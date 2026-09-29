@@ -378,7 +378,8 @@
           "id": "deepgram/nova-3",
           "name": "Nova-3",
           "description": "Deepgram's fast multilingual transcription",
-          "descriptionKey": "models.descriptions.transcription.openrouter_deepgram_nova_3"
+          "descriptionKey": "models.descriptions.transcription.openrouter_deepgram_nova_3",
+          "uploadOnly": true
         },
         {
           "id": "google/chirp-3",

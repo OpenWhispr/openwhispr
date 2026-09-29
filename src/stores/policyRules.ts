@@ -578,6 +578,16 @@ export function acceptsUnlistedTranscriptionModel(providerId: string, modelId: s
   return providerId === "openrouter" && modelId.includes("/");
 }
 
+// A registry model only Audio Upload offers (Deepgram via OpenRouter drops the
+// dictionary). It is listed, so the unlisted pass-through above must not keep
+// it on a screen that leaves it out.
+export function isUploadOnlyTranscriptionModel(providerId: string, modelId: string): boolean {
+  const models: Array<{ id: string; uploadOnly?: boolean }> =
+    modelRegistryData.transcriptionProviders.find((provider) => provider.id === providerId)
+      ?.models ?? [];
+  return models.some((model) => model.id === modelId && model.uploadOnly);
+}
+
 export function reconcileCloudProviderSelection({
   selectedProvider,
   selectedModel,
@@ -597,7 +607,8 @@ export function reconcileCloudProviderSelection({
     if (
       !selected.models?.length ||
       selected.models.some((model) => model.id === selectedModel) ||
-      acceptsUnlistedTranscriptionModel(selected.id, selectedModel)
+      (acceptsUnlistedTranscriptionModel(selected.id, selectedModel) &&
+        !isUploadOnlyTranscriptionModel(selected.id, selectedModel))
     ) {
       return null;
     }

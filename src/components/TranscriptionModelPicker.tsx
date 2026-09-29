@@ -13,6 +13,7 @@ import { ConfirmDialog } from "./ui/dialog";
 import { useDialogs } from "../hooks/useDialogs";
 import { useModelDownload, type DownloadProgress } from "../hooks/useModelDownload";
 import {
+  getDictationTranscriptionProviders,
   getTranscriptionProviders,
   getMeetingStreamingTranscriptionProviders,
   TranscriptionProviderData,
@@ -515,11 +516,13 @@ export default function TranscriptionModelPicker({
   // providers note recording can actually run — not every streaming provider.
   // Upload is always http-batch, and the realtime-only providers have no batch
   // route at all (transcriptionRoute fails them closed), so they are hidden there.
+  // Upload is also the only screen that offers uploadOnly models.
   const availableCloudProviders = useMemo(() => {
     if (streamingOnly) return getMeetingStreamingTranscriptionProviders();
-    const providers = getTranscriptionProviders();
-    if (transcriptionContext !== "upload") return providers;
-    return providers.filter((provider) => !STREAMING_ONLY_PROVIDERS.has(provider.id));
+    if (transcriptionContext !== "upload") return getDictationTranscriptionProviders();
+    return getTranscriptionProviders().filter(
+      (provider) => !STREAMING_ONLY_PROVIDERS.has(provider.id)
+    );
   }, [streamingOnly, transcriptionContext]);
   const cloudProviders = useMemo(
     () => filterByokProviderOptionsByPolicy(availableCloudProviders, "transcription", policyState),

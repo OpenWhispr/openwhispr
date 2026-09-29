@@ -160,3 +160,28 @@ test("opening Settings keeps an OpenRouter model outside the shortlist", async (
     );
   }
 });
+
+// Deepgram via OpenRouter drops the dictionary, so it is offered in Upload only.
+// A dictation pick saved before that must be moved off when Settings opens,
+// even though other OpenRouter ids outside the shortlist are kept.
+test("opening Settings moves dictation off Deepgram via OpenRouter; Upload keeps it", async (t) => {
+  const { useSettingsStore, mount } = await loadPicker(t);
+  const expected = { dictation: "openai/gpt-transcribe", upload: "deepgram/nova-3" };
+  for (const context of ["dictation", "upload"]) {
+    useSettingsStore.setState({
+      useLocalWhisper: false,
+      cloudTranscriptionMode: "byok",
+      [key(context, "cloudTranscriptionProvider")]: "openrouter",
+      [key(context, "cloudTranscriptionModel")]: "deepgram/nova-3",
+    });
+
+    const picker = await mount(context);
+    await picker.unmount();
+
+    assert.equal(
+      useSettingsStore.getState()[key(context, "cloudTranscriptionModel")],
+      expected[context],
+      context
+    );
+  }
+});
