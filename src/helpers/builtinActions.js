@@ -152,6 +152,14 @@ export const SECTIONED_NOTES_FORMAT = `FORMAT:
 
 export const SECTIONED_NOTES_FOOTER = `Return only the finished Markdown notes.\n\n${NON_SUBSTANTIVE_NOTES_INSTRUCTIONS}`;
 
+// Action items must end in "— Owner" so the editor can turn owners into
+// mention chips (see tagActionItemOwners).
+const ACTION_ITEMS_SECTION = {
+  heading: "Action Items",
+  instruction:
+    'Only actions someone committed to or was asked to do; never turn a discussion topic into an action item. One checkbox per item in the form `- [ ] Action — Owner`. Put a stated due date inside the action text, for example `- [ ] Send the revised proposal by Friday — Alice`. The owner is the person the transcript shows taking the action on or being asked to, not whoever raised the topic; name them whenever the transcript shows it. Use "You" or "Them" only when no name is available. When the transcript shows no owner, end the line after the action; never write a placeholder such as "Owner not specified".',
+};
+
 const DETAILED_NOTES_SECTIONS = [
   {
     heading: "Summary",
@@ -166,16 +174,123 @@ const DETAILED_NOTES_SECTIONS = [
     heading: "Decisions",
     instruction: "Only decisions that were explicitly made or clearly agreed.",
   },
-  {
-    heading: "Action Items",
-    // Action items must end in "— Owner" so the editor can turn owners into
-    // mention chips (see tagActionItemOwners).
-    instruction:
-      'Only actions someone committed to or was asked to do; never turn a discussion topic into an action item. One checkbox per item in the form `- [ ] Action — Owner`. Put a stated due date inside the action text, for example `- [ ] Send the revised proposal by Friday — Alice`. The owner is the person the transcript shows taking the action on or being asked to, not whoever raised the topic; name them whenever the transcript shows it. Use "You" or "Them" only when no name is available. When the transcript shows no owner, end the line after the action; never write a placeholder such as "Owner not specified".',
-  },
+  ACTION_ITEMS_SECTION,
   {
     heading: "Open Questions",
     instruction: "Unresolved questions, dependencies, and requested follow-ups.",
+  },
+];
+
+const ONE_ON_ONE_CONTEXT =
+  "A one-on-one, usually between a manager and someone on their team. Keep each person's updates, concerns, and feedback attributed to them, and leave out personal matters unless they bear on the work.";
+
+const ONE_ON_ONE_SECTIONS = [
+  {
+    heading: "Summary",
+    instruction: "2–3 bullets: what the conversation covered and where it landed.",
+  },
+  {
+    heading: "Updates",
+    instruction:
+      "Progress, wins, and status changes each person shared, grouped by project or topic.",
+  },
+  {
+    heading: "Challenges and Feedback",
+    instruction:
+      "Blockers, concerns, and feedback given in either direction, with the context behind each.",
+  },
+  {
+    heading: "Growth and Goals",
+    instruction: "Career, development, or goal discussion, and any support that was offered.",
+  },
+  ACTION_ITEMS_SECTION,
+];
+
+const STAND_UP_CONTEXT =
+  "A short team stand-up. Keep every update to one or two bullets and skip small talk entirely.";
+
+const STAND_UP_SECTIONS = [
+  {
+    heading: "Summary",
+    instruction: "1–2 bullets on the team's overall progress and anything that needs attention.",
+  },
+  {
+    heading: "Updates by Person",
+    instruction:
+      "One subheading per person, named by their label, with what they finished and what they are doing next.",
+  },
+  {
+    heading: "Blockers",
+    instruction: "Each blocker, who it affects, and who offered to help.",
+  },
+  ACTION_ITEMS_SECTION,
+];
+
+const SALES_CALL_CONTEXT =
+  "A sales conversation with a prospect or customer. Write it for the seller who has to move the deal forward, and state every number, price, and date exactly.";
+
+const SALES_CALL_SECTIONS = [
+  {
+    heading: "Summary",
+    instruction:
+      "3–5 bullets: who the prospect is, what they want, where the deal stands, and the agreed next step.",
+  },
+  {
+    heading: "Customer Context",
+    instruction:
+      "The prospect's company, the attendees and their roles when stated, and their current situation and tools.",
+  },
+  {
+    heading: "Needs and Pain Points",
+    instruction: "What they are trying to solve and why it matters to them now.",
+  },
+  {
+    heading: "Objections",
+    instruction: "Each objection or concern raised, and how it was answered if it was.",
+  },
+  {
+    heading: "Budget, Pricing, and Timeline",
+    instruction: "Budget, pricing discussed, and deadlines or buying timeline.",
+  },
+  {
+    heading: "Decision Process",
+    instruction:
+      "Who decides, their evaluation criteria, competitors mentioned, and approvals still needed.",
+  },
+  ACTION_ITEMS_SECTION,
+];
+
+const USER_INTERVIEW_CONTEXT =
+  "A user research interview. Keep what the participant said and did separate from what the interviewer suggested, and never present the interviewer's ideas as findings.";
+
+const USER_INTERVIEW_SECTIONS = [
+  {
+    heading: "Summary",
+    instruction: "3–5 bullets: who the participant is and the most important things learned.",
+  },
+  {
+    heading: "Participant Background",
+    instruction: "Their role, context, and experience relevant to the interview.",
+  },
+  {
+    heading: "Current Workflow",
+    instruction: "How they do the job today, including tools and workarounds.",
+  },
+  {
+    heading: "Pain Points",
+    instruction: "Problems they described, how often they hit them, and what they cost them.",
+  },
+  {
+    heading: "Reactions and Feedback",
+    instruction: "Their reactions to any ideas, designs, or features shown, including hesitations.",
+  },
+  {
+    heading: "Notable Quotes",
+    instruction: "Short verbatim quotes that capture their perspective, attributed by label.",
+  },
+  {
+    heading: "Follow-ups",
+    instruction: "Open questions to explore next and anything promised to the participant.",
   },
 ];
 
@@ -212,6 +327,16 @@ Omit any section that has no supported content. Return only the email.`;
 const MAKE_TODOS_PROMPT = `List the to-dos in this note: every action someone committed to or was asked to do, based only on its notes, AI summary, and transcript. One checkbox per item in the form \`- [ ] Action — Owner\`, with any stated due date inside the action text. Leave the owner out when the note does not show one. If there are no to-dos, say so in one sentence.`;
 
 const CREATE_OUTLINE_PROMPT = `Outline this note, based only on its notes, AI summary, and transcript. Use nested Markdown bullets: one top-level bullet per main topic in the order it came up, with its key points, decisions, and numbers beneath it. Return only the outline.`;
+
+const SLACK_UPDATE_PROMPT = `Write a short Slack message I can post to my team about this meeting: one line on what it was about, then 3–5 bullets with the outcomes, decisions, and who is doing what next. Use Slack formatting (bold with *asterisks*, no Markdown headings), keep it under 120 words, and use only what the note supports. Return only the message.`;
+
+const PREP_NEXT_MEETING_PROMPT = `Help me prepare for the next meeting on this topic. Write a short agenda of 3–6 items built from this note's open questions, unresolved decisions, and action items, each with who owns it. Then list anything to check, bring, or send beforehand. Use only what the note supports.`;
+
+const COACH_ME_PROMPT = `Give me brief, candid coaching on how I ("You" in the transcript) ran or took part in this meeting, based only on the transcript: 2–3 things that went well and 2–3 specific things to do differently next time, each tied to the moment in the transcript it comes from. If there is no transcript, say so in one sentence instead.`;
+
+const SHORTEN_PROMPT = `Make the summary about half as long. Keep every decision, number, date, name, and action item; cut repetition, background, and detail that would not change what anyone does next.`;
+
+const ADD_TLDR_PROMPT = `Add a "## TL;DR" section at the very top: two or three sentences on what the meeting decided and what happens next. Leave the rest of the summary exactly as it is.`;
 
 // System-prompt wrappers the note action store puts around a built-in or
 // custom action prompt. They live here, with the action prompts, so the live
@@ -285,6 +410,41 @@ export const CHAT_ACTION_PREAMBLE = `Using the note I'm viewing (its notes, AI s
  */
 export const NOTE_OUTPUT_MAX_TOKENS = 4096;
 
+// Built-ins added once templates had sections; none has an older default to upgrade.
+const builtinTemplate = ({ key, name, description, prompt, sections, sortOrder }) => ({
+  translationKey: `notes.actions.builtin.${key}`,
+  kind: "template",
+  name,
+  description,
+  prompt,
+  sections,
+  output: null,
+  previousPrompts: [],
+  icon: "sparkles",
+  sortOrder,
+});
+
+const builtinAction = ({
+  key,
+  name,
+  description,
+  prompt,
+  output,
+  icon = "sparkles",
+  sortOrder,
+}) => ({
+  translationKey: `notes.actions.builtin.${key}`,
+  kind: "action",
+  name,
+  description,
+  prompt,
+  sections: null,
+  output,
+  previousPrompts: [],
+  icon,
+  sortOrder,
+});
+
 // previousPrompts only upgrades a row that is still a flat prompt; a later change
 // to a built-in's default sections needs its own history.
 export const BUILTIN_ACTIONS = [
@@ -353,6 +513,81 @@ export const BUILTIN_ACTIONS = [
     icon: "file-text",
     sortOrder: 4,
   },
+  builtinTemplate({
+    key: "oneOnOne",
+    name: "1:1",
+    description: "Updates, feedback, growth, and next steps from a one-on-one",
+    prompt: ONE_ON_ONE_CONTEXT,
+    sections: ONE_ON_ONE_SECTIONS,
+    sortOrder: 5,
+  }),
+  builtinTemplate({
+    key: "standUp",
+    name: "Stand-up",
+    description: "Each person's progress, plans, and blockers",
+    prompt: STAND_UP_CONTEXT,
+    sections: STAND_UP_SECTIONS,
+    sortOrder: 6,
+  }),
+  builtinTemplate({
+    key: "salesCall",
+    name: "Sales call",
+    description: "Needs, objections, budget, and the decision process",
+    prompt: SALES_CALL_CONTEXT,
+    sections: SALES_CALL_SECTIONS,
+    sortOrder: 7,
+  }),
+  builtinTemplate({
+    key: "userInterview",
+    name: "User interview",
+    description: "Workflow, pain points, reactions, and quotes from a participant",
+    prompt: USER_INTERVIEW_CONTEXT,
+    sections: USER_INTERVIEW_SECTIONS,
+    sortOrder: 8,
+  }),
+  builtinAction({
+    key: "shorten",
+    name: "Shorten",
+    description: "Make the summary about half as long",
+    prompt: SHORTEN_PROMPT,
+    output: "summary",
+    sortOrder: 9,
+  }),
+  builtinAction({
+    key: "addTldr",
+    name: "Add TL;DR",
+    description: "Put a two- or three-sentence TL;DR at the top of the summary",
+    prompt: ADD_TLDR_PROMPT,
+    output: "summary",
+    sortOrder: 10,
+  }),
+  builtinAction({
+    key: "slackUpdate",
+    name: "Slack update",
+    description: "Write a short team update to post in Slack",
+    prompt: SLACK_UPDATE_PROMPT,
+    output: "chat",
+    icon: "send",
+    sortOrder: 11,
+  }),
+  builtinAction({
+    key: "prepNextMeeting",
+    name: "Prep next meeting",
+    description: "Build the next meeting's agenda from open items",
+    prompt: PREP_NEXT_MEETING_PROMPT,
+    output: "chat",
+    icon: "calendar",
+    sortOrder: 12,
+  }),
+  builtinAction({
+    key: "coachMe",
+    name: "Coach me",
+    description: "Candid feedback on how you ran the meeting",
+    prompt: COACH_ME_PROMPT,
+    output: "chat",
+    icon: "message-circle",
+    sortOrder: 13,
+  }),
 ];
 
 // A flat Detailed Notes prompt (one the user edited before templates had

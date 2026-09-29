@@ -27,6 +27,19 @@ function relaunch(check) {
   }
 }
 
+test("every built-in is named and described in English, matching its fallback text", () => {
+  const { notes } = require("../../src/locales/en/translation.json");
+  for (const action of BUILTIN_ACTIONS) {
+    const key = action.translationKey.split(".").pop();
+    assert.equal(notes.actions.builtin[key]?.name, action.name, action.translationKey);
+    assert.equal(
+      notes.actions.builtin[key]?.description,
+      action.description,
+      action.translationKey
+    );
+  }
+});
+
 test("no built-in lists its current prompt as a previous default", () => {
   for (const action of BUILTIN_ACTIONS) {
     assert.equal(action.previousPrompts.includes(action.prompt), false, action.name);

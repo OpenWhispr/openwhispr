@@ -3537,6 +3537,47 @@
         "createOutline": {
           "name": "Gliederung erstellen",
           "description": "Die Themen der Notiz im Chat gliedern"
+        },
+        "oneOnOne": {
+          "name": "1:1",
+          "description": "Updates, Feedback, Entwicklung und nächste Schritte aus einem Einzelgespräch"
+        },
+        "standUp": {
+          "name": "Stand-up",
+          "description": "Fortschritt, Pläne und Blocker jeder Person"
+        },
+        "salesCall": {
+          "name": "Verkaufsgespräch",
+          "description": "Bedarf, Einwände, Budget und Entscheidungsprozess"
+        },
+        "userInterview": {
+          "name": "Nutzerinterview",
+          "description": "Arbeitsablauf, Probleme, Reaktionen und Zitate einer teilnehmenden Person"
+        },
+        "shorten": {
+          "name": "Kürzen",
+          "description": "Die Zusammenfassung etwa halb so lang machen",
+          "cta": "Zusammenfassung kürzen"
+        },
+        "addTldr": {
+          "name": "TL;DR hinzufügen",
+          "description": "Ein TL;DR aus zwei oder drei Sätzen an den Anfang der Zusammenfassung setzen",
+          "cta": "TL;DR hinzufügen"
+        },
+        "slackUpdate": {
+          "name": "Slack-Update",
+          "description": "Ein kurzes Team-Update für Slack schreiben",
+          "cta": "Slack-Update schreiben"
+        },
+        "prepNextMeeting": {
+          "name": "Nächstes Meeting vorbereiten",
+          "description": "Die Agenda des nächsten Meetings aus offenen Punkten erstellen",
+          "cta": "Nächstes Meeting vorbereiten"
+        },
+        "coachMe": {
+          "name": "Coache mich",
+          "description": "Offenes Feedback dazu, wie Sie das Meeting geführt haben",
+          "cta": "Feedback zu diesem Meeting"
         }
       },
       "errors": {

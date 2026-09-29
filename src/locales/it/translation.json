@@ -3170,6 +3170,47 @@
         "createOutline": {
           "name": "Crea scaletta",
           "description": "Organizza gli argomenti della nota nella chat"
+        },
+        "oneOnOne": {
+          "name": "1:1",
+          "description": "Aggiornamenti, feedback, crescita e prossimi passi di un incontro individuale"
+        },
+        "standUp": {
+          "name": "Stand-up",
+          "description": "Progressi, piani e blocchi di ciascuno"
+        },
+        "salesCall": {
+          "name": "Chiamata di vendita",
+          "description": "Esigenze, obiezioni, budget e processo decisionale"
+        },
+        "userInterview": {
+          "name": "Intervista utente",
+          "description": "Flusso di lavoro, problemi, reazioni e citazioni di un partecipante"
+        },
+        "shorten": {
+          "name": "Accorcia",
+          "description": "Rendi il riepilogo lungo circa la metà",
+          "cta": "Accorcia il riepilogo"
+        },
+        "addTldr": {
+          "name": "Aggiungi TL;DR",
+          "description": "Metti un TL;DR di due o tre frasi all'inizio del riepilogo",
+          "cta": "Aggiungi un TL;DR"
+        },
+        "slackUpdate": {
+          "name": "Aggiornamento Slack",
+          "description": "Scrivi un breve aggiornamento per il team da pubblicare su Slack",
+          "cta": "Scrivi un aggiornamento Slack"
+        },
+        "prepNextMeeting": {
+          "name": "Prepara la prossima riunione",
+          "description": "Crea l'agenda della prossima riunione dai punti aperti",
+          "cta": "Prepara la prossima riunione"
+        },
+        "coachMe": {
+          "name": "Dammi un feedback",
+          "description": "Un feedback sincero su come hai condotto la riunione",
+          "cta": "Dammi un feedback su questa riunione"
         }
       },
       "errors": {

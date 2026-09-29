@@ -3170,6 +3170,47 @@
         "createOutline": {
           "name": "创建大纲",
           "description": "在聊天中为笔记的主题列出大纲"
+        },
+        "oneOnOne": {
+          "name": "1 对 1",
+          "description": "一对一会议中的近况、反馈、成长和后续步骤"
+        },
+        "standUp": {
+          "name": "站会",
+          "description": "每个人的进展、计划和阻碍"
+        },
+        "salesCall": {
+          "name": "销售通话",
+          "description": "需求、异议、预算和决策流程"
+        },
+        "userInterview": {
+          "name": "用户访谈",
+          "description": "参与者的工作流程、痛点、反应和原话"
+        },
+        "shorten": {
+          "name": "精简",
+          "description": "把摘要缩短到大约一半",
+          "cta": "精简摘要"
+        },
+        "addTldr": {
+          "name": "添加 TL;DR",
+          "description": "在摘要开头加上两三句话的 TL;DR",
+          "cta": "添加 TL;DR"
+        },
+        "slackUpdate": {
+          "name": "Slack 更新",
+          "description": "写一条发到 Slack 的简短团队更新",
+          "cta": "写一条 Slack 更新"
+        },
+        "prepNextMeeting": {
+          "name": "准备下次会议",
+          "description": "根据未决事项拟定下次会议的议程",
+          "cta": "准备下次会议"
+        },
+        "coachMe": {
+          "name": "给我建议",
+          "description": "坦诚反馈你主持会议的表现",
+          "cta": "为这次会议给我建议"
         }
       },
       "errors": {

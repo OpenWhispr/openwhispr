@@ -2951,6 +2951,47 @@
         "createOutline": {
           "name": "アウトラインを作成",
           "description": "ノートのトピックをチャットでアウトライン化"
+        },
+        "oneOnOne": {
+          "name": "1on1",
+          "description": "1on1での近況、フィードバック、成長、次のステップ"
+        },
+        "standUp": {
+          "name": "スタンドアップ",
+          "description": "各メンバーの進捗、予定、ブロッカー"
+        },
+        "salesCall": {
+          "name": "商談",
+          "description": "ニーズ、懸念点、予算、意思決定プロセス"
+        },
+        "userInterview": {
+          "name": "ユーザーインタビュー",
+          "description": "参加者のワークフロー、課題、反応、発言の引用"
+        },
+        "shorten": {
+          "name": "短くする",
+          "description": "要約を約半分の長さにします",
+          "cta": "要約を短くする"
+        },
+        "addTldr": {
+          "name": "TL;DRを追加",
+          "description": "要約の先頭に2〜3文のTL;DRを追加します",
+          "cta": "TL;DRを追加"
+        },
+        "slackUpdate": {
+          "name": "Slack用の共有",
+          "description": "Slackに投稿するチーム向けの短い共有文を作成します",
+          "cta": "Slack用の共有を書く"
+        },
+        "prepNextMeeting": {
+          "name": "次の会議の準備",
+          "description": "未解決の項目から次の会議のアジェンダを作成します",
+          "cta": "次の会議を準備"
+        },
+        "coachMe": {
+          "name": "コーチング",
+          "description": "会議の進め方への率直なフィードバック",
+          "cta": "この会議のコーチングを受ける"
         }
       },
       "errors": {

@@ -3223,6 +3223,47 @@
         "createOutline": {
           "name": "Crear esquema",
           "description": "Esquematiza los temas de la nota en el chat"
+        },
+        "oneOnOne": {
+          "name": "1:1",
+          "description": "Novedades, feedback, desarrollo y próximos pasos de una reunión individual"
+        },
+        "standUp": {
+          "name": "Stand-up",
+          "description": "Avances, planes y bloqueos de cada persona"
+        },
+        "salesCall": {
+          "name": "Llamada de ventas",
+          "description": "Necesidades, objeciones, presupuesto y proceso de decisión"
+        },
+        "userInterview": {
+          "name": "Entrevista con usuario",
+          "description": "Flujo de trabajo, problemas, reacciones y citas de un participante"
+        },
+        "shorten": {
+          "name": "Acortar",
+          "description": "Deja el resumen en la mitad de largo",
+          "cta": "Acortar el resumen"
+        },
+        "addTldr": {
+          "name": "Añadir TL;DR",
+          "description": "Pon un TL;DR de dos o tres frases al principio del resumen",
+          "cta": "Añadir un TL;DR"
+        },
+        "slackUpdate": {
+          "name": "Actualización para Slack",
+          "description": "Escribe una breve actualización para el equipo en Slack",
+          "cta": "Escribir una actualización para Slack"
+        },
+        "prepNextMeeting": {
+          "name": "Preparar la próxima reunión",
+          "description": "Crea la agenda de la próxima reunión con los temas pendientes",
+          "cta": "Preparar la próxima reunión"
+        },
+        "coachMe": {
+          "name": "Dame feedback",
+          "description": "Feedback sincero sobre cómo llevaste la reunión",
+          "cta": "Darme feedback sobre esta reunión"
         }
       },
       "errors": {

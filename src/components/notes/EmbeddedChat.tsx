@@ -9,6 +9,9 @@ import {
   FileText,
   Mail,
   MessageSquareText,
+  Send,
+  Calendar,
+  MessageCircle,
 } from "../icons";
 import { cn } from "../lib/utils";
 import { ChatMessages } from "../chat/ChatMessages";
@@ -33,6 +36,9 @@ const ACTION_ICONS: Record<string, typeof MessageSquareText> = {
   mail: Mail,
   "clipboard-check": ClipboardCheck,
   "file-text": FileText,
+  send: Send,
+  calendar: Calendar,
+  "message-circle": MessageCircle,
 };
 
 interface EmbeddedChatProps {

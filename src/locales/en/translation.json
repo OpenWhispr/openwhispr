@@ -3537,6 +3537,47 @@
         "createOutline": {
           "name": "Create outline",
           "description": "Outline the note's topics in the chat"
+        },
+        "oneOnOne": {
+          "name": "1:1",
+          "description": "Updates, feedback, growth, and next steps from a one-on-one"
+        },
+        "standUp": {
+          "name": "Stand-up",
+          "description": "Each person's progress, plans, and blockers"
+        },
+        "salesCall": {
+          "name": "Sales call",
+          "description": "Needs, objections, budget, and the decision process"
+        },
+        "userInterview": {
+          "name": "User interview",
+          "description": "Workflow, pain points, reactions, and quotes from a participant"
+        },
+        "shorten": {
+          "name": "Shorten",
+          "description": "Make the summary about half as long",
+          "cta": "Shorten the summary"
+        },
+        "addTldr": {
+          "name": "Add TL;DR",
+          "description": "Put a two- or three-sentence TL;DR at the top of the summary",
+          "cta": "Add a TL;DR"
+        },
+        "slackUpdate": {
+          "name": "Slack update",
+          "description": "Write a short team update to post in Slack",
+          "cta": "Write a Slack update"
+        },
+        "prepNextMeeting": {
+          "name": "Prep next meeting",
+          "description": "Build the next meeting's agenda from open items",
+          "cta": "Prep the next meeting"
+        },
+        "coachMe": {
+          "name": "Coach me",
+          "description": "Candid feedback on how you ran the meeting",
+          "cta": "Coach me on this meeting"
         }
       },
       "errors": {

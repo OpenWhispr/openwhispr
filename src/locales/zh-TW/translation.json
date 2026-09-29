@@ -3170,6 +3170,47 @@
         "createOutline": {
           "name": "建立大綱",
           "description": "在聊天中為筆記的主題列出大綱"
+        },
+        "oneOnOne": {
+          "name": "1 對 1",
+          "description": "一對一會議中的近況、回饋、成長和後續步驟"
+        },
+        "standUp": {
+          "name": "站會",
+          "description": "每個人的進度、計畫和阻礙"
+        },
+        "salesCall": {
+          "name": "銷售通話",
+          "description": "需求、異議、預算和決策流程"
+        },
+        "userInterview": {
+          "name": "使用者訪談",
+          "description": "參與者的工作流程、痛點、反應和原話"
+        },
+        "shorten": {
+          "name": "精簡",
+          "description": "把摘要縮短到大約一半",
+          "cta": "精簡摘要"
+        },
+        "addTldr": {
+          "name": "新增 TL;DR",
+          "description": "在摘要開頭加上兩三句話的 TL;DR",
+          "cta": "新增 TL;DR"
+        },
+        "slackUpdate": {
+          "name": "Slack 更新",
+          "description": "寫一則發到 Slack 的簡短團隊更新",
+          "cta": "寫一則 Slack 更新"
+        },
+        "prepNextMeeting": {
+          "name": "準備下次會議",
+          "description": "根據未決事項擬定下次會議的議程",
+          "cta": "準備下次會議"
+        },
+        "coachMe": {
+          "name": "給我建議",
+          "description": "坦誠回饋你主持會議的表現",
+          "cta": "為這次會議給我建議"
         }
       },
       "errors": {
