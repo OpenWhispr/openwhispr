@@ -1,12 +1,26 @@
-// Built-in note actions. The database seeds any that are missing on startup and
-// only rewrites a row whose prompt still equals a previous default, so a user's
-// edited prompt is never touched. Generate Notes uses the generic
-// system-prompt wrapper; the newer built-ins are complete
-// instructions and are sent standalone (see STANDALONE_PROMPT_KEYS).
+// Built-in note templates and actions. The database seeds any that are missing
+// on startup and only rewrites a row whose prompt still equals a previous
+// default, so a user's edited prompt is never touched. A template writes the AI
+// summary: Generate Notes wraps its prompt in the generic system prompt, and
+// Detailed Notes is compiled from sections (see templatePrompts.js). An action
+// either edits the summary or answers in the note chat.
 
 export const GENERATE_NOTES_KEY = "notes.actions.builtin.generateNotes";
 export const DETAILED_NOTES_KEY = "notes.actions.builtin.detailedNotes";
 export const FOLLOW_UP_EMAIL_KEY = "notes.actions.builtin.followUpEmail";
+export const MAKE_TODOS_KEY = "notes.actions.builtin.makeTodos";
+export const CREATE_OUTLINE_KEY = "notes.actions.builtin.createOutline";
+
+// Mirrored by the API's note action schemas; a longer row would be rejected
+// there and hold up the rest of its sync batch.
+export const NOTE_ACTION_LIMITS = {
+  name: 200,
+  description: 1000,
+  prompt: 20000,
+  sections: 20,
+  heading: 200,
+  instruction: 2000,
+};
 
 const GENERATE_NOTES_PROMPT_1_10_1 =
   "Transform the provided content into clean, well-structured notes in markdown. Preserve the user's intent and all substantive information. Remove filler, small talk, false starts, and redundant content. For personal notes, improve grammar and structure for readability. For meeting transcripts, extract key discussion points, decisions, action items, and follow-ups.";
@@ -117,7 +131,54 @@ Return only the finished Markdown notes.`;
 const NON_SUBSTANTIVE_NOTES_INSTRUCTIONS = `For material with no substantive discussion or notes (for example, only greetings, filler, or recording checks), return one brief factual sentence describing what was captured. If nothing meaningful can be summarized, say "No substantive content was captured." in the requested output language. This rule overrides the section structure and bullet counts above: do not return an empty response or invent topics, decisions, or action items. Consider both the transcript and any manual notes before applying this rule.`;
 
 const GENERATE_NOTES_PROMPT = `${GENERATE_NOTES_PROMPT_1_10_1}\n\n${NON_SUBSTANTIVE_NOTES_INSTRUCTIONS}`;
-const DETAILED_NOTES_PROMPT = `${DETAILED_NOTES_PROMPT_1_10_1}\n\n${NON_SUBSTANTIVE_NOTES_INSTRUCTIONS}`;
+// The last flat Detailed Notes prompt; a row still holding it moves to sections.
+const DETAILED_NOTES_PROMPT_1_10_2 = `${DETAILED_NOTES_PROMPT_1_10_1}\n\n${NON_SUBSTANTIVE_NOTES_INSTRUCTIONS}`;
+
+// A sectioned template is compiled from these rules, the template's own context,
+// the format line, its sections, and the footer. Detailed Notes' sections compile
+// back to DETAILED_NOTES_PROMPT_1_10_2 exactly (pinned by templatePrompts.test.js).
+export const SECTIONED_NOTES_INSTRUCTIONS = `Convert the provided material into accurate, comprehensive, easy-to-scan notes in Markdown. Priorities, in order: factual accuracy, preservation of specifics, complete coverage of substantive topics, clear decisions and action items, concise presentation.
+
+RULES:
+- Use only information supported by the material. Never invent facts, decisions, owners, deadlines, or names.
+- Keep the exact names of people, clients, companies, projects, products, tools, and acronyms, and the exact numbers, dates, deadlines, and document names. Never replace a named entity with a generic noun such as "the client" or "the project". If a name is unclear, write "[name unclear]" rather than guessing.
+- Speech-to-text misspells names. When the transcript's spelling is an obvious variant of a name in the Meeting Context, the participants' email addresses, the manual notes, or the custom dictionary, use that spelling instead.
+- Distinguish what was discussed, proposed, or requested from what was actually decided.
+- Treat the user's manual notes as a signal of what matters most, reconciled against the transcript.
+- Consolidate repeated discussion into one point. Drop greetings, filler, and false starts. Give longer meetings proportionally more detail.
+- If there is no transcript, structure the user's own notes and skip the meeting-specific sections.`;
+
+export const SECTIONED_NOTES_FORMAT = `FORMAT:
+- No title, date, attendee list, preamble, table, or horizontal rule. Omit any section with nothing to say.`;
+
+export const SECTIONED_NOTES_FOOTER = `Return only the finished Markdown notes.\n\n${NON_SUBSTANTIVE_NOTES_INSTRUCTIONS}`;
+
+const DETAILED_NOTES_SECTIONS = [
+  {
+    heading: "Summary",
+    instruction: "3–5 bullets: purpose, key subjects, major outcomes, immediate next steps.",
+  },
+  {
+    heading: "Discussion",
+    instruction:
+      "Descriptive topic subheadings named after the actual client, project, or initiative, with enough context that someone who missed the meeting understands what happened and why.",
+  },
+  {
+    heading: "Decisions",
+    instruction: "Only decisions that were explicitly made or clearly agreed.",
+  },
+  {
+    heading: "Action Items",
+    // Action items must end in "— Owner" so the editor can turn owners into
+    // mention chips (see tagActionItemOwners).
+    instruction:
+      'Only actions someone committed to or was asked to do; never turn a discussion topic into an action item. One checkbox per item in the form `- [ ] Action — Owner`. Put a stated due date inside the action text, for example `- [ ] Send the revised proposal by Friday — Alice`. The owner is the person the transcript shows taking the action on or being asked to, not whoever raised the topic; name them whenever the transcript shows it. Use "You" or "Them" only when no name is available. When the transcript shows no owner, end the line after the action; never write a placeholder such as "Owner not specified".',
+  },
+  {
+    heading: "Open Questions",
+    instruction: "Unresolved questions, dependencies, and requested follow-ups.",
+  },
+];
 
 const FOLLOW_UP_EMAIL_PROMPT = `You are an expert at writing follow-up emails after meetings. Draft the follow-up email the user ("You") would send to the other participants, based only on the provided meeting material: meeting context, the user's manual notes, and the transcript.
 
@@ -148,6 +209,10 @@ Open questions
 <sign-off as the user>
 
 Omit any section that has no supported content. Return only the email.`;
+
+const MAKE_TODOS_PROMPT = `List the to-dos in this note: every action someone committed to or was asked to do, based only on its notes, AI summary, and transcript. One checkbox per item in the form \`- [ ] Action — Owner\`, with any stated due date inside the action text. Leave the owner out when the note does not show one. If there are no to-dos, say so in one sentence.`;
+
+const CREATE_OUTLINE_PROMPT = `Outline this note, based only on its notes, AI summary, and transcript. Use nested Markdown bullets: one top-level bullet per main topic in the order it came up, with its key points, decisions, and numbers beneath it. Return only the outline.`;
 
 // System-prompt wrappers the note action store puts around a built-in or
 // custom action prompt. They live here, with the action prompts, so the live
@@ -184,12 +249,26 @@ CONTENT RULES:
 
 Instructions: `;
 
-// Standalone built-in prompts are complete instructions, so they only get told
-// how the material is laid out instead of being wrapped in the generic prompts.
+// Sectioned and standalone templates are complete instructions, so they only get
+// told how the material is laid out instead of being wrapped in the generic prompts.
 export const MEETING_INPUT_PREAMBLE = `The material is laid out as follows. Transcript lines are prefixed with the speaker's label: a real name when known, otherwise "You" (the note owner), "Them", or "Speaker N". A "## Meeting Context" block may identify the note owner and the invited participants; it is reference material, never something to reproduce. Manual notes the user took may precede the transcript.
 
 `;
 export const NOTE_INPUT_PREAMBLE = `The material is the user's own notes, possibly voice-transcribed, rough, or unstructured. There is no transcript.
+
+`;
+
+// A summary action rewrites the summary the note already has; the rest of the
+// input is only there to keep the rewrite accurate.
+export const SUMMARY_ACTION_SYSTEM_PROMPT = `You revise an existing AI summary of a note. The input starts with the current summary under "## Current Summary". The user's own notes under "## My Notes" and a "## Meeting Context" block may follow; they are reference material for accuracy, never something to reproduce.
+
+Apply the instructions below to the current summary and return the complete revised summary in Markdown, with no preamble and no code fences. Unless the instructions say otherwise, keep its facts, names, numbers, headings, and \`- [ ] Action — Owner\` items, and add nothing the summary or the reference material does not support.
+
+Instructions: `;
+
+// A chat action is sent as the user's turn in the note chat, whose system prompt
+// already carries the note being viewed.
+export const CHAT_ACTION_PREAMBLE = `Using the note I'm viewing (its notes, AI summary, and transcript are in your context), follow these instructions:
 
 `;
 
@@ -207,12 +286,17 @@ export const NOTE_INPUT_PREAMBLE = `The material is the user's own notes, possib
  */
 export const NOTE_OUTPUT_MAX_TOKENS = 4096;
 
+// previousPrompts only upgrades a row that is still a flat prompt; a later change
+// to a built-in's default sections needs its own history.
 export const BUILTIN_ACTIONS = [
   {
     translationKey: GENERATE_NOTES_KEY,
+    kind: "template",
     name: "Generate Notes",
     description: "Clean up, structure, and enhance your notes",
     prompt: GENERATE_NOTES_PROMPT,
+    sections: null,
+    output: null,
     // A pre-release build briefly shipped the detailed prompt under this key.
     previousPrompts: [DETAILED_NOTES_PROMPT_1_10_0, GENERATE_NOTES_PROMPT_1_10_1],
     icon: "sparkles",
@@ -220,24 +304,59 @@ export const BUILTIN_ACTIONS = [
   },
   {
     translationKey: DETAILED_NOTES_KEY,
+    kind: "template",
     name: "Detailed Notes",
     description: "Accurate, comprehensive meeting notes with decisions and action items",
-    prompt: DETAILED_NOTES_PROMPT,
-    previousPrompts: [DETAILED_NOTES_PROMPT_1_10_0, DETAILED_NOTES_PROMPT_1_10_1],
+    prompt: "",
+    sections: DETAILED_NOTES_SECTIONS,
+    output: null,
+    previousPrompts: [
+      DETAILED_NOTES_PROMPT_1_10_0,
+      DETAILED_NOTES_PROMPT_1_10_1,
+      DETAILED_NOTES_PROMPT_1_10_2,
+    ],
     icon: "sparkles",
     sortOrder: 1,
   },
   {
     translationKey: FOLLOW_UP_EMAIL_KEY,
+    kind: "action",
     name: "Follow-up email",
     description: "Draft a follow-up email from your notes and transcript",
     prompt: FOLLOW_UP_EMAIL_PROMPT,
+    sections: null,
+    output: "chat",
     previousPrompts: [],
     icon: "mail",
     sortOrder: 2,
   },
+  {
+    translationKey: MAKE_TODOS_KEY,
+    kind: "action",
+    name: "Make to-dos",
+    description: "List every to-do and its owner in the chat",
+    prompt: MAKE_TODOS_PROMPT,
+    sections: null,
+    output: "chat",
+    previousPrompts: [],
+    icon: "clipboard-check",
+    sortOrder: 3,
+  },
+  {
+    translationKey: CREATE_OUTLINE_KEY,
+    kind: "action",
+    name: "Create outline",
+    description: "Outline the note's topics in the chat",
+    prompt: CREATE_OUTLINE_PROMPT,
+    sections: null,
+    output: "chat",
+    previousPrompts: [],
+    icon: "file-text",
+    sortOrder: 4,
+  },
 ];
 
-// Built-ins whose prompt is a complete instruction set and must not be wrapped
-// in the generic system prompts.
-export const STANDALONE_PROMPT_KEYS = new Set([DETAILED_NOTES_KEY, FOLLOW_UP_EMAIL_KEY]);
+// A flat Detailed Notes prompt (one the user edited before templates had
+// sections) is a complete instruction set and must not be wrapped in the
+// generic system prompts.
+export const STANDALONE_PROMPT_KEYS = new Set([DETAILED_NOTES_KEY]);

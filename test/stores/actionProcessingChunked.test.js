@@ -582,29 +582,15 @@ test("an unbroken CJK part rejected by the tokenizer is split and merged without
   assert.equal(accepted.join(""), body);
 });
 
-test("the merge preserves a follow-up email action without imposing exhaustive notes", async (t) => {
-  const { BUILTIN_ACTIONS } = await import("../../src/helpers/builtinActions.js");
-  const email = BUILTIN_ACTIONS.find(
-    (action) => action.translationKey === "notes.actions.builtin.followUpEmail"
-  );
+test("the merge preserves a custom template's instructions without imposing exhaustive notes", async (t) => {
+  const prompt = "Write the follow-up email I would send to the other participants.";
   const { store, calls, updates } = await loadStore(t, { failFirst: true });
-  run(
-    store,
-    16,
-    longMaterial(20),
-    {},
-    {
-      id: 2,
-      name: email.name,
-      prompt: email.prompt,
-      translation_key: email.translationKey,
-    }
-  );
+  run(store, 16, longMaterial(20), {}, { id: 2, kind: "template", name: "Follow-up", prompt });
   await waitForResult(store, updates);
   assert.equal(updates.length, 1);
-  const prompt = calls.at(-1).config.systemPrompt;
-  assert.ok(prompt.includes(email.prompt));
-  assert.doesNotMatch(prompt, /Completeness outranks brevity|as long as that requires/);
+  const systemPrompt = calls.at(-1).config.systemPrompt;
+  assert.ok(systemPrompt.includes(prompt));
+  assert.doesNotMatch(systemPrompt, /Completeness outranks brevity|as long as that requires/);
 });
 
 test("a local model reached through dictation cleanup is summarised in parts too", async (t) => {

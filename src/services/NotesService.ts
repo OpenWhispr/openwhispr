@@ -9,6 +9,7 @@ interface NoteInput {
   content?: string;
   enhanced_content?: string | null;
   enhancement_prompt?: string | null;
+  enhancement_template_id?: string | null;
   note_type?: "personal" | "meeting" | "upload";
   source_file?: string | null;
   audio_duration_seconds?: number | null;
@@ -35,6 +36,8 @@ export interface CloudNote {
   enhanced_content: string | null;
   note_type: string;
   enhancement_prompt: string | null;
+  // Absent from APIs that predate note templates.
+  enhancement_template_id?: string | null;
   source_file: string | null;
   audio_duration_seconds: number | null;
   folder_id: string | null;

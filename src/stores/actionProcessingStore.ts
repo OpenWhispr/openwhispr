@@ -1,12 +1,6 @@
 import { create } from "zustand";
-import {
-  BASE_SYSTEM_PROMPT,
-  MEETING_INPUT_PREAMBLE,
-  MEETING_SYSTEM_PROMPT,
-  NOTE_INPUT_PREAMBLE,
-  NOTE_OUTPUT_MAX_TOKENS,
-  STANDALONE_PROMPT_KEYS,
-} from "../helpers/builtinActions";
+import { NOTE_OUTPUT_MAX_TOKENS } from "../helpers/builtinActions";
+import { compileSummaryActionPrompt, compileTemplatePrompt } from "../helpers/templatePrompts";
 import reasoningService from "../services/ReasoningService";
 import { getSettings, selectResolvedNoteFormatting } from "./settingsStore";
 import { appendDictionarySuffix } from "../config/prompts";
@@ -424,18 +418,14 @@ export function runBackgroundAction(
 
   (async () => {
     try {
-      const standalone =
-        !!action.translation_key && STANDALONE_PROMPT_KEYS.has(action.translation_key);
-      const basePrompt = standalone
-        ? options.isMeetingNote
-          ? MEETING_INPUT_PREAMBLE
-          : NOTE_INPUT_PREAMBLE
-        : options.isMeetingNote
-          ? MEETING_SYSTEM_PROMPT
-          : BASE_SYSTEM_PROMPT;
+      // Only summary actions reach the runner; chat actions run in the note chat.
+      const editsSummary = action.kind === "action";
+      const instructions = editsSummary
+        ? compileSummaryActionPrompt(action)
+        : compileTemplatePrompt(action, { isMeetingNote: options.isMeetingNote });
       const providerOverrides = buildNoteFormattingOverrides(noteFormatting, options.isCloudMode);
       const systemPrompt = appendDictionarySuffix(
-        basePrompt + action.prompt,
+        instructions,
         options.isMeetingNote ? settings.customDictionary : undefined,
         settings.uiLanguage
       );
@@ -448,7 +438,10 @@ export function runBackgroundAction(
         // that fills the shrunken allowance, so a recording is summarised in
         // parts rather than saved clipped. A plain note has no parts route, so
         // its clipped reply is saved as before. Other routes ignore the flag.
-        refuseClippedByWindow: hasTranscript(options.material),
+        // A summary action replaces the whole summary, so a clipped rewrite
+        // would lose content: it is refused on every route instead.
+        refuseClippedByWindow: editsSummary || hasTranscript(options.material),
+        ...(editsSummary && { requireCompleteOutput: true }),
         requestId: runId,
         ...providerOverrides,
       };
@@ -471,20 +464,26 @@ export function runBackgroundAction(
       if (isCancelled()) return;
 
       let title: string | undefined;
-      if (options.allowTitleGeneration && getSettings().autoGenerateNoteTitle) {
+      if (!editsSummary && options.allowTitleGeneration && getSettings().autoGenerateNoteTitle) {
         const generated = await generateNoteTitle(enhanced, modelId, providerOverrides);
         if (generated) title = generated;
       }
 
       if (isCancelled()) return;
 
-      const updates: Record<string, string> = {
-        enhanced_content: options.knownPeople?.length
-          ? tagActionItemOwners(enhanced, options.knownPeople)
-          : enhanced,
-        enhancement_prompt: action.prompt,
-        enhanced_at_content_hash: contentHash,
-      };
+      const enhancedContent = options.knownPeople?.length
+        ? tagActionItemOwners(enhanced, options.knownPeople)
+        : enhanced;
+      // A summary action keeps the template and material hash the summary was
+      // built from, so the note still names its template and staleness holds.
+      const updates: Record<string, string> = editsSummary
+        ? { enhanced_content: enhancedContent }
+        : {
+            enhanced_content: enhancedContent,
+            enhancement_prompt: instructions,
+            enhancement_template_id: action.client_id,
+            enhanced_at_content_hash: contentHash,
+          };
       if (title) updates.title = title;
       await window.electronAPI.updateNote(noteId, updates);
 

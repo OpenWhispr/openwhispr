@@ -276,8 +276,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Action functions
   getActions: () => ipcRenderer.invoke("db-get-actions"),
   getAction: (id) => ipcRenderer.invoke("db-get-action", id),
-  createAction: (name, description, prompt, icon) =>
-    ipcRenderer.invoke("db-create-action", name, description, prompt, icon),
+  createAction: (name, description, prompt, icon, fields) =>
+    ipcRenderer.invoke("db-create-action", name, description, prompt, icon, fields),
   updateAction: (id, updates) => ipcRenderer.invoke("db-update-action", id, updates),
   deleteAction: (id) => ipcRenderer.invoke("db-delete-action", id),
 

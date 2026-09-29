@@ -135,3 +135,65 @@ test("note formatting requests carry the noteFormatting scope, which is what buy
   await waitFor(() => updates.length > 0, "the note to be written");
   assert.equal(calls[0].config.inferenceScope, "noteFormatting");
 });
+
+test("a template writes the summary and records which template produced it", async (t) => {
+  const { store, calls, updates } = await loadStore(t);
+  const template = {
+    id: 3,
+    client_id: "c0ffee00-0000-4000-8000-000000000001",
+    kind: "template",
+    name: "Sales call",
+    prompt: "",
+    sections: [{ heading: "Objections", instruction: "Each objection and the answer." }],
+  };
+
+  store.runBackgroundAction(
+    11,
+    "## Meeting Transcript\nThem: the price is too high.",
+    "hash-11",
+    template,
+    { modelId: "gpt-4.1", isCloudMode: true, isMeetingNote: true },
+    LABELS
+  );
+
+  await waitFor(() => updates.length > 0, "the note to be written");
+  assert.match(calls[0].config.systemPrompt, /\n## Objections\nEach objection and the answer\./);
+  const { payload } = updates[0];
+  assert.equal(payload.enhancement_template_id, template.client_id);
+  assert.equal(payload.enhanced_at_content_hash, "hash-11");
+  assert.match(payload.enhancement_prompt, /## Objections/);
+});
+
+test("a summary action rewrites only the summary and never saves a clipped rewrite", async (t) => {
+  const { store, calls, updates } = await loadStore(t);
+  const action = {
+    id: 4,
+    client_id: "c0ffee00-0000-4000-8000-000000000002",
+    kind: "action",
+    output: "summary",
+    name: "Shorten",
+    prompt: "Make it half as long.",
+  };
+
+  store.runBackgroundAction(
+    12,
+    "## Current Summary\n- decided things",
+    "hash-12",
+    action,
+    {
+      modelId: "gpt-4.1",
+      isCloudMode: true,
+      isMeetingNote: true,
+      allowTitleGeneration: true,
+    },
+    LABELS
+  );
+
+  await waitFor(() => updates.length > 0, "the note to be written");
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].config.systemPrompt, /revise an existing AI summary[\s\S]*half as long/);
+  assert.equal(calls[0].config.requireCompleteOutput, true);
+  assert.equal(calls[0].config.refuseClippedByWindow, true);
+  // The template and material hash stay those of the summary being edited.
+  assert.deepEqual(Object.keys(updates[0].payload), ["enhanced_content"]);
+});

@@ -2313,8 +2313,8 @@ class IPCHandlers {
       return this.databaseManager.getAction(id);
     });
 
-    ipcMain.handle("db-create-action", async (event, name, description, prompt, icon) => {
-      const result = this.databaseManager.createAction(name, description, prompt, icon);
+    ipcMain.handle("db-create-action", async (event, name, description, prompt, icon, fields) => {
+      const result = this.databaseManager.createAction(name, description, prompt, icon, fields);
       if (result?.success && result?.action) {
         setImmediate(() => {
           broadcastToWindows("action-created", result.action);
