@@ -22,7 +22,7 @@ const { DETAILED_NOTES_KEY, FOLLOW_UP_EMAIL_KEY } = require("../../src/helpers/b
 
 const SECTIONS = [{ heading: "Blockers", instruction: "Anything stuck" }];
 
-async function setup(t) {
+async function setup(t, { realClock = false } = {}) {
   const db = createDb(t);
   if (!db) return null;
   resetBrowserGlobals();
@@ -31,8 +31,10 @@ async function setup(t) {
   const cloud = createFakeCloud();
   // A second per server write from now on: every change lands after the delta
   // cursor and is newer than any local row, so only a guard keeps it out.
+  // realClock stamps writes the way the server does, within the same second as
+  // the local edits around them.
   let now = Date.now();
-  cloud.setClock(() => new Date((now += 1000)).toISOString());
+  cloud.setClock(() => new Date(realClock ? Date.now() : (now += 1000)).toISOString());
   windowStub.electronAPI = createElectronApi(db, { cloud });
   await establishValidatedAuth();
   const service = new SyncService();
@@ -247,3 +249,42 @@ test("an API without note actions keeps rows pending and still completes the pas
   const messages = errors.mock.calls.map((call) => String(call.arguments[0]));
   assert.ok(messages.some((m) => m.includes("Note action pull failed")));
 });
+
+// The push is answered before the pull reads the same row back, and the server's
+// millisecond stamp sorts after a local edit in that second ("HH:MM:SS" reads
+// as .000), so only knowing it is this pass's own write keeps the edit.
+for (const [label, method, route] of [
+  ["while its update is in flight", "PATCH", "/api/note-actions/update"],
+  ["after the update is acknowledged", "GET", "/api/note-actions/list"],
+]) {
+  test(`an edit made ${label} survives the same pass's pull`, async (t) => {
+    const ctx = await setup(t, { realClock: true });
+    if (!ctx) return;
+    const { db, cloud, service } = ctx;
+    const template = createTemplate(db);
+    await service.syncAll(true);
+    db.updateAction(template.id, { name: "v2" });
+
+    const request = cloud.request;
+    let edited = false;
+    cloud.request = async (options) => {
+      if (!edited && options.method === method && options.path.startsWith(route)) {
+        edited = true;
+        db.updateAction(template.id, { name: "v3" });
+      }
+      return request(options);
+    };
+    await service.syncAll(true);
+
+    const row = localRow(db, template.client_id);
+    assert.equal(edited, true);
+    assert.equal(row.name, "v3");
+    assert.equal(row.sync_status, "pending", "the edit goes out on the next pass");
+
+    await service.syncAll(true);
+    assert.equal(
+      cloud.noteActions().find((e) => e.client_action_id === template.client_id).name,
+      "v3"
+    );
+  });
+}

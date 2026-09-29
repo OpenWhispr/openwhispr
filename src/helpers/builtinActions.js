@@ -5,6 +5,8 @@
 // Detailed Notes is compiled from sections (see templatePrompts.js). An action
 // either edits the summary or answers in the note chat.
 
+// Every built-in's key, and so its client id, starts with this.
+export const BUILTIN_KEY_PREFIX = "notes.actions.builtin.";
 export const GENERATE_NOTES_KEY = "notes.actions.builtin.generateNotes";
 export const DETAILED_NOTES_KEY = "notes.actions.builtin.detailedNotes";
 export const FOLLOW_UP_EMAIL_KEY = "notes.actions.builtin.followUpEmail";

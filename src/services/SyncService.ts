@@ -2786,16 +2786,19 @@ export class SyncService {
       );
     }
 
-    await this.pushPendingNoteActions();
+    const ownWrites = await this.pushPendingNoteActions();
     await this.pushNoteActionDeletes();
-    await this.pullNoteActions();
+    await this.pullNoteActions(ownWrites);
   }
 
-  private async pushPendingNoteActions(): Promise<void> {
+  /** Returns the server's updated_at for each row this pass wrote, by cloud id. */
+  private async pushPendingNoteActions(): Promise<Map<string, string>> {
+    const ownWrites = new Map<string, string>();
     const pending = (await window.electronAPI.getPendingNoteActions?.()) ?? [];
     for (const entry of pending.filter((e) => e.cloud_id)) {
       try {
         const server = await NoteActionService.update(entry.cloud_id!, toNoteActionFields(entry));
+        ownWrites.set(server.id, server.updated_at);
         await window.electronAPI.markNoteActionSynced?.(
           entry.id,
           server.id,
@@ -2828,6 +2831,7 @@ export class SyncService {
         for (const local of chunk) {
           const server = byClientId.get(local.client_id);
           if (!server) continue;
+          ownWrites.set(server.id, server.updated_at);
           const result = await window.electronAPI.markNoteActionSynced?.(
             local.id,
             server.id,
@@ -2848,6 +2852,7 @@ export class SyncService {
         console.error("Note action batch create failed:", err);
       }
     }
+    return ownWrites;
   }
 
   private async pushNoteActionDeletes(): Promise<void> {
@@ -2866,7 +2871,7 @@ export class SyncService {
     }
   }
 
-  private async pullNoteActions(): Promise<void> {
+  private async pullNoteActions(ownWrites: Map<string, string>): Promise<void> {
     try {
       const since = localStorage.getItem("lastSyncedAt.noteActions") ?? undefined;
       const sinceId = localStorage.getItem("lastSyncedAt.noteActions.id") ?? undefined;
@@ -2904,6 +2909,16 @@ export class SyncService {
             if (local && !(local.sync_status === "pending" && !local.cloud_id)) {
               await window.electronAPI.hardDeleteNoteAction?.(local.id);
             }
+            continue;
+          }
+
+          // This pass's own push coming back to a row that is pending again: the
+          // row changed after the push, so the local edit is the newer one even
+          // when the server's stamp sorts after it.
+          if (
+            local?.sync_status === "pending" &&
+            ownWrites.get(cloudEntry.id) === cloudEntry.updated_at
+          ) {
             continue;
           }
 

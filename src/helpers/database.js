@@ -13,6 +13,7 @@ const { parseEventTime } = require("./calendarAvailability");
 const { hasExplicitTimeZone, parseDbTimestamp, toDbTimestamp } = require("./dbTimestamp");
 const {
   BUILTIN_ACTIONS,
+  BUILTIN_KEY_PREFIX,
   DETAILED_NOTES_KEY,
   GENERATE_NOTES_KEY,
   NOTE_ACTION_LIMITS,
@@ -3048,10 +3049,12 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       const { id: cloudId, client_action_id: clientId, kind } = cloudEntry;
       if (!cloudId || !clientId || (kind !== "template" && kind !== "action")) return null;
+      // A built-in key names a row this build or a later one seeds; a synced copy
+      // would take its client id and stop that seeding at startup.
+      if (clientId.startsWith(BUILTIN_KEY_PREFIX)) return null;
       const fields = resolveActionFields(kind, cloudEntry);
       if (fields.error) return null;
       const existing = this.getNoteActionForCloudMerge(cloudEntry);
-      if (existing?.is_builtin) return null;
 
       const updatedAt = cloudEntry.updated_at || new Date().toISOString();
       const values = [
