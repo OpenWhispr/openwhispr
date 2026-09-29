@@ -1115,7 +1115,7 @@ export default function NoteEditor({
               </span>
             )}
           </div>
-          <div className="mt-5 flex items-center justify-between gap-3">
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
             <div className="flex min-w-0 items-center">
               <div
                 ref={segmentContainerRef}

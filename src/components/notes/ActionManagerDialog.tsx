@@ -352,7 +352,7 @@ export default function ActionManagerDialog({
                 </div>
 
                 {/* Editor form */}
-                <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 flex flex-col">
+                <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
                   <Input
                     dir="auto"
                     ref={nameInputRef}
@@ -418,7 +418,7 @@ export default function ActionManagerDialog({
                       )}
                       maxLength={NOTE_ACTION_LIMITS.prompt}
                       disabled={isSaving}
-                      className={cn(TEXTAREA_CLASS, isTemplate ? "min-h-24" : "flex-1 min-h-50")}
+                      className={cn(TEXTAREA_CLASS, "flex-1", isTemplate ? "min-h-24" : "min-h-50")}
                     />
                   </div>
 
