@@ -3543,7 +3543,7 @@
         "noModel": "No AI model selected. Configure one in Settings.",
         "actionFailed": "Action failed",
         "noEndpoint": "No self-hosted server URL set. Configure one in Settings.",
-        "summaryTruncated": "The AI model ran out of room before it finished rewriting the summary, so the summary was left as it was.",
+        "outputTruncated": "The AI model ran out of room before it finished, so the note was left as it was.",
         "saveFailed": "Couldn't save. Check that nothing is too long and try again."
       },
       "tab": "Actions",

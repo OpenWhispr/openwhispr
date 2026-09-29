@@ -512,7 +512,7 @@ export function runBackgroundAction(
         // The providers' truncation key describes dictation cleanup.
         messageKey:
           messageKey === TRUNCATED_OUTPUT_MESSAGE_KEY
-            ? "notes.actions.errors.summaryTruncated"
+            ? "notes.actions.errors.outputTruncated"
             : messageKey,
         messageParams,
       });

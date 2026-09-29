@@ -225,6 +225,6 @@ test("a cut-off rewrite reports a notes error, not the dictation one providers a
 
   let events = [];
   await waitFor(() => (events = store.consumeErrorEvents()).length > 0, "the error");
-  assert.equal(events[0].messageKey, "notes.actions.errors.summaryTruncated");
+  assert.equal(events[0].messageKey, "notes.actions.errors.outputTruncated");
   assert.equal(updates.length, 0);
 });

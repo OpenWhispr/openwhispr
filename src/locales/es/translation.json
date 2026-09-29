@@ -3229,7 +3229,7 @@
         "noModel": "No hay modelo de IA seleccionado. Configura uno en Ajustes.",
         "actionFailed": "La acción falló",
         "noEndpoint": "No hay URL del servidor autoalojado configurada. Configura una en Ajustes.",
-        "summaryTruncated": "El modelo de IA se quedó sin espacio antes de terminar de reescribir el resumen, así que el resumen quedó como estaba.",
+        "outputTruncated": "El modelo de IA se quedó sin espacio antes de terminar, así que la nota quedó como estaba.",
         "saveFailed": "No se pudo guardar. Comprueba que nada sea demasiado largo e inténtalo de nuevo."
       },
       "tab": "Acciones",

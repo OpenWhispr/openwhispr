@@ -3176,7 +3176,7 @@
         "noModel": "Nessun modello IA selezionato. Configurane uno nelle Impostazioni.",
         "actionFailed": "Azione non riuscita",
         "noEndpoint": "Nessun URL del server self-hosted impostato. Configurane uno nelle Impostazioni.",
-        "summaryTruncated": "Il modello AI ha esaurito lo spazio prima di finire di riscrivere il riepilogo, quindi il riepilogo è rimasto com'era.",
+        "outputTruncated": "Il modello AI ha esaurito lo spazio prima di finire, quindi la nota è rimasta com'era.",
         "saveFailed": "Impossibile salvare. Controlla che nulla sia troppo lungo e riprova."
       },
       "tab": "Azioni",
