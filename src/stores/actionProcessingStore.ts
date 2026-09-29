@@ -11,7 +11,16 @@ import type { ActionItem } from "../types/electron";
 import { estimateNoteTokens, planNoteChunks, splitChunkInHalf } from "../helpers/noteChunking";
 import type { LocalInferenceError } from "../utils/localInferenceError";
 import type { ReasoningConfig } from "../services/BaseReasoningService";
-import { TRUNCATED_OUTPUT_MESSAGE_KEY } from "../services/ai/chatRequestBody";
+import {
+  EMPTY_OUTPUT_MESSAGE_KEY,
+  TRUNCATED_OUTPUT_MESSAGE_KEY,
+} from "../services/ai/chatRequestBody";
+
+// The providers' error keys describe dictation cleanup; a note run shows its own.
+const NOTE_ERROR_KEYS: Record<string, string> = {
+  [TRUNCATED_OUTPUT_MESSAGE_KEY]: "notes.actions.errors.outputTruncated",
+  [EMPTY_OUTPUT_MESSAGE_KEY]: "notes.actions.emptyReply",
+};
 
 // Output room reserved in each part's window when the parts are planned. The
 // allowance a part actually gets is its share of the room the final pass has
@@ -519,11 +528,7 @@ export function runBackgroundAction(
       pushErrorEvent({
         noteId,
         message,
-        // The providers' truncation key describes dictation cleanup.
-        messageKey:
-          messageKey === TRUNCATED_OUTPUT_MESSAGE_KEY
-            ? "notes.actions.errors.outputTruncated"
-            : messageKey,
+        messageKey: (messageKey && NOTE_ERROR_KEYS[messageKey]) || messageKey,
         messageParams,
       });
     } finally {

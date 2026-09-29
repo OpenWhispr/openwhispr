@@ -5,11 +5,9 @@ const { createDb } = require("./harness/db.js");
 const DatabaseManager = require("../../src/helpers/database.js");
 const {
   BUILTIN_ACTIONS,
-  CREATE_OUTLINE_KEY,
   DETAILED_NOTES_KEY,
   FOLLOW_UP_EMAIL_KEY,
   GENERATE_NOTES_KEY,
-  MAKE_TODOS_KEY,
   NOTE_ACTION_LIMITS,
 } = require("../../src/helpers/builtinActions.js");
 
@@ -188,16 +186,17 @@ test("templates and actions are validated and normalized when saved", (t) => {
 test("an older build renaming the newer built-ins doesn't stop the next launch", (t) => {
   const db = createDb(t);
   if (!db) return;
+  const newerKeys = ["notes.actions.builtin.makeTodos", "notes.actions.builtin.createOutline"];
   // What a build that predates Make to-dos and Create outline does to their rows.
   db.db
     .prepare(
       "UPDATE actions SET translation_key = ? WHERE is_builtin = 1 AND translation_key IN (?, ?)"
     )
-    .run(GENERATE_NOTES_KEY, MAKE_TODOS_KEY, CREATE_OUTLINE_KEY);
+    .run(GENERATE_NOTES_KEY, ...newerKeys);
   db.db.close();
 
   relaunch((upgraded) => {
-    for (const key of [GENERATE_NOTES_KEY, MAKE_TODOS_KEY, CREATE_OUTLINE_KEY]) {
+    for (const key of [GENERATE_NOTES_KEY, ...newerKeys]) {
       assert.equal(builtinRows(upgraded, key).length, 1, key);
     }
   });

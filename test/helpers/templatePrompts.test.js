@@ -90,8 +90,12 @@ test("sections are trimmed, lose their Markdown heading marks, and need a headin
       { heading: "  ### Next steps ", instruction: " Owners and dates. " },
       { heading: "   ", instruction: "No heading, so dropped." },
       { heading: "# # #", instruction: "Only heading marks, so dropped." },
+      { heading: "#1 Priority", instruction: "A '#' in the text itself stays." },
     ]),
-    [{ heading: "Next steps", instruction: "Owners and dates." }]
+    [
+      { heading: "Next steps", instruction: "Owners and dates." },
+      { heading: "#1 Priority", instruction: "A '#' in the text itself stays." },
+    ]
   );
 });
 

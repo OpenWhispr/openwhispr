@@ -201,32 +201,39 @@ test("a summary action rewrites only the summary and never saves a clipped rewri
   assert.deepEqual(Object.keys(updates[0].payload), ["enhanced_content"]);
 });
 
-test("a cut-off rewrite reports a notes error, not the dictation one providers attach", async (t) => {
+test("a cut-off or empty rewrite reports a notes error, not the dictation one providers attach", async (t) => {
   const { store, updates } = await loadStore(t);
-  const { TRUNCATED_OUTPUT_MESSAGE_KEY } = await import("../../src/services/ai/chatRequestBody.ts");
-  globalThis.__processTextError = Object.assign(new Error("Model output was truncated"), {
-    messageKey: TRUNCATED_OUTPUT_MESSAGE_KEY,
-  });
+  const { EMPTY_OUTPUT_MESSAGE_KEY, TRUNCATED_OUTPUT_MESSAGE_KEY } =
+    await import("../../src/services/ai/chatRequestBody.ts");
 
-  store.runBackgroundAction(
-    13,
-    "## Current Summary\n- decided things",
-    "hash-13",
-    {
-      id: 5,
-      client_id: "shorten",
-      kind: "action",
-      output: "summary",
-      name: "Shorten",
-      prompt: "x",
-    },
-    { modelId: "gpt-4.1", isCloudMode: true, isMeetingNote: true, fromSummary: true },
-    LABELS
-  );
+  for (const [noteId, providerKey, noteKey] of [
+    [13, TRUNCATED_OUTPUT_MESSAGE_KEY, "notes.actions.errors.outputTruncated"],
+    [14, EMPTY_OUTPUT_MESSAGE_KEY, "notes.actions.emptyReply"],
+  ]) {
+    globalThis.__processTextError = Object.assign(new Error("Provider refused the reply"), {
+      messageKey: providerKey,
+    });
 
-  let events = [];
-  await waitFor(() => (events = store.consumeErrorEvents()).length > 0, "the error");
-  assert.equal(events[0].messageKey, "notes.actions.errors.outputTruncated");
+    store.runBackgroundAction(
+      noteId,
+      "## Current Summary\n- decided things",
+      `hash-${noteId}`,
+      {
+        id: 5,
+        client_id: "shorten",
+        kind: "action",
+        output: "summary",
+        name: "Shorten",
+        prompt: "x",
+      },
+      { modelId: "gpt-4.1", isCloudMode: true, isMeetingNote: true, fromSummary: true },
+      LABELS
+    );
+
+    let events = [];
+    await waitFor(() => (events = store.consumeErrorEvents()).length > 0, "the error");
+    assert.equal(events[0].messageKey, noteKey);
+  }
   assert.equal(updates.length, 0);
 });
 

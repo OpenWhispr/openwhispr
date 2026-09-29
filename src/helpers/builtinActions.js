@@ -8,8 +8,6 @@
 export const GENERATE_NOTES_KEY = "notes.actions.builtin.generateNotes";
 export const DETAILED_NOTES_KEY = "notes.actions.builtin.detailedNotes";
 export const FOLLOW_UP_EMAIL_KEY = "notes.actions.builtin.followUpEmail";
-export const MAKE_TODOS_KEY = "notes.actions.builtin.makeTodos";
-export const CREATE_OUTLINE_KEY = "notes.actions.builtin.createOutline";
 
 // Caps on a template's or action's fields, enforced when a row is saved. Keep
 // them in step with the API's schemas once custom rows sync.
@@ -497,18 +495,15 @@ export const BUILTIN_ACTIONS = [
     icon: "mail",
     sortOrder: 2,
   },
-  {
-    translationKey: MAKE_TODOS_KEY,
-    kind: "action",
+  builtinAction({
+    key: "makeTodos",
     name: "Make to-dos",
     description: "List every to-do and its owner in the chat",
     prompt: MAKE_TODOS_PROMPT,
-    sections: null,
     output: "chat",
-    previousPrompts: [],
     icon: "clipboard-check",
     sortOrder: 3,
-  },
+  }),
   builtinAction({
     key: "shorten",
     name: "Shorten",
@@ -525,18 +520,15 @@ export const BUILTIN_ACTIONS = [
     output: "summary",
     sortOrder: 5,
   }),
-  {
-    translationKey: CREATE_OUTLINE_KEY,
-    kind: "action",
+  builtinAction({
+    key: "createOutline",
     name: "Create outline",
     description: "Outline the note's topics in the chat",
     prompt: CREATE_OUTLINE_PROMPT,
-    sections: null,
     output: "chat",
-    previousPrompts: [],
     icon: "file-text",
     sortOrder: 6,
-  },
+  }),
   builtinAction({
     key: "slackUpdate",
     name: "Slack update",
