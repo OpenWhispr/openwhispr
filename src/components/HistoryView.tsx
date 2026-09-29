@@ -159,27 +159,22 @@ export default function HistoryView({
               </div>
             </div>
           ) : history.length === 0 ? (
-            <>
-              <p className="pt-2 pb-2.5 text-sm text-muted-foreground">
-                {t("controlPanel.history.sectionTitle")}
+            <div className="flex min-h-72 flex-col items-center px-4 pt-6 text-center">
+              <ThemedEmptyIllustration
+                light={historyEmptyLight}
+                dark={historyEmptyDark}
+                width={560}
+                height={102}
+                className="[mask-image:linear-gradient(to_right,transparent,black_20%,black_80%,transparent)]"
+              />
+              <h2 className="mt-6 text-lg font-semibold text-foreground">
+                {t("controlPanel.history.empty")}
+              </h2>
+              <p className="mt-2 max-w-md text-sm text-muted-foreground">
+                {t("controlPanel.history.emptyDescription")}
               </p>
-              <div className="flex min-h-72 flex-col items-center px-4 pt-6 text-center">
-                <ThemedEmptyIllustration
-                  light={historyEmptyLight}
-                  dark={historyEmptyDark}
-                  width={560}
-                  height={102}
-                  className="[mask-image:linear-gradient(to_right,transparent,black_20%,black_80%,transparent)]"
-                />
-                <h2 className="mt-6 text-lg font-semibold text-foreground">
-                  {t("controlPanel.history.empty")}
-                </h2>
-                <p className="mt-2 max-w-md text-sm text-muted-foreground">
-                  {t("controlPanel.history.emptyDescription")}
-                </p>
-                <DictationHotkeyHint hotkey={hotkey} className="mt-2" />
-              </div>
-            </>
+              <DictationHotkeyHint hotkey={hotkey} className="mt-2" />
+            </div>
           ) : (
             <div className="group">
               {groupedHistory.map((group, index) => (

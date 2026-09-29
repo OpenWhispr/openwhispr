@@ -374,8 +374,6 @@ export default function UpcomingMeetings({
 
   return (
     <div>
-      <p className="pt-2 pb-2.5 text-sm text-muted-foreground">{t("upcoming.title")}</p>
-
       {/* Loading state */}
       {isLoading && (
         <div className="flex items-center justify-center gap-2 py-6">
