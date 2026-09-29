@@ -213,7 +213,9 @@ export default function HistoryView({
           )}
         </div>
 
-        <div className="hidden w-80 shrink-0 md:block">
+        {/* With history, drop the day cards by one date row (pt-2 + text-sm line + pb-2.5) so
+            the first one lines up with the first transcription. */}
+        <div className={cn("hidden w-80 shrink-0 md:block", history.length > 0 && "pt-[2.375rem]")}>
           <UpcomingMeetings
             events={events}
             isLoading={eventsLoading}

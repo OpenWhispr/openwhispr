@@ -38,10 +38,16 @@ export function ChatMessages({
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      // Keep focus in the composer: blurring an expanded composer collapses it and slides a
-      // bottom-pinned conversation out from under the pointer before the click completes.
+      // Keep focus in a focused composer: blurring it collapses it and slides a bottom-pinned
+      // conversation out from under the pointer before the click completes. Otherwise links
+      // keep their default press, so their text can still be selected or dragged.
       onMouseDown={(event) => {
-        if ((event.target as Element).closest("button, a")) event.preventDefault();
+        if (
+          document.activeElement instanceof HTMLTextAreaElement &&
+          (event.target as Element).closest("button, a")
+        ) {
+          event.preventDefault();
+        }
       }}
       className={cn("min-h-0 flex-1 overflow-y-auto agent-chat-scroll px-3 py-2", scrollClassName)}
     >
