@@ -15,14 +15,14 @@ import {
   SUMMARY_ACTION_SYSTEM_PROMPT,
 } from "./builtinActions.js";
 
-/** Trimmed sections that have a heading; anything that is not a list is no sections. */
+/** Trimmed sections whose heading has text besides "#"s; a non-list is no sections. */
 export function normalizeSections(value) {
   if (!Array.isArray(value)) return [];
   return value
     .map((section) => ({
       heading: String(section?.heading ?? "")
         .trim()
-        .replace(/^#+\s*/, ""),
+        .replace(/^[#\s]+/, ""),
       instruction: String(section?.instruction ?? "").trim(),
     }))
     .filter((section) => section.heading);

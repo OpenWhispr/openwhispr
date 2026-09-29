@@ -89,6 +89,7 @@ test("sections are trimmed, lose their Markdown heading marks, and need a headin
     normalizeSections([
       { heading: "  ### Next steps ", instruction: " Owners and dates. " },
       { heading: "   ", instruction: "No heading, so dropped." },
+      { heading: "# # #", instruction: "Only heading marks, so dropped." },
     ]),
     [{ heading: "Next steps", instruction: "Owners and dates." }]
   );
