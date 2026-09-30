@@ -8,7 +8,7 @@ import { BRAND_GLASS_SURFACE } from "./gradientCircle";
 const buttonVariants = cva(
   [
     "inline-flex items-center justify-center gap-2 whitespace-nowrap",
-    "rounded text-sm font-medium cursor-pointer select-none",
+    "rounded-full text-sm font-medium cursor-pointer select-none",
     "transition-[background-color,border-color,color,transform] duration-200 ease-out",
     "outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
     "disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed",
@@ -19,7 +19,7 @@ const buttonVariants = cva(
       variant: {
         // Primary CTA — brand glass capsule
         default: [
-          "relative rounded-full font-semibold tracking-[0.005em]",
+          "relative font-semibold tracking-[0.005em]",
           BRAND_GLASS_SURFACE,
           "hover:brightness-110",
           "active:brightness-95 active:scale-[0.985]",
@@ -111,7 +111,8 @@ const buttonVariants = cva(
         default: "h-10 px-4 py-2",
         sm: "h-8 px-3 text-xs gap-1.5",
         lg: "h-12 px-6 text-sm",
-        icon: "size-10",
+        // Icon buttons keep the 4px radius; the pill base is sized for text labels.
+        icon: "size-10 rounded",
       },
     },
     defaultVariants: {

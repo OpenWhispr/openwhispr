@@ -67,6 +67,7 @@ class GeminiLiveStreaming {
     this.isConnecting = false;
     this.isDisconnecting = false;
     this.completedSegments = [];
+    this.openTurnPartial = "";
     this.onPartialTranscript = null;
     this.onFinalTranscript = null;
     this.onError = null;
@@ -95,8 +96,23 @@ class GeminiLiveStreaming {
     this.coldStartBufferSize = 0;
   }
 
+  // A turn the server never finalized (it can go silent after audioStreamEnd)
+  // exists only as its partial, so the transcript keeps it rather than losing
+  // everything since the last pause.
   getFullTranscript() {
-    return this.completedSegments.join(" ");
+    return [...this.completedSegments, this._openTurnText()].filter(Boolean).join(" ");
+  }
+
+  // The partial sometimes restates the finalized turns first, run together
+  // without spaces ("...October.Before then"); only what follows is new.
+  _openTurnText() {
+    let text = this.openTurnPartial;
+    for (const segment of this.completedSegments) {
+      const rest = text.trimStart();
+      if (!rest.startsWith(segment)) break;
+      text = rest.slice(segment.length);
+    }
+    return text.trim();
   }
 
   // Test seam: overridden to point at a loopback server.
@@ -140,6 +156,7 @@ class GeminiLiveStreaming {
 
     if (!this.bufferingAudio) this.beginConnecting();
     this.completedSegments = [];
+    this.openTurnPartial = "";
     this.audioBytesSent = 0;
     this.currentModel = resolveLiveModel(options.model);
     this._connectionLossNotified = false;
@@ -238,12 +255,14 @@ class GeminiLiveStreaming {
       const partial = serverContent.interimInputTranscription?.text;
       if (partial) {
         this._turnEnded = false;
+        this.openTurnPartial = partial;
         this.onPartialTranscript?.(partial);
       }
 
       const final = serverContent.inputTranscription?.text?.trim();
       if (final) {
         this.completedSegments.push(final);
+        this.openTurnPartial = "";
         const fullText = this.getFullTranscript();
         this.onFinalTranscript?.(fullText, Date.now());
         debugLogger.debug("Gemini Live turn completed", {
@@ -448,8 +467,13 @@ class GeminiLiveStreaming {
   }
 
   _takeTranscript() {
+    const openTurnLength = this._openTurnText().length;
+    if (openTurnLength) {
+      debugLogger.debug("Gemini Live last turn was never finalized", { openTurnLength });
+    }
     const result = { text: this.getFullTranscript() };
     this.completedSegments = [];
+    this.openTurnPartial = "";
     return result;
   }
 

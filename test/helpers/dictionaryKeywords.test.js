@@ -29,3 +29,21 @@ test("keywords drop the characters OpenAI rejects and any entry left empty", asy
   assert.deepEqual(dictionaryKeywords(null), []);
   assert.deepEqual(dictionaryKeywords(""), []);
 });
+
+test("keywords stop at 900, counted after empty entries are dropped (#2224)", async () => {
+  const { dictionaryKeywords } = await load();
+  const terms = Array.from({ length: 1481 }, (_, i) => `Term${i}`);
+  assert.deepEqual(dictionaryKeywords(", , <>, " + terms.join(", ")), terms.slice(0, 900));
+  assert.deepEqual(dictionaryKeywords(terms.slice(0, 900).join(", ")), terms.slice(0, 900));
+});
+
+test("terms past the keyword cap are comma-joined for the prompt, never dropped (#2224)", async () => {
+  const { dictionaryKeywordOverflow } = await load();
+  const terms = Array.from({ length: 1481 }, (_, i) => `Term${i}`);
+  assert.equal(
+    dictionaryKeywordOverflow(", , <>, " + terms.join(", ")),
+    terms.slice(900).join(", ")
+  );
+  assert.equal(dictionaryKeywordOverflow(terms.slice(0, 900).join(", ")), null);
+  assert.equal(dictionaryKeywordOverflow(null), null);
+});

@@ -597,6 +597,8 @@ export default function App() {
     panelStartPosition,
     horizontalDirection: voiceHorizontalDirection,
   });
+  const voicePillPopoverAlign =
+    panelStartPosition === "center" ? "center" : voiceHorizontalDirection;
   const voicePillTravelDuration =
     liveTranscript.open && liveTranscript.entrancePhase === "encapsulate"
       ? LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateMs
@@ -672,7 +674,7 @@ export default function App() {
           <PillTooltip
             content={canReopenLiveTranscript ? t("transcriptionPreview.label") : micTooltip}
             disabled={anyPanelMounted}
-            align={panelStartPosition === "center" ? "center" : voiceHorizontalDirection}
+            align={voicePillPopoverAlign}
           >
             <VoicePill
               ref={buttonRef}
@@ -767,6 +769,7 @@ export default function App() {
           {!anyPanelMounted && isCommandMenuOpen && (
             <PillCommandMenu
               buttonRef={buttonRef}
+              align={voicePillPopoverAlign}
               isRecording={isRecording}
               agentAllowed={agentAllowed}
               meetingAllowed={meetingAllowed}

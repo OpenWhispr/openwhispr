@@ -48,7 +48,8 @@ class MeetingDetectionEngine {
     this.windowManager = windowManager;
     this.databaseManager = databaseManager;
     this.activeDetections = new Map();
-    this.preferences = { processDetection: true, audioDetection: true };
+    // Saved renderer preferences arrive after engine startup.
+    this.preferences = { processDetection: false, audioDetection: false };
     this._userRecording = false;
     this._meetingModeActive = false;
     this._notificationQueue = [];
@@ -736,10 +737,6 @@ class MeetingDetectionEngine {
 
     this._syncMeetingProcessDetector();
     this._syncAudioActivityDetector();
-  }
-
-  getPreferences() {
-    return { ...this.preferences };
   }
 
   start() {

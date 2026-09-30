@@ -101,8 +101,8 @@ export default function TestConnectionButton({ provider, getConfig }: TestConnec
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
-                className="h-6 w-6 p-0 shrink-0"
+                size="icon"
+                className="size-6"
                 onClick={() => handleCopy(errorInfo.copyCommand!)}
                 aria-label={t("reasoning.enterprise.technicalDetails.copyCommand")}
               >

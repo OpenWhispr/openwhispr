@@ -1,6 +1,10 @@
 {
   "extends": "electron-builder.json",
+  "extraMetadata": {
+    "windowsTrayIdentity": false
+  },
   "win": {
-    "azureSignOptions": null
+    "azureSignOptions": null,
+    "forceCodeSigning": false
   }
 }

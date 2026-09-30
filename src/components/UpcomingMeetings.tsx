@@ -178,7 +178,7 @@ function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
       size="sm"
       variant="ghost"
       onClick={startNotes}
-      className="pointer-events-auto h-7 shrink-0 gap-1.5 rounded-full bg-surface-3 px-3 text-xs text-foreground hover:bg-surface-raised dark:bg-surface-2 dark:hover:bg-surface-3"
+      className="pointer-events-auto h-7 bg-surface-3 hover:bg-surface-raised dark:bg-surface-2 dark:hover:bg-surface-3"
     >
       {joinUrl ? <Video size={12} /> : <Mic size={12} />}
       {joinUrl ? t("upcoming.joinAndTranscribe") : t("upcoming.takeNotes")}
@@ -315,11 +315,7 @@ export default function UpcomingMeetings({
           title={t("upcoming.connectCalendar")}
           description={t("upcoming.connectCalendarDescription")}
         >
-          <Button
-            size="sm"
-            onClick={onConnectCalendar}
-            className="h-[30px] rounded-full px-3.5 text-xs"
-          >
+          <Button size="sm" onClick={onConnectCalendar} className="h-[30px] px-3.5">
             {t("upcoming.connectCalendarButton")}
           </Button>
         </EmptyStateCard>
@@ -339,7 +335,7 @@ export default function UpcomingMeetings({
               size="sm"
               variant="outline"
               onClick={() => systemAudio.request()}
-              className="h-[30px] rounded-full px-3.5 text-xs"
+              className="h-[30px] px-3.5"
             >
               {systemAudio.mode === "native"
                 ? t("upcoming.openSettings")

@@ -318,12 +318,7 @@ export default function OnboardingShell({
                 </Button>
               )}
               {onSkip && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={onSkip}
-                  className="h-9 min-w-20 rounded-full px-4 text-sm"
-                >
+                <Button type="button" variant="ghost" onClick={onSkip} className="h-9 min-w-20">
                   {skipLabel ?? t("common.skip")}
                 </Button>
               )}

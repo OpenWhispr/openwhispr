@@ -1,0 +1,20 @@
+{
+  "name": "speaker-diarization",
+  "version": "1.0.0",
+  "description": "On-device speaker diarization over FluidAudio (16kHz mono WAV -> speaker-labelled segments + per-speaker embeddings)",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "scripts": {
+    "build": "expo-module build",
+    "clean": "expo-module clean",
+    "lint": "expo-module lint",
+    "test": "expo-module test"
+  },
+  "devDependencies": {
+    "expo-module-scripts": "^3.0.0"
+  },
+  "peerDependencies": {
+    "expo": "*"
+  },
+  "private": true
+}

@@ -78,10 +78,12 @@ struct AttendeeOut: Encodable {
     let name: String?
     let status: String
     let isSelf: Bool
+    let isResource: Bool
 
     enum CodingKeys: String, CodingKey {
         case email, name, status
         case isSelf = "self"
+        case isResource = "resource"
     }
 }
 
@@ -95,6 +97,7 @@ struct EventOut: Encodable {
     let status: String
     let availability: String
     let organizer_email: String?
+    let organizer_self: Bool
     let url: String?
     let location: String?
     let notes_urls: [String]
@@ -208,7 +211,8 @@ func mapEvent(_ event: EKEvent) -> EventOut? {
             email: mailtoEmail(participant.url),
             name: participant.name,
             status: participantStatus(participant.participantStatus),
-            isSelf: participant.isCurrentUser
+            isSelf: participant.isCurrentUser,
+            isResource: participant.participantType == .room || participant.participantType == .resource
         )
     }
 
@@ -222,6 +226,7 @@ func mapEvent(_ event: EKEvent) -> EventOut? {
         status: eventStatus(event.status),
         availability: eventAvailability(event.availability),
         organizer_email: mailtoEmail(event.organizer?.url),
+        organizer_self: event.organizer?.isCurrentUser ?? false,
         url: event.url?.absoluteString,
         location: event.location,
         notes_urls: extractURLs(from: event.notes),

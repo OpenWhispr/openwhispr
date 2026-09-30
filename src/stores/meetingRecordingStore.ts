@@ -430,6 +430,9 @@ let recentSystemSpeaker: RecentSystemSpeaker | null = null;
 let speakerLocks: Map<string, string> = new Map();
 let pushConfigTimeout: ReturnType<typeof setTimeout> | null = null;
 let sessionSystemAudioActive = false;
+// True while the recording's own note is deleted mid-recording, so a live save
+// never writes the transcript back onto its tombstone.
+let recordingNoteDeleted = false;
 
 export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   isRecording: false,
@@ -813,6 +816,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
     speakerLocks = locks;
     systemPartialSpeakerIdValue = null;
     sessionSystemAudioActive = false;
+    recordingNoteDeleted = false;
 
     useMeetingRecordingStore.setState({
       isRecording: true,
@@ -1538,6 +1542,37 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
   return true;
 }
 
+// Writes the live segments to the recording's note, serialized exactly as the
+// stop path writes them. Shared by the 30-second crash-safety save and the
+// flush before an unload. A no-op once a stop has begun: that
+// stop has already written the final transcript (or will write main's, for a
+// recording with no segments), and a second write could overwrite it.
+export async function persistLiveTranscript(): Promise<void> {
+  const { recordingNoteId, segments } = useMeetingRecordingStore.getState();
+  if (!isRecordingFlag || recordingNoteDeleted || recordingNoteId == null) return;
+  if (segments.length === 0) return;
+  try {
+    // Posted before the first await: during beforeunload nothing after it is
+    // guaranteed to run.
+    const result = await window.electronAPI?.updateNote?.(recordingNoteId, {
+      transcript: serializeTranscriptSegments(segments),
+    });
+    if (result && !result.success) {
+      logger.error(
+        "Failed to persist live meeting transcript",
+        { error: result.error, noteId: recordingNoteId },
+        "meeting"
+      );
+    }
+  } catch (err) {
+    logger.error(
+      "Failed to persist live meeting transcript",
+      { error: (err as Error).message, noteId: recordingNoteId },
+      "meeting"
+    );
+  }
+}
+
 export interface StopRecordingResult {
   diarizationSessionId: string | null;
   // True only when this call ended a live recording — false for a no-op stop
@@ -1786,6 +1821,36 @@ if (typeof window !== "undefined") {
         "meeting"
       );
     });
+  });
+}
+
+// Registered once at module load, like the diarization listener above: the
+// note can be deleted from the sidebar while the recording runs on. A team-note
+// delete the server denies revives the same row, and the snapshot pull that
+// follows re-syncs it live, so saves resume. A pull never clears deleted_at, so
+// one racing a real delete re-syncs the tombstone and the guard holds.
+if (typeof window !== "undefined") {
+  window.electronAPI?.onNoteDeleted?.(({ id }) => {
+    if (isRecordingFlag && id === useMeetingRecordingStore.getState().recordingNoteId) {
+      recordingNoteDeleted = true;
+    }
+  });
+  window.electronAPI?.onNoteSynced?.((note) => {
+    if (!note.deleted_at && note.id === useMeetingRecordingStore.getState().recordingNoteId) {
+      recordingNoteDeleted = false;
+    }
+  });
+}
+
+// A reload (Sign in, SSO completion, the crash screen's Reload) replaces this
+// page mid-recording: main's owner-loss teardown ends the session, and this
+// module's state goes with the page before stopRecording can save what was said
+// since the last 30-second save. beforeunload runs first, for location.reload()
+// and main's loadURL/loadFile alike. Never cancel it or return a value: Electron
+// treats either as refusing the unload, and main's load then fails.
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeunload", () => {
+    void persistLiveTranscript();
   });
 }
 

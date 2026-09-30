@@ -42,6 +42,9 @@ export default class FakeAudioManager {
   shouldUseStreaming() {
     return false;
   }
+  isSttConfigStale() {
+    return false;
+  }
   cleanup() {}
 }
 `;

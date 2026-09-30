@@ -1,0 +1,20 @@
+{
+  "name": "apple-llm",
+  "version": "1.0.0",
+  "description": "On-device text generation over Apple's Foundation Models framework",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "scripts": {
+    "build": "expo-module build",
+    "clean": "expo-module clean",
+    "lint": "expo-module lint",
+    "test": "expo-module test"
+  },
+  "devDependencies": {
+    "expo-module-scripts": "^3.0.0"
+  },
+  "peerDependencies": {
+    "expo": "*"
+  },
+  "private": true
+}

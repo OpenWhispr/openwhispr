@@ -16,9 +16,8 @@ const FALLBACK_HOTKEYS = ["F8", "F9", "Control+Shift+Space"];
 // Default hotkey for dictation if no saved value exists
 const DEFAULT_HOTKEY = "Control+Super";
 
-// Slots routed through GNOME native gsettings (not globalShortcut).
-// Temporary slots like "cancel" stay on globalShortcut.
-const GNOME_NATIVE_SLOTS = new Set(["meeting", "voiceAgent", "translation"]);
+// Dictation has a dedicated native path because it also supports push-to-talk.
+const LINUX_NATIVE_TAP_SLOTS = new Set(["meeting", "voiceAgent", "translation"]);
 
 // KDE registration failure reasons — reuse existing i18n keys
 const KDE_FAILURE_REASONS = {
@@ -35,7 +34,7 @@ function isRightSideModifier(hotkey) {
 }
 
 // Modifier-only combos (e.g. "Control+Super") bypass globalShortcut on Windows
-// and use the native low-level keyboard hook instead.
+// and Linux, and use the native low-level keyboard listener instead.
 const MODIFIER_NAMES = new Set([
   "control",
   "ctrl",
@@ -108,8 +107,13 @@ class HotkeyManager extends EventEmitter {
     this.useGnome = false;
     this.hyprlandManager = null;
     this.useHyprland = false;
+    this.hyprlandInitializationAttempted = false;
+    this.hyprlandRegistrationReady = Promise.resolve();
     this.kdeManager = null;
     this.useKDE = false;
+    // Injected by main.js on Linux: LinuxKeyManager.checkAvailability. Kept as a
+    // function so this module never requires the manager it asks about.
+    this.nativeListenerProbe = null;
   }
 
   // Ensure a slot exists and return it (slots always use the list shape).
@@ -206,12 +210,19 @@ class HotkeyManager extends EventEmitter {
         }),
       };
     }
-    // GNOME/KDE/Hyprland bind one accelerator per slot, so they use the primary
-    // (first) hotkey; the globalShortcut path below registers the whole list.
+    // Native Linux backends bind only the primary hotkey.
     const hotkey = hotkeys[0];
+    // GNOME, KDE and Hyprland shortcuts need a regular key; only the evdev
+    // listener, which those desktops do not use, can watch a lone right modifier.
+    if (this.isUsingNativeShortcut() && isRightSideModifier(hotkey)) {
+      return {
+        success: false,
+        error: i18nMain.t("hotkey.errors.rightModifierNeedsListener", { hotkey }),
+      };
+    }
     if (
       hotkeys.length > 1 &&
-      ((this.useGnome && GNOME_NATIVE_SLOTS.has(slotName)) ||
+      (((this.useGnome || this.useHyprland) && LINUX_NATIVE_TAP_SLOTS.has(slotName)) ||
         (this.useKDE && slotName !== "cancel"))
     ) {
       debugLogger.log(
@@ -220,7 +231,7 @@ class HotkeyManager extends EventEmitter {
     }
 
     // On GNOME (X11 or Wayland), route named slots through native gsettings
-    if (this.useGnome && this.gnomeManager && GNOME_NATIVE_SLOTS.has(slotName)) {
+    if (this.useGnome && this.gnomeManager && LINUX_NATIVE_TAP_SLOTS.has(slotName)) {
       const gnomeHotkey = GnomeShortcutManager.convertToGnomeFormat(hotkey);
       if (!gnomeHotkey) {
         debugLogger.log(
@@ -298,6 +309,34 @@ class HotkeyManager extends EventEmitter {
       return { success: true, hotkey };
     }
 
+    if (LINUX_NATIVE_TAP_SLOTS.has(slotName) && this.useHyprland && this.hyprlandManager) {
+      const conflict = this._findSlotConflict(slotName, hotkey);
+      if (conflict) return conflict;
+
+      const success = await this.hyprlandManager.registerSlotKeybinding(hotkey, slotName, callback);
+      if (!success) {
+        return {
+          success: false,
+          error: i18nMain.t("hotkey.errors.registrationFailed", { hotkey }),
+        };
+      }
+
+      const slot = this._ensureSlot(slotName);
+      slot.hotkeys = [hotkey];
+      slot.callback = callback;
+      slot.accelerators = [];
+      this.slots.set(slotName, slot);
+      debugLogger.log(`[HotkeyManager] Hyprland slot "${slotName}" set to "${hotkey}"`);
+      return { success: true, hotkey };
+    }
+
+    if (LINUX_NATIVE_TAP_SLOTS.has(slotName) && this.hyprlandInitializationAttempted) {
+      return {
+        success: false,
+        error: i18nMain.t("hotkey.errors.registrationFailed", { hotkey }),
+      };
+    }
+
     const result = this.setupShortcuts(hotkeys, callback, slotName, options);
     if (result.success) {
       const slot = this._ensureSlot(slotName);
@@ -325,7 +364,7 @@ class HotkeyManager extends EventEmitter {
     }
 
     // On GNOME, native slots are managed via gsettings, not globalShortcut
-    if (this.useGnome && this.gnomeManager && GNOME_NATIVE_SLOTS.has(slotName)) {
+    if (this.useGnome && this.gnomeManager && LINUX_NATIVE_TAP_SLOTS.has(slotName)) {
       this.gnomeManager.unregisterKeybinding(slotName).catch((err) => {
         debugLogger.warn(
           `[HotkeyManager] Error unregistering GNOME keybinding for slot "${slotName}":`,
@@ -335,6 +374,24 @@ class HotkeyManager extends EventEmitter {
       slot.hotkeys = [];
       slot.accelerators = [];
       return;
+    }
+
+    if (this.useHyprland && this.hyprlandManager && LINUX_NATIVE_TAP_SLOTS.has(slotName)) {
+      return this.hyprlandManager
+        .unregisterKeybinding(slotName)
+        .then((success) => {
+          if (!success) return false;
+          slot.hotkeys = [];
+          slot.accelerators = [];
+          return true;
+        })
+        .catch((err) => {
+          debugLogger.warn(
+            `[HotkeyManager] Error unregistering Hyprland keybinding for slot "${slotName}":`,
+            err.message
+          );
+          return false;
+        });
     }
 
     // Release what was actually registered; native-listener entries are null.
@@ -398,11 +455,39 @@ class HotkeyManager extends EventEmitter {
     return keys;
   }
 
+  // What to tell the user when the Linux native listener cannot run.
+  _nativeListenerFailureMessage(reason) {
+    return reason === "input_access_denied"
+      ? `${i18nMain.t("settingsPage.general.hotkey.linuxPttSetupDescription")} ${i18nMain.t(
+          "settingsPage.general.hotkey.linuxPttPermissionDescription"
+        )}`
+      : i18nMain.t("windows.pttUnavailable");
+  }
+
+  // GNOME, KDE and Hyprland deliver press and release themselves, so Linux
+  // depends on the bundled evdev listener only once initializeHotkey has settled
+  // on none of them. Startup restores the saved activation mode before that, so
+  // until then nothing may be refused on the listener's account.
+  reliesOnLinuxKeyListener() {
+    return process.platform === "linux" && this.isInitialized && !this.isUsingNativeShortcut();
+  }
+
+  // Where Linux relies on the listener, a probe failure means Hold cannot work
+  // at all. Returns the reason to show the user, or null when nothing blocks it.
+  _pushToTalkListenerBlockReason() {
+    if (!this.reliesOnLinuxKeyListener() || !this.nativeListenerProbe) return null;
+    const { available, reason } = this.nativeListenerProbe();
+    return available ? null : this._nativeListenerFailureMessage(reason);
+  }
+
   supportsPushToTalk(hotkey = this.currentHotkey) {
     if (process.platform === "darwin" && hotkey && lacksMacReleaseSignal(hotkey)) {
       return false;
     }
     if (this.isUsingNativeShortcut() && isModifierOnlyHotkey(hotkey)) {
+      return false;
+    }
+    if (this._pushToTalkListenerBlockReason()) {
       return false;
     }
     if (this.useGnome && this.gnomeManager?.supportsPushToTalk) {
@@ -418,7 +503,7 @@ class HotkeyManager extends EventEmitter {
     if (this.isUsingNativeShortcut() && isModifierOnlyHotkey(hotkey)) {
       return i18nMain.t("hotkey.errors.osReserved", { hotkey });
     }
-    return i18nMain.t("windows.pttUnavailable");
+    return this._pushToTalkListenerBlockReason() ?? i18nMain.t("windows.pttUnavailable");
   }
 
   async setActivationMode(mode) {
@@ -507,6 +592,31 @@ class HotkeyManager extends EventEmitter {
     return { mouseButtons: [...mouseButtons], suppressGlobeAction };
   }
 
+  // A hotkey only the Linux evdev listener can serve must fail registration when
+  // that listener cannot run (no binary, or no read access to /dev/input):
+  // everything that rescues the user — the FALLBACK_HOTKEYS loop plus its toast
+  // on startup, the inline error in Settings and onboarding, the slot rollback —
+  // hangs off a failed registration, so reporting success leaves dictation
+  // silently dead. Returns null when the hotkey can be served.
+  _nativeListenerUnavailable(hotkey) {
+    if (process.platform !== "linux" || !this.nativeListenerProbe) return null;
+
+    const { available, reason } = this.nativeListenerProbe();
+    if (available) return null;
+
+    const deniedAccess = reason === "input_access_denied";
+    return {
+      success: false,
+      hotkey,
+      error: this._nativeListenerFailureMessage(reason),
+      reason: deniedAccess ? "input_access_denied" : "native_listener_unavailable",
+      // Only regular-key hotkeys avoid the listener that just failed.
+      suggestions: this.getSuggestions(hotkey).filter(
+        (suggestion) => !isModifierOnlyHotkey(suggestion) && !isRightSideModifier(suggestion)
+      ),
+    };
+  }
+
   // Register one hotkey without mutating any slot. `accelerator` is null for
   // hotkeys handled by native listeners.
   _registerSingleHotkey(hotkey, callback) {
@@ -545,16 +655,24 @@ class HotkeyManager extends EventEmitter {
       }
 
       if (isRightSideModifier(hotkey)) {
+        const unavailable = this._nativeListenerUnavailable(hotkey);
+        if (unavailable) return unavailable;
         debugLogger.log(
           `[HotkeyManager] Right-side modifier "${hotkey}" set - using native listener`
         );
         return { success: true, hotkey, accelerator: null };
       }
 
-      if (isModifierOnlyHotkey(hotkey) && process.platform === "win32") {
-        debugLogger.log(
-          `[HotkeyManager] Modifier-only "${hotkey}" set - using Windows native listener`
-        );
+      // Both Windows and Linux watch modifier-only chords with a low-level
+      // listener; Electron cannot build an accelerator without a regular key,
+      // so registering one would fail and reject an otherwise valid hotkey.
+      if (
+        isModifierOnlyHotkey(hotkey) &&
+        (process.platform === "win32" || process.platform === "linux")
+      ) {
+        const unavailable = this._nativeListenerUnavailable(hotkey);
+        if (unavailable) return unavailable;
+        debugLogger.log(`[HotkeyManager] Modifier-only "${hotkey}" set - using native listener`);
         return { success: true, hotkey, accelerator: null };
       }
 
@@ -704,13 +822,24 @@ class HotkeyManager extends EventEmitter {
       isModifierOnlyHotkey(hotkey)
         ? null
         : normalizeToAccelerator(hotkey);
+    const hyprlandBinding = this.useHyprland
+      ? HyprlandShortcutManager.getCanonicalBinding(hotkey)
+      : null;
 
     for (const [otherSlotName, otherSlot] of this.slots) {
       if (otherSlotName === slotName) continue;
       const otherHotkeys = otherSlot.hotkeys || [];
       const otherAccelerators = otherSlot.accelerators || [];
+      const hasEquivalentHyprlandBinding =
+        hyprlandBinding &&
+        otherHotkeys.some(
+          (otherHotkey) =>
+            HyprlandShortcutManager.getCanonicalBinding(otherHotkey) === hyprlandBinding
+        );
       const match =
-        otherHotkeys.includes(hotkey) || (accelerator && otherAccelerators.includes(accelerator));
+        otherHotkeys.includes(hotkey) ||
+        (accelerator && otherAccelerators.includes(accelerator)) ||
+        hasEquivalentHyprlandBinding;
       if (match) {
         debugLogger.warn(
           `[HotkeyManager] Hotkey "${hotkey}" conflicts with slot "${otherSlotName}"`
@@ -831,6 +960,7 @@ class HotkeyManager extends EventEmitter {
     }
 
     if (isHyprland) {
+      this.hyprlandInitializationAttempted = true;
       if (!HyprlandShortcutManager.isHyprctlAvailable()) {
         debugLogger.log("[HotkeyManager] Hyprland detected but hyprctl not available");
         return false;
@@ -948,7 +1078,9 @@ class HotkeyManager extends EventEmitter {
           }
         };
 
-        setTimeout(registerHyprlandHotkey, HOTKEY_REGISTRATION_DELAY_MS);
+        this.hyprlandRegistrationReady = new Promise((resolve) =>
+          setTimeout(resolve, HOTKEY_REGISTRATION_DELAY_MS)
+        ).then(registerHyprlandHotkey);
         this.isInitialized = true;
         return;
       }
@@ -1295,6 +1427,13 @@ class HotkeyManager extends EventEmitter {
         return {
           success: false,
           message: this.getPushToTalkUnavailableReason(primary),
+        };
+      }
+
+      if (this.isUsingNativeShortcut() && isRightSideModifier(primary)) {
+        return {
+          success: false,
+          message: i18nMain.t("hotkey.errors.rightModifierNeedsListener", { hotkey: primary }),
         };
       }
 

@@ -18,6 +18,7 @@ import {
   Users,
 } from "../icons";
 import ShareNoteDialog, { type NoteExportOption } from "./ShareNoteDialog";
+import { reconcileLocalShareState } from "./shareNoteRules";
 import {
   canOrganizeNote,
   noteCapabilities,
@@ -54,6 +55,7 @@ import {
   DropdownMenuSeparator,
 } from "../ui/dropdown-menu";
 import { cn } from "../lib/utils";
+import { PAGE_CONTENT_WIDTH_CLASS } from "../ui/pageWidth";
 import {
   SPLIT_BUTTON_DIVIDER_CLASS,
   SPLIT_BUTTON_GROUP_CLASS,
@@ -61,6 +63,7 @@ import {
 } from "../ui/splitButton";
 import type { NoteItem, FolderItem } from "../../types/electron";
 import type { ActionProcessingState } from "../../hooks/useActionProcessing";
+import type { NoteActionProgress } from "../../stores/actionProcessingStore";
 import ActionProcessingOverlay from "./ActionProcessingOverlay";
 import NoteBottomBar from "./NoteBottomBar";
 import NoteRecordControl, { RecordingWave } from "./NoteRecordControl";
@@ -77,7 +80,7 @@ import {
   serializeTranscriptSegments,
 } from "../../utils/transcriptSpeakerState";
 import NoteParticipants from "./NoteParticipants";
-import type { CalendarAttendee } from "../../types/calendar";
+import { parseNoteParticipants } from "../../utils/noteAttendees";
 import { observeFloatingChatLayout } from "./floatingChatLayout";
 import {
   NOTE_META_CHIP_CLASS,
@@ -196,6 +199,8 @@ interface NoteEditorProps {
   onGenerateSummary?: () => void;
   actionProcessingState?: ActionProcessingState;
   actionName?: string | null;
+  actionProgress?: NoteActionProgress | null;
+  onCancelAction?: () => void;
   diarizationSessionId?: string | null;
   onLiveSpeakerLock?: (speakerId: string, displayName: string) => void;
   sessionDiarizationEnabled?: boolean;
@@ -229,6 +234,8 @@ export default function NoteEditor({
   onGenerateSummary,
   actionProcessingState,
   actionName,
+  actionProgress,
+  onCancelAction,
   diarizationSessionId,
   onLiveSpeakerLock,
   sessionDiarizationEnabled,
@@ -246,7 +253,11 @@ export default function NoteEditor({
   const { t } = useTranslation();
   const locale = useUiLocale();
   const defaultViewMode: MeetingViewMode = enhancement ? "enhanced" : "raw";
-  const [viewMode, setViewMode] = useState<MeetingViewMode>(defaultViewMode);
+  const [selectedViewMode, setSelectedViewMode] = useState<MeetingViewMode>(defaultViewMode);
+  // Stored as chosen, clamped on read: AI Summary is the only tab that can stop
+  // rendering, and a tab that no longer renders can never be the current one.
+  const viewMode: MeetingViewMode =
+    selectedViewMode === "enhanced" && !enhancement ? "raw" : selectedViewMode;
   const [chatMode, setChatMode] = useState<EmbeddedChatMode>("hidden");
   const [folderSearch, setFolderSearch] = useState("");
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
@@ -307,12 +318,14 @@ export default function NoteEditor({
           access: res.access ?? entry?.access,
           rawToken: entry?.rawToken ?? null,
         }));
-        const serverShared = res.share.visibility !== "private";
-        if (serverShared !== Boolean(note.is_shared)) {
-          void persistNoteShareState(
-            note.id,
-            serverShared ? { is_shared: 1 } : { is_shared: 0, share_token: null }
-          ).catch((err) => console.error("Share flag persist failed:", err));
+        const update = reconcileLocalShareState(
+          { isShared: Boolean(note.is_shared), shareToken: note.share_token ?? null },
+          res.share
+        );
+        if (update) {
+          void persistNoteShareState(note.id, update).catch((err) =>
+            console.error("Share flag persist failed:", err)
+          );
         }
       })
       .catch((err) => {
@@ -323,7 +336,15 @@ export default function NoteEditor({
     return () => {
       cancelled = true;
     };
-  }, [aclRetryVersion, isSignedIn, note.cloud_id, note.id, note.is_shared, shareCache]);
+  }, [
+    aclRetryVersion,
+    isSignedIn,
+    note.cloud_id,
+    note.id,
+    note.is_shared,
+    note.share_token,
+    shareCache,
+  ]);
   useEffect(() => {
     if (
       !isSignedIn ||
@@ -372,12 +393,21 @@ export default function NoteEditor({
   >([]);
   const editorRef = useRef<Editor | null>(null);
 
+  const parsedParticipants = useMemo(
+    () => parseNoteParticipants(note.participants),
+    [note.participants]
+  );
+
   const embeddedChat = useEmbeddedChat({
     noteId: note.id,
     folderId: note.folder_id,
     noteTitle: note.title,
     noteContent: note.content,
     noteTranscript: note.transcript ?? undefined,
+    noteParticipants: parsedParticipants,
+    noteOwnedByUser: ownsNote(note, user?.id),
+    selfEmail: user?.email ?? null,
+    noteCalendarEventId: note.calendar_event_id,
   });
   const titleRef = useRef<HTMLDivElement>(null);
   const prevNoteIdRef = useRef<number>(note.id);
@@ -420,14 +450,6 @@ export default function NoteEditor({
     [displaySegments, speakerMappings, speakerProfiles]
   );
 
-  const parsedParticipants = useMemo<CalendarAttendee[]>(() => {
-    try {
-      return note.participants ? JSON.parse(note.participants) : [];
-    } catch {
-      return [];
-    }
-  }, [note.participants]);
-
   const mentionPeople = useMemo(
     () =>
       collectKnownPeople(
@@ -460,7 +482,10 @@ export default function NoteEditor({
 
     const buttons = container.querySelectorAll<HTMLButtonElement>("[data-segment-button]");
     const activeBtn = Array.from(buttons).find((btn) => btn.dataset.segmentValue === viewMode);
-    if (!activeBtn) return;
+    if (!activeBtn) {
+      setIndicatorStyle((style) => ({ ...style, opacity: 0 }));
+      return;
+    }
 
     const cr = container.getBoundingClientRect();
     const br = activeBtn.getBoundingClientRect();
@@ -487,7 +512,7 @@ export default function NoteEditor({
     let cancelScheduledUpdate: (() => void) | undefined;
 
     if (prevProcessingStateRef.current === "processing" && actionProcessingState === "success") {
-      cancelScheduledUpdate = scheduleUiUpdate(() => setViewMode("enhanced"));
+      cancelScheduledUpdate = scheduleUiUpdate(() => setSelectedViewMode("enhanced"));
     }
     prevProcessingStateRef.current = actionProcessingState;
 
@@ -502,7 +527,7 @@ export default function NoteEditor({
         setDiarizedSegments(null);
         setIsDiarizing(false);
         setSpeakerMappings({});
-        setViewMode(defaultViewMode);
+        setSelectedViewMode(defaultViewMode);
         if (titleRef.current && titleRef.current.textContent !== note.title) {
           titleRef.current.textContent = note.title || "";
         }
@@ -831,7 +856,7 @@ export default function NoteEditor({
   return (
     <div className="flex h-full min-h-0">
       <div className="flex-1 min-w-0 flex flex-col">
-        <div className="px-5 pt-5 pb-0">
+        <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-5 pt-5 pb-0")}>
           <div
             dir="auto"
             ref={titleRef}
@@ -1024,7 +1049,7 @@ export default function NoteEditor({
                 <button
                   data-segment-button
                   data-segment-value="transcript"
-                  onClick={() => setViewMode("transcript")}
+                  onClick={() => setSelectedViewMode("transcript")}
                   className={cn(
                     SEGMENT_BUTTON_CLASS,
                     viewMode === "transcript"
@@ -1038,7 +1063,7 @@ export default function NoteEditor({
                 <button
                   data-segment-button
                   data-segment-value="raw"
-                  onClick={() => setViewMode("raw")}
+                  onClick={() => setSelectedViewMode("raw")}
                   className={cn(
                     SEGMENT_BUTTON_CLASS,
                     viewMode === "raw"
@@ -1053,7 +1078,7 @@ export default function NoteEditor({
                   <button
                     data-segment-button
                     data-segment-value="enhanced"
-                    onClick={() => setViewMode("enhanced")}
+                    onClick={() => setSelectedViewMode("enhanced")}
                     className={cn(
                       SEGMENT_BUTTON_CLASS,
                       viewMode === "enhanced"
@@ -1109,37 +1134,39 @@ export default function NoteEditor({
         {conflict && (
           <div
             className={cn(
-              "flex items-center gap-2 px-5 h-8 mt-2 shrink-0",
+              "h-8 mt-2 shrink-0",
               "bg-amber-400/5 dark:bg-amber-400/[0.07]",
               "border-y border-amber-400/15 dark:border-amber-400/20",
               "animate-in slide-in-from-top-2 duration-300"
             )}
           >
-            <span className="w-1 h-1 rounded-full bg-amber-400/60 shrink-0" />
-            <p className="text-[11px] text-foreground/50 flex-1 truncate">
-              {t("notes.spaces.conflictBanner")}
-              {conflictEditorName && (
-                <span className="text-foreground/45">
-                  {" "}
-                  {t("notes.spaces.editedBy", {
-                    name: conflictEditorName,
-                    time: formatRelativeTime(conflict.updated_at, t, locale),
-                  })}
-                </span>
-              )}
-            </p>
-            <button
-              onClick={handleConflictRefresh}
-              className="text-[11px] font-medium text-foreground/50 hover:text-foreground/70 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
-            >
-              {t("notes.spaces.conflictRefresh")}
-            </button>
-            <button
-              onClick={handleConflictKeep}
-              className="text-[11px] font-medium text-foreground/45 hover:text-foreground/55 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
-            >
-              {t("notes.spaces.conflictKeep")}
-            </button>
+            <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "flex h-full items-center gap-2 px-5")}>
+              <span className="w-1 h-1 rounded-full bg-amber-400/60 shrink-0" />
+              <p className="text-[11px] text-foreground/50 flex-1 truncate">
+                {t("notes.spaces.conflictBanner")}
+                {conflictEditorName && (
+                  <span className="text-foreground/45">
+                    {" "}
+                    {t("notes.spaces.editedBy", {
+                      name: conflictEditorName,
+                      time: formatRelativeTime(conflict.updated_at, t, locale),
+                    })}
+                  </span>
+                )}
+              </p>
+              <button
+                onClick={handleConflictRefresh}
+                className="text-[11px] font-medium text-foreground/50 hover:text-foreground/70 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+              >
+                {t("notes.spaces.conflictRefresh")}
+              </button>
+              <button
+                onClick={handleConflictKeep}
+                className="text-[11px] font-medium text-foreground/45 hover:text-foreground/55 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+              >
+                {t("notes.spaces.conflictKeep")}
+              </button>
+            </div>
           </div>
         )}
 
@@ -1148,6 +1175,7 @@ export default function NoteEditor({
             {viewMode === "transcript" && (hasChatSegments || isRecording) ? (
               isRecording ? (
                 <LiveMeetingTranscriptChat
+                  contentClassName={PAGE_CONTENT_WIDTH_CLASS}
                   speakerMappings={speakerMappings}
                   speakerProfiles={speakerProfiles}
                   participants={parsedParticipants}
@@ -1164,6 +1192,7 @@ export default function NoteEditor({
                 />
               ) : (
                 <MeetingTranscriptChat
+                  contentClassName={PAGE_CONTENT_WIDTH_CLASS}
                   segments={displaySegments}
                   speakerMappings={speakerMappings}
                   speakerProfiles={knownSpeakers}
@@ -1189,7 +1218,7 @@ export default function NoteEditor({
                 icon={Mic}
                 title={t("notes.editor.transcriptEmptyTitle")}
                 description={t("notes.editor.transcriptEmptyDescription")}
-                className="mt-2"
+                className={cn(PAGE_CONTENT_WIDTH_CLASS, "mt-2")}
               >
                 {canEditNote && recordingAllowed && (
                   <Button size="sm" onClick={onStartRecording} disabled={isProcessing}>
@@ -1219,6 +1248,8 @@ export default function NoteEditor({
           <ActionProcessingOverlay
             state={actionProcessingState ?? "idle"}
             actionName={actionName ?? null}
+            progress={actionProgress ?? null}
+            onCancel={onCancelAction}
           />
           <div
             className="absolute bottom-0 left-0 right-0 h-20 pointer-events-none"

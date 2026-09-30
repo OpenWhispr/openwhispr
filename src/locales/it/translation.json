@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "Le scorciatoie con i tasti del mouse sono attualmente supportate solo su macOS.",
       "alreadyRegistered": "\"{{hotkey}}\" è già registrata da un'altra applicazione.",
       "osReserved": "\"{{hotkey}}\" potrebbe essere riservata dal sistema operativo.",
+      "rightModifierNeedsListener": "\"{{hotkey}}\" non può essere usato su questo desktop, le cui scorciatoie richiedono un tasto normale. Aggiungi un tasto, ad esempio Control+Alt+Space.",
       "holdNeedsReleaseKey": "Tieni premuto per parlare richiede un tasto di cui macOS rilevi il rilascio: Globo, un tasto destro come Opzione destra o una scorciatoia con modificatore. Tocca funziona con qualsiasi tasto.",
       "registrationFailed": "Impossibile registrare \"{{hotkey}}\". Potrebbe essere in uso da un'altra applicazione.",
       "updateFailedCheckFormat": "Impossibile aggiornare la scorciatoia a \"{{hotkey}}\". Verifica che il formato sia valido.",
@@ -702,6 +703,11 @@
       "title": "Modelli richiesti mancanti",
       "description": "La tua organizzazione richiede questi modelli su questo dispositivo: {{models}}.",
       "download": "Scarica"
+    },
+    "cloudNudge": {
+      "title": "Accesso effettuato",
+      "description": "La dettatura usa ancora la tua configurazione. Puoi passare a OpenWhispr Cloud in qualsiasi momento.",
+      "action": "Apri Impostazioni"
     }
   },
   "reasoning": {
@@ -914,6 +920,7 @@
         "streamingOnlyProvider": "Questo provider supporta solo la trascrizione dal vivo. Scegli un altro provider per i caricamenti di file e i nuovi tentativi.",
         "providerKeyMissing": "Nessuna chiave API impostata per il tuo provider di trascrizione. Aggiungila in Impostazioni → Da voce a testo.",
         "cleanupTruncated": "Il modello IA ha esaurito lo spazio prima di finire la pulizia della dettatura.",
+        "cleanupDuplicated": "La pulizia con IA ha ripetuto la trascrizione. Il testo originale è stato conservato.",
         "cleanupEmptyReply": "Il modello IA ha restituito una risposta vuota invece della dettatura pulita."
       },
       "translationFallback": {
@@ -942,6 +949,18 @@
         "unavailable": "OpenWhispr non ha potuto leggere in sicurezza il testo selezionato. Controlla i permessi di accessibilità o automazione.",
         "tooLarge": "La selezione è troppo grande. Seleziona al massimo 6.000 caratteri.",
         "reasoningFailed": "L’IA non ha potuto completare la modifica. Il testo originale non è stato cambiato."
+      },
+      "pastePermission": {
+        "title": "Consenti di incollare automaticamente",
+        "description": "Abilita OpenWhispr in Impostazioni di Sistema → Privacy e sicurezza → Accessibilità.",
+        "settingsFailed": "Impossibile aprire le impostazioni. Apri Impostazioni di Sistema → Privacy e sicurezza → Accessibilità e abilita OpenWhispr.",
+        "manualPaste": "Copia il testo qui sotto, poi premi {{shortcut}} per incollarlo.",
+        "openSettings": "Apri impostazioni",
+        "copyToClipboard": "Copia negli appunti",
+        "copyFailed": "Copia non riuscita"
+      },
+      "pasteFailed": {
+        "title": "Impossibile incollare automaticamente"
       }
     },
     "clipboard": {
@@ -2662,7 +2681,8 @@
     "errors": {
       "contextTooLarge": "È troppo lungo perché {{model}} possa leggerlo su questo computer. Servono circa {{needed}} token di contesto, ma in memoria ne entrano solo {{max}}. Prova un modello cloud oppure esegui l’azione su una selezione più breve.",
       "contextTooLargeGeneric": "È troppo lungo perché {{model}} possa leggerlo su questo computer. Prova un modello cloud oppure esegui l’azione su una selezione più breve.",
-      "localServerUnavailable": "Impossibile avviare {{model}} su questo computer. Riprova o passa a un modello cloud."
+      "localServerUnavailable": "Impossibile avviare {{model}} su questo computer. Riprova o passa a un modello cloud.",
+      "localModelBusy": "Il modello locale sta ancora elaborando un'altra richiesta. Attendi che finisca, poi riprova."
     }
   },
   "referral": {
@@ -2955,7 +2975,35 @@
       "conversationWillAppear": "La conversazione apparirà qui...",
       "linkedEvent": "Evento collegato",
       "noFolder": "Nessuna cartella",
-      "participants": "Partecipanti"
+      "participants": "Partecipanti",
+      "table": {
+        "actions": "Azioni tabella",
+        "insertRowAbove": "Inserisci riga sopra",
+        "insertRowBelow": "Inserisci riga sotto",
+        "insertColumnLeft": "Inserisci colonna a sinistra",
+        "insertColumnRight": "Inserisci colonna a destra",
+        "deleteRow": "Elimina riga",
+        "deleteColumn": "Elimina colonna",
+        "deleteTable": "Elimina tabella"
+      },
+      "format": {
+        "toolbar": "Formattazione",
+        "withShortcut": "{{action}} ({{shortcut}})",
+        "bold": "Grassetto",
+        "italic": "Corsivo",
+        "strike": "Barrato",
+        "code": "Codice",
+        "textStyle": "Stile testo",
+        "paragraph": "Testo normale",
+        "heading1": "Titolo 1",
+        "heading2": "Titolo 2",
+        "heading3": "Titolo 3",
+        "bulletList": "Elenco puntato",
+        "orderedList": "Elenco numerato",
+        "taskList": "Elenco di controllo",
+        "blockquote": "Citazione",
+        "table": "Inserisci tabella"
+      }
     },
     "participants": {
       "attendee": "partecipante",
@@ -3106,6 +3154,8 @@
       "runAction": "Esegui {{name}}",
       "selectAction": "Seleziona azione",
       "done": "Fatto",
+      "chunkProgress": "Parte {{step}} di {{total}}",
+      "emptyReply": "Il modello ha restituito una risposta vuota. Riprova o scegli un altro modello.",
       "builtin": {
         "generateNotes": {
           "name": "Genera note",
@@ -3636,6 +3686,15 @@
     },
     "tools": {
       "search_notesName": "Cerca nelle note",
+      "email_draftName": "Bozza email",
+      "find_contactName": "Trova contatto",
+      "github_search_issuesName": "Cerca su GitHub",
+      "github_create_issueName": "Issue GitHub",
+      "github_commentName": "Commento GitHub",
+      "slack_send_messageName": "Messaggio Slack",
+      "linear_search_issuesName": "Cerca in Linear",
+      "linear_create_issueName": "Issue di Linear",
+      "linear_commentName": "Commento di Linear",
       "get_noteName": "Ottieni nota",
       "create_noteName": "Crea nota",
       "update_noteName": "Aggiorna nota",
@@ -3648,6 +3707,15 @@
       "update_dictionaryName": "Aggiorna dizionario",
       "update_snippetsName": "Aggiorna snippet",
       "search_notesStatus": "Ricerca nelle note...",
+      "email_draftStatus": "Preparazione di un'email...",
+      "find_contactStatus": "Ricerca contatti...",
+      "github_search_issuesStatus": "Ricerca su GitHub...",
+      "github_create_issueStatus": "Preparazione di una issue GitHub...",
+      "github_commentStatus": "Preparazione di un commento GitHub...",
+      "slack_send_messageStatus": "Preparazione di un messaggio Slack...",
+      "linear_search_issuesStatus": "Ricerca in Linear...",
+      "linear_create_issueStatus": "Preparazione di una issue di Linear...",
+      "linear_commentStatus": "Preparazione di un commento di Linear...",
       "web_searchStatus": "Ricerca sul web...",
       "copy_to_clipboardStatus": "Copia negli appunti...",
       "get_calendar_eventsStatus": "Controllo del calendario...",
@@ -3739,6 +3807,7 @@
       "connectFailedDescription": "Si è verificato un errore durante la connessione a Calendar.app. Riavvia OpenWhispr e riprova."
     },
     "sections": {
+      "connectors": "Connettori",
       "calendar": "Calendario",
       "api": "API",
       "mcp": "MCP",
@@ -3797,6 +3866,457 @@
     "notABot": {
       "title": "OpenWhispr è un registratore di riunioni, non un bot",
       "description": "OpenWhispr cattura l'audio direttamente dal tuo sistema — non entra mai nelle tue riunioni come partecipante. Basta collegare il calendario e prendere appunti normalmente."
+    }
+  },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "Invia a {{destination}}",
+        "slackPost": "Pubblica su {{destination}}",
+        "email": "Email a {{destination}}",
+        "issue": "Crea issue in {{destination}}",
+        "comment": "Commenta {{destination}}"
+      },
+      "identity": "Come {{account}}",
+      "identityWithWorkspace": "Come {{account}} in {{workspace}}",
+      "send": "Invia",
+      "edit": "Modifica",
+      "doneEditing": "Modifica completata",
+      "cancel": "Annulla",
+      "titleLabel": "Titolo",
+      "bodyLabel": "Messaggio",
+      "sending": "Invio in corso…",
+      "sent": "Inviato a {{destination}}.",
+      "open": "Apri",
+      "failed": "Invio non riuscito: {{message}}",
+      "unknown": "Impossibile confermare l'invio. Controlla {{destination}}.",
+      "cancelled": "Annullato. Non è stato inviato nulla.",
+      "notSent": "Non inviato.",
+      "policyRetry": "Non è stato possibile verificare le impostazioni della tua organizzazione, quindi non è stato inviato nulla. Premi Invia per riprovare.",
+      "errors": {
+        "not_in_channel": "Non sei membro di {{destination}}.",
+        "channel_not_found": "{{destination}} non è più stato trovato su Slack.",
+        "is_archived": "{{destination}} è archiviato.",
+        "reconnect_needed": "Slack deve essere ricollegato nelle Impostazioni.",
+        "connection_changed": "La connessione Slack è cambiata prima dell'invio, quindi non è stato inviato nulla.",
+        "rate_limited": "Slack è occupato. Riprova a breve.",
+        "missing_scope": "OpenWhispr non ha il permesso di pubblicare lì. Ricollega Slack nelle Impostazioni.",
+        "msg_too_long": "Il messaggio è troppo lungo per Slack (massimo 12.000 caratteri, una volta formattato).",
+        "no_text": "Il messaggio è vuoto.",
+        "network": "Impossibile raggiungere Slack. Non è stato inviato nulla.",
+        "credential_save_failed": "Impossibile salvare l'accesso a Slack su questo computer. Non è stato inviato nulla. Riprova.",
+        "dm_failed": "Impossibile aprire il messaggio diretto a {{destination}}. Non è stato inviato nulla.",
+        "restricted": "{{destination}} è di sola lettura o limitato per te.",
+        "generic": "Qualcosa è andato storto. Non è stato inviato nulla.",
+        "github": {
+          "reconnect_needed": "GitHub deve essere ricollegato nelle Impostazioni.",
+          "network": "Impossibile raggiungere GitHub. Non è stato pubblicato nulla.",
+          "rate_limited": "GitHub è occupato. Riprova a breve.",
+          "connection_changed": "La connessione GitHub è cambiata prima della pubblicazione, quindi non è stato pubblicato nulla.",
+          "credential_save_failed": "Impossibile salvare l'accesso a GitHub su questo computer. Non è stato pubblicato nulla. Riprova.",
+          "generic": "Qualcosa è andato storto. Non è stato pubblicato nulla su GitHub.",
+          "not_installed": "L'app GitHub di OpenWhispr non è installata in questo repository. Aggiungila nelle Impostazioni. Non è stato pubblicato nulla.",
+          "repo_unlisted": "Impossibile confermare che l'app GitHub di OpenWhispr sia installata in questo repository. Controlla il nome del repository. Non è stato pubblicato nulla.",
+          "no_repositories": "Non hai ancora scelto repository per l'app GitHub di OpenWhispr. Sceglili nelle Impostazioni. Non è stato pubblicato nulla.",
+          "forbidden": "Non hai il permesso di farlo in questo repository. Non è stato pubblicato nulla.",
+          "not_found": "Impossibile trovare la issue o la pull request. Non è stato pubblicato nulla.",
+          "issues_disabled": "Le issue sono disattivate in questo repository. Non è stato pubblicato nulla.",
+          "archived": "Questo repository è archiviato, quindi non accetta nuove issue o commenti. Non è stato pubblicato nulla.",
+          "too_many_labels": "Scegli al massimo 10 etichette per issue. Non è stato pubblicato nulla.",
+          "labels_unavailable": "Impossibile leggere le etichette del repository. Non è stato pubblicato nulla.",
+          "invalid": "GitHub lo ha rifiutato perché non valido. Non è stato pubblicato nulla.",
+          "locked": "La conversazione è bloccata. Non è stato pubblicato nulla.",
+          "invalid_reference": "Non è una issue né una pull request di GitHub. Non è stato pubblicato nulla.",
+          "too_long": "Il titolo o il testo è troppo lungo per GitHub. Non è stato pubblicato nulla.",
+          "not_configured": "GitHub non è disponibile in questa versione. Non è stato pubblicato nulla."
+        },
+        "gmail": {
+          "reconnect_needed": "Gmail deve essere ricollegato nelle Impostazioni.",
+          "network": "Impossibile raggiungere Gmail. Non è stato inviato nulla.",
+          "rate_limited": "Gmail è occupato. Riprova a breve.",
+          "daily_limit": "È stato raggiunto il limite di invio giornaliero di Gmail. Non è stato inviato nulla.",
+          "domain_policy": "L'amministratore Google della tua organizzazione ha bloccato questa app. Non è stato inviato nulla.",
+          "invalid_recipients": "Uno degli indirizzi non è valido. Non è stato inviato nulla.",
+          "too_many_recipients": "Troppi destinatari: al massimo {{max}}. Non è stato inviato nulla.",
+          "too_long": "L'oggetto o il messaggio è troppo lungo per Gmail. Non è stato inviato nulla.",
+          "invalid_message": "Gmail ha rifiutato l'email perché non valida. Non è stato inviato nulla.",
+          "gmail_unavailable": "L'invio con Gmail non è disponibile al momento. Non è stato inviato nulla.",
+          "refused": "Gmail si è rifiutato di inviarla. Non è stato inviato nulla.",
+          "connection_changed": "La connessione Gmail è cambiata prima dell'invio, quindi non è stato inviato nulla.",
+          "credential_save_failed": "Impossibile salvare l'accesso a Gmail su questo computer. Non è stato inviato nulla. Riprova."
+        },
+        "linear": {
+          "reconnect_needed": "Linear deve essere ricollegato nelle Impostazioni.",
+          "connection_changed": "La connessione Linear è cambiata prima dell'invio, quindi non è stato inviato nulla.",
+          "credential_save_failed": "Impossibile salvare l'accesso a Linear su questo computer. Non è stato inviato nulla. Riprova.",
+          "linear_unavailable": "Linear non è disponibile al momento. Non è stato inviato nulla.",
+          "network": "Impossibile raggiungere Linear. Non è stato inviato nulla.",
+          "rate_limited": "Linear è occupato. Riprova a breve.",
+          "not_found": "Linear non trova più il team, il progetto o la issue. Non è stato inviato nulla.",
+          "forbidden": "Il tuo account Linear non ha il permesso di farlo. Non è stato inviato nulla.",
+          "invalid_input": "Linear non ha potuto accettarlo così com'è. Non è stato inviato nulla.",
+          "too_long": "Troppo lungo per Linear. Non è stato inviato nulla.",
+          "missing_title": "La issue di Linear ha bisogno di un titolo. Non è stato inviato nulla.",
+          "missing_body": "Il commento di Linear è vuoto. Non è stato inviato nulla.",
+          "not_created": "Linear non ha creato la issue.",
+          "wrong_workspace": "Quella issue è in un altro workspace di Linear. Non è stato inviato nulla.",
+          "invalid_reference": "Non è una issue di Linear. Non è stato inviato nulla.",
+          "refused": "Linear ha rifiutato la richiesta. Non è stato inviato nulla.",
+          "unknown_action": "OpenWhispr non può farlo in Linear. Non è stato inviato nulla.",
+          "generic": "Qualcosa è andato storto. Non è stato inviato nulla a Linear."
+        }
+      },
+      "email": {
+        "from": "Da {{account}}",
+        "toLabel": "A",
+        "ccLabel": "Cc",
+        "subjectLabel": "Oggetto",
+        "bodyLabel": "Messaggio",
+        "addressHint": "Separa gli indirizzi con una virgola.",
+        "invalidAddress": "{{address}} non è un indirizzo email completo come nome@esempio.com.",
+        "invalidAddressAnnouncement": "Uno degli indirizzi non è un indirizzo email completo.",
+        "sendsTo": "Invio a {{addresses}}",
+        "missingTo": "Aggiungi almeno un indirizzo in A.",
+        "tooManyRecipients": "Un'email può andare al massimo a {{max}} indirizzi, tra A e Cc.",
+        "subjectTooLong": "L'oggetto può contenere al massimo {{max}} caratteri.",
+        "bodyTooLong": "Il messaggio è troppo lungo per Gmail. Accorcialo per inviarlo.",
+        "unknown": "Impossibile confermare l'invio. Controlla la cartella Posta inviata."
+      },
+      "github": {
+        "notes": {
+          "mentions": "Verranno avvisati {{mentions}}",
+          "pullRequest": "Su una pull request",
+          "labelsMayNotApply": "Le etichette vengono aggiunte solo se hai accesso in scrittura a questo repository."
+        }
+      },
+      "openIn": {
+        "github": "Apri in GitHub",
+        "gmail": "Apri in Gmail",
+        "linear": "Apri in Linear"
+      },
+      "sendLabel": {
+        "issue": "Crea issue",
+        "comment": "Commenta"
+      },
+      "issue": {
+        "created": "{{result}} creata.",
+        "createdIn": "Issue creata in {{destination}}.",
+        "unknown": "Impossibile confermare la creazione della issue. Controlla {{destination}} prima di riprovare.",
+        "titleLabel": "Titolo",
+        "bodyLabel": "Descrizione",
+        "missingTitle": "Aggiungi un titolo.",
+        "titleTooLong": "Il titolo può contenere al massimo {{max}} caratteri.",
+        "bodyTooLong": "La descrizione può contenere al massimo {{max}} caratteri.",
+        "notes": {
+          "labels": "Etichette: {{labels}}",
+          "droppedLabels": "Non aggiunte (non presenti in {{destination}}): {{labels}}",
+          "priority": "Priorità: {{priority}}",
+          "assignee": "Assegnata a: {{assignee}}",
+          "project": "Progetto: {{project}}"
+        }
+      },
+      "comment": {
+        "posted": "Commento pubblicato su {{destination}}.",
+        "unknown": "Impossibile confermare la pubblicazione del commento. Controlla {{destination}} prima di riprovare.",
+        "bodyLabel": "Commento",
+        "missingBody": "Scrivi un commento.",
+        "bodyTooLong": "Il commento può contenere al massimo {{max}} caratteri.",
+        "notes": {
+          "targetTitle": "Su «{{title}}»"
+        }
+      }
+    },
+    "policyOff": "La tua organizzazione ha disattivato i connettori.",
+    "email": {
+      "title": "Bozze email",
+      "description": "L'assistente apre una bozza precompilata nella tua app di posta. La rivedi e premi Invia tu stesso.",
+      "descriptionSend": "L'assistente mostra una scheda email nella chat. Viene inviata dal tuo Gmail solo quando premi Invia.",
+      "proRequired": "Passa a un piano a pagamento per far scrivere all'assistente le bozze delle email.",
+      "unavailable": "Le bozze email non sono disponibili al momento.",
+      "targetLabel": "Crea bozze email in",
+      "autoResolved": "Automatico · {{target}}",
+      "targets": {
+        "gmail": "Gmail",
+        "outlookWork": "Outlook (lavoro o scuola)",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "App di posta predefinita",
+        "gmailSend": "Invia dalla chat (Gmail)",
+        "gmailSendConnectFirst": "Invia dalla chat (Gmail) · connetti Gmail qui sotto"
+      }
+    },
+    "slack": {
+      "title": "Slack",
+      "description": "L'assistente può pubblicare messaggi nei canali e alle persone per tuo conto. Approvi ogni messaggio prima che venga inviato.",
+      "connect": "Connetti",
+      "reconnect": "Riconnetti",
+      "disconnect": "Disconnetti",
+      "connecting": "Completa la connessione nel tuo browser…",
+      "connectedAs": "Connesso come {{account}} in {{workspace}}",
+      "needsReconnect": "Slack deve essere ricollegato.",
+      "proRequired": "Passa a un piano a pagamento per far inviare all'assistente i messaggi Slack per te.",
+      "errors": {
+        "connect_failed": "Impossibile connettere Slack. Riprova.",
+        "disconnect_failed": "Impossibile disconnettere Slack. Riprova.",
+        "oauth_denied": "Slack non è stato connesso perché l'accesso non è stato consentito.",
+        "oauth_timeout": "La connessione ha impiegato troppo tempo. Riprova.",
+        "oauth_state_mismatch": "Quel link di accesso non era più valido. Riprova.",
+        "ports_busy": "Un'altra app sta usando le porte di cui OpenWhispr ha bisogno per connettersi. Chiudila e riprova.",
+        "token_exchange_failed": "Slack non ha completato la connessione. Riprova.",
+        "not_configured": "Slack non è disponibile in questa versione.",
+        "connection_changed": "Il tuo account o la connessione Slack sono cambiati durante la connessione. Riprova.",
+        "signed_out": "Accedi a OpenWhispr per connettere Slack.",
+        "policy_blocked": "La tua organizzazione ha disattivato i connettori.",
+        "policy_unavailable": "Non è stato possibile verificare le impostazioni della tua organizzazione. Riprova."
+      },
+      "browser": {
+        "connectedTitle": "Slack è connesso",
+        "connectedBody": "Puoi chiudere questa scheda e tornare a OpenWhispr.",
+        "failedTitle": "Slack non è stato connesso",
+        "failedBody": "Torna a OpenWhispr per riprovare."
+      }
+    },
+    "github": {
+      "title": "GitHub",
+      "description": "L'assistente può cercare issue e pull request, creare issue e commentare per tuo conto, solo nei repository che scegli. Non può leggere il tuo codice e approvi ogni issue e commento prima che venga pubblicato.",
+      "connect": "Connetti",
+      "reconnect": "Riconnetti",
+      "disconnect": "Disconnetti",
+      "connecting": "Connessione a GitHub…",
+      "connectedAs": "Connesso come {{account}} · Repository: {{repositories}}",
+      "connectedAs_empty": "Connesso come {{account}} · ancora nessun repository",
+      "connectedAs_unknown": "Connesso come {{account}}",
+      "needsReconnect": "GitHub deve essere ricollegato.",
+      "proRequired": "Passa a un piano a pagamento per far gestire all'assistente le issue di GitHub per te.",
+      "reviewOnGithub": "Controlla su GitHub",
+      "disconnectedHint": "Disconnesso da questo computer. GitHub mantiene l'autorizzazione di OpenWhispr finché non la rimuovi da lì.",
+      "errors": {
+        "connect_failed": "Impossibile connettere GitHub. Riprova.",
+        "disconnect_failed": "Impossibile disconnettere GitHub. Riprova.",
+        "oauth_denied": "L'accesso a GitHub è stato rifiutato.",
+        "token_exchange_failed": "GitHub non ha completato la connessione. Riprova.",
+        "not_configured": "GitHub non è disponibile in questa versione.",
+        "connection_changed": "Il tuo account o la connessione GitHub sono cambiati durante la connessione. Riprova.",
+        "signed_out": "Accedi a OpenWhispr per connettere GitHub.",
+        "policy_blocked": "La tua organizzazione ha disattivato i connettori.",
+        "policy_unavailable": "Non è stato possibile verificare le impostazioni della tua organizzazione. Riprova.",
+        "code_expired": "Il codice è scaduto. Riprova.",
+        "device_flow_disabled": "L'accesso a GitHub con un codice non è configurato in questa versione.",
+        "network": "Impossibile raggiungere GitHub. Controlla la connessione e riprova.",
+        "rate_limited": "GitHub è occupato in questo momento. Riprova tra un minuto."
+      },
+      "deviceCode": {
+        "instructions": "Inserisci questo codice su GitHub:",
+        "copyAndOpen": "Copia e apri GitHub",
+        "copied": "Codice copiato.",
+        "cancel": "Annulla",
+        "expires": "Il codice scade alle {{time}}."
+      },
+      "repositories": {
+        "choose": "Scegli i repository",
+        "manage": "Gestisci i repository"
+      }
+    },
+    "gmail": {
+      "title": "Gmail",
+      "description": "L'assistente può inviare email dal tuo account Gmail. Non può leggere la tua posta e premi tu Invia per ogni email.",
+      "connect": "Connetti",
+      "reconnect": "Riconnetti",
+      "disconnect": "Disconnetti",
+      "connecting": "Completa la connessione nel tuo browser… Se Google indica che l'accesso è bloccato, l'amministratore Google della tua organizzazione deve consentire OpenWhispr.",
+      "connectedAs": "Connesso come {{account}}",
+      "needsReconnect": "Gmail deve essere ricollegato.",
+      "grantKept": "Disconnesso. Google Calendar usa la stessa autorizzazione Google, quindi OpenWhispr resta elencato nel tuo account Google finché non disconnetti anche Google Calendar.",
+      "proRequired": "Passa a un piano a pagamento per far inviare all'assistente le email da Gmail per te.",
+      "errors": {
+        "connect_failed": "Impossibile connettere Gmail. Riprova.",
+        "disconnect_failed": "Impossibile disconnettere Gmail. Riprova.",
+        "oauth_denied": "Gmail non è stato connesso perché l'accesso non è stato consentito.",
+        "oauth_timeout": "La connessione ha impiegato troppo tempo. Se Google ha indicato che l'accesso è bloccato, chiedi all'amministratore Google della tua organizzazione di consentire OpenWhispr. Altrimenti, riprova.",
+        "oauth_state_mismatch": "Quel link di accesso non era più valido. Riprova.",
+        "ports_busy": "Un'altra app sta usando le porte di cui OpenWhispr ha bisogno per connettersi. Chiudila e riprova.",
+        "token_exchange_failed": "Google non ha completato la connessione. Riprova.",
+        "not_configured": "Gmail non è disponibile in questa versione.",
+        "connection_changed": "Il tuo account o la connessione Gmail sono cambiati durante la connessione. Riprova.",
+        "signed_out": "Accedi a OpenWhispr per connettere Gmail.",
+        "policy_blocked": "La tua organizzazione ha disattivato i connettori.",
+        "policy_unavailable": "Non è stato possibile verificare le impostazioni della tua organizzazione. Riprova.",
+        "permission_not_granted": "Gmail non è stato connesso perché non è stato concesso il permesso di inviare email. Connetti di nuovo e lascia selezionato quel permesso.",
+        "email_not_verified": "Google non ha verificato l'indirizzo email di questo account, quindi Gmail non è stato connesso.",
+        "domain_policy": "L'amministratore Google della tua organizzazione ha bloccato questa app. Chiedigli di consentire OpenWhispr."
+      },
+      "browser": {
+        "connectedTitle": "Gmail è connesso",
+        "connectedBody": "Puoi chiudere questa scheda e tornare a OpenWhispr.",
+        "failedTitle": "Gmail non è stato connesso",
+        "failedBody": "Torna a OpenWhispr per riprovare."
+      }
+    },
+    "linear": {
+      "title": "Linear",
+      "description": "L'assistente può cercare le tue issue di Linear e creare issue e commenti per tuo conto. Approvi ogni issue e ogni commento prima che venga inviato.",
+      "connect": "Connetti",
+      "reconnect": "Riconnetti",
+      "disconnect": "Disconnetti",
+      "connecting": "Completa la connessione nel tuo browser…",
+      "connectedAs": "Connesso come {{account}} in {{workspace}}",
+      "needsReconnect": "Linear deve essere ricollegato.",
+      "proRequired": "Passa a un piano a pagamento per far lavorare l'assistente in Linear per te.",
+      "errors": {
+        "connect_failed": "Impossibile connettere Linear. Riprova.",
+        "disconnect_failed": "Impossibile disconnettere Linear. Riprova.",
+        "oauth_denied": "Linear non è stato connesso perché l'accesso non è stato consentito.",
+        "oauth_timeout": "La connessione ha impiegato troppo tempo. Riprova.",
+        "oauth_state_mismatch": "Quel link di accesso non era più valido. Riprova.",
+        "ports_busy": "Un'altra app sta usando le porte di cui OpenWhispr ha bisogno per connettersi. Chiudila e riprova.",
+        "token_exchange_failed": "Linear non ha completato la connessione. Riprova.",
+        "not_configured": "Linear non è disponibile in questa versione.",
+        "connection_changed": "Il tuo account o la connessione Linear sono cambiati durante la connessione. Riprova.",
+        "signed_out": "Accedi a OpenWhispr per connettere Linear.",
+        "policy_blocked": "La tua organizzazione ha disattivato i connettori.",
+        "policy_unavailable": "Non è stato possibile verificare le impostazioni della tua organizzazione. Riprova.",
+        "permission_not_granted": "Linear non è stato connesso perché non sono stati concessi tutti i permessi. Connetti di nuovo e consentili tutti."
+      },
+      "browser": {
+        "connectedTitle": "Linear è connesso",
+        "connectedBody": "Puoi chiudere questa scheda e tornare a OpenWhispr.",
+        "failedTitle": "Linear non è stato connesso",
+        "failedBody": "Torna a OpenWhispr per riprovare."
+      },
+      "notes": {
+        "priority": {
+          "urgent": "Priorità: Urgente",
+          "high": "Priorità: Alta",
+          "medium": "Priorità: Media",
+          "low": "Priorità: Bassa",
+          "none": "Priorità: Nessuna"
+        },
+        "assignedToYou": "Assegnata a: te"
+      }
+    },
+    "recent": {
+      "title": "Azioni recenti",
+      "actions": {
+        "email_draft": "Bozza a {{destination}}",
+        "github_create_issue": "Nuova issue in {{destination}}",
+        "github_comment": "Commento su {{destination}}",
+        "slack_send_message": "Messaggio a {{destination}}",
+        "gmail_send": "Email a {{destination}}",
+        "linear_create_issue": "Nuova issue in {{destination}}",
+        "linear_comment": "Commento su {{destination}}"
+      },
+      "unlabeledActions": {
+        "email_draft": "Bozza email",
+        "github_create_issue": "Issue GitHub",
+        "github_comment": "Commento GitHub",
+        "slack_send_message": "Messaggio Slack",
+        "gmail_send": "Email Gmail",
+        "linear_create_issue": "Issue di Linear",
+        "linear_comment": "Commento di Linear"
+      },
+      "states": {
+        "pending": "In attesa",
+        "committing": "In corso",
+        "sent": "Completato",
+        "failed": "Non riuscito",
+        "unknown": "Non confermato",
+        "cancelled": "Annullato",
+        "expired": "Scaduto"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "Bozza aperta per {{destination}}.",
+      "draftOpenedBodyCopied": "Bozza aperta per {{destination}}. Il testo è negli appunti.",
+      "draftOpenedSubjectCopied": "Bozza aperta per {{destination}}. L'oggetto e il testo sono negli appunti.",
+      "draftOpenedOnlySubjectCopied": "Bozza per {{destination}} aperta. L'oggetto è negli appunti.",
+      "needsDetails": "Servono più dettagli.",
+      "unavailable": "I connettori non sono disponibili al momento.",
+      "unknown": "Non confermato. Controlla se è andato a buon fine prima di riprovare.",
+      "draftUnknown": "Non confermato: la bozza per {{destination}} potrebbe non essersi aperta. Controlla prima di riprovare.",
+      "contactsFound": "Contatti trovati: {{total}}",
+      "draftLimit": "Si possono aprire solo {{max}} bozze per richiesta.",
+      "clipboardBusy": "Non aperta: il testo di un'altra bozza è ancora negli appunti.",
+      "errors": {
+        "open_failed": "Impossibile aprire l'app email.",
+        "draft_too_long": "Troppi destinatari per un link di bozza.",
+        "invalid_address": "Servono indirizzi email completi.",
+        "not_in_channel": "Non sei membro di quel canale.",
+        "channel_not_found": "Impossibile trovare quella conversazione.",
+        "is_archived": "Quel canale è archiviato.",
+        "reconnect_needed": "Slack deve essere ricollegato.",
+        "connection_changed": "La connessione Slack è cambiata. Non è stato inviato nulla.",
+        "rate_limited": "Slack è occupato.",
+        "missing_scope": "Permesso Slack mancante.",
+        "msg_too_long": "Messaggio troppo lungo per Slack.",
+        "no_text": "Il messaggio è vuoto.",
+        "network": "Impossibile raggiungere Slack. Non è stato inviato nulla.",
+        "credential_save_failed": "Impossibile salvare l'accesso a Slack su questo computer. Non è stato inviato nulla.",
+        "dm_failed": "Impossibile aprire il messaggio diretto. Non è stato inviato nulla.",
+        "restricted": "Quel canale è di sola lettura o limitato.",
+        "generic": "Non ha funzionato.",
+        "github": {
+          "reconnect_needed": "GitHub deve essere ricollegato.",
+          "network": "Impossibile raggiungere GitHub.",
+          "rate_limited": "GitHub è occupato.",
+          "connection_changed": "La connessione GitHub è cambiata.",
+          "credential_save_failed": "Impossibile salvare l'accesso a GitHub su questo computer.",
+          "generic": "Non ha funzionato su GitHub.",
+          "not_installed": "L'app GitHub di OpenWhispr non è installata lì.",
+          "repo_unlisted": "Impossibile confermare che l'app GitHub di OpenWhispr sia installata lì.",
+          "no_repositories": "Nessun repository GitHub ancora scelto.",
+          "forbidden": "Nessun permesso in quel repository.",
+          "not_found": "Impossibile trovare quella issue o pull request.",
+          "issues_disabled": "Le issue sono disattivate in quel repository.",
+          "archived": "Quel repository è archiviato.",
+          "too_many_labels": "Troppe etichette per una issue.",
+          "labels_unavailable": "Impossibile leggere le etichette del repository.",
+          "invalid": "GitHub lo ha rifiutato perché non valido.",
+          "locked": "Quella conversazione è bloccata.",
+          "invalid_reference": "Non è una issue né una pull request di GitHub.",
+          "too_long": "Troppo lungo per GitHub.",
+          "not_configured": "GitHub non è disponibile in questa versione."
+        },
+        "gmail": {
+          "reconnect_needed": "Gmail deve essere ricollegato.",
+          "network": "Impossibile raggiungere Gmail. Non è stato inviato nulla.",
+          "rate_limited": "Gmail è occupato.",
+          "daily_limit": "Raggiunto il limite di invio giornaliero di Gmail.",
+          "domain_policy": "Bloccato dall'amministratore Google della tua organizzazione.",
+          "invalid_recipients": "Un indirizzo non è valido. Non è stato inviato nulla.",
+          "too_many_recipients": "Troppi destinatari. Non è stato inviato nulla.",
+          "too_long": "Troppo lungo per Gmail. Non è stato inviato nulla.",
+          "invalid_message": "Gmail ha rifiutato l'email. Non è stato inviato nulla.",
+          "gmail_unavailable": "L'invio con Gmail non è disponibile al momento.",
+          "refused": "Gmail si è rifiutato di inviarla.",
+          "connection_changed": "La connessione Gmail è cambiata. Non è stato inviato nulla.",
+          "credential_save_failed": "Impossibile salvare l'accesso a Gmail su questo computer. Non è stato inviato nulla."
+        },
+        "linear": {
+          "reconnect_needed": "Linear deve essere ricollegato.",
+          "connection_changed": "La connessione Linear è cambiata. Non è stato inviato nulla.",
+          "credential_save_failed": "Impossibile salvare l'accesso a Linear su questo computer.",
+          "linear_unavailable": "Linear non è disponibile al momento.",
+          "network": "Impossibile raggiungere Linear.",
+          "rate_limited": "Linear è occupato.",
+          "not_found": "Non trovato in Linear.",
+          "forbidden": "Non consentito in Linear.",
+          "invalid_input": "Linear non ha potuto accettarlo.",
+          "too_long": "Troppo lungo per Linear.",
+          "missing_title": "La issue di Linear ha bisogno di un titolo.",
+          "missing_body": "Il commento di Linear è vuoto.",
+          "not_created": "Linear non ha creato la issue.",
+          "wrong_workspace": "Quella issue è in un altro workspace di Linear.",
+          "invalid_reference": "Non è una issue di Linear.",
+          "refused": "Linear ha rifiutato la richiesta.",
+          "unknown_action": "Non disponibile in Linear.",
+          "generic": "Non ha funzionato in Linear."
+        }
+      },
+      "unknownSent": {
+        "gmail": "Impossibile confermare l'invio dell'email a {{destination}}. Controlla la cartella Posta inviata di Gmail."
+      },
+      "gmailDraftLimit": "Si possono preparare solo {{max}} email per richiesta.",
+      "queryResults": "Risultati trovati: {{total}}",
+      "cardLimit": "Si possono preparare solo {{max}} schede per richiesta."
     }
   },
   "calendar": {
@@ -3874,6 +4394,11 @@
         "createLink": "Crea link",
         "copyLink": "Copia link",
         "copied": "Copiato",
+        "replaceLink": {
+          "title": "Sostituire il link di condivisione?",
+          "description": "Questo dispositivo non ha il link attuale, quindi copiarlo significa crearne uno nuovo. Il vecchio link smetterà di funzionare, anche nelle email di invito. Reinvia ogni invito affinché le persone invitate possano continuare ad aprire la nota.",
+          "confirm": "Sostituisci link"
+        },
         "export": "Esporta",
         "owner": "Proprietario",
         "editor": "Può modificare",
