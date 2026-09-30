@@ -553,3 +553,69 @@ test("the binding and status follow the active account's login", async () => {
   assert.equal(await connector.getBinding(), null);
   assert.deepEqual(await connector.getStatus(), NOT_CONNECTED);
 });
+
+test("a Slack login is the same account only for the same user in the same workspace", async () => {
+  const { createSlackConnector } =
+    await import("../../../src/helpers/connectors/slackConnector.js");
+  const { loginKey } = createSlackConnector({
+    api: null,
+    auth: null,
+    directory: null,
+    credentials: null,
+  });
+  const login = { userId: "U1", teamId: "T1" };
+  assert.equal(loginKey(login), loginKey({ ...login, accessToken: "newer" }));
+  assert.notEqual(loginKey(login), loginKey({ ...login, userId: "U2" }));
+  assert.notEqual(loginKey(login), loginKey({ ...login, teamId: "T2" }));
+});
+
+test("Slack's card lets the user edit only the message text", async () => {
+  const { connector } = await setupSlack({});
+  assert.deepEqual(connector.actions, {
+    send_message: { kind: "approval", editable: { body: "text" } },
+  });
+});
+
+// The whole path the card's Send takes: the manager keeps only the declared
+// body, and Slack posts it to the channel the card was prepared for.
+test("an edited Slack card posts its edited text through the manager, and nothing else it sent", async () => {
+  const { connector, slack } = await setupSlack({
+    ...channelsOnly,
+    "chat.postMessage": [ok(FIXTURES.posted)],
+  });
+  const [{ createConnectorManager }, { createPendingActions }] = await Promise.all([
+    import("../../../src/helpers/connectors/connectorManager.js"),
+    import("../../../src/helpers/connectors/pendingActions.js"),
+  ]);
+  const manager = createConnectorManager({
+    connectors: [connector],
+    pendingActions: createPendingActions(),
+    actionLog: {
+      insert() {},
+      update: () => 1,
+      listRecent: () => [],
+      reconcileInterrupted: () => ({}),
+    },
+    logger: { info() {}, warn() {}, error() {} },
+    getAccountId: () => "acct-1",
+  });
+  const auth = { policyState: "allowed", accountId: "acct-1" };
+
+  const prepared = await manager.prepare(
+    "slack",
+    "send_message",
+    { destination: "#eng", text: "Ship it" },
+    auth
+  );
+  assert.equal(prepared.status, "ready");
+  const result = await manager.commit(
+    prepared.actionId,
+    { body: "Ship it today", title: "Ignored", channel: "C0OTHER", text: "Not this" },
+    auth
+  );
+
+  assert.equal(result.state, "sent");
+  assert.equal(posts(slack).length, 1);
+  assert.equal(posts(slack)[0].params.channel, "C0ENG");
+  assert.equal(postedText(posts(slack)[0].params), "Ship it today");
+});

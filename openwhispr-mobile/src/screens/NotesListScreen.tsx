@@ -18,10 +18,8 @@ import { groupNotesByDate } from '@/lib/groupNotesByDate';
 import { safeHaptics } from '@/lib/utils';
 import { confirmDestructive } from '@/lib/alerts';
 import { SyncStatusLabel } from '@/components/notes/SyncStatusLabel';
-import { VoiceProfilePromptCard } from '@/components/notes/VoiceProfilePromptCard';
 import { useManualSyncRefresh } from '@/hooks/useManualSyncRefresh';
 import { useMoveNote } from '@/hooks/useMoveNote';
-import { useConfigStore } from '@/store/useConfigStore';
 
 export default function NotesListScreen() {
   const params = useLocalSearchParams<{ folderId?: string; spaceId?: string }>();
@@ -50,8 +48,6 @@ export default function NotesListScreen() {
     voiceProfiles,
     loadVoiceProfiles,
   } = useNotesStore();
-  const config = useConfigStore((s) => s.config);
-  const updateConfig = useConfigStore((s) => s.updateConfig);
 
   const [newFolderVisible, setNewFolderVisible] = useState(false);
 
@@ -215,32 +211,23 @@ export default function NotesListScreen() {
       if (id === 'note') {
         handleCompose();
       } else if (id === 'meeting') {
-        router.push('/(tabs)/(notes)/meeting-record');
+        // The meeting is filed where it was started: this folder, or this space.
+        const startedIn: { folderId?: string; spaceId?: string } = {};
+        if (params.folderId) startedIn.folderId = params.folderId;
+        else if (params.spaceId) startedIn.spaceId = params.spaceId;
+        router.push({ pathname: '/(tabs)/(notes)/meeting-record', params: startedIn });
       } else if (id === 'folder') {
         safeHaptics('light');
         setNewFolderVisible(true);
       }
     },
-    [handleCompose],
+    [handleCompose, params.folderId, params.spaceId],
   );
-
-  const hasOwnerProfile = voiceProfiles.some((profile) => profile.isOwner === 1);
-  const showVoiceProfilePrompt = !hasOwnerProfile && !config?.voiceProfilePromptDismissedAt;
 
   const openVoiceProfiles = useCallback(() => {
     safeHaptics('selection');
     router.push('/(tabs)/(notes)/voice-profiles');
   }, []);
-
-  const openOwnerEnrollment = useCallback(() => {
-    safeHaptics('selection');
-    router.push('/(tabs)/(notes)/voice-enrollment?owner=1');
-  }, []);
-
-  const dismissVoiceProfilePrompt = useCallback(() => {
-    safeHaptics('light');
-    updateConfig({ voiceProfilePromptDismissedAt: new Date().toISOString() });
-  }, [updateConfig]);
 
   return (
     <View className="flex-1 bg-systemBackground">
@@ -261,11 +248,6 @@ export default function NotesListScreen() {
       >
         <Text className="mb-2 text-[15px] text-tertiaryLabel">{`${totalCount} ${totalCount === 1 ? 'Note' : 'Notes'}`}</Text>
         <SyncStatusLabel />
-        <VoiceProfilePromptCard
-          visible={showVoiceProfilePrompt && !searchQuery}
-          onEnroll={openOwnerEnrollment}
-          onDismiss={dismissVoiceProfilePrompt}
-        />
 
         <View className="mb-2">
           <GroupedList>
@@ -282,8 +264,8 @@ export default function NotesListScreen() {
                   <Text className="text-[16px] font-medium text-label">Voice Profiles</Text>
                   <Text className="mt-0.5 text-[13px] text-secondaryLabel">
                     {voiceProfiles.length === 0
-                      ? 'Enroll voices for meeting labels'
-                      : `${voiceProfiles.length} enrolled`}
+                      ? 'Teach OpenWhispr your voice'
+                      : `${voiceProfiles.length} ${voiceProfiles.length === 1 ? 'voice' : 'voices'}`}
                   </Text>
                 </View>
                 <SystemIcon

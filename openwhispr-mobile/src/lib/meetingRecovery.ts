@@ -1,5 +1,6 @@
 import 'expo-sqlite/localStorage/install';
 import { AppState, type AppStateStatus } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
 import type { Note } from '@/data';
 import { notesRepository } from '@/data';
 import { canTransition } from '@/lib/diarization/transcriptionStatus';
@@ -85,6 +86,34 @@ export async function recoverOrphanedMeetings(deps: MeetingRecoveryDeps): Promis
   }
 }
 
+const MEETING_RECORDING_FILE = /^meeting-(\d+)\.wav$/;
+
+export interface MeetingRecordingRepairDeps {
+  /** File names in the directory meeting recordings are saved to. */
+  listRecordingFiles(): Promise<string[]>;
+  getNote(noteId: number): Note | null;
+  recordingUri(noteId: number): string;
+  restorePath(noteId: number, uri: string): void;
+  deleteFile(uri: string): void;
+}
+
+/**
+ * Sync pulls used to erase a meeting's recording path, leaving the note with no playback
+ * or Retry and its recording on disk with nothing pointing at it. Points each such note
+ * back at its recording, and deletes recordings whose note is gone for good (hard-deleted
+ * notes can only have deleted their recording through that path).
+ */
+export async function repairMeetingRecordings(deps: MeetingRecordingRepairDeps): Promise<void> {
+  for (const name of await deps.listRecordingFiles()) {
+    const noteId = Number(MEETING_RECORDING_FILE.exec(name)?.[1]);
+    if (!noteId) continue;
+    const note = deps.getNote(noteId);
+    const uri = deps.recordingUri(noteId);
+    if (!note) deps.deleteFile(uri);
+    else if (note.noteType === 'meeting' && note.sourceFile == null) deps.restorePath(noteId, uri);
+  }
+}
+
 interface AppStateLike {
   currentState: AppStateStatus;
   addEventListener(type: 'change', listener: (state: AppStateStatus) => void): { remove(): void };
@@ -129,21 +158,40 @@ let hasStarted = false;
 export function startMeetingRecoveryOnce(): void {
   if (hasStarted) return;
   hasStarted = true;
-  recoverOrphanedMeetings({
-    listNotes: () =>
-      notesRepository
-        .getAllNotes()
-        .filter((note) => createdBeforeRuntime(note, RUNTIME_STARTED_AT_MS)),
-    markFailed: (noteId) => useNotesStore.getState().transitionStatus(noteId, 'failed'),
-    waitUntilActive: () => waitForAppActive(AppState),
-    resume: (noteId) => useNotesStore.getState().retryMeetingTranscription(noteId),
-    storage: localStorage,
-    reportError: (error, noteId) =>
-      Sentry.captureException(error, {
-        tags: { feature: 'meeting-recovery' },
-        extra: { noteId },
+  const directory = FileSystem.documentDirectory;
+  // A recording found again can make its meeting resumable, so this runs first.
+  const repaired = directory
+    ? repairMeetingRecordings({
+        listRecordingFiles: () => FileSystem.readDirectoryAsync(directory),
+        getNote: (noteId) => notesRepository.getNoteById(noteId),
+        recordingUri: (noteId) => `${directory}meeting-${noteId}.wav`,
+        restorePath: (noteId, uri) => notesRepository.restoreMeetingRecordingPath(noteId, uri),
+        deleteFile: (uri) => {
+          FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
+        },
+      }).catch((error) => {
+        Sentry.captureException(error, { tags: { feature: 'meeting-recovery' } });
+      })
+    : Promise.resolve();
+  repaired
+    .then(() =>
+      recoverOrphanedMeetings({
+        listNotes: () =>
+          notesRepository
+            .getAllNotes()
+            .filter((note) => createdBeforeRuntime(note, RUNTIME_STARTED_AT_MS)),
+        markFailed: (noteId) => useNotesStore.getState().transitionStatus(noteId, 'failed'),
+        waitUntilActive: () => waitForAppActive(AppState),
+        resume: (noteId) => useNotesStore.getState().retryMeetingTranscription(noteId),
+        storage: localStorage,
+        reportError: (error, noteId) =>
+          Sentry.captureException(error, {
+            tags: { feature: 'meeting-recovery' },
+            extra: { noteId },
+          }),
       }),
-  }).catch((error) => {
-    Sentry.captureException(error, { tags: { feature: 'meeting-recovery' } });
-  });
+    )
+    .catch((error) => {
+      Sentry.captureException(error, { tags: { feature: 'meeting-recovery' } });
+    });
 }

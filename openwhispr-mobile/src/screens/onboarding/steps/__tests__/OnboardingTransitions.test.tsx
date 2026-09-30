@@ -79,6 +79,7 @@ const mockFinish = jest.fn();
 const mockPermission = jest.fn();
 const mockKeyboardInstalled = jest.fn();
 const mockIsInstalled = jest.fn();
+let mockReplaying = false;
 const mockStatus = jest.fn();
 const mockRequest = jest.fn();
 jest.mock('@/store/useOnboardingStore', () => ({
@@ -88,6 +89,7 @@ jest.mock('@/store/useOnboardingStore', () => ({
       finish: mockFinish,
       setPermissionGranted: mockPermission,
       setKeyboardInstalled: mockKeyboardInstalled,
+      replaying: mockReplaying,
     }),
   getStepProgress: () => ({ current: 1, total: 8 }),
 }));
@@ -106,6 +108,7 @@ beforeEach(() => {
   mockRequestMicPermission.mockResolvedValue({ granted: true, canAskAgain: true });
   mockKeyboardInstalled.mockResolvedValue(undefined);
   mockIsInstalled.mockReturnValue(false);
+  mockReplaying = false;
   mockStatus.mockResolvedValue('undetermined');
   mockRequest.mockResolvedValue('denied');
   jest.spyOn(Linking, 'canOpenURL').mockResolvedValue(false);
@@ -166,6 +169,37 @@ it('explains a failed keyboard continuation without native error text', async ()
   render(<KeyboardIntroStep />);
   await waitFor(() => expect(alert).toHaveBeenCalledWith('Could not continue', 'Try again.'));
   alert.mockRestore();
+});
+
+it('skips the keyboard step when the keyboard is already on', async () => {
+  mockIsInstalled.mockReturnValue(true);
+  render(<KeyboardIntroStep />);
+  await waitFor(() => expect(mockNext).toHaveBeenCalledWith('keyboard-intro'));
+});
+
+it('shows the keyboard step on a replay even when the keyboard is already on', async () => {
+  mockReplaying = true;
+  mockIsInstalled.mockReturnValue(true);
+  const screen = render(<KeyboardIntroStep />);
+
+  expect(screen.getByText('The keyboard is already on.')).toBeTruthy();
+  expect(mockNext).not.toHaveBeenCalled();
+
+  fireEvent.press(screen.getByText('Continue'));
+  await waitFor(() => expect(mockNext).toHaveBeenCalledWith('keyboard-intro'));
+  expect(mockKeyboardInstalled).toHaveBeenCalledWith(true);
+});
+
+it('lets a replay walk through keyboard setup in Settings again', async () => {
+  mockReplaying = true;
+  mockIsInstalled.mockReturnValue(true);
+  const openSettings = jest.spyOn(Linking, 'openSettings').mockResolvedValue(undefined);
+  const screen = render(<KeyboardIntroStep />);
+
+  fireEvent.press(screen.getByText('Open Settings'));
+  await waitFor(() => expect(openSettings).toHaveBeenCalledTimes(1));
+  expect(screen.getByText('Use OpenWhispr in any app.')).toBeTruthy();
+  expect(mockNext).not.toHaveBeenCalled();
 });
 
 it('finishes setup before launching an external app', async () => {

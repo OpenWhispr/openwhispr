@@ -57,6 +57,16 @@ function createConnectorCredentials({ store, getAccountId }) {
       expect(accountId, connectorId, expectedGeneration);
       store.clear(slotFor(accountId, connectorId));
     },
+    // Every account's login for this connector on this device. Only Reset
+    // app data reads them, to revoke each one before the files are deleted.
+    readAllAccounts(connectorId) {
+      const slot = new RegExp(`^${connectorId}-[0-9a-f]{24}$`);
+      return store
+        .list()
+        .filter((name) => slot.test(name))
+        .map((name) => store.read(name))
+        .filter(Boolean);
+    },
   };
 }
 

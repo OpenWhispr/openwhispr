@@ -119,6 +119,24 @@ test("a scope's notices do nothing once its turn has ended", async () => {
   assert.equal(notices, 0);
 });
 
+test("a call's holds reach the caller once, and again only to keep the clipboard", async () => {
+  const { createToolExecutionScope } = await loadScope();
+  const holds = [];
+  const scope = createToolExecutionScope({ onHoldDelivery: (options) => holds.push(options) });
+  const first = scope.createContext({ messageId: "m1", toolCallId: "call-h" });
+  const second = scope.createContext({ messageId: "m1", toolCallId: "call-i" });
+
+  // A tool holds first, then runApprovalAction holds the same call again.
+  first.onHoldDelivery();
+  first.onHoldDelivery();
+  first.onHoldDelivery({ preserveClipboard: true });
+  first.onHoldDelivery({ preserveClipboard: true });
+  first.onHoldDelivery();
+  second.onHoldDelivery();
+
+  assert.deepEqual(holds, [undefined, { preserveClipboard: true }, undefined]);
+});
+
 test("turn slots are shared by a scope's calls and start over with each turn", async () => {
   const { createToolExecutionScope } = await loadScope();
   const scope = createToolExecutionScope();

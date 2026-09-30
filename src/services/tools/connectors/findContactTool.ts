@@ -15,6 +15,9 @@ export const findContactTool: ToolDefinition = {
     additionalProperties: false,
   },
   readOnly: true,
+  connectorId: "email",
+  promptInstruction:
+    "Use find_contact to look up a person's email address by name before drafting an email to them.",
 
   async execute(
     args: Record<string, unknown>,

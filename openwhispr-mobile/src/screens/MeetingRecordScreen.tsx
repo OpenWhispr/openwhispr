@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { Alert, TextInput, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -74,6 +74,12 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
   const isLocalAsrModelReady = useNotesStore((s) => s.isLocalAsrModelReady);
   const downloadDiarizerModel = useNotesStore((s) => s.downloadDiarizerModel);
   const { register: registerSuperwallGate } = useSuperwallGate();
+  // Where the meeting was started from; createMeetingNote files it there when it still can.
+  const params = useLocalSearchParams<{ folderId?: string; spaceId?: string }>();
+  const startedIn = {
+    folderId: params.folderId ? Number(params.folderId) : undefined,
+    spaceId: params.spaceId ? Number(params.spaceId) : undefined,
+  };
 
   const recording = useAudioRecording({
     allowsBackgroundRecording: true,
@@ -188,6 +194,7 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
     let note: Note;
     try {
       note = createMeetingNote({
+        ...startedIn,
         expectedSpeakerCount: expected,
         calendarEventId: selectedMeetingContext?.calendarEventId ?? null,
         title: selectedMeetingContext?.title ?? null,
@@ -301,6 +308,7 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
     let note: Note;
     try {
       note = createMeetingNote({
+        ...startedIn,
         expectedSpeakerCount: expected,
         calendarEventId: selectedMeetingContext?.calendarEventId ?? null,
         title: selectedMeetingContext?.title ?? null,

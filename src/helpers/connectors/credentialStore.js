@@ -87,7 +87,18 @@ function createCredentialStore({ dir, secretCrypto, logger, fsImpl = fs }) {
     return generations.get(connectorId) || 0;
   }
 
-  return { read, replace, save, clear, getGeneration };
+  // Every stored name, so erasing the device can reach logins no one is
+  // signed in to.
+  function list() {
+    if (!fsImpl.existsSync(dir)) return [];
+    return fsImpl
+      .readdirSync(dir)
+      .filter((name) => name.endsWith(".bin"))
+      .map((name) => name.slice(0, -".bin".length))
+      .filter((name) => CONNECTOR_ID_PATTERN.test(name));
+  }
+
+  return { read, replace, save, clear, getGeneration, list };
 }
 
 module.exports = { createCredentialStore };

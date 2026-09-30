@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, Modal, Platform } from 'react-native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import NoteEditorScreen from '@/screens/NoteEditorScreen';
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
@@ -9,7 +9,7 @@ import { formatTranscriptForExport } from '@/lib/diarization/transcriptDisplay';
 import { makeContentHash } from '@/lib/utils';
 import { clearLocalReasoningReadinessCache, LocalReasoningError } from '@/lib/localReasoning';
 import { extractCorrections } from '@/lib/correctionLearner';
-import type { Action, Note, Segment, Speaker } from '@/data/types';
+import type { Action, Note, Segment, Speaker, SpeakerProfile } from '@/data/types';
 import type { Folder, Space } from '@/data';
 import type { UserConfig } from '@/types';
 
@@ -25,6 +25,8 @@ const mockAddLearnedWords = jest.fn();
 const mockUpdateConfig = jest.fn(async (updates: Record<string, unknown>) => {
   mockConfigState.config = { ...mockConfigState.config, ...updates };
 });
+const mockClaimSpeakerAsMe = jest.fn();
+const mockLoadVoiceProfiles = jest.fn();
 
 let mockNote: Note;
 let mockRouteNoteId = '7';
@@ -56,6 +58,10 @@ const mockNotesState = {
   moveNoteToSpace: jest.fn(),
   createFolder: jest.fn(),
   getSpaceFolders: jest.fn(() => [] as Folder[]),
+  voiceProfiles: [] as SpeakerProfile[],
+  meetingSpeakerEmbeddingsByNoteId: {} as Record<number, Record<string, number[]>>,
+  claimSpeakerAsMe: mockClaimSpeakerAsMe,
+  loadVoiceProfiles: mockLoadVoiceProfiles,
 };
 
 const mockActionsState = {
@@ -85,10 +91,11 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
+const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ id: mockRouteNoteId }),
   useRouter: () => ({
-    push: jest.fn(),
+    push: mockPush,
     canGoBack: () => true,
     back: jest.fn(),
     replace: jest.fn(),
@@ -97,6 +104,12 @@ jest.mock('expo-router', () => ({
 
 jest.mock('expo-clipboard', () => ({
   setStringAsync: jest.fn(async () => undefined),
+}));
+
+jest.mock('@/lib/transcriptAudio', () => ({
+  ...jest.requireActual('@/lib/transcriptAudio'),
+  isManagedMeetingAudioUri: (noteId: number, uri?: string | null) =>
+    uri === `managed://meeting-${noteId}.wav`,
 }));
 
 jest.mock('@/store/useNotesStore', () => ({
@@ -524,6 +537,9 @@ beforeEach(() => {
   mockSpeakers = [speaker()];
   mockConfigState.config.autoGenerateNoteTitle = false;
   mockConfigState.config.appleLocalIntelligenceEnabled = true;
+  mockConfigState.config.voiceSetupBannerDismissedAt = undefined;
+  mockNotesState.voiceProfiles = [];
+  mockNotesState.meetingSpeakerEmbeddingsByNoteId = {};
   mockUpdateConfig.mockClear();
   (ReasoningService.processText as jest.Mock).mockResolvedValue({
     text: 'Generated calendar-aware notes',
@@ -1599,5 +1615,190 @@ describe('NoteEditorScreen clearing generated notes', () => {
     fireEvent.changeText(getByTestId('enhanced-editor'), '## Rewritten');
     fireEvent.press(getByTestId('enhanced-done'));
     expect(mockUpdateNote).toHaveBeenLastCalledWith(7, { enhancedContent: '## Rewritten' });
+  });
+});
+
+describe('NoteEditorScreen voice setup', () => {
+  let alertSpy: jest.SpyInstance;
+  const longSegments = (): Segment[] => [
+    segment({
+      id: 20,
+      speakerLabel: 'speaker_0',
+      startMs: 0,
+      endMs: 15000,
+      text: 'I will own the launch.',
+    }),
+  ];
+
+  beforeEach(() => {
+    alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockNote = note({ sourceFile: 'managed://meeting-7.wav', transcriptionStatus: 'done' });
+    mockNotesState.notes = [mockNote];
+    mockSegments = longSegments();
+    mockSpeakers = [speaker()];
+    mockNotesState.meetingSpeakerEmbeddingsByNoteId = { 7: { speaker_0: [0.1, 0.2] } };
+  });
+  afterEach(() => alertSpy.mockRestore());
+
+  it('offers voice setup on a meeting recorded on this device', () => {
+    const { getByTestId } = render(<NoteEditorScreen />);
+    expect(getByTestId('voice-setup-banner')).toBeTruthy();
+  });
+
+  it('loads your voice profiles, which a meeting opened straight from recording never did', () => {
+    render(<NoteEditorScreen />);
+    expect(mockLoadVoiceProfiles).toHaveBeenCalled();
+  });
+
+  it('does not offer it on a meeting recorded elsewhere, or once you have a profile', () => {
+    mockNote = note({ sourceFile: null });
+    mockNotesState.notes = [mockNote];
+    const { queryByTestId, rerender } = render(<NoteEditorScreen />);
+    expect(queryByTestId('voice-setup-banner')).toBeNull();
+
+    mockNote = note({ sourceFile: 'managed://meeting-7.wav' });
+    mockNotesState.notes = [mockNote];
+    mockNotesState.voiceProfiles = [{ id: 1, isOwner: 1 } as SpeakerProfile];
+    rerender(<NoteEditorScreen />);
+    expect(queryByTestId('voice-setup-banner')).toBeNull();
+  });
+
+  it("doesn't offer it once this meeting's samples are gone, such as after a restart", () => {
+    mockNotesState.meetingSpeakerEmbeddingsByNoteId = {};
+    const { queryByTestId } = render(<NoteEditorScreen />);
+    expect(queryByTestId('voice-setup-banner')).toBeNull();
+  });
+
+  it('waits for settings to load, so a dismissed banner never flashes', () => {
+    const loaded = mockConfigState.config;
+    mockConfigState.config = null as unknown as Partial<UserConfig>;
+    try {
+      const { queryByTestId } = render(<NoteEditorScreen />);
+      expect(queryByTestId('voice-setup-banner')).toBeNull();
+    } finally {
+      mockConfigState.config = loaded;
+    }
+  });
+
+  it('hides the banner for good when dismissed, under its own setting', () => {
+    const { getByTestId } = render(<NoteEditorScreen />);
+    fireEvent.press(getByTestId('voice-setup-banner-dismiss'));
+    expect(mockUpdateConfig).toHaveBeenCalledWith({
+      voiceSetupBannerDismissedAt: expect.any(String),
+    });
+  });
+
+  it('still shows for someone who dismissed the old notes-list card', () => {
+    (mockConfigState.config as Record<string, unknown>).voiceProfilePromptDismissedAt =
+      '2026-09-01T00:00:00.000Z';
+    try {
+      const { getByTestId } = render(<NoteEditorScreen />);
+      expect(getByTestId('voice-setup-banner')).toBeTruthy();
+    } finally {
+      delete (mockConfigState.config as Record<string, unknown>).voiceProfilePromptDismissedAt;
+    }
+  });
+
+  it('makes the tapped speaker your voice', () => {
+    const { getByTestId, getByText } = render(<NoteEditorScreen />);
+    fireEvent.press(getByTestId('voice-setup-banner-set-up'));
+    fireEvent.press(getByTestId('thats-me-10'));
+
+    expect(mockClaimSpeakerAsMe).toHaveBeenCalledWith(7, 10);
+    expect(getByText('Got it')).toBeTruthy();
+  });
+
+  it('explains and keeps the script offer when the sample is gone', () => {
+    mockClaimSpeakerAsMe.mockImplementationOnce(() => {
+      throw new Error("This meeting's voice sample is no longer available.");
+    });
+    const { getByTestId, queryByText } = render(<NoteEditorScreen />);
+    fireEvent.press(getByTestId('voice-setup-banner-set-up'));
+    fireEvent.press(getByTestId('thats-me-10'));
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      "Couldn't save your voice",
+      'Read a short script instead to teach OpenWhispr your voice.',
+    );
+    expect(queryByText('Got it')).toBeNull();
+    expect(getByTestId('thats-me-read-script')).toBeTruthy();
+  });
+
+  it("doesn't suggest the script when you already have a voice profile", () => {
+    const { SpeakerProfileOwnerAlreadyExistsError } = jest.requireActual(
+      '@/data/local/notesRepository',
+    );
+    mockClaimSpeakerAsMe.mockImplementationOnce(() => {
+      throw new SpeakerProfileOwnerAlreadyExistsError();
+    });
+    const { getByTestId } = render(<NoteEditorScreen />);
+    fireEvent.press(getByTestId('voice-setup-banner-set-up'));
+    fireEvent.press(getByTestId('thats-me-10'));
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      "You've already taught OpenWhispr your voice",
+      'Open it in Voice Profiles and choose Retrain Voice.',
+    );
+    // Reloading picks up the profile, which hides the banner.
+    expect(mockLoadVoiceProfiles).toHaveBeenCalledTimes(2);
+  });
+
+  it('opens the script for this meeting once the sheet has finished closing', () => {
+    const { getByTestId, UNSAFE_getAllByType } = render(<NoteEditorScreen />);
+    fireEvent.press(getByTestId('voice-setup-banner-set-up'));
+    const sheet = UNSAFE_getAllByType(Modal).find(
+      (modal) => modal.props.presentationStyle === 'pageSheet' && modal.props.visible,
+    );
+    fireEvent.press(getByTestId('thats-me-read-script'));
+
+    // Pushing while the sheet slides away gets dropped on iOS.
+    expect(mockPush).not.toHaveBeenCalled();
+    act(() => sheet?.props.onDismiss());
+
+    expect(mockPush).toHaveBeenCalledWith('/(tabs)/(notes)/voice-enrollment?owner=1&noteId=7');
+  });
+
+  it('opens the script right away on Android, which has no sheet onDismiss', () => {
+    const platform = Platform.OS;
+    Platform.OS = 'android';
+    try {
+      const { getByTestId } = render(<NoteEditorScreen />);
+      fireEvent.press(getByTestId('voice-setup-banner-set-up'));
+      fireEvent.press(getByTestId('thats-me-read-script'));
+
+      expect(mockPush).toHaveBeenCalledWith('/(tabs)/(notes)/voice-enrollment?owner=1&noteId=7');
+    } finally {
+      Platform.OS = platform;
+    }
+  });
+
+  it("doesn't open the script for another note after switching mid-close", () => {
+    const { getByTestId, UNSAFE_getAllByType, rerender } = render(<NoteEditorScreen />);
+    fireEvent.press(getByTestId('voice-setup-banner-set-up'));
+    const sheet = UNSAFE_getAllByType(Modal).find(
+      (modal) => modal.props.presentationStyle === 'pageSheet' && modal.props.visible,
+    );
+    fireEvent.press(getByTestId('thats-me-read-script'));
+
+    mockRouteNoteId = '8';
+    mockNote = note({ id: 8, sourceFile: 'managed://meeting-8.wav' });
+    mockNotesState.notes = [mockNote];
+    rerender(<NoteEditorScreen />);
+    act(() => sheet?.props.onDismiss());
+
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('closes the sheet when another note opens', () => {
+    const { getByTestId, queryByTestId, rerender } = render(<NoteEditorScreen />);
+    fireEvent.press(getByTestId('voice-setup-banner-set-up'));
+    expect(getByTestId('thats-me-sheet')).toBeTruthy();
+
+    mockRouteNoteId = '8';
+    mockNote = note({ id: 8, sourceFile: 'managed://meeting-8.wav' });
+    mockNotesState.notes = [mockNote];
+    rerender(<NoteEditorScreen />);
+
+    expect(queryByTestId('thats-me-sheet')).toBeNull();
   });
 });

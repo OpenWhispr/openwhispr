@@ -97,14 +97,44 @@ beforeEach(() => {
 });
 
 describe('runInitialBackfillIfNeeded — once-per-account guard', () => {
-  it('does nothing when the flag is already set for this userId', async () => {
+  it('does not run again when the flag is already set for this userId', async () => {
     mockNotesRepository.getSyncState.mockReturnValue('1');
 
     await runInitialBackfillIfNeeded('user-1');
 
     expect(mockFetchFolders).not.toHaveBeenCalled();
-    expect(mockNotesRepository.getFoldersMissingClientId).not.toHaveBeenCalled();
+    expect(mockNotesRepository.getNotesMissingClientId).not.toHaveBeenCalled();
+    expect(mockNotesRepository.markFolderPushed).not.toHaveBeenCalled();
     expect(mockNotesRepository.setSyncState).not.toHaveBeenCalled();
+  });
+
+  it('still gives a default folder re-seeded after it ran a client id, so it can upload', async () => {
+    mockNotesRepository.getSyncState.mockReturnValue('1');
+    mockNotesRepository.getFoldersMissingClientId.mockReturnValue([
+      folder({ id: 1, name: 'Personal' }),
+      folder({ id: 2, name: 'Meetings', sortOrder: 1 }),
+    ]);
+
+    await runInitialBackfillIfNeeded('user-1');
+
+    expect(mockNotesRepository.setFolderClientId).toHaveBeenCalledWith(1, expect.any(String));
+    expect(mockNotesRepository.setFolderClientId).toHaveBeenCalledWith(2, expect.any(String));
+    expect(mockFetchFolders).not.toHaveBeenCalled();
+    expect(mockNotesRepository.setSyncState).not.toHaveBeenCalled();
+  });
+
+  it('leaves alone a folder the server already has, or one being deleted, once it has run', async () => {
+    mockNotesRepository.getSyncState.mockReturnValue('1');
+    mockNotesRepository.getFoldersMissingClientId.mockReturnValue([
+      // Pulled with no client id: marking it for upload would push its name back over a
+      // rename made on another device.
+      folder({ id: 3, name: 'Clients', isDefault: 0, remoteId: 'srv-folder-3' }),
+      folder({ id: 4, name: 'Old', isDefault: 0, deletedAt: '2026-08-24T10:00:00.000Z' }),
+    ]);
+
+    await runInitialBackfillIfNeeded('user-1');
+
+    expect(mockNotesRepository.setFolderClientId).not.toHaveBeenCalled();
   });
 
   it('runs once and sets the per-user flag when it was unset', async () => {

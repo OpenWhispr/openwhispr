@@ -965,3 +965,40 @@ for (const menu of ["selection", "empty line", "table"]) {
     assert.deepEqual(notes.errors, []);
   });
 }
+
+test("the menus mount without error on an editor useEditor already destroyed", async (t) => {
+  // useEditor destroys the editor it created while rendering unless its effect
+  // runs within 1 ms, and replaces it once that effect runs. Opening a note from
+  // an IPC event (Join & transcribe) runs effects after paint, so the menus'
+  // effects, which run first, can get the destroyed one.
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  const React = require("react");
+  const { createRoot } = require("react-dom/client");
+  const vite = await createRendererServer(t);
+  const { RichTextEditorFormatMenu } = await vite.ssrLoadModule(
+    "/components/ui/RichTextEditorFormatMenu.tsx"
+  );
+  const { RichTextEditorTableMenu } = await vite.ssrLoadModule(
+    "/components/ui/RichTextEditorTableMenu.tsx"
+  );
+  const editor = createEditor("Meeting notes");
+  editor.destroy();
+  const host = happyWindow.document.createElement("div");
+  happyWindow.document.body.appendChild(host);
+  const root = createRoot(host);
+  t.after(async () => {
+    await React.act(async () => root.unmount());
+    host.remove();
+  });
+
+  await React.act(async () =>
+    root.render(
+      React.createElement(
+        React.Fragment,
+        null,
+        React.createElement(RichTextEditorFormatMenu, { editor }),
+        React.createElement(RichTextEditorTableMenu, { editor })
+      )
+    )
+  );
+});

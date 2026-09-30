@@ -97,6 +97,9 @@ const NOTE = {
   updated_at: "2026-09-01T00:00:00.000Z",
   space_id: null,
   folder_id: null,
+  participants: JSON.stringify([
+    { email: "dana@example.com", displayName: "Dana Wu", responseStatus: null, self: false },
+  ]),
 };
 
 const ENHANCEMENT = { content: NOTE.enhanced_content, isStale: false, onChange() {} };
@@ -156,9 +159,14 @@ async function loadNoteEditor(t) {
         export function SelectionBar() { return null; }
       `,
       "/EmbeddedChat": `export default function EmbeddedChat() { return null; }`,
-      "/hooks/useAuth": `export function useAuth() { return { isSignedIn: false, user: null }; }`,
+      "/hooks/useAuth": `
+        export function useAuth() {
+          return globalThis.__noteEditorAuth ?? { isSignedIn: false, user: null };
+        }
+      `,
       "/hooks/useEmbeddedChat": `
-        export function useEmbeddedChat() {
+        export function useEmbeddedChat(options) {
+          globalThis.__embeddedChatOptions = options;
           return {
             messages: [],
             send() {},
@@ -169,7 +177,11 @@ async function loadNoteEditor(t) {
         }
       `,
       "/services/NoteSharingService": `
-        export const NoteSharingService = { fetchAcl: async () => null };
+        export const NoteSharingService = {
+          fetchAcl: async () => null,
+          // A signed-in cloud note loads its sharing state; never answered here.
+          getShareSettings: () => new Promise(() => {}),
+        };
       `,
       "/hooks/useSpaceRoster": `export async function fetchSpaceRoster() { return []; }`,
     },
@@ -314,5 +326,53 @@ test("the summary callout makes way for the transcript selection bar", async (t)
     "the callout steps aside while segments are selected"
   );
 
+  await unmount();
+});
+
+test("the note's chat gets the note's participants, parsed once", async (t) => {
+  t.after(() => {
+    delete globalThis.__embeddedChatOptions;
+  });
+  const { render, unmount } = await loadNoteEditor(t);
+
+  await render(ENHANCEMENT);
+
+  assert.deepEqual(
+    globalThis.__embeddedChatOptions.noteParticipants,
+    JSON.parse(NOTE.participants)
+  );
+  assert.equal(globalThis.__embeddedChatOptions.noteId, NOTE.id);
+  await unmount();
+});
+
+test("the note's chat learns who is viewing the note and its calendar event", async (t) => {
+  t.after(() => {
+    delete globalThis.__embeddedChatOptions;
+    delete globalThis.__noteEditorAuth;
+  });
+  globalThis.__noteEditorAuth = {
+    isSignedIn: true,
+    user: { id: "user-chad", email: "chad@example.com" },
+  };
+  const { render, unmount } = await loadNoteEditor(t);
+  const options = () => globalThis.__embeddedChatOptions;
+
+  // A local note is the user's own.
+  await render(ENHANCEMENT, { note: { ...NOTE, calendar_event_id: "evt-1" } });
+  assert.equal(options().noteOwnedByUser, true);
+  assert.equal(options().selfEmail, "chad@example.com");
+  assert.equal(options().noteCalendarEventId, "evt-1");
+
+  // A team note someone else recorded is not.
+  await render(ENHANCEMENT, {
+    note: {
+      ...NOTE,
+      cloud_id: "cloud-1",
+      owner_user_id: "user-alice",
+      calendar_event_id: null,
+    },
+  });
+  assert.equal(options().noteOwnedByUser, false);
+  assert.equal(options().noteCalendarEventId, null);
   await unmount();
 });

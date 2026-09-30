@@ -548,3 +548,179 @@ test("a held verdict that throws on the deadline fallback fails closed", async (
   });
   assert.equal(await resolver({}), "unavailable");
 });
+
+function registerNoteAttendees(policies) {
+  const ipcMain = fakeIpcMain();
+  const requests = [];
+  return load().then(({ registerConnectorIpc }) => {
+    registerConnectorIpc({
+      ipcMain,
+      manager: fakeManager(),
+      getPolicyState: async () => policies.shift(),
+      getAccountScope: () => SCOPE,
+      noteAttendees: (request) => {
+        requests.push(request);
+        return request.participants
+          .filter((attendee) => !attendee.self)
+          .map(({ email, displayName }) => ({ name: displayName, email }));
+      },
+    });
+    const handler = ipcMain.handlers.get("connector-note-attendees");
+    return { handler, requests };
+  });
+}
+
+const meeting = (overrides) => ({
+  noteId: null,
+  participants: [],
+  calendarEventId: null,
+  selfEmail: null,
+  ...overrides,
+});
+
+test("note attendees pass only well-formed fields to the filter, and follow the org policy", async () => {
+  const policies = ["allowed", "blocked", "unavailable"];
+  const { handler, requests } = await registerNoteAttendees(policies);
+  const participants = [
+    {
+      email: "dana@example.com",
+      displayName: "Dana",
+      responseStatus: "accepted",
+      self: false,
+      extra: "dropped",
+    },
+    { email: "me@example.com", displayName: null, self: true },
+    { email: "room@corp.test", displayName: "Room", resource: true, self: "yes" },
+    { email: "" },
+    { displayName: "No address" },
+    "kim@example.com",
+    null,
+    { email: `${"a".repeat(320)}@example.com` },
+    { email: "lee@example.com", displayName: "x".repeat(201) },
+  ];
+  const request = meeting({ noteId: 7, participants, selfEmail: " me@openwhispr.test " });
+
+  assert.deepEqual(await handler({}, request), {
+    attendees: [
+      { name: "Dana", email: "dana@example.com" },
+      { name: "Room", email: "room@corp.test" },
+      { name: null, email: "lee@example.com" },
+    ],
+  });
+  assert.deepEqual(requests, [
+    {
+      noteId: 7,
+      participants: [
+        { email: "dana@example.com", displayName: "Dana", self: false, resource: false },
+        { email: "me@example.com", displayName: null, self: true, resource: false },
+        { email: "room@corp.test", displayName: "Room", self: false, resource: true },
+        { email: "lee@example.com", displayName: null, self: false, resource: false },
+      ],
+      calendarEventId: null,
+      selfEmail: "me@openwhispr.test",
+    },
+  ]);
+  assert.deepEqual(await handler({}, request), {
+    attendees: [],
+    unavailableReason: "policy_blocked",
+  });
+  assert.deepEqual(await handler({}, request), {
+    attendees: [],
+    unavailableReason: "policy_unavailable",
+  });
+  assert.equal(requests.length, 1);
+});
+
+test("a note's attendee list is cut at 200, and a request with nothing to look up skips the policy lookup", async () => {
+  const policies = ["allowed"];
+  const { handler, requests } = await registerNoteAttendees(policies);
+  const many = Array.from({ length: 300 }, (_, index) => ({
+    email: `person${index}@example.com`,
+    displayName: null,
+    self: false,
+  }));
+
+  const { attendees } = await handler({}, meeting({ participants: many }));
+
+  assert.equal(attendees.length, 200);
+  assert.equal(attendees[199].email, "person199@example.com");
+  assert.equal(requests[0].participants.length, 200);
+  // Nothing to filter: no policy lookup, no filter call.
+  for (const request of [
+    "not a request",
+    null,
+    [],
+    meeting({ participants: "not a list" }),
+    meeting({ participants: [{ displayName: "No address" }] }),
+    meeting({ noteId: 0 }),
+    meeting({ noteId: "7" }),
+    meeting({ calendarEventId: "x".repeat(1025) }),
+    meeting({ calendarEventId: "" }),
+  ]) {
+    assert.deepEqual(await handler({}, request), { attendees: [] }, JSON.stringify(request));
+  }
+  assert.equal(requests.length, 1);
+  assert.equal(policies.length, 0);
+});
+
+test("a note id or calendar event alone reaches the filter; malformed values don't", async () => {
+  const policies = ["allowed", "allowed"];
+  const { handler, requests } = await registerNoteAttendees(policies);
+
+  await handler({}, meeting({ calendarEventId: "event-1" }));
+  await handler(
+    {},
+    meeting({
+      noteId: 9,
+      calendarEventId: { id: "event-1" },
+      selfEmail: `${"a".repeat(321)}@x.test`,
+    })
+  );
+
+  assert.deepEqual(requests, [meeting({ calendarEventId: "event-1" }), meeting({ noteId: 9 })]);
+  assert.equal(policies.length, 0);
+});
+
+test("without an attendee filter, no note-attendees channel is registered", async () => {
+  const { registerConnectorIpc } = await load();
+  const ipcMain = fakeIpcMain();
+  registerConnectorIpc({ ipcMain, manager: fakeManager(), getPolicyState: async () => "allowed" });
+  assert.equal(ipcMain.handlers.has("connector-note-attendees"), false);
+});
+
+test("a query reaches the manager with the call's auth; malformed requests don't", async () => {
+  const { registerConnectorIpc } = await load();
+  const ipcMain = fakeIpcMain();
+  const calls = [];
+  const manager = {
+    ...fakeManager(),
+    query: async (...args) => {
+      calls.push(args);
+      return { status: "ok", items: [], truncated: false };
+    },
+  };
+  registerConnectorIpc({
+    ipcMain,
+    manager,
+    getPolicyState: async () => "allowed",
+    getAccountScope: () => SCOPE,
+  });
+  const query = ipcMain.handlers.get("connector-query");
+
+  assert.deepEqual(await query({}, "linear", "search_issues", { query: "login" }), {
+    status: "ok",
+    items: [],
+    truncated: false,
+  });
+  assert.deepEqual(calls, [["linear", "search_issues", { query: "login" }, ALLOWED]]);
+
+  for (const bad of [
+    [7, "search_issues", {}],
+    ["linear", "", {}],
+    ["linear", "search_issues", null],
+    ["linear", "search_issues", ["login"]],
+  ]) {
+    assert.deepEqual(await query({}, ...bad), { status: "unavailable", reason: "invalid_request" });
+  }
+  assert.equal(calls.length, 1);
+});

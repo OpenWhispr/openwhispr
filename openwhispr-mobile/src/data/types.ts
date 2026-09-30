@@ -407,6 +407,17 @@ export interface NotesRepository {
   getSpeakerProfiles(): SpeakerProfile[];
   getSpeakerProfileById(id: number): SpeakerProfile | null;
   createSpeakerProfile(input: NewSpeakerProfile): SpeakerProfile;
+  /**
+   * Atomically creates the owner speaker profile and applies `speakerPatch` (plus the new
+   * profile's id) to the speaker row in one transaction, so a failure partway through never
+   * leaves an owner profile with no speaker linked to it, which would block every later
+   * claim until the profile was deleted. Used by the "claim this speaker as me" flow.
+   */
+  createOwnerProfileForSpeaker(
+    speakerId: number,
+    profileInput: Omit<NewSpeakerProfile, 'isOwner'>,
+    speakerPatch: Partial<Speaker>,
+  ): SpeakerProfile;
   updateSpeakerProfile(id: number, updates: Partial<SpeakerProfile>): void;
   deleteSpeakerProfile(id: number): void;
   deleteAllSpeakerProfiles(): void;
@@ -418,6 +429,8 @@ export interface NotesRepository {
   setTranscriptionStatus(noteId: number, status: TranscriptionStatus): void;
   /** Update local-only meeting/diarization columns NoteUpdate cannot reach. */
   updateNoteMeta(noteId: number, updates: MeetingNoteUpdate): void;
+  /** Points a meeting with no recording path back at its recording, keeping its place in lists. */
+  restoreMeetingRecordingPath(noteId: number, sourceFile: string): void;
   /** Update selected calendar context; public notes mark pending sync, private notes stay local-only. */
   updateNoteCalendarContext(noteId: number, updates: MeetingCalendarContextUpdate): void;
 }

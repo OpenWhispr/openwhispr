@@ -474,11 +474,7 @@ function initializeCoreManagers() {
   const { createActionLog } = require("./src/helpers/connectors/actionLog");
   const { createCredentialStore } = require("./src/helpers/connectors/credentialStore");
   const { createConnectorCredentials } = require("./src/helpers/connectors/connectorCredentials");
-  const { createSlackApi } = require("./src/helpers/connectors/slackApi");
-  const { createSlackAuth } = require("./src/helpers/connectors/slackAuth");
-  const { createSlackDirectory } = require("./src/helpers/connectors/slackDirectory");
-  const { createSlackConnector } = require("./src/helpers/connectors/slackConnector");
-  const { renderOAuthResultPage } = require("./src/helpers/connectors/oauthResultPage");
+  const { createConnectors } = require("./src/helpers/connectors/createConnectors");
   const { runOAuthLoopbackFlow, OAuthFlowError } = require("./src/helpers/oauthLoopbackFlow");
   const { broadcastToWindows } = require("./src/helpers/windowBroadcast");
   const { connectorAccountIdFrom } = require("./src/helpers/connectors/connectorIpc");
@@ -499,43 +495,22 @@ function initializeCoreManagers() {
     }),
     getAccountId: getConnectorAccountId,
   });
-  const slackApi = createSlackApi({
-    fetchImpl: (url, init) => net.fetch(url, { ...init, useSessionCookies: false }),
-  });
-  const slackAuth = createSlackAuth({
-    api: slackApi,
-    credentials: connectorCredentials,
-    getClientId: () => process.env.SLACK_CLIENT_ID,
-    runOAuthLoopbackFlow,
-    OAuthFlowError,
-    renderResultPage: ({ ok }) =>
-      renderOAuthResultPage({
-        ok,
-        title: i18nMain.t(
-          ok ? "connectors.slack.browser.connectedTitle" : "connectors.slack.browser.failedTitle"
-        ),
-        body: i18nMain.t(
-          ok ? "connectors.slack.browser.connectedBody" : "connectors.slack.browser.failedBody"
-        ),
-      }),
-    // Shared by every consumer of Slack auth: its single-flight refresh map is
-    // per instance, so a second instance could spend the same single-use
-    // refresh token.
-    logger: debugLogger,
-  });
   connectorManager = createConnectorManager({
-    connectors: [
-      require("./src/helpers/connectors/emailConnector").createEmailConnector({
-        openExternal: (url) => require("./src/helpers/externalUrlOpener").openExternalUrl(url),
-        writeClipboard: (text, webContents) => clipboardManager.writeClipboard(text, webContents),
-      }),
-      createSlackConnector({
-        api: slackApi,
-        auth: slackAuth,
-        directory: createSlackDirectory({ api: slackApi }),
-        credentials: connectorCredentials,
-      }),
-    ],
+    connectors: createConnectors({
+      fetch: (url, init) => net.fetch(url, { ...init, useSessionCookies: false }),
+      i18n: i18nMain,
+      runOAuthLoopbackFlow,
+      OAuthFlowError,
+      credentials: connectorCredentials,
+      logger: debugLogger,
+      env: process.env,
+      openExternal: (url) => require("./src/helpers/externalUrlOpener").openExternalUrl(url),
+      writeClipboard: (text, webContents) => clipboardManager.writeClipboard(text, webContents),
+      // Read only when revoking a Gmail login on the calendar's Google project;
+      // the calendar manager is created below.
+      getGoogleCalendarAccounts: () => googleCalendarManager?.getAccounts() ?? [],
+      broadcast: broadcastToWindows,
+    }),
     pendingActions: createPendingActions(),
     actionLog: createActionLog(databaseManager),
     logger: debugLogger,

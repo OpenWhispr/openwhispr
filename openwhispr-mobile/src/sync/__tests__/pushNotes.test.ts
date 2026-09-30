@@ -174,6 +174,54 @@ describe('pushNotes calendar context', () => {
     );
   });
 
+  it("holds a note whose folder hasn't reached the server yet, instead of filing it nowhere", async () => {
+    const UNSYNCED_FOLDER_ID = 3;
+    const [syncedFolder] = mockNotesRepository.getFolders();
+    mockNotesRepository.getFolders.mockReset().mockReturnValue([
+      syncedFolder,
+      {
+        ...syncedFolder,
+        id: UNSYNCED_FOLDER_ID,
+        name: 'Clients',
+        clientFolderId: 'client-folder-3',
+        remoteId: null,
+        pendingSync: 1,
+      },
+    ]);
+    mockNotesRepository.getPendingNotes.mockReturnValue([
+      note({ id: 1, remoteId: null, folderId: UNSYNCED_FOLDER_ID }),
+      note({
+        id: 2,
+        remoteId: 'remote-note-2',
+        clientNoteId: 'client-note-2',
+        folderId: UNSYNCED_FOLDER_ID,
+      }),
+      note({ id: 3, remoteId: null, clientNoteId: 'client-note-3', folderId: 2 }),
+    ]);
+    mockBatchCreateNotes.mockResolvedValue([
+      { id: 'remote-note-3', client_note_id: 'client-note-3' },
+    ]);
+
+    await expect(pushNotes()).resolves.toBeUndefined();
+
+    // Only the note whose folder is on the server goes up, filed in it.
+    expect(mockBatchCreateNotes).toHaveBeenCalledWith([
+      expect.objectContaining({ client_note_id: 'client-note-3', folder_id: 'remote-folder-2' }),
+    ]);
+    expect(mockUpdateNoteRemote).not.toHaveBeenCalled();
+    expect(mockNotesRepository.markNotePushed).toHaveBeenCalledTimes(1);
+    expect(mockNotesRepository.markNoteTerminal).not.toHaveBeenCalled();
+    // Folders are read once per pass, not once per note.
+    expect(mockNotesRepository.getFolders).toHaveBeenCalledTimes(1);
+    expect(mockAddBreadcrumb).toHaveBeenCalledWith(
+      expect.objectContaining({
+        category: 'sync',
+        level: 'info',
+        message: expect.stringContaining('skipped 2 row(s) whose folder has no cloud id yet'),
+      }),
+    );
+  });
+
   it('pushes public update calendar context', async () => {
     mockNotesRepository.getPendingNotes.mockReturnValue([
       note({

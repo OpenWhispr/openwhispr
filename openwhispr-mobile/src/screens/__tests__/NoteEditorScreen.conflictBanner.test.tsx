@@ -3,7 +3,15 @@ import { act, fireEvent, render } from '@testing-library/react-native';
 import NoteEditorScreen from '@/screens/NoteEditorScreen';
 import * as Clipboard from 'expo-clipboard';
 import { exportNote } from '@/lib/noteExport';
-import type { Action, ConflictedNote, Note, RemoteNote, Segment, Speaker } from '@/data/types';
+import type {
+  Action,
+  ConflictedNote,
+  Note,
+  RemoteNote,
+  Segment,
+  Speaker,
+  SpeakerProfile,
+} from '@/data/types';
 import type { Folder, Space } from '@/data';
 
 const mockUpdateNote = jest.fn();
@@ -48,6 +56,10 @@ const mockNotesState = {
   moveNoteToSpace: jest.fn(),
   createFolder: jest.fn(),
   getSpaceFolders: jest.fn(() => [] as Folder[]),
+  voiceProfiles: [] as SpeakerProfile[],
+  meetingSpeakerEmbeddingsByNoteId: {} as Record<number, Record<string, number[]>>,
+  claimSpeakerAsMe: jest.fn(),
+  loadVoiceProfiles: jest.fn(),
 };
 
 const mockActionsState = {

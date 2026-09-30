@@ -18,7 +18,7 @@ const MOCKS = {
   "/stores/settingsStore": `
     const state = {
       isSignedIn: true,
-      emailDraftTarget: "auto",
+      emailDraftTarget: globalThis.__emailDraftTarget ?? "auto",
       setEmailDraftTarget() {},
       gcalConnected: false,
       mcalAccounts: [{ email: "a@corp.com", tenantId: null }],
@@ -40,11 +40,17 @@ const MOCKS = {
   "/ui/select": `
     import React from "react";
     const Pass = ({ children }) => React.createElement("div", null, children);
-    export const Select = Pass;
+    export const Select = ({ children, value }) =>
+      React.createElement("div", { "data-select-value": value }, children);
     export const SelectContent = Pass;
     export const SelectTrigger = Pass;
     export const SelectValue = () => null;
-    export const SelectItem = ({ children }) => React.createElement("span", null, children);
+    export const SelectItem = ({ children, value, disabled }) =>
+      React.createElement(
+        "span",
+        { "data-value": value, "data-disabled": disabled ? "true" : "false" },
+        children
+      );
   `,
   "/ui/button": `
     import React from "react";
@@ -93,14 +99,17 @@ function setPlan(
     allowed = !blocked,
     isPaid,
     statuses = {},
+    emailDraftTarget,
   } = {}
 ) {
+  globalThis.__emailDraftTarget = emailDraftTarget;
   globalThis.__usage = usageState ?? usage(Boolean(isPaid));
   globalThis.__subscribedFlag = isPaid ?? subscribedFlag;
   globalThis.__connectorsBlocked = blocked;
   globalThis.__connectorsAllowed = allowed;
   globalThis.__connectorStatuses = statuses;
   t.after(() => {
+    delete globalThis.__emailDraftTarget;
     delete globalThis.__usage;
     delete globalThis.__subscribedFlag;
     delete globalThis.__connectorsBlocked;
@@ -315,9 +324,10 @@ test("a stale login offers Reconnect and Disconnect", async (t) => {
   assert.match(staleMarkup, /connectors\.slack\.needsReconnect/);
 });
 
-test("free users with no login see Upgrade for both rows and no Connect", async (t) => {
+test("free users with no login see Upgrade on every row and no Connect", async (t) => {
   const none = await renderSection(t, { isPaid: false, blocked: false });
-  assert.equal(count(none.textContent, /integrations\.api\.viewPlans/g), 2);
+  // Email, Gmail, Slack and Linear.
+  assert.equal(count(none.textContent, /integrations\.api\.viewPlans/g), 4);
   assert.equal(buttonWithText(none, "connectors.slack.connect"), null);
 });
 
@@ -330,8 +340,8 @@ test("free users can always disconnect a login they have", async (t) => {
   assert.match(lapsed.textContent, /connectors\.slack\.disconnect/);
   assert.equal(
     count(lapsed.textContent, /integrations\.api\.viewPlans/g),
-    1,
-    "only the email row's Upgrade"
+    3,
+    "only the email, Gmail and Linear rows' Upgrade"
   );
 });
 
@@ -351,4 +361,163 @@ test("an org that turned connectors off still lets the user remove a login", asy
 test("an org that turned connectors off hides the Slack row when there's no login", async (t) => {
   const none = await renderSection(t, { isPaid: true, blocked: true });
   assert.doesNotMatch(none.textContent, /connectors\.slack\.title/);
+});
+
+const GMAIL = {
+  id: "gmail",
+  connected: true,
+  configured: true,
+  accountLabel: "you@example.test",
+  workspaceLabel: null,
+  needsReconnect: false,
+};
+const pickerOption = (container, value) =>
+  findElement(
+    container,
+    (node) => node.tagName === "SPAN" && node.getAttribute("data-value") === value
+  );
+
+test("Send from chat can be picked only while Gmail is connected", async (t) => {
+  const container = await renderSection(t, { isPaid: true, statuses: { gmail: GMAIL } });
+  const option = pickerOption(container, "gmailSend");
+  assert.equal(option.textContent, "connectors.email.targets.gmailSend");
+  assert.equal(option.getAttribute("data-disabled"), "false");
+  // Automatic sends from chat once Gmail is connected.
+  assert.match(
+    container.textContent,
+    /connectors\.email\.autoResolved\{"target":"connectors\.email\.targets\.gmailSend"\}/
+  );
+});
+
+test("without a Gmail login, Send from chat is listed but can't be picked, and says why", async (t) => {
+  const container = await renderSection(t, { isPaid: true });
+  const option = pickerOption(container, "gmailSend");
+  assert.equal(option.getAttribute("data-disabled"), "true");
+  assert.equal(option.textContent, "connectors.email.targets.gmailSendConnectFirst");
+  assert.match(
+    container.textContent,
+    /connectors\.email\.autoResolved\{"target":"connectors\.email\.targets\.outlookWork"\}/
+  );
+});
+
+test("a Gmail login that needs reconnecting can't be picked, but Automatic still points at it", async (t) => {
+  const container = await renderSection(t, {
+    isPaid: true,
+    statuses: { gmail: { ...GMAIL, needsReconnect: true } },
+  });
+  const option = pickerOption(container, "gmailSend");
+  assert.equal(option.getAttribute("data-disabled"), "true");
+  assert.equal(option.textContent, "connectors.email.targets.gmailSendConnectFirst");
+  assert.match(
+    container.textContent,
+    /connectors\.email\.autoResolved\{"target":"connectors\.email\.targets\.gmailSend"\}/
+  );
+  assert.match(container.textContent, /connectors\.gmail\.needsReconnect/);
+});
+
+test("a build without a Google client shows no Gmail row and no Send from chat", async (t) => {
+  const container = await renderSection(t, {
+    isPaid: true,
+    statuses: { gmail: { ...GMAIL, connected: false, configured: false, accountLabel: null } },
+  });
+  assert.doesNotMatch(container.textContent, /connectors\.gmail\./);
+  // A boolean, so a failed assertion never tries to print a DOM node.
+  assert.equal(Boolean(pickerOption(container, "gmailSend")), false);
+  assert.ok(pickerOption(container, "gmail"), "the Gmail compose link stays");
+});
+
+const shownTarget = (container) =>
+  findElement(container, (node) => Boolean(node.getAttribute?.("data-select-value")))?.getAttribute(
+    "data-select-value"
+  );
+
+test("a saved Send from chat shows while Gmail can send, and reads as Automatic once it can't", async (t) => {
+  for (const [label, statuses, expected] of [
+    ["connected", { gmail: GMAIL }, "gmailSend"],
+    ["needs reconnecting", { gmail: { ...GMAIL, needsReconnect: true } }, "gmailSend"],
+    ["disconnected", {}, "auto"],
+    [
+      "build without a Google client",
+      { gmail: { ...GMAIL, connected: false, configured: false, accountLabel: null } },
+      "auto",
+    ],
+  ]) {
+    await t.test(label, async (st) => {
+      const container = await renderSection(st, {
+        isPaid: true,
+        statuses,
+        emailDraftTarget: "gmailSend",
+      });
+      assert.equal(shownTarget(container), expected);
+    });
+  }
+});
+
+test("the card's description follows where drafts actually go", async (t) => {
+  for (const [label, options, key] of [
+    ["Automatic with Gmail connected", { statuses: { gmail: GMAIL } }, "descriptionSend"],
+    [
+      "a compose target picked",
+      { statuses: { gmail: GMAIL }, emailDraftTarget: "mailto" },
+      "description",
+    ],
+    ["no Gmail login", {}, "description"],
+  ]) {
+    await t.test(label, async (st) => {
+      const container = await renderSection(st, { isPaid: true, ...options });
+      const other = key === "description" ? "descriptionSend" : "description";
+      assert.match(container.textContent, new RegExp(`connectors\\.email\\.${key}(?!Send)`));
+      assert.doesNotMatch(
+        container.textContent,
+        new RegExp(`connectors\\.email\\.${other}(?!Send)`)
+      );
+    });
+  }
+});
+
+test("any other saved target shows as saved", async (t) => {
+  const container = await renderSection(t, { isPaid: true, emailDraftTarget: "mailto" });
+  assert.equal(shownTarget(container), "mailto");
+});
+
+test("a connected Gmail row names the account", async (t) => {
+  const container = await renderSection(t, { isPaid: true, statuses: { gmail: GMAIL } });
+  assert.match(
+    container.textContent,
+    /connectors\.gmail\.connectedAs\{"account":"you@example\.test"\}/
+  );
+  assert.ok(buttonWithText(container, "connectors.gmail.disconnect"));
+});
+
+test("every CONNECTOR_ROWS entry renders after the email row, in list order", async (t) => {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  installBrowserGlobals(t, { window: { electronAPI: {} } });
+  setPlan(t, { usageState: usage(true) });
+  const container = installInteractiveDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-connectors-section-row-order-test-",
+    noExternal: ["react-i18next"],
+    mockModules: MOCKS,
+  });
+  const [{ ConnectorsSection }, { CONNECTOR_ROWS }] = await Promise.all([
+    vite.ssrLoadModule("/components/ConnectorsSection.tsx"),
+    vite.ssrLoadModule("/components/connectors/connectorRows.tsx"),
+  ]);
+  root = createRoot(container);
+  await React.act(async () => root.render(createElement(ConnectorsSection, { onUpgrade() {} })));
+
+  assert.ok(CONNECTOR_ROWS.length > 0, "there is at least one row to check");
+  const markup = container.textContent;
+  const emailIndex = markup.indexOf("connectors.email.title");
+  assert.ok(emailIndex >= 0, "the email row renders");
+  let previousIndex = emailIndex;
+  for (const row of CONNECTOR_ROWS) {
+    const index = markup.indexOf(`connectors.${row.id}.title`);
+    assert.ok(index >= 0, `the ${row.id} row renders`);
+    assert.ok(index > previousIndex, `the ${row.id} row renders after the previous row`);
+    previousIndex = index;
+  }
 });

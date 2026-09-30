@@ -1,3 +1,7 @@
+jest.mock('expo-file-system/legacy', () => ({
+  documentDirectory: 'file:///app/documents/',
+  deleteAsync: jest.fn().mockResolvedValue(undefined),
+}));
 import { eq } from 'drizzle-orm';
 import { notes, speakers, transcriptSegments } from '@/db/schema';
 import { serializeSegmentsForSync } from '@/lib/notes/remoteTranscript';
@@ -312,6 +316,40 @@ describe('applyRemoteNote transcript integration', () => {
     const seg = repo.getSegments(note.id);
     expect(seg).toHaveLength(1);
     expect(seg[0].text).toBe('Only one line now.');
+  });
+
+  it('keeps the recording this device holds when the pull echoes back a null source file', () => {
+    const { repo, db } = createMemoryRepository();
+    repo.applyRemoteNote(remoteNote({ transcript: desktopRaw }), noFolder);
+    const [note] = repo.getAllNotes();
+    const recording = `file:///app/documents/meeting-${note.id}.wav`;
+    db.update(notes).set({ sourceFile: recording }).where(eq(notes.id, note.id)).run();
+
+    repo.applyRemoteNote(remoteNote({ updated_at: '2026-07-09T11:00:00.000Z' }), noFolder);
+    expect(repo.getNoteById(note.id)?.sourceFile).toBe(recording);
+
+    repo.applyRemoteNote(
+      remoteNote({
+        source_file: 'https://cdn.example/a.wav',
+        updated_at: '2026-07-09T12:00:00.000Z',
+      }),
+      noFolder,
+    );
+    expect(repo.getNoteById(note.id)?.sourceFile).toBe('https://cdn.example/a.wav');
+  });
+
+  it.each([
+    ['a file name another device stored', 'file-1.wav'],
+    ["a file this device doesn't manage", 'file:///app/documents/imported.wav'],
+  ])('clears %s when the pull echoes back a null source file', (_case, sourceFile) => {
+    const { repo, db } = createMemoryRepository();
+    repo.applyRemoteNote(remoteNote({ transcript: desktopRaw }), noFolder);
+    const [note] = repo.getAllNotes();
+    db.update(notes).set({ sourceFile }).where(eq(notes.id, note.id)).run();
+
+    repo.applyRemoteNote(remoteNote({ updated_at: '2026-07-09T11:00:00.000Z' }), noFolder);
+
+    expect(repo.getNoteById(note.id)?.sourceFile).toBeNull();
   });
 
   it('does not rebuild when the transcript is unchanged (segment ids stable)', () => {

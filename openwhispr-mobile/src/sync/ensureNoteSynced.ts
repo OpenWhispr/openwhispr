@@ -3,6 +3,7 @@ import { notesRepository, type Note } from '@/data';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useNotesStore } from '@/store/useNotesStore';
+import { isFolderAwaitingUpload } from '@/lib/notes/folderUpload';
 import { createPushScopeResolver, createTeamSpaceFilter } from './pushScope';
 import { requestSync, subscribeSyncCompletion } from './syncEngine';
 import { useSyncStore } from './useSyncStore';
@@ -112,6 +113,11 @@ export async function ensureNoteSynced(
         // The same test pushNotes uses to leave a row queued until its space resolves.
         if (!createPushScopeResolver()(note.spaceId)) {
           throw new Error('This note’s space is not available to sync yet. Try again later.');
+        }
+        // Likewise for a folder that hasn't reached the server yet.
+        const folder = notesRepository.getFolders().find(({ id }) => id === note.folderId);
+        if (isFolderAwaitingUpload(folder)) {
+          throw new Error('This note’s folder has not synced yet. Try again later.');
         }
       } catch (error) {
         finish(error instanceof Error ? error : new Error('Unable to sync this note.'));

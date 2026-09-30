@@ -1,6 +1,7 @@
 import type { ToolDefinition, ToolExecutionContext, ToolResult } from "../ToolRegistry";
 import { runApprovalAction } from "./runApprovalAction";
 import { failedResult, needsClarificationResult } from "./toolOutcome";
+import type { ConnectorToolModule } from "./connectorToolModules";
 
 // By Send the card was already shown, so a channel that disappeared after
 // prepare comes back as a failure. The model should ask where to send it.
@@ -31,6 +32,9 @@ export const slackSendMessageTool: ToolDefinition = {
     additionalProperties: false,
   },
   readOnly: false,
+  connectorId: "slack",
+  promptInstruction:
+    "Use slack_send_message to post to a Slack channel or person as the user; the user approves each message on a card before it is sent. For a person, pass their name, @handle or email address.",
 
   async execute(
     args: Record<string, unknown>,
@@ -50,4 +54,10 @@ export const slackSendMessageTool: ToolDefinition = {
     const result = await runApprovalAction(context, "slack", "send_message", { destination, text });
     return askAboutVanishedChannel(result, destination);
   },
+};
+
+export const slackToolModule: ConnectorToolModule = {
+  connectorId: "slack",
+  requiresConnection: true,
+  createTools: () => [slackSendMessageTool],
 };

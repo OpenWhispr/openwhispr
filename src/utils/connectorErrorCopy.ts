@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next";
+
 /**
  * The translated copy a failed connector action shows, as a key under both
  * `connectors.approval.errors` (the approval card) and
@@ -79,4 +81,33 @@ export function connectorErrorCopyKey(errorCode: string | null | undefined): Con
   const alias = ALIASES.get(errorCode);
   if (alias) return alias;
   return TRANSPORT_CODE.test(errorCode) ? "network" : "generic";
+}
+
+/**
+ * The copy for a failed action of one connector. A connector with its own
+ * wording (`connectors.<scope>.errors.<connectorId>.*`, e.g. Gmail's) is
+ * tried first, by its exact code and then by the shared copy key, so a
+ * transport code still reads as that connector's "couldn't be reached".
+ * Anything else gets the shared copy, which is Slack's wording today.
+ */
+export function connectorErrorText(
+  t: TFunction,
+  scope: "approval" | "toolStatus",
+  connectorId: string,
+  errorCode: string | undefined,
+  values: Record<string, unknown> = {}
+): string {
+  const base = `connectors.${scope}.errors`;
+  const copyKey = connectorErrorCopyKey(errorCode);
+  const shared = t(`${base}.${copyKey}`, {
+    ...values,
+    defaultValue: t(`${base}.generic`, values),
+  });
+  if (!connectorId) return shared;
+  const ownCopy = t(`${base}.${connectorId}.${copyKey}`, { ...values, defaultValue: shared });
+  // i18next resolves a key named after an object property ("constructor",
+  // "__proto__") to that property, so such a code never names its own copy.
+  return errorCode && errorCode !== copyKey && !(errorCode in Object.prototype)
+    ? t(`${base}.${connectorId}.${errorCode}`, { ...values, defaultValue: ownCopy })
+    : ownCopy;
 }

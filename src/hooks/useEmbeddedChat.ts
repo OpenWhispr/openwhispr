@@ -3,6 +3,9 @@ import { useChatPersistence } from "../components/chat/useChatPersistence";
 import { useChatStreaming } from "../components/chat/useChatStreaming";
 import { useChatMessageSender } from "../components/chat/useChatMessageSender";
 import type { Message, AgentState } from "../components/chat/types";
+import { attendeesForUser } from "../utils/noteAttendees";
+import type { CalendarAttendee } from "../types/calendar";
+import type { NoteAttendeesRequest } from "../types/connectors";
 
 interface UseEmbeddedChatOptions {
   noteId: number | null;
@@ -10,6 +13,18 @@ interface UseEmbeddedChatOptions {
   noteTitle: string;
   noteContent: string;
   noteTranscript?: string;
+  /** The note's participants, as parsed by parseNoteParticipants. */
+  noteParticipants?: CalendarAttendee[];
+  /**
+   * Whether the signed-in user owns the note, which decides what `self`
+   * means. Unknown reads as someone else's: then the recorder is listed as
+   * an attendee rather than the user left in.
+   */
+  noteOwnedByUser?: boolean;
+  /** The signed-in user's OpenWhispr address, never listed as an attendee. */
+  selfEmail?: string | null;
+  /** The note's calendar event, whose organizer main adds to the attendees. */
+  noteCalendarEventId?: string | null;
 }
 
 interface NoteConversationItem {
@@ -31,12 +46,20 @@ interface UseEmbeddedChatReturn {
   startNewChat: () => void;
 }
 
+// Stable, so a note without participants doesn't rebuild noteMeeting on
+// every render.
+const NO_PARTICIPANTS: CalendarAttendee[] = [];
+
 export function useEmbeddedChat({
   noteId,
   folderId,
   noteTitle,
   noteContent,
   noteTranscript,
+  noteParticipants = NO_PARTICIPANTS,
+  noteOwnedByUser = false,
+  selfEmail = null,
+  noteCalendarEventId = null,
 }: UseEmbeddedChatOptions): UseEmbeddedChatReturn {
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [noteConversations, setNoteConversations] = useState<NoteConversationItem[]>([]);
@@ -64,10 +87,24 @@ export function useEmbeddedChat({
     [folderId, noteContent, noteId, noteTitle, noteTranscript]
   );
 
+  const noteMeeting = useMemo<NoteAttendeesRequest>(
+    () => ({
+      noteId,
+      participants: attendeesForUser(noteParticipants, noteOwnedByUser),
+      calendarEventId: noteCalendarEventId,
+      selfEmail,
+    }),
+    [noteCalendarEventId, noteId, noteOwnedByUser, noteParticipants, selfEmail]
+  );
+
+  // A meeting note's chat drafts follow-ups to its attendees, so it offers
+  // the connector tools (still subject to plan, sign-in and policy).
   const streaming = useChatStreaming({
     messages: persistence.messages,
     setMessages: persistence.setMessages,
     noteContext,
+    allowConnectors: true,
+    noteMeeting,
     onStreamComplete: (_id, content, toolCalls) => {
       persistence.saveAssistantMessage(content, toolCalls);
     },
@@ -115,18 +152,27 @@ export function useEmbeddedChat({
     };
   }, [noteId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // useChatStreaming returns a fresh object every render; cancelStream is
+  // stable. Leaving a conversation cancels its turn, as in ChatView: a card
+  // waiting for approval would otherwise hold the send lock and save its
+  // reply into whichever conversation is open when it settles.
+  const { cancelStream } = streaming;
+
   const switchConversation = useCallback(
     async (id: number) => {
+      if (id === conversationId) return;
+      cancelStream();
       await persistence.loadConversation(id);
       setConversationId(id);
     },
-    [persistence]
+    [cancelStream, conversationId, persistence]
   );
 
   const startNewChat = useCallback(() => {
+    cancelStream();
     persistence.handleNewChat();
     setConversationId(null);
-  }, [persistence]);
+  }, [cancelStream, persistence]);
 
   const createConversation = useCallback(
     async (text: string) => {

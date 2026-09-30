@@ -1,4 +1,5 @@
 jest.mock('expo-sqlite/localStorage/install', () => ({}));
+jest.mock('expo-file-system/legacy', () => ({ documentDirectory: 'file:///docs/' }));
 jest.mock('@/data', () => ({ notesRepository: { getAllNotes: jest.fn(() => []) } }));
 jest.mock('@/store/useNotesStore', () => ({ useNotesStore: { getState: jest.fn() } }));
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
@@ -13,6 +14,7 @@ import {
   MEETING_RESUME_MARKER_PREFIX,
   createdBeforeRuntime,
   recoverOrphanedMeetings,
+  repairMeetingRecordings,
   waitForAppActive,
   type MeetingRecoveryDeps,
 } from '@/lib/meetingRecovery';
@@ -251,5 +253,46 @@ describe('createdBeforeRuntime', () => {
     expect(
       createdBeforeRuntime({ createdAt: '2026-09-25T09:59:59+00:00' }, runtimeStartedAtMs),
     ).toBe(true);
+  });
+});
+
+describe('repairMeetingRecordings', () => {
+  const run = async (files: string[], notes: Note[]) => {
+    const deps = {
+      listRecordingFiles: jest.fn(async () => files),
+      getNote: jest.fn((id: number) => notes.find((candidate) => candidate.id === id) ?? null),
+      recordingUri: (id: number) => `file:///docs/meeting-${id}.wav`,
+      restorePath: jest.fn(),
+      deleteFile: jest.fn(),
+    };
+    await repairMeetingRecordings(deps);
+    return deps;
+  };
+
+  it('points a meeting whose path a sync erased back at its recording', async () => {
+    const deps = await run(['meeting-4.wav'], [note({ id: 4, sourceFile: null })]);
+
+    expect(deps.restorePath).toHaveBeenCalledWith(4, 'file:///docs/meeting-4.wav');
+    expect(deps.deleteFile).not.toHaveBeenCalled();
+  });
+
+  it('deletes a recording whose note is gone for good', async () => {
+    const deps = await run(['meeting-9.wav'], []);
+
+    expect(deps.deleteFile).toHaveBeenCalledWith('file:///docs/meeting-9.wav');
+    expect(deps.restorePath).not.toHaveBeenCalled();
+  });
+
+  it('leaves notes that still point somewhere, other note types, and other files alone', async () => {
+    const deps = await run(
+      ['meeting-4.wav', 'meeting-5.wav', 'SQLite', 'meeting-x.wav', 'meeting-6.wav.tmp'],
+      [
+        note({ id: 4 }),
+        note({ id: 5, noteType: 'upload', sourceFile: null } as Partial<Note> & { id: number }),
+      ],
+    );
+
+    expect(deps.restorePath).not.toHaveBeenCalled();
+    expect(deps.deleteFile).not.toHaveBeenCalled();
   });
 });

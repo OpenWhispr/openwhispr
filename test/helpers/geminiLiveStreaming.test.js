@@ -460,6 +460,66 @@ for (const [code, reason] of [
   });
 }
 
+test("disconnect keeps a last turn the server never finalized", async () => {
+  await withServer(
+    async ({ streaming }) => {
+      await streaming.connect({ token: "t", mode: "byok" });
+      streaming.sendAudio(FRAME);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+
+      assert.equal(streaming.finalize(), true);
+      streaming._audioStreamEndSentAt -= 10000;
+
+      // An earlier turn was finalized; the last one only ever had a partial.
+      assert.deepEqual(await streaming.disconnect(true), {
+        text: "Turn one. Turn two is still open",
+      });
+    },
+    (socket, message) => {
+      if (message.setup) {
+        socket.send(JSON.stringify({ setupComplete: {} }));
+        return;
+      }
+      if (!message.realtimeInput?.audio) return;
+      socket.send(JSON.stringify({ serverContent: { inputTranscription: { text: "Turn one." } } }));
+      socket.send(JSON.stringify({ serverContent: { generationComplete: true } }));
+      socket.send(
+        JSON.stringify({
+          serverContent: { interimInputTranscription: { text: "Turn two is still open" } },
+        })
+      );
+    }
+  );
+});
+
+test("a partial that restates the finalized turns adds only the open turn", async () => {
+  await withServer(
+    async ({ streaming }) => {
+      await streaming.connect({ token: "t", mode: "byok" });
+      streaming.sendAudio(FRAME);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+
+      assert.equal(streaming.getFullTranscript(), "Turn one. Turn two. Turn three");
+    },
+    (socket, message) => {
+      if (message.setup) {
+        socket.send(JSON.stringify({ setupComplete: {} }));
+        return;
+      }
+      if (!message.realtimeInput?.audio) return;
+      for (const text of ["Turn one.", "Turn two."]) {
+        socket.send(JSON.stringify({ serverContent: { inputTranscription: { text } } }));
+      }
+      // Real Live sessions sometimes repeat every finalized turn, unspaced.
+      socket.send(
+        JSON.stringify({
+          serverContent: { interimInputTranscription: { text: "Turn one.Turn two.Turn three" } },
+        })
+      );
+    }
+  );
+});
+
 test("errors: a spent managed token is re-minted once and the session survives", async () => {
   await withServer(
     async ({ streaming, urls }) => {
@@ -510,7 +570,8 @@ test("an unexpected close hands the transcript over and reports the loss once", 
       streaming.sendAudio(FRAME);
       await new Promise((resolve) => setTimeout(resolve, 60));
 
-      assert.deepEqual(sessionEnds, [{ text: "half a sentence" }]);
+      // The open turn's partial is handed over with the finalized text.
+      assert.deepEqual(sessionEnds, [{ text: "half a sentence and the rest" }]);
       // Distinct from the pre-ready failure, and without the raw server reason.
       assert.deepEqual(errors, ["Connection lost (code: 1011)"]);
       assert.equal(streaming.isConnected, false);
@@ -523,6 +584,9 @@ test("an unexpected close hands the transcript over and reports the loss once", 
       if (!message.realtimeInput?.audio) return;
       socket.send(
         JSON.stringify({ serverContent: { inputTranscription: { text: "half a sentence" } } })
+      );
+      socket.send(
+        JSON.stringify({ serverContent: { interimInputTranscription: { text: "and the rest" } } })
       );
       setTimeout(() => socket.close(1011, "Token has expired"), 10);
     }

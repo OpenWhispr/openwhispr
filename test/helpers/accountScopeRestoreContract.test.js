@@ -10,7 +10,7 @@ const read = (relativePath) => fs.readFileSync(path.join(__dirname, "../..", rel
 test("scope handler evaluates requests through the binding policy and persists validated bindings", () => {
   const source = read("src/helpers/ipcHandlers.js");
   const handler = source.match(
-    /ipcMain\.handle\("set-active-account-scope"([\s\S]*?)ipcMain\.handle\("delete-account-data"/
+    /ipcMain\.handle\("set-active-account-scope"([\s\S]*?)ipcMain\.handle\(\s*"delete-account-data"/
   );
   assert.ok(handler, "set-active-account-scope handler is present");
   assert.ok(

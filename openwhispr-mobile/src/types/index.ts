@@ -24,7 +24,8 @@ export interface UserConfig {
   languages?: string[];
   cloudBackupEnabled?: boolean;
   usageAnalyticsEnabled?: boolean;
-  voiceProfilePromptDismissedAt?: string;
+  // Its own key, so dismissing the old notes-list voice card doesn't also hide this.
+  voiceSetupBannerDismissedAt?: string;
   // One-time Parakeet nudges on the Home banner: pick a language to unlock the
   // faster on-device model / download the faster model for a qualifying language.
   parakeetAutoLanguageNudgeDismissedAt?: string;

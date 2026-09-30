@@ -37,6 +37,11 @@ import {
 import { NoteShareSheet } from '@/components/notes/NoteShareSheet';
 import { NoteActionsMenu } from '@/components/notes/NoteActionsMenu';
 import { ConflictBanner } from '@/components/notes/ConflictBanner';
+import { VoiceSetupBanner } from '@/components/notes/VoiceSetupBanner';
+import { ThatsMeSheet } from '@/components/notes/ThatsMeSheet';
+import { shouldOfferVoiceSetup, voiceSetupCandidates } from '@/lib/notes/voiceSetupPrompt';
+import { SpeakerProfileOwnerAlreadyExistsError } from '@/data/local/notesRepository';
+import { VOICE_ALREADY_TAUGHT_ALERT } from '@/lib/voiceEnrollmentMessages';
 import { NoteChatSheet } from '@/components/notes/NoteChatSheet';
 import { isDictationAgentEnabled } from '@/lib/dictationAgent';
 import { SpeakerTranscript } from '@/components/notes/SpeakerTranscript';
@@ -143,6 +148,15 @@ export default function NoteEditorScreen() {
   const spaceFolders = useNotesStore((s) => s.spaceFolders);
   const spaces = useNotesStore((s) => s.spaces);
   const getSpaceFolders = useNotesStore((s) => s.getSpaceFolders);
+  const voiceProfiles = useNotesStore((s) => s.voiceProfiles);
+  const meetingSpeakerEmbeddings = useNotesStore((s) => s.meetingSpeakerEmbeddingsByNoteId);
+  const claimSpeakerAsMe = useNotesStore((s) => s.claimSpeakerAsMe);
+  const loadVoiceProfiles = useNotesStore((s) => s.loadVoiceProfiles);
+  // Until the config loads, treat the banner as dismissed so it can't flash.
+  const voiceSetupDismissed = useConfigStore(
+    (s) => !s.config || !!s.config.voiceSetupBannerDismissedAt,
+  );
+  const updateConfig = useConfigStore((s) => s.updateConfig);
   const note = useMemo<Note | null>(() => {
     if (Number.isNaN(noteId)) return null;
     return notes.find((n) => n.id === noteId) ?? getNoteById(noteId);
@@ -313,6 +327,35 @@ export default function NoteEditorScreen() {
     () => groupTranscriptSegments(transcriptSegments, speakers),
     [speakers, transcriptSegments],
   );
+  const [voiceSetupVisible, setVoiceSetupVisible] = useState(false);
+  const readScriptAfterSheetRef = useRef(false);
+  const voiceCandidates = useMemo(
+    () =>
+      voiceSetupCandidates({
+        segments: transcriptSegments,
+        speakers,
+        embeddingsByLabel: note ? meetingSpeakerEmbeddings[note.id] : undefined,
+        profileIds: new Set(voiceProfiles.map((profile) => profile.id)),
+      }),
+    [meetingSpeakerEmbeddings, note, speakers, transcriptSegments, voiceProfiles],
+  );
+  const showVoiceSetupBanner = shouldOfferVoiceSetup({
+    isOnDeviceMeeting:
+      note?.noteType === 'meeting' && isManagedMeetingAudioUri(note.id, note.sourceFile),
+    transcriptStatus,
+    hasOwnerProfile: voiceProfiles.some((profile) => profile.isOwner === 1),
+    dismissed: voiceSetupDismissed,
+    candidateCount: voiceCandidates.length,
+  });
+  // The banner and That's me need your profiles, and a meeting opened straight from
+  // recording never passes a screen that loads them.
+  useEffect(() => {
+    loadVoiceProfiles();
+  }, [loadVoiceProfiles]);
+  useEffect(() => {
+    setVoiceSetupVisible(false);
+    readScriptAfterSheetRef.current = false;
+  }, [noteId]);
   const hasTranscriptSegments = transcriptSegments.length > 0;
   const usesSegmentTranscript = isAudioTranscript && hasTranscriptSegments;
   const transcriptText = useMemo(
@@ -444,6 +487,52 @@ export default function NoteEditorScreen() {
     safeHaptics('selection');
     resolveConflictKeepMine(noteId);
   }, [noteId, resolveConflictKeepMine]);
+
+  const handleClaimVoice = useCallback(
+    (speakerId: number): boolean => {
+      try {
+        claimSpeakerAsMe(noteId, speakerId);
+        safeHaptics('success');
+        return true;
+      } catch (error) {
+        if (error instanceof SpeakerProfileOwnerAlreadyExistsError) {
+          // A profile this screen didn't know about: reloading hides the banner.
+          loadVoiceProfiles();
+          Alert.alert(...VOICE_ALREADY_TAUGHT_ALERT);
+        } else {
+          Alert.alert(
+            "Couldn't save your voice",
+            'Read a short script instead to teach OpenWhispr your voice.',
+          );
+        }
+        return false;
+      }
+    },
+    [claimSpeakerAsMe, loadVoiceProfiles, noteId],
+  );
+
+  const openVoiceScript = useCallback(() => {
+    router.push(`/(tabs)/(notes)/voice-enrollment?owner=1&noteId=${noteId}`);
+  }, [noteId, router]);
+
+  // iOS drops a push made while a page sheet is still sliding away, so it waits for the
+  // sheet's onDismiss; Android's Modal has no onDismiss.
+  const handleReadVoiceScript = useCallback(() => {
+    setVoiceSetupVisible(false);
+    if (Platform.OS === 'ios') readScriptAfterSheetRef.current = true;
+    else openVoiceScript();
+  }, [openVoiceScript]);
+
+  const handleVoiceSetupDismissed = useCallback(() => {
+    if (!readScriptAfterSheetRef.current) return;
+    readScriptAfterSheetRef.current = false;
+    openVoiceScript();
+  }, [openVoiceScript]);
+
+  const dismissVoiceSetup = useCallback(() => {
+    safeHaptics('light');
+    updateConfig({ voiceSetupBannerDismissedAt: new Date().toISOString() });
+  }, [updateConfig]);
 
   const maybeLearnCorrections = useCallback(
     (newContent: string) => {
@@ -1252,6 +1341,13 @@ export default function NoteEditorScreen() {
             />
           ) : null}
 
+          {showVoiceSetupBanner ? (
+            <VoiceSetupBanner
+              onSetUp={() => setVoiceSetupVisible(true)}
+              onDismiss={dismissVoiceSetup}
+            />
+          ) : null}
+
           {bodyTabs.length > 1 ? (
             <View
               className="mb-4 flex-row bg-tertiarySystemFill p-0.5"
@@ -1500,6 +1596,14 @@ export default function NoteEditorScreen() {
         {transcriptSheetVisible ? speakerSheets : null}
       </TranscriptSheet>
       {transcriptSheetVisible ? null : speakerSheets}
+      <ThatsMeSheet
+        visible={voiceSetupVisible}
+        candidates={voiceCandidates}
+        onClaim={handleClaimVoice}
+        onReadScript={handleReadVoiceScript}
+        onClose={() => setVoiceSetupVisible(false)}
+        onDismissed={handleVoiceSetupDismissed}
+      />
     </View>
   );
 }

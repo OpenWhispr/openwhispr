@@ -20,8 +20,11 @@ import type {
   ConnectorDisconnectResult,
   ConnectorEdits,
   ConnectorPrepareResult,
+  ConnectorQueryResult,
   ConnectorStatus,
   ContactMatch,
+  NoteAttendee,
+  NoteAttendeesRequest,
 } from "./connectors";
 
 export type LocalTranscriptionProvider = "whisper" | "nvidia" | "cohere";
@@ -1552,7 +1555,8 @@ declare global {
       ) => () => void;
       deleteAccountData?: (
         accountId: string,
-        expectedAuthGeneration: number
+        expectedAuthGeneration: number,
+        options?: { erasingDevice?: boolean }
       ) => Promise<{
         success: boolean;
         code?: string;
@@ -2922,6 +2926,12 @@ declare global {
         action: string,
         args: Record<string, unknown>
       ) => Promise<ConnectorPrepareResult>;
+      /** Reads provider data for the model (an issue search); never writes. */
+      connectorQuery?: (
+        connectorId: string,
+        action: string,
+        args: Record<string, unknown>
+      ) => Promise<ConnectorQueryResult>;
       connectorCommit?: (actionId: string, edits: ConnectorEdits) => Promise<ConnectorCommitResult>;
       /** Cancels a pending approval, or a direct run (by its runId) still waiting on policy. */
       connectorCancel?: (
@@ -2941,6 +2951,13 @@ declare global {
       connectorFindContacts?: (
         query: string
       ) => Promise<{ contacts: ContactMatch[]; hasMore?: boolean; unavailableReason?: string }>;
+      /**
+       * A note's participants, plus its calendar event's organizer, minus the
+       * user and rooms (main applies find_contact's exclusions).
+       */
+      connectorNoteAttendees?: (
+        request: NoteAttendeesRequest
+      ) => Promise<{ attendees: NoteAttendee[]; unavailableReason?: string }>;
       connectorConnect?: (connectorId: string) => Promise<ConnectorConnectResult>;
       connectorDisconnect?: (connectorId: string) => Promise<ConnectorDisconnectResult>;
       onConnectorStatusChanged?: (callback: (statuses: ConnectorStatus[]) => void) => () => void;

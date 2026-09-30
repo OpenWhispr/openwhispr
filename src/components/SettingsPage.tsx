@@ -2010,7 +2010,8 @@ export default function SettingsPage({
           deleteLocalAccountData: async () => {
             const cleanup = await window.electronAPI?.deleteAccountData?.(
               accountId,
-              authGeneration
+              authGeneration,
+              { erasingDevice: eraseDeviceData }
             );
             if (!cleanup?.success) {
               throw new Error(cleanup?.error ?? "Could not remove local account data");

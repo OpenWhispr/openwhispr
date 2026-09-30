@@ -16,8 +16,12 @@ import { usePolicyStore } from "../../stores/policyStore";
 import { getUsageState } from "../../lib/usageStore";
 import { readIsSubscribed } from "../../lib/subscriptionFlag";
 import { hasConnectorPlan } from "../../utils/connectorEligibility";
-import { resolveEmailDraftTarget } from "../../utils/emailDraftTarget";
-import { ensureConnectorStatus, isConnectorReady } from "../../stores/connectorStatusStore";
+import { gmailSendStatus, resolveEmailDraftTarget } from "../../utils/emailDraftTarget";
+import {
+  ensureConnectorStatus,
+  readyConnectorIds,
+  useConnectorStatusStore,
+} from "../../stores/connectorStatusStore";
 import {
   appendDictionarySuffix,
   appendPlainTextResponseSuffix,
@@ -25,6 +29,7 @@ import {
   getAgentSystemPrompt,
 } from "../../config/prompts";
 import { getDictionaryHintWords } from "../../utils/snippets";
+import { noteAttendeesContext, withoutAttendeesFence } from "../../utils/noteAttendees";
 import { createToolRegistry } from "../../services/tools";
 import {
   executeTool,
@@ -32,9 +37,11 @@ import {
   type ToolRegistry,
 } from "../../services/tools/ToolRegistry";
 import { createToolExecutionScope, type ToolExecutionScope } from "./toolExecutionScope";
+import { isQueryResultData } from "../../services/tools/connectors/runQueryAction";
 import { getAgentToolActivityRemainingMs } from "../../helpers/agentToolPresentation";
 import type { Message, AgentState, ChatImageAttachment, ToolCallInfo } from "./types";
 import type { ContainerScope } from "../../types/chat";
+import type { NoteAttendeesRequest } from "../../types/connectors";
 import {
   buildAgentRequestText,
   type AgentSelectionContext,
@@ -49,6 +56,22 @@ const LOCAL_TOOL_MIN_PARAMS_B = 4;
 function estimateModelSizeB(modelId: string): number {
   const match = modelId.match(/-([\d.]+)[bB]/);
   return match ? parseFloat(match[1]) : 0;
+}
+
+// Main adds the note's identified speakers and its calendar event's
+// organizer (calendars often leave them out of the attendees), then drops
+// the user (their OpenWhispr address included) and rooms with find_contact's
+// rules; a failed lookup just leaves the block out.
+async function buildNoteAttendeesContext(
+  meeting: NoteAttendeesRequest | undefined
+): Promise<string> {
+  if (!meeting || !window.electronAPI?.connectorNoteAttendees) return "";
+  try {
+    const result = await window.electronAPI.connectorNoteAttendees(meeting);
+    return noteAttendeesContext(result?.attendees ?? []);
+  } catch {
+    return "";
+  }
 }
 
 async function buildRAGContext(userText: string, scope?: ContainerScope): Promise<string> {
@@ -99,6 +122,11 @@ interface UseChatStreamingOptions {
    * policy allow them. Off unless a surface opts in: they act outside the app.
    */
   allowConnectors?: boolean;
+  /**
+   * The note's meeting (note chat). Its attendees are listed for the model
+   * only in a send that offers connector tools, so recipients come from them.
+   */
+  noteMeeting?: NoteAttendeesRequest;
   onStreamComplete?: (assistantId: string, content: string, toolCalls?: ToolCallInfo[]) => void;
   /** Fires exactly once when displayable assistant content or tool activity becomes available. */
   onResponseContent?: () => void;
@@ -156,6 +184,7 @@ export function useChatStreaming({
   noteContext: externalNoteContext,
   searchScope,
   allowConnectors = false,
+  noteMeeting,
   onStreamComplete,
   onResponseContent,
 }: UseChatStreamingOptions): ChatStreaming {
@@ -169,6 +198,8 @@ export function useChatStreaming({
   noteContextRef.current = externalNoteContext;
   const searchScopeRef = useRef(searchScope);
   searchScopeRef.current = searchScope;
+  const noteMeetingRef = useRef(noteMeeting);
+  noteMeetingRef.current = noteMeeting;
   const toolRegistryRef = useRef<{ key: string; registry: ToolRegistry } | null>(null);
   const toolActivityStartedAtRef = useRef<number | null>(null);
   const toolActivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -341,6 +372,7 @@ export function useChatStreaming({
 
         const scope = searchScopeRef.current;
         let registry: ToolRegistry | null = null;
+        let connectorsOffered = false;
         if (supportsTools) {
           const scopeKey = scope ? `${scope.spaceId}:${scope.folderId ?? ""}` : "";
           // The calendar tool reads the shared provider-deduped events table,
@@ -353,15 +385,21 @@ export function useChatStreaming({
             settings.isSignedIn &&
             hasConnectorPlan(getUsageState(), readIsSubscribed()) &&
             isConnectorsAllowed(usePolicyStore.getState());
-          // The first send in a window must not miss a connected Slack.
+          // The first send in a window must not miss a connector that is already connected.
           if (connectorsAvailable) await ensureConnectorStatus();
-          const slackReady = connectorsAvailable && isConnectorReady("slack");
           const connectors = connectorsAvailable
-            ? { emailDraftTarget: resolveEmailDraftTarget(settings), slackReady }
+            ? {
+                emailDraftTarget: resolveEmailDraftTarget({
+                  ...settings,
+                  gmailStatus: gmailSendStatus(useConnectorStatusStore.getState().statuses.gmail),
+                }),
+                readyConnectorIds: readyConnectorIds(),
+              }
             : undefined;
+          connectorsOffered = connectors !== undefined;
           // Triggers ride in the tool description, so a snippet edit rebuilds the registry.
           const snippetKey = settings.snippets.map((s) => s.trigger).join("|");
-          const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${snippetKey}-${connectors?.emailDraftTarget ?? "no-connectors"}-${slackReady}`;
+          const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${snippetKey}-${connectors?.emailDraftTarget ?? "no-connectors"}-${connectors?.readyConnectorIds.join(",") ?? ""}`;
           if (toolRegistryRef.current?.key === cacheKey) {
             registry = toolRegistryRef.current.registry;
           } else {
@@ -384,16 +422,24 @@ export function useChatStreaming({
           }
         }
 
-        const ragContext = await buildRAGContext(userText, scope);
+        const [ragContext, attendeesContext] = await Promise.all([
+          buildRAGContext(userText, scope),
+          connectorsOffered ? buildNoteAttendeesContext(noteMeetingRef.current) : "",
+        ]);
         if (cancelled() || !mountedRef.current) return;
-        const combinedContext = [noteContextRef.current, ragContext].filter(Boolean).join("\n\n");
+        // Only main's attendee block may carry its fence: note text and search
+        // results can't fake a second list.
+        const combinedContext = [
+          withoutAttendeesFence(noteContextRef.current ?? ""),
+          attendeesContext,
+          withoutAttendeesFence(ragContext),
+        ]
+          .filter(Boolean)
+          .join("\n\n");
         // The user's dictionary rides on every conversation so replies use their
         // jargon — same suffix the dictation prompts carry.
         let systemPrompt = appendDictionarySuffix(
-          getAgentSystemPrompt(
-            registry?.getAll().map((t) => t.name),
-            combinedContext || undefined
-          ),
+          getAgentSystemPrompt(registry?.getAll(), combinedContext || undefined),
           getDictionaryHintWords(settings),
           settings.uiLanguage
         );
@@ -604,7 +650,9 @@ export function useChatStreaming({
                                 ...tc,
                                 status: "completed" as const,
                                 result: toolDisplayTexts.get(chunk.callId) ?? chunk.displayText,
-                                ...(chunk.metadata ? { metadata: chunk.metadata } : {}),
+                                ...(chunk.metadata && !isQueryResultData(chunk.metadata)
+                                  ? { metadata: chunk.metadata }
+                                  : {}),
                               }
                             : tc
                         ),

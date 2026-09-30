@@ -181,6 +181,10 @@ function reconcileSyncIdentity(auth: ReturnType<typeof useAuthStore.getState>): 
         level: 'info',
       });
       notesRepository.wipeAllSyncableData();
+      // The wipe also deleted the previous user's voice profiles; their meeting voice
+      // samples held in memory go with them.
+      useNotesStore.getState().loadVoiceProfiles();
+      useNotesStore.setState({ meetingSpeakerEmbeddingsByNoteId: {} });
       resetSubscriptionCache();
       // Immediately clear in-memory dictionary + snippets so any UI/transcription
       // path that reads them between now and the post-pull load() doesn't see the
