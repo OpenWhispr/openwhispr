@@ -28,6 +28,7 @@ import { canManageSystemAudioInApp } from "../../utils/systemAudioAccess";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
 import { PAGE_CONTENT_WIDTH_CLASS } from "../ui/pageWidth";
 import { PAGE_HERO_ICON_TILE_CLASS } from "../ui/surfaces";
+import { syncService } from "../../services/SyncService.js";
 
 const CARD_CLASS = "rounded-2xl border transition-colors duration-200";
 const CARD_IDLE_CLASS = "border-border/70 bg-card/50 dark:border-white/10 dark:bg-surface-2/60";
@@ -102,6 +103,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
         toast({ title: t("notes.actions.errors.saveFailed"), variant: "destructive" });
         return;
       }
+      syncService.requestSyncAll("manual");
       setActionName("");
       setActionDescription("");
       setActionPrompt("");

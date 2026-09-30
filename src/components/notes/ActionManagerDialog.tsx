@@ -10,6 +10,7 @@ import { cn } from "../lib/utils";
 import { useActionsOfKind, initializeActions, getActionName } from "../../stores/actionStore";
 import { NOTE_ACTION_LIMITS } from "../../helpers/builtinActions";
 import { normalizeSections } from "../../helpers/templatePrompts";
+import { syncService } from "../../services/SyncService.js";
 import type { ActionItem, ActionKind, ActionOutput, TemplateSection } from "../../types/electron";
 
 interface ActionManagerDialogProps {
@@ -121,7 +122,8 @@ export default function ActionManagerDialog({
   };
 
   const handleDelete = async (id: number) => {
-    await window.electronAPI.deleteAction(id);
+    const result = await window.electronAPI.deleteAction(id);
+    if (result.success) syncService.requestSyncAll("manual");
     if (selectedId === id) {
       setSelectedId(null);
       setIsCreating(false);
@@ -175,6 +177,7 @@ export default function ActionManagerDialog({
         toast({ title: t("notes.actions.errors.saveFailed"), variant: "destructive" });
         return;
       }
+      syncService.requestSyncAll("manual");
       if (editingId === null) setIsCreating(false);
     } finally {
       setIsSaving(false);
