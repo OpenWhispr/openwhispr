@@ -78,7 +78,7 @@ jobs:
           path: meeting-aec-helper-${{ matrix.platform }}-${{ matrix.arch }}.*
 
       - name: Create or update release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: meeting-aec-helper-v${{ inputs.version || '1.0.0' }}
           name: Meeting AEC Helper v${{ inputs.version || '1.0.0' }}
