@@ -5,6 +5,7 @@ const load = () => import("../../src/config/retiredCloudModels.ts");
 
 const CLEANUP = { provider: "cleanupProvider", model: "cleanupModel" };
 const CHAT = { provider: "chatAgentProvider", model: "chatAgentModel" };
+const NOTES = { provider: "noteFormattingProvider", model: "noteFormattingModel" };
 
 const makeStorage = (initial = {}) => {
   const map = new Map(Object.entries(initial));
@@ -31,19 +32,23 @@ test("remaps a scope pinned to a model Tinfoil retired", async () => {
 
 test("remaps every other Tinfoil model the app has offered and Tinfoil has since retired", async () => {
   const { sweepRetiredCloudModelSelections } = await load();
-  // Both shipped as seed defaults and are both gone from the live catalog now,
-  // so they 404 exactly like glm-5-2 did.
+  // deepseek-v4-pro and kimi-k2-6 shipped as seed defaults; deepseek-v4-flash
+  // was served live (and was deepseek-v4-pro's replacement here) until Tinfoil
+  // retired it too. All three 404 exactly like glm-5-2 did.
   const storage = makeStorage({
     cleanupProvider: "tinfoil",
     cleanupModel: "deepseek-v4-pro",
     chatAgentProvider: "tinfoil",
     chatAgentModel: "kimi-k2-6",
+    noteFormattingProvider: "tinfoil",
+    noteFormattingModel: "deepseek-v4-flash",
   });
 
-  sweepRetiredCloudModelSelections(storage, [CLEANUP, CHAT]);
+  sweepRetiredCloudModelSelections(storage, [CLEANUP, CHAT, NOTES]);
 
-  assert.equal(storage.map.get("cleanupModel"), "deepseek-v4-flash");
+  assert.equal(storage.map.get("cleanupModel"), "deepseek-v4-1-flash");
   assert.equal(storage.map.get("chatAgentModel"), "kimi-k3");
+  assert.equal(storage.map.get("noteFormattingModel"), "deepseek-v4-1-flash");
 });
 
 test("still remaps the models Groq retired", async () => {
@@ -116,6 +121,26 @@ test("a provider whose sentinel is already set is skipped", async () => {
   assert.equal(storage.map.get("cleanupModel"), "llama-3.3-70b-versatile");
 });
 
+test("a sentinel a shipped build already wrote does not stop the rotated sweep", async () => {
+  const { sweepRetiredCloudModelSelections } = await load();
+  // v1.10.x ran the first Tinfoil sweep; deepseek-v4-flash retired after it.
+  const storage = makeStorage({
+    _retiredTinfoilModelsMigrated: "1",
+    cleanupProvider: "tinfoil",
+    cleanupModel: "deepseek-v4-flash",
+  });
+
+  assert.deepEqual(sweepRetiredCloudModelSelections(storage, [CLEANUP]), [
+    {
+      storeKey: "cleanupModel",
+      provider: "tinfoil",
+      from: "deepseek-v4-flash",
+      to: "deepseek-v4-1-flash",
+    },
+  ]);
+  assert.equal(storage.map.get("_retiredTinfoilModelsMigrated2"), "1");
+});
+
 test("no replacement is itself retired, and every provider has its own sentinel", async () => {
   const { RETIRED_CLOUD_MODELS } = await load();
   const sentinels = new Set();
@@ -153,8 +178,8 @@ test("each provider's sentinel is pinned to the exact set of ids it covers", asy
       retired: ["llama-3.1-8b-instant", "llama-3.3-70b-versatile", "qwen/qwen3-32b"],
     },
     tinfoil: {
-      migratedKey: "_retiredTinfoilModelsMigrated",
-      retired: ["deepseek-v4-pro", "glm-5-2", "kimi-k2-6"],
+      migratedKey: "_retiredTinfoilModelsMigrated2",
+      retired: ["deepseek-v4-flash", "deepseek-v4-pro", "glm-5-2", "kimi-k2-6"],
     },
   });
 });
@@ -167,7 +192,7 @@ test("a storage that cannot be written leaves the sentinel unset, so the next la
   };
 
   assert.deepEqual(sweepRetiredCloudModelSelections(storage, [CLEANUP]), []);
-  assert.equal(storage.map.get("_retiredTinfoilModelsMigrated"), undefined);
+  assert.equal(storage.map.get("_retiredTinfoilModelsMigrated2"), undefined);
   // Groq shares the storage but not the failure's blast radius.
   assert.equal(storage.map.get("_retiredGroqModelsMigrated"), undefined);
 });

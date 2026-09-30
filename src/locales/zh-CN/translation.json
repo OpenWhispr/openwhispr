@@ -121,6 +121,7 @@
       "mouseButtonOnlyMac": "鼠标按键快捷键目前仅在 macOS 上受支持。",
       "alreadyRegistered": "\"{{hotkey}}\" 已被其他应用注册。",
       "osReserved": "\"{{hotkey}}\" 可能被系统保留。",
+      "rightModifierNeedsListener": "\"{{hotkey}}\" 无法在此桌面上使用，其快捷键需要包含一个普通按键。请添加一个按键，例如 Control+Alt+Space。",
       "holdNeedsReleaseKey": "按住说话需要 macOS 能检测到松开的按键：Globe、右侧 Option 之类的右侧按键，或带修饰键的快捷键。点按可用于任何按键。",
       "registrationFailed": "无法注册 \"{{hotkey}}\"，该快捷键可能已被其他应用占用。",
       "windowsKeyListenerMissing": "\"{{hotkey}}\" 需要 Windows 按键监听器，但此安装中缺少该组件。请选择包含普通按键的快捷键，例如 F8。",
@@ -703,6 +704,11 @@
       "title": "缺少必需的模型",
       "description": "您的组织要求在此设备上安装这些模型：{{models}}。",
       "download": "下载"
+    },
+    "cloudNudge": {
+      "title": "你已登录",
+      "description": "听写仍在使用你自己的配置。你可以随时切换到 OpenWhispr Cloud。",
+      "action": "打开设置"
     }
   },
   "reasoning": {
@@ -915,6 +921,7 @@
         "streamingOnlyProvider": "该服务商仅支持实时转录。请为文件上传和重试选择其他服务商。",
         "providerKeyMissing": "尚未为您的转录服务商设置 API 密钥。请在“设置 → 语音转文字”中添加。",
         "cleanupTruncated": "AI 模型的输出长度达到上限，未能完成听写清理。",
+        "cleanupDuplicated": "AI 清理重复了转录内容。已保留原始文本。",
         "cleanupEmptyReply": "AI 模型返回了空响应，没有生成清理后的文本。"
       },
       "translationFallback": {
@@ -936,6 +943,18 @@
         "unavailable": "OpenWhispr 无法安全读取选中的文本。请检查辅助功能或输入自动化权限。",
         "tooLarge": "选中的内容过长。请选择不超过 6,000 个字符。",
         "reasoningFailed": "AI 无法完成选中文本编辑。原始文本未被更改。"
+      },
+      "pastePermission": {
+        "title": "允许自动粘贴",
+        "description": "请在系统设置 → 隐私与安全性 → 辅助功能中启用 OpenWhispr。",
+        "settingsFailed": "无法打开设置。请打开系统设置 → 隐私与安全性 → 辅助功能，并启用 OpenWhispr。",
+        "manualPaste": "点击下方按钮复制文本，然后按 {{shortcut}} 粘贴。",
+        "openSettings": "打开设置",
+        "copyToClipboard": "复制到剪贴板",
+        "copyFailed": "复制失败"
+      },
+      "pasteFailed": {
+        "title": "无法自动粘贴"
       }
     },
     "clipboard": {
@@ -2656,7 +2675,8 @@
     "errors": {
       "contextTooLarge": "内容过长，{{model}} 无法在这台电脑上读取。大约需要 {{needed}} 个上下文 token，但内存中只能容纳 {{max}} 个。请改用云端模型，或对更短的选区执行该操作。",
       "contextTooLargeGeneric": "内容过长，{{model}} 无法在这台电脑上读取。请改用云端模型，或对更短的选区执行该操作。",
-      "localServerUnavailable": "无法在这台电脑上启动 {{model}}。请重试，或改用云端模型。"
+      "localServerUnavailable": "无法在这台电脑上启动 {{model}}。请重试，或改用云端模型。",
+      "localModelBusy": "本地模型仍在处理另一个请求。请等待其完成后再试。"
     }
   },
   "referral": {
@@ -2949,7 +2969,35 @@
       "conversationWillAppear": "对话将显示在这里...",
       "linkedEvent": "关联日程",
       "noFolder": "无文件夹",
-      "participants": "参与者"
+      "participants": "参与者",
+      "table": {
+        "actions": "表格操作",
+        "insertRowAbove": "在上方插入行",
+        "insertRowBelow": "在下方插入行",
+        "insertColumnLeft": "在左侧插入列",
+        "insertColumnRight": "在右侧插入列",
+        "deleteRow": "删除行",
+        "deleteColumn": "删除列",
+        "deleteTable": "删除表格"
+      },
+      "format": {
+        "toolbar": "格式",
+        "withShortcut": "{{action}}（{{shortcut}}）",
+        "bold": "粗体",
+        "italic": "斜体",
+        "strike": "删除线",
+        "code": "代码",
+        "textStyle": "文本样式",
+        "paragraph": "正文",
+        "heading1": "标题 1",
+        "heading2": "标题 2",
+        "heading3": "标题 3",
+        "bulletList": "项目符号列表",
+        "orderedList": "编号列表",
+        "taskList": "清单",
+        "blockquote": "引用",
+        "table": "插入表格"
+      }
     },
     "participants": {
       "attendee": "位参会者",
@@ -3100,6 +3148,8 @@
       "runAction": "运行 {{name}}",
       "selectAction": "选择操作",
       "done": "完成",
+      "chunkProgress": "第 {{step}} 部分，共 {{total}} 部分",
+      "emptyReply": "模型返回了空回复。请重试，或选择其他模型。",
       "builtin": {
         "generateNotes": {
           "name": "生成笔记",
@@ -3630,6 +3680,15 @@
     },
     "tools": {
       "search_notesName": "搜索笔记",
+      "email_draftName": "邮件草稿",
+      "find_contactName": "查找联系人",
+      "github_search_issuesName": "搜索 GitHub",
+      "github_create_issueName": "GitHub Issue",
+      "github_commentName": "GitHub 评论",
+      "slack_send_messageName": "Slack 消息",
+      "linear_search_issuesName": "搜索 Linear",
+      "linear_create_issueName": "Linear 议题",
+      "linear_commentName": "Linear 评论",
       "get_noteName": "获取笔记",
       "create_noteName": "创建笔记",
       "update_noteName": "更新笔记",
@@ -3642,6 +3701,15 @@
       "update_dictionaryName": "更新词典",
       "update_snippetsName": "更新片段",
       "search_notesStatus": "正在搜索笔记...",
+      "email_draftStatus": "正在准备邮件...",
+      "find_contactStatus": "正在查找联系人...",
+      "github_search_issuesStatus": "正在搜索 GitHub...",
+      "github_create_issueStatus": "正在准备 GitHub Issue...",
+      "github_commentStatus": "正在准备 GitHub 评论...",
+      "slack_send_messageStatus": "正在准备 Slack 消息...",
+      "linear_search_issuesStatus": "正在搜索 Linear...",
+      "linear_create_issueStatus": "正在准备 Linear 议题...",
+      "linear_commentStatus": "正在准备 Linear 评论...",
       "web_searchStatus": "正在搜索网页...",
       "copy_to_clipboardStatus": "正在复制到剪贴板...",
       "get_calendar_eventsStatus": "正在查看日历...",
@@ -3733,6 +3801,7 @@
       "connectFailedDescription": "连接 Calendar.app 时出错。请重启 OpenWhispr 后重试。"
     },
     "sections": {
+      "connectors": "连接器",
       "calendar": "日历",
       "api": "API",
       "mcp": "MCP",
@@ -3791,6 +3860,457 @@
     "notABot": {
       "title": "OpenWhispr 是会议录制工具，不是机器人",
       "description": "OpenWhispr 直接从您的系统捕获音频 — 它不会以参与者身份加入您的会议。只需连接日历，正常记录笔记即可。"
+    }
+  },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "发送到 {{destination}}",
+        "slackPost": "发布到 {{destination}}",
+        "email": "发送邮件给 {{destination}}",
+        "issue": "在 {{destination}} 中创建问题",
+        "comment": "评论 {{destination}}"
+      },
+      "identity": "以 {{account}} 身份",
+      "identityWithWorkspace": "以 {{account}}（{{workspace}}）身份",
+      "send": "发送",
+      "edit": "编辑",
+      "doneEditing": "编辑完成",
+      "cancel": "取消",
+      "titleLabel": "标题",
+      "bodyLabel": "消息",
+      "sending": "发送中…",
+      "sent": "已发送到 {{destination}}。",
+      "open": "打开",
+      "failed": "发送失败：{{message}}",
+      "unknown": "无法确认是否已发送，请检查 {{destination}}。",
+      "cancelled": "已取消，未发送任何内容。",
+      "notSent": "未发送。",
+      "policyRetry": "无法检查您的组织设置，因此未发送任何内容。请点击“发送”重试。",
+      "errors": {
+        "not_in_channel": "您不是 {{destination}} 的成员。",
+        "channel_not_found": "在 Slack 中已找不到 {{destination}}。",
+        "is_archived": "{{destination}} 已归档。",
+        "reconnect_needed": "需要在设置中重新连接 Slack。",
+        "connection_changed": "发送前 Slack 连接发生了变化，因此未发送任何内容。",
+        "rate_limited": "Slack 正忙，请稍后重试。",
+        "missing_scope": "OpenWhispr 没有权限在那里发布。请在设置中重新连接 Slack。",
+        "msg_too_long": "消息对 Slack 来说太长了（格式化后最多 12,000 个字符）。",
+        "no_text": "消息为空。",
+        "network": "无法连接到 Slack，未发送任何内容。",
+        "credential_save_failed": "无法在此电脑上保存 Slack 登录信息，未发送任何内容。请重试。",
+        "dm_failed": "无法打开与 {{destination}} 的私信，未发送任何内容。",
+        "restricted": "{{destination}} 对您是只读或受限的。",
+        "generic": "出了点问题，未发送任何内容。",
+        "github": {
+          "reconnect_needed": "需要在设置中重新连接 GitHub。",
+          "network": "无法连接到 GitHub，未发布任何内容。",
+          "rate_limited": "GitHub 正忙，请稍后重试。",
+          "connection_changed": "发布前 GitHub 连接发生了变化，因此未发布任何内容。",
+          "credential_save_failed": "无法在此电脑上保存 GitHub 登录信息，未发布任何内容。请重试。",
+          "generic": "出了点问题，未向 GitHub 发布任何内容。",
+          "not_installed": "此仓库未安装 OpenWhispr GitHub App。请在设置中添加。未发布任何内容。",
+          "repo_unlisted": "无法确认此仓库是否已安装 OpenWhispr GitHub App。请检查仓库名称。未发布任何内容。",
+          "no_repositories": "尚未为 OpenWhispr GitHub App 选择仓库。请在设置中选择。未发布任何内容。",
+          "forbidden": "您没有在此仓库中执行此操作的权限，未发布任何内容。",
+          "not_found": "找不到该 Issue 或拉取请求，未发布任何内容。",
+          "issues_disabled": "此仓库已关闭 Issue，未发布任何内容。",
+          "archived": "此仓库已归档，无法添加新的 Issue 或评论，未发布任何内容。",
+          "too_many_labels": "一个 Issue 最多选择 10 个标签，未发布任何内容。",
+          "labels_unavailable": "无法读取仓库的标签，未发布任何内容。",
+          "invalid": "GitHub 认为其无效并拒绝了，未发布任何内容。",
+          "locked": "该对话已锁定，未发布任何内容。",
+          "invalid_reference": "这不是 GitHub Issue 或拉取请求，未发布任何内容。",
+          "too_long": "标题或正文对 GitHub 来说太长，未发布任何内容。",
+          "not_configured": "此版本中 GitHub 不可用，未发布任何内容。"
+        },
+        "gmail": {
+          "reconnect_needed": "需要在设置中重新连接 Gmail。",
+          "network": "无法连接到 Gmail，未发送任何内容。",
+          "rate_limited": "Gmail 正忙，请稍后重试。",
+          "daily_limit": "已达到 Gmail 每日发送上限，未发送任何内容。",
+          "domain_policy": "您所在组织的 Google 管理员已阻止此应用，未发送任何内容。",
+          "invalid_recipients": "其中一个地址无效，未发送任何内容。",
+          "too_many_recipients": "收件人过多（最多 {{max}} 个），未发送任何内容。",
+          "too_long": "主题或正文对 Gmail 来说太长，未发送任何内容。",
+          "invalid_message": "Gmail 因格式错误拒绝了这封邮件，未发送任何内容。",
+          "gmail_unavailable": "目前无法通过 Gmail 发送，未发送任何内容。",
+          "refused": "Gmail 拒绝发送，未发送任何内容。",
+          "connection_changed": "发送前 Gmail 连接发生了变化，因此未发送任何内容。",
+          "credential_save_failed": "无法在此电脑上保存 Gmail 登录信息，未发送任何内容。请重试。"
+        },
+        "linear": {
+          "reconnect_needed": "需要在设置中重新连接 Linear。",
+          "connection_changed": "发送前 Linear 连接发生了变化，因此未发送任何内容。",
+          "credential_save_failed": "无法在此电脑上保存 Linear 登录信息，未发送任何内容。请重试。",
+          "linear_unavailable": "Linear 目前不可用，未发送任何内容。",
+          "network": "无法连接到 Linear，未发送任何内容。",
+          "rate_limited": "Linear 正忙，请稍后重试。",
+          "not_found": "Linear 找不到该团队、项目或议题了，未发送任何内容。",
+          "forbidden": "您的 Linear 账户无权执行此操作，未发送任何内容。",
+          "invalid_input": "Linear 无法接受当前内容，未发送任何内容。",
+          "too_long": "对 Linear 来说太长，未发送任何内容。",
+          "missing_title": "Linear 议题需要标题，未发送任何内容。",
+          "missing_body": "Linear 评论为空，未发送任何内容。",
+          "not_created": "Linear 未创建该议题。",
+          "wrong_workspace": "该议题位于另一个 Linear 工作区，未发送任何内容。",
+          "invalid_reference": "这不是 Linear 议题，未发送任何内容。",
+          "refused": "Linear 拒绝了请求，未发送任何内容。",
+          "unknown_action": "OpenWhispr 无法在 Linear 中执行此操作，未发送任何内容。",
+          "generic": "出了点问题，未向 Linear 发送任何内容。"
+        }
+      },
+      "email": {
+        "from": "发件人：{{account}}",
+        "toLabel": "收件人",
+        "ccLabel": "抄送",
+        "subjectLabel": "主题",
+        "bodyLabel": "正文",
+        "addressHint": "多个地址请用逗号分隔。",
+        "invalidAddress": "{{address}} 不是完整的电子邮件地址（例如 name@example.com）。",
+        "invalidAddressAnnouncement": "有一个地址不是完整的电子邮件地址。",
+        "sendsTo": "发送至 {{addresses}}",
+        "missingTo": "请在收件人中至少添加一个地址。",
+        "tooManyRecipients": "一封邮件最多可发送给 {{max}} 个地址（收件人和抄送合计）。",
+        "subjectTooLong": "主题不能超过 {{max}} 个字符。",
+        "bodyTooLong": "邮件正文过长，无法通过 Gmail 发送。请缩短后再发送。",
+        "unknown": "无法确认是否已发送，请检查“已发送”文件夹。"
+      },
+      "github": {
+        "notes": {
+          "mentions": "将通知 {{mentions}}",
+          "pullRequest": "针对拉取请求",
+          "labelsMayNotApply": "只有在您对此仓库有写入权限时才会添加标签。"
+        }
+      },
+      "openIn": {
+        "github": "在 GitHub 中打开",
+        "gmail": "在 Gmail 中打开",
+        "linear": "在 Linear 中打开"
+      },
+      "sendLabel": {
+        "issue": "创建问题",
+        "comment": "评论"
+      },
+      "issue": {
+        "created": "已创建 {{result}}。",
+        "createdIn": "已在 {{destination}} 中创建问题。",
+        "unknown": "无法确认问题是否已创建。请先检查 {{destination}} 再重试。",
+        "titleLabel": "标题",
+        "bodyLabel": "描述",
+        "missingTitle": "请添加标题。",
+        "titleTooLong": "标题不能超过 {{max}} 个字符。",
+        "bodyTooLong": "描述不能超过 {{max}} 个字符。",
+        "notes": {
+          "labels": "标签：{{labels}}",
+          "droppedLabels": "未添加（{{destination}} 中不存在）：{{labels}}",
+          "priority": "优先级：{{priority}}",
+          "assignee": "负责人：{{assignee}}",
+          "project": "项目：{{project}}"
+        }
+      },
+      "comment": {
+        "posted": "已评论 {{destination}}。",
+        "unknown": "无法确认评论是否已发布。请先检查 {{destination}} 再重试。",
+        "bodyLabel": "评论",
+        "missingBody": "请填写评论。",
+        "bodyTooLong": "评论不能超过 {{max}} 个字符。",
+        "notes": {
+          "targetTitle": "关于“{{title}}”"
+        }
+      }
+    },
+    "policyOff": "您的组织已关闭连接器。",
+    "email": {
+      "title": "邮件草稿",
+      "description": "助手会在您的邮件应用中打开预填好的草稿，由您检查并亲自点击发送。",
+      "descriptionSend": "助手会在聊天中显示一张邮件卡片，只有在您点击发送后才会通过您的 Gmail 发出。",
+      "proRequired": "升级到付费计划，让助手为您起草邮件。",
+      "unavailable": "邮件草稿暂时不可用。",
+      "targetLabel": "在此处起草邮件",
+      "autoResolved": "自动 · {{target}}",
+      "targets": {
+        "gmail": "Gmail",
+        "outlookWork": "Outlook（工作或学校）",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "默认邮件应用",
+        "gmailSend": "在聊天中发送（Gmail）",
+        "gmailSendConnectFirst": "在聊天中发送（Gmail）· 请在下方连接 Gmail"
+      }
+    },
+    "slack": {
+      "title": "Slack",
+      "description": "助手可以代表您在频道和给他人发布消息。每条消息发送前都需要您批准。",
+      "connect": "连接",
+      "reconnect": "重新连接",
+      "disconnect": "断开连接",
+      "connecting": "请在浏览器中完成连接…",
+      "connectedAs": "已以 {{account}} 身份连接到 {{workspace}}",
+      "needsReconnect": "需要重新连接 Slack。",
+      "proRequired": "升级到付费计划，让助手为您发送 Slack 消息。",
+      "errors": {
+        "connect_failed": "无法连接 Slack，请重试。",
+        "disconnect_failed": "无法断开 Slack 连接，请重试。",
+        "oauth_denied": "由于未获得授权，Slack 未连接。",
+        "oauth_timeout": "连接耗时过长，请重试。",
+        "oauth_state_mismatch": "该登录链接已过期，请重试。",
+        "ports_busy": "另一个应用正在使用 OpenWhispr 连接所需的端口。请关闭它后重试。",
+        "token_exchange_failed": "Slack 未完成连接，请重试。",
+        "not_configured": "此版本中 Slack 不可用。",
+        "connection_changed": "连接过程中您的账户或 Slack 连接发生了变化，请重试。",
+        "signed_out": "请登录 OpenWhispr 以连接 Slack。",
+        "policy_blocked": "您的组织已关闭连接器。",
+        "policy_unavailable": "无法检查您的组织设置，请重试。"
+      },
+      "browser": {
+        "connectedTitle": "Slack 已连接",
+        "connectedBody": "您可以关闭此标签页并返回 OpenWhispr。",
+        "failedTitle": "Slack 未连接",
+        "failedBody": "请返回 OpenWhispr 重试。"
+      }
+    },
+    "github": {
+      "title": "GitHub",
+      "description": "助手可以仅在您选择的仓库中，以您的身份搜索 Issue 和拉取请求、创建 Issue 以及发表评论。它无法读取您的代码，每个 Issue 和评论在发布前都需要您批准。",
+      "connect": "连接",
+      "reconnect": "重新连接",
+      "disconnect": "断开连接",
+      "connecting": "正在连接 GitHub…",
+      "connectedAs": "已以 {{account}} 身份连接 · 仓库：{{repositories}}",
+      "connectedAs_empty": "已以 {{account}} 身份连接 · 尚无仓库",
+      "connectedAs_unknown": "已以 {{account}} 身份连接",
+      "needsReconnect": "需要重新连接 GitHub。",
+      "proRequired": "升级到付费计划，让助手为您处理 GitHub Issue。",
+      "reviewOnGithub": "在 GitHub 上查看",
+      "disconnectedHint": "已在此电脑上断开连接。在您于 GitHub 上移除之前，GitHub 会保留 OpenWhispr 的授权。",
+      "errors": {
+        "connect_failed": "无法连接 GitHub，请重试。",
+        "disconnect_failed": "无法断开 GitHub 连接，请重试。",
+        "oauth_denied": "GitHub 访问被拒绝。",
+        "token_exchange_failed": "GitHub 未完成连接，请重试。",
+        "not_configured": "此版本中 GitHub 不可用。",
+        "connection_changed": "连接过程中您的账户或 GitHub 连接发生了变化，请重试。",
+        "signed_out": "请登录 OpenWhispr 以连接 GitHub。",
+        "policy_blocked": "您的组织已关闭连接器。",
+        "policy_unavailable": "无法检查您的组织设置，请重试。",
+        "code_expired": "代码已过期，请重试。",
+        "device_flow_disabled": "此版本未设置使用代码登录 GitHub。",
+        "network": "无法连接到 GitHub。请检查网络连接后重试。",
+        "rate_limited": "GitHub 当前繁忙，请一分钟后重试。"
+      },
+      "deviceCode": {
+        "instructions": "请在 GitHub 上输入此代码：",
+        "copyAndOpen": "复制并打开 GitHub",
+        "copied": "代码已复制。",
+        "cancel": "取消",
+        "expires": "代码将于 {{time}} 过期。"
+      },
+      "repositories": {
+        "choose": "选择仓库",
+        "manage": "管理仓库"
+      }
+    },
+    "gmail": {
+      "title": "Gmail",
+      "description": "助手可以通过您的 Gmail 账户发送邮件。它无法读取您的邮件，每封邮件都由您亲自点击发送。",
+      "connect": "连接",
+      "reconnect": "重新连接",
+      "disconnect": "断开连接",
+      "connecting": "请在浏览器中完成连接… 如果 Google 显示访问已被阻止，需要您所在组织的 Google 管理员允许 OpenWhispr。",
+      "connectedAs": "已以 {{account}} 身份连接",
+      "needsReconnect": "需要重新连接 Gmail。",
+      "grantKept": "已断开连接。Google 日历使用相同的 Google 权限，因此在您也断开 Google 日历之前，OpenWhispr 仍会显示在您的 Google 帐号中。",
+      "proRequired": "升级到付费计划，让助手通过 Gmail 为您发送邮件。",
+      "errors": {
+        "connect_failed": "无法连接 Gmail，请重试。",
+        "disconnect_failed": "无法断开 Gmail 连接，请重试。",
+        "oauth_denied": "由于未获得授权，Gmail 未连接。",
+        "oauth_timeout": "连接耗时过长。如果 Google 显示访问已被阻止，请让您所在组织的 Google 管理员允许 OpenWhispr；否则请重试。",
+        "oauth_state_mismatch": "该登录链接已过期，请重试。",
+        "ports_busy": "另一个应用正在使用 OpenWhispr 连接所需的端口。请关闭它后重试。",
+        "token_exchange_failed": "Google 未完成连接，请重试。",
+        "not_configured": "此版本中 Gmail 不可用。",
+        "connection_changed": "连接过程中您的账户或 Gmail 连接发生了变化，请重试。",
+        "signed_out": "请登录 OpenWhispr 以连接 Gmail。",
+        "policy_blocked": "您的组织已关闭连接器。",
+        "policy_unavailable": "无法检查您的组织设置，请重试。",
+        "permission_not_granted": "由于未授予发送邮件的权限，Gmail 未连接。请重新连接并保持勾选该权限。",
+        "email_not_verified": "Google 尚未验证此账户的邮箱地址，因此 Gmail 未连接。",
+        "domain_policy": "您所在组织的 Google 管理员已阻止此应用。请他们允许 OpenWhispr。"
+      },
+      "browser": {
+        "connectedTitle": "Gmail 已连接",
+        "connectedBody": "您可以关闭此标签页并返回 OpenWhispr。",
+        "failedTitle": "Gmail 未连接",
+        "failedBody": "请返回 OpenWhispr 重试。"
+      }
+    },
+    "linear": {
+      "title": "Linear",
+      "description": "助手可以搜索您的 Linear 议题，并以您的身份创建议题和评论。每个议题和评论发送前都需要您批准。",
+      "connect": "连接",
+      "reconnect": "重新连接",
+      "disconnect": "断开连接",
+      "connecting": "请在浏览器中完成连接…",
+      "connectedAs": "已以 {{account}} 身份连接到 {{workspace}}",
+      "needsReconnect": "需要重新连接 Linear。",
+      "proRequired": "升级到付费计划，让助手为您在 Linear 中工作。",
+      "errors": {
+        "connect_failed": "无法连接 Linear，请重试。",
+        "disconnect_failed": "无法断开 Linear 连接，请重试。",
+        "oauth_denied": "由于未获得授权，Linear 未连接。",
+        "oauth_timeout": "连接耗时过长，请重试。",
+        "oauth_state_mismatch": "该登录链接已过期，请重试。",
+        "ports_busy": "另一个应用正在使用 OpenWhispr 连接所需的端口。请关闭它后重试。",
+        "token_exchange_failed": "Linear 未完成连接，请重试。",
+        "not_configured": "此版本中 Linear 不可用。",
+        "connection_changed": "连接过程中您的账户或 Linear 连接发生了变化，请重试。",
+        "signed_out": "请登录 OpenWhispr 以连接 Linear。",
+        "policy_blocked": "您的组织已关闭连接器。",
+        "policy_unavailable": "无法检查您的组织设置，请重试。",
+        "permission_not_granted": "由于未授予全部权限，Linear 未连接。请重新连接并允许所有权限。"
+      },
+      "browser": {
+        "connectedTitle": "Linear 已连接",
+        "connectedBody": "您可以关闭此标签页并返回 OpenWhispr。",
+        "failedTitle": "Linear 未连接",
+        "failedBody": "请返回 OpenWhispr 重试。"
+      },
+      "notes": {
+        "priority": {
+          "urgent": "优先级：紧急",
+          "high": "优先级：高",
+          "medium": "优先级：中",
+          "low": "优先级：低",
+          "none": "优先级：无"
+        },
+        "assignedToYou": "负责人：你"
+      }
+    },
+    "recent": {
+      "title": "最近的操作",
+      "actions": {
+        "email_draft": "发送给 {{destination}} 的草稿",
+        "github_create_issue": "{{destination}} 中的新 Issue",
+        "github_comment": "对 {{destination}} 的评论",
+        "slack_send_message": "发送给 {{destination}} 的消息",
+        "gmail_send": "发送给 {{destination}} 的邮件",
+        "linear_create_issue": "{{destination}} 中的新议题",
+        "linear_comment": "对 {{destination}} 的评论"
+      },
+      "unlabeledActions": {
+        "email_draft": "邮件草稿",
+        "github_create_issue": "GitHub Issue",
+        "github_comment": "GitHub 评论",
+        "slack_send_message": "Slack 消息",
+        "gmail_send": "Gmail 邮件",
+        "linear_create_issue": "Linear 议题",
+        "linear_comment": "Linear 评论"
+      },
+      "states": {
+        "pending": "等待中",
+        "committing": "进行中",
+        "sent": "已完成",
+        "failed": "失败",
+        "unknown": "未确认",
+        "cancelled": "已取消",
+        "expired": "已过期"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "已打开发送给 {{destination}} 的草稿。",
+      "draftOpenedBodyCopied": "已打开发送给 {{destination}} 的草稿。正文已在剪贴板中。",
+      "draftOpenedSubjectCopied": "已打开发送给 {{destination}} 的草稿。主题和正文已在剪贴板中。",
+      "draftOpenedOnlySubjectCopied": "已打开发给 {{destination}} 的草稿。主题已在剪贴板中。",
+      "needsDetails": "需要更多信息。",
+      "unavailable": "连接器暂时不可用。",
+      "unknown": "未确认。请先检查是否已完成，再重试。",
+      "draftUnknown": "未确认：发给 {{destination}} 的草稿可能没有打开。请先检查，再重试。",
+      "contactsFound": "找到的联系人：{{total}}",
+      "draftLimit": "每次请求最多只能打开 {{max}} 份草稿。",
+      "clipboardBusy": "未打开：另一份草稿的文字仍在剪贴板中。",
+      "errors": {
+        "open_failed": "无法打开您的邮件应用。",
+        "draft_too_long": "收件人太多，无法生成草稿链接。",
+        "invalid_address": "需要完整的电子邮件地址。",
+        "not_in_channel": "不是该频道的成员。",
+        "channel_not_found": "找不到该对话。",
+        "is_archived": "该频道已归档。",
+        "reconnect_needed": "需要重新连接 Slack。",
+        "connection_changed": "Slack 连接已更改。未发送任何内容。",
+        "rate_limited": "Slack 正忙。",
+        "missing_scope": "缺少 Slack 权限。",
+        "msg_too_long": "消息对 Slack 来说太长。",
+        "no_text": "消息为空。",
+        "network": "无法连接到 Slack。未发送任何内容。",
+        "credential_save_failed": "无法在此电脑上保存 Slack 登录信息。未发送任何内容。",
+        "dm_failed": "无法打开私信。未发送任何内容。",
+        "restricted": "该频道为只读或受限。",
+        "generic": "操作未成功。",
+        "github": {
+          "reconnect_needed": "需要重新连接 GitHub。",
+          "network": "无法连接到 GitHub。",
+          "rate_limited": "GitHub 正忙。",
+          "connection_changed": "GitHub 连接已更改。",
+          "credential_save_failed": "无法在此电脑上保存 GitHub 登录信息。",
+          "generic": "在 GitHub 上操作未成功。",
+          "not_installed": "那里未安装 OpenWhispr GitHub App。",
+          "repo_unlisted": "无法确认那里是否已安装 OpenWhispr GitHub App。",
+          "no_repositories": "尚未选择 GitHub 仓库。",
+          "forbidden": "在该仓库中没有权限。",
+          "not_found": "找不到该 Issue 或拉取请求。",
+          "issues_disabled": "该仓库已关闭 Issue。",
+          "archived": "该仓库已归档。",
+          "too_many_labels": "一个 Issue 的标签过多。",
+          "labels_unavailable": "无法读取仓库的标签。",
+          "invalid": "GitHub 认为其无效并拒绝了。",
+          "locked": "该对话已锁定。",
+          "invalid_reference": "不是 GitHub Issue 或拉取请求。",
+          "too_long": "对 GitHub 来说太长。",
+          "not_configured": "此版本中 GitHub 不可用。"
+        },
+        "gmail": {
+          "reconnect_needed": "需要重新连接 Gmail。",
+          "network": "无法连接到 Gmail。未发送任何内容。",
+          "rate_limited": "Gmail 正忙。",
+          "daily_limit": "已达到 Gmail 每日发送上限。",
+          "domain_policy": "已被您所在组织的 Google 管理员阻止。",
+          "invalid_recipients": "有地址无效。未发送任何内容。",
+          "too_many_recipients": "收件人过多。未发送任何内容。",
+          "too_long": "对 Gmail 来说太长。未发送任何内容。",
+          "invalid_message": "Gmail 拒绝了这封邮件。未发送任何内容。",
+          "gmail_unavailable": "目前无法通过 Gmail 发送。",
+          "refused": "Gmail 拒绝发送。",
+          "connection_changed": "Gmail 连接已更改。未发送任何内容。",
+          "credential_save_failed": "无法在此电脑上保存 Gmail 登录信息。未发送任何内容。"
+        },
+        "linear": {
+          "reconnect_needed": "需要重新连接 Linear。",
+          "connection_changed": "Linear 连接已更改。未发送任何内容。",
+          "credential_save_failed": "无法在此电脑上保存 Linear 登录信息。",
+          "linear_unavailable": "Linear 目前不可用。",
+          "network": "无法连接到 Linear。",
+          "rate_limited": "Linear 正忙。",
+          "not_found": "在 Linear 中未找到。",
+          "forbidden": "在 Linear 中无权执行。",
+          "invalid_input": "Linear 无法接受。",
+          "too_long": "对 Linear 来说太长。",
+          "missing_title": "Linear 议题需要标题。",
+          "missing_body": "Linear 评论为空。",
+          "not_created": "Linear 未创建该议题。",
+          "wrong_workspace": "该议题位于另一个 Linear 工作区。",
+          "invalid_reference": "不是 Linear 议题。",
+          "refused": "Linear 拒绝了请求。",
+          "unknown_action": "在 Linear 中不可用。",
+          "generic": "在 Linear 中操作未成功。"
+        }
+      },
+      "unknownSent": {
+        "gmail": "无法确认发给 {{destination}} 的邮件是否已发送，请检查 Gmail 的“已发送”文件夹。"
+      },
+      "gmailDraftLimit": "每次请求最多只能准备 {{max}} 封邮件。",
+      "queryResults": "找到的结果：{{total}}",
+      "cardLimit": "每次请求最多只能准备 {{max}} 张卡片。"
     }
   },
   "calendar": {
@@ -3868,6 +4388,11 @@
         "createLink": "创建链接",
         "copyLink": "复制链接",
         "copied": "已复制",
+        "replaceLink": {
+          "title": "替换分享链接？",
+          "description": "此设备上没有当前链接，因此复制时需要创建新链接。旧链接将失效，包括邀请邮件中的链接。请重新发送每个邀请，以便受邀者仍能打开此笔记。",
+          "confirm": "替换链接"
+        },
         "export": "导出",
         "owner": "所有者",
         "editor": "可编辑",

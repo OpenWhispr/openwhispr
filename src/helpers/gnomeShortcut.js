@@ -549,9 +549,11 @@ class GnomeShortcutManager {
       .split("+")
       .map((part) => part.trim())
       .filter(Boolean);
+    // The side is stripped because a lone "RightControl" is modifier-only too, and
+    // the portal cannot bind a trigger that has no base key.
     if (
       parts.length === 0 ||
-      parts.every((part) => PORTAL_MODIFIER_NAMES.has(part.toLowerCase()))
+      parts.every((part) => PORTAL_MODIFIER_NAMES.has(part.toLowerCase().replace(/^right/, "")))
     ) {
       return "";
     }

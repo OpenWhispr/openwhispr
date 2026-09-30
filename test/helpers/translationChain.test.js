@@ -279,6 +279,23 @@ test("usedCloudReasoning: cloud cleanup that throws does not set it", async () =
   assert.equal(result.usedCloudReasoning, false);
 });
 
+test("usedCloudReasoning: cloud cleanup rejected after a successful call sets it true", async () => {
+  const { executeTranslationChain } = await load();
+
+  const result = await executeTranslationChain(
+    makeOpts({
+      cleanupIsCloud: true,
+      translateIsCloud: false,
+      runCleanup: async () => {
+        throw Object.assign(new Error("duplicated"), { code: "CLEANUP_OUTPUT_INVALID" });
+      },
+      runTranslate: async () => "translated",
+    })
+  );
+
+  assert.equal(result.usedCloudReasoning, true);
+});
+
 test("usedCloudReasoning: cloud translate sets it true", async () => {
   const { executeTranslationChain } = await load();
 

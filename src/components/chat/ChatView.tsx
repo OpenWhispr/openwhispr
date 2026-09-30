@@ -9,6 +9,7 @@ import { ChatEmptyIllustration } from "./ChatEmptyIllustration";
 import ConversationList from "./ConversationList";
 import EmptyChatState from "./EmptyChatState";
 import { ConfirmDialog } from "../ui/dialog";
+import { PAGE_CONTENT_WIDTH_CLASS } from "../ui/pageWidth";
 import { useDialogs } from "../../hooks/useDialogs";
 import { getCachedPlatform } from "../../utils/platform";
 
@@ -34,6 +35,7 @@ export default function ChatView() {
   const [isNewChat, setIsNewChat] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [showSearch, setShowSearch] = useState(false);
+  const [submissionInFlight, setSubmissionInFlight] = useState(false);
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
 
   const persistence = useChatPersistence({
@@ -47,26 +49,32 @@ export default function ChatView() {
   const streaming = useChatStreaming({
     messages: persistence.messages,
     setMessages: persistence.setMessages,
+    allowConnectors: true,
     onStreamComplete: (_id, content, toolCalls) => {
       persistence.saveAssistantMessage(content, toolCalls);
     },
   });
+  // useChatStreaming returns a fresh object every render; cancelStream is
+  // stable, so the callbacks below depend on it rather than on `streaming`.
+  const { cancelStream } = streaming;
 
   const handleSelectConversation = useCallback(
     async (id: number) => {
       if (id === activeConversationId) return;
+      cancelStream();
       setActiveConversationId(id);
       setIsNewChat(false);
       await persistence.loadConversation(id);
     },
-    [activeConversationId, persistence]
+    [activeConversationId, cancelStream, persistence]
   );
 
   const handleNewChat = useCallback(() => {
+    cancelStream();
     setActiveConversationId(null);
     setIsNewChat(true);
     persistence.handleNewChat();
-  }, [persistence]);
+  }, [cancelStream, persistence]);
 
   const createConversation = useCallback(
     async (text: string) => {
@@ -82,6 +90,7 @@ export default function ChatView() {
     streaming,
     createConversation,
     onBeforeSend: markChatStarted,
+    onSendingChange: setSubmissionInFlight,
   });
 
   const handleArchive = useCallback(
@@ -163,15 +172,30 @@ export default function ChatView() {
         <div className="flex-1 min-w-80 flex flex-col">
           {hasActiveChat ? (
             <>
-              <ChatMessages messages={persistence.messages} emptyState={<NewChatEmptyState />} />
-              <ChatInput
-                agentState={streaming.agentState}
-                partialTranscript=""
-                onTextSubmit={handleTextSubmit}
-                onCancel={streaming.cancelStream}
-                autoFocus={isNewChat}
-                voiceDraft
+              <ChatMessages
+                messages={persistence.messages}
+                emptyState={<NewChatEmptyState />}
+                contentClassName={PAGE_CONTENT_WIDTH_CLASS}
               />
+              <div className="px-3 pb-3 pt-1">
+                <ChatInput
+                  className={PAGE_CONTENT_WIDTH_CLASS}
+                  // New chat and switching cancel the stream at once, but the
+                  // cancelled send can hold the submission lock until an
+                  // in-flight tool returns; a message sent before then would
+                  // be dropped, so the input stays busy until it lets go.
+                  agentState={
+                    submissionInFlight && streaming.agentState === "idle"
+                      ? "thinking"
+                      : streaming.agentState
+                  }
+                  partialTranscript=""
+                  onTextSubmit={handleTextSubmit}
+                  onCancel={streaming.cancelStream}
+                  autoFocus={isNewChat}
+                  voiceDraft
+                />
+              </div>
             </>
           ) : (
             <EmptyChatState />

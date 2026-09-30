@@ -1,0 +1,20 @@
+{
+  "name": "live-pcm-streaming",
+  "version": "1.0.0",
+  "description": "Live raw PCM16 microphone streaming for realtime transcription (24kHz mono, processing off for desktop-parity accuracy)",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "scripts": {
+    "build": "expo-module build",
+    "clean": "expo-module clean",
+    "lint": "expo-module lint",
+    "test": "expo-module test"
+  },
+  "devDependencies": {
+    "expo-module-scripts": "^3.0.0"
+  },
+  "peerDependencies": {
+    "expo": "*"
+  },
+  "private": true
+}

@@ -7,6 +7,14 @@ const DEFAULT_CHAT_AGENT_PROMPT =
   "Keep answers brief unless the user asks for detail. " +
   "You may be given a transcription of spoken input, so handle informal phrasing gracefully.";
 
+// Appended per request, not baked into the default: the panel renders markdown.
+export const PLAIN_TEXT_RESPONSE_SUFFIX =
+  "\n\nOUTPUT FORMAT: Your answer will be inserted as plain text exactly where the user is typing, " +
+  "inside another application. Write plain prose with no markdown: no asterisks, underscores, " +
+  "backticks, heading marks, bullet or numbered-list markers, tables, or link syntax. " +
+  "Use ordinary sentences and paragraphs. If several items must be listed, put each on its " +
+  "own line with no marker.";
+
 export const PROMPT_KINDS = {
   cleanup: {
     i18nKey: "cleanupPrompt" as const,

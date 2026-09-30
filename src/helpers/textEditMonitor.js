@@ -226,6 +226,13 @@ class TextEditMonitor extends EventEmitter {
               resolve({ state: "none" });
               return;
             }
+            // The focused element resolved but is the bare window — the
+            // dormant-Chromium signature. The selection state is unreadable,
+            // not empty; the caller's synthetic-copy fallback can still read it.
+            if (output === "UNKNOWN:") {
+              resolve({ state: "unknown" });
+              return;
+            }
             if (output.startsWith("SELECTED_B64:")) {
               try {
                 resolve({
@@ -297,14 +304,18 @@ class TextEditMonitor extends EventEmitter {
     );
   }
 
-  async isFocusedEditable(target, timeoutMs = 1000) {
+  // Resolves "editable" | "not_editable" | "unknown". "unknown" is macOS-only:
+  // the dormant-Chromium signature, where accessibility cannot inspect the
+  // focused field at all. The default timeout reuses SELECTED_TEXT_TIMEOUT_MS
+  // because a dormant tree's verdict only arrives after the same retry ladder.
+  async isFocusedEditable(target, timeoutMs = SELECTED_TEXT_TIMEOUT_MS) {
     const resolved = this.resolveBinary();
-    if (!resolved) return false;
+    if (!resolved) return "not_editable";
 
     let args;
     if (process.platform === "darwin") {
       const pid = target?.kind === "mac-pid" ? target.pid : this.lastTargetPid;
-      if (!pid) return false;
+      if (!pid) return "not_editable";
       args = [...resolved.args, "--editable-target", String(pid)];
     } else {
       args = [...resolved.args, "--probe-editable"];
@@ -315,6 +326,8 @@ class TextEditMonitor extends EventEmitter {
     // then emits its monitor output and keeps running — closing stdin and
     // resolving on that first line keeps the stale case a fast "not editable"
     // rather than a hang until the timeout.
+    const toVerdict = (line) =>
+      line === "EDITABLE" ? "editable" : line === "UNKNOWN" ? "unknown" : "not_editable";
     return new Promise((resolve) => {
       const child = spawn(resolved.command, args, { stdio: ["pipe", "pipe", "ignore"] });
       let buffered = "";
@@ -328,16 +341,16 @@ class TextEditMonitor extends EventEmitter {
         } catch {}
         resolve(verdict);
       };
-      const timer = setTimeout(() => settle(false), timeoutMs);
+      const timer = setTimeout(() => settle("not_editable"), timeoutMs);
       child.stdin.on("error", () => {});
       child.stdin.end();
       child.stdout.on("data", (data) => {
         buffered += data.toString();
         const newline = buffered.indexOf("\n");
-        if (newline !== -1) settle(buffered.slice(0, newline).trim() === "EDITABLE");
+        if (newline !== -1) settle(toVerdict(buffered.slice(0, newline).trim()));
       });
-      child.on("error", () => settle(false));
-      child.on("close", () => settle(buffered.trim() === "EDITABLE"));
+      child.on("error", () => settle("not_editable"));
+      child.on("close", () => settle(toVerdict(buffered.trim())));
     });
   }
 

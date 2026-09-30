@@ -1,3 +1,4 @@
+import { SIGN_IN_PROMPTED_AT_KEY } from "../../utils/requestSignIn";
 import { PENDING_LOCAL_MODELS_KEY } from "./pendingLocalModels";
 
 export const ONBOARDING_SESSION_KEY = "onboardingSessionV2";
@@ -215,6 +216,8 @@ export function resetOnboardingProgress(storage: OnboardingStorage): void {
   storage.removeItem("skipAuth");
   storage.removeItem("localSetupPending");
   storage.removeItem(PENDING_LOCAL_MODELS_KEY);
+  // A restart is not the sign-in that marker announces.
+  storage.removeItem(SIGN_IN_PROMPTED_AT_KEY);
   // AppRouter uses this marker to distinguish an explicit restart from a
   // returning signed-in user, while useOnboardingSession migrates it to auth.
   storage.setItem(LEGACY_ONBOARDING_STEP_KEY, "0");
