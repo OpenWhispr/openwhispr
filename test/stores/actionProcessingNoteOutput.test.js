@@ -17,7 +17,7 @@ const STORED_NOTE = {
   enhanced_at_content_hash: "the hash before the run",
 };
 
-async function loadStore(t) {
+async function loadStore(t, storedNote = STORED_NOTE) {
   const updates = [];
   installBrowserGlobals(t, {
     window: {
@@ -29,7 +29,7 @@ async function loadStore(t) {
         // What the database holds now, so a snapshot read after the write would show it.
         getNote: async (noteId) =>
           Object.assign(
-            { id: noteId, ...STORED_NOTE },
+            { id: noteId, ...storedNote },
             ...updates.filter((u) => u.noteId === noteId).map((u) => u.payload)
           ),
       },
@@ -339,6 +339,29 @@ test("a run hands Undo the summary fields it overwrote, and the title when it re
   assert.equal(updates[1].payload.title, "Q3 launch sync");
   const [{ previous }] = store.consumeAppliedEvents();
   assert.deepEqual(previous, { ...summaryFields, title: STORED_NOTE.title });
+});
+
+test("Undo of a first summary clears it with an empty string, which sync can't ignore", async (t) => {
+  // The API keeps its copy when a push sends null (COALESCE), so a null here
+  // would bring the undone summary back on the next pull.
+  const { store, updates } = await loadStore(t, {
+    title: "Untitled Note",
+    enhanced_content: null,
+    enhancement_prompt: null,
+    enhancement_template_id: null,
+    enhanced_at_content_hash: null,
+  });
+  store.runBackgroundAction(
+    31,
+    "notes",
+    "hash-31",
+    ACTION,
+    { modelId: "gpt-4.1", isCloudMode: true, isMeetingNote: false },
+    LABELS
+  );
+  await waitFor(() => updates.length === 1, "the first summary to be written");
+  const [{ previous }] = store.consumeAppliedEvents();
+  assert.equal(previous.enhanced_content, "");
 });
 
 test("a write the database refused offers no Undo and reports the failure", async (t) => {

@@ -547,7 +547,8 @@ export function runBackgroundAction(
         noteId,
         action,
         previous: {
-          enhanced_content: before?.enhanced_content ?? null,
+          // "" as deleting a summary does: sync keeps the cloud copy over a null.
+          enhanced_content: before?.enhanced_content ?? "",
           enhancement_prompt: before?.enhancement_prompt ?? null,
           enhancement_template_id: before?.enhancement_template_id ?? null,
           enhanced_at_content_hash: before?.enhanced_at_content_hash ?? null,
