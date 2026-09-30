@@ -1703,3 +1703,85 @@ test("a selection edit that fails during the language re-transcription surfaces 
   assert.deepEqual(cancelled.errors, []);
   assert.deepEqual(cancelled.published, []);
 });
+
+test("language-score rollout modes reach the real finalization path without leaking content", async (t) => {
+  globalThis.__orukeetRoutingLog = [];
+  t.after(() => delete globalThis.__orukeetRoutingLog);
+  const AudioManager = await loadManagerClass(t, {
+    "/utils/logger": `export default { debug() {}, warn() {}, error() {}, logReasoning() {}, info(message, meta) { if (message === "Orukeet language routing comparison") globalThis.__orukeetRoutingLog.push(meta); } };`,
+  });
+  const sample = {
+    ...JA_FINAL,
+    text: "PRIVATE DICTATION",
+    language: "hi",
+    languageConfidence: 0.55,
+    languageSupportedScore: 0.02,
+  };
+  for (const [mode, expected] of [
+    ["shadow", false],
+    ["supported-0.30", true],
+    ["supported-0.10", true],
+    ["off", false],
+  ]) {
+    globalThis.__orukeetRoutingLog.length = 0;
+    const result = await stopManagedDictation(AudioManager, {
+      final: sample,
+      overrides: { sttConfig: { orukeetLanguageRouting: mode } },
+      upload: async () => ({ text: "Cloud result", rawText: "Cloud result" }),
+    });
+    assert.equal(result.uploads.length, expected ? 1 : 0, mode);
+    assert.equal(result.published[0].text, expected ? "Cloud result" : sample.text, mode);
+    assert.equal(result.reasonCalls.length, 0, "no extra cleanup call");
+    assert.equal(globalThis.__orukeetRoutingLog.length, mode === "off" ? 0 : 1);
+    assert.doesNotMatch(
+      JSON.stringify(globalThis.__orukeetRoutingLog),
+      /PRIVATE DICTATION|Cloud result/
+    );
+    if (mode !== "off") assert.equal(globalThis.__orukeetRoutingLog[0].fallbackAvailable, true);
+  }
+});
+
+test("language-score routing uses analyzed time and preserves explicit language, BYOK and unavailable metadata", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const sample = {
+    ...JA_FINAL,
+    language: "hi",
+    languageConfidence: 0.55,
+    languageSupportedScore: 0.02,
+  };
+  for (const overrides of [
+    { final: { ...sample, languageAudioSeconds: 3 } },
+    { final: { ...sample, languageSupportedScore: undefined } },
+    { language: "en" },
+    { settings: { cloudTranscriptionMode: "byok" } },
+    { providerName: "deepgram" },
+  ]) {
+    const r = await stopManagedDictation(AudioManager, {
+      final: sample,
+      overrides: { sttConfig: { orukeetLanguageRouting: "supported-0.30" } },
+      upload: async () => ({ text: "Unexpected cloud", rawText: "Unexpected cloud" }),
+      ...overrides,
+    });
+    assert.equal(r.uploads.length, 0, JSON.stringify(overrides));
+  }
+});
+
+test("group-score fallback failure still discards the unsupported transcript", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const r = await stopManagedDictation(AudioManager, {
+    final: { ...JA_FINAL, languageConfidence: 0.4, languageSupportedScore: 0.01 },
+    overrides: {
+      sttConfig: { orukeetLanguageRouting: "supported-0.30" },
+      saveFailedTranscription() {},
+    },
+    upload: async () => {
+      throw Object.assign(new Error("Cloud unavailable"), { code: "NETWORK_ERROR" });
+    },
+  });
+  assert.equal(r.uploads.length, 1);
+  assert.equal(
+    r.published.some((x) => x.text === JA_FINAL.text),
+    false
+  );
+  assert.equal(r.errors.length, 1);
+});

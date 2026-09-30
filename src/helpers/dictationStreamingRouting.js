@@ -13,10 +13,9 @@ const ORUKEET_LANGUAGES = new Set(
   modelRegistryData.parakeetModels[ORUKEET_MODEL].supportedLanguages
 );
 
-// Oruk's audio classifier score (not a calibrated probability): 0.90 caught
-// 92% of unsupported FLEURS clips at 6 s and 62.5% at 3 s while flagging 0.4%
-// / 1.2% of supported ones. A false flag costs one batch round trip; a miss
-// pastes nonsense. See docs/orukeet-streaming-language.md.
+// Existing default retained during the opt-in group-score rollout. Scores are
+// not calibrated probabilities; see docs/orukeet-streaming-language.md for
+// the expanded evaluation and the separate three/six-second behavior.
 const ORUKEET_LANGUAGE_FALLBACK_MIN_CONFIDENCE = 0.9;
 const ORUKEET_LANGUAGE_FALLBACK_MIN_AUDIO_SECONDS = 3;
 
@@ -40,6 +39,62 @@ export function shouldRetranscribeOrukeetLanguage({ language, final }) {
     Number.isFinite(final.languageAudioSeconds) &&
     final.languageAudioSeconds >= ORUKEET_LANGUAGE_FALLBACK_MIN_AUDIO_SECONDS
   );
+}
+
+// Opt-in, server-controlled rollout. Missing/unknown modes retain the existing
+// rule; shadow records the comparison without changing the user's result.
+const ORUKEET_LANGUAGE_ROUTING_MODES = new Set(["shadow", "supported-0.30", "supported-0.10"]);
+const validScore = (value) => Number.isFinite(value) && value >= 0 && value <= 1;
+
+export function evaluateOrukeetLanguageRouting({ language, final, mode }) {
+  const legacyFallback = shouldRetranscribeOrukeetLanguage({ language, final });
+  if (!ORUKEET_LANGUAGE_ROUTING_MODES.has(mode)) {
+    return { fallback: legacyFallback, comparison: null };
+  }
+  const auto = !language || language === "auto";
+  const seconds =
+    Number.isFinite(final?.languageAudioSeconds) && final.languageAudioSeconds > 0
+      ? final.languageAudioSeconds
+      : null;
+  const score = validScore(final?.languageSupportedScore) ? final.languageSupportedScore : null;
+  const topLanguage =
+    typeof final?.language === "string" && /^[a-z]{2}$/.test(final.language)
+      ? final.language
+      : null;
+  const topScore = validScore(final?.languageConfidence) ? final.languageConfidence : null;
+  const eligible = auto && final?.success !== false && seconds >= 6 && score !== null;
+  const candidate030 = eligible ? score <= 0.3 : null;
+  const candidate010 = eligible ? score <= 0.1 : null;
+  const candidate = mode === "supported-0.30" ? candidate030 : candidate010;
+  const fallback = mode === "shadow" || candidate === null ? legacyFallback : candidate;
+
+  // Explicit allowlist: never spread a final result, settings, transcript,
+  // recording, token, account identifier or arbitrary server fields into logs.
+  return {
+    fallback,
+    comparison: {
+      version: 1,
+      mode,
+      auto,
+      eligible,
+      analyzedSeconds: seconds,
+      topLanguage,
+      topScore,
+      supportedScore: score,
+      legacyFallback,
+      top05Fallback:
+        auto &&
+        final?.success !== false &&
+        seconds >= 6 &&
+        topLanguage !== null &&
+        !isOrukeetLanguage(topLanguage) &&
+        topScore !== null &&
+        topScore >= 0.5,
+      candidate030,
+      candidate010,
+      selectedFallback: fallback,
+    },
+  };
 }
 
 // Reported for every Orukeet dictation so the backend's per-user gate sees
