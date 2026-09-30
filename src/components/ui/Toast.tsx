@@ -403,28 +403,31 @@ const Toast: React.FC<
           )}
           {detail &&
             (isDestructive ? (
-              <div
-                className={cn(
-                  "text-xs leading-snug mt-1 px-1.5 py-1 rounded-[3px] font-mono",
-                  "bg-white/4 border border-white/6",
-                  "text-red-300/80"
-                )}
-              >
-                <div className="flex items-start justify-between gap-1.5">
-                  <span className="select-all wrap-break-word min-w-0">{detail}</span>
-                  <button
-                    onClick={() => void copy()}
-                    className={cn(
-                      "shrink-0 p-0.5 rounded-xs mt-px",
-                      "text-white/30 hover:text-white/70",
-                      "hover:bg-white/6",
-                      "transition-colors duration-150"
-                    )}
-                    aria-label="Copy error"
-                  >
-                    {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
-                  </button>
+              <div className="mt-1 flex items-center gap-2">
+                <div
+                  className={cn(
+                    "min-w-0 flex-1 text-xs leading-snug px-1.5 py-1 rounded-[3px] font-mono",
+                    "bg-white/4 border border-white/6",
+                    "text-red-300/80"
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-1.5">
+                    <span className="select-all wrap-break-word min-w-0">{detail}</span>
+                    <button
+                      onClick={() => void copy()}
+                      className={cn(
+                        "shrink-0 p-0.5 rounded-xs mt-px",
+                        "text-white/30 hover:text-white/70",
+                        "hover:bg-white/6",
+                        "transition-colors duration-150"
+                      )}
+                      aria-label="Copy error"
+                    >
+                      {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+                    </button>
+                  </div>
                 </div>
+                {action && <div className="shrink-0">{action}</div>}
               </div>
             ) : (
               <div className="text-xs leading-snug mt-0.5 text-white/45">{detail}</div>
@@ -450,7 +453,9 @@ const Toast: React.FC<
           <TechnicalErrorDetails details={technicalDetails} onDark />
         </div>
 
-        {action && <div className="shrink-0 self-center">{action}</div>}
+        {action && !(isDestructive && detail) && (
+          <div className="shrink-0 self-center">{action}</div>
+        )}
       </div>
 
       {onClose && (
