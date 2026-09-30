@@ -661,7 +661,7 @@ class DatabaseManager {
         "UPDATE actions SET name = ?, description = ?, prompt = ?, sections = ? WHERE id = ?"
       );
       const settleBuiltin = this.db.prepare(
-        "UPDATE actions SET client_id = ?, kind = ?, output = COALESCE(output, ?) WHERE id = ?"
+        "UPDATE actions SET client_id = ?, kind = ?, name = ?, sort_order = ?, output = COALESCE(output, ?) WHERE id = ?"
       );
       for (const action of BUILTIN_ACTIONS) {
         const sections = action.sections ? JSON.stringify(action.sections) : null;
@@ -684,7 +684,14 @@ class DatabaseManager {
         if (existing.sections === null && action.previousPrompts.includes(existing.prompt)) {
           upgradeBuiltin.run(action.name, action.description, action.prompt, sections, existing.id);
         }
-        settleBuiltin.run(action.translationKey, action.kind, action.output, existing.id);
+        settleBuiltin.run(
+          action.translationKey,
+          action.kind,
+          action.name,
+          action.sortOrder,
+          action.output,
+          existing.id
+        );
       }
 
       const actionsWithoutClientId = this.db

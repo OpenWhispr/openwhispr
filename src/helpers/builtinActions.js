@@ -455,22 +455,10 @@ const builtinAction = ({
 // to a built-in's default sections needs its own history.
 export const BUILTIN_ACTIONS = [
   {
-    translationKey: GENERATE_NOTES_KEY,
-    kind: "template",
-    name: "Generate Notes",
-    description: "Clean up, structure, and enhance your notes",
-    prompt: GENERATE_NOTES_PROMPT,
-    sections: null,
-    output: null,
-    // A pre-release build briefly shipped the detailed prompt under this key.
-    previousPrompts: [DETAILED_NOTES_PROMPT_1_10_0, GENERATE_NOTES_PROMPT_1_10_1],
-    icon: "sparkles",
-    sortOrder: 0,
-  },
-  {
     translationKey: DETAILED_NOTES_KEY,
     kind: "template",
-    name: "Detailed Notes",
+    // The default template, and the prompt AI summaries always used.
+    name: "AI Summary",
     description: "Accurate, comprehensive meeting notes with decisions and action items",
     prompt: "",
     sections: DETAILED_NOTES_SECTIONS,
@@ -480,6 +468,19 @@ export const BUILTIN_ACTIONS = [
       DETAILED_NOTES_PROMPT_1_10_1,
       DETAILED_NOTES_PROMPT_1_10_2,
     ],
+    icon: "sparkles",
+    sortOrder: 0,
+  },
+  {
+    translationKey: GENERATE_NOTES_KEY,
+    kind: "template",
+    name: "Generate Notes",
+    description: "Clean up, structure, and enhance your notes",
+    prompt: GENERATE_NOTES_PROMPT,
+    sections: null,
+    output: null,
+    // A pre-release build briefly shipped the detailed prompt under this key.
+    previousPrompts: [DETAILED_NOTES_PROMPT_1_10_0, GENERATE_NOTES_PROMPT_1_10_1],
     icon: "sparkles",
     sortOrder: 1,
   },

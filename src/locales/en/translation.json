@@ -3526,7 +3526,7 @@
           "cta": "Draft a follow-up email"
         },
         "detailedNotes": {
-          "name": "Detailed Notes",
+          "name": "AI Summary",
           "description": "Accurate, comprehensive meeting notes with decisions and action items"
         },
         "makeTodos": {

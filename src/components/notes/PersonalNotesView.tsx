@@ -12,7 +12,6 @@ import AddNotesToFolderDialog from "./AddNotesToFolderDialog";
 import { useActionProcessing } from "../../hooks/useActionProcessing";
 import type { NoteMoveTarget } from "../../hooks/useNoteDragAndDrop";
 import type { ActionItem, ActionKind, NoteItem } from "../../types/electron";
-import { rememberTemplate } from "../../stores/actionStore";
 import { buildNoteRunInput } from "../../helpers/templatePrompts";
 import { inferActionOutput } from "../../utils/inferActionOutput";
 import {
@@ -682,9 +681,6 @@ export default function PersonalNotesView({
       }
     }
 
-    const isTemplate = action.kind === "template";
-    // A note's first summary uses the template that last ran.
-    if (isTemplate) rememberTemplate(action);
     const { input, fromSummary, material } = buildNoteRunInput(action, {
       summary: editorEnhancedContent,
       notes: noteContent,

@@ -2940,7 +2940,7 @@
           "cta": "フォローアップメールを作成"
         },
         "detailedNotes": {
-          "name": "詳細ノート",
+          "name": "AI要約",
           "description": "決定事項とアクションを含む正確で網羅的な会議ノート"
         },
         "makeTodos": {

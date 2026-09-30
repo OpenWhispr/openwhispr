@@ -103,6 +103,26 @@ for (const action of BUILTIN_ACTIONS) {
   });
 }
 
+test("launch puts the default AI Summary template first, under its current name", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  // As main shipped them: Generate Notes first, and the default under its old name.
+  db.db
+    .prepare("UPDATE actions SET sort_order = 0 WHERE translation_key = ?")
+    .run(GENERATE_NOTES_KEY);
+  db.db
+    .prepare("UPDATE actions SET sort_order = 1, name = 'Detailed Notes' WHERE translation_key = ?")
+    .run(DETAILED_NOTES_KEY);
+  db.db.close();
+
+  relaunch((migrated) => {
+    const [first, second] = migrated.getActions();
+    assert.equal(first.translation_key, DETAILED_NOTES_KEY);
+    assert.equal(first.name, "AI Summary");
+    assert.equal(second.translation_key, GENERATE_NOTES_KEY);
+  });
+});
+
 test("a database from before templates and chat actions migrates on launch", (t) => {
   const db = createDb(t);
   if (!db) return;

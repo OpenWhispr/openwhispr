@@ -79,7 +79,6 @@ import TemplatePicker from "./TemplatePicker";
 import {
   getActionCta,
   getActionName,
-  getLastTemplateId,
   initializeActions,
   resolveTemplate,
   useActionsOfKind,
@@ -457,11 +456,8 @@ export default function NoteEditor({
   const templates = useActionsOfKind("template");
   const noteActions = useActionsOfKind("action");
   const chatActions = useMemo(() => noteActions.filter((a) => a.output === "chat"), [noteActions]);
-  // Regenerating keeps the note's template; a first summary uses the last one picked.
-  const noteTemplate = resolveTemplate(
-    templates,
-    note.enhancement_template_id ?? getLastTemplateId()
-  );
+  // Regenerating keeps the note's template; a first summary uses the default.
+  const noteTemplate = resolveTemplate(templates, note.enhancement_template_id);
   const isActionRunning = actionProcessingState === "processing";
   const hasNoteMaterial = !!note.content.trim() || hasMeetingTranscript;
   const canRunTemplate =

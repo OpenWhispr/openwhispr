@@ -3212,7 +3212,7 @@
           "cta": "Redactar correo de seguimiento"
         },
         "detailedNotes": {
-          "name": "Notas detalladas",
+          "name": "Resumen con IA",
           "description": "Notas de reunión precisas y completas con decisiones y tareas"
         },
         "makeTodos": {

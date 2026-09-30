@@ -3159,7 +3159,7 @@
           "cta": "草擬跟進郵件"
         },
         "detailedNotes": {
-          "name": "詳細筆記",
+          "name": "AI 摘要",
           "description": "準確、完整的會議筆記，包含決策和行動項目"
         },
         "makeTodos": {

@@ -4,8 +4,6 @@ import { TFunction } from "i18next";
 import type { ActionItem, ActionKind } from "../types/electron";
 import { DETAILED_NOTES_KEY } from "../helpers/builtinActions";
 
-const LAST_TEMPLATE_KEY = "summaryTemplateId";
-
 interface ActionState {
   actions: ActionItem[];
 }
@@ -80,9 +78,9 @@ export function useActionsOfKind(kind: ActionKind): ActionItem[] {
 }
 
 /**
- * The template a summary is written with: the one asked for (the note's own, or
- * the last one picked), else Detailed Notes. An id can outlive its template or
- * belong to a teammate's, so it is only a preference.
+ * The template a summary is written with: the note's own, else the default AI
+ * Summary. An id can outlive its template or belong to a teammate's, so it is
+ * only a preference.
  */
 export function resolveTemplate(
   templates: ActionItem[],
@@ -94,14 +92,6 @@ export function resolveTemplate(
     templates[0] ??
     null
   );
-}
-
-export function getLastTemplateId(): string | null {
-  return localStorage.getItem(LAST_TEMPLATE_KEY);
-}
-
-export function rememberTemplate(template: ActionItem): void {
-  localStorage.setItem(LAST_TEMPLATE_KEY, template.client_id);
 }
 
 export function getActionName(
