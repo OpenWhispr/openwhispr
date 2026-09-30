@@ -1,4 +1,13 @@
 import { cn } from "../lib/utils";
+import {
+  ClipboardCheck,
+  FileText,
+  Mail,
+  MessageSquareText,
+  Send,
+  Sparkles,
+  type IconComponent,
+} from "../icons";
 import type { FolderItem } from "../../types/electron";
 
 export const DEFAULT_FOLDER_NAME = "Personal";
@@ -112,6 +121,25 @@ export const notesTextareaClass = cn(
   "text-foreground/80 placeholder:text-foreground/45 outline-none",
   "focus:border-primary/30 transition-colors duration-150"
 );
+
+/** Rounded suggestion pill above an ask box: the folder overview's prompts, a note's actions. */
+export const ASK_PILL_CLASS = cn(
+  "inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[11px]",
+  "border border-border/70 bg-card text-foreground/55 shadow-sm dark:border-white/10",
+  "hover:bg-surface-3 hover:text-foreground/80 disabled:pointer-events-none disabled:text-foreground/30",
+  "transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+);
+
+const ACTION_ICONS: Record<string, IconComponent> = {
+  mail: Mail,
+  "clipboard-check": ClipboardCheck,
+  "file-text": FileText,
+  send: Send,
+  sparkles: Sparkles,
+};
+
+export const getActionIcon = (action: { icon: string }): IconComponent =>
+  ACTION_ICONS[action.icon] ?? MessageSquareText;
 
 /** Neutral capsule for note header facts (date + attendees, folder, space). */
 export const NOTE_META_CHIP_CLASS = cn(

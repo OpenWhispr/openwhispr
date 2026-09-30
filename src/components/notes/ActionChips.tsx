@@ -9,11 +9,9 @@ import {
 } from "../ui/dropdown-menu";
 import { getActionName, getActionDescription } from "../../stores/actionStore";
 import type { ActionItem } from "../../types/electron";
+import { ASK_PILL_CLASS, getActionIcon } from "./shared";
 
 const VISIBLE_CHIPS = 4;
-
-const CHIP =
-  "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-border/70 bg-background px-2.5 text-xs text-foreground/65 transition-colors hover:text-foreground disabled:opacity-40 dark:border-white/10 dark:bg-surface-2";
 
 interface ActionChipsProps {
   /** Actions only; templates have their own picker. */
@@ -34,29 +32,27 @@ export default function ActionChips({
 
   return (
     <div className="scrollbar-hidden flex items-center gap-1.5 overflow-x-auto">
-      {actions.slice(0, VISIBLE_CHIPS).map((action) => (
-        <button
-          key={action.id}
-          type="button"
-          // Keep focus in the composer, so an open chat can take a follow-up right away.
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => onRunAction(action)}
-          disabled={!canRun(action)}
-          className={CHIP}
-        >
-          <span
-            aria-hidden="true"
-            className="flex size-4 items-center justify-center rounded-[5px] border border-foreground/15 text-[10px] leading-none text-foreground/45"
+      {actions.slice(0, VISIBLE_CHIPS).map((action) => {
+        const Icon = getActionIcon(action);
+        return (
+          <button
+            key={action.id}
+            type="button"
+            // Keep focus in the composer, so an open chat can take a follow-up right away.
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => onRunAction(action)}
+            disabled={!canRun(action)}
+            className={ASK_PILL_CLASS}
           >
-            /
-          </span>
-          <span dir="auto">{getActionName(action, t)}</span>
-        </button>
-      ))}
+            <Icon size={11} className="shrink-0 text-foreground/45" />
+            <span dir="auto">{getActionName(action, t)}</span>
+          </button>
+        );
+      })}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button type="button" className={CHIP}>
-            <Blocks size={13} className="text-foreground/45" />
+          <button type="button" className={ASK_PILL_CLASS}>
+            <Blocks size={11} className="shrink-0 text-foreground/45" />
             {t("notes.actions.allActions")}
           </button>
         </DropdownMenuTrigger>

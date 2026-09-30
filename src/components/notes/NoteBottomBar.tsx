@@ -82,7 +82,9 @@ export default function NoteBottomBar({
       <div
         aria-hidden="true"
         className={cn(
-          "pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-background from-45% to-transparent transition-opacity duration-200",
+          "pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-background from-45% to-transparent transition-opacity duration-200",
+          // Taller while the action chips sit above the composer, so text fades out behind them.
+          actionChips && !chatOpen && !hideInput ? "h-32" : "h-20",
           chatOpen && "opacity-0"
         )}
       />

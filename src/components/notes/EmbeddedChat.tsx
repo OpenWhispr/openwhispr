@@ -1,16 +1,6 @@
 import { useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  X,
-  PanelRight,
-  Plus,
-  AlignLeft,
-  ClipboardCheck,
-  FileText,
-  Mail,
-  MessageSquareText,
-  Send,
-} from "../icons";
+import { X, PanelRight, Plus, AlignLeft } from "../icons";
 import { cn } from "../lib/utils";
 import { ChatMessages } from "../chat/ChatMessages";
 import { ChatInput } from "../chat/ChatInput";
@@ -28,15 +18,9 @@ import { getActionName } from "../../stores/actionStore";
 import type { ActionItem } from "../../types/electron";
 import type { ContainerConversationItem } from "../../hooks/useContainerChat";
 import { ConversationPicker } from "./ConversationPicker";
+import { getActionIcon } from "./shared";
 
 export type EmbeddedChatMode = "hidden" | "floating" | "sidebar";
-
-const ACTION_ICONS: Record<string, typeof MessageSquareText> = {
-  mail: Mail,
-  "clipboard-check": ClipboardCheck,
-  "file-text": FileText,
-  send: Send,
-};
 
 interface EmbeddedChatProps {
   mode: EmbeddedChatMode;
@@ -141,7 +125,7 @@ export default function EmbeddedChat({
     ...chatActions.map((action) => ({
       key: action.client_id,
       label: getActionName(action, t),
-      Icon: ACTION_ICONS[action.icon] ?? MessageSquareText,
+      Icon: getActionIcon(action),
       run: () => onRunChatAction?.(action),
     })),
   ];
