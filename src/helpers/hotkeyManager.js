@@ -19,6 +19,14 @@ const DEFAULT_HOTKEY = "Control+Super";
 // Dictation has a dedicated native path because it also supports push-to-talk.
 const LINUX_NATIVE_TAP_SLOTS = new Set(["meeting", "voiceAgent", "translation"]);
 
+// Settings titles that name each slot in a conflict message, as the renderer does.
+const SLOT_LABEL_KEYS = {
+  dictation: "settingsPage.general.hotkey.title",
+  voiceAgent: "settingsPage.general.voiceAgentHotkey.title",
+  translation: "settingsPage.general.translationHotkey.title",
+  meeting: "settingsPage.general.meetingHotkey.title",
+};
+
 // KDE registration failure reasons — reuse existing i18n keys
 const KDE_FAILURE_REASONS = {
   conflict: (hotkey) => i18nMain.t("hotkey.errors.alreadyRegistered", { hotkey }),
@@ -197,10 +205,18 @@ class HotkeyManager extends EventEmitter {
       suggestions = ["Control+Super", "Control+Shift+K", "Super+Shift+R"];
     }
 
-    return suggestions
-      .filter((s) => s !== failedHotkey)
-      .filter((s) => !isModifierOnlyHotkey(s) || !this._isWindowsKeyListenerMissing())
-      .slice(0, 3);
+    const listenerMissing = this._isWindowsKeyListenerMissing();
+    // A key another slot holds would only be refused as a conflict. Slots without
+    // a callback are placeholders, not registered hotkeys.
+    const boundHotkeys = new Set(
+      [...this.slots.values()].filter((slot) => slot.callback).flatMap((slot) => slot.hotkeys)
+    );
+    const isUsable = (hotkey) =>
+      hotkey !== failedHotkey &&
+      !boundHotkeys.has(hotkey) &&
+      !(listenerMissing && isModifierOnlyHotkey(hotkey));
+    const usable = suggestions.filter(isUsable);
+    return (usable.length > 0 ? usable : FALLBACK_HOTKEYS.filter(isUsable)).slice(0, 3);
   }
 
   async registerSlot(slotName, hotkeyInput, callback, options) {
@@ -725,7 +741,11 @@ class HotkeyManager extends EventEmitter {
       };
     } catch (error) {
       debugLogger.error("Error setting up shortcut", { error: error.message }, "hotkey");
-      return { success: false, hotkey, error: error.message };
+      return {
+        success: false,
+        hotkey,
+        error: i18nMain.t("hotkey.errors.registrationFailed", { hotkey }),
+      };
     }
   }
 
@@ -873,7 +893,9 @@ class HotkeyManager extends EventEmitter {
         return {
           success: false,
           error: i18nMain.t("hotkey.errors.slotConflict", {
-            slot: otherSlotName,
+            slot: SLOT_LABEL_KEYS[otherSlotName]
+              ? i18nMain.t(SLOT_LABEL_KEYS[otherSlotName])
+              : otherSlotName,
             defaultValue: `This hotkey is already used for ${otherSlotName}`,
           }),
           reason: "slot_conflict",
@@ -1223,6 +1245,7 @@ class HotkeyManager extends EventEmitter {
         }
       }
 
+      let savedFailure = null;
       if (savedHotkey && savedHotkey.trim() !== "") {
         const result = this.setupShortcuts(savedHotkey, callback);
         if (result.success) {
@@ -1231,12 +1254,16 @@ class HotkeyManager extends EventEmitter {
           return;
         }
         debugLogger.log(`[HotkeyManager] Saved hotkey "${savedHotkey}" failed to register`);
-        this.notifyHotkeyFailure(savedHotkey, result);
+        savedFailure = result;
       }
 
       const defaultHotkey = this.getEffectiveDefaultHotkey();
+      // The user knows their saved hotkey, not the default, so a replacement is
+      // reported against the hotkey they chose.
+      const replacedHotkey = savedFailure ? savedHotkey : defaultHotkey;
 
       if (defaultHotkey === "GLOBE") {
+        if (savedFailure) this.notifyHotkeyFailure(savedHotkey, savedFailure);
         this.currentHotkey = "GLOBE";
         debugLogger.log("[HotkeyManager] Using GLOBE key as default on macOS");
         await this._persistHotkeyToEnvFile("GLOBE");
@@ -1248,6 +1275,11 @@ class HotkeyManager extends EventEmitter {
         debugLogger.log(
           `[HotkeyManager] Default hotkey "${defaultHotkey}" registered successfully`
         );
+        // The saved hotkey stays saved so the next launch retries it.
+        if (savedFailure) {
+          this.notifyActiveHotkey(defaultHotkey);
+          this.notifyHotkeyFallback(savedHotkey, defaultHotkey);
+        }
         return;
       }
 
@@ -1263,12 +1295,13 @@ class HotkeyManager extends EventEmitter {
           // app retries it on next startup once the conflict is resolved.
           await this._persistHotkeyToEnvFile(fallback);
           this.notifyActiveHotkey(fallback);
-          this.notifyHotkeyFallback(defaultHotkey, fallback);
+          this.notifyHotkeyFallback(replacedHotkey, fallback);
           return;
         }
       }
 
       debugLogger.log("[HotkeyManager] All hotkey fallbacks failed");
+      if (savedFailure) this.notifyHotkeyFailure(savedHotkey, savedFailure);
       this.notifyHotkeyFailure(defaultHotkey, result);
     } catch (err) {
       debugLogger.error("Failed to initialize hotkey", { error: err.message }, "hotkey");
@@ -1410,6 +1443,13 @@ class HotkeyManager extends EventEmitter {
   // Tell the renderer which hotkeys actually registered and which failed.
   _notifyStartupRegistration(requestedHotkey, result) {
     this.notifyActiveHotkey(result.hotkeys ? result.hotkeys.join(",") : requestedHotkey);
+    this.notifyRestoreFailures(requestedHotkey, result);
+  }
+
+  // Tell the user which saved hotkeys no longer register, so a slot never goes
+  // silently dead at startup.
+  notifyRestoreFailures(requestedHotkey, result) {
+    if (!result.success) this.notifyHotkeyFailure(requestedHotkey, result);
     for (const failure of result.failures || []) {
       this.notifyHotkeyFailure(failure.hotkey, failure);
     }

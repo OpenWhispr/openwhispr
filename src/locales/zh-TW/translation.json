@@ -124,7 +124,7 @@
       "rightModifierNeedsListener": "\"{{hotkey}}\" 無法在此桌面上使用，其快捷鍵需要包含一個一般按鍵。請加入一個按鍵，例如 Control+Alt+Space。",
       "holdNeedsReleaseKey": "按住說話需要 macOS 能偵測到放開的按鍵：Globe、右側 Option 之類的右側按鍵，或帶修飾鍵的快速鍵。點按可用於任何按鍵。",
       "registrationFailed": "無法註冊「{{hotkey}}」。可能已被其他應用程式使用。",
-      "windowsKeyListenerMissing": "「{{hotkey}}」需要 Windows 按鍵監聽程式，但此安裝中缺少該元件。請選擇包含一般按鍵的快捷鍵，例如 F8。",
+      "windowsKeyListenerMissing": "「{{hotkey}}」需要 Windows 按鍵監聽程式，但此安裝中缺少該元件。請選擇包含一般按鍵的快捷鍵。",
       "updateFailedCheckFormat": "無法將快速鍵更新為「{{hotkey}}」。請檢查格式是否有效。",
       "trySuggestions": "試試看：{{suggestions}}",
       "slotConflict": "此快捷鍵已用於{{slot}}。"

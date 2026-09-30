@@ -204,7 +204,6 @@ test("Windows refuses listener-only hotkeys when the key listener is missing", a
     );
     assert.equal(await manager.setActivationMode("push"), false);
     assert.equal(manager.getEffectiveDefaultHotkey(), "F8");
-    assert.deepEqual(manager.getSuggestions("Control+Shift+K"), []);
     const refused = manager.setupShortcuts("Control+Super", callback);
     assert.match(refused.error, /Windows key listener/);
     assert.equal(refused.reason, "native_listener_unavailable");
@@ -235,27 +234,121 @@ test("a saved Windows Hold is restored first and refused once initialized", asyn
   });
 });
 
+// Runs startup with `savedHotkey` in localStorage and records what the user is told.
+async function startWithSavedHotkey(manager, savedHotkey) {
+  const savedEnvHotkey = process.env.DICTATION_KEY;
+  delete process.env.DICTATION_KEY;
+  const told = { failures: [], fallbacks: [], active: [] };
+  manager.notifyHotkeyFailure = (hotkey) => told.failures.push(hotkey);
+  manager.notifyHotkeyFallback = (original, fallback) =>
+    told.fallbacks.push({ original, fallback });
+  manager.notifyActiveHotkey = (hotkey) => told.active.push(hotkey);
+  manager._persistHotkeyToEnvFile = async () => undefined;
+  try {
+    const mainWindow = { webContents: { executeJavaScript: async () => savedHotkey } };
+    await manager.loadSavedHotkeyOrDefault(mainWindow, () => undefined);
+    return told;
+  } finally {
+    if (savedEnvHotkey === undefined) delete process.env.DICTATION_KEY;
+    else process.env.DICTATION_KEY = savedEnvHotkey;
+  }
+}
+
+// The saved hotkey stays saved, so every launch retries it; the user is told what
+// runs instead rather than being asked to pick a hotkey that already works.
 test("Windows startup moves a saved modifier-only hotkey to F8 without the key listener", async () => {
   await withPlatform("win32", async () => {
-    const savedEnvHotkey = process.env.DICTATION_KEY;
-    delete process.env.DICTATION_KEY;
-    try {
-      const manager = new HotkeyManager();
-      const failures = [];
-      manager.nativeListenerProbe = denyProbe("binary_missing");
-      manager.notifyHotkeyFailure = (hotkey) => failures.push(hotkey);
-      manager._persistHotkeyToEnvFile = async () => undefined;
-      const mainWindow = { webContents: { executeJavaScript: async () => "Control+Super" } };
+    const manager = new HotkeyManager();
+    manager.nativeListenerProbe = denyProbe("binary_missing");
 
-      await manager.loadSavedHotkeyOrDefault(mainWindow, () => undefined);
+    const told = await startWithSavedHotkey(manager, "Control+Super");
 
-      assert.deepEqual(failures, ["Control+Super"]);
-      assert.equal(manager.getCurrentHotkey(), "F8");
-    } finally {
-      if (savedEnvHotkey === undefined) delete process.env.DICTATION_KEY;
-      else process.env.DICTATION_KEY = savedEnvHotkey;
-    }
+    assert.equal(manager.getCurrentHotkey(), "F8");
+    assert.deepEqual(told.failures, []);
+    assert.deepEqual(told.active, ["F8"]);
+    assert.deepEqual(told.fallbacks, [{ original: "Control+Super", fallback: "F8" }]);
   });
+});
+
+test("startup reports a fallback against the saved hotkey when the default fails too", async () => {
+  const { globalShortcut } = require("electron");
+  const register = globalShortcut.register;
+  globalShortcut.register = (accelerator) => accelerator === "F9";
+  try {
+    await withPlatform("win32", async () => {
+      const manager = new HotkeyManager();
+      manager.nativeListenerProbe = denyProbe("binary_missing");
+
+      const told = await startWithSavedHotkey(manager, "Alt+F7");
+
+      assert.equal(manager.getCurrentHotkey(), "F9");
+      assert.deepEqual(told.failures, []);
+      assert.deepEqual(told.fallbacks, [{ original: "Alt+F7", fallback: "F9" }]);
+    });
+  } finally {
+    globalShortcut.register = register;
+  }
+});
+
+// With the listener missing every compound suggestion on Windows is modifier-only
+// or taken, so the regular fallback keys stand in rather than an empty "Try:".
+test("Windows suggestions skip keys other slots hold and never come back empty", async () => {
+  await withPlatform("win32", () => {
+    const manager = new HotkeyManager();
+    manager.nativeListenerProbe = denyProbe("binary_missing");
+    assert.deepEqual(manager.getSuggestions("Control+Shift+K"), [
+      "F8",
+      "F9",
+      "Control+Shift+Space",
+    ]);
+
+    assert.equal(manager.setupShortcuts("F8", () => undefined).success, true);
+    assert.deepEqual(manager.getSuggestions("RightControl"), ["F9", "F10", "Pause"]);
+    const refused = manager.setupShortcuts("RightControl", () => undefined);
+    assert.doesNotMatch(refused.error, /\bF8\b/);
+  });
+});
+
+// Voice Assistant, Translation and Meeting restore after dictation; a saved
+// hotkey that no longer registers must reach the user, not just the log.
+test("restore failures reach the user for a failed slot and for each refused hotkey", () => {
+  const manager = new HotkeyManager();
+  const failures = [];
+  manager.notifyHotkeyFailure = (hotkey, result) => failures.push({ hotkey, error: result.error });
+
+  manager.notifyRestoreFailures("RightControl", { success: false, error: "refused" });
+  manager.notifyRestoreFailures("F9,Control+Alt", {
+    success: true,
+    failures: [{ hotkey: "Control+Alt", error: "listener" }],
+  });
+  manager.notifyRestoreFailures("F10", { success: true });
+
+  assert.deepEqual(failures, [
+    { hotkey: "RightControl", error: "refused" },
+    { hotkey: "Control+Alt", error: "listener" },
+  ]);
+});
+
+// The Voice Assistant and Translation dialogs show main's error as written, so an
+// exception's own text (English, technical) must never be it.
+test("a registration that throws reports the translated failure, not the exception", async () => {
+  const { globalShortcut } = require("electron");
+  const register = globalShortcut.register;
+  globalShortcut.register = () => {
+    throw new Error("conversion failed: bad accelerator");
+  };
+  try {
+    const manager = new HotkeyManager();
+    const result = await manager.registerSlot("voiceAgent", "Alt+F7", () => undefined, {
+      atomic: true,
+    });
+
+    assert.equal(result.success, false);
+    assert.match(result.error, /^Could not register "Alt\+F7"/);
+    assert.doesNotMatch(result.error, /conversion failed/);
+  } finally {
+    globalShortcut.register = register;
+  }
 });
 
 // Only Windows swaps its defaults and suggestions for regular keys; a Linux probe

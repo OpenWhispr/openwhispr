@@ -4050,7 +4050,7 @@
       "rightModifierNeedsListener": "لا يمكن استخدام \"{{hotkey}}\" على سطح المكتب هذا، إذ تحتاج اختصاراته إلى مفتاح عادي. أضف مفتاحًا، مثل Control+Alt+Space.",
       "holdNeedsReleaseKey": "يحتاج الضغط المستمر للتحدث إلى مفتاح يمكن لـ macOS أن يرصد تحريره: Globe، أو مفتاح جانبي أيمن مثل Option الأيمن، أو اختصار مع مفتاح تعديل. أما النقر فيعمل مع أي مفتاح.",
       "registrationFailed": "تعذر تسجيل \"{{hotkey}}\". قد يكون قيد الاستخدام بواسطة تطبيق آخر.",
-      "windowsKeyListenerMissing": "يحتاج \"{{hotkey}}\" إلى مستمع مفاتيح Windows، وهو غير موجود في هذا التثبيت. اختر اختصارًا يتضمن مفتاحًا عاديًا، مثل F8.",
+      "windowsKeyListenerMissing": "يحتاج \"{{hotkey}}\" إلى مستمع مفاتيح Windows، وهو غير موجود في هذا التثبيت. اختر اختصارًا يتضمن مفتاحًا عاديًا.",
       "updateFailedCheckFormat": "فشل تحديث الاختصار إلى \"{{hotkey}}\". تأكد من أن التنسيق صالح.",
       "trySuggestions": "جرّب: {{suggestions}}",
       "slotConflict": "هذا الاختصار مستخدم بالفعل لـ {{slot}}."
