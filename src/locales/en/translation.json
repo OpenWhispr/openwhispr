@@ -3574,6 +3574,7 @@
         "actionFailed": "Action failed",
         "noEndpoint": "No self-hosted server URL set. Configure one in Settings.",
         "outputTruncated": "The AI model ran out of room before it finished, so the note was left as it was.",
+        "nothingToSummarize": "There's nothing to summarize in this note yet, so the AI summary was left as it was.",
         "saveFailed": "Couldn't save. Check that nothing is too long and try again."
       },
       "tab": "Actions",

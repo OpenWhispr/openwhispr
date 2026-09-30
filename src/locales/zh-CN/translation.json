@@ -3207,6 +3207,7 @@
         "actionFailed": "操作失败",
         "noEndpoint": "未设置自托管服务器 URL。请在设置中配置。",
         "outputTruncated": "AI 模型在完成之前就用完了输出空间，因此笔记保持不变。",
+        "nothingToSummarize": "这条笔记还没有可以总结的内容，因此 AI 摘要保持不变。",
         "saveFailed": "无法保存。请检查是否有内容过长，然后重试。"
       },
       "tab": "操作",

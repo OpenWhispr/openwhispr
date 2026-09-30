@@ -125,16 +125,25 @@ Unresolved questions, dependencies, and requested follow-ups.
 
 Return only the finished Markdown notes.`;
 
-// Omitting every unsupported section can otherwise produce a blank completion.
-const NON_SUBSTANTIVE_NOTES_INSTRUCTIONS = `For material with no substantive discussion or notes (for example, only greetings, filler, or recording checks), return one brief factual sentence describing what was captured. If nothing meaningful can be summarized, say "No substantive content was captured." in the requested output language. This rule overrides the section structure and bullet counts above: do not return an empty response or invent topics, decisions, or action items. Consider both the transcript and any manual notes before applying this rule.`;
+// Shipped through 1.10.2: a note with nothing to summarize got a sentence saying
+// so saved as its summary.
+const NON_SUBSTANTIVE_NOTES_INSTRUCTIONS_1_10_2 = `For material with no substantive discussion or notes (for example, only greetings, filler, or recording checks), return one brief factual sentence describing what was captured. If nothing meaningful can be summarized, say "No substantive content was captured." in the requested output language. This rule overrides the section structure and bullet counts above: do not return an empty response or invent topics, decisions, or action items. Consider both the transcript and any manual notes before applying this rule.`;
 
+/** A note run's reply when the material has nothing to summarize: the runner saves nothing and says so. */
+export const NOTHING_TO_SUMMARIZE = "NOTHING_TO_SUMMARIZE";
+
+// Omitting every unsupported section can otherwise produce a blank completion.
+const NON_SUBSTANTIVE_NOTES_INSTRUCTIONS = `For material with no substantive discussion or notes (for example, only greetings, filler, or recording checks), reply with exactly ${NOTHING_TO_SUMMARIZE} and nothing else. This rule overrides the section structure and bullet counts above: do not return an empty response or invent topics, decisions, or action items. Consider both the transcript and any manual notes before applying this rule.`;
+
+const GENERATE_NOTES_PROMPT_1_10_2 = `${GENERATE_NOTES_PROMPT_1_10_1}\n\n${NON_SUBSTANTIVE_NOTES_INSTRUCTIONS_1_10_2}`;
 const GENERATE_NOTES_PROMPT = `${GENERATE_NOTES_PROMPT_1_10_1}\n\n${NON_SUBSTANTIVE_NOTES_INSTRUCTIONS}`;
 // The last flat Detailed Notes prompt; a row still holding it moves to sections.
-const DETAILED_NOTES_PROMPT_1_10_2 = `${DETAILED_NOTES_PROMPT_1_10_1}\n\n${NON_SUBSTANTIVE_NOTES_INSTRUCTIONS}`;
+const DETAILED_NOTES_PROMPT_1_10_2 = `${DETAILED_NOTES_PROMPT_1_10_1}\n\n${NON_SUBSTANTIVE_NOTES_INSTRUCTIONS_1_10_2}`;
 
 // A sectioned template is compiled from these rules, the template's own context,
 // the format line, its sections, and the footer. Detailed Notes' sections compile
-// back to DETAILED_NOTES_PROMPT_1_10_2 exactly (pinned by templatePrompts.test.js).
+// back to DETAILED_NOTES_PROMPT_1_10_2 exactly, but for its closing rule (pinned by
+// templatePrompts.test.js).
 export const SECTIONED_NOTES_INSTRUCTIONS = `Convert the provided material into accurate, comprehensive, easy-to-scan notes in Markdown. Priorities, in order: factual accuracy, preservation of specifics, complete coverage of substantive topics, clear decisions and action items, concise presentation.
 
 RULES:
@@ -389,7 +398,7 @@ Apply the instructions below to the current summary and return the complete revi
 Instructions: `;
 
 // With no summary to edit, a summary action writes one from the material first.
-export const SUMMARY_ACTION_FROM_MATERIAL_PROMPT = `The note has no AI summary yet. Write concise, accurate notes of the material in Markdown (no title or preamble, and only what the material supports, with action items as \`- [ ] Action — Owner\`), apply the instructions below to them, and return the result. It becomes the note's AI summary.
+export const SUMMARY_ACTION_FROM_MATERIAL_PROMPT = `The note has no AI summary yet. Write concise, accurate notes of the material in Markdown (no title or preamble, and only what the material supports, with action items as \`- [ ] Action — Owner\`), apply the instructions below to them, and return the result. It becomes the note's AI summary. If the material has no substantive discussion or notes (for example, only greetings, filler, or recording checks), reply with exactly ${NOTHING_TO_SUMMARIZE} and nothing else.
 
 Instructions: `;
 
@@ -480,7 +489,11 @@ export const BUILTIN_ACTIONS = [
     sections: null,
     output: null,
     // A pre-release build briefly shipped the detailed prompt under this key.
-    previousPrompts: [DETAILED_NOTES_PROMPT_1_10_0, GENERATE_NOTES_PROMPT_1_10_1],
+    previousPrompts: [
+      DETAILED_NOTES_PROMPT_1_10_0,
+      GENERATE_NOTES_PROMPT_1_10_1,
+      GENERATE_NOTES_PROMPT_1_10_2,
+    ],
     icon: "sparkles",
     sortOrder: 1,
   },

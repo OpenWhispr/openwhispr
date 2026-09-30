@@ -3207,6 +3207,7 @@
         "actionFailed": "操作失敗",
         "noEndpoint": "未設定自架伺服器 URL。請在設定中進行配置。",
         "outputTruncated": "AI 模型在完成之前就用完了輸出空間，因此筆記維持不變。",
+        "nothingToSummarize": "這則筆記還沒有可以摘要的內容，因此 AI 摘要維持不變。",
         "saveFailed": "無法儲存。請檢查是否有內容過長，然後再試一次。"
       },
       "tab": "動作",

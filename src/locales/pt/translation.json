@@ -3207,6 +3207,7 @@
         "actionFailed": "A ação falhou",
         "noEndpoint": "Nenhum URL de servidor auto-hospedado definido. Configure um nas Configurações.",
         "outputTruncated": "O modelo de IA ficou sem espaço antes de terminar, então a nota ficou como estava.",
+        "nothingToSummarize": "Esta nota ainda não tem nada para resumir, então o resumo com IA ficou como estava.",
         "saveFailed": "Não foi possível salvar. Verifique se nada está longo demais e tente novamente."
       },
       "tab": "Ações",

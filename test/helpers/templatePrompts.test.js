@@ -13,7 +13,7 @@ const seededRow = (builtin) => ({
   translation_key: builtin.translationKey,
 });
 
-test("Detailed Notes compiled from its sections is the prompt it replaced, byte for byte", async () => {
+test("Detailed Notes compiled from its sections is the prompt it replaced, but for its closing rule", async () => {
   const {
     BUILTIN_ACTIONS,
     DETAILED_NOTES_KEY,
@@ -22,17 +22,22 @@ test("Detailed Notes compiled from its sections is the prompt it replaced, byte 
     compileTemplatePrompt,
   } = await load();
   const detailed = BUILTIN_ACTIONS.find((action) => action.translationKey === DETAILED_NOTES_KEY);
-  // Delete this test if the sectioned default is meant to diverge from the flat one.
   const flat = detailed.previousPrompts.at(-1);
+  // The closing rule is its last paragraph: a note with nothing to summarize now
+  // answers with a marker instead of a sentence that was saved as its summary.
+  const body = flat.slice(0, flat.lastIndexOf("\n\n"));
 
-  assert.equal(
-    compileTemplatePrompt(seededRow(detailed), { isMeetingNote: true }),
-    MEETING_INPUT_PREAMBLE + flat
-  );
-  assert.equal(
-    compileTemplatePrompt(seededRow(detailed), { isMeetingNote: false }),
-    NOTE_INPUT_PREAMBLE + flat
-  );
+  for (const [isMeetingNote, preamble] of [
+    [true, MEETING_INPUT_PREAMBLE],
+    [false, NOTE_INPUT_PREAMBLE],
+  ]) {
+    const compiled = compileTemplatePrompt(seededRow(detailed), { isMeetingNote });
+    assert.ok(compiled.startsWith(preamble + body), "everything before the rule is unchanged");
+    assert.match(
+      compiled.slice((preamble + body).length),
+      /^\n\nFor material with no substantive discussion[^\n]*reply with exactly NOTHING_TO_SUMMARIZE[^\n]*$/
+    );
+  }
 });
 
 test("a template without sections is sent exactly as before templates had sections", async () => {
@@ -158,6 +163,11 @@ test("a summary action revises the summary, or writes one from the material firs
   });
   assert.ok(fromMaterial.startsWith(MEETING_INPUT_PREAMBLE));
   assert.match(fromMaterial, /no AI summary yet[\s\S]*Instructions: Translate it to Spanish\.$/);
+  assert.match(
+    fromMaterial,
+    /reply with exactly NOTHING_TO_SUMMARIZE/,
+    "a first summary can decline too"
+  );
 });
 
 test("a chat action works from the summary when there is one, and the transcript when there isn't", async () => {

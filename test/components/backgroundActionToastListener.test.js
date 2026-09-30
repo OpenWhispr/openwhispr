@@ -146,3 +146,22 @@ test("a newer change to the same note retires the older Undo, which would wipe i
   assert.equal(globalThis.__toasts.length, 2);
   assert.deepEqual(globalThis.__dismissed, ["toast-1"]);
 });
+
+test("a run with nothing to write informs, where a failed one reports an error", async (t) => {
+  const { store } = await mountListener(t, { success: true });
+  await React.act(async () =>
+    store.useActionProcessingStore.setState({
+      errorEvents: [
+        { noteId: 4, message: "Nothing to summarize", notice: true },
+        { noteId: 4, message: "Request failed" },
+      ],
+    })
+  );
+
+  const [notice, failure] = globalThis.__toasts;
+  assert.equal(notice.description, "Nothing to summarize");
+  assert.equal(notice.variant, undefined);
+  assert.equal(notice.title, undefined, "no error title over it");
+  assert.equal(failure.variant, "destructive");
+  assert.ok(failure.title);
+});

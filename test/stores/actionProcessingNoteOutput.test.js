@@ -49,15 +49,22 @@ async function loadStore(t) {
           },
         };
       `,
-      "/utils/generateTitle": `export const generateNoteTitle = async () => globalThis.__generatedTitle;`,
+      "/utils/generateTitle": `
+        export const generateNoteTitle = async () => {
+          globalThis.__titleRequests += 1;
+          return globalThis.__generatedTitle;
+        };
+      `,
     },
   });
   globalThis.__processTextCalls = calls;
+  globalThis.__titleRequests = 0;
   t.after(() => {
     delete globalThis.__processTextCalls;
     delete globalThis.__processTextResult;
     delete globalThis.__processTextError;
     delete globalThis.__generatedTitle;
+    delete globalThis.__titleRequests;
     delete globalThis.__updateNoteFails;
   });
 
@@ -349,4 +356,54 @@ test("a write the database refused offers no Undo and reports the failure", asyn
   await waitFor(() => (errors = store.consumeErrorEvents()).length > 0, "the error");
   assert.equal(errors[0].message, LABELS.actionFailed);
   assert.deepEqual(store.consumeAppliedEvents(), []);
+});
+
+test("material with nothing to summarize leaves the note as it was and says so", async (t) => {
+  const { store, calls, updates } = await loadStore(t);
+  globalThis.__generatedTitle = "Should not be asked for";
+
+  const replies = [
+    "NOTHING_TO_SUMMARIZE",
+    "**NOTHING_TO_SUMMARIZE**",
+    "```markdown\nNOTHING_TO_SUMMARIZE\n```",
+    "Only greetings were exchanged.\n\nNOTHING_TO_SUMMARIZE",
+    "<think>Just hellos.</think>\nNOTHING_TO_SUMMARIZE",
+  ];
+  for (const [index, reply] of replies.entries()) {
+    const noteId = 18 + index;
+    globalThis.__processTextResult = reply;
+    store.runBackgroundAction(
+      noteId,
+      "## Meeting Transcript\nYou: Hi, can you hear me?",
+      `hash-${noteId}`,
+      ACTION,
+      { modelId: "gpt-4.1", isCloudMode: true, isMeetingNote: true, allowTitleGeneration: true },
+      LABELS
+    );
+    let errors = [];
+    await waitFor(() => (errors = store.consumeErrorEvents()).length > 0, "the notice");
+    assert.equal(errors[0].messageKey, "notes.actions.errors.nothingToSummarize", reply);
+    assert.equal(errors[0].notice, true, "not a failure");
+  }
+  assert.equal(calls.length, replies.length, "one request per run");
+  assert.equal(globalThis.__titleRequests, 0, "no title request");
+  assert.deepEqual(updates, [], "nothing is written");
+  assert.deepEqual(store.consumeAppliedEvents(), [], "nothing to undo");
+});
+
+test("the marker only in the model's thinking still saves the summary", async (t) => {
+  const { store, updates } = await loadStore(t);
+  globalThis.__processTextResult =
+    "<think>NOTHING_TO_SUMMARIZE? No, they set a date.</think>\n# Notes\n- ship Friday";
+
+  store.runBackgroundAction(
+    30,
+    "## Meeting Transcript\nYou: We ship Friday.",
+    "hash-30",
+    ACTION,
+    { modelId: "gpt-4.1", isCloudMode: true, isMeetingNote: true },
+    LABELS
+  );
+  await waitFor(() => updates.length > 0, "the summary write");
+  assert.deepEqual(store.consumeErrorEvents(), []);
 });

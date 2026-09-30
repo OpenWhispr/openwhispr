@@ -27,9 +27,9 @@ export default function BackgroundActionToastListener() {
     if (errorCount === 0) return;
     for (const event of consumeErrorEvents()) {
       toast({
-        title: t("notes.enhance.title"),
+        title: event.notice ? undefined : t("notes.enhance.title"),
         description: event.messageKey ? t(event.messageKey, event.messageParams) : event.message,
-        variant: "destructive",
+        variant: event.notice ? undefined : "destructive",
       });
     }
   }, [errorCount, toast, t]);

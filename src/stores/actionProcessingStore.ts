@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { NOTE_OUTPUT_MAX_TOKENS } from "../helpers/builtinActions";
+import { NOTE_OUTPUT_MAX_TOKENS, NOTHING_TO_SUMMARIZE } from "../helpers/builtinActions";
+import { stripThinkingTags } from "../helpers/stripThinking";
 import { compileSummaryActionPrompt, compileTemplatePrompt } from "../helpers/templatePrompts";
 import reasoningService from "../services/ReasoningService";
 import { getSettings, selectResolvedNoteFormatting } from "./settingsStore";
@@ -88,6 +89,8 @@ export interface ActionErrorEvent {
   /** Set when the failure has a translatable form; the toast prefers it. */
   messageKey?: string;
   messageParams?: Record<string, string | number>;
+  /** Not a failure: the run found nothing to write, so the toast only informs. */
+  notice?: boolean;
 }
 
 interface ActionProcessingStoreState {
@@ -190,6 +193,12 @@ async function readLocalContextBudget(modelId: string): Promise<LocalContextBudg
 
 const emptyReplyError = () =>
   Object.assign(new Error("Model returned no text"), { messageKey: "notes.actions.emptyReply" });
+
+const nothingToSummarizeError = () =>
+  Object.assign(new Error("Nothing to summarize"), {
+    messageKey: "notes.actions.errors.nothingToSummarize",
+    notice: true,
+  });
 
 /** The translated refusal from #2142, for material no amount of splitting can fit. */
 function tooLongForModel(modelName: string): LocalInferenceError {
@@ -498,6 +507,11 @@ export function runBackgroundAction(
       if (!enhanced.trim()) {
         throw emptyReplyError();
       }
+      // Only greetings or filler: say so rather than save that as the summary.
+      // Models also wrap the marker in a fence or bold, or add a sentence first.
+      if (stripThinkingTags(enhanced).includes(NOTHING_TO_SUMMARIZE)) {
+        throw nothingToSummarizeError();
+      }
 
       if (isCancelled()) return;
 
@@ -554,15 +568,17 @@ export function runBackgroundAction(
       processingFlags.set(noteId, false);
       clearNoteState(noteId);
       const message = err instanceof Error ? err.message : labels.actionFailed;
-      const { messageKey, messageParams } = (err ?? {}) as {
+      const { messageKey, messageParams, notice } = (err ?? {}) as {
         messageKey?: string;
         messageParams?: Record<string, string | number>;
+        notice?: boolean;
       };
       pushErrorEvent({
         noteId,
         message,
         messageKey: (messageKey && NOTE_ERROR_KEYS[messageKey]) || messageKey,
         messageParams,
+        notice,
       });
     } finally {
       if (activeRuns.get(noteId) === runId) activeRuns.delete(noteId);
