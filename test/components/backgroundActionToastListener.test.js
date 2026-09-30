@@ -4,7 +4,11 @@ const React = require("react");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 const { installInteractiveDom } = require("../lib/interactiveDom");
 
-async function mountListener(t, updateNoteResult) {
+async function mountListener(
+  t,
+  updateNoteResult,
+  { focused = true, storedNote = { id: 4, deleted_at: null } } = {}
+) {
   let root;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
@@ -12,9 +16,13 @@ async function mountListener(t, updateNoteResult) {
     delete globalThis.__dismissed;
   });
   const writes = [];
+  const focusListeners = new Set();
   installBrowserGlobals(t, {
     window: {
+      addEventListener: (type, listener) => type === "focus" && focusListeners.add(listener),
+      removeEventListener: (type, listener) => focusListeners.delete(listener),
       electronAPI: {
+        getNote: async () => storedNote,
         updateNote: async (noteId, payload) => {
           writes.push({ noteId, payload });
           return updateNoteResult;
@@ -23,6 +31,7 @@ async function mountListener(t, updateNoteResult) {
     },
   });
   const container = installInteractiveDom(t);
+  globalThis.document.hasFocus = () => focused;
   globalThis.__toasts = [];
   globalThis.__dismissed = [];
   const vite = await createRendererServer(t, {
@@ -49,7 +58,7 @@ async function mountListener(t, updateNoteResult) {
   const { createRoot } = require("react-dom/client");
   root = createRoot(container);
   await React.act(async () => root.render(React.createElement(Listener)));
-  return { store, writes };
+  return { store, writes, focusListeners };
 }
 
 const PREVIOUS = {
@@ -89,4 +98,39 @@ test("an undo the database refused leaves the toast up to try again", async (t) 
   await React.act(async () => globalThis.__toasts[0].action.props.onClick());
   assert.equal(writes.length, 1);
   assert.deepEqual(globalThis.__dismissed, []);
+});
+
+test("a run that lands while the app is in the background offers Undo once the user is back", async (t) => {
+  const { store, focusListeners } = await mountListener(t, { success: true }, { focused: false });
+  await React.act(async () =>
+    store.useActionProcessingStore.setState({ appliedEvents: [APPLIED] })
+  );
+  assert.equal(globalThis.__toasts.length, 0, "no toast runs out unseen");
+  assert.equal(
+    store.useActionProcessingStore.getState().appliedEvents.length,
+    1,
+    "the event waits in the store, so a remount keeps it"
+  );
+
+  // The window gains focus, as the user comes back to the app.
+  globalThis.document.hasFocus = () => true;
+  await React.act(async () => focusListeners.forEach((listener) => listener()));
+  assert.equal(globalThis.__toasts.length, 1);
+  await React.act(async () => focusListeners.forEach((listener) => listener()));
+  assert.equal(globalThis.__toasts.length, 1, "shown once");
+});
+
+test("Undo leaves a note deleted since alone instead of bringing it back", async (t) => {
+  const { store, writes } = await mountListener(
+    t,
+    { success: true },
+    { storedNote: { id: 4, deleted_at: "2026-09-30T10:00:00Z" } }
+  );
+  await React.act(async () =>
+    store.useActionProcessingStore.setState({ appliedEvents: [APPLIED] })
+  );
+
+  await React.act(async () => globalThis.__toasts[0].action.props.onClick());
+  assert.deepEqual(writes, []);
+  assert.deepEqual(globalThis.__dismissed, ["toast-1"]);
 });

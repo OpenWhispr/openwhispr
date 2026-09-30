@@ -24,9 +24,14 @@ async function loadStore(t) {
       electronAPI: {
         updateNote: async (noteId, payload) => {
           updates.push({ noteId, payload });
-          return { success: true };
+          return { success: !globalThis.__updateNoteFails };
         },
-        getNote: async (noteId) => ({ id: noteId, ...STORED_NOTE }),
+        // What the database holds now, so a snapshot read after the write would show it.
+        getNote: async (noteId) =>
+          Object.assign(
+            { id: noteId, ...STORED_NOTE },
+            ...updates.filter((u) => u.noteId === noteId).map((u) => u.payload)
+          ),
       },
     },
   });
@@ -53,6 +58,7 @@ async function loadStore(t) {
     delete globalThis.__processTextResult;
     delete globalThis.__processTextError;
     delete globalThis.__generatedTitle;
+    delete globalThis.__updateNoteFails;
   });
 
   const store = await vite.ssrLoadModule("/stores/actionProcessingStore.ts");
@@ -326,4 +332,21 @@ test("a run hands Undo the summary fields it overwrote, and the title when it re
   assert.equal(updates[1].payload.title, "Q3 launch sync");
   const [{ previous }] = store.consumeAppliedEvents();
   assert.deepEqual(previous, { ...summaryFields, title: STORED_NOTE.title });
+});
+
+test("a write the database refused offers no Undo and reports the failure", async (t) => {
+  const { store, updates } = await loadStore(t);
+  globalThis.__updateNoteFails = true;
+  store.runBackgroundAction(
+    17,
+    "notes",
+    "hash-17",
+    ACTION,
+    { modelId: "gpt-4.1", isCloudMode: true, isMeetingNote: false },
+    LABELS
+  );
+  let errors = [];
+  await waitFor(() => (errors = store.consumeErrorEvents()).length > 0, "the error");
+  assert.equal(errors[0].message, LABELS.actionFailed);
+  assert.deepEqual(store.consumeAppliedEvents(), []);
 });

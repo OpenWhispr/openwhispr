@@ -120,6 +120,34 @@ test("launch puts the default AI Summary template first, under its current name"
     assert.equal(first.translation_key, DETAILED_NOTES_KEY);
     assert.equal(first.name, "AI Summary");
     assert.equal(second.translation_key, GENERATE_NOTES_KEY);
+    migrated.db
+      .prepare("UPDATE actions SET name = 'Team notes' WHERE translation_key = ?")
+      .run(DETAILED_NOTES_KEY);
+  });
+  relaunch((again) => {
+    assert.equal(
+      builtinRows(again, DETAILED_NOTES_KEY)[0].name,
+      "Team notes",
+      "the user's name stays"
+    );
+  });
+});
+
+test("an upgrade to sections keeps a name the user gave the default template", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const detailed = BUILTIN_ACTIONS.find((a) => a.translationKey === DETAILED_NOTES_KEY);
+  db.db
+    .prepare(
+      "UPDATE actions SET name = 'Team notes', prompt = ?, sections = NULL WHERE translation_key = ?"
+    )
+    .run(detailed.previousPrompts.at(-1), DETAILED_NOTES_KEY);
+  db.db.close();
+
+  relaunch((migrated) => {
+    const [row] = builtinRows(migrated, DETAILED_NOTES_KEY);
+    assert.deepEqual(row.sections, detailed.sections, "the old default still moves to sections");
+    assert.equal(row.name, "Team notes");
   });
 });
 

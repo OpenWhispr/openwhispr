@@ -527,7 +527,8 @@ export function runBackgroundAction(
           ? { enhanced_content: enhancedContent }
           : { enhanced_content: enhancedContent, enhanced_at_content_hash: contentHash };
       if (title) updates.title = title;
-      await window.electronAPI.updateNote(noteId, updates);
+      const result = await window.electronAPI.updateNote(noteId, updates);
+      if (!result?.success) throw new Error(labels.actionFailed);
       pushAppliedEvent({
         noteId,
         action,

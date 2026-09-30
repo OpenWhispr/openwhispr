@@ -11,7 +11,12 @@ const { parseEventTime } = require("./calendarAvailability");
 // keeps the cloud created_at but lets timestamp default to the local pull, so
 // a naive value must never outrank created_at when dating a historical row.
 const { hasExplicitTimeZone, parseDbTimestamp, toDbTimestamp } = require("./dbTimestamp");
-const { BUILTIN_ACTIONS, GENERATE_NOTES_KEY, NOTE_ACTION_LIMITS } = require("./builtinActions");
+const {
+  BUILTIN_ACTIONS,
+  DETAILED_NOTES_KEY,
+  GENERATE_NOTES_KEY,
+  NOTE_ACTION_LIMITS,
+} = require("./builtinActions");
 const { normalizeSections } = require("./templatePrompts");
 const {
   ANALYTICS_COUNTER_VERSION,
@@ -647,6 +652,13 @@ class DatabaseManager {
         )
         .run(GENERATE_NOTES_KEY, ...builtinKeys);
 
+      // Detailed Notes became the default "AI Summary"; a name the user chose stays.
+      this.db
+        .prepare(
+          "UPDATE actions SET name = 'AI Summary' WHERE is_builtin = 1 AND translation_key = ? AND name = 'Detailed Notes'"
+        )
+        .run(DETAILED_NOTES_KEY);
+
       // Built-ins: insert any that are missing, and roll a new default out to rows
       // that are still a previous flat default (never a user edit). A built-in's
       // kind is fixed, so it is settled whatever the prompt; its output is only
@@ -658,10 +670,10 @@ class DatabaseManager {
         "INSERT INTO actions (name, description, prompt, icon, is_builtin, sort_order, translation_key, client_id, kind, sections, output) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)"
       );
       const upgradeBuiltin = this.db.prepare(
-        "UPDATE actions SET name = ?, description = ?, prompt = ?, sections = ? WHERE id = ?"
+        "UPDATE actions SET description = ?, prompt = ?, sections = ? WHERE id = ?"
       );
       const settleBuiltin = this.db.prepare(
-        "UPDATE actions SET client_id = ?, kind = ?, name = ?, sort_order = ?, output = COALESCE(output, ?) WHERE id = ?"
+        "UPDATE actions SET client_id = ?, kind = ?, sort_order = ?, output = COALESCE(output, ?) WHERE id = ?"
       );
       for (const action of BUILTIN_ACTIONS) {
         const sections = action.sections ? JSON.stringify(action.sections) : null;
@@ -682,12 +694,11 @@ class DatabaseManager {
           continue;
         }
         if (existing.sections === null && action.previousPrompts.includes(existing.prompt)) {
-          upgradeBuiltin.run(action.name, action.description, action.prompt, sections, existing.id);
+          upgradeBuiltin.run(action.description, action.prompt, sections, existing.id);
         }
         settleBuiltin.run(
           action.translationKey,
           action.kind,
-          action.name,
           action.sortOrder,
           action.output,
           existing.id

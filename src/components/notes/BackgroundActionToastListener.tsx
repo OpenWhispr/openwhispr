@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "../ui/useToast";
 import { ToastActionButton } from "../ui/Toast";
@@ -6,6 +6,7 @@ import {
   useActionProcessingStore,
   consumeAppliedEvents,
   consumeErrorEvents,
+  type ActionAppliedEvent,
 } from "../../stores/actionProcessingStore";
 import { getActionName } from "../../stores/actionStore";
 
@@ -33,15 +34,20 @@ export default function BackgroundActionToastListener() {
     }
   }, [errorCount, toast, t]);
 
-  useEffect(() => {
-    if (appliedCount === 0) return;
-    for (const { noteId, action, previous } of consumeAppliedEvents()) {
+  const offerUndo = useCallback(
+    ({ noteId, action, previous }: ActionAppliedEvent) => {
       const toastId = toast({
         title: t("notes.actions.applied", { name: getActionName(action, t) }),
         duration: UNDO_WINDOW_MS,
         action: (
           <ToastActionButton
             onClick={async () => {
+              // Writing to a note deleted since would bring it back.
+              const note = await window.electronAPI.getNote(noteId);
+              if (!note || note.deleted_at) {
+                dismiss(toastId);
+                return;
+              }
               const result = await window.electronAPI.updateNote(noteId, previous);
               if (result?.success) dismiss(toastId);
             }}
@@ -50,8 +56,20 @@ export default function BackgroundActionToastListener() {
           </ToastActionButton>
         ),
       });
-    }
-  }, [appliedCount, toast, dismiss, t]);
+    },
+    [toast, dismiss, t]
+  );
+
+  // A run can finish while the app is in the background: its short Undo window
+  // stays queued until the window has focus instead of running out unseen.
+  useEffect(() => {
+    const offerQueued = () => {
+      if (document.hasFocus()) consumeAppliedEvents().forEach(offerUndo);
+    };
+    offerQueued();
+    window.addEventListener("focus", offerQueued);
+    return () => window.removeEventListener("focus", offerQueued);
+  }, [appliedCount, offerUndo]);
 
   return null;
 }

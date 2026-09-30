@@ -195,7 +195,14 @@ export default function ActionManagerDialog({
 
         <div className="flex h-120">
           {/* Left panel — template/action list */}
-          <div className="w-56 shrink-0 border-e border-border dark:border-white/10 flex flex-col bg-card/50 dark:bg-surface-1/30">
+          <div
+            // Auto can take a moment on save; switching away then would drop the new draft.
+            inert={isSaving}
+            className={cn(
+              "w-56 shrink-0 border-e border-border dark:border-white/10 flex flex-col bg-card/50 dark:bg-surface-1/30",
+              isSaving && "opacity-60"
+            )}
+          >
             {/* List header */}
             <div className="flex items-center gap-1.5 px-3 pt-3.5 pb-2">
               <Tabs

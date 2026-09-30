@@ -35,11 +35,14 @@ test("an action that changes the summary is inferred as a summary action", async
   assert.equal(await inferActionOutput("Translate it to Spanish.", "gpt-4.1", true), "summary");
   assert.equal(calls[0].text, "Translate it to Spanish.");
   assert.equal(calls[0].config.inferenceScope, "noteFormatting", "asks the note model");
+  assert.equal(calls[0].config.disableThinking, true, "thinking text would hide the answer");
 });
 
 test("a reply is read by its first word, whatever the case or punctuation", async (t) => {
   const { inferActionOutput } = await loadInfer(t, "  summary.");
   assert.equal(await inferActionOutput("Shorten it.", "gpt-4.1", true), "summary");
+  globalThis.__inferReply = "<think>Could be chat, but it rewrites the summary.</think>\nSUMMARY";
+  assert.equal(await inferActionOutput("Make it longer.", "gpt-4.1", true), "summary");
   globalThis.__inferReply = "CHAT — it writes an email, not the summary";
   assert.equal(await inferActionOutput("Draft an email.", "gpt-4.1", true), "chat");
 });
