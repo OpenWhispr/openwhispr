@@ -140,8 +140,14 @@ export default function ActionManagerDialog({
     });
 
   const savedSections: TemplateSection[] = normalizeSections(sections);
+  // A section without a heading isn't saved, so its instruction would be lost.
+  const hasHeadlessInstruction = sections.some(
+    (section) => section.instruction.trim() && normalizeSections([section]).length === 0
+  );
   const canSave =
-    !!name.trim() && (isTemplate ? !!prompt.trim() || savedSections.length > 0 : !!prompt.trim());
+    !!name.trim() &&
+    !hasHeadlessInstruction &&
+    (isTemplate ? !!prompt.trim() || savedSections.length > 0 : !!prompt.trim());
 
   const handleSave = async () => {
     if (!canSave) return;
