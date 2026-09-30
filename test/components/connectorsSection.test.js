@@ -235,7 +235,8 @@ test("an unresolved policy doesn't hide the upsell from a free user", async (t) 
 });
 
 test("a change of main's account scope clears and refetches the receipts", async (t) => {
-  let onScopeChanged = null;
+  // The login rows listen too, as main's preload allows.
+  const scopeListeners = new Set();
   let answerSecondFetch = null;
   const answers = [
     Promise.resolve([receipt("a", "first@example.com")]),
@@ -249,18 +250,19 @@ test("a change of main's account scope clears and refetches the receipts", async
     { usageState: usage(true) },
     {
       onActiveAccountScopeChanged: (callback) => {
-        onScopeChanged = callback;
-        return () => {
-          onScopeChanged = null;
-        };
+        scopeListeners.add(callback);
+        return () => scopeListeners.delete(callback);
       },
       connectorRecentActions: () => answers[fetches++],
     }
   );
   assert.match(listItems(container).join(), /first@example\.com/);
 
-  assert.equal(typeof onScopeChanged, "function");
-  await React.act(async () => onScopeChanged({ accountId: "acct-b", authGeneration: 2 }));
+  assert.ok(scopeListeners.size > 0);
+  await React.act(async () => {
+    for (const listener of [...scopeListeners])
+      listener({ accountId: "acct-b", authGeneration: 2 });
+  });
   assert.equal(fetches, 2);
   assert.deepEqual(listItems(container), []);
 
@@ -326,8 +328,8 @@ test("a stale login offers Reconnect and Disconnect", async (t) => {
 
 test("free users with no login see Upgrade on every row and no Connect", async (t) => {
   const none = await renderSection(t, { isPaid: false, blocked: false });
-  // Email, Gmail, Slack and Linear.
-  assert.equal(count(none.textContent, /integrations\.api\.viewPlans/g), 4);
+  // Email, Gmail, Slack, Linear and GitHub.
+  assert.equal(count(none.textContent, /integrations\.api\.viewPlans/g), 5);
   assert.equal(buttonWithText(none, "connectors.slack.connect"), null);
 });
 
@@ -340,8 +342,8 @@ test("free users can always disconnect a login they have", async (t) => {
   assert.match(lapsed.textContent, /connectors\.slack\.disconnect/);
   assert.equal(
     count(lapsed.textContent, /integrations\.api\.viewPlans/g),
-    3,
-    "only the email, Gmail and Linear rows' Upgrade"
+    4,
+    "only the email, Gmail, Linear and GitHub rows' Upgrade"
   );
 });
 

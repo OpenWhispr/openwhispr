@@ -2,6 +2,11 @@
 export const MAX_ISSUE_TITLE_LENGTH = 256;
 /** GitHub's issue and comment body limit; Linear allows more. */
 export const MAX_ISSUE_BODY_LENGTH = 65536;
+/**
+ * The trackers' search limit (githubConnector.js, linearConnector.js). The
+ * tools check it too, so a search that can't succeed never reaches main.
+ */
+export const MAX_ISSUE_QUERY_LENGTH = 200;
 
 /** The issue-tracker card layouts: a new issue, or a comment on one. */
 export type IssueVerb = "issue" | "comment";
@@ -38,7 +43,8 @@ export function toIssueFields(
   return { title: typeof title === "string" ? title : "", body };
 }
 
-function characterCount(text: string): number {
+/** Characters (code points), as the card, the tools and main count them. */
+export function characterCount(text: string): number {
   return [...text].length;
 }
 

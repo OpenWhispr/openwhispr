@@ -3,6 +3,7 @@ import type { EmailDraftTarget } from "../../../utils/emailDraftTarget";
 import { emailToolModule } from "./emailDraftTool";
 import { linearToolModule } from "./linearTools";
 import { slackToolModule } from "./slackSendMessageTool";
+import { githubToolModule } from "./githubTools";
 
 /** What a module may need to build its tools for this send. */
 export interface ConnectorToolEnv {
@@ -27,6 +28,7 @@ export const CONNECTOR_TOOL_MODULES: readonly ConnectorToolModule[] = [
   emailToolModule,
   slackToolModule,
   linearToolModule,
+  githubToolModule,
 ];
 
 export function registerConnectorTools(

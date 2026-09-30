@@ -131,7 +131,6 @@ test("the Linear row, browser page, card note, link and receipts have copy in ev
       ]),
       ["notes.assignedToYou", linear.notes.assignedToYou],
       ["approval.openIn.linear", connectors.approval.openIn.linear],
-      ["toolStatus.unknownSent.linear", connectors.toolStatus.unknownSent.linear],
       ["recent.actions.linear_create_issue", connectors.recent.actions.linear_create_issue],
       ["recent.actions.linear_comment", connectors.recent.actions.linear_comment],
       [
@@ -148,7 +147,6 @@ test("the Linear row, browser page, card note, link and receipts have copy in ev
       linear.connectedAs,
       /\{\{account\}\}.*\{\{workspace\}\}|\{\{workspace\}\}.*\{\{account\}\}/
     );
-    assert.match(connectors.toolStatus.unknownSent.linear, /\{\{destination\}\}/);
     for (const note of [...Object.values(linear.notes.priority), linear.notes.assignedToYou]) {
       assert.doesNotMatch(note, /\{\{/, `${locale}: a note with nothing left to fill in`);
     }
@@ -171,7 +169,6 @@ test("the Linear copy sits at the foundation's anchors, right after Gmail's", ()
     after(connectors.approval.errors, "gmail", "linear");
     after(connectors.toolStatus.errors, "gmail", "linear");
     after(connectors.approval.openIn, "gmail", "linear");
-    after(connectors.toolStatus.unknownSent, "gmail", "linear");
     after(connectors.recent.actions, "gmail_send", "linear_create_issue");
     after(connectors.recent.actions, "linear_create_issue", "linear_comment");
     after(connectors.recent.unlabeledActions, "gmail_send", "linear_create_issue");

@@ -93,9 +93,10 @@ test("an unavailable session service falls back to batch as session_unavailable"
 
 test("a start that fails without a denial to act on falls back instead of losing the dictation", async () => {
   const failures = [
-    // Network error or the 10 s session request timeout.
+    // Network error.
     { success: false, code: "NETWORK_ERROR" },
-    { success: false, error: "The operation was aborted due to timeout" },
+    // The 10 s session request timeout, as it crosses IPC.
+    toPolicyFailure(new DOMException("The operation was aborted due to timeout", "TimeoutError")),
     // WebSocket handshake failure or a rejected session body.
     { success: false, error: "Orukeet connection closed before completion" },
     { success: false, error: "Invalid Orukeet cloud session" },

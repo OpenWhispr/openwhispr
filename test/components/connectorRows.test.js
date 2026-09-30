@@ -53,13 +53,13 @@ async function loadRows(t, electronAPI = {}) {
   return { container, rows, ConnectorLoginRow };
 }
 
-test("the shipped rows are Gmail, Slack then Linear, with their account summaries", async (t) => {
+test("the shipped rows are Gmail, Slack, Linear then GitHub, with their account summaries", async (t) => {
   const { rows } = await loadRows(t);
   const status = { accountLabel: "chad", workspaceLabel: "Acme" };
 
   assert.deepEqual(
     rows.CONNECTOR_ROWS.map((row) => row.id),
-    ["gmail", "slack", "linear"]
+    ["gmail", "slack", "linear", "github"]
   );
   assert.deepEqual(rows.CONNECTOR_ROWS[0].accountSummary(status), { account: "chad" });
   assert.deepEqual(rows.CONNECTOR_ROWS[1].accountSummary(status), {

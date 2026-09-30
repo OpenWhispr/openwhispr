@@ -8,20 +8,24 @@ const { connectorResultPage } = require("./oauthResultPage");
 const { createLinearApi } = require("./linearApi");
 const { createLinearAuth, linearRedirectUri } = require("./linearAuth");
 const { createLinearTeams } = require("./linearTeams");
-
-const MAX_TITLE_LENGTH = 256;
-// Checked live: Linear accepted a 70,000-character description, higher
-// than the card's own 65,536-character limit, so the card's limit governs.
-const MAX_DESCRIPTION_LENGTH = 65536;
-const MAX_QUERY_LENGTH = 200;
-const MAX_RESULTS = 10;
-const SNIPPET_LENGTH = 300;
+const {
+  MAX_TITLE_LENGTH,
+  // Checked live: Linear accepted a 70,000-character description, higher
+  // than the card's own 65,536-character limit, so the card's limit governs.
+  MAX_BODY_LENGTH: MAX_DESCRIPTION_LENGTH,
+  MAX_QUERY_LENGTH,
+  MAX_RESULTS,
+  SNIPPET_LENGTH,
+  LINE_BREAK,
+  nonEmptyString,
+  characterCount,
+  clarify,
+} = require("./connectorText");
 
 // Linear's own priority numbers; the card words each
 // name from connectors.linear.notes.priority.<name>.
 const PRIORITIES = { urgent: 1, high: 2, medium: 3, low: 4, none: 0 };
 
-const LINE_BREAK = /[\r\n]/;
 // What linearApi reports when Linear refused the token (401 or
 // AUTHENTICATION_ERROR): nothing happened, so the call may be repeated once
 // after refreshing the bound login.
@@ -88,10 +92,6 @@ const COMMENT_QUERY = `query LinearComment($id: String!) {
 
 const IDENTIFIER = /^([A-Za-z][A-Za-z0-9]{0,9})-([1-9]\d{0,8})$/;
 
-function nonEmptyString(value) {
-  return typeof value === "string" && value.length > 0;
-}
-
 // "ENG-123", "eng-123", or a link to it in this workspace:
 // https://linear.app/<urlKey>/issue/ENG-123/<slug>?query#fragment.
 function parseIssueReference(input, organizationUrlKey) {
@@ -131,12 +131,6 @@ function clip(text, max) {
     .slice(0, max - 1)
     .join("")
     .trimEnd()}…`;
-}
-
-// Characters (code points), as the card counts them (issueApprovalFields.ts),
-// so a card the user could send is never refused here for its length.
-function characterCount(text) {
-  return [...text].length;
 }
 
 function titleProblem(title) {
@@ -218,10 +212,6 @@ function failureMessage(errorCode) {
     default:
       return "Linear refused the request. Nothing was sent.";
   }
-}
-
-function clarify(message, candidates = []) {
-  return { status: "needs_clarification", message, candidates };
 }
 
 function prepareFailed(errorCode, message = failureMessage(errorCode)) {

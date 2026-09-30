@@ -223,6 +223,13 @@ function normalizeStatus(status) {
     accountLabel: isString(value.accountLabel) ? value.accountLabel : null,
     workspaceLabel: isString(value.workspaceLabel) ? value.workspaceLabel : null,
     needsReconnect: value.needsReconnect === true,
+    // GitHub: where the user chooses the repositories its App is installed
+    // on. Settings opens it in the browser, so only a github.com page passes.
+    ...(isString(value.manageUrl) && value.manageUrl.startsWith("https://github.com/")
+      ? { manageUrl: value.manageUrl }
+      : {}),
+    // GitHub: its repository count hasn't been read yet for this login.
+    ...(value.workspaceLabelPending === true ? { workspaceLabelPending: true } : {}),
   };
 }
 
@@ -288,6 +295,13 @@ const CONNECT_ERROR_CODES = new Set([
   "email_not_verified",
   // Gmail: a Workspace admin blocked the app, or it's restricted to another org.
   "domain_policy",
+  // GitHub: the device code ran out (15 minutes), or the App has Device Flow off.
+  "code_expired",
+  "device_flow_disabled",
+  // GitHub: no device code could be asked for, offline or throttled, so the
+  // user never saw one to enter.
+  "network",
+  "rate_limited",
 ]);
 
 // A revoke is best effort: nothing may hang on an unreachable provider. The
@@ -486,6 +500,8 @@ function createConnectorManager({
         // A new login: approvals prepared under the old one must not send.
         replaced = credentials.read(accountId, connectorId)?.credential ?? null;
         credentials.replace(accountId, connectorId, credential, startGeneration);
+        // Saved: from here a Cancel has nothing left to stop.
+        if (connecting.get(flowKey) === controller) connecting.delete(flowKey);
       } catch (error) {
         // Nobody will use this login, so it is revoked rather than left live.
         await revokeQuietly(connector, credential);
@@ -520,10 +536,46 @@ function createConnectorManager({
     }
   }
 
+  // Aborts the connects in progress that `matches(accountId, connectorId)`;
+  // each then ends as oauth_cancelled, and a login that arrives anyway is
+  // never saved and is revoked where the connector does so (not GitHub, see
+  // githubConnector's revoke), as when a newer Connect replaces it. True when
+  // any was running.
+  function abortConnects(matches) {
+    let aborted = false;
+    for (const [flowKey, controller] of connecting) {
+      const split = flowKey.lastIndexOf(":");
+      if (matches(flowKey.slice(0, split), flowKey.slice(split + 1))) {
+        controller.abort();
+        aborted = true;
+      }
+    }
+    return aborted;
+  }
+
+  // The row's Cancel, or the user leaving Settings while GitHub's device code
+  // is showing. A connect started before an account switch or sign-out is
+  // stopped too: it can't be saved, and nothing else would end its polling.
+  // Stopping is always allowed.
+  function cancelConnect(connectorId) {
+    return abortConnects((_accountId, id) => id === connectorId)
+      ? { status: "cancelled" }
+      : { status: "idle" };
+  }
+
+  // The signed-in account changed: a connect started under another one can
+  // only be refused when it finishes, so it stops now.
+  function accountChanged() {
+    const accountId = getAccountId();
+    abortConnects((flowAccountId) => flowAccountId !== String(accountId));
+  }
+
   // Removing access is always allowed: no policy or plan check.
   // `erasingDevice` (Delete account with device erase) revokes a grant the
   // connector would otherwise keep because another login shares it.
-  async function disconnect(connectorId, { erasingDevice = false } = {}) {
+  // `removingAll` (account deletion, Reset app data) tells a connector that
+  // every login is going, not just this one.
+  async function disconnect(connectorId, { erasingDevice = false, removingAll = false } = {}) {
     const connector = byId.get(connectorId);
     if (!connector?.revoke || !credentials) {
       return { status: "unavailable", reason: "unknown_connector" };
@@ -533,7 +585,10 @@ function createConnectorManager({
     const entry = credentials.read(accountId, connectorId);
     let grantKept = false;
     if (entry) {
-      const revoked = await revokeQuietly(connector, entry.credential, { erasingDevice });
+      const revoked = await revokeQuietly(connector, entry.credential, {
+        erasingDevice,
+        removingAll,
+      });
       grantKept = revoked?.kept === true;
       try {
         credentials.clear(accountId, connectorId, entry.generation);
@@ -565,7 +620,7 @@ function createConnectorManager({
     await Promise.all(
       [...byId.values()]
         .filter((connector) => connector.revoke)
-        .map((connector) => disconnect(connector.id, options))
+        .map((connector) => disconnect(connector.id, { ...options, removingAll: true }))
     );
   }
 
@@ -580,7 +635,9 @@ function createConnectorManager({
     for (const connector of byId.values()) {
       if (!connector.revoke) continue;
       for (const credential of credentials.readAllAccounts(connector.id)) {
-        revokes.push(revokeQuietly(connector, credential, { erasingDevice: true }));
+        revokes.push(
+          revokeQuietly(connector, credential, { erasingDevice: true, removingAll: true })
+        );
       }
       invalidate(connector.id);
     }
@@ -871,6 +928,8 @@ function createConnectorManager({
     recentActions,
     sweepExpired,
     connect,
+    cancelConnect,
+    accountChanged,
     disconnect,
     disconnectAll,
     revokeAllStored,

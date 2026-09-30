@@ -652,6 +652,8 @@
       "dataRetentionDisabled": "La retención de datos está desactivada. Las transcripciones y el audio no se guardan en el historial.",
       "welcomeBack": "Bienvenido de nuevo",
       "welcomeBackNamed": "Bienvenido de nuevo, {{name}}",
+      "welcome": "Bienvenido",
+      "welcomeNamed": "Bienvenido, {{name}}",
       "dateGroups": {
         "today": "Hoy",
         "yesterday": "Ayer"
@@ -3629,6 +3631,7 @@
     "search": "Buscar conversaciones...",
     "archived": "Archivadas",
     "noConversations": "Aún no hay chats",
+    "allArchived": "Todos los chats están archivados",
     "noConversationsDescription": "Tus chats con el Asistente aparecerán aquí.",
     "loadFailed": "No se pudieron cargar los chats",
     "noResults": "Sin conversaciones coincidentes",
@@ -3806,6 +3809,9 @@
       "search_notesName": "Buscar notas",
       "email_draftName": "Borrador de correo",
       "find_contactName": "Buscar contacto",
+      "github_search_issuesName": "Buscar en GitHub",
+      "github_create_issueName": "Issue de GitHub",
+      "github_commentName": "Comentario de GitHub",
       "slack_send_messageName": "Mensaje de Slack",
       "linear_search_issuesName": "Buscar en Linear",
       "linear_create_issueName": "Incidencia de Linear",
@@ -3824,6 +3830,9 @@
       "search_notesStatus": "Buscando notas...",
       "email_draftStatus": "Preparando un correo...",
       "find_contactStatus": "Buscando contactos...",
+      "github_search_issuesStatus": "Buscando en GitHub...",
+      "github_create_issueStatus": "Preparando un issue de GitHub...",
+      "github_commentStatus": "Preparando un comentario de GitHub...",
       "slack_send_messageStatus": "Preparando un mensaje de Slack...",
       "linear_search_issuesStatus": "Buscando en Linear...",
       "linear_create_issueStatus": "Preparando una incidencia de Linear...",
@@ -4020,6 +4029,28 @@
         "dm_failed": "No se pudo abrir el mensaje directo a {{destination}}. No se envió nada.",
         "restricted": "{{destination}} es de solo lectura o está restringido para ti.",
         "generic": "Algo salió mal. No se envió nada.",
+        "github": {
+          "reconnect_needed": "GitHub debe reconectarse en Configuración.",
+          "network": "No se pudo conectar con GitHub. No se publicó nada.",
+          "rate_limited": "GitHub está ocupado. Vuelve a intentarlo en breve.",
+          "connection_changed": "La conexión de GitHub cambió antes de publicar, así que no se publicó nada.",
+          "credential_save_failed": "No se pudo guardar el inicio de sesión de GitHub en este equipo. No se publicó nada. Inténtalo de nuevo.",
+          "generic": "Algo salió mal. No se publicó nada en GitHub.",
+          "not_installed": "La aplicación OpenWhispr de GitHub no está instalada en este repositorio. Añádela en Configuración. No se publicó nada.",
+          "repo_unlisted": "No se pudo confirmar que la aplicación OpenWhispr de GitHub esté instalada en este repositorio. Comprueba el nombre del repositorio. No se publicó nada.",
+          "no_repositories": "Aún no hay repositorios elegidos para la aplicación OpenWhispr de GitHub. Elígelos en Configuración. No se publicó nada.",
+          "forbidden": "No tienes permiso para hacer esto en el repositorio. No se publicó nada.",
+          "not_found": "No se encontró el issue o la pull request. No se publicó nada.",
+          "issues_disabled": "Los issues están desactivados en este repositorio. No se publicó nada.",
+          "archived": "Este repositorio está archivado, así que no admite issues ni comentarios nuevos. No se publicó nada.",
+          "too_many_labels": "Elige como máximo 10 etiquetas por issue. No se publicó nada.",
+          "labels_unavailable": "No se pudieron leer las etiquetas del repositorio. No se publicó nada.",
+          "invalid": "GitHub lo rechazó por no ser válido. No se publicó nada.",
+          "locked": "La conversación está bloqueada. No se publicó nada.",
+          "invalid_reference": "Eso no es un issue ni una pull request de GitHub. No se publicó nada.",
+          "too_long": "El título o el texto es demasiado largo para GitHub. No se publicó nada.",
+          "not_configured": "GitHub no está disponible en esta versión. No se publicó nada."
+        },
         "gmail": {
           "reconnect_needed": "Gmail debe reconectarse en Configuración.",
           "network": "No se pudo conectar con Gmail. No se envió nada.",
@@ -4072,7 +4103,15 @@
         "bodyTooLong": "El mensaje es demasiado largo para Gmail. Acórtalo para enviarlo.",
         "unknown": "No se pudo confirmar el envío. Revisa tu carpeta de enviados."
       },
+      "github": {
+        "notes": {
+          "mentions": "Se notificará a {{mentions}}",
+          "pullRequest": "En una pull request",
+          "labelsMayNotApply": "Las etiquetas solo se añaden si tienes acceso de escritura a este repositorio."
+        }
+      },
       "openIn": {
+        "github": "Abrir en GitHub",
         "gmail": "Abrir en Gmail",
         "linear": "Abrir en Linear"
       },
@@ -4157,6 +4196,47 @@
         "failedBody": "Vuelve a OpenWhispr para intentarlo de nuevo."
       }
     },
+    "github": {
+      "title": "GitHub",
+      "description": "El asistente puede buscar issues y pull requests, crear issues y comentar en tu nombre, solo en los repositorios que elijas. No puede leer tu código y apruebas cada issue y comentario antes de que se publique.",
+      "connect": "Conectar",
+      "reconnect": "Reconectar",
+      "disconnect": "Desconectar",
+      "connecting": "Conectando con GitHub…",
+      "connectedAs": "Conectado como {{account}} · Repositorios: {{repositories}}",
+      "connectedAs_empty": "Conectado como {{account}} · aún no hay repositorios",
+      "connectedAs_unknown": "Conectado como {{account}}",
+      "needsReconnect": "GitHub debe reconectarse.",
+      "proRequired": "Actualiza a un plan de pago para que el asistente trabaje con issues de GitHub por ti.",
+      "reviewOnGithub": "Revisar en GitHub",
+      "disconnectedHint": "Desconectado de este equipo. GitHub conserva la autorización de OpenWhispr hasta que la quites allí.",
+      "errors": {
+        "connect_failed": "No se pudo conectar GitHub. Inténtalo de nuevo.",
+        "disconnect_failed": "No se pudo desconectar GitHub. Inténtalo de nuevo.",
+        "oauth_denied": "Se rechazó el acceso a GitHub.",
+        "token_exchange_failed": "GitHub no terminó de conectarse. Inténtalo de nuevo.",
+        "not_configured": "GitHub no está disponible en esta versión.",
+        "connection_changed": "Tu cuenta o la conexión de GitHub cambiaron durante la conexión. Inténtalo de nuevo.",
+        "signed_out": "Inicia sesión en OpenWhispr para conectar GitHub.",
+        "policy_blocked": "Tu organización ha desactivado los conectores.",
+        "policy_unavailable": "No se pudieron comprobar los ajustes de tu organización. Inténtalo de nuevo.",
+        "code_expired": "El código caducó. Inténtalo de nuevo.",
+        "device_flow_disabled": "El inicio de sesión en GitHub con un código no está configurado en esta versión.",
+        "network": "No se pudo conectar con GitHub. Comprueba tu conexión e inténtalo de nuevo.",
+        "rate_limited": "GitHub está ocupado en este momento. Inténtalo de nuevo en un minuto."
+      },
+      "deviceCode": {
+        "instructions": "Introduce este código en GitHub:",
+        "copyAndOpen": "Copiar y abrir GitHub",
+        "copied": "Código copiado.",
+        "cancel": "Cancelar",
+        "expires": "El código caduca a las {{time}}."
+      },
+      "repositories": {
+        "choose": "Elegir repositorios",
+        "manage": "Gestionar repositorios"
+      }
+    },
     "gmail": {
       "title": "Gmail",
       "description": "El asistente puede enviar correos desde tu cuenta de Gmail. No puede leer tu correo y tú pulsas Enviar en cada correo.",
@@ -4238,6 +4318,8 @@
       "title": "Acciones recientes",
       "actions": {
         "email_draft": "Borrador a {{destination}}",
+        "github_create_issue": "Nuevo issue en {{destination}}",
+        "github_comment": "Comentario en {{destination}}",
         "slack_send_message": "Mensaje a {{destination}}",
         "gmail_send": "Correo a {{destination}}",
         "linear_create_issue": "Nueva incidencia en {{destination}}",
@@ -4245,6 +4327,8 @@
       },
       "unlabeledActions": {
         "email_draft": "Borrador de correo",
+        "github_create_issue": "Issue de GitHub",
+        "github_comment": "Comentario de GitHub",
         "slack_send_message": "Mensaje de Slack",
         "gmail_send": "Correo de Gmail",
         "linear_create_issue": "Incidencia de Linear",
@@ -4290,6 +4374,28 @@
         "dm_failed": "No se pudo abrir el mensaje directo. No se envió nada.",
         "restricted": "Ese canal es de solo lectura o está restringido.",
         "generic": "No funcionó.",
+        "github": {
+          "reconnect_needed": "GitHub debe reconectarse.",
+          "network": "No se pudo conectar con GitHub.",
+          "rate_limited": "GitHub está ocupado.",
+          "connection_changed": "La conexión de GitHub cambió.",
+          "credential_save_failed": "No se pudo guardar el inicio de sesión de GitHub en este equipo.",
+          "generic": "No funcionó en GitHub.",
+          "not_installed": "La aplicación OpenWhispr de GitHub no está instalada ahí.",
+          "repo_unlisted": "No se pudo confirmar que la aplicación OpenWhispr de GitHub esté instalada ahí.",
+          "no_repositories": "Aún no hay repositorios de GitHub elegidos.",
+          "forbidden": "Sin permiso en ese repositorio.",
+          "not_found": "No se encontró ese issue o pull request.",
+          "issues_disabled": "Los issues están desactivados en ese repositorio.",
+          "archived": "Ese repositorio está archivado.",
+          "too_many_labels": "Demasiadas etiquetas para un issue.",
+          "labels_unavailable": "No se pudieron leer las etiquetas del repositorio.",
+          "invalid": "GitHub lo rechazó por no ser válido.",
+          "locked": "Esa conversación está bloqueada.",
+          "invalid_reference": "No es un issue ni una pull request de GitHub.",
+          "too_long": "Demasiado largo para GitHub.",
+          "not_configured": "GitHub no está disponible en esta versión."
+        },
         "gmail": {
           "reconnect_needed": "Gmail debe reconectarse.",
           "network": "No se pudo conectar con Gmail. No se envió nada.",
@@ -4327,8 +4433,7 @@
         }
       },
       "unknownSent": {
-        "gmail": "No se pudo confirmar que el correo para {{destination}} se envió. Revisa la carpeta Enviados de Gmail.",
-        "linear": "No se pudo confirmar que llegara a Linear. Revisa {{destination}} en Linear antes de volver a intentarlo."
+        "gmail": "No se pudo confirmar que el correo para {{destination}} se envió. Revisa la carpeta Enviados de Gmail."
       },
       "gmailDraftLimit": "Solo se pueden preparar {{max}} correos por solicitud.",
       "queryResults": "Resultados encontrados: {{total}}",

@@ -185,11 +185,13 @@ export function useEmbeddedChat({
     },
     [fetchNoteConversations, noteId, noteTitle, persistence]
   );
+  const [submissionInFlight, setSubmissionInFlight] = useState(false);
   const sendMessageWithResult = useChatMessageSender({
     conversationId,
     persistence,
     streaming,
     createConversation,
+    onSendingChange: setSubmissionInFlight,
   });
   const sendMessage = useCallback(
     async (text: string, options?: SendToAIOptions): Promise<void> => {
@@ -200,7 +202,11 @@ export function useEmbeddedChat({
 
   return {
     messages: persistence.messages,
-    agentState: streaming.agentState,
+    // As in ChatView: a cancelled send can hold the submission lock until an in-flight
+    // tool returns, and the lock would drop a message sent before then, so the chat
+    // reads busy until it lets go.
+    agentState:
+      submissionInFlight && streaming.agentState === "idle" ? "thinking" : streaming.agentState,
     sendMessage,
     cancelStream: streaming.cancelStream,
     noteConversations,

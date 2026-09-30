@@ -1,4 +1,5 @@
 import i18n from "../../../i18n";
+import { useConnectorStatusStore } from "../../../stores/connectorStatusStore";
 import { connectorErrorText } from "../../../utils/connectorErrorCopy";
 import { issueSentCopy, issueUnknownCopy, issueVerb } from "../../../utils/issueApprovalFields";
 import type { ToolResult } from "../ToolRegistry";
@@ -61,6 +62,21 @@ export function failedResult(
     data: { status: "failed", errorCode, error: message, ...edits },
     displayText: connectorErrorText(i18n.t, "toolStatus", connectorId ?? "", errorCode),
   };
+}
+
+// The tool step reads "<connector> needs to be reconnected.", the same copy a
+// failed reconnect_needed step shows, not the generic "connectors unavailable".
+export function reconnectResult(connectorId: string, guidance: string): ToolResult {
+  return {
+    ...unavailableResult("reconnect_needed", guidance),
+    displayText: connectorErrorText(i18n.t, "toolStatus", connectorId, "reconnect_needed"),
+  };
+}
+
+// Read live, not when the registry was built: a login can lapse mid-conversation.
+export function needsReconnectNow(connectorId: string): boolean {
+  const status = useConnectorStatusStore.getState().statuses[connectorId];
+  return Boolean(status?.connected && status.needsReconnect);
 }
 
 // A direct action that may already have acted: the model must not retry it.

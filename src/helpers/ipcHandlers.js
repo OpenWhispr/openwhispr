@@ -112,6 +112,7 @@ const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
 const { supportsLiveSpeakerIdentification } = require("./liveSpeakerIdPolicy");
 const MeetingEchoLeakDetector = require("./meetingEchoLeakDetector");
 const createMeetingSystemAudioWatchdog = require("./meetingSystemAudioWatchdog");
+const createMeetingSystemAudioHandover = require("./meetingSystemAudioHandover");
 const {
   partitionPendingMicFinals,
   isRiskyMicDuplicateProfile,
@@ -681,20 +682,7 @@ class IPCHandlers {
     resolveSystemDefaultMicrophone();
     this.setupHandlers();
     // Lives for the app's lifetime; IPCHandlers has no teardown path.
-    tokenStore.subscribe(({ generation, token }) => {
-      this.enterpriseIdentityManager?.clear();
-      if (!token) {
-        this.databaseManager.setActiveAccountId(null);
-        accountScopeBinding.clear();
-        broadcastToWindows("active-account-scope-changed", null);
-      }
-      broadcastToWindows("auth-token-state-changed", {
-        generation,
-        hasToken: Boolean(token),
-      });
-      // A sign-out or another account changes whose login shows.
-      void this.connectorManager?.notifyStatusChanged();
-    });
+    tokenStore.subscribe((state) => this._handleAuthTokenChange(state));
 
     if (this.whisperManager?.serverManager) {
       // Remember the failed backend so it isn't re-attempted (and its model
@@ -716,6 +704,23 @@ class IPCHandlers {
         this._syncStartupEnv({}, ["WHISPER_VULKAN_DEVICE"]);
       });
     }
+  }
+
+  _handleAuthTokenChange({ generation, token }) {
+    this.enterpriseIdentityManager?.clear();
+    if (!token) {
+      this.databaseManager.setActiveAccountId(null);
+      accountScopeBinding.clear();
+      broadcastToWindows("active-account-scope-changed", null);
+      // As set-active-account-scope does: a connect can't outlive its account.
+      this.connectorManager?.accountChanged();
+    }
+    broadcastToWindows("auth-token-state-changed", {
+      generation,
+      hasToken: Boolean(token),
+    });
+    // A sign-out or another account changes whose login shows.
+    void this.connectorManager?.notifyStatusChanged();
   }
 
   // Reconstructing counters from the transcripts already on disk records exactly
@@ -2216,6 +2221,7 @@ class IPCHandlers {
         "active-account-scope-changed",
         accountId !== null ? { accountId, authGeneration: state.generation } : null
       );
+      this.connectorManager?.accountChanged();
       void this.connectorManager?.notifyStatusChanged();
       return { success: true };
     });
@@ -6916,7 +6922,7 @@ class IPCHandlers {
       meetingMicDiarizationPath = null;
       meetingMicDiarizationStartedAt = null;
       meetingSystemAudioHeard = false;
-      meetingSystemAudioDegraded = false;
+      meetingSystemAudioHandover.reset();
       meetingDiarizationSegments = [];
       const { pcmPath, startedAt, diarizedSource, cleanupPcmPaths } = resolveDiarizationInput({
         systemPcmPath,
@@ -7509,7 +7515,7 @@ class IPCHandlers {
     let meetingMicDiarizationPath = null;
     let meetingMicDiarizationStartedAt = null;
     let meetingSystemAudioHeard = false;
-    let meetingSystemAudioDegraded = false;
+    const meetingSystemAudioHandover = createMeetingSystemAudioHandover();
     let meetingDiarizationSegments = [];
     let meetingLiveSpeakerActive = false;
     let meetingLiveSpeakerState = null;
@@ -8115,7 +8121,7 @@ class IPCHandlers {
       meetingDiarizationStartedAt = null;
       dropMeetingMicDiarizationCapture();
       meetingSystemAudioHeard = false;
-      meetingSystemAudioDegraded = false;
+      meetingSystemAudioHandover.reset();
       meetingDiarizationSegments = [];
       meetingLocalWin = null;
       meetingLocalTranscript = "";
@@ -8855,22 +8861,26 @@ class IPCHandlers {
     };
 
     // The Windows helper reports capture_silent when its own stream is silent
-    // while a render endpoint is playing: activation succeeded but no audio
-    // will ever arrive, so hand the live session to Chromium's renderer
-    // loopback. The silence watchdog stays armed in case that fails too.
-    const degradeMeetingSystemAudioToLoopback = async (event) => {
-      if (meetingSystemAudioDegraded || meetingSystemAudioHeard) return;
-      meetingSystemAudioDegraded = true;
+    // while a render endpoint is playing, which activation success cannot
+    // detect. Start renderer loopback beside it; the handover decides whether
+    // it takes the channel.
+    const degradeMeetingSystemAudioToLoopback = (event) => {
+      if (!meetingSystemAudioHandover.begin()) return;
       debugLogger.warn(
-        "Windows system audio helper captured only silence, switching to renderer loopback",
+        "Windows system audio helper captured only silence, starting renderer loopback beside it",
         {},
         "meeting"
       );
-      await this.windowsLoopbackAudioManager?.stop().catch(() => {});
       const win = BrowserWindow.fromWebContents(event.sender);
       if (win && !win.isDestroyed()) {
         win.webContents.send("meeting-system-audio-degraded");
       }
+    };
+
+    const completeMeetingSystemAudioHandover = () => {
+      debugLogger.info("Renderer loopback took over system audio capture", {}, "meeting");
+      meetingSystemAudioWatchdog.detachCapture();
+      void this.windowsLoopbackAudioManager?.stop().catch(() => {});
     };
 
     const startManagedMeetingSystemAudio = (event, manager, warningLabel, onWarningCode) => {
@@ -8883,6 +8893,7 @@ class IPCHandlers {
         captureStarted = true;
         return manager.start({
           onChunk: (chunk) => {
+            if (!meetingSystemAudioHandover.acceptNativeChunk(chunk)) return;
             if (timeline) {
               timeline.write(chunk, (buffer, synthetic, capturedAt) =>
                 sendMeetingAudio(buffer, "system", synthetic, capturedAt)
@@ -8973,7 +8984,7 @@ class IPCHandlers {
             "Windows system audio warning",
             (code) => {
               if (code === "capture_silent") {
-                void degradeMeetingSystemAudioToLoopback(event);
+                degradeMeetingSystemAudioToLoopback(event);
               }
             }
           );
@@ -9013,7 +9024,13 @@ class IPCHandlers {
     };
 
     ipcMain.on("meeting-transcription-send", (_event, audioBuffer, source) => {
-      sendMeetingAudio(audioBuffer, source);
+      const buffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
+      if (source === "system") {
+        const route = meetingSystemAudioHandover.acceptRendererChunk(buffer);
+        if (route === "drop") return;
+        if (route === "takeover") completeMeetingSystemAudioHandover();
+      }
+      sendMeetingAudio(buffer, source);
     });
 
     const stopMeetingTranscription = async (expectedSessionId) => {

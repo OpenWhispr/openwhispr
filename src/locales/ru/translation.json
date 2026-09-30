@@ -643,6 +643,8 @@
       "dataRetentionDisabled": "Хранение данных отключено. Транскрипции и аудио не сохраняются в истории.",
       "welcomeBack": "С возвращением",
       "welcomeBackNamed": "С возвращением, {{name}}",
+      "welcome": "Добро пожаловать",
+      "welcomeNamed": "Добро пожаловать, {{name}}",
       "dateGroups": {
         "today": "Сегодня",
         "yesterday": "Вчера"
@@ -3620,6 +3622,7 @@
     "search": "Поиск бесед...",
     "archived": "Архив",
     "noConversations": "Чатов пока нет",
+    "allArchived": "Все чаты в архиве",
     "noConversationsDescription": "Здесь появятся ваши чаты с ассистентом.",
     "loadFailed": "Не удалось загрузить чаты",
     "noResults": "Совпадений не найдено",
@@ -3797,6 +3800,9 @@
       "search_notesName": "Поиск заметок",
       "email_draftName": "Черновик письма",
       "find_contactName": "Найти контакт",
+      "github_search_issuesName": "Поиск в GitHub",
+      "github_create_issueName": "Issue в GitHub",
+      "github_commentName": "Комментарий в GitHub",
       "slack_send_messageName": "Сообщение Slack",
       "linear_search_issuesName": "Поиск в Linear",
       "linear_create_issueName": "Задача в Linear",
@@ -3815,6 +3821,9 @@
       "search_notesStatus": "Поиск в заметках...",
       "email_draftStatus": "Подготовка письма...",
       "find_contactStatus": "Поиск контактов...",
+      "github_search_issuesStatus": "Поиск в GitHub...",
+      "github_create_issueStatus": "Подготовка issue в GitHub...",
+      "github_commentStatus": "Подготовка комментария в GitHub...",
       "slack_send_messageStatus": "Подготовка сообщения Slack...",
       "linear_search_issuesStatus": "Поиск в Linear...",
       "linear_create_issueStatus": "Подготовка задачи в Linear...",
@@ -4011,6 +4020,28 @@
         "dm_failed": "Не удалось открыть личные сообщения с {{destination}}. Ничего не отправлено.",
         "restricted": "{{destination}} доступен вам только для чтения или ограничен.",
         "generic": "Что-то пошло не так. Ничего не отправлено.",
+        "github": {
+          "reconnect_needed": "GitHub нужно переподключить в настройках.",
+          "network": "Не удалось связаться с GitHub. Ничего не опубликовано.",
+          "rate_limited": "GitHub сейчас перегружен. Повторите попытку чуть позже.",
+          "connection_changed": "Подключение к GitHub изменилось перед публикацией, поэтому ничего не было опубликовано.",
+          "credential_save_failed": "Не удалось сохранить вход в GitHub на этом компьютере. Ничего не опубликовано. Попробуйте снова.",
+          "generic": "Что-то пошло не так. В GitHub ничего не опубликовано.",
+          "not_installed": "Приложение OpenWhispr для GitHub не установлено в этом репозитории. Добавьте его в настройках. Ничего не опубликовано.",
+          "repo_unlisted": "Не удалось подтвердить, что приложение OpenWhispr для GitHub установлено в этом репозитории. Проверьте название репозитория. Ничего не опубликовано.",
+          "no_repositories": "Для приложения OpenWhispr в GitHub ещё не выбраны репозитории. Выберите их в настройках. Ничего не опубликовано.",
+          "forbidden": "У вас нет прав на это действие в репозитории. Ничего не опубликовано.",
+          "not_found": "Issue или pull request не найдены. Ничего не опубликовано.",
+          "issues_disabled": "В этом репозитории отключены issues. Ничего не опубликовано.",
+          "archived": "Этот репозиторий архивирован, поэтому в нём нельзя создавать issues и комментарии. Ничего не опубликовано.",
+          "too_many_labels": "Выберите не больше 10 меток для одного issue. Ничего не опубликовано.",
+          "labels_unavailable": "Не удалось прочитать метки репозитория. Ничего не опубликовано.",
+          "invalid": "GitHub отклонил это как недопустимое. Ничего не опубликовано.",
+          "locked": "Обсуждение заблокировано. Ничего не опубликовано.",
+          "invalid_reference": "Это не issue и не pull request в GitHub. Ничего не опубликовано.",
+          "too_long": "Заголовок или текст слишком длинные для GitHub. Ничего не опубликовано.",
+          "not_configured": "GitHub недоступен в этой сборке. Ничего не опубликовано."
+        },
         "gmail": {
           "reconnect_needed": "Gmail нужно переподключить в настройках.",
           "network": "Не удалось связаться с Gmail. Ничего не отправлено.",
@@ -4063,7 +4094,15 @@
         "bodyTooLong": "Сообщение слишком длинное для Gmail. Сократите его, чтобы отправить.",
         "unknown": "Не удалось подтвердить отправку. Проверьте папку «Отправленные»."
       },
+      "github": {
+        "notes": {
+          "mentions": "Уведомление получат: {{mentions}}",
+          "pullRequest": "К pull request",
+          "labelsMayNotApply": "Метки добавляются, только если у вас есть права на запись в этот репозиторий."
+        }
+      },
       "openIn": {
+        "github": "Открыть в GitHub",
         "gmail": "Открыть в Gmail",
         "linear": "Открыть в Linear"
       },
@@ -4148,6 +4187,47 @@
         "failedBody": "Вернитесь в OpenWhispr, чтобы попробовать снова."
       }
     },
+    "github": {
+      "title": "GitHub",
+      "description": "Ассистент может искать issues и pull requests, создавать issues и оставлять комментарии от вашего имени, только в выбранных вами репозиториях. Он не может читать ваш код, и вы одобряете каждое issue и каждый комментарий перед публикацией.",
+      "connect": "Подключить",
+      "reconnect": "Переподключить",
+      "disconnect": "Отключить",
+      "connecting": "Подключение к GitHub…",
+      "connectedAs": "Подключено как {{account}} · Репозитории: {{repositories}}",
+      "connectedAs_empty": "Подключено как {{account}} · репозиториев пока нет",
+      "connectedAs_unknown": "Подключено как {{account}}",
+      "needsReconnect": "GitHub нужно переподключить.",
+      "proRequired": "Перейдите на платный план, чтобы ассистент работал с issues в GitHub за вас.",
+      "reviewOnGithub": "Проверить на GitHub",
+      "disconnectedHint": "Отключено на этом компьютере. GitHub сохраняет авторизацию OpenWhispr, пока вы не удалите её там.",
+      "errors": {
+        "connect_failed": "Не удалось подключить GitHub. Попробуйте снова.",
+        "disconnect_failed": "Не удалось отключить GitHub. Попробуйте снова.",
+        "oauth_denied": "Доступ к GitHub был отклонён.",
+        "token_exchange_failed": "GitHub не завершил подключение. Попробуйте снова.",
+        "not_configured": "GitHub недоступен в этой сборке.",
+        "connection_changed": "Ваш аккаунт или подключение к GitHub изменились во время подключения. Попробуйте снова.",
+        "signed_out": "Войдите в OpenWhispr, чтобы подключить GitHub.",
+        "policy_blocked": "Ваша организация отключила коннекторы.",
+        "policy_unavailable": "Не удалось проверить настройки вашей организации. Попробуйте снова.",
+        "code_expired": "Срок действия кода истёк. Попробуйте снова.",
+        "device_flow_disabled": "Вход в GitHub по коду не настроен в этой сборке.",
+        "network": "Не удалось связаться с GitHub. Проверьте подключение и попробуйте снова.",
+        "rate_limited": "GitHub сейчас перегружен. Попробуйте снова через минуту."
+      },
+      "deviceCode": {
+        "instructions": "Введите этот код на GitHub:",
+        "copyAndOpen": "Скопировать и открыть GitHub",
+        "copied": "Код скопирован.",
+        "cancel": "Отмена",
+        "expires": "Код действует до {{time}}."
+      },
+      "repositories": {
+        "choose": "Выбрать репозитории",
+        "manage": "Управлять репозиториями"
+      }
+    },
     "gmail": {
       "title": "Gmail",
       "description": "Ассистент может отправлять письма из вашего аккаунта Gmail. Он не может читать вашу почту, и каждое письмо вы отправляете сами кнопкой «Отправить».",
@@ -4229,6 +4309,8 @@
       "title": "Последние действия",
       "actions": {
         "email_draft": "Черновик для {{destination}}",
+        "github_create_issue": "Новое issue в {{destination}}",
+        "github_comment": "Комментарий к {{destination}}",
         "slack_send_message": "Сообщение для {{destination}}",
         "gmail_send": "Письмо для {{destination}}",
         "linear_create_issue": "Новая задача в {{destination}}",
@@ -4236,6 +4318,8 @@
       },
       "unlabeledActions": {
         "email_draft": "Черновик письма",
+        "github_create_issue": "Issue в GitHub",
+        "github_comment": "Комментарий в GitHub",
         "slack_send_message": "Сообщение в Slack",
         "gmail_send": "Письмо Gmail",
         "linear_create_issue": "Задача в Linear",
@@ -4281,6 +4365,28 @@
         "dm_failed": "Не удалось открыть личные сообщения. Ничего не отправлено.",
         "restricted": "Этот канал только для чтения или ограничен.",
         "generic": "Не получилось.",
+        "github": {
+          "reconnect_needed": "GitHub нужно переподключить.",
+          "network": "Не удалось связаться с GitHub.",
+          "rate_limited": "GitHub сейчас перегружен.",
+          "connection_changed": "Подключение к GitHub изменилось.",
+          "credential_save_failed": "Не удалось сохранить вход в GitHub на этом компьютере.",
+          "generic": "В GitHub не получилось.",
+          "not_installed": "Приложение OpenWhispr для GitHub там не установлено.",
+          "repo_unlisted": "Не удалось подтвердить, что приложение OpenWhispr для GitHub там установлено.",
+          "no_repositories": "Репозитории GitHub ещё не выбраны.",
+          "forbidden": "Нет прав в этом репозитории.",
+          "not_found": "Issue или pull request не найдены.",
+          "issues_disabled": "В этом репозитории отключены issues.",
+          "archived": "Этот репозиторий архивирован.",
+          "too_many_labels": "Слишком много меток для одного issue.",
+          "labels_unavailable": "Не удалось прочитать метки репозитория.",
+          "invalid": "GitHub отклонил это как недопустимое.",
+          "locked": "Это обсуждение заблокировано.",
+          "invalid_reference": "Это не issue и не pull request в GitHub.",
+          "too_long": "Слишком длинно для GitHub.",
+          "not_configured": "GitHub недоступен в этой сборке."
+        },
         "gmail": {
           "reconnect_needed": "Gmail нужно переподключить.",
           "network": "Не удалось связаться с Gmail. Ничего не отправлено.",
@@ -4318,8 +4424,7 @@
         }
       },
       "unknownSent": {
-        "gmail": "Не удалось подтвердить отправку письма для {{destination}}. Проверьте папку «Отправленные» в Gmail.",
-        "linear": "Не удалось подтвердить, что это дошло до Linear. Проверьте {{destination}} в Linear, прежде чем пробовать снова."
+        "gmail": "Не удалось подтвердить отправку письма для {{destination}}. Проверьте папку «Отправленные» в Gmail."
       },
       "gmailDraftLimit": "Лимит писем на один запрос: {{max}}.",
       "queryResults": "Найдено результатов: {{total}}",

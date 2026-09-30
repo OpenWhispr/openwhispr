@@ -15,6 +15,7 @@ const { createGmailAuth, gmailClientCredentials, sharesCalendarGrant } = require
 const { connectorResultPage } = require("./oauthResultPage");
 const { buildRawMessage } = require("./gmailMime");
 const { isTransportErrorCode } = require("./deliveryClassifier");
+const { characterCount } = require("./connectorText");
 
 function stringList(value) {
   return Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
@@ -49,10 +50,6 @@ function sentMessageUrl(email, id) {
 
 function sentFolderUrl(email) {
   return `https://mail.google.com/mail/?authuser=${encodeURIComponent(email)}#sent`;
-}
-
-function characterCount(text) {
-  return [...text].length;
 }
 
 // English for the model; the card shows translated copy by errorCode.

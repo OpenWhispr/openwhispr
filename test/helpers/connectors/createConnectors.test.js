@@ -51,13 +51,13 @@ test("two connectors with one id is a build fault", async () => {
   assert.throws(() => createConnectors(fakeDeps(), [same, same]), /connector id "a" is used twice/);
 });
 
-test("the shipped connectors are email, Slack, Gmail and Linear, built from the deps", async () => {
+test("the shipped connectors are email, Slack, Gmail, Linear and GitHub, built from the deps", async () => {
   const { createConnectors } = await load();
 
   const connectors = createConnectors(fakeDeps());
   assert.deepEqual(
     connectors.map((connector) => connector.id),
-    ["email", "slack", "gmail", "linear"]
+    ["email", "slack", "gmail", "linear", "github"]
   );
 });
 

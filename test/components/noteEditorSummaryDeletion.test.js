@@ -439,3 +439,37 @@ test("the note's chat names the user's own speakers and leaves attendees to the 
   assert.equal(chatTranscript(), transcript);
   await unmount();
 });
+
+// The note's bottom bar: the element that receives the in-view chat as `chatContent`.
+function findBottomBar(tree) {
+  let bar = null;
+  walk(tree, (node) => {
+    if (!bar && "chatContent" in node.props) bar = node;
+  });
+  return bar;
+}
+
+test("the in-view chat mounts on its first open and stays to fade out", async (t) => {
+  const { render, latest, unmount } = await loadNoteEditor(t);
+  // Closing checks whether focus is inside the chat; the harness DOM has no elements.
+  const originalHTMLElement = globalThis.HTMLElement;
+  globalThis.HTMLElement ??= class {};
+  t.after(() => {
+    if (originalHTMLElement === undefined) delete globalThis.HTMLElement;
+    else globalThis.HTMLElement = originalHTMLElement;
+  });
+
+  // Every keystroke in the note re-renders the editor; a chat nobody opened isn't
+  // rendered, so its conversation isn't parsed on each one.
+  await render(ENHANCEMENT);
+  assert.ok(!findBottomBar(latest()).props.chatContent);
+
+  await React.act(async () => findBottomBar(latest()).props.onInputFocus());
+  assert.equal(findBottomBar(latest()).props.chatOpen, true);
+  assert.ok(findBottomBar(latest()).props.chatContent);
+
+  await React.act(async () => findBottomBar(latest()).props.onInputEscape());
+  assert.equal(findBottomBar(latest()).props.chatOpen, false);
+  assert.ok(findBottomBar(latest()).props.chatContent, "closing keeps it mounted for the fade");
+  await unmount();
+});

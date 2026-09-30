@@ -510,6 +510,7 @@ function initializeCoreManagers() {
       // the calendar manager is created below.
       getGoogleCalendarAccounts: () => googleCalendarManager?.getAccounts() ?? [],
       broadcast: broadcastToWindows,
+      notifyStatusChanged: () => void connectorManager?.notifyStatusChanged(),
     }),
     pendingActions: createPendingActions(),
     actionLog: createActionLog(databaseManager),

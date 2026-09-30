@@ -88,4 +88,4 @@ function createBoundLogin({ connectorId, credentials, sameLogin, isFresh, refres
   return { stillBound, boundCredential, markReconnect, saveRefreshed, getAccessToken };
 }
 
-module.exports = { createBoundLogin };
+module.exports = { createBoundLogin, CONNECTION_CHANGED };

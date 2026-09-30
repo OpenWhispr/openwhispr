@@ -1,5 +1,5 @@
-import { createContext, useContext, useId, type ReactElement } from "react";
-import Markdown, { type Components } from "react-markdown";
+import { createContext, useContext, useId, type ComponentProps, type ReactElement } from "react";
+import Markdown, { type Components, type ExtraProps } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 interface MarkdownRendererProps {
@@ -8,6 +8,48 @@ interface MarkdownRendererProps {
 }
 
 const FootnotePrefixContext = createContext("");
+const InsideLinkContext = createContext(false);
+
+function MarkdownLink({ node: _node, ...props }: ComponentProps<"a"> & ExtraProps): ReactElement {
+  const prefix = useContext(FootnotePrefixContext);
+  return (
+    <InsideLinkContext value={true}>
+      <a
+        {...props}
+        aria-describedby={
+          props["aria-describedby"] === "footnote-label"
+            ? `${prefix}footnote-label`
+            : props["aria-describedby"]
+        }
+        target={props.href?.startsWith("#") ? undefined : "_blank"}
+        rel="noopener noreferrer"
+        className="text-link underline decoration-link/30 hover:decoration-link/60 transition-colors wrap-break-word"
+      />
+    </InsideLinkContext>
+  );
+}
+
+// Replies can be steered by prompt injections in notes, calendar events or web
+// results the agent read. An <img> would fetch its URL as soon as the reply
+// renders, leaking whatever the injection packed into it, so images only ever
+// render as a link the user has to click. Inside another link, a nested link
+// would take the click, and a relative URL resolves against the file:// page
+// (on Windows, `//host/x` is a network share), so those render as text. Only a
+// link to the image itself may be labelled with its URL.
+function MarkdownImage({
+  src,
+  alt,
+  title,
+}: ComponentProps<"img"> & ExtraProps): ReactElement | null {
+  const insideLink = useContext(InsideLinkContext);
+  const label = alt?.trim();
+  if (!src || insideLink || !/^https?:\/\//i.test(src)) return label ? <>{label}</> : null;
+  return (
+    <MarkdownLink href={src} title={title}>
+      {label || src}
+    </MarkdownLink>
+  );
+}
 
 // Stable component types preserve DOM state, including table scroll positions.
 const markdownComponents: Components = {
@@ -38,22 +80,8 @@ const markdownComponents: Components = {
       {children}
     </li>
   ),
-  a: function MarkdownLink({ node: _node, ...props }): ReactElement {
-    const prefix = useContext(FootnotePrefixContext);
-    return (
-      <a
-        {...props}
-        aria-describedby={
-          props["aria-describedby"] === "footnote-label"
-            ? `${prefix}footnote-label`
-            : props["aria-describedby"]
-        }
-        target={props.href?.startsWith("#") ? undefined : "_blank"}
-        rel="noopener noreferrer"
-        className="text-link underline decoration-link/30 hover:decoration-link/60 transition-colors"
-      />
-    );
-  },
+  a: MarkdownLink,
+  img: MarkdownImage,
   code: ({ children }): ReactElement => (
     <code dir="ltr" className="bg-black/10 px-1 py-0.5 rounded text-xs font-mono">
       {children}

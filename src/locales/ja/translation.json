@@ -643,6 +643,8 @@
       "dataRetentionDisabled": "データ保持が無効です。文字起こしと音声は履歴に保存されません。",
       "welcomeBack": "おかえりなさい",
       "welcomeBackNamed": "おかえりなさい、{{name}}さん",
+      "welcome": "ようこそ",
+      "welcomeNamed": "ようこそ、{{name}}さん",
       "dateGroups": {
         "today": "今日",
         "yesterday": "昨日"
@@ -3576,6 +3578,7 @@
     "search": "会話を検索...",
     "archived": "アーカイブ済み",
     "noConversations": "チャットはまだありません",
+    "allArchived": "すべてのチャットはアーカイブ済みです",
     "noConversationsDescription": "アシスタントとのチャットはここに表示されます。",
     "loadFailed": "チャットを読み込めませんでした",
     "noResults": "該当する会話がありません",
@@ -3753,6 +3756,9 @@
       "search_notesName": "ノートを検索",
       "email_draftName": "メールの下書き",
       "find_contactName": "連絡先を検索",
+      "github_search_issuesName": "GitHubを検索",
+      "github_create_issueName": "GitHubのIssue",
+      "github_commentName": "GitHubのコメント",
       "slack_send_messageName": "Slackメッセージ",
       "linear_search_issuesName": "Linearを検索",
       "linear_create_issueName": "LinearのIssue",
@@ -3771,6 +3777,9 @@
       "search_notesStatus": "ノートを検索中...",
       "email_draftStatus": "メールを準備しています...",
       "find_contactStatus": "連絡先を検索中...",
+      "github_search_issuesStatus": "GitHubを検索中...",
+      "github_create_issueStatus": "GitHubのIssueを準備しています...",
+      "github_commentStatus": "GitHubのコメントを準備しています...",
       "slack_send_messageStatus": "Slackメッセージを準備しています...",
       "linear_search_issuesStatus": "Linearを検索中...",
       "linear_create_issueStatus": "LinearのIssueを準備しています...",
@@ -3967,6 +3976,28 @@
         "dm_failed": "{{destination}}とのダイレクトメッセージを開けませんでした。何も送信されていません。",
         "restricted": "{{destination}}は読み取り専用か、あなたには制限されています。",
         "generic": "問題が発生しました。何も送信されていません。",
+        "github": {
+          "reconnect_needed": "設定でGitHubを再接続する必要があります。",
+          "network": "GitHubに接続できませんでした。何も投稿されていません。",
+          "rate_limited": "GitHubが混み合っています。しばらくしてからもう一度お試しください。",
+          "connection_changed": "投稿前にGitHubの接続が変わったため、何も投稿されませんでした。",
+          "credential_save_failed": "このコンピューターにGitHubのログイン情報を保存できませんでした。何も投稿されていません。もう一度お試しください。",
+          "generic": "問題が発生しました。GitHubには何も投稿されていません。",
+          "not_installed": "このリポジトリにはOpenWhisprのGitHub Appがインストールされていません。設定で追加してください。何も投稿されていません。",
+          "repo_unlisted": "このリポジトリにOpenWhisprのGitHub Appがインストールされているか確認できませんでした。リポジトリ名を確認してください。何も投稿されていません。",
+          "no_repositories": "OpenWhisprのGitHub Appにリポジトリがまだ選択されていません。設定で選択してください。何も投稿されていません。",
+          "forbidden": "このリポジトリでこの操作を行う権限がありません。何も投稿されていません。",
+          "not_found": "Issueまたはプルリクエストが見つかりませんでした。何も投稿されていません。",
+          "issues_disabled": "このリポジトリではIssueが無効になっています。何も投稿されていません。",
+          "archived": "このリポジトリはアーカイブされているため、新しいIssueやコメントを追加できません。何も投稿されていません。",
+          "too_many_labels": "1つのIssueに付けられるラベルは10個までです。何も投稿されていません。",
+          "labels_unavailable": "リポジトリのラベルを読み込めませんでした。何も投稿されていません。",
+          "invalid": "GitHubに無効として拒否されました。何も投稿されていません。",
+          "locked": "この会話はロックされています。何も投稿されていません。",
+          "invalid_reference": "GitHubのIssueまたはプルリクエストではありません。何も投稿されていません。",
+          "too_long": "タイトルまたは本文がGitHubには長すぎます。何も投稿されていません。",
+          "not_configured": "このビルドではGitHubを利用できません。何も投稿されていません。"
+        },
         "gmail": {
           "reconnect_needed": "設定でGmailを再接続する必要があります。",
           "network": "Gmailに接続できませんでした。何も送信されていません。",
@@ -4019,7 +4050,15 @@
         "bodyTooLong": "メッセージが長すぎて Gmail で送信できません。短くしてから送信してください。",
         "unknown": "送信されたか確認できませんでした。送信済みフォルダを確認してください。"
       },
+      "github": {
+        "notes": {
+          "mentions": "{{mentions}} に通知されます",
+          "pullRequest": "プルリクエストへのコメント",
+          "labelsMayNotApply": "ラベルは、このリポジトリへの書き込み権限がある場合にのみ追加されます。"
+        }
+      },
       "openIn": {
+        "github": "GitHubで開く",
         "gmail": "Gmailで開く",
         "linear": "Linearで開く"
       },
@@ -4104,6 +4143,47 @@
         "failedBody": "OpenWhisprに戻ってもう一度お試しください。"
       }
     },
+    "github": {
+      "title": "GitHub",
+      "description": "アシスタントは、あなたが選んだリポジトリでのみ、あなたとしてIssueとプルリクエストの検索、Issueの作成、コメントができます。コードを読むことはできず、Issueやコメントは投稿前に必ずあなたが承認します。",
+      "connect": "接続",
+      "reconnect": "再接続",
+      "disconnect": "接続を解除",
+      "connecting": "GitHubに接続しています…",
+      "connectedAs": "{{account}} として接続済み · リポジトリ: {{repositories}}",
+      "connectedAs_empty": "{{account}} として接続済み · リポジトリはまだありません",
+      "connectedAs_unknown": "{{account}} として接続済み",
+      "needsReconnect": "GitHubを再接続する必要があります。",
+      "proRequired": "アシスタントにGitHubのIssueを扱わせるには、有料プランへのアップグレードが必要です。",
+      "reviewOnGithub": "GitHubで確認",
+      "disconnectedHint": "このコンピューターから接続を解除しました。GitHub側でOpenWhisprの認可を削除するまで、認可はGitHubに残ります。",
+      "errors": {
+        "connect_failed": "GitHubを接続できませんでした。もう一度お試しください。",
+        "disconnect_failed": "GitHubの接続を解除できませんでした。もう一度お試しください。",
+        "oauth_denied": "GitHubへのアクセスが拒否されました。",
+        "token_exchange_failed": "GitHubの接続が完了しませんでした。もう一度お試しください。",
+        "not_configured": "このビルドではGitHubを利用できません。",
+        "connection_changed": "接続中にアカウントまたはGitHubの接続が変わりました。もう一度お試しください。",
+        "signed_out": "GitHubを接続するにはOpenWhisprにサインインしてください。",
+        "policy_blocked": "組織によってコネクタが無効にされています。",
+        "policy_unavailable": "組織の設定を確認できませんでした。もう一度お試しください。",
+        "code_expired": "コードの有効期限が切れました。もう一度お試しください。",
+        "device_flow_disabled": "このビルドでは、コードによるGitHubへのサインインが設定されていません。",
+        "network": "GitHubに接続できませんでした。接続を確認して、もう一度お試しください。",
+        "rate_limited": "GitHubが混み合っています。1分後にもう一度お試しください。"
+      },
+      "deviceCode": {
+        "instructions": "GitHubでこのコードを入力してください:",
+        "copyAndOpen": "コピーしてGitHubを開く",
+        "copied": "コードをコピーしました。",
+        "cancel": "キャンセル",
+        "expires": "コードの有効期限は {{time}} です。"
+      },
+      "repositories": {
+        "choose": "リポジトリを選択",
+        "manage": "リポジトリを管理"
+      }
+    },
     "gmail": {
       "title": "Gmail",
       "description": "アシスタントはあなたのGmailアカウントからメールを送信できます。メールを読むことはできず、各メールはあなた自身が送信を押して送ります。",
@@ -4185,6 +4265,8 @@
       "title": "最近のアクション",
       "actions": {
         "email_draft": "{{destination}} 宛ての下書き",
+        "github_create_issue": "{{destination}} の新しいIssue",
+        "github_comment": "{{destination}} へのコメント",
         "slack_send_message": "{{destination}} 宛てのメッセージ",
         "gmail_send": "{{destination}} 宛てのメール",
         "linear_create_issue": "{{destination}} の新しいIssue",
@@ -4192,6 +4274,8 @@
       },
       "unlabeledActions": {
         "email_draft": "メール下書き",
+        "github_create_issue": "GitHubのIssue",
+        "github_comment": "GitHubのコメント",
         "slack_send_message": "Slackメッセージ",
         "gmail_send": "Gmailのメール",
         "linear_create_issue": "LinearのIssue",
@@ -4237,6 +4321,28 @@
         "dm_failed": "ダイレクトメッセージを開けませんでした。何も送信されていません。",
         "restricted": "そのチャンネルは読み取り専用か、制限されています。",
         "generic": "うまくいきませんでした。",
+        "github": {
+          "reconnect_needed": "GitHubを再接続する必要があります。",
+          "network": "GitHubに接続できませんでした。",
+          "rate_limited": "GitHubが混み合っています。",
+          "connection_changed": "GitHubの接続が変わりました。",
+          "credential_save_failed": "このコンピューターにGitHubのログイン情報を保存できませんでした。",
+          "generic": "GitHubでうまくいきませんでした。",
+          "not_installed": "そこにはOpenWhisprのGitHub Appがインストールされていません。",
+          "repo_unlisted": "そこにOpenWhisprのGitHub Appがインストールされているか確認できませんでした。",
+          "no_repositories": "GitHubのリポジトリがまだ選択されていません。",
+          "forbidden": "そのリポジトリでの権限がありません。",
+          "not_found": "そのIssueまたはプルリクエストが見つかりませんでした。",
+          "issues_disabled": "そのリポジトリではIssueが無効です。",
+          "archived": "そのリポジトリはアーカイブされています。",
+          "too_many_labels": "1つのIssueにはラベルが多すぎます。",
+          "labels_unavailable": "リポジトリのラベルを読み込めませんでした。",
+          "invalid": "GitHubに無効として拒否されました。",
+          "locked": "その会話はロックされています。",
+          "invalid_reference": "GitHubのIssueまたはプルリクエストではありません。",
+          "too_long": "GitHubには長すぎます。",
+          "not_configured": "このビルドではGitHubを利用できません。"
+        },
         "gmail": {
           "reconnect_needed": "Gmailを再接続する必要があります。",
           "network": "Gmailに接続できませんでした。何も送信されていません。",
@@ -4274,8 +4380,7 @@
         }
       },
       "unknownSent": {
-        "gmail": "{{destination}} 宛てのメールが送信されたか確認できませんでした。Gmailの送信済みフォルダを確認してください。",
-        "linear": "Linearに届いたか確認できませんでした。もう一度試す前に、Linearで {{destination}} を確認してください。"
+        "gmail": "{{destination}} 宛てのメールが送信されたか確認できませんでした。Gmailの送信済みフォルダを確認してください。"
       },
       "gmailDraftLimit": "1回のリクエストで準備できるメールは{{max}}件までです。",
       "queryResults": "見つかった結果: {{total}}",

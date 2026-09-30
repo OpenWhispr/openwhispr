@@ -146,3 +146,64 @@ test("a host that cannot send yet keeps the draft by writing it back", async (t)
   );
   assert.equal(drafts.at(-1), "Next question");
 });
+
+test("the assistant send button reads as active only once there is a draft", async (t) => {
+  const { root, container, ChatInput } = await mountChatInput(t, installInteractiveDom);
+  const props = {
+    variant: "assistant",
+    agentState: "idle",
+    partialTranscript: "",
+    onTextSubmit: () => {},
+    focusOnIdle: false,
+  };
+  const sendCircleClass = () => {
+    const send = findElement(
+      container,
+      (element) => element.getAttribute?.("aria-label") === "agentMode.input.send"
+    );
+    return send.childNodes[0].getAttribute("class");
+  };
+
+  await React.act(async () =>
+    root.render(React.createElement(ChatInput, { ...props, draftText: "" }))
+  );
+  assert.match(sendCircleClass(), /bg-muted/, "an empty draft leaves the send button muted");
+
+  await React.act(async () =>
+    root.render(React.createElement(ChatInput, { ...props, draftText: "Summarize my week" }))
+  );
+  assert.doesNotMatch(sendCircleClass(), /bg-muted/);
+  assert.match(sendCircleClass(), /gradient-brand-glass/, "a draft lights up the send button");
+});
+
+test("cancelling a reply hands focus back to the composer", async (t) => {
+  const { root, container, ChatInput } = await mountChatInput(t, installInteractiveDom);
+  let cancelled = 0;
+  await React.act(async () =>
+    root.render(
+      React.createElement(ChatInput, {
+        variant: "assistant",
+        agentState: "streaming",
+        partialTranscript: "",
+        onTextSubmit: () => {},
+        onCancel: () => cancelled++,
+        // Like the Assistant page, which never refocuses on idle by itself.
+        focusOnIdle: false,
+      })
+    )
+  );
+  const cancel = findElement(
+    container,
+    (element) => element.getAttribute?.("aria-label") === "common.cancel"
+  );
+  cancel.focus();
+  await React.act(async () =>
+    cancel.dispatchEvent({ type: "click", bubbles: true, button: 0, preventDefault() {} })
+  );
+  assert.equal(cancelled, 1);
+  assert.equal(
+    cancel.ownerDocument.activeElement?.tagName === "TEXTAREA",
+    true,
+    "focus would otherwise fall to the page when the Cancel button unmounts"
+  );
+});

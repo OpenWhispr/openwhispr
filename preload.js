@@ -1277,11 +1277,19 @@ contextBridge.exposeInMainWorld("electronAPI", {
   connectorFindContacts: (query) => ipcRenderer.invoke("connector-find-contacts", query),
   connectorNoteAttendees: (request) => ipcRenderer.invoke("connector-note-attendees", request),
   connectorConnect: (connectorId) => ipcRenderer.invoke("connector-connect", connectorId),
+  connectorCancelConnect: (connectorId) =>
+    ipcRenderer.invoke("connector-cancel-connect", connectorId),
   connectorDisconnect: (connectorId) => ipcRenderer.invoke("connector-disconnect", connectorId),
   onConnectorStatusChanged: (callback) => {
     const listener = (_event, statuses) => callback(statuses);
     ipcRenderer.on("connector-status-changed", listener);
     return () => ipcRenderer.removeListener("connector-status-changed", listener);
+  },
+  // A connect's progress, such as the code GitHub's device flow shows.
+  onConnectorConnectProgress: (callback) => {
+    const listener = (_event, progress) => callback(progress);
+    ipcRenderer.on("connector-connect-progress", listener);
+    return () => ipcRenderer.removeListener("connector-connect-progress", listener);
   },
   calendarGetAvailability: (request) => ipcRenderer.invoke("calendar-get-availability", request),
   gcalGetEvent: (eventId) => ipcRenderer.invoke("gcal-get-event", eventId),

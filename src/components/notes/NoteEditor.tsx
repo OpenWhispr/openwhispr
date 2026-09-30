@@ -278,6 +278,10 @@ export default function NoteEditor({
   const viewMode: MeetingViewMode =
     selectedViewMode === "enhanced" && !enhancement ? "raw" : selectedViewMode;
   const [chatMode, setChatMode] = useState<EmbeddedChatMode>("hidden");
+  // The in-view chat mounts on its first open and then stays, so it can fade out as it
+  // closes; a note whose chat is never opened doesn't render its conversation at all.
+  const [inViewChatMounted, setInViewChatMounted] = useState(false);
+  if (chatMode === "floating" && !inViewChatMounted) setInViewChatMounted(true);
   const [chatDraft, setChatDraft] = useState("");
   const handleChatModeChange = useCallback((mode: EmbeddedChatMode) => {
     if (
@@ -1436,7 +1440,8 @@ export default function NoteEditor({
             onCancel={embeddedChat.cancelStream}
             floatingPanelRef={floatingChatPanelRef}
             chatContent={
-              chatMode !== "sidebar" && (
+              chatMode !== "sidebar" &&
+              inViewChatMounted && (
                 <EmbeddedChat
                   mode="floating"
                   active={chatMode === "floating"}

@@ -98,13 +98,30 @@ export interface ConnectorStatus {
   configured: boolean;
   accountLabel: string | null;
   workspaceLabel: string | null;
+  /** GitHub: connected, and this login's first repository count hasn't been read yet. */
+  workspaceLabelPending?: true;
   needsReconnect: boolean;
+  /** GitHub: the github.com page where the user chooses the repositories its App is installed on. */
+  manageUrl?: string;
+}
+
+/** What a connect in progress asks the user to do: GitHub's device code. */
+export interface ConnectorConnectProgress {
+  connectorId: string;
+  userCode: string;
+  verificationUri: string;
+  /** When the code stops working, in epoch milliseconds. */
+  expiresAt: number;
 }
 
 export type ConnectorConnectResult =
   | { status: "connected"; accountLabel: string | null; workspaceLabel: string | null }
   | { status: "failed"; errorCode: string }
   | { status: "unavailable"; reason: string };
+
+/** Whether a connect in progress was there to stop. */
+export type ConnectorCancelConnectResult =
+  { status: "cancelled" } | { status: "idle" } | { status: "unavailable"; reason: string };
 
 export type ConnectorDisconnectResult =
   /** grantKept: another login (Google Calendar) shares the provider's grant, so it wasn't revoked. */

@@ -606,7 +606,8 @@ test("the Linear module offers three tools, each with its own prompt line, only 
 
   assert.equal(linearToolModule.connectorId, "linear");
   assert.equal(linearToolModule.requiresConnection, true);
-  assert.equal(CONNECTOR_TOOL_MODULES.at(-1), linearToolModule);
+  assert.equal(CONNECTOR_TOOL_MODULES.at(-2), linearToolModule);
+  assert.equal(CONNECTOR_TOOL_MODULES.at(-1).connectorId, "github");
   const tools = linearToolModule.createTools({ emailDraftTarget: "gmail" });
   assert.deepEqual(
     tools.map((tool) => [tool.name, tool.connectorId, tool.readOnly]),

@@ -4,12 +4,14 @@ const { buildEmailConnector } = require("./emailConnector");
 const { buildSlackConnector } = require("./slackConnector");
 const { buildGmailConnector } = require("./gmailConnector");
 const { buildLinearConnector } = require("./linearConnector");
+const { buildGithubConnector } = require("./githubConnector");
 
 const CONNECTOR_FACTORIES = [
   buildEmailConnector,
   buildSlackConnector,
   buildGmailConnector,
   buildLinearConnector,
+  buildGithubConnector,
 ];
 
 // Two connectors with one id would share login slots and receipts: a build
@@ -25,7 +27,7 @@ function assertUniqueIds(connectors) {
 /**
  * deps: { fetch, i18n, runOAuthLoopbackFlow, OAuthFlowError, credentials,
  * logger, env, openExternal, writeClipboard, getGoogleCalendarAccounts,
- * broadcast } (spec §9.3).
+ * broadcast, notifyStatusChanged } (spec §9.3).
  */
 function createConnectors(deps, factories = CONNECTOR_FACTORIES) {
   const connectors = factories.map((build) => build(deps));

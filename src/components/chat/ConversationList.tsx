@@ -233,9 +233,9 @@ export default function ConversationList({
         )}
       </div>
 
-      {conversations.length === 0 ? (
+      {flatItems.length === 0 ? (
         <EmptyConversationList
-          state={loadError ? "error" : "active"}
+          state={conversations.length > 0 ? "archived" : loadError ? "error" : "active"}
           onRetry={() => {
             setIsLoading(true);
             setShowSkeleton(true);

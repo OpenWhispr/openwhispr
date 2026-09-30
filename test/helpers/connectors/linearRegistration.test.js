@@ -93,12 +93,12 @@ test("buildLinearConnector sends Linear's requests through the shared fetch", as
   ]);
 });
 
-test("createConnectors builds Linear last, once, from the shared deps", async () => {
+test("createConnectors builds Linear once, just before GitHub, from the shared deps", async () => {
   const { createConnectors } = await import("../../../src/helpers/connectors/createConnectors.js");
   const { deps } = connectorDeps();
 
   const ids = createConnectors(deps).map((connector) => connector.id);
 
-  assert.equal(ids.at(-1), "linear");
+  assert.deepEqual(ids.slice(-2), ["linear", "github"]);
   assert.equal(ids.filter((id) => id === "linear").length, 1);
 });

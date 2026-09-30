@@ -13,8 +13,10 @@ import type {
 } from "./calendar";
 import type {
   ConnectorActionRecord,
+  ConnectorCancelConnectResult,
   ConnectorCancelReason,
   ConnectorCommitResult,
+  ConnectorConnectProgress,
   ConnectorConnectResult,
   ConnectorDirectResult,
   ConnectorDisconnectResult,
@@ -834,7 +836,7 @@ export type SystemAudioStrategy =
 
 export interface MeetingSystemAudioInterruption {
   systemAudioStrategy: SystemAudioStrategy;
-  reason: "no_audio_delivered" | "device_invalidated" | "gone_quiet";
+  reason: "no_audio_delivered" | "device_invalidated" | "gone_quiet" | "loopback_takeover_failed";
   recovering: boolean;
 }
 
@@ -2981,8 +2983,16 @@ declare global {
         request: NoteAttendeesRequest
       ) => Promise<{ attendees: NoteAttendee[]; unavailableReason?: string }>;
       connectorConnect?: (connectorId: string) => Promise<ConnectorConnectResult>;
+      /**
+       * Stops this connector's connect in progress, whichever account started it
+       * (including one still waiting on policy); the connect ends as oauth_cancelled.
+       */
+      connectorCancelConnect?: (connectorId: string) => Promise<ConnectorCancelConnectResult>;
       connectorDisconnect?: (connectorId: string) => Promise<ConnectorDisconnectResult>;
       onConnectorStatusChanged?: (callback: (statuses: ConnectorStatus[]) => void) => () => void;
+      onConnectorConnectProgress?: (
+        callback: (progress: ConnectorConnectProgress) => void
+      ) => () => void;
       calendarGetAvailability?: (
         request: CalendarAvailabilityRequest
       ) => Promise<

@@ -643,6 +643,8 @@
       "dataRetentionDisabled": "数据保留已关闭。转录和音频不会保存到历史记录。",
       "welcomeBack": "欢迎回来",
       "welcomeBackNamed": "欢迎回来，{{name}}",
+      "welcome": "欢迎",
+      "welcomeNamed": "欢迎，{{name}}",
       "dateGroups": {
         "today": "今天",
         "yesterday": "昨天"
@@ -3576,6 +3578,7 @@
     "search": "搜索对话...",
     "archived": "已归档",
     "noConversations": "暂无聊天",
+    "allArchived": "所有聊天均已归档",
     "noConversationsDescription": "与助手的聊天会显示在这里。",
     "loadFailed": "无法加载聊天记录",
     "noResults": "没有匹配的对话",
@@ -3753,6 +3756,9 @@
       "search_notesName": "搜索笔记",
       "email_draftName": "邮件草稿",
       "find_contactName": "查找联系人",
+      "github_search_issuesName": "搜索 GitHub",
+      "github_create_issueName": "GitHub Issue",
+      "github_commentName": "GitHub 评论",
       "slack_send_messageName": "Slack 消息",
       "linear_search_issuesName": "搜索 Linear",
       "linear_create_issueName": "Linear 议题",
@@ -3771,6 +3777,9 @@
       "search_notesStatus": "正在搜索笔记...",
       "email_draftStatus": "正在准备邮件...",
       "find_contactStatus": "正在查找联系人...",
+      "github_search_issuesStatus": "正在搜索 GitHub...",
+      "github_create_issueStatus": "正在准备 GitHub Issue...",
+      "github_commentStatus": "正在准备 GitHub 评论...",
       "slack_send_messageStatus": "正在准备 Slack 消息...",
       "linear_search_issuesStatus": "正在搜索 Linear...",
       "linear_create_issueStatus": "正在准备 Linear 议题...",
@@ -3967,6 +3976,28 @@
         "dm_failed": "无法打开与 {{destination}} 的私信，未发送任何内容。",
         "restricted": "{{destination}} 对您是只读或受限的。",
         "generic": "出了点问题，未发送任何内容。",
+        "github": {
+          "reconnect_needed": "需要在设置中重新连接 GitHub。",
+          "network": "无法连接到 GitHub，未发布任何内容。",
+          "rate_limited": "GitHub 正忙，请稍后重试。",
+          "connection_changed": "发布前 GitHub 连接发生了变化，因此未发布任何内容。",
+          "credential_save_failed": "无法在此电脑上保存 GitHub 登录信息，未发布任何内容。请重试。",
+          "generic": "出了点问题，未向 GitHub 发布任何内容。",
+          "not_installed": "此仓库未安装 OpenWhispr GitHub App。请在设置中添加。未发布任何内容。",
+          "repo_unlisted": "无法确认此仓库是否已安装 OpenWhispr GitHub App。请检查仓库名称。未发布任何内容。",
+          "no_repositories": "尚未为 OpenWhispr GitHub App 选择仓库。请在设置中选择。未发布任何内容。",
+          "forbidden": "您没有在此仓库中执行此操作的权限，未发布任何内容。",
+          "not_found": "找不到该 Issue 或拉取请求，未发布任何内容。",
+          "issues_disabled": "此仓库已关闭 Issue，未发布任何内容。",
+          "archived": "此仓库已归档，无法添加新的 Issue 或评论，未发布任何内容。",
+          "too_many_labels": "一个 Issue 最多选择 10 个标签，未发布任何内容。",
+          "labels_unavailable": "无法读取仓库的标签，未发布任何内容。",
+          "invalid": "GitHub 认为其无效并拒绝了，未发布任何内容。",
+          "locked": "该对话已锁定，未发布任何内容。",
+          "invalid_reference": "这不是 GitHub Issue 或拉取请求，未发布任何内容。",
+          "too_long": "标题或正文对 GitHub 来说太长，未发布任何内容。",
+          "not_configured": "此版本中 GitHub 不可用，未发布任何内容。"
+        },
         "gmail": {
           "reconnect_needed": "需要在设置中重新连接 Gmail。",
           "network": "无法连接到 Gmail，未发送任何内容。",
@@ -4019,7 +4050,15 @@
         "bodyTooLong": "邮件正文过长，无法通过 Gmail 发送。请缩短后再发送。",
         "unknown": "无法确认是否已发送，请检查“已发送”文件夹。"
       },
+      "github": {
+        "notes": {
+          "mentions": "将通知 {{mentions}}",
+          "pullRequest": "针对拉取请求",
+          "labelsMayNotApply": "只有在您对此仓库有写入权限时才会添加标签。"
+        }
+      },
       "openIn": {
+        "github": "在 GitHub 中打开",
         "gmail": "在 Gmail 中打开",
         "linear": "在 Linear 中打开"
       },
@@ -4104,6 +4143,47 @@
         "failedBody": "请返回 OpenWhispr 重试。"
       }
     },
+    "github": {
+      "title": "GitHub",
+      "description": "助手可以仅在您选择的仓库中，以您的身份搜索 Issue 和拉取请求、创建 Issue 以及发表评论。它无法读取您的代码，每个 Issue 和评论在发布前都需要您批准。",
+      "connect": "连接",
+      "reconnect": "重新连接",
+      "disconnect": "断开连接",
+      "connecting": "正在连接 GitHub…",
+      "connectedAs": "已以 {{account}} 身份连接 · 仓库：{{repositories}}",
+      "connectedAs_empty": "已以 {{account}} 身份连接 · 尚无仓库",
+      "connectedAs_unknown": "已以 {{account}} 身份连接",
+      "needsReconnect": "需要重新连接 GitHub。",
+      "proRequired": "升级到付费计划，让助手为您处理 GitHub Issue。",
+      "reviewOnGithub": "在 GitHub 上查看",
+      "disconnectedHint": "已在此电脑上断开连接。在您于 GitHub 上移除之前，GitHub 会保留 OpenWhispr 的授权。",
+      "errors": {
+        "connect_failed": "无法连接 GitHub，请重试。",
+        "disconnect_failed": "无法断开 GitHub 连接，请重试。",
+        "oauth_denied": "GitHub 访问被拒绝。",
+        "token_exchange_failed": "GitHub 未完成连接，请重试。",
+        "not_configured": "此版本中 GitHub 不可用。",
+        "connection_changed": "连接过程中您的账户或 GitHub 连接发生了变化，请重试。",
+        "signed_out": "请登录 OpenWhispr 以连接 GitHub。",
+        "policy_blocked": "您的组织已关闭连接器。",
+        "policy_unavailable": "无法检查您的组织设置，请重试。",
+        "code_expired": "代码已过期，请重试。",
+        "device_flow_disabled": "此版本未设置使用代码登录 GitHub。",
+        "network": "无法连接到 GitHub。请检查网络连接后重试。",
+        "rate_limited": "GitHub 当前繁忙，请一分钟后重试。"
+      },
+      "deviceCode": {
+        "instructions": "请在 GitHub 上输入此代码：",
+        "copyAndOpen": "复制并打开 GitHub",
+        "copied": "代码已复制。",
+        "cancel": "取消",
+        "expires": "代码将于 {{time}} 过期。"
+      },
+      "repositories": {
+        "choose": "选择仓库",
+        "manage": "管理仓库"
+      }
+    },
     "gmail": {
       "title": "Gmail",
       "description": "助手可以通过您的 Gmail 账户发送邮件。它无法读取您的邮件，每封邮件都由您亲自点击发送。",
@@ -4185,6 +4265,8 @@
       "title": "最近的操作",
       "actions": {
         "email_draft": "发送给 {{destination}} 的草稿",
+        "github_create_issue": "{{destination}} 中的新 Issue",
+        "github_comment": "对 {{destination}} 的评论",
         "slack_send_message": "发送给 {{destination}} 的消息",
         "gmail_send": "发送给 {{destination}} 的邮件",
         "linear_create_issue": "{{destination}} 中的新议题",
@@ -4192,6 +4274,8 @@
       },
       "unlabeledActions": {
         "email_draft": "邮件草稿",
+        "github_create_issue": "GitHub Issue",
+        "github_comment": "GitHub 评论",
         "slack_send_message": "Slack 消息",
         "gmail_send": "Gmail 邮件",
         "linear_create_issue": "Linear 议题",
@@ -4237,6 +4321,28 @@
         "dm_failed": "无法打开私信。未发送任何内容。",
         "restricted": "该频道为只读或受限。",
         "generic": "操作未成功。",
+        "github": {
+          "reconnect_needed": "需要重新连接 GitHub。",
+          "network": "无法连接到 GitHub。",
+          "rate_limited": "GitHub 正忙。",
+          "connection_changed": "GitHub 连接已更改。",
+          "credential_save_failed": "无法在此电脑上保存 GitHub 登录信息。",
+          "generic": "在 GitHub 上操作未成功。",
+          "not_installed": "那里未安装 OpenWhispr GitHub App。",
+          "repo_unlisted": "无法确认那里是否已安装 OpenWhispr GitHub App。",
+          "no_repositories": "尚未选择 GitHub 仓库。",
+          "forbidden": "在该仓库中没有权限。",
+          "not_found": "找不到该 Issue 或拉取请求。",
+          "issues_disabled": "该仓库已关闭 Issue。",
+          "archived": "该仓库已归档。",
+          "too_many_labels": "一个 Issue 的标签过多。",
+          "labels_unavailable": "无法读取仓库的标签。",
+          "invalid": "GitHub 认为其无效并拒绝了。",
+          "locked": "该对话已锁定。",
+          "invalid_reference": "不是 GitHub Issue 或拉取请求。",
+          "too_long": "对 GitHub 来说太长。",
+          "not_configured": "此版本中 GitHub 不可用。"
+        },
         "gmail": {
           "reconnect_needed": "需要重新连接 Gmail。",
           "network": "无法连接到 Gmail。未发送任何内容。",
@@ -4274,8 +4380,7 @@
         }
       },
       "unknownSent": {
-        "gmail": "无法确认发给 {{destination}} 的邮件是否已发送，请检查 Gmail 的“已发送”文件夹。",
-        "linear": "无法确认是否已送达 Linear。重试前请先在 Linear 中检查 {{destination}}。"
+        "gmail": "无法确认发给 {{destination}} 的邮件是否已发送，请检查 Gmail 的“已发送”文件夹。"
       },
       "gmailDraftLimit": "每次请求最多只能准备 {{max}} 封邮件。",
       "queryResults": "找到的结果：{{total}}",

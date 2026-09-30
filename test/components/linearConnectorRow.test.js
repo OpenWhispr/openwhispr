@@ -102,10 +102,13 @@ async function renderLinearRow(
   return { container, row, rows: CONNECTOR_ROWS };
 }
 
-test("the Linear row comes last and names the user and the workspace", async (t) => {
+test("the Linear row comes just before GitHub and names the user and the workspace", async (t) => {
   const { container, row, rows } = await renderLinearRow(t, { status: LINEAR });
 
-  assert.equal(rows.at(-1).id, "linear");
+  assert.deepEqual(
+    rows.slice(-2).map((entry) => entry.id),
+    ["linear", "github"]
+  );
   assert.deepEqual(row.accountSummary(LINEAR), { account: "Dana", workspace: "Acme" });
   assert.deepEqual(row.accountSummary(DISCONNECTED), { account: "", workspace: "" });
   assert.match(container.textContent, /connectors\.linear\.title/);

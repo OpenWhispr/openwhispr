@@ -204,9 +204,39 @@ function registerConnectorIpc({
     return manager.recentActions(connectorId, limit, getAccountScope()?.accountId ?? null);
   });
 
+  // Connects still waiting on policy, before the manager holds them. A cancel
+  // that lands then must stop them there: nothing else would end a device
+  // flow that then polls for 15 minutes with nothing on screen.
+  const pendingConnects = new Set();
+
   ipcMain.handle("connector-connect", async (event, connectorId) => {
     if (!isNonEmptyString(connectorId)) return { status: "unavailable", reason: "invalid_request" };
-    return manager.connect(connectorId, await getPolicyState(event));
+    const pending = { connectorId, controller: new AbortController() };
+    pendingConnects.add(pending);
+    let policyState;
+    try {
+      policyState = await getPolicyState(event);
+    } finally {
+      pendingConnects.delete(pending);
+    }
+    // What an aborted flow reports, so the row stays silent.
+    if (pending.controller.signal.aborted) {
+      return { status: "failed", errorCode: "oauth_cancelled" };
+    }
+    return manager.connect(connectorId, policyState);
+  });
+
+  // Stopping a connect is always allowed, so it skips the policy check too.
+  ipcMain.handle("connector-cancel-connect", (_event, connectorId) => {
+    if (!isNonEmptyString(connectorId)) return { status: "unavailable", reason: "invalid_request" };
+    let stoppedPending = false;
+    for (const pending of pendingConnects) {
+      if (pending.connectorId !== connectorId) continue;
+      pending.controller.abort();
+      stoppedPending = true;
+    }
+    const result = manager.cancelConnect(connectorId);
+    return stoppedPending ? { status: "cancelled" } : result;
   });
 
   // Removing access is always allowed, so disconnect skips the policy check.

@@ -129,6 +129,8 @@ jobs:
           echo "MICROSOFT_CALENDAR_CLIENT_ID=${{ secrets.MICROSOFT_CALENDAR_CLIENT_ID }}" >> .env
           echo "SLACK_CLIENT_ID=${{ secrets.SLACK_CLIENT_ID }}" >> .env
           echo "LINEAR_CLIENT_ID=${{ secrets.LINEAR_CLIENT_ID }}" >> .env
+          echo "GITHUB_APP_CLIENT_ID=${{ secrets.GH_APP_CLIENT_ID }}" >> .env
+          echo "GITHUB_APP_SLUG=${{ secrets.GH_APP_SLUG }}" >> .env
 
       - name: Verify PipeWire system audio helper build
         run: |
@@ -247,6 +249,8 @@ jobs:
           echo "MICROSOFT_CALENDAR_CLIENT_ID=${{ secrets.MICROSOFT_CALENDAR_CLIENT_ID }}" >> .env
           echo "SLACK_CLIENT_ID=${{ secrets.SLACK_CLIENT_ID }}" >> .env
           echo "LINEAR_CLIENT_ID=${{ secrets.LINEAR_CLIENT_ID }}" >> .env
+          echo "GITHUB_APP_CLIENT_ID=${{ secrets.GH_APP_CLIENT_ID }}" >> .env
+          echo "GITHUB_APP_SLUG=${{ secrets.GH_APP_SLUG }}" >> .env
 
       - name: Build and Sign Application
         run: npm run build:win -- --publish always
@@ -369,6 +373,8 @@ jobs:
           echo "MICROSOFT_CALENDAR_CLIENT_ID=${{ secrets.MICROSOFT_CALENDAR_CLIENT_ID }}" >> .env
           echo "SLACK_CLIENT_ID=${{ secrets.SLACK_CLIENT_ID }}" >> .env
           echo "LINEAR_CLIENT_ID=${{ secrets.LINEAR_CLIENT_ID }}" >> .env
+          echo "GITHUB_APP_CLIENT_ID=${{ secrets.GH_APP_CLIENT_ID }}" >> .env
+          echo "GITHUB_APP_SLUG=${{ secrets.GH_APP_SLUG }}" >> .env
 
       - name: Build Application (${{ matrix.arch }})
         run: npm run build:mac -- --${{ matrix.arch }} --publish always
