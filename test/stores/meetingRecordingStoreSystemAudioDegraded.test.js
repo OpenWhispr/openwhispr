@@ -21,8 +21,19 @@ const START_ARGS = {
 function installDisplayCaptureGlobals(t, { capture = null } = {}) {
   installMicCaptureGlobals(t);
 
-  const calls = { getDisplayMedia: 0 };
-  const makeTrack = (kind) => ({ kind, readyState: "live", stop() {}, getSettings: () => ({}) });
+  const calls = { getDisplayMedia: 0, tracks: [] };
+  const makeTrack = (kind) => {
+    const track = {
+      kind,
+      readyState: "live",
+      stop() {
+        track.readyState = "ended";
+      },
+      getSettings: () => ({}),
+    };
+    calls.tracks.push(track);
+    return track;
+  };
   navigator.mediaDevices.getDisplayMedia = async () => {
     calls.getDisplayMedia += 1;
     if (capture) return capture.promise;
@@ -37,17 +48,21 @@ function installDisplayCaptureGlobals(t, { capture = null } = {}) {
   return calls;
 }
 
-// The takeover builds its own AudioContext, so swapping the global once the
-// recording is running leaves the mic graph alone. Loading the worklet module
-// is the await a stop lands in, because cleanup closes the context underneath.
 function installFailingSystemAudioContext(addModule) {
   const Base = globalThis.AudioContext;
+  const contexts = [];
   globalThis.AudioContext = class extends Base {
     constructor(...args) {
       super(...args);
       this.audioWorklet = { addModule };
+      this.closed = false;
+      contexts.push(this);
+    }
+    async close() {
+      this.closed = true;
     }
   };
+  return contexts;
 }
 
 function createElectronAPI({ systemAudioMode, systemAudioStrategy }) {
@@ -157,8 +172,6 @@ test("a failed takeover warns and gives up the session's system channel", async 
   capture.reject(new Error("Permission denied by system"));
   await flush();
 
-  // Nothing captures the call now, so the interruption is the only warning the
-  // user gets, and auto-end must stop counting on a system channel.
   assert.deepEqual(store.useMeetingRecordingStore.getState().systemAudioInterrupted, {
     recovering: false,
     reason: "loopback_takeover_failed",
@@ -183,14 +196,12 @@ test("a takeover that fails after the recording stopped touches nothing", async 
   capture.reject(new Error("Permission denied by system"));
   await flush();
 
-  // Both writes below are shared with the next recording: a warning it would
-  // deliver as its own, and the system-audio state auto-end reads.
   assert.equal(store.useMeetingRecordingStore.getState().systemAudioInterrupted, null);
   assert.deepEqual(systemAudioAvailability, [true]);
 });
 
-test("a takeover whose capture graph throws gives up the same way", async (t) => {
-  installDisplayCaptureGlobals(t);
+test("a takeover whose capture graph throws gives up and releases the capture", async (t) => {
+  const calls = installDisplayCaptureGlobals(t);
   const { api, listeners, systemAudioAvailability } = createElectronAPI({
     systemAudioMode: "loopback",
     systemAudioStrategy: "wasapi-loopback",
@@ -198,19 +209,25 @@ test("a takeover whose capture graph throws gives up the same way", async (t) =>
   const store = await loadStore(t, api);
 
   assert.equal(await store.startRecording(START_ARGS), true);
-  installFailingSystemAudioContext(async () => {
+  const contexts = installFailingSystemAudioContext(async () => {
     throw new Error("AudioWorklet module failed to load");
   });
   listeners.systemAudioDegraded();
   await flush();
 
-  // A stream that arrives but cannot be wired up leaves the call just as
-  // uncaptured as one that never arrived, so it must warn just as loudly.
   assert.deepEqual(store.useMeetingRecordingStore.getState().systemAudioInterrupted, {
     recovering: false,
     reason: "loopback_takeover_failed",
   });
   assert.deepEqual(systemAudioAvailability, [true, false]);
+  assert.deepEqual(
+    calls.tracks.map((track) => track.readyState),
+    ["ended", "ended"]
+  );
+  assert.deepEqual(
+    contexts.map((context) => context.closed),
+    [true]
+  );
 
   await store.stopRecording();
 });

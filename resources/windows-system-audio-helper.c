@@ -352,12 +352,9 @@ static HRESULT activate_process_loopback(
  * Activation succeeding proves only that the OS exposes process loopback; on
  * some machines it then delivers nothing but digital silence. Silence alone
  * is ambiguous — an idle machine looks identical — so it only counts as a
- * failure while a render endpoint is metering real output.
- *
- * The comparison runs per second for the whole session rather than until the
- * first audible sample: Windows hides some applications' streams from process
- * loopback (Teams call audio, openwhispr#1265) while passing others through,
- * so a capture that works for one app proves nothing about the next.
+ * failure while a render endpoint is metering real output. It stays armed
+ * after audible samples: Windows hides some apps' streams from process
+ * loopback (Teams call audio, openwhispr#1265) while passing others through.
  * ======================================================================== */
 
 static BOOL any_render_endpoint_audible(IMMDeviceEnumerator *enumerator)
@@ -449,10 +446,8 @@ static int run_capture(DWORD excludePid, UINT32 sampleRate)
     LARGE_INTEGER lastSilenceCheck;
     UINT64 emittedFrames = 0;
     IMMDeviceEnumerator *deviceEnumerator = NULL;
-    /* Disarmed for good once the warning has been emitted (main tears the
-     * helper down) or when no meter is available to compare against. */
+    /* Disarmed once the warning is emitted or when no meter is available. */
     BOOL silenceDetectionArmed = TRUE;
-    /* Any audible sample since the last one-second check, which clears it. */
     BOOL capturedAudibleThisTick = FALSE;
     int endpointAudibleTicks = 0;
     const char *errorCode = NULL;

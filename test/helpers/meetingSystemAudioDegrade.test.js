@@ -4,74 +4,89 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-// Executes the real degrade closure, the way meetingAudioTimeline.test.js runs
-// the dispatch closures, because the handover decision lives inside the
-// IPCHandlers registration closure.
-const ipcPath = path.join(__dirname, "../../src/helpers/ipcHandlers.js");
-const source = fs.readFileSync(ipcPath, "utf8");
+const createMeetingSystemAudioHandover = require("../../src/helpers/meetingSystemAudioHandover");
+const { makeSine, toInt16Buffer } = require("./harness/pcmFixtures");
 
-function harness({ systemAudioHeard }) {
-  const sent = [];
-  const stopped = [];
-  const detached = [];
+const { CONFIRM_MS } = createMeetingSystemAudioHandover;
+const AUDIBLE = toInt16Buffer(makeSine({ durationMs: 100, amplitude: 0.3 }));
+
+const source = fs.readFileSync(path.join(__dirname, "../../src/helpers/ipcHandlers.js"), "utf8");
+
+const sliceBetween = (startMarker, endMarker) => {
+  const start = source.indexOf(startMarker);
+  const end = source.indexOf(endMarker, start);
+  assert.ok(start >= 0 && end > start, `${startMarker} not found in ipcHandlers.js`);
+  return source.slice(start, end);
+};
+
+function harness({ systemAudioHeard = false } = {}) {
+  let now = 1_000_000;
+  const events = [];
+  const handlers = {};
   const context = {
-    meetingSystemAudioDegraded: false,
-    // Inert since #1265, and that is the point: the closure must not read it.
+    Buffer,
     meetingSystemAudioHeard: systemAudioHeard,
-    meetingSystemAudioWatchdog: {
-      detachCapture: () => {
-        detached.push(true);
-      },
-    },
+    meetingSystemAudioHandover: createMeetingSystemAudioHandover({ now: () => now }),
+    meetingSystemAudioWatchdog: { detachCapture: () => events.push("detach") },
     debugLogger: { warn() {}, debug() {}, error() {}, info() {} },
-    windowsLoopbackAudioManager: {
-      stop: async () => {
-        stopped.push(true);
-      },
-    },
+    windowsLoopbackAudioManager: { stop: async () => events.push("stop") },
     BrowserWindow: {
       fromWebContents: () => ({
         isDestroyed: () => false,
-        webContents: { send: (channel) => sent.push(channel) },
+        webContents: { send: (channel) => events.push(channel) },
       }),
     },
+    ipcMain: { on: (channel, handler) => (handlers[channel] = handler) },
+    sendMeetingAudio: (_buffer, source) => events.push(`send:${source}`),
   };
-  // `this.windowsLoopbackAudioManager` inside the closure resolves through the
-  // context's global object, which is why the manager is a plain context key.
-  const start = source.indexOf("const degradeMeetingSystemAudioToLoopback =");
-  const end = source.indexOf("const startManagedMeetingSystemAudio =");
-  assert.ok(start >= 0 && end > start, "degrade closure not found in ipcHandlers.js");
   vm.createContext(context);
   vm.runInContext(
-    `${source.slice(start, end)}
+    `${sliceBetween(
+      "const degradeMeetingSystemAudioToLoopback =",
+      "const startManagedMeetingSystemAudio ="
+    )}
+    ${sliceBetween('ipcMain.on("meeting-transcription-send"', "const stopMeetingTranscription =")}
     globalThis.degrade = () => degradeMeetingSystemAudioToLoopback({ sender: {} });`,
     context
   );
-  return { context, sent, stopped, detached, degrade: context.degrade };
+  return {
+    events,
+    degrade: context.degrade,
+    sendRenderer: (buffer) => handlers["meeting-transcription-send"]({}, buffer, "system"),
+    advance: (ms) => {
+      now += ms;
+    },
+  };
 }
 
-test("a silent capture hands over even after the helper delivered audible chunks", async () => {
-  // Windows hides some applications' streams from process loopback while
-  // passing others through, so a captured notification sound says nothing
-  // about whether the call itself is being recorded (#1265).
-  const { context, sent, stopped, detached, degrade } = harness({ systemAudioHeard: true });
+test("a silent capture starts renderer loopback without stopping the helper", () => {
+  const { events, degrade } = harness({ systemAudioHeard: true });
 
-  await degrade();
+  degrade();
+  degrade();
 
-  assert.deepEqual(sent, ["meeting-system-audio-degraded"]);
-  assert.equal(stopped.length, 1);
-  assert.equal(context.meetingSystemAudioDegraded, true);
-  // Structural: the watchdog must be told to drop its restart hook rather than
-  // be left pointing at the helper this just stopped.
-  assert.equal(detached.length, 1);
+  assert.deepEqual(events, ["meeting-system-audio-degraded"]);
 });
 
-test("the handover runs once per session", async () => {
-  const { sent, stopped, degrade } = harness({ systemAudioHeard: false });
+test("renderer chunks are held back until loopback hears what the helper misses", () => {
+  const { events, degrade, sendRenderer, advance } = harness();
+  degrade();
+  events.length = 0;
 
-  await degrade();
-  await degrade();
+  sendRenderer(AUDIBLE);
+  assert.deepEqual(events, []);
 
-  assert.deepEqual(sent, ["meeting-system-audio-degraded"]);
-  assert.equal(stopped.length, 1);
+  advance(CONFIRM_MS);
+  sendRenderer(AUDIBLE);
+  sendRenderer(AUDIBLE);
+
+  assert.deepEqual(events, ["detach", "stop", "send:system", "send:system"]);
+});
+
+test("renderer chunks pass straight through when no helper handover is pending", () => {
+  const { events, sendRenderer } = harness();
+
+  sendRenderer(AUDIBLE);
+
+  assert.deepEqual(events, ["send:system"]);
 });
