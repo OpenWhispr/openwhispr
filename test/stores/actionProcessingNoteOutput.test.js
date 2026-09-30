@@ -218,6 +218,11 @@ test("a summary action rewrites only the summary and never saves a clipped rewri
   assert.equal(calls.length, 1);
   assert.match(calls[0].config.systemPrompt, /revise an existing AI summary[\s\S]*half as long/);
   assert.equal(calls[0].config.requireCompleteOutput, true);
+  assert.equal(
+    calls[0].config.refuseClippedByWindow,
+    true,
+    "a local model shortens the reply to fit rather than refusing up front"
+  );
   const { NOTE_OUTPUT_MAX_TOKENS } = await import("../../src/helpers/builtinActions.js");
   assert.equal(
     calls[0].config.maxTokens,

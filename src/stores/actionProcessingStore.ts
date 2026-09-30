@@ -499,8 +499,10 @@ export function runBackgroundAction(
         // A local model that shrinks the reply to fit the prompt refuses a reply
         // that fills the shrunken allowance, so a recording is summarised in
         // parts rather than saved clipped. A plain note has no parts route, so
-        // its clipped reply is saved as before. Other routes ignore the flag.
-        refuseClippedByWindow: hasTranscript(options.material),
+        // its clipped reply is saved as before. A rewrite sets it too, so a
+        // local model shortens its allowance instead of refusing up front.
+        // Other routes ignore the flag.
+        refuseClippedByWindow: rewritesSummary || hasTranscript(options.material),
         // Rewriting an existing summary replaces all of it, so a clipped
         // rewrite would lose content: providers refuse it (OpenWhispr Cloud
         // refuses a truncated reply for every request).

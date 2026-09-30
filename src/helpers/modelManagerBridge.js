@@ -605,8 +605,12 @@ class ModelManager {
     // exact prompt. The MIN_OUTPUT_TOKENS floor below already keeps the prompt
     // clear of the edge by the same margin, so charging it twice would only
     // shorten the answer.
+    // A caller that refuses window clips still gets no partial answer: a reply
+    // that fills the trimmed allowance is refused after inference.
+    const acceptsShorterOutput =
+      !options.requireCompleteOutput || options.refuseClippedByWindow === true;
     const affordableOutput = nowUsable - exactTokens;
-    if (!options.requireCompleteOutput && affordableOutput >= MIN_OUTPUT_TOKENS) {
+    if (acceptsShorterOutput && affordableOutput >= MIN_OUTPUT_TOKENS) {
       debugLogger.info("Trimming the output allowance to fit the context window", {
         model: modelInfo.model.id,
         requested: maxTokens,
