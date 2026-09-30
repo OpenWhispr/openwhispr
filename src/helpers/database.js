@@ -3145,7 +3145,9 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const result = this.db
-        .prepare("UPDATE actions SET cloud_id = NULL, sync_status = 'pending' WHERE id = ?")
+        .prepare(
+          "UPDATE actions SET cloud_id = NULL, sync_status = 'pending' WHERE id = ? AND deleted_at IS NULL"
+        )
         .run(id);
       return { success: result.changes > 0 };
     } catch (error) {

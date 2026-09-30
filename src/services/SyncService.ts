@@ -2906,7 +2906,7 @@ export class SyncService {
           );
 
           if (cloudEntry.deleted_at) {
-            if (local && !(local.sync_status === "pending" && !local.cloud_id)) {
+            if (local && local.sync_status !== "pending") {
               await window.electronAPI.hardDeleteNoteAction?.(local.id);
             }
             continue;

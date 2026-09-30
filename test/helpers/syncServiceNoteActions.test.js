@@ -228,6 +228,30 @@ test("an edit to a row deleted elsewhere re-creates it instead of losing the edi
   assert.equal(localRow(db, template.client_id).sync_status, "synced");
 });
 
+test("an edit whose update failed survives a remote delete pulled in the same pass", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  t.mock.method(console, "error", () => {});
+  const template = createTemplate(db);
+  await service.syncAll(true);
+  const cloudId = localRow(db, template.client_id).cloud_id;
+
+  await otherDevice(cloud).delete(cloudId);
+  db.updateAction(template.id, { name: "Edited offline" });
+  cloud.failNext((call) => call.method === "PATCH", { status: 503, error: "Unavailable" });
+  await service.syncAll(true);
+
+  assert.ok(db.getAction(template.id), "the remote tombstone does not delete a pending row");
+
+  await service.syncAll(true);
+  await service.syncAll(true);
+
+  const revived = cloud.noteActions().find((row) => row.id === cloudId);
+  assert.equal(revived.deleted_at, null);
+  assert.equal(revived.name, "Edited offline");
+});
+
 test("an API without note actions keeps rows pending and still completes the pass", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;

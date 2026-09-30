@@ -87,6 +87,8 @@ test("deleting removes an unsynced row and leaves a synced one as a pending tomb
   assert.equal(db.updateAction(synced.id, { name: "Back" }).success, false);
   assert.equal(db.deleteAction(synced.id).success, false);
 
+  // An update 404 racing the delete must not unlink the tombstone from its delete.
+  db.clearNoteActionCloudId(synced.id);
   const [tombstone] = db.getPendingNoteActionDeletes();
   assert.equal(tombstone.id, synced.id);
   assert.equal(tombstone.cloud_id, "cloud-1");
