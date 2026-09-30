@@ -691,12 +691,13 @@ class ClipboardManager {
 
   // A paste or copy chord injected while the user still holds a modifier reaches
   // the target as a different shortcut (Super+Ctrl+V), and the text is lost.
-  // Resolves "released" (possibly after waiting), "held" once the wait runs out,
-  // or "unknown" when the key state can't be read, in which case the caller
-  // proceeds as it always has.
+  // Resolves { state, waitedMs }: "released" (waitedMs > 0 when it had to wait),
+  // "held" once the wait runs out, or "unknown" when the key state can't be read,
+  // in which case the caller proceeds as it always has.
   _awaitModifierRelease() {
+    const unknown = { state: "unknown", waitedMs: 0 };
     const binary = this.resolveLinuxFastPasteBinary();
-    if (!binary) return Promise.resolve("unknown");
+    if (!binary) return Promise.resolve(unknown);
 
     return new Promise((resolve) => {
       // --capabilities comes first so an older binary that doesn't know the wait
@@ -711,7 +712,7 @@ class ClipboardManager {
       const timeoutId = setTimeout(() => {
         timedOut = true;
         killProcess(proc, "SIGKILL");
-        resolve("unknown");
+        resolve(unknown);
       }, MODIFIER_RELEASE_WAIT_MS + 1000);
 
       proc.stdout?.on("data", (data) => {
@@ -737,12 +738,12 @@ class ClipboardManager {
             "clipboard"
           );
         }
-        resolve(state);
+        resolve({ state, waitedMs: Number(waitedMs) });
       });
 
       proc.on("error", () => {
         clearTimeout(timeoutId);
-        resolve("unknown");
+        resolve(unknown);
       });
     });
   }
@@ -1598,6 +1599,16 @@ class ClipboardManager {
       }
     };
 
+    // Every tool below injects a chord, so wait here once for held modifiers. The
+    // text is already on the clipboard; returning before a restore is scheduled
+    // keeps it there for a manual paste. The wait comes before target detection:
+    // focus can move while a key is held, and the chord must suit the window the
+    // paste will actually reach.
+    if ((await this._awaitModifierRelease()).state === "held") {
+      this.safeLog("⌨️ Modifier keys still held, leaving the text on the clipboard");
+      return { pasted: false, reason: "modifiers-held", restoreComplete: Promise.resolve() };
+    }
+
     const targetWindowId = preDetectTargetWindow();
     let detectedWindowClass = preDetectWindowClass(targetWindowId);
 
@@ -1675,14 +1686,6 @@ class ClipboardManager {
       if (useShiftInsert) args.push("--shift-insert");
       else if (isTerminalTarget) args.push("--terminal");
     };
-
-    // Every tool below injects a chord, so wait here once for held modifiers. The
-    // text is already on the clipboard; returning before a restore is scheduled
-    // keeps it there for a manual paste.
-    if ((await this._awaitModifierRelease()) === "held") {
-      this.safeLog("⌨️ Modifier keys still held, leaving the text on the clipboard");
-      return { pasted: false, reason: "modifiers-held", restoreComplete: Promise.resolve() };
-    }
 
     if (isWayland && isWlroots && wtypeExists) {
       try {

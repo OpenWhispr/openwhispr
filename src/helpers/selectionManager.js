@@ -459,8 +459,15 @@ class SelectionManager {
 
     // Capture runs right after the voice assistant hotkey press, so its keys are
     // often still down; a Ctrl+C sent into them copies nothing.
-    if ((await this.clipboardManager._awaitModifierRelease()) === "held") {
+    const modifiers = await this.clipboardManager._awaitModifierRelease();
+    if (modifiers.state === "held") {
       return { status: "unavailable", code: "modifiers_held" };
+    }
+    // The checks above approved the window focused before the wait. If focus
+    // moved while a key was held, the chord would reach an unchecked window,
+    // and a plain Ctrl+C in a terminal interrupts whatever is running there.
+    if (modifiers.waitedMs > 0 && !this._sameTarget(await this._getLinuxTarget(), target)) {
+      return { status: "target_changed" };
     }
 
     const capture = await this._captureViaClipboard(async () => {

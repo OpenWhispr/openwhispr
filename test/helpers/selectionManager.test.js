@@ -665,7 +665,7 @@ for (const [modifiers, expectCopy] of [
         runClipboardOperation: (operation) => operation(),
         isLinuxTerminalWindowClass: () => false,
         resolveLinuxFastPasteBinary: () => "/tmp/linux-fast-paste",
-        _awaitModifierRelease: async () => modifiers,
+        _awaitModifierRelease: async () => ({ state: modifiers, waitedMs: 0 }),
       },
       textEditMonitor: {},
       platform: "linux",
@@ -685,6 +685,47 @@ for (const [modifiers, expectCopy] of [
       result,
       expectCopy ? { status: "none", target } : { status: "unavailable", code: "modifiers_held" }
     );
+  });
+}
+
+// The target was classified before the wait. If focus moved while the keys were
+// held (say, to a terminal), a copy chord would reach a window nobody checked:
+// a plain Ctrl+C there interrupts whatever is running.
+for (const [waitedMs, focusMoved, expectCopy] of [
+  [400, true, false],
+  [400, false, true],
+  [0, true, true],
+]) {
+  test(`Linux selection capture ${expectCopy ? "copies" : "sends no copy"} after a ${waitedMs} ms wait when focus ${focusMoved ? "moved" : "stayed"}`, async () => {
+    let copyAttempts = 0;
+    let targetReads = 0;
+    const manager = new SelectionManager({
+      clipboardManager: {
+        runClipboardOperation: (operation) => operation(),
+        isLinuxTerminalWindowClass: (windowClass) => windowClass === "konsole",
+        resolveLinuxFastPasteBinary: () => "/tmp/linux-fast-paste",
+        _awaitModifierRelease: async () => ({ state: "released", waitedMs }),
+      },
+      textEditMonitor: {},
+      platform: "linux",
+      now: () => 1000,
+    });
+    const target = { kind: "kde-window", id: "7", windowClass: "kate" };
+    const terminal = { kind: "kde-window", id: "9", windowClass: "konsole" };
+    manager._getLinuxTarget = async () => {
+      targetReads += 1;
+      return targetReads > 1 && focusMoved ? terminal : target;
+    };
+    manager._captureViaClipboard = async () => {
+      copyAttempts += 1;
+      return { status: "none", target };
+    };
+
+    const result = await manager._readLinuxSelection(null);
+
+    assert.equal(copyAttempts, expectCopy ? 1 : 0);
+    assert.equal(targetReads, waitedMs > 0 ? 2 : 1, "only a real wait pays for a second lookup");
+    if (!expectCopy) assert.deepEqual(result, { status: "target_changed" });
   });
 }
 

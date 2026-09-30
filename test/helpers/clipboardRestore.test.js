@@ -87,7 +87,10 @@ function loadClipboardManager({ spawn, accessibility = true, realModifierWait = 
   try {
     const LoadedClipboardManager = require("../../src/helpers/clipboard");
     if (!realModifierWait) {
-      LoadedClipboardManager.prototype._awaitModifierRelease = async () => "released";
+      LoadedClipboardManager.prototype._awaitModifierRelease = async () => ({
+        state: "released",
+        waitedMs: 0,
+      });
     }
     return LoadedClipboardManager;
   } finally {
@@ -795,6 +798,29 @@ test("modifiers still held leave the text on the clipboard without injecting", a
   assert.equal(restoreScheduled, false, "the transcript stays on the clipboard");
 });
 
+// The wait can outlast a focus change (the user switches to a terminal while
+// still holding a key), so the chord is chosen for the window focused once the
+// keys are up — the one it will actually reach.
+test("the paste target is detected after the modifier wait", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSpawn(spawnCalls, [0], { stdout: ["MODIFIERS released 400\n"] }),
+    realModifierWait: true,
+  });
+  const manager = new TestClipboardManager();
+  const dispatched = [];
+  manager.commandExists = (command) => command === "hyprctl";
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._detectHyprlandWindowClass = () => (spawnCalls.length > 0 ? "kitty" : "gedit");
+  manager._runLinuxPasteCommand = async (command, args) => dispatched.push(args.at(-1));
+  manager._restoreClipboardAfterDelay = async () => {};
+
+  await withWaylandEnvironment("Hyprland", () => manager.pasteLinux(null));
+
+  assert.deepEqual(spawnCalls, [MODIFIER_WAIT_CALL]);
+  assert.match(dispatched[0], /mods = "CTRL SHIFT", key = "V"/);
+});
+
 // "unknown" (a Wayland session without /dev/input access) and the capabilities
 // line an older binary prints for the unknown flag both mean the state can't be
 // read, which must paste exactly as before.
@@ -845,7 +871,7 @@ test("a hung modifier wait is killed after the watchdog budget, reads as unknown
 
   let state = null;
   const wait = manager._awaitModifierRelease().then((resolved) => {
-    state = resolved;
+    state = resolved.state;
   });
   t.mock.timers.tick(2499);
   await Promise.resolve();
@@ -916,7 +942,7 @@ test(
     const manager = new TestClipboardManager();
     manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
 
-    assert.equal(await manager._awaitModifierRelease(), "unknown");
+    assert.deepEqual(await manager._awaitModifierRelease(), { state: "unknown", waitedMs: 0 });
   }
 );
 
