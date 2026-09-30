@@ -1190,7 +1190,7 @@ export default function NoteEditor({
                   <AlignLeft size={12} />
                   {t("notes.editor.notes")}
                 </button>
-                {(enhancement || canRunTemplate) && (
+                {enhancement && (
                   <div
                     data-segment-button
                     data-segment-value="enhanced"
@@ -1201,41 +1201,32 @@ export default function NoteEditor({
                         : "text-foreground/60 hover:text-foreground/80"
                     )}
                   >
-                    {enhancement && (
-                      <button
-                        onClick={() => setSelectedViewMode("enhanced")}
-                        className={cn(SEGMENT_BUTTON_CLASS, canRunTemplate && "pe-1")}
-                      >
-                        <Sparkles size={12} />
-                        <span className="max-w-32 truncate">{summaryLabel}</span>
-                        {enhancement.isStale && (
-                          <span
-                            className="h-1 w-1 rounded-full bg-amber-400/60"
-                            title={t("notes.editor.staleIndicator")}
-                          />
-                        )}
-                      </button>
-                    )}
+                    <button
+                      onClick={() => setSelectedViewMode("enhanced")}
+                      className={cn(SEGMENT_BUTTON_CLASS, canRunTemplate && "pe-1")}
+                    >
+                      <Sparkles size={12} />
+                      <span className="max-w-32 truncate">{summaryLabel}</span>
+                      {enhancement.isStale && (
+                        <span
+                          className="h-1 w-1 rounded-full bg-amber-400/60"
+                          title={t("notes.editor.staleIndicator")}
+                        />
+                      )}
+                    </button>
                     {canRunTemplate && noteTemplate && (
                       <TemplatePicker
                         templates={templates}
                         current={noteTemplate}
-                        regenerate={!!enhancement}
                         onRun={(template) => onRunNoteAction?.(template)}
                         onManage={() => onManageActions?.("template")}
                         disabled={isActionRunning}
                       >
                         <button
                           type="button"
-                          aria-label={enhancement ? t("notes.templates.select") : undefined}
-                          className={cn(SEGMENT_BUTTON_CLASS, enhancement && "ps-1 pe-2")}
+                          aria-label={t("notes.templates.select")}
+                          className={cn(SEGMENT_BUTTON_CLASS, "ps-1 pe-2")}
                         >
-                          {!enhancement && (
-                            <>
-                              <Sparkles size={12} />
-                              {summaryLabel}
-                            </>
-                          )}
                           <ChevronDown size={12} />
                         </button>
                       </TemplatePicker>

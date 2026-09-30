@@ -14,10 +14,8 @@ import type { ActionItem } from "../../types/electron";
 
 interface TemplatePickerProps {
   templates: ActionItem[];
-  /** The note's template, or the one a first summary would be written with. */
+  /** The template that wrote the note's summary, or the default. */
   current: ActionItem;
-  /** Rewrites an existing summary rather than writing the first one. */
-  regenerate: boolean;
   onRun: (template: ActionItem) => void;
   onManage: () => void;
   disabled?: boolean;
@@ -29,7 +27,6 @@ interface TemplatePickerProps {
 export default function TemplatePicker({
   templates,
   current,
-  regenerate,
   onRun,
   onManage,
   disabled,
@@ -62,9 +59,7 @@ export default function TemplatePicker({
                   </div>
                 )}
               </div>
-              {isCurrent && regenerate && (
-                <RefreshCw size={12} className="shrink-0 text-foreground/50" />
-              )}
+              {isCurrent && <RefreshCw size={12} className="shrink-0 text-foreground/50" />}
               <Check size={12} className={cn("shrink-0 text-accent", !isCurrent && "invisible")} />
             </DropdownMenuItem>
           );
