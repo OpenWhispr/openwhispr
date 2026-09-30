@@ -183,7 +183,7 @@ function createElectronApi(db, options = {}) {
     // Note templates and actions
     getPendingNoteActions: async () => db.getPendingNoteActions(),
     getPendingNoteActionDeletes: async () => db.getPendingNoteActionDeletes(),
-    getNoteActionForCloudMerge: async (cloudEntry) => db.getNoteActionForCloudMerge(cloudEntry),
+    getNoteActionForCloudMerge: async (clientId) => db.getNoteActionForCloudMerge(clientId),
     upsertNoteActionFromCloud: async (cloudEntry) => db.upsertNoteActionFromCloud(cloudEntry),
     markNoteActionSynced: async (id, cloudId, serverUpdatedAt, snapshot) =>
       db.markNoteActionSynced(id, cloudId, serverUpdatedAt, snapshot),

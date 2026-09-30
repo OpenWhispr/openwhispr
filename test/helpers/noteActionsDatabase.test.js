@@ -145,10 +145,6 @@ test("cloud rows insert, merge by client id, and revive a local tombstone", (t) 
   assert.deepEqual(db.getPendingNoteActionDeletes(), []);
 });
 
-function localRow(db, clientId) {
-  return db.db.prepare("SELECT * FROM actions WHERE client_id = ?").get(clientId);
-}
-
 test("a cloud row never overwrites or deletes a built-in, and a malformed one is ignored", (t) => {
   const db = createDb(t);
   if (!db) return;
@@ -164,7 +160,7 @@ test("a cloud row never overwrites or deletes a built-in, and a malformed one is
   // A key a later build will seed must not arrive first as a custom row.
   const future = cloudAction({ client_action_id: "notes.actions.builtin.somethingNew" });
   assert.equal(db.upsertNoteActionFromCloud(future), null);
-  assert.equal(localRow(db, "notes.actions.builtin.somethingNew"), undefined);
+  assert.equal(db.getNoteActionForCloudMerge("notes.actions.builtin.somethingNew"), null);
   assert.equal(db.hardDeleteNoteAction(builtin.id).success, false);
   assert.deepEqual(db.getAction(builtin.id), builtin);
 

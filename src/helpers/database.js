@@ -3007,9 +3007,7 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       return this.db
-        .prepare(
-          "SELECT * FROM actions WHERE deleted_at IS NOT NULL AND cloud_id IS NOT NULL AND sync_status = 'pending'"
-        )
+        .prepare("SELECT * FROM actions WHERE deleted_at IS NOT NULL AND cloud_id IS NOT NULL")
         .all()
         .map(toActionItem);
     } catch (error) {
@@ -3022,13 +3020,11 @@ class DatabaseManager {
     }
   }
 
-  getNoteActionForCloudMerge(cloudEntry) {
+  getNoteActionForCloudMerge(clientId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       return toActionItem(
-        this.db
-          .prepare("SELECT * FROM actions WHERE client_id = ?")
-          .get(cloudEntry.client_action_id ?? null)
+        this.db.prepare("SELECT * FROM actions WHERE client_id = ?").get(clientId)
       );
     } catch (error) {
       debugLogger.error(
@@ -3052,9 +3048,8 @@ class DatabaseManager {
       if (clientId.startsWith(BUILTIN_KEY_PREFIX)) return null;
       const fields = resolveActionFields(kind, cloudEntry);
       if (fields.error) return null;
-      const existing = this.getNoteActionForCloudMerge(cloudEntry);
+      const existing = this.getNoteActionForCloudMerge(clientId);
 
-      const updatedAt = cloudEntry.updated_at || new Date().toISOString();
       const values = [
         cloudId,
         kind,
@@ -3064,8 +3059,8 @@ class DatabaseManager {
         fields.sections,
         fields.output,
         cloudEntry.icon || "sparkles",
-        cloudEntry.sort_order ?? 0,
-        updatedAt,
+        cloudEntry.sort_order,
+        cloudEntry.updated_at,
       ];
       if (existing) {
         this.db
@@ -3086,7 +3081,7 @@ class DatabaseManager {
               sort_order, updated_at, client_id, created_at, sync_status)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced')`
         )
-        .run(...values, clientId, cloudEntry.created_at || updatedAt);
+        .run(...values, clientId, cloudEntry.created_at);
       return this.getAction(result.lastInsertRowid);
     } catch (error) {
       debugLogger.error(

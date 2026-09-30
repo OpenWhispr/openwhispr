@@ -432,7 +432,7 @@ export const NOTE_OUTPUT_MAX_TOKENS = 4096;
 
 // Built-ins added once templates had sections; none has an older default to upgrade.
 const builtinTemplate = ({ key, name, description, prompt, sections, sortOrder }) => ({
-  translationKey: `notes.actions.builtin.${key}`,
+  translationKey: `${BUILTIN_KEY_PREFIX}${key}`,
   kind: "template",
   name,
   description,
@@ -453,7 +453,7 @@ const builtinAction = ({
   icon = "sparkles",
   sortOrder,
 }) => ({
-  translationKey: `notes.actions.builtin.${key}`,
+  translationKey: `${BUILTIN_KEY_PREFIX}${key}`,
   kind: "action",
   name,
   description,

@@ -1973,8 +1973,8 @@ class IPCHandlers {
       return this.databaseManager.getPendingNoteActionDeletes();
     });
 
-    ipcMain.handle("db-get-note-action-for-cloud-merge", async (_event, cloudEntry) => {
-      return this.databaseManager.getNoteActionForCloudMerge(cloudEntry);
+    ipcMain.handle("db-get-note-action-for-cloud-merge", async (_event, clientId) => {
+      return this.databaseManager.getNoteActionForCloudMerge(clientId);
     });
 
     // A pulled row reaches open windows like a new one: the action store

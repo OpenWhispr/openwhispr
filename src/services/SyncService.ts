@@ -2766,8 +2766,9 @@ export class SyncService {
   }
 
   // Custom note templates and actions. Built-ins are seeded on every device and
-  // never leave it. An API without /api/note-actions answers 404; each stage
-  // logs it and the rows stay pending until the endpoint exists.
+  // never leave it. An API without /api/note-actions answers 404: creates and the
+  // pull log it and rows stay pending, while an update or delete 404 reads as the
+  // cloud row being gone.
   private async syncNoteActions(): Promise<void> {
     const api = window.electronAPI;
     const required = [
@@ -2902,7 +2903,7 @@ export class SyncService {
           // A row matching a built-in is left alone by both the delete and the
           // upsert below.
           const local = await window.electronAPI.getNoteActionForCloudMerge?.(
-            cloudEntry as unknown as Record<string, unknown>
+            cloudEntry.client_action_id
           );
 
           if (cloudEntry.deleted_at) {

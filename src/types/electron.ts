@@ -3469,9 +3469,7 @@ declare global {
 
       getPendingNoteActions?: () => Promise<NoteActionSyncRow[]>;
       getPendingNoteActionDeletes?: () => Promise<NoteActionSyncRow[]>;
-      getNoteActionForCloudMerge?: (
-        cloudEntry: Record<string, unknown>
-      ) => Promise<NoteActionSyncRow | null>;
+      getNoteActionForCloudMerge?: (clientId: string) => Promise<NoteActionSyncRow | null>;
       upsertNoteActionFromCloud?: (
         cloudEntry: Record<string, unknown>
       ) => Promise<NoteActionSyncRow | null>;

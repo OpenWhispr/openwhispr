@@ -1254,8 +1254,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   getPendingNoteActions: () => ipcRenderer.invoke("db-get-pending-note-actions"),
   getPendingNoteActionDeletes: () => ipcRenderer.invoke("db-get-pending-note-action-deletes"),
-  getNoteActionForCloudMerge: (cloudEntry) =>
-    ipcRenderer.invoke("db-get-note-action-for-cloud-merge", cloudEntry),
+  getNoteActionForCloudMerge: (clientId) =>
+    ipcRenderer.invoke("db-get-note-action-for-cloud-merge", clientId),
   upsertNoteActionFromCloud: (cloudEntry) =>
     ipcRenderer.invoke("db-upsert-note-action-from-cloud", cloudEntry),
   markNoteActionSynced: (id, cloudId, serverUpdatedAt, snapshot) =>
