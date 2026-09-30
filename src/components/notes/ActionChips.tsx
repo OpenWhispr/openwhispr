@@ -31,7 +31,7 @@ export default function ActionChips({
   const { t } = useTranslation();
 
   return (
-    <div className="scrollbar-hidden flex items-center gap-1.5 overflow-x-auto">
+    <div className="scrollbar-hidden flex items-center justify-center-safe gap-1.5 overflow-x-auto">
       {actions.slice(0, VISIBLE_CHIPS).map((action) => {
         const Icon = getActionIcon(action);
         return (
