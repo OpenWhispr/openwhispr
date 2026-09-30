@@ -218,9 +218,14 @@ async function loadNoteEditor(t) {
     React.act(async () => {
       root.render(React.createElement(Harness, { enhancement, overrides }));
     });
+  // The AI Summary tab wraps its label button and the template chevron.
   const click = (value) =>
     React.act(async () => {
-      collectSegments(renders.at(-1)).get(value).props.onClick();
+      let target = null;
+      walk(collectSegments(renders.at(-1)).get(value), (node) => {
+        if (!target && node.props.onClick) target = node;
+      });
+      target.props.onClick();
     });
   const latest = () => renders.at(-1);
   const unmount = () => React.act(async () => root.unmount());

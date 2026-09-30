@@ -66,6 +66,7 @@ const MOCKS = {
     export const useActionProcessing = () => ({ state: "idle", actionName: null, runAction() {} });
   `,
   "/stores/actionStore": `export const getActionName = (action) => action.name;`,
+  "/utils/inferActionOutput": `export const inferActionOutput = async () => "chat";`,
   "/hooks/useNotesOnboarding": `
     export const useNotesOnboarding = () => ({ isComplete: true, complete() {} });
   `,

@@ -18,7 +18,7 @@ import { getActionName } from "../../stores/actionStore";
 import type { ActionItem } from "../../types/electron";
 import type { ContainerConversationItem } from "../../hooks/useContainerChat";
 import { ConversationPicker } from "./ConversationPicker";
-import { getActionIcon } from "./shared";
+import { getActionIcon } from "./actionIcons";
 
 export type EmbeddedChatMode = "hidden" | "floating" | "sidebar";
 

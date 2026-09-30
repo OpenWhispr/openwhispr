@@ -9,7 +9,8 @@ import {
 } from "../ui/dropdown-menu";
 import { getActionName, getActionDescription } from "../../stores/actionStore";
 import type { ActionItem } from "../../types/electron";
-import { ASK_PILL_CLASS, getActionIcon } from "./shared";
+import { ASK_PILL_CLASS } from "./shared";
+import { getActionIcon } from "./actionIcons";
 
 const VISIBLE_CHIPS = 4;
 

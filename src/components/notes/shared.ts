@@ -1,13 +1,4 @@
 import { cn } from "../lib/utils";
-import {
-  ClipboardCheck,
-  FileText,
-  Mail,
-  MessageSquareText,
-  Send,
-  Sparkles,
-  type IconComponent,
-} from "../icons";
 import type { FolderItem } from "../../types/electron";
 
 export const DEFAULT_FOLDER_NAME = "Personal";
@@ -129,17 +120,6 @@ export const ASK_PILL_CLASS = cn(
   "hover:bg-surface-3 hover:text-foreground/80 disabled:pointer-events-none disabled:text-foreground/30",
   "transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
 );
-
-const ACTION_ICONS: Record<string, IconComponent> = {
-  mail: Mail,
-  "clipboard-check": ClipboardCheck,
-  "file-text": FileText,
-  send: Send,
-  sparkles: Sparkles,
-};
-
-export const getActionIcon = (action: { icon: string }): IconComponent =>
-  ACTION_ICONS[action.icon] ?? MessageSquareText;
 
 /** Neutral capsule for note header facts (date + attendees, folder, space). */
 export const NOTE_META_CHIP_CLASS = cn(
