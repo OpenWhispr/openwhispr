@@ -1,32 +1,31 @@
 import { useTranslation } from "react-i18next";
-import { Check, ChevronDown, RefreshCw, Settings2, Sparkles } from "../icons";
+import { Check, RefreshCw, Settings2 } from "../icons";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
-import {
-  SPLIT_BUTTON_DIVIDER_CLASS,
-  SPLIT_BUTTON_GROUP_CLASS,
-  SPLIT_BUTTON_SEGMENT_CLASS,
-} from "../ui/splitButton";
 import { cn } from "../lib/utils";
 import { getActionDescription, getActionName } from "../../stores/actionStore";
 import type { ActionItem } from "../../types/electron";
 
 interface TemplatePickerProps {
   templates: ActionItem[];
-  /** What the main button runs: the note's template, or the one to write it with. */
+  /** The note's template, or the one a first summary would be written with. */
   current: ActionItem;
   /** Rewrites an existing summary rather than writing the first one. */
   regenerate: boolean;
   onRun: (template: ActionItem) => void;
   onManage: () => void;
   disabled?: boolean;
+  /** The trigger, rendered as is. */
+  children: React.ReactNode;
 }
 
+/** The templates that write a note's AI summary, opened from the AI Summary tab. */
 export default function TemplatePicker({
   templates,
   current,
@@ -34,56 +33,27 @@ export default function TemplatePicker({
   onRun,
   onManage,
   disabled,
+  children,
 }: TemplatePickerProps) {
   const { t } = useTranslation();
-  const currentName = getActionName(current, t);
-
-  const MainIcon = regenerate ? RefreshCw : Sparkles;
 
   return (
-    <div
-      className={cn(
-        SPLIT_BUTTON_GROUP_CLASS,
-        "h-[30px] min-w-0",
-        disabled && "pointer-events-none opacity-40"
-      )}
-    >
-      <button
-        type="button"
-        onClick={() => onRun(current)}
-        disabled={disabled}
-        aria-label={t(
-          regenerate ? "notes.templates.regenerateWith" : "notes.templates.generateWith",
-          { name: currentName }
-        )}
-        className={cn(SPLIT_BUTTON_SEGMENT_CLASS, "min-w-0 gap-1.5 ps-2.5 pe-2")}
-      >
-        <MainIcon size={13} className="shrink-0 text-foreground/60" />
-        <span className="max-w-36 truncate">{currentName}</span>
-      </button>
-      <span aria-hidden="true" className={SPLIT_BUTTON_DIVIDER_CLASS} />
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            disabled={disabled}
-            aria-label={t("notes.templates.select")}
-            className={cn(SPLIT_BUTTON_SEGMENT_CLASS, "w-[26px] justify-center")}
-          >
-            <ChevronDown size={12} className="text-foreground/60" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" sideOffset={6} className="min-w-56">
-          {templates.map((template) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild disabled={disabled}>
+        {children}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" sideOffset={6} className="min-w-56">
+        <DropdownMenuLabel className="px-2.5 py-1 text-[11px] font-medium text-muted-foreground/70">
+          {t("notes.templates.tab")}
+        </DropdownMenuLabel>
+        {templates.map((template) => {
+          const isCurrent = template.id === current.id;
+          return (
             <DropdownMenuItem
               key={template.id}
               onClick={() => onRun(template)}
               className="gap-2.5 rounded-md px-2.5 py-1.5 text-xs"
             >
-              <Check
-                size={12}
-                className={cn("shrink-0", template.id === current.id ? "text-accent" : "invisible")}
-              />
               <div className="min-w-0 flex-1">
                 <div className="truncate font-medium">{getActionName(template, t)}</div>
                 {template.description && (
@@ -92,18 +62,22 @@ export default function TemplatePicker({
                   </div>
                 )}
               </div>
+              {isCurrent && regenerate && (
+                <RefreshCw size={12} className="shrink-0 text-foreground/50" />
+              )}
+              <Check size={12} className={cn("shrink-0 text-accent", !isCurrent && "invisible")} />
             </DropdownMenuItem>
-          ))}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onClick={onManage}
-            className="gap-2.5 rounded-md px-2.5 py-1.5 text-xs text-muted-foreground/70"
-          >
-            <Settings2 size={12} />
-            {t("notes.templates.manage")}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
+          );
+        })}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={onManage}
+          className="gap-2.5 rounded-md px-2.5 py-1.5 text-xs text-muted-foreground/70"
+        >
+          <Settings2 size={12} />
+          {t("notes.templates.manage")}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

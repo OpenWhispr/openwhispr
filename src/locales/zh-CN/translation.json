@@ -3211,20 +3211,20 @@
       },
       "tab": "操作",
       "output": {
+        "auto": "自动",
         "chat": "聊天",
         "summary": "AI 摘要",
         "chatHint": "在笔记的聊天中回复，AI 摘要保持不变。",
-        "summaryHint": "编辑笔记的 AI 摘要；如果还没有摘要，就根据转录内容生成一份。"
+        "summaryHint": "编辑笔记的 AI 摘要；如果还没有摘要，就根据转录内容生成一份。",
+        "autoHint": "保存时读取提示词，并选择聊天或 AI 摘要。"
       },
-      "replaceDescription": "{{name}}将编辑这条笔记的 AI 摘要。你对其所做的修改可能会被更改。"
+      "applied": "已使用 {{name}} 更新 AI 摘要"
     },
     "templates": {
       "tab": "模板",
       "managerTitle": "模板和操作",
       "manage": "管理模板...",
       "select": "选择模板",
-      "generateWith": "使用{{name}}生成 AI 摘要",
-      "regenerateWith": "使用{{name}}重新生成 AI 摘要",
       "addTemplate": "新建模板",
       "editTemplate": "编辑模板",
       "namePlaceholder": "模板名称",
@@ -3240,10 +3240,7 @@
       "noSectionsHint": "没有章节时，背景就是摘要的全部指令。",
       "noTemplates": "暂无模板",
       "emptyEditorTitle": "选择模板",
-      "emptyEditorDescription": "从列表中选择一个模板或创建新模板",
-      "replaceTitle": "替换 AI 摘要？",
-      "replaceDescription": "{{name}}将为这条笔记生成新的 AI 摘要。你对当前摘要所做的修改将会丢失。",
-      "replaceConfirm": "替换"
+      "emptyEditorDescription": "从列表中选择一个模板或创建新模板"
     },
     "empty": {
       "title": "这里还没有笔记",

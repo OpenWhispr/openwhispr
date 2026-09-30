@@ -16,6 +16,8 @@ interface ActionManagerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialKind: ActionKind;
+  /** Picks chat or summary for an action saved with Auto. */
+  onInferOutput: (prompt: string) => Promise<ActionOutput>;
 }
 
 // Rows keep a stable key while sections are reordered or removed.
@@ -35,6 +37,12 @@ const TEXTAREA_CLASS = cn(
   "font-mono text-[13px]"
 );
 
+const OUTPUT_HINT_KEYS = {
+  auto: "notes.actions.output.autoHint",
+  chat: "notes.actions.output.chatHint",
+  summary: "notes.actions.output.summaryHint",
+} as const;
+
 const ICON_BUTTON_CLASS =
   "p-1 rounded-md text-muted-foreground/70 hover:text-foreground/70 hover:bg-foreground/5 dark:hover:bg-white/6 transition-colors duration-150 disabled:opacity-30 disabled:pointer-events-none";
 
@@ -42,6 +50,7 @@ export default function ActionManagerDialog({
   open,
   onOpenChange,
   initialKind,
+  onInferOutput,
 }: ActionManagerDialogProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -51,7 +60,7 @@ export default function ActionManagerDialog({
   const [description, setDescription] = useState("");
   const [prompt, setPrompt] = useState("");
   const [sections, setSections] = useState<SectionDraft[]>([]);
-  const [output, setOutput] = useState<ActionOutput>("chat");
+  const [output, setOutput] = useState<ActionOutput | "auto">("auto");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -64,7 +73,7 @@ export default function ActionManagerDialog({
     setDescription("");
     setPrompt("");
     setSections([]);
-    setOutput("chat");
+    setOutput("auto");
     setEditingId(null);
   };
 
@@ -92,7 +101,7 @@ export default function ActionManagerDialog({
     setDescription(action.description);
     setPrompt(action.prompt);
     setSections(toDrafts(action.sections));
-    setOutput(action.output ?? "chat");
+    setOutput(action.output ?? "auto");
     setIsCreating(false);
   };
 
@@ -138,7 +147,9 @@ export default function ActionManagerDialog({
     if (!canSave) return;
     setIsSaving(true);
     try {
-      const fields = isTemplate ? { sections: savedSections } : { output };
+      const fields = isTemplate
+        ? { sections: savedSections }
+        : { output: output === "auto" ? await onInferOutput(prompt.trim()) : output };
       const result =
         editingId !== null
           ? await window.electronAPI.updateAction(editingId, {
@@ -159,6 +170,8 @@ export default function ActionManagerDialog({
         return;
       }
       if (editingId === null) setIsCreating(false);
+      // Show what Auto picked.
+      if ("output" in fields) setOutput(fields.output);
     } finally {
       setIsSaving(false);
     }
@@ -379,9 +392,12 @@ export default function ActionManagerDialog({
                     <div className="space-y-1.5">
                       <Tabs
                         value={output}
-                        onValueChange={(value) => setOutput(value as ActionOutput)}
+                        onValueChange={(value) => setOutput(value as ActionOutput | "auto")}
                       >
                         <TabsList className="h-8 p-0.5">
+                          <TabsTrigger value="auto" className="px-3 py-1 text-xs">
+                            {t("notes.actions.output.auto")}
+                          </TabsTrigger>
                           <TabsTrigger value="chat" className="px-3 py-1 text-xs">
                             {t("notes.actions.output.chat")}
                           </TabsTrigger>
@@ -391,11 +407,7 @@ export default function ActionManagerDialog({
                         </TabsList>
                       </Tabs>
                       <p className="text-xs text-muted-foreground/70">
-                        {t(
-                          output === "chat"
-                            ? "notes.actions.output.chatHint"
-                            : "notes.actions.output.summaryHint"
-                        )}
+                        {t(OUTPUT_HINT_KEYS[output])}
                       </p>
                     </div>
                   )}

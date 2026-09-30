@@ -3211,20 +3211,20 @@
       },
       "tab": "Ações",
       "output": {
+        "auto": "Automático",
         "chat": "Chat",
         "summary": "Resumo com IA",
         "chatHint": "Responde no chat da nota e deixa o resumo com IA como está.",
-        "summaryHint": "Edita o resumo com IA da nota, ou escreve um a partir da transcrição se ainda não houver."
+        "summaryHint": "Edita o resumo com IA da nota, ou escreve um a partir da transcrição se ainda não houver.",
+        "autoHint": "Lê o prompt ao salvar e escolhe o chat ou o resumo com IA."
       },
-      "replaceDescription": "{{name}} vai editar o resumo com IA desta nota. As edições que você fez nele podem mudar."
+      "applied": "Resumo com IA atualizado com {{name}}"
     },
     "templates": {
       "tab": "Modelos",
       "managerTitle": "Modelos e ações",
       "manage": "Gerenciar modelos...",
       "select": "Escolher modelo",
-      "generateWith": "Escrever o resumo com IA usando {{name}}",
-      "regenerateWith": "Gerar novamente o resumo com IA usando {{name}}",
       "addTemplate": "Novo modelo",
       "editTemplate": "Editar modelo",
       "namePlaceholder": "Nome do modelo",
@@ -3240,10 +3240,7 @@
       "noSectionsHint": "Sem seções, o contexto é a instrução completa para o resumo.",
       "noTemplates": "Nenhum modelo ainda",
       "emptyEditorTitle": "Selecionar modelo",
-      "emptyEditorDescription": "Escolha um modelo da lista ou crie um novo",
-      "replaceTitle": "Substituir o resumo com IA?",
-      "replaceDescription": "{{name}} vai escrever um novo resumo com IA para esta nota. As edições que você fez no atual serão perdidas.",
-      "replaceConfirm": "Substituir"
+      "emptyEditorDescription": "Escolha um modelo da lista ou crie um novo"
     },
     "empty": {
       "title": "Ainda não há notas aqui",

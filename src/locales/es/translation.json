@@ -3264,20 +3264,20 @@
       },
       "tab": "Acciones",
       "output": {
+        "auto": "Automático",
         "chat": "Chat",
         "summary": "Resumen con IA",
         "chatHint": "Responde en el chat de la nota y deja el resumen con IA como está.",
-        "summaryHint": "Edita el resumen con IA de la nota, o lo escribe a partir de la transcripción si aún no hay uno."
+        "summaryHint": "Edita el resumen con IA de la nota, o lo escribe a partir de la transcripción si aún no hay uno.",
+        "autoHint": "Lee el prompt al guardar y elige el chat o el resumen con IA."
       },
-      "replaceDescription": "{{name}} editará el resumen con IA de esta nota. Los cambios que hayas hecho pueden modificarse."
+      "applied": "Resumen con IA actualizado con {{name}}"
     },
     "templates": {
       "tab": "Plantillas",
       "managerTitle": "Plantillas y acciones",
       "manage": "Gestionar plantillas...",
       "select": "Elegir plantilla",
-      "generateWith": "Escribir el resumen con IA con {{name}}",
-      "regenerateWith": "Regenerar el resumen con IA con {{name}}",
       "addTemplate": "Nueva plantilla",
       "editTemplate": "Editar plantilla",
       "namePlaceholder": "Nombre de la plantilla",
@@ -3293,10 +3293,7 @@
       "noSectionsHint": "Sin secciones, el contexto es la instrucción completa para el resumen.",
       "noTemplates": "Aún no hay plantillas",
       "emptyEditorTitle": "Seleccionar plantilla",
-      "emptyEditorDescription": "Elige una plantilla de la lista o crea una nueva",
-      "replaceTitle": "¿Reemplazar el resumen con IA?",
-      "replaceDescription": "{{name}} escribirá un nuevo resumen con IA para esta nota. Se perderán los cambios que hayas hecho en el actual.",
-      "replaceConfirm": "Reemplazar"
+      "emptyEditorDescription": "Elige una plantilla de la lista o crea una nueva"
     },
     "empty": {
       "title": "Todavía no hay notas aquí",

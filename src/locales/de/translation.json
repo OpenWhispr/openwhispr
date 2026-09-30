@@ -3578,20 +3578,20 @@
       },
       "tab": "Aktionen",
       "output": {
+        "auto": "Automatisch",
         "chat": "Chat",
         "summary": "KI-Zusammenfassung",
         "chatHint": "Antwortet im Chat der Notiz und lässt die KI-Zusammenfassung unverändert.",
-        "summaryHint": "Bearbeitet die KI-Zusammenfassung der Notiz oder erstellt sie aus dem Transkript, falls es noch keine gibt."
+        "summaryHint": "Bearbeitet die KI-Zusammenfassung der Notiz oder erstellt sie aus dem Transkript, falls es noch keine gibt.",
+        "autoHint": "Liest beim Speichern den Prompt und wählt den Chat oder die KI-Zusammenfassung."
       },
-      "replaceDescription": "{{name}} bearbeitet die KI-Zusammenfassung dieser Notiz. Ihre Änderungen daran können sich ändern."
+      "applied": "KI-Zusammenfassung mit {{name}} aktualisiert"
     },
     "templates": {
       "tab": "Vorlagen",
       "managerTitle": "Vorlagen & Aktionen",
       "manage": "Vorlagen verwalten...",
       "select": "Vorlage auswählen",
-      "generateWith": "KI-Zusammenfassung mit {{name}} erstellen",
-      "regenerateWith": "KI-Zusammenfassung mit {{name}} neu erstellen",
       "addTemplate": "Neue Vorlage",
       "editTemplate": "Vorlage bearbeiten",
       "namePlaceholder": "Name der Vorlage",
@@ -3607,10 +3607,7 @@
       "noSectionsHint": "Ohne Abschnitte ist der Kontext die gesamte Anweisung für die Zusammenfassung.",
       "noTemplates": "Noch keine Vorlagen",
       "emptyEditorTitle": "Vorlage auswählen",
-      "emptyEditorDescription": "Wählen Sie eine Vorlage aus der Liste oder erstellen Sie eine neue",
-      "replaceTitle": "KI-Zusammenfassung ersetzen?",
-      "replaceDescription": "{{name}} erstellt eine neue KI-Zusammenfassung für diese Notiz. Ihre Änderungen an der aktuellen gehen verloren.",
-      "replaceConfirm": "Ersetzen"
+      "emptyEditorDescription": "Wählen Sie eine Vorlage aus der Liste oder erstellen Sie eine neue"
     },
     "onboarding": {
       "llm": {

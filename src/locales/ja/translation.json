@@ -2992,20 +2992,20 @@
       },
       "tab": "アクション",
       "output": {
+        "auto": "自動",
         "chat": "チャット",
         "summary": "AI要約",
         "chatHint": "ノートのチャットで回答し、AI要約はそのまま残します。",
-        "summaryHint": "ノートのAI要約を編集します。要約がまだない場合は文字起こしから作成します。"
+        "summaryHint": "ノートのAI要約を編集します。要約がまだない場合は文字起こしから作成します。",
+        "autoHint": "保存時にプロンプトを読み取り、チャットかAI要約かを選びます。"
       },
-      "replaceDescription": "{{name}}でこのノートのAI要約を編集します。加えた編集が変更される場合があります。"
+      "applied": "{{name}}でAI要約を更新しました"
     },
     "templates": {
       "tab": "テンプレート",
       "managerTitle": "テンプレートとアクション",
       "manage": "テンプレートを管理...",
       "select": "テンプレートを選択",
-      "generateWith": "{{name}}でAI要約を作成",
-      "regenerateWith": "{{name}}でAI要約を再作成",
       "addTemplate": "新しいテンプレート",
       "editTemplate": "テンプレートを編集",
       "namePlaceholder": "テンプレート名",
@@ -3021,10 +3021,7 @@
       "noSectionsHint": "セクションがない場合、コンテキストが要約への指示のすべてになります。",
       "noTemplates": "テンプレートはまだありません",
       "emptyEditorTitle": "テンプレートを選択",
-      "emptyEditorDescription": "リストからテンプレートを選択するか、新しく作成してください",
-      "replaceTitle": "AI要約を置き換えますか？",
-      "replaceDescription": "{{name}}でこのノートのAI要約を新しく作成します。現在の要約に加えた編集は失われます。",
-      "replaceConfirm": "置き換える"
+      "emptyEditorDescription": "リストからテンプレートを選択するか、新しく作成してください"
     },
     "empty": {
       "title": "まだノートがありません",

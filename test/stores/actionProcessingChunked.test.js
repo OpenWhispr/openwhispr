@@ -31,6 +31,7 @@ async function loadStore(
           updates.push({ noteId, payload });
           return { success: true };
         },
+        getNote: async () => null,
         getLocalContextBudget: async (modelId) => {
           budgetCalls.push(modelId);
           if (budget instanceof Error) throw budget;

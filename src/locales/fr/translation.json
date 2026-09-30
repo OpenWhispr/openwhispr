@@ -3578,20 +3578,20 @@
       },
       "tab": "Actions",
       "output": {
+        "auto": "Auto",
         "chat": "Chat",
         "summary": "Résumé IA",
         "chatHint": "Répond dans le chat de la note et laisse le résumé IA tel quel.",
-        "summaryHint": "Modifie le résumé IA de la note, ou le rédige à partir de la transcription s'il n'y en a pas encore."
+        "summaryHint": "Modifie le résumé IA de la note, ou le rédige à partir de la transcription s'il n'y en a pas encore.",
+        "autoHint": "Lit le prompt à l'enregistrement et choisit le chat ou le résumé IA."
       },
-      "replaceDescription": "{{name}} va modifier le résumé IA de cette note. Les modifications que vous y avez apportées peuvent changer."
+      "applied": "Résumé IA mis à jour avec {{name}}"
     },
     "templates": {
       "tab": "Modèles",
       "managerTitle": "Modèles et actions",
       "manage": "Gérer les modèles...",
       "select": "Choisir un modèle",
-      "generateWith": "Rédiger le résumé IA avec {{name}}",
-      "regenerateWith": "Régénérer le résumé IA avec {{name}}",
       "addTemplate": "Nouveau modèle",
       "editTemplate": "Modifier le modèle",
       "namePlaceholder": "Nom du modèle",
@@ -3607,10 +3607,7 @@
       "noSectionsHint": "Sans sections, le contexte constitue toute la consigne du résumé.",
       "noTemplates": "Aucun modèle pour l'instant",
       "emptyEditorTitle": "Sélectionner un modèle",
-      "emptyEditorDescription": "Choisissez un modèle dans la liste ou créez-en un nouveau",
-      "replaceTitle": "Remplacer le résumé IA ?",
-      "replaceDescription": "{{name}} va rédiger un nouveau résumé IA pour cette note. Les modifications apportées au résumé actuel seront perdues.",
-      "replaceConfirm": "Remplacer"
+      "emptyEditorDescription": "Choisissez un modèle dans la liste ou créez-en un nouveau"
     },
     "onboarding": {
       "llm": {

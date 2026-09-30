@@ -9,6 +9,13 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 
 const ACTION = { id: 1, name: "Generate Notes", prompt: "Summarize the meeting." };
 const LABELS = { noModel: "no model", noEndpoint: "no endpoint", actionFailed: "failed" };
+const STORED_NOTE = {
+  title: "Untitled Note",
+  enhanced_content: "- the summary before the run",
+  enhancement_prompt: "the prompt before the run",
+  enhancement_template_id: "the template before the run",
+  enhanced_at_content_hash: "the hash before the run",
+};
 
 async function loadStore(t) {
   const updates = [];
@@ -19,6 +26,7 @@ async function loadStore(t) {
           updates.push({ noteId, payload });
           return { success: true };
         },
+        getNote: async (noteId) => ({ id: noteId, ...STORED_NOTE }),
       },
     },
   });
@@ -36,7 +44,7 @@ async function loadStore(t) {
           },
         };
       `,
-      "/utils/generateTitle": `export const generateNoteTitle = async () => undefined;`,
+      "/utils/generateTitle": `export const generateNoteTitle = async () => globalThis.__generatedTitle;`,
     },
   });
   globalThis.__processTextCalls = calls;
@@ -44,6 +52,7 @@ async function loadStore(t) {
     delete globalThis.__processTextCalls;
     delete globalThis.__processTextResult;
     delete globalThis.__processTextError;
+    delete globalThis.__generatedTitle;
   });
 
   const store = await vite.ssrLoadModule("/stores/actionProcessingStore.ts");
@@ -271,4 +280,50 @@ test("a summary action on a note without a summary writes one from the transcrip
     "enhanced_at_content_hash",
   ]);
   assert.equal(updates[0].payload.enhanced_at_content_hash, "hash-14");
+});
+
+test("a run hands Undo the summary fields it overwrote, and the title when it renamed the note", async (t) => {
+  const { store, updates } = await loadStore(t);
+  const summaryFields = {
+    enhanced_content: STORED_NOTE.enhanced_content,
+    enhancement_prompt: STORED_NOTE.enhancement_prompt,
+    enhancement_template_id: STORED_NOTE.enhancement_template_id,
+    enhanced_at_content_hash: STORED_NOTE.enhanced_at_content_hash,
+  };
+  const shorten = {
+    id: 7,
+    client_id: "shorten",
+    kind: "action",
+    output: "summary",
+    name: "Shorten",
+    prompt: "x",
+  };
+  const options = { modelId: "gpt-4.1", isCloudMode: true, isMeetingNote: true };
+
+  store.runBackgroundAction(
+    15,
+    "## Current Summary\n- a",
+    "hash-15",
+    shorten,
+    { ...options, fromSummary: true },
+    LABELS
+  );
+  await waitFor(() => updates.length === 1, "the rewrite to be written");
+  assert.deepEqual(store.consumeAppliedEvents(), [
+    { noteId: 15, action: shorten, previous: summaryFields },
+  ]);
+
+  globalThis.__generatedTitle = "Q3 launch sync";
+  store.runBackgroundAction(
+    16,
+    "notes",
+    "hash-16",
+    ACTION,
+    { ...options, allowTitleGeneration: true },
+    LABELS
+  );
+  await waitFor(() => updates.length === 2, "the template run to be written");
+  assert.equal(updates[1].payload.title, "Q3 launch sync");
+  const [{ previous }] = store.consumeAppliedEvents();
+  assert.deepEqual(previous, { ...summaryFields, title: STORED_NOTE.title });
 });

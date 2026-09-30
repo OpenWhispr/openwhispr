@@ -14,6 +14,7 @@ import {
   Search,
   Plus,
   Check,
+  ChevronDown,
   ShieldCheck,
   Users,
 } from "../icons";
@@ -465,6 +466,11 @@ export default function NoteEditor({
   const hasNoteMaterial = !!note.content.trim() || hasMeetingTranscript;
   const canRunTemplate =
     !!onRunNoteAction && !!noteTemplate && canEditNote && !isRecording && hasNoteMaterial;
+  // The AI Summary tab names the template that wrote the summary, when it still exists.
+  const summaryLabel =
+    noteTemplate && noteTemplate.client_id === note.enhancement_template_id
+      ? getActionName(noteTemplate, t)
+      : t("notes.editor.aiSummary");
 
   useEffect(() => {
     initializeActions();
@@ -542,7 +548,7 @@ export default function NoteEditor({
     const container = segmentContainerRef.current;
     if (!container) return;
 
-    const buttons = container.querySelectorAll<HTMLButtonElement>("[data-segment-button]");
+    const buttons = container.querySelectorAll<HTMLElement>("[data-segment-button]");
     const activeBtn = Array.from(buttons).find((btn) => btn.dataset.segmentValue === viewMode);
     if (!activeBtn) {
       setIndicatorStyle((style) => ({ ...style, opacity: 0 }));
@@ -1188,41 +1194,61 @@ export default function NoteEditor({
                   <AlignLeft size={12} />
                   {t("notes.editor.notes")}
                 </button>
-                {enhancement && (
-                  <button
+                {(enhancement || canRunTemplate) && (
+                  <div
                     data-segment-button
                     data-segment-value="enhanced"
-                    onClick={() => setSelectedViewMode("enhanced")}
                     className={cn(
-                      SEGMENT_BUTTON_CLASS,
+                      "relative z-1 flex items-center",
                       viewMode === "enhanced"
                         ? "text-foreground"
                         : "text-foreground/60 hover:text-foreground/80"
                     )}
                   >
-                    <Sparkles size={12} />
-                    {t("notes.editor.aiSummary")}
-                    {enhancement.isStale && (
-                      <span
-                        className="h-1 w-1 rounded-full bg-amber-400/60"
-                        title={t("notes.editor.staleIndicator")}
-                      />
+                    {enhancement && (
+                      <button
+                        onClick={() => setSelectedViewMode("enhanced")}
+                        className={cn(SEGMENT_BUTTON_CLASS, canRunTemplate && "pe-1")}
+                      >
+                        <Sparkles size={12} />
+                        <span className="max-w-32 truncate">{summaryLabel}</span>
+                        {enhancement.isStale && (
+                          <span
+                            className="h-1 w-1 rounded-full bg-amber-400/60"
+                            title={t("notes.editor.staleIndicator")}
+                          />
+                        )}
+                      </button>
                     )}
-                  </button>
+                    {canRunTemplate && noteTemplate && (
+                      <TemplatePicker
+                        templates={templates}
+                        current={noteTemplate}
+                        regenerate={!!enhancement}
+                        onRun={(template) => onRunNoteAction?.(template)}
+                        onManage={() => onManageActions?.("template")}
+                        disabled={isActionRunning}
+                      >
+                        <button
+                          type="button"
+                          aria-label={enhancement ? t("notes.templates.select") : undefined}
+                          className={cn(SEGMENT_BUTTON_CLASS, enhancement && "ps-1 pe-2")}
+                        >
+                          {!enhancement && (
+                            <>
+                              <Sparkles size={12} />
+                              {summaryLabel}
+                            </>
+                          )}
+                          <ChevronDown size={12} />
+                        </button>
+                      </TemplatePicker>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              {canRunTemplate && noteTemplate && (
-                <TemplatePicker
-                  templates={templates}
-                  current={noteTemplate}
-                  regenerate={!!enhancement}
-                  onRun={(template) => onRunNoteAction?.(template)}
-                  onManage={() => onManageActions?.("template")}
-                  disabled={isActionRunning}
-                />
-              )}
               {canEditNote && (
                 <NoteRecordControl
                   isRecording={isRecording}

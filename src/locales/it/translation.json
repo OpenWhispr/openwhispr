@@ -3211,20 +3211,20 @@
       },
       "tab": "Azioni",
       "output": {
+        "auto": "Automatico",
         "chat": "Chat",
         "summary": "Riepilogo AI",
         "chatHint": "Risponde nella chat della nota e lascia invariato il riepilogo AI.",
-        "summaryHint": "Modifica il riepilogo AI della nota, oppure lo scrive dalla trascrizione se non c'è ancora."
+        "summaryHint": "Modifica il riepilogo AI della nota, oppure lo scrive dalla trascrizione se non c'è ancora.",
+        "autoHint": "Legge il prompt al salvataggio e sceglie la chat o il riepilogo AI."
       },
-      "replaceDescription": "{{name}} modificherà il riepilogo AI di questa nota. Le modifiche che hai apportato potrebbero cambiare."
+      "applied": "Riepilogo AI aggiornato con {{name}}"
     },
     "templates": {
       "tab": "Modelli",
       "managerTitle": "Modelli e azioni",
       "manage": "Gestisci modelli...",
       "select": "Scegli modello",
-      "generateWith": "Scrivi il riepilogo AI con {{name}}",
-      "regenerateWith": "Rigenera il riepilogo AI con {{name}}",
       "addTemplate": "Nuovo modello",
       "editTemplate": "Modifica modello",
       "namePlaceholder": "Nome del modello",
@@ -3240,10 +3240,7 @@
       "noSectionsHint": "Senza sezioni, il contesto è l'intera istruzione per il riepilogo.",
       "noTemplates": "Nessun modello ancora",
       "emptyEditorTitle": "Seleziona un modello",
-      "emptyEditorDescription": "Scegli un modello dall'elenco o creane uno nuovo",
-      "replaceTitle": "Sostituire il riepilogo AI?",
-      "replaceDescription": "{{name}} scriverà un nuovo riepilogo AI per questa nota. Le modifiche apportate a quello attuale andranno perse.",
-      "replaceConfirm": "Sostituisci"
+      "emptyEditorDescription": "Scegli un modello dall'elenco o creane uno nuovo"
     },
     "empty": {
       "title": "Ancora nessuna nota qui",

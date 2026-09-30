@@ -7,7 +7,7 @@ import { appendDictionarySuffix } from "../config/prompts";
 import { generateNoteTitle } from "../utils/generateTitle";
 import { buildNoteFormattingOverrides } from "../helpers/noteFormattingOverrides";
 import { tagActionItemOwners, type MentionPerson } from "../utils/mentionMarkdown";
-import type { ActionItem } from "../types/electron";
+import type { ActionItem, NoteItem } from "../types/electron";
 import { estimateNoteTokens, planNoteChunks, splitChunkInHalf } from "../helpers/noteChunking";
 import type { LocalInferenceError } from "../utils/localInferenceError";
 import type { ReasoningConfig } from "../services/BaseReasoningService";
@@ -70,6 +70,18 @@ export interface NoteMaterial {
   transcript: string;
 }
 
+/** What a run overwrote, so Undo can put it back. */
+export type NoteSummarySnapshot = Pick<
+  NoteItem,
+  "enhanced_content" | "enhancement_prompt" | "enhancement_template_id" | "enhanced_at_content_hash"
+> & { title?: string };
+
+export interface ActionAppliedEvent {
+  noteId: number;
+  action: ActionItem;
+  previous: NoteSummarySnapshot;
+}
+
 export interface ActionErrorEvent {
   noteId: number;
   message: string;
@@ -81,6 +93,7 @@ export interface ActionErrorEvent {
 interface ActionProcessingStoreState {
   noteStates: Record<number, NoteActionState>;
   errorEvents: ActionErrorEvent[];
+  appliedEvents: ActionAppliedEvent[];
 }
 
 // The run a note's in-flight action belongs to. A per-note flag would be reset
@@ -112,9 +125,15 @@ function pushErrorEvent(event: ActionErrorEvent) {
   useActionProcessingStore.setState({ errorEvents: [...errorEvents, event] });
 }
 
+function pushAppliedEvent(event: ActionAppliedEvent) {
+  const { appliedEvents } = useActionProcessingStore.getState();
+  useActionProcessingStore.setState({ appliedEvents: [...appliedEvents, event] });
+}
+
 export const useActionProcessingStore = create<ActionProcessingStoreState>()(() => ({
   noteStates: {},
   errorEvents: [],
+  appliedEvents: [],
 }));
 
 // One part of a recording too long for the local model's window (#2142). The
@@ -488,6 +507,7 @@ export function runBackgroundAction(
         if (generated) title = generated;
       }
 
+      const before = await window.electronAPI.getNote(noteId);
       if (isCancelled()) return;
 
       const enhancedContent = options.knownPeople?.length
@@ -508,6 +528,17 @@ export function runBackgroundAction(
           : { enhanced_content: enhancedContent, enhanced_at_content_hash: contentHash };
       if (title) updates.title = title;
       await window.electronAPI.updateNote(noteId, updates);
+      pushAppliedEvent({
+        noteId,
+        action,
+        previous: {
+          enhanced_content: before?.enhanced_content ?? null,
+          enhancement_prompt: before?.enhancement_prompt ?? null,
+          enhancement_template_id: before?.enhancement_template_id ?? null,
+          enhanced_at_content_hash: before?.enhanced_at_content_hash ?? null,
+          ...(title && before && { title: before.title }),
+        },
+      });
 
       setNoteState(noteId, { status: "success", actionName: action.name, progress: null });
 
@@ -560,6 +591,13 @@ export function consumeErrorEvents(): ActionErrorEvent[] {
   if (errorEvents.length === 0) return [];
   useActionProcessingStore.setState({ errorEvents: [] });
   return errorEvents;
+}
+
+export function consumeAppliedEvents(): ActionAppliedEvent[] {
+  const { appliedEvents } = useActionProcessingStore.getState();
+  if (appliedEvents.length === 0) return [];
+  useActionProcessingStore.setState({ appliedEvents: [] });
+  return appliedEvents;
 }
 
 export function selectNoteActionState(

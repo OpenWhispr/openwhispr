@@ -8,14 +8,13 @@ import SpacesTree from "./SpacesTree";
 import { ContainerOverview } from "./overview/ContainerOverview";
 import NotesStructureIntroDialog from "./NotesStructureIntroDialog";
 import ActionManagerDialog from "./ActionManagerDialog";
-import { ConfirmDialog } from "../ui/dialog";
 import AddNotesToFolderDialog from "./AddNotesToFolderDialog";
 import { useActionProcessing } from "../../hooks/useActionProcessing";
 import type { NoteMoveTarget } from "../../hooks/useNoteDragAndDrop";
 import type { ActionItem, ActionKind, NoteItem } from "../../types/electron";
-import { getActionName, rememberTemplate } from "../../stores/actionStore";
+import { rememberTemplate } from "../../stores/actionStore";
 import { buildNoteRunInput } from "../../helpers/templatePrompts";
-import { useDialogs } from "../../hooks/useDialogs";
+import { inferActionOutput } from "../../utils/inferActionOutput";
 import {
   useSettingsStore,
   selectIsCloudNoteFormattingMode,
@@ -147,7 +146,6 @@ export default function PersonalNotesView({
   const [draft, setDraftState] = useState<NoteEditorDraft | null>(null);
   const draftRef = useRef<NoteEditorDraft | null>(null);
   const [managerKind, setManagerKind] = useState<ActionKind | null>(null);
-  const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
   const [showAddNotesDialog, setShowAddNotesDialog] = useState(false);
   const pendingDocumentRef = useRef<PendingDocumentSave | null>(null);
   const pendingEnhancedRef = useRef<PendingEnhancedSave | null>(null);
@@ -707,25 +705,6 @@ export default function PersonalNotesView({
       ),
     });
   };
-  // Rewriting a summary loses any edits made to it, so ask first.
-  const requestNoteRun = (action: ActionItem) => {
-    if (!editorEnhancedContent) {
-      void runNoteAction(action);
-      return;
-    }
-    showConfirmDialog({
-      title: t("notes.templates.replaceTitle"),
-      description: t(
-        action.kind === "template"
-          ? "notes.templates.replaceDescription"
-          : "notes.actions.replaceDescription",
-        { name: getActionName(action, t) }
-      ),
-      confirmText: t("notes.templates.replaceConfirm"),
-      cancelText: t("notes.actions.cancel"),
-      onConfirm: () => void runNoteAction(action),
-    });
-  };
 
   if (!isOnboardingComplete) {
     return (
@@ -813,22 +792,14 @@ export default function PersonalNotesView({
               actionName={actionName}
               actionProgress={actionProgress}
               onCancelAction={cancelAction}
-              onRunNoteAction={requestNoteRun}
+              onRunNoteAction={runNoteAction}
               onManageActions={setManagerKind}
             />
             <ActionManagerDialog
               open={managerKind !== null}
               onOpenChange={(open) => !open && setManagerKind(null)}
               initialKind={managerKind ?? "template"}
-            />
-            <ConfirmDialog
-              open={confirmDialog.open}
-              onOpenChange={(open) => !open && hideConfirmDialog()}
-              title={confirmDialog.title}
-              description={confirmDialog.description}
-              confirmText={confirmDialog.confirmText}
-              cancelText={confirmDialog.cancelText}
-              onConfirm={confirmDialog.onConfirm}
+              onInferOutput={(prompt) => inferActionOutput(prompt, effectiveModelId, isCloudMode)}
             />
           </>
         ) : activeContext && overviewSpace ? (

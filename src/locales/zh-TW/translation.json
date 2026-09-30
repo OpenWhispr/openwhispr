@@ -3211,20 +3211,20 @@
       },
       "tab": "動作",
       "output": {
+        "auto": "自動",
         "chat": "聊天",
         "summary": "AI 摘要",
         "chatHint": "在筆記的聊天中回覆，AI 摘要維持不變。",
-        "summaryHint": "編輯筆記的 AI 摘要；如果還沒有摘要，就根據轉錄內容產生一份。"
+        "summaryHint": "編輯筆記的 AI 摘要；如果還沒有摘要，就根據轉錄內容產生一份。",
+        "autoHint": "儲存時讀取提示詞，並選擇聊天或 AI 摘要。"
       },
-      "replaceDescription": "{{name}}將編輯這則筆記的 AI 摘要。你對其所做的編輯可能會被更改。"
+      "applied": "已使用 {{name}} 更新 AI 摘要"
     },
     "templates": {
       "tab": "範本",
       "managerTitle": "範本與動作",
       "manage": "管理範本...",
       "select": "選擇範本",
-      "generateWith": "使用{{name}}產生 AI 摘要",
-      "regenerateWith": "使用{{name}}重新產生 AI 摘要",
       "addTemplate": "新增範本",
       "editTemplate": "編輯範本",
       "namePlaceholder": "範本名稱",
@@ -3240,10 +3240,7 @@
       "noSectionsHint": "沒有段落時，背景就是摘要的完整指示。",
       "noTemplates": "尚無範本",
       "emptyEditorTitle": "選擇範本",
-      "emptyEditorDescription": "從列表中選擇一個範本或建立新範本",
-      "replaceTitle": "要取代 AI 摘要嗎？",
-      "replaceDescription": "{{name}}將為這則筆記產生新的 AI 摘要。你對目前摘要所做的編輯將會遺失。",
-      "replaceConfirm": "取代"
+      "emptyEditorDescription": "從列表中選擇一個範本或建立新範本"
     },
     "empty": {
       "title": "這裡還沒有筆記",
