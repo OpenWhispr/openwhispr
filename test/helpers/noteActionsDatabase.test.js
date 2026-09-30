@@ -117,7 +117,7 @@ test("markNoteActionSynced leaves a row pending when it changed since the push",
   assert.equal(db.getPendingNoteActions()[0].cloud_id, null);
 });
 
-test("cloud rows insert, merge by client id then cloud id, and revive a local tombstone", (t) => {
+test("cloud rows insert, merge by client id, and revive a local tombstone", (t) => {
   const db = createDb(t);
   if (!db) return;
   const inserted = db.upsertNoteActionFromCloud(cloudAction());
@@ -133,10 +133,6 @@ test("cloud rows insert, merge by client id then cloud id, and revive a local to
   );
   assert.equal(updated.id, inserted.id);
   assert.equal(updated.name, "Shorten more");
-  assert.equal(
-    db.getNoteActionForCloudMerge({ id: "cloud-1", client_action_id: "unknown" }).id,
-    inserted.id
-  );
 
   db.deleteAction(inserted.id);
   const revived = db.upsertNoteActionFromCloud(

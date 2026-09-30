@@ -3025,12 +3025,10 @@ class DatabaseManager {
   getNoteActionForCloudMerge(cloudEntry) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      const byClientId = this.db
-        .prepare("SELECT * FROM actions WHERE client_id = ?")
-        .get(cloudEntry.client_action_id ?? null);
       return toActionItem(
-        byClientId ||
-          this.db.prepare("SELECT * FROM actions WHERE cloud_id = ?").get(cloudEntry.id ?? null)
+        this.db
+          .prepare("SELECT * FROM actions WHERE client_id = ?")
+          .get(cloudEntry.client_action_id ?? null)
       );
     } catch (error) {
       debugLogger.error(
@@ -3058,7 +3056,6 @@ class DatabaseManager {
 
       const updatedAt = cloudEntry.updated_at || new Date().toISOString();
       const values = [
-        clientId,
         cloudId,
         kind,
         fields.name,
@@ -3074,7 +3071,7 @@ class DatabaseManager {
         this.db
           .prepare(
             `UPDATE actions
-             SET client_id = ?, cloud_id = ?, kind = ?, name = ?, description = ?, prompt = ?,
+             SET cloud_id = ?, kind = ?, name = ?, description = ?, prompt = ?,
                  sections = ?, output = ?, icon = ?, sort_order = ?, updated_at = ?,
                  sync_status = 'synced', deleted_at = NULL
              WHERE id = ?`
@@ -3085,11 +3082,11 @@ class DatabaseManager {
       const result = this.db
         .prepare(
           `INSERT INTO actions
-             (client_id, cloud_id, kind, name, description, prompt, sections, output, icon,
-              sort_order, updated_at, created_at, sync_status)
+             (cloud_id, kind, name, description, prompt, sections, output, icon,
+              sort_order, updated_at, client_id, created_at, sync_status)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced')`
         )
-        .run(...values, cloudEntry.created_at || updatedAt);
+        .run(...values, clientId, cloudEntry.created_at || updatedAt);
       return this.getAction(result.lastInsertRowid);
     } catch (error) {
       debugLogger.error(
@@ -3109,14 +3106,14 @@ class DatabaseManager {
       const result = this.db
         .prepare(
           `UPDATE actions
-           SET sync_status = 'synced', cloud_id = ?, updated_at = COALESCE(?, updated_at)
+           SET sync_status = 'synced', cloud_id = ?, updated_at = ?
            WHERE id = ? AND deleted_at IS NULL
              AND name IS ? AND description IS ? AND prompt IS ? AND sections IS ?
              AND output IS ? AND icon IS ? AND sort_order IS ?`
         )
         .run(
           cloudId,
-          serverUpdatedAt ?? null,
+          serverUpdatedAt,
           id,
           snapshot.name,
           snapshot.description,

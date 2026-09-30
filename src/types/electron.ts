@@ -3478,7 +3478,7 @@ declare global {
       markNoteActionSynced?: (
         id: number,
         cloudId: string,
-        serverUpdatedAt: string | undefined,
+        serverUpdatedAt: string,
         snapshot: NoteActionSyncRow
       ) => Promise<{ success: boolean; changes: number }>;
       hardDeleteNoteAction?: (id: number) => Promise<{ success: boolean; id: number }>;
