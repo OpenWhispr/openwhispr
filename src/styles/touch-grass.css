@@ -164,6 +164,13 @@
   }
 }
 
+/* The lawn holds still while the window is in the background (TouchGrass.tsx). */
+.touch-grass--resting .touch-grass__ground::after,
+.touch-grass--resting .touch-grass__patch,
+.touch-grass--resting .touch-grass__gust {
+  animation-play-state: paused;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .touch-grass__ground::after,
   .touch-grass__patch {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Copy, Check, Search, FileText, ChevronDown, ChevronRight, CircleAlert } from "../icons";
 import { cn } from "../lib/utils";
@@ -174,7 +174,9 @@ function NoteCard({
   );
 }
 
-export function ChatMessage({
+// Memoized: hosts re-render on every keystroke in their composer (or, for note chat, in
+// the note), and only the streaming reply's props change between those renders.
+export const ChatMessage = memo(function ChatMessage({
   messageId,
   role,
   content,
@@ -209,7 +211,9 @@ export function ChatMessage({
             "text-[13px] leading-relaxed"
           )}
         >
-          <span dir="auto">{content}</span>
+          <span dir="auto" className="whitespace-pre-wrap">
+            {content}
+          </span>
         </div>
       </div>
     );
@@ -295,4 +299,4 @@ export function ChatMessage({
       </div>
     </div>
   );
-}
+});

@@ -643,6 +643,8 @@
       "dataRetentionDisabled": "データ保持が無効です。文字起こしと音声は履歴に保存されません。",
       "welcomeBack": "おかえりなさい",
       "welcomeBackNamed": "おかえりなさい、{{name}}さん",
+      "welcome": "ようこそ",
+      "welcomeNamed": "ようこそ、{{name}}さん",
       "dateGroups": {
         "today": "今日",
         "yesterday": "昨日"
@@ -3504,6 +3506,7 @@
     "search": "会話を検索...",
     "archived": "アーカイブ済み",
     "noConversations": "チャットはまだありません",
+    "allArchived": "すべてのチャットはアーカイブ済みです",
     "noConversationsDescription": "アシスタントとのチャットはここに表示されます。",
     "loadFailed": "チャットを読み込めませんでした",
     "noResults": "該当する会話がありません",

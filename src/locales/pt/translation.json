@@ -622,6 +622,8 @@
       "dataRetentionDisabled": "A retenção de dados está desativada. Transcrições e áudio não são salvos no histórico.",
       "welcomeBack": "Que bom ter você de volta",
       "welcomeBackNamed": "Que bom ter você de volta, {{name}}",
+      "welcome": "Boas-vindas",
+      "welcomeNamed": "Boas-vindas, {{name}}",
       "dateGroups": {
         "today": "Hoje",
         "yesterday": "Ontem"
@@ -3504,6 +3506,7 @@
     "search": "Pesquisar conversas...",
     "archived": "Arquivadas",
     "noConversations": "Nenhuma conversa ainda",
+    "allArchived": "Todas as conversas estão arquivadas",
     "noConversationsDescription": "Suas conversas com o Assistente aparecerão aqui.",
     "loadFailed": "Não foi possível carregar as conversas",
     "noResults": "Nenhuma conversa encontrada",

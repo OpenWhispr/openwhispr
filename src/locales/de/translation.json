@@ -643,6 +643,8 @@
       "dataRetentionDisabled": "Datenaufbewahrung ist deaktiviert. Transkriptionen und Audio werden nicht im Verlauf gespeichert.",
       "welcomeBack": "Willkommen zurück",
       "welcomeBackNamed": "Willkommen zurück, {{name}}",
+      "welcome": "Willkommen",
+      "welcomeNamed": "Willkommen, {{name}}",
       "dateGroups": {
         "today": "Heute",
         "yesterday": "Gestern"
@@ -3006,6 +3008,7 @@
     "search": "Unterhaltungen suchen...",
     "archived": "Archiviert",
     "noConversations": "Noch keine Chats",
+    "allArchived": "Alle Chats sind archiviert",
     "noConversationsDescription": "Deine Chats mit dem Assistenten erscheinen hier.",
     "loadFailed": "Chats konnten nicht geladen werden",
     "noResults": "Keine passenden Unterhaltungen",

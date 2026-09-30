@@ -8,6 +8,7 @@ import { Loader2, Sparkles, X, Trash2, Archive } from "./icons";
 import TranscriptionItem from "./ui/TranscriptionItem";
 import ThemedEmptyIllustration from "./ui/ThemedEmptyIllustration";
 import DictationHotkeyHint from "./ui/DictationHotkeyHint";
+import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
 import historyEmptyLight from "../assets/empty-states/home-history-light.svg";
 import historyEmptyDark from "../assets/empty-states/home-history-dark.svg";
 import type { TranscriptionItem as TranscriptionItemType } from "../types/electron";
@@ -63,6 +64,7 @@ export default function HistoryView({
   );
   const { events, isLoading: eventsLoading, isConnected } = useUpcomingEvents();
   const firstName = userName?.trim().split(/\s+/)[0];
+  const hasHistory = history.length > 0;
 
   const groupedHistory = useMemo(() => {
     if (history.length === 0) return [];
@@ -100,10 +102,22 @@ export default function HistoryView({
 
   return (
     <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 pt-4 pb-6")}>
-      <h2 className="mb-4 text-xl text-foreground">
-        {firstName
-          ? t("controlPanel.history.welcomeBackNamed", { name: firstName })
-          : t("controlPanel.history.welcomeBack")}
+      {/* Hidden until the first load settles, so a returning user isn't greeted as new. */}
+      <h2 className={cn("mb-4 text-xl text-foreground", isLoading && !hasHistory && "invisible")}>
+        {firstName ? (
+          <BidiInterpolatedText
+            text={t(
+              hasHistory
+                ? "controlPanel.history.welcomeBackNamed"
+                : "controlPanel.history.welcomeNamed",
+              { name: BIDI_VALUE_TOKEN }
+            )}
+            value={firstName}
+            dir="auto"
+          />
+        ) : (
+          t(hasHistory ? "controlPanel.history.welcomeBack" : "controlPanel.history.welcome")
+        )}
       </h2>
       {!useCleanupModel && !aiCTADismissed && (
         <div className="mb-3 relative rounded-lg border border-primary/20 bg-primary/5 dark:bg-primary/10 p-3">

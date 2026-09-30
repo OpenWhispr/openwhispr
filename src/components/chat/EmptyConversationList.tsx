@@ -3,8 +3,15 @@ import ThemedEmptyIllustration from "../ui/ThemedEmptyIllustration";
 import chatEmptyLight from "../../assets/empty-states/chat-empty-light.svg";
 import chatEmptyDark from "../../assets/empty-states/chat-empty-dark.svg";
 
+const TITLE_KEYS = {
+  active: "chat.noConversations",
+  // There are chats, but every one of them is archived.
+  archived: "chat.allArchived",
+  error: "chat.loadFailed",
+} as const;
+
 interface EmptyConversationListProps {
-  state: "active" | "error";
+  state: keyof typeof TITLE_KEYS;
   onRetry: () => void;
 }
 
@@ -21,9 +28,7 @@ export default function EmptyConversationList({ state, onRetry }: EmptyConversat
           height={150}
         />
       )}
-      <p className="mt-3 text-sm font-semibold text-foreground">
-        {t(state === "error" ? "chat.loadFailed" : "chat.noConversations")}
-      </p>
+      <p className="mt-3 text-sm font-semibold text-foreground">{t(TITLE_KEYS[state])}</p>
       {state === "active" && (
         <p className="mt-2 text-xs text-muted-foreground">{t("chat.noConversationsDescription")}</p>
       )}

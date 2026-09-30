@@ -108,6 +108,24 @@ export default function ChatView() {
     persistence.handleNewChat();
   }, [cancelStream, persistence]);
 
+  const composerElementRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useCallback((composer: HTMLDivElement | null) => {
+    composerElementRef.current = composer;
+    const container = composer?.parentElement;
+    if (!composer || !container) return;
+    return observeChatComposerInset(composer, container);
+  }, []);
+
+  const focusComposer = useCallback(() => {
+    composerElementRef.current?.querySelector("textarea")?.focus();
+  }, []);
+
+  // Starting a new chat from the list or the shortcut means the user is about to type.
+  const startNewChat = useCallback(() => {
+    handleNewChat();
+    focusComposer();
+  }, [handleNewChat, focusComposer]);
+
   const createConversation = useCallback(
     async (text: string) => {
       const title = text.length > 50 ? `${text.slice(0, 50)}...` : text;
@@ -157,20 +175,12 @@ export default function ChatView() {
       const mod = platform === "darwin" ? e.metaKey : e.ctrlKey;
       if (mod && e.key === "n") {
         e.preventDefault();
-        handleNewChat();
+        startNewChat();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleNewChat]);
-
-  const composerElementRef = useRef<HTMLDivElement | null>(null);
-  const composerRef = useCallback((composer: HTMLDivElement | null) => {
-    composerElementRef.current = composer;
-    const container = composer?.parentElement;
-    if (!composer || !container) return;
-    return observeChatComposerInset(composer, container);
-  }, []);
+  }, [startNewChat]);
 
   return (
     <>
@@ -197,7 +207,7 @@ export default function ChatView() {
           <ConversationList
             activeConversationId={activeConversationId}
             onSelectConversation={handleSelectConversation}
-            onNewChat={handleNewChat}
+            onNewChat={startNewChat}
             onOpenSearch={() => setShowSearch(true)}
             onArchive={handleArchive}
             onDelete={handleDelete}
@@ -212,7 +222,7 @@ export default function ChatView() {
                 onPrompt={(prompt) => {
                   // The starter card unmounts once the message lands; move focus to the
                   // composer first so it isn't dropped.
-                  composerElementRef.current?.querySelector("textarea")?.focus();
+                  focusComposer();
                   void handleTextSubmit(prompt);
                 }}
                 showSuggestions={isNewChat}

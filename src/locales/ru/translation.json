@@ -643,6 +643,8 @@
       "dataRetentionDisabled": "Хранение данных отключено. Транскрипции и аудио не сохраняются в истории.",
       "welcomeBack": "С возвращением",
       "welcomeBackNamed": "С возвращением, {{name}}",
+      "welcome": "Добро пожаловать",
+      "welcomeNamed": "Добро пожаловать, {{name}}",
       "dateGroups": {
         "today": "Сегодня",
         "yesterday": "Вчера"
@@ -3548,6 +3550,7 @@
     "search": "Поиск бесед...",
     "archived": "Архив",
     "noConversations": "Чатов пока нет",
+    "allArchived": "Все чаты в архиве",
     "noConversationsDescription": "Здесь появятся ваши чаты с ассистентом.",
     "loadFailed": "Не удалось загрузить чаты",
     "noResults": "Совпадений не найдено",

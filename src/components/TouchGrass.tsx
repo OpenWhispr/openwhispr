@@ -1,5 +1,6 @@
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent, PointerEvent } from "react";
+import { cn } from "./lib/utils";
 import type { GrassRustle } from "../utils/grassRustle";
 import "../styles/touch-grass.css";
 
@@ -214,19 +215,28 @@ export default function TouchGrass({ rustle, height, label, onExit }: TouchGrass
     scene.focus({ preventScroll: true });
   }, []);
 
+  // The lawn rests while the window is in the background. The control panel never reports
+  // itself hidden (backgroundThrottling is off, so visibilitychange doesn't fire and the
+  // animations keep running when it goes to the tray), but it does lose focus.
+  const [resting, setResting] = useState(false);
+
   useEffect(() => {
-    const onVisibilityChange = () => {
-      if (document.hidden) rustle.hush();
+    const rest = () => {
+      rustle.hush();
+      setResting(true);
     };
+    const wake = () => setResting(false);
     // The page can scroll or resize under a resting hand; measure again on the next move.
     const forgetRect = () => {
       sceneRectRef.current = null;
     };
-    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("blur", rest);
+    window.addEventListener("focus", wake);
     window.addEventListener("scroll", forgetRect, true);
     window.addEventListener("resize", forgetRect);
     return () => {
-      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("blur", rest);
+      window.removeEventListener("focus", wake);
       window.removeEventListener("scroll", forgetRect, true);
       window.removeEventListener("resize", forgetRect);
       if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
@@ -336,7 +346,10 @@ export default function TouchGrass({ rustle, height, label, onExit }: TouchGrass
       role="application"
       aria-label={label}
       tabIndex={0}
-      className="touch-grass -mx-2 rounded-t-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40"
+      className={cn(
+        "touch-grass -mx-2 rounded-t-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40",
+        resting && "touch-grass--resting"
+      )}
       style={{ height: height || undefined }}
       onPointerEnter={() => {
         sceneRectRef.current = null;

@@ -643,6 +643,8 @@
       "dataRetentionDisabled": "Data retention is off. Transcriptions and audio are not saved to history.",
       "welcomeBack": "Welcome Back",
       "welcomeBackNamed": "Welcome Back, {{name}}",
+      "welcome": "Welcome",
+      "welcomeNamed": "Welcome, {{name}}",
       "dateGroups": {
         "today": "Today",
         "yesterday": "Yesterday"
@@ -3006,6 +3008,7 @@
     "search": "Search conversations...",
     "archived": "Archived",
     "noConversations": "No chats yet",
+    "allArchived": "All chats are archived",
     "noConversationsDescription": "Your chats with Assistant will appear here.",
     "loadFailed": "Couldn't load chats",
     "noResults": "No matching conversations",

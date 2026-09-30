@@ -643,6 +643,8 @@
       "dataRetentionDisabled": "La conservazione dei dati è disattivata. Trascrizioni e audio non vengono salvati nella cronologia.",
       "welcomeBack": "Bentornato",
       "welcomeBackNamed": "Bentornato, {{name}}",
+      "welcome": "Benvenuto",
+      "welcomeNamed": "Benvenuto, {{name}}",
       "dateGroups": {
         "today": "Oggi",
         "yesterday": "Ieri"
@@ -3504,6 +3506,7 @@
     "search": "Cerca conversazioni...",
     "archived": "Archiviate",
     "noConversations": "Ancora nessuna chat",
+    "allArchived": "Tutte le chat sono archiviate",
     "noConversationsDescription": "Le tue chat con l'Assistente appariranno qui.",
     "loadFailed": "Impossibile caricare le chat",
     "noResults": "Nessuna conversazione corrispondente",

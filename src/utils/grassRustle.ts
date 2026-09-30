@@ -21,7 +21,7 @@ const SCHEDULE_MS = 25;
 export interface GrassRustle {
   /** Rustle for a brush at `speed` px/ms; faster brushing is denser and a little louder. */
   brush(speed: number): void;
-  /** Silence at once, e.g. when the tab is hidden. */
+  /** Silence at once, e.g. when the window goes to the background. */
   hush(): void;
   dispose(): void;
 }
@@ -66,6 +66,15 @@ export function createGrassRustle(): GrassRustle {
   let lastBrushAt = 0;
   let nextGrainAt = 0;
   let timer: number | undefined;
+  // A running context keeps the audio device busy (and the looping swish playing) even in
+  // silence, so it runs only while there is rustling to play.
+  let suspended = false;
+  const suspend = () => {
+    if (suspended) return;
+    suspended = true;
+    void ctx.suspend();
+  };
+  suspend();
 
   const playGrain = (when: number, level: number) => {
     const source = ctx.createBufferSource();
@@ -95,6 +104,7 @@ export function createGrassRustle(): GrassRustle {
       if (idleMs > HOLD_MS + FADE_MS * 4) {
         window.clearInterval(timer);
         timer = undefined;
+        suspend();
       }
       return;
     }
@@ -115,11 +125,15 @@ export function createGrassRustle(): GrassRustle {
     master.gain.setTargetAtTime(0, ctx.currentTime, 0.01);
     swishGain.gain.cancelScheduledValues(ctx.currentTime);
     swishGain.gain.setValueAtTime(0, ctx.currentTime);
+    suspend();
   };
 
   return {
     brush(speed) {
-      if (ctx.state === "suspended") void ctx.resume();
+      if (suspended) {
+        suspended = false;
+        void ctx.resume();
+      }
       intensity = intensity * 0.6 + Math.min(1, speed / FULL_SPEED) * 0.4;
       lastBrushAt = performance.now();
       if (timer === undefined) {

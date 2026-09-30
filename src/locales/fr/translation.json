@@ -643,6 +643,8 @@
       "dataRetentionDisabled": "La conservation des données est désactivée. Les transcriptions et l'audio ne sont pas sauvegardés dans l'historique.",
       "welcomeBack": "Bon retour",
       "welcomeBackNamed": "Bon retour, {{name}}",
+      "welcome": "Bienvenue",
+      "welcomeNamed": "Bienvenue, {{name}}",
       "dateGroups": {
         "today": "Aujourd'hui",
         "yesterday": "Hier"
@@ -3006,6 +3008,7 @@
     "search": "Rechercher des conversations...",
     "archived": "Archivées",
     "noConversations": "Aucune discussion pour l’instant",
+    "allArchived": "Toutes les discussions sont archivées",
     "noConversationsDescription": "Vos discussions avec l’assistant apparaîtront ici.",
     "loadFailed": "Impossible de charger les discussions",
     "noResults": "Aucune conversation correspondante",
