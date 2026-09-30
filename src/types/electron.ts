@@ -2678,9 +2678,9 @@ declare global {
       }>;
 
       // Agent Mode
-      updateVoiceAgentHotkey?: (hotkey: string) => Promise<{ success: boolean; message: string }>;
+      updateVoiceAgentHotkey?: (hotkey: string) => Promise<{ success: boolean; message?: string }>;
       getVoiceAgentKey?: () => Promise<string>;
-      updateTranslationHotkey?: (hotkey: string) => Promise<{ success: boolean; message: string }>;
+      updateTranslationHotkey?: (hotkey: string) => Promise<{ success: boolean; message?: string }>;
       getTranslationKey?: () => Promise<string>;
       createAgentConversation?: (
         title: string,

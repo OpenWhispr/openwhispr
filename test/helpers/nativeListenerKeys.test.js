@@ -138,6 +138,8 @@ test("_findSlotConflict detects a hotkey already bound to another slot's list", 
   const conflict = mgr._findSlotConflict("voiceAgent", "Control+Shift+R");
   assert.equal(conflict?.reason, "slot_conflict");
   assert.equal(conflict?.conflictSlot, "dictation");
+  // The message names the slot as Settings does, never by its internal id.
+  assert.equal(conflict?.error, "This hotkey is already used for Dictation Hotkey.");
   // A fresh hotkey does not conflict.
   assert.equal(mgr._findSlotConflict("voiceAgent", "F7"), null);
   // Re-checking a slot against its own hotkey is not a conflict.

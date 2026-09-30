@@ -19,6 +19,14 @@ const DEFAULT_HOTKEY = "Control+Super";
 // Dictation has a dedicated native path because it also supports push-to-talk.
 const LINUX_NATIVE_TAP_SLOTS = new Set(["meeting", "voiceAgent", "translation"]);
 
+// Settings titles that name each slot in a conflict message, as the renderer does.
+const SLOT_LABEL_KEYS = {
+  dictation: "settingsPage.general.hotkey.title",
+  voiceAgent: "settingsPage.general.voiceAgentHotkey.title",
+  translation: "settingsPage.general.translationHotkey.title",
+  meeting: "settingsPage.general.meetingHotkey.title",
+};
+
 // KDE registration failure reasons — reuse existing i18n keys
 const KDE_FAILURE_REASONS = {
   conflict: (hotkey) => i18nMain.t("hotkey.errors.alreadyRegistered", { hotkey }),
@@ -111,8 +119,8 @@ class HotkeyManager extends EventEmitter {
     this.hyprlandRegistrationReady = Promise.resolve();
     this.kdeManager = null;
     this.useKDE = false;
-    // Injected by main.js on Linux: LinuxKeyManager.checkAvailability. Kept as a
-    // function so this module never requires the manager it asks about.
+    // Injected by main.js: LinuxKeyManager or WindowsKeyManager checkAvailability.
+    // Kept as a function so this module never requires the manager it asks about.
     this.nativeListenerProbe = null;
   }
 
@@ -197,7 +205,18 @@ class HotkeyManager extends EventEmitter {
       suggestions = ["Control+Super", "Control+Shift+K", "Super+Shift+R"];
     }
 
-    return suggestions.filter((s) => s !== failedHotkey).slice(0, 3);
+    const listenerMissing = this._isWindowsKeyListenerMissing();
+    // A key another slot holds would only be refused as a conflict. Slots without
+    // a callback are placeholders, not registered hotkeys.
+    const boundHotkeys = new Set(
+      [...this.slots.values()].filter((slot) => slot.callback).flatMap((slot) => slot.hotkeys)
+    );
+    const isUsable = (hotkey) =>
+      hotkey !== failedHotkey &&
+      !boundHotkeys.has(hotkey) &&
+      !(listenerMissing && isModifierOnlyHotkey(hotkey));
+    const usable = suggestions.filter(isUsable);
+    return (usable.length > 0 ? usable : FALLBACK_HOTKEYS.filter(isUsable)).slice(0, 3);
   }
 
   async registerSlot(slotName, hotkeyInput, callback, options) {
@@ -455,13 +474,25 @@ class HotkeyManager extends EventEmitter {
     return keys;
   }
 
-  // What to tell the user when the Linux native listener cannot run.
-  _nativeListenerFailureMessage(reason) {
-    return reason === "input_access_denied"
-      ? `${i18nMain.t("settingsPage.general.hotkey.linuxPttSetupDescription")} ${i18nMain.t(
-          "settingsPage.general.hotkey.linuxPttPermissionDescription"
-        )}`
-      : i18nMain.t("windows.pttUnavailable");
+  // What to tell the user when the native listener cannot run. Only a hotkey
+  // refusal names the hotkey; Hold's reason is about the mode, not the key.
+  _nativeListenerFailureMessage(reason, hotkey) {
+    if (reason === "input_access_denied") {
+      return `${i18nMain.t("settingsPage.general.hotkey.linuxPttSetupDescription")} ${i18nMain.t(
+        "settingsPage.general.hotkey.linuxPttPermissionDescription"
+      )}`;
+    }
+    if (process.platform === "win32" && hotkey) {
+      return i18nMain.t("hotkey.errors.windowsKeyListenerMissing", { hotkey });
+    }
+    return i18nMain.t("windows.pttUnavailable");
+  }
+
+  // Windows builds can ship without windows-key-listener.exe (#2005). Only it sees
+  // modifier-only and right-side-modifier hotkeys, so without it the defaults and
+  // suggestions must be regular keys.
+  _isWindowsKeyListenerMissing() {
+    return process.platform === "win32" && this.nativeListenerProbe?.().available === false;
   }
 
   // GNOME, KDE and Hyprland deliver press and release themselves, so Linux
@@ -472,10 +503,16 @@ class HotkeyManager extends EventEmitter {
     return process.platform === "linux" && this.isInitialized && !this.isUsingNativeShortcut();
   }
 
-  // Where Linux relies on the listener, a probe failure means Hold cannot work
+  // Windows always holds through its listener. It waits for initialization too,
+  // so a saved Hold is restored and then checked by main.js the same way as Linux.
+  _holdReliesOnNativeListener() {
+    return (process.platform === "win32" && this.isInitialized) || this.reliesOnLinuxKeyListener();
+  }
+
+  // Where Hold relies on the listener, a probe failure means Hold cannot work
   // at all. Returns the reason to show the user, or null when nothing blocks it.
   _pushToTalkListenerBlockReason() {
-    if (!this.reliesOnLinuxKeyListener() || !this.nativeListenerProbe) return null;
+    if (!this._holdReliesOnNativeListener() || !this.nativeListenerProbe) return null;
     const { available, reason } = this.nativeListenerProbe();
     return available ? null : this._nativeListenerFailureMessage(reason);
   }
@@ -592,23 +629,28 @@ class HotkeyManager extends EventEmitter {
     return { mouseButtons: [...mouseButtons], suppressGlobeAction };
   }
 
-  // A hotkey only the Linux evdev listener can serve must fail registration when
-  // that listener cannot run (no binary, or no read access to /dev/input):
-  // everything that rescues the user — the FALLBACK_HOTKEYS loop plus its toast
-  // on startup, the inline error in Settings and onboarding, the slot rollback —
-  // hangs off a failed registration, so reporting success leaves dictation
-  // silently dead. Returns null when the hotkey can be served.
+  // A hotkey only the Linux evdev listener or windows-key-listener.exe can serve
+  // must fail registration when that listener cannot run (no binary, or on Linux
+  // no read access to /dev/input): everything that rescues the user — the
+  // FALLBACK_HOTKEYS loop plus its toast on startup, the inline error in Settings
+  // and onboarding, the slot rollback — hangs off a failed registration, so
+  // reporting success leaves dictation silently dead. Returns null when the
+  // hotkey can be served.
   _nativeListenerUnavailable(hotkey) {
-    if (process.platform !== "linux" || !this.nativeListenerProbe) return null;
+    if (process.platform !== "linux" && process.platform !== "win32") return null;
+    if (!this.nativeListenerProbe) return null;
 
     const { available, reason } = this.nativeListenerProbe();
     if (available) return null;
 
+    debugLogger.warn(`[HotkeyManager] "${hotkey}" rejected - native key listener unavailable`, {
+      reason,
+    });
     const deniedAccess = reason === "input_access_denied";
     return {
       success: false,
       hotkey,
-      error: this._nativeListenerFailureMessage(reason),
+      error: this._nativeListenerFailureMessage(reason, hotkey),
       reason: deniedAccess ? "input_access_denied" : "native_listener_unavailable",
       // Only regular-key hotkeys avoid the listener that just failed.
       suggestions: this.getSuggestions(hotkey).filter(
@@ -699,7 +741,11 @@ class HotkeyManager extends EventEmitter {
       };
     } catch (error) {
       debugLogger.error("Error setting up shortcut", { error: error.message }, "hotkey");
-      return { success: false, hotkey, error: error.message };
+      return {
+        success: false,
+        hotkey,
+        error: i18nMain.t("hotkey.errors.registrationFailed", { hotkey }),
+      };
     }
   }
 
@@ -847,7 +893,9 @@ class HotkeyManager extends EventEmitter {
         return {
           success: false,
           error: i18nMain.t("hotkey.errors.slotConflict", {
-            slot: otherSlotName,
+            slot: SLOT_LABEL_KEYS[otherSlotName]
+              ? i18nMain.t(SLOT_LABEL_KEYS[otherSlotName])
+              : otherSlotName,
             defaultValue: `This hotkey is already used for ${otherSlotName}`,
           }),
           reason: "slot_conflict",
@@ -1197,6 +1245,7 @@ class HotkeyManager extends EventEmitter {
         }
       }
 
+      let savedFailure = null;
       if (savedHotkey && savedHotkey.trim() !== "") {
         const result = this.setupShortcuts(savedHotkey, callback);
         if (result.success) {
@@ -1205,12 +1254,16 @@ class HotkeyManager extends EventEmitter {
           return;
         }
         debugLogger.log(`[HotkeyManager] Saved hotkey "${savedHotkey}" failed to register`);
-        this.notifyHotkeyFailure(savedHotkey, result);
+        savedFailure = result;
       }
 
       const defaultHotkey = this.getEffectiveDefaultHotkey();
+      // The user knows their saved hotkey, not the default, so a replacement is
+      // reported against the hotkey they chose.
+      const replacedHotkey = savedFailure ? savedHotkey : defaultHotkey;
 
       if (defaultHotkey === "GLOBE") {
+        if (savedFailure) this.notifyHotkeyFailure(savedHotkey, savedFailure);
         this.currentHotkey = "GLOBE";
         debugLogger.log("[HotkeyManager] Using GLOBE key as default on macOS");
         await this._persistHotkeyToEnvFile("GLOBE");
@@ -1222,6 +1275,11 @@ class HotkeyManager extends EventEmitter {
         debugLogger.log(
           `[HotkeyManager] Default hotkey "${defaultHotkey}" registered successfully`
         );
+        // The saved hotkey stays saved so the next launch retries it.
+        if (savedFailure) {
+          this.notifyActiveHotkey(defaultHotkey);
+          this.notifyHotkeyFallback(savedHotkey, defaultHotkey);
+        }
         return;
       }
 
@@ -1237,12 +1295,13 @@ class HotkeyManager extends EventEmitter {
           // app retries it on next startup once the conflict is resolved.
           await this._persistHotkeyToEnvFile(fallback);
           this.notifyActiveHotkey(fallback);
-          this.notifyHotkeyFallback(defaultHotkey, fallback);
+          this.notifyHotkeyFallback(replacedHotkey, fallback);
           return;
         }
       }
 
       debugLogger.log("[HotkeyManager] All hotkey fallbacks failed");
+      if (savedFailure) this.notifyHotkeyFailure(savedHotkey, savedFailure);
       this.notifyHotkeyFailure(defaultHotkey, result);
     } catch (err) {
       debugLogger.error("Failed to initialize hotkey", { error: err.message }, "hotkey");
@@ -1323,11 +1382,13 @@ class HotkeyManager extends EventEmitter {
 
   /**
    * Returns the effective default hotkey for the current platform.
-   * On platforms where Control+Super doesn't work (X11 modifier-only,
-   * GNOME gsettings requires a regular key), returns the first fallback (F8).
+   * Where Control+Super doesn't work (X11 modifier-only, GNOME gsettings
+   * requires a regular key, Windows without its key listener), returns the
+   * first fallback (F8).
    */
   getEffectiveDefaultHotkey() {
     if (process.platform === "darwin") return "GLOBE";
+    if (this._isWindowsKeyListenerMissing()) return FALLBACK_HOTKEYS[0];
     if (process.platform !== "linux") return DEFAULT_HOTKEY;
 
     const isX11 = !GnomeShortcutManager.isWayland();
@@ -1382,6 +1443,13 @@ class HotkeyManager extends EventEmitter {
   // Tell the renderer which hotkeys actually registered and which failed.
   _notifyStartupRegistration(requestedHotkey, result) {
     this.notifyActiveHotkey(result.hotkeys ? result.hotkeys.join(",") : requestedHotkey);
+    this.notifyRestoreFailures(requestedHotkey, result);
+  }
+
+  // Tell the user which saved hotkeys no longer register, so a slot never goes
+  // silently dead at startup.
+  notifyRestoreFailures(requestedHotkey, result) {
+    if (!result.success) this.notifyHotkeyFailure(requestedHotkey, result);
     for (const failure of result.failures || []) {
       this.notifyHotkeyFailure(failure.hotkey, failure);
     }

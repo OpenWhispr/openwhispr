@@ -4300,10 +4300,7 @@ class IPCHandlers {
           ? requestedHotkey.split(",")[0].trim()
           : hotkeyManager.getCurrentHotkey();
       const isUsingNativeShortcut = this.windowManager.isUsingNativeShortcutHotkeys();
-      const supportsPushToTalk =
-        process.platform === "linux" || process.platform === "darwin"
-          ? hotkeyManager.supportsPushToTalk(hotkey)
-          : !isUsingNativeShortcut;
+      const supportsPushToTalk = hotkeyManager.supportsPushToTalk(hotkey);
 
       return {
         isUsingGnome: this.windowManager.isUsingGnomeHotkeys(),
@@ -11332,7 +11329,7 @@ class IPCHandlers {
       const hotkeyManager = this.windowManager.hotkeyManager;
       const voiceAgentCallback = this.windowManager._voiceAgentHotkeyCallback;
       if (!voiceAgentCallback) {
-        return { success: false, message: "Voice agent hotkey callback not initialized" };
+        return { success: false };
       }
 
       if (!hotkey) {
@@ -11354,10 +11351,7 @@ class IPCHandlers {
         return { success: true, message: `Voice agent hotkey updated to: ${hotkey}` };
       }
 
-      return {
-        success: false,
-        message: result.error || `Failed to update voice agent hotkey to: ${hotkey}`,
-      };
+      return { success: false, message: result.error };
     });
 
     ipcMain.handle("get-voice-agent-key", async () => {
@@ -11368,7 +11362,7 @@ class IPCHandlers {
       const hotkeyManager = this.windowManager.hotkeyManager;
       const translationCallback = this.windowManager._translationHotkeyCallback;
       if (!translationCallback) {
-        return { success: false, message: "Translation hotkey callback not initialized" };
+        return { success: false };
       }
 
       if (!hotkey) {
@@ -11390,10 +11384,7 @@ class IPCHandlers {
         return { success: true, message: `Translation hotkey updated to: ${hotkey}` };
       }
 
-      return {
-        success: false,
-        message: result.error || `Failed to update translation hotkey to: ${hotkey}`,
-      };
+      return { success: false, message: result.error };
     });
 
     ipcMain.handle("get-translation-key", async () => {

@@ -609,6 +609,8 @@ function initializeCoreManagers() {
   windowManager.linuxKeyManager = linuxKeyManager;
   if (process.platform === "linux") {
     windowManager.hotkeyManager.nativeListenerProbe = () => linuxKeyManager.checkAvailability();
+  } else if (process.platform === "win32") {
+    windowManager.hotkeyManager.nativeListenerProbe = () => windowsKeyManager.checkAvailability();
   }
 
   // IPC handlers must be registered before window content loads
@@ -1214,6 +1216,7 @@ async function startApp() {
         "hotkey"
       );
     }
+    hotkeyManager.notifyRestoreFailures(savedVoiceAgentKey, result);
   }
 
   // Set up translation hotkey (dictation cleaned up and translated into the
@@ -1239,6 +1242,7 @@ async function startApp() {
         "hotkey"
       );
     }
+    hotkeyManager.notifyRestoreFailures(savedTranslationKey, result);
   }
 
   // Set up meeting mode hotkey
@@ -1261,6 +1265,7 @@ async function startApp() {
       { savedMeetingKey, ...result },
       "meeting"
     );
+    hotkeyManager.notifyRestoreFailures(savedMeetingKey, result);
   }
 
   ipcMain.handle("register-meeting-hotkey", async (_event, hotkey) => {

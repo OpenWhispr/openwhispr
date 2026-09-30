@@ -128,6 +128,7 @@ import {
   TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
   TRANSCRIPTION_POLICY_PROVIDER_IDS,
   useSettingsStore,
+  type HotkeyRegistrationResult,
 } from "../stores/settingsStore";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { highestPlan } from "../lib/usageStore";
@@ -1502,17 +1503,17 @@ export default function SettingsPage({
   // surface it and return the result so HotkeyListInput rolls the row back.
   const [isAgentHotkeyCommitting, setIsAgentHotkeyCommitting] = useState(false);
   const commitAgentHotkey = useCallback(
-    async (setter: (key: string) => Promise<boolean>, key: string) => {
+    async (setter: (key: string) => Promise<HotkeyRegistrationResult>, key: string) => {
       setIsAgentHotkeyCommitting(true);
       try {
-        const ok = await setter(key);
-        if (!ok) {
+        const result = await setter(key);
+        if (!result.success) {
           showAlertDialog({
             title: t("hooks.hotkeyRegistration.titles.notRegistered"),
-            description: t("hooks.hotkeyRegistration.errors.failedToRegister"),
+            description: result.message || t("hooks.hotkeyRegistration.errors.failedToRegister"),
           });
         }
-        return ok;
+        return result.success;
       } finally {
         setIsAgentHotkeyCommitting(false);
       }
