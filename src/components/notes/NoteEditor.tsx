@@ -319,11 +319,12 @@ export default function NoteEditor({
       : aclRequest?.cloudId === note.cloud_id
         ? aclRequest.state
         : "loading";
+  const ownedByUser = ownsNote(note, user?.id);
   const notePermission = resolveNotePermission({
     cachedPermission: shareCache?.access?.my_permission,
     aclState,
     isTeamNote,
-    locallyOwned: ownsNote(note, user?.id),
+    locallyOwned: ownedByUser,
   });
   const shareCapabilities = noteCapabilities(notePermission);
   const canEditNote = shareCapabilities.canEdit;
@@ -502,18 +503,20 @@ export default function NoteEditor({
     [meetingIdentity, speakerMappings, displaySegments]
   );
 
-  // The chat reads a meeting the way note formatting does: who the user is and
-  // named speakers, not the stored segment JSON.
+  // The chat reads the user's own meeting the way note formatting does: who the
+  // user is and named speakers, not the stored segment JSON. Invitees are left to
+  // the filtered attendee block that comes with connector tools (a chat without
+  // them names only speakers), and a teammate's mic lines aren't the user's.
   const chatTranscript = useMemo(() => {
-    if (displaySegments.length === 0) return note.transcript ?? undefined;
+    if (displaySegments.length === 0 || !ownedByUser) return note.transcript ?? undefined;
     const selfLabel = meetingIdentity.selfName || t("notes.speaker.you");
     return [
-      buildMeetingContext(meetingIdentity, selfLabel),
+      buildMeetingContext({ ...meetingIdentity, participants: [] }, selfLabel),
       buildLlmTranscript(displaySegments, speakerMappings, selfLabel, t),
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [displaySegments, meetingIdentity, note.transcript, speakerMappings, t]);
+  }, [displaySegments, meetingIdentity, note.transcript, ownedByUser, speakerMappings, t]);
 
   const embeddedChat = useEmbeddedChat({
     noteId: note.id,
@@ -523,7 +526,7 @@ export default function NoteEditor({
     noteTranscript: chatTranscript,
     noteSummary: enhancement?.content,
     noteParticipants: parsedParticipants,
-    noteOwnedByUser: ownsNote(note, user?.id),
+    noteOwnedByUser: ownedByUser,
     selfEmail: user?.email ?? null,
     noteCalendarEventId: note.calendar_event_id,
   });

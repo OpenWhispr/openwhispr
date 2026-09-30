@@ -181,4 +181,11 @@ test("a chat action works from the summary when there is one, and the transcript
     compileChatActionPrompt(action, { fromSummary: false }),
     /no AI summary yet, so work from its transcript and notes[\s\S]*\n\nList the to-dos\.$/
   );
+  for (const fromSummary of [true, false]) {
+    assert.match(
+      compileChatActionPrompt(action, { fromSummary }),
+      /answer here in the chat as text\. Don't use a tool to draft, send or post it/,
+      "one click never sends an email or posts to Slack"
+    );
+  }
 });

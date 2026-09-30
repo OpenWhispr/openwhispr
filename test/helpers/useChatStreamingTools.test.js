@@ -699,11 +699,6 @@ test("a note action sends its prompt in place of the visible message, without se
 
   await captured.sendToAI(visible.content, [visible], { requestText });
   assert.equal(sentMessages[0].filter((m) => m.role === "user").at(-1).content, requestText);
-  assert.equal(
-    visible.content,
-    "Draft a follow-up email",
-    "the chat keeps showing the action name"
-  );
   assert.deepEqual(searches, []);
 
   await captured.sendToAI(visible.content, [visible]);

@@ -404,10 +404,13 @@ Instructions: `;
 
 // A chat action is sent as the user's turn in the note chat, whose system prompt
 // already carries the whole note. It works from the AI summary when there is one.
-export const CHAT_ACTION_ON_SUMMARY_PREAMBLE = `Work from the AI summary of the note I'm viewing (it's in your context), and use its transcript only if the instructions below ask for it. Follow these instructions:
+// The note chat can offer connector tools; a one-click action answers in the chat.
+const CHAT_ACTION_ANSWER_RULE =
+  "Write your answer here in the chat as text. Don't use a tool to draft, send or post it, unless the instructions explicitly ask you to send, post or file something.";
+export const CHAT_ACTION_ON_SUMMARY_PREAMBLE = `Work from the AI summary of the note I'm viewing (it's in your context), and use its transcript only if the instructions below ask for it. ${CHAT_ACTION_ANSWER_RULE} Follow these instructions:
 
 `;
-export const CHAT_ACTION_ON_MATERIAL_PREAMBLE = `The note I'm viewing has no AI summary yet, so work from its transcript and notes (they're in your context). Follow these instructions:
+export const CHAT_ACTION_ON_MATERIAL_PREAMBLE = `The note I'm viewing has no AI summary yet, so work from its transcript and notes (they're in your context). ${CHAT_ACTION_ANSWER_RULE} Follow these instructions:
 
 `;
 

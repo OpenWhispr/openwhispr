@@ -411,3 +411,31 @@ test("the note's chat learns who is viewing the note and its calendar event", as
   assert.equal(options().noteCalendarEventId, null);
   await unmount();
 });
+
+test("the note's chat names the user's own speakers and leaves attendees to the attendee block", async (t) => {
+  t.after(() => {
+    delete globalThis.__embeddedChatOptions;
+    delete globalThis.__noteEditorAuth;
+  });
+  globalThis.__noteEditorAuth = {
+    isSignedIn: true,
+    user: { id: "user-chad", name: "Chad", email: "chad@example.com" },
+  };
+  const { render, unmount } = await loadNoteEditor(t);
+  const transcript = JSON.stringify([
+    { text: "I'll send the deck.", source: "mic", timestamp: 0 },
+    { text: "Thanks.", source: "system", timestamp: 3 },
+  ]);
+  const chatTranscript = () => globalThis.__embeddedChatOptions.noteTranscript;
+
+  await render(ENHANCEMENT, { note: { ...NOTE, transcript } });
+  assert.match(chatTranscript(), /Chad: I'll send the deck\./);
+  assert.doesNotMatch(chatTranscript(), /Dana Wu|Invited participants/);
+
+  // A teammate's recording: its mic lines are theirs, so the chat keeps it as stored.
+  await render(ENHANCEMENT, {
+    note: { ...NOTE, transcript, cloud_id: "cloud-1", owner_user_id: "user-alice" },
+  });
+  assert.equal(chatTranscript(), transcript);
+  await unmount();
+});
