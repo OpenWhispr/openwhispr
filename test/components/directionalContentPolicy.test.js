@@ -99,7 +99,7 @@ test("technical output values remain LTR inside an Arabic document", () => {
     ],
     [
       "src/components/notes/UploadAudioView.tsx",
-      /<p\s+dir="ltr"[^>]*max-w-50[^>]*>\s*\{file\.name\}/,
+      /<p\s+dir="ltr"[^>]*max-w-sm[^>]*>\s*\{file\.name\}/,
     ],
     ["src/components/ui/SidebarModal.tsx", /<span\s+dir="ltr"[\s\S]*?v\{version\}/],
     ["src/components/ui/ModelCardList.tsx", /<span\s+dir="ltr"[\s\S]*?\{model\.label\}/],

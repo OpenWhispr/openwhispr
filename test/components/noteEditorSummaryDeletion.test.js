@@ -104,6 +104,19 @@ const NOTE = {
 
 const ENHANCEMENT = { content: NOTE.enhanced_content, isStale: false, onChange() {} };
 
+// The summary callout runs a template, so the note view needs one loaded.
+const TEMPLATE = {
+  id: 1,
+  client_id: "notes.actions.builtin.detailedNotes",
+  kind: "template",
+  name: "Detailed Notes",
+  description: "",
+  prompt: "",
+  sections: [{ heading: "Summary", instruction: "" }],
+  output: null,
+  translation_key: "notes.actions.builtin.detailedNotes",
+};
+
 function baseProps(enhancement) {
   return {
     note: { ...NOTE, enhanced_content: enhancement ? enhancement.content : null },
@@ -124,6 +137,7 @@ async function loadNoteEditor(t) {
       electronAPI: {
         getSpeakerProfiles: async () => [],
         getSpeakerMappings: async () => [],
+        getActions: async () => [TEMPLATE],
       },
     },
   });
@@ -191,22 +205,27 @@ async function loadNoteEditor(t) {
   const NoteEditor = mod.default;
 
   const renders = [];
-  function Harness({ enhancement, note }) {
+  function Harness({ enhancement, overrides }) {
     // Run the real component body + hooks under React's lifecycle without
     // mounting host elements (the harness DOM has no layout), then assert on
     // the tree it returned.
-    renders.push(NoteEditor({ ...baseProps(enhancement), ...(note ? { note } : {}) }));
+    renders.push(NoteEditor({ ...baseProps(enhancement), ...overrides }));
     return null;
   }
 
   const root = createRoot(container);
-  const render = (enhancement, note) =>
+  const render = (enhancement, overrides) =>
     React.act(async () => {
-      root.render(React.createElement(Harness, { enhancement, note }));
+      root.render(React.createElement(Harness, { enhancement, overrides }));
     });
+  // The AI Summary tab wraps its label button and the template chevron.
   const click = (value) =>
     React.act(async () => {
-      collectSegments(renders.at(-1)).get(value).props.onClick();
+      let target = null;
+      walk(collectSegments(renders.at(-1)).get(value), (node) => {
+        if (!target && node.props.onClick) target = node;
+      });
+      target.props.onClick();
     });
   const latest = () => renders.at(-1);
   const unmount = () => React.act(async () => root.unmount());
@@ -295,6 +314,56 @@ test("hides the highlight instead of freezing it when no tab matches the selecti
   await unmount();
 });
 
+test("a typed note without a summary offers one with the default template", async (t) => {
+  const { render, latest, unmount } = await loadNoteEditor(t);
+  const ran = [];
+
+  await render(undefined, { onRunNoteAction: (action) => ran.push(action.client_id) });
+  let callout = null;
+  walk(latest(), (node) => {
+    if (!callout && "onAskSubmit" in node.props) callout = node.props.callout;
+  });
+  assert.ok(callout, "notes with no transcript still offer a summary");
+  callout.props.onClick();
+  assert.deepEqual(ran, [TEMPLATE.client_id]);
+
+  await unmount();
+});
+
+test("the summary callout makes way for the transcript selection bar", async (t) => {
+  const { render, click, latest, unmount } = await loadNoteEditor(t);
+  const propsWith = (key) => {
+    let found = null;
+    walk(latest(), (node) => {
+      if (!found && key in node.props) found = node.props;
+    });
+    return found;
+  };
+
+  await render(undefined, {
+    note: {
+      ...NOTE,
+      enhanced_content: null,
+      transcript: JSON.stringify([{ text: "Hello", source: "mic", timestamp: 0 }]),
+    },
+    onRunNoteAction() {},
+  });
+  findSegmentStrip(latest()).props.ref.current = measurableStrip(["transcript", "raw"]);
+  await click("transcript");
+  assert.ok(propsWith("onAskSubmit").callout, "a transcript without a summary offers one");
+
+  const transcript = propsWith("onToggleSelect");
+  await React.act(async () => transcript.onToggleSelect(transcript.segments[0].id));
+  assert.ok(propsWith("onAssignName"), "selecting a segment shows the selection bar");
+  // Both float in the same bottom strip; the callout would cover the bar's buttons.
+  assert.ok(
+    !propsWith("onAskSubmit").callout,
+    "the callout steps aside while segments are selected"
+  );
+
+  await unmount();
+});
+
 test("the note's chat gets the note's participants, parsed once", async (t) => {
   t.after(() => {
     delete globalThis.__embeddedChatOptions;
@@ -324,19 +393,49 @@ test("the note's chat learns who is viewing the note and its calendar event", as
   const options = () => globalThis.__embeddedChatOptions;
 
   // A local note is the user's own.
-  await render(ENHANCEMENT, { ...NOTE, calendar_event_id: "evt-1" });
+  await render(ENHANCEMENT, { note: { ...NOTE, calendar_event_id: "evt-1" } });
   assert.equal(options().noteOwnedByUser, true);
   assert.equal(options().selfEmail, "chad@example.com");
   assert.equal(options().noteCalendarEventId, "evt-1");
 
   // A team note someone else recorded is not.
   await render(ENHANCEMENT, {
-    ...NOTE,
-    cloud_id: "cloud-1",
-    owner_user_id: "user-alice",
-    calendar_event_id: null,
+    note: {
+      ...NOTE,
+      cloud_id: "cloud-1",
+      owner_user_id: "user-alice",
+      calendar_event_id: null,
+    },
   });
   assert.equal(options().noteOwnedByUser, false);
   assert.equal(options().noteCalendarEventId, null);
+  await unmount();
+});
+
+test("the note's chat names the user's own speakers and leaves attendees to the attendee block", async (t) => {
+  t.after(() => {
+    delete globalThis.__embeddedChatOptions;
+    delete globalThis.__noteEditorAuth;
+  });
+  globalThis.__noteEditorAuth = {
+    isSignedIn: true,
+    user: { id: "user-chad", name: "Chad", email: "chad@example.com" },
+  };
+  const { render, unmount } = await loadNoteEditor(t);
+  const transcript = JSON.stringify([
+    { text: "I'll send the deck.", source: "mic", timestamp: 0 },
+    { text: "Thanks.", source: "system", timestamp: 3 },
+  ]);
+  const chatTranscript = () => globalThis.__embeddedChatOptions.noteTranscript;
+
+  await render(ENHANCEMENT, { note: { ...NOTE, transcript } });
+  assert.match(chatTranscript(), /Chad: I'll send the deck\./);
+  assert.doesNotMatch(chatTranscript(), /Dana Wu|Invited participants/);
+
+  // A teammate's recording: its mic lines are theirs, so the chat keeps it as stored.
+  await render(ENHANCEMENT, {
+    note: { ...NOTE, transcript, cloud_id: "cloud-1", owner_user_id: "user-alice" },
+  });
+  assert.equal(chatTranscript(), transcript);
   await unmount();
 });

@@ -276,8 +276,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Action functions
   getActions: () => ipcRenderer.invoke("db-get-actions"),
   getAction: (id) => ipcRenderer.invoke("db-get-action", id),
-  createAction: (name, description, prompt, icon) =>
-    ipcRenderer.invoke("db-create-action", name, description, prompt, icon),
+  createAction: (name, description, prompt, icon, fields) =>
+    ipcRenderer.invoke("db-create-action", name, description, prompt, icon, fields),
   updateAction: (id, updates) => ipcRenderer.invoke("db-update-action", id, updates),
   deleteAction: (id) => ipcRenderer.invoke("db-delete-action", id),
 
@@ -1251,6 +1251,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
   hardDeleteSnippet: (id) => ipcRenderer.invoke("db-hard-delete-snippet", id),
   clearSnippetCloudId: (id) => ipcRenderer.invoke("db-clear-snippet-cloud-id", id),
   broadcastSnippetsUpdated: () => ipcRenderer.invoke("db-broadcast-snippets-updated"),
+
+  getPendingNoteActions: () => ipcRenderer.invoke("db-get-pending-note-actions"),
+  getPendingNoteActionDeletes: () => ipcRenderer.invoke("db-get-pending-note-action-deletes"),
+  getNoteActionForCloudMerge: (clientId) =>
+    ipcRenderer.invoke("db-get-note-action-for-cloud-merge", clientId),
+  upsertNoteActionFromCloud: (cloudEntry) =>
+    ipcRenderer.invoke("db-upsert-note-action-from-cloud", cloudEntry),
+  markNoteActionSynced: (id, cloudId, serverUpdatedAt, snapshot) =>
+    ipcRenderer.invoke("db-mark-note-action-synced", id, cloudId, serverUpdatedAt, snapshot),
+  hardDeleteNoteAction: (id) => ipcRenderer.invoke("db-hard-delete-note-action", id),
+  clearNoteActionCloudId: (id) => ipcRenderer.invoke("db-clear-note-action-cloud-id", id),
 
   // Google Calendar
   gcalStartOAuth: () => ipcRenderer.invoke("gcal-start-oauth"),

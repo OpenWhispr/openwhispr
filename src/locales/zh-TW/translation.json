@@ -637,12 +637,12 @@
       "couldNotDeleteTitle": "無法刪除",
       "couldNotDeleteDescription": "這筆轉錄記錄可能已被移除。",
       "couldNotDeleteDescriptionGeneric": "發生錯誤，請再試一次。",
-      "empty": "目前沒有轉錄記錄",
-      "emptyDescription": "在任何應用程式中按下快捷鍵開始說話。每則轉錄都會私密地儲存在你的裝置上。",
-      "sectionTitle": "轉錄記錄",
+      "empty": "開始你的第一次聽寫",
+      "emptyDescription": "你聽寫的文字會顯示在這裡。",
+      "shortcutHint": "按 {{shortcut}} 開始說話。",
       "dataRetentionDisabled": "資料保留已關閉。轉錄和音訊不會儲存至歷史記錄。",
-      "press": "按下",
-      "toStart": "開始",
+      "welcomeBack": "歡迎回來",
+      "welcomeBackNamed": "歡迎回來，{{name}}",
       "dateGroups": {
         "today": "今天",
         "yesterday": "昨天"
@@ -2764,7 +2764,7 @@
     "sidebar": {
       "newNote": "新增筆記",
       "searchNotes": "搜尋筆記",
-      "actions": "動作"
+      "templatesAndActions": "範本與動作"
     },
     "spaces": {
       "privateSpaces": "私人筆記",
@@ -2821,6 +2821,7 @@
       "undo": "復原",
       "emptySpace": "還沒有筆記。這裡的筆記對 {{space}} 中的所有人可見。",
       "emptyTeamHint": "與你共享的空間將顯示在這裡。",
+      "emptyTeamTitle": "尚無共享空間",
       "noteCount_one": "{{count}} 則筆記",
       "noteCount_other": "{{count}} 則筆記",
       "accessRevoked": "你已無法存取 {{space}}",
@@ -2956,8 +2957,8 @@
       "raw": "原始",
       "aiSummary": "AI 摘要",
       "saving": "儲存中",
-      "transcriptEmptyTitle": "尚未錄製任何內容",
-      "transcriptEmptyDescription": "點擊錄製開始轉錄。所說的內容會即時顯示在這裡。",
+      "transcriptEmptyTitle": "尚無轉錄",
+      "transcriptEmptyDescription": "開始錄音後，所說的一切都會顯示在這裡。",
       "startRecording": "開始錄製",
       "generateSummary": "產生 AI 摘要",
       "startWriting": "開始撰寫...",
@@ -3129,8 +3130,8 @@
       "showInFileManager": "在{{manager}}中顯示"
     },
     "actions": {
+      "allActions": "全部動作",
       "manage": "管理動作...",
-      "manageTitle": "自訂動作",
       "addAction": "新增動作",
       "editAction": "編輯動作",
       "namePlaceholder": "動作名稱",
@@ -3144,8 +3145,6 @@
       "promptLabel": "提示詞",
       "emptyEditorTitle": "選擇動作",
       "emptyEditorDescription": "從列表中選擇一個動作或建立新動作",
-      "runAction": "執行 {{name}}",
-      "selectAction": "選擇動作",
       "done": "完成",
       "chunkProgress": "第 {{step}} 部分，共 {{total}} 部分",
       "emptyReply": "模型傳回了空白回覆。請再試一次，或選擇其他模型。",
@@ -3160,15 +3159,89 @@
           "cta": "草擬跟進郵件"
         },
         "detailedNotes": {
-          "name": "詳細筆記",
+          "name": "AI 摘要",
           "description": "準確、完整的會議筆記，包含決策和行動項目"
+        },
+        "makeTodos": {
+          "name": "建立待辦事項",
+          "description": "在聊天中列出每項待辦及其負責人"
+        },
+        "createOutline": {
+          "name": "建立大綱",
+          "description": "在聊天中為筆記的主題列出大綱"
+        },
+        "oneOnOne": {
+          "name": "1 對 1",
+          "description": "一對一會議中的近況、回饋、成長和後續步驟"
+        },
+        "standUp": {
+          "name": "站會",
+          "description": "每個人的進度、計畫和阻礙"
+        },
+        "salesCall": {
+          "name": "銷售通話",
+          "description": "需求、異議、預算和決策流程"
+        },
+        "userInterview": {
+          "name": "使用者訪談",
+          "description": "參與者的工作流程、痛點、反應和原話"
+        },
+        "shorten": {
+          "name": "精簡",
+          "description": "把摘要縮短到大約一半",
+          "cta": "精簡摘要"
+        },
+        "addTldr": {
+          "name": "新增 TL;DR",
+          "description": "在摘要開頭加上兩三句話的 TL;DR",
+          "cta": "新增 TL;DR"
+        },
+        "slackUpdate": {
+          "name": "Slack 更新",
+          "description": "寫一則發到 Slack 的簡短團隊更新",
+          "cta": "寫一則 Slack 更新"
         }
       },
       "errors": {
         "noModel": "未選擇 AI 模型。請在設定中進行配置。",
         "actionFailed": "操作失敗",
-        "noEndpoint": "未設定自架伺服器 URL。請在設定中進行配置。"
-      }
+        "noEndpoint": "未設定自架伺服器 URL。請在設定中進行配置。",
+        "outputTruncated": "AI 模型在完成之前就用完了輸出空間，因此筆記維持不變。",
+        "nothingToSummarize": "這則筆記還沒有可以摘要的內容，因此 AI 摘要維持不變。",
+        "saveFailed": "無法儲存。請檢查是否有內容過長，然後再試一次。"
+      },
+      "tab": "動作",
+      "output": {
+        "auto": "自動",
+        "chat": "聊天",
+        "summary": "AI 摘要",
+        "chatHint": "在筆記的聊天中回覆，AI 摘要維持不變。",
+        "summaryHint": "編輯筆記的 AI 摘要；如果還沒有摘要，就根據轉錄內容產生一份。",
+        "autoHint": "儲存時讀取提示詞，並選擇聊天或 AI 摘要。"
+      },
+      "applied": "已使用 {{name}} 更新 AI 摘要"
+    },
+    "templates": {
+      "tab": "範本",
+      "managerTitle": "範本與動作",
+      "manage": "管理範本...",
+      "select": "選擇範本",
+      "addTemplate": "新增範本",
+      "editTemplate": "編輯範本",
+      "namePlaceholder": "範本名稱",
+      "contextLabel": "背景",
+      "contextPlaceholder": "這是什麼類型的會議？摘要應著重在什麼？",
+      "sectionsLabel": "段落",
+      "addSection": "新增段落",
+      "sectionHeadingPlaceholder": "段落標題",
+      "sectionInstructionPlaceholder": "這個段落要寫什麼？",
+      "moveSectionUp": "上移段落",
+      "moveSectionDown": "下移段落",
+      "removeSection": "移除段落",
+      "noSectionsHint": "沒有段落時，背景就是摘要的完整指示。",
+      "noTemplates": "尚無範本",
+      "emptyEditorTitle": "選擇範本",
+      "emptyEditorDescription": "從列表中選擇一個範本或建立新範本"
     },
     "empty": {
       "title": "這裡還沒有筆記",
@@ -3192,12 +3265,12 @@
         "description": "動作使用 AI 來處理你的筆記。設定語言模型以開始使用。",
         "configured": "AI 模型已設定"
       },
-      "actions": {
-        "title": "AI 驅動的動作",
-        "description": "動作可以處理你的筆記——整理轉錄、摘要會議等。使用內建動作或建立你自己的。",
-        "builtInLabel": "內建",
-        "createTitle": "建立你的動作",
-        "createDescription": "使用你自己的 AI 提示詞定義自訂動作。你隨時可以在設定中編輯或新增更多。",
+      "templates": {
+        "title": "範本與動作",
+        "description": "範本決定 AI 摘要的樣式，從詳細的會議記錄到你自訂的段落。動作在筆記上執行，例如在聊天中草擬跟進郵件。",
+        "builtInLabel": "你的範本",
+        "createTitle": "建立你的範本",
+        "createDescription": "描述你想要的摘要。你之後可以新增段落、更多範本與動作。",
         "created": "已建立！"
       },
       "getStarted": "開始使用",
@@ -3290,9 +3363,6 @@
         }
       },
       "invite": "邀請",
-      "list": {
-        "empty": "這裡還沒有筆記"
-      },
       "author": {
         "you": "你"
       }
@@ -3339,19 +3409,14 @@
       "examples": {
         "linkedinTrigger": "我的 LinkedIn",
         "linkedinText": "linkedin.com/in/you",
-        "rewriteTrigger": "改寫提示詞",
-        "rewriteText": "把這段話改寫得更簡潔、更專業",
-        "introTrigger": "開場郵件",
-        "introText": "你好，希望本週能找個時間聊聊…",
         "signoffTrigger": "簽名",
         "signoffText": "祝好，Alex · alex@example.com"
       },
       "addPlaceholder": "新增觸發詞——「我的行事曆連結」「簽名」"
     },
-    "emptyTitle": "你的字典是空的",
+    "emptyTitle": "將詞語加入字典",
     "emptyDescription": "新增希望{{agentName}}始終辨識正確的詞：名字、工具、縮寫。",
     "addFirstWord": "新增第一個詞",
-    "importList": "匯入清單",
     "agentDefault": "預設加入"
   },
   "insights": {
@@ -3510,8 +3575,9 @@
     "newChat": "新對話",
     "search": "搜尋對話...",
     "archived": "已封存",
-    "noConversations": "開始你的第一個對話",
-    "selectChat": "選擇一個對話或開始新的對話",
+    "noConversations": "尚無聊天",
+    "noConversationsDescription": "與助理的聊天會顯示在這裡。",
+    "loadFailed": "無法載入聊天紀錄",
     "noResults": "沒有符合的對話",
     "today": "今天",
     "yesterday": "昨天",
@@ -3526,7 +3592,12 @@
     "searchChats": "搜尋聊天",
     "searchTitle": "搜尋對話",
     "searchDescription": "搜尋所有對話",
-    "newChatEmpty": "詢問關於筆記、轉錄或其他任何內容"
+    "inputPlaceholder": "隨便問點什麼...",
+    "starters": {
+      "todos": "列出我最近的待辦事項",
+      "meeting": "幫我準備下一場會議",
+      "sharedNotes": "突顯我的共享筆記"
+    }
   },
   "support": {
     "documentation": "文件",
@@ -3675,7 +3746,8 @@
       "thinking": "正在思考...",
       "typeMessage": "輸入訊息...",
       "send": "傳送",
-      "voiceDraftStreamingOnly": "目前的轉錄服務商僅支援即時聽寫，因此無法使用語音輸入。請在「設定 → 語音轉文字」中選擇其他服務商。"
+      "voiceDraftStreamingOnly": "目前的轉錄服務商僅支援即時聽寫，因此無法使用語音輸入。請在「設定 → 語音轉文字」中選擇其他服務商。",
+      "commands": "指令"
     },
     "tools": {
       "search_notesName": "搜尋筆記",
@@ -4336,12 +4408,14 @@
     "tomorrow": "明天"
   },
   "upcoming": {
-    "title": "即將開始",
     "now": "進行中",
     "untitledEvent": "無標題事件",
     "joinAndTranscribe": "加入並轉錄",
     "takeNotes": "記筆記",
-    "noEventsToday": "今天沒有行程",
+    "noEventsToday": "今天沒有會議了",
+    "emptyDayDescription": "是時候去摸摸草地了",
+    "touchGrass": "摸摸草地",
+    "touchGrassLabel": "一片草地。用指標或方向鍵拂過它。按 Esc 返回。",
     "noUpcomingEvents": "暫無即將開始的行程",
     "moreCalendarsHint": "想連接更多日曆？",
     "connectHere": "在這裡連接",
@@ -4523,15 +4597,17 @@
     }
   },
   "embeddedChat": {
-    "askPlaceholder": "隨便問點什麼...",
-    "send": "傳送",
+    "askPlaceholder": "詢問關於筆記的任何問題",
     "title": "聊天",
     "emptyState": "就這條筆記提個問題",
     "dock": "固定到側邊欄",
     "undock": "從側邊欄取消固定",
     "close": "關閉聊天",
     "newChat": "新對話",
-    "conversationSelector": "切換對話"
+    "conversationSelector": "切換對話",
+    "history": "歷史記錄",
+    "quickActions": "快速操作",
+    "generateSummary": "產生摘要"
   },
   "transcriptionPreview": {
     "label": "預覽",

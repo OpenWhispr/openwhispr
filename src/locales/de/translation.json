@@ -637,12 +637,12 @@
       "couldNotDeleteTitle": "Löschen fehlgeschlagen",
       "couldNotDeleteDescription": "Diese Transkription wurde möglicherweise bereits entfernt.",
       "couldNotDeleteDescriptionGeneric": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
-      "empty": "Noch keine Transkriptionen",
-      "emptyDescription": "Drücke deinen Hotkey in einer beliebigen App und sprich los. Jede Transkription wird hier privat auf deinem Gerät gespeichert.",
-      "sectionTitle": "Transkriptionen",
+      "empty": "Starte dein erstes Diktat",
+      "emptyDescription": "Dein diktierter Text erscheint hier.",
+      "shortcutHint": "Drücke {{shortcut}} und sprich los.",
       "dataRetentionDisabled": "Datenaufbewahrung ist deaktiviert. Transkriptionen und Audio werden nicht im Verlauf gespeichert.",
-      "press": "Drücken Sie",
-      "toStart": "zum Starten",
+      "welcomeBack": "Willkommen zurück",
+      "welcomeBackNamed": "Willkommen zurück, {{name}}",
       "dateGroups": {
         "today": "Heute",
         "yesterday": "Gestern"
@@ -1184,12 +1184,14 @@
     "tomorrow": "Morgen"
   },
   "upcoming": {
-    "title": "Demnächst",
     "now": "Jetzt",
     "untitledEvent": "Unbenanntes Ereignis",
     "joinAndTranscribe": "Beitreten & transkribieren",
     "takeNotes": "Notizen machen",
-    "noEventsToday": "Heute keine Termine",
+    "noEventsToday": "Heute keine Meetings mehr",
+    "emptyDayDescription": "Zeit, ein bisschen Gras anzufassen",
+    "touchGrass": "Gras anfassen",
+    "touchGrassLabel": "Ein Stück Rasen. Streich mit dem Mauszeiger oder den Pfeiltasten darüber. Mit Escape geht es zurück.",
     "noUpcomingEvents": "Keine anstehenden Termine",
     "moreCalendarsHint": "Weitere Kalender gewünscht?",
     "connectHere": "Hier verbinden",
@@ -2810,7 +2812,7 @@
     "enableDescription_one": "Nutzung aus {{count}} vorhandenem Diktat synchronisieren. Transkripte bleiben privat.",
     "enableDescription_other": "Nutzung aus {{count}} vorhandenen Diktaten synchronisieren. Transkripte bleiben privat.",
     "emptyTitle": "Noch keine Diktate",
-    "emptyBody": "Beginnen Sie zu diktieren – Ihre Wörter, Serien und tägliche Aktivität erscheinen dann hier.",
+    "emptyBody": "Fang an zu diktieren – deine Wörter, Serien und tägliche Aktivität erscheinen dann hier.",
     "loadError": "Insights konnten von diesem Gerät nicht gelesen werden.",
     "leaderboard": {
       "title": "Bestenliste",
@@ -3003,8 +3005,9 @@
     "newChat": "Neuer Chat",
     "search": "Unterhaltungen suchen...",
     "archived": "Archiviert",
-    "noConversations": "Starten Sie Ihre erste Unterhaltung",
-    "selectChat": "Wählen Sie eine Unterhaltung oder starten Sie eine neue",
+    "noConversations": "Noch keine Chats",
+    "noConversationsDescription": "Deine Chats mit dem Assistenten erscheinen hier.",
+    "loadFailed": "Chats konnten nicht geladen werden",
     "noResults": "Keine passenden Unterhaltungen",
     "today": "Heute",
     "yesterday": "Gestern",
@@ -3019,7 +3022,12 @@
     "searchChats": "Chats suchen",
     "searchTitle": "Unterhaltungen suchen",
     "searchDescription": "In allen Unterhaltungen suchen",
-    "newChatEmpty": "Fragen Sie zu Ihren Notizen, Transkripten oder anderem"
+    "inputPlaceholder": "Frag etwas...",
+    "starters": {
+      "todos": "Liste meine letzten Aufgaben auf",
+      "meeting": "Bereite mich auf mein nächstes Meeting vor",
+      "sharedNotes": "Hebe meine geteilten Notizen hervor"
+    }
   },
   "referral": {
     "title": "Empfehlen und Belohnungen erhalten",
@@ -3107,7 +3115,7 @@
     "sidebar": {
       "newNote": "Neue Notiz",
       "searchNotes": "Notizen suchen",
-      "actions": "Aktionen"
+      "templatesAndActions": "Vorlagen & Aktionen"
     },
     "spaces": {
       "privateSpaces": "Private Notizen",
@@ -3164,6 +3172,7 @@
       "undo": "Rückgängig",
       "emptySpace": "Noch keine Notizen. Notizen hier sind für alle in {{space}} sichtbar.",
       "emptyTeamHint": "Mit Ihnen geteilte Bereiche erscheinen hier.",
+      "emptyTeamTitle": "Keine geteilten Bereiche",
       "noteCount_one": "{{count}} Notiz",
       "noteCount_other": "{{count}} Notizen",
       "accessRevoked": "Du hast keinen Zugriff mehr auf {{space}}",
@@ -3299,8 +3308,8 @@
       "raw": "Roh",
       "aiSummary": "KI-Zusammenfassung",
       "saving": "Wird gespeichert",
-      "transcriptEmptyTitle": "Noch nichts aufgenommen",
-      "transcriptEmptyDescription": "Drücke auf Aufnahme, um mit der Transkription zu beginnen. Alles Gesagte erscheint hier in Echtzeit.",
+      "transcriptEmptyTitle": "Noch kein Transkript",
+      "transcriptEmptyDescription": "Starte eine Aufnahme, und alles Gesagte erscheint hier.",
       "startRecording": "Aufnahme starten",
       "generateSummary": "KI-Zusammenfassung erstellen",
       "startWriting": "Schreibe los...",
@@ -3491,8 +3500,8 @@
       "done": "Fertig",
       "chunkProgress": "Teil {{step}} von {{total}}",
       "emptyReply": "Das Modell hat eine leere Antwort zurückgegeben. Versuchen Sie es erneut oder wählen Sie ein anderes Modell.",
+      "allActions": "Alle Aktionen",
       "manage": "Aktionen verwalten...",
-      "manageTitle": "Benutzerdefinierte Aktionen",
       "addAction": "Neue Aktion",
       "editAction": "Aktion bearbeiten",
       "namePlaceholder": "Name der Aktion",
@@ -3506,8 +3515,6 @@
       "promptLabel": "Anweisung",
       "emptyEditorTitle": "Aktion auswählen",
       "emptyEditorDescription": "Wählen Sie eine Aktion aus der Liste oder erstellen Sie eine neue",
-      "runAction": "{{name}} ausführen",
-      "selectAction": "Aktion auswählen",
       "builtin": {
         "generateNotes": {
           "name": "Notizen generieren",
@@ -3519,15 +3526,89 @@
           "cta": "Follow-up-E-Mail entwerfen"
         },
         "detailedNotes": {
-          "name": "Ausführliche Notizen",
+          "name": "KI-Zusammenfassung",
           "description": "Präzise, umfassende Meeting-Notizen mit Entscheidungen und Aufgaben"
+        },
+        "makeTodos": {
+          "name": "Aufgabenliste erstellen",
+          "description": "Alle Aufgaben und ihre Verantwortlichen im Chat auflisten"
+        },
+        "createOutline": {
+          "name": "Gliederung erstellen",
+          "description": "Die Themen der Notiz im Chat gliedern"
+        },
+        "oneOnOne": {
+          "name": "1:1",
+          "description": "Updates, Feedback, Entwicklung und nächste Schritte aus einem Einzelgespräch"
+        },
+        "standUp": {
+          "name": "Stand-up",
+          "description": "Fortschritt, Pläne und Blocker jeder Person"
+        },
+        "salesCall": {
+          "name": "Verkaufsgespräch",
+          "description": "Bedarf, Einwände, Budget und Entscheidungsprozess"
+        },
+        "userInterview": {
+          "name": "Nutzerinterview",
+          "description": "Arbeitsablauf, Probleme, Reaktionen und Zitate einer teilnehmenden Person"
+        },
+        "shorten": {
+          "name": "Kürzen",
+          "description": "Die Zusammenfassung etwa halb so lang machen",
+          "cta": "Zusammenfassung kürzen"
+        },
+        "addTldr": {
+          "name": "TL;DR hinzufügen",
+          "description": "Ein TL;DR aus zwei oder drei Sätzen an den Anfang der Zusammenfassung setzen",
+          "cta": "TL;DR hinzufügen"
+        },
+        "slackUpdate": {
+          "name": "Slack-Update",
+          "description": "Ein kurzes Team-Update für Slack schreiben",
+          "cta": "Slack-Update schreiben"
         }
       },
       "errors": {
         "noModel": "Kein KI-Modell ausgewählt. Konfigurieren Sie eins in den Einstellungen.",
         "actionFailed": "Aktion fehlgeschlagen",
-        "noEndpoint": "Keine URL für den selbst gehosteten Server festgelegt. Konfigurieren Sie eine in den Einstellungen."
-      }
+        "noEndpoint": "Keine URL für den selbst gehosteten Server festgelegt. Konfigurieren Sie eine in den Einstellungen.",
+        "outputTruncated": "Dem KI-Modell ging der Platz aus, bevor es fertig war. Die Notiz bleibt daher unverändert.",
+        "nothingToSummarize": "Diese Notiz enthält noch nichts zum Zusammenfassen, daher bleibt die KI-Zusammenfassung unverändert.",
+        "saveFailed": "Speichern nicht möglich. Prüfen Sie, dass nichts zu lang ist, und versuchen Sie es erneut."
+      },
+      "tab": "Aktionen",
+      "output": {
+        "auto": "Automatisch",
+        "chat": "Chat",
+        "summary": "KI-Zusammenfassung",
+        "chatHint": "Antwortet im Chat der Notiz und lässt die KI-Zusammenfassung unverändert.",
+        "summaryHint": "Bearbeitet die KI-Zusammenfassung der Notiz oder erstellt sie aus dem Transkript, falls es noch keine gibt.",
+        "autoHint": "Liest beim Speichern den Prompt und wählt den Chat oder die KI-Zusammenfassung."
+      },
+      "applied": "KI-Zusammenfassung mit {{name}} aktualisiert"
+    },
+    "templates": {
+      "tab": "Vorlagen",
+      "managerTitle": "Vorlagen & Aktionen",
+      "manage": "Vorlagen verwalten...",
+      "select": "Vorlage auswählen",
+      "addTemplate": "Neue Vorlage",
+      "editTemplate": "Vorlage bearbeiten",
+      "namePlaceholder": "Name der Vorlage",
+      "contextLabel": "Kontext",
+      "contextPlaceholder": "Um welche Art von Besprechung geht es, und worauf soll sich die Zusammenfassung konzentrieren?",
+      "sectionsLabel": "Abschnitte",
+      "addSection": "Abschnitt hinzufügen",
+      "sectionHeadingPlaceholder": "Überschrift des Abschnitts",
+      "sectionInstructionPlaceholder": "Was gehört in diesen Abschnitt?",
+      "moveSectionUp": "Abschnitt nach oben verschieben",
+      "moveSectionDown": "Abschnitt nach unten verschieben",
+      "removeSection": "Abschnitt entfernen",
+      "noSectionsHint": "Ohne Abschnitte ist der Kontext die gesamte Anweisung für die Zusammenfassung.",
+      "noTemplates": "Noch keine Vorlagen",
+      "emptyEditorTitle": "Vorlage auswählen",
+      "emptyEditorDescription": "Wählen Sie eine Vorlage aus der Liste oder erstellen Sie eine neue"
     },
     "onboarding": {
       "llm": {
@@ -3535,12 +3616,12 @@
         "description": "Aktionen verwenden KI, um Ihre Notizen zu transformieren. Richten Sie ein Sprachmodell ein, um loszulegen.",
         "configured": "KI-Modell konfiguriert"
       },
-      "actions": {
-        "title": "KI-gestützte Aktionen",
-        "description": "Aktionen transformieren Ihre Notizen – bereinigen Transkriptionen, fassen Besprechungen zusammen und mehr. Verwenden Sie integrierte Aktionen oder erstellen Sie eigene.",
-        "builtInLabel": "Integriert",
-        "createTitle": "Eigene Aktion erstellen",
-        "createDescription": "Definieren Sie eine benutzerdefinierte Aktion mit Ihrem eigenen KI-Prompt. Sie können später jederzeit weitere hinzufügen oder bearbeiten.",
+      "templates": {
+        "title": "Vorlagen und Aktionen",
+        "description": "Vorlagen bestimmen Ihre KI-Zusammenfassung, von ausführlichen Besprechungsnotizen bis zu eigenen Abschnitten. Aktionen laufen auf einer Notiz, etwa ein Follow-up-E-Mail-Entwurf im Chat.",
+        "builtInLabel": "Ihre Vorlagen",
+        "createTitle": "Eigene Vorlage erstellen",
+        "createDescription": "Beschreiben Sie die gewünschte Zusammenfassung. Abschnitte, weitere Vorlagen und Aktionen können Sie später hinzufügen.",
         "created": "Erstellt!"
       },
       "getStarted": "Loslegen",
@@ -3633,9 +3714,6 @@
         }
       },
       "invite": "Einladen",
-      "list": {
-        "empty": "Hier gibt es noch keine Notizen"
-      },
       "author": {
         "you": "Du"
       }
@@ -3682,19 +3760,14 @@
       "examples": {
         "linkedinTrigger": "Mein LinkedIn",
         "linkedinText": "linkedin.com/in/du",
-        "rewriteTrigger": "Umschreib-Prompt",
-        "rewriteText": "Schreibe das prägnanter und professioneller um",
-        "introTrigger": "Intro-E-Mail",
-        "introText": "Hallo, ich würde mich freuen, diese Woche Zeit für ein Gespräch zu finden …",
         "signoffTrigger": "Grußformel",
         "signoffText": "Viele Grüße, Alex · alex@example.com"
       },
       "addPlaceholder": "Auslöser-Phrase hinzufügen – „mein Kalender“, „mein LinkedIn“"
     },
-    "emptyTitle": "Dein Wörterbuch ist leer",
+    "emptyTitle": "Füge Wörter zu deinem Wörterbuch hinzu",
     "emptyDescription": "Füge Wörter hinzu, die {{agentName}} immer richtig erkennen soll: Namen, Tools, Abkürzungen.",
     "addFirstWord": "Füge dein erstes Wort hinzu",
-    "importList": "Liste importieren",
     "agentDefault": "Standardmäßig enthalten"
   },
   "support": {
@@ -3844,7 +3917,8 @@
       "thinking": "Denkt nach...",
       "typeMessage": "Nachricht eingeben...",
       "send": "Senden",
-      "voiceDraftStreamingOnly": "Spracheingabe ist mit Ihrem Transkriptionsanbieter nicht verfügbar: Er unterstützt nur Live-Diktat. Wählen Sie unter Einstellungen → Sprache zu Text einen anderen Anbieter."
+      "voiceDraftStreamingOnly": "Spracheingabe ist mit Ihrem Transkriptionsanbieter nicht verfügbar: Er unterstützt nur Live-Diktat. Wählen Sie unter Einstellungen → Sprache zu Text einen anderen Anbieter.",
+      "commands": "Befehle"
     },
     "tools": {
       "search_notesName": "Notizen durchsuchen",
@@ -4599,15 +4673,17 @@
     "continue": "Weiter"
   },
   "embeddedChat": {
-    "askPlaceholder": "Frag etwas...",
-    "send": "Senden",
+    "askPlaceholder": "Frag etwas zu deiner Notiz",
     "title": "Chat",
     "emptyState": "Stelle eine Frage zu dieser Notiz",
     "dock": "In Seitenleiste andocken",
     "undock": "Von Seitenleiste abdocken",
     "close": "Chat schließen",
     "newChat": "Neuer Chat",
-    "conversationSelector": "Unterhaltung wechseln"
+    "conversationSelector": "Unterhaltung wechseln",
+    "history": "Verlauf",
+    "quickActions": "Schnellaktionen",
+    "generateSummary": "Zusammenfassung erstellen"
   },
   "transcriptionPreview": {
     "label": "Vorschau",

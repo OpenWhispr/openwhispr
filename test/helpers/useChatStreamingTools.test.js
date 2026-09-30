@@ -9,7 +9,7 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 // Drives the real useChatStreaming hook (one synchronous render, then its
 // sendToAI closure; see useChatStreamingCancellation.test.js) on the
 // OpenWhispr Cloud path, with the stream itself stubbed so the test can see
-// which tools a send offers the model.
+// which tools (and messages) a send offers the model.
 async function renderChatStreaming(
   t,
   hookOptions = {},
@@ -49,10 +49,12 @@ async function renderChatStreaming(
   t.after(() => reasoningService.destroy());
 
   const offeredTools = [];
+  const sentMessages = [];
   const endStream = async function* () {
     yield { type: "done", finishReason: "stop" };
   };
-  t.mock.method(reasoningService, "processTextStreamingCloud", (_messages, config) => {
+  t.mock.method(reasoningService, "processTextStreamingCloud", (messages, config) => {
+    sentMessages.push(messages);
     offeredTools.push((config.tools ?? []).map((tool) => tool.name));
     return endStream();
   });
@@ -78,6 +80,7 @@ async function renderChatStreaming(
   return {
     captured,
     offeredTools,
+    sentMessages,
     reasoningService,
     usePolicyStore,
     getMessages: () => messages,
@@ -675,4 +678,30 @@ test("a failed attendee lookup still answers, without the block", async (t) => {
   await captured.sendToAI("Draft a follow-up", []);
   assert.equal(prompts.length, 1);
   assert.doesNotMatch(prompts[0], /Meeting attendees/);
+});
+
+test("a note action sends its prompt in place of the visible message, without searching other notes", async (t) => {
+  const searches = [];
+  const { captured, sentMessages } = await renderChatStreaming(
+    t,
+    {},
+    {
+      electronAPI: {
+        semanticSearchNotes: async (query) => {
+          searches.push(query);
+          return [];
+        },
+      },
+    }
+  );
+  const visible = { id: "u1", role: "user", content: "Draft a follow-up email" };
+  const requestText = "Using the note I'm viewing, draft the follow-up email.";
+
+  await captured.sendToAI(visible.content, [visible], { requestText });
+  assert.equal(sentMessages[0].filter((m) => m.role === "user").at(-1).content, requestText);
+  assert.deepEqual(searches, []);
+
+  await captured.sendToAI(visible.content, [visible]);
+  assert.equal(sentMessages[1].filter((m) => m.role === "user").at(-1).content, visible.content);
+  assert.deepEqual(searches, [visible.content], "a typed question still searches the library");
 });

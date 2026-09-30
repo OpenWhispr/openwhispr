@@ -646,12 +646,12 @@
       "couldNotDeleteTitle": "No se pudo eliminar",
       "couldNotDeleteDescription": "Puede que esta transcripción ya se haya eliminado.",
       "couldNotDeleteDescriptionGeneric": "Algo salió mal. Inténtalo de nuevo.",
-      "empty": "Aún no hay transcripciones",
-      "emptyDescription": "Pulsa tu atajo en cualquier app y empieza a hablar. Cada transcripción se guarda aquí de forma privada en tu dispositivo.",
-      "sectionTitle": "Transcripciones",
+      "empty": "Empieza tu primer dictado",
+      "emptyDescription": "Tu texto dictado aparecerá aquí.",
+      "shortcutHint": "Pulsa {{shortcut}} y empieza a hablar.",
       "dataRetentionDisabled": "La retención de datos está desactivada. Las transcripciones y el audio no se guardan en el historial.",
-      "press": "Pulsa",
-      "toStart": "para empezar",
+      "welcomeBack": "Bienvenido de nuevo",
+      "welcomeBackNamed": "Bienvenido de nuevo, {{name}}",
       "dateGroups": {
         "today": "Hoy",
         "yesterday": "Ayer"
@@ -2817,7 +2817,7 @@
     "sidebar": {
       "newNote": "Nueva nota",
       "searchNotes": "Buscar notas",
-      "actions": "Acciones"
+      "templatesAndActions": "Plantillas y acciones"
     },
     "spaces": {
       "privateSpaces": "Notas privadas",
@@ -2874,6 +2874,7 @@
       "undo": "Deshacer",
       "emptySpace": "Aún no hay notas. Las notas aquí son visibles para todos en {{space}}.",
       "emptyTeamHint": "Los espacios compartidos contigo aparecerán aquí.",
+      "emptyTeamTitle": "No hay espacios compartidos",
       "noteCount_one": "{{count}} nota",
       "noteCount_other": "{{count}} notas",
       "accessRevoked": "Ya no tienes acceso a {{space}}",
@@ -3009,8 +3010,8 @@
       "raw": "Sin procesar",
       "aiSummary": "Resumen con IA",
       "saving": "Guardando",
-      "transcriptEmptyTitle": "Aún no hay grabaciones",
-      "transcriptEmptyDescription": "Pulsa grabar para empezar a transcribir. Todo lo que se diga aparecerá aquí en tiempo real.",
+      "transcriptEmptyTitle": "Aún no hay transcripción",
+      "transcriptEmptyDescription": "Inicia una grabación y todo lo que se diga aparecerá aquí.",
       "startRecording": "Empezar a grabar",
       "generateSummary": "Generar resumen con IA",
       "startWriting": "Comienza a escribir...",
@@ -3182,8 +3183,8 @@
       "showInFileManager": "Mostrar en {{manager}}"
     },
     "actions": {
+      "allActions": "Todas las acciones",
       "manage": "Gestionar acciones...",
-      "manageTitle": "Acciones personalizadas",
       "addAction": "Nueva acción",
       "editAction": "Editar acción",
       "namePlaceholder": "Nombre de la acción",
@@ -3197,8 +3198,6 @@
       "promptLabel": "Instrucción",
       "emptyEditorTitle": "Seleccionar acción",
       "emptyEditorDescription": "Elige una acción de la lista o crea una nueva",
-      "runAction": "Ejecutar {{name}}",
-      "selectAction": "Seleccionar acción",
       "done": "Listo",
       "chunkProgress": "Parte {{step}} de {{total}}",
       "emptyReply": "El modelo devolvió una respuesta vacía. Vuelve a intentarlo o elige otro modelo.",
@@ -3213,15 +3212,89 @@
           "cta": "Redactar correo de seguimiento"
         },
         "detailedNotes": {
-          "name": "Notas detalladas",
+          "name": "Resumen con IA",
           "description": "Notas de reunión precisas y completas con decisiones y tareas"
+        },
+        "makeTodos": {
+          "name": "Crear tareas",
+          "description": "Enumera cada tarea y su responsable en el chat"
+        },
+        "createOutline": {
+          "name": "Crear esquema",
+          "description": "Esquematiza los temas de la nota en el chat"
+        },
+        "oneOnOne": {
+          "name": "1:1",
+          "description": "Novedades, feedback, desarrollo y próximos pasos de una reunión individual"
+        },
+        "standUp": {
+          "name": "Stand-up",
+          "description": "Avances, planes y bloqueos de cada persona"
+        },
+        "salesCall": {
+          "name": "Llamada de ventas",
+          "description": "Necesidades, objeciones, presupuesto y proceso de decisión"
+        },
+        "userInterview": {
+          "name": "Entrevista con usuario",
+          "description": "Flujo de trabajo, problemas, reacciones y citas de un participante"
+        },
+        "shorten": {
+          "name": "Acortar",
+          "description": "Deja el resumen en la mitad de largo",
+          "cta": "Acortar el resumen"
+        },
+        "addTldr": {
+          "name": "Añadir TL;DR",
+          "description": "Pon un TL;DR de dos o tres frases al principio del resumen",
+          "cta": "Añadir un TL;DR"
+        },
+        "slackUpdate": {
+          "name": "Actualización para Slack",
+          "description": "Escribe una breve actualización para el equipo en Slack",
+          "cta": "Escribir una actualización para Slack"
         }
       },
       "errors": {
         "noModel": "No hay modelo de IA seleccionado. Configura uno en Ajustes.",
         "actionFailed": "La acción falló",
-        "noEndpoint": "No hay URL del servidor autoalojado configurada. Configura una en Ajustes."
-      }
+        "noEndpoint": "No hay URL del servidor autoalojado configurada. Configura una en Ajustes.",
+        "outputTruncated": "El modelo de IA se quedó sin espacio antes de terminar, así que la nota quedó como estaba.",
+        "nothingToSummarize": "Esta nota aún no tiene nada que resumir, así que el resumen con IA se quedó como estaba.",
+        "saveFailed": "No se pudo guardar. Comprueba que nada sea demasiado largo e inténtalo de nuevo."
+      },
+      "tab": "Acciones",
+      "output": {
+        "auto": "Automático",
+        "chat": "Chat",
+        "summary": "Resumen con IA",
+        "chatHint": "Responde en el chat de la nota y deja el resumen con IA como está.",
+        "summaryHint": "Edita el resumen con IA de la nota, o lo escribe a partir de la transcripción si aún no hay uno.",
+        "autoHint": "Lee el prompt al guardar y elige el chat o el resumen con IA."
+      },
+      "applied": "Resumen con IA actualizado con {{name}}"
+    },
+    "templates": {
+      "tab": "Plantillas",
+      "managerTitle": "Plantillas y acciones",
+      "manage": "Gestionar plantillas...",
+      "select": "Elegir plantilla",
+      "addTemplate": "Nueva plantilla",
+      "editTemplate": "Editar plantilla",
+      "namePlaceholder": "Nombre de la plantilla",
+      "contextLabel": "Contexto",
+      "contextPlaceholder": "¿Qué tipo de reunión es y en qué debe centrarse el resumen?",
+      "sectionsLabel": "Secciones",
+      "addSection": "Añadir sección",
+      "sectionHeadingPlaceholder": "Título de la sección",
+      "sectionInstructionPlaceholder": "¿Qué va en esta sección?",
+      "moveSectionUp": "Subir sección",
+      "moveSectionDown": "Bajar sección",
+      "removeSection": "Quitar sección",
+      "noSectionsHint": "Sin secciones, el contexto es la instrucción completa para el resumen.",
+      "noTemplates": "Aún no hay plantillas",
+      "emptyEditorTitle": "Seleccionar plantilla",
+      "emptyEditorDescription": "Elige una plantilla de la lista o crea una nueva"
     },
     "empty": {
       "title": "Todavía no hay notas aquí",
@@ -3245,12 +3318,12 @@
         "description": "Las acciones usan IA para transformar tus notas. Configura un modelo de lenguaje para comenzar.",
         "configured": "Modelo de IA configurado"
       },
-      "actions": {
-        "title": "Acciones impulsadas por IA",
-        "description": "Las acciones transforman tus notas: corrigen transcripciones, resumen reuniones y más. Usa acciones integradas o crea las tuyas.",
-        "builtInLabel": "Integrada",
-        "createTitle": "Crea tu propia acción",
-        "createDescription": "Define una acción personalizada con tu propio prompt de IA. Puedes editar o agregar más después en los ajustes.",
+      "templates": {
+        "title": "Plantillas y acciones",
+        "description": "Las plantillas dan forma a tu resumen con IA, desde notas de reunión detalladas hasta secciones que tú defines. Las acciones se ejecutan sobre una nota, como redactar un correo de seguimiento en el chat.",
+        "builtInLabel": "Tus plantillas",
+        "createTitle": "Crea tu propia plantilla",
+        "createDescription": "Describe el resumen que quieres. Puedes añadir secciones, más plantillas y acciones después.",
         "created": "¡Creada!"
       },
       "getStarted": "Comenzar",
@@ -3343,9 +3416,6 @@
         }
       },
       "invite": "Invitar",
-      "list": {
-        "empty": "Aún no hay notas aquí"
-      },
       "author": {
         "you": "Tú"
       }
@@ -3392,19 +3462,14 @@
       "examples": {
         "linkedinTrigger": "Mi LinkedIn",
         "linkedinText": "linkedin.com/in/tu",
-        "rewriteTrigger": "Prompt de reescritura",
-        "rewriteText": "Reescribe esto para que sea más conciso y profesional",
-        "introTrigger": "Email de presentación",
-        "introText": "Hola, me encantaría encontrar un momento para hablar esta semana…",
         "signoffTrigger": "Despedida",
         "signoffText": "Saludos, Alex · alex@example.com"
       },
       "addPlaceholder": "Añade una frase disparadora: \"mi agenda\", \"mi LinkedIn\""
     },
-    "emptyTitle": "Tu diccionario está vacío",
+    "emptyTitle": "Añade palabras a tu diccionario",
     "emptyDescription": "Añade palabras que {{agentName}} siempre debe reconocer: nombres, herramientas, siglas.",
     "addFirstWord": "Añade tu primera palabra",
-    "importList": "Importar una lista",
     "agentDefault": "Añadido por defecto"
   },
   "insights": {
@@ -3563,8 +3628,9 @@
     "newChat": "Nuevo chat",
     "search": "Buscar conversaciones...",
     "archived": "Archivadas",
-    "noConversations": "Inicia tu primera conversación",
-    "selectChat": "Selecciona una conversación o inicia una nueva",
+    "noConversations": "Aún no hay chats",
+    "noConversationsDescription": "Tus chats con el Asistente aparecerán aquí.",
+    "loadFailed": "No se pudieron cargar los chats",
     "noResults": "Sin conversaciones coincidentes",
     "today": "Hoy",
     "yesterday": "Ayer",
@@ -3579,7 +3645,12 @@
     "searchChats": "Buscar chats",
     "searchTitle": "Buscar conversaciones",
     "searchDescription": "Buscar en todas tus conversaciones",
-    "newChatEmpty": "Pregunta sobre tus notas, transcripciones o lo que quieras"
+    "inputPlaceholder": "Pregunta algo...",
+    "starters": {
+      "todos": "Enumera mis tareas recientes",
+      "meeting": "Prepárame para mi próxima reunión",
+      "sharedNotes": "Destaca mis notas compartidas"
+    }
   },
   "support": {
     "documentation": "Documentación",
@@ -3728,7 +3799,8 @@
       "thinking": "Pensando...",
       "typeMessage": "Escribe un mensaje...",
       "send": "Enviar",
-      "voiceDraftStreamingOnly": "La entrada de voz no está disponible con tu proveedor de transcripción: solo admite dictado en directo. Elige otro proveedor en Ajustes → Voz a texto."
+      "voiceDraftStreamingOnly": "La entrada de voz no está disponible con tu proveedor de transcripción: solo admite dictado en directo. Elige otro proveedor en Ajustes → Voz a texto.",
+      "commands": "Comandos"
     },
     "tools": {
       "search_notesName": "Buscar notas",
@@ -4389,12 +4461,14 @@
     "tomorrow": "Mañana"
   },
   "upcoming": {
-    "title": "Próximamente",
     "now": "Ahora",
     "untitledEvent": "Evento sin título",
     "joinAndTranscribe": "Unirse y transcribir",
     "takeNotes": "Tomar notas",
-    "noEventsToday": "Hoy no hay eventos",
+    "noEventsToday": "Hoy no hay más reuniones",
+    "emptyDayDescription": "Es hora de tocar un poco de césped",
+    "touchGrass": "Tocar césped",
+    "touchGrassLabel": "Un trozo de césped. Acarícialo con el puntero o con las teclas de flecha. Pulsa Escape para volver.",
     "noUpcomingEvents": "No hay próximos eventos",
     "moreCalendarsHint": "¿Quieres añadir más calendarios?",
     "connectHere": "Conéctalos aquí",
@@ -4523,15 +4597,17 @@
     "continue": "Continuar"
   },
   "embeddedChat": {
-    "askPlaceholder": "Pregunta algo...",
-    "send": "Enviar",
+    "askPlaceholder": "Pregunta sobre tu nota",
     "title": "Chat",
     "emptyState": "Haz una pregunta sobre esta nota",
     "dock": "Anclar a la barra lateral",
     "undock": "Desanclar de la barra lateral",
     "close": "Cerrar chat",
     "newChat": "Nuevo chat",
-    "conversationSelector": "Cambiar conversación"
+    "conversationSelector": "Cambiar conversación",
+    "history": "Historial",
+    "quickActions": "Acciones rápidas",
+    "generateSummary": "Generar resumen"
   },
   "transcriptionPreview": {
     "label": "Vista previa",

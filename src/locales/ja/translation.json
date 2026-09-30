@@ -637,12 +637,12 @@
       "couldNotDeleteTitle": "削除できませんでした",
       "couldNotDeleteDescription": "この文字起こしは既に削除されている可能性があります。",
       "couldNotDeleteDescriptionGeneric": "問題が発生しました。もう一度お試しください。",
-      "empty": "文字起こし履歴はまだありません",
-      "emptyDescription": "どのアプリでもホットキーを押して話し始めてください。すべての文字起こしは、このデバイス上にプライベートに保存されます。",
-      "sectionTitle": "文字起こし",
+      "empty": "最初のディクテーションを始めましょう",
+      "emptyDescription": "ディクテーションしたテキストがここに表示されます。",
+      "shortcutHint": "{{shortcut}} を押して話し始めてください。",
       "dataRetentionDisabled": "データ保持が無効です。文字起こしと音声は履歴に保存されません。",
-      "press": "押してください",
-      "toStart": "開始するには",
+      "welcomeBack": "おかえりなさい",
+      "welcomeBackNamed": "おかえりなさい、{{name}}さん",
       "dateGroups": {
         "today": "今日",
         "yesterday": "昨日"
@@ -2692,7 +2692,7 @@
     "sidebar": {
       "newNote": "新しいノート",
       "searchNotes": "ノートを検索",
-      "actions": "アクション"
+      "templatesAndActions": "テンプレートとアクション"
     },
     "spaces": {
       "privateSpaces": "プライベートノート",
@@ -2749,6 +2749,7 @@
       "undo": "元に戻す",
       "emptySpace": "まだノートがありません。ここのノートは{{space}}の全員に表示されます。",
       "emptyTeamHint": "共有されたスペースはここに表示されます。",
+      "emptyTeamTitle": "共有スペースはありません",
       "noteCount_one": "{{count}} 件のノート",
       "noteCount_other": "{{count}} 件のノート",
       "accessRevoked": "{{space}} へのアクセス権がなくなりました",
@@ -2858,8 +2859,8 @@
       "raw": "元のテキスト",
       "aiSummary": "AI要約",
       "saving": "保存中",
-      "transcriptEmptyTitle": "まだ録音がありません",
-      "transcriptEmptyDescription": "録音ボタンを押すと文字起こしが始まります。話した内容がここにリアルタイムで表示されます。",
+      "transcriptEmptyTitle": "文字起こしはまだありません",
+      "transcriptEmptyDescription": "録音を始めると、話した内容がここに表示されます。",
       "startRecording": "録音を開始",
       "generateSummary": "AI要約を生成",
       "startWriting": "書き始める...",
@@ -2910,8 +2911,8 @@
       "showInFileManager": "{{manager}}で表示"
     },
     "actions": {
+      "allActions": "すべてのアクション",
       "manage": "アクションを管理...",
-      "manageTitle": "カスタムアクション",
       "addAction": "新しいアクション",
       "editAction": "アクションを編集",
       "namePlaceholder": "アクション名",
@@ -2925,8 +2926,6 @@
       "promptLabel": "プロンプト",
       "emptyEditorTitle": "アクションを選択",
       "emptyEditorDescription": "リストからアクションを選択するか、新しく作成してください",
-      "runAction": "{{name}} を実行",
-      "selectAction": "アクションを選択",
       "done": "完了",
       "chunkProgress": "パート {{step}} / {{total}}",
       "emptyReply": "モデルから空の応答が返されました。もう一度お試しいただくか、別のモデルを選択してください。",
@@ -2941,15 +2940,89 @@
           "cta": "フォローアップメールを作成"
         },
         "detailedNotes": {
-          "name": "詳細ノート",
+          "name": "AI要約",
           "description": "決定事項とアクションを含む正確で網羅的な会議ノート"
+        },
+        "makeTodos": {
+          "name": "ToDoを作成",
+          "description": "すべてのToDoと担当者をチャットに一覧表示"
+        },
+        "createOutline": {
+          "name": "アウトラインを作成",
+          "description": "ノートのトピックをチャットでアウトライン化"
+        },
+        "oneOnOne": {
+          "name": "1on1",
+          "description": "1on1での近況、フィードバック、成長、次のステップ"
+        },
+        "standUp": {
+          "name": "スタンドアップ",
+          "description": "各メンバーの進捗、予定、ブロッカー"
+        },
+        "salesCall": {
+          "name": "商談",
+          "description": "ニーズ、懸念点、予算、意思決定プロセス"
+        },
+        "userInterview": {
+          "name": "ユーザーインタビュー",
+          "description": "参加者のワークフロー、課題、反応、発言の引用"
+        },
+        "shorten": {
+          "name": "短くする",
+          "description": "要約を約半分の長さにします",
+          "cta": "要約を短くする"
+        },
+        "addTldr": {
+          "name": "TL;DRを追加",
+          "description": "要約の先頭に2〜3文のTL;DRを追加します",
+          "cta": "TL;DRを追加"
+        },
+        "slackUpdate": {
+          "name": "Slack用の共有",
+          "description": "Slackに投稿するチーム向けの短い共有文を作成します",
+          "cta": "Slack用の共有を書く"
         }
       },
       "errors": {
         "noModel": "AIモデルが選択されていません。設定で構成してください。",
         "actionFailed": "アクションに失敗しました",
-        "noEndpoint": "セルフホストサーバーの URL が設定されていません。設定で構成してください。"
-      }
+        "noEndpoint": "セルフホストサーバーの URL が設定されていません。設定で構成してください。",
+        "outputTruncated": "AIモデルが出力の上限に達して最後まで書けなかったため、ノートは変更されていません。",
+        "nothingToSummarize": "このノートにはまだ要約できる内容がないため、AI要約はそのままです。",
+        "saveFailed": "保存できませんでした。長すぎる項目がないか確認して、もう一度お試しください。"
+      },
+      "tab": "アクション",
+      "output": {
+        "auto": "自動",
+        "chat": "チャット",
+        "summary": "AI要約",
+        "chatHint": "ノートのチャットで回答し、AI要約はそのまま残します。",
+        "summaryHint": "ノートのAI要約を編集します。要約がまだない場合は文字起こしから作成します。",
+        "autoHint": "保存時にプロンプトを読み取り、チャットかAI要約かを選びます。"
+      },
+      "applied": "{{name}}でAI要約を更新しました"
+    },
+    "templates": {
+      "tab": "テンプレート",
+      "managerTitle": "テンプレートとアクション",
+      "manage": "テンプレートを管理...",
+      "select": "テンプレートを選択",
+      "addTemplate": "新しいテンプレート",
+      "editTemplate": "テンプレートを編集",
+      "namePlaceholder": "テンプレート名",
+      "contextLabel": "コンテキスト",
+      "contextPlaceholder": "どのような会議で、要約では何に重点を置くべきですか？",
+      "sectionsLabel": "セクション",
+      "addSection": "セクションを追加",
+      "sectionHeadingPlaceholder": "セクションの見出し",
+      "sectionInstructionPlaceholder": "このセクションに何を書きますか？",
+      "moveSectionUp": "セクションを上に移動",
+      "moveSectionDown": "セクションを下に移動",
+      "removeSection": "セクションを削除",
+      "noSectionsHint": "セクションがない場合、コンテキストが要約への指示のすべてになります。",
+      "noTemplates": "テンプレートはまだありません",
+      "emptyEditorTitle": "テンプレートを選択",
+      "emptyEditorDescription": "リストからテンプレートを選択するか、新しく作成してください"
     },
     "empty": {
       "title": "まだノートがありません",
@@ -3120,12 +3193,12 @@
         "description": "アクションは AI を使ってノートを変換します。言語モデルを設定して始めましょう。",
         "configured": "AI モデルが設定されました"
       },
-      "actions": {
-        "title": "AI アクション",
-        "description": "アクションでノートを変換できます — 文字起こしの整理、議事録の要約など。組み込みアクションを使うか、独自のアクションを作成できます。",
-        "builtInLabel": "組み込み",
-        "createTitle": "独自のアクションを作成",
-        "createDescription": "独自の AI プロンプトでカスタムアクションを定義できます。設定からいつでも編集・追加できます。",
+      "templates": {
+        "title": "テンプレートとアクション",
+        "description": "テンプレートでAI要約の形を決められます — 詳しい議事録から独自のセクションまで。アクションはノートに対して実行され、たとえばチャットでフォローアップメールを下書きできます。",
+        "builtInLabel": "あなたのテンプレート",
+        "createTitle": "独自のテンプレートを作成",
+        "createDescription": "必要な要約を説明してください。セクションや他のテンプレート、アクションは後から追加できます。",
         "created": "作成しました！"
       },
       "getStarted": "始める",
@@ -3218,9 +3291,6 @@
         }
       },
       "invite": "招待",
-      "list": {
-        "empty": "まだノートがありません"
-      },
       "author": {
         "you": "自分"
       }
@@ -3267,19 +3337,14 @@
       "examples": {
         "linkedinTrigger": "私のLinkedIn",
         "linkedinText": "linkedin.com/in/you",
-        "rewriteTrigger": "書き直しプロンプト",
-        "rewriteText": "これをより簡潔でプロフェッショナルに書き直して",
-        "introTrigger": "挨拶メール",
-        "introText": "こんにちは、今週どこかでお話しできれば嬉しいです…",
         "signoffTrigger": "署名",
         "signoffText": "よろしくお願いします。Alex · alex@example.com"
       },
       "addPlaceholder": "トリガーフレーズを追加 — 「カレンダーリンク」「署名」など"
     },
-    "emptyTitle": "辞書は空です",
+    "emptyTitle": "辞書に単語を追加しましょう",
     "emptyDescription": "{{agentName}}に正しく認識してほしい言葉を追加しましょう。名前、ツール、略語など。",
     "addFirstWord": "最初の単語を追加",
-    "importList": "リストをインポート",
     "agentDefault": "デフォルトで追加済み"
   },
   "referral": {
@@ -3510,8 +3575,9 @@
     "newChat": "新しいチャット",
     "search": "会話を検索...",
     "archived": "アーカイブ済み",
-    "noConversations": "最初の会話を始めましょう",
-    "selectChat": "会話を選択するか、新しく始めてください",
+    "noConversations": "チャットはまだありません",
+    "noConversationsDescription": "アシスタントとのチャットはここに表示されます。",
+    "loadFailed": "チャットを読み込めませんでした",
     "noResults": "該当する会話がありません",
     "today": "今日",
     "yesterday": "昨日",
@@ -3526,7 +3592,12 @@
     "searchChats": "チャットを検索",
     "searchTitle": "会話を検索",
     "searchDescription": "すべての会話を検索",
-    "newChatEmpty": "ノートや文字起こし、その他なんでも聞いてください"
+    "inputPlaceholder": "何でも聞いてください...",
+    "starters": {
+      "todos": "最近のTo Doを一覧にして",
+      "meeting": "次の会議に備えさせて",
+      "sharedNotes": "共有ノートのハイライトを見せて"
+    }
   },
   "support": {
     "documentation": "ドキュメント",
@@ -3675,7 +3746,8 @@
       "thinking": "考え中...",
       "typeMessage": "メッセージを入力...",
       "send": "送信",
-      "voiceDraftStreamingOnly": "現在の文字起こしプロバイダーはライブ音声入力のみに対応しているため、音声入力は利用できません。設定 → 音声テキスト変換 で別のプロバイダーを選択してください。"
+      "voiceDraftStreamingOnly": "現在の文字起こしプロバイダーはライブ音声入力のみに対応しているため、音声入力は利用できません。設定 → 音声テキスト変換 で別のプロバイダーを選択してください。",
+      "commands": "コマンド"
     },
     "tools": {
       "search_notesName": "ノートを検索",
@@ -4336,12 +4408,14 @@
     "tomorrow": "明日"
   },
   "upcoming": {
-    "title": "今後の予定",
     "now": "進行中",
     "untitledEvent": "無題のイベント",
     "joinAndTranscribe": "参加して文字起こし",
     "takeNotes": "メモを取る",
-    "noEventsToday": "今日の予定はありません",
+    "noEventsToday": "今日の会議はもうありません",
+    "emptyDayDescription": "そろそろ芝生に触れる時間です",
+    "touchGrass": "芝生に触れる",
+    "touchGrassLabel": "芝生です。ポインターか矢印キーでなでてみてください。Esc キーで戻ります。",
     "noUpcomingEvents": "今後の予定はありません",
     "moreCalendarsHint": "他のカレンダーも連携しますか？",
     "connectHere": "ここから連携",
@@ -4523,15 +4597,17 @@
     }
   },
   "embeddedChat": {
-    "askPlaceholder": "何でも聞いてください...",
-    "send": "送信",
+    "askPlaceholder": "ノートについて何でも質問",
     "title": "チャット",
     "emptyState": "このノートについて質問してください",
     "dock": "サイドバーに固定",
     "undock": "サイドバーから外す",
     "close": "チャットを閉じる",
     "newChat": "新しいチャット",
-    "conversationSelector": "会話を切り替え"
+    "conversationSelector": "会話を切り替え",
+    "history": "履歴",
+    "quickActions": "クイックアクション",
+    "generateSummary": "要約を作成"
   },
   "transcriptionPreview": {
     "label": "プレビュー",

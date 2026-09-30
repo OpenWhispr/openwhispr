@@ -8,6 +8,10 @@ import { formatRelativeTime } from "../../../utils/dateFormatting";
 import { useSpaceRoster } from "../../../hooks/useSpaceRoster";
 import { useAuth } from "../../../hooks/useAuth";
 import type { NoteItem, SpaceItem } from "../../../types/electron";
+import { Button } from "../../ui/button";
+import ThemedEmptyIllustration from "../../ui/ThemedEmptyIllustration";
+import notesEmptyLight from "../../../assets/empty-states/notes-empty-light.svg";
+import notesEmptyDark from "../../../assets/empty-states/notes-empty-dark.svg";
 
 interface OverviewNoteListProps {
   notes: NoteItem[];
@@ -34,25 +38,27 @@ export function OverviewNoteList({
 
   if (notes.length === 0) {
     return (
-      <div className="flex flex-col items-center py-8">
-        <p className="text-xs text-foreground/45 dark:text-foreground/45 mb-3">
-          {t("notes.overview.list.empty")}
+      <div className="flex min-h-80 flex-col items-center justify-center px-4 py-8 text-center">
+        <ThemedEmptyIllustration
+          light={notesEmptyLight}
+          dark={notesEmptyDark}
+          width={327}
+          height={117}
+          className="[mask-image:linear-gradient(to_right,transparent,black_20%,black_80%,transparent)]"
+        />
+        <h2 className="mt-6 text-lg font-semibold text-foreground">{t("notes.empty.title")}</h2>
+        <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+          {t("notes.empty.description")}
         </p>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onNewNote}
-            className="flex items-center gap-1.5 px-4 h-7 rounded-md bg-primary/8 dark:bg-primary/10 border border-primary/12 dark:border-primary/15 text-xs font-medium text-primary/70 hover:bg-primary/12 hover:text-primary hover:border-primary/20 transition-colors"
-          >
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+          <Button onClick={onNewNote} className="px-5 font-medium">
             <Plus size={11} />
             {t("notes.empty.createNote")}
-          </button>
+          </Button>
           {onAddExisting && (
-            <button
-              onClick={onAddExisting}
-              className="flex items-center gap-1.5 px-4 h-7 rounded-md border border-foreground/8 dark:border-white/10 text-xs text-foreground/45 hover:text-foreground/60 hover:border-foreground/15 hover:bg-foreground/3 dark:hover:bg-white/3 transition-colors"
-            >
+            <Button variant="outline" onClick={onAddExisting}>
               {t("notes.addToFolder.addExisting")}
-            </button>
+            </Button>
           )}
         </div>
       </div>

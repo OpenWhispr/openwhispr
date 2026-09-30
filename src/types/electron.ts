@@ -331,6 +331,8 @@ export interface NoteItem {
   content: string;
   enhanced_content: string | null;
   enhancement_prompt: string | null;
+  /** The client_id of the template that produced enhanced_content. */
+  enhancement_template_id: string | null;
   enhanced_at_content_hash: string | null;
   note_type: "personal" | "meeting" | "upload";
   source_file: string | null;
@@ -379,6 +381,7 @@ export type NotePushSnapshot = Pick<
   | "content"
   | "enhanced_content"
   | "enhancement_prompt"
+  | "enhancement_template_id"
   | "enhanced_at_content_hash"
   | "note_type"
   | "source_file"
@@ -699,17 +702,39 @@ export interface NewWorkspaceApiKey extends WorkspaceApiKey {
   key: string;
 }
 
+export interface TemplateSection {
+  heading: string;
+  instruction: string;
+}
+
+/** A template writes the AI summary; an action edits it or answers in the note chat. */
+export type ActionKind = "template" | "action";
+export type ActionOutput = "summary" | "chat";
+
 export interface ActionItem {
   id: number;
+  /** Stable across devices: a built-in's translation key, otherwise a UUID. */
+  client_id: string;
+  kind: ActionKind;
   name: string;
   description: string;
+  /** A template's context, or an action's instructions. */
   prompt: string;
+  sections: TemplateSection[] | null;
+  output: ActionOutput | null;
   icon: string;
   is_builtin: number;
   sort_order: number;
   translation_key: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** An actions row as sync reads it, tombstones included (getActions hides them). */
+export interface NoteActionSyncRow extends ActionItem {
+  cloud_id: string | null;
+  sync_status: "synced" | "pending";
+  deleted_at: string | null;
 }
 
 export interface GpuDevice {
@@ -1482,6 +1507,7 @@ declare global {
           content?: string;
           enhanced_content?: string | null;
           enhancement_prompt?: string | null;
+          enhancement_template_id?: string | null;
           enhanced_at_content_hash?: string | null;
           folder_id?: number | null;
           space_id?: number;
@@ -1634,7 +1660,8 @@ declare global {
         name: string,
         description: string,
         prompt: string,
-        icon?: string
+        icon?: string,
+        fields?: { kind?: ActionKind; sections?: TemplateSection[]; output?: ActionOutput }
       ) => Promise<{ success: boolean; action?: ActionItem; error?: string }>;
       updateAction: (
         id: number,
@@ -1644,6 +1671,8 @@ declare global {
           prompt?: string;
           icon?: string;
           sort_order?: number;
+          sections?: TemplateSection[];
+          output?: ActionOutput;
         }
       ) => Promise<{ success: boolean; action?: ActionItem; error?: string }>;
       deleteAction: (id: number) => Promise<{ success: boolean; id?: number; error?: string }>;
@@ -3447,6 +3476,21 @@ declare global {
       hardDeleteSnippet?: (id: number) => Promise<{ success: boolean; id: number }>;
       clearSnippetCloudId?: (id: number) => Promise<{ success: boolean }>;
       broadcastSnippetsUpdated?: () => Promise<{ success: boolean }>;
+
+      getPendingNoteActions?: () => Promise<NoteActionSyncRow[]>;
+      getPendingNoteActionDeletes?: () => Promise<NoteActionSyncRow[]>;
+      getNoteActionForCloudMerge?: (clientId: string) => Promise<NoteActionSyncRow | null>;
+      upsertNoteActionFromCloud?: (
+        cloudEntry: Record<string, unknown>
+      ) => Promise<NoteActionSyncRow | null>;
+      markNoteActionSynced?: (
+        id: number,
+        cloudId: string,
+        serverUpdatedAt: string,
+        snapshot: NoteActionSyncRow
+      ) => Promise<{ success: boolean; changes: number }>;
+      hardDeleteNoteAction?: (id: number) => Promise<{ success: boolean; id: number }>;
+      clearNoteActionCloudId?: (id: number) => Promise<{ success: boolean }>;
     };
 
     api?: {

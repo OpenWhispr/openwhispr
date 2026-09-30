@@ -137,6 +137,11 @@ export interface SendToAIOptions {
   attachment?: ChatImageAttachment;
   /** Agent-response selection attached to this request without changing chat history. */
   selectedContext?: AgentSelectionContext;
+  /**
+   * Sent to the model in place of this turn's visible message, which is what the
+   * chat shows and saves (a note action shows its name while its prompt is sent).
+   */
+  requestText?: string;
   /** Keeps a caret-destined voice response in the compact pill while it streams. */
   suppressResponseContent?: boolean;
   /** Asks the model for plain prose because the answer will be pasted into a plain-text app. */
@@ -422,8 +427,9 @@ export function useChatStreaming({
           }
         }
 
+        // A note action is about the note in context; other notes would only add noise.
         const [ragContext, attendeesContext] = await Promise.all([
-          buildRAGContext(userText, scope),
+          options?.requestText ? "" : buildRAGContext(userText, scope),
           connectorsOffered ? buildNoteAttendeesContext(noteMeetingRef.current) : "",
         ]);
         if (cancelled() || !mountedRef.current) return;
@@ -447,6 +453,11 @@ export function useChatStreaming({
         const history: HistoryMessage[] = allMessages
           .slice(-20)
           .map((m) => ({ role: m.role, content: m.content }));
+
+        const requestText = options?.requestText;
+        if (requestText) {
+          transformLastUserMessage(history, (message) => ({ ...message, content: requestText }));
+        }
 
         const selectedContext = options?.selectedContext;
         if (selectedContext) {

@@ -637,12 +637,12 @@
       "couldNotDeleteTitle": "Couldn't delete",
       "couldNotDeleteDescription": "This transcription may have already been removed.",
       "couldNotDeleteDescriptionGeneric": "Something went wrong. Please try again.",
-      "empty": "No transcriptions yet",
-      "emptyDescription": "Press your hotkey in any app and start talking. Every transcription is saved privately here on your device.",
-      "sectionTitle": "Transcriptions",
+      "empty": "Start your first dictation",
+      "emptyDescription": "Your dictated text will appear here.",
+      "shortcutHint": "Press {{shortcut}} and start speaking.",
       "dataRetentionDisabled": "Data retention is off. Transcriptions and audio are not saved to history.",
-      "press": "Press",
-      "toStart": "to start",
+      "welcomeBack": "Welcome Back",
+      "welcomeBackNamed": "Welcome Back, {{name}}",
       "dateGroups": {
         "today": "Today",
         "yesterday": "Yesterday"
@@ -1184,12 +1184,14 @@
     "tomorrow": "Tomorrow"
   },
   "upcoming": {
-    "title": "Coming up",
     "now": "Now",
     "untitledEvent": "Untitled Event",
     "joinAndTranscribe": "Join & transcribe",
     "takeNotes": "Take notes",
-    "noEventsToday": "No events today",
+    "noEventsToday": "No more meetings today",
+    "emptyDayDescription": "Time to touch some grass",
+    "touchGrass": "Touch Grass",
+    "touchGrassLabel": "A patch of grass. Brush it with your pointer or the arrow keys. Press Escape to go back.",
     "noUpcomingEvents": "No upcoming events",
     "moreCalendarsHint": "Want additional calendars?",
     "connectHere": "Connect them here",
@@ -3003,8 +3005,9 @@
     "newChat": "New chat",
     "search": "Search conversations...",
     "archived": "Archived",
-    "noConversations": "Start your first conversation",
-    "selectChat": "Select a conversation or start a new one",
+    "noConversations": "No chats yet",
+    "noConversationsDescription": "Your chats with Assistant will appear here.",
+    "loadFailed": "Couldn't load chats",
     "noResults": "No matching conversations",
     "today": "Today",
     "yesterday": "Yesterday",
@@ -3019,7 +3022,12 @@
     "searchChats": "Search chats",
     "searchTitle": "Search conversations",
     "searchDescription": "Search across all your conversations",
-    "newChatEmpty": "Ask about your notes, transcripts, or anything else"
+    "inputPlaceholder": "Ask anything...",
+    "starters": {
+      "todos": "List my recent to-dos",
+      "meeting": "Prepare me for my next meeting",
+      "sharedNotes": "Highlight my shared notes"
+    }
   },
   "referral": {
     "title": "Refer and earn rewards",
@@ -3107,7 +3115,7 @@
     "sidebar": {
       "newNote": "New note",
       "searchNotes": "Search notes",
-      "actions": "Actions"
+      "templatesAndActions": "Templates & Actions"
     },
     "spaces": {
       "privateSpaces": "Private notes",
@@ -3164,6 +3172,7 @@
       "undo": "Undo",
       "emptySpace": "No notes yet. Notes here are visible to everyone in {{space}}.",
       "emptyTeamHint": "Spaces shared with you will appear here.",
+      "emptyTeamTitle": "No shared spaces",
       "noteCount_one": "{{count}} note",
       "noteCount_other": "{{count}} notes",
       "accessRevoked": "You no longer have access to {{space}}",
@@ -3299,8 +3308,8 @@
       "raw": "Raw",
       "aiSummary": "AI Summary",
       "saving": "Saving",
-      "transcriptEmptyTitle": "Nothing recorded yet",
-      "transcriptEmptyDescription": "Hit record to start transcribing. Everything said shows up here as it happens.",
+      "transcriptEmptyTitle": "No transcript yet",
+      "transcriptEmptyDescription": "Start a recording and everything said will appear here.",
       "startRecording": "Start recording",
       "generateSummary": "Generate AI Summary",
       "startWriting": "Start writing...",
@@ -3491,8 +3500,8 @@
       "done": "Done",
       "chunkProgress": "Part {{step}} of {{total}}",
       "emptyReply": "The model returned an empty reply. Try again, or pick a different model.",
+      "allActions": "All actions",
       "manage": "Manage Actions...",
-      "manageTitle": "Custom Actions",
       "addAction": "New Action",
       "editAction": "Edit Action",
       "namePlaceholder": "Action name",
@@ -3506,8 +3515,6 @@
       "promptLabel": "Prompt",
       "emptyEditorTitle": "Select an action",
       "emptyEditorDescription": "Choose an action from the list or create a new one",
-      "runAction": "Run {{name}}",
-      "selectAction": "Select action",
       "builtin": {
         "generateNotes": {
           "name": "Generate Notes",
@@ -3519,15 +3526,89 @@
           "cta": "Draft a follow-up email"
         },
         "detailedNotes": {
-          "name": "Detailed Notes",
+          "name": "AI Summary",
           "description": "Accurate, comprehensive meeting notes with decisions and action items"
+        },
+        "makeTodos": {
+          "name": "Make to-dos",
+          "description": "List every to-do and its owner in the chat"
+        },
+        "createOutline": {
+          "name": "Create outline",
+          "description": "Outline the note's topics in the chat"
+        },
+        "oneOnOne": {
+          "name": "1:1",
+          "description": "Updates, feedback, growth, and next steps from a one-on-one"
+        },
+        "standUp": {
+          "name": "Stand-up",
+          "description": "Each person's progress, plans, and blockers"
+        },
+        "salesCall": {
+          "name": "Sales call",
+          "description": "Needs, objections, budget, and the decision process"
+        },
+        "userInterview": {
+          "name": "User interview",
+          "description": "Workflow, pain points, reactions, and quotes from a participant"
+        },
+        "shorten": {
+          "name": "Shorten",
+          "description": "Make the summary about half as long",
+          "cta": "Shorten the summary"
+        },
+        "addTldr": {
+          "name": "Add TL;DR",
+          "description": "Put a two- or three-sentence TL;DR at the top of the summary",
+          "cta": "Add a TL;DR"
+        },
+        "slackUpdate": {
+          "name": "Slack update",
+          "description": "Write a short team update to post in Slack",
+          "cta": "Write a Slack update"
         }
       },
       "errors": {
         "noModel": "No AI model selected. Configure one in Settings.",
         "actionFailed": "Action failed",
-        "noEndpoint": "No self-hosted server URL set. Configure one in Settings."
-      }
+        "noEndpoint": "No self-hosted server URL set. Configure one in Settings.",
+        "outputTruncated": "The AI model ran out of room before it finished, so the note was left as it was.",
+        "nothingToSummarize": "There's nothing to summarize in this note yet, so the AI summary was left as it was.",
+        "saveFailed": "Couldn't save. Check that nothing is too long and try again."
+      },
+      "tab": "Actions",
+      "output": {
+        "auto": "Auto",
+        "chat": "Chat",
+        "summary": "AI summary",
+        "chatHint": "Answers in the note's chat and leaves the AI summary as it is.",
+        "summaryHint": "Edits the note's AI summary, or writes one from the transcript if there isn't one yet.",
+        "autoHint": "Reads the prompt when you save and picks the chat or the AI summary."
+      },
+      "applied": "AI summary updated with {{name}}"
+    },
+    "templates": {
+      "tab": "Templates",
+      "managerTitle": "Templates & Actions",
+      "manage": "Manage Templates...",
+      "select": "Choose template",
+      "addTemplate": "New Template",
+      "editTemplate": "Edit Template",
+      "namePlaceholder": "Template name",
+      "contextLabel": "Context",
+      "contextPlaceholder": "What kind of meeting is this, and what should the summary focus on?",
+      "sectionsLabel": "Sections",
+      "addSection": "Add section",
+      "sectionHeadingPlaceholder": "Section heading",
+      "sectionInstructionPlaceholder": "What goes in this section?",
+      "moveSectionUp": "Move section up",
+      "moveSectionDown": "Move section down",
+      "removeSection": "Remove section",
+      "noSectionsHint": "Without sections, the context is the whole instruction for the summary.",
+      "noTemplates": "No templates yet",
+      "emptyEditorTitle": "Select a template",
+      "emptyEditorDescription": "Choose a template from the list or create a new one"
     },
     "onboarding": {
       "llm": {
@@ -3535,12 +3616,12 @@
         "description": "Actions use AI to transform your notes. Set up a language model to get started.",
         "configured": "AI model configured"
       },
-      "actions": {
-        "title": "AI-Powered Actions",
-        "description": "Actions transform your notes — clean up transcriptions, summarize meetings, and more. Use built-in actions or create your own.",
-        "builtInLabel": "Built-in",
-        "createTitle": "Create your own action",
-        "createDescription": "Define a custom action with your own AI prompt. You can always edit or add more later in settings.",
+      "templates": {
+        "title": "Templates and Actions",
+        "description": "Templates shape your AI summary, from detailed meeting notes to sections you define. Actions run on a note, like drafting a follow-up email in the chat.",
+        "builtInLabel": "Your templates",
+        "createTitle": "Create your own template",
+        "createDescription": "Describe the summary you want. You can add sections, more templates, and actions later.",
         "created": "Created!"
       },
       "getStarted": "Get Started",
@@ -3633,9 +3714,6 @@
         }
       },
       "invite": "Invite",
-      "list": {
-        "empty": "No notes here yet"
-      },
       "author": {
         "you": "You"
       }
@@ -3675,26 +3753,21 @@
       "replacementPlaceholder": "Text to insert when you say the trigger…",
       "create": "Create snippet",
       "duplicate": "A snippet with this trigger already exists",
-      "emptyTitle": "The stuff you shouldn't have to say",
+      "emptyTitle": "Stuff you shouldn't have to say",
       "emptyTitleAccent": "twice",
       "emptyDescription": "Speak a trigger word and OpenWhispr replaces it with whatever you saved — URLs, intros, sign-offs, prompts.",
       "new": "New snippet",
       "examples": {
         "linkedinTrigger": "My LinkedIn",
         "linkedinText": "linkedin.com/in/you",
-        "rewriteTrigger": "Rewrite prompt",
-        "rewriteText": "Rewrite this to be more concise and professional",
-        "introTrigger": "Intro email",
-        "introText": "Hey, would love to find some time to chat later this week…",
         "signoffTrigger": "Sign off",
         "signoffText": "Best, Alex · alex@example.com"
       },
       "addPlaceholder": "Add a trigger phrase — \"investor ask\", \"cal link\""
     },
-    "emptyTitle": "Your dictionary is empty",
+    "emptyTitle": "Add words to your dictionary",
     "emptyDescription": "Add words for {{agentName}} to always get right: names, tools, acronyms.",
     "addFirstWord": "Add your first word",
-    "importList": "Import a list",
     "agentDefault": "Added by default"
   },
   "support": {
@@ -3844,7 +3917,8 @@
       "thinking": "Thinking...",
       "typeMessage": "Type a message...",
       "send": "Send",
-      "voiceDraftStreamingOnly": "Voice input isn't available with your transcription provider: it only supports live dictation. Choose another provider in Settings → Speech to Text."
+      "voiceDraftStreamingOnly": "Voice input isn't available with your transcription provider: it only supports live dictation. Choose another provider in Settings → Speech to Text.",
+      "commands": "Commands"
     },
     "tools": {
       "search_notesName": "Search notes",
@@ -4599,15 +4673,17 @@
     "continue": "Continue"
   },
   "embeddedChat": {
-    "askPlaceholder": "Ask anything...",
-    "send": "Send",
+    "askPlaceholder": "Ask anything about your note",
     "title": "Chat",
     "emptyState": "Ask a question about this note",
     "dock": "Dock to sidebar",
     "undock": "Undock from sidebar",
     "close": "Close chat",
     "newChat": "New chat",
-    "conversationSelector": "Switch conversation"
+    "conversationSelector": "Switch conversation",
+    "history": "History",
+    "quickActions": "Quick actions",
+    "generateSummary": "Generate summary"
   },
   "transcriptionPreview": {
     "label": "Preview",

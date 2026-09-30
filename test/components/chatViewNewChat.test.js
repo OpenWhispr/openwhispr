@@ -51,8 +51,6 @@ const MOCKS = {
     }
   `,
   "/ChatMessages": `export function ChatMessages() { return null; }`,
-  "/ChatEmptyIllustration": `export function ChatEmptyIllustration() { return null; }`,
-  "/EmptyChatState": `export default function EmptyChatState() { return null; }`,
   "/ui/dialog": `export function ConfirmDialog() { return null; }`,
   "/hooks/useDialogs": `
     export function useDialogs() {
