@@ -147,6 +147,26 @@ test("a newer change to the same note retires the older Undo, which would wipe i
   assert.deepEqual(globalThis.__dismissed, ["toast-1"]);
 });
 
+test("a new run starting on the note retires its Undo, which the run may build on", async (t) => {
+  const { store } = await mountListener(t, { success: true });
+  await React.act(async () =>
+    store.useActionProcessingStore.setState({ appliedEvents: [APPLIED] })
+  );
+  await React.act(async () =>
+    store.useActionProcessingStore.setState({
+      noteStates: { 9: { status: "processing", actionName: "Shorten" } },
+    })
+  );
+  assert.deepEqual(globalThis.__dismissed, [], "a run on another note leaves it");
+
+  await React.act(async () =>
+    store.useActionProcessingStore.setState({
+      noteStates: { 4: { status: "processing", actionName: "Shorten" } },
+    })
+  );
+  assert.deepEqual(globalThis.__dismissed, ["toast-1"]);
+});
+
 test("a run with nothing to write informs, where a failed one reports an error", async (t) => {
   const { store } = await mountListener(t, { success: true });
   await React.act(async () =>

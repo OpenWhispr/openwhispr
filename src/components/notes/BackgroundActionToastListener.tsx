@@ -6,6 +6,7 @@ import {
   useActionProcessingStore,
   consumeAppliedEvents,
   consumeErrorEvents,
+  selectNoteActionState,
   type ActionAppliedEvent,
 } from "../../stores/actionProcessingStore";
 import { getActionName } from "../../stores/actionStore";
@@ -36,6 +37,19 @@ export default function BackgroundActionToastListener() {
 
   // Only a note's latest change can be undone: an older Undo would wipe out the newer run.
   const undoToastByNote = useRef(new Map<number, string>());
+
+  // A run starting on the note retires its Undo, since the run may build on what Undo would restore.
+  useEffect(
+    () =>
+      useActionProcessingStore.subscribe((state) => {
+        for (const [noteId, toastId] of undoToastByNote.current) {
+          if (selectNoteActionState(state, noteId).status !== "processing") continue;
+          dismiss(toastId);
+          undoToastByNote.current.delete(noteId);
+        }
+      }),
+    [dismiss]
+  );
 
   const offerUndo = useCallback(
     ({ noteId, action, previous }: ActionAppliedEvent) => {
