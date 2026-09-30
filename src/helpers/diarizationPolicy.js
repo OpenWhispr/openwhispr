@@ -22,7 +22,9 @@ const MIN_CLUSTER_TOTAL_SECONDS = 1;
 // starts whose 1–3 s embeddings land near neither speaker's centroid (a
 // 20-minute two-person call produced four, holding 8 % of the speech). A
 // phantom is both a sliver of the speech and made of short segments; a real
-// minor speaker holds longer turns.
+// minor speaker holds longer turns. Known cost: a real third participant with
+// under 10 % of the speech in turns averaging under 3 s looks the same and is
+// dropped too. Only their voice tells them apart, which this rule doesn't use.
 const PHANTOM_MAX_SHARE = 0.1;
 const PHANTOM_MAX_MEAN_SEGMENT_SECONDS = 3;
 // Merging two real speakers is the worse failure, so the two largest clusters
@@ -32,7 +34,9 @@ const PROTECTED_CLUSTER_COUNT = 2;
 // When clustering merges two real speakers, one cluster ends up with nearly
 // all the speech and only short-utterance phantoms beside it (94–96 % on
 // #2021's call). A dominant speaker beside someone with real turns is a
-// lecture or an interview, not a collapse.
+// lecture or an interview, not a collapse. Check the run before dropping
+// phantoms: dropping them inflates the top share, so an interviewee holding
+// 88 % beside a short-question interviewer and a 3 % phantom would cross 90 %.
 const COLLAPSED_TOP_SHARE = 0.9;
 
 function clusterThresholdForDuration(durationSeconds) {
@@ -100,6 +104,40 @@ function isCollapsedDiarization(segments) {
   );
 }
 
+// Keeps the `cap` largest clusters and relabels each extra one to the kept
+// speaker whose voice centroid it is most similar to. Folding extras into the
+// largest cluster (capSpeakerClusters) handed one person's turns to the other
+// whenever clustering split a real speaker. Clusters without a centroid still
+// fold into the largest.
+function capSpeakerClustersByVoice(segments, cap, centroids, similarity) {
+  const { clusters } = summarizeClusters(segments);
+  if (clusters.size <= cap) return segments;
+
+  const ranked = [...clusters].sort((a, b) => b[1].total - a[1].total).map(([speaker]) => speaker);
+  const kept = ranked.slice(0, cap);
+  const relabel = new Map();
+  for (const extra of ranked.slice(cap)) {
+    const voice = centroids.get(extra);
+    let target = kept[0];
+    let bestSimilarity = -Infinity;
+    if (voice) {
+      for (const speaker of kept) {
+        const keptVoice = centroids.get(speaker);
+        if (!keptVoice) continue;
+        const score = similarity(voice, keptVoice);
+        if (score > bestSimilarity) {
+          bestSimilarity = score;
+          target = speaker;
+        }
+      }
+    }
+    relabel.set(extra, target);
+  }
+  return segments.map((s) =>
+    relabel.has(s.speaker) ? { ...s, speaker: relabel.get(s.speaker) } : s
+  );
+}
+
 module.exports = {
   DEFAULT_CLUSTER_THRESHOLD,
   LONG_AUDIO_CLUSTER_THRESHOLD,
@@ -110,4 +148,5 @@ module.exports = {
   resolveClusterThreshold,
   dropNegligibleClusters,
   isCollapsedDiarization,
+  capSpeakerClustersByVoice,
 };

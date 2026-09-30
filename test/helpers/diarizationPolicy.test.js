@@ -11,6 +11,7 @@ const {
   resolveClusterThreshold,
   dropNegligibleClusters,
   isCollapsedDiarization,
+  capSpeakerClustersByVoice,
 } = require("../../src/helpers/diarizationPolicy");
 
 // 0.55 is tuned for short clean audio; on a 73-minute single-mic voice memo one
@@ -193,4 +194,139 @@ test("dropping never empties the result or touches a clean input", () => {
 
 test("minimum speaking time constant is sane", () => {
   assert.ok(MIN_CLUSTER_TOTAL_SECONDS >= 0.5 && MIN_CLUSTER_TOTAL_SECONDS <= 5);
+});
+
+// sherpa numbers clusters by first appearance, and on #2021's call the first
+// cluster (speaker_00) was a phantom. Protection must follow size, not order.
+test("the protected clusters are the largest, whatever order sherpa lists them in", () => {
+  const segments = [
+    ...cluster("speaker_00", 23, 1.72),
+    ...cluster("speaker_01", 85, 5.44),
+    ...cluster("speaker_02", 20, 1.57),
+    ...cluster("speaker_06", 79, 6.46),
+  ];
+  assert.deepEqual(speakersOf(dropNegligibleClusters(segments)), ["speaker_01", "speaker_06"]);
+});
+
+test("the 1 s floor applies to the protected second-largest cluster", () => {
+  const segments = [...cluster("speaker_0", 5, 6), ...cluster("speaker_1", 2, 0.4)];
+  assert.deepEqual(speakersOf(dropNegligibleClusters(segments)), ["speaker_0"]);
+});
+
+test("a short-segment cluster at exactly 10% of the speech is kept", () => {
+  const segments = [
+    ...cluster("speaker_0", 45, 10),
+    ...cluster("speaker_1", 45, 10),
+    ...cluster("speaker_2", 50, 2),
+  ];
+  assert.equal(speakersOf(dropNegligibleClusters(segments)).length, 3);
+});
+
+test("a small cluster is kept from a 3 s mean segment up and dropped below it", () => {
+  const withMean = (seconds, count) => [
+    ...cluster("speaker_0", 47, 10),
+    ...cluster("speaker_1", 47, 10),
+    ...cluster("speaker_2", count, seconds),
+  ];
+  assert.equal(speakersOf(dropNegligibleClusters(withMean(3, 20))).length, 3);
+  assert.equal(speakersOf(dropNegligibleClusters(withMean(4, 15))).length, 3);
+  assert.equal(speakersOf(dropNegligibleClusters(withMean(2.5, 20))).length, 2);
+});
+
+// Documented cost of the phantom rule: by duration alone, a real third
+// participant with under 10 % of the speech in short turns looks like a
+// phantom. Flip this deliberately if the rule learns to use voices.
+test("characterization: a quiet third participant in short turns is dropped", () => {
+  const segments = [
+    ...cluster("speaker_0", 60, 7.5),
+    ...cluster("speaker_1", 60, 7.5),
+    ...cluster("speaker_2", 34, 2.8),
+  ];
+  assert.deepEqual(speakersOf(dropNegligibleClusters(segments)), ["speaker_0", "speaker_1"]);
+});
+
+test("a collapsed run is found whatever order sherpa lists its clusters in", () => {
+  const segments = [...cluster("speaker_00", 35, 1.72), ...cluster("speaker_01", 165, 6.06)];
+  assert.equal(isCollapsedDiarization(segments), true);
+});
+
+test("a run is collapsed only above 90% for the largest cluster", () => {
+  const withTop = (seconds) => [
+    ...cluster("speaker_0", 1, seconds),
+    ...cluster("speaker_1", 50, 2),
+  ];
+  assert.equal(isCollapsedDiarization(withTop(900)), false);
+  assert.equal(isCollapsedDiarization(withTop(901)), true);
+});
+
+// Short turns alone don't make a collapse: someone holding 15 % of the speech
+// in quick replies is a real second speaker.
+test("a lopsided conversation in short turns on both sides is not collapsed", () => {
+  const segments = [...cluster("speaker_0", 425, 2), ...cluster("speaker_1", 75, 2)];
+  assert.equal(isCollapsedDiarization(segments), false);
+});
+
+test("a run is not collapsed while any other cluster holds real turns", () => {
+  const exactlyThree = [...cluster("speaker_0", 97, 10), ...cluster("speaker_1", 10, 3)];
+  assert.equal(isCollapsedDiarization(exactlyThree), false);
+
+  const oneRealBesidePhantom = [
+    ...cluster("speaker_0", 91, 10),
+    ...cluster("speaker_1", 10, 5),
+    ...cluster("speaker_2", 20, 2),
+  ];
+  assert.equal(isCollapsedDiarization(oneRealBesidePhantom), false);
+});
+
+const dot = (a, b) => a.reduce((sum, value, i) => sum + value * b[i], 0);
+
+test("an extra cluster is relabelled to the kept speaker it sounds like", () => {
+  const segments = [
+    ...cluster("speaker_0", 10, 10),
+    ...cluster("speaker_1", 8, 10),
+    ...cluster("speaker_2", 6, 10),
+  ];
+  const centroids = new Map([
+    ["speaker_0", [1, 0]],
+    ["speaker_1", [0, 1]],
+    ["speaker_2", [0.1, 0.9]],
+  ]);
+  const capped = capSpeakerClustersByVoice(segments, 2, centroids, dot);
+  assert.deepEqual(speakersOf(capped), ["speaker_0", "speaker_1"]);
+  assert.equal(capped.filter((s) => s.speaker === "speaker_1").length, 14);
+  assert.deepEqual(
+    capped.slice(0, 18).map((s) => s.speaker),
+    segments.slice(0, 18).map((s) => s.speaker)
+  );
+});
+
+test("an extra cluster without a usable voice folds into the largest", () => {
+  const segments = [
+    ...cluster("speaker_0", 10, 10),
+    ...cluster("speaker_1", 8, 10),
+    ...cluster("speaker_2", 6, 10),
+  ];
+  const noExtraVoice = new Map([
+    ["speaker_0", [1, 0]],
+    ["speaker_1", [0, 1]],
+  ]);
+  const capped = capSpeakerClustersByVoice(segments, 2, noExtraVoice, dot);
+  assert.equal(capped.filter((s) => s.speaker === "speaker_0").length, 16);
+
+  // A kept speaker without a voice can't be matched, so the extra goes to the
+  // closest kept speaker that has one.
+  const onlySecondVoice = new Map([
+    ["speaker_1", [0, 1]],
+    ["speaker_2", [1, 0]],
+  ]);
+  const matched = capSpeakerClustersByVoice(segments, 2, onlySecondVoice, dot);
+  assert.equal(matched.filter((s) => s.speaker === "speaker_1").length, 14);
+});
+
+test("the voice cap leaves a run within the cap untouched and can fold everything into one", () => {
+  const segments = [...cluster("speaker_0", 10, 10), ...cluster("speaker_1", 8, 10)];
+  assert.equal(capSpeakerClustersByVoice(segments, 2, new Map(), dot), segments);
+  assert.deepEqual(speakersOf(capSpeakerClustersByVoice(segments, 1, new Map(), dot)), [
+    "speaker_0",
+  ]);
 });

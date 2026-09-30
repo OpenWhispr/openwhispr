@@ -10,6 +10,8 @@ const MIN_SEGMENT_SECONDS = 1.5;
 const MIN_SEGMENT_SAMPLES = SAMPLE_RATE * MIN_SEGMENT_SECONDS;
 const MAX_EMBEDDING_SECONDS = 8;
 const MAX_EMBEDDING_SAMPLES = SAMPLE_RATE * MAX_EMBEDDING_SECONDS;
+// Same as the meeting path's per-speaker centroids.
+const CENTROID_SEGMENTS_PER_CLUSTER = 3;
 const MODEL_FILE = "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx";
 // Live meetings extract during remote speech, so this normally fires once a meeting and its
 // post-meeting diarization are done (a longer silence mid-meeting costs one reload). The
@@ -133,8 +135,44 @@ class SpeakerEmbeddings {
     if (endSec - startSec < MIN_SEGMENT_SECONDS) return null;
 
     const buf = fs.readFileSync(wavPath);
-    const { sampleRate, dataOffset } = this._parseWavHeader(buf);
+    return this._extractEmbeddingFromWav(buf, this._parseWavHeader(buf), startSec, endSec);
+  }
 
+  // One voice per diarized cluster, from its longest segments. The WAV is read
+  // once: extractEmbedding re-reads the whole file for every segment.
+  async extractClusterCentroids(wavPath, segments, { signal = null } = {}) {
+    const buf = fs.readFileSync(wavPath);
+    const header = this._parseWavHeader(buf);
+
+    const bySpeaker = new Map();
+    for (const segment of segments) {
+      if (segment.end - segment.start < MIN_SEGMENT_SECONDS) continue;
+      if (!bySpeaker.has(segment.speaker)) bySpeaker.set(segment.speaker, []);
+      bySpeaker.get(segment.speaker).push(segment);
+    }
+
+    const centroids = new Map();
+    for (const [speaker, speakerSegments] of bySpeaker) {
+      if (signal?.aborted) break;
+      const longest = speakerSegments
+        .sort((a, b) => b.end - b.start - (a.end - a.start))
+        .slice(0, CENTROID_SEGMENTS_PER_CLUSTER);
+      const embeddings = [];
+      for (const segment of longest) {
+        const embedding = await this._extractEmbeddingFromWav(
+          buf,
+          header,
+          segment.start,
+          segment.end
+        );
+        if (embedding) embeddings.push(embedding);
+      }
+      if (embeddings.length > 0) centroids.set(speaker, this.computeCentroid(embeddings));
+    }
+    return centroids;
+  }
+
+  _extractEmbeddingFromWav(buf, { sampleRate, dataOffset }, startSec, endSec) {
     const cappedSeconds = Math.min(endSec - startSec, MAX_EMBEDDING_SECONDS);
     const cappedStartSec = endSec - cappedSeconds;
     const startSample = Math.floor(cappedStartSec * sampleRate);

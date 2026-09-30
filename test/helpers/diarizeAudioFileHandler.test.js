@@ -44,6 +44,18 @@ const electronStub = {
   MessageChannelMain: class {},
 };
 
+// Voices are looked up by cluster id; tests set the centroids (or make the
+// lookup fail) per case.
+let centroidCalls = [];
+let clusterCentroids = async () => new Map();
+const speakerEmbeddingsStub = {
+  extractClusterCentroids: (...args) => {
+    centroidCalls.push(args);
+    return clusterCentroids(...args);
+  },
+  cosineSimilarity: (a, b) => a.reduce((sum, value, i) => sum + value * b[i], 0),
+};
+
 // ffmpeg is not run: the handler only needs a WAV whose size gives a duration.
 Module._load = function loadWithMocks(request, parent, isMain) {
   if (request === "electron") return electronStub;
@@ -53,10 +65,11 @@ Module._load = function loadWithMocks(request, parent, isMain) {
       convertToWav: async (_input, output) => fs.writeFileSync(output, Buffer.alloc(32000)),
     };
   }
+  if (parent?.filename === handlersModulePath && request === "./speakerEmbeddings") {
+    return speakerEmbeddingsStub;
+  }
   return originalLoad.call(this, request, parent, isMain);
 };
-
-const DiarizationManager = require("../../src/helpers/diarization.js");
 
 function anything() {
   return new Proxy(function () {}, {
@@ -86,7 +99,6 @@ test.before(() => {
         diarizeCalls.push(options);
         return diarizerOutput;
       },
-      capSpeakerClusters: DiarizationManager.prototype.capSpeakerClusters,
     },
   };
   Ctor.prototype.setupHandlers.call(
@@ -102,6 +114,8 @@ test.before(() => {
 
 test.beforeEach(() => {
   diarizeCalls = [];
+  centroidCalls = [];
+  clusterCentroids = async () => new Map();
 });
 
 test.after(() => {
@@ -133,9 +147,11 @@ test("a requested speaker count still clusters automatically", async () => {
 
   assert.equal(result.success, true);
   assert.equal(diarizeCalls.length, 1);
-  // diarize() maps a missing count to --clustering.num-clusters=-1 (auto).
-  assert.equal(diarizeCalls[0].numSpeakers ?? -1, -1);
+  // diarize() maps a missing count to --clustering.num-clusters=-1 (auto); its
+  // default doesn't replace null, which would reach sherpa as "null".
+  assert.equal(Object.hasOwn(diarizeCalls[0], "numSpeakers"), false);
   assert.deepEqual(speakersOf(result.segments), ["speaker_01", "speaker_06"]);
+  assert.equal(centroidCalls.length, 0, "voices are only read when clusters exceed the cap");
 });
 
 test("a collapsed run returns no segments, so the plain transcript is kept", async () => {
@@ -158,4 +174,63 @@ test("a requested speaker count caps the clusters automatic clustering finds", a
   const result = await handler({}, audioPath, { numSpeakers: 2 });
 
   assert.deepEqual(speakersOf(result.segments), ["speaker_0", "speaker_1"]);
+});
+
+test("an extra cluster goes to the requested speaker whose voice it matches", async () => {
+  diarizerOutput = [
+    ...cluster("speaker_0", 80, 6),
+    ...cluster("speaker_1", 60, 6),
+    ...cluster("speaker_2", 40, 6),
+  ];
+  clusterCentroids = async () =>
+    new Map([
+      ["speaker_0", [1, 0]],
+      ["speaker_1", [0, 1]],
+      ["speaker_2", [0.2, 0.8]],
+    ]);
+
+  const result = await handler({}, audioPath, { numSpeakers: 2 });
+
+  assert.equal(centroidCalls.length, 1);
+  assert.equal(result.segments.filter((s) => s.speaker === "speaker_1").length, 100);
+  assert.equal(result.segments.filter((s) => s.speaker === "speaker_0").length, 80);
+});
+
+test("extra clusters fold into the largest when voices can't be read", async () => {
+  diarizerOutput = [
+    ...cluster("speaker_0", 80, 6),
+    ...cluster("speaker_1", 60, 6),
+    ...cluster("speaker_2", 40, 6),
+  ];
+  clusterCentroids = async () => {
+    throw new Error("Speaker embedding model not found");
+  };
+
+  const result = await handler({}, audioPath, { numSpeakers: 2 });
+
+  assert.equal(result.success, true);
+  assert.equal(result.segments.filter((s) => s.speaker === "speaker_0").length, 120);
+});
+
+// Dropping the 3 % phantom first would lift the interviewee from 88 % to
+// 90.7 % of the speech and discard a correctly labelled interview.
+test("an interview with short questions keeps its labels", async () => {
+  diarizerOutput = [
+    ...cluster("speaker_0", 88, 10),
+    ...cluster("speaker_1", 36, 2.5),
+    ...cluster("speaker_2", 20, 1.5),
+  ];
+
+  const result = await handler({}, audioPath, {});
+
+  assert.deepEqual(speakersOf(result.segments), ["speaker_0", "speaker_1"]);
+});
+
+test("a request for one speaker labels one speaker instead of discarding the run", async () => {
+  diarizerOutput = [...cluster("speaker_01", 165, 6.06), ...cluster("speaker_00", 35, 1.72)];
+
+  const result = await handler({}, audioPath, { numSpeakers: 1 });
+
+  assert.equal(result.segments.length, 200);
+  assert.deepEqual(speakersOf(result.segments), ["speaker_01"]);
 });
