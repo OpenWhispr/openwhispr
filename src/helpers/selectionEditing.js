@@ -32,15 +32,16 @@ const STANDALONE_CAPTURE_CODES = new Set([
   "accessibility_unavailable",
   // Linux: keys still held past the wait block the copy, so the same holds.
   "modifiers_held",
+  // Linux: focus moved while those keys were held, so the window the command
+  // is about was never checked (a target_changed status).
+  "focus_moved",
 ]);
 
 export function getSelectionCaptureDisposition(capture) {
   if (capture?.status === "editable") return "caret";
   if (!capture || capture.status === "none") return "standalone";
   if (capture.status === "selected") return "selection";
-  if (capture.status === "unavailable" && STANDALONE_CAPTURE_CODES.has(capture.code)) {
-    return "standalone";
-  }
+  if (STANDALONE_CAPTURE_CODES.has(capture.code)) return "standalone";
   return capture.status === "target_changed" ? "changed" : "unavailable";
 }
 

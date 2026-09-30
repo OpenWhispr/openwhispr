@@ -725,9 +725,47 @@ for (const [waitedMs, focusMoved, expectCopy] of [
 
     assert.equal(copyAttempts, expectCopy ? 1 : 0);
     assert.equal(targetReads, waitedMs > 0 ? 2 : 1, "only a real wait pays for a second lookup");
-    if (!expectCopy) assert.deepEqual(result, { status: "target_changed" });
+    if (!expectCopy) assert.deepEqual(result, { status: "target_changed", code: "focus_moved" });
   });
 }
+
+// A capture that saw focus move runs the command on its own (nothing was
+// checked), but a session being revalidated has a real target to protect: the
+// selection edit or caret delivery is declined as a changed target.
+test("a Linux session revalidation declines when focus moved during the modifier wait", async () => {
+  let targetReads = 0;
+  let pastes = 0;
+  const manager = new SelectionManager({
+    clipboardManager: {
+      runClipboardOperation: (operation) => operation(),
+      isLinuxTerminalWindowClass: () => false,
+      resolveLinuxFastPasteBinary: () => "/tmp/linux-fast-paste",
+      _awaitModifierRelease: async () => ({ state: "released", waitedMs: 400 }),
+      _pasteText: async () => {
+        pastes += 1;
+        return { pasted: true };
+      },
+    },
+    textEditMonitor: {},
+    platform: "linux",
+    now: () => 1000,
+  });
+  const target = { kind: "kde-window", id: "7", windowClass: "kate" };
+  const other = { kind: "kde-window", id: "9", windowClass: "konsole" };
+  manager._getLinuxTarget = async () => (++targetReads % 2 === 0 ? other : target);
+  manager.sessions.set("edit", { kind: "selection", text: "old", target, expiresAt: 2000 });
+  manager.sessions.set("caret", { kind: "caret", target, expiresAt: 2000 });
+
+  assert.deepEqual(await manager.replaceSelectedText("edit", "new"), {
+    success: false,
+    code: "target_changed",
+  });
+  assert.deepEqual(await manager.pasteAtCapturedTarget("caret", "answer"), {
+    success: false,
+    code: "target_changed",
+  });
+  assert.equal(pastes, 0);
+});
 
 // macOS accessibility never resolves a focused element in Chromium browsers, so
 // a synthetic ⌘C is the only way to tell a real selection from an empty field.

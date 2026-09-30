@@ -466,8 +466,10 @@ class SelectionManager {
     // The checks above approved the window focused before the wait. If focus
     // moved while a key was held, the chord would reach an unchecked window,
     // and a plain Ctrl+C in a terminal interrupts whatever is running there.
+    // `focus_moved` lets a fresh capture run the command on its own; a session
+    // being revalidated still declines as a changed target.
     if (modifiers.waitedMs > 0 && !this._sameTarget(await this._getLinuxTarget(), target)) {
-      return { status: "target_changed" };
+      return { status: "target_changed", code: "focus_moved" };
     }
 
     const capture = await this._captureViaClipboard(async () => {
