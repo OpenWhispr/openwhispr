@@ -35,6 +35,13 @@ const RESTORE_DELAYS = {
   linux_kde_wayland: 1200,
 };
 
+// wl-copy forks and exits only after the compositor accepts the selection.
+// 50ms is shorter than that round trip under load, so spawnSync kills it and
+// the following X11 write lands on the wrong clipboard (issue #2220).
+// 200ms matches the other clipboard tools; the second attempt is the one
+// longer retry the issue asks for.
+const WL_COPY_TIMEOUTS_MS = [200, 500];
+
 // Window classes that identify terminal emulators, which expect
 // Ctrl+Shift+V/C instead of Ctrl+V/C. Mirrors terminal_classes in
 // resources/linux-fast-paste.c — keep the two lists in sync.
@@ -119,6 +126,28 @@ class ClipboardManager {
     return isWayland;
   }
 
+  // True only when wl-copy exits 0. A timeout throws; a non-zero status does
+  // not. Either failure is retried once before giving up. The clipboard text
+  // itself is not logged.
+  _runWlCopy(args) {
+    let lastError = null;
+    for (const timeout of WL_COPY_TIMEOUTS_MS) {
+      try {
+        const result = spawnSync("wl-copy", args, { timeout });
+        if (result.status === 0) return true;
+        lastError = `exit ${result.status}`;
+      } catch (error) {
+        lastError = error?.message || String(error);
+      }
+    }
+    debugLogger.warn(
+      "wl-copy did not update the Wayland clipboard",
+      { flags: args.slice(0, -1), error: lastError },
+      "clipboard"
+    );
+    return false;
+  }
+
   _writeClipboardWayland(text, webContents) {
     const { isKde } = getLinuxSessionInfo();
 
@@ -155,13 +184,14 @@ class ClipboardManager {
     }
 
     if (this.commandExists("wl-copy")) {
-      try {
-        const result = spawnSync("wl-copy", ["--", text], { timeout: 50 });
-        if (result.status === 0) {
-          clipboard.writeText(text);
-          return;
-        }
-      } catch {}
+      if (this._runWlCopy(["--", text])) {
+        // Native selection is set. Also mirror it for XWayland clients.
+        clipboard.writeText(text);
+      }
+      // Do not fall through. On failure, Electron's X11 clipboard write
+      // (--ozone-platform=x11) would leave the Wayland selection stale
+      // (issue #2220). On success the XWayland mirror above already ran.
+      return;
     }
 
     if (webContents && !webContents.isDestroyed()) {
@@ -174,18 +204,17 @@ class ClipboardManager {
   // PRIMARY selection (X11's "highlight to copy") is what terminals like alacritty,
   // foot, konsole, xterm, and st bind Shift+Insert to. Mirror the transcription
   // there so Shift+Insert pastes reliably regardless of which selection the
-  // terminal uses. Falls through wl-copy → xclip → xsel → Electron's selection
-  // target so we cover Wayland, X11, and XWayland setups.
+  // terminal uses. On Wayland with wl-copy installed, a failed wl-copy must not
+  // fall through to the X11 primary selection (issue #2220). Without wl-copy,
+  // fall through xclip → xsel → Electron's selection target.
   _writePrimarySelection(text) {
     if (process.platform !== "linux") return;
 
     const { isWayland } = getLinuxSessionInfo();
 
     if (isWayland && this.commandExists("wl-copy")) {
-      try {
-        const result = spawnSync("wl-copy", ["--primary", "--", text], { timeout: 50 });
-        if (result.status === 0) return;
-      } catch {}
+      this._runWlCopy(["--primary", "--", text]);
+      return;
     }
 
     if (this.commandExists("xclip")) {
