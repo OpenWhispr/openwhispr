@@ -314,6 +314,22 @@ test("hides the highlight instead of freezing it when no tab matches the selecti
   await unmount();
 });
 
+test("a typed note without a summary offers one with the default template", async (t) => {
+  const { render, latest, unmount } = await loadNoteEditor(t);
+  const ran = [];
+
+  await render(undefined, { onRunNoteAction: (action) => ran.push(action.client_id) });
+  let callout = null;
+  walk(latest(), (node) => {
+    if (!callout && "onAskSubmit" in node.props) callout = node.props.callout;
+  });
+  assert.ok(callout, "notes with no transcript still offer a summary");
+  callout.props.onClick();
+  assert.deepEqual(ran, [TEMPLATE.client_id]);
+
+  await unmount();
+});
+
 test("the summary callout makes way for the transcript selection bar", async (t) => {
   const { render, click, latest, unmount } = await loadNoteEditor(t);
   const propsWith = (key) => {

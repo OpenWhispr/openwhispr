@@ -477,7 +477,7 @@ export default function NoteEditor({
     canRunTemplate &&
     shouldOfferMeetingSummary({
       isRecording,
-      hasTranscriptSegments: hasChatSegments,
+      hasTranscriptSegments: hasNoteMaterial,
       hasSummary: !!enhancement,
       canEdit: canEditNote,
       isProcessingAction: actionProcessingState === "processing",
