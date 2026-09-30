@@ -249,6 +249,9 @@ function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEve
   const tryButtonRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef(false);
 
+  // A sync can add a meeting to today while the grass is out; the day is no longer empty.
+  if (rustle && group.items.length > 0) setRustle(null);
+
   useEffect(() => () => rustle?.dispose(), [rustle]);
 
   useEffect(() => {

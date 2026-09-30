@@ -133,6 +133,12 @@ export function ChatInput({
     focusAfterFrame();
   }, [inputText, onTextSubmit, setInputText, isBusy, focusAfterFrame]);
 
+  // The Cancel button unmounts once the reply stops, which would drop its focus to the page.
+  const handleCancel = useCallback(() => {
+    onCancel?.();
+    focusAfterFrame();
+  }, [onCancel, focusAfterFrame]);
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === "Escape" && onEscape) {
@@ -324,7 +330,7 @@ export function ChatInput({
             {isBusy && onCancel ? (
               <button
                 type="button"
-                onClick={onCancel}
+                onClick={handleCancel}
                 aria-label={t("common.cancel")}
                 title={t("common.cancel")}
                 className={cn(
@@ -355,7 +361,12 @@ export function ChatInput({
                 )}
               >
                 {variant === "assistant" || variant === "note" || variant === "sidebar" ? (
-                  <span className="flex size-8 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                  <span
+                    className={cn(
+                      "flex size-8 items-center justify-center rounded-full",
+                      inputText.trim() ? GRADIENT_CIRCLE : "bg-muted text-muted-foreground"
+                    )}
+                  >
                     <ArrowRight size={18} className="-rotate-90" />
                   </span>
                 ) : (

@@ -50,6 +50,10 @@ function installInteractiveDom(t) {
       return this.childNodes[0] ?? null;
     }
 
+    get firstElementChild() {
+      return this.childNodes.find((child) => child.nodeType === 1) ?? null;
+    }
+
     get lastChild() {
       return this.childNodes.at(-1) ?? null;
     }
