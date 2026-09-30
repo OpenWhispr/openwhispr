@@ -130,7 +130,7 @@
     },
     "@typescript-eslint/typescript-estree": {
       "minimatch": {
-        "brace-expansion": "2.1.4"
+        "brace-expansion": "2.1.7"
       }
     },
     "postcss": "8.5.28",
