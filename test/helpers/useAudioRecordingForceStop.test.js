@@ -42,6 +42,9 @@ export default class FakeAudioManager {
   shouldUseStreaming() {
     return false;
   }
+  getRecordingAudioLevel() {
+    return 0;
+  }
   isSttConfigStale() {
     return false;
   }
@@ -96,6 +99,7 @@ async function mountHarness(
   const lifecycle = [];
   const toasts = [];
   const dismissals = [];
+  let previewHides = 0;
   let forceStopListener = null;
   const noopDispose = () => () => {};
 
@@ -115,7 +119,9 @@ async function mountHarness(
         },
         dictationLifecycleStateChanged: (state) => lifecycle.push(state),
         completeDictationPreview: NOOP,
-        hideDictationPreview: NOOP,
+        hideDictationPreview: () => {
+          previewHides += 1;
+        },
         setScreenContextEnabled: NOOP,
         async writeClipboard(text) {
           clipboardWrites.push(text);
@@ -180,7 +186,17 @@ async function mountHarness(
     replacements,
     toasts,
     dismissals,
+    previewHides: () => previewHides,
     recordingStarts: () => globalThis.__forceStopStarts,
+    setRecording: async (isRecording) => {
+      await React.act(async () =>
+        globalThis.__forceStopAudioManager.callbacks.onStateChange({
+          isRecording,
+          isProcessing: false,
+          isStreaming: false,
+        })
+      );
+    },
     forceStop: async (reason) => {
       assert.ok(forceStopListener, "the hook must subscribe to dictation-force-stopped");
       await React.act(async () => forceStopListener({ reason }));
@@ -365,24 +381,45 @@ function deferredPaste() {
 }
 
 // The audio manager settles processing before the paste starts, so the pill
-// would sit idle while the modifier wait runs (up to 1.5 s). The hook keeps the
-// processing state until the paste attempt has settled.
-test("the hook stays processing until the paste attempt settles", async (t) => {
-  let finishPaste;
-  const harness = await mountHarness(t, {
-    pasteOutcome: new Promise((resolve) => {
-      finishPaste = resolve;
-    }),
-  });
+// would sit idle while the modifier wait runs (up to 1.5 s): the hook keeps the
+// pill processing until the paste attempt settles. It must not report that to
+// main, which drops dictation hotkeys while processing — the user could not
+// start the next dictation during every paste.
+test("the pill stays processing during a paste without holding back hotkeys", async (t) => {
+  const paste = deferredPaste();
+  const harness = await mountHarness(t, { pasteOutcome: paste.outcome });
 
   await harness.complete(undefined, { detach: true });
   assert.equal(harness.api.isProcessing, true);
-  assert.equal(harness.lifecycle.at(-1), "processing");
+  assert.ok(!harness.lifecycle.includes("processing"), "main keeps accepting hotkeys");
 
-  await React.act(async () => finishPaste({ pasted: true }));
+  await paste.settle({ pasted: true });
   await harness.flush();
   assert.equal(harness.api.isProcessing, false);
-  assert.equal(harness.lifecycle.at(-1), "idle");
+});
+
+// Holding Ctrl and pressing the rest of the chord again starts the next
+// dictation while the previous paste is still waiting on that Ctrl. The held-back
+// transcript stays on the clipboard, but its pill must not land on top of the new
+// recording (which dismisses it at once) or hide that recording's live preview.
+test("a paste held back after the next recording started keeps the transcript quietly", async (t) => {
+  const paste = deferredPaste();
+  const harness = await mountHarness(t, { pasteOutcome: paste.outcome });
+  await harness.complete(undefined, { detach: true });
+
+  await harness.startRecording();
+  await harness.setRecording(true);
+  assert.equal(harness.recordingStarts(), 1);
+  assert.equal(harness.api.isProcessing, false, "the new recording owns the pill");
+  const hidesBefore = harness.previewHides();
+
+  await paste.settle({ pasted: false, reason: "modifiers-held" });
+  await harness.flush();
+
+  assert.deepEqual(harness.clipboardWrites, ["held too long"]);
+  assert.deepEqual(errorToasts(harness), []);
+  assert.equal(harness.previewHides(), hidesBefore, "the live preview is left alone");
+  assert.equal(harness.lifecycle.at(-1), "recording");
 });
 
 // Retry shows no progress while the paste waits on held keys, so a second click
