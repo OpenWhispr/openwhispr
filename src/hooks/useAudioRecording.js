@@ -362,11 +362,11 @@ export const useAudioRecording = (toast, options = {}) => {
       onRetry,
     }) => {
       const errorGeneration = ++dictationErrorGenerationRef.current;
+      const isCurrent = () => errorGeneration === dictationErrorGenerationRef.current;
       const recoverAssistant = Boolean(audioManagerRef.current?.voiceAgentRequested);
       onDictationError?.({ recoverAssistant });
       if (code === "ACCESSIBILITY_PERMISSION_REQUIRED") {
         let settingsOpening = false;
-        const isCurrent = () => errorGeneration === dictationErrorGenerationRef.current;
         const actions = [
           {
             label: t("hooks.audioRecording.pastePermission.openSettings"),
@@ -445,12 +445,25 @@ export const useAudioRecording = (toast, options = {}) => {
         return;
       }
       const recoverableTranscript = getRecoverableTranscript(transcript);
+      // A retried paste can wait on held keys with no visible progress, so a
+      // second click is ignored until it settles, and a paste that lands after
+      // a newer pill or recording leaves that one alone.
+      let retrying = false;
+      const retry = async () => {
+        if (retrying || !isCurrent()) return;
+        retrying = true;
+        try {
+          if ((await onRetry()) && isCurrent()) dismissDictationError?.();
+        } finally {
+          retrying = false;
+        }
+      };
       const actions = [
         {
           label: t("common.retry"),
           icon: "retry",
           dismissOnClick: false,
-          onClick: onRetry ?? (() => performStartRecording(lastStartOptionsRef.current)),
+          onClick: onRetry ? retry : () => performStartRecording(lastStartOptionsRef.current),
         },
       ];
 
@@ -772,9 +785,7 @@ export const useAudioRecording = (toast, options = {}) => {
               // action on this pill is the recovery path either way.
               description: keptInClipboard ? description : descriptionClipboardFailed,
               transcript: result.rawText ?? result.text,
-              onRetry: async () => {
-                if (await pasteTranscript()) dismissDictationError?.();
-              },
+              onRetry: pasteTranscript,
             });
           };
 

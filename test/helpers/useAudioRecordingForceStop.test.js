@@ -95,6 +95,7 @@ async function mountHarness(
   const replacements = [];
   const lifecycle = [];
   const toasts = [];
+  const dismissals = [];
   let forceStopListener = null;
   const noopDispose = () => () => {};
 
@@ -160,8 +161,9 @@ async function mountHarness(
   // Stable like the app's ToastProvider callback: a new identity per render
   // would re-run the hook's mount effect on every state change.
   const pushToast = (entry) => toasts.push(entry);
+  const dismissDictationError = () => dismissals.push(toasts.length);
   function Harness() {
-    Object.assign(api, useAudioRecording(pushToast, { onDemoEvent: NOOP }));
+    Object.assign(api, useAudioRecording(pushToast, { onDemoEvent: NOOP, dismissDictationError }));
     return null;
   }
 
@@ -177,6 +179,7 @@ async function mountHarness(
     pastes: globalThis.__forceStopPastes,
     replacements,
     toasts,
+    dismissals,
     recordingStarts: () => globalThis.__forceStopStarts,
     forceStop: async (reason) => {
       assert.ok(forceStopListener, "the hook must subscribe to dictation-force-stopped");
@@ -353,6 +356,14 @@ test("retrying a force-stopped push pastes the kept transcript", async (t) => {
   assert.equal(harness.recordingStarts(), 0);
 });
 
+function deferredPaste() {
+  let settle;
+  const outcome = new Promise((resolve) => {
+    settle = resolve;
+  });
+  return { outcome, settle: (value) => React.act(async () => settle(value)) };
+}
+
 // The audio manager settles processing before the paste starts, so the pill
 // would sit idle while the modifier wait runs (up to 1.5 s). The hook keeps the
 // processing state until the paste attempt has settled.
@@ -372,6 +383,61 @@ test("the hook stays processing until the paste attempt settles", async (t) => {
   await harness.flush();
   assert.equal(harness.api.isProcessing, false);
   assert.equal(harness.lifecycle.at(-1), "idle");
+});
+
+// Retry shows no progress while the paste waits on held keys, so a second click
+// is likely; it must not queue a second paste of the same text.
+test("a double-clicked Retry pastes once", async (t) => {
+  const harness = await mountHarness(t, {
+    pasteOutcome: { pasted: false, reason: "modifiers-held" },
+  });
+  await harness.complete();
+  const [toast] = errorToasts(harness);
+
+  const paste = deferredPaste();
+  globalThis.__forceStopPasteOutcome = paste.outcome;
+  const retry = retryAction(toast);
+  const dismissalsBefore = harness.dismissals.length;
+  await React.act(async () => {
+    void retry.onClick();
+    void retry.onClick();
+  });
+  await paste.settle({ pasted: true });
+  await harness.flush();
+
+  assert.equal(harness.pastes.length, 2, "the first attempt plus one retry");
+  assert.equal(
+    harness.dismissals.length - dismissalsBefore,
+    1,
+    "the landed retry closes its pill once"
+  );
+});
+
+test("a Retry that lands after a newer pill leaves that pill alone", async (t) => {
+  const harness = await mountHarness(t, {
+    pasteOutcome: { pasted: false, reason: "modifiers-held" },
+  });
+  await harness.complete();
+  const [toast] = errorToasts(harness);
+
+  const paste = deferredPaste();
+  globalThis.__forceStopPasteOutcome = paste.outcome;
+  await React.act(async () => {
+    void retryAction(toast).onClick();
+  });
+  await harness.forceStop("timeout");
+  await harness.complete({ text: "newer", rawText: "newer" });
+  assert.equal(errorToasts(harness).length, 2, "a newer pill is showing");
+  const dismissalsBefore = harness.dismissals.length;
+
+  await paste.settle({ pasted: true });
+  await harness.flush();
+
+  assert.equal(
+    harness.dismissals.length,
+    dismissalsBefore,
+    "the stale Retry must not close the newer pill"
+  );
 });
 
 test("an ordinary dictation still pastes", async (t) => {
