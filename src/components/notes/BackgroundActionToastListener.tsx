@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "../ui/useToast";
 import { ToastActionButton } from "../ui/Toast";
@@ -34,8 +34,13 @@ export default function BackgroundActionToastListener() {
     }
   }, [errorCount, toast, t]);
 
+  // Only a note's latest change can be undone: an older Undo would wipe out the newer run.
+  const undoToastByNote = useRef(new Map<number, string>());
+
   const offerUndo = useCallback(
     ({ noteId, action, previous }: ActionAppliedEvent) => {
+      const earlier = undoToastByNote.current.get(noteId);
+      if (earlier) dismiss(earlier);
       const toastId = toast({
         title: t("notes.actions.applied", { name: getActionName(action, t) }),
         duration: UNDO_WINDOW_MS,
@@ -56,6 +61,7 @@ export default function BackgroundActionToastListener() {
           </ToastActionButton>
         ),
       });
+      undoToastByNote.current.set(noteId, toastId);
     },
     [toast, dismiss, t]
   );

@@ -109,7 +109,7 @@ test("a run that lands while the app is in the background offers Undo once the u
   assert.equal(
     store.useActionProcessingStore.getState().appliedEvents.length,
     1,
-    "the event waits in the store, so a remount keeps it"
+    "the event waits in the store until the window has focus"
   );
 
   // The window gains focus, as the user comes back to the app.
@@ -132,5 +132,17 @@ test("Undo leaves a note deleted since alone instead of bringing it back", async
 
   await React.act(async () => globalThis.__toasts[0].action.props.onClick());
   assert.deepEqual(writes, []);
+  assert.deepEqual(globalThis.__dismissed, ["toast-1"]);
+});
+
+test("a newer change to the same note retires the older Undo, which would wipe it out", async (t) => {
+  const { store } = await mountListener(t, { success: true });
+  await React.act(async () =>
+    store.useActionProcessingStore.setState({ appliedEvents: [APPLIED] })
+  );
+  await React.act(async () =>
+    store.useActionProcessingStore.setState({ appliedEvents: [APPLIED] })
+  );
+  assert.equal(globalThis.__toasts.length, 2);
   assert.deepEqual(globalThis.__dismissed, ["toast-1"]);
 });
