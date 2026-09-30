@@ -187,5 +187,10 @@ test("a chat action works from the summary when there is one, and the transcript
       /answer here in the chat as text\. Don't use a tool to draft, send or post it/,
       "one click never sends an email or posts to Slack"
     );
+    assert.match(
+      compileChatActionPrompt(action, { fromSummary }),
+      /in the language the note is written in, not the language of these instructions/,
+      "the English action prompt doesn't turn a German note's answer into English"
+    );
   }
 });
