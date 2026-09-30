@@ -3682,6 +3682,9 @@
       "email_draftName": "Bozza email",
       "find_contactName": "Trova contatto",
       "slack_send_messageName": "Messaggio Slack",
+      "linear_search_issuesName": "Cerca in Linear",
+      "linear_create_issueName": "Issue di Linear",
+      "linear_commentName": "Commento di Linear",
       "get_noteName": "Ottieni nota",
       "create_noteName": "Crea nota",
       "update_noteName": "Aggiorna nota",
@@ -3694,9 +3697,12 @@
       "update_dictionaryName": "Aggiorna dizionario",
       "update_snippetsName": "Aggiorna snippet",
       "search_notesStatus": "Ricerca nelle note...",
-      "email_draftStatus": "Apertura di una bozza email...",
+      "email_draftStatus": "Preparazione di un'email...",
       "find_contactStatus": "Ricerca contatti...",
       "slack_send_messageStatus": "Preparazione di un messaggio Slack...",
+      "linear_search_issuesStatus": "Ricerca in Linear...",
+      "linear_create_issueStatus": "Preparazione di una issue di Linear...",
+      "linear_commentStatus": "Preparazione di un commento di Linear...",
       "web_searchStatus": "Ricerca sul web...",
       "copy_to_clipboardStatus": "Copia negli appunti...",
       "get_calendar_eventsStatus": "Controllo del calendario...",
@@ -3853,7 +3859,10 @@
     "approval": {
       "headers": {
         "default": "Invia a {{destination}}",
-        "slackPost": "Pubblica su {{destination}}"
+        "slackPost": "Pubblica su {{destination}}",
+        "email": "Email a {{destination}}",
+        "issue": "Crea issue in {{destination}}",
+        "comment": "Commenta {{destination}}"
       },
       "identity": "Come {{account}}",
       "identityWithWorkspace": "Come {{account}} in {{workspace}}",
@@ -3885,13 +3894,100 @@
         "credential_save_failed": "Impossibile salvare l'accesso a Slack su questo computer. Non è stato inviato nulla. Riprova.",
         "dm_failed": "Impossibile aprire il messaggio diretto a {{destination}}. Non è stato inviato nulla.",
         "restricted": "{{destination}} è di sola lettura o limitato per te.",
-        "generic": "Qualcosa è andato storto. Non è stato inviato nulla."
+        "generic": "Qualcosa è andato storto. Non è stato inviato nulla.",
+        "gmail": {
+          "reconnect_needed": "Gmail deve essere ricollegato nelle Impostazioni.",
+          "network": "Impossibile raggiungere Gmail. Non è stato inviato nulla.",
+          "rate_limited": "Gmail è occupato. Riprova a breve.",
+          "daily_limit": "È stato raggiunto il limite di invio giornaliero di Gmail. Non è stato inviato nulla.",
+          "domain_policy": "L'amministratore Google della tua organizzazione ha bloccato questa app. Non è stato inviato nulla.",
+          "invalid_recipients": "Uno degli indirizzi non è valido. Non è stato inviato nulla.",
+          "too_many_recipients": "Troppi destinatari: al massimo {{max}}. Non è stato inviato nulla.",
+          "too_long": "L'oggetto o il messaggio è troppo lungo per Gmail. Non è stato inviato nulla.",
+          "invalid_message": "Gmail ha rifiutato l'email perché non valida. Non è stato inviato nulla.",
+          "gmail_unavailable": "L'invio con Gmail non è disponibile al momento. Non è stato inviato nulla.",
+          "refused": "Gmail si è rifiutato di inviarla. Non è stato inviato nulla.",
+          "connection_changed": "La connessione Gmail è cambiata prima dell'invio, quindi non è stato inviato nulla.",
+          "credential_save_failed": "Impossibile salvare l'accesso a Gmail su questo computer. Non è stato inviato nulla. Riprova."
+        },
+        "linear": {
+          "reconnect_needed": "Linear deve essere ricollegato nelle Impostazioni.",
+          "connection_changed": "La connessione Linear è cambiata prima dell'invio, quindi non è stato inviato nulla.",
+          "credential_save_failed": "Impossibile salvare l'accesso a Linear su questo computer. Non è stato inviato nulla. Riprova.",
+          "linear_unavailable": "Linear non è disponibile al momento. Non è stato inviato nulla.",
+          "network": "Impossibile raggiungere Linear. Non è stato inviato nulla.",
+          "rate_limited": "Linear è occupato. Riprova a breve.",
+          "not_found": "Linear non trova più il team, il progetto o la issue. Non è stato inviato nulla.",
+          "forbidden": "Il tuo account Linear non ha il permesso di farlo. Non è stato inviato nulla.",
+          "invalid_input": "Linear non ha potuto accettarlo così com'è. Non è stato inviato nulla.",
+          "too_long": "Troppo lungo per Linear. Non è stato inviato nulla.",
+          "missing_title": "La issue di Linear ha bisogno di un titolo. Non è stato inviato nulla.",
+          "missing_body": "Il commento di Linear è vuoto. Non è stato inviato nulla.",
+          "not_created": "Linear non ha creato la issue.",
+          "wrong_workspace": "Quella issue è in un altro workspace di Linear. Non è stato inviato nulla.",
+          "invalid_reference": "Non è una issue di Linear. Non è stato inviato nulla.",
+          "refused": "Linear ha rifiutato la richiesta. Non è stato inviato nulla.",
+          "unknown_action": "OpenWhispr non può farlo in Linear. Non è stato inviato nulla.",
+          "generic": "Qualcosa è andato storto. Non è stato inviato nulla a Linear."
+        }
+      },
+      "email": {
+        "from": "Da {{account}}",
+        "toLabel": "A",
+        "ccLabel": "Cc",
+        "subjectLabel": "Oggetto",
+        "bodyLabel": "Messaggio",
+        "addressHint": "Separa gli indirizzi con una virgola.",
+        "invalidAddress": "{{address}} non è un indirizzo email completo come nome@esempio.com.",
+        "invalidAddressAnnouncement": "Uno degli indirizzi non è un indirizzo email completo.",
+        "sendsTo": "Invio a {{addresses}}",
+        "missingTo": "Aggiungi almeno un indirizzo in A.",
+        "tooManyRecipients": "Un'email può andare al massimo a {{max}} indirizzi, tra A e Cc.",
+        "subjectTooLong": "L'oggetto può contenere al massimo {{max}} caratteri.",
+        "bodyTooLong": "Il messaggio è troppo lungo per Gmail. Accorcialo per inviarlo.",
+        "unknown": "Impossibile confermare l'invio. Controlla la cartella Posta inviata."
+      },
+      "openIn": {
+        "gmail": "Apri in Gmail",
+        "linear": "Apri in Linear"
+      },
+      "sendLabel": {
+        "issue": "Crea issue",
+        "comment": "Commenta"
+      },
+      "issue": {
+        "created": "{{result}} creata.",
+        "createdIn": "Issue creata in {{destination}}.",
+        "unknown": "Impossibile confermare la creazione della issue. Controlla {{destination}} prima di riprovare.",
+        "titleLabel": "Titolo",
+        "bodyLabel": "Descrizione",
+        "missingTitle": "Aggiungi un titolo.",
+        "titleTooLong": "Il titolo può contenere al massimo {{max}} caratteri.",
+        "bodyTooLong": "La descrizione può contenere al massimo {{max}} caratteri.",
+        "notes": {
+          "labels": "Etichette: {{labels}}",
+          "droppedLabels": "Non aggiunte (non presenti in {{destination}}): {{labels}}",
+          "priority": "Priorità: {{priority}}",
+          "assignee": "Assegnata a: {{assignee}}",
+          "project": "Progetto: {{project}}"
+        }
+      },
+      "comment": {
+        "posted": "Commento pubblicato su {{destination}}.",
+        "unknown": "Impossibile confermare la pubblicazione del commento. Controlla {{destination}} prima di riprovare.",
+        "bodyLabel": "Commento",
+        "missingBody": "Scrivi un commento.",
+        "bodyTooLong": "Il commento può contenere al massimo {{max}} caratteri.",
+        "notes": {
+          "targetTitle": "Su «{{title}}»"
+        }
       }
     },
     "policyOff": "La tua organizzazione ha disattivato i connettori.",
     "email": {
       "title": "Bozze email",
       "description": "L'assistente apre una bozza precompilata nella tua app di posta. La rivedi e premi Invia tu stesso.",
+      "descriptionSend": "L'assistente mostra una scheda email nella chat. Viene inviata dal tuo Gmail solo quando premi Invia.",
       "proRequired": "Passa a un piano a pagamento per far scrivere all'assistente le bozze delle email.",
       "unavailable": "Le bozze email non sono disponibili al momento.",
       "targetLabel": "Crea bozze email in",
@@ -3900,7 +3996,9 @@
         "gmail": "Gmail",
         "outlookWork": "Outlook (lavoro o scuola)",
         "outlookPersonal": "Outlook.com",
-        "mailto": "App di posta predefinita"
+        "mailto": "App di posta predefinita",
+        "gmailSend": "Invia dalla chat (Gmail)",
+        "gmailSendConnectFirst": "Invia dalla chat (Gmail) · connetti Gmail qui sotto"
       }
     },
     "slack": {
@@ -3934,15 +4032,98 @@
         "failedBody": "Torna a OpenWhispr per riprovare."
       }
     },
+    "gmail": {
+      "title": "Gmail",
+      "description": "L'assistente può inviare email dal tuo account Gmail. Non può leggere la tua posta e premi tu Invia per ogni email.",
+      "connect": "Connetti",
+      "reconnect": "Riconnetti",
+      "disconnect": "Disconnetti",
+      "connecting": "Completa la connessione nel tuo browser… Se Google indica che l'accesso è bloccato, l'amministratore Google della tua organizzazione deve consentire OpenWhispr.",
+      "connectedAs": "Connesso come {{account}}",
+      "needsReconnect": "Gmail deve essere ricollegato.",
+      "grantKept": "Disconnesso. Google Calendar usa la stessa autorizzazione Google, quindi OpenWhispr resta elencato nel tuo account Google finché non disconnetti anche Google Calendar.",
+      "proRequired": "Passa a un piano a pagamento per far inviare all'assistente le email da Gmail per te.",
+      "errors": {
+        "connect_failed": "Impossibile connettere Gmail. Riprova.",
+        "disconnect_failed": "Impossibile disconnettere Gmail. Riprova.",
+        "oauth_denied": "Gmail non è stato connesso perché l'accesso non è stato consentito.",
+        "oauth_timeout": "La connessione ha impiegato troppo tempo. Se Google ha indicato che l'accesso è bloccato, chiedi all'amministratore Google della tua organizzazione di consentire OpenWhispr. Altrimenti, riprova.",
+        "oauth_state_mismatch": "Quel link di accesso non era più valido. Riprova.",
+        "ports_busy": "Un'altra app sta usando le porte di cui OpenWhispr ha bisogno per connettersi. Chiudila e riprova.",
+        "token_exchange_failed": "Google non ha completato la connessione. Riprova.",
+        "not_configured": "Gmail non è disponibile in questa versione.",
+        "connection_changed": "Il tuo account o la connessione Gmail sono cambiati durante la connessione. Riprova.",
+        "signed_out": "Accedi a OpenWhispr per connettere Gmail.",
+        "policy_blocked": "La tua organizzazione ha disattivato i connettori.",
+        "policy_unavailable": "Non è stato possibile verificare le impostazioni della tua organizzazione. Riprova.",
+        "permission_not_granted": "Gmail non è stato connesso perché non è stato concesso il permesso di inviare email. Connetti di nuovo e lascia selezionato quel permesso.",
+        "email_not_verified": "Google non ha verificato l'indirizzo email di questo account, quindi Gmail non è stato connesso.",
+        "domain_policy": "L'amministratore Google della tua organizzazione ha bloccato questa app. Chiedigli di consentire OpenWhispr."
+      },
+      "browser": {
+        "connectedTitle": "Gmail è connesso",
+        "connectedBody": "Puoi chiudere questa scheda e tornare a OpenWhispr.",
+        "failedTitle": "Gmail non è stato connesso",
+        "failedBody": "Torna a OpenWhispr per riprovare."
+      }
+    },
+    "linear": {
+      "title": "Linear",
+      "description": "L'assistente può cercare le tue issue di Linear e creare issue e commenti per tuo conto. Approvi ogni issue e ogni commento prima che venga inviato.",
+      "connect": "Connetti",
+      "reconnect": "Riconnetti",
+      "disconnect": "Disconnetti",
+      "connecting": "Completa la connessione nel tuo browser…",
+      "connectedAs": "Connesso come {{account}} in {{workspace}}",
+      "needsReconnect": "Linear deve essere ricollegato.",
+      "proRequired": "Passa a un piano a pagamento per far lavorare l'assistente in Linear per te.",
+      "errors": {
+        "connect_failed": "Impossibile connettere Linear. Riprova.",
+        "disconnect_failed": "Impossibile disconnettere Linear. Riprova.",
+        "oauth_denied": "Linear non è stato connesso perché l'accesso non è stato consentito.",
+        "oauth_timeout": "La connessione ha impiegato troppo tempo. Riprova.",
+        "oauth_state_mismatch": "Quel link di accesso non era più valido. Riprova.",
+        "ports_busy": "Un'altra app sta usando le porte di cui OpenWhispr ha bisogno per connettersi. Chiudila e riprova.",
+        "token_exchange_failed": "Linear non ha completato la connessione. Riprova.",
+        "not_configured": "Linear non è disponibile in questa versione.",
+        "connection_changed": "Il tuo account o la connessione Linear sono cambiati durante la connessione. Riprova.",
+        "signed_out": "Accedi a OpenWhispr per connettere Linear.",
+        "policy_blocked": "La tua organizzazione ha disattivato i connettori.",
+        "policy_unavailable": "Non è stato possibile verificare le impostazioni della tua organizzazione. Riprova.",
+        "permission_not_granted": "Linear non è stato connesso perché non sono stati concessi tutti i permessi. Connetti di nuovo e consentili tutti."
+      },
+      "browser": {
+        "connectedTitle": "Linear è connesso",
+        "connectedBody": "Puoi chiudere questa scheda e tornare a OpenWhispr.",
+        "failedTitle": "Linear non è stato connesso",
+        "failedBody": "Torna a OpenWhispr per riprovare."
+      },
+      "notes": {
+        "priority": {
+          "urgent": "Priorità: Urgente",
+          "high": "Priorità: Alta",
+          "medium": "Priorità: Media",
+          "low": "Priorità: Bassa",
+          "none": "Priorità: Nessuna"
+        },
+        "assignedToYou": "Assegnata a: te"
+      }
+    },
     "recent": {
       "title": "Azioni recenti",
       "actions": {
         "email_draft": "Bozza a {{destination}}",
-        "slack_send_message": "Messaggio a {{destination}}"
+        "slack_send_message": "Messaggio a {{destination}}",
+        "gmail_send": "Email a {{destination}}",
+        "linear_create_issue": "Nuova issue in {{destination}}",
+        "linear_comment": "Commento su {{destination}}"
       },
       "unlabeledActions": {
         "email_draft": "Bozza email",
-        "slack_send_message": "Messaggio Slack"
+        "slack_send_message": "Messaggio Slack",
+        "gmail_send": "Email Gmail",
+        "linear_create_issue": "Issue di Linear",
+        "linear_comment": "Commento di Linear"
       },
       "states": {
         "pending": "In attesa",
@@ -3964,7 +4145,7 @@
       "unknown": "Non confermato. Controlla se è andato a buon fine prima di riprovare.",
       "draftUnknown": "Non confermato: la bozza per {{destination}} potrebbe non essersi aperta. Controlla prima di riprovare.",
       "contactsFound": "Contatti trovati: {{total}}",
-      "draftLimit": "Si possono aprire solo {{count}} bozze per richiesta.",
+      "draftLimit": "Si possono aprire solo {{max}} bozze per richiesta.",
       "clipboardBusy": "Non aperta: il testo di un'altra bozza è ancora negli appunti.",
       "errors": {
         "open_failed": "Impossibile aprire l'app email.",
@@ -3983,8 +4164,50 @@
         "credential_save_failed": "Impossibile salvare l'accesso a Slack su questo computer. Non è stato inviato nulla.",
         "dm_failed": "Impossibile aprire il messaggio diretto. Non è stato inviato nulla.",
         "restricted": "Quel canale è di sola lettura o limitato.",
-        "generic": "Non ha funzionato."
-      }
+        "generic": "Non ha funzionato.",
+        "gmail": {
+          "reconnect_needed": "Gmail deve essere ricollegato.",
+          "network": "Impossibile raggiungere Gmail. Non è stato inviato nulla.",
+          "rate_limited": "Gmail è occupato.",
+          "daily_limit": "Raggiunto il limite di invio giornaliero di Gmail.",
+          "domain_policy": "Bloccato dall'amministratore Google della tua organizzazione.",
+          "invalid_recipients": "Un indirizzo non è valido. Non è stato inviato nulla.",
+          "too_many_recipients": "Troppi destinatari. Non è stato inviato nulla.",
+          "too_long": "Troppo lungo per Gmail. Non è stato inviato nulla.",
+          "invalid_message": "Gmail ha rifiutato l'email. Non è stato inviato nulla.",
+          "gmail_unavailable": "L'invio con Gmail non è disponibile al momento.",
+          "refused": "Gmail si è rifiutato di inviarla.",
+          "connection_changed": "La connessione Gmail è cambiata. Non è stato inviato nulla.",
+          "credential_save_failed": "Impossibile salvare l'accesso a Gmail su questo computer. Non è stato inviato nulla."
+        },
+        "linear": {
+          "reconnect_needed": "Linear deve essere ricollegato.",
+          "connection_changed": "La connessione Linear è cambiata. Non è stato inviato nulla.",
+          "credential_save_failed": "Impossibile salvare l'accesso a Linear su questo computer.",
+          "linear_unavailable": "Linear non è disponibile al momento.",
+          "network": "Impossibile raggiungere Linear.",
+          "rate_limited": "Linear è occupato.",
+          "not_found": "Non trovato in Linear.",
+          "forbidden": "Non consentito in Linear.",
+          "invalid_input": "Linear non ha potuto accettarlo.",
+          "too_long": "Troppo lungo per Linear.",
+          "missing_title": "La issue di Linear ha bisogno di un titolo.",
+          "missing_body": "Il commento di Linear è vuoto.",
+          "not_created": "Linear non ha creato la issue.",
+          "wrong_workspace": "Quella issue è in un altro workspace di Linear.",
+          "invalid_reference": "Non è una issue di Linear.",
+          "refused": "Linear ha rifiutato la richiesta.",
+          "unknown_action": "Non disponibile in Linear.",
+          "generic": "Non ha funzionato in Linear."
+        }
+      },
+      "unknownSent": {
+        "gmail": "Impossibile confermare l'invio dell'email a {{destination}}. Controlla la cartella Posta inviata di Gmail.",
+        "linear": "Impossibile confermare che sia arrivato in Linear. Controlla {{destination}} in Linear prima di riprovare."
+      },
+      "gmailDraftLimit": "Si possono preparare solo {{max}} email per richiesta.",
+      "queryResults": "Risultati trovati: {{total}}",
+      "cardLimit": "Si possono preparare solo {{max}} schede per richiesta."
     }
   },
   "calendar": {

@@ -3682,6 +3682,9 @@
       "email_draftName": "郵件草稿",
       "find_contactName": "尋找聯絡人",
       "slack_send_messageName": "Slack 訊息",
+      "linear_search_issuesName": "搜尋 Linear",
+      "linear_create_issueName": "Linear 議題",
+      "linear_commentName": "Linear 留言",
       "get_noteName": "取得筆記",
       "create_noteName": "建立筆記",
       "update_noteName": "更新筆記",
@@ -3694,9 +3697,12 @@
       "update_dictionaryName": "更新字典",
       "update_snippetsName": "更新片段",
       "search_notesStatus": "正在搜尋筆記...",
-      "email_draftStatus": "正在開啟郵件草稿...",
+      "email_draftStatus": "正在準備郵件...",
       "find_contactStatus": "正在尋找聯絡人...",
       "slack_send_messageStatus": "正在準備 Slack 訊息...",
+      "linear_search_issuesStatus": "正在搜尋 Linear...",
+      "linear_create_issueStatus": "正在準備 Linear 議題...",
+      "linear_commentStatus": "正在準備 Linear 留言...",
       "web_searchStatus": "正在搜尋網頁...",
       "copy_to_clipboardStatus": "正在複製到剪貼簿...",
       "get_calendar_eventsStatus": "正在查看行事曆...",
@@ -3853,7 +3859,10 @@
     "approval": {
       "headers": {
         "default": "傳送至 {{destination}}",
-        "slackPost": "發佈到 {{destination}}"
+        "slackPost": "發佈到 {{destination}}",
+        "email": "寄送郵件給 {{destination}}",
+        "issue": "在 {{destination}} 中建立問題",
+        "comment": "留言於 {{destination}}"
       },
       "identity": "以 {{account}} 身分",
       "identityWithWorkspace": "以 {{account}}（{{workspace}}）身分",
@@ -3885,13 +3894,100 @@
         "credential_save_failed": "無法在這台電腦上儲存 Slack 登入資訊，未傳送任何內容。請再試一次。",
         "dm_failed": "無法開啟與 {{destination}} 的私訊，未傳送任何內容。",
         "restricted": "{{destination}} 對您是唯讀或受限的。",
-        "generic": "發生問題，未傳送任何內容。"
+        "generic": "發生問題，未傳送任何內容。",
+        "gmail": {
+          "reconnect_needed": "需要在設定中重新連接 Gmail。",
+          "network": "無法連線到 Gmail，未傳送任何內容。",
+          "rate_limited": "Gmail 忙碌中，請稍後再試。",
+          "daily_limit": "已達 Gmail 每日傳送上限，未傳送任何內容。",
+          "domain_policy": "您機構的 Google 管理員已封鎖此應用程式，未傳送任何內容。",
+          "invalid_recipients": "其中一個地址無效，未傳送任何內容。",
+          "too_many_recipients": "收件者過多（最多 {{max}} 位），未傳送任何內容。",
+          "too_long": "主旨或內文對 Gmail 來說太長，未傳送任何內容。",
+          "invalid_message": "Gmail 因格式錯誤拒絕了這封郵件，未傳送任何內容。",
+          "gmail_unavailable": "目前無法透過 Gmail 傳送，未傳送任何內容。",
+          "refused": "Gmail 拒絕傳送，未傳送任何內容。",
+          "connection_changed": "傳送前 Gmail 連線發生了變化，因此未傳送任何內容。",
+          "credential_save_failed": "無法在這台電腦上儲存 Gmail 登入資訊，未傳送任何內容。請再試一次。"
+        },
+        "linear": {
+          "reconnect_needed": "需要在設定中重新連接 Linear。",
+          "connection_changed": "傳送前 Linear 連線發生了變化，因此未傳送任何內容。",
+          "credential_save_failed": "無法在這台電腦上儲存 Linear 登入資訊，未傳送任何內容。請再試一次。",
+          "linear_unavailable": "Linear 目前無法使用，未傳送任何內容。",
+          "network": "無法連線到 Linear，未傳送任何內容。",
+          "rate_limited": "Linear 忙碌中，請稍後再試。",
+          "not_found": "Linear 找不到該團隊、專案或議題了，未傳送任何內容。",
+          "forbidden": "您的 Linear 帳戶無權執行此操作，未傳送任何內容。",
+          "invalid_input": "Linear 無法接受目前的內容，未傳送任何內容。",
+          "too_long": "對 Linear 來說太長，未傳送任何內容。",
+          "missing_title": "Linear 議題需要標題，未傳送任何內容。",
+          "missing_body": "Linear 留言為空，未傳送任何內容。",
+          "not_created": "Linear 未建立該議題。",
+          "wrong_workspace": "該議題位於另一個 Linear 工作區，未傳送任何內容。",
+          "invalid_reference": "這不是 Linear 議題，未傳送任何內容。",
+          "refused": "Linear 拒絕了請求，未傳送任何內容。",
+          "unknown_action": "OpenWhispr 無法在 Linear 中執行此操作，未傳送任何內容。",
+          "generic": "發生問題，未向 Linear 傳送任何內容。"
+        }
+      },
+      "email": {
+        "from": "寄件者：{{account}}",
+        "toLabel": "收件者",
+        "ccLabel": "副本",
+        "subjectLabel": "主旨",
+        "bodyLabel": "內文",
+        "addressHint": "多個地址請以逗號分隔。",
+        "invalidAddress": "{{address}} 不是完整的電子郵件地址（例如 name@example.com）。",
+        "invalidAddressAnnouncement": "有一個地址不是完整的電子郵件地址。",
+        "sendsTo": "傳送至 {{addresses}}",
+        "missingTo": "請在收件者中至少新增一個地址。",
+        "tooManyRecipients": "一封郵件最多可寄給 {{max}} 個地址（收件者和副本合計）。",
+        "subjectTooLong": "主旨不能超過 {{max}} 個字元。",
+        "bodyTooLong": "郵件內文過長，無法透過 Gmail 傳送。請縮短後再傳送。",
+        "unknown": "無法確認是否已傳送，請檢查「寄件備份」資料夾。"
+      },
+      "openIn": {
+        "gmail": "在 Gmail 中開啟",
+        "linear": "在 Linear 中開啟"
+      },
+      "sendLabel": {
+        "issue": "建立問題",
+        "comment": "留言"
+      },
+      "issue": {
+        "created": "已建立 {{result}}。",
+        "createdIn": "已在 {{destination}} 中建立問題。",
+        "unknown": "無法確認問題是否已建立。請先檢查 {{destination}} 再重試。",
+        "titleLabel": "標題",
+        "bodyLabel": "描述",
+        "missingTitle": "請新增標題。",
+        "titleTooLong": "標題不能超過 {{max}} 個字元。",
+        "bodyTooLong": "描述不能超過 {{max}} 個字元。",
+        "notes": {
+          "labels": "標籤：{{labels}}",
+          "droppedLabels": "未新增（{{destination}} 中不存在）：{{labels}}",
+          "priority": "優先順序：{{priority}}",
+          "assignee": "負責人：{{assignee}}",
+          "project": "專案：{{project}}"
+        }
+      },
+      "comment": {
+        "posted": "已在 {{destination}} 留言。",
+        "unknown": "無法確認留言是否已發布。請先檢查 {{destination}} 再重試。",
+        "bodyLabel": "留言",
+        "missingBody": "請輸入留言。",
+        "bodyTooLong": "留言不能超過 {{max}} 個字元。",
+        "notes": {
+          "targetTitle": "關於「{{title}}」"
+        }
       }
     },
     "policyOff": "您的組織已關閉連接器。",
     "email": {
       "title": "郵件草稿",
       "description": "助理會在您的郵件應用程式中開啟預先填寫的草稿，由您檢查並親自按下傳送。",
+      "descriptionSend": "助理會在聊天中顯示一張郵件卡片，只有在您按下傳送後才會透過您的 Gmail 寄出。",
       "proRequired": "升級到付費方案，讓助理為您草擬郵件。",
       "unavailable": "郵件草稿暫時無法使用。",
       "targetLabel": "在此撰寫郵件",
@@ -3900,7 +3996,9 @@
         "gmail": "Gmail",
         "outlookWork": "Outlook（公司或學校）",
         "outlookPersonal": "Outlook.com",
-        "mailto": "預設郵件應用程式"
+        "mailto": "預設郵件應用程式",
+        "gmailSend": "在聊天中傳送（Gmail）",
+        "gmailSendConnectFirst": "在聊天中傳送（Gmail）· 請在下方連接 Gmail"
       }
     },
     "slack": {
@@ -3934,15 +4032,98 @@
         "failedBody": "請返回 OpenWhispr 重試。"
       }
     },
+    "gmail": {
+      "title": "Gmail",
+      "description": "助理可以透過您的 Gmail 帳戶傳送郵件。它無法讀取您的郵件，每封郵件都由您親自按下傳送。",
+      "connect": "連接",
+      "reconnect": "重新連接",
+      "disconnect": "中斷連接",
+      "connecting": "請在瀏覽器中完成連接… 如果 Google 顯示存取已遭封鎖，需要您機構的 Google 管理員允許 OpenWhispr。",
+      "connectedAs": "已以 {{account}} 身分連接",
+      "needsReconnect": "需要重新連接 Gmail。",
+      "grantKept": "已中斷連線。Google 日曆使用相同的 Google 權限，因此在您也中斷 Google 日曆的連線之前，OpenWhispr 仍會顯示在您的 Google 帳戶中。",
+      "proRequired": "升級到付費方案，讓助理透過 Gmail 為您傳送郵件。",
+      "errors": {
+        "connect_failed": "無法連接 Gmail，請重試。",
+        "disconnect_failed": "無法中斷 Gmail 連接，請重試。",
+        "oauth_denied": "由於未獲得授權，Gmail 未連接。",
+        "oauth_timeout": "連接耗時過長。如果 Google 顯示存取已遭封鎖，請要求您機構的 Google 管理員允許 OpenWhispr；否則請重試。",
+        "oauth_state_mismatch": "該登入連結已過期，請重試。",
+        "ports_busy": "另一個應用程式正在使用 OpenWhispr 連接所需的連接埠。請關閉它後重試。",
+        "token_exchange_failed": "Google 未完成連接，請重試。",
+        "not_configured": "此版本中 Gmail 不可用。",
+        "connection_changed": "連接過程中您的帳戶或 Gmail 連接發生了變化，請重試。",
+        "signed_out": "請登入 OpenWhispr 以連接 Gmail。",
+        "policy_blocked": "您的組織已關閉連接器。",
+        "policy_unavailable": "無法檢查您的組織設定，請重試。",
+        "permission_not_granted": "由於未授予傳送郵件的權限，Gmail 未連接。請重新連接並保持勾選該權限。",
+        "email_not_verified": "Google 尚未驗證此帳戶的電子郵件地址，因此 Gmail 未連接。",
+        "domain_policy": "您機構的 Google 管理員已封鎖此應用程式。請他們允許 OpenWhispr。"
+      },
+      "browser": {
+        "connectedTitle": "Gmail 已連接",
+        "connectedBody": "您可以關閉此分頁並返回 OpenWhispr。",
+        "failedTitle": "Gmail 未連接",
+        "failedBody": "請返回 OpenWhispr 重試。"
+      }
+    },
+    "linear": {
+      "title": "Linear",
+      "description": "助理可以搜尋您的 Linear 議題，並以您的身分建立議題和留言。每個議題和留言傳送前都需要您核准。",
+      "connect": "連接",
+      "reconnect": "重新連接",
+      "disconnect": "中斷連接",
+      "connecting": "請在瀏覽器中完成連接…",
+      "connectedAs": "已以 {{account}} 身分連接到 {{workspace}}",
+      "needsReconnect": "需要重新連接 Linear。",
+      "proRequired": "升級到付費方案，讓助理為您在 Linear 中工作。",
+      "errors": {
+        "connect_failed": "無法連接 Linear，請重試。",
+        "disconnect_failed": "無法中斷 Linear 連接，請重試。",
+        "oauth_denied": "由於未獲得授權，Linear 未連接。",
+        "oauth_timeout": "連接耗時過長，請重試。",
+        "oauth_state_mismatch": "該登入連結已過期，請重試。",
+        "ports_busy": "另一個應用程式正在使用 OpenWhispr 連接所需的連接埠。請關閉它後重試。",
+        "token_exchange_failed": "Linear 未完成連接，請重試。",
+        "not_configured": "此版本中 Linear 不可用。",
+        "connection_changed": "連接過程中您的帳戶或 Linear 連接發生了變化，請重試。",
+        "signed_out": "請登入 OpenWhispr 以連接 Linear。",
+        "policy_blocked": "您的組織已關閉連接器。",
+        "policy_unavailable": "無法檢查您的組織設定，請重試。",
+        "permission_not_granted": "由於未授予全部權限，Linear 未連接。請重新連接並允許所有權限。"
+      },
+      "browser": {
+        "connectedTitle": "Linear 已連接",
+        "connectedBody": "您可以關閉此分頁並返回 OpenWhispr。",
+        "failedTitle": "Linear 未連接",
+        "failedBody": "請返回 OpenWhispr 重試。"
+      },
+      "notes": {
+        "priority": {
+          "urgent": "優先順序：緊急",
+          "high": "優先順序：高",
+          "medium": "優先順序：中",
+          "low": "優先順序：低",
+          "none": "優先順序：無"
+        },
+        "assignedToYou": "負責人：你"
+      }
+    },
     "recent": {
       "title": "近期操作",
       "actions": {
         "email_draft": "傳送給 {{destination}} 的草稿",
-        "slack_send_message": "傳送給 {{destination}} 的訊息"
+        "slack_send_message": "傳送給 {{destination}} 的訊息",
+        "gmail_send": "傳送給 {{destination}} 的郵件",
+        "linear_create_issue": "{{destination}} 中的新議題",
+        "linear_comment": "對 {{destination}} 的留言"
       },
       "unlabeledActions": {
         "email_draft": "郵件草稿",
-        "slack_send_message": "Slack 訊息"
+        "slack_send_message": "Slack 訊息",
+        "gmail_send": "Gmail 郵件",
+        "linear_create_issue": "Linear 議題",
+        "linear_comment": "Linear 留言"
       },
       "states": {
         "pending": "等待中",
@@ -3964,7 +4145,7 @@
       "unknown": "未確認。請先檢查是否已完成，再重試。",
       "draftUnknown": "未確認：寄給 {{destination}} 的草稿可能沒有開啟。請先檢查，再重試。",
       "contactsFound": "找到的聯絡人：{{total}}",
-      "draftLimit": "每次請求最多只能開啟 {{count}} 份草稿。",
+      "draftLimit": "每次請求最多只能開啟 {{max}} 份草稿。",
       "clipboardBusy": "未開啟：另一份草稿的文字仍在剪貼簿中。",
       "errors": {
         "open_failed": "無法開啟您的郵件應用程式。",
@@ -3983,8 +4164,50 @@
         "credential_save_failed": "無法在這台電腦上儲存 Slack 登入資訊。未傳送任何內容。",
         "dm_failed": "無法開啟私訊。未傳送任何內容。",
         "restricted": "該頻道為唯讀或受限。",
-        "generic": "操作未成功。"
-      }
+        "generic": "操作未成功。",
+        "gmail": {
+          "reconnect_needed": "需要重新連接 Gmail。",
+          "network": "無法連線到 Gmail。未傳送任何內容。",
+          "rate_limited": "Gmail 忙碌中。",
+          "daily_limit": "已達 Gmail 每日傳送上限。",
+          "domain_policy": "已被您機構的 Google 管理員封鎖。",
+          "invalid_recipients": "有地址無效。未傳送任何內容。",
+          "too_many_recipients": "收件者過多。未傳送任何內容。",
+          "too_long": "對 Gmail 來說太長。未傳送任何內容。",
+          "invalid_message": "Gmail 拒絕了這封郵件。未傳送任何內容。",
+          "gmail_unavailable": "目前無法透過 Gmail 傳送。",
+          "refused": "Gmail 拒絕傳送。",
+          "connection_changed": "Gmail 連線已變更。未傳送任何內容。",
+          "credential_save_failed": "無法在這台電腦上儲存 Gmail 登入資訊。未傳送任何內容。"
+        },
+        "linear": {
+          "reconnect_needed": "需要重新連接 Linear。",
+          "connection_changed": "Linear 連線已變更。未傳送任何內容。",
+          "credential_save_failed": "無法在這台電腦上儲存 Linear 登入資訊。",
+          "linear_unavailable": "Linear 目前無法使用。",
+          "network": "無法連線到 Linear。",
+          "rate_limited": "Linear 忙碌中。",
+          "not_found": "在 Linear 中找不到。",
+          "forbidden": "在 Linear 中無權執行。",
+          "invalid_input": "Linear 無法接受。",
+          "too_long": "對 Linear 來說太長。",
+          "missing_title": "Linear 議題需要標題。",
+          "missing_body": "Linear 留言為空。",
+          "not_created": "Linear 未建立該議題。",
+          "wrong_workspace": "該議題位於另一個 Linear 工作區。",
+          "invalid_reference": "不是 Linear 議題。",
+          "refused": "Linear 拒絕了請求。",
+          "unknown_action": "在 Linear 中無法使用。",
+          "generic": "在 Linear 中操作未成功。"
+        }
+      },
+      "unknownSent": {
+        "gmail": "無法確認寄給 {{destination}} 的郵件是否已傳送，請檢查 Gmail 的「寄件備份」資料夾。",
+        "linear": "無法確認是否已送達 Linear。重試前請先在 Linear 中檢查 {{destination}}。"
+      },
+      "gmailDraftLimit": "每次請求最多只能準備 {{max}} 封郵件。",
+      "queryResults": "找到的結果：{{total}}",
+      "cardLimit": "每次請求最多只能準備 {{max}} 張卡片。"
     }
   },
   "calendar": {

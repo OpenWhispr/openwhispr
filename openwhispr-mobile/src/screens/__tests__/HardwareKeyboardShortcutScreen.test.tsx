@@ -79,6 +79,13 @@ describe('HardwareKeyboardShortcutScreen', () => {
     await waitFor(() => expect(mockGetStatus).toHaveBeenCalled());
   });
 
+  it('suggests Option-D, which Full Keyboard Access leaves free', async () => {
+    render(<HardwareKeyboardShortcutScreen />);
+    expect(screen.getByText(/then press ⌥D \(Option-D\)\./)).toBeTruthy();
+    expect(screen.queryByText(/⌃/)).toBeNull();
+    await waitFor(() => expect(mockGetStatus).toHaveBeenCalled());
+  });
+
   it('hides the notifications step once notifications are allowed', async () => {
     render(<HardwareKeyboardShortcutScreen />);
     await waitFor(() => expect(mockGetStatus).toHaveBeenCalled());

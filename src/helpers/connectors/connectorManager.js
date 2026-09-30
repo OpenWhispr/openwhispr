@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 const { describeError } = require("./errorSummary");
 const { policyRefusal } = require("./connectorPolicy");
+const { normalizeQueryResult, queryFailed } = require("./queryResult");
 
 const CANCEL_REASONS = new Set(["cancelled_by_user", "conversation_ended", "expired"]);
 
@@ -36,16 +37,34 @@ function failedResult(result) {
 
 // Anything other than a recognized outcome may still have reached the
 // provider, so it is "unknown", never "failed".
+//
+// destinationLabel is optional: only a connector whose commit can change
+// who the receipt names (Gmail's edited To/Cc) returns one, for "sent" and
+// "unknown" only. When it's absent the receipt keeps the label prepare
+// wrote (Slack: the destination is fixed once prepared).
 function normalizeCommitResult(result) {
   switch (result?.state) {
     case "sent":
-      return { state: "sent", ...stringFields({ url: result.url }) };
+      return {
+        state: "sent",
+        // resultLabel names what the send created ("ENG-124"), for the card
+        // and the model; only a created item has one.
+        ...stringFields({
+          url: result.url,
+          destinationLabel: result.destinationLabel,
+          resultLabel: result.resultLabel,
+        }),
+      };
     case "failed":
       return failedResult(result);
     case "unknown":
       return {
         state: "unknown",
-        ...stringFields({ checkUrl: result.checkUrl, errorCode: result.errorCode }),
+        ...stringFields({
+          checkUrl: result.checkUrl,
+          errorCode: result.errorCode,
+          destinationLabel: result.destinationLabel,
+        }),
       };
     default:
       return { state: "unknown" };
@@ -116,12 +135,39 @@ function normalizePreviewNote(note) {
     : { key: note.key };
 }
 
+// A card layout's fields (an email's to, cc, subject and body). Every field
+// the card can edit must be one the action declares editable, holding a value
+// of the declared type: an undeclared one (a typo in the declaration, say)
+// would let the user change it only for Send to drop it, and a mistyped one
+// would fail only at Send. Null when there are none; false when malformed.
+function normalizePreviewFields(fields, editable) {
+  if (fields === undefined || fields === null) return null;
+  if (!fields || typeof fields !== "object" || Array.isArray(fields)) return false;
+  const entries = Object.entries(fields);
+  const valid = entries.every(
+    ([name, value]) => Object.hasOwn(editable, name) && EDIT_TYPES[editable[name]](value)
+  );
+  if (!valid) return false;
+  return entries.length > 0 ? Object.fromEntries(entries) : null;
+}
+
+// The fields an issue or comment card lays out. Fields without them would
+// drop the card to its plain layout, whose edits Send never commits.
+const LAYOUT_FIELDS = { issue: ["title", "body"], comment: ["body"] };
+
+function hasLayoutFields(verbKey, fields) {
+  const required = Object.hasOwn(LAYOUT_FIELDS, verbKey) ? LAYOUT_FIELDS[verbKey] : [];
+  return required.every((name) => isString(fields[name]));
+}
+
 // The card renders exactly this, so a preview missing a field it needs is
 // malformed rather than shown half empty.
-function normalizePreview(preview) {
+function normalizePreview(preview, editable) {
   if (!preview || typeof preview !== "object") return null;
   const { verbKey, destinationLabel, accountLabel, body } = preview;
   if (![verbKey, destinationLabel, accountLabel, body].every(isString)) return null;
+  const fields = normalizePreviewFields(preview.fields, editable);
+  if (fields === false || (fields && !hasLayoutFields(verbKey, fields))) return null;
   return {
     verbKey,
     destinationLabel,
@@ -131,6 +177,7 @@ function normalizePreview(preview) {
     ...(Array.isArray(preview.notes)
       ? { notes: preview.notes.map(normalizePreviewNote).filter(Boolean) }
       : {}),
+    ...(fields ? { fields } : {}),
   };
 }
 
@@ -139,10 +186,10 @@ function normalizePreview(preview) {
 // payload stays in main; only the fields each status defines reach the
 // renderer, so a connector can't leak anything else (such as message text)
 // through an odd result.
-function normalizePrepareResult(result) {
+function normalizePrepareResult(result, editable) {
   switch (result?.status) {
     case "ready": {
-      const preview = normalizePreview(result.preview);
+      const preview = normalizePreview(result.preview, editable);
       return preview && result.payload !== undefined
         ? { status: "ready", payload: result.payload, preview }
         : INVALID_PREPARE_RESULT;
@@ -170,6 +217,9 @@ function normalizeStatus(status) {
   const value = status && typeof status === "object" ? status : {};
   return {
     connected: value.connected === true,
+    // Only a connector that says so is unconfigured (Gmail without a Google
+    // OAuth client); its Settings row is hidden.
+    configured: value.configured !== false,
     accountLabel: isString(value.accountLabel) ? value.accountLabel : null,
     workspaceLabel: isString(value.workspaceLabel) ? value.workspaceLabel : null,
     needsReconnect: value.needsReconnect === true,
@@ -183,10 +233,44 @@ function normalizeBinding(binding) {
   return binding;
 }
 
-function sanitizeEdits(edits) {
+// What each declared editable type accepts. A "line" goes into a header
+// (an email's subject), so CR or LF would let it add headers such as Bcc.
+const EDIT_TYPES = {
+  addresses: (value) => Array.isArray(value) && value.every(isString),
+  line: (value) => isString(value) && !/[\r\n]/.test(value),
+  text: isString,
+};
+
+// Every approval action says which of its card's fields the user may edit.
+// A missing declaration, or one naming a type that doesn't exist, would drop
+// edits; it is a build fault, caught when the manager is created.
+function assertEditableTypes(connectors) {
+  for (const connector of connectors) {
+    for (const [action, spec] of Object.entries(connector.actions ?? {})) {
+      if (spec?.kind !== "approval") continue;
+      if (!spec.editable || typeof spec.editable !== "object") {
+        throw new Error(`${connector.id}.${action}: an approval action must declare editable`);
+      }
+      for (const [field, type] of Object.entries(spec.editable)) {
+        if (!Object.hasOwn(EDIT_TYPES, type)) {
+          throw new Error(`${connector.id}.${action}.${field}: unknown editable type "${type}"`);
+        }
+      }
+    }
+  }
+}
+
+// The card's edits reach the connector only as the action declares them:
+// exactly the declared fields. A declared field of the wrong type returns
+// null, so Send refuses instead of sending the prepared value in its place.
+function sanitizeEdits(edits, editable) {
+  const source = edits && typeof edits === "object" ? edits : {};
   const clean = {};
-  if (edits && typeof edits.title === "string") clean.title = edits.title;
-  if (edits && typeof edits.body === "string") clean.body = edits.body;
+  for (const [field, type] of Object.entries(editable)) {
+    if (!Object.hasOwn(source, field) || source[field] === undefined) continue;
+    if (!EDIT_TYPES[type](source[field])) return null;
+    clean[field] = source[field];
+  }
   return clean;
 }
 
@@ -198,13 +282,23 @@ const CONNECT_ERROR_CODES = new Set([
   "oauth_state_mismatch",
   "ports_busy",
   "token_exchange_failed",
+  // Gmail: the user unticked "send email" at Google's consent screen, or
+  // Google says the account's address isn't verified.
+  "permission_not_granted",
+  "email_not_verified",
+  // Gmail: a Workspace admin blocked the app, or it's restricted to another org.
+  "domain_policy",
 ]);
 
-// A revoke is best effort: nothing may hang on an unreachable provider.
+// A revoke is best effort: nothing may hang on an unreachable provider. The
+// promise's value, or null when the deadline came first.
 async function withinDeadline(promise, ms) {
   let timer;
   try {
-    await Promise.race([promise, new Promise((resolve) => (timer = setTimeout(resolve, ms)))]);
+    return await Promise.race([
+      promise,
+      new Promise((resolve) => (timer = setTimeout(() => resolve(null), ms))),
+    ]);
   } finally {
     clearTimeout(timer);
   }
@@ -225,6 +319,7 @@ function createConnectorManager({
   onStatusChanged = () => {},
   randomId = () => crypto.randomBytes(16).toString("hex"),
 }) {
+  assertEditableTypes(connectors);
   const byId = new Map(connectors.map((connector) => [connector.id, connector]));
 
   // Writes before a side effect gate it: without a durable row, a crash
@@ -308,6 +403,12 @@ function createConnectorManager({
     return Promise.all([...byId.values()].map(statusOf));
   }
 
+  // One connector's status, or null for an unknown id.
+  async function connectorStatus(connectorId) {
+    const connector = byId.get(connectorId);
+    return connector ? statusOf(connector) : null;
+  }
+
   // The sign-in in flight per account and connector. A new Connect replaces
   // it: a user who closed the browser tab would otherwise wait out the flow.
   const connecting = new Map();
@@ -324,15 +425,18 @@ function createConnectorManager({
     }
   }
 
-  async function revokeQuietly(connector, credential) {
+  // The connector's answer (Gmail: { kept: true } for a grant it left in
+  // place), or null when the revoke failed or ran out of time.
+  async function revokeQuietly(connector, credential, options) {
     try {
-      await withinDeadline(connector.revoke(credential), REVOKE_TIMEOUT_MS);
+      return await withinDeadline(connector.revoke(credential, options), REVOKE_TIMEOUT_MS);
     } catch (error) {
       logger.warn(
         "connector revoke failed",
         { connectorId: connector.id, ...describeError(error) },
         "connectors"
       );
+      return null;
     }
   }
 
@@ -353,6 +457,7 @@ function createConnectorManager({
     const startGeneration = credentials.generation(accountId, connectorId);
     try {
       let credential;
+      let replaced = null;
       try {
         credential = await connector.authorize({ signal: controller.signal });
       } catch (error) {
@@ -379,6 +484,7 @@ function createConnectorManager({
           throw Object.assign(new Error("account changed"), { code: "connection_changed" });
         }
         // A new login: approvals prepared under the old one must not send.
+        replaced = credentials.read(accountId, connectorId)?.credential ?? null;
         credentials.replace(accountId, connectorId, credential, startGeneration);
       } catch (error) {
         // Nobody will use this login, so it is revoked rather than left live.
@@ -396,6 +502,13 @@ function createConnectorManager({
       }
       invalidate(connectorId);
       await notifyStatusChanged();
+      // A login for another account is left with nothing using it, so it is
+      // revoked rather than left live. The same account's is kept: Google's
+      // revoke would end the new login's grant too. Not awaited: the new
+      // login is already saved, and Settings shouldn't wait on the old one.
+      if (replaced && connector.loginKey?.(replaced) !== connector.loginKey?.(credential)) {
+        void revokeQuietly(connector, replaced);
+      }
       const current = await statusOf(connector);
       return {
         status: "connected",
@@ -408,7 +521,9 @@ function createConnectorManager({
   }
 
   // Removing access is always allowed: no policy or plan check.
-  async function disconnect(connectorId) {
+  // `erasingDevice` (Delete account with device erase) revokes a grant the
+  // connector would otherwise keep because another login shares it.
+  async function disconnect(connectorId, { erasingDevice = false } = {}) {
     const connector = byId.get(connectorId);
     if (!connector?.revoke || !credentials) {
       return { status: "unavailable", reason: "unknown_connector" };
@@ -416,8 +531,10 @@ function createConnectorManager({
     const accountId = getAccountId();
     if (!accountId) return { status: "unavailable", reason: "signed_out" };
     const entry = credentials.read(accountId, connectorId);
+    let grantKept = false;
     if (entry) {
-      await revokeQuietly(connector, entry.credential);
+      const revoked = await revokeQuietly(connector, entry.credential, { erasingDevice });
+      grantKept = revoked?.kept === true;
       try {
         credentials.clear(accountId, connectorId, entry.generation);
       } catch (error) {
@@ -438,13 +555,36 @@ function createConnectorManager({
     }
     invalidate(connectorId);
     await notifyStatusChanged();
-    return { status: "disconnected" };
+    // Google still lists the app for that account until the other login
+    // (the calendar) is disconnected too; Settings says so.
+    return grantKept ? { status: "disconnected", grantKept: true } : { status: "disconnected" };
   }
 
-  async function disconnectAll() {
+  // In parallel, so an offline account deletion waits one revoke deadline.
+  async function disconnectAll(options) {
+    await Promise.all(
+      [...byId.values()]
+        .filter((connector) => connector.revoke)
+        .map((connector) => disconnect(connector.id, options))
+    );
+  }
+
+  // Reset app data: every login stored on this device is revoked at its
+  // provider, whichever account it belongs to and whether anyone is still
+  // signed in (the renderer signs out before the reset runs). The files are
+  // deleted right after, so nothing is cleared here. In parallel, so an
+  // offline reset waits one revoke deadline, not one per login.
+  async function revokeAllStored() {
+    if (!credentials) return;
+    const revokes = [];
     for (const connector of byId.values()) {
-      if (connector.revoke) await disconnect(connector.id);
+      if (!connector.revoke) continue;
+      for (const credential of credentials.readAllAccounts(connector.id)) {
+        revokes.push(revokeQuietly(connector, credential, { erasingDevice: true }));
+      }
+      invalidate(connector.id);
     }
+    await Promise.all(revokes);
   }
 
   async function prepare(connectorId, action, args, { policyState, accountId }) {
@@ -461,7 +601,10 @@ function createConnectorManager({
 
     let prepared;
     try {
-      prepared = normalizePrepareResult(await connector.prepare(action, args || {}, { binding }));
+      prepared = normalizePrepareResult(
+        await connector.prepare(action, args || {}, { binding }),
+        connector.actions?.[action]?.editable
+      );
     } catch (error) {
       logger.warn(
         "connector prepare threw",
@@ -515,6 +658,10 @@ function createConnectorManager({
     // overwrite the in-flight row.
     if (entry.state !== "pending") return { state: "not_sent", reason: "not_pending" };
 
+    const connector = byId.get(entry.connectorId);
+    const cleanEdits = sanitizeEdits(edits, connector.actions[entry.action]?.editable);
+    if (!cleanEdits) return withdrawPending(actionId, "invalid_edit");
+
     const refusal = policyRefusal(policyState);
     // A policy lookup that timed out or went offline says nothing about this
     // action: leave it pending so the user can press Send again.
@@ -525,7 +672,6 @@ function createConnectorManager({
     // Another account (or none) must not send what this one prepared.
     if (entry.accountId !== accountId) return withdrawPending(actionId, "account_changed");
 
-    const connector = byId.get(entry.connectorId);
     const begun = pendingActions.beginCommit(actionId, await currentBinding(connector));
     if (!begun.ok) {
       if (begun.reason === "expired" || begun.reason === "connection_changed") {
@@ -554,9 +700,7 @@ function createConnectorManager({
     let result;
     try {
       result = normalizeCommitResult(
-        await connector.commit(entry.action, entry.payload, sanitizeEdits(edits), {
-          binding: entry.binding,
-        })
+        await connector.commit(entry.action, entry.payload, cleanEdits, { binding: entry.binding })
       );
     } catch (error) {
       logger.warn(
@@ -574,6 +718,11 @@ function createConnectorManager({
         state: result.state,
         resultUrl: result.url || result.checkUrl || null,
         errorCode: result.errorCode || null,
+        // Only when the connector's commit named one (Gmail, edited
+        // recipients): the row otherwise keeps the label prepare wrote.
+        ...(typeof result.destinationLabel === "string"
+          ? { destinationLabel: result.destinationLabel }
+          : {}),
       })
     );
     logger.info(
@@ -645,6 +794,52 @@ function createConnectorManager({
     return result;
   }
 
+  // A read for the model (an issue search). It changes nothing anywhere, so
+  // there is no pending action and no receipt; it still needs the policy, an
+  // account and the bound login, since what it returns leaves the device
+  // with the model's request.
+  async function query(connectorId, action, args, { policyState, accountId }) {
+    const refusal = policyRefusal(policyState);
+    if (refusal) return { status: "unavailable", reason: refusal };
+    const resolved = resolveAction(connectorId, action, "query");
+    if (resolved.error) return { status: "unavailable", reason: resolved.error };
+    if (!accountId) return { status: "unavailable", reason: "signed_out" };
+    const { connector } = resolved;
+
+    const binding = await currentBinding(connector);
+    if (!binding) return { status: "unavailable", reason: "not_connected" };
+    // A login filed under another account must not answer for this one.
+    if (isString(binding.ownerAccountId) && binding.ownerAccountId !== accountId) {
+      return { status: "unavailable", reason: "account_changed" };
+    }
+
+    let result;
+    try {
+      result = normalizeQueryResult(await connector.query(action, args || {}, { binding }));
+    } catch (error) {
+      logger.warn(
+        "connector query threw",
+        { connectorId, action, ...describeError(error) },
+        "connectors"
+      );
+      result = queryFailed();
+    }
+    if (result.errorCode === "reconnect_needed") void notifyStatusChanged();
+    logger.info(
+      "connector query finished",
+      {
+        connectorId,
+        action,
+        status: result.status,
+        itemCount: result.status === "ok" ? result.items.length : 0,
+        truncated: result.status === "ok" && result.truncated,
+        errorCode: result.errorCode || null,
+      },
+      "connectors"
+    );
+    return result;
+  }
+
   function invalidate(connectorId) {
     const removed = pendingActions.invalidateConnector(connectorId);
     for (const actionId of removed) {
@@ -666,16 +861,19 @@ function createConnectorManager({
 
   return {
     status,
+    connectorStatus,
     prepare,
     commit,
     cancel,
     runDirect,
+    query,
     invalidate,
     recentActions,
     sweepExpired,
     connect,
     disconnect,
     disconnectAll,
+    revokeAllStored,
     notifyStatusChanged,
   };
 }

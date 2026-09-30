@@ -1,6 +1,7 @@
 {
   "platforms": ["ios"],
   "ios": {
-    "modules": ["AppGroupStorageModule"]
+    "modules": ["AppGroupStorageModule"],
+    "appDelegateSubscribers": ["AppGroupStorageAppDelegate"]
   }
 }

@@ -1,13 +1,9 @@
 import { Alert, type AlertButton } from 'react-native';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 import type { NoteAccessState, NoteShareInvitation } from '@/data/remote/noteSharingTypes';
 import { NoteShareAccessList } from '../NoteShareAccessList';
 
-const mockSearch = jest.fn();
-jest.mock('@/data/remote/noteSharingApi', () => ({
-  searchNoteAccessPrincipals: (...args: unknown[]) => mockSearch(...args),
-}));
-
+jest.mock('@react-native-menu/menu', () => require('./menuViewMock'));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 
@@ -78,17 +74,23 @@ it('shows owner, grants, and pending invitations, and forwards permitted changes
   );
   expect(screen.getAllByText('Owner')).toHaveLength(2);
   expect(screen.getByText('Person')).toBeTruthy();
-  expect(screen.getByText('Viewer · Direct')).toBeTruthy();
+  expect(screen.getByText('person@example.com')).toBeTruthy();
+  expect(screen.getByLabelText('Change access for Person').props.accessibilityValue).toEqual({
+    text: 'Viewer',
+  });
   expect(screen.getByText('pending@example.com')).toBeTruthy();
-  fireEvent.press(screen.getByLabelText('Make Person an editor'));
+  fireEvent.press(screen.getByTestId('menu-grant-1:viewer'));
+  expect(Alert.alert).not.toHaveBeenCalled();
+  expect(updateGrant).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByTestId('menu-grant-1:editor'));
   expect(updateGrant).not.toHaveBeenCalled();
   confirmAlert('Make editor');
   expect(updateGrant).toHaveBeenCalledWith(access.grants[0], 'editor');
-  fireEvent.press(screen.getByLabelText('Revoke invitation for pending@example.com'));
+  fireEvent.press(screen.getByTestId('menu-invitation:inv-1:revoke'));
   expect(revokeInvitation).not.toHaveBeenCalled();
   confirmAlert('Cancel');
   expect(revokeInvitation).not.toHaveBeenCalled();
-  fireEvent.press(screen.getByLabelText('Revoke invitation for pending@example.com'));
+  fireEvent.press(screen.getByTestId('menu-invitation:inv-1:revoke'));
   confirmAlert('Revoke');
   expect(revokeInvitation).toHaveBeenCalledWith(invitation);
 });
@@ -127,82 +129,11 @@ it('keeps inherited grants read-only and invitation actions visible beside invit
       onResendInvitation={jest.fn()}
     />,
   );
-  expect(screen.queryByLabelText('Make Person an editor')).toBeNull();
-  expect(screen.getByLabelText('Revoke invitation for pending@example.com')).toBeTruthy();
-  expect(screen.getByLabelText('Make pending@example.com an editor')).toBeTruthy();
-  expect(screen.getByLabelText('Resend invitation to pending@example.com')).toBeTruthy();
+  expect(screen.queryByLabelText('Change access for Person')).toBeNull();
+  expect(screen.getByTestId('menu-invitation:inv-1:revoke')).toBeTruthy();
+  expect(screen.getByTestId('menu-invitation:inv-1:editor')).toBeTruthy();
+  expect(screen.getByTestId('menu-invitation:inv-1:resend')).toBeTruthy();
   expect(screen.queryByText('Pending Person')).toBeNull();
-});
-
-it('searches principals and only offers grants allowed by server permissions', async () => {
-  jest.useFakeTimers();
-  mockSearch.mockResolvedValue({
-    suggestions: [
-      {
-        type: 'user',
-        id: 'user-2',
-        name: 'Jamie',
-        email: 'jamie@example.com',
-        image: null,
-        member_count: null,
-        existing_grant_id: null,
-      },
-      {
-        type: 'team',
-        id: 'team-2',
-        name: 'Engineering',
-        email: null,
-        image: null,
-        member_count: 3,
-        existing_grant_id: null,
-      },
-    ],
-  });
-  const onAddPrincipal = jest.fn();
-  const screen = render(
-    <NoteShareAccessList
-      remoteId="remote-1"
-      access={access}
-      invitations={[]}
-      busy={false}
-      onAddPrincipal={onAddPrincipal}
-      onUpdateGrant={jest.fn()}
-      onRemoveGrant={jest.fn()}
-      onRevokeInvitation={jest.fn()}
-      onResendInvitation={jest.fn()}
-    />,
-  );
-  fireEvent.changeText(screen.getByLabelText('Find people or groups'), 'jam');
-  await act(async () => {
-    jest.advanceTimersByTime(350);
-    await Promise.resolve();
-  });
-  await waitFor(() => expect(screen.getByText('Jamie')).toBeTruthy());
-  expect(screen.queryByText('Engineering')).toBeNull();
-  fireEvent.press(screen.getByText('Jamie'));
-  expect(onAddPrincipal).toHaveBeenCalledWith(expect.objectContaining({ id: 'user-2' }));
-  onAddPrincipal.mockClear();
-  screen.rerender(
-    <NoteShareAccessList
-      remoteId="remote-1"
-      access={access}
-      invitations={[]}
-      busy
-      onAddPrincipal={onAddPrincipal}
-      onUpdateGrant={jest.fn()}
-      onRemoveGrant={jest.fn()}
-      onRevokeInvitation={jest.fn()}
-      onResendInvitation={jest.fn()}
-    />,
-  );
-  fireEvent.changeText(screen.getByLabelText('Find people or groups'), 'jam');
-  await act(async () => {
-    jest.advanceTimersByTime(350);
-    await Promise.resolve();
-  });
-  fireEvent.press(screen.getByText('Jamie'));
-  expect(onAddPrincipal).not.toHaveBeenCalled();
-  jest.useRealTimers();
 });
 
 const teamGrant = {
@@ -231,13 +162,13 @@ it.each([
       />,
     );
     if (editable) {
-      expect(screen.getByText('Viewer · Team')).toBeTruthy();
-      fireEvent.press(screen.getByLabelText('Remove access for Design'));
+      expect(screen.getByText('Team')).toBeTruthy();
+      fireEvent.press(screen.getByTestId('menu-grant-team:remove'));
       expect(removeGrant).not.toHaveBeenCalled();
       confirmAlert('Remove');
       expect(removeGrant).toHaveBeenCalledWith(teamGrant);
     } else {
-      expect(screen.queryByLabelText('Remove access for Design')).toBeNull();
+      expect(screen.queryByTestId('menu-grant-team:remove')).toBeNull();
     }
   },
 );
@@ -256,7 +187,7 @@ it('marks direct access and invitations as paused while external sharing is off'
     />,
   );
   expect(screen.getByText(/paused until you share this note again/i)).toBeTruthy();
-  expect(screen.getByText(/Viewer · Direct · Paused/)).toBeTruthy();
+  expect(screen.getByText('person@example.com · Paused')).toBeTruthy();
   expect(screen.getByText(/Pending invitation · Paused/)).toBeTruthy();
 });
 
@@ -281,8 +212,8 @@ it('stops offering Resend while sharing is paused, since the email could not ope
       onResendInvitation={jest.fn()}
     />,
   );
-  expect(screen.queryByLabelText('Resend invitation to pending@example.com')).toBeNull();
-  expect(screen.getByLabelText('Revoke invitation for pending@example.com')).toBeTruthy();
+  expect(screen.queryByTestId('menu-invitation:inv-1:resend')).toBeNull();
+  expect(screen.getByTestId('menu-invitation:inv-1:revoke')).toBeTruthy();
 });
 
 it('never marks team-space membership as paused', () => {
@@ -298,29 +229,27 @@ it('never marks team-space membership as paused', () => {
       onResendInvitation={jest.fn()}
     />,
   );
-  expect(screen.getByText('Viewer · Inherited from team space')).toBeTruthy();
+  expect(screen.getByText('Inherited from team space')).toBeTruthy();
+  expect(screen.queryByLabelText('Change access for Design space')).toBeNull();
 });
 
 it('keeps only removals when the organization blocks invitations', () => {
   const screen = render(
     <NoteShareAccessList
-      remoteId="remote"
       access={access}
       invitations={[invitation]}
       canInvite={false}
       busy={false}
-      onAddPrincipal={jest.fn()}
       onUpdateGrant={jest.fn()}
       onRemoveGrant={jest.fn()}
       onRevokeInvitation={jest.fn()}
       onResendInvitation={jest.fn()}
     />,
   );
-  expect(screen.queryByLabelText('Find people or groups')).toBeNull();
-  expect(screen.queryByLabelText('Make Person an editor')).toBeNull();
-  expect(screen.queryByLabelText('Resend invitation to pending@example.com')).toBeNull();
-  expect(screen.getByLabelText('Remove access for Person')).toBeTruthy();
-  expect(screen.getByLabelText('Revoke invitation for pending@example.com')).toBeTruthy();
+  expect(screen.queryByTestId('menu-grant-1:editor')).toBeNull();
+  expect(screen.queryByTestId('menu-invitation:inv-1:resend')).toBeNull();
+  expect(screen.getByTestId('menu-grant-1:remove')).toBeTruthy();
+  expect(screen.getByTestId('menu-invitation:inv-1:revoke')).toBeTruthy();
 });
 
 it('shows an invitation permission from the invitation itself', () => {
@@ -335,10 +264,12 @@ it('shows an invitation permission from the invitation itself', () => {
       onResendInvitation={jest.fn()}
     />,
   );
-  expect(screen.getByText('Pending invitation · Editor')).toBeTruthy();
+  expect(
+    screen.getByLabelText('Change access for pending@example.com').props.accessibilityValue,
+  ).toEqual({ text: 'Editor' });
 });
 
-it('gives every action a 44pt touch target and greys it out while busy', () => {
+it('gives every menu a 44pt touch target and greys out its actions while busy', () => {
   const screen = render(
     <NoteShareAccessList
       access={access}
@@ -350,15 +281,20 @@ it('gives every action a 44pt touch target and greys it out while busy', () => {
       onResendInvitation={jest.fn()}
     />,
   );
-  for (const label of [
-    'Make Person an editor',
-    'Remove access for Person',
-    'Resend invitation to pending@example.com',
-    'Revoke invitation for pending@example.com',
+  for (const label of ['Change access for Person', 'Change access for pending@example.com']) {
+    const trigger = screen.getByLabelText(label);
+    expect(trigger.props.className).toContain('min-h-[44px]');
+    expect(trigger.props.accessibilityState).toMatchObject({ disabled: true });
+  }
+  for (const id of [
+    'grant-1:editor',
+    'grant-1:remove',
+    'invitation:inv-1:resend',
+    'invitation:inv-1:revoke',
   ]) {
-    const button = screen.getByLabelText(label);
-    expect(button.props.className).toContain('min-h-[44px]');
-    expect(button.props.accessibilityState).toMatchObject({ disabled: true });
+    expect(screen.getByTestId(`menu-${id}`).props.accessibilityState).toMatchObject({
+      disabled: true,
+    });
   }
 });
 
@@ -394,9 +330,17 @@ it('still lets a manager reduce access when the organization blocks invitations'
       onResendInvitation={jest.fn()}
     />,
   );
-  fireEvent.press(screen.getByLabelText('Change Person a viewer'));
+  expect(screen.getByTestId('menu-grant-1:editor').props.accessibilityState).toMatchObject({
+    selected: true,
+  });
+  fireEvent.press(screen.getByTestId('menu-grant-1:viewer'));
+  expect(Alert.alert).not.toHaveBeenCalled();
   expect(updateGrant).toHaveBeenCalledWith(editorGrant, 'viewer');
-  expect(screen.getByLabelText('Make pending@example.com a viewer')).toBeTruthy();
+  fireEvent.press(screen.getByTestId('menu-invitation:inv-1:viewer'));
+  expect(updateGrant).toHaveBeenLastCalledWith(
+    expect.objectContaining({ id: 'invite:inv-1' }),
+    'viewer',
+  );
 });
 
 /** VoiceOver can't focus an element inside another accessible element, so nested actions vanish. */
@@ -407,7 +351,7 @@ function insideAccessibleElement(element: RenderedElement): boolean {
   }
   return false;
 }
-it('leaves per-person actions reachable by VoiceOver', () => {
+it('leaves per-person menus reachable by VoiceOver', () => {
   const screen = render(
     <NoteShareAccessList
       access={access}
@@ -419,12 +363,23 @@ it('leaves per-person actions reachable by VoiceOver', () => {
       onResendInvitation={jest.fn()}
     />,
   );
-  for (const label of [
-    'Make Person an editor',
-    'Remove access for Person',
-    'Resend invitation to pending@example.com',
-    'Revoke invitation for pending@example.com',
-  ]) {
+  for (const label of ['Change access for Person', 'Change access for pending@example.com']) {
     expect(insideAccessibleElement(screen.getByLabelText(label))).toBe(false);
   }
+});
+
+it('gives a person without a name the initial of their email', () => {
+  const screen = render(
+    <NoteShareAccessList
+      access={{ ...access, grants: [], owner: { ...owner, name: null, email: 'sam@example.com' } }}
+      invitations={[]}
+      busy={false}
+      onUpdateGrant={jest.fn()}
+      onRemoveGrant={jest.fn()}
+      onRevokeInvitation={jest.fn()}
+      onResendInvitation={jest.fn()}
+    />,
+  );
+  expect(screen.getByText('S')).toBeTruthy();
+  expect(screen.getByText('sam@example.com')).toBeTruthy();
 });

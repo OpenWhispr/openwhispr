@@ -397,3 +397,203 @@ test("the same tool-call id on two messages gets two separate cards", async (t) 
   store.cancelApproval(keyOf(store, "call-1", "msg-a"));
   assert.equal((await first).state, "cancelled");
 });
+
+const EMAIL_FIELDS = {
+  to: ["josh@acme.test"],
+  cc: ["sam@acme.test"],
+  subject: "Q3 numbers",
+  body: "Numbers attached.",
+};
+const EMAIL_PREVIEW = {
+  verbKey: "email",
+  destinationLabel: "josh@acme.test",
+  accountLabel: "you@example.test",
+  body: EMAIL_FIELDS.body,
+  fields: EMAIL_FIELDS,
+};
+const SENT = { state: "sent", url: "https://mail.google.test/#sent/1" };
+
+// The cleanup is registered before installBrowserGlobals's own (which
+// removes window), so a test that fails before Send or Cancel never leaves a
+// card's 10-minute expiry timer holding the process open.
+async function emailCards(t, commitImpl = () => SENT) {
+  const keys = [];
+  let store;
+  t.after(() => keys.forEach((key) => store?.cancelApproval(key)));
+  const electron = fakeElectron(commitImpl);
+  installBrowserGlobals(t, { window: { electronAPI: electron.api } });
+  store = await freshStore();
+  const request = (toolCallId, preview = EMAIL_PREVIEW) => {
+    keys.push(keyOf(store, toolCallId));
+    return store.requestApproval(context(toolCallId).value, {
+      actionId: `a-${toolCallId}`,
+      connectorId: preview === EMAIL_PREVIEW ? "gmail" : "slack",
+      preview,
+    });
+  };
+  const draftOf = (toolCallId) =>
+    store.useConnectorApprovalStore.getState().entries[keyOf(store, toolCallId)].draft;
+  return { store, electron, request, draftOf, key: (toolCallId) => keyOf(store, toolCallId) };
+}
+
+test("an email card starts from the preview's fields and Send commits exactly what it shows", async (t) => {
+  const { store, electron, request, draftOf, key } = await emailCards(t);
+  const outcome = request("call-20");
+
+  assert.deepEqual(draftOf("call-20").fields, EMAIL_FIELDS);
+  assert.notEqual(draftOf("call-20").fields.to, EMAIL_FIELDS.to, "the draft owns its lists");
+
+  store.updateApprovalDraft(key("call-20"), {
+    fields: { to: ["josh@acme.test", "dana@acme.test"] },
+  });
+  store.updateApprovalDraft(key("call-20"), { fields: { subject: "Q3 numbers (final)" } });
+  const onCard = draftOf("call-20").fields;
+  await store.approveAction(key("call-20"));
+
+  const edited = {
+    to: ["josh@acme.test", "dana@acme.test"],
+    cc: ["sam@acme.test"],
+    subject: "Q3 numbers (final)",
+    body: "Numbers attached.",
+  };
+  assert.deepEqual(onCard, edited);
+  assert.deepEqual(electron.calls.commit, [{ actionId: "a-call-20", edits: edited }]);
+  assert.deepEqual(await outcome, { ...SENT, final: edited });
+  assert.deepEqual(EMAIL_FIELDS.to, ["josh@acme.test"], "the preview is untouched");
+});
+
+test("an unedited email, or one edited back to the original, reports no final fields", async (t) => {
+  const { store, electron, request, key } = await emailCards(t);
+
+  const untouched = request("call-21");
+  await store.approveAction(key("call-21"));
+  assert.deepEqual(await untouched, SENT);
+  assert.deepEqual(electron.calls.commit[0].edits, EMAIL_FIELDS);
+
+  const reverted = request("call-22");
+  store.updateApprovalDraft(key("call-22"), { fields: { to: ["dana@acme.test"] } });
+  store.updateApprovalDraft(key("call-22"), { fields: { to: ["josh@acme.test"] } });
+  await store.approveAction(key("call-22"));
+  assert.deepEqual(await reverted, SENT);
+});
+
+test("a card takes edits only to the fields it shows, in the same shape", async (t) => {
+  const { store, electron, request, draftOf, key } = await emailCards(t);
+  const outcome = request("call-23");
+
+  store.updateApprovalDraft(key("call-23"), {
+    fields: { bcc: ["evil@attacker.test"], to: "josh@acme.test", subject: ["Q3"] },
+  });
+  assert.deepEqual(draftOf("call-23").fields, EMAIL_FIELDS);
+  store.cancelApproval(key("call-23"));
+  await outcome;
+
+  // A card without fields (Slack's) ignores them and commits its text.
+  const slack = request("call-24", PREVIEW);
+  store.updateApprovalDraft(key("call-24"), { fields: { to: ["x@y.test"] } });
+  await store.approveAction(key("call-24"));
+  await slack;
+  assert.equal("fields" in draftOf("call-24"), false);
+  assert.deepEqual(electron.calls.commit.at(-1), {
+    actionId: "a-call-24",
+    edits: { body: "Hello team" },
+  });
+});
+
+test("an email card's fields are frozen once sending starts", async (t) => {
+  const { store, electron, request, draftOf, key } = await emailCards(t);
+  const outcome = request("call-25");
+
+  const sending = store.approveAction(key("call-25"));
+  store.updateApprovalDraft(key("call-25"), { fields: { to: ["late@acme.test"] } });
+  await sending;
+
+  assert.deepEqual(electron.calls.commit[0].edits, EMAIL_FIELDS);
+  assert.deepEqual(draftOf("call-25").fields, EMAIL_FIELDS);
+  assert.deepEqual(await outcome, SENT);
+});
+
+test("the recipients main reports after Send reach the card and the outcome", async (t) => {
+  let reply;
+  const { store, request, key } = await emailCards(t, () => reply);
+
+  reply = { ...SENT, destinationLabel: "dana@acme.test" };
+  const sent = request("call-26");
+  store.updateApprovalDraft(key("call-26"), { fields: { to: ["dana@acme.test"] } });
+  await store.approveAction(key("call-26"));
+  assert.equal((await sent).destinationLabel, "dana@acme.test");
+  assert.equal(
+    store.useConnectorApprovalStore.getState().entries[key("call-26")].destinationLabel,
+    "dana@acme.test"
+  );
+
+  reply = {
+    state: "unknown",
+    checkUrl: "https://mail.google.test/#sent",
+    destinationLabel: "dana@acme.test",
+  };
+  const unknown = request("call-27");
+  await store.approveAction(key("call-27"));
+  assert.deepEqual(await unknown, {
+    state: "unknown",
+    checkUrl: "https://mail.google.test/#sent",
+    destinationLabel: "dana@acme.test",
+  });
+
+  reply = { ...SENT, destinationLabel: "" };
+  const blank = request("call-28");
+  await store.approveAction(key("call-28"));
+  assert.deepEqual(await blank, SENT, "an empty label is ignored");
+});
+
+test("a failed or unknown Send still reports what the user changed on the card", async (t) => {
+  let reply;
+  const { store, request, key } = await emailCards(t, () => reply);
+
+  reply = { state: "failed", errorCode: "network", message: "offline" };
+  const failed = request("call-29");
+  store.updateApprovalDraft(key("call-29"), { fields: { cc: [], subject: "Q3 (final)" } });
+  await store.approveAction(key("call-29"));
+  assert.deepEqual(await failed, {
+    ...reply,
+    final: { ...EMAIL_FIELDS, cc: [], subject: "Q3 (final)" },
+  });
+
+  const unedited = request("call-2a");
+  await store.approveAction(key("call-2a"));
+  assert.deepEqual(await unedited, reply, "nothing changed, nothing reported");
+
+  // A card without fields reports its edited text the same way.
+  reply = { state: "unknown" };
+  const slack = request("call-2b", PREVIEW);
+  store.updateApprovalDraft(key("call-2b"), { body: "Hello team, updated" });
+  await store.approveAction(key("call-2b"));
+  assert.deepEqual(await slack, { state: "unknown", finalText: "Hello team, updated" });
+});
+
+test("a malformed commit result settles an email card as unknown, never sent", async (t) => {
+  let reply;
+  const { store, request, key } = await emailCards(t, () => reply);
+  for (const [index, raw] of [
+    { state: "bogus" },
+    { status: "sent" },
+    undefined,
+    "sent",
+  ].entries()) {
+    reply = raw;
+    const toolCallId = `call-3${index}`;
+    const outcome = request(toolCallId);
+    store.updateApprovalDraft(key(toolCallId), { fields: { subject: "Edited" } });
+    await store.approveAction(key(toolCallId));
+    // The user's edit still reaches the model, since it may have gone out.
+    assert.deepEqual(
+      await outcome,
+      { state: "unknown", final: { ...EMAIL_FIELDS, subject: "Edited" } },
+      JSON.stringify(raw)
+    );
+    assert.equal(
+      store.useConnectorApprovalStore.getState().entries[key(toolCallId)].state,
+      "unknown"
+    );
+  }
+});

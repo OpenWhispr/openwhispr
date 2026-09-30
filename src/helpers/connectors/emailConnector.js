@@ -125,4 +125,12 @@ function createEmailConnector({
   };
 }
 
-module.exports = { createEmailConnector, hasLinuxMailtoHandler };
+// Built by createConnectors.js from the app's shared dependencies.
+function buildEmailConnector(deps) {
+  return createEmailConnector({
+    openExternal: deps.openExternal,
+    writeClipboard: deps.writeClipboard,
+  });
+}
+
+module.exports = { createEmailConnector, buildEmailConnector, hasLinuxMailtoHandler };

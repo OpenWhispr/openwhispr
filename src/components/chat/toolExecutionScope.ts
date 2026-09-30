@@ -43,6 +43,21 @@ export function createToolExecutionScope(handlers: ToolExecutionHandlers = {}): 
     const used = turnSlots.get(key) ?? 0;
     if (used > 0) turnSlots.set(key, used - 1);
   };
+  // A tool and runApprovalAction may both hold the same call; the caller
+  // hears it once, and again only when a later hold newly asks to keep the
+  // clipboard.
+  const holdOncePerCall = (): ((options?: HoldDeliveryOptions) => void) => {
+    const hold = notify(handlers.onHoldDelivery);
+    let held = false;
+    let clipboardPreserved = false;
+    return (options) => {
+      const preservesClipboard = options?.preserveClipboard === true;
+      if (held && (clipboardPreserved || !preservesClipboard)) return;
+      held = true;
+      clipboardPreserved ||= preservesClipboard;
+      hold(options);
+    };
+  };
   return {
     createContext: ({ messageId, toolCallId, signal }) => ({
       messageId,
@@ -51,7 +66,7 @@ export function createToolExecutionScope(handlers: ToolExecutionHandlers = {}): 
       // whatever the tool is waiting on.
       signal: signal ? AbortSignal.any([controller.signal, signal]) : controller.signal,
       onApprovalRequested: notify(handlers.onApprovalRequested),
-      onHoldDelivery: notify(handlers.onHoldDelivery),
+      onHoldDelivery: holdOncePerCall(),
       claimTurnSlot,
       releaseTurnSlot,
     }),

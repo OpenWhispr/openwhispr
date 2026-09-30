@@ -55,3 +55,50 @@ test("provider error codes are failed only when documented as rejected before ac
   assert.equal(classifyProviderError("brand_new_code", slackRejections), "unknown");
   assert.equal(classifyProviderError(undefined, slackRejections), "unknown");
 });
+
+test("a failed request reports its code, never its message", async () => {
+  const { transportErrorCode } = await load();
+  assert.equal(
+    transportErrorCode(Object.assign(new Error("x"), { code: "ENOTFOUND" })),
+    "ENOTFOUND"
+  );
+  assert.equal(
+    transportErrorCode(new Error("net::ERR_INTERNET_DISCONNECTED (https://slack.com/api/x)")),
+    "ERR_INTERNET_DISCONNECTED",
+    "Electron's net.fetch names the error only in the message"
+  );
+  const timeout = new DOMException("The operation was aborted due to timeout", "TimeoutError");
+  assert.equal(transportErrorCode(timeout), "timeout");
+  assert.equal(transportErrorCode(new Error("something odd")), "network_error");
+  assert.equal(
+    transportErrorCode(new Error("net::ERR_HTTP2_PROTOCOL_ERROR")),
+    "ERR_HTTP2_PROTOCOL_ERROR",
+    "codes with digits are kept whole"
+  );
+});
+
+test("only the codes transportErrorCode produces count as transport codes", async () => {
+  const { isTransportErrorCode } = await load();
+  for (const code of [
+    "ENOTFOUND",
+    "ERR_CONNECTION_RESET",
+    "UND_ERR_SOCKET",
+    "timeout",
+    "network_error",
+  ]) {
+    assert.equal(isTransportErrorCode(code), true, code);
+  }
+  for (const code of ["invalid_grant", "rate_limited", "", null, undefined]) {
+    assert.equal(isTransportErrorCode(code), false, String(code));
+  }
+});
+
+test("Retry-After counts only as seconds", async () => {
+  const { retryAfterMs } = await load();
+  assert.equal(retryAfterMs("3"), 3000);
+  assert.equal(retryAfterMs("0"), 0);
+  assert.equal(retryAfterMs("Wed, 21 Oct 2026 07:28:00 GMT"), null);
+  assert.equal(retryAfterMs(""), null);
+  assert.equal(retryAfterMs(null), null);
+  assert.equal(retryAfterMs("-1"), null);
+});

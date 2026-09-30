@@ -3,6 +3,13 @@ const { connectorPolicyState, policyRefusal } = require("./connectorPolicy");
 const POLICY_TIMEOUT_MS = 1500;
 // A name or part of an address; anything longer is not a lookup.
 const MAX_CONTACT_QUERY_LENGTH = 200;
+// More than any meeting invite; a longer list is cut, not refused.
+const MAX_NOTE_ATTENDEES = 200;
+// RFC 5321's address limit, and a generous display name.
+const MAX_ATTENDEE_EMAIL_LENGTH = 320;
+const MAX_ATTENDEE_NAME_LENGTH = 200;
+// Calendar event ids are well under this (Graph's are the longest, ~150).
+const MAX_EVENT_ID_LENGTH = 1024;
 
 function isNonEmptyString(value) {
   return typeof value === "string" && value.length > 0;
@@ -10,6 +17,26 @@ function isNonEmptyString(value) {
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+// Only the fields the attendee filter reads, from well-formed items.
+function sanitizeNoteAttendees(list) {
+  const attendees = [];
+  for (const item of list.slice(0, MAX_NOTE_ATTENDEES)) {
+    if (!isPlainObject(item) || !isNonEmptyString(item.email)) continue;
+    if (item.email.length > MAX_ATTENDEE_EMAIL_LENGTH) continue;
+    const displayName =
+      typeof item.displayName === "string" && item.displayName.length <= MAX_ATTENDEE_NAME_LENGTH
+        ? item.displayName
+        : null;
+    attendees.push({
+      email: item.email,
+      displayName,
+      self: item.self === true,
+      resource: item.resource === true,
+    });
+  }
+  return attendees;
 }
 
 // Connectors must tell "signed out" ({}) from "can't tell" (null). Without a
@@ -88,7 +115,14 @@ function sameAccountScope(left, right) {
 
 // getAccountScope() is the signed-in account bound to the current credential
 // and its generation, or null.
-function registerConnectorIpc({ ipcMain, manager, getPolicyState, getAccountScope, findContacts }) {
+function registerConnectorIpc({
+  ipcMain,
+  manager,
+  getPolicyState,
+  getAccountScope,
+  findContacts,
+  noteAttendees,
+}) {
   // The verdict and the account that owns the receipt come from one
   // credential: a sign-in or account switch during the policy wait leaves no
   // account, so the action is refused rather than filed under the wrong one.
@@ -113,6 +147,14 @@ function registerConnectorIpc({ ipcMain, manager, getPolicyState, getAccountScop
       return { status: "unavailable", reason: "invalid_request" };
     }
     return manager.prepare(connectorId, action, args, await resolveCallAuth(event));
+  });
+
+  // Reads for the model: the same checks as prepare, and nothing is written.
+  ipcMain.handle("connector-query", async (event, connectorId, action, args) => {
+    if (!isNonEmptyString(connectorId) || !isNonEmptyString(action) || !isPlainObject(args)) {
+      return { status: "unavailable", reason: "invalid_request" };
+    }
+    return manager.query(connectorId, action, args, await resolveCallAuth(event));
   });
 
   ipcMain.handle("connector-commit", async (event, actionId, edits) => {
@@ -183,6 +225,34 @@ function registerConnectorIpc({ ipcMain, manager, getPolicyState, getAccountScop
       const refusal = policyRefusal(await getPolicyState(event));
       if (refusal) return { contacts: [], unavailableReason: refusal };
       return findContacts(query.trim());
+    });
+  }
+
+  if (noteAttendees) {
+    // A note's attendees, minus the user and rooms, for the note chat's
+    // context. They go to the model, so the org switch applies here too.
+    ipcMain.handle("connector-note-attendees", async (event, request) => {
+      if (!isPlainObject(request)) return { attendees: [] };
+      const participants = Array.isArray(request.participants)
+        ? sanitizeNoteAttendees(request.participants)
+        : [];
+      const noteId =
+        Number.isSafeInteger(request.noteId) && request.noteId > 0 ? request.noteId : null;
+      const calendarEventId =
+        isNonEmptyString(request.calendarEventId) &&
+        request.calendarEventId.length <= MAX_EVENT_ID_LENGTH
+          ? request.calendarEventId
+          : null;
+      if (participants.length === 0 && !calendarEventId && !noteId) return { attendees: [] };
+      const refusal = policyRefusal(await getPolicyState(event));
+      if (refusal) return { attendees: [], unavailableReason: refusal };
+      const selfEmail =
+        isNonEmptyString(request.selfEmail) && request.selfEmail.length <= MAX_ATTENDEE_EMAIL_LENGTH
+          ? request.selfEmail.trim()
+          : null;
+      return {
+        attendees: await noteAttendees({ noteId, participants, calendarEventId, selfEmail }),
+      };
     });
   }
 }

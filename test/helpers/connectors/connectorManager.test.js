@@ -69,7 +69,10 @@ function fakeConnector(overrides = {}) {
   let binding = { accountId: "U1", workspaceId: "T1", generation: 1 };
   const connector = {
     id: "fake",
-    actions: { post: { kind: "approval" }, draft: { kind: "direct" } },
+    actions: {
+      post: { kind: "approval", editable: { title: "text", body: "text" } },
+      draft: { kind: "direct" },
+    },
     async getStatus() {
       return { connected: true, accountLabel: "chad" };
     },
@@ -453,6 +456,7 @@ test("a connector lookup that throws never hands its error to the renderer", asy
     {
       id: "fake",
       connected: false,
+      configured: true,
       accountLabel: null,
       workspaceLabel: null,
       needsReconnect: false,
@@ -536,11 +540,214 @@ test("an action is only reachable through its own kind", async () => {
   });
 });
 
-test("edits are reduced to string title and body", async () => {
+test("edits are reduced to the declared title and body", async () => {
   const { manager, fake } = await setup();
   const { actionId } = await manager.prepare("fake", "post", { text: "x" }, ALLOWED);
-  await manager.commit(actionId, { body: "b", title: 5, channel: "C999" }, ALLOWED);
+  await manager.commit(actionId, { body: "b", channel: "C999" }, ALLOWED);
   assert.deepEqual(fake.calls.commit[0].edits, { body: "b" });
+});
+
+// Gmail's send action declares its card fields; the manager passes on only
+// those, each with the type it declares.
+const EMAIL_EDITABLE = { to: "addresses", cc: "addresses", subject: "line", body: "text" };
+
+async function commitEdits(editable, edits) {
+  const { manager, fake, log } = await setup({
+    actions: { post: { kind: "approval", editable } },
+  });
+  const { actionId } = await manager.prepare("fake", "post", { text: "x" }, ALLOWED);
+  const result = await manager.commit(actionId, edits, ALLOWED);
+  return { edits: fake.calls.commit[0]?.edits, result, row: log.rows.get(actionId) };
+}
+
+test("a declared action receives exactly its declared fields", async () => {
+  const { edits } = await commitEdits(EMAIL_EDITABLE, {
+    to: ["josh@acme.test", "dana@acme.test"],
+    subject: "Q3 numbers",
+    body: "Numbers attached.",
+    title: "Not declared",
+    bcc: ["evil@attacker.test"],
+  });
+  assert.deepEqual(edits, {
+    to: ["josh@acme.test", "dana@acme.test"],
+    subject: "Q3 numbers",
+    body: "Numbers attached.",
+  });
+  // An empty line is still a line; the connector decides whether it may be empty.
+  assert.deepEqual((await commitEdits(EMAIL_EDITABLE, { subject: "" })).edits, { subject: "" });
+  assert.deepEqual((await commitEdits(EMAIL_EDITABLE, "not an object")).edits, {});
+});
+
+test("a declared field of the wrong type refuses Send instead of sending the prepared value", async () => {
+  for (const edits of [
+    { subject: "Q3\r\nBcc: evil@attacker.test" },
+    { subject: "Q3\nBcc: x" },
+    { subject: "Q3\rx" },
+    { to: "josh@acme.test" },
+    { cc: { 0: "a@b.test" } },
+    { to: ["josh@acme.test", 7] },
+    { body: 42 },
+  ]) {
+    const { edits: sent, result, row } = await commitEdits(EMAIL_EDITABLE, edits);
+    assert.equal(sent, undefined, `${JSON.stringify(edits)}: the connector never commits`);
+    assert.deepEqual(result, { state: "not_sent", reason: "invalid_edit" });
+    assert.equal(row.state, "cancelled");
+    assert.equal(row.errorCode, "invalid_edit");
+  }
+});
+
+test("an unknown editable type is a build fault, caught when the manager is created", async () => {
+  await assert.rejects(
+    setup({ actions: { post: { kind: "approval", editable: { body: "html" } } } }),
+    /fake\.post\.body: unknown editable type "html"/
+  );
+});
+
+test("an approval action without an editable declaration is a build fault", async () => {
+  for (const editable of [undefined, null, "body"]) {
+    await assert.rejects(
+      setup({ actions: { post: { kind: "approval", editable } } }),
+      /fake\.post: an approval action must declare editable/,
+      JSON.stringify(editable)
+    );
+  }
+  // A direct action has no card, so it declares nothing.
+  await setup({ actions: { draft: { kind: "direct" } } });
+});
+
+test("a body-only declaration (Slack's) drops the title", async () => {
+  assert.deepEqual(
+    (await commitEdits({ body: "text" }, { title: "T", body: "B", to: ["x"] })).edits,
+    { body: "B" }
+  );
+});
+
+// An email-like card: the fields it shows are the fields it declares editable.
+const EMAIL_ACTIONS = {
+  post: {
+    kind: "approval",
+    editable: { to: "addresses", cc: "addresses", subject: "line", body: "text" },
+  },
+};
+
+test("a preview keeps its declared fields, each of its declared type, and body stays required", async () => {
+  const preview = {
+    verbKey: "email",
+    destinationLabel: "josh@acme.test +1",
+    accountLabel: "you@example.test",
+    body: "Numbers attached.",
+    fields: {
+      to: ["josh@acme.test", "dana@acme.test"],
+      cc: [],
+      subject: "Q3 numbers",
+      body: "Numbers attached.",
+    },
+  };
+  const prepareWith = async (fields) => {
+    const { manager, log } = await setup({
+      actions: EMAIL_ACTIONS,
+      prepare: async () => ({ status: "ready", payload: {}, preview: { ...preview, fields } }),
+    });
+    return { result: await manager.prepare("fake", "post", { text: "x" }, ALLOWED), log };
+  };
+  assert.deepEqual((await prepareWith(preview.fields)).result.preview, preview);
+
+  // No fields: the plain layout.
+  for (const fields of [undefined, null, {}]) {
+    const { result } = await prepareWith(fields);
+    assert.equal(result.status, "ready", JSON.stringify(fields));
+    assert.equal("fields" in result.preview, false, JSON.stringify(fields));
+  }
+
+  // A field that isn't its declared type would only fail at Send: no card.
+  for (const fields of [
+    { ...preview.fields, to: ["josh@acme.test", 7] },
+    { ...preview.fields, subject: ["Q3"] },
+    { ...preview.fields, subject: "Q3\r\nBcc: evil@attacker.test" },
+    { ...preview.fields, body: 42 },
+    ["to"],
+    "to",
+  ]) {
+    const { result, log } = await prepareWith(fields);
+    assert.equal(result.errorCode, "invalid_result", JSON.stringify(fields));
+    assert.equal(log.rows.size, 0);
+  }
+
+  const { body, ...withoutBody } = preview;
+  assert.equal(body, "Numbers attached.");
+  const bodiless = await setup({
+    actions: EMAIL_ACTIONS,
+    prepare: async () => ({ status: "ready", payload: {}, preview: withoutBody }),
+  });
+  const refused = await bodiless.manager.prepare("fake", "post", { text: "x" }, ALLOWED);
+  assert.equal(refused.errorCode, "invalid_result");
+  assert.equal(bodiless.log.rows.size, 0);
+});
+
+test("a card field the action doesn't declare editable (a typo, say) means no card", async () => {
+  const preview = {
+    verbKey: "email",
+    destinationLabel: "josh@acme.test",
+    accountLabel: "you@example.test",
+    body: "Hi",
+    fields: { to: ["josh@acme.test"], subject: "Q3", body: "Hi" },
+  };
+  for (const editable of [
+    { to: "addresses", subjct: "line", body: "text" },
+    { title: "text", body: "text" },
+  ]) {
+    const { manager, log } = await setup({
+      actions: { post: { kind: "approval", editable } },
+      prepare: async () => ({ status: "ready", payload: {}, preview }),
+    });
+    const result = await manager.prepare("fake", "post", { text: "x" }, ALLOWED);
+    assert.equal(result.errorCode, "invalid_result", JSON.stringify(editable));
+    assert.equal(log.rows.size, 0);
+  }
+});
+
+test("an issue or comment card missing a field its layout needs means no card", async () => {
+  const prepareWith = async (verbKey, fields) => {
+    const { manager, log } = await setup({
+      actions: { post: { kind: "approval", editable: { title: "line", body: "text" } } },
+      prepare: async () => ({
+        status: "ready",
+        payload: {},
+        preview: { verbKey, destinationLabel: "ENG", accountLabel: "you", body: "B", fields },
+      }),
+    });
+    return { result: await manager.prepare("fake", "post", { text: "x" }, ALLOWED), log };
+  };
+  // A body-only issue would fall back to the plain layout, whose edits Send drops.
+  for (const [verbKey, fields] of [
+    ["issue", { body: "B" }],
+    ["issue", { title: "T" }],
+    ["comment", { title: "T" }],
+  ]) {
+    const { result, log } = await prepareWith(verbKey, fields);
+    assert.equal(result.errorCode, "invalid_result", `${verbKey} ${JSON.stringify(fields)}`);
+    assert.equal(log.rows.size, 0);
+  }
+  for (const [verbKey, fields] of [
+    ["issue", { title: "T", body: "B" }],
+    ["comment", { body: "B" }],
+    ["email", { body: "B" }],
+  ]) {
+    const { result } = await prepareWith(verbKey, fields);
+    assert.deepEqual(result.preview.fields, fields, verbKey);
+  }
+});
+
+test("a status says whether the connector is configured; only an explicit false hides it", async () => {
+  for (const [reported, configured] of [
+    [{ connected: false, configured: false }, false],
+    [{ connected: false }, true],
+    [{ connected: true, accountLabel: "chad", configured: true }, true],
+    [{ connected: false, configured: "no" }, true],
+  ]) {
+    const { manager } = await setup({ getStatus: async () => reported });
+    assert.equal((await manager.status())[0].configured, configured, JSON.stringify(reported));
+  }
 });
 
 test("invalidate cancels pending actions for that connector", async () => {
@@ -740,14 +947,9 @@ test("connector logs carry error names and codes, never messages", async () => {
   assert.match(logged, /ECONNRESET/);
 });
 
-const VALID_PREVIEW = {
-  verbKey: "default",
-  destinationLabel: "#eng",
-  accountLabel: "chad",
-  body: "hi",
-};
 const NOT_CONNECTED = {
   connected: false,
+  configured: true,
   accountLabel: null,
   workspaceLabel: null,
   needsReconnect: false,
@@ -945,6 +1147,70 @@ test("connect saves under the account that started it, cancels old approvals and
   assert.equal(announced.length, 1);
 });
 
+test("connecting another account revokes the login it replaced; the same account keeps it", async () => {
+  for (const [previous, revokesOld] of [
+    [{ accessToken: "old", user: "someone-else" }, true],
+    [{ accessToken: "old", user: "me" }, false],
+  ]) {
+    const credentials = memoryCredentials(previous, { connectorId: "fake" });
+    const revoked = [];
+    const { manager } = await setup(
+      connectable({
+        async authorize() {
+          return { accessToken: "new", user: "me" };
+        },
+        async revoke(credential) {
+          revoked.push(credential.accessToken);
+        },
+        loginKey: (credential) => credential.user,
+      }),
+      undefined,
+      { credentials }
+    );
+
+    assert.equal((await manager.connect("fake", "allowed")).status, "connected");
+    assert.deepEqual(revoked, revokesOld ? ["old"] : [], previous.user);
+    assert.equal(credentials.read("acct-1", "fake").credential.accessToken, "new");
+  }
+});
+
+test("connecting doesn't wait on revoking the login it replaced", async () => {
+  const credentials = memoryCredentials(
+    { accessToken: "old", user: "someone-else" },
+    {
+      connectorId: "fake",
+    }
+  );
+  const revoking = deferred();
+  const revoked = [];
+  const { manager } = await setup(
+    connectable({
+      async authorize() {
+        return { accessToken: "new", user: "me" };
+      },
+      revoke(credential) {
+        revoked.push(credential.accessToken);
+        return revoking.promise;
+      },
+      loginKey: (credential) => credential.user,
+    }),
+    undefined,
+    { credentials }
+  );
+
+  // Offline, the old login's revoke would hold Settings on "connecting"
+  // until its 5 s deadline.
+  let timer;
+  const outcome = await Promise.race([
+    manager.connect("fake", "allowed"),
+    new Promise((resolve) => (timer = setTimeout(() => resolve("still connecting"), 500))),
+  ]);
+  clearTimeout(timer);
+  assert.equal(outcome.status, "connected");
+  assert.deepEqual(revoked, ["old"], "the revoke has started");
+  revoking.resolve(null);
+});
+
 test("an account switch during the OAuth round trip saves nothing and revokes the new login", async () => {
   let accountId = "acct-a";
   const credentials = memoryCredentials();
@@ -1117,6 +1383,10 @@ test("connect refuses on policy or no account, and reports flow errors by code",
       Object.assign(new Error("x"), { redirectCode: "token_exchange_failed" }),
       "token_exchange_failed",
     ],
+    // A Workspace admin block or org-restricted app (gmailAuth's own coded
+    // error, not the loopback flow's oauth_denied): kept as its own code
+    // rather than collapsed to connect_failed.
+    [Object.assign(new Error("domain_policy"), { code: "domain_policy" }), "domain_policy"],
     [new Error("GET https://slack.com/api/oauth.v2.access?code=secret failed"), "connect_failed"],
   ]) {
     const failing = await setup(
@@ -1131,6 +1401,27 @@ test("connect refuses on policy or no account, and reports flow errors by code",
     assert.deepEqual(await failing.manager.connect("fake", "allowed"), {
       status: "failed",
       errorCode,
+    });
+  }
+  assert.equal(credentials.read("acct-1", "fake"), null);
+});
+
+test("connect reports a missing Gmail permission and an unverified email by code", async () => {
+  const credentials = memoryCredentials();
+  for (const code of ["permission_not_granted", "email_not_verified"]) {
+    const failing = await setup(
+      connectable({
+        async authorize() {
+          // oauthLoopbackFlow's OAuthFlowError carries its code as redirectCode.
+          throw Object.assign(new Error("flow failed"), { redirectCode: code });
+        },
+      }),
+      undefined,
+      { credentials }
+    );
+    assert.deepEqual(await failing.manager.connect("fake", "allowed"), {
+      status: "failed",
+      errorCode: code,
     });
   }
   assert.equal(credentials.read("acct-1", "fake"), null);
@@ -1344,11 +1635,116 @@ test("main files connector logins under the credential's account scope, not the 
   assert.doesNotMatch(wiring[1], /databaseManager\.activeAccountId/);
 });
 
-test("disconnectAll disconnects every connector that can revoke", async () => {
+test("a disconnect that kept a shared grant says so; the IPC can't ask to erase", async () => {
   const credentials = memoryCredentials({ accessToken: "t" }, { connectorId: "fake" });
-  const { manager } = await setup(connectable(), undefined, { credentials });
-  await manager.disconnectAll();
+  const options = [];
+  const { manager } = await setup(
+    connectable({
+      async revoke(_credential, revokeOptions) {
+        options.push(revokeOptions);
+        return { kept: true };
+      },
+    }),
+    undefined,
+    { credentials }
+  );
+
+  assert.deepEqual(await manager.disconnect("fake"), { status: "disconnected", grantKept: true });
+  assert.deepEqual(options, [{ erasingDevice: false }]);
+  assert.equal(credentials.read("acct-1", "fake"), null, "the local login is gone either way");
+});
+
+test("disconnectAll disconnects every connector that can revoke, erasing when asked", async () => {
+  const credentials = memoryCredentials({ accessToken: "t" }, { connectorId: "fake" });
+  const options = [];
+  const { manager } = await setup(
+    connectable({
+      async revoke(_credential, revokeOptions) {
+        options.push(revokeOptions);
+      },
+    }),
+    undefined,
+    { credentials }
+  );
+  // Delete account with device erase: a grant shared with a calendar goes too.
+  await manager.disconnectAll({ erasingDevice: true });
   assert.equal(credentials.read("acct-1", "fake"), null);
+  assert.deepEqual(options, [{ erasingDevice: true }]);
+});
+
+test("revokeAllStored (Reset app data) revokes every account's login with no one signed in", async () => {
+  const credentials = memoryCredentials({ accessToken: "mine" }, { connectorId: "fake" });
+  credentials.replace("acct-2", "fake", { accessToken: "theirs" }, 0);
+  credentials.switchAccount(null);
+  const revoked = [];
+  const { manager } = await setup(
+    connectable({
+      async revoke(credential, options) {
+        revoked.push([credential.accessToken, options]);
+      },
+    }),
+    undefined,
+    { credentials, getAccountId: () => null }
+  );
+
+  await manager.revokeAllStored();
+
+  assert.deepEqual(revoked.sort(), [
+    ["mine", { erasingDevice: true }],
+    ["theirs", { erasingDevice: true }],
+  ]);
+});
+
+test("revokeAllStored waits one revoke deadline, not one per login", async () => {
+  const credentials = memoryCredentials({ accessToken: "a" }, { connectorId: "fake" });
+  credentials.replace("acct-2", "fake", { accessToken: "b" }, 0);
+  const started = [];
+  const release = deferred();
+  const { manager } = await setup(
+    connectable({
+      revoke(credential) {
+        started.push(credential.accessToken);
+        return release.promise;
+      },
+    }),
+    undefined,
+    { credentials }
+  );
+
+  const revoking = manager.revokeAllStored();
+  await Promise.resolve();
+  assert.equal(started.length, 2, "both revokes are in flight together");
+  release.resolve();
+  await revoking;
+});
+
+test("disconnectAll (account deletion) waits one revoke deadline, not one per connector", async () => {
+  const credentials = memoryCredentials({ accessToken: "a" }, { connectorId: "fake" });
+  credentials.replace("acct-1", "other", { accessToken: "b" }, 0);
+  const started = [];
+  const release = deferred();
+  const revokingConnector = (id) =>
+    fakeConnector({
+      id,
+      ...connectable({
+        revoke(credential) {
+          started.push(credential.accessToken);
+          return release.promise;
+        },
+      }),
+    }).connector;
+  const { manager } = await setup(undefined, undefined, {
+    credentials,
+    connectors: [revokingConnector("fake"), revokingConnector("other")],
+  });
+
+  const disconnecting = manager.disconnectAll();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(started.sort(), ["a", "b"], "both revokes are in flight together");
+  release.resolve();
+  await disconnecting;
+  assert.equal(credentials.read("acct-1", "fake"), null);
+  assert.equal(credentials.read("acct-1", "other"), null);
 });
 
 test("only the newest status change is announced", async () => {
@@ -1523,12 +1919,42 @@ test("a commit result keeps only its state's fields, typed, and its receipt stil
     ],
     [{ state: "unknown", checkUrl: ["x"] }, { state: "unknown" }],
     [{ state: "not_sent", reason: "cancelled" }, { state: "unknown" }],
+    // A connector-named destinationLabel (Gmail, after Send edited the
+    // recipients) overwrites the receipt's prepared label, for sent and
+    // unknown only; a non-string one is dropped like any other malformed
+    // field, and the receipt then keeps the prepared label ("#eng").
+    [
+      { state: "sent", url: "https://example.test/p/3", destinationLabel: "lee@acme.test +1" },
+      { state: "sent", url: "https://example.test/p/3", destinationLabel: "lee@acme.test +1" },
+      "lee@acme.test +1",
+    ],
+    [
+      {
+        state: "unknown",
+        checkUrl: "https://mail.test/#sent",
+        destinationLabel: "lee@acme.test +1",
+      },
+      {
+        state: "unknown",
+        checkUrl: "https://mail.test/#sent",
+        destinationLabel: "lee@acme.test +1",
+      },
+      "lee@acme.test +1",
+    ],
+    [
+      { state: "sent", url: "https://example.test/p/4", destinationLabel: ["not", "a", "string"] },
+      { state: "sent", url: "https://example.test/p/4" },
+      "#eng",
+    ],
   ];
-  for (const [committed, expected] of cases) {
+  for (const [committed, expected, rowLabel = "#eng"] of cases) {
     const { manager, log } = await setup({ commit: async () => committed });
     const { actionId } = await manager.prepare("fake", "post", { text: "x" }, ALLOWED);
     assert.deepEqual(await manager.commit(actionId, {}, ALLOWED), expected);
     assert.equal(log.rows.get(actionId).state, expected.state);
+    // Every case above has no destinationLabel of its own (Slack's shape):
+    // the receipt keeps prepare's "#eng" unless the case names a new one.
+    assert.equal(log.rows.get(actionId).destinationLabel, rowLabel);
   }
 });
 
@@ -1680,4 +2106,164 @@ test("Esc during the Linux mail-app probe stops the draft before it opens or cop
   const [row] = [...log.rows.values()];
   assert.equal(row.state, "cancelled");
   assert.equal(row.errorCode, "cancelled");
+});
+
+const QUERY_ACTIONS = {
+  post: { kind: "approval", editable: { body: "text" } },
+  search: { kind: "query" },
+};
+
+test("a query runs on the bound login, returns normalized items and writes no receipt", async () => {
+  const seen = [];
+  const { manager, log } = await setup({
+    actions: QUERY_ACTIONS,
+    async query(action, args, context) {
+      seen.push({ action, args, context });
+      return {
+        status: "ok",
+        items: [{ reference: "ENG-1", title: "Fix\u0000 login", extra: { nested: true } }],
+      };
+    },
+  });
+
+  const result = await manager.query("fake", "search", { query: "login" }, ALLOWED);
+
+  assert.deepEqual(result, {
+    status: "ok",
+    items: [{ reference: "ENG-1", title: "Fix login" }],
+    truncated: false,
+  });
+  assert.deepEqual(seen, [
+    {
+      action: "search",
+      args: { query: "login" },
+      context: { binding: { accountId: "U1", workspaceId: "T1", generation: 1 } },
+    },
+  ]);
+  assert.equal(log.rows.size, 0, "a read leaves no receipt");
+});
+
+test("a query is refused, in order, before the connector is asked", async () => {
+  let calls = 0;
+  const { manager, fake } = await setup({
+    actions: QUERY_ACTIONS,
+    async query() {
+      calls += 1;
+      return { status: "ok", items: [] };
+    },
+  });
+  const refused = (reason) => ({ status: "unavailable", reason });
+
+  for (const [args, reason] of [
+    [["fake", "search", {}, { policyState: "blocked", accountId: ACCOUNT }], "policy_blocked"],
+    [
+      ["fake", "search", {}, { policyState: "unavailable", accountId: ACCOUNT }],
+      "policy_unavailable",
+    ],
+    [["fake", "search", {}, SIGNED_OUT], "signed_out"],
+    [["nope", "search", {}, ALLOWED], "unknown_connector"],
+    [["fake", "post", {}, ALLOWED], "unknown_action"],
+    // Signed in, but the account changed while the policy was read.
+    [["fake", "search", {}, { policyState: "allowed", accountId: null }], "signed_out"],
+  ]) {
+    assert.deepEqual(await manager.query(...args), refused(reason), reason);
+  }
+
+  fake.setBinding(null);
+  assert.deepEqual(await manager.query("fake", "search", {}, ALLOWED), refused("not_connected"));
+
+  // A login filed under another OpenWhispr account must not answer for this one.
+  fake.setBinding({ ownerAccountId: "account-b", accountId: "U1", generation: 1 });
+  assert.deepEqual(await manager.query("fake", "search", {}, ALLOWED), refused("account_changed"));
+
+  fake.setBinding({ ownerAccountId: ACCOUNT, accountId: "U1", generation: 1 });
+  assert.equal((await manager.query("fake", "search", {}, ALLOWED)).status, "ok");
+  assert.equal(calls, 1, "only the last call reached the connector");
+});
+
+test("a query that throws or answers malformed fails closed, a lost login is broadcast, and logs hold no text", async () => {
+  const logs = [];
+  const statuses = [];
+  let next;
+  const logger = {
+    info: (message, data) => logs.push({ message, data }),
+    warn: (message, data) => logs.push({ message, data }),
+    error: (message, data) => logs.push({ message, data }),
+  };
+  const { manager } = await setup(
+    {
+      actions: QUERY_ACTIONS,
+      async query() {
+        return next();
+      },
+    },
+    undefined,
+    { logger, onStatusChanged: (list) => statuses.push(list) }
+  );
+
+  next = () => {
+    throw new Error("socket hang up https://api.linear.test/?token=secret-token");
+  };
+  assert.deepEqual(await manager.query("fake", "search", {}, ALLOWED), {
+    status: "failed",
+    errorCode: "query_failed",
+    message: "Couldn't search right now.",
+  });
+
+  next = () => ({ status: "ok", items: "not a list" });
+  assert.deepEqual(await manager.query("fake", "search", {}, ALLOWED), {
+    status: "failed",
+    errorCode: "invalid_result",
+    message: "Couldn't read the results.",
+  });
+
+  next = () => ({ status: "failed", errorCode: "reconnect_needed", message: "Reconnect Linear." });
+  assert.equal((await manager.query("fake", "search", {}, ALLOWED)).errorCode, "reconnect_needed");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(statuses.length, 1, "Settings hears that the login is gone");
+
+  next = () => ({
+    status: "ok",
+    items: [{ title: "Private roadmap", url: "https://linear.test/x" }],
+  });
+  await manager.query("fake", "search", { query: "roadmap" }, ALLOWED);
+
+  const finished = logs.filter((entry) => entry.message === "connector query finished");
+  assert.equal(finished.length, 4);
+  assert.deepEqual(finished.at(-1).data, {
+    connectorId: "fake",
+    action: "search",
+    status: "ok",
+    itemCount: 1,
+    truncated: false,
+    errorCode: null,
+  });
+  assert.doesNotMatch(JSON.stringify(logs), /roadmap|linear\.test|secret-token/i);
+});
+
+test("a sent commit may name what it created; nothing else keeps a result label", async () => {
+  const replies = [
+    { state: "sent", url: "https://linear.test/ENG-124", resultLabel: "ENG-124" },
+    { state: "sent", resultLabel: 124 },
+    { state: "unknown", resultLabel: "ENG-125" },
+    { state: "failed", errorCode: "rate_limited", message: "busy", resultLabel: "ENG-126" },
+  ];
+  const { manager } = await setup({
+    async commit() {
+      return replies.shift();
+    },
+  });
+
+  const results = [];
+  for (const text of ["a", "b", "c", "d"]) {
+    const prepared = await manager.prepare("fake", "post", { text }, ALLOWED);
+    results.push(await manager.commit(prepared.actionId, {}, ALLOWED));
+  }
+
+  assert.deepEqual(results, [
+    { state: "sent", url: "https://linear.test/ENG-124", resultLabel: "ENG-124" },
+    { state: "sent" },
+    { state: "unknown" },
+    { state: "failed", errorCode: "rate_limited", message: "busy" },
+  ]);
 });

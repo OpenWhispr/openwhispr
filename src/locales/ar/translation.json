@@ -715,7 +715,10 @@
     "approval": {
       "headers": {
         "default": "إرسال إلى {{destination}}",
-        "slackPost": "نشر في {{destination}}"
+        "slackPost": "نشر في {{destination}}",
+        "email": "بريد إلكتروني إلى {{destination}}",
+        "issue": "إنشاء مشكلة في {{destination}}",
+        "comment": "التعليق على {{destination}}"
       },
       "identity": "بصفتك {{account}}",
       "identityWithWorkspace": "بصفتك {{account}} في {{workspace}}",
@@ -747,13 +750,100 @@
         "credential_save_failed": "تعذّر حفظ تسجيل الدخول إلى Slack على هذا الكمبيوتر. لم يُرسل شيء. حاول مرة أخرى.",
         "dm_failed": "تعذّر فتح الرسالة المباشرة إلى {{destination}}. لم يُرسل شيء.",
         "restricted": "{{destination}} للقراءة فقط أو مقيّدة بالنسبة لك.",
-        "generic": "حدث خطأ ما. لم يُرسل شيء."
+        "generic": "حدث خطأ ما. لم يُرسل شيء.",
+        "gmail": {
+          "reconnect_needed": "يلزم إعادة ربط Gmail من الإعدادات.",
+          "network": "تعذّر الوصول إلى Gmail. لم يُرسل شيء.",
+          "rate_limited": "Gmail مشغول حاليًا. حاول مرة أخرى بعد قليل.",
+          "daily_limit": "تم بلوغ الحد اليومي للإرسال في Gmail. لم يُرسل شيء.",
+          "domain_policy": "حظر مسؤول Google في مؤسستك هذا التطبيق. لم يُرسل شيء.",
+          "invalid_recipients": "أحد العناوين غير صالح. لم يُرسل شيء.",
+          "too_many_recipients": "عدد المستلمين كبير جدًا: {{max}} على الأكثر. لم يُرسل شيء.",
+          "too_long": "الموضوع أو الرسالة أطول مما يسمح به Gmail. لم يُرسل شيء.",
+          "invalid_message": "رفض Gmail الرسالة لأنها غير سليمة. لم يُرسل شيء.",
+          "gmail_unavailable": "الإرسال عبر Gmail غير متاح حاليًا. لم يُرسل شيء.",
+          "refused": "رفض Gmail إرسالها. لم يُرسل شيء.",
+          "connection_changed": "تغيّر اتصال Gmail قبل الإرسال، لذا لم يُرسل شيء.",
+          "credential_save_failed": "تعذّر حفظ تسجيل الدخول إلى Gmail على هذا الكمبيوتر. لم يُرسل شيء. حاول مرة أخرى."
+        },
+        "linear": {
+          "reconnect_needed": "يلزم إعادة ربط Linear من الإعدادات.",
+          "connection_changed": "تغيّر اتصال Linear قبل الإرسال، لذا لم يُرسل شيء.",
+          "credential_save_failed": "تعذّر حفظ تسجيل الدخول إلى Linear على هذا الكمبيوتر. لم يُرسل شيء. حاول مرة أخرى.",
+          "linear_unavailable": "Linear غير متاح حاليًا. لم يُرسل شيء.",
+          "network": "تعذّر الوصول إلى Linear. لم يُرسل شيء.",
+          "rate_limited": "Linear مشغول حاليًا. حاول مرة أخرى بعد قليل.",
+          "not_found": "لم يعد Linear يجد الفريق أو المشروع أو المشكلة. لم يُرسل شيء.",
+          "forbidden": "لا يُسمح لحسابك في Linear بذلك. لم يُرسل شيء.",
+          "invalid_input": "لم يقبل Linear هذا بصيغته الحالية. لم يُرسل شيء.",
+          "too_long": "أطول مما يسمح به Linear. لم يُرسل شيء.",
+          "missing_title": "تحتاج مشكلة Linear إلى عنوان. لم يُرسل شيء.",
+          "missing_body": "تعليق Linear فارغ. لم يُرسل شيء.",
+          "not_created": "لم ينشئ Linear المشكلة.",
+          "wrong_workspace": "هذه المشكلة في مساحة عمل Linear أخرى. لم يُرسل شيء.",
+          "invalid_reference": "هذه ليست مشكلة في Linear. لم يُرسل شيء.",
+          "refused": "رفض Linear الطلب. لم يُرسل شيء.",
+          "unknown_action": "لا يستطيع OpenWhispr فعل ذلك في Linear. لم يُرسل شيء.",
+          "generic": "حدث خطأ ما. لم يُرسل شيء إلى Linear."
+        }
+      },
+      "email": {
+        "from": "من {{account}}",
+        "toLabel": "إلى",
+        "ccLabel": "نسخة",
+        "subjectLabel": "الموضوع",
+        "bodyLabel": "الرسالة",
+        "addressHint": "افصل بين العناوين بفواصل.",
+        "invalidAddress": "{{address}} ليس عنوان بريد إلكتروني كاملًا مثل name@example.com.",
+        "invalidAddressAnnouncement": "أحد العناوين ليس عنوان بريد إلكتروني كاملًا.",
+        "sendsTo": "يُرسل إلى {{addresses}}",
+        "missingTo": "أضف عنوانًا واحدًا على الأقل في حقل «إلى».",
+        "tooManyRecipients": "يمكن إرسال البريد الإلكتروني إلى {{max}} عنوانًا كحد أقصى، في حقلي إلى ونسخة معًا.",
+        "subjectTooLong": "اجعل الموضوع {{max}} حرفًا أو أقل.",
+        "bodyTooLong": "الرسالة طويلة جدًا بالنسبة إلى Gmail. اختصرها لإرسالها.",
+        "unknown": "تعذّر تأكيد الإرسال. تحقق من مجلد البريد المُرسل."
+      },
+      "openIn": {
+        "gmail": "فتح في Gmail",
+        "linear": "فتح في Linear"
+      },
+      "sendLabel": {
+        "issue": "إنشاء مشكلة",
+        "comment": "تعليق"
+      },
+      "issue": {
+        "created": "تم إنشاء {{result}}.",
+        "createdIn": "تم إنشاء مشكلة في {{destination}}.",
+        "unknown": "تعذّر تأكيد إنشاء المشكلة. تحقق من {{destination}} قبل المحاولة مرة أخرى.",
+        "titleLabel": "العنوان",
+        "bodyLabel": "الوصف",
+        "missingTitle": "أضف عنوانًا.",
+        "titleTooLong": "اجعل العنوان {{max}} حرفًا أو أقل.",
+        "bodyTooLong": "اجعل الوصف {{max}} حرفًا أو أقل.",
+        "notes": {
+          "labels": "التسميات: {{labels}}",
+          "droppedLabels": "لم تُضف (غير موجودة في {{destination}}): {{labels}}",
+          "priority": "الأولوية: {{priority}}",
+          "assignee": "المُسنَد إليه: {{assignee}}",
+          "project": "المشروع: {{project}}"
+        }
+      },
+      "comment": {
+        "posted": "تم التعليق على {{destination}}.",
+        "unknown": "تعذّر تأكيد نشر التعليق. تحقق من {{destination}} قبل المحاولة مرة أخرى.",
+        "bodyLabel": "التعليق",
+        "missingBody": "اكتب تعليقًا.",
+        "bodyTooLong": "اجعل التعليق {{max}} حرفًا أو أقل.",
+        "notes": {
+          "targetTitle": "على \"{{title}}\""
+        }
       }
     },
     "policyOff": "أوقفت مؤسستك تشغيل الموصلات.",
     "email": {
       "title": "مسودات البريد الإلكتروني",
       "description": "يفتح المساعد مسودة معبأة مسبقًا في تطبيق البريد الإلكتروني الخاص بك. راجعها واضغط إرسال بنفسك.",
+      "descriptionSend": "يعرض المساعد بطاقة بريد إلكتروني في الدردشة، ولا يُرسل البريد من Gmail الخاص بك إلا عندما تضغط إرسال.",
       "proRequired": "قم بالترقية إلى خطة مدفوعة ليكتب المساعد مسودات رسائلك الإلكترونية.",
       "unavailable": "مسودات البريد الإلكتروني غير متاحة حاليًا.",
       "targetLabel": "صياغة رسائل البريد الإلكتروني في",
@@ -762,7 +852,9 @@
         "gmail": "Gmail",
         "outlookWork": "Outlook (العمل أو المدرسة)",
         "outlookPersonal": "Outlook.com",
-        "mailto": "تطبيق البريد الافتراضي"
+        "mailto": "تطبيق البريد الافتراضي",
+        "gmailSend": "الإرسال من الدردشة (Gmail)",
+        "gmailSendConnectFirst": "الإرسال من الدردشة (Gmail) · اربط Gmail أدناه"
       }
     },
     "slack": {
@@ -796,15 +888,98 @@
         "failedBody": "عد إلى OpenWhispr للمحاولة مرة أخرى."
       }
     },
+    "gmail": {
+      "title": "Gmail",
+      "description": "يمكن للمساعد إرسال الرسائل الإلكترونية من حسابك على Gmail. لا يمكنه قراءة بريدك، وتضغط إرسال بنفسك لكل رسالة.",
+      "connect": "ربط",
+      "reconnect": "إعادة الربط",
+      "disconnect": "قطع الربط",
+      "connecting": "أكمل الربط في متصفحك… إذا أظهرت Google أن الوصول محظور، فيجب على مسؤول Google في مؤسستك السماح بـ OpenWhispr.",
+      "connectedAs": "متصل بصفتك {{account}}",
+      "needsReconnect": "يلزم إعادة ربط Gmail.",
+      "grantKept": "تم قطع الاتصال. يستخدم تقويم Google إذن Google نفسه، لذا سيظل OpenWhispr مدرجًا في حسابك على Google حتى تقطع اتصال تقويم Google أيضًا.",
+      "proRequired": "قم بالترقية إلى خطة مدفوعة ليتمكن المساعد من إرسال الرسائل الإلكترونية من Gmail نيابةً عنك.",
+      "errors": {
+        "connect_failed": "تعذّر ربط Gmail. حاول مرة أخرى.",
+        "disconnect_failed": "تعذّر قطع ربط Gmail. حاول مرة أخرى.",
+        "oauth_denied": "لم يتم ربط Gmail لأن الإذن لم يُمنح.",
+        "oauth_timeout": "استغرق الربط وقتًا طويلاً. إذا أظهرت Google أن الوصول محظور، فاطلب من مسؤول Google في مؤسستك السماح بـ OpenWhispr. وإلا فحاول مرة أخرى.",
+        "oauth_state_mismatch": "رابط تسجيل الدخول هذا كان قديمًا. حاول مرة أخرى.",
+        "ports_busy": "يستخدم تطبيق آخر المنافذ التي يحتاجها OpenWhispr للربط. أغلقه وحاول مرة أخرى.",
+        "token_exchange_failed": "لم يكمل Google عملية الربط. حاول مرة أخرى.",
+        "not_configured": "Gmail غير متاح في هذا الإصدار.",
+        "connection_changed": "تغيّر حسابك أو اتصال Gmail أثناء الربط. حاول مرة أخرى.",
+        "signed_out": "سجّل الدخول إلى OpenWhispr لربط Gmail.",
+        "policy_blocked": "أوقفت مؤسستك تشغيل الموصلات.",
+        "policy_unavailable": "تعذّر التحقق من إعدادات مؤسستك. حاول مرة أخرى.",
+        "permission_not_granted": "لم يتم ربط Gmail لأن إذن إرسال الرسائل الإلكترونية لم يُمنح. أعد الربط واترك هذا الإذن محددًا.",
+        "email_not_verified": "لم تتحقق Google من عنوان البريد الإلكتروني لهذا الحساب، لذلك لم يتم ربط Gmail.",
+        "domain_policy": "حظر مسؤول Google في مؤسستك هذا التطبيق. اطلب منه السماح بـ OpenWhispr."
+      },
+      "browser": {
+        "connectedTitle": "تم توصيل Gmail",
+        "connectedBody": "يمكنك إغلاق هذا التبويب والعودة إلى OpenWhispr.",
+        "failedTitle": "لم يتم توصيل Gmail",
+        "failedBody": "عد إلى OpenWhispr للمحاولة مرة أخرى."
+      }
+    },
+    "linear": {
+      "title": "Linear",
+      "description": "يمكن للمساعد البحث في مشكلات Linear وإنشاء مشكلات وتعليقات نيابةً عنك. توافق على كل مشكلة وتعليق قبل إرسالهما.",
+      "connect": "ربط",
+      "reconnect": "إعادة الربط",
+      "disconnect": "قطع الربط",
+      "connecting": "أكمل الربط في متصفحك…",
+      "connectedAs": "متصل بصفتك {{account}} في {{workspace}}",
+      "needsReconnect": "يلزم إعادة ربط Linear.",
+      "proRequired": "قم بالترقية إلى خطة مدفوعة ليتمكن المساعد من العمل في Linear نيابةً عنك.",
+      "errors": {
+        "connect_failed": "تعذّر ربط Linear. حاول مرة أخرى.",
+        "disconnect_failed": "تعذّر قطع ربط Linear. حاول مرة أخرى.",
+        "oauth_denied": "لم يتم ربط Linear لأن الإذن لم يُمنح.",
+        "oauth_timeout": "استغرق الربط وقتًا طويلاً. حاول مرة أخرى.",
+        "oauth_state_mismatch": "رابط تسجيل الدخول هذا كان قديمًا. حاول مرة أخرى.",
+        "ports_busy": "يستخدم تطبيق آخر المنافذ التي يحتاجها OpenWhispr للربط. أغلقه وحاول مرة أخرى.",
+        "token_exchange_failed": "لم يكمل Linear عملية الربط. حاول مرة أخرى.",
+        "not_configured": "Linear غير متاح في هذا الإصدار.",
+        "connection_changed": "تغيّر حسابك أو اتصال Linear أثناء الربط. حاول مرة أخرى.",
+        "signed_out": "سجّل الدخول إلى OpenWhispr لربط Linear.",
+        "policy_blocked": "أوقفت مؤسستك تشغيل الموصلات.",
+        "policy_unavailable": "تعذّر التحقق من إعدادات مؤسستك. حاول مرة أخرى.",
+        "permission_not_granted": "لم يتم ربط Linear لأن بعض الأذونات لم تُمنح. أعد الربط واسمح بها جميعًا."
+      },
+      "browser": {
+        "connectedTitle": "تم توصيل Linear",
+        "connectedBody": "يمكنك إغلاق هذا التبويب والعودة إلى OpenWhispr.",
+        "failedTitle": "لم يتم توصيل Linear",
+        "failedBody": "عد إلى OpenWhispr للمحاولة مرة أخرى."
+      },
+      "notes": {
+        "priority": {
+          "urgent": "الأولوية: عاجلة",
+          "high": "الأولوية: عالية",
+          "medium": "الأولوية: متوسطة",
+          "low": "الأولوية: منخفضة",
+          "none": "الأولوية: لا شيء"
+        },
+        "assignedToYou": "المُسنَد إليه: أنت"
+      }
+    },
     "recent": {
       "title": "الإجراءات الأخيرة",
       "actions": {
         "email_draft": "مسودة إلى {{destination}}",
-        "slack_send_message": "رسالة إلى {{destination}}"
+        "slack_send_message": "رسالة إلى {{destination}}",
+        "gmail_send": "رسالة إلكترونية إلى {{destination}}",
+        "linear_create_issue": "مشكلة جديدة في {{destination}}",
+        "linear_comment": "تعليق على {{destination}}"
       },
       "unlabeledActions": {
         "email_draft": "مسودة بريد إلكتروني",
-        "slack_send_message": "رسالة Slack"
+        "slack_send_message": "رسالة Slack",
+        "gmail_send": "رسالة Gmail",
+        "linear_create_issue": "مشكلة Linear",
+        "linear_comment": "تعليق Linear"
       },
       "states": {
         "pending": "قيد الانتظار",
@@ -826,7 +1001,7 @@
       "unknown": "لم يتم التأكيد. تحقق مما إذا كان الإجراء قد تم قبل المحاولة مرة أخرى.",
       "draftUnknown": "لم يتم التأكيد: ربما لم تُفتح المسودة إلى {{destination}}. تحقق قبل المحاولة مرة أخرى.",
       "contactsFound": "جهات الاتصال التي عُثر عليها: {{total}}",
-      "draftLimit": "يمكن فتح {{count}} مسودات فقط لكل طلب.",
+      "draftLimit": "يمكن فتح {{max}} مسودات فقط لكل طلب.",
       "clipboardBusy": "لم تُفتح: نص مسودة أخرى لا يزال في الحافظة.",
       "errors": {
         "open_failed": "تعذّر فتح تطبيق البريد الإلكتروني.",
@@ -845,8 +1020,50 @@
         "credential_save_failed": "تعذّر حفظ تسجيل الدخول إلى Slack على هذا الكمبيوتر. لم يُرسل شيء.",
         "dm_failed": "تعذّر فتح الرسالة المباشرة. لم يُرسل شيء.",
         "restricted": "تلك القناة للقراءة فقط أو مقيّدة.",
-        "generic": "لم ينجح ذلك."
-      }
+        "generic": "لم ينجح ذلك.",
+        "gmail": {
+          "reconnect_needed": "يلزم إعادة ربط Gmail.",
+          "network": "تعذّر الوصول إلى Gmail. لم يُرسل شيء.",
+          "rate_limited": "Gmail مشغول حاليًا.",
+          "daily_limit": "تم بلوغ الحد اليومي للإرسال في Gmail.",
+          "domain_policy": "حظره مسؤول Google في مؤسستك.",
+          "invalid_recipients": "أحد العناوين غير صالح. لم يُرسل شيء.",
+          "too_many_recipients": "عدد المستلمين كبير جدًا. لم يُرسل شيء.",
+          "too_long": "أطول مما يسمح به Gmail. لم يُرسل شيء.",
+          "invalid_message": "رفض Gmail الرسالة. لم يُرسل شيء.",
+          "gmail_unavailable": "الإرسال عبر Gmail غير متاح حاليًا.",
+          "refused": "رفض Gmail الإرسال.",
+          "connection_changed": "تغيّر اتصال Gmail. لم يُرسل شيء.",
+          "credential_save_failed": "تعذّر حفظ تسجيل الدخول إلى Gmail على هذا الكمبيوتر. لم يُرسل شيء."
+        },
+        "linear": {
+          "reconnect_needed": "يلزم إعادة ربط Linear.",
+          "connection_changed": "تغيّر اتصال Linear. لم يُرسل شيء.",
+          "credential_save_failed": "تعذّر حفظ تسجيل الدخول إلى Linear على هذا الكمبيوتر.",
+          "linear_unavailable": "Linear غير متاح حاليًا.",
+          "network": "تعذّر الوصول إلى Linear.",
+          "rate_limited": "Linear مشغول حاليًا.",
+          "not_found": "غير موجود في Linear.",
+          "forbidden": "غير مسموح به في Linear.",
+          "invalid_input": "لم يقبله Linear.",
+          "too_long": "أطول مما يسمح به Linear.",
+          "missing_title": "تحتاج مشكلة Linear إلى عنوان.",
+          "missing_body": "تعليق Linear فارغ.",
+          "not_created": "لم ينشئ Linear المشكلة.",
+          "wrong_workspace": "هذه المشكلة في مساحة عمل Linear أخرى.",
+          "invalid_reference": "ليست مشكلة في Linear.",
+          "refused": "رفض Linear الطلب.",
+          "unknown_action": "غير متاح في Linear.",
+          "generic": "لم ينجح ذلك في Linear."
+        }
+      },
+      "unknownSent": {
+        "gmail": "تعذّر تأكيد إرسال البريد الإلكتروني إلى {{destination}}. تحقق من مجلد البريد المُرسل في Gmail.",
+        "linear": "تعذّر تأكيد وصوله إلى Linear. تحقق من {{destination}} في Linear قبل المحاولة مرة أخرى."
+      },
+      "gmailDraftLimit": "يمكن تجهيز {{max}} رسائل بريد إلكتروني فقط لكل طلب.",
+      "queryResults": "النتائج التي عُثر عليها: {{total}}",
+      "cardLimit": "يمكن تجهيز {{max}} بطاقات فقط لكل طلب."
     }
   },
   "auth": {
@@ -1390,6 +1607,9 @@
       "email_draftName": "مسودة بريد إلكتروني",
       "find_contactName": "البحث عن جهة اتصال",
       "slack_send_messageName": "رسالة Slack",
+      "linear_search_issuesName": "البحث في Linear",
+      "linear_create_issueName": "مشكلة Linear",
+      "linear_commentName": "تعليق Linear",
       "get_noteName": "الحصول على الملاحظة",
       "create_noteName": "إنشاء ملاحظة",
       "update_noteName": "تحديث الملاحظة",
@@ -1402,9 +1622,12 @@
       "update_dictionaryName": "تحديث القاموس",
       "update_snippetsName": "تحديث المقتطفات",
       "search_notesStatus": "جاري البحث في الملاحظات...",
-      "email_draftStatus": "جارٍ فتح مسودة بريد إلكتروني...",
+      "email_draftStatus": "جارٍ تحضير بريد إلكتروني...",
       "find_contactStatus": "جارٍ البحث عن جهات الاتصال...",
       "slack_send_messageStatus": "جارٍ تحضير رسالة Slack...",
+      "linear_search_issuesStatus": "جاري البحث في Linear...",
+      "linear_create_issueStatus": "جارٍ تحضير مشكلة Linear...",
+      "linear_commentStatus": "جارٍ تحضير تعليق Linear...",
       "web_searchStatus": "جاري البحث في الويب...",
       "copy_to_clipboardStatus": "جاري النسخ إلى الحافظة...",
       "get_calendar_eventsStatus": "جاري التحقق من التقويم...",

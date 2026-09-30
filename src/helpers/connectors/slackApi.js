@@ -2,8 +2,9 @@ const {
   classifyTransportError,
   classifyHttpStatus,
   classifyProviderError,
+  transportErrorCode,
+  retryAfterMs,
 } = require("./deliveryClassifier");
-const { describeError } = require("./errorSummary");
 
 const SLACK_API_BASE = "https://slack.com/api/";
 const REQUEST_TIMEOUT_MS = 15000;
@@ -35,18 +36,6 @@ const SLACK_PRE_SEND_REJECTIONS = new Set([
   "rate_limited",
 ]);
 
-function retryAfterMs(header) {
-  if (header === null || header === undefined || header === "") return null;
-  const seconds = Number(header);
-  return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : null;
-}
-
-function transportCode(error) {
-  const { errorName, errorCode } = describeError(error);
-  if (errorCode) return errorCode;
-  return errorName === "TimeoutError" ? "timeout" : "network_error";
-}
-
 function createSlackApi({
   fetchImpl,
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
@@ -69,7 +58,7 @@ function createSlackApi({
         ok: false,
         source: "network",
         outcome: classifyTransportError(error),
-        errorCode: transportCode(error),
+        errorCode: transportErrorCode(error),
       };
     }
     // A 429 means Slack did not act.

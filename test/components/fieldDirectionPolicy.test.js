@@ -93,6 +93,10 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/SettingsPage.tsx": ["inherit"],
   "src/components/chat/ApprovalCard.tsx": ["auto", "auto"],
   "src/components/chat/ChatInput.tsx": ["auto"],
+  // To, Cc, Subject, Body: people's names and prose in any script.
+  "src/components/chat/EmailApprovalFields.tsx": ["auto", "auto", "auto", "auto"],
+  // Title and description, or a comment: prose in any script.
+  "src/components/chat/IssueApprovalFields.tsx": ["auto", "auto"],
   "src/components/notes/ActionManagerDialog.tsx": ["auto"],
   "src/components/notes/AddNotesToFolderDialog.tsx": ["auto"],
   "src/components/notes/MeetingTranscriptChat.tsx": ["ltr", "auto"],

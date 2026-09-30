@@ -243,6 +243,10 @@ function memoryCredentials(initial = null, { accountId = "acct-1", connectorId =
       expect(account, connectorId, expected);
       slots.set(keyOf(account, connectorId), { credential: null, generation: expected + 1 });
     },
+    readAllAccounts: (connectorId) =>
+      [...slots]
+        .filter(([key, slot]) => key.endsWith(`:${connectorId}`) && slot.credential)
+        .map(([, slot]) => slot.credential),
   };
 }
 

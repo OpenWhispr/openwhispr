@@ -19,7 +19,8 @@ export default function TabsLayout() {
   const isNoteEditor =
     segments[1] === '(notes)' && segments[2] !== undefined && !NOTES_STATIC_ROUTES.has(segments[2]);
   // The keyboard-dictation handoff takes over the Record tab with a full-screen
-  // "Swipe back to your app" prompt — hide the tab bar so it reads as a takeover.
+  // return screen ("Returning to your app…", "Back to <App>", or the swipe
+  // instructions) — hide the tab bar so it reads as a takeover.
   const handoffActive = useHandoffStore((s) => s.isActive);
 
   return (

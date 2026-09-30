@@ -94,3 +94,18 @@ test("a failed load leaves connectors off and is retried by the next ensure", as
   assert.equal(store.isConnectorReady("slack"), true);
   assert.equal(attempts, 2);
 });
+
+test("the ready connectors are the connected ones not waiting on a reconnect, sorted", async (t) => {
+  const store = await loadStore(t, {});
+  store.useConnectorStatusStore.setState({
+    loaded: true,
+    statuses: {
+      slack: SLACK,
+      gmail: { ...SLACK, id: "gmail", needsReconnect: true },
+      github: { ...SLACK, id: "github" },
+      linear: { ...SLACK, id: "linear", connected: false },
+    },
+  });
+
+  assert.deepEqual(store.readyConnectorIds(), ["github", "slack"]);
+});

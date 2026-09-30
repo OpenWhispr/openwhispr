@@ -43,6 +43,7 @@ const EMAIL_ADDRESS_PATTERN =
 // (cоrp with a Cyrillic о). A label written in one script (münchen, пример) is
 // allowed; recipientLabel shows its punycode so a whole-script look-alike
 // (аррӏе) stands out.
+const IPV4_HOST = /^\d{1,3}(\.\d{1,3}){3}$/;
 const HIDDEN_CHARACTER = /[\p{Cc}\p{Cf}\p{Cs}\p{Default_Ignorable_Code_Point}]/u;
 const LOOKALIKE_SCRIPTS = [
   /\p{Script=Latin}/u,
@@ -57,8 +58,9 @@ function mixesLookalikeScripts(label) {
 
 // The ASCII (punycode) form a mail server routes to, or null when the domain
 // has no valid one. The URL API applies the same IDNA mapping in main and in
-// the renderer.
-function asciiDomain(domain) {
+// the renderer. Exported for gmailMime.js, which writes this form into the
+// From/To/Cc headers.
+export function asciiDomain(domain) {
   try {
     return new URL(`http://${domain}`).hostname;
   } catch {
@@ -75,8 +77,19 @@ export function isValidEmailAddress(value) {
   ) {
     return false;
   }
-  const domain = value.split("@")[1];
-  return !domain.split(".").some(mixesLookalikeScripts) && asciiDomain(domain) !== null;
+  const [local, domain] = value.split("@");
+  // An unquoted local part is a dot-atom: dots only between characters, and
+  // no backslash (which only a quoted local part may use). Mail servers
+  // refuse anything else.
+  if (/^\.|\.$|\.\.|\\/.test(local)) return false;
+  // RFC 5321 caps a local part at 64 octets. "=?" in one would be decoded as
+  // an encoded word in the To header, showing the recipient something else.
+  if (new TextEncoder().encode(local).length > 64 || local.includes("=?")) return false;
+  if (domain.split(".").some(mixesLookalikeScripts)) return false;
+  const ascii = asciiDomain(domain);
+  // The URL parser reads a numeric domain (0x7f.01) as an IPv4 address, so
+  // the card would show one domain and the message go to another.
+  return ascii !== null && !IPV4_HOST.test(ascii);
 }
 
 // How a recipient is shown to the user and the model: a non-ASCII domain also
@@ -85,6 +98,35 @@ export function recipientLabel(address) {
   const domain = address.slice(address.lastIndexOf("@") + 1);
   const ascii = /[^\x00-\x7F]/.test(domain) ? asciiDomain(domain) : null;
   return ascii ? `${address} (${ascii})` : address;
+}
+
+// Gmail's limits for one email, checked by the card before Send and by main
+// again at Send.
+export const MAX_EMAIL_RECIPIENTS = 50;
+export const MAX_EMAIL_SUBJECT_LENGTH = 250;
+// A body this size, base64-encoded twice (MIME, then Gmail's raw) with the
+// largest headers the other limits allow, stays under the 1 MB raw message
+// cap, so the card can tell before Send what main will refuse.
+export const MAX_EMAIL_BODY_BYTES = 512 * 1024;
+
+// The body's size as sent: UTF-8, with every line break as CRLF.
+export function emailBodyBytes(body) {
+  return new TextEncoder().encode(body.replace(/\r\n|\r|\n/g, "\r\n")).length;
+}
+
+// What an email card's header and receipt name: the first recipient, and how
+// many more, each counted once however often it's listed (as main sends it).
+// Never the subject or body.
+export function recipientsLabel(to, cc = []) {
+  const seen = new Set();
+  const all = [...to, ...cc].filter((address) => {
+    const key = address.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  if (all.length === 0) return "";
+  return all.length > 1 ? `${recipientLabel(all[0])} +${all.length - 1}` : recipientLabel(all[0]);
 }
 
 // Models often write "Josh Lee <josh@example.com>"; only the address inside

@@ -129,6 +129,8 @@ interface OnboardingStore {
   paywallHandled: boolean;
   paywallNextStep: PaywallNextStep;
   tutorialCompleted: boolean;
+  // Set by Reset onboarding: steps that skip themselves when setup is already done show instead.
+  replaying: boolean;
   keyboardInstalled: boolean;
   trackingAuthorizationRequestAttempted: boolean;
   permissionsGranted: { microphone: boolean; notifications: boolean };
@@ -155,6 +157,7 @@ function snapshot(state: OnboardingStore): OnboardingProgress {
     paywallHandled: state.paywallHandled,
     paywallNextStep: state.paywallNextStep,
     tutorialCompleted: state.tutorialCompleted,
+    replaying: state.replaying,
     keyboardInstalled: state.keyboardInstalled,
     permissionsGranted: state.permissionsGranted,
   };
@@ -186,6 +189,7 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => {
     paywallHandled: false,
     paywallNextStep: 'language',
     tutorialCompleted: false,
+    replaying: false,
     keyboardInstalled: false,
     trackingAuthorizationRequestAttempted: false,
     permissionsGranted: { microphone: false, notifications: false },
@@ -216,6 +220,7 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => {
           ? progress.paywallNextStep
           : 'language',
         tutorialCompleted: progress.tutorialCompleted === true,
+        replaying: progress.replaying === true,
         keyboardInstalled: progress.keyboardInstalled,
         trackingAuthorizationRequestAttempted,
         permissionsGranted: progress.permissionsGranted,
@@ -308,10 +313,13 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => {
         paywallHandled: false,
         paywallNextStep: 'language',
         tutorialCompleted: false,
+        replaying: true,
         keyboardInstalled: false,
         trackingAuthorizationRequestAttempted: attempted,
         permissionsGranted: { microphone: false, notifications: false },
       });
+      // The replay has to outlive the relaunch Reset asks for.
+      await OnboardingService.setProgress(snapshot(get()));
     },
   };
 });

@@ -50,7 +50,24 @@ function button(root, label) {
 
 const textarea = (root) => findElement(root, (element) => element.tagName === "TEXTAREA");
 
-async function mountPendingCard(t) {
+const field = (root, labelKey) =>
+  findElement(
+    root,
+    (element) => element.getAttribute?.("aria-label") === `connectors.approval.${labelKey}`
+  );
+
+async function mountPendingCard(t, options = {}) {
+  const {
+    preview = {
+      verbKey: "default",
+      destinationLabel: "#eng",
+      accountLabel: "chad",
+      body: "Original text",
+    },
+    connectorId = "slack",
+    action = "send_message",
+    args = { destination: "#eng", text: "Original text" },
+  } = options;
   let root = null;
   let store;
   let key;
@@ -73,12 +90,7 @@ async function mountPendingCard(t) {
         connectorPrepare: async () => ({
           status: "ready",
           actionId: "a1",
-          preview: {
-            verbKey: "default",
-            destinationLabel: "#eng",
-            accountLabel: "chad",
-            body: "Original text",
-          },
+          preview,
         }),
         connectorCommit: async (actionId, edits) => {
           calls.commit.push({ actionId, edits });
@@ -129,10 +141,12 @@ async function mountPendingCard(t) {
         signal: new AbortController().signal,
         onApprovalRequested() {},
         onHoldDelivery() {},
+        claimTurnSlot: () => true,
+        releaseTurnSlot() {},
       },
-      "slack",
-      "send_message",
-      { destination: "#eng", text: "Original text" }
+      connectorId,
+      action,
+      args
     );
     await new Promise((resolve) => setImmediate(resolve));
   });
@@ -153,6 +167,61 @@ test("Esc in the text field ends editing, keeps the draft, and never reaches the
   assert.equal(event.cancelBubble, true);
   assert.ok(!textarea(container), "edit mode ended");
   assert.match(container.textContent, /Edited text/);
+  assert.equal(store.useConnectorApprovalStore.getState().entries[key].state, "pending");
+  assert.deepEqual(calls.cancel, []);
+});
+
+test("Esc in an issue title field ends editing and never reaches the panel", async (t) => {
+  const { container, store, key, calls } = await mountPendingCard(t, {
+    connectorId: "linear",
+    action: "create_issue",
+    args: {},
+    preview: {
+      verbKey: "issue",
+      destinationLabel: "ENG",
+      accountLabel: "chad",
+      workspaceLabel: "Acme",
+      body: "Safari users can't sign in.",
+      fields: { title: "Fix login", body: "Safari users can't sign in." },
+    },
+  });
+  await React.act(async () => click(button(container, "connectors.approval.edit")));
+
+  let event;
+  await React.act(async () => {
+    event = keyDown(field(container, "issue.titleLabel"), "Escape");
+  });
+
+  assert.equal(event.cancelBubble, true);
+  assert.ok(!field(container, "issue.titleLabel"), "edit mode ended");
+  assert.match(container.textContent, /Fix login/);
+  assert.equal(store.useConnectorApprovalStore.getState().entries[key].state, "pending");
+  assert.deepEqual(calls.cancel, []);
+});
+
+test("Esc in a comment body field ends editing and never reaches the panel", async (t) => {
+  const { container, store, key, calls } = await mountPendingCard(t, {
+    connectorId: "github",
+    action: "comment",
+    args: {},
+    preview: {
+      verbKey: "comment",
+      destinationLabel: "acme/app#12",
+      accountLabel: "chad",
+      body: "Fixed in 1.9.",
+      fields: { body: "Fixed in 1.9." },
+    },
+  });
+  await React.act(async () => click(button(container, "connectors.approval.edit")));
+
+  let event;
+  await React.act(async () => {
+    event = keyDown(field(container, "comment.bodyLabel"), "Escape");
+  });
+
+  assert.equal(event.cancelBubble, true);
+  assert.ok(!field(container, "comment.bodyLabel"), "edit mode ended");
+  assert.match(container.textContent, /Fixed in 1\.9\./);
   assert.equal(store.useConnectorApprovalStore.getState().entries[key].state, "pending");
   assert.deepEqual(calls.cancel, []);
 });

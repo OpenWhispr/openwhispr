@@ -45,6 +45,10 @@ export interface ToolDefinition {
   description: string;
   parameters: Record<string, unknown>;
   readOnly: boolean;
+  /** The tool's line in the agent's system prompt; without one, TOOL_INSTRUCTIONS has it. */
+  promptInstruction?: string;
+  /** Set on every connector tool: the connector rules join the prompt when any is offered. */
+  connectorId?: string;
   execute: (args: Record<string, unknown>, context?: ToolExecutionContext) => Promise<ToolResult>;
 }
 

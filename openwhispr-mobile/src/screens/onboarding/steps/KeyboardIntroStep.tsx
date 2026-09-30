@@ -21,6 +21,8 @@ const STEPS = [
 export function KeyboardIntroStep() {
   const { goNext, progress } = useOnboardingStep('keyboard-intro');
   const setKeyboardInstalled = useOnboardingStore((s) => s.setKeyboardInstalled);
+  const replaying = useOnboardingStore((s) => s.replaying);
+  const [installedOnArrival] = useState(() => isKeyboardInstalled());
   const [openedSettings, setOpenedSettings] = useState(false);
   const [hasReturned, setHasReturned] = useState(false);
   const [settingsLaunchPending, setSettingsLaunchPending] = useState(false);
@@ -49,14 +51,15 @@ export function KeyboardIntroStep() {
 
   // Mirror MicrophoneStep's auto-skip pattern: if the OpenWhispr keyboard is
   // already enabled in iOS, advance immediately without showing this screen.
+  // A replay shows it anyway, so Reset onboarding can walk through setup again.
   useEffect(() => {
     if (skipCheckRef.current) return;
     skipCheckRef.current = true;
-    if (isKeyboardInstalled()) {
+    if (installedOnArrival && !replaying) {
       stopPipTutorial();
       void advance();
     }
-  }, [advance, stopPipTutorial]);
+  }, [advance, installedOnArrival, replaying, stopPipTutorial]);
 
   useEffect(() => {
     let pollHandle: ReturnType<typeof setInterval> | null = null;
@@ -123,22 +126,42 @@ export function KeyboardIntroStep() {
     }
   }, []);
 
+  const content =
+    replaying && installedOnArrival && !openedSettings
+      ? {
+          title: 'The keyboard is already on.',
+          titleAccent: 'already on',
+          subtitle: 'OpenWhispr is enabled in Settings. Continue, or walk through setup again.',
+          ctaLabel: 'Continue',
+          onCta: advance,
+          secondaryCtaLabel: 'Open Settings',
+          onSecondaryCta: openSettings,
+        }
+      : hasReturned
+        ? {
+            title: 'Did you enable the keyboard?',
+            titleAccent: 'enable',
+            subtitle:
+              'We didn’t detect the keyboard yet. Make sure both toggles are on, then try again.',
+            ctaLabel: 'Try again',
+            onCta: openSettings,
+            secondaryCtaLabel: "I've enabled it",
+            onSecondaryCta: advance,
+          }
+        : {
+            title: 'Use OpenWhispr in any app.',
+            titleAccent: 'any app',
+            subtitle: 'Follow these steps in Settings. We’ll be here when you come back.',
+            ctaLabel: 'Open Settings',
+            onCta: openSettings,
+          };
+
   return (
     <OnboardingShell
+      {...content}
       progress={progress}
-      title={hasReturned ? 'Did you enable the keyboard?' : 'Use OpenWhispr in any app.'}
-      titleAccent={hasReturned ? 'enable' : 'any app'}
-      subtitle={
-        hasReturned
-          ? 'We didn’t detect the keyboard yet. Make sure both toggles are on, then try again.'
-          : 'Follow these steps in Settings. We’ll be here when you come back.'
-      }
-      ctaLabel={hasReturned ? 'Try again' : 'Open Settings'}
       ctaDisabled={settingsLaunchPending}
       ctaLoading={settingsLaunchPending}
-      onCta={openSettings}
-      secondaryCtaLabel={hasReturned ? "I've enabled it" : undefined}
-      onSecondaryCta={hasReturned ? advance : undefined}
     >
       <View className="flex-1 justify-center gap-4">
         {openedSettings ? (

@@ -18,7 +18,8 @@ import { LiveActivity } from '../../modules/live-activity/src';
 
 export const SHORTCUTS_CREATE_URL = 'shortcuts://create-shortcut';
 export const SHORTCUTS_APP_URL = 'shortcuts://';
-const SUGGESTED_COMBO = '⌃⌥D';
+// Full Keyboard Access claims Tab and Fn combos by default and no Option ones.
+const SUGGESTED_COMBO = '⌥D';
 
 // iOS can refuse the editor deep link. The Shortcuts app itself is enough, since
 // step 2 says which action to add, and a refusal must never become an error screen.
@@ -110,8 +111,8 @@ export function HardwareKeyboardShortcutScreen() {
           iconStyle="line"
           icon="keyboard"
           mdIcon="Keyboard"
-          title="Settings → Accessibility → Keyboards & Typing → Full Keyboard Access"
-          description="Turn the Full Keyboard Access switch on. The shortcut does nothing while it is off."
+          title="Full Keyboard Access"
+          description="In Settings → Accessibility → Keyboards & Typing, turn Full Keyboard Access on. The shortcut does nothing while it is off."
           showChevron={false}
         />
       </SettingsSection>
@@ -120,8 +121,8 @@ export function HardwareKeyboardShortcutScreen() {
           iconStyle="line"
           icon="command"
           mdIcon="Command"
-          title="Commands → Shortcuts → Toggle OpenWhispr Dictation"
-          description={`Press the keys you want to use. ${SUGGESTED_COMBO} (Control-Option-D) is free by default.`}
+          title="Toggle OpenWhispr Dictation"
+          description={`In Full Keyboard Access, open Commands, tap this action under Shortcuts, then press ${SUGGESTED_COMBO} (Option-D).`}
           showChevron={false}
         />
       </SettingsSection>
@@ -141,7 +142,7 @@ export function HardwareKeyboardShortcutScreen() {
         <SettingsTextFieldRow
           icon="text.cursor"
           mdIcon="TextCursorInput"
-          placeholder={`Press ${SUGGESTED_COMBO}, speak, press it again, then ⌘V`}
+          placeholder={`${SUGGESTED_COMBO}, speak, ${SUGGESTED_COMBO}, then ⌘V`}
           value={tryText}
           onChangeText={setTryText}
           testID="hardware-keyboard-try-it"
