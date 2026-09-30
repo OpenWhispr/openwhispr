@@ -430,3 +430,28 @@ test("the marker only in the model's thinking still saves the summary", async (t
   await waitFor(() => updates.length > 0, "the summary write");
   assert.deepEqual(store.consumeErrorEvents(), []);
 });
+
+test("a summary that merely contains the marker is still saved", async (t) => {
+  const { store, updates } = await loadStore(t);
+  const summaries = [
+    // A small model answering one empty section with the marker.
+    "## Summary\n- We agreed to ship on Friday.\n\n## Decisions\nNOTHING_TO_SUMMARIZE",
+    "- We agreed to ship on Friday.\n- NOTHING_TO_SUMMARIZE",
+    "# Notes\n- The marker NOTHING_TO_SUMMARIZE confused the parser.\n- Ship Friday.",
+  ];
+  for (const [index, reply] of summaries.entries()) {
+    const noteId = 40 + index;
+    globalThis.__processTextResult = reply;
+    store.runBackgroundAction(
+      noteId,
+      "## Meeting Transcript\nYou: We ship Friday.",
+      `hash-${noteId}`,
+      ACTION,
+      { modelId: "gpt-4.1", isCloudMode: true, isMeetingNote: true },
+      LABELS
+    );
+    await waitFor(() => updates.length === index + 1, "the summary write");
+    assert.equal(updates[index].payload.enhanced_content, reply);
+  }
+  assert.deepEqual(store.consumeErrorEvents(), []);
+});

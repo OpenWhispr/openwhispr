@@ -200,6 +200,22 @@ const nothingToSummarizeError = () =>
     notice: true,
   });
 
+/**
+ * Whether the reply is the marker itself, as models wrap it: in a fence or
+ * emphasis, or after a short sentence. A summary that only contains it, such as
+ * a section a small model answered with the marker, is still a summary.
+ */
+function isNothingToSummarizeReply(reply: string): boolean {
+  const lines = stripThinkingTags(reply)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("```"));
+  const last = lines.pop()?.replace(/^[*_`]+|[*_`.!]+$/g, "");
+  if (last !== NOTHING_TO_SUMMARIZE) return false;
+  const lead = lines.join("\n");
+  return lead.length <= 200 && !/^(?:#|[-*+]\s|\d+[.)]\s)/m.test(lead);
+}
+
 /** The translated refusal from #2142, for material no amount of splitting can fit. */
 function tooLongForModel(modelName: string): LocalInferenceError {
   const error: LocalInferenceError = new Error(
@@ -508,8 +524,7 @@ export function runBackgroundAction(
         throw emptyReplyError();
       }
       // Only greetings or filler: say so rather than save that as the summary.
-      // Models also wrap the marker in a fence or bold, or add a sentence first.
-      if (stripThinkingTags(enhanced).includes(NOTHING_TO_SUMMARIZE)) {
+      if (isNothingToSummarizeReply(enhanced)) {
         throw nothingToSummarizeError();
       }
 
