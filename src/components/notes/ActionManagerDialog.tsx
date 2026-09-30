@@ -101,7 +101,7 @@ export default function ActionManagerDialog({
     setDescription(action.description);
     setPrompt(action.prompt);
     setSections(toDrafts(action.sections));
-    setOutput(action.output ?? "auto");
+    setOutput(action.output ?? "chat");
     setIsCreating(false);
   };
 
@@ -170,8 +170,6 @@ export default function ActionManagerDialog({
         return;
       }
       if (editingId === null) setIsCreating(false);
-      // Show what Auto picked.
-      if ("output" in fields) setOutput(fields.output);
     } finally {
       setIsSaving(false);
     }
@@ -395,9 +393,12 @@ export default function ActionManagerDialog({
                         onValueChange={(value) => setOutput(value as ActionOutput | "auto")}
                       >
                         <TabsList className="h-8 p-0.5">
-                          <TabsTrigger value="auto" className="px-3 py-1 text-xs">
-                            {t("notes.actions.output.auto")}
-                          </TabsTrigger>
+                          {/* A saved action keeps the output it was given, so Auto is for new ones. */}
+                          {editingId === null && (
+                            <TabsTrigger value="auto" className="px-3 py-1 text-xs">
+                              {t("notes.actions.output.auto")}
+                            </TabsTrigger>
+                          )}
                           <TabsTrigger value="chat" className="px-3 py-1 text-xs">
                             {t("notes.actions.output.chat")}
                           </TabsTrigger>
