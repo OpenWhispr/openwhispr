@@ -214,6 +214,14 @@ test("extra clusters fold into the largest when voices can't be read", async () 
 
 // Dropping the 3 % phantom first would lift the interviewee from 88 % to
 // 90.7 % of the speech and discard a correctly labelled interview.
+test("a solo recording with a stray blip keeps its one speaker", async () => {
+  diarizerOutput = [...cluster("speaker_0", 100, 6), ...cluster("speaker_1", 1, 0.45)];
+
+  const result = await handler({}, audioPath, {});
+
+  assert.deepEqual(speakersOf(result.segments), ["speaker_0"]);
+});
+
 test("an interview with short questions keeps its labels", async () => {
   diarizerOutput = [
     ...cluster("speaker_0", 88, 10),

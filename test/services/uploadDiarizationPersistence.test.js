@@ -3,10 +3,9 @@ const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
 // Regression for the upload/URL-ingest path dropping diarization metadata: the
-// batch queue ran the diarizer but persisted none of diarization_enabled,
-// expected_speaker_count, or audio_duration_seconds, so an uploaded note that
-// WAS diarized presented to the app as though it was not (the meeting path
-// persists all of them).
+// batch queue ran the diarizer but persisted neither diarization_enabled nor
+// audio_duration_seconds, so an uploaded note that WAS diarized presented to
+// the app as though it was not (the meeting path persists both).
 
 const transcription = {
   useLocalWhisper: true,
@@ -105,7 +104,7 @@ test("a diarized file upload persists the diarization metadata", async (t) => {
   // The diarizer runs under the same cancellable requestId as the
   // transcription, so one cancel-upload-transcription aborts both.
   assert.equal(typeof calls.diarize[0].requestId, "string");
-  assert.deepEqual(calls.updateNote, [[7, { diarization_enabled: 1, expected_speaker_count: 2 }]]);
+  assert.deepEqual(calls.updateNote, [[7, { diarization_enabled: 1 }]]);
 });
 
 test("a diarized URL ingest persists the diarization metadata", async (t) => {
@@ -141,7 +140,7 @@ test("a diarized URL ingest persists the diarization metadata", async (t) => {
   assert.equal(sourceFile, "Board Meeting Recording");
   assert.equal(audioDuration, 4359.87);
 
-  assert.deepEqual(calls.updateNote, [[7, { diarization_enabled: 1, expected_speaker_count: 2 }]]);
+  assert.deepEqual(calls.updateNote, [[7, { diarization_enabled: 1 }]]);
   assert.deepEqual(calls.deletedTempFiles, ["/tmp/ow-url-download.m4a"]);
 });
 

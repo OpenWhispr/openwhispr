@@ -32,12 +32,16 @@ const PHANTOM_MAX_MEAN_SEGMENT_SECONDS = 3;
 const PROTECTED_CLUSTER_COUNT = 2;
 
 // When clustering merges two real speakers, one cluster ends up with nearly
-// all the speech and only short-utterance phantoms beside it (94–96 % on
-// #2021's call). A dominant speaker beside someone with real turns is a
-// lecture or an interview, not a collapse. Check the run before dropping
-// phantoms: dropping them inflates the top share, so an interviewee holding
-// 88 % beside a short-question interviewer and a 3 % phantom would cross 90 %.
-const COLLAPSED_TOP_SHARE = 0.9;
+// all the speech beside phantoms of backchannels and turn starts: on every
+// collapsed run of #2021's call the top held 94–96 % and each phantom
+// averaged 1.7–2 s segments. Someone who asks questions, however short,
+// averages longer segments, so an interview or a lecture with audience
+// questions keeps its labels. Known cost: a listener who only backchannels
+// beside a speaker holding over 93 % looks the same, and that run loses its
+// labels. Clusters under the 1 s floor are noise and don't count, so a
+// monologue with a stray blip isn't a collapse.
+const COLLAPSED_TOP_SHARE = 0.93;
+const COLLAPSED_MAX_MEAN_SEGMENT_SECONDS = 2.2;
 
 function clusterThresholdForDuration(durationSeconds) {
   if (!Number.isFinite(durationSeconds) || durationSeconds <= THRESHOLD_RAMP_START_SECONDS) {
@@ -95,12 +99,14 @@ function dropNegligibleClusters(segments) {
 }
 
 function isCollapsedDiarization(segments) {
-  const { clusters, totalSpeech } = summarizeClusters(segments);
-  if (clusters.size < 2) return false;
-  const [largest, ...rest] = [...clusters.values()].sort((a, b) => b.total - a.total);
+  const { clusters } = summarizeClusters(segments);
+  const heard = [...clusters.values()].filter(({ total }) => total >= MIN_CLUSTER_TOTAL_SECONDS);
+  if (heard.length < 2) return false;
+  const [largest, ...rest] = heard.sort((a, b) => b.total - a.total);
+  const heardSpeech = heard.reduce((sum, { total }) => sum + total, 0);
   return (
-    largest.total / totalSpeech > COLLAPSED_TOP_SHARE &&
-    rest.every(({ total, count }) => total / count < PHANTOM_MAX_MEAN_SEGMENT_SECONDS)
+    largest.total / heardSpeech > COLLAPSED_TOP_SHARE &&
+    rest.every(({ total, count }) => total / count < COLLAPSED_MAX_MEAN_SEGMENT_SECONDS)
   );
 }
 

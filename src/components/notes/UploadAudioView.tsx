@@ -189,9 +189,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const [diarizationEnabled, setDiarizationEnabled] = useState(
     () => localStorage.getItem("uploadDiarizationEnabled") === "true"
   );
-  const [diarizationNumSpeakers, setDiarizationNumSpeakers] = useState<string>(
-    () => localStorage.getItem("uploadDiarizationNumSpeakers") || ""
-  );
+  // Earlier builds accepted decimals; a saved one would read as Auto.
+  const [diarizationNumSpeakers, setDiarizationNumSpeakers] = useState<string>(() => {
+    const saved = localStorage.getItem("uploadDiarizationNumSpeakers") || "";
+    return /^\d+$/.test(saved) ? saved : "";
+  });
   const [diarizationModelsReady, setDiarizationModelsReady] = useState<boolean | null>(null);
   const [diarizationDownloading, setDiarizationDownloading] = useState(false);
 
@@ -1352,15 +1354,21 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                   type="number"
                   min="2"
                   max={MAX_SPEAKER_COUNT}
+                  step="1"
+                  inputMode="numeric"
                   value={diarizationNumSpeakers}
+                  onKeyDown={(e) => {
+                    if ([".", ",", "e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+                  }}
                   onChange={(e) => {
                     const raw = e.target.value;
                     if (raw === "") {
                       setDiarizationNumSpeakers("");
                       return;
                     }
-                    const n = Math.max(2, Math.min(MAX_SPEAKER_COUNT, Number(raw)));
-                    setDiarizationNumSpeakers(String(isNaN(n) ? "" : n));
+                    const n = Number(raw);
+                    if (!Number.isInteger(n)) return;
+                    setDiarizationNumSpeakers(String(Math.max(2, Math.min(MAX_SPEAKER_COUNT, n))));
                   }}
                   placeholder={t("notes.upload.numSpeakersPlaceholder")}
                   className={cn(

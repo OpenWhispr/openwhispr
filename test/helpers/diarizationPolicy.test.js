@@ -250,13 +250,13 @@ test("a collapsed run is found whatever order sherpa lists its clusters in", () 
   assert.equal(isCollapsedDiarization(segments), true);
 });
 
-test("a run is collapsed only above 90% for the largest cluster", () => {
+test("a run is collapsed only above 93% for the largest cluster", () => {
   const withTop = (seconds) => [
     ...cluster("speaker_0", 1, seconds),
-    ...cluster("speaker_1", 50, 2),
+    ...cluster("speaker_1", 35, 2),
   ];
-  assert.equal(isCollapsedDiarization(withTop(900)), false);
-  assert.equal(isCollapsedDiarization(withTop(901)), true);
+  assert.equal(isCollapsedDiarization(withTop(930)), false);
+  assert.equal(isCollapsedDiarization(withTop(931)), true);
 });
 
 // Short turns alone don't make a collapse: someone holding 15 % of the speech
@@ -266,9 +266,13 @@ test("a lopsided conversation in short turns on both sides is not collapsed", ()
   assert.equal(isCollapsedDiarization(segments), false);
 });
 
-test("a run is not collapsed while any other cluster holds real turns", () => {
-  const exactlyThree = [...cluster("speaker_0", 97, 10), ...cluster("speaker_1", 10, 3)];
-  assert.equal(isCollapsedDiarization(exactlyThree), false);
+test("a run is not collapsed while any other cluster averages 2.2 s segments or more", () => {
+  const beside = (seconds) => [
+    ...cluster("speaker_0", 100, 10),
+    ...cluster("speaker_1", 1, seconds),
+  ];
+  assert.equal(isCollapsedDiarization(beside(2.2)), false);
+  assert.equal(isCollapsedDiarization(beside(2.19)), true);
 
   const oneRealBesidePhantom = [
     ...cluster("speaker_0", 91, 10),
@@ -276,6 +280,33 @@ test("a run is not collapsed while any other cluster holds real turns", () => {
     ...cluster("speaker_2", 20, 2),
   ];
   assert.equal(isCollapsedDiarization(oneRealBesidePhantom), false);
+});
+
+// The 1 s floor exists for these blips; a monologue must keep its label.
+test("a single speaker beside a sub-second blip is not collapsed", () => {
+  const monologue = [...cluster("speaker_0", 100, 6), ...cluster("speaker_1", 1, 0.45)];
+  assert.equal(isCollapsedDiarization(monologue), false);
+
+  const blips = [
+    ...cluster("speaker_0", 100, 6),
+    ...cluster("speaker_1", 1, 0.5),
+    ...cluster("speaker_2", 2, 0.4),
+  ];
+  assert.equal(isCollapsedDiarization(blips), false);
+});
+
+test("interviews, podcasts and lectures dominated by one voice keep their labels", () => {
+  const oralHistory = [...cluster("speaker_0", 40, 60), ...cluster("speaker_1", 40, 2.5)];
+  const podcast = [...cluster("speaker_0", 60, 20), ...cluster("speaker_1", 40, 2.9)];
+  const lecture = [...cluster("speaker_0", 500, 6), ...cluster("speaker_1", 6, 2.8)];
+  for (const run of [oralHistory, podcast, lecture]) {
+    assert.equal(isCollapsedDiarization(run), false);
+  }
+});
+
+test("characterization: a listener who only backchannels beside a dominant speaker reads as collapsed", () => {
+  const segments = [...cluster("speaker_0", 100, 10), ...cluster("speaker_1", 30, 1.8)];
+  assert.equal(isCollapsedDiarization(segments), true);
 });
 
 const dot = (a, b) => a.reduce((sum, value, i) => sum + value * b[i], 0);
