@@ -637,11 +637,10 @@
       "couldNotDeleteTitle": "Löschen fehlgeschlagen",
       "couldNotDeleteDescription": "Diese Transkription wurde möglicherweise bereits entfernt.",
       "couldNotDeleteDescriptionGeneric": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
-      "empty": "Noch keine Diktate",
-      "emptyDescription": "Deine Diktate erscheinen hier.",
+      "empty": "Starte dein erstes Diktat",
+      "emptyDescription": "Dein diktierter Text erscheint hier.",
+      "shortcutHint": "Drücke {{shortcut}} und sprich los.",
       "dataRetentionDisabled": "Datenaufbewahrung ist deaktiviert. Transkriptionen und Audio werden nicht im Verlauf gespeichert.",
-      "press": "Drücken Sie",
-      "toStart": "zum Starten",
       "welcomeBack": "Willkommen zurück",
       "welcomeBackNamed": "Willkommen zurück, {{name}}",
       "dateGroups": {
@@ -2813,7 +2812,7 @@
     "enableDescription_one": "Nutzung aus {{count}} vorhandenem Diktat synchronisieren. Transkripte bleiben privat.",
     "enableDescription_other": "Nutzung aus {{count}} vorhandenen Diktaten synchronisieren. Transkripte bleiben privat.",
     "emptyTitle": "Noch keine Diktate",
-    "emptyBody": "Beginnen Sie zu diktieren – Ihre Wörter, Serien und tägliche Aktivität erscheinen dann hier.",
+    "emptyBody": "Fang an zu diktieren – deine Wörter, Serien und tägliche Aktivität erscheinen dann hier.",
     "loadError": "Insights konnten von diesem Gerät nicht gelesen werden.",
     "leaderboard": {
       "title": "Bestenliste",

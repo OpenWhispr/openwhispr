@@ -2,8 +2,9 @@ import { Fragment } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import { formatHotkeyLabel, parseHotkeyList } from "../../utils/hotkeys";
+import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./BidiInterpolatedText";
 
-/** "Press <hotkey> to start", with each dictation hotkey drawn as a key cap. */
+/** "Press <hotkey> and start speaking.", with each dictation hotkey drawn as a key cap. */
 export default function DictationHotkeyHint({
   hotkey,
   className,
@@ -19,18 +20,21 @@ export default function DictationHotkeyHint({
         className
       )}
     >
-      {t("controlPanel.history.press")}
-      <span dir="ltr" className="inline-flex items-center gap-1">
-        {parseHotkeyList(hotkey).map((hk, index) => (
-          <Fragment key={hk}>
-            {index > 0 && <span className="text-foreground/45">/</span>}
-            <kbd className="rounded-md bg-background px-1.5 py-px font-sans text-[11px] font-medium text-foreground/80 shadow-sm dark:bg-surface-2">
-              {formatHotkeyLabel(hk)}
-            </kbd>
-          </Fragment>
-        ))}
-      </span>
-      {t("controlPanel.history.toStart")}
+      <BidiInterpolatedText
+        text={t("controlPanel.history.shortcutHint", { shortcut: BIDI_VALUE_TOKEN })}
+        value={
+          <span className="inline-flex items-center gap-1">
+            {parseHotkeyList(hotkey).map((hk, index) => (
+              <Fragment key={hk}>
+                {index > 0 && <span className="text-foreground/45">/</span>}
+                <kbd className="rounded-md bg-background px-1.5 py-px font-sans text-[11px] font-medium text-foreground/80 shadow-sm dark:bg-surface-2">
+                  {formatHotkeyLabel(hk)}
+                </kbd>
+              </Fragment>
+            ))}
+          </span>
+        }
+      />
     </span>
   );
 }
