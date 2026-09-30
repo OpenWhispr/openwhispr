@@ -357,7 +357,10 @@ test("retrying a held-back paste while the keys are still held shows the pill ag
   assert.equal(errorToasts(harness).length, 2);
 });
 
-test("retrying a force-stopped push pastes the kept transcript", async (t) => {
+// Force stops come only from macOS and Windows push-to-talk, which have no
+// modifier wait: a pasting Retry clicked while the keys are still down would
+// inject exactly the chord the pill exists to prevent. Retry records again.
+test("retrying a force-stopped push records again instead of pasting", async (t) => {
   const harness = await mountHarness(t);
   await harness.forceStop("timeout");
   await harness.complete();
@@ -365,11 +368,8 @@ test("retrying a force-stopped push pastes the kept transcript", async (t) => {
 
   await React.act(async () => retryAction(toast).onClick());
 
-  assert.deepEqual(
-    harness.pastes.map((paste) => paste.text),
-    ["held too long"]
-  );
-  assert.equal(harness.recordingStarts(), 0);
+  assert.deepEqual(harness.pastes, []);
+  assert.equal(harness.recordingStarts(), 1);
 });
 
 function deferredPaste() {

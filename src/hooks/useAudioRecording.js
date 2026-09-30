@@ -763,14 +763,14 @@ export const useAudioRecording = (toast, options = {}) => {
           };
 
           // A paste held back because keys were still down keeps the transcript
-          // and says why it did not land. Its Retry pastes the kept text again
-          // rather than starting another recording. `generation` is the pill
+          // and says why it did not land. `onRetry`, when given, replaces the
+          // pill's record-again Retry. `generation` is the pill
           // generation when the attempt began: if the next dictation started while
           // it waited, that recording owns the pill (and would dismiss this one at
           // once) and its live preview, so the transcript only stays on the clipboard.
           const reportHeldBackPaste = async (
             delivery,
-            { title, description, descriptionClipboardFailed },
+            { title, description, descriptionClipboardFailed, onRetry },
             generation = dictationErrorGenerationRef.current
           ) => {
             const keptInClipboard = await keepInClipboard(delivery);
@@ -789,7 +789,7 @@ export const useAudioRecording = (toast, options = {}) => {
               // action on this pill is the recovery path either way.
               description: keptInClipboard ? description : descriptionClipboardFailed,
               transcript: result.rawText ?? result.text,
-              onRetry: pasteTranscript,
+              onRetry,
             });
           };
 
@@ -810,6 +810,8 @@ export const useAudioRecording = (toast, options = {}) => {
                   descriptionClipboardFailed: t(
                     "hooks.audioRecording.modifiersHeld.descriptionClipboardFailed"
                   ),
+                  // The modifier wait runs again, so the kept text is safe to re-paste.
+                  onRetry: pasteTranscript,
                 },
                 generation
               );
@@ -820,7 +822,9 @@ export const useAudioRecording = (toast, options = {}) => {
           if (pushForceStoppedRef.current && autoPasteEnabled && !result.assistantConversation) {
             // The push hit its safety ceiling while the trigger keys were still
             // down. Injecting the paste shortcut into those held modifiers is
-            // what silently loses the transcript, so keep it instead.
+            // what silently loses the transcript, so keep it instead. Only macOS
+            // and Windows force-stop, and neither waits for held modifiers, so
+            // Retry records again rather than pasting.
             await reportHeldBackPaste("push-force-stopped", {
               title: t("hooks.audioRecording.pushForceStopped.title"),
               description: t("hooks.audioRecording.pushForceStopped.description"),
@@ -850,6 +854,7 @@ export const useAudioRecording = (toast, options = {}) => {
                     descriptionClipboardFailed: t(
                       "hooks.audioRecording.selectionEditing.modifiersHeldClipboardFailed"
                     ),
+                    onRetry: pasteTranscript,
                   },
                   generation
                 );
