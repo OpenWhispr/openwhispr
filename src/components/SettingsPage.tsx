@@ -1194,6 +1194,8 @@ export default function SettingsPage({
     dictationKey,
     activationMode,
     setActivationMode,
+    escapeCancelsDictation,
+    setEscapeCancelsDictation,
     microphoneSelectionMode,
     selectedMicDeviceId,
     selectedMicDeviceLabel,
@@ -4051,6 +4053,18 @@ EOF`,
                       )}
                   </SettingsPanelRow>
                 )}
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.general.hotkey.cancelWithEscape")}
+                    description={t("settingsPage.general.hotkey.cancelWithEscapeDescription")}
+                  >
+                    <Toggle
+                      checked={escapeCancelsDictation}
+                      onChange={setEscapeCancelsDictation}
+                      aria-label={t("settingsPage.general.hotkey.cancelWithEscape")}
+                    />
+                  </SettingsRow>
+                </SettingsPanelRow>
               </SettingsPanel>
             </div>
 
