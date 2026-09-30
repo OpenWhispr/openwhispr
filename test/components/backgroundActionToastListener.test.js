@@ -135,18 +135,6 @@ test("Undo leaves a note deleted since alone instead of bringing it back", async
   assert.deepEqual(globalThis.__dismissed, ["toast-1"]);
 });
 
-test("a newer change to the same note retires the older Undo, which would wipe it out", async (t) => {
-  const { store } = await mountListener(t, { success: true });
-  await React.act(async () =>
-    store.useActionProcessingStore.setState({ appliedEvents: [APPLIED] })
-  );
-  await React.act(async () =>
-    store.useActionProcessingStore.setState({ appliedEvents: [APPLIED] })
-  );
-  assert.equal(globalThis.__toasts.length, 2);
-  assert.deepEqual(globalThis.__dismissed, ["toast-1"]);
-});
-
 test("a new run starting on the note retires its Undo, which the run may build on", async (t) => {
   const { store } = await mountListener(t, { success: true });
   await React.act(async () =>

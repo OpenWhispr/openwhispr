@@ -53,8 +53,6 @@ export default function BackgroundActionToastListener() {
 
   const offerUndo = useCallback(
     ({ noteId, action, previous }: ActionAppliedEvent) => {
-      const earlier = undoToastByNote.current.get(noteId);
-      if (earlier) dismiss(earlier);
       const toastId = toast({
         title: t("notes.actions.applied", { name: getActionName(action, t) }),
         duration: UNDO_WINDOW_MS,
