@@ -7298,7 +7298,9 @@ class IPCHandlers {
           throw err;
         }
         const authHeader = await getAuthHeader(event);
-        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
+        if (!Object.keys(authHeader).length) {
+          throw Object.assign(new Error("Not authenticated"), { code: "AUTH_REQUIRED" });
+        }
         const url = `${apiUrl}${path}`;
         let response;
         try {
@@ -7319,7 +7321,12 @@ class IPCHandlers {
           throw err;
         }
         if (!response.ok) {
-          throw await readPolicyResponseError(response, `Token request failed: ${response.status}`);
+          const error = await readPolicyResponseError(
+            response,
+            `Token request failed: ${response.status}`
+          );
+          if (response.status === 401 && !error.code) error.code = "AUTH_EXPIRED";
+          throw error;
         }
         return response.json();
       };

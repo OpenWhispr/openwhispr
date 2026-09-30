@@ -178,6 +178,7 @@
     "active": "使用中",
     "managedByOrg": "由您的組織管理",
     "freeAccountRequired": "需要免費帳戶",
+    "signIn": "登入",
     "comingSoon": "即將推出",
     "cloud": "雲端",
     "local": "本機",
@@ -2295,7 +2296,8 @@
           }
         }
       },
-      "meetingEnterpriseOnly": "貴組織僅允許企業雲端轉錄，尚不支援會議錄音。"
+      "meetingEnterpriseOnly": "貴組織僅允許企業雲端轉錄，尚不支援會議錄音。",
+      "meetingCloudSignedOut": "未登入時，無法使用 OpenWhispr Cloud 開始筆記錄音。請在上方選擇其他引擎。"
     },
     "intelligence": {
       "gpuDevice": {
@@ -3101,6 +3103,7 @@
       "unsupportedSelfHosted": "筆記錄音尚不支援自架端點。請開啟設定，選擇本機或支援串流的服務商。",
       "unsupportedProvider": "筆記錄音無法使用 {{provider}} 進行即時轉錄。請開啟設定，選擇本機或支援串流的服務商。",
       "noProviderSelected": "尚未為筆記錄音選擇服務商。請開啟設定，選擇本機或支援串流的服務商。",
+      "signInRequired": "筆記錄音使用 OpenWhispr Cloud，需要登入。請登入，或開啟設定，選擇本機或支援串流的服務商。",
       "systemAudioSilent": {
         "title": "尚未偵測到會議音訊",
         "description": "到目前為止，只有您的麥克風收到聲音。正在進行視訊通話？請檢查會議音訊是否正在此電腦上播放且未被靜音。正在進行現場錄音？您可以忽略此提示——您的麥克風會收錄房間內的聲音。"

@@ -1,6 +1,7 @@
 import { createElement, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "./ui/useToast";
+import { ToastActionButton } from "./ui/Toast";
 import {
   getActiveRecordingSessionId,
   getMicAnalyser,
@@ -11,6 +12,7 @@ import {
 } from "../stores/meetingRecordingStore";
 import { requestMeetingRecordingAutoEnd } from "../helpers/meetingRecordingSession";
 import logger from "../utils/logger";
+import { requestSignIn } from "../utils/requestSignIn";
 
 const EMA_PREV = 0.5;
 const EMA_NEXT = 0.5;
@@ -23,6 +25,7 @@ const MEETING_ERROR_KEYS: Record<string, string> = {
   unsupportedSelfHosted: "notes.meeting.unsupportedSelfHosted",
   unsupportedProvider: "notes.meeting.unsupportedProvider",
   noProviderSelected: "notes.meeting.noProviderSelected",
+  signInRequired: "notes.meeting.signInRequired",
 };
 
 export default function MeetingRecordingMount(): null {
@@ -75,10 +78,15 @@ export default function MeetingRecordingMount(): null {
     if (!error) return;
     const [sentinel, argument] = error.split(":");
     const errorKey = MEETING_ERROR_KEYS[sentinel];
+    const needsSignIn = sentinel === "signInRequired";
     toast({
       title: t("notes.meeting.title"),
       description: errorKey ? t(errorKey, { provider: argument }) : error,
       variant: "destructive",
+      duration: needsSignIn ? 8000 : undefined,
+      action: needsSignIn
+        ? createElement(ToastActionButton, { onClick: requestSignIn, children: t("common.signIn") })
+        : undefined,
     });
     // errorNonce re-fires this toast when the same error repeats back-to-back.
   }, [error, errorNonce, toast, t]);

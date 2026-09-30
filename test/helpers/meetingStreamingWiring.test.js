@@ -164,3 +164,15 @@ test("meeting connects forward the credential mode", () => {
     assert.match(block, /^\s*mode: options\.mode,$/m);
   }
 });
+
+test("realtime-token refusals carry a sign-in code", () => {
+  // The token request answers a stale session with 401 "Invalid session" and no
+  // code; without one, Note Recording toasts that raw text instead of offering
+  // sign-in (#2427).
+  const helper = source.slice(
+    source.indexOf("const postServerToken"),
+    source.indexOf("return fetchRealtimeTokenForProvider(")
+  );
+  assert.match(helper, /new Error\("Not authenticated"\), \{ code: "AUTH_REQUIRED" \}/);
+  assert.match(helper, /response\.status === 401 && !error\.code\) error\.code = "AUTH_EXPIRED"/);
+});

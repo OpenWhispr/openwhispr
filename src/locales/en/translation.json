@@ -178,6 +178,7 @@
     "active": "Active",
     "managedByOrg": "Managed by your organization",
     "freeAccountRequired": "Free account required",
+    "signIn": "Sign in",
     "comingSoon": "Coming Soon",
     "cloud": "Cloud",
     "local": "Local",
@@ -2590,7 +2591,8 @@
           }
         }
       },
-      "meetingEnterpriseOnly": "Your organization only allows enterprise cloud transcription, which does not cover meeting recording yet."
+      "meetingEnterpriseOnly": "Your organization only allows enterprise cloud transcription, which does not cover meeting recording yet.",
+      "meetingCloudSignedOut": "Note recordings can't start on OpenWhispr Cloud while you're signed out. Choose another engine above."
     },
     "intelligence": {
       "gpuDevice": {
@@ -3453,6 +3455,7 @@
       "unsupportedSelfHosted": "Note Recording can't use a self-hosted endpoint yet. Open Settings and choose Local or a streaming provider.",
       "unsupportedProvider": "Note Recording can't use {{provider}} for live transcription. Open Settings and choose Local or a streaming provider.",
       "noProviderSelected": "No provider is selected for Note Recording. Open Settings and choose Local or a streaming provider.",
+      "signInRequired": "Note Recording uses OpenWhispr Cloud, which requires you to sign in. Sign in, or open Settings and choose Local or a streaming provider.",
       "systemAudioSilent": {
         "title": "No meeting audio detected yet",
         "description": "Only your microphone has picked up sound so far. On a video call? Check that the meeting audio is playing on this computer and isn't muted. Recording in person? You can ignore this — your microphone captures the room."
