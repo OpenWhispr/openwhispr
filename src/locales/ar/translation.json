@@ -4120,7 +4120,7 @@
       "callbackRequired": "دالة الاستدعاء مطلوبة لإعداد اختصار لوحة المفاتيح",
       "globeOnlyMac": "مفتاح Globe متوفر فقط على نظام macOS.",
       "fnCombinationUnsupported": "يمكن استخدام مفتاح Globe/Fn بمفرده فقط.",
-      "mouseButtonOnlyMac": "اختصارات أزرار الماوس مدعومة حاليًا على نظام macOS فقط.",
+      "mouseButtonOnlyMac": "اختصارات أزرار الماوس مدعومة على Windows وmacOS.",
       "alreadyRegistered": "\"{{hotkey}}\" مسجل بالفعل بواسطة تطبيق آخر.",
       "osReserved": "قد يكون \"{{hotkey}}\" محجوزًا بواسطة بيئة سطح المكتب لديك.",
       "rightModifierNeedsListener": "لا يمكن استخدام \"{{hotkey}}\" على سطح المكتب هذا، إذ تحتاج اختصاراته إلى مفتاح عادي. أضف مفتاحًا، مثل Control+Alt+Space.",
@@ -4344,6 +4344,7 @@
     }
   },
   "hotkeyInput": {
+    "mouseButtonHint": "تعمل أزرار الماوس الجانبية أيضًا. حدد حقل الاختصار، ثم اضغط على زر جانبي.",
     "ariaLabel": "اضغط على مجموعة مفاتيح لتعيين اختصار",
     "clickToChange": "انقر للتغيير",
     "clickToChangeLower": "انقر للتغيير",

@@ -1,7 +1,7 @@
 /**
  * Windows Key Listener for Push-to-Talk
  *
- * Uses Windows Low-Level Keyboard Hook to detect key up/down events.
+ * Uses Windows Low-Level Keyboard/Mouse Hooks to detect key up/down events.
  * Accepts a virtual key code as command line argument.
  * Outputs "KEY_DOWN" and "KEY_UP" to stdout.
  *
@@ -18,6 +18,7 @@
 static HHOOK g_hook = NULL;
 static DWORD g_targetVk = 0;
 static BOOL g_isKeyDown = FALSE;
+static BOOL g_isMouse = FALSE;
 
 // Modifier key requirements
 static BOOL g_requireCtrl = FALSE;
@@ -107,6 +108,8 @@ static BOOL AreRequiredModifiersPressed(void) {
 
 // Map key name to virtual key code
 DWORD ParseKeyCode(const char* keyName) {
+    if (_stricmp(keyName, "MouseButton4") == 0) return VK_XBUTTON1;
+    if (_stricmp(keyName, "MouseButton5") == 0) return VK_XBUTTON2;
     // Function keys (F1-F12)
     if (_stricmp(keyName, "F1") == 0) return VK_F1;
     if (_stricmp(keyName, "F2") == 0) return VK_F2;
@@ -257,6 +260,31 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     return CallNextHookEx(g_hook, nCode, wParam, lParam);
 }
 
+LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
+    if (nCode == HC_ACTION) {
+        MSLLHOOKSTRUCT* mouse = (MSLLHOOKSTRUCT*)lParam;
+        DWORD vk = 0;
+        BOOL down = FALSE;
+        if (wParam == WM_XBUTTONDOWN || wParam == WM_XBUTTONUP) {
+            WORD button = HIWORD(mouse->mouseData);
+            if (button == XBUTTON1) vk = VK_XBUTTON1;
+            if (button == XBUTTON2) vk = VK_XBUTTON2;
+            down = wParam == WM_XBUTTONDOWN;
+        }
+        if (mouse->flags & LLMHF_INJECTED) return CallNextHookEx(g_hook, nCode, wParam, lParam);
+        if (vk && vk == g_targetVk) {
+            if (down != g_isKeyDown) {
+                g_isKeyDown = down;
+                printf(down ? "KEY_DOWN\n" : "KEY_UP\n");
+                fflush(stdout);
+            }
+            // Consume only the bound button, preventing browser back/forward.
+            return 1;
+        }
+    }
+    return CallNextHookEx(g_hook, nCode, wParam, lParam);
+}
+
 BOOL WINAPI ConsoleHandler(DWORD signal) {
     if (signal == CTRL_C_EVENT || signal == CTRL_BREAK_EVENT || signal == CTRL_CLOSE_EVENT) {
         if (g_hook) {
@@ -349,10 +377,12 @@ int main(int argc, char* argv[]) {
     // Set up console handler for clean shutdown
     SetConsoleCtrlHandler(ConsoleHandler, TRUE);
 
-    // Install the low-level keyboard hook
-    g_hook = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, NULL, 0);
+    // Install the low-level hook for the configured input
+    g_isMouse = g_targetVk == VK_XBUTTON1 || g_targetVk == VK_XBUTTON2;
+    g_hook = SetWindowsHookEx(g_isMouse ? WH_MOUSE_LL : WH_KEYBOARD_LL,
+                            g_isMouse ? LowLevelMouseProc : LowLevelKeyboardProc, NULL, 0);
     if (!g_hook) {
-        fprintf(stderr, "Error: Failed to install keyboard hook (error %lu)\n", GetLastError());
+        fprintf(stderr, "Error: Failed to install input hook (error %lu)\n", GetLastError());
         return 1;
     }
 

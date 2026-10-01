@@ -118,7 +118,7 @@
       "callbackRequired": "Se requiere una función callback para configurar el atajo",
       "globeOnlyMac": "La tecla Globe solo está disponible en macOS.",
       "fnCombinationUnsupported": "La tecla Globe/Fn solo se puede usar por sí sola.",
-      "mouseButtonOnlyMac": "Los atajos con botones del ratón solo son compatibles con macOS por ahora.",
+      "mouseButtonOnlyMac": "Los atajos con botones del ratón son compatibles con Windows y macOS.",
       "alreadyRegistered": "\"{{hotkey}}\" ya está registrada por otra aplicación.",
       "osReserved": "\"{{hotkey}}\" puede estar reservada por tu entorno de escritorio.",
       "rightModifierNeedsListener": "\"{{hotkey}}\" no se puede usar en este escritorio, cuyos atajos necesitan una tecla normal. Añade una tecla, como Control+Alt+Space.",
@@ -1372,6 +1372,7 @@
     }
   },
   "hotkeyInput": {
+    "mouseButtonHint": "Los botones laterales del ratón también funcionan. Selecciona el campo del atajo y pulsa un botón lateral.",
     "ariaLabel": "Pulsa una combinación de teclas para configurar el atajo",
     "clickToChange": "Clic para cambiar",
     "clickToChangeLower": "clic para cambiar",

@@ -591,10 +591,10 @@ export function validateHotkey(
   }
 
   if (isMouseButtonHotkey(hotkey)) {
-    if (platform !== "darwin") {
+    if (platform !== "darwin" && platform !== "win32") {
       return {
         valid: false,
-        error: "Mouse button hotkeys are currently supported on macOS only.",
+        error: "Mouse button hotkeys are supported on Windows and macOS.",
       };
     }
     return { valid: true };

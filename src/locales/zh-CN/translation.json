@@ -118,7 +118,7 @@
       "callbackRequired": "设置快捷键需要回调函数",
       "globeOnlyMac": "Globe 键仅在 macOS 上可用。",
       "fnCombinationUnsupported": "Globe/Fn 键只能单独使用。",
-      "mouseButtonOnlyMac": "鼠标按键快捷键目前仅在 macOS 上受支持。",
+      "mouseButtonOnlyMac": "Windows 和 macOS 支持鼠标按键快捷键。",
       "alreadyRegistered": "\"{{hotkey}}\" 已被其他应用注册。",
       "osReserved": "\"{{hotkey}}\" 可能被系统保留。",
       "rightModifierNeedsListener": "\"{{hotkey}}\" 无法在此桌面上使用，其快捷键需要包含一个普通按键。请添加一个按键，例如 Control+Alt+Space。",
@@ -1319,6 +1319,7 @@
     }
   },
   "hotkeyInput": {
+    "mouseButtonHint": "也支持鼠标侧键。选择快捷键输入框，然后按下侧键。",
     "ariaLabel": "按下组合键以设置快捷键",
     "clickToChange": "点击更改",
     "clickToChangeLower": "点击更改",
