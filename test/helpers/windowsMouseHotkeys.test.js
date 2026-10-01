@@ -27,7 +27,7 @@ function withPlatform(platform, run) {
     Object.defineProperty(process, "platform", original);
   }
 }
-test("Windows side buttons use native listeners in both Tap and Hold, across slots", () =>
+test("Windows mouse buttons use native listeners in both Tap and Hold, across slots", () =>
   withPlatform("win32", () => {
     const manager = new HotkeyManager();
     manager.slots = new Map([
@@ -36,7 +36,13 @@ test("Windows side buttons use native listeners in both Tap and Hold, across slo
     ]);
     assert.deepEqual(manager.getNativeListenerKeys("tap"), ["MouseButton4", "MouseButton5"]);
     assert.deepEqual(manager.getNativeListenerKeys("push"), ["MouseButton4", "F8", "MouseButton5"]);
-    for (const button of ["MouseButton4", "MouseButton5"]) {
+    for (const button of [
+      "MouseButton1",
+      "MouseButton2",
+      "MouseButton3",
+      "MouseButton4",
+      "MouseButton5",
+    ]) {
       assert.deepEqual(
         manager._registerSingleHotkey(button, () => {}),
         { success: true, hotkey: button, accelerator: null }

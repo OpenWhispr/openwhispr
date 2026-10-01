@@ -1319,7 +1319,7 @@
     }
   },
   "hotkeyInput": {
-    "mouseButtonHint": "也支持鼠标侧键。选择快捷键输入框，然后按下侧键。",
+    "mouseButtonHint": "鼠标按钮也可以使用。",
     "ariaLabel": "按下组合键以设置快捷键",
     "clickToChange": "点击更改",
     "clickToChangeLower": "点击更改",

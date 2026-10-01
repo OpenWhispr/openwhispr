@@ -1319,7 +1319,7 @@
     }
   },
   "hotkeyInput": {
-    "mouseButtonHint": "Funzionano anche i pulsanti laterali del mouse. Seleziona il campo della scorciatoia, poi premi un pulsante laterale.",
+    "mouseButtonHint": "Funzionano anche i pulsanti del mouse.",
     "ariaLabel": "Premi una combinazione di tasti per impostare la scorciatoia",
     "clickToChange": "Fai clic per cambiare",
     "clickToChangeLower": "fai clic per cambiare",

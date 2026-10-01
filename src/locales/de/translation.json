@@ -1414,7 +1414,7 @@
     }
   },
   "hotkeyInput": {
-    "mouseButtonHint": "Seitliche Maustasten funktionieren auch. Wähle das Tastenkürzel-Feld aus und drücke dann eine Seitentaste.",
+    "mouseButtonHint": "Maustasten funktionieren auch.",
     "ariaLabel": "Drücken Sie eine Tastenkombination, um den Hotkey festzulegen",
     "clickToChange": "Klicken zum Ändern",
     "clickToChangeLower": "klicken zum Ändern",

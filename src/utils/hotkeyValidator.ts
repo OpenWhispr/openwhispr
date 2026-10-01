@@ -408,8 +408,7 @@ function normalizeKeyToken(part: string): string {
   if (lowered === "backspace") return "Backspace";
   if (lowered === "globe") return "GLOBE";
   if (lowered === "fn") return "Fn";
-  if (lowered === "mousebutton4") return "MouseButton4";
-  if (lowered === "mousebutton5") return "MouseButton5";
+  if (/^mousebutton[1-5]$/.test(lowered)) return `MouseButton${lowered.slice(-1)}`;
 
   const functionMatch = lowered.match(/^f(\d{1,2})$/);
   if (functionMatch) {
@@ -602,7 +601,7 @@ export function validateHotkey(
 
   // Mouse buttons cannot be combined with keyboard modifiers — they're handled
   // by a separate native event tap, not Electron's globalShortcut.
-  if (/mousebutton[45]/i.test(hotkey)) {
+  if (/mousebutton[1-5]/i.test(hotkey)) {
     return {
       valid: false,
       error: "Mouse button hotkeys cannot be combined with other keys.",

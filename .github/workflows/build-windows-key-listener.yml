@@ -42,7 +42,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $events = @(& ./windows-mouse-test.exe)
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if (($events -join ',') -ne 'KEY_DOWN,KEY_UP,KEY_DOWN,KEY_UP') {
+          if (($events -join ',') -ne 'KEY_DOWN,KEY_UP,KEY_DOWN,KEY_UP,KEY_DOWN,KEY_UP,KEY_DOWN,KEY_UP,KEY_DOWN,KEY_UP') {
             throw "Unexpected mouse event sequence: $events"
           }
         shell: pwsh

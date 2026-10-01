@@ -1372,7 +1372,7 @@
     }
   },
   "hotkeyInput": {
-    "mouseButtonHint": "Los botones laterales del ratón también funcionan. Selecciona el campo del atajo y pulsa un botón lateral.",
+    "mouseButtonHint": "Los botones del ratón también funcionan.",
     "ariaLabel": "Pulsa una combinación de teclas para configurar el atajo",
     "clickToChange": "Clic para cambiar",
     "clickToChangeLower": "clic para cambiar",

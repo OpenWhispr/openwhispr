@@ -1298,7 +1298,7 @@
     }
   },
   "hotkeyInput": {
-    "mouseButtonHint": "Os botões laterais do mouse também funcionam. Selecione o campo do atalho e pressione um botão lateral.",
+    "mouseButtonHint": "Os botões do mouse também funcionam.",
     "ariaLabel": "Pressione uma combinação de teclas para definir o atalho",
     "clickToChange": "Clique para alterar",
     "clickToChangeLower": "clique para alterar",

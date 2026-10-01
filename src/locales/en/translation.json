@@ -1414,7 +1414,7 @@
     }
   },
   "hotkeyInput": {
-    "mouseButtonHint": "Side mouse buttons work too. Select the shortcut field, then press a side button.",
+    "mouseButtonHint": "Mouse buttons work too.",
     "ariaLabel": "Press a key combination to set hotkey",
     "clickToChange": "Click to change",
     "clickToChangeLower": "click to change",

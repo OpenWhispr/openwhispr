@@ -1319,7 +1319,7 @@
     }
   },
   "hotkeyInput": {
-    "mouseButtonHint": "也支援滑鼠側鍵。選取快捷鍵輸入框，然後按下側鍵。",
+    "mouseButtonHint": "滑鼠按鈕也可以使用。",
     "ariaLabel": "按下按鍵組合以設定快捷鍵",
     "clickToChange": "點擊以變更",
     "clickToChangeLower": "點擊以變更",

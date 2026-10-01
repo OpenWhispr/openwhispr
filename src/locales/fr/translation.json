@@ -1414,7 +1414,7 @@
     }
   },
   "hotkeyInput": {
-    "mouseButtonHint": "Les boutons latéraux de la souris fonctionnent aussi. Sélectionnez le champ du raccourci, puis appuyez sur un bouton latéral.",
+    "mouseButtonHint": "Les boutons de la souris fonctionnent aussi.",
     "ariaLabel": "Appuyez sur une combinaison de touches pour définir le raccourci",
     "clickToChange": "Cliquez pour modifier",
     "clickToChangeLower": "cliquez pour modifier",

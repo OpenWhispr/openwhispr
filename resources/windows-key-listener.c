@@ -108,6 +108,9 @@ static BOOL AreRequiredModifiersPressed(void) {
 
 // Map key name to virtual key code
 DWORD ParseKeyCode(const char* keyName) {
+    if (_stricmp(keyName, "MouseButton1") == 0) return VK_LBUTTON;
+    if (_stricmp(keyName, "MouseButton2") == 0) return VK_RBUTTON;
+    if (_stricmp(keyName, "MouseButton3") == 0) return VK_MBUTTON;
     if (_stricmp(keyName, "MouseButton4") == 0) return VK_XBUTTON1;
     if (_stricmp(keyName, "MouseButton5") == 0) return VK_XBUTTON2;
     // Function keys (F1-F12)
@@ -271,6 +274,13 @@ LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
             if (button == XBUTTON2) vk = VK_XBUTTON2;
             down = wParam == WM_XBUTTONDOWN;
         }
+        if (wParam == WM_LBUTTONDOWN || wParam == WM_LBUTTONUP) {
+            vk = VK_LBUTTON; down = wParam == WM_LBUTTONDOWN;
+        } else if (wParam == WM_RBUTTONDOWN || wParam == WM_RBUTTONUP) {
+            vk = VK_RBUTTON; down = wParam == WM_RBUTTONDOWN;
+        } else if (wParam == WM_MBUTTONDOWN || wParam == WM_MBUTTONUP) {
+            vk = VK_MBUTTON; down = wParam == WM_MBUTTONDOWN;
+        }
         if (mouse->flags & LLMHF_INJECTED) return CallNextHookEx(g_hook, nCode, wParam, lParam);
         if (vk && vk == g_targetVk) {
             if (down != g_isKeyDown) {
@@ -378,7 +388,8 @@ int main(int argc, char* argv[]) {
     SetConsoleCtrlHandler(ConsoleHandler, TRUE);
 
     // Install the low-level hook for the configured input
-    g_isMouse = g_targetVk == VK_XBUTTON1 || g_targetVk == VK_XBUTTON2;
+    g_isMouse = g_targetVk == VK_LBUTTON || g_targetVk == VK_RBUTTON ||
+                g_targetVk == VK_MBUTTON || g_targetVk == VK_XBUTTON1 || g_targetVk == VK_XBUTTON2;
     g_hook = SetWindowsHookEx(g_isMouse ? WH_MOUSE_LL : WH_KEYBOARD_LL,
                             g_isMouse ? LowLevelMouseProc : LowLevelKeyboardProc, NULL, 0);
     if (!g_hook) {

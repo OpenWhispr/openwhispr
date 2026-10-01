@@ -1319,7 +1319,7 @@
     }
   },
   "hotkeyInput": {
-    "mouseButtonHint": "マウスのサイドボタンも使えます。ショートカット欄を選択してから、サイドボタンを押してください。",
+    "mouseButtonHint": "マウスボタンも使えます。",
     "ariaLabel": "キーの組み合わせを押してホットキーを設定",
     "clickToChange": "クリックして変更",
     "clickToChangeLower": "クリックして変更",

@@ -68,7 +68,7 @@ function isGlobeLikeHotkey(hotkey) {
 }
 
 function isMouseButtonHotkey(hotkey) {
-  return /^MouseButton[45]$/i.test(hotkey || "");
+  return /^MouseButton[1-5]$/i.test(hotkey || "");
 }
 
 // macOS only reports a release for keys the native listener watches (Globe,
@@ -457,7 +457,7 @@ class HotkeyManager extends EventEmitter {
    * instead of globalShortcut. Modifier-only and right-side-modifier combos never
    * register through globalShortcut, and in push-to-talk mode dictation also needs
    * raw key-down/key-up events. Only the dictation slot supports push-to-talk;
-   * every other slot is tap-to-toggle. Globe hotkeys are macOS-only; side mouse buttons also use the Windows listener.
+   * every other slot is tap-to-toggle. Globe hotkeys are macOS-only; mouse buttons also use the Windows listener.
    * Each slot may bind several hotkeys, so we evaluate every one.
    */
   getNativeListenerKeys(activationMode) {

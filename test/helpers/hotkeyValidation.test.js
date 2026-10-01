@@ -29,7 +29,11 @@ test("mouse button hotkeys support Windows and macOS without keyboard combinatio
 
   assert.equal(validateHotkey("MouseButton4", "darwin").valid, true);
   assert.equal(validateHotkey("MouseButton4", "linux").valid, false);
-  assert.equal(validateHotkey("MouseButton3", "win32").valid, false);
+  for (const button of [1, 2, 3, 4, 5]) {
+    assert.equal(validateHotkey(`MouseButton${button}`, "win32").valid, true);
+    assert.equal(validateHotkey(`MouseButton${button}`, "darwin").valid, true);
+  }
+  assert.equal(validateHotkey("MouseButton6", "win32").valid, false);
   assert.equal(validateHotkey("MouseButton5", "win32").valid, true);
   assert.equal(validateHotkey("Control+MouseButton4", "darwin").valid, false);
 });
