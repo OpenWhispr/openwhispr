@@ -13,6 +13,7 @@ Module._load = function patchedLoad(request, parent, isMain) {
 
 const { createDb } = require("./harness/db.js");
 const CliBridge = require("../../src/helpers/cliBridge.js");
+const { call } = require("./harness/cliBridge.js");
 
 function createBridge(t) {
   const db = createDb(t);
@@ -24,16 +25,6 @@ function createBridge(t) {
     _asyncMirrorWrite() {},
   });
   return { bridge, db };
-}
-
-function call(bridge, method, pathname, body) {
-  for (const route of bridge.routes) {
-    if (route.method !== method) continue;
-    const params = route.match(pathname);
-    if (!params) continue;
-    return route.handler({ params, query: new URLSearchParams(), body });
-  }
-  throw new Error(`No route for ${method} ${pathname}`);
 }
 
 test("PATCH /v1/notes/:id is not_found when the note does not exist", (t) => {

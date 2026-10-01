@@ -440,7 +440,7 @@ class CliBridge {
         }
         const result = db.updateNote(id, body || {});
         // The note exists, so a remaining error names a folder or space that doesn't.
-        if (result?.error) {
+        if (result.error) {
           const err = new Error(result.error);
           err.code = "VALIDATION";
           throw err;
