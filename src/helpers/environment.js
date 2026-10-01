@@ -42,6 +42,7 @@ const PERSISTED_KEYS = [
   "FLOATING_ICON_AUTO_HIDE",
   "PANEL_START_POSITION",
   "START_MINIMIZED",
+  "TRAY_ICON_STYLE",
   "UI_LANGUAGE",
   "WHISPER_CUDA_ENABLED",
   "WHISPER_VULKAN_ENABLED",
@@ -453,6 +454,17 @@ class EnvironmentManager {
     const result = this._saveKey("START_MINIMIZED", String(enabled));
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;
+  }
+
+  getTrayIconStyle() {
+    return this._getKey("TRAY_ICON_STYLE") === "monochrome" ? "monochrome" : "default";
+  }
+
+  saveTrayIconStyle(style) {
+    const normalizedStyle = style === "monochrome" ? "monochrome" : "default";
+    const result = this._saveKey("TRAY_ICON_STYLE", normalizedStyle);
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return { ...result, style: normalizedStyle };
   }
 
   getPanelStartPosition() {
