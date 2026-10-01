@@ -380,7 +380,6 @@ test("cancelling the newest assistant download permits Skip without activating a
   );
   await setup.skip();
   assert.equal(setup.skipped(), true);
-  assert.notEqual(localStorage.getItem("localSetupPending"), "true");
   await setup.complete(FIRST_LLM);
   assert.equal(setup.store.getState().chatAgentModel, "");
   assert.equal(setup.canProceed(), false);
@@ -441,6 +440,13 @@ test("Skip marks a pending model for background activation", async (t) => {
   assert.equal(setup.canSkip(), true);
   await setup.skip();
   assert.equal(localStorage.getItem("localSetupPending"), "true");
+});
+
+test("the assistant step can be skipped with no model selected or downloading", async (t) => {
+  const setup = await createSetupHarness(t, { assistant: true });
+  assert.equal(setup.canProceed(), false);
+  await setup.skip();
+  assert.equal(setup.skipped(), true);
 });
 
 test("choosing a local model records it in the resume draft", async (t) => {

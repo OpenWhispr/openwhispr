@@ -47,7 +47,6 @@ import {
   rememberPendingLocalModel,
 } from "./pendingLocalModels";
 import { isLocalStageDownloadActive } from "./localDownloadState";
-import { resolveLocalModelSetupActions } from "./localModelSetupActions";
 import { isBlankByokDraft, resolveSavedByokConfig } from "./savedByokConfig";
 
 export function SetupStageStepper({ stepId }: { stepId: OnboardingStepId }) {
@@ -1036,16 +1035,7 @@ export function LocalModelSetupStep({
     pendingSelection && pendingDownload.isDownloadingModel(pendingSelection.modelId)
   );
   const canProceed = selectedReady || hasPendingDownload;
-  const {
-    showSkip: showSkipAction,
-    skipDisabled,
-    preservePending,
-  } = resolveLocalModelSetupActions({
-    assistant,
-    selectedReady,
-    anyDownloadActive,
-    canProceed,
-  });
+  const showSkip = anyDownloadActive || (assistant && !selectedReady);
 
   const proceed = () => {
     // Leaving mid-download is the same situation as "download in background":
@@ -1057,10 +1047,8 @@ export function LocalModelSetupStep({
     onProceed();
   };
 
-  // Keep a selected download active in the tray, but allow the optional assistant
-  // step to be skipped without activating an unselected model.
   const skip = () => {
-    if (preservePending) localStorage.setItem("localSetupPending", "true");
+    localStorage.setItem("localSetupPending", "true");
     onSkip();
   };
 
@@ -1195,11 +1183,15 @@ export function LocalModelSetupStep({
         })}
       </div>
 
-      <div className={`mt-5 grid gap-2 ${showSkipAction ? "grid-cols-2" : "grid-cols-1"}`}>
+      <div className={`mt-5 grid gap-2 ${showSkip ? "grid-cols-2" : "grid-cols-1"}`}>
         {/* On the assistant step, Skip also lets local-dictation users finish
             without configuring a cleanup model. */}
-        {showSkipAction && (
-          <StepSecondaryAction onClick={skip} disabled={skipDisabled} className="h-10!">
+        {showSkip && (
+          <StepSecondaryAction
+            onClick={skip}
+            disabled={!assistant && !canProceed}
+            className="h-10!"
+          >
             {t("common.skip")}
           </StepSecondaryAction>
         )}
