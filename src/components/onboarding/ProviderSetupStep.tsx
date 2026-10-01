@@ -1057,8 +1057,8 @@ export function LocalModelSetupStep({
     onProceed();
   };
 
-  // Only reachable while a download runs (see the action row), so the transfer
-  // always needs the tray to apply its pending selection once it lands.
+  // Keep a selected download active in the tray, but allow the optional assistant
+  // step to be skipped without activating an unselected model.
   const skip = () => {
     if (preservePending) localStorage.setItem("localSetupPending", "true");
     onSkip();
