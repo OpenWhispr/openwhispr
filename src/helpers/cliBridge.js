@@ -98,11 +98,7 @@ function parsePositiveIntQuery(query, key, fallback) {
 
 function unwrapMutationResult(result, label) {
   if (!result?.success || !result[label]) {
-    const err = new Error(result?.error || `Failed to write ${label}`);
-    if (result?.error && /not found/i.test(result.error)) {
-      err.code = "NOT_FOUND";
-    }
-    throw err;
+    throw new Error(result?.error || `Failed to write ${label}`);
   }
   return result[label];
 }
@@ -436,7 +432,19 @@ class CliBridge {
       ),
       param("PATCH", "/v1/notes/", "", "id", ({ params, body }) => {
         const id = requireId(params, "note");
+        const existing = db.getNote(id);
+        if (!existing || existing.deleted_at) {
+          const err = new Error(`Note ${id} not found`);
+          err.code = "NOT_FOUND";
+          throw err;
+        }
         const result = db.updateNote(id, body || {});
+        // The note exists, so a remaining error names a folder or space that doesn't.
+        if (result?.error) {
+          const err = new Error(result.error);
+          err.code = "VALIDATION";
+          throw err;
+        }
         const note = unwrapMutationResult(result, "note");
         setImmediate(() => broadcastToWindows("note-updated", note));
         ipc.notifyVectorChanges();

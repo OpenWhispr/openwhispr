@@ -1,154 +1,133 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { EventEmitter } = require("node:events");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 const Module = require("node:module");
 
+let userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-cli-notes-"));
 const originalLoad = Module._load;
-const broadcasts = [];
 
 Module._load = function patchedLoad(request, parent, isMain) {
   if (request === "electron") {
     return {
       app: {
-        getPath: () => "/tmp",
+        getPath: () => userDataDir,
         getAppPath: () => process.cwd(),
         isReady: () => false,
       },
     };
   }
   if (request === "./windowBroadcast") {
-    return {
-      broadcastToWindows: (channel, payload) => broadcasts.push({ channel, payload }),
-    };
+    return { broadcastToWindows() {} };
   }
   return originalLoad.call(this, request, parent, isMain);
 };
 
+process.env.NODE_ENV = "test";
+
+const DatabaseManager = require("../../src/helpers/database.js");
 const CliBridge = require("../../src/helpers/cliBridge.js");
 
-Module._load = originalLoad;
+function isNativeBindingUnavailable(error) {
+  const message = String(error?.message || error);
+  return (
+    message.includes("NODE_MODULE_VERSION") ||
+    message.includes("Could not locate the bindings file")
+  );
+}
 
-function createBridge(dbMocks = {}) {
+function createBridge(t) {
+  userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-cli-notes-"));
+  let db;
+  try {
+    const BetterSqlite = require("better-sqlite3");
+    const probe = new BetterSqlite(path.join(userDataDir, "probe.db"));
+    probe.close();
+    fs.rmSync(path.join(userDataDir, "probe.db"), { force: true });
+    db = new DatabaseManager();
+  } catch (error) {
+    if (isNativeBindingUnavailable(error)) {
+      t.skip("better-sqlite3 native binding is not available for this Node runtime");
+      return null;
+    }
+    throw error;
+  }
+
   const bridge = new CliBridge({
-    databaseManager: {
-      getNote: () => null,
-      updateNote: () => ({ success: false, error: "Note not found" }),
-      ...dbMocks,
-    },
+    databaseManager: db,
     notifyVectorChanges() {},
     _asyncMirrorWrite() {},
   });
-  bridge.token = "test-token";
-  bridge.port = 8200;
-  return bridge;
+  return { bridge, db };
 }
 
-function makeRequest(method, url, body = null) {
-  const request = new EventEmitter();
-  request.method = method;
-  request.url = url;
-  request.headers = { authorization: "Bearer test-token" };
-  request.socket = { remoteAddress: "127.0.0.1" };
-  request.destroyed = false;
-  request.destroy = () => {
-    request.destroyed = true;
-  };
-  setImmediate(() => {
-    if (body !== null) {
-      const payload = typeof body === "string" ? body : JSON.stringify(body);
-      request.emit("data", Buffer.from(payload));
-    }
-    request.emit("end");
-  });
-  return request;
+function call(bridge, method, pathname, body) {
+  for (const route of bridge.routes) {
+    if (route.method !== method) continue;
+    const params = route.match(pathname);
+    if (!params) continue;
+    return route.handler({ params, query: new URLSearchParams(), body });
+  }
+  throw new Error(`No route for ${method} ${pathname}`);
 }
 
-function makeResponse() {
-  return {
-    headersSent: false,
-    statusCode: null,
-    headers: {},
-    payload: "",
-    writeHead(statusCode, headers = {}) {
-      this.statusCode = statusCode;
-      this.headers = headers;
-      this.headersSent = true;
-    },
-    end(body = "") {
-      this.payload = body;
-    },
-  };
-}
+test("PATCH /v1/notes/:id is not_found when the note does not exist", (t) => {
+  const ctx = createBridge(t);
+  if (!ctx) return;
 
-test("PATCH /v1/notes/:id responds with HTTP 404 not_found when note does not exist", async () => {
-  const bridge = createBridge({
-    updateNote(_id, _updates) {
-      return { success: false, error: "Note not found" };
-    },
+  assert.throws(() => call(ctx.bridge, "PATCH", "/v1/notes/999", { title: "New Title" }), {
+    code: "NOT_FOUND",
   });
-
-  const req = makeRequest("PATCH", "/v1/notes/999", { title: "New Title" });
-  const res = makeResponse();
-
-  await bridge._handleRequest(req, res);
-
-  assert.equal(res.statusCode, 404);
-  const parsed = JSON.parse(res.payload);
-  assert.equal(parsed.error.code, "not_found");
-  assert.equal(parsed.error.message, "Note not found");
 });
 
-test("PATCH /v1/notes/:id responds with HTTP 404 not_found when target folder does not exist", async () => {
-  const bridge = createBridge({
-    updateNote(_id, _updates) {
-      return { success: false, error: "Folder not found" };
-    },
+test("PATCH /v1/notes/:id is not_found for a deleted note and leaves it unchanged", (t) => {
+  const ctx = createBridge(t);
+  if (!ctx) return;
+
+  const { id } = ctx.db.saveNote("Original", "content").note;
+  ctx.db.deleteNote(id);
+
+  assert.throws(() => call(ctx.bridge, "PATCH", `/v1/notes/${id}`, { title: "Edited" }), {
+    code: "NOT_FOUND",
   });
-
-  const req = makeRequest("PATCH", "/v1/notes/1", { folder_id: 888 });
-  const res = makeResponse();
-
-  await bridge._handleRequest(req, res);
-
-  assert.equal(res.statusCode, 404);
-  const parsed = JSON.parse(res.payload);
-  assert.equal(parsed.error.code, "not_found");
-  assert.equal(parsed.error.message, "Folder not found");
+  assert.equal(ctx.db.getNote(id).title, "Original");
 });
 
-test("PATCH /v1/notes/:id responds with HTTP 404 not_found for invalid non-integer id", async () => {
-  const bridge = createBridge();
+test("PATCH /v1/notes/:id is a validation error when the folder or space does not exist", (t) => {
+  const ctx = createBridge(t);
+  if (!ctx) return;
 
-  const req = makeRequest("PATCH", "/v1/notes/invalid-id", { title: "New Title" });
-  const res = makeResponse();
+  const { id } = ctx.db.saveNote("Original", "content").note;
 
-  await bridge._handleRequest(req, res);
-
-  assert.equal(res.statusCode, 404);
-  const parsed = JSON.parse(res.payload);
-  assert.equal(parsed.error.code, "not_found");
-  assert.equal(parsed.error.message, "Invalid note id");
+  assert.throws(() => call(ctx.bridge, "PATCH", `/v1/notes/${id}`, { folder_id: 888 }), {
+    code: "VALIDATION",
+    message: "Folder not found",
+  });
+  assert.throws(() => call(ctx.bridge, "PATCH", `/v1/notes/${id}`, { space_id: 888 }), {
+    code: "VALIDATION",
+    message: "Space not found",
+  });
 });
 
-test("PATCH /v1/notes/:id responds with HTTP 200 and updated note on success", async () => {
-  let passedId = null;
-  let passedUpdates = null;
-  const bridge = createBridge({
-    updateNote(id, updates) {
-      passedId = id;
-      passedUpdates = updates;
-      return { success: true, note: { id, title: updates.title, content: "Existing content" } };
-    },
+test("PATCH /v1/notes/:id is not_found for a non-integer id", (t) => {
+  const ctx = createBridge(t);
+  if (!ctx) return;
+
+  assert.throws(() => call(ctx.bridge, "PATCH", "/v1/notes/invalid-id", { title: "New Title" }), {
+    code: "NOT_FOUND",
+    message: "Invalid note id",
   });
+});
 
-  const req = makeRequest("PATCH", "/v1/notes/42", { title: "Updated Title" });
-  const res = makeResponse();
+test("PATCH /v1/notes/:id returns the updated note", (t) => {
+  const ctx = createBridge(t);
+  if (!ctx) return;
 
-  await bridge._handleRequest(req, res);
+  const { id } = ctx.db.saveNote("Original", "Existing content").note;
+  const result = call(ctx.bridge, "PATCH", `/v1/notes/${id}`, { title: "Updated Title" });
 
-  assert.equal(res.statusCode, 200);
-  assert.equal(passedId, 42);
-  assert.deepEqual(passedUpdates, { title: "Updated Title" });
-  const parsed = JSON.parse(res.payload);
-  assert.deepEqual(parsed.data, { id: 42, title: "Updated Title", content: "Existing content" });
+  assert.equal(result.data.id, id);
+  assert.equal(result.data.title, "Updated Title");
+  assert.equal(result.data.content, "Existing content");
 });
