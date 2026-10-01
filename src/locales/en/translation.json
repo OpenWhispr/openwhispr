@@ -3455,7 +3455,7 @@
       "unsupportedSelfHosted": "Note Recording can't use a self-hosted endpoint yet. Open Settings and choose Local or a streaming provider.",
       "unsupportedProvider": "Note Recording can't use {{provider}} for live transcription. Open Settings and choose Local or a streaming provider.",
       "noProviderSelected": "No provider is selected for Note Recording. Open Settings and choose Local or a streaming provider.",
-      "signInRequired": "Sign in to record with OpenWhispr Cloud.",
+      "signInRequired": "Sign in, or change the notes provider in Settings.",
       "systemAudioSilent": {
         "title": "No meeting audio detected yet",
         "description": "Only your microphone has picked up sound so far. On a video call? Check that the meeting audio is playing on this computer and isn't muted. Recording in person? You can ignore this — your microphone captures the room."
