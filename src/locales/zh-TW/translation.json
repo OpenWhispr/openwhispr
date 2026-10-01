@@ -1787,7 +1787,7 @@
       "enableTextCleanupDescription": "AI 移除語助詞，修正文法和標點",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
-        "providers": "雲端供應商",
+        "providers": "設定金鑰",
         "local": "本機",
         "selfHosted": "自架主機",
         "openwhisprDesc": "準確可靠，無需設定。",
@@ -3711,18 +3711,6 @@
       "permissionDescription": "macOS 需要螢幕錄製權限才能擷取螢幕。",
       "relaunchHint": "螢幕錄製權限是在 OpenWhispr 執行期間授予的。請結束並重新開啟 OpenWhispr 以開始擷取螢幕截圖。"
     },
-    "modes": {
-      "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "使用 OpenWhispr 託管的助理，無需 API Key。",
-      "providers": "使用你自己的 API Key",
-      "providersDesc": "用你自己的 API Key 連接 OpenAI、Anthropic、Gemini 或 Groq。",
-      "local": "本機",
-      "localDesc": "在你的裝置上執行本機 LLM，完全私密。",
-      "selfHosted": "自架主機",
-      "selfHostedDesc": "指向自架的 OpenAI 相容端點。",
-      "enterprise": "企業級",
-      "enterpriseDesc": "使用 AWS Bedrock、Azure OpenAI 或 Google Vertex。"
-    },
     "prompt": {
       "title": "助理提示詞",
       "description": "偵測到喚醒詞時使用的系統提示詞。若未設定則使用內建預設值。"
@@ -3732,19 +3720,7 @@
     "settings": {
       "systemPrompt": "系統提示詞",
       "systemPromptDescription": "助理的自訂指令",
-      "systemPromptPlaceholder": "輸入自訂系統提示詞...",
-      "modes": {
-        "openwhispr": "OpenWhispr Cloud",
-        "providers": "雲端供應商",
-        "local": "本機",
-        "selfHosted": "自架主機",
-        "openwhisprDesc": "準確可靠，無需設定。",
-        "providersDesc": "使用自己的 API 金鑰。",
-        "localDesc": "裝置端模型，完全私密。",
-        "selfHostedDesc": "你自己網路上的伺服器。",
-        "enterprise": "企業級",
-        "enterpriseDesc": "使用你組織的雲端帳號（AWS、Azure、GCP）。"
-      }
+      "systemPromptPlaceholder": "輸入自訂系統提示詞..."
     },
     "chat": {
       "errorPrefix": "錯誤",

@@ -36,15 +36,6 @@ import TestConnectionButton from "../TestConnectionButton";
 import { getEnterpriseCallSettings } from "../../services/ai/enterpriseSettings";
 import { Button } from "../ui/button";
 
-const MODE_LABEL_PREFIX: Record<InferenceScope, string> = {
-  dictationCleanup: "settingsPage.aiModels.modes",
-  noteFormatting: "settingsPage.aiModels.modes",
-  dictationAgent: "dictationAgent.modes",
-  dictationAgentVision: "dictationAgent.modes",
-  chatIntelligence: "agentMode.settings.modes",
-  dictationTranslation: "settingsPage.aiModels.modes",
-};
-
 interface InferenceConfigEditorProps {
   scope: InferenceScope;
   onModeChange?: (mode: InferenceMode) => void;
@@ -76,40 +67,39 @@ export default function InferenceConfigEditor({
   const managed = useManagedScopeResolution(scope, enterpriseSetupMode);
   const managedAvailable = useManagedScopeResolution(scope, "managed");
 
-  const prefix = MODE_LABEL_PREFIX[scope];
   const { modes, effectiveMode, isModeAllowed } = usePolicyModeOptions<InferenceModeOption>(
     (
       [
         {
           id: "openwhispr",
-          label: t(`${prefix}.openwhispr`),
-          description: t(`${prefix}.openwhisprDesc`),
+          label: t("settingsPage.aiModels.modes.openwhispr"),
+          description: t("settingsPage.aiModels.modes.openwhisprDesc"),
           icon: <Cloud className="w-4 h-4" />,
           disabled: !isSignedIn,
           badge: !isSignedIn ? t("common.freeAccountRequired") : undefined,
         },
         {
           id: "providers",
-          label: t(`${prefix}.providers`),
-          description: t(`${prefix}.providersDesc`),
+          label: t("settingsPage.aiModels.modes.providers"),
+          description: t("settingsPage.aiModels.modes.providersDesc"),
           icon: <Key className="w-4 h-4" />,
         },
         {
           id: "local",
-          label: t(`${prefix}.local`),
-          description: t(`${prefix}.localDesc`),
+          label: t("settingsPage.aiModels.modes.local"),
+          description: t("settingsPage.aiModels.modes.localDesc"),
           icon: <Cpu className="w-4 h-4" />,
         },
         {
           id: "self-hosted",
-          label: t(`${prefix}.selfHosted`),
-          description: t(`${prefix}.selfHostedDesc`),
+          label: t("settingsPage.aiModels.modes.selfHosted"),
+          description: t("settingsPage.aiModels.modes.selfHostedDesc"),
           icon: <Network className="w-4 h-4" />,
         },
         {
           id: "enterprise",
-          label: t(`${prefix}.enterprise`),
-          description: t(`${prefix}.enterpriseDesc`),
+          label: t("settingsPage.aiModels.modes.enterprise"),
+          description: t("settingsPage.aiModels.modes.enterpriseDesc"),
           icon: <Building2 className="w-4 h-4" />,
         },
       ] as InferenceModeOption[]

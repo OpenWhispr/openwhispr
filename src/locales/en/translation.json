@@ -2082,7 +2082,7 @@
       "enableTextCleanupDescription": "Use AI to remove filler words, fix grammar, and polish punctuation",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
-        "providers": "Cloud Providers",
+        "providers": "Configure key",
         "local": "Local",
         "selfHosted": "Self-Hosted",
         "enterprise": "Enterprise",
@@ -3882,18 +3882,6 @@
       "permissionDescription": "macOS requires Screen Recording permission to capture your screen.",
       "relaunchHint": "Screen Recording was granted while OpenWhispr was running. Quit and reopen OpenWhispr to start capturing screenshots."
     },
-    "modes": {
-      "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "Use the OpenWhispr-managed assistant — no API key needed.",
-      "providers": "Bring your own key",
-      "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
-      "local": "Local",
-      "localDesc": "Run a local LLM on your device — fully private.",
-      "selfHosted": "Self-hosted",
-      "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
-      "enterprise": "Enterprise",
-      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
-    },
     "prompt": {
       "title": "Assistant prompt",
       "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
@@ -3903,19 +3891,7 @@
     "settings": {
       "systemPrompt": "System Prompt",
       "systemPromptDescription": "Custom instructions for the assistant",
-      "systemPromptPlaceholder": "Enter custom system prompt...",
-      "modes": {
-        "openwhispr": "OpenWhispr Cloud",
-        "providers": "Cloud Providers",
-        "local": "Local",
-        "selfHosted": "Self-Hosted",
-        "enterprise": "Enterprise",
-        "openwhisprDesc": "Reliable accuracy. No setup needed.",
-        "providersDesc": "Bring your own API key.",
-        "localDesc": "On-device models. Fully private.",
-        "selfHostedDesc": "Your own server on your network.",
-        "enterpriseDesc": "Use your organization's cloud account (AWS, Azure, GCP)."
-      }
+      "systemPromptPlaceholder": "Enter custom system prompt..."
     },
     "chat": {
       "errorPrefix": "Error",
