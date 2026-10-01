@@ -117,15 +117,17 @@ test("a missing listener binary reports the push-to-talk unavailable message", a
   assert.equal(result.error.startsWith("Push-to-Talk native listener not available"), true);
 });
 
-test("a failing probe is ignored off linux", async () => {
-  setPlatform("win32");
+// Windows answers through its own probe (windows-key-listener.exe); macOS watches
+// right-side modifiers with the Globe listener and has none.
+test("a failing probe is ignored on macOS", async () => {
+  setPlatform("darwin");
   const mgr = new HotkeyManager();
-  mgr.nativeListenerProbe = denyProbe("input_access_denied");
+  mgr.nativeListenerProbe = denyProbe("binary_missing");
 
-  const result = await mgr.registerSlot("dictation", "Control+Super", noop);
+  const result = await mgr.registerSlot("dictation", "RightOption", noop);
 
   assert.equal(result.success, true);
-  assert.deepEqual(mgr.getSlotHotkeys("dictation"), ["Control+Super"]);
+  assert.deepEqual(mgr.getSlotHotkeys("dictation"), ["RightOption"]);
 });
 
 // GNOME, KDE and Hyprland register through their own shortcut systems, which

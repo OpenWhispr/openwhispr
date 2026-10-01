@@ -50,6 +50,10 @@ function installInteractiveDom(t) {
       return this.childNodes[0] ?? null;
     }
 
+    get firstElementChild() {
+      return this.childNodes.find((child) => child.nodeType === 1) ?? null;
+    }
+
     get lastChild() {
       return this.childNodes.at(-1) ?? null;
     }
@@ -141,6 +145,28 @@ function installInteractiveDom(t) {
 
     focus() {
       this.ownerDocument.activeElement = this;
+    }
+
+    // Tag-name and [attribute] selectors only.
+    querySelectorAll(selector) {
+      const attribute = selector.match(/^\[([\w-]+)\]$/)?.[1];
+      const tagName = selector.toUpperCase();
+      const matches = [];
+      const visit = (node) => {
+        for (const child of node.childNodes) {
+          if (child.nodeType !== 1) continue;
+          if (attribute ? child.attributes.has(attribute) : child.tagName === tagName) {
+            matches.push(child);
+          }
+          visit(child);
+        }
+      };
+      visit(this);
+      return matches;
+    }
+
+    querySelector(selector) {
+      return this.querySelectorAll(selector)[0] ?? null;
     }
   }
 

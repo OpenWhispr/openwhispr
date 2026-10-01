@@ -9,6 +9,7 @@ interface ChatMessagesProps {
   onOpenNote?: (noteId: number) => void;
   /** Extra classes for the message column (e.g. a page-width cap); the scroll container stays full width. */
   contentClassName?: string;
+  scrollClassName?: string;
 }
 
 export function ChatMessages({
@@ -16,6 +17,7 @@ export function ChatMessages({
   emptyState,
   onOpenNote,
   contentClassName,
+  scrollClassName,
 }: ChatMessagesProps) {
   // Follow the stream only while the user is at the bottom; scrolling up to
   // re-read must not be yanked back down by the next token.
@@ -36,7 +38,18 @@ export function ChatMessages({
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      className={cn("flex-1 overflow-y-auto agent-chat-scroll", "px-3 py-2")}
+      // Keep focus in a focused composer: blurring it collapses it and slides a bottom-pinned
+      // conversation out from under the pointer before the click completes. Otherwise links
+      // keep their default press, so their text can still be selected or dragged.
+      onMouseDown={(event) => {
+        if (
+          document.activeElement instanceof HTMLTextAreaElement &&
+          (event.target as Element).closest("button, a")
+        ) {
+          event.preventDefault();
+        }
+      }}
+      className={cn("min-h-0 flex-1 overflow-y-auto agent-chat-scroll px-3 py-2", scrollClassName)}
     >
       {messages.length === 0 ? (
         (emptyState ?? null)

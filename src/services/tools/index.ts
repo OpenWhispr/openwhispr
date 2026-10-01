@@ -10,11 +10,11 @@ import { calendarTool } from "./calendarTool";
 import { calendarAvailabilityTool } from "./calendarAvailabilityTool";
 import { createSnippetTool, createUpdateSnippetsTool, type SnippetActions } from "./snippetTool";
 import { createUpdateDictionaryTool, type DictionaryActions } from "./dictionaryTool";
-import { createEmailDraftTool } from "./connectors/emailDraftTool";
-import { findContactTool } from "./connectors/findContactTool";
-import { slackSendMessageTool } from "./connectors/slackSendMessageTool";
+import {
+  registerConnectorTools,
+  type ConnectorToolSettings,
+} from "./connectors/connectorToolModules";
 import type { ContainerScope } from "../../types/chat";
-import type { EmailDraftTarget } from "../../utils/emailDraftTarget";
 
 export { ToolRegistry } from "./ToolRegistry";
 export type { ToolDefinition, ToolResult } from "./ToolRegistry";
@@ -29,7 +29,7 @@ interface ToolRegistrySettings {
   /** Live dictionary and snippet access; enables the vocabulary tools. */
   vocabulary?: DictionaryActions & SnippetActions;
   /** Present only when connectors are available (signed in, paid, policy allows). */
-  connectors?: { emailDraftTarget: EmailDraftTarget; slackReady: boolean };
+  connectors?: ConnectorToolSettings;
 }
 
 export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry {
@@ -59,11 +59,7 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
     registry.register(calendarAvailabilityTool);
   }
 
-  if (settings.connectors) {
-    registry.register(findContactTool);
-    registry.register(createEmailDraftTool(settings.connectors.emailDraftTarget));
-    if (settings.connectors.slackReady) registry.register(slackSendMessageTool);
-  }
+  if (settings.connectors) registerConnectorTools(registry, settings.connectors);
 
   return registry;
 }

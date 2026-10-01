@@ -436,6 +436,39 @@ it('defaults an unselected workflow to On-Device for a private-mode user', () =>
   expect(selectedMode()).toBe('On-Device');
 });
 
+it('shows no cleanup mode for a private-mode user who has not saved one, since cleanup is skipped', () => {
+  mockConfig = { defaultMode: 'private' };
+  mockActiveMode = 'private';
+  mockScope = 'cleanup';
+  render(<WorkflowSettingsScreen />);
+  expect(selectedMode()).toBeUndefined();
+  expect(
+    screen.getByText('Not saved yet. On-Device mode skips cleanup until you choose On-Device.'),
+  ).toBeTruthy();
+  expect(screen.queryByText('Runs on Apple Intelligence on this iPhone.')).toBeNull();
+});
+
+it('saves On-Device cleanup when a private-mode user taps it with nothing saved', async () => {
+  mockConfig = { defaultMode: 'private' };
+  mockActiveMode = 'private';
+  mockScope = 'cleanup';
+  render(<WorkflowSettingsScreen />);
+  fireEvent.press(screen.getByText('On-Device'));
+  await waitFor(() => expect(mockSwitchMode).toHaveBeenCalledWith('cleanup', 'local'));
+  await waitFor(() => expect(selectedMode()).toBe('On-Device'));
+  expect(screen.getByText('Runs on Apple Intelligence on this iPhone.')).toBeTruthy();
+});
+
+it('keeps On-Device cleanup selected once a private-mode user has saved it', () => {
+  mockConfig = { defaultMode: 'private', inference: { cleanup: { mode: 'local' } } };
+  mockActiveMode = 'private';
+  mockScope = 'cleanup';
+  render(<WorkflowSettingsScreen />);
+  expect(selectedMode()).toBe('On-Device');
+  fireEvent.press(screen.getByText('On-Device'));
+  expect(mockSwitchMode).not.toHaveBeenCalled();
+});
+
 it('keeps uploads on the previous mode when dictation switches to Bring Your Own Key', async () => {
   mockConfig = { defaultMode: 'private' };
   mockActiveMode = 'private';
@@ -748,11 +781,20 @@ it('adds no pins when an existing user re-saves dictation with their own key', a
   expect(saved.inference.notes).toBeUndefined();
 });
 
+it('explains that On-Device mode skips a saved Cloud cleanup choice', () => {
+  mockConfig = { defaultMode: 'private', inference: { cleanup: { mode: 'openwhispr' } } };
+  mockActiveMode = 'private';
+  mockScope = 'cleanup';
+  render(<WorkflowSettingsScreen />);
+  expect(selectedMode()).toBe('OpenWhispr Cloud');
+  expect(
+    screen.getByText(
+      'On-Device cleanup runs on this iPhone. Any other choice is skipped until dictation leaves On-Device, so the transcript never leaves this phone.',
+    ),
+  ).toBeTruthy();
+});
+
 it.each([
-  [
-    'cleanup',
-    'On-Device mode keeps the raw transcript, so cleanup is skipped. Your choice applies when dictation leaves On-Device.',
-  ],
   [
     'agent',
     'In On-Device mode the voice assistant is off, and note chat asks before sending a note off this iPhone.',

@@ -39,6 +39,7 @@ jest.mock('@/hooks/useNoteSharing', () => ({
   useNoteSharing: () => mockController,
 }));
 jest.mock('@/data/remote/noteSharingApi', () => ({ searchNoteAccessPrincipals: jest.fn() }));
+jest.mock('@react-native-menu/menu', () => require('./menuViewMock'));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/components/ui/GlassIconButton', () => ({
@@ -148,17 +149,17 @@ beforeEach(() => {
 it('offers invited sharing and email invitation before a new note has a remote ID', () => {
   mockController.note = { ...mockController.note!, remoteId: null };
   const screen = render(<NoteShareSheet {...props} />);
-  fireEvent.press(screen.getByText('Invited only'));
+  fireEvent.press(screen.getByTestId('menu-visibility:invited'));
   expect(mockController.setVisibility).toHaveBeenCalledWith('invited');
-  fireEvent.changeText(screen.getByLabelText('Email address'), 'friend@example.com');
-  fireEvent.press(screen.getByLabelText('Invite email'));
+  fireEvent.changeText(screen.getByLabelText('Invite by email'), 'friend@example.com');
+  fireEvent.press(screen.getByLabelText('Invite friend@example.com'));
   expect(mockController.inviteEmail).toHaveBeenCalledWith('friend@example.com');
 });
 
 it('offers the owner business domain without making a new note public', () => {
   mockController.note = { ...mockController.note!, remoteId: null };
   const screen = render(<NoteShareSheet {...props} />);
-  fireEvent.press(screen.getByText('Organization (example.com)'));
+  fireEvent.press(screen.getByTestId('menu-visibility:domain'));
   expect(mockController.setVisibility).toHaveBeenCalledWith('domain', ['example.com']);
   expect(mockController.setVisibility).not.toHaveBeenCalledWith('link');
 });
@@ -248,14 +249,14 @@ it('keeps both exports available when sharing settings cannot load', () => {
   expect(screen.queryByText('Create link')).toBeNull();
   fireEvent.press(screen.getByText('Retry'));
   expect(mockController.refresh).toHaveBeenCalled();
-  fireEvent.press(screen.getByText('Export Markdown'));
+  fireEvent.press(screen.getByLabelText('Export Markdown'));
   expect(props.onExport).toHaveBeenCalledWith('md');
 });
 
 it('creates public links only after an explicit tap', () => {
   mockController.state = { share, invitations: [], access };
   const screen = render(<NoteShareSheet {...props} />);
-  expect(screen.getByText('Anyone with the link can view this note.')).toBeTruthy();
+  expect(screen.getByText('Not shared with anyone')).toBeTruthy();
   expect(mockController.setVisibility).not.toHaveBeenCalled();
   fireEvent.press(screen.getByText('Create link'));
   expect(mockController.setVisibility).toHaveBeenCalledWith('link');
@@ -270,7 +271,7 @@ it('shows the actual invited setting and confirms replacement of an unavailable 
   const screen = render(<NoteShareSheet {...props} />);
   expect(screen.getByText('Invited people')).toBeTruthy();
   expect(screen.queryByText('Create link')).toBeNull();
-  fireEvent.press(screen.getByText('Replace link'));
+  fireEvent.press(screen.getByTestId('menu-replace-link'));
   const buttons = (Alert.alert as jest.Mock).mock.calls[0][2];
   expect((Alert.alert as jest.Mock).mock.calls[0][1]).toContain('previous link will stop working');
   buttons[1].onPress();
@@ -287,7 +288,7 @@ it('lets a manager replace a known link and shows a busy status', () => {
   mockController.busy = true;
   const screen = render(<NoteShareSheet {...props} />);
   expect(screen.getByText('Updating sharing…')).toBeTruthy();
-  expect(screen.getByText('Replace link')).toBeTruthy();
+  expect(screen.getByTestId('menu-replace-link')).toBeTruthy();
   expect(screen.queryByLabelText('Close share sheet')).toBeNull();
 });
 
@@ -312,9 +313,9 @@ it('hides link management actions when access cannot be managed', () => {
   };
   mockController.hasLink = true;
   const screen = render(<NoteShareSheet {...props} />);
-  expect(screen.queryByText('Share link')).toBeNull();
-  expect(screen.queryByText('Replace link')).toBeNull();
-  expect(screen.getByText('Export Markdown')).toBeTruthy();
+  expect(screen.queryByLabelText('Share link')).toBeNull();
+  expect(screen.queryByTestId('menu-replace-link')).toBeNull();
+  expect(screen.getByLabelText('Export Markdown')).toBeTruthy();
 });
 
 it('allows legacy sharing revocation when the share endpoint authorizes access', () => {
@@ -331,7 +332,7 @@ it('confirms before widening a restricted share to anyone with the link', () => 
     access,
   };
   const screen = render(<NoteShareSheet {...props} />);
-  fireEvent.press(screen.getByText('Anyone with link'));
+  fireEvent.press(screen.getByTestId('menu-visibility:link'));
   expect(mockController.setVisibility).not.toHaveBeenCalled();
   const [title, , buttons] = (Alert.alert as jest.Mock).mock.calls[0];
   expect(title).toBe('Make this note public?');
@@ -346,10 +347,10 @@ it('marks the current access mode as selected for assistive technology', () => {
     access,
   };
   const screen = render(<NoteShareSheet {...props} />);
-  expect(screen.getByLabelText('Invited only').props.accessibilityState).toMatchObject({
+  expect(screen.getByTestId('menu-visibility:invited').props.accessibilityState).toMatchObject({
     selected: true,
   });
-  expect(screen.getByLabelText('Anyone with link').props.accessibilityState).toMatchObject({
+  expect(screen.getByTestId('menu-visibility:link').props.accessibilityState).toMatchObject({
     selected: false,
   });
 });
@@ -367,7 +368,7 @@ it('confirms before widening invited-only sharing to the organization', () => {
     access,
   };
   const screen = render(<NoteShareSheet {...props} />);
-  fireEvent.press(screen.getByText('Organization (example.com)'));
+  fireEvent.press(screen.getByTestId('menu-visibility:domain'));
   expect(mockController.setVisibility).not.toHaveBeenCalled();
   const [title, , buttons] = (Alert.alert as jest.Mock).mock.calls[0];
   expect(title).toBe('Share with example.com?');
@@ -382,7 +383,7 @@ it('narrows sharing without asking', () => {
     access,
   };
   const screen = render(<NoteShareSheet {...props} />);
-  fireEvent.press(screen.getByText('Invited only'));
+  fireEvent.press(screen.getByTestId('menu-visibility:invited'));
   expect(Alert.alert).not.toHaveBeenCalled();
   expect(mockController.setVisibility).toHaveBeenCalledWith('invited');
 });
@@ -406,7 +407,7 @@ it('warns that replacing a link breaks links in invitation emails', () => {
     access,
   };
   const screen = render(<NoteShareSheet {...props} />);
-  fireEvent.press(screen.getByText('Replace link'));
+  fireEvent.press(screen.getByTestId('menu-replace-link'));
   expect((Alert.alert as jest.Mock).mock.calls[0][1]).toMatch(/invitation emails/i);
 });
 
@@ -414,16 +415,16 @@ it('clears the email field only after a confirmed invitation', async () => {
   jest.mocked(mockController.inviteEmail).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
   mockController.state = { share, invitations: [], access };
   const screen = render(<NoteShareSheet {...props} />);
-  const input = screen.getByLabelText('Email address');
+  const input = screen.getByLabelText('Add people or emails');
   fireEvent.changeText(input, 'friend@example.com');
   await act(async () => {
-    fireEvent.press(screen.getByLabelText('Invite email'));
+    fireEvent.press(screen.getByLabelText('Invite friend@example.com'));
   });
-  expect(screen.getByLabelText('Email address').props.value).toBe('friend@example.com');
+  expect(screen.getByLabelText('Add people or emails').props.value).toBe('friend@example.com');
   await act(async () => {
-    fireEvent.press(screen.getByLabelText('Invite email'));
+    fireEvent.press(screen.getByLabelText('Invite friend@example.com'));
   });
-  expect(screen.getByLabelText('Email address').props.value).toBe('');
+  expect(screen.getByLabelText('Add people or emails').props.value).toBe('');
 });
 
 it('can be closed while the note is still uploading, but not while sharing is saved', () => {
@@ -452,9 +453,9 @@ it('offers only domain sharing under a domain-only organization policy', () => {
   const screen = render(<NoteShareSheet {...props} />);
   expect(screen.getByText(/only allows sharing within your company/i)).toBeTruthy();
   expect(screen.queryByText('Create link')).toBeNull();
-  expect(screen.queryByText('Invited only')).toBeNull();
-  expect(screen.queryByLabelText('Email address')).toBeNull();
-  fireEvent.press(screen.getByText('Organization (company.com)'));
+  expect(screen.queryByTestId('menu-visibility:invited')).toBeNull();
+  expect(screen.queryByLabelText('Add people or emails')).toBeNull();
+  fireEvent.press(screen.getByTestId('menu-visibility:domain'));
   expect(mockController.setVisibility).toHaveBeenCalledWith('domain', ['company.com']);
 });
 
@@ -468,10 +469,10 @@ it('keeps only disabling when the organization does not allow external sharing',
   };
   const screen = render(<NoteShareSheet {...props} />);
   expect(screen.getByText(/does not allow sharing notes outside/i)).toBeTruthy();
-  expect(screen.queryByText('Invited only')).toBeNull();
+  expect(screen.queryByTestId('menu-visibility:invited')).toBeNull();
   expect(screen.queryByText('Copy link')).toBeNull();
-  expect(screen.queryByText('Replace link')).toBeNull();
-  expect(screen.getByText('Disable external sharing')).toBeTruthy();
+  expect(screen.queryByTestId('menu-replace-link')).toBeNull();
+  expect(screen.getByTestId('menu-disable-sharing')).toBeTruthy();
 });
 
 it('offers an upgrade before uploading a personal note without a subscription', () => {
@@ -494,9 +495,12 @@ it('greys out link actions while an operation runs', () => {
     access,
   };
   const screen = render(<NoteShareSheet {...props} />);
-  for (const label of ['Share link', 'Copy link', 'Open in browser', 'Replace link']) {
+  for (const label of ['Share link', 'Copy link', 'Open in browser']) {
     expect(screen.getByLabelText(label).props.accessibilityState).toMatchObject({ disabled: true });
   }
+  expect(screen.getByTestId('menu-replace-link').props.accessibilityState).toMatchObject({
+    disabled: true,
+  });
 });
 
 it('keeps the sheet open while a previous link is being disabled', () => {
@@ -526,13 +530,13 @@ it('keeps existing sharing manageable but blocks uploads while cloud backup is o
   expect(screen.getByText(/Cloud backup is off\. Turn it on in Privacy & Data/)).toBeTruthy();
   expect(screen.getByText('Open privacy settings')).toBeTruthy();
   expect(screen.getByText('pending@example.com')).toBeTruthy();
-  expect(screen.getByLabelText('Revoke invitation for pending@example.com')).toBeTruthy();
+  expect(screen.getByTestId('menu-invitation:inv-1:revoke')).toBeTruthy();
   expect(screen.getByText('Copy link')).toBeTruthy();
-  expect(screen.queryByText('Invite by email')).toBeNull();
-  expect(screen.queryByText('Replace link')).toBeNull();
-  expect(screen.queryByText('Invited only')).toBeNull();
-  expect(screen.queryByLabelText('Find people or groups')).toBeNull();
-  fireEvent.press(screen.getByText('Disable external sharing'));
+  expect(screen.queryByLabelText('Invite by email')).toBeNull();
+  expect(screen.queryByTestId('menu-replace-link')).toBeNull();
+  expect(screen.queryByTestId('menu-visibility:invited')).toBeNull();
+  expect(screen.queryByLabelText('Add people or emails')).toBeNull();
+  fireEvent.press(screen.getByTestId('menu-disable-sharing'));
   const buttons = (Alert.alert as jest.Mock).mock.calls[0][2];
   buttons[1].onPress();
   expect(mockController.setVisibility).toHaveBeenCalledWith('private');
@@ -545,7 +549,7 @@ it('points a never-uploaded personal note at privacy settings while cloud backup
   expect(screen.getByText(/Cloud backup is off/)).toBeTruthy();
   expect(screen.getByText('Open privacy settings')).toBeTruthy();
   expect(screen.queryByText('Create link')).toBeNull();
-  expect(screen.queryByText('Invite by email')).toBeNull();
+  expect(screen.queryByLabelText('Invite by email')).toBeNull();
 });
 
 it('marks the sheet title as a heading', () => {
@@ -571,7 +575,7 @@ it('shows errors beside the controls with a way to refresh', () => {
   expect(screen.queryByText('Upgrade to Pro')).toBeNull();
   fireEvent.press(screen.getByLabelText('Refresh sharing settings'));
   expect(mockController.refresh).toHaveBeenCalled();
-  fireEvent.changeText(screen.getByLabelText('Email address'), 'friend@');
+  fireEvent.changeText(screen.getByLabelText('Add people or emails'), 'friend@');
   expect(mockController.dismissError).not.toHaveBeenCalled();
 });
 
@@ -579,7 +583,7 @@ it('clears an invalid email error once the address is edited', () => {
   mockController.state = { share, invitations: [], access };
   mockController.error = INVALID_EMAIL_ERROR;
   const screen = render(<NoteShareSheet {...props} />);
-  fireEvent.changeText(screen.getByLabelText('Email address'), 'friend@example.com');
+  fireEvent.changeText(screen.getByLabelText('Add people or emails'), 'friend@example.com');
   expect(mockController.dismissError).toHaveBeenCalled();
 });
 
@@ -607,13 +611,13 @@ it('keeps the controls while an operation loads settings after the first upload'
   const screen = render(<NoteShareSheet {...props} />);
   expect(screen.queryByText('Sharing settings are unavailable.')).toBeNull();
   expect(screen.queryByText('Retry')).toBeNull();
-  expect(screen.getByLabelText('Email address')).toBeTruthy();
+  expect(screen.getByLabelText('Invite by email')).toBeTruthy();
 });
 it('asks before an invitation turns paused sharing back on', () => {
   mockController.state = { share, invitations: [], access: { ...access, grants: [pausedGrant] } };
   const screen = render(<NoteShareSheet {...props} />);
-  fireEvent.changeText(screen.getByLabelText('Email address'), 'friend@example.com');
-  fireEvent.press(screen.getByLabelText('Invite email'));
+  fireEvent.changeText(screen.getByLabelText('Add people or emails'), 'friend@example.com');
+  fireEvent.press(screen.getByLabelText('Invite friend@example.com'));
   expect(mockController.inviteEmail).not.toHaveBeenCalled();
   const [title, message, buttons] = (Alert.alert as jest.Mock).mock.calls[0];
   expect(title).toBe('Turn sharing back on?');
@@ -624,8 +628,8 @@ it('asks before an invitation turns paused sharing back on', () => {
 it('reports an invalid address on a paused share without asking first', () => {
   mockController.state = { share, invitations: [], access: { ...access, grants: [pausedGrant] } };
   const screen = render(<NoteShareSheet {...props} />);
-  fireEvent.changeText(screen.getByLabelText('Email address'), 'not-an-email');
-  fireEvent.press(screen.getByLabelText('Invite email'));
+  fireEvent.changeText(screen.getByLabelText('Add people or emails'), 'not-an-email');
+  fireEvent(screen.getByLabelText('Add people or emails'), 'submitEditing');
   expect(Alert.alert).not.toHaveBeenCalled();
   expect(mockController.inviteEmail).toHaveBeenCalledWith('not-an-email');
 });
@@ -633,8 +637,8 @@ it('invites without asking when no access is paused', () => {
   const inherited = { ...pausedGrant, id: 'scope:space-1', inherited: true };
   mockController.state = { share, invitations: [], access: { ...access, grants: [inherited] } };
   const screen = render(<NoteShareSheet {...props} />);
-  fireEvent.changeText(screen.getByLabelText('Email address'), 'friend@example.com');
-  fireEvent.press(screen.getByLabelText('Invite email'));
+  fireEvent.changeText(screen.getByLabelText('Add people or emails'), 'friend@example.com');
+  fireEvent.press(screen.getByLabelText('Invite friend@example.com'));
   expect(Alert.alert).not.toHaveBeenCalled();
   expect(mockController.inviteEmail).toHaveBeenCalledWith('friend@example.com');
 });
@@ -654,7 +658,7 @@ it('asks before adding someone turns paused sharing back on', async () => {
   });
   mockController.state = { share, invitations: [], access: { ...access, grants: [pausedGrant] } };
   const screen = render(<NoteShareSheet {...props} />);
-  fireEvent.changeText(screen.getByLabelText('Find people or groups'), 'ril');
+  fireEvent.changeText(screen.getByLabelText('Add people or emails'), 'ril');
   await waitFor(() => expect(screen.getByText('Riley')).toBeTruthy());
   fireEvent.press(screen.getByText('Riley'));
   expect(mockController.addPrincipal).not.toHaveBeenCalled();

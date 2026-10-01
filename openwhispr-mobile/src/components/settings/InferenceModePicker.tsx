@@ -6,7 +6,8 @@ import type { InferenceMode } from '@/types';
 
 type Props = {
   scope: InferenceScope;
-  selectedMode: InferenceMode;
+  // null when no mode is saved and none applies, so nothing is shown as picked.
+  selectedMode: InferenceMode | null;
   onSelect: (mode: InferenceMode) => void;
 };
 

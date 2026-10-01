@@ -59,14 +59,14 @@ const MOCKS = {
   "./SpacesTree": `export default () => null;`,
   "/overview/ContainerOverview": `export const ContainerOverview = () => null;`,
   "./NotesStructureIntroDialog": `export default () => null;`,
-  "./ActionPicker": `export default () => null;`,
   "./ActionManagerDialog": `export default () => null;`,
   "./AddNotesToFolderDialog": `export default () => null;`,
   "./NotesOnboarding": `export default () => null;`,
   "/hooks/useActionProcessing": `
     export const useActionProcessing = () => ({ state: "idle", actionName: null, runAction() {} });
   `,
-  "/stores/actionStore": `export const useActions = () => [];`,
+  "/stores/actionStore": `export const getActionName = (action) => action.name;`,
+  "/utils/inferActionOutput": `export const inferActionOutput = async () => "chat";`,
   "/hooks/useNotesOnboarding": `
     export const useNotesOnboarding = () => ({ isComplete: true, complete() {} });
   `,

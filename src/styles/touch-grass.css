@@ -1,0 +1,183 @@
+/* "Touch grass" scene on the empty day card (TouchGrass.tsx). CSS only: a flat, dark
+   olive field from the bottom of the scene to the horizon, which grows in over bare
+   soil, covered by rows of curved blades in perspective. Every animation runs on
+   transform properties, so the compositor carries the breeze; JS only re-leans the
+   tufts near the hand. */
+
+.touch-grass {
+  /* Grass grain: fractal noise stretched vertically so it reads as blades. Rendered once
+     from these inline SVGs, then only composited. */
+  --grain-dark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='90'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9 0.12' numOctaves='3' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.07 0 0 0 0 0.1 0 0 0 0 0.02 0 0 0 1.2 -0.4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  --grain-light: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='90'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9 0.12' numOctaves='3' seed='13' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.78 0 0 0 0 0.84 0 0 0 0 0.52 0.9 0 0 0 -0.5'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+
+  position: relative;
+  overflow: hidden;
+  min-height: 12rem;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.touch-grass:active {
+  cursor: grabbing;
+}
+
+/* The field starts as bare soil; the turf fades in over it. */
+.touch-grass__ground {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  background: linear-gradient(#3e3325, #2a2219);
+}
+
+/* Dark olive turf under the blades: hazier and lighter at the horizon, darkest in the
+   shadowed gaps at the front, with a fine grain and a few pale glints. */
+.touch-grass__ground::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to bottom, rgb(206 214 160 / 0.22), transparent 10%),
+    var(--grain-light) 0 0 / 120px 40px,
+    var(--grain-dark) 0 0 / 150px 60px,
+    linear-gradient(to bottom, #56682a, #3a4a17 28%, #212b0b);
+  animation: touch-grass-cover 2.4s ease-out 0.1s backwards;
+}
+
+/* A patch is a row segment of the lawn, anchored on its row's baseline. Patches (and
+   the gust sheen) are the only animated layers here: a patch grows from the ground and
+   bends in the breeze with skewX, which moves the tips while the roots stay put. */
+.touch-grass__patch {
+  position: absolute;
+  transform-origin: 50% 100%;
+  pointer-events: none;
+  animation:
+    touch-grass-grow var(--grow-dur) cubic-bezier(0.2, 0.7, 0.3, 1) var(--grow-delay) backwards,
+    touch-grass-sway var(--sway-dur) ease-in-out var(--sway-delay) infinite;
+}
+
+/* The light a gust throws across the lawn as it bends the blades, sweeping left to
+   right. One layer moved by transform, so it costs the compositor next to nothing. */
+.touch-grass__gust {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 60%;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 10%,
+    rgb(214 224 160 / 0.05) 38%,
+    rgb(214 224 160 / 0.08) 50%,
+    rgb(214 224 160 / 0.05) 62%,
+    transparent 90%
+  );
+  transform: translateX(-100%);
+  animation: touch-grass-gust 7s ease-in-out 3s infinite;
+}
+
+/* A tuft is several curved blades cut from one element by a clip-path, sized, placed
+   and bent by plain inline values. Tufts are paint inside their patch (no animation of
+   their own, so no layer or render pass each); only their rotate changes, while the
+   hand parts them. */
+.touch-grass__tuft {
+  position: absolute;
+  transform-origin: 50% 100%;
+}
+
+/* Six olives, darker to lighter, from shadowed roots to pale tips. Written out in
+   full: no var() in a tuft's rules, so restyling one while it parts never re-parses its
+   colours. */
+.touch-grass__tuft--0 {
+  background:
+    linear-gradient(90deg, rgb(255 255 255 / 0.05), transparent 50%, rgb(0 0 0 / 0.08)),
+    linear-gradient(to top, #26320d, #4d6119 45%, #758b2c);
+}
+
+.touch-grass__tuft--1 {
+  background:
+    linear-gradient(90deg, rgb(255 255 255 / 0.05), transparent 50%, rgb(0 0 0 / 0.08)),
+    linear-gradient(to top, #2b3810, #56691d 45%, #7f9432);
+}
+
+.touch-grass__tuft--2 {
+  background:
+    linear-gradient(90deg, rgb(255 255 255 / 0.05), transparent 50%, rgb(0 0 0 / 0.08)),
+    linear-gradient(to top, #303e12, #5e7322 45%, #8a9d3a);
+}
+
+.touch-grass__tuft--3 {
+  background:
+    linear-gradient(90deg, rgb(255 255 255 / 0.05), transparent 50%, rgb(0 0 0 / 0.08)),
+    linear-gradient(to top, #34430f, #677c25 45%, #96a843);
+}
+
+.touch-grass__tuft--4 {
+  background:
+    linear-gradient(90deg, rgb(255 255 255 / 0.05), transparent 50%, rgb(0 0 0 / 0.08)),
+    linear-gradient(to top, #394714, #70852b 45%, #a1b24c);
+}
+
+.touch-grass__tuft--5 {
+  background:
+    linear-gradient(90deg, rgb(255 255 255 / 0.05), transparent 50%, rgb(0 0 0 / 0.08)),
+    linear-gradient(to top, #3f4d18, #7a8e33 45%, #adbc5a);
+}
+
+@keyframes touch-grass-cover {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes touch-grass-grow {
+  from {
+    scale: 1 0;
+  }
+}
+
+/* A gust: the tips lean with the wind, ease, then spring back past upright. */
+@keyframes touch-grass-sway {
+  0%,
+  100% {
+    transform: skewX(0deg);
+  }
+  35% {
+    transform: skewX(var(--amp));
+  }
+  55% {
+    transform: skewX(calc(var(--amp) * 0.55));
+  }
+  78% {
+    transform: skewX(calc(var(--amp) * -0.22));
+  }
+}
+
+@keyframes touch-grass-gust {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(170%);
+  }
+}
+
+/* The lawn holds still while the window is in the background (TouchGrass.tsx). */
+.touch-grass--resting .touch-grass__ground::after,
+.touch-grass--resting .touch-grass__patch,
+.touch-grass--resting .touch-grass__gust {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .touch-grass__ground::after,
+  .touch-grass__patch {
+    animation: none;
+  }
+
+  .touch-grass__gust {
+    display: none;
+  }
+}

@@ -39,9 +39,10 @@ const MOCKS = {
     }
   `,
   "/ChatInput": `
+    import { createElement } from "react";
     export function ChatInput(props) {
       globalThis.__chatInput = props;
-      return null;
+      return createElement("textarea");
     }
   `,
   "/ConversationList": `
@@ -51,8 +52,6 @@ const MOCKS = {
     }
   `,
   "/ChatMessages": `export function ChatMessages() { return null; }`,
-  "/ChatEmptyIllustration": `export function ChatEmptyIllustration() { return null; }`,
-  "/EmptyChatState": `export default function EmptyChatState() { return null; }`,
   "/ui/dialog": `export function ConfirmDialog() { return null; }`,
   "/hooks/useDialogs": `
     export function useDialogs() {
@@ -70,8 +69,18 @@ async function renderChatView(t) {
     delete globalThis.__conversationList;
     delete globalThis.__cancelCount;
     delete globalThis.__chatStreamingOptions;
+    delete globalThis.__keydown;
   });
-  installBrowserGlobals(t);
+  installBrowserGlobals(t, {
+    window: {
+      addEventListener(type, listener) {
+        if (type === "keydown") {
+          globalThis.__keydown = (init) => listener({ preventDefault() {}, ...init });
+        }
+      },
+      removeEventListener() {},
+    },
+  });
   const container = installInteractiveDom(t);
   globalThis.__cancelCount = 0;
   const vite = await createRendererServer(t, {
@@ -115,5 +124,22 @@ for (const [leave, leaveConversation] of Object.entries(LEAVE_CONVERSATION)) {
 
     await React.act(async () => settleSend());
     assert.equal(globalThis.__chatInput.agentState, "idle");
+  });
+}
+
+// The composer stays collapsed until focused, so nothing focuses it when the page opens;
+// starting a new chat is the moment the user means to type.
+const START_NEW_CHAT = {
+  "the New chat button": () => globalThis.__conversationList.onNewChat(),
+  "the shortcut": () => globalThis.__keydown({ key: "n", metaKey: true, ctrlKey: true }),
+};
+
+for (const [way, startNewChat] of Object.entries(START_NEW_CHAT)) {
+  test(`starting a new chat with ${way} puts the cursor in the composer`, async (t) => {
+    await renderChatView(t);
+    assert.equal(globalThis.document.activeElement, null);
+
+    await React.act(async () => startNewChat());
+    assert.equal(globalThis.document.activeElement?.tagName, "TEXTAREA");
   });
 }

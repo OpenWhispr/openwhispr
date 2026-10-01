@@ -88,3 +88,30 @@ test("no account means no login and no writes", async () => {
     code("signed_out")
   );
 });
+
+test("readAllAccounts finds every account's login for one connector, signed in or not", async () => {
+  const { credentials, dir, switchTo } = await setup();
+  credentials.replace("acct-a", "gmail", { refreshToken: "a" }, 0);
+  credentials.replace("acct-b", "gmail", { refreshToken: "b" }, 0);
+  credentials.replace("acct-a", "slack", { accessToken: "s" }, 0);
+  // Not a login slot: a stray temp file and another connector's prefix.
+  fs.writeFileSync(path.join(dir, "gmail-extra-0123456789abcdef01234567.bin"), "x");
+  fs.writeFileSync(path.join(dir, "gmail-0123.bin.tmp"), "x");
+  switchTo(null);
+
+  const tokens = credentials
+    .readAllAccounts("gmail")
+    .map((credential) => credential.refreshToken)
+    .sort();
+  assert.deepEqual(tokens, ["a", "b"]);
+  assert.deepEqual(
+    credentials.readAllAccounts("slack").map((credential) => credential.accessToken),
+    ["s"]
+  );
+});
+
+test("readAllAccounts on a device with no logins is empty", async () => {
+  const { credentials, dir } = await setup();
+  fs.rmSync(dir, { recursive: true, force: true });
+  assert.deepEqual(credentials.readAllAccounts("gmail"), []);
+});

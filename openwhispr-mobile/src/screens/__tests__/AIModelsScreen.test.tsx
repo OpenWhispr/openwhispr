@@ -26,8 +26,9 @@ jest.mock('@/store/useProcessingModeStore', () => ({
     selector({ activeMode: mockActiveMode }),
 }));
 jest.mock('@/hooks/useConfigToggle', () => ({ useConfigToggle: () => jest.fn() }));
+const mockReadiness = jest.fn();
 jest.mock('@/lib/localReasoning', () => ({
-  getLocalReasoningReadiness: jest.fn(async () => ({ status: 'ready', tokenCounting: false })),
+  getLocalReasoningReadiness: (...args: unknown[]) => mockReadiness(...args),
 }));
 jest.mock('@/services/providers/ProviderCredentials', () => ({
   clearProviderCredentials: (...args: unknown[]) => mockClearCredentials(...args),
@@ -51,6 +52,7 @@ beforeEach(() => {
   mockConfig = null;
   Platform.OS = 'ios';
   mockCredentialStatus.mockResolvedValue({ isConfigured: true });
+  mockReadiness.mockResolvedValue({ status: 'ready', tokenCounting: false });
 });
 
 afterAll(() => {
@@ -131,11 +133,48 @@ it('shows what each workflow really does while On-Device mode is on', async () =
   // A picked model keeps its name; uploads stay on the phone whatever is saved.
   expect(screen.getByText('Whisper base')).toBeTruthy();
   expect(screen.queryByText('OpenAI')).toBeNull();
-  // On-Device transcripts stay raw, so cleanup never runs.
+  // Cleanup set to anything but On-Device would leave the phone, so it is skipped.
   expect(screen.getByText('Skipped')).toBeTruthy();
   // Note chat keeps its own selection, which is OpenWhispr Cloud when unset.
   expect(screen.getByText('OpenWhispr Cloud')).toBeTruthy();
   await screen.findByText(/Status: Ready/);
+});
+
+it.each([
+  ['nothing saved', undefined],
+  ['a provider', { mode: 'providers', providerId: 'openai', modelId: 'gpt-5-mini' }],
+])('shows cleanup as skipped in On-Device mode with %s', async (_label, cleanup) => {
+  mockActiveMode = 'private';
+  mockConfig = {
+    defaultMode: 'private',
+    inference: { dictation: { mode: 'local' }, ...(cleanup ? { cleanup } : {}) },
+  };
+  render(<AIModelsScreen />);
+  expect(screen.getByText('Skipped')).toBeTruthy();
+  expect(screen.queryByText('OpenAI')).toBeNull();
+  await screen.findByText(/Status: Ready/);
+});
+
+it('shows On-Device cleanup as running in On-Device mode', async () => {
+  mockActiveMode = 'private';
+  mockConfig = {
+    defaultMode: 'private',
+    inference: { dictation: { mode: 'local' }, cleanup: { mode: 'local' } },
+  };
+  render(<AIModelsScreen />);
+  expect(screen.queryByText('Skipped')).toBeNull();
+  await screen.findByText(/Status: Ready/);
+});
+
+it('says why On-Device cleanup cannot run while Apple Intelligence is off', async () => {
+  mockReadiness.mockResolvedValue({ status: 'appleIntelligenceOff', tokenCounting: false });
+  mockActiveMode = 'private';
+  mockConfig = {
+    defaultMode: 'private',
+    inference: { dictation: { mode: 'local' }, cleanup: { mode: 'local' } },
+  };
+  render(<AIModelsScreen />);
+  expect(await screen.findByText('On-Device · Apple Intelligence off')).toBeTruthy();
 });
 
 it('shows provider note chat as On-Device, which answers it on this iPhone first', async () => {

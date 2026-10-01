@@ -59,3 +59,10 @@ export function isConnectorReady(id: string): boolean {
   const status = useConnectorStatusStore.getState().statuses[id];
   return Boolean(status?.connected && !status.needsReconnect);
 }
+
+/** Every connector that is connected and not waiting on a reconnect, sorted. */
+export function readyConnectorIds(): string[] {
+  return Object.keys(useConnectorStatusStore.getState().statuses)
+    .filter((id) => isConnectorReady(id))
+    .sort();
+}

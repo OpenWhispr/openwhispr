@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { BarChart3, Cloud, CloudUpload, Flame, Gauge, Mic2, Trophy } from "./icons";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../hooks/useAuth";
+import { useHotkey } from "../hooks/useHotkey";
 import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
 import { useSettings } from "../hooks/useSettings";
 import { hasValidatedAuthContext } from "../lib/authRequestContext";
@@ -19,6 +20,8 @@ import type { AnalyticsDailyBucket, AnalyticsSummary } from "../types/electron";
 import { cn } from "./lib/utils";
 import LeaderboardSkeleton from "./LeaderboardSkeleton";
 import { Button } from "./ui/button";
+import DictationHotkeyHint from "./ui/DictationHotkeyHint";
+import EmptyStateCard from "./ui/EmptyStateCard";
 import { PAGE_CONTENT_WIDTH_CLASS } from "./ui/pageWidth";
 import { Skeleton } from "./ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
@@ -231,6 +234,129 @@ function MetricCard({
   );
 }
 
+// The dashboard a user gets once they've dictated: the metric cards over the activity
+// heatmap. Null while the summary loads; every value holds a skeleton meanwhile.
+function UsageDashboard({ summary }: { summary: AnalyticsSummary | null }) {
+  const { t, i18n } = useTranslation();
+  // i18n.language, not the runtime default: the OS locale is not the language
+  // the app is being read in, so a Japanese UI rendered 12.3K where 1.2万
+  // belongs, next to correctly localized month labels in the same card.
+  const number = useMemo(
+    () => new Intl.NumberFormat(i18n.language, { notation: "compact", maximumFractionDigits: 1 }),
+    [i18n.language]
+  );
+
+  return (
+    <>
+      {!summary && (
+        <p role="status" className="sr-only">
+          {t("controlPanel.loading")}
+        </p>
+      )}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <MetricCard
+          icon={Mic2}
+          label={t("insights.wordsSpoken")}
+          value={summary && number.format(summary.totalWords)}
+          detail={t("insights.allTime")}
+          largeValue
+        />
+        <MetricCard
+          icon={Gauge}
+          label={t("insights.wordsPerMinute")}
+          value={summary && (summary.averageWpm == null ? "—" : number.format(summary.averageWpm))}
+          detail={summary && t("insights.wpmCoverage", { count: summary.wpmCoveragePercent })}
+          largeValue
+        />
+        <MetricCard
+          icon={BarChart3}
+          label={t("insights.dictations")}
+          value={summary && number.format(summary.totalDictations)}
+          detail={t("insights.allTime")}
+          largeValue
+        />
+        <MetricCard
+          icon={Flame}
+          label={t("insights.currentStreak")}
+          value={summary && t("insights.days", { count: summary.currentStreakDays })}
+          detail={summary && t("insights.longestStreak", { count: summary.longestStreakDays })}
+        />
+      </div>
+
+      <div className="mt-5 rounded-2xl border border-border/70 bg-card/70 px-5 py-2.5 dark:border-white/10">
+        <h2 className="text-base font-medium text-foreground">{t("insights.activity")}</h2>
+        <div className="mt-2">
+          <Heatmap daily={summary?.daily ?? null} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+// 0 ≤ n < 1, stable per index, so the preview's heatmap is the same on every visit.
+function unitHash(index: number) {
+  let x = Math.imul(index ^ (index >>> 16), 0x45d9f3b);
+  x = Math.imul(x ^ (x >>> 16), 0x45d9f3b);
+  return ((x ^ (x >>> 16)) >>> 0) / 2 ** 32;
+}
+
+// Sample usage for the locked preview: a few months of dictation that is busier on
+// weekdays and picks up over time, so the heatmap reads like a real one.
+function buildPreviewSummary(): AnalyticsSummary {
+  const days = buildAnalyticsActivityDays([]);
+  const daily = days.map(({ date }, index) => {
+    const progress = index / (days.length - 1);
+    const weekday = dateFromLocalKey(date).getDay();
+    const chance = weekday === 0 || weekday === 6 ? 0.15 : 0.3 + progress * 0.55;
+    const words =
+      unitHash(index) < chance
+        ? Math.round((0.3 + unitHash(index + days.length) * 0.7) * (400 + progress * 1600))
+        : 0;
+    return { date, words, dictations: 0, spokenDurationMs: 0 };
+  });
+  return {
+    totalWords: daily.reduce((sum, day) => sum + day.words, 0),
+    totalDictations: 1260,
+    totalSpokenDurationMs: 0,
+    averageWpm: 142,
+    currentStreakDays: 12,
+    longestStreakDays: 21,
+    wpmCoveragePercent: 96,
+    daily,
+  };
+}
+
+// Before the first dictation: the dashboard as it will look, filled with sample
+// usage and locked behind a card that says how to start.
+function UsagePreview() {
+  const { t } = useTranslation();
+  const { hotkey } = useHotkey();
+  const summary = useMemo(buildPreviewSummary, []);
+
+  return (
+    <div className="relative">
+      <div
+        aria-hidden="true"
+        inert
+        className="pointer-events-none select-none opacity-50 blur-[1px] [mask-image:linear-gradient(to_bottom,#000_45%,transparent)]"
+      >
+        <UsageDashboard summary={summary} />
+      </div>
+      <div className="absolute inset-0 flex items-center justify-center p-6">
+        <EmptyStateCard
+          icon={BarChart3}
+          title={t("insights.emptyTitle")}
+          description={t("insights.emptyBody")}
+          headingLevel={2}
+          className="w-full max-w-sm bg-background/95 shadow-xl dark:bg-surface-1/95"
+        >
+          <DictationHotkeyHint hotkey={hotkey} className="text-[13px]" />
+        </EmptyStateCard>
+      </div>
+    </div>
+  );
+}
+
 function YourUsage({
   accountId,
   dataRetentionEnabled,
@@ -244,7 +370,7 @@ function YourUsage({
   onSyncErrorChange: (error: boolean) => void;
   syncActive: boolean;
 }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncError, setSyncError] = useState(false);
@@ -304,14 +430,6 @@ function YourUsage({
     onSyncErrorChange(syncError);
   }, [onSyncErrorChange, syncError]);
 
-  // i18n.language, not the runtime default: the OS locale is not the language
-  // the app is being read in, so a Japanese UI rendered 12.3K where 1.2万
-  // belongs, next to correctly localized month labels in the same card.
-  const number = useMemo(
-    () => new Intl.NumberFormat(i18n.language, { notation: "compact", maximumFractionDigits: 1 }),
-    [i18n.language]
-  );
-
   if (loadFailed) {
     return (
       <div className="rounded-lg border border-border bg-card/50 backdrop-blur-sm dark:bg-card/60">
@@ -340,63 +458,7 @@ function YourUsage({
         </div>
       )}
 
-      {summary?.totalDictations === 0 ? (
-        <div className="rounded-lg border border-border bg-card/50 backdrop-blur-sm dark:bg-card/60">
-          <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
-            <BarChart3 size={40} className="mb-4 text-foreground/45" aria-hidden="true" />
-            <h2 className="text-sm font-medium text-foreground">{t("insights.emptyTitle")}</h2>
-            <p className="mt-1.5 max-w-sm text-xs text-muted-foreground">
-              {t("insights.emptyBody")}
-            </p>
-          </div>
-        </div>
-      ) : (
-        <>
-          {!summary && (
-            <p role="status" className="sr-only">
-              {t("controlPanel.loading")}
-            </p>
-          )}
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <MetricCard
-              icon={Mic2}
-              label={t("insights.wordsSpoken")}
-              value={summary && number.format(summary.totalWords)}
-              detail={t("insights.allTime")}
-              largeValue
-            />
-            <MetricCard
-              icon={Gauge}
-              label={t("insights.wordsPerMinute")}
-              value={
-                summary && (summary.averageWpm == null ? "—" : number.format(summary.averageWpm))
-              }
-              detail={summary && t("insights.wpmCoverage", { count: summary.wpmCoveragePercent })}
-              largeValue
-            />
-            <MetricCard
-              icon={BarChart3}
-              label={t("insights.dictations")}
-              value={summary && number.format(summary.totalDictations)}
-              detail={t("insights.allTime")}
-              largeValue
-            />
-            <MetricCard
-              icon={Flame}
-              label={t("insights.currentStreak")}
-              value={summary && t("insights.days", { count: summary.currentStreakDays })}
-              detail={summary && t("insights.longestStreak", { count: summary.longestStreakDays })}
-            />
-          </div>
-
-          <div className="mt-5 rounded-2xl border border-border/70 bg-card/70 px-5 py-2.5 dark:border-white/10">
-            <h2 className="text-base font-medium text-foreground">{t("insights.activity")}</h2>
-            <div className="mt-2">
-              <Heatmap daily={summary?.daily ?? null} />
-            </div>
-          </div>
-        </>
-      )}
+      {summary?.totalDictations === 0 ? <UsagePreview /> : <UsageDashboard summary={summary} />}
     </>
   );
 }

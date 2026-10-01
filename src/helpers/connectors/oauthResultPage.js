@@ -14,4 +14,20 @@ main{max-width:28rem;padding:2rem;text-align:center}h1{font-size:1.25rem;margin:
 <body><main dir="auto" data-ok="${ok ? "true" : "false"}"><h1>${escapeHtml(title)}</h1><p>${escapeHtml(body)}</p></main></body></html>`;
 }
 
-module.exports = { renderOAuthResultPage };
+// The page after one connector's OAuth redirect, worded from
+// connectors.<id>.browser.* when it is shown (the language may change while
+// the browser is open, so the copy is read at render time, not build time).
+function connectorResultPage(
+  { i18n, renderOAuthResultPage: render = renderOAuthResultPage },
+  connectorId
+) {
+  const copy = (key) => i18n.t(`connectors.${connectorId}.browser.${key}`);
+  return ({ ok }) =>
+    render({
+      ok,
+      title: copy(ok ? "connectedTitle" : "failedTitle"),
+      body: copy(ok ? "connectedBody" : "failedBody"),
+    });
+}
+
+module.exports = { renderOAuthResultPage, connectorResultPage };

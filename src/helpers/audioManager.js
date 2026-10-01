@@ -430,6 +430,9 @@ const STREAMING_PROVIDERS = {
     // audioStreamEnd before its own disconnect gives up.
     awaitsFinalTranscript: true,
     finalCeilingMs: 3000,
+    // Its stop result supersedes the streamed finals: it also carries a last
+    // turn the server never finalized.
+    preferStopTranscript: true,
     warmup: (opts) => window.electronAPI.geminiStreamingWarmup(opts),
     start: (opts) => window.electronAPI.geminiStreamingStart(opts),
     send: (buf) => window.electronAPI.geminiStreamingSend(buf),
@@ -4077,9 +4080,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           clipboardCopied: true,
           transcript: text,
         });
-        return false;
+        return { pasted: false };
       }
-      return result?.pasted === true;
+      return {
+        pasted: result?.pasted === true,
+        ...(result?.reason ? { reason: result.reason } : {}),
+      };
     } catch (error) {
       const message =
         error?.message ??
@@ -4090,7 +4096,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         // Keep the platform's guidance, without Electron's IPC wrapper around it.
         description: message.replace(/^Error invoking remote method '[^']+': (?:\w*Error: )?/, ""),
       });
-      return false;
+      return { pasted: false };
     }
   }
 
@@ -5260,7 +5266,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     });
     const tTerminate = performance.now();
 
-    finalText = this.streamingFinalText || "";
+    finalText =
+      (provider.preferStopTranscript && stopResult?.text) || this.streamingFinalText || "";
 
     if (!finalText && this.streamingPartialText) {
       finalText = this.streamingPartialText;

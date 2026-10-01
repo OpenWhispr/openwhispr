@@ -1,22 +1,27 @@
 import { create } from "zustand";
-import {
-  BASE_SYSTEM_PROMPT,
-  MEETING_INPUT_PREAMBLE,
-  MEETING_SYSTEM_PROMPT,
-  NOTE_INPUT_PREAMBLE,
-  NOTE_OUTPUT_MAX_TOKENS,
-  STANDALONE_PROMPT_KEYS,
-} from "../helpers/builtinActions";
+import { NOTE_OUTPUT_MAX_TOKENS, NOTHING_TO_SUMMARIZE } from "../helpers/builtinActions";
+import { stripThinkingTags } from "../helpers/stripThinking";
+import { compileSummaryActionPrompt, compileTemplatePrompt } from "../helpers/templatePrompts";
 import reasoningService from "../services/ReasoningService";
 import { getSettings, selectResolvedNoteFormatting } from "./settingsStore";
 import { appendDictionarySuffix } from "../config/prompts";
 import { generateNoteTitle } from "../utils/generateTitle";
 import { buildNoteFormattingOverrides } from "../helpers/noteFormattingOverrides";
 import { tagActionItemOwners, type MentionPerson } from "../utils/mentionMarkdown";
-import type { ActionItem } from "../types/electron";
+import type { ActionItem, NoteItem } from "../types/electron";
 import { estimateNoteTokens, planNoteChunks, splitChunkInHalf } from "../helpers/noteChunking";
 import type { LocalInferenceError } from "../utils/localInferenceError";
 import type { ReasoningConfig } from "../services/BaseReasoningService";
+import {
+  EMPTY_OUTPUT_MESSAGE_KEY,
+  TRUNCATED_OUTPUT_MESSAGE_KEY,
+} from "../services/ai/chatRequestBody";
+
+// The providers' error keys describe dictation cleanup; a note run shows its own.
+const NOTE_ERROR_KEYS: Record<string, string> = {
+  [TRUNCATED_OUTPUT_MESSAGE_KEY]: "notes.actions.errors.outputTruncated",
+  [EMPTY_OUTPUT_MESSAGE_KEY]: "notes.actions.emptyReply",
+};
 
 // Output room reserved in each part's window when the parts are planned. The
 // allowance a part actually gets is its share of the room the final pass has
@@ -66,17 +71,32 @@ export interface NoteMaterial {
   transcript: string;
 }
 
+/** What a run overwrote, so Undo can put it back. */
+export type NoteSummarySnapshot = Pick<
+  NoteItem,
+  "enhanced_content" | "enhancement_prompt" | "enhancement_template_id" | "enhanced_at_content_hash"
+> & { title?: string };
+
+export interface ActionAppliedEvent {
+  noteId: number;
+  action: ActionItem;
+  previous: NoteSummarySnapshot;
+}
+
 export interface ActionErrorEvent {
   noteId: number;
   message: string;
   /** Set when the failure has a translatable form; the toast prefers it. */
   messageKey?: string;
   messageParams?: Record<string, string | number>;
+  /** Not a failure: the run found nothing to write, so the toast only informs. */
+  notice?: boolean;
 }
 
 interface ActionProcessingStoreState {
   noteStates: Record<number, NoteActionState>;
   errorEvents: ActionErrorEvent[];
+  appliedEvents: ActionAppliedEvent[];
 }
 
 // The run a note's in-flight action belongs to. A per-note flag would be reset
@@ -108,9 +128,15 @@ function pushErrorEvent(event: ActionErrorEvent) {
   useActionProcessingStore.setState({ errorEvents: [...errorEvents, event] });
 }
 
+function pushAppliedEvent(event: ActionAppliedEvent) {
+  const { appliedEvents } = useActionProcessingStore.getState();
+  useActionProcessingStore.setState({ appliedEvents: [...appliedEvents, event] });
+}
+
 export const useActionProcessingStore = create<ActionProcessingStoreState>()(() => ({
   noteStates: {},
   errorEvents: [],
+  appliedEvents: [],
 }));
 
 // One part of a recording too long for the local model's window (#2142). The
@@ -167,6 +193,28 @@ async function readLocalContextBudget(modelId: string): Promise<LocalContextBudg
 
 const emptyReplyError = () =>
   Object.assign(new Error("Model returned no text"), { messageKey: "notes.actions.emptyReply" });
+
+const nothingToSummarizeError = () =>
+  Object.assign(new Error("Nothing to summarize"), {
+    messageKey: "notes.actions.errors.nothingToSummarize",
+    notice: true,
+  });
+
+/**
+ * Whether the reply is the marker itself, as models wrap it: in a fence or
+ * emphasis, or after a short sentence. A summary that only contains it, such as
+ * a section a small model answered with the marker, is still a summary.
+ */
+function isNothingToSummarizeReply(reply: string): boolean {
+  const lines = stripThinkingTags(reply)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("```"));
+  const last = lines.pop()?.replace(/^[*_`]+|[*_`.!]+$/g, "");
+  if (last !== NOTHING_TO_SUMMARIZE) return false;
+  const lead = lines.join("\n");
+  return lead.length <= 200 && !/^(?:#|[-*+]\s|\d+[.)]\s)/m.test(lead);
+}
 
 /** The translated refusal from #2142, for material no amount of splitting can fit. */
 function tooLongForModel(modelName: string): LocalInferenceError {
@@ -380,6 +428,8 @@ export interface RunActionOptions {
   knownPeople?: MentionPerson[];
   /** Structured pieces of `noteContent`; only its transcript is ever split into parts. */
   material?: NoteMaterial;
+  /** An action's input is the note's AI summary rather than its notes and transcript. */
+  fromSummary?: boolean;
 }
 
 export interface RunActionLabels {
@@ -424,31 +474,39 @@ export function runBackgroundAction(
 
   (async () => {
     try {
-      const standalone =
-        !!action.translation_key && STANDALONE_PROMPT_KEYS.has(action.translation_key);
-      const basePrompt = standalone
-        ? options.isMeetingNote
-          ? MEETING_INPUT_PREAMBLE
-          : NOTE_INPUT_PREAMBLE
-        : options.isMeetingNote
-          ? MEETING_SYSTEM_PROMPT
-          : BASE_SYSTEM_PROMPT;
+      // Only summary actions reach the runner; chat actions run in the note chat.
+      const editsSummary = action.kind === "action";
+      // A summary action with no summary yet writes a first one, like a template.
+      const rewritesSummary = editsSummary && !!options.fromSummary;
+      const instructions = editsSummary
+        ? compileSummaryActionPrompt(action, {
+            fromSummary: !!options.fromSummary,
+            isMeetingNote: options.isMeetingNote,
+          })
+        : compileTemplatePrompt(action, { isMeetingNote: options.isMeetingNote });
       const providerOverrides = buildNoteFormattingOverrides(noteFormatting, options.isCloudMode);
       const systemPrompt = appendDictionarySuffix(
-        basePrompt + action.prompt,
+        instructions,
         options.isMeetingNote ? settings.customDictionary : undefined,
         settings.uiLanguage
       );
       const requestConfig: ReasoningConfig = {
         systemPrompt,
-        maxTokens: NOTE_OUTPUT_MAX_TOKENS,
+        // A rewrite repeats a summary written under NOTE_OUTPUT_MAX_TOKENS, plus its edit.
+        maxTokens: rewritesSummary ? 2 * NOTE_OUTPUT_MAX_TOKENS : NOTE_OUTPUT_MAX_TOKENS,
         temperature: 0.3,
         disableThinking: settings.noteFormattingDisableThinking,
         // A local model that shrinks the reply to fit the prompt refuses a reply
         // that fills the shrunken allowance, so a recording is summarised in
         // parts rather than saved clipped. A plain note has no parts route, so
-        // its clipped reply is saved as before. Other routes ignore the flag.
-        refuseClippedByWindow: hasTranscript(options.material),
+        // its clipped reply is saved as before. A rewrite sets it too, so a
+        // local model shortens its allowance instead of refusing up front.
+        // Other routes ignore the flag.
+        refuseClippedByWindow: rewritesSummary || hasTranscript(options.material),
+        // Rewriting an existing summary replaces all of it, so a clipped
+        // rewrite would lose content: providers refuse it (OpenWhispr Cloud
+        // refuses a truncated reply for every request).
+        ...(rewritesSummary && { requireCompleteOutput: true }),
         requestId: runId,
         ...providerOverrides,
       };
@@ -467,26 +525,53 @@ export function runBackgroundAction(
       if (!enhanced.trim()) {
         throw emptyReplyError();
       }
-
-      if (isCancelled()) return;
-
-      let title: string | undefined;
-      if (options.allowTitleGeneration && getSettings().autoGenerateNoteTitle) {
-        const generated = await generateNoteTitle(enhanced, modelId, providerOverrides);
-        if (generated) title = generated;
+      // Only greetings or filler: say so rather than save that as the summary.
+      if (isNothingToSummarizeReply(enhanced)) {
+        throw nothingToSummarizeError();
       }
 
       if (isCancelled()) return;
 
-      const updates: Record<string, string> = {
-        enhanced_content: options.knownPeople?.length
-          ? tagActionItemOwners(enhanced, options.knownPeople)
-          : enhanced,
-        enhancement_prompt: action.prompt,
-        enhanced_at_content_hash: contentHash,
-      };
+      let title: string | undefined;
+      if (!editsSummary && options.allowTitleGeneration && getSettings().autoGenerateNoteTitle) {
+        const generated = await generateNoteTitle(enhanced, modelId, providerOverrides);
+        if (generated) title = generated;
+      }
+
+      const before = await window.electronAPI.getNote(noteId);
+      if (isCancelled()) return;
+
+      const enhancedContent = options.knownPeople?.length
+        ? tagActionItemOwners(enhanced, options.knownPeople)
+        : enhanced;
+      // A summary action keeps the template the summary was built from. Editing
+      // a summary also keeps its material hash; writing one from the material
+      // records that material, so later edits to it mark the summary stale.
+      const updates: Record<string, string> = !editsSummary
+        ? {
+            enhanced_content: enhancedContent,
+            enhancement_prompt: instructions,
+            enhancement_template_id: action.client_id,
+            enhanced_at_content_hash: contentHash,
+          }
+        : options.fromSummary
+          ? { enhanced_content: enhancedContent }
+          : { enhanced_content: enhancedContent, enhanced_at_content_hash: contentHash };
       if (title) updates.title = title;
-      await window.electronAPI.updateNote(noteId, updates);
+      const result = await window.electronAPI.updateNote(noteId, updates);
+      if (!result?.success) throw new Error(labels.actionFailed);
+      pushAppliedEvent({
+        noteId,
+        action,
+        previous: {
+          // "" as deleting a summary does: sync keeps the cloud copy over a null.
+          enhanced_content: before?.enhanced_content ?? "",
+          enhancement_prompt: before?.enhancement_prompt ?? null,
+          enhancement_template_id: before?.enhancement_template_id ?? null,
+          enhanced_at_content_hash: before?.enhanced_at_content_hash ?? null,
+          ...(title && before && { title: before.title }),
+        },
+      });
 
       setNoteState(noteId, { status: "success", actionName: action.name, progress: null });
 
@@ -501,11 +586,18 @@ export function runBackgroundAction(
       processingFlags.set(noteId, false);
       clearNoteState(noteId);
       const message = err instanceof Error ? err.message : labels.actionFailed;
-      const { messageKey, messageParams } = (err ?? {}) as {
+      const { messageKey, messageParams, notice } = (err ?? {}) as {
         messageKey?: string;
         messageParams?: Record<string, string | number>;
+        notice?: boolean;
       };
-      pushErrorEvent({ noteId, message, messageKey, messageParams });
+      pushErrorEvent({
+        noteId,
+        message,
+        messageKey: (messageKey && NOTE_ERROR_KEYS[messageKey]) || messageKey,
+        messageParams,
+        notice,
+      });
     } finally {
       if (activeRuns.get(noteId) === runId) activeRuns.delete(noteId);
     }
@@ -534,6 +626,13 @@ export function consumeErrorEvents(): ActionErrorEvent[] {
   if (errorEvents.length === 0) return [];
   useActionProcessingStore.setState({ errorEvents: [] });
   return errorEvents;
+}
+
+export function consumeAppliedEvents(): ActionAppliedEvent[] {
+  const { appliedEvents } = useActionProcessingStore.getState();
+  if (appliedEvents.length === 0) return [];
+  useActionProcessingStore.setState({ appliedEvents: [] });
+  return appliedEvents;
 }
 
 export function selectNoteActionState(

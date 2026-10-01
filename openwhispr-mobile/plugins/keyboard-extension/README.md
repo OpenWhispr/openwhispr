@@ -15,8 +15,8 @@ A custom iOS keyboard extension that lets the user dictate from any text field s
 
 1. User installs the keyboard from iOS Settings → General → Keyboard → Keyboards → Add New.
 2. User opens any app, switches to the OpenWhispr keyboard, taps the mic.
-3. Extension writes a flag to the App Group, then opens the configured app scheme at `/keyboard-dictation` (handled by [src/screens/HomeScreen.tsx](../../src/screens/HomeScreen.tsx)).
-4. The main app starts a native recording, then calls `AppGroupStorage.returnToPreviousApp()` to swap back to the host.
+3. Extension writes a flag to the App Group, then opens the configured app scheme at `/keyboard-dictation` (handled by [src/hooks/useKeyboardHandoff.ts](../../src/hooks/useKeyboardHandoff.ts)).
+4. The main app starts a native recording, then sends the user back to the host app (`returnToHost` in [src/lib/handoffReturn.ts](../../src/lib/handoffReturn.ts)). iOS 26.4+ hides the host from the extension, so the containing app learns it from UIKit ([`HostAppObserver.swift`](../../modules/app-group-storage/ios/HostAppObserver.swift)). When no host is found, the app shows the "Swipe back to your app" screen instead.
 5. Recording continues in the background. When stopped, the main app writes the transcript to `keyboard_pending_transcript` and the extension pastes it on next focus.
 
 ## Apple capabilities required

@@ -38,7 +38,7 @@ const {
   createConnectorPolicyResolver,
   createConnectorAuthLookup,
 } = require("./connectors/connectorIpc");
-const { searchContacts } = require("./connectors/contactSearch");
+const { createNoteAttendeesLookup, searchContacts } = require("./connectors/contactSearch");
 // The renderer's ModelRegistry is not main-loadable; the raw registry data is
 // packaged, and the route resolver only needs {id, baseUrl} per provider.
 const transcriptionProviderBaseUrls = () =>
@@ -112,6 +112,7 @@ const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
 const { supportsLiveSpeakerIdentification } = require("./liveSpeakerIdPolicy");
 const MeetingEchoLeakDetector = require("./meetingEchoLeakDetector");
 const createMeetingSystemAudioWatchdog = require("./meetingSystemAudioWatchdog");
+const createMeetingSystemAudioHandover = require("./meetingSystemAudioHandover");
 const {
   partitionPendingMicFinals,
   isRiskyMicDuplicateProfile,
@@ -681,20 +682,7 @@ class IPCHandlers {
     resolveSystemDefaultMicrophone();
     this.setupHandlers();
     // Lives for the app's lifetime; IPCHandlers has no teardown path.
-    tokenStore.subscribe(({ generation, token }) => {
-      this.enterpriseIdentityManager?.clear();
-      if (!token) {
-        this.databaseManager.setActiveAccountId(null);
-        accountScopeBinding.clear();
-        broadcastToWindows("active-account-scope-changed", null);
-      }
-      broadcastToWindows("auth-token-state-changed", {
-        generation,
-        hasToken: Boolean(token),
-      });
-      // A sign-out or another account changes whose login shows.
-      void this.connectorManager?.notifyStatusChanged();
-    });
+    tokenStore.subscribe((state) => this._handleAuthTokenChange(state));
 
     if (this.whisperManager?.serverManager) {
       // Remember the failed backend so it isn't re-attempted (and its model
@@ -716,6 +704,23 @@ class IPCHandlers {
         this._syncStartupEnv({}, ["WHISPER_VULKAN_DEVICE"]);
       });
     }
+  }
+
+  _handleAuthTokenChange({ generation, token }) {
+    this.enterpriseIdentityManager?.clear();
+    if (!token) {
+      this.databaseManager.setActiveAccountId(null);
+      accountScopeBinding.clear();
+      broadcastToWindows("active-account-scope-changed", null);
+      // As set-active-account-scope does: a connect can't outlive its account.
+      this.connectorManager?.accountChanged();
+    }
+    broadcastToWindows("auth-token-state-changed", {
+      generation,
+      hasToken: Boolean(token),
+    });
+    // A sign-out or another account changes whose login shows.
+    void this.connectorManager?.notifyStatusChanged();
   }
 
   // Reconstructing counters from the transcripts already on disk records exactly
@@ -2216,6 +2221,7 @@ class IPCHandlers {
         "active-account-scope-changed",
         accountId !== null ? { accountId, authGeneration: state.generation } : null
       );
+      this.connectorManager?.accountChanged();
       void this.connectorManager?.notifyStatusChanged();
       return { success: true };
     });
@@ -2227,33 +2233,41 @@ class IPCHandlers {
       })
     );
 
-    ipcMain.handle("delete-account-data", async (_event, accountId, expectedGeneration) => {
-      const state = tokenStore.getState();
-      if (
-        typeof accountId !== "string" ||
-        accountId.trim().length === 0 ||
-        !state.token ||
-        state.generation !== expectedGeneration
-      ) {
-        return {
-          success: false,
-          code: "AUTH_CONTEXT_CHANGED",
-          error: "Authentication context changed before local account cleanup",
-        };
-      }
-      try {
-        // Best effort; each revoke has a 5s deadline (connectorManager.js).
-        await this.connectorManager?.disconnectAll();
-        const result = this.databaseManager.deleteAccountData(accountId);
-        this.notifyVectorChanges();
-        for (const noteId of result.deletedNoteIds) {
-          this._asyncMirrorDelete(noteId);
+    ipcMain.handle(
+      "delete-account-data",
+      async (_event, accountId, expectedGeneration, options) => {
+        const state = tokenStore.getState();
+        if (
+          typeof accountId !== "string" ||
+          accountId.trim().length === 0 ||
+          !state.token ||
+          state.generation !== expectedGeneration
+        ) {
+          return {
+            success: false,
+            code: "AUTH_CONTEXT_CHANGED",
+            error: "Authentication context changed before local account cleanup",
+          };
         }
-        return { success: true, ...result };
-      } catch (error) {
-        return { success: false, code: "LOCAL_ACCOUNT_CLEANUP_FAILED", error: error.message };
+        try {
+          // Best effort; each revoke has a 5s deadline (connectorManager.js).
+          // Erasing the device takes the calendar logins with it, so a grant
+          // Gmail shares with a calendar is revoked too: cleanup-app runs
+          // after this and finds no Gmail login left to revoke.
+          await this.connectorManager?.disconnectAll({
+            erasingDevice: options?.erasingDevice === true,
+          });
+          const result = this.databaseManager.deleteAccountData(accountId);
+          this.notifyVectorChanges();
+          for (const noteId of result.deletedNoteIds) {
+            this._asyncMirrorDelete(noteId);
+          }
+          return { success: true, ...result };
+        } catch (error) {
+          return { success: false, code: "LOCAL_ACCOUNT_CLEANUP_FAILED", error: error.message };
+        }
       }
-    });
+    );
 
     ipcMain.handle("db-update-space", async (event, id, updates) => {
       const result = this.databaseManager.updateSpace(id, updates);
@@ -2305,8 +2319,8 @@ class IPCHandlers {
       return this.databaseManager.getAction(id);
     });
 
-    ipcMain.handle("db-create-action", async (event, name, description, prompt, icon) => {
-      const result = this.databaseManager.createAction(name, description, prompt, icon);
+    ipcMain.handle("db-create-action", async (event, name, description, prompt, icon, fields) => {
+      const result = this.databaseManager.createAction(name, description, prompt, icon, fields);
       if (result?.success && result?.action) {
         setImmediate(() => {
           broadcastToWindows("action-created", result.action);
@@ -3064,8 +3078,13 @@ class IPCHandlers {
       // Promise cannot cross Electron's IPC boundary, though, and renderer
       // callers need to know whether text was pasted, but not the delayed
       // clipboard restoration promise. Successful platform paths predate the
-      // explicit `pasted` outcome; only the clipboard-only fallback sets false.
-      return { success: true, pasted };
+      // explicit `pasted` outcome; only the clipboard-only fallback and a paste
+      // held back for still-held modifiers (which carries a `reason`) set false.
+      return {
+        success: true,
+        pasted,
+        ...(pasteResult?.reason ? { reason: pasteResult.reason } : {}),
+      };
     });
 
     ipcMain.handle("check-accessibility-permission", async (_event, silent = false) => {
@@ -3758,14 +3777,16 @@ class IPCHandlers {
         if (!realPath) return { success: false, error: "File path not allowed" };
         filePath = realPath;
 
-        const numSpeakers = Math.min(
-          MAX_SPEAKER_COUNT,
-          Math.max(-1, Math.round(Number(options.numSpeakers) || -1))
-        );
+        const maxSpeakers = normalizeStoredSpeakerCount(options.numSpeakers) ?? MAX_SPEAKER_COUNT;
 
         const { convertToWav } = require("./ffmpegUtils");
         const { getSafeTempDir } = require("./safeTempDir");
-        const { resolveClusterThreshold, dropNegligibleClusters } = require("./diarizationPolicy");
+        const {
+          resolveClusterThreshold,
+          dropNegligibleClusters,
+          isCollapsedDiarization,
+          capSpeakerClustersByVoice,
+        } = require("./diarizationPolicy");
         const { PCM16_MONO_16K_BYTES_PER_SECOND } = require("./transcriptionTimeout");
         const wavPath = path.join(getSafeTempDir(), `ow-diarize-${Date.now()}.wav`);
 
@@ -3779,22 +3800,48 @@ class IPCHandlers {
           const durationSeconds = fs.statSync(wavPath).size / PCM16_MONO_16K_BYTES_PER_SECOND;
           const threshold = resolveClusterThreshold(durationSeconds, options.threshold);
 
-          let segments = await this.diarizationManager.diarize(wavPath, {
-            numSpeakers,
-            threshold,
-            signal,
-          });
+          // Always auto-cluster: forcing 2 clusters on #2021's two-person call
+          // split short utterances from long ones instead of one speaker from
+          // the other, merging both speakers. The requested count is applied
+          // as a cap after cleanup instead.
+          let segments = await this.diarizationManager.diarize(wavPath, { threshold, signal });
           if (signal?.aborted) {
             return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
+          }
+          // A collapsed run's labels are wrong either way: two people under
+          // one label, or one person split off into a phantom. With no
+          // segments the renderer keeps the plain transcript and shows the
+          // diarization warning instead. Judged before phantoms are dropped;
+          // a request for one speaker is met by the cap below instead.
+          if (maxSpeakers > 1 && isCollapsedDiarization(segments)) {
+            debugLogger.warn("Discarding diarization: one cluster holds nearly all speech", {
+              durationSeconds,
+            });
+            segments = [];
           }
           // The meeting path caps clusters via its expectation resolver; this
           // path fed raw sherpa output to the merge, which is how a 2-person
           // voice memo surfaced 46 speakers.
           segments = dropNegligibleClusters(segments);
-          segments = this.diarizationManager.capSpeakerClusters(
-            segments,
-            numSpeakers > 0 ? numSpeakers : MAX_SPEAKER_COUNT
-          );
+          if (new Set(segments.map((s) => s.speaker)).size > maxSpeakers) {
+            const speakerEmbeddings = require("./speakerEmbeddings");
+            let centroids = new Map();
+            try {
+              centroids = await speakerEmbeddings.extractClusterCentroids(wavPath, segments, {
+                signal,
+              });
+            } catch (error) {
+              debugLogger.warn("Speaker voices unavailable; extra clusters fold into the largest", {
+                error: error.message,
+              });
+            }
+            if (signal?.aborted) {
+              return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
+            }
+            segments = capSpeakerClustersByVoice(segments, maxSpeakers, centroids, (a, b) =>
+              speakerEmbeddings.cosineSimilarity(a, b)
+            );
+          }
           // Callers persist this as audio_duration_seconds: for picked files
           // the renderer has no other duration source.
           return { success: true, segments, durationSeconds };
@@ -3934,6 +3981,19 @@ class IPCHandlers {
         errors.push(`GCal revoke: ${e.message}`);
       }
 
+      // Revoke every connector login stored on this device (Slack, Gmail) at
+      // its provider, for every account: Settings signs out before this
+      // runs, so there may be no signed-in account left. It must run before
+      // the connectors directory is deleted below. Best effort: the revokes
+      // run in parallel under a 5 s deadline and never block the reset.
+      try {
+        await this.connectorManager?.revokeAllStored();
+      } catch (e) {
+        const { describeError } = require("./connectors/errorSummary");
+        const { errorName, errorCode } = describeError(e);
+        errors.push(`Connector revoke: ${errorCode ?? errorName}`);
+      }
+
       // Close DB connection before deleting the file
       try {
         this.databaseManager?.db?.close();
@@ -4027,7 +4087,8 @@ class IPCHandlers {
       } catch (e) {
         errors.push(`Device setting files: ${e.message}`);
       }
-      // "connectors" holds encrypted connector logins (Slack, …).
+      // "connectors" holds encrypted connector logins (Slack, Gmail), all
+      // revoked above.
       for (const directoryName of ["bin", "llama-cpp", "connectors"]) {
         try {
           fs.rmSync(path.join(app.getPath("userData"), directoryName), {
@@ -4272,10 +4333,7 @@ class IPCHandlers {
           ? requestedHotkey.split(",")[0].trim()
           : hotkeyManager.getCurrentHotkey();
       const isUsingNativeShortcut = this.windowManager.isUsingNativeShortcutHotkeys();
-      const supportsPushToTalk =
-        process.platform === "linux" || process.platform === "darwin"
-          ? hotkeyManager.supportsPushToTalk(hotkey)
-          : !isUsingNativeShortcut;
+      const supportsPushToTalk = hotkeyManager.supportsPushToTalk(hotkey);
 
       return {
         isUsingGnome: this.windowManager.isUsingGnomeHotkeys(),
@@ -6083,6 +6141,14 @@ class IPCHandlers {
           }),
         findContacts: (query) =>
           searchContacts(this.databaseManager.getContactLookupSources(), query),
+        noteAttendees: createNoteAttendeesLookup({
+          getContactLookupSources: () => this.databaseManager.getContactLookupSources(),
+          getCalendarEventById: (id) => this.databaseManager.getCalendarEventById(id),
+          getSpeakerMappings: (noteId) => this.databaseManager.getSpeakerMappings(noteId),
+          getSpeakerProfiles: () => this.databaseManager.getSpeakerProfiles(),
+          getGmailAddress: async () =>
+            (await this.connectorManager.connectorStatus("gmail"))?.accountLabel ?? null,
+        }),
       });
     }
     this.enterpriseIdentityManager = createEnterpriseIdentityManager({
@@ -6886,7 +6952,7 @@ class IPCHandlers {
       meetingMicDiarizationPath = null;
       meetingMicDiarizationStartedAt = null;
       meetingSystemAudioHeard = false;
-      meetingSystemAudioDegraded = false;
+      meetingSystemAudioHandover.reset();
       meetingDiarizationSegments = [];
       const { pcmPath, startedAt, diarizedSource, cleanupPcmPaths } = resolveDiarizationInput({
         systemPcmPath,
@@ -7479,7 +7545,7 @@ class IPCHandlers {
     let meetingMicDiarizationPath = null;
     let meetingMicDiarizationStartedAt = null;
     let meetingSystemAudioHeard = false;
-    let meetingSystemAudioDegraded = false;
+    const meetingSystemAudioHandover = createMeetingSystemAudioHandover();
     let meetingDiarizationSegments = [];
     let meetingLiveSpeakerActive = false;
     let meetingLiveSpeakerState = null;
@@ -8085,7 +8151,7 @@ class IPCHandlers {
       meetingDiarizationStartedAt = null;
       dropMeetingMicDiarizationCapture();
       meetingSystemAudioHeard = false;
-      meetingSystemAudioDegraded = false;
+      meetingSystemAudioHandover.reset();
       meetingDiarizationSegments = [];
       meetingLocalWin = null;
       meetingLocalTranscript = "";
@@ -8825,22 +8891,26 @@ class IPCHandlers {
     };
 
     // The Windows helper reports capture_silent when its own stream is silent
-    // while a render endpoint is playing: activation succeeded but no audio
-    // will ever arrive, so hand the live session to Chromium's renderer
-    // loopback. The silence watchdog stays armed in case that fails too.
-    const degradeMeetingSystemAudioToLoopback = async (event) => {
-      if (meetingSystemAudioDegraded || meetingSystemAudioHeard) return;
-      meetingSystemAudioDegraded = true;
+    // while a render endpoint is playing, which activation success cannot
+    // detect. Start renderer loopback beside it; the handover decides whether
+    // it takes the channel.
+    const degradeMeetingSystemAudioToLoopback = (event) => {
+      if (!meetingSystemAudioHandover.begin()) return;
       debugLogger.warn(
-        "Windows system audio helper captured only silence, switching to renderer loopback",
+        "Windows system audio helper captured only silence, starting renderer loopback beside it",
         {},
         "meeting"
       );
-      await this.windowsLoopbackAudioManager?.stop().catch(() => {});
       const win = BrowserWindow.fromWebContents(event.sender);
       if (win && !win.isDestroyed()) {
         win.webContents.send("meeting-system-audio-degraded");
       }
+    };
+
+    const completeMeetingSystemAudioHandover = () => {
+      debugLogger.info("Renderer loopback took over system audio capture", {}, "meeting");
+      meetingSystemAudioWatchdog.detachCapture();
+      void this.windowsLoopbackAudioManager?.stop().catch(() => {});
     };
 
     const startManagedMeetingSystemAudio = (event, manager, warningLabel, onWarningCode) => {
@@ -8853,6 +8923,7 @@ class IPCHandlers {
         captureStarted = true;
         return manager.start({
           onChunk: (chunk) => {
+            if (!meetingSystemAudioHandover.acceptNativeChunk(chunk)) return;
             if (timeline) {
               timeline.write(chunk, (buffer, synthetic, capturedAt) =>
                 sendMeetingAudio(buffer, "system", synthetic, capturedAt)
@@ -8943,7 +9014,7 @@ class IPCHandlers {
             "Windows system audio warning",
             (code) => {
               if (code === "capture_silent") {
-                void degradeMeetingSystemAudioToLoopback(event);
+                degradeMeetingSystemAudioToLoopback(event);
               }
             }
           );
@@ -8983,7 +9054,13 @@ class IPCHandlers {
     };
 
     ipcMain.on("meeting-transcription-send", (_event, audioBuffer, source) => {
-      sendMeetingAudio(audioBuffer, source);
+      const buffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
+      if (source === "system") {
+        const route = meetingSystemAudioHandover.acceptRendererChunk(buffer);
+        if (route === "drop") return;
+        if (route === "takeover") completeMeetingSystemAudioHandover();
+      }
+      sendMeetingAudio(buffer, source);
     });
 
     const stopMeetingTranscription = async (expectedSessionId) => {
@@ -11285,7 +11362,7 @@ class IPCHandlers {
       const hotkeyManager = this.windowManager.hotkeyManager;
       const voiceAgentCallback = this.windowManager._voiceAgentHotkeyCallback;
       if (!voiceAgentCallback) {
-        return { success: false, message: "Voice agent hotkey callback not initialized" };
+        return { success: false };
       }
 
       if (!hotkey) {
@@ -11307,10 +11384,7 @@ class IPCHandlers {
         return { success: true, message: `Voice agent hotkey updated to: ${hotkey}` };
       }
 
-      return {
-        success: false,
-        message: result.error || `Failed to update voice agent hotkey to: ${hotkey}`,
-      };
+      return { success: false, message: result.error };
     });
 
     ipcMain.handle("get-voice-agent-key", async () => {
@@ -11321,7 +11395,7 @@ class IPCHandlers {
       const hotkeyManager = this.windowManager.hotkeyManager;
       const translationCallback = this.windowManager._translationHotkeyCallback;
       if (!translationCallback) {
-        return { success: false, message: "Translation hotkey callback not initialized" };
+        return { success: false };
       }
 
       if (!hotkey) {
@@ -11343,10 +11417,7 @@ class IPCHandlers {
         return { success: true, message: `Translation hotkey updated to: ${hotkey}` };
       }
 
-      return {
-        success: false,
-        message: result.error || `Failed to update translation hotkey to: ${hotkey}`,
-      };
+      return { success: false, message: result.error };
     });
 
     ipcMain.handle("get-translation-key", async () => {

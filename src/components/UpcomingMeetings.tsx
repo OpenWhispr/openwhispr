@@ -1,17 +1,22 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Calendar, ExternalLink, Loader2, Mic, Monitor, Video } from "./icons";
 import { Button } from "./ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import PersonAvatar from "./ui/PersonAvatar";
 import EmptyStateCard from "./ui/EmptyStateCard";
-import { GRADIENT_CIRCLE } from "./ui/gradientCircle";
+import ThemedEmptyIllustration from "./ui/ThemedEmptyIllustration";
+import calendarEmptyLight from "../assets/empty-states/home-calendar-light.svg";
+import calendarEmptyDark from "../assets/empty-states/home-calendar-dark.svg";
 import { cn } from "./lib/utils";
+import { CARD_SURFACE_CLASS } from "./ui/surfaces";
 import type { CalendarAttendee, CalendarEvent } from "../types/calendar";
 import { parseAttendees } from "../utils/calendarAttendees";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import { getMeetingJoinUrl } from "../helpers/meetingJoinUrl";
+import TouchGrass from "./TouchGrass";
+import { createGrassRustle, type GrassRustle } from "../utils/grassRustle";
 import { parseEventDate } from "../utils/dateFormatting";
 
 interface UpcomingMeetingsProps {
@@ -69,6 +74,10 @@ function groupEventsByDay(events: CalendarEvent[], now: Date): DayGroup[] {
   }
   return groups.slice(0, MAX_DAY_CARDS);
 }
+
+// The quiet grey buttons inside a day card: join a meeting, touch grass.
+const DAY_CARD_BUTTON_CLASS =
+  "h-7 bg-surface-3 hover:bg-surface-raised dark:bg-surface-2 dark:hover:bg-surface-3";
 
 const ATTENDEE_COUNT_PILL_CLASS =
   "flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-surface-3 px-0.5 text-[9px] font-medium tabular-nums text-muted-foreground ring-1 ring-background";
@@ -178,7 +187,7 @@ function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
       size="sm"
       variant="ghost"
       onClick={startNotes}
-      className="pointer-events-auto h-7 bg-surface-3 hover:bg-surface-raised dark:bg-surface-2 dark:hover:bg-surface-3"
+      className={cn("pointer-events-auto", DAY_CARD_BUTTON_CLASS)}
     >
       {joinUrl ? <Video size={12} /> : <Mic size={12} />}
       {joinUrl ? t("upcoming.joinAndTranscribe") : t("upcoming.takeNotes")}
@@ -233,22 +242,49 @@ function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
 
 function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEvent) => boolean }) {
   const { t, i18n } = useTranslation();
+  // Non-null while the empty day shows the grass; it owns that visit's rustle audio.
+  const [rustle, setRustle] = useState<GrassRustle | null>(null);
+  const [sceneHeight, setSceneHeight] = useState(0);
+  const emptyStateRef = useRef<HTMLDivElement>(null);
+  const tryButtonRef = useRef<HTMLButtonElement>(null);
+  const returnFocusRef = useRef(false);
+
+  // A sync can add a meeting to today while the grass is out; the day is no longer empty.
+  if (rustle && group.items.length > 0) setRustle(null);
+
+  useEffect(() => () => rustle?.dispose(), [rustle]);
+
+  useEffect(() => {
+    if (rustle || !returnFocusRef.current) return;
+    returnFocusRef.current = false;
+    tryButtonRef.current?.focus();
+  }, [rustle]);
+
+  const touchGrass = () => {
+    setSceneHeight(emptyStateRef.current?.offsetHeight ?? 0);
+    // Created in the click so the browser lets the audio start.
+    setRustle(createGrassRustle());
+  };
+
+  const leaveGrass = () => {
+    returnFocusRef.current = true;
+    setRustle(null);
+  };
 
   return (
     <div
       className={cn(
-        "rounded-2xl border border-border/70 dark:border-white/10",
-        !group.isToday && "overflow-clip"
+        "overflow-clip rounded-xl border border-border/70 bg-clip-padding dark:border-white/10",
+        // Out on the grass the header goes quiet grey, so the lawn carries the colour.
+        group.isToday && !rustle
+          ? "bg-[image:var(--gradient-calendar-today)]"
+          : "bg-surface-3 dark:bg-surface-2"
       )}
     >
       <div
         className={cn(
-          "flex items-center gap-1.5 px-2.5 py-2 text-xs font-medium",
-          // Today's glass strip sits over the card's hairline on three sides so the blue meets
-          // the rounded edge directly instead of being outlined in grey.
-          group.isToday
-            ? cn(GRADIENT_CIRCLE, "-mx-px -mt-px rounded-t-2xl")
-            : "bg-surface-3 text-foreground dark:bg-surface-2"
+          "flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium",
+          group.isToday && !rustle ? "calendar-today-header text-white" : "text-foreground"
         )}
       >
         <Calendar size={12} className="shrink-0" />
@@ -259,19 +295,62 @@ function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEve
             month: "short",
           })}
         </span>
-      </div>
-      <div className="rounded-b-[15px] bg-background px-2 dark:bg-surface-2/60">
-        {group.items.length === 0 ? (
-          <p className="px-1 py-3 text-xs text-muted-foreground/70">
-            {t("upcoming.noEventsToday")}
-          </p>
-        ) : (
-          <div className="divide-y divide-border/60">
-            {group.items.map((event) => (
-              <EventRow key={event.id} event={event} isNow={isNowFn(event)} />
-            ))}
-          </div>
+        {rustle && (
+          <button
+            type="button"
+            onClick={leaveGrass}
+            className="ms-auto rounded-sm px-1 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-current/40"
+          >
+            {t("common.back")}
+          </button>
         )}
+      </div>
+      {/* The list sits on the header colour with its own rounded top, so that colour shows
+          around its corners. The opaque layer keeps the dark tint from mixing with it. */}
+      <div className="rounded-t-xl bg-background">
+        <div className="rounded-t-xl px-2 dark:bg-surface-2/60">
+          {group.items.length === 0 && rustle ? (
+            <TouchGrass
+              rustle={rustle}
+              height={sceneHeight}
+              label={t("upcoming.touchGrassLabel")}
+              onExit={leaveGrass}
+            />
+          ) : group.items.length === 0 ? (
+            <div ref={emptyStateRef} className="flex flex-col items-center px-1 py-5 text-center">
+              <ThemedEmptyIllustration
+                light={calendarEmptyLight}
+                dark={calendarEmptyDark}
+                width={316}
+                height={120}
+              />
+              <p className="mt-3 text-[15px] font-medium text-foreground">
+                {t("upcoming.noEventsToday")}
+              </p>
+              <p className="mt-1.5 text-[13px] text-muted-foreground">
+                {t("upcoming.emptyDayDescription")}
+              </p>
+              <Button
+                ref={tryButtonRef}
+                variant="ghost"
+                onClick={touchGrass}
+                className={cn(
+                  "mt-5",
+                  DAY_CARD_BUTTON_CLASS,
+                  "h-9 rounded-full px-5 text-primary hover:text-primary dark:text-primary"
+                )}
+              >
+                {t("upcoming.touchGrass")}
+              </Button>
+            </div>
+          ) : (
+            <div className="divide-y divide-border/60">
+              {group.items.map((event) => (
+                <EventRow key={event.id} event={event} isNow={isNowFn(event)} />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -298,8 +377,6 @@ export default function UpcomingMeetings({
 
   return (
     <div>
-      <p className="pt-2 pb-2.5 text-sm text-muted-foreground">{t("upcoming.title")}</p>
-
       {/* Loading state */}
       {isLoading && (
         <div className="flex items-center justify-center gap-2 py-6">
@@ -343,19 +420,26 @@ export default function UpcomingMeetings({
             </Button>
           </EmptyStateCard>
         ) : (
-          <EmptyStateCard
-            className="px-4 py-8"
-            icon={Calendar}
-            title={t("upcoming.noUpcomingEvents")}
-            description={t("upcoming.moreCalendarsHint")}
+          <div
+            className={cn(CARD_SURFACE_CLASS, "flex flex-col items-center px-4 py-6 text-center")}
           >
+            <ThemedEmptyIllustration
+              light={calendarEmptyLight}
+              dark={calendarEmptyDark}
+              width={316}
+              height={120}
+            />
+            <p className="mt-3 text-sm font-semibold text-foreground">
+              {t("upcoming.noUpcomingEvents")}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">{t("upcoming.moreCalendarsHint")}</p>
             <button
               onClick={onConnectCalendar}
-              className="cursor-pointer text-xs text-primary underline-offset-2 outline-none hover:underline focus-visible:underline"
+              className="mt-3 cursor-pointer text-xs text-primary underline-offset-2 outline-none hover:underline focus-visible:underline"
             >
               {t("upcoming.connectHere")}
             </button>
-          </EmptyStateCard>
+          </div>
         ))}
 
       {/* Day cards */}

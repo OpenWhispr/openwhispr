@@ -12,7 +12,7 @@ on:
       version:
         description: 'Version tag (e.g., 1.0.0)'
         required: false
-        default: '1.0.0'
+        default: '1.2.0'
         type: string
 
 permissions:
@@ -70,8 +70,8 @@ jobs:
       - name: Create or update release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: windows-system-audio-helper-v${{ inputs.version || '1.0.0' }}
-          name: Windows System Audio Helper v${{ inputs.version || '1.0.0' }}
+          tag_name: windows-system-audio-helper-v${{ inputs.version || '1.2.0' }}
+          name: Windows System Audio Helper v${{ inputs.version || '1.2.0' }}
           body: |
             Prebuilt Windows system audio helper binary for meeting transcription.
 

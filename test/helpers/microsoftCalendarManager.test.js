@@ -447,3 +447,34 @@ test("fetchCalendars still saves the calendars when the address lookup fails", a
   assert.equal(calendars.length, 1);
   assert.equal(savedCalendars.length, 1);
 });
+
+test("a stripped occurrence keeps details but applies explicit RSVP after master failure", async () => {
+  const MicrosoftCalendarManager = loadManagerModule();
+  const original = {
+    id: "occ-1",
+    calendar_id: "cal-1",
+    provider: "microsoft",
+    summary: "Standup",
+    start_time: "2026-10-01T10:00:00Z",
+    end_time: "2026-10-01T11:00:00Z",
+    is_all_day: 0,
+    status: "confirmed",
+    availability_status: "busy",
+    self_response_status: "accepted",
+    hangout_link: "https://teams.live.com/meet/123",
+    attendees_count: 1,
+    attendees: '[{"email":"guest@example.com"}]',
+  };
+  const upserted = [];
+  const manager = createManager(MicrosoftCalendarManager, upserted, [], {
+    getCalendarEventById: () => original,
+  });
+  manager._apiGet = async (url) => {
+    if (!url.includes("/calendarView/delta")) throw new Error("master unavailable");
+    return {
+      value: [{ ...STRIPPED_OCCURRENCE, responseStatus: { response: "declined" } }],
+    };
+  };
+  await manager._syncCalendar({ id: "cal-1", account_email: "me@example.com" });
+  assert.deepEqual(upserted, [{ ...original, self_response_status: "declined" }]);
+});

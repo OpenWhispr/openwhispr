@@ -115,7 +115,7 @@ test("rooms and resources are flagged in attendees and kept, with the user, out 
       replaceAppleCalendarEvents: (events) => saved.push(...events),
       syncCalendarContacts: (...args) => synced.push(args),
     },
-    { reconcileProvider: () => {}, scheduleNextMeeting: () => {} }
+    { scheduleNextMeeting: () => {} }
   );
 
   manager._applySnapshot({
@@ -173,4 +173,24 @@ test("_mapEvent drops the organizer address only when the user organized the eve
 
   assert.equal(manager._mapEvent({ ...event, organizer_self: true }).organizer_email, null);
   assert.equal(manager._mapEvent(event).organizer_email, "me@corp.test");
+});
+
+test("Apple RSVP ignores another attendee's decline and follows current-user changes", () => {
+  const AppleCalendarManager = loadManager();
+  const manager = new AppleCalendarManager({}, {});
+  for (const response of ["accepted", "declined", "tentative", "unknown"]) {
+    const mapped = manager._mapEvent({
+      id: "instance",
+      calendar_id: "cal",
+      title: "Meeting",
+      status: "confirmed",
+      start: "2026-10-01T10:00:00Z",
+      end: "2026-10-01T11:00:00Z",
+      attendees: [
+        { email: "guest@example.com", status: "declined" },
+        { email: "me@example.com", self: true, status: response },
+      ],
+    });
+    assert.equal(mapped.self_response_status, response);
+  }
 });

@@ -1168,6 +1168,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   onRetryTranscription={retryTranscription}
                   showDiscarded={showDiscarded}
                   onToggleDiscarded={toggleShowDiscarded}
+                  userName={user?.name}
                   onOpenSettings={(section) => {
                     setSettingsSection(section);
                     setShowSettings(true);

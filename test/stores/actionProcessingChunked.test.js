@@ -31,6 +31,7 @@ async function loadStore(
           updates.push({ noteId, payload });
           return { success: true };
         },
+        getNote: async () => null,
         getLocalContextBudget: async (modelId) => {
           budgetCalls.push(modelId);
           if (budget instanceof Error) throw budget;
@@ -173,6 +174,37 @@ test("refused material is summarised in parts, then merged with the action promp
     updates[0].payload.enhanced_content,
     `# Part notes ${calls.length}\n- decided things`
   );
+});
+
+test("a summary action writing a first summary splits a refused recording like a template", async (t) => {
+  const { store, calls, updates } = await loadStore(t, { failFirst: true });
+  const tldr = {
+    id: 2,
+    client_id: "tldr",
+    kind: "action",
+    output: "summary",
+    name: "Add TL;DR",
+    prompt: "Add a TL;DR.",
+  };
+  run(store, 30, longMaterial(400), { fromSummary: false }, tldr);
+  await waitFor(() => updates.length > 0, "save");
+
+  // A first summary has nothing to lose, so no request, part or not, demands a
+  // complete reply: a verbose part is kept clipped, as for a template.
+  assert.equal(calls[0].config.refuseClippedByWindow, true, "a long recording can split");
+  const parts = calls.slice(1, -1);
+  assert.ok(parts.length >= 2, "the recording ran in parts");
+  for (const part of parts) {
+    assert.ok(isPart(part.config));
+    assert.equal(part.config.requireCompleteOutput, undefined);
+    assert.equal(part.config.refuseClippedByWindow, false);
+  }
+  assert.equal(calls.at(-1).config.requireCompleteOutput, undefined);
+  assert.match(calls.at(-1).config.systemPrompt, /no AI summary yet[\s\S]*Add a TL;DR\./);
+  assert.deepEqual(Object.keys(updates[0].payload), [
+    "enhanced_content",
+    "enhanced_at_content_hash",
+  ]);
 });
 
 test("a refusal whose budget cannot be read is reported without splitting", async (t) => {
@@ -582,29 +614,15 @@ test("an unbroken CJK part rejected by the tokenizer is split and merged without
   assert.equal(accepted.join(""), body);
 });
 
-test("the merge preserves a follow-up email action without imposing exhaustive notes", async (t) => {
-  const { BUILTIN_ACTIONS } = await import("../../src/helpers/builtinActions.js");
-  const email = BUILTIN_ACTIONS.find(
-    (action) => action.translationKey === "notes.actions.builtin.followUpEmail"
-  );
+test("the merge preserves a custom template's instructions without imposing exhaustive notes", async (t) => {
+  const prompt = "Write the follow-up email I would send to the other participants.";
   const { store, calls, updates } = await loadStore(t, { failFirst: true });
-  run(
-    store,
-    16,
-    longMaterial(20),
-    {},
-    {
-      id: 2,
-      name: email.name,
-      prompt: email.prompt,
-      translation_key: email.translationKey,
-    }
-  );
+  run(store, 16, longMaterial(20), {}, { id: 2, kind: "template", name: "Follow-up", prompt });
   await waitForResult(store, updates);
   assert.equal(updates.length, 1);
-  const prompt = calls.at(-1).config.systemPrompt;
-  assert.ok(prompt.includes(email.prompt));
-  assert.doesNotMatch(prompt, /Completeness outranks brevity|as long as that requires/);
+  const systemPrompt = calls.at(-1).config.systemPrompt;
+  assert.ok(systemPrompt.includes(prompt));
+  assert.doesNotMatch(systemPrompt, /Completeness outranks brevity|as long as that requires/);
 });
 
 test("a local model reached through dictation cleanup is summarised in parts too", async (t) => {

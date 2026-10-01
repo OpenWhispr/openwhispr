@@ -117,6 +117,7 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
     return {
       DEV_SERVER_PORT: 5173,
       DEV_SERVER_URL: "http://localhost:5173",
+      getAppUrl: () => null,
       getAppFilePath: () => ({ path: "/app/index.html", query: {} }),
       waitForDevServer: async () => undefined,
     };
@@ -217,6 +218,46 @@ test("the Assistant response context menu exposes native Copy only for selected 
   manager._assistantPanelOpen = false;
   onContextMenu(null, { selectionText: "outside Assistant" });
   assert.equal(builtMenus.length, 1);
+});
+
+// Assistant replies can carry links an injected prompt chose, so the dictation
+// window hands them to the browser like the control panel instead of opening
+// an in-app window, and never passes a local path to the OS.
+test("assistant panel links open in the browser, never an in-app window or a local file", () => {
+  const manager = new WindowManager();
+  const opened = [];
+  manager.openExternalUrl = (url) => opened.push(url);
+  const listeners = new Map();
+  let openHandler;
+  const window = {
+    webContents: {
+      on: (event, listener) => listeners.set(event, listener),
+      setWindowOpenHandler: (handler) => {
+        openHandler = handler;
+      },
+    },
+  };
+
+  manager.registerExternalLinkHandlers(window, false);
+
+  for (const url of [
+    "https://attacker.example/chart.png",
+    "mailto:someone@example.com",
+    "file:///C:/Windows/System32/cmd.exe",
+    "javascript:alert(1)",
+  ]) {
+    assert.deepEqual(openHandler({ url }), { action: "deny" });
+  }
+  assert.deepEqual(opened, ["https://attacker.example/chart.png", "mailto:someone@example.com"]);
+
+  opened.length = 0;
+  let prevented = 0;
+  const event = { preventDefault: () => (prevented += 1) };
+  listeners.get("will-navigate")(event, "file:///app/index.html?panel=false");
+  listeners.get("will-navigate")(event, "https://attacker.example/");
+  listeners.get("will-navigate")(event, "file:///C:/Windows/System32/cmd.exe");
+  assert.equal(prevented, 2, "only the app's own reload may navigate the window");
+  assert.deepEqual(opened, ["https://attacker.example/"]);
 });
 
 test("the Agent companion follows the edge opposite the panel", () => {

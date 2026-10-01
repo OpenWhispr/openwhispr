@@ -233,6 +233,9 @@ function readStringArray(key: string, fallback: string[]): string[] {
 
 type MicrophoneSelectionMode = "system" | "built-in" | "specific";
 
+// `message` is main's translated reason, when it gave one.
+export type HotkeyRegistrationResult = { success: boolean; message?: string };
+
 function migrateMicrophoneSelectionMode() {
   if (!isBrowser) return;
   const current = localStorage.getItem("microphoneSelectionMode");
@@ -1178,9 +1181,9 @@ export interface SettingsState
 
   setDictationKey: (key: string) => void;
   setMeetingKey: (key: string) => void;
-  setVoiceAgentKey: (key: string) => Promise<boolean>;
+  setVoiceAgentKey: (key: string) => Promise<HotkeyRegistrationResult>;
   translationKey: string;
-  setTranslationKey: (key: string) => Promise<boolean>;
+  setTranslationKey: (key: string) => Promise<HotkeyRegistrationResult>;
   setMeetingHotkeyLayoutMode: (mode: "side-panel" | "full-width") => void;
   setOnboardingUseCases: (useCases: string[]) => void;
   setOnboardingUseCaseNote: (note: string) => void;
@@ -1303,14 +1306,13 @@ function createNumberSetter(key: string) {
 function createRegisteredHotkeySetter(
   key: "voiceAgentKey" | "translationKey",
   label: string,
-  getRegisterFn: () =>
-    ((hotkey: string) => Promise<{ success: boolean; message: string }>) | undefined,
+  getRegisterFn: () => ((hotkey: string) => Promise<HotkeyRegistrationResult>) | undefined,
   fallbackSave?: (hotkey: string) => void
 ) {
-  return async (hotkey: string): Promise<boolean> => {
+  return async (hotkey: string): Promise<HotkeyRegistrationResult> => {
     if (!isBrowser) {
       useSettingsStore.setState({ [key]: hotkey });
-      return true;
+      return { success: true };
     }
 
     const registerFn = getRegisterFn();
@@ -1318,7 +1320,7 @@ function createRegisteredHotkeySetter(
       localStorage.setItem(key, hotkey);
       useSettingsStore.setState({ [key]: hotkey });
       fallbackSave?.(hotkey);
-      return true;
+      return { success: true };
     }
 
     const previousKey = useSettingsStore.getState()[key];
@@ -1329,19 +1331,19 @@ function createRegisteredHotkeySetter(
         localStorage.setItem(key, previousKey);
         useSettingsStore.setState({ [key]: previousKey });
         logger.warn(`Failed to update ${label}`, { hotkey, message: result?.message }, "settings");
-        return false;
+        return { success: false, message: result?.message };
       }
 
       localStorage.setItem(key, hotkey);
       useSettingsStore.setState({ [key]: hotkey });
-      return true;
+      return { success: true };
     } catch (error) {
       logger.warn(
         `Failed to update ${label}`,
         { hotkey, error: error instanceof Error ? error.message : String(error) },
         "settings"
       );
-      return false;
+      return { success: false };
     }
   };
 }

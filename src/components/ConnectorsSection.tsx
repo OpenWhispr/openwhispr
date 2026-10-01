@@ -5,8 +5,10 @@ import { Button } from "./ui/button";
 import { SettingsPanel, SettingsPanelRow } from "./ui/SettingsSection";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { RecentActions } from "./connectors/RecentActions";
-import { SlackConnectorRow } from "./connectors/SlackConnectorRow";
+import { ConnectorLoginRow } from "./connectors/ConnectorLoginRow";
+import { CONNECTOR_ROWS } from "./connectors/connectorRows";
 import { useSettingsStore } from "../stores/settingsStore";
+import { useConnectorStatusStore } from "../stores/connectorStatusStore";
 import { usePolicyStore } from "../stores/policyStore";
 import { isConnectorsAllowed, isConnectorsBlockedByOrg } from "../stores/policyRules";
 import { getUsageState, subscribeUsage } from "../lib/usageStore";
@@ -14,6 +16,7 @@ import { readIsSubscribed, subscribeIsSubscribed } from "../lib/subscriptionFlag
 import { hasConnectorPlan } from "../utils/connectorEligibility";
 import {
   EMAIL_DRAFT_TARGET_SETTINGS,
+  gmailSendStatus,
   resolveEmailDraftTarget,
   type EmailDraftTargetSetting,
 } from "../utils/emailDraftTarget";
@@ -33,6 +36,8 @@ export function ConnectorsSection({ onUpgrade }: ConnectorsSectionProps): ReactE
   const setEmailDraftTarget = useSettingsStore((state) => state.setEmailDraftTarget);
   const gcalConnected = useSettingsStore((state) => state.gcalConnected);
   const mcalAccounts = useSettingsStore((state) => state.mcalAccounts);
+  const gmail = useConnectorStatusStore((state) => state.statuses.gmail);
+  const gmailStatus = gmailSendStatus(gmail);
   // The same plan check that decides whether the chat gets the connector tools.
   const usage = useSyncExternalStore(subscribeUsage, getUsageState);
   const isSubscribedFlag = useSyncExternalStore(subscribeIsSubscribed, readIsSubscribed);
@@ -43,21 +48,47 @@ export function ConnectorsSection({ onUpgrade }: ConnectorsSectionProps): ReactE
     emailDraftTarget: "auto",
     gcalConnected,
     mcalAccounts,
+    gmailStatus,
   });
-  const optionLabel = (option: EmailDraftTargetSetting): string =>
-    option === "auto"
-      ? t("connectors.email.autoResolved", {
-          target: t(`connectors.email.targets.${automaticTarget}`),
-        })
-      : t(`connectors.email.targets.${option}`);
+  // Sending from chat needs a working Gmail login; a build without a Google
+  // client never offers it.
+  const targetOptions = EMAIL_DRAFT_TARGET_SETTINGS.filter(
+    (option) => option !== "gmailSend" || gmail?.configured !== false
+  );
+  const currentTarget = resolveEmailDraftTarget({
+    emailDraftTarget,
+    gcalConnected,
+    mcalAccounts,
+    gmailStatus,
+  });
+  // Automatic and Send from chat both pick Gmail whenever it's connected, so
+  // a saved Send from chat whose Gmail login is gone drafts, and shows, as
+  // Automatic.
+  const shownTarget =
+    emailDraftTarget === "gmailSend" && currentTarget !== "gmailSend" ? "auto" : emailDraftTarget;
+  // Send from chat needs a connected Gmail; until then it says where to connect.
+  const gmailSendUnavailable = gmailStatus !== "connected";
+  const optionLabel = (option: EmailDraftTargetSetting): string => {
+    if (option === "auto") {
+      return t("connectors.email.autoResolved", {
+        target: t(`connectors.email.targets.${automaticTarget}`),
+      });
+    }
+    if (option === "gmailSend" && gmailSendUnavailable) {
+      return t("connectors.email.targets.gmailSendConnectFirst");
+    }
+    return t(`connectors.email.targets.${option}`);
+  };
 
   const description = blockedByOrg
     ? t("connectors.policyOff")
     : !isPaid
       ? t("connectors.email.proRequired")
-      : connectorsAllowed
-        ? t("connectors.email.description")
-        : t("connectors.email.unavailable");
+      : !connectorsAllowed
+        ? t("connectors.email.unavailable")
+        : currentTarget === "gmailSend"
+          ? t("connectors.email.descriptionSend")
+          : t("connectors.email.description");
 
   return (
     <SettingsPanel>
@@ -72,7 +103,7 @@ export function ConnectorsSection({ onUpgrade }: ConnectorsSectionProps): ReactE
           </div>
           {showActions && (
             <Select
-              value={emailDraftTarget}
+              value={shownTarget}
               onValueChange={(value) => setEmailDraftTarget(value as EmailDraftTargetSetting)}
             >
               <SelectTrigger
@@ -82,8 +113,12 @@ export function ConnectorsSection({ onUpgrade }: ConnectorsSectionProps): ReactE
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {EMAIL_DRAFT_TARGET_SETTINGS.map((option) => (
-                  <SelectItem key={option} value={option}>
+                {targetOptions.map((option) => (
+                  <SelectItem
+                    key={option}
+                    value={option}
+                    disabled={option === "gmailSend" && gmailSendUnavailable}
+                  >
                     {optionLabel(option)}
                   </SelectItem>
                 ))}
@@ -99,7 +134,15 @@ export function ConnectorsSection({ onUpgrade }: ConnectorsSectionProps): ReactE
 
         {showActions && <RecentActions connectorId="email" />}
       </SettingsPanelRow>
-      <SlackConnectorRow isPaid={isPaid} blockedByOrg={blockedByOrg} onUpgrade={onUpgrade} />
+      {CONNECTOR_ROWS.map((row) => (
+        <ConnectorLoginRow
+          key={row.id}
+          row={row}
+          isPaid={isPaid}
+          blockedByOrg={blockedByOrg}
+          onUpgrade={onUpgrade}
+        />
+      ))}
     </SettingsPanel>
   );
 }

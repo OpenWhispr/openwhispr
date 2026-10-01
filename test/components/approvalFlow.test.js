@@ -98,6 +98,8 @@ async function mountApprovalTurn(t) {
         signal: controller.signal,
         onApprovalRequested() {},
         onHoldDelivery() {},
+        claimTurnSlot: () => true,
+        releaseTurnSlot() {},
       },
       "slack",
       "send_message",

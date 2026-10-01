@@ -1,22 +1,23 @@
-import { Fragment, useMemo } from "react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "./lib/utils";
 import { useUiLocale } from "../hooks/useUiLocale";
 import { Button } from "./ui/button";
 import { PAGE_CONTENT_WIDTH_CLASS } from "./ui/pageWidth";
-import { Loader2, Sparkles, X, Mic, Trash2, Archive } from "./icons";
+import { Loader2, Sparkles, X, Trash2, Archive } from "./icons";
 import TranscriptionItem from "./ui/TranscriptionItem";
-import EmptyStateCard from "./ui/EmptyStateCard";
+import ThemedEmptyIllustration from "./ui/ThemedEmptyIllustration";
+import DictationHotkeyHint from "./ui/DictationHotkeyHint";
+import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
+import historyEmptyLight from "../assets/empty-states/home-history-light.svg";
+import historyEmptyDark from "../assets/empty-states/home-history-dark.svg";
 import type { TranscriptionItem as TranscriptionItemType } from "../types/electron";
-import { formatHotkeyLabel, parseHotkeyList } from "../utils/hotkeys";
 import { formatDateGroup } from "../utils/dateFormatting";
 import { useUpcomingEvents } from "../hooks/useUpcomingEvents";
 import UpcomingMeetings from "./UpcomingMeetings";
 import { useSettingsStore } from "../stores/settingsStore";
 import { effectiveLocalHistoryEnabled } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
-
-const EMPTY_PREVIEW_WIDTHS = ["w-full", "w-4/5", "w-3/5"];
 
 interface HistoryViewProps {
   history: TranscriptionItemType[];
@@ -34,6 +35,7 @@ interface HistoryViewProps {
   onRetryTranscription: (id: number, options?: { isRecover?: boolean }) => Promise<void>;
   showDiscarded: boolean;
   onToggleDiscarded: () => void;
+  userName?: string | null;
 }
 
 export default function HistoryView({
@@ -52,6 +54,7 @@ export default function HistoryView({
   onRetryTranscription,
   showDiscarded,
   onToggleDiscarded,
+  userName,
 }: HistoryViewProps) {
   const { t } = useTranslation();
   const locale = useUiLocale();
@@ -60,6 +63,8 @@ export default function HistoryView({
     effectiveLocalHistoryEnabled(policyState, personalDataRetentionEnabled)
   );
   const { events, isLoading: eventsLoading, isConnected } = useUpcomingEvents();
+  const firstName = userName?.trim().split(/\s+/)[0];
+  const hasHistory = history.length > 0;
 
   const groupedHistory = useMemo(() => {
     if (history.length === 0) return [];
@@ -97,6 +102,23 @@ export default function HistoryView({
 
   return (
     <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 pt-4 pb-6")}>
+      {/* Hidden until the first load settles, so a returning user isn't greeted as new. */}
+      <h2 className={cn("mb-4 text-xl text-foreground", isLoading && !hasHistory && "invisible")}>
+        {firstName ? (
+          <BidiInterpolatedText
+            text={t(
+              hasHistory
+                ? "controlPanel.history.welcomeBackNamed"
+                : "controlPanel.history.welcomeNamed",
+              { name: BIDI_VALUE_TOKEN }
+            )}
+            value={firstName}
+            dir="auto"
+          />
+        ) : (
+          t(hasHistory ? "controlPanel.history.welcomeBack" : "controlPanel.history.welcome")
+        )}
+      </h2>
       {!useCleanupModel && !aiCTADismissed && (
         <div className="mb-3 relative rounded-lg border border-primary/20 bg-primary/5 dark:bg-primary/10 p-3">
           <button
@@ -151,43 +173,22 @@ export default function HistoryView({
               </div>
             </div>
           ) : history.length === 0 ? (
-            <>
-              <p className="pt-2 pb-2.5 text-sm text-muted-foreground">
-                {t("controlPanel.history.sectionTitle")}
+            <div className="flex min-h-72 flex-col items-center px-4 pt-6 text-center">
+              <ThemedEmptyIllustration
+                light={historyEmptyLight}
+                dark={historyEmptyDark}
+                width={560}
+                height={102}
+                className="[mask-image:linear-gradient(to_right,transparent,black_20%,black_80%,transparent)]"
+              />
+              <h2 className="mt-6 text-lg font-semibold text-foreground">
+                {t("controlPanel.history.empty")}
+              </h2>
+              <p className="mt-2 max-w-md text-sm text-muted-foreground">
+                {t("controlPanel.history.emptyDescription")}
               </p>
-              <EmptyStateCard
-                icon={Mic}
-                title={t("controlPanel.history.empty")}
-                description={t("controlPanel.history.emptyDescription")}
-              >
-                {/* Ghost rows preview the list this card becomes. */}
-                <div aria-hidden="true" className="mb-1 w-56 space-y-2">
-                  {EMPTY_PREVIEW_WIDTHS.map((width) => (
-                    <span
-                      key={width}
-                      className={cn(
-                        "block h-2 rounded-full bg-foreground/6 dark:bg-white/8",
-                        width
-                      )}
-                    />
-                  ))}
-                </div>
-                <span className="inline-flex h-[30px] items-center gap-1.5 rounded-full bg-surface-3 px-3 text-xs font-medium text-foreground/70 dark:bg-surface-3">
-                  {t("controlPanel.history.press")}
-                  <span dir="ltr" className="inline-flex items-center gap-1">
-                    {parseHotkeyList(hotkey).map((hk, index) => (
-                      <Fragment key={hk}>
-                        {index > 0 && <span className="text-foreground/45">/</span>}
-                        <kbd className="rounded-md bg-background px-1.5 py-px font-sans text-[11px] font-medium text-foreground/80 shadow-sm dark:bg-surface-2">
-                          {formatHotkeyLabel(hk)}
-                        </kbd>
-                      </Fragment>
-                    ))}
-                  </span>
-                  {t("controlPanel.history.toStart")}
-                </span>
-              </EmptyStateCard>
-            </>
+              <DictationHotkeyHint hotkey={hotkey} className="mt-2" />
+            </div>
           ) : (
             <div className="group">
               {groupedHistory.map((group, index) => (
@@ -226,7 +227,9 @@ export default function HistoryView({
           )}
         </div>
 
-        <div className="hidden w-80 shrink-0 md:block">
+        {/* With history, drop the day cards by one date row (pt-2 + text-sm line + pb-2.5) so
+            the first one lines up with the first transcription. */}
+        <div className={cn("hidden w-80 shrink-0 md:block", history.length > 0 && "pt-[2.375rem]")}>
           <UpcomingMeetings
             events={events}
             isLoading={eventsLoading}

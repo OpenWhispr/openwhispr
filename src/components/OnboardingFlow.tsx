@@ -512,10 +512,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   const confirmAssistantHotkey = useCallback(
     async (value: string) => {
-      const registered = await settings.setVoiceAgentKey(
+      const result = await settings.setVoiceAgentKey(
         serializeHotkeyList([value, ...parseHotkeyList(settings.voiceAgentKey).slice(1)])
       );
-      return registered ? null : t("onboarding.rehaul.hotkey.inUse");
+      return result.success ? null : result.message || t("onboarding.rehaul.hotkey.inUse");
     },
     [settings, t]
   );
@@ -709,14 +709,14 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       setDictationHotkeyConfirmed(true);
     } else if (currentStepId === "assistant-hotkey") {
       if (parseHotkeyList(settings.voiceAgentKey)[0] !== assistantHotkey) {
-        const registered = await settings.setVoiceAgentKey(
+        const result = await settings.setVoiceAgentKey(
           serializeHotkeyList([
             assistantHotkey,
             ...parseHotkeyList(settings.voiceAgentKey).slice(1),
           ])
         );
-        if (!registered) {
-          setFatalError(t("onboarding.rehaul.hotkey.inUse"));
+        if (!result.success) {
+          setFatalError(result.message || t("onboarding.rehaul.hotkey.inUse"));
           return;
         }
       }

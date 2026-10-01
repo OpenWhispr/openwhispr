@@ -1,7 +1,13 @@
 import i18n from "../../../i18n";
-import { connectorErrorCopyKey } from "../../../utils/connectorErrorCopy";
+import { useConnectorStatusStore } from "../../../stores/connectorStatusStore";
+import { connectorErrorText } from "../../../utils/connectorErrorCopy";
+import { issueSentCopy, issueUnknownCopy, issueVerb } from "../../../utils/issueApprovalFields";
 import type { ToolResult } from "../ToolRegistry";
-import type { ApprovalOutcome, ConnectorPrepareResult } from "../../../types/connectors";
+import type {
+  ApprovalEdits,
+  ApprovalOutcome,
+  ConnectorPrepareResult,
+} from "../../../types/connectors";
 
 const NO_RETRY = "Do not retry this action unless the user asks you to.";
 
@@ -17,10 +23,14 @@ export function needsClarificationResult(message: string, candidates: string[] =
   };
 }
 
-export function unavailableResult(reason: string): ToolResult {
+export function unavailableResult(
+  reason: string,
+  guidance: string = NO_RETRY,
+  edits: ApprovalEdits = {}
+): ToolResult {
   return {
     success: true,
-    data: { status: "unavailable", reason, guidance: NO_RETRY },
+    data: { status: "unavailable", reason, guidance, ...edits },
     displayText: i18n.t(
       reason === "policy_blocked" ? "connectors.policyOff" : "connectors.toolStatus.unavailable"
     ),
@@ -39,14 +49,34 @@ export function notSentResult(
   };
 }
 
-export function failedResult(errorCode: string, message: string): ToolResult {
+// connectorId picks that connector's own wording for the tool step, when it
+// has any (Gmail's "Gmail needs to be reconnected").
+export function failedResult(
+  errorCode: string,
+  message: string,
+  connectorId?: string,
+  edits: ApprovalEdits = {}
+): ToolResult {
   return {
     success: true,
-    data: { status: "failed", errorCode, error: message },
-    displayText: i18n.t(`connectors.toolStatus.errors.${connectorErrorCopyKey(errorCode)}`, {
-      defaultValue: i18n.t("connectors.toolStatus.errors.generic"),
-    }),
+    data: { status: "failed", errorCode, error: message, ...edits },
+    displayText: connectorErrorText(i18n.t, "toolStatus", connectorId ?? "", errorCode),
   };
+}
+
+// The tool step reads "<connector> needs to be reconnected.", the same copy a
+// failed reconnect_needed step shows, not the generic "connectors unavailable".
+export function reconnectResult(connectorId: string, guidance: string): ToolResult {
+  return {
+    ...unavailableResult("reconnect_needed", guidance),
+    displayText: connectorErrorText(i18n.t, "toolStatus", connectorId, "reconnect_needed"),
+  };
+}
+
+// Read live, not when the registry was built: a login can lapse mid-conversation.
+export function needsReconnectNow(connectorId: string): boolean {
+  const status = useConnectorStatusStore.getState().statuses[connectorId];
+  return Boolean(status?.connected && status.needsReconnect);
 }
 
 // A direct action that may already have acted: the model must not retry it.
@@ -63,19 +93,67 @@ export function unknownResult(
 }
 
 export function prepareFailureResult(
-  result: Exclude<ConnectorPrepareResult, { status: "ready" }>
+  result: Exclude<ConnectorPrepareResult, { status: "ready" }>,
+  connectorId?: string
 ): ToolResult {
   switch (result.status) {
     case "needs_clarification":
       return needsClarificationResult(result.message, result.candidates);
     case "failed":
-      return failedResult(result.errorCode, result.message);
+      return failedResult(result.errorCode, result.message, connectorId);
     case "unavailable":
       return unavailableResult(result.reason);
   }
 }
 
-export function approvalOutcomeResult(outcome: ApprovalOutcome, destination: string): ToolResult {
+export interface ApprovalOutcomeOptions {
+  /** Replaces "Tell the user to check <destination>." (Gmail: the Sent folder). */
+  unknownGuidance?: string;
+  /** Picks the connector's own wording for a failed or unknown tool step. */
+  connectorId?: string;
+  /** The card's layout; an issue or comment reads "Created ENG-124" rather than "Sent to". */
+  verbKey?: string;
+}
+
+// A connector with its own wording says where to look (Gmail: "Check your
+// Gmail Sent folder."); an issue or comment names what may not exist; any
+// other keeps the generic line.
+function unknownDisplayText(destination: string, connectorId?: string, verbKey?: string): string {
+  const verb = issueVerb(verbKey);
+  if (verb) {
+    const copy = issueUnknownCopy(verb, destination);
+    return i18n.t(copy.key, copy.values);
+  }
+  const generic = i18n.t("connectors.approval.unknown", { destination });
+  return connectorId
+    ? i18n.t(`connectors.toolStatus.unknownSent.${connectorId}`, {
+        destination,
+        defaultValue: generic,
+      })
+    : generic;
+}
+
+function sentDisplayText(destination: string, resultLabel?: string, verbKey?: string): string {
+  const verb = issueVerb(verbKey);
+  if (!verb) return i18n.t("connectors.approval.sent", { destination });
+  const copy = issueSentCopy(verb, destination, resultLabel);
+  return i18n.t(copy.key, copy.values);
+}
+
+// What the user changed on the card, so the model describes (or proposes
+// again) the email the user settled on, not the one it drafted.
+export function userEdits({ finalText, final }: ApprovalEdits): ApprovalEdits {
+  return {
+    ...(finalText !== undefined ? { finalText } : {}),
+    ...(final !== undefined ? { final } : {}),
+  };
+}
+
+export function approvalOutcomeResult(
+  outcome: ApprovalOutcome,
+  destination: string,
+  options: ApprovalOutcomeOptions = {}
+): ToolResult {
   switch (outcome.state) {
     case "sent":
       return {
@@ -84,9 +162,11 @@ export function approvalOutcomeResult(outcome: ApprovalOutcome, destination: str
           status: "sent",
           url: outcome.url,
           destination,
-          ...(outcome.finalText !== undefined ? { finalText: outcome.finalText } : {}),
+          ...userEdits(outcome),
+          // What was created ("ENG-124"), so the model can name it.
+          ...(outcome.resultLabel !== undefined ? { reference: outcome.resultLabel } : {}),
         },
-        displayText: i18n.t("connectors.approval.sent", { destination }),
+        displayText: sentDisplayText(destination, outcome.resultLabel, options.verbKey),
       };
     case "cancelled":
       return {
@@ -100,7 +180,12 @@ export function approvalOutcomeResult(outcome: ApprovalOutcome, destination: str
     case "not_sent":
       return notSentResult(outcome.reason);
     case "failed":
-      return failedResult(outcome.errorCode, outcome.message);
+      return failedResult(
+        outcome.errorCode,
+        outcome.message,
+        options.connectorId,
+        userEdits(outcome)
+      );
     case "unknown":
       return {
         success: true,
@@ -108,9 +193,12 @@ export function approvalOutcomeResult(outcome: ApprovalOutcome, destination: str
           status: "unknown",
           destination,
           checkUrl: outcome.checkUrl,
-          guidance: `It may or may not have been sent. ${NO_RETRY} Tell the user to check ${destination}.`,
+          ...userEdits(outcome),
+          guidance: `It may or may not have been sent. ${NO_RETRY} ${
+            options.unknownGuidance ?? `Tell the user to check ${destination}.`
+          }`,
         },
-        displayText: i18n.t("connectors.approval.unknown", { destination }),
+        displayText: unknownDisplayText(destination, options.connectorId, options.verbKey),
       };
   }
 }

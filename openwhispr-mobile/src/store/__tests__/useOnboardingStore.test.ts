@@ -330,3 +330,27 @@ it('preserves the tracking request marker when resetting setup', async () => {
     trackingAuthorizationRequestAttempted: true,
   });
 });
+
+it('marks a reset setup as a replay, across a relaunch', async () => {
+  useOnboardingStore.setState({ finished: true });
+  await useOnboardingStore.getState().reset();
+  expect(useOnboardingStore.getState().replaying).toBe(true);
+
+  service.getProgress.mockResolvedValue(service.setProgress.mock.calls.at(-1)![0]);
+  useOnboardingStore.setState(useOnboardingStore.getInitialState());
+  await useOnboardingStore.getState().hydrate();
+  expect(useOnboardingStore.getState()).toMatchObject({
+    currentStep: 'get-started',
+    replaying: true,
+  });
+});
+
+it('does not treat a first setup as a replay', async () => {
+  service.getProgress.mockResolvedValue({
+    step: 'keyboard-intro',
+    keyboardInstalled: false,
+    permissionsGranted: { microphone: false, notifications: false },
+  });
+  await useOnboardingStore.getState().hydrate();
+  expect(useOnboardingStore.getState().replaying).toBe(false);
+});

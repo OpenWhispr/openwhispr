@@ -4,23 +4,22 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Pressable,
   ScrollView,
-  TextInput,
   View,
-  type TextStyle,
+  useColorScheme,
 } from 'react-native';
+import { MenuView, type MenuAction } from '@react-native-menu/menu';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { GlassIconButton } from '@/components/ui/GlassIconButton';
-import { SystemIcon } from '@/components/ui/SystemIcon';
+import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { INVALID_EMAIL_ERROR, useNoteSharing } from '@/hooks/useNoteSharing';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
-import { AppFont } from '@/lib/fonts';
 import { confirmDestructive } from '@/lib/alerts';
 import { isValidEmail } from '@/lib/utils';
-import { iosColor } from '@/config/colors';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useNotesStore } from '@/store/useNotesStore';
 import { useUsageStore } from '@/store/useUsageStore';
@@ -32,6 +31,9 @@ import { isScopeGrant } from '@/lib/notes/noteShareAccess';
 import type { ShareVisibility } from '@/data/remote/noteSharingTypes';
 import { GroupedList } from './GroupedList';
 import { NoteShareAccessList } from './NoteShareAccessList';
+import { NoteShareInviteField } from './NoteShareInviteField';
+import { ShareActionRow, ShareActionStrip } from './NoteShareActions';
+import { RowIcon } from './NoteSharePrincipal';
 import { ShareTextButton } from './ShareTextButton';
 
 export interface NoteShareSheetProps {
@@ -40,9 +42,6 @@ export interface NoteShareSheetProps {
   onFlushDraft: () => void;
   onExport: (format: 'md' | 'txt') => void;
 }
-
-const PLACEHOLDER_COLOR = iosColor('tertiaryLabel');
-const EMAIL_INPUT_STYLE: TextStyle = { fontFamily: AppFont.regular, borderCurve: 'continuous' };
 
 const VISIBILITY_REACH: Record<ShareVisibility, number> = {
   private: 0,
@@ -58,6 +57,35 @@ const VISIBILITY_LABEL: Record<ShareVisibility, string> = {
   invited: 'Invited people',
 };
 
+const VISIBILITY_ICON: Record<ShareVisibility, [sfName: string, mdName: LucideIconName]> = {
+  private: ['lock', 'Lock'],
+  link: ['globe', 'Globe'],
+  domain: ['building.2', 'Building2'],
+  invited: ['person.2', 'Users'],
+};
+
+const VISIBILITY_CHOICES = ['link', 'domain', 'invited'] as const;
+const VISIBILITY_ACTION_PREFIX = 'visibility:';
+const REPLACE_LINK_ID = 'replace-link';
+const DISABLE_SHARING_ID = 'disable-sharing';
+
+function describeAccess(
+  visibility: ShareVisibility | undefined,
+  domains: string[],
+  isTeamNote: boolean,
+): string {
+  switch (visibility) {
+    case 'link':
+      return 'Anyone with the link can view';
+    case 'domain':
+      return `Anyone at ${domains.join(', ')} with the link can view`;
+    case 'invited':
+      return 'Only people you add can open it';
+    default:
+      return isTeamNote ? 'Not shared outside this space' : 'Not shared with anyone';
+  }
+}
+
 /** Announces each new message to VoiceOver. */
 function useAnnouncement(text: string | null): void {
   useEffect(() => {
@@ -65,10 +93,57 @@ function useAnnouncement(text: string | null): void {
   }, [text]);
 }
 
+/** Explanatory text as the first row of a card. */
+function MessageRow({
+  children,
+  tone = 'secondary',
+}: {
+  children: ReactNode;
+  tone?: 'secondary' | 'error';
+}) {
+  return (
+    <GroupedList.Row>
+      <Text
+        accessibilityRole={tone === 'error' ? 'alert' : undefined}
+        className={
+          tone === 'error' ? 'text-[15px] text-systemRed' : 'text-[15px] text-secondaryLabel'
+        }
+      >
+        {children}
+      </Text>
+    </GroupedList.Row>
+  );
+}
+
+function LoadingRow({ label }: { label: string }) {
+  return (
+    <GroupedList.Row>
+      <View className="flex-row items-center gap-2">
+        <ActivityIndicator size="small" />
+        <Text className="text-[15px] text-secondaryLabel">{label}</Text>
+      </View>
+    </GroupedList.Row>
+  );
+}
+
+function SectionLabel({ children }: { children: string }) {
+  return (
+    <Text className="px-1 text-[13px] uppercase tracking-wider text-secondaryLabel">
+      {children}
+    </Text>
+  );
+}
+
+/** Supporting text under a card, like a grouped list's section footer. */
+function SectionFooter({ children }: { children: ReactNode }) {
+  return <Text className="px-4 text-[12px] text-secondaryLabel">{children}</Text>;
+}
+
 export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: NoteShareSheetProps) {
   const sharing = useNoteSharing(noteId, onFlushDraft);
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const scheme = useColorScheme();
   const cloudBackupEnabled = useConfigStore((state) => state.config?.cloudBackupEnabled ?? true);
   const setNotePrivacy = useNotesStore((state) => state.setNotePrivacy);
   const spaces = useNotesStore((state) => state.spaces);
@@ -114,7 +189,11 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
   const allowed = (target: ShareVisibility): boolean =>
     isShareVisibilityAllowed(sharing.sharingMode, target);
   const offered = (target: ShareVisibility): boolean => visibility === target || allowed(target);
+  const linkManaged = Boolean(visibility && shared && canManage && allowed(visibility));
+  const canAddPeople = canManage && !backupOff && allowed('invited');
   const scrollContentStyle = { paddingHorizontal: 24, paddingBottom: insets.bottom + 24, gap: 18 };
+  // Hex literal: the native menu can't serialize PlatformColor.
+  const menuIconColor = scheme === 'dark' ? 'rgba(255, 255, 255, 0.95)' : 'rgba(0, 0, 0, 0.85)';
   // Waiting for the upload can be abandoned; a sharing change in flight must finish to keep its link.
   const closable = !sharing.busy || sharing.cancellable;
   const close = (): void => {
@@ -163,15 +242,6 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
       ],
     );
   };
-
-  const modeButton = (target: ShareVisibility, label: string): ReactNode => (
-    <ShareTextButton
-      label={label}
-      selected={visibility === target}
-      disabled={sharing.busy}
-      onPress={() => changeVisibility(target)}
-    />
-  );
 
   const enableCloudSync = (): void => {
     Alert.alert(
@@ -243,12 +313,165 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
     }).catch(() => {});
   };
 
+  const accessMenu: MenuAction[] = [];
+  if (canManage && !backupOff) {
+    const choices = VISIBILITY_CHOICES.filter((target) =>
+      target === 'domain' ? domainEligible && offered('domain') : offered(target),
+    );
+    if (choices.length > 0) {
+      accessMenu.push({
+        id: 'visibility',
+        title: '',
+        displayInline: true,
+        subactions: choices.map((target) => ({
+          id: `${VISIBILITY_ACTION_PREFIX}${target}`,
+          title: target === 'invited' ? 'Invited people only' : VISIBILITY_LABEL[target],
+          subtitle: target === 'domain' ? businessDomain : undefined,
+          image: VISIBILITY_ICON[target][0],
+          imageColor: menuIconColor,
+          state: visibility === target ? 'on' : 'off',
+          attributes: { disabled: sharing.busy },
+        })),
+      });
+    }
+  }
+  const linkActions: MenuAction[] = [];
+  if (linkManaged && !backupOff) {
+    linkActions.push({
+      id: REPLACE_LINK_ID,
+      title: 'Replace link',
+      image: 'arrow.triangle.2.circlepath',
+      imageColor: menuIconColor,
+      attributes: { disabled: sharing.busy },
+    });
+  }
+  if (shared && canManage) {
+    linkActions.push({
+      id: DISABLE_SHARING_ID,
+      title: 'Disable external sharing',
+      image: 'lock',
+      imageColor: '#FF3B30',
+      attributes: { destructive: true, disabled: sharing.busy },
+    });
+  }
+  if (linkActions.length > 0) {
+    accessMenu.push({ id: 'link', title: '', displayInline: true, subactions: linkActions });
+  }
+
+  const pressAccessMenu = (id: string): void => {
+    if (id === REPLACE_LINK_ID) replaceLink();
+    else if (id === DISABLE_SHARING_ID) changeVisibility('private');
+    else if (id.startsWith(VISIBILITY_ACTION_PREFIX))
+      changeVisibility(id.slice(VISIBILITY_ACTION_PREFIX.length) as ShareVisibility);
+  };
+
+  const accessTitle =
+    shared || !isTeamNote
+      ? VISIBILITY_LABEL[visibility ?? 'private']
+      : 'Everyone in this team space';
+  const accessDetail = pausedAccess
+    ? 'External sharing is off'
+    : describeAccess(visibility, sharing.state?.share.domain_allowlist ?? [], isTeamNote);
+  const [accessIcon, accessMdIcon] = VISIBILITY_ICON[shared && visibility ? visibility : 'private'];
+  const accessRowContent = (
+    <View className="flex-row items-center gap-3 px-4 py-3">
+      <RowIcon name={accessIcon} mdName={accessMdIcon} tone="brand" />
+      <View className="min-w-0 flex-1">
+        <Text className="text-[15px] font-medium text-label">{accessTitle}</Text>
+        <Text className="text-[12px] text-secondaryLabel">{accessDetail}</Text>
+      </View>
+      {accessMenu.length > 0 && (
+        <SystemIcon
+          name="chevron.up.chevron.down"
+          mdName="ChevronsUpDown"
+          size={13}
+          color={sharing.busy ? 'quaternaryLabel' : 'tertiaryLabel'}
+        />
+      )}
+    </View>
+  );
+  const accessRow =
+    accessMenu.length > 0 ? (
+      <MenuView
+        actions={accessMenu}
+        onPressAction={({ nativeEvent }) => pressAccessMenu(nativeEvent.event)}
+        shouldOpenOnLongPress={false}
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="General access"
+          accessibilityValue={{ text: `${accessTitle}. ${accessDetail}` }}
+          accessibilityHint="Changes who can open this note"
+          className="active:bg-tertiarySystemFill"
+        >
+          {accessRowContent}
+        </Pressable>
+      </MenuView>
+    ) : (
+      <View accessible accessibilityLabel={`General access: ${accessTitle}. ${accessDetail}`}>
+        {accessRowContent}
+      </View>
+    );
+
+  let accessStrip: ReactNode = null;
+  if (linkManaged && sharing.hasLink) {
+    accessStrip = (
+      <ShareActionStrip
+        disabled={sharing.busy}
+        actions={[
+          {
+            label: 'Copy link',
+            icon: 'doc.on.doc',
+            mdIcon: 'Copy',
+            onPress: () => sharing.copyLink(),
+          },
+          {
+            label: 'Share',
+            accessibilityLabel: 'Share link',
+            icon: 'square.and.arrow.up',
+            mdIcon: 'Share',
+            onPress: () => sharing.shareLink(),
+          },
+          {
+            label: 'Open',
+            accessibilityLabel: 'Open in browser',
+            icon: 'safari',
+            mdIcon: 'Compass',
+            onPress: () => sharing.openLink(),
+          },
+        ]}
+      />
+    );
+  } else if (linkManaged) {
+    accessStrip = (
+      <Text className="px-4 py-3 text-[13px] text-secondaryLabel">
+        {backupOff
+          ? 'The full link isn’t saved on this device.'
+          : 'The full link isn’t saved on this device. Replace it to get a new one.'}
+      </Text>
+    );
+  } else if (!shared && canManage && !backupOff && allowed('link')) {
+    accessStrip = (
+      <ShareActionStrip
+        disabled={sharing.busy}
+        actions={[
+          {
+            label: 'Create link',
+            icon: 'link',
+            mdIcon: 'Link',
+            onPress: () => changeVisibility('link'),
+          },
+        ]}
+      />
+    );
+  }
+
   // In the sharing view, feedback sits next to the controls that trigger it rather than below the list.
   const feedback: ReactNode = (
     <>
       {sharing.error && !unknown && !(privateNote && note?.remoteId) && (
-        <View className="gap-1">
-          <Text accessibilityRole="alert" className="text-systemRed">
+        <View className="gap-1 px-1">
+          <Text accessibilityRole="alert" className="text-[13px] text-systemRed">
             {sharing.error}
           </Text>
           <View className="flex-row flex-wrap gap-x-6">
@@ -267,21 +490,36 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
         </View>
       )}
       {privacyError && (
-        <Text accessibilityRole="alert" className="text-systemRed">
+        <Text accessibilityRole="alert" className="px-1 text-[13px] text-systemRed">
           {privacyError}
         </Text>
       )}
       {sharing.message && (
-        <Text accessibilityRole="alert" className="text-secondaryLabel">
+        <Text accessibilityRole="alert" className="px-1 text-[13px] text-secondaryLabel">
           {sharing.message}
         </Text>
       )}
     </>
   );
 
-  const sectionLabel = (label: string): ReactNode => (
-    <Text className="px-1 text-[13px] uppercase tracking-wider text-secondaryLabel">{label}</Text>
-  );
+  const inviteField = canAddPeople ? (
+    <NoteShareInviteField
+      value={email}
+      onChangeText={(value) => {
+        setEmail(value);
+        if (sharing.error === INVALID_EMAIL_ERROR) sharing.dismissError();
+      }}
+      onInvite={invite}
+      remoteId={note?.remoteId ?? undefined}
+      access={sharing.state?.access}
+      invitations={sharing.state?.invitations}
+      busy={sharing.busy}
+      onAddPrincipal={(principal) => {
+        setEmail('');
+        resumeSharing(() => sharing.addPrincipal(principal));
+      }}
+    />
+  ) : null;
 
   return (
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>
@@ -302,15 +540,15 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
           contentContainerStyle={scrollContentStyle}
         >
           {sharing.busy && (
-            <View className="flex-row items-center gap-2" accessibilityRole="alert">
+            <View className="flex-row items-center gap-2 px-1" accessibilityRole="alert">
               <ActivityIndicator size="small" />
               <Text className="text-[13px] text-secondaryLabel">Updating sharing…</Text>
             </View>
           )}
           {signedOut ? (
-            <View className="gap-3">
-              <Text className="text-secondaryLabel">Sign in to share this note online.</Text>
-              <ShareTextButton
+            <GroupedList dividerInset={16}>
+              <MessageRow>Sign in to share this note online.</MessageRow>
+              <ShareActionRow
                 label="Sign in"
                 accessibilityLabel="Sign in to share"
                 onPress={() => {
@@ -318,39 +556,32 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
                   router.push('/auth');
                 }}
               />
-            </View>
+            </GroupedList>
           ) : localOnly ? (
-            <View className="gap-3">
-              <Text className="text-secondaryLabel">
+            <GroupedList dividerInset={16}>
+              <MessageRow>
                 {backupOff
                   ? 'Cloud backup is off. Turn it on in Privacy & Data to share personal notes.'
                   : 'Enable cloud sync for this note before sharing.'}
-              </Text>
+              </MessageRow>
               {note?.remoteId && !sharing.loading && (
-                <Text className="text-[13px] text-secondaryLabel">
+                <MessageRow>
                   {shared
                     ? 'A previous link may still be active.'
                     : 'Removal of a previous cloud copy may still be pending.'}
-                </Text>
+                </MessageRow>
               )}
               {sharing.loading && note?.remoteId && (
-                <View className="flex-row items-center gap-2">
-                  <ActivityIndicator size="small" />
-                  <Text className="text-[13px] text-secondaryLabel">
-                    Checking previous sharing…
-                  </Text>
-                </View>
+                <LoadingRow label="Checking previous sharing…" />
               )}
               {sharing.error && note?.remoteId && (
-                <View className="gap-2">
-                  <Text accessibilityRole="alert" className="text-systemRed">
-                    {sharing.error}
-                  </Text>
-                  <ShareTextButton label="Retry" onPress={() => sharing.refresh()} />
-                </View>
+                <MessageRow tone="error">{sharing.error}</MessageRow>
+              )}
+              {sharing.error && note?.remoteId && (
+                <ShareActionRow label="Retry" onPress={() => sharing.refresh()} />
               )}
               {canDisablePrevious && (
-                <ShareTextButton
+                <ShareActionRow
                   label="Disable previous link"
                   destructive
                   disabled={sharing.busy || sharing.loading}
@@ -358,217 +589,113 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
                 />
               )}
               {backupOff ? (
-                <ShareTextButton
+                <ShareActionRow
                   label="Open privacy settings"
                   disabled={sharing.busy}
                   onPress={openPrivacySettings}
                 />
               ) : (
-                <ShareTextButton
+                <ShareActionRow
                   label="Enable cloud sync"
                   accessibilityLabel="Enable cloud sync for this note"
                   disabled={sharing.busy}
                   onPress={enableCloudSync}
                 />
               )}
-            </View>
+            </GroupedList>
           ) : upgradeRequired ? (
-            <View className="gap-3">
-              <Text className="text-secondaryLabel">
+            <GroupedList dividerInset={16}>
+              <MessageRow>
                 Sharing uploads this note to your cloud account, which requires Pro.
-              </Text>
-              <ShareTextButton label="Upgrade to Pro" onPress={upgrade} />
-            </View>
+              </MessageRow>
+              <ShareActionRow label="Upgrade to Pro" onPress={upgrade} />
+            </GroupedList>
           ) : sharing.loading ? (
-            <View className="flex-row items-center gap-3 py-3">
+            <View className="flex-row items-center gap-3 px-1 py-3">
               <ActivityIndicator />
               <Text className="text-secondaryLabel">Loading sharing settings…</Text>
             </View>
           ) : unknown ? (
-            <View className="gap-3">
-              <Text className="text-secondaryLabel">
-                {sharing.error || 'Sharing settings are unavailable.'}
-              </Text>
-              <ShareTextButton label="Retry" onPress={() => sharing.refresh()} />
-            </View>
+            <GroupedList dividerInset={16}>
+              <MessageRow>{sharing.error || 'Sharing settings are unavailable.'}</MessageRow>
+              <ShareActionRow label="Retry" onPress={() => sharing.refresh()} />
+            </GroupedList>
           ) : (
             <>
               {backupOff && (
-                <View className="gap-1">
-                  <Text className="text-secondaryLabel">
+                <GroupedList dividerInset={16}>
+                  <MessageRow>
                     Cloud backup is off. Turn it on in Privacy & Data to change who this note is
                     shared with.
-                  </Text>
-                  <ShareTextButton
+                  </MessageRow>
+                  <ShareActionRow
                     label="Open privacy settings"
                     disabled={sharing.busy}
                     onPress={openPrivacySettings}
                   />
-                </View>
+                </GroupedList>
               )}
-              {sectionLabel('General access')}
-              <GroupedList dividerInset={16}>
-                <GroupedList.Row>
-                  <Text className="text-[15px] font-medium text-label">
-                    {shared || !isTeamNote
-                      ? VISIBILITY_LABEL[visibility ?? 'private']
-                      : 'Everyone in this team space'}
-                  </Text>
-                  {visibility === 'domain' && (
-                    <Text className="text-[12px] text-secondaryLabel">
-                      {sharing.state?.share.domain_allowlist.join(', ')}
-                    </Text>
-                  )}
-                </GroupedList.Row>
-              </GroupedList>
-              {canManage && !backupOff && (
-                <View className="gap-2">
-                  {sharing.sharingMode === 'domain_only' && (
-                    <Text className="text-[13px] text-secondaryLabel">
-                      Your organization only allows sharing within your company domain.
-                    </Text>
-                  )}
-                  {sharing.sharingMode === 'disabled' && (
-                    <Text className="text-[13px] text-secondaryLabel">
-                      Your organization does not allow sharing notes outside it.
-                    </Text>
-                  )}
-                  {!shared && allowed('link') && (
-                    <View>
-                      <Text className="text-[13px] text-secondaryLabel">
-                        Anyone with the link can view this note.
-                      </Text>
-                      <ShareTextButton
-                        label="Create link"
-                        disabled={sharing.busy}
-                        onPress={() => changeVisibility('link')}
-                      />
-                    </View>
-                  )}
-                  <View className="flex-row flex-wrap gap-x-6">
-                    {shared && offered('link') && modeButton('link', 'Anyone with link')}
-                    {offered('invited') && modeButton('invited', 'Invited only')}
-                    {domainEligible &&
-                      offered('domain') &&
-                      modeButton('domain', `Organization (${businessDomain})`)}
-                  </View>
-                </View>
-              )}
-              {visibility && shared && canManage && allowed(visibility) && (
-                <View className="gap-2">
-                  {sectionLabel('Link')}
-                  {sharing.hasLink ? (
-                    <View className="flex-row flex-wrap gap-x-6">
-                      <ShareTextButton
-                        label="Share link"
-                        disabled={sharing.busy}
-                        onPress={() => sharing.shareLink()}
-                      />
-                      <ShareTextButton
-                        label="Copy link"
-                        disabled={sharing.busy}
-                        onPress={() => sharing.copyLink()}
-                      />
-                      <ShareTextButton
-                        label="Open in browser"
-                        disabled={sharing.busy}
-                        onPress={() => sharing.openLink()}
-                      />
-                    </View>
-                  ) : (
-                    <Text className="text-[13px] text-secondaryLabel">
-                      The full link is unavailable on this device.
-                    </Text>
-                  )}
-                  {!backupOff && (
-                    <ShareTextButton
-                      label="Replace link"
-                      disabled={sharing.busy}
-                      onPress={replaceLink}
-                    />
-                  )}
-                </View>
-              )}
-              {canManage && !backupOff && allowed('invited') && (
-                <View className="gap-2">
-                  {sectionLabel('Invite by email')}
-                  <View className="flex-row items-center gap-2">
-                    <TextInput
-                      accessibilityLabel="Email address"
-                      className="h-12 min-w-0 flex-1 rounded-[10px] bg-tertiarySystemFill px-3 text-[15px] text-label"
-                      style={EMAIL_INPUT_STYLE}
-                      placeholder="name@example.com"
-                      placeholderTextColor={PLACEHOLDER_COLOR}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      autoComplete="email"
-                      textContentType="emailAddress"
-                      keyboardType="email-address"
-                      returnKeyType="send"
-                      value={email}
-                      onChangeText={(value) => {
-                        setEmail(value);
-                        if (sharing.error === INVALID_EMAIL_ERROR) sharing.dismissError();
-                      }}
-                      onSubmitEditing={invite}
-                    />
-                    <ShareTextButton
-                      label="Invite"
-                      accessibilityLabel="Invite email"
-                      disabled={sharing.busy || !email.trim()}
-                      onPress={invite}
-                    />
-                  </View>
-                </View>
-              )}
+              <View className="gap-2">
+                <SectionLabel>General access</SectionLabel>
+                <GroupedList dividerInset={0}>
+                  {accessRow}
+                  {accessStrip}
+                </GroupedList>
+                {canManage && !backupOff && sharing.sharingMode === 'domain_only' && (
+                  <SectionFooter>
+                    Your organization only allows sharing within your company domain.
+                  </SectionFooter>
+                )}
+                {canManage && !backupOff && sharing.sharingMode === 'disabled' && (
+                  <SectionFooter>
+                    Your organization does not allow sharing notes outside it.
+                  </SectionFooter>
+                )}
+              </View>
               {feedback}
-              {sharing.state && (
+              {sharing.state ? (
                 <NoteShareAccessList
                   key={`${sharing.user?.id}:${note?.remoteId}`}
-                  remoteId={note?.remoteId ?? undefined}
                   access={sharing.state.access}
                   invitations={sharing.state.invitations}
                   paused={visibility === 'private'}
                   canInvite={allowed('invited')}
                   busy={sharing.busy}
-                  onAddPrincipal={
-                    backupOff
-                      ? undefined
-                      : (principal) => resumeSharing(() => sharing.addPrincipal(principal))
-                  }
+                  inviteField={inviteField}
                   onUpdateGrant={(grant, permission) => sharing.updateGrant(grant, permission)}
                   onRemoveGrant={(grant) => sharing.removeGrant(grant)}
                   onRevokeInvitation={(invitation) => sharing.revokeInvitation(invitation)}
                   onResendInvitation={(invitation) => sharing.resendInvitation(invitation)}
                 />
-              )}
-              {shared && canManage && (
-                <ShareTextButton
-                  label="Disable external sharing"
-                  destructive
-                  disabled={sharing.busy}
-                  onPress={() => changeVisibility('private')}
-                />
+              ) : (
+                inviteField && (
+                  <View className="gap-2">
+                    <SectionLabel>Invite people</SectionLabel>
+                    <GroupedList>{inviteField}</GroupedList>
+                  </View>
+                )
               )}
             </>
           )}
           {!managed && feedback}
           <View className="gap-2">
-            {sectionLabel('Export')}
-            <GroupedList dividerInset={16}>
+            <SectionLabel>Export</SectionLabel>
+            <GroupedList>
               <GroupedList.Row
                 onPress={() => onExport('md')}
                 accessibilityRole="button"
                 accessibilityLabel="Export Markdown"
+                leadingIconSlot={<RowIcon name="doc.richtext" mdName="FileCode" />}
               >
-                <Text className="text-[15px] text-label">Export Markdown</Text>
+                <Text className="text-[15px] text-label">Markdown</Text>
               </GroupedList.Row>
               <GroupedList.Row
                 onPress={() => onExport('txt')}
                 accessibilityRole="button"
                 accessibilityLabel="Export Plain Text"
+                leadingIconSlot={<RowIcon name="doc.plaintext" mdName="FileText" />}
               >
-                <Text className="text-[15px] text-label">Export Plain Text</Text>
+                <Text className="text-[15px] text-label">Plain text</Text>
               </GroupedList.Row>
             </GroupedList>
           </View>

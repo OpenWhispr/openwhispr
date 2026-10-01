@@ -1,4 +1,4 @@
-const { describeError } = require("./errorSummary");
+const { createBoundLogin } = require("./boundLogin");
 
 const SLACK_AUTHORIZE_URL = "https://slack.com/oauth/v2/authorize";
 const SLACK_USER_SCOPES = [
@@ -90,8 +90,6 @@ function createSlackAuth({
   logger = null,
   now = Date.now,
 }) {
-  const refreshes = new Map();
-
   // `signal` gives the sign-in up when a newer Connect replaces it.
   function authorize({ signal } = {}) {
     const clientId = getClientId();
@@ -141,30 +139,6 @@ function createSlackAuth({
     });
   }
 
-  // Flags the login the binding names, and only it, as needing a reconnect:
-  // Slack said that login is gone. A reconnect or disconnect that landed
-  // first wins, and nothing is written to it.
-  function markReconnect(binding) {
-    const entry = credentials.read(binding?.ownerAccountId ?? null, "slack");
-    if (!sameLogin(entry, binding)) return { ok: false, errorCode: "connection_changed" };
-    try {
-      credentials.save(
-        binding.ownerAccountId,
-        "slack",
-        { ...entry.credential, needsReconnect: true },
-        binding.generation
-      );
-    } catch (error) {
-      if (error.code === "connection_changed" || error.code === "signed_out") {
-        return { ok: false, errorCode: "connection_changed" };
-      }
-      // A real write failure (disk, permission, encryption). Slack's answer
-      // still stands: the login is gone, though the flag wasn't recorded.
-      logger?.warn("slack reconnect flag save failed", describeError(error), "connectors");
-    }
-    return { ok: false, errorCode: "reconnect_needed" };
-  }
-
   function callRefresh(refreshToken) {
     return api.call("oauth.v2.access", {
       client_id: getClientId() ?? "",
@@ -174,7 +148,7 @@ function createSlackAuth({
   }
 
   async function refresh(binding, credential) {
-    if (!credential.refreshToken) return markReconnect(binding);
+    if (!credential.refreshToken) return login.markReconnect(binding);
     let result = await callRefresh(credential.refreshToken);
     // No clear answer: Slack may have rotated the token anyway. The used
     // refresh token still works for a short grace period, so ask once more.
@@ -182,59 +156,32 @@ function createSlackAuth({
       result = await callRefresh(credential.refreshToken);
     }
     if (!result.ok) {
-      // A reconnect or disconnect may have landed while the network call was
-      // in flight. That always wins over the login this refresh started
-      // with: report connection_changed and write nothing for either the
-      // login-gone or the transient case.
-      if (!sameLogin(credentials.read(binding.ownerAccountId, "slack"), binding)) {
-        return { ok: false, errorCode: "connection_changed" };
-      }
+      // A reconnect or disconnect that landed while the call was in flight
+      // wins, for the login-gone and the transient case alike.
+      if (!login.stillBound(binding)) return { ok: false, errorCode: "connection_changed" };
       return OAUTH_LOGIN_GONE.has(result.errorCode)
-        ? markReconnect(binding)
+        ? login.markReconnect(binding)
         : { ok: false, errorCode: result.errorCode };
     }
     const tokens = parseUserTokens(result.data, now());
     if (!tokens) return { ok: false, errorCode: "bad_response" };
-    const next = {
+    return login.saveRefreshed(binding, {
       ...credential,
       ...tokens,
       refreshToken: tokens.refreshToken ?? credential.refreshToken,
       refreshIssuedAt: tokens.refreshToken ? now() : credential.refreshIssuedAt,
       needsReconnect: false,
-    };
-    // Saved before use, and only into the slot and generation this refresh
-    // started from: a reconnect or disconnect that landed meanwhile wins.
-    try {
-      credentials.save(binding.ownerAccountId, "slack", next, binding.generation);
-    } catch (error) {
-      if (error.code === "connection_changed" || error.code === "signed_out") {
-        return { ok: false, errorCode: "connection_changed" };
-      }
-      // A real write failure (disk, permission, encryption): the rotated
-      // token is lost, so this is worth a log line, never the token itself.
-      logger?.warn("slack token save failed", describeError(error), "connectors");
-      return { ok: false, errorCode: "credential_save_failed" };
-    }
-    return { ok: true, token: next.accessToken, credential: next };
+    });
   }
 
-  async function getAccessToken(binding, { forceRefresh = false } = {}) {
-    const entry = credentials.read(binding?.ownerAccountId ?? null, "slack");
-    if (!sameLogin(entry, binding)) return { ok: false, errorCode: "connection_changed" };
-    const { credential } = entry;
-    if (credential.needsReconnect) return { ok: false, errorCode: "reconnect_needed" };
-    const fresh = !credential.expiresAt || credential.expiresAt - EXPIRY_SKEW_MS > now();
-    if (fresh && !forceRefresh) return { ok: true, token: credential.accessToken, credential };
-    // Refresh tokens are single-use, so concurrent callers for one login
-    // share one refresh.
-    const key = `${binding.ownerAccountId}:${binding.generation}`;
-    let pending = refreshes.get(key);
-    if (!pending) {
-      pending = refresh(binding, credential).finally(() => refreshes.delete(key));
-      refreshes.set(key, pending);
-    }
-    return pending;
-  }
+  const login = createBoundLogin({
+    connectorId: "slack",
+    credentials,
+    sameLogin,
+    isFresh: (credential) => !credential.expiresAt || credential.expiresAt - EXPIRY_SKEW_MS > now(),
+    refresh,
+    logger,
+  });
 
   // With token rotation, auth.revoke revokes only the token it is given, so
   // the refresh token and the access token are revoked separately. Best
@@ -259,7 +206,13 @@ function createSlackAuth({
     };
   }
 
-  return { authorize, getAccessToken, markReconnect, revoke, statusOf };
+  return {
+    authorize,
+    getAccessToken: login.getAccessToken,
+    markReconnect: login.markReconnect,
+    revoke,
+    statusOf,
+  };
 }
 
 module.exports = {

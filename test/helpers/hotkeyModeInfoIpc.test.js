@@ -98,14 +98,14 @@ test.after(() => {
 
 // The handler decides everything before its first await, so the patched
 // platform covers the whole answer.
-function hotkeyModeInfo(backend) {
+function hotkeyModeInfo(backend, platform = "linux") {
   hotkeyManager = Object.assign(new HotkeyManager(), {
     isInitialized: true,
     nativeListenerProbe: inputDenied,
     ...backend,
   });
   const original = Object.getOwnPropertyDescriptor(process, "platform");
-  Object.defineProperty(process, "platform", { value: "linux", configurable: true });
+  Object.defineProperty(process, "platform", { value: platform, configurable: true });
   try {
     return handlers.get("get-hotkey-mode-info")({}, "F8");
   } finally {
@@ -137,4 +137,24 @@ test("without a desktop backend, denied input access reaches the renderer", asyn
   assert.equal(info.supportsPushToTalk, false);
   assert.equal(info.linuxInputAccessDenied, true);
   assert.match(info.pushToTalkUnavailableReason, /usermod/);
+});
+
+// Windows holds only through windows-key-listener.exe, which a build can lack
+// (#2005). The Linux input-access setup box never applies there.
+test("Windows without its key listener reports Hold unavailable", async () => {
+  const info = await hotkeyModeInfo(
+    { nativeListenerProbe: () => ({ available: false, reason: "binary_missing" }) },
+    "win32"
+  );
+
+  assert.equal(info.supportsPushToTalk, false);
+  assert.equal(info.pushToTalkUnavailableReason, "Push-to-Talk native listener not available");
+  assert.equal(info.linuxInputAccessDenied, false);
+});
+
+test("Windows with its key listener still offers Hold", async () => {
+  const info = await hotkeyModeInfo({ nativeListenerProbe: () => ({ available: true }) }, "win32");
+
+  assert.equal(info.supportsPushToTalk, true);
+  assert.equal(info.pushToTalkUnavailableReason, null);
 });

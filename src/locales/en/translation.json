@@ -124,6 +124,7 @@
       "rightModifierNeedsListener": "\"{{hotkey}}\" can't be used on this desktop, whose shortcuts need a regular key. Add a key, such as Control+Alt+Space.",
       "holdNeedsReleaseKey": "Hold-to-talk needs a key macOS can see you release: Globe, a right-side key like Right Option, or a shortcut with a modifier. Tap works with any key.",
       "registrationFailed": "Could not register \"{{hotkey}}\". It may be in use by another application.",
+      "windowsKeyListenerMissing": "\"{{hotkey}}\" needs the Windows key listener, which this install is missing. Choose a shortcut with a regular key.",
       "updateFailedCheckFormat": "Failed to update hotkey to \"{{hotkey}}\". Check the format is valid.",
       "trySuggestions": "Try: {{suggestions}}",
       "slotConflict": "This hotkey is already used for {{slot}}."
@@ -637,12 +638,14 @@
       "couldNotDeleteTitle": "Couldn't delete",
       "couldNotDeleteDescription": "This transcription may have already been removed.",
       "couldNotDeleteDescriptionGeneric": "Something went wrong. Please try again.",
-      "empty": "No transcriptions yet",
-      "emptyDescription": "Press your hotkey in any app and start talking. Every transcription is saved privately here on your device.",
-      "sectionTitle": "Transcriptions",
+      "empty": "Start your first dictation",
+      "emptyDescription": "Your dictated text will appear here.",
+      "shortcutHint": "Press {{shortcut}} and start speaking.",
       "dataRetentionDisabled": "Data retention is off. Transcriptions and audio are not saved to history.",
-      "press": "Press",
-      "toStart": "to start",
+      "welcomeBack": "Welcome Back",
+      "welcomeBackNamed": "Welcome Back, {{name}}",
+      "welcome": "Welcome",
+      "welcomeNamed": "Welcome, {{name}}",
       "dateGroups": {
         "today": "Today",
         "yesterday": "Yesterday"
@@ -934,11 +937,18 @@
         "description": "Dictation stopped while the hotkey was still held, so the text was not pasted. Your transcription is on the clipboard.",
         "descriptionClipboardFailed": "Dictation stopped while the hotkey was still held, so the text was not pasted, and it could not be copied to the clipboard either."
       },
+      "modifiersHeld": {
+        "title": "Transcription not pasted",
+        "description": "A modifier key (like Ctrl or Shift) was still held down, so the text was not pasted. Your transcription is on the clipboard.",
+        "descriptionClipboardFailed": "A modifier key (like Ctrl or Shift) was still held down, so the text was not pasted, and it could not be copied to the clipboard either."
+      },
       "selectionEditing": {
         "notAppliedTitle": "Selection edit not applied",
         "changed": "The selected text or target app changed while OpenWhispr was processing. Nothing was replaced.",
         "expired": "The selection edit took too long and expired. Select the text and try again.",
         "pasteFailed": "OpenWhispr generated the edit but could not replace the selected text.",
+        "modifiersHeld": "OpenWhispr generated the edit, but a modifier key (like Ctrl or Shift) was still held down, so it was not applied. The edit is on the clipboard.",
+        "modifiersHeldClipboardFailed": "OpenWhispr generated the edit, but a modifier key (like Ctrl or Shift) was still held down, so it was not applied, and it could not be copied to the clipboard either.",
         "unavailable": "OpenWhispr could not safely read the selected text. Check accessibility or input automation permissions and try again.",
         "tooLarge": "The selection is too large to edit safely. Select 6,000 characters or fewer.",
         "reasoningFailed": "The AI could not complete the selection edit. Your original text was not changed."
@@ -1184,12 +1194,14 @@
     "tomorrow": "Tomorrow"
   },
   "upcoming": {
-    "title": "Coming up",
     "now": "Now",
     "untitledEvent": "Untitled Event",
     "joinAndTranscribe": "Join & transcribe",
     "takeNotes": "Take notes",
-    "noEventsToday": "No events today",
+    "noEventsToday": "No more meetings today",
+    "emptyDayDescription": "Time to touch some grass",
+    "touchGrass": "Touch Grass",
+    "touchGrassLabel": "A patch of grass. Brush it with your pointer or the arrow keys. Press Escape to go back.",
     "noUpcomingEvents": "No upcoming events",
     "moreCalendarsHint": "Want additional calendars?",
     "connectHere": "Connect them here",
@@ -3003,8 +3015,10 @@
     "newChat": "New chat",
     "search": "Search conversations...",
     "archived": "Archived",
-    "noConversations": "Start your first conversation",
-    "selectChat": "Select a conversation or start a new one",
+    "noConversations": "No chats yet",
+    "allArchived": "All chats are archived",
+    "noConversationsDescription": "Your chats with Assistant will appear here.",
+    "loadFailed": "Couldn't load chats",
     "noResults": "No matching conversations",
     "today": "Today",
     "yesterday": "Yesterday",
@@ -3019,7 +3033,12 @@
     "searchChats": "Search chats",
     "searchTitle": "Search conversations",
     "searchDescription": "Search across all your conversations",
-    "newChatEmpty": "Ask about your notes, transcripts, or anything else"
+    "inputPlaceholder": "Ask anything...",
+    "starters": {
+      "todos": "List my recent to-dos",
+      "meeting": "Prepare me for my next meeting",
+      "sharedNotes": "Highlight my shared notes"
+    }
   },
   "referral": {
     "title": "Refer and earn rewards",
@@ -3107,7 +3126,7 @@
     "sidebar": {
       "newNote": "New note",
       "searchNotes": "Search notes",
-      "actions": "Actions"
+      "templatesAndActions": "Templates & Actions"
     },
     "spaces": {
       "privateSpaces": "Private notes",
@@ -3164,6 +3183,7 @@
       "undo": "Undo",
       "emptySpace": "No notes yet. Notes here are visible to everyone in {{space}}.",
       "emptyTeamHint": "Spaces shared with you will appear here.",
+      "emptyTeamTitle": "No shared spaces",
       "noteCount_one": "{{count}} note",
       "noteCount_other": "{{count}} notes",
       "accessRevoked": "You no longer have access to {{space}}",
@@ -3280,7 +3300,6 @@
     "createMenu": {
       "note": "Note",
       "assistantChat": "Assistant chat",
-      "teamSpace": "Team space",
       "chooseType": "Choose what to create"
     },
     "editor": {
@@ -3299,8 +3318,8 @@
       "raw": "Raw",
       "aiSummary": "AI Summary",
       "saving": "Saving",
-      "transcriptEmptyTitle": "Nothing recorded yet",
-      "transcriptEmptyDescription": "Hit record to start transcribing. Everything said shows up here as it happens.",
+      "transcriptEmptyTitle": "No transcript yet",
+      "transcriptEmptyDescription": "Start a recording and everything said will appear here.",
       "startRecording": "Start recording",
       "generateSummary": "Generate AI Summary",
       "startWriting": "Start writing...",
@@ -3414,7 +3433,7 @@
       "speakerDetectionDescription": "Identify different speakers in the audio",
       "numSpeakersPlaceholder": "Auto-detect",
       "numSpeakersLabel": "Number of speakers",
-      "numSpeakersHint": "Setting the exact count improves accuracy, especially on long recordings.",
+      "numSpeakersHint": "Speakers are detected automatically, up to this number.",
       "downloadingModels": "Downloading models...",
       "openaiDiarizeNote": "Overrides your transcription model with gpt-4o-transcribe-diarize, the only OpenAI model with speaker detection. Costs may differ from your selected model.",
       "mistralDiarizeNote": "Speaker detection included at no extra cost with Voxtral.",
@@ -3491,8 +3510,8 @@
       "done": "Done",
       "chunkProgress": "Part {{step}} of {{total}}",
       "emptyReply": "The model returned an empty reply. Try again, or pick a different model.",
+      "allActions": "All actions",
       "manage": "Manage Actions...",
-      "manageTitle": "Custom Actions",
       "addAction": "New Action",
       "editAction": "Edit Action",
       "namePlaceholder": "Action name",
@@ -3506,8 +3525,6 @@
       "promptLabel": "Prompt",
       "emptyEditorTitle": "Select an action",
       "emptyEditorDescription": "Choose an action from the list or create a new one",
-      "runAction": "Run {{name}}",
-      "selectAction": "Select action",
       "builtin": {
         "generateNotes": {
           "name": "Generate Notes",
@@ -3519,15 +3536,89 @@
           "cta": "Draft a follow-up email"
         },
         "detailedNotes": {
-          "name": "Detailed Notes",
+          "name": "AI Summary",
           "description": "Accurate, comprehensive meeting notes with decisions and action items"
+        },
+        "makeTodos": {
+          "name": "Make to-dos",
+          "description": "List every to-do and its owner in the chat"
+        },
+        "createOutline": {
+          "name": "Create outline",
+          "description": "Outline the note's topics in the chat"
+        },
+        "oneOnOne": {
+          "name": "1:1",
+          "description": "Updates, feedback, growth, and next steps from a one-on-one"
+        },
+        "standUp": {
+          "name": "Stand-up",
+          "description": "Each person's progress, plans, and blockers"
+        },
+        "salesCall": {
+          "name": "Sales call",
+          "description": "Needs, objections, budget, and the decision process"
+        },
+        "userInterview": {
+          "name": "User interview",
+          "description": "Workflow, pain points, reactions, and quotes from a participant"
+        },
+        "shorten": {
+          "name": "Shorten",
+          "description": "Make the summary about half as long",
+          "cta": "Shorten the summary"
+        },
+        "addTldr": {
+          "name": "Add TL;DR",
+          "description": "Put a two- or three-sentence TL;DR at the top of the summary",
+          "cta": "Add a TL;DR"
+        },
+        "slackUpdate": {
+          "name": "Slack update",
+          "description": "Write a short team update to post in Slack",
+          "cta": "Write a Slack update"
         }
       },
       "errors": {
         "noModel": "No AI model selected. Configure one in Settings.",
         "actionFailed": "Action failed",
-        "noEndpoint": "No self-hosted server URL set. Configure one in Settings."
-      }
+        "noEndpoint": "No self-hosted server URL set. Configure one in Settings.",
+        "outputTruncated": "The AI model ran out of room before it finished, so the note was left as it was.",
+        "nothingToSummarize": "There's nothing to summarize in this note yet, so the AI summary was left as it was.",
+        "saveFailed": "Couldn't save. Check that nothing is too long and try again."
+      },
+      "tab": "Actions",
+      "output": {
+        "auto": "Auto",
+        "chat": "Chat",
+        "summary": "AI summary",
+        "chatHint": "Answers in the note's chat and leaves the AI summary as it is.",
+        "summaryHint": "Edits the note's AI summary, or writes one from the transcript if there isn't one yet.",
+        "autoHint": "Reads the prompt when you save and picks the chat or the AI summary."
+      },
+      "applied": "AI summary updated with {{name}}"
+    },
+    "templates": {
+      "tab": "Templates",
+      "managerTitle": "Templates & Actions",
+      "manage": "Manage Templates...",
+      "select": "Choose template",
+      "addTemplate": "New Template",
+      "editTemplate": "Edit Template",
+      "namePlaceholder": "Template name",
+      "contextLabel": "Context",
+      "contextPlaceholder": "What kind of meeting is this, and what should the summary focus on?",
+      "sectionsLabel": "Sections",
+      "addSection": "Add section",
+      "sectionHeadingPlaceholder": "Section heading",
+      "sectionInstructionPlaceholder": "What goes in this section?",
+      "moveSectionUp": "Move section up",
+      "moveSectionDown": "Move section down",
+      "removeSection": "Remove section",
+      "noSectionsHint": "Without sections, the context is the whole instruction for the summary.",
+      "noTemplates": "No templates yet",
+      "emptyEditorTitle": "Select a template",
+      "emptyEditorDescription": "Choose a template from the list or create a new one"
     },
     "onboarding": {
       "llm": {
@@ -3535,12 +3626,12 @@
         "description": "Actions use AI to transform your notes. Set up a language model to get started.",
         "configured": "AI model configured"
       },
-      "actions": {
-        "title": "AI-Powered Actions",
-        "description": "Actions transform your notes — clean up transcriptions, summarize meetings, and more. Use built-in actions or create your own.",
-        "builtInLabel": "Built-in",
-        "createTitle": "Create your own action",
-        "createDescription": "Define a custom action with your own AI prompt. You can always edit or add more later in settings.",
+      "templates": {
+        "title": "Templates and Actions",
+        "description": "Templates shape your AI summary, from detailed meeting notes to sections you define. Actions run on a note, like drafting a follow-up email in the chat.",
+        "builtInLabel": "Your templates",
+        "createTitle": "Create your own template",
+        "createDescription": "Describe the summary you want. You can add sections, more templates, and actions later.",
         "created": "Created!"
       },
       "getStarted": "Get Started",
@@ -3633,9 +3724,6 @@
         }
       },
       "invite": "Invite",
-      "list": {
-        "empty": "No notes here yet"
-      },
       "author": {
         "you": "You"
       }
@@ -3675,26 +3763,21 @@
       "replacementPlaceholder": "Text to insert when you say the trigger…",
       "create": "Create snippet",
       "duplicate": "A snippet with this trigger already exists",
-      "emptyTitle": "The stuff you shouldn't have to say",
+      "emptyTitle": "Stuff you shouldn't have to say",
       "emptyTitleAccent": "twice",
       "emptyDescription": "Speak a trigger word and OpenWhispr replaces it with whatever you saved — URLs, intros, sign-offs, prompts.",
       "new": "New snippet",
       "examples": {
         "linkedinTrigger": "My LinkedIn",
         "linkedinText": "linkedin.com/in/you",
-        "rewriteTrigger": "Rewrite prompt",
-        "rewriteText": "Rewrite this to be more concise and professional",
-        "introTrigger": "Intro email",
-        "introText": "Hey, would love to find some time to chat later this week…",
         "signoffTrigger": "Sign off",
         "signoffText": "Best, Alex · alex@example.com"
       },
       "addPlaceholder": "Add a trigger phrase — \"investor ask\", \"cal link\""
     },
-    "emptyTitle": "Your dictionary is empty",
+    "emptyTitle": "Add words to your dictionary",
     "emptyDescription": "Add words for {{agentName}} to always get right: names, tools, acronyms.",
     "addFirstWord": "Add your first word",
-    "importList": "Import a list",
     "agentDefault": "Added by default"
   },
   "support": {
@@ -3844,13 +3927,20 @@
       "thinking": "Thinking...",
       "typeMessage": "Type a message...",
       "send": "Send",
-      "voiceDraftStreamingOnly": "Voice input isn't available with your transcription provider: it only supports live dictation. Choose another provider in Settings → Speech to Text."
+      "voiceDraftStreamingOnly": "Voice input isn't available with your transcription provider: it only supports live dictation. Choose another provider in Settings → Speech to Text.",
+      "commands": "Commands"
     },
     "tools": {
       "search_notesName": "Search notes",
       "email_draftName": "Email draft",
       "find_contactName": "Find contact",
+      "github_search_issuesName": "Search GitHub",
+      "github_create_issueName": "GitHub issue",
+      "github_commentName": "GitHub comment",
       "slack_send_messageName": "Slack message",
+      "linear_search_issuesName": "Search Linear",
+      "linear_create_issueName": "Linear issue",
+      "linear_commentName": "Linear comment",
       "get_noteName": "Get note",
       "create_noteName": "Create note",
       "update_noteName": "Update note",
@@ -3863,9 +3953,15 @@
       "update_dictionaryName": "Update dictionary",
       "update_snippetsName": "Update snippets",
       "search_notesStatus": "Searching notes...",
-      "email_draftStatus": "Opening an email draft...",
+      "email_draftStatus": "Preparing an email...",
       "find_contactStatus": "Looking up contacts...",
+      "github_search_issuesStatus": "Searching GitHub...",
+      "github_create_issueStatus": "Preparing a GitHub issue...",
+      "github_commentStatus": "Preparing a GitHub comment...",
       "slack_send_messageStatus": "Preparing a Slack message...",
+      "linear_search_issuesStatus": "Searching Linear...",
+      "linear_create_issueStatus": "Preparing a Linear issue...",
+      "linear_commentStatus": "Preparing a Linear comment...",
       "web_searchStatus": "Searching the web...",
       "copy_to_clipboardStatus": "Copying to clipboard...",
       "get_calendar_eventsStatus": "Checking calendar...",
@@ -4022,7 +4118,10 @@
     "approval": {
       "headers": {
         "default": "Send to {{destination}}",
-        "slackPost": "Post to {{destination}}"
+        "slackPost": "Post to {{destination}}",
+        "email": "Email to {{destination}}",
+        "issue": "Create issue in {{destination}}",
+        "comment": "Comment on {{destination}}"
       },
       "identity": "As {{account}}",
       "identityWithWorkspace": "As {{account}} in {{workspace}}",
@@ -4054,13 +4153,130 @@
         "credential_save_failed": "The Slack login couldn't be saved on this computer. Nothing was sent. Try again.",
         "dm_failed": "The direct message to {{destination}} couldn't be opened. Nothing was sent.",
         "restricted": "{{destination}} is read-only or restricted for you.",
-        "generic": "Something went wrong. Nothing was sent."
+        "generic": "Something went wrong. Nothing was sent.",
+        "github": {
+          "reconnect_needed": "GitHub needs to be reconnected in Settings.",
+          "network": "GitHub couldn't be reached. Nothing was posted.",
+          "rate_limited": "GitHub is busy. Try again shortly.",
+          "connection_changed": "The GitHub connection changed before posting, so nothing was posted.",
+          "credential_save_failed": "The GitHub login couldn't be saved on this computer. Nothing was posted. Try again.",
+          "generic": "Something went wrong. Nothing was posted to GitHub.",
+          "not_installed": "The OpenWhispr GitHub App isn't installed on this repository. Add it in Settings. Nothing was posted.",
+          "repo_unlisted": "Couldn't confirm the OpenWhispr GitHub App is installed on this repository. Check the repository name. Nothing was posted.",
+          "no_repositories": "No repositories are chosen for the OpenWhispr GitHub App yet. Choose them in Settings. Nothing was posted.",
+          "forbidden": "You don't have permission to do this in the repository. Nothing was posted.",
+          "not_found": "The issue or pull request couldn't be found. Nothing was posted.",
+          "issues_disabled": "Issues are turned off in this repository. Nothing was posted.",
+          "archived": "This repository is archived, so it can't take new issues or comments. Nothing was posted.",
+          "too_many_labels": "Pick at most 10 labels for one issue. Nothing was posted.",
+          "labels_unavailable": "Couldn't read the repository's labels. Nothing was posted.",
+          "invalid": "GitHub refused it as invalid. Nothing was posted.",
+          "locked": "The conversation is locked. Nothing was posted.",
+          "invalid_reference": "That isn't a GitHub issue or pull request. Nothing was posted.",
+          "too_long": "The title or text is too long for GitHub. Nothing was posted.",
+          "not_configured": "GitHub isn't available in this build. Nothing was posted."
+        },
+        "gmail": {
+          "reconnect_needed": "Gmail needs to be reconnected in Settings.",
+          "network": "Gmail couldn't be reached. Nothing was sent.",
+          "rate_limited": "Gmail is busy. Try again shortly.",
+          "daily_limit": "Gmail's daily sending limit was reached. Nothing was sent.",
+          "domain_policy": "Your organization's Google admin blocked this app. Nothing was sent.",
+          "invalid_recipients": "One of the addresses isn't valid. Nothing was sent.",
+          "too_many_recipients": "Too many recipients: {{max}} at most. Nothing was sent.",
+          "too_long": "The subject or message is too long for Gmail. Nothing was sent.",
+          "invalid_message": "Gmail refused the email as malformed. Nothing was sent.",
+          "gmail_unavailable": "Sending with Gmail isn't available right now. Nothing was sent.",
+          "refused": "Gmail refused to send it. Nothing was sent.",
+          "connection_changed": "The Gmail connection changed before sending, so nothing was sent.",
+          "credential_save_failed": "The Gmail login couldn't be saved on this computer. Nothing was sent. Try again."
+        },
+        "linear": {
+          "reconnect_needed": "Linear needs to be reconnected in Settings.",
+          "connection_changed": "The Linear connection changed before sending, so nothing was sent.",
+          "credential_save_failed": "The Linear login couldn't be saved on this computer. Nothing was sent. Try again.",
+          "linear_unavailable": "Linear isn't available right now. Nothing was sent.",
+          "network": "Linear couldn't be reached. Nothing was sent.",
+          "rate_limited": "Linear is busy. Try again shortly.",
+          "not_found": "Linear couldn't find the team, project or issue anymore. Nothing was sent.",
+          "forbidden": "Your Linear account isn't allowed to do that. Nothing was sent.",
+          "invalid_input": "Linear couldn't accept this as written. Nothing was sent.",
+          "too_long": "Too long for Linear. Nothing was sent.",
+          "missing_title": "The Linear issue needs a title. Nothing was sent.",
+          "missing_body": "The Linear comment is empty. Nothing was sent.",
+          "not_created": "Linear didn't create the issue.",
+          "wrong_workspace": "That issue is in another Linear workspace. Nothing was sent.",
+          "invalid_reference": "That isn't a Linear issue. Nothing was sent.",
+          "refused": "Linear refused the request. Nothing was sent.",
+          "unknown_action": "OpenWhispr can't do that in Linear. Nothing was sent.",
+          "generic": "Something went wrong. Nothing was sent to Linear."
+        }
+      },
+      "email": {
+        "from": "From {{account}}",
+        "toLabel": "To",
+        "ccLabel": "Cc",
+        "subjectLabel": "Subject",
+        "bodyLabel": "Message",
+        "addressHint": "Separate addresses with commas.",
+        "invalidAddress": "{{address}} isn't a full email address like name@example.com.",
+        "invalidAddressAnnouncement": "One of the addresses isn't a full email address.",
+        "sendsTo": "Sends to {{addresses}}",
+        "missingTo": "Add at least one address to To.",
+        "tooManyRecipients": "An email can go to at most {{max}} addresses, To and Cc together.",
+        "subjectTooLong": "Keep the subject to {{max}} characters or fewer.",
+        "bodyTooLong": "The message is too long for Gmail. Shorten it to send.",
+        "unknown": "Couldn't confirm it was sent. Check your Sent folder."
+      },
+      "github": {
+        "notes": {
+          "mentions": "This will notify {{mentions}}",
+          "pullRequest": "On a pull request",
+          "labelsMayNotApply": "Labels are added only if you have write access to this repository."
+        }
+      },
+      "openIn": {
+        "github": "Open in GitHub",
+        "gmail": "Open in Gmail",
+        "linear": "Open in Linear"
+      },
+      "sendLabel": {
+        "issue": "Create issue",
+        "comment": "Comment"
+      },
+      "issue": {
+        "created": "Created {{result}}.",
+        "createdIn": "Created an issue in {{destination}}.",
+        "unknown": "Couldn't confirm the issue was created. Check {{destination}} before trying again.",
+        "titleLabel": "Title",
+        "bodyLabel": "Description",
+        "missingTitle": "Add a title.",
+        "titleTooLong": "Keep the title to {{max}} characters or fewer.",
+        "bodyTooLong": "Keep the description to {{max}} characters or fewer.",
+        "notes": {
+          "labels": "Labels: {{labels}}",
+          "droppedLabels": "Not added (not in {{destination}}): {{labels}}",
+          "priority": "Priority: {{priority}}",
+          "assignee": "Assignee: {{assignee}}",
+          "project": "Project: {{project}}"
+        }
+      },
+      "comment": {
+        "posted": "Commented on {{destination}}.",
+        "unknown": "Couldn't confirm the comment was posted. Check {{destination}} before trying again.",
+        "bodyLabel": "Comment",
+        "missingBody": "Write a comment.",
+        "bodyTooLong": "Keep the comment to {{max}} characters or fewer.",
+        "notes": {
+          "targetTitle": "On \"{{title}}\""
+        }
       }
     },
     "policyOff": "Connectors are turned off by your organization.",
     "email": {
       "title": "Email drafts",
       "description": "The assistant opens a pre-filled draft in your email app. You review it and press Send yourself.",
+      "descriptionSend": "The assistant shows an email card in the chat. It's sent from your Gmail only when you press Send.",
       "proRequired": "Upgrade to a paid plan to let the assistant draft emails for you.",
       "unavailable": "Email drafts aren't available right now.",
       "targetLabel": "Draft emails in",
@@ -4069,7 +4285,9 @@
         "gmail": "Gmail",
         "outlookWork": "Outlook (work or school)",
         "outlookPersonal": "Outlook.com",
-        "mailto": "Default mail app"
+        "mailto": "Default mail app",
+        "gmailSend": "Send from chat (Gmail)",
+        "gmailSendConnectFirst": "Send from chat (Gmail) · connect Gmail below"
       }
     },
     "slack": {
@@ -4103,15 +4321,143 @@
         "failedBody": "Return to OpenWhispr to try again."
       }
     },
+    "github": {
+      "title": "GitHub",
+      "description": "The assistant can search issues and pull requests, create issues and comment as you, only in the repositories you choose. It can't read your code, and you approve every issue and comment before it's posted.",
+      "connect": "Connect",
+      "reconnect": "Reconnect",
+      "disconnect": "Disconnect",
+      "connecting": "Connecting to GitHub…",
+      "connectedAs": "Connected as {{account}} · Repositories: {{repositories}}",
+      "connectedAs_empty": "Connected as {{account}} · no repositories yet",
+      "connectedAs_unknown": "Connected as {{account}}",
+      "needsReconnect": "GitHub needs to be reconnected.",
+      "proRequired": "Upgrade to a paid plan to let the assistant work with GitHub issues for you.",
+      "reviewOnGithub": "Review on GitHub",
+      "disconnectedHint": "Disconnected from this computer. GitHub keeps OpenWhispr's authorization until you remove it there.",
+      "errors": {
+        "connect_failed": "Couldn't connect GitHub. Try again.",
+        "disconnect_failed": "Couldn't disconnect GitHub. Try again.",
+        "oauth_denied": "GitHub access was declined.",
+        "token_exchange_failed": "GitHub didn't finish connecting. Try again.",
+        "not_configured": "GitHub isn't available in this build.",
+        "connection_changed": "Your account or GitHub connection changed while connecting. Try again.",
+        "signed_out": "Sign in to OpenWhispr to connect GitHub.",
+        "policy_blocked": "Connectors are turned off by your organization.",
+        "policy_unavailable": "Couldn't check your organization's settings. Try again.",
+        "code_expired": "The code expired. Try again.",
+        "device_flow_disabled": "Signing in to GitHub with a code isn't set up for this build.",
+        "network": "Couldn't reach GitHub. Check your connection and try again.",
+        "rate_limited": "GitHub is busy right now. Try again in a minute."
+      },
+      "deviceCode": {
+        "instructions": "Enter this code on GitHub:",
+        "copyAndOpen": "Copy & open GitHub",
+        "copied": "Code copied.",
+        "cancel": "Cancel",
+        "expires": "The code expires at {{time}}."
+      },
+      "repositories": {
+        "choose": "Choose repositories",
+        "manage": "Manage repositories"
+      }
+    },
+    "gmail": {
+      "title": "Gmail",
+      "description": "The assistant can send emails from your Gmail account. It can't read your mail, and you press Send on every email yourself.",
+      "connect": "Connect",
+      "reconnect": "Reconnect",
+      "disconnect": "Disconnect",
+      "connecting": "Finish connecting in your browser… If Google says access is blocked, your organization's Google admin needs to allow OpenWhispr.",
+      "connectedAs": "Connected as {{account}}",
+      "needsReconnect": "Gmail needs to be reconnected.",
+      "grantKept": "Disconnected. Google Calendar uses the same Google permission, so OpenWhispr stays listed in your Google Account until you disconnect Google Calendar too.",
+      "proRequired": "Upgrade to a paid plan to let the assistant send emails from Gmail for you.",
+      "errors": {
+        "connect_failed": "Couldn't connect Gmail. Try again.",
+        "disconnect_failed": "Couldn't disconnect Gmail. Try again.",
+        "oauth_denied": "Gmail wasn't connected because access wasn't allowed.",
+        "oauth_timeout": "Connecting took too long. If Google said access is blocked, ask your organization's Google admin to allow OpenWhispr. Otherwise, try again.",
+        "oauth_state_mismatch": "That sign-in link was out of date. Try again.",
+        "ports_busy": "Another app is using the ports OpenWhispr needs to connect. Close it and try again.",
+        "token_exchange_failed": "Google didn't finish connecting. Try again.",
+        "not_configured": "Gmail isn't available in this build.",
+        "connection_changed": "Your account or Gmail connection changed while connecting. Try again.",
+        "signed_out": "Sign in to OpenWhispr to connect Gmail.",
+        "policy_blocked": "Connectors are turned off by your organization.",
+        "policy_unavailable": "Couldn't check your organization's settings. Try again.",
+        "permission_not_granted": "Gmail wasn't connected because permission to send email wasn't granted. Connect again and leave that permission ticked.",
+        "email_not_verified": "Google hasn't verified this account's email address, so Gmail wasn't connected.",
+        "domain_policy": "Your organization's Google admin blocked this app. Ask them to allow OpenWhispr."
+      },
+      "browser": {
+        "connectedTitle": "Gmail is connected",
+        "connectedBody": "You can close this tab and return to OpenWhispr.",
+        "failedTitle": "Gmail wasn't connected",
+        "failedBody": "Return to OpenWhispr to try again."
+      }
+    },
+    "linear": {
+      "title": "Linear",
+      "description": "The assistant can search your Linear issues and create issues and comments as you. You approve every issue and comment before it's sent.",
+      "connect": "Connect",
+      "reconnect": "Reconnect",
+      "disconnect": "Disconnect",
+      "connecting": "Finish connecting in your browser…",
+      "connectedAs": "Connected as {{account}} in {{workspace}}",
+      "needsReconnect": "Linear needs to be reconnected.",
+      "proRequired": "Upgrade to a paid plan to let the assistant work in Linear for you.",
+      "errors": {
+        "connect_failed": "Couldn't connect Linear. Try again.",
+        "disconnect_failed": "Couldn't disconnect Linear. Try again.",
+        "oauth_denied": "Linear wasn't connected because access wasn't allowed.",
+        "oauth_timeout": "Connecting took too long. Try again.",
+        "oauth_state_mismatch": "That sign-in link was out of date. Try again.",
+        "ports_busy": "Another app is using the ports OpenWhispr needs to connect. Close it and try again.",
+        "token_exchange_failed": "Linear didn't finish connecting. Try again.",
+        "not_configured": "Linear isn't available in this build.",
+        "connection_changed": "Your account or Linear connection changed while connecting. Try again.",
+        "signed_out": "Sign in to OpenWhispr to connect Linear.",
+        "policy_blocked": "Connectors are turned off by your organization.",
+        "policy_unavailable": "Couldn't check your organization's settings. Try again.",
+        "permission_not_granted": "Linear wasn't connected because not every permission was granted. Connect again and allow all of them."
+      },
+      "browser": {
+        "connectedTitle": "Linear is connected",
+        "connectedBody": "You can close this tab and return to OpenWhispr.",
+        "failedTitle": "Linear wasn't connected",
+        "failedBody": "Return to OpenWhispr to try again."
+      },
+      "notes": {
+        "priority": {
+          "urgent": "Priority: Urgent",
+          "high": "Priority: High",
+          "medium": "Priority: Medium",
+          "low": "Priority: Low",
+          "none": "Priority: None"
+        },
+        "assignedToYou": "Assignee: you"
+      }
+    },
     "recent": {
       "title": "Recent actions",
       "actions": {
         "email_draft": "Draft to {{destination}}",
-        "slack_send_message": "Message to {{destination}}"
+        "github_create_issue": "New issue in {{destination}}",
+        "github_comment": "Comment on {{destination}}",
+        "slack_send_message": "Message to {{destination}}",
+        "gmail_send": "Email to {{destination}}",
+        "linear_create_issue": "New issue in {{destination}}",
+        "linear_comment": "Comment on {{destination}}"
       },
       "unlabeledActions": {
         "email_draft": "Email draft",
-        "slack_send_message": "Slack message"
+        "github_create_issue": "GitHub issue",
+        "github_comment": "GitHub comment",
+        "slack_send_message": "Slack message",
+        "gmail_send": "Gmail email",
+        "linear_create_issue": "Linear issue",
+        "linear_comment": "Linear comment"
       },
       "states": {
         "pending": "Waiting",
@@ -4133,7 +4479,7 @@
       "unknown": "Not confirmed. Check whether it went through before trying again.",
       "draftUnknown": "Not confirmed: the draft to {{destination}} may not have opened. Check before trying again.",
       "contactsFound": "Contacts found: {{total}}",
-      "draftLimit": "Only {{count}} drafts can open per request.",
+      "draftLimit": "Only {{max}} drafts can open per request.",
       "clipboardBusy": "Not opened: another draft's text is still on your clipboard.",
       "errors": {
         "open_failed": "Couldn't open your email app.",
@@ -4152,8 +4498,71 @@
         "credential_save_failed": "Couldn't save the Slack login on this computer. Nothing was sent.",
         "dm_failed": "Couldn't open the direct message. Nothing was sent.",
         "restricted": "That channel is read-only or restricted.",
-        "generic": "That didn't work."
-      }
+        "generic": "That didn't work.",
+        "github": {
+          "reconnect_needed": "GitHub needs to be reconnected.",
+          "network": "Couldn't reach GitHub.",
+          "rate_limited": "GitHub is busy.",
+          "connection_changed": "The GitHub connection changed.",
+          "credential_save_failed": "Couldn't save the GitHub login on this computer.",
+          "generic": "That didn't work on GitHub.",
+          "not_installed": "The OpenWhispr GitHub App isn't installed there.",
+          "repo_unlisted": "Couldn't confirm the OpenWhispr GitHub App is installed there.",
+          "no_repositories": "No GitHub repositories chosen yet.",
+          "forbidden": "No permission in that repository.",
+          "not_found": "Couldn't find that issue or pull request.",
+          "issues_disabled": "Issues are turned off in that repository.",
+          "archived": "That repository is archived.",
+          "too_many_labels": "Too many labels for one issue.",
+          "labels_unavailable": "Couldn't read the repository's labels.",
+          "invalid": "GitHub refused it as invalid.",
+          "locked": "That conversation is locked.",
+          "invalid_reference": "Not a GitHub issue or pull request.",
+          "too_long": "Too long for GitHub.",
+          "not_configured": "GitHub isn't available in this build."
+        },
+        "gmail": {
+          "reconnect_needed": "Gmail needs to be reconnected.",
+          "network": "Couldn't reach Gmail. Nothing was sent.",
+          "rate_limited": "Gmail is busy.",
+          "daily_limit": "Gmail's daily sending limit was reached.",
+          "domain_policy": "Blocked by your organization's Google admin.",
+          "invalid_recipients": "An address isn't valid. Nothing was sent.",
+          "too_many_recipients": "Too many recipients. Nothing was sent.",
+          "too_long": "Too long for Gmail. Nothing was sent.",
+          "invalid_message": "Gmail refused the email. Nothing was sent.",
+          "gmail_unavailable": "Sending with Gmail isn't available right now.",
+          "refused": "Gmail refused to send it.",
+          "connection_changed": "The Gmail connection changed. Nothing was sent.",
+          "credential_save_failed": "Couldn't save the Gmail login on this computer. Nothing was sent."
+        },
+        "linear": {
+          "reconnect_needed": "Linear needs to be reconnected.",
+          "connection_changed": "The Linear connection changed. Nothing was sent.",
+          "credential_save_failed": "Couldn't save the Linear login on this computer.",
+          "linear_unavailable": "Linear isn't available right now.",
+          "network": "Couldn't reach Linear.",
+          "rate_limited": "Linear is busy.",
+          "not_found": "Not found in Linear.",
+          "forbidden": "Not allowed in Linear.",
+          "invalid_input": "Linear couldn't accept it.",
+          "too_long": "Too long for Linear.",
+          "missing_title": "The Linear issue needs a title.",
+          "missing_body": "The Linear comment is empty.",
+          "not_created": "Linear didn't create the issue.",
+          "wrong_workspace": "That issue is in another Linear workspace.",
+          "invalid_reference": "Not a Linear issue.",
+          "refused": "Linear refused the request.",
+          "unknown_action": "Not available in Linear.",
+          "generic": "That didn't work in Linear."
+        }
+      },
+      "unknownSent": {
+        "gmail": "Couldn't confirm the email to {{destination}} was sent. Check your Gmail Sent folder."
+      },
+      "gmailDraftLimit": "Only {{max}} emails can be prepared per request.",
+      "queryResults": "Results found: {{total}}",
+      "cardLimit": "Only {{max}} cards can be prepared per request."
     }
   },
   "notesView": {
@@ -4274,15 +4683,17 @@
     "continue": "Continue"
   },
   "embeddedChat": {
-    "askPlaceholder": "Ask anything...",
-    "send": "Send",
+    "askPlaceholder": "Ask anything about your note",
     "title": "Chat",
     "emptyState": "Ask a question about this note",
     "dock": "Dock to sidebar",
     "undock": "Undock from sidebar",
     "close": "Close chat",
     "newChat": "New chat",
-    "conversationSelector": "Switch conversation"
+    "conversationSelector": "Switch conversation",
+    "history": "History",
+    "quickActions": "Quick actions",
+    "generateSummary": "Generate summary"
   },
   "transcriptionPreview": {
     "label": "Preview",

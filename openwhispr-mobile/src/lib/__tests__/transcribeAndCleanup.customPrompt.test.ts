@@ -99,7 +99,7 @@ describe('transcribeAndCleanup with a custom cleanup prompt', () => {
     expect(mockCleanup).not.toHaveBeenCalled();
   });
 
-  it('never cleans a local transcript, override or not', async () => {
+  it('never cleans a local transcript when cleanup is not On-Device, override or not', async () => {
     mockTranscribe.mockResolvedValue({ text: 'local words', provider: 'local', duration: 1 });
     const result = await transcribeAndCleanup({
       audioUri: 'file://a.wav',

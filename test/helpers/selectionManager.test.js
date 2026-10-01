@@ -260,6 +260,65 @@ test("does not paste when the selection changed", async () => {
   assert.equal(pastes.length, 0);
 });
 
+// Keys still held past the modifier wait (#2113) block the edit at two points.
+// Both must say so: "selection_unavailable" sends the user to permissions
+// settings and "paste_failed" hides that the edit is on the clipboard.
+test("a replacement blocked by held modifiers at revalidation reports modifiers_held", async () => {
+  const { manager, pastes } = makeHarness({ selections: ["original"] });
+  const capture = await manager.captureSelectedText();
+  manager._readCurrentSelection = async () => ({ status: "unavailable", code: "modifiers_held" });
+
+  assert.deepEqual(await manager.replaceSelectedText(capture.sessionId, "improved"), {
+    success: false,
+    code: "modifiers_held",
+  });
+  assert.equal(pastes.length, 0);
+});
+
+test("a replacement whose paste was held back for modifiers reports modifiers_held", async () => {
+  const { manager, pastes } = makeHarness({
+    selections: ["original", "original"],
+    pasteResult: { restoreComplete: Promise.resolve(), pasted: false, reason: "modifiers-held" },
+  });
+  const capture = await manager.captureSelectedText();
+
+  assert.deepEqual(await manager.replaceSelectedText(capture.sessionId, "improved"), {
+    success: false,
+    code: "modifiers_held",
+  });
+  assert.equal(pastes.length, 1);
+});
+
+// The assistant's caret paste is blocked the same two ways. The renderer only
+// reads `success`, so this code is for logs and support rather than UI.
+test("an assistant caret paste held back by modifier keys reports modifiers_held", async () => {
+  const { manager } = makeHarness({
+    selections: [
+      { state: "none", editable: true },
+      { state: "none", editable: true },
+    ],
+    pasteResult: { restoreComplete: Promise.resolve(), pasted: false, reason: "modifiers-held" },
+  });
+  const capture = await manager.captureSelectedText({ probeEditable: true });
+
+  assert.deepEqual(await manager.pasteAtCapturedTarget(capture.sessionId, "Agent response"), {
+    success: false,
+    code: "modifiers_held",
+  });
+});
+
+test("a caret re-read blocked by held modifier keys reports modifiers_held", async () => {
+  const { manager, pastes } = makeHarness({ selections: [{ state: "none", editable: true }] });
+  const capture = await manager.captureSelectedText({ probeEditable: true });
+  manager._readCurrentSelection = async () => ({ status: "unavailable", code: "modifiers_held" });
+
+  assert.deepEqual(await manager.pasteAtCapturedTarget(capture.sessionId, "Agent response"), {
+    success: false,
+    code: "modifiers_held",
+  });
+  assert.equal(pastes.length, 0);
+});
+
 test("selection sessions are single-use", async () => {
   const { manager } = makeHarness({ selections: ["original", "original", "original"] });
   const capture = await manager.captureSelectedText();
@@ -589,6 +648,123 @@ test("a terminal target reads as no selection", async () => {
   const result = await manager._readLinuxSelection(null);
   assert.equal(result.status, "none");
   assert.deepEqual(result.target, terminalTarget);
+});
+
+// Capture runs right after the voice assistant hotkey press, while its keys are
+// often still down. A Ctrl+C sent into them copies nothing, so capture waits for
+// the release and fails closed when the keys stay held.
+for (const [modifiers, expectCopy] of [
+  ["held", false],
+  ["released", true],
+  ["unknown", true],
+]) {
+  test(`Linux selection capture ${expectCopy ? "copies" : "sends no copy"} when modifiers are ${modifiers}`, async () => {
+    let copyAttempts = 0;
+    const manager = new SelectionManager({
+      clipboardManager: {
+        runClipboardOperation: (operation) => operation(),
+        isLinuxTerminalWindowClass: () => false,
+        resolveLinuxFastPasteBinary: () => "/tmp/linux-fast-paste",
+        _awaitModifierRelease: async () => ({ state: modifiers, waitedMs: 0 }),
+      },
+      textEditMonitor: {},
+      platform: "linux",
+      now: () => 1000,
+    });
+    const target = { kind: "x11-window", id: "7", windowClass: "org.gnome.texteditor" };
+    manager._getLinuxTarget = async () => target;
+    manager._captureViaClipboard = async () => {
+      copyAttempts += 1;
+      return { status: "none", target };
+    };
+
+    const result = await manager._readLinuxSelection(null);
+
+    assert.equal(copyAttempts, expectCopy ? 1 : 0);
+    assert.deepEqual(
+      result,
+      expectCopy ? { status: "none", target } : { status: "unavailable", code: "modifiers_held" }
+    );
+  });
+}
+
+// The target was classified before the wait. If focus moved while the keys were
+// held (say, to a terminal), a copy chord would reach a window nobody checked:
+// a plain Ctrl+C there interrupts whatever is running.
+for (const [waitedMs, focusMoved, expectCopy] of [
+  [400, true, false],
+  [400, false, true],
+  [0, true, true],
+]) {
+  test(`Linux selection capture ${expectCopy ? "copies" : "sends no copy"} after a ${waitedMs} ms wait when focus ${focusMoved ? "moved" : "stayed"}`, async () => {
+    let copyAttempts = 0;
+    let targetReads = 0;
+    const manager = new SelectionManager({
+      clipboardManager: {
+        runClipboardOperation: (operation) => operation(),
+        isLinuxTerminalWindowClass: (windowClass) => windowClass === "konsole",
+        resolveLinuxFastPasteBinary: () => "/tmp/linux-fast-paste",
+        _awaitModifierRelease: async () => ({ state: "released", waitedMs }),
+      },
+      textEditMonitor: {},
+      platform: "linux",
+      now: () => 1000,
+    });
+    const target = { kind: "kde-window", id: "7", windowClass: "kate" };
+    const terminal = { kind: "kde-window", id: "9", windowClass: "konsole" };
+    manager._getLinuxTarget = async () => {
+      targetReads += 1;
+      return targetReads > 1 && focusMoved ? terminal : target;
+    };
+    manager._captureViaClipboard = async () => {
+      copyAttempts += 1;
+      return { status: "none", target };
+    };
+
+    const result = await manager._readLinuxSelection(null);
+
+    assert.equal(copyAttempts, expectCopy ? 1 : 0);
+    assert.equal(targetReads, waitedMs > 0 ? 2 : 1, "only a real wait pays for a second lookup");
+    if (!expectCopy) assert.deepEqual(result, { status: "target_changed", code: "focus_moved" });
+  });
+}
+
+// A capture that saw focus move runs the command on its own (nothing was
+// checked), but a session being revalidated has a real target to protect: the
+// selection edit or caret delivery is declined as a changed target.
+test("a Linux session revalidation declines when focus moved during the modifier wait", async () => {
+  let targetReads = 0;
+  let pastes = 0;
+  const manager = new SelectionManager({
+    clipboardManager: {
+      runClipboardOperation: (operation) => operation(),
+      isLinuxTerminalWindowClass: () => false,
+      resolveLinuxFastPasteBinary: () => "/tmp/linux-fast-paste",
+      _awaitModifierRelease: async () => ({ state: "released", waitedMs: 400 }),
+      _pasteText: async () => {
+        pastes += 1;
+        return { pasted: true };
+      },
+    },
+    textEditMonitor: {},
+    platform: "linux",
+    now: () => 1000,
+  });
+  const target = { kind: "kde-window", id: "7", windowClass: "kate" };
+  const other = { kind: "kde-window", id: "9", windowClass: "konsole" };
+  manager._getLinuxTarget = async () => (++targetReads % 2 === 0 ? other : target);
+  manager.sessions.set("edit", { kind: "selection", text: "old", target, expiresAt: 2000 });
+  manager.sessions.set("caret", { kind: "caret", target, expiresAt: 2000 });
+
+  assert.deepEqual(await manager.replaceSelectedText("edit", "new"), {
+    success: false,
+    code: "target_changed",
+  });
+  assert.deepEqual(await manager.pasteAtCapturedTarget("caret", "answer"), {
+    success: false,
+    code: "target_changed",
+  });
+  assert.equal(pastes, 0);
 });
 
 // macOS accessibility never resolves a focused element in Chromium browsers, so
