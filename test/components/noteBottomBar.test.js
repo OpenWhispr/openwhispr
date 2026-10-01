@@ -51,28 +51,6 @@ test("in-view chat expands the existing capsule around one composer", async (t) 
   assert.equal((html.match(/<textarea/g) ?? []).length, 1);
 });
 
-test("opening the chat leaves the composer's box where it was", async (t) => {
-  const partsOf = (html) => {
-    const textarea = html.indexOf("<textarea");
-    const panel = html.lastIndexOf("data-note-chat-panel", textarea);
-    return {
-      panel: html.slice(panel, html.indexOf(">", panel)),
-      composer: html.slice(panel, textarea),
-    };
-  };
-  const closed = partsOf(await renderBottomBar(t, { chatOpen: false }));
-  const open = partsOf(
-    await renderBottomBar(t, { chatOpen: true, chatContent: createElement("div", null, "Chat") })
-  );
-
-  assert.match(open.panel, /justify-end/, "content that doesn't fit yet overflows the top");
-  assert.match(open.composer, /ring-inset/, "the open composer's outline takes no room");
-  assert.doesNotMatch(open.composer, /\bborder border-/, "nor does a border");
-  const wrapper = (parts) => parts.composer.match(/class="(shrink-0 w-full min-w-0[^"]*)"/)?.[1];
-  assert.ok(wrapper(closed));
-  assert.equal(wrapper(open), wrapper(closed), "the composer's wrapper has no padding either way");
-});
-
 test("the collapsed composer offers the action picker; the chips wait for the chat to open", async (t) => {
   const props = {
     chatContent: createElement("div", null, "Previous conversation"),

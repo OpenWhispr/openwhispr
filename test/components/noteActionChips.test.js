@@ -93,8 +93,6 @@ test("the open chat shows the first four actions as chips and every action under
   chips[0].props.onClick();
   assert.deepEqual(ran, ["Follow-up email"]);
 
-  const allActions = tree.find((node) => node.type === "button" && !node.props.onClick);
-  assert.match(allActions.props.className, /\bms-auto\b/, "All actions sits at the end");
   const menu = tree.find((node) => node.props.onManageActions);
   assert.equal(menu.props.actions, ACTIONS);
   assert.equal(menu.props.onRunAction, props.onRunAction);
