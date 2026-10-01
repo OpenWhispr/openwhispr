@@ -4,7 +4,7 @@ import {
   type ScrollMetrics,
 } from "../../utils/scrollFollowState";
 
-// The bar's bottom padding and the open card's 8px reach past the panel.
+// The bar's 28px below the panel, the open card's 8px overhang and a 4px gap.
 const FLOATING_CHAT_INSET_EXTRA_PX = 40;
 const FLOATING_CHAT_MIN_VISIBLE_CONTENT_PX = 80;
 

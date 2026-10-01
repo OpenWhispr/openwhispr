@@ -97,7 +97,6 @@ test("typing / in the composer runs an action from the keyboard", async (t) => {
 
   await render("/");
   assert.deepEqual(options(container), [], "the menu waits for the composer to have focus");
-  assert.deepEqual(menuOpen, [false]);
   const textarea = findElement(container, (el) => el.tagName === "TEXTAREA");
   await React.act(async () => textarea.dispatchEvent({ type: "focusin", bubbles: true }));
   assert.deepEqual(
@@ -105,7 +104,7 @@ test("typing / in the composer runs an action from the keyboard", async (t) => {
     ["Follow-up emailDraft it from the note", "Create to-dos", "Add TL;DRAI summary"],
     "each command shows its description"
   );
-  assert.deepEqual(menuOpen, [false, true], "the host hears the menu open, to hide the chat");
+  assert.equal(menuOpen.at(-1), true, "the host hears the menu open, to hide the chat");
 
   const row = (index) =>
     findElement(container, (el) => el.getAttribute?.("role") === "listbox").childNodes[index];

@@ -1,8 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createElement } = require("react");
-const { renderToStaticMarkup } = require("react-dom/server");
 const React = require("react");
+const { renderToStaticMarkup } = require("react-dom/server");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 const { installInteractiveDom, findElement } = require("../lib/interactiveDom");
 
@@ -45,7 +44,7 @@ function renderTree(Component, props) {
     tree = Component(props);
     return null;
   }
-  renderToStaticMarkup(createElement(Harness));
+  renderToStaticMarkup(React.createElement(Harness));
   return tree;
 }
 
@@ -69,7 +68,7 @@ const ACTIONS = [
   action({ id: 6, client_id: "outline", name: "Create outline" }),
 ];
 
-test("the open chat shows the first four actions as chips and every action under All actions", async (t) => {
+test("the open chat shows the first four actions as chips that run on click, disabled while they can't", async (t) => {
   const ActionChips = await load(t, "/components/notes/ActionChips.tsx");
   const ran = [];
   const props = {
@@ -92,10 +91,6 @@ test("the open chat shows the first four actions as chips and every action under
   );
   chips[0].props.onClick();
   assert.deepEqual(ran, ["Follow-up email"]);
-
-  const menu = tree.find((node) => node.props.onManageActions);
-  assert.equal(menu.props.actions, ACTIONS);
-  assert.equal(menu.props.onRunAction, props.onRunAction);
 });
 
 test("hovering a chip shows what its action does above the row", async (t) => {

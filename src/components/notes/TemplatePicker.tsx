@@ -22,7 +22,7 @@ interface TemplatePickerProps {
   onManage: () => void;
   disabled?: boolean;
   /** The menu opens under this element's start edge instead of the trigger's. */
-  alignTo?: React.RefObject<HTMLElement | null>;
+  alignTo: React.RefObject<HTMLElement | null>;
   /** The trigger, rendered as is. */
   children: React.ReactNode;
 }
@@ -44,7 +44,7 @@ export default function TemplatePicker({
   // Radix only aligns a menu with its trigger, so shift it by the distance between the two
   // start edges (Radix mirrors the offset in right-to-left layouts).
   const handleOpenChange = (open: boolean) => {
-    const anchor = alignTo?.current?.getBoundingClientRect();
+    const anchor = alignTo.current?.getBoundingClientRect();
     const trigger = triggerRef.current;
     if (!open || !anchor || !trigger) return;
     const bounds = trigger.getBoundingClientRect();

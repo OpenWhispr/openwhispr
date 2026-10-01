@@ -270,8 +270,6 @@ export function ChatInput({
           activeIndex={activeSlashIndex}
           onActiveIndexChange={setSlashIndex}
           onRun={runSlashCommand}
-          // Rows line up with the draft's text.
-          className="min-h-0 flex-1 px-1.5 py-2 animate-[fade-in-up_0.2s_ease-out] motion-reduce:animate-none"
         />
       )}
       <div

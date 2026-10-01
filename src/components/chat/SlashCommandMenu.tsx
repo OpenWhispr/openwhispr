@@ -9,7 +9,6 @@ interface SlashCommandMenuProps {
   activeIndex: number;
   onActiveIndexChange: (index: number) => void;
   onRun: (command: SlashCommand) => void;
-  className?: string;
 }
 
 /** The command list the composer drives from its keyboard while its draft starts with "/". */
@@ -20,7 +19,6 @@ export default function SlashCommandMenu({
   activeIndex,
   onActiveIndexChange,
   onRun,
-  className,
 }: SlashCommandMenuProps) {
   const activeRef = useRef<HTMLButtonElement>(null);
 
@@ -36,7 +34,8 @@ export default function SlashCommandMenu({
       aria-label={label}
       // A scrolling list is otherwise a tab stop, and Shift+Tab into it would close it.
       tabIndex={-1}
-      className={cn("flex flex-col overflow-y-auto", className)}
+      // Rows line up with the draft's text.
+      className="flex min-h-0 flex-1 flex-col overflow-y-auto px-1.5 py-2 animate-[fade-in-up_0.2s_ease-out] motion-reduce:animate-none"
     >
       {commands.map((command, index) => (
         <button
