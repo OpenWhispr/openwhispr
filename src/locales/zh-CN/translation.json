@@ -3140,6 +3140,7 @@
     },
     "actions": {
       "allActions": "全部操作",
+      "selectAction": "选择操作",
       "manage": "管理操作...",
       "addAction": "新建操作",
       "editAction": "编辑操作",
@@ -3235,6 +3236,7 @@
       "managerTitle": "模板和操作",
       "manage": "管理模板...",
       "select": "选择模板",
+      "regenerate": "重新生成",
       "addTemplate": "新建模板",
       "editTemplate": "编辑模板",
       "namePlaceholder": "模板名称",

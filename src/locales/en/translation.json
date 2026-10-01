@@ -3511,6 +3511,7 @@
       "chunkProgress": "Part {{step}} of {{total}}",
       "emptyReply": "The model returned an empty reply. Try again, or pick a different model.",
       "allActions": "All actions",
+      "selectAction": "Select action",
       "manage": "Manage Actions...",
       "addAction": "New Action",
       "editAction": "Edit Action",
@@ -3540,7 +3541,7 @@
           "description": "Accurate, comprehensive meeting notes with decisions and action items"
         },
         "makeTodos": {
-          "name": "Make to-dos",
+          "name": "Create to-dos",
           "description": "List every to-do and its owner in the chat"
         },
         "createOutline": {
@@ -3603,6 +3604,7 @@
       "managerTitle": "Templates & Actions",
       "manage": "Manage Templates...",
       "select": "Choose template",
+      "regenerate": "Regenerate",
       "addTemplate": "New Template",
       "editTemplate": "Edit Template",
       "namePlaceholder": "Template name",

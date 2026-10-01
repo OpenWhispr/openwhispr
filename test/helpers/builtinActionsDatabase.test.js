@@ -235,7 +235,7 @@ test("an older build renaming the newer built-ins doesn't stop the next launch",
   const db = createDb(t);
   if (!db) return;
   const newerKeys = ["notes.actions.builtin.makeTodos", "notes.actions.builtin.createOutline"];
-  // What a build that predates Make to-dos and Create outline does to their rows.
+  // What a build that predates Create to-dos and Create outline does to their rows.
   db.db
     .prepare(
       "UPDATE actions SET translation_key = ? WHERE is_builtin = 1 AND translation_key IN (?, ?)"

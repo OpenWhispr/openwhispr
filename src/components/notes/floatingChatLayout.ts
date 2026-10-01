@@ -4,7 +4,8 @@ import {
   type ScrollMetrics,
 } from "../../utils/scrollFollowState";
 
-const FLOATING_CHAT_INSET_EXTRA_PX = 32;
+// The bar's bottom padding and the open card's 8px reach past the panel.
+const FLOATING_CHAT_INSET_EXTRA_PX = 40;
 const FLOATING_CHAT_MIN_VISIBLE_CONTENT_PX = 80;
 
 const SCROLL_BOTTOM_THRESHOLD_PX = 80;
@@ -71,8 +72,10 @@ export function observeFloatingChatLayout(
   const follower = createScrollFollowController({
     nearBottomThreshold: SCROLL_BOTTOM_THRESHOLD_PX,
   });
+  // The chat opens over the note without scrolling it; the inset only makes room to
+  // scroll the end into view, and a reader who does is followed from then on.
+  follower.leaveBottom();
   let frameId: number | null = null;
-  let forcePinPending = false;
   let touchY: number | null = null;
 
   const pinActiveScroller = (): void => {
@@ -82,24 +85,21 @@ export function observeFloatingChatLayout(
     follower.follow();
   };
 
-  const schedulePin = (force: boolean): void => {
-    forcePinPending ||= force;
-    if (!forcePinPending && !follower.isFollowing()) return;
+  const schedulePin = (): void => {
+    if (!follower.isFollowing()) return;
     if (frameId !== null) cancelFrame(frameId);
     frameId = requestFrame((): void => {
       frameId = null;
-      const shouldForce = forcePinPending;
-      forcePinPending = false;
-      if (shouldForce || follower.isFollowing()) pinActiveScroller();
+      if (follower.isFollowing()) pinActiveScroller();
     });
   };
 
-  const applyInset = (force = false): void => {
+  const applyInset = (): void => {
     container.style.setProperty(
       "--floating-inset",
       `${panel.offsetHeight + FLOATING_CHAT_INSET_EXTRA_PX}px`
     );
-    schedulePin(force);
+    schedulePin();
   };
 
   const updateFollowState = (): void => {
@@ -118,7 +118,6 @@ export function observeFloatingChatLayout(
     // no DOM globals; wheel/touch targets are always nodes in the renderer.
     if (target == null || !scroller.contains(target as Node)) return;
     follower.leaveBottom();
-    forcePinPending = false;
     if (frameId !== null) {
       cancelFrame(frameId);
       frameId = null;
@@ -149,7 +148,7 @@ export function observeFloatingChatLayout(
   contentRoot.addEventListener("touchstart", handleTouchStart, { capture: true, passive: true });
   contentRoot.addEventListener("touchmove", handleTouchMove, { capture: true, passive: true });
   contentRoot.addEventListener("touchend", handleTouchEnd, { capture: true, passive: true });
-  applyInset(true);
+  applyInset();
 
   const observer = createResizeObserver((): void => applyInset());
   observer.observe(panel);

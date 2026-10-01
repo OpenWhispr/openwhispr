@@ -3140,6 +3140,7 @@
     },
     "actions": {
       "allActions": "全部動作",
+      "selectAction": "選擇動作",
       "manage": "管理動作...",
       "addAction": "新增動作",
       "editAction": "編輯動作",
@@ -3235,6 +3236,7 @@
       "managerTitle": "範本與動作",
       "manage": "管理範本...",
       "select": "選擇範本",
+      "regenerate": "重新產生",
       "addTemplate": "新增範本",
       "editTemplate": "編輯範本",
       "namePlaceholder": "範本名稱",

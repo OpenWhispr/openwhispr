@@ -40,8 +40,9 @@ function SquareMark({ strokeWidth = 2, ...props }: MarkProps) {
   );
 }
 
-// The note editor's formatting glyphs, drawn to the same 24px grid as the
-// vendored Nucleo outline set (2px stroke, round caps, 3–21 bounds).
+// Glyphs Nucleo lacks (the note editor's formatting marks, a slash command),
+// drawn to the same 24px grid as the vendored Nucleo outline set (2px stroke,
+// round caps, 3–21 bounds).
 const glyph = (children: SVGProps<SVGSVGElement>["children"]) =>
   function Glyph({ strokeWidth = 2, ...props }: MarkProps) {
     return (
@@ -136,6 +137,13 @@ const QuoteMark = glyph(
   </>
 );
 
+const SquareSlashMark = glyph(
+  <>
+    <rect x="3" y="3" width="18" height="18" rx="4" />
+    <path d="M14.5 7.5l-5 9" />
+  </>
+);
+
 const TableMark = glyph(
   <>
     <rect x="3" y="4" width="18" height="16" rx="2" />
@@ -147,6 +155,7 @@ const TableMark = glyph(
 
 export const Circle = createIcon("circle", CircleMark);
 export const Square = createIcon("square", SquareMark);
+export const SquareSlash = createIcon("square-slash", SquareSlashMark);
 export const Bold = createIcon("bold", BoldMark);
 export const Heading = createIcon("heading", HeadingMark);
 export const Italic = createIcon("italic", ItalicMark);

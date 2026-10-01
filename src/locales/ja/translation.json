@@ -2922,6 +2922,7 @@
     },
     "actions": {
       "allActions": "すべてのアクション",
+      "selectAction": "アクションを選択",
       "manage": "アクションを管理...",
       "addAction": "新しいアクション",
       "editAction": "アクションを編集",
@@ -3017,6 +3018,7 @@
       "managerTitle": "テンプレートとアクション",
       "manage": "テンプレートを管理...",
       "select": "テンプレートを選択",
+      "regenerate": "再生成",
       "addTemplate": "新しいテンプレート",
       "editTemplate": "テンプレートを編集",
       "namePlaceholder": "テンプレート名",

@@ -13,6 +13,7 @@ export {
   ListOrdered,
   Quote,
   Square,
+  SquareSlash,
   Strikethrough,
   Table,
 } from "./primitives";

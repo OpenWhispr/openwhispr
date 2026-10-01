@@ -514,7 +514,7 @@ export const BUILTIN_ACTIONS = [
   },
   builtinAction({
     key: "makeTodos",
-    name: "Make to-dos",
+    name: "Create to-dos",
     description: "List every to-do and its owner in the chat",
     prompt: MAKE_TODOS_PROMPT,
     output: "chat",

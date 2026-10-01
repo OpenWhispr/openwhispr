@@ -3193,6 +3193,7 @@
     },
     "actions": {
       "allActions": "Todas las acciones",
+      "selectAction": "Seleccionar acción",
       "manage": "Gestionar acciones...",
       "addAction": "Nueva acción",
       "editAction": "Editar acción",
@@ -3288,6 +3289,7 @@
       "managerTitle": "Plantillas y acciones",
       "manage": "Gestionar plantillas...",
       "select": "Elegir plantilla",
+      "regenerate": "Regenerar",
       "addTemplate": "Nueva plantilla",
       "editTemplate": "Editar plantilla",
       "namePlaceholder": "Nombre de la plantilla",

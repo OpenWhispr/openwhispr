@@ -1,18 +1,24 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Blocks, Settings2, Sparkles, MessageSquareText } from "../icons";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from "../ui/dropdown-menu";
+import { Blocks, SquareSlash } from "../icons";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent } from "../ui/dropdown-menu";
+import { cn } from "../lib/utils";
 import { getActionName, getActionDescription } from "../../stores/actionStore";
 import type { ActionItem } from "../../types/electron";
-import { ASK_PILL_CLASS } from "./shared";
-import { getActionIcon } from "./actionIcons";
+import ActionMenuItems, { ActionOutputBadge } from "./ActionMenuItems";
 
 const VISIBLE_CHIPS = 4;
+
+const CHIP_CLASS = cn(
+  "inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-xs text-foreground/60",
+  // A disabled chip still takes the pointer, so moving onto one moves the card to it.
+  "enabled:hover:bg-foreground/6 enabled:hover:text-foreground disabled:cursor-default disabled:text-foreground/30",
+  "transition-colors duration-150 focus:outline-none focus-visible:bg-foreground/6 focus-visible:text-foreground",
+  "animate-[fade-in-up_0.32s_cubic-bezier(0.22,1,0.36,1)_backwards] motion-reduce:animate-none"
+);
+
+// The chips rise in one after another as the chat finishes opening.
+const chipEntrance = (index: number) => ({ animationDelay: `${140 + index * 40}ms` });
 
 interface ActionChipsProps {
   /** Actions only; templates have their own picker. */
@@ -22,7 +28,10 @@ interface ActionChipsProps {
   onManageActions: () => void;
 }
 
-/** The first actions as one-click chips, then every action behind "All actions". */
+/**
+ * The first actions as one-click chips, then every action behind "All actions" at the end.
+ * A hovered or focused chip shows what its action does above the row.
+ */
 export default function ActionChips({
   actions,
   canRun,
@@ -30,73 +39,78 @@ export default function ActionChips({
   onManageActions,
 }: ActionChipsProps) {
   const { t } = useTranslation();
+  const [previewed, setPreviewed] = useState<ActionItem | null>(null);
+  const description = previewed && getActionDescription(previewed, t);
 
   return (
-    <div className="scrollbar-hidden flex items-center justify-center-safe gap-1.5 overflow-x-auto">
-      {actions.slice(0, VISIBLE_CHIPS).map((action) => {
-        const Icon = getActionIcon(action);
-        return (
+    <div className="relative">
+      {previewed && (
+        <div className="pointer-events-none absolute bottom-full start-0 z-10 mb-2 flex w-full max-w-md items-center gap-3 rounded-2xl border border-border/70 bg-popover p-3 shadow-lg animate-[fade-in-up_0.18s_ease-out] motion-reduce:animate-none dark:border-white/10">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-foreground/6">
+            <SquareSlash size={16} className="text-foreground/70" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span dir="auto" className="block truncate text-sm font-medium text-foreground">
+              {getActionName(previewed, t)}
+            </span>
+            {description && (
+              <span dir="auto" className="block truncate text-xs text-muted-foreground">
+                {description}
+              </span>
+            )}
+          </span>
+          <ActionOutputBadge action={previewed} />
+        </div>
+      )}
+      {/* Left as a row, so moving between chips swaps the card instead of replaying it. */}
+      <div
+        onMouseLeave={() => setPreviewed(null)}
+        className="scrollbar-hidden flex items-center gap-1 overflow-x-auto"
+      >
+        {actions.slice(0, VISIBLE_CHIPS).map((action, index) => (
           <button
             key={action.id}
             type="button"
             // Keep focus in the composer, so an open chat can take a follow-up right away.
             onMouseDown={(event) => event.preventDefault()}
-            onClick={() => onRunAction(action)}
+            // Running it disables the chips, so the card would otherwise sit over the reply.
+            onClick={() => {
+              setPreviewed(null);
+              onRunAction(action);
+            }}
+            onMouseEnter={() => setPreviewed(action)}
+            onFocus={() => setPreviewed(action)}
+            onBlur={() => setPreviewed(null)}
             disabled={!canRun(action)}
-            className={ASK_PILL_CLASS}
+            className={CHIP_CLASS}
+            style={chipEntrance(index)}
           >
-            <Icon size={11} className="shrink-0 text-foreground/45" />
+            <SquareSlash size={13} className="shrink-0" />
             <span dir="auto">{getActionName(action, t)}</span>
           </button>
-        );
-      })}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button type="button" className={ASK_PILL_CLASS}>
-            <Blocks size={11} className="shrink-0 text-foreground/45" />
-            {t("notes.actions.allActions")}
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" side="top" sideOffset={8} className="min-w-48">
-          {actions.map((action) => {
-            const editsSummary = action.output === "summary";
-            const OutputIcon = editsSummary ? Sparkles : MessageSquareText;
-            return (
-              <DropdownMenuItem
-                key={action.id}
-                onClick={() => onRunAction(action)}
-                disabled={!canRun(action)}
-                className="text-xs gap-2.5 rounded-md px-2.5 py-1.5"
-              >
-                <OutputIcon size={12} className="text-accent/50 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span dir="auto" className="font-medium truncate">
-                      {getActionName(action, t)}
-                    </span>
-                    <span className="text-[10px] font-medium px-1 py-px rounded bg-foreground/5 dark:bg-white/6 text-muted-foreground/70 shrink-0">
-                      {t(
-                        editsSummary ? "notes.actions.output.summary" : "notes.actions.output.chat"
-                      )}
-                    </span>
-                  </div>
-                  <div className="text-xs text-muted-foreground/70 truncate">
-                    {getActionDescription(action, t)}
-                  </div>
-                </div>
-              </DropdownMenuItem>
-            );
-          })}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onClick={onManageActions}
-            className="text-xs gap-2.5 rounded-md px-2.5 py-1.5 text-muted-foreground/70"
-          >
-            <Settings2 size={12} />
-            {t("notes.actions.manage")}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+        ))}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              onMouseEnter={() => setPreviewed(null)}
+              className={cn(CHIP_CLASS, "ms-auto")}
+              style={chipEntrance(Math.min(actions.length, VISIBLE_CHIPS))}
+            >
+              <Blocks size={13} className="shrink-0" />
+              {t("notes.actions.allActions")}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" side="top" sideOffset={8} className="min-w-48">
+            <ActionMenuItems
+              actions={actions}
+              canRun={canRun}
+              onRunAction={onRunAction}
+              onManageActions={onManageActions}
+            />
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </div>
   );
 }

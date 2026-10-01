@@ -3140,6 +3140,7 @@
     },
     "actions": {
       "allActions": "Tutte le azioni",
+      "selectAction": "Seleziona azione",
       "manage": "Gestisci azioni...",
       "addAction": "Nuova azione",
       "editAction": "Modifica azione",
@@ -3235,6 +3236,7 @@
       "managerTitle": "Modelli e azioni",
       "manage": "Gestisci modelli...",
       "select": "Scegli modello",
+      "regenerate": "Rigenera",
       "addTemplate": "Nuovo modello",
       "editTemplate": "Modifica modello",
       "namePlaceholder": "Nome del modello",

@@ -51,25 +51,169 @@ test("in-view chat expands the existing capsule around one composer", async (t) 
   assert.equal((html.match(/<textarea/g) ?? []).length, 1);
 });
 
-test("the action chips sit above the composer, inside the chat once it opens", async (t) => {
+test("opening the chat leaves the composer's box where it was", async (t) => {
+  const partsOf = (html) => {
+    const textarea = html.indexOf("<textarea");
+    const panel = html.lastIndexOf("data-note-chat-panel", textarea);
+    return {
+      panel: html.slice(panel, html.indexOf(">", panel)),
+      composer: html.slice(panel, textarea),
+    };
+  };
+  const closed = partsOf(await renderBottomBar(t, { chatOpen: false }));
+  const open = partsOf(
+    await renderBottomBar(t, { chatOpen: true, chatContent: createElement("div", null, "Chat") })
+  );
+
+  assert.match(open.panel, /justify-end/, "content that doesn't fit yet overflows the top");
+  assert.match(open.composer, /ring-inset/, "the open composer's outline takes no room");
+  assert.doesNotMatch(open.composer, /\bborder border-/, "nor does a border");
+  const wrapper = (parts) => parts.composer.match(/class="(shrink-0 w-full min-w-0[^"]*)"/)?.[1];
+  assert.ok(wrapper(closed));
+  assert.equal(wrapper(open), wrapper(closed), "the composer's wrapper has no padding either way");
+});
+
+test("the collapsed composer offers the action picker; the chips wait for the chat to open", async (t) => {
   const props = {
     chatContent: createElement("div", null, "Previous conversation"),
+    actionPicker: createElement("button", null, "Action picker"),
     actionChips: createElement("button", null, "All actions"),
     callout: createElement("button", null, "Generate summary"),
   };
   const closed = await renderBottomBar(t, { ...props, chatOpen: false });
 
   assert.ok(closed.includes("Generate summary"));
+  assert.ok(!closed.includes("All actions"), "no chips over a collapsed composer");
   assert.ok(
-    closed.indexOf("All actions") < closed.indexOf("<textarea"),
-    "the chips sit above the composer"
+    closed.indexOf("<textarea") < closed.indexOf("Action picker"),
+    "the picker sits in the composer"
   );
+  assert.ok(!closed.includes("agentMode.input.send"), "in place of the send button");
 
   const open = await renderBottomBar(t, { ...props, chatOpen: true });
+  assert.ok(!open.includes("Action picker"), "the picker steps aside once the chat opens");
   assert.equal(open.split("All actions").length, 2, "the chips show once");
   assert.ok(
     open.indexOf("Previous conversation") < open.indexOf("All actions") &&
       open.indexOf("All actions") < open.indexOf("<textarea"),
-    "an open chat keeps the chips, between its messages and the composer"
+    "between the chat's messages and the composer"
   );
+});
+
+// The real DOM pieces the open chat needs: containment, pointer events, ResizeObserver.
+async function installHappyDom(t) {
+  const { Window } = await import("happy-dom");
+  const happyWindow = new Window();
+  const fromWindow = [
+    "document",
+    "navigator",
+    "Node",
+    "Element",
+    "HTMLElement",
+    "Event",
+    "PointerEvent",
+    "MouseEvent",
+    "FocusEvent",
+    "ResizeObserver",
+    "MutationObserver",
+    "getComputedStyle",
+  ];
+  const names = [
+    "window",
+    ...fromWindow,
+    "requestAnimationFrame",
+    "cancelAnimationFrame",
+    "IS_REACT_ACT_ENVIRONMENT",
+  ];
+  const originals = names.map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)]);
+  const define = (name, value) =>
+    Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
+  define("window", happyWindow);
+  for (const name of fromWindow) define(name, happyWindow[name]);
+  define("requestAnimationFrame", happyWindow.requestAnimationFrame.bind(happyWindow));
+  define("cancelAnimationFrame", happyWindow.cancelAnimationFrame.bind(happyWindow));
+  define("IS_REACT_ACT_ENVIRONMENT", true);
+  t.after(async () => {
+    for (const [name, descriptor] of originals) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else delete globalThis[name];
+    }
+    await happyWindow.happyDOM.close();
+  });
+  return happyWindow;
+}
+
+test("a click outside the open chat closes it, unless it dismisses a menu over the page", async (t) => {
+  const { document, PointerEvent, MouseEvent } = await installHappyDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-note-bottom-bar-outside-test-",
+    mockModules: {
+      "/ui/useToast": `export const useToast = () => ({ toast: () => {} });`,
+      "/useVoiceDraft": `
+        export const useVoiceDraft = () => ({ status: "idle", streamingOnlyProvider: false });
+      `,
+    },
+  });
+  const NoteBottomBar = (await vite.ssrLoadModule("/components/notes/NoteBottomBar.tsx")).default;
+  const { createRoot } = require("react-dom/client");
+  const { act } = require("react");
+
+  const outside = document.createElement("p");
+  const host = document.createElement("div");
+  document.body.append(outside, host);
+  const root = createRoot(host);
+  let closed = 0;
+  const render = (chatOpen) =>
+    act(async () =>
+      root.render(
+        createElement(NoteBottomBar, {
+          isRecording: false,
+          draftText: "",
+          onDraftChange: () => {},
+          onAskSubmit: () => {},
+          chatOpen,
+          chatContent: createElement("button", { id: "in-chat" }, "Chat"),
+          onClickOutside: () => closed++,
+        })
+      )
+    );
+  const press = (target) =>
+    target.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, composed: true }));
+  const click = (target) => {
+    press(target);
+    target.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true, detail: 1 }));
+  };
+
+  await render(true);
+  click(document.getElementById("in-chat"));
+  assert.equal(closed, 0, "a click inside the chat keeps it open");
+  click(document.querySelector("[data-note-chat-panel]").previousElementSibling);
+  assert.equal(closed, 0, "as does one on the card's margin around it");
+  press(outside);
+  assert.equal(
+    closed,
+    0,
+    "a press that never clicks (a touch scroll, a right-click) keeps it open"
+  );
+  document
+    .getElementById("in-chat")
+    .dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true, detail: 0 }));
+  assert.equal(closed, 0, "nor does that stale press count for a later click from the keyboard");
+
+  const menu = document.createElement("div");
+  menu.setAttribute("data-radix-popper-content-wrapper", "");
+  document.body.append(menu);
+  press(outside);
+  // Radix closes the menu on the press, before the click arrives.
+  menu.remove();
+  outside.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true, detail: 1 }));
+  assert.equal(closed, 0, "a click that dismisses a menu over the page only closes the menu");
+
+  click(outside);
+  assert.equal(closed, 1);
+
+  await render(false);
+  click(outside);
+  assert.equal(closed, 1, "a closed chat doesn't listen");
+  await act(async () => root.unmount());
 });
