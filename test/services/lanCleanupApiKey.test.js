@@ -3,9 +3,9 @@ const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
 // The dictation panel is its own renderer and hydrates secrets once at startup,
-// so its store copy of the cleanup key is empty when the user adds the key in
-// the control panel afterwards. The self-hosted provider must ask for the key
-// the same way the custom provider does instead of trusting that copy (#2351).
+// so its store copy of the cleanup key is empty, or an older key, when the user
+// saves a key in the control panel afterwards. The self-hosted provider must ask
+// for the key at call time instead of trusting that copy (#2351).
 test("self-hosted cleanup sends the current cleanup key, not the store's stale copy", async (t) => {
   installBrowserGlobals(t);
   const vite = await createRendererServer(t, {
@@ -16,9 +16,8 @@ test("self-hosted cleanup sends the current cleanup key, not the store's stale c
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
 
   useSettingsStore.setState({
-    cleanupMode: "self-hosted",
     cleanupRemoteUrl: "http://10.10.10.121:8317/v1",
-    cleanupCustomApiKey: "",
+    cleanupCustomApiKey: "sk-stale",
   });
 
   const call = async (config) => {

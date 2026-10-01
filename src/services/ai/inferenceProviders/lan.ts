@@ -15,11 +15,11 @@ export const lanProvider: InferenceProvider = {
     try {
       const baseUrl = resolveSelfHostedOpenAIBase(lanUrl);
       const endpoint = buildApiUrl(baseUrl, "/chat/completions");
-      // Read the cleanup key through getApiKey like the custom provider does:
-      // the store copy in the dictation panel is only hydrated at startup, so
-      // a key saved in the control panel later would not be sent.
+      // Ask for the cleanup key at call time: the store copy in the dictation
+      // panel is only hydrated at startup, so a key saved in the control panel
+      // later would not be sent.
       const apiKey =
-        config.customApiKey?.trim() || (isAgentCall ? "" : await ctx.getApiKey("custom")) || "";
+        config.customApiKey?.trim() || (isAgentCall ? "" : await ctx.getApiKey("custom"));
       const resolvedModel = model?.trim() || "default";
       return await ctx.callChatCompletionsApi(
         endpoint,
