@@ -485,6 +485,15 @@ const MANAGED_TRANSCRIPTION_SPEC = {
 };
 
 const PROXY_TRANSCRIPTION_PROVIDERS = {
+  sixtydb: {
+    displayName: "60db",
+    ipc: () => window.electronAPI?.proxySixtyDBTranscription,
+    buildPayload: ({ audioBuffer, language, dictionaryPrompt }) => ({
+      audioBuffer,
+      language,
+      context: dictionaryPrompt || undefined,
+    }),
+  },
   tinfoil: {
     displayName: "Tinfoil",
     ipc: () => window.electronAPI?.proxyTinfoilTranscription,
@@ -2575,6 +2584,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const err = new Error(
           "Gemini API key not found. Please set your API key in the Control Panel."
         );
+        err.code = "API_KEY_MISSING";
+        throw err;
+      }
+    } else if (provider === "sixtydb") {
+      apiKey = s.sixtydbApiKey || (await window.electronAPI.getSixtyDBKey?.());
+      if (!apiKey?.trim()) {
+        const err = new Error("60db API key not found. Add your key in Settings.");
         err.code = "API_KEY_MISSING";
         throw err;
       }

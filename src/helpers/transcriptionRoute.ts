@@ -36,6 +36,7 @@ const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
 const GEMINI_FILE_SIZE_LIMIT = 14 * 1024 * 1024;
 
 export function byokFileSizeLimit(provider: string): number {
+  if (provider === "sixtydb") return 10 * 1024 * 1024;
   return provider === "gemini" ? GEMINI_FILE_SIZE_LIMIT : BYOK_FILE_SIZE_LIMIT;
 }
 
@@ -116,7 +117,7 @@ export type TranscriptionRoute =
   | { transport: "local" }
   | {
       transport: "proxied";
-      provider: "tinfoil" | "mistral" | "xai" | "corti" | "gemini";
+      provider: "tinfoil" | "mistral" | "xai" | "corti" | "gemini" | "sixtydb";
       model: string | null;
       language?: string;
       sizeCapBytes: number;
@@ -195,6 +196,7 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
         (trimmed.startsWith("universal-") || trimmed.startsWith("slam-")));
     if (matchesProvider) return trimmed;
   }
+  if (provider === "sixtydb") return "sixtydb-stt";
   if (provider === "groq") return "whisper-large-v3-turbo";
   if (provider === "xai") return "grok-stt";
   if (provider === "mistral") return "voxtral-mini-latest";
@@ -342,6 +344,15 @@ export function resolveTranscriptionRoute({
       language:
         provider === "xai" && language && !XAI_STT_LANGUAGES.has(language) ? undefined : language,
       sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
+    };
+  }
+  if (provider === "sixtydb") {
+    return {
+      transport: "proxied",
+      provider,
+      model,
+      language,
+      sizeCapBytes: byokFileSizeLimit(provider),
     };
   }
   if (provider === "gemini") {

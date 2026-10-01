@@ -104,6 +104,7 @@ const { TINFOIL_REALTIME_MODEL } = require("./tinfoilRealtimeStreaming");
 const { getTinfoilChatModels } = require("./tinfoilCatalog");
 const { transcribeWithTinfoil } = require("./tinfoilTranscription");
 const { transcribeWithGemini } = require("./geminiTranscription");
+const { transcribeWithSixtyDB } = require("./sixtydbTranscription");
 const AudioStorageManager = require("./audioStorage");
 const LocalModelDownloadStatus = require("./localModelDownloadStatus");
 const AgentStreamRequestRegistry = require("./agentStreamRequestRegistry");
@@ -4710,6 +4711,18 @@ class IPCHandlers {
       })
     );
 
+    ipcMain.handle(
+      "proxy-sixtydb-transcription",
+      serializeIpcError(async (event, { audioBuffer, language, context }) =>
+        transcribeWithSixtyDB({
+          audioBuffer,
+          language,
+          context,
+          apiKey: this.environmentManager.getSixtyDBKey(),
+        })
+      )
+    );
+
     ipcMain.handle("get-custom-transcription-key", async () => {
       return this.environmentManager.getCustomTranscriptionKey();
     });
@@ -6573,6 +6586,13 @@ class IPCHandlers {
             language: route.language,
           });
           if (text) result = { text, source: "corti", model: route.model };
+        } else if (route.transport === "proxied" && route.provider === "sixtydb") {
+          const { text, model } = await transcribeWithSixtyDB({
+            audioBuffer: buffer,
+            language: route.language,
+            apiKey: this.environmentManager.getSixtyDBKey(),
+          });
+          result = { text, source: "sixtydb", model };
         } else if (route.transport === "proxied" && route.provider === "gemini") {
           if (route.sizeCapBytes && buffer.byteLength > route.sizeCapBytes) {
             throw new Error(byokSizeCapError(route.sizeCapBytes));
@@ -10184,6 +10204,17 @@ class IPCHandlers {
               contentType: providerContentType(realByok),
               language: route.language,
               apiKey: this.environmentManager.getTinfoilKey(),
+            });
+            return { success: true, text };
+          }
+
+          if (route.transport === "proxied" && route.provider === "sixtydb") {
+            // Uploads auto-detect language, matching the other batch providers.
+            const { text } = await transcribeWithSixtyDB({
+              audioBuffer: fs.readFileSync(realByok),
+              fileName: path.basename(realByok),
+              contentType: providerContentType(realByok),
+              apiKey: apiKey || this.environmentManager.getSixtyDBKey(),
             });
             return { success: true, text };
           }

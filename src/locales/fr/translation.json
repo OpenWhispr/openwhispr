@@ -2672,6 +2672,7 @@
         "openai_whisper_1": "Modèle Whisper original",
         "groq_whisper_large_v3": "Reconnaissance vocale haute précision",
         "groq_whisper_large_v3_turbo": "Vitesse 216x en temps réel",
+        "sixtydb_stt": "Transcription multilingue par lots",
         "mistral_voxtral_mini_latest": "Transcription multilingue rapide",
         "gemini_3_5_transcribe": "Reconnaissance vocale Gemini de Google",
         "gemini_3_5_transcribe_live": "Reconnaissance vocale en streaming temps réel",

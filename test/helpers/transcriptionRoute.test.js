@@ -456,3 +456,37 @@ test("Orukeet fallback preserves the custom Bearer key", async () => {
   assert.equal(route.endpoint, "https://orukeet.gizmovoice.ai/v1/audio/transcriptions");
   assert.deepEqual(route.auth, { scheme: "bearer", keyRef: "custom" });
 });
+
+test("60db uses its native proxy and cap without changing defaults or policy precedence", async () => {
+  const { byokFileSizeLimit, resolveByokModel } = await load();
+  const settings = {
+    cloudTranscriptionProvider: "sixtydb",
+    cloudTranscriptionModel: "whisper-1",
+    preferredLanguage: "hi-IN",
+  };
+  assert.deepEqual(await resolve(settings), {
+    transport: "proxied",
+    provider: "sixtydb",
+    model: "sixtydb-stt",
+    language: "hi",
+    sizeCapBytes: 10 * 1024 * 1024,
+  });
+  assert.equal(byokFileSizeLimit("sixtydb"), 10 * 1024 * 1024);
+  assert.equal(resolveByokModel("sixtydb", "sixtydb-stt"), "sixtydb-stt");
+  assert.equal((await resolve({})).provider, "openai");
+  assert.equal((await resolve({ ...settings, useLocalWhisper: true })).transport, "local");
+  assert.equal(
+    (await resolve(settings, { policy: MANAGED_OPENAI_ONLY })).code,
+    "POLICY_RESTRICTED"
+  );
+  assert.equal(
+    (
+      await resolve({
+        ...settings,
+        transcriptionMode: "self-hosted",
+        remoteTranscriptionUrl: "http://localhost:8000/v1",
+      })
+    ).provider,
+    "self-hosted"
+  );
+});
