@@ -1787,7 +1787,7 @@
       "enableTextCleanupDescription": "AI 去除语气词，修正语法和标点",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
-        "providers": "配置密钥",
+        "providers": "自带密钥",
         "local": "本地",
         "selfHosted": "自托管",
         "openwhisprDesc": "准确可靠，无需设置。",

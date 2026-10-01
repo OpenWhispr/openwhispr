@@ -3394,7 +3394,7 @@
       "enableTextCleanupDescription": "استخدم الذكاء الاصطناعي لإزالة كلمات الحشو، وإصلاح القواعد، وتنسيق علامات الترقيم",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
-        "providers": "إعداد المفتاح",
+        "providers": "إحضار مفتاحك الخاص",
         "local": "محلي",
         "selfHosted": "مستضاف ذاتيًا",
         "enterprise": "مؤسسي",

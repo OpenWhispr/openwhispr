@@ -1840,7 +1840,7 @@
       "enableTextCleanupDescription": "La IA elimina muletillas, corrige gramática y puntuación",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
-        "providers": "Configurar clave",
+        "providers": "Trae tu propia clave",
         "local": "Local",
         "selfHosted": "Autoalojado",
         "openwhisprDesc": "Resultados fiables. Sin configuración.",

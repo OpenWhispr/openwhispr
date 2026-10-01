@@ -2082,7 +2082,7 @@
       "enableTextCleanupDescription": "L'IA supprime les mots de remplissage, corrige la grammaire et la ponctuation",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
-        "providers": "Configurer une clé",
+        "providers": "Apportez votre propre clé",
         "local": "Local",
         "selfHosted": "Auto-hébergé",
         "enterprise": "Enterprise",

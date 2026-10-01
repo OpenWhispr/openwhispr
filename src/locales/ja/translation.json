@@ -1787,7 +1787,7 @@
       "enableTextCleanupDescription": "AI がフィラーワードを除去し、文法と句読点を整える",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
-        "providers": "キーを設定",
+        "providers": "自分のキーを使用",
         "local": "ローカル",
         "selfHosted": "セルフホスト",
         "openwhisprDesc": "信頼できる精度。設定不要。",

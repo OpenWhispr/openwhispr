@@ -1791,7 +1791,7 @@
       "enableTextCleanupDescription": "ИИ убирает слова-паразиты, исправляет грамматику и пунктуацию",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
-        "providers": "Настроить ключ",
+        "providers": "Свой ключ",
         "local": "Локально",
         "selfHosted": "Свой сервер",
         "openwhisprDesc": "Надёжные результаты. Без настройки.",

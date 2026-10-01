@@ -2082,7 +2082,7 @@
       "enableTextCleanupDescription": "KI entfernt Füllwörter, korrigiert Grammatik und Zeichensetzung",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
-        "providers": "Schlüssel konfigurieren",
+        "providers": "Eigenen Schlüssel nutzen",
         "local": "Lokal",
         "selfHosted": "Selbst gehostet",
         "enterprise": "Enterprise",

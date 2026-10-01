@@ -1787,7 +1787,7 @@
       "enableTextCleanupDescription": "AI 移除語助詞，修正文法和標點",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
-        "providers": "設定金鑰",
+        "providers": "自備金鑰",
         "local": "本機",
         "selfHosted": "自架主機",
         "openwhisprDesc": "準確可靠，無需設定。",

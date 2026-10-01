@@ -1787,7 +1787,7 @@
       "enableTextCleanupDescription": "L'IA rimuove parole superflue, corregge grammatica e punteggiatura",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
-        "providers": "Configura chiave",
+        "providers": "Porta la tua chiave",
         "local": "Locale",
         "selfHosted": "Self-hosted",
         "openwhisprDesc": "Risultati affidabili. Nessuna configurazione necessaria.",

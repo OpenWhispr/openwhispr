@@ -2082,7 +2082,7 @@
       "enableTextCleanupDescription": "Use AI to remove filler words, fix grammar, and polish punctuation",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
-        "providers": "Configure key",
+        "providers": "Bring your own key",
         "local": "Local",
         "selfHosted": "Self-Hosted",
         "enterprise": "Enterprise",
