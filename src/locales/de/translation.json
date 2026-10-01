@@ -118,7 +118,7 @@
       "callbackRequired": "Eine Callback-Funktion ist für das Hotkey-Setup erforderlich",
       "globeOnlyMac": "Die Globe-Taste ist nur auf macOS verfügbar.",
       "fnCombinationUnsupported": "Die Globe/Fn-Taste kann nur allein verwendet werden.",
-      "mouseButtonOnlyMac": "Maustasten-Kürzel werden unter Windows und macOS unterstützt.",
+      "mouseButtonOnlyMac": "Maustasten-Hotkeys werden derzeit nur auf macOS unterstützt.",
       "alreadyRegistered": "\"{{hotkey}}\" ist bereits von einer anderen Anwendung registriert.",
       "osReserved": "\"{{hotkey}}\" ist möglicherweise von Ihrer Desktop-Umgebung reserviert.",
       "rightModifierNeedsListener": "„{{hotkey}}“ kann auf diesem Desktop nicht verwendet werden, da seine Tastenkürzel eine normale Taste benötigen. Fügen Sie eine Taste hinzu, z. B. Control+Alt+Space.",
@@ -1414,7 +1414,6 @@
     }
   },
   "hotkeyInput": {
-    "mouseButtonHint": "Maustasten funktionieren auch.",
     "ariaLabel": "Drücken Sie eine Tastenkombination, um den Hotkey festzulegen",
     "clickToChange": "Klicken zum Ändern",
     "clickToChangeLower": "klicken zum Ändern",

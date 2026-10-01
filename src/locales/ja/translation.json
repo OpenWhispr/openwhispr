@@ -118,7 +118,7 @@
       "callbackRequired": "ホットキー設定にはコールバック関数が必要です",
       "globeOnlyMac": "Globe キーは macOS でのみ利用できます。",
       "fnCombinationUnsupported": "Globe/Fn キーは単独でのみ使用できます。",
-      "mouseButtonOnlyMac": "マウスボタンのショートカットはWindowsとmacOSで対応しています。",
+      "mouseButtonOnlyMac": "マウスボタンのホットキーは現在 macOS でのみサポートされています。",
       "alreadyRegistered": "\"{{hotkey}}\" は別のアプリケーションで既に登録されています。",
       "osReserved": "\"{{hotkey}}\" はデスクトップ環境で予約されている可能性があります。",
       "rightModifierNeedsListener": "\"{{hotkey}}\" はこのデスクトップでは使用できません。ショートカットには通常のキーが必要です。Control+Alt+Space のようにキーを追加してください。",
@@ -1319,7 +1319,6 @@
     }
   },
   "hotkeyInput": {
-    "mouseButtonHint": "マウスボタンも使えます。",
     "ariaLabel": "キーの組み合わせを押してホットキーを設定",
     "clickToChange": "クリックして変更",
     "clickToChangeLower": "クリックして変更",

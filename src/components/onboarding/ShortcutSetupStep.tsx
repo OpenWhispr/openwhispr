@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Globe, Loader2 } from "../icons";
 import { HotkeyInput } from "../ui/HotkeyInput";
-import { getPlatform } from "../../utils/platform";
 import { formatHotkeyLabel } from "../../utils/hotkeys";
 import {
   formatHotkeyInstruction,
@@ -85,7 +84,6 @@ export default function ShortcutSetupStep({
   dense = false,
 }: ShortcutSetupStepProps) {
   const { t } = useTranslation();
-  const platform = getPlatform();
   const recommendations = Array.isArray(recommended) ? recommended : [recommended];
   // Only a chord the user already confirmed reopens in the box.
   const [candidate, setCandidate] = useState(initiallyConfirmed ? value : "");
@@ -183,12 +181,6 @@ export default function ShortcutSetupStep({
               </div>
             ))}
         </div>
-      )}
-
-      {(platform === "win32" || platform === "darwin") && (
-        <p className="mt-3 text-sm text-[var(--onboarding-text-tertiary)]">
-          {t("hotkeyInput.mouseButtonHint")}
-        </p>
       )}
 
       <div

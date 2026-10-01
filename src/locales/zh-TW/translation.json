@@ -118,7 +118,7 @@
       "callbackRequired": "設定快捷鍵需要回呼函式",
       "globeOnlyMac": "Globe 鍵僅在 macOS 上可用。",
       "fnCombinationUnsupported": "Globe/Fn 鍵只能單獨使用。",
-      "mouseButtonOnlyMac": "Windows 和 macOS 支援滑鼠按鍵快捷鍵。",
+      "mouseButtonOnlyMac": "滑鼠按鍵快捷鍵目前僅在 macOS 上受支援。",
       "alreadyRegistered": "\"{{hotkey}}\" 已被其他應用程式註冊。",
       "osReserved": "\"{{hotkey}}\" 可能被你的作業系統保留。",
       "rightModifierNeedsListener": "\"{{hotkey}}\" 無法在此桌面上使用，其快捷鍵需要包含一個一般按鍵。請加入一個按鍵，例如 Control+Alt+Space。",
@@ -1319,7 +1319,6 @@
     }
   },
   "hotkeyInput": {
-    "mouseButtonHint": "滑鼠按鈕也可以使用。",
     "ariaLabel": "按下按鍵組合以設定快捷鍵",
     "clickToChange": "點擊以變更",
     "clickToChangeLower": "點擊以變更",

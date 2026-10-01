@@ -500,14 +500,7 @@ export function HotkeyInput({
         return;
       }
 
-      const mouseButtons = [
-        "MouseButton1",
-        "MouseButton3",
-        "MouseButton2",
-        "MouseButton4",
-        "MouseButton5",
-      ];
-      const mouseHotkey = mouseButtons[e.button];
+      const mouseHotkey = e.button === 3 ? "MouseButton4" : e.button === 4 ? "MouseButton5" : null;
       if (!mouseHotkey) return;
 
       e.preventDefault();
@@ -658,7 +651,6 @@ export function HotkeyInput({
         onKeyDown={handleKeyDown}
         onKeyUp={handleKeyUp}
         onMouseDown={handleMouseDown}
-        onContextMenu={(event) => event.preventDefault()}
         onFocus={handleFocus}
         onBlur={handleBlur}
         className="absolute inset-0 z-10 cursor-pointer rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-blue-500/20"
@@ -683,7 +675,6 @@ export function HotkeyInput({
         onKeyDown={handleKeyDown}
         onKeyUp={handleKeyUp}
         onMouseDown={handleMouseDown}
-        onContextMenu={(event) => event.preventDefault()}
         onFocus={handleFocus}
         onBlur={handleBlur}
         className={`
@@ -796,7 +787,6 @@ export function HotkeyInput({
       onKeyDown={handleKeyDown}
       onKeyUp={handleKeyUp}
       onMouseDown={handleMouseDown}
-      onContextMenu={(event) => event.preventDefault()}
       onFocus={handleFocus}
       onBlur={handleBlur}
       className={`

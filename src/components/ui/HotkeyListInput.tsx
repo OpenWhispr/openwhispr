@@ -107,9 +107,6 @@ export function HotkeyListInput({
 
   return (
     <div className="flex flex-col gap-2">
-      {(platform === "win32" || platform === "darwin") && (
-        <p className="text-xs text-muted-foreground">{t("hotkeyInput.mouseButtonHint")}</p>
-      )}
       {items.map((hotkey, index) => (
         <HotkeyInput
           key={`${hotkey}-${index}`}

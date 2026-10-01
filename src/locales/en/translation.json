@@ -118,7 +118,7 @@
       "callbackRequired": "Callback function is required for hotkey setup",
       "globeOnlyMac": "The Globe key is only available on macOS.",
       "fnCombinationUnsupported": "The Globe/Fn key can only be used by itself.",
-      "mouseButtonOnlyMac": "Mouse button hotkeys are supported on Windows and macOS.",
+      "mouseButtonOnlyMac": "Mouse button hotkeys are currently supported on macOS only.",
       "alreadyRegistered": "\"{{hotkey}}\" is already registered by another application.",
       "osReserved": "\"{{hotkey}}\" may be reserved by your desktop environment.",
       "rightModifierNeedsListener": "\"{{hotkey}}\" can't be used on this desktop, whose shortcuts need a regular key. Add a key, such as Control+Alt+Space.",
@@ -1414,7 +1414,6 @@
     }
   },
   "hotkeyInput": {
-    "mouseButtonHint": "Mouse buttons work too.",
     "ariaLabel": "Press a key combination to set hotkey",
     "clickToChange": "Click to change",
     "clickToChangeLower": "click to change",

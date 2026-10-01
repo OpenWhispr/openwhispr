@@ -118,7 +118,7 @@
       "callbackRequired": "Uma função de callback é obrigatória para configurar o atalho",
       "globeOnlyMac": "A tecla Globe está disponível apenas no macOS.",
       "fnCombinationUnsupported": "A tecla Globe/Fn só pode ser usada sozinha.",
-      "mouseButtonOnlyMac": "Atalhos com botões do mouse são compatíveis com Windows e macOS.",
+      "mouseButtonOnlyMac": "Atalhos com botões do mouse atualmente são compatíveis apenas no macOS.",
       "alreadyRegistered": "\"{{hotkey}}\" já está registrada por outro aplicativo.",
       "osReserved": "\"{{hotkey}}\" pode estar reservada pelo seu ambiente de desktop.",
       "rightModifierNeedsListener": "\"{{hotkey}}\" não pode ser usada neste ambiente de trabalho, cujos atalhos precisam de uma tecla normal. Adicione uma tecla, como Control+Alt+Space.",
@@ -1298,7 +1298,6 @@
     }
   },
   "hotkeyInput": {
-    "mouseButtonHint": "Os botões do mouse também funcionam.",
     "ariaLabel": "Pressione uma combinação de teclas para definir o atalho",
     "clickToChange": "Clique para alterar",
     "clickToChangeLower": "clique para alterar",
