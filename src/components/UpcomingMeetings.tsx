@@ -318,7 +318,7 @@ function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEve
             />
           ) : group.items.length === 0 ? (
             <div ref={emptyStateRef} className="flex flex-col items-center px-1 py-4 text-center">
-              {/* The artwork is drawn in the middle third of its canvas; the negative margin
+              {/* The artwork is drawn in the middle third of its height; the negative margin
                   trims most of the empty space above and below it, so the card stays short. */}
               <ThemedEmptyIllustration
                 light={calendarEmptyLight}

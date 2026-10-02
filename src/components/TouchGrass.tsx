@@ -347,7 +347,7 @@ export default function TouchGrass({ rustle, height, label, onExit }: TouchGrass
       aria-label={label}
       tabIndex={0}
       className={cn(
-        "touch-grass -mx-2 rounded-t-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40",
+        "touch-grass -mx-2 rounded-t-xl focus-visible:outline-none",
         resting && "touch-grass--resting"
       )}
       style={{ height: height || undefined }}
