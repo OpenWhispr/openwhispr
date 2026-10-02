@@ -17,13 +17,13 @@ const fakeClipboard = {
   readText() {
     return this.text;
   },
-  writeText(text) {
+  writeText(text, type) {
     this.text = text;
     this.html = "";
     this.rtf = "";
     this.image = null;
     this.formats = ["text/plain"];
-    this.writes.push(["writeText", text]);
+    this.writes.push(type ? ["writeText", text, type] : ["writeText", text]);
   },
   readHTML() {
     return this.html;
@@ -66,7 +66,7 @@ const originalLoad = Module._load;
 // The held-modifier wait spawns the fast-paste binary ahead of every Linux paste.
 // Tests that pin the paste chain's spawn sequence see it as already released;
 // the wait itself is covered by tests that load with `realModifierWait`.
-function loadClipboardManager({ spawn, accessibility = true, realModifierWait = false } = {}) {
+function loadClipboardManager({ spawn, spawnSync, accessibility = true, realModifierWait = false } = {}) {
   delete require.cache[clipboardModulePath];
 
   Module._load = function loadWithMocks(request, parent, isMain) {
@@ -78,8 +78,12 @@ function loadClipboardManager({ spawn, accessibility = true, realModifierWait = 
         },
       };
     }
-    if (request === "child_process" && spawn) {
-      return { ...childProcess, spawn };
+    if (request === "child_process" && (spawn || spawnSync)) {
+      return {
+        ...childProcess,
+        ...(spawn ? { spawn } : {}),
+        ...(spawnSync ? { spawnSync } : {}),
+      };
     }
     return originalLoad.call(this, request, parent, isMain);
   };
@@ -1131,4 +1135,129 @@ test("clipboard write failure is never classified as an Accessibility denial", a
     assert.equal(error.clipboardCopied, undefined);
     return true;
   });
+});
+
+function createSpawnSync(calls, outcomes) {
+  return function mockedSpawnSync(command, args = [], options = {}) {
+    calls.push({ command, args, options });
+    const outcome = outcomes.shift() ?? { status: 0 };
+    if (outcome.throw) {
+      const error = new Error(outcome.throw);
+      error.code = outcome.code || "ETIMEDOUT";
+      throw error;
+    }
+    return {
+      status: outcome.status ?? 0,
+      stdout: Buffer.from(""),
+      stderr: Buffer.from(""),
+    };
+  };
+}
+
+test("non-KDE Wayland retries wl-copy after a timeout before mirroring to Electron", async () => {
+  const calls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawnSync: createSpawnSync(calls, [
+      { throw: "spawnSync wl-copy ETIMEDOUT" },
+      { status: 0 },
+      { status: 0 },
+    ]),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (command) => command === "wl-copy";
+  resetClipboard({ text: "stale" });
+
+  await withWaylandEnvironment("GNOME", () => {
+    manager._writeClipboardWayland("fresh transcript");
+    manager._writePrimarySelection("fresh transcript");
+  });
+
+  assert.deepEqual(
+    calls.map((call) => [call.command, call.args, call.options.timeout]),
+    [
+      ["wl-copy", ["--", "fresh transcript"], 200],
+      ["wl-copy", ["--", "fresh transcript"], 500],
+      ["wl-copy", ["--primary", "--", "fresh transcript"], 200],
+    ]
+  );
+  assert.deepEqual(fakeClipboard.writes, [["writeText", "fresh transcript"]]);
+});
+
+test("non-KDE Wayland does not fall back to the X11 clipboard when wl-copy fails", async () => {
+  const calls = [];
+  const jsCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawnSync: createSpawnSync(calls, [
+      { throw: "spawnSync wl-copy ETIMEDOUT" },
+      { status: 1 },
+      { throw: "spawnSync wl-copy ETIMEDOUT" },
+      { status: 1 },
+    ]),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (command) =>
+    command === "wl-copy" || command === "xclip" || command === "xsel";
+  resetClipboard({ text: "stale" });
+  const webContents = {
+    isDestroyed: () => false,
+    executeJavaScript: (code) => {
+      jsCalls.push(code);
+      return Promise.resolve();
+    },
+  };
+
+  await withWaylandEnvironment("GNOME", () => {
+    manager._writeClipboardWayland("fresh transcript", webContents);
+    manager._writePrimarySelection("fresh transcript");
+  });
+
+  assert.deepEqual(
+    calls.map((call) => [call.command, call.args[0], call.options.timeout]),
+    [
+      ["wl-copy", "--", 200],
+      ["wl-copy", "--", 500],
+      ["wl-copy", "--primary", 200],
+      ["wl-copy", "--primary", 500],
+    ]
+  );
+  assert.deepEqual(fakeClipboard.writes, []);
+  assert.equal(fakeClipboard.text, "stale");
+  assert.deepEqual(jsCalls, []);
+});
+
+test("Wayland without wl-copy still writes Electron's clipboard", async () => {
+  const calls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawnSync: createSpawnSync(calls, []),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = () => false;
+  resetClipboard();
+
+  await withWaylandEnvironment("GNOME", () => {
+    manager._writeClipboardWayland("fresh transcript");
+  });
+
+  assert.deepEqual(calls, []);
+  assert.deepEqual(fakeClipboard.writes, [["writeText", "fresh transcript"]]);
+});
+
+test("KDE Wayland clipboard write still uses xclip and does not call wl-copy", async () => {
+  const calls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawnSync: createSpawnSync(calls, [{ status: 0 }]),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (command) => command === "xclip" || command === "wl-copy";
+  resetClipboard();
+
+  await withWaylandEnvironment("KDE", () => {
+    manager._writeClipboardWayland("fresh transcript");
+  });
+
+  assert.deepEqual(
+    calls.map((call) => [call.command, call.args, call.options.timeout]),
+    [["xclip", ["-selection", "clipboard"], 200]]
+  );
+  assert.deepEqual(fakeClipboard.writes, [["writeText", "fresh transcript"]]);
 });
