@@ -3930,7 +3930,10 @@
       "typeMessage": "Type a message...",
       "send": "Send",
       "voiceDraftStreamingOnly": "Voice input isn't available with your transcription provider: it only supports live dictation. Choose another provider in Settings → Speech to Text.",
-      "commands": "Commands"
+      "commands": "Commands",
+      "slashNavigate": "to navigate",
+      "slashSelect": "to select",
+      "slashClose": "to close"
     },
     "tools": {
       "search_notesName": "Search notes",

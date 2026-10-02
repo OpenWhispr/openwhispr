@@ -3759,7 +3759,10 @@
       "typeMessage": "輸入訊息...",
       "send": "傳送",
       "voiceDraftStreamingOnly": "目前的轉錄服務商僅支援即時聽寫，因此無法使用語音輸入。請在「設定 → 語音轉文字」中選擇其他服務商。",
-      "commands": "指令"
+      "commands": "指令",
+      "slashNavigate": "瀏覽",
+      "slashSelect": "選擇",
+      "slashClose": "關閉"
     },
     "tools": {
       "search_notesName": "搜尋筆記",

@@ -1,6 +1,15 @@
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Copy, Check, Search, FileText, ChevronDown, ChevronRight, CircleAlert } from "../icons";
+import {
+  Copy,
+  CopyRounded,
+  Check,
+  Search,
+  FileText,
+  ChevronDown,
+  ChevronRight,
+  CircleAlert,
+} from "../icons";
 import { cn } from "../lib/utils";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
 import type { ToolCallInfo } from "./types";
@@ -16,6 +25,7 @@ interface ChatMessageProps {
   isStreaming: boolean;
   toolCalls?: ToolCallInfo[];
   onOpenNote?: (noteId: number) => void;
+  plain?: boolean;
 }
 
 function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
@@ -183,6 +193,7 @@ export const ChatMessage = memo(function ChatMessage({
   isStreaming,
   toolCalls,
   onOpenNote,
+  plain = false,
 }: ChatMessageProps) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
@@ -206,9 +217,10 @@ export const ChatMessage = memo(function ChatMessage({
         <div
           data-chat-bubble
           className={cn(
-            "max-w-[80%] px-3 py-2 rounded-lg rounded-ee-sm",
-            "bg-primary/90 text-primary-foreground",
-            "text-[13px] leading-relaxed"
+            "max-w-[80%] text-[13px] leading-relaxed",
+            plain
+              ? "rounded-2xl rounded-ee-md bg-foreground/[0.07] px-3.5 py-2 text-foreground shadow-[inset_0_1px_0_rgb(255_255_255/0.5)] dark:bg-white/[0.09] dark:shadow-[inset_0_1px_0_rgb(255_255_255/0.06)]"
+              : "rounded-lg rounded-ee-sm bg-primary/90 px-3 py-2 text-primary-foreground"
           )}
         >
           <span dir="auto" className="whitespace-pre-wrap">
@@ -231,9 +243,10 @@ export const ChatMessage = memo(function ChatMessage({
       <div
         data-chat-bubble
         className={cn(
-          "max-w-[85%] px-3 py-2 rounded-lg rounded-es-sm",
-          "bg-surface-1 border border-border/70 text-foreground",
-          "text-[13px] leading-relaxed"
+          "text-[13px] leading-relaxed text-foreground",
+          plain
+            ? "max-w-full px-1 py-1"
+            : "max-w-[85%] rounded-lg rounded-es-sm border border-border/70 bg-surface-1 px-3 py-2"
         )}
       >
         {hasToolCalls && (
@@ -281,7 +294,30 @@ export const ChatMessage = memo(function ChatMessage({
           </div>
         )}
 
-        {hasContent && !isStreaming && (
+        {hasContent && !isStreaming && plain && (
+          // Always there in the note chat, not only on hover.
+          <div className="mt-1.5 flex justify-start">
+            <button
+              type="button"
+              onClick={handleCopy}
+              aria-label={t(copied ? "common.copied" : "common.copy")}
+              title={t(copied ? "common.copied" : "common.copy")}
+              className={cn(
+                "flex size-7 items-center justify-center rounded-full text-foreground/45",
+                "hover:bg-foreground/[0.07] hover:text-foreground dark:hover:bg-white/[0.08]",
+                "transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+              )}
+            >
+              {copied ? (
+                <Check size={15} className="text-emerald-500" />
+              ) : (
+                <CopyRounded size={15} />
+              )}
+            </button>
+          </div>
+        )}
+
+        {hasContent && !isStreaming && !plain && (
           <div className="flex justify-start mt-1.5 -mb-0.5">
             <button
               onClick={handleCopy}

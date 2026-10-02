@@ -3930,7 +3930,10 @@
       "typeMessage": "Nachricht eingeben...",
       "send": "Senden",
       "voiceDraftStreamingOnly": "Spracheingabe ist mit Ihrem Transkriptionsanbieter nicht verfügbar: Er unterstützt nur Live-Diktat. Wählen Sie unter Einstellungen → Sprache zu Text einen anderen Anbieter.",
-      "commands": "Befehle"
+      "commands": "Befehle",
+      "slashNavigate": "zum Navigieren",
+      "slashSelect": "zum Auswählen",
+      "slashClose": "zum Schließen"
     },
     "tools": {
       "search_notesName": "Notizen durchsuchen",

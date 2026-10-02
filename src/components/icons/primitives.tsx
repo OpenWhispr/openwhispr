@@ -144,6 +144,14 @@ const SquareSlashMark = glyph(
   </>
 );
 
+// Copy, in the same soft-cornered squares as SquareSlash.
+const CopyRoundedMark = glyph(
+  <>
+    <rect x="8.5" y="8.5" width="12.5" height="12.5" rx="3.5" />
+    <path d="M15.5 8.5V6.5A3.5 3.5 0 0 0 12 3H6.5A3.5 3.5 0 0 0 3 6.5V12a3.5 3.5 0 0 0 3.5 3.5h2" />
+  </>
+);
+
 const TableMark = glyph(
   <>
     <rect x="3" y="4" width="18" height="16" rx="2" />
@@ -157,6 +165,7 @@ export const Circle = createIcon("circle", CircleMark);
 export const Square = createIcon("square", SquareMark);
 export const SquareSlash = createIcon("square-slash", SquareSlashMark);
 export const Bold = createIcon("bold", BoldMark);
+export const CopyRounded = createIcon("copy-rounded", CopyRoundedMark);
 export const Heading = createIcon("heading", HeadingMark);
 export const Italic = createIcon("italic", ItalicMark);
 export const List = createIcon("list", ListMark);

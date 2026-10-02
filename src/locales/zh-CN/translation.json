@@ -3759,7 +3759,10 @@
       "typeMessage": "输入消息...",
       "send": "发送",
       "voiceDraftStreamingOnly": "当前转录服务商仅支持实时听写，因此无法使用语音输入。请在“设置 → 语音转文字”中选择其他服务商。",
-      "commands": "命令"
+      "commands": "命令",
+      "slashNavigate": "导航",
+      "slashSelect": "选择",
+      "slashClose": "关闭"
     },
     "tools": {
       "search_notesName": "搜索笔记",

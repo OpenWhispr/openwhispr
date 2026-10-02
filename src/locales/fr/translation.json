@@ -3930,7 +3930,10 @@
       "typeMessage": "Écrivez un message...",
       "send": "Envoyer",
       "voiceDraftStreamingOnly": "La saisie vocale n'est pas disponible avec votre fournisseur de transcription : il ne prend en charge que la dictée en direct. Choisissez un autre fournisseur dans Réglages → Parole en texte.",
-      "commands": "Commandes"
+      "commands": "Commandes",
+      "slashNavigate": "pour naviguer",
+      "slashSelect": "pour sélectionner",
+      "slashClose": "pour fermer"
     },
     "tools": {
       "search_notesName": "Rechercher des notes",

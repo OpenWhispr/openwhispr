@@ -8,8 +8,13 @@ import { hasLayerAbove } from "../ui/useDismissGuard";
 import { observeFloatingChatSize } from "./floatingChatLayout";
 
 const RECORDING_SURFACE = "bg-surface-2/95 shadow-(--shadow-glass)";
-// One curve for everything that moves as the chat opens, so it unfolds as one piece.
-const UNFOLD = "duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none";
+// One curve for everything that moves as the chat opens, so it unfolds as one piece:
+// a soft spring that settles just past its mark.
+const UNFOLD =
+  "duration-[480ms] ease-[cubic-bezier(0.25,1.15,0.4,1)] motion-reduce:transition-none";
+// Frosted glass. Never over a live transcript: re-blurring it on every partial is costly.
+const CARD_GLASS =
+  "bg-(--chat-glass) bg-(image:--chat-glass-sheen) backdrop-blur-[10px] backdrop-saturate-[1.8] transform-gpu";
 
 interface NoteBottomBarProps {
   isRecording: boolean;
@@ -136,13 +141,16 @@ export default function NoteBottomBar({
             "absolute border transition-[inset,border-radius,box-shadow,background-color,border-color,opacity]",
             UNFOLD,
             chatOpen
-              ? "-inset-2 rounded-[32px] bg-background shadow-elevated"
+              ? cn(
+                  "-inset-2 rounded-[32px] shadow-(--shadow-chat-card)",
+                  isRecording ? "bg-surface-2/95" : CARD_GLASS
+                )
               : cn(
                   "inset-0 rounded-3xl",
-                  isRecording ? RECORDING_SURFACE : "bg-background shadow-sm",
+                  isRecording ? RECORDING_SURFACE : cn(CARD_GLASS, "shadow-(--shadow-glass)"),
                   "group-hover/chat:border-black/15 dark:group-hover/chat:border-white/22"
                 ),
-            "border-black/10 dark:border-white/14",
+            "border-black/[0.08] dark:border-white/12",
             "group-focus-within/chat:border-black/15 group-focus-within/chat:ring-[3px] group-focus-within/chat:ring-primary/8 dark:group-focus-within/chat:border-white/22",
             hideInput ? "pointer-events-none opacity-0" : "pointer-events-auto"
           )}
@@ -164,11 +172,11 @@ export default function NoteBottomBar({
             aria-hidden={!chatOpen}
             inert={!chatOpen}
             className={cn(
-              "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden transition-[opacity,transform] motion-reduce:transition-none",
-              // In just behind the card as it opens; out at once as it closes.
+              "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden transition-[opacity,transform,filter] motion-reduce:transition-none",
+              // Materializes out of a soft blur just behind the card as it opens; out at once as it closes.
               chatOpen
-                ? "translate-y-0 opacity-100 duration-300 delay-150 ease-out"
-                : "translate-y-2 opacity-0 duration-150",
+                ? "translate-y-0 opacity-100 blur-[0px] duration-[380ms] delay-150 ease-out"
+                : "translate-y-2 opacity-0 blur-[6px] duration-150",
               slashMenuOpen && "hidden"
             )}
           >

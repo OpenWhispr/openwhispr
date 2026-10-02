@@ -284,7 +284,7 @@ export function ChatInput({
             ? "min-h-12 bg-card shadow-sm dark:bg-surface-2"
             : variant === "note"
               ? outlined
-                ? "min-h-12 bg-background"
+                ? "min-h-12 bg-white/55 shadow-(--shadow-composer-glow) dark:bg-white/[0.035]"
                 : "min-h-12 bg-transparent"
               : variant === "default" && GLASS_SURFACE,
           // The outlined note composer draws an inset ring, which takes no room and sits where
@@ -293,7 +293,7 @@ export function ChatInput({
             ? "border border-border/80 dark:border-white/14"
             : variant === "note"
               ? outlined
-                ? "border-0 ring-1 ring-inset ring-border/70 dark:ring-white/14"
+                ? "border-0 ring-1 ring-inset ring-primary/20 focus-within:ring-primary/45 dark:ring-primary/25 dark:focus-within:ring-primary/50"
                 : "border-0"
               : "border border-black/10 dark:border-white/14",
           variant === "sidebar"
@@ -305,7 +305,7 @@ export function ChatInput({
                     ? "focus-within:h-[clamp(min(18vh,7rem),var(--composer-fit-height,0px),min(36vh,14rem))]"
                     : "focus-within:h-[clamp(min(20vh,8rem),var(--composer-fit-height,0px),min(40vh,16rem))]"
                 )
-              : "transition-[border-color,box-shadow] duration-200",
+              : "transition-[border-color,box-shadow,background-color] duration-200",
           isIdle &&
             (variant === "assistant"
               ? "focus-within:border-foreground/15 focus-within:ring-2 focus-within:ring-foreground/5"

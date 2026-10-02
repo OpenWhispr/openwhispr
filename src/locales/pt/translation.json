@@ -3759,7 +3759,10 @@
       "typeMessage": "Digite uma mensagem...",
       "send": "Enviar",
       "voiceDraftStreamingOnly": "A entrada por voz não está disponível com seu provedor de transcrição: ele só suporta ditado ao vivo. Escolha outro provedor em Configurações → Fala para texto.",
-      "commands": "Comandos"
+      "commands": "Comandos",
+      "slashNavigate": "para navegar",
+      "slashSelect": "para selecionar",
+      "slashClose": "para fechar"
     },
     "tools": {
       "search_notesName": "Pesquisar notas",

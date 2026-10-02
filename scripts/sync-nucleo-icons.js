@@ -90,6 +90,7 @@ export type { IconComponent, IconProps } from "./createIcon";
 export {
   Bold,
   Circle,
+  CopyRounded,
   Heading,
   Italic,
   List,

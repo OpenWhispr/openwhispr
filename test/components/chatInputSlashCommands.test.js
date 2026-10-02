@@ -49,7 +49,7 @@ const options = (container) => {
   const listbox = findElement(container, (el) => el.getAttribute?.("role") === "listbox");
   if (!listbox) return [];
   return listbox.childNodes.map((option) => ({
-    label: option.textContent,
+    label: option.textContent.trim(),
     selected: option.getAttribute("aria-selected") === "true",
   }));
 };

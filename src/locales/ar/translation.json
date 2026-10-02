@@ -1701,7 +1701,10 @@
       "typeMessage": "اكتب رسالة...",
       "send": "إرسال",
       "voiceDraftStreamingOnly": "الإدخال الصوتي غير متاح مع مزود التفريغ الخاص بك: فهو يدعم الإملاء المباشر فقط. اختر مزودًا آخر في الإعدادات ← تحويل الكلام إلى نص (Speech to Text).",
-      "commands": "الأوامر"
+      "commands": "الأوامر",
+      "slashNavigate": "للتنقل",
+      "slashSelect": "للاختيار",
+      "slashClose": "للإغلاق"
     },
     "tools": {
       "search_notesName": "البحث في الملاحظات",

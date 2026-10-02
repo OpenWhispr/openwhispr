@@ -3812,7 +3812,10 @@
       "typeMessage": "Escribe un mensaje...",
       "send": "Enviar",
       "voiceDraftStreamingOnly": "La entrada de voz no está disponible con tu proveedor de transcripción: solo admite dictado en directo. Elige otro proveedor en Ajustes → Voz a texto.",
-      "commands": "Comandos"
+      "commands": "Comandos",
+      "slashNavigate": "para navegar",
+      "slashSelect": "para seleccionar",
+      "slashClose": "para cerrar"
     },
     "tools": {
       "search_notesName": "Buscar notas",

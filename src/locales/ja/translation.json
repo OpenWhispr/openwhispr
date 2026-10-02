@@ -3759,7 +3759,10 @@
       "typeMessage": "メッセージを入力...",
       "send": "送信",
       "voiceDraftStreamingOnly": "現在の文字起こしプロバイダーはライブ音声入力のみに対応しているため、音声入力は利用できません。設定 → 音声テキスト変換 で別のプロバイダーを選択してください。",
-      "commands": "コマンド"
+      "commands": "コマンド",
+      "slashNavigate": "で移動",
+      "slashSelect": "で選択",
+      "slashClose": "で閉じる"
     },
     "tools": {
       "search_notesName": "ノートを検索",

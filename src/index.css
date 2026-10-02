@@ -102,6 +102,18 @@
   --shadow-glass:
     inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(255, 255, 255, 0.45),
     0 2px 10px rgba(15, 23, 42, 0.06);
+  /* The open note chat: the glass rim over a deep, soft lift. */
+  --shadow-chat-card:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85), inset 0 0 0 1px rgba(255, 255, 255, 0.5),
+    0 28px 64px -24px rgba(15, 23, 42, 0.3), 0 2px 10px rgba(15, 23, 42, 0.06);
+  /* The note chat's composer: a faint brand glow inside the glass card. */
+  --shadow-composer-glow: 0 10px 28px -14px rgba(69, 119, 233, 0.45);
+  --chat-glass: rgba(255, 255, 255, 0.55);
+  /* A sheen across the top and a faint brand glow at the composer, so the glass reads
+     even over an empty page. */
+  --chat-glass-sheen:
+    linear-gradient(165deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 45%),
+    radial-gradient(120% 55% at 50% 115%, rgba(69, 119, 233, 0.12), transparent 70%);
   /* Same rim on brand-blue surfaces (mic/send buttons): the app icon's glass.
      Softer than --shadow-glass because it sits on colour. */
   --shadow-brand-glass:
@@ -186,6 +198,14 @@
   --shadow-glass:
     inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.05),
     0 2px 12px rgba(0, 0, 0, 0.35);
+  --shadow-chat-card:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 32px 72px -24px rgba(0, 0, 0, 0.8), 0 2px 12px rgba(0, 0, 0, 0.35);
+  --shadow-composer-glow: 0 12px 32px -14px oklch(0.65 0.2 260 / 0.55);
+  --chat-glass: oklch(0.26 0.008 260 / 0.55);
+  --chat-glass-sheen:
+    linear-gradient(165deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 45%),
+    radial-gradient(120% 55% at 50% 115%, oklch(0.65 0.2 260 / 0.16), transparent 70%);
   --shadow-brand-tile: var(--shadow-brand-glass), 0 10px 24px -8px rgb(0 0 0 / 0.6);
 }
 
@@ -1295,6 +1315,20 @@ a:hover {
   50% {
     transform: scale(1.02);
     opacity: 0.7;
+  }
+}
+
+/* Content materializing through the note chat's glass: it rises in out of a soft blur. */
+@keyframes glass-in {
+  from {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
   }
 }
 

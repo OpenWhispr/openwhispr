@@ -202,6 +202,7 @@ export default function EmbeddedChat({
           messages={messages}
           emptyState={<EmptyState floating={mode === "floating"} />}
           onOpenNote={handleOpenNote}
+          plainBubbles
           scrollClassName={
             mode === "floating"
               ? cn(
