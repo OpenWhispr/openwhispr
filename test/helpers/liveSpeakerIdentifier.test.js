@@ -45,6 +45,16 @@ function loadIdentifier(options = {}) {
     if (interceptsOrt && request === "onnxruntime-node") {
       return options.ort();
     }
+    if (options.downsampleCalls && request === "../utils/audioUtils") {
+      const real = originalLoad.call(this, request, parent, isMain);
+      return {
+        ...real,
+        downsample24kTo16k: (buf) => {
+          options.downsampleCalls.push(Buffer.from(buf));
+          return Buffer.alloc(0);
+        },
+      };
+    }
     return originalLoad.call(this, request, parent, isMain);
   };
 
@@ -420,4 +430,29 @@ test("distinct voices are folded into one cluster when the session cap is 1", ()
     first.speakerId,
     "at the cap, new voices are force-merged into the nearest cluster by design"
   );
+});
+
+test("Linux 512-sample buffers reach the resampler in whole groups of 3 samples", async () => {
+  const downsampleCalls = [];
+  const { LiveSpeakerIdentifier } = loadIdentifier({ downsampleCalls });
+  const identifier = new LiveSpeakerIdentifier();
+  identifier._resetMeetingState();
+  identifier.session = {}; // loaded: skip _ensureLoaded
+
+  const source = Buffer.alloc(485 * 2 + 512 * 2 * 20);
+  for (let i = 0; i < source.length / 2; i++) source.writeInt16LE(i % 30000, i * 2);
+  // The helper's first buffer is 485 samples, then 512 each; one odd byteOffset.
+  const odd = Buffer.alloc(512 * 2 + 1).subarray(1);
+  source.copy(odd, 0, 485 * 2, 485 * 2 + 512 * 2);
+  const chunks = [source.subarray(0, 485 * 2), odd];
+  for (let off = 485 * 2 + 512 * 2; off < source.length; off += 1024) {
+    chunks.push(source.subarray(off, off + 1024));
+  }
+  for (const chunk of chunks) await identifier._processAudio(chunk);
+
+  for (const buf of downsampleCalls) assert.equal(buf.length % 6, 0);
+  const fed = Buffer.concat(downsampleCalls);
+  const carried = identifier.pcmRemainder.length;
+  assert.equal(fed.length + carried, source.length, "no sample is lost or duplicated");
+  assert.ok(fed.equals(source.subarray(0, fed.length)), "samples stay in order");
 });
