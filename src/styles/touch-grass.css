@@ -53,7 +53,7 @@
     var(--grain-light) 0 0 / 120px 40px,
     var(--grain-dark) 0 0 / 150px 60px,
     linear-gradient(to bottom, #9bd552, #6db336 28%, #3f8a22);
-  animation: touch-grass-fade-in 2.4s ease-out 0.1s backwards;
+  animation: touch-grass-fade-in 3s ease-out 0.1s backwards;
 }
 
 /* A patch is a row segment of the lawn, anchored on its row's baseline. Patches (and
@@ -85,7 +85,7 @@
     transparent 90%
   );
   transform: translateX(-100%);
-  animation: touch-grass-gust 7s ease-in-out 3s infinite;
+  animation: touch-grass-gust 7s ease-in-out 3.75s infinite;
 }
 
 /* A tuft is several curved blades cut from one element by a clip-path, sized, placed

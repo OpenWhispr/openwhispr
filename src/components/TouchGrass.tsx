@@ -13,7 +13,7 @@ const ROWS = 16;
 const SEGMENTS = 6;
 // When the breeze starts, just after the lawn has grown; each column then joins a
 // little after the one to its left, so gusts roll across the lawn.
-const WAVE_START_S = 3;
+const WAVE_START_S = 3.75;
 const WAVE_CROSSING_S = 1.2;
 // Tufts part within this distance of the hand, fading to nothing at the edge.
 const PART_RADIUS_PX = 64;
@@ -128,8 +128,8 @@ function makePatches(sceneHeight: number): Patch[] {
         height: Math.max(...tufts.map((tuft) => tuft.h)),
         // Negative skew pushes the tips right, with the gusts rolling left to right.
         amp: -(5 + rand() * 4),
-        growDelay: depth * 0.5 + rand() * 0.8,
-        growDur: 1.5 + rand() * 0.5,
+        growDelay: depth * 0.6 + rand(),
+        growDur: 1.9 + rand() * 0.6,
         // Close periods keep the wave coherent; the small spread lets it drift so the
         // patches never lock into step.
         swayDur: 3.4 + rand() * 0.8,
