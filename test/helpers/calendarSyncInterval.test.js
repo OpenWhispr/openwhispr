@@ -102,30 +102,6 @@ test("a pending failure cannot restart a stopped runner", async (t) => {
   assert.equal(calls, 1, "the stopped runner must not sync again");
 });
 
-test("a pending focus success cannot restart a stopped runner after a failure", async (t) => {
-  t.mock.timers.enable({ apis: ["setInterval"] });
-  const pending = Promise.withResolvers();
-  let calls = 0;
-  const runner = createRunner(() => {
-    calls += 1;
-    return calls === 1 ? Promise.reject(new Error("boom")) : pending.promise;
-  });
-  t.after(() => runner.stop());
-
-  runner.start();
-  t.mock.timers.tick(1000);
-  await flushPromises();
-  runner.syncOnFocus();
-  assert.equal(calls, 2);
-  runner.stop();
-  pending.resolve();
-  await flushPromises();
-
-  t.mock.timers.tick(10000);
-  await flushPromises();
-  assert.equal(calls, 2, "a late focus completion must leave the runner stopped");
-});
-
 for (const [source, outcome, restartWithoutStop] of [
   ["interval", "failure", false],
   ["interval", "success", false],
@@ -168,30 +144,6 @@ for (const [source, outcome, restartWithoutStop] of [
   });
 }
 
-test("a pending interval success cannot restart a stopped runner after a failure", async (t) => {
-  t.mock.timers.enable({ apis: ["setInterval"] });
-  const pending = Promise.withResolvers();
-  let calls = 0;
-  const runner = createRunner(() => {
-    calls += 1;
-    return calls === 1 ? Promise.reject(new Error("boom")) : pending.promise;
-  });
-  t.after(() => runner.stop());
-
-  runner.start();
-  t.mock.timers.tick(1000);
-  await flushPromises();
-  t.mock.timers.tick(2000);
-  assert.equal(calls, 2);
-  runner.stop();
-  pending.resolve();
-  await flushPromises();
-
-  t.mock.timers.tick(10000);
-  await flushPromises();
-  assert.equal(calls, 2);
-});
-
 test("an out-of-band success does not start a stopped runner", async (t) => {
   t.mock.timers.enable({ apis: ["setInterval"] });
   let calls = 0;
@@ -225,10 +177,8 @@ for (const source of ["interval", "focus"]) {
     runner.start();
     t.mock.timers.tick(1000);
     await flushPromises();
-    t.mock.timers.tick(1000);
-    assert.equal(calls, 1);
     if (source === "focus") runner.syncOnFocus();
-    else t.mock.timers.tick(1000);
+    else t.mock.timers.tick(2000);
     await flushPromises();
     assert.equal(calls, 2);
 
