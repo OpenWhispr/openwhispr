@@ -34,8 +34,9 @@
 }
 
 /* The keyboard focus ring, drawn over the sky and the lawn: a ring on the scene itself
-   would paint under them. Rounded at the bottom too, where the day card's corners clip
-   the scene. */
+   would paint under them. White, as on the app's other coloured surfaces, since the
+   blue ring vanishes against both. Rounded at the bottom too, where the day card's
+   corners clip the scene. */
 .touch-grass::after {
   content: "";
   position: absolute;
@@ -45,7 +46,7 @@
 }
 
 .touch-grass:focus-visible::after {
-  box-shadow: inset 0 0 0 2px oklch(from var(--color-ring) l c h / 0.4);
+  box-shadow: inset 0 0 0 2px rgb(255 255 255);
 }
 
 /* The field starts as bare soil; the turf fades in over it. */
