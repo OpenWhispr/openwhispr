@@ -14,7 +14,9 @@ async function request(token, tenant, url, options = {}) {
   });
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
-    throw new Error(`Corti API Error: ${response.status} ${errorText}`.trim());
+    throw Object.assign(new Error(`Corti API Error: ${response.status} ${errorText}`.trim()), {
+      status: response.status,
+    });
   }
   return response;
 }

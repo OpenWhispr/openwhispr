@@ -4758,5 +4758,32 @@
     },
     "start": "Notizen aufnehmen",
     "join": "Beitreten & transkribieren"
+  },
+  "modelFallback": {
+    "title": "Automatischer Modellwechsel",
+    "description": "Bei Kontingentüberschreitung, Zeitüberschreitung oder Nichterreichbarkeit den nächsten Anbieter versuchen.",
+    "credentials": "Verwendet den gespeicherten Anbieterschlüssel oder einen benannten Schlüssel unten. Cloud-Ausweichmodelle erhalten Ihr Diktat und können Kosten verursachen.",
+    "order": "Reihenfolge der Ausweichmodelle",
+    "provider": "Ausweichanbieter",
+    "model": "Ausweichmodell",
+    "modelId": "OpenRouter-Modell-ID eingeben",
+    "empty": "Bis zu drei Modelle hinzufügen, die nach einem Fehler des Hauptmodells versucht werden.",
+    "add": "Ausweichmodell hinzufügen",
+    "moveUp": "{{model}} nach oben verschieben",
+    "moveDown": "{{model}} nach unten verschieben",
+    "remove": "{{model}} entfernen",
+    "unavailable": "Nicht verfügbar, wird übersprungen",
+    "downloadLocal": "Zuerst ein lokales Modell in der Modellauswahl herunterladen.",
+    "key": "API-Schlüssel",
+    "defaultKey": "Gespeicherter Standardschlüssel",
+    "newKey": "Weiteren Schlüssel hinzufügen",
+    "keyName": "Schlüsselname",
+    "keyValue": "API-Schlüssel",
+    "saveKey": "Schlüssel speichern",
+    "cancelKey": "Abbrechen",
+    "deleteKey": "Ausgewählten Schlüssel löschen",
+    "missingKey": "Schlüssel fehlt",
+    "keySaveError": "Schlüssel konnte nicht gespeichert werden. Sicheren Speicher prüfen und erneut versuchen.",
+    "keyDeleteError": "Schlüssel konnte nicht gelöscht werden. Erneut versuchen."
   }
 }

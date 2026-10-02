@@ -1,3 +1,4 @@
+import { normalizeFallbackTargets, type FallbackTarget } from "../helpers/modelFallback";
 import { create } from "zustand";
 import { API_ENDPOINTS } from "../config/constants";
 import i18n, { normalizeUiLanguage } from "../i18n";
@@ -174,6 +175,23 @@ function defaultLlmModel(mode: InferenceMode, providerId: string, bedrockRegion:
     : defaultModel;
 }
 
+function readFallbackTargets(key: string): FallbackTarget[] {
+  try {
+    return normalizeFallbackTargets(JSON.parse(readString(key, "[]")));
+  } catch {
+    return [];
+  }
+}
+
+function setFallbackTargets(
+  key: "transcriptionFallbackModels" | "cleanupFallbackModels",
+  value: FallbackTarget[]
+): void {
+  const targets = normalizeFallbackTargets(value);
+  if (isBrowser) localStorage.setItem(key, JSON.stringify(targets));
+  useSettingsStore.setState({ [key]: targets });
+}
+
 function readString(key: string, fallback: string): string {
   if (!isBrowser) return fallback;
   return localStorage.getItem(key) ?? fallback;
@@ -271,6 +289,8 @@ const BOOLEAN_SETTINGS = new Set([
   "uploadUseLocalWhisper",
   "allowOpenAIFallback",
   "allowLocalFallback",
+  "transcriptionFallbackEnabled",
+  "cleanupFallbackEnabled",
   "assemblyAiStreaming",
   "autoGenerateNoteTitle",
   "useCleanupModel",
@@ -1092,6 +1112,10 @@ export interface SettingsState
   setCohereModel: (value: string) => void;
   setAllowOpenAIFallback: (value: boolean) => void;
   setAllowLocalFallback: (value: boolean) => void;
+  setTranscriptionFallbackEnabled: (value: boolean) => void;
+  setTranscriptionFallbackModels: (value: FallbackTarget[]) => void;
+  setCleanupFallbackEnabled: (value: boolean) => void;
+  setCleanupFallbackModels: (value: FallbackTarget[]) => void;
   setFallbackWhisperModel: (value: string) => void;
   setPreferredLanguage: (value: string) => void;
   setChineseScriptPreference: (value: ChineseScriptPreference) => void;
@@ -1504,6 +1528,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cohereModel: readString("cohereModel", DEFAULT_COHERE_MODEL),
   allowOpenAIFallback: readBoolean("allowOpenAIFallback", false),
   allowLocalFallback: readBoolean("allowLocalFallback", false),
+  transcriptionFallbackEnabled: readBoolean("transcriptionFallbackEnabled", false),
+  cleanupFallbackEnabled: readBoolean("cleanupFallbackEnabled", false),
+  transcriptionFallbackModels: readFallbackTargets("transcriptionFallbackModels"),
+  cleanupFallbackModels: readFallbackTargets("cleanupFallbackModels"),
   fallbackWhisperModel: readString("fallbackWhisperModel", "base"),
   preferredLanguage: readString("preferredLanguage", "auto"),
   chineseScriptPreference: normalizeChineseScriptPreference(
@@ -2001,6 +2029,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCohereModel: createStringSetter("cohereModel"),
   setAllowOpenAIFallback: createBooleanSetter("allowOpenAIFallback"),
   setAllowLocalFallback: createBooleanSetter("allowLocalFallback"),
+  setTranscriptionFallbackEnabled: createBooleanSetter("transcriptionFallbackEnabled"),
+  setCleanupFallbackEnabled: createBooleanSetter("cleanupFallbackEnabled"),
+  setTranscriptionFallbackModels: (value) =>
+    setFallbackTargets("transcriptionFallbackModels", value),
+  setCleanupFallbackModels: (value) => setFallbackTargets("cleanupFallbackModels", value),
   setFallbackWhisperModel: createStringSetter("fallbackWhisperModel"),
   setPreferredLanguage: createStringSetter("preferredLanguage"),
   setChineseScriptPreference: (value: ChineseScriptPreference) =>
@@ -2571,6 +2604,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (settings.cohereModel !== undefined) s.setCohereModel(settings.cohereModel);
     if (settings.allowOpenAIFallback !== undefined)
       s.setAllowOpenAIFallback(settings.allowOpenAIFallback);
+    if (settings.transcriptionFallbackEnabled !== undefined)
+      s.setTranscriptionFallbackEnabled(settings.transcriptionFallbackEnabled);
+    if (settings.transcriptionFallbackModels !== undefined)
+      s.setTranscriptionFallbackModels(settings.transcriptionFallbackModels);
     if (settings.allowLocalFallback !== undefined)
       s.setAllowLocalFallback(settings.allowLocalFallback);
     if (settings.fallbackWhisperModel !== undefined)
@@ -2645,6 +2682,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (settings.useCleanupModel !== undefined) s.setUseCleanupModel(settings.useCleanupModel);
     if (settings.useDictationAgent !== undefined)
       s.setUseDictationAgent(settings.useDictationAgent);
+    if (settings.cleanupFallbackEnabled !== undefined)
+      s.setCleanupFallbackEnabled(settings.cleanupFallbackEnabled);
+    if (settings.cleanupFallbackModels !== undefined)
+      s.setCleanupFallbackModels(settings.cleanupFallbackModels);
     if (settings.cleanupModel !== undefined) s.setCleanupModel(settings.cleanupModel);
     if (settings.cleanupProvider !== undefined) s.setCleanupProvider(settings.cleanupProvider);
     if (settings.cleanupCloudBaseUrl !== undefined)
@@ -3727,6 +3768,12 @@ export async function initializeSettings(): Promise<void> {
     let value: unknown;
     if (BOOLEAN_SETTINGS.has(key)) {
       value = newValue === "true";
+    } else if (key === "transcriptionFallbackModels" || key === "cleanupFallbackModels") {
+      try {
+        value = normalizeFallbackTargets(JSON.parse(newValue));
+      } catch {
+        value = [];
+      }
     } else if (ARRAY_SETTINGS.has(key)) {
       try {
         const parsed = JSON.parse(newValue);

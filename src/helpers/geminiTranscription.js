@@ -87,6 +87,7 @@ async function transcribeWithGemini(
       throw error;
     }
     const error = new Error(`Gemini API Error: ${response.status} ${errorText}`.trim());
+    error.status = response.status;
     if (response.status === 429) {
       error.code = "PROVIDER_RATE_LIMITED";
       error.messageKey = "hooks.audioRecording.errorDescriptions.providerRateLimited";

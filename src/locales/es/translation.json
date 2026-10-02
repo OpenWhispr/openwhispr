@@ -4758,5 +4758,32 @@
     },
     "start": "Tomar notas",
     "join": "Unirse y transcribir"
+  },
+  "modelFallback": {
+    "title": "Cambio automático de modelo",
+    "description": "Prueba el siguiente modelo si se agota la cuota, vence el tiempo de espera o el proveedor no está disponible.",
+    "credentials": "Usa la clave guardada del proveedor o una clave con nombre. Los modelos alternativos en la nube reciben tu dictado y pueden generar cargos.",
+    "order": "Orden de alternativas",
+    "provider": "Proveedor alternativo",
+    "model": "Modelo alternativo",
+    "modelId": "Introduce un ID de modelo de OpenRouter",
+    "empty": "Añade hasta tres modelos para probar si falla el principal.",
+    "add": "Añadir alternativa",
+    "moveUp": "Subir {{model}}",
+    "moveDown": "Bajar {{model}}",
+    "remove": "Eliminar {{model}}",
+    "unavailable": "No disponible, se omitirá",
+    "downloadLocal": "Descarga primero un modelo local en el selector de modelos.",
+    "key": "Clave API",
+    "defaultKey": "Clave guardada predeterminada",
+    "newKey": "Añadir otra clave",
+    "keyName": "Nombre de la clave",
+    "keyValue": "Clave API",
+    "saveKey": "Guardar clave",
+    "cancelKey": "Cancelar",
+    "deleteKey": "Eliminar la clave seleccionada",
+    "missingKey": "Falta la clave",
+    "keySaveError": "No se pudo guardar la clave. Comprueba el almacenamiento seguro e inténtalo de nuevo.",
+    "keyDeleteError": "No se pudo eliminar la clave. Inténtalo de nuevo."
   }
 }

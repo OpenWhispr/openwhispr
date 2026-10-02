@@ -4758,5 +4758,32 @@
     },
     "start": "Take notes",
     "join": "Join & transcribe"
+  },
+  "modelFallback": {
+    "title": "Automatic model fallback",
+    "description": "Try the next model if a request hits a quota, times out, or the provider is unavailable.",
+    "credentials": "Uses the saved provider key or a named key below. Cloud fallbacks send your dictation to that provider and may incur charges.",
+    "order": "Fallback order",
+    "provider": "Fallback provider",
+    "model": "Fallback model",
+    "modelId": "Enter an OpenRouter model ID",
+    "empty": "Add up to three models to try after your primary model fails.",
+    "add": "Add fallback",
+    "moveUp": "Move {{model}} up",
+    "moveDown": "Move {{model}} down",
+    "remove": "Remove {{model}}",
+    "unavailable": "Unavailable, will be skipped",
+    "downloadLocal": "Download a local model in the model picker first.",
+    "key": "API key",
+    "defaultKey": "Default saved key",
+    "newKey": "Add another key",
+    "keyName": "Key name",
+    "keyValue": "API key",
+    "saveKey": "Save key",
+    "cancelKey": "Cancel",
+    "deleteKey": "Delete selected key",
+    "missingKey": "Missing key",
+    "keySaveError": "Could not save the key. Check secure storage and try again.",
+    "keyDeleteError": "Could not delete the key. Try again."
   }
 }

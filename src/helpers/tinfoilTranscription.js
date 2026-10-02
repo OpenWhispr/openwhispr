@@ -58,6 +58,7 @@ async function transcribeWithTinfoil({
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
     const error = new Error(`Tinfoil API Error: ${response.status} ${errorText}`.trim());
+    error.status = response.status;
     if (response.status === 429) {
       error.code = "PROVIDER_RATE_LIMITED";
       error.messageKey = "hooks.audioRecording.errorDescriptions.providerRateLimited";

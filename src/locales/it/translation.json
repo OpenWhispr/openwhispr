@@ -4758,5 +4758,32 @@
     },
     "start": "Prendi appunti",
     "join": "Partecipa e trascrivi"
+  },
+  "modelFallback": {
+    "title": "Cambio automatico del modello",
+    "description": "Prova il modello successivo se la quota è esaurita, la richiesta scade o il provider non è disponibile.",
+    "credentials": "Usa la chiave salvata del provider o una chiave con nome qui sotto. I modelli alternativi cloud ricevono la dettatura e possono comportare costi.",
+    "order": "Ordine delle alternative",
+    "provider": "Provider alternativo",
+    "model": "Modello alternativo",
+    "modelId": "Inserisci un ID modello OpenRouter",
+    "empty": "Aggiungi fino a tre modelli da provare se quello principale non funziona.",
+    "add": "Aggiungi alternativa",
+    "moveUp": "Sposta {{model}} in alto",
+    "moveDown": "Sposta {{model}} in basso",
+    "remove": "Rimuovi {{model}}",
+    "unavailable": "Non disponibile, verrà saltato",
+    "downloadLocal": "Scarica prima un modello locale dal selettore dei modelli.",
+    "key": "Chiave API",
+    "defaultKey": "Chiave salvata predefinita",
+    "newKey": "Aggiungi un’altra chiave",
+    "keyName": "Nome della chiave",
+    "keyValue": "Chiave API",
+    "saveKey": "Salva chiave",
+    "cancelKey": "Annulla",
+    "deleteKey": "Elimina la chiave selezionata",
+    "missingKey": "Chiave mancante",
+    "keySaveError": "Impossibile salvare la chiave. Controlla l’archiviazione sicura e riprova.",
+    "keyDeleteError": "Impossibile eliminare la chiave. Riprova."
   }
 }

@@ -4758,5 +4758,32 @@
     },
     "start": "开始记录",
     "join": "加入并转录"
+  },
+  "modelFallback": {
+    "title": "自动切换备用模型",
+    "description": "请求达到配额、超时或提供商不可用时，尝试下一个模型。",
+    "credentials": "使用已保存的提供商密钥或下方的命名密钥。云端备用模型会接收你的语音输入，并可能产生费用。",
+    "order": "备用顺序",
+    "provider": "备用提供商",
+    "model": "备用模型",
+    "modelId": "输入 OpenRouter 模型 ID",
+    "empty": "最多添加三个模型，在主模型失败后依次尝试。",
+    "add": "添加备用模型",
+    "moveUp": "上移 {{model}}",
+    "moveDown": "下移 {{model}}",
+    "remove": "移除 {{model}}",
+    "unavailable": "不可用，将跳过",
+    "downloadLocal": "请先在模型选择器中下载本地模型。",
+    "key": "API 密钥",
+    "defaultKey": "已保存的默认密钥",
+    "newKey": "添加另一密钥",
+    "keyName": "密钥名称",
+    "keyValue": "API 密钥",
+    "saveKey": "保存密钥",
+    "cancelKey": "取消",
+    "deleteKey": "删除所选密钥",
+    "missingKey": "密钥缺失",
+    "keySaveError": "无法保存密钥。请检查安全存储并重试。",
+    "keyDeleteError": "无法删除密钥。请重试。"
   }
 }

@@ -4758,5 +4758,32 @@
     },
     "start": "Fazer anotações",
     "join": "Entrar e transcrever"
+  },
+  "modelFallback": {
+    "title": "Alternância automática de modelo",
+    "description": "Tenta o próximo modelo se a cota for atingida, o tempo esgotar ou o provedor estiver indisponível.",
+    "credentials": "Usa a chave salva do provedor ou uma chave nomeada abaixo. Os modelos alternativos na nuvem recebem seu ditado e podem gerar cobranças.",
+    "order": "Ordem das alternativas",
+    "provider": "Provedor alternativo",
+    "model": "Modelo alternativo",
+    "modelId": "Insira um ID de modelo do OpenRouter",
+    "empty": "Adicione até três modelos para tentar se o principal falhar.",
+    "add": "Adicionar alternativa",
+    "moveUp": "Mover {{model}} para cima",
+    "moveDown": "Mover {{model}} para baixo",
+    "remove": "Remover {{model}}",
+    "unavailable": "Indisponível, será ignorado",
+    "downloadLocal": "Primeiro baixe um modelo local no seletor de modelos.",
+    "key": "Chave API",
+    "defaultKey": "Chave salva padrão",
+    "newKey": "Adicionar outra chave",
+    "keyName": "Nome da chave",
+    "keyValue": "Chave API",
+    "saveKey": "Salvar chave",
+    "cancelKey": "Cancelar",
+    "deleteKey": "Excluir a chave selecionada",
+    "missingKey": "Chave ausente",
+    "keySaveError": "Não foi possível salvar a chave. Verifique o armazenamento seguro e tente novamente.",
+    "keyDeleteError": "Não foi possível excluir a chave. Tente novamente."
   }
 }

@@ -1,3 +1,5 @@
+const { FallbackKeyStore } = require("./fallbackKeys");
+const secretCrypto = require("./secretCrypto");
 const { OrukeetStreaming, MANAGED_STREAM_OPTIONS } = require("./orukeetStreaming");
 const { connectManagedOrukeet } = require("./orukeetCloudSession");
 const { ipcMain, app, shell, BrowserWindow, systemPreferences, net, session } = require("electron");
@@ -52,7 +54,13 @@ const serializeIpcError =
     try {
       return await fn(...args);
     } catch (error) {
-      return { error: error.message, code: error.code, messageKey: error.messageKey };
+      return {
+        error: error.message,
+        code: error.code,
+        messageKey: error.messageKey,
+        status: error.status,
+        name: error.name,
+      };
     }
   };
 
@@ -601,6 +609,10 @@ const CLEANUP_EMPTY_REPLY_MESSAGE_KEY = "hooks.audioRecording.errorDescriptions.
 class IPCHandlers {
   constructor(managers) {
     this.environmentManager = managers.environmentManager;
+    this.fallbackKeys = new FallbackKeyStore({
+      directory: path.join(app.getPath("userData"), "secure-keys"),
+      crypto: secretCrypto,
+    });
     this.databaseManager = managers.databaseManager;
     this.clipboardManager = managers.clipboardManager;
     this.whisperManager = managers.whisperManager;
@@ -1562,6 +1574,35 @@ class IPCHandlers {
     ipcMain.handle("resize-dictation-error-window-to-content", (event, surfaceHeight) => {
       return this.windowManager.resizeDictationErrorWindowToContent(surfaceHeight);
     });
+
+    ipcMain.handle("list-fallback-keys", async () => {
+      try {
+        return { success: true, profiles: await this.fallbackKeys.list() };
+      } catch {
+        return { success: false, error: "Could not read saved fallback keys" };
+      }
+    });
+    ipcMain.handle("save-fallback-key", async (_event, input) => {
+      try {
+        const profile = await this.fallbackKeys.save(input);
+        broadcastToWindows("fallback-keys-changed");
+        return { success: true, profile };
+      } catch {
+        return { success: false, error: "Could not save fallback key" };
+      }
+    });
+    ipcMain.handle("delete-fallback-key", async (_event, id) => {
+      try {
+        await this.fallbackKeys.remove(id);
+        broadcastToWindows("fallback-keys-changed");
+        return { success: true };
+      } catch {
+        return { success: false, error: "Could not delete fallback key" };
+      }
+    });
+    ipcMain.handle("get-fallback-key", (_event, id, provider) =>
+      this.fallbackKeys.getKey(id, provider)
+    );
 
     for (const k of BYOK_API_KEYS) {
       ipcMain.handle(`get-${k.base}-key`, () => this.environmentManager[k.get]());
@@ -4581,8 +4622,10 @@ class IPCHandlers {
 
     ipcMain.handle(
       "proxy-xai-transcription",
-      serializeIpcError(async (event, { audioBuffer, language, keyterms }) => {
-        const apiKey = this.environmentManager.getXaiKey();
+      serializeIpcError(async (event, { audioBuffer, language, keyterms, fallbackKeyId }) => {
+        const apiKey = fallbackKeyId
+          ? await this.fallbackKeys.getKey(fallbackKeyId, "xai")
+          : this.environmentManager.getXaiKey();
         if (!apiKey) {
           throw new Error("xAI API key not configured");
         }
@@ -4609,7 +4652,9 @@ class IPCHandlers {
 
         if (!response.ok) {
           const errorText = await response.text();
-          throw new Error(`xAI API Error: ${response.status} ${errorText}`);
+          throw Object.assign(new Error(`xAI API Error: ${response.status} ${errorText}`), {
+            status: response.status,
+          });
         }
 
         return await response.json();
@@ -4618,40 +4663,46 @@ class IPCHandlers {
 
     ipcMain.handle(
       "proxy-mistral-transcription",
-      serializeIpcError(async (event, { audioBuffer, model, language, contextBias }) => {
-        const apiKey = this.environmentManager.getMistralKey();
-        if (!apiKey) {
-          throw new Error("Mistral API key not configured");
-        }
-
-        const formData = new FormData();
-        const audioBlob = new Blob([Buffer.from(audioBuffer)], { type: "audio/webm" });
-        formData.append("file", audioBlob, "audio.webm");
-        formData.append("model", model || "voxtral-mini-latest");
-        if (language && language !== "auto") {
-          formData.append("language", language);
-        }
-        if (contextBias && contextBias.length > 0) {
-          for (const token of contextBias) {
-            formData.append("context_bias", token);
+      serializeIpcError(
+        async (event, { audioBuffer, model, language, contextBias, fallbackKeyId }) => {
+          const apiKey = fallbackKeyId
+            ? await this.fallbackKeys.getKey(fallbackKeyId, "mistral")
+            : this.environmentManager.getMistralKey();
+          if (!apiKey) {
+            throw new Error("Mistral API key not configured");
           }
+
+          const formData = new FormData();
+          const audioBlob = new Blob([Buffer.from(audioBuffer)], { type: "audio/webm" });
+          formData.append("file", audioBlob, "audio.webm");
+          formData.append("model", model || "voxtral-mini-latest");
+          if (language && language !== "auto") {
+            formData.append("language", language);
+          }
+          if (contextBias && contextBias.length > 0) {
+            for (const token of contextBias) {
+              formData.append("context_bias", token);
+            }
+          }
+
+          const response = await proxyFetch(MISTRAL_TRANSCRIPTION_URL, {
+            method: "POST",
+            headers: {
+              "x-api-key": apiKey,
+            },
+            body: formData,
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw Object.assign(new Error(`Mistral API Error: ${response.status} ${errorText}`), {
+              status: response.status,
+            });
+          }
+
+          return await response.json();
         }
-
-        const response = await proxyFetch(MISTRAL_TRANSCRIPTION_URL, {
-          method: "POST",
-          headers: {
-            "x-api-key": apiKey,
-          },
-          body: formData,
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Mistral API Error: ${response.status} ${errorText}`);
-        }
-
-        return await response.json();
-      })
+      )
     );
 
     ipcMain.handle("get-corti-client-id", async () => {
@@ -4698,14 +4749,16 @@ class IPCHandlers {
     // Enclave attestation is Node-only, so batch transcription is proxied through main.
     ipcMain.handle(
       "proxy-tinfoil-transcription",
-      serializeIpcError(async (event, { audioBuffer, language, prompt }) => {
+      serializeIpcError(async (event, { audioBuffer, language, prompt, fallbackKeyId }) => {
         return await transcribeWithTinfoil({
           audioBuffer: Buffer.from(audioBuffer),
           fileName: "audio.webm",
           contentType: "audio/webm",
           language,
           prompt,
-          apiKey: this.environmentManager.getTinfoilKey(),
+          apiKey: fallbackKeyId
+            ? await this.fallbackKeys.getKey(fallbackKeyId, "tinfoil")
+            : this.environmentManager.getTinfoilKey(),
         });
       })
     );
@@ -4714,16 +4767,20 @@ class IPCHandlers {
     // OpenAI-compatible multipart, so batch transcription is proxied through main.
     ipcMain.handle(
       "proxy-gemini-transcription",
-      serializeIpcError(async (event, { audioBuffer, model, language, keyterms }) => {
-        return await transcribeWithGemini({
-          audioBuffer: Buffer.from(audioBuffer),
-          model,
-          contentType: "audio/webm",
-          language,
-          keyterms,
-          apiKey: this.environmentManager.getGeminiKey(),
-        });
-      })
+      serializeIpcError(
+        async (event, { audioBuffer, model, language, keyterms, fallbackKeyId }) => {
+          return await transcribeWithGemini({
+            audioBuffer: Buffer.from(audioBuffer),
+            model,
+            contentType: "audio/webm",
+            language,
+            keyterms,
+            apiKey: fallbackKeyId
+              ? await this.fallbackKeys.getKey(fallbackKeyId, "gemini")
+              : this.environmentManager.getGeminiKey(),
+          });
+        }
+      )
     );
 
     ipcMain.handle("get-custom-transcription-key", async () => {
@@ -5342,7 +5399,9 @@ class IPCHandlers {
       "process-anthropic-reasoning",
       async (event, text, modelId, _agentName, config) => {
         try {
-          const apiKey = this.environmentManager.getAnthropicKey();
+          const apiKey = config?.fallbackKeyId
+            ? await this.fallbackKeys.getKey(config.fallbackKeyId, "anthropic")
+            : this.environmentManager.getAnthropicKey();
 
           if (!apiKey) {
             throw new Error("Anthropic API key not configured");
@@ -5399,10 +5458,13 @@ class IPCHandlers {
             } catch {
               errorData = { error: errorText || response.statusText };
             }
-            throw new Error(
-              errorData.error?.message ||
-                errorData.error ||
-                `Anthropic API error: ${response.status}`
+            throw Object.assign(
+              new Error(
+                errorData.error?.message ||
+                  errorData.error ||
+                  `Anthropic API error: ${response.status}`
+              ),
+              { status: response.status }
             );
           }
 
@@ -5421,7 +5483,14 @@ class IPCHandlers {
           return { success: true, text: outputText };
         } catch (error) {
           debugLogger.error("Anthropic reasoning error:", error);
-          return { success: false, error: error.message, messageKey: error.messageKey };
+          return {
+            success: false,
+            error: error.message,
+            messageKey: error.messageKey,
+            status: error.status,
+            code: error.code,
+            name: error.name,
+          };
         }
       }
     );

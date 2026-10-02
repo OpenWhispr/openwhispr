@@ -1,3 +1,4 @@
+import ModelFallbackSettings from "./ModelFallbackSettings";
 import { useCallback } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
@@ -314,6 +315,7 @@ export default function InferenceConfigEditor({
           setLocalReasoningProvider={setProvider}
         />
       )}
+      {scope === "dictationCleanup" && <ModelFallbackSettings stage="cleanup" />}
     </div>
   );
 }

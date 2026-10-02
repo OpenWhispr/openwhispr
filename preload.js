@@ -610,6 +610,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setUiLanguage: (language) => ipcRenderer.invoke("set-ui-language", language),
 
   // xAI / Mistral transcription proxies (keys handled by the manifest bridge)
+  listFallbackKeys: () => ipcRenderer.invoke("list-fallback-keys"),
+  saveFallbackKey: (profile) => ipcRenderer.invoke("save-fallback-key", profile),
+  deleteFallbackKey: (id) => ipcRenderer.invoke("delete-fallback-key", id),
+  getFallbackKey: (id, provider) => ipcRenderer.invoke("get-fallback-key", id, provider),
+  onFallbackKeysChanged: registerListener("fallback-keys-changed"),
   proxyXaiTranscription: (data) => ipcRenderer.invoke("proxy-xai-transcription", data),
   proxyMistralTranscription: (data) => ipcRenderer.invoke("proxy-mistral-transcription", data),
   proxyGeminiTranscription: (data) => ipcRenderer.invoke("proxy-gemini-transcription", data),

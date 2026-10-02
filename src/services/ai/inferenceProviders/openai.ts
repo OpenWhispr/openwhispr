@@ -223,7 +223,10 @@ export const openaiProvider: InferenceProvider = {
       });
     }
 
-    const retryStrategy = createApiRetryStrategy();
+    const retryStrategy = {
+      ...createApiRetryStrategy(),
+      ...(config.skipProviderRetries ? { maxRetries: 0 } : {}),
+    };
     const response = await withRetry(async () => {
       let lastError: Error | null = null;
       let lastRetryableError: Error | null = null;

@@ -49,21 +49,24 @@ export const tinfoilProvider: InferenceProvider = {
 
     // Keep SDK-internal retries off so withRetry stays the single retry layer.
     const timeoutSeconds = getLlmRequestTimeoutSeconds({ scope: config.inferenceScope });
-    const response = await withRetry(async () => {
-      try {
-        return await client.chat.completions.create(requestBody as any, {
-          timeout: timeoutSeconds * 1000,
-          maxRetries: 0,
-        });
-      } catch (error) {
-        // The SDK reports an expired deadline as a connection error, which
-        // withRetry would otherwise treat as a network drop and re-send.
-        if ((error as Error).name === "APIConnectionTimeoutError") {
-          throw llmRequestTimeoutError(timeoutSeconds);
+    const response = await withRetry(
+      async () => {
+        try {
+          return await client.chat.completions.create(requestBody as any, {
+            timeout: timeoutSeconds * 1000,
+            maxRetries: 0,
+          });
+        } catch (error) {
+          // The SDK reports an expired deadline as a connection error, which
+          // withRetry would otherwise treat as a network drop and re-send.
+          if ((error as Error).name === "APIConnectionTimeoutError") {
+            throw llmRequestTimeoutError(timeoutSeconds);
+          }
+          throw error;
         }
-        throw error;
-      }
-    }, createApiRetryStrategy());
+      },
+      { ...createApiRetryStrategy(), ...(config.skipProviderRetries ? { maxRetries: 0 } : {}) }
+    );
 
     const responseText =
       response.choices

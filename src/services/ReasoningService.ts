@@ -1,3 +1,7 @@
+import { runModelFallback } from "../helpers/modelFallback";
+import { getFallbackProvider, getDownloadedFallbackModels } from "../helpers/modelFallbackModels";
+import { isLlmSelectionAllowed } from "../stores/policyRules";
+import { usePolicyStore } from "../stores/policyStore";
 import {
   resolveInferenceProvider,
   getCloudModel,
@@ -330,84 +334,87 @@ class ReasoningService extends BaseReasoningService {
     const openCodeHeaders = openCodeSessionHeaders(endpoint);
 
     const requestGeneration = this.requestCancellationGeneration;
-    const response = await withRetry(async () => {
-      if (requestGeneration !== this.requestCancellationGeneration) {
-        throw httpError("Request cancelled", 499);
-      }
-      const controller = new AbortController();
-      this.activeRequestControllers.add(controller);
-      const timeoutSeconds = getLlmRequestTimeoutSeconds({ scope: config.inferenceScope });
-      const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
-      try {
-        const headers: Record<string, string> = {
-          "Content-Type": "application/json",
-          ...openCodeHeaders,
-        };
-        if (apiKey) {
-          headers["Authorization"] = `Bearer ${apiKey}`;
+    const response = await withRetry(
+      async () => {
+        if (requestGeneration !== this.requestCancellationGeneration) {
+          throw httpError("Request cancelled", 499);
         }
-
-        const res = await fetchWithParamFallback(
-          () =>
-            fetch(endpoint, {
-              method: "POST",
-              headers,
-              body: JSON.stringify(requestBody),
-              signal: controller.signal,
-            }),
-          requestBody,
-          logParamFallback(`${providerName.toUpperCase()}_PARAM_FALLBACK`)
-        );
-
-        if (!res.ok) {
-          const errorText = await res.text();
-          let errorData: any = { error: res.statusText };
-
-          try {
-            errorData = JSON.parse(errorText);
-          } catch {
-            errorData = { error: errorText || res.statusText };
+        const controller = new AbortController();
+        this.activeRequestControllers.add(controller);
+        const timeoutSeconds = getLlmRequestTimeoutSeconds({ scope: config.inferenceScope });
+        const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
+        try {
+          const headers: Record<string, string> = {
+            "Content-Type": "application/json",
+            ...openCodeHeaders,
+          };
+          if (apiKey) {
+            headers["Authorization"] = `Bearer ${apiKey}`;
           }
 
-          const errorMessage = extractApiErrorMessage(
-            errorData,
-            `${providerName} API error: ${res.status}`
+          const res = await fetchWithParamFallback(
+            () =>
+              fetch(endpoint, {
+                method: "POST",
+                headers,
+                body: JSON.stringify(requestBody),
+                signal: controller.signal,
+              }),
+            requestBody,
+            logParamFallback(`${providerName.toUpperCase()}_PARAM_FALLBACK`)
           );
 
-          logger.logReasoning(`${providerName.toUpperCase()}_API_ERROR_DETAIL`, {
-            status: res.status,
-            statusText: res.statusText,
-            error: errorData,
-            errorMessage,
-            fullResponse: errorText.substring(0, 500),
-          });
-          throw httpError(errorMessage, res.status);
-        }
+          if (!res.ok) {
+            const errorText = await res.text();
+            let errorData: any = { error: res.statusText };
 
-        const jsonResponse = await res.json();
+            try {
+              errorData = JSON.parse(errorText);
+            } catch {
+              errorData = { error: errorText || res.statusText };
+            }
 
-        logger.logReasoning(`${providerName.toUpperCase()}_RAW_RESPONSE`, {
-          hasResponse: !!jsonResponse,
-          responseKeys: jsonResponse ? Object.keys(jsonResponse) : [],
-          hasChoices: !!jsonResponse?.choices,
-          choicesLength: jsonResponse?.choices?.length || 0,
-          fullResponse: JSON.stringify(jsonResponse).substring(0, 500),
-        });
+            const errorMessage = extractApiErrorMessage(
+              errorData,
+              `${providerName} API error: ${res.status}`
+            );
 
-        return jsonResponse;
-      } catch (error) {
-        if ((error as Error).name === "AbortError") {
-          if (requestGeneration !== this.requestCancellationGeneration) {
-            throw httpError("Request cancelled", 499);
+            logger.logReasoning(`${providerName.toUpperCase()}_API_ERROR_DETAIL`, {
+              status: res.status,
+              statusText: res.statusText,
+              error: errorData,
+              errorMessage,
+              fullResponse: errorText.substring(0, 500),
+            });
+            throw httpError(errorMessage, res.status);
           }
-          throw llmRequestTimeoutError(timeoutSeconds);
+
+          const jsonResponse = await res.json();
+
+          logger.logReasoning(`${providerName.toUpperCase()}_RAW_RESPONSE`, {
+            hasResponse: !!jsonResponse,
+            responseKeys: jsonResponse ? Object.keys(jsonResponse) : [],
+            hasChoices: !!jsonResponse?.choices,
+            choicesLength: jsonResponse?.choices?.length || 0,
+            fullResponse: JSON.stringify(jsonResponse).substring(0, 500),
+          });
+
+          return jsonResponse;
+        } catch (error) {
+          if ((error as Error).name === "AbortError") {
+            if (requestGeneration !== this.requestCancellationGeneration) {
+              throw httpError("Request cancelled", 499);
+            }
+            throw llmRequestTimeoutError(timeoutSeconds);
+          }
+          throw error;
+        } finally {
+          clearTimeout(timeoutId);
+          this.activeRequestControllers.delete(controller);
         }
-        throw error;
-      } finally {
-        clearTimeout(timeoutId);
-        this.activeRequestControllers.delete(controller);
-      }
-    }, createApiRetryStrategy());
+      },
+      { ...createApiRetryStrategy(), ...(config.skipProviderRetries ? { maxRetries: 0 } : {}) }
+    );
 
     if (!response.choices || !response.choices[0]) {
       logger.logReasoning(`${providerName.toUpperCase()}_RESPONSE_ERROR`, {
@@ -453,6 +460,98 @@ class ReasoningService extends BaseReasoningService {
   }
 
   async processText(
+    text: string,
+    model: string = "",
+    agentName: string | null = null,
+    config: ReasoningConfig = {},
+    primaryAttempt?: () => Promise<string>
+  ): Promise<string> {
+    const managed = this.resolveManagedScope(model, config.provider, config, "dictationCleanup");
+    const settings = getSettings();
+    if (managed.isManaged) return this.processTextOnce(text, model, agentName, config);
+    if (
+      managed.config.inferenceScope !== "dictationCleanup" ||
+      config.requiresAgent ||
+      !settings.cleanupFallbackEnabled ||
+      !settings.cleanupFallbackModels.length
+    ) {
+      return primaryAttempt
+        ? primaryAttempt()
+        : this.processTextOnce(text, model, agentName, config);
+    }
+    const generation = this.requestCancellationGeneration;
+    const provider = config.lanUrl
+      ? "lan"
+      : (config.provider ??
+        (settings.cleanupMode === "openwhispr"
+          ? "openwhispr"
+          : settings.cleanupMode === "self-hosted"
+            ? "lan"
+            : settings.cleanupProvider));
+    const primary = {
+      provider: resolveInferenceProvider(provider, model) || provider,
+      model,
+      keyId: config.fallbackKeyId,
+    };
+    assertReasoningAllowedByPolicy(
+      primary.provider,
+      resolveLlmDispatchMode(primary.provider, config)
+    );
+    const result = await runModelFallback({
+      primary,
+      targets: settings.cleanupFallbackModels,
+      wasCancelled: () => generation !== this.requestCancellationGeneration,
+      isAllowed: async (target) => {
+        const entry = getFallbackProvider("cleanup", target);
+        if (
+          !entry ||
+          !isLlmSelectionAllowed(usePolicyStore.getState(), {
+            mode: entry.local ? "local" : "providers",
+            provider: target.provider,
+          })
+        )
+          return false;
+        try {
+          if (entry.local) return (await getDownloadedFallbackModels("cleanup")).has(target.model);
+          if (target.keyId)
+            return (
+              (await window.electronAPI.listFallbackKeys?.())?.profiles?.some(
+                (profile) => profile.id === target.keyId && profile.provider === target.provider
+              ) ?? false
+            );
+          return !!(await this.getApiKey(
+            target.provider as Parameters<ReasoningService["getApiKey"]>[0]
+          ));
+        } catch {
+          return false;
+        }
+      },
+      attempt: (target, isFallback) =>
+        !isFallback && primaryAttempt
+          ? primaryAttempt()
+          : this.processTextOnce(text, target.model, agentName, {
+              ...config,
+              skipProviderRetries: true,
+              ...(isFallback
+                ? {
+                    provider: target.provider,
+                    fallbackKeyId: target.keyId,
+                    baseUrl: undefined,
+                    lanUrl: undefined,
+                    customApiKey: undefined,
+                  }
+                : {}),
+            }),
+    });
+    if (result.usedFallback)
+      logger.logReasoning("CLEANUP_MODEL_FALLBACK", {
+        provider: result.target.provider,
+        model: result.target.model,
+      });
+    return result.value;
+  }
+
+  private async processTextOnce(
     text: string,
     model: string = "",
     agentName: string | null = null,
@@ -514,6 +613,25 @@ class ReasoningService extends BaseReasoningService {
       throw new Error(`Unsupported reasoning provider: ${providerId}`);
     }
 
+    const generation = this.requestCancellationGeneration;
+    let ctx = this.providerContext;
+    if (dispatchConfig.fallbackKeyId && providerId !== "anthropic") {
+      const apiKey = await window.electronAPI.getFallbackKey?.(
+        dispatchConfig.fallbackKeyId,
+        providerId
+      );
+      if (!apiKey)
+        throw Object.assign(new Error("Fallback key is unavailable"), { code: "API_KEY_MISSING" });
+      ctx = {
+        ...ctx,
+        getApiKey: async (provider) => {
+          if (provider !== providerId) throw new Error("Fallback key provider mismatch");
+          return apiKey;
+        },
+      };
+    }
+    if (generation !== this.requestCancellationGeneration)
+      throw Object.assign(new Error("Request cancelled"), { name: "AbortError" });
     const startTime = Date.now();
     try {
       const result = await handler.call({
@@ -521,7 +639,7 @@ class ReasoningService extends BaseReasoningService {
         model: trimmedModel,
         agentName,
         config: dispatchConfig,
-        ctx: this.providerContext,
+        ctx,
       });
 
       if (validateCleanup) assertValidCleanupOutput(text, result);

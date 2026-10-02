@@ -1,3 +1,4 @@
+import type { FallbackTarget } from "../helpers/modelFallback";
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
@@ -32,6 +33,8 @@ export interface TranscriptionSettings {
   cohereModel: string;
   allowOpenAIFallback: boolean;
   allowLocalFallback: boolean;
+  transcriptionFallbackEnabled: boolean;
+  transcriptionFallbackModels: FallbackTarget[];
   fallbackWhisperModel: string;
   preferredLanguage: string;
   /** When transcription language is Auto, force Chinese output script. See #975. */
@@ -54,6 +57,8 @@ export interface CleanupSettings {
   autoGenerateNoteTitle: boolean;
   useCleanupModel: boolean;
   useDictationAgent: boolean;
+  cleanupFallbackEnabled: boolean;
+  cleanupFallbackModels: FallbackTarget[];
   cleanupModel: string;
   cleanupProvider: string;
   cleanupCloudBaseUrl?: string;
@@ -295,6 +300,8 @@ function useSettingsInternal() {
     cohereModel: store.cohereModel,
     allowOpenAIFallback: store.allowOpenAIFallback,
     allowLocalFallback: store.allowLocalFallback,
+    transcriptionFallbackEnabled: store.transcriptionFallbackEnabled,
+    transcriptionFallbackModels: store.transcriptionFallbackModels,
     fallbackWhisperModel: store.fallbackWhisperModel,
     preferredLanguage: store.preferredLanguage,
     chineseScriptPreference: store.chineseScriptPreference,
@@ -319,6 +326,8 @@ function useSettingsInternal() {
     setAutoGenerateNoteTitle: store.setAutoGenerateNoteTitle,
     useCleanupModel: store.useCleanupModel,
     useDictationAgent: store.useDictationAgent,
+    cleanupFallbackEnabled: store.cleanupFallbackEnabled,
+    cleanupFallbackModels: store.cleanupFallbackModels,
     cleanupModel: store.cleanupModel,
     cleanupProvider: store.cleanupProvider,
     openaiApiKey: store.openaiApiKey,
@@ -345,6 +354,8 @@ function useSettingsInternal() {
     setCohereModel: store.setCohereModel,
     setAllowOpenAIFallback: store.setAllowOpenAIFallback,
     setAllowLocalFallback: store.setAllowLocalFallback,
+    setTranscriptionFallbackEnabled: store.setTranscriptionFallbackEnabled,
+    setTranscriptionFallbackModels: store.setTranscriptionFallbackModels,
     setFallbackWhisperModel: store.setFallbackWhisperModel,
     setPreferredLanguage: store.setPreferredLanguage,
     setChineseScriptPreference: store.setChineseScriptPreference,
@@ -364,6 +375,8 @@ function useSettingsInternal() {
     updateCustomDictionary: store.updateCustomDictionary,
     setUseCleanupModel: store.setUseCleanupModel,
     setUseDictationAgent: store.setUseDictationAgent,
+    setCleanupFallbackEnabled: store.setCleanupFallbackEnabled,
+    setCleanupFallbackModels: store.setCleanupFallbackModels,
     setCleanupModel: store.setCleanupModel,
     setCleanupProvider: store.setCleanupProvider,
     setOpenaiApiKey: store.setOpenaiApiKey,
