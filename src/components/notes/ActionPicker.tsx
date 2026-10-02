@@ -26,7 +26,6 @@ export default function ActionPicker({
   const { t } = useTranslation();
   const [lastUsedId, setLastUsedId] = useState(() => Number(localStorage.getItem(LAST_ACTION_KEY)));
   const current = actions.find((action) => action.id === lastUsedId) ?? actions[0];
-  if (!current) return null;
 
   const run = (action: ActionItem) => {
     setLastUsedId(action.id);

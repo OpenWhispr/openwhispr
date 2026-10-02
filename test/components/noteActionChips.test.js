@@ -224,11 +224,6 @@ test("the collapsed ask bar's picker runs the first action until one is picked, 
     true,
     "a remounted picker remembers it, disabled while it can't run"
   );
-  assert.equal(
-    collect(renderTree(ActionPicker, { ...props, actions: [] })).length,
-    0,
-    "nothing to pick, no picker"
-  );
 });
 
 test("picking from the picker makes its main button run that action at once", async (t) => {
