@@ -106,7 +106,7 @@
     "autoprefixer": "^10.5.0",
     "concurrently": "^10.0.3",
     "cross-env": "^10.0.0",
-    "electron": "^41.10.7",
+    "electron": "^44.4.5",
     "electron-builder": "^26.4.0",
     "emojibase-data": "^17.0.0",
     "eslint": "^10.7.0",
