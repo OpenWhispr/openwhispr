@@ -2161,6 +2161,7 @@ declare global {
         model?: string;
         language?: string;
         keyterms?: string[];
+        mode?: "verbatim" | "smart";
       }) => Promise<ProxyTranscriptionResult>;
 
       // Groq API key management

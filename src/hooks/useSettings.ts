@@ -38,6 +38,8 @@ export interface TranscriptionSettings {
   chineseScriptPreference: ChineseScriptPreference;
   cloudTranscriptionProvider: string;
   cloudTranscriptionModel: string;
+  /** Opt-in smart formatting for Gemini batch dictation only. */
+  geminiDictationMode: "verbatim" | "smart";
   cloudTranscriptionBaseUrl?: string;
   cloudTranscriptionMode: string;
   transcriptionMode: InferenceMode;
@@ -300,6 +302,7 @@ function useSettingsInternal() {
     chineseScriptPreference: store.chineseScriptPreference,
     cloudTranscriptionProvider: store.cloudTranscriptionProvider,
     cloudTranscriptionModel: store.cloudTranscriptionModel,
+    geminiDictationMode: store.geminiDictationMode,
     cloudTranscriptionBaseUrl: store.cloudTranscriptionBaseUrl,
     cleanupCloudBaseUrl: store.cleanupCloudBaseUrl,
     cloudTranscriptionMode: store.cloudTranscriptionMode,
@@ -350,6 +353,7 @@ function useSettingsInternal() {
     setChineseScriptPreference: store.setChineseScriptPreference,
     setCloudTranscriptionProvider: store.setCloudTranscriptionProvider,
     setCloudTranscriptionModel: store.setCloudTranscriptionModel,
+    setGeminiDictationMode: store.setGeminiDictationMode,
     setCloudTranscriptionBaseUrl: store.setCloudTranscriptionBaseUrl,
     setCloudTranscriptionMode: store.setCloudTranscriptionMode,
     setCleanupCloudBaseUrl: store.setCleanupCloudBaseUrl,

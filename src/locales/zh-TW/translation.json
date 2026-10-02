@@ -855,6 +855,12 @@
     }
   },
   "transcription": {
+    "geminiDictationMode": {
+      "label": "聽寫轉錄模式",
+      "verbatim": "逐字（預設）",
+      "smart": "Smart",
+      "description": "Smart 無需額外的清理請求即可刪除語氣詞和重複內容，並套用口頭更正。它會改變措辭，可能遺漏原本想表達的內容。逐字模式保留所說的話。獨立的聽寫清理設定不會改變。"
+    },
     "modelCard": "模型卡",
     "deleteModel": {
       "title": "刪除模型",

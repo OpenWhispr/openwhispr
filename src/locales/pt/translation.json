@@ -834,6 +834,12 @@
     }
   },
   "transcription": {
+    "geminiDictationMode": {
+      "label": "Modo de transcrição do ditado",
+      "verbatim": "Literal (padrão)",
+      "smart": "Smart",
+      "description": "Smart remove palavras de preenchimento e repetições e aplica correções faladas sem uma chamada de limpeza adicional. Altera suas palavras e pode omitir conteúdo intencional. Literal preserva o que você diz. A configuração separada de limpeza do ditado não muda."
+    },
     "modelCard": "Ficha do modelo",
     "deleteModel": {
       "title": "Excluir modelo",
