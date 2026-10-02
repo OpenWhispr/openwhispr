@@ -5,9 +5,10 @@ import type { GrassRustle } from "../utils/grassRustle";
 import "../styles/touch-grass.css";
 
 // The lawn is one flat field from the bottom of the scene to the horizon, drawn as a
-// grid of patches: rows by depth, a few columns across. Only the patches animate
-// (growth, breeze), so the GPU moves about a hundred textures a frame; the tufts
-// inside them are painted once, and repainted only while the hand parts them.
+// grid of patches: rows by depth, a few columns across. Besides the opening fades and
+// the gust sheen, only the patches animate (growth, breeze), so the GPU moves about a
+// hundred textures a frame; the tufts inside them are painted once, and repainted only
+// while the hand parts them.
 const HORIZON = 48; // % of the scene from the bottom
 const ROWS = 16;
 const SEGMENTS = 6;

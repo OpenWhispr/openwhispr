@@ -1,6 +1,6 @@
 /* "Touch grass" scene on the empty day card (TouchGrass.tsx). CSS only: a flat, sunny
-   green field from the bottom of the scene to the horizon under a blue sky, which
-   grows in over bare soil, covered by rows of curved blades in perspective. Every
+   green field from the bottom of the scene to the horizon, which grows in over bare
+   soil, covered by rows of curved blades in perspective, under a blue sky. Every
    animation runs on transform or opacity, so the compositor carries the breeze; JS
    only re-leans the tufts near the hand. */
 
@@ -28,24 +28,18 @@
   content: "";
   position: absolute;
   inset: 0;
-  pointer-events: none;
   background: linear-gradient(#4fa8ee, #8ccbf5 30%, #cdebfb 52%);
   animation: touch-grass-fade-in 1.6s ease-out backwards;
 }
 
 /* The keyboard focus ring, drawn over the sky and the lawn: a ring on the scene itself
-   would paint under them. White, as on the app's other coloured surfaces, since the
-   blue ring vanishes against both. Rounded at the bottom too, where the day card's
-   corners clip the scene. */
-.touch-grass::after {
+   would paint under them. White, since the app's blue ring vanishes against both.
+   Rounded at the bottom too, where the day card's corners clip the scene. */
+.touch-grass:focus-visible::after {
   content: "";
   position: absolute;
   inset: 0;
-  pointer-events: none;
   border-radius: var(--radius-xl);
-}
-
-.touch-grass:focus-visible::after {
   box-shadow: inset 0 0 0 2px rgb(255 255 255);
 }
 
@@ -86,7 +80,8 @@
 }
 
 /* The light a gust throws across the lawn as it bends the blades, sweeping left to
-   right. One layer moved by transform, so it costs the compositor next to nothing. */
+   right from when the breeze starts (WAVE_START_S in TouchGrass.tsx). One layer moved
+   by transform, so it costs the compositor next to nothing. */
 .touch-grass__gust {
   position: absolute;
   left: 0;
