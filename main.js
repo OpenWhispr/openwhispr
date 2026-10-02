@@ -731,11 +731,7 @@ app.on("open-url", (event, url) => {
 
   void handleOAuthDeepLink(url);
 
-  if (windowManager && isLiveWindow(windowManager.controlPanelWindow)) {
-    windowManager.controlPanelWindow.show();
-    windowManager.controlPanelWindow.focus();
-    dockManager.setControlPanelVisible(true);
-  }
+  windowManager?.showControlPanel();
 });
 
 function isInvitationDeepLink(url) {
@@ -835,9 +831,7 @@ function handleInvitationDeepLink(deepLinkUrl) {
     pendingInvitationDeepLinkToken = token;
     if (!windowManager) return;
     if (isLiveWindow(windowManager.controlPanelWindow)) {
-      windowManager.controlPanelWindow.show();
-      windowManager.controlPanelWindow.focus();
-      dockManager.setControlPanelVisible(true);
+      windowManager.showControlPanel();
       // Best-effort fast path — the get-pending-invitation-token pull is the reliable path.
       windowManager.controlPanelWindow.webContents.send("workspace-invitation-token", token);
     } else {
@@ -946,9 +940,7 @@ async function applySessionTokenAndRefresh(token) {
       oauthProtocol: OAUTH_PROTOCOL,
     });
   }
-  windowManager.controlPanelWindow.show();
-  windowManager.controlPanelWindow.focus();
-  dockManager.setControlPanelVisible(true);
+  windowManager.showControlPanel();
 }
 
 async function handleOAuthDeepLink(deepLinkUrl) {
@@ -973,9 +965,7 @@ function handleUpgradeDeepLink() {
     windowManager.controlPanelWindow.webContents.executeJavaScript(
       'window.dispatchEvent(new Event("upgrade-success"))'
     );
-    windowManager.controlPanelWindow.show();
-    windowManager.controlPanelWindow.focus();
-    dockManager.setControlPanelVisible(true);
+    windowManager.showControlPanel();
   }
 }
 
@@ -1900,12 +1890,7 @@ if (gotSingleInstanceLock) {
     }
 
     if (isLiveWindow(windowManager.controlPanelWindow)) {
-      if (windowManager.controlPanelWindow.isMinimized()) {
-        windowManager.controlPanelWindow.restore();
-      }
-      windowManager.controlPanelWindow.show();
-      windowManager.controlPanelWindow.focus();
-      dockManager.setControlPanelVisible(true);
+      windowManager.showControlPanel();
       if (windowManager.controlPanelWindow.webContents.isCrashed()) {
         windowManager.loadControlPanel();
       }
@@ -2006,12 +1991,7 @@ if (gotSingleInstanceLock) {
     } else {
       // Show control panel when dock icon is clicked (most common user action)
       if (windowManager && isLiveWindow(windowManager.controlPanelWindow)) {
-        if (windowManager.controlPanelWindow.isMinimized()) {
-          windowManager.controlPanelWindow.restore();
-        }
-        windowManager.controlPanelWindow.show();
-        windowManager.controlPanelWindow.focus();
-        dockManager.setControlPanelVisible(true);
+        windowManager.showControlPanel();
       } else if (windowManager) {
         // If control panel doesn't exist, create it
         windowManager.createControlPanelWindow();

@@ -69,7 +69,9 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **devServerManager.js**: Vite dev server integration
 - **dockManager.js**: Single owner of the macOS Dock icon
   - The icon follows the control panel: it appears when the panel opens and goes away when the panel closes to the tray, so no other caller (in particular the dictation panel's hide path) can resurrect it
-  - Every path that surfaces or hides the control panel (tray, app menu, deep links, `activate`, `ready-to-show`, `hideControlPanelToTray`) reports that state explicitly
+  - Every path that surfaces or hides the control panel reports that state explicitly: openers (tray, app menu, deep links, `activate`, second instance, first show) go through `windowManager.showControlPanel()`, hiding through `hideControlPanelToTray()`
+  - `showControlPanel()` reports the Dock before restoring, showing and focusing the window: on an active app `dock.show()` activates the Dock and then re-activates the app, which macOS does not honour, so a window surfaced first is left behind the previously frontmost app
+  - `app.dock.show()`/`hide()` run only when the requested state differs from `app.dock.isVisible()`, so reopening an already open panel never triggers that Dock hand-off
   - Never derive that state from the window's `show`/`hide` events: on macOS those are occlusion events, so they also fire when the panel is merely covered by another window, minimized, or on another Space, and the icon flickers as the user switches windows
   - Decision logic lives in `dockPolicy.js` (pure, unit-tested in `test/helpers/dockPolicy.test.js`)
 - **dragManager.js**: Window dragging functionality

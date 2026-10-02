@@ -1312,14 +1312,7 @@ class WindowManager {
 
   async createControlPanelWindow() {
     if (this.controlPanelWindow && !this.controlPanelWindow.isDestroyed()) {
-      if (this.controlPanelWindow.isMinimized()) {
-        this.controlPanelWindow.restore();
-      }
-      if (!this.controlPanelWindow.isVisible()) {
-        this.controlPanelWindow.show();
-      }
-      this.controlPanelWindow.focus();
-      dockManager.setControlPanelVisible(true);
+      this.showControlPanel();
       return;
     }
 
@@ -1663,9 +1656,22 @@ class WindowManager {
     // a later timer firing could pull it back out of the tray.
     this._clearControlPanelVisibilityTimer();
     if (win.isVisible()) return;
+    this.showControlPanel();
+  }
+
+  // Every path that opens the control panel comes through here. The Dock is
+  // reported first: on an active app dock.show() activates the Dock and then
+  // re-activates the app, which macOS does not honour, so a window surfaced
+  // before it is left behind the previously frontmost app. show() runs even
+  // for a visible window, since on macOS it activates the app while another
+  // app is active and focus() does not.
+  showControlPanel() {
+    const win = this.controlPanelWindow;
+    if (!win || win.isDestroyed()) return;
+    dockManager.setControlPanelVisible(true);
+    if (win.isMinimized()) win.restore();
     win.show();
     win.focus();
-    dockManager.setControlPanelVisible(true);
   }
 
   // Compact onboarding starts at smaller bounds, but both modes expose the
