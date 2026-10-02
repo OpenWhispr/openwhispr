@@ -177,7 +177,7 @@
     "recommended": "Recommandé",
     "active": "Actif",
     "managedByOrg": "Géré par votre organisation",
-    "freeAccountRequired": "Compte gratuit requis",
+    "accountRequired": "Compte requis",
     "comingSoon": "Bientôt disponible",
     "cloud": "Cloud",
     "local": "Local",
@@ -337,8 +337,8 @@
           }
         },
         "byok": {
-          "title": "Fournisseur d’API",
-          "description": "Utilisez votre propre clé API."
+          "title": "Apportez votre propre clé",
+          "description": "Utilisez votre propre clé API pour connecter votre fournisseur de LLM préféré."
         },
         "local": {
           "title": "Sur votre appareil",
@@ -2087,7 +2087,7 @@
         "selfHosted": "Auto-hébergé",
         "enterprise": "Enterprise",
         "openwhisprDesc": "Résultats fiables. Aucune configuration requise.",
-        "providersDesc": "Utilisez votre propre clé API.",
+        "providersDesc": "Utilisez votre propre clé API pour connecter votre fournisseur de LLM préféré.",
         "localDesc": "Modèles sur l'appareil. 100 % privé.",
         "selfHostedDesc": "Votre serveur sur votre réseau.",
         "enterpriseDesc": "Utilisez le compte cloud de votre organisation (AWS, Azure, GCP)."

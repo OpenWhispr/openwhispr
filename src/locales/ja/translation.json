@@ -177,7 +177,7 @@
     "recommended": "推奨",
     "active": "有効",
     "managedByOrg": "組織によって管理されています",
-    "freeAccountRequired": "無料アカウントが必要です",
+    "accountRequired": "アカウントが必要です",
     "comingSoon": "近日公開",
     "cloud": "クラウド",
     "local": "ローカル",
@@ -337,8 +337,8 @@
           }
         },
         "byok": {
-          "title": "API プロバイダー",
-          "description": "自分の API キーを使用します。"
+          "title": "自分のキーを使用",
+          "description": "自分の API キーで、お好みの LLM プロバイダーに接続します。"
         },
         "local": {
           "title": "デバイス上で実行",
@@ -1791,7 +1791,7 @@
         "local": "ローカル",
         "selfHosted": "セルフホスト",
         "openwhisprDesc": "信頼できる精度。設定不要。",
-        "providersDesc": "自分のAPIキーを使用。",
+        "providersDesc": "自分の API キーで、お好みの LLM プロバイダーに接続します。",
         "localDesc": "端末上のモデル。完全プライベート。",
         "selfHostedDesc": "自前サーバーをネットワーク上に。",
         "enterprise": "エンタープライズ",

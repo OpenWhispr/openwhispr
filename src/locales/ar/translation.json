@@ -2644,8 +2644,8 @@
           }
         },
         "byok": {
-          "title": "مزود API",
-          "description": "استخدم مفتاح API الخاص بك."
+          "title": "إحضار مفتاحك الخاص",
+          "description": "استخدم مفتاح API الخاص بك للاتصال بمزود LLM المفضل لديك."
         },
         "local": {
           "title": "على جهازك",
@@ -3399,7 +3399,7 @@
         "selfHosted": "مستضاف ذاتيًا",
         "enterprise": "مؤسسي",
         "openwhisprDesc": "دقة موثوقة. لا حاجة للإعداد.",
-        "providersDesc": "أحضر مفتاح API الخاص بك.",
+        "providersDesc": "استخدم مفتاح API الخاص بك للاتصال بمزود LLM المفضل لديك.",
         "localDesc": "نماذج على الجهاز. خاصة بالكامل.",
         "selfHostedDesc": "خادمك الخاص على شبكتك.",
         "enterpriseDesc": "استخدم الحساب السحابي لمؤسستك (AWS، Azure، GCP)."
@@ -4154,7 +4154,7 @@
     "recommended": "موصى به",
     "active": "نشط",
     "managedByOrg": "مُدار بواسطة مؤسستك",
-    "freeAccountRequired": "حساب مجاني مطلوب",
+    "accountRequired": "حساب مطلوب",
     "comingSoon": "قريبًا",
     "cloud": "سحابي",
     "local": "محلي",

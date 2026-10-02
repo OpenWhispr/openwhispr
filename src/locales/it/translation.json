@@ -177,7 +177,7 @@
     "recommended": "Consigliato",
     "active": "Attivo",
     "managedByOrg": "Gestito dalla tua organizzazione",
-    "freeAccountRequired": "Account gratuito richiesto",
+    "accountRequired": "Account richiesto",
     "comingSoon": "Prossimamente",
     "cloud": "Cloud",
     "local": "Locale",
@@ -337,8 +337,8 @@
           }
         },
         "byok": {
-          "title": "Provider API",
-          "description": "Usa la tua chiave API."
+          "title": "Porta la tua chiave",
+          "description": "Usa la tua chiave API per connettere il tuo provider LLM preferito."
         },
         "local": {
           "title": "Sul tuo dispositivo",
@@ -1791,7 +1791,7 @@
         "local": "Locale",
         "selfHosted": "Self-hosted",
         "openwhisprDesc": "Risultati affidabili. Nessuna configurazione necessaria.",
-        "providersDesc": "Usa la tua chiave API.",
+        "providersDesc": "Usa la tua chiave API per connettere il tuo provider LLM preferito.",
         "localDesc": "Modelli sul dispositivo. Totalmente privato.",
         "selfHostedDesc": "Il tuo server nella tua rete.",
         "enterprise": "Enterprise",

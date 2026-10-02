@@ -177,7 +177,7 @@
     "recommended": "推荐",
     "active": "已激活",
     "managedByOrg": "由您的组织管理",
-    "freeAccountRequired": "需要免费账户",
+    "accountRequired": "需要账户",
     "comingSoon": "即将推出",
     "cloud": "云端",
     "local": "本地",
@@ -337,8 +337,8 @@
           }
         },
         "byok": {
-          "title": "API 服务商",
-          "description": "使用你自己的 API Key。"
+          "title": "自带密钥",
+          "description": "使用你自己的 API Key 连接你首选的 LLM 服务商。"
         },
         "local": {
           "title": "在你的设备上",
@@ -1791,7 +1791,7 @@
         "local": "本地",
         "selfHosted": "自托管",
         "openwhisprDesc": "准确可靠，无需设置。",
-        "providersDesc": "使用你自己的 API Key。",
+        "providersDesc": "使用你自己的 API Key 连接你首选的 LLM 服务商。",
         "localDesc": "设备端模型，完全私密。",
         "selfHostedDesc": "你的服务器，在你的网络上。",
         "enterprise": "企业级",

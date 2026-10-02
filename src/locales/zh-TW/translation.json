@@ -177,7 +177,7 @@
     "recommended": "推薦",
     "active": "使用中",
     "managedByOrg": "由您的組織管理",
-    "freeAccountRequired": "需要免費帳戶",
+    "accountRequired": "需要帳戶",
     "comingSoon": "即將推出",
     "cloud": "雲端",
     "local": "本機",
@@ -337,8 +337,8 @@
           }
         },
         "byok": {
-          "title": "API 服務商",
-          "description": "使用你自己的 API Key。"
+          "title": "自備金鑰",
+          "description": "使用你自己的 API Key 連接你慣用的 LLM 服務商。"
         },
         "local": {
           "title": "在你的裝置上",
@@ -381,7 +381,7 @@
           "title": "選擇你的 API 設定方式",
           "description": "新增 API Key 或連接自架模型。",
           "selfHosted": {
-            "title": "自架",
+            "title": "自架主機",
             "description": "連接你自己託管的模型。"
           }
         }
@@ -1791,7 +1791,7 @@
         "local": "本機",
         "selfHosted": "自架主機",
         "openwhisprDesc": "準確可靠，無需設定。",
-        "providersDesc": "使用你自己的 API Key。",
+        "providersDesc": "使用你自己的 API Key 連接你慣用的 LLM 服務商。",
         "localDesc": "裝置端模型，完全私密。",
         "selfHostedDesc": "你的伺服器，在你的網路上。",
         "enterprise": "企業級",
