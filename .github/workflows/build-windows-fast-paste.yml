@@ -57,7 +57,7 @@ jobs:
         shell: pwsh
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-fast-paste
           path: windows-fast-paste-win32-x64.zip

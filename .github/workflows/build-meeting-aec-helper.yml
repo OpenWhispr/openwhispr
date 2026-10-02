@@ -72,7 +72,7 @@ jobs:
           Compress-Archive -Path "resources/bin/meeting-aec-helper-win32-x64.exe" -DestinationPath "meeting-aec-helper-win32-x64.zip"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: meeting-aec-helper-${{ matrix.platform }}-${{ matrix.arch }}
           path: meeting-aec-helper-${{ matrix.platform }}-${{ matrix.arch }}.*
