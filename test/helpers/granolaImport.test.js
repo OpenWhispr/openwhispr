@@ -177,6 +177,24 @@ test("normalizeDate returns null for garbage or empty input", async () => {
   assert.equal(normalizeDate(undefined), null);
 });
 
+test("normalizeDate returns null for impossible calendar days instead of rolling over", async () => {
+  const { normalizeDate } = await load();
+  // Date.UTC would silently roll these into the next month; a wrong creation
+  // date is worse than none, so they must be rejected like other bad input.
+  assert.equal(normalizeDate("04/31/2026"), null);
+  assert.equal(normalizeDate("02/30/2026"), null);
+  assert.equal(normalizeDate("2026-02-30"), null);
+  assert.equal(normalizeDate("2026-13-45"), null);
+  assert.equal(normalizeDate("2026-02-30T00:00:00-04:00"), null);
+});
+
+test("normalizeDate keeps real dates, including leap days and day-first salvage", async () => {
+  const { normalizeDate } = await load();
+  assert.equal(normalizeDate("2028-02-29"), "2028-02-29 00:00:00"); // leap year
+  assert.equal(normalizeDate("2026-02-29"), null); // not a leap year
+  assert.equal(normalizeDate("13/5/2026"), "2026-05-13 00:00:00"); // month-impossible → swap
+});
+
 // ---------------------------------------------------------------------------
 // parseTranscriptToSegments — "Speaker: text" lines → native segments
 // ---------------------------------------------------------------------------
