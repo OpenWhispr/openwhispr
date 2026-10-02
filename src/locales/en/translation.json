@@ -341,8 +341,8 @@
           }
         },
         "byok": {
-          "title": "API Provider",
-          "description": "Use your own API key."
+          "title": "Bring your own key",
+          "description": "Use your own API key to connect your preferred LLM provider."
         },
         "local": {
           "title": "On your device",
@@ -385,7 +385,7 @@
           "title": "Choose your API setup",
           "description": "Add an API key or connect a self-hosted model.",
           "selfHosted": {
-            "title": "Self-hosted",
+            "title": "Self-Hosted",
             "description": "Connect your own hosted model."
           }
         }
@@ -2129,7 +2129,7 @@
         "selfHosted": "Self-Hosted",
         "enterprise": "Enterprise",
         "openwhisprDesc": "Reliable accuracy. No setup needed.",
-        "providersDesc": "Bring your own API key.",
+        "providersDesc": "Use your own API key to connect your preferred LLM provider.",
         "localDesc": "On-device models. Fully private.",
         "selfHostedDesc": "Your own server on your network.",
         "enterpriseDesc": "Use your organization's cloud account (AWS, Azure, GCP)."
