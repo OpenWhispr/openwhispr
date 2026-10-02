@@ -338,7 +338,7 @@
         },
         "byok": {
           "title": "Eigenen Schlüssel nutzen",
-          "description": "Verwenden Sie Ihren eigenen API-Schlüssel, um Ihren bevorzugten LLM-Anbieter zu verbinden."
+          "description": "Verwenden Sie Ihren eigenen API-Schlüssel."
         },
         "local": {
           "title": "Auf Ihrem Gerät",

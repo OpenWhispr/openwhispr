@@ -338,7 +338,7 @@
         },
         "byok": {
           "title": "自带密钥",
-          "description": "使用你自己的 API Key 连接你首选的 LLM 服务商。"
+          "description": "使用你自己的 API Key。"
         },
         "local": {
           "title": "在你的设备上",

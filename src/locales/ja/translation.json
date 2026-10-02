@@ -338,7 +338,7 @@
         },
         "byok": {
           "title": "自分のキーを使用",
-          "description": "自分の API キーで、お好みの LLM プロバイダーに接続します。"
+          "description": "自分の API キーを使用します。"
         },
         "local": {
           "title": "デバイス上で実行",

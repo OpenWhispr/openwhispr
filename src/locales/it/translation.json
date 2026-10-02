@@ -338,7 +338,7 @@
         },
         "byok": {
           "title": "Porta la tua chiave",
-          "description": "Usa la tua chiave API per connettere il tuo provider LLM preferito."
+          "description": "Usa la tua chiave API."
         },
         "local": {
           "title": "Sul tuo dispositivo",

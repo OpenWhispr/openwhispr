@@ -338,7 +338,7 @@
         },
         "byok": {
           "title": "自備金鑰",
-          "description": "使用你自己的 API Key 連接你慣用的 LLM 服務商。"
+          "description": "使用你自己的 API Key。"
         },
         "local": {
           "title": "在你的裝置上",

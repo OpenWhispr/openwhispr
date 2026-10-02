@@ -338,7 +338,7 @@
         },
         "byok": {
           "title": "Trae tu propia clave",
-          "description": "Usa tu propia clave API para conectar tu proveedor de LLM preferido."
+          "description": "Usa tu propia clave API."
         },
         "local": {
           "title": "En tu dispositivo",
