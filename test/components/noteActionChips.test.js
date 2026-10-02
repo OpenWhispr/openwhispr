@@ -125,7 +125,8 @@ test("hovering a chip shows what its action does above the row", async (t) => {
     root.render(
       React.createElement(ActionChips, {
         actions: [FOLLOW_UP, todos],
-        canRun: () => true,
+        // A disabled chip still shows what its action does.
+        canRun: (a) => a !== FOLLOW_UP,
         onRunAction: () => ran++,
         onManageActions: () => {},
       })
@@ -140,7 +141,7 @@ test("hovering a chip shows what its action does above the row", async (t) => {
     React.act(async () => chip.dispatchEvent({ type, bubbles: true, relatedTarget: null }));
 
   assert.equal(description(), null);
-  await pointer("mouseover");
+  await pointer("pointerover");
   assert.ok(description(), "the hovered action's description shows");
 
   const card = description().parentNode.parentNode;
@@ -148,12 +149,16 @@ test("hovering a chip shows what its action does above the row", async (t) => {
   const row = followUpChip.parentNode;
   const move = (from, to) =>
     React.act(async () =>
-      from.dispatchEvent({ type: "mouseout", bubbles: true, relatedTarget: to })
+      from.dispatchEvent({ type: "pointerout", bubbles: true, relatedTarget: to })
     );
   await move(chip, row);
   assert.ok(description(), "crossing the gap between chips keeps the card up");
   await move(row, followUpChip);
-  assert.equal(description(), null, "and the next chip swaps it to its own action");
+  assert.equal(
+    description(),
+    null,
+    "and the next chip, even a disabled one, swaps it to its own action"
+  );
   assert.ok(card.textContent.startsWith(followUpChip.textContent));
   assert.ok(
     findElement(container, (el) => el === card),
@@ -166,7 +171,7 @@ test("hovering a chip shows what its action does above the row", async (t) => {
     "it goes once the pointer leaves the row"
   );
 
-  await pointer("mouseover");
+  await pointer("pointerover");
   await pointer("click");
   assert.equal(ran, 1);
   assert.equal(description(), null, "and once the action runs, so it can't cover the reply");

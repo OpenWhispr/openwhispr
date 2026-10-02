@@ -64,7 +64,7 @@ export default function ActionChips({
       )}
       {/* Left as a row, so moving between chips swaps the card instead of replaying it. */}
       <div
-        onMouseLeave={() => setPreviewed(null)}
+        onPointerLeave={() => setPreviewed(null)}
         className="scrollbar-hidden flex items-center gap-1 overflow-x-auto"
       >
         {actions.slice(0, VISIBLE_CHIPS).map((action, index) => (
@@ -78,7 +78,8 @@ export default function ActionChips({
               setPreviewed(null);
               onRunAction(action);
             }}
-            onMouseEnter={() => setPreviewed(action)}
+            // Pointer, not mouse: React drops mouse events on disabled buttons.
+            onPointerEnter={() => setPreviewed(action)}
             onFocus={() => setPreviewed(action)}
             onBlur={() => setPreviewed(null)}
             disabled={!canRun(action)}
@@ -93,7 +94,7 @@ export default function ActionChips({
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              onMouseEnter={() => setPreviewed(null)}
+              onPointerEnter={() => setPreviewed(null)}
               className={cn(CHIP_CLASS, "ms-auto")}
               style={chipEntrance(Math.min(actions.length, VISIBLE_CHIPS))}
             >
