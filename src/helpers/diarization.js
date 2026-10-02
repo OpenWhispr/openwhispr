@@ -55,6 +55,7 @@ const {
   EMBEDDING_MODEL_FILE: EMBEDDING_ONNX,
   EMBEDDING_MODEL_URL,
 } = require("../constants/speakerDetection.json");
+const { DEFAULT_CLUSTER_THRESHOLD } = require("./diarizationPolicy");
 // Embedding model shipped before the switch to the zh-en "advanced" CAM++; removed once
 // the current model is in place so upgrades don't leave ~30 MB behind.
 const LEGACY_EMBEDDING_ONNX = "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx";
@@ -290,7 +291,7 @@ class DiarizationManager {
   }
 
   async diarize(wavPath, options = {}) {
-    const { numSpeakers = -1, threshold = 0.55, signal = null } = options;
+    const { numSpeakers = -1, threshold = DEFAULT_CLUSTER_THRESHOLD, signal = null } = options;
 
     if (signal?.aborted) return [];
 

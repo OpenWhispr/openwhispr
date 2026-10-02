@@ -2,13 +2,15 @@
 // electron imports so the rules stay unit-testable (pattern: cloudChunkPolicy).
 
 // sherpa-onnx's cluster threshold is a cosine distance: higher merges more.
-// 0.55 suits short clean audio, but over a long single-mic recording one
-// speaker's embeddings drift wider than that and agglomerative clustering
-// stops merging early — a 73-minute voice memo produced 46 "speakers". Ramp
-// the threshold with duration instead of pretending one constant fits both.
+// Over a long recording one speaker's embeddings drift wider, so a constant
+// tuned for short audio stops merging early (with the previous embedding model a
+// 73-minute voice memo produced 46 "speakers"). Ramp the threshold with duration.
 // The top stays below 0.72: from there up, a two-person Spanish call merged
 // both speakers into one cluster.
-const DEFAULT_CLUSTER_THRESHOLD = 0.55;
+// Values measured for the zh-en "advanced" CAM++ on human-labelled meetings:
+// 0.6 kept clusters ~100% pure with ~1.3 clusters per person on 35-67 min calls,
+// and 0.7 did the same (~1.1 per person) on an 88-minute 12-speaker call.
+const DEFAULT_CLUSTER_THRESHOLD = 0.6;
 const LONG_AUDIO_CLUSTER_THRESHOLD = 0.7;
 const THRESHOLD_RAMP_START_SECONDS = 15 * 60;
 const THRESHOLD_RAMP_END_SECONDS = 60 * 60;
