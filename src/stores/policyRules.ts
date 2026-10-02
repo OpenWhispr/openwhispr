@@ -593,6 +593,25 @@ interface CloudProviderOption {
   models?: ReadonlyArray<{ id: string }>;
 }
 
+// OpenRouter's speech-to-text catalog moves faster than the shortlist we ship,
+// so a vendor-prefixed id is a real selection even when the registry does not
+// list it; a bare id is another provider's leftover. Shared by the picker, the
+// settings store and the request resolver so none of them resets what another
+// keeps.
+export function acceptsUnlistedTranscriptionModel(providerId: string, modelId: string): boolean {
+  return providerId === "openrouter" && modelId.includes("/");
+}
+
+// A registry model only Audio Upload offers (Deepgram via OpenRouter drops the
+// dictionary). It is listed, so the unlisted pass-through above must not keep
+// it on a screen that leaves it out.
+export function isUploadOnlyTranscriptionModel(providerId: string, modelId: string): boolean {
+  const models: Array<{ id: string; uploadOnly?: boolean }> =
+    modelRegistryData.transcriptionProviders.find((provider) => provider.id === providerId)
+      ?.models ?? [];
+  return models.some((model) => model.id === modelId && model.uploadOnly);
+}
+
 export function reconcileCloudProviderSelection({
   selectedProvider,
   selectedModel,
@@ -609,7 +628,12 @@ export function reconcileCloudProviderSelection({
   if (selectedProvider === "custom" && customAllowed) return null;
   const selected = allowedProviders.find((provider) => provider.id === selectedProvider);
   if (selected) {
-    if (!selected.models?.length || selected.models.some((model) => model.id === selectedModel)) {
+    if (
+      !selected.models?.length ||
+      selected.models.some((model) => model.id === selectedModel) ||
+      (acceptsUnlistedTranscriptionModel(selected.id, selectedModel) &&
+        !isUploadOnlyTranscriptionModel(selected.id, selectedModel))
+    ) {
       return null;
     }
     return { provider: selected.id, model: selected.models[0].id };

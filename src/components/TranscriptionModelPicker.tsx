@@ -13,6 +13,7 @@ import { ConfirmDialog } from "./ui/dialog";
 import { useDialogs } from "../hooks/useDialogs";
 import { useModelDownload, type DownloadProgress } from "../hooks/useModelDownload";
 import {
+  getDictationTranscriptionProviders,
   getTranscriptionProviders,
   getMeetingStreamingTranscriptionProviders,
   TranscriptionProviderData,
@@ -250,6 +251,7 @@ const CLOUD_PROVIDER_TABS = [
   { id: "tinfoil", name: "Tinfoil" },
   { id: "deepgram", name: "Deepgram" },
   { id: "assemblyai", name: "AssemblyAI" },
+  { id: "openrouter", name: "OpenRouter" },
   { id: "custom", name: "Custom" },
 ];
 
@@ -266,7 +268,8 @@ interface ProviderCredentialField {
     | "cortiTenant"
     | "tinfoilApiKey"
     | "deepgramApiKey"
-    | "assemblyaiApiKey";
+    | "assemblyaiApiKey"
+    | "openrouterApiKey";
   input: "secret" | "text" | "select";
   labelKey?: string;
   placeholder?: string;
@@ -330,6 +333,10 @@ const PROVIDER_CREDENTIALS: Record<
   assemblyai: {
     consoleUrl: "https://www.assemblyai.com/dashboard/api-keys",
     fields: [{ key: "assemblyaiApiKey", input: "secret" }],
+  },
+  openrouter: {
+    consoleUrl: "https://openrouter.ai/keys",
+    fields: [{ key: "openrouterApiKey", input: "secret" }],
   },
 };
 
@@ -423,6 +430,8 @@ export default function TranscriptionModelPicker({
   const setDeepgramApiKey = useSettingsStore((s) => s.setDeepgramApiKey);
   const assemblyaiApiKey = useSettingsStore((s) => s.assemblyaiApiKey);
   const setAssemblyaiApiKey = useSettingsStore((s) => s.setAssemblyaiApiKey);
+  const openrouterApiKey = useSettingsStore((s) => s.openrouterApiKey);
+  const setOpenrouterApiKey = useSettingsStore((s) => s.setOpenrouterApiKey);
   const customTranscriptionApiKey = useSettingsStore((s) => s.customTranscriptionApiKey);
   const setCustomTranscriptionApiKey = useSettingsStore((s) => s.setCustomTranscriptionApiKey);
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
@@ -507,11 +516,13 @@ export default function TranscriptionModelPicker({
   // providers note recording can actually run — not every streaming provider.
   // Upload is always http-batch, and the realtime-only providers have no batch
   // route at all (transcriptionRoute fails them closed), so they are hidden there.
+  // Upload is also the only screen that offers uploadOnly models.
   const availableCloudProviders = useMemo(() => {
     if (streamingOnly) return getMeetingStreamingTranscriptionProviders();
-    const providers = getTranscriptionProviders();
-    if (transcriptionContext !== "upload") return providers;
-    return providers.filter((provider) => !STREAMING_ONLY_PROVIDERS.has(provider.id));
+    if (transcriptionContext !== "upload") return getDictationTranscriptionProviders();
+    return getTranscriptionProviders().filter(
+      (provider) => !STREAMING_ONLY_PROVIDERS.has(provider.id)
+    );
   }, [streamingOnly, transcriptionContext]);
   const cloudProviders = useMemo(
     () => filterByokProviderOptionsByPolicy(availableCloudProviders, "transcription", policyState),
@@ -929,6 +940,9 @@ export default function TranscriptionModelPicker({
     }
     if (normalized) {
       for (const provider of cloudProviders) {
+        // Custom endpoints on OpenRouter predate its tab and keep their own key
+        // slot, model id and WAV re-encode, so they are never moved onto it.
+        if (provider.id === "openrouter") continue;
         const providerNormalized = normalizeBaseUrl(provider.baseUrl);
         if (normalized === providerNormalized) {
           switchCloudTranscriptionProvider(transcriptionContext, provider.id);
@@ -985,6 +999,7 @@ export default function TranscriptionModelPicker({
     tinfoilApiKey,
     deepgramApiKey,
     assemblyaiApiKey,
+    openrouterApiKey,
   };
   const credentialSetters: Record<ProviderCredentialField["key"], (value: string) => void> = {
     openaiApiKey: setOpenaiApiKey,
@@ -999,20 +1014,29 @@ export default function TranscriptionModelPicker({
     tinfoilApiKey: setTinfoilApiKey,
     deepgramApiKey: setDeepgramApiKey,
     assemblyaiApiKey: setAssemblyaiApiKey,
+    openrouterApiKey: setOpenrouterApiKey,
   };
 
   const cloudModelOptions = useMemo(() => {
     if (!currentCloudProvider) return [];
-    const { icon, invertInDark } = getRemoteProviderIcon(displayedCloudProvider);
-    return currentCloudProvider.models.map((m) => ({
-      value: m.id,
-      label: m.name,
-      description: m.descriptionKey
-        ? t(m.descriptionKey, { defaultValue: m.description })
-        : m.description,
-      icon,
-      invertInDark,
-    }));
+    const providerIcon = getRemoteProviderIcon(displayedCloudProvider);
+    return currentCloudProvider.models.map((m) => {
+      // OpenRouter brokers other vendors' models, so the id's prefix
+      // ("openai/…", "google/…") names the model better than OpenRouter's own
+      // mark. Vendors we have no icon for keep it, rather than showing none.
+      const slash = displayedCloudProvider === "openrouter" ? m.id.indexOf("/") : -1;
+      const vendorIcon = slash > 0 ? getRemoteProviderIcon(m.id.slice(0, slash)) : null;
+      const { icon, invertInDark } = vendorIcon?.icon ? vendorIcon : providerIcon;
+      return {
+        value: m.id,
+        label: m.name,
+        description: m.descriptionKey
+          ? t(m.descriptionKey, { defaultValue: m.description })
+          : m.description,
+        icon,
+        invertInDark,
+      };
+    });
   }, [currentCloudProvider, displayedCloudProvider, t]);
 
   const progressDisplay = useMemo(() => {

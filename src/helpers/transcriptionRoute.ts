@@ -12,6 +12,7 @@ import {
   isSecureHttpEndpoint,
   isAzureOpenAIEndpoint,
   buildAzureTranscriptionUrl,
+  matchesHost,
 } from "../utils/urlUtils.ts";
 import {
   isOrukeetEndpoint,
@@ -19,6 +20,7 @@ import {
   resolveSelfHostedTranscriptionModel,
 } from "./selfHostedTranscription.js";
 import {
+  acceptsUnlistedTranscriptionModel,
   isTranscriptionSelectionAllowed,
   type PolicyDecisionSnapshot,
 } from "../stores/policyRules.ts";
@@ -39,6 +41,14 @@ export function byokFileSizeLimit(provider: string): number {
   return provider === "gemini" ? GEMINI_FILE_SIZE_LIMIT : BYOK_FILE_SIZE_LIMIT;
 }
 
+// BYOK providers that speak OpenAI's own /audio/transcriptions shape and
+// differ only in base URL and key slot; OpenAI itself falls through as the
+// default. OpenRouter is a broker, so its ids stay vendor-prefixed.
+const OPENAI_COMPATIBLE_TRANSCRIPTION_BASES: Record<string, string> = {
+  groq: API_ENDPOINTS.GROQ_BASE,
+  openrouter: API_ENDPOINTS.OPENROUTER_BASE,
+};
+
 const CUSTOM_ENDPOINT_INVALID_MESSAGE_KEY =
   "hooks.audioRecording.errorDescriptions.customEndpointInvalid";
 const MANAGED_TRANSCRIPTION_UNAVAILABLE_MESSAGE_KEY =
@@ -49,6 +59,39 @@ const STREAMING_ONLY_PROVIDER_MESSAGE_KEY =
 
 const PROVIDER_KEY_MISSING_MESSAGE_KEY =
   "hooks.audioRecording.errorDescriptions.providerKeyMissing";
+
+const OPENROUTER_OUT_OF_CREDITS_MESSAGE_KEY =
+  "hooks.audioRecording.errorDescriptions.openRouterOutOfCredits";
+
+// OpenRouter is reached from its own tab or from a Custom endpoint typed by
+// hand. Both post to this host and share its limits, so every OpenRouter rule
+// (credits, dictionary, upload pieces) keys on the host, not the provider id.
+export function isOpenRouterEndpoint(endpoint: string | null | undefined): boolean {
+  return matchesHost(endpoint, "openrouter.ai");
+}
+
+// Audio Uploads to OpenRouter go out in 4-minute pieces (openRouterChunkedUpload.js):
+// its upstream providers stop after ~60 s of work per request. Self-hosted
+// servers set their own limits and never match.
+export function uploadsInChunks(route: TranscriptionRoute): boolean {
+  return (
+    route.transport === "http-batch" &&
+    route.provider !== "self-hosted" &&
+    isOpenRouterEndpoint(route.endpoint)
+  );
+}
+
+// OpenRouter answers 402 once the account's prepaid credit is spent, and its
+// JSON body would otherwise become the error text.
+export function batchTranscriptionHttpError(
+  status: number,
+  endpoint: string
+): { code: string; messageKey: string } | null {
+  if (status === 402 && isOpenRouterEndpoint(endpoint)) {
+    return { code: "OPENROUTER_OUT_OF_CREDITS", messageKey: OPENROUTER_OUT_OF_CREDITS_MESSAGE_KEY };
+  }
+  return null;
+}
 
 // Deepgram and AssemblyAI have no OpenAI-compatible /audio/transcriptions, so
 // they exist only as realtime providers. A batch/upload/retry request for them
@@ -125,7 +168,7 @@ export type TranscriptionRoute =
     }
   | {
       transport: "http-batch";
-      provider: "self-hosted" | "custom" | "openai" | "groq";
+      provider: "self-hosted" | "custom" | "openai" | "groq" | "openrouter";
       endpoint: string;
       model: string | null;
       auth: { scheme: "bearer" | "azure-api-key" | "none"; keyRef: string | null };
@@ -187,6 +230,10 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
         (trimmed.startsWith("gpt-transcribe") ||
           trimmed.startsWith("gpt-4o") ||
           trimmed === "whisper-1")) ||
+      // Every OpenRouter id is vendor-prefixed, so the slash is what tells a
+      // real selection apart from one left behind by another provider. Models
+      // outside our curated list pass through deliberately.
+      acceptsUnlistedTranscriptionModel(provider, trimmed) ||
       (provider === "mistral" && trimmed.startsWith("voxtral-")) ||
       (provider === "corti" && trimmed.startsWith("corti-")) ||
       (provider === "gemini" && trimmed.startsWith("gemini-")) ||
@@ -202,6 +249,7 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
   if (provider === "gemini") return "gemini-3.5-transcribe";
   if (provider === "deepgram") return "nova-3";
   if (provider === "assemblyai") return "universal-3-5-pro";
+  if (provider === "openrouter") return "openai/gpt-transcribe";
   return "gpt-transcribe";
 }
 
@@ -412,16 +460,17 @@ export function resolveTranscriptionRoute({
     );
   }
 
-  const isGroq = provider === "groq";
+  const compatibleBase = OPENAI_COMPATIBLE_TRANSCRIPTION_BASES[provider];
+  const resolvedProvider = compatibleBase ? (provider as "groq" | "openrouter") : "openai";
   return {
     transport: "http-batch",
-    provider: isGroq ? "groq" : "openai",
+    provider: resolvedProvider,
     endpoint: buildApiUrl(
-      isGroq ? API_ENDPOINTS.GROQ_BASE : API_ENDPOINTS.TRANSCRIPTION_BASE,
+      compatibleBase ?? API_ENDPOINTS.TRANSCRIPTION_BASE,
       "/audio/transcriptions"
     ),
     model,
-    auth: { scheme: "bearer", keyRef: isGroq ? "groq" : "openai" },
+    auth: { scheme: "bearer", keyRef: resolvedProvider },
     sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
     language,
   };
