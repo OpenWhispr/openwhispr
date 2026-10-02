@@ -855,6 +855,12 @@
     }
   },
   "transcription": {
+    "geminiDictationMode": {
+      "label": "音声入力の文字起こしモード",
+      "verbatim": "逐語（既定）",
+      "smart": "Smart",
+      "description": "Smart は追加の整形リクエストなしで、つなぎ言葉や繰り返しを除き、口頭での訂正を反映します。発言内容が変わり、意図した言葉が省略される場合があります。逐語モードは発言をそのまま残します。音声入力のクリーンアップ設定は変更されません。"
+    },
     "modelCard": "モデルカード",
     "deleteModel": {
       "title": "モデルを削除",

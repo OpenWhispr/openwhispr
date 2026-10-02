@@ -27,7 +27,7 @@ function extractText(data) {
 }
 
 async function transcribeWithGemini(
-  { audioBuffer, model, contentType, language, keyterms, apiKey },
+  { audioBuffer, model, contentType, language, keyterms, mode, apiKey },
   fetchImpl
 ) {
   if (!apiKey?.trim()) {
@@ -38,6 +38,9 @@ async function transcribeWithGemini(
 
   const resolvedModel = model || "gemini-3.5-transcribe";
   const transcriptionConfig = {};
+  // Interactions uses lowercase "smart", unlike generateContent's "SMART".
+  // Keep Google's verbatim default unless the caller explicitly opts in.
+  if (mode === "smart") transcriptionConfig.mode = "smart";
   if (language && language !== "auto") {
     transcriptionConfig.language_codes = [language];
   }
