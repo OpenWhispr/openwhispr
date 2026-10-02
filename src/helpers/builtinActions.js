@@ -470,7 +470,7 @@ export const BUILTIN_ACTIONS = [
   {
     translationKey: DETAILED_NOTES_KEY,
     kind: "template",
-    // The prompt AI summaries used through 1.10.2.
+    // The prompt 1.10.2's Generate AI Summary button used.
     name: "Detailed Notes",
     description: "Accurate, comprehensive meeting notes with decisions and action items",
     prompt: "",
