@@ -294,41 +294,28 @@ export const ChatMessage = memo(function ChatMessage({
           </div>
         )}
 
-        {hasContent && !isStreaming && plain && (
-          // Always there in the note chat, not only on hover.
-          <div className="mt-1.5 flex justify-start">
+        {hasContent && !isStreaming && (
+          <div className={cn("flex justify-start mt-1.5", !plain && "-mb-0.5")}>
             <button
               type="button"
               onClick={handleCopy}
               aria-label={t(copied ? "common.copied" : "common.copy")}
-              title={t(copied ? "common.copied" : "common.copy")}
+              title={plain ? t(copied ? "common.copied" : "common.copy") : undefined}
               className={cn(
-                "flex size-7 items-center justify-center rounded-full text-foreground/45",
-                "hover:bg-foreground/[0.07] hover:text-foreground dark:hover:bg-white/[0.08]",
-                "transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
-              )}
-            >
-              {copied ? (
-                <Check size={15} className="text-emerald-500" />
-              ) : (
-                <CopyRounded size={15} />
-              )}
-            </button>
-          </div>
-        )}
-
-        {hasContent && !isStreaming && !plain && (
-          <div className="flex justify-start mt-1.5 -mb-0.5">
-            <button
-              onClick={handleCopy}
-              className={cn(
-                "p-1 rounded-sm",
-                "text-muted-foreground/70 hover:text-foreground hover:bg-foreground/8",
-                "opacity-0 group-hover/msg:opacity-100 transition-all duration-150",
+                plain
+                  ? // Always there in the note chat, not only on hover.
+                    "flex size-7 items-center justify-center rounded-full text-foreground/45 hover:bg-foreground/[0.07] hover:text-foreground dark:hover:bg-white/[0.08] transition-colors duration-150"
+                  : "p-1 rounded-sm text-muted-foreground/70 hover:text-foreground hover:bg-foreground/8 opacity-0 group-hover/msg:opacity-100 transition-all duration-150",
                 "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
               )}
             >
-              {copied ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
+              {copied ? (
+                <Check size={plain ? 15 : 12} className="text-emerald-500" />
+              ) : plain ? (
+                <CopyRounded size={15} />
+              ) : (
+                <Copy size={12} />
+              )}
             </button>
           </div>
         )}
