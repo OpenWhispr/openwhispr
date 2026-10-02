@@ -284,7 +284,7 @@ export function ChatInput({
             ? "min-h-12 bg-card shadow-sm dark:bg-surface-2"
             : variant === "note"
               ? outlined
-                ? "min-h-12 bg-white/55 shadow-(--shadow-composer-glow) dark:bg-white/[0.035]"
+                ? "min-h-12 bg-white/55 dark:bg-white/[0.035]"
                 : "min-h-12 bg-transparent"
               : variant === "default" && GLASS_SURFACE,
           // The outlined note composer draws an inset ring, which takes no room and sits where
