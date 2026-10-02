@@ -3018,7 +3018,10 @@ class IPCHandlers {
         if (process.platform === "darwin") {
           mainWindow.hide();
           await new Promise((resolve) => setTimeout(resolve, 120));
-          mainWindow.showInactive();
+          // Same live window only; auto-hide waits for the paste and the Agent panel refuses hides.
+          if (this.windowManager.mainWindow === mainWindow && !mainWindow.isDestroyed()) {
+            this.windowManager.showDictationPanel();
+          }
         } else {
           mainWindow.blur();
           await new Promise((resolve) => setTimeout(resolve, 80));

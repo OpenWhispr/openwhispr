@@ -227,6 +227,72 @@ test("paste-text preserves rejection for generic errors and unconfirmed clipboar
   }
 });
 
+// When activating the paste target fails, macOS hands focus back by hiding the
+// focused pill for 120 ms. A display change in that gap can pin the hidden pill
+// to one Space, so it must come back through the manager's Spaces-aware show.
+function pasteThroughFocusHandoff(t) {
+  const platform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "darwin" });
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  t.after(() => {
+    Object.defineProperty(process, "platform", platform);
+    t.mock.timers.reset();
+    target.textEditMonitor = null;
+  });
+  const calls = [];
+  const pill = {
+    isDestroyed: () => false,
+    isFocused: () => true,
+    hide: () => calls.push("hide"),
+    showInactive: () => calls.push("showInactive"),
+  };
+  target.textEditMonitor = { activateTargetPid: async () => false };
+  target.windowManager = {
+    mainWindow: pill,
+    isOnboardingDemoActive: () => false,
+    showDictationPanel: (...args) => calls.push(["showDictationPanel", ...args]),
+  };
+  target.clipboardManager = { pasteText: async () => calls.push("pasteText") };
+  const pasting = handlers.get("paste-text")({ sender: {} }, "dictated text");
+  // Lets the handler reach its 120 ms wait.
+  const settle = () => new Promise((resolve) => setImmediate(resolve));
+  return { calls, pill, pasting, settle };
+}
+
+test("paste-text brings the hidden pill back through the manager's Spaces-aware show", async (t) => {
+  const { calls, pasting, settle } = pasteThroughFocusHandoff(t);
+
+  await settle();
+  assert.deepEqual(calls, ["hide"]);
+
+  t.mock.timers.tick(120);
+  assert.deepEqual(await pasting, { success: true, pasted: true });
+  assert.deepEqual(calls, ["hide", ["showDictationPanel"], "pasteText"]);
+});
+
+for (const [label, interrupt] of [
+  ["destroyed", ({ pill }) => (pill.isDestroyed = () => true)],
+  [
+    "replaced",
+    ({ calls }) =>
+      (target.windowManager.mainWindow = {
+        isDestroyed: () => false,
+        showInactive: () => calls.push("replacement showInactive"),
+      }),
+  ],
+]) {
+  test(`paste-text leaves a pill ${label} during the focus hand-off alone`, async (t) => {
+    const handoff = pasteThroughFocusHandoff(t);
+
+    await handoff.settle();
+    interrupt(handoff);
+    t.mock.timers.tick(120);
+
+    assert.deepEqual(await handoff.pasting, { success: true, pasted: true });
+    assert.deepEqual(handoff.calls, ["hide", "pasteText"]);
+  });
+}
+
 test("Accessibility settings opens the macOS system pane and reports launch failure", async (t) => {
   const platform = Object.getOwnPropertyDescriptor(process, "platform");
   Object.defineProperty(process, "platform", { value: "darwin" });

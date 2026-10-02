@@ -122,6 +122,7 @@
         "macos-calendar-listener",
         "macos-text-monitor",
         "macos-window-bounds",
+        "macos-window-spaces.node",
         "macos-media-remote",
         "MediaRemoteAdapter.framework/**",
         "linux-fast-paste",

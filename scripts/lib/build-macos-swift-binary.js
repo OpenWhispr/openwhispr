@@ -198,4 +198,4 @@ function buildMacosSwiftBinary({ label, sourceName, binaryName, frameworks = [],
   log(`Successfully built ${binaryName} (${targetArch}).`);
 }
 
-module.exports = { buildMacosSwiftBinary };
+module.exports = { buildMacosSwiftBinary, ARCH_TO_TARGET, verifyBinaryArch };
