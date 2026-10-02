@@ -3423,7 +3423,7 @@
         "chips": {
           "catchUp": "Ponme al día",
           "keyDecisions": "Lista las decisiones clave",
-          "inFlight": "Muestra los proyectos en curso"
+          "openActionItems": "Lista las tareas pendientes"
         }
       },
       "invite": "Invitar",

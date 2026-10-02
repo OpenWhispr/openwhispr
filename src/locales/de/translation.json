@@ -3722,7 +3722,7 @@
         "chips": {
           "catchUp": "Bring mich auf den neuesten Stand",
           "keyDecisions": "Liste die wichtigsten Entscheidungen auf",
-          "inFlight": "Zeig laufende Projekte"
+          "openActionItems": "Liste die offenen Aufgaben auf"
         }
       },
       "invite": "Einladen",

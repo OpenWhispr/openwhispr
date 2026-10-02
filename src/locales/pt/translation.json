@@ -3370,7 +3370,7 @@
         "chips": {
           "catchUp": "Me atualize",
           "keyDecisions": "Liste as decisões principais",
-          "inFlight": "Mostre os projetos em andamento"
+          "openActionItems": "Liste as tarefas pendentes"
         }
       },
       "invite": "Convidar",

@@ -3370,7 +3370,7 @@
         "chips": {
           "catchUp": "帮我补上进展",
           "keyDecisions": "列出关键决定",
-          "inFlight": "显示进行中的项目"
+          "openActionItems": "列出待办事项"
         }
       },
       "invite": "邀请",

@@ -12,7 +12,7 @@ import { ASK_PILL_CLASS } from "../shared";
 const PROMPT_CHIP_KEYS = [
   "notes.overview.ask.chips.catchUp",
   "notes.overview.ask.chips.keyDecisions",
-  "notes.overview.ask.chips.inFlight",
+  "notes.overview.ask.chips.openActionItems",
 ] as const;
 
 interface OverviewAskSectionProps {

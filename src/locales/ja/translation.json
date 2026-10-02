@@ -3298,7 +3298,7 @@
         "chips": {
           "catchUp": "最新情報をまとめて",
           "keyDecisions": "重要な決定事項を一覧に",
-          "inFlight": "進行中のプロジェクトを表示"
+          "openActionItems": "未完了のアクションアイテムを一覧に"
         }
       },
       "invite": "招待",

@@ -3722,7 +3722,7 @@
         "chips": {
           "catchUp": "Catch me up",
           "keyDecisions": "List key decisions",
-          "inFlight": "Show in flight projects"
+          "openActionItems": "List open action items"
         }
       },
       "invite": "Invite",

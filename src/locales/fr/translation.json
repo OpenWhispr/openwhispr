@@ -3722,7 +3722,7 @@
         "chips": {
           "catchUp": "Résume-moi les nouveautés",
           "keyDecisions": "Liste les décisions clés",
-          "inFlight": "Montre les projets en cours"
+          "openActionItems": "Liste les actions à mener"
         }
       },
       "invite": "Inviter",

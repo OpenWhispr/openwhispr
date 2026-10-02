@@ -3370,7 +3370,7 @@
         "chips": {
           "catchUp": "Aggiornami",
           "keyDecisions": "Elenca le decisioni chiave",
-          "inFlight": "Mostra i progetti in corso"
+          "openActionItems": "Elenca le attività aperte"
         }
       },
       "invite": "Invita",
