@@ -757,6 +757,9 @@ export interface CudaWhisperStatus {
   gpuFailed?: boolean;
   /** The whisper-server error line saved with that failure; null when none was readable. */
   gpuFailReason?: string | null;
+  /** The pack the GPU card describes: the one every whisper start picks, else
+   * an installed pack that failed (#1736). At most one pack reports true. */
+  inUse?: boolean;
 }
 
 export interface VulkanWhisperStatus {
@@ -768,6 +771,9 @@ export interface VulkanWhisperStatus {
   gpuFailed?: boolean;
   /** The whisper-server error line saved with that failure; null when none was readable. */
   gpuFailReason?: string | null;
+  /** The pack the GPU card describes: the one every whisper start picks, else
+   * an installed pack that failed (#1736). At most one pack reports true. */
+  inUse?: boolean;
 }
 
 export interface WhisperServerStatus {
@@ -1857,6 +1863,7 @@ declare global {
         }) => void
       ) => () => void;
       onGpuFallbackNotification: (callback: () => void) => () => void;
+      onWhisperGpuStatusChanged: (callback: () => void) => () => void;
 
       // One-time "GPU pack needs re-downloading" notice from the legacy-layout migration
       getGpuPackMigrationNotice: () => Promise<{ packs: string[] } | null>;
