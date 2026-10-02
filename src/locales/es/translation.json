@@ -3213,7 +3213,7 @@
       "emptyReply": "El modelo devolvió una respuesta vacía. Vuelve a intentarlo o elige otro modelo.",
       "builtin": {
         "generateNotes": {
-          "name": "Generar notas",
+          "name": "Resumen con IA",
           "description": "Limpiar, estructurar y mejorar tus notas"
         },
         "followUpEmail": {
@@ -3222,7 +3222,7 @@
           "cta": "Redactar correo de seguimiento"
         },
         "detailedNotes": {
-          "name": "Resumen con IA",
+          "name": "Notas detalladas",
           "description": "Notas de reunión precisas y completas con decisiones y tareas"
         },
         "makeTodos": {

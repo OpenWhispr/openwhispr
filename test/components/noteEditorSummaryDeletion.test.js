@@ -116,6 +116,15 @@ const TEMPLATE = {
   output: null,
   translation_key: "notes.actions.builtin.detailedNotes",
 };
+const DEFAULT_TEMPLATE = {
+  ...TEMPLATE,
+  id: 2,
+  client_id: "notes.actions.builtin.generateNotes",
+  name: "AI Summary",
+  prompt: "Summarize the note.",
+  sections: null,
+  translation_key: "notes.actions.builtin.generateNotes",
+};
 
 function baseProps(enhancement) {
   return {
@@ -137,7 +146,7 @@ async function loadNoteEditor(t) {
       electronAPI: {
         getSpeakerProfiles: async () => [],
         getSpeakerMappings: async () => [],
-        getActions: async () => [TEMPLATE],
+        getActions: async () => [TEMPLATE, DEFAULT_TEMPLATE],
       },
     },
   });
@@ -325,7 +334,7 @@ test("a typed note without a summary offers one with the default template", asyn
   });
   assert.ok(callout, "notes with no transcript still offer a summary");
   callout.props.onClick();
-  assert.deepEqual(ran, [TEMPLATE.client_id]);
+  assert.deepEqual(ran, [DEFAULT_TEMPLATE.client_id]);
 
   await unmount();
 });

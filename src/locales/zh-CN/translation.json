@@ -3160,7 +3160,7 @@
       "emptyReply": "模型返回了空回复。请重试，或选择其他模型。",
       "builtin": {
         "generateNotes": {
-          "name": "生成笔记",
+          "name": "AI 摘要",
           "description": "清理、结构化和增强您的笔记"
         },
         "followUpEmail": {
@@ -3169,7 +3169,7 @@
           "cta": "草拟跟进邮件"
         },
         "detailedNotes": {
-          "name": "AI 摘要",
+          "name": "详细笔记",
           "description": "准确、全面的会议笔记，包含决策和行动项"
         },
         "makeTodos": {

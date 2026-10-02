@@ -3528,7 +3528,7 @@
       "emptyEditorDescription": "Choose an action from the list or create a new one",
       "builtin": {
         "generateNotes": {
-          "name": "Generate Notes",
+          "name": "AI Summary",
           "description": "Clean up, structure, and enhance your notes"
         },
         "followUpEmail": {
@@ -3537,7 +3537,7 @@
           "cta": "Draft a follow-up email"
         },
         "detailedNotes": {
-          "name": "AI Summary",
+          "name": "Detailed Notes",
           "description": "Accurate, comprehensive meeting notes with decisions and action items"
         },
         "makeTodos": {

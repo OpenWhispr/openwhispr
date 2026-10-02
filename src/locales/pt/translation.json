@@ -3160,7 +3160,7 @@
       "emptyReply": "O modelo retornou uma resposta vazia. Tente novamente ou escolha outro modelo.",
       "builtin": {
         "generateNotes": {
-          "name": "Gerar notas",
+          "name": "Resumo com IA",
           "description": "Limpar, estruturar e aprimorar suas notas"
         },
         "followUpEmail": {
@@ -3169,7 +3169,7 @@
           "cta": "Redigir e-mail de acompanhamento"
         },
         "detailedNotes": {
-          "name": "Resumo com IA",
+          "name": "Notas detalhadas",
           "description": "Notas de reunião precisas e completas com decisões e ações"
         },
         "makeTodos": {

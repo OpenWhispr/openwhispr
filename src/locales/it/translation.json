@@ -3160,7 +3160,7 @@
       "emptyReply": "Il modello ha restituito una risposta vuota. Riprova o scegli un altro modello.",
       "builtin": {
         "generateNotes": {
-          "name": "Genera note",
+          "name": "Riepilogo AI",
           "description": "Pulire, strutturare e migliorare le note"
         },
         "followUpEmail": {
@@ -3169,7 +3169,7 @@
           "cta": "Scrivi un'email di follow-up"
         },
         "detailedNotes": {
-          "name": "Riepilogo AI",
+          "name": "Note dettagliate",
           "description": "Note di riunione accurate e complete con decisioni e azioni"
         },
         "makeTodos": {

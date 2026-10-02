@@ -2942,7 +2942,7 @@
       "emptyReply": "モデルから空の応答が返されました。もう一度お試しいただくか、別のモデルを選択してください。",
       "builtin": {
         "generateNotes": {
-          "name": "ノートを生成",
+          "name": "AI要約",
           "description": "ノートを整理、構成、強化する"
         },
         "followUpEmail": {
@@ -2951,7 +2951,7 @@
           "cta": "フォローアップメールを作成"
         },
         "detailedNotes": {
-          "name": "AI要約",
+          "name": "詳細ノート",
           "description": "決定事項とアクションを含む正確で網羅的な会議ノート"
         },
         "makeTodos": {

@@ -3528,7 +3528,7 @@
       "emptyEditorDescription": "Wählen Sie eine Aktion aus der Liste oder erstellen Sie eine neue",
       "builtin": {
         "generateNotes": {
-          "name": "Notizen generieren",
+          "name": "KI-Zusammenfassung",
           "description": "Notizen bereinigen, strukturieren und verbessern"
         },
         "followUpEmail": {
@@ -3537,7 +3537,7 @@
           "cta": "Follow-up-E-Mail entwerfen"
         },
         "detailedNotes": {
-          "name": "KI-Zusammenfassung",
+          "name": "Ausführliche Notizen",
           "description": "Präzise, umfassende Meeting-Notizen mit Entscheidungen und Aufgaben"
         },
         "makeTodos": {
