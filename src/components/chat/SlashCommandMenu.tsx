@@ -39,8 +39,12 @@ export default function SlashCommandMenu({
   }, [activeIndex, commands]);
 
   return (
-    // Rows line up with the draft's text.
-    <div className="flex min-h-0 flex-1 flex-col px-1.5 pt-2.5 animate-[glass-in_0.26s_ease-out] motion-reduce:animate-none">
+    <div
+      // Keep focus in the composer, wherever the press lands.
+      onMouseDown={(event) => event.preventDefault()}
+      // Rows line up with the draft's text.
+      className="flex min-h-0 flex-1 flex-col px-1.5 pt-2.5 animate-[glass-in_0.26s_ease-out] motion-reduce:animate-none"
+    >
       {/* The keys the composer answers to while the menu is open. */}
       <div
         aria-hidden="true"
@@ -87,15 +91,11 @@ export default function SlashCommandMenu({
               aria-selected={isActive}
               aria-disabled={command.disabled}
               tabIndex={-1}
-              // Keep focus in the composer.
-              onMouseDown={(event) => event.preventDefault()}
               onClick={() => onRun(command)}
               // Move, not enter: rows sliding under a resting pointer as the list filters or
               // scrolls mustn't change which command Enter runs.
               onMouseMove={() => onActiveIndexChange(index)}
-              // The rows materialize one after another.
               style={{ animationDelay: `${Math.min(index, 8) * 25}ms` }}
-              // Laid out like the action chips' hover card.
               className={cn(
                 "flex w-full shrink-0 items-center gap-3 rounded-xl px-2.5 py-2 text-start text-xs",
                 "transition-[background-color,color,translate] duration-200 ease-out",

@@ -11,18 +11,10 @@ import { cn } from "../lib/utils";
 import { getActionCta } from "../../stores/actionStore";
 import type { ActionItem } from "../../types/electron";
 import { getActionIcon } from "./actionIcons";
-import ActionMenuItems from "./ActionMenuItems";
+import ActionMenuItems, { type ActionMenuItemsProps } from "./ActionMenuItems";
 
 // The key the ask bar's picker has always used, so a remembered choice carries over.
 const LAST_ACTION_KEY = "askBarActionId";
-
-interface ActionPickerProps {
-  /** Actions only; templates have their own picker. */
-  actions: ActionItem[];
-  canRun: (action: ActionItem) => boolean;
-  onRunAction: (action: ActionItem) => void;
-  onManageActions: () => void;
-}
 
 /** Runs the action last picked from it (the first action until then), or picks another. */
 export default function ActionPicker({
@@ -30,7 +22,7 @@ export default function ActionPicker({
   canRun,
   onRunAction,
   onManageActions,
-}: ActionPickerProps) {
+}: ActionMenuItemsProps) {
   const { t } = useTranslation();
   const [lastUsedId, setLastUsedId] = useState(() => Number(localStorage.getItem(LAST_ACTION_KEY)));
   const current = actions.find((action) => action.id === lastUsedId) ?? actions[0];

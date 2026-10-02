@@ -10,7 +10,7 @@ interface ChatMessagesProps {
   /** Extra classes for the message column (e.g. a page-width cap); the scroll container stays full width. */
   contentClassName?: string;
   scrollClassName?: string;
-  /** Replies as plain text and the user's messages in a soft pill (the note chat's glass card). */
+  /** Replies as plain text and the user's messages in a soft pill (the note chat, floating or docked). */
   plainBubbles?: boolean;
 }
 

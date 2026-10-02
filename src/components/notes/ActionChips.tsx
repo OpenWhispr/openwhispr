@@ -5,7 +5,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent } from "../ui/dr
 import { cn } from "../lib/utils";
 import { getActionName, getActionDescription } from "../../stores/actionStore";
 import type { ActionItem } from "../../types/electron";
-import ActionMenuItems, { ActionOutputBadge } from "./ActionMenuItems";
+import ActionMenuItems, { ActionOutputBadge, type ActionMenuItemsProps } from "./ActionMenuItems";
 
 const VISIBLE_CHIPS = 4;
 
@@ -17,16 +17,7 @@ const CHIP_CLASS = cn(
   "animate-[glass-in_0.42s_cubic-bezier(0.22,1,0.36,1)_backwards] motion-reduce:animate-none"
 );
 
-// The chips rise in one after another as the chat finishes opening.
 const chipEntrance = (index: number) => ({ animationDelay: `${140 + index * 40}ms` });
-
-interface ActionChipsProps {
-  /** Actions only; templates have their own picker. */
-  actions: ActionItem[];
-  canRun: (action: ActionItem) => boolean;
-  onRunAction: (action: ActionItem) => void;
-  onManageActions: () => void;
-}
 
 /**
  * The first actions as one-click chips, then every action behind "All actions" at the end.
@@ -37,7 +28,7 @@ export default function ActionChips({
   canRun,
   onRunAction,
   onManageActions,
-}: ActionChipsProps) {
+}: ActionMenuItemsProps) {
   const { t } = useTranslation();
   const [previewed, setPreviewed] = useState<ActionItem | null>(null);
   const description = previewed && getActionDescription(previewed, t);

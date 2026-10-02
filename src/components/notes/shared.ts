@@ -113,14 +113,6 @@ export const notesTextareaClass = cn(
   "focus:border-primary/30 transition-colors duration-150"
 );
 
-/** Rounded suggestion pill above the folder overview's ask box. */
-export const ASK_PILL_CLASS = cn(
-  "inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[11px]",
-  "border border-border/70 bg-card text-foreground/55 shadow-sm dark:border-white/10",
-  "hover:bg-surface-3 hover:text-foreground/80 disabled:pointer-events-none disabled:text-foreground/30",
-  "transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
-);
-
 /** Neutral capsule for note header facts (date + attendees, folder, space). */
 export const NOTE_META_CHIP_CLASS = cn(
   "inline-flex h-[26px] items-center gap-2 rounded-full bg-surface-3 px-2.5 text-xs font-medium text-foreground/70",

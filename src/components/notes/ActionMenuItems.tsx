@@ -4,7 +4,8 @@ import { DropdownMenuItem, DropdownMenuSeparator } from "../ui/dropdown-menu";
 import { getActionName, getActionDescription } from "../../stores/actionStore";
 import type { ActionItem } from "../../types/electron";
 
-interface ActionMenuItemsProps {
+export interface ActionMenuItemsProps {
+  /** Actions only; templates have their own picker. */
   actions: ActionItem[];
   canRun: (action: ActionItem) => boolean;
   onRunAction: (action: ActionItem) => void;

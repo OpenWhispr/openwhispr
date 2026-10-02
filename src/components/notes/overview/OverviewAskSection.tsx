@@ -7,7 +7,7 @@ import { observeChatComposerInset } from "../../chat/composerLayout";
 import type { Message, AgentState } from "../../chat/types";
 import type { ContainerConversationItem } from "../../../hooks/useContainerChat";
 import { ConversationPicker } from "../ConversationPicker";
-import { ASK_PILL_CLASS } from "../shared";
+import { cn } from "../../lib/utils";
 
 const PROMPT_CHIP_KEYS = [
   "notes.overview.ask.chips.catchUp",
@@ -86,7 +86,12 @@ export function OverviewAskSection({
                     onTextSubmit(t(key));
                   }}
                   disabled={agentState !== "idle"}
-                  className={ASK_PILL_CLASS}
+                  className={cn(
+                    "inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[11px]",
+                    "border border-border/70 bg-card text-foreground/55 shadow-sm dark:border-white/10",
+                    "hover:bg-surface-3 hover:text-foreground/80 disabled:pointer-events-none disabled:text-foreground/30",
+                    "transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+                  )}
                 >
                   <Sparkles size={10} className="text-foreground/45 shrink-0" />
                   {t(key)}

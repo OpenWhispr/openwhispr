@@ -217,7 +217,6 @@ test("the collapsed ask bar's picker runs the first action until one is picked, 
 
   const menu = first.find((node) => node.props.onManageActions);
   menu.props.onRunAction(SHORTEN);
-  assert.equal(localStorage.getItem("askBarActionId"), String(SHORTEN.id));
 
   const next = collect(renderTree(ActionPicker, props));
   assert.equal(

@@ -300,7 +300,7 @@ export const ChatMessage = memo(function ChatMessage({
               type="button"
               onClick={handleCopy}
               aria-label={t(copied ? "common.copied" : "common.copy")}
-              title={plain ? t(copied ? "common.copied" : "common.copy") : undefined}
+              title={t(copied ? "common.copied" : "common.copy")}
               className={cn(
                 plain
                   ? // Always there in the note chat, not only on hover.

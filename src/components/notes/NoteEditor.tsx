@@ -1487,7 +1487,8 @@ export default function NoteEditor({
               )
             }
             actionPicker={
-              offersActions && (
+              offersActions &&
+              noteActions.length > 0 && (
                 <ActionPicker
                   actions={noteActions}
                   canRun={canRunAction}

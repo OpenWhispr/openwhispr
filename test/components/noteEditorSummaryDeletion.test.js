@@ -482,3 +482,10 @@ test("the in-view chat mounts on its first open and stays to fade out", async (t
   assert.ok(findBottomBar(latest()).props.chatContent, "closing keeps it mounted for the fade");
   await unmount();
 });
+
+test("the collapsed composer keeps its send button while the note has no actions", async (t) => {
+  const { render, latest, unmount } = await loadNoteEditor(t);
+  await render(ENHANCEMENT);
+  assert.ok(!findBottomBar(latest()).props.actionPicker);
+  await unmount();
+});

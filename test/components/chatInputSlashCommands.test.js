@@ -105,6 +105,15 @@ test("typing / in the composer runs an action from the keyboard", async (t) => {
     "each command shows its description"
   );
   assert.equal(menuOpen.at(-1), true, "the host hears the menu open, to hide the chat");
+  const listbox = findElement(container, (el) => el.getAttribute?.("role") === "listbox");
+  const pressBetweenRows = listbox.dispatchEvent({
+    type: "mousedown",
+    bubbles: true,
+    preventDefault() {
+      this.defaultPrevented = true;
+    },
+  });
+  assert.equal(pressBetweenRows, false, "a press between the rows keeps focus in the composer");
 
   const row = (index) =>
     findElement(container, (el) => el.getAttribute?.("role") === "listbox").childNodes[index];
