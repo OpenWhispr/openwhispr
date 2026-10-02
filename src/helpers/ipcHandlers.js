@@ -12192,15 +12192,20 @@ class IPCHandlers {
       }
     };
 
-    const diarizationEnabled = (sessionConfig?.enabled ?? this.speakerDiarizationEnabled) !== false;
-
-    if (!diarizationEnabled || !this.diarizationManager?.isAvailable() || !rawPcmPath) {
+    // The renderer saves only the segments it had at stop; this is the only way
+    // the ones transcribed after stop reach the note.
+    const sendUndiarizedSegments = () =>
       send({
         segments: transcriptSegments.map((segment, index) => ({
           ...segment,
           id: segment.id || `segment-${index}`,
         })),
       });
+
+    const diarizationEnabled = (sessionConfig?.enabled ?? this.speakerDiarizationEnabled) !== false;
+
+    if (!diarizationEnabled || !this.diarizationManager?.isAvailable() || !rawPcmPath) {
+      sendUndiarizedSegments();
       return;
     }
 
@@ -12374,7 +12379,7 @@ class IPCHandlers {
         send({ segments: enrichedSegments, speakerEmbeddings: speakerEmbeddingsMap });
       } catch (err) {
         debugLogger.warn("Background diarization failed", { error: err.message });
-        send({ segments: [] });
+        sendUndiarizedSegments();
       } finally {
         try {
           fs.unlinkSync(rawPcmPath);

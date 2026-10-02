@@ -132,18 +132,19 @@ function scenario(t) {
     for (let i = 0; i < pcm.length; i += 2) pcm.writeInt16LE(SAMPLE_BY_WORD[word], i);
     listeners.get("meeting-transcription-send")({}, pcm, "system");
   };
+  let firedTimer = null;
   const tick = () => {
-    const local = [...timers.values()].filter(
-      ({ delay }) => delay === LOCAL_MEETING_CHUNK_INTERVAL_MS
-    );
+    const local = [...timers].filter(([, { delay }]) => delay === LOCAL_MEETING_CHUNK_INTERVAL_MS);
     assert.equal(local.length, 1, "expected one local transcription timer");
-    local[0].callback();
+    [firedTimer] = local[0];
+    local[0][1].callback();
   };
   return {
     diarized,
     say,
     tick,
     decodeCount: () => decodeCount,
+    firedTimerCleared: () => !timers.has(firedTimer),
     releaseFirstDecode: firstDecode.resolve,
     start: (sessionId) =>
       invoke("meeting-transcription-start", {
@@ -168,7 +169,8 @@ test("a pass still decoding at stop stays with its recording, not the next one",
 
   const stopA = s.stop("meeting-a");
   const startB = s.start("meeting-b");
-  await settle();
+  // Stop clears A's timer right before it reaches the pass still decoding.
+  await waitFor(s.firedTimerCleared);
   s.releaseFirstDecode();
 
   const stoppedA = await stopA;
@@ -183,5 +185,39 @@ test("a pass still decoding at stop stays with its recording, not the next one",
       transcripts: ["alpha-one alpha-two", "bravo"],
       diarized: [["alpha-one", "alpha-two"], ["bravo"]],
     }
+  );
+});
+
+test("a failed diarization still sends the transcript, so post-stop lines reach the note", async () => {
+  const sent = deferred();
+  const IPCHandlers = require(handlersModulePath);
+  IPCHandlers.prototype._startOrSkipDiarization.call(
+    {
+      diarizationManager: {
+        isAvailable: () => true,
+        convertRawPcmToWav: async () => {
+          throw new Error("diarizer crashed");
+        },
+      },
+    },
+    "diar-a",
+    "/nonexistent/meeting-a.pcm",
+    1,
+    [
+      { text: "alpha-one", source: "system", timestamp: 1 },
+      { text: "alpha-two", source: "system", timestamp: 2 },
+    ],
+    {
+      isDestroyed: () => false,
+      webContents: { send: (_channel, payload) => sent.resolve(payload) },
+    },
+    null,
+    { enabled: true }
+  );
+
+  const { segments } = await sent.promise;
+  assert.deepEqual(
+    segments.map((segment) => segment.text),
+    ["alpha-one", "alpha-two"]
   );
 });
