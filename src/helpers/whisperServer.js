@@ -187,6 +187,8 @@ function buildWhisperServerArgs({
   // between. See #2150. A segment covers at most one 30s window; the longest measured is
   // 186 characters.
   args.push("--max-len", "4096");
+  // Decode windows must not inherit text: a repeated sentence feeds itself on long audio.
+  args.push("--max-context", "0");
 
   if (isVadActive({ vadEnabled, vadModelPath })) {
     const cfg = sanitizeWhisperVadConfig(vadConfig || DEFAULT_WHISPER_VAD_CONFIG);
