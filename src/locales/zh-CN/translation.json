@@ -177,7 +177,7 @@
     "recommended": "推荐",
     "active": "已激活",
     "managedByOrg": "由您的组织管理",
-    "freeAccountRequired": "需要免费账户",
+    "accountRequired": "需要账户",
     "comingSoon": "即将推出",
     "cloud": "云端",
     "local": "本地",
@@ -337,7 +337,7 @@
           }
         },
         "byok": {
-          "title": "API 服务商",
+          "title": "自带密钥",
           "description": "使用你自己的 API Key。"
         },
         "local": {
@@ -1801,11 +1801,11 @@
       "enableTextCleanupDescription": "AI 去除语气词，修正语法和标点",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
-        "providers": "云服务商",
+        "providers": "自带密钥",
         "local": "本地",
         "selfHosted": "自托管",
         "openwhisprDesc": "准确可靠，无需设置。",
-        "providersDesc": "使用你自己的 API Key。",
+        "providersDesc": "使用你自己的 API Key 连接你首选的 LLM 服务商。",
         "localDesc": "设备端模型，完全私密。",
         "selfHostedDesc": "你的服务器，在你的网络上。",
         "enterprise": "企业级",
@@ -3725,18 +3725,6 @@
       "permissionDescription": "macOS 需要屏幕录制权限才能截取屏幕。",
       "relaunchHint": "屏幕录制权限是在 OpenWhispr 运行期间授予的。请退出并重新打开 OpenWhispr 以开始捕获屏幕截图。"
     },
-    "modes": {
-      "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "使用 OpenWhispr 托管的助手，无需 API Key。",
-      "providers": "使用自己的 API Key",
-      "providersDesc": "用你自己的 API Key 连接 OpenAI、Anthropic、Gemini 或 Groq。",
-      "local": "本地",
-      "localDesc": "在你的设备上运行本地 LLM，完全私密。",
-      "selfHosted": "自托管",
-      "selfHostedDesc": "指向兼容 OpenAI 的自托管端点。",
-      "enterprise": "企业级",
-      "enterpriseDesc": "使用 AWS Bedrock、Azure OpenAI 或 Google Vertex。"
-    },
     "prompt": {
       "title": "助手提示词",
       "description": "检测到唤醒词时使用的系统提示词。未设置时回退到内置默认值。"
@@ -3746,19 +3734,7 @@
     "settings": {
       "systemPrompt": "系统提示词",
       "systemPromptDescription": "助手的自定义指令",
-      "systemPromptPlaceholder": "输入自定义系统提示词...",
-      "modes": {
-        "openwhispr": "OpenWhispr Cloud",
-        "providers": "云服务商",
-        "local": "本地",
-        "selfHosted": "自托管",
-        "openwhisprDesc": "准确可靠，无需设置。",
-        "providersDesc": "使用自己的 API 密钥。",
-        "localDesc": "设备端模型，完全私密。",
-        "selfHostedDesc": "你自己网络上的服务器。",
-        "enterprise": "企业级",
-        "enterpriseDesc": "使用你组织的云账号（AWS、Azure、GCP）。"
-      }
+      "systemPromptPlaceholder": "输入自定义系统提示词..."
     },
     "chat": {
       "errorPrefix": "错误",

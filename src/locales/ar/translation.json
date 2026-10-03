@@ -1656,18 +1656,6 @@
       "permissionDescription": "يتطلب macOS إذن تسجيل الشاشة لالتقاط شاشتك.",
       "relaunchHint": "تم منح إذن تسجيل الشاشة أثناء تشغيل OpenWhispr. قم بإنهاء OpenWhispr وإعادة فتحه لبدء التقاط لقطات الشاشة."
     },
-    "modes": {
-      "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "استخدم المساعد المُدار بواسطة OpenWhispr — لا حاجة لمفتاح API.",
-      "providers": "إحضار مفتاحك الخاص",
-      "providersDesc": "اتصل بـ OpenAI أو Anthropic أو Gemini أو Groq باستخدام مفتاح API الخاص بك.",
-      "local": "محلي",
-      "localDesc": "قم بتشغيل LLM محلي على جهازك — خاص بالكامل.",
-      "selfHosted": "مستضاف ذاتيًا",
-      "selfHostedDesc": "اتصل بنقطة نهاية مستضافة ذاتيًا ومتوافقة مع OpenAI.",
-      "enterprise": "للمؤسسات",
-      "enterpriseDesc": "استخدم AWS Bedrock أو Azure OpenAI أو Google Vertex."
-    },
     "prompt": {
       "title": "مطالبة المساعد",
       "description": "مطالبة النظام المستخدمة عند اكتشاف كلمة التفعيل. إذا تُركت فارغة، تُستخدم المطالبة الافتراضية المدمجة."
@@ -1677,19 +1665,7 @@
     "settings": {
       "systemPrompt": "مطالبة النظام",
       "systemPromptDescription": "تعليمات مخصصة للمساعد",
-      "systemPromptPlaceholder": "أدخل مطالبة النظام المخصصة...",
-      "modes": {
-        "openwhispr": "OpenWhispr Cloud",
-        "providers": "مزودو الخدمات السحابية",
-        "local": "محلي",
-        "selfHosted": "مستضاف ذاتيًا",
-        "enterprise": "للمؤسسات",
-        "openwhisprDesc": "دقة موثوقة. لا يتطلب أي إعداد.",
-        "providersDesc": "أحضر مفتاح API الخاص بك.",
-        "localDesc": "نماذج على الجهاز. خاصة بالكامل.",
-        "selfHostedDesc": "الخادم الخاص بك على شبكتك.",
-        "enterpriseDesc": "استخدم الحساب السحابي لمؤسستك (AWS، Azure، GCP)."
-      }
+      "systemPromptPlaceholder": "أدخل مطالبة النظام المخصصة..."
     },
     "chat": {
       "errorPrefix": "خطأ",
@@ -2669,7 +2645,7 @@
           }
         },
         "byok": {
-          "title": "مزود API",
+          "title": "إحضار مفتاحك الخاص",
           "description": "استخدم مفتاح API الخاص بك."
         },
         "local": {
@@ -3433,12 +3409,12 @@
       "enableTextCleanupDescription": "استخدم الذكاء الاصطناعي لإزالة كلمات الحشو، وإصلاح القواعد، وتنسيق علامات الترقيم",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
-        "providers": "مزودو الخدمات السحابية",
+        "providers": "إحضار مفتاحك الخاص",
         "local": "محلي",
         "selfHosted": "مستضاف ذاتيًا",
         "enterprise": "مؤسسي",
         "openwhisprDesc": "دقة موثوقة. لا حاجة للإعداد.",
-        "providersDesc": "أحضر مفتاح API الخاص بك.",
+        "providersDesc": "استخدم مفتاح API الخاص بك للاتصال بمزود LLM المفضل لديك.",
         "localDesc": "نماذج على الجهاز. خاصة بالكامل.",
         "selfHostedDesc": "خادمك الخاص على شبكتك.",
         "enterpriseDesc": "استخدم الحساب السحابي لمؤسستك (AWS، Azure، GCP)."
@@ -4193,7 +4169,7 @@
     "recommended": "موصى به",
     "active": "نشط",
     "managedByOrg": "مُدار بواسطة مؤسستك",
-    "freeAccountRequired": "حساب مجاني مطلوب",
+    "accountRequired": "حساب مطلوب",
     "comingSoon": "قريبًا",
     "cloud": "سحابي",
     "local": "محلي",

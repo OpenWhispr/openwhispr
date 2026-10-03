@@ -177,7 +177,7 @@
     "recommended": "推奨",
     "active": "有効",
     "managedByOrg": "組織によって管理されています",
-    "freeAccountRequired": "無料アカウントが必要です",
+    "accountRequired": "アカウントが必要です",
     "comingSoon": "近日公開",
     "cloud": "クラウド",
     "local": "ローカル",
@@ -337,7 +337,7 @@
           }
         },
         "byok": {
-          "title": "API プロバイダー",
+          "title": "自分のキーを使用",
           "description": "自分の API キーを使用します。"
         },
         "local": {
@@ -1801,11 +1801,11 @@
       "enableTextCleanupDescription": "AI がフィラーワードを除去し、文法と句読点を整える",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
-        "providers": "クラウドプロバイダー",
+        "providers": "自分のキーを使用",
         "local": "ローカル",
         "selfHosted": "セルフホスト",
         "openwhisprDesc": "信頼できる精度。設定不要。",
-        "providersDesc": "自分のAPIキーを使用。",
+        "providersDesc": "自分の API キーで、お好みの LLM プロバイダーに接続します。",
         "localDesc": "端末上のモデル。完全プライベート。",
         "selfHostedDesc": "自前サーバーをネットワーク上に。",
         "enterprise": "エンタープライズ",
@@ -3725,18 +3725,6 @@
       "permissionDescription": "画面をキャプチャするには macOS の画面収録の許可が必要です。",
       "relaunchHint": "画面収録の許可は OpenWhispr の実行中に付与されました。スクリーンショットのキャプチャを開始するには、OpenWhispr を終了して再度開いてください。"
     },
-    "modes": {
-      "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "OpenWhispr が管理するアシスタントを使用。API キーは不要です。",
-      "providers": "自分の API キーを使用",
-      "providersDesc": "自分の API キーで OpenAI、Anthropic、Gemini、Groq に接続します。",
-      "local": "ローカル",
-      "localDesc": "端末上でローカル LLM を実行。完全プライベート。",
-      "selfHosted": "セルフホスト",
-      "selfHostedDesc": "セルフホストの OpenAI 互換エンドポイントを指定します。",
-      "enterprise": "エンタープライズ",
-      "enterpriseDesc": "AWS Bedrock、Azure OpenAI、Google Vertex を使用します。"
-    },
     "prompt": {
       "title": "アシスタントプロンプト",
       "description": "ウェイクワードが検出されたときに使用するシステムプロンプト。未設定の場合は組み込みのデフォルトが使われます。"
@@ -3746,19 +3734,7 @@
     "settings": {
       "systemPrompt": "システムプロンプト",
       "systemPromptDescription": "アシスタントへのカスタム指示",
-      "systemPromptPlaceholder": "カスタムシステムプロンプトを入力...",
-      "modes": {
-        "openwhispr": "OpenWhispr Cloud",
-        "providers": "クラウドプロバイダー",
-        "local": "ローカル",
-        "selfHosted": "セルフホスト",
-        "openwhisprDesc": "信頼できる精度。設定不要。",
-        "providersDesc": "独自のAPIキーを使用。",
-        "localDesc": "デバイス上のモデル。完全プライベート。",
-        "selfHostedDesc": "ネットワーク上の自分のサーバー。",
-        "enterprise": "エンタープライズ",
-        "enterpriseDesc": "組織のクラウドアカウントを使用 (AWS, Azure, GCP)。"
-      }
+      "systemPromptPlaceholder": "カスタムシステムプロンプトを入力..."
     },
     "chat": {
       "errorPrefix": "エラー",

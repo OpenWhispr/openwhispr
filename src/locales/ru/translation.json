@@ -177,7 +177,7 @@
     "recommended": "Рекомендуется",
     "active": "Активно",
     "managedByOrg": "Управляется вашей организацией",
-    "freeAccountRequired": "Требуется бесплатный аккаунт",
+    "accountRequired": "Требуется аккаунт",
     "comingSoon": "Скоро",
     "cloud": "Облако",
     "local": "Локально",
@@ -337,7 +337,7 @@
           }
         },
         "byok": {
-          "title": "API-провайдер",
+          "title": "Свой ключ",
           "description": "Используйте свой API-ключ."
         },
         "local": {
@@ -381,7 +381,7 @@
           "title": "Выберите способ настройки API",
           "description": "Добавьте API-ключ или подключите самостоятельно размещённую модель.",
           "selfHosted": {
-            "title": "Самостоятельное размещение",
+            "title": "Свой сервер",
             "description": "Подключите свою размещённую модель."
           }
         }
@@ -1805,11 +1805,11 @@
       "enableTextCleanupDescription": "ИИ убирает слова-паразиты, исправляет грамматику и пунктуацию",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
-        "providers": "Облачные провайдеры",
+        "providers": "Свой ключ",
         "local": "Локально",
         "selfHosted": "Свой сервер",
         "openwhisprDesc": "Надёжные результаты. Без настройки.",
-        "providersDesc": "Используйте свой API-ключ.",
+        "providersDesc": "Используйте свой API-ключ, чтобы подключить предпочитаемого LLM-провайдера.",
         "localDesc": "Модели на устройстве. Полная приватность.",
         "selfHostedDesc": "Свой сервер в вашей сети.",
         "enterprise": "Корпоративный",
@@ -3769,18 +3769,6 @@
       "permissionDescription": "macOS требует разрешение на запись экрана для создания снимков.",
       "relaunchHint": "Доступ к записи экрана был предоставлен, пока OpenWhispr был запущен. Закройте и снова откройте OpenWhispr, чтобы начать делать снимки экрана."
     },
-    "modes": {
-      "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "Используйте помощника под управлением OpenWhispr, без API-ключа.",
-      "providers": "Свой ключ",
-      "providersDesc": "Подключитесь к OpenAI, Anthropic, Gemini или Groq со своим API-ключом.",
-      "local": "Локально",
-      "localDesc": "Запускайте локальную LLM на своём устройстве. Полная приватность.",
-      "selfHosted": "Свой сервер",
-      "selfHostedDesc": "Укажите свой OpenAI-совместимый эндпоинт.",
-      "enterprise": "Корпоративный",
-      "enterpriseDesc": "Используйте AWS Bedrock, Azure OpenAI или Google Vertex."
-    },
     "prompt": {
       "title": "Подсказка помощника",
       "description": "Системная подсказка, используемая при обнаружении слова активации. По умолчанию применяется встроенная."
@@ -3790,19 +3778,7 @@
     "settings": {
       "systemPrompt": "Системный промпт",
       "systemPromptDescription": "Пользовательские инструкции для помощника",
-      "systemPromptPlaceholder": "Введите пользовательский системный промпт...",
-      "modes": {
-        "openwhispr": "OpenWhispr Cloud",
-        "providers": "Облачные провайдеры",
-        "local": "Локально",
-        "selfHosted": "Свой сервер",
-        "openwhisprDesc": "Надёжные результаты. Без настройки.",
-        "providersDesc": "Свой API-ключ.",
-        "localDesc": "Модели на устройстве. Полная приватность.",
-        "selfHostedDesc": "Ваш сервер в вашей сети.",
-        "enterprise": "Корпоративный",
-        "enterpriseDesc": "Используйте облачный аккаунт вашей организации (AWS, Azure, GCP)."
-      }
+      "systemPromptPlaceholder": "Введите пользовательский системный промпт..."
     },
     "chat": {
       "errorPrefix": "Ошибка",

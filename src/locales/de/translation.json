@@ -177,7 +177,7 @@
     "recommended": "Empfohlen",
     "active": "Aktiv",
     "managedByOrg": "Von Ihrer Organisation verwaltet",
-    "freeAccountRequired": "Kostenloses Konto erforderlich",
+    "accountRequired": "Konto erforderlich",
     "comingSoon": "Demnächst verfügbar",
     "cloud": "Cloud",
     "local": "Lokal",
@@ -337,7 +337,7 @@
           }
         },
         "byok": {
-          "title": "API-Anbieter",
+          "title": "Eigenen Schlüssel nutzen",
           "description": "Verwenden Sie Ihren eigenen API-Schlüssel."
         },
         "local": {
@@ -2096,12 +2096,12 @@
       "enableTextCleanupDescription": "KI entfernt Füllwörter, korrigiert Grammatik und Zeichensetzung",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
-        "providers": "Cloud-Anbieter",
+        "providers": "Eigenen Schlüssel nutzen",
         "local": "Lokal",
         "selfHosted": "Selbst gehostet",
         "enterprise": "Enterprise",
         "openwhisprDesc": "Zuverlässige Ergebnisse. Keine Einrichtung nötig.",
-        "providersDesc": "Eigenen API-Schlüssel nutzen.",
+        "providersDesc": "Verwenden Sie Ihren eigenen API-Schlüssel, um Ihren bevorzugten LLM-Anbieter zu verbinden.",
         "localDesc": "Modelle auf dem Gerät. Voll privat.",
         "selfHostedDesc": "Eigener Server in Ihrem Netzwerk.",
         "enterpriseDesc": "Nutzen Sie das Cloud-Konto Ihrer Organisation (AWS, Azure, GCP)."
@@ -3896,18 +3896,6 @@
       "permissionDescription": "macOS benötigt die Berechtigung zur Bildschirmaufnahme, um Ihren Bildschirm zu erfassen.",
       "relaunchHint": "Die Bildschirmaufnahme wurde erteilt, während OpenWhispr lief. Beenden und öffnen Sie OpenWhispr erneut, um Screenshots aufzunehmen."
     },
-    "modes": {
-      "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "Den von OpenWhispr verwalteten Assistenten nutzen, kein API-Schlüssel nötig.",
-      "providers": "Eigenen Schlüssel nutzen",
-      "providersDesc": "Mit Ihrem eigenen API-Schlüssel an OpenAI, Anthropic, Gemini oder Groq anbinden.",
-      "local": "Lokal",
-      "localDesc": "Ein lokales LLM auf Ihrem Gerät ausführen, voll privat.",
-      "selfHosted": "Selbst gehostet",
-      "selfHostedDesc": "Auf einen selbst gehosteten, OpenAI-kompatiblen Endpunkt verweisen.",
-      "enterprise": "Enterprise",
-      "enterpriseDesc": "AWS Bedrock, Azure OpenAI oder Google Vertex nutzen."
-    },
     "prompt": {
       "title": "Assistent-Prompt",
       "description": "Der System-Prompt, der bei Erkennung des Aktivierungsworts verwendet wird. Fällt auf die integrierte Standardvorgabe zurück."
@@ -3917,19 +3905,7 @@
     "settings": {
       "systemPrompt": "System-Prompt",
       "systemPromptDescription": "Benutzerdefinierte Anweisungen für den Assistenten",
-      "systemPromptPlaceholder": "Benutzerdefinierten System-Prompt eingeben...",
-      "modes": {
-        "openwhispr": "OpenWhispr Cloud",
-        "providers": "Cloud-Anbieter",
-        "local": "Lokal",
-        "selfHosted": "Selbst gehostet",
-        "enterprise": "Enterprise",
-        "openwhisprDesc": "Zuverlässige Ergebnisse. Keine Einrichtung nötig.",
-        "providersDesc": "Eigenen API-Schlüssel verwenden.",
-        "localDesc": "Modelle auf dem Gerät. Vollständig privat.",
-        "selfHostedDesc": "Eigener Server in Ihrem Netzwerk.",
-        "enterpriseDesc": "Nutzen Sie das Cloud-Konto Ihrer Organisation (AWS, Azure, GCP)."
-      }
+      "systemPromptPlaceholder": "Benutzerdefinierten System-Prompt eingeben..."
     },
     "chat": {
       "errorPrefix": "Fehler",

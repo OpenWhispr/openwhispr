@@ -575,7 +575,7 @@ function TranscriptionSection({
         description: t("settingsPage.transcription.modes.openwhisprDesc"),
         icon: <Cloud className="w-4 h-4" />,
         disabled: !isSignedIn,
-        badge: !isSignedIn ? t("common.freeAccountRequired") : undefined,
+        badge: !isSignedIn ? t("common.accountRequired") : undefined,
       },
       {
         id: "providers",
