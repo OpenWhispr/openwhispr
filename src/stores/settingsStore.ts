@@ -1180,6 +1180,7 @@ export interface SettingsState
   setVertexApiKey: (key: string) => void;
 
   setDictationKey: (key: string) => void;
+  setPasteLastKey: (key: string) => void;
   setMeetingKey: (key: string) => void;
   setVoiceAgentKey: (key: string) => Promise<HotkeyRegistrationResult>;
   translationKey: string;
@@ -1589,6 +1590,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   dictationKey: readString("dictationKey", ""),
   activeDictationKey: null,
+  pasteLastKey: readString("pasteLastKey", "Alt+Shift+Z"),
   meetingKey: readString("meetingKey", ""),
   voiceAgentKey: readString("voiceAgentKey", ""),
   translationKey: readString("translationKey", ""),
@@ -2321,6 +2323,15 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setMeetingHotkeyLayoutMode: (mode: "side-panel" | "full-width") => {
     if (isBrowser) localStorage.setItem("meetingHotkeyLayoutMode", mode);
     set({ meetingHotkeyLayoutMode: mode });
+  },
+
+  setPasteLastKey: (key: string) => {
+    if (isBrowser) localStorage.setItem("pasteLastKey", key);
+    set({ pasteLastKey: key });
+    if (isBrowser) {
+      window.electronAPI?.notifyPasteLastKeyChanged?.(key);
+      window.electronAPI?.savePasteLastKey?.(key);
+    }
   },
 
   setOnboardingUseCases: (useCases: string[]) => {
@@ -3498,6 +3509,20 @@ export async function initializeSettings(): Promise<void> {
     } catch (err) {
       logger.warn(
         "Failed to sync translation hotkey on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
+    // Sync paste-last key from main process
+    try {
+      const envKey = await window.electronAPI.getPasteLastKey?.();
+      if (envKey && envKey !== state.pasteLastKey) {
+        createStringSetter("pasteLastKey")(envKey);
+      }
+    } catch (err) {
+      logger.warn(
+        "Failed to sync paste-last key on startup",
         { error: (err as Error).message },
         "settings"
       );
