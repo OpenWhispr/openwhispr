@@ -79,7 +79,7 @@ class MenuManager {
           submenu: [
             { role: "reload" },
             { role: "forceReload" },
-            { role: "toggleDevTools" },
+            ...(process.env.NODE_ENV === "development" ? [{ role: "toggleDevTools" }] : []),
             { type: "separator" },
             { role: "resetZoom" },
             { role: "zoomIn" },
@@ -148,7 +148,7 @@ class MenuManager {
           submenu: [
             { role: "reload" },
             { role: "forceReload" },
-            { role: "toggleDevTools" },
+            ...(process.env.NODE_ENV === "development" ? [{ role: "toggleDevTools" }] : []),
             { type: "separator" },
             { role: "resetZoom" },
             { role: "zoomIn" },
