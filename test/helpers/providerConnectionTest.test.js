@@ -88,6 +88,27 @@ test("probes the /v1 sibling for bare custom origins", () => {
   );
 });
 
+// Regression for #2381: a versioned mount other than /v1 (Z.ai's coding base)
+// is complete — the connection test must not probe a /v1 sibling next to it.
+test("versioned custom bases other than /v1 get no /v1 sibling probe", () => {
+  assert.deepEqual(
+    resolveProviderRequest({
+      provider: "custom",
+      baseUrl: "https://api.z.ai/api/coding/paas/v4",
+      apiKey: "",
+    }).endpoints,
+    ["https://api.z.ai/api/coding/paas/v4/models"]
+  );
+  assert.deepEqual(
+    resolveProviderRequest({
+      provider: "custom",
+      baseUrl: "https://api.example.com/v2",
+      apiKey: "",
+    }).endpoints,
+    ["https://api.example.com/v2/models"]
+  );
+});
+
 // The runtime (isSecureHttpEndpoint in src/utils/urlUtils.ts) refuses plain
 // HTTP on public hosts, so the test must refuse the same URLs — a passing test
 // would otherwise commit a config every real request rejects.
