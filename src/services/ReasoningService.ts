@@ -64,6 +64,7 @@ const BYOK_STREAM_PROVIDERS = [
   "custom",
   "openrouter",
   "corti",
+  "xai",
 ] as const;
 
 type ByokStreamProvider = (typeof BYOK_STREAM_PROVIDERS)[number];
@@ -181,7 +182,15 @@ class ReasoningService extends BaseReasoningService {
 
   private async getApiKey(
     provider:
-      "openai" | "anthropic" | "gemini" | "groq" | "tinfoil" | "custom" | "openrouter" | "corti"
+      | "openai"
+      | "anthropic"
+      | "gemini"
+      | "groq"
+      | "tinfoil"
+      | "custom"
+      | "openrouter"
+      | "corti"
+      | "xai"
   ): Promise<string> {
     if (provider === "custom") {
       let customKey = "";
@@ -222,6 +231,7 @@ class ReasoningService extends BaseReasoningService {
           openrouter: () => window.electronAPI.getOpenrouterKey(),
           tinfoil: () => window.electronAPI.getTinfoilKey?.(),
           corti: () => window.electronAPI.getCortiKey?.(),
+          xai: () => window.electronAPI.getXaiKey?.(),
         };
         apiKey = (await keyGetters[provider]()) ?? undefined;
 
@@ -602,6 +612,7 @@ class ReasoningService extends BaseReasoningService {
             openai: API_ENDPOINTS.OPENAI_BASE,
             groq: API_ENDPOINTS.GROQ_BASE,
             corti: API_ENDPOINTS.CORTI_MODELS_BASE,
+            xai: API_ENDPOINTS.XAI_BASE,
             gemini: API_ENDPOINTS.GEMINI,
           } as Partial<Record<string, string>>
         )[provider];
@@ -1285,6 +1296,7 @@ class ReasoningService extends BaseReasoningService {
       const openrouterKey = await window.electronAPI?.getOpenrouterKey?.();
       const tinfoilKey = await window.electronAPI?.getTinfoilKey?.();
       const cortiKey = await window.electronAPI?.getCortiKey?.();
+      const xaiKey = await window.electronAPI?.getXaiKey?.();
       const localAvailable = await window.electronAPI?.checkLocalReasoningAvailable?.();
 
       logger.logReasoning("API_KEY_CHECK", {
@@ -1295,6 +1307,7 @@ class ReasoningService extends BaseReasoningService {
         hasOpenrouter: !!openrouterKey,
         hasTinfoil: !!tinfoilKey,
         hasCorti: !!cortiKey,
+        hasXai: !!xaiKey,
         hasLocal: !!localAvailable,
       });
 
@@ -1306,6 +1319,7 @@ class ReasoningService extends BaseReasoningService {
         openrouterKey ||
         tinfoilKey ||
         cortiKey ||
+        xaiKey ||
         localAvailable
       );
     } catch (error) {
@@ -1329,6 +1343,7 @@ class ReasoningService extends BaseReasoningService {
       | "custom"
       | "openrouter"
       | "corti"
+      | "xai"
   ): void {
     if (provider) {
       if (provider !== "custom") {

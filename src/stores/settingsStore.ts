@@ -1452,6 +1452,7 @@ function invalidateApiKeyCaches(
     | "custom"
     | "openrouter"
     | "corti"
+    | "xai"
 ) {
   if (provider) {
     if (_ReasoningService) {
@@ -1471,7 +1472,7 @@ function invalidateApiKeyCaches(
 
 // Uniform BYOK key setter: persist to the secure store (debounced) and clear
 // the provider's cached key. cacheProvider is omitted where there is no scoped
-// cache to clear (xai), preserving prior behavior.
+// cache to clear, preserving prior behavior.
 function createSecretSetter(
   storeKey: string,
   saver: SecretProvider,
@@ -2181,7 +2182,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setAnthropicApiKey: createSecretSetter("anthropicApiKey", "anthropic", "anthropic"),
   setGeminiApiKey: createSecretSetter("geminiApiKey", "gemini", "gemini"),
   setGroqApiKey: createSecretSetter("groqApiKey", "groq", "groq"),
-  setXaiApiKey: createSecretSetter("xaiApiKey", "xai"),
+  setXaiApiKey: createSecretSetter("xaiApiKey", "xai", "xai"),
   setMistralApiKey: createSecretSetter("mistralApiKey", "mistral", "mistral"),
   setOpenrouterApiKey: createSecretSetter("openrouterApiKey", "openrouter", "openrouter"),
   setCortiClientId: (key: string) => {
