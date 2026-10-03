@@ -99,6 +99,50 @@ private final class KeyButton: UIButton {
   }
 }
 
+/// Route through row/stack boundaries so a key's enlarged target also works in
+/// the gaps between rows. UIKit's default hit testing stops at a parent whose
+/// bounds do not contain the touch, before consulting the key's point(inside:).
+private final class KeyboardRowsStack: UIStackView {
+  override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+    guard !isHidden, isUserInteractionEnabled, alpha >= 0.01,
+          self.point(inside: point, with: event) else { return nil }
+
+    var nearest: KeyButton?
+    var nearestDistance = CGFloat.infinity
+    var nearestCenterDistance = CGFloat.infinity
+
+    func visit(_ view: UIView) {
+      guard !view.isHidden, view.isUserInteractionEnabled, view.alpha >= 0.01 else { return }
+      if let key = view as? KeyButton {
+        guard key.isEnabled,
+              key.point(inside: key.convert(point, from: self), with: event) else { return }
+
+        // Prefer the visible key rectangle over another key's expanded area.
+        // In a gap, choose the nearer edge; center distance breaks edge ties.
+        // This avoids UIKit's reverse-subview-order bias in overlapping targets.
+        let rect = key.convert(key.bounds, to: self)
+        let dx = max(rect.minX - point.x, 0, point.x - rect.maxX)
+        let dy = max(rect.minY - point.y, 0, point.y - rect.maxY)
+        let distance = dx * dx + dy * dy
+        let centerDX = point.x - rect.midX
+        let centerDY = point.y - rect.midY
+        let centerDistance = centerDX * centerDX + centerDY * centerDY
+        if distance < nearestDistance
+          || (distance == nearestDistance && centerDistance < nearestCenterDistance) {
+          nearest = key
+          nearestDistance = distance
+          nearestCenterDistance = centerDistance
+        }
+        return
+      }
+      view.subviews.forEach(visit)
+    }
+
+    subviews.forEach(visit)
+    return nearest ?? self
+  }
+}
+
 private extension UIColor {
   func brightened(by amount: CGFloat) -> UIColor {
     var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
@@ -517,7 +561,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   // the in-flight transcription. Hidden in every other state.
   private let processingCancelButton = UIButton(type: .system)
   private let toneButton = KeyButton(type: .system)
-  private let keyboardRowsStack = UIStackView()
+  private let keyboardRowsStack = KeyboardRowsStack()
   private let lettersRowsStack = UIStackView()
   private let numbersRowsStack = UIStackView()
 

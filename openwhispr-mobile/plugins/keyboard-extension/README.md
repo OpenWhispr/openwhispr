@@ -45,6 +45,25 @@ npx expo prebuild --clean
 npm run ios
 ```
 
+## Keyboard touch regression tests
+
+On macOS with Xcode and an installed iOS Simulator runtime:
+
+```bash
+python3 openwhispr-mobile/plugins/keyboard-extension/tests/run-keyboard-touch-tests.py
+```
+
+Run from the repository root. The runner compiles the production keyboard Swift
+source and tests UIKit hit routing across row gaps, overlapping key targets,
+nested stacks, hidden layouts, disabled keys, and keyboard boundaries. It uses an
+available iPhone Simulator and shuts it down only if the runner booted it.
+Mobile CI runs the same tests. No Apple signing credentials or Expo build are needed.
+
+These synthetic touch tests do not measure typing latency. Before releasing,
+check fast two-thumb typing and repeated letters on an iPhone, near-edge taps,
+Shift, 123/ABC, space/return, held delete, keyboard switching, and dictation in
+portrait and landscape in Notes and another host app.
+
 ## Reference
 
 - [Apple — Custom Keyboard Extensions](https://developer.apple.com/documentation/uikit/keyboards_and_input/creating_a_custom_keyboard)
