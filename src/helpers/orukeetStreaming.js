@@ -21,6 +21,15 @@ const MANAGED_STREAM_OPTIONS = {
 function languageMetadata(message) {
   const language = message.language;
   const confidence = message.language_confidence;
+  const supportedScore = message.language_supported_score;
+  const hasSupportedScore =
+    Number.isFinite(supportedScore) && supportedScore >= 0 && supportedScore <= 1;
+  const extra = {
+    ...(hasSupportedScore ? { languageSupportedScore: supportedScore } : {}),
+    ...(Number.isFinite(message.language_audio_seconds) && message.language_audio_seconds > 0
+      ? { languageAudioSeconds: message.language_audio_seconds }
+      : {}),
+  };
   if (
     typeof language === "string" &&
     /^[a-z]{2}$/.test(language) &&
@@ -31,12 +40,10 @@ function languageMetadata(message) {
     return {
       language,
       languageConfidence: confidence,
-      ...(Number.isFinite(message.language_audio_seconds) && message.language_audio_seconds > 0
-        ? { languageAudioSeconds: message.language_audio_seconds }
-        : {}),
+      ...extra,
     };
   }
-  return { language: null, languageConfidence: null };
+  return { language: null, languageConfidence: null, ...(hasSupportedScore ? extra : {}) };
 }
 
 function capacityRetryDelay(requestedMs) {
@@ -181,7 +188,8 @@ class OrukeetStreaming {
       // The final message remains authoritative for this recording.
       if (!this.isConnected || this.result) return;
       const metadata = languageMetadata(message);
-      if (metadata.language) this.onLanguage?.(metadata);
+      if (metadata.language || Number.isFinite(metadata.languageSupportedScore))
+        this.onLanguage?.(metadata);
     } else if (message.type === "final") {
       // A duplicate or unsolicited final must never result in a second paste.
       if (this.result) return;

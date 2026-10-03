@@ -2,13 +2,14 @@ const { captureAuthFence } = require("./cloudApiRequest");
 const { createPolicyResponseError } = require("./policyResponseError");
 
 const ORUKEET_BASE_URL = "https://orukeet.gizmovoice.ai";
+const ORUKEET_LANGUAGE_PREVIEW_URL = `${ORUKEET_BASE_URL}/preview/language-routing`;
 const ORUKEET_SESSION_PATH = "/api/stt/orukeet/session";
 
 function validateSession(data) {
   if (
-    data?.baseUrl !== ORUKEET_BASE_URL ||
+    ![ORUKEET_BASE_URL, ORUKEET_LANGUAGE_PREVIEW_URL].includes(data?.baseUrl) ||
     data?.websocketUrl !==
-      `${ORUKEET_BASE_URL.replace("https:", "wss:")}/v1/audio/transcriptions/stream` ||
+      `${data?.baseUrl?.replace("https:", "wss:")}/v1/audio/transcriptions/stream` ||
     data?.protocol !== "orukeet.pcm.v1" ||
     data?.model !== "orukeet-v0.1.0" ||
     data?.singleUse !== true ||
@@ -18,7 +19,7 @@ function validateSession(data) {
   ) {
     throw new Error("Invalid Orukeet cloud session");
   }
-  return { baseUrl: ORUKEET_BASE_URL, clientToken: data.clientToken };
+  return { baseUrl: data.baseUrl, clientToken: data.clientToken };
 }
 
 // Main process only. The account bearer goes to the existing Cloud backend;

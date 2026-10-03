@@ -140,7 +140,7 @@ import {
   resolveManagedOrukeetRoute,
   resolveStreamingProviderName,
   buildStreamingSessionOptions,
-  shouldRetranscribeOrukeetLanguage,
+  evaluateOrukeetLanguageRouting,
 } from "./dictationStreamingRouting";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
@@ -1010,11 +1010,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   isSttConfigStale(now = Date.now()) {
-    return (
-      !this.sttConfig ||
-      !this.sttConfigFetchedAt ||
-      now - this.sttConfigFetchedAt > STT_CONFIG_TTL_MS
-    );
+    // Re-check opt-in language experiments frequently so a server rollback
+    // takes effect on the next recording after at most 30 s of cached config.
+    const ttl = ["shadow", "supported-0.30", "supported-0.10"].includes(
+      this.sttConfig?.orukeetLanguageRouting
+    )
+      ? 30000
+      : STT_CONFIG_TTL_MS;
+    return !this.sttConfig || !this.sttConfigFetchedAt || now - this.sttConfigFetchedAt > ttl;
   }
 
   invalidateSttConfig() {
@@ -5320,6 +5323,25 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const detectedLanguageFields = isOrukeetStream
       ? orukeetDetectedLanguageFields(orukeetFinal)
       : {};
+    const languageRouting = evaluateOrukeetLanguageRouting({
+      language: streamingSttLanguage,
+      final: orukeetFinal,
+      mode:
+        isOrukeetStream && stSettings.cloudTranscriptionMode === "openwhispr"
+          ? this.sttConfig?.orukeetLanguageRouting
+          : undefined,
+    });
+    if (isOrukeetStream && languageRouting.comparison) {
+      logger.info(
+        "Orukeet language routing comparison",
+        {
+          ...languageRouting.comparison,
+          fallbackAvailable:
+            fallbackBlob?.size > 0 && resolveStreamingFallbackTarget(stSettings) === "cloud",
+        },
+        "streaming"
+      );
+    }
 
     // Orukeet renders speech outside its 25 languages as confident nonsense.
     // With a confident final estimate, send the kept recording through Cloud
@@ -5329,7 +5351,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       isOrukeetStream &&
       fallbackBlob?.size > 0 &&
       resolveStreamingFallbackTarget(stSettings) === "cloud" &&
-      shouldRetranscribeOrukeetLanguage({ language: streamingSttLanguage, final: orukeetFinal })
+      languageRouting.fallback
     ) {
       logger.info(
         "Orukeet detected an unsupported language, re-transcribing through Cloud",
