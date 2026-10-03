@@ -338,6 +338,141 @@ test("cancelling while the streaming microphone opens never enters recording", a
   );
 });
 
+const managedOrukeetConfig = { dictation: { mode: "streaming" }, streamingProvider: "orukeet" };
+const managedDeepgramConfig = { dictation: { mode: "streaming" }, streamingProvider: "deepgram" };
+
+// A managed Orukeet recording that resolves its provider through the real
+// sttConfig routing, with every provider channel recording what reached it.
+async function startManagedOrukeetRecording(t, AudioManager) {
+  globalThis.__streamingFinalizationSettings = {
+    ...globalThis.__streamingFinalizationSettings,
+    cloudTranscriptionMode: "openwhispr",
+    isSignedIn: true,
+    preferredLanguage: "auto",
+  };
+  const previousAudioWorkletNode = globalThis.AudioWorkletNode;
+  globalThis.AudioWorkletNode = class {
+    constructor() {
+      this.port = {
+        postMessage: (message) => {
+          if (message === "stop") queueMicrotask(() => this.port.onmessage?.({ data: "flushed" }));
+        },
+      };
+    }
+
+    disconnect() {}
+  };
+  t.after(() => {
+    if (previousAudioWorkletNode === undefined) delete globalThis.AudioWorkletNode;
+    else globalThis.AudioWorkletNode = previousAudioWorkletNode;
+  });
+
+  const calls = [];
+  const record = (name, result) => async () => {
+    calls.push(name);
+    return result;
+  };
+  const listen = () => () => {};
+  Object.assign(globalThis.window.electronAPI, {
+    dictationRealtimeStart: async (options) => {
+      calls.push(`${options.provider}:start`);
+      return { success: true };
+    },
+    dictationRealtimeFinalize: record("realtime:finalize", { success: true, text: "Bonjour" }),
+    dictationRealtimeStop: record("realtime:stop", { success: true }),
+    onDictationRealtimePartial: listen,
+    onDictationRealtimeFinal: listen,
+    onDictationRealtimeError: listen,
+    onDictationRealtimeSessionEnd: listen,
+    deepgramStreamingFinalize: record("deepgram:finalize", { success: true }),
+    deepgramStreamingStop: record("deepgram:stop", { success: true }),
+    cloudStreamingUsage: async () => ({ success: true }),
+  });
+  globalThis.window.dispatchEvent = () => true;
+
+  const completions = [];
+  const stream = {
+    getAudioTracks: () => [{ getSettings: () => ({}) }],
+    getTracks: () => [{ stop() {} }],
+  };
+  const source = { connect() {}, disconnect() {} };
+  const manager = Object.assign(Object.create(AudioManager.prototype), {
+    isRecording: false,
+    isProcessing: false,
+    isStreaming: false,
+    streamingStartInProgress: false,
+    _streamingStartSettlementWaiters: [],
+    stopRequestedDuringStreamingStart: false,
+    _streamingStopPromise: null,
+    _streamingStopMode: null,
+    _streamingCancellationGeneration: 0,
+    _activeTranscriptionAbortController: null,
+    _streamingSessionGeneration: 0,
+    _activeStreamingSessionId: null,
+    _streamingMicSwapPromise: null,
+    streamingCleanupFns: [],
+    streamingFallbackRecorder: null,
+    streamingFallbackChunks: [],
+    _streamingFallbackSegments: [],
+    streamingTextDebounce: null,
+    pendingAssistantConversation: null,
+    pendingSelectionEdit: null,
+    preparedMicCapture: { take: async () => null },
+    micRecovery: { stop() {} },
+    isRecordingAllowedByPolicy: () => true,
+    getAudioConstraints: async () => ({}),
+    _acquireCaptureStream: async () => stream,
+    startStreamingFallbackRecorder() {},
+    getOrCreateAudioContext: async () => ({
+      createMediaStreamSource: () => source,
+      createAnalyser: () => ({}),
+      audioWorklet: { addModule: async () => {} },
+    }),
+    getWorkletBlobUrl: () => "",
+    getKeyterms: () => [],
+    beginMicRecovery: async () => {},
+    mergeRecordedSegments: async () => null,
+    finalizeChineseScript: async (text) => text,
+    cleanupPreview: async () => null,
+    _markCaptureStreamReleased() {},
+    onStateChange() {},
+    onTranscriptionComplete: (result) => completions.push(result),
+  });
+  manager.setSttConfig(managedOrukeetConfig);
+
+  assert.equal(await manager.startStreamingRecording(), true);
+  // The hook's background TTL refresh lands mid-recording and would now route
+  // a new recording elsewhere.
+  manager.setSttConfig(managedDeepgramConfig);
+  assert.equal(manager.getStreamingProviderName(), "deepgram");
+
+  return { manager, calls, completions };
+}
+
+test("stop finalizes the Orukeet stream after an STT config refresh reroutes mid-recording", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const { manager, calls, completions } = await startManagedOrukeetRecording(t, AudioManager);
+
+  assert.equal(await manager.stopStreamingRecording(), true);
+
+  assert.deepEqual(calls, ["orukeet:start", "realtime:finalize", "realtime:stop"]);
+  assert.equal(completions.length, 1);
+  assert.equal(completions[0].text, "Bonjour");
+  assert.equal(completions[0].source, "orukeet-streaming");
+  assert.equal(manager._activeStreamingProviderName, null);
+});
+
+test("cancel disconnects the Orukeet stream after an STT config refresh reroutes mid-recording", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const { manager, calls, completions } = await startManagedOrukeetRecording(t, AudioManager);
+
+  assert.equal(await manager.cancelStreamingRecording(), true);
+
+  assert.deepEqual(calls, ["orukeet:start", "realtime:stop"]);
+  assert.deepEqual(completions, []);
+  assert.equal(manager._activeStreamingProviderName, null);
+});
+
 test("cancel overrides a normal streaming stop before it can publish text", async (t) => {
   const AudioManager = await loadManagerClass(t);
   const { manager } = createFinalizingManager(AudioManager);
