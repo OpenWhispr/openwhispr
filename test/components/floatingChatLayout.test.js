@@ -39,6 +39,15 @@ function createElement(overrides = {}) {
   };
 }
 
+// Opening the chat leaves the note where it was; a reader scrolls to its end to be followed.
+function scrollToBottom(contentRoot, scroller) {
+  const bottom = scroller.scrollHeight - scroller.clientHeight;
+  scroller.scrollTop = bottom - 100;
+  contentRoot.dispatch("scroll");
+  scroller.scrollTop = bottom;
+  contentRoot.dispatch("scroll");
+}
+
 test("near-bottom detection uses the real scroll range", async () => {
   const { isNearScrollBottom } = await load();
 
@@ -100,13 +109,17 @@ test("viewport resizes preserve pinned content without yanking a reader", async 
   );
 
   assert.deepEqual(observedElements, [panel, contentRoot]);
-  assert.equal(container.style.getPropertyValue("--floating-inset"), "232px");
+  assert.equal(container.style.getPropertyValue("--floating-inset"), "240px");
+  assert.equal(scheduledFrames.size, 0, "opening the chat doesn't scroll the note");
+  resizeCallback();
+  assert.equal(scheduledFrames.size, 0, "nor does the panel growing as it opens");
+  assert.equal(scroller.scrollTop, 700);
 
-  scheduledFrames.get(nextFrameId)();
+  scrollToBottom(contentRoot, scroller);
   scroller.clientHeight = 150;
   resizeCallback();
   scheduledFrames.get(nextFrameId)();
-  assert.equal(scroller.scrollTop, 850, "a pinned scroller follows a viewport shrink");
+  assert.equal(scroller.scrollTop, 850, "a reader at the bottom follows a viewport shrink");
 
   scroller.scrollTop = 600;
   contentRoot.dispatch("scroll");
@@ -181,7 +194,7 @@ test("the note viewport caps the in-view chat in a short window", async () => {
 
   container.clientHeight = 240;
   onResize();
-  assert.equal(panel.style.height, "128px", "the top clearance caps a short viewport");
+  assert.equal(panel.style.height, "120px", "the top clearance caps a short viewport");
   stopSelected();
 });
 
@@ -230,10 +243,12 @@ test("upward wheel intent cancels resize pinning until the reader returns to bot
     clientHeight: 300,
     contains: (target) => target === transcriptRow,
   });
-  const { contentRoot, scheduledFrames, resizeCallback, nextFrameId, cleanup } =
-    createLayoutHarness(observeFloatingChatLayout, { scroller });
+  const { contentRoot, scheduledFrames, resizeCallback, cleanup } = createLayoutHarness(
+    observeFloatingChatLayout,
+    { scroller }
+  );
 
-  scheduledFrames.get(nextFrameId)();
+  scrollToBottom(contentRoot, scroller);
   resizeCallback();
   assert.equal(scheduledFrames.size, 1, "a followed resize schedules a bottom correction");
 
@@ -265,7 +280,7 @@ test("upward wheel over chrome outside the scroller keeps following", async () =
   const harness = createLayoutHarness(observeFloatingChatLayout, { scroller });
   const { contentRoot, scheduledFrames } = harness;
 
-  scheduledFrames.get(harness.nextFrameId)();
+  scrollToBottom(contentRoot, scroller);
   harness.resizeCallback();
   assert.equal(scheduledFrames.size, 1, "a followed resize schedules a bottom correction");
 

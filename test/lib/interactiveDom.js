@@ -147,6 +147,8 @@ function installInteractiveDom(t) {
       this.ownerDocument.activeElement = this;
     }
 
+    scrollIntoView() {}
+
     // Tag-name and [attribute] selectors only.
     querySelectorAll(selector) {
       const attribute = selector.match(/^\[([\w-]+)\]$/)?.[1];

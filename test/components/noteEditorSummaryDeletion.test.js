@@ -116,6 +116,15 @@ const TEMPLATE = {
   output: null,
   translation_key: "notes.actions.builtin.detailedNotes",
 };
+const DEFAULT_TEMPLATE = {
+  ...TEMPLATE,
+  id: 2,
+  client_id: "notes.actions.builtin.generateNotes",
+  name: "AI Summary",
+  prompt: "Summarize the note.",
+  sections: null,
+  translation_key: "notes.actions.builtin.generateNotes",
+};
 
 function baseProps(enhancement) {
   return {
@@ -137,7 +146,7 @@ async function loadNoteEditor(t) {
       electronAPI: {
         getSpeakerProfiles: async () => [],
         getSpeakerMappings: async () => [],
-        getActions: async () => [TEMPLATE],
+        getActions: async () => [TEMPLATE, DEFAULT_TEMPLATE],
       },
     },
   });
@@ -325,7 +334,7 @@ test("a typed note without a summary offers one with the default template", asyn
   });
   assert.ok(callout, "notes with no transcript still offer a summary");
   callout.props.onClick();
-  assert.deepEqual(ran, [TEMPLATE.client_id]);
+  assert.deepEqual(ran, [DEFAULT_TEMPLATE.client_id]);
 
   await unmount();
 });
@@ -471,5 +480,12 @@ test("the in-view chat mounts on its first open and stays to fade out", async (t
   await React.act(async () => findBottomBar(latest()).props.onInputEscape());
   assert.equal(findBottomBar(latest()).props.chatOpen, false);
   assert.ok(findBottomBar(latest()).props.chatContent, "closing keeps it mounted for the fade");
+  await unmount();
+});
+
+test("the collapsed composer keeps its send button while the note has no actions", async (t) => {
+  const { render, latest, unmount } = await loadNoteEditor(t);
+  await render(ENHANCEMENT);
+  assert.ok(!findBottomBar(latest()).props.actionPicker);
   await unmount();
 });

@@ -1,9 +1,10 @@
 // Built-in note templates and actions. The database seeds any that are missing
 // on startup and only rewrites a row whose prompt still equals a previous
 // default, so a user's edited prompt is never touched. A template writes the AI
-// summary: Generate Notes wraps its prompt in the generic system prompt, and
-// Detailed Notes is compiled from sections (see templatePrompts.js). An action
-// either edits the summary or answers in the note chat.
+// summary: AI Summary, the default (Generate Notes' key), wraps its prompt in the
+// generic system prompt, and Detailed Notes is compiled from sections (see
+// templatePrompts.js). An action either edits the summary or answers in the note
+// chat.
 
 export const GENERATE_NOTES_KEY = "notes.actions.builtin.generateNotes";
 export const DETAILED_NOTES_KEY = "notes.actions.builtin.detailedNotes";
@@ -469,8 +470,8 @@ export const BUILTIN_ACTIONS = [
   {
     translationKey: DETAILED_NOTES_KEY,
     kind: "template",
-    // The default template, and the prompt AI summaries always used.
-    name: "AI Summary",
+    // The prompt 1.10.2's Generate AI Summary button used.
+    name: "Detailed Notes",
     description: "Accurate, comprehensive meeting notes with decisions and action items",
     prompt: "",
     sections: DETAILED_NOTES_SECTIONS,
@@ -481,12 +482,13 @@ export const BUILTIN_ACTIONS = [
       DETAILED_NOTES_PROMPT_1_10_2,
     ],
     icon: "sparkles",
-    sortOrder: 0,
+    sortOrder: 1,
   },
   {
     translationKey: GENERATE_NOTES_KEY,
     kind: "template",
-    name: "Generate Notes",
+    // The default template.
+    name: "AI Summary",
     description: "Clean up, structure, and enhance your notes",
     prompt: GENERATE_NOTES_PROMPT,
     sections: null,
@@ -498,7 +500,7 @@ export const BUILTIN_ACTIONS = [
       GENERATE_NOTES_PROMPT_1_10_2,
     ],
     icon: "sparkles",
-    sortOrder: 1,
+    sortOrder: 0,
   },
   {
     translationKey: FOLLOW_UP_EMAIL_KEY,
@@ -514,7 +516,7 @@ export const BUILTIN_ACTIONS = [
   },
   builtinAction({
     key: "makeTodos",
-    name: "Make to-dos",
+    name: "Create to-dos",
     description: "List every to-do and its owner in the chat",
     prompt: MAKE_TODOS_PROMPT,
     output: "chat",

@@ -3525,6 +3525,7 @@
       "chunkProgress": "Partie {{step}} sur {{total}}",
       "emptyReply": "Le modèle a renvoyé une réponse vide. Réessayez ou choisissez un autre modèle.",
       "allActions": "Toutes les actions",
+      "selectAction": "Sélectionner l'action",
       "manage": "Gérer les actions...",
       "addAction": "Nouvelle action",
       "editAction": "Modifier l'action",
@@ -3541,7 +3542,7 @@
       "emptyEditorDescription": "Choisissez une action dans la liste ou créez-en une nouvelle",
       "builtin": {
         "generateNotes": {
-          "name": "Générer des notes",
+          "name": "Résumé IA",
           "description": "Nettoyer, structurer et améliorer vos notes"
         },
         "followUpEmail": {
@@ -3550,7 +3551,7 @@
           "cta": "Rédiger un e-mail de suivi"
         },
         "detailedNotes": {
-          "name": "Résumé IA",
+          "name": "Notes détaillées",
           "description": "Des notes de réunion précises et complètes avec décisions et actions"
         },
         "makeTodos": {
@@ -3617,6 +3618,7 @@
       "managerTitle": "Modèles et actions",
       "manage": "Gérer les modèles...",
       "select": "Choisir un modèle",
+      "regenerate": "Régénérer",
       "addTemplate": "Nouveau modèle",
       "editTemplate": "Modifier le modèle",
       "namePlaceholder": "Nom du modèle",
@@ -3734,7 +3736,7 @@
         "chips": {
           "catchUp": "Résume-moi les nouveautés",
           "keyDecisions": "Liste les décisions clés",
-          "inFlight": "Montre les projets en cours"
+          "openActionItems": "Liste les actions à mener"
         }
       },
       "invite": "Inviter",
@@ -3942,7 +3944,10 @@
       "typeMessage": "Écrivez un message...",
       "send": "Envoyer",
       "voiceDraftStreamingOnly": "La saisie vocale n'est pas disponible avec votre fournisseur de transcription : il ne prend en charge que la dictée en direct. Choisissez un autre fournisseur dans Réglages → Parole en texte.",
-      "commands": "Commandes"
+      "commands": "Commandes",
+      "slashNavigate": "pour naviguer",
+      "slashSelect": "pour sélectionner",
+      "slashClose": "pour fermer"
     },
     "tools": {
       "search_notesName": "Rechercher des notes",

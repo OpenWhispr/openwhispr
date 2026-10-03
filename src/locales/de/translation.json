@@ -3525,6 +3525,7 @@
       "chunkProgress": "Teil {{step}} von {{total}}",
       "emptyReply": "Das Modell hat eine leere Antwort zurückgegeben. Versuchen Sie es erneut oder wählen Sie ein anderes Modell.",
       "allActions": "Alle Aktionen",
+      "selectAction": "Aktion auswählen",
       "manage": "Aktionen verwalten...",
       "addAction": "Neue Aktion",
       "editAction": "Aktion bearbeiten",
@@ -3541,7 +3542,7 @@
       "emptyEditorDescription": "Wählen Sie eine Aktion aus der Liste oder erstellen Sie eine neue",
       "builtin": {
         "generateNotes": {
-          "name": "Notizen generieren",
+          "name": "KI-Zusammenfassung",
           "description": "Notizen bereinigen, strukturieren und verbessern"
         },
         "followUpEmail": {
@@ -3550,7 +3551,7 @@
           "cta": "Follow-up-E-Mail entwerfen"
         },
         "detailedNotes": {
-          "name": "KI-Zusammenfassung",
+          "name": "Ausführliche Notizen",
           "description": "Präzise, umfassende Meeting-Notizen mit Entscheidungen und Aufgaben"
         },
         "makeTodos": {
@@ -3617,6 +3618,7 @@
       "managerTitle": "Vorlagen & Aktionen",
       "manage": "Vorlagen verwalten...",
       "select": "Vorlage auswählen",
+      "regenerate": "Neu generieren",
       "addTemplate": "Neue Vorlage",
       "editTemplate": "Vorlage bearbeiten",
       "namePlaceholder": "Name der Vorlage",
@@ -3734,7 +3736,7 @@
         "chips": {
           "catchUp": "Bring mich auf den neuesten Stand",
           "keyDecisions": "Liste die wichtigsten Entscheidungen auf",
-          "inFlight": "Zeig laufende Projekte"
+          "openActionItems": "Liste die offenen Aufgaben auf"
         }
       },
       "invite": "Einladen",
@@ -3942,7 +3944,10 @@
       "typeMessage": "Nachricht eingeben...",
       "send": "Senden",
       "voiceDraftStreamingOnly": "Spracheingabe ist mit Ihrem Transkriptionsanbieter nicht verfügbar: Er unterstützt nur Live-Diktat. Wählen Sie unter Einstellungen → Sprache zu Text einen anderen Anbieter.",
-      "commands": "Befehle"
+      "commands": "Befehle",
+      "slashNavigate": "zum Navigieren",
+      "slashSelect": "zum Auswählen",
+      "slashClose": "zum Schließen"
     },
     "tools": {
       "search_notesName": "Notizen durchsuchen",

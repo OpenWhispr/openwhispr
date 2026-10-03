@@ -1702,7 +1702,10 @@
       "typeMessage": "اكتب رسالة...",
       "send": "إرسال",
       "voiceDraftStreamingOnly": "الإدخال الصوتي غير متاح مع مزود التفريغ الخاص بك: فهو يدعم الإملاء المباشر فقط. اختر مزودًا آخر في الإعدادات ← تحويل الكلام إلى نص (Speech to Text).",
-      "commands": "الأوامر"
+      "commands": "الأوامر",
+      "slashNavigate": "للتنقل",
+      "slashSelect": "للاختيار",
+      "slashClose": "للإغلاق"
     },
     "tools": {
       "search_notesName": "البحث في الملاحظات",
@@ -2317,6 +2320,7 @@
       "chunkProgress": "الجزء {{step}} من {{total}}",
       "emptyReply": "أعاد النموذج ردًا فارغًا. حاول مرة أخرى، أو اختر نموذجًا آخر.",
       "allActions": "كل الإجراءات",
+      "selectAction": "تحديد إجراء",
       "manage": "إدارة الإجراءات...",
       "addAction": "إجراء جديد",
       "editAction": "تعديل الإجراء",
@@ -2333,7 +2337,7 @@
       "emptyEditorDescription": "اختر إجراءً من القائمة أو أنشئ إجراءً جديدًا",
       "builtin": {
         "generateNotes": {
-          "name": "إنشاء ملاحظات",
+          "name": "ملخص بالذكاء الاصطناعي",
           "description": "تنظيف وتنظيم وتحسين ملاحظاتك"
         },
         "followUpEmail": {
@@ -2342,7 +2346,7 @@
           "cta": "صياغة بريد متابعة"
         },
         "detailedNotes": {
-          "name": "ملخص بالذكاء الاصطناعي",
+          "name": "ملاحظات مفصلة",
           "description": "ملاحظات اجتماع دقيقة وشاملة تتضمن القرارات والمهام"
         },
         "makeTodos": {
@@ -2409,6 +2413,7 @@
       "managerTitle": "القوالب والإجراءات",
       "manage": "إدارة القوالب...",
       "select": "اختر قالبًا",
+      "regenerate": "إعادة الإنشاء",
       "addTemplate": "قالب جديد",
       "editTemplate": "تعديل القالب",
       "namePlaceholder": "اسم القالب",
@@ -2534,7 +2539,7 @@
         "chips": {
           "catchUp": "أطلعني على المستجدات",
           "keyDecisions": "اذكر القرارات الرئيسية",
-          "inFlight": "إظهار المشاريع قيد التنفيذ"
+          "openActionItems": "اذكر بنود العمل المفتوحة"
         }
       },
       "invite": "دعوة",

@@ -11,12 +11,7 @@ const { parseEventTime } = require("./calendarAvailability");
 // keeps the cloud created_at but lets timestamp default to the local pull, so
 // a naive value must never outrank created_at when dating a historical row.
 const { hasExplicitTimeZone, parseDbTimestamp, toDbTimestamp } = require("./dbTimestamp");
-const {
-  BUILTIN_ACTIONS,
-  DETAILED_NOTES_KEY,
-  GENERATE_NOTES_KEY,
-  NOTE_ACTION_LIMITS,
-} = require("./builtinActions");
+const { BUILTIN_ACTIONS, GENERATE_NOTES_KEY, NOTE_ACTION_LIMITS } = require("./builtinActions");
 const { normalizeSections } = require("./templatePrompts");
 const {
   ANALYTICS_COUNTER_VERSION,
@@ -651,13 +646,6 @@ class DatabaseManager {
           `UPDATE actions SET translation_key = ? WHERE is_builtin = 1 AND (translation_key IS NULL OR translation_key NOT IN (${builtinKeys.map(() => "?").join(", ")}))`
         )
         .run(GENERATE_NOTES_KEY, ...builtinKeys);
-
-      // Detailed Notes became the default "AI Summary"; a name the user chose stays.
-      this.db
-        .prepare(
-          "UPDATE actions SET name = 'AI Summary' WHERE is_builtin = 1 AND translation_key = ? AND name = 'Detailed Notes'"
-        )
-        .run(DETAILED_NOTES_KEY);
 
       // Built-ins: insert any that are missing, and roll a new default out to rows
       // that are still a previous flat default (never a user edit). A built-in's

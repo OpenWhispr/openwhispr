@@ -3154,6 +3154,7 @@
     },
     "actions": {
       "allActions": "全部操作",
+      "selectAction": "选择操作",
       "manage": "管理操作...",
       "addAction": "新建操作",
       "editAction": "编辑操作",
@@ -3173,7 +3174,7 @@
       "emptyReply": "模型返回了空回复。请重试，或选择其他模型。",
       "builtin": {
         "generateNotes": {
-          "name": "生成笔记",
+          "name": "AI 摘要",
           "description": "清理、结构化和增强您的笔记"
         },
         "followUpEmail": {
@@ -3182,7 +3183,7 @@
           "cta": "草拟跟进邮件"
         },
         "detailedNotes": {
-          "name": "AI 摘要",
+          "name": "详细笔记",
           "description": "准确、全面的会议笔记，包含决策和行动项"
         },
         "makeTodos": {
@@ -3249,6 +3250,7 @@
       "managerTitle": "模板和操作",
       "manage": "管理模板...",
       "select": "选择模板",
+      "regenerate": "重新生成",
       "addTemplate": "新建模板",
       "editTemplate": "编辑模板",
       "namePlaceholder": "模板名称",
@@ -3382,7 +3384,7 @@
         "chips": {
           "catchUp": "帮我补上进展",
           "keyDecisions": "列出关键决定",
-          "inFlight": "显示进行中的项目"
+          "openActionItems": "列出待办事项"
         }
       },
       "invite": "邀请",
@@ -3771,7 +3773,10 @@
       "typeMessage": "输入消息...",
       "send": "发送",
       "voiceDraftStreamingOnly": "当前转录服务商仅支持实时听写，因此无法使用语音输入。请在“设置 → 语音转文字”中选择其他服务商。",
-      "commands": "命令"
+      "commands": "命令",
+      "slashNavigate": "导航",
+      "slashSelect": "选择",
+      "slashClose": "关闭"
     },
     "tools": {
       "search_notesName": "搜索笔记",

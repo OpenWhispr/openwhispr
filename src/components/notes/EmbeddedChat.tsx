@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { X, PanelRight, Plus, AlignLeft } from "../icons";
 import { cn } from "../lib/utils";
@@ -88,6 +88,7 @@ export default function EmbeddedChat({
   slashCommands,
 }: EmbeddedChatProps) {
   const { t } = useTranslation();
+  const [slashMenuOpen, setSlashMenuOpen] = useState(false);
 
   const handleOpenNote = useCallback(async (noteId: number) => {
     const note = await window.electronAPI.getNote(noteId);
@@ -201,6 +202,7 @@ export default function EmbeddedChat({
           messages={messages}
           emptyState={<EmptyState floating={mode === "floating"} />}
           onOpenNote={handleOpenNote}
+          plainBubbles
           scrollClassName={
             mode === "floating"
               ? cn(
@@ -223,9 +225,21 @@ export default function EmbeddedChat({
   return (
     <div className="flex min-h-0 w-1/2 min-w-80 max-w-2xl shrink-0 p-4" data-note-chat-panel>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-4xl border border-border/60 bg-surface-1 dark:border-white/10 dark:bg-surface-1">
-        {chatBody}
-        <div className="mx-3 mb-3 shrink-0">
-          <div className="scrollbar-hidden flex items-center gap-1.5 overflow-x-auto px-1 pb-2">
+        <div className={cn("flex min-h-0 flex-1 flex-col", slashMenuOpen && "hidden")}>
+          {chatBody}
+        </div>
+        <div
+          className={cn(
+            "mx-3 mb-3",
+            slashMenuOpen ? "mt-3 flex min-h-0 flex-1 flex-col" : "shrink-0"
+          )}
+        >
+          <div
+            className={cn(
+              "scrollbar-hidden flex items-center gap-1.5 overflow-x-auto px-1 pb-2",
+              slashMenuOpen && "hidden"
+            )}
+          >
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
@@ -274,6 +288,7 @@ export default function EmbeddedChat({
             focusOnIdle={false}
             placeholder={t("embeddedChat.askPlaceholder")}
             slashCommands={slashCommands}
+            onSlashMenuOpenChange={setSlashMenuOpen}
           />
         </div>
       </div>

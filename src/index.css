@@ -102,6 +102,18 @@
   --shadow-glass:
     inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(255, 255, 255, 0.45),
     0 2px 10px rgba(15, 23, 42, 0.06);
+  /* The open note chat: the glass rim over a deep, soft lift. */
+  --shadow-chat-card:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85), inset 0 0 0 1px rgba(255, 255, 255, 0.5),
+    0 28px 64px -24px rgba(15, 23, 42, 0.3), 0 2px 10px rgba(15, 23, 42, 0.06);
+  /* A faint gray, not white: white glass on a white page reads as paper. */
+  --chat-glass: rgba(228, 228, 231, 0.25);
+  /* A sheen across the top, so the glass reads even over an empty page. */
+  --chat-glass-sheen: linear-gradient(
+    165deg,
+    rgba(255, 255, 255, 0.55),
+    rgba(255, 255, 255, 0) 45%
+  );
   /* Same rim on brand-blue surfaces (mic/send buttons): the app icon's glass.
      Softer than --shadow-glass because it sits on colour. */
   --shadow-brand-glass:
@@ -186,6 +198,15 @@
   --shadow-glass:
     inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.05),
     0 2px 12px rgba(0, 0, 0, 0.35);
+  --shadow-chat-card:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 32px 72px -24px rgba(0, 0, 0, 0.8), 0 2px 12px rgba(0, 0, 0, 0.35);
+  --chat-glass: oklch(0.26 0 0 / 0.55);
+  --chat-glass-sheen: linear-gradient(
+    165deg,
+    rgba(255, 255, 255, 0.07),
+    rgba(255, 255, 255, 0) 45%
+  );
   --shadow-brand-tile: var(--shadow-brand-glass), 0 10px 24px -8px rgb(0 0 0 / 0.6);
 }
 
@@ -1300,6 +1321,20 @@ a:hover {
   }
 }
 
+/* Content materializing through the note chat's glass: it rises in out of a soft blur. */
+@keyframes glass-in {
+  from {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+
 @keyframes fade-in-up {
   from {
     opacity: 0;
@@ -1709,8 +1744,7 @@ a:hover {
 .rich-text-editor-content {
   outline: none;
   unicode-bidi: plaintext;
-  /* The bottom clears the note's ask bar and the action chips above it. */
-  padding-block: 0.75rem 7.5rem;
+  padding-block: 0.75rem 5rem;
   /* Centers the text in the page column (PAGE_CONTENT_WIDTH_CLASS) with padding, not a
      max-width, so the editable area spans the pane and a margin click places the caret. */
   padding-inline: max(1.25rem, calc((100% - var(--container-5xl)) / 2 + 1.25rem));

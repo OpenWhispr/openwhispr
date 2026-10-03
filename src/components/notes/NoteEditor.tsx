@@ -75,9 +75,11 @@ import { Button } from "../ui/button";
 import EmbeddedChat, { type EmbeddedChatMode } from "./EmbeddedChat";
 import { useEmbeddedChat } from "../../hooks/useEmbeddedChat";
 import ActionChips from "./ActionChips";
+import ActionPicker from "./ActionPicker";
 import TemplatePicker from "./TemplatePicker";
 import {
   getActionCta,
+  getActionDescription,
   getActionName,
   initializeActions,
   resolveTemplate,
@@ -438,6 +440,7 @@ export default function NoteEditor({
 
   const segmentScrollRef = useRef<HTMLDivElement>(null);
   const segmentContainerRef = useRef<HTMLDivElement>(null);
+  const summaryTabRef = useRef<HTMLDivElement>(null);
   const [indicatorStyle, setIndicatorStyle] = useState<React.CSSProperties>({ opacity: 0 });
   const scheduleUiUpdate = useCallback((callback: () => void) => {
     const frameId = window.requestAnimationFrame(callback);
@@ -923,10 +926,13 @@ export default function NoteEditor({
         hint: t(
           action.output === "summary" ? "notes.actions.output.summary" : "notes.actions.output.chat"
         ),
+        description: getActionDescription(action, t),
         disabled: !canRunAction(action),
         run: () => runAction(action),
       }))
     : undefined;
+
+  const closeChat = useCallback(() => handleChatModeChange("hidden"), [handleChatModeChange]);
 
   const handleChatInputFocus = useCallback(() => {
     if (chatMode === "hidden") {
@@ -1219,6 +1225,7 @@ export default function NoteEditor({
                 </button>
                 {enhancement && (
                   <div
+                    ref={summaryTabRef}
                     data-segment-button
                     data-segment-value="enhanced"
                     className={cn(
@@ -1248,6 +1255,7 @@ export default function NoteEditor({
                         onRun={(template) => onRunNoteAction?.(template)}
                         onManage={() => onManageActions?.("template")}
                         disabled={isActionRunning}
+                        alignTo={summaryTabRef}
                       >
                         <button
                           type="button"
@@ -1454,7 +1462,8 @@ export default function NoteEditor({
             onDraftChange={setChatDraft}
             onAskSubmit={handleAskSubmit}
             onInputFocus={handleChatInputFocus}
-            onInputEscape={() => handleChatModeChange("hidden")}
+            onInputEscape={closeChat}
+            onClickOutside={closeChat}
             chatOpen={chatMode === "floating"}
             agentState={chatMode === "floating" ? embeddedChat.agentState : "idle"}
             onCancel={embeddedChat.cancelStream}
@@ -1474,6 +1483,17 @@ export default function NoteEditor({
                   activeConversationId={embeddedChat.activeConversationId}
                   onSwitchConversation={embeddedChat.switchConversation}
                   onNewChat={embeddedChat.startNewChat}
+                />
+              )
+            }
+            actionPicker={
+              offersActions &&
+              noteActions.length > 0 && (
+                <ActionPicker
+                  actions={noteActions}
+                  canRun={canRunAction}
+                  onRunAction={runAction}
+                  onManageActions={() => onManageActions?.("action")}
                 />
               )
             }

@@ -20,15 +20,6 @@ async function mountChatInput(t) {
         export const getMicAnalyser = () => null;
         export const useMeetingRecordingStore = { getState: () => ({ currentMicLevel: 0 }) };
       `,
-      // Radix positions the menu with real layout; render it in place instead.
-      "/ui/popover": `
-        import { createContext, createElement, useContext } from "react";
-        const Open = createContext(false);
-        export const Popover = ({ open, children }) =>
-          createElement(Open.Provider, { value: open }, children);
-        export const PopoverAnchor = () => null;
-        export const PopoverContent = ({ children }) => (useContext(Open) ? children : null);
-      `,
     },
   });
   const { ChatInput } = await vite.ssrLoadModule("/components/chat/ChatInput.tsx");
@@ -58,7 +49,7 @@ const options = (container) => {
   const listbox = findElement(container, (el) => el.getAttribute?.("role") === "listbox");
   if (!listbox) return [];
   return listbox.childNodes.map((option) => ({
-    label: option.textContent,
+    label: option.textContent.trim(),
     selected: option.getAttribute("aria-selected") === "true",
   }));
 };
@@ -68,10 +59,16 @@ test("typing / in the composer runs an action from the keyboard", async (t) => {
   const ran = [];
   const drafts = [];
   const submitted = [];
+  const menuOpen = [];
   let escaped = 0;
   const commands = [
-    { id: "email", label: "Follow-up email", run: () => ran.push("email") },
-    { id: "todos", label: "Make to-dos", run: () => ran.push("todos") },
+    {
+      id: "email",
+      label: "Follow-up email",
+      description: "Draft it from the note",
+      run: () => ran.push("email"),
+    },
+    { id: "todos", label: "Create to-dos", run: () => ran.push("todos") },
     {
       id: "tldr",
       label: "Add TL;DR",
@@ -93,6 +90,7 @@ test("typing / in the composer runs an action from the keyboard", async (t) => {
           onEscape: () => escaped++,
           focusOnIdle: false,
           slashCommands: commands,
+          onSlashMenuOpenChange: (open) => menuOpen.push(open),
         })
       )
     );
@@ -103,8 +101,30 @@ test("typing / in the composer runs an action from the keyboard", async (t) => {
   await React.act(async () => textarea.dispatchEvent({ type: "focusin", bubbles: true }));
   assert.deepEqual(
     options(container).map((option) => option.label),
-    ["Follow-up email", "Make to-dos", "Add TL;DRAI summary"]
+    ["Follow-up emailDraft it from the note", "Create to-dos", "Add TL;DRAI summary"],
+    "each command shows its description"
   );
+  assert.equal(menuOpen.at(-1), true, "the host hears the menu open, to hide the chat");
+  const listbox = findElement(container, (el) => el.getAttribute?.("role") === "listbox");
+  const pressBetweenRows = listbox.dispatchEvent({
+    type: "mousedown",
+    bubbles: true,
+    preventDefault() {
+      this.defaultPrevented = true;
+    },
+  });
+  assert.equal(pressBetweenRows, false, "a press between the rows keeps focus in the composer");
+
+  const row = (index) =>
+    findElement(container, (el) => el.getAttribute?.("role") === "listbox").childNodes[index];
+  const selected = () => options(container).map((option) => option.selected);
+  await React.act(async () =>
+    row(2).dispatchEvent({ type: "mouseover", bubbles: true, relatedTarget: null })
+  );
+  assert.deepEqual(selected(), [true, false, false], "a row sliding under a resting pointer");
+  await React.act(async () => row(1).dispatchEvent({ type: "mousemove", bubbles: true }));
+  assert.deepEqual(selected(), [false, true, false], "moving the pointer picks the row");
+  await key(textarea, "ArrowUp");
 
   await key(textarea, "ArrowDown");
   assert.deepEqual(
@@ -141,24 +161,25 @@ test("typing / in the composer runs an action from the keyboard", async (t) => {
 
   await render("/zzz");
   assert.deepEqual(options(container), []);
+  assert.equal(menuOpen.at(-1), false, "and close, to show the chat again");
   await key(textarea, "Enter");
   assert.deepEqual(submitted, ["/zzz"], "a draft no command matches is sent as typed");
 });
 
 test("a / filter ranks labels with a word starting with it first", async () => {
   const { matchSlashCommands } = await import("../../src/components/chat/slashCommands.ts");
-  const commands = ["Make to-dos", "Shorten", "Slack update", "全部操作"].map((label) => ({
+  const commands = ["Create to-dos", "Shorten", "Slack update", "全部操作"].map((label) => ({
     id: label,
     label,
     run: () => {},
   }));
   const labels = (draft) => matchSlashCommands(commands, draft).map((command) => command.label);
 
-  assert.deepEqual(labels("/s"), ["Shorten", "Slack update", "Make to-dos"]);
-  assert.deepEqual(labels("/DOS"), ["Make to-dos"]);
+  assert.deepEqual(labels("/s"), ["Shorten", "Slack update", "Create to-dos"]);
+  assert.deepEqual(labels("/DOS"), ["Create to-dos"]);
   assert.deepEqual(labels("/操作"), ["全部操作"], "a label without spaces matches mid-word");
   assert.deepEqual(labels("／操作"), ["全部操作"], "a CJK input method's full-width slash counts");
-  assert.deepEqual(labels("/"), ["Make to-dos", "Shorten", "Slack update", "全部操作"]);
+  assert.deepEqual(labels("/"), ["Create to-dos", "Shorten", "Slack update", "全部操作"]);
   assert.deepEqual(labels("Summarize /s"), [], "only a draft that starts with / asks");
   assert.deepEqual(labels("/s\nmore"), [], "nor one that runs onto a new line");
 });

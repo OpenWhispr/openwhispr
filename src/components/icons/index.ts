@@ -6,6 +6,7 @@ export type { IconComponent, IconProps } from "./createIcon";
 export {
   Bold,
   Circle,
+  CopyRounded,
   Heading,
   Italic,
   List,
@@ -13,6 +14,7 @@ export {
   ListOrdered,
   Quote,
   Square,
+  SquareSlash,
   Strikethrough,
   Table,
 } from "./primitives";

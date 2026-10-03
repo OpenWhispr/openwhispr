@@ -195,11 +195,11 @@ export default function ActionManagerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl p-0 gap-0 overflow-hidden">
+      <DialogContent className="sm:max-w-4xl p-0 gap-0 overflow-hidden">
         {/* Hidden accessible title */}
         <DialogTitle className="sr-only">{t("notes.templates.managerTitle")}</DialogTitle>
 
-        <div className="flex h-120">
+        <div className="flex h-[min(44rem,85vh)]">
           {/* Left panel — template/action list */}
           <div
             // Auto can take a moment on save; switching away then would drop the new draft.
@@ -216,7 +216,7 @@ export default function ActionManagerDialog({
                 onValueChange={(value) => showKind(value as ActionKind)}
                 className="flex-1 min-w-0"
               >
-                <TabsList className="h-7 w-full p-0.5">
+                <TabsList className="h-7 w-full px-1 py-0.5">
                   <TabsTrigger value="template" className="flex-1 px-2 py-0.5 text-xs">
                     {t("notes.templates.tab")}
                   </TabsTrigger>
@@ -374,7 +374,7 @@ export default function ActionManagerDialog({
                 </div>
 
                 {/* Editor form */}
-                <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+                <div className="flex flex-1 flex-col overflow-y-auto px-5 py-4 space-y-3">
                   <Input
                     dir="auto"
                     ref={nameInputRef}
@@ -405,7 +405,7 @@ export default function ActionManagerDialog({
                         value={output}
                         onValueChange={(value) => setOutput(value as ActionOutput | "auto")}
                       >
-                        <TabsList className="h-8 p-0.5">
+                        <TabsList className="h-8 px-1 py-0.5">
                           {/* A saved action keeps the output it was given, so Auto is for new ones. */}
                           {editingId === null && (
                             <TabsTrigger value="auto" className="px-3 py-1 text-xs">
@@ -427,7 +427,7 @@ export default function ActionManagerDialog({
                   )}
 
                   {/* Prompt — a template's context, or what an action does */}
-                  <div className="flex flex-col flex-1 space-y-1.5 min-h-0">
+                  <div className="flex flex-col flex-1 space-y-1.5">
                     <label className="text-xs font-medium text-foreground/50">
                       {t(isTemplate ? "notes.templates.contextLabel" : "notes.actions.promptLabel")}
                     </label>

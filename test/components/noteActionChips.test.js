@@ -1,8 +1,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createElement } = require("react");
+const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const { installInteractiveDom, findElement } = require("../lib/interactiveDom");
 
 // i18n is not initialized, so labels render as raw keys or their default values.
 
@@ -43,7 +44,7 @@ function renderTree(Component, props) {
     tree = Component(props);
     return null;
   }
-  renderToStaticMarkup(createElement(Harness));
+  renderToStaticMarkup(React.createElement(Harness));
   return tree;
 }
 
@@ -59,24 +60,24 @@ function collect(node, out = []) {
   return out;
 }
 
-test("the ask bar shows the first four actions as chips and every action under All actions", async (t) => {
+const ACTIONS = [
+  FOLLOW_UP,
+  action({ id: 4, client_id: "todos", name: "Create to-dos" }),
+  SHORTEN,
+  action({ id: 5, client_id: "tldr", name: "Add TL;DR", output: "summary" }),
+  action({ id: 6, client_id: "outline", name: "Create outline" }),
+];
+
+test("the open chat shows the first four actions as chips that run on click, disabled while they can't", async (t) => {
   const ActionChips = await load(t, "/components/notes/ActionChips.tsx");
-  const actions = [
-    FOLLOW_UP,
-    action({ id: 4, client_id: "todos", name: "Make to-dos" }),
-    SHORTEN,
-    action({ id: 5, client_id: "tldr", name: "Add TL;DR", output: "summary" }),
-    action({ id: 6, client_id: "outline", name: "Create outline" }),
-  ];
   const ran = [];
-  const tree = collect(
-    renderTree(ActionChips, {
-      actions,
-      canRun: (a) => a.output === "chat",
-      onRunAction: (a) => ran.push(a.name),
-      onManageActions: () => ran.push("manage"),
-    })
-  );
+  const props = {
+    actions: ACTIONS,
+    canRun: (a) => a.output === "chat",
+    onRunAction: (a) => ran.push(a.name),
+    onManageActions: () => ran.push("manage"),
+  };
+  const tree = collect(renderTree(ActionChips, props));
 
   const chips = tree.filter((node) => node.type === "button" && node.props.onClick);
   assert.deepEqual(
@@ -89,12 +90,202 @@ test("the ask bar shows the first four actions as chips and every action under A
     "a chip is disabled while its action can't run"
   );
   chips[0].props.onClick();
+  assert.deepEqual(ran, ["Follow-up email"]);
+});
 
-  const menuItems = tree.filter((node) => typeof node.type !== "string" && node.props.onClick);
-  assert.equal(menuItems.length, actions.length + 1, "every action, then Manage Actions");
+test("hovering a chip shows what its action does above the row", async (t) => {
+  let root;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-note-action-chips-hover-",
+    // Radix needs real layout; the menu isn't under test here.
+    mockModules: {
+      "/ui/dropdown-menu": `
+        export const DropdownMenu = ({ children }) => children;
+        export const DropdownMenuTrigger = ({ children }) => children;
+        export const DropdownMenuContent = () => null;
+      `,
+    },
+  });
+  const ActionChips = (await vite.ssrLoadModule("/components/notes/ActionChips.tsx")).default;
+  const { createRoot } = require("react-dom/client");
+  root = createRoot(container);
+  let ran = 0;
+  const todos = action({
+    id: 4,
+    client_id: "todos",
+    name: "Create to-dos",
+    description: "List every to-do",
+  });
+  await React.act(async () =>
+    root.render(
+      React.createElement(ActionChips, {
+        actions: [FOLLOW_UP, todos],
+        // A disabled chip still shows what its action does.
+        canRun: (a) => a !== FOLLOW_UP,
+        onRunAction: () => ran++,
+        onManageActions: () => {},
+      })
+    )
+  );
+  const chip = findElement(
+    container,
+    (el) => el.tagName === "BUTTON" && el.textContent === "Create to-dos"
+  );
+  const description = () => findElement(container, (el) => el.textContent === "List every to-do");
+  const pointer = (type) =>
+    React.act(async () => chip.dispatchEvent({ type, bubbles: true, relatedTarget: null }));
+
+  assert.equal(description(), null);
+  await pointer("pointerover");
+  assert.ok(description(), "the hovered action's description shows");
+
+  const card = description().parentNode.parentNode;
+  const followUpChip = findElement(container, (el) => el.tagName === "BUTTON");
+  const row = followUpChip.parentNode;
+  const move = (from, to) =>
+    React.act(async () =>
+      from.dispatchEvent({ type: "pointerout", bubbles: true, relatedTarget: to })
+    );
+  await move(chip, row);
+  assert.ok(description(), "crossing the gap between chips keeps the card up");
+  await move(row, followUpChip);
+  assert.equal(
+    description(),
+    null,
+    "and the next chip, even a disabled one, swaps it to its own action"
+  );
+  assert.ok(card.textContent.startsWith(followUpChip.textContent));
+  assert.ok(
+    findElement(container, (el) => el === card),
+    "without remounting the card, so its entrance doesn't replay"
+  );
+  await move(followUpChip, null);
+  assert.equal(
+    findElement(container, (el) => el === card),
+    null,
+    "it goes once the pointer leaves the row"
+  );
+
+  await pointer("pointerover");
+  await pointer("click");
+  assert.equal(ran, 1);
+  assert.equal(description(), null, "and once the action runs, so it can't cover the reply");
+});
+
+test("the action menu lists every action, then Manage Actions", async (t) => {
+  const ActionMenuItems = await load(t, "/components/notes/ActionMenuItems.tsx");
+  const ran = [];
+  const menuItems = collect(
+    renderTree(ActionMenuItems, {
+      actions: ACTIONS,
+      canRun: (a) => a.output === "chat",
+      onRunAction: (a) => ran.push(a.name),
+      onManageActions: () => ran.push("manage"),
+    })
+  ).filter((node) => typeof node.type !== "string" && node.props.onClick);
+
+  assert.equal(menuItems.length, ACTIONS.length + 1, "every action, then Manage Actions");
+  assert.deepEqual(
+    menuItems.slice(0, -1).map((item) => item.props.disabled),
+    [false, false, true, true, false]
+  );
   menuItems.at(-2).props.onClick();
   menuItems.at(-1).props.onClick();
-  assert.deepEqual(ran, ["Follow-up email", "Create outline", "manage"]);
+  assert.deepEqual(ran, ["Create outline", "manage"]);
+});
+
+test("the collapsed ask bar's picker runs the first action until one is picked, and remembers the pick", async (t) => {
+  const ActionPicker = await load(t, "/components/notes/ActionPicker.tsx");
+  const ran = [];
+  const props = {
+    actions: ACTIONS,
+    canRun: (a) => a.output === "chat",
+    onRunAction: (a) => ran.push(a.name),
+    onManageActions: () => {},
+  };
+  const runButton = (tree) => tree.find((node) => node.type === "button" && node.props.onClick);
+
+  const first = collect(renderTree(ActionPicker, props));
+  assert.equal(runButton(first).props.disabled, false);
+  runButton(first).props.onClick();
+  assert.deepEqual(ran, ["Follow-up email"], "the first action until one is picked");
+
+  const menu = first.find((node) => node.props.onManageActions);
+  menu.props.onRunAction(SHORTEN);
+
+  const next = collect(renderTree(ActionPicker, props));
+  assert.equal(
+    runButton(next).props.disabled,
+    true,
+    "a remounted picker remembers it, disabled while it can't run"
+  );
+});
+
+test("picking from the picker makes its main button run that action at once", async (t) => {
+  let root;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-note-action-picker-",
+    // Radix needs real layout; render the menu's items in place.
+    mockModules: {
+      "/ui/dropdown-menu": `
+        import { createElement } from "react";
+        export const DropdownMenu = ({ children }) => children;
+        export const DropdownMenuTrigger = ({ children }) => children;
+        export const DropdownMenuContent = ({ children }) => children;
+        export const DropdownMenuItem = ({ children, onClick, disabled }) =>
+          createElement("button", { onClick, disabled, "data-menu-item": "" }, children);
+        export const DropdownMenuSeparator = () => null;
+      `,
+    },
+  });
+  const ActionPicker = (await vite.ssrLoadModule("/components/notes/ActionPicker.tsx")).default;
+  const { createRoot } = require("react-dom/client");
+  root = createRoot(container);
+  const ran = [];
+  await React.act(async () =>
+    root.render(
+      React.createElement(ActionPicker, {
+        actions: ACTIONS,
+        canRun: () => true,
+        onRunAction: (a) => ran.push(a.name),
+        onManageActions: () => {},
+      })
+    )
+  );
+  const click = (el) => React.act(async () => el.dispatchEvent({ type: "click", bubbles: true }));
+  const runButton = () =>
+    findElement(
+      container,
+      (el) =>
+        el.tagName === "BUTTON" &&
+        el.getAttribute("aria-label") === null &&
+        el.getAttribute("data-menu-item") === null
+    );
+
+  await click(
+    findElement(
+      container,
+      (el) =>
+        el.getAttribute?.("data-menu-item") !== null && el.textContent.startsWith("Create outline")
+    )
+  );
+  assert.equal(
+    runButton().textContent.trim(),
+    "Create outline",
+    "the picker shows the picked action"
+  );
+  await click(runButton());
+  assert.deepEqual(ran, ["Create outline", "Create outline"]);
 });
 
 test("the sidebar chat offers the note's chat actions, and Generate summary writes the summary", async (t) => {

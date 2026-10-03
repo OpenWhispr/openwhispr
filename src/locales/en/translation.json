@@ -3525,6 +3525,7 @@
       "chunkProgress": "Part {{step}} of {{total}}",
       "emptyReply": "The model returned an empty reply. Try again, or pick a different model.",
       "allActions": "All actions",
+      "selectAction": "Select action",
       "manage": "Manage Actions...",
       "addAction": "New Action",
       "editAction": "Edit Action",
@@ -3541,7 +3542,7 @@
       "emptyEditorDescription": "Choose an action from the list or create a new one",
       "builtin": {
         "generateNotes": {
-          "name": "Generate Notes",
+          "name": "AI Summary",
           "description": "Clean up, structure, and enhance your notes"
         },
         "followUpEmail": {
@@ -3550,11 +3551,11 @@
           "cta": "Draft a follow-up email"
         },
         "detailedNotes": {
-          "name": "AI Summary",
+          "name": "Detailed Notes",
           "description": "Accurate, comprehensive meeting notes with decisions and action items"
         },
         "makeTodos": {
-          "name": "Make to-dos",
+          "name": "Create to-dos",
           "description": "List every to-do and its owner in the chat"
         },
         "createOutline": {
@@ -3617,6 +3618,7 @@
       "managerTitle": "Templates & Actions",
       "manage": "Manage Templates...",
       "select": "Choose template",
+      "regenerate": "Regenerate",
       "addTemplate": "New Template",
       "editTemplate": "Edit Template",
       "namePlaceholder": "Template name",
@@ -3734,7 +3736,7 @@
         "chips": {
           "catchUp": "Catch me up",
           "keyDecisions": "List key decisions",
-          "inFlight": "Show in flight projects"
+          "openActionItems": "List open action items"
         }
       },
       "invite": "Invite",
@@ -3942,7 +3944,10 @@
       "typeMessage": "Type a message...",
       "send": "Send",
       "voiceDraftStreamingOnly": "Voice input isn't available with your transcription provider: it only supports live dictation. Choose another provider in Settings → Speech to Text.",
-      "commands": "Commands"
+      "commands": "Commands",
+      "slashNavigate": "to navigate",
+      "slashSelect": "to select",
+      "slashClose": "to close"
     },
     "tools": {
       "search_notesName": "Search notes",
