@@ -176,13 +176,15 @@
       "extractDir": "sherpa-onnx-pyannote-segmentation-3-0",
       "descriptionKey": "models.descriptions.diarization.segmentation"
     },
-    "3dspeaker-campplus-en": {
-      "name": "CAM++ Speaker Embedding (English)",
+    "3dspeaker-campplus-zh-en-advanced": {
+      "name": "CAM++ Speaker Embedding (Chinese-English, advanced)",
       "description": "Speaker voice fingerprinting for identification",
-      "size": "28.2 MB",
-      "sizeMb": 28.2,
-      "downloadUrl": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx",
-      "fileName": "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx",
+      "size": "27.0 MB",
+      "sizeMb": 27.0,
+      "downloadUrl": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
+      "fileName": "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
+      "license": "Apache-2.0",
+      "modelCardUrl": "https://www.modelscope.cn/models/iic/speech_campplus_sv_zh_en_16k-common_advanced",
       "descriptionKey": "models.descriptions.diarization.embedding_en"
     }
   },

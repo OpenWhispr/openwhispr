@@ -14,9 +14,9 @@ const {
   capSpeakerClustersByVoice,
 } = require("../../src/helpers/diarizationPolicy");
 
-// 0.55 is tuned for short clean audio; on a 73-minute single-mic voice memo one
-// speaker's embeddings spread past it and clustering stopped merging at 46
-// "speakers". The threshold must grow with duration.
+// The short-audio default is tuned for short recordings; on a 73-minute
+// single-mic voice memo one speaker's embeddings spread past it and clustering
+// stopped merging at 46 "speakers". The threshold must grow with duration.
 test("short audio keeps the sherpa default threshold", () => {
   assert.equal(clusterThresholdForDuration(0), DEFAULT_CLUSTER_THRESHOLD);
   assert.equal(
