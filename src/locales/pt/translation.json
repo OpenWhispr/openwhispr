@@ -1458,6 +1458,7 @@
   },
   "settingsModal": {
     "managedByOrg": "Algumas configurações são gerenciadas pela sua organização.",
+    "managedAccount": "Conta gerenciada",
     "groups": {
       "account": "Conta",
       "app": "Aplicativo",

@@ -4440,6 +4440,7 @@
   },
   "settingsModal": {
     "managedByOrg": "تتم إدارة بعض الإعدادات بواسطة مؤسستك.",
+    "managedAccount": "حساب مُدار",
     "groups": {
       "account": "الحساب",
       "app": "التطبيق",
