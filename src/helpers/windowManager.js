@@ -25,6 +25,7 @@ const {
   normalizeDictationInputKind,
   resolveAgentDictationPillState,
   shouldIgnoreDictationHotkey,
+  shouldDebounceDictationToggle,
   isDictationRecording,
   shouldBlockDictationWhilePanelOpen,
 } = require("./dictationLifecycle");
@@ -98,6 +99,7 @@ class WindowManager {
     this._panelStartPosition = "bottom-right";
     this._activeHorizontalDirection = null;
     this._isDictatingToggle = false;
+    this._lastDictationToggleAt = 0;
     this._dictationLifecycleState = DICTATION_LIFECYCLE.IDLE;
     this._dictationInputKind = DICTATION_INPUT_KIND.DICTATION;
     this._assistantPanelOpen = false;
@@ -925,7 +927,13 @@ class WindowManager {
       });
       return;
     }
+    const now = Date.now();
+    if (shouldDebounceDictationToggle(now, this._lastDictationToggleAt)) {
+      debugLogger.debug("Ignoring bounced dictation toggle", { channel });
+      return;
+    }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this._lastDictationToggleAt = now;
       const isStarting = !this._isDictatingToggle;
       // Capture the paste target and any selection on every toggle press,
       // before the overlay steals focus — the paste can't refocus the target
