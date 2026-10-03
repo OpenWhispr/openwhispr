@@ -1,11 +1,11 @@
 // Chromium picks the display backend before JS runs, so appendSwitch is too
 // late — the flag has to come from a relaunch.
-const { XWAYLAND_FLAG, shouldForceXWayland } = require("./src/helpers/xwayland");
+const { shouldForceXWayland, xwaylandLaunchFlags } = require("./src/helpers/xwayland");
 const { createHotkeyRepeatGate } = require("./src/helpers/hotkeyRepeatGate");
 
 if (shouldForceXWayland(process.argv)) {
   const { spawn } = require("child_process");
-  spawn(process.execPath, [...process.argv.slice(1), XWAYLAND_FLAG], {
+  spawn(process.execPath, [...process.argv.slice(1), ...xwaylandLaunchFlags(process.argv)], {
     stdio: "inherit",
     detached: true,
   }).unref();
