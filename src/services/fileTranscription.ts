@@ -65,6 +65,7 @@ export interface TranscriptionApiKeys {
   mistralApiKey: string;
   geminiApiKey: string;
   tinfoilApiKey: string;
+  sixtydbApiKey?: string;
   deepgramApiKey: string;
   assemblyaiApiKey: string;
   customTranscriptionApiKey?: string;
@@ -84,6 +85,8 @@ export function getTranscriptionApiKey(provider: string, keys: TranscriptionApiK
       return keys.geminiApiKey;
     case "tinfoil":
       return keys.tinfoilApiKey;
+    case "sixtydb":
+      return keys.sixtydbApiKey || "";
     case "deepgram":
       return keys.deepgramApiKey;
     case "assemblyai":

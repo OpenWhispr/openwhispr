@@ -99,6 +99,7 @@ export interface ApiKeySettings {
   cortiClientSecret: string;
   cortiApiKey: string;
   tinfoilApiKey: string;
+  sixtydbApiKey: string;
   deepgramApiKey: string;
   assemblyaiApiKey: string;
   customTranscriptionApiKey: string;
@@ -329,6 +330,7 @@ function useSettingsInternal() {
     mistralApiKey: store.mistralApiKey,
     openrouterApiKey: store.openrouterApiKey,
     tinfoilApiKey: store.tinfoilApiKey,
+    sixtydbApiKey: store.sixtydbApiKey,
     deepgramApiKey: store.deepgramApiKey,
     assemblyaiApiKey: store.assemblyaiApiKey,
     dictationKey: store.dictationKey,

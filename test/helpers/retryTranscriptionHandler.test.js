@@ -138,7 +138,7 @@ function buildFakeThis() {
       getAudioBuffer: (id) => (id === 7 ? Buffer.from([1, 2, 3]) : id === 8 ? WAV_BUFFER : null),
     },
     databaseManager: {
-      updateTranscriptionText: () => {},
+      updateTranscriptionText: (id, text) => Object.assign(dbRows.get(id), { text }),
       updateTranscriptionStatus: () => {},
       updateTranscriptionAudio: () => {},
       getTranscriptionById: (id) => dbRows.get(id),
@@ -146,6 +146,7 @@ function buildFakeThis() {
     environmentManager: {
       getOpenAIKey: () => "sk-openai",
       getGroqKey: () => "gk-groq",
+      getSixtyDBKey: () => "sk-sixtydb",
       getMistralKey: () => "mk-mistral",
       getXaiKey: () => "xk-xai",
       getTinfoilKey: () => "tk-tinfoil",
@@ -601,4 +602,46 @@ test("upload: a self-hosted Azure endpoint keeps its deployment URL", async () =
     fetches[0].url,
     "https://myorg.openai.azure.com/openai/deployments/my-deployment/audio/transcriptions?api-version=2025-03-01-preview"
   );
+});
+
+test("60db dictation proxy and retry use the native endpoint and main-process key", async () => {
+  for (const run of [
+    () =>
+      handlers.get("proxy-sixtydb-transcription")(
+        { sender: {} },
+        { audioBuffer: new ArrayBuffer(4), language: "hi", context: "Acme" }
+      ),
+    () =>
+      invoke({
+        cloudTranscriptionProvider: "sixtydb",
+        transcriptionMode: "providers",
+        preferredLanguage: "hi-IN",
+      }),
+  ]) {
+    fetches.length = 0;
+    const result = await run();
+    assert.equal(result.text ?? result.transcription?.text, "transcribed");
+    assert.equal(result.error, undefined);
+    assert.equal(fetches.length, 1);
+    assert.equal(fetches[0].url, "https://api.60db.ai/stt");
+    assert.equal(fetches[0].init.headers.Authorization, "Bearer sk-sixtydb");
+    assert.equal(fetches[0].init.body.get("language"), "hi");
+    assert.equal(fetches[0].init.body.get("model"), null);
+  }
+});
+
+test("60db upload uses native multipart and detects language instead of applying dictation's hint", async () => {
+  fetches.length = 0;
+  const result = await invokeUpload({
+    provider: "sixtydb",
+    transcriptionMode: "providers",
+    language: "hi",
+    model: "whisper-1",
+  });
+  assert.equal(result.success, true);
+  assert.equal(result.text, "transcribed");
+  assert.equal(fetches.length, 1);
+  assert.equal(fetches[0].url, "https://api.60db.ai/stt");
+  assert.equal(fetches[0].init.headers.Authorization, "Bearer sk-sixtydb");
+  assert.deepEqual([...fetches[0].init.body.keys()], ["file"]);
 });

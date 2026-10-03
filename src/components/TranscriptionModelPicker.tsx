@@ -248,6 +248,7 @@ const CLOUD_PROVIDER_TABS = [
   { id: "gemini", name: "Gemini" },
   { id: "corti", name: "Corti" },
   { id: "tinfoil", name: "Tinfoil" },
+  { id: "sixtydb", name: "60db" },
   { id: "deepgram", name: "Deepgram" },
   { id: "assemblyai", name: "AssemblyAI" },
   { id: "custom", name: "Custom" },
@@ -265,6 +266,7 @@ interface ProviderCredentialField {
     | "cortiEnvironment"
     | "cortiTenant"
     | "tinfoilApiKey"
+    | "sixtydbApiKey"
     | "deepgramApiKey"
     | "assemblyaiApiKey";
   input: "secret" | "text" | "select";
@@ -322,6 +324,10 @@ const PROVIDER_CREDENTIALS: Record<
   tinfoil: {
     consoleUrl: "https://tinfoil.sh/inference?utm_source=referral&utm_campaign=openwhispr",
     fields: [{ key: "tinfoilApiKey", input: "secret" }],
+  },
+  sixtydb: {
+    consoleUrl: "https://60db.ai",
+    fields: [{ key: "sixtydbApiKey", input: "secret" }],
   },
   deepgram: {
     consoleUrl: "https://console.deepgram.com/",
@@ -419,6 +425,8 @@ export default function TranscriptionModelPicker({
   const setCortiTenant = useSettingsStore((s) => s.setCortiTenant);
   const tinfoilApiKey = useSettingsStore((s) => s.tinfoilApiKey);
   const setTinfoilApiKey = useSettingsStore((s) => s.setTinfoilApiKey);
+  const sixtydbApiKey = useSettingsStore((s) => s.sixtydbApiKey);
+  const setSixtyDBApiKey = useSettingsStore((s) => s.setSixtyDBApiKey);
   const deepgramApiKey = useSettingsStore((s) => s.deepgramApiKey);
   const setDeepgramApiKey = useSettingsStore((s) => s.setDeepgramApiKey);
   const assemblyaiApiKey = useSettingsStore((s) => s.assemblyaiApiKey);
@@ -983,6 +991,7 @@ export default function TranscriptionModelPicker({
     cortiEnvironment,
     cortiTenant,
     tinfoilApiKey,
+    sixtydbApiKey,
     deepgramApiKey,
     assemblyaiApiKey,
   };
@@ -997,6 +1006,7 @@ export default function TranscriptionModelPicker({
     cortiEnvironment: setCortiEnvironment,
     cortiTenant: setCortiTenant,
     tinfoilApiKey: setTinfoilApiKey,
+    sixtydbApiKey: setSixtyDBApiKey,
     deepgramApiKey: setDeepgramApiKey,
     assemblyaiApiKey: setAssemblyaiApiKey,
   };

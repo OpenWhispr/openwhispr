@@ -67,6 +67,13 @@ const BYOK_API_KEYS = [
   // `get`/`save` are taken verbatim, never derived from `base`, so these keep
   // the capitalisation realtimeTokenProviders.js already calls them by.
   {
+    base: "sixtydb",
+    env: "SIXTYDB_API_KEY",
+    get: "getSixtyDBKey",
+    save: "saveSixtyDBKey",
+    storeKey: "sixtydbApiKey",
+  },
+  {
     base: "deepgram",
     env: "DEEPGRAM_API_KEY",
     get: "getDeepgramKey",

@@ -219,3 +219,34 @@ test("corrupt persisted model memory hydrates as empty, not a crash", async (t) 
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
   assert.deepEqual(useSettingsStore.getState().transcriptionModelByProvider, {});
 });
+
+test("60db selection and keys survive the existing settings flow without localStorage secrets", async (t) => {
+  const saved = [];
+  const { window } = installBrowserGlobals(t, {
+    initialStorage: { sixtydbApiKey: "stale-secret" },
+    window: { dispatchEvent() {} },
+  });
+  window.electronAPI.setDictionary = async () => {};
+  window.electronAPI.getSixtyDBKey = async () => "hydrated-secret";
+  window.electronAPI.saveSixtyDBKey = async (key) => saved.push(key);
+  const vite = await createRendererServer(t, { cachePrefix: "openwhispr-sixtydb-settings-test-" });
+  const { useSettingsStore, initializeSettings } = await vite.ssrLoadModule(
+    "/stores/settingsStore.ts"
+  );
+  await initializeSettings();
+  assert.equal(useSettingsStore.getState().sixtydbApiKey, "hydrated-secret");
+  assert.equal(localStorage.getItem("sixtydbApiKey"), null);
+  for (const scope of ["dictation", "upload"]) {
+    useSettingsStore.getState().switchCloudTranscriptionProvider(scope, "groq");
+    useSettingsStore.getState().switchCloudTranscriptionProvider(scope, "sixtydb");
+    const state = useSettingsStore.getState();
+    assert.equal(
+      scope === "upload" ? state.uploadCloudTranscriptionModel : state.cloudTranscriptionModel,
+      "sixtydb-stt"
+    );
+  }
+  useSettingsStore.getState().updateApiKeys({ sixtydbApiKey: "replacement-secret" });
+  await new Promise((resolve) => setTimeout(resolve, 1100));
+  assert.deepEqual(saved, ["replacement-secret"]);
+  assert.equal(localStorage.getItem("sixtydbApiKey"), null);
+});

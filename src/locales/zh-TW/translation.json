@@ -2587,6 +2587,7 @@
         "openai_whisper_1": "原始 Whisper 模型",
         "groq_whisper_large_v3_turbo": "216 倍即時速度",
         "groq_whisper_large_v3": "Large v3 模型，快速且精準",
+        "sixtydb_stt": "多語言批次轉錄",
         "mistral_voxtral_mini_latest": "快速多語言轉錄",
         "gemini_3_5_transcribe": "Google Gemini 語音轉文字",
         "gemini_3_5_transcribe_live": "即時串流語音轉文字",
