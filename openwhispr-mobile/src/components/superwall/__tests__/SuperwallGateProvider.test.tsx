@@ -1,3 +1,11 @@
+const mockCreatorSessions: { handle: jest.Mock; close: jest.Mock }[] = [];
+jest.mock('@/lib/affiliatePaywall', () => ({
+  createAffiliatePaywallSession: () => {
+    const session = { handle: jest.fn(async () => ({ status: 'success' })), close: jest.fn() };
+    mockCreatorSessions.push(session);
+    return session;
+  },
+}));
 import React, { useState } from 'react';
 import { Pressable, Text } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
@@ -125,6 +133,8 @@ function GateConsumer({
   onPurchaseComplete,
   label = 'register',
   signal,
+  creatorOffer,
+  requiresAccount,
 }: {
   placement: SuperwallPlacement;
   feature?: () => void;
@@ -132,6 +142,8 @@ function GateConsumer({
   onPurchaseComplete?: (completion: SuperwallPurchaseCompletion) => void;
   label?: string;
   signal?: AbortSignal;
+  creatorOffer?: RegisterSuperwallGateOptions['creatorOffer'];
+  requiresAccount?: boolean;
 }): React.JSX.Element {
   const { register } = useSuperwallGate();
   const [result, setResult] = useState('pending');
@@ -146,6 +158,8 @@ function GateConsumer({
             onAccessGrantedWithoutPurchase,
             onPurchaseComplete,
             signal,
+            creatorOffer,
+            requiresAccount,
           };
           register(options).then((granted) => setResult(String(granted)));
         }}
@@ -175,6 +189,7 @@ const usage = {
 describe('SuperwallGateProvider', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCreatorSessions.length = 0;
     mockPlacementCallbacks = {};
     mockNativeFeature = undefined;
     mockResolveNativePlacement = undefined;
@@ -1061,4 +1076,74 @@ describe('SuperwallGateProvider', () => {
     await waitFor(() => expect(screen.getByTestId('result').props.children).toBe('true'));
     expect(onAccessGrantedWithoutPurchase).toHaveBeenCalledTimes(1);
   });
+  it.each([SUPERWALL_PLACEMENTS.onboardingPaywall, SUPERWALL_PLACEMENTS.accountBillingOpen])(
+    'isolates creator callbacks after closing and reopening %s',
+    async (placement) => {
+      const screen = render(
+        <EnabledSuperwallGateProvider>
+          <GateConsumer placement={placement} />
+        </EnabledSuperwallGateProvider>,
+      );
+      fireEvent.press(screen.getByText('register'));
+      const oldCallbacks = mockPlacementCallbacks;
+      const first = mockCreatorSessions[0];
+      await act(async () => {
+        await oldCallbacks.onCustomCallback({ name: 'creatorCodeApply' });
+      });
+      expect(first.handle).toHaveBeenCalledTimes(1);
+      act(() => oldCallbacks.onDismiss({}, { type: 'declined' }));
+      fireEvent.press(screen.getByText('register'));
+      expect(mockCreatorSessions).toHaveLength(2);
+      await act(async () => {
+        await oldCallbacks.onCustomCallback({ name: 'creatorOfferRedeem' });
+      });
+      expect(first.handle).toHaveBeenCalledTimes(1);
+      expect(first.close).toHaveBeenCalled();
+      expect(mockCreatorSessions[1].handle).not.toHaveBeenCalled();
+      await act(async () => {
+        await mockPlacementCallbacks.onCustomCallback({ name: 'creatorCodeApply' });
+      });
+      expect(mockCreatorSessions[1].handle).toHaveBeenCalledTimes(1);
+    },
+  );
+  it('releases an ordinary presented gate when native registration rejects', async () => {
+    mockRegisterPlacement.mockImplementationOnce(() => {
+      mockPlacementCallbacks.onPresent({ identifier: 'fixture', name: 'Fixture' });
+      return Promise.reject(new Error('native failure'));
+    });
+    const screen = render(
+      <EnabledSuperwallGateProvider>
+        <GateConsumer placement={SUPERWALL_PLACEMENTS.accountBillingOpen} />
+      </EnabledSuperwallGateProvider>,
+    );
+    await act(async () => fireEvent.press(screen.getByText('register')));
+    expect(screen.getByTestId('result').props.children).toBe('false');
+    fireEvent.press(screen.getByText('register'));
+    expect(mockRegisterPlacement).toHaveBeenCalledTimes(2);
+  });
+  it.each(['loading', 'error'])(
+    'does not grant seeded anonymous offer access when SDK is %s',
+    async (state) => {
+      mockIsConfigured = false;
+      mockConfigurationError = state === 'error' ? 'failed' : null;
+      const granted = jest.fn();
+      const creatorOffer = { productId: 'monthly' } as NonNullable<
+        RegisterSuperwallGateOptions['creatorOffer']
+      >;
+      const screen = render(
+        <EnabledSuperwallGateProvider>
+          <GateConsumer
+            placement={SUPERWALL_PLACEMENTS.accountBillingOpen}
+            requiresAccount={false}
+            creatorOffer={creatorOffer}
+            onAccessGrantedWithoutPurchase={granted}
+          />
+        </EnabledSuperwallGateProvider>,
+      );
+      await act(async () => fireEvent.press(screen.getByText('register')));
+      expect(screen.getByTestId('result').props.children).toBe('false');
+      expect(granted).not.toHaveBeenCalled();
+      expect(mockRegisterPlacement).not.toHaveBeenCalled();
+    },
+  );
 });

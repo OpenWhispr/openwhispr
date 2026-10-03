@@ -1,20 +1,18 @@
+import { PaywallHighlights } from '@/components/onboarding/PaywallHighlights';
 import { useOnboardingStep } from '@/hooks/useOnboardingStep';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
-import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useAffiliateStore } from '@/store/useAffiliateStore';
+import { loadAffiliateOffer, type AffiliateOffer } from '@/lib/affiliateOffer';
 import { getUsageOwnerKey, useUsageStore } from '@/store/useUsageStore';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 import { describeOnboardingError } from '@/lib/onboardingErrors';
-
-const HIGHLIGHTS: { icon: string; mdIcon: LucideIconName; label: string }[] = [
-  { icon: 'cloud', mdIcon: 'Cloud', label: 'Cloud transcription with no word limit' },
-  { icon: 'arrow.triangle.2.circlepath', mdIcon: 'RefreshCw', label: 'Sync notes across devices' },
-  { icon: 'sparkles', mdIcon: 'Sparkles', label: 'AI cleanup, actions, and note chat' },
-];
+import { getAffiliateClientConfig } from '@/lib/affiliateLink';
+import { TrackingPermissionStep } from './TrackingPermissionStep';
 
 // A cold launch that resumes on this step arrives before the SDK's configure
 // round trip has finished; registering then is answered immediately for a
@@ -35,6 +33,7 @@ export const PAYWALL_ESCAPE_MS = 8_000;
 export function PaywallStep() {
   const { goNext } = useOnboardingStep('paywall');
   const user = useAuthStore((s) => s.user);
+  const sessionCookie = useAuthStore((s) => s.sessionCookie);
   const usage = useUsageStore((s) => s.usage);
   const usageOwnerKey = useUsageStore((s) => s.ownerKey);
   // Usage is only this account's when the store loaded it for the current
@@ -53,6 +52,9 @@ export function PaywallStep() {
   const [presenting, setPresenting] = useState(false);
   const [skipping, setSkipping] = useState(false);
   const [escapeElapsed, setEscapeElapsed] = useState(false);
+  const affiliateEnabled = Boolean(getAffiliateClientConfig());
+  const [consentChecked, setConsentChecked] = useState(!affiliateEnabled);
+  const completeConsent = useCallback(async () => setConsentChecked(true), []);
 
   const [advanceError, setAdvanceError] = useState<string | null>(null);
   const advance = useCallback(async (): Promise<void> => {
@@ -107,6 +109,8 @@ export function PaywallStep() {
       return;
     }
 
+    if (!consentChecked) return;
+
     if (!isConfigured && !readyGraceElapsed) return;
     hasPresentedRef.current = true;
     setPresenting(true);
@@ -117,12 +121,55 @@ export function PaywallStep() {
     // only thing that cancels the advance; effect re-runs must not.
     const controller = new AbortController();
     registrationRef.current = controller;
-    register({ placement: SUPERWALL_PLACEMENTS.onboardingPaywall, signal: controller.signal })
+    const isCurrent = () =>
+      !unmountedRef.current &&
+      !hasAdvancedRef.current &&
+      !controller.signal.aborted &&
+      useAuthStore.getState().user?.id === user.id &&
+      useAuthStore.getState().sessionCookie === sessionCookie;
+    (async () => {
+      // Only a trusted inbound-link intent can seed this first presentation.
+      // Ordinary rendering and typed candidates never claim or allocate stock.
+      let creatorOffer: AffiliateOffer | undefined;
+      try {
+        if (affiliateEnabled && (await useAffiliateStore.getState().consumeInboundOffer(isCurrent)))
+          creatorOffer = (await loadAffiliateOffer(isCurrent)) ?? undefined;
+      } catch {
+        // Optional referral storage must not skip ordinary purchasing.
+      }
+      if (!isCurrent()) return;
+      const latestUsage = useUsageStore.getState();
+      if (
+        !latestUsage.usage ||
+        !latestUsage.ownerKey ||
+        latestUsage.ownerKey !== getUsageOwnerKey() ||
+        latestUsage.usage.isSubscribed
+      ) {
+        setPresenting(false);
+        setSkipping(true);
+        return;
+      }
+      await register({
+        placement: SUPERWALL_PLACEMENTS.onboardingPaywall,
+        signal: controller.signal,
+        creatorOffer,
+      });
+    })()
       .catch(() => {})
       .finally(() => {
-        if (!unmountedRef.current) void advance();
+        if (isCurrent()) void advance();
       });
-  }, [advance, isConfigured, isConfirmedFree, readyGraceElapsed, register, user]);
+  }, [
+    advance,
+    affiliateEnabled,
+    consentChecked,
+    isConfigured,
+    isConfirmedFree,
+    readyGraceElapsed,
+    register,
+    user,
+    sessionCookie,
+  ]);
 
   // Between registering and the SDK presenting, this backdrop looks like an
   // ordinary screen with a primary button; tapping it would mount the next
@@ -146,24 +193,27 @@ export function PaywallStep() {
     );
   }
 
+  if (affiliateEnabled && !consentChecked && user && isConfirmedFree)
+    return <TrackingPermissionStep onComplete={completeConsent} />;
+
   return (
-    <OnboardingShell
-      title="Go further with OpenWhispr Pro."
-      titleAccent="Pro"
-      subtitle="Unlock more with Pro, or close the offer to keep using Cloud with your current limits."
-      ctaLabel="Continue"
-      ctaDisabled={ctaDisabled}
-      onCta={advance}
+    <KeyboardAvoidingView
+      className="flex-1"
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View className="gap-4 pt-2">
-        {errorNotice}
-        {HIGHLIGHTS.map((item) => (
-          <View key={item.label} className="flex-row items-center gap-3">
-            <SystemIcon name={item.icon} mdName={item.mdIcon} size={20} />
-            <Text className="flex-1 text-[16px] text-label">{item.label}</Text>
-          </View>
-        ))}
-      </View>
-    </OnboardingShell>
+      <OnboardingShell
+        title="Go further with OpenWhispr Pro."
+        titleAccent="Pro"
+        subtitle="Unlock more with Pro, or close the offer to keep using Cloud with your current limits."
+        ctaLabel="Continue"
+        ctaDisabled={ctaDisabled}
+        onCta={advance}
+      >
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerClassName="gap-4 pt-2">
+          {errorNotice}
+          <PaywallHighlights />
+        </ScrollView>
+      </OnboardingShell>
+    </KeyboardAvoidingView>
   );
 }

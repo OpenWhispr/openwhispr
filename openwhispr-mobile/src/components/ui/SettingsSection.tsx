@@ -1,5 +1,12 @@
 import React from 'react';
-import { View, Pressable, StyleSheet, TextInput, type TextInputProps } from 'react-native';
+import {
+  View,
+  Pressable,
+  StyleSheet,
+  TextInput,
+  type TextInputProps,
+  type AccessibilityState,
+} from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from './SystemIcon';
 import { BRAND, iosColor } from '@/config/colors';
@@ -18,6 +25,7 @@ type SettingsRowProps = {
   destructive?: boolean;
   showChevron?: boolean;
   selected?: boolean;
+  accessibilityState?: AccessibilityState;
   // Shown right after the description, such as a help button.
   descriptionAccessory?: React.ReactNode;
 };
@@ -35,14 +43,16 @@ export function SettingsRow({
   destructive = false,
   showChevron = true,
   selected = false,
+  accessibilityState,
   descriptionAccessory,
 }: SettingsRowProps) {
   const isLine = iconStyle === 'line';
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
       disabled={!onPress && !rightElement}
-      accessibilityState={{ selected }}
+      accessibilityState={{ selected, ...accessibilityState }}
       className={selected ? 'bg-brand/10 active:bg-brand/20' : 'active:bg-tertiarySystemFill'}
     >
       <View

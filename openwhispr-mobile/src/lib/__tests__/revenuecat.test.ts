@@ -1,6 +1,8 @@
 import Purchases from 'react-native-purchases';
 import {
   getAppStorefrontCountryCode,
+  reconcileRevenueCatPurchases,
+  identifyRevenueCatUser,
   recordRevenueCatPurchase,
   showAppStoreManageSubscriptions,
 } from '../revenuecat';
@@ -10,6 +12,9 @@ jest.mock('react-native-purchases', () => ({
   __esModule: true,
   default: {
     configure: jest.fn(),
+    logIn: jest.fn(),
+    logOut: jest.fn(),
+    syncPurchasesForResult: jest.fn(),
     getStorefront: jest.fn(),
     recordPurchase: jest.fn(),
     showManageSubscriptions: jest.fn(),
@@ -67,4 +72,65 @@ describe('RevenueCat StoreKit helpers', () => {
 
     await expect(recordRevenueCatPurchase('pro.monthly')).resolves.toBe(false);
   });
+});
+
+it('does not sync an old account when login finishes after an account switch', async () => {
+  let release!: (value: never) => void;
+  let current = true;
+  mockPurchases.logIn.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+  );
+  const pending = reconcileRevenueCatPurchases('billing-a', () => current);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  current = false;
+  release({} as never);
+  expect(await pending).toBe(false);
+  expect(mockPurchases.syncPurchasesForResult).not.toHaveBeenCalled();
+});
+it('serializes another login behind an in-progress purchase sync', async () => {
+  jest.clearAllMocks();
+  let release!: (value: never) => void;
+  mockPurchases.logIn.mockResolvedValue({} as never);
+  mockPurchases.syncPurchasesForResult.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+  );
+  const pending = reconcileRevenueCatPurchases('billing-a', () => true);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  const next = identifyRevenueCatUser('billing-b');
+  expect(mockPurchases.logIn).toHaveBeenCalledTimes(1);
+  release({} as never);
+  expect(await pending).toBe(true);
+  expect(await next).toBe(true);
+  expect(mockPurchases.logIn.mock.calls.map(([id]) => id)).toEqual(['billing-a', 'billing-b']);
+});
+
+it('bounds callers behind a hung native operation without switching its identity', async () => {
+  jest.clearAllMocks();
+  jest.useFakeTimers();
+  let release!: (value: never) => void;
+  mockPurchases.recordPurchase.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+  );
+  const recording = recordRevenueCatPurchase('monthly');
+  await Promise.resolve();
+  const next = identifyRevenueCatUser('billing-b');
+  await jest.advanceTimersByTimeAsync(10001);
+  expect(await recording).toBe(false);
+  expect(await next).toBe(false);
+  expect(mockPurchases.logIn).not.toHaveBeenCalled();
+  release({} as never);
+  await jest.advanceTimersByTimeAsync(1);
+  expect(mockPurchases.logIn).not.toHaveBeenCalled();
+  jest.useRealTimers();
+  expect(await identifyRevenueCatUser('billing-c')).toBe(true);
+  expect(mockPurchases.logIn).toHaveBeenCalledWith('billing-c');
 });
