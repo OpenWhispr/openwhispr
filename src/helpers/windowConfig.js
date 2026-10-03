@@ -212,6 +212,12 @@ const ONBOARDING_WINDOW_SIZES = {
   EXPANDED: { width: 1000, height: 740 },
 };
 
+// Smallest size the user can resize the control panel to. Applied after
+// creation, clamped to the display's work area so a 1366x768-class display can
+// still fit the window. Onboarding and meeting mode temporarily replace it with
+// their own floors.
+const CONTROL_PANEL_MIN_SIZE = { width: 1150, height: 760 };
+
 // Control panel window configuration
 const CONTROL_PANEL_CONFIG = {
   width: 1200,
@@ -379,6 +385,7 @@ class WindowPositionUtil {
 module.exports = {
   MAIN_WINDOW_CONFIG,
   CONTROL_PANEL_CONFIG,
+  CONTROL_PANEL_MIN_SIZE,
   ONBOARDING_WINDOW_SIZES,
   NOTIFICATION_WINDOW_CONFIG,
   ASSISTANT_PANEL_SIZE_LIMITS,
