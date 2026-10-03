@@ -116,10 +116,14 @@ export function useUsage(): UseUsageResult | null {
     window.addEventListener("focus", handleFocus);
     window.addEventListener("usage-changed", handleUsageChanged);
     window.addEventListener("upgrade-success", handleUpgradeSuccess);
+    const unsubscribeSyncEvent = window.electronAPI?.onSyncEvent?.(({ name }) => {
+      if (name === "usage-changed") handleUsageChanged();
+    });
     return () => {
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("usage-changed", handleUsageChanged);
       window.removeEventListener("upgrade-success", handleUpgradeSuccess);
+      unsubscribeSyncEvent?.();
     };
   }, [isLoaded, accountId]);
 
