@@ -5,6 +5,7 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { usePolicyModeOptions, usePolicySnapshot } from "../../hooks/usePolicy";
 import { isModeAllowedByPolicy } from "../../stores/policyRules";
 import { requestSignIn } from "../../utils/requestSignIn";
+import { Button } from "../ui/button";
 import { InferenceModeSelector, SettingsRow } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
 import { Toggle } from "../ui/toggle";
@@ -176,6 +177,14 @@ export function MeetingTranscriptionPanel() {
         onSelect={handleTranscriptionModeSelect}
       />
 
+      {effectiveTranscriptionMode === "openwhispr" && !isSignedIn && (
+        <p className="text-sm text-muted-foreground">
+          {t("settingsPage.transcription.meetingCloudSignedOut")}{" "}
+          <Button variant="link" className="h-auto p-0" onClick={requestSignIn}>
+            {t("common.signIn")}
+          </Button>
+        </p>
+      )}
       {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
       {effectiveTranscriptionMode === "local" && renderTranscriptionPicker("local")}
       <MeetingSpeakerDetectionRow />

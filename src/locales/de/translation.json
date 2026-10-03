@@ -178,6 +178,7 @@
     "active": "Aktiv",
     "managedByOrg": "Von Ihrer Organisation verwaltet",
     "freeAccountRequired": "Kostenloses Konto erforderlich",
+    "signIn": "Anmelden",
     "comingSoon": "Demnächst verfügbar",
     "cloud": "Cloud",
     "local": "Lokal",
@@ -2611,7 +2612,8 @@
           }
         }
       },
-      "meetingEnterpriseOnly": "Ihre Organisation erlaubt nur Unternehmens-Cloud-Transkription, die Besprechungsaufnahmen noch nicht abdeckt."
+      "meetingEnterpriseOnly": "Ihre Organisation erlaubt nur Unternehmens-Cloud-Transkription, die Besprechungsaufnahmen noch nicht abdeckt.",
+      "meetingCloudSignedOut": "Notizaufnahmen mit OpenWhispr Cloud können nicht starten, solange Sie abgemeldet sind. Wählen Sie oben eine andere Engine."
     },
     "intelligence": {
       "gpuDevice": {
@@ -3474,6 +3476,7 @@
       "unsupportedSelfHosted": "Die Notizaufnahme kann noch keinen selbst gehosteten Endpunkt verwenden. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
       "unsupportedProvider": "Die Notizaufnahme kann {{provider}} nicht für die Live-Transkription verwenden. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
       "noProviderSelected": "Für die Notizaufnahme ist kein Anbieter ausgewählt. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
+      "signInRequired": "Melde dich an oder wechsle den Notizanbieter in den Einstellungen.",
       "systemAudioSilent": {
         "title": "Noch kein Meeting-Ton erkannt",
         "description": "Bisher hat nur Ihr Mikrofon Ton aufgenommen. Sie sind in einem Videoanruf? Prüfen Sie, ob der Meeting-Ton auf diesem Computer wiedergegeben wird und nicht stummgeschaltet ist. Sie nehmen vor Ort auf? Dann können Sie diesen Hinweis ignorieren – Ihr Mikrofon nimmt den Raum auf."
