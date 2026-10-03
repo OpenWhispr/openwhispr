@@ -1,4 +1,30 @@
 {
+  "s1Mini": {
+    "options": "Options",
+    "description": "S1-mini by Superwhisper supports English dictation cleanup only. Choose its options below. Thinking is always off.",
+    "styling": "Styling",
+    "structure": "Structure",
+    "context": "Context",
+    "values": {
+      "casual": "Casual",
+      "semi-casual": "Semi casual",
+      "semi-formal": "Semi formal",
+      "formal": "Formal",
+      "prose": "Paragraphs",
+      "lists": "Allow lists",
+      "general": "General",
+      "email": "Email"
+    },
+    "help": {
+      "styling": "Capitalization, punctuation, and contractions.",
+      "structure": "Keep paragraphs or allow bulleted lists.",
+      "context": "General text or email greetings and sign-offs."
+    },
+    "licenseSummary": "Apache 2.0 + naming requirement",
+    "license": "License",
+    "notice": "Notice",
+    "modelDescription": "English only · Dictation cleanup (Q4_K_M)"
+  },
   "settings": {
     "language": {
       "sectionTitle": "Language",

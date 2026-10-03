@@ -1,4 +1,30 @@
 {
+  "s1Mini": {
+    "options": "Opções",
+    "description": "O S1-mini da Superwhisper só permite limpar ditados em inglês. Escolha as opções abaixo. O raciocínio fica sempre desativado.",
+    "styling": "Estilo",
+    "structure": "Estrutura",
+    "context": "Contexto",
+    "values": {
+      "casual": "Informal",
+      "semi-casual": "Um pouco informal",
+      "semi-formal": "Um pouco formal",
+      "formal": "Formal",
+      "prose": "Parágrafos",
+      "lists": "Permitir listas",
+      "general": "Geral",
+      "email": "E-mail"
+    },
+    "help": {
+      "styling": "Maiúsculas, pontuação e contrações.",
+      "structure": "Manter parágrafos ou permitir listas com marcadores.",
+      "context": "Texto geral ou saudações e despedidas de e-mail."
+    },
+    "licenseSummary": "Apache 2.0 + requisito de identificação do nome",
+    "license": "Licença",
+    "notice": "Aviso",
+    "modelDescription": "Somente inglês · Limpeza de ditados (Q4_K_M)"
+  },
   "settings": {
     "language": {
       "sectionTitle": "Idioma",
