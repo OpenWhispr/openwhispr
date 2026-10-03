@@ -75,6 +75,12 @@ const MATRIX = [
   ["corti keeps the legacy chat-completions shape", "Corti", "corti-s1", null, AGENT,
     { max_tokens: MAX_TOKENS, temperature: 0.3 }],
 
+  // --- xAI (legacy shape; no reasoning fields on Chat Completions) ---
+  ["xai cleanup keeps max_tokens and zero temperature", "xAI", "grok-4.20-0309-non-reasoning", null, CLEANUP,
+    { max_tokens: MAX_TOKENS, temperature: 0 }],
+  ["xai suppression sends no reasoning fields it would reject", "xAI", "grok-4.20-0309-reasoning", null, AGENT_NO_THINK,
+    { max_tokens: MAX_TOKENS, temperature: 0.3 }],
+
   // --- Gemini through its OpenAI-compat endpoint (agent streaming route) ---
   ["gemini openai-compat: fallback config, no temperature param", "gemini", "gemini-3-flash-preview", null, AGENT,
     { max_completion_tokens: MAX_TOKENS }],

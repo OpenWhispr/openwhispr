@@ -58,6 +58,12 @@ export function suppressThinking(
     return;
   }
 
+  // xAI takes reasoning effort only through its Responses API, and its
+  // reasoning models have no off value; on Chat Completions the extra fields
+  // risk a rejection, so send none. The non-reasoning Grok models are the
+  // fast path.
+  if (providerKey === "xai") return;
+
   // DeepSeek's API rejects reasoning_effort "none" (its enum has no off value,
   // #1260); thinking: {type} is its native switch. Family facts don't apply —
   // deepseek models on other hosts (e.g. Tinfoil) accept the generic shape.
