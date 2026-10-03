@@ -61,6 +61,7 @@ class GpuBinaryManager {
     this.config = config;
     this._downloadSignal = null;
     this._downloading = false;
+    this._downloadProgress = null;
   }
 
   get binRoot() {
@@ -96,6 +97,10 @@ class GpuBinaryManager {
 
   isDownloading() {
     return this._downloading;
+  }
+
+  getDownloadProgress() {
+    return this._downloadProgress ? { ...this._downloadProgress } : null;
   }
 
   getStatus() {
@@ -181,10 +186,18 @@ class GpuBinaryManager {
       archivePath = path.join(tempDir, asset.name);
       extractDir = path.join(tempDir, `temp-extract-${Date.now()}`);
 
+      const reportProgress = (downloadedBytes, totalBytes) => {
+        this._downloadProgress = {
+          downloadedBytes,
+          totalBytes,
+          percentage: totalBytes > 0 ? Math.round((downloadedBytes / totalBytes) * 100) : 0,
+        };
+        onProgress?.(downloadedBytes, totalBytes);
+      };
       await downloadFile(asset.browser_download_url, archivePath, {
         signal,
         expectedSize: asset.size,
-        onProgress,
+        onProgress: reportProgress,
       });
 
       await this._verifyDigest(asset, archivePath);
@@ -231,6 +244,7 @@ class GpuBinaryManager {
     } finally {
       this._downloading = false;
       this._downloadSignal = null;
+      this._downloadProgress = null;
       if (archivePath) await fsPromises.unlink(archivePath).catch(() => {});
       if (extractDir) {
         await fsPromises.rm(extractDir, { recursive: true, force: true }).catch(() => {});
