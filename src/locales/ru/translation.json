@@ -2637,8 +2637,6 @@
         "gemini_gemma_4_26b_a4b_it": "Gemma 4 MoE от Google, 4B активных параметров, контекст 256K",
         "groq_openai_gpt_oss_120b": "Открытая флагманская модель OpenAI, 500 т/с",
         "groq_openai_gpt_oss_20b": "Быстрая открытая модель, 1000 т/с",
-        "groq_compound": "Система Compound от Groq, 450 т/с",
-        "groq_compound_mini": "Быстрая система Compound, 3x ниже задержка",
         "openai_gpt_6_astra": "Самая мощная модель OpenAI для программирования и исследований",
         "openai_gpt_5_6_sol": "Флагманская GPT-5.6 для сложного программирования и исследований",
         "openai_gpt_5_6_terra": "Сбалансированная GPT-5.6 для повседневной работы",
