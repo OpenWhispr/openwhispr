@@ -16,6 +16,9 @@ const MESSAGE_KEY = /\bmessageKey\s*[:=]\s*(['"`])([A-Za-z0-9_.-]+)\1/g;
 const INTERPOLATION = /\{\{\s*([\w.]+)/g;
 const ARABIC_PLURAL_CATEGORIES = ["zero", "one", "two", "few", "many", "other"];
 const ARABIC_PLURAL_BASES = [
+  "settingsPage.account.usageReturn.day",
+  "settingsPage.account.usageReturn.hour",
+  "settingsPage.account.usageReturn.minute",
   "settingsPage.workspace.members.description",
   "settingsPage.workspace.teams.memberCount",
   "settingsPage.workspace.teams.grantsAccessToSpaces",
