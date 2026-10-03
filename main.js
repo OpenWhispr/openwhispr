@@ -661,7 +661,7 @@ function registerSidecars() {
 
 // Phase 2: Non-critical setup after windows are visible
 function initializeDeferredManagers() {
-  ensureYdotool().catch((err) => {
+  ensureYdotool({ checkPasteTools: () => clipboardManager.checkPasteTools() }).catch((err) => {
     require("./src/helpers/debugLogger").warn(
       "ydotool setup error",
       { error: err?.message },
