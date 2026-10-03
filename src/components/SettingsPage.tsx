@@ -655,7 +655,9 @@ function TranscriptionSection({
     [localTranscriptionProvider, setParakeetModel, setCohereModel, setWhisperModel]
   );
 
+  // xAI's model streams for Note Recording only; its dictation is batch.
   const selectedCloudModelStreams = Boolean(
+    cloudTranscriptionProvider !== "xai" &&
     getTranscriptionProvider(cloudTranscriptionProvider)?.models.some(
       (model) => model.id === cloudTranscriptionModel && model.streaming
     )

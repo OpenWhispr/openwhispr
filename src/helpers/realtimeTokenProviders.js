@@ -90,6 +90,13 @@ const REALTIME_TOKEN_PROVIDERS = {
     return duplicate(streams, apiKey);
   },
 
+  // BYOK only; the raw key authorizes the WSS upgrade, so both streams share it.
+  "xai-realtime": async ({ environmentManager }, options, streams) => {
+    const apiKey = environmentManager.getXaiKey();
+    if (!apiKey) throw new Error("No xAI API key configured. Add your key in Settings.");
+    return duplicate(streams, apiKey);
+  },
+
   "openai-realtime": async ({ environmentManager, postServerToken }, options, streams) => {
     if (options.mode === "byok") {
       const apiKey = environmentManager.getOpenAIKey();
