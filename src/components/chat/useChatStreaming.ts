@@ -9,8 +9,10 @@ import logger from "../../utils/logger";
 import {
   isAgentAllowed,
   isConnectorsAllowed,
+  isConnectorsBlockedByOrg,
   isLlmSelectionAllowed,
   isWebSearchAllowed,
+  isWebSearchBlockedByOrg,
 } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { getUsageState } from "../../lib/usageStore";
@@ -28,6 +30,7 @@ import {
   appendScreenContextSuffix,
   getAgentSystemPrompt,
 } from "../../config/prompts";
+import { resolveUnavailableCapabilities } from "../../config/agentCapabilities";
 import { getDictionaryHintWords } from "../../utils/snippets";
 import { noteAttendeesContext, withoutAttendeesFence } from "../../utils/noteAttendees";
 import { createToolRegistry } from "../../services/tools";
@@ -40,6 +43,7 @@ import { createToolExecutionScope, type ToolExecutionScope } from "./toolExecuti
 import { isQueryResultData } from "../../services/tools/connectors/runQueryAction";
 import { getAgentToolActivityRemainingMs } from "../../helpers/agentToolPresentation";
 import type { Message, AgentState, ChatImageAttachment, ToolCallInfo } from "./types";
+import { toHistoryMessages, type HistoryMessage } from "./historyMessages";
 import type { ContainerScope } from "../../types/chat";
 import type { NoteAttendeesRequest } from "../../types/connectors";
 import {
@@ -165,8 +169,6 @@ export interface ChatStreaming {
   sendToAI: (userText: string, allMessages: Message[], options?: SendToAIOptions) => Promise<void>;
   cancelStream: () => void;
 }
-
-type HistoryMessage = { role: string; content: string | Array<Record<string, unknown>> };
 
 // Walks backward to the newest user message; a null transform keeps walking.
 function transformLastUserMessage(
@@ -376,20 +378,19 @@ export function useChatStreaming({
         const supportsTools = isCloudAgent || !isLocalProvider || localModelCanUseTool;
 
         const scope = searchScopeRef.current;
+        const policy = usePolicyStore.getState();
+        // The calendar tool reads the shared provider-deduped events table,
+        // so any connected provider enables it.
+        const calendarConnected =
+          settings.gcalConnected || settings.mcalConnected || settings.appleCalendarConnected;
+        const webSearchEnabled = isWebSearchAllowed(policy);
+        const connectorPlan = hasConnectorPlan(getUsageState(), readIsSubscribed());
         let registry: ToolRegistry | null = null;
         let connectorsOffered = false;
         if (supportsTools) {
           const scopeKey = scope ? `${scope.spaceId}:${scope.folderId ?? ""}` : "";
-          // The calendar tool reads the shared provider-deduped events table,
-          // so any connected provider enables it.
-          const calendarConnected =
-            settings.gcalConnected || settings.mcalConnected || settings.appleCalendarConnected;
-          const webSearchEnabled = isWebSearchAllowed(usePolicyStore.getState());
           const connectorsAvailable =
-            allowConnectors &&
-            settings.isSignedIn &&
-            hasConnectorPlan(getUsageState(), readIsSubscribed()) &&
-            isConnectorsAllowed(usePolicyStore.getState());
+            allowConnectors && settings.isSignedIn && connectorPlan && isConnectorsAllowed(policy);
           // The first send in a window must not miss a connector that is already connected.
           if (connectorsAvailable) await ensureConnectorStatus();
           const connectors = connectorsAvailable
@@ -427,6 +428,30 @@ export function useChatStreaming({
           }
         }
 
+        // Named in the prompt so the model says how to turn a capability on
+        // instead of claiming it can't; built per send, outside the registry cache.
+        const unavailable = resolveUnavailableCapabilities({
+          supportsTools,
+          isSignedIn: settings.isSignedIn,
+          webSearch: { allowed: webSearchEnabled, blockedByOrg: isWebSearchBlockedByOrg(policy) },
+          calendarConnected,
+          connectors: allowConnectors
+            ? {
+                hasPlan: connectorPlan,
+                allowed: isConnectorsAllowed(policy),
+                blockedByOrg: isConnectorsBlockedByOrg(policy),
+                statuses: useConnectorStatusStore.getState().statuses,
+              }
+            : undefined,
+          locations: {
+            account: `${t("sidebar.settings")} → ${t("settingsModal.sections.account.label")}`,
+            plans: `${t("sidebar.settings")} → ${t("settingsModal.sections.plansBilling.label")}`,
+            calendars: `${t("sidebar.integrations")} → ${t("integrations.nav.sections.calendars")}`,
+            connectors: `${t("sidebar.integrations")} → ${t("integrations.nav.sections.connectors")}`,
+            models: `${t("sidebar.settings")} → ${t("settingsModal.sections.llms.label")}`,
+          },
+        });
+
         // A note action is about the note in context; other notes would only add noise.
         const [ragContext, attendeesContext] = await Promise.all([
           options?.requestText ? "" : buildRAGContext(userText, scope),
@@ -445,14 +470,17 @@ export function useChatStreaming({
         // The user's dictionary rides on every conversation so replies use their
         // jargon — same suffix the dictation prompts carry.
         let systemPrompt = appendDictionarySuffix(
-          getAgentSystemPrompt(registry?.getAll(), combinedContext || undefined),
+          getAgentSystemPrompt(registry?.getAll(), combinedContext || undefined, {
+            unavailable,
+            toolTrace: registry !== null,
+          }),
           getDictionaryHintWords(settings),
           settings.uiLanguage
         );
 
-        const history: HistoryMessage[] = allMessages
-          .slice(-20)
-          .map((m) => ({ role: m.role, content: m.content }));
+        const history: HistoryMessage[] = toHistoryMessages(allMessages, {
+          includeToolTrace: registry !== null,
+        });
 
         const requestText = options?.requestText;
         if (requestText) {
