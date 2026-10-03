@@ -12,6 +12,9 @@
 //    on distros that restrict unprivileged user namespaces).
 // 3. Fails the build if required binaries (ffmpeg-static, ps-list vendor exe,
 //    onnx worker script) are missing from app.asar.unpacked/.
+// 4. Fails the build if a whisper-server build for processors without AVX2
+//    that download-whisper-cpp.js lists for the platform is missing from
+//    resources/bin.
 
 const fs = require("fs");
 const path = require("path");
@@ -22,6 +25,7 @@ const {
   WINDOWS_ONNXRUNTIME_PRIVATE_NAME,
   WINDOWS_ONNXRUNTIME_UPSTREAM_NAME,
 } = require("./download-sherpa-onnx");
+const { getEntriesForPlatformArch } = require("./download-whisper-cpp");
 
 // ---------------------------------------------------------------------------
 // macOS resource binary signing
@@ -254,6 +258,22 @@ function verifyWindowsOnnxRuntimePrivatized(binDir) {
   }
 }
 
+// The builds for processors without AVX2 are what whisperServer.js falls back to
+// when the primary dies of an illegal instruction (#2356). Nothing else notices
+// one missing, so every such build listed for the platform must ship. They are
+// the platform's entries besides the primary, which is keyed by the platform.
+function verifyWhisperServerFallbackBuilds(binDir, platformArch, binaries) {
+  const missing = getEntriesForPlatformArch(platformArch, binaries)
+    .filter(([key]) => key !== platformArch)
+    .map(([, config]) => config.outputName)
+    .filter((name) => !fs.existsSync(path.join(binDir, name)));
+  if (missing.length > 0) {
+    throw new Error(
+      `afterPack: missing ${missing.join(", ")} in ${binDir} — download-whisper-cpp.js did not install every whisper-server build for ${platformArch}; local Whisper would not start on processors without AVX2`
+    );
+  }
+}
+
 function verifyUnpackedBinaries(context) {
   const unpackedDir = path.join(resolveResourcesDir(context), "app.asar.unpacked");
   const unpackedModulesDir = path.join(unpackedDir, "node_modules");
@@ -305,7 +325,12 @@ exports.default = async function (context) {
   wrapLinuxBinary(context);
   verifyMeetingAecHelper(context);
   verifyUnpackedBinaries(context);
+  verifyWhisperServerFallbackBuilds(
+    path.join(resolveResourcesDir(context), "bin"),
+    `${context.electronPlatformName}-${Arch[context.arch]}`
+  );
   registerMacResourceBinariesForSigning(context);
 };
 
 exports.verifyWindowsOnnxRuntimePrivatized = verifyWindowsOnnxRuntimePrivatized;
+exports.verifyWhisperServerFallbackBuilds = verifyWhisperServerFallbackBuilds;

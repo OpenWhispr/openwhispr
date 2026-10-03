@@ -5,6 +5,7 @@ const os = require("os");
 const path = require("path");
 
 const {
+  cleanupFiles,
   copyLibraries,
   findLibrariesInDir,
   matchesPattern,
@@ -13,6 +14,8 @@ const {
   BINARIES,
   WHISPER_CPP_TAG,
   downloadAllBinaries,
+  downloadCurrentPlatform,
+  getEntriesForPlatformArch,
   isCompleteInstall,
 } = require("../../scripts/download-whisper-cpp");
 
@@ -128,4 +131,86 @@ test("matchesPattern matches each supported library pattern", () => {
   assert.ok(matchesPattern("libonnxruntime.so", "*.so*"));
   assert.ok(matchesPattern("libonnxruntime.so.1.23.2", "*.so*"));
   assert.ok(!matchesPattern("libonnxruntime.so.1.txt", "*.so*"));
+});
+
+test("--current installs every build configured for the platform and fails if any is missing", async () => {
+  const binaries = {
+    "win32-x64": { platformArch: "win32-x64" },
+    "win32-x64-ivybridge": { platformArch: "win32-x64" },
+    "win32-x64-sandybridge": { platformArch: "win32-x64" },
+    "linux-x64": { platformArch: "linux-x64" },
+  };
+  const attempts = [];
+  const download = (failing) => async (key) => {
+    attempts.push(key);
+    return key !== failing;
+  };
+
+  // A release without one of the builds must fail the build, never ship without it
+  assert.equal(
+    await downloadCurrentPlatform("win32-x64", { assets: [] }, false, {
+      binaries,
+      download: download("win32-x64-ivybridge"),
+    }),
+    false
+  );
+  assert.deepEqual(attempts, ["win32-x64", "win32-x64-ivybridge"]);
+
+  attempts.length = 0;
+  assert.equal(
+    await downloadCurrentPlatform("win32-x64", { assets: [] }, false, {
+      binaries,
+      download: download(null),
+    }),
+    true
+  );
+  assert.deepEqual(attempts, ["win32-x64", "win32-x64-ivybridge", "win32-x64-sandybridge"]);
+
+  attempts.length = 0;
+  assert.equal(
+    await downloadCurrentPlatform("freebsd-x64", { assets: [] }, false, {
+      binaries,
+      download: download(null),
+    }),
+    false
+  );
+  assert.deepEqual(attempts, []);
+});
+
+test("every configured build installs under its platform's name, which CI cleanup keeps", () => {
+  for (const [key, config] of Object.entries(BINARIES)) {
+    assert.ok(key.startsWith(config.platformArch), key);
+    assert.ok(config.outputName.startsWith(`whisper-server-${config.platformArch}`), key);
+    assert.ok(
+      getEntriesForPlatformArch(config.platformArch).some(([k]) => k === key),
+      key
+    );
+  }
+});
+
+test("CI cleanup keeps the current platform's builds for processors without AVX2", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "whisper-cleanup-test-"));
+  const files = [
+    ".whisper-cpp-win32-x64.json",
+    "msvcp140.dll",
+    "whisper-server-linux-x64",
+    "whisper-server-linux-x64-ivybridge",
+    "whisper-server-win32-x64-ivybridge.exe",
+    "whisper-server-win32-x64-sandybridge.exe",
+    "whisper-server-win32-x64.exe",
+  ];
+  for (const name of files) fs.writeFileSync(path.join(tempDir, name), name);
+
+  try {
+    cleanupFiles(tempDir, "whisper-server", "whisper-server-win32-x64");
+    assert.deepEqual(fs.readdirSync(tempDir).sort(), [
+      ".whisper-cpp-win32-x64.json",
+      "msvcp140.dll",
+      "whisper-server-win32-x64-ivybridge.exe",
+      "whisper-server-win32-x64-sandybridge.exe",
+      "whisper-server-win32-x64.exe",
+    ]);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 });
