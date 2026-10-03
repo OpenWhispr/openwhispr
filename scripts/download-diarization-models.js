@@ -30,13 +30,20 @@ function getModelDir() {
   return path.join(os.homedir(), ".cache", "openwhispr", "diarization-models");
 }
 
-function extractTarBz2(archivePath, destDir) {
+async function extractTarBz2(archivePath, destDir) {
   fs.mkdirSync(destDir, { recursive: true });
-  const cwd = path.dirname(archivePath);
-  execFileSync("tar", ["-xjf", path.basename(archivePath), "-C", path.relative(cwd, destDir)], {
-    stdio: "inherit",
-    cwd,
-  });
+  if (process.platform === "win32") {
+    const unbzip2 = require("unbzip2-stream");
+    const tar = require("tar");
+    const { pipeline } = require("stream/promises");
+    await pipeline(fs.createReadStream(archivePath), unbzip2(), tar.x({ cwd: destDir }));
+  } else {
+    const cwd = path.dirname(archivePath);
+    execFileSync("tar", ["-xjf", path.basename(archivePath), "-C", path.relative(cwd, destDir)], {
+      stdio: "inherit",
+      cwd,
+    });
+  }
 }
 
 async function main() {
@@ -69,7 +76,7 @@ async function main() {
 
       const extractDir = path.join(modelDir, "temp-segmentation");
       fs.mkdirSync(extractDir, { recursive: true });
-      extractTarBz2(archivePath, extractDir);
+      await extractTarBz2(archivePath, extractDir);
 
       // Find model.onnx inside the extracted directory
       const extractedModelPath = path.join(extractDir, SEGMENTATION_DIR, SEGMENTATION_FILE);
