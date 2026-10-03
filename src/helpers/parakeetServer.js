@@ -14,6 +14,7 @@ const {
 const { getSafeTempDir } = require("./safeTempDir");
 const { createAbortError } = require("./abortError");
 const ParakeetWsServer = require("./parakeetWsServer");
+const { splitAtPauses } = require("./parakeetSegmentation");
 const {
   getModelRuntime,
   getModelType,
@@ -175,15 +176,13 @@ class ParakeetServerManager {
         return { ...retry, elapsed: (result.elapsed || 0) + (retry.elapsed || 0) };
       }
 
+      const segments = splitAtPauses(samples, { sampleRate: SAMPLE_RATE, maxSegmentSeconds });
       debugLogger.debug("Parakeet segmenting long audio", {
         durationSeconds,
-        segmentCount: Math.ceil(samples.length / maxSegmentBytes),
+        segmentSeconds: segments.map((segment) =>
+          Number((segment.length / BYTES_PER_SAMPLE / SAMPLE_RATE).toFixed(2))
+        ),
       });
-
-      const segments = [];
-      for (let offset = 0; offset < samples.length; offset += maxSegmentBytes) {
-        segments.push(samples.subarray(offset, offset + maxSegmentBytes));
-      }
 
       const decodeSegment = async (segment, segmentIndex) => {
         throwIfAborted();
