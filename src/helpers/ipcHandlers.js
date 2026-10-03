@@ -1520,8 +1520,11 @@ class IPCHandlers {
     });
 
     ipcMain.handle("capture-dictation-target", async () => {
+      // Recording start awaits this handler, so the Linux/Windows window probe
+      // runs in the background: a stalled AT-SPI peer would otherwise hold the
+      // microphone for seconds (#1944). Its consumers wait for it themselves.
+      void this.selectionManager?.captureTarget?.();
       const pid = (await this.textEditMonitor?.captureTargetPid?.()) ?? null;
-      await this.selectionManager?.captureTarget?.();
       return { success: true, pid };
     });
 
