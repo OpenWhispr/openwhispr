@@ -97,3 +97,23 @@ test("handles multi-line markdown and empty people", async () => {
   );
   assert.equal(tagActionItemOwners(markdown, []), markdown);
 });
+
+test("tags owners on tasks containing hyphens or dashes in their description", async () => {
+  const { tagActionItemOwners } = await load();
+  assert.equal(
+    tagActionItemOwners("- [ ] Follow-up - call client — Michael Chen", PEOPLE),
+    "- [ ] Follow-up - call client — [@Michael Chen](mention:michael%40acme.com)"
+  );
+  assert.equal(
+    tagActionItemOwners("- [ ] Fix issue - part 1 - Michael Chen", PEOPLE),
+    "- [ ] Fix issue - part 1 - [@Michael Chen](mention:michael%40acme.com)"
+  );
+  assert.equal(
+    tagActionItemOwners("- [ ] Plan — phase 1 — Sean and Michael", PEOPLE),
+    "- [ ] Plan — phase 1 — [@Sean](mention:Sean), [@Michael Chen](mention:michael%40acme.com)"
+  );
+  assert.equal(
+    tagActionItemOwners("* [x] Deploy front-end – staging – Sean", PEOPLE),
+    "* [x] Deploy front-end – staging – [@Sean](mention:Sean)"
+  );
+});
