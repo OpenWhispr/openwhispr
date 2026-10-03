@@ -84,7 +84,17 @@ function userInInputGroup() {
   }
 }
 
-async function ensureYdotool() {
+// Paste methods the compositor offers without ydotool: the GNOME/KDE
+// RemoteDesktop portal, wtype on wlroots, and Hyprland's sendshortcut.
+const COMPOSITOR_PASTE_TOOLS = ["portal", "wtype", "hyprland-sendshortcut"];
+
+function hasCompositorPaste(pasteTools) {
+  return !!pasteTools?.tools?.some((tool) => COMPOSITOR_PASTE_TOOLS.includes(tool));
+}
+
+// checkPasteTools is ClipboardManager.checkPasteTools, passed in so this module
+// stays free of the clipboard manager.
+async function ensureYdotool({ checkPasteTools } = {}) {
   if (process.platform !== "linux") return;
 
   const sessionType = (process.env.XDG_SESSION_TYPE || "").toLowerCase();
@@ -162,6 +172,14 @@ async function ensureYdotool() {
   }
 
   if (missing.length > 0) {
+    // ydotool is only a fallback when the compositor already pastes for us, so
+    // warning about it at every start just nags users who chose not to grant
+    // /dev/uinput access.
+    if (hasCompositorPaste(checkPasteTools?.())) {
+      log.debug("ydotool setup incomplete, compositor paste available", {}, "clipboard");
+      return;
+    }
+
     const detail = missing.join("\n\n");
     log.warn("ydotool setup incomplete", { missing: missing.length }, "clipboard");
 
@@ -212,4 +230,4 @@ function getYdotoolStatus() {
   };
 }
 
-module.exports = { ensureYdotool, getYdotoolStatus };
+module.exports = { ensureYdotool, getYdotoolStatus, hasCompositorPaste };
