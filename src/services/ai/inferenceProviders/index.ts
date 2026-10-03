@@ -9,6 +9,7 @@ import { lanProvider } from "./lan";
 import { openaiProvider } from "./openai";
 import { tinfoilProvider } from "./tinfoil";
 import { cortiProvider } from "./corti";
+import { xaiProvider } from "./xai";
 
 export const PROVIDER_REGISTRY: Readonly<Record<string, InferenceProvider>> = Object.freeze({
   openai: openaiProvider,
@@ -19,6 +20,7 @@ export const PROVIDER_REGISTRY: Readonly<Record<string, InferenceProvider>> = Ob
   groq: groqProvider,
   tinfoil: tinfoilProvider,
   corti: cortiProvider,
+  xai: xaiProvider,
   local: localProvider,
   bedrock: enterpriseProvider,
   azure: enterpriseProvider,
