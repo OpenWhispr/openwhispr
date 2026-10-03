@@ -34,8 +34,9 @@ const ONLINE_FINISH_IDLE_TIMEOUT_MS = 10000;
 // Must cover the model's 560ms chunk so the flush decodes the final words.
 const ONLINE_END_TAIL_PADDING_S = 0.6;
 const AVAILABLE_CPUS = getAvailableParallelism();
-// ONNX intra-op threads for one decode; the cap of four dates from #1131.
-const INTRA_OP_THREADS = Math.max(1, Math.min(4, Math.floor(AVAILABLE_CPUS * 0.75)));
+// ONNX intra-op threads for one decode; leave a quarter of the available
+// parallelism for Electron and other work instead of pinning large CPUs to 4.
+const INTRA_OP_THREADS = Math.max(1, Math.floor(AVAILABLE_CPUS * 0.75));
 // sherpa-onnx's offline server decodes each connection on its own work thread.
 const OFFLINE_WORK_THREADS = 3;
 // How many segments the manager may hand the offline server at once: one per
