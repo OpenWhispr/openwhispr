@@ -2687,6 +2687,8 @@
         "groq_whisper_large_v3": "Hochpräzise Spracherkennung",
         "groq_whisper_large_v3_turbo": "216x Echtzeitgeschwindigkeit",
         "mistral_voxtral_mini_latest": "Schnelle mehrsprachige Transkription",
+        "fish_transcribe_1_pro": "Empfohlenes Fish Audio-Modell zur Spracherkennung",
+        "fish_transcribe_1": "Älteres Fish Audio-Modell zur Spracherkennung",
         "gemini_3_5_transcribe": "Googles Gemini-Spracherkennung",
         "gemini_3_5_transcribe_live": "Spracherkennung per Echtzeit-Streaming",
         "corti_transcribe": "Medizinische Transkription in klinischer Qualität",

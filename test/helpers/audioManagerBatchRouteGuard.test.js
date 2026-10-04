@@ -65,3 +65,78 @@ test("batch dictation on a keyed realtime-only provider fails closed on the tran
     return true;
   });
 });
+
+test("Fish dictation uses its proxy with the selected model, language and recording MIME", async (t) => {
+  const manager = await loadManager(t);
+  Object.assign(manager, {
+    getEffectiveSttLanguage: () => "pt-BR",
+    getWhisperPrompt: () => "",
+    processTranscription: async (text) => text,
+    isReasoningAvailable: async () => false,
+  });
+  setSettings({
+    cloudTranscriptionProvider: "fish",
+    cloudTranscriptionModel: "transcribe-1",
+    cloudTranscriptionBaseUrl: "https://api.openai.com/v1",
+    fishApiKey: "fish-test-key",
+  });
+  globalThis.window.electronAPI.getOpenAIKey = async () => {
+    assert.fail("Fish dictation must not read the OpenAI key");
+  };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    assert.fail("Fish dictation must not use renderer HTTP");
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  const calls = [];
+  globalThis.window.electronAPI.proxyFishTranscription = async (payload) => {
+    calls.push(payload);
+    return { text: "Olá mundo" };
+  };
+
+  for (const [mimeType, fileName] of [
+    ["audio/webm;codecs=opus", "audio.webm"],
+    ["audio/ogg;codecs=opus", "audio.ogg"],
+    ["audio/mp4", "audio.mp4"],
+    ["audio/wav", "audio.wav"],
+  ]) {
+    const blob = new Blob([new Uint8Array([1, 2, 3])], { type: mimeType });
+    const result = await manager.processWithOpenAIAPI(blob);
+    assert.equal(result.success, true);
+    assert.equal(result.source, "fish");
+    assert.equal(result.rawText, "Olá mundo");
+    const payload = calls.at(-1);
+    assert.equal(payload.model, "transcribe-1");
+    assert.equal(payload.language, "pt");
+    assert.equal(payload.contentType, mimeType);
+    assert.equal(payload.fileName, fileName);
+    assert.equal(payload.apiKey, undefined, "the proxy resolves its key in main");
+    assert.deepEqual(new Uint8Array(payload.audioBuffer), new Uint8Array([1, 2, 3]));
+  }
+  assert.equal(calls.length, 4);
+});
+
+test("Fish dictation reads its saved key when needed and fails closed when it is missing", async (t) => {
+  const manager = await loadManager(t);
+  setSettings({ cloudTranscriptionProvider: "fish", fishApiKey: " " });
+  let fishKeyReads = 0;
+  globalThis.window.electronAPI.getFishKey = async () => {
+    fishKeyReads += 1;
+    return "saved-fish-key";
+  };
+  globalThis.window.electronAPI.getOpenAIKey = async () => {
+    assert.fail("Fish must not read the OpenAI key");
+  };
+  assert.equal(await manager.getAPIKey(), "saved-fish-key");
+  assert.equal(fishKeyReads, 1);
+
+  manager.cachedApiKey = null;
+  globalThis.window.electronAPI.getFishKey = async () => "";
+  await assert.rejects(manager.getAPIKey(), (error) => {
+    assert.equal(error.code, "API_KEY_MISSING");
+    assert.match(error.message, /Fish Audio/);
+    return true;
+  });
+});

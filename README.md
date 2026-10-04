@@ -68,6 +68,26 @@ Requires Node.js 24+. See the [full documentation](https://docs.openwhispr.com/q
 
 The commands above run the desktop application, which remains at the repository root. The Expo mobile application lives in [`openwhispr-mobile`](openwhispr-mobile/) with its own dependencies, lockfile, build configuration, and release process. See the [mobile README](openwhispr-mobile/README.md) for its setup instructions.
 
+### Fish Audio speech-to-text
+
+In Settings → Speech-to-Text → **Dictation** (or **Audio Upload**), open
+**Cloud Providers → Fish Audio**, enter your Fish API key, and select a model
+card to activate it. Browsing the provider tab alone does not change the active
+model. Development launches can instead inherit `FISH_API_KEY`.
+Keys use the existing credential store, not synced settings or localStorage:
+encrypted storage when available, with the existing plaintext fallback on systems
+without a usable keyring.
+
+The model picker offers **Transcribe 1 Pro** (`transcribe-1-pro`, default) and
+**Transcribe 1** (`transcribe-1`, legacy). Fish supports batch dictation, retries,
+and audio imports, not live meeting streaming. OpenWhispr keeps its 25 MiB BYOK
+upload cap, converts browser recordings to WAV for the legacy model, and removes
+inline speaker markers from plain dictation text. The connection check verifies
+credentials without uploading audio; the model list is curated because Fish's
+model-list API lists TTS voices rather than ASR models.
+
+See the [official Fish ASR API reference](https://docs.fish.audio/api-reference/endpoint/openapi-v1/speech-to-text).
+
 ## Documentation
 
 Visit **[docs.openwhispr.com](https://docs.openwhispr.com)** for:

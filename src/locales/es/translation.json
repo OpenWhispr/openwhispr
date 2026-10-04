@@ -2641,6 +2641,8 @@
         "groq_whisper_large_v3": "Reconocimiento de voz de alta precisión",
         "groq_whisper_large_v3_turbo": "Velocidad 216x en tiempo real",
         "mistral_voxtral_mini_latest": "Transcripción multilingüe rápida",
+        "fish_transcribe_1_pro": "Modelo de voz a texto recomendado de Fish Audio",
+        "fish_transcribe_1": "Modelo de voz a texto anterior de Fish Audio",
         "gemini_3_5_transcribe": "Voz a texto con Gemini de Google",
         "gemini_3_5_transcribe_live": "Voz a texto en streaming en tiempo real",
         "corti_transcribe": "Transcripción médica de nivel clínico",

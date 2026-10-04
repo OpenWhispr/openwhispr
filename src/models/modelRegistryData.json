@@ -329,6 +329,25 @@
       ]
     },
     {
+      "id": "fish",
+      "name": "Fish Audio",
+      "baseUrl": "https://api.fish.audio/v1",
+      "models": [
+        {
+          "id": "transcribe-1-pro",
+          "name": "Transcribe 1 Pro",
+          "description": "Recommended Fish Audio speech-to-text model",
+          "descriptionKey": "models.descriptions.transcription.fish_transcribe_1_pro"
+        },
+        {
+          "id": "transcribe-1",
+          "name": "Transcribe 1",
+          "description": "Legacy Fish Audio speech-to-text model",
+          "descriptionKey": "models.descriptions.transcription.fish_transcribe_1"
+        }
+      ]
+    },
+    {
       "id": "gemini",
       "name": "Gemini",
       "baseUrl": "https://generativelanguage.googleapis.com/v1beta",

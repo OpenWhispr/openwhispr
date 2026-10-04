@@ -104,6 +104,7 @@ const { TINFOIL_REALTIME_MODEL } = require("./tinfoilRealtimeStreaming");
 const { getTinfoilChatModels } = require("./tinfoilCatalog");
 const { transcribeWithTinfoil } = require("./tinfoilTranscription");
 const { transcribeWithGemini } = require("./geminiTranscription");
+const { transcribeWithFish } = require("./fishTranscription");
 const AudioStorageManager = require("./audioStorage");
 const LocalModelDownloadStatus = require("./localModelDownloadStatus");
 const AgentStreamRequestRegistry = require("./agentStreamRequestRegistry");
@@ -4726,6 +4727,26 @@ class IPCHandlers {
       })
     );
 
+    ipcMain.handle(
+      "proxy-fish-transcription",
+      serializeIpcError(async (event, { audioBuffer, model, language, contentType, fileName }) => {
+        const buffer = Buffer.from(audioBuffer);
+        const { byokFileSizeLimit } = await import("./transcriptionRoute.ts");
+        const sizeCapBytes = byokFileSizeLimit("fish");
+        if (buffer.byteLength > sizeCapBytes) {
+          throw new Error(byokSizeCapError(sizeCapBytes));
+        }
+        return await transcribeWithFish({
+          audioBuffer: buffer,
+          model,
+          contentType: contentType || "audio/webm",
+          fileName: fileName || "audio.webm",
+          language,
+          apiKey: this.environmentManager.getFishKey(),
+        });
+      })
+    );
+
     ipcMain.handle("get-custom-transcription-key", async () => {
       return this.environmentManager.getCustomTranscriptionKey();
     });
@@ -6607,6 +6628,20 @@ class IPCHandlers {
             apiKey: this.environmentManager.getGeminiKey(),
           });
           if (text) result = { text, source: "gemini", model: route.model };
+        } else if (route.transport === "proxied" && route.provider === "fish") {
+          if (buffer.byteLength > route.sizeCapBytes) {
+            throw new Error(byokSizeCapError(route.sizeCapBytes));
+          }
+          const storedWav = isWavFormat(buffer);
+          const { text } = await transcribeWithFish({
+            audioBuffer: buffer,
+            model: route.model,
+            fileName: storedWav ? "audio.wav" : "audio.webm",
+            contentType: storedWav ? "audio/wav" : "audio/webm",
+            language: route.language,
+            apiKey: this.environmentManager.getFishKey(),
+          });
+          if (text) result = { text, source: "fish", model: route.model };
         } else {
           // mistral/xai have no OpenAI-compatible endpoint — main talks to them
           // directly; everything else consumes the route endpoint as-is.
@@ -10218,6 +10253,18 @@ class IPCHandlers {
               model: route.model,
               contentType: providerContentType(realByok),
               apiKey: apiKey || this.environmentManager.getGeminiKey(),
+            });
+            return { success: true, text };
+          }
+
+          if (route.transport === "proxied" && route.provider === "fish") {
+            // Uploaded audio may differ from the dictation language; auto-detect it.
+            const { text } = await transcribeWithFish({
+              audioBuffer: fs.readFileSync(realByok),
+              model: route.model,
+              fileName: path.basename(realByok),
+              contentType: providerContentType(realByok),
+              apiKey: apiKey?.trim() || this.environmentManager.getFishKey(),
             });
             return { success: true, text };
           }

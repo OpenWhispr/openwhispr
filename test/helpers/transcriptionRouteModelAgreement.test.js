@@ -4,20 +4,21 @@ const assert = require("node:assert/strict");
 const registry = require("../../src/models/modelRegistryData.json");
 const load = () => import("../../src/helpers/transcriptionRoute.ts");
 
-// resolveByokModel validates by prefix so it can run in the packaged main process
-// without the registry, which means the two can silently drift apart. Every model
-// the picker can write must survive a round trip through the resolver, or a user
+// resolveByokModel validates most providers by prefix so it can run in the packaged
+// main process without the registry, which means the two can silently drift apart.
+// Every model the picker can write must survive a round trip through the resolver, or a user
 // who picks it has their choice replaced by the provider default at request time.
 //
 // Tinfoil is excluded: its batch model comes from the registry directly
 // (getBatchTranscriptionModel) and the route sends none.
-const PREFIX_VALIDATED_PROVIDERS = [
+const VALIDATED_PROVIDERS = [
   "openai",
   "groq",
   "xai",
   "mistral",
   "corti",
   "gemini",
+  "fish",
   "deepgram",
   "assemblyai",
 ];
@@ -25,7 +26,7 @@ const PREFIX_VALIDATED_PROVIDERS = [
 test("every shipping registry model survives resolveByokModel", async () => {
   const { resolveByokModel } = await load();
 
-  for (const providerId of PREFIX_VALIDATED_PROVIDERS) {
+  for (const providerId of VALIDATED_PROVIDERS) {
     const provider = registry.transcriptionProviders.find((p) => p.id === providerId);
     assert.ok(provider, `registry is missing provider ${providerId}`);
 
@@ -42,7 +43,7 @@ test("every shipping registry model survives resolveByokModel", async () => {
 test("each provider's fallback default is a model that provider actually offers", async () => {
   const { resolveByokModel } = await load();
 
-  for (const providerId of PREFIX_VALIDATED_PROVIDERS) {
+  for (const providerId of VALIDATED_PROVIDERS) {
     const provider = registry.transcriptionProviders.find((p) => p.id === providerId);
     const fallback = resolveByokModel(providerId, "a-model-from-another-provider");
     assert.ok(
@@ -84,4 +85,13 @@ test("a model belonging to another provider degrades to the provider default", a
   assert.equal(resolveByokModel("gemini", "whisper-1"), "gemini-3.5-transcribe");
   assert.equal(resolveByokModel("deepgram", "whisper-1"), "nova-3");
   assert.equal(resolveByokModel("assemblyai", "nova-3"), "universal-3-5-pro");
+});
+
+test("Fish accepts only known model headers so unknown ids cannot silently select legacy", async () => {
+  const { resolveByokModel } = await load();
+  for (const model of [undefined, "", "  ", "whisper-1", "transcribe-2", "transcribe-1-preview"]) {
+    assert.equal(resolveByokModel("fish", model), "transcribe-1-pro", String(model));
+  }
+  assert.equal(resolveByokModel("fish", " transcribe-1 "), "transcribe-1");
+  assert.equal(resolveByokModel("fish", " transcribe-1-pro "), "transcribe-1-pro");
 });
