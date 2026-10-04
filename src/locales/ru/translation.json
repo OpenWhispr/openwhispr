@@ -2604,6 +2604,8 @@
         "groq_whisper_large_v3_turbo": "Скорость в 216 раз быстрее реального времени",
         "groq_whisper_large_v3": "Модель Large v3, быстрая и точная",
         "mistral_voxtral_mini_latest": "Быстрая многоязычная транскрипция",
+        "fish_transcribe_1_pro": "Рекомендуемая модель распознавания речи Fish Audio",
+        "fish_transcribe_1": "Предыдущая модель распознавания речи Fish Audio",
         "gemini_3_5_transcribe": "Распознавание речи Gemini от Google",
         "gemini_3_5_transcribe_live": "Распознавание речи в реальном времени",
         "corti_transcribe": "Медицинская транскрипция клинического уровня",

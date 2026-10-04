@@ -2163,6 +2163,17 @@ declare global {
         keyterms?: string[];
       }) => Promise<ProxyTranscriptionResult>;
 
+      // Fish Audio transcription (credentials resolved in the main process)
+      getFishKey: () => Promise<string | null>;
+      saveFishKey: (key: string) => Promise<void>;
+      proxyFishTranscription?: (data: {
+        audioBuffer: ArrayBuffer;
+        model?: string;
+        language?: string;
+        contentType?: string;
+        fileName?: string;
+      }) => Promise<ProxyTranscriptionResult>;
+
       // Groq API key management
       getGroqKey: () => Promise<string | null>;
       saveGroqKey: (key: string) => Promise<void>;

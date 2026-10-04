@@ -518,6 +518,17 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
       keyterms: keyterms.length > 0 ? keyterms : undefined,
     }),
   },
+  fish: {
+    displayName: "Fish Audio",
+    ipc: () => window.electronAPI?.proxyFishTranscription,
+    buildPayload: ({ audioBuffer, model, language, mimeType }) => ({
+      audioBuffer,
+      model,
+      language,
+      contentType: mimeType,
+      fileName: `audio.${audioExtensionForMime(mimeType)}`,
+    }),
+  },
   xai: {
     displayName: "xAI",
     ipc: () => window.electronAPI?.proxyXaiTranscription,
@@ -2574,6 +2585,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (!apiKey?.trim()) {
         const err = new Error(
           "Gemini API key not found. Please set your API key in the Control Panel."
+        );
+        err.code = "API_KEY_MISSING";
+        throw err;
+      }
+    } else if (provider === "fish") {
+      apiKey = s.fishApiKey;
+      if (!apiKey?.trim()) {
+        apiKey = await window.electronAPI.getFishKey?.();
+      }
+      if (!apiKey?.trim()) {
+        const err = new Error(
+          "Fish Audio API key not found. Please set your API key in the Control Panel."
         );
         err.code = "API_KEY_MISSING";
         throw err;

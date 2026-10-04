@@ -116,7 +116,7 @@ export type TranscriptionRoute =
   | { transport: "local" }
   | {
       transport: "proxied";
-      provider: "tinfoil" | "mistral" | "xai" | "corti" | "gemini";
+      provider: "tinfoil" | "mistral" | "xai" | "corti" | "gemini" | "fish";
       model: string | null;
       language?: string;
       sizeCapBytes: number;
@@ -180,6 +180,12 @@ export const XAI_STT_LANGUAGES = new Set([
 export function resolveByokModel(provider: string, configuredModel?: string): string {
   const trimmed = (configuredModel || "").trim();
   if (provider === "custom") return trimmed || "whisper-1";
+  // Fish silently selects its legacy model for unknown header values.
+  if (provider === "fish") {
+    return trimmed === "transcribe-1" || trimmed === "transcribe-1-pro"
+      ? trimmed
+      : "transcribe-1-pro";
+  }
   if (trimmed) {
     const matchesProvider =
       (provider === "groq" && trimmed.startsWith("whisper-large-v3")) ||
@@ -344,13 +350,13 @@ export function resolveTranscriptionRoute({
       sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
     };
   }
-  if (provider === "gemini") {
+  if (provider === "gemini" || provider === "fish") {
     return {
       transport: "proxied",
       provider,
       model,
       language,
-      sizeCapBytes: GEMINI_FILE_SIZE_LIMIT,
+      sizeCapBytes: byokFileSizeLimit(provider),
     };
   }
   if (provider === "corti") {

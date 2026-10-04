@@ -2588,6 +2588,8 @@
         "groq_whisper_large_v3_turbo": "リアルタイムの 216 倍速",
         "groq_whisper_large_v3": "Large v3 モデル、高速かつ高精度",
         "mistral_voxtral_mini_latest": "高速多言語文字起こし",
+        "fish_transcribe_1_pro": "Fish Audioの推奨音声文字起こしモデル",
+        "fish_transcribe_1": "Fish Audioの旧音声文字起こしモデル",
         "gemini_3_5_transcribe": "GoogleのGemini音声文字起こし",
         "gemini_3_5_transcribe_live": "リアルタイムストリーミング文字起こし",
         "corti_transcribe": "臨床グレードの医療文字起こし",

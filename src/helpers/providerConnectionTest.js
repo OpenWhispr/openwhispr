@@ -11,11 +11,12 @@ const ENDPOINTS = {
   deepgram: "https://api.deepgram.com/v1/models",
   // AssemblyAI exposes no model list; listing transcripts is its 200-vs-401 probe.
   assemblyai: "https://api.assemblyai.com/v2/transcript?limit=1",
+  // Fish's model list contains TTS voices, not ASR models. Probe credentials without audio.
+  fish: "https://api.fish.audio/wallet/self/api-credit",
 };
 
-// Neither response is OpenAI-shaped — Deepgram's /v1/models is {stt,tts}-keyed
-// and AssemblyAI returns transcripts — so a 200 is the whole credential signal.
-const MODEL_LIST_UNVERIFIABLE = new Set(["deepgram", "assemblyai"]);
+// These responses are not OpenAI model lists; a 200 is the credential signal.
+const MODEL_LIST_UNVERIFIABLE = new Set(["deepgram", "assemblyai", "fish"]);
 
 // Renderers translate errorCode via onboarding.rehaul.provider.errors.*; the
 // English `error` string stays for logs and older callers.

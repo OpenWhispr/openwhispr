@@ -8,6 +8,7 @@ const BYOK_KEY_BRIDGES = [
   { base: "openai", get: "getOpenAIKey", save: "saveOpenAIKey" },
   { base: "anthropic", get: "getAnthropicKey", save: "saveAnthropicKey" },
   { base: "gemini", get: "getGeminiKey", save: "saveGeminiKey" },
+  { base: "fish", get: "getFishKey", save: "saveFishKey" },
   { base: "groq", get: "getGroqKey", save: "saveGroqKey" },
   { base: "xai", get: "getXaiKey", save: "saveXaiKey" },
   { base: "mistral", get: "getMistralKey", save: "saveMistralKey" },
@@ -613,6 +614,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   proxyXaiTranscription: (data) => ipcRenderer.invoke("proxy-xai-transcription", data),
   proxyMistralTranscription: (data) => ipcRenderer.invoke("proxy-mistral-transcription", data),
   proxyGeminiTranscription: (data) => ipcRenderer.invoke("proxy-gemini-transcription", data),
+  proxyFishTranscription: (data) => ipcRenderer.invoke("proxy-fish-transcription", data),
 
   // Corti API
   getCortiClientId: () => ipcRenderer.invoke("get-corti-client-id"),

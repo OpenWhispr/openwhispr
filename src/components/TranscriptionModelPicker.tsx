@@ -245,6 +245,7 @@ const CLOUD_PROVIDER_TABS = [
   { id: "groq", name: "Groq" },
   { id: "xai", name: "xAI" },
   { id: "mistral", name: "Mistral" },
+  { id: "fish", name: "Fish Audio" },
   { id: "gemini", name: "Gemini" },
   { id: "corti", name: "Corti" },
   { id: "tinfoil", name: "Tinfoil" },
@@ -259,6 +260,7 @@ interface ProviderCredentialField {
     | "groqApiKey"
     | "xaiApiKey"
     | "mistralApiKey"
+    | "fishApiKey"
     | "geminiApiKey"
     | "cortiClientId"
     | "cortiClientSecret"
@@ -292,6 +294,10 @@ const PROVIDER_CREDENTIALS: Record<
   mistral: {
     consoleUrl: "https://console.mistral.ai/api-keys",
     fields: [{ key: "mistralApiKey", input: "secret" }],
+  },
+  fish: {
+    consoleUrl: "https://fish.audio/app/api-keys",
+    fields: [{ key: "fishApiKey", input: "secret" }],
   },
   gemini: {
     consoleUrl: "https://aistudio.google.com/apikey",
@@ -407,6 +413,8 @@ export default function TranscriptionModelPicker({
   const setXaiApiKey = useSettingsStore((s) => s.setXaiApiKey);
   const mistralApiKey = useSettingsStore((s) => s.mistralApiKey);
   const setMistralApiKey = useSettingsStore((s) => s.setMistralApiKey);
+  const fishApiKey = useSettingsStore((s) => s.fishApiKey);
+  const setFishApiKey = useSettingsStore((s) => s.setFishApiKey);
   const geminiApiKey = useSettingsStore((s) => s.geminiApiKey);
   const setGeminiApiKey = useSettingsStore((s) => s.setGeminiApiKey);
   const cortiClientId = useSettingsStore((s) => s.cortiClientId);
@@ -977,6 +985,7 @@ export default function TranscriptionModelPicker({
     groqApiKey,
     xaiApiKey,
     mistralApiKey,
+    fishApiKey,
     geminiApiKey,
     cortiClientId,
     cortiClientSecret,
@@ -991,6 +1000,7 @@ export default function TranscriptionModelPicker({
     groqApiKey: setGroqApiKey,
     xaiApiKey: setXaiApiKey,
     mistralApiKey: setMistralApiKey,
+    fishApiKey: setFishApiKey,
     geminiApiKey: setGeminiApiKey,
     cortiClientId: setCortiClientId,
     cortiClientSecret: setCortiClientSecret,

@@ -1,4 +1,4 @@
-// Single source of truth for the uniform BYOK cloud-LLM API-key secrets:
+// Single source of truth for the uniform BYOK API-key secrets:
 // environment.js, ipcHandlers.js and the settings store all derive their
 // per-key plumbing from this list, so adding a provider is one entry.
 // CommonJS + pure data so both the main process and the Vite renderer share it.
@@ -42,6 +42,13 @@ const BYOK_API_KEYS = [
     get: "getMistralKey",
     save: "saveMistralKey",
     storeKey: "mistralApiKey",
+  },
+  {
+    base: "fish",
+    env: "FISH_API_KEY",
+    get: "getFishKey",
+    save: "saveFishKey",
+    storeKey: "fishApiKey",
   },
   {
     base: "openrouter",

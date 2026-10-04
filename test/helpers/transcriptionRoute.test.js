@@ -42,7 +42,16 @@ test("self-hosted routes to the configured server and wins over stale flags", as
 });
 
 test("self-hosted mode without a URL fails closed unless the provider is custom", async () => {
-  for (const provider of ["openai", "groq", "mistral", "xai", "corti", "gemini", "tinfoil"]) {
+  for (const provider of [
+    "openai",
+    "groq",
+    "mistral",
+    "xai",
+    "corti",
+    "gemini",
+    "fish",
+    "tinfoil",
+  ]) {
     const route = await resolve({
       transcriptionMode: "self-hosted",
       remoteTranscriptionUrl: "",
@@ -126,10 +135,60 @@ test("proxied providers carry their quirks as route data", async () => {
   );
 });
 
+test("Fish routes through the proxy even with a stale OpenAI base URL and model", async () => {
+  const route = await resolve({
+    cloudTranscriptionProvider: "fish",
+    cloudTranscriptionBaseUrl: "https://api.openai.com/v1",
+    cloudTranscriptionModel: "whisper-1",
+    preferredLanguage: "pt-BR",
+  });
+  assert.deepEqual(route, {
+    transport: "proxied",
+    provider: "fish",
+    model: "transcribe-1-pro",
+    language: "pt",
+    sizeCapBytes: 25 * 1024 * 1024,
+  });
+});
+
+test("Fish defaults to Pro and preserves a valid request model and effective language", async () => {
+  const defaultRoute = await resolve({ cloudTranscriptionProvider: "fish" });
+  assert.equal(defaultRoute.transport, "proxied");
+  assert.equal(defaultRoute.model, "transcribe-1-pro");
+  assert.equal(defaultRoute.language, undefined);
+
+  const override = await resolve(
+    {
+      cloudTranscriptionProvider: "fish",
+      cloudTranscriptionModel: "transcribe-1-pro",
+      preferredLanguage: "en",
+    },
+    { request: { model: " transcribe-1 ", effectiveLanguage: "ja" } }
+  );
+  assert.equal(override.transport, "proxied");
+  assert.equal(override.provider, "fish");
+  assert.equal(override.model, "transcribe-1");
+  assert.equal(override.language, "ja");
+});
+
+test("Fish proxy routing obeys the managed provider allowlist", async () => {
+  const settings = { transcriptionMode: "providers", cloudTranscriptionProvider: "fish" };
+  const blocked = await resolve(settings, { policy: MANAGED_OPENAI_ONLY });
+  assert.equal(blocked.transport, "error");
+  assert.equal(blocked.code, "POLICY_RESTRICTED");
+
+  const fishAllowed = structuredClone(MANAGED_OPENAI_ONLY);
+  fishAllowed.policy.transcription.allowedByokProviders = ["fish"];
+  const allowed = await resolve(settings, { policy: fishAllowed });
+  assert.equal(allowed.transport, "proxied");
+  assert.equal(allowed.provider, "fish");
+});
+
 test("byokFileSizeLimit matches the per-provider route caps", async () => {
   const { byokFileSizeLimit } = await load();
   assert.equal(byokFileSizeLimit("gemini"), 14 * 1024 * 1024);
   assert.equal(byokFileSizeLimit("openai"), 25 * 1024 * 1024);
+  assert.equal(byokFileSizeLimit("fish"), 25 * 1024 * 1024);
 });
 
 test("custom requires a configured secure endpoint (empty, sentinel, garbage all fail)", async () => {

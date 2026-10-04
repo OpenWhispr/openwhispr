@@ -276,6 +276,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     groqApiKey,
     xaiApiKey,
     mistralApiKey,
+    fishApiKey,
     geminiApiKey,
     tinfoilApiKey,
     deepgramApiKey,
@@ -443,6 +444,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                 groqApiKey,
                 xaiApiKey,
                 mistralApiKey,
+                fishApiKey,
                 geminiApiKey,
                 tinfoilApiKey,
                 deepgramApiKey,
@@ -484,6 +486,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     groqApiKey,
     xaiApiKey,
     mistralApiKey,
+    fishApiKey,
     geminiApiKey,
     tinfoilApiKey,
     deepgramApiKey,
@@ -508,7 +511,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     const name =
       cloudTranscriptionProvider === "custom"
         ? t("notes.upload.custom")
-        : cloudTranscriptionProvider.charAt(0).toUpperCase() + cloudTranscriptionProvider.slice(1);
+        : (getTranscriptionProviders().find(
+            (provider) => provider.id === cloudTranscriptionProvider
+          )?.name ?? cloudTranscriptionProvider);
     const model = getBatchTranscriptionModel(cloudTranscriptionProvider) ?? cloudTranscriptionModel;
     return `${name} · ${model}`;
   };

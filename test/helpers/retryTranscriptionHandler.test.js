@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const Module = require("node:module");
 
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
+const fishModulePath = require.resolve("../../src/helpers/fishTranscription");
 const originalLoad = Module._load;
 
 // Captures every ipcMain.handle registration and every net.fetch request so the
@@ -73,11 +74,26 @@ let convertBehavior = async () => CONVERTED_WAV;
 const cortiCalls = [];
 const tinfoilCalls = [];
 let cortiBehavior = async () => ({ text: "corti text" });
+let fishApiKey = "fish-test-key";
+let retryBufferOverride = null;
 
 // Kept installed for the whole file: the corti client is require()d lazily at
 // handler invocation time, not at module load.
 Module._load = function loadWithMocks(request, parent, isMain) {
   if (request === "electron") return electronStub;
+  if (
+    request === "./ffmpegUtils" &&
+    (parent?.filename === handlersModulePath || parent?.filename === fishModulePath)
+  ) {
+    const real = originalLoad.call(this, request, parent, isMain);
+    return {
+      ...real,
+      convertBufferToWav: async (buffer, options) => {
+        wavConversions.push(buffer);
+        return convertBehavior(buffer, options);
+      },
+    };
+  }
   if (parent?.filename === handlersModulePath) {
     if (request === "./cortiTranscription") {
       return {
@@ -98,16 +114,6 @@ Module._load = function loadWithMocks(request, parent, isMain) {
     }
     if (request === "./windowBroadcast") {
       return { broadcastToWindows: () => {} };
-    }
-    if (request === "./ffmpegUtils") {
-      const real = originalLoad.call(this, request, parent, isMain);
-      return {
-        ...real,
-        convertBufferToWav: async (buffer, options) => {
-          wavConversions.push(buffer);
-          return convertBehavior(buffer, options);
-        },
-      };
     }
   }
   return originalLoad.call(this, request, parent, isMain);
@@ -135,7 +141,8 @@ function buildFakeThis() {
     sessionId: "test-session",
     audioStorageManager: {
       // 7 is a stored WebM recording, 8 one already in WAV.
-      getAudioBuffer: (id) => (id === 7 ? Buffer.from([1, 2, 3]) : id === 8 ? WAV_BUFFER : null),
+      getAudioBuffer: (id) =>
+        retryBufferOverride ?? (id === 7 ? Buffer.from([1, 2, 3]) : id === 8 ? WAV_BUFFER : null),
     },
     databaseManager: {
       updateTranscriptionText: () => {},
@@ -149,6 +156,7 @@ function buildFakeThis() {
       getMistralKey: () => "mk-mistral",
       getXaiKey: () => "xk-xai",
       getTinfoilKey: () => "tk-tinfoil",
+      getFishKey: () => fishApiKey,
       getCustomTranscriptionKey: () => "ck-custom",
       getCortiClientId: () => "corti-id",
       getCortiClientSecret: () => "corti-secret",
@@ -373,6 +381,98 @@ test("retry: mistral goes to Mistral with x-api-key", async () => {
   assert.equal(result.success, true);
   assert.match(fetches[0].url, /api\.mistral\.ai/);
   assert.equal(fetches[0].init.headers["x-api-key"], "mk-mistral");
+});
+
+const FISH_SETTINGS = {
+  cloudTranscriptionProvider: "fish",
+  cloudTranscriptionMode: "byok",
+  transcriptionMode: "providers",
+  cloudTranscriptionModel: "transcribe-1-pro",
+  cloudTranscriptionBaseUrl: "https://api.openai.com/v1",
+  preferredLanguage: "pt-BR",
+};
+
+test("retry: Fish uses its own credentials, model header and language, never OpenAI", async () => {
+  fetches.length = 0;
+  const result = await invoke(FISH_SETTINGS);
+  assert.equal(result.success, true);
+  assert.equal(fetches.length, 1);
+  const { url, init } = fetches[0];
+  assert.equal(url, "https://api.fish.audio/v1/asr");
+  assert.equal(init.headers.Authorization, "Bearer fish-test-key");
+  assert.equal(init.headers.model, "transcribe-1-pro");
+  assert.equal(init.body.get("model"), null);
+  assert.equal(init.body.get("language"), "pt");
+  assert.equal(init.body.get("audio").type, "audio/webm");
+  assert.equal(init.body.get("audio").name, "audio.webm");
+});
+
+test("retry: Fish legacy converts WebM but preserves stored WAV", async () => {
+  for (const id of [7, 8]) {
+    fetches.length = 0;
+    wavConversions.length = 0;
+    const result = await invoke({ ...FISH_SETTINGS, cloudTranscriptionModel: "transcribe-1" }, id);
+    assert.equal(result.success, true);
+    assert.equal(wavConversions.length, id === 7 ? 1 : 0);
+    const { init } = fetches[0];
+    assert.equal(init.headers.model, "transcribe-1");
+    assert.equal(init.body.get("audio").type, "audio/wav");
+    assert.equal(init.body.get("audio").name, "audio.wav");
+    assert.deepEqual(
+      Buffer.from(await init.body.get("audio").arrayBuffer()),
+      id === 7 ? CONVERTED_WAV : WAV_BUFFER
+    );
+  }
+});
+
+test("Fish proxy preserves dictation MIME and returns credential errors with their code", async () => {
+  const proxy = handlers.get("proxy-fish-transcription");
+  fetches.length = 0;
+  const result = await proxy(
+    { sender: {} },
+    {
+      audioBuffer: WAV_BUFFER,
+      model: "transcribe-1",
+      contentType: "audio/wav",
+      fileName: "dictation.wav",
+      language: "ja",
+    }
+  );
+  assert.equal(result.text, "transcribed");
+  assert.equal(fetches[0].init.body.get("audio").name, "dictation.wav");
+  assert.equal(fetches[0].init.body.get("audio").type, "audio/wav");
+  assert.equal(fetches[0].init.body.get("language"), "ja");
+
+  fishApiKey = " ";
+  fetches.length = 0;
+  try {
+    const failedProxy = await proxy({ sender: {} }, { audioBuffer: WAV_BUFFER });
+    assert.equal(failedProxy.code, "API_KEY_MISSING");
+    const failedRetry = await invoke(FISH_SETTINGS);
+    assert.equal(failedRetry.success, false);
+    assert.equal(failedRetry.code, "API_KEY_MISSING");
+    assert.equal(fetches.length, 0);
+  } finally {
+    fishApiKey = "fish-test-key";
+  }
+});
+
+test("Fish proxy and retry reject over-limit audio before contacting the provider", async () => {
+  fetches.length = 0;
+  retryBufferOverride = Buffer.alloc(25 * 1024 * 1024 + 1);
+  try {
+    const retry = await invoke(FISH_SETTINGS);
+    assert.equal(retry.success, false);
+    assert.match(retry.error, /25 MB/);
+    const proxy = await handlers.get("proxy-fish-transcription")(
+      { sender: {} },
+      { audioBuffer: retryBufferOverride }
+    );
+    assert.match(proxy.error, /25 MB/);
+    assert.equal(fetches.length, 0);
+  } finally {
+    retryBufferOverride = null;
+  }
 });
 
 test("proxy transcription handlers resolve to structured errors instead of rejecting", async () => {
@@ -601,4 +701,85 @@ test("upload: a self-hosted Azure endpoint keeps its deployment URL", async () =
     fetches[0].url,
     "https://myorg.openai.azure.com/openai/deployments/my-deployment/audio/transcriptions?api-version=2025-03-01-preview"
   );
+});
+
+test("upload: Fish keeps the selected model and file MIME while auto-detecting language", async () => {
+  fetches.length = 0;
+  const result = await invokeUpload({
+    apiKey: "fish-upload-key",
+    provider: "fish",
+    model: "transcribe-1-pro",
+    baseUrl: "https://api.openai.com/v1",
+    language: "de",
+    transcriptionMode: "providers",
+  });
+  assert.equal(result.success, true);
+  assert.equal(fetches.length, 1);
+  const { url, init } = fetches[0];
+  assert.equal(url, "https://api.fish.audio/v1/asr");
+  assert.equal(init.headers.Authorization, "Bearer fish-upload-key");
+  assert.equal(init.headers.model, "transcribe-1-pro");
+  assert.equal(init.body.get("language"), null);
+  assert.equal(init.body.get("audio").type, "audio/webm");
+  assert.equal(init.body.get("audio").name, pathNode.basename(uploadTempFile));
+});
+
+test("upload: Fish falls back to its stored key for blank keys and defaults stale models to Pro", async () => {
+  for (const apiKey of [undefined, "", "   "]) {
+    fetches.length = 0;
+    const result = await invokeUpload({
+      apiKey,
+      provider: "fish",
+      model: "whisper-1",
+      transcriptionMode: "providers",
+    });
+    assert.equal(result.success, true);
+    assert.equal(fetches[0].init.headers.Authorization, "Bearer fish-test-key");
+    assert.equal(fetches[0].init.headers.model, "transcribe-1-pro");
+  }
+});
+
+test("upload: Fish legacy converts WebM and never inherits the dictation language", async () => {
+  fetches.length = 0;
+  wavConversions.length = 0;
+  const result = await invokeUpload({
+    provider: "fish",
+    model: "transcribe-1",
+    language: "de",
+    transcriptionMode: "providers",
+  });
+  assert.equal(result.success, true);
+  assert.equal(wavConversions.length, 1);
+  const { init } = fetches[0];
+  assert.equal(init.headers.model, "transcribe-1");
+  assert.equal(init.body.get("language"), null);
+  assert.equal(init.body.get("audio").type, "audio/wav");
+  assert.equal(init.body.get("audio").name, "audio.wav");
+});
+
+test("upload: Fish enforces the size limit and missing credentials before any request", async (t) => {
+  const dir = fsNode.mkdtempSync(pathNode.join(osNode.tmpdir(), "openwhispr-fish-upload-"));
+  t.after(() => fsNode.rmSync(dir, { recursive: true, force: true }));
+  const filePath = pathNode.join(dir, "oversized.wav");
+  fsNode.writeFileSync(filePath, Buffer.alloc(25 * 1024 * 1024 + 1));
+  fetches.length = 0;
+  const oversized = await invokeUpload({
+    filePath,
+    provider: "fish",
+    model: "transcribe-1-pro",
+    transcriptionMode: "providers",
+  });
+  assert.equal(oversized.success, false);
+  assert.match(oversized.error, /25 MB/);
+  assert.equal(fetches.length, 0);
+
+  fishApiKey = "";
+  try {
+    const missingKey = await invokeUpload({ provider: "fish", transcriptionMode: "providers" });
+    assert.equal(missingKey.success, false);
+    assert.equal(missingKey.code, "API_KEY_MISSING");
+    assert.equal(fetches.length, 0);
+  } finally {
+    fishApiKey = "fish-test-key";
+  }
 });
