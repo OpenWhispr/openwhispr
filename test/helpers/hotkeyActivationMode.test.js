@@ -146,6 +146,41 @@ test("switching to Hold without input access is refused and keeps Tap", async ()
   assert.match(failures[0].result.error, /usermod/);
 });
 
+// Desktop backends can't hold a modifier-only chord, so both ways into that
+// combination must ask for a regular key rather than blame a conflict (#1977).
+test("a desktop backend refuses Hold with a modifier-only hotkey and asks for a regular key", async () => {
+  const manager = new HotkeyManager();
+  const failures = [];
+  manager.useKDE = true;
+  manager.activationMode = "tap";
+  manager.currentHotkey = "Control+Super";
+  manager.notifyHotkeyFailure = (hotkey, result) => failures.push({ hotkey, result });
+
+  const changed = await withPlatform("linux", () => manager.setActivationMode("push"));
+
+  assert.equal(changed, false);
+  assert.equal(manager.activationMode, "tap");
+  assert.equal(failures.length, 1);
+  assert.match(failures[0].result.error, /regular key/);
+  assert.doesNotMatch(failures[0].result.error, /reserved/);
+});
+
+test("a desktop backend on Hold refuses a modifier-only hotkey and asks for a regular key", async () => {
+  const manager = new HotkeyManager();
+  manager.useKDE = true;
+  manager.activationMode = "push";
+  manager.currentHotkey = "F8";
+
+  const result = await withPlatform("linux", () =>
+    manager.updateHotkey("Control+Super", () => undefined)
+  );
+
+  assert.equal(result.success, false);
+  assert.match(result.message, /regular key/);
+  assert.doesNotMatch(result.message, /reserved/);
+  assert.equal(manager.currentHotkey, "F8");
+});
+
 // main.js restores the saved mode before initializeHotkey has chosen a backend,
 // and GNOME, KDE and Hyprland hold without the listener. Refusing that early left
 // the saved setting on Hold while main ran Tap, and nothing checked it again.
