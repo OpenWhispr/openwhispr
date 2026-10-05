@@ -123,6 +123,8 @@
       "osReserved": "\"{{hotkey}}\" puede estar reservada por tu entorno de escritorio.",
       "rightModifierNeedsListener": "\"{{hotkey}}\" no se puede usar en este escritorio, cuyos atajos necesitan una tecla normal. Añade una tecla, como Control+Alt+Space.",
       "holdNeedsReleaseKey": "Mantener para hablar necesita una tecla cuya liberación macOS pueda detectar: Globo, una tecla derecha como Opción derecha o un atajo con modificador. Pulsar funciona con cualquier tecla.",
+      "holdNeedsRegularKey": "Para usar Mantener, añade una tecla normal al atajo, como Control+Alt+Space. Tu escritorio no puede detectar cuándo mantienes pulsadas solo teclas modificadoras.",
+      "holdNeedsGnomePortal": "Para usar Mantener, GNOME necesita su portal de atajos globales, incluido desde GNOME 48. Pulsar funciona sin él.",
       "registrationFailed": "No se pudo registrar \"{{hotkey}}\". Puede estar en uso por otra aplicación.",
       "windowsKeyListenerMissing": "\"{{hotkey}}\" necesita el detector de teclas de Windows, que falta en esta instalación. Elige un atajo con una tecla normal.",
       "updateFailedCheckFormat": "No se pudo actualizar el atajo a \"{{hotkey}}\". Comprueba que el formato sea válido.",

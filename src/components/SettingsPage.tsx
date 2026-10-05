@@ -1585,6 +1585,9 @@ export default function SettingsPage({
     pushToTalkUnavailableReason,
     linuxInputAccessDenied,
   } = useHotkeyModeInfo("settings", dictationKey);
+  const pushDisabledReason = supportsPushToTalk
+    ? undefined
+    : pushToTalkUnavailableReason || t("windows.pttUnavailable");
   const [effectiveDefaultHotkey, setEffectiveDefaultHotkey] = useState<string | null>(null);
   const [linuxPttAvailable, setLinuxPttAvailable] = useState(true);
 
@@ -4037,13 +4040,13 @@ EOF`,
                       <ActivationModeSelector
                         value={activationMode}
                         onChange={setActivationMode}
-                        pushDisabledReason={
-                          !supportsPushToTalk
-                            ? pushToTalkUnavailableReason || t("windows.pttUnavailable")
-                            : undefined
-                        }
+                        pushDisabledReason={pushDisabledReason}
                       />
                     </div>
+                    {/* Denied input access gets the setup box below instead. */}
+                    {pushDisabledReason && !linuxInputAccessDenied && (
+                      <p className="mt-2 text-xs text-muted-foreground">{pushDisabledReason}</p>
+                    )}
                     {getCachedPlatform() === "linux" &&
                       (activationMode === "push" || linuxInputAccessDenied) && (
                         <LinuxPttSetupInfo

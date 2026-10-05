@@ -217,6 +217,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     linuxInputAccessDenied,
     loaded: hotkeyModeLoaded,
   } = useHotkeyModeInfo("onboarding", dictationHotkey);
+  const pushDisabledReason = supportsPushToTalk
+    ? undefined
+    : pushToTalkUnavailableReason || t("windows.pttUnavailable");
   const { activationMode, setActivationMode } = settings;
   // This hook also starts the membership fetch for already-authenticated users;
   // relying on the login transition alone would leave resumed onboarding stuck
@@ -1092,13 +1095,15 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                     variant="onboarding"
                     value={activationMode}
                     onChange={setActivationMode}
-                    pushDisabledReason={
-                      !supportsPushToTalk
-                        ? pushToTalkUnavailableReason || t("windows.pttUnavailable")
-                        : undefined
-                    }
+                    pushDisabledReason={pushDisabledReason}
                   />
                 </div>
+                {/* Denied input access gets the setup box below instead. */}
+                {pushDisabledReason && !linuxInputAccessDenied && (
+                  <p className="mt-2 text-start text-xs leading-[1.4] text-[var(--onboarding-text-secondary)]">
+                    {pushDisabledReason}
+                  </p>
+                )}
                 {platform === "linux" && (activationMode === "push" || linuxInputAccessDenied) && (
                   <LinuxPttSetupInfo isAvailable={!linuxInputAccessDenied && supportsPushToTalk} />
                 )}

@@ -32,3 +32,21 @@ test("an unsupported Hold option stays explained while Tap remains usable", () =
   assert.match(buttons[1], /title="Choose a hotkey with a non-modifier key\."/);
   assert.match(buttons[1], /aria-label="common\.hold: Choose a hotkey with a non-modifier key\."/);
 });
+
+test("an unsupported Hold option does not brighten on hover in either variant", () => {
+  for (const variant of ["default", "onboarding"]) {
+    const markup = renderToStaticMarkup(
+      React.createElement(ActivationModeSelector, {
+        value: "tap",
+        onChange: () => undefined,
+        pushDisabledReason: "Hold needs a regular key.",
+        variant,
+      })
+    );
+    const hold = markup.match(/<button[^>]*>/g)[1];
+
+    assert.match(hold, /disabled/, variant);
+    assert.doesNotMatch(hold, /[\s"]hover:/, variant);
+    assert.match(hold, /enabled:hover:/, variant);
+  }
+});
