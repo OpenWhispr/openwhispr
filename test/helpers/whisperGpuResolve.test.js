@@ -128,3 +128,34 @@ test("resolveFailedGpuBackends tolerates empty and messy values", () => {
   assert.deepEqual(resolveFailedGpuBackends("cuda"), ["cuda"]);
   assert.deepEqual(resolveFailedGpuBackends(" cuda , vulkan ,"), ["cuda", "vulkan"]);
 });
+
+test("a proven failure keeps the backend off for the session without remembering it", () => {
+  const manager = managerWith({ cudaDownloaded: true });
+  manager.serverManager.emit("cuda-fallback", { proven: true });
+
+  assert.deepEqual(manager.resolveGpuStartOptions(), { useCuda: false, useVulkan: false });
+  assert.deepEqual(manager.getFailedGpuBackends(), ["cuda"]);
+
+  manager.forgetSessionGpuFailures();
+  assert.deepEqual(manager.resolveGpuStartOptions(), { useCuda: true, useVulkan: false });
+});
+
+test("an unproven failure is left to the persisted WHISPER_GPU_FAILED", () => {
+  const manager = managerWith({ vulkanDownloaded: true });
+  manager.serverManager.emit("gpu-fallback", { proven: false });
+  assert.deepEqual(manager.getFailedGpuBackends(), []);
+});
+
+test("failed backends combine remembered and session-only failures without duplicates", () => {
+  process.env.WHISPER_GPU_FAILED = "cuda";
+  const manager = managerWith({ cudaDownloaded: true, vulkanDownloaded: true });
+  manager.serverManager.emit("cuda-fallback", { proven: true });
+  manager.serverManager.emit("gpu-fallback", { proven: true });
+  assert.deepEqual(manager.getFailedGpuBackends(), ["cuda", "vulkan"]);
+
+  // Forgetting one backend's session failure leaves the remembered one in place
+  manager.forgetSessionGpuFailures("cuda");
+  assert.deepEqual(manager.getFailedGpuBackends(), ["cuda", "vulkan"]);
+  manager.forgetSessionGpuFailures("vulkan");
+  assert.deepEqual(manager.getFailedGpuBackends(), ["cuda"]);
+});
