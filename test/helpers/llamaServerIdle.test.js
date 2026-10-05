@@ -11,8 +11,8 @@ const settle = () => new Promise(setImmediate);
 // A manager whose spawn is stubbed at the _doStart boundary but still arms the
 // idle timer the way a real start does, whose /slots answer is scripted, and
 // whose stop is recorded.
-function makeManager() {
-  const manager = new LlamaServerManager();
+function makeManager(options) {
+  const manager = new LlamaServerManager(options);
   const stops = [];
   manager.processing = false;
   manager._requestJson = async (path) =>
@@ -96,4 +96,36 @@ test("a request that arrives while /slots is checked keeps the server", async (t
   await settle();
 
   assert.equal(stops.length, 0, "the newer request's timer owns the decision now");
+});
+
+// Opt-in residency must survive idle without sending artificial inference.
+test("an opted-in resident server stays loaded after five idle minutes", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const { manager, stops } = makeManager({ keepResident: true });
+  await manager.start("/models/main.gguf");
+  t.mock.timers.tick(30 * MINUTE);
+  await settle();
+  assert.equal(stops.length, 0);
+  assert.equal(manager.idleTimer, null);
+});
+
+test("enabling residency cancels an already pending idle unload", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const { manager, stops } = makeManager();
+  await manager.start("/models/main.gguf");
+  t.mock.timers.tick(4 * MINUTE);
+  manager.keepResident = true;
+  manager.resetIdleTimer();
+  t.mock.timers.tick(2 * MINUTE);
+  await settle();
+  assert.equal(stops.length, 0);
+  assert.equal(manager.idleTimer, null);
+});
+
+test("an opted-in resident server still responds to explicit stop", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const { manager, stops } = makeManager({ keepResident: true });
+  await manager.start("/models/main.gguf");
+  await manager.stop();
+  assert.equal(stops.length, 1);
 });

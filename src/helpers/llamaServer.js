@@ -69,7 +69,8 @@ function buildResponseError(statusCode, body) {
 }
 
 class LlamaServerManager {
-  constructor() {
+  constructor({ keepResident = false } = {}) {
+    this.keepResident = keepResident;
     this.process = null;
     this.port = null;
     this.ready = false;
@@ -611,6 +612,8 @@ class LlamaServerManager {
 
   resetIdleTimer() {
     this.clearIdleTimer();
+    // Explicit stop, model/context changes and app shutdown still release it.
+    if (this.keepResident) return;
     const timer = setTimeout(async () => {
       // Streaming chat talks to the port directly, so only the server knows
       // whether an answer that outlived the timeout is still being generated.

@@ -76,7 +76,9 @@ class ModelManager {
     this.downloadReservations = new Map();
     this.activeRequests = new Map(); // Track HTTP requests for cancellation
     this.downloadLifecycleVersion = 0;
-    this.serverManager = new LlamaServerManager();
+    this.serverManager = new LlamaServerManager({
+      keepResident: process.env.OPENWHISPR_KEEP_LOCAL_MODEL_LOADED === "1",
+    });
     this.currentServerModelId = null;
     this._initialized = false;
 
