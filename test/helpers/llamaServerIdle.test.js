@@ -97,3 +97,62 @@ test("a request that arrives while /slots is checked keeps the server", async (t
 
   assert.equal(stops.length, 0, "the newer request's timer owns the decision now");
 });
+
+// "Keep model loaded" (#1207): with it on, nothing idles the server out.
+test("with Keep model loaded on, an idle server is never stopped", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const { manager, stops } = makeManager();
+  manager.setKeepLoaded(true);
+
+  await manager.start("/models/main.gguf");
+  t.mock.timers.tick(60 * MINUTE);
+  await settle();
+
+  assert.equal(stops.length, 0);
+});
+
+test("turning Keep model loaded on cancels a pending idle stop", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const { manager, stops } = makeManager();
+
+  await manager.start("/models/main.gguf");
+  t.mock.timers.tick(4 * MINUTE);
+  manager.setKeepLoaded(true);
+  t.mock.timers.tick(2 * MINUTE);
+  await settle();
+
+  assert.equal(stops.length, 0);
+});
+
+test("turning Keep model loaded off idles the running server out five minutes later", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const { manager, stops } = makeManager();
+  manager.setKeepLoaded(true);
+
+  await manager.start("/models/main.gguf");
+  manager.process = {};
+  t.mock.timers.tick(30 * MINUTE);
+  manager.setKeepLoaded(false);
+  t.mock.timers.tick(5 * MINUTE - 1);
+  await settle();
+  assert.equal(stops.length, 0, "the countdown starts when the setting goes off");
+
+  t.mock.timers.tick(2);
+  await settle();
+  assert.equal(stops.length, 1);
+});
+
+// Every window resends the setting on load and when its local-model inputs change.
+test("resyncing an unchanged Keep model loaded leaves the idle countdown alone", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const { manager, stops } = makeManager();
+
+  await manager.start("/models/main.gguf");
+  manager.process = {};
+  t.mock.timers.tick(4 * MINUTE);
+  manager.setKeepLoaded(false);
+  t.mock.timers.tick(1 * MINUTE + 1);
+  await settle();
+
+  assert.equal(stops.length, 1);
+});

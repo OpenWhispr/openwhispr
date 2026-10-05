@@ -92,6 +92,7 @@ class LlamaServerManager {
     this.cachedServerBinaryPaths = null;
     this.activeBackend = null;
     this.idleTimer = null;
+    this.keepLoaded = false;
   }
 
   getServerBinaryPaths() {
@@ -609,8 +610,18 @@ class LlamaServerManager {
     }
   }
 
+  // The "Keep model loaded" setting. Every window resends it on load and when
+  // its local-model or policy inputs change, so only a change may touch the timer.
+  setKeepLoaded(keepLoaded) {
+    if (this.keepLoaded === keepLoaded) return;
+    this.keepLoaded = keepLoaded;
+    if (keepLoaded) this.clearIdleTimer();
+    else if (this.process) this.resetIdleTimer();
+  }
+
   resetIdleTimer() {
     this.clearIdleTimer();
+    if (this.keepLoaded) return;
     const timer = setTimeout(async () => {
       // Streaming chat talks to the port directly, so only the server knows
       // whether an answer that outlived the timeout is still being generated.

@@ -771,6 +771,10 @@
       "label": "Denkausgabe deaktivieren",
       "help": "Überspringt Reasoning-Token für eine sauberere Ausgabe. Empfohlen für Bereinigung. Einige Server ignorieren diesen Hinweis."
     },
+    "keepModelLoaded": {
+      "label": "Modell geladen lassen",
+      "help": "Das lokale Modell wird nach 5 Minuten Inaktivität nicht entladen und ist so für die nächste Anfrage bereit. Solange die App läuft, belegt es weiter Speicher: mindestens seine Downloadgröße, nach langen Anfragen mehr. Gilt für alle Funktionen, die ein lokales Modell nutzen."
+    },
     "selfHosted": {
       "endpointHelp": "Zeige auf einen OpenAI-kompatiblen Server in deinem lokalen Netzwerk (z. B. Ollama, LM Studio, vLLM oder llama-server)."
     },
