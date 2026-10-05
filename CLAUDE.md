@@ -951,7 +951,8 @@ UI icons come from `src/components/icons/` (vendored Nucleo core outline compone
 - No standardized URL scheme for system settings (user must open manually)
 - Privacy settings button hidden in UI (not applicable on Linux)
 - Recommend `pavucontrol` for audio device management
-- **Dialog overlays**: the full-window dialog overlays (shared `Dialog`, Settings, Ctrl+K, referral) skip their default backdrop blur on Linux (`ui/overlayBlur.ts`). Linux composites on the CPU (`--disable-gpu-compositing` in `main.js`), where a full-window blur is redrawn on every repaint inside the dialog (#2298); a blur passed through `overlayClassName` still applies
+- **GPU compositing** is on, as on Windows (Chromium falls back to CPU compositing by itself on blocklisted drivers). Where transparent windows flicker (#203), `--disable-gpu-compositing` in `$XDG_CONFIG_HOME/open-whispr-flags.conf` (usually `~/.config`) turns it off: the packaged launcher (`scripts/lib/linux-launcher.js`) passes each line of that file to the app
+- **Dialog overlays**: the full-window dialog overlays (shared `Dialog`, Settings, Ctrl+K, referral) skip their default backdrop blur on Linux (`ui/overlayBlur.ts`). Linux can still composite on the CPU (blocklisted drivers, the flags-file opt-out), where a full-window blur is redrawn on every repaint inside the dialog (#2298); a blur passed through `overlayClassName` still applies
 - **Launch at login**: XDG autostart entry at `~/.config/autostart/open-whispr.desktop` (see `linuxAutostart.js`), since Electron's `setLoginItemSettings()` does nothing on Linux
   - Disabling it from GNOME Tweaks or KDE's autostart editor is reflected in the Settings toggle
   - "Start minimized" is handled app-side by the `startMinimized` setting, not by the desktop entry

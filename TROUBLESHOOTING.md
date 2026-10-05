@@ -127,6 +127,18 @@ OpenWhispr tries clipboard methods in order: `wl-copy` (most reliable) → rende
 
 On GNOME and KDE, the first automatic paste can show a remote-interaction permission dialog. Approval is remembered in `~/.cache/openwhispr/portal-paste-token`; revoking permission or invalidating that token makes the prompt return. If automatic paste fails, the transcription remains in the clipboard for manual paste.
 
+### Linux Window Flicker
+
+**Symptoms:** The dictation pill or other transparent windows flicker
+
+**Fix:** Turn off GPU compositing. Add this line to `~/.config/open-whispr-flags.conf` (`$XDG_CONFIG_HOME/open-whispr-flags.conf` if you set `XDG_CONFIG_HOME`; create the file if it doesn't exist), then quit OpenWhispr from the tray and start it again:
+
+```text
+--disable-gpu-compositing
+```
+
+The interface then composites on the CPU, so hover effects and scrolling can feel slower. Delete the line to undo it.
+
 ### Linux System Audio PipeWire Issues
 
 **Symptoms:** Meeting transcription captures the microphone but not other participants, browser audio, or other system audio.

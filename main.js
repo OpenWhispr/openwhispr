@@ -108,11 +108,12 @@ if (process.platform === "win32") {
 
 // Fix transparent window flickering on Linux: --enable-transparent-visuals requires
 // the compositor to set up an ARGB visual before any windows are created.
-// --disable-gpu-compositing prevents GPU compositing conflicts with the compositor.
+// GPU compositing stays on, as on Windows (Chromium falls back to CPU compositing by itself
+// on blocklisted drivers). Where the transparent windows still flicker (#203), users can add
+// --disable-gpu-compositing to the launcher's flags file (scripts/lib/linux-launcher.js).
 if (process.platform === "linux") {
   app.commandLine.appendSwitch("gtk-version", "3");
   app.commandLine.appendSwitch("enable-transparent-visuals");
-  app.commandLine.appendSwitch("disable-gpu-compositing");
 }
 
 // Wayland: packaged builds use the wrapper script (scripts/afterPack.js) to
