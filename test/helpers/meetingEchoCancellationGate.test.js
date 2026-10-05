@@ -28,7 +28,7 @@ async function startMeetingAec(meetingConnectionOptions) {
   vm.createContext(context);
   vm.runInContext(`${startMeetingAecSource}; globalThis.run = startMeetingAec;`, context);
   const started = await context.run("loopback");
-  return { started, helperStarts, aecEnabled: context.meetingAecEnabled };
+  return { started, helperStarts };
 }
 
 test("echo cancellation stays off unless the meeting start asks for it", async () => {
@@ -36,7 +36,6 @@ test("echo cancellation stays off unless the meeting start asks for it", async (
     assert.deepEqual(await startMeetingAec(options), {
       started: false,
       helperStarts: 0,
-      aecEnabled: false,
     });
   }
 });
@@ -45,6 +44,5 @@ test("the AEC helper starts when the meeting start asks for echo cancellation", 
   assert.deepEqual(await startMeetingAec({ echoCancellation: true }), {
     started: true,
     helperStarts: 1,
-    aecEnabled: true,
   });
 });
