@@ -2486,11 +2486,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       window.electronAPI?.setWhisperVadConfig?.({ meetingSileroEnabled: value });
     }
   },
-  setMeetingAecEnabled: (value: boolean) => {
-    if (isBrowser) localStorage.setItem("meetingAecEnabled", String(value));
-    useSettingsStore.setState({ meetingAecEnabled: value });
-    // Read from start options at meeting-transcription-start; no IPC sync needed.
-  },
+  setMeetingAecEnabled: createBooleanSetter("meetingAecEnabled"),
   setWhisperVadThreshold: (value: number) => {
     const next = clampVadValue("threshold", value);
     if (isBrowser) localStorage.setItem("whisperVadThreshold", String(next));

@@ -11,11 +11,11 @@ const startMeetingAecSource = source.slice(
   source.indexOf("const flushPendingMeetingMicChunks =")
 );
 
-async function startMeetingAec(meetingAecRequested) {
+async function startMeetingAec(meetingConnectionOptions) {
   let helperStarts = 0;
   const context = {
     meetingAecEnabled: false,
-    meetingAecRequested,
+    meetingConnectionOptions,
     meetingAecManager: {
       isAvailable: () => true,
       start: async () => {
@@ -32,9 +32,11 @@ async function startMeetingAec(meetingAecRequested) {
 }
 
 test("the AEC helper stays off unless the meeting asked for echo cancellation", async () => {
-  assert.deepEqual(await startMeetingAec(false), { started: false, helperStarts: 0 });
+  for (const options of [{}, { aecEnabled: false }]) {
+    assert.deepEqual(await startMeetingAec(options), { started: false, helperStarts: 0 });
+  }
 });
 
 test("the AEC helper starts when the meeting asked for echo cancellation", async () => {
-  assert.deepEqual(await startMeetingAec(true), { started: true, helperStarts: 1 });
+  assert.deepEqual(await startMeetingAec({ aecEnabled: true }), { started: true, helperStarts: 1 });
 });
