@@ -1581,13 +1581,9 @@ export default function SettingsPage({
     isUsingNativeShortcut,
     isUsingHyprland,
     hyprlandConfigStatus,
-    supportsPushToTalk,
     pushToTalkUnavailableReason,
     linuxInputAccessDenied,
   } = useHotkeyModeInfo("settings", dictationKey);
-  const pushDisabledReason = supportsPushToTalk
-    ? undefined
-    : pushToTalkUnavailableReason || t("windows.pttUnavailable");
   const [effectiveDefaultHotkey, setEffectiveDefaultHotkey] = useState<string | null>(null);
   const [linuxPttAvailable, setLinuxPttAvailable] = useState(true);
 
@@ -4040,12 +4036,14 @@ EOF`,
                       <ActivationModeSelector
                         value={activationMode}
                         onChange={setActivationMode}
-                        pushDisabledReason={pushDisabledReason}
+                        pushDisabledReason={pushToTalkUnavailableReason ?? undefined}
                       />
                     </div>
                     {/* Denied input access gets the setup box below instead. */}
-                    {pushDisabledReason && !linuxInputAccessDenied && (
-                      <p className="mt-2 text-xs text-muted-foreground">{pushDisabledReason}</p>
+                    {pushToTalkUnavailableReason && !linuxInputAccessDenied && (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {pushToTalkUnavailableReason}
+                      </p>
                     )}
                     {getCachedPlatform() === "linux" &&
                       (activationMode === "push" || linuxInputAccessDenied) && (
