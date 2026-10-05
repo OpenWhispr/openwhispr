@@ -5260,6 +5260,10 @@ class IPCHandlers {
       // the read fallback is removed (~2 releases after this lands).
       clearVars.push("REASONING_PROVIDER", "LOCAL_REASONING_MODEL");
 
+      // No workspace policy governs this, so it applies before the policy settles.
+      const modelManager = require("./modelManagerBridge").default;
+      modelManager.serverManager.setKeepResident(prefs.keepLocalModelLoaded === true);
+
       // A signed-in window whose workspace policy is still loading reports
       // unclamped modes, so it neither pre-warms nor stops the shared
       // llama-server; signed out, the policy never loads.
@@ -5282,7 +5286,6 @@ class IPCHandlers {
 
         // Stop the shared llama-server only when no scope still needs the model
         // it holds, so the active scopes keep their server when another leaves.
-        const modelManager = require("./modelManagerBridge").default;
         if (shouldStopLocalServer(localServer, modelManager.currentServerModelId)) {
           if (modelManager.getServerStatus().running) {
             debugLogger.debug("Stopping llama-server: no scope needs its model", {

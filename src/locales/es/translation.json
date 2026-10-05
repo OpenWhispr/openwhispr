@@ -771,6 +771,10 @@
       "label": "Desactivar salida de razonamiento",
       "help": "Omite los tokens de razonamiento para una salida más limpia. Recomendado para limpieza. Algunos servidores ignoran esta indicación."
     },
+    "keepModelLoaded": {
+      "label": "Mantener el modelo cargado",
+      "help": "El modelo local no se libera de la memoria tras 5 minutos de inactividad, así está listo para la siguiente solicitud. Mientras la app se ejecuta, sigue ocupando memoria: al menos su tamaño de descarga, y más tras solicitudes largas. Se aplica a todas las funciones que usan un modelo local."
+    },
     "selfHosted": {
       "endpointHelp": "Apunta a un servidor compatible con OpenAI en tu red local (p. ej. Ollama, LM Studio, vLLM o llama-server)."
     },

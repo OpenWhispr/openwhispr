@@ -69,8 +69,8 @@ function buildResponseError(statusCode, body) {
 }
 
 class LlamaServerManager {
-  constructor({ keepResident = false } = {}) {
-    this.keepResident = keepResident;
+  constructor() {
+    this.keepResident = false;
     this.process = null;
     this.port = null;
     this.ready = false;
@@ -608,6 +608,15 @@ class LlamaServerManager {
       clearInterval(this.healthCheckInterval);
       this.healthCheckInterval = null;
     }
+  }
+
+  // The "Keep model loaded" setting. Every window resends it on load and when
+  // its local-model or policy inputs change, so only a change may touch the timer.
+  setKeepResident(keepResident) {
+    if (this.keepResident === keepResident) return;
+    this.keepResident = keepResident;
+    if (keepResident) this.clearIdleTimer();
+    else if (this.process) this.resetIdleTimer();
   }
 
   resetIdleTimer() {

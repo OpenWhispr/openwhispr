@@ -11,13 +11,14 @@ const settle = () => new Promise(setImmediate);
 // A manager whose spawn is stubbed at the _doStart boundary but still arms the
 // idle timer the way a real start does, whose /slots answer is scripted, and
 // whose stop is recorded.
-function makeManager(options) {
-  const manager = new LlamaServerManager(options);
+function makeManager() {
+  const manager = new LlamaServerManager();
   const stops = [];
   manager.processing = false;
   manager._requestJson = async (path) =>
     path === "/slots" ? [{ is_processing: false }, { is_processing: manager.processing }] : null;
   manager._doStart = async (modelPath, options = {}) => {
+    manager.process = {};
     manager.ready = true;
     manager.modelPath = modelPath;
     manager.draftModelPath = options.draftModelPath || null;
@@ -101,7 +102,8 @@ test("a request that arrives while /slots is checked keeps the server", async (t
 // Opt-in residency must survive idle without sending artificial inference.
 test("an opted-in resident server stays loaded after five idle minutes", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
-  const { manager, stops } = makeManager({ keepResident: true });
+  const { manager, stops } = makeManager();
+  manager.setKeepResident(true);
   await manager.start("/models/main.gguf");
   t.mock.timers.tick(30 * MINUTE);
   await settle();
@@ -114,8 +116,7 @@ test("enabling residency cancels an already pending idle unload", async (t) => {
   const { manager, stops } = makeManager();
   await manager.start("/models/main.gguf");
   t.mock.timers.tick(4 * MINUTE);
-  manager.keepResident = true;
-  manager.resetIdleTimer();
+  manager.setKeepResident(true);
   t.mock.timers.tick(2 * MINUTE);
   await settle();
   assert.equal(stops.length, 0);
@@ -124,11 +125,42 @@ test("enabling residency cancels an already pending idle unload", async (t) => {
 
 test("a resident server still stops and restarts when its context must grow", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
-  const { manager, stops } = makeManager({ keepResident: true });
+  const { manager, stops } = makeManager();
+  manager.setKeepResident(true);
   await manager.start("/models/main.gguf", { contextSize: 16384 });
-  manager.process = {};
   await manager.start("/models/main.gguf", { contextSize: 32768 });
   assert.equal(stops.length, 1);
   assert.equal(manager.contextSize, 32768);
   assert.equal(manager.idleTimer, null);
+});
+
+test("turning residency off idles the running server out five minutes later", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const { manager, stops } = makeManager();
+  manager.setKeepResident(true);
+
+  await manager.start("/models/main.gguf");
+  t.mock.timers.tick(30 * MINUTE);
+  manager.setKeepResident(false);
+  t.mock.timers.tick(5 * MINUTE - 1);
+  await settle();
+  assert.equal(stops.length, 0, "the countdown starts when residency goes off");
+
+  t.mock.timers.tick(2);
+  await settle();
+  assert.equal(stops.length, 1);
+});
+
+// Every window resends the setting on load and when its local-model or policy inputs change.
+test("resyncing an unchanged residency setting leaves the idle countdown alone", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const { manager, stops } = makeManager();
+
+  await manager.start("/models/main.gguf");
+  t.mock.timers.tick(4 * MINUTE);
+  manager.setKeepResident(false);
+  t.mock.timers.tick(1 * MINUTE + 1);
+  await settle();
+
+  assert.equal(stops.length, 1);
 });

@@ -771,6 +771,10 @@
       "label": "Disattiva output di ragionamento",
       "help": "Salta i token di ragionamento per un output più pulito. Consigliato per la pulizia. Alcuni server ignorano questo suggerimento."
     },
+    "keepModelLoaded": {
+      "label": "Mantieni il modello caricato",
+      "help": "Il modello locale non viene rimosso dalla memoria dopo 5 minuti di inattività, così è pronto per la richiesta successiva. Finché l'app è in esecuzione, continua a occupare memoria: almeno la sua dimensione di download, di più dopo richieste lunghe. Vale per tutte le funzioni che usano un modello locale."
+    },
     "selfHosted": {
       "endpointHelp": "Punta a un server compatibile con OpenAI sulla tua rete locale (es. Ollama, LM Studio, vLLM o llama-server)."
     },

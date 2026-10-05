@@ -96,16 +96,15 @@ npm run download:whisper-cpp:all
 | Local | No                  | Only for model download | Free      |
 | Cloud | Yes (to OpenAI)     | Yes                     | API usage |
 
-## Optional local cleanup model residency
+## Optional local model residency
 
-Set `OPENWHISPR_KEEP_LOCAL_MODEL_LOADED=1` in the app process environment
-before launching to retain the currently selected local language model after
-idle periods. The default remains the five-minute idle unload. This is an
-advanced opt-in; no new settings UI is provided.
+Turn on **Keep model loaded** (Settings → Language Models, shown for any
+feature set to Local) to retain the currently selected local language model
+after idle periods. The default remains the five-minute idle unload.
 
 Residency avoids the next model reload but keeps the model's RAM/VRAM allocated
 and does not speed up token generation. Explicit shutdown, model changes,
 and context growth still release/restart the server normally. This option
 leaves the Local inference timeout, context sizing and cleanup controls
 unchanged. It also applies when other local-language-model features share the
-same server. Unset the variable and relaunch to restore the default behavior.
+same server. Turn it off to restore the five-minute idle unload.
