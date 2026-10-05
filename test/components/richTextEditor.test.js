@@ -100,6 +100,21 @@ function markdownOf(editor) {
   return markdown.trim();
 }
 
+test("plain text conversion removes bold applied across an editor hard break", async (t) => {
+  const { markdownToPlainText } = await import("../../src/helpers/markdownToPlainText.ts");
+  const editor = createEditor("");
+  t.after(() => editor.destroy());
+  editor
+    .chain()
+    .insertContent("first")
+    .setHardBreak()
+    .insertContent("second")
+    .selectAll()
+    .toggleBold()
+    .run();
+  assert.equal(markdownToPlainText(markdownOf(editor)), "first\\\nsecond");
+});
+
 /** Asserts the output and that loading it back gives the same Markdown. */
 function assertSaves(editor, expected) {
   const markdown = markdownOf(editor);

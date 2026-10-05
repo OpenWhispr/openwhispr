@@ -171,6 +171,18 @@ test("Text note export preserves code whitespace and accepts empty content", asy
   }
 });
 
+test("Text note export preserves literal pipes and hyphen-only table data", async (t) => {
+  assert.equal(await exportNoteToFile(t, "|x|"), "|x|");
+  assert.equal(
+    await exportNoteToFile(t, "| Name | Value |\n| --- | --- |\n| - | - |\n| actual | 5 |"),
+    "Name\tValue\n-\t-\nactual\t5"
+  );
+});
+
+test("Text note export removes bold spanning an editor hard break", async (t) => {
+  assert.equal(await exportNoteToFile(t, "**first\\\nsecond**"), "first\\\nsecond");
+});
+
 test("Markdown note export retains the existing enhanced-content preference", async (t) => {
   note.enhanced_content = "## Summary\n**Ready**";
   assert.equal(await exportNoteToFile(t, "Original notes", "md"), note.enhanced_content);
