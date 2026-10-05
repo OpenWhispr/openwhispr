@@ -18,6 +18,7 @@ function makeManager() {
   manager._requestJson = async (path) =>
     path === "/slots" ? [{ is_processing: false }, { is_processing: manager.processing }] : null;
   manager._doStart = async (modelPath, options = {}) => {
+    manager.process = {};
     manager.ready = true;
     manager.modelPath = modelPath;
     manager.draftModelPath = options.draftModelPath || null;
@@ -130,7 +131,6 @@ test("turning Keep model loaded off idles the running server out five minutes la
   manager.setKeepLoaded(true);
 
   await manager.start("/models/main.gguf");
-  manager.process = {};
   t.mock.timers.tick(30 * MINUTE);
   manager.setKeepLoaded(false);
   t.mock.timers.tick(5 * MINUTE - 1);
@@ -142,13 +142,12 @@ test("turning Keep model loaded off idles the running server out five minutes la
   assert.equal(stops.length, 1);
 });
 
-// Every window resends the setting on load and when its local-model inputs change.
+// Every window resends the setting on load and when its local-model or policy inputs change.
 test("resyncing an unchanged Keep model loaded leaves the idle countdown alone", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
   const { manager, stops } = makeManager();
 
   await manager.start("/models/main.gguf");
-  manager.process = {};
   t.mock.timers.tick(4 * MINUTE);
   manager.setKeepLoaded(false);
   t.mock.timers.tick(1 * MINUTE + 1);
