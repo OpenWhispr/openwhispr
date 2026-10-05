@@ -99,8 +99,8 @@ npm run download:whisper-cpp:all
 ## Optional local model residency
 
 Turn on **Keep model loaded** (Settings → Language Models, shown for any
-feature set to Local) to retain the currently selected local language model
-after idle periods. The default remains the five-minute idle unload.
+feature set to Local) to keep whichever local language model is loaded in
+memory after idle periods. The default remains the five-minute idle unload.
 
 Residency avoids the next model reload but keeps the model's RAM/VRAM allocated
 and does not speed up token generation. Explicit shutdown, model changes,

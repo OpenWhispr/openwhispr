@@ -773,7 +773,7 @@
     },
     "keepModelLoaded": {
       "label": "Modell geladen lassen",
-      "help": "Das lokale Modell wird nach 5 Minuten Inaktivität nicht entladen und ist so für die nächste Anfrage bereit. Solange die App läuft, belegt es weiter Speicher: mindestens seine Downloadgröße, nach langen Anfragen mehr. Gilt für alle Funktionen, die ein lokales Modell nutzen."
+      "help": "Bleibt im Speicher, statt nach 5 Minuten Inaktivität entladen zu werden, sodass bei der nächsten Anfrage der Kaltstart entfällt. Gilt für alle Funktionen mit lokalem Modell."
     },
     "selfHosted": {
       "endpointHelp": "Zeige auf einen OpenAI-kompatiblen Server in deinem lokalen Netzwerk (z. B. Ollama, LM Studio, vLLM oder llama-server)."

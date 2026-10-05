@@ -773,7 +773,7 @@
     },
     "keepModelLoaded": {
       "label": "Mantieni il modello caricato",
-      "help": "Il modello locale non viene rimosso dalla memoria dopo 5 minuti di inattività, così è pronto per la richiesta successiva. Finché l'app è in esecuzione, continua a occupare memoria: almeno la sua dimensione di download, di più dopo richieste lunghe. Vale per tutte le funzioni che usano un modello locale."
+      "help": "Resta in memoria invece di essere rimosso dopo 5 minuti di inattività, così la richiesta successiva evita l'avvio a freddo. Vale per tutte le funzioni che usano un modello locale."
     },
     "selfHosted": {
       "endpointHelp": "Punta a un server compatibile con OpenAI sulla tua rete locale (es. Ollama, LM Studio, vLLM o llama-server)."

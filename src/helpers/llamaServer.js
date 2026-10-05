@@ -196,6 +196,8 @@ class LlamaServerManager {
       await this.stop();
     }
 
+    // Residency may have been turned off while the old server stopped.
+    this.clearIdleTimer();
     this.startupPromise = this._doStart(modelPath, options);
     try {
       await this.startupPromise;
@@ -616,7 +618,8 @@ class LlamaServerManager {
     if (this.keepResident === keepResident) return;
     this.keepResident = keepResident;
     if (keepResident) this.clearIdleTimer();
-    else if (this.process) this.resetIdleTimer();
+    // A start in progress arms the timer itself once the server is ready.
+    else if (this.process && !this.startupPromise) this.resetIdleTimer();
   }
 
   resetIdleTimer() {

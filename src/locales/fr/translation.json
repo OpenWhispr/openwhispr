@@ -773,7 +773,7 @@
     },
     "keepModelLoaded": {
       "label": "Garder le modèle chargé",
-      "help": "Le modèle local n'est pas déchargé après 5 minutes d'inactivité, il reste donc prêt pour la requête suivante. Tant que l'app est en cours d'exécution, il continue d'occuper de la mémoire : au moins sa taille de téléchargement, davantage après de longues requêtes. S'applique à toutes les fonctionnalités qui utilisent un modèle local."
+      "help": "Reste en mémoire au lieu d'être déchargé après 5 minutes d'inactivité, ce qui évite un démarrage à froid à la requête suivante. S'applique à toutes les fonctionnalités utilisant un modèle local."
     },
     "selfHosted": {
       "endpointHelp": "Pointez vers un serveur compatible OpenAI sur votre réseau local (par ex. Ollama, LM Studio, vLLM ou llama-server)."
