@@ -1134,6 +1134,7 @@ export interface SettingsState
   setCortiClientSecret: (key: string) => void;
   setCortiApiKey: (key: string) => void;
   setTinfoilApiKey: (key: string) => void;
+  setSixtyDBApiKey: (key: string) => void;
   setDeepgramApiKey: (key: string) => void;
   setAssemblyaiApiKey: (key: string) => void;
   setCustomTranscriptionApiKey: (key: string) => void;
@@ -1375,6 +1376,7 @@ const SECRET_IPC_SAVERS = {
   cortiClientSecret: "saveCortiClientSecret",
   cortiApiKey: "saveCortiKey",
   tinfoil: "saveTinfoilKey",
+  sixtydb: "saveSixtyDBKey",
   deepgram: "saveDeepgramKey",
   assemblyai: "saveAssemblyAIKey",
   customTranscription: "saveCustomTranscriptionKey",
@@ -1424,6 +1426,7 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
   "cortiClientSecret",
   "cortiApiKey",
   "tinfoilApiKey",
+  "sixtydbApiKey",
   "deepgramApiKey",
   "assemblyaiApiKey",
   "customTranscriptionApiKey",
@@ -1556,6 +1559,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cortiClientSecret: "",
   cortiApiKey: "",
   tinfoilApiKey: "",
+  sixtydbApiKey: "",
   deepgramApiKey: "",
   assemblyaiApiKey: "",
   customTranscriptionApiKey: "",
@@ -2199,6 +2203,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCortiTenant: createStringSetter("cortiTenant"),
   setTinfoilApiKey: createSecretSetter("tinfoilApiKey", "tinfoil", "tinfoil"),
   // STT-only, so there is no ReasoningService key cache to invalidate.
+  setSixtyDBApiKey: createSecretSetter("sixtydbApiKey", "sixtydb"),
   setDeepgramApiKey: createSecretSetter("deepgramApiKey", "deepgram"),
   setAssemblyaiApiKey: createSecretSetter("assemblyaiApiKey", "assemblyai"),
   setCustomTranscriptionApiKey: (key: string) => {
@@ -2702,6 +2707,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.cortiClientSecret !== undefined) s.setCortiClientSecret(keys.cortiClientSecret);
     if (keys.cortiApiKey !== undefined) s.setCortiApiKey(keys.cortiApiKey);
     if (keys.tinfoilApiKey !== undefined) s.setTinfoilApiKey(keys.tinfoilApiKey);
+    if (keys.sixtydbApiKey !== undefined) s.setSixtyDBApiKey(keys.sixtydbApiKey);
     if (keys.deepgramApiKey !== undefined) s.setDeepgramApiKey(keys.deepgramApiKey);
     if (keys.assemblyaiApiKey !== undefined) s.setAssemblyaiApiKey(keys.assemblyaiApiKey);
     if (keys.customTranscriptionApiKey !== undefined)
@@ -3323,6 +3329,7 @@ export async function initializeSettings(): Promise<void> {
         bedrockSessionToken,
         azureApiKey,
         vertexApiKey,
+        sixtydb,
         deepgram,
         assemblyai,
       ] = await Promise.all([
@@ -3349,6 +3356,7 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getBedrockSessionToken?.(),
         window.electronAPI.getAzureApiKey?.(),
         window.electronAPI.getVertexApiKey?.(),
+        window.electronAPI.getSixtyDBKey?.(),
         window.electronAPI.getDeepgramKey?.(),
         window.electronAPI.getAssemblyAIKey?.(),
       ]);
@@ -3383,6 +3391,7 @@ export async function initializeSettings(): Promise<void> {
         bedrockSessionToken: bedrockSessionToken || "",
         azureApiKey: azureApiKey || "",
         vertexApiKey: vertexApiKey || "",
+        sixtydbApiKey: sixtydb || "",
         deepgramApiKey: deepgram || "",
         assemblyaiApiKey: assemblyai || "",
       });

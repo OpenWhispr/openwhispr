@@ -2209,6 +2209,13 @@ declare global {
         language?: string;
         prompt?: string;
       }) => Promise<ProxyTranscriptionResult>;
+      getSixtyDBKey?: () => Promise<string | null>;
+      saveSixtyDBKey?: (key: string) => Promise<void>;
+      proxySixtyDBTranscription?: (data: {
+        audioBuffer: ArrayBuffer;
+        language?: string;
+        context?: string;
+      }) => Promise<ProxyTranscriptionResult>;
       getDeepgramKey?: () => Promise<string | null>;
       saveDeepgramKey?: (key: string) => Promise<void>;
       getAssemblyAIKey?: () => Promise<string | null>;

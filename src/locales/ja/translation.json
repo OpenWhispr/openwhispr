@@ -2587,6 +2587,7 @@
         "openai_whisper_1": "オリジナル Whisper モデル",
         "groq_whisper_large_v3_turbo": "リアルタイムの 216 倍速",
         "groq_whisper_large_v3": "Large v3 モデル、高速かつ高精度",
+        "sixtydb_stt": "多言語のバッチ文字起こし",
         "mistral_voxtral_mini_latest": "高速多言語文字起こし",
         "gemini_3_5_transcribe": "GoogleのGemini音声文字起こし",
         "gemini_3_5_transcribe_live": "リアルタイムストリーミング文字起こし",

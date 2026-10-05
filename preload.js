@@ -14,6 +14,7 @@ const BYOK_KEY_BRIDGES = [
   { base: "openrouter", get: "getOpenrouterKey", save: "saveOpenrouterKey" },
   { base: "tinfoil", get: "getTinfoilKey", save: "saveTinfoilKey" },
   { base: "corti", get: "getCortiKey", save: "saveCortiKey" },
+  { base: "sixtydb", get: "getSixtyDBKey", save: "saveSixtyDBKey" },
   { base: "deepgram", get: "getDeepgramKey", save: "saveDeepgramKey" },
   { base: "assemblyai", get: "getAssemblyAIKey", save: "saveAssemblyAIKey" },
   {
@@ -621,6 +622,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveCortiClientSecret: (key) => ipcRenderer.invoke("save-corti-client-secret", key),
   proxyCortiTranscription: (data) => ipcRenderer.invoke("proxy-corti-transcription", data),
   getTinfoilChatModels: () => ipcRenderer.invoke("get-tinfoil-chat-models"),
+  proxySixtyDBTranscription: (data) => ipcRenderer.invoke("proxy-sixtydb-transcription", data),
   proxyTinfoilTranscription: (data) => ipcRenderer.invoke("proxy-tinfoil-transcription", data),
 
   // Custom endpoint API keys

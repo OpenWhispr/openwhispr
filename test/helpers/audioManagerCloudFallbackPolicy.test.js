@@ -596,3 +596,41 @@ test("config-error code survives a failed local fallback", async (t) => {
     }
   );
 });
+
+test("60db dictation sends context through IPC and never falls through to OpenAI", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-sixtydb-test-",
+    settingsKey: "__sixtydbSettings",
+  });
+  const fetched = captureFetch(t, rejectFetch("60db must use the main-process proxy"));
+  const payloads = [];
+  window.electronAPI.proxySixtyDBTranscription = async (payload) => {
+    payloads.push(payload);
+    return { text: "60db transcript" };
+  };
+  setSettings({
+    useLocalWhisper: false,
+    allowLocalFallback: false,
+    cloudTranscriptionProvider: "sixtydb",
+    transcriptionMode: "providers",
+  });
+  const manager = createManager({
+    getEffectiveSttLanguage: () => "hi",
+    getTranscriptionModel: () => "sixtydb-stt",
+    getWhisperPrompt: () => "Acme, Gizmo",
+  });
+  const result = await manager.processWithOpenAIAPI(
+    new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" })
+  );
+  assert.equal(result.source, "sixtydb");
+  assert.equal(result.text, "60db transcript");
+  assert.equal(payloads.length, 1);
+  assert.equal(payloads[0].context, "Acme, Gizmo");
+  assert.equal(payloads[0].language, "hi");
+  assert.equal(fetched.length, 0);
+  manager.isDictionaryEcho = () => true;
+  await assert.rejects(
+    manager.processWithOpenAIAPI(new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" })),
+    (error) => error.code === "DICTIONARY_ECHO"
+  );
+});

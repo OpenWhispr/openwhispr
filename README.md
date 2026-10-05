@@ -68,6 +68,20 @@ Requires Node.js 24+. See the [full documentation](https://docs.openwhispr.com/q
 
 The commands above run the desktop application, which remains at the repository root. The Expo mobile application lives in [`openwhispr-mobile`](openwhispr-mobile/) with its own dependencies, lockfile, build configuration, and release process. See the [mobile README](openwhispr-mobile/README.md) for its setup instructions.
 
+### 60db speech-to-text (BYOK)
+
+Choose **60db** under Transcription → Providers in settings (or during onboarding),
+then enter your workspace API key. The key uses OpenWhispr's existing encrypted
+secret storage; deployments can also supply `SIXTYDB_API_KEY`. The provider supports
+batch dictation, stored-audio retries, and file uploads through the native
+[60db STT API](https://docs.60db.ai/api-reference/stt/speech-to-text).
+
+The maximum audio file size is 10 MB. Dictation uses your selected language (Auto
+enables detection) and custom dictionary as context. File uploads auto-detect the
+language. Note recording's live streaming is not available with this batch provider;
+existing local speaker detection remains available for file uploads. Selecting 60db
+does not change your cleanup/LLM provider.
+
 ## Documentation
 
 Visit **[docs.openwhispr.com](https://docs.openwhispr.com)** for:
