@@ -49,10 +49,10 @@ const MATCH_THRESHOLD = 0.65;
 const MATCH_MARGIN = 0.03;
 const LIVE_WINDOW_PADDING_SECONDS = 0.75;
 // The 24 kHz -> 16 kHz resampler restarts on every buffer and only divides
-// evenly on whole groups of 3 input samples (6 bytes). The macOS tap delivers
-// 2400 samples per buffer; the Linux PipeWire helper delivers 512, which lost
-// ~0.1% of the audio (the identifier clock fell ~2 s behind over 35 min) and
-// jittered embeddings.
+// evenly on whole groups of 3 input samples (6 bytes). Capture buffers come in
+// arbitrary sizes (PipeWire quantum, coalesced pipe reads, renderer loopback
+// frames, recovery silence), so a partial group is carried into the next
+// buffer; dropping it pulls the identifier clock behind real time.
 const RESAMPLE_GROUP_BYTES = 6;
 const DEFAULT_VAD_STATE_SHAPE = [2, 1, 64];
 // The VAD graph is tiny (~64 ops per 512-sample window at ~31 Hz); ORT's
@@ -467,7 +467,8 @@ class LiveSpeakerIdentifier {
     if (!this.session) return;
 
     // Carry the bytes past the last whole resample group into the next buffer.
-    // The concat also copies, so an odd byteOffset can't break the Int16 view.
+    // The concat copies into a new buffer, so the Int16 view never inherits the
+    // caller's byteOffset.
     const incoming = Buffer.isBuffer(pcmBuffer) ? pcmBuffer : Buffer.from(pcmBuffer);
     const pending = Buffer.concat([this.pcmRemainder, incoming]);
     const usableBytes = pending.length - (pending.length % RESAMPLE_GROUP_BYTES);

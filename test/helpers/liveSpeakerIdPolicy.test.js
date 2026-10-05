@@ -23,8 +23,7 @@ test("Windows loopback supports live speaker identification", async () => {
 test("Linux loopback (PipeWire portal) supports live speaker identification", async () => {
   const { supportsLiveSpeakerIdentification } = await load();
 
-  // The helper feeds the same 24 kHz mono s16le sendMeetingAudio path, in
-  // 512-sample buffers the identifier regroups for its resampler.
+  // The helper feeds the same 24 kHz mono s16le sendMeetingAudio path.
   assert.equal(supportsLiveSpeakerIdentification("loopback", "linux"), true);
 });
 
