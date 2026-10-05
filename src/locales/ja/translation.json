@@ -162,7 +162,7 @@
     "close": "閉じる"
   },
   "windows": {
-    "pttUnavailable": "プッシュトゥトークのネイティブリスナーが利用できません"
+    "pttUnavailable": "OpenWhispr のキーリスナーを利用できません。"
   },
   "common": {
     "continue": "続ける",

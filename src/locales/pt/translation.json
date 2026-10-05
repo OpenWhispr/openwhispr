@@ -141,7 +141,7 @@
     "loginItems": "As configurações de itens de início não estão disponíveis nesta plataforma."
   },
   "windows": {
-    "pttUnavailable": "O listener nativo de Push-to-Talk não está disponível"
+    "pttUnavailable": "O listener de teclas do OpenWhispr não está disponível."
   },
   "common": {
     "continue": "Continuar",

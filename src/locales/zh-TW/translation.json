@@ -162,7 +162,7 @@
     "close": "關閉"
   },
   "windows": {
-    "pttUnavailable": "按住說話原生監聽程式無法使用"
+    "pttUnavailable": "OpenWhispr 按鍵監聽程式無法使用。"
   },
   "common": {
     "continue": "繼續",

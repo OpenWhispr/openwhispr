@@ -162,7 +162,7 @@
     "close": "Cerrar"
   },
   "windows": {
-    "pttUnavailable": "El módulo nativo de Push-to-Talk no está disponible"
+    "pttUnavailable": "El detector de teclas de OpenWhispr no está disponible."
   },
   "common": {
     "continue": "Continuar",

@@ -99,7 +99,7 @@ test("linux Hold reports the generic message when the listener binary is missing
     assert.equal(manager.supportsPushToTalk("F8"), false);
     assert.equal(
       manager.getPushToTalkUnavailableReason("F8"),
-      "Push-to-Talk native listener not available"
+      "OpenWhispr's key listener isn't available."
     );
   });
 });
@@ -200,7 +200,7 @@ test("Windows refuses listener-only hotkeys when the key listener is missing", a
     assert.equal(manager.supportsPushToTalk("F8"), false);
     assert.equal(
       manager.getPushToTalkUnavailableReason("F8"),
-      "Push-to-Talk native listener not available"
+      "OpenWhispr's key listener isn't available."
     );
     assert.equal(await manager.setActivationMode("push"), false);
     assert.equal(manager.getEffectiveDefaultHotkey(), "F8");

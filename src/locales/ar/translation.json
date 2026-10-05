@@ -4179,7 +4179,7 @@
     "close": "إغلاق"
   },
   "windows": {
-    "pttUnavailable": "المستمع الأصلي لميزة «اضغط للتحدث» غير متوفر"
+    "pttUnavailable": "مستمع مفاتيح OpenWhispr غير متوفر."
   },
   "common": {
     "continue": "متابعة",

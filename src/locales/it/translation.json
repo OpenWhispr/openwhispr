@@ -162,7 +162,7 @@
     "close": "Chiudi"
   },
   "windows": {
-    "pttUnavailable": "Il listener nativo Push-to-Talk non è disponibile"
+    "pttUnavailable": "Il listener di tasti di OpenWhispr non è disponibile."
   },
   "common": {
     "continue": "Continua",

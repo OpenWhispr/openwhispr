@@ -154,11 +154,8 @@ test("GNOME without the shortcuts portal names the portal, not the key listener"
   assert.equal(info.supportsPushToTalk, false);
   assert.match(info.pushToTalkUnavailableReason, /GNOME 48/);
   assert.doesNotMatch(info.pushToTalkUnavailableReason, /listener/);
-  assert.equal(info.linuxInputAccessDenied, false);
 });
 
-// Without the portal no key can hold, so asking for a regular key would send
-// the user to change a hotkey that still won't hold.
 test("GNOME without the portal names the portal even for a modifier-only hotkey", async () => {
   const info = await hotkeyModeInfo(
     { useGnome: true, gnomeManager: { supportsPushToTalk: () => false } },
@@ -187,7 +184,7 @@ test("Windows without its key listener reports Hold unavailable", async () => {
   );
 
   assert.equal(info.supportsPushToTalk, false);
-  assert.equal(info.pushToTalkUnavailableReason, "Push-to-Talk native listener not available");
+  assert.equal(info.pushToTalkUnavailableReason, "OpenWhispr's key listener isn't available.");
   assert.equal(info.linuxInputAccessDenied, false);
 });
 

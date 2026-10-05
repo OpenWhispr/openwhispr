@@ -162,7 +162,7 @@
     "close": "Close"
   },
   "windows": {
-    "pttUnavailable": "Push-to-Talk native listener not available"
+    "pttUnavailable": "OpenWhispr's key listener isn't available."
   },
   "common": {
     "continue": "Continue",

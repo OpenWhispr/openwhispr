@@ -162,7 +162,7 @@
     "close": "关闭"
   },
   "windows": {
-    "pttUnavailable": "按住说话原生监听器不可用"
+    "pttUnavailable": "OpenWhispr 按键监听器不可用。"
   },
   "common": {
     "continue": "继续",

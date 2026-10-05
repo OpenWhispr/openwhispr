@@ -162,7 +162,7 @@
     "close": "Закрыть"
   },
   "windows": {
-    "pttUnavailable": "Нативный слушатель Push-to-Talk недоступен"
+    "pttUnavailable": "Слушатель клавиш OpenWhispr недоступен."
   },
   "common": {
     "continue": "Продолжить",
