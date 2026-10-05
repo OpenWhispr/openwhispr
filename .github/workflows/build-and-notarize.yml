@@ -7,16 +7,64 @@ on:
       - "**.md"
       - "LICENSE"
       - ".github/ISSUE_TEMPLATE/**"
+      - "openwhispr-mobile/**"
   pull_request:
-    branches: [main]
-    paths-ignore:
-      - "**.md"
-      - "LICENSE"
-      - ".github/ISSUE_TEMPLATE/**"
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  changes:
+    uses: ./.github/workflows/ci-changes.yml
+    permissions:
+      contents: read
+
+  quality:
+    needs: changes
+    if: needs.changes.outputs.desktop == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ github.event_name != 'pull_request' || (github.base_ref == 'main' && needs.changes.outputs.build == 'true') }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Run quality checks
+        run: npm run quality-check
+      - name: Check translations
+        run: npm run i18n:check
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+      - name: Build better-sqlite3 for the runner's node
+        # --ignore-scripts skips the native build; DB-backed tests silently
+        # skip without it. This job is the only test gate on push to main.
+        # Guarded like the test step below, or the rebuild is skipped and the
+        # suite then fails REQUIRE_DB_TESTS on a missing binding instead.
+        if: ${{ !cancelled() }}
+        run: npm rebuild better-sqlite3
+      - name: Run tests
+        # The gates above fail on drift that has nothing to do with the suite —
+        # a stray format nit, a missing locale key, a fresh advisory. Without
+        # this, main goes untested for as long as the drift stands (#1735).
+        if: ${{ !cancelled() }}
+        run: npm test
+        env:
+          # keeps require("electron") from throwing when postinstall was skipped
+          ELECTRON_OVERRIDE_DIST_PATH: /tmp
+          # a skipped DB test here means the rebuild step above is gone: fail instead
+          REQUIRE_DB_TESTS: "1"
+
   build-linux:
+    needs: quality
+    if: needs.quality.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -54,6 +102,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
 
+      - name: Download yt-dlp binary
+        run: node scripts/download-yt-dlp.js --current
+
       - name: Download Qdrant binary
         run: node scripts/download-qdrant.js --current
         env:
@@ -68,7 +119,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/electron
-          key: linux-electron-${{ hashFiles('**/package-lock.json') }}
+          key: linux-electron-${{ hashFiles('package-lock.json') }}
           restore-keys: linux-electron-
 
       - name: Install Linux build and packaging dependencies
@@ -80,6 +131,11 @@ jobs:
         run: |
           echo "GOOGLE_CALENDAR_CLIENT_ID=${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}" >> .env
           echo "GOOGLE_CALENDAR_CLIENT_SECRET=${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}" >> .env
+          echo "MICROSOFT_CALENDAR_CLIENT_ID=${{ secrets.MICROSOFT_CALENDAR_CLIENT_ID }}" >> .env
+          echo "SLACK_CLIENT_ID=${{ secrets.SLACK_CLIENT_ID }}" >> .env
+          echo "LINEAR_CLIENT_ID=${{ secrets.LINEAR_CLIENT_ID }}" >> .env
+          echo "GITHUB_APP_CLIENT_ID=${{ secrets.GH_APP_CLIENT_ID }}" >> .env
+          echo "GITHUB_APP_SLUG=${{ secrets.GH_APP_SLUG }}" >> .env
 
       - name: Verify PipeWire system audio helper build
         run: |
@@ -91,11 +147,14 @@ jobs:
         run: npm run build:linux -- --publish never
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
-          VITE_NEON_AUTH_URL: ${{ vars.VITE_NEON_AUTH_URL }}
+          # Forks and Dependabot get no GH_TOKEN; github.token can't read the private font release.
+          BRAND_FONTS_REQUIRED: ${{ secrets.GH_TOKEN && '1' || '0' }}
+          VITE_AUTH_URL: ${{ vars.VITE_AUTH_URL || 'https://auth.openwhispr.com' }}
           VITE_OPENWHISPR_API_URL: ${{ vars.VITE_OPENWHISPR_API_URL }}
           VITE_OPENWHISPR_OAUTH_CALLBACK_URL: ${{ vars.VITE_OPENWHISPR_OAUTH_CALLBACK_URL }}
 
       - name: Upload Artifacts
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: linux-build
@@ -103,6 +162,8 @@ jobs:
           retention-days: 7
 
   build-windows:
+    needs: quality
+    if: needs.quality.outputs.build == 'true'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -112,6 +173,9 @@ jobs:
         with:
           node-version: "24"
           cache: "npm"
+
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
 
       - name: Install dependencies
         run: npm ci
@@ -123,7 +187,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: resources/bin
-          key: windows-x64-bin-${{ hashFiles('scripts/download-*.js') }}
+          # Native helper sources are in the key so source changes cannot
+          # restore stale helper binaries from the cache.
+          key: windows-x64-bin-${{ hashFiles('scripts/download-*.js', 'resources/windows-system-audio-helper.c', 'resources/windows-mic-listener.c') }}
 
       - name: Download whisper.cpp binaries
         run: node scripts/download-whisper-cpp.js --current
@@ -139,6 +205,9 @@ jobs:
         run: node scripts/download-sherpa-onnx.js --current
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+
+      - name: Download yt-dlp binary
+        run: node scripts/download-yt-dlp.js --current
 
       - name: Download Qdrant binary
         run: node scripts/download-qdrant.js --current
@@ -165,16 +234,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
 
-      - name: Download windows-mic-listener.exe
-        run: node scripts/download-windows-mic-listener.js
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+      - name: Compile windows-mic-listener.exe
+        shell: cmd
+        run: |
+          if not exist resources\bin mkdir resources\bin
+          cl /O2 /nologo resources\windows-mic-listener.c /Fe:resources\bin\windows-mic-listener.exe ole32.lib oleaut32.lib
 
       - name: Cache Electron
         uses: actions/cache@v4
         with:
           path: ~/AppData/Local/electron/Cache
-          key: windows-electron-${{ hashFiles('**/package-lock.json') }}
+          key: windows-electron-${{ hashFiles('package-lock.json') }}
           restore-keys: windows-electron-
 
       - name: Create runtime env
@@ -182,6 +252,11 @@ jobs:
         run: |
           echo "GOOGLE_CALENDAR_CLIENT_ID=${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}" >> .env
           echo "GOOGLE_CALENDAR_CLIENT_SECRET=${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}" >> .env
+          echo "MICROSOFT_CALENDAR_CLIENT_ID=${{ secrets.MICROSOFT_CALENDAR_CLIENT_ID }}" >> .env
+          echo "SLACK_CLIENT_ID=${{ secrets.SLACK_CLIENT_ID }}" >> .env
+          echo "LINEAR_CLIENT_ID=${{ secrets.LINEAR_CLIENT_ID }}" >> .env
+          echo "GITHUB_APP_CLIENT_ID=${{ secrets.GH_APP_CLIENT_ID }}" >> .env
+          echo "GITHUB_APP_SLUG=${{ secrets.GH_APP_SLUG }}" >> .env
 
       - name: Build and Sign Application
         run: |
@@ -193,7 +268,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
-          VITE_NEON_AUTH_URL: ${{ vars.VITE_NEON_AUTH_URL }}
+          VITE_AUTH_URL: ${{ vars.VITE_AUTH_URL || 'https://auth.openwhispr.com' }}
           VITE_OPENWHISPR_API_URL: ${{ vars.VITE_OPENWHISPR_API_URL }}
           VITE_OPENWHISPR_OAUTH_CALLBACK_URL: ${{ vars.VITE_OPENWHISPR_OAUTH_CALLBACK_URL }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -201,6 +276,7 @@ jobs:
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
 
       - name: Upload Artifacts
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
@@ -208,6 +284,8 @@ jobs:
           retention-days: 7
 
   build-macos:
+    needs: quality
+    if: needs.quality.outputs.build == 'true'
     runs-on: macos-latest
     strategy:
       fail-fast: false
@@ -243,6 +321,9 @@ jobs:
       - name: Compile macos-fast-paste binary
         run: npm run compile:fast-paste -- --arch ${{ matrix.arch }}
 
+      - name: Test macOS copy and paste keyboard layouts
+        run: node --test test/helpers/macosPasteLayout.test.js
+
       - name: Compile macos-media-remote binary
         run: npm run compile:media-remote -- --arch ${{ matrix.arch }}
 
@@ -264,6 +345,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
 
+      - name: Download yt-dlp binary
+        run: node scripts/download-yt-dlp.js --current --platform darwin --arch ${{ matrix.arch }}
+
       - name: Download Qdrant binary
         run: node scripts/download-qdrant.js --current --platform darwin --arch ${{ matrix.arch }}
         env:
@@ -278,7 +362,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/electron
-          key: macos-${{ matrix.arch }}-electron-${{ hashFiles('**/package-lock.json') }}
+          key: macos-${{ matrix.arch }}-electron-${{ hashFiles('package-lock.json') }}
           restore-keys: macos-${{ matrix.arch }}-electron-
 
       - name: Setup macOS Code Signing
@@ -310,13 +394,20 @@ jobs:
         run: |
           echo "GOOGLE_CALENDAR_CLIENT_ID=${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}" >> .env
           echo "GOOGLE_CALENDAR_CLIENT_SECRET=${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}" >> .env
+          echo "MICROSOFT_CALENDAR_CLIENT_ID=${{ secrets.MICROSOFT_CALENDAR_CLIENT_ID }}" >> .env
+          echo "SLACK_CLIENT_ID=${{ secrets.SLACK_CLIENT_ID }}" >> .env
+          echo "LINEAR_CLIENT_ID=${{ secrets.LINEAR_CLIENT_ID }}" >> .env
+          echo "GITHUB_APP_CLIENT_ID=${{ secrets.GH_APP_CLIENT_ID }}" >> .env
+          echo "GITHUB_APP_SLUG=${{ secrets.GH_APP_SLUG }}" >> .env
 
       - name: Build Application (${{ matrix.arch }})
         run: npm run build:mac -- --${{ matrix.arch }} --publish never
         env:
           TARGET_ARCH: ${{ matrix.arch }}
           GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
-          VITE_NEON_AUTH_URL: ${{ vars.VITE_NEON_AUTH_URL }}
+          # Forks and Dependabot get no GH_TOKEN; github.token can't read the private font release.
+          BRAND_FONTS_REQUIRED: ${{ secrets.GH_TOKEN && '1' || '0' }}
+          VITE_AUTH_URL: ${{ vars.VITE_AUTH_URL || 'https://auth.openwhispr.com' }}
           VITE_OPENWHISPR_API_URL: ${{ vars.VITE_OPENWHISPR_API_URL }}
           VITE_OPENWHISPR_OAUTH_CALLBACK_URL: ${{ vars.VITE_OPENWHISPR_OAUTH_CALLBACK_URL }}
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ github.event_name != 'pull_request' && 'true' || 'false' }}
@@ -328,11 +419,15 @@ jobs:
       - name: Verify packaged macOS native binaries
         run: |
           APP_PATH=$(ls -d dist/mac*/OpenWhispr.app | head -n1)
-          for bin in macos-audio-tap macos-globe-listener macos-fast-paste macos-mic-listener macos-text-monitor macos-media-remote; do
+          for bin in macos-audio-tap macos-globe-listener macos-fast-paste macos-mic-listener macos-calendar-listener macos-text-monitor macos-window-bounds macos-media-remote; do
             test -x "$APP_PATH/Contents/Resources/bin/$bin" || { echo "Missing in bundle: $bin"; exit 1; }
           done
+          test -x "$APP_PATH/Contents/Resources/bin/MediaRemoteAdapter.framework/Versions/A/MediaRemoteAdapter" || { echo "Missing in bundle: MediaRemoteAdapter.framework"; exit 1; }
+          test -f "$APP_PATH/Contents/Resources/bin/mediaremote-adapter.pl" || { echo "Missing in bundle: mediaremote-adapter.pl"; exit 1; }
+          node scripts/verify-macos-parakeet.js "$APP_PATH"
 
       - name: Upload Artifacts
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: macos-${{ matrix.arch }}-build
@@ -345,3 +440,31 @@ jobs:
           security delete-keychain $RUNNER_TEMP/app-signing.keychain-db || true
           rm -f $RUNNER_TEMP/build_certificate.p12
           rm -f $RUNNER_TEMP/api_key.p8
+
+  desktop-status:
+    name: Desktop CI
+    needs: [changes, quality, build-linux, build-windows, build-macos]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Require all selected desktop checks
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          DESKTOP: ${{ needs.changes.outputs.desktop }}
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          BUILD: ${{ needs.quality.outputs.build }}
+          LINUX_RESULT: ${{ needs.build-linux.result }}
+          WINDOWS_RESULT: ${{ needs.build-windows.result }}
+          MACOS_RESULT: ${{ needs.build-macos.result }}
+        run: |
+          test "$CHANGES_RESULT" = success
+          if [ "$DESKTOP" = true ]; then
+            test "$QUALITY_RESULT" = success
+            if [ "$BUILD" = true ]; then
+              test "$LINUX_RESULT" = success
+              test "$WINDOWS_RESULT" = success
+              test "$MACOS_RESULT" = success
+            fi
+          fi

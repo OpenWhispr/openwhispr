@@ -1,9 +1,8 @@
-import { cloudGet, cloudPost, cloudDelete } from "./cloudApi.js";
+import { cloudGet, cloudGetPublic, cloudPost, cloudDelete, type DataWrap } from "./cloudApi.js";
 import type { WorkspaceInvitation, InvitationPreview } from "../types/electron";
 
-interface DataWrap<T> {
-  data: T;
-}
+// email_sent is separate because the invite row is created even when the email fails.
+type InvitationSendResult = WorkspaceInvitation & { email_sent: boolean };
 
 async function list(workspaceId: string): Promise<WorkspaceInvitation[]> {
   const res = await cloudGet<DataWrap<WorkspaceInvitation[]>>(
@@ -14,9 +13,10 @@ async function list(workspaceId: string): Promise<WorkspaceInvitation[]> {
 
 async function send(
   workspaceId: string,
-  input: { email: string; role?: "admin" | "member"; team_ids?: string[] }
-): Promise<WorkspaceInvitation> {
-  const res = await cloudPost<DataWrap<WorkspaceInvitation>>(
+  // space_ids become member grants applied when the invitation is accepted.
+  input: { email: string; role?: "admin" | "member"; team_ids?: string[]; space_ids?: string[] }
+): Promise<InvitationSendResult> {
+  const res = await cloudPost<DataWrap<InvitationSendResult>>(
     `/api/workspaces/${workspaceId}/invitations`,
     input
   );
@@ -27,19 +27,32 @@ async function revoke(workspaceId: string, invitationId: string): Promise<void> 
   await cloudDelete(`/api/workspaces/${workspaceId}/invitations/${invitationId}`);
 }
 
-async function resend(workspaceId: string, invitationId: string): Promise<void> {
-  await cloudPost(`/api/workspaces/${workspaceId}/invitations/${invitationId}`);
+async function resend(workspaceId: string, invitationId: string): Promise<{ email_sent: boolean }> {
+  const res = await cloudPost<DataWrap<{ resent: boolean; email_sent: boolean }>>(
+    `/api/workspaces/${workspaceId}/invitations/${invitationId}`
+  );
+  return { email_sent: res.data.email_sent };
 }
 
 async function preview(token: string): Promise<InvitationPreview> {
-  const res = await cloudGet<DataWrap<InvitationPreview>>(
+  const res = await cloudGetPublic<DataWrap<InvitationPreview>>(
     `/api/invitations/${encodeURIComponent(token)}`
   );
   return res.data;
 }
 
-async function accept(token: string): Promise<{ workspace_id: string; role: string }> {
-  const res = await cloudPost<DataWrap<{ workspace_id: string; role: string }>>(
+// team_ids and space_ids are the authoritative post-accept grants (the
+// invitation may have been edited since it was previewed); optional only
+// because older API responses predate them.
+type InvitationAcceptResult = {
+  workspace_id: string;
+  role: string;
+  team_ids?: string[];
+  space_ids?: string[];
+};
+
+async function accept(token: string): Promise<InvitationAcceptResult> {
+  const res = await cloudPost<DataWrap<InvitationAcceptResult>>(
     `/api/invitations/${encodeURIComponent(token)}/accept`
   );
   return res.data;

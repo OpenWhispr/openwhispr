@@ -2,42 +2,90 @@
 const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
-const { downloadFile, findBinaryInDir, parseArgs, setExecutable } = require("./lib/download-utils");
+const crypto = require("crypto");
+const {
+  cleanupFiles,
+  downloadFile,
+  findBinaryInDir,
+  findLibrariesInDir,
+  parseArgs,
+  setExecutable,
+} = require("./lib/download-utils");
+const {
+  PARAKEET_MINIMUM_MACOS_VERSION,
+  compareVersions,
+} = require("../src/helpers/parakeetCapability");
+const { renameImportedModule } = require("./lib/pe-imports");
 
-const SHERPA_ONNX_VERSION = "1.12.23";
+const SHERPA_ONNX_VERSION = "1.13.8";
 const GITHUB_RELEASE_URL = `https://github.com/k2-fsa/sherpa-onnx/releases/download/v${SHERPA_ONNX_VERSION}`;
 
+// Windows 11 ships an older onnxruntime.dll in System32, and on some machines
+// the loader resolves the bare import name to that copy instead of the one
+// beside the exe (#2054: "requested API version [27] is not available").
+// So the bundled runtime ships under a private name and every sherpa image
+// gets its import table rewritten to match. The replacement must not be
+// longer than the upstream name because the string is patched in place.
+// Drop this once ORT ships version-suffixed DLLs (microsoft/onnxruntime#27893)
+// and sherpa-onnx picks them up.
+const WINDOWS_ONNXRUNTIME_UPSTREAM_NAME = "onnxruntime.dll";
+const WINDOWS_ONNXRUNTIME_PRIVATE_NAME = "ow-onnxrt.dll";
+
+// sherpa-onnx's macOS archives bundle a universal2 libonnxruntime whose arm64
+// slice runs INT8 models ~3x slower than the arm64-only build of the same
+// version from the same maintainer (the zip sherpa-onnx's own
+// cmake/onnxruntime-osx-arm64.cmake pins). On macOS hosts we swap that slice
+// in and keep the x86_64 slice, so the file stays universal2.
+const MACOS_ARM64_ONNXRUNTIME = {
+  url: "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.28.2/onnxruntime-osx-arm64-1.28.2.zip",
+  sha256: "d9e5c0c79929e201f5b8eb095e6809a91ce78be9866a1bca0dfab7e20b40ae40",
+  libraryName: "libonnxruntime.dylib",
+  marker: "arm64-1.28.2", // recorded in the install marker so older installs re-extract
+};
+
 // Binary configurations for each platform
-// Note: macOS uses universal2 builds that work on both arm64 and x64
+// Note: macOS uses universal2 builds that work on both arm64 and x64.
+// The -no-tts archives are built with SHERPA_ONNX_ENABLE_TTS=OFF, so nothing in
+// them links espeak-ng (GPL-3.0), which the TTS builds compile into the C API
+// library. The ASR and diarization executables are the same in both builds.
 const BINARIES = {
   "darwin-arm64": {
-    archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-shared.tar.bz2`,
+    archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-shared-no-tts.tar.bz2`,
     binaryPath: "sherpa-onnx-offline-websocket-server",
     outputName: "sherpa-onnx-ws-darwin-arm64",
+    onlineBinaryPath: "sherpa-onnx-online-websocket-server",
+    onlineOutputName: "sherpa-onnx-online-ws-darwin-arm64",
     diarizeBinaryPath: "sherpa-onnx-offline-speaker-diarization",
     diarizeOutputName: "sherpa-onnx-diarize-darwin-arm64",
     libPattern: "*.dylib",
   },
   "darwin-x64": {
-    archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-shared.tar.bz2`,
+    archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-shared-no-tts.tar.bz2`,
     binaryPath: "sherpa-onnx-offline-websocket-server",
     outputName: "sherpa-onnx-ws-darwin-x64",
+    onlineBinaryPath: "sherpa-onnx-online-websocket-server",
+    onlineOutputName: "sherpa-onnx-online-ws-darwin-x64",
     diarizeBinaryPath: "sherpa-onnx-offline-speaker-diarization",
     diarizeOutputName: "sherpa-onnx-diarize-darwin-x64",
     libPattern: "*.dylib",
   },
   "win32-x64": {
-    archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-win-x64-shared.tar.bz2`,
+    // Since 1.13.4 the Windows assets carry an MSVC runtime/build-type suffix
+    archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-win-x64-shared-MD-Release-no-tts.tar.bz2`,
     binaryPath: "sherpa-onnx-offline-websocket-server.exe",
     outputName: "sherpa-onnx-ws-win32-x64.exe",
+    onlineBinaryPath: "sherpa-onnx-online-websocket-server.exe",
+    onlineOutputName: "sherpa-onnx-online-ws-win32-x64.exe",
     diarizeBinaryPath: "sherpa-onnx-offline-speaker-diarization.exe",
     diarizeOutputName: "sherpa-onnx-diarize-win32-x64.exe",
     libPattern: "*.dll",
   },
   "linux-x64": {
-    archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-shared.tar.bz2`,
+    archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-shared-no-tts.tar.bz2`,
     binaryPath: "sherpa-onnx-offline-websocket-server",
     outputName: "sherpa-onnx-ws-linux-x64",
+    onlineBinaryPath: "sherpa-onnx-online-websocket-server",
+    onlineOutputName: "sherpa-onnx-online-ws-linux-x64",
     diarizeBinaryPath: "sherpa-onnx-offline-speaker-diarization",
     diarizeOutputName: "sherpa-onnx-diarize-linux-x64",
     libPattern: "*.so*",
@@ -46,12 +94,136 @@ const BINARIES = {
 
 const BIN_DIR = path.join(__dirname, "..", "resources", "bin");
 
+const VERSIONED_LIB_PATTERN = /^(lib.+?)\.(\d+\.\d+\.\d+)\.(dylib|so|dll)$/;
+// The executables link only ONNX Runtime; the archive's sherpa-onnx C/C++ API
+// libraries are for embedding sherpa-onnx and nothing in the app loads them.
+const SHIPPED_LIBRARY_PATTERN = /^(lib)?onnxruntime/;
+const REQUIRED_MACOS_ARCHITECTURES = ["x86_64", "arm64"];
+
+// Both macOS targets install the same libonnxruntime file; lipo needs a macOS host.
+function isMacosHostTarget(platformArch) {
+  return process.platform === "darwin" && platformArch.startsWith("darwin");
+}
+
+// Upstream 1.13.4 ships an invalid arm64 signature on libonnxruntime; dyld SIGKILLs unsigned loads.
+function adhocSign(filePath, platformArch) {
+  if (process.platform !== "darwin" || !platformArch.startsWith("darwin")) return;
+  execFileSync("codesign", ["--force", "--sign", "-", filePath], { stdio: "ignore" });
+}
+
+async function replaceMacosArm64OnnxRuntime(libraryPath, platformArch) {
+  const { url, sha256, libraryName } = MACOS_ARM64_ONNXRUNTIME;
+  if (path.basename(libraryPath) !== libraryName) {
+    throw new Error(
+      `sherpa-onnx ships ${path.basename(libraryPath)}; update MACOS_ARM64_ONNXRUNTIME to match`
+    );
+  }
+  const zipPath = `${libraryPath}.arm64.zip`;
+  const extractDir = `${libraryPath}.arm64`;
+  const x86Path = `${libraryPath}.x86_64`;
+  try {
+    console.log(`  ${platformArch}: Downloading arm64 ONNX Runtime from ${url}`);
+    await downloadFile(url, zipPath);
+    const actual = crypto.createHash("sha256").update(fs.readFileSync(zipPath)).digest("hex");
+    if (actual !== sha256) throw new Error(`arm64 ONNX Runtime sha256 mismatch: ${actual}`);
+    execFileSync("unzip", ["-q", "-o", zipPath, "-d", extractDir], { stdio: "ignore" });
+    const arm64Path = findLibrariesInDir(extractDir, "*.dylib").find(
+      (file) => path.basename(file) === libraryName
+    );
+    if (!arm64Path) throw new Error(`${libraryName} missing from arm64 ONNX Runtime zip`);
+    execFileSync("lipo", ["-thin", "x86_64", libraryPath, "-output", x86Path]);
+    execFileSync("lipo", ["-create", x86Path, arm64Path, "-output", libraryPath]);
+    console.log(`  ${platformArch}: Replaced arm64 slice of ${libraryName}`);
+  } finally {
+    for (const file of [zipPath, extractDir, x86Path]) {
+      fs.rmSync(file, { recursive: true, force: true });
+    }
+  }
+}
+
 function getDownloadUrl(archiveName) {
   return `${GITHUB_RELEASE_URL}/${archiveName}`;
 }
 
-function extractTarBz2(archivePath, destDir) {
+function parseMacosDeploymentTargets(vtoolOutput) {
+  const targets = [];
+  let architecture = null;
+  let isMacosBuildVersion = false;
+
+  for (const line of String(vtoolOutput).split("\n")) {
+    const architectureMatch = line.match(/\(architecture ([^)]+)\):\s*$/);
+    if (architectureMatch) {
+      architecture = architectureMatch[1];
+      isMacosBuildVersion = false;
+      continue;
+    }
+
+    if (/^\s*platform MACOS\s*$/.test(line)) {
+      isMacosBuildVersion = true;
+      continue;
+    }
+
+    const minimumMatch = line.match(/^\s*minos (\S+)\s*$/);
+    if (architecture && isMacosBuildVersion && minimumMatch) {
+      targets.push({ architecture, minimumVersion: minimumMatch[1] });
+      isMacosBuildVersion = false;
+    }
+  }
+
+  return targets;
+}
+
+function validateMacosDeploymentTargets(targets) {
+  const architectures = new Set(targets.map((target) => target.architecture));
+  for (const architecture of REQUIRED_MACOS_ARCHITECTURES) {
+    if (!architectures.has(architecture)) {
+      throw new Error(`ONNX Runtime is missing required architecture: ${architecture}`);
+    }
+  }
+
+  for (const target of targets) {
+    if (compareVersions(target.minimumVersion, PARAKEET_MINIMUM_MACOS_VERSION) > 0) {
+      throw new Error(
+        `${target.architecture} requires macOS ${target.minimumVersion}, but the Parakeet capability gate is ${PARAKEET_MINIMUM_MACOS_VERSION}`
+      );
+    }
+  }
+
+  return {
+    architectures: [...architectures],
+    minimumVersion: PARAKEET_MINIMUM_MACOS_VERSION,
+  };
+}
+
+function verifyPackagedMacosParakeet(
+  appPath,
+  {
+    readDirectory = fs.readdirSync,
+    runVtool = (libraryPath) =>
+      execFileSync("xcrun", ["vtool", "-show-build", libraryPath], { encoding: "utf8" }),
+  } = {}
+) {
+  const binDirectory = path.join(appPath, "Contents", "Resources", "bin");
+  if (!readDirectory(binDirectory).includes(MACOS_ARM64_ONNXRUNTIME.libraryName)) {
+    throw new Error(`Expected ${MACOS_ARM64_ONNXRUNTIME.libraryName} in ${binDirectory}`);
+  }
+
+  const libraryPath = path.join(binDirectory, MACOS_ARM64_ONNXRUNTIME.libraryName);
+  const targets = parseMacosDeploymentTargets(runVtool(libraryPath));
+  return { ...validateMacosDeploymentTargets(targets), libraryPath };
+}
+
+async function extractTarBz2(archivePath, destDir, { platform = process.platform } = {}) {
   fs.mkdirSync(destDir, { recursive: true });
+  if (platform === "win32") {
+    // Windows bsdtar may spawn an external bzip2 and never finish. Use the
+    // same bundled decompressor as model installation, with no PATH tools.
+    const { pipeline } = require("stream/promises");
+    const unbzip2 = require("unbzip2-stream");
+    const tar = require("tar");
+    await pipeline(fs.createReadStream(archivePath), unbzip2(), tar.x({ cwd: destDir }));
+    return;
+  }
   // Use relative paths from archive dir as cwd, so neither -f nor -C args
   // contain Windows drive letter colons (GNU tar treats C: as remote host)
   const cwd = path.dirname(archivePath);
@@ -61,38 +233,98 @@ function extractTarBz2(archivePath, destDir) {
   });
 }
 
-function findLibrariesInDir(dir, pattern, maxDepth = 5, currentDepth = 0) {
-  if (currentDepth >= maxDepth) return [];
+function copyBinary(extractDir, binaryName, outputPath, platformArch) {
+  const foundPath = findBinaryInDir(extractDir, binaryName);
 
-  const results = [];
-  try {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-
-      if (entry.isDirectory()) {
-        results.push(...findLibrariesInDir(fullPath, pattern, maxDepth, currentDepth + 1));
-      } else if (matchesPattern(entry.name, pattern)) {
-        results.push(fullPath);
-      }
-    }
-  } catch {
-    // Ignore permission errors
+  if (!foundPath || !fs.existsSync(foundPath)) {
+    console.error(`  ${platformArch}: Binary '${binaryName}' not found in archive`);
+    return false;
   }
 
-  return results;
+  fs.rmSync(outputPath, { force: true });
+  fs.copyFileSync(foundPath, outputPath);
+  setExecutable(outputPath);
+  adhocSign(outputPath, platformArch);
+  console.log(`  ${platformArch}: Extracted to ${path.basename(outputPath)}`);
+  return true;
 }
 
-function matchesPattern(filename, pattern) {
-  if (pattern === "*.dylib") {
-    return filename.endsWith(".dylib");
-  } else if (pattern === "*.dll") {
-    return filename.endsWith(".dll");
-  } else if (pattern === "*.so*") {
-    return /\.so(\.\d+)*$/.test(filename) || filename.endsWith(".so");
+function privatizeWindowsOnnxRuntime({ binDir, binaryPaths, libraryNames }) {
+  const isUpstreamRuntime = (name) => name.toLowerCase() === WINDOWS_ONNXRUNTIME_UPSTREAM_NAME;
+  const upstreamName = libraryNames.find(isUpstreamRuntime);
+  if (!upstreamName) {
+    throw new Error(
+      `${WINDOWS_ONNXRUNTIME_UPSTREAM_NAME} not found among extracted libraries (${libraryNames.join(", ")}); the upstream archive layout changed`
+    );
   }
-  return false;
+
+  // Upstream's Windows CI copies every DLL into both bin/ and lib/ of the
+  // archive, so the extracted list carries each name twice for one file.
+  const shippedLibraries = [
+    ...new Set(
+      libraryNames.map((name) =>
+        isUpstreamRuntime(name) ? WINDOWS_ONNXRUNTIME_PRIVATE_NAME : name
+      )
+    ),
+  ];
+  const privatePath = path.join(binDir, WINDOWS_ONNXRUNTIME_PRIVATE_NAME);
+  fs.rmSync(privatePath, { force: true });
+  fs.renameSync(path.join(binDir, upstreamName), privatePath);
+
+  const imagePaths = [...binaryPaths, ...shippedLibraries.map((name) => path.join(binDir, name))];
+  for (const imagePath of imagePaths) {
+    const image = fs.readFileSync(imagePath);
+    const patched = renameImportedModule(
+      image,
+      WINDOWS_ONNXRUNTIME_UPSTREAM_NAME,
+      WINDOWS_ONNXRUNTIME_PRIVATE_NAME
+    );
+    if (patched === 0) continue;
+    fs.writeFileSync(imagePath, image);
+    console.log(
+      `  win32: ${path.basename(imagePath)} now imports ${WINDOWS_ONNXRUNTIME_PRIVATE_NAME}`
+    );
+  }
+
+  return shippedLibraries;
+}
+
+function readInstallMarker(markerPath) {
+  try {
+    return JSON.parse(fs.readFileSync(markerPath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function findObsoleteLibraries(previousLibraries, installedLibraries, directoryEntries) {
+  const previous = new Set(previousLibraries);
+  const installed = new Set(installedLibraries);
+  return directoryEntries.filter((file) => previous.has(file) && !installed.has(file));
+}
+
+function isCompleteInstall(markerPath, binaryPaths, { platformArch, binDir = BIN_DIR }) {
+  if (binaryPaths.some((binaryPath) => !fs.existsSync(binaryPath))) return false;
+
+  const marker = readInstallMarker(markerPath);
+  if (marker?.version !== SHERPA_ONNX_VERSION || !Array.isArray(marker?.libraries)) return false;
+  // Same version from a different archive (e.g. the TTS build) must re-extract
+  // so the libraries it left behind get cleaned up.
+  if (marker.archive !== BINARIES[platformArch]?.archiveName) return false;
+  if (
+    marker.libraries.some(
+      (library) => typeof library !== "string" || !fs.existsSync(path.join(binDir, library))
+    )
+  ) {
+    return false;
+  }
+  // A win32 marker without this field predates the rename: the exes on disk
+  // still import onnxruntime.dll and must be re-extracted.
+  if (platformArch.startsWith("win32")) {
+    return marker.onnxRuntime === WINDOWS_ONNXRUNTIME_PRIVATE_NAME;
+  }
+  // A macOS marker without this field still holds the slow universal2 slice.
+  return !isMacosHostTarget(platformArch) || marker.onnxRuntime === MACOS_ARM64_ONNXRUNTIME.marker;
 }
 
 async function downloadBinary(platformArch, config, isForce = false) {
@@ -102,56 +334,66 @@ async function downloadBinary(platformArch, config, isForce = false) {
   }
 
   const outputPath = path.join(BIN_DIR, config.outputName);
+  const onlineOutputPath = path.join(BIN_DIR, config.onlineOutputName);
   const diarizeOutputPath = path.join(BIN_DIR, config.diarizeOutputName);
+  const installMarkerPath = path.join(BIN_DIR, `.sherpa-onnx-${platformArch}.json`);
+  const previousInstall = readInstallMarker(installMarkerPath);
+  const previousLibraries = Array.isArray(previousInstall?.libraries)
+    ? previousInstall.libraries
+    : [];
 
-  if (fs.existsSync(outputPath) && fs.existsSync(diarizeOutputPath) && !isForce) {
+  if (
+    !isForce &&
+    isCompleteInstall(installMarkerPath, [outputPath, onlineOutputPath, diarizeOutputPath], {
+      platformArch,
+    })
+  ) {
     console.log(`  ${platformArch}: Already exists (use --force to re-download)`);
     return true;
   }
+  // Retain cleanup ownership across retries without certifying a partially repaired install.
+  fs.writeFileSync(installMarkerPath, JSON.stringify({ libraries: previousLibraries }));
 
   const url = getDownloadUrl(config.archiveName);
   console.log(`  ${platformArch}: Downloading from ${url}`);
 
   const archivePath = path.join(BIN_DIR, config.archiveName);
+  const extractDir = path.join(BIN_DIR, `temp-sherpa-${platformArch}`);
 
   try {
     await downloadFile(url, archivePath);
 
-    const extractDir = path.join(BIN_DIR, `temp-sherpa-${platformArch}`);
     fs.mkdirSync(extractDir, { recursive: true });
-    extractTarBz2(archivePath, extractDir);
+    await extractTarBz2(archivePath, extractDir);
 
-    // Find the WebSocket server binary (may be in a subdirectory)
-    const binaryName = path.basename(config.binaryPath);
-    let binaryPath = findBinaryInDir(extractDir, binaryName);
-
-    if (binaryPath && fs.existsSync(binaryPath)) {
-      fs.copyFileSync(binaryPath, outputPath);
-      setExecutable(outputPath);
-      console.log(`  ${platformArch}: Extracted to ${config.outputName}`);
-    } else {
-      console.error(`  ${platformArch}: Binary '${binaryName}' not found in archive`);
-      return false;
-    }
-
-    // Find the diarization binary from the same archive
-    const diarizeBinaryName = path.basename(config.diarizeBinaryPath);
-    let diarizeBinaryPath = findBinaryInDir(extractDir, diarizeBinaryName);
-
-    if (diarizeBinaryPath && fs.existsSync(diarizeBinaryPath)) {
-      fs.copyFileSync(diarizeBinaryPath, diarizeOutputPath);
-      setExecutable(diarizeOutputPath);
-      console.log(`  ${platformArch}: Extracted to ${config.diarizeOutputName}`);
-    } else {
-      console.error(
-        `  ${platformArch}: Diarization binary '${diarizeBinaryName}' not found in archive`
-      );
-      return false;
+    for (const [binaryName, destPath] of [
+      [config.binaryPath, outputPath],
+      [config.onlineBinaryPath, onlineOutputPath],
+      [config.diarizeBinaryPath, diarizeOutputPath],
+    ]) {
+      if (!copyBinary(extractDir, binaryName, destPath, platformArch)) return false;
     }
 
     // Copy shared libraries
+    const copiedLibraries = [];
     if (config.libPattern) {
-      const libraries = findLibrariesInDir(extractDir, config.libPattern);
+      const archiveLibraries = findLibrariesInDir(extractDir, config.libPattern, {
+        ignoreReadErrors: true,
+      });
+      const libraries = archiveLibraries.filter((libPath) =>
+        SHIPPED_LIBRARY_PATTERN.test(path.basename(libPath))
+      );
+
+      // Installs before v1.7.6 wrote no marker yet copied every library, so
+      // ownership alone would leave their C API library (espeak-ng) behind.
+      const unshippedNames = new Set(archiveLibraries.map((libPath) => path.basename(libPath)));
+      for (const libPath of libraries) unshippedNames.delete(path.basename(libPath));
+      for (const libName of unshippedNames) {
+        const stalePath = path.join(BIN_DIR, libName);
+        if (!fs.existsSync(stalePath)) continue;
+        fs.rmSync(stalePath, { force: true });
+        console.log(`  ${platformArch}: Removed unshipped ${libName}`);
+      }
 
       // Separate versioned and unversioned libraries to create symlinks where possible
       // e.g. libonnxruntime.dylib -> libonnxruntime.1.23.2.dylib (saves ~71MB)
@@ -161,44 +403,77 @@ async function downloadBinary(platformArch, config, isForce = false) {
         const libName = path.basename(libPath);
         const destPath = path.join(BIN_DIR, libName);
 
-        // Detect versioned dylib pattern: libFoo.X.Y.Z.dylib
-        const versionMatch = libName.match(/^(lib.+?)\.(\d+\.\d+\.\d+)\.(dylib|so|dll)$/);
+        const versionMatch = libName.match(VERSIONED_LIB_PATTERN);
         if (versionMatch) {
-          const baseName = `${versionMatch[1]}.${versionMatch[3]}`; // e.g. libonnxruntime.dylib
-          versionedLibs.set(baseName, libName);
+          versionedLibs.set(`${versionMatch[1]}.${versionMatch[3]}`, libName);
         }
 
+        // rm first: copying onto an existing symlink would write through it
+        fs.rmSync(destPath, { force: true });
         fs.copyFileSync(libPath, destPath);
         setExecutable(destPath);
+        if (isMacosHostTarget(platformArch) && libName === MACOS_ARM64_ONNXRUNTIME.libraryName) {
+          await replaceMacosArm64OnnxRuntime(destPath, platformArch);
+        }
+        adhocSign(destPath, platformArch);
+        copiedLibraries.push(libName);
         console.log(`  ${platformArch}: Copied library ${libName}`);
+      }
+
+      for (const file of findObsoleteLibraries(
+        previousLibraries,
+        copiedLibraries,
+        fs.readdirSync(BIN_DIR)
+      )) {
+        fs.rmSync(path.join(BIN_DIR, file), { force: true });
+        console.log(`  ${platformArch}: Removed stale ${file}`);
       }
 
       // Replace unversioned copies with symlinks to versioned ones (macOS/Linux only)
       if (process.platform !== "win32") {
         for (const [baseName, versionedName] of versionedLibs) {
           const basePath = path.join(BIN_DIR, baseName);
-          const versionedPath = path.join(BIN_DIR, versionedName);
-          if (
-            fs.existsSync(basePath) &&
-            fs.existsSync(versionedPath) &&
-            !fs.lstatSync(basePath).isSymbolicLink()
-          ) {
-            fs.unlinkSync(basePath);
-            fs.symlinkSync(versionedName, basePath);
-            console.log(`  ${platformArch}: Symlinked ${baseName} -> ${versionedName}`);
+          fs.rmSync(basePath, { force: true });
+          fs.symlinkSync(versionedName, basePath);
+          console.log(`  ${platformArch}: Symlinked ${baseName} -> ${versionedName}`);
+
+          for (const file of fs.readdirSync(BIN_DIR)) {
+            const match = file.match(VERSIONED_LIB_PATTERN);
+            if (match && `${match[1]}.${match[3]}` === baseName && file !== versionedName) {
+              fs.unlinkSync(path.join(BIN_DIR, file));
+              console.log(`  ${platformArch}: Removed stale ${file}`);
+            }
           }
         }
       }
     }
 
-    // Cleanup
-    fs.rmSync(extractDir, { recursive: true, force: true });
-    if (fs.existsSync(archivePath)) fs.unlinkSync(archivePath);
+    const isWindowsTarget = platformArch.startsWith("win32");
+    const shippedLibraries = isWindowsTarget
+      ? privatizeWindowsOnnxRuntime({
+          binDir: BIN_DIR,
+          binaryPaths: [outputPath, onlineOutputPath, diarizeOutputPath],
+          libraryNames: copiedLibraries,
+        })
+      : copiedLibraries;
+
+    fs.writeFileSync(
+      installMarkerPath,
+      JSON.stringify({
+        version: SHERPA_ONNX_VERSION,
+        archive: config.archiveName,
+        libraries: shippedLibraries,
+        ...(isWindowsTarget ? { onnxRuntime: WINDOWS_ONNXRUNTIME_PRIVATE_NAME } : {}),
+        ...(isMacosHostTarget(platformArch) ? { onnxRuntime: MACOS_ARM64_ONNXRUNTIME.marker } : {}),
+      })
+    );
     return true;
   } catch (error) {
     console.error(`  ${platformArch}: Failed - ${error.message}`);
-    if (fs.existsSync(archivePath)) fs.unlinkSync(archivePath);
     return false;
+  } finally {
+    fs.rmSync(extractDir, { recursive: true, force: true });
+    if (fs.existsSync(archivePath)) fs.unlinkSync(archivePath);
   }
 }
 
@@ -216,8 +491,9 @@ async function main() {
       return;
     }
 
+    const config = BINARIES[args.platformArch];
     console.log(`Downloading for target platform (${args.platformArch}):`);
-    const ok = await downloadBinary(args.platformArch, BINARIES[args.platformArch], args.isForce);
+    const ok = await downloadBinary(args.platformArch, config, args.isForce);
     if (!ok) {
       console.error(`Failed to download binaries for ${args.platformArch}`);
       process.exitCode = 1;
@@ -235,16 +511,11 @@ async function main() {
     }
 
     if (args.shouldCleanup) {
-      const wsPrefix = `sherpa-onnx-ws-${args.platformArch}`;
-      const diarizePrefix = `sherpa-onnx-diarize-${args.platformArch}`;
-      const files = fs.readdirSync(BIN_DIR).filter((f) => f.startsWith("sherpa-onnx"));
-      files.forEach((file) => {
-        if (!file.startsWith(wsPrefix) && !file.startsWith(diarizePrefix)) {
-          const filePath = path.join(BIN_DIR, file);
-          console.log(`Removing old binary: ${file}`);
-          fs.unlinkSync(filePath);
-        }
-      });
+      cleanupFiles(BIN_DIR, "sherpa-onnx", [
+        `sherpa-onnx-ws-${args.platformArch}`,
+        `sherpa-onnx-online-ws-${args.platformArch}`,
+        `sherpa-onnx-diarize-${args.platformArch}`,
+      ]);
     }
   } else {
     console.log("Downloading binaries for all platforms:");
@@ -273,9 +544,19 @@ async function main() {
 // Export config for potential imports
 module.exports = {
   SHERPA_ONNX_VERSION,
+  MACOS_ARM64_ONNXRUNTIME,
   BINARIES,
   BIN_DIR,
+  WINDOWS_ONNXRUNTIME_PRIVATE_NAME,
+  WINDOWS_ONNXRUNTIME_UPSTREAM_NAME,
   getDownloadUrl,
+  extractTarBz2,
+  findObsoleteLibraries,
+  isCompleteInstall,
+  parseMacosDeploymentTargets,
+  privatizeWindowsOnnxRuntime,
+  validateMacosDeploymentTargets,
+  verifyPackagedMacosParakeet,
 };
 
 // Only run main() when executed directly

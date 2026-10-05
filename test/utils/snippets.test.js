@@ -1,7 +1,11 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { expandSnippets } = require("../../src/utils/snippets.ts");
+const {
+  expandSnippets,
+  findSnippetTriggerRanges,
+  getDictionaryHintWords,
+} = require("../../src/utils/snippets.ts");
 
 test("expands a trigger containing Turkish capital İ", () => {
   const snippets = [{ trigger: "İmza", replacement: "Best regards,\nUmut" }];
@@ -74,4 +78,83 @@ test("plain ASCII triggers still fold case both ways", () => {
 test("multiple occurrences and unmatched text are preserved", () => {
   const snippets = [{ trigger: "İmza", replacement: "X" }];
   assert.equal(expandSnippets("İmza and imza, done", snippets), "X and X, done");
+});
+
+test("expandSnippets leaves the transcript unchanged when snippets is nullish", () => {
+  assert.equal(expandSnippets("hello there", null), "hello there");
+  assert.equal(expandSnippets("hello there", undefined), "hello there");
+});
+
+test("getDictionaryHintWords returns empty list on nullish, empty, or partial settings", () => {
+  assert.deepEqual(getDictionaryHintWords(null), []);
+  assert.deepEqual(getDictionaryHintWords(undefined), []);
+  assert.deepEqual(getDictionaryHintWords({}), []);
+  assert.deepEqual(getDictionaryHintWords({ customDictionary: null }), []);
+  assert.deepEqual(getDictionaryHintWords({ snippets: null }), []);
+  assert.deepEqual(getDictionaryHintWords({ customDictionary: null, snippets: null }), []);
+});
+
+test("getDictionaryHintWords preserves customDictionary when snippets are absent or empty", () => {
+  const customDictionary = ["OpenWhispr", "Supabase"];
+  const result = getDictionaryHintWords({ customDictionary });
+  assert.deepEqual(result, ["OpenWhispr", "Supabase"]);
+  // Must return a fresh array, not the input reference
+  assert.notEqual(result, customDictionary);
+
+  const emptySnippetsResult = getDictionaryHintWords({ customDictionary, snippets: [] });
+  assert.deepEqual(emptySnippetsResult, ["OpenWhispr", "Supabase"]);
+  assert.notEqual(emptySnippetsResult, customDictionary);
+});
+
+test("getDictionaryHintWords extracts triggers when customDictionary is absent or empty", () => {
+  const snippets = [
+    { trigger: "my cal", replacement: "cal.com/me" },
+    { trigger: "zoom link", replacement: "zoom.us/j/123" },
+  ];
+  assert.deepEqual(getDictionaryHintWords({ snippets }), ["my cal", "zoom link"]);
+  assert.deepEqual(getDictionaryHintWords({ customDictionary: [], snippets }), [
+    "my cal",
+    "zoom link",
+  ]);
+});
+
+test("getDictionaryHintWords combines dictionary words and snippet triggers safely", () => {
+  const settings = {
+    customDictionary: ["OpenWhispr", "Supabase"],
+    snippets: [
+      { trigger: "my cal", replacement: "cal.com/me" },
+      { trigger: "zoom link", replacement: "zoom.us/j/123" },
+    ],
+  };
+  assert.deepEqual(getDictionaryHintWords(settings), [
+    "OpenWhispr",
+    "Supabase",
+    "my cal",
+    "zoom link",
+  ]);
+});
+
+test("findSnippetTriggerRanges reports where each trigger occurs", () => {
+  const snippets = [{ trigger: "openwhispr review", replacement: "Review the PR" }];
+
+  assert.deepEqual(findSnippetTriggerRanges("openwhispr review this PR", snippets), [
+    { start: 0, end: 17 },
+  ]);
+  assert.deepEqual(findSnippetTriggerRanges("please openwhispr review it", snippets), [
+    { start: 7, end: 24 },
+  ]);
+  assert.deepEqual(findSnippetTriggerRanges("nothing to expand here", snippets), []);
+  assert.deepEqual(findSnippetTriggerRanges("openwhispr review", null), []);
+});
+
+// Wake-word suppression keys off these ranges, so a range that expandSnippets
+// will not actually replace costs the user both the wake word and the snippet.
+// The matcher folds case the Unicode way (/iu) while the replacement lookup
+// uses toLowerCase(); Turkish dotless ı is where the two part company, since
+// the pattern's [ıI] matches a plain "i" that is not a Map key.
+test("findSnippetTriggerRanges reports only ranges expandSnippets will replace", () => {
+  const snippets = [{ trigger: "ımza", replacement: "Saygılarımla" }];
+
+  assert.equal(expandSnippets("imza raporu hazırla", snippets), "imza raporu hazırla");
+  assert.deepEqual(findSnippetTriggerRanges("imza raporu hazırla", snippets), []);
 });

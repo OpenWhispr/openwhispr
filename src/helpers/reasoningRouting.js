@@ -7,21 +7,40 @@ export function deriveReasoningMode(cloudMode, provider) {
   return "openwhispr";
 }
 
-// Fan a cleanup config out to all four LLM scopes; the three non-cleanup scopes
-// mirror only cloud routing plus the derived mode (each tab selects on its mode).
+// Whether a scope may borrow the fallback scope's API key along with its endpoint.
+// A scope pointing somewhere of its own, or in another mode, would send that key to
+// a host it was never entered for.
+export function inheritsFallbackEndpoint(own, fallbackMode) {
+  if (own.cloudBaseUrl || own.remoteUrl) return false;
+  return !!fallbackMode && own.mode === fallbackMode;
+}
+
+const MIRRORED_ROUTING_FIELDS = [
+  ["cleanupProvider", "provider"],
+  ["cleanupModel", "model"],
+  ["cleanupCloudMode", "cloudMode"],
+  ["cleanupCloudBaseUrl", "cloudBaseUrl"],
+  ["cleanupRemoteUrl", "remoteUrl"],
+  ["cleanupCustomApiKey", "customApiKey"],
+];
+
+// Fan a cleanup config out to all five LLM scopes; the four non-cleanup scopes
+// mirror the routing fields that are set plus the derived mode (each tab selects
+// on its mode). The endpoint and key ride along so a self-hosted or custom
+// endpoint is reachable from every scope, not just the one onboarding wrote.
 export function buildReasoningScopePatches(settings, mode) {
   const dictationCleanup = { ...settings, cleanupMode: mode };
-  // The three non-cleanup scopes mirror only the cloud routing fields that are set.
-  const routing = {
-    ...(settings.cleanupProvider !== undefined ? { provider: settings.cleanupProvider } : {}),
-    ...(settings.cleanupModel !== undefined ? { model: settings.cleanupModel } : {}),
-    ...(settings.cleanupCloudMode !== undefined ? { cloudMode: settings.cleanupCloudMode } : {}),
-  };
+  const routing = Object.fromEntries(
+    MIRRORED_ROUTING_FIELDS.filter(([cleanupKey]) => settings[cleanupKey] !== undefined).map(
+      ([cleanupKey, field]) => [field, settings[cleanupKey]]
+    )
+  );
   return {
     dictationCleanup,
     noteFormatting: { mode, ...routing },
     dictationAgent: { mode, ...routing },
     chatIntelligence: { mode, ...routing },
+    dictationTranslation: { mode, ...routing },
   };
 }
 

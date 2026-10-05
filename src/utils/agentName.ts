@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { getSettings, useSettingsStore } from "../stores/settingsStore";
+import { agentNameDictionaryChanges } from "../helpers/agentNameDictionary";
 
 const AGENT_NAME_KEY = "agentName";
 const DEFAULT_AGENT_NAME = "OpenWhispr";
@@ -9,20 +10,14 @@ export const getAgentName = (): string => {
 };
 
 function syncAgentNameToDictionary(newName: string, oldName?: string): void {
-  let dictionary = [...getSettings().customDictionary];
+  const { add, remove } = agentNameDictionaryChanges(
+    getSettings().customDictionary,
+    newName,
+    oldName
+  );
+  if (add.length === 0 && remove.length === 0) return;
 
-  // Remove old agent name if it changed
-  if (oldName && oldName !== newName) {
-    dictionary = dictionary.filter((w) => w !== oldName);
-  }
-
-  // Add new name at the front if not already present
-  const trimmed = newName.trim();
-  if (trimmed && !dictionary.includes(trimmed)) {
-    dictionary = [trimmed, ...dictionary];
-  }
-
-  useSettingsStore.getState().setCustomDictionary(dictionary);
+  useSettingsStore.getState().updateCustomDictionary({ add, remove });
 }
 
 export const setAgentName = (name: string): void => {

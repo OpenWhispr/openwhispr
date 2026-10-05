@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const { app } = require("electron");
 const debugLogger = require("./debugLogger");
+const { parseDbTimestamp } = require("./dbTimestamp");
 
 class AudioStorageManager {
   constructor() {
@@ -23,8 +24,10 @@ class AudioStorageManager {
 
   _buildFilename(transcriptionId, timestamp) {
     if (timestamp) {
-      const d = new Date(timestamp);
-      if (!isNaN(d.getTime())) {
+      // Named in the user's own wall clock, so the stored instant has to be
+      // resolved before it is read -- a bare SQLite timestamp is UTC, not local.
+      const d = parseDbTimestamp(timestamp);
+      if (d) {
         const pad = (n) => String(n).padStart(2, "0");
         const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
         const time = `${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;

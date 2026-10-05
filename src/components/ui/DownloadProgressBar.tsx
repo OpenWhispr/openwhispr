@@ -1,4 +1,4 @@
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "../icons";
 import { formatETA, type DownloadProgress } from "../../hooks/useModelDownload";
 
 interface DownloadProgressBarProps {
@@ -55,7 +55,7 @@ export function DownloadProgressBar({
               )}
               {etaText && (
                 <>
-                  <span className="text-xs text-muted-foreground/30">·</span>
+                  <span className="text-xs text-muted-foreground/70">·</span>
                   <span className="text-xs text-muted-foreground/70 tabular-nums">{etaText}</span>
                 </>
               )}

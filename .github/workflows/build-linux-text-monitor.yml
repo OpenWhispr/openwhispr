@@ -30,12 +30,16 @@ jobs:
 
       - name: Compile Linux Text Monitor
         run: |
-          gcc -O2 resources/linux-text-monitor.c -o linux-text-monitor $(pkg-config --cflags --libs atspi-2)
+          gcc -O2 resources/linux-text-monitor.c -o linux-text-monitor $(pkg-config --cflags --libs atspi-2) -lgobject-2.0
 
       - name: Verify binary
         run: |
           file linux-text-monitor
-          test -f linux-text-monitor || { echo "Binary not found"; exit 1; }
+          test -x linux-text-monitor || { echo "Binary not found or not executable"; exit 1; }
+          ldd linux-text-monitor
+          ldd linux-text-monitor | grep -q "not found" && { echo "Unresolved shared library dependency"; exit 1; }
+          ldd linux-text-monitor | grep -q libgobject-2.0.so || { echo "libgobject-2.0 not linked - explicit -lgobject-2.0 flag may have regressed"; exit 1; }
+          exit 0
 
       - name: Create tar.gz archive
         run: |

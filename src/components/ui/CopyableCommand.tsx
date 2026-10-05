@@ -1,13 +1,24 @@
 import { useState, useCallback } from "react";
-import { Copy, Check } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { Copy, Check } from "../icons";
 
 interface CopyableCommandProps {
   command: string;
   label?: string;
+  /** Names what the button copies, e.g. "Copy MCP URL"; defaults to "Copy". */
+  copyLabel?: string;
+  onCopied?: () => void;
   className?: string;
 }
 
-export function CopyableCommand({ command, label, className = "" }: CopyableCommandProps) {
+export function CopyableCommand({
+  command,
+  label,
+  copyLabel,
+  onCopied,
+  className = "",
+}: CopyableCommandProps) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(() => {
@@ -15,21 +26,25 @@ export function CopyableCommand({ command, label, className = "" }: CopyableComm
       .writeText(command)
       .then(() => {
         setCopied(true);
+        onCopied?.();
         setTimeout(() => setCopied(false), 2000);
       })
       .catch(() => {});
-  }, [command]);
+  }, [command, onCopied]);
 
   return (
     <div className={className}>
       {label && <div className="text-xs text-muted-foreground mb-1">{label}</div>}
-      <div className="relative bg-card border border-border p-3 rounded-md font-mono text-xs overflow-x-auto">
+      <div
+        dir="ltr"
+        className="relative bg-card border border-border p-3 rounded-md font-mono text-xs overflow-x-auto"
+      >
         <span className="text-foreground pr-8">{command}</span>
         <button
           type="button"
           onClick={handleCopy}
-          aria-label={copied ? "Copied" : "Copy command"}
-          className="absolute top-2 right-2 h-6 w-6 flex items-center justify-center rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/50 active:scale-95 transition-all"
+          aria-label={copied ? t("common.copied") : (copyLabel ?? t("common.copy"))}
+          className="absolute top-2 right-2 h-6 w-6 flex items-center justify-center rounded text-muted-foreground/70 hover:text-muted-foreground hover:bg-muted/50 active:scale-95 transition-all"
         >
           {copied ? (
             <Check className="w-3.5 h-3.5 text-success" />

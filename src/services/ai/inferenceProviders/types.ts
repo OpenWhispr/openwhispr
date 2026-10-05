@@ -33,5 +33,7 @@ export interface ProviderCallParams {
 
 export interface InferenceProvider {
   readonly id: string;
+  /** True when this client can send `config.screenContext` as image content. */
+  readonly supportsImages?: boolean;
   call(params: ProviderCallParams): Promise<string>;
 }

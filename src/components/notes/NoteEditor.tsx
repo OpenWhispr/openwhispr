@@ -1,27 +1,53 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback, type ComponentProps } from "react";
 import { useTranslation } from "react-i18next";
+import { useUiLocale } from "../../hooks/useUiLocale";
 import {
-  Download,
   Loader2,
   FileText,
   Sparkles,
   AlignLeft,
   MessageSquareText,
-  Calendar,
   LinkIcon,
+  Link2,
+  Lock,
   FolderOpen,
   Search,
   Plus,
   Check,
-  Share2,
-} from "lucide-react";
-import ShareNoteDialog from "./ShareNoteDialog";
-import { useShareCacheEntry } from "../../stores/noteStore";
-import { SHARING_ENABLED } from "../../lib/features";
+  ChevronDown,
+  ShieldCheck,
+  Users,
+} from "../icons";
+import ShareNoteDialog, { type NoteExportOption } from "./ShareNoteDialog";
+import { reconcileLocalShareState } from "./shareNoteRules";
+import {
+  canOrganizeNote,
+  noteCapabilities,
+  resolveNotePermission,
+  type NoteAclState,
+} from "../../lib/notePermissions";
+import { ownsNote } from "../../lib/spacePermissions";
+import SpaceSettingsDialog from "./SpaceSettingsDialog";
+import {
+  useShareCacheEntry,
+  useNoteConflict,
+  useSpaces,
+  clearNoteConflict,
+  navigateToContainer,
+  persistNoteShareState,
+  updateNoteInStore,
+  updateShareCache,
+} from "../../stores/noteStore";
+import { NoteSharingService } from "../../services/NoteSharingService";
+import { fetchSpaceRoster } from "../../hooks/useSpaceRoster";
+import { useAuth } from "../../hooks/useAuth";
 import { RichTextEditor } from "../ui/RichTextEditor";
 import type { Editor } from "@tiptap/react";
 import { MeetingTranscriptChat, SelectionBar } from "./MeetingTranscriptChat";
-import type { TranscriptSegment } from "../../stores/meetingRecordingStore";
+import {
+  useMeetingRecordingStore,
+  type TranscriptSegment,
+} from "../../stores/meetingRecordingStore";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -30,73 +56,172 @@ import {
   DropdownMenuSeparator,
 } from "../ui/dropdown-menu";
 import { cn } from "../lib/utils";
-import type { NoteItem, FolderItem } from "../../types/electron";
+import { PAGE_CONTENT_WIDTH_CLASS } from "../ui/pageWidth";
+import {
+  SPLIT_BUTTON_DIVIDER_CLASS,
+  SPLIT_BUTTON_GROUP_CLASS,
+  SPLIT_BUTTON_SEGMENT_CLASS,
+} from "../ui/splitButton";
+import type { NoteItem, FolderItem, ActionItem, ActionKind } from "../../types/electron";
 import type { ActionProcessingState } from "../../hooks/useActionProcessing";
+import type { NoteActionProgress } from "../../stores/actionProcessingStore";
 import ActionProcessingOverlay from "./ActionProcessingOverlay";
 import NoteBottomBar from "./NoteBottomBar";
+import NoteRecordControl, { RecordingWave } from "./NoteRecordControl";
+import ThemedEmptyIllustration from "../ui/ThemedEmptyIllustration";
+import transcriptsEmptyLight from "../../assets/empty-states/notes-transcripts-light.svg";
+import transcriptsEmptyDark from "../../assets/empty-states/notes-transcripts-dark.svg";
+import { Button } from "../ui/button";
 import EmbeddedChat, { type EmbeddedChatMode } from "./EmbeddedChat";
 import { useEmbeddedChat } from "../../hooks/useEmbeddedChat";
-import { normalizeDbDate } from "../../utils/dateFormatting";
+import ActionChips from "./ActionChips";
+import TemplatePicker from "./TemplatePicker";
+import {
+  getActionCta,
+  getActionName,
+  initializeActions,
+  resolveTemplate,
+  useActionsOfKind,
+} from "../../stores/actionStore";
+import { compileChatActionPrompt } from "../../helpers/templatePrompts";
+import type { SlashCommand } from "../chat/slashCommands";
+import { formatNoteDate, formatRelativeTime, formatShortDate } from "../../utils/dateFormatting";
+import {
+  buildLlmTranscript,
+  buildMeetingContext,
+  collectKnownPeople,
+  type MeetingIdentity,
+} from "../../utils/llmTranscript";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
 import {
   applyTranscriptSpeakerPatch,
   lockTranscriptSpeaker,
-  mergeTranscriptSegments,
   serializeTranscriptSegments,
 } from "../../utils/transcriptSpeakerState";
 import NoteParticipants from "./NoteParticipants";
-import type { CalendarAttendee } from "../../types/calendar";
+import { parseNoteParticipants } from "../../utils/noteAttendees";
+import { observeFloatingChatLayout } from "./floatingChatLayout";
+import {
+  NOTE_META_CHIP_CLASS,
+  defaultFolderDisplayName,
+  folderMatchesQuery,
+  shouldOfferMeetingSummary,
+} from "./shared";
 
-function formatNoteDate(dateStr: string): string {
-  const date = normalizeDbDate(dateStr);
-  if (Number.isNaN(date.getTime())) return "";
-  const datePart = date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-  const timePart = date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  return `${datePart} \u00b7 ${timePart}`;
-}
+const SEGMENT_BUTTON_CLASS =
+  "relative z-1 flex h-[26px] items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors duration-150 @max-[400px]/note-editor:gap-1 @max-[400px]/note-editor:px-2 @max-[400px]/note-editor:text-[11px] @max-[330px]/note-editor:[&>svg]:hidden @max-[330px]/note-editor:[&>span[aria-hidden]]:hidden";
 
-function formatShortDate(dateStr: string): string {
-  const date = normalizeDbDate(dateStr);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
+const TRANSCRIPT_EXPORT_LABEL_KEYS = {
+  txt: "notes.editor.asTranscriptText",
+  srt: "notes.editor.asSubtitles",
+  md: "notes.editor.asTranscriptMarkdown",
+  json: "notes.editor.asJson",
+} as const;
+const NOTE_EXPORT_LABEL_KEYS = {
+  md: "notes.editor.asMarkdown",
+  txt: "notes.editor.asPlainText",
+} as const;
 
 export interface Enhancement {
   content: string;
   isStale: boolean;
-  onChange: (content: string) => void;
+  onChange: (sourceNoteId: number, content: string) => void;
 }
 
 type MeetingViewMode = "raw" | "transcript" | "enhanced";
 
+type SpeakerProfileOption = { id?: number; display_name: string; email: string | null };
+
+function buildKnownSpeakers(
+  profiles: SpeakerProfileOption[],
+  segments: TranscriptSegment[],
+  mappings: Record<string, string>
+): SpeakerProfileOption[] {
+  const seen = new Set<string>();
+  const list: SpeakerProfileOption[] = [];
+  for (const p of profiles) {
+    const key = p.display_name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    list.push(p);
+  }
+  for (const segment of segments) {
+    if (!segment.speaker) continue;
+    const name = mappings[segment.speaker] || segment.speakerName;
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    list.push({ display_name: name, email: null });
+  }
+  return list;
+}
+
+type LiveMeetingTranscriptChatProps = Omit<
+  ComponentProps<typeof MeetingTranscriptChat>,
+  | "segments"
+  | "micPartial"
+  | "systemPartial"
+  | "systemPartialSpeakerId"
+  | "systemPartialSpeakerName"
+  | "isRecording"
+>;
+
+// Subscribes to live transcript state at this leaf so per-update re-renders
+// don't reach the editor/chat (which would drop text selection).
+function LiveMeetingTranscriptChat({
+  speakerProfiles,
+  speakerMappings,
+  ...props
+}: LiveMeetingTranscriptChatProps) {
+  const segments = useMeetingRecordingStore((s) => s.segments);
+  const micPartial = useMeetingRecordingStore((s) => s.micPartial);
+  const systemPartial = useMeetingRecordingStore((s) => s.systemPartial);
+  const systemPartialSpeakerId = useMeetingRecordingStore((s) => s.systemPartialSpeakerId);
+  const systemPartialSpeakerName = useMeetingRecordingStore((s) => s.systemPartialSpeakerName);
+
+  const knownSpeakers = useMemo(
+    () => buildKnownSpeakers(speakerProfiles ?? [], segments, speakerMappings ?? {}),
+    [segments, speakerMappings, speakerProfiles]
+  );
+
+  return (
+    <MeetingTranscriptChat
+      {...props}
+      isRecording
+      segments={segments}
+      micPartial={micPartial}
+      systemPartial={systemPartial}
+      systemPartialSpeakerId={systemPartialSpeakerId}
+      systemPartialSpeakerName={systemPartialSpeakerName}
+      speakerMappings={speakerMappings}
+      speakerProfiles={knownSpeakers}
+    />
+  );
+}
+
 interface NoteEditorProps {
   note: NoteItem;
-  onTitleChange: (title: string) => void;
-  onContentChange: (content: string) => void;
+  onTitleChange: (sourceNoteId: number, title: string) => void;
+  onContentChange: (sourceNoteId: number, content: string) => void;
   isSaving: boolean;
   isRecording: boolean;
   isProcessing: boolean;
+  recordingAllowed?: boolean;
   onStartRecording: () => void;
   onStopRecording: () => void;
   onExportNote?: (format: "md" | "txt") => void;
   onExportTranscript?: (format: "txt" | "srt" | "json" | "md") => void;
   enhancement?: Enhancement;
-  actionPicker?: React.ReactNode;
+  /** Runs a template, or an action that edits the summary, on this note. */
+  onRunNoteAction?: (action: ActionItem) => void;
+  onManageActions?: (kind: ActionKind) => void;
   actionProcessingState?: ActionProcessingState;
   actionName?: string | null;
+  actionProgress?: NoteActionProgress | null;
+  onCancelAction?: () => void;
   diarizationSessionId?: string | null;
-  meetingTranscript?: string;
-  meetingSegments?: TranscriptSegment[];
-  meetingMicPartial?: string;
-  meetingSystemPartial?: string;
-  meetingSystemPartialSpeakerId?: string | null;
-  meetingSystemPartialSpeakerName?: string | null;
   onLiveSpeakerLock?: (speakerId: string, displayName: string) => void;
-  liveTranscript?: string;
   sessionDiarizationEnabled?: boolean;
   sessionExpectedCount?: number;
   userTouchedStepper?: boolean;
@@ -107,6 +232,8 @@ interface NoteEditorProps {
   folders?: FolderItem[];
   onMoveToFolder?: (noteId: number, folderId: number) => void;
   onCreateFolderAndMove?: (noteId: number, folderName: string) => void;
+  /** Cancels the owner's debounced autosaves before an external copy is applied. */
+  onCancelPendingSaves?: (noteId: number) => void;
 }
 
 export default function NoteEditor({
@@ -116,23 +243,20 @@ export default function NoteEditor({
   isSaving,
   isRecording,
   isProcessing,
+  recordingAllowed = true,
   onStartRecording,
   onStopRecording,
   onExportNote,
   onExportTranscript,
   enhancement,
-  actionPicker,
+  onRunNoteAction,
+  onManageActions,
   actionProcessingState,
   actionName,
+  actionProgress,
+  onCancelAction,
   diarizationSessionId,
-  meetingTranscript,
-  meetingSegments,
-  meetingMicPartial,
-  meetingSystemPartial,
-  meetingSystemPartialSpeakerId,
-  meetingSystemPartialSpeakerName,
   onLiveSpeakerLock,
-  liveTranscript,
   sessionDiarizationEnabled,
   sessionExpectedCount,
   userTouchedStepper,
@@ -143,36 +267,176 @@ export default function NoteEditor({
   folders,
   onMoveToFolder,
   onCreateFolderAndMove,
+  onCancelPendingSaves,
 }: NoteEditorProps) {
   const { t } = useTranslation();
-  const [viewMode, setViewMode] = useState<MeetingViewMode>("raw");
+  const locale = useUiLocale();
+  const defaultViewMode: MeetingViewMode = enhancement ? "enhanced" : "raw";
+  const [selectedViewMode, setSelectedViewMode] = useState<MeetingViewMode>(defaultViewMode);
+  // Stored as chosen, clamped on read: AI Summary is the only tab that can stop
+  // rendering, and a tab that no longer renders can never be the current one.
+  const viewMode: MeetingViewMode =
+    selectedViewMode === "enhanced" && !enhancement ? "raw" : selectedViewMode;
   const [chatMode, setChatMode] = useState<EmbeddedChatMode>("hidden");
+  // The in-view chat mounts on its first open and then stays, so it can fade out as it
+  // closes; a note whose chat is never opened doesn't render its conversation at all.
+  const [inViewChatMounted, setInViewChatMounted] = useState(false);
+  if (chatMode === "floating" && !inViewChatMounted) setInViewChatMounted(true);
+  const [chatDraft, setChatDraft] = useState("");
+  const handleChatModeChange = useCallback((mode: EmbeddedChatMode) => {
+    if (
+      mode === "hidden" &&
+      document.activeElement instanceof HTMLElement &&
+      document.activeElement.closest("[data-note-chat-panel]")
+    ) {
+      document.activeElement.blur();
+    }
+    setChatMode(mode);
+  }, []);
   const [folderSearch, setFolderSearch] = useState("");
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [isDiarizing, setIsDiarizing] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareIntent, setShareIntent] = useState<"open" | "copy-link">("open");
+  const [membersDialogOpen, setMembersDialogOpen] = useState(false);
+  const [aclRetryVersion, setAclRetryVersion] = useState(0);
+  const [aclRequest, setAclRequest] = useState<{
+    cloudId: string;
+    state: Extract<NoteAclState, "loading" | "unavailable">;
+  } | null>(null);
+  const { isSignedIn, user } = useAuth();
   const shareCache = useShareCacheEntry(note.cloud_id);
-  const isShared = (shareCache?.share.visibility ?? "private") !== "private";
+  const spaces = useSpaces();
+  const space = useMemo(
+    () => spaces.find((s) => s.id === note.space_id) ?? null,
+    [spaces, note.space_id]
+  );
+  const isTeamNote = space?.kind === "team";
+  // Persisted flag is the restart-safe truth; the live cache overlays it for
+  // the current session (it reflects server state before the flag persists).
+  const isShared = shareCache ? shareCache.share.visibility !== "private" : Boolean(note.is_shared);
+  const aclState: NoteAclState = shareCache
+    ? "loaded"
+    : !note.cloud_id || !isSignedIn
+      ? "unavailable"
+      : aclRequest?.cloudId === note.cloud_id
+        ? aclRequest.state
+        : "loading";
+  const ownedByUser = ownsNote(note, user?.id);
+  const notePermission = resolveNotePermission({
+    cachedPermission: shareCache?.access?.my_permission,
+    aclState,
+    isTeamNote,
+    locallyOwned: ownedByUser,
+  });
+  const shareCapabilities = noteCapabilities(notePermission);
+  const canEditNote = shareCapabilities.canEdit;
+  // Re-filing is owner-only on shared personal notes (a denied folder_id
+  // PATCH would fork an unexpected Personal copy); team members keep
+  // same-space folder moves.
+  const canMoveToFolders = canOrganizeNote(notePermission, {
+    isTeamNote,
+    hasCloudCopy: Boolean(note.cloud_id),
+  });
+  useEffect(() => {
+    if (!isSignedIn || !note.cloud_id || shareCache) return;
+    const cloudId = note.cloud_id;
+    let cancelled = false;
+    setAclRequest({ cloudId, state: "loading" });
+    NoteSharingService.getShareSettings(cloudId)
+      .then((res) => {
+        if (cancelled) return;
+        updateShareCache(cloudId, (entry) => ({
+          share: res.share,
+          invitations: res.invitations,
+          access: res.access ?? entry?.access,
+          rawToken: entry?.rawToken ?? null,
+        }));
+        const update = reconcileLocalShareState(
+          { isShared: Boolean(note.is_shared), shareToken: note.share_token ?? null },
+          res.share
+        );
+        if (update) {
+          void persistNoteShareState(note.id, update).catch((err) =>
+            console.error("Share flag persist failed:", err)
+          );
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setAclRequest({ cloudId, state: "unavailable" });
+        console.error("Failed to load note permissions:", err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    aclRetryVersion,
+    isSignedIn,
+    note.cloud_id,
+    note.id,
+    note.is_shared,
+    note.share_token,
+    shareCache,
+  ]);
+  useEffect(() => {
+    if (
+      !isSignedIn ||
+      !note.cloud_id ||
+      shareCache ||
+      aclRequest?.cloudId !== note.cloud_id ||
+      aclRequest.state !== "unavailable"
+    ) {
+      return;
+    }
+    const retryWhenOnline = () => setAclRetryVersion((version) => version + 1);
+    window.addEventListener("online", retryWhenOnline);
+    return () => window.removeEventListener("online", retryWhenOnline);
+  }, [aclRequest, isSignedIn, note.cloud_id, shareCache]);
+  // A newer cloud copy arrived while this note had unpushed edits (plan §7.3).
+  const conflict = useNoteConflict(note.client_note_id);
+  const [conflictEditorName, setConflictEditorName] = useState<string | null>(null);
+  const conflictEditorId =
+    conflict?.updated_by_user_id && user?.id && conflict.updated_by_user_id !== user.id
+      ? conflict.updated_by_user_id
+      : null;
+  const conflictSpaceId = space?.cloud_space_id ?? null;
+  useEffect(() => {
+    if (!conflictEditorId || !conflictSpaceId) {
+      setConflictEditorName(null);
+      return;
+    }
+    let cancelled = false;
+    fetchSpaceRoster(conflictSpaceId)
+      .then((roster) => {
+        if (cancelled) return;
+        const member = roster.find((m) => m.user_id === conflictEditorId);
+        setConflictEditorName(member ? (member.name ?? member.email) : null);
+      })
+      .catch(() => {
+        if (!cancelled) setConflictEditorName(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [conflictEditorId, conflictSpaceId]);
   const [diarizedSegments, setDiarizedSegments] = useState<TranscriptSegment[] | null>(null);
   const [speakerMappings, setSpeakerMappings] = useState<Record<string, string>>({});
   const [speakerProfiles, setSpeakerProfiles] = useState<
     Array<{ id: number; display_name: string; email: string | null }>
   >([]);
   const editorRef = useRef<Editor | null>(null);
-  const displaySegmentsRef = useRef<TranscriptSegment[]>([]);
 
-  const embeddedChat = useEmbeddedChat({
-    noteId: note.id,
-    folderId: note.folder_id,
-    noteTitle: note.title,
-    noteContent: note.content,
-    noteTranscript: note.transcript ?? undefined,
-  });
+  const parsedParticipants = useMemo(
+    () => parseNoteParticipants(note.participants),
+    [note.participants]
+  );
+
   const titleRef = useRef<HTMLDivElement>(null);
   const prevNoteIdRef = useRef<number>(note.id);
-  const autoShowDoneRef = useRef(false);
 
+  const segmentScrollRef = useRef<HTMLDivElement>(null);
   const segmentContainerRef = useRef<HTMLDivElement>(null);
   const [indicatorStyle, setIndicatorStyle] = useState<React.CSSProperties>({ opacity: 0 });
   const scheduleUiUpdate = useCallback((callback: () => void) => {
@@ -180,58 +444,97 @@ export default function NoteEditor({
     return () => window.cancelAnimationFrame(frameId);
   }, []);
 
-  const effectiveTranscript = liveTranscript || meetingTranscript || note.transcript || "";
-  const hasMeetingTranscript = !isRecording && !!effectiveTranscript;
+  const hasMeetingTranscript = !!note.transcript;
 
   const filteredFolders = useMemo(
     () =>
       folderSearch && folders
-        ? folders.filter((f) => f.name.toLowerCase().includes(folderSearch.toLowerCase()))
+        ? folders.filter((f) => folderMatchesQuery(f, t, folderSearch))
         : (folders ?? []),
-    [folders, folderSearch]
+    [folders, folderSearch, t]
   );
 
   const displaySegments = useMemo<TranscriptSegment[]>(() => {
-    if (isRecording) return meetingSegments ?? [];
     if (diarizedSegments && diarizedSegments.length > 0) return diarizedSegments;
-    if (meetingSegments && meetingSegments.length > 0) return meetingSegments;
     return parseTranscriptSegments(note.transcript || "");
-  }, [diarizedSegments, isRecording, meetingSegments, note.transcript]);
+  }, [diarizedSegments, note.transcript]);
+
+  const templates = useActionsOfKind("template");
+  const noteActions = useActionsOfKind("action");
+  const chatActions = useMemo(() => noteActions.filter((a) => a.output === "chat"), [noteActions]);
+  // Regenerating keeps the note's template; a first summary uses the default.
+  const noteTemplate = resolveTemplate(templates, note.enhancement_template_id);
+  const isActionRunning = actionProcessingState === "processing";
+  const hasNoteMaterial = !!note.content.trim() || hasMeetingTranscript;
+  const canRunTemplate =
+    !!onRunNoteAction && !!noteTemplate && canEditNote && !isRecording && hasNoteMaterial;
+  // The AI Summary tab names the template that wrote the summary, when it still exists.
+  const summaryLabel =
+    noteTemplate && noteTemplate.client_id === note.enhancement_template_id
+      ? getActionName(noteTemplate, t)
+      : t("notes.editor.aiSummary");
 
   useEffect(() => {
-    displaySegmentsRef.current = displaySegments;
-  }, [displaySegments]);
+    initializeActions();
+  }, []);
 
   const hasChatSegments = displaySegments.length > 0;
+  const showSummaryCallout =
+    canRunTemplate &&
+    shouldOfferMeetingSummary({
+      isRecording,
+      hasTranscriptSegments: hasNoteMaterial,
+      hasSummary: !!enhancement,
+      canEdit: canEditNote,
+      isProcessingAction: actionProcessingState === "processing",
+    });
 
-  const knownSpeakers = useMemo(() => {
-    const seen = new Set<string>();
-    const list: Array<{ id?: number; display_name: string; email: string | null }> = [];
-    for (const p of speakerProfiles) {
-      const key = p.display_name.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      list.push(p);
-    }
-    for (const segment of displaySegments) {
-      if (!segment.speaker) continue;
-      const name = speakerMappings[segment.speaker] || segment.speakerName;
-      if (!name) continue;
-      const key = name.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      list.push({ display_name: name, email: null });
-    }
-    return list;
-  }, [displaySegments, speakerMappings, speakerProfiles]);
+  const knownSpeakers = useMemo(
+    () => buildKnownSpeakers(speakerProfiles, displaySegments, speakerMappings),
+    [displaySegments, speakerMappings, speakerProfiles]
+  );
 
-  const parsedParticipants = useMemo<CalendarAttendee[]>(() => {
-    try {
-      return note.participants ? JSON.parse(note.participants) : [];
-    } catch {
-      return [];
-    }
-  }, [note.participants]);
+  const meetingIdentity = useMemo<MeetingIdentity>(
+    () => ({
+      selfName: user?.name?.trim() || null,
+      selfEmail: user?.email?.trim() || null,
+      participants: parsedParticipants,
+    }),
+    [user?.name, user?.email, parsedParticipants]
+  );
+
+  const mentionPeople = useMemo(
+    () => collectKnownPeople(meetingIdentity, speakerMappings, displaySegments),
+    [meetingIdentity, speakerMappings, displaySegments]
+  );
+
+  // The chat reads the user's own meeting the way note formatting does: who the
+  // user is and named speakers, not the stored segment JSON. Invitees are left to
+  // the filtered attendee block that comes with connector tools (a chat without
+  // them names only speakers), and a teammate's mic lines aren't the user's.
+  const chatTranscript = useMemo(() => {
+    if (displaySegments.length === 0 || !ownedByUser) return note.transcript ?? undefined;
+    const selfLabel = meetingIdentity.selfName || t("notes.speaker.you");
+    return [
+      buildMeetingContext({ ...meetingIdentity, participants: [] }, selfLabel),
+      buildLlmTranscript(displaySegments, speakerMappings, selfLabel, t),
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  }, [displaySegments, meetingIdentity, note.transcript, ownedByUser, speakerMappings, t]);
+
+  const embeddedChat = useEmbeddedChat({
+    noteId: note.id,
+    folderId: note.folder_id,
+    noteTitle: note.title,
+    noteContent: note.content,
+    noteTranscript: chatTranscript,
+    noteSummary: enhancement?.content,
+    noteParticipants: parsedParticipants,
+    noteOwnedByUser: ownedByUser,
+    selfEmail: user?.email ?? null,
+    noteCalendarEventId: note.calendar_event_id,
+  });
 
   const refreshSpeakerProfiles = useCallback(() => {
     window.electronAPI?.getSpeakerProfiles?.().then((profiles) => {
@@ -245,13 +548,16 @@ export default function NoteEditor({
     });
   }, []);
 
-  const updateSegmentIndicator = useCallback(() => {
+  const syncSelectedSegment = useCallback(() => {
     const container = segmentContainerRef.current;
     if (!container) return;
 
-    const buttons = container.querySelectorAll<HTMLButtonElement>("[data-segment-button]");
+    const buttons = container.querySelectorAll<HTMLElement>("[data-segment-button]");
     const activeBtn = Array.from(buttons).find((btn) => btn.dataset.segmentValue === viewMode);
-    if (!activeBtn) return;
+    if (!activeBtn) {
+      setIndicatorStyle((style) => ({ ...style, opacity: 0 }));
+      return;
+    }
 
     const cr = container.getBoundingClientRect();
     const br = activeBtn.getBoundingClientRect();
@@ -261,24 +567,32 @@ export default function NoteEditor({
       transform: `translateX(${br.left - cr.left}px)`,
       opacity: 1,
     });
+
+    // Long translations can make the tab strip scroll; keep the selected tab in view.
+    const scroller = segmentScrollRef.current;
+    if (!scroller) return;
+    const sr = scroller.getBoundingClientRect();
+    if (br.left < sr.left) scroller.scrollLeft -= sr.left - br.left;
+    else if (br.right > sr.right) scroller.scrollLeft += br.right - sr.right;
   }, [viewMode]);
 
   useEffect(() => {
-    updateSegmentIndicator();
-  }, [updateSegmentIndicator]);
+    syncSelectedSegment();
+  }, [syncSelectedSegment]);
 
   useEffect(() => {
-    const observer = new ResizeObserver(() => updateSegmentIndicator());
+    const observer = new ResizeObserver(() => syncSelectedSegment());
     if (segmentContainerRef.current) observer.observe(segmentContainerRef.current);
+    if (segmentScrollRef.current) observer.observe(segmentScrollRef.current);
     return () => observer.disconnect();
-  }, [updateSegmentIndicator]);
+  }, [syncSelectedSegment]);
 
   const prevProcessingStateRef = useRef(actionProcessingState);
   useEffect(() => {
     let cancelScheduledUpdate: (() => void) | undefined;
 
     if (prevProcessingStateRef.current === "processing" && actionProcessingState === "success") {
-      cancelScheduledUpdate = scheduleUiUpdate(() => setViewMode("enhanced"));
+      cancelScheduledUpdate = scheduleUiUpdate(() => setSelectedViewMode("enhanced"));
     }
     prevProcessingStateRef.current = actionProcessingState;
 
@@ -288,22 +602,20 @@ export default function NoteEditor({
   useEffect(() => {
     if (note.id !== prevNoteIdRef.current) {
       prevNoteIdRef.current = note.id;
-      autoShowDoneRef.current = false;
       return scheduleUiUpdate(() => {
         setChatMode("hidden");
+        setChatDraft("");
         setDiarizedSegments(null);
         setIsDiarizing(false);
         setSpeakerMappings({});
-        if (!isRecording) {
-          setViewMode("raw");
-        }
+        setSelectedViewMode(defaultViewMode);
         if (titleRef.current && titleRef.current.textContent !== note.title) {
           titleRef.current.textContent = note.title || "";
         }
         editorRef.current?.commands.focus();
       });
     }
-  }, [isRecording, note.id, note.title, scheduleUiUpdate]);
+  }, [note.id, note.title, defaultViewMode, scheduleUiUpdate]);
 
   useEffect(() => {
     window.electronAPI?.getSpeakerMappings?.(note.id).then((mappings) => {
@@ -313,17 +625,6 @@ export default function NoteEditor({
     });
     refreshSpeakerProfiles();
   }, [note.id, refreshSpeakerProfiles]);
-
-  useEffect(() => {
-    if (
-      !autoShowDoneRef.current &&
-      embeddedChat.activeConversationId &&
-      embeddedChat.messages.length > 0
-    ) {
-      autoShowDoneRef.current = true;
-      return scheduleUiUpdate(() => setChatMode("floating"));
-    }
-  }, [embeddedChat.activeConversationId, embeddedChat.messages.length, scheduleUiUpdate]);
 
   useEffect(() => {
     if (titleRef.current && titleRef.current.textContent !== note.title) {
@@ -341,45 +642,28 @@ export default function NoteEditor({
     prevRecordingForDiarizationRef.current = isRecording;
   }, [diarizationSessionId, isRecording, scheduleUiUpdate]);
 
+  // Persistence happens in meetingRecordingStore's module-level listener
+  // (#1495); this only mirrors a published result into the rendered note's UI.
+  const completedDiarization = useMeetingRecordingStore((s) => s.completedDiarization);
   useEffect(() => {
-    const expectedSession = diarizationSessionId;
-    const cleanup = window.electronAPI?.onMeetingDiarizationComplete?.(async (data) => {
-      if (!expectedSession || data?.sessionId !== expectedSession) return;
+    if (!completedDiarization || completedDiarization.noteId !== note.id) return;
+    // Consume so a remount can't repaint this overlay over newer edits; the
+    // transcript itself is already persisted.
+    useMeetingRecordingStore.setState({ completedDiarization: null });
+    setIsDiarizing(false);
 
-      setIsDiarizing(false);
+    const enriched = completedDiarization.segments;
+    if (enriched.length === 0) return;
+    setDiarizedSegments(enriched);
 
-      if (!data?.segments?.length) return;
-
-      const persisted = await window.electronAPI?.getNote?.(note.id);
-      const existing = persisted?.transcript
-        ? parseTranscriptSegments(persisted.transcript)
-        : displaySegmentsRef.current;
-
-      const enriched = mergeTranscriptSegments(
-        existing,
-        data.segments.map((s: any, i: number) => ({
-          ...s,
-          id: s.id || `diarized-${i}`,
-        }))
-      );
-      setDiarizedSegments(enriched);
-
-      window.electronAPI.updateNote(note.id, { transcript: serializeTranscriptSegments(enriched) });
-
-      if (data.speakerEmbeddings) {
-        window.electronAPI?.saveNoteSpeakerEmbeddings?.(note.id, data.speakerEmbeddings);
-      }
-
-      const autoMappings: Record<string, string> = {};
-      for (const s of enriched) {
-        if (s.speakerName && s.speaker) autoMappings[s.speaker] = s.speakerName;
-      }
-      if (Object.keys(autoMappings).length > 0) {
-        setSpeakerMappings((prev) => ({ ...autoMappings, ...prev }));
-      }
-    });
-    return () => cleanup?.();
-  }, [note.id, diarizationSessionId]);
+    const autoMappings: Record<string, string> = {};
+    for (const s of enriched) {
+      if (s.speakerName && s.speaker) autoMappings[s.speaker] = s.speakerName;
+    }
+    if (Object.keys(autoMappings).length > 0) {
+      setSpeakerMappings((prev) => ({ ...autoMappings, ...prev }));
+    }
+  }, [completedDiarization, note.id]);
 
   const persistDisplaySegments = useCallback(
     async (nextSegments: TranscriptSegment[], updateOverlay = true) => {
@@ -524,9 +808,9 @@ export default function NoteEditor({
   const handleTitleInput = useCallback(() => {
     if (titleRef.current) {
       const text = titleRef.current.textContent || "";
-      onTitleChange(text);
+      onTitleChange(note.id, text);
     }
-  }, [onTitleChange]);
+  }, [note.id, onTitleChange]);
 
   const handleTitleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
@@ -541,26 +825,45 @@ export default function NoteEditor({
     document.execCommand("insertText", false, text);
   }, []);
 
-  const prevRecordingRef = useRef(false);
-  useEffect(() => {
-    if (isRecording && !prevRecordingRef.current) {
-      scheduleUiUpdate(() => setViewMode("transcript"));
-    }
-    prevRecordingRef.current = isRecording;
-  }, [isRecording, scheduleUiUpdate]);
+  const contentScrollRef = useRef<HTMLDivElement>(null);
+
+  const getActiveScroller = useCallback((root: HTMLDivElement): HTMLElement | null => {
+    const candidates = [root, ...Array.from(root.querySelectorAll<HTMLElement>("*"))].filter(
+      (el) => el.scrollHeight - el.clientHeight > 2
+    );
+    if (!candidates.length) return null;
+    return candidates.reduce((a, b) =>
+      b.scrollHeight - b.clientHeight > a.scrollHeight - a.clientHeight ? b : a
+    );
+  }, []);
+
+  const floatingChatPanelRef = useCallback(
+    (panel: HTMLDivElement, container: HTMLElement): (() => void) | undefined => {
+      const contentRoot = contentScrollRef.current;
+      if (!contentRoot) return undefined;
+
+      return observeFloatingChatLayout({
+        panel,
+        container,
+        contentRoot,
+        getActiveScroller: (): HTMLElement | null => getActiveScroller(contentRoot),
+      });
+    },
+    [getActiveScroller]
+  );
 
   const handleContentChange = useCallback(
     (newValue: string) => {
-      onContentChange(newValue);
+      onContentChange(note.id, newValue);
     },
-    [onContentChange]
+    [note.id, onContentChange]
   );
 
   const handleEnhancedChange = useCallback(
     (value: string) => {
-      enhancement?.onChange(value);
+      enhancement?.onChange(note.id, value);
     },
-    [enhancement]
+    [enhancement, note.id]
   );
 
   const handleAskSubmit = useCallback(
@@ -568,10 +871,62 @@ export default function NoteEditor({
       if (chatMode === "hidden") {
         setChatMode("floating");
       }
+      // The chat is still replying: keep the question as the draft instead of dropping it.
+      if (embeddedChat.agentState !== "idle") {
+        setChatDraft(text);
+        return;
+      }
       embeddedChat.sendMessage(text);
     },
     [chatMode, embeddedChat]
   );
+
+  // The chat shows the action's name while the model gets its prompt.
+  const handleChatAction = useCallback(
+    (action: ActionItem) => {
+      if (embeddedChat.agentState !== "idle") return;
+      if (chatMode === "hidden") {
+        setChatMode("floating");
+      }
+      void embeddedChat.sendMessage(getActionCta(action, t), {
+        requestText: compileChatActionPrompt(action, { fromSummary: !!enhancement }),
+      });
+    },
+    [chatMode, embeddedChat, enhancement, t]
+  );
+
+  const runAction = useCallback(
+    (action: ActionItem) => {
+      if (action.output === "chat") {
+        handleChatAction(action);
+        return;
+      }
+      // Uncover the summary the action rewrites; a docked chat already sits beside it.
+      if (chatMode === "floating") handleChatModeChange("hidden");
+      onRunNoteAction?.(action);
+    },
+    [chatMode, handleChatAction, handleChatModeChange, onRunNoteAction]
+  );
+  const offersActions =
+    !isRecording &&
+    canEditNote &&
+    !(viewMode === "transcript" && !hasMeetingTranscript && !hasChatSegments);
+  // A summary action waits for a run already writing the summary; a chat action
+  // for the reply the chat is still writing.
+  const canRunAction = (action: ActionItem) =>
+    hasNoteMaterial &&
+    (action.output === "summary" ? !isActionRunning : embeddedChat.agentState === "idle");
+  const actionCommands: SlashCommand[] | undefined = offersActions
+    ? noteActions.map((action) => ({
+        id: action.client_id,
+        label: getActionName(action, t),
+        hint: t(
+          action.output === "summary" ? "notes.actions.output.summary" : "notes.actions.output.chat"
+        ),
+        disabled: !canRunAction(action),
+        run: () => runAction(action),
+      }))
+    : undefined;
 
   const handleChatInputFocus = useCallback(() => {
     if (chatMode === "hidden") {
@@ -579,43 +934,121 @@ export default function NoteEditor({
     }
   }, [chatMode]);
 
-  const noteDate = formatNoteDate(note.created_at);
-  const shortDate = formatShortDate(note.created_at);
+  // Apply the newer cloud copy over the local edits, keeping the note's
+  // current local placement.
+  const handleConflictRefresh = useCallback(async () => {
+    if (!conflict) return;
+    // Cancel any queued autosave FIRST: a pending debounced save holds the
+    // pre-refresh buffer and would both block the editor resync and clobber
+    // the cloud copy in SQLite a second later.
+    onCancelPendingSaves?.(note.id);
+    const fresh = await window.electronAPI.upsertNoteFromCloud?.(
+      conflict as unknown as Record<string, unknown>,
+      note.folder_id,
+      note.space_id
+    );
+    clearNoteConflict(note.client_note_id);
+    // With no save pending, the owner's external-update resync applies the
+    // fresh copy to the visible editor buffer.
+    if (fresh) updateNoteInStore(fresh);
+  }, [conflict, note.client_note_id, note.folder_id, note.id, note.space_id, onCancelPendingSaves]);
+
+  // Keep the local edits, overwriting the cloud revision the user just saw.
+  // Advancing the base first is what lets the next push succeed instead of
+  // 409ing against the same conflict and re-raising the banner.
+  const handleConflictKeep = useCallback(() => {
+    if (conflict) void window.electronAPI.setNoteCloudBase?.(note.id, conflict.updated_at);
+    clearNoteConflict(note.client_note_id);
+  }, [conflict, note.id, note.client_note_id]);
+
+  const noteDate = formatNoteDate(note.created_at, locale);
+  const shortDate = formatShortDate(note.created_at, locale);
+
+  const openShare = useCallback((intent: "open" | "copy-link") => {
+    setShareIntent(intent);
+    setShareDialogOpen(true);
+  }, []);
+
+  const exportOptions = useMemo<NoteExportOption[]>(() => {
+    if (viewMode === "transcript" && onExportTranscript) {
+      return (["txt", "srt", "md", "json"] as const).map((format) => ({
+        id: format,
+        label: t(TRANSCRIPT_EXPORT_LABEL_KEYS[format]),
+        onSelect: () => onExportTranscript(format),
+      }));
+    }
+    if (!onExportNote) return [];
+    return (["md", "txt"] as const).map((format) => ({
+      id: format,
+      label: t(NOTE_EXPORT_LABEL_KEYS[format]),
+      onSelect: () => onExportNote(format),
+    }));
+  }, [viewMode, onExportTranscript, onExportNote, t]);
 
   return (
     <div className="flex h-full min-h-0">
-      <div className="flex-1 min-w-0 flex flex-col">
-        <div className="px-5 pt-4 pb-0">
+      <div className="@container/note-editor flex-1 min-w-0 flex flex-col">
+        <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-5 pt-5 pb-0")}>
           <div
+            dir="auto"
             ref={titleRef}
-            contentEditable
+            contentEditable={canEditNote}
             suppressContentEditableWarning
             onInput={handleTitleInput}
             onKeyDown={handleTitleKeyDown}
             onPaste={handleTitlePaste}
             data-placeholder={t("notes.editor.untitled")}
-            className="text-base font-semibold text-foreground bg-transparent outline-none tracking-[-0.01em] empty:before:content-[attr(data-placeholder)] empty:before:text-foreground/15 empty:before:pointer-events-none"
+            className="text-3xl font-medium leading-tight text-foreground bg-transparent outline-none tracking-[-0.01em] [overflow-wrap:anywhere] @max-[400px]/note-editor:text-[26px] empty:before:content-[attr(data-placeholder)] empty:before:text-foreground/45 empty:before:pointer-events-none"
             role="textbox"
             aria-label={t("notes.editor.noteTitle")}
           />
-          <div className="flex items-center gap-2 mt-1.5">
-            {shortDate && (
-              <span
-                className="inline-flex items-center gap-1.5 text-[11px] text-foreground/50 dark:text-foreground/35"
-                title={noteDate}
-              >
-                <Calendar size={11} className="shrink-0" />
-                {shortDate}
-              </span>
-            )}
+          <div className="mt-3 flex flex-wrap items-center gap-2 [&>*]:max-w-full">
+            <NoteParticipants
+              noteId={note.id}
+              participants={parsedParticipants}
+              dateLabel={shortDate || undefined}
+              dateTitle={noteDate}
+            />
             {calendarEventName && (
-              <span className="inline-flex items-center gap-1.5 text-[11px] text-foreground/50 dark:text-foreground/35">
-                <LinkIcon size={11} className="shrink-0" />
-                <span className="truncate max-w-40">{calendarEventName}</span>
+              <span className={cn(NOTE_META_CHIP_CLASS, "cursor-default")}>
+                <LinkIcon size={14} className="shrink-0 text-foreground/60" />
+                <span className="max-w-40 truncate">{calendarEventName}</span>
               </span>
             )}
-            <NoteParticipants noteId={note.id} participants={parsedParticipants} />
-            {folders && onMoveToFolder && (
+            {isTeamNote && space && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => navigateToContainer(space.id, null)}
+                  className={NOTE_META_CHIP_CLASS}
+                >
+                  {space.emoji ? (
+                    <span className="text-[11px] leading-none shrink-0" aria-hidden="true">
+                      {space.emoji}
+                    </span>
+                  ) : (
+                    <Users size={14} className="shrink-0 text-foreground/60" />
+                  )}
+                  <span dir="auto" className="truncate max-w-32">
+                    {space.name}
+                  </span>
+                </button>
+                {folders && onMoveToFolder && (canMoveToFolders || folderName) && (
+                  <span aria-hidden="true" className="text-xs text-foreground/45">
+                    /
+                  </span>
+                )}
+              </>
+            )}
+            {folders && onMoveToFolder && !canMoveToFolders && folderName && (
+              <span className={cn(NOTE_META_CHIP_CLASS, "cursor-default")}>
+                <FolderOpen size={14} className="shrink-0 text-foreground/60" />
+                <span dir="auto" className="truncate">
+                  {folderName}
+                </span>
+              </span>
+            )}
+            {folders && onMoveToFolder && canMoveToFolders && (
               <DropdownMenu
                 onOpenChange={(open) => {
                   if (!open) {
@@ -626,9 +1059,15 @@ export default function NoteEditor({
                 }}
               >
                 <DropdownMenuTrigger asChild>
-                  <button className="inline-flex items-center gap-1.5 text-[11px] px-1.5 py-0.5 rounded-md border border-border/70 dark:border-white/25 text-foreground/50 dark:text-foreground/35 hover:text-foreground/60 hover:border-border/60 hover:bg-foreground/3 dark:hover:text-foreground/40 dark:hover:border-white/10 dark:hover:bg-white/3 transition-all duration-150 cursor-pointer outline-none">
-                    <FolderOpen size={11} className="shrink-0" />
-                    {folderName || t("notes.editor.noFolder")}
+                  <button className={NOTE_META_CHIP_CLASS}>
+                    <FolderOpen size={14} className="shrink-0 text-foreground/60" />
+                    {folderName ? (
+                      <span dir="auto" className="truncate">
+                        {folderName}
+                      </span>
+                    ) : (
+                      t("notes.editor.noFolder")
+                    )}
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" sideOffset={6} className="min-w-44 p-1">
@@ -637,14 +1076,15 @@ export default function NoteEditor({
                       <div className="relative px-1.5 py-0.5">
                         <Search
                           size={9}
-                          className="absolute left-3.5 top-1/2 -translate-y-1/2 text-foreground/15 pointer-events-none"
+                          className="absolute start-3.5 top-1/2 -translate-y-1/2 text-foreground/45 pointer-events-none"
                         />
                         <input
+                          dir="auto"
                           value={folderSearch}
                           onChange={(e) => setFolderSearch(e.target.value)}
                           onKeyDown={(e) => e.stopPropagation()}
                           placeholder={t("notes.context.searchFolders")}
-                          className="input-inline w-full pl-4.5 pr-1 py-0.5 text-xs text-foreground placeholder:text-foreground/15 outline-none border-none appearance-none"
+                          className="input-inline w-full ps-4.5 pe-1 py-0.5 text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
                         />
                       </div>
                       <DropdownMenuSeparator />
@@ -660,14 +1100,16 @@ export default function NoteEditor({
                           onClick={() => onMoveToFolder(note.id, folder.id)}
                           className="text-xs gap-2 rounded-md px-2 py-1.5"
                         >
-                          <FolderOpen size={11} className="text-foreground/30 shrink-0" />
-                          <span className="truncate flex-1">{folder.name}</span>
+                          <FolderOpen size={11} className="text-foreground/45 shrink-0" />
+                          <span dir="auto" className="truncate flex-1">
+                            {defaultFolderDisplayName(folder, t)}
+                          </span>
                           {isCurrent && <Check size={9} className="text-primary shrink-0" />}
                         </DropdownMenuItem>
                       );
                     })}
                     {folderSearch && filteredFolders.length === 0 && (
-                      <p className="text-xs text-foreground/20 text-center py-1.5">
+                      <p className="text-xs text-foreground/45 text-center py-1.5">
                         {t("notes.context.noResults")}
                       </p>
                     )}
@@ -678,6 +1120,7 @@ export default function NoteEditor({
                       {isCreatingFolder ? (
                         <div className="px-1">
                           <input
+                            dir="auto"
                             autoFocus
                             value={newFolderName}
                             onChange={(e) => setNewFolderName(e.target.value)}
@@ -694,7 +1137,7 @@ export default function NoteEditor({
                               }
                             }}
                             placeholder={t("notes.folders.folderName")}
-                            className="input-inline w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/20 outline-none border-none appearance-none"
+                            className="input-inline w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
                           />
                         </div>
                       ) : (
@@ -703,7 +1146,7 @@ export default function NoteEditor({
                             e.preventDefault();
                             setIsCreatingFolder(true);
                           }}
-                          className="text-xs gap-2 rounded-md px-2 py-1.5 text-foreground/40"
+                          className="text-xs gap-2 rounded-md px-2 py-1.5 text-foreground/45"
                         >
                           <Plus size={10} />
                           {t("notes.context.newFolder")}
@@ -714,212 +1157,278 @@ export default function NoteEditor({
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
+            {isTeamNote && space?.cloud_space_id && (
+              <button
+                type="button"
+                onClick={() => setMembersDialogOpen(true)}
+                aria-label={t("notes.spaces.teamsMembers.title", { space: space.name })}
+                className={NOTE_META_CHIP_CLASS}
+              >
+                <Users size={14} className="shrink-0 text-foreground/60" />
+                {/* member_count tracks explicit rosters only — the audience always includes the viewer */}
+                {Math.max(1, space.member_count ?? 1)}
+              </button>
+            )}
             {isSaving && (
-              <span className="inline-flex items-center gap-1 text-[11px] text-foreground/30 dark:text-foreground/15 tabular-nums">
-                <Loader2 size={8} className="animate-spin" />
+              <span className="inline-flex items-center gap-1 text-xs text-foreground/45 tabular-nums">
+                <Loader2 size={10} className="animate-spin" />
                 {t("notes.editor.saving")}
               </span>
             )}
-            <div className="flex-1" />
-            <div className="flex items-center gap-1">
-              {(enhancement || hasMeetingTranscript || hasChatSegments || isRecording) && (
+          </div>
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+            <div
+              ref={segmentScrollRef}
+              className="scrollbar-hidden flex min-w-0 max-w-full items-center overflow-x-auto"
+            >
+              <div
+                ref={segmentContainerRef}
+                className="relative flex shrink-0 items-center rounded-full bg-surface-3 p-0.5 dark:bg-surface-2"
+              >
                 <div
-                  ref={segmentContainerRef}
-                  className="relative flex items-center shrink-0 rounded-md bg-foreground/3 dark:bg-white/3 p-0.5"
-                >
-                  <div
-                    className="absolute top-0.5 left-0 rounded bg-background dark:bg-surface-2 shadow-sm transition-[width,height,transform,opacity] duration-200 ease-out pointer-events-none"
-                    style={indicatorStyle}
-                  />
-                  {(hasMeetingTranscript || hasChatSegments || isRecording) && (
-                    <button
-                      data-segment-button
-                      data-segment-value="transcript"
-                      onClick={() => setViewMode("transcript")}
-                      className={cn(
-                        "relative z-1 px-1.5 h-5 rounded text-xs font-medium transition-colors duration-150 flex items-center gap-1",
-                        viewMode === "transcript"
-                          ? "text-foreground/60"
-                          : "text-foreground/25 hover:text-foreground/40"
-                      )}
-                    >
-                      <MessageSquareText size={10} />
-                      {t("notes.editor.transcript")}
-                    </button>
+                  className="pointer-events-none absolute top-0.5 left-0 rounded-full bg-background shadow-sm transition-[width,height,transform,opacity] duration-200 ease-out dark:bg-surface-3"
+                  style={indicatorStyle}
+                />
+                <button
+                  data-segment-button
+                  data-segment-value="transcript"
+                  onClick={() => setSelectedViewMode("transcript")}
+                  className={cn(
+                    SEGMENT_BUTTON_CLASS,
+                    viewMode === "transcript"
+                      ? "text-foreground"
+                      : "text-foreground/60 hover:text-foreground/80"
                   )}
-                  <button
+                >
+                  {isRecording ? <RecordingWave /> : <MessageSquareText size={12} />}
+                  {t("notes.editor.transcript")}
+                </button>
+                <button
+                  data-segment-button
+                  data-segment-value="raw"
+                  onClick={() => setSelectedViewMode("raw")}
+                  className={cn(
+                    SEGMENT_BUTTON_CLASS,
+                    viewMode === "raw"
+                      ? "text-foreground"
+                      : "text-foreground/60 hover:text-foreground/80"
+                  )}
+                >
+                  <AlignLeft size={12} />
+                  {t("notes.editor.notes")}
+                </button>
+                {enhancement && (
+                  <div
                     data-segment-button
-                    data-segment-value="raw"
-                    onClick={() => setViewMode("raw")}
+                    data-segment-value="enhanced"
                     className={cn(
-                      "relative z-1 px-1.5 h-5 rounded text-xs font-medium transition-colors duration-150 flex items-center gap-1",
-                      viewMode === "raw"
-                        ? "text-foreground/60"
-                        : "text-foreground/25 hover:text-foreground/40"
+                      "relative z-1 flex items-center",
+                      viewMode === "enhanced"
+                        ? "text-foreground"
+                        : "text-foreground/60 hover:text-foreground/80"
                     )}
                   >
-                    <AlignLeft size={10} />
-                    {t("notes.editor.notes")}
-                  </button>
-                  {enhancement && (
                     <button
-                      data-segment-button
-                      data-segment-value="enhanced"
-                      onClick={() => setViewMode("enhanced")}
-                      className={cn(
-                        "relative z-1 px-1.5 h-5 rounded text-xs font-medium transition-colors duration-150 flex items-center gap-1",
-                        viewMode === "enhanced"
-                          ? "text-foreground/60"
-                          : "text-foreground/25 hover:text-foreground/40"
-                      )}
+                      onClick={() => setSelectedViewMode("enhanced")}
+                      className={cn(SEGMENT_BUTTON_CLASS, canRunTemplate && "pe-1")}
                     >
-                      <Sparkles size={9} />
-                      {t("notes.editor.enhanced")}
+                      <Sparkles size={12} />
+                      <span className="max-w-32 truncate">{summaryLabel}</span>
                       {enhancement.isStale && (
                         <span
-                          className="w-1 h-1 rounded-full bg-amber-400/60"
+                          className="h-1 w-1 rounded-full bg-amber-400/60"
                           title={t("notes.editor.staleIndicator")}
                         />
                       )}
                     </button>
-                  )}
-                </div>
+                    {canRunTemplate && noteTemplate && (
+                      <TemplatePicker
+                        templates={templates}
+                        current={noteTemplate}
+                        onRun={(template) => onRunNoteAction?.(template)}
+                        onManage={() => onManageActions?.("template")}
+                        disabled={isActionRunning}
+                      >
+                        <button
+                          type="button"
+                          aria-label={t("notes.templates.select")}
+                          className={cn(SEGMENT_BUTTON_CLASS, "ps-1 pe-2")}
+                        >
+                          <ChevronDown size={12} />
+                        </button>
+                      </TemplatePicker>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex w-full shrink-0 flex-wrap items-center gap-2 @[650px]/note-editor:w-auto">
+              {canEditNote && (
+                <NoteRecordControl
+                  isRecording={isRecording}
+                  isProcessing={isProcessing}
+                  disabled={!recordingAllowed}
+                  onStart={onStartRecording}
+                  onStop={onStopRecording}
+                />
               )}
-              {SHARING_ENABLED && note.cloud_id && (
+              <div className={cn(SPLIT_BUTTON_GROUP_CLASS, "h-[30px] shrink-0")}>
                 <button
                   type="button"
-                  onClick={() => setShareDialogOpen(true)}
-                  className={cn(
-                    "shrink-0 h-6 w-6 flex items-center justify-center rounded-md",
-                    "bg-foreground/4 dark:bg-white/5",
-                    "hover:bg-foreground/8 dark:hover:bg-white/10",
-                    "active:bg-foreground/12 dark:active:bg-white/15",
-                    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-                    "transition-colors duration-150"
-                  )}
-                  aria-label={t("noteEditor.share.button")}
+                  onClick={() => openShare("open")}
+                  className={cn(SPLIT_BUTTON_SEGMENT_CLASS, "gap-1.5 ps-2.5 pe-3")}
                 >
-                  <Share2
-                    size={11}
-                    className={cn(
-                      "transition-colors",
-                      isShared
-                        ? "text-blue-600 dark:text-blue-400"
-                        : "text-foreground/50 dark:text-foreground/40"
-                    )}
-                  />
+                  <Lock size={13} className={isShared ? "text-primary" : "text-foreground/60"} />
+                  {t("noteEditor.share.button")}
                 </button>
-              )}
-              {(onExportNote || onExportTranscript) && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      className="shrink-0 h-6 w-6 flex items-center justify-center rounded-md bg-foreground/4 dark:bg-white/5 text-foreground/50 dark:text-foreground/40 hover:text-foreground/70 hover:bg-foreground/8 dark:hover:text-foreground/60 dark:hover:bg-white/8 transition-colors duration-150"
-                      aria-label={t("notes.editor.export")}
-                    >
-                      <Download size={11} />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" sideOffset={4}>
-                    {viewMode === "transcript" && onExportTranscript ? (
-                      <>
-                        <DropdownMenuItem
-                          onClick={() => onExportTranscript("txt")}
-                          className="text-xs gap-2"
-                        >
-                          <FileText size={13} className="text-foreground/40" />
-                          {t("notes.editor.asTranscriptText")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => onExportTranscript("srt")}
-                          className="text-xs gap-2"
-                        >
-                          <FileText size={13} className="text-foreground/40" />
-                          {t("notes.editor.asSubtitles")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => onExportTranscript("md")}
-                          className="text-xs gap-2"
-                        >
-                          <FileText size={13} className="text-foreground/40" />
-                          {t("notes.editor.asTranscriptMarkdown")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => onExportTranscript("json")}
-                          className="text-xs gap-2"
-                        >
-                          <FileText size={13} className="text-foreground/40" />
-                          {t("notes.editor.asJson")}
-                        </DropdownMenuItem>
-                      </>
-                    ) : (
-                      <>
-                        <DropdownMenuItem
-                          onClick={() => onExportNote?.("md")}
-                          className="text-xs gap-2"
-                        >
-                          <FileText size={13} className="text-foreground/40" />
-                          {t("notes.editor.asMarkdown")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => onExportNote?.("txt")}
-                          className="text-xs gap-2"
-                        >
-                          <FileText size={13} className="text-foreground/40" />
-                          {t("notes.editor.asPlainText")}
-                        </DropdownMenuItem>
-                      </>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
+                <span aria-hidden="true" className={SPLIT_BUTTON_DIVIDER_CLASS} />
+                <button
+                  type="button"
+                  onClick={() => openShare("copy-link")}
+                  aria-label={t("noteEditor.share.dialog.copyLink")}
+                  className={cn(SPLIT_BUTTON_SEGMENT_CLASS, "w-[30px] justify-center")}
+                >
+                  <Link2 size={13} className="text-foreground/60" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
+        {conflict && (
+          <div
+            className={cn(
+              "h-8 mt-2 shrink-0",
+              "bg-amber-400/5 dark:bg-amber-400/[0.07]",
+              "border-y border-amber-400/15 dark:border-amber-400/20",
+              "animate-in slide-in-from-top-2 duration-300"
+            )}
+          >
+            <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "flex h-full items-center gap-2 px-5")}>
+              <span className="w-1 h-1 rounded-full bg-amber-400/60 shrink-0" />
+              <p className="text-[11px] text-foreground/50 flex-1 truncate">
+                {t("notes.spaces.conflictBanner")}
+                {conflictEditorName && (
+                  <span className="text-foreground/45">
+                    {" "}
+                    {t("notes.spaces.editedBy", {
+                      name: conflictEditorName,
+                      time: formatRelativeTime(conflict.updated_at, t, locale),
+                    })}
+                  </span>
+                )}
+              </p>
+              <button
+                onClick={handleConflictRefresh}
+                className="text-[11px] font-medium text-foreground/50 hover:text-foreground/70 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+              >
+                {t("notes.spaces.conflictRefresh")}
+              </button>
+              <button
+                onClick={handleConflictKeep}
+                className="text-[11px] font-medium text-foreground/45 hover:text-foreground/55 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+              >
+                {t("notes.spaces.conflictKeep")}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="flex-1 relative min-h-0">
-          <div className="h-full overflow-y-auto">
+          <div ref={contentScrollRef} className="h-full overflow-y-auto">
             {viewMode === "transcript" && (hasChatSegments || isRecording) ? (
-              <MeetingTranscriptChat
-                segments={displaySegments}
-                micPartial={isRecording ? meetingMicPartial : undefined}
-                systemPartial={isRecording ? meetingSystemPartial : undefined}
-                systemPartialSpeakerId={isRecording ? meetingSystemPartialSpeakerId : undefined}
-                systemPartialSpeakerName={isRecording ? meetingSystemPartialSpeakerName : undefined}
-                speakerMappings={speakerMappings}
-                speakerProfiles={knownSpeakers}
-                participants={parsedParticipants}
-                isRecording={isRecording}
-                isDiarizing={isDiarizing}
-                sessionDiarizationEnabled={sessionDiarizationEnabled}
-                sessionExpectedCount={sessionExpectedCount}
-                userTouchedStepper={userTouchedStepper}
-                onSetSessionDiarizationEnabled={onSetSessionDiarizationEnabled}
-                onSetSessionExpectedCount={onSetSessionExpectedCount}
-                onMapSpeaker={handleMapSpeaker}
-                onConfirmSuggestion={handleConfirmSuggestion}
-                onDismissSuggestion={handleDismissSuggestion}
-                onAttachSpeakerEmail={handleAttachSpeakerEmail}
-                selectedSegmentIds={!isRecording ? selectedSegmentIds : undefined}
-                onToggleSelect={!isRecording ? handleToggleSelect : undefined}
-              />
+              isRecording ? (
+                <LiveMeetingTranscriptChat
+                  contentClassName={PAGE_CONTENT_WIDTH_CLASS}
+                  speakerMappings={speakerMappings}
+                  speakerProfiles={speakerProfiles}
+                  participants={parsedParticipants}
+                  isDiarizing={isDiarizing}
+                  sessionDiarizationEnabled={sessionDiarizationEnabled}
+                  sessionExpectedCount={sessionExpectedCount}
+                  userTouchedStepper={userTouchedStepper}
+                  onSetSessionDiarizationEnabled={onSetSessionDiarizationEnabled}
+                  onSetSessionExpectedCount={onSetSessionExpectedCount}
+                  onMapSpeaker={handleMapSpeaker}
+                  onConfirmSuggestion={handleConfirmSuggestion}
+                  onDismissSuggestion={handleDismissSuggestion}
+                  onAttachSpeakerEmail={handleAttachSpeakerEmail}
+                />
+              ) : (
+                <MeetingTranscriptChat
+                  contentClassName={PAGE_CONTENT_WIDTH_CLASS}
+                  segments={displaySegments}
+                  speakerMappings={speakerMappings}
+                  speakerProfiles={knownSpeakers}
+                  participants={parsedParticipants}
+                  isDiarizing={isDiarizing}
+                  sessionDiarizationEnabled={sessionDiarizationEnabled}
+                  sessionExpectedCount={sessionExpectedCount}
+                  userTouchedStepper={userTouchedStepper}
+                  onSetSessionDiarizationEnabled={onSetSessionDiarizationEnabled}
+                  onSetSessionExpectedCount={onSetSessionExpectedCount}
+                  onMapSpeaker={handleMapSpeaker}
+                  onConfirmSuggestion={handleConfirmSuggestion}
+                  onDismissSuggestion={handleDismissSuggestion}
+                  onAttachSpeakerEmail={handleAttachSpeakerEmail}
+                  selectedSegmentIds={selectedSegmentIds}
+                  onToggleSelect={handleToggleSelect}
+                />
+              )
             ) : viewMode === "transcript" && hasMeetingTranscript ? (
-              <RichTextEditor value={effectiveTranscript} disabled />
+              <RichTextEditor value={note.transcript || ""} disabled />
+            ) : viewMode === "transcript" ? (
+              <div
+                className={cn(
+                  PAGE_CONTENT_WIDTH_CLASS,
+                  "flex min-h-80 flex-col items-center px-4 pt-16 text-center"
+                )}
+              >
+                <ThemedEmptyIllustration
+                  light={transcriptsEmptyLight}
+                  dark={transcriptsEmptyDark}
+                  width={590}
+                  height={77}
+                />
+                <h2 className="mt-12 text-xl font-semibold text-foreground">
+                  {t("notes.editor.transcriptEmptyTitle")}
+                </h2>
+                <p className="mt-2 max-w-xs text-base leading-6 text-muted-foreground">
+                  {t("notes.editor.transcriptEmptyDescription")}
+                </p>
+                {canEditNote && recordingAllowed && (
+                  <Button
+                    className="mt-6 rounded-full px-5 font-medium"
+                    onClick={onStartRecording}
+                    disabled={isProcessing}
+                  >
+                    {t("notes.editor.startRecording")}
+                  </Button>
+                )}
+              </div>
             ) : viewMode === "enhanced" && enhancement ? (
-              <RichTextEditor value={enhancement.content} onChange={handleEnhancedChange} />
+              <RichTextEditor
+                value={enhancement.content}
+                onChange={handleEnhancedChange}
+                disabled={!canEditNote}
+                mentionPeople={mentionPeople}
+              />
             ) : (
               <RichTextEditor
                 value={note.content}
                 onChange={handleContentChange}
                 editorRef={editorRef}
                 placeholder={t("notes.editor.startWriting")}
-                disabled={actionProcessingState === "processing"}
+                disabled={!canEditNote || actionProcessingState === "processing"}
+                mentionPeople={mentionPeople}
               />
             )}
           </div>
           <ActionProcessingOverlay
             state={actionProcessingState ?? "idle"}
             actionName={actionName ?? null}
+            progress={actionProgress ?? null}
+            onCancel={onCancelAction}
           />
           <div
             className="absolute bottom-0 left-0 right-0 h-20 pointer-events-none"
@@ -941,46 +1450,108 @@ export default function NoteEditor({
           )}
           <NoteBottomBar
             isRecording={isRecording}
-            isProcessing={isProcessing}
-            onStartRecording={onStartRecording}
-            onStopRecording={onStopRecording}
+            draftText={chatDraft}
+            onDraftChange={setChatDraft}
             onAskSubmit={handleAskSubmit}
             onInputFocus={handleChatInputFocus}
-            actionPicker={isRecording ? undefined : actionPicker}
-            hideInput={chatMode !== "hidden"}
+            onInputEscape={() => handleChatModeChange("hidden")}
+            chatOpen={chatMode === "floating"}
+            agentState={chatMode === "floating" ? embeddedChat.agentState : "idle"}
+            onCancel={embeddedChat.cancelStream}
+            floatingPanelRef={floatingChatPanelRef}
+            chatContent={
+              chatMode !== "sidebar" &&
+              inViewChatMounted && (
+                <EmbeddedChat
+                  mode="floating"
+                  active={chatMode === "floating"}
+                  onModeChange={handleChatModeChange}
+                  messages={embeddedChat.messages}
+                  agentState={embeddedChat.agentState}
+                  onTextSubmit={embeddedChat.sendMessage}
+                  onCancel={embeddedChat.cancelStream}
+                  noteConversations={embeddedChat.noteConversations}
+                  activeConversationId={embeddedChat.activeConversationId}
+                  onSwitchConversation={embeddedChat.switchConversation}
+                  onNewChat={embeddedChat.startNewChat}
+                />
+              )
+            }
+            actionChips={
+              offersActions && (
+                <ActionChips
+                  actions={noteActions}
+                  canRun={canRunAction}
+                  onRunAction={runAction}
+                  onManageActions={() => onManageActions?.("action")}
+                />
+              )
+            }
+            slashCommands={actionCommands}
+            callout={
+              showSummaryCallout &&
+              noteTemplate &&
+              selectedSegmentIds.size === 0 && (
+                <Button
+                  className="h-9 gap-2 px-4 text-sm"
+                  onClick={() => onRunNoteAction?.(noteTemplate)}
+                >
+                  <AlignLeft size={16} />
+                  {t("notes.editor.generateSummary")}
+                </Button>
+              )
+            }
+            footnote={
+              viewMode === "transcript" &&
+              (hasChatSegments || isRecording) && (
+                <>
+                  <ShieldCheck size={10} className="shrink-0" />
+                  <span>{t("notes.speaker.consentNotice")}</span>
+                </>
+              )
+            }
+            hideInput={chatMode === "sidebar"}
           />
-          {chatMode === "floating" && (
-            <EmbeddedChat
-              mode="floating"
-              onModeChange={setChatMode}
-              messages={embeddedChat.messages}
-              agentState={embeddedChat.agentState}
-              onTextSubmit={embeddedChat.sendMessage}
-              onCancel={embeddedChat.cancelStream}
-              noteConversations={embeddedChat.noteConversations}
-              activeConversationId={embeddedChat.activeConversationId}
-              onSwitchConversation={embeddedChat.switchConversation}
-              onNewChat={embeddedChat.startNewChat}
-            />
-          )}
         </div>
       </div>
       {chatMode === "sidebar" && (
         <EmbeddedChat
           mode="sidebar"
-          onModeChange={setChatMode}
+          onModeChange={handleChatModeChange}
           messages={embeddedChat.messages}
           agentState={embeddedChat.agentState}
+          draftText={chatDraft}
+          onDraftChange={setChatDraft}
           onTextSubmit={embeddedChat.sendMessage}
           onCancel={embeddedChat.cancelStream}
           noteConversations={embeddedChat.noteConversations}
           activeConversationId={embeddedChat.activeConversationId}
           onSwitchConversation={embeddedChat.switchConversation}
           onNewChat={embeddedChat.startNewChat}
+          chatActions={chatActions}
+          onRunChatAction={handleChatAction}
+          slashCommands={actionCommands}
+          onGenerateSummary={
+            canRunTemplate && noteTemplate && !isActionRunning
+              ? () => onRunNoteAction?.(noteTemplate)
+              : undefined
+          }
         />
       )}
-      {SHARING_ENABLED && note.cloud_id && (
-        <ShareNoteDialog open={shareDialogOpen} onOpenChange={setShareDialogOpen} note={note} />
+      <ShareNoteDialog
+        open={shareDialogOpen}
+        onOpenChange={setShareDialogOpen}
+        note={note}
+        exportOptions={exportOptions}
+        copyLinkOnOpen={shareIntent === "copy-link"}
+      />
+      {isTeamNote && space?.cloud_space_id && (
+        <SpaceSettingsDialog
+          space={space}
+          open={membersDialogOpen}
+          onOpenChange={setMembersDialogOpen}
+          initialTab="members"
+        />
       )}
     </div>
   );

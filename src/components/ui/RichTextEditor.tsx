@@ -1,11 +1,11 @@
 import { useEffect, useRef, useCallback, type MutableRefObject } from "react";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import TaskList from "@tiptap/extension-task-list";
-import TaskItem from "@tiptap/extension-task-item";
-import Placeholder from "@tiptap/extension-placeholder";
-import { Markdown } from "tiptap-markdown";
 import { cn } from "../lib/utils";
+import { createMentionExtension } from "./RichTextEditorMention";
+import { createRichTextExtensions } from "./RichTextEditorExtensions";
+import { RichTextEditorFormatMenu } from "./RichTextEditorFormatMenu";
+import { RichTextEditorTableMenu } from "./RichTextEditorTableMenu";
+import type { MentionPerson } from "../../utils/mentionMarkdown";
 
 interface RichTextEditorProps {
   value: string;
@@ -14,6 +14,8 @@ interface RichTextEditorProps {
   className?: string;
   disabled?: boolean;
   editorRef?: MutableRefObject<Editor | null>;
+  /** Enables @mention tagging with these people as suggestions. */
+  mentionPeople?: MentionPerson[];
 }
 
 export function RichTextEditor({
@@ -23,28 +25,23 @@ export function RichTextEditor({
   className,
   disabled,
   editorRef,
+  mentionPeople,
 }: RichTextEditorProps) {
   const internalValueRef = useRef(value);
   const suppressUpdateRef = useRef(false);
 
+  // Mention support is decided at mount; the ref keeps suggestions current
+  // without rebuilding the editor when the people list changes.
+  const mentionPeopleRef = useRef(mentionPeople);
+  useEffect(() => {
+    mentionPeopleRef.current = mentionPeople;
+  }, [mentionPeople]);
+  const withMentions = useRef(mentionPeople != null).current;
+
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({
-        heading: { levels: [1, 2, 3] },
-        bulletList: { keepMarks: true },
-        orderedList: { keepMarks: true },
-      }),
-      TaskList,
-      TaskItem.configure({ nested: true }),
-      Placeholder.configure({
-        placeholder: placeholder || "",
-        emptyEditorClass: "is-editor-empty",
-      }),
-      Markdown.configure({
-        html: false,
-        transformPastedText: true,
-        transformCopiedText: true,
-      }),
+      ...(withMentions ? [createMentionExtension(() => mentionPeopleRef.current ?? [])] : []),
+      ...createRichTextExtensions(placeholder || ""),
     ],
     content: value,
     editable: !disabled,
@@ -58,6 +55,7 @@ export function RichTextEditor({
     editorProps: {
       attributes: {
         class: "rich-text-editor-content",
+        dir: "auto",
       },
     },
   });
@@ -92,7 +90,7 @@ export function RichTextEditor({
   // Sync editable state
   useEffect(() => {
     if (editor && !editor.isDestroyed) {
-      editor.setEditable(!disabled);
+      editor.setEditable(!disabled, false);
     }
   }, [disabled, editor]);
 
@@ -106,8 +104,16 @@ export function RichTextEditor({
     <div className={cn("relative w-full h-full", className)} onClick={handleClick}>
       <EditorContent
         editor={editor}
-        className={cn("h-full overflow-y-auto", disabled && "pointer-events-none opacity-70")}
+        className={cn(
+          // relative: the table menu positions against this scroller and scrolls with it.
+          "relative h-full overflow-y-auto",
+          disabled && "pointer-events-none opacity-70",
+          // Reserved by an ancestor via --floating-inset; 0 elsewhere.
+          "pb-[var(--floating-inset,0px)]"
+        )}
       />
+      {editor && !disabled && <RichTextEditorFormatMenu editor={editor} />}
+      {editor && !disabled && <RichTextEditorTableMenu editor={editor} />}
     </div>
   );
 }

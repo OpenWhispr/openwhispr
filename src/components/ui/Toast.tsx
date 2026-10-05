@@ -1,7 +1,41 @@
 import * as React from "react";
-import { X, Copy, Check } from "lucide-react";
+import { X, Copy, Check } from "../icons";
+import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
-import { ToastContext, type ToastProps } from "./useToast";
+import {
+  ToastContext,
+  type ToastActionConfig,
+  type ToastPresentation,
+  type ToastProps,
+} from "./useToast";
+import { isDictationPanelWindow } from "../../utils/windowContext";
+import {
+  getDictationErrorActionCount,
+  getDictationErrorDuration,
+  resolveToastPresentation,
+} from "../../helpers/toastPresentation";
+import { useCopyFeedback } from "../../hooks/useCopyFeedback";
+import { DictationErrorCard } from "../dictation/DictationErrorCard";
+import { TechnicalErrorDetails } from "./TechnicalErrorDetails";
+
+/** The inline action beside a toast's text; dismissing is left to the caller. */
+export function ToastActionButton({
+  onClick,
+  children,
+}: {
+  onClick: () => void | Promise<void>;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-sm border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-medium whitespace-nowrap text-white/90 transition-colors hover:border-white/35 hover:bg-white/20 hover:text-white"
+    >
+      {children}
+    </button>
+  );
+}
 
 interface ToastState extends ToastProps {
   id: string;
@@ -11,7 +45,12 @@ interface ToastState extends ToastProps {
 
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = React.useState<ToastState[]>([]);
+  const toastsRef = React.useRef<ToastState[]>([]);
   const timersRef = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  React.useEffect(() => {
+    toastsRef.current = toasts;
+  }, [toasts]);
 
   const clearTimer = React.useCallback((id: string) => {
     const timer = timersRef.current[id];
@@ -31,11 +70,49 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const toast = React.useCallback(
     (props: Omit<ToastProps, "id">): string => {
       const id = Math.random().toString(36).substring(2, 11);
-      const newToast: ToastState = { ...props, id, createdAt: Date.now() };
+      const presentation = resolveToastPresentation({
+        presentation: props.presentation,
+        variant: props.variant,
+        isDictationPanel: isDictationPanelWindow(),
+      });
+      const duration =
+        props.duration ??
+        (presentation === "dictation-error"
+          ? getDictationErrorDuration(props.title, props.description)
+          : props.variant === "destructive"
+            ? 6000
+            : 3500);
+      const newToast: ToastState = {
+        ...props,
+        presentation,
+        duration,
+        id,
+        createdAt: Date.now(),
+      };
 
-      setToasts((prev) => [...prev, newToast]);
+      if (presentation === "dictation-error") {
+        // The new error replaces any current one; its auto-dismiss timer must
+        // not fire (and re-schedule exit work) for the removed toast.
+        for (const item of toastsRef.current) {
+          if (item.presentation === "dictation-error") clearTimer(item.id);
+        }
+      }
+      setToasts((prev) =>
+        presentation === "dictation-error"
+          ? [...prev.filter((item) => item.presentation !== "dictation-error"), newToast]
+          : [...prev, newToast]
+      );
+      // Mirror synchronously: dismissByPresentation can run from a child's
+      // effect in the same commit, before this provider's effect refreshes
+      // toastsRef from state.
+      toastsRef.current =
+        presentation === "dictation-error"
+          ? [
+              ...toastsRef.current.filter((item) => item.presentation !== "dictation-error"),
+              newToast,
+            ]
+          : [...toastsRef.current, newToast];
 
-      const duration = props.duration ?? (props.variant === "destructive" ? 6000 : 3500);
       if (duration > 0) {
         const timer = setTimeout(() => {
           startExitAnimation(id);
@@ -45,7 +122,18 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       return id;
     },
-    [startExitAnimation]
+    [clearTimer, startExitAnimation]
+  );
+
+  const dismissByPresentation = React.useCallback(
+    (presentation: ToastPresentation) => {
+      for (const item of toastsRef.current) {
+        if (item.presentation !== presentation) continue;
+        clearTimer(item.id);
+        startExitAnimation(item.id);
+      }
+    },
+    [clearTimer, startExitAnimation]
   );
 
   const dismiss = React.useCallback(
@@ -92,8 +180,18 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
   }, []);
 
+  const dictationErrorActionCount = getDictationErrorActionCount(toasts);
+
   return (
-    <ToastContext.Provider value={{ toast, dismiss, toastCount: toasts.length }}>
+    <ToastContext.Provider
+      value={{
+        toast,
+        dismiss,
+        toastCount: toasts.length,
+        dictationErrorActionCount,
+        dismissByPresentation,
+      }}
+    >
       {children}
       <ToastViewport
         toasts={toasts}
@@ -111,12 +209,10 @@ const ToastViewport: React.FC<{
   onPauseTimer: (id: string) => void;
   onResumeTimer: (id: string, remainingTime: number) => void;
 }> = ({ toasts, onDismiss, onPauseTimer, onResumeTimer }) => {
-  const isDictationPanel = React.useMemo(() => {
-    return (
-      window.location.pathname.indexOf("control") === -1 &&
-      window.location.search.indexOf("panel=true") === -1
-    );
-  }, []);
+  const isDictationPanel = React.useMemo(isDictationPanelWindow, []);
+  // Keep the error viewport anchored through its exit animation so the card
+  // does not jump back to the standard toast position while fading out.
+  const hasDictationError = toasts.some((toast) => toast.presentation === "dictation-error");
 
   if (toasts.length === 0) return null;
 
@@ -124,14 +220,24 @@ const ToastViewport: React.FC<{
     <div
       className={cn(
         "fixed z-[100] flex flex-col gap-1.5 pointer-events-none",
-        isDictationPanel ? "bottom-20 right-6" : "bottom-5 right-5"
+        isDictationPanel
+          ? hasDictationError
+            ? "inset-x-3 bottom-3"
+            : "bottom-20 end-6"
+          : "bottom-5 end-5"
       )}
     >
       {toasts.map((toast) => (
         <Toast
           key={toast.id}
           {...toast}
-          onClose={() => onDismiss(toast.id)}
+          onClose={() => {
+            try {
+              toast.onClose?.();
+            } finally {
+              onDismiss(toast.id);
+            }
+          }}
           onPauseTimer={() => onPauseTimer(toast.id)}
           onResumeTimer={(remaining) => onResumeTimer(toast.id, remaining)}
         />
@@ -164,7 +270,14 @@ const Toast: React.FC<
 > = ({
   title,
   description,
+  descriptionHotkey,
+  dismissible,
+  secondaryDescription,
+  copyCommand,
+  technicalDetails,
   action,
+  actions,
+  presentation = "standard",
   variant = "default",
   duration = 3500,
   isExiting,
@@ -175,34 +288,95 @@ const Toast: React.FC<
 }) => {
   const config = variantConfig[variant];
   const pausedAtRef = React.useRef<number | null>(null);
-  const [copied, setCopied] = React.useState(false);
+  const remainingDurationRef = React.useRef(duration);
+  const timerStartedAtRef = React.useRef(createdAt);
+  const { copied, copy } = useCopyFeedback(description ?? "", { resetMs: 2000 });
+  const { copied: commandCopied, copy: copyRecoveryCommand } = useCopyFeedback(copyCommand ?? "", {
+    resetMs: 2000,
+  });
+  const { t } = useTranslation();
+  const [timerPaused, setTimerPaused] = React.useState(false);
+  const [errorSurfaceReady, setErrorSurfaceReady] = React.useState(false);
   const isDestructive = variant === "destructive";
 
+  React.useEffect(() => {
+    if (presentation !== "dictation-error" || errorSurfaceReady) return undefined;
+
+    // Native error sizing is an enhancement, not a visibility gate. A resize
+    // acknowledgment can be delayed or skipped when another panel is handing
+    // off the same BrowserWindow, so always reveal the already-mounted card
+    // after a short grace period instead of leaving it permanently transparent.
+    const fallbackTimer = setTimeout(() => {
+      requestAnimationFrame(() => setErrorSurfaceReady(true));
+    }, 240);
+    return () => clearTimeout(fallbackTimer);
+  }, [errorSurfaceReady, presentation]);
+
+  const handleStructuredAction = (structuredAction: ToastActionConfig) => {
+    if (structuredAction.dismissOnClick !== false) onClose?.();
+    return structuredAction.onClick();
+  };
+
+  const handleErrorHeightChange = React.useCallback(async (height: number) => {
+    try {
+      await window.electronAPI?.resizeDictationErrorWindowToContent?.(height);
+    } finally {
+      // A failed or superseded content-height request must never suppress the
+      // actual warning. The initial DICTATION_ERROR width is already usable.
+      requestAnimationFrame(() => setErrorSurfaceReady(true));
+    }
+  }, []);
+
   const handleMouseEnter = () => {
-    pausedAtRef.current = Date.now();
+    if (pausedAtRef.current !== null || duration <= 0) return;
+    const now = Date.now();
+    remainingDurationRef.current = Math.max(
+      0,
+      remainingDurationRef.current - (now - timerStartedAtRef.current)
+    );
+    pausedAtRef.current = now;
+    setTimerPaused(true);
     onPauseTimer();
   };
 
   const handleMouseLeave = () => {
-    if (pausedAtRef.current && duration > 0) {
-      const elapsed = pausedAtRef.current - createdAt;
-      const remaining = Math.max(duration - elapsed, 500);
+    if (pausedAtRef.current !== null && duration > 0) {
+      const remaining = Math.max(remainingDurationRef.current, 500);
+      timerStartedAtRef.current = Date.now();
+      setTimerPaused(false);
       onResumeTimer(remaining);
     }
     pausedAtRef.current = null;
   };
 
-  const handleCopyError = async () => {
-    if (!description) return;
-    try {
-      await navigator.clipboard.writeText(description);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {}
-  };
-
   const message = title || description;
   const detail = title && description ? description : undefined;
+
+  if (presentation === "dictation-error") {
+    return (
+      <div
+        className={cn(
+          "pointer-events-auto w-full transition-[opacity,transform] duration-200 ease-out",
+          isExiting ? "translate-y-2 scale-[0.98] opacity-0" : "translate-y-0 scale-100 opacity-100"
+        )}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        <DictationErrorCard
+          title={title}
+          description={description}
+          descriptionHotkey={descriptionHotkey}
+          onDismiss={dismissible ? onClose : undefined}
+          actions={actions ?? []}
+          onAction={handleStructuredAction}
+          onPreferredHeightChange={handleErrorHeightChange}
+          progressDuration={!isExiting ? duration : 0}
+          progressPaused={timerPaused}
+          ready={errorSurfaceReady}
+        />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -211,8 +385,8 @@ const Toast: React.FC<
         "rounded-[5px]",
         "transition-[opacity,transform] duration-200 ease-out",
         isExiting
-          ? "opacity-0 translate-x-2 scale-[0.98]"
-          : "opacity-100 translate-x-0 scale-100 animate-in slide-in-from-right-4 fade-in-0 duration-300"
+          ? "opacity-0 translate-x-2 rtl:-translate-x-2 scale-[0.98]"
+          : "toast-enter opacity-100 translate-x-0 scale-100"
       )}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
@@ -223,6 +397,9 @@ const Toast: React.FC<
         <div className="flex-1 min-w-0">
           {message && (
             <div className="text-xs font-medium leading-tight text-white/90">{message}</div>
+          )}
+          {secondaryDescription && (
+            <div className="mt-1 text-xs leading-snug text-white/45">{secondaryDescription}</div>
           )}
           {detail &&
             (isDestructive ? (
@@ -236,7 +413,7 @@ const Toast: React.FC<
                 <div className="flex items-start justify-between gap-1.5">
                   <span className="select-all wrap-break-word min-w-0">{detail}</span>
                   <button
-                    onClick={handleCopyError}
+                    onClick={() => void copy()}
                     className={cn(
                       "shrink-0 p-0.5 rounded-xs mt-px",
                       "text-white/30 hover:text-white/70",
@@ -252,6 +429,25 @@ const Toast: React.FC<
             ) : (
               <div className="text-xs leading-snug mt-0.5 text-white/45">{detail}</div>
             ))}
+          {copyCommand && (
+            <div className="mt-1.5 flex items-center gap-1.5 rounded-[3px] border border-white/6 bg-white/4 px-1.5 py-1">
+              <code
+                dir="ltr"
+                className="min-w-0 flex-1 wrap-break-word font-mono text-[11px] text-white/60 select-all"
+              >
+                {copyCommand}
+              </code>
+              <button
+                type="button"
+                onClick={() => void copyRecoveryCommand()}
+                className="shrink-0 rounded-xs p-1 text-white/30 transition-colors hover:bg-white/6 hover:text-white/70"
+                aria-label={t("reasoning.enterprise.technicalDetails.copyCommand")}
+              >
+                {commandCopied ? <Check className="size-3" /> : <Copy className="size-3" />}
+              </button>
+            </div>
+          )}
+          <TechnicalErrorDetails details={technicalDetails} onDark />
         </div>
 
         {action && <div className="shrink-0 self-center">{action}</div>}
@@ -261,7 +457,7 @@ const Toast: React.FC<
         <button
           onClick={onClose}
           className={cn(
-            "absolute -left-2 -top-2 size-6 rounded-full",
+            "absolute -start-2 -top-2 size-6 rounded-full",
             "flex items-center justify-center",
             "bg-white/10 backdrop-blur-sm border border-white/10",
             "text-white/70 hover:text-white hover:bg-white/20",
@@ -276,11 +472,12 @@ const Toast: React.FC<
       )}
 
       {duration > 0 && !isExiting && (
-        <div className="absolute bottom-0 left-0.5 right-0 h-px overflow-hidden">
+        <div className="absolute bottom-0 start-0.5 end-0 h-px overflow-hidden">
           <div
             className={cn("h-full", config.progressClass)}
             style={{
               animation: `toast-progress ${duration}ms linear forwards`,
+              animationPlayState: timerPaused ? "paused" : "running",
             }}
           />
         </div>

@@ -5,11 +5,7 @@ import {
   consumeTinfoilModelSwitches,
   useTinfoilModelSwitchStore,
 } from "../stores/tinfoilModelSwitchStore";
-
-const isDictationPanelWindow = () => {
-  const { search, pathname } = window.location;
-  return !pathname.includes("control") && !search.includes("panel=true");
-};
+import { isDictationPanelWindow } from "../utils/windowContext";
 
 /** Alerts the user when a retired Tinfoil model was switched out from under them. */
 export default function TinfoilModelSwitchToastListener() {

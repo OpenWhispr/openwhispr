@@ -2,6 +2,7 @@ const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const debugLogger = require("./debugLogger");
+const { compareVersions } = require("./parakeetCapability");
 
 const ARCH_CPU_TYPE = {
   arm64: 0x0100000c,
@@ -14,32 +15,13 @@ const START_TIMEOUT_MS = 3000;
 const REQUEST_TIMEOUT_MS = 60000;
 const STOP_TIMEOUT_MS = 5000;
 
-function compareVersions(left, right) {
-  const leftParts = String(left)
-    .split(".")
-    .map((part) => parseInt(part, 10) || 0);
-  const rightParts = String(right)
-    .split(".")
-    .map((part) => parseInt(part, 10) || 0);
-  const length = Math.max(leftParts.length, rightParts.length);
-
-  for (let index = 0; index < length; index += 1) {
-    const leftPart = leftParts[index] || 0;
-    const rightPart = rightParts[index] || 0;
-    if (leftPart !== rightPart) {
-      return leftPart > rightPart ? 1 : -1;
-    }
-  }
-
-  return 0;
-}
-
 class AudioTapManager {
   constructor() {
     this.process = null;
     this.stderrBuffer = "";
     this.onChunk = null;
     this.onError = null;
+    this.onWarning = null;
     this.isStopping = false;
     this.permissionStatus = this._loadPermissionStatus();
     this._requestPromise = null;
@@ -127,13 +109,14 @@ class AudioTapManager {
     return this._requestPromise;
   }
 
-  async start({ onChunk, onError } = {}) {
+  async start({ onChunk, onError, onWarning } = {}) {
     if (!this.isSupported()) {
       throw new Error("macOS 14.2 or later is required for native system audio capture.");
     }
     if (this.process) {
       this.onChunk = onChunk || null;
       this.onError = onError || null;
+      this.onWarning = onWarning || null;
       return;
     }
     if (this._requestPromise) {
@@ -143,6 +126,7 @@ class AudioTapManager {
     const binaryPath = this._prepareBinary();
     this.onChunk = onChunk || null;
     this.onError = onError || null;
+    this.onWarning = onWarning || null;
     this.isStopping = false;
     this.stderrBuffer = "";
 
@@ -190,6 +174,11 @@ class AudioTapManager {
           if (message.type === "start") {
             this._persistPermissionStatus("granted");
             finish(resolve);
+            return;
+          }
+
+          if (message.type === "warning") {
+            this.onWarning?.(message);
             return;
           }
 
@@ -277,6 +266,7 @@ class AudioTapManager {
     this.stderrBuffer = "";
     this.onChunk = null;
     this.onError = null;
+    this.onWarning = null;
     this.isStopping = false;
   }
 

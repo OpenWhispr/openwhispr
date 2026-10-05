@@ -1,20 +1,30 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check } from "lucide-react";
+import { Check } from "../icons";
 import { cn } from "../lib/utils";
+import { Button } from "../ui/button";
 import type { ActionProcessingState } from "../../hooks/useActionProcessing";
+import type { NoteActionProgress } from "../../stores/actionProcessingStore";
 
 interface ActionProcessingOverlayProps {
   state: ActionProcessingState;
   actionName: string | null;
+  /** Set while a long note is summarised in parts. */
+  progress?: NoteActionProgress | null;
+  /** Offered while processing: a run in parts takes minutes, and only quitting stopped it before. */
+  onCancel?: () => void;
 }
 
 export default function ActionProcessingOverlay({
   state,
   actionName,
+  progress = null,
+  onCancel,
 }: ActionProcessingOverlayProps) {
   const { t } = useTranslation();
-  const [visible, setVisible] = useState(false);
+  // A mount mid-run is a note switch (NoteEditor is keyed by note id); the
+  // overlay must show without waiting for a state change that already happened.
+  const [visible, setVisible] = useState(state !== "idle");
   const [prevState, setPrevState] = useState(state);
 
   if (state !== prevState) {
@@ -87,6 +97,11 @@ export default function ActionProcessingOverlay({
         ) : (
           <>
             <span className="text-xs font-medium text-accent/70 tracking-tight">{actionName}</span>
+            {progress ? (
+              <span className="text-[11px] text-accent/50 tracking-tight">
+                {t("notes.actions.chunkProgress", { step: progress.step, total: progress.total })}
+              </span>
+            ) : null}
             <div className="w-32 h-0.5 bg-accent/10 rounded-full overflow-hidden">
               <div
                 className="h-full w-1/3 bg-accent/40 rounded-full"
@@ -94,6 +109,17 @@ export default function ActionProcessingOverlay({
                 data-scanner-progress=""
               />
             </div>
+            {onCancel ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onCancel}
+                className="h-6 px-2 text-[11px] text-accent/60 hover:text-accent hover:bg-accent/8 dark:text-accent/60 dark:hover:text-accent dark:hover:bg-accent/8"
+              >
+                {t("common.cancel")}
+              </Button>
+            ) : null}
           </>
         )}
       </div>

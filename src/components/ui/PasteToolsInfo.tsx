@@ -1,8 +1,12 @@
 import { useTranslation } from "react-i18next";
-import { Check, Terminal, Info } from "lucide-react";
+import { Check, Terminal, Info } from "../icons";
 import { Button } from "./button";
 import { InfoBox } from "./InfoBox";
 import type { PasteToolsResult } from "../../types/electron";
+import {
+  getLinuxPasteInstallCommands,
+  needsLinuxPasteToolGuidance,
+} from "../../utils/linuxPasteTools";
 
 interface PasteToolsInfoProps {
   pasteToolsInfo: PasteToolsResult | null;
@@ -59,8 +63,7 @@ export default function PasteToolsInfo({
     );
   }
 
-  // Linux with tools available
-  if (pasteToolsInfo.platform === "linux" && pasteToolsInfo.available) {
+  if (pasteToolsInfo.platform === "linux" && !needsLinuxPasteToolGuidance(pasteToolsInfo)) {
     const method = pasteToolsInfo.method || "xdotool";
     const methodLabel = method === "xtest" ? "built-in (XTest)" : method;
     const methodSuffix =
@@ -79,7 +82,10 @@ export default function PasteToolsInfo({
               </h3>
               <p className="text-sm text-success dark:text-success">
                 {t("pasteToolsInfo.usingMethodPrefix")}{" "}
-                <code className="bg-success/20 px-1 rounded">{methodLabel}</code> {methodSuffix}
+                <code dir="ltr" className="bg-success/20 px-1 rounded">
+                  {methodLabel}
+                </code>{" "}
+                {methodSuffix}
               </p>
             </div>
           </div>
@@ -91,11 +97,17 @@ export default function PasteToolsInfo({
     );
   }
 
-  // Linux without tools - show helpful install instructions
-  if (pasteToolsInfo.platform === "linux" && !pasteToolsInfo.available) {
+  if (needsLinuxPasteToolGuidance(pasteToolsInfo)) {
     const isWayland = pasteToolsInfo.isWayland;
-    const recommendedTool = pasteToolsInfo.recommendedInstall;
-    const showInstall = !!recommendedTool;
+    const needsWtype = pasteToolsInfo.isWlroots && !pasteToolsInfo.hasWtype;
+    const recommendedTool = needsWtype
+      ? "wtype"
+      : pasteToolsInfo.recommendedInstall === "wtype"
+        ? "wtype"
+        : pasteToolsInfo.recommendedInstall === "xdotool"
+          ? "xdotool"
+          : null;
+    const showInstall = recommendedTool !== null;
 
     return (
       <InfoBox variant="warning" className="space-y-3">
@@ -111,42 +123,28 @@ export default function PasteToolsInfo({
             {showInstall ? (
               <>
                 <p className="text-sm text-warning dark:text-warning mt-1">
-                  {t("pasteToolsInfo.installPrefix")}{" "}
-                  <code className="bg-warning/20 px-1 rounded font-mono">{recommendedTool}</code>:
-                </p>
-
-                <div className="mt-3 bg-card border border-border p-3 rounded-md font-mono text-xs overflow-x-auto">
-                  {recommendedTool === "wtype" ? (
-                    <>
-                      <div className="text-muted-foreground">
-                        {t("pasteToolsInfo.installCommands.fedoraRhel")}
-                      </div>
-                      <div className="text-foreground">sudo dnf install wtype</div>
-                      <div className="text-muted-foreground mt-2">
-                        {t("pasteToolsInfo.installCommands.debianUbuntu")}
-                      </div>
-                      <div className="text-foreground">sudo apt install wtype</div>
-                      <div className="text-muted-foreground mt-2">
-                        {t("pasteToolsInfo.installCommands.archLinux")}
-                      </div>
-                      <div className="text-foreground">sudo pacman -S wtype</div>
-                    </>
+                  {needsWtype ? (
+                    t("pasteToolsInfo.wtypeFallbackDescription")
                   ) : (
                     <>
-                      <div className="text-muted-foreground">
-                        {t("pasteToolsInfo.installCommands.debianUbuntuMint")}
-                      </div>
-                      <div className="text-foreground">sudo apt install xdotool</div>
-                      <div className="text-muted-foreground mt-2">
-                        {t("pasteToolsInfo.installCommands.fedoraRhel")}
-                      </div>
-                      <div className="text-foreground">sudo dnf install xdotool</div>
-                      <div className="text-muted-foreground mt-2">
-                        {t("pasteToolsInfo.installCommands.archLinux")}
-                      </div>
-                      <div className="text-foreground">sudo pacman -S xdotool</div>
+                      {t("pasteToolsInfo.installPrefix")}{" "}
+                      <code dir="ltr" className="bg-warning/20 px-1 rounded font-mono">
+                        {recommendedTool}
+                      </code>
+                      :
                     </>
                   )}
+                </p>
+
+                <div className="mt-3 space-y-2 bg-card border border-border p-3 rounded-md font-mono text-xs overflow-x-auto">
+                  {getLinuxPasteInstallCommands(t, recommendedTool).map(({ label, cmd }) => (
+                    <div key={cmd}>
+                      <div className="text-muted-foreground">{label}</div>
+                      <div dir="ltr" className="text-foreground">
+                        {cmd}
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
                 {isWayland && recommendedTool === "wtype" && (
@@ -164,14 +162,20 @@ export default function PasteToolsInfo({
             ) : (
               <p className="text-sm text-warning dark:text-warning mt-1">
                 {t("pasteToolsInfo.waylandClipboardDescription")}{" "}
-                <kbd className="bg-warning/20 px-1 rounded text-xs">Ctrl+V</kbd>.
+                <kbd dir="ltr" className="bg-warning/20 px-1 rounded text-xs">
+                  Ctrl+V
+                </kbd>
+                .
               </p>
             )}
 
             {showInstall && (
               <p className="text-sm text-warning dark:text-warning mt-3">
                 {t("pasteToolsInfo.withoutToolPrefix")}{" "}
-                <kbd className="bg-warning/20 px-1 rounded text-xs">Ctrl+V</kbd>.
+                <kbd dir="ltr" className="bg-warning/20 px-1 rounded text-xs">
+                  Ctrl+V
+                </kbd>
+                .
               </p>
             )}
           </div>

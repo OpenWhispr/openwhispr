@@ -62,3 +62,10 @@ test("round-trips lists containing comma-key hotkeys", () => {
   assert.equal(serialized, "Control+,,F8,GLOBE");
   assert.deepEqual(parseHotkeyList(serialized), list);
 });
+
+test("preserves hotkeys ending with '+' when followed by another hotkey in a list or array", () => {
+  assert.deepEqual(parseHotkeyList("Control++,F8"), ["Control++", "F8"]);
+  assert.deepEqual(parseHotkeyList(["Control++", "F8"]), ["Control++", "F8"]);
+  assert.deepEqual(parseHotkeyList("Control++,,F8"), ["Control++,", "F8"]);
+  assert.deepEqual(parseHotkeyList("Command++,Control+,,"), ["Command++", "Control+,"]);
+});

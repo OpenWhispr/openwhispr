@@ -1,6 +1,9 @@
 {
   "appId": "com.gizmolabs.openwhispr",
   "afterPack": "scripts/afterPack.js",
+  "extraMetadata": {
+    "windowsTrayIdentity": true
+  },
   "productName": "OpenWhispr",
   "protocols": {
     "name": "OpenWhispr Protocol",
@@ -25,6 +28,8 @@
     "src/hooks/**/*",
     "src/models/**/*",
     "src/services/localReasoningBridge.js",
+    "src/services/transcriptionBaseUrl.ts",
+    "src/stores/policyRules.ts",
     "src/types/**/*",
     "src/utils.js",
     "src/utils/**/*",
@@ -95,7 +100,11 @@
   ],
   "extraResources": [
     ".env",
-    "src/assets/**/*",
+    {
+      "from": "src/assets",
+      "to": "src/assets",
+      "filter": ["**/*", "!fonts/yowza/**"]
+    },
     {
       "from": "resources/bin/",
       "to": "bin/",
@@ -104,13 +113,17 @@
         "whisper-server-*",
         "llama-server-*",
         "sherpa-onnx-*",
+        "yt-dlp-*",
         "qdrant-*",
         "macos-audio-tap",
         "macos-globe-listener",
         "macos-fast-paste",
         "macos-mic-listener",
+        "macos-calendar-listener",
         "macos-text-monitor",
+        "macos-window-bounds",
         "macos-media-remote",
+        "MediaRemoteAdapter.framework/**",
         "linux-fast-paste",
         "linux-system-audio-helper",
         "linux-text-monitor",
@@ -128,6 +141,14 @@
         "*.dll",
         "*.so*"
       ]
+    },
+    {
+      "from": "resources/mediaremote-adapter/bin/mediaremote-adapter.pl",
+      "to": "bin/mediaremote-adapter.pl"
+    },
+    {
+      "from": "resources/mediaremote-adapter/LICENSE",
+      "to": "bin/mediaremote-adapter.LICENSE"
     }
   ],
   "mac": {
@@ -151,12 +172,15 @@
       "CFBundleIconName": "openwhispr",
       "NSMicrophoneUsageDescription": "OpenWhispr uses the microphone to capture your voice for transcription.",
       "NSAudioCaptureUsageDescription": "OpenWhispr uses system audio to capture other participants' audio from calls and meetings.",
-      "NSAccessibilityUsageDescription": "OpenWhispr needs accessibility permissions to paste transcribed text into other applications."
+      "NSAccessibilityUsageDescription": "OpenWhispr needs accessibility permissions to paste transcribed text into other applications.",
+      "NSCalendarsUsageDescription": "OpenWhispr reads your calendar to detect upcoming meetings and link meeting notes to events.",
+      "NSCalendarsFullAccessUsageDescription": "OpenWhispr reads your calendar to detect upcoming meetings and link meeting notes to events."
     }
   },
   "win": {
-    "target": ["nsis", "portable"],
+    "target": ["nsis"],
     "icon": "src/assets/icon.ico",
+    "forceCodeSigning": true,
     "azureSignOptions": {
       "endpoint": "https://eus.codesigning.azure.net/",
       "certificateProfileName": "openwhispr-release",

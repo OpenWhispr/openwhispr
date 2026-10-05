@@ -1,29 +1,53 @@
 import type { InferenceProvider } from "./types";
-import { getCloudModel } from "../../../models/ModelRegistry";
-import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
-import { API_ENDPOINTS, TOKEN_LIMITS } from "../../../config/constants";
+import { withRetry, createApiRetryStrategy, httpError } from "../../../utils/retry";
+import { API_ENDPOINTS } from "../../../config/constants";
+import {
+  getLlmRequestTimeoutSeconds,
+  llmRequestTimeoutError,
+} from "../../../helpers/llmRequestTimeout.js";
+import { extractGeminiText } from "../../../helpers/geminiResponse.js";
 import { wrapCleanupTranscript } from "../../../config/prompts";
+import { extractApiErrorMessage } from "../apiErrorMessage";
+import { emptyOutputError, truncatedOutputError } from "../chatRequestBody";
 import logger from "../../../utils/logger";
 
 interface GeminiResponse {
   candidates?: Array<{
-    content?: { parts?: Array<{ text?: string }> };
+    content?: { parts?: Array<{ text?: string; thought?: boolean }> };
     finishReason?: string;
   }>;
-  usageMetadata?: { totalTokenCount?: number };
+  usageMetadata?: {
+    promptTokenCount?: number;
+    candidatesTokenCount?: number;
+    thoughtsTokenCount?: number;
+    totalTokenCount?: number;
+  };
 }
 
 interface GeminiGenerationConfig {
   temperature: number;
-  maxOutputTokens: number;
   thinkingConfig?: {
-    thinkingLevel: "minimal" | "low" | "medium" | "high";
+    thinkingLevel?: "minimal" | "low";
+    thinkingBudget?: number;
     includeThoughts: boolean;
   };
 }
 
+// Thinking controls differ by model: Pro cannot use minimal, and 2.5 uses budgets.
+const minimalThinking: Record<string, GeminiGenerationConfig["thinkingConfig"]> = {
+  "gemini-3.5-flash": { thinkingLevel: "minimal", includeThoughts: false },
+  "gemini-3.5-flash-lite": { thinkingLevel: "minimal", includeThoughts: false },
+  "gemini-3.1-flash-lite": { thinkingLevel: "minimal", includeThoughts: false },
+  "gemini-3-flash-preview": { thinkingLevel: "minimal", includeThoughts: false },
+  "gemini-3.1-pro-preview": { thinkingLevel: "low", includeThoughts: false },
+  "gemini-2.5-flash": { thinkingBudget: 0, includeThoughts: false },
+  "gemini-2.5-flash-lite": { thinkingBudget: 0, includeThoughts: false },
+  "gemini-2.5-pro": { thinkingBudget: 128, includeThoughts: false },
+};
+
 export const geminiProvider: InferenceProvider = {
   id: "gemini",
+  supportsImages: true,
   async call({ text, model, agentName, config, ctx }) {
     logger.logReasoning("GEMINI_START", { model, agentName, hasApiKey: false });
     const apiKey = await ctx.getApiKey("gemini");
@@ -32,40 +56,55 @@ export const geminiProvider: InferenceProvider = {
     const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
     const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
 
+    const isGemini = model.startsWith("gemini-");
+    const isGemini3 = model.startsWith("gemini-3-") || model.startsWith("gemini-3.");
     const generationConfig: GeminiGenerationConfig = {
-      temperature: config.temperature ?? (config.systemPrompt ? 0.3 : 0),
-      maxOutputTokens:
-        config.maxTokens ||
-        Math.max(
-          2000,
-          ctx.calculateMaxTokens(
-            text.length,
-            TOKEN_LIMITS.MIN_TOKENS_GEMINI,
-            TOKEN_LIMITS.MAX_TOKENS_GEMINI,
-            TOKEN_LIMITS.TOKEN_MULTIPLIER
-          )
-        ),
+      // Google recommends 1.0 for Gemini 3 to avoid low-temperature looping.
+      // Cleanup defers here; explicit overrides still win.
+      // https://ai.google.dev/gemini-api/docs/gemini-3#temperature
+      temperature: config.temperature ?? (isGemini3 ? 1 : config.systemPrompt ? 0.3 : 0),
+      // No maxOutputTokens. Gemini bills thinking against it, so any budget sized
+      // for the text starved thinking models (#2091), and a caller's pinned budget
+      // is priced for the local path, not for Gemini (#2142). The model's own
+      // limit and the request timeout bound the reply.
     };
 
-    if (config.disableThinking === true && getCloudModel(model)?.supportsThinking) {
-      generationConfig.thinkingConfig = { thinkingLevel: "minimal", includeThoughts: false };
+    if (config.disableThinking === true && minimalThinking[model]) {
+      generationConfig.thinkingConfig = minimalThinking[model];
     }
 
+    const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
+      // Keep the existing inline instructions for non-Gemini models (e.g. Gemma).
+      { text: isGemini ? userContent : `${systemPrompt}\n\n${userContent}` },
+    ];
+    if (config.screenContext) {
+      parts.push({
+        inlineData: {
+          mimeType: config.screenContext.mediaType,
+          data: config.screenContext.data,
+        },
+      });
+    }
     const requestBody = {
-      contents: [{ parts: [{ text: `${systemPrompt}\n\n${userContent}` }] }],
+      ...(isGemini ? { systemInstruction: { parts: [{ text: systemPrompt }] } } : {}),
+      contents: [{ parts }],
       generationConfig,
     };
 
     const response = await withRetry(async () => {
+      // Metadata only: body previews can leak transcript text or base64 screenshots.
       logger.logReasoning("GEMINI_REQUEST", {
         endpoint: `${API_ENDPOINTS.GEMINI}/models/${model}:generateContent`,
         model,
         hasApiKey: !!apiKey,
-        requestBody: JSON.stringify(requestBody).substring(0, 200),
+        hasScreenContext: !!config.screenContext,
+        generationConfig,
+        textLength: text.length,
       });
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      const timeoutSeconds = getLlmRequestTimeoutSeconds({ scope: config.inferenceScope });
+      const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
       try {
         const res = await fetch(`${API_ENDPOINTS.GEMINI}/models/${model}:generateContent`, {
           method: "POST",
@@ -92,12 +131,8 @@ export const geminiProvider: InferenceProvider = {
             fullResponse: errorText.substring(0, 500),
           });
 
-          const errMsg =
-            (typeof errorData.error === "object" && errorData.error?.message) ||
-            errorData.message ||
-            (typeof errorData.error === "string" ? errorData.error : null) ||
-            `Gemini API error: ${res.status}`;
-          throw new Error(errMsg);
+          const errMsg = extractApiErrorMessage(errorData, `Gemini API error: ${res.status}`);
+          throw httpError(errMsg, res.status);
         }
 
         const jsonResponse = (await res.json()) as GeminiResponse;
@@ -105,11 +140,13 @@ export const geminiProvider: InferenceProvider = {
           hasResponse: !!jsonResponse,
           hasCandidates: !!jsonResponse?.candidates,
           candidatesLength: jsonResponse?.candidates?.length || 0,
+          finishReason: jsonResponse?.candidates?.[0]?.finishReason,
+          usageMetadata: jsonResponse?.usageMetadata,
         });
         return jsonResponse;
       } catch (error) {
         if ((error as Error).name === "AbortError") {
-          throw new Error("Request timed out after 30s");
+          throw llmRequestTimeoutError(timeoutSeconds);
         }
         throw error;
       } finally {
@@ -118,20 +155,24 @@ export const geminiProvider: InferenceProvider = {
     }, createApiRetryStrategy());
 
     const candidate = response.candidates?.[0];
-    if (!candidate?.content?.parts?.[0]?.text) {
+    // Outside withRetry: don't repeat cutoffs/blocks; cleanup falls back to the original.
+    if (candidate?.finishReason === "MAX_TOKENS") {
+      throw truncatedOutputError();
+    }
+    if (candidate?.finishReason !== "STOP") {
+      throw new Error(
+        `Gemini returned incomplete output (${candidate?.finishReason || "missing finish reason"})`
+      );
+    }
+    const responseText = extractGeminiText(candidate);
+    if (!responseText) {
       logger.logReasoning("GEMINI_EMPTY_RESPONSE", {
         model,
         finishReason: candidate?.finishReason,
       });
-      if (candidate?.finishReason === "MAX_TOKENS") {
-        throw new Error(
-          "Gemini reached token limit before generating response. Try a shorter input or increase max tokens."
-        );
-      }
-      throw new Error("Gemini returned empty response");
+      throw emptyOutputError("Gemini returned empty response");
     }
 
-    const responseText = candidate.content.parts[0].text!.trim();
     logger.logReasoning("GEMINI_RESPONSE", {
       model,
       responseLength: responseText.length,

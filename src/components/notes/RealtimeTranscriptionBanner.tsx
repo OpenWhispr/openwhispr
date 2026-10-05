@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Zap, X } from "lucide-react";
+import { Zap, X } from "../icons";
 import { cn } from "../lib/utils";
 
 interface RealtimeTranscriptionBannerProps {

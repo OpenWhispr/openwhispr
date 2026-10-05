@@ -2,7 +2,7 @@ import i18n, { normalizeUiLanguage } from "../../i18n";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { en as enPrompts } from "../../locales/prompts";
 import { getLanguageInstruction } from "../../utils/languageSupport";
-import { PROMPT_KINDS, type PromptKind } from "./registry";
+import { PROMPT_KINDS, PLAIN_TEXT_RESPONSE_SUFFIX, type PromptKind } from "./registry";
 
 export { PROMPT_KINDS, PROMPT_KIND_LIST, type PromptKind } from "./registry";
 
@@ -11,6 +11,7 @@ export interface ResolvePromptOptions {
   uiLanguage?: string;
   language?: string;
   customDictionary?: string[];
+  targetLanguageLabel?: string;
 }
 
 export function resolvePrompt(kind: PromptKind, opts: ResolvePromptOptions): string {
@@ -35,6 +36,15 @@ export function wrapCleanupTranscript(text: string): string {
   return `<transcript>\n${text}\n</transcript>\n\nOutput only the cleaned transcript.`;
 }
 
+// Appended to the dictation-agent prompt only when a screenshot is attached.
+export function appendScreenContextSuffix(prompt: string, uiLanguage?: string): string {
+  const locale = normalizeUiLanguage(uiLanguage || "en");
+  const suffix = i18n.getFixedT(locale, "prompts")("screenContextSuffix", {
+    defaultValue: enPrompts.screenContextSuffix,
+  });
+  return prompt + suffix;
+}
+
 export function appendDictionarySuffix(
   prompt: string,
   customDictionary?: string[],
@@ -48,9 +58,18 @@ export function appendDictionarySuffix(
   return prompt + suffix + customDictionary.join(", ");
 }
 
+// Append after every other suffix: trailing instructions are the ones models weight most.
+export function appendPlainTextResponseSuffix(prompt: string): string {
+  return prompt + PLAIN_TEXT_RESPONSE_SUFFIX;
+}
+
 function applySubstitutions(template: string, opts: ResolvePromptOptions): string {
   const name = opts.agentName?.trim() || "Assistant";
   let prompt = template.replace(/\{\{agentName\}\}/g, name);
+
+  if (opts.targetLanguageLabel) {
+    prompt = prompt.replace(/\{\{targetLanguage\}\}/g, opts.targetLanguageLabel);
+  }
 
   const langInstruction = getLanguageInstruction(opts.language);
   if (langInstruction) prompt += "\n\n" + langInstruction;

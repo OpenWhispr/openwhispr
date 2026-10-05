@@ -1,11 +1,15 @@
 import { cloudGet, cloudPost, cloudPatch, cloudDelete } from "./cloudApi.js";
+import { buildNotesListPath } from "./noteListQuery";
 
 interface NoteInput {
   client_note_id?: string;
+  workspace_id?: string | null;
+  space_id?: string | null;
   title?: string | null;
   content?: string;
   enhanced_content?: string | null;
   enhancement_prompt?: string | null;
+  enhancement_template_id?: string | null;
   note_type?: "personal" | "meeting" | "upload";
   source_file?: string | null;
   audio_duration_seconds?: number | null;
@@ -18,9 +22,13 @@ interface NoteInput {
   folder_id?: string | null;
   created_at?: string;
   updated_at?: string;
+  // Optimistic-concurrency base on updates: the server updated_at this device
+  // last acked. The server 409s (note_version_conflict) when a newer write
+  // landed; omitted = legacy last-write-wins.
+  base_updated_at?: string;
 }
 
-interface CloudNote {
+export interface CloudNote {
   id: string;
   client_note_id: string | null;
   title: string | null;
@@ -28,6 +36,8 @@ interface CloudNote {
   enhanced_content: string | null;
   note_type: string;
   enhancement_prompt: string | null;
+  // Absent from APIs that predate note templates.
+  enhancement_template_id?: string | null;
   source_file: string | null;
   audio_duration_seconds: number | null;
   folder_id: string | null;
@@ -37,6 +47,19 @@ interface CloudNote {
   calendar_event_id: string | null;
   diarization_enabled: number | null;
   expected_speaker_count: number | null;
+  workspace_id: string | null;
+  space_id: string | null;
+  // The note's owner (creator), not its last editor. Absent on access_removed
+  // stubs and on API versions that predate ownership.
+  user_id?: string | null;
+  // Creator attribution is separate from the operational custodian. It is
+  // explicitly null after the creator deletes their account.
+  created_by_user_id?: string | null;
+  updated_by_user_id: string | null;
+  previous_space_id?: string | null;
+  // Redacted stub for a row that moved out of one of the caller's spaces —
+  // only id/client_note_id/scope/updated_at are present.
+  access_removed?: boolean;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
@@ -52,8 +75,8 @@ async function create(note: NoteInput): Promise<CloudNote> {
 
 async function batchCreate(
   notes: NoteInput[]
-): Promise<{ created: { client_note_id: string; id: string }[] }> {
-  return cloudPost<{ created: { client_note_id: string; id: string }[] }>(
+): Promise<{ created: { client_note_id: string; id: string; updated_at?: string }[] }> {
+  return cloudPost<{ created: { client_note_id: string; id: string; updated_at?: string }[] }>(
     "/api/notes/batch-create",
     { notes }
   );
@@ -70,14 +93,13 @@ async function deleteNote(id: string): Promise<void> {
 async function list(
   limit?: number,
   before?: string,
-  since?: string
+  since?: string,
+  scope?: "all",
+  cursorId?: string
 ): Promise<{ notes: CloudNote[] }> {
-  const params = new URLSearchParams();
-  if (limit !== undefined) params.set("limit", String(limit));
-  if (before !== undefined) params.set("before", before);
-  if (since !== undefined) params.set("since", since);
-  const query = params.toString();
-  return cloudGet<{ notes: CloudNote[] }>(`/api/notes/list${query ? `?${query}` : ""}`);
+  return cloudGet<{ notes: CloudNote[] }>(
+    buildNotesListPath({ limit, before, since, scope, cursorId })
+  );
 }
 
 async function deleteAll(): Promise<{ deleted: number; errors: number }> {
@@ -94,10 +116,19 @@ async function deleteAll(): Promise<{ deleted: number; errors: number }> {
   return { deleted: results.length - errors, errors };
 }
 
-async function search(query: string, limit?: number): Promise<{ notes: SearchResult[] }> {
+// scope "all" opts into space results (legacy clients stay personal-only);
+// space_id narrows to a single space and takes precedence over scope.
+async function search(
+  query: string,
+  limit?: number,
+  scope?: "all",
+  spaceId?: string
+): Promise<{ notes: SearchResult[] }> {
   return cloudPost<{ notes: SearchResult[] }>("/api/notes/search", {
     query,
     ...(limit !== undefined ? { limit } : {}),
+    ...(scope !== undefined ? { scope } : {}),
+    ...(spaceId !== undefined ? { space_id: spaceId } : {}),
   });
 }
 

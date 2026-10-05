@@ -1,30 +1,42 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useAuth } from "./useAuth";
-import { CACHE_CONFIG } from "../config/constants";
 import { withSessionRefresh } from "../lib/auth";
+import {
+  getUsageState,
+  isPastDueUsage,
+  loadUsage,
+  retryUsage,
+  setUsageAccount,
+  subscribeUsage,
+  watchForUpgrade,
+  type UsageResponse,
+  type UsageState,
+} from "../lib/usageStore";
 
-interface UsageData {
-  wordsUsed: number;
-  wordsRemaining: number;
-  limit: number;
+export interface UseUsageResult {
+  /** Entitlement is only known when this is `"success"`. Gate billing UI on it. */
+  status: UsageState["status"];
+  isRefreshing: boolean;
+  isRetrying: boolean;
+  error: string | null;
+  retry: () => Promise<void>;
+  refetch: () => Promise<void>;
+  /** `null` while the entitlement is unknown — never assume free. */
+  hasPaidAccess: boolean | null;
+  /**
+   * `hasPaidAccess` with the unknown case resolved in the account's favour, for
+   * gates where locking out a payer costs more than briefly over-granting
+   * (the server stays authoritative).
+   */
+  hasPaidAccessOptimistic: boolean;
   plan: string;
-  status: string;
-  isSubscribed: boolean;
-  isTrial: boolean;
-  trialDaysLeft: number | null;
-  currentPeriodEnd: string | null;
-  billingInterval: "monthly" | "annual" | null;
-  resetAt: string;
-}
-
-interface UseUsageResult {
-  plan: string;
-  status: string;
   isPastDue: boolean;
   wordsUsed: number;
   wordsRemaining: number;
   limit: number;
   isSubscribed: boolean;
+  isPersonallySubscribed: boolean;
+  entitledWorkspaceIds: string[];
   isTrial: boolean;
   trialDaysLeft: number | null;
   currentPeriodEnd: string | null;
@@ -32,16 +44,13 @@ interface UseUsageResult {
   isOverLimit: boolean;
   isApproachingLimit: boolean;
   resetAt: string | null;
-  isLoading: boolean;
-  hasLoaded: boolean;
-  error: string | null;
+  /** Any Stripe action — checkout, switch-plan or portal — is in flight; they share one guard. */
   checkoutLoading: boolean;
-  refetch: () => Promise<void>;
   openCheckout: (opts?: {
     plan?: "monthly" | "annual";
     tier?: "pro" | "business";
   }) => Promise<{ success: boolean; error?: string }>;
-  openBillingPortal: () => Promise<{ success: boolean; error?: string }>;
+  openBillingPortal: () => Promise<{ success: boolean; error?: string; code?: string }>;
   switchPlan: (opts: {
     plan: "monthly" | "annual";
     tier: "pro" | "business";
@@ -60,96 +69,49 @@ interface UseUsageResult {
   }>;
 }
 
-const USAGE_CACHE_TTL = CACHE_CONFIG.API_KEY_TTL; // 1 hour
+async function fetchUsageResponse(): Promise<UsageResponse> {
+  const cloudUsage = window.electronAPI?.cloudUsage;
+  if (!cloudUsage) throw new Error("App not ready");
+  return withSessionRefresh(async () => {
+    const result = await cloudUsage();
+    if (!result.success) {
+      const error: Error & { code?: string } = new Error(result.error || "Failed to fetch usage");
+      error.code = result.code;
+      throw error;
+    }
+    return result;
+  });
+}
 
 export function useUsage(): UseUsageResult | null {
-  const { isSignedIn, isLoaded } = useAuth();
-  const [data, setData] = useState<UsageData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasLoaded, setHasLoaded] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { isSignedIn, isLoaded, user } = useAuth();
+  const state = useSyncExternalStore(subscribeUsage, getUsageState);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const checkoutInFlightRef = useRef(false);
-  const lastFetchRef = useRef<number>(0);
-
-  const fetchUsage = useCallback(async () => {
-    if (!window.electronAPI?.cloudUsage) return;
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      await withSessionRefresh(async () => {
-        const result = await window.electronAPI.cloudUsage();
-        if (result.success) {
-          setData({
-            wordsUsed: result.wordsUsed ?? 0,
-            wordsRemaining: result.wordsRemaining ?? 0,
-            limit: result.limit ?? 2000,
-            plan: result.plan ?? "free",
-            status: result.status ?? "active",
-            isSubscribed: result.isSubscribed ?? false,
-            isTrial: result.isTrial ?? false,
-            trialDaysLeft: result.trialDaysLeft ?? null,
-            currentPeriodEnd: result.currentPeriodEnd ?? null,
-            billingInterval: result.billingInterval ?? null,
-            resetAt: result.resetAt ?? "rolling",
-          });
-          lastFetchRef.current = Date.now();
-          localStorage.setItem("isSubscribed", String(result.isSubscribed ?? false));
-        } else {
-          const error: any = new Error(result.error || "Failed to fetch usage");
-          error.code = result.code;
-          throw error;
-        }
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch usage");
-    } finally {
-      setIsLoading(false);
-      setHasLoaded(true);
-    }
-  }, []);
-
   const pendingRefetchRef = useRef(false);
 
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn) {
-      lastFetchRef.current = 0;
-      setData(null);
-      return;
-    }
+  const accountId = isSignedIn ? (user?.id ?? null) : null;
 
-    const shouldFetch = Date.now() - lastFetchRef.current > USAGE_CACHE_TTL;
-    if (shouldFetch) {
-      fetchUsage();
-    } else {
-      setIsLoading(false);
-      setHasLoaded(true);
-    }
+  useEffect(() => {
+    if (!isLoaded) return;
+    setUsageAccount(accountId);
+  }, [isLoaded, accountId]);
+
+  useEffect(() => {
+    if (!isLoaded || !accountId) return;
+
+    void loadUsage(fetchUsageResponse);
 
     const handleFocus = () => {
-      if (pendingRefetchRef.current) {
-        pendingRefetchRef.current = false;
-        lastFetchRef.current = 0;
-        fetchUsage();
-      }
+      if (!pendingRefetchRef.current) return;
+      pendingRefetchRef.current = false;
+      void loadUsage(fetchUsageResponse, { force: true });
     };
     const handleUsageChanged = () => {
-      lastFetchRef.current = 0;
-      fetchUsage();
+      void loadUsage(fetchUsageResponse, { force: true });
     };
-    const handleUpgradeSuccess = async () => {
-      lastFetchRef.current = 0;
-      await fetchUsage();
-      // Retry if webhook hasn't updated DB yet
-      for (let i = 0; i < 3; i++) {
-        const result = await window.electronAPI.cloudUsage();
-        if (result.success && result.isSubscribed) break;
-        await new Promise((r) => setTimeout(r, 2000 * (i + 1)));
-        lastFetchRef.current = 0;
-        await fetchUsage();
-      }
+    const handleUpgradeSuccess = () => {
+      void watchForUpgrade(fetchUsageResponse);
     };
     window.addEventListener("focus", handleFocus);
     window.addEventListener("usage-changed", handleUsageChanged);
@@ -159,7 +121,10 @@ export function useUsage(): UseUsageResult | null {
       window.removeEventListener("usage-changed", handleUsageChanged);
       window.removeEventListener("upgrade-success", handleUpgradeSuccess);
     };
-  }, [isLoaded, isSignedIn, fetchUsage]);
+  }, [isLoaded, accountId]);
+
+  const refetch = useCallback(() => loadUsage(fetchUsageResponse, { force: true }), []);
+  const retry = useCallback(() => retryUsage(fetchUsageResponse), []);
 
   const openCheckout = useCallback(
     async (opts?: {
@@ -189,7 +154,11 @@ export function useUsage(): UseUsageResult | null {
     []
   );
 
-  const openBillingPortal = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+  const openBillingPortal = useCallback(async (): Promise<{
+    success: boolean;
+    error?: string;
+    code?: string;
+  }> => {
     if (checkoutInFlightRef.current) return { success: false, error: "Already loading" };
     if (!window.electronAPI?.cloudBillingPortal || !window.electronAPI?.openExternal) {
       return { success: false, error: "App not ready" };
@@ -203,7 +172,11 @@ export function useUsage(): UseUsageResult | null {
         await window.electronAPI.openExternal(result.url);
         return { success: true };
       }
-      return { success: false, error: result.error || "Failed to open billing portal" };
+      return {
+        success: false,
+        error: result.error || "Failed to open billing portal",
+        code: result.code,
+      };
     } finally {
       checkoutInFlightRef.current = false;
       setCheckoutLoading(false);
@@ -223,16 +196,14 @@ export function useUsage(): UseUsageResult | null {
       setCheckoutLoading(true);
       try {
         const result = await window.electronAPI.cloudSwitchPlan(opts);
-        if (result.success) {
-          await fetchUsage();
-        }
+        if (result.success) await refetch();
         return result;
       } finally {
         checkoutInFlightRef.current = false;
         setCheckoutLoading(false);
       }
     },
-    [fetchUsage]
+    [refetch]
   );
 
   const previewSwitchPlan = useCallback(
@@ -247,34 +218,41 @@ export function useUsage(): UseUsageResult | null {
 
   if (!isSignedIn) return null;
 
+  const data = state.status === "success" ? state.data : null;
   const wordsUsed = data?.wordsUsed ?? 0;
-  const limit = data?.limit ?? 2000;
+  const limit = data?.limit ?? 0;
   const isSubscribed = data?.isSubscribed ?? false;
-  const status = data?.status ?? "active";
-  const isPastDue = (data?.plan === "pro" || data?.plan === "business") && status === "past_due";
-  const isOverLimit = !isSubscribed && limit > 0 && wordsUsed >= limit;
-  const isApproachingLimit = !isSubscribed && limit > 0 && wordsUsed >= limit * 0.8 && !isOverLimit;
+  const isTrial = data?.isTrial ?? false;
+  const hasPaidAccess = data ? data.isSubscribed || data.isTrial : null;
+  const isOverLimit = Boolean(data) && !isSubscribed && limit > 0 && wordsUsed >= limit;
+  const isApproachingLimit =
+    Boolean(data) && !isSubscribed && limit > 0 && wordsUsed >= limit * 0.8 && !isOverLimit;
 
   return {
+    status: state.status,
+    isRefreshing: state.status === "success" && state.isRefreshing,
+    isRetrying: state.status === "error" && state.isRetrying,
+    error: state.status === "error" ? state.error : null,
+    retry,
+    refetch,
+    hasPaidAccess,
+    hasPaidAccessOptimistic: hasPaidAccess !== false,
     plan: data?.plan ?? "free",
-    status,
-    isPastDue,
+    isPastDue: data ? isPastDueUsage(data) : false,
     wordsUsed,
-    wordsRemaining: data?.wordsRemaining ?? (limit > 0 ? limit - wordsUsed : -1),
+    wordsRemaining: data?.wordsRemaining ?? 0,
     limit,
     isSubscribed,
-    isTrial: data?.isTrial ?? false,
+    isPersonallySubscribed: data?.entitlementSources.personal ?? false,
+    entitledWorkspaceIds: data?.entitlementSources.workspaceIds ?? [],
+    isTrial,
     trialDaysLeft: data?.trialDaysLeft ?? null,
     currentPeriodEnd: data?.currentPeriodEnd ?? null,
     billingInterval: data?.billingInterval ?? null,
     isOverLimit,
     isApproachingLimit,
     resetAt: data?.resetAt ?? null,
-    isLoading,
-    hasLoaded,
-    error,
     checkoutLoading,
-    refetch: fetchUsage,
     openCheckout,
     openBillingPortal,
     switchPlan,

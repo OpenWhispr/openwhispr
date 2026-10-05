@@ -60,6 +60,14 @@ function getDownloadUrl(release, archiveName) {
   return asset?.url || null;
 }
 
+function isCurrentVersion(markerPath, version) {
+  try {
+    return JSON.parse(fs.readFileSync(markerPath, "utf8")).version === version;
+  } catch {
+    return false;
+  }
+}
+
 async function downloadBinary(platformArch, config, release, isForce = false) {
   if (!config) {
     console.log(`  [qdrant] ${platformArch}: Not supported`);
@@ -67,9 +75,10 @@ async function downloadBinary(platformArch, config, release, isForce = false) {
   }
 
   const outputPath = path.join(BIN_DIR, config.outputName);
+  const markerPath = path.join(BIN_DIR, `.qdrant-${platformArch}.json`);
 
-  if (fs.existsSync(outputPath) && !isForce) {
-    console.log(`  [qdrant] ${platformArch}: Already exists (use --force to re-download)`);
+  if (fs.existsSync(outputPath) && !isForce && isCurrentVersion(markerPath, release.tag)) {
+    console.log(`  [qdrant] ${platformArch}: Already up to date (${release.tag})`);
     return true;
   }
 
@@ -93,6 +102,7 @@ async function downloadBinary(platformArch, config, release, isForce = false) {
     if (binaryPath) {
       fs.copyFileSync(binaryPath, outputPath);
       setExecutable(outputPath);
+      fs.writeFileSync(markerPath, JSON.stringify({ version: release.tag }));
       console.log(`  [qdrant] ${platformArch}: Extracted to ${config.outputName}`);
     } else {
       console.error(

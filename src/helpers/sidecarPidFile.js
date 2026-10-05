@@ -32,15 +32,25 @@ function clear(name) {
 
 function readAll() {
   const dir = pidDir();
-  if (!fs.existsSync(dir)) return [];
+  let files;
+  try {
+    files = fs.readdirSync(dir);
+  } catch {
+    return [];
+  }
+
   const entries = [];
-  for (const file of fs.readdirSync(dir)) {
+  for (const file of files) {
     if (!file.endsWith(".pid")) continue;
-    const name = path.basename(file, ".pid");
-    const raw = fs.readFileSync(path.join(dir, file), "utf-8").trim();
-    const pid = Number(raw);
-    if (!Number.isInteger(pid) || pid <= 0) continue;
-    entries.push({ name, pid });
+    try {
+      const name = path.basename(file, ".pid");
+      const raw = fs.readFileSync(path.join(dir, file), "utf-8").trim();
+      const pid = Number(raw);
+      if (!Number.isInteger(pid) || pid <= 0) continue;
+      entries.push({ name, pid });
+    } catch {
+      // Best-effort recovery metadata; skip entries that vanished or cannot be read.
+    }
   }
   return entries;
 }

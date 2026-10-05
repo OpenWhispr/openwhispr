@@ -10,7 +10,15 @@ const REWARM_DELAY_MS = 2000;
 const MAX_REWARM_ATTEMPTS = 10;
 const KEEPALIVE_INTERVAL_MS = 15000;
 const MIN_FRAME_MS = 50;
-const MIN_FRAME_BYTES = (SAMPLE_RATE * 2 * MIN_FRAME_MS) / 1000;
+// AssemblyAI hard-closes the session outside 50-1000 ms but documents 50-250 ms
+// as the supported shape, so the split targets the recommended ceiling: 1000 would
+// put the first slice of a coalesced read exactly on the limit it exists to avoid.
+const MAX_FRAME_MS = 250;
+// Both bounds follow the rate the socket opened at: Note Recording streams at
+// 24 kHz, where a frame sized against this module's 16 kHz default lasts only
+// 33 ms (#2140).
+const minFrameBytes = (sampleRate) => Math.ceil((sampleRate * 2 * MIN_FRAME_MS) / 1000);
+const maxFrameBytes = (sampleRate) => Math.floor((sampleRate * 2 * MAX_FRAME_MS) / 1000);
 
 class AssemblyAiStreaming {
   constructor() {
@@ -21,6 +29,8 @@ class AssemblyAiStreaming {
     this.onFinalTranscript = null;
     this.onError = null;
     this.onSessionEnd = null;
+    this.onConnectionLost = null;
+    this.connectionLossNotified = false;
     this.pendingResolve = null;
     this.pendingReject = null;
     this.connectionTimeout = null;
@@ -30,10 +40,13 @@ class AssemblyAiStreaming {
     this.terminationResolve = null;
     this.cachedToken = null;
     this.tokenFetchedAt = null;
+    this.mode = null;
     this.warmConnection = null;
     this.warmConnectionReady = false;
     this.warmConnectionOptions = null;
     this.warmSessionId = null;
+    this.requestedModel = null;
+    this.sessionSampleRate = SAMPLE_RATE;
     this.rewarmAttempts = 0;
     this.rewarmTimer = null;
     this.keepAliveInterval = null;
@@ -46,12 +59,14 @@ class AssemblyAiStreaming {
 
   buildWebSocketUrl(options) {
     const sampleRate = options.sampleRate || SAMPLE_RATE;
+    this.sessionSampleRate = sampleRate;
     const params = new URLSearchParams({
       sample_rate: String(sampleRate),
       encoding: "pcm_s16le",
       format_turns: "true",
       token: options.token,
     });
+    this.requestedModel = options.model || null;
     if (options.model) {
       params.set("speech_model", options.model);
     }
@@ -71,6 +86,23 @@ class AssemblyAiStreaming {
     this.cachedToken = token;
     this.tokenFetchedAt = Date.now();
     debugLogger.debug("AssemblyAI token cached", { expiresIn: TOKEN_EXPIRY_MS });
+  }
+
+  // BYOK and managed dictation share one client instance, so a token or warm
+  // socket minted under one credential kind must never serve the other. Callers
+  // that read the cache before connecting must adopt the mode first.
+  adoptMode(options) {
+    const mode = options.mode === "byok" ? "byok" : "openwhispr";
+    if (this.mode !== null && this.mode !== mode) {
+      debugLogger.debug("AssemblyAI credential mode changed, dropping cached session state", {
+        from: this.mode,
+        to: mode,
+      });
+      this.cachedToken = null;
+      this.tokenFetchedAt = null;
+      this.cleanupWarmConnection();
+    }
+    this.mode = mode;
   }
 
   isTokenValid() {
@@ -112,6 +144,7 @@ class AssemblyAiStreaming {
       throw new Error("Streaming token is required for warmup");
     }
 
+    this.adoptMode(options);
     if (this.warmConnection) {
       debugLogger.debug(
         this.warmConnectionReady
@@ -132,7 +165,10 @@ class AssemblyAiStreaming {
     debugLogger.debug("AssemblyAI warming up connection");
 
     return new Promise((resolve, reject) => {
+      let settled = false;
       const warmupTimeout = setTimeout(() => {
+        if (settled) return;
+        settled = true;
         this.cleanupWarmConnection();
         reject(new Error("AssemblyAI warmup connection timeout"));
       }, WEBSOCKET_TIMEOUT_MS);
@@ -146,7 +182,8 @@ class AssemblyAiStreaming {
       this.warmConnection.on("message", (data) => {
         try {
           const message = JSON.parse(data.toString());
-          if (message.type === "Begin") {
+          if (message.type === "Begin" && !settled) {
+            settled = true;
             clearTimeout(warmupTimeout);
             this.warmConnectionReady = true;
             this.warmSessionId = message.id || null;
@@ -163,7 +200,10 @@ class AssemblyAiStreaming {
         clearTimeout(warmupTimeout);
         debugLogger.error("AssemblyAI warmup connection error", { error: error.message });
         this.cleanupWarmConnection();
-        reject(error);
+        if (!settled) {
+          settled = true;
+          reject(error);
+        }
       });
 
       this.warmConnection.on("close", (code, reason) => {
@@ -177,6 +217,11 @@ class AssemblyAiStreaming {
           reason: reason?.toString(),
         });
         this.cleanupWarmConnection();
+        if (!settled) {
+          settled = true;
+          reject(new Error(`AssemblyAI warmup connection closed before ready (code: ${code})`));
+          return;
+        }
         if (wasReady && savedOptions) {
           this.warmConnectionOptions = savedOptions;
           this.scheduleRewarm();
@@ -233,6 +278,7 @@ class AssemblyAiStreaming {
 
     this.ws = this.warmConnection;
     this.isConnected = true;
+    this.connectionLossNotified = false;
     this.sessionId = this.warmSessionId || null;
     this.warmConnection = null;
     this.warmConnectionReady = false;
@@ -245,9 +291,10 @@ class AssemblyAiStreaming {
 
     this.ws.removeAllListeners("error");
     this.ws.on("error", (error) => {
+      const wasActive = this.isConnected;
       debugLogger.error("AssemblyAI WebSocket error", { error: error.message });
       this.cleanup();
-      this.onError?.(error);
+      if (wasActive && !this.isDisconnecting) this.notifyConnectionLost(error);
     });
 
     this.ws.removeAllListeners("close");
@@ -260,7 +307,7 @@ class AssemblyAiStreaming {
       });
       this.cleanup();
       if (wasActive && !this.isDisconnecting) {
-        this.onError?.(new Error(`Connection lost (code: ${code})`));
+        this.notifyConnectionLost(new Error(`Connection lost (code: ${code})`));
       }
     });
 
@@ -306,6 +353,26 @@ class AssemblyAiStreaming {
     this.accumulatedText = "";
     this.lastTurnText = "";
     this.turns = [];
+    this.connectionLossNotified = false;
+
+    this.adoptMode(options);
+    // The server pins speech_model at Begin, so a warm socket opened for another
+    // model would keep that model for the whole session — and the Begin mismatch
+    // warning could never fire for the model actually requested.
+    if (
+      this.hasWarmConnection() &&
+      ((this.warmConnectionOptions.model || null) !== (options.model || null) ||
+        (this.warmConnectionOptions.sampleRate || SAMPLE_RATE) !==
+          (options.sampleRate || SAMPLE_RATE))
+    ) {
+      debugLogger.debug("AssemblyAI warm connection differs, cold-starting", {
+        warm: this.warmConnectionOptions.model || null,
+        requested: options.model || null,
+        warmSampleRate: this.warmConnectionOptions.sampleRate || SAMPLE_RATE,
+        requestedSampleRate: options.sampleRate || SAMPLE_RATE,
+      });
+      this.cleanupWarmConnection();
+    }
 
     // Try to use pre-warmed connection for instant start
     if (this.hasWarmConnection()) {
@@ -338,6 +405,7 @@ class AssemblyAiStreaming {
       });
 
       this.ws.on("error", (error) => {
+        const wasActive = this.isConnected;
         debugLogger.error("AssemblyAI WebSocket error", { error: error.message });
         this.cleanup();
         if (this.pendingReject) {
@@ -345,7 +413,11 @@ class AssemblyAiStreaming {
           this.pendingReject = null;
           this.pendingResolve = null;
         }
-        this.onError?.(error);
+        if (wasActive && !this.isDisconnecting) {
+          this.notifyConnectionLost(error);
+        } else if (!this.isDisconnecting) {
+          this.onError?.(error);
+        }
       });
 
       this.ws.on("close", (code, reason) => {
@@ -355,12 +427,27 @@ class AssemblyAiStreaming {
           reason: reason?.toString(),
           wasActive,
         });
+        if (this.pendingReject) {
+          this.pendingReject(new Error(`AssemblyAI WebSocket closed before ready (code: ${code})`));
+          this.pendingReject = null;
+          this.pendingResolve = null;
+        }
         this.cleanup();
         if (wasActive && !this.isDisconnecting) {
-          this.onError?.(new Error(`Connection lost (code: ${code})`));
+          this.notifyConnectionLost(new Error(`Connection lost (code: ${code})`));
         }
       });
     });
+  }
+
+  notifyConnectionLost(error) {
+    if (this.connectionLossNotified) return;
+    this.connectionLossNotified = true;
+    if (this.onConnectionLost) {
+      this.onConnectionLost(error);
+    } else {
+      this.onError?.(error);
+    }
   }
 
   handleMessage(data) {
@@ -373,6 +460,19 @@ class AssemblyAiStreaming {
           this.isConnected = true;
           clearTimeout(this.connectionTimeout);
           debugLogger.debug("AssemblyAI session started", { sessionId: this.sessionId });
+          // AssemblyAI ignores unrecognized query params instead of rejecting them,
+          // so a bad speech_model silently downgrades the session.
+          if (
+            message.configuration?.model &&
+            this.requestedModel &&
+            message.configuration.model !== this.requestedModel
+          ) {
+            debugLogger.warn(
+              "AssemblyAI applied a different speech model than requested",
+              { requested: this.requestedModel, applied: message.configuration.model },
+              "transcription"
+            );
+          }
           if (this.pendingResolve) {
             this.pendingResolve();
             this.pendingResolve = null;
@@ -489,14 +589,30 @@ class AssemblyAiStreaming {
 
     this.pendingAudio.push(pcmBuffer);
     this.pendingAudioBytes += pcmBuffer.length;
-    if (this.pendingAudioBytes < MIN_FRAME_BYTES) {
+    const minBytes = minFrameBytes(this.sessionSampleRate);
+    if (this.pendingAudioBytes < minBytes) {
       return true;
     }
 
     const frame = Buffer.concat(this.pendingAudio, this.pendingAudioBytes);
     this.pendingAudio = [];
     this.pendingAudioBytes = 0;
-    this.ws.send(frame);
+
+    // The native system-audio helpers forward raw stdout chunks, so one read can
+    // far exceed the nominal 100 ms when a stalled main process lets the pipe
+    // coalesce. Carry a sub-floor remainder forward rather than sending it short.
+    const maxBytes = maxFrameBytes(this.sessionSampleRate);
+    let offset = 0;
+    while (frame.length - offset >= minBytes) {
+      const end = Math.min(offset + maxBytes, frame.length);
+      this.ws.send(frame.subarray(offset, end));
+      offset = end;
+    }
+    if (offset < frame.length) {
+      const remainder = frame.subarray(offset);
+      this.pendingAudio.push(remainder);
+      this.pendingAudioBytes = remainder.length;
+    }
     return true;
   }
 

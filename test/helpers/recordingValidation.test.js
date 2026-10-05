@@ -52,3 +52,31 @@ test("treats missing / undefined args as unusable (defensive, does not throw)", 
     reason: "empty-container",
   });
 });
+
+test("withSalvageWarning attaches a warning to a successful salvaged transcription", async () => {
+  const { withSalvageWarning } = await load();
+  assert.deepEqual(withSalvageWarning({ success: true, text: "hi" }, true), {
+    success: true,
+    text: "hi",
+    warning: "salvaged-recording",
+  });
+});
+
+test("withSalvageWarning leaves non-salvaged results untouched", async () => {
+  const { withSalvageWarning } = await load();
+  const result = { success: true, text: "hi" };
+  assert.equal(withSalvageWarning(result, false), result);
+});
+
+test("withSalvageWarning keeps an existing warning", async () => {
+  const { withSalvageWarning } = await load();
+  const result = { success: true, text: "hi", warning: "truncated" };
+  assert.equal(withSalvageWarning(result, true), result);
+});
+
+test("withSalvageWarning ignores failed or missing results", async () => {
+  const { withSalvageWarning } = await load();
+  const failed = { success: false, message: "no audio" };
+  assert.equal(withSalvageWarning(failed, true), failed);
+  assert.equal(withSalvageWarning(null, true), null);
+});

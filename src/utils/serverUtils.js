@@ -1,5 +1,6 @@
 const fs = require("fs");
 const net = require("net");
+const os = require("os");
 const path = require("path");
 const { killProcessGroup } = require("./process");
 
@@ -8,7 +9,8 @@ const GRACEFUL_STOP_TIMEOUT_MS = 5000;
 function tryBind(port, host) {
   return new Promise((resolve) => {
     const s = net.createServer();
-    s.once("error", () => resolve(false));
+    // A host whose address family is absent (e.g. IPv6 disabled) can't conflict on the port.
+    s.once("error", (err) => resolve(err.code === "EADDRNOTAVAIL" || err.code === "EAFNOSUPPORT"));
     s.once("listening", () => s.close(() => resolve(true)));
     s.listen(port, host);
   });
@@ -74,9 +76,17 @@ async function gracefulStopProcess(proc) {
   });
 }
 
+// Logical CPUs this process may use: unlike os.cpus().length this honours
+// affinity masks and container limits, so inference thread counts fit the
+// cores the sidecar will actually get.
+function getAvailableParallelism() {
+  return os.availableParallelism();
+}
+
 module.exports = {
   findAvailablePort,
   isPortAvailable,
   resolveBinaryPath,
   gracefulStopProcess,
+  getAvailableParallelism,
 };

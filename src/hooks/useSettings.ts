@@ -1,9 +1,27 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef } from "react";
-import { useSettingsStore, initializeSettings } from "../stores/settingsStore";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
+import {
+  useSettingsStore,
+  initializeSettings,
+  selectLocalServerPrefs,
+} from "../stores/settingsStore";
 import logger from "../utils/logger";
 import { useLocalStorage } from "./useLocalStorage";
-import type { LocalTranscriptionProvider, InferenceMode, SelfHostedType } from "../types/electron";
+import type {
+  ChineseScriptPreference,
+  LocalTranscriptionProvider,
+  InferenceMode,
+  SelfHostedType,
+} from "../types/electron";
 import type { Snippet } from "../utils/snippets";
+import {
+  effectiveAudioRetentionDays,
+  effectiveLocalHistoryEnabled,
+  isLocalHistoryPolicyResolved,
+  isPolicySettled,
+} from "../stores/policyRules";
+import { usePolicyStore } from "../stores/policyStore";
+import { usePolicySnapshot } from "./usePolicy";
 
 export interface TranscriptionSettings {
   uiLanguage: string;
@@ -11,10 +29,13 @@ export interface TranscriptionSettings {
   whisperModel: string;
   localTranscriptionProvider: LocalTranscriptionProvider;
   parakeetModel: string;
+  cohereModel: string;
   allowOpenAIFallback: boolean;
   allowLocalFallback: boolean;
   fallbackWhisperModel: string;
   preferredLanguage: string;
+  /** When transcription language is Auto, force Chinese output script. See #975. */
+  chineseScriptPreference: ChineseScriptPreference;
   cloudTranscriptionProvider: string;
   cloudTranscriptionModel: string;
   cloudTranscriptionBaseUrl?: string;
@@ -55,11 +76,15 @@ export interface HotkeySettings {
 export interface OnboardingSettings {
   onboardingUseCases: string[];
   onboardingUseCaseNote: string;
+  spokenLanguages: string[];
 }
 
 export interface MicrophoneSettings {
+  microphoneSelectionMode: "system" | "built-in" | "specific";
   preferBuiltInMic: boolean;
   selectedMicDeviceId: string;
+  selectedMicDeviceLabel: string;
+  micWarmHoldSeconds: number;
 }
 
 export interface ApiKeySettings {
@@ -74,14 +99,18 @@ export interface ApiKeySettings {
   cortiClientSecret: string;
   cortiApiKey: string;
   tinfoilApiKey: string;
+  deepgramApiKey: string;
+  assemblyaiApiKey: string;
   customTranscriptionApiKey: string;
   cleanupCustomApiKey: string;
 }
 
 export interface PrivacySettings {
   cloudBackupEnabled: boolean;
+  insightsSyncEnabled: boolean;
   telemetryEnabled: boolean;
   audioRetentionDays: number;
+  transcriptRetentionDays: number;
   dataRetentionEnabled: boolean;
   saveDiscardedTranscriptions: boolean;
 }
@@ -93,7 +122,6 @@ export interface ThemeSettings {
 export interface ChatAgentSettings {
   chatAgentModel: string;
   chatAgentProvider: string;
-  chatAgentKey: string;
   chatAgentCloudMode: string;
   chatAgentMode: InferenceMode;
   chatAgentCloudBaseUrl: string;
@@ -103,8 +131,7 @@ export interface ChatAgentSettings {
 
 function useSettingsInternal() {
   const store = useSettingsStore();
-  const { setCustomDictionary, applyCustomDictionaryFromExternal, applySnippetsFromExternal } =
-    store;
+  const { applyCustomDictionaryFromExternal, applySnippetsFromExternal } = store;
 
   // One-time initialization: sync API keys, dictation key, activation mode,
   // UI language, and dictionary from the main process / SQLite.
@@ -168,31 +195,77 @@ function useSettingsInternal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Retention periods are enforced by the main process cleanup sweep
+  const { audioRetentionDays, transcriptRetentionDays, dataRetentionEnabled } = store;
+  const enforcedAudioRetentionDays = usePolicyStore((policyState) =>
+    effectiveAudioRetentionDays(policyState, audioRetentionDays)
+  );
+  // Sent alongside the periods because the main process reconstructs Insights
+  // history from stored transcripts, and that must answer to the same switch.
+  const enforcedDataRetentionEnabled = usePolicyStore((policyState) =>
+    effectiveLocalHistoryEnabled(policyState, dataRetentionEnabled)
+  );
+  // Reported alongside the value because history reconstruction reads that
+  // switch as consent, and until the policy settles it is only a default.
+  const localHistoryPolicyResolved = usePolicyStore(isLocalHistoryPolicyResolved);
+  useEffect(() => {
+    window.electronAPI?.syncRetentionSettings?.({
+      audioRetentionDays: enforcedAudioRetentionDays,
+      transcriptRetentionDays,
+      dataRetentionEnabled: enforcedDataRetentionEnabled,
+      localHistoryPolicyResolved,
+    });
+  }, [
+    enforcedAudioRetentionDays,
+    transcriptRetentionDays,
+    enforcedDataRetentionEnabled,
+    localHistoryPolicyResolved,
+  ]);
+
   // Sync startup pre-warming preferences to main process
   const {
     useLocalWhisper,
     localTranscriptionProvider,
     whisperModel,
     parakeetModel,
-    cleanupProvider,
-    cleanupModel,
-    dictationAgentProvider,
-    dictationAgentModel,
+    cohereModel,
+    preferredLanguage,
   } = store;
+  // Every window runs this sync, and the main process stops the shared
+  // llama-server from it, so it must see every scope's resolved local model.
+  const policySnapshot = usePolicySnapshot();
+  const localServerPrefs = useSettingsStore(
+    useShallow((state) => selectLocalServerPrefs(state, policySnapshot))
+  );
+  const policySettled = isPolicySettled(policySnapshot);
+  // A sign-out before the policy fetch starts leaves the policy idle, so only
+  // the cleared account scope says this window's deferred sync can now apply.
+  const [signOuts, setSignOuts] = useState(0);
+  useEffect(
+    () =>
+      window.electronAPI?.onActiveAccountScopeChanged?.((scope) => {
+        if (!scope) setSignOuts((count) => count + 1);
+      }),
+    []
+  );
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.electronAPI?.syncStartupPreferences) return;
 
-    const model = localTranscriptionProvider === "nvidia" ? parakeetModel : whisperModel;
+    const model =
+      localTranscriptionProvider === "nvidia"
+        ? parakeetModel
+        : localTranscriptionProvider === "cohere"
+          ? cohereModel
+          : whisperModel;
     window.electronAPI
       .syncStartupPreferences({
         useLocalWhisper,
         localTranscriptionProvider,
         model: model || undefined,
-        cleanupProvider,
-        cleanupModel: cleanupProvider === "local" ? cleanupModel : undefined,
-        dictationAgentProvider,
-        dictationAgentModel: dictationAgentProvider === "local" ? dictationAgentModel : undefined,
+        language: preferredLanguage || undefined,
+        ...localServerPrefs,
+        policySettled,
       })
       .catch((err) =>
         logger.warn(
@@ -206,10 +279,11 @@ function useSettingsInternal() {
     localTranscriptionProvider,
     whisperModel,
     parakeetModel,
-    cleanupProvider,
-    cleanupModel,
-    dictationAgentProvider,
-    dictationAgentModel,
+    cohereModel,
+    preferredLanguage,
+    localServerPrefs,
+    policySettled,
+    signOuts,
   ]);
 
   return {
@@ -218,10 +292,12 @@ function useSettingsInternal() {
     uiLanguage: store.uiLanguage,
     localTranscriptionProvider: store.localTranscriptionProvider,
     parakeetModel: store.parakeetModel,
+    cohereModel: store.cohereModel,
     allowOpenAIFallback: store.allowOpenAIFallback,
     allowLocalFallback: store.allowLocalFallback,
     fallbackWhisperModel: store.fallbackWhisperModel,
     preferredLanguage: store.preferredLanguage,
+    chineseScriptPreference: store.chineseScriptPreference,
     cloudTranscriptionProvider: store.cloudTranscriptionProvider,
     cloudTranscriptionModel: store.cloudTranscriptionModel,
     cloudTranscriptionBaseUrl: store.cloudTranscriptionBaseUrl,
@@ -253,6 +329,8 @@ function useSettingsInternal() {
     mistralApiKey: store.mistralApiKey,
     openrouterApiKey: store.openrouterApiKey,
     tinfoilApiKey: store.tinfoilApiKey,
+    deepgramApiKey: store.deepgramApiKey,
+    assemblyaiApiKey: store.assemblyaiApiKey,
     dictationKey: store.dictationKey,
     meetingKey: store.meetingKey,
     voiceAgentKey: store.voiceAgentKey,
@@ -264,10 +342,12 @@ function useSettingsInternal() {
     setUiLanguage: store.setUiLanguage,
     setLocalTranscriptionProvider: store.setLocalTranscriptionProvider,
     setParakeetModel: store.setParakeetModel,
+    setCohereModel: store.setCohereModel,
     setAllowOpenAIFallback: store.setAllowOpenAIFallback,
     setAllowLocalFallback: store.setAllowLocalFallback,
     setFallbackWhisperModel: store.setFallbackWhisperModel,
     setPreferredLanguage: store.setPreferredLanguage,
+    setChineseScriptPreference: store.setChineseScriptPreference,
     setCloudTranscriptionProvider: store.setCloudTranscriptionProvider,
     setCloudTranscriptionModel: store.setCloudTranscriptionModel,
     setCloudTranscriptionBaseUrl: store.setCloudTranscriptionBaseUrl,
@@ -281,6 +361,7 @@ function useSettingsInternal() {
     setCleanupMode: store.setCleanupMode,
     setCleanupRemoteUrl: store.setCleanupRemoteUrl,
     setCustomDictionary: store.setCustomDictionary,
+    updateCustomDictionary: store.updateCustomDictionary,
     setUseCleanupModel: store.setUseCleanupModel,
     setUseDictationAgent: store.setUseDictationAgent,
     setCleanupModel: store.setCleanupModel,
@@ -301,6 +382,8 @@ function useSettingsInternal() {
     setOnboardingUseCases: store.setOnboardingUseCases,
     onboardingUseCaseNote: store.onboardingUseCaseNote,
     setOnboardingUseCaseNote: store.setOnboardingUseCaseNote,
+    spokenLanguages: store.spokenLanguages,
+    setSpokenLanguages: store.setSpokenLanguages,
     setTheme: store.setTheme,
     activationMode: store.activationMode,
     setActivationMode: store.setActivationMode,
@@ -310,8 +393,8 @@ function useSettingsInternal() {
     setNotifyMeetingDetection: store.setNotifyMeetingDetection,
     notifyCalendarReminders: store.notifyCalendarReminders,
     setNotifyCalendarReminders: store.setNotifyCalendarReminders,
-    notifyUpdates: store.notifyUpdates,
-    setNotifyUpdates: store.setNotifyUpdates,
+    autoUpdatesEnabled: store.autoUpdatesEnabled,
+    setAutoUpdatesEnabled: store.setAutoUpdatesEnabled,
     audioCuesEnabled: store.audioCuesEnabled,
     setAudioCuesEnabled: store.setAudioCuesEnabled,
     pauseMediaOnDictation: store.pauseMediaOnDictation,
@@ -322,10 +405,15 @@ function useSettingsInternal() {
     setStartMinimized: store.setStartMinimized,
     panelStartPosition: store.panelStartPosition,
     setPanelStartPosition: store.setPanelStartPosition,
+    microphoneSelectionMode: store.microphoneSelectionMode,
     preferBuiltInMic: store.preferBuiltInMic,
     selectedMicDeviceId: store.selectedMicDeviceId,
+    selectedMicDeviceLabel: store.selectedMicDeviceLabel,
+    micWarmHoldSeconds: store.micWarmHoldSeconds,
+    setMicrophoneSelectionMode: store.setMicrophoneSelectionMode,
     setPreferBuiltInMic: store.setPreferBuiltInMic,
-    setSelectedMicDeviceId: store.setSelectedMicDeviceId,
+    setSelectedMicDevice: store.setSelectedMicDevice,
+    setMicWarmHoldSeconds: store.setMicWarmHoldSeconds,
     autoLearnCorrections,
     setAutoLearnCorrections,
     showTranscriptionPreview: store.showTranscriptionPreview,
@@ -360,10 +448,14 @@ function useSettingsInternal() {
     setWhisperVadSamplesOverlap: store.setWhisperVadSamplesOverlap,
     cloudBackupEnabled: store.cloudBackupEnabled,
     setCloudBackupEnabled: store.setCloudBackupEnabled,
+    insightsSyncEnabled: store.insightsSyncEnabled,
+    setInsightsSyncEnabled: store.setInsightsSyncEnabled,
     telemetryEnabled: store.telemetryEnabled,
     setTelemetryEnabled: store.setTelemetryEnabled,
     audioRetentionDays: store.audioRetentionDays,
     setAudioRetentionDays: store.setAudioRetentionDays,
+    transcriptRetentionDays: store.transcriptRetentionDays,
+    setTranscriptRetentionDays: store.setTranscriptRetentionDays,
     dataRetentionEnabled: store.dataRetentionEnabled,
     setDataRetentionEnabled: store.setDataRetentionEnabled,
     saveDiscardedTranscriptions: store.saveDiscardedTranscriptions,

@@ -7,34 +7,59 @@ import { listFoldersTool } from "./listFoldersTool";
 import { clipboardTool } from "./clipboardTool";
 import { webSearchTool } from "./webSearchTool";
 import { calendarTool } from "./calendarTool";
+import { calendarAvailabilityTool } from "./calendarAvailabilityTool";
+import { createSnippetTool, createUpdateSnippetsTool, type SnippetActions } from "./snippetTool";
+import { createUpdateDictionaryTool, type DictionaryActions } from "./dictionaryTool";
+import {
+  registerConnectorTools,
+  type ConnectorToolSettings,
+} from "./connectors/connectorToolModules";
+import type { ContainerScope } from "../../types/chat";
 
 export { ToolRegistry } from "./ToolRegistry";
 export type { ToolDefinition, ToolResult } from "./ToolRegistry";
 
 interface ToolRegistrySettings {
   isSignedIn: boolean;
-  gcalConnected: boolean;
+  calendarConnected: boolean;
   cloudBackupEnabled: boolean;
+  /** Pins search_notes to a container (overview chat); the LLM cannot widen it. */
+  searchScope?: ContainerScope;
+  webSearchEnabled: boolean;
+  /** Live dictionary and snippet access; enables the vocabulary tools. */
+  vocabulary?: DictionaryActions & SnippetActions;
+  /** Present only when connectors are available (signed in, paid, policy allows). */
+  connectors?: ConnectorToolSettings;
 }
 
 export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry {
   const registry = new ToolRegistry();
 
   const useCloudSearch = settings.isSignedIn && settings.cloudBackupEnabled;
-  registry.register(createSearchNotesTool({ useCloudSearch }));
+  registry.register(createSearchNotesTool({ useCloudSearch, fixedScope: settings.searchScope }));
   registry.register(getNoteTool);
   registry.register(createNoteTool);
   registry.register(updateNoteTool);
   registry.register(listFoldersTool);
   registry.register(clipboardTool);
 
-  if (settings.isSignedIn) {
+  if (settings.vocabulary) {
+    const snippets = settings.vocabulary.getSnippets();
+    if (snippets.length > 0) registry.register(createSnippetTool(snippets));
+    registry.register(createUpdateDictionaryTool(settings.vocabulary));
+    registry.register(createUpdateSnippetsTool(settings.vocabulary));
+  }
+
+  if (settings.isSignedIn && settings.webSearchEnabled) {
     registry.register(webSearchTool);
   }
 
-  if (settings.gcalConnected) {
+  if (settings.calendarConnected) {
     registry.register(calendarTool);
+    registry.register(calendarAvailabilityTool);
   }
+
+  if (settings.connectors) registerConnectorTools(registry, settings.connectors);
 
   return registry;
 }

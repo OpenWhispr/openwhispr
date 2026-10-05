@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
-import { ChevronDown, Search, X, Check } from "lucide-react";
+import { ChevronDown, Search, X, Check } from "../icons";
 import registry from "../../config/languageRegistry.json";
 import { LIST_SEARCH_THRESHOLD } from "../../config/constants";
 
@@ -22,6 +22,7 @@ interface LanguageSelectorProps {
   onChange: (value: string) => void;
   options?: LanguageOption[];
   className?: string;
+  placeholder?: string;
 }
 
 export default function LanguageSelector({
@@ -29,6 +30,7 @@ export default function LanguageSelector({
   onChange,
   options,
   className = "",
+  placeholder,
 }: LanguageSelectorProps) {
   const { t } = useTranslation();
   const items = options ?? REGISTRY_OPTIONS;
@@ -75,10 +77,18 @@ export default function LanguageSelector({
       // fixed positioning is relative to that ancestor, not the viewport.
       const offsetX = target === document.body ? 0 : target.getBoundingClientRect().left;
       const offsetY = target === document.body ? 0 : target.getBoundingClientRect().top;
+      const menuWidth = Math.max(triggerRect.width, 240);
+      const containerRight =
+        (target === document.body ? window.innerWidth : target.getBoundingClientRect().right) -
+        offsetX;
+      let left = triggerRect.left - offsetX;
+      if (left + menuWidth > containerRight - 8) {
+        left = Math.max(8, triggerRect.right - offsetX - menuWidth);
+      }
       setDropdownPosition({
         top: triggerRect.bottom + 4 - offsetY,
-        left: triggerRect.left - offsetX,
-        width: triggerRect.width,
+        left,
+        width: menuWidth,
       });
       requestAnimationFrame(() => {
         searchInputRef.current?.focus();
@@ -146,6 +156,8 @@ export default function LanguageSelector({
     }
   };
 
+  const selected = items.find((l) => l.value === value);
+
   return (
     <div className={`relative ${className}`} ref={setContainerNode}>
       {/* Trigger button - premium, tight, tactile macOS-style */}
@@ -156,7 +168,7 @@ export default function LanguageSelector({
         onKeyDown={handleKeyDown}
         className={`
           group relative w-full flex items-center justify-between gap-2
-          h-7 px-2.5 text-left
+          h-7 px-2.5 text-start
           rounded text-xs font-medium
           border shadow-sm backdrop-blur-sm
           transition-[background-color,border-color,transform] duration-200 ease-out
@@ -170,11 +182,9 @@ export default function LanguageSelector({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
       >
-        <span className="truncate text-foreground">
-          <span className="mr-1.5">
-            {items.find((l) => l.value === value)?.flag ?? "\uD83C\uDF10"}
-          </span>
-          {items.find((l) => l.value === value)?.label ?? value}
+        <span className={`truncate ${selected ? "text-foreground" : "text-muted-foreground"}`}>
+          <span className="me-1.5">{selected?.flag ?? "\uD83C\uDF10"}</span>
+          {selected?.label ?? (value || placeholder || "")}
         </span>
         <ChevronDown
           className={`w-3.5 h-3.5 shrink-0 text-muted-foreground transition-[color,transform] duration-200 ${
@@ -198,23 +208,24 @@ export default function LanguageSelector({
             className="z-9999 bg-popover/95 backdrop-blur-xl border border-border/70 rounded shadow-xl overflow-hidden"
           >
             {showSearch && (
-              <div className="px-2 pt-2 pb-1.5 border-b border-border/50">
+              <div className="px-2 pt-2 pb-1.5 border-b border-border/70">
                 <div className="relative">
-                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+                  <Search className="absolute start-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
                   <input
+                    dir="auto"
                     ref={searchInputRef}
                     type="text"
                     value={searchQuery}
                     onChange={(e) => handleSearchQueryChange(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder={t("languageSelector.searchPlaceholder")}
-                    className="w-full h-7 pl-7 pr-6 text-xs bg-transparent text-foreground border-0 focus:outline-none placeholder:text-muted-foreground/50"
+                    className="w-full h-7 ps-7 pe-6 text-xs bg-transparent text-foreground border-0 focus:outline-none placeholder:text-muted-foreground/70"
                   />
                   {searchQuery && (
                     <button
                       type="button"
                       onClick={clearSearch}
-                      className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors rounded p-0.5 hover:bg-muted/50"
+                      className="absolute end-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors rounded p-0.5 hover:bg-muted/50"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -242,7 +253,7 @@ export default function LanguageSelector({
                         onClick={() => handleSelect(language.value)}
                         className={`
                           group w-full flex items-center justify-between gap-2
-                          h-7 px-2.5 text-left text-xs font-medium
+                          h-7 px-2.5 text-start text-xs font-medium
                           rounded transition-[background-color,color,transform] duration-150 ease-out
                           ${
                             isSelected
@@ -256,7 +267,7 @@ export default function LanguageSelector({
                         aria-selected={isSelected}
                       >
                         <span className="truncate">
-                          <span className="mr-1.5">{language.flag}</span>
+                          <span className="me-1.5">{language.flag}</span>
                           {language.label}
                         </span>
                         {isSelected && <Check className="w-3 h-3 shrink-0" />}

@@ -1,4 +1,4 @@
-import { MousePointerClick, MicVocal } from "lucide-react";
+import { MousePointerClick, MicVocal } from "../icons";
 import { useTranslation } from "react-i18next";
 
 type ActivationMode = "tap" | "push";
@@ -6,7 +6,9 @@ type ActivationMode = "tap" | "push";
 interface ActivationModeSelectorProps {
   value: ActivationMode;
   onChange: (mode: ActivationMode) => void;
-  disabled?: boolean;
+  pushDisabledReason?: string;
+  /** "onboarding" draws the control in the setup flow's pill grammar and tokens. */
+  variant?: "default" | "onboarding";
 }
 
 const OPTIONS = [
@@ -14,48 +16,69 @@ const OPTIONS = [
   { mode: "push", Icon: MicVocal, labelKey: "common.hold" },
 ] as const;
 
+const STYLES = {
+  default: {
+    track: "rounded-md border p-0.5 bg-surface-1 border-border-subtle",
+    indicator: "rounded border bg-surface-raised border-border-subtle",
+    button: "gap-1.5 rounded px-3.5 py-1.5 text-xs",
+    icon: "size-3.5",
+    selected: "text-foreground",
+    unselected: "text-muted-foreground hover:text-foreground",
+  },
+  onboarding: {
+    track: "rounded-full p-1 bg-[var(--onboarding-surface-tertiary)]",
+    indicator: "rounded-full bg-[var(--onboarding-surface)] shadow-sm",
+    button: "h-8 gap-1.5 rounded-full px-4 text-sm",
+    icon: "size-4",
+    selected: "text-[var(--onboarding-text-primary)]",
+    unselected:
+      "text-[var(--onboarding-text-secondary)] hover:text-[var(--onboarding-text-primary)]",
+  },
+} as const;
+
 export function ActivationModeSelector({
   value,
   onChange,
-  disabled = false,
+  pushDisabledReason,
+  variant = "default",
 }: ActivationModeSelectorProps) {
   const { t } = useTranslation();
+  const styles = STYLES[variant];
 
   return (
-    <div
-      className={`
-        relative flex rounded-md border p-0.5 transition-colors duration-200
-        bg-surface-1 border-border-subtle
-        ${disabled ? "opacity-50 cursor-not-allowed" : ""}
-      `}
-    >
-      {/* Sliding indicator */}
+    // Two equal columns, so the half-width indicator covers exactly one option
+    // and a single full-width translate lands it under the other.
+    <div className={`relative grid grid-cols-2 transition-colors duration-200 ${styles.track}`}>
       <div
-        className={`
-          absolute top-0.5 bottom-0.5 w-[calc(50%-2px)] rounded
-          bg-surface-raised border border-border-subtle
-          transition-transform duration-200 ease-out
-          ${value === "push" ? "translate-x-[calc(100%+4px)]" : "translate-x-0"}
-        `}
+        className={`absolute inset-y-[var(--inset)] start-[var(--inset)] w-[calc(50%-var(--inset))] transition-transform duration-200 ease-out ${styles.indicator} ${
+          value === "push" ? "translate-x-full rtl:-translate-x-full" : "translate-x-0"
+        }`}
+        style={{ "--inset": variant === "onboarding" ? "4px" : "2px" } as React.CSSProperties}
       />
 
-      {OPTIONS.map(({ mode, Icon, labelKey }) => (
-        <button
-          key={mode}
-          type="button"
-          disabled={disabled}
-          onClick={() => onChange(mode)}
-          className={`
-            relative z-10 flex-1 flex items-center justify-center gap-1 rounded px-2.5 py-1
-            transition-colors duration-150
-            ${disabled ? "cursor-not-allowed" : "cursor-pointer"}
-            ${value === mode ? "text-foreground" : "text-muted-foreground hover:text-foreground"}
-          `}
-        >
-          <Icon className="w-3 h-3" />
-          <span className="text-xs font-medium">{t(labelKey)}</span>
-        </button>
-      ))}
+      {OPTIONS.map(({ mode, Icon, labelKey }) => {
+        const disabledReason = mode === "push" ? pushDisabledReason : undefined;
+        const disabled = Boolean(disabledReason);
+        const label = t(labelKey);
+
+        return (
+          <button
+            key={mode}
+            type="button"
+            disabled={disabled}
+            title={disabledReason}
+            aria-label={disabledReason ? `${label}: ${disabledReason}` : undefined}
+            aria-pressed={value === mode}
+            onClick={() => onChange(mode)}
+            className={`relative z-10 flex items-center justify-center font-medium transition-colors duration-150 ${styles.button} ${
+              disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+            } ${value === mode ? styles.selected : styles.unselected}`}
+          >
+            <Icon className={styles.icon} />
+            <span>{label}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }

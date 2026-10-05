@@ -1,3 +1,4 @@
+import orukIcon from "@/assets/icons/providers/oruk.webp";
 import openaiIcon from "@/assets/icons/providers/openai.svg";
 import anthropicIcon from "@/assets/icons/providers/anthropic.svg";
 import geminiIcon from "@/assets/icons/providers/gemini.svg";
@@ -5,9 +6,14 @@ import llamaIcon from "@/assets/icons/providers/llama.svg";
 import mistralIcon from "@/assets/icons/providers/mistral.svg";
 import qwenIcon from "@/assets/icons/providers/qwen.svg";
 import groqIcon from "@/assets/icons/providers/groq.svg";
-import nvidiaIcon from "@/assets/icons/providers/nvidia.svg";
+// The square brand tile (green field, white mark) rather than the bare eye: the
+// eye SVG is 163x108, and ProviderIcon renders a square img, so it came out
+// squashed in every row. WebP because NVIDIA ships the tile as raster art.
+import nvidiaIcon from "@/assets/icons/providers/nvidia.webp";
+import cohereIcon from "@/assets/icons/providers/cohere.svg";
 import openaiOssIcon from "@/assets/icons/providers/openai-oss.svg";
 import gemmaIcon from "@/assets/icons/providers/gemma.svg";
+import liquidaiIcon from "@/assets/icons/providers/liquidai.svg";
 import bedrockIcon from "@/assets/icons/providers/bedrock.svg";
 import azureIcon from "@/assets/icons/providers/azure.svg";
 import vertexIcon from "@/assets/icons/providers/vertex.svg";
@@ -15,8 +21,11 @@ import xaiIcon from "@/assets/icons/providers/xai.svg";
 import cortiIcon from "@/assets/icons/providers/corti.svg";
 import openrouterIcon from "@/assets/icons/providers/openrouter.svg";
 import tinfoilIcon from "@/assets/icons/providers/tinfoil.svg";
+import deepgramIcon from "@/assets/icons/providers/deepgram.svg";
+import assemblyaiIcon from "@/assets/icons/providers/assemblyai.svg";
 
 export const PROVIDER_ICONS: Record<string, string> = {
+  oruk: orukIcon,
   openai: openaiIcon,
   whisper: openaiIcon,
   anthropic: anthropicIcon,
@@ -26,8 +35,10 @@ export const PROVIDER_ICONS: Record<string, string> = {
   qwen: qwenIcon,
   groq: groqIcon,
   nvidia: nvidiaIcon,
+  cohere: cohereIcon,
   "openai-oss": openaiOssIcon,
   gemma: gemmaIcon,
+  liquidai: liquidaiIcon,
   bedrock: bedrockIcon,
   azure: azureIcon,
   vertex: vertexIcon,
@@ -35,6 +46,8 @@ export const PROVIDER_ICONS: Record<string, string> = {
   corti: cortiIcon,
   openrouter: openrouterIcon,
   tinfoil: tinfoilIcon,
+  deepgram: deepgramIcon,
+  assemblyai: assemblyaiIcon,
 };
 
 export function getProviderIcon(provider: string): string | undefined {
@@ -46,10 +59,12 @@ export const MONOCHROME_PROVIDERS = [
   "whisper",
   "anthropic",
   "openai-oss",
+  "liquidai",
   "xai",
   "corti",
   "openrouter",
   "tinfoil",
+  "assemblyai",
 ] as const;
 
 export function isMonochromeProvider(provider: string): boolean {

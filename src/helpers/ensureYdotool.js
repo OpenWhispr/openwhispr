@@ -2,6 +2,7 @@ const fs = require("fs");
 const os = require("os");
 const { spawnSync } = require("child_process");
 const { dialog } = require("electron");
+const { getLinuxSessionInfo } = require("./linuxSession");
 
 function getLogger() {
   return require("./debugLogger");
@@ -186,27 +187,28 @@ function isNixOS() {
 function getYdotoolStatus() {
   const hasYdotool = commandExists("ydotool");
   const hasYdotoold = commandExists("ydotoold");
+  const hasWtype = commandExists("wtype");
   const daemonRunning = isYdotooldRunning();
   const hasService = serviceFileExists();
   const hasUinput = isUinputAccessible();
   const hasUdevRule = udevRuleExists();
   const hasGroup = userInInputGroup();
-  const isWayland =
-    (process.env.XDG_SESSION_TYPE || "").toLowerCase() === "wayland" ||
-    !!process.env.WAYLAND_DISPLAY;
+  const { isWayland, isKde, isWlroots } = getLinuxSessionInfo();
 
   return {
     isLinux: process.platform === "linux",
     isWayland,
+    isKde,
+    isWlroots,
     hasYdotool,
     hasYdotoold,
+    hasWtype,
     daemonRunning,
     hasService,
     hasUinput,
     hasUdevRule,
     hasGroup,
     isNixOS: isNixOS(),
-    allGood: hasYdotool && hasYdotoold && daemonRunning && hasUinput && hasGroup,
   };
 }
 

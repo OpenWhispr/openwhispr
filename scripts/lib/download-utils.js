@@ -8,6 +8,13 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000;
 const MAX_REDIRECTS = 5;
 
+// Node's global agent keeps sockets alive, and a socket only returns to the pool (where it
+// stops holding the event loop open) once its response has been read to the end. A redirect
+// or error body we never read pins the socket until the server drops it, often for minutes.
+function discardBody(response) {
+  response.resume();
+}
+
 /**
  * Fetch JSON from a URL with proper error handling.
  * @param {string} url - URL to fetch
@@ -40,6 +47,7 @@ function fetchJson(url, redirectCount = 0) {
     https
       .get(url, options, (res) => {
         if ([301, 302, 303, 307, 308].includes(res.statusCode)) {
+          discardBody(res);
           const location = res.headers.location;
           if (!location) {
             reject(new Error("Redirect without location header"));
@@ -53,6 +61,7 @@ function fetchJson(url, redirectCount = 0) {
         }
 
         if (res.statusCode !== 200) {
+          discardBody(res);
           reject(new Error(`HTTP ${res.statusCode}`));
           return;
         }
@@ -69,7 +78,10 @@ function fetchJson(url, redirectCount = 0) {
         res.on("error", reject);
       })
       .on("error", reject)
-      .on("timeout", () => reject(new Error("Request timeout")));
+      .on("timeout", function onTimeout() {
+        // Destroying rejects through the "error" handler and frees the stalled socket.
+        this.destroy(new Error("Request timeout"));
+      });
   });
 }
 
@@ -161,8 +173,9 @@ function downloadFile(url, dest, retryCount = 0) {
         return;
       }
 
-      activeRequest = https.get(currentUrl, (response) => {
+      const req = https.get(currentUrl, (response) => {
         if ([301, 302, 303, 307, 308].includes(response.statusCode)) {
+          discardBody(response);
           const location = response.headers.location;
           if (!location) {
             cleanup();
@@ -209,12 +222,21 @@ function downloadFile(url, dest, retryCount = 0) {
         });
       });
 
-      activeRequest.on("error", (err) => {
+      activeRequest = req;
+
+      // A redirect we already followed can still error or time out while its body drains;
+      // that must not tear down the request that replaced it.
+      req.on("error", (err) => {
+        if (req !== activeRequest) return;
         cleanup();
         reject(err);
       });
 
-      activeRequest.setTimeout(REQUEST_TIMEOUT, () => {
+      req.setTimeout(REQUEST_TIMEOUT, () => {
+        if (req !== activeRequest) {
+          req.destroy();
+          return;
+        }
         cleanup();
         reject(new Error("Connection timed out"));
       });
@@ -319,13 +341,63 @@ function setExecutable(filePath) {
   }
 }
 
+function matchesPattern(filename, pattern) {
+  if (pattern === "*.dylib") {
+    return filename.endsWith(".dylib");
+  } else if (pattern === "*.dll") {
+    return filename.endsWith(".dll");
+  } else if (pattern === "*.so*") {
+    return /\.so(\.\d+)*$/.test(filename) || filename.endsWith(".so");
+  }
+  return false;
+}
+
+function findLibrariesInDir(dir, pattern, options = {}, currentDepth = 0) {
+  const { maxDepth = 5, ignoreReadErrors = false } = options;
+  if (currentDepth >= maxDepth) return [];
+
+  const results = [];
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch (error) {
+    if (ignoreReadErrors) return [];
+    throw error;
+  }
+
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+
+    if (entry.isDirectory()) {
+      results.push(...findLibrariesInDir(fullPath, pattern, options, currentDepth + 1));
+    } else if (matchesPattern(entry.name, pattern)) {
+      results.push(fullPath);
+    }
+  }
+
+  return results;
+}
+
+function copyLibraries(extractDir, destDir, pattern) {
+  const copied = [];
+  for (const libPath of findLibrariesInDir(extractDir, pattern)) {
+    const libName = path.basename(libPath);
+    const destPath = path.join(destDir, libName);
+    fs.copyFileSync(libPath, destPath);
+    setExecutable(destPath);
+    copied.push(libName);
+  }
+  return copied;
+}
+
 function cleanupFiles(binDir, prefix, keepPrefix) {
+  const keepPrefixes = Array.isArray(keepPrefix) ? keepPrefix : [keepPrefix];
   // Never delete shared libraries; only platform binaries. The b9763 split ships
   // llama-server-impl.dll, which shares the "llama-server" prefix and must survive.
   const isLibrary = (f) => /\.(dll|dylib)$/i.test(f) || /\.so(\.\d+)*$/.test(f);
   const files = fs.readdirSync(binDir).filter((f) => f.startsWith(prefix));
   files.forEach((file) => {
-    if (!file.startsWith(keepPrefix) && !isLibrary(file)) {
+    if (!keepPrefixes.some((keep) => file.startsWith(keep)) && !isLibrary(file)) {
       const filePath = path.join(binDir, file);
       console.log(`Removing old binary: ${file}`);
       fs.unlinkSync(filePath);
@@ -334,11 +406,14 @@ function cleanupFiles(binDir, prefix, keepPrefix) {
 }
 
 module.exports = {
+  copyLibraries,
   downloadFile,
   extractArchive,
   extractZip,
   fetchLatestRelease,
   findBinaryInDir,
+  findLibrariesInDir,
+  matchesPattern,
   parseArgs,
   setExecutable,
   cleanupFiles,

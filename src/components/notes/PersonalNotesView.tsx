@@ -1,72 +1,54 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Plus,
-  Loader2,
-  FolderOpen,
-  MoreHorizontal,
-  Pencil,
-  Trash2,
-  Check,
-  SquarePen,
-  Search,
-  Sparkles,
-  ExternalLink,
-} from "lucide-react";
-import { Button } from "../ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from "../ui/dropdown-menu";
-import {
-  ConfirmDialog,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "../ui/dialog";
-import { useDialogs } from "../../hooks/useDialogs";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-  SelectSeparator,
-} from "../ui/select";
-import { Input } from "../ui/input";
+import { useShallow } from "zustand/react/shallow";
+import { Plus, Sparkles } from "../icons";
 import { useToast } from "../ui/useToast";
-import NoteListItem from "./NoteListItem";
 import NoteEditor from "./NoteEditor";
-import ActionPicker from "./ActionPicker";
+import SpacesTree from "./SpacesTree";
+import { ContainerOverview } from "./overview/ContainerOverview";
+import NotesStructureIntroDialog from "./NotesStructureIntroDialog";
 import ActionManagerDialog from "./ActionManagerDialog";
 import AddNotesToFolderDialog from "./AddNotesToFolderDialog";
 import { useActionProcessing } from "../../hooks/useActionProcessing";
+import type { NoteMoveTarget } from "../../hooks/useNoteDragAndDrop";
+import type { ActionItem, ActionKind, NoteItem } from "../../types/electron";
+import { buildNoteRunInput } from "../../helpers/templatePrompts";
+import { inferActionOutput } from "../../utils/inferActionOutput";
 import {
   useSettingsStore,
   selectIsCloudNoteFormattingMode,
+  selectPolicyEffectiveSettings,
   selectResolvedNoteFormatting,
 } from "../../stores/settingsStore";
-import { useFolderManagement } from "../../hooks/useFolderManagement";
-import { useNoteDragAndDrop } from "../../hooks/useNoteDragAndDrop";
 import { cn } from "../lib/utils";
-import { MEETINGS_FOLDER_NAME, findDefaultFolder } from "./shared";
 import logger from "../../utils/logger";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
-import { serializeTranscriptSegments } from "../../utils/transcriptSpeakerState";
-import { resolveExpectedSpeakerCount } from "../../utils/participants";
+import { isExplicitSpeakerCount, resolveExpectedSpeakerCount } from "../../utils/participants";
+import {
+  buildLlmTranscript,
+  buildMeetingContext,
+  collectKnownPeople,
+  type MeetingIdentity,
+} from "../../utils/llmTranscript";
+import type { MentionPerson } from "../../utils/mentionMarkdown";
+import type { CalendarAttendee } from "../../types/calendar";
 import {
   useNotes,
+  useSpaces,
+  useFolders,
+  useActiveNote,
   useActiveNoteId,
   useActiveFolderId,
+  useActiveContext,
+  useIsTreeLoading,
   initializeNotes,
+  initializeNotesTree,
+  loadFolders,
   setActiveNoteId,
-  setActiveFolderId,
-  removeNote,
+  setActiveContext,
+  revealContainer,
+  createFolder,
+  getNoteFromStore,
 } from "../../stores/noteStore";
 import {
   useMeetingRecordingStore,
@@ -79,31 +61,78 @@ import {
   setSessionExpectedCount,
 } from "../../stores/meetingRecordingStore";
 import { useNotesOnboarding } from "../../hooks/useNotesOnboarding";
+import { startRecordingForNote, useCreateNote } from "../../hooks/useCreateNote";
+import { useTeamSpacesCapability } from "../../hooks/useTeamSpacesCapability";
+import { useAuth } from "../../hooks/useAuth";
+import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
 import NotesOnboarding from "./NotesOnboarding";
-
-const FOLDER_INPUT_CLASS =
-  "w-full h-6 bg-foreground/5 dark:bg-white/5 rounded px-2 text-xs text-foreground outline-none border border-primary/30 focus:border-primary/50";
+import { defaultFolderDisplayName, notesEmptyTitleKey } from "./shared";
+import { isRegenerableNoteTitle } from "../../helpers/regenerableNoteTitle";
+import { isMeetingAutoEndEligible } from "../../helpers/meetingRecordingSession";
+import { handleMeetingRecordingRequest } from "../../helpers/meetingRecordingRequest";
+import { markIntroSeen, NOTES_STRUCTURE_INTRO, shouldShowIntro } from "../../lib/versionedIntro";
+import {
+  applyNoteDraftMutation,
+  collectPendingNoteWrites,
+  planNoteTransition,
+  shouldCancelPendingSavesForDelete,
+  type NoteEditorDraft,
+  type PendingDocumentSnapshot,
+  type PendingEnhancedSnapshot,
+  type PendingNoteWrite,
+} from "../../lib/noteEditorPendingSave";
 
 function makeContentHash(content: string): string {
   return String(content.length) + "-" + content.slice(0, 50);
 }
 
+function parseNoteParticipants(raw: string | null | undefined): CalendarAttendee[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function draftFromNote(note: NoteItem): NoteEditorDraft {
+  return {
+    noteId: note.id,
+    title: note.title,
+    content: note.content,
+    enhancedContent: note.enhanced_content ?? null,
+  };
+}
+
+interface PendingDocumentSave extends PendingDocumentSnapshot {
+  readonly timer: ReturnType<typeof setTimeout>;
+}
+
+interface PendingEnhancedSave extends PendingEnhancedSnapshot {
+  readonly timer: ReturnType<typeof setTimeout>;
+}
+
+type PendingSaveReason = "switch" | "overview" | "unmount";
+
 interface PersonalNotesViewProps {
   onOpenSettings?: (section: string) => void;
-  onOpenSearch?: () => void;
   meetingRecordingRequest?: {
     noteId: number;
     folderId: number;
     event: any;
   } | null;
   onMeetingRecordingRequestHandled?: () => void;
+  invitationEntry?: { workspaceId: string; teamIds: string[]; spaceIds: string[] } | null;
+  onInvitationEntryHandled?: () => void;
 }
 
 export default function PersonalNotesView({
   onOpenSettings,
-  onOpenSearch,
   meetingRecordingRequest,
   onMeetingRecordingRequestHandled,
+  invitationEntry,
+  onInvitationEntryHandled,
 }: PersonalNotesViewProps) {
   const isMeetingMode = useIsMeetingMode();
   const isNarrowWindow = useIsNarrowWindow();
@@ -113,104 +142,209 @@ export default function PersonalNotesView({
   const isSidePanelLayout = isMeetingMode || (isNarrowWindow && activeNoteId != null);
   const activeFolderId = useActiveFolderId();
   const [isSaving, setIsSaving] = useState(false);
-  const [localTitle, setLocalTitle] = useState("");
-  const [localContent, setLocalContent] = useState("");
-  const [localEnhancedContent, setLocalEnhancedContent] = useState<string | null>(null);
-  const [showActionManager, setShowActionManager] = useState(false);
-  const [showNewNoteDialog, setShowNewNoteDialog] = useState(false);
-  const [newNoteFolderId, setNewNoteFolderId] = useState<string>("");
-  const [isCreatingNewNoteFolder, setIsCreatingNewNoteFolder] = useState(false);
-  const [newNoteFolderName, setNewNoteFolderName] = useState("");
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const enhancedSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const activeNoteRef = useRef<number | null>(null);
-  const [syncedNoteId, setSyncedNoteIdState] = useState<number | null>(null);
-  const localContentRef = useRef(localContent);
-  const localTitleRef = useRef(localTitle);
-  const localEnhancedContentRef = useRef(localEnhancedContent);
-  useEffect(() => {
-    localContentRef.current = localContent;
-    localTitleRef.current = localTitle;
-  }, [localContent, localTitle]);
-  useEffect(() => {
-    localEnhancedContentRef.current = localEnhancedContent;
-  }, [localEnhancedContent]);
-  const markNoteAsSynced = (id: number | null) => {
-    activeNoteRef.current = id;
-    setSyncedNoteIdState(id);
-  };
+  const [draft, setDraftState] = useState<NoteEditorDraft | null>(null);
+  const draftRef = useRef<NoteEditorDraft | null>(null);
+  const [managerKind, setManagerKind] = useState<ActionKind | null>(null);
+  const [showAddNotesDialog, setShowAddNotesDialog] = useState(false);
+  const pendingDocumentRef = useRef<PendingDocumentSave | null>(null);
+  const pendingEnhancedRef = useRef<PendingEnhancedSave | null>(null);
+
+  const commitDraft = useCallback((next: NoteEditorDraft | null) => {
+    draftRef.current = next;
+    setDraftState(next);
+  }, []);
+
+  // Conflict-banner Refresh applies an external cloud copy: a queued
+  // debounced save would clobber it with the pre-refresh buffer, so the
+  // editor cancels pending saves for that note before the copy is applied.
+  const cancelPendingSaves = useCallback((noteId: number) => {
+    const document = pendingDocumentRef.current;
+    if (document?.noteId === noteId) {
+      clearTimeout(document.timer);
+      pendingDocumentRef.current = null;
+    }
+    const enhanced = pendingEnhancedRef.current;
+    if (enhanced?.noteId === noteId) {
+      clearTimeout(enhanced.timer);
+      pendingEnhancedRef.current = null;
+    }
+  }, []);
+
+  const takePendingSnapshots = useCallback((): {
+    document: PendingDocumentSnapshot | null;
+    enhanced: PendingEnhancedSnapshot | null;
+  } => {
+    const document = pendingDocumentRef.current;
+    const enhanced = pendingEnhancedRef.current;
+
+    if (document) clearTimeout(document.timer);
+    if (enhanced) clearTimeout(enhanced.timer);
+    pendingDocumentRef.current = null;
+    pendingEnhancedRef.current = null;
+
+    return { document, enhanced };
+  }, []);
+
+  const persistPendingWrites = useCallback(
+    (writes: PendingNoteWrite[], reason: PendingSaveReason) => {
+      for (const write of writes) {
+        void window.electronAPI.updateNote(write.noteId, write.updates).catch((err: unknown) => {
+          logger.warn(
+            `Failed to flush note before ${reason}`,
+            { error: (err as Error).message },
+            "notes"
+          );
+        });
+      }
+    },
+    []
+  );
+
+  const flushPendingSaves = useCallback(
+    (reason: PendingSaveReason) => {
+      const pending = takePendingSnapshots();
+      persistPendingWrites(collectPendingNoteWrites(pending.document, pending.enhanced), reason);
+    },
+    [persistPendingWrites, takePendingSnapshots]
+  );
+
+  const transitionToNote = useCallback(
+    (nextNote: NoteItem | null, reason: Extract<PendingSaveReason, "switch" | "overview">) => {
+      const pending = takePendingSnapshots();
+      const transition = planNoteTransition(nextNote, pending.document, pending.enhanced);
+      persistPendingWrites(transition.writes, reason);
+      commitDraft(transition.nextDraft);
+    },
+    [commitDraft, persistPendingWrites, takePendingSnapshots]
+  );
   const { toast } = useToast();
-  const isCloudMode = useSettingsStore(selectIsCloudNoteFormattingMode);
-  const effectiveModelId = useSettingsStore((s) => selectResolvedNoteFormatting(s).model);
-  const noteFilesEnabled = useSettingsStore((s) => s.noteFilesEnabled);
-  const fileManagerName = navigator.platform.startsWith("Mac")
-    ? "Finder"
-    : navigator.platform.startsWith("Win")
-      ? "Explorer"
-      : "Files";
+  const policyState = usePolicySnapshot();
+  const noteFormatting = useSettingsStore(
+    useShallow((settings) => {
+      const effectiveSettings = selectPolicyEffectiveSettings(settings, policyState);
+      return {
+        isCloudMode: selectIsCloudNoteFormattingMode(effectiveSettings),
+        modelId: selectResolvedNoteFormatting(effectiveSettings).model,
+      };
+    })
+  );
+  const isCloudMode = noteFormatting.isCloudMode;
+  const effectiveModelId = noteFormatting.modelId;
   const { isComplete: isOnboardingComplete, complete: completeOnboarding } = useNotesOnboarding();
+  const { isSignedIn, user } = useAuth();
+  const teamSpacesAvailable = useTeamSpacesCapability(isSignedIn);
+  const isTreeLoading = useIsTreeLoading();
+  const [structureIntroPending, setStructureIntroPending] = useState(() =>
+    shouldShowIntro(localStorage, NOTES_STRUCTURE_INTRO)
+  );
+  const [showStructureIntro, setShowStructureIntro] = useState(false);
 
   const isTranscribing = useMeetingRecordingStore((s) => s.isRecording);
-  const realtimeTranscript = useMeetingRecordingStore((s) => s.transcript);
-  const realtimeSegments = useMeetingRecordingStore((s) => s.segments);
-  const micPartial = useMeetingRecordingStore((s) => s.micPartial);
-  const systemPartial = useMeetingRecordingStore((s) => s.systemPartial);
-  const systemPartialSpeakerId = useMeetingRecordingStore((s) => s.systemPartialSpeakerId);
-  const systemPartialSpeakerName = useMeetingRecordingStore((s) => s.systemPartialSpeakerName);
   const diarizationSessionId = useMeetingRecordingStore((s) => s.diarizationSessionId);
+  const recordingNoteId = useMeetingRecordingStore((s) => s.recordingNoteId);
   const sessionDiarizationEnabled = useMeetingRecordingStore((s) => s.sessionDiarizationEnabled);
   const sessionExpectedCount = useMeetingRecordingStore((s) => s.sessionExpectedCount);
   const userTouchedStepper = useMeetingRecordingStore((s) => s.userTouchedStepper);
-  const recordingNoteId = useMeetingRecordingStore((s) => s.recordingNoteId);
+  const meetingRecordingAllowed = useTranscriptionContextAllowed("meeting");
 
-  const {
-    folders,
-    folderCounts,
-    isLoading,
-    isCreatingFolder,
-    newFolderName,
-    renamingFolderId,
-    renameValue,
-    showAddNotesDialog,
-    newFolderInputRef,
-    renameInputRef,
-    setIsCreatingFolder,
-    setNewFolderName,
-    setRenamingFolderId,
-    setRenameValue,
-    setShowAddNotesDialog,
-    loadFolders,
-    handleCreateFolder,
-    handleConfirmRename,
-    handleDeleteFolder,
-  } = useFolderManagement();
-
-  const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
-
-  const requestDeleteFolder = useCallback(
-    (folder: { id: number; name: string }) => {
-      const count = folderCounts[folder.id] ?? 0;
-      showConfirmDialog({
-        title: t("notes.folders.deleteTitle"),
-        description:
-          count > 0
-            ? t("notes.folders.deleteDescription", { name: folder.name, count })
-            : t("notes.folders.deleteDescriptionEmpty", { name: folder.name }),
-        confirmText: t("notes.folders.deleteConfirm"),
-        variant: "destructive",
-        onConfirm: () => handleDeleteFolder(folder.id),
-      });
-    },
-    [folderCounts, handleDeleteFolder, showConfirmDialog, t]
+  const spaces = useSpaces();
+  const folders = useFolders();
+  const activeContext = useActiveContext();
+  const overviewSpace = useMemo(
+    () => (activeContext ? (spaces.find((s) => s.id === activeContext.spaceId) ?? null) : null),
+    [activeContext, spaces]
+  );
+  const overviewFolder = useMemo(
+    () =>
+      activeContext?.folderId != null
+        ? (folders.find((f) => f.id === activeContext.folderId) ?? null)
+        : null,
+    [activeContext, folders]
   );
 
-  const activeNote = notes.find((n) => n.id === activeNoteId) ?? null;
+  useEffect(() => {
+    initializeNotesTree();
+  }, []);
+
+  useEffect(() => {
+    if (
+      structureIntroPending &&
+      isOnboardingComplete &&
+      isSignedIn &&
+      teamSpacesAvailable &&
+      !isTreeLoading &&
+      !isSidePanelLayout
+    ) {
+      setShowStructureIntro(true);
+    }
+  }, [
+    structureIntroPending,
+    isOnboardingComplete,
+    isSignedIn,
+    teamSpacesAvailable,
+    isTreeLoading,
+    isSidePanelLayout,
+  ]);
+
+  // Arriving via an accepted invitation reopens the structure intro even when
+  // this device has already seen it, and even before notes onboarding is done
+  // (the dialog also renders in the onboarding branch below).
+  useEffect(() => {
+    if (invitationEntry && !isSidePanelLayout) setShowStructureIntro(true);
+  }, [invitationEntry, isSidePanelLayout]);
+
+  // The acceptance modal starts a sync before navigating here. Once the first
+  // space the invitation granted (directly or via a team) appears in the local
+  // mirror, take the user to it instead of leaving the newly shared content
+  // hidden behind Personal.
+  useEffect(() => {
+    if (!invitationEntry) return;
+    const invitedTeamIds = new Set(invitationEntry.teamIds);
+    const invitedSpaceIds = new Set(invitationEntry.spaceIds);
+    // Workspace owners/admins receive implicit access, so their invitation
+    // may enumerate no grants at all. In that case, open the first accessible
+    // team space belonging to the accepted workspace.
+    const anyGrant = invitedTeamIds.size === 0 && invitedSpaceIds.size === 0;
+    const invitedSpace = spaces.find(
+      (space) =>
+        space.kind === "team" &&
+        space.workspace_id === invitationEntry.workspaceId &&
+        space.cloud_space_id != null &&
+        (anyGrant ||
+          invitedSpaceIds.has(space.cloud_space_id) ||
+          space.teams.some((team) => invitedTeamIds.has(team.id)))
+    );
+    if (!invitedSpace) return;
+
+    setActiveNoteId(null);
+    revealContainer(invitedSpace.id, null);
+    setActiveContext(invitedSpace.id, null);
+    onInvitationEntryHandled?.();
+  }, [invitationEntry, onInvitationEntryHandled, spaces]);
+
+  const handleStructureIntroOpenChange = useCallback((open: boolean) => {
+    setShowStructureIntro(open);
+    if (!open) {
+      markIntroSeen(localStorage, NOTES_STRUCTURE_INTRO);
+      setStructureIntroPending(false);
+    }
+  }, []);
+
+  const activeNote = useActiveNote();
 
   // Derive folder name and calendar event name for the metadata chips
   const activeFolderName = useMemo(() => {
     if (!activeNote?.folder_id) return null;
-    return folders.find((f) => f.id === activeNote.folder_id)?.name ?? null;
-  }, [activeNote?.folder_id, folders]);
+    const folder = folders.find((f) => f.id === activeNote.folder_id);
+    return folder ? defaultFolderDisplayName(folder, t) : null;
+  }, [activeNote?.folder_id, folders, t]);
+
+  // The editor's move-to-folder chip only offers folders in the note's own
+  // space; cross-space moves change the audience and need an explicit confirm.
+  const editorFolders = useMemo(
+    () => (activeNote ? folders.filter((f) => f.space_id === activeNote.space_id) : folders),
+    [activeNote, folders]
+  );
 
   const [calendarEventName, setCalendarEventName] = useState<string | null>(null);
   useEffect(() => {
@@ -223,247 +357,196 @@ export default function PersonalNotesView({
     });
   }, [activeNote?.calendar_event_id]);
 
-  const startRecording = useCallback(async () => {
-    const noteId = activeNoteRef.current;
-    const note = notes.find((n) => n.id === noteId);
-    const seedSegments = note?.transcript ? parseTranscriptSegments(note.transcript) : [];
-    await storeStartRecording({
-      noteId,
-      noteTitle: note?.title ?? null,
-      folderId: note?.folder_id ?? null,
-      seedSegments,
-      diarizationEnabled: note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
-      expectedCount: resolveExpectedSpeakerCount(note),
-    });
-  }, [notes]);
+  const startRecording = useCallback(() => startRecordingForNote(activeNote ?? null), [activeNote]);
 
   const stopRecording = useCallback(async () => {
     await storeStopRecording();
   }, []);
 
   useEffect(() => {
-    if (activeNote && activeNote.id !== activeNoteRef.current) {
-      // --- Switching notes ---
-      // 1. Capture old note state before anything changes
-      const oldNoteId = activeNoteRef.current;
-      const oldTitle = localTitleRef.current;
-      const oldContent = localContentRef.current;
-      const hadPendingSave = !!saveTimeoutRef.current;
+    const currentDraft = draftRef.current;
 
-      // 2. Clear all pending timers
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-        saveTimeoutRef.current = null;
+    if (!activeNote) {
+      // Space/folder activation shows its overview by clearing activeNoteId.
+      if (currentDraft || pendingDocumentRef.current || pendingEnhancedRef.current) {
+        transitionToNote(null, "overview");
       }
-      if (enhancedSaveTimeoutRef.current) {
-        clearTimeout(enhancedSaveTimeoutRef.current);
-        enhancedSaveTimeoutRef.current = null;
-      }
-
-      // 3. Switch to new note IMMEDIATELY (no await, eliminates race window)
-      markNoteAsSynced(activeNote.id);
-      setLocalTitle(activeNote.title);
-      setLocalContent(activeNote.content);
-      setLocalEnhancedContent(activeNote.enhanced_content ?? null);
-      // Also update refs directly so callbacks are correct before next render
-      localTitleRef.current = activeNote.title;
-      localContentRef.current = activeNote.content;
-
-      // 4. Flush old note data fire-and-forget (uses captured values, not refs)
-      if (hadPendingSave && oldNoteId) {
-        window.electronAPI
-          .updateNote(oldNoteId, { title: oldTitle, content: oldContent })
-          .catch((err: unknown) => {
-            logger.warn(
-              "Failed to flush note on switch",
-              { error: (err as Error).message },
-              "notes"
-            );
-          });
-      }
-    } else if (activeNote && activeNote.id === activeNoteRef.current && !saveTimeoutRef.current) {
-      // External update (e.g. AI chat tool) — resync only when no user save is pending
-      if (activeNote.title !== localTitleRef.current) setLocalTitle(activeNote.title);
-      if (activeNote.content !== localContentRef.current) setLocalContent(activeNote.content);
-      if ((activeNote.enhanced_content ?? null) !== localEnhancedContentRef.current) {
-        setLocalEnhancedContent(activeNote.enhanced_content ?? null);
-      }
-    } else if (!activeNote) {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-        saveTimeoutRef.current = null;
-      }
-      if (enhancedSaveTimeoutRef.current) {
-        clearTimeout(enhancedSaveTimeoutRef.current);
-        enhancedSaveTimeoutRef.current = null;
-      }
-      markNoteAsSynced(null);
-      setLocalTitle("");
-      setLocalContent("");
-      setLocalEnhancedContent(null);
+      return;
     }
-  }, [activeNote]);
 
-  const debouncedSave = useCallback((noteId: number, title: string, content: string) => {
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    saveTimeoutRef.current = setTimeout(async () => {
-      saveTimeoutRef.current = null;
-      setIsSaving(true);
-      try {
-        await window.electronAPI.updateNote(noteId, { title, content });
-      } catch (err) {
-        logger.warn("Failed to save note", { error: (err as Error).message }, "notes");
-      } finally {
-        setIsSaving(false);
-      }
-    }, 1000);
+    if (!currentDraft || activeNote.id !== currentDraft.noteId) {
+      // Captured writes retain the old owner while the complete next draft is
+      // installed atomically.
+      transitionToNote(activeNote, "switch");
+      return;
+    }
+
+    const hasPendingLocalSave =
+      pendingDocumentRef.current?.noteId === activeNote.id ||
+      pendingEnhancedRef.current?.noteId === activeNote.id;
+    if (!hasPendingLocalSave) {
+      // External update (e.g. AI chat tool) — replace the complete draft only
+      // when it has no local save pending.
+      commitDraft(draftFromNote(activeNote));
+    }
+  }, [activeNote, commitDraft, transitionToNote]);
+
+  const scheduleDocumentSave = useCallback((snapshot: NoteEditorDraft) => {
+    const current = pendingDocumentRef.current;
+    if (current) clearTimeout(current.timer);
+
+    const pending: PendingDocumentSave = {
+      noteId: snapshot.noteId,
+      title: snapshot.title,
+      content: snapshot.content,
+      timer: setTimeout(async () => {
+        if (pendingDocumentRef.current !== pending) return;
+        pendingDocumentRef.current = null;
+        setIsSaving(true);
+        try {
+          await window.electronAPI.updateNote(pending.noteId, {
+            title: pending.title,
+            content: pending.content,
+          });
+        } catch (err) {
+          logger.warn("Failed to save note", { error: (err as Error).message }, "notes");
+        } finally {
+          setIsSaving(false);
+        }
+      }, 1000),
+    };
+    pendingDocumentRef.current = pending;
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      if (enhancedSaveTimeoutRef.current) clearTimeout(enhancedSaveTimeoutRef.current);
+  const scheduleEnhancedSave = useCallback((snapshot: NoteEditorDraft) => {
+    const current = pendingEnhancedRef.current;
+    if (current) clearTimeout(current.timer);
+
+    const pending: PendingEnhancedSave = {
+      noteId: snapshot.noteId,
+      enhancedContent: snapshot.enhancedContent,
+      timer: setTimeout(async () => {
+        if (pendingEnhancedRef.current !== pending) return;
+        pendingEnhancedRef.current = null;
+        setIsSaving(true);
+        try {
+          await window.electronAPI.updateNote(pending.noteId, {
+            enhanced_content: pending.enhancedContent,
+          });
+        } catch (err) {
+          logger.warn(
+            "Failed to save enhanced note content",
+            { error: (err as Error).message },
+            "notes"
+          );
+        } finally {
+          setIsSaving(false);
+        }
+      }, 1000),
     };
+    pendingEnhancedRef.current = pending;
   }, []);
 
   const handleTitleChange = useCallback(
-    (title: string) => {
-      setLocalTitle(title);
-      if (activeNoteRef.current)
-        debouncedSave(activeNoteRef.current, title, localContentRef.current);
+    (sourceNoteId: number, title: string) => {
+      const next = applyNoteDraftMutation(draftRef.current, {
+        sourceNoteId,
+        field: "title",
+        value: title,
+      });
+      if (!next) return;
+      commitDraft(next);
+      scheduleDocumentSave(next);
     },
-    [debouncedSave]
+    [commitDraft, scheduleDocumentSave]
   );
 
   const handleContentChange = useCallback(
-    (content: string) => {
-      setLocalContent(content);
-      if (activeNoteRef.current)
-        debouncedSave(activeNoteRef.current, localTitleRef.current, content);
+    (sourceNoteId: number, content: string) => {
+      const next = applyNoteDraftMutation(draftRef.current, {
+        sourceNoteId,
+        field: "content",
+        value: content,
+      });
+      if (!next) return;
+      commitDraft(next);
+      scheduleDocumentSave(next);
     },
-    [debouncedSave]
+    [commitDraft, scheduleDocumentSave]
   );
 
-  const handleEnhancedContentChange = useCallback((content: string) => {
-    setLocalEnhancedContent(content);
-    if (!activeNoteRef.current) return;
-    const noteId = activeNoteRef.current;
-    if (enhancedSaveTimeoutRef.current) clearTimeout(enhancedSaveTimeoutRef.current);
-    enhancedSaveTimeoutRef.current = setTimeout(async () => {
-      enhancedSaveTimeoutRef.current = null;
-      setIsSaving(true);
-      try {
-        await window.electronAPI.updateNote(noteId, { enhanced_content: content });
-      } finally {
-        setIsSaving(false);
-      }
-    }, 1000);
-  }, []);
+  const handleEnhancedContentChange = useCallback(
+    (sourceNoteId: number, content: string) => {
+      const next = applyNoteDraftMutation(draftRef.current, {
+        sourceNoteId,
+        field: "enhancedContent",
+        value: content,
+      });
+      if (!next) return;
+      commitDraft(next);
+      scheduleEnhancedSave(next);
+    },
+    [commitDraft, scheduleEnhancedSave]
+  );
 
-  const handleNewNote = useCallback(async () => {
-    if (!activeFolderId) return;
-    const result = await window.electronAPI.saveNote(
-      t("notes.list.untitledNote"),
-      "",
-      "personal",
-      null,
-      null,
-      activeFolderId
-    );
-    if (result.success && result.note) {
-      setActiveNoteId(result.note.id);
-      loadFolders();
-    }
-  }, [activeFolderId, loadFolders, t]);
+  useEffect(() => {
+    return () => flushPendingSaves("unmount");
+  }, [flushPendingSaves]);
 
-  const handleOpenNewNoteDialog = useCallback(() => {
-    const personal = findDefaultFolder(folders);
-    setNewNoteFolderId(personal ? String(personal.id) : folders[0] ? String(folders[0].id) : "");
-    setShowNewNoteDialog(true);
-  }, [folders]);
+  const { createNote, createNoteIn } = useCreateNote();
 
-  const handleNewNoteFolderChange = useCallback((val: string) => {
-    if (val === "__create_new__") {
-      setIsCreatingNewNoteFolder(true);
-      return;
-    }
-    setNewNoteFolderId(val);
-  }, []);
-
-  const handleCreateNewNoteFolder = useCallback(async () => {
-    const trimmed = newNoteFolderName.trim();
-    if (!trimmed) return;
-    const res = await window.electronAPI.createFolder(trimmed);
-    if (res.success && res.folder) {
-      await loadFolders();
-      setNewNoteFolderId(String(res.folder.id));
-    }
-    setNewNoteFolderName("");
-    setIsCreatingNewNoteFolder(false);
-  }, [newNoteFolderName, loadFolders]);
-
-  const handleConfirmNewNote = useCallback(async () => {
-    const folderId = Number(newNoteFolderId);
-    if (!folderId) return;
-    const result = await window.electronAPI.saveNote(
-      t("notes.list.untitledNote"),
-      "",
-      "personal",
-      null,
-      null,
-      folderId
-    );
-    if (result.success && result.note) {
-      setActiveFolderId(folderId);
-      setActiveNoteId(result.note.id);
-      loadFolders();
-    }
-    setShowNewNoteDialog(false);
-  }, [newNoteFolderId, loadFolders, t]);
+  const privateSpaceId = useMemo(
+    () => spaces.find((s) => s.kind === "private")?.id ?? null,
+    [spaces]
+  );
 
   const handleNotesAdded = useCallback(async () => {
     if (activeFolderId) {
       await initializeNotes(null, 50, activeFolderId);
     }
     loadFolders();
-  }, [activeFolderId, loadFolders]);
+  }, [activeFolderId]);
 
   const handleDelete = useCallback(
     async (id: number) => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-        saveTimeoutRef.current = null;
+      if (shouldCancelPendingSavesForDelete(draftRef.current?.noteId ?? null, id)) {
+        cancelPendingSaves(id);
       }
       await window.electronAPI.deleteNote(id);
-      loadFolders();
     },
-    [loadFolders]
+    [cancelPendingSaves]
+  );
+
+  const handleMoveNote = useCallback(
+    async (noteId: number, target: NoteMoveTarget) => {
+      await window.electronAPI.updateNote(noteId, {
+        folder_id: target.folderId,
+        space_id: target.spaceId,
+      });
+      if (noteId === activeNoteId) {
+        setActiveContext(target.spaceId, target.folderId);
+        revealContainer(target.spaceId, target.folderId);
+      }
+    },
+    [activeNoteId]
   );
 
   const handleMoveToFolder = useCallback(
     async (noteId: number, folderId: number) => {
-      await window.electronAPI.updateNote(noteId, { folder_id: folderId });
-      if (noteId === activeNoteId) {
-        setActiveFolderId(folderId);
-      } else {
-        removeNote(noteId);
-      }
-      loadFolders();
+      const folder = folders.find((f) => f.id === folderId);
+      if (!folder) return;
+      await handleMoveNote(noteId, { spaceId: folder.space_id, folderId });
     },
-    [activeNoteId, loadFolders]
+    [folders, handleMoveNote]
   );
-
-  const { dragState, noteDragHandlers, folderDropHandlers } = useNoteDragAndDrop({
-    onMoveToFolder: handleMoveToFolder,
-    currentFolderId: activeFolderId,
-  });
 
   const handleCreateFolderAndMove = useCallback(
     async (noteId: number, folderName: string) => {
-      const result = await window.electronAPI.createFolder(folderName);
+      const spaceId = getNoteFromStore(noteId)?.space_id ?? privateSpaceId;
+      if (spaceId == null) return;
+      const result = await createFolder(folderName, spaceId);
       if (result.success && result.folder) {
-        await window.electronAPI.updateNote(noteId, { folder_id: result.folder.id });
-        await loadFolders();
+        await handleMoveToFolder(noteId, result.folder.id);
       } else if (result.error) {
         toast({
           title: t("notes.folders.couldNotCreate"),
@@ -472,28 +555,40 @@ export default function PersonalNotesView({
         });
       }
     },
-    [loadFolders, toast, t]
+    [privateSpaceId, handleMoveToFolder, toast, t]
   );
 
   const {
     state: actionProcessingState,
     actionName,
+    progress: actionProgress,
     runAction,
+    cancel: cancelAction,
   } = useActionProcessing(activeNoteId ?? null);
 
-  // The realtime transcript outlives its recording — only use it for the note it was recorded on.
-  const activeNoteRawTranscript =
-    (recordingNoteId === activeNote?.id ? realtimeTranscript : "") || activeNote?.transcript || "";
+  const activeNoteRawTranscript = activeNote?.transcript || "";
+  const activeDraft = draft?.noteId === activeNote?.id ? draft : null;
+  const editorNote = activeNote
+    ? {
+        ...activeNote,
+        title: activeDraft ? activeDraft.title : activeNote.title,
+        content: activeDraft ? activeDraft.content : activeNote.content,
+        enhanced_content: activeDraft
+          ? activeDraft.enhancedContent
+          : (activeNote.enhanced_content ?? null),
+      }
+    : null;
+  const editorEnhancedContent = editorNote?.enhanced_content ?? null;
 
   const isEnhancementStale = useMemo(() => {
-    if (!activeNote?.enhanced_content || !activeNote?.enhanced_at_content_hash) return false;
-    const currentHash = makeContentHash(`${localContent}\n${activeNoteRawTranscript}`);
+    if (!editorEnhancedContent || !activeNote?.enhanced_at_content_hash) return false;
+    const currentHash = makeContentHash(`${editorNote?.content ?? ""}\n${activeNoteRawTranscript}`);
     return currentHash !== activeNote.enhanced_at_content_hash;
   }, [
-    activeNote?.enhanced_content,
     activeNote?.enhanced_at_content_hash,
-    localContent,
     activeNoteRawTranscript,
+    editorEnhancedContent,
+    editorNote?.content,
   ]);
 
   const handleExportNote = useCallback(
@@ -514,64 +609,109 @@ export default function PersonalNotesView({
 
   useEffect(() => {
     if (!meetingRecordingRequest || activeNoteId !== meetingRecordingRequest.noteId) return;
-    const note = notes.find((n) => n.id === meetingRecordingRequest.noteId);
+    const note = activeNote?.id === meetingRecordingRequest.noteId ? activeNote : null;
     const seedSegments = note?.transcript ? parseTranscriptSegments(note.transcript) : [];
-    storeStartRecording({
-      noteId: meetingRecordingRequest.noteId,
-      noteTitle: note?.title ?? null,
-      folderId: note?.folder_id ?? meetingRecordingRequest.folderId ?? null,
-      seedSegments,
-      diarizationEnabled: note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
-      expectedCount: resolveExpectedSpeakerCount(note),
+    void handleMeetingRecordingRequest({
+      args: {
+        noteId: meetingRecordingRequest.noteId,
+        noteTitle: note?.title ?? null,
+        folderId: note?.folder_id ?? meetingRecordingRequest.folderId ?? null,
+        seedSegments,
+        diarizationEnabled:
+          note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
+        expectedCount: resolveExpectedSpeakerCount(note),
+        expectedCountIsExplicit: isExplicitSpeakerCount(note?.expected_speaker_count),
+        // Requests come from meeting detection, so a note that hasn't loaded
+        // yet is still a meeting note.
+        autoEndEligible: note ? isMeetingAutoEndEligible(note) : true,
+      },
+      startRecording: storeStartRecording,
+      restoreFromMeetingMode: async () => {
+        await window.electronAPI?.restoreFromMeetingMode?.();
+      },
+      onHandled: () => onMeetingRecordingRequestHandled?.(),
+    }).catch((error) => {
+      logger.warn(
+        "Failed to handle automatic meeting recording request",
+        { error: (error as Error).message },
+        "meeting"
+      );
     });
-    onMeetingRecordingRequestHandled?.();
-  }, [meetingRecordingRequest, activeNoteId, notes, onMeetingRecordingRequestHandled]);
+  }, [meetingRecordingRequest, activeNoteId, activeNote, onMeetingRecordingRequestHandled]);
 
-  const prevTranscribingRef = useRef(false);
+  // Final and periodic transcript persistence live in MeetingRecordingMount /
+  // the store — this view can be unmounted when an auto-end stop fires.
+  const isActiveNoteRecording = isTranscribing && recordingNoteId === activeNote?.id;
 
-  useEffect(() => {
-    if (
-      prevTranscribingRef.current &&
-      !isTranscribing &&
-      (realtimeTranscript || realtimeSegments.length > 0)
-    ) {
-      const transcript =
-        realtimeSegments.length > 0
-          ? serializeTranscriptSegments(realtimeSegments)
-          : realtimeTranscript;
+  const runNoteAction = async (action: ActionItem) => {
+    if (!editorNote) return;
+    const { recordingNoteId: liveNoteId, transcript: liveTranscript } =
+      useMeetingRecordingStore.getState();
+    const rawTranscript =
+      (liveNoteId === activeNote?.id ? liveTranscript : "") || activeNoteRawTranscript;
+    const noteContent = editorNote.content;
+    const hasNotes = !!noteContent.trim();
+    if (!hasNotes && !rawTranscript) return;
 
-      if (recordingNoteId && transcript) {
-        window.electronAPI.updateNote(recordingNoteId, { transcript });
+    let formattedTranscript = "";
+    let meetingContext = "";
+    let isMeetingNote = false;
+    let knownPeople: MentionPerson[] = [];
+    if (rawTranscript) {
+      const segments = parseTranscriptSegments(rawTranscript);
+      if (segments.length > 0) {
+        isMeetingNote = true;
+        const mappingRows =
+          (await window.electronAPI?.getSpeakerMappings?.(editorNote.id).catch(() => [])) || [];
+        const speakerMappings: Record<string, string> = {};
+        for (const m of mappingRows) speakerMappings[m.speaker_id] = m.display_name;
+
+        const identity: MeetingIdentity = {
+          selfName: user?.name?.trim() || null,
+          selfEmail: user?.email?.trim() || null,
+          participants: parseNoteParticipants(editorNote.participants),
+        };
+        const selfLabel = identity.selfName || t("notes.speaker.you");
+        meetingContext = buildMeetingContext(identity, selfLabel);
+        formattedTranscript = buildLlmTranscript(segments, speakerMappings, selfLabel, t);
+        knownPeople = collectKnownPeople(identity, speakerMappings, segments);
+      }
+      if (!formattedTranscript) {
+        formattedTranscript = rawTranscript;
       }
     }
-    prevTranscribingRef.current = isTranscribing;
-  }, [isTranscribing, realtimeTranscript, realtimeSegments, recordingNoteId]);
 
-  useEffect(() => {
-    if (!isTranscribing) return;
-
-    const interval = setInterval(() => {
-      if (!recordingNoteId || realtimeSegments.length === 0) return;
-      window.electronAPI.updateNote(recordingNoteId, {
-        transcript: serializeTranscriptSegments(realtimeSegments),
-      });
-    }, 30_000);
-
-    return () => clearInterval(interval);
-  }, [isTranscribing, realtimeSegments, recordingNoteId]);
-
-  const isLocalSynced = syncedNoteId === activeNote?.id;
-  const isActiveNoteRecording = isTranscribing && recordingNoteId === activeNote?.id;
-  const editorNote = activeNote
-    ? {
-        ...activeNote,
-        title: isLocalSynced ? localTitle : activeNote.title,
-        content: isLocalSynced ? localContent : activeNote.content,
-      }
-    : null;
+    const { input, fromSummary, material } = buildNoteRunInput(action, {
+      summary: editorEnhancedContent,
+      notes: noteContent,
+      meetingContext,
+      transcript: formattedTranscript,
+    });
+    runAction(action, input, makeContentHash(`${noteContent}\n${rawTranscript}`), {
+      isCloudMode,
+      modelId: effectiveModelId,
+      isMeetingNote,
+      knownPeople,
+      fromSummary,
+      material,
+      allowTitleGeneration: isRegenerableNoteTitle(
+        editorNote.title,
+        [t("notes.list.untitledNote"), t("notes.list.newNote"), t("notes.sidebar.newNote")],
+        calendarEventName
+      ),
+    });
+  };
 
   if (!isOnboardingComplete) {
-    return <NotesOnboarding onComplete={completeOnboarding} />;
+    return (
+      <>
+        <NotesOnboarding onComplete={completeOnboarding} />
+        <NotesStructureIntroDialog
+          open={showStructureIntro}
+          onOpenChange={handleStructureIntroOpenChange}
+        />
+      </>
+    );
   }
 
   return (
@@ -580,351 +720,29 @@ export default function PersonalNotesView({
         className="shrink-0 overflow-hidden transition-[width] duration-300 ease-out"
         style={{ width: isSidePanelLayout ? 0 : "13rem" }}
       >
-        <div className="w-52 shrink-0 border-r border-border/15 dark:border-white/4 flex flex-col h-full">
+        <div className="w-52 shrink-0 border-e border-border dark:border-white/10 flex flex-col h-full">
           <div className="px-2 pt-2 pb-1 shrink-0 space-y-0.5">
             <button
-              onClick={handleOpenNewNoteDialog}
+              onClick={() => setManagerKind("template")}
               className={cn(
                 "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs",
-                "text-muted-foreground/80 hover:text-foreground hover:bg-foreground/5",
-                "transition-colors duration-150",
-                "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
-              )}
-            >
-              <SquarePen size={14} className="shrink-0" />
-              {t("notes.sidebar.newNote")}
-            </button>
-            {onOpenSearch && (
-              <button
-                onClick={onOpenSearch}
-                className={cn(
-                  "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs",
-                  "text-muted-foreground/80 hover:text-foreground hover:bg-foreground/5",
-                  "transition-colors duration-150",
-                  "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
-                )}
-              >
-                <Search size={14} className="shrink-0" />
-                {t("notes.sidebar.searchNotes")}
-              </button>
-            )}
-            <button
-              onClick={() => setShowActionManager(true)}
-              className={cn(
-                "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs",
-                "text-muted-foreground/80 hover:text-foreground hover:bg-foreground/5",
+                "text-foreground/85 hover:text-foreground hover:bg-foreground/5",
                 "transition-colors duration-150",
                 "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
               )}
             >
               <Sparkles size={14} className="shrink-0" />
-              {t("notes.sidebar.actions")}
+              {t("notes.sidebar.templatesAndActions")}
             </button>
           </div>
 
-          {/* Folders */}
-          <div className="flex items-center justify-between px-3 py-2">
-            <span className="text-xs font-medium uppercase tracking-wider text-foreground/50 dark:text-foreground/25">
-              {t("notes.folders.title")}
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsCreatingFolder(true)}
-              aria-label={t("notes.context.newFolder")}
-              className="h-5 w-5 rounded-md text-muted-foreground/50 dark:text-muted-foreground/30 hover:text-foreground/60 hover:bg-foreground/5"
-            >
-              <Plus size={13} />
-            </Button>
-          </div>
-
-          <div className="px-1.5 space-y-px">
-            {folders.map((folder) => {
-              const isActive = folder.id === activeFolderId;
-              const isMeetings = folder.name === MEETINGS_FOLDER_NAME;
-              const count = folderCounts[folder.id] || 0;
-              const isRenaming = renamingFolderId === folder.id;
-
-              if (isRenaming) {
-                return (
-                  <div key={folder.id} className="px-2">
-                    <input
-                      ref={renameInputRef}
-                      value={renameValue}
-                      onChange={(e) => setRenameValue(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleConfirmRename();
-                        if (e.key === "Escape") {
-                          setRenamingFolderId(null);
-                          setRenameValue("");
-                        }
-                      }}
-                      onBlur={handleConfirmRename}
-                      className={FOLDER_INPUT_CLASS}
-                    />
-                  </div>
-                );
-              }
-
-              const isDragOver = dragState.dragOverFolderId === folder.id;
-              const isDropSuccess = dragState.dropSuccessFolderId === folder.id;
-
-              return (
-                <button
-                  key={folder.id}
-                  onClick={() => setActiveFolderId(folder.id)}
-                  {...folderDropHandlers(folder.id, folder.name)}
-                  className={cn(
-                    "group relative flex items-center gap-2 w-full h-7 px-2 rounded-md cursor-pointer text-left transition-all duration-150",
-                    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30",
-                    isActive
-                      ? "bg-primary/8 dark:bg-primary/10"
-                      : "hover:bg-foreground/4 dark:hover:bg-white/4",
-                    isDragOver &&
-                      !isMeetings &&
-                      "bg-primary/12 dark:bg-primary/15 ring-1 ring-primary/25 scale-[1.02]",
-                    isDropSuccess &&
-                      "bg-emerald-500/10 dark:bg-emerald-400/10 ring-1 ring-emerald-500/20"
-                  )}
-                >
-                  <FolderOpen
-                    size={13}
-                    className={cn(
-                      "shrink-0 transition-colors duration-150",
-                      isDragOver || isActive
-                        ? "text-primary"
-                        : "text-foreground/35 dark:text-foreground/20 group-hover:text-foreground/50 dark:group-hover:text-foreground/35"
-                    )}
-                  />
-                  <span
-                    className={cn(
-                      "text-xs truncate flex-1 transition-colors duration-150",
-                      isDragOver || isActive
-                        ? "text-foreground font-medium"
-                        : "text-foreground/50 group-hover:text-foreground/70"
-                    )}
-                  >
-                    {folder.name}
-                  </span>
-
-                  {isDropSuccess ? (
-                    <Check
-                      size={10}
-                      className="text-emerald-500 dark:text-emerald-400 shrink-0 animate-[scale-in_200ms_ease-out]"
-                    />
-                  ) : (
-                    <span
-                      className={cn(
-                        "text-xs tabular-nums shrink-0 transition-colors group-hover:opacity-0",
-                        isActive
-                          ? "text-foreground/50 dark:text-foreground/30"
-                          : "text-foreground/35 dark:text-foreground/15"
-                      )}
-                    >
-                      {count > 0 ? count : ""}
-                    </span>
-                  )}
-                  {(!folder.is_default || noteFilesEnabled) && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <span
-                          role="button"
-                          tabIndex={-1}
-                          onClick={(e) => e.stopPropagation()}
-                          className="h-4 w-4 flex items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 transition-opacity absolute right-1.5 text-foreground/25 hover:text-foreground/50 cursor-pointer"
-                        >
-                          <MoreHorizontal size={11} />
-                        </span>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" sideOffset={4} className="min-w-32">
-                        {noteFilesEnabled && (
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              window.electronAPI?.showFolderInExplorer?.(folder.name);
-                            }}
-                            className="text-xs gap-2 rounded-md px-2 py-1"
-                          >
-                            <ExternalLink size={11} className="text-muted-foreground/60" />
-                            {t("notes.context.showInFileManager", { manager: fileManagerName })}
-                          </DropdownMenuItem>
-                        )}
-                        {!folder.is_default && (
-                          <>
-                            {noteFilesEnabled && <DropdownMenuSeparator />}
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setRenamingFolderId(folder.id);
-                                setRenameValue(folder.name);
-                              }}
-                              className="text-xs gap-2 rounded-md px-2 py-1"
-                            >
-                              <Pencil size={11} className="text-muted-foreground/60" />
-                              {t("notes.context.rename")}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                requestDeleteFolder(folder);
-                              }}
-                              className="text-xs gap-2 rounded-md px-2 py-1 text-destructive focus:text-destructive focus:bg-destructive/10"
-                            >
-                              <Trash2 size={11} />
-                              {t("notes.context.delete")}
-                            </DropdownMenuItem>
-                          </>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                </button>
-              );
-            })}
-
-            {isCreatingFolder && (
-              <div className="px-2">
-                <input
-                  ref={newFolderInputRef}
-                  value={newFolderName}
-                  onChange={(e) => setNewFolderName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleCreateFolder();
-                    if (e.key === "Escape") {
-                      setIsCreatingFolder(false);
-                      setNewFolderName("");
-                    }
-                  }}
-                  onBlur={handleCreateFolder}
-                  placeholder={t("notes.folders.folderName")}
-                  className={cn(FOLDER_INPUT_CLASS, "placeholder:text-foreground/20")}
-                />
-              </div>
-            )}
-          </div>
-
-          <div className="mx-3 h-px bg-border/10 dark:bg-white/4 my-2" />
-
-          {/* Notes list */}
-          <div className="flex items-center justify-between px-3 py-1">
-            <span className="text-xs font-medium uppercase tracking-wider text-foreground/50 dark:text-foreground/25">
-              {t("notes.list.title")}
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleNewNote}
-              aria-label={t("notes.list.newNote")}
-              className="h-5 w-5 rounded-md text-muted-foreground/50 dark:text-muted-foreground/30 hover:text-foreground/60 hover:bg-foreground/5"
-            >
-              <Plus size={13} />
-            </Button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto">
-            {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 size={12} className="animate-spin text-foreground/15" />
-              </div>
-            ) : notes.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 px-4">
-                <svg
-                  className="text-foreground dark:text-white mb-3"
-                  width="40"
-                  height="36"
-                  viewBox="0 0 40 36"
-                  fill="none"
-                >
-                  <rect
-                    x="12"
-                    y="1"
-                    width="20"
-                    height="26"
-                    rx="2"
-                    transform="rotate(5 22 14)"
-                    fill="currentColor"
-                    fillOpacity={0.025}
-                    stroke="currentColor"
-                    strokeOpacity={0.06}
-                  />
-                  <rect
-                    x="8"
-                    y="3"
-                    width="20"
-                    height="26"
-                    rx="2"
-                    fill="currentColor"
-                    fillOpacity={0.04}
-                    stroke="currentColor"
-                    strokeOpacity={0.08}
-                  />
-                  <rect
-                    x="12"
-                    y="9"
-                    width="10"
-                    height="1.5"
-                    rx="0.75"
-                    fill="currentColor"
-                    fillOpacity={0.07}
-                  />
-                  <rect
-                    x="12"
-                    y="13"
-                    width="12"
-                    height="1.5"
-                    rx="0.75"
-                    fill="currentColor"
-                    fillOpacity={0.05}
-                  />
-                  <rect
-                    x="12"
-                    y="17"
-                    width="8"
-                    height="1.5"
-                    rx="0.75"
-                    fill="currentColor"
-                    fillOpacity={0.04}
-                  />
-                </svg>
-                <p className="text-xs text-foreground/50 dark:text-foreground/25 mb-3">
-                  {t("notes.empty.emptyFolder")}
-                </p>
-                <div className="flex flex-col gap-1.5 w-full max-w-36">
-                  <button
-                    onClick={handleNewNote}
-                    className="flex items-center justify-center gap-1.5 h-6 rounded-md bg-primary/8 dark:bg-primary/10 border border-primary/12 dark:border-primary/15 text-xs font-medium text-primary/70 hover:bg-primary/12 hover:text-primary hover:border-primary/20 transition-colors"
-                  >
-                    <Plus size={10} />
-                    {t("notes.empty.createNote")}
-                  </button>
-                  <button
-                    onClick={() => setShowAddNotesDialog(true)}
-                    className="flex items-center justify-center gap-1.5 h-6 rounded-md border border-foreground/8 dark:border-white/8 text-xs text-foreground/40 hover:text-foreground/60 hover:border-foreground/15 hover:bg-foreground/3 dark:hover:bg-white/3 transition-colors"
-                  >
-                    {t("notes.addToFolder.addExisting")}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              notes.map((note) => (
-                <NoteListItem
-                  key={note.id}
-                  note={note}
-                  isActive={note.id === activeNoteId}
-                  onClick={() => setActiveNoteId(note.id)}
-                  onDelete={handleDelete}
-                  folders={folders}
-                  currentFolderId={activeFolderId}
-                  onMoveToFolder={handleMoveToFolder}
-                  onCreateFolderAndMove={handleCreateFolderAndMove}
-                  dragHandlers={noteDragHandlers(note.id, note.title)}
-                  isDragging={dragState.draggingNoteId === note.id}
-                  noteFilesEnabled={noteFilesEnabled}
-                />
-              ))
-            )}
-          </div>
+          <SpacesTree
+            onDeleteNote={handleDelete}
+            onMoveNote={handleMoveNote}
+            onCreateFolderAndMove={handleCreateFolderAndMove}
+            onNewNote={createNoteIn}
+            onShowStructureIntro={() => setShowStructureIntro(true)}
+          />
         </div>
       </div>
 
@@ -939,32 +757,22 @@ export default function PersonalNotesView({
               isSaving={isSaving}
               isRecording={isActiveNoteRecording}
               isProcessing={false}
+              recordingAllowed={meetingRecordingAllowed}
               onStartRecording={startRecording}
               onStopRecording={stopRecording}
               onExportNote={handleExportNote}
               onExportTranscript={handleExportTranscript}
               enhancement={
-                localEnhancedContent
+                editorEnhancedContent
                   ? {
-                      content: localEnhancedContent,
+                      content: editorEnhancedContent,
                       isStale: isEnhancementStale,
                       onChange: handleEnhancedContentChange,
                     }
                   : undefined
               }
               diarizationSessionId={diarizationSessionId}
-              meetingTranscript={isActiveNoteRecording ? realtimeTranscript : ""}
-              meetingSegments={isActiveNoteRecording ? realtimeSegments : []}
-              meetingMicPartial={isActiveNoteRecording ? micPartial : ""}
-              meetingSystemPartial={isActiveNoteRecording ? systemPartial : ""}
-              meetingSystemPartialSpeakerId={
-                isActiveNoteRecording ? systemPartialSpeakerId : undefined
-              }
-              meetingSystemPartialSpeakerName={
-                isActiveNoteRecording ? systemPartialSpeakerName : undefined
-              }
               onLiveSpeakerLock={lockSpeaker}
-              liveTranscript={isActiveNoteRecording ? realtimeTranscript : ""}
               sessionDiarizationEnabled={sessionDiarizationEnabled}
               sessionExpectedCount={sessionExpectedCount}
               userTouchedStepper={userTouchedStepper}
@@ -972,69 +780,37 @@ export default function PersonalNotesView({
               onSetSessionExpectedCount={setSessionExpectedCount}
               folderName={activeFolderName}
               calendarEventName={calendarEventName}
-              folders={folders}
+              folders={editorFolders}
               onMoveToFolder={handleMoveToFolder}
               onCreateFolderAndMove={handleCreateFolderAndMove}
+              onCancelPendingSaves={cancelPendingSaves}
               actionProcessingState={actionProcessingState}
               actionName={actionName}
-              actionPicker={
-                <ActionPicker
-                  onRunAction={(action) => {
-                    if (!editorNote) return;
-                    const noteContent = editorNote.content;
-                    const hasNotes = !!noteContent.trim();
-                    if (!hasNotes && !activeNoteRawTranscript) return;
-
-                    let formattedTranscript = "";
-                    let isMeetingNote = false;
-                    if (activeNoteRawTranscript) {
-                      const segments = parseTranscriptSegments(activeNoteRawTranscript);
-                      if (segments.length > 0) {
-                        isMeetingNote = true;
-                        formattedTranscript = segments
-                          .map(
-                            (s) =>
-                              `${s.source === "mic" ? t("notes.speaker.you") : t("notes.speaker.them")}: ${s.text}`
-                          )
-                          .join("\n");
-                      }
-                      if (!formattedTranscript) {
-                        formattedTranscript = activeNoteRawTranscript;
-                      }
-                    }
-
-                    const parts = [
-                      hasNotes ? noteContent : "",
-                      formattedTranscript ? `## Meeting Transcript\n${formattedTranscript}` : "",
-                    ]
-                      .filter(Boolean)
-                      .join("\n\n");
-                    runAction(
-                      action,
-                      parts,
-                      makeContentHash(`${noteContent}\n${activeNoteRawTranscript}`),
-                      {
-                        isCloudMode,
-                        modelId: effectiveModelId,
-                        isMeetingNote,
-                        allowTitleGeneration:
-                          !editorNote.title.trim() ||
-                          editorNote.title === t("notes.list.untitledNote"),
-                      }
-                    );
-                  }}
-                  onManageActions={() => setShowActionManager(true)}
-                  disabled={
-                    (!editorNote?.content?.trim() &&
-                      !realtimeTranscript &&
-                      !activeNote?.transcript) ||
-                    actionProcessingState === "processing"
-                  }
-                />
-              }
+              actionProgress={actionProgress}
+              onCancelAction={cancelAction}
+              onRunNoteAction={runNoteAction}
+              onManageActions={setManagerKind}
             />
-            <ActionManagerDialog open={showActionManager} onOpenChange={setShowActionManager} />
+            <ActionManagerDialog
+              open={managerKind !== null}
+              onOpenChange={(open) => !open && setManagerKind(null)}
+              initialKind={managerKind ?? "template"}
+              onInferOutput={(prompt) => inferActionOutput(prompt, effectiveModelId, isCloudMode)}
+            />
           </>
+        ) : activeContext && overviewSpace ? (
+          <ContainerOverview
+            key={
+              activeContext.folderId != null
+                ? `f:${activeContext.folderId}`
+                : `s:${activeContext.spaceId}`
+            }
+            space={overviewSpace}
+            folder={overviewFolder}
+            onOpenNote={setActiveNoteId}
+            onNewNote={createNote}
+            onAddExisting={activeFolderId != null ? () => setShowAddNotesDialog(true) : undefined}
+          />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center -mt-6">
             <svg
@@ -1136,25 +912,29 @@ export default function PersonalNotesView({
             {notes.length === 0 ? (
               <>
                 <h3 className="text-xs font-semibold text-foreground/60 mb-1">
-                  {t("notes.empty.title")}
+                  {t(notesEmptyTitleKey(activeFolderId != null))}
                 </h3>
-                <p className="text-xs text-foreground/50 dark:text-foreground/25 text-center max-w-55 mb-4">
+                <p className="text-xs text-foreground/50 dark:text-foreground/45 text-center max-w-55 mb-4">
                   {t("notes.empty.description")}
                 </p>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={handleNewNote}
+                    onClick={createNote}
                     className="flex items-center gap-1.5 px-4 h-7 rounded-md bg-primary/8 dark:bg-primary/10 border border-primary/12 dark:border-primary/15 text-xs font-medium text-primary/70 hover:bg-primary/12 hover:text-primary hover:border-primary/20 transition-colors"
                   >
                     <Plus size={11} />
                     {t("notes.empty.createNote")}
                   </button>
-                  <button
-                    onClick={() => setShowAddNotesDialog(true)}
-                    className="flex items-center gap-1.5 px-4 h-7 rounded-md border border-foreground/8 dark:border-white/8 text-xs text-foreground/40 hover:text-foreground/60 hover:border-foreground/15 hover:bg-foreground/3 dark:hover:bg-white/3 transition-colors"
-                  >
-                    {t("notes.addToFolder.addExisting")}
-                  </button>
+                  {/* AddNotesToFolderDialog only mounts for folder contexts —
+                      space-root empty states offer just "Create note". */}
+                  {activeFolderId != null && (
+                    <button
+                      onClick={() => setShowAddNotesDialog(true)}
+                      className="flex items-center gap-1.5 px-4 h-7 rounded-md border border-foreground/8 dark:border-white/10 text-xs text-foreground/45 hover:text-foreground/60 hover:border-foreground/15 hover:bg-foreground/3 dark:hover:bg-white/3 transition-colors"
+                    >
+                      {t("notes.addToFolder.addExisting")}
+                    </button>
+                  )}
                 </div>
               </>
             ) : (
@@ -1162,7 +942,7 @@ export default function PersonalNotesView({
                 <h3 className="text-xs font-semibold text-foreground/60 mb-1">
                   {t("notes.empty.selectTitle")}
                 </h3>
-                <p className="text-xs text-foreground/50 dark:text-foreground/25 text-center max-w-50">
+                <p className="text-xs text-foreground/50 dark:text-foreground/45 text-center max-w-50">
                   {t("notes.empty.selectDescription")}
                 </p>
               </>
@@ -1180,106 +960,9 @@ export default function PersonalNotesView({
         />
       )}
 
-      <Dialog
-        open={showNewNoteDialog}
-        onOpenChange={(open) => {
-          setShowNewNoteDialog(open);
-          if (!open) {
-            setIsCreatingNewNoteFolder(false);
-            setNewNoteFolderName("");
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-95 p-6 gap-5">
-          <DialogHeader>
-            <DialogTitle>
-              {isCreatingNewNoteFolder ? t("notes.upload.newFolder") : t("notes.sidebar.newNote")}
-            </DialogTitle>
-          </DialogHeader>
-
-          {isCreatingNewNoteFolder ? (
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-foreground/50">
-                {t("notes.upload.folderName")}
-              </label>
-              <Input
-                value={newNoteFolderName}
-                onChange={(e) => setNewNoteFolderName(e.target.value)}
-                placeholder={t("notes.folders.folderName")}
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleCreateNewNoteFolder();
-                }}
-              />
-            </div>
-          ) : (
-            folders.length > 0 && (
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-foreground/50">
-                  {t("notes.folders.title")}
-                </label>
-                <Select value={newNoteFolderId} onValueChange={handleNewNoteFolderChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("notes.upload.selectFolder")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {folders.map((f) => (
-                      <SelectItem key={f.id} value={String(f.id)}>
-                        {f.name}
-                      </SelectItem>
-                    ))}
-                    <SelectSeparator />
-                    <SelectItem value="__create_new__">
-                      <span className="flex items-center gap-1.5 text-primary/60">
-                        <Plus size={13} />
-                        {t("notes.upload.newFolder")}
-                      </span>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )
-          )}
-
-          <DialogFooter>
-            {isCreatingNewNoteFolder ? (
-              <>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setIsCreatingNewNoteFolder(false);
-                    setNewNoteFolderName("");
-                  }}
-                >
-                  {t("common.back")}
-                </Button>
-                <Button onClick={handleCreateNewNoteFolder} disabled={!newNoteFolderName.trim()}>
-                  {t("notes.upload.create")}
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button variant="ghost" onClick={() => setShowNewNoteDialog(false)}>
-                  {t("notes.upload.cancel")}
-                </Button>
-                <Button onClick={handleConfirmNewNote} disabled={!newNoteFolderId}>
-                  {t("notes.upload.create")}
-                </Button>
-              </>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <ConfirmDialog
-        open={confirmDialog.open}
-        onOpenChange={(open) => !open && hideConfirmDialog()}
-        title={confirmDialog.title}
-        description={confirmDialog.description}
-        confirmText={confirmDialog.confirmText}
-        cancelText={confirmDialog.cancelText}
-        onConfirm={confirmDialog.onConfirm}
-        variant={confirmDialog.variant}
+      <NotesStructureIntroDialog
+        open={showStructureIntro}
+        onOpenChange={handleStructureIntroOpenChange}
       />
     </div>
   );

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://github.com/IBM/audit-ci/raw/main/docs/schema.json",
+  "high": true,
+  "package-manager": "npm",
+  "extra-args": ["--package-lock-only", "--ignore-scripts"],
+  "allowlist": [
+    {
+      "GHSA-86w9-cpqp-85rv": {
+        "active": true,
+        "expiry": "2026-11-01T00:00:00Z",
+        "notes": "node-forge 1.4.0 is patched with the nested DigestAlgorithm validation from https://github.com/digitalbazaar/forge/pull/1152. npm audit cannot detect patch-package fixes. CI and postinstall run test:security against every locked copy before Expo tools run. Remove this exception and the patch when an upstream fixed release is installed; review by 2026-11-01."
+      }
+    }
+  ]
+}

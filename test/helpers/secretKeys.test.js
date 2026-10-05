@@ -63,6 +63,17 @@ test("openrouter is a first-class secret", () => {
   assert.equal(env.getOpenrouterKey(), "sk-or-abc");
 });
 
+// The accessor names come verbatim from the manifest rather than from `base`,
+// and realtimeTokenProviders.js / stt-canary.mjs call these exact spellings —
+// a base-derived rename would give getAssemblyaiKey and break them silently.
+test("the STT accessors keep the spellings their callers use", () => {
+  const env = new EnvironmentManager();
+  assert.equal(typeof env.getAssemblyAIKey, "function");
+  assert.equal(typeof env.saveAssemblyAIKey, "function");
+  assert.equal(typeof env.getDeepgramKey, "function");
+  assert.equal(typeof env.saveDeepgramKey, "function");
+});
+
 test("preload BYOK_KEY_BRIDGES mirror the manifest exactly", () => {
   // preload.js can't require the manifest under sandbox, so it inlines the
   // {base, get, save} tuples. Assert they stay in lockstep with the manifest.
@@ -71,7 +82,7 @@ test("preload BYOK_KEY_BRIDGES mirror the manifest exactly", () => {
   assert.ok(block, "BYOK_KEY_BRIDGES declared in preload.js");
   for (const k of BYOK_API_KEYS) {
     const entry = new RegExp(
-      `\\{\\s*base:\\s*"${k.base}",\\s*get:\\s*"${k.get}",\\s*save:\\s*"${k.save}"\\s*\\}`
+      `\\{\\s*base:\\s*"${k.base}",\\s*get:\\s*"${k.get}",\\s*save:\\s*"${k.save}",?\\s*\\}`
     );
     assert.match(block[1], entry, `preload mirrors ${k.base}`);
   }

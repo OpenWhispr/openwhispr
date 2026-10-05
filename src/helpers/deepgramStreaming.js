@@ -68,6 +68,21 @@ const NOVA3_LANGUAGES = new Set([
 // Deepgram's net0001 idle timeout (which only resets on audio data, not KeepAlive).
 const SILENCE_FRAME = Buffer.alloc((SAMPLE_RATE / 10) * 2);
 
+// Deepgram binds the scheme to the credential: a raw API key (BYOK) is accepted
+// only as `Token`, `Bearer` only for what /v1/auth/grant mints (managed). #2140
+const authorizationHeader = (mode, token) => `${mode === "byok" ? "Token" : "Bearer"} ${token}`;
+
+// Everything buildWebSocketUrl pins on the socket, folded the way it folds it, so
+// a warm connection can be compared against the session that wants to ride it.
+// Dictation warms on the UI language before it can know a translation wants the
+// source language, and the dictionary can be edited between the two.
+const urlIdentity = (options) =>
+  JSON.stringify([
+    options.sampleRate || SAMPLE_RATE,
+    options.language && options.language !== "auto" ? options.language : null,
+    (options.keyterms || []).filter(Boolean),
+  ]);
+
 class DeepgramStreaming {
   constructor() {
     this.ws = null;
@@ -77,6 +92,8 @@ class DeepgramStreaming {
     this.onFinalTranscript = null;
     this.onError = null;
     this.onSessionEnd = null;
+    this.onConnectionLost = null;
+    this.connectionLossNotified = false;
     this.pendingResolve = null;
     this.pendingReject = null;
     this.connectionTimeout = null;
@@ -86,6 +103,7 @@ class DeepgramStreaming {
     this.closeResolve = null;
     this.cachedToken = null;
     this.tokenFetchedAt = null;
+    this.mode = null;
     this.warmConnection = null;
     this.warmConnectionReady = false;
     this.warmConnectionOptions = null;
@@ -121,6 +139,9 @@ class DeepgramStreaming {
     const lang = options.language && options.language !== "auto" ? options.language : null;
     const baseLang = lang ? lang.split("-")[0].toLowerCase() : null;
     const useNova3 = !lang || NOVA3_LANGUAGES.has(lang) || NOVA3_LANGUAGES.has(baseLang);
+    // options.model is intentionally ignored: the registry only offers nova-3,
+    // and honouring a user-pinned family would defeat the nova-2 downgrade that
+    // keeps languages outside NOVA3_LANGUAGES working.
     const model = useNova3 ? "nova-3" : "nova-2";
     this.currentModel = model;
 
@@ -153,6 +174,23 @@ class DeepgramStreaming {
     this.cachedToken = token;
     this.tokenFetchedAt = Date.now();
     debugLogger.debug("Deepgram token cached", { expiresIn: TOKEN_EXPIRY_MS });
+  }
+
+  // BYOK and managed dictation share one client instance, so a token or warm
+  // socket minted under one credential kind must never serve the other. Callers
+  // that read the cache before connecting must adopt the mode first.
+  adoptMode(options) {
+    const mode = options.mode === "byok" ? "byok" : "openwhispr";
+    if (this.mode !== null && this.mode !== mode) {
+      debugLogger.debug("Deepgram credential mode changed, dropping cached session state", {
+        from: this.mode,
+        to: mode,
+      });
+      this.cachedToken = null;
+      this.tokenFetchedAt = null;
+      this.cleanupWarmConnection();
+    }
+    this.mode = mode;
   }
 
   isTokenValid() {
@@ -207,6 +245,7 @@ class DeepgramStreaming {
       throw new Error("Streaming token is required for warmup");
     }
 
+    this.adoptMode(options);
     if (this.warmConnection) {
       debugLogger.debug(
         this.warmConnectionReady
@@ -262,7 +301,7 @@ class DeepgramStreaming {
       }, WEBSOCKET_TIMEOUT_MS);
 
       this.warmConnection = new WebSocket(url, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: authorizationHeader(this.mode, token) },
       });
 
       this.warmConnection.on("open", () => {
@@ -347,6 +386,14 @@ class DeepgramStreaming {
       this.rewarmTimer = null;
       if (this.hasWarmConnection() || this.isConnected) return;
 
+      // cleanupWarmConnection() drops these without cancelling this timer, and
+      // spreading a null one loses `mode`, re-warming a BYOK key as a Bearer.
+      const savedOptions = this.warmConnectionOptions;
+      if (!savedOptions) {
+        debugLogger.debug("Deepgram cannot re-warm: options dropped before the timer fired");
+        return;
+      }
+
       let token = this.getCachedToken();
       if (!token && this.tokenRefreshFn) {
         try {
@@ -363,7 +410,7 @@ class DeepgramStreaming {
         return;
       }
 
-      this.warmup({ ...this.warmConnectionOptions, token }).catch((err) => {
+      this.warmup({ ...savedOptions, token }).catch((err) => {
         debugLogger.debug("Deepgram auto re-warm failed", { error: err.message });
       });
     }, delay);
@@ -419,6 +466,7 @@ class DeepgramStreaming {
 
     this.ws = this.warmConnection;
     this.isConnected = true;
+    this.connectionLossNotified = false;
     this.sessionId = this.warmSessionId || null;
     this.warmConnection = null;
     this.warmConnectionReady = false;
@@ -431,9 +479,10 @@ class DeepgramStreaming {
 
     this.ws.removeAllListeners("error");
     this.ws.on("error", (error) => {
+      const wasActive = this.isConnected;
       debugLogger.error("Deepgram WebSocket error", { error: error.message });
       this.cleanup();
-      this.onError?.(error);
+      if (wasActive && !this.isDisconnecting) this.notifyConnectionLost(error);
     });
 
     this.ws.removeAllListeners("close");
@@ -449,7 +498,7 @@ class DeepgramStreaming {
       }
       this.cleanup();
       if (wasActive && !this.isDisconnecting) {
-        this.onError?.(new Error(`Connection lost (code: ${code})`));
+        this.notifyConnectionLost(new Error(`Connection lost (code: ${code})`));
       }
     });
 
@@ -553,15 +602,18 @@ class DeepgramStreaming {
       return;
     }
 
+    this.adoptMode(options);
     this.connectionOptions = {
       sampleRate: options.sampleRate,
       language: options.language,
       keyterms: options.keyterms,
+      mode: options.mode,
     };
     this.accumulatedText = "";
     this.finalSegments = [];
     this.audioBytesSent = 0;
     this.resultsReceived = 0;
+    this.connectionLossNotified = false;
 
     if (replayBuffer && replayBuffer.length > 0) {
       this.coldStartBuffer = replayBuffer;
@@ -573,6 +625,20 @@ class DeepgramStreaming {
     } else {
       this.coldStartBuffer = [];
       this.coldStartBufferSize = 0;
+    }
+
+    // The socket carries these for its whole life, so riding a warm one opened
+    // for other values transcribes the session under them — silently, since
+    // Deepgram has no reason to object to the audio.
+    if (
+      this.hasWarmConnection() &&
+      urlIdentity(this.warmConnectionOptions) !== urlIdentity(options)
+    ) {
+      debugLogger.debug("Deepgram warm connection differs, cold-starting", {
+        warm: urlIdentity(this.warmConnectionOptions),
+        requested: urlIdentity(options),
+      });
+      this.cleanupWarmConnection();
     }
 
     if (!forceNew && this.hasWarmConnection()) {
@@ -596,7 +662,7 @@ class DeepgramStreaming {
       }, WEBSOCKET_TIMEOUT_MS);
 
       this.ws = new WebSocket(url, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: authorizationHeader(this.mode, token) },
       });
 
       this.ws.on("open", () => {
@@ -608,6 +674,7 @@ class DeepgramStreaming {
       });
 
       this.ws.on("error", (error) => {
+        const wasActive = this.isConnected;
         debugLogger.error("Deepgram WebSocket error", { error: error.message });
         // Invalidate cached token on auth failure so next attempt fetches fresh
         if (error.message && error.message.includes("401")) {
@@ -620,7 +687,11 @@ class DeepgramStreaming {
           this.pendingReject = null;
           this.pendingResolve = null;
         }
-        this.onError?.(error);
+        if (wasActive && !this.isDisconnecting) {
+          this.notifyConnectionLost(error);
+        } else if (!this.isDisconnecting) {
+          this.onError?.(error);
+        }
       });
 
       this.ws.on("close", (code, reason) => {
@@ -640,10 +711,20 @@ class DeepgramStreaming {
         }
         this.cleanup();
         if (wasActive && !this.isDisconnecting) {
-          this.onError?.(new Error(`Connection lost (code: ${code})`));
+          this.notifyConnectionLost(new Error(`Connection lost (code: ${code})`));
         }
       });
     });
+  }
+
+  notifyConnectionLost(error) {
+    if (this.connectionLossNotified) return;
+    this.connectionLossNotified = true;
+    if (this.onConnectionLost) {
+      this.onConnectionLost(error);
+    } else {
+      this.onError?.(error);
+    }
   }
 
   handleMessage(data) {
@@ -885,3 +966,4 @@ class DeepgramStreaming {
 }
 
 module.exports = DeepgramStreaming;
+module.exports.authorizationHeader = authorizationHeader;

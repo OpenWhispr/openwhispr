@@ -14,8 +14,52 @@ on:
 permissions:
   contents: write # Required for creating releases
 
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref_name }}
+
 jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Validate release inputs
+        env:
+          MICROSOFT_CALENDAR_CLIENT_ID: ${{ secrets.MICROSOFT_CALENDAR_CLIENT_ID }}
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          if [ "$RELEASE_TAG" != "v$PACKAGE_VERSION" ]; then
+            echo "::error::Release tag $RELEASE_TAG does not match package version v$PACKAGE_VERSION"
+            exit 1
+          fi
+          if [ -z "$MICROSOFT_CALENDAR_CLIENT_ID" ]; then
+            echo "::error::MICROSOFT_CALENDAR_CLIENT_ID is required for release builds"
+            exit 1
+          fi
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Run quality checks
+        run: npm run quality-check
+      - name: Check translations
+        run: npm run i18n:check
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+      - name: Build better-sqlite3 for the runner's node
+        # --ignore-scripts skips the native build, so DB-backed tests silently
+        # skip unless the binding is rebuilt for the CI Node runtime.
+        run: npm rebuild better-sqlite3
+      - name: Run tests
+        run: npm test
+        env:
+          # keeps require("electron") from throwing when postinstall was skipped
+          ELECTRON_OVERRIDE_DIST_PATH: /tmp
+          # a skipped DB test here means the rebuild step above is gone: fail instead
+          REQUIRE_DB_TESTS: "1"
+
   build-linux:
+    needs: tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -53,6 +97,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
 
+      - name: Download yt-dlp binary
+        run: node scripts/download-yt-dlp.js --current
+
       - name: Download Qdrant binary
         run: node scripts/download-qdrant.js --current
         env:
@@ -67,7 +114,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/electron
-          key: linux-electron-${{ hashFiles('**/package-lock.json') }}
+          key: linux-electron-${{ hashFiles('package-lock.json') }}
           restore-keys: linux-electron-
 
       - name: Install Linux build and packaging dependencies
@@ -79,6 +126,11 @@ jobs:
         run: |
           echo "GOOGLE_CALENDAR_CLIENT_ID=${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}" >> .env
           echo "GOOGLE_CALENDAR_CLIENT_SECRET=${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}" >> .env
+          echo "MICROSOFT_CALENDAR_CLIENT_ID=${{ secrets.MICROSOFT_CALENDAR_CLIENT_ID }}" >> .env
+          echo "SLACK_CLIENT_ID=${{ secrets.SLACK_CLIENT_ID }}" >> .env
+          echo "LINEAR_CLIENT_ID=${{ secrets.LINEAR_CLIENT_ID }}" >> .env
+          echo "GITHUB_APP_CLIENT_ID=${{ secrets.GH_APP_CLIENT_ID }}" >> .env
+          echo "GITHUB_APP_SLUG=${{ secrets.GH_APP_SLUG }}" >> .env
 
       - name: Verify PipeWire system audio helper build
         run: |
@@ -90,11 +142,13 @@ jobs:
         run: npm run build:linux -- --publish always
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          VITE_AUTH_URL: ${{ vars.VITE_AUTH_URL }}
+          BRAND_FONTS_REQUIRED: "1"
+          VITE_AUTH_URL: ${{ vars.VITE_AUTH_URL || 'https://auth.openwhispr.com' }}
           VITE_OPENWHISPR_API_URL: ${{ vars.VITE_OPENWHISPR_API_URL }}
           VITE_OPENWHISPR_OAUTH_CALLBACK_URL: ${{ vars.VITE_OPENWHISPR_OAUTH_CALLBACK_URL }}
 
   build-windows:
+    needs: tests
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -104,6 +158,9 @@ jobs:
         with:
           node-version: "24"
           cache: "npm"
+
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
 
       - name: Install dependencies
         run: npm ci
@@ -115,9 +172,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: resources/bin
-          # The system-audio helper source is in the key so a republished
-          # helper binary invalidates the cached copy.
-          key: windows-x64-bin-${{ hashFiles('scripts/download-*.js', 'resources/windows-system-audio-helper.c') }}
+          # Native helper sources are in the key so source changes cannot
+          # restore stale helper binaries from the cache.
+          key: windows-x64-bin-${{ hashFiles('scripts/download-*.js', 'resources/windows-system-audio-helper.c', 'resources/windows-mic-listener.c') }}
 
       - name: Download whisper.cpp binaries
         run: node scripts/download-whisper-cpp.js --current
@@ -133,6 +190,9 @@ jobs:
         run: node scripts/download-sherpa-onnx.js --current
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
+      - name: Download yt-dlp binary
+        run: node scripts/download-yt-dlp.js --current
 
       - name: Download Qdrant binary
         run: node scripts/download-qdrant.js --current
@@ -159,10 +219,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
 
-      - name: Download windows-mic-listener.exe
-        run: node scripts/download-windows-mic-listener.js
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+      - name: Compile windows-mic-listener.exe
+        shell: cmd
+        run: |
+          if not exist resources\bin mkdir resources\bin
+          cl /O2 /nologo resources\windows-mic-listener.c /Fe:resources\bin\windows-mic-listener.exe ole32.lib oleaut32.lib
 
       - name: Download windows-system-audio-helper.exe
         run: node scripts/download-windows-system-audio-helper.js
@@ -177,7 +238,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/AppData/Local/electron/Cache
-          key: windows-electron-${{ hashFiles('**/package-lock.json') }}
+          key: windows-electron-${{ hashFiles('package-lock.json') }}
           restore-keys: windows-electron-
 
       - name: Create runtime env
@@ -185,12 +246,18 @@ jobs:
         run: |
           echo "GOOGLE_CALENDAR_CLIENT_ID=${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}" >> .env
           echo "GOOGLE_CALENDAR_CLIENT_SECRET=${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}" >> .env
+          echo "MICROSOFT_CALENDAR_CLIENT_ID=${{ secrets.MICROSOFT_CALENDAR_CLIENT_ID }}" >> .env
+          echo "SLACK_CLIENT_ID=${{ secrets.SLACK_CLIENT_ID }}" >> .env
+          echo "LINEAR_CLIENT_ID=${{ secrets.LINEAR_CLIENT_ID }}" >> .env
+          echo "GITHUB_APP_CLIENT_ID=${{ secrets.GH_APP_CLIENT_ID }}" >> .env
+          echo "GITHUB_APP_SLUG=${{ secrets.GH_APP_SLUG }}" >> .env
 
       - name: Build and Sign Application
         run: npm run build:win -- --publish always
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          VITE_AUTH_URL: ${{ vars.VITE_AUTH_URL }}
+          BRAND_FONTS_REQUIRED: "1"
+          VITE_AUTH_URL: ${{ vars.VITE_AUTH_URL || 'https://auth.openwhispr.com' }}
           VITE_OPENWHISPR_API_URL: ${{ vars.VITE_OPENWHISPR_API_URL }}
           VITE_OPENWHISPR_OAUTH_CALLBACK_URL: ${{ vars.VITE_OPENWHISPR_OAUTH_CALLBACK_URL }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -198,6 +265,7 @@ jobs:
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
 
   build-macos:
+    needs: tests
     runs-on: macos-latest
     strategy:
       fail-fast: false
@@ -254,6 +322,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
 
+      - name: Download yt-dlp binary
+        run: node scripts/download-yt-dlp.js --current --platform darwin --arch ${{ matrix.arch }}
+
       - name: Download Qdrant binary
         run: node scripts/download-qdrant.js --current --platform darwin --arch ${{ matrix.arch }}
         env:
@@ -268,7 +339,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/electron
-          key: macos-${{ matrix.arch }}-electron-${{ hashFiles('**/package-lock.json') }}
+          key: macos-${{ matrix.arch }}-electron-${{ hashFiles('package-lock.json') }}
           restore-keys: macos-${{ matrix.arch }}-electron-
 
       - name: Setup macOS Code Signing
@@ -299,13 +370,19 @@ jobs:
         run: |
           echo "GOOGLE_CALENDAR_CLIENT_ID=${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}" >> .env
           echo "GOOGLE_CALENDAR_CLIENT_SECRET=${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}" >> .env
+          echo "MICROSOFT_CALENDAR_CLIENT_ID=${{ secrets.MICROSOFT_CALENDAR_CLIENT_ID }}" >> .env
+          echo "SLACK_CLIENT_ID=${{ secrets.SLACK_CLIENT_ID }}" >> .env
+          echo "LINEAR_CLIENT_ID=${{ secrets.LINEAR_CLIENT_ID }}" >> .env
+          echo "GITHUB_APP_CLIENT_ID=${{ secrets.GH_APP_CLIENT_ID }}" >> .env
+          echo "GITHUB_APP_SLUG=${{ secrets.GH_APP_SLUG }}" >> .env
 
       - name: Build Application (${{ matrix.arch }})
         run: npm run build:mac -- --${{ matrix.arch }} --publish always
         env:
           TARGET_ARCH: ${{ matrix.arch }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          VITE_AUTH_URL: ${{ vars.VITE_AUTH_URL }}
+          BRAND_FONTS_REQUIRED: "1"
+          VITE_AUTH_URL: ${{ vars.VITE_AUTH_URL || 'https://auth.openwhispr.com' }}
           VITE_OPENWHISPR_API_URL: ${{ vars.VITE_OPENWHISPR_API_URL }}
           VITE_OPENWHISPR_OAUTH_CALLBACK_URL: ${{ vars.VITE_OPENWHISPR_OAUTH_CALLBACK_URL }}
           CSC_IDENTITY_AUTO_DISCOVERY: true
@@ -317,16 +394,17 @@ jobs:
       - name: Verify packaged macOS native binaries
         run: |
           APP_PATH=$(ls -d dist/mac*/OpenWhispr.app | head -n1)
-          for bin in macos-audio-tap macos-globe-listener macos-fast-paste macos-mic-listener macos-text-monitor macos-media-remote; do
+          for bin in macos-audio-tap macos-globe-listener macos-fast-paste macos-mic-listener macos-calendar-listener macos-text-monitor macos-window-bounds macos-media-remote; do
             test -x "$APP_PATH/Contents/Resources/bin/$bin" || { echo "Missing in bundle: $bin"; exit 1; }
           done
+          node scripts/verify-macos-parakeet.js "$APP_PATH"
 
       - name: Upload arch-specific update metadata
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           cp dist/latest-mac.yml "dist/latest-${{ matrix.arch }}-mac.yml"
-          gh release upload "${{ github.ref_name }}" "dist/latest-${{ matrix.arch }}-mac.yml" --clobber
+          gh release upload "$RELEASE_TAG" "dist/latest-${{ matrix.arch }}-mac.yml" --clobber
 
       - name: Cleanup Certificates
         if: always()

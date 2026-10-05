@@ -1,0 +1,331 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const { once } = require("node:events");
+
+const { WebSocketServer } = require("ws");
+
+const ParakeetWsServer = require("../../src/helpers/parakeetWsServer");
+const { pcm16ToFloat32 } = require("../../src/utils/audioUtils");
+
+// Mock sherpa online WS protocol: float32 binary frames in, JSON results out, "Done"/"Done!" handshake.
+async function startMockOnlineServer({ onBinary, finalSegment = 0 }) {
+  const wss = new WebSocketServer({ port: 0, host: "127.0.0.1" });
+  await once(wss, "listening");
+
+  let ignoringDone = false;
+  wss.on("connection", (socket) => {
+    let binaryFrames = 0;
+    socket.on("message", (data, isBinary) => {
+      if (isBinary) {
+        binaryFrames += 1;
+        onBinary?.(socket, data, binaryFrames);
+        return;
+      }
+      if (data.toString() === "Done" && !ignoringDone) {
+        socket.send(
+          JSON.stringify({
+            text: `final after ${binaryFrames} frames`,
+            segment: finalSegment,
+            is_final: true,
+          })
+        );
+        socket.send("Done!");
+      }
+    });
+  });
+
+  return {
+    port: wss.address().port,
+    ignoreDone: () => {
+      ignoringDone = true;
+    },
+    close: () => new Promise((resolve) => wss.close(resolve)),
+  };
+}
+
+function onlineWsServerAt(port) {
+  const server = new ParakeetWsServer();
+  server.ready = true;
+  server.process = { pid: 1 };
+  server.port = port;
+  server.modelRuntime = "online";
+  return server;
+}
+
+test("online stream emits live updates and finish resolves with the final text", async () => {
+  const mock = await startMockOnlineServer({
+    onBinary: (socket, _data, frameCount) => {
+      socket.send(JSON.stringify({ text: `partial ${frameCount}`, segment: 0, is_final: false }));
+    },
+  });
+
+  try {
+    const updates = [];
+    const stream = onlineWsServerAt(mock.port).createOnlineStream({
+      onUpdate: (text) => updates.push(text),
+    });
+
+    // Chunks sent before the socket opens must be queued, not dropped.
+    stream.sendPcm16(Buffer.alloc(3200));
+    stream.sendFloat32(pcm16ToFloat32(Buffer.alloc(3200)));
+
+    const { text } = await stream.finish();
+
+    assert.equal(text, "final after 2 frames");
+    assert.ok(updates.includes("partial 1"));
+    assert.ok(updates.includes("partial 2"));
+  } finally {
+    await mock.close();
+  }
+});
+
+test("finalized segments accumulate across endpoints in live updates", async () => {
+  let segment = 0;
+  const mock = await startMockOnlineServer({
+    finalSegment: 2,
+    onBinary: (socket, _data, frameCount) => {
+      // Simulate endpointing: every frame finalizes a segment.
+      socket.send(
+        JSON.stringify({ text: `segment ${frameCount}`, segment: segment++, is_final: true })
+      );
+    },
+  });
+
+  try {
+    let lastUpdate = "";
+    const stream = onlineWsServerAt(mock.port).createOnlineStream({
+      onUpdate: (text) => {
+        lastUpdate = text;
+      },
+    });
+
+    stream.sendPcm16(Buffer.alloc(3200));
+    stream.sendPcm16(Buffer.alloc(3200));
+
+    const { text } = await stream.finish();
+
+    assert.equal(text, "segment 1 segment 2 final after 2 frames");
+    assert.equal(lastUpdate, text);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("createOnlineStream rejects offline-runtime sessions and dead servers", () => {
+  const offline = onlineWsServerAt(1);
+  offline.modelRuntime = "offline";
+  assert.throws(() => offline.createOnlineStream(), /online-runtime/);
+
+  const dead = onlineWsServerAt(1);
+  dead.ready = false;
+  assert.throws(() => dead.createOnlineStream(), /not running/);
+});
+
+test("abort closes the stream without waiting for the server", async () => {
+  const mock = await startMockOnlineServer({});
+  try {
+    const stream = onlineWsServerAt(mock.port).createOnlineStream({});
+    stream.sendPcm16(Buffer.alloc(3200));
+    stream.abort();
+    const { text, truncated } = await stream.finish();
+    assert.equal(text, "");
+    assert.equal(truncated, false);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("finish flags truncation when the server never acknowledges Done", async () => {
+  // Server sends a partial but ignores "Done" entirely.
+  const mock = await startMockOnlineServer({
+    onBinary: (socket) => {
+      socket.send(JSON.stringify({ text: "partial", segment: 0, is_final: false }));
+    },
+  });
+  mock.ignoreDone();
+
+  try {
+    const stream = onlineWsServerAt(mock.port).createOnlineStream({});
+    stream.sendPcm16(Buffer.alloc(3200));
+    const { text, truncated } = await stream.finish({ idleTimeoutMs: 200 });
+    assert.equal(text, "partial");
+    assert.equal(truncated, true);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("unexpected close before Done! reports an error and truncation", async () => {
+  const mock = await startMockOnlineServer({
+    onBinary: (socket) => {
+      socket.send(JSON.stringify({ text: "cut off", segment: 0, is_final: false }));
+      socket.close();
+    },
+  });
+
+  try {
+    const errors = [];
+    const stream = onlineWsServerAt(mock.port).createOnlineStream({
+      onError: (err) => errors.push(err),
+    });
+    stream.sendPcm16(Buffer.alloc(3200));
+    const { text, truncated } = await stream.finish({ idleTimeoutMs: 1000 });
+    assert.equal(text, "cut off");
+    assert.equal(truncated, true);
+    assert.equal(errors.length, 1);
+    assert.match(errors[0].message, /closed before/);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("a clean finish reports no truncation", async () => {
+  const mock = await startMockOnlineServer({});
+  try {
+    const stream = onlineWsServerAt(mock.port).createOnlineStream({});
+    stream.sendPcm16(Buffer.alloc(3200));
+    const { text, truncated } = await stream.finish();
+    assert.equal(truncated, false);
+    assert.equal(text, "final after 1 frames");
+  } finally {
+    await mock.close();
+  }
+});
+
+test("a send error during the queued flush flags truncation", async () => {
+  const mock = await startMockOnlineServer({});
+  const WebSocket = require("ws");
+  const realSend = WebSocket.prototype.send;
+  // Only client audio frames are binary; the mock server sends strings, so gate on type.
+  WebSocket.prototype.send = function (data, cb) {
+    if (typeof data !== "string") {
+      if (typeof cb === "function") cb(new Error("forced send failure"));
+      return;
+    }
+    return realSend.call(this, data, cb);
+  };
+  try {
+    const stream = onlineWsServerAt(mock.port).createOnlineStream({});
+    stream.sendPcm16(Buffer.alloc(3200));
+    const { truncated } = await stream.finish({ idleTimeoutMs: 1000 });
+    assert.equal(truncated, true);
+  } finally {
+    WebSocket.prototype.send = realSend;
+    await mock.close();
+  }
+});
+
+test("a chunk arriving after finish flags truncation", async () => {
+  const mock = await startMockOnlineServer({});
+  try {
+    const stream = onlineWsServerAt(mock.port).createOnlineStream({});
+    stream.sendPcm16(Buffer.alloc(3200));
+    const finishPromise = stream.finish({ idleTimeoutMs: 1000 });
+    // Renderer flushed a chunk after we already told the server we were done.
+    stream.sendPcm16(Buffer.alloc(3200));
+    const { truncated } = await finishPromise;
+    assert.equal(truncated, true);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("finish is idempotent and returns the same result", async () => {
+  const mock = await startMockOnlineServer({});
+  try {
+    const stream = onlineWsServerAt(mock.port).createOnlineStream({});
+    stream.sendPcm16(Buffer.alloc(3200));
+    const [first, second] = await Promise.all([stream.finish(), stream.finish()]);
+    assert.deepEqual(first, second);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("offline transcription rejects with AbortError when cancelled mid-flight", async () => {
+  const wss = new WebSocketServer({ port: 0, host: "127.0.0.1" });
+  await once(wss, "listening");
+  const controller = new AbortController();
+  // The server holds the request open; only the abort can settle it.
+  wss.on("connection", () => controller.abort());
+
+  try {
+    const server = onlineWsServerAt(wss.address().port);
+    server.modelRuntime = "offline";
+    await assert.rejects(
+      () => server.transcribe(Buffer.alloc(3200), 16000, { signal: controller.signal }),
+      (err) => {
+        assert.equal(err.name, "AbortError");
+        return true;
+      }
+    );
+  } finally {
+    await new Promise((resolve) => wss.close(resolve));
+  }
+});
+
+test("offline transcription rejects immediately on a pre-aborted signal", async () => {
+  const controller = new AbortController();
+  controller.abort();
+
+  const server = onlineWsServerAt(1);
+  server.modelRuntime = "offline";
+  await assert.rejects(
+    () => server.transcribe(Buffer.alloc(3200), 16000, { signal: controller.signal }),
+    (err) => {
+      assert.equal(err.name, "AbortError");
+      return true;
+    }
+  );
+});
+
+test("online transcription rejects with AbortError when cancelled mid-flight", async () => {
+  // The server never acknowledges Done, so only the abort settles the stream.
+  const mock = await startMockOnlineServer({});
+  mock.ignoreDone();
+
+  try {
+    const server = onlineWsServerAt(mock.port);
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 20);
+    await assert.rejects(
+      () => server.transcribe(Buffer.alloc(3200), 16000, { signal: controller.signal }),
+      (err) => {
+        assert.equal(err.name, "AbortError");
+        return true;
+      }
+    );
+  } finally {
+    await mock.close();
+  }
+});
+
+test("offline transcription rejects when the connection closes without a result", async () => {
+  const wss = new WebSocketServer({ port: 0, host: "127.0.0.1" });
+  await once(wss, "listening");
+  wss.on("connection", (socket) => socket.close());
+
+  try {
+    const server = onlineWsServerAt(wss.address().port);
+    server.modelRuntime = "offline";
+    await assert.rejects(
+      () => server.transcribe(Buffer.alloc(3200), 16000),
+      /closed before transcription completed/
+    );
+  } finally {
+    await new Promise((resolve) => wss.close(resolve));
+  }
+});
+
+test("pcm16ToFloat32 converts int16 samples to normalized float32", () => {
+  const pcm = Buffer.alloc(8);
+  pcm.writeInt16LE(0, 0);
+  pcm.writeInt16LE(16384, 2);
+  pcm.writeInt16LE(-16384, 4);
+  pcm.writeInt16LE(-32768, 6);
+
+  const floats = pcm16ToFloat32(pcm);
+
+  assert.ok(floats instanceof Float32Array);
+  assert.deepEqual(Array.from(floats), [0, 0.5, -0.5, -1]);
+});

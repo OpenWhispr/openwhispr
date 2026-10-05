@@ -3,10 +3,26 @@ import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { useDialogs } from "./useDialogs";
 import { useToast } from "../components/ui/useToast";
-import type { WhisperDownloadProgressData } from "../types/electron";
+import type {
+  LocalLLMDownloadProgressEvent,
+  LocalModelDownloadStatus,
+  WhisperDownloadProgressData,
+} from "../types/electron";
+import { clearMissingLocalModelSelections } from "../stores/settingsStore";
 import "../types/electron";
 
 const PROGRESS_THROTTLE_MS = 100;
+
+/**
+ * Fired on this window whenever a local model lands on or leaves the disk
+ * (download complete, model deleted), so surfaces that mirror disk truth
+ * without owning the download — e.g. useRequiredLocalModels — can re-check.
+ */
+export const LOCAL_MODELS_CHANGED_EVENT = "openwhispr-local-models-changed";
+
+function notifyLocalModelsChanged(): void {
+  window.dispatchEvent(new Event(LOCAL_MODELS_CHANGED_EVENT));
+}
 
 export interface DownloadProgress {
   percentage: number;
@@ -24,37 +40,54 @@ interface UseModelDownloadOptions {
   onModelsCleared?: () => void;
 }
 
-interface LLMDownloadProgressData {
-  modelId: string;
-  progress: number;
-  downloadedSize: number;
-  totalSize: number;
+interface ModelDownloadTerminalEvent {
+  type: "complete" | "error";
+  error?: string;
+  code?: string;
+  sequence?: number;
 }
+
+type LLMDownloadProgressData = LocalLLMDownloadProgressEvent & { sequence?: number };
 
 export function formatETA(seconds: number): string {
   if (seconds < 60) return `${Math.round(seconds)}s`;
   const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = Math.round(seconds % 60);
-  return `${minutes}m ${remainingSeconds}s`;
+  return `${minutes}m ${Math.round(seconds % 60)}s`;
 }
 
 function getDownloadErrorMessage(t: TFunction, error: string, code?: string): string {
-  if (code === "EXTRACTION_FAILED" || error.includes("installation failed"))
+  if (code === "EXTRACTION_FAILED" || error.includes("installation failed")) {
     return t("hooks.modelDownload.errors.extractionFailed");
-  if (code === "TLS_ERROR" || error.includes("certificate") || error.includes("issuer"))
+  }
+  if (code === "TLS_ERROR" || error.includes("certificate") || error.includes("issuer")) {
     return t("hooks.modelDownload.errors.tlsError");
-  if (code === "ETIMEDOUT" || error.includes("timeout") || error.includes("stalled"))
+  }
+  if (code === "ETIMEDOUT" || error.includes("timeout") || error.includes("stalled")) {
     return t("hooks.modelDownload.errors.timeout");
-  if (code === "ENOTFOUND" || error.includes("ENOTFOUND"))
+  }
+  if (code === "ENOTFOUND" || error.includes("ENOTFOUND")) {
     return t("hooks.modelDownload.errors.notFound");
+  }
   if (error.includes("disk space")) return error;
-  if (error.includes("corrupted") || error.includes("incomplete") || error.includes("too small"))
+  if (error.includes("corrupted") || error.includes("incomplete") || error.includes("too small")) {
     return t("hooks.modelDownload.errors.corrupted");
-  if (error.includes("HTTP 429") || error.includes("rate limit"))
+  }
+  if (error.includes("HTTP 429") || error.includes("rate limit")) {
     return t("hooks.modelDownload.errors.rateLimited");
-  if (error.includes("HTTP 4") || error.includes("HTTP 5"))
+  }
+  if (error.includes("HTTP 4") || error.includes("HTTP 5")) {
     return t("hooks.modelDownload.errors.server", { error });
+  }
   return t("hooks.modelDownload.errors.generic", { error });
+}
+
+function isCancellation(error?: string, code?: string) {
+  return (
+    code === "DOWNLOAD_CANCELLED" ||
+    error?.includes("interrupted by user") ||
+    error?.includes("cancelled by user") ||
+    error?.includes("Download cancelled")
+  );
 }
 
 export function useModelDownload({
@@ -63,27 +96,17 @@ export function useModelDownload({
   onModelsCleared,
 }: UseModelDownloadOptions) {
   const { t } = useTranslation();
-  const [downloadingModel, setDownloadingModel] = useState<string | null>(null);
-  const [downloadProgress, setDownloadProgress] = useState<DownloadProgress>({
-    percentage: 0,
-    downloadedBytes: 0,
-    totalBytes: 0,
-  });
-  const [isCancelling, setIsCancelling] = useState(false);
-  const [isInstalling, setIsInstalling] = useState(false);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
-  const isCancellingRef = useRef(false);
-  const lastProgressUpdateRef = useRef(0);
-
   const { showAlertDialog } = useDialogs();
   const { toast } = useToast();
-  const showAlertDialogRef = useRef(showAlertDialog);
+  const [downloads, setDownloads] = useState<Record<string, LocalModelDownloadStatus>>({});
+  const [cancellingModels, setCancellingModels] = useState<Set<string>>(new Set());
+  const [downloadErrors, setDownloadErrors] = useState<Record<string, string>>({});
+  const ownedRequestsRef = useRef(new Map<string, ModelDownloadTerminalEvent | null>());
+  const settlingDownloadsRef = useRef(new Set<string>());
+  const terminalSequencesRef = useRef<Record<string, number>>({});
+  const lastProgressUpdateRef = useRef<Record<string, number>>({});
   const onDownloadCompleteRef = useRef(onDownloadComplete);
   const onModelsClearedRef = useRef(onModelsCleared);
-
-  useEffect(() => {
-    showAlertDialogRef.current = showAlertDialog;
-  }, [showAlertDialog]);
 
   useEffect(() => {
     onDownloadCompleteRef.current = onDownloadComplete;
@@ -99,82 +122,183 @@ export function useModelDownload({
     return () => window.removeEventListener("openwhispr-models-cleared", handleModelsCleared);
   }, []);
 
-  const handleWhisperProgress = useCallback(
-    (_event: unknown, data: WhisperDownloadProgressData) => {
-      if (data.type === "progress") {
-        const now = Date.now();
-        if (now - lastProgressUpdateRef.current < PROGRESS_THROTTLE_MS) return;
-        lastProgressUpdateRef.current = now;
-        setDownloadProgress({
-          percentage: data.percentage || 0,
-          downloadedBytes: data.downloaded_bytes || 0,
-          totalBytes: data.total_bytes || 0,
-        });
-      } else if (data.type === "installing") {
-        setIsInstalling(true);
-      } else if (data.type === "complete") {
-        if (isCancellingRef.current) return;
-        setIsInstalling(false);
-        // Don't clear downloadingModel/downloadProgress here — let downloadModel's
-        // finally block handle it after the model list has been refreshed.
-        // This prevents a flash where the model appears "not downloaded".
-      } else if (data.type === "error") {
-        if (isCancellingRef.current) return;
-        const msg = getDownloadErrorMessage(
-          t,
-          data.error || t("hooks.modelDownload.errors.unknown"),
-          data.code
-        );
-        const title =
-          data.code === "EXTRACTION_FAILED"
-            ? t("hooks.modelDownload.installationFailed.title")
-            : t("hooks.modelDownload.downloadFailed.title");
-        setDownloadError(msg);
-        showAlertDialogRef.current({ title, description: msg });
-        setIsInstalling(false);
-        setDownloadingModel(null);
-        setDownloadProgress({ percentage: 0, downloadedBytes: 0, totalBytes: 0 });
-      }
+  const updateDownload = useCallback(
+    (status: LocalModelDownloadStatus) => {
+      if (status.modelType !== modelType) return;
+      setDownloads((current) => {
+        const terminalSequence = terminalSequencesRef.current[status.modelId] || 0;
+        if (status.sequence !== 0 && status.sequence <= terminalSequence) return current;
+        const existing = current[status.modelId];
+        if (existing && existing.sequence > status.sequence) return current;
+        return { ...current, [status.modelId]: status };
+      });
     },
-    [t]
+    [modelType]
   );
 
-  const handleLLMProgress = useCallback((_event: unknown, data: LLMDownloadProgressData) => {
-    if (isCancellingRef.current) return;
-
-    const now = Date.now();
-    const isComplete = data.progress >= 100;
-    if (!isComplete && now - lastProgressUpdateRef.current < PROGRESS_THROTTLE_MS) {
-      return;
-    }
-    lastProgressUpdateRef.current = now;
-
-    setDownloadProgress({
-      percentage: data.progress || 0,
-      downloadedBytes: data.downloadedSize || 0,
-      totalBytes: data.totalSize || 0,
+  const removeDownload = useCallback((modelId: string, sequence?: number) => {
+    setDownloads((current) => {
+      const existing = current[modelId];
+      if (!existing || (sequence !== undefined && existing.sequence > sequence)) return current;
+      const { [modelId]: _removed, ...remaining } = current;
+      return remaining;
     });
   }, []);
 
+  const clearCancelling = useCallback((modelId: string) => {
+    setCancellingModels((current) => {
+      if (!current.has(modelId)) return current;
+      const next = new Set(current);
+      next.delete(modelId);
+      return next;
+    });
+  }, []);
+
+  const settleDownload = useCallback(
+    async (modelId: string, sequence?: number) => {
+      if (settlingDownloadsRef.current.has(modelId)) return;
+      settlingDownloadsRef.current.add(modelId);
+      try {
+        await onDownloadCompleteRef.current?.();
+      } catch {
+        // The model is already on disk even if the UI refresh fails.
+      } finally {
+        removeDownload(modelId, sequence);
+        clearCancelling(modelId);
+        settlingDownloadsRef.current.delete(modelId);
+      }
+    },
+    [clearCancelling, removeDownload]
+  );
+
+  const handleTerminalDownload = useCallback(
+    async (
+      modelId: string,
+      type: "complete" | "error",
+      error?: string,
+      code?: string,
+      sequence?: number
+    ): Promise<void> => {
+      if (sequence !== undefined) {
+        terminalSequencesRef.current[modelId] = Math.max(
+          terminalSequencesRef.current[modelId] || 0,
+          sequence
+        );
+      }
+      if (ownedRequestsRef.current.has(modelId)) {
+        ownedRequestsRef.current.set(modelId, { type, error, code, sequence });
+        return;
+      }
+      if (type === "complete") notifyLocalModelsChanged();
+      if (type === "error" && !isCancellation(error, code)) {
+        const message = getDownloadErrorMessage(
+          t,
+          error || t("hooks.modelDownload.errors.unknown"),
+          code
+        );
+        setDownloadErrors((current) => ({ ...current, [modelId]: message }));
+        showAlertDialog({
+          title:
+            code === "EXTRACTION_FAILED"
+              ? t("hooks.modelDownload.installationFailed.title")
+              : t("hooks.modelDownload.downloadFailed.title"),
+          description: message,
+        });
+      }
+      await settleDownload(modelId, sequence);
+    },
+    [settleDownload, showAlertDialog, t]
+  );
+
+  const handleNativeProgress = useCallback(
+    (data: WhisperDownloadProgressData) => {
+      if (data.type === "complete" || data.type === "error") {
+        void handleTerminalDownload(data.model, data.type, data.error, data.code, data.sequence);
+        return;
+      }
+      if (data.type !== "progress" && data.type !== "installing") return;
+
+      const isInstalling = data.type === "installing";
+      if (!isInstalling) {
+        const now = Date.now();
+        const lastUpdate = lastProgressUpdateRef.current[data.model] || 0;
+        if (now - lastUpdate < PROGRESS_THROTTLE_MS) return;
+        lastProgressUpdateRef.current[data.model] = now;
+      }
+      updateDownload({
+        modelType,
+        modelId: data.model,
+        phase: isInstalling ? "installing" : "downloading",
+        progress: isInstalling ? data.percentage || 100 : data.percentage || 0,
+        downloadedBytes: isInstalling ? 0 : data.downloaded_bytes || 0,
+        totalBytes: isInstalling ? 0 : data.total_bytes || 0,
+        sequence: data.sequence || 0,
+      });
+    },
+    [handleTerminalDownload, modelType, updateDownload]
+  );
+
+  const handleLLMProgress = useCallback(
+    (_event: unknown, data: LLMDownloadProgressData) => {
+      if (data.type === "complete") {
+        void handleTerminalDownload(data.modelId, data.type, undefined, undefined, data.sequence);
+        return;
+      }
+      if (data.type === "error") {
+        void handleTerminalDownload(data.modelId, data.type, data.error, data.code, data.sequence);
+        return;
+      }
+      const now = Date.now();
+      const lastUpdate = lastProgressUpdateRef.current[data.modelId] || 0;
+      if ((data.progress || 0) < 100 && now - lastUpdate < PROGRESS_THROTTLE_MS) return;
+      lastProgressUpdateRef.current[data.modelId] = now;
+      updateDownload({
+        modelType: "llm",
+        modelId: data.modelId,
+        phase: "downloading",
+        progress: data.progress || 0,
+        downloadedBytes: data.downloadedSize || 0,
+        totalBytes: data.totalSize || 0,
+        sequence: data.sequence || 0,
+      });
+    },
+    [handleTerminalDownload, updateDownload]
+  );
+
   useEffect(() => {
-    let dispose: (() => void) | undefined;
+    const dispose =
+      modelType === "whisper"
+        ? window.electronAPI?.onWhisperDownloadProgress((_event, data) =>
+            handleNativeProgress(data)
+          )
+        : modelType === "parakeet"
+          ? window.electronAPI?.onParakeetDownloadProgress((_event, data) =>
+              handleNativeProgress(data)
+            )
+          : window.electronAPI?.onModelDownloadProgress(handleLLMProgress);
+    return () => dispose?.();
+  }, [handleLLMProgress, handleNativeProgress, modelType]);
 
-    if (modelType === "whisper") {
-      dispose = window.electronAPI?.onWhisperDownloadProgress(handleWhisperProgress);
-    } else if (modelType === "parakeet") {
-      dispose = window.electronAPI?.onParakeetDownloadProgress(handleWhisperProgress);
-    } else {
-      dispose = window.electronAPI?.onModelDownloadProgress(handleLLMProgress);
-    }
-
+  useEffect(() => {
+    let disposed = false;
+    window.electronAPI
+      ?.modelGetActiveDownloads?.()
+      .then((activeDownloads) => {
+        if (!disposed) activeDownloads.forEach(updateDownload);
+      })
+      .catch(() => {});
     return () => {
-      dispose?.();
+      disposed = true;
     };
-  }, [handleWhisperProgress, handleLLMProgress, modelType]);
+  }, [updateDownload]);
 
   const downloadModel = useCallback(
     async (modelId: string, onSelectAfterDownload?: (id: string) => void) => {
-      if (downloadingModel) {
+      if (
+        ownedRequestsRef.current.has(modelId) ||
+        downloads[modelId] ||
+        (modelType !== "llm" && Object.keys(downloads).length > 0)
+      ) {
         toast({
           title: t("hooks.modelDownload.downloadInProgress.title"),
           description: t("hooks.modelDownload.downloadInProgress.description"),
@@ -182,97 +306,105 @@ export function useModelDownload({
         return;
       }
 
+      ownedRequestsRef.current.set(modelId, null);
+      setDownloadErrors((current) => {
+        if (!(modelId in current)) return current;
+        const { [modelId]: _removed, ...remaining } = current;
+        return remaining;
+      });
+      updateDownload({
+        modelType,
+        modelId,
+        phase: "downloading",
+        progress: 0,
+        downloadedBytes: 0,
+        totalBytes: 0,
+        sequence: 0,
+      });
+      lastProgressUpdateRef.current[modelId] = 0;
+
+      let keepActiveDownloadState = false;
+      let isDuplicateRequest = false;
+
       try {
-        setDownloadingModel(modelId);
-        setDownloadError(null);
-        setDownloadProgress({ percentage: 0, downloadedBytes: 0, totalBytes: 0 });
-        lastProgressUpdateRef.current = 0; // Reset throttle timer
+        const result =
+          modelType === "whisper"
+            ? await window.electronAPI?.downloadWhisperModel(modelId)
+            : modelType === "parakeet"
+              ? await window.electronAPI?.downloadParakeetModel(modelId)
+              : await window.electronAPI?.modelDownload?.(modelId);
 
-        let success = false;
-
-        if (modelType === "whisper") {
-          const result = await window.electronAPI?.downloadWhisperModel(modelId);
-          if (!result?.success && !result?.error?.includes("interrupted by user")) {
-            const msg = getDownloadErrorMessage(
-              t,
-              result?.error || t("hooks.modelDownload.errors.unknown"),
-              result?.code
-            );
-            setDownloadError(msg);
-            showAlertDialog({
-              title: t("hooks.modelDownload.downloadFailed.title"),
-              description: msg,
-            });
-          } else {
-            success = result?.success ?? false;
+        if (result?.success) {
+          notifyLocalModelsChanged();
+          onSelectAfterDownload?.(modelId);
+        } else if (result?.code === "DOWNLOAD_IN_PROGRESS") {
+          isDuplicateRequest = true;
+          const activeDownloads = await window.electronAPI?.modelGetActiveDownloads?.();
+          if (ownedRequestsRef.current.get(modelId)) return;
+          const activeDownload = activeDownloads?.find(
+            (status) =>
+              status.modelType === modelType && (modelType !== "llm" || status.modelId === modelId)
+          );
+          if (activeDownload) {
+            updateDownload(activeDownload);
+            keepActiveDownloadState = activeDownload.modelId === modelId;
           }
-        } else if (modelType === "parakeet") {
-          const result = await window.electronAPI?.downloadParakeetModel(modelId);
-          if (!result?.success && !result?.error?.includes("interrupted by user")) {
-            const msg = getDownloadErrorMessage(
-              t,
-              result?.error || t("hooks.modelDownload.errors.unknown"),
-              result?.code
-            );
-            const title =
+          toast({
+            title: t("hooks.modelDownload.downloadInProgress.title"),
+            description: t("hooks.modelDownload.downloadInProgress.description"),
+          });
+        } else if (!isCancellation(result?.error, result?.code)) {
+          const message = getDownloadErrorMessage(
+            t,
+            result?.error || t("hooks.modelDownload.errors.unknown"),
+            result?.code
+          );
+          setDownloadErrors((current) => ({ ...current, [modelId]: message }));
+          showAlertDialog({
+            title:
               result?.code === "EXTRACTION_FAILED"
                 ? t("hooks.modelDownload.installationFailed.title")
-                : t("hooks.modelDownload.downloadFailed.title");
-            setDownloadError(msg);
-            showAlertDialog({ title, description: msg });
-          } else {
-            success = result?.success ?? false;
-          }
-        } else {
-          const result = (await window.electronAPI?.modelDownload?.(modelId)) as unknown as
-            { success: boolean; error?: string; code?: string } | undefined;
-          if (result && !result.success && result.error) {
-            const msg = getDownloadErrorMessage(t, result.error, result.code);
-            setDownloadError(msg);
-            showAlertDialog({
-              title: t("hooks.modelDownload.downloadFailed.title"),
-              description: msg,
-            });
-          } else {
-            success = result?.success ?? false;
-          }
-        }
-
-        if (success) {
-          onSelectAfterDownload?.(modelId);
-        }
-
-        // Await the refresh so the model list is updated before we clear
-        // the downloading state in `finally`. This prevents a flash where
-        // the model briefly appears "not downloaded".
-        try {
-          await onDownloadCompleteRef.current?.();
-        } catch {
-          // Non-fatal — the model is on disk regardless
+                : t("hooks.modelDownload.downloadFailed.title"),
+            description: message,
+          });
         }
       } catch (error: unknown) {
-        if (isCancellingRef.current) return;
-
         const errorMessage = error instanceof Error ? error.message : String(error);
-        if (
-          !errorMessage.includes("interrupted by user") &&
-          !errorMessage.includes("cancelled by user") &&
-          !errorMessage.includes("DOWNLOAD_CANCELLED")
-        ) {
-          const msg = getDownloadErrorMessage(t, errorMessage);
-          setDownloadError(msg);
+        if (!isCancellation(errorMessage)) {
+          const message = getDownloadErrorMessage(t, errorMessage);
+          setDownloadErrors((current) => ({ ...current, [modelId]: message }));
           showAlertDialog({
             title: t("hooks.modelDownload.downloadFailed.title"),
-            description: msg,
+            description: message,
           });
         }
       } finally {
-        setIsInstalling(false);
-        setDownloadingModel(null);
-        setDownloadProgress({ percentage: 0, downloadedBytes: 0, totalBytes: 0 });
+        const terminalEvent = ownedRequestsRef.current.get(modelId);
+        ownedRequestsRef.current.delete(modelId);
+        if (isDuplicateRequest && terminalEvent) {
+          // A duplicate response cannot carry the original transfer's terminal result.
+          await handleTerminalDownload(
+            modelId,
+            terminalEvent.type,
+            terminalEvent.error,
+            terminalEvent.code,
+            terminalEvent.sequence
+          );
+        } else if (!keepActiveDownloadState) {
+          await settleDownload(modelId);
+        }
       }
     },
-    [downloadingModel, modelType, showAlertDialog, toast, t]
+    [
+      downloads,
+      handleTerminalDownload,
+      modelType,
+      settleDownload,
+      showAlertDialog,
+      t,
+      toast,
+      updateDownload,
+    ]
   );
 
   const deleteModel = useCallback(
@@ -299,12 +431,17 @@ export function useModelDownload({
             });
           }
         } else {
-          await window.electronAPI?.modelDelete?.(modelId);
+          // model-delete reports failure by resolving, not throwing — leaving the
+          // model on disk, so the scopes pointing at it must stay untouched.
+          const result = await window.electronAPI?.modelDelete?.(modelId);
+          if (!result?.success) throw new Error(result?.error ?? "");
+          clearMissingLocalModelSelections((id) => id !== modelId);
           toast({
             title: t("hooks.modelDownload.modelDeleted.title"),
             description: t("hooks.modelDownload.modelDeleted.description"),
           });
         }
+        notifyLocalModelsChanged();
         onComplete?.();
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -314,51 +451,57 @@ export function useModelDownload({
         });
       }
     },
-    [modelType, toast, showAlertDialog, t]
+    [modelType, showAlertDialog, t, toast]
   );
 
-  const cancelDownload = useCallback(async () => {
-    if (!downloadingModel || isCancelling) return;
+  const cancelDownload = useCallback(
+    async (modelId?: string) => {
+      const targetModel = modelId || Object.keys(downloads)[0];
+      if (!targetModel || cancellingModels.has(targetModel)) return;
+      if (downloads[targetModel]?.phase === "installing") return;
 
-    setIsCancelling(true);
-    isCancellingRef.current = true;
-    try {
-      if (modelType === "whisper") {
-        await window.electronAPI?.cancelWhisperDownload();
-      } else if (modelType === "parakeet") {
-        await window.electronAPI?.cancelParakeetDownload();
-      } else {
-        await window.electronAPI?.modelCancelDownload?.(downloadingModel);
+      setCancellingModels((current) => new Set(current).add(targetModel));
+      try {
+        const result =
+          modelType === "whisper"
+            ? await window.electronAPI?.cancelWhisperDownload()
+            : modelType === "parakeet"
+              ? await window.electronAPI?.cancelParakeetDownload()
+              : await window.electronAPI?.modelCancelDownload?.(targetModel);
+        if (result?.success) {
+          toast({
+            title: t("hooks.modelDownload.downloadCancelled.title"),
+            description: t("hooks.modelDownload.downloadCancelled.description"),
+          });
+          return;
+        }
+      } catch (error) {
+        console.error("Failed to cancel download:", error);
       }
-      toast({
-        title: t("hooks.modelDownload.downloadCancelled.title"),
-        description: t("hooks.modelDownload.downloadCancelled.description"),
-      });
-    } catch (error) {
-      console.error("Failed to cancel download:", error);
-    } finally {
-      setIsCancelling(false);
-      isCancellingRef.current = false;
-      setDownloadingModel(null);
-      setDownloadProgress({ percentage: 0, downloadedBytes: 0, totalBytes: 0 });
-      onDownloadCompleteRef.current?.();
-    }
-  }, [downloadingModel, isCancelling, modelType, toast, t]);
-
-  const isDownloading = downloadingModel !== null;
-  const isDownloadingModel = useCallback(
-    (modelId: string) => downloadingModel === modelId,
-    [downloadingModel]
+      clearCancelling(targetModel);
+    },
+    [cancellingModels, clearCancelling, downloads, modelType, t, toast]
   );
+
+  const downloadingModel = Object.keys(downloads)[0] || null;
+  const activeDownload = downloadingModel ? downloads[downloadingModel] : null;
+  const errorMessages = Object.values(downloadErrors);
 
   return {
+    downloads,
+    downloadErrors,
     downloadingModel,
-    downloadProgress,
-    downloadError,
-    isDownloading,
-    isDownloadingModel,
-    isInstalling,
-    isCancelling,
+    downloadProgress: {
+      percentage: activeDownload?.progress || 0,
+      downloadedBytes: activeDownload?.downloadedBytes || 0,
+      totalBytes: activeDownload?.totalBytes || 0,
+    },
+    downloadError: errorMessages[errorMessages.length - 1] || null,
+    isDownloading: downloadingModel !== null,
+    isInstalling: activeDownload?.phase === "installing",
+    isCancelling: downloadingModel ? cancellingModels.has(downloadingModel) : false,
+    isDownloadingModel: (modelId: string) => !!downloads[modelId],
+    isCancellingModel: (modelId: string) => cancellingModels.has(modelId),
     downloadModel,
     deleteModel,
     cancelDownload,

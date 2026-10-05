@@ -3,7 +3,7 @@ import {
   isGlobeLikeHotkey,
   isMouseButtonHotkey,
   parseHotkeyList,
-} from "./hotkeys";
+} from "./hotkeys.ts";
 
 export type Platform = "darwin" | "win32" | "linux";
 
@@ -14,7 +14,9 @@ export type ValidationErrorCode =
   | "LEFT_MODIFIER_ONLY"
   | "DUPLICATE"
   | "RESERVED"
-  | "INVALID_GLOBE";
+  | "INVALID_GLOBE"
+  | "FN_COMBINATION_UNSUPPORTED"
+  | "MODIFIER_ONLY_UNSUPPORTED";
 
 export interface ValidationResult {
   valid: boolean;
@@ -37,11 +39,49 @@ const RIGHT_SIDE_MODIFIERS = new Set([
   "rightsuper",
   "rightmeta",
   "rightwin",
+  "controlright",
+  "ctrlright",
+  "altright",
+  "optionright",
+  "shiftright",
+  "commandright",
+  "cmdright",
+  "superright",
+  "metaright",
+  "winright",
+]);
+
+const LEFT_SIDE_MODIFIERS = new Set([
+  "leftcontrol",
+  "leftctrl",
+  "leftalt",
+  "leftoption",
+  "leftshift",
+  "leftcommand",
+  "leftcmd",
+  "leftsuper",
+  "leftmeta",
+  "leftwin",
+  "controlleft",
+  "ctrlleft",
+  "altleft",
+  "optionleft",
+  "shiftleft",
+  "commandleft",
+  "cmdleft",
+  "superleft",
+  "metaleft",
+  "winleft",
 ]);
 
 function isRightSideModifier(part: string): boolean {
   const normalized = part.replace(/[-_ ]/g, "").toLowerCase();
   return RIGHT_SIDE_MODIFIERS.has(normalized);
+}
+
+function isLeftSideModifier(part: string): boolean {
+  const normalized = part.replace(/[-_ ]/g, "").toLowerCase();
+  return LEFT_SIDE_MODIFIERS.has(normalized);
 }
 
 const SPECIAL_KEYS = new Set(
@@ -251,29 +291,6 @@ const LINUX_RESERVED_SHORTCUTS = [
   "Super+PrintScreen",
 ] as const;
 
-const MAC_RECOMMENDED = [
-  "Fn",
-  "Ctrl + Option",
-  "Option + Cmd",
-  "Right Cmd or Right Option",
-  "Modifier + unused key (e.g., Ctrl + Page Up)",
-] as const;
-
-const WINDOWS_RECOMMENDED = [
-  "Ctrl + Win",
-  "Ctrl + Alt",
-  "Ctrl (right) or Alt (right)",
-  "Modifier + rarely used key (e.g., Ctrl + Page Up)",
-] as const;
-
-const LINUX_RECOMMENDED = [
-  "Ctrl + Super",
-  "Ctrl + Shift + Super",
-  "Super + Shift",
-  "Ctrl (right) or Alt (right)",
-  "Modifier + rarely used key (e.g., Ctrl + Page Up or Ctrl + Scroll Lock)",
-] as const;
-
 const MAC_EXAMPLES = [
   "Control+Shift+K",
   "Alt+F7",
@@ -353,6 +370,18 @@ function normalizeModifier(part: string, platform: Platform): string | null {
     }
   }
 
+  // Handle left-side modifiers (e.g., LeftControl, ControlLeft, LeftOption)
+  if (isLeftSideModifier(part)) {
+    if (lowered.includes("control") || lowered.includes("ctrl")) return "LeftControl";
+    if (lowered.includes("alt") || lowered.includes("option"))
+      return platform === "darwin" ? "LeftOption" : "LeftAlt";
+    if (lowered.includes("shift")) return "LeftShift";
+    if (lowered.includes("command") || lowered.includes("cmd")) return "LeftCommand";
+    if (lowered.includes("super") || lowered.includes("meta") || lowered.includes("win")) {
+      return platform === "darwin" ? "LeftCommand" : "LeftSuper";
+    }
+  }
+
   return null;
 }
 
@@ -398,26 +427,35 @@ function isLeftRightMix(parts: string[]): boolean {
   const sidesByModifier = new Map<string, Set<string>>();
 
   const patterns = [
-    /^(left|right)[-_ ]?(ctrl|control|alt|option|shift|command|cmd|super|meta)$/i,
-    /^(ctrl|control|alt|option|shift|command|cmd|super|meta)[-_ ]?(left|right)$/i,
+    {
+      regex: /^(left|right)[-_ ]?(ctrl|control|alt|option|shift|command|cmd|super|meta|win)$/i,
+      sideIndex: 1,
+      modIndex: 2,
+    },
+    {
+      regex: /^(ctrl|control|alt|option|shift|command|cmd|super|meta|win)[-_ ]?(left|right)$/i,
+      sideIndex: 2,
+      modIndex: 1,
+    },
   ];
 
   for (const rawPart of parts) {
     const part = rawPart.replace(/\s+/g, "");
-    for (const pattern of patterns) {
-      const match = part.match(pattern);
+    for (const { regex, sideIndex, modIndex } of patterns) {
+      const match = part.match(regex);
       if (match) {
-        const side = match[1].toLowerCase().includes("left") ? "left" : "right";
-        const modifier = match[2]?.toLowerCase() || match[1]?.toLowerCase();
-        if (!modifier) continue;
+        const side = match[sideIndex].toLowerCase().includes("left") ? "left" : "right";
+        const rawModifier = match[modIndex].toLowerCase();
         const normalizedModifier =
-          modifier === "ctrl"
+          rawModifier === "ctrl"
             ? "control"
-            : modifier === "cmd"
+            : rawModifier === "cmd"
               ? "command"
-              : modifier === "option"
+              : rawModifier === "option"
                 ? "alt"
-                : modifier;
+                : rawModifier === "win" || rawModifier === "meta"
+                  ? "super"
+                  : rawModifier;
         const set = sidesByModifier.get(normalizedModifier) ?? new Set<string>();
         set.add(side);
         sidesByModifier.set(normalizedModifier, set);
@@ -468,19 +506,6 @@ export function getReservedShortcuts(platform: Platform): readonly string[] {
       return WINDOWS_RESERVED_SHORTCUTS;
     case "linux":
       return LINUX_RESERVED_SHORTCUTS;
-    default:
-      return [];
-  }
-}
-
-export function getRecommendedPatterns(platform: Platform): readonly string[] {
-  switch (platform) {
-    case "darwin":
-      return MAC_RECOMMENDED;
-    case "win32":
-      return WINDOWS_RECOMMENDED;
-    case "linux":
-      return LINUX_RECOMMENDED;
     default:
       return [];
   }
@@ -554,6 +579,17 @@ export function validateHotkey(
     return { valid: true };
   }
 
+  // Electron cannot represent Fn inside an accelerator. Stripping it would
+  // register the base key globally, so the native listener supports standalone
+  // Globe/Fn only.
+  if (/^fn\+/i.test(hotkey)) {
+    return {
+      valid: false,
+      error: "The Globe/Fn key can only be used by itself.",
+      errorCode: "FN_COMBINATION_UNSUPPORTED",
+    };
+  }
+
   if (isMouseButtonHotkey(hotkey)) {
     if (platform !== "darwin") {
       return {
@@ -623,22 +659,28 @@ export function validateHotkey(
   const modifierCount = parts.filter((part) => normalizeModifier(part, platform) !== null).length;
   const hasBaseKey = parts.length > modifierCount;
 
+  // Windows and Linux route a modifier-only chord to a native low-level listener;
+  // macOS has no equivalent — the Globe listener reports Fn, right-side modifiers
+  // and mouse buttons, nothing else — and Electron cannot register an accelerator
+  // without a key, so the chord would be accepted here and then fail to bind.
+  if (!hasBaseKey && modifierCount >= 2 && platform === "darwin") {
+    return {
+      valid: false,
+      error:
+        "Two-modifier shortcuts are not supported on macOS. Use a right-side modifier on its own (e.g. RightOption), or add a regular key.",
+      errorCode: "MODIFIER_ONLY_UNSUPPORTED",
+    };
+  }
+
   if (!hasBaseKey && modifierCount === 1) {
     const singleMod = parts[0];
     if (!isRightSideModifier(singleMod)) {
       return {
         valid: false,
         error:
-          "Single modifier hotkeys must use the right-side key (e.g., RightOption). Or use two modifiers (e.g., Control+Alt).",
-        errorCode: "LEFT_MODIFIER_ONLY",
-      };
-    }
-    // Right-side single modifiers require native listeners (not available on Linux)
-    if (platform === "linux") {
-      return {
-        valid: false,
-        error:
-          "Right-side single modifier hotkeys are not supported on Linux. Use two modifiers (e.g., Control+Alt) instead.",
+          platform === "darwin"
+            ? "Single modifier hotkeys must use the right-side key (e.g., RightOption). Or add a regular key (e.g., Control+Space)."
+            : "Single modifier hotkeys must use the right-side key (e.g., RightOption). Or use two modifiers (e.g., Control+Alt).",
         errorCode: "LEFT_MODIFIER_ONLY",
       };
     }

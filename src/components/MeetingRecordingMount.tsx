@@ -1,33 +1,190 @@
-import { useEffect } from "react";
+import { createElement, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "./ui/useToast";
 import {
+  getActiveRecordingSessionId,
   getMicAnalyser,
+  persistLiveTranscript,
   primeMeetingWorklet,
+  stopRecording,
   useMeetingRecordingStore,
 } from "../stores/meetingRecordingStore";
+import { requestMeetingRecordingAutoEnd } from "../helpers/meetingRecordingSession";
+import logger from "../utils/logger";
 
 const EMA_PREV = 0.5;
 const EMA_NEXT = 0.5;
 
+// Sentinel errors set by meetingRecordingStore, translated at display time.
+// A sentinel may carry one argument after a colon, e.g. `unsupportedProvider:groq`.
+// Anything that is not a sentinel reaches the toast unchanged.
+const MEETING_ERROR_KEYS: Record<string, string> = {
+  policyRestricted: "notes.meeting.restrictedByOrg",
+  unsupportedSelfHosted: "notes.meeting.unsupportedSelfHosted",
+  unsupportedProvider: "notes.meeting.unsupportedProvider",
+  noProviderSelected: "notes.meeting.noProviderSelected",
+};
+
 export default function MeetingRecordingMount(): null {
   const { t } = useTranslation();
-  const { toast } = useToast();
+  const { toast, dismiss } = useToast();
   const isRecording = useMeetingRecordingStore((s) => s.isRecording);
+  const isTranscribing = useMeetingRecordingStore((s) => s.isTranscribing);
   const error = useMeetingRecordingStore((s) => s.error);
+  const errorNonce = useMeetingRecordingStore((s) => s.errorNonce);
+  const systemAudioSilentWarning = useMeetingRecordingStore((s) => s.systemAudioSilentWarning);
+  const systemAudioInterrupted = useMeetingRecordingStore((s) => s.systemAudioInterrupted);
+  const systemAudioInterruptedNonce = useMeetingRecordingStore(
+    (s) => s.systemAudioInterruptedNonce
+  );
+  const micCaptureStatus = useMeetingRecordingStore((s) => s.micCaptureStatus);
+  const wasMicUnavailable = useRef(false);
+  const wasSystemAudioSilent = useRef(false);
 
   useEffect(() => {
     primeMeetingWorklet();
   }, []);
 
   useEffect(() => {
+    const unsubscribeStop = window.electronAPI?.onMeetingAutoEndRequested?.((request) => {
+      requestMeetingRecordingAutoEnd(request, stopRecording, (error, sessionId) => {
+        logger.error(
+          "Meeting auto-end stop failed; recording is still running",
+          { error: error instanceof Error ? error.message : String(error), sessionId },
+          "meeting"
+        );
+      });
+    });
+
+    return () => {
+      unsubscribeStop?.();
+    };
+  }, []);
+
+  // Crash-safety net moved out of the notes view: it must keep running when
+  // the user switches views mid-recording.
+  useEffect(() => {
+    if (!isTranscribing) return;
+
+    const interval = setInterval(() => void persistLiveTranscript(), 30_000);
+
+    return () => clearInterval(interval);
+  }, [isTranscribing]);
+
+  useEffect(() => {
     if (!error) return;
+    const [sentinel, argument] = error.split(":");
+    const errorKey = MEETING_ERROR_KEYS[sentinel];
     toast({
       title: t("notes.meeting.title"),
-      description: error,
+      description: errorKey ? t(errorKey, { provider: argument }) : error,
       variant: "destructive",
     });
-  }, [error, toast, t]);
+    // errorNonce re-fires this toast when the same error repeats back-to-back.
+  }, [error, errorNonce, toast, t]);
+
+  // The store latches this once per recording; the ref keeps dependency
+  // changes (e.g. a language switch recreating `t`) from re-firing the toast.
+  useEffect(() => {
+    if (!systemAudioSilentWarning) {
+      wasSystemAudioSilent.current = false;
+      return;
+    }
+    if (wasSystemAudioSilent.current) return;
+    wasSystemAudioSilent.current = true;
+    toast({
+      title: t("notes.meeting.systemAudioSilent.title"),
+      description: t("notes.meeting.systemAudioSilent.description"),
+      duration: 8000,
+    });
+  }, [systemAudioSilentWarning, toast, t]);
+
+  useEffect(() => {
+    const deliverInterruption = (): void => {
+      const state = useMeetingRecordingStore.getState();
+      if (!state.isRecording || !state.systemAudioInterrupted) {
+        return;
+      }
+      if (
+        document.visibilityState !== "visible" ||
+        !document.hasFocus() ||
+        state.systemAudioInterruptedDeliveredNonce === state.systemAudioInterruptedNonce
+      )
+        return;
+
+      const interruption = state.systemAudioInterrupted;
+      let key = "notes.meeting.systemAudioStopped";
+      if (interruption.recovering) {
+        key = "notes.meeting.systemAudioInterrupted";
+      } else if (interruption.reason === "gone_quiet") {
+        key = "notes.meeting.systemAudioQuiet";
+      }
+      const sessionId = getActiveRecordingSessionId();
+      const toastId = toast({
+        title: t(`${key}.title`),
+        description: t(`${key}.description`),
+        duration: interruption.recovering ? 8000 : 0,
+        action:
+          key === "notes.meeting.systemAudioStopped" && sessionId
+            ? createElement(
+                "button",
+                {
+                  type: "button",
+                  className: "text-xs text-primary underline hover:text-primary/80",
+                  onClick: async (): Promise<void> => {
+                    await stopRecording(sessionId);
+                  },
+                },
+                t("notes.editor.stop")
+              )
+            : undefined,
+      });
+      // The provider survives route changes. Keep its warning until the
+      // recording stops or a newer interruption supersedes it, even unmounted.
+      const unsubscribe = useMeetingRecordingStore.subscribe((next) => {
+        if (
+          !next.isRecording ||
+          !next.systemAudioInterrupted ||
+          next.systemAudioInterruptedNonce !== state.systemAudioInterruptedNonce
+        ) {
+          dismiss(toastId);
+          unsubscribe();
+        }
+      });
+      // Keep delivery state outside this component: routes may unmount it
+      // while the recording and interruption listener continue running.
+      useMeetingRecordingStore.setState({
+        systemAudioInterruptedDeliveredNonce: state.systemAudioInterruptedNonce,
+      });
+    };
+    deliverInterruption();
+    document.addEventListener("visibilitychange", deliverInterruption);
+    window.addEventListener("focus", deliverInterruption);
+    return (): void => {
+      document.removeEventListener("visibilitychange", deliverInterruption);
+      window.removeEventListener("focus", deliverInterruption);
+    };
+  }, [isRecording, systemAudioInterrupted, systemAudioInterruptedNonce, toast, dismiss, t]);
+
+  useEffect(() => {
+    if (micCaptureStatus === "unavailable" && !wasMicUnavailable.current) {
+      wasMicUnavailable.current = true;
+      toast({
+        title: t("hooks.audioRecording.micDisconnected.title"),
+        description: t("hooks.audioRecording.micDisconnected.meetingDescription"),
+        variant: "default",
+      });
+    } else if (micCaptureStatus === "active" && wasMicUnavailable.current) {
+      wasMicUnavailable.current = false;
+      toast({
+        title: t("hooks.audioRecording.micRestored.title"),
+        description: t("hooks.audioRecording.micRestored.description"),
+        variant: "default",
+      });
+    } else if (micCaptureStatus === "inactive") {
+      wasMicUnavailable.current = false;
+    }
+  }, [micCaptureStatus, toast, t]);
 
   useEffect(() => {
     if (!isRecording) return;

@@ -5,6 +5,7 @@ const path = require("path");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
 const { isPortAvailable } = require("../utils/serverUtils");
+const { broadcastToWindows } = require("./windowBroadcast");
 
 const PORT_RANGE_START = 8200;
 const PORT_RANGE_END = 8219;
@@ -28,15 +29,26 @@ async function findAvailablePort() {
 
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
-    let raw = "";
+    // Buffer the raw chunks and decode once at the end: decoding per chunk
+    // corrupts multibyte sequences split across chunk boundaries.
+    const chunks = [];
+    let receivedBytes = 0;
+    let rejected = false;
     req.on("data", (chunk) => {
-      raw += chunk;
-      if (raw.length > MAX_REQUEST_BODY_BYTES) {
+      if (rejected) return;
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      receivedBytes += buffer.length;
+      if (receivedBytes > MAX_REQUEST_BODY_BYTES) {
+        rejected = true;
         reject(new Error("Request body too large"));
         req.destroy();
+        return;
       }
+      chunks.push(buffer);
     });
     req.on("end", () => {
+      if (rejected) return;
+      const raw = Buffer.concat(chunks, receivedBytes).toString("utf8");
       if (!raw) return resolve({});
       try {
         resolve(JSON.parse(raw));
@@ -70,6 +82,18 @@ function parseIdParam(value) {
   const id = Number(value);
   if (!Number.isInteger(id) || id <= 0) return null;
   return id;
+}
+
+function parsePositiveIntQuery(query, key, fallback) {
+  const raw = query.get(key);
+  if (raw === null || raw === "") return fallback;
+  const num = parseIdParam(raw);
+  if (num === null) {
+    const err = new Error(`Query parameter '${key}' must be a positive integer`);
+    err.code = "VALIDATION";
+    throw err;
+  }
+  return num;
 }
 
 function unwrapMutationResult(result, label) {
@@ -211,6 +235,10 @@ class CliBridge {
       sendV1Error(res, 404, "not_found", err.message);
       return;
     }
+    if (err.code === "VALIDATION") {
+      sendV1Error(res, 400, "validation_error", err.message);
+      return;
+    }
     debugLogger.error("CLI bridge route error", { error: err.message }, "cli-bridge");
     sendV1Error(res, 500, "internal_error", err.message || "Internal server error");
   }
@@ -262,6 +290,88 @@ class CliBridge {
       return id;
     };
 
+    const requireWordList = (value, field) => {
+      if (value === undefined || value === null) return [];
+      if (!Array.isArray(value) || value.some((w) => typeof w !== "string")) {
+        const err = new Error(`'${field}' must be an array of strings`);
+        err.code = "VALIDATION";
+        throw err;
+      }
+      return value;
+    };
+
+    const requireSnippetList = (value) => {
+      if (value === undefined || value === null) return [];
+      const valid =
+        Array.isArray(value) &&
+        value.every(
+          (s) =>
+            s &&
+            typeof s.trigger === "string" &&
+            s.trigger.trim() &&
+            typeof s.replacement === "string" &&
+            s.replacement.trim()
+        );
+      if (!valid) {
+        const err = new Error("'add' must be an array of { trigger, replacement } strings");
+        err.code = "VALIDATION";
+        throw err;
+      }
+      return value;
+    };
+
+    const requireAudioFile = (value) => {
+      if (typeof value !== "string" || !value.trim()) {
+        const err = new Error("'path' must be the path of an audio file");
+        err.code = "VALIDATION";
+        throw err;
+      }
+      let stat;
+      try {
+        stat = fs.statSync(value);
+      } catch {
+        const err = new Error(`No file at ${value}`);
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      if (!stat.isFile()) {
+        const err = new Error("'path' must point to a file, not a directory");
+        err.code = "VALIDATION";
+        throw err;
+      }
+      return fs.realpathSync(value);
+    };
+
+    // Picks the requested model, or the one the app is set to use, and refuses
+    // anything not on disk so the engines' own errors stay genuine failures.
+    const requireLocalModel = (models, requested) => {
+      if (requested !== undefined && typeof requested !== "string") {
+        const err = new Error("'model' must be a string");
+        err.code = "VALIDATION";
+        throw err;
+      }
+      const match = requested
+        ? models.find((m) => m.model === requested)
+        : models.find((m) => m.default);
+      if (!match) {
+        const err = new Error(
+          requested
+            ? `Unknown model '${requested}'. Available: ${models.map((m) => m.model).join(", ")}`
+            : "No local transcription model is selected. Choose one in OpenWhispr under Settings → Transcription, or pass 'model'."
+        );
+        err.code = "VALIDATION";
+        throw err;
+      }
+      if (!match.downloaded) {
+        const err = new Error(
+          `Model '${match.model}' is not downloaded. Open OpenWhispr and download it under Settings → Transcription.`
+        );
+        err.code = "VALIDATION";
+        throw err;
+      }
+      return match;
+    };
+
     const requireSuccess = (result, message) => {
       if (!result?.success) {
         const err = new Error(result?.error || message);
@@ -274,8 +384,8 @@ class CliBridge {
       exact("GET", "/v1/health", () => ({ data: { ok: true, version: 1 } })),
       exact("GET", "/v1/notes/list", ({ query }) => {
         const noteType = query.get("note_type") || null;
-        const limit = query.get("limit") ? Number(query.get("limit")) : 100;
-        const folderId = query.get("folder_id") ? Number(query.get("folder_id")) : null;
+        const limit = parsePositiveIntQuery(query, "limit", 100);
+        const folderId = parsePositiveIntQuery(query, "folder_id", null);
         const notes = db.getNotes(noteType, limit, folderId);
         return { data: notes, has_more: false, next_cursor: null };
       }),
@@ -286,7 +396,7 @@ class CliBridge {
           err.code = "VALIDATION";
           throw err;
         }
-        const limit = query.get("limit") ? Number(query.get("limit")) : 20;
+        const limit = parsePositiveIntQuery(query, "limit", 20);
         const notes = db.searchNotes(q, limit);
         return { data: notes, has_more: false, next_cursor: null };
       }),
@@ -313,8 +423,8 @@ class CliBridge {
             body.folder_id ?? null
           );
           const note = unwrapMutationResult(result, "note");
-          setImmediate(() => ipc.broadcastToWindows("note-added", note));
-          ipc._asyncVectorUpsert(note);
+          setImmediate(() => broadcastToWindows("note-added", note));
+          ipc.notifyVectorChanges();
           ipc._asyncMirrorWrite(note);
           return { data: note };
         },
@@ -322,10 +432,22 @@ class CliBridge {
       ),
       param("PATCH", "/v1/notes/", "", "id", ({ params, body }) => {
         const id = requireId(params, "note");
+        const existing = db.getNote(id);
+        if (!existing || existing.deleted_at) {
+          const err = new Error(`Note ${id} not found`);
+          err.code = "NOT_FOUND";
+          throw err;
+        }
         const result = db.updateNote(id, body || {});
+        // The note exists, so a remaining error names a folder or space that doesn't.
+        if (result.error) {
+          const err = new Error(result.error);
+          err.code = "VALIDATION";
+          throw err;
+        }
         const note = unwrapMutationResult(result, "note");
-        setImmediate(() => ipc.broadcastToWindows("note-updated", note));
-        ipc._asyncVectorUpsert(note);
+        setImmediate(() => broadcastToWindows("note-updated", note));
+        ipc.notifyVectorChanges();
         ipc._asyncMirrorWrite(note);
         return { data: note };
       }),
@@ -344,13 +466,88 @@ class CliBridge {
         ({ body }) => {
           const result = db.createFolder(body?.name);
           const folder = unwrapMutationResult(result, "folder");
-          setImmediate(() => ipc.broadcastToWindows("folder-created", folder));
+          setImmediate(() => broadcastToWindows("folder-created", folder));
           return { data: folder };
         },
         201
       ),
+      exact("GET", "/v1/dictionary/list", () => {
+        return { data: db.getDictionary(), has_more: false, next_cursor: null };
+      }),
+      // Bulk edits without writing to SQLite by hand, which lost rows on the
+      // next launch and never reached the cloud (#1295). Takes a delta, so an
+      // import cannot delete words it didn't name.
+      exact("POST", "/v1/dictionary/update", ({ body }) => {
+        const add = requireWordList(body?.add, "add");
+        const remove = requireWordList(body?.remove, "remove");
+        if (add.length === 0 && remove.length === 0) {
+          const err = new Error("Provide at least one word in 'add' or 'remove'");
+          err.code = "VALIDATION";
+          throw err;
+        }
+        const result = db.applyDictionaryChanges({ add, remove });
+        const words = db.getDictionary();
+        setImmediate(() => broadcastToWindows("dictionary-updated", words));
+        return { data: { words, added: result.added, removed: result.removed } };
+      }),
+      exact("GET", "/v1/snippets/list", () => {
+        return { data: db.getSnippets(), has_more: false, next_cursor: null };
+      }),
+      // Same delta shape as the dictionary route: an add with an existing
+      // trigger replaces that snippet's text, and removes are by trigger.
+      exact("POST", "/v1/snippets/update", ({ body }) => {
+        const add = requireSnippetList(body?.add);
+        const remove = requireWordList(body?.remove, "remove");
+        if (add.length === 0 && remove.length === 0) {
+          const err = new Error("Provide at least one snippet in 'add' or trigger in 'remove'");
+          err.code = "VALIDATION";
+          throw err;
+        }
+        const lower = (trigger) => trigger.trim().toLowerCase();
+        const removeKeys = new Set(remove.map(lower));
+        const addKeys = new Set(add.map((s) => lower(s.trigger)));
+        const current = db.getSnippets();
+        const kept = current.filter(
+          (s) => !removeKeys.has(lower(s.trigger)) && !addKeys.has(lower(s.trigger))
+        );
+        db.setSnippets([...kept, ...add]);
+        const snippets = db.getSnippets();
+        setImmediate(() => broadcastToWindows("snippets-updated", snippets));
+        // setSnippets drops entries it cannot store (e.g. over-long triggers),
+        // so count what landed rather than what was sent.
+        const storedKeys = new Set(snippets.map((s) => lower(s.trigger)));
+        return {
+          data: {
+            snippets,
+            added: add.filter((s) => storedKeys.has(lower(s.trigger))).length,
+            removed: current.filter((s) => removeKeys.has(lower(s.trigger))).length,
+          },
+        };
+      }),
+      exact("GET", "/v1/transcribe/models", () => ({ data: ipc.listLocalTranscriptionModels() })),
+      // The CLI runs on this machine, so it sends a path and the app reads the
+      // file itself: no audio crosses the bridge and the user's downloaded
+      // models do the work.
+      exact("POST", "/v1/transcribe", async ({ body }) => {
+        const real = requireAudioFile(body?.path);
+        const { provider, model } = requireLocalModel(
+          ipc.listLocalTranscriptionModels(),
+          body?.model
+        );
+        const language =
+          typeof body?.language === "string" && body.language ? body.language : undefined;
+        ipc.approveAudioPath(real);
+        const result = await ipc.transcribeLocalFile(real, { provider, model, language });
+        if (!result?.success) {
+          if (result?.code === "NO_SPEECH_DETECTED" || result?.message === "No audio detected") {
+            return { data: { text: "", provider, model, warning: "No speech detected" } };
+          }
+          throw new Error(result?.error || result?.message || "Local transcription failed");
+        }
+        return { data: { text: result.text, provider, model } };
+      }),
       exact("GET", "/v1/transcriptions/list", ({ query }) => {
-        const limit = query.get("limit") ? Number(query.get("limit")) : 50;
+        const limit = parsePositiveIntQuery(query, "limit", 50);
         return {
           data: db.getTranscriptions(limit),
           has_more: false,

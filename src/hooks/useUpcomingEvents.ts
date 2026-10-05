@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSettingsStore } from "../stores/settingsStore";
 import type { CalendarEvent } from "../types/calendar";
+import { hasOtherAttendees } from "../utils/calendarAttendees";
 
 export interface UseUpcomingEventsReturn {
   events: CalendarEvent[];
@@ -20,28 +21,36 @@ function getLookaheadMinutes(): number {
 
 export function useUpcomingEvents(): UseUpcomingEventsReturn {
   const gcalAccounts = useSettingsStore((s) => s.gcalAccounts);
-  const isConnected = gcalAccounts.length > 0;
+  const mcalAccounts = useSettingsStore((s) => s.mcalAccounts);
+  const appleCalendarConnected = useSettingsStore((s) => s.appleCalendarConnected);
+  const isConnected = gcalAccounts.length > 0 || mcalAccounts.length > 0 || appleCalendarConnected;
 
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  // Only the first load shows as loading. A refresh after a sync keeps the current
+  // events on screen, so the list doesn't flash (or unmount whatever the user is doing
+  // in it) every time a calendar syncs.
+  const hasLoadedRef = useRef(false);
 
   const fetchEvents = useCallback(async () => {
     if (!isConnected) {
+      hasLoadedRef.current = false;
       setEvents([]);
       return;
     }
-    setIsLoading(true);
+    if (!hasLoadedRef.current) setIsLoading(true);
     try {
       const windowMinutes = getLookaheadMinutes();
       const result = await window.electronAPI?.gcalGetUpcomingEvents?.(windowMinutes);
       if (result?.success && Array.isArray(result.events)) {
-        setEvents(result.events);
+        setEvents(result.events.filter(hasOtherAttendees));
       } else {
         setEvents([]);
       }
     } catch {
       setEvents([]);
     } finally {
+      hasLoadedRef.current = true;
       setIsLoading(false);
     }
   }, [isConnected]);
@@ -51,13 +60,23 @@ export function useUpcomingEvents(): UseUpcomingEventsReturn {
     fetchEvents();
   }, [fetchEvents]);
 
-  // Re-fetch when events are synced from Google Calendar
+  // Re-fetch when any provider syncs events
   useEffect(() => {
     if (!isConnected) return;
-    const unsub = window.electronAPI?.onGcalEventsSynced?.(() => {
+    const unsubGcal = window.electronAPI?.onGcalEventsSynced?.(() => {
       fetchEvents();
     });
-    return () => unsub?.();
+    const unsubMcal = window.electronAPI?.onMcalEventsSynced?.(() => {
+      fetchEvents();
+    });
+    const unsubAcal = window.electronAPI?.onAcalEventsSynced?.(() => {
+      fetchEvents();
+    });
+    return () => {
+      unsubGcal?.();
+      unsubMcal?.();
+      unsubAcal?.();
+    };
   }, [isConnected, fetchEvents]);
 
   return { events, isLoading, isConnected };

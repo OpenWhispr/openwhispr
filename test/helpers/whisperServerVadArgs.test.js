@@ -29,6 +29,8 @@ test("buildWhisperServerArgs includes VAD flags when enabled and model path prov
     "8180",
     "--language",
     "auto",
+    "--max-len",
+    "4096",
     "--vad",
     "--vad-model",
     "/tmp/ggml-silero-v5.1.2.bin",
@@ -60,6 +62,26 @@ test("buildWhisperServerArgs omits VAD flags when vadModelPath is missing", () =
   assert.equal(args.includes("--vad-model"), false);
 });
 
+test("buildWhisperServerArgs suppresses the segment wrap without disabling timestamps", () => {
+  const args = WhisperServerManager.buildWhisperServerArgs({
+    modelPath: "/tmp/model.bin",
+    port: 8180,
+    language: "auto",
+  });
+
+  // The server's 60-char wrap breaks words mid-token (#1348). Raising max_len past
+  // anything one 30s window can hold turns it off; the longest segment measured
+  // against the bundled binary is 186 characters.
+  const maxLenIndex = args.indexOf("--max-len");
+  assert.notEqual(maxLenIndex, -1);
+  assert.equal(Number(args[maxLenIndex + 1]) >= 4096, true);
+
+  // Suppressing the wrap with --no-timestamps instead cost the decoder its timestamp
+  // tokens, so whisper.cpp advanced `seek` a full 30s window regardless of where the
+  // decode stopped and silently dropped everything in between (#2150).
+  assert.equal(args.includes("--no-timestamps"), false);
+});
+
 test("buildWhisperServerArgs includes thread count when provided", () => {
   const args = WhisperServerManager.buildWhisperServerArgs({
     modelPath: "/tmp/model.bin",
@@ -78,6 +100,30 @@ test("buildWhisperServerArgs includes thread count when provided", () => {
     "--threads",
     "10",
   ]);
+});
+
+test("buildWhisperServerArgs pins the GPU device when an index is given", () => {
+  const args = WhisperServerManager.buildWhisperServerArgs({
+    modelPath: "/tmp/model.bin",
+    port: 8180,
+    language: "auto",
+    gpuDeviceIndex: 1,
+  });
+
+  assert.deepEqual(args.slice(6, 8), ["--device", "1"]);
+});
+
+test("buildWhisperServerArgs omits --device by default and for unpinned sentinels", () => {
+  for (const gpuDeviceIndex of [undefined, null, -1]) {
+    const args = WhisperServerManager.buildWhisperServerArgs({
+      modelPath: "/tmp/model.bin",
+      port: 8180,
+      language: "auto",
+      gpuDeviceIndex,
+    });
+
+    assert.equal(args.includes("--device"), false);
+  }
 });
 
 test("resolveWhisperThreads keeps whisper.cpp default on small machines", () => {

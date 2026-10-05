@@ -9,8 +9,6 @@ const { BYOK_API_KEYS } = require("../config/secretKeys");
 
 const SECRET_KEYS = [
   ...BYOK_API_KEYS.map((k) => k.env),
-  "ASSEMBLYAI_API_KEY",
-  "DEEPGRAM_API_KEY",
   "CORTI_CLIENT_ID",
   "CORTI_CLIENT_SECRET",
   "CUSTOM_TRANSCRIPTION_API_KEY",
@@ -28,6 +26,7 @@ const PERSISTED_KEYS = [
   ...SECRET_KEYS,
   "LOCAL_TRANSCRIPTION_PROVIDER",
   "PARAKEET_MODEL",
+  "DICTATION_LANGUAGE",
   "LOCAL_WHISPER_MODEL",
   "CLEANUP_PROVIDER",
   "LOCAL_CLEANUP_MODEL",
@@ -36,8 +35,8 @@ const PERSISTED_KEYS = [
   "LLAMA_GPU_BACKEND",
   "LLAMA_VULKAN_ENABLED",
   "DICTATION_KEY",
-  "CHAT_AGENT_KEY",
   "VOICE_AGENT_KEY",
+  "TRANSLATION_KEY",
   "MEETING_KEY",
   "ACTIVATION_MODE",
   "FLOATING_ICON_AUTO_HIDE",
@@ -45,6 +44,9 @@ const PERSISTED_KEYS = [
   "START_MINIMIZED",
   "UI_LANGUAGE",
   "WHISPER_CUDA_ENABLED",
+  "WHISPER_VULKAN_ENABLED",
+  "WHISPER_VULKAN_DEVICE",
+  "WHISPER_GPU_FAILED",
   "WHISPER_THREADS",
   "TRANSCRIPTION_GPU_UUID",
   "INTELLIGENCE_GPU_UUID",
@@ -261,22 +263,6 @@ class EnvironmentManager {
     return { success: true };
   }
 
-  getAssemblyAIKey() {
-    return this._getKey("ASSEMBLYAI_API_KEY");
-  }
-
-  saveAssemblyAIKey(key) {
-    return this._saveKey("ASSEMBLYAI_API_KEY", key);
-  }
-
-  getDeepgramKey() {
-    return this._getKey("DEEPGRAM_API_KEY");
-  }
-
-  saveDeepgramKey(key) {
-    return this._saveKey("DEEPGRAM_API_KEY", key);
-  }
-
   getCortiClientId() {
     return this._getKey("CORTI_CLIENT_ID");
   }
@@ -399,24 +385,30 @@ class EnvironmentManager {
     return result;
   }
 
-  getAgentKey() {
-    // TODO: drop AGENT_KEY fallback after 2 releases.
-    return this._getKey("CHAT_AGENT_KEY") || this._getKey("AGENT_KEY");
-  }
-
-  saveAgentKey(key) {
-    delete process.env.AGENT_KEY;
-    const result = this._saveKey("CHAT_AGENT_KEY", key);
-    this.saveAllKeysToEnvFile().catch(() => {});
-    return result;
-  }
-
   getVoiceAgentKey() {
-    return this._getKey("VOICE_AGENT_KEY");
+    const key = this._getKey("VOICE_AGENT_KEY");
+    if (key) return key;
+    // The chat-agent window is gone; its hotkey now opens the assistant by voice.
+    const legacy = this._getKey("CHAT_AGENT_KEY");
+    if (legacy) {
+      this.saveVoiceAgentKey(legacy);
+      delete process.env.CHAT_AGENT_KEY;
+    }
+    return legacy;
   }
 
   saveVoiceAgentKey(key) {
     const result = this._saveKey("VOICE_AGENT_KEY", key);
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
+  getTranslationKey() {
+    return this._getKey("TRANSLATION_KEY");
+  }
+
+  saveTranslationKey(key) {
+    const result = this._saveKey("TRANSLATION_KEY", key);
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;
   }
@@ -475,8 +467,9 @@ class EnvironmentManager {
     return result;
   }
 
-  getUiLanguage() {
-    return normalizeUiLanguage(this._getKey("UI_LANGUAGE"));
+  getUiLanguage(fallbackLanguage = "") {
+    const language = this._getKey("UI_LANGUAGE") || fallbackLanguage;
+    return language ? normalizeUiLanguage(language) : "";
   }
 
   saveUiLanguage(language) {
@@ -491,6 +484,45 @@ class EnvironmentManager {
     await this._writeEnvFileAtomic(envPath);
     require("dotenv").config({ path: envPath });
     return { success: true, path: envPath };
+  }
+
+  async clearAllPersistedData() {
+    for (const envVarName of PERSISTED_KEYS) {
+      delete process.env[envVarName];
+    }
+    delete process.env.CUSTOM_REASONING_API_KEY;
+
+    await Promise.all([
+      fsPromises.rm(path.join(app.getPath("userData"), ".env"), { force: true }),
+      fsPromises.rm(this._getSecureKeysDir(), { recursive: true, force: true }),
+    ]);
+    return { success: true };
+  }
+
+  // Removes a single key's line from .env, preserving every other line
+  // verbatim. saveAllKeysToEnvFile() would instead regenerate the file from
+  // PERSISTED_KEYS, dropping hand-added lines (e.g. OPENWHISPR_LOG_LEVEL) and
+  // materializing session/shell env values into the file.
+  removeKeyFromEnvFile(key) {
+    const envPath = path.join(app.getPath("userData"), ".env");
+    envWriteQueue = envWriteQueue.catch(() => {}).then(() => this._removeKeyLine(envPath, key));
+    return envWriteQueue;
+  }
+
+  async _removeKeyLine(envPath, key) {
+    let content;
+    try {
+      content = await fsPromises.readFile(envPath, "utf8");
+    } catch {
+      return; // No .env — nothing to remove.
+    }
+    const keyLine = new RegExp(`^\\s*(?:export\\s+)?${key}\\s*=`);
+    const lines = content.split("\n");
+    const kept = lines.filter((line) => !keyLine.test(line));
+    if (kept.length === lines.length) return;
+    const tmpPath = `${envPath}.tmp`;
+    await fsPromises.writeFile(tmpPath, kept.join("\n"), "utf8");
+    await fsPromises.rename(tmpPath, envPath);
   }
 }
 

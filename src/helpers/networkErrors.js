@@ -2,8 +2,10 @@ const debugLogger = require("./debugLogger");
 
 const CODE_TO_KEY = {
   ENOTFOUND: "streaming.errors.cloudUnreachable.dnsBlocked",
+  EAI_AGAIN: "streaming.errors.cloudUnreachable.dnsBlocked",
   ECONNREFUSED: "streaming.errors.cloudUnreachable.refused",
   ECONNRESET: "streaming.errors.cloudUnreachable.refused",
+  EPIPE: "streaming.errors.cloudUnreachable.refused",
   UND_ERR_SOCKET: "streaming.errors.cloudUnreachable.refused",
   ETIMEDOUT: "streaming.errors.cloudUnreachable.timeout",
   UND_ERR_CONNECT_TIMEOUT: "streaming.errors.cloudUnreachable.timeout",

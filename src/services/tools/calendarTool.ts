@@ -1,4 +1,5 @@
 import type { ToolDefinition, ToolResult } from "./ToolRegistry";
+import { getMeetingJoinUrl } from "../../helpers/meetingJoinUrl";
 
 type TimeRange = "today" | "tomorrow" | "week";
 
@@ -22,7 +23,7 @@ function getWindowMinutes(timeRange: TimeRange): number {
 export const calendarTool: ToolDefinition = {
   name: "get_calendar_events",
   description:
-    "Get upcoming Google Calendar events for a given time range. Returns event summaries, times, and locations.",
+    "Get upcoming events from the user's connected calendars for a given time range. Returns event summaries, start/end times, and meeting join links.",
   parameters: {
     type: "object",
     properties: {
@@ -52,11 +53,14 @@ export const calendarTool: ToolDefinition = {
         };
       }
 
+      // Rows come straight from the calendar_events table (start_time/end_time
+      // columns; there is no location column — the join link is what the DB
+      // actually has for "where").
       const events = response.events.map((event: Record<string, unknown>) => ({
         summary: event.summary || "(No title)",
-        start: event.start,
-        end: event.end,
-        location: event.location || null,
+        start: event.start_time,
+        end: event.end_time,
+        joinUrl: getMeetingJoinUrl(event),
       }));
 
       if (events.length === 0) {

@@ -1,0 +1,590 @@
+import { SIGN_IN_PROMPTED_AT_KEY } from "../../utils/requestSignIn";
+import { PENDING_LOCAL_MODELS_KEY } from "./pendingLocalModels";
+import type { PermissionGuideId } from "../../types/permissionGuide";
+
+export const ONBOARDING_SESSION_KEY = "onboardingSessionV2";
+export const LEGACY_ONBOARDING_STEP_KEY = "onboardingCurrentStep";
+export const ONBOARDING_FLOW_VERSION = 2;
+
+/**
+ * Resume drafts hold typed fields, and every write persists the whole session, so
+ * the steps that own a text input write once per pause rather than per keystroke.
+ */
+export const RESUME_DRAFT_PERSIST_DELAY_MS = 400;
+
+type OnboardingStorage = Pick<Storage, "setItem" | "removeItem">;
+
+export type OnboardingStepId =
+  | "auth"
+  | "required-models"
+  | "permissions"
+  | "languages"
+  | "use-cases"
+  | "dictation-hotkey"
+  /** No longer routed — tap/hold lives on dictation-hotkey. Kept so a session
+      saved on it still parses and reconciles onto its neighbour. */
+  | "activation-mode"
+  | "dictation-demo"
+  | "assistant-hotkey"
+  | "assistant-demo"
+  | "notes"
+  | "setup-choice"
+  | "byok-dictation"
+  | "byok-assistant"
+  | "local-dictation"
+  | "local-assistant";
+
+export type OnboardingAuthPath = "account" | "guest" | null;
+export type OnboardingSetupMode = "cloud" | "byok" | "local" | null;
+export type OnboardingAuthMode = "sign-in" | "sign-up" | null;
+export type OnboardingByokStepId = "byok-dictation" | "byok-assistant";
+export type OnboardingLocalStepId = "local-dictation" | "local-assistant";
+
+export interface OnboardingSsoDiscoveryDraft {
+  required: boolean;
+  domain: string;
+  exists: boolean;
+}
+
+export interface OnboardingAuthDraft {
+  authMode: OnboardingAuthMode;
+  email: string;
+  fullName: string;
+  ssoDiscovery: OnboardingSsoDiscoveryDraft | null;
+  pendingVerificationEmail: string | null;
+}
+
+export interface OnboardingByokDraft {
+  selectedProvider: string;
+  selectedModel: string;
+  baseUrl: string;
+  customModel: string;
+}
+
+export interface OnboardingLocalModelDraft {
+  provider: string;
+  modelId: string;
+}
+
+export interface OnboardingResumeState {
+  dictationHotkeyConfirmed: boolean;
+  assistantHotkeyConfirmed: boolean;
+  dictationDemoCompleted: boolean;
+  assistantDemoCompleted: boolean;
+  auth: OnboardingAuthDraft;
+  byok: Partial<Record<OnboardingByokStepId, OnboardingByokDraft>>;
+  localModels: Partial<Record<OnboardingLocalStepId, OnboardingLocalModelDraft>>;
+}
+
+export interface OnboardingSession {
+  version: typeof ONBOARDING_FLOW_VERSION;
+  currentStepId: OnboardingStepId;
+  history: OnboardingStepId[];
+  authPath: OnboardingAuthPath;
+  setupMode: OnboardingSetupMode;
+  selfHostedRequested: boolean;
+  /**
+   * The permissions step's screen-context Enable was clicked and the grant has
+   * not landed yet. Persisted so the opt-in completes across the quit-and-reopen
+   * macOS asks for after granting Screen Recording; cleared once consumed and
+   * dropped with the session at finalization.
+   */
+  screenContextRequested: boolean;
+  permissionGuide: PermissionGuideId | null;
+  resume: OnboardingResumeState;
+}
+
+export interface OnboardingRouteContext {
+  authPath: OnboardingAuthPath;
+  setupMode: OnboardingSetupMode;
+  agentAllowed: boolean;
+  /**
+   * Org-required local models are missing on disk. Inserts the blocking
+   * "required-models" step right after auth — account path only, since guests
+   * never fetch a policy. Callers latch this once the step is entered so a
+   * mid-download policy refresh can't yank the step from under the user.
+   */
+  requiredModelsPending?: boolean;
+  /** A confirmed Enterprise workspace is already provisioned outside onboarding. */
+  skipSetupChoice?: boolean;
+}
+
+// Dictation first, then Notes (the meeting recorder and its calendar
+// connections), then the assistant: the assistant demo suggests meeting times
+// from whatever calendar the Notes step connected.
+const ACCOUNT_ROUTE: OnboardingStepId[] = [
+  "auth",
+  "permissions",
+  "languages",
+  "use-cases",
+  "dictation-hotkey",
+  "dictation-demo",
+  "notes",
+];
+
+const SETUP_ROUTES: Record<Exclude<OnboardingSetupMode, null | "cloud">, OnboardingStepId[]> = {
+  byok: ["byok-dictation", "byok-assistant"],
+  local: ["local-dictation", "local-assistant"],
+};
+
+// Canonical flow order, independent of any one route. reconcileStepWithRoute uses
+// it to clamp backwards instead of jumping to the end of the route.
+const STEP_ORDER: OnboardingStepId[] = [
+  "auth",
+  "required-models",
+  "permissions",
+  "languages",
+  "use-cases",
+  "dictation-hotkey",
+  "activation-mode",
+  "dictation-demo",
+  "notes",
+  "assistant-hotkey",
+  "assistant-demo",
+  "setup-choice",
+  "byok-dictation",
+  "byok-assistant",
+  "local-dictation",
+  "local-assistant",
+];
+
+const KNOWN_STEPS = new Set<OnboardingStepId>(STEP_ORDER);
+const PERMISSIONS_STEP_INDEX = STEP_ORDER.indexOf("permissions");
+
+export function shouldInitializeMacAccessibilityFeatures(stepId: OnboardingStepId): boolean {
+  return STEP_ORDER.indexOf(stepId) >= PERMISSIONS_STEP_INDEX;
+}
+
+/**
+ * Steps that render in the compact frame. That frame has no footer, so these
+ * steps show no progress row and are left out of the count entirely — landing on
+ * `languages` reads as "1 of N", not "3 of N" for two steps the user never saw a
+ * counter on.
+ */
+export const COMPACT_STEPS: ReadonlySet<OnboardingStepId> = new Set<OnboardingStepId>([
+  "auth",
+  "permissions",
+]);
+
+const LEGACY_STEP_MAP: OnboardingStepId[] = [
+  "auth",
+  // The old flow put permissions after these two indexes, so a save at 1-2
+  // means the grants were never shown; the new route puts permissions first,
+  // and resuming past it would skip the mic/accessibility prompts entirely.
+  "permissions",
+  "permissions",
+  "permissions",
+  "dictation-hotkey",
+  "assistant-hotkey",
+  "notes",
+  "setup-choice",
+];
+
+export function createOnboardingResumeState(): OnboardingResumeState {
+  return {
+    dictationHotkeyConfirmed: false,
+    assistantHotkeyConfirmed: false,
+    dictationDemoCompleted: false,
+    assistantDemoCompleted: false,
+    auth: {
+      authMode: null,
+      email: "",
+      fullName: "",
+      ssoDiscovery: null,
+      pendingVerificationEmail: null,
+    },
+    byok: {},
+    localModels: {},
+  };
+}
+
+export function createOnboardingSession(): OnboardingSession {
+  return {
+    version: ONBOARDING_FLOW_VERSION,
+    currentStepId: "auth",
+    history: [],
+    authPath: null,
+    setupMode: null,
+    selfHostedRequested: false,
+    screenContextRequested: false,
+    permissionGuide: null,
+    resume: createOnboardingResumeState(),
+  };
+}
+
+export function resetOnboardingProgress(storage: OnboardingStorage): void {
+  storage.removeItem(ONBOARDING_SESSION_KEY);
+  storage.removeItem("onboardingCompleted");
+  storage.removeItem("authenticationSkipped");
+  storage.removeItem("skipAuth");
+  storage.removeItem("localSetupPending");
+  storage.removeItem(PENDING_LOCAL_MODELS_KEY);
+  // A restart is not the sign-in that marker announces.
+  storage.removeItem(SIGN_IN_PROMPTED_AT_KEY);
+  // AppRouter uses this marker to distinguish an explicit restart from a
+  // returning signed-in user, while useOnboardingSession migrates it to auth.
+  storage.setItem(LEGACY_ONBOARDING_STEP_KEY, "0");
+}
+
+export function getOnboardingRoute(context: OnboardingRouteContext): OnboardingStepId[] {
+  if (context.authPath === null) return ["auth"];
+
+  const setupChoice = context.skipSetupChoice ? [] : (["setup-choice"] as OnboardingStepId[]);
+
+  const route =
+    context.authPath === "guest"
+      ? // Guests still need the permission grants and a hotkey they have seen:
+        // finalizeOnboarding registers dictationHotkey either way, and skipping
+        // these steps shipped users who neither granted the mic nor knew their
+        // trigger key.
+        (["auth", "permissions", "dictation-hotkey", "setup-choice"] as OnboardingStepId[])
+      : [
+          ...ACCOUNT_ROUTE,
+          ...(context.agentAllowed
+            ? (["assistant-hotkey", "assistant-demo"] as OnboardingStepId[])
+            : []),
+          ...setupChoice,
+        ];
+
+  if (context.requiredModelsPending && context.authPath === "account") {
+    route.splice(route.indexOf("auth") + 1, 0, "required-models");
+  }
+
+  if (context.setupMode && context.setupMode !== "cloud") {
+    route.push(
+      ...SETUP_ROUTES[context.setupMode].filter(
+        (stepId) => context.agentAllowed || !stepId.endsWith("assistant")
+      )
+    );
+  }
+
+  return route;
+}
+
+/**
+ * The Notes step's forward action. Calendar connections are optional, so the step
+ * offers Skip until one connects and Continue afterwards. "loading" is its own
+ * state rather than an absence: while the setup decision is pending there is
+ * nothing to commit yet, but the step still has to show a disabled Continue —
+ * dropping the action entirely leaves the footer with only Back and no explanation.
+ */
+export function getNotesFooterAction({
+  setupDecisionPending,
+  hasConnectedCalendar,
+}: {
+  setupDecisionPending: boolean;
+  hasConnectedCalendar: boolean;
+}): "skip" | "continue" | "loading" {
+  if (setupDecisionPending) return "loading";
+  return hasConnectedCalendar ? "continue" : "skip";
+}
+
+/**
+ * The step whose Continue commits the setup decision: it leads into setup-choice,
+ * or ends the route once a confirmed Enterprise workspace has removed that step.
+ * Advancing from it before the workspace resolves could show setup-choice to a
+ * managed user, so the flow holds Continue there until resolution lands.
+ */
+export function isSetupDecisionStep(stepId: OnboardingStepId, route: OnboardingStepId[]): boolean {
+  const setupChoiceIndex = route.indexOf("setup-choice");
+  const decisionStep = setupChoiceIndex === -1 ? route.at(-1) : route[setupChoiceIndex - 1];
+  return stepId === decisionStep;
+}
+
+export function isOnboardingStepId(value: unknown): value is OnboardingStepId {
+  return typeof value === "string" && KNOWN_STEPS.has(value as OnboardingStepId);
+}
+
+function isPermissionGuideId(value: unknown): value is PermissionGuideId {
+  return (
+    typeof value === "string" &&
+    ["microphone", "accessibility", "system-audio", "screen-context"].includes(value)
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function readDraftString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function parseSsoDiscoveryDraft(value: unknown): OnboardingSsoDiscoveryDraft | null {
+  if (
+    !isRecord(value) ||
+    typeof value.required !== "boolean" ||
+    typeof value.domain !== "string" ||
+    typeof value.exists !== "boolean"
+  ) {
+    return null;
+  }
+  return { required: value.required, domain: value.domain, exists: value.exists };
+}
+
+function parseByokDraft(value: unknown): OnboardingByokDraft | undefined {
+  if (!isRecord(value)) return undefined;
+  return {
+    selectedProvider: readDraftString(value.selectedProvider),
+    selectedModel: readDraftString(value.selectedModel),
+    baseUrl: readDraftString(value.baseUrl),
+    customModel: readDraftString(value.customModel),
+  };
+}
+
+function parseLocalModelDraft(value: unknown): OnboardingLocalModelDraft | undefined {
+  if (!isRecord(value)) return undefined;
+  return {
+    provider: readDraftString(value.provider),
+    modelId: readDraftString(value.modelId),
+  };
+}
+
+/**
+ * Sessions written before `resume` existed carry no confirmation flags, and
+ * reading them as "never confirmed" is not safe: the hotkey flags decide whether
+ * onboarding may replace a registered chord with the platform's onboarding one,
+ * and finalizeOnboarding re-registers that on routes which never show the hotkey
+ * step again. Having moved past the step is the evidence those builds left —
+ * their Continue was gated on confirming.
+ *
+ * Only the hotkey flags are inferred. The demo flags gate nothing but a Continue
+ * on the step the user is standing on, so guessing them would skip practice the
+ * user never did.
+ */
+function inferResumeFlagsFromStep(currentStepId: OnboardingStepId): OnboardingResumeState {
+  const isPast = (stepId: OnboardingStepId) =>
+    STEP_ORDER.indexOf(currentStepId) > STEP_ORDER.indexOf(stepId);
+  return {
+    ...createOnboardingResumeState(),
+    dictationHotkeyConfirmed: isPast("dictation-hotkey"),
+    assistantHotkeyConfirmed: isPast("assistant-hotkey"),
+  };
+}
+
+function parseOnboardingResumeState(
+  value: unknown,
+  currentStepId: OnboardingStepId
+): OnboardingResumeState {
+  if (value === undefined) return inferResumeFlagsFromStep(currentStepId);
+  const defaults = createOnboardingResumeState();
+  if (!isRecord(value)) return defaults;
+
+  const authValue = isRecord(value.auth) ? value.auth : {};
+  const authMode = authValue.authMode;
+  const byokValue = isRecord(value.byok) ? value.byok : {};
+  const localModelsValue = isRecord(value.localModels) ? value.localModels : {};
+  const byokDictation = parseByokDraft(byokValue["byok-dictation"]);
+  const byokAssistant = parseByokDraft(byokValue["byok-assistant"]);
+  const localDictation = parseLocalModelDraft(localModelsValue["local-dictation"]);
+  const localAssistant = parseLocalModelDraft(localModelsValue["local-assistant"]);
+
+  return {
+    dictationHotkeyConfirmed: value.dictationHotkeyConfirmed === true,
+    assistantHotkeyConfirmed: value.assistantHotkeyConfirmed === true,
+    dictationDemoCompleted: value.dictationDemoCompleted === true,
+    assistantDemoCompleted: value.assistantDemoCompleted === true,
+    auth: {
+      authMode: authMode === "sign-in" || authMode === "sign-up" ? authMode : null,
+      email: readDraftString(authValue.email),
+      fullName: readDraftString(authValue.fullName),
+      ssoDiscovery: parseSsoDiscoveryDraft(authValue.ssoDiscovery),
+      pendingVerificationEmail:
+        typeof authValue.pendingVerificationEmail === "string"
+          ? authValue.pendingVerificationEmail
+          : null,
+    },
+    byok: {
+      ...(byokDictation ? { "byok-dictation": byokDictation } : {}),
+      ...(byokAssistant ? { "byok-assistant": byokAssistant } : {}),
+    },
+    localModels: {
+      ...(localDictation ? { "local-dictation": localDictation } : {}),
+      ...(localAssistant ? { "local-assistant": localAssistant } : {}),
+    },
+  };
+}
+
+export function parseOnboardingSession(value: string | null): OnboardingSession | null {
+  if (!value) return null;
+
+  try {
+    const parsed = JSON.parse(value) as Partial<OnboardingSession>;
+    if (
+      parsed.version !== ONBOARDING_FLOW_VERSION ||
+      !isOnboardingStepId(parsed.currentStepId) ||
+      !Array.isArray(parsed.history)
+    ) {
+      return null;
+    }
+
+    const authPath = parsed.authPath;
+    const setupMode = parsed.setupMode;
+    if (authPath !== null && authPath !== "account" && authPath !== "guest") return null;
+    if (
+      setupMode !== null &&
+      setupMode !== "cloud" &&
+      setupMode !== "byok" &&
+      setupMode !== "local"
+    ) {
+      return null;
+    }
+    if (
+      parsed.selfHostedRequested !== undefined &&
+      typeof parsed.selfHostedRequested !== "boolean"
+    ) {
+      return null;
+    }
+    if (
+      parsed.screenContextRequested !== undefined &&
+      typeof parsed.screenContextRequested !== "boolean"
+    ) {
+      return null;
+    }
+
+    return {
+      version: ONBOARDING_FLOW_VERSION,
+      currentStepId: parsed.currentStepId,
+      history: parsed.history.filter(isOnboardingStepId),
+      authPath,
+      setupMode,
+      selfHostedRequested: parsed.selfHostedRequested ?? false,
+      screenContextRequested: parsed.screenContextRequested ?? false,
+      permissionGuide: isPermissionGuideId(parsed.permissionGuide) ? parsed.permissionGuide : null,
+      resume: parseOnboardingResumeState(parsed.resume, parsed.currentStepId),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * True while a persisted onboarding session sits on the blocking
+ * required-models step. The background download tray uses this to keep its
+ * hands off downloads that step owns: a tray row would duplicate the step's
+ * own progress pill, and the tray's cancel cannot stick — the step
+ * auto-restarts org-mandated downloads.
+ */
+export function isRequiredModelsOnboardingStepActive(sessionValue: string | null): boolean {
+  return parseOnboardingSession(sessionValue)?.currentStepId === "required-models";
+}
+
+export function migrateLegacyOnboardingStep(value: string | null): OnboardingStepId {
+  if (!value) return "auth";
+  if (isOnboardingStepId(value)) return value;
+
+  const index = Number.parseInt(value, 10);
+  if (!Number.isFinite(index) || index < 0) return "auth";
+  return LEGACY_STEP_MAP[Math.min(index, LEGACY_STEP_MAP.length - 1)] ?? "auth";
+}
+
+/**
+ * Map a step onto the caller's route, for when a saved session names a step the
+ * current route no longer has (the assistant gets disallowed, setupMode changes, or a
+ * dev jump asks for an off-route step).
+ *
+ * Clamps to the route step nearest in the canonical order, ties going to the
+ * earlier one so nothing gets skipped — falling back to the route's last step
+ * would teleport past intermediate steps (with agentAllowed false, asking for an
+ * assistant step must land on its neighbour, not on setup-choice).
+ */
+export function reconcileStepWithRoute(
+  stepId: OnboardingStepId,
+  route: OnboardingStepId[]
+): OnboardingStepId {
+  if (route.includes(stepId)) return stepId;
+  const target = STEP_ORDER.indexOf(stepId);
+  if (target === -1 || route.length === 0) return route[0] ?? "auth";
+  return route.reduce((best, candidate) => {
+    const bestDistance = Math.abs(STEP_ORDER.indexOf(best) - target);
+    const candidateDistance = Math.abs(STEP_ORDER.indexOf(candidate) - target);
+    return candidateDistance < bestDistance ? candidate : best;
+  }, route[0]);
+}
+
+export function getNextOnboardingStep(
+  currentStepId: OnboardingStepId,
+  route: OnboardingStepId[]
+): OnboardingStepId | null {
+  const index = route.indexOf(currentStepId);
+  return index >= 0 ? (route[index + 1] ?? null) : (route[0] ?? null);
+}
+
+export interface OnboardingProgressState {
+  /** Zero-based position among the counted steps. */
+  index: number;
+  /** Number of counted steps in the current route. */
+  total: number;
+}
+
+/**
+ * Progress across the live route: one dot per step the user will actually see a
+ * counter on, filled up to the current one.
+ *
+ * The total comes from the route rather than a constant because the route itself
+ * is conditional — the assistant pair drops out when the assistant is disallowed, and
+ * the provider pair only exists once a non-cloud setup mode is picked. Choosing
+ * BYOK/local on setup-choice therefore appends two steps and the row
+ * grows by two dots at that moment, which is the flow honestly getting longer.
+ *
+ * Returns null when there is nothing worth drawing: a compact step, an off-route
+ * step, or a route with fewer than two counted steps, where a one-dot row would
+ * read as decoration.
+ */
+export function getOnboardingProgress(
+  stepId: OnboardingStepId,
+  route: OnboardingStepId[]
+): OnboardingProgressState | null {
+  if (COMPACT_STEPS.has(stepId)) return null;
+
+  const counted = route.filter((candidate) => !COMPACT_STEPS.has(candidate));
+  const index = counted.indexOf(stepId);
+  if (index === -1 || counted.length < 2) return null;
+
+  return { index, total: counted.length };
+}
+
+/** Enterprise customers keep provider/model selection in Settings, outside onboarding. */
+export interface OnboardingWorkspaceEntitlement {
+  id: string;
+  plan?: string | null;
+  status?: string | null;
+}
+
+export function isEnterpriseWorkspaceEntitled(
+  workspace: Pick<OnboardingWorkspaceEntitlement, "plan" | "status"> | null | undefined
+): boolean {
+  return (
+    workspace?.plan === "enterprise" &&
+    (workspace.status === "active" || workspace.status === "trialing")
+  );
+}
+
+export function resolveEnterpriseWorkspaceForOnboarding<T extends OnboardingWorkspaceEntitlement>(
+  activeWorkspace: T | null | undefined,
+  workspaces: T[]
+): T | null {
+  if (activeWorkspace) {
+    return isEnterpriseWorkspaceEntitled(activeWorkspace) ? activeWorkspace : null;
+  }
+  return workspaces.find(isEnterpriseWorkspaceEntitled) ?? null;
+}
+
+export function shouldSkipOnboardingSetupChoice({
+  isSignedIn,
+  authPath,
+  setupMode,
+  activeWorkspace,
+}: {
+  isSignedIn: boolean;
+  authPath: OnboardingAuthPath;
+  setupMode: OnboardingSetupMode;
+  activeWorkspace: Pick<OnboardingWorkspaceEntitlement, "plan" | "status"> | null | undefined;
+}): boolean {
+  return (
+    isSignedIn &&
+    authPath === "account" &&
+    (setupMode === null || setupMode === "cloud") &&
+    isEnterpriseWorkspaceEntitled(activeWorkspace)
+  );
+}

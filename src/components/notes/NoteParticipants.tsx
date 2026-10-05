@@ -1,97 +1,40 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Users, X } from "lucide-react";
+import { Calendar, ChevronDown, Users, X } from "../icons";
+import { cn } from "../lib/utils";
+import { NOTE_META_CHIP_CLASS } from "./shared";
 import { Popover, PopoverTrigger, PopoverContent } from "../ui/popover";
+import PersonAvatar from "../ui/PersonAvatar";
 import type { CalendarAttendee } from "../../types/calendar";
+import { syncSessionExpectedCountFromParticipants } from "../../stores/meetingRecordingStore";
 
-function getInitials(displayName: string | null, email: string): string {
-  if (displayName) return displayName.charAt(0).toUpperCase();
-  return email.charAt(0).toUpperCase();
-}
-
-function getInitialColor(email: string): string {
-  let hash = 0;
-  for (let i = 0; i < email.length; i++) {
-    hash = email.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const h = Math.abs(hash) % 360;
-  return `hsl(${h}, 45%, 65%)`;
-}
-
-interface ParticipantAvatarProps {
-  email: string;
-  displayName: string | null;
-  gravatarHash?: string;
-  failed: boolean;
-  onImageError: () => void;
-}
-
-function ParticipantAvatar({
-  email,
-  displayName,
-  gravatarHash,
-  failed,
-  onImageError,
-}: ParticipantAvatarProps) {
-  if (gravatarHash && !failed) {
-    return (
-      <img
-        src={`https://www.gravatar.com/avatar/${gravatarHash}?d=404&s=64`}
-        alt=""
-        loading="lazy"
-        className="shrink-0 w-6 h-6 rounded-full object-cover"
-        onError={onImageError}
-      />
-    );
-  }
-  return (
-    <span
-      className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-medium text-white"
-      style={{ backgroundColor: getInitialColor(email) }}
-    >
-      {getInitials(displayName, email)}
-    </span>
-  );
-}
+const MAX_STACKED_AVATARS = 2;
 
 interface NoteParticipantsProps {
   noteId: number;
   participants: CalendarAttendee[];
+  /** When present the capsule leads with the note's date, so date and people read as one fact. */
+  dateLabel?: string;
+  dateTitle?: string;
 }
 
-export default function NoteParticipants({ noteId, participants }: NoteParticipantsProps) {
+export default function NoteParticipants({
+  noteId,
+  participants,
+  dateLabel,
+  dateTitle,
+}: NoteParticipantsProps) {
   const { t } = useTranslation();
   const [localParticipants, setLocalParticipants] = useState(participants);
   const [search, setSearch] = useState("");
   const [suggestions, setSuggestions] = useState<
     Array<{ email: string; display_name: string | null }>
   >([]);
-  const [gravatarHashes, setGravatarHashes] = useState<Record<string, string>>({});
-  const [failedGravatars, setFailedGravatars] = useState<Set<string>>(new Set());
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
     setLocalParticipants(participants);
   }, [participants]);
-
-  useEffect(() => {
-    const emails = localParticipants.map((p) => p.email);
-    const missing = emails.filter((e) => !gravatarHashes[e]);
-    if (missing.length === 0) return;
-
-    Promise.all(
-      missing.map(async (email) => {
-        const hash = await window.electronAPI.getMD5Hash(email);
-        return { email, hash };
-      })
-    ).then((results) => {
-      setGravatarHashes((prev) => {
-        const next = { ...prev };
-        for (const { email, hash } of results) next[email] = hash;
-        return next;
-      });
-    });
-  }, [localParticipants, gravatarHashes]);
 
   useEffect(() => {
     if (!open) return;
@@ -106,6 +49,7 @@ export default function NoteParticipants({ noteId, participants }: NoteParticipa
 
   const saveParticipants = useCallback(
     (updated: CalendarAttendee[]) => {
+      syncSessionExpectedCountFromParticipants(noteId, updated);
       window.electronAPI.updateNote(noteId, {
         participants: JSON.stringify(updated),
       });
@@ -172,53 +116,85 @@ export default function NoteParticipants({ noteId, participants }: NoteParticipa
       }}
     >
       <PopoverTrigger asChild>
-        <button className="inline-flex items-center gap-1.5 text-[11px] px-1.5 py-0.5 rounded-md border border-border/70 dark:border-white/25 text-foreground/50 dark:text-foreground/35 hover:text-foreground/60 hover:border-border/60 hover:bg-foreground/3 dark:hover:text-foreground/40 dark:hover:border-white/10 dark:hover:bg-white/3 transition-all duration-150 cursor-pointer outline-none">
-          <Users size={11} className="shrink-0" />
-          {chipLabel}
+        <button
+          type="button"
+          aria-label={chipLabel}
+          title={dateTitle}
+          className={cn(NOTE_META_CHIP_CLASS, "pe-2")}
+        >
+          {dateLabel && (
+            <>
+              <Calendar size={14} className="shrink-0 text-foreground/60" />
+              <span>{dateLabel}</span>
+              <span aria-hidden="true" className="mx-0.5 h-3.5 w-px bg-border dark:bg-white/15" />
+            </>
+          )}
+          {localParticipants.length > 0 ? (
+            <span className="flex items-center -space-x-1">
+              {localParticipants.slice(0, MAX_STACKED_AVATARS).map((p) => (
+                <PersonAvatar
+                  key={p.email}
+                  email={p.email}
+                  displayName={p.displayName}
+                  size={18}
+                  className="ring-1 ring-surface-3 dark:ring-surface-2"
+                />
+              ))}
+              {localParticipants.length > MAX_STACKED_AVATARS && (
+                <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-background px-0.5 text-[9px] font-medium tabular-nums text-foreground/70 ring-1 ring-surface-3 dark:bg-surface-3 dark:ring-surface-2">
+                  +{localParticipants.length - MAX_STACKED_AVATARS}
+                </span>
+              )}
+            </span>
+          ) : (
+            <>
+              <Users size={14} className="shrink-0 text-foreground/60" />
+              {chipLabel}
+            </>
+          )}
+          <ChevronDown size={14} className="shrink-0 text-foreground/50" />
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-72 p-0">
-        <div className="p-2 border-b border-border/50">
+        <div className="p-2 border-b border-border/70">
           <input
+            dir="auto"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={t("notes.participants.addPlaceholder", "Add attendees...")}
-            className="w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/20 outline-none border-none appearance-none"
+            className="w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
             autoFocus
           />
         </div>
 
         <div className="max-h-64 overflow-y-auto">
           {search && suggestions.length > 0 && (
-            <div className="p-1 border-b border-border/30">
+            <div className="p-1 border-b border-border/70">
               {suggestions.slice(0, 5).map((contact) => (
                 <button
                   key={contact.email}
                   onClick={() => addParticipant(contact.email, contact.display_name)}
                   className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-foreground/70 hover:bg-foreground/5 transition-colors cursor-pointer"
                 >
-                  <ParticipantAvatar
-                    email={contact.email}
-                    displayName={contact.display_name}
-                    failed={false}
-                    onImageError={() => {}}
-                  />
-                  <span className="truncate">{contact.display_name || contact.email}</span>
+                  <PersonAvatar email={contact.email} displayName={contact.display_name} />
+                  <span dir="auto" className="truncate">
+                    {contact.display_name || contact.email}
+                  </span>
                 </button>
               ))}
             </div>
           )}
 
           {search && !search.includes("@") && suggestions.length === 0 && (
-            <div className="px-3 py-2 text-[11px] text-foreground/30">
+            <div className="px-3 py-2 text-[11px] text-foreground/45">
               {t("notes.participants.typeEmail", "Type an email to add...")}
             </div>
           )}
 
           {grouped.map(([domain, members]) => (
             <div key={domain} className="p-1">
-              <div className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
+              <div dir="ltr" className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
                 {domain}
               </div>
               {members.map((p) => (
@@ -226,18 +202,12 @@ export default function NoteParticipants({ noteId, participants }: NoteParticipa
                   key={p.email}
                   className="group flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-foreground/5 transition-colors"
                 >
-                  <ParticipantAvatar
-                    email={p.email}
-                    displayName={p.displayName}
-                    gravatarHash={gravatarHashes[p.email]}
-                    failed={failedGravatars.has(p.email)}
-                    onImageError={() => setFailedGravatars((prev) => new Set(prev).add(p.email))}
-                  />
+                  <PersonAvatar email={p.email} displayName={p.displayName} />
 
-                  <span className="flex-1 min-w-0 truncate text-xs text-foreground/70">
+                  <span dir="auto" className="flex-1 min-w-0 truncate text-xs text-foreground/70">
                     {p.displayName || p.email.split("@")[0]}
                     {p.self && (
-                      <span className="ml-1 text-foreground/30">
+                      <span className="ms-1 text-foreground/45">
                         {t("notes.participants.me", "(me)")}
                       </span>
                     )}
@@ -245,7 +215,7 @@ export default function NoteParticipants({ noteId, participants }: NoteParticipa
 
                   <button
                     onClick={() => removeParticipant(p.email)}
-                    className="shrink-0 opacity-0 group-hover:opacity-100 p-0.5 rounded text-foreground/30 hover:text-foreground/60 transition-opacity cursor-pointer"
+                    className="shrink-0 opacity-0 group-hover:opacity-100 p-0.5 rounded text-foreground/45 hover:text-foreground/60 transition-opacity cursor-pointer"
                   >
                     <X size={12} />
                   </button>
@@ -255,7 +225,7 @@ export default function NoteParticipants({ noteId, participants }: NoteParticipa
           ))}
 
           {localParticipants.length === 0 && !search && (
-            <div className="px-3 py-4 text-center text-[11px] text-foreground/30">
+            <div className="px-3 py-4 text-center text-[11px] text-foreground/45">
               {t("notes.participants.typeEmail", "Type an email to add...")}
             </div>
           )}

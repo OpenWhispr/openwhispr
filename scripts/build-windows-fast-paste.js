@@ -47,10 +47,37 @@ function isBinaryUpToDate() {
   try {
     const binaryStat = fs.statSync(outputBinary);
     const sourceStat = fs.statSync(cSource);
-    return binaryStat.mtimeMs >= sourceStat.mtimeMs;
+    return binaryStat.mtimeMs >= sourceStat.mtimeMs && supportsSelectionCopy(outputBinary);
   } catch {
     return false;
   }
+}
+
+function supportsSelectionCopy(binaryPath) {
+  // The capability probe executes the binary, which is only possible on
+  // Windows itself; when cross-packaging, trust the downloaded artifact.
+  if (process.platform !== "win32") {
+    return true;
+  }
+  try {
+    const result = spawnSync(binaryPath, ["--capabilities"], {
+      stdio: "pipe",
+      windowsHide: true,
+    });
+    return result.status === 0 && result.stdout.toString().includes("selection-copy-v1");
+  } catch {
+    return false;
+  }
+}
+
+// A stale binary must never linger at the output path: packaging would ship
+// it, and its missing selection-copy support silently disables selection
+// editing at runtime.
+function discardStaleBinary(reason) {
+  try {
+    fs.rmSync(outputBinary, { force: true });
+    log(reason);
+  } catch {}
 }
 
 async function tryDownload() {
@@ -68,8 +95,14 @@ async function tryDownload() {
   });
 
   if (result.status === 0 && fs.existsSync(outputBinary)) {
-    log("Successfully downloaded prebuilt binary");
-    return true;
+    if (supportsSelectionCopy(outputBinary)) {
+      log("Successfully downloaded prebuilt binary");
+      return true;
+    }
+    discardStaleBinary(
+      "Discarded prebuilt binary without selection-copy-v1 support; compiling locally"
+    );
+    return false;
   }
 
   log("Download failed or binary not found after download");
@@ -149,8 +182,11 @@ function tryCompile() {
     }
 
     if (result.status === 0 && fs.existsSync(outputBinary)) {
-      log(`Successfully built with ${compiler.name}`);
-      return true;
+      if (supportsSelectionCopy(outputBinary)) {
+        log(`Successfully built with ${compiler.name}`);
+        return true;
+      }
+      discardStaleBinary(`Binary built with ${compiler.name} lacks selection-copy-v1; discarded`);
     }
 
     log(`${compiler.name} compilation failed, trying next...`);
@@ -177,8 +213,14 @@ async function main() {
     return;
   }
 
+  if (fs.existsSync(outputBinary) && !supportsSelectionCopy(outputBinary)) {
+    discardStaleBinary("Removed stale fast-paste binary so packaging cannot ship it");
+  }
+
   console.warn("[windows-fast-paste] Could not obtain Windows fast-paste binary.");
-  console.warn("[windows-fast-paste] Windows paste will use nircmd/PowerShell fallback.");
+  console.warn(
+    "[windows-fast-paste] Windows paste will use nircmd/PowerShell fallback; selection editing will type at the cursor."
+  );
 }
 
 main().catch((error) => {

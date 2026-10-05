@@ -24,13 +24,26 @@ test("sanitizeWhisperVadConfig applies defaults and clamps invalid values", asyn
   });
 });
 
-test("resolveContextSileroEnabled prefers context value then falls back to true", async () => {
+test("resolveContextSileroEnabled prefers context value then falls back to per-context default", async () => {
   const { resolveContextSileroEnabled } = await import("../../src/helpers/whisperVadConfig.js");
 
   assert.equal(resolveContextSileroEnabled({ dictationSileroEnabled: false }, "dictation"), false);
+  assert.equal(resolveContextSileroEnabled({ dictationSileroEnabled: true }, "dictation"), true);
   assert.equal(
     resolveContextSileroEnabled({ noteRecordingSileroEnabled: true }, "noteRecording"),
     true
   );
+  assert.equal(resolveContextSileroEnabled({}, "meeting"), true);
+});
+
+// VAD on pause-heavy dictations can strip the speech, making Whisper decode
+// near-silence seeded with the custom-dictionary prompt — the transcript is
+// replaced by dictionary words (#1454). Dictation VAD is opt-in.
+test("resolveContextSileroEnabled defaults dictation off, other contexts on", async () => {
+  const { resolveContextSileroEnabled } = await import("../../src/helpers/whisperVadConfig.js");
+
+  assert.equal(resolveContextSileroEnabled({}, "dictation"), false);
+  assert.equal(resolveContextSileroEnabled(undefined, "dictation"), false);
+  assert.equal(resolveContextSileroEnabled({}, "noteRecording"), true);
   assert.equal(resolveContextSileroEnabled({}, "meeting"), true);
 });

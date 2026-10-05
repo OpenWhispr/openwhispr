@@ -1,8 +1,21 @@
-const { Tray, Menu, nativeImage, app } = require("electron");
+const { Tray, Menu, nativeImage, app, systemPreferences } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const debugLogger = require("./debugLogger");
+const dockManager = require("./dockManager");
 const { i18nMain } = require("./i18nMain");
+const { windowsTrayIdentity } = require("../../package.json");
+
+// Permanent identity for signed production Windows builds; keep across releases.
+// Windows binds an unsigned executable's GUID to its path, so only builds from the
+// signed config, which sets windowsTrayIdentity, may use it.
+const WINDOWS_PRODUCTION_TRAY_GUID = "9afd9bd5-53da-42ef-8334-6e2b494c66fe";
+
+// macOS saves the menu-bar position under this GUID, so changing it resets every
+// user's placement. Electron lowercases the GUID before handing it to macOS, so
+// it stays lowercase here or the position key below matches no item.
+const MACOS_TRAY_GUID = "eb809902-04b5-5b08-b12a-f81d6f27e185";
+const MACOS_TRAY_POSITION_KEY = `NSStatusItem Preferred Position ${MACOS_TRAY_GUID}`;
 
 class TrayManager {
   constructor() {
@@ -54,24 +67,49 @@ class TrayManager {
       this.updateTrayMenu?.();
     });
 
+    window.on("minimize", () => {
+      this.updateTrayMenu?.();
+    });
+
+    window.on("restore", () => {
+      this.updateTrayMenu?.();
+    });
+
     window.on("destroyed", () => {
       this.controlPanelWindow = null;
       this.updateTrayMenu?.();
     });
   }
 
+  syncControlPanelWindow() {
+    if (this.windowManager) {
+      this.controlPanelWindow = this.windowManager.controlPanelWindow || this.controlPanelWindow;
+    }
+    this.attachControlPanelListeners(this.controlPanelWindow);
+    return this.controlPanelWindow;
+  }
+
+  isControlPanelVisible() {
+    const win = this.syncControlPanelWindow();
+    return !!win && !win.isDestroyed() && win.isVisible() && !win.isMinimized();
+  }
+
+  // On Linux a window parked on another workspace still reports as visible, so
+  // the first click hides it and the next re-shows it on the current workspace.
+  async toggleControlPanelFromTray() {
+    if (this.isControlPanelVisible()) {
+      this.windowManager?.hideControlPanelToTray();
+      return;
+    }
+
+    await this.showControlPanelFromTray();
+  }
+
   async showControlPanelFromTray() {
     try {
-      if (this.windowManager) {
-        this.controlPanelWindow = this.windowManager.controlPanelWindow || this.controlPanelWindow;
-      }
-      this.attachControlPanelListeners(this.controlPanelWindow);
+      this.syncControlPanelWindow();
 
       if (this.controlPanelWindow && !this.controlPanelWindow.isDestroyed()) {
-        // Show dock icon on macOS when control panel opens
-        if (process.platform === "darwin" && app.dock) {
-          app.dock.show();
-        }
         if (this.controlPanelWindow.isMinimized()) {
           this.controlPanelWindow.restore();
         }
@@ -79,6 +117,7 @@ class TrayManager {
           this.controlPanelWindow.show();
         }
         this.controlPanelWindow.focus();
+        dockManager.setControlPanelVisible(true);
         if (this.controlPanelWindow.webContents.isCrashed()) {
           this.controlPanelWindow.webContents.reload();
         }
@@ -87,15 +126,12 @@ class TrayManager {
 
       if (this.createControlPanelCallback) {
         await this.createControlPanelCallback();
-        if (this.windowManager) {
-          this.controlPanelWindow =
-            this.windowManager.controlPanelWindow || this.controlPanelWindow;
-        }
-        this.attachControlPanelListeners(this.controlPanelWindow);
+        this.syncControlPanelWindow();
 
         if (this.controlPanelWindow && !this.controlPanelWindow.isDestroyed()) {
           this.controlPanelWindow.show();
           this.controlPanelWindow.focus();
+          dockManager.setControlPanelVisible(true);
         }
         return;
       }
@@ -114,10 +150,24 @@ class TrayManager {
         return;
       }
 
-      this.tray = new Tray(trayIcon);
-
       if (process.platform === "darwin") {
+        // The position key is an undocumented AppKit default, so placement is best
+        // effort. Position 0 starts the icon as far right as macOS allows, beside
+        // the system icons. A registered default only fills in for a missing value,
+        // so once the user drags the icon, their saved position wins.
+        systemPreferences.registerDefaults({ [MACOS_TRAY_POSITION_KEY]: 0 });
+        this.tray = new Tray(trayIcon, MACOS_TRAY_GUID);
         this.tray.setIgnoreDoubleClickEvents(true);
+      } else if (
+        process.platform === "win32" &&
+        process.env.OPENWHISPR_CHANNEL === "production" &&
+        windowsTrayIdentity === true
+      ) {
+        // Other channels have their own profile and single-instance lock, so they can
+        // run beside production and must not claim its GUID.
+        this.tray = new Tray(trayIcon, WINDOWS_PRODUCTION_TRAY_GUID);
+      } else {
+        this.tray = new Tray(trayIcon);
       }
 
       this.updateTrayMenu();
@@ -229,8 +279,29 @@ class TrayManager {
 
   buildContextMenuTemplate() {
     const dictationVisible = this.windowManager?.isDictationPanelVisible?.() ?? false;
+    const dictating = this.windowManager?.isDictating?.() ?? false;
 
     return [
+      {
+        label: dictating
+          ? i18nMain.t("app.commandMenu.stopListening")
+          : i18nMain.t("app.commandMenu.startListening"),
+        click: () =>
+          dictating
+            ? this.windowManager?.sendStopDictation()
+            : this.windowManager?.sendStartDictation(),
+      },
+      {
+        label: i18nMain.t("app.commandMenu.askAssistant"),
+        click: () => this.windowManager?.sendOpenAssistantPanel(),
+      },
+      {
+        // Starts in the main process, like the meeting hotkey: the recording it
+        // opens is policy-gated where it actually begins, in the control panel.
+        label: i18nMain.t("app.commandMenu.startMeetingRecording"),
+        click: () => this.windowManager?.startManualMeeting(),
+      },
+      { type: "separator" },
       {
         label: dictationVisible
           ? i18nMain.t("tray.toggleDictation.hide")
@@ -240,15 +311,17 @@ class TrayManager {
           if (this.windowManager.isDictationPanelVisible()) {
             this.windowManager.hideDictationPanel();
           } else {
-            this.windowManager.showDictationPanel({ focus: true });
+            this.windowManager.showDictationPanel({ focus: true, reposition: true });
           }
           this.updateTrayMenu();
         },
       },
       {
-        label: i18nMain.t("tray.openControlPanel"),
-        click: async () => {
-          await this.showControlPanelFromTray();
+        label: this.isControlPanelVisible()
+          ? i18nMain.t("tray.hideControlPanel")
+          : i18nMain.t("tray.openControlPanel"),
+        click: () => {
+          void this.toggleControlPanelFromTray();
         },
       },
       { type: "separator" },
@@ -277,7 +350,7 @@ class TrayManager {
 
     if (process.platform !== "darwin") {
       this.tray.on("click", () => {
-        void this.showControlPanelFromTray();
+        void this.toggleControlPanelFromTray();
       });
     }
 

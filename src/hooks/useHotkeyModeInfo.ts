@@ -10,14 +10,22 @@ export interface HotkeyModeInfo {
   isUsingNativeShortcut: boolean;
   isUsingHyprland: boolean;
   supportsPushToTalk: boolean;
+  pushToTalkUnavailableReason: string | null;
+  /** Linux only: the evdev listener cannot read /dev/input, which Hold needs. */
+  linuxInputAccessDenied: boolean;
   hyprlandConfigStatus: HyprlandConfigStatus | null;
+  /** False until main has answered; the defaults above are optimistic placeholders. */
+  loaded: boolean;
 }
 
 const DEFAULT_INFO: HotkeyModeInfo = {
   isUsingNativeShortcut: false,
   isUsingHyprland: false,
   supportsPushToTalk: true,
+  pushToTalkUnavailableReason: null,
+  linuxInputAccessDenied: false,
   hyprlandConfigStatus: null,
+  loaded: false,
 };
 
 /**
@@ -25,14 +33,14 @@ const DEFAULT_INFO: HotkeyModeInfo = {
  * (native shortcut, Hyprland) and, on Hyprland, whether its config is
  * persistable. `scope` tags log output for the calling surface.
  */
-export function useHotkeyModeInfo(scope: string): HotkeyModeInfo {
+export function useHotkeyModeInfo(scope: string, hotkey?: string): HotkeyModeInfo {
   const [modeInfo, setModeInfo] = useState<HotkeyModeInfo>(DEFAULT_INFO);
 
   useEffect(() => {
     let cancelled = false;
     const checkHotkeyMode = async () => {
       try {
-        const info = await window.electronAPI?.getHotkeyModeInfo?.();
+        const info = await window.electronAPI?.getHotkeyModeInfo?.(hotkey);
         if (!info || cancelled) return;
         const hyprlandConfigStatus = info.isUsingHyprland
           ? ((await window.electronAPI?.getHyprlandConfigStatus?.()) ?? null)
@@ -42,7 +50,10 @@ export function useHotkeyModeInfo(scope: string): HotkeyModeInfo {
           isUsingNativeShortcut: info.isUsingNativeShortcut,
           isUsingHyprland: info.isUsingHyprland,
           supportsPushToTalk: info.supportsPushToTalk,
+          pushToTalkUnavailableReason: info.pushToTalkUnavailableReason,
+          linuxInputAccessDenied: info.linuxInputAccessDenied ?? false,
           hyprlandConfigStatus,
+          loaded: true,
         });
       } catch (error) {
         logger.error("Failed to check hotkey mode", { error }, scope);
@@ -52,7 +63,7 @@ export function useHotkeyModeInfo(scope: string): HotkeyModeInfo {
     return () => {
       cancelled = true;
     };
-  }, [scope]);
+  }, [scope, hotkey]);
 
   return modeInfo;
 }

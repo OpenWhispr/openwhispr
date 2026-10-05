@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Key, Copy, Check, Trash2, Plus, Shield, AlertTriangle } from "lucide-react";
+import { Key, Copy, Check, Trash2, Plus, Shield, AlertTriangle } from "./icons";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
@@ -44,7 +44,12 @@ function formatRelativeTime(dateString: string): string {
   return `${months}mo ago`;
 }
 
-export default function ApiKeysSection() {
+interface ApiKeysSectionProps {
+  /** Bumped by a "Create API key" elsewhere; opens the create dialog once keys load. */
+  createRequest?: number;
+}
+
+export default function ApiKeysSection({ createRequest = 0 }: ApiKeysSectionProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
 
@@ -52,6 +57,7 @@ export default function ApiKeysSection() {
   const [isLoading, setIsLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState<ApiKey | null>(null);
+  const handledCreateRequest = useRef(0);
 
   const fetchKeys = useCallback(async () => {
     try {
@@ -67,6 +73,13 @@ export default function ApiKeysSection() {
   useEffect(() => {
     fetchKeys();
   }, [fetchKeys]);
+
+  // At the key limit there's nothing to create; the list says so instead.
+  useEffect(() => {
+    if (isLoading || createRequest === handledCreateRequest.current) return;
+    handledCreateRequest.current = createRequest;
+    if (keys.length < MAX_API_KEYS) setCreateOpen(true);
+  }, [createRequest, isLoading, keys.length]);
 
   const handleRevoke = async () => {
     if (!revokeTarget) return;
@@ -91,7 +104,7 @@ export default function ApiKeysSection() {
       {!isLoading && keys.length > 0 && keys.length < MAX_API_KEYS && (
         <div className="flex justify-end">
           <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-3.5 w-3.5 mr-1.5" />
+            <Plus className="h-3.5 w-3.5 me-1.5" />
             {t("apiKeysSection.createButton")}
           </Button>
         </div>
@@ -115,10 +128,10 @@ export default function ApiKeysSection() {
         <SettingsPanel>
           <SettingsPanelRow>
             <div className="flex flex-col items-center py-4 text-center">
-              <Key className="h-5 w-5 text-muted-foreground/40 mb-2" />
+              <Key className="h-5 w-5 text-muted-foreground/70 mb-2" />
               <p className="text-xs text-muted-foreground mb-3">{t("apiKeysSection.empty")}</p>
               <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
-                <Plus className="h-3.5 w-3.5 mr-1.5" />
+                <Plus className="h-3.5 w-3.5 me-1.5" />
                 {t("apiKeysSection.createButton")}
               </Button>
             </div>
@@ -131,10 +144,13 @@ export default function ApiKeysSection() {
               <div className="flex items-center justify-between gap-4">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-xs font-medium text-foreground truncate">
+                    <span dir="auto" className="text-xs font-medium text-foreground truncate">
                       {apiKey.name}
                     </span>
-                    <code className="text-[10px] font-mono text-muted-foreground/60 shrink-0">
+                    <code
+                      dir="ltr"
+                      className="text-[10px] font-mono text-muted-foreground/70 shrink-0"
+                    >
                       {apiKey.key_prefix}...
                     </code>
                   </div>
@@ -146,7 +162,7 @@ export default function ApiKeysSection() {
                           {t(`apiKeysSection.scopes.${API_SCOPE_I18N_KEY[scope as ApiScope]}`)}
                         </Badge>
                       ))}
-                    <span className="text-[10px] text-muted-foreground/50 ml-1">
+                    <span className="text-[10px] text-muted-foreground/70 ms-1">
                       {apiKey.last_used_at
                         ? t("apiKeysSection.lastUsed", {
                             time: formatRelativeTime(apiKey.last_used_at),
@@ -157,8 +173,8 @@ export default function ApiKeysSection() {
                 </div>
                 <Button
                   variant="ghost"
-                  size="sm"
-                  className="shrink-0 text-muted-foreground hover:text-destructive"
+                  size="icon"
+                  className="h-8 w-10 text-muted-foreground hover:text-destructive"
                   onClick={() => setRevokeTarget(apiKey)}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -169,7 +185,7 @@ export default function ApiKeysSection() {
 
           {keys.length >= MAX_API_KEYS && (
             <SettingsPanelRow>
-              <p className="text-[10px] text-muted-foreground/50 text-center">
+              <p className="text-[10px] text-muted-foreground/70 text-center">
                 {t("apiKeysSection.maxKeysReached", { max: MAX_API_KEYS })}
               </p>
             </SettingsPanelRow>
@@ -301,17 +317,20 @@ function CreateKeyDialog({
             </DialogHeader>
 
             <div className="space-y-3">
-              <div className="rounded-lg border border-border/50 bg-muted/30 dark:bg-surface-raised/30 p-3">
-                <code className="text-xs font-mono text-foreground break-all select-all leading-relaxed">
+              <div className="rounded-lg border border-border/70 bg-muted/30 dark:bg-surface-raised/30 p-3">
+                <code
+                  dir="ltr"
+                  className="text-xs font-mono text-foreground break-all select-all leading-relaxed"
+                >
                   {rawKey}
                 </code>
               </div>
 
               <Button variant="outline" size="sm" className="w-full" onClick={handleCopy}>
                 {copied ? (
-                  <Check className="h-3.5 w-3.5 mr-1.5 text-success" />
+                  <Check className="h-3.5 w-3.5 me-1.5 text-success" />
                 ) : (
-                  <Copy className="h-3.5 w-3.5 mr-1.5" />
+                  <Copy className="h-3.5 w-3.5 me-1.5" />
                 )}
                 {copied
                   ? t("apiKeysSection.created.copied")
@@ -347,6 +366,7 @@ function CreateKeyDialog({
                   {t("apiKeysSection.create.nameLabel")}
                 </label>
                 <Input
+                  dir="auto"
                   value={name}
                   onChange={(e) => setName(e.target.value.slice(0, MAX_NAME_LENGTH))}
                   placeholder={t("apiKeysSection.create.namePlaceholder")}
