@@ -3266,6 +3266,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     while (true) {
       const { value, done } = await reader.read();
       if (done) {
+        // Preserve support for a complete final data line without a newline.
+        const tail = buffer.trim();
+        if (tail.startsWith("data:")) {
+          try {
+            handleEvent(JSON.parse(tail.slice(5).trim()));
+          } catch {
+            // Ignore an incomplete or malformed final line.
+          }
+        }
         logger.debug(
           "Stream reading complete",
           {
@@ -3296,7 +3305,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Process complete lines from the buffer
       // Each SSE event is "data: <json>\n" followed by empty line
       const lines = buffer.split("\n");
-      buffer = "";
+      buffer = lines.pop() || "";
 
       for (const line of lines) {
         const trimmedLine = line.trim();
@@ -3313,8 +3322,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         } else if (trimmedLine.startsWith("data:")) {
           data = trimmedLine.slice(5).trim();
         } else {
-          // Not a data line, could be leftover - keep in buffer
-          buffer += line + "\n";
+          // Completed non-data lines do not belong to the buffered tail.
           continue;
         }
 
@@ -3328,9 +3336,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         try {
           const parsed = JSON.parse(data);
           handleEvent(parsed);
-        } catch (error) {
-          // Incomplete JSON - put back in buffer for next iteration
-          buffer += line + "\n";
+        } catch {
+          // Ignore malformed complete lines; partial lines stay in buffer.
         }
       }
     }
