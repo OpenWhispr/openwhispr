@@ -13,6 +13,7 @@ const { createAbortError } = require("./abortError");
 const sidecarPidFile = require("./sidecarPidFile");
 const { BIN_SUBDIR: CUDA_BIN_SUBDIR } = require("./whisperCudaManager");
 const { BIN_SUBDIR: VULKAN_BIN_SUBDIR } = require("./whisperVulkanManager");
+const { CPU_FALLBACK_LEVELS, cpuFallbackServerBinaryName } = require("./whisperCppRelease");
 const { sanitizeWhisperVadConfig, DEFAULT_WHISPER_VAD_CONFIG } = require("./whisperVadConfig");
 const {
   computeTranscriptionTimeoutMs,
@@ -118,6 +119,26 @@ function shouldFallbackToDefaultThreads(resolution) {
 
 function getThreadSignature(resolution) {
   return `threads:${resolution.threads || "default"}`;
+}
+
+// How a process ended, as the startup errors report it. A Unix signal death has
+// no exit code, so without the signal a SIGILL left no detail at all (#2356).
+function describeProcessExit({ exitCode = null, signal = null } = {}) {
+  if (signal) return `signal: ${signal}`;
+  if (exitCode !== null) return `exit code: ${exitCode}`;
+  return "";
+}
+
+// A process that executes an instruction its processor lacks is ended with
+// STATUS_ILLEGAL_INSTRUCTION (0xC000001D) on Windows and SIGILL on Unix. The
+// primary CPU build needs AVX2, FMA, F16C and BMI2, so this is how it dies at
+// startup on a processor without them (#2356).
+const STATUS_ILLEGAL_INSTRUCTION = 0xc000001d;
+
+function isIllegalInstructionExit({ exitCode = null, signal = null } = {}) {
+  if (signal === "SIGILL") return true;
+  // Node reports the NTSTATUS unsigned (3221225501); >>> 0 also maps the signed form
+  return Number.isInteger(exitCode) && exitCode >>> 0 === STATUS_ILLEGAL_INSTRUCTION;
 }
 
 function isVadActive(options = {}) {
@@ -447,6 +468,20 @@ class WhisperServerManager extends EventEmitter {
     return null;
   }
 
+  // The CPU build to try after `binary` died of an illegal instruction: the
+  // first CPU_FALLBACK_LEVELS build below it that is installed next to it, or
+  // null when none is left.
+  getCpuFallbackBinaryPath(binary) {
+    const names = CPU_FALLBACK_LEVELS.map((level) =>
+      cpuFallbackServerBinaryName(process.platform, process.arch, level)
+    );
+    for (const name of names.slice(names.indexOf(path.basename(binary)) + 1)) {
+      const candidate = path.join(path.dirname(binary), name);
+      if (fs.existsSync(candidate)) return candidate;
+    }
+    return null;
+  }
+
   isAvailable() {
     return this.getServerBinaryPath() !== null;
   }
@@ -642,6 +677,8 @@ class WhisperServerManager extends EventEmitter {
 
     let stderrBuffer = "";
     let exitCode = null;
+    let exitSignal = null;
+    const getProcessInfo = () => ({ stderr: stderrBuffer, exitCode, signal: exitSignal });
 
     this.process.stdout.on("data", (data) => {
       debugLogger.debug("whisper-server stdout", { data: data.toString().trim() });
@@ -657,20 +694,19 @@ class WhisperServerManager extends EventEmitter {
       this.ready = false;
     });
 
-    this.process.on("close", (code) => {
+    this.process.on("close", (code, signal) => {
       exitCode = code;
-      debugLogger.debug("whisper-server process exited", { code });
+      exitSignal = signal;
+      debugLogger.debug("whisper-server process exited", { code, signal });
       this.ready = false;
       this.process = null;
       this.stopHealthCheck();
       sidecarPidFile.clear("whisper");
     });
 
+    const startupTimeoutMs = usingVulkan ? VULKAN_STARTUP_TIMEOUT_MS : STARTUP_TIMEOUT_MS;
     try {
-      await this.waitForReady(
-        () => ({ stderr: stderrBuffer, exitCode }),
-        usingVulkan ? VULKAN_STARTUP_TIMEOUT_MS : STARTUP_TIMEOUT_MS
-      );
+      await this.waitForReady(getProcessInfo, startupTimeoutMs);
     } catch (err) {
       // An intentional stop() during startup is not a GPU/thread failure
       if (err.isStopped) throw err;
@@ -691,6 +727,31 @@ class WhisperServerManager extends EventEmitter {
         await this.stop();
         this.gpuFallbackActive = true;
         return this._doStart(modelPath, { ...options, useCuda: false, useVulkan: false });
+      }
+      // The CPU build ran an instruction this processor lacks: move one level
+      // down (getCpuFallbackBinaryPath). Caching the build makes it the CPU
+      // binary for the rest of the session, since stop() leaves the cache alone,
+      // so later restarts and GPU fallbacks never re-run a build that crashed.
+      // The process has already exited, so there is nothing for stop() to reap
+      // and gpuFallbackActive stays as the GPU branch above left it. The thread
+      // retry below is skipped: the same build would only crash again.
+      const processInfo = getProcessInfo();
+      if (isIllegalInstructionExit(processInfo)) {
+        const exit = describeProcessExit(processInfo);
+        const fallbackBinary = this.getCpuFallbackBinaryPath(serverBinary);
+        if (fallbackBinary) {
+          debugLogger.warn(
+            "whisper-server stopped on an instruction this processor lacks, retrying with a build for older processors",
+            { exit, from: path.basename(serverBinary), to: path.basename(fallbackBinary) }
+          );
+          this.cachedServerBinaryPath = fallbackBinary;
+          return this._doStart(modelPath, options);
+        }
+        throw new Error(
+          `whisper-server can't run on this processor: ${path.basename(serverBinary)} stopped on ` +
+            `an instruction the processor doesn't support (${exit}), and no build for older ` +
+            "processors is left to try"
+        );
       }
       if (shouldFallbackToDefaultThreads(threadResolution)) {
         const defaultThreadResolution = createThreadResolution(
@@ -779,7 +840,7 @@ class WhisperServerManager extends EventEmitter {
       if (!this.process || this.process.killed) {
         const info = getProcessInfo ? getProcessInfo() : {};
         const stderr = info.stderr ? info.stderr.trim().slice(0, 200) : "";
-        const details = stderr || (info.exitCode !== null ? `exit code: ${info.exitCode}` : "");
+        const details = stderr || describeProcessExit(info);
         throw new Error(
           `whisper-server process died during startup${details ? `: ${details}` : ""}`
         );
@@ -1201,3 +1262,4 @@ module.exports.getGpuSignature = getGpuSignature;
 module.exports.resolveWhisperThreads = resolveWhisperThreads;
 module.exports.shouldFallbackToCpuAfterRequestError = shouldFallbackToCpuAfterRequestError;
 module.exports.shouldRetryAfterServerReplaced = shouldRetryAfterServerReplaced;
+module.exports.isIllegalInstructionExit = isIllegalInstructionExit;
