@@ -110,6 +110,11 @@ test("transcribes audible mono 16 kHz WAV input", async (t) => {
         return { text: "audible", elapsed: 0 };
       },
     };
+    // Subtests share the manager, so each starts from a clean slate.
+    t.beforeEach(() => {
+      conversions = 0;
+      receivedSamples = undefined;
+    });
 
     await t.test("float32 input still uses normalization", async () => {
       const result = await manager.transcribe(createFloat32Wav(0.5), { modelName: MODEL_NAME });
@@ -127,7 +132,7 @@ test("transcribes audible mono 16 kHz WAV input", async (t) => {
         const input = insertWavChunk(createPcm16Wav(0.5), "JUNK", Buffer.from([42]), offset);
         const result = await manager.transcribe(input, { modelName: MODEL_NAME });
         assert.equal(result.text, "audible");
-        assert.equal(conversions, 1);
+        assert.equal(conversions, 0);
         assert.equal(receivedSamples.length, 160 * 4);
         for (let index = 0; index < 160; index += 1) {
           assert.equal(receivedSamples.readFloatLE(index * 4), Math.round(0.5 * 32767) / 32768);
