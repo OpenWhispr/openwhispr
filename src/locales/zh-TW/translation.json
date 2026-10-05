@@ -123,6 +123,8 @@
       "osReserved": "\"{{hotkey}}\" 可能被你的作業系統保留。",
       "rightModifierNeedsListener": "\"{{hotkey}}\" 無法在此桌面上使用，其快捷鍵需要包含一個一般按鍵。請加入一個按鍵，例如 Control+Alt+Space。",
       "holdNeedsReleaseKey": "按住說話需要 macOS 能偵測到放開的按鍵：Globe、右側 Option 之類的右側按鍵，或帶修飾鍵的快速鍵。點按可用於任何按鍵。",
+      "holdNeedsRegularKey": "要使用按住模式，請在快捷鍵中加入一個一般按鍵，例如 Control+Alt+Space。桌面環境無法偵測僅按住修飾鍵的操作。",
+      "holdNeedsGnomePortal": "要使用按住模式，GNOME 需要全域快捷鍵入口（GNOME 48 及更新版本內建）。點按不需要它。",
       "registrationFailed": "無法註冊「{{hotkey}}」。可能已被其他應用程式使用。",
       "windowsKeyListenerMissing": "「{{hotkey}}」需要 Windows 按鍵監聽程式，但此安裝中缺少該元件。請選擇包含一般按鍵的快捷鍵。",
       "updateFailedCheckFormat": "無法將快速鍵更新為「{{hotkey}}」。請檢查格式是否有效。",
@@ -160,7 +162,7 @@
     "close": "關閉"
   },
   "windows": {
-    "pttUnavailable": "按住說話原生監聽程式無法使用"
+    "pttUnavailable": "OpenWhispr 按鍵監聽程式無法使用。"
   },
   "common": {
     "continue": "繼續",
@@ -2272,6 +2274,12 @@
       },
       "transcriptionPreview": "即時轉錄預覽",
       "transcriptionPreviewDescription": "在浮動視窗中顯示轉錄結果，再進行文字整理",
+      "aec": {
+        "toggle": {
+          "title": "會議回音消除",
+          "description": "消除洩漏到麥克風中的會議音訊。使用耳機或耳塞時請關閉此功能——沒有需要消除的回音，且它可能會完全抑制您的聲音。"
+        }
+      },
       "vad": {
         "title": "語音活動偵測",
         "description": "設定 Silero VAD 如何為本機 Whisper 轉錄偵測並切分語音",

@@ -1520,8 +1520,11 @@ class IPCHandlers {
     });
 
     ipcMain.handle("capture-dictation-target", async () => {
+      // Recording start awaits this handler, so the Linux/Windows window probe
+      // runs in the background: a stalled AT-SPI peer would otherwise hold the
+      // microphone for seconds (#1944). Its consumers wait for it themselves.
+      void this.selectionManager?.captureTarget?.();
       const pid = (await this.textEditMonitor?.captureTargetPid?.()) ?? null;
-      await this.selectionManager?.captureTarget?.();
       return { success: true, pid };
     });
 
@@ -2733,13 +2736,8 @@ class IPCHandlers {
 
         let exportContent;
         if (format === "txt") {
-          exportContent = (note.content || "")
-            .replace(/#{1,6}\s+/g, "")
-            .replace(/[*_~`]+/g, "")
-            .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-            .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
-            .replace(/^>\s+/gm, "")
-            .trim();
+          const { markdownToPlainText } = await import("./markdownToPlainText.ts");
+          exportContent = markdownToPlainText(note.content || "");
         } else {
           exportContent = note.enhanced_content || note.content;
         }
@@ -7739,6 +7737,9 @@ class IPCHandlers {
 
     const startMeetingAec = async (systemAudioMode) => {
       meetingAecEnabled = false;
+      if (meetingConnectionOptions.aecEnabled !== true) {
+        return false;
+      }
       if (systemAudioMode === "unsupported" || !this.meetingAecManager?.isAvailable()) {
         return false;
       }
