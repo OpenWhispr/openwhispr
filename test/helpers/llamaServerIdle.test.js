@@ -122,10 +122,13 @@ test("enabling residency cancels an already pending idle unload", async (t) => {
   assert.equal(manager.idleTimer, null);
 });
 
-test("an opted-in resident server still responds to explicit stop", async (t) => {
+test("a resident server still stops and restarts when its context must grow", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
   const { manager, stops } = makeManager({ keepResident: true });
-  await manager.start("/models/main.gguf");
-  await manager.stop();
+  await manager.start("/models/main.gguf", { contextSize: 16384 });
+  manager.process = {};
+  await manager.start("/models/main.gguf", { contextSize: 32768 });
   assert.equal(stops.length, 1);
+  assert.equal(manager.contextSize, 32768);
+  assert.equal(manager.idleTimer, null);
 });
