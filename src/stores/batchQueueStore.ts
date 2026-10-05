@@ -48,9 +48,9 @@ export const useBatchQueueStore = create<BatchQueueStoreState>()(() => ({
   isProcessing: false,
 }));
 
-// Bumping the run id soft-cancels the drain loop; cloud and local uploads
-// additionally get a true backend abort via cancel-upload-transcription
-// (BYOK providers' in-flight IPC still can't be aborted). Either way the
+// Bumping the run id soft-cancels the drain loop; cloud, local and OpenRouter
+// uploads additionally get a true backend abort via cancel-upload-transcription
+// (other BYOK providers' in-flight IPC still can't be aborted). Either way the
 // orphaned run's late results are discarded on arrival while the UI unlocks
 // immediately.
 let runId = 0;

@@ -16,6 +16,12 @@ const ENDPOINTS = {
 // Neither response is OpenAI-shaped — Deepgram's /v1/models is {stt,tts}-keyed
 // and AssemblyAI returns transcripts — so a 200 is the whole credential signal.
 const MODEL_LIST_UNVERIFIABLE = new Set(["deepgram", "assemblyai"]);
+// OpenRouter's model catalogs answer 200 whatever the key, so they cannot tell a
+// valid key from a mistyped one; its key endpoint can. The model goes unchecked:
+// the ids are a fixed registry shortlist, so only a retired one would slip by.
+const TRANSCRIPTION_ENDPOINTS = {
+  openrouter: "https://openrouter.ai/api/v1/key",
+};
 
 // Renderers translate errorCode via onboarding.rehaul.provider.errors.*; the
 // English `error` string stays for logs and older callers.
@@ -153,8 +159,12 @@ function buildModelEndpoints(base) {
 
 function resolveProviderRequest(config) {
   const provider = String(config?.provider || "").toLowerCase();
+  const scope = String(config?.scope || "").toLowerCase();
   const apiKey = typeof config?.apiKey === "string" ? config.apiKey.trim() : "";
-  let endpoints = ENDPOINTS[provider] ? [ENDPOINTS[provider]] : [];
+  const transcriptionEndpoint =
+    scope === "transcription" ? TRANSCRIPTION_ENDPOINTS[provider] : undefined;
+  const probe = transcriptionEndpoint ?? ENDPOINTS[provider];
+  let endpoints = probe ? [probe] : [];
 
   if (provider === "openai") {
     const override = normalizeBaseUrl(
@@ -212,7 +222,12 @@ function resolveProviderRequest(config) {
     }
   }
 
-  return { endpoint: endpoints[0], endpoints, headers };
+  return {
+    endpoint: endpoints[0],
+    endpoints,
+    headers,
+    credentialOnly: MODEL_LIST_UNVERIFIABLE.has(provider) || Boolean(transcriptionEndpoint),
+  };
 }
 
 // When several candidate endpoints fail, report the most actionable failure.
@@ -304,7 +319,7 @@ async function testProviderConnection(config, fetchImpl = fetch) {
         signal: controller.signal,
       });
       if (response.ok) {
-        if (MODEL_LIST_UNVERIFIABLE.has(provider)) return { success: true };
+        if (request.credentialOnly) return { success: true };
         if (await responseOffersModel(response, model)) return { success: true };
         failure = pickFailure(failure, {
           errorCode: "modelNotFound",
