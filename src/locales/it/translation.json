@@ -54,6 +54,10 @@
       "speakerDetection": {
         "title": "Identifica ed etichetta i partecipanti",
         "description": "Se disattivato, le trascrizioni mostrano \"Tu\" e \"Altri\""
+      },
+      "echoCancellation": {
+        "title": "Cancellazione dell'eco",
+        "description": "Attivala per le chiamate con altoparlanti. Lasciala disattivata con le cuffie, perché può tagliare la tua voce."
       }
     }
   },

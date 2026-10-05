@@ -289,6 +289,7 @@ const BOOLEAN_SETTINGS = new Set([
   "startMinimized",
   "meetingProcessDetection",
   "speakerDiarizationEnabled",
+  "meetingEchoCancellationEnabled",
   "dictationSileroEnabled",
   "noteRecordingSileroEnabled",
   "meetingSileroEnabled",
@@ -903,6 +904,7 @@ export interface SettingsState
   appleCalendarConnected: boolean;
   meetingProcessDetection: boolean;
   speakerDiarizationEnabled: boolean;
+  meetingEchoCancellationEnabled: boolean;
   dictationSileroEnabled: boolean;
   noteRecordingSileroEnabled: boolean;
   meetingSileroEnabled: boolean;
@@ -1218,6 +1220,7 @@ export interface SettingsState
   setAppleCalendarConnected: (value: boolean) => void;
   setMeetingProcessDetection: (value: boolean) => void;
   setSpeakerDiarizationEnabled: (value: boolean) => void;
+  setMeetingEchoCancellationEnabled: (value: boolean) => void;
   setDictationSileroEnabled: (value: boolean) => void;
   setNoteRecordingSileroEnabled: (value: boolean) => void;
   setMeetingSileroEnabled: (value: boolean) => void;
@@ -1664,6 +1667,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   appleCalendarConnected: readBoolean("appleCalendarConnected", false),
   meetingProcessDetection: readBoolean("meetingProcessDetection", true),
   speakerDiarizationEnabled: readBoolean("speakerDiarizationEnabled", true),
+  // Off by default: with headphones there is no echo to cancel, and the canceller
+  // still suppresses the user's own speech (#1025).
+  meetingEchoCancellationEnabled: readBoolean("meetingEchoCancellationEnabled", false),
   // Off by default: VAD on pause-heavy dictations can strip the speech and make
   // Whisper hallucinate the dictionary prompt as the transcript (#1454).
   dictationSileroEnabled: readBoolean("dictationSileroEnabled", false),
@@ -2459,6 +2465,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       window.electronAPI?.setSpeakerDiarizationEnabled?.(value);
     }
   },
+  setMeetingEchoCancellationEnabled: createBooleanSetter("meetingEchoCancellationEnabled"),
   setDictationSileroEnabled: (value: boolean) => {
     if (isBrowser) localStorage.setItem("dictationSileroEnabled", String(value));
     useSettingsStore.setState({ dictationSileroEnabled: value });

@@ -54,6 +54,10 @@
       "speakerDetection": {
         "title": "Identifier et étiqueter les intervenants",
         "description": "Lorsque désactivé, les transcriptions affichent « Vous » et « Autres »"
+      },
+      "echoCancellation": {
+        "title": "Annulation d'écho",
+        "description": "Activez-la pour les appels sur haut-parleurs. Laissez-la désactivée avec un casque : elle peut couper votre propre voix."
       }
     }
   },

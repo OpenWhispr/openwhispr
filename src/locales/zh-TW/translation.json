@@ -54,6 +54,10 @@
       "speakerDetection": {
         "title": "辨識並標記發言者",
         "description": "關閉後，逐字稿會顯示「你」和「其他人」"
+      },
+      "echoCancellation": {
+        "title": "回音消除",
+        "description": "透過喇叭通話時開啟。使用耳機時請保持關閉，否則可能會切掉你自己的聲音。"
       }
     }
   },

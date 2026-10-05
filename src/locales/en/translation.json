@@ -54,6 +54,10 @@
       "speakerDetection": {
         "title": "Identify and label speakers",
         "description": "When off, transcripts show \"You\" and \"Others\""
+      },
+      "echoCancellation": {
+        "title": "Echo cancellation",
+        "description": "Turn on for calls on speakers. Leave off with headphones, where it can cut out your own voice."
       }
     }
   },

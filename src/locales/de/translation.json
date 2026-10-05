@@ -54,6 +54,10 @@
       "speakerDetection": {
         "title": "Sprecher erkennen und beschriften",
         "description": "Wenn deaktiviert, zeigen Transkripte „Du“ und „Andere“"
+      },
+      "echoCancellation": {
+        "title": "Echounterdrückung",
+        "description": "Für Anrufe über Lautsprecher einschalten. Mit Kopfhörern ausgeschaltet lassen, sonst kann deine eigene Stimme verloren gehen."
       }
     }
   },

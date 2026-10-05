@@ -3048,6 +3048,7 @@ declare global {
         noteId?: number | null;
         sessionId: string;
         autoEndEligible: boolean;
+        echoCancellation: boolean;
       }) => Promise<
         {
           success: boolean;

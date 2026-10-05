@@ -54,6 +54,10 @@
       "speakerDetection": {
         "title": "Identificar e rotular participantes",
         "description": "Quando desativado, as transcrições mostram \"Você\" e \"Outros\""
+      },
+      "echoCancellation": {
+        "title": "Cancelamento de eco",
+        "description": "Ative para chamadas com alto-falantes. Deixe desativado com fones de ouvido, pois pode cortar a sua própria voz."
       }
     }
   },

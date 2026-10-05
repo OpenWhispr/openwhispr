@@ -31,6 +31,26 @@ export function MeetingSpeakerDetectionRow() {
   );
 }
 
+function MeetingEchoCancellationRow() {
+  const { t } = useTranslation();
+  const meetingEchoCancellationEnabled = useSettingsStore((s) => s.meetingEchoCancellationEnabled);
+  const setMeetingEchoCancellationEnabled = useSettingsStore(
+    (s) => s.setMeetingEchoCancellationEnabled
+  );
+
+  return (
+    <SettingsRow
+      label={t("settings.meeting.echoCancellation.title")}
+      description={t("settings.meeting.echoCancellation.description")}
+    >
+      <Toggle
+        checked={meetingEchoCancellationEnabled}
+        onChange={setMeetingEchoCancellationEnabled}
+      />
+    </SettingsRow>
+  );
+}
+
 const noop = () => {};
 
 export function MeetingTranscriptionPanel() {
@@ -179,6 +199,7 @@ export function MeetingTranscriptionPanel() {
       {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
       {effectiveTranscriptionMode === "local" && renderTranscriptionPicker("local")}
       <MeetingSpeakerDetectionRow />
+      <MeetingEchoCancellationRow />
     </div>
   );
 }

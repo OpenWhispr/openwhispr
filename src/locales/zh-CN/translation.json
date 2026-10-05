@@ -54,6 +54,10 @@
       "speakerDetection": {
         "title": "识别并标记发言者",
         "description": "关闭后，转写会显示\"你\"和\"其他人\""
+      },
+      "echoCancellation": {
+        "title": "回声消除",
+        "description": "通过扬声器通话时开启。使用耳机时请保持关闭，否则可能会切掉你自己的声音。"
       }
     }
   },

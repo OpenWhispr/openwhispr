@@ -54,6 +54,10 @@
       "speakerDetection": {
         "title": "Identificar y etiquetar participantes",
         "description": "Cuando está desactivado, las transcripciones muestran \"Tú\" y \"Otros\""
+      },
+      "echoCancellation": {
+        "title": "Cancelación de eco",
+        "description": "Actívala para llamadas con altavoces. Déjala desactivada con auriculares, ya que puede cortar tu propia voz."
       }
     }
   },

@@ -7739,7 +7739,13 @@ class IPCHandlers {
 
     const startMeetingAec = async (systemAudioMode) => {
       meetingAecEnabled = false;
-      if (systemAudioMode === "unsupported" || !this.meetingAecManager?.isAvailable()) {
+      // Opt-in: with headphones there is no echo to cancel, and AEC3 still
+      // suppresses the user's own speech, worst in the first seconds (#1025).
+      if (
+        meetingConnectionOptions?.echoCancellation !== true ||
+        systemAudioMode === "unsupported" ||
+        !this.meetingAecManager?.isAvailable()
+      ) {
         return false;
       }
 
