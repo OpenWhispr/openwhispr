@@ -1835,7 +1835,7 @@
       },
       "gpuPackMigration": {
         "title": "تحتاج حزمة GPU إلى إعادة التنزيل",
-        "description": "أزال التحديث تثبيت حزمة GPU قديمة ({{packs}}). أعد تنزيلها في الإعدادات لاستعادة تسريع GPU."
+        "description": "لا يمكن لهذا الإصدار استخدام حزمة GPU السابقة ({{packs}}). أعد تنزيلها من الإعدادات لإعادة تشغيل تسريع GPU."
       },
       "cleanupFailed": {
         "title": "فشل التنقيح",
@@ -4742,6 +4742,9 @@
     "activationFailedDescription": "انتقل OpenWhispr إلى استخدام وحدة المعالجة المركزية (CPU) للتفريغ الصوتي.",
     "reasoningActivationFailedDescription": "انتقل OpenWhispr إلى استخدام وحدة المعالجة المركزية (CPU) للمعالجة.",
     "retryActivation": "إعادة محاولة تفعيل GPU",
+    "updateNeeded": "حزمة GPU بحاجة إلى تحديث",
+    "updateNeededDescription": "لا يمكن لهذا الإصدار من OpenWhispr استخدام حزمة GPU المثبتة. حدّثها لإعادة تشغيل تسريع GPU.",
+    "updateButton": "تحديث حزمة GPU",
     "remove": "إزالة",
     "dismiss": "ليس الآن",
     "cancel": "إلغاء"

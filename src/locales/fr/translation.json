@@ -3833,6 +3833,9 @@
     "activationFailedDescription": "OpenWhispr est passé à la transcription par CPU.",
     "reasoningActivationFailedDescription": "OpenWhispr est passé au traitement par CPU.",
     "retryActivation": "Réessayer l'accélération GPU",
+    "updateNeeded": "Le pack GPU doit être mis à jour",
+    "updateNeededDescription": "Cette version d'OpenWhispr ne peut pas utiliser votre pack GPU installé. Mettez-le à jour pour réactiver l'accélération GPU.",
+    "updateButton": "Mettre à jour le pack GPU",
     "remove": "Supprimer",
     "dismiss": "Pas maintenant",
     "cancel": "Annuler"
@@ -3860,7 +3863,7 @@
       },
       "gpuPackMigration": {
         "title": "Le pack GPU doit être retéléchargé",
-        "description": "Une mise à jour a supprimé une installation obsolète du pack GPU ({{packs}}). Retéléchargez-le dans les paramètres pour rétablir l'accélération GPU."
+        "description": "Cette version ne peut pas utiliser votre ancien pack GPU ({{packs}}). Retéléchargez-le dans les paramètres pour réactiver l'accélération GPU."
       },
       "cleanupFailed": {
         "title": "Échec du nettoyage",

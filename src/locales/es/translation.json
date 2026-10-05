@@ -3715,6 +3715,9 @@
     "activationFailedDescription": "OpenWhispr cambió a la transcripción por CPU.",
     "reasoningActivationFailedDescription": "OpenWhispr cambió al procesamiento por CPU.",
     "retryActivation": "Reintentar aceleración GPU",
+    "updateNeeded": "El paquete GPU necesita una actualización",
+    "updateNeededDescription": "Esta versión de OpenWhispr no puede usar tu paquete GPU instalado. Actualízalo para volver a activar la aceleración GPU.",
+    "updateButton": "Actualizar paquete GPU",
     "remove": "Eliminar",
     "dismiss": "Ahora no",
     "cancel": "Cancelar"
@@ -3742,7 +3745,7 @@
       },
       "gpuPackMigration": {
         "title": "Es necesario volver a descargar el paquete GPU",
-        "description": "Una actualización eliminó una instalación obsoleta del paquete GPU ({{packs}}). Vuelve a descargarlo en Configuración para restaurar la aceleración GPU."
+        "description": "Esta versión no puede usar tu paquete GPU anterior ({{packs}}). Vuelve a descargarlo en Configuración para volver a activar la aceleración GPU."
       },
       "cleanupFailed": {
         "title": "Limpieza fallida",

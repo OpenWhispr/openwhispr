@@ -755,6 +755,8 @@ export interface CudaWhisperStatus {
   gpuInfo: GpuInfo;
   /** CUDA fell back to CPU on this machine and stays off until retried. */
   gpuFailed?: boolean;
+  /** An older release installed the pack and this version can't use it. */
+  needsUpdate?: boolean;
 }
 
 export interface VulkanWhisperStatus {
@@ -764,6 +766,8 @@ export interface VulkanWhisperStatus {
   hasNvidiaGpu: boolean;
   /** Vulkan fell back to CPU on this machine and stays off until retried. */
   gpuFailed?: boolean;
+  /** An older release installed the pack and this version can't use it. */
+  needsUpdate?: boolean;
 }
 
 export interface WhisperServerStatus {

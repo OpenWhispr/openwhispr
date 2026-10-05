@@ -3662,6 +3662,9 @@
     "activationFailedDescription": "OpenWhispr 已切换为 CPU 转录。",
     "reasoningActivationFailedDescription": "OpenWhispr 已切换为 CPU 处理。",
     "retryActivation": "重试 GPU 加速",
+    "updateNeeded": "GPU 加速包需要更新",
+    "updateNeededDescription": "此版本的 OpenWhispr 无法使用已安装的 GPU 加速包。请更新以重新启用 GPU 加速。",
+    "updateButton": "更新 GPU 加速包",
     "remove": "移除",
     "dismiss": "暂不启用",
     "cancel": "取消"
@@ -3689,7 +3692,7 @@
       },
       "gpuPackMigration": {
         "title": "需要重新下载 GPU 加速包",
-        "description": "更新移除了过时的 GPU 加速包安装（{{packs}}）。请在设置中重新下载以恢复 GPU 加速。"
+        "description": "此版本无法使用之前的 GPU 加速包（{{packs}}）。请在设置中重新下载以重新启用 GPU 加速。"
       },
       "cleanupFailed": {
         "title": "清理失败",

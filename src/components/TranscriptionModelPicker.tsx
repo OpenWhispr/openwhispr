@@ -447,6 +447,8 @@ export default function TranscriptionModelPicker({
   const [gpuDismissed, setGpuDismissed] = useState(false);
   // The pack fell back to CPU on this machine (persisted by main until retried)
   const [gpuFailed, setGpuFailed] = useState(false);
+  // An older release installed the pack and this version can't use it (#2424)
+  const [gpuNeedsUpdate, setGpuNeedsUpdate] = useState(false);
   // A server reload with the new backend is in flight (Vulkan cold starts are slow)
   const [gpuActivating, setGpuActivating] = useState(false);
   // Live truth from the running server; "active" is never inferred from a download
@@ -721,15 +723,21 @@ export default function TranscriptionModelPicker({
         const cudaEligible = !!cuda?.gpuInfo.hasNvidiaGpu && !!cuda.gpuInfo.cudaSupported;
         // Prefer the pack that's already installed: a working Vulkan setup must
         // not be re-prompted to download the CUDA pack (matches the resolver,
-        // which only prefers CUDA when it is actually downloaded).
-        if (cudaEligible && (cuda.downloaded || !vulkan?.downloaded)) {
+        // which only prefers CUDA when it is actually downloaded). With neither
+        // working, a pack an older release installed comes next, so the card
+        // offers its update rather than a first download.
+        const preferCuda =
+          cuda?.downloaded || (!vulkan?.downloaded && (cuda?.needsUpdate || !vulkan?.needsUpdate));
+        if (cudaEligible && preferCuda) {
           setGpuBackend("cuda");
           setGpuDownloaded(cuda.downloaded);
           setGpuFailed(!!cuda.gpuFailed);
+          setGpuNeedsUpdate(!!cuda.needsUpdate);
         } else if (vulkan?.vulkan.available) {
           setGpuBackend("vulkan");
           setGpuDownloaded(vulkan.downloaded);
           setGpuFailed(!!vulkan.gpuFailed);
+          setGpuNeedsUpdate(!!vulkan.needsUpdate);
         }
       } catch {}
     };
@@ -797,6 +805,7 @@ export default function TranscriptionModelPicker({
       if (result?.success) {
         setGpuDownloaded(true);
         setGpuFailed(false);
+        setGpuNeedsUpdate(false);
         // Main reloads the server with the new backend only when one is loaded;
         // otherwise the pack simply engages on the next dictation.
         setGpuActivating(!!result.willRestart);
@@ -820,6 +829,7 @@ export default function TranscriptionModelPicker({
     if (result?.success) {
       setGpuDownloaded(false);
       setGpuFailed(false);
+      setGpuNeedsUpdate(false);
       setGpuActivating(false);
       setGpuActive(false);
     }
@@ -1354,7 +1364,7 @@ export default function TranscriptionModelPicker({
             gpuBackend && (
               <div
                 className={`rounded-md border p-2.5 ${
-                  gpuDownloaded && gpuFailed
+                  (gpuDownloaded ? gpuFailed : gpuNeedsUpdate)
                     ? "border-warning/40 bg-warning/5"
                     : "border-border bg-surface-1"
                 }`}
@@ -1425,6 +1435,35 @@ export default function TranscriptionModelPicker({
                       </Button>
                     </div>
                   )
+                ) : gpuNeedsUpdate ? (
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-start gap-2">
+                      <CircleAlert size={15} className="mt-0.5 shrink-0 text-warning" />
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-foreground">
+                          {t("gpu.updateNeeded")}
+                        </p>
+                        <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+                          {t("gpu.updateNeededDescription")}
+                        </p>
+                        <Button
+                          onClick={handleGpuDownload}
+                          size="sm"
+                          className="mt-2 h-7 px-3 text-xs"
+                        >
+                          {t("gpu.updateButton")}
+                        </Button>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={handleGpuDelete}
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 shrink-0 px-2 text-xs text-muted-foreground hover:text-destructive"
+                    >
+                      {t("gpu.remove")}
+                    </Button>
+                  </div>
                 ) : (
                   <div className="flex items-start gap-2.5">
                     <Zap size={13} className="text-primary shrink-0 mt-0.5" />
