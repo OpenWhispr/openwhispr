@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Check } from "../icons";
 import { cn } from "../lib/utils";
 import { Button } from "../ui/button";
+import { blurBehindOverlays } from "../ui/overlayBlur";
 import type { ActionProcessingState } from "../../hooks/useActionProcessing";
 import type { NoteActionProgress } from "../../stores/actionProcessingStore";
 
@@ -46,10 +47,14 @@ export default function ActionProcessingOverlay({
   const isFadingOut = state === "idle";
 
   return (
+    // No blur on Linux: Linux can composite on the CPU, which would redraw it on every frame
+    // of the scanner animation for as long as an action runs (#2298). A denser tint stands in.
     <div
       className={cn(
         "absolute inset-0 z-[5] flex items-center justify-center",
-        "bg-background/60 dark:bg-background/70 backdrop-blur-md",
+        blurBehindOverlays
+          ? "bg-background/60 dark:bg-background/70 backdrop-blur-md"
+          : "bg-background/90",
         "transition-opacity duration-300",
         isFadingOut && "opacity-0 pointer-events-none"
       )}
@@ -81,9 +86,16 @@ export default function ActionProcessingOverlay({
         className={cn(
           "relative flex flex-col items-center gap-2.5",
           isSuccess
-            ? "bg-success/6 dark:bg-success/8 border-success/12 dark:border-success/15"
-            : "bg-accent/6 dark:bg-accent/8 border-accent/12 dark:border-accent/15",
-          "backdrop-blur-xl border rounded-xl px-6 py-3 shadow-elevated",
+            ? "border-success/12 dark:border-success/15"
+            : "border-accent/12 dark:border-accent/15",
+          // Opaque on Linux, so the unblurred scanner line passes behind the label, not through it.
+          blurBehindOverlays
+            ? cn(
+                isSuccess ? "bg-success/6 dark:bg-success/8" : "bg-accent/6 dark:bg-accent/8",
+                "backdrop-blur-xl"
+              )
+            : "bg-background",
+          "border rounded-xl px-6 py-3 shadow-elevated",
           "transition-colors duration-300"
         )}
       >
