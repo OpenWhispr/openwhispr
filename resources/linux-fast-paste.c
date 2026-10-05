@@ -371,7 +371,15 @@ static int is_terminal(const char *wm_class) {
     return 0;
 }
 
-static int check_parent_terminal(Display *dpy, Window win) {
+static paste_mode_t class_paste_mode(const XClassHint *hint) {
+    /* Emacs uses Ctrl+V for scrolling; match its class, not its instance name. */
+    if (hint->res_class && strcasecmp(hint->res_class, "Emacs") == 0)
+        return PASTE_MODE_SHIFT_INSERT;
+    return (is_terminal(hint->res_class) || is_terminal(hint->res_name))
+        ? PASTE_MODE_CTRL_SHIFT_V : PASTE_MODE_CTRL_V;
+}
+
+static paste_mode_t check_parent_paste_mode(Display *dpy, Window win) {
     Window current = win;
     Window root = DefaultRootWindow(dpy);
 
@@ -389,16 +397,16 @@ static int check_parent_terminal(Display *dpy, Window win) {
 
         XClassHint hint;
         if (XGetClassHint(dpy, parent, &hint)) {
-            int terminal = is_terminal(hint.res_class) || is_terminal(hint.res_name);
+            paste_mode_t mode = class_paste_mode(&hint);
             XFree(hint.res_name);
             XFree(hint.res_class);
-            return terminal;
+            return mode;
         }
 
         current = parent;
     }
 
-    return 0;
+    return PASTE_MODE_CTRL_V;
 }
 
 #ifdef HAVE_ATSPI
@@ -774,17 +782,19 @@ static paste_mode_t resolve_paste_mode(int force_terminal, int force_shift_inser
         Display *dpy = XOpenDisplay(NULL);
         if (dpy) {
             Window win = (target_window != None) ? target_window : get_active_window(dpy);
+            paste_mode_t mode = PASTE_MODE_CTRL_V;
             if (win != None) {
                 XClassHint hint;
                 if (XGetClassHint(dpy, win, &hint)) {
-                    is_term = is_terminal(hint.res_class) || is_terminal(hint.res_name);
+                    mode = class_paste_mode(&hint);
                     XFree(hint.res_name);
                     XFree(hint.res_class);
                 } else {
-                    is_term = check_parent_terminal(dpy, win);
+                    mode = check_parent_paste_mode(dpy, win);
                 }
             }
             XCloseDisplay(dpy);
+            return mode;
         }
     }
     return is_term ? PASTE_MODE_CTRL_SHIFT_V : PASTE_MODE_CTRL_V;

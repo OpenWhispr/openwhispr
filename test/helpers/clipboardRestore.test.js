@@ -741,6 +741,42 @@ test("XWayland fallback remains reachable after native Wayland failure", async (
   );
 });
 
+for (const [windowClass, keys, mode] of [
+  ["Emacs", "shift+Insert", "--shift-insert"],
+  ["EMACS", "shift+Insert", "--shift-insert"],
+  ["not-emacs", "ctrl+v", null],
+  ["Firefox", "ctrl+v", null],
+  ["", "ctrl+v", null],
+  ["Gnome-terminal", "ctrl+shift+v", "--terminal"],
+]) {
+  for (const native of [true, false]) {
+    test(`X11 ${windowClass || "unknown"} paste (native=${native})`, async (t) => {
+      t.mock.method(childProcess, "spawnSync", (command, args) => ({
+        status: args.includes("getwindowpid") ? 1 : 0,
+        stdout: Buffer.from(args.includes("getwindowclassname") ? windowClass : "42"),
+      }));
+      const calls = [];
+      const Manager = loadClipboardManager({ spawn: createSuccessfulSpawn(calls) });
+      const manager = new Manager();
+      manager.commandExists = (command) => command === "xdotool";
+      manager.resolveLinuxFastPasteBinary = () => (native ? "/tmp/linux-fast-paste" : null);
+      await withWaylandEnvironment("GNOME", async () => {
+        process.env.XDG_SESSION_TYPE = "x11";
+        delete process.env.WAYLAND_DISPLAY;
+        await manager.pasteLinux(null);
+      });
+      assert.deepEqual(calls, [
+        {
+          command: native ? "/tmp/linux-fast-paste" : "xdotool",
+          args: native
+            ? ["--window", "42", ...(mode ? [mode] : [])]
+            : ["windowactivate", "--sync", "42", "key", keys],
+        },
+      ]);
+    });
+  }
+}
+
 const MODIFIER_WAIT_CALL = {
   command: "/tmp/linux-fast-paste",
   args: ["--capabilities", "--await-modifier-release", "1500"],
