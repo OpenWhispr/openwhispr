@@ -760,6 +760,8 @@ export interface CudaWhisperStatus {
   /** The pack the GPU card describes: the one every whisper start picks, else
    * an installed pack that failed (#1736). At most one pack reports true. */
   inUse?: boolean;
+  /** An older release installed the pack and this version can't use it. */
+  needsUpdate?: boolean;
 }
 
 export interface VulkanWhisperStatus {
@@ -774,6 +776,8 @@ export interface VulkanWhisperStatus {
   /** The pack the GPU card describes: the one every whisper start picks, else
    * an installed pack that failed (#1736). At most one pack reports true. */
   inUse?: boolean;
+  /** An older release installed the pack and this version can't use it. */
+  needsUpdate?: boolean;
 }
 
 export interface WhisperServerStatus {
@@ -3059,6 +3063,7 @@ declare global {
         noteId?: number | null;
         sessionId: string;
         autoEndEligible: boolean;
+        aecEnabled?: boolean;
       }) => Promise<
         {
           success: boolean;

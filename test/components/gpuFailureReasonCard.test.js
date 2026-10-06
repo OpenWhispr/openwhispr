@@ -51,6 +51,15 @@ function findElement(node, predicate) {
 
 const isFailedCard = (node) => String(node.props?.className ?? "").includes("border-warning/40");
 const hasText = (text) => (node) => node.props?.children === text;
+// The shared warning row renders its buttons from these props, and this
+// element tree never expands components, so its buttons are read off the row
+const rowButtons = (node) =>
+  node.props?.onRemove
+    ? { [node.props.actionLabel]: node.props.onAction, Remove: node.props.onRemove }
+    : {};
+const isButton = (label) => (node) =>
+  (!!node.props?.onClick && hasText(label)(node)) || !!rowButtons(node)[label];
+const onClickOf = (node, label) => node.props.onClick ?? rowButtons(node)[label];
 
 const NVIDIA = { hasNvidiaGpu: true, cudaSupported: true };
 // An NVIDIA GPU below the CUDA build's kernel floor (e.g. Maxwell)
@@ -163,10 +172,10 @@ async function mountPicker(t, vulkanStatus, cudaStatus = cudaPack(), gpuAccelera
     fireVulkanFallback: (status) => fire("vulkan", { status }),
     // Clicks the card button with this label; returns the pack IPCs it made
     click: async (label) => {
-      const button = findElement(tree, (node) => !!node.props?.onClick && hasText(label)(node));
+      const button = findElement(tree, isButton(label));
       assert.ok(button, `a "${label}" button`);
       calls.length = 0;
-      await React.act(async () => button.props.onClick());
+      await React.act(async () => onClickOf(button, label)());
       await settle();
       return [...calls];
     },
@@ -435,7 +444,7 @@ test("a card left with no pack to show or offer hides, not the deleted pack", as
 
     assert.equal(picker.shows(isFailedCard), false);
     assert.equal(picker.shows(hasText(KERNEL_IMAGE)), false, "the deleted pack's reason is gone");
-    assert.equal(picker.shows(hasText("Remove")), false, "no Remove for a deleted pack");
+    assert.equal(picker.shows(isButton("Remove")), false, "no Remove for a deleted pack");
   } finally {
     await picker.unmount();
   }

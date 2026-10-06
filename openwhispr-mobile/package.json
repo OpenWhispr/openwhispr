@@ -22,8 +22,9 @@
     "clean": "npm run format && npm run lint && npm run typecheck",
     "pretest": "npm rebuild better-sqlite3",
     "test": "jest",
+    "test:security": "node --test scripts/__tests__/node-forge.test.js",
     "test:watch": "jest --watch",
-    "postinstall": "patch-package && npm run download:brand-fonts",
+    "postinstall": "patch-package --error-on-fail && npm run test:security && npm run download:brand-fonts",
     "eas-build-pre-install": "bundle install"
   },
   "engines": {
@@ -87,7 +88,7 @@
     "react-native-appsflyer": "^7.0.2",
     "react-native-css-interop": "^0.2.1",
     "react-native-gesture-handler": "~2.30.0",
-    "react-native-purchases": "^10.4.1",
+    "react-native-purchases": "^10.10.0",
     "react-native-reanimated": "4.2.1",
     "react-native-safe-area-context": "~5.6.2",
     "react-native-screens": "~4.23.0",

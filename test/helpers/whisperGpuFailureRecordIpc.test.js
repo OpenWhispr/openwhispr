@@ -136,6 +136,7 @@ function createHandlers({ downloadError = null } = {}) {
   };
   const whisperCudaManager = {
     isDownloaded: () => true,
+    needsUpdate: () => false,
     isDownloading: () => false,
     getCudaBinaryPath: () => null,
     download,
@@ -143,6 +144,7 @@ function createHandlers({ downloadError = null } = {}) {
   };
   const whisperVulkanManager = {
     isDownloaded: () => true,
+    needsUpdate: () => false,
     isDownloading: () => false,
     download,
     delete: async () => ({ success: true, deletedCount: 1 }),
