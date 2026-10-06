@@ -748,6 +748,8 @@ export default function TranscriptionModelPicker({
   // Live server state: "GPU acceleration active" reflects what the server is
   // actually running on, not just that a pack is on disk (a crashed GPU server
   // silently falls back to CPU). Faster poll while an activation is in flight.
+  // Main retries a GPU that failed after working (e.g. on wake), so this
+  // backend running again also ends its failed state.
   useEffect(() => {
     if (!effectiveLocal || internalLocalProvider !== "whisper" || !gpuDownloaded) return;
     const poll = () => {
@@ -756,13 +758,14 @@ export default function TranscriptionModelPicker({
         .then((status) => {
           setGpuActive(!!status?.gpuAccelerated);
           if (status?.gpuAccelerated) setGpuActivating(false);
+          if (status?.gpuAccelerated && status.gpuBackend === gpuBackend) setGpuFailed(false);
         })
         .catch(() => {});
     };
     poll();
     const id = setInterval(poll, gpuActivating ? 1000 : 5000);
     return () => clearInterval(id);
-  }, [effectiveLocal, internalLocalProvider, gpuDownloaded, gpuActivating]);
+  }, [effectiveLocal, internalLocalProvider, gpuDownloaded, gpuActivating, gpuBackend]);
 
   // Safety valve: a Vulkan cold start can take up to ~2 minutes (see #698);
   // past that the live status or a fallback notification settles the state.

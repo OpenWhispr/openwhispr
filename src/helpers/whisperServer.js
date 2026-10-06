@@ -148,6 +148,13 @@ function getGpuSignature(options = {}) {
   return `gpu:vulkan:${Number.isInteger(deviceIndex) && deviceIndex >= 0 ? deviceIndex : "default"}`;
 }
 
+// What "this GPU worked before" means for a fallback's `proven` flag: the same
+// backend, device and model. A bigger model can run out of VRAM, and another
+// card can be below the CUDA build's kernel floor, where this one worked.
+function getGpuProofKey(gpuSignature, modelPath) {
+  return `${gpuSignature}|${process.env.TRANSCRIPTION_GPU_UUID || ""}|${modelPath}`;
+}
+
 function buildWhisperServerArgs({
   modelPath,
   port,
@@ -305,6 +312,25 @@ class WhisperServerManager extends EventEmitter {
     this.gpuSignature = "gpu:cpu";
     this.gpuFallbackActive = false;
     this.lastStartOptions = {};
+    // GPU setups (getGpuProofKey) that started, and that completed a
+    // transcription, since launch. A later failure at the same stage is passing
+    // (sleep, a driver reset), not a GPU that can never work, so the fallback
+    // events report it as `proven`. The stages are kept apart because a CUDA
+    // build below the card's kernel floor starts fine and only crashes at its
+    // first inference. See #2265.
+    this.gpuProofKey = null;
+    this.startedGpuKeys = new Set();
+    this.transcribedGpuKeys = new Set();
+  }
+
+  // A re-downloaded or removed pack is a different binary: what the old one
+  // proved no longer counts.
+  forgetGpuProofs(backend) {
+    for (const keys of [this.startedGpuKeys, this.transcribedGpuKeys]) {
+      for (const key of keys) {
+        if (key.startsWith(`gpu:${backend}`)) keys.delete(key);
+      }
+    }
   }
 
   getFFmpegPath() {
@@ -574,6 +600,9 @@ class WhisperServerManager extends EventEmitter {
       useVulkan: usingVulkan,
       vulkanDeviceIndex: vulkanDeviceIndex ?? -1,
     });
+    const gpuProofKey =
+      usingCuda || usingVulkan ? getGpuProofKey(this.gpuSignature, modelPath) : null;
+    this.gpuProofKey = gpuProofKey;
 
     // Check for FFmpeg first - only use --convert flag if FFmpeg is available
     const ffmpegPath = this.getFFmpegPath();
@@ -687,7 +716,9 @@ class WhisperServerManager extends EventEmitter {
             stderr: stderrBuffer.slice(0, 200),
           }
         );
-        this.emit(usingCuda ? "cuda-fallback" : "gpu-fallback");
+        this.emit(usingCuda ? "cuda-fallback" : "gpu-fallback", {
+          proven: this.startedGpuKeys.has(gpuProofKey),
+        });
         await this.stop();
         this.gpuFallbackActive = true;
         return this._doStart(modelPath, { ...options, useCuda: false, useVulkan: false });
@@ -749,6 +780,7 @@ class WhisperServerManager extends EventEmitter {
       }
     }
 
+    if (gpuProofKey) this.startedGpuKeys.add(gpuProofKey);
     this.startHealthCheck();
 
     debugLogger.info("whisper-server started successfully", {
@@ -928,9 +960,12 @@ class WhisperServerManager extends EventEmitter {
 
     const generation = this.startGeneration;
     const modelPath = this.modelPath;
+    const gpuProofKey = this.useCuda || this.useVulkan ? this.gpuProofKey : null;
 
     try {
-      return await this._postInference(body, boundary, signal);
+      const result = await this._postInference(body, boundary, signal);
+      if (gpuProofKey) this.transcribedGpuKeys.add(gpuProofKey);
+      return result;
     } catch (err) {
       // A cancel is not a server failure: rethrow before the retry/CPU-fallback
       // logic so it never triggers a server restart.
@@ -1079,6 +1114,7 @@ class WhisperServerManager extends EventEmitter {
 
   async _fallbackToCpuAndRetry(body, boundary, modelPath) {
     const backend = this.useCuda ? "cuda" : "vulkan";
+    const gpuProofKey = this.gpuProofKey;
     debugLogger.warn(`${backend} whisper-server died during transcription, falling back to CPU`, {
       port: this.port,
       model: modelPath ? path.basename(modelPath) : null,
@@ -1086,7 +1122,9 @@ class WhisperServerManager extends EventEmitter {
     await this.start(modelPath, { ...this.lastStartOptions, useCuda: false, useVulkan: false });
     this.gpuFallbackActive = true;
     // Emit only once the CPU server is up — the notification tells the user CPU is in use
-    this.emit(backend === "cuda" ? "cuda-fallback" : "gpu-fallback");
+    this.emit(backend === "cuda" ? "cuda-fallback" : "gpu-fallback", {
+      proven: this.transcribedGpuKeys.has(gpuProofKey),
+    });
     return await this._postInference(body, boundary);
   }
 

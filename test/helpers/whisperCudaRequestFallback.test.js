@@ -702,3 +702,77 @@ test("does not fall back after an intentional stop", async (t) => {
   assert.equal(startCalled, false);
   assert.equal(fallbackEvents, 0);
 });
+
+// A GPU setup that already transcribed is known to work on this machine, so its
+// later failure (sleep, a driver reset) is reported as proven: main keeps it off
+// only for the session instead of remembering it in WHISPER_GPU_FAILED. #2265
+test("reports a crash as proven once the backend has transcribed", async (t) => {
+  let manager;
+  let requestCount = 0;
+
+  const { server, port } = await startServer((req, res) => {
+    requestCount += 1;
+    if (requestCount === 2) {
+      manager.process = null;
+      req.socket.destroy();
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ text: "hello" }));
+  });
+  t.after(() => server.close());
+
+  manager = createManager(port, { useCuda: true });
+  manager.gpuProofKey = "gpu:cuda||/tmp/model.bin";
+  manager.start = async () => {
+    manager.useCuda = false;
+    manager.ready = true;
+  };
+
+  const payloads = [];
+  manager.on("cuda-fallback", (payload) => payloads.push(payload));
+
+  await manager.transcribe(Buffer.from("audio"));
+  assert.deepEqual([...manager.transcribedGpuKeys], ["gpu:cuda||/tmp/model.bin"]);
+
+  const result = await manager.transcribe(Buffer.from("audio"));
+
+  assert.equal(result.text, "hello");
+  assert.deepEqual(payloads, [{ proven: true }]);
+});
+
+test("reports a crash as not proven when the setup started but never transcribed", async (t) => {
+  let manager;
+  let requestCount = 0;
+
+  const { server, port } = await startServer((req, res) => {
+    requestCount += 1;
+    if (requestCount === 1) {
+      manager.process = null;
+      req.socket.destroy();
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ text: "hello" }));
+  });
+  t.after(() => server.close());
+
+  manager = createManager(port, { useCuda: false, useVulkan: true });
+  manager.gpuProofKey = "gpu:vulkan:default||/tmp/model.bin";
+  // A build below the card's kernel floor starts fine and crashes at its first
+  // inference (#1578): starting must not count as proof for that crash.
+  manager.startedGpuKeys.add(manager.gpuProofKey);
+  manager.start = async () => {
+    manager.useVulkan = false;
+    manager.ready = true;
+  };
+
+  const payloads = [];
+  manager.on("gpu-fallback", (payload) => payloads.push(payload));
+
+  await manager.transcribe(Buffer.from("audio"));
+
+  assert.deepEqual(payloads, [{ proven: false }]);
+  // The CPU retry that answered is not a GPU success.
+  assert.deepEqual([...manager.transcribedGpuKeys], []);
+});

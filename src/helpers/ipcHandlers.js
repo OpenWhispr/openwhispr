@@ -685,16 +685,7 @@ class IPCHandlers {
     tokenStore.subscribe((state) => this._handleAuthTokenChange(state));
 
     if (this.whisperManager?.serverManager) {
-      // Remember the failed backend so it isn't re-attempted (and its model
-      // reload re-paid) on every launch; cleared by retry, re-download, delete.
-      this.whisperManager.serverManager.on("cuda-fallback", () => {
-        this._recordWhisperGpuFailure("cuda");
-        broadcastToWindows("cuda-fallback-notification", {});
-      });
-      this.whisperManager.serverManager.on("gpu-fallback", () => {
-        this._recordWhisperGpuFailure("vulkan");
-        broadcastToWindows("gpu-fallback-notification", {});
-      });
+      this._setupWhisperGpuFallbackListeners();
       // Persist the discrete-GPU pin so later launches spawn pinned directly
       // instead of paying a second Vulkan cold start. See #1606.
       this.whisperManager.serverManager.on("vulkan-device-pinned", ({ index }) => {
@@ -1256,6 +1247,26 @@ class IPCHandlers {
     return resolveFailedGpuBackends(process.env.WHISPER_GPU_FAILED);
   }
 
+  // Remember the failed backend so it isn't re-attempted (and its model reload
+  // re-paid) on every launch; cleared by retry, re-download, delete. WhisperManager
+  // keeps a proven backend's failure for the session only, and a wake re-warm
+  // retries it on its own, so that failure isn't announced either. See #2265.
+  _setupWhisperGpuFallbackListeners() {
+    const { serverManager } = this.whisperManager;
+    serverManager.on("cuda-fallback", ({ proven } = {}) => {
+      if (!proven) this._recordWhisperGpuFailure("cuda");
+      if (!proven || !this.whisperManager.isRewarmingAfterWake()) {
+        broadcastToWindows("cuda-fallback-notification", {});
+      }
+    });
+    serverManager.on("gpu-fallback", ({ proven } = {}) => {
+      if (!proven) this._recordWhisperGpuFailure("vulkan");
+      if (!proven || !this.whisperManager.isRewarmingAfterWake()) {
+        broadcastToWindows("gpu-fallback-notification", {});
+      }
+    });
+  }
+
   _recordWhisperGpuFailure(backend) {
     const failed = this._whisperGpuFailedBackends();
     if (!failed.includes(backend)) failed.push(backend);
@@ -1263,6 +1274,8 @@ class IPCHandlers {
   }
 
   _clearWhisperGpuFailure(backend) {
+    this.whisperManager.forgetSessionGpuFailures(backend);
+    this.whisperManager.serverManager.forgetGpuProofs(backend);
     const failed = this._whisperGpuFailedBackends().filter((b) => b !== backend);
     if (failed.length > 0) {
       this._syncStartupEnv({ WHISPER_GPU_FAILED: failed.join(",") });
@@ -3439,7 +3452,7 @@ class IPCHandlers {
         downloading: this.whisperCudaManager.isDownloading(),
         path: this.whisperCudaManager.getCudaBinaryPath(),
         gpuInfo,
-        gpuFailed: this._whisperGpuFailedBackends().includes("cuda"),
+        gpuFailed: this.whisperManager.getFailedGpuBackends().includes("cuda"),
       };
     });
 
@@ -3501,7 +3514,7 @@ class IPCHandlers {
         downloading: this.whisperVulkanManager?.isDownloading() ?? false,
         vulkan,
         hasNvidiaGpu: gpuInfo.hasNvidiaGpu,
-        gpuFailed: this._whisperGpuFailedBackends().includes("vulkan"),
+        gpuFailed: this.whisperManager.getFailedGpuBackends().includes("vulkan"),
       };
     });
 
@@ -3565,6 +3578,7 @@ class IPCHandlers {
     // Clears the remembered GPU failure and reloads the server with the GPU
     // backend re-enabled (Retry on the "GPU could not be activated" state)
     ipcMain.handle("whisper-gpu-retry", async () => {
+      this.whisperManager.forgetSessionGpuFailures();
       this._syncStartupEnv({}, ["WHISPER_GPU_FAILED"]);
       return {
         success: true,
