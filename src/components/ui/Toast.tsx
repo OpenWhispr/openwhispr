@@ -404,9 +404,7 @@ const Toast: React.FC<
   const detail = title && description ? description : undefined;
   // Structured actions come with a classified error: its description is a
   // sentence to read, and Copy details replaces the raw-error copy box.
-  const rowActions = actions?.length
-    ? [...actions.filter((a) => !a.iconOnly), ...actions.filter((a) => a.iconOnly)]
-    : undefined;
+  const rowActions = actions?.length ? actions : undefined;
 
   if (presentation === "dictation-error") {
     return (

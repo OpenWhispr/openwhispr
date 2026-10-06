@@ -141,7 +141,6 @@ async function recordClassifiedCleanupFailure(t, { dictationWindow }) {
   await React.act(async () =>
     recordCleanupFailure({
       message: "OpenAI rejected your API key.",
-      code: "PROVIDER_AUTH_FAILED",
       surface: "llm",
       messageKey: "providerErrors.authFailed",
       messageParams: { provider: "OpenAI" },

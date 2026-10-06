@@ -35,21 +35,6 @@ export function describeProviderError(error: unknown, t: TFunction): ProviderErr
   };
 }
 
-/** Surface title for a classified provider failure; undefined keeps the caller's own. */
-export function providerErrorTitle(
-  error: { code?: string; surface?: string } | null | undefined,
-  t: TFunction
-): string | undefined {
-  const code = error?.code;
-  // The rate-limit pill keeps its dedicated "Provider Rate Limited" title.
-  if (!code?.startsWith("PROVIDER_") || code === "PROVIDER_RATE_LIMITED") return undefined;
-  return String(
-    t(
-      error?.surface === "llm" ? "providerErrors.titles.llm" : "providerErrors.titles.transcription"
-    )
-  );
-}
-
 export function formatProviderErrorDetails(
   details: TechnicalErrorDetailsData,
   t: TFunction

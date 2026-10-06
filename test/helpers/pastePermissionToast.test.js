@@ -238,6 +238,7 @@ test("a standard toast with structured actions shows its description as text and
       variant: "destructive",
       duration: 0,
       actions: [
+        { label: "Open Settings", onClick: () => clicks.push("settings") },
         {
           label: "Copy details",
           icon: "copy",
@@ -249,7 +250,6 @@ test("a standard toast with structured actions shows its description as text and
             return true;
           },
         },
-        { label: "Open Settings", onClick: () => clicks.push("settings") },
       ],
     })
   );

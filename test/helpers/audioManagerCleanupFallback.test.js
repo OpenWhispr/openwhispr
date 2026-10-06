@@ -312,7 +312,6 @@ test("a classified provider cleanup failure keeps the fields its toast needs", a
   assert.deepEqual(manager._takePendingResultExtras(), {
     cleanupFailure: {
       message: failure.message,
-      code: failure.code,
       messageKey: failure.messageKey,
       messageParams: failure.messageParams,
       surface: failure.surface,

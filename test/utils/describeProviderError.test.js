@@ -79,14 +79,6 @@ test("formatProviderErrorDetails keeps AWS labels for Bedrock details", async ()
   );
 });
 
-test("providerErrorTitle picks the surface title for provider codes only", async () => {
-  const { providerErrorTitle } = await load();
-  assert.equal(providerErrorTitle({ code: "PROVIDER_AUTH_FAILED", surface: "transcription" }, t), "providerErrors.titles.transcription");
-  assert.equal(providerErrorTitle({ code: "PROVIDER_UNAVAILABLE", surface: "llm" }, t), "providerErrors.titles.llm");
-  assert.equal(providerErrorTitle({ code: "PROVIDER_RATE_LIMITED", surface: "transcription" }, t), undefined);
-  assert.equal(providerErrorTitle({ code: "OFFLINE" }, t), undefined);
-});
-
 function withClipboard(ctx, writeClipboard) {
   const original = globalThis.window;
   globalThis.window = { electronAPI: { writeClipboard } };

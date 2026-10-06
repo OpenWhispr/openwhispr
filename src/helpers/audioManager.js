@@ -158,7 +158,6 @@ const MIN_UNIQUE_WORD_GAIN = 2;
 
 const cleanupFailureFromError = (error) => ({
   message: error?.message || String(error),
-  ...(error?.code ? { code: error.code } : {}),
   ...(error?.messageKey ? { messageKey: error.messageKey } : {}),
   ...(error?.messageParams ? { messageParams: error.messageParams } : {}),
   ...(error?.surface ? { surface: error.surface } : {}),

@@ -119,19 +119,9 @@ export const geminiProvider: InferenceProvider = {
 
         if (!res.ok) {
           const errorText = await res.text();
-          let errorData: { error?: { message?: string } | string; message?: string } = {
-            error: res.statusText,
-          };
-          try {
-            errorData = JSON.parse(errorText);
-          } catch {
-            errorData = { error: errorText || res.statusText };
-          }
-
           logger.logReasoning("GEMINI_API_ERROR_DETAIL", {
             status: res.status,
             statusText: res.statusText,
-            error: redactProviderBody(errorData),
             fullResponse: redactProviderBody(errorText),
           });
 

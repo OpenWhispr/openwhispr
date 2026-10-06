@@ -1,5 +1,5 @@
 import { TFunction } from "i18next";
-import { describeProviderError, providerErrorTitle } from "./describeProviderError";
+import { describeProviderError } from "./describeProviderError";
 
 type RecordingError = {
   code?: string;
@@ -35,8 +35,11 @@ export function getRecordingErrorTitle(error: RecordingError, t: TFunction): str
     return t("hooks.audioRecording.errorTitles.dailyLimitReached");
   if (error.code === "PROVIDER_RATE_LIMITED")
     return t("hooks.audioRecording.errorTitles.providerRateLimited");
-  const providerTitle = providerErrorTitle(error, t);
-  if (providerTitle) return providerTitle;
+  if (error.code?.startsWith("PROVIDER_")) {
+    return t(
+      error.surface === "llm" ? "providerErrors.titles.llm" : "providerErrors.titles.transcription"
+    );
+  }
   return error.title;
 }
 

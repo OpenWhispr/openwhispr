@@ -1,5 +1,6 @@
 import { RETRY_CONFIG } from "../config/constants.ts";
 import { LLM_REQUEST_TIMEOUT_CODE } from "../helpers/llmRequestTimeout.js";
+import { PROVIDER_ERROR_CODES } from "../helpers/providerHttpErrors.js";
 
 export interface RetryOptions {
   maxRetries?: number;
@@ -54,7 +55,7 @@ export function createApiRetryStrategy() {
       if (error?.code === LLM_REQUEST_TIMEOUT_CODE) return false;
 
       // An empty account stays empty: retrying only delays the message.
-      if (error?.code === "PROVIDER_QUOTA_EXHAUSTED") return false;
+      if (error?.code === PROVIDER_ERROR_CODES.QUOTA_EXHAUSTED) return false;
 
       // No HTTP status means the request never got an answer (network drop).
       const status = error?.status ?? error?.response?.status;

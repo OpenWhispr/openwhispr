@@ -10,9 +10,8 @@ const noop = () => {};
 
 const { installInteractiveDom, findElement } = require("../lib/interactiveDom");
 
-// Shared setup for both the markup-only render (renderAssistantPanel) and the
-// interactive mount (mountAssistantPanel): loads the real AssistantPanel with its
-// heavier dependencies mocked, and real i18n so translated text (not keys) renders.
+// Loads the real AssistantPanel with its heavier dependencies mocked, and real
+// i18n so translated text (not keys) renders.
 async function setupAssistantPanel(
   t,
   messages,
@@ -150,18 +149,6 @@ async function setupAssistantPanel(
 async function renderAssistantPanel(t, messages, options) {
   const { AssistantPanel, props } = await setupAssistantPanel(t, messages, options);
   return renderToStaticMarkup(React.createElement(AssistantPanel, props));
-}
-
-// For tests that need to inspect the live DOM tree (e.g. ref'd elements), rather
-// than just the markup string. The caller registers its own `t.after` unmount
-// (before installing the DOM globals, matching this file's other createRoot
-// tests) so cleanup runs while the fake document still exists.
-async function mountAssistantPanel(t, container, messages, options) {
-  const { AssistantPanel, props } = await setupAssistantPanel(t, messages, options);
-  const { createRoot } = require("react-dom/client");
-  const root = createRoot(container);
-  await React.act(async () => root.render(React.createElement(AssistantPanel, props)));
-  return root;
 }
 
 test("an empty idle Assistant shows typed input and generic suggestions", async (t) => {
@@ -579,7 +566,7 @@ test("Cmd+C copies a selection in a classified error's answer, but not one runni
   const container = installInteractiveDom(t);
   t.mock.method(globalThis.document, "addEventListener");
 
-  root = await mountAssistantPanel(t, container, [
+  const { AssistantPanel, props } = await setupAssistantPanel(t, [
     {
       id: "assistant-1",
       role: "assistant",
@@ -588,6 +575,9 @@ test("Cmd+C copies a selection in a classified error's answer, but not one runni
       error: { settingsTarget: "llms", technicalDetails: { provider: "OpenAI", status: 401 } },
     },
   ]);
+  const { createRoot } = require("react-dom/client");
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(AssistantPanel, props)));
 
   const answer = findElement(
     container,

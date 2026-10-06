@@ -4,7 +4,7 @@ import { Check, Copy, Plus, X } from "../icons";
 import { BrandMarkIcon } from "./BrandMarkIcon";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
 import { TechnicalErrorDetails } from "../ui/TechnicalErrorDetails";
-import { describeProviderError, openProviderSettings } from "../../utils/describeProviderError";
+import { openProviderSettings } from "../../utils/describeProviderError";
 import { Button } from "../ui/button";
 import { useChatPersistence } from "../chat/useChatPersistence";
 import { useChatStreaming } from "../chat/useChatStreaming";
@@ -224,26 +224,20 @@ export function AssistantPanel({
         consumedCommandIdRef.current = null;
       })
       .catch((error: unknown) => {
-        const failure = describeProviderError(
-          error instanceof Error || typeof error === "string" ? error : String(error ?? ""),
-          t
-        );
+        const errorMessage =
+          error instanceof Error && error.message
+            ? error.message
+            : error == null
+              ? t("common.unknownError")
+              : String(error);
         onCommandDiscarded(commandId);
         setMessages((prev) => [
           ...prev,
           {
             id: crypto.randomUUID(),
             role: "assistant",
-            content: `${t("agentMode.chat.errorPrefix")}: ${failure.description || t("common.unknownError")}`,
+            content: `${t("agentMode.chat.errorPrefix")}: ${errorMessage}`,
             isStreaming: false,
-            ...(failure.technicalDetails || failure.settingsTarget
-              ? {
-                  error: {
-                    technicalDetails: failure.technicalDetails,
-                    settingsTarget: failure.settingsTarget,
-                  },
-                }
-              : {}),
           },
         ]);
       })

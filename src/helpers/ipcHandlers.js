@@ -5480,11 +5480,7 @@ class IPCHandlers {
           return { success: true, text: outputText };
         } catch (error) {
           debugLogger.error("Anthropic reasoning error:", error);
-          // Already-classified errors (the API_KEY_MISSING throw above, the
-          // truncated/empty-reply messageKey throws below) pass through
-          // unchanged; a network failure (proxyFetch rejecting before any
-          // response, e.g. DNS/TLS) gets classified here. The !response.ok
-          // branch returns directly and never reaches this catch.
+          // A network failure rejects proxyFetch before any response.
           return {
             success: false,
             ...ipcErrorFields(

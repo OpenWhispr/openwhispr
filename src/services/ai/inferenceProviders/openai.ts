@@ -2,7 +2,7 @@ import type { InferenceProvider } from "./types";
 import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl } from "../../../config/constants";
 import { getCloudModel, getOpenAiApiConfig } from "../../../models/ModelRegistry";
 import { getSettings } from "../../../stores/settingsStore";
-import { withRetry, createApiRetryStrategy, httpError } from "../../../utils/retry";
+import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
 import logger from "../../../utils/logger";
 import { canBorrowCleanupCustomKey, resolveConfiguredOpenAIBase } from "../openaiBase";
 import {
@@ -236,22 +236,6 @@ export const openaiProvider: InferenceProvider = {
     }
 
     const retryStrategy = createApiRetryStrategy();
-    // A caught error is one of: already classified (thrown straight from the
-    // !res.ok branch above — leave it alone, rebuilding from its own English
-    // message would drop its requestId and could reclassify it, e.g. a 429
-    // insufficient_quota turning into a generic rate limit); a raw httpError
-    // from the responses->chat 404/405 fallback (has .status, never
-    // classified); or an unclassified network failure (no status at all).
-    const classifyFinalError = (err: Error): Error =>
-      (err as { messageKey?: string }).messageKey
-        ? err
-        : (err as Error & { status?: number }).status
-          ? providerHttpError({
-              ...errorContext,
-              status: (err as Error & { status: number }).status,
-              body: err.message,
-            })
-          : asProviderError(err, errorContext);
     const response = await withRetry(async () => {
       let lastError: Error | null = null;
       let lastRetryableError: Error | null = null;
@@ -328,7 +312,12 @@ export const openaiProvider: InferenceProvider = {
               (res.status === 404 || res.status === 405) && type === "responses";
 
             if (isUnsupportedEndpoint) {
-              lastError = httpError(errorMessage, res.status);
+              lastError = providerHttpError({
+                ...errorContext,
+                status: res.status,
+                body: errorData,
+                headers: res.headers,
+              });
               rememberPreference(openAiBase, "chat");
               logger.logReasoning("OPENAI_ENDPOINT_FALLBACK", {
                 attemptedEndpoint: endpoint,
@@ -372,7 +361,7 @@ export const openaiProvider: InferenceProvider = {
     }, retryStrategy).catch((error) => {
       // Classified only once it has left withRetry, so the deadline is still
       // attempted exactly once.
-      throw classifyFinalError(error as Error);
+      throw asProviderError(error, errorContext);
     });
 
     const isResponsesApi = Array.isArray(response?.output);

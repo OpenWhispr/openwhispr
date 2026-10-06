@@ -3,7 +3,6 @@ import type { TechnicalErrorDetailsData } from "../components/ui/useToast";
 
 export interface CleanupFailure {
   message: string;
-  code?: string;
   messageKey?: string;
   messageParams?: Record<string, string | number>;
   surface?: "transcription" | "llm";
