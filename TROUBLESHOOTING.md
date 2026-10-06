@@ -131,11 +131,13 @@ On GNOME and KDE, the first automatic paste can show a remote-interaction permis
 
 **Symptoms:** The dictation pill or other transparent windows flicker
 
-**Fix:** Turn off GPU compositing. Add this line to `~/.config/open-whispr-flags.conf` (`$XDG_CONFIG_HOME/open-whispr-flags.conf` if you set `XDG_CONFIG_HOME`; create the file if it doesn't exist), then quit OpenWhispr from the tray and start it again:
+**Fix:** Turn off GPU compositing (OpenWhispr already does this on NVIDIA's proprietary driver). With the official AppImage, deb, rpm or tar.gz build, add this line to `~/.config/open-whispr-flags.conf` (`$XDG_CONFIG_HOME/open-whispr-flags.conf` if you set `XDG_CONFIG_HOME`; create the file if it doesn't exist):
 
 ```text
 --disable-gpu-compositing
 ```
+
+Then quit OpenWhispr and start it again. Closing the window only hides it, so quit from the tray icon, or, if your desktop shows no tray icon (GNOME without the AppIndicator extension), run `pkill -x open-whispr-app`.
 
 The interface then composites on the CPU, so hover effects and scrolling can feel slower. Delete the line to undo it.
 
