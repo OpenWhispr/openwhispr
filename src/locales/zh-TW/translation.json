@@ -971,7 +971,10 @@
         "modifiersHeldClipboardFailed": "OpenWhispr 已產生編輯結果，但修飾鍵（如 Ctrl 或 Shift）仍處於按住狀態，因此未套用，也無法複製到剪貼簿。",
         "unavailable": "OpenWhispr 無法安全讀取選取的文字。請檢查輔助使用或輸入自動化權限。",
         "tooLarge": "選取內容過長。請選取不超過 6,000 個字元。",
-        "reasoningFailed": "AI 無法完成選取文字編輯。原始文字未被變更。"
+        "reasoningFailed": "AI 無法完成選取文字編輯。原始文字未被變更。",
+        "invalidResponse": "AI 傳回的編輯回應格式無效。未取代任何內容。請選取文字後重試。",
+        "emptyResponse": "AI 傳回了空白的編輯結果。未取代任何內容。請嘗試更具體的指示。",
+        "truncatedResponse": "AI 在完成編輯之前停止了。未取代任何內容。請嘗試選取較少的文字。"
       },
       "pastePermission": {
         "title": "允許自動貼上",

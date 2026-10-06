@@ -950,7 +950,10 @@
         "modifiersHeldClipboardFailed": "O OpenWhispr gerou a edição, mas uma tecla modificadora (como Ctrl ou Shift) ainda estava pressionada, por isso ela não foi aplicada e também não foi possível copiá-la para a área de transferência.",
         "unavailable": "O OpenWhispr não conseguiu ler o texto selecionado com segurança. Verifique as permissões de acessibilidade ou automação.",
         "tooLarge": "A seleção é muito grande. Selecione no máximo 6.000 caracteres.",
-        "reasoningFailed": "A IA não conseguiu concluir a edição. O texto original não foi alterado."
+        "reasoningFailed": "A IA não conseguiu concluir a edição. O texto original não foi alterado.",
+        "invalidResponse": "A IA retornou uma resposta de edição inválida. Nada foi substituído. Selecione o texto e tente novamente.",
+        "emptyResponse": "A IA retornou uma edição vazia. Nada foi substituído. Tente uma instrução mais específica.",
+        "truncatedResponse": "A IA parou antes de concluir a edição. Nada foi substituído. Tente selecionar menos texto."
       },
       "pastePermission": {
         "title": "Permitir colagem automática",

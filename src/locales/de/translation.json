@@ -971,7 +971,10 @@
         "modifiersHeldClipboardFailed": "OpenWhispr hat die Bearbeitung erstellt, aber eine Sondertaste (z. B. Strg oder Umschalt) war noch gedrückt, daher wurde sie nicht angewendet und konnte auch nicht in die Zwischenablage kopiert werden.",
         "unavailable": "OpenWhispr konnte den ausgewählten Text nicht sicher lesen. Prüfe die Bedienungshilfen oder Eingabeautomatisierung.",
         "tooLarge": "Die Auswahl ist zu groß. Wähle höchstens 6.000 Zeichen aus.",
-        "reasoningFailed": "Die KI konnte die Auswahlbearbeitung nicht abschließen. Dein ursprünglicher Text wurde nicht geändert."
+        "reasoningFailed": "Die KI konnte die Auswahlbearbeitung nicht abschließen. Dein ursprünglicher Text wurde nicht geändert.",
+        "invalidResponse": "Die KI hat eine ungültige Bearbeitungsantwort zurückgegeben. Es wurde nichts ersetzt. Wähle den Text aus und versuche es erneut.",
+        "emptyResponse": "Die KI hat eine leere Bearbeitung zurückgegeben. Es wurde nichts ersetzt. Versuche eine genauere Anweisung.",
+        "truncatedResponse": "Die KI hat die Bearbeitung vorzeitig beendet. Es wurde nichts ersetzt. Versuche, weniger Text auszuwählen."
       },
       "pastePermission": {
         "title": "Automatisches Einfügen erlauben",

@@ -971,7 +971,10 @@
         "modifiersHeldClipboardFailed": "OpenWhispr ha generato la modifica, ma un tasto modificatore (come Ctrl o Maiusc) era ancora premuto, quindi non è stata applicata e non è stato possibile copiarla negli appunti.",
         "unavailable": "OpenWhispr non ha potuto leggere in sicurezza il testo selezionato. Controlla i permessi di accessibilità o automazione.",
         "tooLarge": "La selezione è troppo grande. Seleziona al massimo 6.000 caratteri.",
-        "reasoningFailed": "L’IA non ha potuto completare la modifica. Il testo originale non è stato cambiato."
+        "reasoningFailed": "L’IA non ha potuto completare la modifica. Il testo originale non è stato cambiato.",
+        "invalidResponse": "L’IA ha restituito una risposta di modifica non valida. Non è stato sostituito nulla. Seleziona il testo e riprova.",
+        "emptyResponse": "L’IA ha restituito una modifica vuota. Non è stato sostituito nulla. Prova con un’istruzione più specifica.",
+        "truncatedResponse": "L’IA si è fermata prima di completare la modifica. Non è stato sostituito nulla. Prova a selezionare meno testo."
       },
       "pastePermission": {
         "title": "Consenti di incollare automaticamente",

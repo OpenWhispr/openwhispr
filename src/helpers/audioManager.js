@@ -132,6 +132,10 @@ import { shouldDisplayDictationPreview } from "../utils/transcriptionPreview";
 import {
   buildSelectionEditSystemPrompt,
   buildSelectionEditUserPrompt,
+  buildLocalSelectionEditSystemPrompt,
+  buildLocalSelectionEditUserPrompt,
+  extractLocalSelectionEditReplacement,
+  SELECTION_EDIT_RESPONSE_FORMAT,
   extractSelectionEditReplacement,
   getSelectionCaptureDisposition,
 } from "./selectionEditing";
@@ -783,6 +787,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   finalizeChineseScript(text, settings = getSettings()) {
+    // A selection edit has already applied its explicit language instruction.
+    // A dictation-wide script preference must not rewrite that document again.
+    if (this.pendingSelectionEdit) return text;
     return applyChineseScript(
       text,
       resolveChineseScriptTarget(
@@ -2845,11 +2852,39 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       requireCompleteOutput: true,
     };
     const completionMarker = `__OPENWHISPR_SELECTION_COMPLETE_${crypto.randomUUID()}__`;
-    selectionConfig.systemPrompt = buildSelectionEditSystemPrompt(
-      config?.systemPrompt,
-      completionMarker
-    );
-    if (selectionConfig.textOnlySystemPrompt) {
+    const isLocalSelection = config?.provider === "local";
+    let userPrompt;
+    if (isLocalSelection) {
+      const settings = getSettings();
+      selectionConfig.systemPrompt = buildLocalSelectionEditSystemPrompt({
+        customPrompt: (settings.customPrompts?.dictationAgent || "").replace(
+          /\{\{agentName\}\}/g,
+          agentName || "Assistant"
+        ),
+        dictionary: getDictionaryHintWords(settings),
+      });
+      selectionConfig.responseFormat = SELECTION_EDIT_RESPONSE_FORMAT;
+      selectionConfig.disableThinking = true;
+      if (selectionConfig.textOnlySystemPrompt) {
+        selectionConfig.textOnlySystemPrompt = selectionConfig.systemPrompt;
+      }
+      const instruction = this.voiceAgentRequested
+        ? text
+        : stripAgentAddress(
+            text,
+            agentName,
+            wakeWordLanguage ?? resolveWakeWordLanguage(settings),
+            config?.snippets ?? settings.snippets
+          );
+      userPrompt = buildLocalSelectionEditUserPrompt(instruction, capture.text);
+    } else {
+      selectionConfig.systemPrompt = buildSelectionEditSystemPrompt(
+        config?.systemPrompt,
+        completionMarker
+      );
+      userPrompt = buildSelectionEditUserPrompt(text, capture.text);
+    }
+    if (!isLocalSelection && selectionConfig.textOnlySystemPrompt) {
       // The text-only retry prompt must carry the same selection-edit
       // instructions and marker, or a rejected screenshot loses the command.
       selectionConfig.textOnlySystemPrompt = buildSelectionEditSystemPrompt(
@@ -2857,7 +2892,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         completionMarker
       );
     }
-    const userPrompt = buildSelectionEditUserPrompt(text, capture.text);
 
     try {
       const result = await this.processWithReasoningModel(
@@ -2867,13 +2901,26 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         selectionConfig
       );
       if (wasCancelled()) return text;
-      const replacement = extractSelectionEditReplacement(result, completionMarker);
+      const replacement = isLocalSelection
+        ? extractLocalSelectionEditReplacement(result)
+        : extractSelectionEditReplacement(result, completionMarker);
       this.pendingSelectionEdit = { sessionId: capture.sessionId };
       return replacement;
     } catch (cause) {
-      const error = new Error(`Selection edit failed: ${cause.message}`);
-      error.code = "SELECTION_EDIT_REASONING_FAILED";
-      error.messageKey = "hooks.audioRecording.selectionEditing.reasoningFailed";
+      const error = Object.assign(new Error(`Selection edit failed: ${cause.message}`), cause);
+      const failures = {
+        SELECTION_EDIT_INVALID_RESPONSE: "invalidResponse",
+        SELECTION_EDIT_EMPTY_RESPONSE: "emptyResponse",
+        OUTPUT_COMPLETION_UNVERIFIED: "invalidResponse",
+        OUTPUT_TRUNCATED: "truncatedResponse",
+      };
+      const failure = failures[cause.code];
+      error.code = failure
+        ? `SELECTION_EDIT_${cause.code.replace(/^SELECTION_EDIT_/, "")}`
+        : cause.code || "SELECTION_EDIT_REASONING_FAILED";
+      error.messageKey = failure
+        ? `hooks.audioRecording.selectionEditing.${failure}`
+        : cause.messageKey || "hooks.audioRecording.selectionEditing.reasoningFailed";
       error.selectionEditFatal = true;
       error.cause = cause;
       throw error;

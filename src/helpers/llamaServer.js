@@ -750,6 +750,7 @@ class LlamaServerManager {
       max_tokens: options.max_tokens ?? 512,
       stream: false,
     };
+    if (options.responseFormat) requestBody.response_format = options.responseFormat;
 
     // Without this, Qwen chat templates think into `reasoning_content` first
     // and can spend the whole budget there. Non-Qwen templates ignore it.
@@ -800,7 +801,12 @@ class LlamaServerManager {
               // A cut-off reply with no content spent its whole budget reasoning
               // (#2187): there is no answer to return, whichever field the
               // reasoning sits in. Lenient callers still accept a partial answer.
-              if (truncated && (options.requireCompleteOutput || !message?.content?.trim())) {
+              if (
+                truncated &&
+                (options.requireCompleteOutput ||
+                  options.responseFormat ||
+                  !message?.content?.trim())
+              ) {
                 // The renderer maps the code to the cleanup toast's wording (#2091).
                 const error = new Error("Model output was truncated");
                 error.code = "OUTPUT_TRUNCATED";
@@ -811,6 +817,26 @@ class LlamaServerManager {
                 debugLogger.warn("llama-server reply was cut off at max_tokens", {
                   maxTokens: requestBody.max_tokens,
                 });
+              }
+              if (options.responseFormat) {
+                if (choice?.finish_reason !== "stop") {
+                  reject(
+                    Object.assign(new Error("Model completion could not be verified"), {
+                      code: "OUTPUT_COMPLETION_UNVERIFIED",
+                    })
+                  );
+                  return;
+                }
+                if (typeof message?.content !== "string" || !message.content.trim()) {
+                  reject(
+                    Object.assign(new Error("Model returned no selection edit answer"), {
+                      code: "SELECTION_EDIT_EMPTY_RESPONSE",
+                    })
+                  );
+                  return;
+                }
+                resolve(message.content);
+                return;
               }
               // Some builds still route a suppressed-thinking answer into
               // `reasoning_content` (#809). With thinking on, that field is the

@@ -127,6 +127,43 @@ test("the text-only retry swaps in the pre-built prompt verbatim", async (t) => 
   assert.deepEqual(prompts, ["BASE PROMPT WITH SUFFIX", "BASE PROMPT"]);
 });
 
+test("a local text-only retry retains the structured edit contract", async (t) => {
+  const { window, setProcessText, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-local-sc-retry-",
+    settingsKey: "__localScRetrySettings",
+    reasoningKey: "__localScRetryProcessText",
+  });
+  window.electronAPI.captureSelectedText = async () => ({
+    status: "selected",
+    text: "original",
+    sessionId: "local-s1",
+  });
+  const calls = [];
+  setProcessText(async (text, model, agentName, config) => {
+    calls.push({ text, config });
+    if (config.screenContext) throw new Error("image rejected");
+    return JSON.stringify({ replacement: '  "replacement"\n' });
+  });
+  const manager = createManager({ voiceAgentRequested: true, onError() {} });
+  assert.equal(
+    await manager.processAgentCommand("edit", "local-model", "Agent", {
+      provider: "local",
+      selectionEditReachable: true,
+      screenContext: { mediaType: "image/jpeg", data: "x" },
+      systemPrompt: "dictation with image",
+      textOnlySystemPrompt: "dictation without image",
+    }),
+    '  "replacement"\n'
+  );
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].text, calls[0].text);
+  assert.equal(calls[1].config.systemPrompt, calls[0].config.systemPrompt);
+  assert.deepEqual(calls[1].config.responseFormat, calls[0].config.responseFormat);
+  assert.equal(calls[1].config.requireCompleteOutput, true);
+  assert.equal(calls[1].config.screenContext, undefined);
+  assert.equal(manager.pendingSelectionEdit.sessionId, "local-s1");
+});
+
 test("a non-voice-agent recording clears a stale screen capture", async (t) => {
   const { createManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-sc-stale-test-",

@@ -1,4 +1,5 @@
 import type { ModelDefinition } from "../models/ModelRegistry";
+import type { ReasoningConfig } from "../services/BaseReasoningService";
 import type { PermissionGuideState, PermissionGuideAction } from "./permissionGuide";
 import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 import type { UsageResponse } from "../lib/usageStore";
@@ -1966,7 +1967,7 @@ declare global {
         text: string,
         modelId: string,
         agentName: string | null,
-        config: any
+        config: ReasoningConfig
       ) => Promise<{
         success: boolean;
         text?: string;
