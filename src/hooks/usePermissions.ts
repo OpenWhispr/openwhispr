@@ -27,6 +27,10 @@ export interface UsePermissionsProps {
   showAlertDialog: (dialog: { title: string; description?: string }) => void;
 }
 
+interface UsePermissionsOptions {
+  macAccessibilityChecksEnabled?: boolean;
+}
+
 const stopTracks = (stream?: MediaStream) => {
   try {
     stream?.getTracks?.().forEach((track) => track.stop());
@@ -103,7 +107,8 @@ const describeMicError = (error: unknown, t: TFunction): string => {
 };
 
 export const usePermissions = (
-  showAlertDialog?: UsePermissionsProps["showAlertDialog"]
+  showAlertDialog?: UsePermissionsProps["showAlertDialog"],
+  { macAccessibilityChecksEnabled = true }: UsePermissionsOptions = {}
 ): UsePermissionsReturn => {
   const { t } = useTranslation();
   const [micPermissionGranted, setMicPermissionGranted] = useLocalStorage(
@@ -275,18 +280,18 @@ export const usePermissions = (
     });
   }, [setMicPermissionGranted]);
 
-  // On macOS, re-validate accessibility permission on mount to override stale
-  // localStorage values (e.g. after app update changes the code signature).
+  // On macOS, re-validate accessibility permission once this screen is allowed
+  // to touch protected features, overriding stale localStorage values.
   useEffect(() => {
-    if (getPlatform() !== "darwin") return;
+    if (getPlatform() !== "darwin" || !macAccessibilityChecksEnabled) return;
     window.electronAPI?.checkAccessibilityPermission?.(true).then((granted) => {
       setAccessibilityPermissionGranted(granted);
     });
-  }, [setAccessibilityPermissionGranted]);
+  }, [macAccessibilityChecksEnabled, setAccessibilityPermissionGranted]);
 
   // Poll for accessibility permission changes on macOS (e.g. user grants in System Settings)
   useEffect(() => {
-    if (getPlatform() !== "darwin") return;
+    if (getPlatform() !== "darwin" || !macAccessibilityChecksEnabled) return;
     if (accessibilityPermissionGranted) {
       setAccessibilityTroubleshooting(false);
       accessibilityPollCount.current = 0;
@@ -310,7 +315,11 @@ export const usePermissions = (
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [accessibilityPermissionGranted, setAccessibilityPermissionGranted]);
+  }, [
+    accessibilityPermissionGranted,
+    macAccessibilityChecksEnabled,
+    setAccessibilityPermissionGranted,
+  ]);
 
   return {
     micPermissionGranted,

@@ -12,25 +12,42 @@ export function parseEventDate(value: string): Date | null {
 }
 
 export function normalizeDbDate(dateStr: string): Date {
-  const hasExplicitZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(dateStr);
-  const source = hasExplicitZone ? dateStr : `${dateStr}Z`;
+  if (typeof dateStr !== "string" || !dateStr.trim()) return new Date(NaN);
+  const trimmed = dateStr.trim();
+  const hasExplicitZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(trimmed);
+  const source = hasExplicitZone ? trimmed : `${trimmed}Z`;
   return new Date(source);
 }
 
-export function formatShortDate(dateStr: string): string {
+export function formatShortDate(dateStr: string, locale?: string): string {
+  if (!dateStr) return "";
   const date = normalizeDbDate(dateStr);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return date.toLocaleDateString(locale, { month: "short", day: "numeric" });
+}
+
+export function formatNoteDate(dateStr: string, locale?: string): string {
+  const date = normalizeDbDate(dateStr);
+  if (Number.isNaN(date.getTime())) return "";
+  const datePart = date.toLocaleDateString(locale, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  const timePart = date.toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
+  return `${datePart} \u00b7 ${timePart}`;
 }
 
 export function formatRelativeTime(
   dateStr: string,
-  t: (key: string, options?: Record<string, unknown>) => string
+  t: (key: string, options?: Record<string, unknown>) => string,
+  locale?: string
 ): string {
+  if (!dateStr) return "";
   const date = normalizeDbDate(dateStr);
   if (Number.isNaN(date.getTime())) return "";
   const diff = Date.now() - date.getTime();
-  if (diff < 0) return formatShortDate(dateStr);
+  if (diff < 0) return formatShortDate(dateStr, locale);
   const minutes = Math.floor(diff / 60000);
   const hours = Math.floor(diff / 3600000);
   const days = Math.floor(diff / 86400000);
@@ -38,11 +55,17 @@ export function formatRelativeTime(
   if (minutes < 60) return t("notes.list.minutesAgo", { count: minutes });
   if (hours < 24) return t("notes.list.hoursAgo", { count: hours });
   if (days < 7) return t("notes.list.daysAgo", { count: days });
-  return formatShortDate(dateStr);
+  return formatShortDate(dateStr, locale);
 }
 
-export function formatDateGroup(date: Date | string, t: (key: string) => string): string {
+export function formatDateGroup(
+  date: Date | string,
+  t: (key: string) => string,
+  locale?: string
+): string {
+  if (!date) return "";
   const d = typeof date === "string" ? normalizeDbDate(date) : date;
+  if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "";
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const yesterday = new Date(today);
@@ -52,5 +75,5 @@ export function formatDateGroup(date: Date | string, t: (key: string) => string)
   if (target.getTime() === today.getTime()) return t("controlPanel.history.dateGroups.today");
   if (target.getTime() === yesterday.getTime())
     return t("controlPanel.history.dateGroups.yesterday");
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return d.toLocaleDateString(locale, { month: "short", day: "numeric", year: "numeric" });
 }

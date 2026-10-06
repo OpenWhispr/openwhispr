@@ -8,243 +8,32 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 
 const noop = () => {};
 
-function installInteractiveDom(t) {
-  const originalDocument = globalThis.document;
-  const originalNode = globalThis.Node;
-  const originalElement = globalThis.Element;
-  const originalHTMLElement = globalThis.HTMLElement;
-  const originalHTMLIFrameElement = globalThis.HTMLIFrameElement;
-  const originalActEnvironment = globalThis.IS_REACT_ACT_ENVIRONMENT;
-  const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
-  const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
+const { installInteractiveDom, findElement } = require("../lib/interactiveDom");
 
-  class FakeNode {
-    constructor(nodeType, nodeName, ownerDocument) {
-      this.nodeType = nodeType;
-      this.nodeName = nodeName;
-      this.ownerDocument = ownerDocument;
-      this.parentNode = null;
-      this.childNodes = [];
-    }
-
-    appendChild(child) {
-      return this.insertBefore(child, null);
-    }
-
-    insertBefore(child, before) {
-      if (child.parentNode) child.parentNode.removeChild(child);
-      const index = before === null ? this.childNodes.length : this.childNodes.indexOf(before);
-      this.childNodes.splice(index < 0 ? this.childNodes.length : index, 0, child);
-      child.parentNode = this;
-      return child;
-    }
-
-    removeChild(child) {
-      const index = this.childNodes.indexOf(child);
-      if (index >= 0) this.childNodes.splice(index, 1);
-      child.parentNode = null;
-      return child;
-    }
-
-    contains(candidate) {
-      for (let current = candidate; current; current = current.parentNode) {
-        if (current === this) return true;
-      }
-      return false;
-    }
-
-    get firstChild() {
-      return this.childNodes[0] ?? null;
-    }
-
-    get lastChild() {
-      return this.childNodes.at(-1) ?? null;
-    }
-
-    get nextSibling() {
-      if (!this.parentNode) return null;
-      const index = this.parentNode.childNodes.indexOf(this);
-      return this.parentNode.childNodes[index + 1] ?? null;
-    }
-
-    get textContent() {
-      return this.childNodes.map((child) => child.textContent).join("");
-    }
-
-    set textContent(value) {
-      for (const child of this.childNodes) child.parentNode = null;
-      this.childNodes = [];
-      if (value !== "") this.appendChild(this.ownerDocument.createTextNode(String(value)));
-    }
-  }
-
-  class Element extends FakeNode {}
-  class HTMLElement extends Element {}
-  class HTMLIFrameElement extends HTMLElement {}
-
-  class FakeText extends FakeNode {
-    constructor(value, ownerDocument) {
-      super(3, "#text", ownerDocument);
-      this.nodeValue = value;
-    }
-
-    get textContent() {
-      return this.nodeValue;
-    }
-
-    set textContent(value) {
-      this.nodeValue = String(value);
-    }
-  }
-
-  class FakeElement extends HTMLElement {
-    constructor(tagName, ownerDocument, namespaceURI = "http://www.w3.org/1999/xhtml") {
-      super(1, tagName.toUpperCase(), ownerDocument);
-      this.tagName = tagName.toUpperCase();
-      this.namespaceURI = namespaceURI;
-      this.attributes = new Map();
-      this.listeners = new Map();
-      this.style = {
-        setProperty: (name, value) => {
-          this.style[name] = value;
-        },
-        removeProperty: (name) => {
-          delete this.style[name];
-        },
-      };
-    }
-
-    setAttribute(name, value) {
-      this.attributes.set(name, String(value));
-    }
-
-    getAttribute(name) {
-      return this.attributes.get(name) ?? null;
-    }
-
-    removeAttribute(name) {
-      this.attributes.delete(name);
-    }
-
-    addEventListener(type, listener) {
-      const listeners = this.listeners.get(type) ?? new Set();
-      listeners.add(listener);
-      this.listeners.set(type, listeners);
-    }
-
-    removeEventListener(type, listener) {
-      this.listeners.get(type)?.delete(listener);
-    }
-
-    dispatchEvent(event) {
-      if (!event.target) event.target = this;
-      for (let current = this; current; current = event.bubbles ? current.parentNode : null) {
-        event.currentTarget = current;
-        for (const listener of current.listeners?.get(event.type) ?? []) listener(event);
-        if (event.cancelBubble) break;
-      }
-      return !event.defaultPrevented;
-    }
-
-    focus() {
-      this.ownerDocument.activeElement = this;
-    }
-  }
-
-  const documentListeners = new Map();
-  const document = {
-    nodeType: 9,
-    nodeName: "#document",
-    activeElement: null,
-    createElement: (tagName) => new FakeElement(tagName, document),
-    createElementNS: (namespaceURI, tagName) => new FakeElement(tagName, document, namespaceURI),
-    createTextNode: (value) => new FakeText(String(value), document),
-    createComment: (value) => {
-      const comment = new FakeNode(8, "#comment", document);
-      comment.nodeValue = String(value);
-      return comment;
-    },
-    addEventListener(type, listener) {
-      const listeners = documentListeners.get(type) ?? new Set();
-      listeners.add(listener);
-      documentListeners.set(type, listeners);
-    },
-    removeEventListener(type, listener) {
-      documentListeners.get(type)?.delete(listener);
-    },
-  };
-  const container = new FakeElement("div", document);
-  document.documentElement = container;
-  document.body = container;
-  document.defaultView = globalThis.window;
-  Object.assign(globalThis.window, {
-    Node: FakeNode,
-    Element,
-    HTMLElement,
-    HTMLIFrameElement,
-    document,
-    getSelection: () => ({
-      isCollapsed: true,
-      rangeCount: 0,
-      removeAllRanges() {},
-    }),
-  });
-  globalThis.document = document;
-  globalThis.Node = FakeNode;
-  globalThis.Element = Element;
-  globalThis.HTMLElement = HTMLElement;
-  globalThis.HTMLIFrameElement = HTMLIFrameElement;
-  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-  globalThis.requestAnimationFrame = (callback) => {
-    callback();
-    return 1;
-  };
-  globalThis.cancelAnimationFrame = noop;
-
-  t.after(() => {
-    if (originalDocument === undefined) delete globalThis.document;
-    else globalThis.document = originalDocument;
-    if (originalNode === undefined) delete globalThis.Node;
-    else globalThis.Node = originalNode;
-    if (originalElement === undefined) delete globalThis.Element;
-    else globalThis.Element = originalElement;
-    if (originalHTMLElement === undefined) delete globalThis.HTMLElement;
-    else globalThis.HTMLElement = originalHTMLElement;
-    if (originalHTMLIFrameElement === undefined) delete globalThis.HTMLIFrameElement;
-    else globalThis.HTMLIFrameElement = originalHTMLIFrameElement;
-    if (originalActEnvironment === undefined) delete globalThis.IS_REACT_ACT_ENVIRONMENT;
-    else globalThis.IS_REACT_ACT_ENVIRONMENT = originalActEnvironment;
-    if (originalRequestAnimationFrame === undefined) delete globalThis.requestAnimationFrame;
-    else globalThis.requestAnimationFrame = originalRequestAnimationFrame;
-    if (originalCancelAnimationFrame === undefined) delete globalThis.cancelAnimationFrame;
-    else globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
-  });
-
-  return container;
-}
-
-function findElement(root, predicate) {
-  if (root.nodeType === 1 && predicate(root)) return root;
-  for (const child of root.childNodes) {
-    const match = findElement(child, predicate);
-    if (match) return match;
-  }
-  return null;
-}
-
-async function renderAssistantPanel(
+// Loads the real AssistantPanel with its heavier dependencies mocked, and real
+// i18n so translated text (not keys) renders.
+async function setupAssistantPanel(
   t,
   messages,
-  { initialConversationId = null, agentState = "idle", activeToolName = null, locale = "en" } = {}
+  {
+    initialConversationId = null,
+    agentState = "idle",
+    activeToolName = null,
+    locale = "en",
+    approvals = {},
+  } = {}
 ) {
   installBrowserGlobals(t);
   globalThis.__assistantPanelMessages = messages;
   globalThis.__assistantPanelAgentState = agentState;
   globalThis.__assistantPanelActiveToolName = activeToolName;
+  globalThis.__assistantPanelApprovals = approvals;
   t.after(() => {
     delete globalThis.__assistantPanelMessages;
     delete globalThis.__assistantPanelAgentState;
     delete globalThis.__assistantPanelActiveToolName;
+    delete globalThis.__assistantPanelApprovals;
+    delete globalThis.__assistantPanelStreamingOptions;
   });
 
   const vite = await createRendererServer(t, {
@@ -265,7 +54,8 @@ async function renderAssistantPanel(
         }
       `,
       "/chat/useChatStreaming": `
-        export function useChatStreaming() {
+        export function useChatStreaming(options) {
+          globalThis.__assistantPanelStreamingOptions = options;
           return {
             agentState: globalThis.__assistantPanelAgentState,
             activeToolName: globalThis.__assistantPanelActiveToolName,
@@ -286,7 +76,9 @@ async function renderAssistantPanel(
         export function useWindowDrag() { return { handleMouseDown() {}, handleMouseUp() {} }; }
       `,
       "/hooks/useCopyFeedback": `
-        export function useCopyFeedback() { return { copied: false, async copy() {} }; }
+        export function useCopyFeedback() {
+          return { copied: false, async copy() {}, async copyText() { return true; }, confirmCopied() {} };
+        }
       `,
       "/stores/settingsStore": `
         const state = { voiceAgentKey: [] };
@@ -304,6 +96,20 @@ async function renderAssistantPanel(
       "/ui/useToast": `
         export function useToast() { return { toast() {} }; }
       `,
+      "/stores/connectorApprovalStore": `
+        export function useConnectorApprovalStore(selector) {
+          return selector({ entries: globalThis.__assistantPanelApprovals || {} });
+        }
+        export function approvalKey(messageId, toolCallId) {
+          return messageId + "::" + toolCallId;
+        }
+      `,
+      "/chat/ApprovalCard": `
+        import React from "react";
+        export function ApprovalCard({ entry }) {
+          return React.createElement("div", { "data-approval-card": entry.toolCallId, "data-state": entry.state });
+        }
+      `,
     },
   });
   const [{ default: viteI18next }, { initReactI18next }] = await Promise.all([
@@ -319,32 +125,36 @@ async function renderAssistantPanel(
     interpolation: { escapeValue: false },
   });
   const { AssistantPanel } = await vite.ssrLoadModule("/components/dictation/AssistantPanel.tsx");
-  return renderToStaticMarkup(
-    React.createElement(AssistantPanel, {
-      pendingCommand: null,
-      onCommandConsumed: noop,
-      onCommandDiscarded: noop,
-      initialConversationId,
-      onConversationIdChange: noop,
-      voiceState: "idle",
-      thinking: false,
-      open: true,
-      footerPhase: "pill",
-      horizontalDirection: "right",
-      onClose: noop,
-      onBusyChange: noop,
-      onResponseReadyChange: noop,
-      onResponseContent: noop,
-      onConversationReset: noop,
-      onSelectionContextChange: noop,
-    })
-  );
+  const props = {
+    pendingCommand: null,
+    onCommandConsumed: noop,
+    onCommandDiscarded: noop,
+    initialConversationId,
+    onConversationIdChange: noop,
+    voiceState: "idle",
+    thinking: false,
+    open: true,
+    footerPhase: "pill",
+    horizontalDirection: "right",
+    onClose: noop,
+    onBusyChange: noop,
+    onResponseReadyChange: noop,
+    onResponseContent: noop,
+    onConversationReset: noop,
+    onSelectionContextChange: noop,
+  };
+  return { AssistantPanel, props };
+}
+
+async function renderAssistantPanel(t, messages, options) {
+  const { AssistantPanel, props } = await setupAssistantPanel(t, messages, options);
+  return renderToStaticMarkup(React.createElement(AssistantPanel, props));
 }
 
 test("an empty idle Assistant shows typed input and generic suggestions", async (t) => {
   const markup = await renderAssistantPanel(t, []);
 
-  assert.match(markup, /<input/);
+  assert.match(markup, /<textarea\b[^>]*dir="auto"/);
   assert.match(markup, /Summarize my recent notes/);
   assert.match(markup, /What is on my calendar\?/);
   assert.match(markup, /Help me draft something/);
@@ -356,7 +166,7 @@ test("a populated Assistant keeps typed input without empty-state suggestions", 
   ]);
 
   assert.match(markup, /Existing answer/);
-  assert.match(markup, /<input/);
+  assert.match(markup, /<textarea\b[^>]*dir="auto"/);
   assert.doesNotMatch(markup, /Summarize my recent notes/);
 });
 
@@ -376,7 +186,7 @@ test("starting a new conversation clears the displayed response and parent conte
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-assistant-panel-reset-test-",
     mockModules: {
-      "lucide-react": `
+      "/components/icons": `
         import React from "react";
         const Icon = () => React.createElement("span");
         export const Check = Icon;
@@ -448,7 +258,9 @@ test("starting a new conversation clears the displayed response and parent conte
         export function useWindowDrag() { return { handleMouseDown() {}, handleMouseUp() {} }; }
       `,
       "/hooks/useCopyFeedback": `
-        export function useCopyFeedback() { return { copied: false, async copy() {} }; }
+        export function useCopyFeedback() {
+          return { copied: false, async copy() {}, confirmCopied() {} };
+        }
       `,
       "/stores/settingsStore": `
         const state = { voiceAgentKey: [] };
@@ -573,7 +385,7 @@ test("the Assistant exposes an accessible new-conversation control only after me
 test("a reopened Assistant blocks typed actions until retained history finishes loading", async (t) => {
   const markup = await renderAssistantPanel(t, [], { initialConversationId: 42 });
 
-  assert.match(markup, /<input[^>]*disabled=""/);
+  assert.match(markup, /<textarea\b[^>]*readOnly=""/);
   assert.doesNotMatch(markup, /Summarize my recent notes/);
 });
 
@@ -601,6 +413,203 @@ test("the Assistant uses its localized fallback for an unknown active tool", asy
 
   assert.match(markup, />Herramienta</);
   assert.doesNotMatch(markup, />Unregistered tool</);
+});
+
+test("an automatic clipboard delivery keeps the shared Copy button confirmed for six seconds", async (t) => {
+  let root = null;
+  const originalSetTimeout = globalThis.setTimeout;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+    globalThis.setTimeout = originalSetTimeout;
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  const scheduledDelays = [];
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-copy-feedback-test-",
+  });
+  const { useCopyFeedback } = await vite.ssrLoadModule("/hooks/useCopyFeedback.ts");
+  const { createRoot } = require("react-dom/client");
+  let copyFeedback;
+
+  function Harness() {
+    copyFeedback = useCopyFeedback("Agent answer");
+    return React.createElement("button", null, copyFeedback.copied ? "Copied" : "Copy");
+  }
+
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(Harness)));
+  globalThis.setTimeout = (callback, delay, ...args) => {
+    scheduledDelays.push(delay);
+    return originalSetTimeout(callback, delay, ...args);
+  };
+  await React.act(async () => copyFeedback.confirmCopied("Agent answer", 6000));
+
+  assert.equal(container.textContent, "Copied");
+  assert.ok(scheduledDelays.includes(6000));
+});
+
+test("Assistant selection copy preserves the selected text without claiming Copied", async (t) => {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  const writes = [];
+  const originalElectronAPI = globalThis.window.electronAPI;
+  t.after(() => {
+    globalThis.window.electronAPI = originalElectronAPI;
+  });
+  globalThis.window.electronAPI = {
+    writeClipboard: async (text) => {
+      writes.push(text);
+      return { success: true };
+    },
+  };
+
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-selection-copy-feedback-test-",
+  });
+  const { useCopyFeedback } = await vite.ssrLoadModule("/hooks/useCopyFeedback.ts");
+  const { createRoot } = require("react-dom/client");
+  let copyFeedback;
+
+  function Harness() {
+    copyFeedback = useCopyFeedback("Full Agent answer");
+    return React.createElement("button");
+  }
+
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(Harness)));
+  await React.act(async () => copyFeedback.copyText(" selected answer "));
+  assert.equal(copyFeedback.copied, false, "a partial copy never shows the Copied state");
+  await React.act(async () => copyFeedback.copy());
+  assert.equal(copyFeedback.copied, true);
+
+  assert.deepEqual(writes, [" selected answer ", "Full Agent answer"]);
+});
+
+test("Assistant selection must stay entirely inside the response root", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-assistant-selection-test-",
+  });
+  const { getSelectionForCopyShortcut, getSelectionInside } = await vite.ssrLoadModule(
+    "/utils/assistantSelection.ts"
+  );
+  const insideStart = {};
+  const insideEnd = {};
+  const outside = {};
+  const responseRoot = {
+    contains: (node) => node === insideStart || node === insideEnd,
+  };
+  const originalGetSelection = globalThis.window.getSelection;
+  t.after(() => {
+    globalThis.window.getSelection = originalGetSelection;
+  });
+
+  globalThis.window.getSelection = () => ({
+    isCollapsed: false,
+    rangeCount: 1,
+    getRangeAt: () => ({ startContainer: insideStart, endContainer: insideEnd }),
+    toString: () => "selected answer",
+  });
+  assert.equal(getSelectionInside(responseRoot), "selected answer");
+  assert.equal(
+    getSelectionForCopyShortcut(
+      { key: "c", ctrlKey: true, metaKey: false, altKey: false },
+      responseRoot
+    ),
+    "selected answer"
+  );
+  assert.equal(
+    getSelectionForCopyShortcut(
+      { key: "c", ctrlKey: false, metaKey: true, altKey: false },
+      responseRoot
+    ),
+    "selected answer"
+  );
+  assert.equal(
+    getSelectionForCopyShortcut(
+      { key: "c", ctrlKey: true, metaKey: false, altKey: true },
+      responseRoot
+    ),
+    null
+  );
+  assert.equal(
+    getSelectionForCopyShortcut(
+      { key: "c", ctrlKey: true, metaKey: false, altKey: false, target: { tagName: "TEXTAREA" } },
+      responseRoot
+    ),
+    null
+  );
+
+  globalThis.window.getSelection = () => ({
+    isCollapsed: false,
+    rangeCount: 1,
+    getRangeAt: () => ({ startContainer: insideStart, endContainer: outside }),
+    toString: () => "mixed selection",
+  });
+  assert.equal(getSelectionInside(responseRoot), null);
+});
+
+// The Open Settings link and technical details must never ride along in a
+// drag-select + copy over the response, or the clipboard would pick up UI
+// chrome instead of just the answer.
+test("Cmd+C copies a selection in a classified error's answer, but not one running into its Open Settings or details", async (t) => {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  t.mock.method(globalThis.document, "addEventListener");
+
+  const { AssistantPanel, props } = await setupAssistantPanel(t, [
+    {
+      id: "assistant-1",
+      role: "assistant",
+      content: "Error: OpenAI rejected your API key.",
+      isStreaming: false,
+      error: { settingsTarget: "llms", technicalDetails: { provider: "OpenAI", status: 401 } },
+    },
+  ]);
+  const { createRoot } = require("react-dom/client");
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(AssistantPanel, props)));
+
+  const answer = findElement(
+    container,
+    (element) => element.textContent === "Error: OpenAI rejected your API key."
+  );
+  const settingsButton = findElement(
+    container,
+    (element) => element.tagName === "BUTTON" && element.textContent.includes("Open Settings")
+  );
+  const details = findElement(container, (element) => element.tagName === "DETAILS");
+  assert.ok(answer && settingsButton && details, "shows the answer, Open Settings and details");
+
+  let selectionEnd = null;
+  globalThis.window.getSelection = () => ({
+    isCollapsed: false,
+    rangeCount: 1,
+    getRangeAt: () => ({ startContainer: answer, endContainer: selectionEnd }),
+    toString: () => "selected text",
+  });
+  const onKeyDown = globalThis.document.addEventListener.mock.calls.findLast(
+    (call) => call.arguments[0] === "keydown"
+  ).arguments[1];
+  const copiesSelectionEndingIn = (node) => {
+    selectionEnd = node;
+    const preventDefault = t.mock.fn();
+    onKeyDown({ key: "c", metaKey: true, ctrlKey: false, altKey: false, preventDefault });
+    return preventDefault.mock.callCount() === 1;
+  };
+
+  assert.equal(copiesSelectionEndingIn(answer), true, "a selection inside the answer is copied");
+  assert.equal(copiesSelectionEndingIn(settingsButton), false, "Open Settings is never copied");
+  assert.equal(copiesSelectionEndingIn(details), false, "technical details are never copied");
 });
 
 test("a failed Assistant resize releases its open claim so opening can retry", async (t) => {
@@ -663,4 +672,314 @@ test("a failed live-transcript resize releases its open claim so opening can ret
 
   assert.equal(resizeCalls, 2);
   assert.equal(liveTranscript.openRef.current, false);
+});
+
+test("a caret-delivered command returns the hidden Assistant to the idle pill", async (t) => {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-assistant-caret-settlement-test-",
+  });
+  const { useAssistantPanel } = await vite.ssrLoadModule("/hooks/useAssistantPanel.js");
+  const { createRoot } = require("react-dom/client");
+  let assistant;
+
+  function Harness() {
+    assistant = useAssistantPanel({
+      requestMainWindowSize: async () => ({ success: true }),
+      dictationErrorActionCount: 0,
+      recordingControlsRef: { current: null },
+    });
+    return null;
+  }
+
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(Harness)));
+  await React.act(async () => {
+    assistant.handleCommand({
+      text: "draft a reply",
+      attachment: null,
+      selectedContext: null,
+      delivery: {
+        mode: "paste",
+        sessionId: "caret-session",
+        restoreClipboard: true,
+        allowClipboardFallback: false,
+        plainText: true,
+      },
+    });
+  });
+  assert.equal(assistant.mounted, true);
+  assert.equal(assistant.open, false);
+
+  await React.act(async () => {
+    assistant.handleCommandSettled(1, { showPanel: false });
+  });
+  assert.equal(assistant.mounted, false);
+  assert.equal(assistant.open, false);
+  assert.equal(assistant.thinking, false);
+});
+
+test("a follow-up into an open panel strips caret delivery and stays panel-first", async (t) => {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-assistant-followup-delivery-test-",
+  });
+  const { useAssistantPanel } = await vite.ssrLoadModule("/hooks/useAssistantPanel.js");
+  const { createRoot } = require("react-dom/client");
+  let assistant;
+
+  function Harness() {
+    assistant = useAssistantPanel({
+      requestMainWindowSize: async () => ({ success: true }),
+      dictationErrorActionCount: 0,
+      recordingControlsRef: { current: null },
+    });
+    return null;
+  }
+
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(Harness)));
+  const delivery = {
+    mode: "paste",
+    sessionId: "caret-session",
+    restoreClipboard: true,
+    allowClipboardFallback: false,
+    plainText: true,
+  };
+
+  assistant.openRef.current = true;
+  await React.act(async () => {
+    assistant.handleCommand({
+      text: "draft a reply",
+      attachment: null,
+      selectedContext: null,
+      delivery,
+    });
+  });
+  assert.equal(assistant.pendingCommand.delivery, null);
+
+  assistant.openRef.current = false;
+  await React.act(async () => {
+    assistant.handleCommand({
+      text: "draft a reply",
+      attachment: null,
+      selectedContext: null,
+      delivery,
+    });
+  });
+  assert.deepEqual(assistant.pendingCommand.delivery, delivery);
+});
+
+test("spoken commands answer on the Voice Assistant scope with connector tools offered", async (t) => {
+  await renderAssistantPanel(t, []);
+
+  const options = globalThis.__assistantPanelStreamingOptions;
+  assert.equal(options.inferenceScope, "dictationAgent");
+  assert.equal(options.allowConnectors, true);
+});
+
+test("a pending approval shows in the panel and replaces the tool overlay", async (t) => {
+  const markup = await renderAssistantPanel(
+    t,
+    [
+      { id: "user-1", role: "user", content: "post the summary to eng", isStreaming: false },
+      {
+        id: "assistant-1",
+        role: "assistant",
+        content: "",
+        isStreaming: true,
+        toolCalls: [
+          { id: "call-1", name: "slack_send_message", arguments: "{}", status: "executing" },
+        ],
+      },
+    ],
+    {
+      agentState: "tool-executing",
+      activeToolName: "slack_send_message",
+      approvals: {
+        "assistant-1::call-1": {
+          key: "assistant-1::call-1",
+          messageId: "assistant-1",
+          toolCallId: "call-1",
+          actionId: "a1",
+          connectorId: "slack",
+          state: "pending",
+          preview: {
+            verbKey: "default",
+            destinationLabel: "#eng",
+            accountLabel: "chad",
+            body: "x",
+          },
+        },
+      },
+    }
+  );
+
+  assert.match(markup, /data-approval-card="call-1"/);
+  assert.doesNotMatch(markup, /data-tool-invocation=/);
+});
+
+test("an approval request opens the hidden panel of a caret-delivered command", async (t) => {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-assistant-approval-open-test-",
+  });
+  const { useAssistantPanel } = await vite.ssrLoadModule("/hooks/useAssistantPanel.js");
+  const { createRoot } = require("react-dom/client");
+  let assistant;
+
+  function Harness() {
+    assistant = useAssistantPanel({
+      requestMainWindowSize: async () => ({ success: true }),
+      dictationErrorActionCount: 0,
+      recordingControlsRef: { current: null },
+    });
+    return null;
+  }
+
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(Harness)));
+  await React.act(async () => {
+    assistant.handleCommand({
+      text: "post the summary to eng",
+      attachment: null,
+      selectedContext: null,
+      delivery: {
+        mode: "paste",
+        sessionId: "caret-session",
+        restoreClipboard: true,
+        allowClipboardFallback: false,
+      },
+    });
+  });
+  assert.equal(assistant.open, false);
+
+  // onApprovalRequested routes to the panel's onResponseContent handler.
+  await React.act(async () => {
+    assistant.handleResponseContent();
+  });
+
+  assert.equal(assistant.openRef.current, true);
+  assert.equal(assistant.thinking, false);
+});
+
+test("only a plain-text caret delivery asks the model for plain prose", async (t) => {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+    delete globalThis.__assistantPanelSentOptions;
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  const sentOptions = [];
+  globalThis.__assistantPanelSentOptions = sentOptions;
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-assistant-plain-text-test-",
+    mockModules: {
+      "/chat/useChatPersistence": `
+        export function useChatPersistence() {
+          return {
+            messages: [],
+            setMessages() {},
+            conversationId: null,
+            async createConversation() { return 1; },
+            async loadConversation() {},
+            saveUserMessage() {},
+            saveAssistantMessage() {},
+            handleNewChat() {},
+          };
+        }
+      `,
+      "/chat/useChatStreaming": `
+        export function useChatStreaming() {
+          return { agentState: "idle", activeToolName: null, toolStatus: "", cancelStream() {} };
+        }
+      `,
+      "/chat/useChatMessageSender": `
+        export function useChatMessageSender() {
+          return async (_text, options) => {
+            globalThis.__assistantPanelSentOptions.push(options);
+            return true;
+          };
+        }
+      `,
+      useVoiceDraft: `
+        export function useVoiceDraft() {
+          return { status: "idle", elapsed: 0, readLevel: () => 0, start() {}, stop() {}, cancel() {} };
+        }
+      `,
+      "/hooks/useWindowDrag": `
+        export function useWindowDrag() { return { handleMouseDown() {}, handleMouseUp() {} }; }
+      `,
+      "/stores/settingsStore": `
+        const state = { voiceAgentKey: [] };
+        export function useSettingsStore(selector) { return selector(state); }
+      `,
+      "/utils/hotkeys": `
+        export function formatHotkeyListLabel() { return ""; }
+      `,
+      "/ui/useToast": `
+        export function useToast() { return { toast() {} }; }
+      `,
+    },
+  });
+  const { AssistantPanel } = await vite.ssrLoadModule("/components/dictation/AssistantPanel.tsx");
+  const { createRoot } = require("react-dom/client");
+  const paste = {
+    mode: "paste",
+    sessionId: "s",
+    restoreClipboard: true,
+    allowClipboardFallback: false,
+  };
+  const render = (id, delivery) =>
+    React.createElement(AssistantPanel, {
+      pendingCommand: {
+        id,
+        text: "draft a reply",
+        attachment: null,
+        selectedContext: null,
+        delivery,
+      },
+      onCommandConsumed: noop,
+      onCommandDiscarded: noop,
+      onCommandSettled: noop,
+      initialConversationId: null,
+      onConversationIdChange: noop,
+      voiceState: "idle",
+      thinking: false,
+      open: false,
+      footerPhase: "pill",
+      horizontalDirection: "right",
+      onClose: noop,
+      onBusyChange: noop,
+      onResponseReadyChange: noop,
+      onResponseContent: noop,
+      onConversationReset: noop,
+      onSelectionContextChange: noop,
+    });
+
+  root = createRoot(container);
+  await React.act(async () => root.render(render(1, { ...paste, plainText: true })));
+  await React.act(async () => root.render(render(2, { ...paste, plainText: false })));
+  await React.act(async () => root.render(render(3, { mode: "clipboard" })));
+
+  assert.deepEqual(
+    sentOptions.map((options) => options.plainTextResponse),
+    [true, false, false]
+  );
 });

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { getSettings, selectResolvedMeetingTranscription } from "./settingsStore";
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
-import { getStreamingTranscriptionProviders } from "../models/ModelRegistry";
+import { getMeetingStreamingTranscriptionProviders } from "../models/ModelRegistry";
 import { resolveMeetingTranscriptionOptions } from "../helpers/meetingTranscriptionRouting";
 import { followsSystemDefaultMic } from "../helpers/micSelectionRecovery";
 import { resolvePreferredMicrophone } from "../helpers/microphoneSelection";
@@ -11,7 +11,12 @@ import {
   resolveInitialSpeakerCountOverride,
   resolveParticipantSpeakerCountSync,
 } from "../utils/participants";
-import type { NoteItem, SystemAudioAccessResult, SystemAudioStrategy } from "../types/electron";
+import type {
+  MeetingSystemAudioInterruption,
+  NoteItem,
+  SystemAudioAccessResult,
+  SystemAudioStrategy,
+} from "../types/electron";
 import type { CalendarAttendee } from "../types/calendar";
 import {
   DEFAULT_SYSTEM_AUDIO_ACCESS,
@@ -84,6 +89,10 @@ interface MeetingRecordingState {
   recordingNoteId: number | null;
   recordingNoteTitle: string | null;
   recordingFolderId: number | null;
+  /** Wall-clock start of the live recording. The note header's timer derives its
+   * elapsed seconds from this, so switching notes — which remounts the editor —
+   * keeps the real duration. Meaningful only while `isRecording`. */
+  recordingStartedAt: number | null;
   segments: TranscriptSegment[];
   transcript: string;
   micPartial: string;
@@ -99,6 +108,13 @@ interface MeetingRecordingState {
   error: string | null;
   /** Bumped on every error report so identical repeated errors still re-notify. */
   errorNonce: number;
+  /** Latched once per recording when main reports the system-audio tap has produced only silence. */
+  systemAudioSilentWarning: boolean;
+  /** Most recent interruption; quiet warnings clear when audible system audio resumes. */
+  systemAudioInterrupted: { recovering: boolean; reason: string } | null;
+  /** Bumped on every interruption report so a repeated one still re-notifies. */
+  systemAudioInterruptedNonce: number;
+  systemAudioInterruptedDeliveredNonce: number;
   currentMicLevel: number;
   micCaptureStatus: "inactive" | "active" | "reconnecting" | "unavailable";
   windowWidth: number;
@@ -148,9 +164,10 @@ const getMeetingTranscriptionOptions = () => {
     localProvider: resolved.localTranscriptionProvider,
     whisperModel: resolved.whisperModel,
     parakeetModel: resolved.parakeetModel,
+    cohereModel: resolved.cohereModel,
     selectedProvider: resolved.cloudTranscriptionProvider,
     selectedModel: resolved.cloudTranscriptionModel,
-    byokProviders: getStreamingTranscriptionProviders(),
+    byokProviders: getMeetingStreamingTranscriptionProviders(),
     managedProviders: useStreamingProvidersStore.getState().providers,
     cortiEnvironment: state.cortiEnvironment,
     cortiTenant: state.cortiTenant,
@@ -412,6 +429,10 @@ let systemPartialSpeakerIdValue: string | null = null;
 let recentSystemSpeaker: RecentSystemSpeaker | null = null;
 let speakerLocks: Map<string, string> = new Map();
 let pushConfigTimeout: ReturnType<typeof setTimeout> | null = null;
+let sessionSystemAudioActive = false;
+// True while the recording's own note is deleted mid-recording, so a live save
+// never writes the transcript back onto its tombstone.
+let recordingNoteDeleted = false;
 
 export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   isRecording: false,
@@ -419,6 +440,7 @@ export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   recordingNoteId: null,
   recordingNoteTitle: null,
   recordingFolderId: null,
+  recordingStartedAt: null,
   segments: [],
   transcript: "",
   micPartial: "",
@@ -433,6 +455,10 @@ export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   userTouchedStepper: false,
   error: null,
   errorNonce: 0,
+  systemAudioSilentWarning: false,
+  systemAudioInterrupted: null,
+  systemAudioInterruptedNonce: 0,
+  systemAudioInterruptedDeliveredNonce: 0,
   currentMicLevel: 0,
   micCaptureStatus: "inactive",
   windowWidth: typeof window !== "undefined" ? window.innerWidth : SIDE_PANEL_BREAKPOINT_PX,
@@ -641,6 +667,22 @@ function assignProvisionalSpeaker(segment: TranscriptSegment): TranscriptSegment
   });
 }
 
+async function releaseSystemAudioCapture(): Promise<void> {
+  await flushAndDisconnectProcessor(systemProcessor);
+  systemProcessor = null;
+
+  systemSource?.disconnect();
+  systemSource = null;
+
+  stopMediaStream(systemStream);
+  systemStream = null;
+
+  try {
+    await systemContext?.close();
+  } catch {}
+  systemContext = null;
+}
+
 async function cleanup(): Promise<void> {
   micRecovery?.stop();
   micRecovery = null;
@@ -663,19 +705,7 @@ async function cleanup(): Promise<void> {
   } catch {}
   micContext = null;
 
-  await flushAndDisconnectProcessor(systemProcessor);
-  systemProcessor = null;
-
-  systemSource?.disconnect();
-  systemSource = null;
-
-  stopMediaStream(systemStream);
-  systemStream = null;
-
-  try {
-    await systemContext?.close();
-  } catch {}
-  systemContext = null;
+  await releaseSystemAudioCapture();
 
   ipcCleanups.forEach((fn) => fn());
   ipcCleanups = [];
@@ -688,6 +718,7 @@ async function cleanup(): Promise<void> {
   isPrepared = false;
   isRecordingFlag = false;
   isStartingFlag = false;
+  sessionSystemAudioActive = false;
 }
 
 export async function prepareTranscription(): Promise<void> {
@@ -788,6 +819,8 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
     recentSystemSpeaker = null;
     speakerLocks = locks;
     systemPartialSpeakerIdValue = null;
+    sessionSystemAudioActive = false;
+    recordingNoteDeleted = false;
 
     useMeetingRecordingStore.setState({
       isRecording: true,
@@ -795,6 +828,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       recordingNoteId: args.noteId,
       recordingNoteTitle: args.noteTitle,
       recordingFolderId: args.folderId,
+      recordingStartedAt: Date.now(),
       sessionDiarizationEnabled: initialEnabled,
       sessionExpectedCount: initialCount,
       userTouchedStepper: resolveInitialSpeakerCountOverride(
@@ -810,10 +844,24 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       diarizationSessionId: null,
       completedDiarization: null,
       error: null,
+      systemAudioSilentWarning: false,
+      systemAudioInterrupted: null,
       micCaptureStatus: "inactive",
     });
 
     isRecordingFlag = true;
+    let systemAudioAvailabilityResolved = false;
+    let pendingSystemAudioInterruption: MeetingSystemAudioInterruption | null = null;
+    const publishSystemAudioInterruption = (data: MeetingSystemAudioInterruption): void => {
+      logger.warn("Meeting system audio was interrupted", data, "meeting");
+      useMeetingRecordingStore.setState((state) => ({
+        systemAudioInterrupted: {
+          recovering: data.recovering === true,
+          reason: data.reason,
+        },
+        systemAudioInterruptedNonce: state.systemAudioInterruptedNonce + 1,
+      }));
+    };
     let setupMicResult: MediaStream | null = null;
     let setupSystemCaptureResult: { stream: MediaStream | null; error: Error | null } = {
       stream: null,
@@ -842,6 +890,32 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
     };
 
     try {
+      // Main capture can fail while microphone permission is still pending.
+      // Keep its latest report until setup establishes whether this session
+      // actually has system audio, including a possible mic-only fallback.
+      const interruptedCleanup = window.electronAPI?.onMeetingSystemAudioInterrupted?.((data) => {
+        if (activeRecordingSessionId !== sessionId || !isRecordingFlag) return;
+        if (!systemAudioAvailabilityResolved) {
+          pendingSystemAudioInterruption = data;
+        } else if (sessionSystemAudioActive) {
+          publishSystemAudioInterruption(data);
+        }
+      });
+      const resumedCleanup = window.electronAPI?.onMeetingSystemAudioResumed?.(() => {
+        if (activeRecordingSessionId !== sessionId || !isRecordingFlag) return;
+        if (pendingSystemAudioInterruption?.reason === "gone_quiet") {
+          pendingSystemAudioInterruption = null;
+        }
+        if (useMeetingRecordingStore.getState().systemAudioInterrupted?.reason === "gone_quiet") {
+          useMeetingRecordingStore.setState({ systemAudioInterrupted: null });
+        }
+      });
+      ipcCleanups.push(() => {
+        pendingSystemAudioInterruption = null;
+        interruptedCleanup?.();
+        resumedCleanup?.();
+      });
+
       if (preparePromise) {
         logger.debug("Waiting for in-flight prepare to finish...", {}, "meeting");
         await preparePromise;
@@ -868,6 +942,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         noteId: args.noteId ?? null,
         sessionId,
         autoEndEligible: args.autoEndEligible,
+        aecEnabled: getSettings().meetingAecEnabled,
       });
       const micCapturePromise = getMeetingMicConstraints().then(async (constraints) => {
         if (!isCurrentStart()) return null;
@@ -948,6 +1023,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         setupSystemCaptureResult = { stream: null, error: null };
         isRecordingFlag = false;
         isStartingFlag = false;
+        await cleanup();
         releaseSession();
         return;
       }
@@ -1158,6 +1234,22 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       });
       if (fatalErrorCleanup) ipcCleanups.push(fatalErrorCleanup);
 
+      // One-shot from main (~45s in) when the system tap has streamed only
+      // silence; main never emits it for mic-only sessions, but gate on this
+      // session's own system-audio state anyway.
+      const systemAudioSilentCleanup = window.electronAPI?.onMeetingSystemAudioSilent?.((data) => {
+        if (activeRecordingSessionId !== sessionId || !isRecordingFlag) return;
+        if (!sessionSystemAudioActive) return;
+        if (useMeetingRecordingStore.getState().systemAudioSilentWarning) return;
+        logger.warn(
+          "Meeting system audio has produced only silence",
+          { systemAudioStrategy: data?.systemAudioStrategy },
+          "meeting"
+        );
+        useMeetingRecordingStore.setState({ systemAudioSilentWarning: true });
+      });
+      if (systemAudioSilentCleanup) ipcCleanups.push(systemAudioSilentCleanup);
+
       // Main re-derives the expected count when participants are added mid-meeting
       // (never for a count set explicitly via the stepper — main skips those).
       const speakerConfigCleanup = window.electronAPI?.onMeetingSessionSpeakerConfigUpdated?.(
@@ -1298,19 +1390,13 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         }
       }
 
-      if (systemCaptureResult.stream) {
-        const stream = systemCaptureResult.stream;
+      // Builds the renderer-side capture graph for the system channel. Shared
+      // by the initial start and by the mid-session takeover registered below.
+      const attachRendererSystemAudio = async (stream: MediaStream) => {
         systemStream = stream;
-        setupSystemCaptureResult = { stream: null, error: null };
-
         const ctx = new AudioContext({ sampleRate: 24000 });
         systemContext = ctx;
         await detachFromOutputDevice(ctx);
-        if (!isCurrentStart()) {
-          await teardownStart();
-          return;
-        }
-
         const { source, processor } = await createAudioPipeline({
           stream,
           context: ctx,
@@ -1323,14 +1409,17 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
             pendingSystemChunks.push(chunk.slice(0));
           },
         });
+        systemSource = source;
+        systemProcessor = processor;
+      };
+
+      if (systemCaptureResult.stream) {
+        setupSystemCaptureResult = { stream: null, error: null };
+        await attachRendererSystemAudio(systemCaptureResult.stream);
         if (!isCurrentStart()) {
-          source.disconnect();
-          await flushAndDisconnectProcessor(processor);
           await teardownStart();
           return;
         }
-        systemSource = source;
-        systemProcessor = processor;
       } else if (systemCaptureError) {
         if (systemAudioStrategy === "loopback") {
           logger.warn(
@@ -1344,6 +1433,56 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         }
       }
 
+      // Main sends this when a native helper reports it is capturing silence
+      // while audio is really playing, which activation success cannot detect.
+      // Main keeps the helper until this loopback hears audio the helper misses.
+      if (systemAudioHandledInMain) {
+        const degradedCleanup = window.electronAPI?.onMeetingSystemAudioDegraded?.(() => {
+          if (activeRecordingSessionId !== sessionId || !isRecordingFlag) return;
+          if (systemStream) return;
+          void (async () => {
+            const reportTakeoverFailure = (error: Error | null) => {
+              logger.warn(
+                "Renderer loopback takeover failed after native system audio went silent",
+                { error: error?.message },
+                "meeting"
+              );
+              publishSystemAudioInterruption({
+                systemAudioStrategy: "loopback",
+                reason: "loopback_takeover_failed",
+                recovering: false,
+              });
+              sessionSystemAudioActive = false;
+              void window.electronAPI
+                ?.meetingTranscriptionSetSystemAudioAvailable?.(sessionId, false)
+                .catch(() => undefined);
+            };
+            const takeover = await requestSystemAudioDisplayStream(
+              getDisplayCaptureModeForStrategy("loopback")
+            );
+            if (activeRecordingSessionId !== sessionId || !isRecordingFlag || systemStream) {
+              stopMediaStream(takeover.stream);
+              return;
+            }
+            if (!takeover.stream) {
+              reportTakeoverFailure(takeover.error);
+              return;
+            }
+            try {
+              await attachRendererSystemAudio(takeover.stream);
+              logger.info("Renderer loopback started beside native system audio", {}, "meeting");
+            } catch (error) {
+              // A stop mid-attach also lands here, and its cleanup owns the graph.
+              if (activeRecordingSessionId === sessionId && isRecordingFlag) {
+                reportTakeoverFailure(error as Error);
+                await releaseSystemAudioCapture();
+              }
+            }
+          })();
+        });
+        if (degradedCleanup) ipcCleanups.push(degradedCleanup);
+      }
+
       if (!isCurrentStart()) {
         logger.info(
           "Meeting transcription aborted during pipeline setup (stop called)",
@@ -1355,6 +1494,12 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       }
 
       const systemAudioAvailable = systemAudioHandledInMain || systemStream !== null;
+      sessionSystemAudioActive = systemAudioAvailable;
+      systemAudioAvailabilityResolved = true;
+      if (systemAudioAvailable && pendingSystemAudioInterruption) {
+        publishSystemAudioInterruption(pendingSystemAudioInterruption);
+      }
+      pendingSystemAudioInterruption = null;
       try {
         const availabilityResult =
           await window.electronAPI?.meetingTranscriptionSetSystemAudioAvailable?.(
@@ -1422,8 +1567,42 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
   return true;
 }
 
+// Writes the live segments to the recording's note, serialized exactly as the
+// stop path writes them. Shared by the 30-second crash-safety save and the
+// flush before an unload. A no-op once a stop has begun: that
+// stop has already written the final transcript (or will write main's, for a
+// recording with no segments), and a second write could overwrite it.
+export async function persistLiveTranscript(): Promise<void> {
+  const { recordingNoteId, segments } = useMeetingRecordingStore.getState();
+  if (!isRecordingFlag || recordingNoteDeleted || recordingNoteId == null) return;
+  if (segments.length === 0) return;
+  try {
+    // Posted before the first await: during beforeunload nothing after it is
+    // guaranteed to run.
+    const result = await window.electronAPI?.updateNote?.(recordingNoteId, {
+      transcript: serializeTranscriptSegments(segments),
+    });
+    if (result && !result.success) {
+      logger.error(
+        "Failed to persist live meeting transcript",
+        { error: result.error, noteId: recordingNoteId },
+        "meeting"
+      );
+    }
+  } catch (err) {
+    logger.error(
+      "Failed to persist live meeting transcript",
+      { error: (err as Error).message, noteId: recordingNoteId },
+      "meeting"
+    );
+  }
+}
+
 export interface StopRecordingResult {
   diarizationSessionId: string | null;
+  // True only when this call ended a live recording — false for a no-op stop
+  // (nothing recording, or a scoped stop for a session that is not active).
+  stopped: boolean;
 }
 
 export async function stopRecording(expectedSessionId?: string): Promise<StopRecordingResult> {
@@ -1438,25 +1617,28 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
       systemPartial: "",
       systemPartialSpeakerId: null,
       systemPartialSpeakerName: null,
+      systemAudioSilentWarning: false,
+      systemAudioInterrupted: null,
       currentMicLevel: 0,
+      recordingStartedAt: null,
     });
-    return { diarizationSessionId: null };
+    return { diarizationSessionId: null, stopped: false };
   }
 
   await meetingRecordingStopBarrier.waitForPendingStop();
   if (!canStopMeetingRecordingSession(activeRecordingSessionId, expectedSessionId)) {
-    return { diarizationSessionId: null };
+    return { diarizationSessionId: null, stopped: false };
   }
   if (!isRecordingFlag) {
-    return { diarizationSessionId: null };
+    return { diarizationSessionId: null, stopped: false };
   }
 
   return meetingRecordingStopBarrier.runStop(async () => {
     if (!canStopMeetingRecordingSession(activeRecordingSessionId, expectedSessionId)) {
-      return { diarizationSessionId: null };
+      return { diarizationSessionId: null, stopped: false };
     }
     if (!isRecordingFlag) {
-      return { diarizationSessionId: null };
+      return { diarizationSessionId: null, stopped: false };
     }
 
     const sessionId = activeRecordingSessionId;
@@ -1523,11 +1705,17 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
       systemPartial: "",
       systemPartialSpeakerId: null,
       systemPartialSpeakerName: null,
+      systemAudioSilentWarning: false,
+      systemAudioInterrupted: null,
       currentMicLevel: 0,
+      recordingStartedAt: null,
     });
 
     logger.info("Meeting transcription stopped", {}, "meeting");
-    return { diarizationSessionId };
+    // Reaching here means this call ended a live recording and its transcript
+    // was written above. A failed main-side teardown is surfaced by
+    // reportMeetingError and must not be reported as a recording that never stopped.
+    return { diarizationSessionId, stopped: true };
   });
 }
 
@@ -1574,6 +1762,7 @@ if (typeof window !== "undefined") {
     enqueueDiarizationCompletion(async () => {
       const {
         diarizationSessionId,
+        isRecording,
         recordingNoteId,
         segments: liveSegments,
       } = useMeetingRecordingStore.getState();
@@ -1581,6 +1770,7 @@ if (typeof window !== "undefined") {
         payloadNoteId: data?.noteId,
         payloadSessionId: data?.sessionId,
         currentSessionId: diarizationSessionId,
+        activeRecordingNoteId: isRecording ? recordingNoteId : null,
       });
       if (targetNoteId == null) return;
 
@@ -1656,6 +1846,36 @@ if (typeof window !== "undefined") {
         "meeting"
       );
     });
+  });
+}
+
+// Registered once at module load, like the diarization listener above: the
+// note can be deleted from the sidebar while the recording runs on. A team-note
+// delete the server denies revives the same row, and the snapshot pull that
+// follows re-syncs it live, so saves resume. A pull never clears deleted_at, so
+// one racing a real delete re-syncs the tombstone and the guard holds.
+if (typeof window !== "undefined") {
+  window.electronAPI?.onNoteDeleted?.(({ id }) => {
+    if (isRecordingFlag && id === useMeetingRecordingStore.getState().recordingNoteId) {
+      recordingNoteDeleted = true;
+    }
+  });
+  window.electronAPI?.onNoteSynced?.((note) => {
+    if (!note.deleted_at && note.id === useMeetingRecordingStore.getState().recordingNoteId) {
+      recordingNoteDeleted = false;
+    }
+  });
+}
+
+// A reload (Sign in, SSO completion, the crash screen's Reload) replaces this
+// page mid-recording: main's owner-loss teardown ends the session, and this
+// module's state goes with the page before stopRecording can save what was said
+// since the last 30-second save. beforeunload runs first, for location.reload()
+// and main's loadURL/loadFile alike. Never cancel it or return a value: Electron
+// treats either as refusing the unload, and main's load then fails.
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeunload", () => {
+    void persistLiveTranscript();
   });
 }
 

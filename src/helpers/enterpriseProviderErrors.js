@@ -6,6 +6,252 @@
 
 const { classifyNetworkError } = require("./networkErrors");
 
+const BEDROCK_MAX_ATTEMPTS = 6;
+const BEDROCK_INITIAL_DELAY_MS = 500;
+const BEDROCK_MAX_DELAY_MS = 8_000;
+
+const BEDROCK_SAFE_NETWORK_CODES = new Set([
+  "EAI_AGAIN",
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "EHOSTDOWN",
+  "EHOSTUNREACH",
+  "ENETDOWN",
+  "ENETUNREACH",
+  "ENOTFOUND",
+  "EPIPE",
+  "ETIMEDOUT",
+  "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_HEADERS_TIMEOUT",
+  "UND_ERR_BODY_TIMEOUT",
+  "UND_ERR_SOCKET",
+]);
+
+function unwrapRetryError(error) {
+  let current = error;
+  const seen = new Set();
+  while (current?.lastError && !seen.has(current)) {
+    seen.add(current);
+    current = current.lastError;
+  }
+  return current;
+}
+
+function bedrockErrorChain(error) {
+  const chain = [];
+  let current = unwrapRetryError(error);
+  const seen = new Set();
+  while (current && !seen.has(current)) {
+    chain.push(current);
+    seen.add(current);
+    current = current.cause;
+  }
+  return chain;
+}
+
+function getBedrockHttpStatus(error) {
+  for (const item of bedrockErrorChain(error)) {
+    const status =
+      item?.status ?? item?.statusCode ?? item?.$metadata?.httpStatusCode ?? item?.response?.status;
+    if (Number.isInteger(status)) return status;
+  }
+  return undefined;
+}
+
+function getHeaderCaseInsensitive(headers, headerName) {
+  if (!headers) return undefined;
+  if (typeof headers.get === "function") return headers.get(headerName) || undefined;
+  const normalizedName = headerName.toLowerCase();
+  for (const [name, value] of Object.entries(headers)) {
+    if (name.toLowerCase() === normalizedName) return value;
+  }
+  return undefined;
+}
+
+function normalizeBedrockExceptionType(value) {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  const namespaceSeparator = trimmed.lastIndexOf("#");
+  const withoutNamespace =
+    namespaceSeparator === -1 ? trimmed : trimmed.slice(namespaceSeparator + 1);
+  const suffixSeparator = withoutNamespace.indexOf(":");
+  const normalized =
+    suffixSeparator === -1 ? withoutNamespace : withoutNamespace.slice(0, suffixSeparator);
+  return normalized.trim() || undefined;
+}
+
+function getBedrockExceptionType(error) {
+  for (const item of bedrockErrorChain(error)) {
+    const headers = item?.responseHeaders || item?.response?.headers;
+    const candidates = [
+      getHeaderCaseInsensitive(headers, "x-amzn-errortype"),
+      item?.data?.code,
+      item?.data?.__type,
+      item?.data?.type,
+      item?.type,
+      item?.code,
+      item?.name,
+    ];
+    for (const candidate of candidates) {
+      const type = normalizeBedrockExceptionType(candidate);
+      if (type && !["Error", "AI_APICallError", "AI_RetryError"].includes(type)) return type;
+    }
+  }
+  return undefined;
+}
+
+function getBedrockRequestId(error) {
+  for (const item of bedrockErrorChain(error)) {
+    const headers = item?.responseHeaders || item?.response?.headers || {};
+    const requestId =
+      item?.$metadata?.requestId ||
+      item?.requestId ||
+      getHeaderCaseInsensitive(headers, "x-amzn-requestid") ||
+      getHeaderCaseInsensitive(headers, "x-amz-request-id");
+    if (requestId) return requestId;
+  }
+  return undefined;
+}
+
+function getBedrockErrorCode(error) {
+  for (const item of bedrockErrorChain(error)) {
+    if (typeof item?.code === "string") return item.code;
+    if (typeof item?.cause?.code === "string") return item.cause.code;
+  }
+  return undefined;
+}
+
+function isBedrockTimeout(error) {
+  const status = getBedrockHttpStatus(error);
+  const type = (getBedrockExceptionType(error) || "").toLowerCase();
+  const code = (getBedrockErrorCode(error) || "").toUpperCase();
+  return (
+    status === 408 ||
+    type === "timeouterror" ||
+    type.includes("requesttimeout") ||
+    code === "ETIMEDOUT" ||
+    code === "UND_ERR_CONNECT_TIMEOUT" ||
+    code === "UND_ERR_HEADERS_TIMEOUT" ||
+    code === "UND_ERR_BODY_TIMEOUT"
+  );
+}
+
+function isSafeBedrockNetworkError(error) {
+  if (getBedrockHttpStatus(error) !== undefined) return false;
+  const code = (getBedrockErrorCode(error) || "").toUpperCase();
+  if (BEDROCK_SAFE_NETWORK_CODES.has(code)) return true;
+  return bedrockErrorChain(error).some(
+    (item) => item?.name === "TypeError" && /fetch failed|network/i.test(item?.message || "")
+  );
+}
+
+function getBedrockFailureKind(error) {
+  const status = getBedrockHttpStatus(error);
+  const type = (getBedrockExceptionType(error) || "").toLowerCase();
+  const message = bedrockErrorChain(error)
+    .map((item) => item?.message || "")
+    .join(" ")
+    .toLowerCase();
+
+  if (status === 503 || type.includes("serviceunavailable")) return "unavailable";
+  if (
+    status === 429 ||
+    type.includes("throttl") ||
+    type.includes("toomanyrequests") ||
+    message.includes("too many requests")
+  ) {
+    return "throttled";
+  }
+  if (isBedrockTimeout(error)) return "timeout";
+  if (isSafeBedrockNetworkError(error)) return "network";
+  return "other";
+}
+
+function shouldRetryBedrockError(error) {
+  return ["unavailable", "throttled", "timeout", "network"].includes(getBedrockFailureKind(error));
+}
+
+function sleepWithAbort(delay, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason);
+      return;
+    }
+
+    let timer;
+    const onAbort = () => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", onAbort);
+      reject(signal.reason);
+    };
+    const onTimeout = () => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    };
+
+    timer = setTimeout(onTimeout, delay);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+async function runAbortableOperation(operation, signal) {
+  if (!signal) return operation();
+  signal.throwIfAborted();
+
+  let onAbort;
+  const aborted = new Promise((_, reject) => {
+    onAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+
+  try {
+    signal.throwIfAborted();
+    return await Promise.race([operation(), aborted]);
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
+}
+
+async function runBedrockRequest(operation, options = {}) {
+  const {
+    signal,
+    maxAttempts = BEDROCK_MAX_ATTEMPTS,
+    initialDelayMs = BEDROCK_INITIAL_DELAY_MS,
+    maxDelayMs = BEDROCK_MAX_DELAY_MS,
+    random = Math.random,
+    sleep = sleepWithAbort,
+  } = options;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    signal?.throwIfAborted();
+    try {
+      return await operation();
+    } catch (error) {
+      signal?.throwIfAborted();
+      const underlying = unwrapRetryError(error);
+      if (attempt === maxAttempts || !shouldRetryBedrockError(underlying)) throw underlying;
+      const backoffCeiling = Math.min(maxDelayMs, initialDelayMs * 2 ** Math.max(0, attempt - 1));
+      await sleep(Math.floor(random() * backoffCeiling), signal);
+    }
+  }
+
+  throw new Error("Bedrock retry loop exited unexpectedly");
+}
+
+function getBedrockTechnicalDetails(error) {
+  const underlying = unwrapRetryError(error);
+  return {
+    ...(getBedrockHttpStatus(underlying) !== undefined
+      ? { status: getBedrockHttpStatus(underlying) }
+      : {}),
+    ...(getBedrockExceptionType(underlying)
+      ? { exceptionType: getBedrockExceptionType(underlying) }
+      : {}),
+    ...(getBedrockRequestId(underlying) ? { requestId: getBedrockRequestId(underlying) } : {}),
+    underlyingError: underlying?.message || String(underlying),
+  };
+}
+
 function mapManagedIdentityError(error, provider) {
   const code = error?.code;
   if (!code) return null;
@@ -49,42 +295,117 @@ function mapManagedIdentityError(error, provider) {
 }
 
 function mapBedrockError(error, config = {}) {
-  const msg = error?.message || error?.code || String(error);
+  const underlying = unwrapRetryError(error);
+  const msg = underlying?.message || underlying?.code || String(underlying);
+  const status = getBedrockHttpStatus(underlying);
+  const exceptionType = getBedrockExceptionType(underlying) || "";
+  const signature = `${exceptionType} ${msg}`.toLowerCase();
   const profile = config.bedrockProfile || "default";
   const region = config.bedrockRegion || "us-east-1";
+  const technicalDetails = getBedrockTechnicalDetails(underlying);
+  const withDetails = (mapped) => ({ ...mapped, technicalDetails });
 
-  if (msg.includes("ExpiredToken") || msg.includes("expired")) {
-    return {
+  if (signature.includes("expiredtoken") || signature.includes("expired")) {
+    if (config.managedContext) {
+      return withDetails({
+        message: "Temporary AWS access expired.",
+        messageKey: "reasoning.enterprise.errors.bedrock.temporaryAccessExpired",
+        action: "Sign out and sign back in to refresh company access, then retry.",
+        actionKey: "reasoning.enterprise.errors.bedrock.actions.refreshManagedAccess",
+        retryable: true,
+      });
+    }
+    return withDetails({
       message: "AWS SSO session expired.",
+      messageKey: "reasoning.enterprise.errors.bedrock.ssoExpired",
       action: "Run the command below in your terminal to re-authenticate:",
+      actionKey: "reasoning.enterprise.errors.bedrock.actions.reauthenticate",
       copyCommand: `aws sso login --profile ${profile}`,
       retryable: true,
-    };
+    });
   }
-  if (msg.includes("AccessDenied")) {
-    return {
-      message: `Model access not enabled. Enable it in the AWS Bedrock console for region ${region}.`,
-      action: "Open the AWS Bedrock console and request model access.",
-    };
+  if (
+    status === 401 ||
+    signature.includes("unrecognizedclient") ||
+    signature.includes("invalidclienttoken") ||
+    signature.includes("invalidsignature") ||
+    signature.includes("incompletesignature") ||
+    signature.includes("signaturedoesnotmatch")
+  ) {
+    return withDetails({
+      message: "AWS credentials were rejected. Check the access key ID, secret, and session token.",
+      messageKey: "reasoning.enterprise.errors.bedrock.credentialsRejected",
+    });
   }
-  if (msg.includes("ValidationException") || msg.includes("not found")) {
-    return {
-      message: `Model not found in region ${region}. Check the model ID format.`,
-      action: "Bedrock model IDs look like: anthropic.claude-sonnet-4-20250514-v1:0",
-    };
+  if (status === 403 || signature.includes("accessdenied") || signature.includes("permission")) {
+    return withDetails({
+      message: `AWS Bedrock denied this request. Ask your AWS administrator to grant permission to invoke the selected model in region ${region}.`,
+      messageKey: "reasoning.enterprise.errors.bedrock.accessDenied",
+      messageParams: { region },
+    });
   }
-  if (msg.includes("UnrecognizedClient") || msg.includes("InvalidSignature")) {
-    return {
-      message: "Invalid AWS credentials. Check your access key ID and secret.",
-    };
+  if (signature.includes("resourcenotfound") || signature.includes("modelnotfound")) {
+    return withDetails({
+      message: `AWS Bedrock could not find the selected model in region ${region}. Check the model ID and whether it is available in that region.`,
+      messageKey: "reasoning.enterprise.errors.bedrock.modelNotFound",
+      messageParams: { region },
+    });
   }
-  if (msg.includes("Throttling") || msg.includes("TooManyRequests")) {
-    return {
-      message: "Rate limited by AWS Bedrock. Wait a moment and retry.",
+  if (status === 400 || signature.includes("validationexception")) {
+    return withDetails({
+      message: `AWS Bedrock rejected the model configuration for region ${region}. Check the model ID, inference profile, and region.`,
+      messageKey: "reasoning.enterprise.errors.bedrock.configurationRejected",
+      messageParams: { region },
+    });
+  }
+  if (
+    signature.includes("credentialsprovidererror") ||
+    signature.includes("configerror") ||
+    signature.includes("region is missing") ||
+    signature.includes("could not load credentials")
+  ) {
+    return withDetails({
+      message: "AWS Bedrock is not configured correctly. Check the region and AWS credentials.",
+      messageKey: "reasoning.enterprise.errors.bedrock.notConfigured",
+    });
+  }
+  const kind = getBedrockFailureKind(underlying);
+  if (kind === "unavailable") {
+    return withDetails({
+      message:
+        "AWS Bedrock is temporarily unavailable due to high demand. This is an AWS service issue, not an OpenWhispr outage. Please try again in a few minutes.",
+      messageKey: "reasoning.enterprise.errors.bedrock.serviceUnavailable",
       retryable: true,
-    };
+    });
   }
-  return { message: `AWS Bedrock error: ${msg}` };
+  if (kind === "throttled") {
+    return withDetails({
+      message:
+        "AWS Bedrock is temporarily limiting requests because it is receiving too many. Please wait a moment and try again. If this continues, ask your AWS administrator to check your Bedrock usage and quotas.",
+      messageKey: "reasoning.enterprise.errors.bedrock.throttled",
+      retryable: true,
+    });
+  }
+  if (kind === "timeout") {
+    return withDetails({
+      message:
+        "AWS Bedrock did not respond in time. Please try again. If this continues, check your internet connection and AWS Bedrock service status.",
+      messageKey: "reasoning.enterprise.errors.bedrock.timeout",
+      retryable: true,
+    });
+  }
+  if (kind === "network") {
+    return withDetails({
+      message: "AWS Bedrock could not be reached. Check your internet connection and try again.",
+      messageKey: "reasoning.enterprise.errors.bedrock.network",
+      retryable: true,
+    });
+  }
+  return withDetails({
+    message: `AWS Bedrock error: ${msg}`,
+    messageKey: "reasoning.enterprise.errors.bedrock.unknown",
+    messageParams: { error: msg },
+  });
 }
 
 function mapAzureError(error) {
@@ -270,5 +591,8 @@ module.exports = {
   isEnterpriseProvider,
   mapEnterpriseError,
   pickEnterpriseConfig,
+  runAbortableOperation,
+  runBedrockRequest,
+  unwrapRetryError,
   validateEnterpriseEndpoint,
 };

@@ -28,10 +28,13 @@ function mapVerboseSegments(responseData) {
   for (const seg of segments) {
     const text = typeof seg?.text === "string" ? seg.text.trim() : "";
     if (!text || !Number.isFinite(seg.start)) continue;
+    const start = Math.max(0, seg.start);
+    const rawEnd = Number.isFinite(seg.end) ? seg.end : start;
+    const end = Math.max(start, rawEnd);
     mapped.push({
       text,
-      start: seg.start,
-      end: Number.isFinite(seg.end) ? seg.end : seg.start,
+      start,
+      end,
     });
   }
   return mapped.length ? mapped : null;

@@ -16,6 +16,9 @@ const MAX_RESTART_ATTEMPTS = 3;
 const RESTART_DELAY_MS = 1000;
 // After this much sustained uptime, reset restart counter (allows future restarts after sleep/wake)
 const RESTART_RESET_MS = 10000;
+// Crash recovery is best-effort and must never hold the rest of app startup.
+const PREFERENCE_RECOVERY_TIMEOUT_MS = 2000;
+const PREFERENCE_RECOVERY_TERMINATION_TIMEOUT_MS = 1000;
 
 class GlobeKeyManager extends EventEmitter {
   constructor({ preferenceStatePath = null } = {}) {
@@ -26,6 +29,7 @@ class GlobeKeyManager extends EventEmitter {
     this._isStopping = false;
     this._restartCount = 0;
     this._restartResetTimer = null;
+    this._preferenceRecoveryBlocked = false;
     this.preferenceStatePath = preferenceStatePath;
     this.config = { mouseButtons: [], suppressGlobeAction: false };
   }
@@ -86,9 +90,109 @@ class GlobeKeyManager extends EventEmitter {
     return args;
   }
 
+  restoreLeftoverSystemPreference() {
+    if (!this.isSupported || !this.preferenceStatePath) {
+      return Promise.resolve();
+    }
+    if (!fs.existsSync(this.preferenceStatePath)) {
+      return Promise.resolve();
+    }
+
+    const listenerPath = this.resolveListenerBinary();
+    if (!listenerPath) {
+      debugLogger.warn("[GlobeKeyManager] Preference recovery skipped — binary not found");
+      return Promise.resolve();
+    }
+
+    const archMismatch = this._checkArchMismatch(listenerPath);
+    if (archMismatch) {
+      debugLogger.warn("[GlobeKeyManager] Preference recovery skipped", { error: archMismatch });
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      let settled = false;
+      let recoveryTimeout = null;
+      let terminationTimeout = null;
+      let terminationRequested = false;
+      const finish = (error, code) => {
+        if (settled) return;
+        settled = true;
+        if (recoveryTimeout) clearTimeout(recoveryTimeout);
+        if (terminationTimeout) clearTimeout(terminationTimeout);
+        if (error || code !== 0) {
+          debugLogger.warn("[GlobeKeyManager] Preference recovery failed", {
+            error: error?.message,
+            code,
+          });
+        }
+        resolve();
+      };
+      const blockListenerStart = (error) => {
+        this._preferenceRecoveryBlocked = true;
+        finish(error);
+      };
+
+      try {
+        const child = spawn(
+          listenerPath,
+          [
+            "--globe-preference-state",
+            this.preferenceStatePath,
+            "--restore-leftover-globe-preference",
+          ],
+          { stdio: "ignore" }
+        );
+        child.once("error", (error) => {
+          if (terminationRequested) {
+            blockListenerStart(error);
+          } else {
+            finish(error);
+          }
+        });
+        child.once("exit", (code) =>
+          finish(
+            terminationRequested
+              ? new Error("Preference recovery helper was terminated after timing out")
+              : null,
+            code
+          )
+        );
+        recoveryTimeout = setTimeout(() => {
+          terminationRequested = true;
+          try {
+            child.kill("SIGKILL");
+          } catch (error) {
+            blockListenerStart(error);
+            return;
+          }
+          if (!settled) {
+            terminationTimeout = setTimeout(
+              () =>
+                blockListenerStart(
+                  new Error(
+                    `Preference recovery helper did not exit within ${PREFERENCE_RECOVERY_TERMINATION_TIMEOUT_MS}ms after SIGKILL`
+                  )
+                ),
+              PREFERENCE_RECOVERY_TERMINATION_TIMEOUT_MS
+            );
+          }
+        }, PREFERENCE_RECOVERY_TIMEOUT_MS);
+      } catch (error) {
+        finish(error);
+      }
+    });
+  }
+
   start() {
     if (!this.isSupported) {
       debugLogger.info("[GlobeKeyManager] Skipped — not macOS");
+      return;
+    }
+    if (this._preferenceRecoveryBlocked) {
+      this.reportError(
+        new Error("Globe listener blocked because preference recovery could not be terminated")
+      );
       return;
     }
     if (this.process) {

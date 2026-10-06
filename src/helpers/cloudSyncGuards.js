@@ -31,6 +31,7 @@ export function buildNoteUpdatePayload(note, cloudFolderId) {
     content: note.content,
     enhanced_content: note.enhanced_content,
     enhancement_prompt: note.enhancement_prompt,
+    enhancement_template_id: note.enhancement_template_id,
     enhanced_at_content_hash: note.enhanced_at_content_hash,
     note_type: note.note_type,
     source_file: note.source_file,
@@ -52,8 +53,14 @@ export function buildNoteUpdatePayload(note, cloudFolderId) {
 // POST creates a new cloud identity and therefore has no prior server
 // revision to compare. Forks from older databases can retain a stale base, so
 // derive create payloads explicitly rather than forwarding base_updated_at.
+//
+// updated_at is dropped too so the server stamps the row itself. The local
+// value is the last edit, possibly hours old by the time the row uploads, and
+// the server stores it as-is — mobile's delta cursor (the newest updated_at
+// it has seen) would then skip the row forever. PATCHes are server-stamped.
 export function buildNoteCreatePayload(note, cloudFolderId) {
   const payload = buildNoteUpdatePayload(note, cloudFolderId);
   delete payload.base_updated_at;
+  delete payload.updated_at;
   return payload;
 }

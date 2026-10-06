@@ -43,6 +43,12 @@ test("unrelated word swaps are filtered by edit distance — cat to elephant is 
   assert.ok(!result.includes("elephant"));
 });
 
+test("swapping one everyday word for another is a content edit, not vocabulary", () => {
+  const original = "This is why I'm speaking";
+  assert.deepEqual(extractCorrections(original, "This is what I'm speaking", []), []);
+  assert.deepEqual(extractCorrections(original, "This is where I'm speaking", []), []);
+});
+
 test("a non-array dictionary is tolerated", () => {
   const result = extractCorrections("Hey Shunade", "Hey Sinead", null);
   assert.ok(result.includes("Sinead"));

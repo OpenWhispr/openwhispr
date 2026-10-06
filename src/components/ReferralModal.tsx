@@ -1,8 +1,9 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { X } from "lucide-react";
+import { X } from "./icons";
 import { cn } from "./lib/utils";
+import { blurBehindOverlays } from "./ui/overlayBlur";
 import { ReferralDashboard } from "./ReferralDashboard";
 
 interface ReferralModalProps {
@@ -17,7 +18,8 @@ export default function ReferralModal({ open, onOpenChange }: ReferralModalProps
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay
           className={cn(
-            "fixed inset-0 z-50 bg-black/60 backdrop-blur-lg",
+            "fixed inset-0 z-50 bg-black/60",
+            blurBehindOverlays && "backdrop-blur-lg",
             "data-[state=open]:animate-in data-[state=closed]:animate-out",
             "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
           )}
@@ -40,7 +42,7 @@ export default function ReferralModal({ open, onOpenChange }: ReferralModalProps
             {t("referral.modalTitle")}
           </DialogPrimitive.Title>
 
-          <DialogPrimitive.Close className="absolute right-3 top-3 z-20 rounded-full p-1.5 opacity-40 transition-[opacity,background-color] hover:opacity-80 hover:bg-foreground/10 focus:outline-none focus:ring-2 focus:ring-foreground/20 focus:ring-offset-0">
+          <DialogPrimitive.Close className="absolute end-3 top-3 z-20 rounded-full p-1.5 opacity-40 transition-[opacity,background-color] hover:opacity-80 hover:bg-foreground/10 focus:outline-none focus:ring-2 focus:ring-foreground/20 focus:ring-offset-0">
             <X className="h-4 w-4 text-foreground" />
             <span className="sr-only">{t("common.close")}</span>
           </DialogPrimitive.Close>

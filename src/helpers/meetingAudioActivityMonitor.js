@@ -4,11 +4,11 @@ const {
   MEETING_SYSTEM_ACTIVITY_RMS,
 } = require("../utils/audioUtils");
 
-// How long a channel stays "active" after its last audible chunk. The system
-// tail is longer so gaps between a remote speaker's sentences don't read as
-// silence.
+// How long a channel stays "active" after its last audible chunk. Both tails sit
+// in front of the auto-end dwell, so they are kept short; the system tail only
+// has to bridge the pause between a remote speaker's words, not their sentences.
 const MIC_ACTIVITY_TAIL_MS = 2_000;
-const SYSTEM_ACTIVITY_TAIL_MS = 3_000;
+const SYSTEM_ACTIVITY_TAIL_MS = 1_000;
 
 const CHANNELS = {
   mic: { threshold: MEETING_MIC_ACTIVITY_RMS, tailMs: MIC_ACTIVITY_TAIL_MS },

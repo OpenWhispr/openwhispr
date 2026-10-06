@@ -72,6 +72,17 @@ test("the ceiling bounds a final that never lands", async (t) => {
   assert.ok(ms < CEILING_MS + 300, `overran the ceiling: ${ms}ms`);
 });
 
+test("a provider can widen the ceiling for a slower final", async (t) => {
+  const manager = await loadManager(t);
+  const providerCeilingMs = 600;
+  manager.streamingPartialText = "never finalized";
+
+  const ms = await elapsed(() => manager.awaitStreamingTextSettled(providerCeilingMs));
+
+  assert.ok(ms >= providerCeilingMs - TIMER_SLACK_MS, `ignored the provider ceiling: ${ms}ms`);
+  assert.ok(ms < CEILING_MS, `fell back to the default ceiling: ${ms}ms`);
+});
+
 test("clears its timers so a settled wait leaves no handles behind", async (t) => {
   const manager = await loadManager(t);
 

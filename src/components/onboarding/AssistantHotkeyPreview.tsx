@@ -11,20 +11,24 @@ import assistantPreview from "../../assets/onboarding-assistant-preview.webp";
  * it stays English in every locale. It is illustrative chrome, not UI the user
  * reads for meaning.
  *
- * `shrink` + `min-h-0` matter — this is decoration, so on a short window it gives
- * way and crops rather than pushing the hotkey capture box out of the shell.
+ * This stays above the shortcut controls and outside the shrinking flex pool.
+ * The frame is a fixed band rather than the export's 16:9 (at full height the
+ * step scrolled) and crops a lightly enlarged image biased toward the top, so
+ * the spoken request and mail window stay in view with no export edge showing.
  */
 export default function AssistantHotkeyPreview() {
   return (
-    <img
-      src={assistantPreview}
-      alt=""
-      aria-hidden="true"
-      width={561}
-      height={318}
-      decoding="async"
-      draggable={false}
-      className="mx-auto mt-6 h-auto min-h-0 w-full max-w-[26rem] shrink select-none rounded-2xl border border-[var(--onboarding-control-border)] object-cover"
-    />
+    <div className="mx-auto mt-3 h-56 w-full max-w-[30rem] shrink-0 overflow-hidden rounded-2xl">
+      <img
+        src={assistantPreview}
+        alt=""
+        aria-hidden="true"
+        width={561}
+        height={318}
+        decoding="async"
+        draggable={false}
+        className="h-full w-full scale-105 select-none object-cover object-[50%_35%]"
+      />
+    </div>
   );
 }

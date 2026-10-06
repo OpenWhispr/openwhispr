@@ -1,3 +1,4 @@
+import orukIcon from "@/assets/icons/providers/oruk.webp";
 import openaiIcon from "@/assets/icons/providers/openai.svg";
 import anthropicIcon from "@/assets/icons/providers/anthropic.svg";
 import geminiIcon from "@/assets/icons/providers/gemini.svg";
@@ -9,6 +10,7 @@ import groqIcon from "@/assets/icons/providers/groq.svg";
 // eye SVG is 163x108, and ProviderIcon renders a square img, so it came out
 // squashed in every row. WebP because NVIDIA ships the tile as raster art.
 import nvidiaIcon from "@/assets/icons/providers/nvidia.webp";
+import cohereIcon from "@/assets/icons/providers/cohere.svg";
 import openaiOssIcon from "@/assets/icons/providers/openai-oss.svg";
 import gemmaIcon from "@/assets/icons/providers/gemma.svg";
 import liquidaiIcon from "@/assets/icons/providers/liquidai.svg";
@@ -19,8 +21,11 @@ import xaiIcon from "@/assets/icons/providers/xai.svg";
 import cortiIcon from "@/assets/icons/providers/corti.svg";
 import openrouterIcon from "@/assets/icons/providers/openrouter.svg";
 import tinfoilIcon from "@/assets/icons/providers/tinfoil.svg";
+import deepgramIcon from "@/assets/icons/providers/deepgram.svg";
+import assemblyaiIcon from "@/assets/icons/providers/assemblyai.svg";
 
 export const PROVIDER_ICONS: Record<string, string> = {
+  oruk: orukIcon,
   openai: openaiIcon,
   whisper: openaiIcon,
   anthropic: anthropicIcon,
@@ -30,6 +35,7 @@ export const PROVIDER_ICONS: Record<string, string> = {
   qwen: qwenIcon,
   groq: groqIcon,
   nvidia: nvidiaIcon,
+  cohere: cohereIcon,
   "openai-oss": openaiOssIcon,
   gemma: gemmaIcon,
   liquidai: liquidaiIcon,
@@ -40,6 +46,8 @@ export const PROVIDER_ICONS: Record<string, string> = {
   corti: cortiIcon,
   openrouter: openrouterIcon,
   tinfoil: tinfoilIcon,
+  deepgram: deepgramIcon,
+  assemblyai: assemblyaiIcon,
 };
 
 export function getProviderIcon(provider: string): string | undefined {
@@ -56,6 +64,7 @@ export const MONOCHROME_PROVIDERS = [
   "corti",
   "openrouter",
   "tinfoil",
+  "assemblyai",
 ] as const;
 
 export function isMonochromeProvider(provider: string): boolean {

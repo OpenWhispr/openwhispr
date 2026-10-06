@@ -43,6 +43,43 @@ test("payload noteId with no pending session is current", () => {
   assert.deepEqual(result, { targetNoteId: 1, isCurrentSession: true });
 });
 
+// A restarted recording resets diarizationSessionId to null, so "no pending
+// session" stops meaning "nothing newer is happening". Publishing the finished
+// half's snapshot then paints it over the live recording — and the editor
+// prefers that overlay, so the note looks truncated and one speaker rename
+// writes the truncated copy to disk.
+test("a live recording on the target note supersedes a result with no pending session", () => {
+  const result = resolveDiarizationTarget({
+    payloadNoteId: 1,
+    payloadSessionId: "diar-100",
+    currentSessionId: null,
+    activeRecordingNoteId: 1,
+  });
+  assert.deepEqual(result, { targetNoteId: 1, isCurrentSession: false });
+});
+
+test("a live recording on another note does not supersede the result", () => {
+  const result = resolveDiarizationTarget({
+    payloadNoteId: 1,
+    payloadSessionId: "diar-100",
+    currentSessionId: null,
+    activeRecordingNoteId: 2,
+  });
+  assert.deepEqual(result, { targetNoteId: 1, isCurrentSession: true });
+});
+
+// recordingNoteId outlives the recording that set it, so the caller passes null
+// once the recording stops — otherwise the note could never publish again.
+test("a stopped recording no longer supersedes its own note's result", () => {
+  const result = resolveDiarizationTarget({
+    payloadNoteId: 1,
+    payloadSessionId: "diar-100",
+    currentSessionId: null,
+    activeRecordingNoteId: null,
+  });
+  assert.deepEqual(result, { targetNoteId: 1, isCurrentSession: true });
+});
+
 test("a payload without a noteId is dropped", () => {
   // Main snapshots the same noteId the renderer passed to
   // meetingTranscriptionStart, so a missing one means the recording was never

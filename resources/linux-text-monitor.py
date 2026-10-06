@@ -65,11 +65,14 @@ def _emit_text(prefix, value):
 
 
 def main():
+    probe_editable = len(sys.argv) >= 2 and sys.argv[1] == "--probe-editable"
+
     # Read original text from stdin (consume but don't use in this binary)
-    try:
-        sys.stdin.readline()
-    except Exception:
-        pass
+    if not probe_editable:
+        try:
+            sys.stdin.readline()
+        except Exception:
+            pass
 
     if not HAS_ATSPI:
         print("NO_ELEMENT", flush=True)
@@ -96,6 +99,44 @@ def main():
     if focused is None:
         print("NO_ELEMENT", flush=True)
         sys.exit(1)
+
+    if probe_editable:
+        try:
+            states = focused.get_state_set()
+            editable = (
+                states.contains(Atspi.StateType.EDITABLE)
+                and states.contains(Atspi.StateType.ENABLED)
+                and states.contains(Atspi.StateType.FOCUSABLE)
+                and not states.contains(Atspi.StateType.PROTECTED)
+            )
+        except Exception:
+            editable = False
+        # A shell prompt must never read as a writable caret: pasted newlines
+        # execute. VTE and Qt terminals expose the TERMINAL role; the caller
+        # separately refuses terminals by executable name.
+        if editable:
+            try:
+                if focused.get_role() == Atspi.Role.TERMINAL:
+                    editable = False
+            except Exception:
+                pass
+        # A live selection means an EDITABLE verdict would let generated text
+        # paste over the user's highlighted text. This is the authoritative
+        # check: the caller's clipboard-based capture cannot see a selection
+        # whose text already matches the clipboard.
+        if editable:
+            try:
+                text_iface = focused.get_text_iface()
+                if text_iface:
+                    for i in range(text_iface.get_n_selections()):
+                        selection = text_iface.get_selection(i)
+                        if selection and selection.end_offset > selection.start_offset:
+                            editable = False
+                            break
+            except Exception:
+                pass
+        print("EDITABLE" if editable else "NOT_EDITABLE", flush=True)
+        sys.exit(0)
 
     # Check if the element supports the Text interface
     try:

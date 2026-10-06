@@ -84,6 +84,7 @@ export function useSystemAudioPermission() {
   const portalVersion = access?.portalVersion ?? null;
 
   return {
+    loaded: access !== null,
     granted,
     status,
     mode,

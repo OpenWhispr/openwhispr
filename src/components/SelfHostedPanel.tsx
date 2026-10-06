@@ -28,6 +28,7 @@ export default function SelfHostedPanel({
           {t("settingsPage.selfHosted.serverUrl")}
         </label>
         <Input
+          dir="ltr"
           value={url}
           onChange={(e) => onUrlChange(e.target.value)}
           placeholder={placeholderUrl}
@@ -38,6 +39,7 @@ export default function SelfHostedPanel({
         <div className="space-y-1.5">
           <label className="block text-xs font-medium text-foreground">{t("common.model")}</label>
           <Input
+            dir="ltr"
             value={model ?? ""}
             onChange={(e) => onModelChange(e.target.value)}
             placeholder="Whisper-Large-v3-Turbo"

@@ -30,6 +30,7 @@ test("builds a structured prompt that keeps instruction and selection separate",
   assert.equal(extractSelectionEditReplacement(`Improved text${marker}`, marker), "Improved text");
   assert.throws(() => extractSelectionEditReplacement("Truncated text", marker), /incomplete/);
 
+  assert.equal(getSelectionCaptureDisposition({ status: "editable" }), "caret");
   assert.equal(getSelectionCaptureDisposition({ status: "none" }), "standalone");
   assert.equal(
     getSelectionCaptureDisposition({ status: "unavailable", code: "copy_helper_unavailable" }),
@@ -40,6 +41,17 @@ test("builds a structured prompt that keeps instruction and selection separate",
   // failing — otherwise the Voice Agent is unusable in Chromium browsers.
   assert.equal(
     getSelectionCaptureDisposition({ status: "unavailable", code: "accessibility_unavailable" }),
+    "standalone"
+  );
+  // Keys held past the modifier wait (#2113) block the copy the same way.
+  assert.equal(
+    getSelectionCaptureDisposition({ status: "unavailable", code: "modifiers_held" }),
+    "standalone"
+  );
+  // Focus moved during that wait, so the new window was never checked: the
+  // command runs on its own rather than failing as a changed selection.
+  assert.equal(
+    getSelectionCaptureDisposition({ status: "target_changed", code: "focus_moved" }),
     "standalone"
   );
   assert.equal(getSelectionCaptureDisposition({ status: "target_changed" }), "changed");

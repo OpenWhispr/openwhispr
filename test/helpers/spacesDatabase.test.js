@@ -49,7 +49,9 @@ function createDb(t) {
   }
 
   try {
-    return new DatabaseManager();
+    const database = new DatabaseManager();
+    database.setActiveAccountId("test-account");
+    return database;
   } catch (error) {
     if (isNativeBindingUnavailable(error)) {
       t.skip("better-sqlite3 native binding is not available for this Node runtime");
@@ -68,6 +70,9 @@ function createTestTeamSpace(db, { name, emoji = null } = {}) {
       "INSERT INTO spaces (client_space_id, kind, name, emoji, sort_order) VALUES (?, 'team', ?, ?, ?)"
     )
     .run(`test-team-space-${++nextTestTeamSpaceId}`, name, emoji, (maxOrder?.max_order ?? 0) + 1);
+  db.db
+    .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, ?)")
+    .run(result.lastInsertRowid, "test-account");
   return { success: true, space: db.getSpace(result.lastInsertRowid) };
 }
 
@@ -100,7 +105,8 @@ test("spaces migration is idempotent across launches", (t) => {
     .all()
     .map((row) => row.name);
   assert.ok(indexes.includes("idx_folders_client_folder_id"));
-  assert.ok(indexes.includes("idx_folders_space_name"));
+  assert.ok(indexes.includes("idx_folders_space_legacy_name"));
+  assert.ok(indexes.includes("idx_folders_space_account_name"));
 
   const privates = db2.db
     .prepare("SELECT COUNT(*) as count FROM spaces WHERE kind = 'private'")
@@ -1663,6 +1669,34 @@ test("upsertSpaceFromCloud round-trips the teams mirror as a parsed array", (t) 
   // A corrupt column must degrade to an empty array, never throw.
   db.db.prepare("UPDATE spaces SET teams = 'not json' WHERE id = ?").run(space.id);
   assert.deepEqual(db.getSpaces().find((s) => s.id === space.id).teams, []);
+});
+
+test("upsertSpaceFromCloud mirrors the direct role and clears it when the grant goes", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const created = db.upsertSpaceFromCloud({
+    id: "space-1",
+    name: "Design space",
+    workspace_id: "ws-1",
+    my_role: "admin",
+    my_direct_role: "admin",
+    teams: [],
+  });
+  assert.equal(created.my_direct_role, "admin");
+  assert.equal(db.getSpaceByCloudSpaceId("space-1").my_direct_role, "admin");
+
+  // Access now flows only through a team: the effective role survives, the
+  // direct grant must not linger and keep "Leave space" offered.
+  const updated = db.upsertSpaceFromCloud({
+    id: "space-1",
+    name: "Design space",
+    workspace_id: "ws-1",
+    my_role: "member",
+    teams: [{ id: "team-1", name: "Design", my_role: "member" }],
+  });
+  assert.equal(updated.id, created.id);
+  assert.equal(updated.my_role, "member");
+  assert.equal(updated.my_direct_role, null);
 });
 
 test("upsertSpaceFromCloud adopts a pre-spaces row via its single backfilled team", (t) => {

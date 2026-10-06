@@ -170,7 +170,8 @@ test("enterprise call settings cannot omit or bypass a resolved managed route", 
     status: "ready",
     config: managedBedrockConfig(),
     error: null,
-    failClosed: false,
+    managedScopes: SCOPES,
+    enforcedScopes: [],
   });
 
   const settings = getEnterpriseCallSettings("azure", "dictationCleanup");
@@ -181,7 +182,8 @@ test("enterprise call settings cannot omit or bypass a resolved managed route", 
     status: "error",
     config: null,
     error: "Company SSO is required",
-    failClosed: true,
+    managedScopes: SCOPES,
+    enforcedScopes: SCOPES,
   });
   assert.throws(
     () => getEnterpriseCallSettings("azure", "dictationCleanup"),
@@ -235,7 +237,8 @@ test("required managed access fails closed when workspace policy forbids it", as
     status: "error",
     config: null,
     error: "Sign in with company SSO",
-    failClosed: true,
+    managedScopes: SCOPES,
+    enforcedScopes: SCOPES,
   });
   const unavailable = resolvedMode();
   assert.equal(unavailable.mode, "enterprise");

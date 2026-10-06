@@ -39,7 +39,7 @@ test("_syncCalendar fetches all pages when nextPageToken is returned", async () 
     updateCalendarSyncToken: (calendarId, syncToken) => {
       savedSyncToken = syncToken;
     },
-    upsertContacts: () => {},
+    syncCalendarContacts: () => {},
   };
 
   const reminderScheduler = {
@@ -55,7 +55,13 @@ test("_syncCalendar fetches all pages when nextPageToken is returned", async () 
     if (!path.includes("pageToken=")) {
       return {
         items: [
-          { id: "event-1", summary: "Event Page 1", start: { dateTime: "2026-08-12T10:00:00Z" } },
+          {
+            id: "event-1",
+            summary: "Event Page 1",
+            start: { dateTime: "2026-08-12T10:00:00Z" },
+            transparency: "transparent",
+            attendees: [{ self: true, responseStatus: "declined" }],
+          },
         ],
         nextPageToken: "token-page-2",
       };
@@ -71,7 +77,7 @@ test("_syncCalendar fetches all pages when nextPageToken is returned", async () 
     throw new Error(`Unexpected path: ${path}`);
   };
 
-  const calendar = { id: "cal-1", account_email: "test@example.com" };
+  const calendar = { id: "cal-1", account_email: "test@example.com", is_primary: 1 };
   await manager._syncCalendar(calendar);
 
   assert.equal(apiCalls.length, 2, "should make 2 API calls for 2 pages");
@@ -87,6 +93,8 @@ test("_syncCalendar fetches all pages when nextPageToken is returned", async () 
   assert.equal(secondPageParams.get("pageToken"), "token-page-2");
   assert.equal(upsertedEvents.length, 2, "should upsert events from both pages");
   assert.equal(upsertedEvents[0].id, "event-1");
+  assert.equal(upsertedEvents[0].availability_status, "free");
+  assert.equal(upsertedEvents[0].self_response_status, "declined");
   assert.equal(upsertedEvents[1].id, "event-2");
   assert.equal(savedSyncToken, "sync-token-final", "should save nextSyncToken from final page");
   assert.deepEqual(
@@ -105,7 +113,7 @@ test("_syncCalendar preserves incremental sync parameters across pages", async (
     upsertCalendarEvents: () => {},
     removeCalendarEvents: () => {},
     updateCalendarSyncToken: () => {},
-    upsertContacts: () => {},
+    syncCalendarContacts: () => {},
   };
   const reminderScheduler = {
     scheduleNextMeeting: () => {},
@@ -125,6 +133,7 @@ test("_syncCalendar preserves incremental sync parameters across pages", async (
     id: "cal-1",
     account_email: "test@example.com",
     sync_token: "sync-token-previous",
+    sync_token_expires_at: Date.now() + 60_000,
   });
 
   assert.equal(apiCalls.length, 2);
@@ -135,6 +144,83 @@ test("_syncCalendar preserves incremental sync parameters across pages", async (
   assert.equal(secondPageParams.get("singleEvents"), "true");
   assert.equal(secondPageParams.get("syncToken"), "sync-token-previous");
   assert.equal(secondPageParams.get("pageToken"), "token-page-2");
+});
+
+test("_syncCalendar discards an expired sync token and re-runs a full window sync", async () => {
+  const GoogleCalendarManager = loadManagerModule();
+
+  let savedToken = null;
+  const databaseManager = {
+    getGoogleAccounts: () => [],
+    removeStaleCalendarEvents: () => {},
+    upsertCalendarEvents: () => {},
+    removeCalendarEvents: () => {},
+    updateCalendarSyncToken: (calendarId, syncToken, expiresAt) => {
+      savedToken = { calendarId, syncToken, expiresAt };
+    },
+    syncCalendarContacts: () => {},
+  };
+  const reminderScheduler = { scheduleNextMeeting: () => {}, reset: () => {} };
+  const manager = new GoogleCalendarManager(databaseManager, null, reminderScheduler);
+
+  const apiCalls = [];
+  manager._apiGet = async (path) => {
+    apiCalls.push(path);
+    return { items: [], nextSyncToken: "sync-token-fresh" };
+  };
+
+  const before = Date.now();
+  await manager._syncCalendar({
+    id: "cal-1",
+    account_email: "test@example.com",
+    sync_token: "sync-token-stale",
+    sync_token_expires_at: before - 1,
+  });
+
+  const params = new URL(apiCalls[0], "https://www.googleapis.com").searchParams;
+  assert.equal(params.get("syncToken"), null, "expired token must not be reused");
+  assert.ok(params.get("timeMin"), "full sync should send a fresh window");
+  assert.ok(params.get("timeMax"), "full sync should send a fresh window");
+  assert.equal(savedToken.syncToken, "sync-token-fresh");
+  assert.ok(
+    savedToken.expiresAt >= before + 23 * 60 * 60 * 1000,
+    "new token should carry a fresh expiry"
+  );
+});
+
+test("_syncCalendar keeps the stored expiry when an incremental sync reuses the token", async () => {
+  const GoogleCalendarManager = loadManagerModule();
+
+  let savedToken = null;
+  const databaseManager = {
+    getGoogleAccounts: () => [],
+    removeStaleCalendarEvents: () => {},
+    upsertCalendarEvents: () => {},
+    removeCalendarEvents: () => {},
+    updateCalendarSyncToken: (calendarId, syncToken, expiresAt) => {
+      savedToken = { calendarId, syncToken, expiresAt };
+    },
+    syncCalendarContacts: () => {},
+  };
+  const reminderScheduler = { scheduleNextMeeting: () => {}, reset: () => {} };
+  const manager = new GoogleCalendarManager(databaseManager, null, reminderScheduler);
+
+  manager._apiGet = async () => ({ items: [], nextSyncToken: "sync-token-next" });
+
+  const storedExpiry = Date.now() + 60_000;
+  await manager._syncCalendar({
+    id: "cal-1",
+    account_email: "test@example.com",
+    sync_token: "sync-token-previous",
+    sync_token_expires_at: storedExpiry,
+  });
+
+  assert.equal(savedToken.syncToken, "sync-token-next");
+  assert.equal(
+    savedToken.expiresAt,
+    storedExpiry,
+    "incremental sync must not extend the pinned window's expiry"
+  );
 });
 
 test("_syncCalendar preserves meeting links from Google event location and description", async () => {
@@ -149,7 +235,7 @@ test("_syncCalendar preserves meeting links from Google event location and descr
     },
     removeCalendarEvents: () => {},
     updateCalendarSyncToken: () => {},
-    upsertContacts: () => {},
+    syncCalendarContacts: () => {},
   };
   const reminderScheduler = {
     scheduleNextMeeting: () => {},
@@ -199,5 +285,145 @@ test("_syncCalendar preserves meeting links from Google event location and descr
         attendees_count: 0,
       },
     ]
+  );
+});
+
+test("_syncCalendar flags rooms and resources and keeps them and the user out of contacts", async () => {
+  const GoogleCalendarManager = loadManagerModule();
+  const upsertedEvents = [];
+  const synced = [];
+  const databaseManager = {
+    getGoogleAccounts: () => [],
+    removeStaleCalendarEvents: () => {},
+    upsertCalendarEvents: (events) => upsertedEvents.push(...events),
+    removeCalendarEvents: () => {},
+    updateCalendarSyncToken: () => {},
+    syncCalendarContacts: (...args) => synced.push(args),
+  };
+  const manager = new GoogleCalendarManager(databaseManager, null, {
+    scheduleNextMeeting: () => {},
+    reset: () => {},
+  });
+  manager._apiGet = async () => ({
+    items: [
+      {
+        id: "event-room",
+        summary: "Planning",
+        start: { dateTime: "2026-08-12T10:00:00Z" },
+        attendees: [
+          { email: "ana@example.com", displayName: "Ana", responseStatus: "accepted" },
+          { email: "boardroom@corp.test", displayName: "Boardroom", resource: true },
+          { email: "Me@example.com", displayName: "Me", self: true },
+        ],
+      },
+    ],
+    nextSyncToken: "sync-token",
+  });
+
+  await manager._syncCalendar({ id: "cal-1", account_email: "me@example.com" });
+
+  const attendees = JSON.parse(upsertedEvents[0].attendees);
+  assert.equal(attendees[0].resource, undefined);
+  assert.equal(attendees[1].resource, true);
+  // Rows older builds stored for the room and the user are purged.
+  assert.deepEqual(synced, [
+    [
+      "google",
+      "me@example.com",
+      [{ email: "ana@example.com", displayName: "Ana" }],
+      ["boardroom@corp.test", "Me@example.com"],
+    ],
+  ]);
+});
+
+test("_syncCalendar trusts self as the user only on the account's primary calendar", async () => {
+  const GoogleCalendarManager = loadManagerModule();
+  const synced = [];
+  const manager = new GoogleCalendarManager(
+    {
+      getGoogleAccounts: () => [],
+      removeStaleCalendarEvents: () => {},
+      upsertCalendarEvents: () => {},
+      removeCalendarEvents: () => {},
+      updateCalendarSyncToken: () => {},
+      syncCalendarContacts: (...args) => synced.push(args),
+    },
+    null,
+    { scheduleNextMeeting: () => {}, reset: () => {} }
+  );
+  manager._apiGet = async () => ({
+    items: [
+      {
+        id: "event-1",
+        start: { dateTime: "2026-08-12T10:00:00Z" },
+        // Self on the user's primary calendar is them (under an alias here);
+        // on a colleague's shared calendar it is that colleague.
+        attendees: [{ email: "dana@example.com", self: true }],
+      },
+    ],
+    nextSyncToken: "sync-token",
+  });
+
+  await manager._syncCalendar({ id: "me@example.com", account_email: "me@example.com" });
+  await manager._syncCalendar({ id: "cal-2", account_email: "me@example.com", is_primary: 1 });
+  await manager._syncCalendar({ id: "dana@example.com", account_email: "me@example.com" });
+
+  assert.deepEqual(
+    synced.map(([, , contacts, notContacts]) => [contacts.length, notContacts]),
+    [
+      [0, ["dana@example.com"]],
+      [0, ["dana@example.com"]],
+      [1, []],
+    ]
+  );
+});
+
+async function syncGoogleResponse(calendar, attendees) {
+  const rows = [];
+  const GoogleCalendarManager = loadManagerModule();
+  const manager = new GoogleCalendarManager(
+    {
+      removeStaleCalendarEvents: () => {},
+      upsertCalendarEvents: (events) => rows.push(...events),
+      removeCalendarEvents: () => {},
+      updateCalendarSyncToken: () => {},
+      syncCalendarContacts: () => {},
+    },
+    null,
+    { scheduleNextMeeting: () => {} }
+  );
+  manager._apiGet = async () => ({
+    items: [
+      {
+        id: "meeting",
+        summary: "Planning",
+        status: "confirmed",
+        start: { dateTime: "2026-10-01T10:00:00Z" },
+        end: { dateTime: "2026-10-01T11:00:00Z" },
+        attendees,
+      },
+    ],
+  });
+  await manager._syncCalendar(calendar);
+  return rows[0].self_response_status;
+}
+
+test("Google RSVP on a shared calendar uses the connected account's attendee", async () => {
+  const shared = { id: "colleague@example.com", account_email: "me@example.com" };
+  const colleague = { email: "colleague@example.com", self: true, responseStatus: "declined" };
+  assert.equal(
+    await syncGoogleResponse(shared, [
+      colleague,
+      { email: "ME@example.com", responseStatus: "accepted" },
+    ]),
+    "accepted"
+  );
+  assert.equal(await syncGoogleResponse(shared, [colleague]), "unknown");
+  assert.equal(
+    await syncGoogleResponse(shared, [
+      colleague,
+      { email: "me@example.com", responseStatus: "unrecognized" },
+    ]),
+    "unknown"
   );
 });

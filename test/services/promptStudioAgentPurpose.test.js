@@ -44,7 +44,7 @@ test("Prompt Studio labels dictation-agent runs for policy enforcement", async (
             "zustand/react/shallow": "zustand-shallow",
             "./button": "button",
             "./textarea": "textarea",
-            "lucide-react": "icons",
+            "../icons": "icons",
             "./dialog": "dialog",
           };
           if (modules[source]) return `\0prompt-studio-${modules[source]}`;

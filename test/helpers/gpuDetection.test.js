@@ -24,7 +24,7 @@ test("Turing and newer report cudaSupported", () => {
   });
 });
 
-test("Pascal is CUDA-supported since the 0.0.9 build ships sm_61 kernels", () => {
+test("Pascal is CUDA-supported since the 0.0.10 build ships sm_61 kernels", () => {
   const info = parseNvidiaSmiGpuInfo("NVIDIA GeForce GTX 1080 Ti, 582.66, 11264, 6.1");
   assert.equal(info.hasNvidiaGpu, true);
   assert.equal(info.computeCap, 6.1);

@@ -1,5 +1,6 @@
 import * as React from "react";
-import { X, Copy, Check } from "lucide-react";
+import { X, Copy, Check } from "../icons";
+import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import {
   ToastContext,
@@ -15,6 +16,77 @@ import {
 } from "../../helpers/toastPresentation";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 import { DictationErrorCard } from "../dictation/DictationErrorCard";
+import { TOAST_ACTION_ICONS } from "./toastActionIcons";
+import { TechnicalErrorDetails } from "./TechnicalErrorDetails";
+
+/** The inline action beside a toast's text; dismissing is left to the caller. */
+export function ToastActionButton({
+  onClick,
+  children,
+}: {
+  onClick: () => void | Promise<void>;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-sm border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-medium whitespace-nowrap text-white/90 transition-colors hover:border-white/35 hover:bg-white/20 hover:text-white"
+    >
+      {children}
+    </button>
+  );
+}
+
+/** A structured action under a standard toast's text: a compact button, or its icon alone. */
+function StandardToastAction({
+  action,
+  onAction,
+}: {
+  action: ToastActionConfig;
+  onAction: (action: ToastActionConfig) => ReturnType<ToastActionConfig["onClick"]>;
+}) {
+  const [result, setResult] = React.useState<boolean | undefined>();
+  const resetTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  React.useEffect(() => () => clearTimeout(resetTimer.current), []);
+
+  const handleClick = async () => {
+    let outcome: void | boolean;
+    try {
+      outcome = await onAction(action);
+    } catch {
+      outcome = false;
+    }
+    if (!action.feedback || typeof outcome !== "boolean") return;
+    setResult(outcome);
+    clearTimeout(resetTimer.current);
+    resetTimer.current = setTimeout(() => setResult(undefined), 1800);
+  };
+
+  const label =
+    result === true
+      ? action.feedback?.successLabel
+      : result === false
+        ? action.feedback?.failureLabel
+        : action.label;
+  if (!action.iconOnly) {
+    return <ToastActionButton onClick={handleClick}>{label}</ToastActionButton>;
+  }
+  const Icon = result === true ? Check : action.icon ? TOAST_ACTION_ICONS[action.icon] : Copy;
+  return (
+    <button
+      type="button"
+      onClick={() => void handleClick()}
+      title={label}
+      className="rounded-sm border border-white/20 bg-white/10 p-1 text-white/70 transition-colors hover:border-white/35 hover:bg-white/20 hover:text-white"
+    >
+      <Icon className="size-3" aria-hidden="true" />
+      <span className="sr-only" aria-live={action.feedback ? "polite" : undefined}>
+        {label}
+      </span>
+    </button>
+  );
+}
 
 interface ToastState extends ToastProps {
   id: string;
@@ -202,8 +274,8 @@ const ToastViewport: React.FC<{
         isDictationPanel
           ? hasDictationError
             ? "inset-x-3 bottom-3"
-            : "bottom-20 right-6"
-          : "bottom-5 right-5"
+            : "bottom-20 end-6"
+          : "bottom-5 end-5"
       )}
       // In the dictation panel an open menu raises the stack above itself
       // via --toast-viewport-bottom (set in App.jsx); 5rem matches bottom-20.
@@ -218,7 +290,13 @@ const ToastViewport: React.FC<{
         <Toast
           key={toast.id}
           {...toast}
-          onClose={() => onDismiss(toast.id)}
+          onClose={() => {
+            try {
+              toast.onClose?.();
+            } finally {
+              onDismiss(toast.id);
+            }
+          }}
           onPauseTimer={() => onPauseTimer(toast.id)}
           onResumeTimer={(remaining) => onResumeTimer(toast.id, remaining)}
         />
@@ -251,6 +329,11 @@ const Toast: React.FC<
 > = ({
   title,
   description,
+  descriptionHotkey,
+  dismissible,
+  secondaryDescription,
+  copyCommand,
+  technicalDetails,
   action,
   actions,
   presentation = "standard",
@@ -267,6 +350,10 @@ const Toast: React.FC<
   const remainingDurationRef = React.useRef(duration);
   const timerStartedAtRef = React.useRef(createdAt);
   const { copied, copy } = useCopyFeedback(description ?? "", { resetMs: 2000 });
+  const { copied: commandCopied, copy: copyRecoveryCommand } = useCopyFeedback(copyCommand ?? "", {
+    resetMs: 2000,
+  });
+  const { t } = useTranslation();
   const [timerPaused, setTimerPaused] = React.useState(false);
   const [errorSurfaceReady, setErrorSurfaceReady] = React.useState(false);
   const isDestructive = variant === "destructive";
@@ -286,7 +373,7 @@ const Toast: React.FC<
 
   const handleStructuredAction = (structuredAction: ToastActionConfig) => {
     if (structuredAction.dismissOnClick !== false) onClose?.();
-    void structuredAction.onClick();
+    return structuredAction.onClick();
   };
 
   const handleErrorHeightChange = React.useCallback(async (height: number) => {
@@ -323,6 +410,9 @@ const Toast: React.FC<
 
   const message = title || description;
   const detail = title && description ? description : undefined;
+  // Structured actions come with a classified error: its description is a
+  // sentence to read, and Copy details replaces the raw-error copy box.
+  const rowActions = actions?.length ? actions : undefined;
 
   if (presentation === "dictation-error") {
     return (
@@ -337,6 +427,8 @@ const Toast: React.FC<
         <DictationErrorCard
           title={title}
           description={description}
+          descriptionHotkey={descriptionHotkey}
+          onDismiss={dismissible ? onClose : undefined}
           actions={actions ?? []}
           onAction={handleStructuredAction}
           onPreferredHeightChange={handleErrorHeightChange}
@@ -355,8 +447,8 @@ const Toast: React.FC<
         "rounded-[5px]",
         "transition-[opacity,transform] duration-200 ease-out",
         isExiting
-          ? "opacity-0 translate-x-2 scale-[0.98]"
-          : "opacity-100 translate-x-0 scale-100 animate-in slide-in-from-right-4 fade-in-0 duration-300"
+          ? "opacity-0 translate-x-2 rtl:-translate-x-2 scale-[0.98]"
+          : "toast-enter opacity-100 translate-x-0 scale-100"
       )}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
@@ -368,8 +460,11 @@ const Toast: React.FC<
           {message && (
             <div className="text-xs font-medium leading-tight text-white/90">{message}</div>
           )}
+          {secondaryDescription && (
+            <div className="mt-1 text-xs leading-snug text-white/45">{secondaryDescription}</div>
+          )}
           {detail &&
-            (isDestructive ? (
+            (isDestructive && !rowActions ? (
               <div
                 className={cn(
                   "text-xs leading-snug mt-1 px-1.5 py-1 rounded-[3px] font-mono",
@@ -396,6 +491,36 @@ const Toast: React.FC<
             ) : (
               <div className="text-xs leading-snug mt-0.5 text-white/45">{detail}</div>
             ))}
+          {copyCommand && (
+            <div className="mt-1.5 flex items-center gap-1.5 rounded-[3px] border border-white/6 bg-white/4 px-1.5 py-1">
+              <code
+                dir="ltr"
+                className="min-w-0 flex-1 wrap-break-word font-mono text-[11px] text-white/60 select-all"
+              >
+                {copyCommand}
+              </code>
+              <button
+                type="button"
+                onClick={() => void copyRecoveryCommand()}
+                className="shrink-0 rounded-xs p-1 text-white/30 transition-colors hover:bg-white/6 hover:text-white/70"
+                aria-label={t("reasoning.enterprise.technicalDetails.copyCommand")}
+              >
+                {commandCopied ? <Check className="size-3" /> : <Copy className="size-3" />}
+              </button>
+            </div>
+          )}
+          <TechnicalErrorDetails details={technicalDetails} onDark />
+          {rowActions && (
+            <div className="mt-2 flex items-center gap-1.5">
+              {rowActions.map((rowAction, index) => (
+                <StandardToastAction
+                  key={`${rowAction.label}-${index}`}
+                  action={rowAction}
+                  onAction={handleStructuredAction}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
         {action && <div className="shrink-0 self-center">{action}</div>}
@@ -405,7 +530,7 @@ const Toast: React.FC<
         <button
           onClick={onClose}
           className={cn(
-            "absolute -left-2 -top-2 size-6 rounded-full",
+            "absolute -start-2 -top-2 size-6 rounded-full",
             "flex items-center justify-center",
             "bg-white/10 backdrop-blur-sm border border-white/10",
             "text-white/70 hover:text-white hover:bg-white/20",
@@ -420,7 +545,7 @@ const Toast: React.FC<
       )}
 
       {duration > 0 && !isExiting && (
-        <div className="absolute bottom-0 left-0.5 right-0 h-px overflow-hidden">
+        <div className="absolute bottom-0 start-0.5 end-0 h-px overflow-hidden">
           <div
             className={cn("h-full", config.progressClass)}
             style={{

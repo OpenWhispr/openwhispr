@@ -6,6 +6,7 @@ import { getBaseLanguageCode } from "../../utils/languageSupport";
 import {
   transcribeFile,
   getTranscriptionApiKey,
+  resolveFileTranscriptionRoute,
   type FileTranscriptionConfig,
 } from "../../services/fileTranscription";
 import { analyserRms } from "../../utils/audioLevel";
@@ -30,6 +31,7 @@ export function useVoiceDraft({ onTranscript, onError }: UseVoiceDraftOptions) {
     whisperModel,
     localTranscriptionProvider,
     parakeetModel,
+    cohereModel,
     cloudTranscriptionMode,
     cloudTranscriptionProvider,
     cloudTranscriptionBaseUrl,
@@ -58,6 +60,7 @@ export function useVoiceDraft({ onTranscript, onError }: UseVoiceDraftOptions) {
     localTranscriptionProvider: localTranscriptionProvider as string,
     whisperModel,
     parakeetModel,
+    cohereModel,
     isOpenWhisprCloud: isSignedIn && cloudTranscriptionMode === "openwhispr" && !useLocalWhisper,
     getApiKey: () => getTranscriptionApiKey(cloudTranscriptionProvider as string, settings),
     cloudTranscriptionProvider: cloudTranscriptionProvider as string,
@@ -71,6 +74,17 @@ export function useVoiceDraft({ onTranscript, onError }: UseVoiceDraftOptions) {
     remoteTranscriptionUrl,
     remoteTranscriptionModel,
   });
+
+  // The chat mic always takes the batch file path, which a realtime-only
+  // provider cannot serve; the caller disables the mic rather than letting a
+  // take record straight into that failure.
+  const config = buildConfig();
+  const route =
+    config.isOpenWhisprCloud || config.useLocalWhisper
+      ? null
+      : resolveFileTranscriptionRoute(config);
+  const streamingOnlyProvider =
+    route?.transport === "error" && route.code === "STREAMING_ONLY_PROVIDER";
 
   // Latest-value refs so the recorder's onstop (bound at start time) uses
   // current settings and callbacks.
@@ -188,5 +202,5 @@ export function useVoiceDraft({ onTranscript, onError }: UseVoiceDraftOptions) {
     []
   );
 
-  return { status, elapsed, readLevel, start, stop, cancel };
+  return { status, elapsed, readLevel, start, stop, cancel, streamingOnlyProvider };
 }

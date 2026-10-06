@@ -9,6 +9,8 @@ const { FOCUS_SYNC_THROTTLE_MS } = require("./calendarSyncInterval");
 const BINARY_NAME = "macos-calendar-listener";
 const HELPER_RESTART_BASE_MS = 1000;
 const HELPER_RESTART_MAX_MS = 30 * 1000;
+const AVAILABILITY_STATUSES = new Set(["free", "tentative", "busy", "unavailable", "unknown"]);
+const RESPONSE_STATUSES = new Set(["accepted", "declined", "tentative", "needsAction"]);
 
 // Reads the local EventKit store (all accounts Calendar.app aggregates) via a
 // bundled Swift helper that pushes calendars+events snapshots as line-delimited
@@ -272,15 +274,18 @@ class AppleCalendarManager {
       this.databaseManager.replaceAppleCalendarEvents(events.map((event) => this._mapEvent(event)));
 
       const contacts = [];
+      const notContacts = [];
       for (const event of events) {
         for (const attendee of event.attendees || []) {
-          if (attendee.email) contacts.push({ email: attendee.email, displayName: attendee.name });
+          if (!attendee.email) continue;
+          // Rooms and the user (EventKit's current user) aren't people to write to.
+          if (attendee.resource || attendee.self) notContacts.push(attendee.email);
+          else contacts.push({ email: attendee.email, displayName: attendee.name });
         }
       }
-      if (contacts.length > 0) this.databaseManager.upsertContacts(contacts);
+      this.databaseManager.syncCalendarContacts("apple", null, contacts, notContacts);
 
       broadcastToWindows("acal-events-synced", {});
-      this.reminderScheduler.reconcileProvider("apple");
       this.reminderScheduler.scheduleNextMeeting();
 
       if (this._pendingConnect?.awaitingSnapshot) {
@@ -301,6 +306,7 @@ class AppleCalendarManager {
 
   _mapEvent(event) {
     const attendees = event.attendees || [];
+    const selfResponseStatus = attendees.find((attendee) => attendee.self === true)?.status;
     return {
       id: event.id,
       calendar_id: event.calendar_id,
@@ -310,12 +316,21 @@ class AppleCalendarManager {
       end_time: event.end,
       is_all_day: event.is_all_day,
       status: event.status,
+      availability_status: AVAILABILITY_STATUSES.has(event.availability)
+        ? event.availability
+        : "unknown",
+      self_response_status: RESPONSE_STATUSES.has(selfResponseStatus)
+        ? selfResponseStatus
+        : "unknown",
       hangout_link:
         extractMeetingUrl([event.url, event.location, ...(event.notes_urls || [])]) ??
         // Generic fallback only for the event's own URL field
         (event.url?.startsWith("https://") ? event.url : null),
       conference_data: null,
-      organizer_email: event.organizer_email || null,
+      // Dropped when the user organized it, which contact lookup (this
+      // column's only reader) can't otherwise tell: Apple has no account email
+      // to exclude, and EventKit often leaves the organizer out of attendees.
+      organizer_email: event.organizer_self ? null : event.organizer_email || null,
       attendees_count: attendees.length,
       attendees: attendees.length
         ? JSON.stringify(
@@ -324,6 +339,7 @@ class AppleCalendarManager {
               displayName: a.name || null,
               responseStatus: a.status || null,
               self: a.self || false,
+              ...(a.resource ? { resource: true } : {}),
             }))
           )
         : null,

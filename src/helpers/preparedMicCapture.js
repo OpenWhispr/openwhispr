@@ -22,6 +22,10 @@ export const discardPreRoll = (prepared) => {
     prepared.recorder = null;
   }
   if (prepared?.chunks) prepared.chunks.length = 0;
+  if (prepared?.pcmTap) {
+    prepared.pcmTap.close();
+    prepared.pcmTap = null;
+  }
 };
 
 export const disposePreparedCapture = (prepared) => {

@@ -48,7 +48,20 @@ const SILENCE_WINDOWS_TO_END = 24;
 const MATCH_THRESHOLD = 0.65;
 const MATCH_MARGIN = 0.03;
 const LIVE_WINDOW_PADDING_SECONDS = 0.75;
+// The 24 kHz -> 16 kHz resampler restarts on every buffer and only divides
+// evenly on whole groups of 3 input samples (6 bytes). Capture buffers come in
+// arbitrary sizes (PipeWire quantum, coalesced pipe reads, renderer loopback
+// frames, recovery silence), so a partial group is carried into the next
+// buffer; dropping it pulls the identifier clock behind real time.
+const RESAMPLE_GROUP_BYTES = 6;
 const DEFAULT_VAD_STATE_SHAPE = [2, 1, 64];
+// The VAD graph is tiny (~64 ops per 512-sample window at ~31 Hz); ORT's
+// default thread pool spins one worker per core for no throughput gain.
+const VAD_SESSION_OPTIONS = {
+  intraOpNumThreads: 1,
+  interOpNumThreads: 1,
+  executionMode: "sequential",
+};
 
 function appendFloat32(existing, next) {
   if (!existing.length) return next;
@@ -60,16 +73,17 @@ function appendFloat32(existing, next) {
   return merged;
 }
 
+function totalSampleCount(chunks) {
+  let total = 0;
+  for (const chunk of chunks) total += chunk.length;
+  return total;
+}
+
 function concatFloat32Arrays(chunks) {
   if (chunks.length === 0) return new Float32Array(0);
   if (chunks.length === 1) return chunks[0];
 
-  let totalLength = 0;
-  for (const chunk of chunks) {
-    totalLength += chunk.length;
-  }
-
-  const merged = new Float32Array(totalLength);
+  const merged = new Float32Array(totalSampleCount(chunks));
   let offset = 0;
   for (const chunk of chunks) {
     merged.set(chunk, offset);
@@ -80,8 +94,7 @@ function concatFloat32Arrays(chunks) {
 }
 
 function trimChunksToMaxSamples(chunks, maxSamples) {
-  let total = 0;
-  for (const chunk of chunks) total += chunk.length;
+  let total = totalSampleCount(chunks);
   while (total > maxSamples && chunks.length > 0) {
     total -= chunks[0].length;
     chunks.shift();
@@ -138,6 +151,7 @@ class LiveSpeakerIdentifier {
     this.queue = Promise.resolve();
     this.onSpeakerIdentified = null;
     this.getSpeakerProfiles = null;
+    this.pcmRemainder = Buffer.alloc(0);
     this.audioRemainder = new Float32Array(0);
     this.vadStateInputs = [];
     this.vadStateOutputs = [];
@@ -403,7 +417,7 @@ class LiveSpeakerIdentifier {
     const ort = loadOnnxRuntime();
     if (!ort) return;
 
-    this.session = await ort.InferenceSession.create(vadModelPath);
+    this.session = await ort.InferenceSession.create(vadModelPath, VAD_SESSION_OPTIONS);
     this.vadStateInputs = (this.session.inputNames || []).filter((name) => /state|h|c/i.test(name));
     this.vadStateOutputs = (this.session.outputNames || []).filter((name) =>
       /state|h|c/i.test(name)
@@ -413,6 +427,7 @@ class LiveSpeakerIdentifier {
 
   _resetMeetingState() {
     this.queue = Promise.resolve();
+    this.pcmRemainder = Buffer.alloc(0);
     this.audioRemainder = new Float32Array(0);
     this.speechChunks = [];
     this.speechActive = false;
@@ -451,9 +466,16 @@ class LiveSpeakerIdentifier {
     await this._ensureLoaded();
     if (!this.session) return;
 
-    const downsampled = downsample24kTo16k(
-      Buffer.isBuffer(pcmBuffer) ? pcmBuffer : Buffer.from(pcmBuffer)
-    );
+    // Carry the bytes past the last whole resample group into the next buffer.
+    // The concat copies into a new buffer, so the Int16 view never inherits the
+    // caller's byteOffset.
+    const incoming = Buffer.isBuffer(pcmBuffer) ? pcmBuffer : Buffer.from(pcmBuffer);
+    const pending = Buffer.concat([this.pcmRemainder, incoming]);
+    const usableBytes = pending.length - (pending.length % RESAMPLE_GROUP_BYTES);
+    this.pcmRemainder = Buffer.from(pending.subarray(usableBytes));
+    if (!usableBytes) return;
+
+    const downsampled = downsample24kTo16k(pending.subarray(0, usableBytes));
     if (!downsampled.length) return;
 
     this.audioRemainder = appendFloat32(this.audioRemainder, pcm16ToFloat32(downsampled));
@@ -571,14 +593,12 @@ class LiveSpeakerIdentifier {
   }
 
   async _identifyActiveSpeechSegment(force = false) {
-    const allSamples = concatFloat32Arrays(this.speechChunks);
-    if (allSamples.length < LIVE_IDENTIFICATION_MIN_SAMPLES) {
+    // Runs on every speech window (~31x/sec), so the cheap gates must come
+    // first — concatenating up to 32s of float32 per window is ~64 MB/s of
+    // wasted main-thread memcpy during continuous speech.
+    if (totalSampleCount(this.speechChunks) < LIVE_IDENTIFICATION_MIN_SAMPLES) {
       return;
     }
-    const currentSamples =
-      allSamples.length > MAX_EMBEDDING_SAMPLES
-        ? allSamples.subarray(allSamples.length - MAX_EMBEDDING_SAMPLES)
-        : allSamples;
 
     if (
       !force &&
@@ -588,6 +608,12 @@ class LiveSpeakerIdentifier {
     ) {
       return;
     }
+
+    const allSamples = concatFloat32Arrays(this.speechChunks);
+    const currentSamples =
+      allSamples.length > MAX_EMBEDDING_SAMPLES
+        ? allSamples.subarray(allSamples.length - MAX_EMBEDDING_SAMPLES)
+        : allSamples;
 
     const embedding = await speakerEmbeddings.extractEmbeddingFromSamples(currentSamples);
     if (!embedding) {

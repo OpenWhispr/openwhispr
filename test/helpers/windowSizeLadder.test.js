@@ -209,10 +209,30 @@ test("every ladder size key has a native footprint in WINDOW_SIZES", async () =>
   }
 });
 
+test("the language chip and five-option command menu fit the active pill geometry", async () => {
+  const { WINDOW_SIZES } = require("../../src/helpers/windowConfig");
+  const { VOICE_PILL_FOOTPRINT, VOICE_PILL_CANCEL } =
+    await import("../../src/helpers/voicePillPresentation.js");
+
+  // A three-letter base code occupies at most 48px in the chip (including its
+  // padding, border, and chevron). The row also contains the recording pill,
+  // cancel control, and 12px inset on both sides.
+  const requiredLanguageWidth =
+    48 + VOICE_PILL_FOOTPRINT.recording.width + VOICE_PILL_CANCEL.gap + VOICE_PILL_CANCEL.size + 24;
+  assert.ok(WINDOW_SIZES.WITH_LANGUAGE.width >= requiredLanguageWidth);
+  assert.equal(WINDOW_SIZES.WITH_LANGUAGE.height, WINDOW_SIZES.RECORDING.height);
+
+  // Four 36px actions, the 144px capped language list, its 27px label, four
+  // dividers, the 2px border, and the pill+gap+bottom inset need 385px.
+  const requiredMenuHeight = 4 * 36 + 144 + 27 + 4 + 2 + 40 + 12 + 12;
+  assert.ok(WINDOW_SIZES.WITH_MENU_LANGUAGE.height >= requiredMenuHeight);
+});
+
 test("size ranks order every key", async () => {
   const { SIZE_RANK } = await load();
   assert.ok(
-    SIZE_RANK.BASE < SIZE_RANK.RECORDING &&
+    SIZE_RANK.BASE < SIZE_RANK.WITH_LANGUAGE &&
+      SIZE_RANK.WITH_LANGUAGE < SIZE_RANK.RECORDING &&
       SIZE_RANK.RECORDING < SIZE_RANK.DICTATION_ERROR &&
       SIZE_RANK.DICTATION_ERROR < SIZE_RANK.DICTATION_ERROR_WITH_TRANSCRIPT &&
       SIZE_RANK.DICTATION_ERROR_WITH_TRANSCRIPT < SIZE_RANK.WITH_MENU &&

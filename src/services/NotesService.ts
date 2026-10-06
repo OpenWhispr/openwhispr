@@ -9,6 +9,7 @@ interface NoteInput {
   content?: string;
   enhanced_content?: string | null;
   enhancement_prompt?: string | null;
+  enhancement_template_id?: string | null;
   note_type?: "personal" | "meeting" | "upload";
   source_file?: string | null;
   audio_duration_seconds?: number | null;
@@ -35,6 +36,8 @@ export interface CloudNote {
   enhanced_content: string | null;
   note_type: string;
   enhancement_prompt: string | null;
+  // Absent from APIs that predate note templates.
+  enhancement_template_id?: string | null;
   source_file: string | null;
   audio_duration_seconds: number | null;
   folder_id: string | null;
@@ -49,6 +52,9 @@ export interface CloudNote {
   // The note's owner (creator), not its last editor. Absent on access_removed
   // stubs and on API versions that predate ownership.
   user_id?: string | null;
+  // Creator attribution is separate from the operational custodian. It is
+  // explicitly null after the creator deletes their account.
+  created_by_user_id?: string | null;
   updated_by_user_id: string | null;
   previous_space_id?: string | null;
   // Redacted stub for a row that moved out of one of the caller's spaces —

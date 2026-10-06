@@ -2,19 +2,33 @@ const { net } = require("electron");
 const debugLogger = require("./debugLogger");
 const MicrosoftCalendarOAuth = require("./microsoftCalendarOAuth");
 const CalendarSyncInterval = require("./calendarSyncInterval");
+const { MAX_BUFFER_MINUTES } = require("./calendarAvailability");
 const { extractMeetingUrl } = require("./meetingJoinUrl");
 const { broadcastToWindows } = require("./windowBroadcast");
 
 const GRAPH_API_BASE = "https://graph.microsoft.com/v1.0";
 
 const SERIES_MASTER_FIELDS =
-  "subject,isAllDay,isCancelled,onlineMeeting,onlineMeetingUrl,location,bodyPreview,organizer,attendees";
+  "subject,isAllDay,isCancelled,showAs,responseStatus,onlineMeeting,onlineMeetingUrl,location,bodyPreview,organizer,attendees";
 
 // Graph's deltaLink permanently encodes the calendarView window it was created
-// with — it never rolls forward. Sync a 14-day window and discard the token
-// after 7 days so coverage never drops below the app's 7-day lookahead.
-const DELTA_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+// with — it never rolls forward. Sync a 38-day window and discard the token
+// after 7 days so coverage never drops below the app's 31-day lookahead.
+const DELTA_WINDOW_MS = 38 * 24 * 60 * 60 * 1000;
 const DELTA_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+// A failed series-master backfill can't be retried via delta (unchanged
+// occurrences are never re-delivered); a short TTL forces an early full sync.
+const BACKFILL_RETRY_TTL_MS = 10 * 60 * 1000;
+const BUFFER_COVERAGE_MS = MAX_BUFFER_MINUTES * 60 * 1000;
+const LOOKBACK_SAFETY_MS = 24 * 60 * 60 * 1000;
+
+const AVAILABILITY_STATUS_BY_GRAPH = {
+  free: "free",
+  workingElsewhere: "free",
+  tentative: "tentative",
+  busy: "busy",
+  oof: "unavailable",
+};
 
 const RESPONSE_STATUS_BY_GRAPH = {
   accepted: "accepted",
@@ -24,9 +38,11 @@ const RESPONSE_STATUS_BY_GRAPH = {
 
 // Graph returns "2026-07-20T17:00:00.0000000" — no offset, 7-digit fraction —
 // which SQLite's datetime() cannot parse. Events are requested in UTC
-// (Prefer: outlook.timezone), so trim the fraction and append "Z".
-function normalizeGraphDateTime({ dateTime }) {
-  return `${dateTime.slice(0, 19)}Z`;
+// (Prefer: outlook.timezone), so trim the fraction and append "Z". All-day
+// events come back as midnight in that zone, not as real instants, so keep
+// only the date — date-only rows read as local days, like Google's start.date.
+function normalizeGraphDateTime({ dateTime }, isAllDay = false) {
+  return isAllDay ? dateTime.slice(0, 10) : `${dateTime.slice(0, 19)}Z`;
 }
 
 // calendarView/delta can return recurring-series occurrences as bare
@@ -149,6 +165,7 @@ class MicrosoftCalendarManager {
       } catch (err) {
         debugLogger.error("Error fetching calendars", { email, error: err.message }, "mcal");
       }
+      await this._refreshOwnAddresses(email);
     }
 
     this.databaseManager.applyMicrosoftPrimaryOnlyToSelection(this.primaryOnly);
@@ -214,25 +231,45 @@ class MicrosoftCalendarManager {
       url = data["@odata.nextLink"] || null;
     }
 
-    const events = await this._backfillStrippedOccurrences(items, accountEmail);
+    const events = await this._backfillStrippedOccurrences(items, calendar);
+    if (events.some(isStrippedOccurrence)) {
+      tokenExpiresAt = Math.min(tokenExpiresAt, Date.now() + BACKFILL_RETRY_TTL_MS);
+    }
 
     const toUpsert = [];
     const contactsToUpsert = [];
+    const notContacts = [];
+    const ownAddresses = new Set([
+      (accountEmail || "").toLowerCase(),
+      ...this.databaseManager.getMicrosoftOwnAddresses(accountEmail),
+    ]);
     for (const item of events) {
       // An occurrence still stripped after backfill (master fetch failed) has no
       // subject, attendees, or join link. Overwriting a row a previous sync
       // stored in full would demote that meeting to an untitled time block, so
-      // keep the stored row and only insert bare stubs we've never seen.
-      if (isStrippedOccurrence(item) && this.databaseManager.getCalendarEventById(item.id)) {
-        continue;
+      // keep its details while applying any explicit RSVP update.
+      if (isStrippedOccurrence(item)) {
+        const cached = this.databaseManager.getCalendarEventById(item.id);
+        if (cached) {
+          if (typeof item.responseStatus?.response === "string") {
+            toUpsert.push({
+              ...cached,
+              self_response_status:
+                RESPONSE_STATUS_BY_GRAPH[item.responseStatus.response] || "unknown",
+            });
+          }
+          continue;
+        }
       }
       toUpsert.push(this._mapEvent(item, calendar));
       for (const a of item.attendees || []) {
-        if (a.emailAddress?.address) {
-          contactsToUpsert.push({
-            email: a.emailAddress.address,
-            displayName: a.emailAddress.name || null,
-          });
+        const address = a.emailAddress?.address;
+        if (!address) continue;
+        // Rooms and the user's own addresses aren't people to write to.
+        if (a.type === "resource" || ownAddresses.has(address.toLowerCase())) {
+          notContacts.push(address);
+        } else {
+          contactsToUpsert.push({ email: address, displayName: a.emailAddress.name || null });
         }
       }
     }
@@ -252,25 +289,32 @@ class MicrosoftCalendarManager {
     if (deltaLink) {
       this.databaseManager.updateMicrosoftCalendarSyncToken(calendar.id, deltaLink, tokenExpiresAt);
     }
-    if (contactsToUpsert.length > 0) this.databaseManager.upsertContacts(contactsToUpsert);
+    this.databaseManager.syncCalendarContacts(
+      "microsoft",
+      accountEmail,
+      contactsToUpsert,
+      notContacts
+    );
   }
 
   // Merges each stripped occurrence with its series master (fetched once per
-  // series); the occurrence's own id/start/end win. A failed master fetch
-  // leaves its occurrences bare instead of failing the calendar's sync;
-  // _syncCalendar decides whether a bare stub may be written.
-  async _backfillStrippedOccurrences(items, accountEmail) {
+  // series, through its calendar — /me/events/{id} 404s for shared calendars);
+  // the occurrence's own id/start/end win. A failed master fetch leaves its
+  // occurrences bare instead of failing the calendar's sync; _syncCalendar
+  // decides whether a bare stub may be written.
+  async _backfillStrippedOccurrences(items, calendar) {
     const masterIds = new Set(
       items.filter(isStrippedOccurrence).map((item) => item.seriesMasterId)
     );
     if (masterIds.size === 0) return items;
 
+    const calendarPath = encodeURIComponent(calendar.id);
     const masters = new Map();
     for (const id of masterIds) {
       try {
         const master = await this._apiGet(
-          `/me/events/${encodeURIComponent(id)}?$select=${SERIES_MASTER_FIELDS}`,
-          accountEmail
+          `/me/calendars/${calendarPath}/events/${encodeURIComponent(id)}?$select=${SERIES_MASTER_FIELDS}`,
+          calendar.account_email
         );
         masters.set(id, master);
       } catch (err) {
@@ -296,12 +340,12 @@ class MicrosoftCalendarManager {
       calendar_id: calendar.id,
       provider: "microsoft",
       summary: item.subject || null,
-      start_time: normalizeGraphDateTime(item.start),
-      end_time: normalizeGraphDateTime(item.end),
+      start_time: normalizeGraphDateTime(item.start, item.isAllDay),
+      end_time: normalizeGraphDateTime(item.end, item.isAllDay),
       is_all_day: item.isAllDay,
-      // showAs is deliberately ignored: unaccepted invitations arrive as
-      // showAs=tentative and must still surface (Google keeps them confirmed).
       status: item.isCancelled ? "cancelled" : "confirmed",
+      availability_status: AVAILABILITY_STATUS_BY_GRAPH[item.showAs] || "unknown",
+      self_response_status: RESPONSE_STATUS_BY_GRAPH[item.responseStatus?.response] || "unknown",
       hangout_link:
         item.onlineMeeting?.joinUrl ||
         item.onlineMeetingUrl ||
@@ -316,6 +360,7 @@ class MicrosoftCalendarManager {
               displayName: a.emailAddress?.name || null,
               responseStatus: RESPONSE_STATUS_BY_GRAPH[a.status?.response] || "needsAction",
               self: (a.emailAddress?.address || "").toLowerCase() === accountEmail,
+              ...(a.type === "resource" ? { resource: true } : {}),
             }))
           )
         : null,
@@ -357,11 +402,35 @@ class MicrosoftCalendarManager {
     return Array.from(this.accounts.keys());
   }
 
+  // Attendee lists address the user by their primary SMTP address or an
+  // alias, which can differ from the sign-in name the account is stored under.
+  async _refreshOwnAddresses(email) {
+    try {
+      const me = await this._apiGet("/me?$select=mail,userPrincipalName,proxyAddresses", email);
+      const aliases = (me.proxyAddresses || [])
+        .filter((entry) => /^smtp:/i.test(entry))
+        .map((entry) => entry.slice("smtp:".length));
+      const addresses = [me.mail, me.userPrincipalName, ...aliases]
+        .filter((address) => typeof address === "string" && address.includes("@"))
+        .map((address) => address.toLowerCase());
+      const ownAddresses = [...new Set(addresses)];
+      this.databaseManager.saveMicrosoftOwnAddresses(email, ownAddresses);
+      // Syncs before this lookup may have stored an alias as a contact.
+      this.databaseManager.removeContacts(ownAddresses);
+    } catch (err) {
+      debugLogger.warn(
+        "Error fetching Microsoft account addresses",
+        { email, error: err.message },
+        "mcal"
+      );
+    }
+  }
+
   // calendarView/delta expands recurrences into occurrences and returns a
   // deltaLink for incremental syncs (stored in microsoft_calendars.sync_token).
   _deltaUrl(calendarId) {
     const params = new URLSearchParams({
-      startDateTime: new Date().toISOString(),
+      startDateTime: new Date(Date.now() - LOOKBACK_SAFETY_MS - BUFFER_COVERAGE_MS).toISOString(),
       endDateTime: new Date(Date.now() + DELTA_WINDOW_MS).toISOString(),
     });
     return `/me/calendars/${encodeURIComponent(calendarId)}/calendarView/delta?${params.toString()}`;

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Copy, Trash2, Check, Key, Loader2 } from "lucide-react";
+import { Plus, Copy, Trash2, Check, Key, Loader2 } from "../icons";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
@@ -177,12 +177,12 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
           </p>
         </div>
         <Button size="sm" onClick={() => setCreateOpen(true)}>
-          <Plus className="mr-1.5 h-3.5 w-3.5" />
+          <Plus className="me-1.5 h-3.5 w-3.5" />
           {t("settingsPage.workspace.developer.new")}
         </Button>
       </div>
 
-      <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 divide-y divide-border/30 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
+      <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 divide-y divide-border/60 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
         {loadError && (
           <div className="px-4 py-6 flex items-center justify-between gap-2">
             <p className="text-xs text-muted-foreground">
@@ -195,7 +195,7 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
         )}
         {!loadError && keys.length === 0 && (
           <div className="py-10 text-center">
-            <Key className="w-5 h-5 text-muted-foreground/60 mx-auto mb-2" />
+            <Key className="w-5 h-5 text-muted-foreground/70 mx-auto mb-2" />
             <p className="text-xs text-muted-foreground">
               {t("settingsPage.workspace.developer.empty")}
             </p>
@@ -204,8 +204,10 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
         {keys.map((k) => (
           <div key={k.id} className="flex items-center gap-3 px-4 h-14">
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-foreground truncate">{k.name}</p>
-              <p className="text-[11px] font-mono text-muted-foreground truncate">
+              <p dir="auto" className="text-xs font-medium text-foreground truncate">
+                {k.name}
+              </p>
+              <p dir="ltr" className="text-[11px] font-mono text-muted-foreground truncate">
                 {k.key_prefix}…
               </p>
             </div>
@@ -242,6 +244,7 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
                 {t("settingsPage.workspace.developer.nameLabel")}
               </Label>
               <Input
+                dir="auto"
                 id="key-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -270,7 +273,7 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
                             "focus-visible:ring-1 focus-visible:ring-primary/30",
                             checked
                               ? "border-primary/40 bg-primary/8 text-foreground"
-                              : "border-border/60 text-muted-foreground hover:bg-foreground/4 hover:text-foreground"
+                              : "border-border/70 text-muted-foreground hover:bg-foreground/4 hover:text-foreground"
                           )}
                         >
                           {t(
@@ -296,7 +299,7 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
                 type="submit"
                 disabled={!name.trim() || selectedScopes.size === 0 || submitting}
               >
-                {submitting && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                {submitting && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
                 {submitting ? t("common.saving") : t("settingsPage.workspace.developer.create")}
               </Button>
             </DialogFooter>
@@ -331,19 +334,22 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
               {t("settingsPage.workspace.developer.keyCreatedDescription")}
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-md border border-border/60 bg-foreground/4 dark:bg-white/4 p-3 font-mono text-xs break-all">
+          <div
+            dir="ltr"
+            className="rounded-md border border-border/70 bg-foreground/4 dark:bg-white/4 p-3 font-mono text-xs break-all"
+          >
             {newKey?.key}
           </div>
           <DialogFooter>
             <Button onClick={handleCopy} variant="outline" size="sm">
               {copied ? (
                 <>
-                  <Check className="mr-1.5 h-3.5 w-3.5" />
+                  <Check className="me-1.5 h-3.5 w-3.5" />
                   {t("common.copied")}
                 </>
               ) : (
                 <>
-                  <Copy className="mr-1.5 h-3.5 w-3.5" />
+                  <Copy className="me-1.5 h-3.5 w-3.5" />
                   {t("common.copy")}
                 </>
               )}

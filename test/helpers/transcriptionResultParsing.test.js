@@ -49,19 +49,53 @@ test("whisper: a server-reported error is surfaced verbatim", () => {
   assert.match(result.message, /failed to load model/);
 });
 
-test("parakeet: present-but-empty transcript is genuine silence", () => {
-  assert.deepEqual(parakeet.parseParakeetResult({ text: "  " }), {
-    success: false,
-    message: "No audio detected",
-  });
+test("parakeet: completed empty transcript carries the no-speech code and legacy message", () => {
+  for (const text of ["", "  \n\t"]) {
+    assert.deepEqual(parakeet.parseParakeetResult({ text }), {
+      success: false,
+      code: "NO_SPEECH_DETECTED",
+      message: "No audio detected",
+    });
+  }
 });
 
 test("parakeet: missing output or text field is an engine failure, not silence", () => {
-  for (const output of [null, {}, { text: 42 }]) {
+  for (const output of [null, {}, { text: 42 }, { error: "failed to load model" }]) {
     const result = parakeet.parseParakeetResult(output);
     assert.equal(result.success, false);
     assert.equal(result.error, "invalid_response");
+    assert.notEqual(result.code, "NO_SPEECH_DETECTED");
     assert.notEqual(result.message, "No audio detected");
+  }
+});
+
+test("parakeet: entirely truncated output is a decode failure, not no speech", () => {
+  const result = parakeet.parseParakeetResult({ text: "  ", truncated: true });
+  assert.equal(result.success, false);
+  assert.equal(result.error, "invalid_response");
+  assert.notEqual(result.code, "NO_SPEECH_DETECTED");
+  assert.notEqual(result.message, "No audio detected");
+});
+
+test("parakeet: execution failures and cancellation retain their original errors", async () => {
+  const manager = new ParakeetManager();
+  for (const failure of [
+    new Error("FFmpeg conversion failed"),
+    new Error("parakeet-ws transcription timed out"),
+    Object.assign(new Error("Transcription cancelled"), { name: "AbortError" }),
+  ]) {
+    manager.serverManager = {
+      isAvailable: () => true,
+      isModelDownloaded: () => true,
+      transcribe: async () => {
+        throw failure;
+      },
+    };
+    await assert.rejects(manager.transcribeLocalParakeet(Buffer.from([1])), (error) => {
+      assert.equal(error, failure);
+      assert.notEqual(error.code, "NO_SPEECH_DETECTED");
+      return true;
+    });
   }
 });
 

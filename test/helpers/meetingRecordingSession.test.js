@@ -35,7 +35,7 @@ test("accepts legacy stops but rejects an expected ID for another active session
   assert.equal(canStopMeetingRecordingSession(null, "meeting-1"), false);
 });
 
-test("auto-end stop requests forward only a valid expected session ID", async () => {
+test("auto-end stop requests stop only sessions with a usable ID", async () => {
   const { requestMeetingRecordingAutoEnd } = await load();
   const requestedSessions = [];
   const errors = [];
@@ -50,6 +50,7 @@ test("auto-end stop requests forward only a valid expected session ID", async ()
   );
   assert.equal(requestMeetingRecordingAutoEnd({ sessionId: "" }, stopRecording, onError), false);
   assert.equal(requestMeetingRecordingAutoEnd(null, stopRecording, onError), false);
+  await Promise.resolve();
   await Promise.resolve();
 
   assert.deepEqual(requestedSessions, ["meeting-2"]);

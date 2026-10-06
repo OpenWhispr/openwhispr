@@ -7,6 +7,7 @@ import {
 import { getSettings } from "../../../stores/settingsStore";
 import { getEnterpriseCallSettings } from "../enterpriseSettings";
 import { wrapCleanupTranscript } from "../../../config/prompts";
+import { getLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
 import logger from "../../../utils/logger";
 
 export const enterpriseProvider: InferenceProvider = {
@@ -38,6 +39,7 @@ export const enterpriseProvider: InferenceProvider = {
         systemPrompt,
         provider: enterpriseId,
         supportsTemperature,
+        timeoutMs: getLlmRequestTimeoutSeconds({ scope: config.inferenceScope }) * 1000,
         ...getEnterpriseCallSettings(enterpriseId, config.inferenceScope || "dictationCleanup"),
       }
     );
@@ -52,9 +54,26 @@ export const enterpriseProvider: InferenceProvider = {
         error: result.error,
       });
       const enhanced = new Error(result.error || `${enterpriseId} reasoning failed`) as Error & {
+        messageKey?: string;
+        messageParams?: Record<string, string | number>;
+        action?: string;
+        actionKey?: string;
+        copyCommand?: string;
         retryable?: boolean;
+        technicalDetails?: {
+          status?: number;
+          exceptionType?: string;
+          requestId?: string;
+          underlyingError?: string;
+        };
       };
+      enhanced.messageKey = result.messageKey;
+      enhanced.messageParams = result.messageParams;
+      enhanced.action = result.action;
+      enhanced.actionKey = result.actionKey;
+      enhanced.copyCommand = result.copyCommand;
       enhanced.retryable = result.retryable ?? false;
+      enhanced.technicalDetails = result.technicalDetails;
       throw enhanced;
     }
 

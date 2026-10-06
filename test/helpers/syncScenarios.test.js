@@ -326,9 +326,8 @@ test("S2 two devices: an older empty shell never destroys the transcript and the
   const mark2 = cloud.log.length;
   await syncOnce(deviceA);
   assert.equal(
-    cloud.log
-      .slice(mark2)
-      .filter((c) => c.method === "PATCH" && c.path === "/api/notes/update").length,
+    cloud.log.slice(mark2).filter((c) => c.method === "PATCH" && c.path === "/api/notes/update")
+      .length,
     0,
     "a conflicted row must not be re-pushed before the user resolves it"
   );

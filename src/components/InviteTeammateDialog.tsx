@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "./icons";
 import {
   Dialog,
   DialogContent,
@@ -25,10 +25,13 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   workspaceId: string;
   workspaceName: string;
-  onInvited?: () => void;
+  /** Receives the normalized email the invitation was sent to. */
+  onInvited?: (email: string) => void;
   cancelLabel?: string;
-  /** Team spaces the invitee joins on accept (threaded into the invitation). */
+  /** Teams the invitee joins on accept (threaded into the invitation). */
   teamIds?: string[];
+  /** Spaces the invitee is added to directly on accept. */
+  spaceIds?: string[];
   initialEmail?: string;
 }
 
@@ -40,6 +43,7 @@ export default function InviteTeammateDialog({
   onInvited,
   cancelLabel,
   teamIds,
+  spaceIds,
   initialEmail,
 }: Props) {
   const { t } = useTranslation();
@@ -97,11 +101,13 @@ export default function InviteTeammateDialog({
     e.preventDefault();
     if (!email.trim()) return;
     setSubmitting(true);
+    const normalizedEmail = email.trim().toLowerCase();
     try {
       const result = await InvitationsService.send(workspaceId, {
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         role,
         ...(teamIds && teamIds.length > 0 ? { team_ids: teamIds } : {}),
+        ...(spaceIds && spaceIds.length > 0 ? { space_ids: spaceIds } : {}),
       });
       if (result.email_sent) {
         toast({
@@ -115,7 +121,7 @@ export default function InviteTeammateDialog({
           variant: "destructive",
         });
       }
-      onInvited?.();
+      onInvited?.(normalizedEmail);
       onOpenChange(false);
     } catch (error) {
       toast({
@@ -146,6 +152,7 @@ export default function InviteTeammateDialog({
               {t("workspaces.invite.emailLabel")}
             </Label>
             <Input
+              dir="ltr"
               id="invite-email"
               type="email"
               autoFocus
@@ -166,11 +173,11 @@ export default function InviteTeammateDialog({
                   aria-pressed={role === r}
                   onClick={() => setRole(r)}
                   className={cn(
-                    "flex-1 px-3 py-2 rounded-md border text-left transition-colors",
+                    "flex-1 px-3 py-2 rounded-md border text-start transition-colors",
                     "outline-none focus-visible:ring-1 focus-visible:ring-primary/30",
                     role === r
                       ? "border-primary/40 bg-primary/8"
-                      : "border-border/60 hover:bg-foreground/4"
+                      : "border-border/70 hover:bg-foreground/4"
                   )}
                 >
                   <span
@@ -207,7 +214,7 @@ export default function InviteTeammateDialog({
               {cancelLabel ?? t("common.cancel")}
             </Button>
             <Button type="submit" disabled={!email.trim() || submitting}>
-              {showSpinner && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              {showSpinner && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
               {submitting ? t("workspaces.invite.submitting") : t("workspaces.invite.submit")}
             </Button>
           </DialogFooter>

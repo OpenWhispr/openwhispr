@@ -1,6 +1,25 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
+const LARGE_DICTIONARY_PROMPT = [
+  "OpenWhispr",
+  "Parakeet",
+  "Alcahest",
+  "Chromium",
+  "TypeScript",
+  "Electron",
+  "testing",
+  "data",
+  "benchmark",
+  "inference",
+  "transcription",
+  "dictionary",
+  "microphone",
+  "renderer",
+  "latency",
+  "pipeline",
+].join(", ");
+
 test("detects verbatim echo of dictionary prompt", async () => {
   const { matchesDictionaryPrompt } = await import("../../src/utils/dictionaryEchoFilter.js");
   assert.equal(
@@ -123,4 +142,213 @@ test("returns false when text or prompt normalizes to empty string (punctuation 
   assert.equal(matchesDictionaryPrompt("!!!", ",,,"), false);
   assert.equal(matchesDictionaryPrompt("???", "OpenWhispr, Parakeet"), false);
   assert.equal(matchesDictionaryPrompt("OpenWhispr, Parakeet", "!!!"), false);
+});
+
+test("detects short repeated fragments from a large dictionary prompt", async () => {
+  const { isLikelyDictionaryPromptFragment } =
+    await import("../../src/utils/dictionaryEchoFilter.js");
+
+  assert.equal(
+    isLikelyDictionaryPromptFragment("data, data, data, data,", LARGE_DICTIONARY_PROMPT),
+    true
+  );
+  assert.equal(isLikelyDictionaryPromptFragment("testing,", LARGE_DICTIONARY_PROMPT), true);
+});
+
+test("does not classify normal or unrelated short speech as a dictionary fragment", async () => {
+  const { isLikelyDictionaryPromptFragment } =
+    await import("../../src/utils/dictionaryEchoFilter.js");
+
+  assert.equal(
+    isLikelyDictionaryPromptFragment("OpenWhispr is working", LARGE_DICTIONARY_PROMPT),
+    false
+  );
+  assert.equal(isLikelyDictionaryPromptFragment("hello there", LARGE_DICTIONARY_PROMPT), false);
+});
+
+test("requires non-empty text and a non-empty dictionary prompt", async () => {
+  const { isLikelyDictionaryPromptFragment } =
+    await import("../../src/utils/dictionaryEchoFilter.js");
+
+  assert.equal(isLikelyDictionaryPromptFragment("", LARGE_DICTIONARY_PROMPT), false);
+  assert.equal(isLikelyDictionaryPromptFragment("...", LARGE_DICTIONARY_PROMPT), false);
+  assert.equal(isLikelyDictionaryPromptFragment("testing", null), false);
+  assert.equal(isLikelyDictionaryPromptFragment("testing", ""), false);
+});
+
+test("detects repeated long dictionary terms without a character cutoff", async () => {
+  const { isLikelyDictionaryPromptFragment } =
+    await import("../../src/utils/dictionaryEchoFilter.js");
+
+  assert.equal(
+    isLikelyDictionaryPromptFragment("OpenWhispr, OpenWhispr, OpenWhispr", LARGE_DICTIONARY_PROMPT),
+    true
+  );
+});
+
+test("does not classify long non-repeated dictionary speech as a prompt fragment", async () => {
+  const { isLikelyDictionaryPromptFragment } =
+    await import("../../src/utils/dictionaryEchoFilter.js");
+
+  assert.equal(
+    isLikelyDictionaryPromptFragment(
+      "OpenWhispr Parakeet Alcahest Chromium",
+      LARGE_DICTIONARY_PROMPT
+    ),
+    false
+  );
+});
+
+test("requires the prompt's own separator or a repeat, not just dictionary words", async () => {
+  const { isLikelyDictionaryPromptFragment } =
+    await import("../../src/utils/dictionaryEchoFilter.js");
+
+  // A bare dictionary term is short-form dictation, not a prompt continuation.
+  assert.equal(isLikelyDictionaryPromptFragment("testing", LARGE_DICTIONARY_PROMPT), false);
+  assert.equal(
+    isLikelyDictionaryPromptFragment("Electron renderer latency", LARGE_DICTIONARY_PROMPT),
+    false
+  );
+  // Whisper continuing the prompt carries the ", " the hint list was joined with.
+  assert.equal(isLikelyDictionaryPromptFragment("testing, ", LARGE_DICTIONARY_PROMPT), true);
+});
+
+test("does not treat snippet-trigger words as an echo of ordinary speech", async () => {
+  const { isLikelyDictionaryPromptFragment } =
+    await import("../../src/utils/dictionaryEchoFilter.js");
+
+  // getDictionaryHintWords appends whole triggers, so a multi-word trigger puts
+  // "on", "my" and "way" into the prompt's word set.
+  const promptWithTriggers = `${LARGE_DICTIONARY_PROMPT}, on my way, let me know`;
+  assert.equal(isLikelyDictionaryPromptFragment("On my way.", promptWithTriggers), false);
+  assert.equal(isLikelyDictionaryPromptFragment("Let me know", promptWithTriggers), false);
+});
+
+test("does not classify comma-separated dictionary-term dictation as a fragment", async () => {
+  const { isLikelyDictionaryPromptFragment } =
+    await import("../../src/utils/dictionaryEchoFilter.js");
+
+  // Real short-form dictation of curated terms; replacing it with a prompt-free
+  // retry would misspell exactly the vocabulary the dictionary protects.
+  assert.equal(
+    isLikelyDictionaryPromptFragment("Electron, renderer", LARGE_DICTIONARY_PROMPT),
+    false
+  );
+  // Without a dangling separator, two echoed terms are indistinguishable from
+  // that dictation, so they are deliberately left alone as well.
+  assert.equal(isLikelyDictionaryPromptFragment("testing, data", LARGE_DICTIONARY_PROMPT), false);
+});
+
+test("does not classify a genuinely doubled term as a looped echo", async () => {
+  const { isLikelyDictionaryPromptFragment } =
+    await import("../../src/utils/dictionaryEchoFilter.js");
+
+  // Whisper's echo pathology loops a term many times; saying it twice is speech.
+  assert.equal(
+    isLikelyDictionaryPromptFragment("OpenWhispr, OpenWhispr", LARGE_DICTIONARY_PROMPT),
+    false
+  );
+});
+
+test("detects a run of consecutive prompt terms past the character cutoff", async () => {
+  const { isLikelyDictionaryPromptFragment } =
+    await import("../../src/utils/dictionaryEchoFilter.js");
+
+  // A comma-separated continuation of 3+ entries in the prompt's own order is
+  // the echo shape that outgrows the short-fragment cap.
+  assert.equal(
+    isLikelyDictionaryPromptFragment(
+      "TypeScript, Electron, testing, data, benchmark",
+      LARGE_DICTIONARY_PROMPT
+    ),
+    true
+  );
+  // The same words out of prompt order are dictation, not a continuation.
+  assert.equal(
+    isLikelyDictionaryPromptFragment(
+      "benchmark, TypeScript, data, Electron, testing",
+      LARGE_DICTIONARY_PROMPT
+    ),
+    false
+  );
+});
+
+test("a dangling separator does not outweigh non-dictionary words", async () => {
+  const { isLikelyDictionaryPromptFragment } =
+    await import("../../src/utils/dictionaryEchoFilter.js");
+
+  assert.equal(
+    isLikelyDictionaryPromptFragment("yes, no, maybe, dunno,", LARGE_DICTIONARY_PROMPT),
+    false
+  );
+});
+
+// #1759: the echo check must only run when the outgoing payload actually
+// carried dictionary bias. Payload shapes below mirror what each provider's
+// buildPayload in audioManager.js really produces.
+
+test("payloadSendsDictionaryBias: Corti payload carries no bias field at all", async () => {
+  const { payloadSendsDictionaryBias } = await import("../../src/utils/dictionaryEchoFilter.js");
+  assert.equal(
+    payloadSendsDictionaryBias({
+      audioBuffer: new ArrayBuffer(4),
+      language: "en",
+      environment: "us",
+      tenant: "clinic",
+    }),
+    false
+  );
+});
+
+test("payloadSendsDictionaryBias: Tinfoil-style prompt string counts as bias", async () => {
+  const { payloadSendsDictionaryBias } = await import("../../src/utils/dictionaryEchoFilter.js");
+  assert.equal(
+    payloadSendsDictionaryBias({ audioBuffer: new ArrayBuffer(4), prompt: "Ozempic, Parakeet" }),
+    true
+  );
+  assert.equal(
+    payloadSendsDictionaryBias({ audioBuffer: new ArrayBuffer(4), prompt: "   " }),
+    false
+  );
+  assert.equal(
+    payloadSendsDictionaryBias({ audioBuffer: new ArrayBuffer(4), prompt: undefined }),
+    false
+  );
+});
+
+test("payloadSendsDictionaryBias: Mistral contextBias tokens count as bias", async () => {
+  const { payloadSendsDictionaryBias } = await import("../../src/utils/dictionaryEchoFilter.js");
+  assert.equal(
+    payloadSendsDictionaryBias({
+      audioBuffer: new ArrayBuffer(4),
+      model: "voxtral",
+      contextBias: ["Machine", "Learning"],
+    }),
+    true
+  );
+  // empty dictionary: buildPayload omits the field entirely
+  assert.equal(
+    payloadSendsDictionaryBias({ audioBuffer: new ArrayBuffer(4), model: "voxtral" }),
+    false
+  );
+});
+
+test("payloadSendsDictionaryBias: xAI/Gemini keyterms count as bias", async () => {
+  const { payloadSendsDictionaryBias } = await import("../../src/utils/dictionaryEchoFilter.js");
+  assert.equal(
+    payloadSendsDictionaryBias({ audioBuffer: new ArrayBuffer(4), keyterms: ["Ozempic"] }),
+    true
+  );
+  assert.equal(payloadSendsDictionaryBias({ audioBuffer: new ArrayBuffer(4) }), false);
+  assert.equal(
+    payloadSendsDictionaryBias({ audioBuffer: new ArrayBuffer(4), keyterms: [] }),
+    false
+  );
+});
+
+test("payloadSendsDictionaryBias: nullish or malformed payloads never enable the check", async () => {
+  const { payloadSendsDictionaryBias } = await import("../../src/utils/dictionaryEchoFilter.js");
+  assert.equal(payloadSendsDictionaryBias(null), false);
+  assert.equal(payloadSendsDictionaryBias(undefined), false);
+  assert.equal(payloadSendsDictionaryBias("prompt"), false);
 });

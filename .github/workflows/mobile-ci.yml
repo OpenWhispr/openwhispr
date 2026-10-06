@@ -1,0 +1,142 @@
+name: Mobile CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CI: "true"
+  EXPO_NO_DOTENV: "1"
+  SENTRY_DISABLE_AUTO_UPLOAD: "true"
+
+jobs:
+  changes:
+    uses: ./.github/workflows/ci-changes.yml
+
+  lockfile:
+    name: Mobile lockfile
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: openwhispr-mobile/.nvmrc
+      # Validate before installing packages from the contributor's lockfile.
+      - name: Validate dependency sources and integrity
+        run: npx --yes --ignore-scripts --package=lockfile-lint@5.0.1 lockfile-lint --path openwhispr-mobile/package-lock.json --type npm --validate-https --allowed-hosts npm --validate-integrity
+      - name: Reject high and critical dependency advisories
+        working-directory: openwhispr-mobile
+        run: npx --yes --ignore-scripts --package=audit-ci@7.1.0 audit-ci --config audit-ci.json
+
+  checks:
+    name: Mobile ${{ matrix.check }}
+    needs: [changes, lockfile]
+    if: needs.changes.outputs.mobile == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        check: [static, tests, bundles]
+    defaults:
+      run:
+        working-directory: openwhispr-mobile
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: openwhispr-mobile/.nvmrc
+          cache: npm
+          cache-dependency-path: openwhispr-mobile/package-lock.json
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Apply reviewed dependency patches
+        run: node_modules/.bin/patch-package --error-on-fail
+      - name: Verify patched signing dependency
+        run: npm run test:security
+      - name: Check formatting
+        if: matrix.check == 'static'
+        run: npm run format
+      - name: Lint
+        if: matrix.check == 'static'
+        run: npm run lint
+      - name: Typecheck
+        if: matrix.check == 'static'
+        run: npm run typecheck
+      - name: Check Expo dependencies and configuration
+        if: matrix.check == 'static'
+        run: npm run doctor
+      - name: Validate development and production app configuration
+        if: matrix.check == 'static'
+        run: |
+          OPENWHISPR_APP_ENV=development node_modules/.bin/expo config --type public > /dev/null
+          OPENWHISPR_APP_ENV=production node_modules/.bin/expo config --type public > /dev/null
+      - name: Build SQLite test binding
+        if: matrix.check == 'tests'
+        run: npm rebuild better-sqlite3
+      - name: Run tests
+        if: matrix.check == 'tests'
+        run: npm run test --ignore-scripts -- --ci --runInBand
+      - name: Bundle iOS
+        if: matrix.check == 'bundles'
+        run: node_modules/.bin/expo export --platform ios --max-workers 2 --output-dir "$RUNNER_TEMP/mobile-export"
+        env:
+          OPENWHISPR_APP_ENV: production
+
+  native-transport:
+    name: Mobile native Swift tests
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
+    # Compiles the Foundation-only Swift sources and their tests, which need Xcode's toolchain.
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Run native provider transport tests
+        run: python3 openwhispr-mobile/modules/background-uploader/tests/run-provider-transport-tests.py
+      - name: Run keyboard return resolver tests
+        run: bash openwhispr-mobile/modules/app-group-storage/tests/run-return-target-tests.sh
+      - name: Run hotkey dictation logic tests
+        run: python3 openwhispr-mobile/plugins/hotkey-dictation/tests/run-hotkey-logic-tests.py
+      - name: Run Live Activity resolver tests
+        run: sh openwhispr-mobile/modules/live-activity/tests/run-resolver-tests.sh
+
+  mobile-status:
+    name: Mobile CI
+    needs: [changes, lockfile, checks, native-transport]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Require all selected mobile checks
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          MOBILE: ${{ needs.changes.outputs.mobile }}
+          LOCKFILE_RESULT: ${{ needs.lockfile.result }}
+          CHECKS_RESULT: ${{ needs.checks.result }}
+          NATIVE_TRANSPORT_RESULT: ${{ needs.native-transport.result }}
+        run: |
+          test "$CHANGES_RESULT" = success
+          if [ "$MOBILE" = true ]; then
+            test "$LOCKFILE_RESULT" = success
+            test "$CHECKS_RESULT" = success
+            test "$NATIVE_TRANSPORT_RESULT" = success
+          fi

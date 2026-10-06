@@ -124,10 +124,15 @@ test("DictationErrorCard reports content height at the shared expected width", a
         export const Fragment = Symbol.for("react.fragment");
         export function jsxDEV(type, props, key) { return { type, props, key }; }
       `,
-      "lucide-react": `
+      "/components/icons": `
         export function RotateCcw() { return null; }
         export function ScrollText() { return null; }
+        export function Settings() { return null; }
+        export function Copy() { return null; }
+        export function Check() { return null; }
+        export function X() { return null; }
       `,
+      "react-i18next": `export function useTranslation() { return { t: (key) => key }; }`,
       react: `
         export function useLayoutEffect(effect) {
           globalThis.__dictationErrorCardCleanup = effect();

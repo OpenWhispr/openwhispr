@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Copy, Link2, Loader2, MoreHorizontal, Users } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
+import { Check, Copy, FileText, Link2, Loader2, MoreHorizontal, Users } from "../icons";
+import { ConfirmDialog, Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import {
   DropdownMenu,
@@ -12,6 +12,13 @@ import {
 import { cn } from "../lib/utils";
 import ShareVisibilityMenu from "./ShareVisibilityMenu";
 import { notesInputClass } from "./shared";
+import {
+  canManageAccessGrant,
+  currentShareToken,
+  reconcileLocalShareState,
+  resolveShareLink,
+  type LocalShareState,
+} from "./shareNoteRules";
 import { useAuth } from "../../hooks/useAuth";
 import {
   NoteSharingService,
@@ -46,7 +53,6 @@ import type {
   ShareVisibility,
 } from "../../types/electron";
 
-const SHARE_VIEWER_BASE_URL = "https://notes.openwhispr.com";
 const SHARE_VISIBILITY_OPTIONS: Array<{ id: ShareVisibility }> = [
   { id: "private" },
   { id: "invited" },
@@ -54,13 +60,29 @@ const SHARE_VISIBILITY_OPTIONS: Array<{ id: ShareVisibility }> = [
   { id: "domain" },
 ];
 
+export interface NoteExportOption {
+  id: string;
+  label: string;
+  onSelect: () => void;
+}
+
 interface ShareNoteDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   note: NoteItem;
+  /** Local export formats offered below the sharing controls. */
+  exportOptions?: NoteExportOption[];
+  /** Opened from the link segment of the Share button: copy the link as soon as it is usable. */
+  copyLinkOnOpen?: boolean;
 }
 
-export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteDialogProps) {
+export default function ShareNoteDialog({
+  open,
+  onOpenChange,
+  note,
+  exportOptions = [],
+  copyLinkOnOpen = false,
+}: ShareNoteDialogProps) {
   const { user } = useAuth();
   const ownerName: string | null = user?.name ?? null;
   const ownerEmail: string = user?.email ?? "";
@@ -96,13 +118,22 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
   const [copied, setCopied] = useState(false);
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [busyGrantId, setBusyGrantId] = useState<string | null>(null);
+  const [confirmingReplaceLink, setConfirmingReplaceLink] = useState(false);
+  // Copy on open waits for this: the cached share can be hours old.
+  const [refreshedCloudId, setRefreshedCloudId] = useState<string | null>(null);
   const emailInputRef = useRef<HTMLInputElement>(null);
   const copyTimeoutRef = useRef<number | null>(null);
-  const localIsSharedRef = useRef(Boolean(note.is_shared));
+  const localShareStateRef = useRef<LocalShareState>({
+    isShared: Boolean(note.is_shared),
+    shareToken: note.share_token ?? null,
+  });
 
   useEffect(() => {
-    localIsSharedRef.current = Boolean(note.is_shared);
-  }, [note.is_shared]);
+    localShareStateRef.current = {
+      isShared: Boolean(note.is_shared),
+      shareToken: note.share_token ?? null,
+    };
+  }, [note.is_shared, note.share_token]);
 
   const policyState = usePolicySnapshot();
 
@@ -165,7 +196,7 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
         share: refreshed.share,
         invitations: refreshed.invitations,
         access: refreshed.access ?? resolveFallbackAccess?.(entry?.access) ?? entry?.access,
-        rawToken: entry?.rawToken ?? null,
+        rawToken: currentShareToken(entry?.rawToken, refreshed.share.token_prefix),
       }));
       return refreshed;
     },
@@ -200,12 +231,12 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
     refreshShareCache()
       .then((res) => {
         if (cancelled || !res) return;
-        const serverShared = res.share.visibility !== "private";
-        if (serverShared !== localIsSharedRef.current) {
-          void persistNoteShareState(
-            note.id,
-            serverShared ? { is_shared: 1 } : { is_shared: 0, share_token: null }
-          ).catch((err) => console.error("Share flag persist failed:", err));
+        setRefreshedCloudId(cloudId);
+        const update = reconcileLocalShareState(localShareStateRef.current, res.share);
+        if (update) {
+          void persistNoteShareState(note.id, update).catch((err) =>
+            console.error("Share flag persist failed:", err)
+          );
         }
       })
       .catch((err) => {
@@ -228,6 +259,8 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
       setEmailInput("");
       setInputError(null);
       setCopied(false);
+      setConfirmingReplaceLink(false);
+      setRefreshedCloudId(null);
     }
   }, [open]);
 
@@ -349,11 +382,9 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
   );
 
   const copyLink = useCallback(
-    async (token: string) => {
+    async (url: string) => {
       try {
-        await navigator.clipboard.writeText(
-          `${SHARE_VIEWER_BASE_URL}/n/${encodeURIComponent(token)}`
-        );
+        await navigator.clipboard.writeText(url);
         setCopied(true);
         if (copyTimeoutRef.current) window.clearTimeout(copyTimeoutRef.current);
         copyTimeoutRef.current = window.setTimeout(() => setCopied(false), 1500);
@@ -365,47 +396,94 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
     [t, toast]
   );
 
-  // Legacy shares can predate local token persistence; rotating is the only
+  // The raw token is returned only on generate or rotate, so a share made on
+  // another device, or by an invite, leaves none here; rotating is the only
   // way to recover a copyable link (the old one stops working by design).
-  const rotateAndCopy = useCallback(async () => {
-    if (!cloudId || !canManageAccess || !shareActionAllowed("rotate-link")) return;
-    try {
-      const res = await NoteSharingService.rotateToken(cloudId);
-      updateShareCache(cloudId, (entry) => ({
-        share: res.share,
-        invitations: entry?.invitations ?? [],
-        rawToken: res.raw_token,
-      }));
-      void persistNoteShareState(note.id, { is_shared: 1, share_token: res.raw_token }).catch(
-        (err) => console.error("Share flag persist failed:", err)
-      );
-      await copyLink(res.raw_token);
-    } catch (err) {
-      console.error("Share link recovery failed:", err);
-      toast({ title: t("noteEditor.share.dialog.error.copyFailed"), variant: "destructive" });
-    }
-  }, [cloudId, canManageAccess, note.id, copyLink, t, toast, shareActionAllowed]);
+  const rotateAndCopy = useCallback(
+    async (visibility: ShareVisibility) => {
+      if (!cloudId || !canManageAccess || !shareActionAllowed("rotate-link", visibility)) {
+        toast({ title: t("noteEditor.share.dialog.error.copyFailed"), variant: "destructive" });
+        return;
+      }
+      try {
+        const res = await NoteSharingService.rotateToken(cloudId);
+        updateShareCache(cloudId, (entry) => ({
+          share: res.share,
+          invitations: entry?.invitations ?? [],
+          rawToken: res.raw_token,
+        }));
+        void persistNoteShareState(note.id, { is_shared: 1, share_token: res.raw_token }).catch(
+          (err) => console.error("Share flag persist failed:", err)
+        );
+        const link = resolveShareLink(res.share, [res.raw_token]);
+        if (link.kind !== "copy") throw new Error("Rotated share has no copyable link");
+        await copyLink(link.url);
+      } catch (err) {
+        console.error("Share link recovery failed:", err);
+        toast({ title: t("noteEditor.share.dialog.error.copyFailed"), variant: "destructive" });
+      }
+    },
+    [cloudId, canManageAccess, note.id, copyLink, t, toast, shareActionAllowed]
+  );
+
+  // Reads the cache rather than render state: a Create link click, or a
+  // refresh that lands while the replace confirm is open, may have changed it.
+  const copyCurrentLink = useCallback(
+    async (replaceConfirmed: boolean) => {
+      const entry = cloudId ? getShareCacheEntry(cloudId) : null;
+      if (!entry || entry.share.visibility === "private") {
+        toast({ title: t("noteEditor.share.dialog.error.copyFailed"), variant: "destructive" });
+        return;
+      }
+      const link = resolveShareLink(entry.share, [note.share_token, entry.rawToken]);
+      if (link.kind === "copy") await copyLink(link.url);
+      else if (link.needsConfirmation && !replaceConfirmed) setConfirmingReplaceLink(true);
+      else await rotateAndCopy(entry.share.visibility);
+    },
+    [cloudId, note.share_token, copyLink, rotateAndCopy, t, toast]
+  );
 
   const handleLinkButton = useCallback(async () => {
     if (!cloudId || !share || !canUseLink) return;
     setLinkBusy(true);
     try {
-      if (share.visibility === "private") {
-        // Create link: the click is the sharing consent.
-        const res = await applyVisibility("link");
-        if (!res) return;
-        const token = res.raw_token ?? note.share_token ?? getShareCacheEntry(cloudId)?.rawToken;
-        if (token) await copyLink(token);
-        else await rotateAndCopy();
-        return;
-      }
-      const known = note.share_token ?? getShareCacheEntry(cloudId)?.rawToken;
-      if (known) await copyLink(known);
-      else await rotateAndCopy();
+      // Create link: the click is the sharing consent.
+      if (share.visibility === "private" && !(await applyVisibility("link"))) return;
+      await copyCurrentLink(false);
     } finally {
       setLinkBusy(false);
     }
-  }, [cloudId, share, canUseLink, note.share_token, applyVisibility, copyLink, rotateAndCopy]);
+  }, [cloudId, share, canUseLink, applyVisibility, copyCurrentLink]);
+
+  const handleReplaceLink = useCallback(async () => {
+    // The confirm stays clickable through its exit animation, and a second
+    // rotation can leave this device holding a dead token.
+    if (linkBusy) return;
+    setLinkBusy(true);
+    try {
+      await copyCurrentLink(true);
+    } finally {
+      setLinkBusy(false);
+    }
+  }, [linkBusy, copyCurrentLink]);
+
+  const copyIntentHandled = useRef(false);
+  useEffect(() => {
+    if (!open) {
+      copyIntentHandled.current = false;
+      return;
+    }
+    if (
+      copyLinkOnOpen &&
+      !copyIntentHandled.current &&
+      share &&
+      refreshedCloudId === cloudId &&
+      canUseLink
+    ) {
+      copyIntentHandled.current = true;
+      void handleLinkButton();
+    }
+  }, [open, copyLinkOnOpen, share, refreshedCloudId, cloudId, canUseLink, handleLinkButton]);
 
   const handleInvite = useCallback(async () => {
     if (!cloudId || !canInvite) return;
@@ -696,6 +774,7 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
               <div className="relative">
                 <div className="flex items-center gap-2">
                   <input
+                    dir="auto"
                     ref={emailInputRef}
                     type="text"
                     value={emailInput}
@@ -728,14 +807,14 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
                 {access &&
                   emailInput.trim() &&
                   (searchingSuggestions || suggestions.length > 0 || suggestionsSettled) && (
-                    <div className="absolute z-20 top-9 left-0 right-[72px] max-h-44 overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-lg">
+                    <div className="absolute z-20 top-9 start-0 end-[72px] max-h-44 overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-lg">
                       {searchingSuggestions && suggestions.length === 0 ? (
                         <div className="h-8 flex items-center justify-center">
-                          <Loader2 size={12} className="animate-spin text-foreground/40" />
+                          <Loader2 size={12} className="animate-spin text-foreground/45" />
                         </div>
                       ) : suggestions.length === 0 ? (
                         <div className="h-8 flex items-center justify-center">
-                          <span className="text-xs text-foreground/40">
+                          <span className="text-xs text-foreground/45">
                             {t("noteEditor.share.dialog.noResults")}
                           </span>
                         </div>
@@ -745,7 +824,7 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
                             key={`${principal.type}:${principal.id ?? principal.email}`}
                             type="button"
                             onClick={() => void handlePrincipalGrant(principal)}
-                            className="flex items-center gap-2 w-full min-w-0 px-2 h-9 rounded-md text-left hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            className="flex items-center gap-2 w-full min-w-0 px-2 h-9 rounded-md text-start hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                           >
                             {principal.type === "team" ||
                             principal.type === "folder" ||
@@ -759,11 +838,14 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
                               />
                             )}
                             <span className="min-w-0 flex-1">
-                              <span className="block text-xs text-foreground truncate">
+                              <span dir="auto" className="block text-xs text-foreground truncate">
                                 {principal.name || principal.email}
                               </span>
                               {principal.name && principal.email && (
-                                <span className="block text-[11px] text-foreground/40 truncate">
+                                <span
+                                  dir="ltr"
+                                  className="block text-[11px] text-foreground/45 truncate"
+                                >
                                   {principal.email}
                                 </span>
                               )}
@@ -800,8 +882,9 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
                   secondary={
                     access?.owner.name ? access.owner.email : ownerName ? ownerEmail : null
                   }
+                  secondaryDir="ltr"
                   trailing={
-                    <span className="text-[11px] text-foreground/40">
+                    <span className="text-[11px] text-foreground/45">
                       {t("noteEditor.share.dialog.owner")}
                     </span>
                   }
@@ -812,17 +895,13 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
                 <AccessGrantRow
                   key={grant.id}
                   grant={grant}
-                  canChangePermission={Boolean(
-                    access?.can_manage_access &&
-                    (!grant.inherited || access.can_manage_inherited_access) &&
-                    shareActionAllowed("change-grant")
-                  )}
+                  canChangePermission={
+                    canManageAccessGrant(access, grant) && shareActionAllowed("change-grant")
+                  }
                   showPermissionActions={shareActionAllowed("change-grant")}
-                  canRemove={Boolean(
-                    access?.can_manage_access &&
-                    (!grant.inherited || access.can_manage_inherited_access) &&
-                    shareActionAllowed("remove-grant")
-                  )}
+                  canRemove={
+                    canManageAccessGrant(access, grant) && shareActionAllowed("remove-grant")
+                  }
                   busy={busyGrantId === grant.id}
                   onPermissionChange={(permission) => void handleGrantPermission(grant, permission)}
                   onRemove={() => void handleRemoveGrant(grant)}
@@ -841,7 +920,7 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
                     primary={space.name}
                     secondary={t("noteEditor.share.dialog.teamAudience")}
                     trailing={
-                      <span className="text-[11px] text-foreground/40">
+                      <span className="text-[11px] text-foreground/45">
                         {t("noteEditor.share.dialog.editor")}
                       </span>
                     }
@@ -853,6 +932,7 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
                   key={invitation.id}
                   leading={<MemberAvatar name={null} email={invitation.email} size="md" />}
                   primary={invitation.email}
+                  primaryDir="ltr"
                   secondary={
                     invitation.accepted_at
                       ? t("noteEditor.share.dialog.accepted")
@@ -894,7 +974,7 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
                         </DropdownMenuContent>
                       </DropdownMenu>
                     ) : (
-                      <span className="text-[11px] text-foreground/40">
+                      <span className="text-[11px] text-foreground/45">
                         {t("noteEditor.share.dialog.viewer")}
                       </span>
                     )
@@ -903,7 +983,7 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
               ))}
             </div>
 
-            <div className="flex items-center gap-2 pt-3 mt-1 border-t border-border/60">
+            <div className="flex items-center gap-2 pt-3 mt-1 border-t border-border/70">
               <ShareVisibilityMenu
                 value={share?.visibility ?? "private"}
                 ownerDomain={ownerDomain}
@@ -949,6 +1029,41 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
             </div>
           </>
         )}
+
+        {exportOptions.length > 0 && (
+          <div className="mt-1 border-t border-border/70 pt-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-foreground/55">
+              {t("noteEditor.share.dialog.export")}
+            </p>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {exportOptions.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => {
+                    option.onSelect();
+                    onOpenChange(false);
+                  }}
+                  className="flex items-center gap-2.5 rounded-xl border border-border/70 px-3 py-2.5 text-start text-xs font-medium text-foreground/80 transition-colors hover:bg-surface-3 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/30 dark:border-white/10 dark:hover:bg-surface-2"
+                >
+                  <FileText size={14} className="shrink-0 text-foreground/55" />
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <ConfirmDialog
+          open={confirmingReplaceLink}
+          onOpenChange={setConfirmingReplaceLink}
+          title={t("noteEditor.share.dialog.replaceLink.title")}
+          description={t("noteEditor.share.dialog.replaceLink.description")}
+          confirmText={t("noteEditor.share.dialog.replaceLink.confirm")}
+          cancelText={t("common.cancel")}
+          variant="destructive"
+          onConfirm={() => void handleReplaceLink()}
+        />
       </DialogContent>
     </Dialog>
   );
@@ -957,17 +1072,32 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
 interface MemberRowProps {
   leading?: React.ReactNode;
   primary: string;
+  primaryDir?: "auto" | "ltr";
   secondary: string | null;
+  secondaryDir?: "auto" | "ltr";
   trailing: React.ReactNode;
 }
 
-function MemberRow({ leading, primary, secondary, trailing }: MemberRowProps) {
+function MemberRow({
+  leading,
+  primary,
+  primaryDir = "auto",
+  secondary,
+  secondaryDir = "auto",
+  trailing,
+}: MemberRowProps) {
   return (
     <div className="flex items-center gap-2 py-1.5 px-1">
       {leading}
       <div className="flex-1 min-w-0">
-        <p className="text-xs text-foreground truncate">{primary}</p>
-        {secondary && <p className="text-[11px] text-foreground/40 truncate">{secondary}</p>}
+        <p dir={primaryDir} className="text-xs text-foreground truncate">
+          {primary}
+        </p>
+        {secondary && (
+          <p dir={secondaryDir} className="text-[11px] text-foreground/45 truncate">
+            {secondary}
+          </p>
+        )}
       </div>
       {trailing}
     </div>
@@ -1033,6 +1163,11 @@ function AccessGrantRow({
       }
       primary={primary}
       secondary={secondary}
+      secondaryDir={
+        !grant.pending && principal.type !== "team" && principal.name && principal.email
+          ? "ltr"
+          : "auto"
+      }
       trailing={
         canChangePermission || canRemove ? (
           <DropdownMenu>
@@ -1083,7 +1218,7 @@ function AccessGrantRow({
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          <span className="text-[11px] text-foreground/40">{permissionLabel}</span>
+          <span className="text-[11px] text-foreground/45">{permissionLabel}</span>
         )
       }
     />

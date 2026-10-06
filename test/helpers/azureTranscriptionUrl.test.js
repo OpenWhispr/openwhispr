@@ -49,7 +49,7 @@ test("buildAzureTranscriptionUrl returns null when no deployment name is availab
   assert.equal(buildAzureTranscriptionUrl("https://r.cognitiveservices.azure.com", ""), null);
 });
 
-// getTranscriptionEndpoint feeds buildAzureTranscriptionUrl the raw base, not the
+// resolveTranscriptionRoute feeds buildAzureTranscriptionUrl the raw base, not the
 // normalized one, because normalizeBaseUrl strips the /audio/transcriptions suffix
 // that marks a deployment the user pinned by pasting their full Azure endpoint.
 test("a pinned Azure endpoint survives base-URL normalization", async () => {

@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { Cloud, Key, Cpu, Network, Building2, ShieldCheck, AlertTriangle } from "lucide-react";
+import { Cloud, Key, Cpu, Network, Building2, ShieldCheck, AlertTriangle } from "../icons";
 import {
   LLM_ENTERPRISE_POLICY_PROVIDER_IDS,
   LLM_POLICY_PROVIDER_IDS,
@@ -9,6 +9,7 @@ import {
   selectPolicyEffectiveSettings,
   selectResolvedLLMConfig,
   setResolvedLLMConfig,
+  type ResolvedLLMConfig,
 } from "../../stores/settingsStore";
 import { usePolicyModeOptions, usePolicySnapshot } from "../../hooks/usePolicy";
 import { InferenceModeSelector } from "../ui/SettingsSection";
@@ -18,7 +19,11 @@ import EnterpriseSection from "../EnterpriseSection";
 import OpenAICompatiblePanel from "../OpenAICompatiblePanel";
 import { Toggle } from "../ui/toggle";
 import type { InferenceMode } from "../../types/electron";
-import type { InferenceScope } from "../../config/inferenceScopes";
+import {
+  INFERENCE_SCOPES,
+  type InferenceScope,
+  type InferenceScopeDefinition,
+} from "../../config/inferenceScopes";
 import {
   isProviderValidForMode,
   getCloudModel,
@@ -26,10 +31,10 @@ import {
   enterpriseProviderName,
 } from "../../models/ModelRegistry";
 import { useManagedScopeResolution } from "../../stores/enterpriseIdentityStore";
+import { requestSignIn } from "../../utils/requestSignIn";
 import TestConnectionButton from "../TestConnectionButton";
 import { getEnterpriseCallSettings } from "../../services/ai/enterpriseSettings";
 import { Button } from "../ui/button";
-import { resetOnboardingProgress } from "../onboarding/flow";
 
 const MODE_LABEL_PREFIX: Record<InferenceScope, string> = {
   dictationCleanup: "settingsPage.aiModels.modes",
@@ -39,12 +44,6 @@ const MODE_LABEL_PREFIX: Record<InferenceScope, string> = {
   chatIntelligence: "agentMode.settings.modes",
   dictationTranslation: "settingsPage.aiModels.modes",
 };
-
-function startCloudOnboarding() {
-  localStorage.setItem("pendingCloudMigration", "true");
-  resetOnboardingProgress(localStorage);
-  window.location.reload();
-}
 
 interface InferenceConfigEditorProps {
   scope: InferenceScope;
@@ -61,11 +60,19 @@ export default function InferenceConfigEditor({
   const { t } = useTranslation();
   const policyState = usePolicySnapshot();
   const config = useSettingsStore(
-    useShallow((settings) =>
-      selectResolvedLLMConfig(selectPolicyEffectiveSettings(settings, policyState), scope)
-    )
+    useShallow((settings): ResolvedLLMConfig => {
+      const effective = selectPolicyEffectiveSettings(settings, policyState);
+      const resolved = selectResolvedLLMConfig(effective, scope);
+      const definition: InferenceScopeDefinition = INFERENCE_SCOPES[scope];
+      // Inherited runtime defaults are not an explicit selection in an optional picker.
+      return definition.optional
+        ? { ...resolved, model: effective[definition.storeKeys.model] as string }
+        : resolved;
+    })
   );
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
+  const keepLocalModelLoaded = useSettingsStore((s) => s.keepLocalModelLoaded);
+  const setKeepLocalModelLoaded = useSettingsStore((s) => s.setKeepLocalModelLoaded);
   const enterpriseSetupMode = useSettingsStore((s) => s.enterpriseSetupMode);
   const setEnterpriseSetupMode = useSettingsStore((s) => s.setEnterpriseSetupMode);
   const managed = useManagedScopeResolution(scope, enterpriseSetupMode);
@@ -129,7 +136,7 @@ export default function InferenceConfigEditor({
     (mode: InferenceMode) => {
       if (!isModeAllowed(mode)) return;
       if (mode === "openwhispr" && !isSignedIn) {
-        startCloudOnboarding();
+        requestSignIn();
         return;
       }
       if (mode === effectiveMode) return;
@@ -143,11 +150,6 @@ export default function InferenceConfigEditor({
         patch.model = "";
       }
       setResolvedLLMConfig(scope, patch);
-
-      if (mode === "openwhispr" || mode === "self-hosted" || mode === "enterprise") {
-        window.electronAPI?.llamaServerStop?.();
-      }
-
       onModeChange?.(mode);
     },
     [scope, config.provider, effectiveMode, isSignedIn, onModeChange, isModeAllowed]
@@ -189,7 +191,9 @@ export default function InferenceConfigEditor({
             <p className="text-sm font-medium">
               {t("settingsPage.aiModels.managedEnterprise.errorTitle")}
             </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">{managed.message}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {managed.messageKey ? t(managed.messageKey) : managed.message}
+            </p>
           </div>
         </div>
       </div>
@@ -216,7 +220,7 @@ export default function InferenceConfigEditor({
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
+        <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3">
           <TestConnectionButton
             provider={managed.provider}
             getConfig={() => ({
@@ -264,7 +268,13 @@ export default function InferenceConfigEditor({
           </Button>
         </div>
       )}
-      <InferenceModeSelector modes={modes} activeMode={effectiveMode} onSelect={handleModeSelect} />
+      {modes.length > 1 && (
+        <InferenceModeSelector
+          modes={modes}
+          activeMode={effectiveMode}
+          onSelect={handleModeSelect}
+        />
+      )}
 
       {effectiveMode === "providers" && renderModelSelector("cloud")}
       {effectiveMode === "local" && renderModelSelector("local")}
@@ -295,6 +305,18 @@ export default function InferenceConfigEditor({
             <p className="text-xs text-muted-foreground">{t("reasoning.disableThinking.help")}</p>
           </div>
           <Toggle checked={config.disableThinking} onChange={setField("disableThinking")} />
+        </div>
+      )}
+
+      {effectiveMode === "local" && (
+        <div className="flex items-start justify-between gap-3 pt-1">
+          <div className="flex-1 min-w-0">
+            <h4 className="text-sm font-medium text-foreground">
+              {t("reasoning.keepModelLoaded.label")}
+            </h4>
+            <p className="text-xs text-muted-foreground">{t("reasoning.keepModelLoaded.help")}</p>
+          </div>
+          <Toggle checked={keepLocalModelLoaded} onChange={setKeepLocalModelLoaded} />
         </div>
       )}
 

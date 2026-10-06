@@ -7,6 +7,7 @@ const vm = require("node:vm");
 function loadPreloadApi() {
   let exposedApi;
   const invocations = [];
+  const sends = [];
   const listeners = new Map();
   const ipcRenderer = {
     invoke: async (channel, ...args) => {
@@ -17,7 +18,7 @@ function loadPreloadApi() {
     removeListener: (channel, listener) => {
       if (listeners.get(channel) === listener) listeners.delete(channel);
     },
-    send: () => undefined,
+    send: (channel, ...args) => sends.push([channel, ...args]),
     sendSync: () => undefined,
   };
   const electron = {
@@ -37,8 +38,36 @@ function loadPreloadApi() {
     },
     process,
   });
-  return { api: exposedApi, invocations, listeners };
+  return { api: exposedApi, invocations, listeners, sends };
 }
+
+test("permission guide bridge uses narrow channels and strips IPC events", async () => {
+  const { api, invocations, listeners, sends } = loadPreloadApi();
+  const state = { sessionId: "guide-1", permission: "accessibility" };
+  await api.openPermissionGuide(state);
+  await api.getPermissionGuideState();
+  await api.closePermissionGuide();
+  const action = { ...state, action: "check" };
+  api.permissionGuideAction(action);
+  api.startPermissionGuideDrag(state);
+  assert.deepEqual(invocations, [
+    ["permission-guide-open", state],
+    ["permission-guide-state"],
+    ["permission-guide-close"],
+  ]);
+  assert.deepEqual(sends, [
+    ["permission-guide-action", action],
+    ["permission-guide-drag", state],
+  ]);
+  let received;
+  const stop = api.onPermissionGuideState((payload) => {
+    received = payload;
+  });
+  listeners.get("permission-guide-state-changed")({ sender: "native" }, state);
+  assert.equal(received, state);
+  stop();
+  assert.equal(listeners.has("permission-guide-state-changed"), false);
+});
 
 test("onboarding demo bridge invokes only its allowlisted channels", async () => {
   const { api, invocations } = loadPreloadApi();
@@ -67,6 +96,19 @@ test("onboarding active bridge invokes only its allowlisted channel", async () =
   assert.deepEqual(invocations, [
     ["onboarding-set-active", true],
     ["onboarding-set-active", false],
+  ]);
+});
+
+test("macOS accessibility readiness forwards an optional account scope", () => {
+  const { api, sends } = loadPreloadApi();
+  const expectedAccountScope = { accountId: "account-a", authGeneration: 3 };
+
+  api.markMacAccessibilityFeaturesReady();
+  api.markMacAccessibilityFeaturesReady(expectedAccountScope);
+
+  assert.deepEqual(sends, [
+    ["mac-accessibility-features-ready"],
+    ["mac-accessibility-features-ready", expectedAccountScope],
   ]);
 });
 

@@ -51,6 +51,14 @@ export function rememberPendingLocalModel(
   writePendingLocalModels({ ...readPendingLocalModels(), [kind]: selection });
 }
 
+export function isPendingLocalModel(
+  kind: PendingLocalModelKind,
+  selection: PendingLocalModelSelection
+) {
+  const pending = readPendingLocalModels()[kind];
+  return pending?.provider === selection.provider && pending.modelId === selection.modelId;
+}
+
 export function consumePendingLocalModel(
   kind: PendingLocalModelKind,
   modelId: string

@@ -18,6 +18,10 @@ const path = require("path");
 const { execFileSync } = require("child_process");
 const { Arch } = require("app-builder-lib");
 const { buildLinuxWrapperScript } = require("./lib/linux-launcher");
+const {
+  WINDOWS_ONNXRUNTIME_PRIVATE_NAME,
+  WINDOWS_ONNXRUNTIME_UPSTREAM_NAME,
+} = require("./download-sherpa-onnx");
 
 // ---------------------------------------------------------------------------
 // macOS resource binary signing
@@ -231,6 +235,37 @@ function verifyMeetingAecHelper(context) {
   }
 }
 
+// download-sherpa-onnx.js renames the bundled ONNX Runtime so the Windows
+// loader can never resolve it to C:\Windows\System32\onnxruntime.dll (#2054).
+// A stray onnxruntime.dll or a missing private DLL means that step was skipped
+// (stale cache, older marker) and Parakeet would die at startup for the user.
+function verifyWindowsOnnxRuntimePrivatized(binDir) {
+  const strayPath = path.join(binDir, WINDOWS_ONNXRUNTIME_UPSTREAM_NAME);
+  if (fs.existsSync(strayPath)) {
+    throw new Error(
+      `afterPack: ${WINDOWS_ONNXRUNTIME_UPSTREAM_NAME} must not ship (${strayPath}) — download-sherpa-onnx.js renames it to ${WINDOWS_ONNXRUNTIME_PRIVATE_NAME}; re-run the sherpa download with --force`
+    );
+  }
+  const privatePath = path.join(binDir, WINDOWS_ONNXRUNTIME_PRIVATE_NAME);
+  if (!fs.existsSync(privatePath)) {
+    throw new Error(
+      `afterPack: missing ${privatePath} — the bundled ONNX Runtime was not extracted and renamed; Parakeet would die at startup on Windows`
+    );
+  }
+}
+
+// compile:winkeys and download:windows-key-listener only warn when they can't
+// produce the key listener, so without this check a build ships where Hold and
+// modifier-only hotkeys (the default Control+Super) never fire (#2005).
+function verifyWindowsKeyListener(binDir) {
+  const listenerPath = path.join(binDir, "windows-key-listener.exe");
+  if (!fs.existsSync(listenerPath)) {
+    throw new Error(
+      `afterPack: missing ${listenerPath} — run npm run compile:winkeys on Windows (compiles with MSVC, MinGW or Clang, or downloads the prebuilt binary); Push-to-Talk and modifier-only hotkeys would never fire on Windows`
+    );
+  }
+}
+
 function verifyUnpackedBinaries(context) {
   const unpackedDir = path.join(resolveResourcesDir(context), "app.asar.unpacked");
   const unpackedModulesDir = path.join(unpackedDir, "node_modules");
@@ -267,6 +302,9 @@ function verifyUnpackedBinaries(context) {
         `afterPack: no fastlist-*.exe in ${psListVendorDir} — ps-list vendor executable was not unpacked from app.asar (asarUnpack/packaging failure); Windows process detection would break`
       );
     }
+    const binDir = path.join(resolveResourcesDir(context), "bin");
+    verifyWindowsOnnxRuntimePrivatized(binDir);
+    verifyWindowsKeyListener(binDir);
   }
 
   console.log("  afterPack: verified unpacked bundled binaries");
@@ -283,3 +321,6 @@ exports.default = async function (context) {
   verifyUnpackedBinaries(context);
   registerMacResourceBinariesForSigning(context);
 };
+
+exports.verifyWindowsOnnxRuntimePrivatized = verifyWindowsOnnxRuntimePrivatized;
+exports.verifyWindowsKeyListener = verifyWindowsKeyListener;

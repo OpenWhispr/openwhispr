@@ -75,6 +75,10 @@ test("link-local, IPv6 ULA, and .local hostnames are allowed over http", async (
 
   assert.equal(isSecureHttpEndpoint("http://169.254.1.1:8080"), true);
   assert.equal(isSecureHttpEndpoint("http://[fe80::1]:8080"), true);
+  assert.equal(isSecureHttpEndpoint("http://[fe90::1]:8080"), true);
+  assert.equal(isSecureHttpEndpoint("http://[fea0::1]:8080"), true);
+  assert.equal(isSecureHttpEndpoint("http://[febf::1]:8080"), true);
+  assert.equal(isSecureHttpEndpoint("http://[fe7f::1]:8080"), false);
   assert.equal(isSecureHttpEndpoint("http://[fc00::1]:8080"), true);
   assert.equal(isSecureHttpEndpoint("http://[fd12::1]:8080"), true);
   assert.equal(isSecureHttpEndpoint("http://myserver.local:8080"), true);

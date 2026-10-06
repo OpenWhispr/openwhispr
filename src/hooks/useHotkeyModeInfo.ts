@@ -11,7 +11,11 @@ export interface HotkeyModeInfo {
   isUsingHyprland: boolean;
   supportsPushToTalk: boolean;
   pushToTalkUnavailableReason: string | null;
+  /** Linux only: the evdev listener cannot read /dev/input, which Hold needs. */
+  linuxInputAccessDenied: boolean;
   hyprlandConfigStatus: HyprlandConfigStatus | null;
+  /** False until main has answered; the defaults above are optimistic placeholders. */
+  loaded: boolean;
 }
 
 const DEFAULT_INFO: HotkeyModeInfo = {
@@ -19,7 +23,9 @@ const DEFAULT_INFO: HotkeyModeInfo = {
   isUsingHyprland: false,
   supportsPushToTalk: true,
   pushToTalkUnavailableReason: null,
+  linuxInputAccessDenied: false,
   hyprlandConfigStatus: null,
+  loaded: false,
 };
 
 /**
@@ -45,7 +51,9 @@ export function useHotkeyModeInfo(scope: string, hotkey?: string): HotkeyModeInf
           isUsingHyprland: info.isUsingHyprland,
           supportsPushToTalk: info.supportsPushToTalk,
           pushToTalkUnavailableReason: info.pushToTalkUnavailableReason,
+          linuxInputAccessDenied: info.linuxInputAccessDenied ?? false,
           hyprlandConfigStatus,
+          loaded: true,
         });
       } catch (error) {
         logger.error("Failed to check hotkey mode", { error }, scope);

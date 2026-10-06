@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import i18n from "../i18n";
 import { transcribeFileWithSpeakers } from "../services/fileTranscription";
 import type { FileTranscriptionConfig, DiarizationSettings } from "../services/fileTranscription";
 import { DOWNLOAD_ERROR_KEYS, transcriptionErrorKey } from "../components/notes/shared";
@@ -6,6 +7,8 @@ import { saveUploadNote, uploadTitleFallback } from "../services/uploadNotes";
 import { getSettings } from "./settingsStore";
 import { isTranscriptionContextAllowed } from "./policyRules";
 import { usePolicyStore } from "./policyStore";
+import { isManagedTranscriptionActive } from "../services/managedTranscription";
+import { describeProviderError } from "../utils/describeProviderError";
 
 export type QueueItemStatus = "queued" | "downloading" | "transcribing" | "done" | "error";
 
@@ -21,6 +24,8 @@ export interface QueueItem {
   error?: string;
   // Transcription completed but parts of the audio failed (e.g. failed chunks).
   warning?: boolean;
+  // Transcription completed, but requested speaker labels could not be applied.
+  diarizationWarning?: boolean;
   noteId?: number;
   tempPath?: string;
 }
@@ -120,7 +125,11 @@ export function processBatchQueue(
   diarization: DiarizationSettings
 ): void {
   if (useBatchQueueStore.getState().isProcessing) return;
-  if (!isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload")) return;
+  if (
+    !isManagedTranscriptionActive() &&
+    !isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload")
+  )
+    return;
   const run = ++runId;
   useBatchQueueStore.setState({ isProcessing: true });
 
@@ -211,6 +220,12 @@ export function processBatchQueue(
           status: "error",
           error:
             transcriptionErrorKey(transcriptionResult) ||
+            (transcriptionResult.messageKey
+              ? describeProviderError(
+                  { ...transcriptionResult, message: transcriptionResult.error },
+                  i18n.t
+                ).description
+              : undefined) ||
             transcriptionResult.error ||
             "batchTranscriptionFailed",
         });
@@ -244,6 +259,7 @@ export function processBatchQueue(
           status: "done",
           progress: 100,
           warning: !!transcriptionResult.warning,
+          diarizationWarning: !!transcriptionResult.diarizationWarning,
           noteId: noteRes.note.id,
         });
       } else {

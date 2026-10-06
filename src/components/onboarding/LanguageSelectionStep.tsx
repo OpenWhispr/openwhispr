@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
-import { Check, Search, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { Check, Search, X } from "../icons";
+import { MAX_PREFERRED_LANGUAGES } from "../../helpers/languagePreferences";
 import OnboardingList from "./OnboardingList";
 import {
   displayOnboardingLanguageLabel,
@@ -23,13 +25,12 @@ export default function LanguageSelectionStep({
   noResultsLabel,
   selectedLabel,
 }: LanguageSelectionStepProps) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const languages = useMemo(() => getOnboardingLanguageOptions(query, selected), [query, selected]);
 
   const toggle = (code: string) => {
-    // Matches MAX_PREFERRED_LANGUAGES: the dictation-panel switcher offers at
-    // most five languages, so onboarding stops offering more past five.
-    if (!selected.includes(code) && selected.length >= 5) return;
+    if (!selected.includes(code) && selected.length >= MAX_PREFERRED_LANGUAGES) return;
     onChange(
       selected.includes(code) ? selected.filter((item) => item !== code) : [...selected, code]
     );
@@ -42,16 +43,17 @@ export default function LanguageSelectionStep({
           content rather than being pinned, which is why there's no h-*. */}
       <label className="relative block">
         <Search
-          className="pointer-events-none absolute left-3.5 top-1/2 size-5 -translate-y-1/2 text-[var(--onboarding-text-tertiary)]"
+          className="pointer-events-none absolute start-3.5 top-1/2 size-5 -translate-y-1/2 text-[var(--onboarding-text-tertiary)]"
           strokeWidth={2}
         />
         <input
+          dir="auto"
           type="search"
           aria-label={searchPlaceholder}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder={searchPlaceholder}
-          className="onboarding-light-input onboarding-light-input-bordered w-full rounded-full! border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] py-2.5 pl-11 pr-3.5 text-base leading-[1.4] text-[var(--onboarding-text-primary)] shadow-none! outline-none placeholder:text-[var(--onboarding-text-tertiary)] focus:border-[var(--onboarding-accent)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--onboarding-accent)_15%,transparent)]"
+          className="onboarding-light-input onboarding-light-input-bordered w-full rounded-full! border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] py-2.5 ps-11 pe-3.5 text-base leading-[1.4] text-[var(--onboarding-text-primary)] shadow-none! outline-none placeholder:text-[var(--onboarding-text-tertiary)] focus:border-[var(--onboarding-accent)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--onboarding-accent)_15%,transparent)]"
         />
       </label>
 
@@ -88,14 +90,24 @@ export default function LanguageSelectionStep({
         ) : (
           languages.map((language) => {
             const checked = selected.includes(language.code);
+            const limitReached = !checked && selected.length >= MAX_PREFERRED_LANGUAGES;
             return (
               <button
                 key={language.code}
                 type="button"
                 role="checkbox"
                 aria-checked={checked}
+                aria-disabled={limitReached || undefined}
+                disabled={limitReached}
+                title={
+                  limitReached
+                    ? t("languageSelector.maxLanguagesHint", { max: MAX_PREFERRED_LANGUAGES })
+                    : undefined
+                }
                 onClick={() => toggle(language.code)}
-                className="onboarding-list-row w-full text-left"
+                className={`onboarding-list-row w-full text-start ${
+                  limitReached ? "cursor-not-allowed opacity-50" : ""
+                }`}
               >
                 {/* The control keeps its light stroke when checked — the spec's
                     asset carries both the fill and the #E3E3E3 border. */}

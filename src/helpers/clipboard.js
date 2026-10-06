@@ -21,6 +21,12 @@ const PASTE_DELAYS = {
   linux: 50,
 };
 
+// How long a Linux paste or copy waits for the user to let go of held modifiers
+// before giving up and leaving the text on the clipboard. Covers someone still
+// resting on the rest of a push-to-talk chord; a key held on purpose past this
+// surfaces as an unpasted transcript instead of an indefinite wait.
+const MODIFIER_RELEASE_WAIT_MS = 1500;
+
 const RESTORE_DELAYS = {
   darwin: 450,
   win32_nircmd: 500,
@@ -683,6 +689,65 @@ class ClipboardManager {
     }
   }
 
+  // A paste or copy chord injected while the user still holds a modifier reaches
+  // the target as a different shortcut (Super+Ctrl+V), and the text is lost.
+  // Resolves { state, waitedMs }: "released" (waitedMs > 0 when it had to wait),
+  // "held" once the wait runs out, or "unknown" when the key state can't be read,
+  // in which case the caller proceeds as it always has.
+  _awaitModifierRelease() {
+    const unknown = { state: "unknown", waitedMs: 0 };
+    const binary = this.resolveLinuxFastPasteBinary();
+    if (!binary) return Promise.resolve(unknown);
+
+    return new Promise((resolve) => {
+      // --capabilities comes first so an older binary that doesn't know the wait
+      // flag prints its capabilities and exits instead of falling through to a paste.
+      const proc = spawn(binary, [
+        "--capabilities",
+        "--await-modifier-release",
+        String(MODIFIER_RELEASE_WAIT_MS),
+      ]);
+      let stdout = "";
+      let timedOut = false;
+      const timeoutId = setTimeout(() => {
+        timedOut = true;
+        killProcess(proc, "SIGKILL");
+        resolve(unknown);
+      }, MODIFIER_RELEASE_WAIT_MS + 1000);
+
+      proc.stdout?.on("data", (data) => {
+        stdout += data.toString();
+      });
+
+      proc.on("close", () => {
+        if (timedOut) return;
+        clearTimeout(timeoutId);
+        const [, state = "unknown", waitedMs = "0"] =
+          stdout.match(/^MODIFIERS (released|held|unknown) (\d+)$/m) || [];
+        if (state === "held" || Number(waitedMs) > 0) {
+          debugLogger.info("Waited for held modifier keys", { state, waitedMs }, "clipboard");
+        }
+        // "unknown" (no /dev/input access on Wayland, or a helper too old for the
+        // flag) means the wait is inert; say so once so support can tell it apart
+        // from a genuine "released".
+        if (state === "unknown" && !this._modifierStateUnreadableLogged) {
+          this._modifierStateUnreadableLogged = true;
+          debugLogger.info(
+            "Modifier key state unreadable, pasting without waiting",
+            { isWayland: getLinuxSessionInfo().isWayland, helperOutput: stdout.trim() },
+            "clipboard"
+          );
+        }
+        resolve({ state, waitedMs: Number(waitedMs) });
+      });
+
+      proc.on("error", () => {
+        clearTimeout(timeoutId);
+        resolve(unknown);
+      });
+    });
+  }
+
   _runLinuxPasteCommand(command, args, label, { expectedOutput } = {}) {
     return new Promise((resolve, reject) => {
       debugLogger.debug("Attempting Linux paste command", { command, args, label }, "clipboard");
@@ -907,17 +972,22 @@ class ClipboardManager {
       if (platform === "darwin") {
         method = this.resolveFastPasteBinary() ? "cgevent" : "applescript";
         this.safeLog("🔍 Checking accessibility permissions for paste operation...");
-        const hasPermissions = await this.checkAccessibilityPermissions(allowClipboardFallback);
+        const hasPermissions = await this.checkAccessibilityPermissions(
+          allowClipboardFallback || options.silentAccessibilityCheck === true
+        );
 
         if (!hasPermissions) {
           this.safeLog("⚠️ No accessibility permissions - text copied to clipboard only");
           if (allowClipboardFallback) {
             this.safeLog("✅ Clipboard fallback used (manual paste required)");
-            return { restoreComplete: Promise.resolve() };
+            return { restoreComplete: Promise.resolve(), pasted: false };
           }
           const errorMsg =
             "Accessibility permissions required for automatic pasting. Text has been copied to clipboard - please paste manually with Cmd+V.";
-          throw new Error(errorMsg);
+          throw Object.assign(new Error(errorMsg), {
+            code: "ACCESSIBILITY_PERMISSION_REQUIRED",
+            clipboardCopied: true,
+          });
         }
 
         this.safeLog("✅ Permissions granted, attempting to paste...");
@@ -1012,6 +1082,15 @@ class ClipboardManager {
             } else {
               resolve({ restoreComplete: Promise.resolve() });
             }
+          } else if (useFastPaste && code === 3) {
+            this.safeLog("CGEvent paste could not resolve the active keyboard layout", {
+              stderr: errorOutput.trim(),
+            });
+            reject(
+              new Error(
+                "Paste could not resolve the active keyboard layout. Text is copied to clipboard - please paste manually with Cmd+V."
+              )
+            );
           } else if (useFastPaste) {
             this.safeLog(
               code === 2
@@ -1520,6 +1599,16 @@ class ClipboardManager {
       }
     };
 
+    // Every tool below injects a chord, so wait here once for held modifiers. The
+    // text is already on the clipboard; returning before a restore is scheduled
+    // keeps it there for a manual paste. The wait comes before target detection:
+    // focus can move while a key is held, and the chord must suit the window the
+    // paste will actually reach.
+    if ((await this._awaitModifierRelease()).state === "held") {
+      this.safeLog("⌨️ Modifier keys still held, leaving the text on the clipboard");
+      return { pasted: false, reason: "modifiers-held", restoreComplete: Promise.resolve() };
+    }
+
     const targetWindowId = preDetectTargetWindow();
     let detectedWindowClass = preDetectWindowClass(targetWindowId);
 
@@ -1570,6 +1659,22 @@ class ClipboardManager {
       : isTerminalTarget
         ? ["-M", "ctrl", "-M", "shift", "-k", "v", "-m", "shift", "-m", "ctrl"]
         : ["-M", "ctrl", "-k", "v", "-m", "ctrl"];
+
+    // ydotool 0.1.x (Ubuntu 24.04) uses key names; 1.0.x uses raw keycodes.
+    // Wayland's physical fallback is always Shift+Insert to avoid KEY_V's layout-sensitive position.
+    const buildYdotoolArgs = () => {
+      const legacyYdotool = this._isYdotoolLegacy();
+      if (isWayland || useShiftInsert) {
+        return legacyYdotool ? ["key", "shift+Insert"] : ["key", "42:1", "110:1", "110:0", "42:0"];
+      }
+      if (isTerminalTarget) {
+        return legacyYdotool
+          ? ["key", "ctrl+shift+v"]
+          : ["key", "29:1", "42:1", "47:1", "47:0", "42:0", "29:0"];
+      }
+      return legacyYdotool ? ["key", "ctrl+v"] : ["key", "29:1", "47:1", "47:0", "29:0"];
+    };
+    let ydotoolAttempted = false;
 
     // Konsole on X11 silently drops simulated Ctrl+Shift+V via XTest (a long-standing
     // focus/grab quirk), and the native fast-paste binary uses XTest. Route Konsole+X11
@@ -1724,6 +1829,27 @@ class ClipboardManager {
           this.portalTokenPasteFailed = true;
         }
 
+        // GNOME: a running ydotoold already owns a persistent uinput device, so
+        // paste through it instead of the throwaway device the binary creates per
+        // paste. Mutter can take 150–500 ms to pick up a hotplugged device, but the
+        // binary destroys its device ~100 ms after creation and exits 0 regardless,
+        // so the keystrokes are dropped and the fallbacks never run (#956).
+        if (isGnome && ydotoolDaemonRunning) {
+          ydotoolAttempted = true;
+          try {
+            await this._runLinuxPasteCommand("ydotool", buildYdotoolArgs(), "ydotool");
+            this.safeLog("✅ Paste successful using ydotool");
+            debugLogger.info("Paste successful", { tool: "ydotool" }, "clipboard");
+            return { method: "ydotool", restoreComplete: restoreClipboard() };
+          } catch (error) {
+            debugLogger.warn(
+              "ydotool paste failed on GNOME, trying uinput",
+              { error: error?.message },
+              "clipboard"
+            );
+          }
+        }
+
         try {
           const uinputPaste = await tryUinputPaste();
           return { method: "uinput", ...uinputPaste };
@@ -1826,24 +1952,9 @@ class ClipboardManager {
       );
     }
 
-    // ydotool 0.1.x (Ubuntu 24.04) uses key names; 1.0.x uses raw keycodes.
-    // Wayland's physical fallback is always Shift+Insert to avoid KEY_V's layout-sensitive position.
-    const legacyYdotool = this._isYdotoolLegacy();
-    let ydotoolArgs;
-    if (isWayland || useShiftInsert) {
-      ydotoolArgs = legacyYdotool
-        ? ["key", "shift+Insert"]
-        : ["key", "42:1", "110:1", "110:0", "42:0"];
-    } else if (isTerminalTarget) {
-      ydotoolArgs = legacyYdotool
-        ? ["key", "ctrl+shift+v"]
-        : ["key", "29:1", "42:1", "47:1", "47:0", "42:0", "29:0"];
-    } else {
-      ydotoolArgs = legacyYdotool ? ["key", "ctrl+v"] : ["key", "29:1", "47:1", "47:0", "29:0"];
-    }
-
     const xdotoolEntry = canUseXdotool ? [{ cmd: "xdotool", args: xdotoolArgs }] : [];
-    const ydotoolEntry = canUseYdotool ? [{ cmd: "ydotool", args: ydotoolArgs }] : [];
+    const ydotoolEntry =
+      canUseYdotool && !ydotoolAttempted ? [{ cmd: "ydotool", args: buildYdotoolArgs() }] : [];
 
     // Compositor-aware priority ordering. X11 and wlroots (where wtype already
     // ran): xdotool first — native on X11, no daemon needed. GNOME, KDE, or

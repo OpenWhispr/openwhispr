@@ -22,10 +22,6 @@ export function buildSelectionEditUserPrompt(spokenInstruction, selectedText) {
   });
 }
 
-// Codes meaning "this target can never report a selection", as opposed to "a
-// selection may exist and the read failed". They fall back to typing at the
-// cursor — the Voice Agent's behavior before selection editing existed — because
-// losing in-place editing is acceptable where losing the command is not.
 const STANDALONE_CAPTURE_CODES = new Set([
   "target_unavailable",
   "copy_helper_unavailable",
@@ -34,14 +30,18 @@ const STANDALONE_CAPTURE_CODES = new Set([
   // macOS: neither the accessibility tree nor a synthetic copy could inspect the
   // app, so a selection is neither readable nor ruled out.
   "accessibility_unavailable",
+  // Linux: keys still held past the wait block the copy, so the same holds.
+  "modifiers_held",
+  // Linux: focus moved while those keys were held, so the window the command
+  // is about was never checked (a target_changed status).
+  "focus_moved",
 ]);
 
 export function getSelectionCaptureDisposition(capture) {
+  if (capture?.status === "editable") return "caret";
   if (!capture || capture.status === "none") return "standalone";
   if (capture.status === "selected") return "selection";
-  if (capture.status === "unavailable" && STANDALONE_CAPTURE_CODES.has(capture.code)) {
-    return "standalone";
-  }
+  if (STANDALONE_CAPTURE_CODES.has(capture.code)) return "standalone";
   return capture.status === "target_changed" ? "changed" : "unavailable";
 }
 

@@ -1,13 +1,14 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { OnboardingProgressState } from "./flow";
-import { Copy, Minus, Square, Undo2, X } from "lucide-react";
+import { Copy, Minus, Square, Undo2, X } from "../icons";
 import { Button } from "../ui/button";
+import { BRAND_GLASS_SURFACE } from "../ui/gradientCircle";
+import { cn } from "../lib/utils";
 import { useTranslation } from "react-i18next";
 import { getPlatform } from "../../utils/platform";
+import { useWindowControls } from "../../hooks/useWindowControls";
 // Imported (not referenced by path) so Vite fingerprints it and it resolves
 // under the packaged app's file:// origin. See .onboarding-compact-hero.
-import heroDither from "@/assets/onboarding-hero-dither.webp";
-import heroDitherDark from "@/assets/onboarding-hero-dither-dark.webp";
 import onboardingBackgroundLight from "@/assets/onboarding-bg-light.svg";
 import onboardingBackgroundDark from "@/assets/onboarding-bg-dark.svg";
 
@@ -42,59 +43,18 @@ interface CompactOnboardingFrameProps {
 }
 
 /**
- * Minimise/close for the frameless window on Windows and Linux — macOS shows
- * its native traffic lights instead (the window manager keeps them visible on
- * the expanded scaffold). Close hides to the tray; the persisted session
- * resumes the flow on reopen, so this is never a way to lose progress.
- *
- * Compact keeps only minimise/close because its fixed card cannot resize.
- * Expanded adds maximize/restore alongside them.
+ * Window controls for the frameless window on Windows and Linux — macOS uses
+ * its native traffic lights, so OnboardingShell skips rendering this there.
+ * Close hides to the tray; the persisted session resumes the flow on reopen,
+ * so this is never a way to lose progress.
  */
-function OnboardingWindowControls({ compact }: { compact: boolean }) {
+function OnboardingWindowControls() {
   const { t } = useTranslation();
-  const [isMaximized, setIsMaximized] = useState(false);
-  const platform = getPlatform();
+  const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
 
-  useEffect(() => {
-    if (compact || platform === "darwin") return;
-    let mounted = true;
-    const syncIsMaximized = async (): Promise<void> => {
-      try {
-        const maximized = await window.electronAPI?.windowIsMaximized?.();
-        if (mounted) setIsMaximized(Boolean(maximized));
-      } catch {}
-    };
-
-    void syncIsMaximized();
-    const intervalId = window.setInterval(syncIsMaximized, 1000);
-    return () => {
-      mounted = false;
-      window.clearInterval(intervalId);
-    };
-  }, [compact, platform]);
-
-  const handleMinimize = async (): Promise<void> => {
-    try {
-      await window.electronAPI?.windowMinimize?.();
-    } catch {}
-  };
-
-  const handleMaximize = async (): Promise<void> => {
-    try {
-      await window.electronAPI?.windowMaximize?.();
-      const maximized = await window.electronAPI?.windowIsMaximized?.();
-      setIsMaximized(Boolean(maximized));
-    } catch {}
-  };
-
-  const handleClose = async (): Promise<void> => {
-    try {
-      await window.electronAPI?.windowClose?.();
-    } catch {}
-  };
-
-  if (platform === "darwin") return null;
-
+  const minimizeLabel = t("windowControls.minimize");
+  const maximizeLabel = t(isMaximized ? "windowControls.restore" : "windowControls.maximize");
+  const closeLabel = t("windowControls.close");
   const buttonClass =
     "inline-flex size-8 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 text-[var(--onboarding-text-secondary)] hover:bg-[var(--onboarding-surface-tertiary)] focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)]";
 
@@ -105,30 +65,31 @@ function OnboardingWindowControls({ compact }: { compact: boolean }) {
     >
       <button
         type="button"
-        onClick={handleMinimize}
-        title={t("windowControls.minimize")}
+        onClick={minimize}
+        title={minimizeLabel}
+        aria-label={minimizeLabel}
         className={buttonClass}
       >
         <Minus className="size-4" aria-hidden="true" />
       </button>
-      {!compact && (
-        <button
-          type="button"
-          onClick={handleMaximize}
-          title={t(isMaximized ? "windowControls.restore" : "windowControls.maximize")}
-          className={buttonClass}
-        >
-          {isMaximized ? (
-            <Copy className="size-4" aria-hidden="true" />
-          ) : (
-            <Square className="size-3.5" aria-hidden="true" />
-          )}
-        </button>
-      )}
       <button
         type="button"
-        onClick={handleClose}
-        title={t("windowControls.close")}
+        onClick={toggleMaximize}
+        title={maximizeLabel}
+        aria-label={maximizeLabel}
+        className={buttonClass}
+      >
+        {isMaximized ? (
+          <Copy className="size-4" aria-hidden="true" />
+        ) : (
+          <Square className="size-3.5" aria-hidden="true" />
+        )}
+      </button>
+      <button
+        type="button"
+        onClick={close}
+        title={closeLabel}
+        aria-label={closeLabel}
         className={buttonClass}
       >
         <X className="size-4" aria-hidden="true" />
@@ -162,18 +123,23 @@ export function OnboardingStepHeader({
   description,
   descriptionLines,
   wideTitle = false,
+  wideDescription = false,
 }: {
   title: string;
   titleLines?: string[];
   description?: ReactNode;
   descriptionLines?: string[];
   wideTitle?: boolean;
+  /** Lets a short description run as one line instead of wrapping at 20rem. */
+  wideDescription?: boolean;
 }) {
   return (
-    <header className="mx-auto w-full max-w-md space-y-3 text-center">
+    <header
+      className={`mx-auto w-full space-y-3 text-center ${wideTitle ? "max-w-lg" : "max-w-md"}`}
+    >
       <h1
         // titleLines already carries the authored line breaks. Lines can still
-        // wrap inside the header's 32rem cap when a translation runs long.
+        // wrap inside the header's cap when a translation runs long.
         className={`onboarding-display-title mx-auto text-[var(--onboarding-text-primary)] ${
           wideTitle || titleLines ? "max-w-none" : "max-w-xs"
         }`}
@@ -194,7 +160,11 @@ export function OnboardingStepHeader({
         )}
       </h1>
       {(description || descriptionLines) && (
-        <p className="mx-auto max-w-xs text-balance text-sm leading-[1.5] text-[var(--onboarding-text-secondary)]">
+        <p
+          className={`mx-auto text-balance text-sm leading-[1.5] text-[var(--onboarding-text-secondary)] ${
+            wideDescription ? "max-w-none" : "max-w-xs"
+          }`}
+        >
           {descriptionLines ? (
             <>
               <span className="sr-only">{description}</span>
@@ -242,18 +212,40 @@ export default function OnboardingShell({
         } as CSSProperties
       }
     >
-      {/* 48px, not a sliver: this is the frameless window's only title bar, so
-          it has to be a target someone can actually grab. Interactive overlays
-          in this band need z-60 + app-region: no-drag and must live outside the
-          step wrapper (a sibling here, or portalled to body) — the wrapper's
-          entry animation retains a transform, capping its descendants below
-          z-50. */}
+      {/* This is the frameless window's only title bar, so it has to be a
+          target someone can actually grab. Interactive overlays in this band
+          need z-60 + app-region: no-drag and must live outside the step wrapper
+          (a sibling here, or portalled to body) — the wrapper's entry animation
+          retains a transform, capping its descendants below z-50.
+
+          The native app-region strip stays 48px on every screen. A drag element
+          swallows the events under it, and it is a sibling of the step scroller
+          inside an overflow-hidden main, so a taller strip would eat wheel
+          scrolling over the top of a compact step — reachable, because
+          setOnboardingWindowMode clamps the compact window to the work area
+          height and the permissions list then overflows. */}
       <div
         className="absolute inset-x-0 top-0 z-50 h-12"
-        style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+        style={{ WebkitAppRegion: "drag" } as CSSProperties}
+        data-window-drag-zone=""
         aria-hidden="true"
       />
-      <OnboardingWindowControls compact={compact} />
+      {/* macOS only: the transparent control panel drops app-region entirely,
+          so the JS fallback (useControlPanelWindowDrag) is the sole drag path
+          there and can widen the grab target to the full compact hero — the
+          dithered ramp reads as window chrome, so people grab it to move the
+          window. pointer-events-none keeps it out of the event path, so it can
+          never swallow scrolling or clicks the way the app-region strip does;
+          the fallback matches declared zones by their bounds, not by hit
+          testing, so being out of the event path costs it nothing. */}
+      {compact && (
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 z-40 h-48"
+          data-window-drag-zone=""
+          aria-hidden="true"
+        />
+      )}
+      {getPlatform() !== "darwin" && <OnboardingWindowControls />}
 
       <div
         // Normally nothing scrolls here: each step sizes itself to the window and
@@ -326,12 +318,7 @@ export default function OnboardingShell({
                 </Button>
               )}
               {onSkip && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={onSkip}
-                  className="h-9 min-w-20 rounded-full px-4 text-sm"
-                >
+                <Button type="button" variant="ghost" onClick={onSkip} className="h-9 min-w-20">
                   {skipLabel ?? t("common.skip")}
                 </Button>
               )}
@@ -340,9 +327,7 @@ export default function OnboardingShell({
                   type="button"
                   onClick={onContinue}
                   disabled={continueDisabled || continueLoading}
-                  // Flat brand fill with no shadow or stroke. It shares the same
-                  // compact height as the Back and Skip controls.
-                  className="h-9 gap-3 rounded-[38px] border-0 bg-[var(--onboarding-accent)] px-5 py-2 text-sm font-medium leading-[1.4] tracking-normal text-[var(--onboarding-accent-foreground)] shadow-none! hover:bg-[var(--onboarding-accent-hover)] hover:shadow-none! disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-tertiary)] disabled:opacity-100!"
+                  className="h-9 rounded-[38px] px-5 text-sm"
                 >
                   {continueLoading ? t("common.loading") : (continueLabel ?? t("common.continue"))}
                 </Button>
@@ -369,20 +354,17 @@ export function CompactOnboardingFrame({
 
   return (
     <section className="relative flex h-full min-h-screen w-full flex-col overflow-hidden bg-[var(--onboarding-surface)] text-[var(--onboarding-text-primary)]">
-      <div
-        className="onboarding-compact-hero pointer-events-none absolute inset-x-0 top-0 h-48"
-        // Both strips are handed over as custom properties and .onboarding-compact-hero
-        // picks one per theme; the URLs have to come from here because only an import
-        // gets fingerprinted by Vite and resolves under the packaged file:// origin.
-        style={
-          {
-            "--onboarding-hero-dither-light": `url(${heroDither})`,
-            "--onboarding-hero-dither-dark": `url(${heroDitherDark})`,
-          } as React.CSSProperties
-        }
-      />
+      <div className="onboarding-compact-hero pointer-events-none absolute inset-x-0 top-0 h-33" />
       {showBrandMark && (
-        <BrandMark className="pointer-events-none absolute left-1/2 top-13 z-10 size-28 -translate-x-1/2 text-white" />
+        <div
+          className={cn(
+            "pointer-events-none absolute left-1/2 top-23 z-10 flex size-19 -translate-x-1/2 items-center justify-center rounded-[20px]",
+            BRAND_GLASS_SURFACE,
+            "shadow-(--shadow-brand-tile)"
+          )}
+        >
+          <BrandMark className="size-13" />
+        </div>
       )}
 
       {/* The compact BrowserWindow is the authored 480x624 surface. This layer
@@ -394,7 +376,7 @@ export function CompactOnboardingFrame({
       </div>
 
       {showLegalNotice && (
-        <p className="relative z-10 mx-auto mt-auto w-full max-w-xs shrink-0 px-2 pb-4 pt-5 text-center text-sm leading-5 text-[var(--onboarding-text-secondary)]">
+        <p className="relative z-10 mx-auto mt-auto w-full max-w-sm shrink-0 px-2 pb-4 pt-5 text-center text-xs leading-[18px] text-[var(--onboarding-text-secondary)]">
           {t("auth.legal.prefix")}{" "}
           <a
             href="https://openwhispr.com/terms"

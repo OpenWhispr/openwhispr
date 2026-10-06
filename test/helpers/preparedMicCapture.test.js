@@ -147,14 +147,16 @@ test("a prepared value that expired is not handed to a later prepare", async () 
   assert.equal((await capture.take()).id, "second");
 });
 
-test("discardPreRoll drops the recorder and chunks but keeps the stream", async () => {
+test("discardPreRoll drops the recorder, chunks and PCM tap but keeps the stream", async () => {
   const { discardPreRoll } = await load();
   let streamStops = 0;
   let recorderStops = 0;
+  let tapCloses = 0;
   const prepared = {
     stream: fakeStream(() => (streamStops += 1)),
     recorder: { state: "recording", ondataavailable: () => {}, stop: () => (recorderStops += 1) },
     chunks: ["a", "b"],
+    pcmTap: { close: () => (tapCloses += 1) },
   };
 
   discardPreRoll(prepared);
@@ -162,6 +164,8 @@ test("discardPreRoll drops the recorder and chunks but keeps the stream", async 
   assert.equal(recorderStops, 1);
   assert.equal(prepared.recorder, null);
   assert.deepEqual(prepared.chunks, []);
+  assert.equal(tapCloses, 1);
+  assert.equal(prepared.pcmTap, null);
   assert.equal(streamStops, 0);
 });
 

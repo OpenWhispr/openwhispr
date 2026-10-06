@@ -278,7 +278,6 @@ test("listening entrance starts in the thinking circle before expanding", async 
   const { resolveListeningEntrancePresentation } = await load();
   assert.deepEqual(resolveListeningEntrancePresentation({ isRecording: true, phase: "idle" }), {
     activeState: "recording",
-    beamActive: true,
     collapseToLogo: true,
     compactPill: false,
     waveformVisible: false,
@@ -291,7 +290,6 @@ test("listening entrance expands before revealing the waveform", async () => {
     resolveListeningEntrancePresentation({ isRecording: true, phase: "expanding" }),
     {
       activeState: "recording",
-      beamActive: false,
       collapseToLogo: false,
       compactPill: true,
       waveformVisible: false,
@@ -312,7 +310,6 @@ test("listening entrance settles at full width before revealing the waveform", a
 
   assert.deepEqual(settled, {
     activeState: "recording",
-    beamActive: false,
     collapseToLogo: false,
     compactPill: true,
     waveformVisible: false,
@@ -322,11 +319,20 @@ test("listening entrance settles at full width before revealing the waveform", a
 
 test("listening entrance timers preserve the visual order", async () => {
   const { getListeningEntranceTimeline } = await load();
-  const timeline = getListeningEntranceTimeline();
 
-  assert.ok(timeline.expandAtMs > 0);
-  assert.ok(timeline.settleAtMs > timeline.expandAtMs);
-  assert.ok(timeline.waveformAtMs > timeline.settleAtMs);
+  for (const afterAssistantFooterHandoff of [false, true]) {
+    const timeline = getListeningEntranceTimeline({ afterAssistantFooterHandoff });
+    assert.ok(timeline.expandAtMs > 0);
+    assert.ok(timeline.settleAtMs > timeline.expandAtMs);
+    assert.ok(timeline.waveformAtMs > timeline.settleAtMs);
+  }
+
+  // The floating pill has no footer handoff to wait out, so its hold is the
+  // shorter of the two speeds.
+  assert.ok(
+    getListeningEntranceTimeline().expandAtMs <
+      getListeningEntranceTimeline({ afterAssistantFooterHandoff: true }).expandAtMs
+  );
 });
 
 test("Agent footer retreats actions before the compact pill enters", async () => {
@@ -340,8 +346,12 @@ test("Agent footer retreats actions before the compact pill enters", async () =>
   assert.ok(timeline.settledAtMs > timeline.handoffAtMs);
   // Cross-policy contract: the footer handoff must fully settle before the
   // listening entrance starts expanding the pill, or the two animations fight
-  // over the same control.
-  assert.ok(timeline.settledAtMs < getListeningEntranceTimeline().expandAtMs);
+  // over the same control. Only the footer-handoff hold carries this bound;
+  // the floating pill never runs the two together.
+  assert.ok(
+    timeline.settledAtMs <
+      getListeningEntranceTimeline({ afterAssistantFooterHandoff: true }).expandAtMs
+  );
 });
 
 test("Agent footer retreats the pill before final actions grow from its anchor", async () => {
@@ -412,7 +422,6 @@ test("stopping during the entrance cancels the staged recording presentation", a
     resolveListeningEntrancePresentation({ isRecording: false, phase: "expanding" }),
     {
       activeState: null,
-      beamActive: null,
       collapseToLogo: false,
       compactPill: false,
       waveformVisible: true,
@@ -623,4 +632,192 @@ test("an Agent follow-up keeps the existing response modal open while thinking",
     responseReady: false,
     thinking: true,
   });
+});
+
+test("a collapsed transcript stays reopenable while its result is processing", async () => {
+  const { resolveCompanionPillInteractive } = await load();
+
+  assert.equal(
+    resolveCompanionPillInteractive({
+      mainProcessInteractive: true,
+      surfaceInteractive: true,
+      isProcessing: true,
+      canReopenLiveTranscript: true,
+    }),
+    true
+  );
+  assert.equal(
+    resolveCompanionPillInteractive({
+      mainProcessInteractive: true,
+      surfaceInteractive: true,
+      isProcessing: true,
+      canReopenLiveTranscript: false,
+    }),
+    false
+  );
+  assert.equal(
+    resolveCompanionPillInteractive({
+      mainProcessInteractive: false,
+      surfaceInteractive: true,
+      isProcessing: false,
+      canReopenLiveTranscript: true,
+    }),
+    false
+  );
+  assert.equal(
+    resolveCompanionPillInteractive({
+      mainProcessInteractive: true,
+      surfaceInteractive: false,
+      isProcessing: false,
+      canReopenLiveTranscript: false,
+    }),
+    false
+  );
+});
+
+test("final Agent actions keep the idle pill hidden until the panel finishes closing", async () => {
+  const { shouldSuppressPillForAssistantActions } = await load();
+
+  assert.equal(
+    shouldSuppressPillForAssistantActions({
+      assistantOpen: true,
+      footerPillVisible: false,
+      assistantClosing: false,
+      hasLiveActivity: false,
+    }),
+    true
+  );
+  assert.equal(
+    shouldSuppressPillForAssistantActions({
+      assistantOpen: true,
+      footerPillVisible: false,
+      assistantClosing: true,
+      hasLiveActivity: false,
+    }),
+    true
+  );
+  assert.equal(
+    shouldSuppressPillForAssistantActions({
+      assistantOpen: true,
+      footerPillVisible: true,
+      assistantClosing: false,
+      hasLiveActivity: false,
+    }),
+    false
+  );
+  assert.equal(
+    shouldSuppressPillForAssistantActions({
+      assistantOpen: false,
+      footerPillVisible: false,
+      assistantClosing: false,
+      hasLiveActivity: true,
+    }),
+    false
+  );
+});
+
+test("the composed pill suppression keeps a live recording visible through the close", async () => {
+  const { resolvePillVisualSuppression } = await load();
+
+  const base = {
+    dictationErrorSuppressed: false,
+    assistantActionsSuppressed: false,
+    assistantClosing: false,
+    panelReturnResizeActive: false,
+    hasLiveActivity: false,
+  };
+
+  // The regression this pins: folding the pill into the panel exit must not
+  // override the close-intent ownership handoff. beginClose hides the companion
+  // on the same tick, so a suppressed pill here leaves a running recording with
+  // no visible owner for the whole ~580ms close.
+  assert.equal(
+    resolvePillVisualSuppression({ ...base, assistantClosing: true, hasLiveActivity: true }),
+    false
+  );
+  // An idle close still folds into one beat.
+  assert.equal(resolvePillVisualSuppression({ ...base, assistantClosing: true }), true);
+
+  // The panel-return mask covers a real native shrink and is bounded by it, so
+  // it stays unconditional — same contract as the dictation-error handoff.
+  assert.equal(
+    resolvePillVisualSuppression({ ...base, panelReturnResizeActive: true, hasLiveActivity: true }),
+    true
+  );
+
+  // Error and footer owners are absolute regardless of activity.
+  assert.equal(
+    resolvePillVisualSuppression({
+      ...base,
+      dictationErrorSuppressed: true,
+      hasLiveActivity: true,
+    }),
+    true
+  );
+  assert.equal(
+    resolvePillVisualSuppression({
+      ...base,
+      assistantActionsSuppressed: true,
+      hasLiveActivity: true,
+    }),
+    true
+  );
+
+  // Nothing claiming the pill leaves it visible.
+  assert.equal(resolvePillVisualSuppression(base), false);
+});
+
+test("the composed suppression honours the assistant-actions carve-out end to end", async () => {
+  const { resolvePillVisualSuppression, shouldSuppressPillForAssistantActions } = await load();
+
+  // Both halves of the close: `assistantOpen` is still true through the content
+  // fade, then flips false while `closing` runs out the contraction. A live
+  // recording has to survive both, which is exactly what regressed when the
+  // composition ORed `closing` in unconditionally.
+  for (const assistantOpen of [true, false]) {
+    const assistantActionsSuppressed = shouldSuppressPillForAssistantActions({
+      assistantOpen,
+      footerPillVisible: false,
+      assistantClosing: true,
+      hasLiveActivity: true,
+    });
+    assert.equal(
+      resolvePillVisualSuppression({
+        dictationErrorSuppressed: false,
+        assistantActionsSuppressed,
+        assistantClosing: true,
+        panelReturnResizeActive: false,
+        hasLiveActivity: true,
+      }),
+      false,
+      `a live recording must stay visible with assistantOpen=${assistantOpen}`
+    );
+  }
+});
+
+test("activity handed back at close intent stays visible through the content fade", async () => {
+  const { shouldSuppressPillForAssistantActions } = await load();
+
+  // The companion hides at close INTENT while `assistantOpen` stays true until
+  // the fade completes: suppressing here is the both-hidden gap.
+  assert.equal(
+    shouldSuppressPillForAssistantActions({
+      assistantOpen: true,
+      footerPillVisible: false,
+      assistantClosing: true,
+      hasLiveActivity: true,
+    }),
+    false
+  );
+  // Before close intent the footer still owns the visuals, so a companion
+  // recording must not surface a second pill here.
+  assert.equal(
+    shouldSuppressPillForAssistantActions({
+      assistantOpen: true,
+      footerPillVisible: false,
+      assistantClosing: false,
+      hasLiveActivity: true,
+    }),
+    true
+  );
 });

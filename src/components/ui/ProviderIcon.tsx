@@ -1,4 +1,4 @@
-import { Brain, Wrench, HardDrive } from "lucide-react";
+import { Brain, Wrench, HardDrive } from "../icons";
 import { getProviderIcon, isMonochromeProvider } from "@/utils/providerIcons";
 
 interface ProviderIconProps {

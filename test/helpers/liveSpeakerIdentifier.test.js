@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
+const { downsample24kTo16k, pcm16ToFloat32 } = require("../../src/utils/audioUtils");
 
 const identifierModulePath = require.resolve("../../src/helpers/liveSpeakerIdentifier");
 const originalLoad = Module._load;
@@ -39,7 +40,7 @@ function loadIdentifier(options = {}) {
         MAX_EMBEDDING_SECONDS: 8,
         isAvailable: () => true,
         cosineSimilarity,
-        extractEmbeddingFromSamples: async () => null,
+        extractEmbeddingFromSamples: options.extractEmbeddingFromSamples || (async () => null),
       };
     }
     if (interceptsOrt && request === "onnxruntime-node") {
@@ -316,6 +317,96 @@ test("isAvailable() stays true when the binding loads", (t) => {
   assert.equal(Boolean(identifier.isAvailable()), true);
 });
 
+// onnxruntime-node defaults intra-op threads to every core with spinning
+// workers — absurd for the tiny VAD graph running ~31x/sec, and a CPU
+// regression during every meeting recording.
+test("the VAD session caps ORT to a single sequential thread", async (t) => {
+  let createArgs = null;
+  const { LiveSpeakerIdentifier, restore } = loadIdentifier({
+    ort: () => ({
+      InferenceSession: {
+        create: async (...args) => {
+          createArgs = args;
+          return { inputNames: [], outputNames: [] };
+        },
+      },
+    }),
+  });
+  t.after(restore);
+  const identifier = new LiveSpeakerIdentifier();
+  stubDownloadedModels(identifier);
+
+  assert.equal(await identifier.start(() => {}, {}), true);
+  assert.deepEqual(createArgs, [
+    __filename,
+    { intraOpNumThreads: 1, interOpNumThreads: 1, executionMode: "sequential" },
+  ]);
+});
+
+// _identifyActiveSpeechSegment runs on every speech window (~31x/sec), so its
+// gates must reject cheaply — before any chunk concat or embedding work — and
+// force must bypass only the interval gate, never the minimum-samples check.
+const LIVE_ID_MIN_SAMPLES = Math.round(16000 * 1.6);
+const LIVE_ID_INTERVAL_SAMPLES = 16000;
+const MAX_EMBEDDING_SAMPLES = 16000 * 8; // MAX_EMBEDDING_SECONDS stubbed to 8
+
+function loadIdentifierCapturingEmbeddings() {
+  const embeddingInputs = [];
+  const { LiveSpeakerIdentifier } = loadIdentifier({
+    extractEmbeddingFromSamples: async (samples) => {
+      embeddingInputs.push(samples);
+      return voiceA;
+    },
+  });
+  return { identifier: new LiveSpeakerIdentifier(), embeddingInputs };
+}
+
+test("live identification below the minimum sample count never embeds, even forced", async () => {
+  const { identifier, embeddingInputs } = loadIdentifierCapturingEmbeddings();
+  identifier.speechChunks = [new Float32Array(LIVE_ID_MIN_SAMPLES - 1)];
+  identifier.segmentEndSample = LIVE_ID_MIN_SAMPLES - 1;
+
+  await identifier._identifyActiveSpeechSegment();
+  await identifier._identifyActiveSpeechSegment(true);
+
+  assert.equal(embeddingInputs.length, 0);
+});
+
+test("the interval gate throttles repeat identification; force bypasses it", async () => {
+  const { identifier, embeddingInputs } = loadIdentifierCapturingEmbeddings();
+  identifier.speechChunks = [new Float32Array(LIVE_ID_MIN_SAMPLES)];
+  identifier.lastLiveIdentificationSample = 50000;
+  identifier.segmentEndSample = 50000 + LIVE_ID_INTERVAL_SAMPLES - 1;
+
+  await identifier._identifyActiveSpeechSegment();
+  assert.equal(embeddingInputs.length, 0, "within the interval, identification is throttled");
+
+  await identifier._identifyActiveSpeechSegment(true);
+  assert.equal(embeddingInputs.length, 1, "force must bypass the interval gate");
+  assert.equal(identifier.lastLiveIdentificationSample, identifier.segmentEndSample);
+
+  identifier.segmentEndSample += LIVE_ID_INTERVAL_SAMPLES;
+  await identifier._identifyActiveSpeechSegment();
+  assert.equal(embeddingInputs.length, 2, "once the interval elapses, identification resumes");
+});
+
+test("identification embeds the exact tail of the concatenated speech chunks", async () => {
+  const { identifier, embeddingInputs } = loadIdentifierCapturingEmbeddings();
+  const chunks = [1, 2, 3, 4].map((value) => new Float32Array(40000).fill(value));
+  identifier.speechChunks = chunks;
+  identifier.segmentEndSample = 160000;
+
+  await identifier._identifyActiveSpeechSegment();
+
+  const flat = new Float32Array(160000);
+  chunks.forEach((chunk, i) => flat.set(chunk, i * 40000));
+  assert.deepEqual(
+    embeddingInputs[0],
+    flat.subarray(flat.length - MAX_EMBEDDING_SAMPLES),
+    "the embedding window must stay byte-identical to the pre-fix concat + slice"
+  );
+});
+
 test("distinct voices are folded into one cluster when the session cap is 1", () => {
   const { LiveSpeakerIdentifier } = loadIdentifier();
   const identifier = new LiveSpeakerIdentifier();
@@ -330,4 +421,74 @@ test("distinct voices are folded into one cluster when the session cap is 1", ()
     first.speakerId,
     "at the cap, new voices are force-merged into the nearest cluster by design"
   );
+});
+
+// Every 16 kHz sample the identifier produced, in order: the VAD windows it
+// processed plus what is still buffered.
+async function collect16kStream(identifier, chunks) {
+  const windows = [];
+  identifier.session = {}; // loaded: skip _ensureLoaded
+  identifier._processWindow = async (window) => windows.push(Float32Array.from(window));
+  for (const chunk of chunks) await identifier._processAudio(chunk);
+
+  const stream = new Float32Array(identifier.sampleCursor + identifier.audioRemainder.length);
+  windows.forEach((window, index) => stream.set(window, index * window.length));
+  stream.set(identifier.audioRemainder, identifier.sampleCursor);
+  return stream;
+}
+
+// Capture buffers come in arbitrary sizes: the Linux helper's 485 then 512
+// samples, coalesced pipe reads, samples split across reads, and one buffer at
+// an odd byteOffset.
+function irregularChunks(source) {
+  const sizes = [970, 1024, 1023, 1025, 1, 5, 4800, 1024];
+  const chunks = [];
+  for (let offset = 0, i = 0; offset < source.length; i++) {
+    const size = sizes[i % sizes.length];
+    chunks.push(source.subarray(offset, offset + size));
+    offset += size;
+  }
+  const odd = Buffer.alloc(chunks[1].length + 1).subarray(1);
+  chunks[1].copy(odd);
+  chunks[1] = odd;
+  return chunks;
+}
+
+// assert.deepEqual on 70k-sample arrays builds an enormous diff on failure.
+function firstMismatch(a, b) {
+  const length = Math.max(a.length, b.length);
+  for (let i = 0; i < length; i++) if (a[i] !== b[i]) return i;
+  return -1;
+}
+
+function makePcm(samples) {
+  const pcm = Buffer.alloc(samples * 2);
+  for (let i = 0; i < samples; i++) pcm.writeInt16LE(((i * 7919) % 60000) - 30000, i * 2);
+  return pcm;
+}
+
+test("audio in irregular buffers resamples to the same 16 kHz stream as one buffer", async () => {
+  const { LiveSpeakerIdentifier } = loadIdentifier();
+  // A whole number of resample groups, so nothing is left carried at the end.
+  const source = makePcm(485 + 512 * 200);
+  const expected = pcm16ToFloat32(downsample24kTo16k(source));
+
+  const stream = await collect16kStream(new LiveSpeakerIdentifier(), irregularChunks(source));
+
+  assert.equal(stream.length, expected.length, "no 16 kHz sample is lost or gained");
+  assert.equal(firstMismatch(stream, expected), -1, "same samples, in order");
+});
+
+test("a new meeting never inherits the previous meeting's partial resample group", async () => {
+  const { LiveSpeakerIdentifier } = loadIdentifier();
+  const reused = new LiveSpeakerIdentifier();
+  reused.session = {};
+  await reused._processAudio(Buffer.alloc(4, 0x7f));
+  reused._resetMeetingState();
+
+  const chunks = irregularChunks(makePcm(512 * 30));
+  const afterReset = await collect16kStream(reused, chunks);
+  const fresh = await collect16kStream(new LiveSpeakerIdentifier(), chunks);
+
+  assert.equal(firstMismatch(afterReset, fresh), -1);
 });

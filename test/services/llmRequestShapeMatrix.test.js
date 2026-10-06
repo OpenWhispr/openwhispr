@@ -34,7 +34,7 @@ const MATRIX = [
     { max_tokens: MAX_TOKENS, temperature: 0, reasoning_effort: "low", chat_template_kwargs: { enable_thinking: false } }],
   ["tinfoil selection edits on gpt-oss also pin low effort", "tinfoil", "gpt-oss-120b", null, SELECTION_EDIT,
     { max_tokens: MAX_TOKENS, temperature: 0.3, reasoning_effort: "low" }],
-  ["tinfoil model outside the registry keeps the legacy shape", "tinfoil", "deepseek-v4-flash", null, CLEANUP,
+  ["tinfoil model outside the registry keeps the legacy shape", "tinfoil", "deepseek-v4-1-flash", null, CLEANUP,
     { max_tokens: MAX_TOKENS, temperature: 0 }],
 
   // --- OpenAI / custom / OpenRouter (registry-driven shape) ---

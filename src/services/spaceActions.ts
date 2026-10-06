@@ -5,10 +5,10 @@ import { loadSpaces, purgeSpace, updateSpaceMeta } from "../stores/noteStore";
 import { invalidateSpaceRoster } from "../lib/spaceRosterCache";
 import { createSpaceActions } from "./spaceActionsCore";
 
-// Single mutation path for spaces and their assigned teams: server call →
-// local SQLite mirror → store refresh. The orchestration lives in an
-// injectable core so ordering, rollback, and partial-failure behavior stay
-// testable without a renderer or cloud server.
+// Single mutation path for spaces, their direct members, and their assigned
+// teams: server call → local SQLite mirror → store refresh. The orchestration
+// lives in an injectable core so ordering, rollback, and partial-failure
+// behavior stay testable without a renderer or cloud server.
 const actions = createSpaceActions({
   teams: TeamsService,
   spaces: SpacesService,
@@ -35,6 +35,10 @@ export const {
   assignTeamToSpace,
   setSpaceTeamAccess,
   unassignTeamFromSpace,
+  addSpaceMembers,
+  setSpaceMemberRole,
+  removeSpaceMember,
+  leaveSpace,
   addTeamMembers,
   removeTeamMember,
   setTeamMemberRole,
