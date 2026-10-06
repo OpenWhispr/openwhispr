@@ -831,10 +831,7 @@ class IPCHandlers {
   }
 
   _handleAuthTokenChange({ generation, token }) {
-    if (this._meetingTokenGeneration !== generation) {
-      this.windowManager.retireMeetingNotificationScope();
-      this._meetingTokenGeneration = generation;
-    }
+    this.windowManager.retireMeetingNotificationScope();
     this.enterpriseIdentityManager?.clear();
     if (!token) {
       this.databaseManager.setActiveAccountId(null);

@@ -83,7 +83,6 @@ class WindowManager {
     this.onDictationStateChanged = null;
     this.notificationWindow = null;
     this._meetingNotificationOwner = null;
-    this._meetingAccountEpoch = 0;
     this.meetingRecentDestinations = [];
     this.agentDictationPillWindow = null;
     this._agentDictationPillReady = false;
@@ -292,11 +291,12 @@ class WindowManager {
     }
   }
 
-  getMeetingNotificationScope() {
+  // Every token or account change retires the prompt first, so only the
+  // current binding has to agree with the database's account.
+  hasMeetingNotificationScope() {
     const database = this.meetingDetectionEngine?.databaseManager;
-    if (!database) return null;
+    if (!database) return false;
     const state = tokenStore.getState();
-    const accountId = database.activeAccountId;
     // A token without a valid binding scopes like no token (signed out).
     const boundAccountId = state.token
       ? (accountScopeBinding.resolveActiveAccountScope({
@@ -304,19 +304,7 @@ class WindowManager {
           binding: accountScopeBinding.read(),
         })?.accountId ?? null)
       : null;
-    if (boundAccountId !== accountId) return null;
-    return { accountId, authGeneration: state.generation, epoch: this._meetingAccountEpoch };
-  }
-
-  isMeetingNotificationScope(scope) {
-    const current = this.getMeetingNotificationScope();
-    return Boolean(
-      scope &&
-      current &&
-      scope.accountId === current.accountId &&
-      scope.authGeneration === current.authGeneration &&
-      scope.epoch === current.epoch
-    );
+    return boundAccountId === database.activeAccountId;
   }
 
   captureMeetingNotificationOwner(sender, sessionId) {
@@ -338,12 +326,11 @@ class WindowManager {
       owner.detection &&
       this.meetingDetectionEngine?.activeDetections?.get(owner.prompt.detectionId) ===
         owner.detection &&
-      this.isMeetingNotificationScope(owner.scope)
+      this.hasMeetingNotificationScope()
     );
   }
 
   retireMeetingNotificationScope() {
-    this._meetingAccountEpoch += 1;
     this.meetingRecentDestinations = [];
     this._pendingMeetingNoteNavigation = null;
     this._cancelMeetingNavigation("ACCOUNT_CHANGED");
@@ -2274,7 +2261,6 @@ class WindowManager {
       prompt: promptData,
       window: win,
       detection: this.meetingDetectionEngine?.activeDetections?.get(promptData.detectionId),
-      scope: this.getMeetingNotificationScope(),
       selectedDestination: null,
       createRequests: new Map(),
       layoutRevision: 0,
@@ -2435,9 +2421,6 @@ class WindowManager {
     const operation = {
       payload,
       owner: options.owner,
-      // The Start is committed: a loading panel's onboarding gate closes the
-      // prompt, so only an account change may invalidate the navigation.
-      isCurrent: () => this.isMeetingNotificationScope(options.owner.scope),
       resolve,
       consumed: false,
       panel: null,
@@ -2452,10 +2435,6 @@ class WindowManager {
       try {
         await this.createControlPanelWindow();
         if (this._meetingNavigationOperation !== operation) return;
-        if (!operation.isCurrent()) {
-          this._settleMeetingNavigation(operation, { success: false, code: "STALE_NOTIFICATION" });
-          return;
-        }
         const panel = this.controlPanelWindow;
         if (!panel || panel.isDestroyed()) throw new Error("Panel unavailable");
         operation.panel = panel;
@@ -2466,7 +2445,7 @@ class WindowManager {
         panel.webContents.once("render-process-gone", operation.onClose);
         const deliver = () => {
           if (this._meetingNavigationOperation !== operation) return;
-          if (!operation.isCurrent() || this.controlPanelWindow !== panel || panel.isDestroyed()) {
+          if (this.controlPanelWindow !== panel || panel.isDestroyed()) {
             this._settleMeetingNavigation(operation, {
               success: false,
               code: "STALE_NOTIFICATION",
@@ -2517,8 +2496,7 @@ class WindowManager {
         !operation ||
         operation.payload !== payload ||
         operation.panel !== this.controlPanelWindow ||
-        operation.contents !== sender ||
-        !operation.isCurrent()
+        operation.contents !== sender
       )
         return null;
       operation.consumed = true;
@@ -2539,8 +2517,7 @@ class WindowManager {
       return { success: false, code: "STALE_NOTIFICATION" };
     }
     let result;
-    if (!operation.isCurrent()) result = { success: false, code: "ACCOUNT_CHANGED" };
-    else if (status === "cancel") result = { success: false, code: "START_FAILED" };
+    if (status === "cancel") result = { success: false, code: "START_FAILED" };
     else if (status !== "ready") return { success: false, code: "INVALID_REQUEST" };
     else {
       try {

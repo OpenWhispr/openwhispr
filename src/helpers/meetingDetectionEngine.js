@@ -527,9 +527,9 @@ class MeetingDetectionEngine {
       },
       { owner }
     );
-    if (!navigation?.success) {
+    if (!navigation.success) {
       this._meetingModeActive = false;
-      return navigation ?? { success: false, code: "START_FAILED" };
+      return navigation;
     }
     this.audioActivityDetector.resetPrompt();
     this.activeDetections.delete(owner.prompt.detectionId);

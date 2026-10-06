@@ -110,20 +110,7 @@ export default function MeetingNotificationOverlay(): ReactElement {
           window.electronAPI?.getMeetingNotificationData?.() ?? Promise.resolve(null),
         onData: (incoming) => {
           dataRef.current = incoming;
-          editorGeneration.current++;
-          loadGeneration.current++;
-          operation.current = null;
-          layoutRevision.current = 0;
-          modeRef.current = "closed";
-          focusIntent.current = "keep";
           setData(incoming);
-          setContext(null);
-          setMode("closed");
-          setBusy(false);
-          setError(null);
-          setFocusReady(false);
-          clearFeedback();
-          setAnnouncement("");
           void loadContext();
         },
         onVisible: () => setIsVisible(true),
@@ -131,7 +118,7 @@ export default function MeetingNotificationOverlay(): ReactElement {
           void window.electronAPI?.meetingNotificationReady?.();
         },
       }),
-    [clearFeedback, loadContext]
+    [loadContext]
   );
   useEffect(
     () => () => {

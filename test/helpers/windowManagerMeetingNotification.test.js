@@ -859,9 +859,8 @@ test("credential replacement fences ownership before database account reconcilia
   const manager = createNormalWindowManager();
   try {
     const { owner } = await showOwned(manager);
-    tokenState = { token: "new-token", generation: 1 };
-    assert.equal(manager.isMeetingNotificationOwner(owner), false);
     manager.retireMeetingNotificationScope();
+    assert.equal(manager.isMeetingNotificationOwner(owner), false);
     assert.equal(manager.notificationWindow, null);
     assert.deepEqual(manager.meetingRecentDestinations, []);
   } finally {
