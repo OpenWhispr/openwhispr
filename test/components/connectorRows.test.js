@@ -96,7 +96,6 @@ test("a row's connecting detail shows only while Connect is in progress", async 
         row,
         isPaid: true,
         blockedByOrg: false,
-        onUpgrade() {},
       })
     )
   );

@@ -42,6 +42,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useUsage } from "../../hooks/useUsage";
 import { useSettings } from "../../hooks/useSettings";
 import { requestSignIn } from "../../utils/requestSignIn";
+import { describeProviderError } from "../../utils/describeProviderError";
 import {
   getAllReasoningModels,
   getBatchTranscriptionModel,
@@ -189,9 +190,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const [diarizationEnabled, setDiarizationEnabled] = useState(
     () => localStorage.getItem("uploadDiarizationEnabled") === "true"
   );
-  const [diarizationNumSpeakers, setDiarizationNumSpeakers] = useState<string>(
-    () => localStorage.getItem("uploadDiarizationNumSpeakers") || ""
-  );
+  // Earlier builds accepted decimals; a saved one would read as Auto.
+  const [diarizationNumSpeakers, setDiarizationNumSpeakers] = useState<string>(() => {
+    const saved = localStorage.getItem("uploadDiarizationNumSpeakers") || "";
+    return /^\d+$/.test(saved) ? saved : "";
+  });
   const [diarizationModelsReady, setDiarizationModelsReady] = useState<boolean | null>(null);
   const [diarizationDownloading, setDiarizationDownloading] = useState(false);
 
@@ -756,7 +759,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           errorKey
             ? t(`notes.upload.${errorKey}`)
             : res.messageKey
-              ? t(res.messageKey)
+              ? describeProviderError({ ...res, message: res.error }, t).description
               : res.error || t("notes.upload.transcriptionFailed")
         );
         setState("error");
@@ -771,7 +774,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       if (errorKey) {
         setError(t(`notes.upload.${errorKey}`));
       } else {
-        setError(err instanceof Error ? err.message : t("notes.upload.errorOccurred"));
+        setError(
+          err instanceof Error
+            ? describeProviderError(err, t).description
+            : t("notes.upload.errorOccurred")
+        );
       }
       setState("error");
     }
@@ -1319,15 +1326,21 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                   type="number"
                   min="2"
                   max={MAX_SPEAKER_COUNT}
+                  step="1"
+                  inputMode="numeric"
                   value={diarizationNumSpeakers}
+                  onKeyDown={(e) => {
+                    if ([".", ",", "e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+                  }}
                   onChange={(e) => {
                     const raw = e.target.value;
                     if (raw === "") {
                       setDiarizationNumSpeakers("");
                       return;
                     }
-                    const n = Math.max(2, Math.min(MAX_SPEAKER_COUNT, Number(raw)));
-                    setDiarizationNumSpeakers(String(isNaN(n) ? "" : n));
+                    const n = Number(raw);
+                    if (!Number.isInteger(n)) return;
+                    setDiarizationNumSpeakers(String(Math.max(2, Math.min(MAX_SPEAKER_COUNT, n))));
                   }}
                   placeholder={t("notes.upload.numSpeakersPlaceholder")}
                   className="h-9 w-32 shrink-0 rounded-xl! px-3 text-sm placeholder:text-foreground/45 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"

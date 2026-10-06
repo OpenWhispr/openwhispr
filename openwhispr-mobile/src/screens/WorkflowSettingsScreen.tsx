@@ -33,6 +33,7 @@ import { workflowSaveConfig } from '@/lib/inferenceModes';
 import { InferenceModePicker } from '@/components/settings/InferenceModePicker';
 import {
   ON_DEVICE_MODE_NOTES,
+  UNSET_ON_DEVICE_CLEANUP_NOTE,
   UNSET_PROVIDER_NOTES,
   WORKFLOW_LABELS,
   WORKFLOWS,
@@ -234,6 +235,9 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   const setActiveMode = useProcessingModeStore((state) => state.setActiveMode);
   const activeMode = useProcessingModeStore((state) => state.activeMode);
   const savedSelection = config?.inference?.[scope] ?? unsetSelection(scope, activeMode);
+  // On-Device mode skips an unsaved cleanup, so the On-Device default must not look picked.
+  const cleanupUnsaved =
+    scope === 'cleanup' && activeMode === 'private' && !config?.inference?.cleanup;
   // Tracks the saved selection, except while a Bring Your Own Key draft is being set up.
   const [selection, setSelection] = useState<InferenceSelection>(savedSelection);
   const remembered = useRef<Record<string, InferenceSelection>>({});
@@ -261,7 +265,10 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   const modelId = selection.modelId ?? defaultModelId(provider);
   const providerId = provider?.id;
   const models = provider?.models.length ? provider.models : discoveredModels;
+  const shownMode =
+    cleanupUnsaved && selection.mode === savedSelection.mode ? null : selection.mode;
   const modeNote =
+    (shownMode === null ? UNSET_ON_DEVICE_CLEANUP_NOTE : undefined) ??
     (activeMode === 'private' ? ON_DEVICE_MODE_NOTES[scope] : undefined) ??
     (activeMode === 'providers' && !config?.inference?.[scope]
       ? UNSET_PROVIDER_NOTES[scope]
@@ -376,7 +383,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
       );
       return;
     }
-    if (mode === savedSelection.mode) {
+    if (mode === savedSelection.mode && !cleanupUnsaved) {
       setSelection(savedSelection);
       return;
     }
@@ -649,7 +656,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
           <>
             <InferenceModePicker
               scope={speechScope ? 'speech' : 'text'}
-              selectedMode={selection.mode}
+              selectedMode={shownMode}
               onSelect={chooseMode}
             />
             {modeNote ? <SectionFooter>{modeNote}</SectionFooter> : null}
@@ -661,7 +668,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
                 }
               />
             ) : null}
-            {selection.mode === 'local' && !speechScope ? (
+            {shownMode === 'local' && !speechScope ? (
               <SectionFooter>Runs on Apple Intelligence on this iPhone.</SectionFooter>
             ) : null}
             {selection.mode === 'providers' && provider ? (

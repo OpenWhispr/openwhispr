@@ -537,8 +537,12 @@ class HotkeyManager extends EventEmitter {
     if (process.platform === "darwin" && hotkey && lacksMacReleaseSignal(hotkey)) {
       return i18nMain.t("hotkey.errors.holdNeedsReleaseKey", { hotkey });
     }
+    // Without the portal no key can hold, so a regular key would not help.
+    if (this.useGnome && this.gnomeManager?.supportsPushToTalk?.() === false) {
+      return i18nMain.t("hotkey.errors.holdNeedsGnomePortal");
+    }
     if (this.isUsingNativeShortcut() && isModifierOnlyHotkey(hotkey)) {
-      return i18nMain.t("hotkey.errors.osReserved", { hotkey });
+      return i18nMain.t("hotkey.errors.holdNeedsRegularKey");
     }
     return this._pushToTalkListenerBlockReason() ?? i18nMain.t("windows.pttUnavailable");
   }

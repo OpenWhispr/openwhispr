@@ -32,6 +32,21 @@ export function MeetingSpeakerDetectionRow() {
   );
 }
 
+function MeetingEchoCancellationRow() {
+  const { t } = useTranslation();
+  const meetingAecEnabled = useSettingsStore((s) => s.meetingAecEnabled);
+  const setMeetingAecEnabled = useSettingsStore((s) => s.setMeetingAecEnabled);
+
+  return (
+    <SettingsRow
+      label={t("settingsPage.transcription.aec.toggle.title")}
+      description={t("settingsPage.transcription.aec.toggle.description")}
+    >
+      <Toggle checked={meetingAecEnabled} onChange={setMeetingAecEnabled} />
+    </SettingsRow>
+  );
+}
+
 const noop = () => {};
 
 export function MeetingTranscriptionPanel() {
@@ -188,6 +203,7 @@ export function MeetingTranscriptionPanel() {
       {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
       {effectiveTranscriptionMode === "local" && renderTranscriptionPicker("local")}
       <MeetingSpeakerDetectionRow />
+      <MeetingEchoCancellationRow />
     </div>
   );
 }

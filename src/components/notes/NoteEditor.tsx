@@ -14,6 +14,7 @@ import {
   Search,
   Plus,
   Check,
+  ChevronDown,
   ShieldCheck,
   Users,
 } from "../icons";
@@ -61,7 +62,7 @@ import {
   SPLIT_BUTTON_GROUP_CLASS,
   SPLIT_BUTTON_SEGMENT_CLASS,
 } from "../ui/splitButton";
-import type { NoteItem, FolderItem } from "../../types/electron";
+import type { NoteItem, FolderItem, ActionItem, ActionKind } from "../../types/electron";
 import type { ActionProcessingState } from "../../hooks/useActionProcessing";
 import type { NoteActionProgress } from "../../stores/actionProcessingStore";
 import ActionProcessingOverlay from "./ActionProcessingOverlay";
@@ -73,8 +74,24 @@ import transcriptsEmptyDark from "../../assets/empty-states/notes-transcripts-da
 import { Button } from "../ui/button";
 import EmbeddedChat, { type EmbeddedChatMode } from "./EmbeddedChat";
 import { useEmbeddedChat } from "../../hooks/useEmbeddedChat";
+import ActionChips from "./ActionChips";
+import TemplatePicker from "./TemplatePicker";
+import {
+  getActionCta,
+  getActionName,
+  initializeActions,
+  resolveTemplate,
+  useActionsOfKind,
+} from "../../stores/actionStore";
+import { compileChatActionPrompt } from "../../helpers/templatePrompts";
+import type { SlashCommand } from "../chat/slashCommands";
 import { formatNoteDate, formatRelativeTime, formatShortDate } from "../../utils/dateFormatting";
-import { collectKnownPeople } from "../../utils/llmTranscript";
+import {
+  buildLlmTranscript,
+  buildMeetingContext,
+  collectKnownPeople,
+  type MeetingIdentity,
+} from "../../utils/llmTranscript";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
 import {
   applyTranscriptSpeakerPatch,
@@ -92,7 +109,7 @@ import {
 } from "./shared";
 
 const SEGMENT_BUTTON_CLASS =
-  "relative z-1 flex h-[26px] items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors duration-150";
+  "relative z-1 flex h-[26px] items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors duration-150 @max-[400px]/note-editor:gap-1 @max-[400px]/note-editor:px-2 @max-[400px]/note-editor:text-[11px] @max-[330px]/note-editor:[&>svg]:hidden @max-[330px]/note-editor:[&>span[aria-hidden]]:hidden";
 
 const TRANSCRIPT_EXPORT_LABEL_KEYS = {
   txt: "notes.editor.asTranscriptText",
@@ -196,9 +213,9 @@ interface NoteEditorProps {
   onExportNote?: (format: "md" | "txt") => void;
   onExportTranscript?: (format: "txt" | "srt" | "json" | "md") => void;
   enhancement?: Enhancement;
-  actionPicker?: React.ReactNode;
-  /** Runs the built-in Generate Notes action; enables the post-recording summary pill. */
-  onGenerateSummary?: () => void;
+  /** Runs a template, or an action that edits the summary, on this note. */
+  onRunNoteAction?: (action: ActionItem) => void;
+  onManageActions?: (kind: ActionKind) => void;
   actionProcessingState?: ActionProcessingState;
   actionName?: string | null;
   actionProgress?: NoteActionProgress | null;
@@ -232,8 +249,8 @@ export default function NoteEditor({
   onExportNote,
   onExportTranscript,
   enhancement,
-  actionPicker,
-  onGenerateSummary,
+  onRunNoteAction,
+  onManageActions,
   actionProcessingState,
   actionName,
   actionProgress,
@@ -306,11 +323,12 @@ export default function NoteEditor({
       : aclRequest?.cloudId === note.cloud_id
         ? aclRequest.state
         : "loading";
+  const ownedByUser = ownsNote(note, user?.id);
   const notePermission = resolveNotePermission({
     cachedPermission: shareCache?.access?.my_permission,
     aclState,
     isTeamNote,
-    locallyOwned: ownsNote(note, user?.id),
+    locallyOwned: ownedByUser,
   });
   const shareCapabilities = noteCapabilities(notePermission);
   const canEditNote = shareCapabilities.canEdit;
@@ -415,20 +433,10 @@ export default function NoteEditor({
     [note.participants]
   );
 
-  const embeddedChat = useEmbeddedChat({
-    noteId: note.id,
-    folderId: note.folder_id,
-    noteTitle: note.title,
-    noteContent: note.content,
-    noteTranscript: note.transcript ?? undefined,
-    noteParticipants: parsedParticipants,
-    noteOwnedByUser: ownsNote(note, user?.id),
-    selfEmail: user?.email ?? null,
-    noteCalendarEventId: note.calendar_event_id,
-  });
   const titleRef = useRef<HTMLDivElement>(null);
   const prevNoteIdRef = useRef<number>(note.id);
 
+  const segmentScrollRef = useRef<HTMLDivElement>(null);
   const segmentContainerRef = useRef<HTMLDivElement>(null);
   const [indicatorStyle, setIndicatorStyle] = useState<React.CSSProperties>({ opacity: 0 });
   const scheduleUiUpdate = useCallback((callback: () => void) => {
@@ -451,12 +459,31 @@ export default function NoteEditor({
     return parseTranscriptSegments(note.transcript || "");
   }, [diarizedSegments, note.transcript]);
 
+  const templates = useActionsOfKind("template");
+  const noteActions = useActionsOfKind("action");
+  const chatActions = useMemo(() => noteActions.filter((a) => a.output === "chat"), [noteActions]);
+  // Regenerating keeps the note's template; a first summary uses the default.
+  const noteTemplate = resolveTemplate(templates, note.enhancement_template_id);
+  const isActionRunning = actionProcessingState === "processing";
+  const hasNoteMaterial = !!note.content.trim() || hasMeetingTranscript;
+  const canRunTemplate =
+    !!onRunNoteAction && !!noteTemplate && canEditNote && !isRecording && hasNoteMaterial;
+  // The AI Summary tab names the template that wrote the summary, when it still exists.
+  const summaryLabel =
+    noteTemplate && noteTemplate.client_id === note.enhancement_template_id
+      ? getActionName(noteTemplate, t)
+      : t("notes.editor.aiSummary");
+
+  useEffect(() => {
+    initializeActions();
+  }, []);
+
   const hasChatSegments = displaySegments.length > 0;
   const showSummaryCallout =
-    !!onGenerateSummary &&
+    canRunTemplate &&
     shouldOfferMeetingSummary({
       isRecording,
-      hasTranscriptSegments: hasChatSegments,
+      hasTranscriptSegments: hasNoteMaterial,
       hasSummary: !!enhancement,
       canEdit: canEditNote,
       isProcessingAction: actionProcessingState === "processing",
@@ -467,19 +494,47 @@ export default function NoteEditor({
     [displaySegments, speakerMappings, speakerProfiles]
   );
 
-  const mentionPeople = useMemo(
-    () =>
-      collectKnownPeople(
-        {
-          selfName: user?.name?.trim() || null,
-          selfEmail: user?.email?.trim() || null,
-          participants: parsedParticipants,
-        },
-        speakerMappings,
-        displaySegments
-      ),
-    [user?.name, user?.email, parsedParticipants, speakerMappings, displaySegments]
+  const meetingIdentity = useMemo<MeetingIdentity>(
+    () => ({
+      selfName: user?.name?.trim() || null,
+      selfEmail: user?.email?.trim() || null,
+      participants: parsedParticipants,
+    }),
+    [user?.name, user?.email, parsedParticipants]
   );
+
+  const mentionPeople = useMemo(
+    () => collectKnownPeople(meetingIdentity, speakerMappings, displaySegments),
+    [meetingIdentity, speakerMappings, displaySegments]
+  );
+
+  // The chat reads the user's own meeting the way note formatting does: who the
+  // user is and named speakers, not the stored segment JSON. Invitees are left to
+  // the filtered attendee block that comes with connector tools (a chat without
+  // them names only speakers), and a teammate's mic lines aren't the user's.
+  const chatTranscript = useMemo(() => {
+    if (displaySegments.length === 0 || !ownedByUser) return note.transcript ?? undefined;
+    const selfLabel = meetingIdentity.selfName || t("notes.speaker.you");
+    return [
+      buildMeetingContext({ ...meetingIdentity, participants: [] }, selfLabel),
+      buildLlmTranscript(displaySegments, speakerMappings, selfLabel, t),
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  }, [displaySegments, meetingIdentity, note.transcript, ownedByUser, speakerMappings, t]);
+
+  const embeddedChat = useEmbeddedChat({
+    noteId: note.id,
+    folderId: note.folder_id,
+    noteTitle: note.title,
+    noteContent: note.content,
+    noteTranscript: chatTranscript,
+    noteSummary: enhancement?.content,
+    noteParticipants: parsedParticipants,
+    noteOwnedByUser: ownedByUser,
+    selfEmail: user?.email ?? null,
+    noteCalendarEventId: note.calendar_event_id,
+  });
 
   const refreshSpeakerProfiles = useCallback(() => {
     window.electronAPI?.getSpeakerProfiles?.().then((profiles) => {
@@ -493,11 +548,11 @@ export default function NoteEditor({
     });
   }, []);
 
-  const updateSegmentIndicator = useCallback(() => {
+  const syncSelectedSegment = useCallback(() => {
     const container = segmentContainerRef.current;
     if (!container) return;
 
-    const buttons = container.querySelectorAll<HTMLButtonElement>("[data-segment-button]");
+    const buttons = container.querySelectorAll<HTMLElement>("[data-segment-button]");
     const activeBtn = Array.from(buttons).find((btn) => btn.dataset.segmentValue === viewMode);
     if (!activeBtn) {
       setIndicatorStyle((style) => ({ ...style, opacity: 0 }));
@@ -512,17 +567,25 @@ export default function NoteEditor({
       transform: `translateX(${br.left - cr.left}px)`,
       opacity: 1,
     });
+
+    // Long translations can make the tab strip scroll; keep the selected tab in view.
+    const scroller = segmentScrollRef.current;
+    if (!scroller) return;
+    const sr = scroller.getBoundingClientRect();
+    if (br.left < sr.left) scroller.scrollLeft -= sr.left - br.left;
+    else if (br.right > sr.right) scroller.scrollLeft += br.right - sr.right;
   }, [viewMode]);
 
   useEffect(() => {
-    updateSegmentIndicator();
-  }, [updateSegmentIndicator]);
+    syncSelectedSegment();
+  }, [syncSelectedSegment]);
 
   useEffect(() => {
-    const observer = new ResizeObserver(() => updateSegmentIndicator());
+    const observer = new ResizeObserver(() => syncSelectedSegment());
     if (segmentContainerRef.current) observer.observe(segmentContainerRef.current);
+    if (segmentScrollRef.current) observer.observe(segmentScrollRef.current);
     return () => observer.disconnect();
-  }, [updateSegmentIndicator]);
+  }, [syncSelectedSegment]);
 
   const prevProcessingStateRef = useRef(actionProcessingState);
   useEffect(() => {
@@ -818,6 +881,53 @@ export default function NoteEditor({
     [chatMode, embeddedChat]
   );
 
+  // The chat shows the action's name while the model gets its prompt.
+  const handleChatAction = useCallback(
+    (action: ActionItem) => {
+      if (embeddedChat.agentState !== "idle") return;
+      if (chatMode === "hidden") {
+        setChatMode("floating");
+      }
+      void embeddedChat.sendMessage(getActionCta(action, t), {
+        requestText: compileChatActionPrompt(action, { fromSummary: !!enhancement }),
+      });
+    },
+    [chatMode, embeddedChat, enhancement, t]
+  );
+
+  const runAction = useCallback(
+    (action: ActionItem) => {
+      if (action.output === "chat") {
+        handleChatAction(action);
+        return;
+      }
+      // Uncover the summary the action rewrites; a docked chat already sits beside it.
+      if (chatMode === "floating") handleChatModeChange("hidden");
+      onRunNoteAction?.(action);
+    },
+    [chatMode, handleChatAction, handleChatModeChange, onRunNoteAction]
+  );
+  const offersActions =
+    !isRecording &&
+    canEditNote &&
+    !(viewMode === "transcript" && !hasMeetingTranscript && !hasChatSegments);
+  // A summary action waits for a run already writing the summary; a chat action
+  // for the reply the chat is still writing.
+  const canRunAction = (action: ActionItem) =>
+    hasNoteMaterial &&
+    (action.output === "summary" ? !isActionRunning : embeddedChat.agentState === "idle");
+  const actionCommands: SlashCommand[] | undefined = offersActions
+    ? noteActions.map((action) => ({
+        id: action.client_id,
+        label: getActionName(action, t),
+        hint: t(
+          action.output === "summary" ? "notes.actions.output.summary" : "notes.actions.output.chat"
+        ),
+        disabled: !canRunAction(action),
+        run: () => runAction(action),
+      }))
+    : undefined;
+
   const handleChatInputFocus = useCallback(() => {
     if (chatMode === "hidden") {
       setChatMode("floating");
@@ -877,7 +987,7 @@ export default function NoteEditor({
 
   return (
     <div className="flex h-full min-h-0">
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className="@container/note-editor flex-1 min-w-0 flex flex-col">
         <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-5 pt-5 pb-0")}>
           <div
             dir="auto"
@@ -888,11 +998,11 @@ export default function NoteEditor({
             onKeyDown={handleTitleKeyDown}
             onPaste={handleTitlePaste}
             data-placeholder={t("notes.editor.untitled")}
-            className="text-3xl font-medium leading-tight text-foreground bg-transparent outline-none tracking-[-0.01em] empty:before:content-[attr(data-placeholder)] empty:before:text-foreground/45 empty:before:pointer-events-none"
+            className="text-3xl font-medium leading-tight text-foreground bg-transparent outline-none tracking-[-0.01em] [overflow-wrap:anywhere] @max-[400px]/note-editor:text-[26px] empty:before:content-[attr(data-placeholder)] empty:before:text-foreground/45 empty:before:pointer-events-none"
             role="textbox"
             aria-label={t("notes.editor.noteTitle")}
           />
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2 [&>*]:max-w-full">
             <NoteParticipants
               noteId={note.id}
               participants={parsedParticipants}
@@ -933,7 +1043,9 @@ export default function NoteEditor({
             {folders && onMoveToFolder && !canMoveToFolders && folderName && (
               <span className={cn(NOTE_META_CHIP_CLASS, "cursor-default")}>
                 <FolderOpen size={14} className="shrink-0 text-foreground/60" />
-                <span dir="auto">{folderName}</span>
+                <span dir="auto" className="truncate">
+                  {folderName}
+                </span>
               </span>
             )}
             {folders && onMoveToFolder && canMoveToFolders && (
@@ -949,7 +1061,13 @@ export default function NoteEditor({
                 <DropdownMenuTrigger asChild>
                   <button className={NOTE_META_CHIP_CLASS}>
                     <FolderOpen size={14} className="shrink-0 text-foreground/60" />
-                    {folderName ? <span dir="auto">{folderName}</span> : t("notes.editor.noFolder")}
+                    {folderName ? (
+                      <span dir="auto" className="truncate">
+                        {folderName}
+                      </span>
+                    ) : (
+                      t("notes.editor.noFolder")
+                    )}
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" sideOffset={6} className="min-w-44 p-1">
@@ -1058,8 +1176,11 @@ export default function NoteEditor({
               </span>
             )}
           </div>
-          <div className="mt-5 flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center">
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+            <div
+              ref={segmentScrollRef}
+              className="scrollbar-hidden flex min-w-0 max-w-full items-center overflow-x-auto"
+            >
               <div
                 ref={segmentContainerRef}
                 className="relative flex shrink-0 items-center rounded-full bg-surface-3 p-0.5 dark:bg-surface-2"
@@ -1097,30 +1218,51 @@ export default function NoteEditor({
                   {t("notes.editor.notes")}
                 </button>
                 {enhancement && (
-                  <button
+                  <div
                     data-segment-button
                     data-segment-value="enhanced"
-                    onClick={() => setSelectedViewMode("enhanced")}
                     className={cn(
-                      SEGMENT_BUTTON_CLASS,
+                      "relative z-1 flex items-center",
                       viewMode === "enhanced"
                         ? "text-foreground"
                         : "text-foreground/60 hover:text-foreground/80"
                     )}
                   >
-                    <Sparkles size={12} />
-                    {t("notes.editor.aiSummary")}
-                    {enhancement.isStale && (
-                      <span
-                        className="h-1 w-1 rounded-full bg-amber-400/60"
-                        title={t("notes.editor.staleIndicator")}
-                      />
+                    <button
+                      onClick={() => setSelectedViewMode("enhanced")}
+                      className={cn(SEGMENT_BUTTON_CLASS, canRunTemplate && "pe-1")}
+                    >
+                      <Sparkles size={12} />
+                      <span className="max-w-32 truncate">{summaryLabel}</span>
+                      {enhancement.isStale && (
+                        <span
+                          className="h-1 w-1 rounded-full bg-amber-400/60"
+                          title={t("notes.editor.staleIndicator")}
+                        />
+                      )}
+                    </button>
+                    {canRunTemplate && noteTemplate && (
+                      <TemplatePicker
+                        templates={templates}
+                        current={noteTemplate}
+                        onRun={(template) => onRunNoteAction?.(template)}
+                        onManage={() => onManageActions?.("template")}
+                        disabled={isActionRunning}
+                      >
+                        <button
+                          type="button"
+                          aria-label={t("notes.templates.select")}
+                          className={cn(SEGMENT_BUTTON_CLASS, "ps-1 pe-2")}
+                        >
+                          <ChevronDown size={12} />
+                        </button>
+                      </TemplatePicker>
                     )}
-                  </button>
+                  </div>
                 )}
               </div>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex w-full shrink-0 flex-wrap items-center gap-2 @[650px]/note-editor:w-auto">
               {canEditNote && (
                 <NoteRecordControl
                   isRecording={isRecording}
@@ -1130,7 +1272,7 @@ export default function NoteEditor({
                   onStop={onStopRecording}
                 />
               )}
-              <div className={cn(SPLIT_BUTTON_GROUP_CLASS, "h-[30px]")}>
+              <div className={cn(SPLIT_BUTTON_GROUP_CLASS, "h-[30px] shrink-0")}>
                 <button
                   type="button"
                   onClick={() => openShare("open")}
@@ -1335,17 +1477,25 @@ export default function NoteEditor({
                 />
               )
             }
-            actionPicker={
-              isRecording ||
-              !canEditNote ||
-              (viewMode === "transcript" && !hasMeetingTranscript && !hasChatSegments)
-                ? undefined
-                : actionPicker
+            actionChips={
+              offersActions && (
+                <ActionChips
+                  actions={noteActions}
+                  canRun={canRunAction}
+                  onRunAction={runAction}
+                  onManageActions={() => onManageActions?.("action")}
+                />
+              )
             }
+            slashCommands={actionCommands}
             callout={
               showSummaryCallout &&
+              noteTemplate &&
               selectedSegmentIds.size === 0 && (
-                <Button className="h-9 gap-2 px-4 text-sm" onClick={onGenerateSummary}>
+                <Button
+                  className="h-9 gap-2 px-4 text-sm"
+                  onClick={() => onRunNoteAction?.(noteTemplate)}
+                >
                   <AlignLeft size={16} />
                   {t("notes.editor.generateSummary")}
                 </Button>
@@ -1378,6 +1528,14 @@ export default function NoteEditor({
           activeConversationId={embeddedChat.activeConversationId}
           onSwitchConversation={embeddedChat.switchConversation}
           onNewChat={embeddedChat.startNewChat}
+          chatActions={chatActions}
+          onRunChatAction={handleChatAction}
+          slashCommands={actionCommands}
+          onGenerateSummary={
+            canRunTemplate && noteTemplate && !isActionRunning
+              ? () => onRunNoteAction?.(noteTemplate)
+              : undefined
+          }
         />
       )}
       <ShareNoteDialog

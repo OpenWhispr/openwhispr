@@ -123,6 +123,8 @@
       "osReserved": "\"{{hotkey}}\" may be reserved by your desktop environment.",
       "rightModifierNeedsListener": "\"{{hotkey}}\" can't be used on this desktop, whose shortcuts need a regular key. Add a key, such as Control+Alt+Space.",
       "holdNeedsReleaseKey": "Hold-to-talk needs a key macOS can see you release: Globe, a right-side key like Right Option, or a shortcut with a modifier. Tap works with any key.",
+      "holdNeedsRegularKey": "To use Hold, add a regular key to the shortcut, such as Control+Alt+Space. Your desktop can't report holding modifier keys alone.",
+      "holdNeedsGnomePortal": "To use Hold, GNOME needs its global shortcuts portal, which comes with GNOME 48 and newer. Tap works without it.",
       "registrationFailed": "Could not register \"{{hotkey}}\". It may be in use by another application.",
       "windowsKeyListenerMissing": "\"{{hotkey}}\" needs the Windows key listener, which this install is missing. Choose a shortcut with a regular key.",
       "updateFailedCheckFormat": "Failed to update hotkey to \"{{hotkey}}\". Check the format is valid.",
@@ -160,7 +162,7 @@
     "close": "Close"
   },
   "windows": {
-    "pttUnavailable": "Push-to-Talk native listener not available"
+    "pttUnavailable": "OpenWhispr's key listener isn't available."
   },
   "common": {
     "continue": "Continue",
@@ -580,6 +582,20 @@
         "title": "A download didn't finish",
         "description": "Check your connection and free disk space, then retry. If it keeps failing, contact your administrator."
       }
+    },
+    "permissionGuide": {
+      "label": "Permission guide",
+      "return": "Return to onboarding",
+      "missingApp": "Or use + to select the app",
+      "failed": "Could not check access.",
+      "microphone": "Turn on OpenWhispr in Microphone.",
+      "accessibility": "Drag OpenWhispr into Accessibility, then turn it on.",
+      "systemAudio": "Turn on OpenWhispr under System Audio Recording Only.",
+      "screenContext": "Drag OpenWhispr into Screen & System Audio Recording, then turn it on.",
+      "settings": "Open Settings",
+      "check": "Check again",
+      "restart": "Restart OpenWhispr",
+      "restartRequired": "Restart OpenWhispr to apply screen access."
     }
   },
   "streaming": {
@@ -757,6 +773,10 @@
     "disableThinking": {
       "label": "Disable thinking output",
       "help": "Skips reasoning tokens for cleaner output. Recommended for cleanup. Some servers ignore this hint."
+    },
+    "keepModelLoaded": {
+      "label": "Keep model loaded",
+      "help": "Stays in memory instead of unloading after 5 idle minutes, so the next request skips the cold start. Applies to all features using a local model."
     },
     "selfHosted": {
       "endpointHelp": "Point to an OpenAI-compatible server on your local network (e.g. Ollama, LM Studio, vLLM, or llama-server)."
@@ -938,11 +958,18 @@
         "description": "Dictation stopped while the hotkey was still held, so the text was not pasted. Your transcription is on the clipboard.",
         "descriptionClipboardFailed": "Dictation stopped while the hotkey was still held, so the text was not pasted, and it could not be copied to the clipboard either."
       },
+      "modifiersHeld": {
+        "title": "Transcription not pasted",
+        "description": "A modifier key (like Ctrl or Shift) was still held down, so the text was not pasted. Your transcription is on the clipboard.",
+        "descriptionClipboardFailed": "A modifier key (like Ctrl or Shift) was still held down, so the text was not pasted, and it could not be copied to the clipboard either."
+      },
       "selectionEditing": {
         "notAppliedTitle": "Selection edit not applied",
         "changed": "The selected text or target app changed while OpenWhispr was processing. Nothing was replaced.",
         "expired": "The selection edit took too long and expired. Select the text and try again.",
         "pasteFailed": "OpenWhispr generated the edit but could not replace the selected text.",
+        "modifiersHeld": "OpenWhispr generated the edit, but a modifier key (like Ctrl or Shift) was still held down, so it was not applied. The edit is on the clipboard.",
+        "modifiersHeldClipboardFailed": "OpenWhispr generated the edit, but a modifier key (like Ctrl or Shift) was still held down, so it was not applied, and it could not be copied to the clipboard either.",
         "unavailable": "OpenWhispr could not safely read the selected text. Check accessibility or input automation permissions and try again.",
         "tooLarge": "The selection is too large to edit safely. Select 6,000 characters or fewer.",
         "reasoningFailed": "The AI could not complete the selection edit. Your original text was not changed."
@@ -2547,6 +2574,12 @@
       },
       "transcriptionPreview": "Live Transcription Preview",
       "transcriptionPreviewDescription": "Show transcription in a floating window before cleanup",
+      "aec": {
+        "toggle": {
+          "title": "Echo cancellation for meetings",
+          "description": "Cancel meeting audio that leaks into your microphone. Leave this off when using headphones or earphones — there is no echo to cancel and it can suppress your voice entirely."
+        }
+      },
       "vad": {
         "title": "Voice Activity Detection",
         "description": "Configure how Silero VAD detects and segments speech for local Whisper transcription",
@@ -3121,7 +3154,7 @@
     "sidebar": {
       "newNote": "New note",
       "searchNotes": "Search notes",
-      "actions": "Actions"
+      "templatesAndActions": "Templates & Actions"
     },
     "spaces": {
       "privateSpaces": "Private notes",
@@ -3428,7 +3461,7 @@
       "speakerDetectionDescription": "Identify different speakers in the audio",
       "numSpeakersPlaceholder": "Auto-detect",
       "numSpeakersLabel": "Number of speakers",
-      "numSpeakersHint": "Setting the exact count improves accuracy, especially on long recordings.",
+      "numSpeakersHint": "Speakers are detected automatically, up to this number.",
       "downloadingModels": "Downloading models...",
       "openaiDiarizeNote": "Overrides your transcription model with gpt-4o-transcribe-diarize, the only OpenAI model with speaker detection. Costs may differ from your selected model.",
       "mistralDiarizeNote": "Speaker detection included at no extra cost with Voxtral.",
@@ -3506,8 +3539,8 @@
       "done": "Done",
       "chunkProgress": "Part {{step}} of {{total}}",
       "emptyReply": "The model returned an empty reply. Try again, or pick a different model.",
+      "allActions": "All actions",
       "manage": "Manage Actions...",
-      "manageTitle": "Custom Actions",
       "addAction": "New Action",
       "editAction": "Edit Action",
       "namePlaceholder": "Action name",
@@ -3521,8 +3554,6 @@
       "promptLabel": "Prompt",
       "emptyEditorTitle": "Select an action",
       "emptyEditorDescription": "Choose an action from the list or create a new one",
-      "runAction": "Run {{name}}",
-      "selectAction": "Select action",
       "builtin": {
         "generateNotes": {
           "name": "Generate Notes",
@@ -3534,15 +3565,89 @@
           "cta": "Draft a follow-up email"
         },
         "detailedNotes": {
-          "name": "Detailed Notes",
+          "name": "AI Summary",
           "description": "Accurate, comprehensive meeting notes with decisions and action items"
+        },
+        "makeTodos": {
+          "name": "Make to-dos",
+          "description": "List every to-do and its owner in the chat"
+        },
+        "createOutline": {
+          "name": "Create outline",
+          "description": "Outline the note's topics in the chat"
+        },
+        "oneOnOne": {
+          "name": "1:1",
+          "description": "Updates, feedback, growth, and next steps from a one-on-one"
+        },
+        "standUp": {
+          "name": "Stand-up",
+          "description": "Each person's progress, plans, and blockers"
+        },
+        "salesCall": {
+          "name": "Sales call",
+          "description": "Needs, objections, budget, and the decision process"
+        },
+        "userInterview": {
+          "name": "User interview",
+          "description": "Workflow, pain points, reactions, and quotes from a participant"
+        },
+        "shorten": {
+          "name": "Shorten",
+          "description": "Make the summary about half as long",
+          "cta": "Shorten the summary"
+        },
+        "addTldr": {
+          "name": "Add TL;DR",
+          "description": "Put a two- or three-sentence TL;DR at the top of the summary",
+          "cta": "Add a TL;DR"
+        },
+        "slackUpdate": {
+          "name": "Slack update",
+          "description": "Write a short team update to post in Slack",
+          "cta": "Write a Slack update"
         }
       },
       "errors": {
         "noModel": "No AI model selected. Configure one in Settings.",
         "actionFailed": "Action failed",
-        "noEndpoint": "No self-hosted server URL set. Configure one in Settings."
-      }
+        "noEndpoint": "No self-hosted server URL set. Configure one in Settings.",
+        "outputTruncated": "The AI model ran out of room before it finished, so the note was left as it was.",
+        "nothingToSummarize": "There's nothing to summarize in this note yet, so the AI summary was left as it was.",
+        "saveFailed": "Couldn't save. Check that nothing is too long and try again."
+      },
+      "tab": "Actions",
+      "output": {
+        "auto": "Auto",
+        "chat": "Chat",
+        "summary": "AI summary",
+        "chatHint": "Answers in the note's chat and leaves the AI summary as it is.",
+        "summaryHint": "Edits the note's AI summary, or writes one from the transcript if there isn't one yet.",
+        "autoHint": "Reads the prompt when you save and picks the chat or the AI summary."
+      },
+      "applied": "AI summary updated with {{name}}"
+    },
+    "templates": {
+      "tab": "Templates",
+      "managerTitle": "Templates & Actions",
+      "manage": "Manage Templates...",
+      "select": "Choose template",
+      "addTemplate": "New Template",
+      "editTemplate": "Edit Template",
+      "namePlaceholder": "Template name",
+      "contextLabel": "Context",
+      "contextPlaceholder": "What kind of meeting is this, and what should the summary focus on?",
+      "sectionsLabel": "Sections",
+      "addSection": "Add section",
+      "sectionHeadingPlaceholder": "Section heading",
+      "sectionInstructionPlaceholder": "What goes in this section?",
+      "moveSectionUp": "Move section up",
+      "moveSectionDown": "Move section down",
+      "removeSection": "Remove section",
+      "noSectionsHint": "Without sections, the context is the whole instruction for the summary.",
+      "noTemplates": "No templates yet",
+      "emptyEditorTitle": "Select a template",
+      "emptyEditorDescription": "Choose a template from the list or create a new one"
     },
     "onboarding": {
       "llm": {
@@ -3550,12 +3655,12 @@
         "description": "Actions use AI to transform your notes. Set up a language model to get started.",
         "configured": "AI model configured"
       },
-      "actions": {
-        "title": "AI-Powered Actions",
-        "description": "Actions transform your notes — clean up transcriptions, summarize meetings, and more. Use built-in actions or create your own.",
-        "builtInLabel": "Built-in",
-        "createTitle": "Create your own action",
-        "createDescription": "Define a custom action with your own AI prompt. You can always edit or add more later in settings.",
+      "templates": {
+        "title": "Templates and Actions",
+        "description": "Templates shape your AI summary, from detailed meeting notes to sections you define. Actions run on a note, like drafting a follow-up email in the chat.",
+        "builtInLabel": "Your templates",
+        "createTitle": "Create your own template",
+        "createDescription": "Describe the summary you want. You can add sections, more templates, and actions later.",
         "created": "Created!"
       },
       "getStarted": "Get Started",
@@ -3737,6 +3842,10 @@
     "activationFailedDescription": "OpenWhispr switched to CPU transcription.",
     "reasoningActivationFailedDescription": "OpenWhispr switched to CPU processing.",
     "retryActivation": "Retry GPU acceleration",
+    "redownloadNeeded": "GPU pack needs re-downloading",
+    "redownloadNeededDescription": "This version of OpenWhispr can't use your installed GPU pack. Download it again to turn GPU acceleration back on.",
+    "redownloadButton": "Re-download GPU pack",
+    "downloadFailed": "Couldn't download the GPU pack.",
     "remove": "Remove",
     "dismiss": "Not now",
     "cancel": "Cancel"
@@ -3764,7 +3873,7 @@
       },
       "gpuPackMigration": {
         "title": "GPU pack needs re-downloading",
-        "description": "An update removed an outdated GPU pack installation ({{packs}}). Re-download it in Settings to restore GPU acceleration."
+        "description": "This version can't use your earlier GPU pack ({{packs}}). Download it again in Settings to turn GPU acceleration back on."
       },
       "cleanupFailed": {
         "title": "Cleanup failed",
@@ -3851,7 +3960,8 @@
       "thinking": "Thinking...",
       "typeMessage": "Type a message...",
       "send": "Send",
-      "voiceDraftStreamingOnly": "Voice input isn't available with your transcription provider: it only supports live dictation. Choose another provider in Settings → Speech to Text."
+      "voiceDraftStreamingOnly": "Voice input isn't available with your transcription provider: it only supports live dictation. Choose another provider in Settings → Speech to Text.",
+      "commands": "Commands"
     },
     "tools": {
       "search_notesName": "Search notes",
@@ -3925,10 +4035,8 @@
   },
   "integrations": {
     "title": "Integrations",
-    "description": "Connect services to supercharge your workflow",
     "googleCalendar": {
       "title": "Google Calendar",
-      "optional": "Optional",
       "description": "Auto-fill meeting titles and attendees from your calendar.",
       "connect": "Connect Google Calendar",
       "connecting": "Connecting...",
@@ -3947,7 +4055,6 @@
     },
     "microsoftCalendar": {
       "title": "Microsoft Calendar",
-      "optional": "Optional",
       "description": "Read meetings from your Outlook or Microsoft 365 calendar.",
       "connect": "Connect Microsoft Calendar",
       "connected": "Connected",
@@ -3962,7 +4069,6 @@
     },
     "appleCalendar": {
       "title": "Apple Calendar",
-      "optional": "Optional",
       "description": "Read meetings from Calendar.app — iCloud, Google, Exchange, and Outlook in one place.",
       "connect": "Connect Apple Calendar",
       "connected": "Connected",
@@ -3975,35 +4081,24 @@
       "connectFailed": "Connection Failed",
       "connectFailedDescription": "Something went wrong while connecting to Calendar.app. Please restart OpenWhispr and try again."
     },
-    "sections": {
-      "connectors": "Connectors",
-      "calendar": "Calendar",
-      "api": "API",
-      "mcp": "MCP",
-      "cli": "CLI"
-    },
     "api": {
-      "title": "API keys",
       "description": "Manage API keys for programmatic access",
       "proRequired": "Upgrade to a paid plan to access the API",
-      "manage": "Manage keys",
       "viewPlans": "View Plans",
-      "dialogTitle": "API keys"
+      "useWith": "Use a key with"
     },
     "mcp": {
-      "title": "Bring your notes to your AI tools",
       "description": "Chat, search, and work with your notes inside Claude, ChatGPT, and Cursor.",
       "step1": "In your AI tool, add OpenWhispr MCP using the public URL",
-      "step2": "Create an API key above with the scopes you need.",
+      "step2": "Create an API key with the scopes you need.",
       "step3": "Paste the key as the Authorization header to connect.",
       "learnMore": "Learn more",
-      "viewPlans": "View Plans",
-      "copyUrl": "Copy MCP URL",
       "proRequired": "Upgrade to a paid plan to connect OpenWhispr to Claude, ChatGPT, and Cursor.",
+      "worksWith": "Works with",
+      "copyUrl": "Copy MCP URL",
       "copied": "Copied"
     },
     "cli": {
-      "title": "Command-line access",
       "description": "Give your assistant access to your notes from the terminal.",
       "installLabel": "Install",
       "learnMore": "Read the docs",
@@ -4033,8 +4128,26 @@
       "upgrade": "Upgrade"
     },
     "notABot": {
-      "title": "OpenWhispr is a meeting recorder, not a bot",
       "description": "OpenWhispr captures audio directly from your system — it never joins your meetings as a participant. Just connect your calendar and take notes as normal."
+    },
+    "nav": {
+      "label": "Integration sections",
+      "groups": {
+        "assistant": "Assistant",
+        "meetings": "Meetings",
+        "developer": "Developer"
+      },
+      "sections": {
+        "connectors": "Connectors",
+        "calendars": "Calendars",
+        "api": "API keys",
+        "mcp": "MCP server",
+        "cli": "Command line"
+      },
+      "docs": "Integration docs"
+    },
+    "connectors": {
+      "description": "Let the assistant use your tools. You approve every email, message and issue before it goes out."
     }
   },
   "connectors": {
@@ -4200,7 +4313,6 @@
       "title": "Email drafts",
       "description": "The assistant opens a pre-filled draft in your email app. You review it and press Send yourself.",
       "descriptionSend": "The assistant shows an email card in the chat. It's sent from your Gmail only when you press Send.",
-      "proRequired": "Upgrade to a paid plan to let the assistant draft emails for you.",
       "unavailable": "Email drafts aren't available right now.",
       "targetLabel": "Draft emails in",
       "autoResolved": "Automatic · {{target}}",
@@ -4215,14 +4327,13 @@
     },
     "slack": {
       "title": "Slack",
-      "description": "The assistant can post messages to channels and people as you. You approve every message before it's sent.",
+      "description": "Post messages to channels and people.",
       "connect": "Connect",
       "reconnect": "Reconnect",
       "disconnect": "Disconnect",
       "connecting": "Finish connecting in your browser…",
       "connectedAs": "Connected as {{account}} in {{workspace}}",
       "needsReconnect": "Slack needs to be reconnected.",
-      "proRequired": "Upgrade to a paid plan to let the assistant send Slack messages for you.",
       "errors": {
         "connect_failed": "Couldn't connect Slack. Try again.",
         "disconnect_failed": "Couldn't disconnect Slack. Try again.",
@@ -4246,7 +4357,7 @@
     },
     "github": {
       "title": "GitHub",
-      "description": "The assistant can search issues and pull requests, create issues and comment as you, only in the repositories you choose. It can't read your code, and you approve every issue and comment before it's posted.",
+      "description": "Issues and comments in the repositories you choose. It can't read your code.",
       "connect": "Connect",
       "reconnect": "Reconnect",
       "disconnect": "Disconnect",
@@ -4255,7 +4366,6 @@
       "connectedAs_empty": "Connected as {{account}} · no repositories yet",
       "connectedAs_unknown": "Connected as {{account}}",
       "needsReconnect": "GitHub needs to be reconnected.",
-      "proRequired": "Upgrade to a paid plan to let the assistant work with GitHub issues for you.",
       "reviewOnGithub": "Review on GitHub",
       "disconnectedHint": "Disconnected from this computer. GitHub keeps OpenWhispr's authorization until you remove it there.",
       "errors": {
@@ -4287,7 +4397,7 @@
     },
     "gmail": {
       "title": "Gmail",
-      "description": "The assistant can send emails from your Gmail account. It can't read your mail, and you press Send on every email yourself.",
+      "description": "Send email from your account. It can't read your mail.",
       "connect": "Connect",
       "reconnect": "Reconnect",
       "disconnect": "Disconnect",
@@ -4295,7 +4405,6 @@
       "connectedAs": "Connected as {{account}}",
       "needsReconnect": "Gmail needs to be reconnected.",
       "grantKept": "Disconnected. Google Calendar uses the same Google permission, so OpenWhispr stays listed in your Google Account until you disconnect Google Calendar too.",
-      "proRequired": "Upgrade to a paid plan to let the assistant send emails from Gmail for you.",
       "errors": {
         "connect_failed": "Couldn't connect Gmail. Try again.",
         "disconnect_failed": "Couldn't disconnect Gmail. Try again.",
@@ -4322,14 +4431,13 @@
     },
     "linear": {
       "title": "Linear",
-      "description": "The assistant can search your Linear issues and create issues and comments as you. You approve every issue and comment before it's sent.",
+      "description": "Search issues and create issues and comments.",
       "connect": "Connect",
       "reconnect": "Reconnect",
       "disconnect": "Disconnect",
       "connecting": "Finish connecting in your browser…",
       "connectedAs": "Connected as {{account}} in {{workspace}}",
       "needsReconnect": "Linear needs to be reconnected.",
-      "proRequired": "Upgrade to a paid plan to let the assistant work in Linear for you.",
       "errors": {
         "connect_failed": "Couldn't connect Linear. Try again.",
         "disconnect_failed": "Couldn't disconnect Linear. Try again.",
@@ -4486,7 +4594,10 @@
       "gmailDraftLimit": "Only {{max}} emails can be prepared per request.",
       "queryResults": "Results found: {{total}}",
       "cardLimit": "Only {{max}} cards can be prepared per request."
-    }
+    },
+    "beta": "Beta",
+    "upsell": "Connectors are included with paid plans. Upgrade to let the assistant work in your tools.",
+    "locked": "Included with paid plans"
   },
   "notesView": {
     "searchPlaceholder": "Search notes…",
@@ -4616,9 +4727,7 @@
     "conversationSelector": "Switch conversation",
     "history": "History",
     "quickActions": "Quick actions",
-    "generateSummary": "Generate summary",
-    "makeTodos": "Make to-dos",
-    "createOutline": "Create outline"
+    "generateSummary": "Generate summary"
   },
   "transcriptionPreview": {
     "label": "Preview",
@@ -4668,5 +4777,48 @@
     },
     "start": "Take notes",
     "join": "Join & transcribe"
+  },
+  "providerErrors": {
+    "authFailed": "{{provider}} rejected your API key.",
+    "accessDenied": "{{provider}} denied access. Your key may not include this model.",
+    "quotaExhausted": "Your {{provider}} account is out of credit.",
+    "rateLimited": "{{provider}} rate-limited the request. Wait a moment and try again.",
+    "modelNotFound": "{{provider}} doesn't recognize the model “{{model}}”.",
+    "modelNotFoundNoModel": "{{provider}} doesn't recognize the selected model.",
+    "payloadTooLarge": "This recording is too large for {{provider}}.",
+    "requestTooLarge": "This request is too large for {{provider}}.",
+    "badRequest": "{{provider}} couldn't process this request.",
+    "unavailable": "{{provider}} is having problems right now. Try again shortly.",
+    "timeout": "{{provider}} took too long to respond.",
+    "unreachable": "Couldn't reach {{provider}}. Check your connection.",
+    "noResponse": "Couldn't get a response from {{provider}}. Check your API key and connection.",
+    "unknown": "{{provider}} returned an unexpected error.",
+    "keyMissing": "No API key is set for {{provider}}. Add it in Settings → Language Models.",
+    "selfHosted": {
+      "authFailed": "Your server rejected the API key.",
+      "accessDenied": "Your server denied access. The key may not include this model.",
+      "quotaExhausted": "Your server says the account is out of credit.",
+      "rateLimited": "Your server rate-limited the request. Wait a moment and try again.",
+      "modelNotFound": "Your server doesn't recognize the model “{{model}}”.",
+      "modelNotFoundNoModel": "Your server doesn't recognize the selected model.",
+      "payloadTooLarge": "This recording is too large for your server.",
+      "requestTooLarge": "This request is too large for your server.",
+      "badRequest": "Your server couldn't process this request.",
+      "unavailable": "Your server is having problems right now. Try again shortly.",
+      "timeout": "Your server took too long to respond.",
+      "unreachable": "Couldn't reach your server. Check that it's running.",
+      "noResponse": "Couldn't get a response from your server. Check its API key and that it's running.",
+      "unknown": "Your server returned an unexpected error."
+    },
+    "openSettings": "Open Settings",
+    "copyDetails": "Copy details",
+    "titles": {
+      "transcription": "Transcription failed",
+      "llm": "AI request failed"
+    },
+    "details": {
+      "provider": "Provider",
+      "requestId": "Request ID"
+    }
   }
 }

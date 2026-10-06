@@ -1,9 +1,10 @@
 import { useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { X, PanelRight, Plus, AlignLeft, ClipboardCheck, FileText } from "../icons";
+import { X, PanelRight, Plus, AlignLeft } from "../icons";
 import { cn } from "../lib/utils";
 import { ChatMessages } from "../chat/ChatMessages";
 import { ChatInput } from "../chat/ChatInput";
+import type { SlashCommand } from "../chat/slashCommands";
 import { BrandMarkIcon } from "../dictation/BrandMarkIcon";
 import {
   DropdownMenu,
@@ -13,16 +14,13 @@ import {
 } from "../ui/dropdown-menu";
 import type { Message, AgentState } from "../chat/types";
 import { setActiveNoteId, setActiveFolderId } from "../../stores/noteStore";
+import { getActionName } from "../../stores/actionStore";
+import type { ActionItem } from "../../types/electron";
 import type { ContainerConversationItem } from "../../hooks/useContainerChat";
 import { ConversationPicker } from "./ConversationPicker";
+import { getActionIcon } from "./actionIcons";
 
 export type EmbeddedChatMode = "hidden" | "floating" | "sidebar";
-
-const SIDEBAR_PROMPTS = [
-  { key: "embeddedChat.generateSummary", icon: AlignLeft },
-  { key: "embeddedChat.makeTodos", icon: ClipboardCheck },
-  { key: "embeddedChat.createOutline", icon: FileText },
-] as const;
 
 interface EmbeddedChatProps {
   mode: EmbeddedChatMode;
@@ -38,6 +36,12 @@ interface EmbeddedChatProps {
   onSwitchConversation?: (id: number) => void;
   onNewChat?: () => void;
   active?: boolean;
+  /** The note's chat actions, offered as quick actions beside the sidebar composer. */
+  chatActions?: ActionItem[];
+  onRunChatAction?: (action: ActionItem) => void;
+  /** Writes the note's AI summary with its template; absent when it can't run now. */
+  onGenerateSummary?: () => void;
+  slashCommands?: SlashCommand[];
 }
 
 function EmptyState({ floating }: { floating: boolean }) {
@@ -78,6 +82,10 @@ export default function EmbeddedChat({
   onSwitchConversation,
   onNewChat,
   active = true,
+  chatActions = [],
+  onRunChatAction,
+  onGenerateSummary,
+  slashCommands,
 }: EmbeddedChatProps) {
   const { t } = useTranslation();
 
@@ -102,6 +110,25 @@ export default function EmbeddedChat({
   }, [handleKeyDown]);
 
   if (mode === "hidden") return null;
+
+  const quickActions = [
+    ...(onGenerateSummary
+      ? [
+          {
+            key: "summary",
+            label: t("embeddedChat.generateSummary"),
+            Icon: AlignLeft,
+            run: onGenerateSummary,
+          },
+        ]
+      : []),
+    ...chatActions.map((action) => ({
+      key: action.client_id,
+      label: getActionName(action, t),
+      Icon: getActionIcon(action),
+      run: () => onRunChatAction?.(action),
+    })),
+  ];
 
   const hasConversationSelector =
     noteConversations !== undefined && onSwitchConversation !== undefined;
@@ -211,26 +238,26 @@ export default function EmbeddedChat({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" side="top" sideOffset={8}>
-                {SIDEBAR_PROMPTS.map(({ key, icon: Icon }) => (
-                  <DropdownMenuItem key={key} onClick={() => onTextSubmit(t(key))}>
+                {quickActions.map(({ key, label, Icon, run }) => (
+                  <DropdownMenuItem key={key} onClick={run}>
                     <Icon size={15} className="text-primary" />
-                    {t(key)}
+                    {label}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            {SIDEBAR_PROMPTS.map(({ key, icon: Icon }) => (
+            {quickActions.map(({ key, label, Icon, run }) => (
               <button
                 key={key}
                 type="button"
                 // Keep focus in the composer so it doesn't collapse and slide the pills away.
                 onMouseDown={(event) => event.preventDefault()}
-                onClick={() => onTextSubmit(t(key))}
+                onClick={run}
                 disabled={agentState !== "idle"}
                 className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border/70 bg-background px-2.5 text-xs text-foreground/65 transition-colors hover:text-foreground disabled:opacity-40 dark:border-white/10 dark:bg-surface-2"
               >
                 <Icon size={14} className="text-primary" />
-                {t(key)}
+                {label}
               </button>
             ))}
           </div>
@@ -246,6 +273,7 @@ export default function EmbeddedChat({
             voiceDraft
             focusOnIdle={false}
             placeholder={t("embeddedChat.askPlaceholder")}
+            slashCommands={slashCommands}
           />
         </div>
       </div>

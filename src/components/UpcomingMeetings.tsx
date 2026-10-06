@@ -317,17 +317,20 @@ function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEve
               onExit={leaveGrass}
             />
           ) : group.items.length === 0 ? (
-            <div ref={emptyStateRef} className="flex flex-col items-center px-1 py-5 text-center">
+            <div ref={emptyStateRef} className="flex flex-col items-center px-1 py-4 text-center">
+              {/* The artwork is drawn in the middle third of its height; the negative margin
+                  trims most of the empty space above and below it, so the card stays short. */}
               <ThemedEmptyIllustration
                 light={calendarEmptyLight}
                 dark={calendarEmptyDark}
                 width={316}
                 height={120}
+                className="-my-8"
               />
-              <p className="mt-3 text-[15px] font-medium text-foreground">
+              <p className="mt-2 text-[15px] font-medium text-foreground">
                 {t("upcoming.noEventsToday")}
               </p>
-              <p className="mt-1.5 text-[13px] text-muted-foreground">
+              <p className="mt-1 text-[13px] text-muted-foreground">
                 {t("upcoming.emptyDayDescription")}
               </p>
               <Button
@@ -335,7 +338,7 @@ function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEve
                 variant="ghost"
                 onClick={touchGrass}
                 className={cn(
-                  "mt-5",
+                  "mt-3",
                   DAY_CARD_BUTTON_CLASS,
                   "h-9 rounded-full px-5 text-primary hover:text-primary dark:text-primary"
                 )}

@@ -247,9 +247,19 @@ class MicrosoftCalendarManager {
       // An occurrence still stripped after backfill (master fetch failed) has no
       // subject, attendees, or join link. Overwriting a row a previous sync
       // stored in full would demote that meeting to an untitled time block, so
-      // keep the stored row and only insert bare stubs we've never seen.
-      if (isStrippedOccurrence(item) && this.databaseManager.getCalendarEventById(item.id)) {
-        continue;
+      // keep its details while applying any explicit RSVP update.
+      if (isStrippedOccurrence(item)) {
+        const cached = this.databaseManager.getCalendarEventById(item.id);
+        if (cached) {
+          if (typeof item.responseStatus?.response === "string") {
+            toUpsert.push({
+              ...cached,
+              self_response_status:
+                RESPONSE_STATUS_BY_GRAPH[item.responseStatus.response] || "unknown",
+            });
+          }
+          continue;
+        }
       }
       toUpsert.push(this._mapEvent(item, calendar));
       for (const a of item.attendees || []) {

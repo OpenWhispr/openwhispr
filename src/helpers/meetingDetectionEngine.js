@@ -564,9 +564,9 @@ class MeetingDetectionEngine {
     });
   }
 
-  /** Navigates to the note already linked to a calendar event, if any. */
+  /** Navigates to the user's own note already linked to a calendar event, if any. */
   async _resumeExistingEventNote(event, trigger) {
-    const existingNote = this.databaseManager.getNoteByCalendarEventId(event.id);
+    const existingNote = this.databaseManager.getOwnNoteByCalendarEventId(event.id);
     if (!existingNote?.id) return false;
     debugLogger.info(
       "Reusing existing note for calendar meeting",

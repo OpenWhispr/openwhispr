@@ -4,7 +4,7 @@
     "slug": "openwhispr-mobile",
     "scheme": "openwhispr",
     "owner": "gizmo-labs",
-    "version": "1.2.2",
+    "version": "1.2.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",

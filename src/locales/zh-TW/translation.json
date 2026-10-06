@@ -123,6 +123,8 @@
       "osReserved": "\"{{hotkey}}\" 可能被你的作業系統保留。",
       "rightModifierNeedsListener": "\"{{hotkey}}\" 無法在此桌面上使用，其快捷鍵需要包含一個一般按鍵。請加入一個按鍵，例如 Control+Alt+Space。",
       "holdNeedsReleaseKey": "按住說話需要 macOS 能偵測到放開的按鍵：Globe、右側 Option 之類的右側按鍵，或帶修飾鍵的快速鍵。點按可用於任何按鍵。",
+      "holdNeedsRegularKey": "要使用按住模式，請在快捷鍵中加入一個一般按鍵，例如 Control+Alt+Space。桌面環境無法偵測僅按住修飾鍵的操作。",
+      "holdNeedsGnomePortal": "要使用按住模式，GNOME 需要全域快捷鍵入口（GNOME 48 及更新版本內建）。點按不需要它。",
       "registrationFailed": "無法註冊「{{hotkey}}」。可能已被其他應用程式使用。",
       "windowsKeyListenerMissing": "「{{hotkey}}」需要 Windows 按鍵監聽程式，但此安裝中缺少該元件。請選擇包含一般按鍵的快捷鍵。",
       "updateFailedCheckFormat": "無法將快速鍵更新為「{{hotkey}}」。請檢查格式是否有效。",
@@ -160,7 +162,7 @@
     "close": "關閉"
   },
   "windows": {
-    "pttUnavailable": "按住說話原生監聽程式無法使用"
+    "pttUnavailable": "OpenWhispr 按鍵監聽程式無法使用。"
   },
   "common": {
     "continue": "繼續",
@@ -580,6 +582,20 @@
         "title": "有一項下載未完成",
         "description": "請檢查網路連線與磁碟剩餘空間，然後重試。如果仍然失敗，請聯絡您的管理員。"
       }
+    },
+    "permissionGuide": {
+      "label": "權限引導",
+      "return": "返回初始設定",
+      "missingApp": "或透過 + 選取 App",
+      "failed": "無法檢查存取權限。",
+      "microphone": "在「麥克風」中開啟 OpenWhispr。",
+      "accessibility": "將 OpenWhispr 拖入「輔助使用」，然後開啟開關。",
+      "systemAudio": "在「僅系統音訊錄製」中開啟 OpenWhispr。",
+      "screenContext": "將 OpenWhispr 拖入「螢幕與系統音訊錄製」，然後開啟開關。",
+      "settings": "開啟設定",
+      "check": "重新檢查",
+      "restart": "重新啟動",
+      "restartRequired": "重新啟動 OpenWhispr 以套用螢幕存取權限。"
     }
   },
   "streaming": {
@@ -757,6 +773,10 @@
     "disableThinking": {
       "label": "停用思考輸出",
       "help": "略過推理權杖以獲得更乾淨的輸出。建議用於清理。某些伺服器會忽略此提示。"
+    },
+    "keepModelLoaded": {
+      "label": "保持模型載入",
+      "help": "閒置 5 分鐘後仍保留在記憶體中，不會卸載，下一次請求無需冷啟動。適用於所有使用本機模型的功能。"
     },
     "selfHosted": {
       "endpointHelp": "指向本地網路中相容 OpenAI 的伺服器（例如 Ollama、LM Studio、vLLM 或 llama-server）。"
@@ -938,11 +958,18 @@
         "description": "聽寫停止時快捷鍵仍處於按住狀態，因此未貼上文字。轉錄內容已複製到剪貼簿。",
         "descriptionClipboardFailed": "聽寫停止時快捷鍵仍處於按住狀態，因此未貼上文字，也無法複製到剪貼簿。"
       },
+      "modifiersHeld": {
+        "title": "轉錄內容未貼上",
+        "description": "修飾鍵（如 Ctrl 或 Shift）仍處於按住狀態，因此未貼上文字。轉錄內容已複製到剪貼簿。",
+        "descriptionClipboardFailed": "修飾鍵（如 Ctrl 或 Shift）仍處於按住狀態，因此未貼上文字，也無法複製到剪貼簿。"
+      },
       "selectionEditing": {
         "notAppliedTitle": "未套用選取文字編輯",
         "changed": "處理期間，選取的文字或目標應用程式已變更。未取代任何內容。",
         "expired": "選取文字編輯已逾時。請重新選取文字後再試。",
         "pasteFailed": "OpenWhispr 已產生編輯結果，但無法取代選取的文字。",
+        "modifiersHeld": "OpenWhispr 已產生編輯結果，但修飾鍵（如 Ctrl 或 Shift）仍處於按住狀態，因此未套用。編輯結果已複製到剪貼簿。",
+        "modifiersHeldClipboardFailed": "OpenWhispr 已產生編輯結果，但修飾鍵（如 Ctrl 或 Shift）仍處於按住狀態，因此未套用，也無法複製到剪貼簿。",
         "unavailable": "OpenWhispr 無法安全讀取選取的文字。請檢查輔助使用或輸入自動化權限。",
         "tooLarge": "選取內容過長。請選取不超過 6,000 個字元。",
         "reasoningFailed": "AI 無法完成選取文字編輯。原始文字未被變更。"
@@ -2252,6 +2279,12 @@
       },
       "transcriptionPreview": "即時轉錄預覽",
       "transcriptionPreviewDescription": "在浮動視窗中顯示轉錄結果，再進行文字整理",
+      "aec": {
+        "toggle": {
+          "title": "會議回音消除",
+          "description": "消除洩漏到麥克風中的會議音訊。使用耳機或耳塞時請關閉此功能——沒有需要消除的回音，且它可能會完全抑制您的聲音。"
+        }
+      },
       "vad": {
         "title": "語音活動偵測",
         "description": "設定 Silero VAD 如何為本機 Whisper 轉錄偵測並切分語音",
@@ -2769,7 +2802,7 @@
     "sidebar": {
       "newNote": "新增筆記",
       "searchNotes": "搜尋筆記",
-      "actions": "動作"
+      "templatesAndActions": "範本與動作"
     },
     "spaces": {
       "privateSpaces": "私人筆記",
@@ -3076,7 +3109,7 @@
       "speakerDetectionDescription": "辨識音訊中的不同說話者",
       "numSpeakersPlaceholder": "自動偵測",
       "numSpeakersLabel": "說話人數",
-      "numSpeakersHint": "設定準確的人數可以提高準確度，尤其是長錄音。",
+      "numSpeakersHint": "將自動偵測說話人，不超過此人數。",
       "downloadingModels": "正在下載模型...",
       "openaiDiarizeNote": "將替換您的轉錄模型為 gpt-4o-transcribe-diarize，這是唯一支援說話人偵測的 OpenAI 模型。費用可能與您選擇的模型不同。",
       "mistralDiarizeNote": "使用 Voxtral 時說話人偵測無需額外費用。",
@@ -3135,8 +3168,8 @@
       "showInFileManager": "在{{manager}}中顯示"
     },
     "actions": {
+      "allActions": "全部動作",
       "manage": "管理動作...",
-      "manageTitle": "自訂動作",
       "addAction": "新增動作",
       "editAction": "編輯動作",
       "namePlaceholder": "動作名稱",
@@ -3150,8 +3183,6 @@
       "promptLabel": "提示詞",
       "emptyEditorTitle": "選擇動作",
       "emptyEditorDescription": "從列表中選擇一個動作或建立新動作",
-      "runAction": "執行 {{name}}",
-      "selectAction": "選擇動作",
       "done": "完成",
       "chunkProgress": "第 {{step}} 部分，共 {{total}} 部分",
       "emptyReply": "模型傳回了空白回覆。請再試一次，或選擇其他模型。",
@@ -3166,15 +3197,89 @@
           "cta": "草擬跟進郵件"
         },
         "detailedNotes": {
-          "name": "詳細筆記",
+          "name": "AI 摘要",
           "description": "準確、完整的會議筆記，包含決策和行動項目"
+        },
+        "makeTodos": {
+          "name": "建立待辦事項",
+          "description": "在聊天中列出每項待辦及其負責人"
+        },
+        "createOutline": {
+          "name": "建立大綱",
+          "description": "在聊天中為筆記的主題列出大綱"
+        },
+        "oneOnOne": {
+          "name": "1 對 1",
+          "description": "一對一會議中的近況、回饋、成長和後續步驟"
+        },
+        "standUp": {
+          "name": "站會",
+          "description": "每個人的進度、計畫和阻礙"
+        },
+        "salesCall": {
+          "name": "銷售通話",
+          "description": "需求、異議、預算和決策流程"
+        },
+        "userInterview": {
+          "name": "使用者訪談",
+          "description": "參與者的工作流程、痛點、反應和原話"
+        },
+        "shorten": {
+          "name": "精簡",
+          "description": "把摘要縮短到大約一半",
+          "cta": "精簡摘要"
+        },
+        "addTldr": {
+          "name": "新增 TL;DR",
+          "description": "在摘要開頭加上兩三句話的 TL;DR",
+          "cta": "新增 TL;DR"
+        },
+        "slackUpdate": {
+          "name": "Slack 更新",
+          "description": "寫一則發到 Slack 的簡短團隊更新",
+          "cta": "寫一則 Slack 更新"
         }
       },
       "errors": {
         "noModel": "未選擇 AI 模型。請在設定中進行配置。",
         "actionFailed": "操作失敗",
-        "noEndpoint": "未設定自架伺服器 URL。請在設定中進行配置。"
-      }
+        "noEndpoint": "未設定自架伺服器 URL。請在設定中進行配置。",
+        "outputTruncated": "AI 模型在完成之前就用完了輸出空間，因此筆記維持不變。",
+        "nothingToSummarize": "這則筆記還沒有可以摘要的內容，因此 AI 摘要維持不變。",
+        "saveFailed": "無法儲存。請檢查是否有內容過長，然後再試一次。"
+      },
+      "tab": "動作",
+      "output": {
+        "auto": "自動",
+        "chat": "聊天",
+        "summary": "AI 摘要",
+        "chatHint": "在筆記的聊天中回覆，AI 摘要維持不變。",
+        "summaryHint": "編輯筆記的 AI 摘要；如果還沒有摘要，就根據轉錄內容產生一份。",
+        "autoHint": "儲存時讀取提示詞，並選擇聊天或 AI 摘要。"
+      },
+      "applied": "已使用 {{name}} 更新 AI 摘要"
+    },
+    "templates": {
+      "tab": "範本",
+      "managerTitle": "範本與動作",
+      "manage": "管理範本...",
+      "select": "選擇範本",
+      "addTemplate": "新增範本",
+      "editTemplate": "編輯範本",
+      "namePlaceholder": "範本名稱",
+      "contextLabel": "背景",
+      "contextPlaceholder": "這是什麼類型的會議？摘要應著重在什麼？",
+      "sectionsLabel": "段落",
+      "addSection": "新增段落",
+      "sectionHeadingPlaceholder": "段落標題",
+      "sectionInstructionPlaceholder": "這個段落要寫什麼？",
+      "moveSectionUp": "上移段落",
+      "moveSectionDown": "下移段落",
+      "removeSection": "移除段落",
+      "noSectionsHint": "沒有段落時，背景就是摘要的完整指示。",
+      "noTemplates": "尚無範本",
+      "emptyEditorTitle": "選擇範本",
+      "emptyEditorDescription": "從列表中選擇一個範本或建立新範本"
     },
     "empty": {
       "title": "這裡還沒有筆記",
@@ -3198,12 +3303,12 @@
         "description": "動作使用 AI 來處理你的筆記。設定語言模型以開始使用。",
         "configured": "AI 模型已設定"
       },
-      "actions": {
-        "title": "AI 驅動的動作",
-        "description": "動作可以處理你的筆記——整理轉錄、摘要會議等。使用內建動作或建立你自己的。",
-        "builtInLabel": "內建",
-        "createTitle": "建立你的動作",
-        "createDescription": "使用你自己的 AI 提示詞定義自訂動作。你隨時可以在設定中編輯或新增更多。",
+      "templates": {
+        "title": "範本與動作",
+        "description": "範本決定 AI 摘要的樣式，從詳細的會議記錄到你自訂的段落。動作在筆記上執行，例如在聊天中草擬跟進郵件。",
+        "builtInLabel": "你的範本",
+        "createTitle": "建立你的範本",
+        "createDescription": "描述你想要的摘要。你之後可以新增段落、更多範本與動作。",
         "created": "已建立！"
       },
       "getStarted": "開始使用",
@@ -3566,6 +3671,10 @@
     "activationFailedDescription": "OpenWhispr 已切換為 CPU 轉錄。",
     "reasoningActivationFailedDescription": "OpenWhispr 已切換為 CPU 處理。",
     "retryActivation": "重試 GPU 加速",
+    "redownloadNeeded": "需要重新下載 GPU 加速包",
+    "redownloadNeededDescription": "此版本的 OpenWhispr 無法使用已安裝的 GPU 加速包。請重新下載以重新啟用 GPU 加速。",
+    "redownloadButton": "重新下載 GPU 加速包",
+    "downloadFailed": "無法下載 GPU 加速包。",
     "remove": "移除",
     "dismiss": "暫時不要",
     "cancel": "取消"
@@ -3593,7 +3702,7 @@
       },
       "gpuPackMigration": {
         "title": "需要重新下載 GPU 加速包",
-        "description": "更新移除了過時的 GPU 加速包安裝（{{packs}}）。請在設定中重新下載以恢復 GPU 加速。"
+        "description": "此版本無法使用先前的 GPU 加速包（{{packs}}）。請在設定中重新下載以重新啟用 GPU 加速。"
       },
       "cleanupFailed": {
         "title": "清理失敗",
@@ -3680,7 +3789,8 @@
       "thinking": "正在思考...",
       "typeMessage": "輸入訊息...",
       "send": "傳送",
-      "voiceDraftStreamingOnly": "目前的轉錄服務商僅支援即時聽寫，因此無法使用語音輸入。請在「設定 → 語音轉文字」中選擇其他服務商。"
+      "voiceDraftStreamingOnly": "目前的轉錄服務商僅支援即時聽寫，因此無法使用語音輸入。請在「設定 → 語音轉文字」中選擇其他服務商。",
+      "commands": "指令"
     },
     "tools": {
       "search_notesName": "搜尋筆記",
@@ -3754,10 +3864,8 @@
   },
   "integrations": {
     "title": "整合",
-    "description": "連接服務以增強您的工作流程",
     "googleCalendar": {
       "title": "Google 日曆",
-      "optional": "可選",
       "description": "從日曆自動填入會議名稱和參與者。",
       "connect": "連接 Google 日曆",
       "connecting": "連接中...",
@@ -3776,7 +3884,6 @@
     },
     "microsoftCalendar": {
       "title": "Microsoft 日曆",
-      "optional": "可選",
       "description": "從 Outlook 或 Microsoft 365 日曆讀取會議。",
       "connect": "連接 Microsoft 日曆",
       "connected": "已連接",
@@ -3791,7 +3898,6 @@
     },
     "appleCalendar": {
       "title": "Apple 日曆",
-      "optional": "可選",
       "description": "從 Calendar.app 讀取會議 — iCloud、Google、Exchange 和 Outlook 一站式接入。",
       "connect": "連接 Apple 日曆",
       "connected": "已連接",
@@ -3804,35 +3910,24 @@
       "connectFailed": "連線失敗",
       "connectFailedDescription": "連線 Calendar.app 時發生錯誤。請重新啟動 OpenWhispr 後再試一次。"
     },
-    "sections": {
-      "connectors": "連接器",
-      "calendar": "行事曆",
-      "api": "API",
-      "mcp": "MCP",
-      "cli": "CLI"
-    },
     "api": {
-      "title": "API 金鑰",
       "description": "管理用於程式存取的 API 金鑰",
       "proRequired": "升級到付費方案以存取 API",
-      "manage": "管理金鑰",
       "viewPlans": "查看方案",
-      "dialogTitle": "API 金鑰"
+      "useWith": "金鑰可用於"
     },
     "mcp": {
-      "title": "將筆記帶到你的 AI 工具中",
       "description": "在 Claude、ChatGPT 和 Cursor 中與你的筆記一起聊天、搜尋和工作。",
       "step1": "在你的 AI 工具中，使用公開 URL 新增 OpenWhispr MCP",
-      "step2": "在上方建立具有所需權限的 API 金鑰。",
+      "step2": "建立具有所需權限的 API 金鑰。",
       "step3": "將金鑰貼上為 Authorization 標頭以連線。",
       "learnMore": "瞭解更多",
-      "viewPlans": "查看方案",
-      "copyUrl": "複製 MCP URL",
       "proRequired": "升級到付費方案，以將 OpenWhispr 連接到 Claude、ChatGPT 和 Cursor。",
+      "worksWith": "支援",
+      "copyUrl": "複製 MCP URL",
       "copied": "已複製"
     },
     "cli": {
-      "title": "命令列存取",
       "description": "讓你的助理透過終端機存取你的筆記。",
       "installLabel": "安裝",
       "learnMore": "查看文件",
@@ -3862,8 +3957,26 @@
       "upgrade": "升級"
     },
     "notABot": {
-      "title": "OpenWhispr 是會議錄製工具，不是機器人",
       "description": "OpenWhispr 直接從您的系統擷取音訊 — 它不會以參與者身分加入您的會議。只需連接日曆，正常記錄筆記即可。"
+    },
+    "nav": {
+      "label": "整合分區",
+      "groups": {
+        "assistant": "助理",
+        "meetings": "會議",
+        "developer": "開發者"
+      },
+      "sections": {
+        "connectors": "連接器",
+        "calendars": "行事曆",
+        "api": "API 金鑰",
+        "mcp": "MCP 伺服器",
+        "cli": "命令列"
+      },
+      "docs": "整合文件"
+    },
+    "connectors": {
+      "description": "讓助理使用您的工具。每封郵件、每則訊息和每個議題送出前都需要您核准。"
     }
   },
   "connectors": {
@@ -4029,7 +4142,6 @@
       "title": "郵件草稿",
       "description": "助理會在您的郵件應用程式中開啟預先填寫的草稿，由您檢查並親自按下傳送。",
       "descriptionSend": "助理會在聊天中顯示一張郵件卡片，只有在您按下傳送後才會透過您的 Gmail 寄出。",
-      "proRequired": "升級到付費方案，讓助理為您草擬郵件。",
       "unavailable": "郵件草稿暫時無法使用。",
       "targetLabel": "在此撰寫郵件",
       "autoResolved": "自動 · {{target}}",
@@ -4044,14 +4156,13 @@
     },
     "slack": {
       "title": "Slack",
-      "description": "助理可以代表您在頻道和向他人發佈訊息。每則訊息傳送前都需要您核准。",
+      "description": "在頻道中和向他人發佈訊息。",
       "connect": "連接",
       "reconnect": "重新連接",
       "disconnect": "中斷連接",
       "connecting": "請在瀏覽器中完成連接…",
       "connectedAs": "已以 {{account}} 身分連接到 {{workspace}}",
       "needsReconnect": "需要重新連接 Slack。",
-      "proRequired": "升級到付費方案，讓助理為您傳送 Slack 訊息。",
       "errors": {
         "connect_failed": "無法連接 Slack，請重試。",
         "disconnect_failed": "無法中斷 Slack 連接，請重試。",
@@ -4075,7 +4186,7 @@
     },
     "github": {
       "title": "GitHub",
-      "description": "助理可以僅在您選擇的存放庫中，以您的身分搜尋 Issue 和提取要求、建立 Issue 以及發表留言。它無法讀取您的程式碼，每個 Issue 和留言在發佈前都需要您核准。",
+      "description": "您所選儲存庫中的議題和留言。無法讀取您的程式碼。",
       "connect": "連接",
       "reconnect": "重新連接",
       "disconnect": "中斷連接",
@@ -4084,7 +4195,6 @@
       "connectedAs_empty": "已以 {{account}} 身分連接 · 尚無存放庫",
       "connectedAs_unknown": "已以 {{account}} 身分連接",
       "needsReconnect": "需要重新連接 GitHub。",
-      "proRequired": "升級到付費方案，讓助理為您處理 GitHub Issue。",
       "reviewOnGithub": "在 GitHub 上查看",
       "disconnectedHint": "已在這台電腦上中斷連接。在您於 GitHub 上移除之前，GitHub 會保留 OpenWhispr 的授權。",
       "errors": {
@@ -4116,7 +4226,7 @@
     },
     "gmail": {
       "title": "Gmail",
-      "description": "助理可以透過您的 Gmail 帳戶傳送郵件。它無法讀取您的郵件，每封郵件都由您親自按下傳送。",
+      "description": "從您的帳戶傳送郵件。無法讀取您的郵件。",
       "connect": "連接",
       "reconnect": "重新連接",
       "disconnect": "中斷連接",
@@ -4124,7 +4234,6 @@
       "connectedAs": "已以 {{account}} 身分連接",
       "needsReconnect": "需要重新連接 Gmail。",
       "grantKept": "已中斷連線。Google 日曆使用相同的 Google 權限，因此在您也中斷 Google 日曆的連線之前，OpenWhispr 仍會顯示在您的 Google 帳戶中。",
-      "proRequired": "升級到付費方案，讓助理透過 Gmail 為您傳送郵件。",
       "errors": {
         "connect_failed": "無法連接 Gmail，請重試。",
         "disconnect_failed": "無法中斷 Gmail 連接，請重試。",
@@ -4151,14 +4260,13 @@
     },
     "linear": {
       "title": "Linear",
-      "description": "助理可以搜尋您的 Linear 議題，並以您的身分建立議題和留言。每個議題和留言傳送前都需要您核准。",
+      "description": "搜尋議題，建立議題和留言。",
       "connect": "連接",
       "reconnect": "重新連接",
       "disconnect": "中斷連接",
       "connecting": "請在瀏覽器中完成連接…",
       "connectedAs": "已以 {{account}} 身分連接到 {{workspace}}",
       "needsReconnect": "需要重新連接 Linear。",
-      "proRequired": "升級到付費方案，讓助理為您在 Linear 中工作。",
       "errors": {
         "connect_failed": "無法連接 Linear，請重試。",
         "disconnect_failed": "無法中斷 Linear 連接，請重試。",
@@ -4315,7 +4423,10 @@
       "gmailDraftLimit": "每次請求最多只能準備 {{max}} 封郵件。",
       "queryResults": "找到的結果：{{total}}",
       "cardLimit": "每次請求最多只能準備 {{max}} 張卡片。"
-    }
+    },
+    "beta": "測試版",
+    "upsell": "連接器包含在付費方案中。升級後，助理即可在您的工具中執行操作。",
+    "locked": "付費方案包含此功能"
   },
   "calendar": {
     "title": "Google 日曆",
@@ -4540,9 +4651,7 @@
     "conversationSelector": "切換對話",
     "history": "歷史記錄",
     "quickActions": "快速操作",
-    "generateSummary": "產生摘要",
-    "makeTodos": "建立待辦事項",
-    "createOutline": "建立大綱"
+    "generateSummary": "產生摘要"
   },
   "transcriptionPreview": {
     "label": "預覽",
@@ -4668,5 +4777,48 @@
     },
     "start": "開始記錄",
     "join": "加入並轉錄"
+  },
+  "providerErrors": {
+    "authFailed": "{{provider}} 拒絕了你的 API 金鑰。",
+    "accessDenied": "{{provider}} 拒絕存取。你的金鑰可能不包含此模型。",
+    "quotaExhausted": "你的 {{provider}} 帳戶額度已用盡。",
+    "rateLimited": "{{provider}} 限制了請求頻率。請稍候再試。",
+    "modelNotFound": "{{provider}} 無法識別模型「{{model}}」。",
+    "modelNotFoundNoModel": "{{provider}} 無法識別所選的模型。",
+    "payloadTooLarge": "這段錄音對 {{provider}} 來說太大了。",
+    "requestTooLarge": "這個請求對 {{provider}} 來說太大了。",
+    "badRequest": "{{provider}} 無法處理此請求。",
+    "unavailable": "{{provider}} 目前發生問題。請稍後再試。",
+    "timeout": "{{provider}} 回應逾時。",
+    "unreachable": "無法連線到 {{provider}}。請檢查你的網路連線。",
+    "noResponse": "未能收到 {{provider}} 的回應。請檢查你的 API 金鑰和網路連線。",
+    "unknown": "{{provider}} 回傳了意外的錯誤。",
+    "keyMissing": "尚未為 {{provider}} 設定 API 金鑰。請在「設定 → 語言模型」中新增。",
+    "selfHosted": {
+      "authFailed": "你的伺服器拒絕了 API 金鑰。",
+      "accessDenied": "你的伺服器拒絕存取。該金鑰可能不包含此模型。",
+      "quotaExhausted": "你的伺服器回報該帳戶額度已用盡。",
+      "rateLimited": "你的伺服器限制了請求頻率。請稍候再試。",
+      "modelNotFound": "你的伺服器無法識別模型「{{model}}」。",
+      "modelNotFoundNoModel": "你的伺服器無法識別所選的模型。",
+      "payloadTooLarge": "這段錄音對你的伺服器來說太大了。",
+      "requestTooLarge": "這個請求對你的伺服器來說太大了。",
+      "badRequest": "你的伺服器無法處理此請求。",
+      "unavailable": "你的伺服器目前發生問題。請稍後再試。",
+      "timeout": "你的伺服器回應逾時。",
+      "unreachable": "無法連線到你的伺服器。請確認它正在執行。",
+      "noResponse": "未能收到你的伺服器的回應。請檢查它的 API 金鑰，並確認它正在執行。",
+      "unknown": "你的伺服器回傳了意外的錯誤。"
+    },
+    "openSettings": "開啟設定",
+    "copyDetails": "複製詳細資訊",
+    "titles": {
+      "transcription": "轉錄失敗",
+      "llm": "AI 請求失敗"
+    },
+    "details": {
+      "provider": "服務商",
+      "requestId": "請求 ID"
+    }
   }
 }

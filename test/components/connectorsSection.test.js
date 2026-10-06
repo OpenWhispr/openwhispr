@@ -185,16 +185,15 @@ test("while usage is unknown, the card follows the saved flag like the chat does
 test("while usage is unknown and the flag is unset, the card asks for a plan", async (t) => {
   const loading = { status: "loading", accountId: "acct" };
   const { textContent } = await renderSection(t, { usageState: loading, subscribedFlag: false });
-  assert.match(textContent, /connectors\.email\.proRequired/);
+  assert.match(textContent, /connectors\.upsell/);
 });
 
-test("free users see that a paid plan is required and a View Plans button", async (t) => {
+test("free users see one upsell above the connectors, which still say what they do", async (t) => {
   const container = await renderSection(t, { usageState: usage(false) });
-  // Matches the API card pattern (IntegrationsView.tsx): the description says
-  // a paid plan is required, and the CTA is the primary/filled button.
-  assert.match(container.textContent, /connectors\.email\.proRequired/);
-  assert.doesNotMatch(container.textContent, /connectors\.email\.description/);
+  assert.match(container.textContent, /connectors\.upsell/);
+  assert.match(container.textContent, /connectors\.email\.description/);
   assert.doesNotMatch(container.textContent, /connectors\.email\.targets\.gmail/);
+  // The section's first button is the upsell's primary View plans.
   const button = findElement(container, (node) => node.tagName === "BUTTON");
   assert.match(button.textContent, /integrations\.api\.viewPlans/);
   assert.equal(button.getAttribute("variant"), null);
@@ -230,7 +229,7 @@ test("while the policy is unresolved, the card says drafts are unavailable", asy
 
 test("an unresolved policy doesn't hide the upsell from a free user", async (t) => {
   const { textContent } = await renderSection(t, { usageState: usage(false), allowed: false });
-  assert.match(textContent, /connectors\.email\.proRequired/);
+  assert.match(textContent, /connectors\.upsell/);
   assert.match(textContent, /integrations\.api\.viewPlans/);
 });
 
@@ -326,11 +325,12 @@ test("a stale login offers Reconnect and Disconnect", async (t) => {
   assert.match(staleMarkup, /connectors\.slack\.needsReconnect/);
 });
 
-test("free users with no login see Upgrade on every row and no Connect", async (t) => {
+test("free users with no login see a single View plans and no Connect", async (t) => {
   const none = await renderSection(t, { isPaid: false, blocked: false });
-  // Email, Gmail, Slack, Linear and GitHub.
-  assert.equal(count(none.textContent, /integrations\.api\.viewPlans/g), 5);
+  assert.equal(count(none.textContent, /integrations\.api\.viewPlans/g), 1);
   assert.equal(buttonWithText(none, "connectors.slack.connect"), null);
+  // Every connector is still listed, each marked beta: email, Gmail, Slack, Linear and GitHub.
+  assert.equal(count(none.textContent, /connectors\.beta/g), 5);
 });
 
 test("free users can always disconnect a login they have", async (t) => {
@@ -340,11 +340,7 @@ test("free users can always disconnect a login they have", async (t) => {
     statuses: { slack: SLACK },
   });
   assert.match(lapsed.textContent, /connectors\.slack\.disconnect/);
-  assert.equal(
-    count(lapsed.textContent, /integrations\.api\.viewPlans/g),
-    4,
-    "only the email, Gmail, Linear and GitHub rows' Upgrade"
-  );
+  assert.equal(count(lapsed.textContent, /integrations\.api\.viewPlans/g), 1);
 });
 
 test("an org that turned connectors off still lets the user remove a login", async (t) => {
@@ -522,4 +518,11 @@ test("every CONNECTOR_ROWS entry renders after the email row, in list order", as
     assert.ok(index > previousIndex, `the ${row.id} row renders after the previous row`);
     previousIndex = index;
   }
+});
+
+test("a free user whose org turned connectors off sees why, not an upsell", async (t) => {
+  const { textContent } = await renderSection(t, { usageState: usage(false), blocked: true });
+  assert.match(textContent, /connectors\.policyOff/);
+  assert.doesNotMatch(textContent, /connectors\.upsell/);
+  assert.doesNotMatch(textContent, /integrations\.api\.viewPlans/);
 });

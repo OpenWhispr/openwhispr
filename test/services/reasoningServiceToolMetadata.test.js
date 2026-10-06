@@ -59,7 +59,7 @@ async function collectAllChunks(stream) {
   return chunks;
 }
 
-async function runToolMetadataScenario(t, cachePrefix, toolExecute) {
+async function runToolMetadataScenario(t, cachePrefix, toolExecute, calledTool = "test_tool") {
   const { reasoningService, vite } = await loadReasoningService(t, cachePrefix);
   const { ToolRegistry } = await vite.ssrLoadModule("/services/tools/ToolRegistry.ts");
   const registry = new ToolRegistry();
@@ -81,7 +81,7 @@ async function runToolMetadataScenario(t, cachePrefix, toolExecute) {
     if (fetchCalls === 1) {
       return createOpenAiSseResponse([], {
         finishReason: "tool_calls",
-        toolCall: { id: "call-test", name: "test_tool", arguments: "{}" },
+        toolCall: { id: "call-test", name: calledTool, arguments: "{}" },
       });
     }
     return createOpenAiSseResponse(["Answer"]);
@@ -165,4 +165,23 @@ test("a successful string tool output yields no metadata", async (t) => {
 
   assert.equal(toolResult.metadata, undefined);
   assert.equal(toolResult.displayText, "plain string result");
+});
+
+test("a call the SDK rejects still settles, with its error as displayText", async (t) => {
+  let executed = false;
+  const toolResult = await runToolMetadataScenario(
+    t,
+    "openwhispr-tool-metadata-rejected-test-",
+    async () => {
+      executed = true;
+      return { success: true, data: "unreachable", displayText: "Done" };
+    },
+    "ghost_tool"
+  );
+
+  assert.equal(executed, false);
+  assert.equal(toolResult.callId, "call-test");
+  assert.equal(toolResult.toolName, "ghost_tool");
+  assert.match(toolResult.displayText, /^Error: .*ghost_tool/);
+  assert.equal(toolResult.metadata, undefined);
 });

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useLayoutEffect, useId, useMemo } from "react";
 import { ArrowRight, Mic, Square, X } from "../icons";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
@@ -9,6 +9,9 @@ import { GLASS_SURFACE } from "../ui/glass";
 import { useToast } from "../ui/useToast";
 import { formatMmSs } from "../../utils/formatDuration";
 import { useVoiceDraft } from "./useVoiceDraft";
+import { Popover, PopoverAnchor, PopoverContent } from "../ui/popover";
+import SlashCommandMenu from "./SlashCommandMenu";
+import { matchSlashCommands, slashOptionId, type SlashCommand } from "./slashCommands";
 import type { AgentState } from "./types";
 
 // Controls stay bottom-anchored so they hold the corner while the composer expands;
@@ -32,10 +35,11 @@ interface ChatInputProps {
   onDraftChange?: (text: string) => void;
   onFocus?: () => void;
   onEscape?: () => void;
-  trailingContent?: React.ReactNode;
   focusOnIdle?: boolean;
   expandOnFocus?: boolean;
   expandOnFocusSize?: "standard" | "compact";
+  /** Offered in a menu while the draft is "/" plus an optional filter. */
+  slashCommands?: SlashCommand[];
 }
 
 function RecordingIndicator() {
@@ -81,10 +85,10 @@ export function ChatInput({
   onDraftChange,
   onFocus,
   onEscape,
-  trailingContent,
   focusOnIdle = true,
   expandOnFocus = false,
   expandOnFocusSize = "standard",
+  slashCommands,
 }: ChatInputProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -124,6 +128,25 @@ export function ChatInput({
   const isBusy =
     agentState === "thinking" || agentState === "streaming" || agentState === "tool-executing";
 
+  const slashMenuId = useId();
+  const [isFocused, setIsFocused] = useState(false);
+  const [slashIndex, setSlashIndex] = useState(0);
+  const slashMatches = useMemo(
+    () =>
+      slashCommands && isFocused && isIdle ? matchSlashCommands(slashCommands, inputText) : [],
+    [slashCommands, isFocused, isIdle, inputText]
+  );
+  const activeSlashIndex = Math.min(slashIndex, slashMatches.length - 1);
+
+  const runSlashCommand = useCallback(
+    (command: SlashCommand) => {
+      if (command.disabled) return;
+      setInputText("");
+      command.run();
+    },
+    [setInputText]
+  );
+
   const handleSubmit = useCallback(() => {
     const text = inputText.trim();
     if (!text || !onTextSubmit || isBusy) return;
@@ -141,6 +164,33 @@ export function ChatInput({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (slashMatches.length > 0 && !e.nativeEvent.isComposing) {
+        const step = e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0;
+        if (step !== 0) {
+          e.preventDefault();
+          setSlashIndex((activeSlashIndex + step + slashMatches.length) % slashMatches.length);
+          return;
+        }
+        const command = slashMatches[activeSlashIndex];
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          runSlashCommand(command);
+          return;
+        }
+        // Tab runs like Enter, but lets focus move on past a command that can't run.
+        if (e.key === "Tab" && !e.shiftKey && !command.disabled) {
+          e.preventDefault();
+          runSlashCommand(command);
+          return;
+        }
+        // Dismiss the menu, not the composer.
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          setInputText("");
+          return;
+        }
+      }
       if (e.key === "Escape" && onEscape) {
         e.preventDefault();
         e.stopPropagation();
@@ -153,7 +203,7 @@ export function ChatInput({
         handleSubmit();
       }
     },
-    [handleSubmit, onEscape]
+    [handleSubmit, onEscape, slashMatches, activeSlashIndex, runSlashCommand, setInputText]
   );
 
   useLayoutEffect(() => {
@@ -185,6 +235,27 @@ export function ChatInput({
 
   return (
     <div className={cn("shrink-0", className ?? "px-3 pb-3 pt-1")}>
+      {slashCommands && (
+        <Popover open={slashMatches.length > 0}>
+          <PopoverAnchor virtualRef={composerRef} />
+          <PopoverContent
+            side="top"
+            className="w-72 p-1"
+            // Focus stays in the composer, which drives the menu from the keyboard.
+            onOpenAutoFocus={(event) => event.preventDefault()}
+            onCloseAutoFocus={(event) => event.preventDefault()}
+          >
+            <SlashCommandMenu
+              id={slashMenuId}
+              label={t("agentMode.input.commands")}
+              commands={slashMatches}
+              activeIndex={activeSlashIndex}
+              onActiveIndexChange={setSlashIndex}
+              onRun={runSlashCommand}
+            />
+          </PopoverContent>
+        </Popover>
+      )}
       <div
         ref={composerRef}
         className={cn(
@@ -310,9 +381,22 @@ export function ChatInput({
               ref={inputRef}
               rows={1}
               value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
+              onChange={(e) => {
+                setInputText(e.target.value);
+                setSlashIndex(0);
+              }}
               onKeyDown={handleKeyDown}
-              onFocus={onFocus}
+              onFocus={() => {
+                setIsFocused(true);
+                setSlashIndex(0);
+                onFocus?.();
+              }}
+              onBlur={() => setIsFocused(false)}
+              aria-autocomplete={slashCommands ? "list" : undefined}
+              aria-controls={slashMatches.length > 0 ? slashMenuId : undefined}
+              aria-activedescendant={
+                slashMatches.length > 0 ? slashOptionId(slashMenuId, activeSlashIndex) : undefined
+              }
               // Read-only, not disabled: disabling would drop focus for the length of every reply.
               readOnly={isBusy}
               autoFocus={autoFocus}
@@ -326,7 +410,6 @@ export function ChatInput({
                 isBusy && "text-muted-foreground/70 cursor-not-allowed"
               )}
             />
-            {isIdle && !inputText.trim() && trailingContent}
             {isBusy && onCancel ? (
               <button
                 type="button"

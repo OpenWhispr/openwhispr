@@ -9,7 +9,7 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 // Drives the real useChatStreaming hook (one synchronous render, then its
 // sendToAI closure; see useChatStreamingCancellation.test.js) on the
 // OpenWhispr Cloud path, with the stream itself stubbed so the test can see
-// which tools a send offers the model.
+// which tools (and messages) a send offers the model.
 async function renderChatStreaming(
   t,
   hookOptions = {},
@@ -49,17 +49,20 @@ async function renderChatStreaming(
   t.after(() => reasoningService.destroy());
 
   const offeredTools = [];
+  const sentMessages = [];
   const endStream = async function* () {
     yield { type: "done", finishReason: "stop" };
   };
-  t.mock.method(reasoningService, "processTextStreamingCloud", (_messages, config) => {
+  t.mock.method(reasoningService, "processTextStreamingCloud", (messages, config) => {
+    sentMessages.push(messages);
     offeredTools.push((config.tools ?? []).map((tool) => tool.name));
     return endStream();
   });
   t.mock.method(
     reasoningService,
     "processTextStreamingAI",
-    (_messages, _model, _provider, _config, tools) => {
+    (messages, _model, _provider, _config, tools) => {
+      sentMessages.push(messages);
       offeredTools.push(Object.keys(tools ?? {}));
       return endStream();
     }
@@ -78,6 +81,7 @@ async function renderChatStreaming(
   return {
     captured,
     offeredTools,
+    sentMessages,
     reasoningService,
     usePolicyStore,
     getMessages: () => messages,
@@ -675,4 +679,242 @@ test("a failed attendee lookup still answers, without the block", async (t) => {
   await captured.sendToAI("Draft a follow-up", []);
   assert.equal(prompts.length, 1);
   assert.doesNotMatch(prompts[0], /Meeting attendees/);
+});
+
+test("a note action sends its prompt in place of the visible message, without searching other notes", async (t) => {
+  const searches = [];
+  const { captured, sentMessages } = await renderChatStreaming(
+    t,
+    {},
+    {
+      electronAPI: {
+        semanticSearchNotes: async (query) => {
+          searches.push(query);
+          return [];
+        },
+      },
+    }
+  );
+  const visible = { id: "u1", role: "user", content: "Draft a follow-up email" };
+  const requestText = "Using the note I'm viewing, draft the follow-up email.";
+
+  await captured.sendToAI(visible.content, [visible], { requestText });
+  assert.equal(sentMessages[0].filter((m) => m.role === "user").at(-1).content, requestText);
+  assert.deepEqual(searches, []);
+
+  await captured.sendToAI(visible.content, [visible]);
+  assert.equal(sentMessages[1].filter((m) => m.role === "user").at(-1).content, visible.content);
+  assert.deepEqual(searches, [visible.content], "a typed question still searches the library");
+});
+
+// ---- What the model is told it can and can't do ----
+
+const systemPromptOf = (messages) => messages.find((m) => m.role === "system").content;
+
+test("an earlier turn's tool use reaches the model as a note on that answer", async (t) => {
+  const { captured, sentMessages } = await renderChatStreaming(t);
+  const earlier = [
+    { id: "u1", role: "user", content: "Weather in Lisbon?" },
+    {
+      id: "a1",
+      role: "assistant",
+      content: "Sunny, 24°C.",
+      toolCalls: [
+        {
+          id: "c1",
+          name: "web_search",
+          arguments: JSON.stringify({ query: "Lisbon weather today" }),
+          status: "completed",
+          result: 'Found web results for "Lisbon weather today"',
+        },
+      ],
+    },
+    { id: "u2", role: "user", content: "And tomorrow?" },
+  ];
+
+  await captured.sendToAI("And tomorrow?", earlier);
+
+  const [system, ...history] = sentMessages[0];
+  assert.match(system.content, /Never write such a note yourself/);
+  assert.deepEqual(history, [
+    { role: "user", content: "Weather in Lisbon?" },
+    {
+      role: "assistant",
+      content: '[Tools used: web_search ("Lisbon weather today")]\n\nSunny, 24°C.',
+    },
+    { role: "user", content: "And tomorrow?" },
+  ]);
+});
+
+test("signed out, the model is told to point the user at signing in", async (t) => {
+  const { captured, sentMessages } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
+    settings: { ...BYOK_SETTINGS, isSignedIn: false },
+  });
+  await captured.sendToAI("What's new in AI today?", []);
+  const prompt = systemPromptOf(sentMessages[0]);
+  assert.match(
+    prompt,
+    /- Web search: needs the user to sign in to OpenWhispr in Settings → Profile\./
+  );
+  assert.match(
+    prompt,
+    /- Integrations \(Email, Slack, Linear, GitHub\): needs the user to sign in/
+  );
+});
+
+test("on a free plan, the model still writes the email and then says a paid plan can send it", async (t) => {
+  const { captured, sentMessages } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
+    subscribed: false,
+  });
+  await captured.sendToAI("Email Josh", []);
+  const prompt = systemPromptOf(sentMessages[0]);
+  assert.match(
+    prompt,
+    /still write it in full in your reply, then end with one short sentence on how they can have you send it for them[^\n]*\n- Integrations \(Email, Slack, Linear, GitHub\): needs a paid OpenWhispr plan in Settings → Plans & Billing\./
+  );
+  assert.doesNotMatch(prompt, /- Web search: (needs|turned|not)/);
+});
+
+test("an org that turns web search off is named as the reason", async (t) => {
+  const { captured, sentMessages, usePolicyStore } = await renderChatStreaming(t);
+  usePolicyStore.setState({
+    status: "managed",
+    appVersion: "1.10.0",
+    policy: {
+      ...MANAGED_POLICY,
+      features: { ...MANAGED_POLICY.features, webSearchEnabled: false },
+    },
+  });
+  await captured.sendToAI("Who won last night?", []);
+  assert.match(
+    systemPromptOf(sentMessages[0]),
+    /- Web search: turned off by the user's organization/
+  );
+});
+
+test("a connector that isn't connected is named with where to connect it", async (t) => {
+  const { captured, sentMessages } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
+    electronAPI: {
+      connectorStatus: async () => [
+        { id: "slack", connected: false, needsReconnect: false },
+        { id: "linear", connected: true, needsReconnect: true },
+        { id: "github", connected: true, needsReconnect: false },
+      ],
+      onConnectorStatusChanged: () => () => {},
+    },
+  });
+  await captured.sendToAI("Post this in #eng", []);
+  const prompt = systemPromptOf(sentMessages[0]);
+  assert.match(
+    prompt,
+    /- Slack: not connected; the user can connect it in Integrations → Connectors\./
+  );
+  assert.match(
+    prompt,
+    /- Linear: the connection has expired; the user can reconnect it in Integrations → Connectors\./
+  );
+  assert.doesNotMatch(prompt, /- GitHub: (not connected|the connection)/);
+});
+
+test("a surface without connectors (container chat) never names them", async (t) => {
+  const { captured, sentMessages } = await renderChatStreaming(t, {}, { subscribed: false });
+  await captured.sendToAI("Summarize this folder", []);
+  const prompt = systemPromptOf(sentMessages[0]);
+  assert.doesNotMatch(prompt, /Integrations \(Email|Slack:|paid OpenWhispr plan/);
+  assert.match(
+    prompt,
+    /- Calendar: not connected; the user can connect it in Integrations → Calendars\./
+  );
+});
+
+test("a local model too small for tools is told so, with no tool notes in its history", async (t) => {
+  const { captured, sentMessages, offeredTools } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
+    settings: {
+      chatAgentMode: "local",
+      chatAgentProvider: "qwen",
+      chatAgentModel: "qwen3-1.7b-q4_k_m",
+    },
+  });
+  const earlier = [
+    { id: "u1", role: "user", content: "Weather in Lisbon?" },
+    {
+      id: "a1",
+      role: "assistant",
+      content: "Sunny.",
+      toolCalls: [
+        {
+          id: "c1",
+          name: "web_search",
+          arguments: JSON.stringify({ query: "Lisbon weather" }),
+          status: "completed",
+        },
+      ],
+    },
+    { id: "u2", role: "user", content: "And tomorrow?" },
+  ];
+
+  await captured.sendToAI("And tomorrow?", earlier);
+
+  assert.deepEqual(offeredTools[0], []);
+  const [system, ...history] = sentMessages[0];
+  assert.match(
+    system.content,
+    /- Tools \(web search, calendar, searching or changing notes, integrations\): the selected model runs without tools .* in Settings → Language Models\. You can still use anything already in this prompt, such as note text/
+  );
+  assert.doesNotMatch(system.content, /Tools used/);
+  assert.equal(history[1].content, "Sunny.");
+});
+
+test("a reply that imitates the tool notes is shown, saved and delivered without one", async (t) => {
+  const completed = [];
+  const { captured, reasoningService, getMessages } = await renderChatStreaming(t, {
+    onStreamComplete: (_id, content) => completed.push(content),
+  });
+  reasoningService.processTextStreamingCloud.mock.mockImplementation(() =>
+    (async function* () {
+      yield { type: "content", text: "[Tools used: slack_send" };
+      yield { type: "content", text: "_message]" };
+      yield { type: "content", text: "\n\nDone." };
+      yield { type: "done", finishReason: "stop" };
+    })()
+  );
+
+  let delivered = null;
+  await captured.sendToAI("Post it", [], { onComplete: ({ content }) => (delivered = content) });
+
+  assert.equal(getMessages().find((m) => m.role === "assistant").content, "Done.");
+  assert.deepEqual(completed, ["Done."]);
+  assert.equal(delivered, "Done.");
+});
+
+test("a reply that is only a tool note settles as an empty response, announced once", async (t) => {
+  let announced = 0;
+  const { captured, reasoningService, getMessages } = await renderChatStreaming(t, {
+    onResponseContent: () => announced++,
+  });
+  reasoningService.processTextStreamingCloud.mock.mockImplementation(() =>
+    (async function* () {
+      yield { type: "content", text: "[Tools used: web_" };
+      yield { type: "content", text: "search]" };
+      yield { type: "done", finishReason: "stop" };
+    })()
+  );
+
+  await captured.sendToAI("Weather?", []);
+
+  assert.equal(
+    getMessages().find((m) => m.role === "assistant").content,
+    "The model returned no response."
+  );
+  assert.equal(announced, 1);
+});
+
+test("the onboarding demo isn't told to send the user off to enable anything", async (t) => {
+  const { captured, sentMessages } = await renderChatStreaming(
+    t,
+    { inferenceScope: "dictationAgent", nameUnavailableCapabilities: false },
+    { settings: { isSignedIn: false } }
+  );
+  await captured.sendToAI("Reply with times I'm free", []);
+  assert.doesNotMatch(systemPromptOf(sentMessages[0]), /Not available in this conversation/);
 });

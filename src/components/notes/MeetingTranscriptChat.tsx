@@ -962,7 +962,7 @@ export function MeetingTranscriptChat({
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className="flex-1 min-h-0 overflow-y-auto pt-2 agent-chat-scroll pb-[var(--floating-inset,96px)]"
+        className="flex-1 min-h-0 overflow-y-auto pt-2 agent-chat-scroll pb-[var(--floating-inset,132px)]"
       >
         <div className={cn("px-4", contentClassName)}>
           <div style={{ height: totalSize, width: "100%", position: "relative" }}>

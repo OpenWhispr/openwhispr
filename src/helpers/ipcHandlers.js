@@ -13,6 +13,7 @@ const { getModelType, isSherpaLocalProvider } = require("./parakeetModelInfo");
 const { broadcastToWindows } = require("./windowBroadcast");
 const { openExternalUrl } = require("./externalUrlOpener");
 const { resolveFailedGpuBackends } = require("./whisper");
+const { WHISPER_GPU_FAILURE_REASON_KEYS } = require("./whisperGpuFailureReason");
 const { BYOK_API_KEYS } = require("../config/secretKeys");
 const tokenStore = require("./tokenStore");
 const accountScopeBinding = require("./accountScopeBinding");
@@ -33,6 +34,15 @@ const {
 } = require("./policyResponseError");
 const { classifyAndLog } = require("./networkErrors");
 const { resolveSystemDefaultMicrophone } = require("./systemDefaultMicrophone");
+const { ipcErrorFields } = require("./ipcErrorFields");
+const {
+  PROVIDER_ERROR_CODES,
+  isProviderSettingsTarget,
+  providerHttpError,
+  providerError,
+  asProviderError,
+  redactProviderBody,
+} = require("./providerHttpErrors");
 const {
   registerConnectorIpc,
   createConnectorPolicyResolver,
@@ -43,8 +53,12 @@ const { createNoteAttendeesLookup, searchContacts } = require("./connectors/cont
 // packaged, and the route resolver only needs {id, baseUrl} per provider.
 const transcriptionProviderBaseUrls = () =>
   require("../models/modelRegistryData.json").transcriptionProviders;
+// Classified errors show the provider's display name; routes only carry its id.
+const transcriptionProviderName = (id) =>
+  require("../models/modelRegistryData.json").transcriptionProviders.find((p) => p.id === id)
+    ?.name || id;
 // ipcMain.handle keeps only the message when a promise rejects, dropping custom
-// props — proxy handlers return {error, code, messageKey} so the renderer can
+// props — proxy handlers return the classified fields so the renderer can
 // rebuild the error.
 const serializeIpcError =
   (fn) =>
@@ -52,7 +66,7 @@ const serializeIpcError =
     try {
       return await fn(...args);
     } catch (error) {
-      return { error: error.message, code: error.code, messageKey: error.messageKey };
+      return ipcErrorFields(error);
     }
   };
 
@@ -685,24 +699,7 @@ class IPCHandlers {
     tokenStore.subscribe((state) => this._handleAuthTokenChange(state));
 
     if (this.whisperManager?.serverManager) {
-      // Remember the failed backend so it isn't re-attempted (and its model
-      // reload re-paid) on every launch; cleared by retry, re-download, delete.
-      this.whisperManager.serverManager.on("cuda-fallback", () => {
-        this._recordWhisperGpuFailure("cuda");
-        broadcastToWindows("cuda-fallback-notification", {});
-      });
-      this.whisperManager.serverManager.on("gpu-fallback", () => {
-        this._recordWhisperGpuFailure("vulkan");
-        broadcastToWindows("gpu-fallback-notification", {});
-      });
-      // Persist the discrete-GPU pin so later launches spawn pinned directly
-      // instead of paying a second Vulkan cold start. See #1606.
-      this.whisperManager.serverManager.on("vulkan-device-pinned", ({ index }) => {
-        this._syncStartupEnv({ WHISPER_VULKAN_DEVICE: String(index) });
-      });
-      this.whisperManager.serverManager.on("vulkan-device-pin-cleared", () => {
-        this._syncStartupEnv({}, ["WHISPER_VULKAN_DEVICE"]);
-      });
+      this._attachWhisperServerListeners(this.whisperManager.serverManager);
     }
   }
 
@@ -1256,19 +1253,55 @@ class IPCHandlers {
     return resolveFailedGpuBackends(process.env.WHISPER_GPU_FAILED);
   }
 
-  _recordWhisperGpuFailure(backend) {
+  _attachWhisperServerListeners(serverManager) {
+    serverManager.on("cuda-fallback", ({ reason }) => {
+      this._recordWhisperGpuFailure("cuda", reason);
+      broadcastToWindows("cuda-fallback-notification", {});
+    });
+    serverManager.on("gpu-fallback", ({ reason }) => {
+      this._recordWhisperGpuFailure("vulkan", reason);
+      broadcastToWindows("gpu-fallback-notification", {});
+    });
+    // Persist the discrete-GPU pin so later launches spawn pinned directly
+    // instead of paying a second Vulkan cold start. See #1606.
+    serverManager.on("vulkan-device-pinned", ({ index }) => {
+      this._syncStartupEnv({ WHISPER_VULKAN_DEVICE: String(index) });
+    });
+    serverManager.on("vulkan-device-pin-cleared", () => {
+      this._syncStartupEnv({}, ["WHISPER_VULKAN_DEVICE"]);
+    });
+  }
+
+  // Remember the failed backend, and the error line that explains it, so the
+  // backend isn't re-attempted (and its model reload re-paid) on every launch
+  // and the settings card can say why (#1736). Cleared by retry, re-download,
+  // delete, and the once-per-upgrade reset. The reason is written in the same
+  // .env write as the flag. A failure with no readable reason clears the older
+  // one, so a stale cause is never shown.
+  _recordWhisperGpuFailure(backend, reason) {
     const failed = this._whisperGpuFailedBackends();
     if (!failed.includes(backend)) failed.push(backend);
-    this._syncStartupEnv({ WHISPER_GPU_FAILED: failed.join(",") });
+    const reasonKey = WHISPER_GPU_FAILURE_REASON_KEYS[backend];
+    this._syncStartupEnv(
+      { WHISPER_GPU_FAILED: failed.join(","), ...(reason ? { [reasonKey]: reason } : {}) },
+      reason ? [] : [reasonKey]
+    );
   }
 
   _clearWhisperGpuFailure(backend) {
     const failed = this._whisperGpuFailedBackends().filter((b) => b !== backend);
+    const reasonKey = WHISPER_GPU_FAILURE_REASON_KEYS[backend];
     if (failed.length > 0) {
-      this._syncStartupEnv({ WHISPER_GPU_FAILED: failed.join(",") });
+      this._syncStartupEnv({ WHISPER_GPU_FAILED: failed.join(",") }, [reasonKey]);
     } else {
-      this._syncStartupEnv({}, ["WHISPER_GPU_FAILED"]);
+      this._syncStartupEnv({}, ["WHISPER_GPU_FAILED", reasonKey]);
     }
+  }
+
+  _whisperGpuFailureStatus(backend) {
+    const gpuFailed = this._whisperGpuFailedBackends().includes(backend);
+    const reason = gpuFailed ? process.env[WHISPER_GPU_FAILURE_REASON_KEYS[backend]] : null;
+    return { gpuFailed, gpuFailReason: reason || null };
   }
 
   // Captured before a handler stops the server to touch pack files (stopServer
@@ -1287,6 +1320,11 @@ class IPCHandlers {
     this.whisperManager.restartServerWithGpuPreference(modelName).catch((err) => {
       debugLogger.error("whisper-server GPU preference restart failed", { error: err.message });
     });
+    // Every pack download or delete and every Retry ends here, already saved.
+    // Tell every window, not just the caller's: Retry on the fallback pop-up
+    // runs in the dictation window, and Settings keeps up to three GPU cards
+    // mounted (#1736). A fallback is announced by its own notification.
+    broadcastToWindows("whisper-gpu-status-changed");
     return !!modelName;
   }
 
@@ -1340,6 +1378,22 @@ class IPCHandlers {
   setupHandlers() {
     ipcMain.handle("onboarding-set-window-mode", (_event, mode) =>
       this.windowManager.setOnboardingWindowMode(mode)
+    );
+
+    ipcMain.handle("permission-guide-open", (event, state) =>
+      this.windowManager.permissionGuide.open(event, state)
+    );
+    ipcMain.handle("permission-guide-close", (event) =>
+      this.windowManager.permissionGuide.closeFromOwner(event)
+    );
+    ipcMain.handle("permission-guide-state", (event) =>
+      this.windowManager.permissionGuide.stateFor(event)
+    );
+    ipcMain.on("permission-guide-action", (event, action) =>
+      this.windowManager.permissionGuide.handleAction(event, action)
+    );
+    ipcMain.on("permission-guide-drag", (event, target) =>
+      this.windowManager.permissionGuide.startDrag(event, target)
     );
 
     // WindowManager owns every teardown path for a demo (id-matched end,
@@ -1503,9 +1557,18 @@ class IPCHandlers {
       this.windowManager.showDictationPanel({ reposition: true });
     });
 
+    ipcMain.handle("open-settings-section", async (_event, section) => {
+      if (!isProviderSettingsTarget(section)) return { success: false };
+      await this.windowManager.openSettings(section);
+      return { success: true };
+    });
+
     ipcMain.handle("capture-dictation-target", async () => {
+      // Recording start awaits this handler, so the Linux/Windows window probe
+      // runs in the background: a stalled AT-SPI peer would otherwise hold the
+      // microphone for seconds (#1944). Its consumers wait for it themselves.
+      void this.selectionManager?.captureTarget?.();
       const pid = (await this.textEditMonitor?.captureTargetPid?.()) ?? null;
-      await this.selectionManager?.captureTarget?.();
       return { success: true, pid };
     });
 
@@ -2319,8 +2382,8 @@ class IPCHandlers {
       return this.databaseManager.getAction(id);
     });
 
-    ipcMain.handle("db-create-action", async (event, name, description, prompt, icon) => {
-      const result = this.databaseManager.createAction(name, description, prompt, icon);
+    ipcMain.handle("db-create-action", async (event, name, description, prompt, icon, fields) => {
+      const result = this.databaseManager.createAction(name, description, prompt, icon, fields);
       if (result?.success && result?.action) {
         setImmediate(() => {
           broadcastToWindows("action-created", result.action);
@@ -2717,13 +2780,8 @@ class IPCHandlers {
 
         let exportContent;
         if (format === "txt") {
-          exportContent = (note.content || "")
-            .replace(/#{1,6}\s+/g, "")
-            .replace(/[*_~`]+/g, "")
-            .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-            .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
-            .replace(/^>\s+/gm, "")
-            .trim();
+          const { markdownToPlainText } = await import("./markdownToPlainText.ts");
+          exportContent = markdownToPlainText(note.content || "");
         } else {
           exportContent = note.enhanced_content || note.content;
         }
@@ -3078,8 +3136,13 @@ class IPCHandlers {
       // Promise cannot cross Electron's IPC boundary, though, and renderer
       // callers need to know whether text was pasted, but not the delayed
       // clipboard restoration promise. Successful platform paths predate the
-      // explicit `pasted` outcome; only the clipboard-only fallback sets false.
-      return { success: true, pasted };
+      // explicit `pasted` outcome; only the clipboard-only fallback and a paste
+      // held back for still-held modifiers (which carries a `reason`) set false.
+      return {
+        success: true,
+        pasted,
+        ...(pasteResult?.reason ? { reason: pasteResult.reason } : {}),
+      };
     });
 
     ipcMain.handle("check-accessibility-permission", async (_event, silent = false) => {
@@ -3413,14 +3476,16 @@ class IPCHandlers {
       const { detectNvidiaGpu } = require("../utils/gpuDetection");
       const gpuInfo = await detectNvidiaGpu();
       if (!this.whisperCudaManager) {
-        return { downloaded: false, downloading: false, path: null, gpuInfo };
+        return { downloaded: false, needsUpdate: false, downloading: false, path: null, gpuInfo };
       }
       return {
         downloaded: this.whisperCudaManager.isDownloaded(),
+        needsUpdate: this.whisperCudaManager.needsUpdate(),
         downloading: this.whisperCudaManager.isDownloading(),
         path: this.whisperCudaManager.getCudaBinaryPath(),
         gpuInfo,
-        gpuFailed: this._whisperGpuFailedBackends().includes("cuda"),
+        ...this._whisperGpuFailureStatus("cuda"),
+        inUse: this.whisperManager.resolveGpuPackInUse() === "cuda",
       };
     });
 
@@ -3479,10 +3544,12 @@ class IPCHandlers {
       const [vulkan, gpuInfo] = await Promise.all([detectVulkanGpu(), detectNvidiaGpu()]);
       return {
         downloaded: this.whisperVulkanManager?.isDownloaded() ?? false,
+        needsUpdate: this.whisperVulkanManager?.needsUpdate() ?? false,
         downloading: this.whisperVulkanManager?.isDownloading() ?? false,
         vulkan,
         hasNvidiaGpu: gpuInfo.hasNvidiaGpu,
-        gpuFailed: this._whisperGpuFailedBackends().includes("vulkan"),
+        ...this._whisperGpuFailureStatus("vulkan"),
+        inUse: this.whisperManager.resolveGpuPackInUse() === "vulkan",
       };
     });
 
@@ -3546,7 +3613,10 @@ class IPCHandlers {
     // Clears the remembered GPU failure and reloads the server with the GPU
     // backend re-enabled (Retry on the "GPU could not be activated" state)
     ipcMain.handle("whisper-gpu-retry", async () => {
-      this._syncStartupEnv({}, ["WHISPER_GPU_FAILED"]);
+      this._syncStartupEnv({}, [
+        "WHISPER_GPU_FAILED",
+        ...Object.values(WHISPER_GPU_FAILURE_REASON_KEYS),
+      ]);
       return {
         success: true,
         willRestart: this._applyWhisperGpuPreference(this._whisperReloadModel()),
@@ -3772,14 +3842,16 @@ class IPCHandlers {
         if (!realPath) return { success: false, error: "File path not allowed" };
         filePath = realPath;
 
-        const numSpeakers = Math.min(
-          MAX_SPEAKER_COUNT,
-          Math.max(-1, Math.round(Number(options.numSpeakers) || -1))
-        );
+        const maxSpeakers = normalizeStoredSpeakerCount(options.numSpeakers) ?? MAX_SPEAKER_COUNT;
 
         const { convertToWav } = require("./ffmpegUtils");
         const { getSafeTempDir } = require("./safeTempDir");
-        const { resolveClusterThreshold, dropNegligibleClusters } = require("./diarizationPolicy");
+        const {
+          resolveClusterThreshold,
+          dropNegligibleClusters,
+          isCollapsedDiarization,
+          capSpeakerClustersByVoice,
+        } = require("./diarizationPolicy");
         const { PCM16_MONO_16K_BYTES_PER_SECOND } = require("./transcriptionTimeout");
         const wavPath = path.join(getSafeTempDir(), `ow-diarize-${Date.now()}.wav`);
 
@@ -3793,22 +3865,48 @@ class IPCHandlers {
           const durationSeconds = fs.statSync(wavPath).size / PCM16_MONO_16K_BYTES_PER_SECOND;
           const threshold = resolveClusterThreshold(durationSeconds, options.threshold);
 
-          let segments = await this.diarizationManager.diarize(wavPath, {
-            numSpeakers,
-            threshold,
-            signal,
-          });
+          // Always auto-cluster: forcing 2 clusters on #2021's two-person call
+          // split short utterances from long ones instead of one speaker from
+          // the other, merging both speakers. The requested count is applied
+          // as a cap after cleanup instead.
+          let segments = await this.diarizationManager.diarize(wavPath, { threshold, signal });
           if (signal?.aborted) {
             return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
+          }
+          // A collapsed run's labels are wrong either way: two people under
+          // one label, or one person split off into a phantom. With no
+          // segments the renderer keeps the plain transcript and shows the
+          // diarization warning instead. Judged before phantoms are dropped;
+          // a request for one speaker is met by the cap below instead.
+          if (maxSpeakers > 1 && isCollapsedDiarization(segments)) {
+            debugLogger.warn("Discarding diarization: one cluster holds nearly all speech", {
+              durationSeconds,
+            });
+            segments = [];
           }
           // The meeting path caps clusters via its expectation resolver; this
           // path fed raw sherpa output to the merge, which is how a 2-person
           // voice memo surfaced 46 speakers.
           segments = dropNegligibleClusters(segments);
-          segments = this.diarizationManager.capSpeakerClusters(
-            segments,
-            numSpeakers > 0 ? numSpeakers : MAX_SPEAKER_COUNT
-          );
+          if (new Set(segments.map((s) => s.speaker)).size > maxSpeakers) {
+            const speakerEmbeddings = require("./speakerEmbeddings");
+            let centroids = new Map();
+            try {
+              centroids = await speakerEmbeddings.extractClusterCentroids(wavPath, segments, {
+                signal,
+              });
+            } catch (error) {
+              debugLogger.warn("Speaker voices unavailable; extra clusters fold into the largest", {
+                error: error.message,
+              });
+            }
+            if (signal?.aborted) {
+              return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
+            }
+            segments = capSpeakerClustersByVoice(segments, maxSpeakers, centroids, (a, b) =>
+              speakerEmbeddings.cosineSimilarity(a, b)
+            );
+          }
           // Callers persist this as audio_duration_seconds: for picked files
           // the renderer has no other duration source.
           return { success: true, segments, durationSeconds };
@@ -4535,7 +4633,10 @@ class IPCHandlers {
       serializeIpcError(async (event, { audioBuffer, language, keyterms }) => {
         const apiKey = this.environmentManager.getXaiKey();
         if (!apiKey) {
-          throw new Error("xAI API key not configured");
+          throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+            provider: "xAI",
+            surface: "transcription",
+          });
         }
 
         const formData = new FormData();
@@ -4560,7 +4661,17 @@ class IPCHandlers {
 
         if (!response.ok) {
           const errorText = await response.text();
-          throw new Error(`xAI API Error: ${response.status} ${errorText}`);
+          debugLogger.warn("xAI transcription failed", {
+            status: response.status,
+            body: redactProviderBody(errorText),
+          });
+          throw providerHttpError({
+            provider: "xAI",
+            status: response.status,
+            body: errorText,
+            headers: response.headers,
+            surface: "transcription",
+          });
         }
 
         return await response.json();
@@ -4572,13 +4683,17 @@ class IPCHandlers {
       serializeIpcError(async (event, { audioBuffer, model, language, contextBias }) => {
         const apiKey = this.environmentManager.getMistralKey();
         if (!apiKey) {
-          throw new Error("Mistral API key not configured");
+          throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+            provider: "Mistral",
+            surface: "transcription",
+          });
         }
 
+        const transcriptionModel = model || "voxtral-mini-latest";
         const formData = new FormData();
         const audioBlob = new Blob([Buffer.from(audioBuffer)], { type: "audio/webm" });
         formData.append("file", audioBlob, "audio.webm");
-        formData.append("model", model || "voxtral-mini-latest");
+        formData.append("model", transcriptionModel);
         if (language && language !== "auto") {
           formData.append("language", language);
         }
@@ -4598,7 +4713,18 @@ class IPCHandlers {
 
         if (!response.ok) {
           const errorText = await response.text();
-          throw new Error(`Mistral API Error: ${response.status} ${errorText}`);
+          debugLogger.warn("Mistral transcription failed", {
+            status: response.status,
+            body: redactProviderBody(errorText),
+          });
+          throw providerHttpError({
+            provider: "Mistral",
+            model: transcriptionModel,
+            status: response.status,
+            body: errorText,
+            headers: response.headers,
+            surface: "transcription",
+          });
         }
 
         return await response.json();
@@ -4627,7 +4753,10 @@ class IPCHandlers {
         const clientId = this.environmentManager.getCortiClientId();
         const clientSecret = this.environmentManager.getCortiClientSecret();
         if (!clientId || !clientSecret) {
-          throw new Error("Corti credentials not configured");
+          throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+            provider: "Corti",
+            surface: "transcription",
+          });
         }
 
         const { transcribeAudio } = require("./cortiTranscription");
@@ -5208,6 +5337,10 @@ class IPCHandlers {
       // the read fallback is removed (~2 releases after this lands).
       clearVars.push("REASONING_PROVIDER", "LOCAL_REASONING_MODEL");
 
+      // No workspace policy governs this, so it applies before the policy settles.
+      const modelManager = require("./modelManagerBridge").default;
+      modelManager.serverManager.setKeepResident(prefs.keepLocalModelLoaded === true);
+
       // A signed-in window whose workspace policy is still loading reports
       // unclamped modes, so it neither pre-warms nor stops the shared
       // llama-server; signed out, the policy never loads.
@@ -5230,7 +5363,6 @@ class IPCHandlers {
 
         // Stop the shared llama-server only when no scope still needs the model
         // it holds, so the active scopes keep their server when another leaves.
-        const modelManager = require("./modelManagerBridge").default;
         if (shouldStopLocalServer(localServer, modelManager.currentServerModelId)) {
           if (modelManager.getServerStatus().running) {
             debugLogger.debug("Stopping llama-server: no scope needs its model", {
@@ -5296,7 +5428,10 @@ class IPCHandlers {
           const apiKey = this.environmentManager.getAnthropicKey();
 
           if (!apiKey) {
-            throw new Error("Anthropic API key not configured");
+            throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+              provider: "Anthropic",
+              surface: "llm",
+            });
           }
 
           const systemPrompt = config?.systemPrompt || "";
@@ -5344,17 +5479,23 @@ class IPCHandlers {
 
           if (!response.ok) {
             const errorText = await response.text();
-            let errorData = { error: response.statusText };
-            try {
-              errorData = JSON.parse(errorText);
-            } catch {
-              errorData = { error: errorText || response.statusText };
-            }
-            throw new Error(
-              errorData.error?.message ||
-                errorData.error ||
-                `Anthropic API error: ${response.status}`
-            );
+            debugLogger.warn("Anthropic API error", {
+              status: response.status,
+              body: redactProviderBody(errorText),
+            });
+            return {
+              success: false,
+              ...ipcErrorFields(
+                providerHttpError({
+                  provider: "Anthropic",
+                  model: modelId,
+                  status: response.status,
+                  body: errorText,
+                  headers: response.headers,
+                  surface: "llm",
+                })
+              ),
+            };
           }
 
           const data = await response.json();
@@ -5372,7 +5513,13 @@ class IPCHandlers {
           return { success: true, text: outputText };
         } catch (error) {
           debugLogger.error("Anthropic reasoning error:", error);
-          return { success: false, error: error.message, messageKey: error.messageKey };
+          // A network failure rejects proxyFetch before any response.
+          return {
+            success: false,
+            ...ipcErrorFields(
+              asProviderError(error, { provider: "Anthropic", model: modelId, surface: "llm" })
+            ),
+          };
         }
       }
     );
@@ -5901,6 +6048,12 @@ class IPCHandlers {
 
     ipcMain.handle("check-system-audio-access", () => getSystemAudioAccess());
 
+    ipcMain.handle("permission-guide-verify-system-audio", async () => {
+      if (!this.audioTapManager?.isSupported()) return buildSystemAudioAccess();
+      const result = await this.audioTapManager.requestAccess();
+      return buildSystemAudioAccess({ ...result, mode: "native", strategy: "native" });
+    });
+
     ipcMain.handle("request-system-audio-access", async () => {
       if (process.platform === "win32") {
         return getWindowsSystemAudioAccess();
@@ -6379,6 +6532,7 @@ class IPCHandlers {
     ipcMain.handle("retry-transcription", async (event, id, settings) => {
       const buffer = this.audioStorageManager.getAudioBuffer(id);
       if (!buffer) return { success: false, error: "Audio file not found" };
+      let providerErrorContext = null;
       try {
         let result;
         const preferredLanguage = settings?.preferredLanguage;
@@ -6410,6 +6564,22 @@ class IPCHandlers {
           throw err;
         }
 
+        // Mirrors the branch order below: self-hosted wins over OpenWhispr
+        // cloud, which wins over the BYOK providers. Managed, local and cloud
+        // failures keep their own shape.
+        if (
+          (route.transport === "http-batch" && route.provider === "self-hosted") ||
+          ((route.transport === "http-batch" || route.transport === "proxied") &&
+            settings?.cloudTranscriptionMode !== "openwhispr")
+        ) {
+          providerErrorContext = {
+            provider: transcriptionProviderName(route.provider),
+            selfHosted: route.provider === "self-hosted" || route.provider === "custom",
+            model: route.model,
+            surface: "transcription",
+          };
+        }
+
         if (route.transport === "managed") {
           const text = await this.executeManagedTranscription(event, route, {
             audioBuffer: buffer,
@@ -6433,7 +6603,16 @@ class IPCHandlers {
           });
           if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(`Self-hosted API Error: ${response.status} ${errorText}`);
+            debugLogger.warn("Self-hosted retry failed", {
+              status: response.status,
+              body: redactProviderBody(errorText),
+            });
+            throw providerHttpError({
+              ...providerErrorContext,
+              status: response.status,
+              body: errorText,
+              headers: response.headers,
+            });
           }
           const data = await response.json();
           if (data?.text) {
@@ -6528,7 +6707,10 @@ class IPCHandlers {
           const clientId = this.environmentManager.getCortiClientId();
           const clientSecret = this.environmentManager.getCortiClientSecret();
           if (!clientId || !clientSecret) {
-            throw new Error("Corti credentials not configured. Add them in Settings.");
+            throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+              provider: "Corti",
+              surface: "transcription",
+            });
           }
           const { transcribeAudio } = require("./cortiTranscription");
           const { text } = await transcribeAudio({
@@ -6573,7 +6755,10 @@ class IPCHandlers {
                     ? this.environmentManager.getGroqKey()
                     : this.environmentManager.getOpenAIKey();
           if (!apiKey && provider !== "custom") {
-            throw new Error(`${provider} API key not configured`);
+            throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+              provider: transcriptionProviderName(provider),
+              surface: "transcription",
+            });
           }
 
           // The renderer re-encodes WebM before uploading to a Custom endpoint
@@ -6629,7 +6814,17 @@ class IPCHandlers {
           const response = await proxyFetch(endpoint, { method: "POST", headers, body: formData });
           if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(`${provider} API Error: ${response.status} ${errorText}`);
+            debugLogger.warn("Retry transcription provider failed", {
+              provider,
+              status: response.status,
+              body: redactProviderBody(errorText),
+            });
+            throw providerHttpError({
+              ...providerErrorContext,
+              status: response.status,
+              body: errorText,
+              headers: response.headers,
+            });
           }
           const data = await response.json();
           if (data?.text) {
@@ -6661,14 +6856,17 @@ class IPCHandlers {
           });
         }
         return { success: true, transcription: updated };
-      } catch (error) {
+      } catch (rawError) {
+        const error = providerErrorContext
+          ? asProviderError(rawError, providerErrorContext)
+          : rawError;
         debugLogger.error(
           "Retry transcription failed",
           { id, error: error.message, code: error.code },
           "audio-storage"
         );
         if (error.code) {
-          return { success: false, error: error.message, code: error.code, ...error };
+          return { success: false, ...ipcErrorFields(error) };
         }
         return { success: false, error: error.message };
       }
@@ -7691,6 +7889,9 @@ class IPCHandlers {
 
     const startMeetingAec = async (systemAudioMode) => {
       meetingAecEnabled = false;
+      if (meetingConnectionOptions.aecEnabled !== true) {
+        return false;
+      }
       if (systemAudioMode === "unsupported" || !this.meetingAecManager?.isAvailable()) {
         return false;
       }
@@ -10059,6 +10260,7 @@ class IPCHandlers {
       ) => {
         const fs = require("fs");
         let cleanupUpload = null;
+        let providerErrorContext = null;
         try {
           if (typeof filePath !== "string") {
             return { success: false, error: "Invalid file path" };
@@ -10109,6 +10311,14 @@ class IPCHandlers {
             return { success: true, text };
           }
 
+          // Every branch below calls a BYOK provider or the user's own server.
+          providerErrorContext = {
+            provider: transcriptionProviderName(route.provider),
+            selfHosted: route.provider === "self-hosted" || route.provider === "custom",
+            model: route.model,
+            surface: "transcription",
+          };
+
           if (route.transport === "http-batch" && route.provider === "self-hosted") {
             // User's own server, so the 25 MB third-party cap does not apply.
             const { body, boundary } = buildMultipartBody(
@@ -10119,11 +10329,15 @@ class IPCHandlers {
             );
             const data = await postMultipart(new URL(route.endpoint), body, boundary);
             if (data.statusCode !== 200) {
-              throw new Error(
-                data.data?.error?.message ||
-                  data.data?.error ||
-                  `Self-hosted API Error: ${data.statusCode}`
-              );
+              debugLogger.warn("Self-hosted file transcription failed", {
+                status: data.statusCode,
+                body: redactProviderBody(data.data),
+              });
+              throw providerHttpError({
+                ...providerErrorContext,
+                status: data.statusCode,
+                body: data.data,
+              });
             }
             return { success: true, text: data.data.text };
           }
@@ -10137,7 +10351,10 @@ class IPCHandlers {
             const clientId = this.environmentManager.getCortiClientId();
             const clientSecret = this.environmentManager.getCortiClientSecret();
             if (!clientId || !clientSecret) {
-              throw new Error("Corti credentials not configured. Add them in Settings.");
+              throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+                provider: "Corti",
+                surface: "transcription",
+              });
             }
             const { transcribeAudio } = require("./cortiTranscription");
             const { text } = await transcribeAudio({
@@ -10175,7 +10392,10 @@ class IPCHandlers {
           }
 
           if (!apiKey && route.provider !== "custom") {
-            throw new Error("No API key configured. Add your key in Settings.");
+            throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+              provider: transcriptionProviderName(route.provider),
+              surface: "transcription",
+            });
           }
 
           const audioBuffer = fs.readFileSync(realByok);
@@ -10247,16 +10467,17 @@ class IPCHandlers {
             : undefined;
           const data = await postMultipart(url, body, boundary, headers);
 
-          if (data.statusCode === 401) {
-            return { success: false, error: "Invalid API key. Check your key in Settings." };
-          }
-          if (data.statusCode === 429) {
-            return { success: false, error: "Rate limit exceeded. Please try again later." };
-          }
           if (data.statusCode !== 200) {
-            throw new Error(
-              data.data?.error?.message || data.data?.error || `API error: ${data.statusCode}`
-            );
+            debugLogger.warn("BYOK file transcription failed", {
+              provider: route.provider,
+              status: data.statusCode,
+              body: redactProviderBody(data.data),
+            });
+            throw providerHttpError({
+              ...providerErrorContext,
+              status: data.statusCode,
+              body: data.data,
+            });
           }
 
           if (diarize && data.data?.speakers) {
@@ -10296,14 +10517,12 @@ class IPCHandlers {
           }
           const segments = timestamps ? mapVerboseSegments(data.data) : null;
           return { success: true, text: data.data.text, ...(segments ? { segments } : {}) };
-        } catch (error) {
+        } catch (rawError) {
+          const error = providerErrorContext
+            ? asProviderError(rawError, providerErrorContext)
+            : rawError;
           debugLogger.error("BYOK audio file transcription error", { error: error.message });
-          return {
-            success: false,
-            error: error.message,
-            code: error.code,
-            messageKey: error.messageKey,
-          };
+          return { success: false, ...ipcErrorFields(error) };
         } finally {
           cleanupUpload?.();
         }
@@ -11745,6 +11964,10 @@ class IPCHandlers {
 
     ipcMain.handle("get-pending-note-navigation", async () => {
       return this.windowManager?.consumePendingNoteNavigation() ?? null;
+    });
+
+    ipcMain.handle("get-pending-settings-section", async () => {
+      return this.windowManager?.consumePendingSettingsSection() ?? null;
     });
 
     ipcMain.handle("meeting-notification-ready", async (event) => {

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useChatPersistence } from "../components/chat/useChatPersistence";
-import { useChatStreaming } from "../components/chat/useChatStreaming";
+import { useChatStreaming, type SendToAIOptions } from "../components/chat/useChatStreaming";
 import { useChatMessageSender } from "../components/chat/useChatMessageSender";
 import type { Message, AgentState } from "../components/chat/types";
 import { attendeesForUser } from "../utils/noteAttendees";
@@ -25,6 +25,7 @@ interface UseEmbeddedChatOptions {
   selfEmail?: string | null;
   /** The note's calendar event, whose organizer main adds to the attendees. */
   noteCalendarEventId?: string | null;
+  noteSummary?: string;
 }
 
 interface NoteConversationItem {
@@ -38,7 +39,7 @@ interface NoteConversationItem {
 interface UseEmbeddedChatReturn {
   messages: Message[];
   agentState: AgentState;
-  sendMessage: (text: string) => Promise<void>;
+  sendMessage: (text: string, options?: SendToAIOptions) => Promise<void>;
   cancelStream: () => void;
   noteConversations: NoteConversationItem[];
   activeConversationId: number | null;
@@ -60,6 +61,7 @@ export function useEmbeddedChat({
   noteOwnedByUser = false,
   selfEmail = null,
   noteCalendarEventId = null,
+  noteSummary,
 }: UseEmbeddedChatOptions): UseEmbeddedChatReturn {
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [noteConversations, setNoteConversations] = useState<NoteConversationItem[]>([]);
@@ -80,11 +82,12 @@ export function useEmbeddedChat({
         folderId != null ? `Folder ID: ${folderId}` : "",
         `Title: ${noteTitle}`,
         `Content:\n${noteContent}`,
+        noteSummary ? `\nAI Summary:\n${noteSummary}` : "",
         noteTranscript ? `\nTranscript:\n${noteTranscript}` : "",
       ]
         .filter(Boolean)
         .join("\n"),
-    [folderId, noteContent, noteId, noteTitle, noteTranscript]
+    [folderId, noteContent, noteId, noteSummary, noteTitle, noteTranscript]
   );
 
   const noteMeeting = useMemo<NoteAttendeesRequest>(
@@ -191,8 +194,8 @@ export function useEmbeddedChat({
     onSendingChange: setSubmissionInFlight,
   });
   const sendMessage = useCallback(
-    async (text: string): Promise<void> => {
-      await sendMessageWithResult(text);
+    async (text: string, options?: SendToAIOptions): Promise<void> => {
+      await sendMessageWithResult(text, options);
     },
     [sendMessageWithResult]
   );

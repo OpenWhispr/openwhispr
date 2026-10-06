@@ -123,6 +123,8 @@
       "osReserved": "\"{{hotkey}}\" potrebbe essere riservata dal sistema operativo.",
       "rightModifierNeedsListener": "\"{{hotkey}}\" non può essere usato su questo desktop, le cui scorciatoie richiedono un tasto normale. Aggiungi un tasto, ad esempio Control+Alt+Space.",
       "holdNeedsReleaseKey": "Tieni premuto per parlare richiede un tasto di cui macOS rilevi il rilascio: Globo, un tasto destro come Opzione destra o una scorciatoia con modificatore. Tocca funziona con qualsiasi tasto.",
+      "holdNeedsRegularKey": "Per usare Tieni premuto, aggiungi un tasto normale alla scorciatoia, ad esempio Control+Alt+Space. Il desktop non può rilevare la pressione prolungata dei soli tasti modificatori.",
+      "holdNeedsGnomePortal": "Per usare Tieni premuto, GNOME ha bisogno del portale delle scorciatoie globali, incluso da GNOME 48 in poi. Tocca funziona anche senza.",
       "registrationFailed": "Impossibile registrare \"{{hotkey}}\". Potrebbe essere in uso da un'altra applicazione.",
       "windowsKeyListenerMissing": "\"{{hotkey}}\" richiede il listener di tasti di Windows, che manca in questa installazione. Scegli una scorciatoia con un tasto normale.",
       "updateFailedCheckFormat": "Impossibile aggiornare la scorciatoia a \"{{hotkey}}\". Verifica che il formato sia valido.",
@@ -160,7 +162,7 @@
     "close": "Chiudi"
   },
   "windows": {
-    "pttUnavailable": "Il listener nativo Push-to-Talk non è disponibile"
+    "pttUnavailable": "Il listener di tasti di OpenWhispr non è disponibile."
   },
   "common": {
     "continue": "Continua",
@@ -580,6 +582,20 @@
         "title": "Un download non è stato completato",
         "description": "Controlla la connessione e lo spazio libero su disco, poi riprova. Se continua a fallire, contatta il tuo amministratore."
       }
+    },
+    "permissionGuide": {
+      "label": "Guida ai permessi",
+      "return": "Torna alla configurazione",
+      "missingApp": "Oppure seleziona l’app con +",
+      "failed": "Impossibile verificare l’accesso.",
+      "microphone": "Attiva OpenWhispr in Microfono.",
+      "accessibility": "Trascina OpenWhispr in Accessibilità e attivalo.",
+      "systemAudio": "Attiva OpenWhispr in Solo registrazione audio di sistema.",
+      "screenContext": "Trascina OpenWhispr in Registrazione schermo e audio di sistema e attivalo.",
+      "settings": "Impostazioni",
+      "check": "Ricontrolla",
+      "restart": "Riavvia l’app",
+      "restartRequired": "Riavvia OpenWhispr per applicare l’accesso allo schermo."
     }
   },
   "streaming": {
@@ -757,6 +773,10 @@
     "disableThinking": {
       "label": "Disattiva output di ragionamento",
       "help": "Salta i token di ragionamento per un output più pulito. Consigliato per la pulizia. Alcuni server ignorano questo suggerimento."
+    },
+    "keepModelLoaded": {
+      "label": "Mantieni il modello caricato",
+      "help": "Resta in memoria invece di essere rimosso dopo 5 minuti di inattività, così la richiesta successiva evita l'avvio a freddo. Vale per tutte le funzioni che usano un modello locale."
     },
     "selfHosted": {
       "endpointHelp": "Punta a un server compatibile con OpenAI sulla tua rete locale (es. Ollama, LM Studio, vLLM o llama-server)."
@@ -938,11 +958,18 @@
         "description": "La dettatura si è interrotta mentre il tasto era ancora premuto, quindi il testo non è stato incollato. La trascrizione è negli appunti.",
         "descriptionClipboardFailed": "La dettatura si è interrotta mentre il tasto era ancora premuto: il testo non è stato incollato e non è stato possibile copiarlo negli appunti."
       },
+      "modifiersHeld": {
+        "title": "Trascrizione non incollata",
+        "description": "Un tasto modificatore (come Ctrl o Maiusc) era ancora premuto, quindi il testo non è stato incollato. La trascrizione è negli appunti.",
+        "descriptionClipboardFailed": "Un tasto modificatore (come Ctrl o Maiusc) era ancora premuto: il testo non è stato incollato e non è stato possibile copiarlo negli appunti."
+      },
       "selectionEditing": {
         "notAppliedTitle": "Modifica della selezione non applicata",
         "changed": "Il testo selezionato o l’app di destinazione è cambiato durante l’elaborazione. Non è stato sostituito nulla.",
         "expired": "La modifica è scaduta. Seleziona di nuovo il testo e riprova.",
         "pasteFailed": "OpenWhispr ha generato la modifica, ma non ha potuto sostituire il testo selezionato.",
+        "modifiersHeld": "OpenWhispr ha generato la modifica, ma un tasto modificatore (come Ctrl o Maiusc) era ancora premuto, quindi non è stata applicata. La modifica è negli appunti.",
+        "modifiersHeldClipboardFailed": "OpenWhispr ha generato la modifica, ma un tasto modificatore (come Ctrl o Maiusc) era ancora premuto, quindi non è stata applicata e non è stato possibile copiarla negli appunti.",
         "unavailable": "OpenWhispr non ha potuto leggere in sicurezza il testo selezionato. Controlla i permessi di accessibilità o automazione.",
         "tooLarge": "La selezione è troppo grande. Seleziona al massimo 6.000 caratteri.",
         "reasoningFailed": "L’IA non ha potuto completare la modifica. Il testo originale non è stato cambiato."
@@ -2252,6 +2279,12 @@
       },
       "transcriptionPreview": "Anteprima dal vivo",
       "transcriptionPreviewDescription": "Mostra la trascrizione in una finestra flottante prima della correzione",
+      "aec": {
+        "toggle": {
+          "title": "Cancellazione dell'eco per le riunioni",
+          "description": "Cancella l'audio della riunione che si infiltra nel microfono. Lascia questa opzione disattivata quando usi cuffie o auricolari: non c'è alcun eco da cancellare e potrebbe sopprimere completamente la tua voce."
+        }
+      },
       "vad": {
         "title": "Rilevamento attività vocale",
         "description": "Configura come Silero VAD rileva e segmenta il parlato per la trascrizione locale Whisper",
@@ -2769,7 +2802,7 @@
     "sidebar": {
       "newNote": "Nuova nota",
       "searchNotes": "Cerca note",
-      "actions": "Azioni"
+      "templatesAndActions": "Modelli e azioni"
     },
     "spaces": {
       "privateSpaces": "Note private",
@@ -3076,7 +3109,7 @@
       "speakerDetectionDescription": "Identifica i diversi parlanti nell'audio",
       "numSpeakersPlaceholder": "Rilevamento automatico",
       "numSpeakersLabel": "Numero di parlanti",
-      "numSpeakersHint": "Indicare il numero esatto migliora la precisione, soprattutto nelle registrazioni lunghe.",
+      "numSpeakersHint": "I parlanti vengono rilevati automaticamente, fino a questo numero.",
       "downloadingModels": "Download modelli in corso...",
       "openaiDiarizeNote": "Sostituisce il tuo modello di trascrizione con gpt-4o-transcribe-diarize, l’unico modello OpenAI con rilevamento dei parlanti. I costi potrebbero differire dal modello selezionato.",
       "mistralDiarizeNote": "Rilevamento dei parlanti incluso senza costi aggiuntivi con Voxtral.",
@@ -3135,8 +3168,8 @@
       "showInFileManager": "Mostra in {{manager}}"
     },
     "actions": {
+      "allActions": "Tutte le azioni",
       "manage": "Gestisci azioni...",
-      "manageTitle": "Azioni personalizzate",
       "addAction": "Nuova azione",
       "editAction": "Modifica azione",
       "namePlaceholder": "Nome dell'azione",
@@ -3150,8 +3183,6 @@
       "promptLabel": "Istruzione",
       "emptyEditorTitle": "Seleziona un'azione",
       "emptyEditorDescription": "Scegli un'azione dall'elenco o creane una nuova",
-      "runAction": "Esegui {{name}}",
-      "selectAction": "Seleziona azione",
       "done": "Fatto",
       "chunkProgress": "Parte {{step}} di {{total}}",
       "emptyReply": "Il modello ha restituito una risposta vuota. Riprova o scegli un altro modello.",
@@ -3166,15 +3197,89 @@
           "cta": "Scrivi un'email di follow-up"
         },
         "detailedNotes": {
-          "name": "Note dettagliate",
+          "name": "Riepilogo AI",
           "description": "Note di riunione accurate e complete con decisioni e azioni"
+        },
+        "makeTodos": {
+          "name": "Crea attività",
+          "description": "Elenca ogni attività e il suo responsabile nella chat"
+        },
+        "createOutline": {
+          "name": "Crea scaletta",
+          "description": "Organizza gli argomenti della nota nella chat"
+        },
+        "oneOnOne": {
+          "name": "1:1",
+          "description": "Aggiornamenti, feedback, crescita e prossimi passi di un incontro individuale"
+        },
+        "standUp": {
+          "name": "Stand-up",
+          "description": "Progressi, piani e blocchi di ciascuno"
+        },
+        "salesCall": {
+          "name": "Chiamata di vendita",
+          "description": "Esigenze, obiezioni, budget e processo decisionale"
+        },
+        "userInterview": {
+          "name": "Intervista utente",
+          "description": "Flusso di lavoro, problemi, reazioni e citazioni di un partecipante"
+        },
+        "shorten": {
+          "name": "Accorcia",
+          "description": "Rendi il riepilogo lungo circa la metà",
+          "cta": "Accorcia il riepilogo"
+        },
+        "addTldr": {
+          "name": "Aggiungi TL;DR",
+          "description": "Metti un TL;DR di due o tre frasi all'inizio del riepilogo",
+          "cta": "Aggiungi un TL;DR"
+        },
+        "slackUpdate": {
+          "name": "Aggiornamento Slack",
+          "description": "Scrivi un breve aggiornamento per il team da pubblicare su Slack",
+          "cta": "Scrivi un aggiornamento Slack"
         }
       },
       "errors": {
         "noModel": "Nessun modello IA selezionato. Configurane uno nelle Impostazioni.",
         "actionFailed": "Azione non riuscita",
-        "noEndpoint": "Nessun URL del server self-hosted impostato. Configurane uno nelle Impostazioni."
-      }
+        "noEndpoint": "Nessun URL del server self-hosted impostato. Configurane uno nelle Impostazioni.",
+        "outputTruncated": "Il modello AI ha esaurito lo spazio prima di finire, quindi la nota è rimasta com'era.",
+        "nothingToSummarize": "Questa nota non ha ancora nulla da riassumere, quindi il riepilogo AI è rimasto invariato.",
+        "saveFailed": "Impossibile salvare. Controlla che nulla sia troppo lungo e riprova."
+      },
+      "tab": "Azioni",
+      "output": {
+        "auto": "Automatico",
+        "chat": "Chat",
+        "summary": "Riepilogo AI",
+        "chatHint": "Risponde nella chat della nota e lascia invariato il riepilogo AI.",
+        "summaryHint": "Modifica il riepilogo AI della nota, oppure lo scrive dalla trascrizione se non c'è ancora.",
+        "autoHint": "Legge il prompt al salvataggio e sceglie la chat o il riepilogo AI."
+      },
+      "applied": "Riepilogo AI aggiornato con {{name}}"
+    },
+    "templates": {
+      "tab": "Modelli",
+      "managerTitle": "Modelli e azioni",
+      "manage": "Gestisci modelli...",
+      "select": "Scegli modello",
+      "addTemplate": "Nuovo modello",
+      "editTemplate": "Modifica modello",
+      "namePlaceholder": "Nome del modello",
+      "contextLabel": "Contesto",
+      "contextPlaceholder": "Che tipo di riunione è e su cosa deve concentrarsi il riepilogo?",
+      "sectionsLabel": "Sezioni",
+      "addSection": "Aggiungi sezione",
+      "sectionHeadingPlaceholder": "Titolo della sezione",
+      "sectionInstructionPlaceholder": "Cosa va in questa sezione?",
+      "moveSectionUp": "Sposta la sezione su",
+      "moveSectionDown": "Sposta la sezione giù",
+      "removeSection": "Rimuovi sezione",
+      "noSectionsHint": "Senza sezioni, il contesto è l'intera istruzione per il riepilogo.",
+      "noTemplates": "Nessun modello ancora",
+      "emptyEditorTitle": "Seleziona un modello",
+      "emptyEditorDescription": "Scegli un modello dall'elenco o creane uno nuovo"
     },
     "empty": {
       "title": "Ancora nessuna nota qui",
@@ -3198,13 +3303,13 @@
         "description": "Le azioni usano l'IA per trasformare le tue note. Configura un modello linguistico per iniziare.",
         "configured": "Modello IA configurato"
       },
-      "actions": {
-        "title": "Azioni basate sull'IA",
-        "description": "Le azioni trasformano le tue note: correggono le trascrizioni, riassumono le riunioni e altro ancora. Usa le azioni integrate o creane di tue.",
-        "builtInLabel": "Integrata",
-        "createTitle": "Crea la tua azione",
-        "createDescription": "Definisci un'azione personalizzata con il tuo prompt IA. Puoi sempre modificarle o aggiungerne altre nelle impostazioni.",
-        "created": "Creata!"
+      "templates": {
+        "title": "Modelli e azioni",
+        "description": "I modelli danno forma al tuo riepilogo AI, dalle note di riunione dettagliate alle sezioni che definisci tu. Le azioni si eseguono su una nota, come scrivere un'email di follow-up nella chat.",
+        "builtInLabel": "I tuoi modelli",
+        "createTitle": "Crea il tuo modello",
+        "createDescription": "Descrivi il riepilogo che desideri. Puoi aggiungere sezioni, altri modelli e azioni in seguito.",
+        "created": "Creato!"
       },
       "getStarted": "Inizia",
       "systemAudio": {
@@ -3566,6 +3671,10 @@
     "activationFailedDescription": "OpenWhispr sta usando la trascrizione CPU.",
     "reasoningActivationFailedDescription": "OpenWhispr sta usando l'elaborazione CPU.",
     "retryActivation": "Riprova l'accelerazione GPU",
+    "redownloadNeeded": "Il pacchetto GPU deve essere scaricato di nuovo",
+    "redownloadNeededDescription": "Questa versione di OpenWhispr non può usare il pacchetto GPU installato. Scaricalo di nuovo per riattivare l'accelerazione GPU.",
+    "redownloadButton": "Scarica di nuovo il pacchetto GPU",
+    "downloadFailed": "Impossibile scaricare il pacchetto GPU.",
     "remove": "Rimuovi",
     "dismiss": "Non ora",
     "cancel": "Annulla"
@@ -3593,7 +3702,7 @@
       },
       "gpuPackMigration": {
         "title": "Il pacchetto GPU deve essere scaricato di nuovo",
-        "description": "Un aggiornamento ha rimosso un'installazione obsoleta del pacchetto GPU ({{packs}}). Scaricalo di nuovo nelle Impostazioni per ripristinare l'accelerazione GPU."
+        "description": "Questa versione non può usare il pacchetto GPU precedente ({{packs}}). Scaricalo di nuovo nelle Impostazioni per riattivare l'accelerazione GPU."
       },
       "cleanupFailed": {
         "title": "Pulizia non riuscita",
@@ -3680,7 +3789,8 @@
       "thinking": "Pensiero...",
       "typeMessage": "Scrivi un messaggio...",
       "send": "Invia",
-      "voiceDraftStreamingOnly": "L'input vocale non è disponibile con il tuo provider di trascrizione: supporta solo la dettatura dal vivo. Scegli un altro provider in Impostazioni → Da voce a testo."
+      "voiceDraftStreamingOnly": "L'input vocale non è disponibile con il tuo provider di trascrizione: supporta solo la dettatura dal vivo. Scegli un altro provider in Impostazioni → Da voce a testo.",
+      "commands": "Comandi"
     },
     "tools": {
       "search_notesName": "Cerca nelle note",
@@ -3754,10 +3864,8 @@
   },
   "integrations": {
     "title": "Integrazioni",
-    "description": "Collega servizi per potenziare il tuo flusso di lavoro",
     "googleCalendar": {
       "title": "Google Calendar",
-      "optional": "Opzionale",
       "description": "Compila automaticamente titoli e partecipanti delle riunioni dal tuo calendario.",
       "connect": "Collega Google Calendar",
       "connecting": "Connessione...",
@@ -3776,7 +3884,6 @@
     },
     "microsoftCalendar": {
       "title": "Microsoft Calendar",
-      "optional": "Opzionale",
       "description": "Leggi le riunioni dal tuo calendario Outlook o Microsoft 365.",
       "connect": "Collega Microsoft Calendar",
       "connected": "Connesso",
@@ -3791,7 +3898,6 @@
     },
     "appleCalendar": {
       "title": "Calendario Apple",
-      "optional": "Opzionale",
       "description": "Leggi le riunioni da Calendar.app — iCloud, Google, Exchange e Outlook in un unico posto.",
       "connect": "Collega Calendario Apple",
       "connected": "Connesso",
@@ -3804,35 +3910,24 @@
       "connectFailed": "Connessione non riuscita",
       "connectFailedDescription": "Si è verificato un errore durante la connessione a Calendar.app. Riavvia OpenWhispr e riprova."
     },
-    "sections": {
-      "connectors": "Connettori",
-      "calendar": "Calendario",
-      "api": "API",
-      "mcp": "MCP",
-      "cli": "CLI"
-    },
     "api": {
-      "title": "Chiavi API",
       "description": "Gestisci le chiavi API per l'accesso programmatico",
       "proRequired": "Passa a un piano a pagamento per accedere all'API",
-      "manage": "Gestisci chiavi",
       "viewPlans": "Visualizza i piani",
-      "dialogTitle": "Chiavi API"
+      "useWith": "Usa una chiave con"
     },
     "mcp": {
-      "title": "Porta le tue note nei tuoi strumenti di IA",
       "description": "Chatta, cerca e lavora con le tue note in Claude, ChatGPT e Cursor.",
       "step1": "Nel tuo strumento di IA, aggiungi OpenWhispr MCP usando l'URL pubblico",
-      "step2": "Crea una chiave API sopra con gli scope necessari.",
+      "step2": "Crea una chiave API con gli scope necessari.",
       "step3": "Incolla la chiave come intestazione Authorization per connetterti.",
       "learnMore": "Scopri di più",
-      "viewPlans": "Visualizza i piani",
-      "copyUrl": "Copia URL MCP",
       "proRequired": "Passa a un piano a pagamento per collegare OpenWhispr a Claude, ChatGPT e Cursor.",
+      "worksWith": "Funziona con",
+      "copyUrl": "Copia URL MCP",
       "copied": "Copiato"
     },
     "cli": {
-      "title": "Accesso da riga di comando",
       "description": "Dai al tuo assistente l'accesso alle note dal terminale.",
       "installLabel": "Installa",
       "learnMore": "Leggi la documentazione",
@@ -3862,8 +3957,26 @@
       "upgrade": "Aggiorna"
     },
     "notABot": {
-      "title": "OpenWhispr è un registratore di riunioni, non un bot",
       "description": "OpenWhispr cattura l'audio direttamente dal tuo sistema — non entra mai nelle tue riunioni come partecipante. Basta collegare il calendario e prendere appunti normalmente."
+    },
+    "nav": {
+      "label": "Sezioni integrazioni",
+      "groups": {
+        "assistant": "Assistente",
+        "meetings": "Riunioni",
+        "developer": "Sviluppatori"
+      },
+      "sections": {
+        "connectors": "Connettori",
+        "calendars": "Calendari",
+        "api": "Chiavi API",
+        "mcp": "Server MCP",
+        "cli": "Riga di comando"
+      },
+      "docs": "Documentazione integrazioni"
+    },
+    "connectors": {
+      "description": "Lascia che l'assistente usi i tuoi strumenti. Approvi ogni email, messaggio e issue prima dell'invio."
     }
   },
   "connectors": {
@@ -4029,7 +4142,6 @@
       "title": "Bozze email",
       "description": "L'assistente apre una bozza precompilata nella tua app di posta. La rivedi e premi Invia tu stesso.",
       "descriptionSend": "L'assistente mostra una scheda email nella chat. Viene inviata dal tuo Gmail solo quando premi Invia.",
-      "proRequired": "Passa a un piano a pagamento per far scrivere all'assistente le bozze delle email.",
       "unavailable": "Le bozze email non sono disponibili al momento.",
       "targetLabel": "Crea bozze email in",
       "autoResolved": "Automatico · {{target}}",
@@ -4044,14 +4156,13 @@
     },
     "slack": {
       "title": "Slack",
-      "description": "L'assistente può pubblicare messaggi nei canali e alle persone per tuo conto. Approvi ogni messaggio prima che venga inviato.",
+      "description": "Pubblica messaggi nei canali e alle persone.",
       "connect": "Connetti",
       "reconnect": "Riconnetti",
       "disconnect": "Disconnetti",
       "connecting": "Completa la connessione nel tuo browser…",
       "connectedAs": "Connesso come {{account}} in {{workspace}}",
       "needsReconnect": "Slack deve essere ricollegato.",
-      "proRequired": "Passa a un piano a pagamento per far inviare all'assistente i messaggi Slack per te.",
       "errors": {
         "connect_failed": "Impossibile connettere Slack. Riprova.",
         "disconnect_failed": "Impossibile disconnettere Slack. Riprova.",
@@ -4075,7 +4186,7 @@
     },
     "github": {
       "title": "GitHub",
-      "description": "L'assistente può cercare issue e pull request, creare issue e commentare per tuo conto, solo nei repository che scegli. Non può leggere il tuo codice e approvi ogni issue e commento prima che venga pubblicato.",
+      "description": "Issue e commenti nei repository che scegli. Non può leggere il tuo codice.",
       "connect": "Connetti",
       "reconnect": "Riconnetti",
       "disconnect": "Disconnetti",
@@ -4084,7 +4195,6 @@
       "connectedAs_empty": "Connesso come {{account}} · ancora nessun repository",
       "connectedAs_unknown": "Connesso come {{account}}",
       "needsReconnect": "GitHub deve essere ricollegato.",
-      "proRequired": "Passa a un piano a pagamento per far gestire all'assistente le issue di GitHub per te.",
       "reviewOnGithub": "Controlla su GitHub",
       "disconnectedHint": "Disconnesso da questo computer. GitHub mantiene l'autorizzazione di OpenWhispr finché non la rimuovi da lì.",
       "errors": {
@@ -4116,7 +4226,7 @@
     },
     "gmail": {
       "title": "Gmail",
-      "description": "L'assistente può inviare email dal tuo account Gmail. Non può leggere la tua posta e premi tu Invia per ogni email.",
+      "description": "Invia email dal tuo account. Non può leggere la tua posta.",
       "connect": "Connetti",
       "reconnect": "Riconnetti",
       "disconnect": "Disconnetti",
@@ -4124,7 +4234,6 @@
       "connectedAs": "Connesso come {{account}}",
       "needsReconnect": "Gmail deve essere ricollegato.",
       "grantKept": "Disconnesso. Google Calendar usa la stessa autorizzazione Google, quindi OpenWhispr resta elencato nel tuo account Google finché non disconnetti anche Google Calendar.",
-      "proRequired": "Passa a un piano a pagamento per far inviare all'assistente le email da Gmail per te.",
       "errors": {
         "connect_failed": "Impossibile connettere Gmail. Riprova.",
         "disconnect_failed": "Impossibile disconnettere Gmail. Riprova.",
@@ -4151,14 +4260,13 @@
     },
     "linear": {
       "title": "Linear",
-      "description": "L'assistente può cercare le tue issue di Linear e creare issue e commenti per tuo conto. Approvi ogni issue e ogni commento prima che venga inviato.",
+      "description": "Cerca issue e crea issue e commenti.",
       "connect": "Connetti",
       "reconnect": "Riconnetti",
       "disconnect": "Disconnetti",
       "connecting": "Completa la connessione nel tuo browser…",
       "connectedAs": "Connesso come {{account}} in {{workspace}}",
       "needsReconnect": "Linear deve essere ricollegato.",
-      "proRequired": "Passa a un piano a pagamento per far lavorare l'assistente in Linear per te.",
       "errors": {
         "connect_failed": "Impossibile connettere Linear. Riprova.",
         "disconnect_failed": "Impossibile disconnettere Linear. Riprova.",
@@ -4315,7 +4423,10 @@
       "gmailDraftLimit": "Si possono preparare solo {{max}} email per richiesta.",
       "queryResults": "Risultati trovati: {{total}}",
       "cardLimit": "Si possono preparare solo {{max}} schede per richiesta."
-    }
+    },
+    "beta": "Beta",
+    "upsell": "I connettori sono inclusi nei piani a pagamento. Effettua l'upgrade per far lavorare l'assistente nei tuoi strumenti.",
+    "locked": "Incluso nei piani a pagamento"
   },
   "calendar": {
     "title": "Google Calendar",
@@ -4540,9 +4651,7 @@
     "conversationSelector": "Cambia conversazione",
     "history": "Cronologia",
     "quickActions": "Azioni rapide",
-    "generateSummary": "Genera riepilogo",
-    "makeTodos": "Crea attività",
-    "createOutline": "Crea scaletta"
+    "generateSummary": "Genera riepilogo"
   },
   "transcriptionPreview": {
     "label": "Anteprima",
@@ -4668,5 +4777,48 @@
     },
     "start": "Prendi appunti",
     "join": "Partecipa e trascrivi"
+  },
+  "providerErrors": {
+    "authFailed": "{{provider}} ha rifiutato la tua chiave API.",
+    "accessDenied": "{{provider}} ha negato l’accesso. La tua chiave potrebbe non includere questo modello.",
+    "quotaExhausted": "Il tuo account {{provider}} ha esaurito il credito.",
+    "rateLimited": "{{provider}} ha limitato la richiesta. Attendi un momento e riprova.",
+    "modelNotFound": "{{provider}} non riconosce il modello “{{model}}”.",
+    "modelNotFoundNoModel": "{{provider}} non riconosce il modello selezionato.",
+    "payloadTooLarge": "Questa registrazione è troppo grande per {{provider}}.",
+    "requestTooLarge": "Questa richiesta è troppo grande per {{provider}}.",
+    "badRequest": "{{provider}} non è riuscito a elaborare questa richiesta.",
+    "unavailable": "{{provider}} sta avendo problemi in questo momento. Riprova a breve.",
+    "timeout": "{{provider}} ha impiegato troppo tempo a rispondere.",
+    "unreachable": "Impossibile contattare {{provider}}. Controlla la tua connessione.",
+    "noResponse": "Nessuna risposta da {{provider}}. Controlla la tua chiave API e la connessione.",
+    "unknown": "{{provider}} ha restituito un errore imprevisto.",
+    "keyMissing": "Nessuna chiave API impostata per {{provider}}. Aggiungila in Impostazioni → Modelli linguistici.",
+    "selfHosted": {
+      "authFailed": "Il tuo server ha rifiutato la chiave API.",
+      "accessDenied": "Il tuo server ha negato l’accesso. La chiave potrebbe non includere questo modello.",
+      "quotaExhausted": "Il tuo server segnala che l'account ha esaurito il credito.",
+      "rateLimited": "Il tuo server ha limitato la richiesta. Attendi un momento e riprova.",
+      "modelNotFound": "Il tuo server non riconosce il modello “{{model}}”.",
+      "modelNotFoundNoModel": "Il tuo server non riconosce il modello selezionato.",
+      "payloadTooLarge": "Questa registrazione è troppo grande per il tuo server.",
+      "requestTooLarge": "Questa richiesta è troppo grande per il tuo server.",
+      "badRequest": "Il tuo server non è riuscito a elaborare questa richiesta.",
+      "unavailable": "Il tuo server sta avendo problemi in questo momento. Riprova a breve.",
+      "timeout": "Il tuo server ha impiegato troppo tempo a rispondere.",
+      "unreachable": "Impossibile contattare il tuo server. Verifica che sia in esecuzione.",
+      "noResponse": "Nessuna risposta dal tuo server. Verifica la sua chiave API e che sia in esecuzione.",
+      "unknown": "Il tuo server ha restituito un errore imprevisto."
+    },
+    "openSettings": "Apri Impostazioni",
+    "copyDetails": "Copia dettagli",
+    "titles": {
+      "transcription": "Trascrizione non riuscita",
+      "llm": "Richiesta IA non riuscita"
+    },
+    "details": {
+      "provider": "Provider",
+      "requestId": "ID richiesta"
+    }
   }
 }

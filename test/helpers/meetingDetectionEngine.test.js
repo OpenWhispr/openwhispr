@@ -162,6 +162,55 @@ test("a live recording with no note id still blocks a second manual meeting", as
   assert.deepEqual(noteNavigations, []);
 });
 
+// Join & transcribe resumes only a note the user owns for the event: a
+// teammate's synced note for the same invite never comes back from the lookup,
+// so the join must create the user's own note rather than record into theirs.
+function createJoinDatabase(ownNote) {
+  const lookups = [];
+  const saved = [];
+  const databaseManager = {
+    getCalendarEventById: (id) => ({ id, summary: "Weekly sync" }),
+    getOwnNoteByCalendarEventId: (id) => {
+      lookups.push(id);
+      return ownNote;
+    },
+    getMeetingsFolder: () => ({ id: 7 }),
+    saveNote: (title) => {
+      saved.push(title);
+      return { note: { id: 99, title } };
+    },
+    updateNote: (id, updates) => ({ note: { id, ...updates } }),
+  };
+  return { databaseManager, lookups, saved };
+}
+
+test("joining a calendar meeting resumes the user's own note for the event", async () => {
+  const { engine, meetingNavigations } = createEngine();
+  const db = createJoinDatabase({ id: 5, folder_id: 3 });
+  engine.databaseManager = db.databaseManager;
+
+  await engine.joinCalendarMeeting("event-1");
+
+  assert.deepEqual(db.lookups, ["event-1"]);
+  assert.deepEqual(db.saved, []);
+  assert.equal(meetingNavigations.length, 1);
+  assert.equal(meetingNavigations[0].noteId, 5);
+  assert.equal(meetingNavigations[0].folderId, 3);
+});
+
+test("joining a calendar meeting with no note of the user's own creates one", async () => {
+  const { engine, meetingNavigations } = createEngine();
+  const db = createJoinDatabase(null);
+  engine.databaseManager = db.databaseManager;
+
+  await engine.joinCalendarMeeting("event-1");
+
+  assert.deepEqual(db.saved, ["Weekly sync"]);
+  assert.equal(meetingNavigations.length, 1);
+  assert.equal(meetingNavigations[0].noteId, 99);
+  assert.equal(meetingNavigations[0].folderId, 7);
+});
+
 // The IPC adapter derives detector preferences through this policy; the engine
 // only has to honour whatever it is handed (adapter coverage lives in
 // meetingDetectionPreferencesIpc.test.js).
