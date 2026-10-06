@@ -75,6 +75,32 @@ test("keeps the transcript and warns when speaker labels cannot be merged", asyn
   assert.equal(result.diarizationWarning, true);
 });
 
+// The diarize handler returns no segments when it discards a collapsed run.
+test("warns and keeps the measured duration when diarization returns no segments", async (t) => {
+  const { window, transcribeFileWithSpeakers } = await loadFileTranscription(t);
+  let mergeCalls = 0;
+  window.electronAPI.diarizeAudioFile = async () => ({
+    success: true,
+    segments: [],
+    durationSeconds: 1188,
+  });
+  window.electronAPI.mergeSpeakerText = async () => {
+    mergeCalls += 1;
+    return { success: true, text: "Speaker 1: Plain transcript" };
+  };
+
+  const result = await transcribeFileWithSpeakers("/tmp/audio.wav", localConfig(), {
+    enabled: true,
+    localModelsReady: true,
+    numSpeakers: null,
+  });
+
+  assert.equal(mergeCalls, 0);
+  assert.equal(result.text, "Plain transcript");
+  assert.equal(result.diarizationWarning, true);
+  assert.equal(result.durationSeconds, 1188);
+});
+
 test("does not warn when speaker labels are merged", async (t) => {
   const { window, transcribeFileWithSpeakers } = await loadFileTranscription(t);
   window.electronAPI.diarizeAudioFile = async () => ({

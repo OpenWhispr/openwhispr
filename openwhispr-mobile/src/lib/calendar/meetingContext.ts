@@ -105,7 +105,7 @@ const isRoomLikeParticipant = (participant: CalendarParticipant): boolean => {
   return /\b(boardroom|conference room|huddle room|meeting room|room)\b/.test(displayName);
 };
 
-const getHumanParticipants = (participants: CalendarParticipant[]): CalendarParticipant[] =>
+export const getHumanParticipants = (participants: CalendarParticipant[]): CalendarParticipant[] =>
   dedupeParticipants(
     participants.filter(
       (participant) =>

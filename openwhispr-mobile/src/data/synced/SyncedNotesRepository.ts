@@ -217,14 +217,18 @@ export class SyncedNotesRepository implements NotesRepository {
     remoteId: string,
     serverUpdatedAt: string,
     cloudUpdatedAt?: string | null,
+    serverCreatedAt?: string,
   ): void {
-    this.local.markNotePushed(pushed, remoteId, serverUpdatedAt, cloudUpdatedAt);
+    this.local.markNotePushed(pushed, remoteId, serverUpdatedAt, cloudUpdatedAt, serverCreatedAt);
   }
   markNoteTerminal(localId: number): void {
     this.local.markNoteTerminal(localId);
   }
   dropNotePushAttempt(localId: number): void {
     this.local.dropNotePushAttempt(localId);
+  }
+  isNotePushRejected(localId: number): boolean {
+    return this.local.isNotePushRejected(localId);
   }
   parkNoteConflict(localId: number, serverNote: RemoteNote): void {
     this.local.parkNoteConflict(localId, serverNote);
@@ -331,6 +335,16 @@ export class SyncedNotesRepository implements NotesRepository {
   createSpeakerProfile(input: NewSpeakerProfile): SpeakerProfile {
     return this.local.createSpeakerProfile(input);
   }
+  createOwnerProfileForSpeaker(
+    speakerId: number,
+    profileInput: Omit<NewSpeakerProfile, 'isOwner'>,
+    speakerPatch: Partial<Speaker>,
+  ): SpeakerProfile {
+    // Also writes the speaker row (see LocalNotesRepository), so nudge sync like updateSpeaker.
+    const profile = this.local.createOwnerProfileForSpeaker(speakerId, profileInput, speakerPatch);
+    requestSync('after-write');
+    return profile;
+  }
   updateSpeakerProfile(id: number, updates: Partial<SpeakerProfile>): void {
     this.local.updateSpeakerProfile(id, updates);
   }
@@ -352,6 +366,10 @@ export class SyncedNotesRepository implements NotesRepository {
 
   updateNoteMeta(noteId: number, updates: MeetingNoteUpdate): void {
     this.local.updateNoteMeta(noteId, updates);
+  }
+
+  restoreMeetingRecordingPath(noteId: number, sourceFile: string): void {
+    this.local.restoreMeetingRecordingPath(noteId, sourceFile);
   }
 
   updateNoteCalendarContext(noteId: number, updates: MeetingCalendarContextUpdate): void {

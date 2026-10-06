@@ -1,5 +1,6 @@
 import type { ParakeetVersion } from '../../../modules/parakeet-asr/src';
 import type { TranscriptionResponse } from '../../types';
+import type { LocalModelKey } from '../../lib/localModelCatalog';
 import { getPreferredTranscriptionLanguages } from '../../lib/transcriptionLanguage';
 import { LocalParakeetService } from './LocalParakeetService';
 import { LocalWhisperService } from './LocalWhisperService';
@@ -22,6 +23,8 @@ export interface LocalTranscribeOptions {
   wordTimestamps?: boolean;
   /** Whisper initial prompt (dictionary/snippet hints). Parakeet has no prompt input — dropped there. */
   prompt?: string;
+  /** The model picked for this workflow; unset or unusable means the automatic choice. */
+  model?: LocalModelKey;
 }
 
 function descriptorFor(
@@ -82,20 +85,20 @@ export class LocalTranscriptionService {
     };
   }
 
-  private static async resolveEngine(): Promise<{
+  private static async resolveEngine(model?: LocalModelKey): Promise<{
     languages: string[];
     choice: LocalEngineChoice;
   }> {
     const languages = getPreferredTranscriptionLanguages();
     const availability = await this.getAvailability();
-    return { languages, choice: selectLocalEngine(languages, availability) };
+    return { languages, choice: selectLocalEngine(languages, availability, model) };
   }
 
   static async transcribe(
     audioUri: string,
     options: LocalTranscribeOptions = {},
   ): Promise<TranscriptionResponse> {
-    const { languages, choice } = await this.resolveEngine();
+    const { languages, choice } = await this.resolveEngine(options.model);
 
     if (choice.engine === 'parakeet') {
       // Don't keep both runtimes' weights resident (~600 MB + ~500 MB) — release the idle one.
@@ -128,8 +131,8 @@ export class LocalTranscriptionService {
    * Warm the engine the current language selection routes to (keyboard/Home pre-warm path).
    * Never downloads; a Parakeet choice that isn't installed resolves to Whisper or a no-op.
    */
-  static async prepareForLanguage(language?: string): Promise<void> {
-    const { choice } = await this.resolveEngine();
+  static async prepareForLanguage(language?: string, model?: LocalModelKey): Promise<void> {
+    const { choice } = await this.resolveEngine(model);
     if (choice.engine === 'parakeet') {
       await LocalParakeetService.prepare(choice.version);
       return;

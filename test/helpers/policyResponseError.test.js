@@ -33,6 +33,16 @@ test("preserves policy denial code, status, details, and minimum version", async
   }
 });
 
+test("drops a DOMException's numeric code, which is not an error code", () => {
+  const timeout = new DOMException("The operation was aborted due to timeout", "TimeoutError");
+  assert.equal(timeout.code, 23);
+
+  assert.deepEqual(toPolicyFailure(timeout), {
+    success: false,
+    error: "The operation was aborted due to timeout",
+  });
+});
+
 test("normalizes parsed multipart policy errors without losing legacy statusCode", () => {
   const error = createPolicyResponseError(
     426,

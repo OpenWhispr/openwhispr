@@ -102,13 +102,26 @@
   --shadow-glass:
     inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(255, 255, 255, 0.45),
     0 2px 10px rgba(15, 23, 42, 0.06);
-  /* Same rim on brand-blue surfaces (mic/send buttons, today header): the app
-     icon's glass. Softer than --shadow-glass because it sits on colour. */
+  /* Same rim on brand-blue surfaces (mic/send buttons): the app icon's glass.
+     Softer than --shadow-glass because it sits on colour. */
   --shadow-brand-glass:
     inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.16),
     inset 0 -1px 1px rgba(0, 0, 0, 0.12);
   /* The fill under that rim: Button default, mic/send circles, the onboarding brand tile. */
   --gradient-brand-glass: linear-gradient(180deg, #5588f0 0%, #3466e2 100%);
+  /* Today's upcoming-events card: a brand-blue band lit at both ends, crossed by two soft
+     diagonal highlights, as in the Home design. */
+  --gradient-calendar-today:
+    linear-gradient(
+      115deg,
+      transparent 36%,
+      rgb(255 255 255 / 0.12) 42%,
+      transparent 50%,
+      transparent 58%,
+      rgb(255 255 255 / 0.08) 64%,
+      transparent 72%
+    ),
+    linear-gradient(90deg, #58a7fe 0%, #1a7bff 22%, #1f80ff 55%, #2a88ff 72%, #62afff 100%);
   /* The brand tile floats over the onboarding hero, so it adds a soft coloured lift. */
   --shadow-brand-tile: var(--shadow-brand-glass), 0 10px 24px -8px rgb(52 102 226 / 0.45);
 }
@@ -228,7 +241,9 @@
      is cleared here rather than filled. The compact frame owns the complete
      480x576 surface, including its rounded corners. */
   body:has(.onboarding-canvas.compact),
-  body:has(.onboarding-canvas.compact) #root {
+  body:has(.onboarding-canvas.compact) #root,
+  body:has(.permission-settings-overlay),
+  body:has(.permission-settings-overlay) #root {
     background: transparent;
   }
 
@@ -794,6 +809,35 @@ body:has(.onboarding-canvas) kbd {
     0 12px 20px color-mix(in oklch, var(--onboarding-keycap-shadow) 8%, transparent);
 }
 
+/* Today's day-card header: a mosaic of faint tiles over --gradient-calendar-today,
+   fading in toward the right, as in the Home design. The tiles are a white wash cut by
+   a mask of vertical and horizontal stripes; it sits behind the header's text. */
+.calendar-today-header {
+  position: relative;
+  isolation: isolate;
+}
+
+.calendar-today-header::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: rgb(255 255 255 / 0.13);
+  mask-image:
+    linear-gradient(to right, transparent 22%, #000 70%),
+    linear-gradient(90deg, #000 5px, transparent 5px), linear-gradient(#000 5px, transparent 5px);
+  mask-size:
+    100% 100%,
+    7px 100%,
+    100% 7px;
+  mask-position:
+    0 0,
+    1px 0,
+    0 1.5px;
+  mask-composite: intersect;
+}
+
 /* OpenWhispr Brand Typography */
 .brand-heading {
   font-family: var(--font-family-display);
@@ -1256,15 +1300,6 @@ a:hover {
   }
 }
 
-@keyframes shimmer-slide {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(100%);
-  }
-}
-
 @keyframes fade-in-up {
   from {
     opacity: 0;
@@ -1674,7 +1709,8 @@ a:hover {
 .rich-text-editor-content {
   outline: none;
   unicode-bidi: plaintext;
-  padding-block: 0.75rem 5rem;
+  /* The bottom clears the note's ask bar and the action chips above it. */
+  padding-block: 0.75rem 7.5rem;
   /* Centers the text in the page column (PAGE_CONTENT_WIDTH_CLASS) with padding, not a
      max-width, so the editable area spans the pane and a margin click places the caret. */
   padding-inline: max(1.25rem, calc((100% - var(--container-5xl)) / 2 + 1.25rem));
@@ -1812,6 +1848,47 @@ a:hover {
   color: oklch(0.5 0 0 / 0.4);
 }
 
+/* Tables (GFM: a header row, then one-line cells) */
+.rich-text-editor-content .tableWrapper {
+  overflow-x: auto;
+  margin: 0.5rem 0;
+}
+
+.rich-text-editor-content table {
+  border-collapse: collapse;
+}
+
+.rich-text-editor-content th,
+.rich-text-editor-content td {
+  min-width: 5rem;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--color-border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.rich-text-editor-content th {
+  font-weight: 600;
+  background: oklch(0.5 0 0 / 0.04);
+}
+
+.rich-text-editor-content th p,
+.rich-text-editor-content td p {
+  margin: 0;
+}
+
+/* prosemirror-tables marks each cell of a cell selection. The .dark selector
+   wins over the dark header background below. */
+.rich-text-editor-content .selectedCell,
+.dark .rich-text-editor-content .selectedCell {
+  background: oklch(0.62 0.22 260 / 0.15);
+}
+
+/* Tiptap draws the gap cursor (e.g. above a table that starts the note) in black. */
+.rich-text-editor-content .ProseMirror-gapcursor:after {
+  border-top-color: var(--color-foreground);
+}
+
 /* Placeholder */
 .rich-text-editor-content p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
@@ -1819,6 +1896,11 @@ a:hover {
   pointer-events: none;
   float: inline-start;
   height: 0;
+}
+
+/* The empty-line format toolbar sits where the placeholder would show. */
+.rich-text-editor-content:has(~ .rich-text-editor-line-menu) p.is-editor-empty:first-child::before {
+  content: none;
 }
 
 /* Dark mode adjustments */
@@ -1841,6 +1923,10 @@ a:hover {
 
 .dark .rich-text-editor-content ul[data-type="taskList"] li[data-checked="true"] > div {
   color: oklch(0.7 0 0 / 0.4);
+}
+
+.dark .rich-text-editor-content th {
+  background: oklch(0.8 0 0 / 0.06);
 }
 
 .dark .rich-text-editor-content p.is-editor-empty:first-child::before {

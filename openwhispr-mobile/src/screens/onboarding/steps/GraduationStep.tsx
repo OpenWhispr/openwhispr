@@ -1,9 +1,18 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Image, Linking, Platform, Pressable, View, type ImageSourcePropType } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Image,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  View,
+  type ImageSourcePropType,
+} from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
+import { describeOnboardingError } from '@/lib/onboardingErrors';
 
 interface AppTarget {
   key: string;
@@ -132,7 +141,10 @@ const TARGETS: AppTarget[] = [
 ];
 
 export function GraduationStep() {
-  const goNext = useOnboardingStore((s) => s.goNext);
+  const finish = useOnboardingStore((s) => s.finish);
+  const completing = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [installedKeys, setInstalledKeys] = useState<Set<string>>(() => {
     return new Set(TARGETS.filter((t) => t.alwaysAvailable).map((t) => t.key));
   });
@@ -176,13 +188,24 @@ export function GraduationStep() {
 
   const visibleTargets = TARGETS.filter((t) => installedKeys.has(t.key));
 
-  // Launching an external app deliberately does NOT advance. The next step
-  // presents a paywall from an effect, and iOS cannot present from a
-  // backgrounded app — it would fail open and skip the paywall entirely. The
-  // user comes back to this screen and continues from the CTA.
-  const handleTarget = useCallback((target: AppTarget) => {
-    Linking.openURL(target.url).catch(() => {});
-  }, []);
+  const complete = useCallback(
+    async (url?: string): Promise<void> => {
+      if (completing.current) return;
+      completing.current = true;
+      setBusy(true);
+      setError(null);
+      try {
+        await finish();
+        if (url) await Linking.openURL(url);
+      } catch (cause) {
+        setError(describeOnboardingError(cause, 'Could not finish setup. Try again.'));
+      } finally {
+        completing.current = false;
+        setBusy(false);
+      }
+    },
+    [finish],
+  );
 
   return (
     <OnboardingShell
@@ -190,21 +213,48 @@ export function GraduationStep() {
       titleAccent="speaking"
       subtitle="Try OpenWhispr anywhere — tap and hold the globe key in any app to switch keyboards."
       ctaLabel="Start using OpenWhispr"
-      onCta={goNext}
+      onCta={() => complete()}
+      ctaLoading={busy}
     >
-      <View className="flex-1 flex-row flex-wrap gap-3 pt-2">
+      {error ? (
+        <Text accessibilityRole="alert" className="mb-3 text-systemRed">
+          {error}
+        </Text>
+      ) : null}
+      <ScrollView
+        contentContainerStyle={{
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          gap: 12,
+          paddingBottom: 16,
+        }}
+      >
         {visibleTargets.map((target) => (
-          <TargetCard key={target.key} target={target} onPress={() => handleTarget(target)} />
+          <TargetCard
+            key={target.key}
+            target={target}
+            disabled={busy}
+            onPress={() => void complete(target.url)}
+          />
         ))}
-      </View>
+      </ScrollView>
     </OnboardingShell>
   );
 }
 
-function TargetCard({ target, onPress }: { target: AppTarget; onPress: () => void }) {
+function TargetCard({
+  target,
+  onPress,
+  disabled,
+}: {
+  target: AppTarget;
+  onPress: () => void;
+  disabled: boolean;
+}) {
   return (
     <Pressable
       onPress={onPress}
+      disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={target.title}
       className="w-[48%] items-center rounded-xl border border-separator bg-secondarySystemGroupedBackground py-4 active:opacity-90"

@@ -1,5 +1,5 @@
 {
-  "_genericTemplate": "LANGUAGE CONTEXT: The user's preferred language is set to \"{{code}}\". Detect the language of the transcribed text and respond in that same language. Maintain proper grammar, spelling, and punctuation for the target language. If the user naturally uses English words or technical terms, preserve those as-is.",
+  "_genericTemplate": "LANGUAGE CONTEXT: The user's preferred language is set to \"{{code}}\". Detect the language of the transcribed text and write your output in that same language. Maintain proper grammar, spelling, and punctuation for the target language. If the user naturally uses English words or technical terms, preserve those as-is.",
   "languages": [
     {
       "code": "auto",
@@ -8,7 +8,7 @@
       "whisper": false,
       "parakeet": false,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The language preference is set to auto-detect. Detect the language of the transcribed text and respond entirely in that same language. Maintain consistent language throughout your response."
+      "instruction": "LANGUAGE CONTEXT: The language preference is set to auto-detect. Detect the language of the transcribed text and write your entire output in that same language. Maintain consistent language throughout your output."
     },
     {
       "code": "af",
@@ -25,7 +25,7 @@
       "whisper": true,
       "parakeet": false,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Arabic. The transcribed text will be in Arabic. You MUST respond entirely in Arabic while maintaining proper Arabic grammar and punctuation. Preserve any English technical terms as the user spoke them."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Arabic. The transcribed text will be in Arabic. You MUST write your entire output in Arabic while maintaining proper Arabic grammar and punctuation. Preserve any English technical terms as the user spoke them."
     },
     {
       "code": "hy",
@@ -66,7 +66,7 @@
       "whisper": true,
       "parakeet": true,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Bulgarian. The transcribed text will be in Bulgarian. You MUST respond entirely in Bulgarian while maintaining proper Bulgarian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Bulgarian. The transcribed text will be in Bulgarian. You MUST write your entire output in Bulgarian while maintaining proper Bulgarian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
     },
     {
       "code": "ca",
@@ -75,7 +75,7 @@
       "whisper": true,
       "parakeet": false,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Catalan. The transcribed text will be in Catalan. You MUST respond entirely in Catalan while maintaining proper Catalan grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Catalan. The transcribed text will be in Catalan. You MUST write your entire output in Catalan while maintaining proper Catalan grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
     },
     {
       "code": "zh-CN",
@@ -84,7 +84,7 @@
       "whisper": true,
       "parakeet": false,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Simplified Chinese (简体中文). The transcribed text will be in Chinese. You MUST respond entirely in Simplified Chinese while maintaining proper grammar and punctuation. Use simplified characters throughout (e.g., 简体, 语言, 学习). Preserve any English technical terms as the user spoke them."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Simplified Chinese (简体中文). The transcribed text will be in Chinese. You MUST write your entire output in Simplified Chinese while maintaining proper grammar and punctuation. Use simplified characters throughout (e.g., 简体, 语言, 学习). Preserve any English technical terms as the user spoke them."
     },
     {
       "code": "zh-TW",
@@ -93,7 +93,7 @@
       "whisper": true,
       "parakeet": false,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Traditional Chinese (繁體中文). The transcribed text will be in Chinese. You MUST respond entirely in Traditional Chinese while maintaining proper grammar and punctuation. Use traditional characters throughout (e.g., 繁體, 語言, 學習). Preserve any English technical terms as the user spoke them."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Traditional Chinese (繁體中文). The transcribed text will be in Chinese. You MUST write your entire output in Traditional Chinese while maintaining proper grammar and punctuation. Use traditional characters throughout (e.g., 繁體, 語言, 學習). Preserve any English technical terms as the user spoke them."
     },
     {
       "code": "hr",
@@ -102,7 +102,7 @@
       "whisper": true,
       "parakeet": true,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Croatian. The transcribed text will be in Croatian. You MUST respond entirely in Croatian while maintaining proper Croatian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Croatian. The transcribed text will be in Croatian. You MUST write your entire output in Croatian while maintaining proper Croatian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
     },
     {
       "code": "cs",
@@ -111,7 +111,7 @@
       "whisper": true,
       "parakeet": true,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Czech. The transcribed text will be in Czech. You MUST respond entirely in Czech while maintaining proper Czech grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Czech. The transcribed text will be in Czech. You MUST write your entire output in Czech while maintaining proper Czech grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
     },
     {
       "code": "da",
@@ -120,7 +120,7 @@
       "whisper": true,
       "parakeet": true,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Danish. The transcribed text will be in Danish. You MUST respond entirely in Danish while maintaining proper Danish grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Danish. The transcribed text will be in Danish. You MUST write your entire output in Danish while maintaining proper Danish grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
     },
     {
       "code": "nl",
@@ -129,7 +129,7 @@
       "whisper": true,
       "parakeet": true,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Dutch. The transcribed text will be in Dutch. You MUST respond entirely in Dutch while maintaining proper Dutch grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Dutch. The transcribed text will be in Dutch. You MUST write your entire output in Dutch while maintaining proper Dutch grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
     },
     {
       "code": "en-US",
@@ -138,7 +138,7 @@
       "whisper": true,
       "parakeet": true,
       "assemblyai": true,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is American English. You MUST use American English spelling conventions throughout your response (e.g., \"color\" not \"colour\", \"organize\" not \"organise\", \"center\" not \"centre\", \"defense\" not \"defence\", \"analyze\" not \"analyse\")."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is American English. You MUST use American English spelling conventions throughout your output (e.g., \"color\" not \"colour\", \"organize\" not \"organise\", \"center\" not \"centre\", \"defense\" not \"defence\", \"analyze\" not \"analyse\")."
     },
     {
       "code": "en-GB",
@@ -147,7 +147,7 @@
       "whisper": true,
       "parakeet": true,
       "assemblyai": true,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is British English. You MUST use British English spelling conventions throughout your response (e.g., \"colour\" not \"color\", \"organise\" not \"organize\", \"centre\" not \"center\", \"defence\" not \"defense\", \"analyse\" not \"analyze\")."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is British English. You MUST use British English spelling conventions throughout your output (e.g., \"colour\" not \"color\", \"organise\" not \"organize\", \"centre\" not \"center\", \"defence\" not \"defense\", \"analyse\" not \"analyze\")."
     },
     {
       "code": "et",
@@ -156,7 +156,7 @@
       "whisper": true,
       "parakeet": true,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Estonian. The transcribed text will be in Estonian. You MUST respond entirely in Estonian while maintaining proper Estonian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Estonian. The transcribed text will be in Estonian. You MUST write your entire output in Estonian while maintaining proper Estonian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
     },
     {
       "code": "fi",
@@ -165,7 +165,7 @@
       "whisper": true,
       "parakeet": true,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Finnish. The transcribed text will be in Finnish. You MUST respond entirely in Finnish while maintaining proper Finnish grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Finnish. The transcribed text will be in Finnish. You MUST write your entire output in Finnish while maintaining proper Finnish grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
     },
     {
       "code": "fr",
@@ -174,7 +174,7 @@
       "whisper": true,
       "parakeet": true,
       "assemblyai": true,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is French. The transcribed text will be in French. You MUST respond entirely in French while maintaining proper French grammar, spelling, and punctuation. If the user naturally uses English words or technical terms within their French speech, preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is French. The transcribed text will be in French. You MUST write your entire output in French while maintaining proper French grammar, spelling, and punctuation. If the user naturally uses English words or technical terms within their French speech, preserve those as-is."
     },
     {
       "code": "gl",
@@ -191,7 +191,7 @@
       "whisper": true,
       "parakeet": true,
       "assemblyai": true,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is German. The transcribed text will be in German. You MUST respond entirely in German while maintaining proper German grammar, spelling, and punctuation. If the user naturally uses English words or technical terms within their German speech, preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is German. The transcribed text will be in German. You MUST write your entire output in German while maintaining proper German grammar, spelling, and punctuation. If the user naturally uses English words or technical terms within their German speech, preserve those as-is."
     },
     {
       "code": "el",
@@ -200,7 +200,7 @@
       "whisper": true,
       "parakeet": true,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Greek. The transcribed text will be in Greek. You MUST respond entirely in Greek while maintaining proper Greek grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Greek. The transcribed text will be in Greek. You MUST write your entire output in Greek while maintaining proper Greek grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
     },
     {
       "code": "he",
@@ -209,7 +209,7 @@
       "whisper": true,
       "parakeet": false,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Hebrew. The transcribed text will be in Hebrew. You MUST respond entirely in Hebrew while maintaining proper Hebrew grammar and punctuation. Preserve any English technical terms as the user spoke them."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Hebrew. The transcribed text will be in Hebrew. You MUST write your entire output in Hebrew while maintaining proper Hebrew grammar and punctuation. Preserve any English technical terms as the user spoke them."
     },
     {
       "code": "hi",
@@ -218,7 +218,7 @@
       "whisper": true,
       "parakeet": false,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Hindi. The transcribed text will be in Hindi. You MUST respond entirely in Hindi while maintaining proper Hindi grammar and punctuation. If the user mixes Hindi and English (Hinglish), preserve that natural code-switching."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Hindi. The transcribed text will be in Hindi. You MUST write your entire output in Hindi while maintaining proper Hindi grammar and punctuation. If the user mixes Hindi and English (Hinglish), preserve that natural code-switching."
     },
     {
       "code": "hu",
@@ -227,7 +227,7 @@
       "whisper": true,
       "parakeet": true,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Hungarian. The transcribed text will be in Hungarian. You MUST respond entirely in Hungarian while maintaining proper Hungarian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Hungarian. The transcribed text will be in Hungarian. You MUST write your entire output in Hungarian while maintaining proper Hungarian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
     },
     {
       "code": "is",
@@ -244,7 +244,7 @@
       "whisper": true,
       "parakeet": false,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Indonesian. The transcribed text will be in Indonesian. You MUST respond entirely in Indonesian while maintaining proper Indonesian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Indonesian. The transcribed text will be in Indonesian. You MUST write your entire output in Indonesian while maintaining proper Indonesian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
     },
     {
       "code": "it",
@@ -253,7 +253,7 @@
       "whisper": true,
       "parakeet": true,
       "assemblyai": true,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Italian. The transcribed text will be in Italian. You MUST respond entirely in Italian while maintaining proper Italian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms within their Italian speech, preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Italian. The transcribed text will be in Italian. You MUST write your entire output in Italian while maintaining proper Italian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms within their Italian speech, preserve those as-is."
     },
     {
       "code": "ja",
@@ -262,7 +262,7 @@
       "whisper": true,
       "parakeet": false,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Japanese. The transcribed text will be in Japanese. You MUST respond entirely in Japanese while maintaining proper Japanese grammar and punctuation. Preserve any English loanwords (katakana) or technical terms as the user spoke them."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Japanese. The transcribed text will be in Japanese. You MUST write your entire output in Japanese while maintaining proper Japanese grammar and punctuation. Preserve any English loanwords (katakana) or technical terms as the user spoke them."
     },
     {
       "code": "kn",
@@ -287,7 +287,7 @@
       "whisper": true,
       "parakeet": false,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Korean. The transcribed text will be in Korean. You MUST respond entirely in Korean while maintaining proper Korean grammar and punctuation. Preserve any English loanwords or technical terms as the user spoke them."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Korean. The transcribed text will be in Korean. You MUST write your entire output in Korean while maintaining proper Korean grammar and punctuation. Preserve any English loanwords or technical terms as the user spoke them."
     },
     {
       "code": "lv",
@@ -296,7 +296,7 @@
       "whisper": true,
       "parakeet": true,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Latvian. The transcribed text will be in Latvian. You MUST respond entirely in Latvian while maintaining proper Latvian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Latvian. The transcribed text will be in Latvian. You MUST write your entire output in Latvian while maintaining proper Latvian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
     },
     {
       "code": "lt",
@@ -305,7 +305,7 @@
       "whisper": true,
       "parakeet": true,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Lithuanian. The transcribed text will be in Lithuanian. You MUST respond entirely in Lithuanian while maintaining proper Lithuanian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Lithuanian. The transcribed text will be in Lithuanian. You MUST write your entire output in Lithuanian while maintaining proper Lithuanian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
     },
     {
       "code": "mk",
@@ -362,7 +362,7 @@
       "whisper": true,
       "parakeet": false,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Norwegian. The transcribed text will be in Norwegian. You MUST respond entirely in Norwegian while maintaining proper Norwegian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Norwegian. The transcribed text will be in Norwegian. You MUST write your entire output in Norwegian while maintaining proper Norwegian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
     },
     {
       "code": "fa",
@@ -371,7 +371,7 @@
       "whisper": true,
       "parakeet": false,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Persian. The transcribed text will be in Persian. You MUST respond entirely in Persian while maintaining proper Persian grammar and punctuation. Preserve any English technical terms as the user spoke them."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Persian. The transcribed text will be in Persian. You MUST write your entire output in Persian while maintaining proper Persian grammar and punctuation. Preserve any English technical terms as the user spoke them."
     },
     {
       "code": "pl",
@@ -380,7 +380,7 @@
       "whisper": true,
       "parakeet": true,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Polish. The transcribed text will be in Polish. You MUST respond entirely in Polish while maintaining proper Polish grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Polish. The transcribed text will be in Polish. You MUST write your entire output in Polish while maintaining proper Polish grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
     },
     {
       "code": "pt",
@@ -389,7 +389,7 @@
       "whisper": true,
       "parakeet": true,
       "assemblyai": true,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Portuguese. The transcribed text will be in Portuguese. You MUST respond entirely in Portuguese while maintaining proper Portuguese grammar, spelling, and punctuation. If the user naturally uses English words or technical terms within their Portuguese speech, preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Portuguese. The transcribed text will be in Portuguese. You MUST write your entire output in Portuguese while maintaining proper Portuguese grammar, spelling, and punctuation. If the user naturally uses English words or technical terms within their Portuguese speech, preserve those as-is."
     },
     {
       "code": "ro",
@@ -398,7 +398,7 @@
       "whisper": true,
       "parakeet": true,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Romanian. The transcribed text will be in Romanian. You MUST respond entirely in Romanian while maintaining proper Romanian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Romanian. The transcribed text will be in Romanian. You MUST write your entire output in Romanian while maintaining proper Romanian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
     },
     {
       "code": "ru",
@@ -407,7 +407,7 @@
       "whisper": true,
       "parakeet": true,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Russian. The transcribed text will be in Russian. You MUST respond entirely in Russian while maintaining proper Russian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms within their Russian speech, preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Russian. The transcribed text will be in Russian. You MUST write your entire output in Russian while maintaining proper Russian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms within their Russian speech, preserve those as-is."
     },
     {
       "code": "sr",
@@ -416,7 +416,7 @@
       "whisper": true,
       "parakeet": false,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Serbian. The transcribed text will be in Serbian. You MUST respond entirely in Serbian while maintaining proper Serbian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Serbian. The transcribed text will be in Serbian. You MUST write your entire output in Serbian while maintaining proper Serbian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
     },
     {
       "code": "sk",
@@ -425,7 +425,7 @@
       "whisper": true,
       "parakeet": true,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Slovak. The transcribed text will be in Slovak. You MUST respond entirely in Slovak while maintaining proper Slovak grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Slovak. The transcribed text will be in Slovak. You MUST write your entire output in Slovak while maintaining proper Slovak grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
     },
     {
       "code": "sl",
@@ -434,7 +434,7 @@
       "whisper": true,
       "parakeet": true,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Slovenian. The transcribed text will be in Slovenian. You MUST respond entirely in Slovenian while maintaining proper Slovenian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Slovenian. The transcribed text will be in Slovenian. You MUST write your entire output in Slovenian while maintaining proper Slovenian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
     },
     {
       "code": "es",
@@ -443,7 +443,7 @@
       "whisper": true,
       "parakeet": true,
       "assemblyai": true,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Spanish. The transcribed text will be in Spanish. You MUST respond entirely in Spanish while maintaining proper Spanish grammar, spelling, and punctuation. If the user naturally uses English words or technical terms within their Spanish speech (code-switching), preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Spanish. The transcribed text will be in Spanish. You MUST write your entire output in Spanish while maintaining proper Spanish grammar, spelling, and punctuation. If the user naturally uses English words or technical terms within their Spanish speech (code-switching), preserve those as-is."
     },
     {
       "code": "sw",
@@ -460,7 +460,7 @@
       "whisper": true,
       "parakeet": true,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Swedish. The transcribed text will be in Swedish. You MUST respond entirely in Swedish while maintaining proper Swedish grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Swedish. The transcribed text will be in Swedish. You MUST write your entire output in Swedish while maintaining proper Swedish grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
     },
     {
       "code": "tl",
@@ -485,7 +485,7 @@
       "whisper": true,
       "parakeet": false,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Thai. The transcribed text will be in Thai. You MUST respond entirely in Thai while maintaining proper Thai grammar and punctuation. Preserve any English technical terms as the user spoke them."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Thai. The transcribed text will be in Thai. You MUST write your entire output in Thai while maintaining proper Thai grammar and punctuation. Preserve any English technical terms as the user spoke them."
     },
     {
       "code": "tr",
@@ -494,7 +494,7 @@
       "whisper": true,
       "parakeet": false,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Turkish. The transcribed text will be in Turkish. You MUST respond entirely in Turkish while maintaining proper Turkish grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Turkish. The transcribed text will be in Turkish. You MUST write your entire output in Turkish while maintaining proper Turkish grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
     },
     {
       "code": "uk",
@@ -503,7 +503,7 @@
       "whisper": true,
       "parakeet": true,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Ukrainian. The transcribed text will be in Ukrainian. You MUST respond entirely in Ukrainian while maintaining proper Ukrainian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Ukrainian. The transcribed text will be in Ukrainian. You MUST write your entire output in Ukrainian while maintaining proper Ukrainian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
     },
     {
       "code": "ur",
@@ -520,7 +520,7 @@
       "whisper": true,
       "parakeet": false,
       "assemblyai": false,
-      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Vietnamese. The transcribed text will be in Vietnamese. You MUST respond entirely in Vietnamese while maintaining proper Vietnamese grammar, spelling, and diacritics. Preserve any English technical terms as the user spoke them."
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Vietnamese. The transcribed text will be in Vietnamese. You MUST write your entire output in Vietnamese while maintaining proper Vietnamese grammar, spelling, and diacritics. Preserve any English technical terms as the user spoke them."
     },
     {
       "code": "cy",

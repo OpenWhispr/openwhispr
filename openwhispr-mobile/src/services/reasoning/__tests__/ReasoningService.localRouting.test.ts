@@ -1,3 +1,5 @@
+jest.mock('@/lib/inferenceRouting', () => ({ getInferenceSelection: jest.fn(() => undefined) }));
+
 jest.mock('@/lib/apiClient', () => ({
   api: {
     post: jest.fn(async () => ({
@@ -123,4 +125,30 @@ describe('ReasoningService local routing', () => {
     expect(mockLocalProcessText).not.toHaveBeenCalled();
     expect(mockPost).toHaveBeenCalledTimes(1);
   });
+});
+
+it('answers On-Device note chat on the device and never calls the Cloud API', async () => {
+  await expect(
+    ReasoningService.chatOverNote({
+      inferenceRoute: { mode: 'local', scope: 'agent' },
+      context: 'private meeting notes',
+      question: 'what did we decide?',
+      history: [],
+    }),
+  ).resolves.toEqual({ text: 'local result', model: 'apple-fm' });
+  expect(mockLocalProcessText).toHaveBeenCalled();
+  expect(mockPost).not.toHaveBeenCalled();
+});
+
+it('fails On-Device note chat rather than falling back to Cloud when the device cannot answer', async () => {
+  mockGetReadiness.mockResolvedValue({ status: 'unavailable' });
+  await expect(
+    ReasoningService.chatOverNote({
+      inferenceRoute: { mode: 'local', scope: 'agent' },
+      context: 'private meeting notes',
+      question: 'what did we decide?',
+      history: [],
+    }),
+  ).rejects.toThrow();
+  expect(mockPost).not.toHaveBeenCalled();
 });

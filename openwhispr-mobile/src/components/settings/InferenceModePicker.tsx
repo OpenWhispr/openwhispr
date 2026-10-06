@@ -6,20 +6,15 @@ import type { InferenceMode } from '@/types';
 
 type Props = {
   scope: InferenceScope;
-  selectedMode: InferenceMode;
+  // null when no mode is saved and none applies, so nothing is shown as picked.
+  selectedMode: InferenceMode | null;
   onSelect: (mode: InferenceMode) => void;
-  title?: string;
 };
 
-export function InferenceModePicker({
-  scope,
-  selectedMode,
-  onSelect,
-  title = 'Inference Mode',
-}: Props) {
+export function InferenceModePicker({ scope, selectedMode, onSelect }: Props) {
   const modes = getInferenceModes(scope);
   return (
-    <SettingsSection title={title}>
+    <SettingsSection title="Mode">
       {modes.map((opt) => (
         <SettingsRow
           key={opt.mode}

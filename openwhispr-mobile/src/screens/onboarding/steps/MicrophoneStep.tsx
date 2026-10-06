@@ -1,22 +1,23 @@
+import { useOnboardingStep } from '@/hooks/useOnboardingStep';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, Linking, View } from 'react-native';
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { getStepProgress, useOnboardingStore } from '@/store/useOnboardingStore';
+import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { getExpoAudioModule } from '@/utils/expoAudio';
+import { describeOnboardingError } from '@/lib/onboardingErrors';
 import { AppGroupStorage } from '../../../../modules/app-group-storage/src';
-
-const STEP_ID = 'microphone';
 
 type PermissionState = 'checking' | 'undetermined' | 'granted' | 'denied' | 'unavailable';
 
 type RecordingPermissionStatus = { granted: boolean; canAskAgain: boolean };
 
 export function MicrophoneStep() {
-  const goNext = useOnboardingStore((s) => s.goNext);
+  const { goNext, progress } = useOnboardingStep('microphone');
   const setPermissionGranted = useOnboardingStore((s) => s.setPermissionGranted);
   const [state, setState] = useState<PermissionState>('checking');
   const [requesting, setRequesting] = useState(false);
+  const [advanceError, setAdvanceError] = useState<string | null>(null);
   const requestingRef = useRef(false);
   const advancedRef = useRef(false);
 
@@ -25,12 +26,18 @@ export function MicrophoneStep() {
   const advance = useCallback(async () => {
     if (advancedRef.current) return;
     advancedRef.current = true;
+    setAdvanceError(null);
     // The native side refuses to warm the dictation mic without permission, so
     // a just-granted permission has to be announced — otherwise warming waits
     // for the next foreground and the keyboard stays "not ready" until then.
     AppGroupStorage.armWarmMic();
-    await setPermissionGranted('microphone', true);
-    await goNext();
+    try {
+      await setPermissionGranted('microphone', true);
+      await goNext();
+    } catch (error) {
+      advancedRef.current = false;
+      setAdvanceError(describeOnboardingError(error, 'Could not save progress.'));
+    }
   }, [goNext, setPermissionGranted]);
 
   const applyStatus = useCallback(
@@ -96,7 +103,17 @@ export function MicrophoneStep() {
           'Open Settings to grant OpenWhispr access. You can continue setup for now.',
           [
             { text: 'Open Settings', onPress: () => Linking.openSettings() },
-            { text: 'Continue', style: 'cancel', onPress: () => goNext() },
+            {
+              text: 'Continue',
+              style: 'cancel',
+              onPress: () =>
+                goNext().catch((error: unknown) =>
+                  Alert.alert(
+                    'Could not continue',
+                    describeOnboardingError(error, 'Could not save progress.'),
+                  ),
+                ),
+            },
           ],
         );
         return;
@@ -117,7 +134,19 @@ export function MicrophoneStep() {
     await goNext();
   }, [goNext]);
 
-  const progress = getStepProgress(STEP_ID);
+  if (advanceError) {
+    return (
+      <OnboardingShell
+        progress={progress}
+        title="Microphone is ready"
+        subtitle={advanceError}
+        ctaLabel="Retry"
+        onCta={advance}
+      >
+        <View className="flex-1" />
+      </OnboardingShell>
+    );
+  }
 
   if (state === 'checking') {
     return (

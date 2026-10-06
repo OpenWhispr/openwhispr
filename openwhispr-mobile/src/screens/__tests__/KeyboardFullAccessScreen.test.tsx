@@ -5,7 +5,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 const mockRouterBack = jest.fn();
 const mockRouterReplace = jest.fn();
 const mockCanGoBack = jest.fn(() => true);
-const mockPipStart = jest.fn((_video: string) => Promise.resolve(true));
+const mockPipStart = jest.fn((_video: string) => Promise.resolve('started'));
 const mockPipStop = jest.fn(() => Promise.resolve(true));
 const mockGetItem = jest.fn<string | null, [string]>(() => null);
 
@@ -153,9 +153,9 @@ describe('KeyboardFullAccessScreen', () => {
   // A double-tap on the CTA must not queue a second Settings launch behind the
   // first — the in-flight ref is the only thing preventing that.
   it('does not launch Settings twice while a launch is in flight', async () => {
-    let releasePip: (value: boolean) => void = () => {};
+    let releasePip: (value: string) => void = () => {};
     mockPipStart.mockReturnValueOnce(
-      new Promise<boolean>((resolve) => {
+      new Promise<string>((resolve) => {
         releasePip = resolve;
       }),
     );
@@ -169,7 +169,7 @@ describe('KeyboardFullAccessScreen', () => {
 
     expect(mockPipStart).toHaveBeenCalledTimes(1);
     await act(async () => {
-      releasePip(true);
+      releasePip('started');
     });
     expect(openSettingsSpy).toHaveBeenCalledTimes(1);
   });

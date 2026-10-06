@@ -65,6 +65,19 @@ const registerListener = (channel, handlerFactory) => {
 contextBridge.exposeInMainWorld("electronAPI", {
   setOnboardingWindowMode: (mode) => ipcRenderer.invoke("onboarding-set-window-mode", mode),
   setOnboardingActive: (active) => ipcRenderer.invoke("onboarding-set-active", active),
+  openPermissionGuide: (state) => ipcRenderer.invoke("permission-guide-open", state),
+  closePermissionGuide: () => ipcRenderer.invoke("permission-guide-close"),
+  getPermissionGuideState: () => ipcRenderer.invoke("permission-guide-state"),
+  permissionGuideAction: (action) => ipcRenderer.send("permission-guide-action", action),
+  startPermissionGuideDrag: (target) => ipcRenderer.send("permission-guide-drag", target),
+  onPermissionGuideState: registerListener(
+    "permission-guide-state-changed",
+    (callback) => (_event, state) => callback(state)
+  ),
+  onPermissionGuideAction: registerListener(
+    "permission-guide-action",
+    (callback) => (_event, action) => callback(action)
+  ),
   markMacAccessibilityFeaturesReady: (expectedAccountScope) =>
     expectedAccountScope
       ? ipcRenderer.send("mac-accessibility-features-ready", expectedAccountScope)
@@ -224,12 +237,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-search-notes", query, limit, spaceId, folderId),
   semanticSearchNotes: (query, limit, spaceId, folderId) =>
     ipcRenderer.invoke("db-semantic-search-notes", query, limit, spaceId, folderId),
-  semanticReindexAll: () => ipcRenderer.invoke("db-semantic-reindex-all"),
-  onSemanticReindexProgress: (callback) => {
-    const listener = (_event, data) => callback?.(data);
-    ipcRenderer.on("semantic-reindex-progress", listener);
-    return () => ipcRenderer.removeListener("semantic-reindex-progress", listener);
-  },
   updateNoteCloudId: (id, cloudId) => ipcRenderer.invoke("db-update-note-cloud-id", id, cloudId),
   updateNoteShareState: (id, state) => ipcRenderer.invoke("db-update-note-share-state", id, state),
 
@@ -250,8 +257,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "active-account-scope-changed",
     (callback) => (_event, scope) => callback(scope)
   ),
-  deleteAccountData: (accountId, expectedAuthGeneration) =>
-    ipcRenderer.invoke("delete-account-data", accountId, expectedAuthGeneration),
+  deleteAccountData: (accountId, expectedAuthGeneration, options) =>
+    ipcRenderer.invoke("delete-account-data", accountId, expectedAuthGeneration, options),
   updateSpace: (id, updates) => ipcRenderer.invoke("db-update-space", id, updates),
   purgeSpace: (id, options) => ipcRenderer.invoke("db-purge-space", id, options),
   upsertSpaceFromCloud: (space) => ipcRenderer.invoke("db-upsert-space-from-cloud", space),
@@ -282,8 +289,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Action functions
   getActions: () => ipcRenderer.invoke("db-get-actions"),
   getAction: (id) => ipcRenderer.invoke("db-get-action", id),
-  createAction: (name, description, prompt, icon) =>
-    ipcRenderer.invoke("db-create-action", name, description, prompt, icon),
+  createAction: (name, description, prompt, icon, fields) =>
+    ipcRenderer.invoke("db-create-action", name, description, prompt, icon, fields),
   updateAction: (id, updates) => ipcRenderer.invoke("db-update-action", id, updates),
   deleteAction: (id) => ipcRenderer.invoke("db-delete-action", id),
 
@@ -667,6 +674,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   processLocalReasoning: (text, modelId, agentName, config) =>
     ipcRenderer.invoke("process-local-reasoning", text, modelId, agentName, config),
   checkLocalReasoningAvailable: () => ipcRenderer.invoke("check-local-reasoning-available"),
+  getLocalContextBudget: (modelId) => ipcRenderer.invoke("get-local-context-budget", modelId),
+  cancelLocalReasoning: (requestId) => ipcRenderer.invoke("cancel-local-reasoning", requestId),
 
   // Anthropic reasoning
   processAnthropicReasoning: (text, modelId, agentName, config) =>
@@ -706,7 +715,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // llama-server
   llamaServerStart: (modelId) => ipcRenderer.invoke("llama-server-start", modelId),
-  llamaServerStop: () => ipcRenderer.invoke("llama-server-stop"),
   llamaServerStatus: () => ipcRenderer.invoke("llama-server-status"),
   llamaGpuReset: () => ipcRenderer.invoke("llama-gpu-reset"),
 
@@ -738,6 +746,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getSystemDefaultMicrophone: (options) =>
     ipcRenderer.invoke("get-system-default-microphone", options),
   checkSystemAudioAccess: () => ipcRenderer.invoke("check-system-audio-access"),
+  verifySystemAudioAccess: () => ipcRenderer.invoke("permission-guide-verify-system-audio"),
   requestSystemAudioAccess: () => ipcRenderer.invoke("request-system-audio-access"),
   openMicrophoneSettings: () => ipcRenderer.invoke("open-microphone-settings"),
   openSoundInputSettings: () => ipcRenderer.invoke("open-sound-input-settings"),
@@ -953,6 +962,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   dictationRealtimeWarmup: (options) => ipcRenderer.invoke("dictation-realtime-warmup", options),
   dictationRealtimeStart: (options) => ipcRenderer.invoke("dictation-realtime-start", options),
   dictationRealtimeSend: (buffer) => ipcRenderer.send("dictation-realtime-send", buffer),
+  dictationRealtimeFinalize: () => ipcRenderer.invoke("dictation-realtime-finalize"),
   dictationRealtimeStop: () => ipcRenderer.invoke("dictation-realtime-stop"),
   onDictationRealtimePartial: registerListener(
     "dictation-realtime-partial",
@@ -960,6 +970,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   onDictationRealtimeFinal: registerListener(
     "dictation-realtime-final",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onDictationRealtimeLanguage: registerListener(
+    "dictation-realtime-language",
     (callback) => (_event, data) => callback(data)
   ),
   onDictationRealtimeError: registerListener(
@@ -1263,6 +1277,34 @@ contextBridge.exposeInMainWorld("electronAPI", {
   gcalSyncEvents: () => ipcRenderer.invoke("gcal-sync-events"),
   gcalGetUpcomingEvents: (windowMinutes) =>
     ipcRenderer.invoke("gcal-get-upcoming-events", windowMinutes),
+  connectorStatus: () => ipcRenderer.invoke("connector-status"),
+  connectorPrepare: (connectorId, action, args) =>
+    ipcRenderer.invoke("connector-prepare", connectorId, action, args),
+  connectorQuery: (connectorId, action, args) =>
+    ipcRenderer.invoke("connector-query", connectorId, action, args),
+  connectorCommit: (actionId, edits) => ipcRenderer.invoke("connector-commit", actionId, edits),
+  connectorCancel: (actionId, reason) => ipcRenderer.invoke("connector-cancel", actionId, reason),
+  connectorRunDirect: (connectorId, action, args, runId) =>
+    ipcRenderer.invoke("connector-run-direct", connectorId, action, args, runId),
+  connectorRecentActions: (connectorId, limit) =>
+    ipcRenderer.invoke("connector-recent-actions", connectorId, limit),
+  connectorFindContacts: (query) => ipcRenderer.invoke("connector-find-contacts", query),
+  connectorNoteAttendees: (request) => ipcRenderer.invoke("connector-note-attendees", request),
+  connectorConnect: (connectorId) => ipcRenderer.invoke("connector-connect", connectorId),
+  connectorCancelConnect: (connectorId) =>
+    ipcRenderer.invoke("connector-cancel-connect", connectorId),
+  connectorDisconnect: (connectorId) => ipcRenderer.invoke("connector-disconnect", connectorId),
+  onConnectorStatusChanged: (callback) => {
+    const listener = (_event, statuses) => callback(statuses);
+    ipcRenderer.on("connector-status-changed", listener);
+    return () => ipcRenderer.removeListener("connector-status-changed", listener);
+  },
+  // A connect's progress, such as the code GitHub's device flow shows.
+  onConnectorConnectProgress: (callback) => {
+    const listener = (_event, progress) => callback(progress);
+    ipcRenderer.on("connector-connect-progress", listener);
+    return () => ipcRenderer.removeListener("connector-connect-progress", listener);
+  },
   calendarGetAvailability: (request) => ipcRenderer.invoke("calendar-get-availability", request),
   gcalGetEvent: (eventId) => ipcRenderer.invoke("gcal-get-event", eventId),
 
@@ -1314,9 +1356,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
 
   // Meeting detection
-  meetingDetectionGetPreferences: () => ipcRenderer.invoke("meeting-detection-get-preferences"),
-  meetingDetectionSetPreferences: (prefs) =>
-    ipcRenderer.invoke("meeting-detection-set-preferences", prefs),
   syncNotificationPreferences: (prefs) =>
     ipcRenderer.invoke("sync-notification-preferences", prefs),
   setSpeakerDiarizationEnabled: (enabled) =>

@@ -1,5 +1,8 @@
 import { EventEmitter, requireNativeModule } from 'expo';
 import { Platform } from 'react-native';
+import { NO_RETURN_TARGET, parseReturnOutcome, type ReturnOutcome } from './returnOutcome';
+
+export { NO_RETURN_TARGET, parseReturnOutcome, type ReturnOutcome } from './returnOutcome';
 
 type EventSubscription = {
   remove(): void;
@@ -14,11 +17,14 @@ interface AppGroupStorageModule {
   analyzeSpeechActivity(fileUri: string): Promise<SpeechActivityAnalysis>;
   convertRecordingToWav(fileUri: string): Promise<RecordingConversionResult>;
   getActiveInputModes(): string[];
-  returnToPreviousApp(): void;
+  returnToPreviousApp(): Promise<unknown>;
+  openHostApp(): Promise<unknown>;
   startNativeRecording(): boolean;
   stopNativeRecording(): void;
   endProcessingTask(): void;
   armWarmMic(): void;
+  isHardwareKeyboardConnected(): boolean;
+  markHotkeyJsReady(): void;
 }
 
 export interface SpeechActivityAnalysis {
@@ -64,6 +70,7 @@ type AppGroupStorageEvents = {
     trigger?: string;
   }) => void;
   onAgentAction: () => void;
+  onHardwareKeyboardChanged: (event: { connected: boolean }) => void;
 };
 
 const NativeModule: AppGroupStorageModule | null =
@@ -137,9 +144,24 @@ export const AppGroupStorage = {
     }
   },
 
-  returnToPreviousApp(): void {
-    if (!NativeModule) return;
-    NativeModule.returnToPreviousApp();
+  /** Sends the user back to the keyboard's host app. Resolves `no_target` whenever it can't. */
+  async returnToPreviousApp(): Promise<ReturnOutcome> {
+    if (!NativeModule) return NO_RETURN_TARGET;
+    try {
+      return parseReturnOutcome(await NativeModule.returnToPreviousApp());
+    } catch {
+      return NO_RETURN_TARGET;
+    }
+  },
+
+  /** "Back to <App>" button: reopens the host resolved by the last return. */
+  async openHostApp(): Promise<ReturnOutcome> {
+    if (!NativeModule) return NO_RETURN_TARGET;
+    try {
+      return parseReturnOutcome(await NativeModule.openHostApp());
+    } catch {
+      return NO_RETURN_TARGET;
+    }
   },
 
   startNativeRecording(): boolean {
@@ -166,6 +188,22 @@ export const AppGroupStorage = {
   armWarmMic(): void {
     if (!NativeModule) return;
     NativeModule.armWarmMic();
+  },
+
+  /** True while a hardware keyboard (e.g. a Magic Keyboard) is attached. */
+  isHardwareKeyboardConnected(): boolean {
+    if (!NativeModule) return false;
+    return NativeModule.isHardwareKeyboardConnected();
+  },
+
+  /**
+   * Tells the hardware-keyboard hotkey (plugins/hotkey-dictation) that this
+   * process's recording listeners are subscribed. The native side stamps the
+   * process id, so a stamp left by a process that died never counts.
+   */
+  markHotkeyJsReady(): void {
+    if (!NativeModule) return;
+    NativeModule.markHotkeyJsReady();
   },
 };
 
@@ -223,6 +261,13 @@ export function addAgentActionListener(callback: () => void): EventSubscription 
   return NativeModuleEvents.addListener('onAgentAction', callback);
 }
 
+export function addHardwareKeyboardChangedListener(
+  callback: (event: { connected: boolean }) => void,
+): EventSubscription | null {
+  if (!NativeModuleEvents) return null;
+  return NativeModuleEvents.addListener('onHardwareKeyboardChanged', callback);
+}
+
 export const APP_GROUP_KEYS = {
   KEYBOARD_PENDING_TRANSCRIPT: 'keyboard_pending_transcript',
   KEYBOARD_PENDING_TRANSCRIPT_JOB_ID: 'keyboard_pending_transcript_job_id',
@@ -246,6 +291,10 @@ export const APP_GROUP_KEYS = {
   KEYBOARD_RECORDING_TONE_JOB_ID: 'keyboard_recording_tone_job_id',
   KEYBOARD_TONE_APPLICABLE: 'keyboard_tone_applicable',
   BACKGROUND_SESSION_READY: 'background_session_ready',
+  // Hotkey dictation: "<pid>:<ms>", stamped by markHotkeyJsReady once
+  // useKeyboardHandoff's recording listeners are subscribed; the hotkey's cold
+  // start waits for it. Native clears it at launch.
+  HOTKEY_JS_READY_AT_MS: 'hotkey_js_ready_at_ms',
   // Agent mode — config mirrors (app → keyboard; persisted across launches like tone keys)
   KEYBOARD_AGENT_ENABLED: 'keyboard_agent_enabled',
   KEYBOARD_AGENT_APPLICABLE: 'keyboard_agent_applicable',

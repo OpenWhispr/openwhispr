@@ -132,6 +132,10 @@ jobs:
           echo "GOOGLE_CALENDAR_CLIENT_ID=${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}" >> .env
           echo "GOOGLE_CALENDAR_CLIENT_SECRET=${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}" >> .env
           echo "MICROSOFT_CALENDAR_CLIENT_ID=${{ secrets.MICROSOFT_CALENDAR_CLIENT_ID }}" >> .env
+          echo "SLACK_CLIENT_ID=${{ secrets.SLACK_CLIENT_ID }}" >> .env
+          echo "LINEAR_CLIENT_ID=${{ secrets.LINEAR_CLIENT_ID }}" >> .env
+          echo "GITHUB_APP_CLIENT_ID=${{ secrets.GH_APP_CLIENT_ID }}" >> .env
+          echo "GITHUB_APP_SLUG=${{ secrets.GH_APP_SLUG }}" >> .env
 
       - name: Verify PipeWire system audio helper build
         run: |
@@ -249,6 +253,10 @@ jobs:
           echo "GOOGLE_CALENDAR_CLIENT_ID=${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}" >> .env
           echo "GOOGLE_CALENDAR_CLIENT_SECRET=${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}" >> .env
           echo "MICROSOFT_CALENDAR_CLIENT_ID=${{ secrets.MICROSOFT_CALENDAR_CLIENT_ID }}" >> .env
+          echo "SLACK_CLIENT_ID=${{ secrets.SLACK_CLIENT_ID }}" >> .env
+          echo "LINEAR_CLIENT_ID=${{ secrets.LINEAR_CLIENT_ID }}" >> .env
+          echo "GITHUB_APP_CLIENT_ID=${{ secrets.GH_APP_CLIENT_ID }}" >> .env
+          echo "GITHUB_APP_SLUG=${{ secrets.GH_APP_SLUG }}" >> .env
 
       - name: Build and Sign Application
         run: |
@@ -387,6 +395,10 @@ jobs:
           echo "GOOGLE_CALENDAR_CLIENT_ID=${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}" >> .env
           echo "GOOGLE_CALENDAR_CLIENT_SECRET=${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}" >> .env
           echo "MICROSOFT_CALENDAR_CLIENT_ID=${{ secrets.MICROSOFT_CALENDAR_CLIENT_ID }}" >> .env
+          echo "SLACK_CLIENT_ID=${{ secrets.SLACK_CLIENT_ID }}" >> .env
+          echo "LINEAR_CLIENT_ID=${{ secrets.LINEAR_CLIENT_ID }}" >> .env
+          echo "GITHUB_APP_CLIENT_ID=${{ secrets.GH_APP_CLIENT_ID }}" >> .env
+          echo "GITHUB_APP_SLUG=${{ secrets.GH_APP_SLUG }}" >> .env
 
       - name: Build Application (${{ matrix.arch }})
         run: npm run build:mac -- --${{ matrix.arch }} --publish never
@@ -407,7 +419,7 @@ jobs:
       - name: Verify packaged macOS native binaries
         run: |
           APP_PATH=$(ls -d dist/mac*/OpenWhispr.app | head -n1)
-          for bin in macos-audio-tap macos-globe-listener macos-fast-paste macos-mic-listener macos-text-monitor macos-media-remote; do
+          for bin in macos-audio-tap macos-globe-listener macos-fast-paste macos-mic-listener macos-calendar-listener macos-text-monitor macos-window-bounds macos-media-remote; do
             test -x "$APP_PATH/Contents/Resources/bin/$bin" || { echo "Missing in bundle: $bin"; exit 1; }
           done
           test -x "$APP_PATH/Contents/Resources/bin/MediaRemoteAdapter.framework/Versions/A/MediaRemoteAdapter" || { echo "Missing in bundle: MediaRemoteAdapter.framework"; exit 1; }

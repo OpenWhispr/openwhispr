@@ -18,7 +18,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { checkUserExists } from '@/lib/authClient';
 import { safeHaptics } from '@/lib/utils';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { SpaceGrotesk } from '@/lib/fonts';
+import { AppFont } from '@/lib/fonts';
 import { BRAND_GRADIENT } from '@/config/colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import { OpenWhisprMark } from '@/components/ui/OpenWhisprMark';
@@ -268,11 +268,15 @@ export default function AuthScreen({
               >
                 <SystemIcon name="chevron.left" mdName="ChevronLeft" size={22} color="#FFFFFF" />
               </Pressable>
-              <Text style={styles.headline}>{headerTitle}</Text>
+              <Text accessibilityRole="header" style={styles.headline}>
+                {headerTitle}
+              </Text>
               {email.trim() ? <Text style={styles.headerSub}>{email.trim()}</Text> : null}
             </View>
           ) : (
-            <Text style={styles.headline}>Privacy-first{'\n'}voice-to-text AI</Text>
+            <Text accessibilityRole="header" style={styles.headline}>
+              Privacy-first{'\n'}voice-to-text AI
+            </Text>
           )}
 
           {/* Spacer pushes the action stack to the bottom (collapses with keyboard) */}
@@ -560,7 +564,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.4)',
     paddingHorizontal: 18,
-    fontFamily: SpaceGrotesk.regular,
+    fontFamily: AppFont.regular,
     fontSize: 16,
     color: '#FFFFFF',
     backgroundColor: 'rgba(255,255,255,0.25)',

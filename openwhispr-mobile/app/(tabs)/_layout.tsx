@@ -1,6 +1,7 @@
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { useSegments } from 'expo-router';
 import { useHandoffStore } from '@/store/useHandoffStore';
+import { AppFont } from '@/lib/fonts';
 
 // Static routes inside the (notes) stack — anything else under (notes) is the
 // dynamic [id] editor route.
@@ -18,11 +19,16 @@ export default function TabsLayout() {
   const isNoteEditor =
     segments[1] === '(notes)' && segments[2] !== undefined && !NOTES_STATIC_ROUTES.has(segments[2]);
   // The keyboard-dictation handoff takes over the Record tab with a full-screen
-  // "Swipe back to your app" prompt — hide the tab bar so it reads as a takeover.
+  // return screen ("Returning to your app…", "Back to <App>", or the swipe
+  // instructions) — hide the tab bar so it reads as a takeover.
   const handoffActive = useHandoffStore((s) => s.isActive);
 
   return (
-    <NativeTabs minimizeBehavior="onScrollDown" hidden={isNoteEditor || handoffActive}>
+    <NativeTabs
+      minimizeBehavior="onScrollDown"
+      hidden={isNoteEditor || handoffActive}
+      labelStyle={{ fontFamily: AppFont.medium }}
+    >
       <NativeTabs.Trigger name="(record)">
         <NativeTabs.Trigger.Label>Record</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="mic.fill" />

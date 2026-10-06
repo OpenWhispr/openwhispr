@@ -38,6 +38,8 @@ let speakerSession = null;
 let speakerInputName = null;
 let textSession = null;
 let textTokenizer = null;
+// One queue per session, keyed by method prefix ("text.", "speaker.").
+const sessionQueues = { text: Promise.resolve(), speaker: Promise.resolve() };
 
 function log(level, message, extra) {
   if (!logStream) return;
@@ -221,6 +223,17 @@ async function speakerExtract({ samplesBuffer }) {
   return { embeddingBuffer: data.buffer };
 }
 
+// Unloads clear the session before releasing it, so a release that throws can't leave ping
+// reporting a loaded session and keep releaseIfIdle from ever exiting the worker.
+async function speakerUnload() {
+  const session = speakerSession;
+  speakerSession = null;
+  speakerInputName = null;
+  if (session) await session.release();
+  log("info", "speaker session unloaded");
+  return { ok: true };
+}
+
 function buildTextTokenizer(tokenizerData) {
   const tokenToId = new Map();
   for (const [token, id] of Object.entries(tokenizerData.model.vocab)) {
@@ -313,12 +326,13 @@ async function textLoad({ modelDir }) {
   loadOrt();
 
   const tokenizerData = JSON.parse(fs.readFileSync(path.join(modelDir, "tokenizer.json"), "utf-8"));
-  textTokenizer = buildTextTokenizer(tokenizerData);
+  const tokenizer = buildTextTokenizer(tokenizerData);
 
   textSession = await ort.InferenceSession.create(
     path.join(modelDir, "model.onnx"),
     SESSION_OPTIONS
   );
+  textTokenizer = tokenizer;
   log("info", "text session loaded", { modelDir });
   return { ok: true };
 }
@@ -338,12 +352,23 @@ async function textEmbed({ text }) {
   return { embeddingBuffer: embedding.buffer };
 }
 
+async function textUnload() {
+  const session = textSession;
+  textSession = null;
+  textTokenizer = null;
+  if (session) await session.release();
+  log("info", "text session unloaded");
+  return { ok: true };
+}
+
 const handlers = {
   ping: () => ({ ok: true, sessions: { speaker: !!speakerSession, text: !!textSession } }),
   "speaker.load": speakerLoad,
   "speaker.extract": speakerExtract,
+  "speaker.unload": speakerUnload,
   "text.load": textLoad,
   "text.embed": textEmbed,
+  "text.unload": textUnload,
   shutdown: () => {
     log("info", "shutdown requested");
     setImmediate(() => process.exit(0));
@@ -357,7 +382,16 @@ async function dispatch({ id, method, payload }) {
     return { reply: { id, error: { message: `unknown method: ${method}` } }, transferList: [] };
   }
   try {
-    const result = await handler(payload || {});
+    let result;
+    const queueKey = method.split(".")[0];
+    if (Object.hasOwn(sessionQueues, queueKey)) {
+      // Message callbacks overlap; never release a session during native inference.
+      const operation = sessionQueues[queueKey].then(() => handler(payload || {}));
+      sessionQueues[queueKey] = operation.catch(() => {});
+      result = await operation;
+    } else {
+      result = await handler(payload || {});
+    }
     // MessagePortMain transfers only ports, not ArrayBuffers — clone the result buffers instead.
     return { reply: { id, result }, transferList: [] };
   } catch (err) {

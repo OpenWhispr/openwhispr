@@ -53,6 +53,10 @@ import {
 import ControlPanelSidebar from "./ControlPanelSidebar";
 import ControlPanelTopBar from "./ControlPanelTopBar";
 import { useControlPanelNavItems, type ControlPanelView } from "./controlPanelNav";
+import {
+  DEFAULT_INTEGRATIONS_SECTION,
+  type IntegrationsSection,
+} from "./integrations/integrationsSections";
 import MeetingRecordingMount from "./MeetingRecordingMount";
 import MeetingRecordingPill from "./notes/MeetingRecordingPill";
 import NewNoteMenu from "./notes/NewNoteMenu";
@@ -92,10 +96,6 @@ import {
 const platform = getCachedPlatform();
 
 const SIDEBAR_WIDTH_PX = 192;
-
-// Bump to force a one-time full semantic reindex on next launch (see the
-// reindex effect for the per-version history).
-const SEMANTIC_REINDEX_VERSION = 2;
 
 const SettingsModal = React.lazy(() => import("./SettingsModal"));
 const ReferralModal = React.lazy(() => import("./ReferralModal"));
@@ -139,6 +139,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const [showSearch, setShowSearch] = useState(false);
   const showDiscarded = useShowDiscarded();
   const [activeView, setActiveView] = useState<ControlPanelView>("home");
+  const [integrationsSection, setIntegrationsSection] = useState<IntegrationsSection>(
+    DEFAULT_INTEGRATIONS_SECTION
+  );
   const navItems = useControlPanelNavItems();
   const {
     collapsed: sidebarCollapsed,
@@ -281,26 +284,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     window.electronAPI?.noteFilesSetEnabled?.(true, noteFilesPath || undefined, {
       skipRebuild: true,
     });
-  }, []);
-
-  // One-time background reindex, versioned: v1 backfilled space_id payloads
-  // after the spaces migration; v2 backfills cloud-pulled notes, which were
-  // never incrementally indexed before the upsert-from-cloud handler gained a
-  // vector upsert. Delayed so the Qdrant sidecar has time to come up; if it
-  // isn't ready yet the flag stays unset and the next launch retries.
-  useEffect(() => {
-    if (Number(localStorage.getItem("semanticReindexVersion")) >= SEMANTIC_REINDEX_VERSION) return;
-    const timer = setTimeout(() => {
-      window.electronAPI
-        ?.semanticReindexAll?.()
-        .then((result) => {
-          if (result?.success) {
-            localStorage.setItem("semanticReindexVersion", String(SEMANTIC_REINDEX_VERSION));
-          }
-        })
-        .catch(() => {});
-    }, 15_000);
-    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -1192,11 +1175,15 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   onRetryTranscription={retryTranscription}
                   showDiscarded={showDiscarded}
                   onToggleDiscarded={toggleShowDiscarded}
+                  userName={user?.name}
                   onOpenSettings={(section) => {
                     setSettingsSection(section);
                     setShowSettings(true);
                   }}
-                  onOpenIntegrations={() => setActiveView("integrations")}
+                  onOpenIntegrations={() => {
+                    setIntegrationsSection("calendars");
+                    setActiveView("integrations");
+                  }}
                 />
               )}
               {activeView === "insights" && (
@@ -1256,6 +1243,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                       setSettingsSection("plansBilling");
                       setShowSettings(true);
                     }}
+                    section={integrationsSection}
+                    onSectionChange={setIntegrationsSection}
                   />
                 </Suspense>
               )}

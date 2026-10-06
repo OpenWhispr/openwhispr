@@ -21,6 +21,15 @@ export interface ReasoningConfig {
   textOnlySystemPrompt?: string;
   language?: string;
   requireCompleteOutput?: boolean;
+  /**
+   * Local models only: when the prompt leaves less than `maxTokens` of room and
+   * the reply fills what is left, fail as CONTEXT_TOO_LARGE instead of
+   * returning a reply the context window clipped. With `requireCompleteOutput`,
+   * it still lets the allowance shrink to fit, where that flag alone refuses.
+   */
+  refuseClippedByWindow?: boolean;
+  /** Local models only: tags the request so `cancelLocalReasoning` can abort it. */
+  requestId?: string;
   requiresAgent?: boolean;
   inferenceScope?: InferenceScope;
 }

@@ -3,7 +3,19 @@ import { createIcon } from "./createIcon";
 import * as Nucleo from "./nucleo";
 
 export type { IconComponent, IconProps } from "./createIcon";
-export { Circle, Square } from "./primitives";
+export {
+  Bold,
+  Circle,
+  Heading,
+  Italic,
+  List,
+  ListChecks,
+  ListOrdered,
+  Quote,
+  Square,
+  Strikethrough,
+  Table,
+} from "./primitives";
 
 export const AlertCircle = createIcon("alert-circle", Nucleo.CircleWarningOutline24);
 export const AlertTriangle = createIcon("alert-triangle", Nucleo.TriangleWarningOutline24);
@@ -122,7 +134,6 @@ export const ShieldCheck = createIcon("shield-check", Nucleo.ShieldCheckOutline2
 export const Sliders = createIcon("sliders", Nucleo.Sliders2VerticalOutline24);
 export const Smile = createIcon("smile", Nucleo.FaceSmileOutline24);
 export const Sparkles = createIcon("sparkles", Nucleo.SparkleOutline24);
-export const SquarePen = createIcon("square-pen", Nucleo.ComposeOutline24);
 export const Sun = createIcon("sun", Nucleo.SunOutline24);
 export const Terminal = createIcon("terminal", Nucleo.ConsoleOutline24);
 export const TestTube = createIcon("test-tube", Nucleo.TestTubeOutline24);

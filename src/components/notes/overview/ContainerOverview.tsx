@@ -10,10 +10,13 @@ import {
   useFolders,
   useFolderCounts,
   useSpaceRootCounts,
+  folderContainerKey,
+  ensureContainerLoaded,
 } from "../../../stores/noteStore";
 import { useContainerChat } from "../../../hooks/useContainerChat";
 import { cn } from "../../lib/utils";
 import { PAGE_CONTENT_WIDTH_CLASS } from "../../ui/pageWidth";
+import { PAGE_HERO_ICON_TILE_CLASS } from "../../ui/surfaces";
 import { ContainerIcon } from "./ContainerIcon";
 import { OverviewExplainerBanner } from "./OverviewExplainerBanner";
 import { OverviewAskSection } from "./OverviewAskSection";
@@ -46,6 +49,9 @@ export function ContainerOverview({
   const folderCounts = useFolderCounts();
   const spaceRootCounts = useSpaceRootCounts();
   const [spaceNotes, setSpaceNotes] = useState<NoteItem[] | null>(null);
+  const [spaceNotesError, setSpaceNotesError] = useState(false);
+  const [folderNotesError, setFolderNotesError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [showInviteDialog, setShowInviteDialog] = useState(false);
 
   // Folder overviews mirror the store's active container; space overviews list
@@ -57,17 +63,43 @@ export function ContainerOverview({
     window.electronAPI
       .getSpaceNotes(space.id, SPACE_NOTES_LIMIT)
       .then((rows) => {
-        if (!stale) setSpaceNotes(rows ?? []);
+        if (!stale) {
+          setSpaceNotes(rows ?? []);
+          setSpaceNotesError(false);
+        }
       })
       .catch(() => {
-        if (!stale) setSpaceNotes([]);
+        if (!stale) setSpaceNotesError(true);
       });
     return () => {
       stale = true;
     };
-  }, [folder, space.id, notesByContainer]);
+  }, [folder, space.id, notesByContainer, reloadKey]);
+
+  useEffect(() => {
+    if (!folder) return;
+    const key = folderContainerKey(folder.id);
+    if (notesByContainer[key] !== undefined) return;
+    let stale = false;
+    void ensureContainerLoaded(key)
+      .then(() => {
+        if (!stale) setFolderNotesError(false);
+      })
+      .catch(() => {
+        if (!stale) setFolderNotesError(true);
+      });
+    return () => {
+      stale = true;
+    };
+  }, [folder, notesByContainer]);
 
   const notes = folder ? containerNotes : (spaceNotes ?? []);
+  const folderKey = folder ? folderContainerKey(folder.id) : null;
+  const folderNotesLoaded = folderKey !== null && notesByContainer[folderKey] !== undefined;
+  const isLoaded = folder ? folderNotesLoaded : spaceNotes !== null;
+  const loadFailed = folder
+    ? folderNotesError && !folderNotesLoaded
+    : spaceNotesError && spaceNotes === null;
 
   const chat = useContainerChat({ space, folder, notes });
 
@@ -101,11 +133,53 @@ export function ContainerOverview({
     metaParts.push(t("notes.overview.meta.members", { count: space.member_count }));
   }
 
+  if (loadFailed || !isLoaded) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-sm text-muted-foreground">
+        <p>{t(loadFailed ? "common.error" : "common.loading")}</p>
+        {loadFailed && (
+          <button
+            onClick={() => {
+              if (folderKey) {
+                setFolderNotesError(false);
+                void ensureContainerLoaded(folderKey).catch(() => setFolderNotesError(true));
+              } else {
+                setSpaceNotes(null);
+                setSpaceNotesError(false);
+                setReloadKey((value) => value + 1);
+              }
+            }}
+            className="text-primary hover:underline focus-visible:underline"
+          >
+            {t("common.retry")}
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  // Keyed, and a direct child of the same parent in both of its slots, so crossing
+  // zero notes moves the composer instead of remounting it and losing its draft.
+  const askSection = (
+    <OverviewAskSection
+      key="ask"
+      messages={chat.messages}
+      agentState={chat.agentState}
+      onTextSubmit={chat.sendMessage}
+      onCancel={chat.cancelStream}
+      conversations={chat.conversations}
+      activeConversationId={chat.activeConversationId}
+      onSwitchConversation={chat.switchConversation}
+      onNewChat={chat.startNewChat}
+      onOpenNote={onOpenNote}
+    />
+  );
+
   return (
     <div className="flex-1 overflow-y-auto min-h-0">
       <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 py-8 flex flex-col gap-5")}>
         <div className="flex flex-col items-center text-center gap-2 pt-4">
-          <div className="h-12 w-12 rounded-xl bg-foreground/4 dark:bg-white/5 border border-border/70 dark:border-white/10 flex items-center justify-center mb-1">
+          <div className={cn(PAGE_HERO_ICON_TILE_CLASS, "mb-1")}>
             <ContainerIcon space={space} folder={folder} size={20} />
           </div>
           <h1 className="text-xl font-semibold text-foreground tracking-tight">
@@ -140,21 +214,11 @@ export function ContainerOverview({
           </div>
         </div>
 
-        <OverviewExplainerBanner kind={space.kind === "team" ? "team" : "private"} />
-
-        <OverviewAskSection
-          messages={chat.messages}
-          agentState={chat.agentState}
-          onTextSubmit={chat.sendMessage}
-          onCancel={chat.cancelStream}
-          conversations={chat.conversations}
-          activeConversationId={chat.activeConversationId}
-          onSwitchConversation={chat.switchConversation}
-          onNewChat={chat.startNewChat}
-          onOpenNote={onOpenNote}
-        />
-
-        <div className="border-t border-border/70 dark:border-white/10">
+        {notes.length > 0 && (
+          <OverviewExplainerBanner kind={space.kind === "team" ? "team" : "private"} />
+        )}
+        {notes.length > 0 && askSection}
+        <div className={notes.length > 0 ? "border-t border-border/70 dark:border-white/10" : ""}>
           <OverviewNoteList
             notes={notes}
             space={space}
@@ -163,6 +227,7 @@ export function ContainerOverview({
             onAddExisting={onAddExisting}
           />
         </div>
+        {notes.length === 0 && askSection}
       </div>
 
       {canInvite && workspace && space.cloud_space_id && (

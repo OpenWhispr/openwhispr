@@ -30,7 +30,9 @@ export function VoiceprintSuggestionSheet({
           testID="voiceprint-suggestion-sheet"
         >
           <View className="gap-1">
-            <Text className="text-lg font-semibold text-label">{speakerName}</Text>
+            <Text accessibilityRole="header" className="text-lg font-semibold text-label">
+              {speakerName}
+            </Text>
             <Text className="text-[14px] leading-5 text-secondaryLabel">
               Confirm this suggestion to lock the speaker label on this transcript.
             </Text>

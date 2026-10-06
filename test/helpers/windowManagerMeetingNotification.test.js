@@ -345,6 +345,26 @@ test("push-to-talk dictation follows the companion pill's availability", () => {
   assert.deepEqual(rendererChannels, ["prepare-dictation", "start-dictation"]);
 });
 
+test("a stop press probes the target again instead of reusing the start press's", () => {
+  const manager = createNormalWindowManager();
+  const captures = [];
+  manager.mainWindow = { isDestroyed: () => false, webContents: { send: () => undefined } };
+  manager.hotkeyManager = {
+    isInListeningMode: () => false,
+    unregisterAll: () => undefined,
+  };
+  manager.textEditMonitor = { captureTargetPid: () => Promise.resolve(null) };
+  manager.selectionManager = { captureTarget: (options) => captures.push(options) };
+  manager.showDictationPanel = () => undefined;
+  manager.sendPrepareDictation = () => undefined;
+
+  manager.sendToggleDictation();
+  manager.setDictationLifecycleState("recording");
+  manager.sendToggleDictation();
+
+  assert.deepEqual(captures, [{ force: false }, { force: true }]);
+});
+
 test("window manager starts fail-closed and suppresses normal-app popup surfaces", async () => {
   const manager = new WindowManager();
 

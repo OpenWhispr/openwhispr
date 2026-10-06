@@ -64,6 +64,11 @@ import {
   type OnboardingStepId,
 } from "./onboarding/flow";
 import { useOnboardingSession } from "./onboarding/useOnboardingSession";
+import { usePermissionGuide } from "./onboarding/usePermissionGuide";
+import {
+  requestMicrophoneForGuide,
+  type GuidePermission,
+} from "./onboarding/permissionGuideController";
 import { clearPendingLocalModels, hasPendingLocalModels } from "./onboarding/pendingLocalModels";
 import { resolveAssistantDemoScenario } from "./onboarding/assistantDemoScenario";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
@@ -107,6 +112,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setSetupMode,
     setSelfHostedRequested,
     setScreenContextRequested,
+    setPermissionGuide,
     clearSession,
   } = useOnboardingSession();
 
@@ -199,14 +205,16 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   );
   const systemAudio = useSystemAudioPermission();
   const {
-    isMacOS,
     granted: screenRecordingGranted,
     needsRelaunch: screenRecordingNeedsRelaunch,
+    loaded: screenRecordingLoaded,
+    check: checkScreenRecording,
     request: requestScreenRecordingAccess,
   } = useScreenRecordingPermission();
   const {
     supportsPushToTalk,
     pushToTalkUnavailableReason,
+    linuxInputAccessDenied,
     loaded: hotkeyModeLoaded,
   } = useHotkeyModeInfo("onboarding", dictationHotkey);
   const { activationMode, setActivationMode } = settings;
@@ -280,23 +288,19 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   // macOS grants Screen Recording in System Settings, outside the app; the
   // permission hook re-checks on mount and window focus. When the grant lands,
-  // complete the opt-in the Enable click started. On macOS the grant serves
-  // only this feature, so one that already exists (a reset wipes the setting
-  // but not the permission) counts as the opt-in too; Windows is permissionless
-  // and keeps its explicit Enable.
+  // complete the opt-in the Enable click started. A system grant alone must
+  // not enable Screen Context without the user's explicit opt-in.
   useEffect(() => {
     if (!screenRecordingGranted || !agentAllowed || !screenContextAllowed) return;
-    if (screenContextRequested || (isMacOS && !settingsStore.voiceAgentScreenContext)) {
+    if (screenContextRequested) {
       applyScreenContext();
     }
   }, [
     agentAllowed,
     applyScreenContext,
-    isMacOS,
     screenContextAllowed,
     screenContextRequested,
     screenRecordingGranted,
-    settingsStore.voiceAgentScreenContext,
   ]);
 
   const requiredModels = useRequiredLocalModels();
@@ -344,6 +348,86 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       macAccessibilityChecksEnabled: shouldInitializeMacAccessibilityFeatures(currentStepId),
     }
   );
+  const openSettings =
+    (open: () => Promise<{ success: boolean; error?: string }>) => async (): Promise<void> => {
+      const result = await open();
+      if (!result.success) throw new Error(result.error);
+    };
+  const openMicrophoneSettings = openSettings(window.electronAPI.openMicrophoneSettings);
+  const openAccessibilitySettings = openSettings(window.electronAPI.openAccessibilitySettings);
+  const guideRows: GuidePermission[] = [
+    {
+      id: "microphone",
+      request: async () => {
+        const result = await requestMicrophoneForGuide({
+          requestAccess: window.electronAPI.requestMicrophoneAccess,
+          checkAccess: window.electronAPI.checkMicrophoneAccess,
+          openSettings: openMicrophoneSettings,
+        });
+        permissions.setMicPermissionGranted(result.granted);
+      },
+      check: async () => {
+        const result = await window.electronAPI.checkMicrophoneAccess();
+        permissions.setMicPermissionGranted(result.granted);
+        return result;
+      },
+      openSettings: openMicrophoneSettings,
+    },
+    {
+      id: "accessibility",
+      request: openAccessibilitySettings,
+      check: async () => {
+        const granted = await window.electronAPI.checkAccessibilityPermission(true);
+        permissions.setAccessibilityPermissionGranted(granted);
+        return { granted };
+      },
+      openSettings: openAccessibilitySettings,
+    },
+  ];
+  if (systemAudio.mode === "native")
+    guideRows.push({
+      id: "system-audio",
+      request: systemAudio.request,
+      check: async () => {
+        await systemAudio.check();
+        return window.electronAPI.checkSystemAudioAccess();
+      },
+      verify: async () => {
+        const result = await window.electronAPI.verifySystemAudioAccess();
+        await systemAudio.check();
+        return result;
+      },
+      openSettings: openSettings(window.electronAPI.openSystemAudioSettings),
+    });
+  if (agentAllowed && screenContextAllowed)
+    guideRows.push({
+      id: "screen-context",
+      request: async () => {
+        setScreenContextRequested(true);
+        return requestScreenRecordingAccess();
+      },
+      onGranted: applyScreenContext,
+      check: async () => {
+        const result = await window.electronAPI.checkScreenRecordingAccess();
+        await checkScreenRecording();
+        return result;
+      },
+      openSettings: openSettings(window.electronAPI.openScreenRecordingSettings),
+    });
+  const guideReady = platform === "darwin" && systemAudio.loaded && screenRecordingLoaded;
+  const permissionGuide = usePermissionGuide({
+    enabled: currentStepId === "permissions" && guideReady,
+    progress: session.permissionGuide,
+    save: setPermissionGuide,
+    // Dismissing the guide withdraws the Screen Context opt-in; enabling
+    // another permission while it is still pending does not.
+    dismissed: () => setScreenContextRequested(false),
+    rows: guideRows,
+  });
+
+  useEffect(() => {
+    if (currentStepId !== "permissions" && session.permissionGuide) setPermissionGuide(null);
+  }, [currentStepId, session.permissionGuide, setPermissionGuide]);
   const updateCurrentByokDraft = useCallback(
     (state: OnboardingByokDraft) => {
       if (currentStepId !== "byok-dictation" && currentStepId !== "byok-assistant") return;
@@ -511,10 +595,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   const confirmAssistantHotkey = useCallback(
     async (value: string) => {
-      const registered = await settings.setVoiceAgentKey(
+      const result = await settings.setVoiceAgentKey(
         serializeHotkeyList([value, ...parseHotkeyList(settings.voiceAgentKey).slice(1)])
       );
-      return registered ? null : t("onboarding.rehaul.hotkey.inUse");
+      return result.success ? null : result.message || t("onboarding.rehaul.hotkey.inUse");
     },
     [settings, t]
   );
@@ -535,7 +619,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   ]);
 
   const finalizeOnboarding = useCallback(
-    async (mode: OnboardingCompletionMode, options: { localPending?: boolean } = {}) => {
+    async (mode: OnboardingCompletionMode) => {
       if (isFinishing) return;
       setIsFinishing(true);
       setFatalError(null);
@@ -558,16 +642,16 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         await window.electronAPI?.markBundleMigrated?.();
         await window.electronAPI?.setOnboardingWindowMode?.("restore");
 
-        // hasPendingLocalModels() covers proceeding past a still-running download
-        // rather than skipping: the model was remembered when the download
-        // started, and BackgroundModelDownloadTray only applies it (and then
-        // clears this flag) while the flag is set.
+        // hasPendingLocalModels() covers leaving a still-running download, by
+        // Proceed or Skip: the model was remembered when the download started,
+        // and BackgroundModelDownloadTray only applies it (and then clears this
+        // flag) while the flag is set.
         //
         // Only preserve a pending download when the completed route still uses
         // local models. A user who walks Back and finishes on Cloud/BYOK must not
         // be switched back to a stale local selection when it completes later.
         const routeKeepsLocalModels = mode === "local";
-        if (routeKeepsLocalModels && (options.localPending || hasPendingLocalModels())) {
+        if (routeKeepsLocalModels && hasPendingLocalModels()) {
           localStorage.setItem("localSetupPending", "true");
         } else {
           localStorage.removeItem("localSetupPending");
@@ -708,14 +792,14 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       setDictationHotkeyConfirmed(true);
     } else if (currentStepId === "assistant-hotkey") {
       if (parseHotkeyList(settings.voiceAgentKey)[0] !== assistantHotkey) {
-        const registered = await settings.setVoiceAgentKey(
+        const result = await settings.setVoiceAgentKey(
           serializeHotkeyList([
             assistantHotkey,
             ...parseHotkeyList(settings.voiceAgentKey).slice(1),
           ])
         );
-        if (!registered) {
-          setFatalError(t("onboarding.rehaul.hotkey.inUse"));
+        if (!result.success) {
+          setFatalError(result.message || t("onboarding.rehaul.hotkey.inUse"));
           return;
         }
       }
@@ -782,8 +866,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       await continueFromCurrentStep();
       return;
     }
-    await finalizeOnboarding("local", { localPending: true });
-  }, [continueFromCurrentStep, currentStepId, finalizeOnboarding]);
+    // The local assistant is optional. If the user skips it, prevent
+    // dictation from falling back to an unconfigured cleanup provider.
+    settingsStore.updateCleanupSettings({ useCleanupModel: false });
+    await finalizeOnboarding("local");
+  }, [continueFromCurrentStep, currentStepId, finalizeOnboarding, settingsStore]);
 
   const canContinue = (() => {
     switch (currentStepId) {
@@ -867,6 +954,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         return (
           <CompactPermissionsStep
             permissions={permissions}
+            guide={{ ...permissionGuide, ready: guideReady }}
             systemAudio={systemAudio}
             screenContext={
               agentAllowed && screenContextAllowed
@@ -1004,15 +1092,17 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                     variant="onboarding"
                     value={activationMode}
                     onChange={setActivationMode}
-                    pushDisabledReason={
-                      !supportsPushToTalk
-                        ? pushToTalkUnavailableReason || t("windows.pttUnavailable")
-                        : undefined
-                    }
+                    pushDisabledReason={pushToTalkUnavailableReason ?? undefined}
                   />
                 </div>
-                {platform === "linux" && activationMode === "push" && (
-                  <LinuxPttSetupInfo isAvailable={supportsPushToTalk} />
+                {/* Denied input access gets the setup box below instead. */}
+                {pushToTalkUnavailableReason && !linuxInputAccessDenied && (
+                  <p className="mt-2 text-start text-xs leading-[1.4] text-[var(--onboarding-text-secondary)]">
+                    {pushToTalkUnavailableReason}
+                  </p>
+                )}
+                {platform === "linux" && (activationMode === "push" || linuxInputAccessDenied) && (
+                  <LinuxPttSetupInfo isAvailable={!linuxInputAccessDenied} />
                 )}
               </div>
             )}

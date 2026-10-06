@@ -11,8 +11,8 @@ type ConflictBannerProps = {
 };
 
 /** Shown on the note editor when the note has a server copy parked from a push-time conflict
- * (see notesRepository.listConflictedNotes). Card/CTA layout matches VoiceProfilePromptCard and
- * ParakeetNudgeBanner — the app's existing inline-alert pattern. */
+ * (see notesRepository.listConflictedNotes). Card/CTA layout matches ParakeetNudgeBanner, the
+ * app's existing inline-alert pattern. */
 export function ConflictBanner({ canUseServerCopy, onKeepMine, onUseServer }: ConflictBannerProps) {
   return (
     <View

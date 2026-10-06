@@ -54,6 +54,7 @@ export async function withRetry<T>(fn: () => Promise<T>, options: RetryOptions =
 export function createApiRetryStrategy(): RetryOptions {
   return {
     shouldRetry: (error: unknown) => {
+      if ((error as { retryable?: unknown } | null)?.retryable === false) return false;
       const status =
         typeof error === 'object' && error !== null && 'status' in error
           ? (error as { status?: number }).status

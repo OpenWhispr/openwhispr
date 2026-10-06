@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import type React from 'react';
-import { KeyboardAvoidingView, Platform, TextInput, View } from 'react-native';
+import { TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { iosColor } from '@/config/colors';
+import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import { MeetingTabs, type MeetingTab } from './MeetingTabs';
 import { LiveTranscriptList } from './LiveTranscriptList';
 import type { RealtimeUtterance } from '@/services/transcription/realtimeEvents';
@@ -54,15 +55,13 @@ export function CloudMeetingRecording({
   // behind it from y=0 — offset below it or the status bar overlaps the timer card.
   const headerHeight = useHeaderHeight();
   const [tab, setTab] = useState<MeetingTab>('transcript');
-  const footerBottomPadding = Math.max(insets.bottom + 16, 24);
+  const keyboardHeight = useKeyboardHeight();
+  // The view fills the screen, so the keyboard covers the home-indicator inset too.
+  const footerBottomPadding =
+    keyboardHeight > 0 ? keyboardHeight + 12 : Math.max(insets.bottom + 16, 24);
 
   return (
-    <KeyboardAvoidingView
-      className="flex-1 bg-systemBackground"
-      style={{ paddingTop: headerHeight }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={headerHeight}
-    >
+    <View className="flex-1 bg-systemBackground" style={{ paddingTop: headerHeight }}>
       <View
         className="mx-4 mt-1 flex-row items-center gap-3 rounded-[22px] border border-separator bg-secondarySystemGroupedBackground p-4 shadow-sm"
         style={{ borderCurve: 'continuous' }}
@@ -111,7 +110,7 @@ export function CloudMeetingRecording({
               placeholderTextColor={iosColor('tertiaryLabel')}
               multiline
               textAlignVertical="top"
-              className="min-h-[120px] flex-1 text-[16px] leading-6 text-label"
+              className="flex-1 text-[16px] leading-6 text-label"
             />
           </View>
         ) : (
@@ -124,6 +123,6 @@ export function CloudMeetingRecording({
           Stop
         </Button>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }

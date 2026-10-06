@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { AlertTriangle, Check, X, Loader2, Clock, Trash2 } from "../icons";
 import { Button } from "../ui/button";
 import { cn } from "../lib/utils";
+import { CARD_SURFACE_CLASS } from "../ui/surfaces";
 import type { QueueItem } from "../../stores/batchQueueStore";
 
 interface BatchQueueViewProps {
@@ -21,13 +22,13 @@ interface BatchQueueViewProps {
 function StatusIcon({ status }: { status: QueueItem["status"] }) {
   switch (status) {
     case "done":
-      return <Check size={12} className="text-success/70" />;
+      return <Check size={14} className="shrink-0 text-success" />;
     case "error":
-      return <X size={12} className="text-destructive/70" />;
+      return <X size={14} className="shrink-0 text-destructive" />;
     case "queued":
-      return <Clock size={12} className="text-foreground/45" />;
+      return <Clock size={14} className="shrink-0 text-muted-foreground" />;
     default:
-      return <Loader2 size={12} className="text-primary/60 animate-spin" />;
+      return <Loader2 size={14} className="shrink-0 animate-spin text-primary" />;
   }
 }
 
@@ -75,16 +76,19 @@ export default function BatchQueueView({
     totalCount > 0 ? Math.round(((completedCount + failedCount) / totalCount) * 100) : 0;
 
   return (
-    <div style={{ animation: "float-up 0.3s ease-out" }}>
-      <div className="mb-3">
-        <div className="flex items-center justify-between mb-1.5">
-          <p className="text-xs text-foreground/50 font-medium">
+    <div
+      className={cn(CARD_SURFACE_CLASS, "overflow-clip")}
+      style={{ animation: "float-up 0.3s ease-out" }}
+    >
+      <div className="px-4 pt-4 pb-3">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <p className="text-sm font-medium text-foreground">
             {t("notes.upload.queueProgress", {
               completed: completedCount,
               total: totalCount,
             })}
             {failedCount > 0 && (
-              <span className="text-destructive/50 font-normal">
+              <span className="font-normal text-destructive">
                 {" · "}
                 {t("notes.upload.queueFailed", { n: failedCount })}
               </span>
@@ -95,38 +99,37 @@ export default function BatchQueueView({
               variant="ghost"
               size="sm"
               onClick={onClearQueue}
-              className="h-6 text-[10px] text-foreground/45"
+              className="h-7 rounded-full px-3 text-xs"
             >
               {t("notes.upload.clearQueue")}
             </Button>
           )}
         </div>
-        <div className="w-full h-[3px] rounded-full bg-foreground/5 dark:bg-white/5 overflow-hidden">
+        <div className="h-1 w-full overflow-hidden rounded-full bg-foreground/8 dark:bg-white/10">
           <div
-            className="h-full rounded-full bg-primary/50 transition-[width] duration-500 ease-out"
+            className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out"
             style={{ width: `${overallProgress}%` }}
           />
         </div>
       </div>
 
-      <div className="space-y-1 max-h-[300px] overflow-y-auto">
+      <div className="max-h-[300px] divide-y divide-border/60 overflow-y-auto border-t border-border/60 dark:divide-white/10 dark:border-white/10">
         {queue.map((item) => (
           <div
             key={item.id}
             className={cn(
-              "flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs",
-              "bg-surface-1/30 dark:bg-white/[0.02] border border-foreground/4 dark:border-white/10",
-              item.status === "error" && "border-destructive/15"
+              "flex min-h-12 items-center gap-3 px-4 py-2 text-sm",
+              item.status === "error" && "bg-destructive/5"
             )}
           >
             <StatusIcon status={item.status} />
-            <span className="flex-1 truncate text-foreground/60">{item.name}</span>
+            <span className="flex-1 truncate text-foreground/80">{item.name}</span>
 
             {item.status === "downloading" && (
-              <div className="w-16 h-[2px] rounded-full bg-foreground/5 overflow-hidden">
+              <div className="h-1 w-16 overflow-hidden rounded-full bg-foreground/8 dark:bg-white/10">
                 <div
                   className={cn(
-                    "h-full rounded-full bg-primary/50 transition-[width] duration-300",
+                    "h-full rounded-full bg-primary transition-[width] duration-300",
                     // Percent 0 = size unknown: pulse instead of an empty bar.
                     !item.progress && "animate-pulse"
                   )}
@@ -146,7 +149,7 @@ export default function BatchQueueView({
             {item.status === "done" && item.noteId && onOpenNote && (
               <button
                 onClick={() => onOpenNote(item.noteId!)}
-                className="text-[10px] text-primary/50 hover:text-primary/70"
+                className="text-xs font-medium text-primary hover:underline"
                 aria-label={t("notes.upload.openNote")}
               >
                 {t("notes.upload.openNote")}
@@ -155,7 +158,7 @@ export default function BatchQueueView({
 
             {item.status === "error" && item.error && (
               <span
-                className="text-[10px] text-destructive/50 truncate max-w-20"
+                className="max-w-40 truncate text-xs text-destructive"
                 title={t(`notes.upload.${item.error}`, {
                   defaultValue: item.error,
                   size: byokMaxFileSizeMb,
@@ -171,10 +174,10 @@ export default function BatchQueueView({
             {item.status === "queued" && (
               <button
                 onClick={() => onRemoveItem(item.id)}
-                className="text-foreground/45 transition-colors"
+                className="flex size-7 shrink-0 items-center justify-center rounded-full text-foreground/45 transition-colors hover:bg-foreground/5 hover:text-foreground"
                 aria-label={t("notes.upload.removeFromQueue")}
               >
-                <Trash2 size={10} />
+                <Trash2 size={13} />
               </button>
             )}
           </div>
@@ -182,13 +185,8 @@ export default function BatchQueueView({
       </div>
 
       {isProcessing && !allDone && (
-        <div className="flex justify-center mt-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onCancelAll}
-            className="h-7 text-xs text-foreground/45"
-          >
+        <div className="flex justify-center border-t border-border/60 py-2 dark:border-white/10">
+          <Button variant="ghost" size="sm" onClick={onCancelAll} className="rounded-full px-4">
             {t("notes.upload.cancelAll")}
           </Button>
         </div>

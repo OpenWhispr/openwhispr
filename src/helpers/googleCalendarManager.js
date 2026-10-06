@@ -231,6 +231,11 @@ class GoogleCalendarManager {
     const toUpsert = [];
     const toRemove = [];
     const contactsToUpsert = [];
+    const notContacts = [];
+    const ownEmail = (accountEmail || "").toLowerCase();
+    // Google's self flag marks the calendar's owner: the user (possibly under
+    // an alias) on their primary calendar, a colleague on a shared one.
+    const selfIsUser = Boolean(calendar.is_primary) || calendar.id === accountEmail;
 
     for (const item of allItems) {
       if (item.status === "cancelled") {
@@ -239,7 +244,9 @@ class GoogleCalendarManager {
       }
 
       const isAllDay = !item.start?.dateTime;
-      const selfAttendee = item.attendees?.find((attendee) => attendee.self === true);
+      const selfAttendee = selfIsUser
+        ? item.attendees?.find((attendee) => attendee.self === true)
+        : item.attendees?.find((attendee) => attendee.email?.toLowerCase() === ownEmail);
       toUpsert.push({
         id: item.id,
         calendar_id: calendar.id,
@@ -264,6 +271,7 @@ class GoogleCalendarManager {
                 displayName: a.displayName || null,
                 responseStatus: a.responseStatus || null,
                 self: a.self || false,
+                ...(a.resource ? { resource: true } : {}),
               }))
             )
           : null,
@@ -271,8 +279,11 @@ class GoogleCalendarManager {
 
       if (item.attendees) {
         for (const a of item.attendees) {
-          if (a.email)
-            contactsToUpsert.push({ email: a.email, displayName: a.displayName || null });
+          if (!a.email) continue;
+          // Rooms and the user's own addresses aren't people to write to.
+          const isUser = a.email.toLowerCase() === ownEmail || (a.self && selfIsUser);
+          if (a.resource || isUser) notContacts.push(a.email);
+          else contactsToUpsert.push({ email: a.email, displayName: a.displayName || null });
         }
       }
     }
@@ -292,7 +303,12 @@ class GoogleCalendarManager {
     if (nextSyncToken) {
       this.databaseManager.updateCalendarSyncToken(calendar.id, nextSyncToken, tokenExpiresAt);
     }
-    if (contactsToUpsert.length > 0) this.databaseManager.upsertContacts(contactsToUpsert);
+    this.databaseManager.syncCalendarContacts(
+      "google",
+      accountEmail,
+      contactsToUpsert,
+      notContacts
+    );
   }
 
   onWakeFromSleep() {

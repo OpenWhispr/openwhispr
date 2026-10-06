@@ -55,7 +55,7 @@ export default function CalendarConnectionsStep() {
             const current = useSettingsStore.getState().mcalAccounts;
             store.setMcalAccounts([
               ...current.filter((account) => account.email !== result.email),
-              { email: result.email },
+              { email: result.email, tenantId: result.tenantId },
             ]);
           } else if (!result?.error?.includes("access_denied")) {
             setError(t("integrations.microsoftCalendar.connectFailedDescription"));
@@ -65,7 +65,7 @@ export default function CalendarConnectionsStep() {
           if (result?.success) {
             store.setAppleCalendarConnected(true);
           } else if (result?.reason === "denied") {
-            // Same distinction IntegrationsView draws: only a real permission
+            // Same distinction CalendarsPane draws: only a real permission
             // denial sends the user to Privacy settings; helper-missing /
             // snapshot-failed are not permission problems.
             setAppleDenied(true);

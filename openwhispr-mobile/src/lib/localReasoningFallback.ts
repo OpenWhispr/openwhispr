@@ -14,6 +14,8 @@ interface PromptLocalReasoningFallbackOptions {
   signedIn: boolean;
   onEnableLocal?: FallbackCallback;
   onUseCloudOnce?: FallbackCallback;
+  // The user's own provider, when that is where this request would go instead of Cloud.
+  destinationName?: string;
 }
 
 function run(callback: FallbackCallback | undefined): void {
@@ -26,10 +28,12 @@ export function promptLocalReasoningFallback({
   signedIn,
   onEnableLocal,
   onUseCloudOnce,
+  destinationName,
 }: PromptLocalReasoningFallbackOptions): void {
   const message = getLocalReasoningUnavailableMessage(readiness);
   const canEnableLocal = readiness.status === 'disabled' && onEnableLocal;
-  const canUseCloud = signedIn && onUseCloudOnce;
+  // A provider takes the user's own key, so it needs no OpenWhispr account.
+  const canUseCloud = (signedIn || !!destinationName) && onUseCloudOnce;
   const buttons = [
     { text: 'Cancel', style: 'cancel' as const },
     ...(canEnableLocal
@@ -57,7 +61,7 @@ export function promptLocalReasoningFallback({
     ...(canUseCloud
       ? [
           {
-            text: 'Use Cloud Once',
+            text: `Use ${destinationName ?? 'Cloud'} Once`,
             onPress: () => run(onUseCloudOnce),
           },
         ]
@@ -72,7 +76,7 @@ export function promptLocalReasoningFallback({
   Alert.alert(
     'Local AI unavailable',
     canUseCloud
-      ? `${message} Send this note to cloud AI for this request instead?`
+      ? `${message} Send this note to ${destinationName ?? 'cloud AI'} for this request instead?`
       : `${message} Sign in to use cloud AI, or try again later.`,
     buttons,
   );

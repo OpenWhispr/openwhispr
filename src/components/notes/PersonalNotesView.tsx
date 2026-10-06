@@ -7,14 +7,13 @@ import NoteEditor from "./NoteEditor";
 import SpacesTree from "./SpacesTree";
 import { ContainerOverview } from "./overview/ContainerOverview";
 import NotesStructureIntroDialog from "./NotesStructureIntroDialog";
-import ActionPicker from "./ActionPicker";
 import ActionManagerDialog from "./ActionManagerDialog";
 import AddNotesToFolderDialog from "./AddNotesToFolderDialog";
 import { useActionProcessing } from "../../hooks/useActionProcessing";
 import type { NoteMoveTarget } from "../../hooks/useNoteDragAndDrop";
-import type { ActionItem, NoteItem } from "../../types/electron";
-import { useActions } from "../../stores/actionStore";
-import { DETAILED_NOTES_KEY } from "../../helpers/builtinActions";
+import type { ActionItem, ActionKind, NoteItem } from "../../types/electron";
+import { buildNoteRunInput } from "../../helpers/templatePrompts";
+import { inferActionOutput } from "../../utils/inferActionOutput";
 import {
   useSettingsStore,
   selectIsCloudNoteFormattingMode,
@@ -145,7 +144,7 @@ export default function PersonalNotesView({
   const [isSaving, setIsSaving] = useState(false);
   const [draft, setDraftState] = useState<NoteEditorDraft | null>(null);
   const draftRef = useRef<NoteEditorDraft | null>(null);
-  const [showActionManager, setShowActionManager] = useState(false);
+  const [managerKind, setManagerKind] = useState<ActionKind | null>(null);
   const [showAddNotesDialog, setShowAddNotesDialog] = useState(false);
   const pendingDocumentRef = useRef<PendingDocumentSave | null>(null);
   const pendingEnhancedRef = useRef<PendingEnhancedSave | null>(null);
@@ -247,7 +246,6 @@ export default function PersonalNotesView({
   const sessionExpectedCount = useMeetingRecordingStore((s) => s.sessionExpectedCount);
   const userTouchedStepper = useMeetingRecordingStore((s) => s.userTouchedStepper);
   const meetingRecordingAllowed = useTranscriptionContextAllowed("meeting");
-  const actions = useActions();
 
   const spaces = useSpaces();
   const folders = useFolders();
@@ -563,13 +561,11 @@ export default function PersonalNotesView({
   const {
     state: actionProcessingState,
     actionName,
+    progress: actionProgress,
     runAction,
+    cancel: cancelAction,
   } = useActionProcessing(activeNoteId ?? null);
 
-  // Boolean flag so actions enable during recording without re-rendering on every transcript update.
-  const hasLiveTranscript = useMeetingRecordingStore(
-    (s) => s.recordingNoteId === activeNote?.id && !!s.transcript
-  );
   const activeNoteRawTranscript = activeNote?.transcript || "";
   const activeDraft = draft?.noteId === activeNote?.id ? draft : null;
   const editorNote = activeNote
@@ -685,28 +681,25 @@ export default function PersonalNotesView({
       }
     }
 
-    const parts = [
-      hasNotes ? noteContent : "",
+    const { input, fromSummary, material } = buildNoteRunInput(action, {
+      summary: editorEnhancedContent,
+      notes: noteContent,
       meetingContext,
-      formattedTranscript ? `## Meeting Transcript\n${formattedTranscript}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-    runAction(action, parts, makeContentHash(`${noteContent}\n${rawTranscript}`), {
+      transcript: formattedTranscript,
+    });
+    runAction(action, input, makeContentHash(`${noteContent}\n${rawTranscript}`), {
       isCloudMode,
       modelId: effectiveModelId,
       isMeetingNote,
       knownPeople,
+      fromSummary,
+      material,
       allowTitleGeneration: isRegenerableNoteTitle(
         editorNote.title,
         [t("notes.list.untitledNote"), t("notes.list.newNote"), t("notes.sidebar.newNote")],
         calendarEventName
       ),
     });
-  };
-  const generateSummary = () => {
-    const action = actions.find((a) => a.translation_key === DETAILED_NOTES_KEY);
-    if (action) void runNoteAction(action);
   };
 
   if (!isOnboardingComplete) {
@@ -730,7 +723,7 @@ export default function PersonalNotesView({
         <div className="w-52 shrink-0 border-e border-border dark:border-white/10 flex flex-col h-full">
           <div className="px-2 pt-2 pb-1 shrink-0 space-y-0.5">
             <button
-              onClick={() => setShowActionManager(true)}
+              onClick={() => setManagerKind("template")}
               className={cn(
                 "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs",
                 "text-foreground/85 hover:text-foreground hover:bg-foreground/5",
@@ -739,7 +732,7 @@ export default function PersonalNotesView({
               )}
             >
               <Sparkles size={14} className="shrink-0" />
-              {t("notes.sidebar.actions")}
+              {t("notes.sidebar.templatesAndActions")}
             </button>
           </div>
 
@@ -793,21 +786,17 @@ export default function PersonalNotesView({
               onCancelPendingSaves={cancelPendingSaves}
               actionProcessingState={actionProcessingState}
               actionName={actionName}
-              onGenerateSummary={generateSummary}
-              actionPicker={
-                <ActionPicker
-                  onRunAction={runNoteAction}
-                  onManageActions={() => setShowActionManager(true)}
-                  disabled={
-                    (!editorNote?.content?.trim() &&
-                      !hasLiveTranscript &&
-                      !activeNoteRawTranscript) ||
-                    actionProcessingState === "processing"
-                  }
-                />
-              }
+              actionProgress={actionProgress}
+              onCancelAction={cancelAction}
+              onRunNoteAction={runNoteAction}
+              onManageActions={setManagerKind}
             />
-            <ActionManagerDialog open={showActionManager} onOpenChange={setShowActionManager} />
+            <ActionManagerDialog
+              open={managerKind !== null}
+              onOpenChange={(open) => !open && setManagerKind(null)}
+              initialKind={managerKind ?? "template"}
+              onInferOutput={(prompt) => inferActionOutput(prompt, effectiveModelId, isCloudMode)}
+            />
           </>
         ) : activeContext && overviewSpace ? (
           <ContainerOverview

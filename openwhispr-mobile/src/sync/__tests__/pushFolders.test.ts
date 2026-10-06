@@ -13,6 +13,7 @@ jest.mock('@/data', () => ({
     markFolderPushed: jest.fn(),
     markFolderTerminal: jest.fn(),
     adoptDuplicateFolder: jest.fn(),
+    getFolderByRemoteId: jest.fn(),
     getSyncState: jest.fn(),
   },
   spacesRepository: {
@@ -166,6 +167,104 @@ describe('pushFolders create response matching', () => {
     );
     expect(mockCaptureMessage).toHaveBeenCalledWith(
       'pushFolders: 1/2 create rows had no matching server response',
+      'warning',
+    );
+  });
+});
+
+describe('pushFolders same-name create in a space that already has the folder', () => {
+  // The server answers a same-named create with the folder it already has, which carries
+  // another member's client_folder_id.
+  const existing = {
+    id: 'remote-theirs',
+    client_folder_id: 'client-theirs',
+    name: 'Standup',
+    is_default: false,
+    sort_order: 0,
+    deleted_at: null,
+    updated_at: '2026-08-24T10:00:00.000Z',
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockNotesRepository.getPendingFolders.mockReturnValue([
+      folder({ id: 1, name: 'Standup', clientFolderId: 'client-mine' }),
+    ]);
+    mockNotesRepository.getFolderByRemoteId.mockReturnValue(null);
+    mockBatchCreateFolders.mockResolvedValue([existing]);
+  });
+
+  it('adopts the returned folder, so notes filed in it can upload', async () => {
+    await pushFolders();
+
+    expect(mockNotesRepository.markFolderPushed).toHaveBeenCalledWith(
+      1,
+      'remote-theirs',
+      existing.updated_at,
+      expect.objectContaining({ id: 1 }),
+    );
+    expect(mockCaptureMessage).not.toHaveBeenCalled();
+  });
+
+  it('merges into the copy a pull already brought down instead of keeping two', async () => {
+    mockNotesRepository.getFolderByRemoteId.mockReturnValue(
+      folder({
+        id: 7,
+        name: 'Standup',
+        clientFolderId: 'client-theirs',
+        remoteId: 'remote-theirs',
+      }),
+    );
+
+    await pushFolders();
+
+    expect(mockNotesRepository.adoptDuplicateFolder).toHaveBeenCalledWith(
+      1,
+      7,
+      'remote-theirs',
+      existing.updated_at,
+    );
+    expect(mockNotesRepository.markFolderPushed).not.toHaveBeenCalled();
+  });
+
+  it('merges a second same-named folder from this device into the first', async () => {
+    mockNotesRepository.getPendingFolders.mockReturnValue([
+      folder({ id: 1, name: 'Standup', clientFolderId: 'client-first' }),
+      folder({ id: 2, name: 'Standup', clientFolderId: 'client-second' }),
+    ]);
+    const first = { ...existing, id: 'remote-first', client_folder_id: 'client-first' };
+    mockBatchCreateFolders.mockResolvedValue([first, first]);
+    mockNotesRepository.getFolderByRemoteId.mockReturnValue(
+      folder({ id: 1, name: 'Standup', clientFolderId: 'client-first', remoteId: 'remote-first' }),
+    );
+
+    await pushFolders();
+
+    expect(mockNotesRepository.markFolderPushed).toHaveBeenCalledTimes(1);
+    expect(mockNotesRepository.markFolderPushed).toHaveBeenCalledWith(
+      1,
+      'remote-first',
+      first.updated_at,
+      expect.objectContaining({ id: 1 }),
+    );
+    expect(mockNotesRepository.adoptDuplicateFolder).toHaveBeenCalledWith(
+      2,
+      1,
+      'remote-first',
+      first.updated_at,
+    );
+    expect(mockCaptureMessage).not.toHaveBeenCalled();
+  });
+
+  it('never adopts a returned folder with another name', async () => {
+    mockBatchCreateFolders.mockResolvedValue([{ ...existing, name: 'Retro' }]);
+
+    await pushFolders();
+
+    expect(mockNotesRepository.markFolderPushed).not.toHaveBeenCalled();
+    expect(mockNotesRepository.adoptDuplicateFolder).not.toHaveBeenCalled();
+    expect(mockCaptureMessage).toHaveBeenCalledWith(
+      'pushFolders: 1/1 create rows had no matching server response',
       'warning',
     );
   });

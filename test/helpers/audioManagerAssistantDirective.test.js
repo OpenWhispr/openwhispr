@@ -79,8 +79,36 @@ test("a verified caret banks targeted response delivery when auto-paste is enabl
     transcript: "draft a reply",
     screenContext: null,
     deliverySessionId: "caret-session",
+    deliveryAcceptsMarkdown: false,
   });
   assert.equal(modelCalls.length, 0, "caret delivery must retain the chat Agent route");
+});
+
+test("a caret in a markdown-friendly app carries that verdict with the session id", async (t) => {
+  const { createManager } = await loadAudioManagerHarness(t, {
+    cachePrefix: "openwhispr-assistant-caret-markdown-",
+    settingsKey: "__assistantCaretMarkdownSettings",
+    settings: { autoPasteEnabled: true },
+    mockModules: {
+      "/services/ReasoningService": 'export default { processText: async () => "" };',
+    },
+  });
+  const { manager } = managerWithCapture(createManager, {
+    status: "editable",
+    sessionId: "caret-session",
+    acceptsMarkdown: true,
+  });
+
+  await manager.processAgentCommand("draft a reply", "gpt", "Aria", {
+    selectionEditReachable: true,
+  });
+
+  assert.deepEqual(manager.pendingAssistantConversation, {
+    transcript: "draft a reply",
+    screenContext: null,
+    deliverySessionId: "caret-session",
+    deliveryAcceptsMarkdown: true,
+  });
 });
 
 test("a verified caret stays panel-first when auto-paste is disabled", async (t) => {
@@ -260,6 +288,28 @@ test("an ambiguous capture with no dictation editor goes to the panel as a plain
     selectionEditReachable: false,
   });
   assert.equal(manager.pendingAssistantConversation.transcript, "summarize this");
+});
+
+// Focus moved while the voice assistant hotkey's keys were still held (#2113),
+// so the window the command is about was never checked. That is no selection to
+// edit, not a failed edit: the command still runs in the panel.
+test("a capture whose focus moved during the modifier wait runs as a panel command", async (t) => {
+  const { createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-assistant-focus-moved-",
+    settingsKey: "__assistantFocusMovedSettings",
+  });
+  const { manager, modelCalls } = managerWithCapture(createManager, {
+    status: "target_changed",
+    code: "focus_moved",
+  });
+
+  const result = await manager.processAgentCommand("summarize this", "gpt", "Aria", {
+    selectionEditReachable: true,
+  });
+
+  assert.equal(result, "summarize this");
+  assert.equal(manager.pendingAssistantConversation.transcript, "summarize this");
+  assert.equal(modelCalls.length, 0, "the dictation-agent model must not run");
 });
 
 test("a selection with the dictation agent reachable keeps the in-place edit path", async (t) => {

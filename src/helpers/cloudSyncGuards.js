@@ -31,6 +31,7 @@ export function buildNoteUpdatePayload(note, cloudFolderId) {
     content: note.content,
     enhanced_content: note.enhanced_content,
     enhancement_prompt: note.enhancement_prompt,
+    enhancement_template_id: note.enhancement_template_id,
     enhanced_at_content_hash: note.enhanced_at_content_hash,
     note_type: note.note_type,
     source_file: note.source_file,

@@ -3,11 +3,8 @@
  * meeting-sized transcript and the exact system prompt the note action store
  * sends for Detailed Notes, so the probe measures the request users make.
  */
-import {
-  BUILTIN_ACTIONS,
-  DETAILED_NOTES_KEY,
-  MEETING_INPUT_PREAMBLE,
-} from "../../src/helpers/builtinActions.js";
+import { BUILTIN_ACTIONS, DETAILED_NOTES_KEY } from "../../src/helpers/builtinActions.js";
+import { compileTemplatePrompt } from "../../src/helpers/templatePrompts.js";
 
 /** A real 45-minute meeting lands around here; the 1.10.1 report was 2,170 words. */
 export const NOTE_PROBE_MIN_WORDS = 2000;
@@ -124,6 +121,9 @@ export function buildNoteProbeTranscript({ minWords = NOTE_PROBE_MIN_WORDS, seed
 /** Exactly what actionProcessingStore sends for the built-in Detailed Notes action on a meeting note. */
 export function buildNoteProbeSystemPrompt() {
   const action = BUILTIN_ACTIONS.find((entry) => entry.translationKey === DETAILED_NOTES_KEY);
-  if (!action) throw new Error("Detailed Notes is no longer a built-in action");
-  return MEETING_INPUT_PREAMBLE + action.prompt;
+  if (!action) throw new Error("Detailed Notes is no longer a built-in template");
+  return compileTemplatePrompt(
+    { prompt: action.prompt, sections: action.sections, translation_key: action.translationKey },
+    { isMeetingNote: true }
+  );
 }

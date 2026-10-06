@@ -10,6 +10,10 @@ import { calendarTool } from "./calendarTool";
 import { calendarAvailabilityTool } from "./calendarAvailabilityTool";
 import { createSnippetTool, createUpdateSnippetsTool, type SnippetActions } from "./snippetTool";
 import { createUpdateDictionaryTool, type DictionaryActions } from "./dictionaryTool";
+import {
+  registerConnectorTools,
+  type ConnectorToolSettings,
+} from "./connectors/connectorToolModules";
 import type { ContainerScope } from "../../types/chat";
 
 export { ToolRegistry } from "./ToolRegistry";
@@ -24,6 +28,8 @@ interface ToolRegistrySettings {
   webSearchEnabled: boolean;
   /** Live dictionary and snippet access; enables the vocabulary tools. */
   vocabulary?: DictionaryActions & SnippetActions;
+  /** Present only when connectors are available (signed in, paid, policy allows). */
+  connectors?: ConnectorToolSettings;
 }
 
 export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry {
@@ -52,6 +58,8 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
     registry.register(calendarTool);
     registry.register(calendarAvailabilityTool);
   }
+
+  if (settings.connectors) registerConnectorTools(registry, settings.connectors);
 
   return registry;
 }

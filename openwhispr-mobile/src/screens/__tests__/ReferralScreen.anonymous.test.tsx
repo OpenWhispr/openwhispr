@@ -28,7 +28,7 @@ jest.mock('@/lib/referralApi', () => ({
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn() }));
 jest.mock('@/lib/utils', () => ({ safeHaptics: jest.fn(), isValidEmail: () => true }));
 jest.mock('@/config/colors', () => ({ iosColor: () => '#999' }));
-jest.mock('@/lib/fonts', () => ({ SpaceGrotesk: {} }));
+jest.mock('@/lib/fonts', () => ({ AppFont: {} }));
 jest.mock('@/lib/accountAccess', () => ({
   ...jest.requireActual('@/lib/accountRequiredError'),
   handleAccountRequiredError: jest.fn(() => false),
