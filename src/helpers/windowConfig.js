@@ -271,7 +271,7 @@ const NOTIFICATION_WINDOW_CONFIG = {
   alwaysOnTop: true,
   skipTaskbar: true,
   resizable: false,
-  focusable: process.platform === "linux",
+  focusable: false,
   hasShadow: false,
   show: false,
   acceptFirstMouse: true,
@@ -282,7 +282,7 @@ const NOTIFICATION_WINDOW_CONFIG = {
     sandbox: true,
   },
   visibleOnAllWorkspaces: process.platform !== "win32",
-  type: process.platform === "linux" ? "normal" : OVERLAY_WINDOW_TYPES.notification,
+  type: OVERLAY_WINDOW_TYPES.notification,
 };
 
 function fitMeetingNotificationWindow(contentHeight, workArea) {

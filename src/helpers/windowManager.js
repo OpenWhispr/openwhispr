@@ -290,13 +290,14 @@ class WindowManager {
     if (!database) return null;
     const state = tokenStore.getState();
     const accountId = database.activeAccountId;
-    if (state.token) {
-      const bound = accountScopeBinding.resolveActiveAccountScope({
-        ...state,
-        binding: accountScopeBinding.read(),
-      });
-      if (!bound || bound.accountId !== accountId) return null;
-    } else if (accountId !== null) return null;
+    // A token without a valid binding scopes like no token (signed out).
+    const boundAccountId = state.token
+      ? (accountScopeBinding.resolveActiveAccountScope({
+          ...state,
+          binding: accountScopeBinding.read(),
+        })?.accountId ?? null)
+      : null;
+    if (boundAccountId !== accountId) return null;
     return { accountId, authGeneration: state.generation, epoch: this._meetingAccountEpoch };
   }
 
@@ -2237,6 +2238,8 @@ class WindowManager {
 
     const win = new BrowserWindow({
       ...NOTIFICATION_WINDOW_CONFIG,
+      // Linux has no setFocusable, so the picker's typing needs this from creation.
+      ...(process.platform === "linux" && { focusable: true, type: "normal" }),
       ...position,
     });
     this.notificationWindow = win;

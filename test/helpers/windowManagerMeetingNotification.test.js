@@ -868,6 +868,19 @@ test("credential replacement fences ownership before database account reconcilia
   }
 });
 
+test("a stored token without an account binding scopes the prompt as signed out", async () => {
+  tokenState = { token: "signed-out-token", generation: 0 };
+  const manager = createNormalWindowManager();
+  try {
+    const { owner } = await showOwned(manager);
+    assert.equal(manager.isMeetingNotificationOwner(owner), true);
+    manager.meetingDetectionEngine.databaseManager.activeAccountId = "unbound-account";
+    assert.equal(manager.isMeetingNotificationOwner(owner), false);
+  } finally {
+    manager.dismissMeetingNotification();
+  }
+});
+
 async function navigationFixture() {
   const manager = createNormalWindowManager();
   const { owner } = await showOwned(manager);

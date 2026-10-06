@@ -68,11 +68,11 @@ test("Sway XWayland uses notification type only for focusless overlays", () => {
     },
     {
       main: "notification",
-      notification: "normal",
+      notification: "notification",
     }
   );
   assert.equal(windowConfig.MAIN_WINDOW_CONFIG.focusable, false);
-  assert.equal(windowConfig.NOTIFICATION_WINDOW_CONFIG.focusable, true);
+  assert.equal(windowConfig.NOTIFICATION_WINDOW_CONFIG.focusable, false);
 });
 
 test("onboarding sizing does not resize the normal control panel", () => {
@@ -220,7 +220,7 @@ test("a stale SWAYSOCK does not change Hyprland window types", () => {
     },
     {
       main: "toolbar",
-      notification: "normal",
+      notification: "toolbar",
     }
   );
 });

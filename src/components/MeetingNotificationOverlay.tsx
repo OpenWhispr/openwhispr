@@ -327,14 +327,17 @@ export default function MeetingNotificationOverlay(): ReactElement {
             : undefined
         );
         if (dataRef.current !== current) return;
-        if (result?.success === true) setIsVisible(false);
+        // A dismiss that fails leaves nothing to choose, so it never opens the picker.
+        if (result?.success === true || action === "dismiss") setIsVisible(false);
         else {
           if (result?.context) setContext(result.context);
           changeMode("list");
           setError(result?.code ?? "START_FAILED");
         }
       } catch {
-        if (dataRef.current === current) {
+        if (dataRef.current !== current) return;
+        if (action === "dismiss") setIsVisible(false);
+        else {
           changeMode("list");
           setError("START_FAILED");
         }

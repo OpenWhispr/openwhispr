@@ -46,7 +46,6 @@ import {
 } from "../stores/policyRules";
 import { getManagedTranscriptionResolution } from "../services/managedTranscription";
 import {
-  startRecording,
   useIsMeetingMode,
   useIsNarrowWindow,
   useMeetingRecordingStore,
@@ -59,9 +58,6 @@ import {
   type IntegrationsSection,
 } from "./integrations/integrationsSections";
 import { navigateMeetingNotification } from "./meetingNotificationNavigation";
-import { parseTranscriptSegments } from "../utils/parseTranscriptSegments";
-import { isExplicitSpeakerCount, resolveExpectedSpeakerCount } from "../utils/participants";
-import { isMeetingAutoEndEligible } from "../helpers/meetingRecordingSession";
 import MeetingRecordingMount from "./MeetingRecordingMount";
 import MeetingRecordingPill from "./notes/MeetingRecordingPill";
 import NewNoteMenu from "./notes/NewNoteMenu";
@@ -69,7 +65,7 @@ import NewNoteMenu from "./notes/NewNoteMenu";
 import { getCachedPlatform } from "../utils/platform";
 import { isAccessibilitySkipped } from "../utils/permissions";
 import { useGpuBannerAvailability } from "../hooks/useGpuBannerAvailability";
-import { useCreateNote } from "../hooks/useCreateNote";
+import { startRecordingForNote, useCreateNote } from "../hooks/useCreateNote";
 import { useSignInCloudNudge } from "../hooks/useSignInCloudNudge";
 import {
   setActiveNoteId,
@@ -395,18 +391,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
 
   useEffect(() => {
     let mounted = true;
-    let generation = 0;
-    const pending = new Set<string>();
-    const invalidate = () => {
-      generation++;
-      for (const id of pending) {
-        void window.electronAPI.confirmMeetingNoteNavigation(id, "cancel").catch(() => {});
-      }
-      pending.clear();
-    };
+    const isCurrent = () => mounted;
     const drain = async () => {
-      const epoch = generation;
-      const isCurrent = () => mounted && epoch === generation;
       const data = await window.electronAPI?.getPendingMeetingNoteNavigation?.();
       if (!data) return;
       if (data.navigationId) {
@@ -414,40 +400,25 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           await window.electronAPI.confirmMeetingNoteNavigation(data.navigationId, "cancel");
           return;
         }
-        pending.add(data.navigationId);
         setActiveView("personal-notes");
-        try {
-          await navigateMeetingNotification(
-            { ...data, navigationId: data.navigationId, spaceId: data.spaceId },
-            isCurrent,
-            () => import("./notes/PersonalNotesView"),
-            (note) => {
-              void startRecording({
-                noteId: note.id,
-                noteTitle: note.title,
-                folderId: note.folder_id,
-                seedSegments: note.transcript ? parseTranscriptSegments(note.transcript) : [],
-                diarizationEnabled:
-                  note.diarization_enabled == null ? null : note.diarization_enabled === 1,
-                expectedCount: resolveExpectedSpeakerCount(note),
-                expectedCountIsExplicit: isExplicitSpeakerCount(note.expected_speaker_count),
-                autoEndEligible: isMeetingAutoEndEligible(note),
+        await navigateMeetingNotification(
+          { ...data, navigationId: data.navigationId, spaceId: data.spaceId },
+          isCurrent,
+          () => import("./notes/PersonalNotesView"),
+          (note) => {
+            void startRecordingForNote(note)
+              .then((accepted) => {
+                if (!accepted) void window.electronAPI?.restoreFromMeetingMode?.();
               })
-                .then((accepted) => {
-                  if (!accepted) void window.electronAPI?.restoreFromMeetingMode?.();
-                })
-                .catch((error) =>
-                  logger.warn(
-                    "Failed to start notification recording",
-                    { error: String(error) },
-                    "meeting"
-                  )
-                );
-            }
-          );
-        } finally {
-          pending.delete(data.navigationId);
-        }
+              .catch((error) =>
+                logger.warn(
+                  "Failed to start notification recording",
+                  { error: String(error) },
+                  "meeting"
+                )
+              );
+          }
+        );
         return;
       }
       if (!isCurrent()) return;
@@ -474,14 +445,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     };
     safeDrain();
     const cleanup = window.electronAPI?.onMeetingNoteNavigationPending?.(safeDrain);
-    const offToken = window.electronAPI.onAuthTokenStateChanged?.(invalidate);
-    const offScope = window.electronAPI.onActiveAccountScopeChanged?.(invalidate);
     return () => {
       mounted = false;
-      invalidate();
       cleanup?.();
-      offToken?.();
-      offScope?.();
     };
   }, []);
 

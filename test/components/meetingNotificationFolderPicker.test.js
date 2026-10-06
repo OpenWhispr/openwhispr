@@ -302,6 +302,14 @@ test("default Start remains available when destination loading fails", async (t)
   assert.equal(c.calls.filter((x) => x[0] === "start").length, 1);
 });
 
+test("a failed dismiss never opens the folder picker", async (t) => {
+  const c = await mount(t, {
+    meetingNotificationRespond: async () => ({ success: false, code: "STALE_NOTIFICATION" }),
+  });
+  await c.click(c.byLabel("Dismiss meeting notification"));
+  assert.equal(c.container.querySelector('[role="dialog"]'), null);
+});
+
 test("a late existing root note replaces choices with an explanation in the same dropdown", async (t) => {
   const linked = {
     noteId: 4,

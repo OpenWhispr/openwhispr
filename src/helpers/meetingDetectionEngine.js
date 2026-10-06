@@ -479,6 +479,14 @@ class MeetingDetectionEngine {
   async _startNotification(owner, action, options) {
     if (!this.windowManager.isMeetingNotificationOwner(owner))
       return { success: false, code: "STALE_NOTIFICATION" };
+    if (action === "join" && !owner.joinDispatched) {
+      owner.joinDispatched = true;
+      const joinUrl = getMeetingJoinUrl(owner.detection.event);
+      if (joinUrl)
+        void openExternalUrl(joinUrl).catch((error) =>
+          debugLogger.error("Failed to open meeting link", { error: error.message }, "meeting")
+        );
+    }
     const db = this.databaseManager;
     const context = () =>
       meetingDestinationContext(db, owner, this.windowManager.meetingRecentDestinations);
@@ -520,6 +528,9 @@ class MeetingDetectionEngine {
       broadcastToWindows("note-added", note);
     }
     owner.authorizedNote = { noteId: note.id, spaceId: note.space_id, folderId: note.folder_id };
+    // Entered before navigation so a detection arriving meanwhile cannot
+    // replace this prompt and cancel the Start after its note is saved.
+    this._meetingModeActive = true;
     const navigation = await this.windowManager.queueMeetingNoteNavigation(
       {
         ...owner.authorizedNote,
@@ -529,17 +540,13 @@ class MeetingDetectionEngine {
       },
       { owner, isCurrent: () => this.windowManager.isMeetingNotificationOwner(owner) }
     );
-    if (!navigation?.success) return navigation ?? { success: false, code: "START_FAILED" };
-    if (!this.windowManager.isMeetingNotificationScope(owner.scope))
+    if (!navigation?.success) {
+      this._meetingModeActive = false;
+      return navigation ?? { success: false, code: "START_FAILED" };
+    }
+    if (!this.windowManager.isMeetingNotificationScope(owner.scope)) {
+      this._meetingModeActive = false;
       return { success: false, code: "ACCOUNT_CHANGED" };
-    this._meetingModeActive = true;
-    if (action === "join" && !owner.joinDispatched) {
-      owner.joinDispatched = true;
-      const joinUrl = getMeetingJoinUrl(owner.detection.event);
-      if (joinUrl)
-        void openExternalUrl(joinUrl).catch((error) =>
-          debugLogger.error("Failed to open meeting link", { error: error.message }, "meeting")
-        );
     }
     this.audioActivityDetector.resetPrompt();
     if (this.activeDetections.get(owner.prompt.detectionId) === owner.detection)

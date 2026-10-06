@@ -5,13 +5,14 @@ const { EventEmitter } = require("node:events");
 
 const enginePath = require.resolve("../../src/helpers/meetingDetectionEngine");
 const originalLoad = Module._load;
+const openedUrls = [];
 
 function loadEngine() {
   delete require.cache[enginePath];
 
   Module._load = function loadWithMocks(request, parent, isMain) {
     if (request === "electron") {
-      return { shell: { openExternal: async () => {} } };
+      return { shell: { openExternal: async (url) => openedUrls.push(url) } };
     }
     if (request === "./debugLogger") {
       return { info() {}, warn() {}, debug() {}, error() {} };
@@ -410,10 +411,28 @@ test("navigation failure retains committed note and retries without duplicate wr
       : { success: true, value: c.db.getNote(payload.noteId) };
   };
   assert.equal((await c.respond()).code, "START_FAILED");
+  c.engine.handleCalendarReminder({ id: "next" });
+  assert.equal(c.shown.length, 1, "a failed Start must not leave prompts suppressed");
   assert.equal(c.db.getNotes().length, 1);
   assert.equal((await c.respond()).success, true);
   assert.equal(c.db.getNotes().length, 1);
   assert.equal(calls, 2);
+});
+
+test("Join opens the link and suppresses new prompts while navigation is pending", async (t) => {
+  const c = ownedNotification(t);
+  if (!c) return;
+  openedUrls.length = 0;
+  c.owner.detection.event.hangout_link = "https://meet.example/join?pwd=1";
+  let finish;
+  c.windowManager.queueMeetingNoteNavigation = () => new Promise((r) => (finish = r));
+  const joining = c.engine.handleNotificationResponse("calendar:event", "join", {}, c.owner);
+  await new Promise(setImmediate);
+  assert.deepEqual(openedUrls, ["https://meet.example/join?pwd=1"]);
+  c.engine.handleCalendarReminder({ id: "next" });
+  assert.equal(c.shown.length, 0);
+  finish({ success: true });
+  assert.equal((await joining).success, true);
 });
 
 test("coalesced audio detections cannot suppress the next meeting after a queued calendar prompt", () => {
