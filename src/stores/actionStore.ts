@@ -1,6 +1,8 @@
 import { create } from "zustand";
+import { useShallow } from "zustand/react/shallow";
 import { TFunction } from "i18next";
-import type { ActionItem } from "../types/electron";
+import type { ActionItem, ActionKind } from "../types/electron";
+import { DETAILED_NOTES_KEY } from "../helpers/builtinActions";
 
 interface ActionState {
   actions: ActionItem[];
@@ -71,8 +73,25 @@ function removeActionFromStore(id: number): void {
   useActionStore.setState({ actions: next });
 }
 
-export function useActions(): ActionItem[] {
-  return useActionStore((state) => state.actions);
+export function useActionsOfKind(kind: ActionKind): ActionItem[] {
+  return useActionStore(useShallow((state) => state.actions.filter((a) => a.kind === kind)));
+}
+
+/**
+ * The template a summary is written with: the note's own, else the default AI
+ * Summary. An id can outlive its template or belong to a teammate's, so it is
+ * only a preference.
+ */
+export function resolveTemplate(
+  templates: ActionItem[],
+  clientId: string | null | undefined
+): ActionItem | null {
+  return (
+    templates.find((a) => a.client_id === clientId) ??
+    templates.find((a) => a.translation_key === DETAILED_NOTES_KEY) ??
+    templates[0] ??
+    null
+  );
 }
 
 export function getActionName(
@@ -84,7 +103,7 @@ export function getActionName(
     : action.name;
 }
 
-/** Verb-form label for the ask bar button; falls back to the action name. */
+/** Verb-form label the chat shows for a running action; falls back to the action name. */
 export function getActionCta(
   action: { name: string; translation_key?: string },
   t: TFunction

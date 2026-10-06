@@ -59,6 +59,28 @@ export function isSecureHttpEndpoint(url: string): boolean {
   }
 }
 
+/**
+ * Scheme-less input is read as https: the connection test does the same, so a commit
+ * that stores this value stores the URL it validated, and the runtime's
+ * isSecureHttpEndpoint gate never sees a bare host.
+ */
+export function withHttpsScheme(url: string): string {
+  const trimmed = url.trim();
+  return !trimmed || trimmed.includes("://") ? trimmed : `https://${trimmed}`;
+}
+
+// A bare "host/path" base still matches, and a subdomain counts as the same provider.
+export function matchesHost(url: string | null | undefined, host: string): boolean {
+  if (!url) return false;
+
+  try {
+    const hostname = new URL(withHttpsScheme(url)).hostname.toLowerCase();
+    return hostname === host || hostname.endsWith(`.${host}`);
+  } catch {
+    return false;
+  }
+}
+
 const AZURE_HOST_SUFFIXES = [
   ".openai.azure.com",
   ".cognitiveservices.azure.com",

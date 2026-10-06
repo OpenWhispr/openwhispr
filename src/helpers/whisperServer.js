@@ -3,13 +3,12 @@ const EventEmitter = require("events");
 const fs = require("fs");
 const path = require("path");
 const http = require("http");
-const os = require("os");
 const { app } = require("electron");
 const debugLogger = require("./debugLogger");
 const { killProcess } = require("../utils/process");
-const { isPortAvailable } = require("../utils/serverUtils");
+const { isPortAvailable, getAvailableParallelism } = require("../utils/serverUtils");
 const { getSafeTempDir } = require("./safeTempDir");
-const { convertToWav } = require("./ffmpegUtils");
+const { convertToWav, isPcm16Mono16kWav } = require("./ffmpegUtils");
 const { createAbortError } = require("./abortError");
 const sidecarPidFile = require("./sidecarPidFile");
 const { BIN_SUBDIR: CUDA_BIN_SUBDIR } = require("./whisperCudaManager");
@@ -19,6 +18,7 @@ const {
   computeTranscriptionTimeoutMs,
   PCM16_MONO_16K_BYTES_PER_SECOND,
 } = require("./transcriptionTimeout");
+const { extractWhisperGpuFailureReason } = require("./whisperGpuFailureReason");
 
 const PORT_RANGE_START = 8178;
 const PORT_RANGE_END = 8199;
@@ -56,17 +56,6 @@ function parsePositiveInteger(value) {
   if (!/^\d+$/.test(normalized)) return null;
   const parsed = Number(normalized);
   return parsed > 0 ? parsed : null;
-}
-
-function getAvailableParallelism() {
-  try {
-    if (typeof os.availableParallelism === "function") {
-      return os.availableParallelism();
-    }
-  } catch {}
-
-  const cpus = os.cpus();
-  return Array.isArray(cpus) && cpus.length > 0 ? cpus.length : DEFAULT_WHISPER_THREADS;
 }
 
 function createThreadResolution(threads, source, availableParallelism) {
@@ -187,12 +176,18 @@ function buildWhisperServerArgs({
   // explicitly pass "auto" to enable language auto-detection
   args.push("--language", language || "auto");
 
-  // whisper.cpp v1.9.x turned token timestamps on for every request, which enables the
-  // server's 60-character segment wrap. split_on_word is off, so the wrap lands on a token
-  // boundary and breaks words mid-word ("abschalten" -> "abs" + "chalten"); we join segments
-  // into one string, so the break surfaces as a stray space. We only read `text`, never
-  // per-token timings, so turn timestamps off and the wrap goes with them. See #1348.
-  args.push("--no-timestamps");
+  // whisper.cpp v1.9.x turned token timestamps on for every request and forces max_len=60
+  // when it is unset, so the server wraps segments at 60 characters. split_on_word is off,
+  // so the wrap lands on a token boundary and breaks words mid-word ("abschalten" -> "abs" +
+  // "chalten"); we join segments into one string, so the break surfaces as a stray space.
+  // See #1348.
+  //
+  // Raise max_len to switch the wrap off rather than passing --no-timestamps, which took the
+  // decoder's timestamp tokens with it: without them whisper.cpp advances `seek` a full 30s
+  // window no matter where the decode actually stopped, silently discarding the audio in
+  // between. See #2150. A segment covers at most one 30s window; the longest measured is
+  // 186 characters.
+  args.push("--max-len", "4096");
 
   if (isVadActive({ vadEnabled, vadModelPath })) {
     const cfg = sanitizeWhisperVadConfig(vadConfig || DEFAULT_WHISPER_VAD_CONFIG);
@@ -311,6 +306,9 @@ class WhisperServerManager extends EventEmitter {
     this.gpuSignature = "gpu:cpu";
     this.gpuFallbackActive = false;
     this.lastStartOptions = {};
+    // Output and exit of the last spawned server, read when a GPU server that
+    // started fine dies mid-transcription (_fallbackToCpuAndRetry). See #1736.
+    this._lastProcessInfo = null;
   }
 
   getFFmpegPath() {
@@ -648,6 +646,9 @@ class WhisperServerManager extends EventEmitter {
 
     let stderrBuffer = "";
     let exitCode = null;
+    let exitSignal = null;
+    const getProcessInfo = () => ({ stderr: stderrBuffer, exitCode, signal: exitSignal });
+    this._lastProcessInfo = getProcessInfo;
 
     this.process.stdout.on("data", (data) => {
       debugLogger.debug("whisper-server stdout", { data: data.toString().trim() });
@@ -663,20 +664,19 @@ class WhisperServerManager extends EventEmitter {
       this.ready = false;
     });
 
-    this.process.on("close", (code) => {
+    this.process.on("close", (code, signal) => {
       exitCode = code;
-      debugLogger.debug("whisper-server process exited", { code });
+      exitSignal = signal;
+      debugLogger.debug("whisper-server process exited", { code, signal });
       this.ready = false;
       this.process = null;
       this.stopHealthCheck();
       sidecarPidFile.clear("whisper");
     });
 
+    const startupTimeoutMs = usingVulkan ? VULKAN_STARTUP_TIMEOUT_MS : STARTUP_TIMEOUT_MS;
     try {
-      await this.waitForReady(
-        () => ({ stderr: stderrBuffer, exitCode }),
-        usingVulkan ? VULKAN_STARTUP_TIMEOUT_MS : STARTUP_TIMEOUT_MS
-      );
+      await this.waitForReady(getProcessInfo, startupTimeoutMs);
     } catch (err) {
       // An intentional stop() during startup is not a GPU/thread failure
       if (err.isStopped) throw err;
@@ -684,16 +684,17 @@ class WhisperServerManager extends EventEmitter {
         // Fall back on ANY startup rejection — a GPU server can exit early
         // (missing kernels), die late (VRAM OOM mid-model-load), or hang, and
         // in every case the CPU binary is the working answer. stop() reaps a
-        // hung process before the CPU restart.
+        // hung process before the CPU restart. The reason travels with the
+        // event so it is saved beside the failure and shown on the GPU card (#1736).
+        const reason = extractWhisperGpuFailureReason({
+          ...getProcessInfo(),
+          timeoutMs: startupTimeoutMs,
+        });
         debugLogger.warn(
           `${usingCuda ? "CUDA" : "Vulkan"} whisper-server failed, falling back to CPU`,
-          {
-            error: err.message,
-            exitCode,
-            stderr: stderrBuffer.slice(0, 200),
-          }
+          { error: err.message, exitCode, reason }
         );
-        this.emit(usingCuda ? "cuda-fallback" : "gpu-fallback");
+        this.emit(usingCuda ? "cuda-fallback" : "gpu-fallback", { reason });
         await this.stop();
         this.gpuFallbackActive = true;
         return this._doStart(modelPath, { ...options, useCuda: false, useVulkan: false });
@@ -874,12 +875,14 @@ class WhisperServerManager extends EventEmitter {
     const { language, initialPrompt, signal, skipDecoderThresholds } = options;
     if (signal?.aborted) throw createAbortError("whisper-server transcription cancelled");
 
-    // Always convert to 16kHz mono WAV - whisper.cpp requires this exact format
+    // whisper.cpp wants 16 kHz mono PCM16; a renderer PCM tap delivers exactly that.
     let finalBuffer = audioBuffer;
-    if (!this.canConvert) {
-      throw new Error("FFmpeg not found - required for audio conversion");
+    if (!isPcm16Mono16kWav(audioBuffer)) {
+      if (!this.canConvert) {
+        throw new Error("FFmpeg not found - required for audio conversion");
+      }
+      finalBuffer = await this._convertToWav(audioBuffer);
     }
-    finalBuffer = await this._convertToWav(audioBuffer);
 
     const boundary = `----WhisperBoundary${Date.now()}`;
     const parts = [];
@@ -932,6 +935,12 @@ class WhisperServerManager extends EventEmitter {
 
     const generation = this.startGeneration;
     const modelPath = this.modelPath;
+    // Where this request's output starts in the server's stderr: a crash is
+    // explained by what the failing request printed, not by earlier requests
+    const stderrMark = {
+      processInfo: this._lastProcessInfo,
+      offset: this._lastProcessInfo?.().stderr.length ?? 0,
+    };
 
     try {
       return await this._postInference(body, boundary, signal);
@@ -939,7 +948,14 @@ class WhisperServerManager extends EventEmitter {
       // A cancel is not a server failure: rethrow before the retry/CPU-fallback
       // logic so it never triggers a server restart.
       if (err?.name === "AbortError") throw err;
-      return await this._retryAfterRequestFailure(err, body, boundary, generation, modelPath);
+      return await this._retryAfterRequestFailure(
+        err,
+        body,
+        boundary,
+        generation,
+        modelPath,
+        stderrMark
+      );
     }
   }
 
@@ -1023,7 +1039,7 @@ class WhisperServerManager extends EventEmitter {
     });
   }
 
-  async _retryAfterRequestFailure(err, body, boundary, generation, modelPath) {
+  async _retryAfterRequestFailure(err, body, boundary, generation, modelPath, stderrMark) {
     if (!err?.isConnectionError || this.isRemote || this._stopRequested) throw err;
 
     if (this.startGeneration === generation) {
@@ -1043,7 +1059,7 @@ class WhisperServerManager extends EventEmitter {
           processExited,
         })
       ) {
-        return await this._fallbackToCpuAndRetry(body, boundary, modelPath);
+        return await this._fallbackToCpuAndRetry(body, boundary, modelPath, stderrMark);
       }
       if (this.startGeneration === generation) throw err;
     }
@@ -1077,20 +1093,30 @@ class WhisperServerManager extends EventEmitter {
       }
       const exited = await this._waitForProcessExit(PROCESS_EXIT_WAIT_MS);
       if (!exited || this._stopRequested) throw retryErr;
-      return await this._fallbackToCpuAndRetry(body, boundary, modelPath);
+      return await this._fallbackToCpuAndRetry(body, boundary, modelPath, stderrMark);
     }
   }
 
-  async _fallbackToCpuAndRetry(body, boundary, modelPath) {
+  async _fallbackToCpuAndRetry(body, boundary, modelPath, stderrMark) {
     const backend = this.useCuda ? "cuda" : "vulkan";
+    // Read the crashed server's output now (the CPU start below replaces it),
+    // from where the failing request began. A peer's replacement server is a
+    // different process, so its output is read whole.
+    const processInfo = this._lastProcessInfo();
+    const offset = stderrMark.processInfo === this._lastProcessInfo ? stderrMark.offset : 0;
+    const reason = extractWhisperGpuFailureReason({
+      ...processInfo,
+      stderr: processInfo.stderr.slice(offset),
+    });
     debugLogger.warn(`${backend} whisper-server died during transcription, falling back to CPU`, {
       port: this.port,
       model: modelPath ? path.basename(modelPath) : null,
+      reason,
     });
     await this.start(modelPath, { ...this.lastStartOptions, useCuda: false, useVulkan: false });
     this.gpuFallbackActive = true;
     // Emit only once the CPU server is up — the notification tells the user CPU is in use
-    this.emit(backend === "cuda" ? "cuda-fallback" : "gpu-fallback");
+    this.emit(backend === "cuda" ? "cuda-fallback" : "gpu-fallback", { reason });
     return await this._postInference(body, boundary);
   }
 

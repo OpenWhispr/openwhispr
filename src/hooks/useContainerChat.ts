@@ -47,6 +47,7 @@ export function useContainerChat({
 }: UseContainerChatOptions): UseContainerChatReturn {
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [conversations, setConversations] = useState<ContainerConversationItem[]>([]);
+  const [submissionInFlight, setSubmissionInFlight] = useState(false);
   const folderId = folder?.id ?? null;
 
   const persistence = useChatPersistence({
@@ -100,18 +101,27 @@ export function useContainerChat({
     };
   }, [fetchConversations]);
 
+  // useChatStreaming returns a fresh object every render; cancelStream is
+  // stable. Leaving a conversation cancels its turn, as in useEmbeddedChat: a
+  // reply still streaming would otherwise save into whichever conversation is
+  // open when it settles.
+  const { cancelStream } = streaming;
+
   const switchConversation = useCallback(
     async (id: number) => {
+      if (id === conversationId) return;
+      cancelStream();
       await persistence.loadConversation(id);
       setConversationId(id);
     },
-    [persistence]
+    [cancelStream, conversationId, persistence]
   );
 
   const startNewChat = useCallback(() => {
+    cancelStream();
     persistence.handleNewChat();
     setConversationId(null);
-  }, [persistence]);
+  }, [cancelStream, persistence]);
 
   const createConversation = useCallback(
     async (text: string) => {
@@ -130,6 +140,7 @@ export function useContainerChat({
     persistence,
     streaming,
     createConversation,
+    onSendingChange: setSubmissionInFlight,
   });
   const sendMessage = useCallback(
     async (text: string): Promise<void> => {
@@ -140,9 +151,14 @@ export function useContainerChat({
 
   return {
     messages: persistence.messages,
-    agentState: streaming.agentState,
+    // As in ChatView: the send lock is held while a first send creates its
+    // conversation, and after Stop, New chat or a switch until an in-flight tool
+    // returns; it would drop a message sent meanwhile, so the chat reads busy
+    // until it lets go.
+    agentState:
+      submissionInFlight && streaming.agentState === "idle" ? "thinking" : streaming.agentState,
     sendMessage,
-    cancelStream: streaming.cancelStream,
+    cancelStream,
     conversations,
     activeConversationId: conversationId,
     switchConversation,

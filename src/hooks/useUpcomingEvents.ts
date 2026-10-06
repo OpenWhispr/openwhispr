@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSettingsStore } from "../stores/settingsStore";
 import type { CalendarEvent } from "../types/calendar";
 import { hasOtherAttendees } from "../utils/calendarAttendees";
@@ -27,13 +27,18 @@ export function useUpcomingEvents(): UseUpcomingEventsReturn {
 
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  // Only the first load shows as loading. A refresh after a sync keeps the current
+  // events on screen, so the list doesn't flash (or unmount whatever the user is doing
+  // in it) every time a calendar syncs.
+  const hasLoadedRef = useRef(false);
 
   const fetchEvents = useCallback(async () => {
     if (!isConnected) {
+      hasLoadedRef.current = false;
       setEvents([]);
       return;
     }
-    setIsLoading(true);
+    if (!hasLoadedRef.current) setIsLoading(true);
     try {
       const windowMinutes = getLookaheadMinutes();
       const result = await window.electronAPI?.gcalGetUpcomingEvents?.(windowMinutes);
@@ -45,6 +50,7 @@ export function useUpcomingEvents(): UseUpcomingEventsReturn {
     } catch {
       setEvents([]);
     } finally {
+      hasLoadedRef.current = true;
       setIsLoading(false);
     }
   }, [isConnected]);

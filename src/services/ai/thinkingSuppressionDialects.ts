@@ -1,4 +1,5 @@
 import { getModelFamilyConstraints } from "./modelFamilyConstraints";
+import { matchesHost } from "../../utils/urlUtils";
 
 /**
  * Per-provider dialects for turning a model's thinking off. Model-family
@@ -15,23 +16,13 @@ export interface EndpointDialect {
 
 /** Custom endpoints that need their own request shape, recognised by host. */
 export function detectEndpointDialect(baseUrl: string | null | undefined): EndpointDialect | null {
-  if (!baseUrl) return null;
-
-  let host: string;
-  try {
-    const normalized = baseUrl.includes("://") ? baseUrl : `https://${baseUrl}`;
-    host = new URL(normalized).hostname.toLowerCase();
-  } catch {
-    return null;
-  }
-
-  if (host === "mistral.ai" || host.endsWith(".mistral.ai")) {
+  if (matchesHost(baseUrl, "mistral.ai")) {
     return { key: "mistral", tokenParam: "max_tokens", supportsTemperature: true };
   }
-  if (host === "deepseek.com" || host.endsWith(".deepseek.com")) {
+  if (matchesHost(baseUrl, "deepseek.com")) {
     return { key: "deepseek", tokenParam: "max_tokens", supportsTemperature: true };
   }
-  if (host === "cerebras.ai" || host.endsWith(".cerebras.ai")) {
+  if (matchesHost(baseUrl, "cerebras.ai")) {
     return { key: "cerebras", tokenParam: "max_tokens", supportsTemperature: true };
   }
 

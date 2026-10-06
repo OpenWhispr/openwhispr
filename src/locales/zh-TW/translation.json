@@ -121,8 +121,12 @@
       "mouseButtonOnlyMac": "滑鼠按鍵快捷鍵目前僅在 macOS 上受支援。",
       "alreadyRegistered": "\"{{hotkey}}\" 已被其他應用程式註冊。",
       "osReserved": "\"{{hotkey}}\" 可能被你的作業系統保留。",
+      "rightModifierNeedsListener": "\"{{hotkey}}\" 無法在此桌面上使用，其快捷鍵需要包含一個一般按鍵。請加入一個按鍵，例如 Control+Alt+Space。",
       "holdNeedsReleaseKey": "按住說話需要 macOS 能偵測到放開的按鍵：Globe、右側 Option 之類的右側按鍵，或帶修飾鍵的快速鍵。點按可用於任何按鍵。",
+      "holdNeedsRegularKey": "要使用按住模式，請在快捷鍵中加入一個一般按鍵，例如 Control+Alt+Space。桌面環境無法偵測僅按住修飾鍵的操作。",
+      "holdNeedsGnomePortal": "要使用按住模式，GNOME 需要全域快捷鍵入口（GNOME 48 及更新版本內建）。點按不需要它。",
       "registrationFailed": "無法註冊「{{hotkey}}」。可能已被其他應用程式使用。",
+      "windowsKeyListenerMissing": "「{{hotkey}}」需要 Windows 按鍵監聽程式，但此安裝中缺少該元件。請選擇包含一般按鍵的快捷鍵。",
       "updateFailedCheckFormat": "無法將快速鍵更新為「{{hotkey}}」。請檢查格式是否有效。",
       "trySuggestions": "試試看：{{suggestions}}",
       "slotConflict": "此快捷鍵已用於{{slot}}。"
@@ -158,7 +162,7 @@
     "close": "關閉"
   },
   "windows": {
-    "pttUnavailable": "按住說話原生監聽程式無法使用"
+    "pttUnavailable": "OpenWhispr 按鍵監聽程式無法使用。"
   },
   "common": {
     "continue": "繼續",
@@ -204,6 +208,7 @@
     "policyAiProcessingRestricted": "AI 處理已被您的組織限制。",
     "policyAgentRestricted": "AI 助理的使用已被您的組織限制。",
     "policyTranscriptionRestricted": "轉錄已被您的組織限制。",
+    "policyUnresolved": "貴組織的設定尚未載入完成。請稍後再試。",
     "managedConfigLoading": "正在檢查您組織的託管設定。請稍候再試。",
     "managedConfigUnavailable": "託管企業存取無法使用。請重新登入或聯絡管理員。",
     "managedPolicyConflict": "託管存取已被您工作區的政策封鎖。請聯絡管理員。"
@@ -576,6 +581,20 @@
         "title": "有一項下載未完成",
         "description": "請檢查網路連線與磁碟剩餘空間，然後重試。如果仍然失敗，請聯絡您的管理員。"
       }
+    },
+    "permissionGuide": {
+      "label": "權限引導",
+      "return": "返回初始設定",
+      "missingApp": "或透過 + 選取 App",
+      "failed": "無法檢查存取權限。",
+      "microphone": "在「麥克風」中開啟 OpenWhispr。",
+      "accessibility": "將 OpenWhispr 拖入「輔助使用」，然後開啟開關。",
+      "systemAudio": "在「僅系統音訊錄製」中開啟 OpenWhispr。",
+      "screenContext": "將 OpenWhispr 拖入「螢幕與系統音訊錄製」，然後開啟開關。",
+      "settings": "開啟設定",
+      "check": "重新檢查",
+      "restart": "重新啟動",
+      "restartRequired": "重新啟動 OpenWhispr 以套用螢幕存取權限。"
     }
   },
   "streaming": {
@@ -635,12 +654,14 @@
       "couldNotDeleteTitle": "無法刪除",
       "couldNotDeleteDescription": "這筆轉錄記錄可能已被移除。",
       "couldNotDeleteDescriptionGeneric": "發生錯誤，請再試一次。",
-      "empty": "目前沒有轉錄記錄",
-      "emptyDescription": "在任何應用程式中按下快捷鍵開始說話。每則轉錄都會私密地儲存在你的裝置上。",
-      "sectionTitle": "轉錄記錄",
+      "empty": "開始你的第一次聽寫",
+      "emptyDescription": "你聽寫的文字會顯示在這裡。",
+      "shortcutHint": "按 {{shortcut}} 開始說話。",
       "dataRetentionDisabled": "資料保留已關閉。轉錄和音訊不會儲存至歷史記錄。",
-      "press": "按下",
-      "toStart": "開始",
+      "welcomeBack": "歡迎回來",
+      "welcomeBackNamed": "歡迎回來，{{name}}",
+      "welcome": "歡迎",
+      "welcomeNamed": "歡迎，{{name}}",
       "dateGroups": {
         "today": "今天",
         "yesterday": "昨天"
@@ -701,6 +722,11 @@
       "title": "缺少必要的模型",
       "description": "您的組織要求在此裝置上安裝這些模型：{{models}}。",
       "download": "下載"
+    },
+    "cloudNudge": {
+      "title": "你已登入",
+      "description": "聽寫仍在使用你自己的設定。你可以隨時切換至 OpenWhispr Cloud。",
+      "action": "開啟設定"
     }
   },
   "reasoning": {
@@ -746,6 +772,10 @@
     "disableThinking": {
       "label": "停用思考輸出",
       "help": "略過推理權杖以獲得更乾淨的輸出。建議用於清理。某些伺服器會忽略此提示。"
+    },
+    "keepModelLoaded": {
+      "label": "保持模型載入",
+      "help": "閒置 5 分鐘後仍保留在記憶體中，不會卸載，下一次請求無需冷啟動。適用於所有使用本機模型的功能。"
     },
     "selfHosted": {
       "endpointHelp": "指向本地網路中相容 OpenAI 的伺服器（例如 Ollama、LM Studio、vLLM 或 llama-server）。"
@@ -911,7 +941,10 @@
         "managedRouteInvalid": "由於設定不符，託管轉錄無法啟動。請重試或聯絡管理員。",
         "managedAuthRejected": "您組織的託管轉錄憑證遭拒。請聯絡管理員。",
         "streamingOnlyProvider": "此服務商僅支援即時轉錄。請為檔案上傳與重試選擇其他服務商。",
-        "providerKeyMissing": "尚未為您的轉錄服務商設定 API 金鑰。請在「設定 → 語音轉文字」中新增。"
+        "providerKeyMissing": "尚未為您的轉錄服務商設定 API 金鑰。請在「設定 → 語音轉文字」中新增。",
+        "cleanupTruncated": "AI 模型的輸出長度達到上限，未能完成聽寫清理。",
+        "cleanupDuplicated": "AI 清理重複了轉錄內容。已保留原始文字。",
+        "cleanupEmptyReply": "AI 模型傳回空白回應，沒有產生清理後的文字。"
       },
       "translationFallback": {
         "unreachableTitle": "翻譯無法使用",
@@ -924,14 +957,33 @@
         "description": "聽寫停止時快捷鍵仍處於按住狀態，因此未貼上文字。轉錄內容已複製到剪貼簿。",
         "descriptionClipboardFailed": "聽寫停止時快捷鍵仍處於按住狀態，因此未貼上文字，也無法複製到剪貼簿。"
       },
+      "modifiersHeld": {
+        "title": "轉錄內容未貼上",
+        "description": "修飾鍵（如 Ctrl 或 Shift）仍處於按住狀態，因此未貼上文字。轉錄內容已複製到剪貼簿。",
+        "descriptionClipboardFailed": "修飾鍵（如 Ctrl 或 Shift）仍處於按住狀態，因此未貼上文字，也無法複製到剪貼簿。"
+      },
       "selectionEditing": {
         "notAppliedTitle": "未套用選取文字編輯",
         "changed": "處理期間，選取的文字或目標應用程式已變更。未取代任何內容。",
         "expired": "選取文字編輯已逾時。請重新選取文字後再試。",
         "pasteFailed": "OpenWhispr 已產生編輯結果，但無法取代選取的文字。",
+        "modifiersHeld": "OpenWhispr 已產生編輯結果，但修飾鍵（如 Ctrl 或 Shift）仍處於按住狀態，因此未套用。編輯結果已複製到剪貼簿。",
+        "modifiersHeldClipboardFailed": "OpenWhispr 已產生編輯結果，但修飾鍵（如 Ctrl 或 Shift）仍處於按住狀態，因此未套用，也無法複製到剪貼簿。",
         "unavailable": "OpenWhispr 無法安全讀取選取的文字。請檢查輔助使用或輸入自動化權限。",
         "tooLarge": "選取內容過長。請選取不超過 6,000 個字元。",
         "reasoningFailed": "AI 無法完成選取文字編輯。原始文字未被變更。"
+      },
+      "pastePermission": {
+        "title": "允許自動貼上",
+        "description": "請在系統設定 → 隱私權與安全性 → 輔助使用中啟用 OpenWhispr。",
+        "settingsFailed": "無法開啟設定。請開啟系統設定 → 隱私權與安全性 → 輔助使用，並啟用 OpenWhispr。",
+        "manualPaste": "點擊下方按鈕複製文字，然後按 {{shortcut}} 貼上。",
+        "openSettings": "開啟設定",
+        "copyToClipboard": "複製到剪貼板",
+        "copyFailed": "複製失敗"
+      },
+      "pasteFailed": {
+        "title": "無法自動貼上"
       }
     },
     "clipboard": {
@@ -1823,10 +1875,10 @@
       "removing": "移除中...",
       "resetAll": {
         "confirmText": "刪除所有資料",
-        "description": "這將永久刪除所有本地設定、轉錄、音訊錄製、下載的 AI 模型、行事曆連線和快取資料。雲端資料和您的帳戶不會受到影響。應用程式將在重設後重新載入。",
+        "description": "這將永久刪除所有本地設定、轉錄、音訊錄製、下載的 AI 模型、行事曆連線和快取資料。雲端資料和您的帳戶不會受到影響。應用程式將在重設後重新啟動。",
         "failedDescription": "發生錯誤。請再試一次或重新安裝應用程式。",
         "failedTitle": "無法重設",
-        "successDescription": "所有資料已重設。應用程式即將重新載入。",
+        "successDescription": "所有資料已重設。應用程式即將重新啟動。",
         "successTitle": "完成",
         "title": "重設所有應用程式資料"
       },
@@ -2226,6 +2278,12 @@
       },
       "transcriptionPreview": "即時轉錄預覽",
       "transcriptionPreviewDescription": "在浮動視窗中顯示轉錄結果，再進行文字整理",
+      "aec": {
+        "toggle": {
+          "title": "會議回音消除",
+          "description": "消除洩漏到麥克風中的會議音訊。使用耳機或耳塞時請關閉此功能——沒有需要消除的回音，且它可能會完全抑制您的聲音。"
+        }
+      },
       "vad": {
         "title": "語音活動偵測",
         "description": "設定 Silero VAD 如何為本機 Whisper 轉錄偵測並切分語音",
@@ -2299,7 +2357,7 @@
       "tab": {
         "general": "一般",
         "members": "成員",
-        "teams": "團隊",
+        "teams": "群組",
         "developer": "開發者"
       },
       "role": {
@@ -2357,33 +2415,33 @@
         "errorTitle": "無法更新申請"
       },
       "teams": {
-        "title": "團隊",
-        "description": "授予團隊空間存取權的工作區成員群組。",
-        "new": "新增團隊",
-        "empty": "還沒有團隊。",
-        "createFirst": "建立你的第一個團隊",
+        "title": "群組",
+        "description": "可一次取得團隊空間存取權的工作區成員群組。",
+        "new": "新增群組",
+        "empty": "還沒有群組。",
+        "createFirst": "建立你的第一個群組",
         "addMembersLabel": "新增成員",
-        "createTitle": "建立團隊",
-        "nameLabel": "團隊名稱",
+        "createTitle": "建立群組",
+        "nameLabel": "群組名稱",
         "memberCount_one": "{{count}} 位成員",
         "memberCount_other": "{{count}} 位成員",
         "membersButton": "成員",
         "grantsAccessToSpaces_one": "授予 {{count}} 個空間的存取權",
         "grantsAccessToSpaces_other": "授予 {{count}} 個空間的存取權",
-        "couldNotCreate": "無法建立團隊",
+        "couldNotCreate": "無法建立群組",
         "created": "已建立 {{team}}",
         "deleted": "已刪除 {{team}}",
         "deleteConfirmTitle": "刪除 {{team}}？",
-        "deleteConfirmDescription": "這將封存該團隊。其成員將失去它授予的存取權。",
-        "deleteConfirmSpaceAccess_one": "該團隊授予 {{count}} 個空間的存取權。其成員將失去該存取權。",
-        "deleteConfirmSpaceAccess_other": "該團隊授予 {{count}} 個空間的存取權。其成員將失去該存取權。",
+        "deleteConfirmDescription": "這將封存該群組。其成員將失去它授予的存取權。",
+        "deleteConfirmSpaceAccess_one": "該群組授予 {{count}} 個空間的存取權。其成員將失去該存取權。",
+        "deleteConfirmSpaceAccess_other": "該群組授予 {{count}} 個空間的存取權。其成員將失去該存取權。",
         "members": {
           "title": "{{team}} 的成員",
           "removeConfirm": "將 {{name}} 從 {{team}} 移除？",
-          "leave": "退出團隊",
+          "leave": "退出群組",
           "leftTeam": "你已退出 {{team}}",
           "leaveConfirm": "退出 {{team}}？",
-          "leaveConfirmDescription": "除非其他團隊包含你，否則你將失去透過該團隊取得的空間存取權。"
+          "leaveConfirmDescription": "除非你被直接加入或其他群組包含你，否則你將失去透過該群組取得的空間存取權。"
         }
       },
       "invites": {
@@ -2648,6 +2706,12 @@
         "segmentation": "用於說話者分離的語音邊界偵測",
         "embedding_en": "用於說話者辨識的聲紋提取"
       }
+    },
+    "errors": {
+      "contextTooLarge": "內容過長，{{model}} 無法在這台電腦上讀取。大約需要 {{needed}} 個上下文 token，但記憶體只能容納 {{max}} 個。請改用雲端模型，或對更短的選取範圍執行該動作。",
+      "contextTooLargeGeneric": "內容過長，{{model}} 無法在這台電腦上讀取。請改用雲端模型，或對更短的選取範圍執行該動作。",
+      "localServerUnavailable": "無法在這台電腦上啟動 {{model}}。請重試，或改用雲端模型。",
+      "localModelBusy": "本機模型仍在處理另一個請求。請等待其完成後再試。"
     }
   },
   "referral": {
@@ -2736,7 +2800,7 @@
     "sidebar": {
       "newNote": "新增筆記",
       "searchNotes": "搜尋筆記",
-      "actions": "動作"
+      "templatesAndActions": "範本與動作"
     },
     "spaces": {
       "privateSpaces": "私人筆記",
@@ -2746,20 +2810,32 @@
       "newSpace": "新增團隊空間",
       "newSpaceInWorkspace": "在 {{workspace}} 中新增團隊空間",
       "createTitle": "建立團隊空間",
-      "createDescription": "工作區內的共享區域，可供一個或多個團隊存取。",
-      "nameLabel": "名稱",
-      "emojiLabel": "表情符號",
+      "createDescription": "工作區內的共享區域，供你加入的人員和群組存取。",
+      "nameAndIconLabel": "名稱與圖示",
       "create": "建立",
       "couldNotCreate": "無法建立空間",
       "created": "已建立 {{space}}",
-      "rename": "重新命名",
       "changeEmoji": "變更表情符號",
+      "settings": "設定",
+      "settingsTitle": "空間設定",
       "couldNotRename": "無法重新命名空間",
-      "renamed": "已重新命名 {{space}}",
+      "couldNotChangeEmoji": "無法變更表情符號",
       "deleteSpace": "刪除空間",
+      "deleteHintTeam": "為所有人移除此空間，其群組會保留。",
+      "deleteHintLocal": "永久刪除此空間以及此裝置上的資料夾與筆記。",
+      "leaveTitle": "離開空間",
+      "leaveDescription": "你的筆記仍可供其他成員存取。",
+      "leave": "離開空間",
+      "leaveConfirmTitle": "要離開 {{space}} 嗎？",
+      "leaveConfirmDescription": "你將從 {{teams}} 中移除，並失去這些群組可開啟的其他空間的存取權。",
+      "leaveDirectDescription": "你將失去此空間的存取權。",
+      "leaveKeepsGroupAccess": "你將保留透過 {{groups}} 的存取權。",
+      "left": "已離開 {{space}}",
+      "stillViaGroups": "你仍可透過 {{groups}} 存取 {{space}}。",
+      "couldNotLeave": "無法離開空間",
       "deleteConfirmTitle": "刪除空間？",
       "deleteConfirmDescription": "這會從此裝置永久刪除 {{space}} 及其所有資料夾和筆記。",
-      "deleteConfirmTeamDescription": "這將為所有人刪除 {{space}}。團隊會保留，但成員將失去其所有資料夾與筆記的存取權。",
+      "deleteConfirmTeamDescription": "這將為所有人刪除 {{space}}。群組會保留，但成員將失去其所有資料夾與筆記的存取權。",
       "deleteTypeName": "輸入 {{space}} 以確認",
       "couldNotDelete": "無法刪除空間",
       "deleted": "已刪除 {{space}}",
@@ -2781,6 +2857,7 @@
       "undo": "復原",
       "emptySpace": "還沒有筆記。這裡的筆記對 {{space}} 中的所有人可見。",
       "emptyTeamHint": "與你共享的空間將顯示在這裡。",
+      "emptyTeamTitle": "尚無共享空間",
       "noteCount_one": "{{count}} 則筆記",
       "noteCount_other": "{{count}} 則筆記",
       "accessRevoked": "你已無法存取 {{space}}",
@@ -2795,9 +2872,10 @@
       "conflictKeep": "繼續編輯",
       "editedBy": "由 {{name}} 編輯 · {{time}}",
       "members": {
-        "addPeopleToTeam": "將成員加入 {{team}}",
+        "addPeople": "新增成員",
         "addedToTeam": "已將 {{name}} 加入 {{team}}",
         "removedFromTeam": "已將 {{name}} 從 {{team}} 移除",
+        "stillViaGroups": "{{name}} 仍可透過 {{groups}} 存取",
         "roleUpdated": "角色已更新",
         "you": "你",
         "addFailed": "{{total}} 人中有 {{failed}} 人無法加入",
@@ -2805,28 +2883,32 @@
         "noResults": "找不到成員",
         "roleAdmin": "管理員",
         "roleMember": "成員",
+        "roleAdminDescription": "管理成員與設定。",
+        "roleMemberDescription": "可以檢視與編輯筆記。",
         "remove": "移除",
         "removeConfirm": "要將 {{name}} 從 {{space}} 移除嗎？",
         "removeConfirmDescription": "對方將無法再存取此空間的所有筆記。",
+        "removeKeepsGroupAccess": "他們將保留透過 {{groups}} 的存取權。",
         "inviteFooter": "邀請 {{email}} 加入工作區…",
-        "empty": "尚未新增任何成員"
+        "empty": "尚未新增任何成員",
+        "viaGroup": "透過 {{group}}",
+        "managedByGroup": "透過 {{group}} 加入。請在該群組中移除。",
+        "roleFromGroup": "透過 {{group}} 取得管理員身分，請在該群組中變更。",
+        "invited": "已向 {{email}} 傳送邀請"
       },
       "invitedTo_one": "你將加入 {{count}} 個團隊空間",
       "invitedTo_other": "你將加入 {{count}} 個團隊空間",
+      "invitedToSpaces": "你將加入 {{spaces}}",
       "teamsMembers": {
-        "menu": "團隊與成員…",
-        "title": "{{space}} 的團隊與成員",
-        "noTeams": "尚無團隊可存取此空間。只有工作區管理員可以看到它。",
-        "addTeamLabel": "將團隊加入此空間",
-        "chooseTeam": "選擇團隊…",
+        "title": "{{space}} 的成員",
+        "noTeams": "尚無群組可存取此空間。",
+        "addTeamLabel": "將群組加入此空間",
+        "chooseTeam": "選擇群組…",
         "teamAdded": "已將 {{team}} 加入 {{space}}",
         "teamRemoved": "已將 {{team}} 從 {{space}} 移除",
         "removeTeamFromSpace": "從空間移除",
         "removeTeamConfirm": "將 {{team}} 從 {{space}} 移除？",
-        "removeTeamConfirmDescription": "除非其他已指派的團隊包含這些成員，否則他們將失去此空間的存取權。",
-        "lastTeamWarning": "這是唯一可存取此空間的團隊。移除後，只有工作區管理員保留存取權。",
-        "affectsOtherSpaces_one": "對 {{team}} 的變更也會套用到它可存取的另外 {{count}} 個空間。",
-        "affectsOtherSpaces_other": "對 {{team}} 的變更也會套用到它可存取的另外 {{count}} 個空間。",
+        "removeTeamConfirmDescription": "除非這些成員被直接加入或其他已指派的群組包含他們，否則他們將失去此空間的存取權。",
         "accessLabel": "空間存取權",
         "accessAdmin": "管理員",
         "accessMember": "成員",
@@ -2834,10 +2916,12 @@
         "accessHint": "僅當存取權設為「管理員」時，{{team}} 的管理員才能管理此空間。"
       },
       "teams": {
-        "assignLabel": "團隊",
-        "newTeam": "新增團隊",
-        "newTeamNameLabel": "團隊名稱",
-        "loadError": "無法載入團隊。"
+        "newTeam": "新增群組",
+        "loadError": "無法載入群組。"
+      },
+      "groups": {
+        "title": "有存取權的群組",
+        "optional": "群組（選填）"
       }
     },
     "structureIntro": {
@@ -2853,7 +2937,7 @@
       },
       "teamSpace": {
         "title": "團隊空間",
-        "description": "工作區內的共享區域。由一個或多個團隊授予存取權。"
+        "description": "工作區內的共享區域。加入人員或群組以授予存取權。"
       },
       "contents": "每個空間都可以包含資料夾和筆記。",
       "done": "知道了",
@@ -2887,6 +2971,11 @@
       "hoursAgo": "{{count}} 小時前",
       "daysAgo": "{{count}} 天前"
     },
+    "createMenu": {
+      "note": "筆記",
+      "assistantChat": "助理聊天",
+      "chooseType": "選擇要建立的內容"
+    },
     "editor": {
       "untitled": "未命名",
       "noteTitle": "筆記標題",
@@ -2901,21 +2990,49 @@
       "asJson": "匯出為 JSON (.json)",
       "asTranscriptMarkdown": "匯出為 Markdown (.md)",
       "raw": "原始",
-      "enhanced": "已增強",
+      "aiSummary": "AI 摘要",
       "saving": "儲存中",
-      "transcriptEmptyTitle": "尚未錄製任何內容",
-      "transcriptEmptyDescription": "點擊錄製開始轉錄。所說的內容會即時顯示在這裡。",
+      "transcriptEmptyTitle": "尚無轉錄",
+      "transcriptEmptyDescription": "開始錄音後，所說的一切都會顯示在這裡。",
       "startRecording": "開始錄製",
       "generateSummary": "產生 AI 摘要",
       "startWriting": "開始撰寫...",
       "staleIndicator": "內容在增強後已變更",
       "live": "即時",
       "transcript": "轉錄",
-      "notes": "筆記",
+      "notes": "你的筆記",
       "conversationWillAppear": "對話將顯示在這裡...",
       "linkedEvent": "關聯行程",
       "noFolder": "無資料夾",
-      "participants": "參與者"
+      "participants": "參與者",
+      "table": {
+        "actions": "表格操作",
+        "insertRowAbove": "在上方插入列",
+        "insertRowBelow": "在下方插入列",
+        "insertColumnLeft": "在左側插入欄",
+        "insertColumnRight": "在右側插入欄",
+        "deleteRow": "刪除列",
+        "deleteColumn": "刪除欄",
+        "deleteTable": "刪除表格"
+      },
+      "format": {
+        "toolbar": "格式",
+        "withShortcut": "{{action}}（{{shortcut}}）",
+        "bold": "粗體",
+        "italic": "斜體",
+        "strike": "刪除線",
+        "code": "程式碼",
+        "textStyle": "文字樣式",
+        "paragraph": "內文",
+        "heading1": "標題 1",
+        "heading2": "標題 2",
+        "heading3": "標題 3",
+        "bulletList": "項目符號清單",
+        "orderedList": "編號清單",
+        "taskList": "核取清單",
+        "blockquote": "引用",
+        "table": "插入表格"
+      }
     },
     "participants": {
       "attendee": "位與會者",
@@ -2928,8 +3045,9 @@
     "upload": {
       "title": "上傳音訊",
       "using": "使用 {{model}}",
-      "dropOrBrowse": "拖放音訊檔案或點擊瀏覽",
-      "supportedFormats": "MP3、WAV、M4A、WebM、OGG、FLAC、AAC、Opus",
+      "dropOrBrowse": "拖放音訊或影片檔案，或點擊瀏覽",
+      "supportedFormats": "MP3、WAV、M4A、MP4、MOV 及大多數其他音訊或影片格式",
+      "unsupportedFiles": "已略過 {{names}}：不支援的音訊或影片格式。",
       "dropToUpload": "拖放以上傳",
       "transcribe": "轉錄",
       "cancel": "取消",
@@ -2989,7 +3107,7 @@
       "speakerDetectionDescription": "辨識音訊中的不同說話者",
       "numSpeakersPlaceholder": "自動偵測",
       "numSpeakersLabel": "說話人數",
-      "numSpeakersHint": "設定準確的人數可以提高準確度，尤其是長錄音。",
+      "numSpeakersHint": "將自動偵測說話人，不超過此人數。",
       "downloadingModels": "正在下載模型...",
       "openaiDiarizeNote": "將替換您的轉錄模型為 gpt-4o-transcribe-diarize，這是唯一支援說話人偵測的 OpenAI 模型。費用可能與您選擇的模型不同。",
       "mistralDiarizeNote": "使用 Voxtral 時說話人偵測無需額外費用。",
@@ -3016,8 +3134,6 @@
       "unsupportedSelfHosted": "筆記錄音尚不支援自架端點。請開啟設定，選擇本機或支援串流的服務商。",
       "unsupportedProvider": "筆記錄音無法使用 {{provider}} 進行即時轉錄。請開啟設定，選擇本機或支援串流的服務商。",
       "noProviderSelected": "尚未為筆記錄音選擇服務商。請開啟設定，選擇本機或支援串流的服務商。",
-      "autoEnded": "會議結束後，錄音已自動停止。",
-      "restartFailed": "無法重新開始會議錄音。",
       "systemAudioSilent": {
         "title": "尚未偵測到會議音訊",
         "description": "到目前為止，只有您的麥克風收到聲音。正在進行視訊通話？請檢查會議音訊是否正在此電腦上播放且未被靜音。正在進行現場錄音？您可以忽略此提示——您的麥克風會收錄房間內的聲音。"
@@ -3049,8 +3165,8 @@
       "showInFileManager": "在{{manager}}中顯示"
     },
     "actions": {
+      "allActions": "全部動作",
       "manage": "管理動作...",
-      "manageTitle": "自訂動作",
       "addAction": "新增動作",
       "editAction": "編輯動作",
       "namePlaceholder": "動作名稱",
@@ -3064,9 +3180,9 @@
       "promptLabel": "提示詞",
       "emptyEditorTitle": "選擇動作",
       "emptyEditorDescription": "從列表中選擇一個動作或建立新動作",
-      "runAction": "執行 {{name}}",
-      "selectAction": "選擇動作",
       "done": "完成",
+      "chunkProgress": "第 {{step}} 部分，共 {{total}} 部分",
+      "emptyReply": "模型傳回了空白回覆。請再試一次，或選擇其他模型。",
       "builtin": {
         "generateNotes": {
           "name": "生成筆記",
@@ -3078,15 +3194,89 @@
           "cta": "草擬跟進郵件"
         },
         "detailedNotes": {
-          "name": "詳細筆記",
+          "name": "AI 摘要",
           "description": "準確、完整的會議筆記，包含決策和行動項目"
+        },
+        "makeTodos": {
+          "name": "建立待辦事項",
+          "description": "在聊天中列出每項待辦及其負責人"
+        },
+        "createOutline": {
+          "name": "建立大綱",
+          "description": "在聊天中為筆記的主題列出大綱"
+        },
+        "oneOnOne": {
+          "name": "1 對 1",
+          "description": "一對一會議中的近況、回饋、成長和後續步驟"
+        },
+        "standUp": {
+          "name": "站會",
+          "description": "每個人的進度、計畫和阻礙"
+        },
+        "salesCall": {
+          "name": "銷售通話",
+          "description": "需求、異議、預算和決策流程"
+        },
+        "userInterview": {
+          "name": "使用者訪談",
+          "description": "參與者的工作流程、痛點、反應和原話"
+        },
+        "shorten": {
+          "name": "精簡",
+          "description": "把摘要縮短到大約一半",
+          "cta": "精簡摘要"
+        },
+        "addTldr": {
+          "name": "新增 TL;DR",
+          "description": "在摘要開頭加上兩三句話的 TL;DR",
+          "cta": "新增 TL;DR"
+        },
+        "slackUpdate": {
+          "name": "Slack 更新",
+          "description": "寫一則發到 Slack 的簡短團隊更新",
+          "cta": "寫一則 Slack 更新"
         }
       },
       "errors": {
         "noModel": "未選擇 AI 模型。請在設定中進行配置。",
         "actionFailed": "操作失敗",
-        "noEndpoint": "未設定自架伺服器 URL。請在設定中進行配置。"
-      }
+        "noEndpoint": "未設定自架伺服器 URL。請在設定中進行配置。",
+        "outputTruncated": "AI 模型在完成之前就用完了輸出空間，因此筆記維持不變。",
+        "nothingToSummarize": "這則筆記還沒有可以摘要的內容，因此 AI 摘要維持不變。",
+        "saveFailed": "無法儲存。請檢查是否有內容過長，然後再試一次。"
+      },
+      "tab": "動作",
+      "output": {
+        "auto": "自動",
+        "chat": "聊天",
+        "summary": "AI 摘要",
+        "chatHint": "在筆記的聊天中回覆，AI 摘要維持不變。",
+        "summaryHint": "編輯筆記的 AI 摘要；如果還沒有摘要，就根據轉錄內容產生一份。",
+        "autoHint": "儲存時讀取提示詞，並選擇聊天或 AI 摘要。"
+      },
+      "applied": "已使用 {{name}} 更新 AI 摘要"
+    },
+    "templates": {
+      "tab": "範本",
+      "managerTitle": "範本與動作",
+      "manage": "管理範本...",
+      "select": "選擇範本",
+      "addTemplate": "新增範本",
+      "editTemplate": "編輯範本",
+      "namePlaceholder": "範本名稱",
+      "contextLabel": "背景",
+      "contextPlaceholder": "這是什麼類型的會議？摘要應著重在什麼？",
+      "sectionsLabel": "段落",
+      "addSection": "新增段落",
+      "sectionHeadingPlaceholder": "段落標題",
+      "sectionInstructionPlaceholder": "這個段落要寫什麼？",
+      "moveSectionUp": "上移段落",
+      "moveSectionDown": "下移段落",
+      "removeSection": "移除段落",
+      "noSectionsHint": "沒有段落時，背景就是摘要的完整指示。",
+      "noTemplates": "尚無範本",
+      "emptyEditorTitle": "選擇範本",
+      "emptyEditorDescription": "從列表中選擇一個範本或建立新範本"
     },
     "empty": {
       "title": "這裡還沒有筆記",
@@ -3110,12 +3300,12 @@
         "description": "動作使用 AI 來處理你的筆記。設定語言模型以開始使用。",
         "configured": "AI 模型已設定"
       },
-      "actions": {
-        "title": "AI 驅動的動作",
-        "description": "動作可以處理你的筆記——整理轉錄、摘要會議等。使用內建動作或建立你自己的。",
-        "builtInLabel": "內建",
-        "createTitle": "建立你的動作",
-        "createDescription": "使用你自己的 AI 提示詞定義自訂動作。你隨時可以在設定中編輯或新增更多。",
+      "templates": {
+        "title": "範本與動作",
+        "description": "範本決定 AI 摘要的樣式，從詳細的會議記錄到你自訂的段落。動作在筆記上執行，例如在聊天中草擬跟進郵件。",
+        "builtInLabel": "你的範本",
+        "createTitle": "建立你的範本",
+        "createDescription": "描述你想要的摘要。你之後可以新增段落、更多範本與動作。",
         "created": "已建立！"
       },
       "getStarted": "開始使用",
@@ -3208,9 +3398,6 @@
         }
       },
       "invite": "邀請",
-      "list": {
-        "empty": "這裡還沒有筆記"
-      },
       "author": {
         "you": "你"
       }
@@ -3257,19 +3444,14 @@
       "examples": {
         "linkedinTrigger": "我的 LinkedIn",
         "linkedinText": "linkedin.com/in/you",
-        "rewriteTrigger": "改寫提示詞",
-        "rewriteText": "把這段話改寫得更簡潔、更專業",
-        "introTrigger": "開場郵件",
-        "introText": "你好，希望本週能找個時間聊聊…",
         "signoffTrigger": "簽名",
         "signoffText": "祝好，Alex · alex@example.com"
       },
       "addPlaceholder": "新增觸發詞——「我的行事曆連結」「簽名」"
     },
-    "emptyTitle": "你的字典是空的",
+    "emptyTitle": "將詞語加入字典",
     "emptyDescription": "新增希望{{agentName}}始終辨識正確的詞：名字、工具、縮寫。",
     "addFirstWord": "新增第一個詞",
-    "importList": "匯入清單",
     "agentDefault": "預設加入"
   },
   "insights": {
@@ -3405,6 +3587,7 @@
     "upload": "上傳",
     "dictionary": "字典",
     "referral": "獲得一個月免費",
+    "inviteTeam": "邀請你的團隊",
     "settings": "設定",
     "support": "支援",
     "limitReached": "已達每週上限",
@@ -3427,8 +3610,10 @@
     "newChat": "新對話",
     "search": "搜尋對話...",
     "archived": "已封存",
-    "noConversations": "開始你的第一個對話",
-    "selectChat": "選擇一個對話或開始新的對話",
+    "noConversations": "尚無聊天",
+    "allArchived": "所有聊天皆已封存",
+    "noConversationsDescription": "與助理的聊天會顯示在這裡。",
+    "loadFailed": "無法載入聊天紀錄",
     "noResults": "沒有符合的對話",
     "today": "今天",
     "yesterday": "昨天",
@@ -3443,7 +3628,12 @@
     "searchChats": "搜尋聊天",
     "searchTitle": "搜尋對話",
     "searchDescription": "搜尋所有對話",
-    "newChatEmpty": "詢問關於筆記、轉錄或其他任何內容"
+    "inputPlaceholder": "隨便問點什麼...",
+    "starters": {
+      "todos": "列出我最近的待辦事項",
+      "meeting": "幫我準備下一場會議",
+      "sharedNotes": "突顯我的共享筆記"
+    }
   },
   "support": {
     "documentation": "文件",
@@ -3478,6 +3668,10 @@
     "activationFailedDescription": "OpenWhispr 已切換為 CPU 轉錄。",
     "reasoningActivationFailedDescription": "OpenWhispr 已切換為 CPU 處理。",
     "retryActivation": "重試 GPU 加速",
+    "redownloadNeeded": "需要重新下載 GPU 加速包",
+    "redownloadNeededDescription": "此版本的 OpenWhispr 無法使用已安裝的 GPU 加速包。請重新下載以重新啟用 GPU 加速。",
+    "redownloadButton": "重新下載 GPU 加速包",
+    "downloadFailed": "無法下載 GPU 加速包。",
     "remove": "移除",
     "dismiss": "暫時不要",
     "cancel": "取消"
@@ -3505,7 +3699,7 @@
       },
       "gpuPackMigration": {
         "title": "需要重新下載 GPU 加速包",
-        "description": "更新移除了過時的 GPU 加速包安裝（{{packs}}）。請在設定中重新下載以恢復 GPU 加速。"
+        "description": "此版本無法使用先前的 GPU 加速包（{{packs}}）。請在設定中重新下載以重新啟用 GPU 加速。"
       },
       "cleanupFailed": {
         "title": "清理失敗",
@@ -3527,7 +3721,9 @@
       "stopListening": "停止錄音",
       "startListening": "開始錄音",
       "hideForNow": "暫時隱藏",
-      "askAssistant": "詢問助理"
+      "askAssistant": "詢問助理",
+      "busyRecording": "請先結束目前的錄音",
+      "startMeetingRecording": "開始會議錄音"
     }
   },
   "dictationAgent": {
@@ -3590,10 +3786,20 @@
       "thinking": "正在思考...",
       "typeMessage": "輸入訊息...",
       "send": "傳送",
-      "voiceDraftStreamingOnly": "目前的轉錄服務商僅支援即時聽寫，因此無法使用語音輸入。請在「設定 → 語音轉文字」中選擇其他服務商。"
+      "voiceDraftStreamingOnly": "目前的轉錄服務商僅支援即時聽寫，因此無法使用語音輸入。請在「設定 → 語音轉文字」中選擇其他服務商。",
+      "commands": "指令"
     },
     "tools": {
       "search_notesName": "搜尋筆記",
+      "email_draftName": "郵件草稿",
+      "find_contactName": "尋找聯絡人",
+      "github_search_issuesName": "搜尋 GitHub",
+      "github_create_issueName": "GitHub Issue",
+      "github_commentName": "GitHub 留言",
+      "slack_send_messageName": "Slack 訊息",
+      "linear_search_issuesName": "搜尋 Linear",
+      "linear_create_issueName": "Linear 議題",
+      "linear_commentName": "Linear 留言",
       "get_noteName": "取得筆記",
       "create_noteName": "建立筆記",
       "update_noteName": "更新筆記",
@@ -3606,6 +3812,15 @@
       "update_dictionaryName": "更新字典",
       "update_snippetsName": "更新片段",
       "search_notesStatus": "正在搜尋筆記...",
+      "email_draftStatus": "正在準備郵件...",
+      "find_contactStatus": "正在尋找聯絡人...",
+      "github_search_issuesStatus": "正在搜尋 GitHub...",
+      "github_create_issueStatus": "正在準備 GitHub Issue...",
+      "github_commentStatus": "正在準備 GitHub 留言...",
+      "slack_send_messageStatus": "正在準備 Slack 訊息...",
+      "linear_search_issuesStatus": "正在搜尋 Linear...",
+      "linear_create_issueStatus": "正在準備 Linear 議題...",
+      "linear_commentStatus": "正在準備 Linear 留言...",
       "web_searchStatus": "正在搜尋網頁...",
       "copy_to_clipboardStatus": "正在複製到剪貼簿...",
       "get_calendar_eventsStatus": "正在查看行事曆...",
@@ -3646,10 +3861,8 @@
   },
   "integrations": {
     "title": "整合",
-    "description": "連接服務以增強您的工作流程",
     "googleCalendar": {
       "title": "Google 日曆",
-      "optional": "可選",
       "description": "從日曆自動填入會議名稱和參與者。",
       "connect": "連接 Google 日曆",
       "connecting": "連接中...",
@@ -3668,7 +3881,6 @@
     },
     "microsoftCalendar": {
       "title": "Microsoft 日曆",
-      "optional": "可選",
       "description": "從 Outlook 或 Microsoft 365 日曆讀取會議。",
       "connect": "連接 Microsoft 日曆",
       "connected": "已連接",
@@ -3683,7 +3895,6 @@
     },
     "appleCalendar": {
       "title": "Apple 日曆",
-      "optional": "可選",
       "description": "從 Calendar.app 讀取會議 — iCloud、Google、Exchange 和 Outlook 一站式接入。",
       "connect": "連接 Apple 日曆",
       "connected": "已連接",
@@ -3696,34 +3907,24 @@
       "connectFailed": "連線失敗",
       "connectFailedDescription": "連線 Calendar.app 時發生錯誤。請重新啟動 OpenWhispr 後再試一次。"
     },
-    "sections": {
-      "calendar": "行事曆",
-      "api": "API",
-      "mcp": "MCP",
-      "cli": "CLI"
-    },
     "api": {
-      "title": "API 金鑰",
       "description": "管理用於程式存取的 API 金鑰",
       "proRequired": "升級到付費方案以存取 API",
-      "manage": "管理金鑰",
       "viewPlans": "查看方案",
-      "dialogTitle": "API 金鑰"
+      "useWith": "金鑰可用於"
     },
     "mcp": {
-      "title": "將筆記帶到你的 AI 工具中",
       "description": "在 Claude、ChatGPT 和 Cursor 中與你的筆記一起聊天、搜尋和工作。",
       "step1": "在你的 AI 工具中，使用公開 URL 新增 OpenWhispr MCP",
-      "step2": "在上方建立具有所需權限的 API 金鑰。",
+      "step2": "建立具有所需權限的 API 金鑰。",
       "step3": "將金鑰貼上為 Authorization 標頭以連線。",
       "learnMore": "瞭解更多",
-      "viewPlans": "查看方案",
-      "copyUrl": "複製 MCP URL",
       "proRequired": "升級到付費方案，以將 OpenWhispr 連接到 Claude、ChatGPT 和 Cursor。",
+      "worksWith": "支援",
+      "copyUrl": "複製 MCP URL",
       "copied": "已複製"
     },
     "cli": {
-      "title": "命令列存取",
       "description": "讓你的助理透過終端機存取你的筆記。",
       "installLabel": "安裝",
       "learnMore": "查看文件",
@@ -3753,9 +3954,476 @@
       "upgrade": "升級"
     },
     "notABot": {
-      "title": "OpenWhispr 是會議錄製工具，不是機器人",
       "description": "OpenWhispr 直接從您的系統擷取音訊 — 它不會以參與者身分加入您的會議。只需連接日曆，正常記錄筆記即可。"
+    },
+    "nav": {
+      "label": "整合分區",
+      "groups": {
+        "assistant": "助理",
+        "meetings": "會議",
+        "developer": "開發者"
+      },
+      "sections": {
+        "connectors": "連接器",
+        "calendars": "行事曆",
+        "api": "API 金鑰",
+        "mcp": "MCP 伺服器",
+        "cli": "命令列"
+      },
+      "docs": "整合文件"
+    },
+    "connectors": {
+      "description": "讓助理使用您的工具。每封郵件、每則訊息和每個議題送出前都需要您核准。"
     }
+  },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "傳送至 {{destination}}",
+        "slackPost": "發佈到 {{destination}}",
+        "email": "寄送郵件給 {{destination}}",
+        "issue": "在 {{destination}} 中建立問題",
+        "comment": "留言於 {{destination}}"
+      },
+      "identity": "以 {{account}} 身分",
+      "identityWithWorkspace": "以 {{account}}（{{workspace}}）身分",
+      "send": "傳送",
+      "edit": "編輯",
+      "doneEditing": "編輯完成",
+      "cancel": "取消",
+      "titleLabel": "標題",
+      "bodyLabel": "訊息",
+      "sending": "傳送中…",
+      "sent": "已傳送至 {{destination}}。",
+      "open": "開啟",
+      "failed": "無法傳送：{{message}}",
+      "unknown": "無法確認是否已傳送，請檢查 {{destination}}。",
+      "cancelled": "已取消，未傳送任何內容。",
+      "notSent": "未傳送。",
+      "policyRetry": "無法檢查您的組織設定，因此未傳送任何內容。請點一下「傳送」重試。",
+      "errors": {
+        "not_in_channel": "您不是 {{destination}} 的成員。",
+        "channel_not_found": "在 Slack 中已找不到 {{destination}}。",
+        "is_archived": "{{destination}} 已封存。",
+        "reconnect_needed": "需要在設定中重新連接 Slack。",
+        "connection_changed": "傳送前 Slack 連線發生了變化，因此未傳送任何內容。",
+        "rate_limited": "Slack 忙碌中，請稍後再試。",
+        "missing_scope": "OpenWhispr 沒有權限在那裡發佈。請在設定中重新連接 Slack。",
+        "msg_too_long": "訊息對 Slack 來說太長了（格式化後最多 12,000 個字元）。",
+        "no_text": "訊息是空的。",
+        "network": "無法連線到 Slack，未傳送任何內容。",
+        "credential_save_failed": "無法在這台電腦上儲存 Slack 登入資訊，未傳送任何內容。請再試一次。",
+        "dm_failed": "無法開啟與 {{destination}} 的私訊，未傳送任何內容。",
+        "restricted": "{{destination}} 對您是唯讀或受限的。",
+        "generic": "發生問題，未傳送任何內容。",
+        "github": {
+          "reconnect_needed": "需要在設定中重新連接 GitHub。",
+          "network": "無法連線到 GitHub，未發佈任何內容。",
+          "rate_limited": "GitHub 忙碌中，請稍後再試。",
+          "connection_changed": "發佈前 GitHub 連線發生了變化，因此未發佈任何內容。",
+          "credential_save_failed": "無法在這台電腦上儲存 GitHub 登入資訊，未發佈任何內容。請再試一次。",
+          "generic": "發生問題，未在 GitHub 上發佈任何內容。",
+          "not_installed": "此存放庫未安裝 OpenWhispr GitHub App。請在設定中新增。未發佈任何內容。",
+          "repo_unlisted": "無法確認此存放庫是否已安裝 OpenWhispr GitHub App。請檢查存放庫名稱。未發佈任何內容。",
+          "no_repositories": "尚未為 OpenWhispr GitHub App 選擇存放庫。請在設定中選擇。未發佈任何內容。",
+          "forbidden": "您沒有在此存放庫中執行此操作的權限，未發佈任何內容。",
+          "not_found": "找不到該 Issue 或提取要求，未發佈任何內容。",
+          "issues_disabled": "此存放庫已關閉 Issue，未發佈任何內容。",
+          "archived": "此存放庫已封存，無法新增 Issue 或留言，未發佈任何內容。",
+          "too_many_labels": "一個 Issue 最多選擇 10 個標籤，未發佈任何內容。",
+          "labels_unavailable": "無法讀取存放庫的標籤，未發佈任何內容。",
+          "invalid": "GitHub 認為其無效並拒絕了，未發佈任何內容。",
+          "locked": "該對話已鎖定，未發佈任何內容。",
+          "invalid_reference": "這不是 GitHub Issue 或提取要求，未發佈任何內容。",
+          "too_long": "標題或內文對 GitHub 來說太長，未發佈任何內容。",
+          "not_configured": "此版本中 GitHub 不可用，未發佈任何內容。"
+        },
+        "gmail": {
+          "reconnect_needed": "需要在設定中重新連接 Gmail。",
+          "network": "無法連線到 Gmail，未傳送任何內容。",
+          "rate_limited": "Gmail 忙碌中，請稍後再試。",
+          "daily_limit": "已達 Gmail 每日傳送上限，未傳送任何內容。",
+          "domain_policy": "您機構的 Google 管理員已封鎖此應用程式，未傳送任何內容。",
+          "invalid_recipients": "其中一個地址無效，未傳送任何內容。",
+          "too_many_recipients": "收件者過多（最多 {{max}} 位），未傳送任何內容。",
+          "too_long": "主旨或內文對 Gmail 來說太長，未傳送任何內容。",
+          "invalid_message": "Gmail 因格式錯誤拒絕了這封郵件，未傳送任何內容。",
+          "gmail_unavailable": "目前無法透過 Gmail 傳送，未傳送任何內容。",
+          "refused": "Gmail 拒絕傳送，未傳送任何內容。",
+          "connection_changed": "傳送前 Gmail 連線發生了變化，因此未傳送任何內容。",
+          "credential_save_failed": "無法在這台電腦上儲存 Gmail 登入資訊，未傳送任何內容。請再試一次。"
+        },
+        "linear": {
+          "reconnect_needed": "需要在設定中重新連接 Linear。",
+          "connection_changed": "傳送前 Linear 連線發生了變化，因此未傳送任何內容。",
+          "credential_save_failed": "無法在這台電腦上儲存 Linear 登入資訊，未傳送任何內容。請再試一次。",
+          "linear_unavailable": "Linear 目前無法使用，未傳送任何內容。",
+          "network": "無法連線到 Linear，未傳送任何內容。",
+          "rate_limited": "Linear 忙碌中，請稍後再試。",
+          "not_found": "Linear 找不到該團隊、專案或議題了，未傳送任何內容。",
+          "forbidden": "您的 Linear 帳戶無權執行此操作，未傳送任何內容。",
+          "invalid_input": "Linear 無法接受目前的內容，未傳送任何內容。",
+          "too_long": "對 Linear 來說太長，未傳送任何內容。",
+          "missing_title": "Linear 議題需要標題，未傳送任何內容。",
+          "missing_body": "Linear 留言為空，未傳送任何內容。",
+          "not_created": "Linear 未建立該議題。",
+          "wrong_workspace": "該議題位於另一個 Linear 工作區，未傳送任何內容。",
+          "invalid_reference": "這不是 Linear 議題，未傳送任何內容。",
+          "refused": "Linear 拒絕了請求，未傳送任何內容。",
+          "unknown_action": "OpenWhispr 無法在 Linear 中執行此操作，未傳送任何內容。",
+          "generic": "發生問題，未向 Linear 傳送任何內容。"
+        }
+      },
+      "email": {
+        "from": "寄件者：{{account}}",
+        "toLabel": "收件者",
+        "ccLabel": "副本",
+        "subjectLabel": "主旨",
+        "bodyLabel": "內文",
+        "addressHint": "多個地址請以逗號分隔。",
+        "invalidAddress": "{{address}} 不是完整的電子郵件地址（例如 name@example.com）。",
+        "invalidAddressAnnouncement": "有一個地址不是完整的電子郵件地址。",
+        "sendsTo": "傳送至 {{addresses}}",
+        "missingTo": "請在收件者中至少新增一個地址。",
+        "tooManyRecipients": "一封郵件最多可寄給 {{max}} 個地址（收件者和副本合計）。",
+        "subjectTooLong": "主旨不能超過 {{max}} 個字元。",
+        "bodyTooLong": "郵件內文過長，無法透過 Gmail 傳送。請縮短後再傳送。",
+        "unknown": "無法確認是否已傳送，請檢查「寄件備份」資料夾。"
+      },
+      "github": {
+        "notes": {
+          "mentions": "將通知 {{mentions}}",
+          "pullRequest": "針對提取要求",
+          "labelsMayNotApply": "只有在您對此存放庫有寫入權限時才會加上標籤。"
+        }
+      },
+      "openIn": {
+        "github": "在 GitHub 中開啟",
+        "gmail": "在 Gmail 中開啟",
+        "linear": "在 Linear 中開啟"
+      },
+      "sendLabel": {
+        "issue": "建立問題",
+        "comment": "留言"
+      },
+      "issue": {
+        "created": "已建立 {{result}}。",
+        "createdIn": "已在 {{destination}} 中建立問題。",
+        "unknown": "無法確認問題是否已建立。請先檢查 {{destination}} 再重試。",
+        "titleLabel": "標題",
+        "bodyLabel": "描述",
+        "missingTitle": "請新增標題。",
+        "titleTooLong": "標題不能超過 {{max}} 個字元。",
+        "bodyTooLong": "描述不能超過 {{max}} 個字元。",
+        "notes": {
+          "labels": "標籤：{{labels}}",
+          "droppedLabels": "未新增（{{destination}} 中不存在）：{{labels}}",
+          "priority": "優先順序：{{priority}}",
+          "assignee": "負責人：{{assignee}}",
+          "project": "專案：{{project}}"
+        }
+      },
+      "comment": {
+        "posted": "已在 {{destination}} 留言。",
+        "unknown": "無法確認留言是否已發布。請先檢查 {{destination}} 再重試。",
+        "bodyLabel": "留言",
+        "missingBody": "請輸入留言。",
+        "bodyTooLong": "留言不能超過 {{max}} 個字元。",
+        "notes": {
+          "targetTitle": "關於「{{title}}」"
+        }
+      }
+    },
+    "policyOff": "您的組織已關閉連接器。",
+    "email": {
+      "title": "郵件草稿",
+      "description": "助理會在您的郵件應用程式中開啟預先填寫的草稿，由您檢查並親自按下傳送。",
+      "descriptionSend": "助理會在聊天中顯示一張郵件卡片，只有在您按下傳送後才會透過您的 Gmail 寄出。",
+      "unavailable": "郵件草稿暫時無法使用。",
+      "targetLabel": "在此撰寫郵件",
+      "autoResolved": "自動 · {{target}}",
+      "targets": {
+        "gmail": "Gmail",
+        "outlookWork": "Outlook（公司或學校）",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "預設郵件應用程式",
+        "gmailSend": "在聊天中傳送（Gmail）",
+        "gmailSendConnectFirst": "在聊天中傳送（Gmail）· 請在下方連接 Gmail"
+      }
+    },
+    "slack": {
+      "title": "Slack",
+      "description": "在頻道中和向他人發佈訊息。",
+      "connect": "連接",
+      "reconnect": "重新連接",
+      "disconnect": "中斷連接",
+      "connecting": "請在瀏覽器中完成連接…",
+      "connectedAs": "已以 {{account}} 身分連接到 {{workspace}}",
+      "needsReconnect": "需要重新連接 Slack。",
+      "errors": {
+        "connect_failed": "無法連接 Slack，請重試。",
+        "disconnect_failed": "無法中斷 Slack 連接，請重試。",
+        "oauth_denied": "由於未獲得授權，Slack 未連接。",
+        "oauth_timeout": "連接耗時過長，請重試。",
+        "oauth_state_mismatch": "該登入連結已過期，請重試。",
+        "ports_busy": "另一個應用程式正在使用 OpenWhispr 連接所需的連接埠。請關閉它後重試。",
+        "token_exchange_failed": "Slack 未完成連接，請重試。",
+        "not_configured": "此版本中 Slack 不可用。",
+        "connection_changed": "連接過程中您的帳戶或 Slack 連接發生了變化，請重試。",
+        "signed_out": "請登入 OpenWhispr 以連接 Slack。",
+        "policy_blocked": "您的組織已關閉連接器。",
+        "policy_unavailable": "無法檢查您的組織設定，請重試。"
+      },
+      "browser": {
+        "connectedTitle": "Slack 已連接",
+        "connectedBody": "您可以關閉此分頁並返回 OpenWhispr。",
+        "failedTitle": "Slack 未連接",
+        "failedBody": "請返回 OpenWhispr 重試。"
+      }
+    },
+    "github": {
+      "title": "GitHub",
+      "description": "您所選儲存庫中的議題和留言。無法讀取您的程式碼。",
+      "connect": "連接",
+      "reconnect": "重新連接",
+      "disconnect": "中斷連接",
+      "connecting": "正在連接 GitHub…",
+      "connectedAs": "已以 {{account}} 身分連接 · 存放庫：{{repositories}}",
+      "connectedAs_empty": "已以 {{account}} 身分連接 · 尚無存放庫",
+      "connectedAs_unknown": "已以 {{account}} 身分連接",
+      "needsReconnect": "需要重新連接 GitHub。",
+      "reviewOnGithub": "在 GitHub 上查看",
+      "disconnectedHint": "已在這台電腦上中斷連接。在您於 GitHub 上移除之前，GitHub 會保留 OpenWhispr 的授權。",
+      "errors": {
+        "connect_failed": "無法連接 GitHub，請重試。",
+        "disconnect_failed": "無法中斷 GitHub 連接，請重試。",
+        "oauth_denied": "GitHub 存取遭到拒絕。",
+        "token_exchange_failed": "GitHub 未完成連接，請重試。",
+        "not_configured": "此版本中 GitHub 不可用。",
+        "connection_changed": "連接過程中您的帳戶或 GitHub 連接發生了變化，請重試。",
+        "signed_out": "請登入 OpenWhispr 以連接 GitHub。",
+        "policy_blocked": "您的組織已關閉連接器。",
+        "policy_unavailable": "無法檢查您的組織設定，請重試。",
+        "code_expired": "代碼已過期，請重試。",
+        "device_flow_disabled": "此版本未設定使用代碼登入 GitHub。",
+        "network": "無法連線到 GitHub。請檢查網路連線後重試。",
+        "rate_limited": "GitHub 目前忙碌中，請一分鐘後重試。"
+      },
+      "deviceCode": {
+        "instructions": "請在 GitHub 上輸入此代碼：",
+        "copyAndOpen": "複製並開啟 GitHub",
+        "copied": "代碼已複製。",
+        "cancel": "取消",
+        "expires": "代碼將於 {{time}} 到期。"
+      },
+      "repositories": {
+        "choose": "選擇存放庫",
+        "manage": "管理存放庫"
+      }
+    },
+    "gmail": {
+      "title": "Gmail",
+      "description": "從您的帳戶傳送郵件。無法讀取您的郵件。",
+      "connect": "連接",
+      "reconnect": "重新連接",
+      "disconnect": "中斷連接",
+      "connecting": "請在瀏覽器中完成連接… 如果 Google 顯示存取已遭封鎖，需要您機構的 Google 管理員允許 OpenWhispr。",
+      "connectedAs": "已以 {{account}} 身分連接",
+      "needsReconnect": "需要重新連接 Gmail。",
+      "grantKept": "已中斷連線。Google 日曆使用相同的 Google 權限，因此在您也中斷 Google 日曆的連線之前，OpenWhispr 仍會顯示在您的 Google 帳戶中。",
+      "errors": {
+        "connect_failed": "無法連接 Gmail，請重試。",
+        "disconnect_failed": "無法中斷 Gmail 連接，請重試。",
+        "oauth_denied": "由於未獲得授權，Gmail 未連接。",
+        "oauth_timeout": "連接耗時過長。如果 Google 顯示存取已遭封鎖，請要求您機構的 Google 管理員允許 OpenWhispr；否則請重試。",
+        "oauth_state_mismatch": "該登入連結已過期，請重試。",
+        "ports_busy": "另一個應用程式正在使用 OpenWhispr 連接所需的連接埠。請關閉它後重試。",
+        "token_exchange_failed": "Google 未完成連接，請重試。",
+        "not_configured": "此版本中 Gmail 不可用。",
+        "connection_changed": "連接過程中您的帳戶或 Gmail 連接發生了變化，請重試。",
+        "signed_out": "請登入 OpenWhispr 以連接 Gmail。",
+        "policy_blocked": "您的組織已關閉連接器。",
+        "policy_unavailable": "無法檢查您的組織設定，請重試。",
+        "permission_not_granted": "由於未授予傳送郵件的權限，Gmail 未連接。請重新連接並保持勾選該權限。",
+        "email_not_verified": "Google 尚未驗證此帳戶的電子郵件地址，因此 Gmail 未連接。",
+        "domain_policy": "您機構的 Google 管理員已封鎖此應用程式。請他們允許 OpenWhispr。"
+      },
+      "browser": {
+        "connectedTitle": "Gmail 已連接",
+        "connectedBody": "您可以關閉此分頁並返回 OpenWhispr。",
+        "failedTitle": "Gmail 未連接",
+        "failedBody": "請返回 OpenWhispr 重試。"
+      }
+    },
+    "linear": {
+      "title": "Linear",
+      "description": "搜尋議題，建立議題和留言。",
+      "connect": "連接",
+      "reconnect": "重新連接",
+      "disconnect": "中斷連接",
+      "connecting": "請在瀏覽器中完成連接…",
+      "connectedAs": "已以 {{account}} 身分連接到 {{workspace}}",
+      "needsReconnect": "需要重新連接 Linear。",
+      "errors": {
+        "connect_failed": "無法連接 Linear，請重試。",
+        "disconnect_failed": "無法中斷 Linear 連接，請重試。",
+        "oauth_denied": "由於未獲得授權，Linear 未連接。",
+        "oauth_timeout": "連接耗時過長，請重試。",
+        "oauth_state_mismatch": "該登入連結已過期，請重試。",
+        "ports_busy": "另一個應用程式正在使用 OpenWhispr 連接所需的連接埠。請關閉它後重試。",
+        "token_exchange_failed": "Linear 未完成連接，請重試。",
+        "not_configured": "此版本中 Linear 不可用。",
+        "connection_changed": "連接過程中您的帳戶或 Linear 連接發生了變化，請重試。",
+        "signed_out": "請登入 OpenWhispr 以連接 Linear。",
+        "policy_blocked": "您的組織已關閉連接器。",
+        "policy_unavailable": "無法檢查您的組織設定，請重試。",
+        "permission_not_granted": "由於未授予全部權限，Linear 未連接。請重新連接並允許所有權限。"
+      },
+      "browser": {
+        "connectedTitle": "Linear 已連接",
+        "connectedBody": "您可以關閉此分頁並返回 OpenWhispr。",
+        "failedTitle": "Linear 未連接",
+        "failedBody": "請返回 OpenWhispr 重試。"
+      },
+      "notes": {
+        "priority": {
+          "urgent": "優先順序：緊急",
+          "high": "優先順序：高",
+          "medium": "優先順序：中",
+          "low": "優先順序：低",
+          "none": "優先順序：無"
+        },
+        "assignedToYou": "負責人：你"
+      }
+    },
+    "recent": {
+      "title": "近期操作",
+      "actions": {
+        "email_draft": "傳送給 {{destination}} 的草稿",
+        "github_create_issue": "{{destination}} 中的新 Issue",
+        "github_comment": "對 {{destination}} 的留言",
+        "slack_send_message": "傳送給 {{destination}} 的訊息",
+        "gmail_send": "傳送給 {{destination}} 的郵件",
+        "linear_create_issue": "{{destination}} 中的新議題",
+        "linear_comment": "對 {{destination}} 的留言"
+      },
+      "unlabeledActions": {
+        "email_draft": "郵件草稿",
+        "github_create_issue": "GitHub Issue",
+        "github_comment": "GitHub 留言",
+        "slack_send_message": "Slack 訊息",
+        "gmail_send": "Gmail 郵件",
+        "linear_create_issue": "Linear 議題",
+        "linear_comment": "Linear 留言"
+      },
+      "states": {
+        "pending": "等待中",
+        "committing": "進行中",
+        "sent": "已完成",
+        "failed": "失敗",
+        "unknown": "未確認",
+        "cancelled": "已取消",
+        "expired": "已過期"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "已開啟傳送給 {{destination}} 的草稿。",
+      "draftOpenedBodyCopied": "已開啟傳送給 {{destination}} 的草稿。內文已在剪貼簿中。",
+      "draftOpenedSubjectCopied": "已開啟傳送給 {{destination}} 的草稿。主旨和內文已在剪貼簿中。",
+      "draftOpenedOnlySubjectCopied": "已開啟寄給 {{destination}} 的草稿。主旨已在剪貼簿中。",
+      "needsDetails": "需要更多資訊。",
+      "unavailable": "連接器暫時無法使用。",
+      "unknown": "未確認。請先檢查是否已完成，再重試。",
+      "draftUnknown": "未確認：寄給 {{destination}} 的草稿可能沒有開啟。請先檢查，再重試。",
+      "contactsFound": "找到的聯絡人：{{total}}",
+      "draftLimit": "每次請求最多只能開啟 {{max}} 份草稿。",
+      "clipboardBusy": "未開啟：另一份草稿的文字仍在剪貼簿中。",
+      "errors": {
+        "open_failed": "無法開啟您的郵件應用程式。",
+        "draft_too_long": "收件者太多，無法產生草稿連結。",
+        "invalid_address": "需要完整的電子郵件地址。",
+        "not_in_channel": "不是該頻道的成員。",
+        "channel_not_found": "找不到該對話。",
+        "is_archived": "該頻道已封存。",
+        "reconnect_needed": "需要重新連接 Slack。",
+        "connection_changed": "Slack 連線已變更。未傳送任何內容。",
+        "rate_limited": "Slack 忙碌中。",
+        "missing_scope": "缺少 Slack 權限。",
+        "msg_too_long": "訊息對 Slack 來說太長。",
+        "no_text": "訊息是空的。",
+        "network": "無法連線到 Slack。未傳送任何內容。",
+        "credential_save_failed": "無法在這台電腦上儲存 Slack 登入資訊。未傳送任何內容。",
+        "dm_failed": "無法開啟私訊。未傳送任何內容。",
+        "restricted": "該頻道為唯讀或受限。",
+        "generic": "操作未成功。",
+        "github": {
+          "reconnect_needed": "需要重新連接 GitHub。",
+          "network": "無法連線到 GitHub。",
+          "rate_limited": "GitHub 忙碌中。",
+          "connection_changed": "GitHub 連線已變更。",
+          "credential_save_failed": "無法在這台電腦上儲存 GitHub 登入資訊。",
+          "generic": "在 GitHub 上操作未成功。",
+          "not_installed": "那裡未安裝 OpenWhispr GitHub App。",
+          "repo_unlisted": "無法確認那裡是否已安裝 OpenWhispr GitHub App。",
+          "no_repositories": "尚未選擇 GitHub 存放庫。",
+          "forbidden": "在該存放庫中沒有權限。",
+          "not_found": "找不到該 Issue 或提取要求。",
+          "issues_disabled": "該存放庫已關閉 Issue。",
+          "archived": "該存放庫已封存。",
+          "too_many_labels": "一個 Issue 的標籤過多。",
+          "labels_unavailable": "無法讀取存放庫的標籤。",
+          "invalid": "GitHub 認為其無效並拒絕了。",
+          "locked": "該對話已鎖定。",
+          "invalid_reference": "不是 GitHub Issue 或提取要求。",
+          "too_long": "對 GitHub 來說太長。",
+          "not_configured": "此版本中 GitHub 不可用。"
+        },
+        "gmail": {
+          "reconnect_needed": "需要重新連接 Gmail。",
+          "network": "無法連線到 Gmail。未傳送任何內容。",
+          "rate_limited": "Gmail 忙碌中。",
+          "daily_limit": "已達 Gmail 每日傳送上限。",
+          "domain_policy": "已被您機構的 Google 管理員封鎖。",
+          "invalid_recipients": "有地址無效。未傳送任何內容。",
+          "too_many_recipients": "收件者過多。未傳送任何內容。",
+          "too_long": "對 Gmail 來說太長。未傳送任何內容。",
+          "invalid_message": "Gmail 拒絕了這封郵件。未傳送任何內容。",
+          "gmail_unavailable": "目前無法透過 Gmail 傳送。",
+          "refused": "Gmail 拒絕傳送。",
+          "connection_changed": "Gmail 連線已變更。未傳送任何內容。",
+          "credential_save_failed": "無法在這台電腦上儲存 Gmail 登入資訊。未傳送任何內容。"
+        },
+        "linear": {
+          "reconnect_needed": "需要重新連接 Linear。",
+          "connection_changed": "Linear 連線已變更。未傳送任何內容。",
+          "credential_save_failed": "無法在這台電腦上儲存 Linear 登入資訊。",
+          "linear_unavailable": "Linear 目前無法使用。",
+          "network": "無法連線到 Linear。",
+          "rate_limited": "Linear 忙碌中。",
+          "not_found": "在 Linear 中找不到。",
+          "forbidden": "在 Linear 中無權執行。",
+          "invalid_input": "Linear 無法接受。",
+          "too_long": "對 Linear 來說太長。",
+          "missing_title": "Linear 議題需要標題。",
+          "missing_body": "Linear 留言為空。",
+          "not_created": "Linear 未建立該議題。",
+          "wrong_workspace": "該議題位於另一個 Linear 工作區。",
+          "invalid_reference": "不是 Linear 議題。",
+          "refused": "Linear 拒絕了請求。",
+          "unknown_action": "在 Linear 中無法使用。",
+          "generic": "在 Linear 中操作未成功。"
+        }
+      },
+      "unknownSent": {
+        "gmail": "無法確認寄給 {{destination}} 的郵件是否已傳送，請檢查 Gmail 的「寄件備份」資料夾。"
+      },
+      "gmailDraftLimit": "每次請求最多只能準備 {{max}} 封郵件。",
+      "queryResults": "找到的結果：{{total}}",
+      "cardLimit": "每次請求最多只能準備 {{max}} 張卡片。"
+    },
+    "beta": "測試版",
+    "upsell": "連接器包含在付費方案中。升級後，助理即可在您的工具中執行操作。",
+    "locked": "付費方案包含此功能"
   },
   "calendar": {
     "title": "Google 日曆",
@@ -3781,12 +4449,14 @@
     "tomorrow": "明天"
   },
   "upcoming": {
-    "title": "即將開始",
     "now": "進行中",
     "untitledEvent": "無標題事件",
     "joinAndTranscribe": "加入並轉錄",
     "takeNotes": "記筆記",
-    "noEventsToday": "今天沒有行程",
+    "noEventsToday": "今天沒有會議了",
+    "emptyDayDescription": "是時候去摸摸草地了",
+    "touchGrass": "摸摸草地",
+    "touchGrassLabel": "一片草地。用指標或方向鍵拂過它。按 Esc 返回。",
     "noUpcomingEvents": "暫無即將開始的行程",
     "moreCalendarsHint": "想連接更多日曆？",
     "connectHere": "在這裡連接",
@@ -3832,6 +4502,11 @@
         "createLink": "建立連結",
         "copyLink": "複製連結",
         "copied": "已複製",
+        "replaceLink": {
+          "title": "要取代分享連結嗎？",
+          "description": "此裝置上沒有目前的連結，因此複製時需要建立新連結。舊連結將會失效，包括邀請電子郵件中的連結。請重新傳送每個邀請，讓受邀者仍能開啟這則筆記。",
+          "confirm": "取代連結"
+        },
         "export": "匯出",
         "owner": "擁有者",
         "editor": "可編輯",
@@ -3885,6 +4560,23 @@
       "navigate": "導覽",
       "open": "開啟",
       "dismiss": "關閉"
+    }
+  },
+  "emojiPicker": {
+    "search": "搜尋表情符號…",
+    "recent": "最近使用",
+    "noResults": "找不到表情符號",
+    "remove": "移除",
+    "groups": {
+      "smileys": "表情與情感",
+      "people": "人物與身體",
+      "animals": "動物與自然",
+      "food": "食物與飲料",
+      "travel": "旅行與地點",
+      "activities": "活動",
+      "objects": "物品",
+      "symbols": "符號",
+      "flags": "旗幟"
     }
   },
   "permissionsGate": {
@@ -3946,15 +4638,17 @@
     }
   },
   "embeddedChat": {
-    "askPlaceholder": "隨便問點什麼...",
-    "send": "傳送",
+    "askPlaceholder": "詢問關於筆記的任何問題",
     "title": "聊天",
     "emptyState": "就這條筆記提個問題",
     "dock": "固定到側邊欄",
     "undock": "從側邊欄取消固定",
     "close": "關閉聊天",
     "newChat": "新對話",
-    "conversationSelector": "切換對話"
+    "conversationSelector": "切換對話",
+    "history": "歷史記錄",
+    "quickActions": "快速操作",
+    "generateSummary": "產生摘要"
   },
   "transcriptionPreview": {
     "label": "預覽",
@@ -4079,15 +4773,49 @@
       "underway": "你的會議似乎已在進行中。要開始記錄嗎？"
     },
     "start": "開始記錄",
-    "join": "加入並轉錄",
-    "autoEnd": {
-      "title": "會議錄音已結束",
-      "body": {
-        "micReleased": "沒有其他應用程式在使用麥克風，因此錄音已自動停止。請在 {{seconds}} 秒內重新開始錄音。",
-        "silence": "未偵測到音訊，因此錄音已自動停止。請在 {{seconds}} 秒內重新開始錄音。",
-        "processExit": "會議應用程式已關閉，因此錄音已自動停止。請在 {{seconds}} 秒內重新開始錄音。"
-      },
-      "restart": "重新開始錄音"
+    "join": "加入並轉錄"
+  },
+  "providerErrors": {
+    "authFailed": "{{provider}} 拒絕了你的 API 金鑰。",
+    "accessDenied": "{{provider}} 拒絕存取。你的金鑰可能不包含此模型。",
+    "quotaExhausted": "你的 {{provider}} 帳戶額度已用盡。",
+    "rateLimited": "{{provider}} 限制了請求頻率。請稍候再試。",
+    "modelNotFound": "{{provider}} 無法識別模型「{{model}}」。",
+    "modelNotFoundNoModel": "{{provider}} 無法識別所選的模型。",
+    "payloadTooLarge": "這段錄音對 {{provider}} 來說太大了。",
+    "requestTooLarge": "這個請求對 {{provider}} 來說太大了。",
+    "badRequest": "{{provider}} 無法處理此請求。",
+    "unavailable": "{{provider}} 目前發生問題。請稍後再試。",
+    "timeout": "{{provider}} 回應逾時。",
+    "unreachable": "無法連線到 {{provider}}。請檢查你的網路連線。",
+    "noResponse": "未能收到 {{provider}} 的回應。請檢查你的 API 金鑰和網路連線。",
+    "unknown": "{{provider}} 回傳了意外的錯誤。",
+    "keyMissing": "尚未為 {{provider}} 設定 API 金鑰。請在「設定 → 語言模型」中新增。",
+    "selfHosted": {
+      "authFailed": "你的伺服器拒絕了 API 金鑰。",
+      "accessDenied": "你的伺服器拒絕存取。該金鑰可能不包含此模型。",
+      "quotaExhausted": "你的伺服器回報該帳戶額度已用盡。",
+      "rateLimited": "你的伺服器限制了請求頻率。請稍候再試。",
+      "modelNotFound": "你的伺服器無法識別模型「{{model}}」。",
+      "modelNotFoundNoModel": "你的伺服器無法識別所選的模型。",
+      "payloadTooLarge": "這段錄音對你的伺服器來說太大了。",
+      "requestTooLarge": "這個請求對你的伺服器來說太大了。",
+      "badRequest": "你的伺服器無法處理此請求。",
+      "unavailable": "你的伺服器目前發生問題。請稍後再試。",
+      "timeout": "你的伺服器回應逾時。",
+      "unreachable": "無法連線到你的伺服器。請確認它正在執行。",
+      "noResponse": "未能收到你的伺服器的回應。請檢查它的 API 金鑰，並確認它正在執行。",
+      "unknown": "你的伺服器回傳了意外的錯誤。"
+    },
+    "openSettings": "開啟設定",
+    "copyDetails": "複製詳細資訊",
+    "titles": {
+      "transcription": "轉錄失敗",
+      "llm": "AI 請求失敗"
+    },
+    "details": {
+      "provider": "服務商",
+      "requestId": "請求 ID"
     }
   }
 }

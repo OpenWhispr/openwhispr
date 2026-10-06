@@ -3,9 +3,9 @@ const { resolveBundledBinary } = require("./binaryResolver");
 const debugLogger = require("./debugLogger");
 
 const COMMAND_TIMEOUT_MS = 3000;
-// Windows resolves through a short-lived PowerShell process, so keep successful
-// lookups warm. Renderer devicechange recovery explicitly bypasses this cache.
-const CACHE_TTL_MS = 30000;
+// A failed lookup is retried after this long, so a transient error (a busy
+// PowerShell, a helper still extracting) does not stick for the session.
+const FAILURE_RETRY_MS = 30000;
 
 const WINDOWS_DEFAULT_INPUT_SCRIPT = String.raw`
 $ErrorActionPreference = 'Stop'
@@ -163,6 +163,7 @@ function createSystemDefaultMicrophoneResolver({
 } = {}) {
   let cache = null;
   let cachedAt = 0;
+  let inflight = null;
 
   const resolveDarwin = async () => {
     const helper = resolveBinary("macos-mic-listener", "audio");
@@ -200,9 +201,7 @@ function createSystemDefaultMicrophoneResolver({
     return parsePactlSources(sources, defaultSourceName);
   };
 
-  return async ({ refresh = false } = {}) => {
-    if (!refresh && cache && now() - cachedAt < CACHE_TTL_MS) return cache;
-
+  const lookup = async () => {
     try {
       let result = null;
       if (platform === "darwin") result = await resolveDarwin();
@@ -212,8 +211,6 @@ function createSystemDefaultMicrophoneResolver({
       cache = result
         ? { ...result, platform, source: "system" }
         : { name: "", platform, source: "unavailable" };
-      cachedAt = now();
-      return cache;
     } catch (error) {
       debugLogger.debug(
         "Failed to resolve the system default microphone",
@@ -221,9 +218,24 @@ function createSystemDefaultMicrophoneResolver({
         "audio"
       );
       cache = { name: "", platform, source: "unavailable" };
-      cachedAt = now();
+    }
+    cachedAt = now();
+    return cache;
+  };
+
+  // A successful lookup stays valid until a renderer sees a devicechange and
+  // asks for a refresh: on Windows each lookup is a PowerShell process compiling
+  // C# (~2s), far too slow to sit on the hotkey path. Every caller joins an
+  // in-flight lookup so all windows share one process and see the same answer.
+  return async ({ refresh = false } = {}) => {
+    if (inflight) return inflight;
+    if (!refresh && cache && (cache.source === "system" || now() - cachedAt < FAILURE_RETRY_MS)) {
       return cache;
     }
+    inflight = lookup().finally(() => {
+      inflight = null;
+    });
+    return inflight;
   };
 }
 

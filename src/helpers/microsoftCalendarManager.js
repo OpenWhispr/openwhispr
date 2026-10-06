@@ -165,6 +165,7 @@ class MicrosoftCalendarManager {
       } catch (err) {
         debugLogger.error("Error fetching calendars", { email, error: err.message }, "mcal");
       }
+      await this._refreshOwnAddresses(email);
     }
 
     this.databaseManager.applyMicrosoftPrimaryOnlyToSelection(this.primaryOnly);
@@ -237,21 +238,38 @@ class MicrosoftCalendarManager {
 
     const toUpsert = [];
     const contactsToUpsert = [];
+    const notContacts = [];
+    const ownAddresses = new Set([
+      (accountEmail || "").toLowerCase(),
+      ...this.databaseManager.getMicrosoftOwnAddresses(accountEmail),
+    ]);
     for (const item of events) {
       // An occurrence still stripped after backfill (master fetch failed) has no
       // subject, attendees, or join link. Overwriting a row a previous sync
       // stored in full would demote that meeting to an untitled time block, so
-      // keep the stored row and only insert bare stubs we've never seen.
-      if (isStrippedOccurrence(item) && this.databaseManager.getCalendarEventById(item.id)) {
-        continue;
+      // keep its details while applying any explicit RSVP update.
+      if (isStrippedOccurrence(item)) {
+        const cached = this.databaseManager.getCalendarEventById(item.id);
+        if (cached) {
+          if (typeof item.responseStatus?.response === "string") {
+            toUpsert.push({
+              ...cached,
+              self_response_status:
+                RESPONSE_STATUS_BY_GRAPH[item.responseStatus.response] || "unknown",
+            });
+          }
+          continue;
+        }
       }
       toUpsert.push(this._mapEvent(item, calendar));
       for (const a of item.attendees || []) {
-        if (a.emailAddress?.address) {
-          contactsToUpsert.push({
-            email: a.emailAddress.address,
-            displayName: a.emailAddress.name || null,
-          });
+        const address = a.emailAddress?.address;
+        if (!address) continue;
+        // Rooms and the user's own addresses aren't people to write to.
+        if (a.type === "resource" || ownAddresses.has(address.toLowerCase())) {
+          notContacts.push(address);
+        } else {
+          contactsToUpsert.push({ email: address, displayName: a.emailAddress.name || null });
         }
       }
     }
@@ -271,7 +289,12 @@ class MicrosoftCalendarManager {
     if (deltaLink) {
       this.databaseManager.updateMicrosoftCalendarSyncToken(calendar.id, deltaLink, tokenExpiresAt);
     }
-    if (contactsToUpsert.length > 0) this.databaseManager.upsertContacts(contactsToUpsert);
+    this.databaseManager.syncCalendarContacts(
+      "microsoft",
+      accountEmail,
+      contactsToUpsert,
+      notContacts
+    );
   }
 
   // Merges each stripped occurrence with its series master (fetched once per
@@ -337,6 +360,7 @@ class MicrosoftCalendarManager {
               displayName: a.emailAddress?.name || null,
               responseStatus: RESPONSE_STATUS_BY_GRAPH[a.status?.response] || "needsAction",
               self: (a.emailAddress?.address || "").toLowerCase() === accountEmail,
+              ...(a.type === "resource" ? { resource: true } : {}),
             }))
           )
         : null,
@@ -376,6 +400,30 @@ class MicrosoftCalendarManager {
 
   _getAccountEmails() {
     return Array.from(this.accounts.keys());
+  }
+
+  // Attendee lists address the user by their primary SMTP address or an
+  // alias, which can differ from the sign-in name the account is stored under.
+  async _refreshOwnAddresses(email) {
+    try {
+      const me = await this._apiGet("/me?$select=mail,userPrincipalName,proxyAddresses", email);
+      const aliases = (me.proxyAddresses || [])
+        .filter((entry) => /^smtp:/i.test(entry))
+        .map((entry) => entry.slice("smtp:".length));
+      const addresses = [me.mail, me.userPrincipalName, ...aliases]
+        .filter((address) => typeof address === "string" && address.includes("@"))
+        .map((address) => address.toLowerCase());
+      const ownAddresses = [...new Set(addresses)];
+      this.databaseManager.saveMicrosoftOwnAddresses(email, ownAddresses);
+      // Syncs before this lookup may have stored an alias as a contact.
+      this.databaseManager.removeContacts(ownAddresses);
+    } catch (err) {
+      debugLogger.warn(
+        "Error fetching Microsoft account addresses",
+        { email, error: err.message },
+        "mcal"
+      );
+    }
   }
 
   // calendarView/delta expands recurrences into occurrences and returns a

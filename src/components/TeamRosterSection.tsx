@@ -1,14 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, Mail, X } from "./icons";
-import { Button } from "./ui/button";
-import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "./ui/select";
 import { useToast } from "./ui/useToast";
-import { cn } from "./lib/utils";
-import MemberAvatar from "./MemberAvatar";
-import MemberPickList from "./MemberPickList";
-import RoleBadge from "./RoleBadge";
+import MemberRoster from "./MemberRoster";
+import { useMemberRoster } from "../hooks/useMemberRoster";
 import { orderMemberCandidates } from "../lib/memberCandidates";
 import { TeamsService } from "../services/TeamsService";
 import { addTeamMembers, removeTeamMember, setTeamMemberRole } from "../services/spaceActions";
@@ -29,6 +23,7 @@ interface TeamRosterSectionProps {
   removeConfirm: (member: TeamMember, onConfirm: () => void) => void;
 }
 
+// Team-backed MemberRoster: every row is a direct team membership.
 export default function TeamRosterSection({
   teamId,
   teamName,
@@ -41,63 +36,23 @@ export default function TeamRosterSection({
 }: TeamRosterSectionProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const [members, setMembers] = useState<TeamMember[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
-  const [busyUserIds, setBusyUserIds] = useState<Set<string>>(new Set());
-  const [addSearch, setAddSearch] = useState("");
 
-  const loadRoster = useCallback(async () => {
-    setLoading(true);
-    setLoadFailed(false);
-    try {
-      const list = await TeamsService.listMembers(teamId);
-      setMembers(list);
-      onRosterChange?.(list);
-    } catch {
-      setLoadFailed(true);
-    } finally {
-      setLoading(false);
-    }
+  const load = useCallback(async () => {
+    const list = await TeamsService.listMembers(teamId);
+    onRosterChange?.(list);
+    return list;
   }, [teamId, onRosterChange]);
-
-  useEffect(() => {
-    void loadRoster();
-  }, [loadRoster]);
-
-  const withRowBusy = useCallback(
-    async (userId: string, action: () => Promise<void>) => {
-      setBusyUserIds((prev) => new Set(prev).add(userId));
-      try {
-        await action();
-        await loadRoster();
-      } catch (err) {
-        toast({
-          title: t("common.error"),
-          description: err instanceof Error ? err.message : t("common.unknownError"),
-          variant: "destructive",
-        });
-      } finally {
-        setBusyUserIds((prev) => {
-          const next = new Set(prev);
-          next.delete(userId);
-          return next;
-        });
-      }
-    },
-    [toast, t, loadRoster]
-  );
+  const { members, loading, loadFailed, reload, busyIds, mutate } = useMemberRoster(load);
 
   const handleRoleChange = (member: TeamMember, role: TeamRole) => {
-    if (role === member.role) return;
-    void withRowBusy(member.user_id, async () => {
+    void mutate(member.user_id, async () => {
       await setTeamMemberRole(teamId, member.user_id, role);
       toast({ title: t("notes.spaces.members.roleUpdated") });
     });
   };
 
   const handleAdd = (member: WorkspaceMember) => {
-    void withRowBusy(member.user_id, async () => {
+    void mutate(member.user_id, async () => {
       const { failures } = await addTeamMembers(teamId, [member.user_id]);
       if (failures.length > 0) throw failures[0];
       toast({
@@ -107,6 +62,22 @@ export default function TeamRosterSection({
         }),
       });
     });
+  };
+
+  const handleRemove = (member: TeamMember) => {
+    removeConfirm(
+      member,
+      () =>
+        void mutate(member.user_id, async () => {
+          await removeTeamMember(teamId, member.user_id);
+          toast({
+            title: t("notes.spaces.members.removedFromTeam", {
+              name: member.name || member.email,
+              team: teamName,
+            }),
+          });
+        })
+    );
   };
 
   const memberIds = useMemo(() => new Set(members.map((m) => m.user_id)), [members]);
@@ -119,154 +90,20 @@ export default function TeamRosterSection({
     [workspaceMembers, memberIds, currentUserId]
   );
 
-  const searchEmail = addSearch.trim().toLowerCase();
-  const showInviteFooter =
-    !!onInvite &&
-    searchEmail.includes("@") &&
-    !members.some((m) => m.email.toLowerCase() === searchEmail) &&
-    !workspaceMembers.some((m) => m.email.toLowerCase() === searchEmail);
-
   return (
-    <div className="space-y-2">
-      {loading && members.length === 0 ? (
-        <div className="h-24 rounded-lg bg-foreground/5 dark:bg-white/5 animate-pulse" />
-      ) : loadFailed && members.length === 0 ? (
-        <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-4 py-6 flex items-center justify-between gap-2">
-          <p className="text-xs text-muted-foreground">
-            {t("settingsPage.workspace.members.loadError")}
-          </p>
-          <Button variant="outline" size="sm" onClick={() => void loadRoster()}>
-            {t("settingsPage.workspace.loadError.retry")}
-          </Button>
-        </div>
-      ) : (
-        <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 divide-y divide-border/60 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50 max-h-64 overflow-y-auto">
-          {members.map((member) => {
-            const isSelf = member.user_id === currentUserId;
-            const isBusy = busyUserIds.has(member.user_id);
-            return (
-              <div key={member.user_id} className="flex items-center gap-3 px-4 h-14">
-                <MemberAvatar name={member.name} email={member.email} image={member.image} />
-                <div className="flex-1 min-w-0">
-                  <p dir="auto" className="text-xs font-medium text-foreground truncate">
-                    {member.name || member.email}
-                  </p>
-                  {member.name && (
-                    <p dir="ltr" className="text-xs text-muted-foreground truncate">
-                      {member.email}
-                    </p>
-                  )}
-                </div>
-                {canManage && !isSelf ? (
-                  <>
-                    <Select
-                      value={member.role}
-                      disabled={isBusy}
-                      onValueChange={(role) => handleRoleChange(member, role as TeamRole)}
-                    >
-                      <SelectTrigger className="h-7 w-25 px-2 text-xs rounded-md shrink-0">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="admin" className="text-xs">
-                          {t("notes.spaces.members.roleAdmin")}
-                        </SelectItem>
-                        <SelectItem value="member" className="text-xs">
-                          {t("notes.spaces.members.roleMember")}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        removeConfirm(
-                          member,
-                          () =>
-                            void withRowBusy(member.user_id, async () => {
-                              await removeTeamMember(teamId, member.user_id);
-                              toast({
-                                title: t("notes.spaces.members.removedFromTeam", {
-                                  name: member.name || member.email,
-                                  team: teamName,
-                                }),
-                              });
-                            })
-                        )
-                      }
-                      disabled={isBusy}
-                      aria-label={t("notes.spaces.members.remove")}
-                      className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/8 transition-colors outline-none focus-visible:ring-1 focus-visible:ring-primary/30 disabled:pointer-events-none"
-                    >
-                      {isBusy ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <X className="w-3.5 h-3.5" />
-                      )}
-                    </button>
-                  </>
-                ) : (
-                  <RoleBadge
-                    label={
-                      member.role === "admin"
-                        ? t("notes.spaces.members.roleAdmin")
-                        : t("notes.spaces.members.roleMember")
-                    }
-                  />
-                )}
-              </div>
-            );
-          })}
-          {members.length === 0 && (
-            <div className="py-8 text-center text-xs text-muted-foreground">
-              {t("notes.spaces.members.empty")}
-            </div>
-          )}
-        </div>
-      )}
-
-      {canManage && (
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-foreground/50">
-            {t("notes.spaces.members.addPeopleToTeam", { team: teamName })}
-          </label>
-          <MemberPickList
-            members={addCandidates}
-            search={addSearch}
-            onSearchChange={setAddSearch}
-            onSelect={handleAdd}
-            currentUserId={currentUserId}
-            busyIds={busyUserIds}
-            listClassName="max-h-32"
-            footer={
-              showInviteFooter ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onInvite?.(addSearch.trim());
-                    setAddSearch("");
-                  }}
-                  className={cn(
-                    "flex items-center gap-2 w-full px-2 h-8 rounded-md text-start",
-                    "transition-colors duration-150 outline-none",
-                    "text-primary/80 hover:text-primary hover:bg-primary/8",
-                    "focus-visible:ring-1 focus-visible:ring-ring/30"
-                  )}
-                >
-                  <Mail size={12} className="shrink-0" />
-                  <span className="text-xs truncate">
-                    <BidiInterpolatedText
-                      text={t("notes.spaces.members.inviteFooter", {
-                        email: BIDI_VALUE_TOKEN,
-                      })}
-                      value={addSearch.trim()}
-                    />
-                  </span>
-                </button>
-              ) : undefined
-            }
-          />
-        </div>
-      )}
-    </div>
+    <MemberRoster
+      members={members}
+      loading={loading}
+      loadFailed={loadFailed}
+      onRetry={() => void reload()}
+      currentUserId={currentUserId}
+      canManage={canManage}
+      busyIds={busyIds}
+      onRoleChange={handleRoleChange}
+      onRemove={handleRemove}
+      addCandidates={addCandidates}
+      onAdd={handleAdd}
+      onInvite={onInvite}
+    />
   );
 }

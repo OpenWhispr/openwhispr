@@ -8,16 +8,15 @@ import {
 } from "../../stores/settingsStore";
 import { usePolicyModeOptions, usePolicySnapshot } from "../../hooks/usePolicy";
 import { isEnterpriseTranscriptionOfferable } from "../../stores/policyRules";
+import { requestSignIn } from "../../utils/requestSignIn";
 import { InferenceModeSelector } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
 import TranscriptionModelPicker from "../TranscriptionModelPicker";
 import SelfHostedPanel from "../SelfHostedPanel";
 import type { InferenceMode } from "../../types/electron";
-import { useStartOnboarding } from "../../hooks/useStartOnboarding";
 
 export function UploadTranscriptionPanel() {
   const { t } = useTranslation();
-  const startOnboarding = useStartOnboarding();
   const policySnapshot = usePolicySnapshot();
 
   const {
@@ -41,10 +40,10 @@ export function UploadTranscriptionPanel() {
     setUploadCloudTranscriptionBaseUrl,
     setUploadCloudTranscriptionMode,
     setEnterpriseTranscriptionSetupMode,
-    remoteTranscriptionUrl,
-    setRemoteTranscriptionUrl,
-    remoteTranscriptionModel,
-    setRemoteTranscriptionModel,
+    uploadRemoteTranscriptionUrl,
+    setUploadRemoteTranscriptionUrl,
+    uploadRemoteTranscriptionModel,
+    setUploadRemoteTranscriptionModel,
   } = useSettingsStore();
   const {
     modes: transcriptionModes,
@@ -99,7 +98,7 @@ export function UploadTranscriptionPanel() {
   const handleTranscriptionModeSelect = (mode: InferenceMode) => {
     if (!isModeAllowed(mode)) return;
     if (mode === "openwhispr" && !isSignedIn) {
-      startOnboarding();
+      requestSignIn();
       return;
     }
     if (mode === effectiveTranscriptionMode) return;
@@ -167,10 +166,10 @@ export function UploadTranscriptionPanel() {
       {effectiveTranscriptionMode === "self-hosted" && (
         <SelfHostedPanel
           service="transcription"
-          url={remoteTranscriptionUrl}
-          onUrlChange={setRemoteTranscriptionUrl}
-          model={remoteTranscriptionModel}
-          onModelChange={setRemoteTranscriptionModel}
+          url={uploadRemoteTranscriptionUrl}
+          onUrlChange={setUploadRemoteTranscriptionUrl}
+          model={uploadRemoteTranscriptionModel}
+          onModelChange={setUploadRemoteTranscriptionModel}
         />
       )}
     </div>

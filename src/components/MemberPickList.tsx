@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Loader2, Search } from "./icons";
 import MemberAvatar from "./MemberAvatar";
@@ -21,6 +21,8 @@ interface MemberPickListProps {
   listClassName?: string;
   /** Rendered at the end of the list (e.g. an invite affordance). */
   footer?: React.ReactNode;
+  /** Keep the list collapsed until the search is focused or has text. */
+  revealOnFocus?: boolean;
 }
 
 export default function MemberPickList({
@@ -33,12 +35,26 @@ export default function MemberPickList({
   busyIds,
   listClassName,
   footer,
+  revealOnFocus = false,
 }: MemberPickListProps) {
   const { t } = useTranslation();
+  const [focused, setFocused] = useState(false);
   const filteredMembers = useMemo(() => filterMemberCandidates(members, search), [members, search]);
+  const showList = !revealOnFocus || focused || search.trim() !== "";
   return (
-    <div className="rounded border border-border/70 dark:border-border-subtle/60 overflow-hidden">
-      <div className="relative border-b border-border/70 dark:border-border-subtle/60">
+    <div
+      className="rounded border border-border/70 dark:border-border-subtle/60 overflow-hidden"
+      onFocus={() => setFocused(true)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false);
+      }}
+    >
+      <div
+        className={cn(
+          "relative",
+          showList && "border-b border-border/70 dark:border-border-subtle/60"
+        )}
+      >
         <Search
           size={11}
           className="absolute start-2.5 top-1/2 -translate-y-1/2 text-foreground/45 pointer-events-none"
@@ -51,48 +67,50 @@ export default function MemberPickList({
           className="w-full h-8 ps-7 pe-2 bg-transparent text-xs text-foreground placeholder:text-foreground/45 outline-none"
         />
       </div>
-      <div className={cn("overflow-y-auto p-1", listClassName ?? "max-h-36")}>
-        {filteredMembers.map((member) => {
-          const isSelected = selectedIds?.has(member.user_id) ?? false;
-          const isBusy = busyIds?.has(member.user_id) ?? false;
-          return (
-            <button
-              key={member.user_id}
-              type="button"
-              disabled={isBusy}
-              aria-pressed={selectedIds ? isSelected : undefined}
-              onClick={() => onSelect(member)}
-              className={cn(
-                "flex items-center gap-2 w-full px-2 h-8 rounded-md text-start",
-                "transition-colors duration-150 outline-none",
-                "hover:bg-foreground/4 dark:hover:bg-white/4",
-                "focus-visible:ring-1 focus-visible:ring-ring/30",
-                "disabled:opacity-60"
-              )}
-            >
-              <MemberAvatar name={member.name} email={member.email} size="sm" />
-              <span dir="auto" className="text-xs text-foreground truncate flex-1">
-                {member.name || member.email}
-              </span>
-              {member.user_id === currentUserId && (
-                <span className="text-[10px] text-foreground/45 shrink-0">
-                  {t("notes.spaces.members.you")}
+      {showList && (
+        <div className={cn("overflow-y-auto p-1", listClassName ?? "max-h-36")}>
+          {filteredMembers.map((member) => {
+            const isSelected = selectedIds?.has(member.user_id) ?? false;
+            const isBusy = busyIds?.has(member.user_id) ?? false;
+            return (
+              <button
+                key={member.user_id}
+                type="button"
+                disabled={isBusy}
+                aria-pressed={selectedIds ? isSelected : undefined}
+                onClick={() => onSelect(member)}
+                className={cn(
+                  "flex items-center gap-2 w-full px-2 h-8 rounded-md text-start",
+                  "transition-colors duration-150 outline-none",
+                  "hover:bg-foreground/4 dark:hover:bg-white/4",
+                  "focus-visible:ring-1 focus-visible:ring-ring/30",
+                  "disabled:opacity-60"
+                )}
+              >
+                <MemberAvatar name={member.name} email={member.email} size="sm" />
+                <span dir="auto" className="text-xs text-foreground truncate flex-1">
+                  {member.name || member.email}
                 </span>
-              )}
-              {isSelected && <Check size={11} className="text-primary shrink-0" />}
-              {isBusy && (
-                <Loader2 className="w-3 h-3 animate-spin text-muted-foreground shrink-0" />
-              )}
-            </button>
-          );
-        })}
-        {filteredMembers.length === 0 && !footer && (
-          <p className="text-xs text-foreground/45 text-center py-2">
-            {t("notes.spaces.members.noResults")}
-          </p>
-        )}
-        {filteredMembers.length === 0 && footer}
-      </div>
+                {member.user_id === currentUserId && (
+                  <span className="text-[10px] text-foreground/45 shrink-0">
+                    {t("notes.spaces.members.you")}
+                  </span>
+                )}
+                {isSelected && <Check size={11} className="text-primary shrink-0" />}
+                {isBusy && (
+                  <Loader2 className="w-3 h-3 animate-spin text-muted-foreground shrink-0" />
+                )}
+              </button>
+            );
+          })}
+          {filteredMembers.length === 0 && !footer && (
+            <p className="text-xs text-foreground/45 text-center py-2">
+              {t("notes.spaces.members.noResults")}
+            </p>
+          )}
+          {filteredMembers.length === 0 && footer}
+        </div>
+      )}
     </div>
   );
 }

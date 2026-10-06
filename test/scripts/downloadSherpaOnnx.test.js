@@ -15,6 +15,7 @@ const {
   WINDOWS_ONNXRUNTIME_PRIVATE_NAME,
   WINDOWS_ONNXRUNTIME_UPSTREAM_NAME,
   extractTarBz2,
+  findObsoleteLibraries,
   isCompleteInstall,
   privatizeWindowsOnnxRuntime,
 } = require("../../scripts/download-sherpa-onnx");
@@ -24,6 +25,16 @@ const EXE_NAMES = [
   "sherpa-onnx-online-ws-win32-x64.exe",
   "sherpa-onnx-diarize-win32-x64.exe",
 ];
+
+test("removes only libraries from the previous sherpa-onnx install", () => {
+  const obsolete = findObsoleteLibraries(
+    ["libonnxruntime.1.27.0.dylib", "libonnxruntime.dylib", "libsherpa-onnx-c-api.dylib"],
+    ["libonnxruntime.dylib", "libsherpa-onnx-c-api.dylib"],
+    ["libonnxruntime.1.27.0.dylib", "libonnxruntime.dylib", "libllama.dylib"]
+  );
+
+  assert.deepEqual(obsolete, ["libonnxruntime.1.27.0.dylib"]);
+});
 
 function makeBinDir(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sherpa-win32-"));
@@ -167,7 +178,11 @@ test("a win32 marker written before the rename is not a complete install", (t) =
 
   fs.writeFileSync(
     marker,
-    JSON.stringify({ version: SHERPA_ONNX_VERSION, libraries: [WINDOWS_ONNXRUNTIME_PRIVATE_NAME] })
+    JSON.stringify({
+      version: SHERPA_ONNX_VERSION,
+      archive: BINARIES["win32-x64"].archiveName,
+      libraries: [WINDOWS_ONNXRUNTIME_PRIVATE_NAME],
+    })
   );
   assert.equal(isCompleteInstall(marker, [exe], options), false);
 
@@ -175,6 +190,7 @@ test("a win32 marker written before the rename is not a complete install", (t) =
     marker,
     JSON.stringify({
       version: SHERPA_ONNX_VERSION,
+      archive: BINARIES["win32-x64"].archiveName,
       libraries: [WINDOWS_ONNXRUNTIME_PRIVATE_NAME],
       onnxRuntime: WINDOWS_ONNXRUNTIME_PRIVATE_NAME,
     })
@@ -187,10 +203,64 @@ test("Linux markers do not need the onnxRuntime field", (t) => {
   const binary = path.join(dir, "sherpa-onnx-ws-linux-x64");
   fs.writeFileSync(binary, "");
   const marker = path.join(dir, ".sherpa-onnx-linux-x64.json");
-  fs.writeFileSync(marker, JSON.stringify({ version: SHERPA_ONNX_VERSION, libraries: [] }));
+  fs.writeFileSync(
+    marker,
+    JSON.stringify({
+      version: SHERPA_ONNX_VERSION,
+      archive: BINARIES["linux-x64"].archiveName,
+      libraries: [],
+    })
+  );
   assert.equal(
     isCompleteInstall(marker, [binary], { platformArch: "linux-x64", binDir: dir }),
     true
+  );
+});
+
+// Installs from the TTS archive of the same version carry the GPL espeak-ng
+// C API library; they must re-extract so that library is removed.
+test("a marker from a different archive of the same version is not a complete install", (t) => {
+  const dir = makeBinDir(t);
+  const binary = path.join(dir, "sherpa-onnx-ws-linux-x64");
+  fs.writeFileSync(binary, "");
+  const marker = path.join(dir, ".sherpa-onnx-linux-x64.json");
+  fs.writeFileSync(
+    marker,
+    JSON.stringify({
+      version: SHERPA_ONNX_VERSION,
+      archive: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-shared.tar.bz2`,
+      libraries: [],
+    })
+  );
+  assert.equal(
+    isCompleteInstall(marker, [binary], { platformArch: "linux-x64", binDir: dir }),
+    false
+  );
+});
+
+test("every platform downloads the TTS-free sherpa-onnx archive", () => {
+  for (const [platformArch, config] of Object.entries(BINARIES)) {
+    assert.match(config.archiveName, /-no-tts\.tar\.bz2$/, platformArch);
+  }
+});
+
+test("a malformed marker is not a complete install", (t) => {
+  const dir = makeBinDir(t);
+  const binary = path.join(dir, "sherpa-onnx-ws-linux-x64");
+  const marker = path.join(dir, ".sherpa-onnx-linux-x64.json");
+  fs.writeFileSync(binary, "");
+  fs.writeFileSync(
+    marker,
+    JSON.stringify({
+      version: SHERPA_ONNX_VERSION,
+      archive: BINARIES["linux-x64"].archiveName,
+      libraries: [null],
+    })
+  );
+
+  assert.equal(
+    isCompleteInstall(marker, [binary], { platformArch: "linux-x64", binDir: dir }),
+    false
   );
 });
 
@@ -204,13 +274,18 @@ test(
     const marker = path.join(dir, ".sherpa-onnx-darwin-arm64.json");
     const options = { platformArch: "darwin-arm64", binDir: dir };
 
-    fs.writeFileSync(marker, JSON.stringify({ version: SHERPA_ONNX_VERSION, libraries: [] }));
+    const archive = BINARIES["darwin-arm64"].archiveName;
+    fs.writeFileSync(
+      marker,
+      JSON.stringify({ version: SHERPA_ONNX_VERSION, archive, libraries: [] })
+    );
     assert.equal(isCompleteInstall(marker, [binary], options), false);
 
     fs.writeFileSync(
       marker,
       JSON.stringify({
         version: SHERPA_ONNX_VERSION,
+        archive,
         libraries: [],
         onnxRuntime: MACOS_ARM64_ONNXRUNTIME.marker,
       })
@@ -218,6 +293,102 @@ test(
     assert.equal(isCompleteInstall(marker, [binary], options), true);
   }
 );
+
+test("a failed macOS upgrade still removes obsolete libraries when retried", async (t) => {
+  const root = makeBinDir(t);
+  const binDir = path.join(root, "resources", "bin");
+  fs.mkdirSync(binDir, { recursive: true });
+  const config = BINARIES["darwin-arm64"];
+  const binaryPaths = [config.outputName, config.onlineOutputName, config.diarizeOutputName].map(
+    (name) => path.join(binDir, name)
+  );
+  const markerPath = path.join(binDir, ".sherpa-onnx-darwin-arm64.json");
+  const obsoleteLibrary = path.join(binDir, "libonnxruntime.1.27.0.dylib");
+  const cApiLibrary = path.join(binDir, "libsherpa-onnx-c-api.dylib");
+  // Installs before v1.7.6 wrote no marker, so the marker below never owned this one.
+  const unownedCxxApiLibrary = path.join(binDir, "libsherpa-onnx-cxx-api.dylib");
+  fs.writeFileSync(obsoleteLibrary, "old runtime");
+  fs.writeFileSync(cApiLibrary, "old C API with espeak-ng");
+  fs.writeFileSync(unownedCxxApiLibrary, "old C++ API");
+  fs.copyFileSync(obsoleteLibrary, path.join(binDir, "libonnxruntime.dylib"));
+  fs.writeFileSync(path.join(binDir, "libllama.dylib"), "unrelated runtime");
+  for (const binaryPath of binaryPaths) fs.writeFileSync(binaryPath, "old binary");
+  fs.writeFileSync(
+    markerPath,
+    JSON.stringify({
+      version: "1.13.4",
+      libraries: [
+        "libonnxruntime.1.27.0.dylib",
+        "libonnxruntime.dylib",
+        "libsherpa-onnx-c-api.dylib",
+      ],
+      onnxRuntime: "arm64-1.27.0",
+    })
+  );
+
+  const sourcePath = require.resolve("../../scripts/download-sherpa-onnx");
+  const requireFromDownloader = createRequire(sourcePath);
+  let failDownload = true;
+  const downloadBinary = vm.runInNewContext(
+    `${fs.readFileSync(sourcePath, "utf8")}\ndownloadBinary;`,
+    {
+      __dirname: path.join(root, "scripts"),
+      module: { exports: {} },
+      // Stub network and native extraction; marker and library operations use the filesystem.
+      process: { ...process, platform: "linux" },
+      console,
+      require(name) {
+        if (name === "./lib/download-utils") {
+          return {
+            ...requireFromDownloader(name),
+            async downloadFile(_url, destination) {
+              if (failDownload) throw new Error("simulated download failure");
+              fs.writeFileSync(destination, "fixture archive");
+            },
+          };
+        }
+        if (name === "child_process") {
+          return {
+            execFileSync(command, args, { cwd }) {
+              assert.equal(command, "tar");
+              const extractDir = path.resolve(cwd, args[args.indexOf("-C") + 1]);
+              for (const name of [
+                config.binaryPath,
+                config.onlineBinaryPath,
+                config.diarizeBinaryPath,
+              ]) {
+                fs.writeFileSync(path.join(extractDir, name), "new binary");
+              }
+              fs.writeFileSync(path.join(extractDir, "libonnxruntime.dylib"), "new runtime");
+              fs.writeFileSync(path.join(extractDir, "libsherpa-onnx-c-api.dylib"), "new C API");
+              fs.writeFileSync(
+                path.join(extractDir, "libsherpa-onnx-cxx-api.dylib"),
+                "new C++ API"
+              );
+            },
+          };
+        }
+        return requireFromDownloader(name);
+      },
+    },
+    { filename: sourcePath }
+  );
+
+  assert.equal(await downloadBinary("darwin-arm64", config), false);
+  assert.equal(await downloadBinary("darwin-arm64", config), false);
+  assert.equal(
+    isCompleteInstall(markerPath, binaryPaths, { platformArch: "darwin-arm64", binDir }),
+    false
+  );
+
+  failDownload = false;
+  assert.equal(await downloadBinary("darwin-arm64", config), true);
+  assert.equal(fs.existsSync(obsoleteLibrary), false);
+  assert.equal(fs.existsSync(cApiLibrary), false);
+  assert.equal(fs.existsSync(unownedCxxApiLibrary), false);
+  assert.equal(fs.readFileSync(path.join(binDir, "libonnxruntime.dylib"), "utf8"), "new runtime");
+  assert.equal(fs.readFileSync(path.join(binDir, "libllama.dylib"), "utf8"), "unrelated runtime");
+});
 
 test("a failed automatic Windows repair stays incomplete and retries DLL patching", async (t) => {
   const root = makeBinDir(t);
@@ -227,6 +398,8 @@ test("a failed automatic Windows repair stays incomplete and retries DLL patchin
   const binaryPaths = EXE_NAMES.map((name) => path.join(binDir, name));
   const markerPath = path.join(binDir, ".sherpa-onnx-win32-x64.json");
   const options = { platformArch: "win32-x64", binDir };
+  // A pre-v1.7.6 install: the C API DLL is on disk but no marker owns it.
+  fs.writeFileSync(path.join(binDir, "sherpa-onnx-c-api.dll"), "old C API with espeak-ng");
   const sourcePath = require.resolve("../../scripts/download-sherpa-onnx");
   const requireFromDownloader = createRequire(sourcePath);
   let downloads = 0;
@@ -298,16 +471,17 @@ test("a failed automatic Windows repair stays incomplete and retries DLL patchin
   assert.equal(patchFailureInjected, true);
   assert.ok(listImportedModules(fs.readFileSync(binaryPaths[1])).includes("onnxruntime.dll"));
   assert.equal(fs.existsSync(path.join(binDir, "onnxruntime.dll")), false);
-  assert.equal(fs.existsSync(markerPath), false);
   assert.equal(isCompleteInstall(markerPath, binaryPaths, options), false);
 
   failPatch = false;
   assert.equal(await downloadBinary("win32-x64", config), true);
   assert.equal(downloads, 3);
   assert.equal(isCompleteInstall(markerPath, binaryPaths, options), true);
-  for (const imagePath of [...binaryPaths, path.join(binDir, "sherpa-onnx-c-api.dll")]) {
+  for (const imagePath of binaryPaths) {
     const imports = listImportedModules(fs.readFileSync(imagePath));
     assert.ok(imports.includes("ow-onnxrt.dll"), imagePath);
     assert.ok(!imports.some((name) => name.toLowerCase() === "onnxruntime.dll"), imagePath);
   }
+  assert.equal(fs.existsSync(path.join(binDir, "sherpa-onnx-c-api.dll")), false);
+  assert.equal(fs.existsSync(path.join(binDir, "onnxruntime_providers_shared.dll")), true);
 });

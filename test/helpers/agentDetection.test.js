@@ -253,3 +253,150 @@ test("every locale's advertised wake phrase triggers detection in its language",
     );
   }
 });
+
+// A snippet trigger is a phrase the snippet feature owns. When it happens to
+// start with the agent name ("openwhispr review"), the wake-word scan used to
+// read it as an address and hijack an ordinary dictation into the agent.
+test("a name inside a snippet trigger is not an address", async () => {
+  const { detectAgentName } = await load();
+  const snippets = [{ trigger: "openwhispr review", replacement: "Review the PR" }];
+
+  assert.equal(
+    detectAgentName("openwhispr review this PR", "OpenWhispr", undefined, snippets),
+    false
+  );
+  assert.equal(
+    detectAgentName("That's done. openwhispr review this PR", "OpenWhispr", undefined, snippets),
+    false
+  );
+});
+
+test("a real address still counts when the dictation also uses a snippet trigger", async () => {
+  const { detectAgentName } = await load();
+  const snippets = [{ trigger: "openwhispr review", replacement: "Review the PR" }];
+
+  assert.equal(
+    detectAgentName(
+      "Hey OpenWhispr, run openwhispr review on PR 5",
+      "OpenWhispr",
+      undefined,
+      snippets
+    ),
+    true
+  );
+});
+
+test("stripAgentAddress removes the real address, not the snippet trigger", async () => {
+  const { stripAgentAddress } = await load();
+  const snippets = [{ trigger: "openwhispr review", replacement: "Review the PR" }];
+
+  assert.equal(
+    stripAgentAddress(
+      "openwhispr review. OpenWhispr summarize it",
+      "OpenWhispr",
+      undefined,
+      snippets
+    ),
+    "openwhispr review. summarize it"
+  );
+  assert.equal(
+    stripAgentAddress("openwhispr review this PR", "OpenWhispr", undefined, snippets),
+    "openwhispr review this PR",
+    "no address left once the trigger is excluded"
+  );
+});
+
+test("characterization: a trigger equal to the agent name shadows the bare wake word", async () => {
+  const { detectAgentName } = await load();
+  // Excluding trigger spans has a cost: a snippet whose trigger is the bare
+  // agent name shadows the wake word whenever it is spoken without a cue.
+  // Expanding the snippet the user explicitly configured is the better of the
+  // two, but flip this deliberately (e.g. by warning about the collision when a
+  // snippet is saved).
+  const snippets = [{ trigger: "Jarvis", replacement: "J.A.R.V.I.S." }];
+
+  assert.equal(detectAgentName("Jarvis take a note", "Jarvis", undefined, snippets), false);
+  // A cue still reaches the agent, so the wake word is never wholly unreachable.
+  assert.equal(detectAgentName("Hey Jarvis take a note", "Jarvis", undefined, snippets), true);
+});
+
+test("characterization: a decomposed trigger falls back to firing the agent", async () => {
+  const { detectAgentName } = await load();
+  // Range-finding matches the transcript exactly as given, because the offsets
+  // have to index the string the locator tokenizes; expandSnippets normalizes to
+  // NFC first. A decomposed trigger therefore stays invisible here and keeps the
+  // pre-fix behavior — the safe direction, since it never suppresses a real
+  // wake word.
+  const snippets = [{ trigger: "İmza", replacement: "Best regards" }];
+
+  assert.equal(detectAgentName("İmza send it".normalize("NFD"), "İmza", undefined, snippets), true);
+});
+
+// A candidate window spans up to maxSpan tokens so STT splitting the name
+// ("open whispr") still matches. Only a window the trigger fully contains is
+// the trigger being spoken; one that merely clips a trigger is a real address.
+test("a trigger clipping part of a split name does not suppress the address", async () => {
+  const { detectAgentName, stripAgentAddress } = await load();
+  const snippets = [{ trigger: "open", replacement: "OPEN" }];
+
+  assert.equal(
+    detectAgentName("open whispr summarize this", "OpenWhispr", undefined, snippets),
+    true
+  );
+  assert.equal(
+    stripAgentAddress("open whispr summarize this", "OpenWhispr", undefined, snippets),
+    "summarize this"
+  );
+});
+
+// "Hey" before the name is the same evidence of address the wake word already
+// relies on, and the two failures are not symmetric: a wrongly-opened panel is
+// visible and dismissable, while a wrongly-expanded snippet types the user's
+// command into their document. The cue wins.
+test("an explicit cue outranks a trigger the address happens to span", async () => {
+  const { detectAgentName, stripAgentAddress } = await load();
+  const snippets = [{ trigger: "openwhispr review", replacement: "Review the PR" }];
+
+  assert.equal(
+    detectAgentName("Hey OpenWhispr review this PR", "OpenWhispr", undefined, snippets),
+    true
+  );
+  assert.equal(
+    stripAgentAddress("Hey OpenWhispr review this PR", "OpenWhispr", undefined, snippets),
+    "review this PR"
+  );
+  // No cue, so the trigger still wins — the reported bug stays fixed.
+  assert.equal(
+    detectAgentName("openwhispr review this PR", "OpenWhispr", undefined, snippets),
+    false
+  );
+});
+
+// Dictation set to auto with a provider that reports no language falls back to
+// the UI language, so an English transcript reaches the CJK branch whenever the
+// app is in Japanese or Chinese. The trigger exclusion has to survive it.
+test("a name inside a snippet trigger is not an address under CJK normalization", async () => {
+  const { detectAgentName } = await load();
+  const snippets = [{ trigger: "openwhispr review", replacement: "Review the PR" }];
+
+  for (const language of ["ja", "zh", "zh-CN", "zh-TW"]) {
+    assert.equal(
+      detectAgentName("openwhispr review this PR", "OpenWhispr", language, snippets),
+      false,
+      language
+    );
+  }
+});
+
+// Japanese runs the words together, so a bare-name trigger cannot match the
+// transcript the user actually spoke. Normalization splits the name out with
+// spaces for cue matching, and those spaces must not manufacture the word
+// boundaries that would make the trigger match — suppressing the wake word for
+// a snippet that then never expands costs the user both.
+test("CJK normalization does not invent a trigger the transcript never had", async () => {
+  const { detectAgentName } = await load();
+  const snippets = [{ trigger: "Jarvis", replacement: "J.A.R.V.I.S." }];
+
+  assert.equal(detectAgentName("Jarvis明日の予定は", "Jarvis", "ja", snippets), true);
+  assert.equal(detectAgentName("Jarvis总结这条笔记", "Jarvis", "zh", snippets), true);
+});

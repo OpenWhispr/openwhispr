@@ -2,6 +2,16 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!--
+      Defense in depth against images an injected model reply points at an
+      attacker's server. Remote images are limited to avatar hosts: Gravatar and
+      Google profile photos (Microsoft photos arrive as data: URLs). A meta tag
+      because the packaged build loads from file://, which has no response headers.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="img-src 'self' data: https://www.gravatar.com https://lh3.googleusercontent.com https://lh4.googleusercontent.com https://lh5.googleusercontent.com https://lh6.googleusercontent.com"
+    />
     <link rel="icon" type="image/png" href="./assets/icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="./assets/fonts/noto-sans.css">

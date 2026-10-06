@@ -10,6 +10,7 @@ const {
 
 const FIRST_LLM = "qwen3.5-4b-q4_k_m";
 const SECOND_LLM = "qwen3.5-2b-q4_k_m";
+const PARAKEET = "parakeet-tdt-0.6b-v3";
 
 function findElement(node, predicate) {
   if (Array.isArray(node)) {
@@ -140,6 +141,7 @@ async function createSetupHarness(
   let trayTree;
   let ready = false;
   let proceeded = false;
+  let skipped = false;
   const resumeDrafts = [];
   const props = {
     stepId: assistant ? "local-assistant" : "local-dictation",
@@ -149,7 +151,9 @@ async function createSetupHarness(
     onProceed() {
       proceeded = true;
     },
-    onSkip() {},
+    onSkip() {
+      skipped = true;
+    },
     resumeState,
     onResumeStateChange: (draft) => resumeDrafts.push(draft),
   };
@@ -184,6 +188,11 @@ async function createSetupHarness(
     assert.ok(button, `${action} is available for ${modelId}: ${textContent(row(modelId))}`);
     await React.act(async () => button.props.onClick());
   };
+  const emit = async (family, event) => {
+    await React.act(async () => {
+      for (const listener of listeners[family]) listener({}, event);
+    });
+  };
   const progress = async (modelId, percentage, phase = "progress") => {
     const family = requests.get(modelId).family;
     const event =
@@ -196,9 +205,7 @@ async function createSetupHarness(
             downloaded_bytes: percentage,
             total_bytes: 100,
           };
-    await React.act(async () => {
-      for (const listener of listeners[family]) listener({}, event);
-    });
+    await emit(family, event);
   };
   const complete = async (modelId) => {
     const request = requests.get(modelId);
@@ -216,6 +223,11 @@ async function createSetupHarness(
       request.resolve({ success: true });
     });
   };
+  const trayRow = (key) => {
+    const element = findElement(trayTree, (node) => node.type === "div" && node.key === key);
+    assert.ok(element, `tray row ${key} is visible`);
+    return element;
+  };
   const actionButton = (label) =>
     findElement(
       tree,
@@ -228,14 +240,19 @@ async function createSetupHarness(
     click,
     progress,
     complete,
+    emit,
+    trayRow,
     cancel: async (modelId) => {
-      const trayRow = findElement(
-        trayTree,
-        (node) => node.type === "div" && node.key === `llm:${modelId}`
-      );
-      assert.ok(trayRow, `tray row ${modelId} is visible`);
-      const button = findElement(trayRow, (node) => node.type === "button");
+      const button = findElement(trayRow(`llm:${modelId}`), (node) => node.type === "button");
       await React.act(async () => button.props.onClick());
+    },
+    trayHeader: () => {
+      const header = findElement(
+        trayTree,
+        (node) => node.type === "div" && String(node.props?.className).includes("gap-[5px]")
+      );
+      assert.ok(header, "tray header is visible");
+      return textContent(header);
     },
     chooseProvider: async (providerId) => {
       const select = findElement(tree, (node) => typeof node.props?.onValueChange === "function");
@@ -252,6 +269,7 @@ async function createSetupHarness(
       await React.act(async () => button.props.onClick());
     },
     proceeded: () => proceeded,
+    skipped: () => skipped,
     ready: () => ready,
     resumeDrafts: () => resumeDrafts,
     canProceed: () => !actionButton("onboarding.rehaul.provider.proceed").props.disabled,
@@ -347,7 +365,7 @@ test("a refused concurrent Whisper download preserves the original pending selec
   assert.equal(setup.ready(), true);
 });
 
-test("cancelling the newest assistant download blocks both ways to continue until a model is chosen", async (t) => {
+test("cancelling the newest assistant download permits Skip without activating an older model", async (t) => {
   const setup = await createSetupHarness(t, { assistant: true });
   await setup.click(FIRST_LLM, "onboarding.rehaul.local.download");
   await setup.click(SECOND_LLM, "onboarding.rehaul.local.download");
@@ -358,8 +376,10 @@ test("cancelling the newest assistant download blocks both ways to continue unti
   assert.equal(setup.pending.hasPendingLocalModels(), false);
   assert.deepEqual(
     { proceed: setup.canProceed(), skip: setup.canSkip() },
-    { proceed: false, skip: false }
+    { proceed: false, skip: true }
   );
+  await setup.skip();
+  assert.equal(setup.skipped(), true);
   await setup.complete(FIRST_LLM);
   assert.equal(setup.store.getState().chatAgentModel, "");
   assert.equal(setup.canProceed(), false);
@@ -422,6 +442,13 @@ test("Skip marks a pending model for background activation", async (t) => {
   assert.equal(localStorage.getItem("localSetupPending"), "true");
 });
 
+test("the assistant step can be skipped with no model selected or downloading", async (t) => {
+  const setup = await createSetupHarness(t, { assistant: true });
+  assert.equal(setup.canProceed(), false);
+  await setup.skip();
+  assert.equal(setup.skipped(), true);
+});
+
 test("choosing a local model records it in the resume draft", async (t) => {
   const setup = await createSetupHarness(t, {
     assistant: true,
@@ -478,4 +505,36 @@ test("unsupported Macs cannot choose Oruk or NVIDIA during local onboarding", as
     assert.ok(setup.row("base"));
     assert.equal(setup.ready(), false);
   }
+});
+
+test("the tray header follows the transfer into its installing phase", async (t) => {
+  const modelId = "parakeet-tdt-0.6b-v3";
+  const setup = await createSetupHarness(t, { provider: "nvidia" });
+
+  await setup.click(modelId, "onboarding.rehaul.local.download");
+  await setup.progress(modelId, 100);
+  assert.equal(setup.trayHeader(), "onboarding.rehaul.local.downloadInProgress");
+
+  // Extraction reports no further bytes, so the header is the only thing left
+  // that can tell a full bar apart from a stalled one.
+  await setup.progress(modelId, 100, "installing");
+  assert.equal(setup.trayHeader(), "onboarding.rehaul.local.installing");
+});
+
+test("an extracting row says so while another model is still downloading", async (t) => {
+  const setup = await createSetupHarness(t, { assistant: true });
+  await setup.click(FIRST_LLM, "onboarding.rehaul.local.download");
+  await setup.progress(FIRST_LLM, 40);
+
+  // The tray outlives the step that started a transfer, so a dictation model
+  // picked earlier keeps extracting behind the assistant step.
+  await setup.emit("parakeet", { model: PARAKEET, type: "installing", percentage: 100 });
+
+  assert.match(
+    textContent(setup.trayRow(`parakeet:${PARAKEET}`)),
+    /onboarding\.rehaul\.local\.installing/
+  );
+  assert.match(textContent(setup.trayRow(`llm:${FIRST_LLM}`)), /40%/);
+  // Not every row has reached extraction, so the strip stays on downloading.
+  assert.equal(setup.trayHeader(), "onboarding.rehaul.local.downloadInProgress");
 });

@@ -102,7 +102,7 @@
 4. Clear model cache: `rm -rf ~/.cache/openwhispr/whisper-models`
 5. Try cloud transcription as fallback
 
-**GPU acceleration (CUDA / Vulkan):** If the GPU-accelerated whisper-server crashes at startup (unsupported GPU, out of VRAM), OpenWhispr automatically restarts it on CPU, retries the same request, and shows a "using CPU instead" notice — the dictation still completes. GPU acceleration can be toggled off from the GPU card in the transcription model picker.
+**GPU acceleration (CUDA / Vulkan):** If the GPU-accelerated whisper-server crashes at startup (unsupported GPU, out of VRAM), OpenWhispr automatically restarts it on CPU, retries the same request, and shows a "using CPU instead" notice — the dictation still completes. GPU acceleration can be toggled off from the GPU card in the transcription model picker. That card also shows the error line that caused the fallback (for example `vk::PhysicalDevice::createDevice: ErrorDeviceLost`); include it, or a screenshot of the card, when you report a GPU problem.
 
 ### Wayland Clipboard Issues (Linux)
 
@@ -156,7 +156,7 @@ On GNOME and KDE, the first automatic paste can show a remote-interaction permis
 
 1. System audio is captured by `windows-system-audio-helper.exe` (WASAPI process loopback), which hears every app on every output device — no permission prompt is needed
 2. If the helper is missing or fails (requires Windows 10 2004+), OpenWhispr automatically falls back to Chromium loopback, which only hears the _default_ output device — make sure your meeting app plays through the default device in that case
-3. On some machines the helper starts successfully but captures only digital silence. OpenWhispr detects this a few seconds in (its capture is silent while an output device is still metering audio) and switches that recording to Chromium loopback; the debug log shows `Windows system audio helper captured only silence, switching to renderer loopback`
+3. On some machines the helper starts successfully but captures only digital silence — and Microsoft Teams call audio appears to be hidden from it regardless of configuration. OpenWhispr detects this a few seconds in (its capture is silent while an output device is still metering audio), starts Chromium loopback alongside, and switches the recording to it once it hears audio the helper is missing; the debug log shows `Windows system audio helper captured only silence, starting renderer loopback beside it`, then `Renderer loopback took over system audio capture`. The check runs for the whole meeting, so a call that goes missing after some other sound was captured still switches over — though audio playing continuously alongside the meeting (music in a browser tab, say) can mask it, since our capture never falls silent
 4. If transcription shows "Continuing with microphone only", system audio capture failed entirely; check debug logs for `windows-system-audio-helper` entries
 
 **All Platforms:**
@@ -201,7 +201,7 @@ Allow OpenWhispr through Windows Firewall when using cloud transcription provide
 
 **Firewall prompt for sherpa-onnx (local Parakeet transcription):**
 
-Windows may ask whether to allow `sherpa-onnx-ws-win32-x64` on public and private networks the first time local Parakeet transcription starts. The bundled sherpa-onnx server only serves OpenWhispr itself over `127.0.0.1`, but it has no loopback-only bind option, so Windows sees it listening on all interfaces. Either choice is safe — Windows never filters loopback traffic, so transcription works even if you click Cancel. All-users installs register a firewall rule that blocks outside access and suppresses the prompt entirely; per-user and portable builds may still see it once.
+Windows may ask whether to allow `sherpa-onnx-ws-win32-x64` on public and private networks the first time local Parakeet transcription starts. The bundled sherpa-onnx server only serves OpenWhispr itself over `127.0.0.1`, but it has no loopback-only bind option, so Windows sees it listening on all interfaces. Either choice is safe — Windows never filters loopback traffic, so transcription works even if you click Cancel. All-users installs register a firewall rule that blocks outside access and suppresses the prompt entirely; per-user installs may still see it once.
 
 **Complete reset (after uninstalling):**
 

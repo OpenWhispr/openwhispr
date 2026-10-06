@@ -6,6 +6,7 @@ const debugLogger = require("./debugLogger");
 const { runSystemTar } = require("./systemTar");
 const {
   downloadFile,
+  fetchJson,
   createDownloadSignal,
   createDownloadInProgressError,
   cleanupStaleDownloads,
@@ -27,7 +28,9 @@ function getParakeetModelConfig(modelName) {
   if (!modelInfo) return null;
   return {
     url: modelInfo.downloadUrl,
+    manifestUrl: modelInfo.manifestUrl,
     size: modelInfo.expectedSizeBytes || modelInfo.sizeMb * 1_000_000,
+    expectedSizeBytes: modelInfo.expectedSizeBytes,
     language: modelInfo.language,
     supportedLanguages: modelInfo.supportedLanguages || [],
     extractDir: modelInfo.extractDir,
@@ -443,6 +446,17 @@ class ParakeetManager {
         });
       }
 
+      // Optional provenance: one request after a fresh install, never on model load.
+      // Hugging Face counts this JSON request for NeMo repositories.
+      if (!archiveReady && !signal.aborted && modelConfig.manifestUrl) {
+        this._saveModelManifest(modelConfig, modelPath).catch((error) => {
+          debugLogger.debug("Optional model manifest unavailable", {
+            modelName,
+            error: error.message,
+          });
+        });
+      }
+
       return { model: modelName, downloaded: true, path: modelPath, success: true };
     } catch (error) {
       if (error.isAbort) {
@@ -457,6 +471,32 @@ class ParakeetManager {
         this.currentDownloadProcess = null;
       }
     }
+  }
+
+  async _saveModelManifest(modelConfig, modelPath) {
+    const manifest = await fetchJson(modelConfig.manifestUrl, {
+      // Keep the default session's cookies off a third-party host, and make sure
+      // the request reaches the network — a cache hit would not be counted.
+      credentials: "omit",
+      cache: "no-store",
+      signal: AbortSignal.timeout(3000),
+    });
+    if (
+      manifest?.archive !== path.posix.basename(new URL(modelConfig.url).pathname) ||
+      manifest.extract_dir !== modelConfig.extractDir ||
+      // Only `expectedSizeBytes` is the archive's true size; `sizeMb` describes the
+      // extracted model, so a model without it simply skips this comparison.
+      (modelConfig.expectedSizeBytes && manifest.archive_bytes !== modelConfig.expectedSizeBytes) ||
+      !/^[a-f0-9]{64}$/.test(manifest.archive_sha256)
+    ) {
+      throw new Error("Manifest does not match the installed model");
+    }
+    // Never recreate a deleted model directory or overwrite an existing sidecar.
+    await fsPromises.writeFile(
+      path.join(modelPath, "download-manifest.json"),
+      JSON.stringify(manifest, null, 2) + "\n",
+      { flag: "wx" }
+    );
   }
 
   async _extractModel(archivePath, modelName) {

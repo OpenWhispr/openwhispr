@@ -44,12 +44,14 @@ async function startupArgs(modelName, runtime = "offline", language = null, regi
         return child;
       },
     },
-    os: { cpus: () => Array(8).fill({}) },
     "./parakeetModelInfo": modelInfo,
     "./debugLogger": { debug() {}, info() {} },
     "./sidecarPidFile": { write() {} },
     "./safeTempDir": { getSafeTempDir: () => os.tmpdir() },
-    "../utils/serverUtils": { findAvailablePort: async () => 6006 },
+    "../utils/serverUtils": {
+      findAvailablePort: async () => 6006,
+      getAvailableParallelism: () => 8,
+    },
   });
   const server = new Server();
   server.getWsBinaryPath = (mode) => `sherpa-${mode}`;
@@ -73,6 +75,7 @@ for (const modelName of ["parakeet-tdt-0.6b-v3", "orukeet-v0.1.0"]) {
       "--model-type=nemo_transducer",
       "--port=6006",
       "--num-threads=4",
+      "--num-work-threads=3",
     ]);
   });
 }
@@ -92,6 +95,7 @@ test("Cohere keeps its language-specific startup arguments", async () => {
     "--cohere-transcribe-language=fr",
     "--port=6006",
     "--num-threads=4",
+    "--num-work-threads=3",
   ]);
 });
 

@@ -23,6 +23,7 @@ export function useMainWindowSizeOwner({
   toastCount,
   isCommandMenuOpen,
   isCompactPill,
+  isDictationActive,
   assistantOpen,
   assistantMounted,
   assistantOpenRef,
@@ -32,6 +33,7 @@ export function useMainWindowSizeOwner({
 }) {
   const [handoffActive, setHandoffActive] = useState(false);
   const actionCountRef = useRef(dictationErrorActionCount);
+  const dictationActiveRef = useRef(isDictationActive);
   const handoffRef = useRef(null);
   // Same masking for the panel-return shrink: snapping the native window from
   // panel bounds back to the pill box paints one compositor frame of the old
@@ -43,7 +45,11 @@ export function useMainWindowSizeOwner({
   useEffect(() => {
     const handoff = createPillVisibilityHandoff({
       onSuppressedChange: setHandoffActive,
-      shouldAutoHide: () => useSettingsStore.getState().floatingIconAutoHide,
+      // Retry (and the hotkey) clear the error card by starting the next
+      // dictation. Handing the window back to auto-hide then would leave that
+      // recording running with no pill on screen (#2141).
+      shouldAutoHide: () =>
+        useSettingsStore.getState().floatingIconAutoHide && !dictationActiveRef.current,
       hideWindow: () => window.electronAPI?.hideWindow?.(),
     });
     handoffRef.current = handoff;
@@ -64,6 +70,10 @@ export function useMainWindowSizeOwner({
       }
     };
   }, []);
+
+  useLayoutEffect(() => {
+    dictationActiveRef.current = isDictationActive;
+  }, [isDictationActive]);
 
   useLayoutEffect(() => {
     actionCountRef.current = dictationErrorActionCount;

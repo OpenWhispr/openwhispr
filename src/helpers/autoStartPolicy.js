@@ -1,4 +1,4 @@
-// Launch-at-login decisions, kept free of Electron so they can be unit-tested.
+// Launch-at-login and relaunch decisions, kept free of Electron so they can be unit-tested.
 //
 // A login launch should come up in the tray, and Windows has no way to ask for
 // that (macOS' openAsHidden is macOS-only and a no-op on macOS 13+). So the login
@@ -45,10 +45,39 @@ function wasLaunchedHidden({ platform, argv, loginItemSettings }) {
   return argv.includes(HIDDEN_LAUNCH_FLAG);
 }
 
+// A relaunch must not replay how this process was launched: --hidden would put the
+// restarted app in the tray, and startup would handle a cold-start deep link again
+// (a sign-in link would restore the session a reset just cleared). An AppImage runs
+// from a FUSE mount that is gone once this process exits, so app.relaunch() cannot
+// bring it back: getRelaunchWaiter() starts the on-disk file from outside instead.
+function getRelaunchOptions({ argv, protocol, appImagePath }) {
+  const args = argv
+    .slice(1)
+    .filter((arg) => arg !== HIDDEN_LAUNCH_FLAG && !arg.startsWith(`${protocol}://`));
+  return appImagePath ? { launcherPath: appImagePath, args } : { args };
+}
+
+// Polls until the pid exits (and the FUSE mount with it), then execs the AppImage
+// with the surviving args.
+function getRelaunchWaiter({ launcherPath, args, pid }) {
+  return {
+    file: "/bin/sh",
+    args: [
+      "-c",
+      'while kill -0 "$0"; do sleep 0.2; done; exec "$@"',
+      String(pid),
+      launcherPath,
+      ...args,
+    ],
+  };
+}
+
 module.exports = {
   HIDDEN_LAUNCH_FLAG,
   getLoginItemArgs,
   resolveAutoStartState,
   needsHiddenFlagMigration,
   wasLaunchedHidden,
+  getRelaunchOptions,
+  getRelaunchWaiter,
 };

@@ -4,12 +4,15 @@ import { useTranslation } from "react-i18next";
 
 interface PillCommandMenuProps {
   buttonRef: React.RefObject<HTMLDivElement | null>;
+  align: "left" | "right" | "center";
   isRecording: boolean;
   agentAllowed: boolean;
+  meetingAllowed: boolean;
   isHovered: boolean;
   setWindowInteractivity: (capture: boolean) => void;
   onToggleListening: () => void;
   onAskAssistant: () => void;
+  onStartMeeting: () => void;
   onHide: () => void;
   onClose: () => void;
 }
@@ -20,12 +23,15 @@ interface PillCommandMenuProps {
  */
 export function PillCommandMenu({
   buttonRef,
+  align,
   isRecording,
   agentAllowed,
+  meetingAllowed,
   isHovered,
   setWindowInteractivity,
   onToggleListening,
   onAskAssistant,
+  onStartMeeting,
   onHide,
   onClose,
 }: PillCommandMenuProps): React.JSX.Element {
@@ -49,10 +55,15 @@ export function PillCommandMenu({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [buttonRef, onClose]);
 
+  // The pill docks against a physical window edge and the window clips anything past it (#2064),
+  // so the menu anchors on that same side, never on a logical start/end.
+  const alignClass =
+    align === "right" ? "right-0" : align === "left" ? "left-0" : "left-1/2 -translate-x-1/2";
+
   return (
     <div
       ref={menuRef}
-      className="absolute bottom-full end-0 mb-3 w-48 rounded-lg border border-border bg-popover text-popover-foreground shadow-lg backdrop-blur-sm"
+      className={`absolute bottom-full ${alignClass} mb-3 w-48 overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-lg backdrop-blur-sm`}
       onMouseEnter={() => {
         setWindowInteractivity(true);
       }}
@@ -80,6 +91,17 @@ export function PillCommandMenu({
             onClick={onAskAssistant}
           >
             {t("app.commandMenu.askAssistant")}
+          </button>
+        </>
+      )}
+      {meetingAllowed && !isRecording && (
+        <>
+          <div className="h-px bg-border" />
+          <button
+            className="w-full px-3 py-2 text-start text-sm hover:bg-muted focus:bg-muted focus:outline-none"
+            onClick={onStartMeeting}
+          >
+            {t("app.commandMenu.startMeetingRecording")}
           </button>
         </>
       )}

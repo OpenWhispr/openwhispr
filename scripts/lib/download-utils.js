@@ -10,6 +10,13 @@ const MAX_REDIRECTS = 5;
 const RELEASE_PAGE_SIZE = 100;
 const MAX_RELEASE_PAGES = 20;
 
+// Node's global agent keeps sockets alive, and a socket only returns to the pool (where it
+// stops holding the event loop open) once its response has been read to the end. A redirect
+// or error body we never read pins the socket until the server drops it, often for minutes.
+function discardBody(response) {
+  response.resume();
+}
+
 /**
  * Fetch JSON and response headers from a URL.
  * @param {string} url - URL to fetch
@@ -42,6 +49,7 @@ function fetchJsonResponse(url, redirectCount = 0) {
     https
       .get(url, options, (res) => {
         if ([301, 302, 303, 307, 308].includes(res.statusCode)) {
+          discardBody(res);
           const location = res.headers.location;
           if (!location) {
             reject(new Error("Redirect without location header"));
@@ -55,6 +63,7 @@ function fetchJsonResponse(url, redirectCount = 0) {
         }
 
         if (res.statusCode !== 200) {
+          discardBody(res);
           reject(new Error(`HTTP ${res.statusCode}`));
           return;
         }
@@ -71,7 +80,10 @@ function fetchJsonResponse(url, redirectCount = 0) {
         res.on("error", reject);
       })
       .on("error", reject)
-      .on("timeout", () => reject(new Error("Request timeout")));
+      .on("timeout", function onTimeout() {
+        // Destroying rejects through the "error" handler and frees the stalled socket.
+        this.destroy(new Error("Request timeout"));
+      });
   });
 }
 
@@ -209,8 +221,9 @@ function downloadFile(url, dest, retryCount = 0) {
         return;
       }
 
-      activeRequest = https.get(currentUrl, (response) => {
+      const req = https.get(currentUrl, (response) => {
         if ([301, 302, 303, 307, 308].includes(response.statusCode)) {
+          discardBody(response);
           const location = response.headers.location;
           if (!location) {
             cleanup();
@@ -257,12 +270,21 @@ function downloadFile(url, dest, retryCount = 0) {
         });
       });
 
-      activeRequest.on("error", (err) => {
+      activeRequest = req;
+
+      // A redirect we already followed can still error or time out while its body drains;
+      // that must not tear down the request that replaced it.
+      req.on("error", (err) => {
+        if (req !== activeRequest) return;
         cleanup();
         reject(err);
       });
 
-      activeRequest.setTimeout(REQUEST_TIMEOUT, () => {
+      req.setTimeout(REQUEST_TIMEOUT, () => {
+        if (req !== activeRequest) {
+          req.destroy();
+          return;
+        }
         cleanup();
         reject(new Error("Connection timed out"));
       });

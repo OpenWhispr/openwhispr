@@ -10,7 +10,6 @@ interface MeetingNotificationCardProps {
   onDismiss?: () => void;
   /** Controls the close button's hover fade. Ignored when `onDismiss` is absent. */
   closeVisible?: boolean;
-  allowTitleWrap?: boolean;
   className?: string;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
@@ -29,7 +28,6 @@ export function MeetingNotificationCard({
   onStart,
   onDismiss,
   closeVisible = true,
-  allowTitleWrap = false,
   className = "",
   onMouseEnter,
   onMouseLeave,
@@ -74,12 +72,7 @@ export function MeetingNotificationCard({
         </div>
 
         <div className="flex-1 min-w-0">
-          <p
-            className={[
-              "text-[12px] font-semibold text-foreground leading-tight",
-              allowTitleWrap ? "whitespace-normal break-words" : "truncate",
-            ].join(" ")}
-          >
+          <p className="truncate text-[12px] font-semibold text-foreground leading-tight">
             {title}
           </p>
           <p className="text-[11px] text-muted-foreground leading-tight mt-0.5 break-words">

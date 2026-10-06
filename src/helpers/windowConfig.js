@@ -285,21 +285,6 @@ const NOTIFICATION_WINDOW_CONFIG = {
   type: OVERLAY_WINDOW_TYPES.notification,
 };
 
-const AUTO_END_NOTIFICATION_WINDOW_SIZE = {
-  width: 480,
-  height: 128,
-};
-
-function getMeetingNotificationWindowSize(promptData) {
-  if (promptData?.kind === "auto-end") {
-    return AUTO_END_NOTIFICATION_WINDOW_SIZE;
-  }
-  return {
-    width: NOTIFICATION_WINDOW_CONFIG.width,
-    height: NOTIFICATION_WINDOW_CONFIG.height,
-  };
-}
-
 class WindowPositionUtil {
   static getMainWindowPosition(display, customSize = null, position = "bottom-right") {
     const { width, height } = customSize || WINDOW_SIZES.BASE;
@@ -340,8 +325,8 @@ class WindowPositionUtil {
     };
   }
 
-  static getNotificationPosition(display, customSize = null) {
-    const { width, height } = customSize || NOTIFICATION_WINDOW_CONFIG;
+  static getNotificationPosition(display) {
+    const { width, height } = NOTIFICATION_WINDOW_CONFIG;
     const MARGIN = 16;
     const workArea = display.workArea || display.bounds;
     // Same negative-origin trap as getMainWindowPosition: clamp to the display,
@@ -402,8 +387,6 @@ module.exports = {
   fitDictationErrorContentWindowToWorkArea,
   fitDictationErrorWindowToWorkArea,
   resolveHorizontalWindowDirection,
-  AUTO_END_NOTIFICATION_WINDOW_SIZE,
-  getMeetingNotificationWindowSize,
   WINDOW_SIZES,
   WindowPositionUtil,
   resolveOverlayWindowType,

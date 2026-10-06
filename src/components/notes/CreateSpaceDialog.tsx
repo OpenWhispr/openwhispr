@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { Check, Loader2, Plus } from "../icons";
+import { Check, ChevronRight, Loader2 } from "../icons";
 import {
   Dialog,
   DialogContent,
@@ -11,11 +11,9 @@ import {
   DialogFooter,
 } from "../ui/dialog";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { useToast } from "../ui/useToast";
 import CreateWorkspaceDialog from "../CreateWorkspaceDialog";
-import CreateTeamDialog from "../CreateTeamDialog";
 import MemberPickList from "../MemberPickList";
 import { createSpace } from "../../services/spaceActions";
 import { TeamsService } from "../../services/TeamsService";
@@ -23,8 +21,7 @@ import { useWorkspace } from "../../hooks/useWorkspace";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { useAuth } from "../../hooks/useAuth";
 import { useDelayedFlag } from "../../hooks/useDelayedFlag";
-import { EmojiPickerInput } from "./EmojiPickerInput";
-import { orderMemberCandidates } from "../../lib/memberCandidates";
+import SpaceNameField from "./SpaceNameField";
 import { canManageWorkspace } from "../../lib/spacePermissions";
 import {
   manageableWorkspaces as findManageableWorkspaces,
@@ -64,7 +61,7 @@ export default function CreateSpaceDialog({
     }))
   );
   const [name, setName] = useState("");
-  const [emoji, setEmoji] = useState("");
+  const [emoji, setEmoji] = useState<string | null>(null);
   const [memberSearch, setMemberSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [membersError, setMembersError] = useState(false);
@@ -73,9 +70,7 @@ export default function CreateSpaceDialog({
   const [teamsError, setTeamsError] = useState(false);
   const [teamsWorkspaceId, setTeamsWorkspaceId] = useState<string | null>(null);
   const [selectedTeamIds, setSelectedTeamIds] = useState<Set<string>>(new Set());
-  const [newTeamOpen, setNewTeamOpen] = useState(false);
-  const [newTeamName, setNewTeamName] = useState("");
-  const [createTeamOpen, setCreateTeamOpen] = useState(false);
+  const [groupsOpen, setGroupsOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const showSpinner = useDelayedFlag(isCreating);
@@ -109,12 +104,8 @@ export default function CreateSpaceDialog({
     setTeamsError(false);
     setTeamsWorkspaceId(null);
     try {
-      const list = await TeamsService.list(workspaceId);
-      setTeams(list);
+      setTeams(await TeamsService.list(workspaceId));
       setTeamsWorkspaceId(workspaceId);
-      // A workspace with no teams yet keeps the one-shot flow: the new-team
-      // section opens straight away, prefilled from the space name at submit.
-      if (list.length === 0) setNewTeamOpen(true);
     } catch {
       setTeamsError(true);
     }
@@ -138,24 +129,30 @@ export default function CreateSpaceDialog({
     });
   }, [open, manageableWorkspaces, defaultWorkspace?.id, initialWorkspaceId]);
 
+  // The creator becomes the space's admin on the server, so they are not a
+  // pick-list candidate.
   const candidates = useMemo(
-    () => (rosterWorkspaceId === workspace?.id ? orderMemberCandidates(roster, user?.id) : []),
+    () =>
+      rosterWorkspaceId === workspace?.id
+        ? roster.filter((member) => member.user_id !== user?.id)
+        : [],
     [roster, rosterWorkspaceId, user?.id, workspace?.id]
   );
+  const workspaceTeams = teamsWorkspaceId === workspace?.id ? teams : [];
+  // Hold the section's place while the roster loads so the footer doesn't jump.
+  const peopleLoading = workspace != null && rosterWorkspaceId !== workspace.id && !membersError;
   const handleOpenChange = (nextOpen: boolean) => {
     onOpenChange(nextOpen);
     if (!nextOpen) {
       setName("");
-      setEmoji("");
+      setEmoji(null);
       setMemberSearch("");
       setSelectedIds(new Set());
       setRosterWorkspaceId(null);
       setTeams([]);
       setTeamsWorkspaceId(null);
       setSelectedTeamIds(new Set());
-      setNewTeamOpen(false);
-      setNewTeamName("");
-      setCreateTeamOpen(false);
+      setGroupsOpen(false);
       setSelectedWorkspaceId(null);
     }
   };
@@ -185,55 +182,24 @@ export default function CreateSpaceDialog({
     });
   };
 
-  const handleTeamCreated = (team: Team) => {
-    setTeams((prev) => [...prev, team]);
-    setSelectedTeamIds((prev) => new Set(prev).add(team.id));
-    toast({ title: t("settingsPage.workspace.teams.created", { team: team.name }) });
-  };
-
   const handleWorkspaceChange = (workspaceId: string) => {
     setSelectedWorkspaceId(workspaceId);
     setSelectedIds(new Set());
     setMemberSearch("");
     setMembersError(false);
     setSelectedTeamIds(new Set());
-    setNewTeamOpen(false);
-    setNewTeamName("");
   };
-
-  // A space needs at least one team (existing or new) unless team loading
-  // failed — then the server-side zero-team create still lets admins proceed.
-  const hasTeamSelection = selectedTeamIds.size > 0 || newTeamOpen || teamsError;
-
-  // Teams for the target workspace haven't arrived yet: skeleton the section
-  // (a bare "New team" button next to the label reads as misplaced UI).
-  const teamsLoading = !teamsError && teamsWorkspaceId !== workspace?.id;
 
   const handleCreate = async () => {
     const trimmed = name.trim();
-    if (!trimmed || isCreating || !workspace || !hasTeamSelection) return;
+    if (!trimmed || isCreating || !workspace) return;
     setIsCreating(true);
     try {
-      // The server adds the creator to a new team as admin; re-adding them
-      // here would upsert that role back down to member.
-      const memberIds = [...selectedIds].filter((id) => id !== user?.id);
-      const { space, failedMembers } = await createSpace(
+      const space = await createSpace(
         workspace.id,
-        { name: trimmed, emoji: emoji.trim() || null },
-        {
-          existingTeamIds: [...selectedTeamIds],
-          newTeam: newTeamOpen ? { name: newTeamName.trim() || trimmed, memberIds } : undefined,
-        }
+        { name: trimmed, emoji },
+        { memberIds: [...selectedIds], teamIds: [...selectedTeamIds] }
       );
-      if (failedMembers > 0) {
-        toast({
-          title: t("notes.spaces.members.addFailed", {
-            failed: failedMembers,
-            total: memberIds.length,
-          }),
-          variant: "destructive",
-        });
-      }
       if (space) {
         revealContainer(space.id, null);
         setActiveContext(space.id, null);
@@ -254,15 +220,6 @@ export default function CreateSpaceDialog({
   return (
     <>
       <CreateWorkspaceDialog open={needsWorkspace} onOpenChange={handleWorkspaceDialogChange} />
-
-      {workspace && (
-        <CreateTeamDialog
-          workspaceId={workspace.id}
-          open={createTeamOpen}
-          onOpenChange={setCreateTeamOpen}
-          onCreated={handleTeamCreated}
-        />
-      )}
 
       <Dialog open={open && !needsWorkspace} onOpenChange={handleOpenChange}>
         <DialogContent className="sm:max-w-95 p-6 gap-5">
@@ -334,69 +291,114 @@ export default function CreateSpaceDialog({
                 </div>
               )}
 
-              <div className="flex gap-3">
-                <div className="space-y-1.5 w-14 shrink-0">
-                  <label
-                    htmlFor="create-space-emoji"
-                    className="text-xs font-medium text-foreground/50"
-                  >
-                    {t("notes.spaces.emojiLabel")}
-                  </label>
-                  <EmojiPickerInput
-                    id="create-space-emoji"
-                    value={emoji}
-                    onChange={setEmoji}
-                    ariaLabel={t("notes.spaces.changeEmoji")}
-                  />
-                </div>
-                <div className="space-y-1.5 flex-1">
-                  <label
-                    htmlFor="create-space-name"
-                    className="text-xs font-medium text-foreground/50"
-                  >
-                    {t("notes.spaces.nameLabel")}
-                  </label>
-                  <Input
-                    dir="auto"
-                    id="create-space-name"
-                    value={name}
-                    autoFocus
-                    maxLength={80}
-                    onChange={(e) => setName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleCreate();
-                    }}
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="create-space-name"
+                  className="text-xs font-medium text-foreground/50"
+                >
+                  {t("notes.spaces.nameAndIconLabel")}
+                </label>
+                <SpaceNameField
+                  id="create-space-name"
+                  name={name}
+                  emoji={emoji}
+                  autoFocus
+                  onNameChange={setName}
+                  onEmojiChange={setEmoji}
+                  onEnter={() => handleCreate()}
+                />
               </div>
 
-              <div className="space-y-1.5">
-                <p className="text-xs font-medium text-foreground/50">
-                  {t("notes.spaces.teams.assignLabel")}
-                </p>
-                {teamsError && teams.length === 0 ? (
-                  <div className="rounded border border-border/70 dark:border-border-subtle/60 px-3 py-2.5 flex items-center justify-between gap-2">
-                    <p className="text-xs text-muted-foreground">
-                      {t("notes.spaces.teams.loadError")}
-                    </p>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        if (workspace) void loadTeams(workspace.id);
-                      }}
-                      className="h-6 px-2 text-xs shrink-0"
+              {/* A workspace of one has nobody to add; the section only
+                  appears once the roster shows other people (or failed). */}
+              {(peopleLoading || membersError || candidates.length > 0) && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-foreground/50">
+                    {t("notes.spaces.members.addPeople")}
+                  </p>
+                  {peopleLoading ? (
+                    <div className="h-24 rounded-lg bg-foreground/5 dark:bg-white/5 animate-pulse" />
+                  ) : membersError ? (
+                    <div className="rounded border border-border/70 dark:border-border-subtle/60 px-3 py-2.5 flex items-center justify-between gap-2">
+                      <p className="text-xs text-muted-foreground">
+                        {t("settingsPage.workspace.members.loadError")}
+                      </p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          if (workspace) void loadMembers(workspace.id);
+                        }}
+                        className="h-6 px-2 text-xs shrink-0"
+                      >
+                        {t("settingsPage.workspace.loadError.retry")}
+                      </Button>
+                    </div>
+                  ) : (
+                    <MemberPickList
+                      members={candidates}
+                      search={memberSearch}
+                      onSearchChange={setMemberSearch}
+                      onSelect={toggleMember}
+                      selectedIds={selectedIds}
+                      currentUserId={user?.id}
+                    />
+                  )}
+                </div>
+              )}
+
+              {(teamsError || workspaceTeams.length > 0) && (
+                <div className="space-y-1.5">
+                  <div className="-mx-1">
+                    <button
+                      type="button"
+                      aria-expanded={groupsOpen}
+                      onClick={() => setGroupsOpen((open) => !open)}
+                      className={cn(
+                        "flex w-full min-w-0 items-center gap-1.5 h-8 px-1.5 rounded-md",
+                        "transition-colors duration-150 outline-none",
+                        "hover:bg-foreground/4 dark:hover:bg-white/4",
+                        "focus-visible:ring-1 focus-visible:ring-ring/30"
+                      )}
                     >
-                      {t("settingsPage.workspace.loadError.retry")}
-                    </Button>
+                      <ChevronRight
+                        size={12}
+                        aria-hidden="true"
+                        className={cn(
+                          "shrink-0 text-foreground/45 transition-transform duration-150",
+                          groupsOpen ? "rotate-90" : "rtl:rotate-180"
+                        )}
+                      />
+                      <span className="text-xs font-medium text-foreground/50 truncate">
+                        {t("notes.spaces.groups.optional")}
+                      </span>
+                      {selectedTeamIds.size > 0 && (
+                        <span className="ms-auto text-[10px] text-foreground/45 shrink-0">
+                          {selectedTeamIds.size}
+                        </span>
+                      )}
+                    </button>
                   </div>
-                ) : teamsLoading ? (
-                  <div className="h-24 rounded bg-foreground/5 dark:bg-white/5 animate-pulse" />
-                ) : (
-                  <>
-                    {teams.length > 0 && (
+                  {groupsOpen &&
+                    (teamsError ? (
+                      <div className="rounded border border-border/70 dark:border-border-subtle/60 px-3 py-2.5 flex items-center justify-between gap-2">
+                        <p className="text-xs text-muted-foreground">
+                          {t("notes.spaces.teams.loadError")}
+                        </p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (workspace) void loadTeams(workspace.id);
+                          }}
+                          className="h-6 px-2 text-xs shrink-0"
+                        >
+                          {t("settingsPage.workspace.loadError.retry")}
+                        </Button>
+                      </div>
+                    ) : (
                       <div className="rounded border border-border/70 dark:border-border-subtle/60 overflow-y-auto max-h-36 p-1">
-                        {teams.map((team) => {
+                        {workspaceTeams.map((team) => {
                           const isSelected = selectedTeamIds.has(team.id);
                           return (
                             <button
@@ -424,80 +426,9 @@ export default function CreateSpaceDialog({
                           );
                         })}
                       </div>
-                    )}
-                    {newTeamOpen ? (
-                      <div className="rounded border border-border/70 dark:border-border-subtle/60 p-2.5 space-y-2">
-                        <div className="space-y-1.5">
-                          <label
-                            htmlFor="create-space-new-team-name"
-                            className="text-xs font-medium text-foreground/50"
-                          >
-                            {t("notes.spaces.teams.newTeamNameLabel")}
-                          </label>
-                          <Input
-                            dir="auto"
-                            id="create-space-new-team-name"
-                            value={newTeamName}
-                            maxLength={80}
-                            placeholder={name.trim() || undefined}
-                            onChange={(e) => setNewTeamName(e.target.value)}
-                          />
-                        </div>
-                        {membersError && candidates.length === 0 ? (
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="text-xs text-muted-foreground">
-                              {t("settingsPage.workspace.members.loadError")}
-                            </p>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                if (workspace) void loadMembers(workspace.id);
-                              }}
-                              className="h-6 px-2 text-xs shrink-0"
-                            >
-                              {t("settingsPage.workspace.loadError.retry")}
-                            </Button>
-                          </div>
-                        ) : candidates.length > 0 ? (
-                          <MemberPickList
-                            members={candidates}
-                            search={memberSearch}
-                            onSearchChange={setMemberSearch}
-                            onSelect={toggleMember}
-                            selectedIds={selectedIds}
-                            currentUserId={user?.id}
-                          />
-                        ) : null}
-                        {teams.length > 0 && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setNewTeamOpen(false);
-                              setNewTeamName("");
-                              setSelectedIds(new Set());
-                            }}
-                            className="h-6 px-2 text-xs"
-                          >
-                            {t("common.cancel")}
-                          </Button>
-                        )}
-                      </div>
-                    ) : (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setCreateTeamOpen(true)}
-                        className="h-7 px-2 text-xs text-foreground/60"
-                      >
-                        <Plus size={12} className="me-1" />
-                        {t("notes.spaces.teams.newTeam")}
-                      </Button>
-                    )}
-                  </>
-                )}
-              </div>
+                    ))}
+                </div>
+              )}
 
               <DialogFooter>
                 <Button
@@ -507,10 +438,7 @@ export default function CreateSpaceDialog({
                 >
                   {t("common.cancel")}
                 </Button>
-                <Button
-                  onClick={handleCreate}
-                  disabled={!name.trim() || isCreating || !workspace || !hasTeamSelection}
-                >
+                <Button onClick={handleCreate} disabled={!name.trim() || isCreating || !workspace}>
                   {showSpinner && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
                   {t("notes.spaces.create")}
                 </Button>

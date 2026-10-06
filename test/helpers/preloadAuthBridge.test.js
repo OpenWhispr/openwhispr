@@ -60,11 +60,12 @@ test("account ownership operations forward the account and credential generation
   const { api, invocations } = loadPreloadApi();
 
   await api.setActiveAccountScope("account-a", 7);
-  await api.deleteAccountData("account-a", 7);
+  await api.deleteAccountData("account-a", 7, { erasingDevice: true });
 
   assert.deepEqual(invocations, [
     ["set-active-account-scope", "account-a", 7],
-    ["delete-account-data", "account-a", 7],
+    // Erasing the device also revokes a Gmail grant shared with a calendar.
+    ["delete-account-data", "account-a", 7, { erasingDevice: true }],
   ]);
 });
 
@@ -99,27 +100,6 @@ test("meeting auto-end listener strips the event and can unsubscribe", () => {
   assert.equal(received, payload);
   unsubscribe();
   assert.equal(listeners.has("meeting-auto-end-requested"), false);
-});
-
-test("meeting auto-end lifecycle bridges completion, overlay responses, and restart", async () => {
-  const { api, invocations, listeners } = loadPreloadApi();
-  const restartPayload = { sessionId: "meeting-2" };
-  let receivedRestart;
-  const unsubscribe = api.onMeetingAutoEndRestartRequested((request) => {
-    receivedRestart = request;
-  });
-
-  await api.meetingAutoEndCompleted("meeting-2");
-  await api.meetingAutoEndRespond("meeting-2", "restart");
-  listeners.get("meeting-auto-end-restart-requested")?.({ sender: "ipc" }, restartPayload);
-
-  assert.deepEqual(invocations, [
-    ["meeting-auto-end-completed", "meeting-2"],
-    ["meeting-auto-end-respond", "meeting-2", "restart"],
-  ]);
-  assert.equal(receivedRestart, restartPayload);
-  unsubscribe();
-  assert.equal(listeners.has("meeting-auto-end-restart-requested"), false);
 });
 
 test("assistant busy state is forwarded to the main-process hotkey guard", async () => {

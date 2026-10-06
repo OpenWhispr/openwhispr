@@ -46,7 +46,10 @@
         "managedRouteInvalid": "تعذر بدء التفريغ المُدار بسبب عدم تطابق في الإعدادات. أعد المحاولة أو اتصل بالمسؤول.",
         "managedAuthRejected": "رُفضت بيانات اعتماد التفريغ المُدار الخاصة بمؤسستك. اتصل بالمسؤول.",
         "streamingOnlyProvider": "هذا المزود يدعم التفريغ المباشر فقط. اختر مزودًا آخر لرفع الملفات وإعادة المحاولة.",
-        "providerKeyMissing": "لم يتم تعيين مفتاح API لمزود التفريغ الخاص بك. أضفه في الإعدادات ← تحويل الكلام إلى نص (Speech to Text)."
+        "providerKeyMissing": "لم يتم تعيين مفتاح API لمزود التفريغ الخاص بك. أضفه في الإعدادات ← تحويل الكلام إلى نص (Speech to Text).",
+        "cleanupTruncated": "نفدت مساحة الإخراج لدى نموذج الذكاء الاصطناعي قبل أن يُكمل تنقيح إملائك.",
+        "cleanupDuplicated": "كرر تنقيح الذكاء الاصطناعي النص. تم الاحتفاظ بالنص الأصلي.",
+        "cleanupEmptyReply": "أرجع نموذج الذكاء الاصطناعي ردًا فارغًا بدلًا من الإملاء المنقَّح."
       },
       "translationFallback": {
         "unreachableTitle": "الترجمة غير متاحة",
@@ -59,6 +62,8 @@
         "changed": "تم تغيير النص المحدد أو التطبيق المستهدف أثناء قيام OpenWhispr بالمعالجة. لم يتم استبدال أي شيء.",
         "expired": "استغرق تعديل التحديد وقتًا طويلًا وانتهت صلاحيته. حدد النص وحاول مرة أخرى.",
         "pasteFailed": "قام OpenWhispr بإنشاء التعديل ولكنه لم يتمكن من استبدال النص المحدد.",
+        "modifiersHeld": "أنشأ OpenWhispr التعديل، لكن مفتاح تعديل (مثل Ctrl أو Shift) كان لا يزال مضغوطًا، لذلك لم يتم تطبيقه. التعديل موجود في الحافظة.",
+        "modifiersHeldClipboardFailed": "أنشأ OpenWhispr التعديل، لكن مفتاح تعديل (مثل Ctrl أو Shift) كان لا يزال مضغوطًا، لذلك لم يتم تطبيقه، ولم يتمكن من نسخه إلى الحافظة أيضًا.",
         "unavailable": "لم يتمكن OpenWhispr من قراءة النص المحدد بأمان. تحقق من أذونات إمكانية الوصول أو أتمتة الإدخال وحاول مرة أخرى.",
         "tooLarge": "التحديد كبير جدًا بحيث لا يمكن تعديله بأمان. حدد 6,000 حرف أو أقل.",
         "reasoningFailed": "لم يتمكن الذكاء الاصطناعي من إكمال تعديل التحديد. لم يتم تغيير نصك الأصلي."
@@ -67,6 +72,23 @@
         "title": "لم يتم لصق النص المفرَّغ",
         "description": "توقف الإملاء بينما كان مفتاح الاختصار لا يزال مضغوطًا، لذلك لم يتم لصق النص. نصك المفرَّغ موجود في الحافظة.",
         "descriptionClipboardFailed": "توقف الإملاء بينما كان مفتاح الاختصار لا يزال مضغوطًا، لذلك لم يتم لصق النص، ولم يمكن نسخه إلى الحافظة أيضًا."
+      },
+      "modifiersHeld": {
+        "title": "لم يتم لصق النص المفرَّغ",
+        "description": "كان مفتاح تعديل (مثل Ctrl أو Shift) لا يزال مضغوطًا، لذلك لم يتم لصق النص. نصك المفرَّغ موجود في الحافظة.",
+        "descriptionClipboardFailed": "كان مفتاح تعديل (مثل Ctrl أو Shift) لا يزال مضغوطًا، لذلك لم يتم لصق النص، ولم يمكن نسخه إلى الحافظة أيضًا."
+      },
+      "pastePermission": {
+        "title": "السماح باللصق التلقائي",
+        "description": "فعّل OpenWhispr في إعدادات النظام ← الخصوصية والأمن ← تسهيلات الاستخدام.",
+        "settingsFailed": "تعذّر فتح الإعدادات. افتح إعدادات النظام ← الخصوصية والأمن ← تسهيلات الاستخدام وفعّل OpenWhispr.",
+        "manualPaste": "انسخ النص أدناه، ثم اضغط على {{shortcut}} للصقه.",
+        "openSettings": "فتح الإعدادات",
+        "copyToClipboard": "نسخ إلى الحافظة",
+        "copyFailed": "تعذّر النسخ"
+      },
+      "pasteFailed": {
+        "title": "تعذّر اللصق تلقائيًا"
       }
     },
     "clipboard": {
@@ -330,6 +352,12 @@
         "liquidai_lfm2_5_350m_q8_0": "نموذج خفيف للغاية للتنظيف السريع للإملاء",
         "liquidai_lfm2_5_230m_q8_0": "نموذج صغير جدًا، تنظيف فوري على الأجهزة المتواضعة"
       }
+    },
+    "errors": {
+      "contextTooLarge": "هذا أطول من أن يقرأه {{model}} على هذا الكمبيوتر. عدد الرموز المطلوبة من السياق: نحو {{needed}}، لكن ما يتسع في الذاكرة: {{max}} فقط. جرّب نموذجًا سحابيًا، أو نفّذ الإجراء على تحديد أقصر.",
+      "contextTooLargeGeneric": "هذا أطول من أن يقرأه {{model}} على هذا الكمبيوتر. جرّب نموذجًا سحابيًا، أو نفّذ الإجراء على تحديد أقصر.",
+      "localServerUnavailable": "تعذّر تشغيل {{model}} على هذا الكمبيوتر. حاول مرة أخرى، أو بدّل إلى نموذج سحابي.",
+      "localModelBusy": "لا يزال النموذج المحلي يعالج طلبًا آخر. انتظر حتى ينتهي، ثم حاول مرة أخرى."
     }
   },
   "reasoning": {
@@ -375,6 +403,10 @@
     "disableThinking": {
       "label": "تعطيل مخرجات التفكير",
       "help": "يتخطى رموز الاستنتاج للحصول على مخرجات أنظف. موصى به للتنظيف. تتجاهل بعض الخوادم هذا التلميح."
+    },
+    "keepModelLoaded": {
+      "label": "إبقاء النموذج محمّلاً",
+      "help": "يبقى في الذاكرة بدلًا من إزالته بعد 5 دقائق من عدم النشاط، فيتجنّب الطلب التالي البدء البارد. ينطبق على كل الميزات التي تستخدم نموذجًا محليًا."
     },
     "selfHosted": {
       "endpointHelp": "أدخل عنوان خادم متوافق مع OpenAI على شبكتك المحلية (مثل Ollama أو LM Studio أو vLLM أو llama-server)."
@@ -503,12 +535,14 @@
       "couldNotDeleteTitle": "تعذر الحذف",
       "couldNotDeleteDescription": "ربما تمت إزالة هذا النص المفرَّغ بالفعل.",
       "couldNotDeleteDescriptionGeneric": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
-      "empty": "لا توجد أي نصوص مفرَّغة حتى الآن",
-      "emptyDescription": "اضغط مفتاح الاختصار في أي تطبيق وابدأ الحديث. يُحفظ كل نص هنا بخصوصية على جهازك.",
-      "sectionTitle": "النصوص المكتوبة",
+      "empty": "ابدأ أول إملاء لك",
+      "emptyDescription": "سيظهر النص الذي تمليه هنا.",
+      "shortcutHint": "اضغط على {{shortcut}} وابدأ في التحدث.",
       "dataRetentionDisabled": "الاحتفاظ بالبيانات قيد الإيقاف. لا يتم حفظ النصوص المفرَّغة والصوت في السجل.",
-      "press": "اضغط",
-      "toStart": "للبدء",
+      "welcomeBack": "مرحبًا بك مرة أخرى",
+      "welcomeBackNamed": "مرحبًا بك مرة أخرى، {{name}}",
+      "welcome": "مرحبًا بك",
+      "welcomeNamed": "مرحبًا بك، {{name}}",
       "dateGroups": {
         "today": "اليوم",
         "yesterday": "أمس"
@@ -569,14 +603,17 @@
       "title": "النماذج المطلوبة مفقودة",
       "description": "تتطلب مؤسستك هذه النماذج على هذا الجهاز: {{models}}.",
       "download": "تنزيل"
+    },
+    "cloudNudge": {
+      "title": "تم تسجيل دخولك",
+      "description": "لا يزال الإملاء يعمل على إعدادك الخاص. يمكنك التبديل إلى OpenWhispr Cloud في أي وقت.",
+      "action": "فتح الإعدادات"
     }
   },
   "integrations": {
     "title": "التكاملات (Integrations)",
-    "description": "قم بتوصيل الخدمات لتعزيز سير عملك",
     "googleCalendar": {
       "title": "تقويم Google",
-      "optional": "اختياري",
       "description": "الملء التلقائي لعناوين الاجتماعات والحاضرين من التقويم الخاص بك.",
       "connect": "ربط تقويم Google",
       "connecting": "جاري الربط...",
@@ -595,7 +632,6 @@
     },
     "microsoftCalendar": {
       "title": "تقويم Microsoft",
-      "optional": "اختياري",
       "description": "قراءة الاجتماعات من تقويم Outlook أو Microsoft 365 الخاص بك.",
       "connect": "ربط تقويم Microsoft",
       "connected": "متصل",
@@ -610,7 +646,6 @@
     },
     "appleCalendar": {
       "title": "تقويم Apple",
-      "optional": "اختياري",
       "description": "قراءة الاجتماعات من تطبيق التقويم (Calendar.app) — iCloud وGoogle وExchange وOutlook في مكان واحد.",
       "connect": "ربط تقويم Apple",
       "connected": "متصل",
@@ -623,34 +658,24 @@
       "connectFailed": "فشل الاتصال",
       "connectFailedDescription": "حدث خطأ ما أثناء الاتصال بتطبيق Calendar.app. يرجى إعادة تشغيل OpenWhispr والمحاولة مرة أخرى."
     },
-    "sections": {
-      "calendar": "التقويم (Calendar)",
-      "api": "API",
-      "mcp": "MCP",
-      "cli": "CLI"
-    },
     "api": {
-      "title": "مفاتيح API",
       "description": "إدارة مفاتيح API للوصول البرمجي",
       "proRequired": "قم بالترقية إلى خطة مدفوعة للوصول إلى API",
-      "manage": "إدارة المفاتيح",
       "viewPlans": "عرض الخطط",
-      "dialogTitle": "مفاتيح API"
+      "useWith": "استخدم مفتاحًا مع"
     },
     "mcp": {
-      "title": "اجلب ملاحظاتك إلى أدوات الذكاء الاصطناعي الخاصة بك",
       "description": "الدردشة والبحث والعمل مع ملاحظاتك داخل Claude وChatGPT وCursor.",
       "step1": "في أداة الذكاء الاصطناعي الخاصة بك، أضف OpenWhispr MCP باستخدام عنوان URL العام",
-      "step2": "قم بإنشاء مفتاح API أعلاه بالنطاقات (scopes) التي تحتاجها.",
+      "step2": "أنشئ مفتاح API بالنطاقات (scopes) التي تحتاجها.",
       "step3": "الصق المفتاح في ترويسة Authorization للاتصال.",
       "learnMore": "اعرف المزيد",
-      "viewPlans": "عرض الخطط",
-      "copyUrl": "نسخ عنوان URL لـ MCP",
       "proRequired": "قم بالترقية إلى خطة مدفوعة لتوصيل OpenWhispr بـ Claude وChatGPT وCursor.",
+      "worksWith": "يعمل مع",
+      "copyUrl": "نسخ عنوان URL لـ MCP",
       "copied": "تم النسخ"
     },
     "cli": {
-      "title": "الوصول عبر سطر الأوامر (Command-line)",
       "description": "امنح مساعدك حق الوصول إلى ملاحظاتك من الجهاز الطرفي (terminal).",
       "installLabel": "تثبيت",
       "learnMore": "اقرأ الوثائق",
@@ -680,9 +705,476 @@
       "upgrade": "ترقية"
     },
     "notABot": {
-      "title": "OpenWhispr هو مسجل اجتماعات، وليس روبوتًا",
       "description": "يلتقط OpenWhispr الصوت مباشرة من نظامك — فهو لا ينضم أبدًا إلى اجتماعاتك كمشارك. ما عليك سوى ربط التقويم الخاص بك وتدوين الملاحظات كالمعتاد."
+    },
+    "nav": {
+      "label": "أقسام التكاملات",
+      "groups": {
+        "assistant": "المساعد",
+        "meetings": "الاجتماعات",
+        "developer": "المطوّرون"
+      },
+      "sections": {
+        "connectors": "الموصلات",
+        "calendars": "التقويمات",
+        "api": "مفاتيح API",
+        "mcp": "خادم MCP",
+        "cli": "سطر الأوامر"
+      },
+      "docs": "وثائق التكاملات"
+    },
+    "connectors": {
+      "description": "دع المساعد يستخدم أدواتك. توافق على كل بريد ورسالة ومهمة قبل إرسالها."
     }
+  },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "إرسال إلى {{destination}}",
+        "slackPost": "نشر في {{destination}}",
+        "email": "بريد إلكتروني إلى {{destination}}",
+        "issue": "إنشاء مشكلة في {{destination}}",
+        "comment": "التعليق على {{destination}}"
+      },
+      "identity": "بصفتك {{account}}",
+      "identityWithWorkspace": "بصفتك {{account}} في {{workspace}}",
+      "send": "إرسال",
+      "edit": "تعديل",
+      "doneEditing": "تم التعديل",
+      "cancel": "إلغاء",
+      "titleLabel": "العنوان",
+      "bodyLabel": "الرسالة",
+      "sending": "جارٍ الإرسال…",
+      "sent": "تم الإرسال إلى {{destination}}.",
+      "open": "فتح",
+      "failed": "تعذّر الإرسال: {{message}}",
+      "unknown": "تعذّر تأكيد الإرسال. تحقق من {{destination}}.",
+      "cancelled": "تم الإلغاء. لم يتم إرسال شيء.",
+      "notSent": "لم يُرسل.",
+      "policyRetry": "تعذّر التحقق من إعدادات مؤسستك، لذا لم يتم إرسال شيء. اضغط على إرسال للمحاولة مرة أخرى.",
+      "errors": {
+        "not_in_channel": "أنت لست عضوًا في {{destination}}.",
+        "channel_not_found": "تعذّر العثور على {{destination}} في Slack بعد الآن.",
+        "is_archived": "{{destination}} مؤرشفة.",
+        "reconnect_needed": "يلزم إعادة ربط Slack من الإعدادات.",
+        "connection_changed": "تغيّر اتصال Slack قبل الإرسال، لذا لم يُرسل شيء.",
+        "rate_limited": "Slack مشغول حاليًا. حاول مرة أخرى بعد قليل.",
+        "missing_scope": "لا يملك OpenWhispr إذنًا للنشر هناك. أعد ربط Slack من الإعدادات.",
+        "msg_too_long": "الرسالة طويلة جدًا بالنسبة لـ Slack (12,000 حرف كحد أقصى بعد التنسيق).",
+        "no_text": "الرسالة فارغة.",
+        "network": "تعذّر الوصول إلى Slack. لم يُرسل شيء.",
+        "credential_save_failed": "تعذّر حفظ تسجيل الدخول إلى Slack على هذا الكمبيوتر. لم يُرسل شيء. حاول مرة أخرى.",
+        "dm_failed": "تعذّر فتح الرسالة المباشرة إلى {{destination}}. لم يُرسل شيء.",
+        "restricted": "{{destination}} للقراءة فقط أو مقيّدة بالنسبة لك.",
+        "generic": "حدث خطأ ما. لم يُرسل شيء.",
+        "github": {
+          "reconnect_needed": "يلزم إعادة ربط GitHub من الإعدادات.",
+          "network": "تعذّر الوصول إلى GitHub. لم يُنشر شيء.",
+          "rate_limited": "GitHub مشغول حاليًا. حاول مرة أخرى بعد قليل.",
+          "connection_changed": "تغيّر اتصال GitHub قبل النشر، لذا لم يُنشر شيء.",
+          "credential_save_failed": "تعذّر حفظ تسجيل الدخول إلى GitHub على هذا الكمبيوتر. لم يُنشر شيء. حاول مرة أخرى.",
+          "generic": "حدث خطأ ما. لم يُنشر شيء على GitHub.",
+          "not_installed": "تطبيق OpenWhispr على GitHub غير مثبّت في هذا المستودع. أضفه من الإعدادات. لم يُنشر شيء.",
+          "repo_unlisted": "تعذّر التأكد من أن تطبيق OpenWhispr على GitHub مثبّت في هذا المستودع. تحقّق من اسم المستودع. لم يُنشر شيء.",
+          "no_repositories": "لم يتم اختيار مستودعات لتطبيق OpenWhispr على GitHub بعد. اخترها من الإعدادات. لم يُنشر شيء.",
+          "forbidden": "ليس لديك إذن للقيام بذلك في هذا المستودع. لم يُنشر شيء.",
+          "not_found": "تعذّر العثور على المشكلة أو طلب السحب. لم يُنشر شيء.",
+          "issues_disabled": "المشكلات متوقفة في هذا المستودع. لم يُنشر شيء.",
+          "archived": "هذا المستودع مؤرشف، لذا لا يقبل مشكلات أو تعليقات جديدة. لم يُنشر شيء.",
+          "too_many_labels": "اختر 10 تصنيفات على الأكثر للمشكلة الواحدة. لم يُنشر شيء.",
+          "labels_unavailable": "تعذّرت قراءة تصنيفات المستودع. لم يُنشر شيء.",
+          "invalid": "رفضه GitHub لأنه غير صالح. لم يُنشر شيء.",
+          "locked": "المحادثة مقفلة. لم يُنشر شيء.",
+          "invalid_reference": "هذه ليست مشكلة ولا طلب سحب على GitHub. لم يُنشر شيء.",
+          "too_long": "العنوان أو النص طويل جدًا بالنسبة إلى GitHub. لم يُنشر شيء.",
+          "not_configured": "GitHub غير متاح في هذا الإصدار. لم يُنشر شيء."
+        },
+        "gmail": {
+          "reconnect_needed": "يلزم إعادة ربط Gmail من الإعدادات.",
+          "network": "تعذّر الوصول إلى Gmail. لم يُرسل شيء.",
+          "rate_limited": "Gmail مشغول حاليًا. حاول مرة أخرى بعد قليل.",
+          "daily_limit": "تم بلوغ الحد اليومي للإرسال في Gmail. لم يُرسل شيء.",
+          "domain_policy": "حظر مسؤول Google في مؤسستك هذا التطبيق. لم يُرسل شيء.",
+          "invalid_recipients": "أحد العناوين غير صالح. لم يُرسل شيء.",
+          "too_many_recipients": "عدد المستلمين كبير جدًا: {{max}} على الأكثر. لم يُرسل شيء.",
+          "too_long": "الموضوع أو الرسالة أطول مما يسمح به Gmail. لم يُرسل شيء.",
+          "invalid_message": "رفض Gmail الرسالة لأنها غير سليمة. لم يُرسل شيء.",
+          "gmail_unavailable": "الإرسال عبر Gmail غير متاح حاليًا. لم يُرسل شيء.",
+          "refused": "رفض Gmail إرسالها. لم يُرسل شيء.",
+          "connection_changed": "تغيّر اتصال Gmail قبل الإرسال، لذا لم يُرسل شيء.",
+          "credential_save_failed": "تعذّر حفظ تسجيل الدخول إلى Gmail على هذا الكمبيوتر. لم يُرسل شيء. حاول مرة أخرى."
+        },
+        "linear": {
+          "reconnect_needed": "يلزم إعادة ربط Linear من الإعدادات.",
+          "connection_changed": "تغيّر اتصال Linear قبل الإرسال، لذا لم يُرسل شيء.",
+          "credential_save_failed": "تعذّر حفظ تسجيل الدخول إلى Linear على هذا الكمبيوتر. لم يُرسل شيء. حاول مرة أخرى.",
+          "linear_unavailable": "Linear غير متاح حاليًا. لم يُرسل شيء.",
+          "network": "تعذّر الوصول إلى Linear. لم يُرسل شيء.",
+          "rate_limited": "Linear مشغول حاليًا. حاول مرة أخرى بعد قليل.",
+          "not_found": "لم يعد Linear يجد الفريق أو المشروع أو المشكلة. لم يُرسل شيء.",
+          "forbidden": "لا يُسمح لحسابك في Linear بذلك. لم يُرسل شيء.",
+          "invalid_input": "لم يقبل Linear هذا بصيغته الحالية. لم يُرسل شيء.",
+          "too_long": "أطول مما يسمح به Linear. لم يُرسل شيء.",
+          "missing_title": "تحتاج مشكلة Linear إلى عنوان. لم يُرسل شيء.",
+          "missing_body": "تعليق Linear فارغ. لم يُرسل شيء.",
+          "not_created": "لم ينشئ Linear المشكلة.",
+          "wrong_workspace": "هذه المشكلة في مساحة عمل Linear أخرى. لم يُرسل شيء.",
+          "invalid_reference": "هذه ليست مشكلة في Linear. لم يُرسل شيء.",
+          "refused": "رفض Linear الطلب. لم يُرسل شيء.",
+          "unknown_action": "لا يستطيع OpenWhispr فعل ذلك في Linear. لم يُرسل شيء.",
+          "generic": "حدث خطأ ما. لم يُرسل شيء إلى Linear."
+        }
+      },
+      "email": {
+        "from": "من {{account}}",
+        "toLabel": "إلى",
+        "ccLabel": "نسخة",
+        "subjectLabel": "الموضوع",
+        "bodyLabel": "الرسالة",
+        "addressHint": "افصل بين العناوين بفواصل.",
+        "invalidAddress": "{{address}} ليس عنوان بريد إلكتروني كاملًا مثل name@example.com.",
+        "invalidAddressAnnouncement": "أحد العناوين ليس عنوان بريد إلكتروني كاملًا.",
+        "sendsTo": "يُرسل إلى {{addresses}}",
+        "missingTo": "أضف عنوانًا واحدًا على الأقل في حقل «إلى».",
+        "tooManyRecipients": "يمكن إرسال البريد الإلكتروني إلى {{max}} عنوانًا كحد أقصى، في حقلي إلى ونسخة معًا.",
+        "subjectTooLong": "اجعل الموضوع {{max}} حرفًا أو أقل.",
+        "bodyTooLong": "الرسالة طويلة جدًا بالنسبة إلى Gmail. اختصرها لإرسالها.",
+        "unknown": "تعذّر تأكيد الإرسال. تحقق من مجلد البريد المُرسل."
+      },
+      "github": {
+        "notes": {
+          "mentions": "سيتم إشعار {{mentions}}",
+          "pullRequest": "على طلب سحب",
+          "labelsMayNotApply": "تُضاف التصنيفات فقط إذا كان لديك إذن الكتابة في هذا المستودع."
+        }
+      },
+      "openIn": {
+        "github": "فتح في GitHub",
+        "gmail": "فتح في Gmail",
+        "linear": "فتح في Linear"
+      },
+      "sendLabel": {
+        "issue": "إنشاء مشكلة",
+        "comment": "تعليق"
+      },
+      "issue": {
+        "created": "تم إنشاء {{result}}.",
+        "createdIn": "تم إنشاء مشكلة في {{destination}}.",
+        "unknown": "تعذّر تأكيد إنشاء المشكلة. تحقق من {{destination}} قبل المحاولة مرة أخرى.",
+        "titleLabel": "العنوان",
+        "bodyLabel": "الوصف",
+        "missingTitle": "أضف عنوانًا.",
+        "titleTooLong": "اجعل العنوان {{max}} حرفًا أو أقل.",
+        "bodyTooLong": "اجعل الوصف {{max}} حرفًا أو أقل.",
+        "notes": {
+          "labels": "التسميات: {{labels}}",
+          "droppedLabels": "لم تُضف (غير موجودة في {{destination}}): {{labels}}",
+          "priority": "الأولوية: {{priority}}",
+          "assignee": "المُسنَد إليه: {{assignee}}",
+          "project": "المشروع: {{project}}"
+        }
+      },
+      "comment": {
+        "posted": "تم التعليق على {{destination}}.",
+        "unknown": "تعذّر تأكيد نشر التعليق. تحقق من {{destination}} قبل المحاولة مرة أخرى.",
+        "bodyLabel": "التعليق",
+        "missingBody": "اكتب تعليقًا.",
+        "bodyTooLong": "اجعل التعليق {{max}} حرفًا أو أقل.",
+        "notes": {
+          "targetTitle": "على \"{{title}}\""
+        }
+      }
+    },
+    "policyOff": "أوقفت مؤسستك تشغيل الموصلات.",
+    "email": {
+      "title": "مسودات البريد الإلكتروني",
+      "description": "يفتح المساعد مسودة معبأة مسبقًا في تطبيق البريد الإلكتروني الخاص بك. راجعها واضغط إرسال بنفسك.",
+      "descriptionSend": "يعرض المساعد بطاقة بريد إلكتروني في الدردشة، ولا يُرسل البريد من Gmail الخاص بك إلا عندما تضغط إرسال.",
+      "unavailable": "مسودات البريد الإلكتروني غير متاحة حاليًا.",
+      "targetLabel": "صياغة رسائل البريد الإلكتروني في",
+      "autoResolved": "تلقائي · {{target}}",
+      "targets": {
+        "gmail": "Gmail",
+        "outlookWork": "Outlook (العمل أو المدرسة)",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "تطبيق البريد الافتراضي",
+        "gmailSend": "الإرسال من الدردشة (Gmail)",
+        "gmailSendConnectFirst": "الإرسال من الدردشة (Gmail) · اربط Gmail أدناه"
+      }
+    },
+    "slack": {
+      "title": "Slack",
+      "description": "ينشر الرسائل في القنوات وللأشخاص.",
+      "connect": "ربط",
+      "reconnect": "إعادة الربط",
+      "disconnect": "قطع الربط",
+      "connecting": "أكمل الربط في متصفحك…",
+      "connectedAs": "متصل بصفتك {{account}} في {{workspace}}",
+      "needsReconnect": "يلزم إعادة ربط Slack.",
+      "errors": {
+        "connect_failed": "تعذّر ربط Slack. حاول مرة أخرى.",
+        "disconnect_failed": "تعذّر قطع ربط Slack. حاول مرة أخرى.",
+        "oauth_denied": "لم يتم ربط Slack لأن الإذن لم يُمنح.",
+        "oauth_timeout": "استغرق الربط وقتًا طويلاً. حاول مرة أخرى.",
+        "oauth_state_mismatch": "رابط تسجيل الدخول هذا كان قديمًا. حاول مرة أخرى.",
+        "ports_busy": "يستخدم تطبيق آخر المنافذ التي يحتاجها OpenWhispr للربط. أغلقه وحاول مرة أخرى.",
+        "token_exchange_failed": "لم يكمل Slack عملية الربط. حاول مرة أخرى.",
+        "not_configured": "Slack غير متاح في هذا الإصدار.",
+        "connection_changed": "تغيّر حسابك أو اتصال Slack أثناء الربط. حاول مرة أخرى.",
+        "signed_out": "سجّل الدخول إلى OpenWhispr لربط Slack.",
+        "policy_blocked": "أوقفت مؤسستك تشغيل الموصلات.",
+        "policy_unavailable": "تعذّر التحقق من إعدادات مؤسستك. حاول مرة أخرى."
+      },
+      "browser": {
+        "connectedTitle": "تم توصيل Slack",
+        "connectedBody": "يمكنك إغلاق هذا التبويب والعودة إلى OpenWhispr.",
+        "failedTitle": "لم يتم توصيل Slack",
+        "failedBody": "عد إلى OpenWhispr للمحاولة مرة أخرى."
+      }
+    },
+    "github": {
+      "title": "GitHub",
+      "description": "المهام والتعليقات في المستودعات التي تختارها. لا يمكنه قراءة الكود الخاص بك.",
+      "connect": "ربط",
+      "reconnect": "إعادة الربط",
+      "disconnect": "قطع الربط",
+      "connecting": "جارٍ الربط مع GitHub…",
+      "connectedAs": "متصل بصفتك {{account}} · المستودعات: {{repositories}}",
+      "connectedAs_empty": "متصل بصفتك {{account}} · لا توجد مستودعات بعد",
+      "connectedAs_unknown": "متصل بصفتك {{account}}",
+      "needsReconnect": "يلزم إعادة ربط GitHub.",
+      "reviewOnGithub": "المراجعة على GitHub",
+      "disconnectedHint": "تم قطع الربط على هذا الكمبيوتر. يحتفظ GitHub بتفويض OpenWhispr إلى أن تزيله من هناك.",
+      "errors": {
+        "connect_failed": "تعذّر ربط GitHub. حاول مرة أخرى.",
+        "disconnect_failed": "تعذّر قطع ربط GitHub. حاول مرة أخرى.",
+        "oauth_denied": "تم رفض الوصول إلى GitHub.",
+        "token_exchange_failed": "لم يكمل GitHub عملية الربط. حاول مرة أخرى.",
+        "not_configured": "GitHub غير متاح في هذا الإصدار.",
+        "connection_changed": "تغيّر حسابك أو اتصال GitHub أثناء الربط. حاول مرة أخرى.",
+        "signed_out": "سجّل الدخول إلى OpenWhispr لربط GitHub.",
+        "policy_blocked": "أوقفت مؤسستك تشغيل الموصلات.",
+        "policy_unavailable": "تعذّر التحقق من إعدادات مؤسستك. حاول مرة أخرى.",
+        "code_expired": "انتهت صلاحية الرمز. حاول مرة أخرى.",
+        "device_flow_disabled": "تسجيل الدخول إلى GitHub برمز غير مُعدّ في هذا الإصدار.",
+        "network": "تعذّر الوصول إلى GitHub. تحقّق من اتصالك وحاول مرة أخرى.",
+        "rate_limited": "GitHub مشغول الآن. حاول مرة أخرى بعد دقيقة."
+      },
+      "deviceCode": {
+        "instructions": "أدخل هذا الرمز على GitHub:",
+        "copyAndOpen": "نسخ وفتح GitHub",
+        "copied": "تم نسخ الرمز.",
+        "cancel": "إلغاء",
+        "expires": "تنتهي صلاحية الرمز في {{time}}."
+      },
+      "repositories": {
+        "choose": "اختيار المستودعات",
+        "manage": "إدارة المستودعات"
+      }
+    },
+    "gmail": {
+      "title": "Gmail",
+      "description": "يرسل البريد من حسابك. لا يمكنه قراءة بريدك.",
+      "connect": "ربط",
+      "reconnect": "إعادة الربط",
+      "disconnect": "قطع الربط",
+      "connecting": "أكمل الربط في متصفحك… إذا أظهرت Google أن الوصول محظور، فيجب على مسؤول Google في مؤسستك السماح بـ OpenWhispr.",
+      "connectedAs": "متصل بصفتك {{account}}",
+      "needsReconnect": "يلزم إعادة ربط Gmail.",
+      "grantKept": "تم قطع الاتصال. يستخدم تقويم Google إذن Google نفسه، لذا سيظل OpenWhispr مدرجًا في حسابك على Google حتى تقطع اتصال تقويم Google أيضًا.",
+      "errors": {
+        "connect_failed": "تعذّر ربط Gmail. حاول مرة أخرى.",
+        "disconnect_failed": "تعذّر قطع ربط Gmail. حاول مرة أخرى.",
+        "oauth_denied": "لم يتم ربط Gmail لأن الإذن لم يُمنح.",
+        "oauth_timeout": "استغرق الربط وقتًا طويلاً. إذا أظهرت Google أن الوصول محظور، فاطلب من مسؤول Google في مؤسستك السماح بـ OpenWhispr. وإلا فحاول مرة أخرى.",
+        "oauth_state_mismatch": "رابط تسجيل الدخول هذا كان قديمًا. حاول مرة أخرى.",
+        "ports_busy": "يستخدم تطبيق آخر المنافذ التي يحتاجها OpenWhispr للربط. أغلقه وحاول مرة أخرى.",
+        "token_exchange_failed": "لم يكمل Google عملية الربط. حاول مرة أخرى.",
+        "not_configured": "Gmail غير متاح في هذا الإصدار.",
+        "connection_changed": "تغيّر حسابك أو اتصال Gmail أثناء الربط. حاول مرة أخرى.",
+        "signed_out": "سجّل الدخول إلى OpenWhispr لربط Gmail.",
+        "policy_blocked": "أوقفت مؤسستك تشغيل الموصلات.",
+        "policy_unavailable": "تعذّر التحقق من إعدادات مؤسستك. حاول مرة أخرى.",
+        "permission_not_granted": "لم يتم ربط Gmail لأن إذن إرسال الرسائل الإلكترونية لم يُمنح. أعد الربط واترك هذا الإذن محددًا.",
+        "email_not_verified": "لم تتحقق Google من عنوان البريد الإلكتروني لهذا الحساب، لذلك لم يتم ربط Gmail.",
+        "domain_policy": "حظر مسؤول Google في مؤسستك هذا التطبيق. اطلب منه السماح بـ OpenWhispr."
+      },
+      "browser": {
+        "connectedTitle": "تم توصيل Gmail",
+        "connectedBody": "يمكنك إغلاق هذا التبويب والعودة إلى OpenWhispr.",
+        "failedTitle": "لم يتم توصيل Gmail",
+        "failedBody": "عد إلى OpenWhispr للمحاولة مرة أخرى."
+      }
+    },
+    "linear": {
+      "title": "Linear",
+      "description": "يبحث في المهام وينشئ المهام والتعليقات.",
+      "connect": "ربط",
+      "reconnect": "إعادة الربط",
+      "disconnect": "قطع الربط",
+      "connecting": "أكمل الربط في متصفحك…",
+      "connectedAs": "متصل بصفتك {{account}} في {{workspace}}",
+      "needsReconnect": "يلزم إعادة ربط Linear.",
+      "errors": {
+        "connect_failed": "تعذّر ربط Linear. حاول مرة أخرى.",
+        "disconnect_failed": "تعذّر قطع ربط Linear. حاول مرة أخرى.",
+        "oauth_denied": "لم يتم ربط Linear لأن الإذن لم يُمنح.",
+        "oauth_timeout": "استغرق الربط وقتًا طويلاً. حاول مرة أخرى.",
+        "oauth_state_mismatch": "رابط تسجيل الدخول هذا كان قديمًا. حاول مرة أخرى.",
+        "ports_busy": "يستخدم تطبيق آخر المنافذ التي يحتاجها OpenWhispr للربط. أغلقه وحاول مرة أخرى.",
+        "token_exchange_failed": "لم يكمل Linear عملية الربط. حاول مرة أخرى.",
+        "not_configured": "Linear غير متاح في هذا الإصدار.",
+        "connection_changed": "تغيّر حسابك أو اتصال Linear أثناء الربط. حاول مرة أخرى.",
+        "signed_out": "سجّل الدخول إلى OpenWhispr لربط Linear.",
+        "policy_blocked": "أوقفت مؤسستك تشغيل الموصلات.",
+        "policy_unavailable": "تعذّر التحقق من إعدادات مؤسستك. حاول مرة أخرى.",
+        "permission_not_granted": "لم يتم ربط Linear لأن بعض الأذونات لم تُمنح. أعد الربط واسمح بها جميعًا."
+      },
+      "browser": {
+        "connectedTitle": "تم توصيل Linear",
+        "connectedBody": "يمكنك إغلاق هذا التبويب والعودة إلى OpenWhispr.",
+        "failedTitle": "لم يتم توصيل Linear",
+        "failedBody": "عد إلى OpenWhispr للمحاولة مرة أخرى."
+      },
+      "notes": {
+        "priority": {
+          "urgent": "الأولوية: عاجلة",
+          "high": "الأولوية: عالية",
+          "medium": "الأولوية: متوسطة",
+          "low": "الأولوية: منخفضة",
+          "none": "الأولوية: لا شيء"
+        },
+        "assignedToYou": "المُسنَد إليه: أنت"
+      }
+    },
+    "recent": {
+      "title": "الإجراءات الأخيرة",
+      "actions": {
+        "email_draft": "مسودة إلى {{destination}}",
+        "github_create_issue": "مشكلة جديدة في {{destination}}",
+        "github_comment": "تعليق على {{destination}}",
+        "slack_send_message": "رسالة إلى {{destination}}",
+        "gmail_send": "رسالة إلكترونية إلى {{destination}}",
+        "linear_create_issue": "مشكلة جديدة في {{destination}}",
+        "linear_comment": "تعليق على {{destination}}"
+      },
+      "unlabeledActions": {
+        "email_draft": "مسودة بريد إلكتروني",
+        "github_create_issue": "مشكلة GitHub",
+        "github_comment": "تعليق GitHub",
+        "slack_send_message": "رسالة Slack",
+        "gmail_send": "رسالة Gmail",
+        "linear_create_issue": "مشكلة Linear",
+        "linear_comment": "تعليق Linear"
+      },
+      "states": {
+        "pending": "قيد الانتظار",
+        "committing": "قيد التنفيذ",
+        "sent": "تم",
+        "failed": "فشل",
+        "unknown": "لم يتم التأكيد",
+        "cancelled": "أُلغي",
+        "expired": "منتهي الصلاحية"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "فُتحت مسودة إلى {{destination}}.",
+      "draftOpenedBodyCopied": "فُتحت مسودة إلى {{destination}}. نص الرسالة في الحافظة.",
+      "draftOpenedSubjectCopied": "فُتحت مسودة إلى {{destination}}. الموضوع ونص الرسالة في الحافظة.",
+      "draftOpenedOnlySubjectCopied": "تم فتح مسودة إلى {{destination}}. الموضوع موجود في الحافظة.",
+      "needsDetails": "يلزم مزيد من التفاصيل.",
+      "unavailable": "الموصلات غير متاحة حاليًا.",
+      "unknown": "لم يتم التأكيد. تحقق مما إذا كان الإجراء قد تم قبل المحاولة مرة أخرى.",
+      "draftUnknown": "لم يتم التأكيد: ربما لم تُفتح المسودة إلى {{destination}}. تحقق قبل المحاولة مرة أخرى.",
+      "contactsFound": "جهات الاتصال التي عُثر عليها: {{total}}",
+      "draftLimit": "يمكن فتح {{max}} مسودات فقط لكل طلب.",
+      "clipboardBusy": "لم تُفتح: نص مسودة أخرى لا يزال في الحافظة.",
+      "errors": {
+        "open_failed": "تعذّر فتح تطبيق البريد الإلكتروني.",
+        "draft_too_long": "عدد المستلمين كبير جدًا لرابط المسودة.",
+        "invalid_address": "يلزم إدخال عناوين بريد إلكتروني كاملة.",
+        "not_in_channel": "لست عضوًا في تلك القناة.",
+        "channel_not_found": "تعذّر العثور على تلك المحادثة.",
+        "is_archived": "تلك القناة مؤرشفة.",
+        "reconnect_needed": "يلزم إعادة ربط Slack.",
+        "connection_changed": "تغيّر اتصال Slack. لم يُرسل شيء.",
+        "rate_limited": "Slack مشغول حاليًا.",
+        "missing_scope": "إذن Slack مفقود.",
+        "msg_too_long": "الرسالة طويلة جدًا بالنسبة لـ Slack.",
+        "no_text": "الرسالة فارغة.",
+        "network": "تعذّر الوصول إلى Slack. لم يُرسل شيء.",
+        "credential_save_failed": "تعذّر حفظ تسجيل الدخول إلى Slack على هذا الكمبيوتر. لم يُرسل شيء.",
+        "dm_failed": "تعذّر فتح الرسالة المباشرة. لم يُرسل شيء.",
+        "restricted": "تلك القناة للقراءة فقط أو مقيّدة.",
+        "generic": "لم ينجح ذلك.",
+        "github": {
+          "reconnect_needed": "يلزم إعادة ربط GitHub.",
+          "network": "تعذّر الوصول إلى GitHub.",
+          "rate_limited": "GitHub مشغول حاليًا.",
+          "connection_changed": "تغيّر اتصال GitHub.",
+          "credential_save_failed": "تعذّر حفظ تسجيل الدخول إلى GitHub على هذا الكمبيوتر.",
+          "generic": "لم ينجح ذلك على GitHub.",
+          "not_installed": "تطبيق OpenWhispr على GitHub غير مثبّت هناك.",
+          "repo_unlisted": "تعذّر التأكد من أن تطبيق OpenWhispr على GitHub مثبّت هناك.",
+          "no_repositories": "لم يتم اختيار مستودعات GitHub بعد.",
+          "forbidden": "لا يوجد إذن في هذا المستودع.",
+          "not_found": "تعذّر العثور على تلك المشكلة أو طلب السحب.",
+          "issues_disabled": "المشكلات متوقفة في هذا المستودع.",
+          "archived": "هذا المستودع مؤرشف.",
+          "too_many_labels": "تصنيفات كثيرة جدًا لمشكلة واحدة.",
+          "labels_unavailable": "تعذّرت قراءة تصنيفات المستودع.",
+          "invalid": "رفضه GitHub لأنه غير صالح.",
+          "locked": "تلك المحادثة مقفلة.",
+          "invalid_reference": "ليست مشكلة ولا طلب سحب على GitHub.",
+          "too_long": "طويل جدًا بالنسبة إلى GitHub.",
+          "not_configured": "GitHub غير متاح في هذا الإصدار."
+        },
+        "gmail": {
+          "reconnect_needed": "يلزم إعادة ربط Gmail.",
+          "network": "تعذّر الوصول إلى Gmail. لم يُرسل شيء.",
+          "rate_limited": "Gmail مشغول حاليًا.",
+          "daily_limit": "تم بلوغ الحد اليومي للإرسال في Gmail.",
+          "domain_policy": "حظره مسؤول Google في مؤسستك.",
+          "invalid_recipients": "أحد العناوين غير صالح. لم يُرسل شيء.",
+          "too_many_recipients": "عدد المستلمين كبير جدًا. لم يُرسل شيء.",
+          "too_long": "أطول مما يسمح به Gmail. لم يُرسل شيء.",
+          "invalid_message": "رفض Gmail الرسالة. لم يُرسل شيء.",
+          "gmail_unavailable": "الإرسال عبر Gmail غير متاح حاليًا.",
+          "refused": "رفض Gmail الإرسال.",
+          "connection_changed": "تغيّر اتصال Gmail. لم يُرسل شيء.",
+          "credential_save_failed": "تعذّر حفظ تسجيل الدخول إلى Gmail على هذا الكمبيوتر. لم يُرسل شيء."
+        },
+        "linear": {
+          "reconnect_needed": "يلزم إعادة ربط Linear.",
+          "connection_changed": "تغيّر اتصال Linear. لم يُرسل شيء.",
+          "credential_save_failed": "تعذّر حفظ تسجيل الدخول إلى Linear على هذا الكمبيوتر.",
+          "linear_unavailable": "Linear غير متاح حاليًا.",
+          "network": "تعذّر الوصول إلى Linear.",
+          "rate_limited": "Linear مشغول حاليًا.",
+          "not_found": "غير موجود في Linear.",
+          "forbidden": "غير مسموح به في Linear.",
+          "invalid_input": "لم يقبله Linear.",
+          "too_long": "أطول مما يسمح به Linear.",
+          "missing_title": "تحتاج مشكلة Linear إلى عنوان.",
+          "missing_body": "تعليق Linear فارغ.",
+          "not_created": "لم ينشئ Linear المشكلة.",
+          "wrong_workspace": "هذه المشكلة في مساحة عمل Linear أخرى.",
+          "invalid_reference": "ليست مشكلة في Linear.",
+          "refused": "رفض Linear الطلب.",
+          "unknown_action": "غير متاح في Linear.",
+          "generic": "لم ينجح ذلك في Linear."
+        }
+      },
+      "unknownSent": {
+        "gmail": "تعذّر تأكيد إرسال البريد الإلكتروني إلى {{destination}}. تحقق من مجلد البريد المُرسل في Gmail."
+      },
+      "gmailDraftLimit": "يمكن تجهيز {{max}} رسائل بريد إلكتروني فقط لكل طلب.",
+      "queryResults": "النتائج التي عُثر عليها: {{total}}",
+      "cardLimit": "يمكن تجهيز {{max}} بطاقات فقط لكل طلب."
+    },
+    "beta": "تجريبي",
+    "upsell": "الموصلات متاحة في الخطط المدفوعة. قم بالترقية ليعمل المساعد في أدواتك.",
+    "locked": "متاح ضمن الخطط المدفوعة"
   },
   "auth": {
     "cloudNotConfigured": "السحابة غير مهيأة",
@@ -887,19 +1379,14 @@
       "examples": {
         "linkedinTrigger": "حسابي على LinkedIn",
         "linkedinText": "linkedin.com/in/you",
-        "rewriteTrigger": "مطالبة إعادة الكتابة",
-        "rewriteText": "أعد كتابة هذا ليكون أكثر إيجازًا واحترافية",
-        "introTrigger": "بريد المقدمة",
-        "introText": "مرحبًا، أود أن نجد بعض الوقت للدردشة في وقت لاحق من هذا الأسبوع…",
         "signoffTrigger": "ختام الرسالة",
         "signoffText": "أطيب التحيات، Alex · alex@example.com"
       },
       "addPlaceholder": "أضف عبارة مفتاحية — \"طلب مستثمر\"، \"رابط التقويم\""
     },
-    "emptyTitle": "قاموسك فارغ",
+    "emptyTitle": "أضف كلمات إلى قاموسك",
     "emptyDescription": "أضف الكلمات التي يجب أن يكتبها {{agentName}} بشكل صحيح دائمًا: الأسماء، الأدوات، الاختصارات.",
     "addFirstWord": "أضف كلمتك الأولى",
-    "importList": "استيراد قائمة",
     "agentDefault": "تمت الإضافة افتراضيًا",
     "promptLimitNotice": "عدد أحرف قاموسك: {{chars}}. لا تقرأ نماذج Groq وWhisper سوى بضع مئات من الأحرف الأخيرة منه، لذا تعمل القوائم الأقصر بشكل أفضل معها. أما النماذج الأخرى فتحصل على القائمة كاملة."
   },
@@ -1218,10 +1705,20 @@
       "thinking": "جاري التفكير...",
       "typeMessage": "اكتب رسالة...",
       "send": "إرسال",
-      "voiceDraftStreamingOnly": "الإدخال الصوتي غير متاح مع مزود التفريغ الخاص بك: فهو يدعم الإملاء المباشر فقط. اختر مزودًا آخر في الإعدادات ← تحويل الكلام إلى نص (Speech to Text)."
+      "voiceDraftStreamingOnly": "الإدخال الصوتي غير متاح مع مزود التفريغ الخاص بك: فهو يدعم الإملاء المباشر فقط. اختر مزودًا آخر في الإعدادات ← تحويل الكلام إلى نص (Speech to Text).",
+      "commands": "الأوامر"
     },
     "tools": {
       "search_notesName": "البحث في الملاحظات",
+      "email_draftName": "مسودة بريد إلكتروني",
+      "find_contactName": "البحث عن جهة اتصال",
+      "github_search_issuesName": "البحث في GitHub",
+      "github_create_issueName": "مشكلة GitHub",
+      "github_commentName": "تعليق GitHub",
+      "slack_send_messageName": "رسالة Slack",
+      "linear_search_issuesName": "البحث في Linear",
+      "linear_create_issueName": "مشكلة Linear",
+      "linear_commentName": "تعليق Linear",
       "get_noteName": "الحصول على الملاحظة",
       "create_noteName": "إنشاء ملاحظة",
       "update_noteName": "تحديث الملاحظة",
@@ -1234,6 +1731,15 @@
       "update_dictionaryName": "تحديث القاموس",
       "update_snippetsName": "تحديث المقتطفات",
       "search_notesStatus": "جاري البحث في الملاحظات...",
+      "email_draftStatus": "جارٍ تحضير بريد إلكتروني...",
+      "find_contactStatus": "جارٍ البحث عن جهات الاتصال...",
+      "github_search_issuesStatus": "جارٍ البحث في GitHub...",
+      "github_create_issueStatus": "جارٍ تحضير مشكلة GitHub...",
+      "github_commentStatus": "جارٍ تحضير تعليق GitHub...",
+      "slack_send_messageStatus": "جارٍ تحضير رسالة Slack...",
+      "linear_search_issuesStatus": "جاري البحث في Linear...",
+      "linear_create_issueStatus": "جارٍ تحضير مشكلة Linear...",
+      "linear_commentStatus": "جارٍ تحضير تعليق Linear...",
       "web_searchStatus": "جاري البحث في الويب...",
       "copy_to_clipboardStatus": "جاري النسخ إلى الحافظة...",
       "get_calendar_eventsStatus": "جاري التحقق من التقويم...",
@@ -1268,6 +1774,11 @@
         "createLink": "إنشاء رابط",
         "copyLink": "نسخ الرابط",
         "copied": "تم النسخ",
+        "replaceLink": {
+          "title": "استبدال رابط المشاركة؟",
+          "description": "لا يتوفر الرابط الحالي على هذا الجهاز، لذا يتطلب نسخه إنشاء رابط جديد. سيتوقف الرابط القديم عن العمل، بما في ذلك الروابط في رسائل الدعوة. أعد إرسال كل دعوة حتى يظل بإمكان المدعوين فتح الملاحظة.",
+          "confirm": "استبدال الرابط"
+        },
         "export": "تصدير",
         "owner": "المالك",
         "editor": "يمكنه التعديل",
@@ -1328,7 +1839,7 @@
       },
       "gpuPackMigration": {
         "title": "تحتاج حزمة GPU إلى إعادة التنزيل",
-        "description": "أزال التحديث تثبيت حزمة GPU قديمة ({{packs}}). أعد تنزيلها في الإعدادات لاستعادة تسريع GPU."
+        "description": "لا يمكن لهذا الإصدار استخدام حزمة GPU السابقة ({{packs}}). أعد تنزيلها من الإعدادات لإعادة تشغيل تسريع GPU."
       },
       "cleanupFailed": {
         "title": "فشل التنقيح",
@@ -1350,7 +1861,9 @@
       "stopListening": "إيقاف الاستماع",
       "startListening": "بدء الاستماع",
       "hideForNow": "إخفاء الآن",
-      "askAssistant": "اسأل المساعد"
+      "askAssistant": "اسأل المساعد",
+      "busyRecording": "أنهِ التسجيل الحالي أولاً",
+      "startMeetingRecording": "بدء تسجيل الاجتماع"
     }
   },
   "calendar": {
@@ -1377,12 +1890,14 @@
     "tomorrow": "غدًا"
   },
   "upcoming": {
-    "title": "القادم",
     "now": "الآن",
     "untitledEvent": "حدث بدون عنوان",
     "joinAndTranscribe": "انضمام وتفريغ صوتي",
     "takeNotes": "تدوين ملاحظات",
-    "noEventsToday": "لا توجد أحداث اليوم",
+    "noEventsToday": "لا مزيد من الاجتماعات اليوم",
+    "emptyDayDescription": "حان وقت لمس بعض العشب",
+    "touchGrass": "المس العشب",
+    "touchGrassLabel": "رقعة من العشب. مرّر المؤشر أو مفاتيح الأسهم فوقها. اضغط Escape للرجوع.",
     "noUpcomingEvents": "لا توجد أحداث قادمة",
     "moreCalendarsHint": "هل تريد تقاويم إضافية؟",
     "connectHere": "قم بربطها هنا",
@@ -1407,7 +1922,7 @@
     "sidebar": {
       "newNote": "ملاحظة جديدة",
       "searchNotes": "البحث في الملاحظات",
-      "actions": "الإجراءات"
+      "templatesAndActions": "القوالب والإجراءات"
     },
     "spaces": {
       "privateSpaces": "ملاحظات خاصة",
@@ -1417,20 +1932,32 @@
       "newSpace": "مساحة فريق جديدة",
       "newSpaceInWorkspace": "مساحة فريق جديدة في {{workspace}}",
       "createTitle": "إنشاء مساحة فريق",
-      "createDescription": "منطقة مشتركة داخل مساحة عمل يمكن لفريق واحد أو أكثر الوصول إليها.",
-      "nameLabel": "الاسم",
-      "emojiLabel": "رمز تعبيري (Emoji)",
+      "createDescription": "منطقة مشتركة داخل مساحة عمل للأشخاص والمجموعات الذين تضيفهم.",
+      "nameAndIconLabel": "الاسم والأيقونة",
       "create": "إنشاء",
       "couldNotCreate": "تعذر إنشاء المساحة",
       "created": "تم إنشاء {{space}}",
-      "rename": "إعادة تسمية",
       "changeEmoji": "تغيير الرمز التعبيري",
+      "settings": "الإعدادات",
+      "settingsTitle": "إعدادات المساحة",
       "couldNotRename": "تعذر إعادة تسمية المساحة",
-      "renamed": "تمت إعادة تسمية {{space}}",
+      "couldNotChangeEmoji": "تعذّر تغيير الرمز التعبيري",
       "deleteSpace": "حذف المساحة",
+      "deleteHintTeam": "يزيل هذه المساحة للجميع. تبقى مجموعاتها كما هي.",
+      "deleteHintLocal": "يحذف هذه المساحة نهائيًا مع مجلداتها وملاحظاتها على هذا الجهاز.",
+      "leaveTitle": "مغادرة المساحة",
+      "leaveDescription": "ستبقى ملاحظاتك متاحة للأعضاء الآخرين.",
+      "leave": "مغادرة المساحة",
+      "leaveConfirmTitle": "مغادرة {{space}}؟",
+      "leaveConfirmDescription": "ستتم إزالتك من {{teams}} وستفقد الوصول إلى أي مساحات أخرى تفتحها تلك المجموعات.",
+      "leaveDirectDescription": "ستفقد إمكانية الوصول إلى هذه المساحة.",
+      "leaveKeepsGroupAccess": "ستحتفظ بالوصول عبر {{groups}}.",
+      "left": "غادرت {{space}}",
+      "stillViaGroups": "لا يزال بإمكانك الوصول إلى {{space}} عبر {{groups}}.",
+      "couldNotLeave": "تعذّرت مغادرة المساحة",
       "deleteConfirmTitle": "حذف المساحة؟",
       "deleteConfirmDescription": "سيؤدي هذا إلى حذف {{space}} بشكل دائم مع جميع مجلداتها وملاحظاتها على هذا الجهاز.",
-      "deleteConfirmTeamDescription": "سيؤدي هذا إلى حذف {{space}} للجميع. ستبقى فرقها، ولكن سيفقد الأعضاء إمكانية الوصول إلى جميع مجلداتها وملاحظاتها.",
+      "deleteConfirmTeamDescription": "سيؤدي هذا إلى حذف {{space}} للجميع. ستبقى مجموعاتها، ولكن سيفقد الأعضاء إمكانية الوصول إلى جميع مجلداتها وملاحظاتها.",
       "deleteTypeName": "اكتب {{space}} للتأكيد",
       "couldNotDelete": "تعذر حذف المساحة",
       "deleted": "تم حذف {{space}}",
@@ -1452,6 +1979,7 @@
       "undo": "تراجع",
       "emptySpace": "لا توجد ملاحظات بعد. الملاحظات هنا مرئية للجميع في {{space}}.",
       "emptyTeamHint": "ستظهر المساحات المشتركة معك هنا.",
+      "emptyTeamTitle": "لا توجد مساحات مشتركة",
       "noteCount_zero": "{{count}} ملاحظات",
       "noteCount_one": "{{count}} ملاحظة",
       "noteCount_two": "{{count}} ملاحظتان",
@@ -1470,9 +1998,10 @@
       "conflictKeep": "متابعة التعديل",
       "editedBy": "تم التعديل بواسطة {{name}} · {{time}}",
       "members": {
-        "addPeopleToTeam": "إضافة أشخاص إلى {{team}}",
+        "addPeople": "إضافة أشخاص",
         "addedToTeam": "تمت إضافة {{name}} إلى {{team}}",
         "removedFromTeam": "تمت إزالة {{name}} من {{team}}",
+        "stillViaGroups": "لا يزال {{name}} يملك الوصول عبر {{groups}}",
         "roleUpdated": "تم تحديث الدور",
         "you": "أنت",
         "addFailed": "عدد الأشخاص الذين تعذرت إضافتهم: {{failed}} من أصل {{total}}",
@@ -1480,11 +2009,18 @@
         "noResults": "لم يتم العثور على أشخاص",
         "roleAdmin": "مسؤول",
         "roleMember": "عضو",
+        "roleAdminDescription": "يدير الأشخاص والإعدادات.",
+        "roleMemberDescription": "يمكنه عرض الملاحظات وتعديلها.",
         "remove": "إزالة",
         "removeConfirm": "إزالة {{name}} من {{space}}؟",
         "removeConfirmDescription": "سيفقد هذا الشخص إمكانية الوصول إلى جميع الملاحظات في هذه المساحة.",
+        "removeKeepsGroupAccess": "سيحتفظون بالوصول عبر {{groups}}.",
         "inviteFooter": "دعوة {{email}} إلى مساحة العمل…",
-        "empty": "لم تتم إضافة أحد بعد"
+        "empty": "لم تتم إضافة أحد بعد",
+        "viaGroup": "عبر {{group}}",
+        "managedByGroup": "تمت الإضافة عبر {{group}}. أزل العضو من هناك.",
+        "roleFromGroup": "مشرف عبر {{group}}. غيّر ذلك هناك.",
+        "invited": "تم إرسال الدعوة إلى {{email}}"
       },
       "invitedTo_zero": "ستنضم إلى {{count}} مساحات فريق",
       "invitedTo_one": "ستنضم إلى {{count}} مساحة فريق",
@@ -1492,24 +2028,17 @@
       "invitedTo_few": "ستنضم إلى {{count}} مساحات فريق",
       "invitedTo_many": "ستنضم إلى {{count}} مساحة فريق",
       "invitedTo_other": "ستنضم إلى {{count}} مساحة فريق",
+      "invitedToSpaces": "ستنضم إلى {{spaces}}",
       "teamsMembers": {
-        "menu": "الفرق والأعضاء…",
-        "title": "الفرق والأعضاء في {{space}}",
-        "noTeams": "لا توجد فرق لديها وصول إلى هذه المساحة بعد. يمكن فقط لمسؤولي مساحة العمل رؤيتها.",
-        "addTeamLabel": "إضافة فريق إلى هذه المساحة",
-        "chooseTeam": "اختيار فريق…",
+        "title": "أعضاء {{space}}",
+        "noTeams": "لا توجد مجموعات لديها وصول إلى هذه المساحة بعد.",
+        "addTeamLabel": "إضافة مجموعة إلى هذه المساحة",
+        "chooseTeam": "اختيار مجموعة…",
         "teamAdded": "تمت إضافة {{team}} إلى {{space}}",
         "teamRemoved": "تمت إزالة {{team}} من {{space}}",
         "removeTeamFromSpace": "إزالة من المساحة",
         "removeTeamConfirm": "إزالة {{team}} من {{space}}؟",
-        "removeTeamConfirmDescription": "سيفقد أعضاؤه إمكانية الوصول إلى هذه المساحة ما لم يشملهم فريق آخر معين.",
-        "lastTeamWarning": "هذا هو الفريق الوحيد الذي لديه وصول إلى هذه المساحة. بعد إزالته، سيحتفظ مسؤولو مساحة العمل فقط بإمكانية الوصول.",
-        "affectsOtherSpaces_zero": "تسري التغييرات التي تُجرى على {{team}} أيضًا على {{count}} مساحات أخرى يمكنه الوصول إليها.",
-        "affectsOtherSpaces_one": "تسري التغييرات التي تُجرى على {{team}} أيضًا على {{count}} مساحة أخرى يمكنه الوصول إليها.",
-        "affectsOtherSpaces_two": "تسري التغييرات التي تُجرى على {{team}} أيضًا على {{count}} مساحتين أخريين يمكنه الوصول إليهما.",
-        "affectsOtherSpaces_few": "تسري التغييرات التي تُجرى على {{team}} أيضًا على {{count}} مساحات أخرى يمكنه الوصول إليها.",
-        "affectsOtherSpaces_many": "تسري التغييرات التي تُجرى على {{team}} أيضًا على {{count}} مساحةً أخرى يمكنه الوصول إليها.",
-        "affectsOtherSpaces_other": "تسري التغييرات التي تُجرى على {{team}} أيضًا على {{count}} مساحة أخرى يمكنه الوصول إليها.",
+        "removeTeamConfirmDescription": "سيفقد أعضاؤها إمكانية الوصول إلى هذه المساحة ما لم يكونوا مضافين مباشرةً أو تشملهم مجموعة أخرى.",
         "accessLabel": "صلاحية الوصول إلى المساحة",
         "accessAdmin": "مسؤول",
         "accessMember": "عضو",
@@ -1517,10 +2046,12 @@
         "accessHint": "يدير مسؤولو {{team}} هذه المساحة فقط عندما يتم تعيين وصولها إلى مسؤول (Admin)."
       },
       "teams": {
-        "assignLabel": "الفرق",
-        "newTeam": "فريق جديد",
-        "newTeamNameLabel": "اسم الفريق",
-        "loadError": "تعذر تحميل الفرق."
+        "newTeam": "مجموعة جديدة",
+        "loadError": "تعذر تحميل المجموعات."
+      },
+      "groups": {
+        "title": "المجموعات التي لديها وصول",
+        "optional": "المجموعات (اختياري)"
       }
     },
     "structureIntro": {
@@ -1536,7 +2067,7 @@
       },
       "teamSpace": {
         "title": "مساحة الفريق",
-        "description": "منطقة مشتركة داخل مساحة العمل. يمنح فريق واحد أو أكثر الوصول إليها."
+        "description": "منطقة مشتركة داخل مساحة العمل. أضف أشخاصًا أو مجموعات لمنحهم الوصول."
       },
       "contents": "يمكن أن تحتوي كل مساحة على مجلدات وملاحظات.",
       "done": "فهمت",
@@ -1570,6 +2101,11 @@
       "hoursAgo": "منذ {{count}} س",
       "daysAgo": "منذ {{count}} ي"
     },
+    "createMenu": {
+      "note": "ملاحظة",
+      "assistantChat": "دردشة مع المساعد",
+      "chooseType": "اختر ما تريد إنشاءه"
+    },
     "editor": {
       "untitled": "بدون عنوان",
       "noteTitle": "عنوان الملاحظة",
@@ -1584,21 +2120,49 @@
       "asJson": "بصيغة JSON (.json)",
       "asTranscriptMarkdown": "بصيغة Markdown (.md)",
       "raw": "خام",
-      "enhanced": "مُحسّن",
+      "aiSummary": "ملخص بالذكاء الاصطناعي",
       "saving": "جاري الحفظ",
-      "transcriptEmptyTitle": "لم يتم تسجيل أي شيء بعد",
-      "transcriptEmptyDescription": "اضغط على تسجيل لبدء النسخ. كل ما يُقال يظهر هنا لحظيًا.",
+      "transcriptEmptyTitle": "لا يوجد نص مفرَّغ بعد",
+      "transcriptEmptyDescription": "ابدأ التسجيل وسيظهر هنا كل ما يُقال.",
       "startRecording": "بدء التسجيل",
       "generateSummary": "إنشاء ملخص بالذكاء الاصطناعي",
       "startWriting": "ابدأ الكتابة...",
       "staleIndicator": "تم تغيير المحتوى منذ التحسين",
       "live": "مباشر",
       "transcript": "النص المفرَّغ",
-      "notes": "الملاحظات",
+      "notes": "ملاحظاتك",
       "conversationWillAppear": "ستظهر المحادثة هنا...",
       "linkedEvent": "الحدث المرتبط",
       "noFolder": "بدون مجلد",
-      "participants": "المشاركون"
+      "participants": "المشاركون",
+      "table": {
+        "actions": "إجراءات الجدول",
+        "insertRowAbove": "إدراج صف أعلى",
+        "insertRowBelow": "إدراج صف أسفل",
+        "insertColumnLeft": "إدراج عمود إلى اليسار",
+        "insertColumnRight": "إدراج عمود إلى اليمين",
+        "deleteRow": "حذف الصف",
+        "deleteColumn": "حذف العمود",
+        "deleteTable": "حذف الجدول"
+      },
+      "format": {
+        "toolbar": "التنسيق",
+        "withShortcut": "{{action}} ({{shortcut}})",
+        "bold": "غامق",
+        "italic": "مائل",
+        "strike": "يتوسطه خط",
+        "code": "تعليمات برمجية",
+        "textStyle": "نمط النص",
+        "paragraph": "نص عادي",
+        "heading1": "عنوان 1",
+        "heading2": "عنوان 2",
+        "heading3": "عنوان 3",
+        "bulletList": "قائمة نقطية",
+        "orderedList": "قائمة مرقمة",
+        "taskList": "قائمة مهام",
+        "blockquote": "اقتباس",
+        "table": "إدراج جدول"
+      }
     },
     "participants": {
       "attendee": "حاضر",
@@ -1611,8 +2175,9 @@
     "upload": {
       "title": "رفع ملف صوتي",
       "using": "باستخدام {{model}}",
-      "dropOrBrowse": "أسقط ملفًا صوتيًا أو انقر للتصفح",
-      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC, Opus",
+      "dropOrBrowse": "أفلت ملف صوت أو فيديو، أو انقر للتصفح",
+      "supportedFormats": "MP3 وWAV وM4A وMP4 وMOV ومعظم صيغ الصوت أو الفيديو الأخرى",
+      "unsupportedFiles": "تم تخطي {{names}}: صيغة صوت أو فيديو غير مدعومة.",
       "dropToUpload": "أسقط للرفع",
       "transcribe": "تفريغ",
       "cancel": "إلغاء",
@@ -1671,7 +2236,7 @@
       "speakerDetectionDescription": "تحديد المتحدثين المختلفين في الصوت",
       "numSpeakersPlaceholder": "اكتشاف تلقائي",
       "numSpeakersLabel": "عدد المتحدثين",
-      "numSpeakersHint": "يؤدي تحديد العدد الدقيق إلى تحسين الدقة، خاصة في التسجيلات الطويلة.",
+      "numSpeakersHint": "يُكتشف المتحدثون تلقائيًا، بحد أقصى هذا العدد.",
       "downloadingModels": "جاري تنزيل النماذج...",
       "openaiDiarizeNote": "يستبدل نموذج التفريغ الذي اخترته بالنموذج gpt-4o-transcribe-diarize، وهو نموذج OpenAI الوحيد الذي يدعم اكتشاف المتحدثين. قد تختلف التكاليف عن نموذجك المحدد.",
       "mistralDiarizeNote": "تم تضمين ميزة اكتشاف المتحدث بدون تكلفة إضافية مع Voxtral.",
@@ -1696,8 +2261,6 @@
       "description": "نصوص مفرَّغة وملخصات مهيكلة",
       "back": "رجوع",
       "restrictedByOrg": "تفريغ الاجتماعات مقيد بواسطة مؤسستك.",
-      "autoEnded": "توقف التسجيل تلقائيًا بعد انتهاء اجتماعك.",
-      "restartFailed": "تعذرت إعادة تشغيل تسجيل الاجتماع.",
       "systemAudioSilent": {
         "title": "لم يتم اكتشاف صوت الاجتماع بعد",
         "description": "لم يلتقط الصوت حتى الآن سوى ميكروفونك. هل أنت في مكالمة فيديو؟ تحقق من أن صوت الاجتماع يُشغَّل على هذا الكمبيوتر وأنه غير مكتوم. هل تسجّل اجتماعًا حضوريًا؟ يمكنك تجاهل هذا — فالميكروفون يلتقط صوت الغرفة."
@@ -1755,8 +2318,10 @@
     },
     "actions": {
       "done": "تم",
+      "chunkProgress": "الجزء {{step}} من {{total}}",
+      "emptyReply": "أعاد النموذج ردًا فارغًا. حاول مرة أخرى، أو اختر نموذجًا آخر.",
+      "allActions": "كل الإجراءات",
       "manage": "إدارة الإجراءات...",
-      "manageTitle": "إجراءات مخصصة",
       "addAction": "إجراء جديد",
       "editAction": "تعديل الإجراء",
       "namePlaceholder": "اسم الإجراء",
@@ -1770,8 +2335,6 @@
       "promptLabel": "الموجه (Prompt)",
       "emptyEditorTitle": "اختر إجراءً",
       "emptyEditorDescription": "اختر إجراءً من القائمة أو أنشئ إجراءً جديدًا",
-      "runAction": "تشغيل {{name}}",
-      "selectAction": "تحديد إجراء",
       "builtin": {
         "generateNotes": {
           "name": "إنشاء ملاحظات",
@@ -1783,15 +2346,89 @@
           "cta": "صياغة بريد متابعة"
         },
         "detailedNotes": {
-          "name": "ملاحظات مفصلة",
+          "name": "ملخص بالذكاء الاصطناعي",
           "description": "ملاحظات اجتماع دقيقة وشاملة تتضمن القرارات والمهام"
+        },
+        "makeTodos": {
+          "name": "إنشاء قائمة مهام",
+          "description": "سرد كل مهمة والمسؤول عنها في الدردشة"
+        },
+        "createOutline": {
+          "name": "إنشاء مخطط",
+          "description": "تنظيم موضوعات الملاحظة في مخطط داخل الدردشة"
+        },
+        "oneOnOne": {
+          "name": "اجتماع فردي",
+          "description": "المستجدات والملاحظات والتطور والخطوات التالية من اجتماع فردي"
+        },
+        "standUp": {
+          "name": "الاجتماع اليومي",
+          "description": "تقدّم كل شخص وخططه والعوائق التي تواجهه"
+        },
+        "salesCall": {
+          "name": "مكالمة مبيعات",
+          "description": "الاحتياجات والاعتراضات والميزانية وآلية اتخاذ القرار"
+        },
+        "userInterview": {
+          "name": "مقابلة مستخدم",
+          "description": "سير العمل والمشكلات وردود الفعل والاقتباسات من أحد المشاركين"
+        },
+        "shorten": {
+          "name": "اختصار",
+          "description": "اجعل الملخص بنصف طوله تقريبًا",
+          "cta": "اختصر الملخص"
+        },
+        "addTldr": {
+          "name": "إضافة خلاصة سريعة",
+          "description": "أضف خلاصة من جملتين أو ثلاث في بداية الملخص",
+          "cta": "أضف خلاصة سريعة"
+        },
+        "slackUpdate": {
+          "name": "تحديث لـ Slack",
+          "description": "اكتب تحديثًا قصيرًا للفريق لنشره على Slack",
+          "cta": "اكتب تحديثًا لـ Slack"
         }
       },
       "errors": {
         "noModel": "لم يتم تحديد نموذج ذكاء اصطناعي. قم بتكوين واحد في الإعدادات.",
         "actionFailed": "فشل الإجراء",
-        "noEndpoint": "لم يتم تعيين عنوان URL لخادم مستضاف ذاتيًا. قم بتكوين واحد في الإعدادات."
-      }
+        "noEndpoint": "لم يتم تعيين عنوان URL لخادم مستضاف ذاتيًا. قم بتكوين واحد في الإعدادات.",
+        "outputTruncated": "نفدت المساحة لدى نموذج الذكاء الاصطناعي قبل أن ينتهي، لذا بقيت الملاحظة كما هي.",
+        "nothingToSummarize": "لا يوجد في هذه الملاحظة ما يمكن تلخيصه بعد، لذا بقي الملخص بالذكاء الاصطناعي كما هو.",
+        "saveFailed": "تعذّر الحفظ. تأكد من أن لا شيء أطول من اللازم ثم حاول مرة أخرى."
+      },
+      "tab": "الإجراءات",
+      "output": {
+        "auto": "تلقائي",
+        "chat": "الدردشة",
+        "summary": "الملخص بالذكاء الاصطناعي",
+        "chatHint": "يجيب في دردشة الملاحظة ويترك الملخص بالذكاء الاصطناعي كما هو.",
+        "summaryHint": "يعدّل ملخص الملاحظة بالذكاء الاصطناعي، أو يكتبه من النص المفرَّغ إن لم يكن موجودًا بعد.",
+        "autoHint": "يقرأ التعليمات عند الحفظ ويختار الدردشة أو الملخص بالذكاء الاصطناعي."
+      },
+      "applied": "تم تحديث الملخص بالذكاء الاصطناعي باستخدام {{name}}"
+    },
+    "templates": {
+      "tab": "القوالب",
+      "managerTitle": "القوالب والإجراءات",
+      "manage": "إدارة القوالب...",
+      "select": "اختر قالبًا",
+      "addTemplate": "قالب جديد",
+      "editTemplate": "تعديل القالب",
+      "namePlaceholder": "اسم القالب",
+      "contextLabel": "السياق",
+      "contextPlaceholder": "ما نوع هذا الاجتماع، وعلامَ يجب أن يركّز الملخص؟",
+      "sectionsLabel": "الأقسام",
+      "addSection": "إضافة قسم",
+      "sectionHeadingPlaceholder": "عنوان القسم",
+      "sectionInstructionPlaceholder": "ماذا يتضمن هذا القسم؟",
+      "moveSectionUp": "نقل القسم لأعلى",
+      "moveSectionDown": "نقل القسم لأسفل",
+      "removeSection": "إزالة القسم",
+      "noSectionsHint": "من دون أقسام، يكون السياق هو التعليمات الكاملة للملخص.",
+      "noTemplates": "لا توجد قوالب بعد",
+      "emptyEditorTitle": "اختر قالبًا",
+      "emptyEditorDescription": "اختر قالبًا من القائمة أو أنشئ قالبًا جديدًا"
     },
     "onboarding": {
       "llm": {
@@ -1799,12 +2436,12 @@
         "description": "تستخدم الإجراءات الذكاء الاصطناعي لتحويل ملاحظاتك. قم بإعداد نموذج لغة للبدء.",
         "configured": "تم تكوين نموذج الذكاء الاصطناعي"
       },
-      "actions": {
-        "title": "إجراءات مدعومة بالذكاء الاصطناعي",
-        "description": "تعمل الإجراءات على تحويل ملاحظاتك — تنظيف النصوص المفرَّغة، وتلخيص الاجتماعات، والمزيد. استخدم الإجراءات المضمّنة أو أنشئ إجراءاتك الخاصة.",
-        "builtInLabel": "مضمّن",
-        "createTitle": "أنشئ إجراءك الخاص",
-        "createDescription": "حدد إجراءً مخصصًا باستخدام موجه الذكاء الاصطناعي الخاص بك. يمكنك دائمًا تعديله أو إضافة المزيد لاحقًا في الإعدادات.",
+      "templates": {
+        "title": "القوالب والإجراءات",
+        "description": "تحدد القوالب شكل ملخصك بالذكاء الاصطناعي، من ملاحظات الاجتماعات المفصّلة إلى أقسام تحددها بنفسك. وتعمل الإجراءات على ملاحظة، مثل كتابة مسودة بريد متابعة في الدردشة.",
+        "builtInLabel": "قوالبك",
+        "createTitle": "أنشئ قالبك الخاص",
+        "createDescription": "صِف الملخص الذي تريده. يمكنك إضافة أقسام ومزيد من القوالب والإجراءات لاحقًا.",
         "created": "تم الإنشاء!"
       },
       "getStarted": "البدء",
@@ -1905,9 +2542,6 @@
         }
       },
       "invite": "دعوة",
-      "list": {
-        "empty": "لا توجد ملاحظات هنا بعد"
-      },
       "author": {
         "you": "أنت"
       }
@@ -2145,7 +2779,7 @@
         "cancelDownload": "إلغاء تنزيل {{model}}",
         "downloads": "تنزيلات النماذج",
         "downloading": "جاري التنزيل... {{progress}}%",
-        "installing": "جاري التثبيت..."
+        "installing": "جاري التثبيت"
       }
     },
     "steps": {
@@ -2281,6 +2915,20 @@
         "title": "لم يكتمل التنزيل",
         "description": "تحقق من اتصالك والمساحة الخالية على القرص، ثم أعد المحاولة. إذا استمر الفشل، فاتصل بالمسؤول."
       }
+    },
+    "permissionGuide": {
+      "label": "دليل الأذونات",
+      "return": "العودة إلى الإعداد",
+      "missingApp": "أو اختر التطبيق عبر +",
+      "failed": "تعذر التحقق من الوصول.",
+      "microphone": "فعّل OpenWhispr ضمن الميكروفون.",
+      "accessibility": "اسحب OpenWhispr إلى تسهيلات الاستخدام، ثم فعّله.",
+      "systemAudio": "فعّل OpenWhispr ضمن تسجيل صوت النظام فقط.",
+      "screenContext": "اسحب OpenWhispr إلى تسجيل الشاشة وصوت النظام، ثم فعّله.",
+      "settings": "فتح الإعدادات",
+      "check": "التحقق مجددًا",
+      "restart": "إعادة التشغيل",
+      "restartRequired": "أعد تشغيل OpenWhispr لتطبيق الوصول إلى الشاشة."
     }
   },
   "settingsPage": {
@@ -2300,7 +2948,7 @@
       "tab": {
         "general": "عام",
         "members": "الأعضاء",
-        "teams": "الفرق",
+        "teams": "المجموعات",
         "developer": "للمطورين"
       },
       "role": {
@@ -2364,14 +3012,14 @@
         "errorTitle": "تعذر تحديث الطلب"
       },
       "teams": {
-        "title": "الفرق",
-        "description": "مجموعات من أعضاء مساحة العمل التي تمنح الوصول إلى مساحات الفريق.",
-        "new": "فريق جديد",
-        "empty": "لا توجد فرق بعد.",
-        "createFirst": "أنشئ فريقك الأول",
+        "title": "المجموعات",
+        "description": "مجموعات من أعضاء مساحة العمل يمكن منحها الوصول إلى مساحات الفريق معًا.",
+        "new": "مجموعة جديدة",
+        "empty": "لا توجد مجموعات بعد.",
+        "createFirst": "أنشئ مجموعتك الأولى",
         "addMembersLabel": "إضافة أعضاء",
-        "createTitle": "إنشاء فريق",
-        "nameLabel": "اسم الفريق",
+        "createTitle": "إنشاء مجموعة",
+        "nameLabel": "اسم المجموعة",
         "memberCount_zero": "{{count}} أعضاء",
         "memberCount_one": "{{count}} عضو",
         "memberCount_two": "{{count}} عضوان",
@@ -2385,24 +3033,24 @@
         "grantsAccessToSpaces_few": "يمنح الوصول إلى {{count}} مساحات",
         "grantsAccessToSpaces_many": "يمنح الوصول إلى {{count}} مساحةً",
         "grantsAccessToSpaces_other": "يمنح الوصول إلى {{count}} مساحة",
-        "couldNotCreate": "تعذر إنشاء الفريق",
+        "couldNotCreate": "تعذر إنشاء المجموعة",
         "created": "تم إنشاء {{team}}",
         "deleted": "تم حذف {{team}}",
         "deleteConfirmTitle": "حذف {{team}}؟",
-        "deleteConfirmDescription": "هذا يؤرشف الفريق. سيفقد أعضاؤه أي وصول منحه إياهم.",
-        "deleteConfirmSpaceAccess_zero": "يمنح هذا الفريق الوصول إلى {{count}} مساحات. سيفقد أعضاؤه هذا الوصول.",
-        "deleteConfirmSpaceAccess_one": "يمنح هذا الفريق الوصول إلى {{count}} مساحة. سيفقد أعضاؤه هذا الوصول.",
-        "deleteConfirmSpaceAccess_two": "يمنح هذا الفريق الوصول إلى {{count}} مساحتين. سيفقد أعضاؤه هذا الوصول.",
-        "deleteConfirmSpaceAccess_few": "يمنح هذا الفريق الوصول إلى {{count}} مساحات. سيفقد أعضاؤه هذا الوصول.",
-        "deleteConfirmSpaceAccess_many": "يمنح هذا الفريق الوصول إلى {{count}} مساحةً. سيفقد أعضاؤه هذا الوصول.",
-        "deleteConfirmSpaceAccess_other": "يمنح هذا الفريق الوصول إلى {{count}} مساحة. سيفقد أعضاؤه هذا الوصول.",
+        "deleteConfirmDescription": "هذا يؤرشف المجموعة. سيفقد أعضاؤها أي وصول منحته إياهم.",
+        "deleteConfirmSpaceAccess_zero": "تمنح هذه المجموعة الوصول إلى {{count}} مساحات. سيفقد أعضاؤها هذا الوصول.",
+        "deleteConfirmSpaceAccess_one": "تمنح هذه المجموعة الوصول إلى {{count}} مساحة. سيفقد أعضاؤها هذا الوصول.",
+        "deleteConfirmSpaceAccess_two": "تمنح هذه المجموعة الوصول إلى {{count}} مساحتين. سيفقد أعضاؤها هذا الوصول.",
+        "deleteConfirmSpaceAccess_few": "تمنح هذه المجموعة الوصول إلى {{count}} مساحات. سيفقد أعضاؤها هذا الوصول.",
+        "deleteConfirmSpaceAccess_many": "تمنح هذه المجموعة الوصول إلى {{count}} مساحةً. سيفقد أعضاؤها هذا الوصول.",
+        "deleteConfirmSpaceAccess_other": "تمنح هذه المجموعة الوصول إلى {{count}} مساحة. سيفقد أعضاؤها هذا الوصول.",
         "members": {
           "title": "أعضاء {{team}}",
           "removeConfirm": "إزالة {{name}} من {{team}}؟",
-          "leave": "مغادرة الفريق",
+          "leave": "مغادرة المجموعة",
           "leftTeam": "لقد غادرت {{team}}",
           "leaveConfirm": "مغادرة {{team}}؟",
-          "leaveConfirmDescription": "ستفقد إمكانية الوصول إلى المساحات المخصصة لهذا الفريق ما لم يضمك فريق آخر."
+          "leaveConfirmDescription": "ستفقد إمكانية الوصول إلى المساحات المخصصة لهذه المجموعة ما لم تكن مضافًا مباشرةً أو تضمك مجموعة أخرى."
         }
       },
       "invites": {
@@ -2857,10 +3505,10 @@
       "removing": "جاري الإزالة...",
       "resetAll": {
         "confirmText": "حذف كل شيء",
-        "description": "سيؤدي هذا إلى حذف جميع الإعدادات المحلية والنصوص المفرَّغة والتسجيلات الصوتية ونماذج الذكاء الاصطناعي التي تم تنزيلها واتصالات التقويم والبيانات المخزنة مؤقتًا بشكل دائم. لن تتأثر البيانات السحابية وحسابك. سيتم إعادة تحميل التطبيق بعد إعادة التعيين.",
+        "description": "سيؤدي هذا إلى حذف جميع الإعدادات المحلية والنصوص المفرَّغة والتسجيلات الصوتية ونماذج الذكاء الاصطناعي التي تم تنزيلها واتصالات التقويم والبيانات المخزنة مؤقتًا بشكل دائم. لن تتأثر البيانات السحابية وحسابك. سيتم إعادة تشغيل التطبيق بعد إعادة التعيين.",
         "failedDescription": "حدث خطأ ما. يرجى المحاولة مرة أخرى أو إعادة تثبيت التطبيق.",
         "failedTitle": "تعذر إعادة التعيين",
-        "successDescription": "تمت إعادة تعيين كل شيء. سيتم إعادة تحميل التطبيق الآن.",
+        "successDescription": "تمت إعادة تعيين كل شيء. سيتم إعادة تشغيل التطبيق الآن.",
         "successTitle": "تم الانتهاء",
         "title": "إعادة تعيين جميع بيانات التطبيق"
       },
@@ -3282,6 +3930,12 @@
       },
       "transcriptionPreview": "معاينة التفريغ المباشر",
       "transcriptionPreviewDescription": "إظهار التفريغ في نافذة عائمة قبل التنقيح",
+      "aec": {
+        "toggle": {
+          "title": "إلغاء الصدى في الاجتماعات",
+          "description": "يلغي صوت الاجتماع الذي يتسرب إلى الميكروفون. اتركه متوقفًا عند استخدام سماعات الرأس أو سماعات الأذن، إذ لا يوجد صدى لإلغائه وقد يكتم صوتك تمامًا."
+        }
+      },
       "vad": {
         "title": "اكتشاف النشاط الصوتي",
         "description": "تكوين كيفية اكتشاف Silero VAD للكلام وتقسيمه عند التفريغ المحلي باستخدام Whisper",
@@ -3494,8 +4148,12 @@
       "mouseButtonOnlyMac": "اختصارات أزرار الماوس مدعومة حاليًا على نظام macOS فقط.",
       "alreadyRegistered": "\"{{hotkey}}\" مسجل بالفعل بواسطة تطبيق آخر.",
       "osReserved": "قد يكون \"{{hotkey}}\" محجوزًا بواسطة بيئة سطح المكتب لديك.",
+      "rightModifierNeedsListener": "لا يمكن استخدام \"{{hotkey}}\" على سطح المكتب هذا، إذ تحتاج اختصاراته إلى مفتاح عادي. أضف مفتاحًا، مثل Control+Alt+Space.",
       "holdNeedsReleaseKey": "يحتاج الضغط المستمر للتحدث إلى مفتاح يمكن لـ macOS أن يرصد تحريره: Globe، أو مفتاح جانبي أيمن مثل Option الأيمن، أو اختصار مع مفتاح تعديل. أما النقر فيعمل مع أي مفتاح.",
+      "holdNeedsRegularKey": "لاستخدام «استمرار الضغط»، أضف مفتاحًا عاديًا إلى الاختصار، مثل Control+Alt+Space. لا يستطيع سطح المكتب لديك رصد الضغط المستمر على مفاتيح التعديل وحدها.",
+      "holdNeedsGnomePortal": "لاستخدام «استمرار الضغط»، يحتاج GNOME إلى بوابة الاختصارات العامة المتوفرة في GNOME 48 والإصدارات الأحدث. أما «نقر» فيعمل بدونها.",
       "registrationFailed": "تعذر تسجيل \"{{hotkey}}\". قد يكون قيد الاستخدام بواسطة تطبيق آخر.",
+      "windowsKeyListenerMissing": "يحتاج \"{{hotkey}}\" إلى مستمع مفاتيح Windows، وهو غير موجود في هذا التثبيت. اختر اختصارًا يتضمن مفتاحًا عاديًا.",
       "updateFailedCheckFormat": "فشل تحديث الاختصار إلى \"{{hotkey}}\". تأكد من أن التنسيق صالح.",
       "trySuggestions": "جرّب: {{suggestions}}",
       "slotConflict": "هذا الاختصار مستخدم بالفعل لـ {{slot}}."
@@ -3531,7 +4189,7 @@
     "close": "إغلاق"
   },
   "windows": {
-    "pttUnavailable": "المستمع الأصلي لميزة «اضغط للتحدث» غير متوفر"
+    "pttUnavailable": "مستمع مفاتيح OpenWhispr غير متوفر."
   },
   "common": {
     "continue": "متابعة",
@@ -3576,6 +4234,7 @@
     "policyAiProcessingRestricted": "معالجة الذكاء الاصطناعي مقيدة من قبل مؤسستك.",
     "policyAgentRestricted": "استخدام مساعد الذكاء الاصطناعي مقيد من قبل مؤسستك.",
     "policyTranscriptionRestricted": "التفريغ الصوتي مقيد من قبل مؤسستك.",
+    "policyUnresolved": "لم يتم تحميل إعدادات مؤسستك بعد. حاول مرة أخرى بعد قليل.",
     "logout": "تسجيل الخروج",
     "managedConfigLoading": "جارٍ التحقق من الإعداد المُدار لمؤسستك. أعد المحاولة بعد لحظات.",
     "managedConfigUnavailable": "الوصول المُدار للمؤسسة غير متاح. سجّل الدخول مرة أخرى أو اتصل بالمسؤول.",
@@ -3845,6 +4504,7 @@
     "upload": "رفع",
     "dictionary": "القاموس",
     "referral": "احصل على شهر مجاني",
+    "inviteTeam": "ادعُ فريقك",
     "settings": "الإعدادات",
     "support": "الدعم",
     "limitReached": "تم الوصول إلى الحد الأسبوعي",
@@ -4030,8 +4690,10 @@
     "newChat": "محادثة جديدة",
     "search": "البحث في المحادثات...",
     "archived": "مؤرشفة",
-    "noConversations": "ابدأ محادثتك الأولى",
-    "selectChat": "حدد محادثة أو ابدأ محادثة جديدة",
+    "noConversations": "لا توجد محادثات بعد",
+    "allArchived": "جميع المحادثات مؤرشفة",
+    "noConversationsDescription": "ستظهر محادثاتك مع المساعد هنا.",
+    "loadFailed": "تعذر تحميل المحادثات",
     "noResults": "لا توجد محادثات مطابقة",
     "today": "اليوم",
     "yesterday": "أمس",
@@ -4046,7 +4708,12 @@
     "searchChats": "البحث في المحادثات",
     "searchTitle": "البحث في المحادثات",
     "searchDescription": "البحث في جميع محادثاتك",
-    "newChatEmpty": "اسأل عن ملاحظاتك أو نصوصك المفرَّغة أو أي شيء آخر"
+    "inputPlaceholder": "اسأل عن أي شيء...",
+    "starters": {
+      "todos": "اعرض مهامي الأخيرة",
+      "meeting": "حضّرني لاجتماعي القادم",
+      "sharedNotes": "أبرِز ملاحظاتي المشتركة"
+    }
   },
   "support": {
     "documentation": "الوثائق",
@@ -4081,6 +4748,10 @@
     "activationFailedDescription": "انتقل OpenWhispr إلى استخدام وحدة المعالجة المركزية (CPU) للتفريغ الصوتي.",
     "reasoningActivationFailedDescription": "انتقل OpenWhispr إلى استخدام وحدة المعالجة المركزية (CPU) للمعالجة.",
     "retryActivation": "إعادة محاولة تفعيل GPU",
+    "redownloadNeeded": "تحتاج حزمة GPU إلى إعادة التنزيل",
+    "redownloadNeededDescription": "لا يمكن لهذا الإصدار من OpenWhispr استخدام حزمة GPU المثبتة. أعد تنزيلها لإعادة تشغيل تسريع GPU.",
+    "redownloadButton": "إعادة تنزيل حزمة GPU",
+    "downloadFailed": "تعذّر تنزيل حزمة GPU.",
     "remove": "إزالة",
     "dismiss": "ليس الآن",
     "cancel": "إلغاء"
@@ -4142,21 +4813,40 @@
       "dismiss": "تجاهل"
     }
   },
+  "emojiPicker": {
+    "search": "ابحث عن رمز تعبيري…",
+    "recent": "الأخيرة",
+    "noResults": "لم يتم العثور على رموز تعبيرية",
+    "remove": "إزالة",
+    "groups": {
+      "smileys": "الوجوه والمشاعر",
+      "people": "الأشخاص والجسم",
+      "animals": "الحيوانات والطبيعة",
+      "food": "الطعام والشراب",
+      "travel": "السفر والأماكن",
+      "activities": "الأنشطة",
+      "objects": "الأشياء",
+      "symbols": "الرموز",
+      "flags": "الأعلام"
+    }
+  },
   "permissionsGate": {
     "title": "الأذونات مطلوبة",
     "description": "يحتاج OpenWhispr إلى بعض الأذونات للعمل على هذا الكمبيوتر.",
     "continue": "متابعة"
   },
   "embeddedChat": {
-    "askPlaceholder": "اسأل عن أي شيء...",
-    "send": "إرسال",
+    "askPlaceholder": "اسأل أي شيء عن ملاحظتك",
     "title": "الدردشة",
     "emptyState": "اسأل سؤالًا حول هذه الملاحظة",
     "dock": "إرساء في الشريط الجانبي",
     "undock": "إلغاء الإرساء من الشريط الجانبي",
     "close": "إغلاق الدردشة",
     "newChat": "محادثة جديدة",
-    "conversationSelector": "تبديل المحادثة"
+    "conversationSelector": "تبديل المحادثة",
+    "history": "السجل",
+    "quickActions": "إجراءات سريعة",
+    "generateSummary": "إنشاء ملخص"
   },
   "transcriptionPreview": {
     "label": "معاينة",
@@ -4205,15 +4895,49 @@
       "underway": "يبدو أن اجتماعك جارٍ بالفعل. هل ترغب في تدوين الملاحظات؟"
     },
     "start": "تدوين الملاحظات",
-    "join": "انضمام وتفريغ صوتي",
-    "autoEnd": {
-      "title": "انتهى تسجيل الاجتماع",
-      "body": {
-        "micReleased": "لا يستخدم أي تطبيق آخر ميكروفونك، لذا توقف التسجيل تلقائيًا. أعد تشغيل التسجيل خلال {{seconds}} ث.",
-        "silence": "لم يُكتشف أي صوت، لذا توقف التسجيل تلقائيًا. أعد تشغيل التسجيل خلال {{seconds}} ث.",
-        "processExit": "أُغلق تطبيق الاجتماع، لذا توقف التسجيل تلقائيًا. أعد تشغيل التسجيل خلال {{seconds}} ث."
-      },
-      "restart": "إعادة تشغيل التسجيل"
+    "join": "انضمام وتفريغ صوتي"
+  },
+  "providerErrors": {
+    "authFailed": "رفض {{provider}} مفتاح API الخاص بك.",
+    "accessDenied": "رفض {{provider}} الوصول. قد لا يشمل مفتاحك هذا النموذج.",
+    "quotaExhausted": "نفذ الرصيد في حساب {{provider}} الخاص بك.",
+    "rateLimited": "قام {{provider}} بتقييد معدل الطلب. انتظر لحظة وحاول مرة أخرى.",
+    "modelNotFound": "لا يتعرّف {{provider}} على النموذج “{{model}}”.",
+    "modelNotFoundNoModel": "لا يتعرّف {{provider}} على النموذج المحدد.",
+    "payloadTooLarge": "هذا التسجيل أكبر من أن يقبله {{provider}}.",
+    "requestTooLarge": "هذا الطلب أكبر من أن يقبله {{provider}}.",
+    "badRequest": "تعذّر على {{provider}} معالجة هذا الطلب.",
+    "unavailable": "يواجه {{provider}} مشكلات الآن. حاول مرة أخرى بعد قليل.",
+    "timeout": "استغرق {{provider}} وقتًا طويلاً للاستجابة.",
+    "unreachable": "تعذّر الوصول إلى {{provider}}. تحقق من اتصالك.",
+    "noResponse": "تعذّر الحصول على رد من {{provider}}. تحقق من مفتاح API واتصالك.",
+    "unknown": "أعاد {{provider}} خطأ غير متوقع.",
+    "keyMissing": "لا يوجد مفتاح API مضبوط لـ {{provider}}. أضفه في الإعدادات ← النماذج اللغوية.",
+    "selfHosted": {
+      "authFailed": "رفض خادمك مفتاح API.",
+      "accessDenied": "رفض خادمك الوصول. قد لا يشمل المفتاح هذا النموذج.",
+      "quotaExhausted": "يفيد خادمك بأن الحساب قد نفذ رصيده.",
+      "rateLimited": "قام خادمك بتقييد معدل الطلب. انتظر لحظة وحاول مرة أخرى.",
+      "modelNotFound": "لا يتعرّف خادمك على النموذج “{{model}}”.",
+      "modelNotFoundNoModel": "لا يتعرّف خادمك على النموذج المحدد.",
+      "payloadTooLarge": "هذا التسجيل أكبر من أن يقبله خادمك.",
+      "requestTooLarge": "هذا الطلب أكبر من أن يقبله خادمك.",
+      "badRequest": "تعذّر على خادمك معالجة هذا الطلب.",
+      "unavailable": "يواجه خادمك مشكلات الآن. حاول مرة أخرى بعد قليل.",
+      "timeout": "استغرق خادمك وقتًا طويلاً للاستجابة.",
+      "unreachable": "تعذّر الوصول إلى خادمك. تحقق من أنه قيد التشغيل.",
+      "noResponse": "تعذّر الحصول على رد من خادمك. تحقق من مفتاح API الخاص به ومن أنه قيد التشغيل.",
+      "unknown": "أعاد خادمك خطأ غير متوقع."
+    },
+    "openSettings": "فتح الإعدادات",
+    "copyDetails": "نسخ التفاصيل",
+    "titles": {
+      "transcription": "فشل التفريغ الصوتي",
+      "llm": "فشل طلب الذكاء الاصطناعي"
+    },
+    "details": {
+      "provider": "المزوّد",
+      "requestId": "معرّف الطلب"
     }
   }
 }

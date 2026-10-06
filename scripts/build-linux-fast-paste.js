@@ -107,9 +107,12 @@ function getAtspiFlags() {
       stdio: "pipe",
     });
     if (cflags.status === 0 && libs.status === 0) {
+      // atspi-2.pc lists gobject-2.0 under Requires.private, so plain --libs
+      // omits -lgobject-2.0; add it explicitly for --as-needed linkers.
       return [
         ...cflags.stdout.toString().trim().split(/\s+/),
         ...libs.stdout.toString().trim().split(/\s+/),
+        "-lgobject-2.0",
       ].filter(Boolean);
     }
   } catch {}
@@ -164,7 +167,7 @@ function attemptCompile(command, args) {
   });
 }
 
-const compileArgs = ["-O2", cSource, "-o", outputBinary, "-lX11", "-lXtst"];
+const compileArgs = ["-O2", cSource, "-o", outputBinary, "-lX11", "-lXtst", "-lXext", "-lm"];
 
 if (uinputAvailable) {
   log("uinput headers found, enabling uinput support");

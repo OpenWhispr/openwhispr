@@ -73,6 +73,27 @@ export function transcriptionErrorKey(failure: unknown): string | undefined {
   return code ? TRANSCRIPTION_ERROR_KEYS[code] : undefined;
 }
 
+// A finished recording that has a transcript but no AI summary yet offers to
+// generate one. Deliberately independent of the open view tab: the callout lives
+// in the bottom bar shared by Notes and Transcript, and every detected or
+// quick-action meeting starts on the Notes tab, so gating it on the transcript
+// view hid the offer exactly when a meeting ended on its own.
+export function shouldOfferMeetingSummary({
+  isRecording,
+  hasTranscriptSegments,
+  hasSummary,
+  canEdit,
+  isProcessingAction,
+}: {
+  isRecording: boolean;
+  hasTranscriptSegments: boolean;
+  hasSummary: boolean;
+  canEdit: boolean;
+  isProcessingAction: boolean;
+}): boolean {
+  return !isRecording && hasTranscriptSegments && !hasSummary && canEdit && !isProcessingAction;
+}
+
 // Folder scopes get the folder-specific empty title; space roots keep the generic one.
 export function notesEmptyTitleKey(inFolder: boolean): string {
   return inFolder ? "notes.empty.emptyFolder" : "notes.empty.title";
@@ -90,6 +111,14 @@ export const notesTextareaClass = cn(
   "bg-foreground/3 dark:bg-white/4 border border-border/70 dark:border-white/10",
   "text-foreground/80 placeholder:text-foreground/45 outline-none",
   "focus:border-primary/30 transition-colors duration-150"
+);
+
+/** Rounded suggestion pill above an ask box: the folder overview's prompts, a note's actions. */
+export const ASK_PILL_CLASS = cn(
+  "inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[11px]",
+  "border border-border/70 bg-card text-foreground/55 shadow-sm dark:border-white/10",
+  "hover:bg-surface-3 hover:text-foreground/80 disabled:pointer-events-none disabled:text-foreground/30",
+  "transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
 );
 
 /** Neutral capsule for note header facts (date + attendees, folder, space). */

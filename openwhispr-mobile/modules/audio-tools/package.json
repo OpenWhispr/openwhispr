@@ -1,0 +1,20 @@
+{
+  "name": "audio-tools",
+  "version": "1.0.0",
+  "description": "Native audio transcoding and chunking for transcription (decode any format to 16kHz mono WAV, split large files into upload-sized chunks)",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "scripts": {
+    "build": "expo-module build",
+    "clean": "expo-module clean",
+    "lint": "expo-module lint",
+    "test": "expo-module test"
+  },
+  "devDependencies": {
+    "expo-module-scripts": "^3.0.0"
+  },
+  "peerDependencies": {
+    "expo": "*"
+  },
+  "private": true
+}

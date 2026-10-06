@@ -185,7 +185,7 @@ export function resolveChatStreamingInference(
       resolveModeProvider({ isCloud, mode: config.mode, provider: config.provider })
     ),
     isCloudAgent: isCloud,
-    baseModelSupportsVision: !!getCloudModel(config.model)?.supportsVision,
+    baseModelSupportsVision: !!getCloudModel(config.model, config.provider)?.supportsVision,
   });
   if (!useVisionOverride) return { config, attachScreenContext: attach };
   return {

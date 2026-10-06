@@ -27,19 +27,66 @@ test("parses a PulseAudio default source", () => {
   });
 });
 
-test("resolver caches a successful platform result briefly", async () => {
+function wpctlResolver({ now = () => 100, respond } = {}) {
   let calls = 0;
   const resolve = helper.createSystemDefaultMicrophoneResolver({
     platform: "linux",
-    now: () => 100,
-    run: async (command) => {
+    now,
+    run: (command) => {
       calls += 1;
-      if (command === "wpctl") return 'node.description = "Desk Microphone"';
-      throw new Error("unexpected command");
+      if (command !== "wpctl") throw new Error("unexpected command");
+      return respond ? respond() : 'node.description = "Desk Microphone"';
     },
   });
+  return { resolve, calls: () => calls };
+}
+
+test("resolver keeps a successful lookup until asked to refresh", async () => {
+  const { resolve, calls } = wpctlResolver();
 
   assert.equal((await resolve()).name, "Desk Microphone");
   assert.equal((await resolve()).name, "Desk Microphone");
-  assert.equal(calls, 1);
+  assert.equal(calls(), 1);
+
+  await resolve({ refresh: true });
+  assert.equal(calls(), 2);
+});
+
+test("resolver retries a failed lookup only after the back-off", async () => {
+  let clock = 0;
+  let calls = 0;
+  const resolve = helper.createSystemDefaultMicrophoneResolver({
+    platform: "linux",
+    now: () => clock,
+    run: async () => {
+      calls += 1;
+      throw new Error("no audio server");
+    },
+  });
+
+  assert.equal((await resolve()).source, "unavailable");
+  clock = 1000;
+  await resolve();
+  assert.equal(calls, 2, "wpctl then pactl, no retry inside the back-off");
+  clock = 31000;
+  await resolve();
+  assert.equal(calls, 4);
+});
+
+test("concurrent lookups share one process", async () => {
+  let release;
+  const { resolve, calls } = wpctlResolver({
+    respond: () =>
+      new Promise((done) => {
+        release = () => done('node.description = "Desk Microphone"');
+      }),
+  });
+
+  const first = resolve();
+  const second = resolve({ refresh: true });
+  release();
+
+  assert.equal((await first).name, "Desk Microphone");
+  assert.equal((await second).name, "Desk Microphone");
+  assert.equal(calls(), 1);
 });

@@ -1,4 +1,5 @@
 import Cocoa
+import Carbon.HIToolbox
 
 if !AXIsProcessTrusted() {
     exit(2)
@@ -8,7 +9,62 @@ if !AXIsProcessTrusted() {
 // can tell a copied selection from a target that changed underneath it. With no
 // arguments this stays what the paste path expects: ⌘V, no output.
 let copyMode = CommandLine.arguments.contains("--copy")
-let virtualKey: CGKeyCode = copyMode ? 0x08 : 0x09  // kVK_ANSI_C : kVK_ANSI_V
+let shortcutCharacter = copyMode ? "c" : "v"
+let commandModifierState = UInt32(cmdKey) >> 8
+
+func keyboardLayoutData(from inputSource: TISInputSource?) -> Data? {
+    guard let inputSource = inputSource,
+          let layoutDataPointer = TISGetInputSourceProperty(inputSource, kTISPropertyUnicodeKeyLayoutData) else {
+        return nil
+    }
+
+    return Unmanaged<CFData>.fromOpaque(layoutDataPointer).takeUnretainedValue() as Data
+}
+
+func lookupVirtualKey(for character: String) -> CGKeyCode? {
+    // Non-ASCII layouts can define their own Command shortcuts. Use the last
+    // ASCII layout only when the active input method provides no layout data.
+    guard let layoutData = keyboardLayoutData(from: TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue())
+        ?? keyboardLayoutData(from: TISCopyCurrentASCIICapableKeyboardLayoutInputSource()?.takeRetainedValue()) else {
+        return nil
+    }
+
+    return layoutData.withUnsafeBytes { rawBuffer in
+        guard let baseAddress = rawBuffer.baseAddress else { return nil }
+        let keyboardLayout = baseAddress.assumingMemoryBound(to: UCKeyboardLayout.self)
+        var deadKeyState: UInt32 = 0
+        var actualStringLength = 0
+        var unicodeString = [UniChar](repeating: 0, count: 4)
+
+        for keyCode in 0..<128 {
+            deadKeyState = 0
+            let status = UCKeyTranslate(
+                keyboardLayout,
+                UInt16(keyCode),
+                UInt16(kUCKeyActionDisplay),
+                commandModifierState,
+                UInt32(LMGetKbdType()),
+                OptionBits(kUCKeyTranslateNoDeadKeysBit),
+                &deadKeyState,
+                unicodeString.count,
+                &actualStringLength,
+                &unicodeString
+            )
+            if status == noErr,
+               String(utf16CodeUnits: unicodeString, count: actualStringLength) == character {
+                return CGKeyCode(keyCode)
+            }
+        }
+
+        return nil
+    }
+}
+
+// Do not post the old US-ANSI fallback key code: on a non-QWERTY layout it
+// can invoke a different shortcut while still reporting a successful paste.
+guard let virtualKey = lookupVirtualKey(for: shortcutCharacter) else {
+    exit(3)
+}
 
 // Resolved before the keystroke is posted: this is the app that will receive it.
 let target = copyMode ? NSWorkspace.shared.frontmostApplication : nil

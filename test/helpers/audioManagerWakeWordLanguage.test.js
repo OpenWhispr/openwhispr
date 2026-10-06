@@ -331,3 +331,94 @@ test("streaming auto-language routing detects and strips Arabic with an English 
 
   assert.equal(completions[0]?.assistantConversation?.transcript, "لخّص هذه الملاحظة");
 });
+
+// Snippet triggers are phrases the user reserves for expansion, and they are
+// free to start one with the agent's own name ("jarvis review"). Routing runs
+// on the raw transcript — expansion happens later, in the renderer — so without
+// trigger-aware detection the wake-word scan reads the leading name as an
+// address and sends an ordinary dictation to the agent.
+const snippetSettings = {
+  preferredLanguage: "en",
+  useCleanupModel: true,
+  cleanupCloudMode: "byok",
+  cleanupDisableThinking: false,
+  customDictionary: [],
+  snippets: [{ trigger: "jarvis review", replacement: "Review the PR below." }],
+};
+
+const snippetAudioBlob = {
+  type: "audio/webm",
+  size: 1024,
+  arrayBuffer: async () => new ArrayBuffer(8),
+};
+
+test("a name inside a snippet trigger does not route to the agent", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t);
+
+  setSettings(snippetSettings);
+  window.electronAPI.cloudTranscribe = async () => ({
+    success: true,
+    text: "jarvis review this PR",
+    sttLanguage: "en",
+  });
+
+  const result = await createManager().processWithOpenWhisprCloud(snippetAudioBlob);
+
+  assert.equal(result.text, "cleanup output");
+});
+
+test("a real address still routes to the agent when a trigger is also spoken", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t);
+
+  setSettings(snippetSettings);
+  window.electronAPI.cloudTranscribe = async () => ({
+    success: true,
+    text: "Hey Jarvis, run jarvis review on PR 5",
+    sttLanguage: "en",
+  });
+
+  const result = await createManager().processWithOpenWhisprCloud(snippetAudioBlob);
+
+  assert.equal(result.text, "agent output");
+});
+
+test("the banked agent command drops the address, not the snippet trigger", async (t) => {
+  const { window, setSettings, createBankingManager } = await loadAudioManager(t);
+
+  setSettings(snippetSettings);
+  window.electronAPI.cloudTranscribe = async () => ({
+    success: true,
+    text: "jarvis review. Jarvis summarize it",
+    sttLanguage: "en",
+  });
+
+  const manager = createBankingManager();
+  await manager.processWithOpenWhisprCloud(snippetAudioBlob);
+
+  assert.equal(manager.pendingAssistantConversation?.transcript, "jarvis review. summarize it");
+});
+
+// Routing and stripping are separated by the selection-capture await. Re-reading
+// the store there lets a snippet edit — a Control Panel save, the assistant's
+// update_snippets tool, the startup SQLite sync — land between them, so the
+// address is spliced out of a different reading of the transcript than the one
+// that chose the route.
+test("a snippets edit between routing and stripping cannot desync them", async (t) => {
+  const { window, setSettings, createBankingManager } = await loadAudioManager(t);
+
+  setSettings(snippetSettings);
+  window.electronAPI.cloudTranscribe = async () => ({
+    success: true,
+    text: "jarvis review. Jarvis summarize it",
+    sttLanguage: "en",
+  });
+
+  const manager = createBankingManager();
+  manager.consumeSelectionCapture = async () => {
+    setSettings({ ...snippetSettings, snippets: [] });
+    return null;
+  };
+  await manager.processWithOpenWhisprCloud(snippetAudioBlob);
+
+  assert.equal(manager.pendingAssistantConversation?.transcript, "jarvis review. summarize it");
+});

@@ -25,10 +25,13 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   workspaceId: string;
   workspaceName: string;
-  onInvited?: () => void;
+  /** Receives the normalized email the invitation was sent to. */
+  onInvited?: (email: string) => void;
   cancelLabel?: string;
-  /** Team spaces the invitee joins on accept (threaded into the invitation). */
+  /** Teams the invitee joins on accept (threaded into the invitation). */
   teamIds?: string[];
+  /** Spaces the invitee is added to directly on accept. */
+  spaceIds?: string[];
   initialEmail?: string;
 }
 
@@ -40,6 +43,7 @@ export default function InviteTeammateDialog({
   onInvited,
   cancelLabel,
   teamIds,
+  spaceIds,
   initialEmail,
 }: Props) {
   const { t } = useTranslation();
@@ -97,11 +101,13 @@ export default function InviteTeammateDialog({
     e.preventDefault();
     if (!email.trim()) return;
     setSubmitting(true);
+    const normalizedEmail = email.trim().toLowerCase();
     try {
       const result = await InvitationsService.send(workspaceId, {
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         role,
         ...(teamIds && teamIds.length > 0 ? { team_ids: teamIds } : {}),
+        ...(spaceIds && spaceIds.length > 0 ? { space_ids: spaceIds } : {}),
       });
       if (result.email_sent) {
         toast({
@@ -115,7 +121,7 @@ export default function InviteTeammateDialog({
           variant: "destructive",
         });
       }
-      onInvited?.();
+      onInvited?.(normalizedEmail);
       onOpenChange(false);
     } catch (error) {
       toast({

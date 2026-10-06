@@ -1,5 +1,15 @@
 import React, { useState } from "react";
-import { Gift, Lock, Settings, ShieldCheck, HelpCircle, UserCircle, X, Zap } from "./icons";
+import {
+  Gift,
+  Lock,
+  Settings,
+  ShieldCheck,
+  HelpCircle,
+  UserCircle,
+  UserPlus,
+  X,
+  Zap,
+} from "./icons";
 import logoIcon from "../assets/icon.png";
 import { useTranslation } from "react-i18next";
 import { cn } from "./lib/utils";
@@ -22,6 +32,7 @@ interface ControlPanelSidebarProps {
   onViewChange: (view: ControlPanelView) => void;
   onOpenSettings: () => void;
   onOpenReferrals?: () => void;
+  onInviteTeam?: () => void;
   onUpgrade?: () => void;
   isOverLimit?: boolean;
   userName?: string | null;
@@ -38,6 +49,7 @@ export default function ControlPanelSidebar({
   onViewChange,
   onOpenSettings,
   onOpenReferrals,
+  onInviteTeam,
   onUpgrade,
   isOverLimit,
   userName,
@@ -52,6 +64,9 @@ export default function ControlPanelSidebar({
   const [upgradeDismissed, setUpgradeDismissed] = useState(
     () => localStorage.getItem("upgradeProDismissed") === "true"
   );
+  // A blocked or expired avatar URL falls back to the icon instead of the
+  // broken-image glyph, like AccountAvatar and MemberAvatar.
+  const [failedImage, setFailedImage] = useState<string | null>(null);
 
   const showLimitBanner = upsell === "show" && Boolean(isSignedIn) && Boolean(isOverLimit);
   const showUpgradeBanner = upsell === "show" && !showLimitBanner && !upgradeDismissed;
@@ -175,6 +190,17 @@ export default function ControlPanelSidebar({
           </div>
         )}
 
+        {onInviteTeam && (
+          <button
+            onClick={onInviteTeam}
+            aria-label={t("sidebar.inviteTeam")}
+            className={rowButtonClass}
+          >
+            <UserPlus size={16} className={rowIconClass} />
+            <span className={rowLabelClass}>{t("sidebar.inviteTeam")}</span>
+          </button>
+        )}
+
         {isSignedIn && onOpenReferrals && (
           <button
             onClick={onOpenReferrals}
@@ -207,8 +233,13 @@ export default function ControlPanelSidebar({
         <div className="mx-1 h-px bg-border/10 dark:bg-white/6 my-1.5!" />
 
         <div className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md">
-          {userImage ? (
-            <img src={userImage} alt="" className="w-6 h-6 rounded-full shrink-0 object-cover" />
+          {userImage && userImage !== failedImage ? (
+            <img
+              src={userImage}
+              alt=""
+              onError={() => setFailedImage(userImage)}
+              className="w-6 h-6 rounded-full shrink-0 object-cover"
+            />
           ) : (
             <UserCircle size={18} className="shrink-0 text-foreground/50 dark:text-foreground/45" />
           )}

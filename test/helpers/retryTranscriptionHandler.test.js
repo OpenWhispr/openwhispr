@@ -56,6 +56,20 @@ const electronStub = {
   MessageChannelMain: class {},
 };
 
+// A 44-byte RIFF header is enough for isWavFormat, which only sniffs the magic.
+const WAV_BUFFER = Buffer.concat([
+  Buffer.from("RIFF"),
+  Buffer.alloc(4),
+  Buffer.from("WAVE"),
+  Buffer.alloc(32),
+]);
+const CONVERTED_WAV = Buffer.concat([WAV_BUFFER, Buffer.from("converted")]);
+
+// Conversion is mocked rather than run: spawning ffmpeg from a unit test would
+// make it slow and dependent on the runner having a usable binary.
+const wavConversions = [];
+let convertBehavior = async () => CONVERTED_WAV;
+
 const cortiCalls = [];
 const tinfoilCalls = [];
 let cortiBehavior = async () => ({ text: "corti text" });
@@ -85,6 +99,16 @@ Module._load = function loadWithMocks(request, parent, isMain) {
     if (request === "./windowBroadcast") {
       return { broadcastToWindows: () => {} };
     }
+    if (request === "./ffmpegUtils") {
+      const real = originalLoad.call(this, request, parent, isMain);
+      return {
+        ...real,
+        convertBufferToWav: async (buffer, options) => {
+          wavConversions.push(buffer);
+          return convertBehavior(buffer, options);
+        },
+      };
+    }
   }
   return originalLoad.call(this, request, parent, isMain);
 };
@@ -103,10 +127,16 @@ function anything() {
 }
 
 function buildFakeThis() {
-  const dbRows = new Map([[7, { id: 7, audio_duration_ms: 1200 }]]);
+  const dbRows = new Map([
+    [7, { id: 7, audio_duration_ms: 1200 }],
+    [8, { id: 8, audio_duration_ms: 1200 }],
+  ]);
   const target = {
     sessionId: "test-session",
-    audioStorageManager: { getAudioBuffer: (id) => (id === 7 ? Buffer.from([1, 2, 3]) : null) },
+    audioStorageManager: {
+      // 7 is a stored WebM recording, 8 one already in WAV.
+      getAudioBuffer: (id) => (id === 7 ? Buffer.from([1, 2, 3]) : id === 8 ? WAV_BUFFER : null),
+    },
     databaseManager: {
       updateTranscriptionText: () => {},
       updateTranscriptionStatus: () => {},
@@ -130,11 +160,13 @@ function buildFakeThis() {
 }
 
 let retryHandler;
+let fakeThis;
 test.before(() => {
   delete require.cache[handlersModulePath];
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
-  Ctor.prototype.setupHandlers.call(buildFakeThis());
+  fakeThis = buildFakeThis();
+  Ctor.prototype.setupHandlers.call(fakeThis);
   retryHandler = handlers.get("retry-transcription");
   assert.ok(retryHandler, "retry-transcription must be registered");
 });
@@ -224,6 +256,101 @@ test("retry: plain custom endpoints use Bearer auth at the configured URL", asyn
   assert.equal(fetches[0].init.headers.Authorization, "Bearer ck-custom");
 });
 
+const CUSTOM_SETTINGS = {
+  cloudTranscriptionProvider: "custom",
+  cloudTranscriptionMode: "byok",
+  transcriptionMode: "providers",
+  cloudTranscriptionBaseUrl: "https://stt.parasail.example.com/v1",
+  cloudTranscriptionModel: "parasail-model",
+};
+
+const uploadedPart = () => fetches[0].init.body.get("file");
+
+test("retry: a stored WebM is re-encoded before reaching a custom endpoint", async () => {
+  // Without this the renderer-side fix covers fresh dictations only, and every
+  // retry of a recording that failed for the container reason fails again.
+  fetches.length = 0;
+  wavConversions.length = 0;
+
+  const result = await invoke(CUSTOM_SETTINGS);
+
+  assert.equal(result.success, true);
+  assert.equal(wavConversions.length, 1, "the stored container must be converted");
+  const part = uploadedPart();
+  assert.equal(part.name, "audio.wav");
+  assert.equal(part.type, "audio/wav");
+  assert.equal(part.size, CONVERTED_WAV.length, "the converted bytes are what gets uploaded");
+});
+
+test("retry: audio already in WAV is uploaded untouched", async () => {
+  fetches.length = 0;
+  wavConversions.length = 0;
+
+  const result = await invoke(CUSTOM_SETTINGS, 8);
+
+  assert.equal(result.success, true);
+  assert.equal(wavConversions.length, 0, "re-encoding WAV would only cost time");
+  assert.equal(uploadedPart().size, WAV_BUFFER.length);
+});
+
+test("retry: WAV expansion preserves uploads that fit the provider limit", async (t) => {
+  for (const wavSize of [25 * 1024 * 1024, 25 * 1024 * 1024 + 1]) {
+    await t.test(`${wavSize} converted bytes`, async () => {
+      fetches.length = 0;
+      const converted = Buffer.alloc(wavSize);
+      WAV_BUFFER.copy(converted);
+      convertBehavior = async () => converted;
+      try {
+        const result = await invoke(CUSTOM_SETTINGS);
+        assert.equal(result.success, true);
+        const part = uploadedPart();
+        const fits = wavSize === 25 * 1024 * 1024;
+        assert.equal(part.type, fits ? "audio/wav" : "audio/webm");
+        assert.equal(part.name, fits ? "audio.wav" : "audio.webm");
+        assert.deepEqual(
+          Buffer.from(await part.arrayBuffer()),
+          fits ? converted : Buffer.from([1, 2, 3])
+        );
+      } finally {
+        convertBehavior = async () => CONVERTED_WAV;
+      }
+    });
+  }
+});
+
+test("retry: built-in providers keep sending the stored container", async () => {
+  fetches.length = 0;
+  wavConversions.length = 0;
+
+  await invoke({
+    cloudTranscriptionProvider: "openai",
+    cloudTranscriptionMode: "byok",
+    transcriptionMode: "providers",
+    cloudTranscriptionModel: "whisper-1",
+  });
+
+  assert.equal(wavConversions.length, 0, "only custom endpoints need the re-encode");
+  assert.equal(uploadedPart().name, "audio.webm");
+});
+
+test("retry: a conversion failure falls open to the stored container", async () => {
+  fetches.length = 0;
+  wavConversions.length = 0;
+  convertBehavior = async () => {
+    throw new Error("ffmpeg missing");
+  };
+
+  try {
+    const result = await invoke(CUSTOM_SETTINGS);
+    assert.equal(result.success, true, "a failed re-encode must not fail the retry");
+    const part = uploadedPart();
+    assert.equal(part.name, "audio.webm");
+    assert.equal(part.type, "audio/webm");
+  } finally {
+    convertBehavior = async () => CONVERTED_WAV;
+  }
+});
+
 test("retry: a custom URL on Tinfoil's host is refused in the main process", async () => {
   fetches.length = 0;
   const result = await invoke({
@@ -248,6 +375,74 @@ test("retry: mistral goes to Mistral with x-api-key", async () => {
   assert.equal(result.success, true);
   assert.match(fetches[0].url, /api\.mistral\.ai/);
   assert.equal(fetches[0].init.headers["x-api-key"], "mk-mistral");
+});
+
+test("retry: a missing BYOK key on the generic provider branch is a classified error", async () => {
+  fetches.length = 0;
+  const originalGetMistralKey = fakeThis.environmentManager.getMistralKey;
+  fakeThis.environmentManager.getMistralKey = () => "";
+  try {
+    const result = await invoke({
+      cloudTranscriptionProvider: "mistral",
+      cloudTranscriptionMode: "byok",
+      transcriptionMode: "providers",
+    });
+    assert.equal(result.success, false);
+    assert.equal(result.code, "API_KEY_MISSING");
+    assert.equal(result.messageKey, "hooks.audioRecording.errorDescriptions.providerKeyMissing");
+    assert.deepEqual(result.messageParams, { provider: "Mistral" });
+    assert.equal(fetches.length, 0, "a missing key must fail before any request is sent");
+  } finally {
+    fakeThis.environmentManager.getMistralKey = originalGetMistralKey;
+  }
+});
+
+test("retry: missing Corti credentials are a classified error", async () => {
+  fetches.length = 0;
+  const cortiCallsBefore = cortiCalls.length;
+  const originalGetCortiClientId = fakeThis.environmentManager.getCortiClientId;
+  fakeThis.environmentManager.getCortiClientId = () => "";
+  try {
+    const result = await invoke({
+      cloudTranscriptionProvider: "corti",
+      cloudTranscriptionMode: "byok",
+      transcriptionMode: "providers",
+      cortiEnvironment: "eu",
+      cortiTenant: "acme",
+    });
+    assert.equal(result.success, false);
+    assert.equal(result.code, "API_KEY_MISSING");
+    assert.equal(result.messageKey, "hooks.audioRecording.errorDescriptions.providerKeyMissing");
+    assert.deepEqual(result.messageParams, { provider: "Corti" });
+    assert.equal(
+      cortiCalls.length,
+      cortiCallsBefore,
+      "a missing credential must fail before calling Corti"
+    );
+  } finally {
+    fakeThis.environmentManager.getCortiClientId = originalGetCortiClientId;
+  }
+});
+
+test("proxy-corti-transcription: missing credentials are a classified error", async () => {
+  const fn = handlers.get("proxy-corti-transcription");
+  assert.ok(fn, "proxy-corti-transcription must be registered");
+  const cortiCallsBefore = cortiCalls.length;
+  const originalGetCortiClientId = fakeThis.environmentManager.getCortiClientId;
+  fakeThis.environmentManager.getCortiClientId = () => "";
+  try {
+    const result = await fn({ sender: {} }, { audioBuffer: new ArrayBuffer(4) });
+    assert.equal(result.code, "API_KEY_MISSING");
+    assert.equal(result.messageKey, "hooks.audioRecording.errorDescriptions.providerKeyMissing");
+    assert.deepEqual(result.messageParams, { provider: "Corti" });
+    assert.equal(
+      cortiCalls.length,
+      cortiCallsBefore,
+      "a missing credential must fail before calling Corti"
+    );
+  } finally {
+    fakeThis.environmentManager.getCortiClientId = originalGetCortiClientId;
+  }
 });
 
 test("proxy transcription handlers resolve to structured errors instead of rejecting", async () => {
@@ -476,4 +671,111 @@ test("upload: a self-hosted Azure endpoint keeps its deployment URL", async () =
     fetches[0].url,
     "https://myorg.openai.azure.com/openai/deployments/my-deployment/audio/transcriptions?api-version=2025-03-01-preview"
   );
+});
+
+// Electron's net.fetch rejects with a plain Error whose message is the Chromium
+// net error and no code; both BYOK handlers must classify it before replying.
+async function withFetchRejecting(message, run) {
+  const originalFetchResponse = fetchResponse;
+  fetchResponse = () => {
+    throw new Error(message);
+  };
+  try {
+    return await run();
+  } finally {
+    fetchResponse = originalFetchResponse;
+  }
+}
+
+test("retry: a net::ERR_* failure from a BYOK provider is classified as unreachable", async () => {
+  const result = await withFetchRejecting("net::ERR_INTERNET_DISCONNECTED", () =>
+    invoke({
+      cloudTranscriptionProvider: "mistral",
+      cloudTranscriptionMode: "byok",
+      transcriptionMode: "providers",
+    })
+  );
+  assert.equal(result.success, false);
+  assert.equal(result.code, "PROVIDER_UNREACHABLE");
+  assert.equal(result.messageKey, "providerErrors.unreachable");
+  assert.equal(result.messageParams.provider, "Mistral");
+  assert.equal(result.surface, "transcription");
+});
+
+test("retry: a self-hosted timeout names the user's server", async () => {
+  const result = await withFetchRejecting("net::ERR_CONNECTION_TIMED_OUT", () =>
+    invoke({
+      transcriptionMode: "self-hosted",
+      remoteTranscriptionUrl: "https://stt.example.com/v1",
+      cloudTranscriptionProvider: "openai",
+      cloudTranscriptionMode: "byok",
+    })
+  );
+  assert.equal(result.code, "PROVIDER_TIMEOUT");
+  assert.equal(result.messageKey, "providerErrors.selfHosted.timeout");
+});
+
+test("retry: a cancelled request (net::ERR_ABORTED) is not classified", async () => {
+  const result = await withFetchRejecting("net::ERR_ABORTED", () =>
+    invoke({
+      cloudTranscriptionProvider: "mistral",
+      cloudTranscriptionMode: "byok",
+      transcriptionMode: "providers",
+    })
+  );
+  assert.equal(result.success, false);
+  assert.equal(result.messageKey, undefined);
+  assert.equal(result.error, "net::ERR_ABORTED");
+});
+
+test("upload: a net::ERR_* failure from a BYOK provider is classified as unreachable", async () => {
+  const result = await withFetchRejecting("net::ERR_NAME_NOT_RESOLVED", () =>
+    invokeUpload({
+      apiKey: "sk-openai",
+      baseUrl: "https://api.openai.com/v1",
+      model: "gpt-4o-mini-transcribe",
+      provider: "openai",
+      language: "",
+      transcriptionMode: "providers",
+    })
+  );
+  assert.equal(result.success, false);
+  assert.equal(result.code, "PROVIDER_UNREACHABLE");
+  assert.equal(result.messageParams.provider, "OpenAI");
+  assert.equal(result.surface, "transcription");
+  assert.equal(result.error, "Couldn't reach OpenAI. Check your connection.");
+});
+
+test("upload: an HTTP failure logs its status and a redacted body", async (t) => {
+  const debugLogger = require("../../src/helpers/debugLogger");
+  const warnings = [];
+  t.mock.method(debugLogger, "warn", (message, meta) => warnings.push({ message, meta }));
+  const originalFetchResponse = fetchResponse;
+  t.after(() => {
+    fetchResponse = originalFetchResponse;
+  });
+  const body = '{"error":{"message":"Incorrect API key provided: sk-proj-leakedKey12345"}}';
+  fetchResponse = () => ({
+    ok: false,
+    status: 401,
+    headers: new Headers(),
+    text: async () => body,
+    json: async () => JSON.parse(body),
+  });
+
+  const result = await invokeUpload({
+    apiKey: "sk-openai",
+    baseUrl: "https://api.openai.com/v1",
+    model: "gpt-4o-mini-transcribe",
+    provider: "openai",
+    language: "",
+    transcriptionMode: "providers",
+  });
+
+  assert.equal(result.code, "PROVIDER_AUTH_FAILED");
+  const failure = warnings.find(({ message }) => message === "BYOK file transcription failed");
+  assert.ok(failure, "the failure must be logged");
+  assert.equal(failure.meta.status, 401);
+  assert.match(failure.meta.body, /Incorrect API key provided/);
+  assert.equal(failure.meta.body.includes("sk-proj-leakedKey12345"), false);
 });

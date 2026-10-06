@@ -1,18 +1,68 @@
 import type { ModelDefinition } from "../models/ModelRegistry";
+import type { PermissionGuideState, PermissionGuideAction } from "./permissionGuide";
 import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 import type { UsageResponse } from "../lib/usageStore";
 import type { OrgPolicy } from "./policy";
+import type { TechnicalErrorDetailsData } from "../components/ui/useToast";
+import type { ProviderSettingsTarget } from "../utils/describeProviderError";
 import type {
   ManagedEnterpriseConfig,
   ManagedEnterpriseRequestContext,
 } from "./enterpriseIdentity";
-import type { CalendarAvailabilityRequest, CalendarAvailabilityResult } from "./calendar";
+import type {
+  CalendarAvailabilityRequest,
+  CalendarAvailabilityResult,
+  MicrosoftCalendarAccount,
+} from "./calendar";
+import type {
+  ConnectorActionRecord,
+  ConnectorCancelConnectResult,
+  ConnectorCancelReason,
+  ConnectorCommitResult,
+  ConnectorConnectProgress,
+  ConnectorConnectResult,
+  ConnectorDirectResult,
+  ConnectorDisconnectResult,
+  ConnectorEdits,
+  ConnectorPrepareResult,
+  ConnectorQueryResult,
+  ConnectorStatus,
+  ContactMatch,
+  NoteAttendee,
+  NoteAttendeesRequest,
+} from "./connectors";
 
 export type LocalTranscriptionProvider = "whisper" | "nvidia" | "cohere";
+
+export interface MainWindowInputRegion {
+  viewportWidth: number;
+  viewportHeight: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
 export type ChineseScriptPreference = "simplified" | "traditional" | "as-transcribed";
 
 export type InferenceMode = "openwhispr" | "providers" | "local" | "self-hosted" | "enterprise";
+
+/** Each LLM scope's resolved mode and model, from which the main process decides the shared llama-server. */
+export interface LocalServerPrefs {
+  useCleanupModel: boolean;
+  cleanupMode: InferenceMode;
+  cleanupModel: string;
+  useDictationAgent: boolean;
+  dictationAgentMode: InferenceMode;
+  dictationAgentModel: string;
+  noteFormattingMode: InferenceMode;
+  noteFormattingModel: string;
+  chatAgentMode: InferenceMode;
+  chatAgentModel: string;
+  useDictationTranslation: boolean;
+  translationMode: InferenceMode;
+  translationModel: string;
+}
 
 export type SelfHostedType = "openai-compatible" | "lan";
 
@@ -46,6 +96,7 @@ export interface NoteRecordingProvider {
 // renderers (#1624).
 export interface DictationRealtimeSessionOptions {
   provider: string;
+  baseUrl?: string;
   model?: string;
   mode?: "byok" | "openwhispr";
   language?: string;
@@ -54,6 +105,12 @@ export interface DictationRealtimeSessionOptions {
   environment?: string;
   tenant?: string;
   preview?: boolean;
+}
+
+export interface DictationLanguageMetadata {
+  language: string | null;
+  languageConfidence: number | null;
+  languageAudioSeconds?: number;
 }
 
 export type NoteRecordingConfigFailure = { success: false } & PolicyFailureMetadata;
@@ -74,12 +131,22 @@ export type TranscriptionErrorCode =
   | "INVALID_KEY"
   | "MODEL_NOT_AVAILABLE"
   | "CUSTOM_ENDPOINT_INVALID"
+  | "PROVIDER_AUTH_FAILED"
+  | "PROVIDER_ACCESS_DENIED"
+  | "PROVIDER_QUOTA_EXHAUSTED"
+  | "PROVIDER_MODEL_NOT_FOUND"
+  | "PROVIDER_PAYLOAD_TOO_LARGE"
+  | "PROVIDER_BAD_REQUEST"
+  | "PROVIDER_UNAVAILABLE"
+  | "PROVIDER_TIMEOUT"
+  | "PROVIDER_UNREACHABLE"
+  | "PROVIDER_NO_RESPONSE"
+  | "PROVIDER_ERROR"
   | null;
 
 export type MeetingPromptVariant = "detected" | "starting" | "underway";
 
-export interface MeetingDetectionNotificationData {
-  kind: "detection";
+export interface MeetingNotificationData {
   detectionId: string;
   source: string;
   key: string;
@@ -91,31 +158,21 @@ export interface MeetingDetectionNotificationData {
 /** Why auto-end concluded the meeting is over. */
 export type MeetingAutoEndReason = "mic-released" | "silence" | "process-exit";
 
-export interface MeetingAutoEndNotificationData {
-  kind: "auto-end";
-  sessionId: string;
-  expiresAt: number;
-  reason?: MeetingAutoEndReason;
-}
-
-export type MeetingNotificationData =
-  MeetingDetectionNotificationData | MeetingAutoEndNotificationData;
-
 export interface MeetingAutoEndRequest {
   sessionId: string;
   reason?: MeetingAutoEndReason;
 }
 
-export type MeetingAutoEndAction = "restart" | "dismiss";
-
-export interface MeetingAutoEndRestartRequest {
-  sessionId: string;
-}
-
-export interface MeetingAutoEndLifecycleResult {
-  success: boolean;
-  reason?: "invalid-session" | "invalid-action" | "stale-session";
-  error?: string;
+/** Fields a main-process handler resolves with in place of a rejected Error. */
+export interface IpcErrorFields {
+  error: string;
+  code?: string;
+  messageKey?: string;
+  messageParams?: Record<string, string | number>;
+  settingsTarget?: string;
+  technicalDetails?: TechnicalErrorDetailsData;
+  status?: number;
+  surface?: "transcription" | "llm";
 }
 
 /**
@@ -123,8 +180,7 @@ export interface MeetingAutoEndLifecycleResult {
  * rejection, so these handlers resolve with a serialized error instead of throwing.
  */
 export type ProxyTranscriptionResult =
-  | { text: string; model?: string; error?: undefined }
-  | { error: string; code?: string; messageKey?: string; text?: undefined };
+  { text: string; model?: string; error?: undefined } | (IpcErrorFields & { text?: undefined });
 
 export interface AuthTokenState {
   token: string | null;
@@ -300,6 +356,8 @@ export interface NoteItem {
   content: string;
   enhanced_content: string | null;
   enhancement_prompt: string | null;
+  /** The client_id of the template that produced enhanced_content. */
+  enhancement_template_id: string | null;
   enhanced_at_content_hash: string | null;
   note_type: "personal" | "meeting" | "upload";
   source_file: string | null;
@@ -348,6 +406,7 @@ export type NotePushSnapshot = Pick<
   | "content"
   | "enhanced_content"
   | "enhancement_prompt"
+  | "enhancement_template_id"
   | "enhanced_at_content_hash"
   | "note_type"
   | "source_file"
@@ -493,9 +552,13 @@ export interface SpaceItem {
   name: string;
   emoji: string | null;
   sort_order: number;
-  // Server-computed max effective role across assigned teams (ws owner/admin ⇒ admin).
+  // Server-computed effective role: direct grant or best role across assigned
+  // teams (ws owner/admin ⇒ admin).
   my_role: "admin" | "member" | null;
-  // Server-computed deduped union of assigned team rosters.
+  // Direct space_members grant, null when access comes only via teams or the
+  // workspace role. Absent on mirrors written before the API shipped it.
+  my_direct_role?: TeamRole | null;
+  // Server-computed deduped union of direct members and assigned team rosters.
   member_count: number | null;
   teams: SpaceTeamRef[];
   sync_status: "synced" | "pending" | "error";
@@ -638,6 +701,8 @@ export interface InvitationPreview {
   email: string;
   workspace_role: WorkspaceRole;
   team_ids: string[];
+  /** Live spaces the invite grants directly; absent from APIs that predate space grants. */
+  space_names?: string[];
   expires_at: string;
   workspace_id: string;
   workspace_name: string;
@@ -662,11 +727,26 @@ export interface NewWorkspaceApiKey extends WorkspaceApiKey {
   key: string;
 }
 
+export interface TemplateSection {
+  heading: string;
+  instruction: string;
+}
+
+/** A template writes the AI summary; an action edits it or answers in the note chat. */
+export type ActionKind = "template" | "action";
+export type ActionOutput = "summary" | "chat";
+
 export interface ActionItem {
   id: number;
+  /** Stable across devices: a built-in's translation key, otherwise a UUID. */
+  client_id: string;
+  kind: ActionKind;
   name: string;
   description: string;
+  /** A template's context, or an action's instructions. */
   prompt: string;
+  sections: TemplateSection[] | null;
+  output: ActionOutput | null;
   icon: string;
   is_builtin: number;
   sort_order: number;
@@ -699,6 +779,13 @@ export interface CudaWhisperStatus {
   gpuInfo: GpuInfo;
   /** CUDA fell back to CPU on this machine and stays off until retried. */
   gpuFailed?: boolean;
+  /** The whisper-server error line saved with that failure; null when none was readable. */
+  gpuFailReason?: string | null;
+  /** The pack the GPU card describes: the one every whisper start picks, else
+   * an installed pack that failed (#1736). At most one pack reports true. */
+  inUse?: boolean;
+  /** An older release installed the pack and this version can't use it. */
+  needsUpdate?: boolean;
 }
 
 export interface VulkanWhisperStatus {
@@ -708,6 +795,13 @@ export interface VulkanWhisperStatus {
   hasNvidiaGpu: boolean;
   /** Vulkan fell back to CPU on this machine and stays off until retried. */
   gpuFailed?: boolean;
+  /** The whisper-server error line saved with that failure; null when none was readable. */
+  gpuFailReason?: string | null;
+  /** The pack the GPU card describes: the one every whisper start picks, else
+   * an installed pack that failed (#1736). At most one pack reports true. */
+  inUse?: boolean;
+  /** An older release installed the pack and this version can't use it. */
+  needsUpdate?: boolean;
 }
 
 export interface WhisperServerStatus {
@@ -781,7 +875,7 @@ export type SystemAudioStrategy =
 
 export interface MeetingSystemAudioInterruption {
   systemAudioStrategy: SystemAudioStrategy;
-  reason: "no_audio_delivered" | "device_invalidated" | "gone_quiet";
+  reason: "no_audio_delivered" | "device_invalidated" | "gone_quiet" | "loopback_takeover_failed";
   recovering: boolean;
 }
 
@@ -809,6 +903,14 @@ export interface ScreenRecordingAccessResult {
 }
 
 export type CloudReasonPurpose = "cleanup" | "assistant" | "translation" | "noteFormatting";
+
+// Orukeet's audio language estimate, reported for the backend's per-user gate.
+export interface SttDetectedLanguageFields {
+  sttDetectedLanguage?: string;
+  sttDetectedLanguageConfidence?: number;
+  sttDetectedLanguageAudioSeconds?: number;
+  sttDetectedLanguageStatus?: "detected" | "unknown";
+}
 
 export interface ScreenContextImage {
   mediaType: string;
@@ -1089,6 +1191,16 @@ declare global {
       // Basic window operations
       setOnboardingWindowMode?: (mode: "compact" | "expanded" | "restore") => Promise<boolean>;
       setOnboardingActive?: (active: boolean) => Promise<boolean>;
+      openPermissionGuide?: (state: PermissionGuideState) => Promise<boolean>;
+      closePermissionGuide?: () => Promise<boolean>;
+      getPermissionGuideState?: () => Promise<PermissionGuideState | null>;
+      permissionGuideAction?: (action: PermissionGuideAction) => void;
+      startPermissionGuideDrag?: (
+        target: Pick<PermissionGuideState, "sessionId" | "permission">
+      ) => void;
+      onPermissionGuideState?: (callback: (state: PermissionGuideState) => void) => () => void;
+      onPermissionGuideAction?: (callback: (action: PermissionGuideAction) => void) => () => void;
+      verifySystemAudioAccess?: () => Promise<SystemAudioAccessResult>;
       beginOnboardingDemo?: (session: { id: string; kind: OnboardingDemoKind }) => Promise<boolean>;
       endOnboardingDemo?: (id: string) => Promise<boolean>;
       stopOnboardingDemo?: (id: string) => Promise<boolean>;
@@ -1112,7 +1224,15 @@ declare global {
           restoreClipboard?: boolean;
           allowClipboardFallback?: boolean;
         }
-      ) => Promise<{ success: true; pasted: boolean }>;
+      ) => Promise<
+        | { success: true; pasted: boolean; reason?: "modifiers-held" }
+        | {
+            success: false;
+            pasted: false;
+            code: "ACCESSIBILITY_PERMISSION_REQUIRED";
+            clipboardCopied: true;
+          }
+      >;
       captureSelectedText?: (options?: { probeEditable?: boolean }) => Promise<
         | {
             status: "selected";
@@ -1123,6 +1243,8 @@ declare global {
         | {
             status: "editable";
             sessionId: string;
+            /** True when the captured app keeps markdown (spec Appendix A); false means plain text. */
+            acceptsMarkdown: boolean;
           }
         | {
             status: "none" | "unavailable" | "target_changed" | "too_large";
@@ -1144,6 +1266,7 @@ declare global {
           | "selection_unavailable"
           | "selection_changed"
           | "paste_failed"
+          | "modifiers_held"
           | "selection_manager_unavailable";
         error?: string;
       }>;
@@ -1158,15 +1281,18 @@ declare global {
           | "session_expired"
           | "target_changed"
           | "paste_failed"
+          | "modifiers_held"
           | "selection_manager_unavailable";
         error?: string;
       }>;
       hideWindow: () => Promise<void>;
       showDictationPanel: () => Promise<void>;
+      openSettingsSection?: (section: ProviderSettingsTarget) => Promise<{ success: boolean }>;
       captureDictationTarget?: () => Promise<{ success: boolean; pid: number | null }>;
       onToggleDictation: (callback: () => void) => () => void;
       onToggleVoiceAgent?: (callback: () => void) => () => void;
       onToggleTranslation?: (callback: () => void) => () => void;
+      onOpenAssistantPanel?: (callback: () => void) => () => void;
       onStartDictation?: (callback: () => void) => () => void;
       onStopDictation?: (callback: () => void) => () => void;
       onPrepareDictation?: (
@@ -1426,6 +1552,7 @@ declare global {
           content?: string;
           enhanced_content?: string | null;
           enhancement_prompt?: string | null;
+          enhancement_template_id?: string | null;
           enhanced_at_content_hash?: string | null;
           folder_id?: number | null;
           space_id?: number;
@@ -1441,7 +1568,7 @@ declare global {
           updated_by_user_id?: string | null;
           left_team?: number;
         }
-      ) => Promise<{ success: boolean; note?: NoteItem }>;
+      ) => Promise<{ success: boolean; note?: NoteItem; error?: string }>;
       deleteNote: (id: number) => Promise<{ success: boolean }>;
       exportNote: (
         noteId: number,
@@ -1464,10 +1591,6 @@ declare global {
         spaceId?: number | null,
         folderId?: number | null
       ) => Promise<NoteItem[]>;
-      semanticReindexAll: () => Promise<{ success: boolean; indexed?: number; error?: string }>;
-      onSemanticReindexProgress: (
-        callback: (data: { done: number; total: number }) => void
-      ) => () => void;
       updateNoteCloudId: (id: number, cloudId: string) => Promise<NoteItem>;
       updateNoteShareState: (
         id: number,
@@ -1505,7 +1628,8 @@ declare global {
       ) => () => void;
       deleteAccountData?: (
         accountId: string,
-        expectedAuthGeneration: number
+        expectedAuthGeneration: number,
+        options?: { erasingDevice?: boolean }
       ) => Promise<{
         success: boolean;
         code?: string;
@@ -1581,7 +1705,8 @@ declare global {
         name: string,
         description: string,
         prompt: string,
-        icon?: string
+        icon?: string,
+        fields?: { kind?: ActionKind; sections?: TemplateSection[]; output?: ActionOutput }
       ) => Promise<{ success: boolean; action?: ActionItem; error?: string }>;
       updateAction: (
         id: number,
@@ -1591,6 +1716,8 @@ declare global {
           prompt?: string;
           icon?: string;
           sort_order?: number;
+          sections?: TemplateSection[];
+          output?: ActionOutput;
         }
       ) => Promise<{ success: boolean; action?: ActionItem; error?: string }>;
       deleteAction: (id: number) => Promise<{ success: boolean; id?: number; error?: string }>;
@@ -1672,18 +1799,16 @@ declare global {
       saveUiLanguage: (language: string) => Promise<{ success: boolean; language: string }>;
       setUiLanguage: (language: string) => Promise<{ success: boolean; language: string }>;
       saveAllKeysToEnv: () => Promise<{ success: boolean; path: string }>;
-      syncStartupPreferences: (prefs: {
-        useLocalWhisper: boolean;
-        localTranscriptionProvider: LocalTranscriptionProvider;
-        model?: string;
-        language?: string;
-        useCleanupModel: boolean;
-        cleanupMode: InferenceMode;
-        cleanupModel?: string;
-        useDictationAgent: boolean;
-        dictationAgentMode: InferenceMode;
-        dictationAgentModel?: string;
-      }) => Promise<void>;
+      syncStartupPreferences: (
+        prefs: LocalServerPrefs & {
+          useLocalWhisper: boolean;
+          localTranscriptionProvider: LocalTranscriptionProvider;
+          model?: string;
+          language?: string;
+          keepLocalModelLoaded: boolean;
+          policySettled: boolean;
+        }
+      ) => Promise<void>;
 
       // Clipboard operations
       checkAccessibilityPermission: (silent?: boolean) => Promise<boolean>;
@@ -1768,6 +1893,7 @@ declare global {
         }) => void
       ) => () => void;
       onGpuFallbackNotification: (callback: () => void) => () => void;
+      onWhisperGpuStatusChanged: (callback: () => void) => () => void;
 
       // One-time "GPU pack needs re-downloading" notice from the legacy-layout migration
       getGpuPackMigrationNotice: () => Promise<{ packs: string[] } | null>;
@@ -1841,8 +1967,23 @@ declare global {
         modelId: string,
         agentName: string | null,
         config: any
-      ) => Promise<{ success: boolean; text?: string; error?: string }>;
+      ) => Promise<{
+        success: boolean;
+        text?: string;
+        error?: string;
+        code?: string;
+        details?: Record<string, unknown>;
+      }>;
       checkLocalReasoningAvailable: () => Promise<boolean>;
+      /** The largest context this machine can give a bundled model; drives chunked note generation. */
+      getLocalContextBudget: (modelId: string) => Promise<{
+        success: boolean;
+        maxContextTokens?: number;
+        modelName?: string;
+        error?: string;
+      }>;
+      /** Aborts the local request tagged with this `requestId`, if it is still in flight. */
+      cancelLocalReasoning: (requestId: string) => Promise<void>;
 
       // Anthropic reasoning
       processAnthropicReasoning: (
@@ -1850,7 +1991,7 @@ declare global {
         modelId: string,
         agentName: string | null,
         config: any
-      ) => Promise<{ success: boolean; text?: string; error?: string }>;
+      ) => Promise<{ success: boolean; text?: string } & Partial<IpcErrorFields>>;
 
       // Enterprise reasoning (Bedrock, Azure, Vertex)
       processEnterpriseReasoning: (
@@ -1907,7 +2048,6 @@ declare global {
       llamaServerStart: (
         modelId: string
       ) => Promise<{ success: boolean; port?: number; error?: string }>;
-      llamaServerStop: () => Promise<{ success: boolean; error?: string }>;
       llamaServerStatus: () => Promise<LlamaServerStatus>;
       llamaGpuReset: () => Promise<{ success: boolean; error?: string }>;
       detectVulkanGpu?: () => Promise<VulkanGpuResult>;
@@ -1940,6 +2080,8 @@ declare global {
       startControlPanelDrag: () => Promise<void>;
       stopControlPanelDrag: () => Promise<void>;
       setMainWindowInteractivity: (interactive: boolean) => Promise<void>;
+      setMainWindowInputRegion: (region: MainWindowInputRegion | null) => Promise<boolean>;
+      onMainWindowVisibilityChanged: (callback: (visible: boolean) => void) => () => void;
       setNotificationInteractivity: (interactive: boolean) => Promise<void>;
       resizeMainWindow: (
         sizeKey:
@@ -1971,6 +2113,7 @@ declare global {
 
       // App management
       cleanupApp: () => Promise<{ success: boolean; message: string; errors?: string[] }>;
+      relaunchApp: () => Promise<void>;
 
       // Update operations
       checkForUpdates: () => Promise<UpdateCheckResult>;
@@ -2005,6 +2148,7 @@ declare global {
         isUsingNativeShortcut: boolean;
         supportsPushToTalk: boolean;
         pushToTalkUnavailableReason: string | null;
+        linuxInputAccessDenied?: boolean;
       }>;
       getHyprlandConfigStatus?: () => Promise<{ canWrite: boolean; path: string } | null>;
 
@@ -2044,6 +2188,7 @@ declare global {
 
       // Settings shortcut (Cmd+, / Ctrl+,)
       onShowSettings?: (callback: () => void) => () => void;
+      getPendingSettingsSection?: () => Promise<string | null>;
 
       // Accessibility permission events (macOS)
       markMacAccessibilityFeaturesReady?: (expectedAccountScope?: ActiveAccountScope) => void;
@@ -2265,7 +2410,6 @@ declare global {
       requestScreenRecordingAccess?: () => Promise<ScreenRecordingAccessResult>;
       captureScreenContext?: () => Promise<ScreenContextImage | null>;
       setScreenContextEnabled?: (enabled: boolean) => Promise<{ success: boolean }>;
-      showEmojiPanel?: () => Promise<boolean>;
       toggleMediaPlayback?: () => Promise<boolean>;
       pauseMediaPlayback?: () => Promise<boolean>;
       resumeMediaPlayback?: () => Promise<boolean>;
@@ -2323,7 +2467,9 @@ declare global {
           diarization?: boolean;
           localDate?: string;
           analyticsOccurredAt?: string;
-        }
+          // Why a managed-streaming user's dictation went batch (rollout metric).
+          streamingFallbackReason?: string;
+        } & SttDetectedLanguageFields
       ) => Promise<
         {
           success: boolean;
@@ -2350,7 +2496,8 @@ declare global {
           screenContext?: ScreenContextImage;
           language?: string;
           locale?: string;
-        }
+          streamingFallbackReason?: string;
+        } & SttDetectedLanguageFields
       ) => Promise<{
         success: boolean;
         text?: string;
@@ -2380,7 +2527,7 @@ declare global {
           analyticsOccurredAt?: string;
           analyticsWordCount?: number;
           analyticsCounterVersion?: number;
-        }
+        } & SttDetectedLanguageFields
       ) => Promise<{
         success: boolean;
         wordsUsed?: number;
@@ -2586,9 +2733,9 @@ declare global {
       }>;
 
       // Agent Mode
-      updateVoiceAgentHotkey?: (hotkey: string) => Promise<{ success: boolean; message: string }>;
+      updateVoiceAgentHotkey?: (hotkey: string) => Promise<{ success: boolean; message?: string }>;
       getVoiceAgentKey?: () => Promise<string>;
-      updateTranslationHotkey?: (hotkey: string) => Promise<{ success: boolean; message: string }>;
+      updateTranslationHotkey?: (hotkey: string) => Promise<{ success: boolean; message?: string }>;
       getTranslationKey?: () => Promise<string>;
       createAgentConversation?: (
         title: string,
@@ -2852,6 +2999,55 @@ declare global {
       gcalGetUpcomingEvents?: (
         windowMinutes?: number
       ) => Promise<{ success: boolean; events: any[] }>;
+      connectorStatus?: () => Promise<ConnectorStatus[]>;
+      connectorPrepare?: (
+        connectorId: string,
+        action: string,
+        args: Record<string, unknown>
+      ) => Promise<ConnectorPrepareResult>;
+      /** Reads provider data for the model (an issue search); never writes. */
+      connectorQuery?: (
+        connectorId: string,
+        action: string,
+        args: Record<string, unknown>
+      ) => Promise<ConnectorQueryResult>;
+      connectorCommit?: (actionId: string, edits: ConnectorEdits) => Promise<ConnectorCommitResult>;
+      /** Cancels a pending approval, or a direct run (by its runId) still waiting on policy. */
+      connectorCancel?: (
+        actionId: string,
+        reason: ConnectorCancelReason
+      ) => Promise<{ cancelled: boolean }>;
+      connectorRunDirect?: (
+        connectorId: string,
+        action: string,
+        args: Record<string, unknown>,
+        runId?: string
+      ) => Promise<ConnectorDirectResult>;
+      connectorRecentActions?: (
+        connectorId: string,
+        limit?: number
+      ) => Promise<ConnectorActionRecord[]>;
+      connectorFindContacts?: (
+        query: string
+      ) => Promise<{ contacts: ContactMatch[]; hasMore?: boolean; unavailableReason?: string }>;
+      /**
+       * A note's participants, plus its calendar event's organizer, minus the
+       * user and rooms (main applies find_contact's exclusions).
+       */
+      connectorNoteAttendees?: (
+        request: NoteAttendeesRequest
+      ) => Promise<{ attendees: NoteAttendee[]; unavailableReason?: string }>;
+      connectorConnect?: (connectorId: string) => Promise<ConnectorConnectResult>;
+      /**
+       * Stops this connector's connect in progress, whichever account started it
+       * (including one still waiting on policy); the connect ends as oauth_cancelled.
+       */
+      connectorCancelConnect?: (connectorId: string) => Promise<ConnectorCancelConnectResult>;
+      connectorDisconnect?: (connectorId: string) => Promise<ConnectorDisconnectResult>;
+      onConnectorStatusChanged?: (callback: (statuses: ConnectorStatus[]) => void) => () => void;
+      onConnectorConnectProgress?: (
+        callback: (progress: ConnectorConnectProgress) => void
+      ) => () => void;
       calendarGetAvailability?: (
         request: CalendarAvailabilityRequest
       ) => Promise<
@@ -2894,6 +3090,7 @@ declare global {
         noteId?: number | null;
         sessionId: string;
         autoEndEligible: boolean;
+        aecEnabled?: boolean;
       }) => Promise<
         {
           success: boolean;
@@ -3063,9 +3260,19 @@ declare global {
         options: DictationRealtimeSessionOptions
       ) => Promise<{ success: boolean } & PolicyFailureMetadata>;
       dictationRealtimeSend?: (buffer: ArrayBuffer) => void;
+      dictationRealtimeFinalize?: () => Promise<
+        {
+          success: boolean;
+          text?: string;
+          error?: string;
+        } & Partial<DictationLanguageMetadata>
+      >;
       dictationRealtimeStop?: () => Promise<{ success: boolean; text: string }>;
       onDictationRealtimePartial?: (callback: (text: string) => void) => () => void;
       onDictationRealtimeFinal?: (callback: (text: string) => void) => () => void;
+      onDictationRealtimeLanguage?: (
+        callback: (metadata: DictationLanguageMetadata) => void
+      ) => () => void;
       onDictationRealtimeError?: (callback: (error: string) => void) => () => void;
       onDictationRealtimeSessionEnd?: (callback: (data: { text: string }) => void) => () => void;
 
@@ -3074,11 +3281,16 @@ declare global {
       onGcalEventsSynced?: (callback: (data: any) => void) => () => void;
 
       // Microsoft Calendar
-      mcalStartOAuth?: () => Promise<{ success: boolean; email?: string; error?: string }>;
+      mcalStartOAuth?: () => Promise<{
+        success: boolean;
+        email?: string;
+        tenantId?: string | null;
+        error?: string;
+      }>;
       mcalDisconnect?: (email?: string) => Promise<{ success: boolean; error?: string }>;
       mcalGetConnectionStatus?: () => Promise<{
         connected: boolean;
-        accounts: Array<{ email: string }>;
+        accounts: MicrosoftCalendarAccount[];
       }>;
       mcalSetPrimaryOnly?: (value: boolean) => Promise<{ success: boolean; error?: string }>;
       onMcalConnectionChanged?: (callback: (data: any) => void) => () => void;
@@ -3094,13 +3306,12 @@ declare global {
       ) => () => void;
       onAcalEventsSynced?: (callback: (data: any) => void) => () => void;
 
-      meetingDetectionGetPreferences?: () => Promise<{ success: boolean; preferences?: any }>;
-      meetingDetectionSetPreferences?: (
-        prefs: Record<string, boolean>
-      ) => Promise<{ success: boolean }>;
-      syncNotificationPreferences?: (
-        prefs: Record<string, boolean>
-      ) => Promise<{ success: boolean }>;
+      syncNotificationPreferences?: (prefs: {
+        notificationsEnabled: boolean;
+        notifyMeetingDetection: boolean;
+        notifyCalendarReminders: boolean;
+        meetingProcessDetection: boolean;
+      }) => Promise<{ success: boolean }>;
       setSpeakerDiarizationEnabled?: (
         enabled: boolean
       ) => Promise<{ success: boolean; error?: string }>;
@@ -3139,14 +3350,6 @@ declare global {
       onMeetingAutoEndRequested?: (
         callback: (request: MeetingAutoEndRequest) => void
       ) => () => void;
-      meetingAutoEndCompleted?: (sessionId: string) => Promise<MeetingAutoEndLifecycleResult>;
-      meetingAutoEndRespond?: (
-        sessionId: string,
-        action: MeetingAutoEndAction
-      ) => Promise<MeetingAutoEndLifecycleResult>;
-      onMeetingAutoEndRestartRequested?: (
-        callback: (request: MeetingAutoEndRestartRequest) => void
-      ) => () => void;
       getMeetingNotificationData?: () => Promise<MeetingNotificationData | null>;
       meetingNotificationReady?: () => Promise<void>;
       meetingNotificationRespond?: (
@@ -3154,6 +3357,7 @@ declare global {
         action: string
       ) => Promise<{ success: boolean }>;
       joinCalendarMeeting?: (eventId: string) => Promise<{ success: boolean }>;
+      startManualMeeting?: () => Promise<void>;
       getPendingMeetingNoteNavigation?: () => Promise<{
         noteId: number;
         folderId: number;

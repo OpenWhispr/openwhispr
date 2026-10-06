@@ -121,8 +121,12 @@
       "mouseButtonOnlyMac": "マウスボタンのホットキーは現在 macOS でのみサポートされています。",
       "alreadyRegistered": "\"{{hotkey}}\" は別のアプリケーションで既に登録されています。",
       "osReserved": "\"{{hotkey}}\" はデスクトップ環境で予約されている可能性があります。",
+      "rightModifierNeedsListener": "\"{{hotkey}}\" はこのデスクトップでは使用できません。ショートカットには通常のキーが必要です。Control+Alt+Space のようにキーを追加してください。",
       "holdNeedsReleaseKey": "ホールドして話すには、macOS が離したことを検知できるキーが必要です。Globe、右 Option のような右側のキー、または修飾キー付きのショートカットです。タップならどのキーでも使えます。",
+      "holdNeedsRegularKey": "ホールドを使うには、Control+Alt+Space のようにショートカットに通常のキーを追加してください。デスクトップは修飾キーだけを押し続けていることを検知できません。",
+      "holdNeedsGnomePortal": "ホールドを使うには、GNOME 48 以降に含まれるグローバルショートカットポータルが必要です。タップはポータルがなくても使えます。",
       "registrationFailed": "\"{{hotkey}}\" を登録できませんでした。別のアプリケーションで使用されている可能性があります。",
+      "windowsKeyListenerMissing": "\"{{hotkey}}\" には Windows のキーリスナーが必要ですが、このインストールにはありません。通常のキーを使うショートカットを選んでください。",
       "updateFailedCheckFormat": "「{{hotkey}}」へのホットキーの更新に失敗しました。形式が正しいか確認してください。",
       "trySuggestions": "お試しください: {{suggestions}}",
       "slotConflict": "このホットキーは既に{{slot}}で使用されています。"
@@ -158,7 +162,7 @@
     "close": "閉じる"
   },
   "windows": {
-    "pttUnavailable": "プッシュトゥトークのネイティブリスナーが利用できません"
+    "pttUnavailable": "OpenWhispr のキーリスナーを利用できません。"
   },
   "common": {
     "continue": "続ける",
@@ -204,6 +208,7 @@
     "policyAiProcessingRestricted": "AI処理は組織によって制限されています。",
     "policyAgentRestricted": "AIアシスタントの使用は組織によって制限されています。",
     "policyTranscriptionRestricted": "文字起こしは組織によって制限されています。",
+    "policyUnresolved": "組織の設定がまだ読み込まれていません。しばらくしてからもう一度お試しください。",
     "managedConfigLoading": "組織のマネージド設定を確認しています。しばらくしてからもう一度お試しください。",
     "managedConfigUnavailable": "マネージド エンタープライズ アクセスを利用できません。再度サインインするか、管理者にお問い合わせください。",
     "managedPolicyConflict": "ワークスペースのポリシーによりマネージド アクセスがブロックされています。管理者にお問い合わせください。"
@@ -576,6 +581,20 @@
         "title": "ダウンロードが完了しませんでした",
         "description": "接続とディスクの空き容量を確認して、再試行してください。それでも失敗する場合は、管理者にお問い合わせください。"
       }
+    },
+    "permissionGuide": {
+      "label": "権限ガイド",
+      "return": "初期設定に戻る",
+      "missingApp": "または＋でアプリを選択",
+      "failed": "アクセスを確認できませんでした。",
+      "microphone": "「マイク」でOpenWhisprをオンにしてください。",
+      "accessibility": "OpenWhisprを「アクセシビリティ」にドラッグしてオンにしてください。",
+      "systemAudio": "「システムオーディオの録音のみ」でOpenWhisprをオンにしてください。",
+      "screenContext": "OpenWhisprを「画面収録とシステムオーディオ録音」にドラッグしてオンにしてください。",
+      "settings": "設定を開く",
+      "check": "再確認",
+      "restart": "アプリを再起動",
+      "restartRequired": "画面アクセスを適用するにはOpenWhisprを再起動してください。"
     }
   },
   "streaming": {
@@ -635,12 +654,14 @@
       "couldNotDeleteTitle": "削除できませんでした",
       "couldNotDeleteDescription": "この文字起こしは既に削除されている可能性があります。",
       "couldNotDeleteDescriptionGeneric": "問題が発生しました。もう一度お試しください。",
-      "empty": "文字起こし履歴はまだありません",
-      "emptyDescription": "どのアプリでもホットキーを押して話し始めてください。すべての文字起こしは、このデバイス上にプライベートに保存されます。",
-      "sectionTitle": "文字起こし",
+      "empty": "最初のディクテーションを始めましょう",
+      "emptyDescription": "ディクテーションしたテキストがここに表示されます。",
+      "shortcutHint": "{{shortcut}} を押して話し始めてください。",
       "dataRetentionDisabled": "データ保持が無効です。文字起こしと音声は履歴に保存されません。",
-      "press": "押してください",
-      "toStart": "開始するには",
+      "welcomeBack": "おかえりなさい",
+      "welcomeBackNamed": "おかえりなさい、{{name}}さん",
+      "welcome": "ようこそ",
+      "welcomeNamed": "ようこそ、{{name}}さん",
       "dateGroups": {
         "today": "今日",
         "yesterday": "昨日"
@@ -701,6 +722,11 @@
       "title": "必須モデルがありません",
       "description": "組織では、このデバイスにこれらのモデルが必要です：{{models}}。",
       "download": "ダウンロード"
+    },
+    "cloudNudge": {
+      "title": "サインインしました",
+      "description": "音声入力は引き続きご自身の設定で動作します。いつでも OpenWhispr Cloud に切り替えられます。",
+      "action": "設定を開く"
     }
   },
   "reasoning": {
@@ -746,6 +772,10 @@
     "disableThinking": {
       "label": "思考出力を無効にする",
       "help": "推論トークンをスキップして出力をクリーンに保ちます。クリーンアップに推奨。一部のサーバーはこのヒントを無視します。"
+    },
+    "keepModelLoaded": {
+      "label": "モデルを読み込んだままにする",
+      "help": "5分間使われなくてもアンロードせずメモリに保持するため、次のリクエストでコールドスタートが発生しません。ローカルモデルを使うすべての機能に適用されます。"
     },
     "selfHosted": {
       "endpointHelp": "ローカルネットワーク上の OpenAI 互換サーバーを指定します（例: Ollama、LM Studio、vLLM、llama-server）。"
@@ -911,7 +941,10 @@
         "managedRouteInvalid": "設定の不一致により、マネージド文字起こしを開始できませんでした。もう一度お試しいただくか、管理者にお問い合わせください。",
         "managedAuthRejected": "組織のマネージド文字起こしの認証情報が拒否されました。管理者にお問い合わせください。",
         "streamingOnlyProvider": "このプロバイダーはライブ文字起こしのみに対応しています。ファイルのアップロードや再実行には別のプロバイダーを選択してください。",
-        "providerKeyMissing": "文字起こしプロバイダーのAPIキーが設定されていません。設定 → 音声テキスト変換 から追加してください。"
+        "providerKeyMissing": "文字起こしプロバイダーのAPIキーが設定されていません。設定 → 音声テキスト変換 から追加してください。",
+        "cleanupTruncated": "AI モデルの出力が上限に達し、ディクテーションのクリーンアップが完了しませんでした。",
+        "cleanupDuplicated": "AI クリーンアップが文字起こしを繰り返しました。元のテキストを保持しました。",
+        "cleanupEmptyReply": "AI モデルが空の応答を返したため、クリーンアップされたテキストがありません。"
       },
       "translationFallback": {
         "unreachableTitle": "翻訳を利用できません",
@@ -924,14 +957,33 @@
         "description": "ホットキーが押されたままディクテーションが終了したため、テキストは貼り付けられませんでした。文字起こしはクリップボードにあります。",
         "descriptionClipboardFailed": "ホットキーが押されたままディクテーションが終了したため、テキストは貼り付けられず、クリップボードにもコピーできませんでした。"
       },
+      "modifiersHeld": {
+        "title": "文字起こしは貼り付けられませんでした",
+        "description": "修飾キー（Ctrl や Shift など）が押されたままだったため、テキストは貼り付けられませんでした。文字起こしはクリップボードにあります。",
+        "descriptionClipboardFailed": "修飾キー（Ctrl や Shift など）が押されたままだったため、テキストは貼り付けられず、クリップボードにもコピーできませんでした。"
+      },
       "selectionEditing": {
         "notAppliedTitle": "選択範囲の編集を適用できませんでした",
         "changed": "処理中に選択したテキストまたは対象アプリが変更されました。置換は行われていません。",
         "expired": "選択範囲の編集が期限切れになりました。テキストを選択し直して再試行してください。",
         "pasteFailed": "OpenWhispr は編集を生成しましたが、選択したテキストを置換できませんでした。",
+        "modifiersHeld": "OpenWhispr は編集を生成しましたが、修飾キー（Ctrl や Shift など）が押されたままだったため、適用されませんでした。編集内容はクリップボードにあります。",
+        "modifiersHeldClipboardFailed": "OpenWhispr は編集を生成しましたが、修飾キー（Ctrl や Shift など）が押されたままだったため、適用されず、クリップボードにもコピーできませんでした。",
         "unavailable": "OpenWhispr は選択したテキストを安全に読み取れませんでした。アクセシビリティまたは入力自動化の権限を確認してください。",
         "tooLarge": "選択範囲が大きすぎます。6,000文字以内を選択してください。",
         "reasoningFailed": "AI は選択範囲の編集を完了できませんでした。元のテキストは変更されていません。"
+      },
+      "pastePermission": {
+        "title": "自動貼り付けを許可",
+        "description": "システム設定 → プライバシーとセキュリティ → アクセシビリティでOpenWhisprを有効にしてください。",
+        "settingsFailed": "設定を開けませんでした。システム設定 → プライバシーとセキュリティ → アクセシビリティを開き、OpenWhisprを有効にしてください。",
+        "manualPaste": "下のボタンでテキストをコピーし、{{shortcut}}を押して貼り付けてください。",
+        "openSettings": "設定を開く",
+        "copyToClipboard": "テキストをコピー",
+        "copyFailed": "コピーに失敗しました"
+      },
+      "pasteFailed": {
+        "title": "自動貼り付けに失敗しました"
       }
     },
     "clipboard": {
@@ -1823,10 +1875,10 @@
       "removing": "削除中...",
       "resetAll": {
         "confirmText": "すべて削除",
-        "description": "すべてのローカル設定、文字起こし、音声録音、ダウンロード済みAIモデル、カレンダー接続、キャッシュデータが完全に削除されます。クラウドデータとアカウントは影響を受けません。リセット後にアプリが再読み込みされます。",
+        "description": "すべてのローカル設定、文字起こし、音声録音、ダウンロード済みAIモデル、カレンダー接続、キャッシュデータが完全に削除されます。クラウドデータとアカウントは影響を受けません。リセット後にアプリが再起動します。",
         "failedDescription": "問題が発生しました。もう一度試すか、アプリを再インストールしてください。",
         "failedTitle": "リセットできませんでした",
-        "successDescription": "すべてリセットされました。アプリを再読み込みします。",
+        "successDescription": "すべてリセットされました。アプリを再起動します。",
         "successTitle": "完了しました",
         "title": "すべてのアプリデータをリセット"
       },
@@ -2226,6 +2278,12 @@
       },
       "transcriptionPreview": "リアルタイム文字起こしプレビュー",
       "transcriptionPreviewDescription": "クリーンアップ前にフローティングウィンドウで文字起こしを表示",
+      "aec": {
+        "toggle": {
+          "title": "会議のエコーキャンセル",
+          "description": "マイクに漏れ込む会議の音声をキャンセルします。ヘッドフォンやイヤフォンを使用しているときはオフのままにしてください。キャンセルすべきエコーがなく、あなたの声を完全に抑制してしまう可能性があります。"
+        }
+      },
       "vad": {
         "title": "音声アクティビティ検出",
         "description": "ローカル Whisper 文字起こしで Silero VAD が発話を検出・分割する方法を設定します",
@@ -2299,7 +2357,7 @@
       "tab": {
         "general": "一般",
         "members": "メンバー",
-        "teams": "チーム",
+        "teams": "グループ",
         "developer": "開発者"
       },
       "role": {
@@ -2357,33 +2415,33 @@
         "errorTitle": "リクエストを更新できませんでした"
       },
       "teams": {
-        "title": "チーム",
-        "description": "チームスペースへのアクセスを付与するワークスペースメンバーのグループ。",
-        "new": "新しいチーム",
-        "empty": "チームはまだありません。",
-        "createFirst": "最初のチームを作成",
+        "title": "グループ",
+        "description": "チームスペースへのアクセスをまとめて付与できるワークスペースメンバーのグループ。",
+        "new": "新しいグループ",
+        "empty": "グループはまだありません。",
+        "createFirst": "最初のグループを作成",
         "addMembersLabel": "メンバーを追加",
-        "createTitle": "チームを作成",
-        "nameLabel": "チーム名",
+        "createTitle": "グループを作成",
+        "nameLabel": "グループ名",
         "memberCount_one": "{{count}}人のメンバー",
         "memberCount_other": "{{count}}人のメンバー",
         "membersButton": "メンバー",
         "grantsAccessToSpaces_one": "{{count}} 件のスペースへのアクセスを付与しています",
         "grantsAccessToSpaces_other": "{{count}} 件のスペースへのアクセスを付与しています",
-        "couldNotCreate": "チームを作成できませんでした",
+        "couldNotCreate": "グループを作成できませんでした",
         "created": "{{team}} を作成しました",
         "deleted": "{{team}} を削除しました",
         "deleteConfirmTitle": "{{team}} を削除しますか？",
-        "deleteConfirmDescription": "チームをアーカイブします。このチームが付与していたアクセスは失われます。",
-        "deleteConfirmSpaceAccess_one": "このチームは {{count}} 件のスペースへのアクセスを付与しています。メンバーはそのアクセスを失います。",
-        "deleteConfirmSpaceAccess_other": "このチームは {{count}} 件のスペースへのアクセスを付与しています。メンバーはそのアクセスを失います。",
+        "deleteConfirmDescription": "グループをアーカイブします。このグループが付与していたアクセスは失われます。",
+        "deleteConfirmSpaceAccess_one": "このグループは {{count}} 件のスペースへのアクセスを付与しています。メンバーはそのアクセスを失います。",
+        "deleteConfirmSpaceAccess_other": "このグループは {{count}} 件のスペースへのアクセスを付与しています。メンバーはそのアクセスを失います。",
         "members": {
           "title": "{{team}} のメンバー",
           "removeConfirm": "{{name}} を {{team}} から外しますか？",
-          "leave": "チームから退出",
+          "leave": "グループから退出",
           "leftTeam": "{{team}} から退出しました",
           "leaveConfirm": "{{team}} から退出しますか？",
-          "leaveConfirmDescription": "他のチームに含まれていない限り、このチームが付与するスペースへのアクセスを失います。"
+          "leaveConfirmDescription": "直接追加されているか他のグループに含まれていない限り、このグループが付与するスペースへのアクセスを失います。"
         }
       },
       "invites": {
@@ -2648,6 +2706,12 @@
         "segmentation": "話者分離のための発話区間検出",
         "embedding_en": "話者識別のための声紋認識"
       }
+    },
+    "errors": {
+      "contextTooLarge": "このコンピューターでは長すぎて {{model}} が読み取れません。約 {{needed}} トークンのコンテキストが必要ですが、メモリに収まるのは {{max}} までです。クラウドモデルを使うか、選択範囲を短くして実行してください。",
+      "contextTooLargeGeneric": "このコンピューターでは長すぎて {{model}} が読み取れません。クラウドモデルを使うか、選択範囲を短くして実行してください。",
+      "localServerUnavailable": "このコンピューターでは {{model}} を起動できませんでした。もう一度試すか、クラウドモデルに切り替えてください。",
+      "localModelBusy": "ローカルモデルはまだ別のリクエストを処理しています。完了を待ってから、もう一度お試しください。"
     }
   },
   "notes": {
@@ -2664,7 +2728,7 @@
     "sidebar": {
       "newNote": "新しいノート",
       "searchNotes": "ノートを検索",
-      "actions": "アクション"
+      "templatesAndActions": "テンプレートとアクション"
     },
     "spaces": {
       "privateSpaces": "プライベートノート",
@@ -2674,20 +2738,32 @@
       "newSpace": "新しいチームスペース",
       "newSpaceInWorkspace": "{{workspace}} に新しいチームスペース",
       "createTitle": "チームスペースを作成",
-      "createDescription": "ワークスペース内の共有エリアで、1つ以上のチームがアクセスできます。",
-      "nameLabel": "名前",
-      "emojiLabel": "絵文字",
+      "createDescription": "ワークスペース内の共有エリアです。追加した人やグループがアクセスできます。",
+      "nameAndIconLabel": "名前とアイコン",
       "create": "作成",
       "couldNotCreate": "スペースを作成できませんでした",
       "created": "{{space}} を作成しました",
-      "rename": "名前を変更",
       "changeEmoji": "絵文字を変更",
+      "settings": "設定",
+      "settingsTitle": "スペースの設定",
       "couldNotRename": "スペースの名前を変更できませんでした",
-      "renamed": "{{space}} の名前を変更しました",
+      "couldNotChangeEmoji": "絵文字を変更できませんでした",
       "deleteSpace": "スペースを削除",
+      "deleteHintTeam": "全員からこのスペースを削除します。グループは残ります。",
+      "deleteHintLocal": "このデバイス上のフォルダーとノートを含め、このスペースを完全に削除します。",
+      "leaveTitle": "スペースから退出",
+      "leaveDescription": "あなたのノートは他のメンバーが引き続き利用できます。",
+      "leave": "スペースから退出",
+      "leaveConfirmTitle": "{{space}} から退出しますか？",
+      "leaveConfirmDescription": "{{teams}} から削除され、それらのグループが開ける他のスペースへのアクセスも失われます。",
+      "leaveDirectDescription": "このスペースへのアクセスを失います。",
+      "leaveKeepsGroupAccess": "{{groups}} 経由のアクセスは維持されます。",
+      "left": "{{space}} から退出しました",
+      "stillViaGroups": "{{groups}} 経由で引き続き {{space}} にアクセスできます。",
+      "couldNotLeave": "スペースから退出できませんでした",
       "deleteConfirmTitle": "スペースを削除しますか？",
       "deleteConfirmDescription": "{{space}}とそのすべてのフォルダとノートがこのデバイスから完全に削除されます。",
-      "deleteConfirmTeamDescription": "{{space}} を全員に対して削除します。チームは残りますが、メンバーはすべてのフォルダーとノートへのアクセスを失います。",
+      "deleteConfirmTeamDescription": "{{space}} を全員に対して削除します。グループは残りますが、メンバーはすべてのフォルダーとノートへのアクセスを失います。",
       "deleteTypeName": "確認のため {{space}} と入力してください",
       "couldNotDelete": "スペースを削除できませんでした",
       "deleted": "{{space}} を削除しました",
@@ -2709,6 +2785,7 @@
       "undo": "元に戻す",
       "emptySpace": "まだノートがありません。ここのノートは{{space}}の全員に表示されます。",
       "emptyTeamHint": "共有されたスペースはここに表示されます。",
+      "emptyTeamTitle": "共有スペースはありません",
       "noteCount_one": "{{count}} 件のノート",
       "noteCount_other": "{{count}} 件のノート",
       "accessRevoked": "{{space}} へのアクセス権がなくなりました",
@@ -2723,9 +2800,10 @@
       "conflictKeep": "編集を続ける",
       "editedBy": "{{name}} が編集 · {{time}}",
       "members": {
-        "addPeopleToTeam": "{{team}} にメンバーを追加",
+        "addPeople": "メンバーを追加",
         "addedToTeam": "{{name}} を {{team}} に追加しました",
         "removedFromTeam": "{{name}} を {{team}} から削除しました",
+        "stillViaGroups": "{{name}} は {{groups}} 経由で引き続きアクセスできます",
         "roleUpdated": "役割を更新しました",
         "you": "自分",
         "addFailed": "{{total}}人中{{failed}}人を追加できませんでした",
@@ -2733,28 +2811,32 @@
         "noResults": "メンバーが見つかりません",
         "roleAdmin": "管理者",
         "roleMember": "メンバー",
+        "roleAdminDescription": "メンバーと設定を管理できます。",
+        "roleMemberDescription": "ノートの閲覧と編集ができます。",
         "remove": "削除",
         "removeConfirm": "{{name}} を {{space}} から削除しますか？",
         "removeConfirmDescription": "このスペースのすべてのノートにアクセスできなくなります。",
+        "removeKeepsGroupAccess": "{{groups}} 経由のアクセスは維持されます。",
         "inviteFooter": "{{email}} をワークスペースに招待…",
-        "empty": "まだ誰も追加されていません"
+        "empty": "まだ誰も追加されていません",
+        "viaGroup": "{{group}} 経由",
+        "managedByGroup": "{{group}} 経由で追加されています。削除はそのグループで行ってください。",
+        "roleFromGroup": "{{group}} 経由の管理者です。変更はそちらで行ってください。",
+        "invited": "{{email}} に招待を送信しました"
       },
       "invitedTo_one": "{{count}} 件のチームスペースに参加します",
       "invitedTo_other": "{{count}} 件のチームスペースに参加します",
+      "invitedToSpaces": "{{spaces}} に参加します",
       "teamsMembers": {
-        "menu": "チームとメンバー…",
-        "title": "{{space}} のチームとメンバー",
-        "noTeams": "このスペースにアクセスできるチームはまだありません。ワークスペース管理者のみが閲覧できます。",
-        "addTeamLabel": "このスペースにチームを追加",
-        "chooseTeam": "チームを選択…",
+        "title": "{{space}} のメンバー",
+        "noTeams": "このスペースにアクセスできるグループはまだありません。",
+        "addTeamLabel": "このスペースにグループを追加",
+        "chooseTeam": "グループを選択…",
         "teamAdded": "{{team}} を {{space}} に追加しました",
         "teamRemoved": "{{team}} を {{space}} から削除しました",
         "removeTeamFromSpace": "スペースから外す",
         "removeTeamConfirm": "{{team}} を {{space}} から外しますか？",
-        "removeTeamConfirmDescription": "他の割り当て済みチームに含まれていない限り、そのメンバーはこのスペースへのアクセスを失います。",
-        "lastTeamWarning": "このスペースにアクセスできる唯一のチームです。外すと、ワークスペース管理者のみがアクセスを保持します。",
-        "affectsOtherSpaces_one": "{{team}} への変更は、このチームがアクセスできる他 {{count}} 件のスペースにも適用されます。",
-        "affectsOtherSpaces_other": "{{team}} への変更は、このチームがアクセスできる他 {{count}} 件のスペースにも適用されます。",
+        "removeTeamConfirmDescription": "直接追加されているか他の割り当て済みグループに含まれていない限り、そのメンバーはこのスペースへのアクセスを失います。",
         "accessLabel": "スペースへのアクセス",
         "accessAdmin": "管理者",
         "accessMember": "メンバー",
@@ -2762,10 +2844,12 @@
         "accessHint": "{{team}} の管理者は、アクセスが「管理者」に設定されている場合のみこのスペースを管理できます。"
       },
       "teams": {
-        "assignLabel": "チーム",
-        "newTeam": "新しいチーム",
-        "newTeamNameLabel": "チーム名",
-        "loadError": "チームを読み込めませんでした。"
+        "newTeam": "新しいグループ",
+        "loadError": "グループを読み込めませんでした。"
+      },
+      "groups": {
+        "title": "アクセスできるグループ",
+        "optional": "グループ（任意）"
       }
     },
     "structureIntro": {
@@ -2781,7 +2865,7 @@
       },
       "teamSpace": {
         "title": "チームスペース",
-        "description": "ワークスペース内の共有エリア。1つ以上のチームがアクセスを付与します。"
+        "description": "ワークスペース内の共有エリア。人やグループを追加してアクセスを付与します。"
       },
       "contents": "各スペースにはフォルダーとノートを作成できます。",
       "done": "了解",
@@ -2792,7 +2876,7 @@
       "staleIndicator": "強化後にコンテンツが変更されました",
       "live": "ライブ",
       "transcript": "文字起こし",
-      "notes": "ノート",
+      "notes": "あなたのノート",
       "conversationWillAppear": "会話がここに表示されます...",
       "linkedEvent": "リンクされたイベント",
       "noFolder": "フォルダなし",
@@ -2809,13 +2893,41 @@
       "asJson": "JSON (.json)",
       "asTranscriptMarkdown": "Markdown (.md)",
       "raw": "元のテキスト",
-      "enhanced": "強化済み",
+      "aiSummary": "AI要約",
       "saving": "保存中",
-      "transcriptEmptyTitle": "まだ録音がありません",
-      "transcriptEmptyDescription": "録音ボタンを押すと文字起こしが始まります。話した内容がここにリアルタイムで表示されます。",
+      "transcriptEmptyTitle": "文字起こしはまだありません",
+      "transcriptEmptyDescription": "録音を始めると、話した内容がここに表示されます。",
       "startRecording": "録音を開始",
       "generateSummary": "AI要約を生成",
-      "startWriting": "書き始める..."
+      "startWriting": "書き始める...",
+      "table": {
+        "actions": "表の操作",
+        "insertRowAbove": "上に行を挿入",
+        "insertRowBelow": "下に行を挿入",
+        "insertColumnLeft": "左に列を挿入",
+        "insertColumnRight": "右に列を挿入",
+        "deleteRow": "行を削除",
+        "deleteColumn": "列を削除",
+        "deleteTable": "表を削除"
+      },
+      "format": {
+        "toolbar": "書式",
+        "withShortcut": "{{action}}（{{shortcut}}）",
+        "bold": "太字",
+        "italic": "斜体",
+        "strike": "取り消し線",
+        "code": "コード",
+        "textStyle": "テキストスタイル",
+        "paragraph": "標準テキスト",
+        "heading1": "見出し 1",
+        "heading2": "見出し 2",
+        "heading3": "見出し 3",
+        "bulletList": "箇条書き",
+        "orderedList": "番号付きリスト",
+        "taskList": "チェックリスト",
+        "blockquote": "引用",
+        "table": "表を挿入"
+      }
     },
     "participants": {
       "attendee": "名の参加者",
@@ -2835,8 +2947,8 @@
       "showInFileManager": "{{manager}}で表示"
     },
     "actions": {
+      "allActions": "すべてのアクション",
       "manage": "アクションを管理...",
-      "manageTitle": "カスタムアクション",
       "addAction": "新しいアクション",
       "editAction": "アクションを編集",
       "namePlaceholder": "アクション名",
@@ -2850,9 +2962,9 @@
       "promptLabel": "プロンプト",
       "emptyEditorTitle": "アクションを選択",
       "emptyEditorDescription": "リストからアクションを選択するか、新しく作成してください",
-      "runAction": "{{name}} を実行",
-      "selectAction": "アクションを選択",
       "done": "完了",
+      "chunkProgress": "パート {{step}} / {{total}}",
+      "emptyReply": "モデルから空の応答が返されました。もう一度お試しいただくか、別のモデルを選択してください。",
       "builtin": {
         "generateNotes": {
           "name": "ノートを生成",
@@ -2864,15 +2976,89 @@
           "cta": "フォローアップメールを作成"
         },
         "detailedNotes": {
-          "name": "詳細ノート",
+          "name": "AI要約",
           "description": "決定事項とアクションを含む正確で網羅的な会議ノート"
+        },
+        "makeTodos": {
+          "name": "ToDoを作成",
+          "description": "すべてのToDoと担当者をチャットに一覧表示"
+        },
+        "createOutline": {
+          "name": "アウトラインを作成",
+          "description": "ノートのトピックをチャットでアウトライン化"
+        },
+        "oneOnOne": {
+          "name": "1on1",
+          "description": "1on1での近況、フィードバック、成長、次のステップ"
+        },
+        "standUp": {
+          "name": "スタンドアップ",
+          "description": "各メンバーの進捗、予定、ブロッカー"
+        },
+        "salesCall": {
+          "name": "商談",
+          "description": "ニーズ、懸念点、予算、意思決定プロセス"
+        },
+        "userInterview": {
+          "name": "ユーザーインタビュー",
+          "description": "参加者のワークフロー、課題、反応、発言の引用"
+        },
+        "shorten": {
+          "name": "短くする",
+          "description": "要約を約半分の長さにします",
+          "cta": "要約を短くする"
+        },
+        "addTldr": {
+          "name": "TL;DRを追加",
+          "description": "要約の先頭に2〜3文のTL;DRを追加します",
+          "cta": "TL;DRを追加"
+        },
+        "slackUpdate": {
+          "name": "Slack用の共有",
+          "description": "Slackに投稿するチーム向けの短い共有文を作成します",
+          "cta": "Slack用の共有を書く"
         }
       },
       "errors": {
         "noModel": "AIモデルが選択されていません。設定で構成してください。",
         "actionFailed": "アクションに失敗しました",
-        "noEndpoint": "セルフホストサーバーの URL が設定されていません。設定で構成してください。"
-      }
+        "noEndpoint": "セルフホストサーバーの URL が設定されていません。設定で構成してください。",
+        "outputTruncated": "AIモデルが出力の上限に達して最後まで書けなかったため、ノートは変更されていません。",
+        "nothingToSummarize": "このノートにはまだ要約できる内容がないため、AI要約はそのままです。",
+        "saveFailed": "保存できませんでした。長すぎる項目がないか確認して、もう一度お試しください。"
+      },
+      "tab": "アクション",
+      "output": {
+        "auto": "自動",
+        "chat": "チャット",
+        "summary": "AI要約",
+        "chatHint": "ノートのチャットで回答し、AI要約はそのまま残します。",
+        "summaryHint": "ノートのAI要約を編集します。要約がまだない場合は文字起こしから作成します。",
+        "autoHint": "保存時にプロンプトを読み取り、チャットかAI要約かを選びます。"
+      },
+      "applied": "{{name}}でAI要約を更新しました"
+    },
+    "templates": {
+      "tab": "テンプレート",
+      "managerTitle": "テンプレートとアクション",
+      "manage": "テンプレートを管理...",
+      "select": "テンプレートを選択",
+      "addTemplate": "新しいテンプレート",
+      "editTemplate": "テンプレートを編集",
+      "namePlaceholder": "テンプレート名",
+      "contextLabel": "コンテキスト",
+      "contextPlaceholder": "どのような会議で、要約では何に重点を置くべきですか？",
+      "sectionsLabel": "セクション",
+      "addSection": "セクションを追加",
+      "sectionHeadingPlaceholder": "セクションの見出し",
+      "sectionInstructionPlaceholder": "このセクションに何を書きますか？",
+      "moveSectionUp": "セクションを上に移動",
+      "moveSectionDown": "セクションを下に移動",
+      "removeSection": "セクションを削除",
+      "noSectionsHint": "セクションがない場合、コンテキストが要約への指示のすべてになります。",
+      "noTemplates": "テンプレートはまだありません",
+      "emptyEditorTitle": "テンプレートを選択",
+      "emptyEditorDescription": "リストからテンプレートを選択するか、新しく作成してください"
     },
     "empty": {
       "title": "まだノートがありません",
@@ -2918,11 +3104,17 @@
       "hoursAgo": "{{count}}時間前",
       "daysAgo": "{{count}}日前"
     },
+    "createMenu": {
+      "note": "ノート",
+      "assistantChat": "アシスタントとのチャット",
+      "chooseType": "作成する項目を選択"
+    },
     "upload": {
       "title": "音声をアップロード",
       "using": "{{model}} を使用中",
-      "dropOrBrowse": "音声ファイルをドロップまたはクリックして選択",
-      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC, Opus",
+      "dropOrBrowse": "音声または動画ファイルをドロップ、またはクリックして選択",
+      "supportedFormats": "MP3、WAV、M4A、MP4、MOV など、ほとんどの音声・動画形式",
+      "unsupportedFiles": "{{names}} をスキップしました: 対応していない音声・動画形式です。",
       "dropToUpload": "ドロップしてアップロード",
       "transcribe": "文字起こし",
       "cancel": "キャンセル",
@@ -2982,7 +3174,7 @@
       "speakerDetectionDescription": "音声内の異なる話者を識別",
       "numSpeakersPlaceholder": "自動検出",
       "numSpeakersLabel": "話者の人数",
-      "numSpeakersHint": "正確な人数を設定すると、特に長い録音で精度が向上します。",
+      "numSpeakersHint": "話者はこの人数を上限として自動で検出されます。",
       "downloadingModels": "モデルをダウンロード中...",
       "openaiDiarizeNote": "話者検出をサポートする唯一のOpenAIモデルであるgpt-4o-transcribe-diarizeに切り替わります。選択したモデルとコストが異なる場合があります。",
       "mistralDiarizeNote": "Voxtralでの話者検出は追加料金なしで利用できます。",
@@ -3009,8 +3201,6 @@
       "unsupportedSelfHosted": "ノート録音はまだセルフホストのエンドポイントを利用できません。設定を開き、ローカルまたはストリーミング対応プロバイダーを選択してください。",
       "unsupportedProvider": "ノート録音ではライブ文字起こしに {{provider}} を利用できません。設定を開き、ローカルまたはストリーミング対応プロバイダーを選択してください。",
       "noProviderSelected": "ノート録音のプロバイダーが選択されていません。設定を開き、ローカルまたはストリーミング対応プロバイダーを選択してください。",
-      "autoEnded": "会議の終了後、録音は自動的に停止しました。",
-      "restartFailed": "会議の録音を再開できませんでした。",
       "systemAudioSilent": {
         "title": "会議の音声がまだ検出されていません",
         "description": "これまでのところ、音声を拾っているのはマイクのみです。ビデオ会議中の場合は、会議の音声がこのコンピューターで再生されており、ミュートになっていないことを確認してください。対面で録音している場合は、この通知は無視してかまいません。マイクが室内の音を拾います。"
@@ -3038,12 +3228,12 @@
         "description": "アクションは AI を使ってノートを変換します。言語モデルを設定して始めましょう。",
         "configured": "AI モデルが設定されました"
       },
-      "actions": {
-        "title": "AI アクション",
-        "description": "アクションでノートを変換できます — 文字起こしの整理、議事録の要約など。組み込みアクションを使うか、独自のアクションを作成できます。",
-        "builtInLabel": "組み込み",
-        "createTitle": "独自のアクションを作成",
-        "createDescription": "独自の AI プロンプトでカスタムアクションを定義できます。設定からいつでも編集・追加できます。",
+      "templates": {
+        "title": "テンプレートとアクション",
+        "description": "テンプレートでAI要約の形を決められます — 詳しい議事録から独自のセクションまで。アクションはノートに対して実行され、たとえばチャットでフォローアップメールを下書きできます。",
+        "builtInLabel": "あなたのテンプレート",
+        "createTitle": "独自のテンプレートを作成",
+        "createDescription": "必要な要約を説明してください。セクションや他のテンプレート、アクションは後から追加できます。",
         "created": "作成しました！"
       },
       "getStarted": "始める",
@@ -3136,9 +3326,6 @@
         }
       },
       "invite": "招待",
-      "list": {
-        "empty": "まだノートがありません"
-      },
       "author": {
         "you": "自分"
       }
@@ -3185,19 +3372,14 @@
       "examples": {
         "linkedinTrigger": "私のLinkedIn",
         "linkedinText": "linkedin.com/in/you",
-        "rewriteTrigger": "書き直しプロンプト",
-        "rewriteText": "これをより簡潔でプロフェッショナルに書き直して",
-        "introTrigger": "挨拶メール",
-        "introText": "こんにちは、今週どこかでお話しできれば嬉しいです…",
         "signoffTrigger": "署名",
         "signoffText": "よろしくお願いします。Alex · alex@example.com"
       },
       "addPlaceholder": "トリガーフレーズを追加 — 「カレンダーリンク」「署名」など"
     },
-    "emptyTitle": "辞書は空です",
+    "emptyTitle": "辞書に単語を追加しましょう",
     "emptyDescription": "{{agentName}}に正しく認識してほしい言葉を追加しましょう。名前、ツール、略語など。",
     "addFirstWord": "最初の単語を追加",
-    "importList": "リストをインポート",
     "agentDefault": "デフォルトで追加済み"
   },
   "referral": {
@@ -3405,6 +3587,7 @@
     "upload": "アップロード",
     "dictionary": "辞書",
     "referral": "1か月無料を取得",
+    "inviteTeam": "チームを招待",
     "settings": "設定",
     "support": "サポート",
     "limitReached": "週間の利用上限に達しました",
@@ -3427,8 +3610,10 @@
     "newChat": "新しいチャット",
     "search": "会話を検索...",
     "archived": "アーカイブ済み",
-    "noConversations": "最初の会話を始めましょう",
-    "selectChat": "会話を選択するか、新しく始めてください",
+    "noConversations": "チャットはまだありません",
+    "allArchived": "すべてのチャットはアーカイブ済みです",
+    "noConversationsDescription": "アシスタントとのチャットはここに表示されます。",
+    "loadFailed": "チャットを読み込めませんでした",
     "noResults": "該当する会話がありません",
     "today": "今日",
     "yesterday": "昨日",
@@ -3443,7 +3628,12 @@
     "searchChats": "チャットを検索",
     "searchTitle": "会話を検索",
     "searchDescription": "すべての会話を検索",
-    "newChatEmpty": "ノートや文字起こし、その他なんでも聞いてください"
+    "inputPlaceholder": "何でも聞いてください...",
+    "starters": {
+      "todos": "最近のTo Doを一覧にして",
+      "meeting": "次の会議に備えさせて",
+      "sharedNotes": "共有ノートのハイライトを見せて"
+    }
   },
   "support": {
     "documentation": "ドキュメント",
@@ -3478,6 +3668,10 @@
     "activationFailedDescription": "OpenWhispr は CPU 文字起こしに切り替えました。",
     "reasoningActivationFailedDescription": "OpenWhispr は CPU 処理に切り替えました。",
     "retryActivation": "GPU アクセラレーションを再試行",
+    "redownloadNeeded": "GPU パックの再ダウンロードが必要です",
+    "redownloadNeededDescription": "このバージョンの OpenWhispr はインストール済みの GPU パックを使用できません。再ダウンロードすると GPU アクセラレーションが再び有効になります。",
+    "redownloadButton": "GPU パックを再ダウンロード",
+    "downloadFailed": "GPU パックをダウンロードできませんでした。",
     "remove": "削除",
     "dismiss": "後で",
     "cancel": "キャンセル"
@@ -3505,7 +3699,7 @@
       },
       "gpuPackMigration": {
         "title": "GPU パックの再ダウンロードが必要です",
-        "description": "アップデートにより古い GPU パックのインストール（{{packs}}）が削除されました。設定から再ダウンロードすると GPU アクセラレーションが復元されます。"
+        "description": "このバージョンでは以前の GPU パック（{{packs}}）を使用できません。設定から再ダウンロードすると GPU アクセラレーションが再び有効になります。"
       },
       "cleanupFailed": {
         "title": "クリーンアップに失敗しました",
@@ -3527,7 +3721,9 @@
       "stopListening": "録音を停止",
       "startListening": "録音を開始",
       "hideForNow": "一時的に非表示",
-      "askAssistant": "アシスタントに質問"
+      "askAssistant": "アシスタントに質問",
+      "busyRecording": "先に録音を終了してください",
+      "startMeetingRecording": "ミーティングの録音を開始"
     }
   },
   "dictationAgent": {
@@ -3590,10 +3786,20 @@
       "thinking": "考え中...",
       "typeMessage": "メッセージを入力...",
       "send": "送信",
-      "voiceDraftStreamingOnly": "現在の文字起こしプロバイダーはライブ音声入力のみに対応しているため、音声入力は利用できません。設定 → 音声テキスト変換 で別のプロバイダーを選択してください。"
+      "voiceDraftStreamingOnly": "現在の文字起こしプロバイダーはライブ音声入力のみに対応しているため、音声入力は利用できません。設定 → 音声テキスト変換 で別のプロバイダーを選択してください。",
+      "commands": "コマンド"
     },
     "tools": {
       "search_notesName": "ノートを検索",
+      "email_draftName": "メールの下書き",
+      "find_contactName": "連絡先を検索",
+      "github_search_issuesName": "GitHubを検索",
+      "github_create_issueName": "GitHubのIssue",
+      "github_commentName": "GitHubのコメント",
+      "slack_send_messageName": "Slackメッセージ",
+      "linear_search_issuesName": "Linearを検索",
+      "linear_create_issueName": "LinearのIssue",
+      "linear_commentName": "Linearのコメント",
       "get_noteName": "ノートを取得",
       "create_noteName": "ノートを作成",
       "update_noteName": "ノートを更新",
@@ -3606,6 +3812,15 @@
       "update_dictionaryName": "辞書を更新",
       "update_snippetsName": "スニペットを更新",
       "search_notesStatus": "ノートを検索中...",
+      "email_draftStatus": "メールを準備しています...",
+      "find_contactStatus": "連絡先を検索中...",
+      "github_search_issuesStatus": "GitHubを検索中...",
+      "github_create_issueStatus": "GitHubのIssueを準備しています...",
+      "github_commentStatus": "GitHubのコメントを準備しています...",
+      "slack_send_messageStatus": "Slackメッセージを準備しています...",
+      "linear_search_issuesStatus": "Linearを検索中...",
+      "linear_create_issueStatus": "LinearのIssueを準備しています...",
+      "linear_commentStatus": "Linearのコメントを準備しています...",
       "web_searchStatus": "ウェブを検索中...",
       "copy_to_clipboardStatus": "クリップボードにコピー中...",
       "get_calendar_eventsStatus": "カレンダーを確認中...",
@@ -3646,10 +3861,8 @@
   },
   "integrations": {
     "title": "連携",
-    "description": "サービスを接続してワークフローを強化",
     "googleCalendar": {
       "title": "Google カレンダー",
-      "optional": "任意",
       "description": "カレンダーから会議名と参加者を自動で入力します。",
       "connect": "Google カレンダーを接続",
       "connecting": "接続中...",
@@ -3668,7 +3881,6 @@
     },
     "microsoftCalendar": {
       "title": "Microsoft カレンダー",
-      "optional": "任意",
       "description": "Outlook または Microsoft 365 のカレンダーから会議を読み取ります。",
       "connect": "Microsoft カレンダーを接続",
       "connected": "接続済み",
@@ -3683,7 +3895,6 @@
     },
     "appleCalendar": {
       "title": "Apple カレンダー",
-      "optional": "任意",
       "description": "Calendar.app から会議を読み取ります — iCloud、Google、Exchange、Outlook をまとめて。",
       "connect": "Apple カレンダーを接続",
       "connected": "接続済み",
@@ -3696,34 +3907,24 @@
       "connectFailed": "接続に失敗しました",
       "connectFailedDescription": "Calendar.app への接続中にエラーが発生しました。OpenWhispr を再起動してもう一度お試しください。"
     },
-    "sections": {
-      "calendar": "カレンダー",
-      "api": "API",
-      "mcp": "MCP",
-      "cli": "CLI"
-    },
     "api": {
-      "title": "APIキー",
       "description": "プログラムからのアクセス用にAPIキーを管理",
       "proRequired": "APIを利用するには有料プランへのアップグレードが必要です",
-      "manage": "キーを管理",
       "viewPlans": "プランを表示",
-      "dialogTitle": "APIキー"
+      "useWith": "キーの利用先"
     },
     "mcp": {
-      "title": "メモをAIツールに持ち込みましょう",
       "description": "Claude、ChatGPT、Cursor内でメモを使ってチャット、検索、作業ができます。",
       "step1": "AIツールで、公開URLを使用してOpenWhispr MCPを追加します",
-      "step2": "上のセクションで必要なスコープを持つAPIキーを作成します。",
+      "step2": "必要なスコープを持つAPIキーを作成します。",
       "step3": "キーを Authorization ヘッダーとして貼り付けて接続します。",
       "learnMore": "詳細",
-      "viewPlans": "プランを表示",
-      "copyUrl": "MCP URLをコピー",
       "proRequired": "OpenWhispr を Claude、ChatGPT、Cursor に接続するには、有料プランへのアップグレードが必要です。",
+      "worksWith": "対応アプリ",
+      "copyUrl": "MCP URLをコピー",
       "copied": "コピーしました"
     },
     "cli": {
-      "title": "コマンドラインアクセス",
       "description": "ターミナルからアシスタントにメモへのアクセスを許可します。",
       "installLabel": "インストール",
       "learnMore": "ドキュメントを読む",
@@ -3753,9 +3954,476 @@
       "upgrade": "アップグレード"
     },
     "notABot": {
-      "title": "OpenWhispr はミーティング録音ツールであり、ボットではありません",
       "description": "OpenWhispr はシステムから直接オーディオをキャプチャします — 参加者としてミーティングに参加することはありません。カレンダーを接続して、通常通りノートを取るだけです。"
+    },
+    "nav": {
+      "label": "連携セクション",
+      "groups": {
+        "assistant": "アシスタント",
+        "meetings": "ミーティング",
+        "developer": "開発者"
+      },
+      "sections": {
+        "connectors": "コネクタ",
+        "calendars": "カレンダー",
+        "api": "APIキー",
+        "mcp": "MCPサーバー",
+        "cli": "コマンドライン"
+      },
+      "docs": "連携ドキュメント"
+    },
+    "connectors": {
+      "description": "アシスタントがあなたのツールを使えるようにします。メール、メッセージ、課題はすべて送信前にあなたが承認します。"
     }
+  },
+  "connectors": {
+    "approval": {
+      "headers": {
+        "default": "{{destination}} に送信",
+        "slackPost": "{{destination}}に投稿",
+        "email": "{{destination}} 宛てのメール",
+        "issue": "{{destination}} に Issue を作成",
+        "comment": "{{destination}} にコメント"
+      },
+      "identity": "{{account}} として",
+      "identityWithWorkspace": "{{workspace}} の {{account}} として",
+      "send": "送信",
+      "edit": "編集",
+      "doneEditing": "編集完了",
+      "cancel": "キャンセル",
+      "titleLabel": "タイトル",
+      "bodyLabel": "メッセージ",
+      "sending": "送信中…",
+      "sent": "{{destination}} に送信しました。",
+      "open": "開く",
+      "failed": "送信できませんでした: {{message}}",
+      "unknown": "送信されたか確認できませんでした。{{destination}} を確認してください。",
+      "cancelled": "キャンセルしました。何も送信されていません。",
+      "notSent": "送信されていません。",
+      "policyRetry": "組織の設定を確認できなかったため、何も送信されていません。もう一度「送信」を押してください。",
+      "errors": {
+        "not_in_channel": "{{destination}}のメンバーではありません。",
+        "channel_not_found": "{{destination}}がSlackで見つからなくなりました。",
+        "is_archived": "{{destination}}はアーカイブされています。",
+        "reconnect_needed": "設定でSlackを再接続する必要があります。",
+        "connection_changed": "送信前にSlackの接続が変わったため、何も送信されませんでした。",
+        "rate_limited": "Slackが混み合っています。しばらくしてからもう一度お試しください。",
+        "missing_scope": "OpenWhisprにはそこに投稿する権限がありません。設定でSlackを再接続してください。",
+        "msg_too_long": "メッセージがSlackには長すぎます（整形後で最大12,000文字）。",
+        "no_text": "メッセージが空です。",
+        "network": "Slackに接続できませんでした。何も送信されていません。",
+        "credential_save_failed": "このコンピューターにSlackのログイン情報を保存できませんでした。何も送信されていません。もう一度お試しください。",
+        "dm_failed": "{{destination}}とのダイレクトメッセージを開けませんでした。何も送信されていません。",
+        "restricted": "{{destination}}は読み取り専用か、あなたには制限されています。",
+        "generic": "問題が発生しました。何も送信されていません。",
+        "github": {
+          "reconnect_needed": "設定でGitHubを再接続する必要があります。",
+          "network": "GitHubに接続できませんでした。何も投稿されていません。",
+          "rate_limited": "GitHubが混み合っています。しばらくしてからもう一度お試しください。",
+          "connection_changed": "投稿前にGitHubの接続が変わったため、何も投稿されませんでした。",
+          "credential_save_failed": "このコンピューターにGitHubのログイン情報を保存できませんでした。何も投稿されていません。もう一度お試しください。",
+          "generic": "問題が発生しました。GitHubには何も投稿されていません。",
+          "not_installed": "このリポジトリにはOpenWhisprのGitHub Appがインストールされていません。設定で追加してください。何も投稿されていません。",
+          "repo_unlisted": "このリポジトリにOpenWhisprのGitHub Appがインストールされているか確認できませんでした。リポジトリ名を確認してください。何も投稿されていません。",
+          "no_repositories": "OpenWhisprのGitHub Appにリポジトリがまだ選択されていません。設定で選択してください。何も投稿されていません。",
+          "forbidden": "このリポジトリでこの操作を行う権限がありません。何も投稿されていません。",
+          "not_found": "Issueまたはプルリクエストが見つかりませんでした。何も投稿されていません。",
+          "issues_disabled": "このリポジトリではIssueが無効になっています。何も投稿されていません。",
+          "archived": "このリポジトリはアーカイブされているため、新しいIssueやコメントを追加できません。何も投稿されていません。",
+          "too_many_labels": "1つのIssueに付けられるラベルは10個までです。何も投稿されていません。",
+          "labels_unavailable": "リポジトリのラベルを読み込めませんでした。何も投稿されていません。",
+          "invalid": "GitHubに無効として拒否されました。何も投稿されていません。",
+          "locked": "この会話はロックされています。何も投稿されていません。",
+          "invalid_reference": "GitHubのIssueまたはプルリクエストではありません。何も投稿されていません。",
+          "too_long": "タイトルまたは本文がGitHubには長すぎます。何も投稿されていません。",
+          "not_configured": "このビルドではGitHubを利用できません。何も投稿されていません。"
+        },
+        "gmail": {
+          "reconnect_needed": "設定でGmailを再接続する必要があります。",
+          "network": "Gmailに接続できませんでした。何も送信されていません。",
+          "rate_limited": "Gmailが混み合っています。しばらくしてからもう一度お試しください。",
+          "daily_limit": "Gmailの1日の送信上限に達しました。何も送信されていません。",
+          "domain_policy": "組織のGoogle管理者がこのアプリをブロックしています。何も送信されていません。",
+          "invalid_recipients": "無効なアドレスが含まれています。何も送信されていません。",
+          "too_many_recipients": "宛先が多すぎます（最大{{max}}件）。何も送信されていません。",
+          "too_long": "件名または本文がGmailには長すぎます。何も送信されていません。",
+          "invalid_message": "Gmailがメールの形式を拒否しました。何も送信されていません。",
+          "gmail_unavailable": "現在Gmailで送信できません。何も送信されていません。",
+          "refused": "Gmailが送信を拒否しました。何も送信されていません。",
+          "connection_changed": "送信前にGmailの接続が変わったため、何も送信されませんでした。",
+          "credential_save_failed": "このコンピューターにGmailのログイン情報を保存できませんでした。何も送信されていません。もう一度お試しください。"
+        },
+        "linear": {
+          "reconnect_needed": "設定でLinearを再接続する必要があります。",
+          "connection_changed": "送信前にLinearの接続が変わったため、何も送信されませんでした。",
+          "credential_save_failed": "このコンピューターにLinearのログイン情報を保存できませんでした。何も送信されていません。もう一度お試しください。",
+          "linear_unavailable": "現在Linearを利用できません。何も送信されていません。",
+          "network": "Linearに接続できませんでした。何も送信されていません。",
+          "rate_limited": "Linearが混み合っています。しばらくしてからもう一度お試しください。",
+          "not_found": "Linearでチーム、プロジェクト、またはIssueが見つからなくなりました。何も送信されていません。",
+          "forbidden": "お使いのLinearアカウントにはその操作が許可されていません。何も送信されていません。",
+          "invalid_input": "Linearはこの内容を受け付けませんでした。何も送信されていません。",
+          "too_long": "Linearには長すぎます。何も送信されていません。",
+          "missing_title": "LinearのIssueにはタイトルが必要です。何も送信されていません。",
+          "missing_body": "Linearのコメントが空です。何も送信されていません。",
+          "not_created": "LinearはIssueを作成しませんでした。",
+          "wrong_workspace": "そのIssueは別のLinearワークスペースにあります。何も送信されていません。",
+          "invalid_reference": "それはLinearのIssueではありません。何も送信されていません。",
+          "refused": "Linearがリクエストを拒否しました。何も送信されていません。",
+          "unknown_action": "OpenWhisprはLinearでその操作を行えません。何も送信されていません。",
+          "generic": "問題が発生しました。Linearには何も送信されていません。"
+        }
+      },
+      "email": {
+        "from": "差出人: {{account}}",
+        "toLabel": "宛先",
+        "ccLabel": "Cc",
+        "subjectLabel": "件名",
+        "bodyLabel": "本文",
+        "addressHint": "複数のアドレスはカンマで区切ってください。",
+        "invalidAddress": "{{address}} は name@example.com のような完全なメールアドレスではありません。",
+        "invalidAddressAnnouncement": "完全なメールアドレスではない宛先があります。",
+        "sendsTo": "送信先: {{addresses}}",
+        "missingTo": "宛先にアドレスを1つ以上入力してください。",
+        "tooManyRecipients": "1通のメールの宛先は、宛先とCcを合わせて最大{{max}}件です。",
+        "subjectTooLong": "件名は{{max}}文字以内にしてください。",
+        "bodyTooLong": "メッセージが長すぎて Gmail で送信できません。短くしてから送信してください。",
+        "unknown": "送信されたか確認できませんでした。送信済みフォルダを確認してください。"
+      },
+      "github": {
+        "notes": {
+          "mentions": "{{mentions}} に通知されます",
+          "pullRequest": "プルリクエストへのコメント",
+          "labelsMayNotApply": "ラベルは、このリポジトリへの書き込み権限がある場合にのみ追加されます。"
+        }
+      },
+      "openIn": {
+        "github": "GitHubで開く",
+        "gmail": "Gmailで開く",
+        "linear": "Linearで開く"
+      },
+      "sendLabel": {
+        "issue": "Issue を作成",
+        "comment": "コメント"
+      },
+      "issue": {
+        "created": "{{result}} を作成しました。",
+        "createdIn": "{{destination}} に Issue を作成しました。",
+        "unknown": "Issue が作成されたか確認できませんでした。再試行する前に {{destination}} を確認してください。",
+        "titleLabel": "タイトル",
+        "bodyLabel": "説明",
+        "missingTitle": "タイトルを入力してください。",
+        "titleTooLong": "タイトルは{{max}}文字以内にしてください。",
+        "bodyTooLong": "説明は{{max}}文字以内にしてください。",
+        "notes": {
+          "labels": "ラベル: {{labels}}",
+          "droppedLabels": "追加されません（{{destination}} にありません）: {{labels}}",
+          "priority": "優先度: {{priority}}",
+          "assignee": "担当者: {{assignee}}",
+          "project": "プロジェクト: {{project}}"
+        }
+      },
+      "comment": {
+        "posted": "{{destination}} にコメントしました。",
+        "unknown": "コメントが投稿されたか確認できませんでした。再試行する前に {{destination}} を確認してください。",
+        "bodyLabel": "コメント",
+        "missingBody": "コメントを入力してください。",
+        "bodyTooLong": "コメントは{{max}}文字以内にしてください。",
+        "notes": {
+          "targetTitle": "「{{title}}」へ"
+        }
+      }
+    },
+    "policyOff": "組織によってコネクタが無効にされています。",
+    "email": {
+      "title": "メール下書き",
+      "description": "アシスタントがメールアプリに下書きを自動入力して開きます。内容を確認し、自分で送信を押してください。",
+      "descriptionSend": "アシスタントがチャットにメールのカードを表示します。送信を押したときだけ、Gmail から送信されます。",
+      "unavailable": "現在メール下書きを利用できません。",
+      "targetLabel": "メールを作成するアプリ",
+      "autoResolved": "自動 · {{target}}",
+      "targets": {
+        "gmail": "Gmail",
+        "outlookWork": "Outlook（職場または学校）",
+        "outlookPersonal": "Outlook.com",
+        "mailto": "既定のメールアプリ",
+        "gmailSend": "チャットから送信（Gmail）",
+        "gmailSendConnectFirst": "チャットから送信（Gmail）· 下で Gmail を接続"
+      }
+    },
+    "slack": {
+      "title": "Slack",
+      "description": "チャンネルや個人にメッセージを投稿します。",
+      "connect": "接続",
+      "reconnect": "再接続",
+      "disconnect": "接続を解除",
+      "connecting": "ブラウザで接続を完了してください…",
+      "connectedAs": "{{workspace}} の {{account}} として接続済み",
+      "needsReconnect": "Slackを再接続する必要があります。",
+      "errors": {
+        "connect_failed": "Slackを接続できませんでした。もう一度お試しください。",
+        "disconnect_failed": "Slackの接続を解除できませんでした。もう一度お試しください。",
+        "oauth_denied": "アクセスが許可されなかったため、Slackは接続されませんでした。",
+        "oauth_timeout": "接続に時間がかかりすぎました。もう一度お試しください。",
+        "oauth_state_mismatch": "そのサインインリンクは期限切れでした。もう一度お試しください。",
+        "ports_busy": "OpenWhisprが接続に必要なポートを別のアプリが使用しています。そのアプリを閉じてから、もう一度お試しください。",
+        "token_exchange_failed": "Slackの接続が完了しませんでした。もう一度お試しください。",
+        "not_configured": "このビルドではSlackを利用できません。",
+        "connection_changed": "接続中にアカウントまたはSlackの接続が変わりました。もう一度お試しください。",
+        "signed_out": "Slackを接続するにはOpenWhisprにサインインしてください。",
+        "policy_blocked": "組織によってコネクタが無効にされています。",
+        "policy_unavailable": "組織の設定を確認できませんでした。もう一度お試しください。"
+      },
+      "browser": {
+        "connectedTitle": "Slackが接続されました",
+        "connectedBody": "このタブを閉じてOpenWhisprに戻ることができます。",
+        "failedTitle": "Slackは接続されませんでした",
+        "failedBody": "OpenWhisprに戻ってもう一度お試しください。"
+      }
+    },
+    "github": {
+      "title": "GitHub",
+      "description": "選択したリポジトリの課題とコメント。コードを読むことはできません。",
+      "connect": "接続",
+      "reconnect": "再接続",
+      "disconnect": "接続を解除",
+      "connecting": "GitHubに接続しています…",
+      "connectedAs": "{{account}} として接続済み · リポジトリ: {{repositories}}",
+      "connectedAs_empty": "{{account}} として接続済み · リポジトリはまだありません",
+      "connectedAs_unknown": "{{account}} として接続済み",
+      "needsReconnect": "GitHubを再接続する必要があります。",
+      "reviewOnGithub": "GitHubで確認",
+      "disconnectedHint": "このコンピューターから接続を解除しました。GitHub側でOpenWhisprの認可を削除するまで、認可はGitHubに残ります。",
+      "errors": {
+        "connect_failed": "GitHubを接続できませんでした。もう一度お試しください。",
+        "disconnect_failed": "GitHubの接続を解除できませんでした。もう一度お試しください。",
+        "oauth_denied": "GitHubへのアクセスが拒否されました。",
+        "token_exchange_failed": "GitHubの接続が完了しませんでした。もう一度お試しください。",
+        "not_configured": "このビルドではGitHubを利用できません。",
+        "connection_changed": "接続中にアカウントまたはGitHubの接続が変わりました。もう一度お試しください。",
+        "signed_out": "GitHubを接続するにはOpenWhisprにサインインしてください。",
+        "policy_blocked": "組織によってコネクタが無効にされています。",
+        "policy_unavailable": "組織の設定を確認できませんでした。もう一度お試しください。",
+        "code_expired": "コードの有効期限が切れました。もう一度お試しください。",
+        "device_flow_disabled": "このビルドでは、コードによるGitHubへのサインインが設定されていません。",
+        "network": "GitHubに接続できませんでした。接続を確認して、もう一度お試しください。",
+        "rate_limited": "GitHubが混み合っています。1分後にもう一度お試しください。"
+      },
+      "deviceCode": {
+        "instructions": "GitHubでこのコードを入力してください:",
+        "copyAndOpen": "コピーしてGitHubを開く",
+        "copied": "コードをコピーしました。",
+        "cancel": "キャンセル",
+        "expires": "コードの有効期限は {{time}} です。"
+      },
+      "repositories": {
+        "choose": "リポジトリを選択",
+        "manage": "リポジトリを管理"
+      }
+    },
+    "gmail": {
+      "title": "Gmail",
+      "description": "あなたのアカウントからメールを送信します。メールを読むことはできません。",
+      "connect": "接続",
+      "reconnect": "再接続",
+      "disconnect": "接続を解除",
+      "connecting": "ブラウザで接続を完了してください… Googleでアクセスがブロックされたと表示された場合は、組織のGoogle管理者がOpenWhisprを許可する必要があります。",
+      "connectedAs": "{{account}} として接続済み",
+      "needsReconnect": "Gmailを再接続する必要があります。",
+      "grantKept": "接続を解除しました。Google カレンダーが同じ Google の権限を使用しているため、Google カレンダーの接続も解除するまで、OpenWhispr は Google アカウントに表示されたままになります。",
+      "errors": {
+        "connect_failed": "Gmailを接続できませんでした。もう一度お試しください。",
+        "disconnect_failed": "Gmailの接続を解除できませんでした。もう一度お試しください。",
+        "oauth_denied": "アクセスが許可されなかったため、Gmailは接続されませんでした。",
+        "oauth_timeout": "接続に時間がかかりすぎました。Googleでアクセスがブロックされたと表示された場合は、OpenWhisprを許可するよう組織のGoogle管理者に依頼してください。それ以外の場合は、もう一度お試しください。",
+        "oauth_state_mismatch": "そのサインインリンクは期限切れでした。もう一度お試しください。",
+        "ports_busy": "OpenWhisprが接続に必要なポートを別のアプリが使用しています。そのアプリを閉じてから、もう一度お試しください。",
+        "token_exchange_failed": "Googleの接続が完了しませんでした。もう一度お試しください。",
+        "not_configured": "このビルドではGmailを利用できません。",
+        "connection_changed": "接続中にアカウントまたはGmailの接続が変わりました。もう一度お試しください。",
+        "signed_out": "Gmailを接続するにはOpenWhisprにサインインしてください。",
+        "policy_blocked": "組織によってコネクタが無効にされています。",
+        "policy_unavailable": "組織の設定を確認できませんでした。もう一度お試しください。",
+        "permission_not_granted": "メール送信の権限が許可されなかったため、Gmailは接続されませんでした。もう一度接続し、その権限をオンのままにしてください。",
+        "email_not_verified": "このアカウントのメールアドレスがGoogleで確認されていないため、Gmailは接続されませんでした。",
+        "domain_policy": "組織のGoogle管理者がこのアプリをブロックしています。OpenWhisprを許可するよう管理者に依頼してください。"
+      },
+      "browser": {
+        "connectedTitle": "Gmailが接続されました",
+        "connectedBody": "このタブを閉じてOpenWhisprに戻ることができます。",
+        "failedTitle": "Gmailは接続されませんでした",
+        "failedBody": "OpenWhisprに戻ってもう一度お試しください。"
+      }
+    },
+    "linear": {
+      "title": "Linear",
+      "description": "課題を検索し、課題とコメントを作成します。",
+      "connect": "接続",
+      "reconnect": "再接続",
+      "disconnect": "接続を解除",
+      "connecting": "ブラウザで接続を完了してください…",
+      "connectedAs": "{{workspace}} の {{account}} として接続済み",
+      "needsReconnect": "Linearを再接続する必要があります。",
+      "errors": {
+        "connect_failed": "Linearを接続できませんでした。もう一度お試しください。",
+        "disconnect_failed": "Linearの接続を解除できませんでした。もう一度お試しください。",
+        "oauth_denied": "アクセスが許可されなかったため、Linearは接続されませんでした。",
+        "oauth_timeout": "接続に時間がかかりすぎました。もう一度お試しください。",
+        "oauth_state_mismatch": "そのサインインリンクは期限切れでした。もう一度お試しください。",
+        "ports_busy": "OpenWhisprが接続に必要なポートを別のアプリが使用しています。そのアプリを閉じてから、もう一度お試しください。",
+        "token_exchange_failed": "Linearの接続が完了しませんでした。もう一度お試しください。",
+        "not_configured": "このビルドではLinearを利用できません。",
+        "connection_changed": "接続中にアカウントまたはLinearの接続が変わりました。もう一度お試しください。",
+        "signed_out": "Linearを接続するにはOpenWhisprにサインインしてください。",
+        "policy_blocked": "組織によってコネクタが無効にされています。",
+        "policy_unavailable": "組織の設定を確認できませんでした。もう一度お試しください。",
+        "permission_not_granted": "すべての権限が許可されなかったため、Linearは接続されませんでした。もう一度接続し、すべて許可してください。"
+      },
+      "browser": {
+        "connectedTitle": "Linearが接続されました",
+        "connectedBody": "このタブを閉じてOpenWhisprに戻ることができます。",
+        "failedTitle": "Linearは接続されませんでした",
+        "failedBody": "OpenWhisprに戻ってもう一度お試しください。"
+      },
+      "notes": {
+        "priority": {
+          "urgent": "優先度: 緊急",
+          "high": "優先度: 高",
+          "medium": "優先度: 中",
+          "low": "優先度: 低",
+          "none": "優先度: なし"
+        },
+        "assignedToYou": "担当者: あなた"
+      }
+    },
+    "recent": {
+      "title": "最近のアクション",
+      "actions": {
+        "email_draft": "{{destination}} 宛ての下書き",
+        "github_create_issue": "{{destination}} の新しいIssue",
+        "github_comment": "{{destination}} へのコメント",
+        "slack_send_message": "{{destination}} 宛てのメッセージ",
+        "gmail_send": "{{destination}} 宛てのメール",
+        "linear_create_issue": "{{destination}} の新しいIssue",
+        "linear_comment": "{{destination}} へのコメント"
+      },
+      "unlabeledActions": {
+        "email_draft": "メール下書き",
+        "github_create_issue": "GitHubのIssue",
+        "github_comment": "GitHubのコメント",
+        "slack_send_message": "Slackメッセージ",
+        "gmail_send": "Gmailのメール",
+        "linear_create_issue": "LinearのIssue",
+        "linear_comment": "Linearのコメント"
+      },
+      "states": {
+        "pending": "待機中",
+        "committing": "処理中",
+        "sent": "完了",
+        "failed": "失敗",
+        "unknown": "未確認",
+        "cancelled": "キャンセル済み",
+        "expired": "期限切れ"
+      }
+    },
+    "toolStatus": {
+      "draftOpened": "{{destination}} 宛ての下書きを開きました。",
+      "draftOpenedBodyCopied": "{{destination}} 宛ての下書きを開きました。本文はクリップボードにあります。",
+      "draftOpenedSubjectCopied": "{{destination}} 宛ての下書きを開きました。件名と本文はクリップボードにあります。",
+      "draftOpenedOnlySubjectCopied": "{{destination}} 宛ての下書きを開きました。件名はクリップボードにあります。",
+      "needsDetails": "詳細が必要です。",
+      "unavailable": "現在コネクタを利用できません。",
+      "unknown": "未確認です。再試行する前に完了したかどうかを確認してください。",
+      "draftUnknown": "未確認：{{destination}} 宛ての下書きが開かなかった可能性があります。再試行する前に確認してください。",
+      "contactsFound": "見つかった連絡先: {{total}}",
+      "draftLimit": "1回のリクエストで開ける下書きは{{max}}件までです。",
+      "clipboardBusy": "開いていません：別の下書きのテキストがまだクリップボードにあります。",
+      "errors": {
+        "open_failed": "メールアプリを開けませんでした。",
+        "draft_too_long": "下書きリンクには宛先が多すぎます。",
+        "invalid_address": "完全なメールアドレスが必要です。",
+        "not_in_channel": "そのチャンネルのメンバーではありません。",
+        "channel_not_found": "その会話が見つかりませんでした。",
+        "is_archived": "そのチャンネルはアーカイブされています。",
+        "reconnect_needed": "Slackを再接続する必要があります。",
+        "connection_changed": "Slackの接続が変わりました。何も送信されていません。",
+        "rate_limited": "Slackが混み合っています。",
+        "missing_scope": "Slackの権限がありません。",
+        "msg_too_long": "メッセージがSlackには長すぎます。",
+        "no_text": "メッセージが空です。",
+        "network": "Slackに接続できませんでした。何も送信されていません。",
+        "credential_save_failed": "このコンピューターにSlackのログイン情報を保存できませんでした。何も送信されていません。",
+        "dm_failed": "ダイレクトメッセージを開けませんでした。何も送信されていません。",
+        "restricted": "そのチャンネルは読み取り専用か、制限されています。",
+        "generic": "うまくいきませんでした。",
+        "github": {
+          "reconnect_needed": "GitHubを再接続する必要があります。",
+          "network": "GitHubに接続できませんでした。",
+          "rate_limited": "GitHubが混み合っています。",
+          "connection_changed": "GitHubの接続が変わりました。",
+          "credential_save_failed": "このコンピューターにGitHubのログイン情報を保存できませんでした。",
+          "generic": "GitHubでうまくいきませんでした。",
+          "not_installed": "そこにはOpenWhisprのGitHub Appがインストールされていません。",
+          "repo_unlisted": "そこにOpenWhisprのGitHub Appがインストールされているか確認できませんでした。",
+          "no_repositories": "GitHubのリポジトリがまだ選択されていません。",
+          "forbidden": "そのリポジトリでの権限がありません。",
+          "not_found": "そのIssueまたはプルリクエストが見つかりませんでした。",
+          "issues_disabled": "そのリポジトリではIssueが無効です。",
+          "archived": "そのリポジトリはアーカイブされています。",
+          "too_many_labels": "1つのIssueにはラベルが多すぎます。",
+          "labels_unavailable": "リポジトリのラベルを読み込めませんでした。",
+          "invalid": "GitHubに無効として拒否されました。",
+          "locked": "その会話はロックされています。",
+          "invalid_reference": "GitHubのIssueまたはプルリクエストではありません。",
+          "too_long": "GitHubには長すぎます。",
+          "not_configured": "このビルドではGitHubを利用できません。"
+        },
+        "gmail": {
+          "reconnect_needed": "Gmailを再接続する必要があります。",
+          "network": "Gmailに接続できませんでした。何も送信されていません。",
+          "rate_limited": "Gmailが混み合っています。",
+          "daily_limit": "Gmailの1日の送信上限に達しました。",
+          "domain_policy": "組織のGoogle管理者によってブロックされています。",
+          "invalid_recipients": "無効なアドレスがあります。何も送信されていません。",
+          "too_many_recipients": "宛先が多すぎます。何も送信されていません。",
+          "too_long": "Gmailには長すぎます。何も送信されていません。",
+          "invalid_message": "Gmailがメールを拒否しました。何も送信されていません。",
+          "gmail_unavailable": "現在Gmailで送信できません。",
+          "refused": "Gmailが送信を拒否しました。",
+          "connection_changed": "Gmailの接続が変わりました。何も送信されていません。",
+          "credential_save_failed": "このコンピューターにGmailのログイン情報を保存できませんでした。何も送信されていません。"
+        },
+        "linear": {
+          "reconnect_needed": "Linearを再接続する必要があります。",
+          "connection_changed": "Linearの接続が変わりました。何も送信されていません。",
+          "credential_save_failed": "このコンピューターにLinearのログイン情報を保存できませんでした。",
+          "linear_unavailable": "現在Linearを利用できません。",
+          "network": "Linearに接続できませんでした。",
+          "rate_limited": "Linearが混み合っています。",
+          "not_found": "Linearで見つかりませんでした。",
+          "forbidden": "Linearで許可されていません。",
+          "invalid_input": "Linearが受け付けませんでした。",
+          "too_long": "Linearには長すぎます。",
+          "missing_title": "LinearのIssueにはタイトルが必要です。",
+          "missing_body": "Linearのコメントが空です。",
+          "not_created": "LinearはIssueを作成しませんでした。",
+          "wrong_workspace": "そのIssueは別のLinearワークスペースにあります。",
+          "invalid_reference": "LinearのIssueではありません。",
+          "refused": "Linearがリクエストを拒否しました。",
+          "unknown_action": "Linearでは利用できません。",
+          "generic": "Linearでうまくいきませんでした。"
+        }
+      },
+      "unknownSent": {
+        "gmail": "{{destination}} 宛てのメールが送信されたか確認できませんでした。Gmailの送信済みフォルダを確認してください。"
+      },
+      "gmailDraftLimit": "1回のリクエストで準備できるメールは{{max}}件までです。",
+      "queryResults": "見つかった結果: {{total}}",
+      "cardLimit": "1回のリクエストで準備できるカードは{{max}}件までです。"
+    },
+    "beta": "ベータ",
+    "upsell": "コネクタは有料プランに含まれています。アップグレードすると、アシスタントがあなたのツールで操作できるようになります。",
+    "locked": "有料プランに含まれます"
   },
   "calendar": {
     "title": "Google カレンダー",
@@ -3781,12 +4449,14 @@
     "tomorrow": "明日"
   },
   "upcoming": {
-    "title": "今後の予定",
     "now": "進行中",
     "untitledEvent": "無題のイベント",
     "joinAndTranscribe": "参加して文字起こし",
     "takeNotes": "メモを取る",
-    "noEventsToday": "今日の予定はありません",
+    "noEventsToday": "今日の会議はもうありません",
+    "emptyDayDescription": "そろそろ芝生に触れる時間です",
+    "touchGrass": "芝生に触れる",
+    "touchGrassLabel": "芝生です。ポインターか矢印キーでなでてみてください。Esc キーで戻ります。",
     "noUpcomingEvents": "今後の予定はありません",
     "moreCalendarsHint": "他のカレンダーも連携しますか？",
     "connectHere": "ここから連携",
@@ -3832,6 +4502,11 @@
         "createLink": "リンクを作成",
         "copyLink": "リンクをコピー",
         "copied": "コピーしました",
+        "replaceLink": {
+          "title": "共有リンクを置き換えますか？",
+          "description": "このデバイスには現在のリンクがないため、コピーするには新しいリンクを作成する必要があります。古いリンクは、招待メール内のリンクも含めて使えなくなります。招待された人が引き続きノートを開けるように、各招待を再送信してください。",
+          "confirm": "リンクを置き換え"
+        },
         "export": "エクスポート",
         "owner": "オーナー",
         "editor": "編集可能",
@@ -3885,6 +4560,23 @@
       "navigate": "移動",
       "open": "開く",
       "dismiss": "閉じる"
+    }
+  },
+  "emojiPicker": {
+    "search": "絵文字を検索…",
+    "recent": "最近使った項目",
+    "noResults": "絵文字が見つかりません",
+    "remove": "削除",
+    "groups": {
+      "smileys": "スマイリーと感情",
+      "people": "人と体",
+      "animals": "動物と自然",
+      "food": "食べ物と飲み物",
+      "travel": "旅行と場所",
+      "activities": "アクティビティ",
+      "objects": "物",
+      "symbols": "記号",
+      "flags": "旗"
     }
   },
   "permissionsGate": {
@@ -3946,15 +4638,17 @@
     }
   },
   "embeddedChat": {
-    "askPlaceholder": "何でも聞いてください...",
-    "send": "送信",
+    "askPlaceholder": "ノートについて何でも質問",
     "title": "チャット",
     "emptyState": "このノートについて質問してください",
     "dock": "サイドバーに固定",
     "undock": "サイドバーから外す",
     "close": "チャットを閉じる",
     "newChat": "新しいチャット",
-    "conversationSelector": "会話を切り替え"
+    "conversationSelector": "会話を切り替え",
+    "history": "履歴",
+    "quickActions": "クイックアクション",
+    "generateSummary": "要約を作成"
   },
   "transcriptionPreview": {
     "label": "プレビュー",
@@ -4079,15 +4773,49 @@
       "underway": "会議はすでに進行中のようです。メモを取りますか？"
     },
     "start": "メモを取る",
-    "join": "参加して文字起こし",
-    "autoEnd": {
-      "title": "会議の録音が終了しました",
-      "body": {
-        "micReleased": "ほかのアプリがマイクを使用していないため、録音を自動停止しました。{{seconds}}秒以内に再開できます。",
-        "silence": "音声が検出されなかったため、録音を自動停止しました。{{seconds}}秒以内に再開できます。",
-        "processExit": "会議アプリが終了したため、録音を自動停止しました。{{seconds}}秒以内に再開できます。"
-      },
-      "restart": "録音を再開"
+    "join": "参加して文字起こし"
+  },
+  "providerErrors": {
+    "authFailed": "{{provider}} がAPIキーを拒否しました。",
+    "accessDenied": "{{provider}} がアクセスを拒否しました。お使いのキーがこのモデルに対応していない可能性があります。",
+    "quotaExhausted": "{{provider}} アカウントのクレジットが不足しています。",
+    "rateLimited": "{{provider}} がリクエストを制限しました。しばらく待ってからもう一度お試しください。",
+    "modelNotFound": "{{provider}} はモデル「{{model}}」を認識できません。",
+    "modelNotFoundNoModel": "{{provider}} は選択されたモデルを認識できません。",
+    "payloadTooLarge": "この録音は {{provider}} には大きすぎます。",
+    "requestTooLarge": "このリクエストは {{provider}} には大きすぎます。",
+    "badRequest": "{{provider}} はこのリクエストを処理できませんでした。",
+    "unavailable": "{{provider}} で現在問題が発生しています。しばらくしてから再度お試しください。",
+    "timeout": "{{provider}} からの応答に時間がかかりすぎました。",
+    "unreachable": "{{provider}} に接続できませんでした。接続を確認してください。",
+    "noResponse": "{{provider}} から応答がありませんでした。APIキーと接続を確認してください。",
+    "unknown": "{{provider}} から予期しないエラーが返されました。",
+    "keyMissing": "{{provider}} のAPIキーが設定されていません。設定 → 言語モデル から追加してください。",
+    "selfHosted": {
+      "authFailed": "サーバーがAPIキーを拒否しました。",
+      "accessDenied": "サーバーがアクセスを拒否しました。キーがこのモデルに対応していない可能性があります。",
+      "quotaExhausted": "サーバーがアカウントのクレジット不足を報告しています。",
+      "rateLimited": "サーバーがリクエストを制限しました。しばらく待ってからもう一度お試しください。",
+      "modelNotFound": "サーバーはモデル「{{model}}」を認識できません。",
+      "modelNotFoundNoModel": "サーバーは選択されたモデルを認識できません。",
+      "payloadTooLarge": "この録音はサーバーには大きすぎます。",
+      "requestTooLarge": "このリクエストはサーバーには大きすぎます。",
+      "badRequest": "サーバーはこのリクエストを処理できませんでした。",
+      "unavailable": "サーバーで現在問題が発生しています。しばらくしてから再度お試しください。",
+      "timeout": "サーバーからの応答に時間がかかりすぎました。",
+      "unreachable": "サーバーに接続できませんでした。サーバーが起動しているか確認してください。",
+      "noResponse": "サーバーから応答がありませんでした。APIキーとサーバーが起動しているかを確認してください。",
+      "unknown": "サーバーから予期しないエラーが返されました。"
+    },
+    "openSettings": "設定を開く",
+    "copyDetails": "詳細をコピー",
+    "titles": {
+      "transcription": "文字起こしに失敗しました",
+      "llm": "AIリクエストに失敗しました"
+    },
+    "details": {
+      "provider": "プロバイダー",
+      "requestId": "リクエストID"
     }
   }
 }

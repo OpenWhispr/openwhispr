@@ -68,16 +68,6 @@ const createMeetingAutoEndController = ({ now = Date.now, onStop }) => {
     if (!session || !session.eligible || session.stopped) return;
     const nowMs = now();
 
-    // A session the user explicitly restarted carries a grace period: they have
-    // just told us the meeting is still live, so hold every stop path and keep
-    // the quiet clocks reset, so the grace expiring cannot stop instantly.
-    if (nowMs < session.suppressUntil) {
-      session.quietSince = nowMs;
-      session.fastArmAt = null;
-      session.ownershipQuietSince = null;
-      return;
-    }
-
     if (session.mode === "ownership") {
       // Any contradicting evidence — the mic coming back, or remote audio
       // resuming — restarts the window rather than merely deferring the stop.
@@ -106,7 +96,6 @@ const createMeetingAutoEndController = ({ now = Date.now, onStop }) => {
     externalMicActive,
     micActive = false,
     systemActive = false,
-    suppressUntil = 0,
   }) => {
     const nowMs = now();
     lastSeenAt = nowMs;
@@ -122,7 +111,6 @@ const createMeetingAutoEndController = ({ now = Date.now, onStop }) => {
       quietSince: nowMs,
       fastArmAt: null,
       ownershipQuietSince: null,
-      suppressUntil,
       stopped: false,
     };
     evaluate();

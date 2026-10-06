@@ -309,6 +309,19 @@ class UpdateManager {
     if (enabled) this._autoDownloadIfEnabled();
   }
 
+  // NSIS and AppImage install a downloaded update from their quit handler, which would
+  // replace the executable a reset relaunch starts (an AppImage even moves to a new
+  // file name).
+  deferInstallOnQuit() {
+    autoUpdater.autoInstallOnAppQuit = false;
+  }
+
+  // On macOS a finished download is handed to Squirrel.Mac, which installs it on any
+  // quit from then on; MacUpdater records that hand-off in squirrelDownloadedUpdate.
+  hasStagedUpdate() {
+    return process.platform === "darwin" && autoUpdater.squirrelDownloadedUpdate === true;
+  }
+
   _autoDownloadIfEnabled() {
     if (!this.autoUpdatesEnabled || !this.updateAvailable) return;
     // downloadUpdate() is a no-op while a download is in flight or complete;

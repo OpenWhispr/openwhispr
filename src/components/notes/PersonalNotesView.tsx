@@ -7,14 +7,13 @@ import NoteEditor from "./NoteEditor";
 import SpacesTree from "./SpacesTree";
 import { ContainerOverview } from "./overview/ContainerOverview";
 import NotesStructureIntroDialog from "./NotesStructureIntroDialog";
-import ActionPicker from "./ActionPicker";
 import ActionManagerDialog from "./ActionManagerDialog";
 import AddNotesToFolderDialog from "./AddNotesToFolderDialog";
 import { useActionProcessing } from "../../hooks/useActionProcessing";
 import type { NoteMoveTarget } from "../../hooks/useNoteDragAndDrop";
-import type { ActionItem, NoteItem } from "../../types/electron";
-import { useActions } from "../../stores/actionStore";
-import { DETAILED_NOTES_KEY } from "../../helpers/builtinActions";
+import type { ActionItem, ActionKind, NoteItem } from "../../types/electron";
+import { buildNoteRunInput } from "../../helpers/templatePrompts";
+import { inferActionOutput } from "../../utils/inferActionOutput";
 import {
   useSettingsStore,
   selectIsCloudNoteFormattingMode,
@@ -62,6 +61,7 @@ import {
   setSessionExpectedCount,
 } from "../../stores/meetingRecordingStore";
 import { useNotesOnboarding } from "../../hooks/useNotesOnboarding";
+import { startRecordingForNote, useCreateNote } from "../../hooks/useCreateNote";
 import { useTeamSpacesCapability } from "../../hooks/useTeamSpacesCapability";
 import { useAuth } from "../../hooks/useAuth";
 import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
@@ -123,7 +123,7 @@ interface PersonalNotesViewProps {
     event: any;
   } | null;
   onMeetingRecordingRequestHandled?: () => void;
-  invitationEntry?: { workspaceId: string; teamIds: string[] } | null;
+  invitationEntry?: { workspaceId: string; teamIds: string[]; spaceIds: string[] } | null;
   onInvitationEntryHandled?: () => void;
 }
 
@@ -144,7 +144,7 @@ export default function PersonalNotesView({
   const [isSaving, setIsSaving] = useState(false);
   const [draft, setDraftState] = useState<NoteEditorDraft | null>(null);
   const draftRef = useRef<NoteEditorDraft | null>(null);
-  const [showActionManager, setShowActionManager] = useState(false);
+  const [managerKind, setManagerKind] = useState<ActionKind | null>(null);
   const [showAddNotesDialog, setShowAddNotesDialog] = useState(false);
   const pendingDocumentRef = useRef<PendingDocumentSave | null>(null);
   const pendingEnhancedRef = useRef<PendingEnhancedSave | null>(null);
@@ -246,7 +246,6 @@ export default function PersonalNotesView({
   const sessionExpectedCount = useMeetingRecordingStore((s) => s.sessionExpectedCount);
   const userTouchedStepper = useMeetingRecordingStore((s) => s.userTouchedStepper);
   const meetingRecordingAllowed = useTranscriptionContextAllowed("meeting");
-  const actions = useActions();
 
   const spaces = useSpaces();
   const folders = useFolders();
@@ -295,21 +294,25 @@ export default function PersonalNotesView({
   }, [invitationEntry, isSidePanelLayout]);
 
   // The acceptance modal starts a sync before navigating here. Once the first
-  // space an invited team can access appears in the local mirror, take the
-  // user to it instead of leaving the newly shared content hidden behind
-  // Personal.
+  // space the invitation granted (directly or via a team) appears in the local
+  // mirror, take the user to it instead of leaving the newly shared content
+  // hidden behind Personal.
   useEffect(() => {
     if (!invitationEntry) return;
     const invitedTeamIds = new Set(invitationEntry.teamIds);
+    const invitedSpaceIds = new Set(invitationEntry.spaceIds);
+    // Workspace owners/admins receive implicit access, so their invitation
+    // may enumerate no grants at all. In that case, open the first accessible
+    // team space belonging to the accepted workspace.
+    const anyGrant = invitedTeamIds.size === 0 && invitedSpaceIds.size === 0;
     const invitedSpace = spaces.find(
       (space) =>
         space.kind === "team" &&
         space.workspace_id === invitationEntry.workspaceId &&
         space.cloud_space_id != null &&
-        // Workspace owners/admins receive implicit access, so their invitation
-        // may not enumerate team ids. In that case, open the first accessible
-        // team space belonging to the accepted workspace.
-        (invitedTeamIds.size === 0 || space.teams.some((team) => invitedTeamIds.has(team.id)))
+        (anyGrant ||
+          invitedSpaceIds.has(space.cloud_space_id) ||
+          space.teams.some((team) => invitedTeamIds.has(team.id)))
     );
     if (!invitedSpace) return;
 
@@ -354,24 +357,7 @@ export default function PersonalNotesView({
     });
   }, [activeNote?.calendar_event_id]);
 
-  const startRecordingForNote = useCallback(async (note: NoteItem | null) => {
-    const seedSegments = note?.transcript ? parseTranscriptSegments(note.transcript) : [];
-    await storeStartRecording({
-      noteId: note?.id ?? null,
-      noteTitle: note?.title ?? null,
-      folderId: note?.folder_id ?? null,
-      seedSegments,
-      diarizationEnabled: note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
-      expectedCount: resolveExpectedSpeakerCount(note),
-      expectedCountIsExplicit: isExplicitSpeakerCount(note?.expected_speaker_count),
-      autoEndEligible: isMeetingAutoEndEligible(note),
-    });
-  }, []);
-
-  const startRecording = useCallback(
-    () => startRecordingForNote(activeNote ?? null),
-    [activeNote, startRecordingForNote]
-  );
+  const startRecording = useCallback(() => startRecordingForNote(activeNote ?? null), [activeNote]);
 
   const stopRecording = useCallback(async () => {
     await storeStopRecording();
@@ -507,42 +493,12 @@ export default function PersonalNotesView({
     return () => flushPendingSaves("unmount");
   }, [flushPendingSaves]);
 
-  const handleNewNoteIn = useCallback(
-    async (spaceId: number, folderId: number | null) => {
-      const result = await window.electronAPI.saveNote(
-        t("notes.list.untitledNote"),
-        "",
-        "personal",
-        null,
-        null,
-        folderId,
-        spaceId
-      );
-      if (result.success && result.note) {
-        setActiveContext(result.note.space_id, result.note.folder_id);
-        revealContainer(result.note.space_id, result.note.folder_id);
-        setActiveNoteId(result.note.id);
-        // A new note is a recording waiting to happen: start it unless one is already live.
-        if (meetingRecordingAllowed && !isTranscribing) void startRecordingForNote(result.note);
-      }
-    },
-    [t, meetingRecordingAllowed, isTranscribing, startRecordingForNote]
-  );
+  const { createNote, createNoteIn } = useCreateNote();
 
   const privateSpaceId = useMemo(
     () => spaces.find((s) => s.kind === "private")?.id ?? null,
     [spaces]
   );
-
-  const handleNewNoteInPrivate = useCallback(() => {
-    if (privateSpaceId == null) return;
-    handleNewNoteIn(privateSpaceId, null);
-  }, [privateSpaceId, handleNewNoteIn]);
-
-  const handleNewNote = useCallback(() => {
-    if (activeContext) handleNewNoteIn(activeContext.spaceId, activeContext.folderId);
-    else handleNewNoteInPrivate();
-  }, [activeContext, handleNewNoteIn, handleNewNoteInPrivate]);
 
   const handleNotesAdded = useCallback(async () => {
     if (activeFolderId) {
@@ -605,13 +561,11 @@ export default function PersonalNotesView({
   const {
     state: actionProcessingState,
     actionName,
+    progress: actionProgress,
     runAction,
+    cancel: cancelAction,
   } = useActionProcessing(activeNoteId ?? null);
 
-  // Boolean flag so actions enable during recording without re-rendering on every transcript update.
-  const hasLiveTranscript = useMeetingRecordingStore(
-    (s) => s.recordingNoteId === activeNote?.id && !!s.transcript
-  );
   const activeNoteRawTranscript = activeNote?.transcript || "";
   const activeDraft = draft?.noteId === activeNote?.id ? draft : null;
   const editorNote = activeNote
@@ -689,18 +643,6 @@ export default function PersonalNotesView({
   // the store — this view can be unmounted when an auto-end stop fires.
   const isActiveNoteRecording = isTranscribing && recordingNoteId === activeNote?.id;
 
-  if (!isOnboardingComplete) {
-    return (
-      <>
-        <NotesOnboarding onComplete={completeOnboarding} />
-        <NotesStructureIntroDialog
-          open={showStructureIntro}
-          onOpenChange={handleStructureIntroOpenChange}
-        />
-      </>
-    );
-  }
-
   const runNoteAction = async (action: ActionItem) => {
     if (!editorNote) return;
     const { recordingNoteId: liveNoteId, transcript: liveTranscript } =
@@ -739,18 +681,19 @@ export default function PersonalNotesView({
       }
     }
 
-    const parts = [
-      hasNotes ? noteContent : "",
+    const { input, fromSummary, material } = buildNoteRunInput(action, {
+      summary: editorEnhancedContent,
+      notes: noteContent,
       meetingContext,
-      formattedTranscript ? `## Meeting Transcript\n${formattedTranscript}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-    runAction(action, parts, makeContentHash(`${noteContent}\n${rawTranscript}`), {
+      transcript: formattedTranscript,
+    });
+    runAction(action, input, makeContentHash(`${noteContent}\n${rawTranscript}`), {
       isCloudMode,
       modelId: effectiveModelId,
       isMeetingNote,
       knownPeople,
+      fromSummary,
+      material,
       allowTitleGeneration: isRegenerableNoteTitle(
         editorNote.title,
         [t("notes.list.untitledNote"), t("notes.list.newNote"), t("notes.sidebar.newNote")],
@@ -758,10 +701,18 @@ export default function PersonalNotesView({
       ),
     });
   };
-  const generateSummary = () => {
-    const action = actions.find((a) => a.translation_key === DETAILED_NOTES_KEY);
-    if (action) void runNoteAction(action);
-  };
+
+  if (!isOnboardingComplete) {
+    return (
+      <>
+        <NotesOnboarding onComplete={completeOnboarding} />
+        <NotesStructureIntroDialog
+          open={showStructureIntro}
+          onOpenChange={handleStructureIntroOpenChange}
+        />
+      </>
+    );
+  }
 
   return (
     <div className="flex h-full">
@@ -772,7 +723,7 @@ export default function PersonalNotesView({
         <div className="w-52 shrink-0 border-e border-border dark:border-white/10 flex flex-col h-full">
           <div className="px-2 pt-2 pb-1 shrink-0 space-y-0.5">
             <button
-              onClick={() => setShowActionManager(true)}
+              onClick={() => setManagerKind("template")}
               className={cn(
                 "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs",
                 "text-foreground/85 hover:text-foreground hover:bg-foreground/5",
@@ -781,7 +732,7 @@ export default function PersonalNotesView({
               )}
             >
               <Sparkles size={14} className="shrink-0" />
-              {t("notes.sidebar.actions")}
+              {t("notes.sidebar.templatesAndActions")}
             </button>
           </div>
 
@@ -789,7 +740,7 @@ export default function PersonalNotesView({
             onDeleteNote={handleDelete}
             onMoveNote={handleMoveNote}
             onCreateFolderAndMove={handleCreateFolderAndMove}
-            onNewNote={handleNewNoteIn}
+            onNewNote={createNoteIn}
             onShowStructureIntro={() => setShowStructureIntro(true)}
           />
         </div>
@@ -835,21 +786,17 @@ export default function PersonalNotesView({
               onCancelPendingSaves={cancelPendingSaves}
               actionProcessingState={actionProcessingState}
               actionName={actionName}
-              onGenerateSummary={generateSummary}
-              actionPicker={
-                <ActionPicker
-                  onRunAction={runNoteAction}
-                  onManageActions={() => setShowActionManager(true)}
-                  disabled={
-                    (!editorNote?.content?.trim() &&
-                      !hasLiveTranscript &&
-                      !activeNoteRawTranscript) ||
-                    actionProcessingState === "processing"
-                  }
-                />
-              }
+              actionProgress={actionProgress}
+              onCancelAction={cancelAction}
+              onRunNoteAction={runNoteAction}
+              onManageActions={setManagerKind}
             />
-            <ActionManagerDialog open={showActionManager} onOpenChange={setShowActionManager} />
+            <ActionManagerDialog
+              open={managerKind !== null}
+              onOpenChange={(open) => !open && setManagerKind(null)}
+              initialKind={managerKind ?? "template"}
+              onInferOutput={(prompt) => inferActionOutput(prompt, effectiveModelId, isCloudMode)}
+            />
           </>
         ) : activeContext && overviewSpace ? (
           <ContainerOverview
@@ -861,7 +808,7 @@ export default function PersonalNotesView({
             space={overviewSpace}
             folder={overviewFolder}
             onOpenNote={setActiveNoteId}
-            onNewNote={handleNewNote}
+            onNewNote={createNote}
             onAddExisting={activeFolderId != null ? () => setShowAddNotesDialog(true) : undefined}
           />
         ) : (
@@ -972,7 +919,7 @@ export default function PersonalNotesView({
                 </p>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={handleNewNote}
+                    onClick={createNote}
                     className="flex items-center gap-1.5 px-4 h-7 rounded-md bg-primary/8 dark:bg-primary/10 border border-primary/12 dark:border-primary/15 text-xs font-medium text-primary/70 hover:bg-primary/12 hover:text-primary hover:border-primary/20 transition-colors"
                   >
                     <Plus size={11} />

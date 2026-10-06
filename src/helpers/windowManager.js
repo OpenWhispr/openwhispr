@@ -1,5 +1,6 @@
 const { app, screen, BrowserWindow, dialog, ipcMain, Menu } = require("electron");
 const debugLogger = require("./debugLogger");
+const { createLinuxWindowInputRegion } = require("./linuxWindowInputRegion");
 // Aliased: this class has an openExternalUrl method wrapping the helper.
 const { openExternalUrl: openUrlInExternalBrowser } = require("./externalUrlOpener");
 const HotkeyManager = require("./hotkeyManager");
@@ -8,7 +9,11 @@ const DragManager = require("./dragManager");
 const MainWindowPlacementCoordinator = require("./mainWindowPlacementCoordinator");
 const MenuManager = require("./menuManager");
 const DevServerManager = require("./devServerManager");
-const { isAllowedAppNavigation, isExternalBrowserUrl } = require("./navigationGuard");
+const {
+  isAllowedAppNavigation,
+  isExternalBrowserUrl,
+  isExternalOpenUrl,
+} = require("./navigationGuard");
 const { pathToFileURL } = require("url");
 const dockManager = require("./dockManager");
 const { i18nMain } = require("./i18nMain");
@@ -24,7 +29,6 @@ const {
   shouldBlockDictationWhilePanelOpen,
 } = require("./dictationLifecycle");
 const { DEV_SERVER_PORT } = DevServerManager;
-const AUTO_END_NOTIFICATION_LOAD_TIMEOUT_MS = 10_000;
 const DRAG_MOVE_TOLERANCE_PX = 2;
 const {
   MAIN_WINDOW_CONFIG,
@@ -36,7 +40,6 @@ const {
   fitDictationErrorContentWindowToWorkArea,
   fitDictationErrorWindowToWorkArea,
   resolveHorizontalWindowDirection,
-  getMeetingNotificationWindowSize,
   WINDOW_SIZES,
   WindowPositionUtil,
 } = require("./windowConfig");
@@ -61,25 +64,21 @@ class WindowManager {
     // Set by IPCHandlers so its demo session dies with the demo kind on every
     // teardown path (id-matched end, onboarding exit, control panel closed).
     this.onOnboardingDemoTeardown = null;
+    // Set by main.js so the tray's listen item rebuilds with dictation state.
+    this.onDictationStateChanged = null;
     this.notificationWindow = null;
     this.agentDictationPillWindow = null;
     this._agentDictationPillReady = false;
     this._agentDictationPillSize = AGENT_DICTATION_PILL_SIZE;
     this._agentDictationPillHorizontalDirection = "left";
     this._agentDictationPillScreenListener = null;
-    this._notificationLoadTimeout = null;
     this._notificationDismissTimer = new NotificationDismissTimer(() => {
-      const notification = this._pendingNotificationData;
-      // Dismiss first: an expiring restart offer lets the engine flush the
-      // detections it was holding, and a prompt raised from that handler must
-      // not be closed by this dismissal. The engine is not told the card closed
-      // either — handleNotificationTimeout below settles this expiry, and a
-      // close report here would flush the queue into a card that handler is
-      // about to clear.
+      // Dismiss first: a prompt raised from the timeout handler must not be
+      // closed by this dismissal. The engine is not told the card closed either —
+      // handleNotificationTimeout below settles this expiry, and a close report
+      // here would flush the queue into a card that handler is about to clear.
       this.dismissMeetingNotification({ notifyEngine: false });
-      if (this.meetingDetectionEngine) {
-        this.meetingDetectionEngine.handleNotificationTimeout(notification);
-      }
+      this.meetingDetectionEngine?.handleNotificationTimeout();
     });
     this.notificationPrefs = {
       notificationsEnabled: true,
@@ -105,6 +104,7 @@ class WindowManager {
     this._assistantPanelBusy = false;
     this._pendingMeetingNoteNavigation = null;
     this._pendingNoteNavigation = null;
+    this._pendingSettingsSection = null;
 
     app.on("before-quit", () => {
       this.isQuitting = true;
@@ -129,6 +129,7 @@ class WindowManager {
     this.setMainWindowInteractivity(false);
     this.registerMainWindowEvents();
     this.registerAssistantSelectionContextMenu();
+    this.registerExternalLinkHandlers(this.mainWindow, false);
 
     // Register load event handlers BEFORE loading to catch all events
     this.mainWindow.webContents.on(
@@ -242,15 +243,35 @@ class WindowManager {
 
     if (process.platform === "win32") {
       // Windows click-through forwarding is unreliable for this floating panel.
-      // Keep the panel interactive so the mic button and cancel button are always clickable.
       this.mainWindow.setIgnoreMouseEvents(false);
       return;
     }
 
-    if (shouldCapture) {
+    if (process.platform === "linux") {
+      // Native capture is the fallback when the input-region helper is unavailable.
+      this.mainWindow.setIgnoreMouseEvents(!shouldCapture);
+    } else if (shouldCapture) {
       this.mainWindow.setIgnoreMouseEvents(false);
     } else {
       this.mainWindow.setIgnoreMouseEvents(true, { forward: true });
+    }
+  }
+
+  async setMainWindowInputRegion(region) {
+    const win = this.mainWindow;
+    if (process.platform !== "linux" || !win || win.isDestroyed()) return false;
+    if (this._linuxWindowInputRegion?.window !== win) {
+      this._linuxWindowInputRegion?.stop();
+      this._linuxWindowInputRegion = { window: win, ...createLinuxWindowInputRegion(win) };
+    }
+    try {
+      await this._linuxWindowInputRegion.set(region);
+      return !win.isDestroyed() && win.isVisible() && !win.isMinimized();
+    } catch (error) {
+      // The writer rejects after its process closes, so an old shape cannot
+      // overwrite this fallback and leave native hover unreachable.
+      if (!win.isDestroyed()) win.setIgnoreMouseEvents(false);
+      throw error;
     }
   }
 
@@ -268,13 +289,12 @@ class WindowManager {
     // begin with, so on Linux leave the hit-testing alone and move the
     // countdown alone.
     const togglesClickThrough = process.platform !== "linux";
-    const hasFixedExpiry = this._pendingNotificationData?.kind === "auto-end";
     if (interactive) {
       if (togglesClickThrough) win.setIgnoreMouseEvents(false);
-      if (!hasFixedExpiry) this._notificationDismissTimer.pause();
+      this._notificationDismissTimer.pause();
     } else {
       if (togglesClickThrough) win.setIgnoreMouseEvents(true, { forward: true });
-      if (!hasFixedExpiry) this._notificationDismissTimer.resume();
+      this._notificationDismissTimer.resume();
     }
   }
 
@@ -837,11 +857,21 @@ class WindowManager {
     return isOnboardingInputAllowed(this._onboardingActive, this._onboardingDemoKind, inputKind);
   }
 
-  // Public gate for main.js's meeting hotkey call sites, which invoke the
-  // detection engine directly rather than routing through a send method here.
   // "meeting" is never a demo kind, so this is simply "not during onboarding".
   isMeetingInputAllowed() {
     return this._isOnboardingInputAllowed("meeting");
+  }
+
+  // The one entry for starting a meeting by hand: the meeting hotkey, the pill's
+  // command menu, and the tray. Fails closed during onboarding and while a
+  // hotkey is being captured, like every hotkey slot.
+  async startManualMeeting() {
+    if (this.hotkeyManager.isInListeningMode() || !this.isMeetingInputAllowed()) return;
+    try {
+      await this.meetingDetectionEngine?.startManualMeeting();
+    } catch (error) {
+      debugLogger.error("Failed to start manual meeting", { error: error.message }, "meeting");
+    }
   }
 
   // Visibility is part of "available": a ready pill that is merely hidden
@@ -907,7 +937,7 @@ class WindowManager {
       // sites in main.js; a stop-press capture resolves the same frontmost
       // app, since NSWorkspace ignores the overlay panel.
       const targetPidPromise = this.textEditMonitor?.captureTargetPid?.();
-      void this.selectionManager?.captureTarget?.();
+      void this.selectionManager?.captureTarget?.({ force: !isStarting });
       if (!isStarting) {
         this._mainWindowPlacementCoordinator.cancelPending();
       }
@@ -939,6 +969,12 @@ class WindowManager {
     this._isDictatingToggle = isDictationRecording(nextState);
     this.meetingDetectionEngine?.setUserRecording(this._isDictatingToggle);
     this._sendAgentDictationPillState();
+    this.onDictationStateChanged?.();
+  }
+
+  // The tray's listen item is a toggle over this state, like the pill's.
+  isDictating() {
+    return this._isDictatingToggle;
   }
 
   _sendAgentDictationPillState() {
@@ -986,6 +1022,17 @@ class WindowManager {
 
   sendToggleTranslation() {
     this._sendDictationToggle("toggle-translation", "translation");
+  }
+
+  // The tray's Ask assistant. Only the renderer can open the panel, and only it
+  // knows the policy and recording state the pill menu gates the item on, so it
+  // decides: nothing is shown or created here, and an accepted command surfaces
+  // the pill itself through setAssistantPanelOpen. Onboarding blocks it outright
+  // rather than through the demo-aware gate — the tray is never part of the demo.
+  sendOpenAssistantPanel() {
+    if (this.hotkeyManager.isInListeningMode() || this._onboardingActive) return;
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    this.mainWindow.webContents.send("open-assistant-panel");
   }
 
   sendStartDictation() {
@@ -1226,6 +1273,44 @@ class WindowManager {
     });
   }
 
+  // Links in either window open in the default browser, never in an in-app
+  // window or by navigating the app away from itself.
+  registerExternalLinkHandlers(window, isControlPanel) {
+    window.webContents.on("will-navigate", (event, url) => {
+      // getAppUrl() is null in packaged builds; exactly one of the two is set.
+      const appUrl =
+        DevServerManager.getAppUrl(isControlPanel) ??
+        pathToFileURL(DevServerManager.getAppFilePath(isControlPanel).path).href;
+
+      if (isAllowedAppNavigation(url, appUrl)) {
+        return;
+      }
+
+      event.preventDefault();
+      if (isExternalBrowserUrl(url)) {
+        this.openExternalUrl(url);
+      } else {
+        debugLogger.debug("Blocked untrusted navigation", { url }, "window");
+      }
+    });
+
+    window.webContents.setWindowOpenHandler(({ url }) => {
+      if (isExternalOpenUrl(url)) {
+        this.openExternalUrl(url);
+      } else {
+        debugLogger.debug("Blocked untrusted window open", { url }, "window");
+      }
+      return { action: "deny" };
+    });
+
+    window.webContents.on("did-create-window", (childWindow, details) => {
+      childWindow.close();
+      if (details.url && isExternalOpenUrl(details.url)) {
+        this.openExternalUrl(details.url, false);
+      }
+    });
+  }
+
   async createControlPanelWindow() {
     if (this.controlPanelWindow && !this.controlPanelWindow.isDestroyed()) {
       if (this.controlPanelWindow.isMinimized()) {
@@ -1244,35 +1329,7 @@ class WindowManager {
     this._onboardingWindowMode = null;
     this._onboardingWindowState = null;
 
-    this.controlPanelWindow.webContents.on("will-navigate", (event, url) => {
-      // getAppUrl() is null in packaged builds; exactly one of the two is set.
-      const appUrl =
-        DevServerManager.getAppUrl(true) ??
-        pathToFileURL(DevServerManager.getAppFilePath(true).path).href;
-
-      if (isAllowedAppNavigation(url, appUrl)) {
-        return;
-      }
-
-      event.preventDefault();
-      if (isExternalBrowserUrl(url)) {
-        this.openExternalUrl(url);
-      } else {
-        debugLogger.debug("Blocked untrusted navigation", { url }, "window");
-      }
-    });
-
-    this.controlPanelWindow.webContents.setWindowOpenHandler(({ url }) => {
-      this.openExternalUrl(url);
-      return { action: "deny" };
-    });
-
-    this.controlPanelWindow.webContents.on("did-create-window", (childWindow, details) => {
-      childWindow.close();
-      if (details.url && !details.url.startsWith("devtools://")) {
-        this.openExternalUrl(details.url, false);
-      }
-    });
+    this.registerExternalLinkHandlers(this.controlPanelWindow, true);
 
     // Nothing else shows this window: ready-to-show deliberately doesn't, so the
     // renderer can pick the onboarding size first and avoid a visible
@@ -1371,8 +1428,12 @@ class WindowManager {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     this.mainWindow.webContents.send("preview-text", text);
     this._sendAgentDictationPreview("preview-text", text);
-    this.mainWindow.showInactive();
-    this.enforceMainWindowOnTop();
+    // Partials arrive several times a second; re-showing a visible window
+    // restacks it (and re-fires "show") on every chunk (#1262).
+    if (!this.mainWindow.isVisible()) {
+      this.mainWindow.showInactive();
+      this.enforceMainWindowOnTop();
+    }
   }
 
   appendTranscriptionPreview(text) {
@@ -1528,6 +1589,7 @@ class WindowManager {
 
   setOnboardingActive(active) {
     const nextActive = active === true;
+    if (!nextActive) this.permissionGuide?.close();
     if (nextActive === this._onboardingActive) {
       if (nextActive) this._hideNormalAppSurfaces();
       return true;
@@ -1725,6 +1787,9 @@ class WindowManager {
     // A demo left running when the panel hides would keep swallowing normal
     // dictations (paste suppressed, transcripts rerouted to the demo session).
     this.endOnboardingDemo();
+    // The guide cannot watch the panel's hide event (occlusion fires it too),
+    // so the one real hide path tells it.
+    this.permissionGuide?.close(false, true);
     this.controlPanelWindow.hide();
     dockManager.setControlPanelVisible(false);
   }
@@ -1922,6 +1987,20 @@ class WindowManager {
       return;
     }
 
+    if (process.platform === "linux") {
+      const win = this.mainWindow;
+      // backgroundThrottling:false keeps document.visibilityState visible even
+      // after hide(). Native visibility owns the Linux input-region updates.
+      for (const event of ["show", "hide", "minimize", "restore"]) {
+        win.on(event, () => {
+          win.webContents.send(
+            "main-window-visibility-changed",
+            win.isVisible() && !win.isMinimized()
+          );
+        });
+      }
+    }
+
     // Safety timeout: force show the window if ready-to-show doesn't fire within 10 seconds
     const showTimeout = setTimeout(() => {
       if (
@@ -1968,40 +2047,25 @@ class WindowManager {
     }
   }
 
-  async showMeetingNotification(promptData, { autoDismiss = true, autoDismissAt = null } = {}) {
+  async showMeetingNotification(promptData, { autoDismiss = true } = {}) {
     if (this._onboardingActive) return false;
     if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
       const previousWindow = this.notificationWindow;
-      const replacedAutoEndSessionId =
-        this._pendingNotificationData?.kind === "auto-end"
-          ? this._pendingNotificationData.sessionId
-          : null;
       this.notificationWindow = null;
       this._pendingNotificationData = null;
       previousWindow.close();
-      if (replacedAutoEndSessionId) {
-        this.meetingDetectionEngine?.handleAutoEndNotificationClosed?.(replacedAutoEndSessionId, {
-          flushQueued: false,
-        });
-      }
     }
     this._notificationDismissTimer.cancel();
-    if (this._notificationLoadTimeout) {
-      clearTimeout(this._notificationLoadTimeout);
-      this._notificationLoadTimeout = null;
-    }
     if (this._notificationReadyFallback) {
       clearTimeout(this._notificationReadyFallback);
       this._notificationReadyFallback = null;
     }
 
     const display = screen.getPrimaryDisplay();
-    const notificationSize = getMeetingNotificationWindowSize(promptData);
-    const position = WindowPositionUtil.getNotificationPosition(display, notificationSize);
+    const position = WindowPositionUtil.getNotificationPosition(display);
 
     const win = new BrowserWindow({
       ...NOTIFICATION_WINDOW_CONFIG,
-      ...notificationSize,
       ...position,
     });
     this.notificationWindow = win;
@@ -2010,25 +2074,15 @@ class WindowManager {
     // after the replacement already took over the reference and the countdown.
     win.on("closed", () => {
       if (this.notificationWindow !== win) return;
-      const closedNotification = this._pendingNotificationData;
-      const closedAutoEndSessionId =
-        closedNotification?.kind === "auto-end" ? closedNotification.sessionId : null;
-      const closedDetectionId =
-        closedNotification?.kind === "detection" ? closedNotification.detectionId : null;
+      const closedDetectionId = this._pendingNotificationData?.detectionId ?? null;
       this.notificationWindow = null;
       this._pendingNotificationData = null;
       this._notificationDismissTimer.cancel();
-      if (this._notificationLoadTimeout) {
-        clearTimeout(this._notificationLoadTimeout);
-        this._notificationLoadTimeout = null;
-      }
       if (this._notificationReadyFallback) {
         clearTimeout(this._notificationReadyFallback);
         this._notificationReadyFallback = null;
       }
-      if (closedAutoEndSessionId) {
-        this.meetingDetectionEngine?.handleAutoEndNotificationClosed?.(closedAutoEndSessionId);
-      } else if (closedDetectionId) {
+      if (closedDetectionId) {
         this.meetingDetectionEngine?.handleDetectionNotificationClosed?.(closedDetectionId);
       }
     });
@@ -2048,35 +2102,16 @@ class WindowManager {
     // Everything past the load addresses `win` directly: a replacement taking
     // over mid-load must not have this prompt's data, countdown or force-show
     // applied to its window.
-    let loadTimeout = null;
     try {
-      const loadNotification = async () => {
-        if (process.env.NODE_ENV === "development") {
-          await DevServerManager.waitForDevServer();
-          if (this.notificationWindow !== win) return;
-          await win.loadURL(`${DevServerManager.DEV_SERVER_URL}?meeting-notification=true`);
-          return;
-        }
-
+      if (process.env.NODE_ENV === "development") {
+        await DevServerManager.waitForDevServer();
+        if (this.notificationWindow !== win) return false;
+        await win.loadURL(`${DevServerManager.DEV_SERVER_URL}?meeting-notification=true`);
+      } else {
         const fileInfo = DevServerManager.getAppFilePath(false);
         await win.loadFile(fileInfo.path, {
           query: { ...fileInfo.query, "meeting-notification": "true" },
         });
-      };
-      const loadPromise = loadNotification();
-      if (promptData?.kind === "auto-end") {
-        const timeoutPromise = new Promise((_, reject) => {
-          loadTimeout = setTimeout(() => {
-            if (this._notificationLoadTimeout === loadTimeout) {
-              this._notificationLoadTimeout = null;
-            }
-            reject(new Error("Meeting auto-end notification load timed out"));
-          }, AUTO_END_NOTIFICATION_LOAD_TIMEOUT_MS);
-          this._notificationLoadTimeout = loadTimeout;
-        });
-        await Promise.race([loadPromise, timeoutPromise]);
-      } else {
-        await loadPromise;
       }
     } catch (error) {
       // A load aborted by our own replacement or dismissal is not a failure —
@@ -2084,11 +2119,6 @@ class WindowManager {
       if (this.notificationWindow !== win) return false;
       this.dismissMeetingNotification();
       throw error;
-    } finally {
-      if (loadTimeout && this._notificationLoadTimeout === loadTimeout) {
-        clearTimeout(loadTimeout);
-        this._notificationLoadTimeout = null;
-      }
     }
     if (this.notificationWindow !== win) return false;
     if (this._onboardingActive) {
@@ -2107,11 +2137,7 @@ class WindowManager {
     this._notificationReadyFallback = readyFallback;
 
     if (autoDismiss) {
-      this._notificationDismissTimer.start(
-        autoDismissAt === null
-          ? getNotificationTimeoutMs(promptData.source)
-          : Math.max(0, autoDismissAt - Date.now())
-      );
+      this._notificationDismissTimer.start(getNotificationTimeoutMs(promptData.source));
     }
     return true;
   }
@@ -2143,40 +2169,14 @@ class WindowManager {
       this._notificationReadyFallback = null;
     }
     this._notificationDismissTimer.cancel();
-    if (this._notificationLoadTimeout) {
-      clearTimeout(this._notificationLoadTimeout);
-      this._notificationLoadTimeout = null;
-    }
     const win = this.notificationWindow;
     this.notificationWindow = null;
     if (win && !win.isDestroyed()) win.close();
-    if (notifyEngine && notification?.kind === "detection") {
+    if (notifyEngine && notification?.detectionId) {
       this.meetingDetectionEngine?.handleDetectionNotificationClosed?.(notification.detectionId, {
         flushQueued,
       });
     }
-  }
-
-  showMeetingAutoEndNotification({ sessionId, expiresAt, reason }) {
-    return this.showMeetingNotification(
-      { kind: "auto-end", sessionId, expiresAt, reason },
-      { autoDismissAt: expiresAt }
-    );
-  }
-
-  dismissMeetingAutoEndNotification(sessionId) {
-    if (
-      this._pendingNotificationData?.kind !== "auto-end" ||
-      this._pendingNotificationData.sessionId !== sessionId
-    ) {
-      return;
-    }
-    this.dismissMeetingNotification();
-  }
-
-  isMeetingNotificationSender(sender) {
-    const win = this.notificationWindow;
-    return !!win && !win.isDestroyed() && win.webContents === sender;
   }
 
   sendToControlPanel(channel, data) {
@@ -2257,11 +2257,20 @@ class WindowManager {
     }
   }
 
-  async openSettings() {
+  // A named section waits here like a note navigation: a control panel created
+  // by this call registers its show-settings listener only after the event.
+  async openSettings(section) {
+    if (section) this._pendingSettingsSection = section;
     await this.createControlPanelWindow();
     if (this.controlPanelWindow && !this.controlPanelWindow.isDestroyed()) {
       this.controlPanelWindow.webContents.send("show-settings");
     }
+  }
+
+  consumePendingSettingsSection() {
+    const section = this._pendingSettingsSection;
+    this._pendingSettingsSection = null;
+    return section;
   }
 
   showLoadFailureDialog(windowName, errorCode, errorDescription, validatedURL) {

@@ -1,4 +1,4 @@
-import { ChevronDown, Plus } from "../icons";
+import { ChevronDown, Clock, PanelRightClose, Plus } from "../icons";
 import { useTranslation } from "react-i18next";
 import { useUiLocale } from "../../hooks/useUiLocale";
 import type { ContainerConversationItem } from "../../hooks/useContainerChat";
@@ -18,6 +18,8 @@ interface ConversationPickerProps {
   onSwitchConversation: (id: number) => void;
   onNewChat?: () => void;
   titleClassName?: string;
+  variant?: "default" | "sidebar";
+  onUndock?: () => void;
 }
 
 export function ConversationPicker({
@@ -26,6 +28,8 @@ export function ConversationPicker({
   onSwitchConversation,
   onNewChat,
   titleClassName,
+  variant = "default",
+  onUndock,
 }: ConversationPickerProps) {
   const { t } = useTranslation();
   const locale = useUiLocale();
@@ -35,13 +39,23 @@ export function ConversationPicker({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="inline-flex items-center gap-1 text-xs font-medium text-foreground/50 hover:text-foreground/70 hover:bg-foreground/5 rounded-md px-1.5 py-0.5 -ms-1.5 transition-colors duration-150 outline-none"
+          className={cn(
+            "inline-flex items-center rounded-md transition-colors duration-150 outline-none hover:bg-foreground/5",
+            variant === "sidebar"
+              ? "gap-2 px-1 py-1 text-sm text-foreground/65 hover:text-foreground"
+              : "-ms-1.5 gap-1 px-1.5 py-0.5 text-xs font-medium text-foreground/50 hover:text-foreground/70"
+          )}
           aria-label={t("embeddedChat.conversationSelector")}
         >
+          {variant === "sidebar" && <Clock size={18} className="shrink-0" />}
           <span className={cn("truncate max-w-40", titleClassName)}>
-            {activeConversation?.title || t("embeddedChat.newChat")}
+            {variant === "sidebar"
+              ? t("embeddedChat.history")
+              : activeConversation?.title || t("embeddedChat.newChat")}
           </span>
-          <ChevronDown size={10} className="shrink-0 text-foreground/45" />
+          {variant !== "sidebar" && (
+            <ChevronDown size={10} className="shrink-0 text-foreground/45" />
+          )}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" sideOffset={4} className="min-w-44 max-w-56 p-1">
@@ -67,6 +81,15 @@ export function ConversationPicker({
                 </span>
               </DropdownMenuItem>
             ))}
+          </>
+        )}
+        {onUndock && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onUndock} className="text-xs gap-2 rounded-md px-2 py-1.5">
+              <PanelRightClose size={12} className="text-foreground/45 shrink-0" />
+              {t("embeddedChat.undock")}
+            </DropdownMenuItem>
           </>
         )}
       </DropdownMenuContent>
