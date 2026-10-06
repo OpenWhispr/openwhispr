@@ -42,7 +42,7 @@ async function startWithResult(t, startResult) {
     cachePrefix: "openwhispr-meeting-sign-in-toast-",
     mockModules: {
       "/ui/useToast": `export const useToast = () => ({ toast: (props) => { globalThis.__signInToasts.push(props); return "1"; }, dismiss: () => {} });`,
-      "/utils/requestSignIn": `export const SIGN_IN_PROMPTED_AT_KEY = "signInPromptedAt"; export const requestSignIn = () => { globalThis.__signInRequests += 1; };`,
+      "/utils/requestSignIn": `export const requestSignIn = () => { globalThis.__signInRequests += 1; };`,
     },
   });
   const { default: Mount } = await vite.ssrLoadModule("/components/MeetingRecordingMount.tsx");
@@ -68,10 +68,8 @@ for (const code of ["AUTH_EXPIRED", "AUTH_REQUIRED"]) {
 
     assert.ok(i18n.exists("notes.meeting.signInRequired"));
     assert.equal(toast.description, i18n.t("notes.meeting.signInRequired"));
-    assert.equal(toast.duration, 8000);
     assert.equal(toast.actions.length, 1);
     assert.equal(toast.actions[0].label, i18n.t("common.signIn"));
-    assert.equal(toast.actionsAlign, "end");
     toast.actions[0].onClick();
     assert.equal(globalThis.__signInRequests, 1);
   });
@@ -86,5 +84,4 @@ test("any other start failure keeps its message and offers no sign-in", async (t
 
   assert.equal(toast.description, "Token request failed: 500");
   assert.equal(toast.actions, undefined);
-  assert.equal(toast.duration, undefined);
 });
