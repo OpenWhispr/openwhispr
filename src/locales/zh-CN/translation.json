@@ -123,6 +123,8 @@
       "osReserved": "\"{{hotkey}}\" 可能被系统保留。",
       "rightModifierNeedsListener": "\"{{hotkey}}\" 无法在此桌面上使用，其快捷键需要包含一个普通按键。请添加一个按键，例如 Control+Alt+Space。",
       "holdNeedsReleaseKey": "按住说话需要 macOS 能检测到松开的按键：Globe、右侧 Option 之类的右侧按键，或带修饰键的快捷键。点按可用于任何按键。",
+      "holdNeedsRegularKey": "要使用按住模式，请在快捷键中添加一个普通按键，例如 Control+Alt+Space。桌面环境无法检测仅按住修饰键的操作。",
+      "holdNeedsGnomePortal": "要使用按住模式，GNOME 需要全局快捷键门户（GNOME 48 及更高版本自带）。点按无需该门户。",
       "registrationFailed": "无法注册 \"{{hotkey}}\"，该快捷键可能已被其他应用占用。",
       "windowsKeyListenerMissing": "\"{{hotkey}}\" 需要 Windows 按键监听器，但此安装中缺少该组件。请选择包含普通按键的快捷键。",
       "updateFailedCheckFormat": "无法将快捷键更新为 \"{{hotkey}}\"，请检查格式是否有效。",
@@ -160,7 +162,7 @@
     "close": "关闭"
   },
   "windows": {
-    "pttUnavailable": "按住说话原生监听器不可用"
+    "pttUnavailable": "OpenWhispr 按键监听器不可用。"
   },
   "common": {
     "continue": "继续",
@@ -2272,6 +2274,12 @@
       },
       "transcriptionPreview": "实时转录预览",
       "transcriptionPreviewDescription": "在浮动窗口中显示转录结果，然后再进行文本整理",
+      "aec": {
+        "toggle": {
+          "title": "会议回声消除",
+          "description": "消除泄漏到麦克风中的会议音频。使用耳机或耳塞时请关闭此功能——没有需要消除的回声，而且它可能会完全抑制您的声音。"
+        }
+      },
       "vad": {
         "title": "语音活动检测",
         "description": "配置 Silero VAD 如何为本地 Whisper 转录检测并切分语音",
@@ -3656,6 +3664,10 @@
     "activationFailedDescription": "OpenWhispr 已切换为 CPU 转录。",
     "reasoningActivationFailedDescription": "OpenWhispr 已切换为 CPU 处理。",
     "retryActivation": "重试 GPU 加速",
+    "redownloadNeeded": "需要重新下载 GPU 加速包",
+    "redownloadNeededDescription": "此版本的 OpenWhispr 无法使用已安装的 GPU 加速包。请重新下载以重新启用 GPU 加速。",
+    "redownloadButton": "重新下载 GPU 加速包",
+    "downloadFailed": "无法下载 GPU 加速包。",
     "remove": "移除",
     "dismiss": "暂不启用",
     "cancel": "取消"
@@ -3683,7 +3695,7 @@
       },
       "gpuPackMigration": {
         "title": "需要重新下载 GPU 加速包",
-        "description": "更新移除了过时的 GPU 加速包安装（{{packs}}）。请在设置中重新下载以恢复 GPU 加速。"
+        "description": "此版本无法使用之前的 GPU 加速包（{{packs}}）。请在设置中重新下载以重新启用 GPU 加速。"
       },
       "cleanupFailed": {
         "title": "清理失败",

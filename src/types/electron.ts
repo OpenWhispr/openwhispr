@@ -757,6 +757,8 @@ export interface CudaWhisperStatus {
   gpuFailed?: boolean;
   /** The whisper-server error line saved with that failure; null when none was readable. */
   gpuFailReason?: string | null;
+  /** An older release installed the pack and this version can't use it. */
+  needsUpdate?: boolean;
 }
 
 export interface VulkanWhisperStatus {
@@ -768,6 +770,8 @@ export interface VulkanWhisperStatus {
   gpuFailed?: boolean;
   /** The whisper-server error line saved with that failure; null when none was readable. */
   gpuFailReason?: string | null;
+  /** An older release installed the pack and this version can't use it. */
+  needsUpdate?: boolean;
 }
 
 export interface WhisperServerStatus {
@@ -3052,6 +3056,7 @@ declare global {
         noteId?: number | null;
         sessionId: string;
         autoEndEligible: boolean;
+        aecEnabled?: boolean;
       }) => Promise<
         {
           success: boolean;

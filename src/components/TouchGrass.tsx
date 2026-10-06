@@ -5,15 +5,16 @@ import type { GrassRustle } from "../utils/grassRustle";
 import "../styles/touch-grass.css";
 
 // The lawn is one flat field from the bottom of the scene to the horizon, drawn as a
-// grid of patches: rows by depth, a few columns across. Only the patches animate
-// (growth, breeze), so the GPU moves about a hundred textures a frame; the tufts
-// inside them are painted once, and repainted only while the hand parts them.
+// grid of patches: rows by depth, a few columns across. Besides the opening fades and
+// the gust sheen, only the patches animate (growth, breeze), so the GPU moves about a
+// hundred textures a frame; the tufts inside them are painted once, and repainted only
+// while the hand parts them.
 const HORIZON = 48; // % of the scene from the bottom
 const ROWS = 16;
 const SEGMENTS = 6;
 // When the breeze starts, just after the lawn has grown; each column then joins a
 // little after the one to its left, so gusts roll across the lawn.
-const WAVE_START_S = 3;
+const WAVE_START_S = 3.75;
 const WAVE_CROSSING_S = 1.2;
 // Tufts part within this distance of the hand, fading to nothing at the edge.
 const PART_RADIUS_PX = 64;
@@ -128,8 +129,8 @@ function makePatches(sceneHeight: number): Patch[] {
         height: Math.max(...tufts.map((tuft) => tuft.h)),
         // Negative skew pushes the tips right, with the gusts rolling left to right.
         amp: -(5 + rand() * 4),
-        growDelay: depth * 0.5 + rand() * 0.8,
-        growDur: 1.5 + rand() * 0.5,
+        growDelay: depth * 0.6 + rand(),
+        growDur: 1.9 + rand() * 0.6,
         // Close periods keep the wave coherent; the small spread lets it drift so the
         // patches never lock into step.
         swayDur: 3.4 + rand() * 0.8,
@@ -347,7 +348,7 @@ export default function TouchGrass({ rustle, height, label, onExit }: TouchGrass
       aria-label={label}
       tabIndex={0}
       className={cn(
-        "touch-grass -mx-2 rounded-t-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40",
+        "touch-grass -mx-2 rounded-t-xl focus-visible:outline-none",
         resting && "touch-grass--resting"
       )}
       style={{ height: height || undefined }}
