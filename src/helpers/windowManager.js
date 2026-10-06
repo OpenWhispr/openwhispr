@@ -341,7 +341,7 @@ class WindowManager {
     this._meetingAccountEpoch += 1;
     this.meetingRecentDestinations = [];
     this._pendingMeetingNoteNavigation = null;
-    this._cancelMeetingNavigation?.("ACCOUNT_CHANGED");
+    this._cancelMeetingNavigation("ACCOUNT_CHANGED");
     if (this.meetingDetectionEngine) {
       this.meetingDetectionEngine._notificationQueue = [];
       this.meetingDetectionEngine.activeDetections.clear();
@@ -358,8 +358,7 @@ class WindowManager {
 
   setNotificationInteractivity(sender, interactive) {
     const win = this.notificationWindow;
-    if (!win || win.isDestroyed() || sender !== win.webContents || typeof interactive !== "boolean")
-      return;
+    if (!win || win.isDestroyed() || sender !== win.webContents) return;
     if (process.platform !== "linux") win.setIgnoreMouseEvents(!interactive, { forward: true });
     const owner = this._meetingNotificationOwner;
     if (owner) {
@@ -416,7 +415,6 @@ class WindowManager {
     owner.layoutRevision = state.revision;
     owner.mode = state.mode;
     owner.surface = state;
-    owner.regions = regions;
     const previousBounds = win.getBounds();
     if (Object.keys(bounds).some((key) => bounds[key] !== previousBounds[key]))
       win.setBounds(bounds);
@@ -2281,7 +2279,6 @@ class WindowManager {
       layoutRevision: 0,
       mode: "closed",
       pointerInside: false,
-      regions: [{ x: 4, y: 4, width: 408, height: 76 }],
     };
     this._meetingNotificationOwner = owner;
     const retireRenderer = () => {
@@ -2289,13 +2286,11 @@ class WindowManager {
       this.dismissMeetingNotification();
     };
     const notificationContents = win.webContents;
-    notificationContents.once?.("render-process-gone", retireRenderer);
-    notificationContents.once?.("destroyed", retireRenderer);
+    notificationContents.once("render-process-gone", retireRenderer);
     win.on("closed", () => {
-      notificationContents.removeListener?.("render-process-gone", retireRenderer);
-      notificationContents.removeListener?.("destroyed", retireRenderer);
+      notificationContents.removeListener("render-process-gone", retireRenderer);
     });
-    if (process.platform === "linux") win.setShape(owner.regions);
+    if (process.platform === "linux") win.setShape([{ x: 4, y: 4, width: 408, height: 76 }]);
     win.on("blur", () => {
       if (!this.isMeetingNotificationOwner(owner) || owner.mode === "closed") return;
       this.setMeetingNotificationSurface(owner, {
@@ -2464,8 +2459,7 @@ class WindowManager {
         operation.onClose = () =>
           this._settleMeetingNavigation(operation, { success: false, code: "START_FAILED" });
         panel.once("closed", operation.onClose);
-        panel.webContents.once?.("render-process-gone", operation.onClose);
-        panel.webContents.once?.("destroyed", operation.onClose);
+        panel.webContents.once("render-process-gone", operation.onClose);
         const deliver = () => {
           if (this._meetingNavigationOperation !== operation) return;
           if (!operation.isCurrent() || this.controlPanelWindow !== panel || panel.isDestroyed()) {
@@ -2499,8 +2493,7 @@ class WindowManager {
     this._meetingNavigationOperation = null;
     clearTimeout(operation.timer);
     operation.panel?.removeListener("closed", operation.onClose);
-    operation.panel?.webContents.removeListener?.("render-process-gone", operation.onClose);
-    operation.panel?.webContents.removeListener?.("destroyed", operation.onClose);
+    operation.panel?.webContents.removeListener("render-process-gone", operation.onClose);
     if (operation.deliver)
       operation.panel?.webContents.removeListener("did-finish-load", operation.deliver);
     if (this._pendingMeetingNoteNavigation === operation.payload)

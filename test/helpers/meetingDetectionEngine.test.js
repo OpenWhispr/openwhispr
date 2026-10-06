@@ -302,7 +302,6 @@ function ownedNotification(t) {
     sessionId: "one",
     prompt: { detectionId: "calendar:event" },
     detection,
-    scope: {},
     selectedDestination: null,
   };
   let current = true;
@@ -324,9 +323,6 @@ function ownedNotification(t) {
     owner,
     respond: (options) =>
       ctx.engine.handleNotificationResponse("calendar:event", "start", options, owner),
-    retire: () => {
-      current = false;
-    },
   };
 }
 

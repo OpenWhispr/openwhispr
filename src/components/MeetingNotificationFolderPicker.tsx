@@ -5,7 +5,7 @@ import { defaultFolderDisplayName, folderMatchesQuery } from "./notes/shared";
 import type { MeetingDestinationContext, MeetingError, MeetingFolderRef } from "../types/electron";
 
 const key = (name: string) => `meetingNotification.folders.${name}`;
-import { meetingFolderLabel } from "./meetingFolderLabel";
+import { meetingFolderLabel, meetingLocationLabel } from "./meetingFolderLabel";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -151,10 +151,17 @@ export function MeetingNotificationFolderPicker({
       createRequest.current = { key: inputKey, id: crypto.randomUUID() };
     onCreate({ requestId: createRequest.current.id, name: draft, spaceId });
   };
+  const locationSpace = context?.spaces.find((s) => s.id === spaceId);
   const linked = context?.existingNote;
   const linkedFolder = folders.find((f) => f.id === linked?.folderId);
   const linkedLocation = linked
-    ? `${linked.shared ? linked.spaceName : t(key("private"))}${linked.folderName ? ` / ${linkedFolder ? defaultFolderDisplayName(linkedFolder, t) : linked.folderName}` : ""}${linked.shared ? ` · ${t(key("shared"))}` : ""}`
+    ? meetingLocationLabel(
+        linked.shared,
+        linked.spaceName,
+        linked.folderName &&
+          (linkedFolder ? defaultFolderDisplayName(linkedFolder, t) : linked.folderName),
+        t
+      )
     : "";
   const errorView = error && (
     <p role="alert" className="meeting-folder-error">
@@ -224,9 +231,12 @@ export function MeetingNotificationFolderPicker({
                     disabled={busy}
                   >
                     <span id="meeting-folder-location-value">
-                      {context?.spaces.find((s) => s.id === spaceId)?.kind === "team"
-                        ? `${context.spaces.find((s) => s.id === spaceId)?.name} · ${t(key("shared"))}`
-                        : t(key("private"))}
+                      {meetingLocationLabel(
+                        locationSpace?.kind === "team",
+                        locationSpace?.name ?? "",
+                        null,
+                        t
+                      )}
                     </span>
                     <ChevronDown className="size-3" />
                   </button>
@@ -248,9 +258,7 @@ export function MeetingNotificationFolderPicker({
                       aria-checked={space.id === spaceId}
                       onSelect={() => setSpaceId(space.id)}
                     >
-                      {space.kind === "private"
-                        ? t(key("private"))
-                        : `${space.name} · ${t(key("shared"))}`}
+                      {meetingLocationLabel(space.kind === "team", space.name, null, t)}
                       {space.id === spaceId && <Check className="size-3" />}
                     </DropdownMenuItem>
                   ))}
@@ -340,9 +348,12 @@ export function MeetingNotificationFolderPicker({
                               {defaultFolderDisplayName(folder, t)}
                             </span>
                             <span className="meeting-folder-space">
-                              {space?.kind === "private"
-                                ? t(key("private"))
-                                : `${space?.name} · ${t(key("shared"))}`}
+                              {meetingLocationLabel(
+                                space?.kind === "team",
+                                space?.name ?? "",
+                                null,
+                                t
+                              )}
                             </span>
                           </span>
                           {space?.kind === "team" && <Users className="size-3 shrink-0" />}

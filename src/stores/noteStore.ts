@@ -363,9 +363,7 @@ export function subscribeMeetingNotificationFolders(): (() => void) | undefined 
   return window.electronAPI.onMeetingNotificationFolderCreated?.(async ({ folderId }) => {
     try {
       const folders = await loadFolders();
-      if (
-        folders.some((folder) => folder.id === folderId && !folder.deleted_at && !folder.left_team)
-      ) {
+      if (folders.some((folder) => folder.id === folderId)) {
         syncService.debouncedPush("folder", folderId);
       }
     } catch {

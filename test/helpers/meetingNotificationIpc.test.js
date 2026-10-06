@@ -136,19 +136,15 @@ function setupMeeting(t) {
   const sender = {};
   const owner = {
     sessionId: "session-one",
-    scope: { accountId: null, authGeneration: 0, epoch: 0 },
     detection: {},
     selectedDestination: null,
     createRequests: new Map(),
   };
-  let current = true;
   const manager = {
     meetingRecentDestinations: [],
     captureMeetingNotificationOwner: (s, id) =>
-      current && s === sender && id === owner.sessionId ? owner : null,
-    isMeetingNotificationOwner: (o) => current && o === owner,
-    isMeetingNotificationScope: (scope) => scope === owner.scope,
-    getMeetingNotificationScope: () => owner.scope,
+      s === sender && id === owner.sessionId ? owner : null,
+    isMeetingNotificationOwner: (o) => o === owner,
     updateMeetingNotificationPause() {},
     sendToControlPanel: (...args) => broadcasts.push(args),
   };
@@ -167,9 +163,6 @@ function setupMeeting(t) {
     sender,
     service,
     manager,
-    retire: () => {
-      current = false;
-    },
   };
 }
 

@@ -837,6 +837,8 @@ test("reused detection strings and stale layout cannot mutate the current prompt
 });
 
 test("small negative-origin displays bound the full surface and its input regions", async () => {
+  const platform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "linux" });
   const manager = createNormalWindowManager();
   try {
     const { win, owner } = await showOwned(manager);
@@ -845,12 +847,11 @@ test("small negative-origin displays bound the full surface and its input region
     assert.deepEqual(result.value, { width: 320, height: 240, maxHeight: 240 });
     assert.deepEqual(win.getBounds(), { x: -320, y: -240, width: 320, height: 240 });
     assert.ok(
-      owner.regions.every(
-        (r) => r.x >= 0 && r.y >= 0 && r.x + r.width <= 320 && r.y + r.height <= 240
-      )
+      win.shape.every((r) => r.x >= 0 && r.y >= 0 && r.x + r.width <= 320 && r.y + r.height <= 240)
     );
   } finally {
     manager.dismissMeetingNotification();
+    Object.defineProperty(process, "platform", platform);
   }
 });
 

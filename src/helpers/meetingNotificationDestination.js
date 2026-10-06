@@ -9,11 +9,11 @@ function isMeetingFolderRef(ref) {
 }
 
 function listMeetingDestinations(db) {
-  const spaces = db.getSpaces().filter((space) => !space.deleted_at);
+  const spaces = db.getSpaces();
   const spaceIds = new Set(spaces.map((space) => space.id));
   const folders = db
     .getFolders()
-    .filter((folder) => !folder.deleted_at && !folder.left_team && spaceIds.has(folder.space_id));
+    .filter((folder) => !folder.left_team && spaceIds.has(folder.space_id));
   const defaultFolder = db.getMeetingsFolder();
   const eligibleDefault = folders.find((folder) => folder.id === defaultFolder?.id);
   return {
@@ -28,15 +28,8 @@ function listMeetingDestinations(db) {
 function resolveMeetingDestination(db, ref) {
   if (!isMeetingFolderRef(ref) || !db.getSpace(ref.spaceId)) return null;
   return (
-    db
-      .getFolders(ref.spaceId)
-      .find(
-        (folder) =>
-          folder.id === ref.folderId &&
-          folder.space_id === ref.spaceId &&
-          !folder.deleted_at &&
-          !folder.left_team
-      ) || null
+    db.getFolders(ref.spaceId).find((folder) => folder.id === ref.folderId && !folder.left_team) ||
+    null
   );
 }
 

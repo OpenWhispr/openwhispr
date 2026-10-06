@@ -713,33 +713,14 @@ class IPCHandlers {
     }
   }
 
-  createFolderWithEffects(name, spaceId, { notification = false } = {}) {
-    const accountId = this.databaseManager.activeAccountId;
-    const authGeneration = tokenStore.getState().generation;
-    const epoch = this.windowManager?._meetingAccountEpoch;
+  createFolderWithEffects(name, spaceId) {
     const result = this.databaseManager.createFolder(name, spaceId);
-    if (result?.success && result.folder) {
+    if (result?.success && result?.folder) {
       setImmediate(() => {
-        if (
-          this.databaseManager.activeAccountId !== accountId ||
-          tokenStore.getState().generation !== authGeneration ||
-          this.windowManager?._meetingAccountEpoch !== epoch
-        )
-          return;
-        try {
-          const folder = resolveMeetingDestination(this.databaseManager, {
-            folderId: result.folder.id,
-            spaceId: result.folder.space_id,
-          });
-          if (!folder) return;
-          broadcastToWindows("folder-created", folder);
-          if (notification)
-            this.windowManager.sendToControlPanel("meeting-notification-folder-created", {
-              folderId: folder.id,
-            });
-          if (this._noteFilesEnabled) require("./markdownMirror").ensureFolder(folder.name);
-        } catch (error) {
-          debugLogger.error("Created folder refresh failed", { error: error.message }, "notes");
+        broadcastToWindows("folder-created", result.folder);
+        if (this._noteFilesEnabled) {
+          const markdownMirror = require("./markdownMirror");
+          markdownMirror.ensureFolder(result.folder.name);
         }
       });
     }
@@ -823,7 +804,7 @@ class IPCHandlers {
         if (!resolveMeetingDestination(this.databaseManager, ref))
           return { success: false, code: "FOLDER_UNAVAILABLE" };
       } else {
-        const result = this.createFolderWithEffects(name, request.spaceId, { notification: true });
+        const result = this.createFolderWithEffects(name, request.spaceId);
         if (!result?.success || !result.folder)
           return {
             success: false,
@@ -836,6 +817,9 @@ class IPCHandlers {
           };
         ref = { folderId: result.folder.id, spaceId: result.folder.space_id };
         owner.createRequests.set(request.requestId, { name, spaceId: request.spaceId, ref });
+        this.windowManager.sendToControlPanel("meeting-notification-folder-created", {
+          folderId: ref.folderId,
+        });
       }
       const refreshed = this.getMeetingNotificationDestination(owner);
       return refreshed.success
