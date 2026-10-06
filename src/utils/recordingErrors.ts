@@ -8,8 +8,6 @@ type RecordingError = {
   messageKey?: string;
   messageParams?: Record<string, string | number | boolean>;
   surface?: string;
-  settingsTarget?: string;
-  technicalDetails?: import("../components/ui/useToast").TechnicalErrorDetailsData;
   /** Toast variant; defaults to destructive for genuine failures. */
   variant?: "default" | "destructive";
 };

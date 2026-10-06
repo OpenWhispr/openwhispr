@@ -78,7 +78,7 @@ async function setupAssistantPanel(
       `,
       "/hooks/useCopyFeedback": `
         export function useCopyFeedback() {
-          return { copied: false, async copy() {}, confirmCopied() {} };
+          return { copied: false, async copy() {}, async copyText() { return true; }, confirmCopied() {} };
         }
       `,
       "/stores/settingsStore": `
@@ -568,15 +568,16 @@ test("Assistant selection must stay entirely inside the response root", async (t
 });
 
 // The Open Settings link and technical details must never ride along in a
-// drag-select + copy over the response (responseSelectionRootRef), or the
-// clipboard would pick up UI chrome instead of just the answer.
-test("a classified error's Open Settings link and details render outside the response selection root", async (t) => {
+// drag-select + copy over the response, or the clipboard would pick up UI
+// chrome instead of just the answer.
+test("Cmd+C copies a selection in a classified error's answer, but not one running into its Open Settings or details", async (t) => {
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
   });
   installBrowserGlobals(t);
   const container = installInteractiveDom(t);
+  t.mock.method(globalThis.document, "addEventListener");
 
   root = await mountAssistantPanel(t, container, [
     {
@@ -588,28 +589,37 @@ test("a classified error's Open Settings link and details render outside the res
     },
   ]);
 
-  const responseRoot = findElement(
+  const answer = findElement(
     container,
-    (element) => element.getAttribute("data-assistant-response-root") != null
+    (element) => element.textContent === "Error: OpenAI rejected your API key."
   );
-  assert.ok(responseRoot, "fixture setup: the response selection root renders");
-
   const settingsButton = findElement(
     container,
     (element) => element.tagName === "BUTTON" && element.textContent.includes("Open Settings")
   );
-  assert.ok(settingsButton, "shows the Open Settings affordance");
-  assert.ok(
-    !responseRoot.contains(settingsButton),
-    "Open Settings must not be a descendant of the selection root"
-  );
-
   const details = findElement(container, (element) => element.tagName === "DETAILS");
-  assert.ok(details, "shows the technical details disclosure");
-  assert.ok(
-    !responseRoot.contains(details),
-    "technical details must not be a descendant of the selection root"
-  );
+  assert.ok(answer && settingsButton && details, "shows the answer, Open Settings and details");
+
+  let selectionEnd = null;
+  globalThis.window.getSelection = () => ({
+    isCollapsed: false,
+    rangeCount: 1,
+    getRangeAt: () => ({ startContainer: answer, endContainer: selectionEnd }),
+    toString: () => "selected text",
+  });
+  const onKeyDown = globalThis.document.addEventListener.mock.calls.findLast(
+    (call) => call.arguments[0] === "keydown"
+  ).arguments[1];
+  const copiesSelectionEndingIn = (node) => {
+    selectionEnd = node;
+    const preventDefault = t.mock.fn();
+    onKeyDown({ key: "c", metaKey: true, ctrlKey: false, altKey: false, preventDefault });
+    return preventDefault.mock.callCount() === 1;
+  };
+
+  assert.equal(copiesSelectionEndingIn(answer), true, "a selection inside the answer is copied");
+  assert.equal(copiesSelectionEndingIn(settingsButton), false, "Open Settings is never copied");
+  assert.equal(copiesSelectionEndingIn(details), false, "technical details are never copied");
 });
 
 test("a failed Assistant resize releases its open claim so opening can retry", async (t) => {

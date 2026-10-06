@@ -43,6 +43,7 @@ import { openCodeSessionHeaders } from "./ai/openCodeSession";
 import { createStreamingThinkFilter } from "./ai/streamingThinkFilter";
 import { extractApiErrorMessage } from "./ai/apiErrorMessage";
 import {
+  PROVIDER_ERROR_CODES,
   asProviderError,
   providerError,
   providerHttpError,
@@ -256,11 +257,10 @@ class ReasoningService extends BaseReasoningService {
         provider,
         error: errorMsg,
       });
-      const error = providerError("API_KEY_MISSING", {
+      throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
         provider: displayName,
         surface: "llm",
-      }) as Error & { code: string; provider: string };
-      throw error;
+      });
     }
 
     return apiKey;
@@ -337,7 +337,7 @@ class ReasoningService extends BaseReasoningService {
     const openCodeHeaders = openCodeSessionHeaders(endpoint);
 
     const errorContext = {
-      provider: providerName === "LAN" ? "self-hosted" : providerName,
+      provider: providerName,
       selfHosted: providerName === "LAN",
       model,
       surface: "llm",
@@ -678,7 +678,6 @@ class ReasoningService extends BaseReasoningService {
     }, timeoutSeconds * 1000);
 
     const selfHostedErrorContext = {
-      provider: "self-hosted",
       selfHosted: true,
       model,
       surface: "llm",
@@ -701,7 +700,7 @@ class ReasoningService extends BaseReasoningService {
       if ((error as Error).name === "AbortError" && abortController.signal.aborted) {
         if (!timeoutTriggered) return;
         throw route.kind === "self-hosted"
-          ? providerError("PROVIDER_TIMEOUT", selfHostedErrorContext)
+          ? providerError(PROVIDER_ERROR_CODES.TIMEOUT, selfHostedErrorContext)
           : new Error("Streaming request timed out");
       }
       // A stopped LAN server rejects the fetch before any response.
@@ -789,7 +788,7 @@ class ReasoningService extends BaseReasoningService {
       if ((error as Error).name === "AbortError" && abortController.signal.aborted) {
         if (!timeoutTriggered) return;
         throw route.kind === "self-hosted"
-          ? providerError("PROVIDER_TIMEOUT", selfHostedErrorContext)
+          ? providerError(PROVIDER_ERROR_CODES.TIMEOUT, selfHostedErrorContext)
           : new Error("Streaming request timed out");
       }
       throw error;
@@ -1022,7 +1021,7 @@ class ReasoningService extends BaseReasoningService {
         // OpenRouter is a cloud provider and keeps its own display name.
         const isSelfHosted = mode === "self-hosted" || provider === "custom";
         const classified = asProviderError(error, {
-          provider: isSelfHosted ? "self-hosted" : getProviderDisplayName(provider),
+          provider: getProviderDisplayName(provider),
           selfHosted: isSelfHosted,
           model,
           surface: "llm",

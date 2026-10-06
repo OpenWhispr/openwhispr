@@ -519,7 +519,6 @@ export function AssistantPanel({
               <>
                 <div
                   ref={responseSelectionRootRef}
-                  data-assistant-response-root
                   style={{ animation: "agent-message-in 160ms ease-out both" }}
                 >
                   <StableAssistantMarkdown

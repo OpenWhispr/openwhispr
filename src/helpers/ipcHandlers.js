@@ -35,6 +35,7 @@ const { classifyAndLog } = require("./networkErrors");
 const { resolveSystemDefaultMicrophone } = require("./systemDefaultMicrophone");
 const { ipcErrorFields } = require("./ipcErrorFields");
 const {
+  PROVIDER_ERROR_CODES,
   isProviderSettingsTarget,
   providerHttpError,
   providerError,
@@ -4602,7 +4603,10 @@ class IPCHandlers {
       serializeIpcError(async (event, { audioBuffer, language, keyterms }) => {
         const apiKey = this.environmentManager.getXaiKey();
         if (!apiKey) {
-          throw providerError("API_KEY_MISSING", { provider: "xAI", surface: "transcription" });
+          throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+            provider: "xAI",
+            surface: "transcription",
+          });
         }
 
         const formData = new FormData();
@@ -4649,13 +4653,17 @@ class IPCHandlers {
       serializeIpcError(async (event, { audioBuffer, model, language, contextBias }) => {
         const apiKey = this.environmentManager.getMistralKey();
         if (!apiKey) {
-          throw providerError("API_KEY_MISSING", { provider: "Mistral", surface: "transcription" });
+          throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+            provider: "Mistral",
+            surface: "transcription",
+          });
         }
 
+        const transcriptionModel = model || "voxtral-mini-latest";
         const formData = new FormData();
         const audioBlob = new Blob([Buffer.from(audioBuffer)], { type: "audio/webm" });
         formData.append("file", audioBlob, "audio.webm");
-        formData.append("model", model || "voxtral-mini-latest");
+        formData.append("model", transcriptionModel);
         if (language && language !== "auto") {
           formData.append("language", language);
         }
@@ -4681,7 +4689,7 @@ class IPCHandlers {
           });
           throw providerHttpError({
             provider: "Mistral",
-            model: model || "voxtral-mini-latest",
+            model: transcriptionModel,
             status: response.status,
             body: errorText,
             headers: response.headers,
@@ -4715,7 +4723,10 @@ class IPCHandlers {
         const clientId = this.environmentManager.getCortiClientId();
         const clientSecret = this.environmentManager.getCortiClientSecret();
         if (!clientId || !clientSecret) {
-          throw providerError("API_KEY_MISSING", { provider: "Corti", surface: "transcription" });
+          throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+            provider: "Corti",
+            surface: "transcription",
+          });
         }
 
         const { transcribeAudio } = require("./cortiTranscription");
@@ -5384,7 +5395,10 @@ class IPCHandlers {
           const apiKey = this.environmentManager.getAnthropicKey();
 
           if (!apiKey) {
-            throw providerError("API_KEY_MISSING", { provider: "Anthropic", surface: "llm" });
+            throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+              provider: "Anthropic",
+              surface: "llm",
+            });
           }
 
           const systemPrompt = config?.systemPrompt || "";
@@ -6565,13 +6579,10 @@ class IPCHandlers {
               body: redactProviderBody(errorText),
             });
             throw providerHttpError({
-              provider: "self-hosted",
-              selfHosted: true,
-              model: route.model,
+              ...providerErrorContext,
               status: response.status,
               body: errorText,
               headers: response.headers,
-              surface: "transcription",
             });
           }
           const data = await response.json();
@@ -6667,7 +6678,10 @@ class IPCHandlers {
           const clientId = this.environmentManager.getCortiClientId();
           const clientSecret = this.environmentManager.getCortiClientSecret();
           if (!clientId || !clientSecret) {
-            throw providerError("API_KEY_MISSING", { provider: "Corti", surface: "transcription" });
+            throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+              provider: "Corti",
+              surface: "transcription",
+            });
           }
           const { transcribeAudio } = require("./cortiTranscription");
           const { text } = await transcribeAudio({
@@ -6712,7 +6726,7 @@ class IPCHandlers {
                     ? this.environmentManager.getGroqKey()
                     : this.environmentManager.getOpenAIKey();
           if (!apiKey && provider !== "custom") {
-            throw providerError("API_KEY_MISSING", {
+            throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
               provider: transcriptionProviderName(provider),
               surface: "transcription",
             });
@@ -6777,13 +6791,10 @@ class IPCHandlers {
               body: redactProviderBody(errorText),
             });
             throw providerHttpError({
-              provider: transcriptionProviderName(provider),
-              selfHosted: provider === "custom",
-              model: route.model,
+              ...providerErrorContext,
               status: response.status,
               body: errorText,
               headers: response.headers,
-              surface: "transcription",
             });
           }
           const data = await response.json();
@@ -10284,12 +10295,9 @@ class IPCHandlers {
                 body: redactProviderBody(data.data),
               });
               throw providerHttpError({
-                provider: "self-hosted",
-                selfHosted: true,
-                model: route.model,
+                ...providerErrorContext,
                 status: data.statusCode,
                 body: data.data,
-                surface: "transcription",
               });
             }
             return { success: true, text: data.data.text };
@@ -10304,7 +10312,7 @@ class IPCHandlers {
             const clientId = this.environmentManager.getCortiClientId();
             const clientSecret = this.environmentManager.getCortiClientSecret();
             if (!clientId || !clientSecret) {
-              throw providerError("API_KEY_MISSING", {
+              throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
                 provider: "Corti",
                 surface: "transcription",
               });
@@ -10345,7 +10353,7 @@ class IPCHandlers {
           }
 
           if (!apiKey && route.provider !== "custom") {
-            throw providerError("API_KEY_MISSING", {
+            throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
               provider: transcriptionProviderName(route.provider),
               surface: "transcription",
             });
@@ -10427,12 +10435,9 @@ class IPCHandlers {
               body: redactProviderBody(data.data),
             });
             throw providerHttpError({
-              provider: transcriptionProviderName(route.provider),
-              selfHosted: route.provider === "custom",
-              model: route.model,
+              ...providerErrorContext,
               status: data.statusCode,
               body: data.data,
-              surface: "transcription",
             });
           }
 

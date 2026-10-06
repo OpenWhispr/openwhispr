@@ -1,6 +1,11 @@
 const { net } = require("electron");
 const debugLogger = require("./debugLogger");
-const { providerHttpError, providerError, redactProviderBody } = require("./providerHttpErrors");
+const {
+  PROVIDER_ERROR_CODES,
+  providerHttpError,
+  providerError,
+  redactProviderBody,
+} = require("./providerHttpErrors");
 
 // gemini-3.5-transcribe is only served by the Interactions API; there is no
 // generateContent or OpenAI-compatible endpoint for it.
@@ -32,7 +37,10 @@ async function transcribeWithGemini(
   fetchImpl
 ) {
   if (!apiKey?.trim()) {
-    throw providerError("API_KEY_MISSING", { provider: "Gemini", surface: "transcription" });
+    throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+      provider: "Gemini",
+      surface: "transcription",
+    });
   }
 
   const resolvedModel = model || "gemini-3.5-transcribe";

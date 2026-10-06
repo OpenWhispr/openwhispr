@@ -2,6 +2,8 @@
 // process through require(esm). Pure on purpose (no electron, no logger) so
 // both sides classify a provider failure the same way.
 
+import { LLM_REQUEST_TIMEOUT_CODE } from "./llmRequestTimeout.js";
+
 export const PROVIDER_ERROR_CODES = Object.freeze({
   AUTH_FAILED: "PROVIDER_AUTH_FAILED",
   ACCESS_DENIED: "PROVIDER_ACCESS_DENIED",
@@ -20,7 +22,7 @@ export const PROVIDER_ERROR_CODES = Object.freeze({
 
 const C = PROVIDER_ERROR_CODES;
 
-export const PROVIDER_SETTINGS_TARGETS = Object.freeze(["speechToText", "llms"]);
+const PROVIDER_SETTINGS_TARGETS = Object.freeze(["speechToText", "llms"]);
 
 export const isProviderSettingsTarget = (value) => PROVIDER_SETTINGS_TARGETS.includes(value);
 
@@ -93,15 +95,13 @@ const ENGLISH = {
   "providerErrors.selfHosted.noResponse":
     "Couldn't get a response from your server. Check its API key and that it's running.",
   "providerErrors.selfHosted.unknown": "Your server returned an unexpected error.",
-  "providerErrors.selfHosted.keyMissing":
-    "No API key is set for your server. Add it in Settings → Language Models.",
   "hooks.audioRecording.errorDescriptions.providerRateLimited":
     "{{provider}} rate-limited the request. Wait a moment and try again.",
   "hooks.audioRecording.errorDescriptions.providerKeyMissing":
     "No API key is set for {{provider}}.",
 };
 
-const SELF_HOSTED_NAME = "Your server";
+export const SELF_HOSTED_NAME = "Your server";
 
 const INVALID_KEY_SIGNAL =
   /invalid[ _-]?(x-)?api[ _-]?key|incorrect api key|api_key_invalid|authentication_error|unauthorized/i;
@@ -149,12 +149,7 @@ const SECRET_PATTERNS = [
 
 function bodyToText(body) {
   if (body == null) return "";
-  if (typeof body === "string") return body;
-  try {
-    return JSON.stringify(body);
-  } catch {
-    return String(body);
-  }
+  return typeof body === "string" ? body : JSON.stringify(body);
 }
 
 export function redactProviderBody(body) {
@@ -245,36 +240,25 @@ function toError(classification, extra = {}) {
   return Object.assign(new Error(englishMessage(classification)), classification, extra);
 }
 
-export function classifyProviderHttpError({
-  provider,
-  status,
-  body,
-  headers,
-  model,
-  surface,
-  selfHosted = false,
-}) {
+export function providerHttpError(args) {
+  const { provider, status, body, headers, model, surface, selfHosted = false } = args;
   const text = bodyToText(body);
   const underlyingError = redactProviderBody(text);
   const requestId = requestIdFrom(headers);
-  return buildClassification(codeForStatus(status, text, selfHosted), {
-    provider,
-    model,
-    surface,
-    selfHosted,
-    technicalDetails: {
-      status,
-      ...(requestId ? { requestId } : {}),
-      ...(underlyingError ? { underlyingError } : {}),
-    },
-  });
-}
-
-export function providerHttpError(args) {
-  return toError(classifyProviderHttpError(args), {
-    status: args.status,
-    provider: args.provider,
-  });
+  return toError(
+    buildClassification(codeForStatus(status, text, selfHosted), {
+      provider,
+      model,
+      surface,
+      selfHosted,
+      technicalDetails: {
+        status,
+        ...(requestId ? { requestId } : {}),
+        ...(underlyingError ? { underlyingError } : {}),
+      },
+    }),
+    { status }
+  );
 }
 
 export function providerError(code, ctx) {
@@ -294,7 +278,7 @@ export function asProviderError(err, ctx) {
       body: inner.responseBody ?? inner.message,
       headers: inner.responseHeaders,
     });
-  } else if (inner.code === "LLM_REQUEST_TIMEOUT" || inner.name === "TimeoutError") {
+  } else if (inner.code === LLM_REQUEST_TIMEOUT_CODE || inner.name === "TimeoutError") {
     classified = providerError(C.TIMEOUT, ctx);
   } else if (netError) {
     classified = providerError(ELECTRON_NET_TIMEOUTS.has(netError) ? C.TIMEOUT : C.UNREACHABLE, {

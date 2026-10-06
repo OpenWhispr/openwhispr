@@ -4789,8 +4789,7 @@
       "timeout": "Votre serveur a pris trop de temps à répondre.",
       "unreachable": "Impossible de contacter votre serveur. Vérifiez qu’il est en cours d’exécution.",
       "noResponse": "Aucune réponse de votre serveur. Vérifiez sa clé API et qu’il est en cours d’exécution.",
-      "unknown": "Votre serveur a renvoyé une erreur inattendue.",
-      "keyMissing": "Aucune clé API n’est définie pour votre serveur. Ajoutez-la dans Réglages → Modèles de langage."
+      "unknown": "Votre serveur a renvoyé une erreur inattendue."
     },
     "openSettings": "Ouvrir les réglages",
     "copyDetails": "Copier les détails",

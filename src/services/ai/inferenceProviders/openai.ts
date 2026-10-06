@@ -20,7 +20,11 @@ import {
 import { extractApiErrorMessage } from "../apiErrorMessage";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 import { openCodeSessionHeaders } from "../openCodeSession";
-import { asProviderError, providerHttpError } from "../../../helpers/providerHttpErrors.js";
+import {
+  asProviderError,
+  providerHttpError,
+  redactProviderBody,
+} from "../../../helpers/providerHttpErrors.js";
 
 const OPENAI_ENDPOINT_PREF_STORAGE_KEY = "openAiEndpointPreference";
 const PROBE_TIMEOUT_MS = 2_000;
@@ -203,12 +207,13 @@ export const openaiProvider: InferenceProvider = {
       endpointCandidates = getEndpointCandidates(openAiBase);
     }
     const isCustomEndpoint = openAiBase !== API_ENDPOINTS.OPENAI_BASE;
-    // Error classification only, independent of isCustomEndpoint above: a
-    // user's own custom endpoint is the only one that counts as self-hosted.
-    // OpenRouter is a cloud provider with its own catalog and display name,
-    // even though it also routes through OPENROUTER_BASE (!== OPENAI_BASE).
-    const errorProvider = isCustomProvider ? "self-hosted" : isOpenRouter ? "OpenRouter" : "OpenAI";
-    const errorProviderSelfHosted = isCustomProvider;
+    // Only the user's own endpoint is self-hosted; isCustomEndpoint also covers OpenRouter.
+    const errorContext = {
+      provider: isOpenRouter ? "OpenRouter" : "OpenAI",
+      selfHosted: isCustomProvider,
+      model,
+      surface: "llm",
+    };
     // One cleanup call is one conversation: every attempt below (endpoint
     // fallback, parameter fallback, retry) reuses the same session id.
     const openCodeHeaders = openCodeSessionHeaders(openAiBase);
@@ -242,19 +247,11 @@ export const openaiProvider: InferenceProvider = {
         ? err
         : (err as Error & { status?: number }).status
           ? providerHttpError({
-              provider: errorProvider,
-              selfHosted: errorProviderSelfHosted,
-              model,
+              ...errorContext,
               status: (err as Error & { status: number }).status,
               body: err.message,
-              surface: "llm",
             })
-          : asProviderError(err, {
-              provider: errorProvider,
-              selfHosted: errorProviderSelfHosted,
-              model,
-              surface: "llm",
-            });
+          : asProviderError(err, errorContext);
     const response = await withRetry(async () => {
       let lastError: Error | null = null;
       let lastRetryableError: Error | null = null;
@@ -335,19 +332,16 @@ export const openaiProvider: InferenceProvider = {
               rememberPreference(openAiBase, "chat");
               logger.logReasoning("OPENAI_ENDPOINT_FALLBACK", {
                 attemptedEndpoint: endpoint,
-                error: errorMessage,
+                error: redactProviderBody(errorMessage),
               });
               continue;
             }
 
             throw providerHttpError({
-              provider: errorProvider,
-              selfHosted: errorProviderSelfHosted,
-              model,
+              ...errorContext,
               status: res.status,
               body: errorData,
               headers: res.headers,
-              surface: "llm",
             });
           }
 

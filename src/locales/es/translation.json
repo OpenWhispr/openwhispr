@@ -4789,8 +4789,7 @@
       "timeout": "Tu servidor tardó demasiado en responder.",
       "unreachable": "No se pudo conectar con tu servidor. Comprueba que esté en funcionamiento.",
       "noResponse": "No se recibió respuesta de tu servidor. Comprueba su clave de API y que esté en funcionamiento.",
-      "unknown": "Tu servidor devolvió un error inesperado.",
-      "keyMissing": "No hay ninguna clave de API configurada para tu servidor. Añádela en Ajustes → Modelos de lenguaje."
+      "unknown": "Tu servidor devolvió un error inesperado."
     },
     "openSettings": "Abrir Ajustes",
     "copyDetails": "Copiar detalles",

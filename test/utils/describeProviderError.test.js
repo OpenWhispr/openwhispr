@@ -57,6 +57,17 @@ test("formatProviderErrorDetails labels provider details generically", async () 
   );
 });
 
+test("formatProviderErrorDetails names a self-hosted server in the UI language", async () => {
+  const { formatProviderErrorDetails } = await load();
+  assert.equal(
+    formatProviderErrorDetails({ provider: "Your server", status: 404 }, t),
+    [
+      "providerErrors.details.provider: settingsPage.aiModels.modes.selfHosted",
+      "reasoning.enterprise.technicalDetails.httpStatus: 404",
+    ].join("\n")
+  );
+});
+
 test("formatProviderErrorDetails keeps AWS labels for Bedrock details", async () => {
   const { formatProviderErrorDetails } = await load();
   assert.equal(

@@ -38,7 +38,7 @@ export const anthropicProvider: InferenceProvider = {
     if (!result.success) {
       logger.logReasoning("ANTHROPIC_ERROR", { model, processingTimeMs, error: result.error });
       // Main resolves with the serialized error (code, i18n key, status…) so the
-      // toast can translate it and the retry strategy can see the status.
+      // toast can translate it.
       throw errorFromIpcResult(result);
     }
 

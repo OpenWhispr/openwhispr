@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const load = () => import("../../src/helpers/providerHttpErrors.js");
 
 const classify = async (args) =>
-  (await load()).classifyProviderHttpError({ provider: "Mistral", surface: "transcription", ...args });
+  (await load()).providerHttpError({ provider: "Mistral", surface: "transcription", ...args });
 
 test("401 is an auth failure that points at Speech-to-Text settings", async () => {
   const c = await classify({ status: 401, body: '{"detail":"Invalid API Key"}' });
@@ -378,7 +378,12 @@ async function everyClassification() {
       }
       errors.push(providerHttpError({ ...base, status: 404, body: "model_not_found", model: "m-1" }));
       errors.push(providerHttpError({ ...base, status: 404, body: "model_not_found" }));
-      for (const code of [C.TIMEOUT, C.UNREACHABLE, C.NO_RESPONSE, C.KEY_MISSING]) {
+      for (const code of [
+        C.TIMEOUT,
+        C.UNREACHABLE,
+        C.NO_RESPONSE,
+        ...(selfHosted ? [] : [C.KEY_MISSING]),
+      ]) {
         errors.push(providerError(code, base));
       }
     }

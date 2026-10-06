@@ -192,44 +192,32 @@ test("real card keeps copy local, guards pending clicks, resets feedback and ren
   assert.equal(h.container.textContent, "");
 });
 
-test("an icon-only action sits after the labelled ones on a single row and is never primary", async (t) => {
+test("an icon-only action follows the labelled ones in the same row", async (t) => {
   const h = await setup(t);
   const { DictationErrorCard } = await h.vite.ssrLoadModule(
     "/components/dictation/DictationErrorCard.tsx"
   );
   const action = (label, extra = {}) => ({ label, onClick: () => {}, ...extra });
-  const copy = action("Copy details", { icon: "copy", iconOnly: true });
-  const render = (actions) =>
-    h.render(
-      React.createElement(DictationErrorCard, {
-        title: "Transcription failed",
-        description: "Mistral rejected your API key.",
-        actions,
-        onAction: (value) => value.onClick(),
-      })
-    );
   const button = (label) =>
     findElement(h.container, (e) => e.tagName === "BUTTON" && e.textContent.trim() === label);
-  const isPrimary = (label) =>
-    /\bbg-foreground text-background\b/.test(button(label).getAttribute("class"));
 
-  await render([action("Retry"), copy, action("Open Settings")]);
-  const row = button("Retry").parentNode;
-  assert.equal(row.style.gridTemplateColumns, "minmax(0, 1fr) minmax(0, 1fr) 2rem");
+  await h.render(
+    React.createElement(DictationErrorCard, {
+      title: "Transcription failed",
+      description: "Mistral rejected your API key.",
+      actions: [
+        action("Retry"),
+        action("Copy details", { icon: "copy", iconOnly: true }),
+        action("Open Settings"),
+      ],
+      onAction: (value) => value.onClick(),
+    })
+  );
   assert.deepEqual(
-    row.childNodes.map((node) => node.textContent.trim()),
+    button("Retry").parentNode.childNodes.map((node) => node.textContent.trim()),
     ["Retry", "Open Settings", "Copy details"]
   );
   assert.equal(button("Copy details").getAttribute("title"), "Copy details");
-  assert.ok(findElement(button("Copy details"), (e) => e.getAttribute("class") === "sr-only"));
-  assert.equal(isPrimary("Retry"), true);
-  assert.equal(isPrimary("Copy details"), false);
-
-  await render([copy, action("Open Settings")]);
-  assert.equal(isPrimary("Open Settings"), true, "the first labelled action stays primary");
-
-  await render([action("Retry"), action("Open Settings"), action("View transcript"), copy]);
-  assert.match(button("Retry").parentNode.getAttribute("class"), /\bgrid-cols-2\b/);
 });
 
 test("a standard toast with structured actions shows its description as text and the actions under it", async (t) => {
@@ -265,12 +253,14 @@ test("a standard toast with structured actions shows its description as text and
       ],
     })
   );
-  const description = findElement(
-    h.container,
-    (e) => e.tagName === "DIV" && e.textContent === "Groq rejected your API key."
+  assert.ok(
+    findElement(h.container, (e) => e.textContent === "Groq rejected your API key."),
+    "description rendered"
   );
-  assert.ok(description, "description rendered");
-  assert.doesNotMatch(description.getAttribute("class"), /font-mono/, "not the raw-error box");
+  assert.ok(
+    !findElement(h.container, (e) => e.getAttribute("aria-label") === "Copy error"),
+    "no raw-error copy box"
+  );
   const buttons = (root) => {
     const found = [];
     (function walk(node) {

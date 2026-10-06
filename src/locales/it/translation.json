@@ -4789,8 +4789,7 @@
       "timeout": "Il tuo server ha impiegato troppo tempo a rispondere.",
       "unreachable": "Impossibile contattare il tuo server. Verifica che sia in esecuzione.",
       "noResponse": "Nessuna risposta dal tuo server. Verifica la sua chiave API e che sia in esecuzione.",
-      "unknown": "Il tuo server ha restituito un errore imprevisto.",
-      "keyMissing": "Nessuna chiave API impostata per il tuo server. Aggiungila in Impostazioni → Modelli linguistici."
+      "unknown": "Il tuo server ha restituito un errore imprevisto."
     },
     "openSettings": "Apri Impostazioni",
     "copyDetails": "Copia dettagli",

@@ -1,13 +1,11 @@
 import type { TFunction } from "i18next";
 import type { TechnicalErrorDetailsData, ToastActionConfig } from "../components/ui/useToast";
-import { isProviderSettingsTarget } from "../helpers/providerHttpErrors.js";
+import { SELF_HOSTED_NAME, isProviderSettingsTarget } from "../helpers/providerHttpErrors.js";
 
 export type ProviderSettingsTarget = "speechToText" | "llms";
 
 interface DescribableError {
   message?: string;
-  code?: string;
-  surface?: string;
   messageKey?: string;
   messageParams?: Record<string, string | number>;
   settingsTarget?: string;
@@ -57,8 +55,12 @@ export function formatProviderErrorDetails(
   t: TFunction
 ): string {
   const isProvider = Boolean(details.provider);
+  const provider =
+    details.provider === SELF_HOSTED_NAME
+      ? t("settingsPage.aiModels.modes.selfHosted")
+      : details.provider;
   return [
-    details.provider ? `${t("providerErrors.details.provider")}: ${details.provider}` : "",
+    provider ? `${t("providerErrors.details.provider")}: ${provider}` : "",
     details.status !== undefined
       ? `${t("reasoning.enterprise.technicalDetails.httpStatus")}: ${details.status}`
       : "",

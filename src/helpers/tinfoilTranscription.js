@@ -1,7 +1,12 @@
 const debugLogger = require("./debugLogger");
 const modelRegistryData = require("../models/modelRegistryData.json");
 const { tinfoilSecureFetch } = require("./tinfoilSecureClient");
-const { providerHttpError, providerError, redactProviderBody } = require("./providerHttpErrors");
+const {
+  PROVIDER_ERROR_CODES,
+  providerHttpError,
+  providerError,
+  redactProviderBody,
+} = require("./providerHttpErrors");
 
 const TINFOIL_TRANSCRIPTION_PATH = "/v1/audio/transcriptions";
 
@@ -27,7 +32,10 @@ async function transcribeWithTinfoil({
   apiKey,
 }) {
   if (!apiKey?.trim()) {
-    throw providerError("API_KEY_MISSING", { provider: "Tinfoil", surface: "transcription" });
+    throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+      provider: "Tinfoil",
+      surface: "transcription",
+    });
   }
 
   const model = getBatchModel();

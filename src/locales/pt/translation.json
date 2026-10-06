@@ -4789,8 +4789,7 @@
       "timeout": "Seu servidor demorou demais para responder.",
       "unreachable": "Não foi possível conectar-se ao seu servidor. Verifique se ele está em execução.",
       "noResponse": "Não foi possível obter uma resposta do seu servidor. Verifique a chave de API dele e se ele está em execução.",
-      "unknown": "Seu servidor retornou um erro inesperado.",
-      "keyMissing": "Nenhuma chave de API definida para o seu servidor. Adicione-a em Configurações → Modelos de linguagem."
+      "unknown": "Seu servidor retornou um erro inesperado."
     },
     "openSettings": "Abrir Configurações",
     "copyDetails": "Copiar detalhes",

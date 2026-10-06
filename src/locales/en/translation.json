@@ -4789,8 +4789,7 @@
       "timeout": "Your server took too long to respond.",
       "unreachable": "Couldn't reach your server. Check that it's running.",
       "noResponse": "Couldn't get a response from your server. Check its API key and that it's running.",
-      "unknown": "Your server returned an unexpected error.",
-      "keyMissing": "No API key is set for your server. Add it in Settings → Language Models."
+      "unknown": "Your server returned an unexpected error."
     },
     "openSettings": "Open Settings",
     "copyDetails": "Copy details",

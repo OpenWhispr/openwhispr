@@ -11,6 +11,7 @@ import { tagActionItemOwners, type MentionPerson } from "../utils/mentionMarkdow
 import type { ActionItem, NoteItem } from "../types/electron";
 import { estimateNoteTokens, planNoteChunks, splitChunkInHalf } from "../helpers/noteChunking";
 import type { LocalInferenceError } from "../utils/localInferenceError";
+import type { TechnicalErrorDetailsData } from "../components/ui/useToast";
 import type { ReasoningConfig } from "../services/BaseReasoningService";
 import {
   EMPTY_OUTPUT_MESSAGE_KEY,
@@ -92,7 +93,7 @@ export interface ActionErrorEvent {
   /** Not a failure: the run found nothing to write, so the toast only informs. */
   notice?: boolean;
   settingsTarget?: string;
-  technicalDetails?: import("../components/ui/useToast").TechnicalErrorDetailsData;
+  technicalDetails?: TechnicalErrorDetailsData;
 }
 
 interface ActionProcessingStoreState {
@@ -594,7 +595,7 @@ export function runBackgroundAction(
         messageParams?: Record<string, string | number>;
         notice?: boolean;
         settingsTarget?: string;
-        technicalDetails?: import("../components/ui/useToast").TechnicalErrorDetailsData;
+        technicalDetails?: TechnicalErrorDetailsData;
       };
       pushErrorEvent({
         noteId,
