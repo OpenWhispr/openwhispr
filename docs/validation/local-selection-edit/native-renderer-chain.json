@@ -1,0 +1,12 @@
+{
+  "id": 1,
+  "result": {
+    "result": {
+      "type": "object",
+      "value": {
+        "response": "{\"replacement\":\"The blue fox jumps over the fence.\"}",
+        "replacement": "The blue fox jumps over the fence."
+      }
+    }
+  }
+}

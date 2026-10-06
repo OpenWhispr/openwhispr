@@ -182,6 +182,10 @@ interface AgentAddress {
   end: number;
   /** The words the indices refer to (CJK transcripts are normalized first). */
   rawWords: string[];
+  /** Address span in the transcript, or its NFC form for CJK detection. */
+  sourceStart: number;
+  sourceEnd: number;
+  sourceIsNfc: boolean;
 }
 
 function locateAgentAddress(
@@ -246,7 +250,15 @@ function locateAgentAddress(
         const addressEnd = SEPARATE_ADDRESS_PUNCTUATION.has(rawWords[nameEnd])
           ? nameEnd + 1
           : nameEnd;
-        return { start: cueBefore ? i - 1 : i, end: addressEnd, rawWords };
+        const start = cueBefore ? i - 1 : i;
+        return {
+          start,
+          end: addressEnd,
+          rawWords,
+          sourceStart: originAt(wordStarts[start]),
+          sourceEnd: originAt(wordStarts[addressEnd - 1] + rawWords[addressEnd - 1].length - 1) + 1,
+          sourceIsNfc: normalizeCjk,
+        };
       }
     }
   }
@@ -280,4 +292,37 @@ export function stripAgentAddress(
   const { rawWords, start, end } = address;
   const remaining = [...rawWords.slice(0, start), ...rawWords.slice(end)].join(" ").trim();
   return remaining || transcript;
+}
+
+/** Remove only the address and its following separator; edit operands stay verbatim. */
+export function stripAgentAddressPreservingFormatting(
+  transcript: string,
+  agentName: string,
+  language?: string,
+  snippets?: Snippet[] | null
+): string {
+  const address = locateAgentAddress(transcript, agentName, language, snippets);
+  if (!address) return transcript;
+  let { sourceStart: start, sourceEnd: end } = address;
+  if (address.sourceIsNfc && transcript !== transcript.normalize("NFC")) {
+    // Detection indexes NFC text. Map grapheme boundaries back to the original
+    // UTF-16 offsets so decomposed text outside the address is never rewritten.
+    const boundaries = new Map<number, number>([[0, 0]]);
+    let normalizedOffset = 0;
+    for (const { segment, index } of new Intl.Segmenter(undefined, {
+      granularity: "grapheme",
+    }).segment(transcript)) {
+      normalizedOffset += segment.normalize("NFC").length;
+      boundaries.set(normalizedOffset, index + segment.length);
+    }
+    const originalStart = boundaries.get(start);
+    const originalEnd = boundaries.get(end);
+    // A partial grapheme match is ambiguous; keeping the address is safer.
+    if (originalStart === undefined || originalEnd === undefined) return transcript;
+    start = originalStart;
+    end = originalEnd;
+  }
+  while (end < transcript.length && /\s/.test(transcript[end])) end++;
+  const remaining = transcript.slice(0, start) + transcript.slice(end);
+  return remaining.trim() ? remaining : transcript;
 }

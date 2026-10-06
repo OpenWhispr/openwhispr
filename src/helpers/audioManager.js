@@ -97,7 +97,11 @@ import {
   resolveTranslatedText,
   shouldRunTranslateStep,
 } from "./translationChain";
-import { detectAgentName, stripAgentAddress } from "../config/agentDetection";
+import {
+  detectAgentName,
+  stripAgentAddress,
+  stripAgentAddressPreservingFormatting,
+} from "../config/agentDetection";
 import {
   resolveDictationRouteKind,
   resolveAgentImageTarget,
@@ -2870,7 +2874,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
       const instruction = this.voiceAgentRequested
         ? text
-        : stripAgentAddress(
+        : stripAgentAddressPreservingFormatting(
             text,
             agentName,
             wakeWordLanguage ?? resolveWakeWordLanguage(settings),
@@ -5594,12 +5598,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         if (wasCancelled()) return true;
         if (reasonError.selectionEditFatal) {
           this.pendingSelectionEdit = null;
-          this.onError?.({
-            title: "Selection Edit Failed",
-            description: reasonError.message,
-            code: reasonError.code,
-            messageKey: reasonError.messageKey,
-          });
+          this.onError?.(transcriptionFailureOutcome(reasonError).report);
           this.isProcessing = false;
           this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
           return false;

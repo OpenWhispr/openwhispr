@@ -11,6 +11,9 @@ Question: can a strict response contract and dedicated local edit request fix th
 - Only a confirmed `stop` with real answer content can supply a structured edit. Reasoning-only, unknown completion and truncated responses fail. Validation precedes session banking; cancellation, capture/session/target checks remain.
 - Explicit custom Assistant preferences and dictionary hints are subordinate to the requested edit. The ordinary dictation prompt and automatic language/script conversion no longer alter a local edit. Other providers retain their existing marker route with the corrected contract.
 
+- Wake-address removal for local edits now splices only the original address span, preserving punctuation, repeated whitespace and decomposed Unicode in literal operands. Existing conversational address handling is unchanged.
+- Streaming and batch selection failures retain provider parameters/recovery details and a localized selection-failure title.
+
 ## Model qualification
 
 - Model: `Qwen_Qwen3.5-2B-Q4_K_M.gguf`, SHA-256 `57a1085840f497d764a7fc5d346922dbde961efb54cc792ea81d694fd846a1d8`.
@@ -29,9 +32,9 @@ The output dialect is documented by [llama.cpp at the tested server revision](ht
 
 - Baseline regression tests failed on the original marker demonstration/error and absent structured contract. The corresponding final tests pass.
 - Focused suite: 244/245 initially passed; the existing unmapped-PID test exceeded its 3-second wall-clock limit under concurrent load. Isolated rerun: 17/17 in that file. The full suite also passed that test.
-- Full `npm test`: 7198 tests, 6906 passed, 291 skipped, 1 todo, 0 failures.
+- Final full `npm test`: 7201 tests, 6909 passed, 291 skipped, 1 todo, 0 failures. The 98-test repair-focused suite also passed.
 - Node 24.20.0; `npm run typecheck`, `npm run format:check`, `node scripts/check-i18n.js`, `npm run build:renderer` passed. Existing lint warnings in icon primitives and build chunk warnings remain. Dependencies were refreshed only in the isolated worktree; lockfile unchanged.
-- Actual Electron renderer → preload/IPC → local bridge → model manager → packaged server → strict decoder: passed the original synthetic replacement case (`native-local-chain.json`). This is real inference/IPC proof, not saved-text/undo proof.
+- Actual isolated Electron renderer `ReasoningService` → local provider → preload/IPC → local bridge → model manager → packaged server → strict decoder: passed the original synthetic replacement case (`native-renderer-chain.json`); a direct IPC probe also passed (`native-local-chain.json`). This is real inference/IPC proof, not saved-text/undo proof.
 - An isolated app/cache root under `/tmp/ow-selection-native-20261006` loaded the unmodified app entrypoint and freshly compiled native helpers. Production profile and installed application remained unchanged. Native UI automation selected synthetic text in a new TextEdit document, but foreground target capture continued to observe another app; no edit was banked or pasted. Do not count this as native target acceptance. Notes editing, saved-text/undo, spoken audio, cleanup-on/off native controls, focus-race/same-app-field tests and packaged/cross-platform acceptance remain open.
 
 ## Reproduce the model check
@@ -46,4 +49,4 @@ node scripts/selection-edit-eval/run.mjs --run --fixtures scripts/selection-edit
 
 The default endpoint is `http://127.0.0.1:18229`; override with `--endpoint` only for an owned loopback server. Future prompt tuning makes the current qualification set development material and requires a new reserved set. Seeds, process state, caching and hardware do not guarantee identical generation.
 
-Independent code review and final CI are recorded in the handoff/PR. This report itself is not merge or release approval.
+Independent native Codex review of `f770e9211..4ada84ca8` found two P2 defects: wake-address normalization changed literal operands, and streaming dropped error parameters. Both were repaired, with 98/98 focused tests and independent follow-up review finding no further actionable defects. Eight additional Unicode/whitespace probes and real German translation rendering passed. The reviewed seven-file repair diff SHA-256 is `1aefbbacef64a259cc6eb4790763ce05ea9f526d1f8008f7a1cc5dd496591f4c`. Final CI is recorded in the handoff/PR. This report itself is not merge or release approval.

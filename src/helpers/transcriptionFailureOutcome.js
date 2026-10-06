@@ -15,6 +15,7 @@ export const transcriptionFailureOutcome = (error) => {
   }
   const report = {
     title: error.selectionEditFatal ? "Selection Edit Failed" : "Transcription Error",
+    ...(error.selectionEditFatal ? { selectionEditFatal: true } : {}),
     description: error.selectionEditFatal
       ? error.message
       : `Transcription failed: ${error.message}`,

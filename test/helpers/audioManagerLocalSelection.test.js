@@ -147,6 +147,42 @@ test("selection failures retain translated provider recovery details", async (t)
   );
 });
 
+test("wake removal preserves literal operands, spacing and original Unicode in local edit requests", async (t) => {
+  const { createManager } = await setup(t);
+  for (const [language, instruction, expected] of [
+    [
+      "ja",
+      "ねぇ、OpenWhispr、「こんにちは。」を「こんばんは。」に置き換えて。",
+      "「こんにちは。」を「こんばんは。」に置き換えて。",
+    ],
+    ["en", 'Hey OpenWhispr, replace "a  b" with "c\n\td".', 'replace "a  b" with "c\n\td".'],
+    [
+      "ja",
+      "Cafe\u0301.  OpenWhispr、「か\u3099」を「き」に置き換えて。",
+      "Cafe\u0301.  「か\u3099」を「き」に置き換えて。",
+    ],
+  ]) {
+    let request;
+    const manager = createManager({
+      voiceAgentRequested: false,
+      processWithReasoningModel: async (prompt) => {
+        request = prompt;
+        return '{"replacement":"OK"}';
+      },
+    });
+    await manager.processAgentCommand(instruction, "local-model", "OpenWhispr", {
+      ...config,
+      wakeWordLanguage: language,
+    });
+    assert.ok(
+      request.includes(
+        `\nEditing instruction:\n${expected}\n\nReturn the replacement JSON object.`
+      ),
+      request
+    );
+  }
+});
+
 test("a late local result after cancellation cannot bank an edit, and legitimate no-ops are allowed", async (t) => {
   const { createManager } = await setup(t);
   let cancelled = false;
