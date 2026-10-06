@@ -3662,9 +3662,10 @@
     "activationFailedDescription": "OpenWhispr は CPU 文字起こしに切り替えました。",
     "reasoningActivationFailedDescription": "OpenWhispr は CPU 処理に切り替えました。",
     "retryActivation": "GPU アクセラレーションを再試行",
-    "updateNeeded": "GPU パックの更新が必要です",
-    "updateNeededDescription": "このバージョンの OpenWhispr はインストール済みの GPU パックを使用できません。更新すると GPU アクセラレーションが再び有効になります。",
-    "updateButton": "GPU パックを更新",
+    "redownloadNeeded": "GPU パックの再ダウンロードが必要です",
+    "redownloadNeededDescription": "このバージョンの OpenWhispr はインストール済みの GPU パックを使用できません。再ダウンロードすると GPU アクセラレーションが再び有効になります。",
+    "redownloadButton": "GPU パックを再ダウンロード",
+    "downloadFailed": "GPU パックをダウンロードできませんでした。",
     "remove": "削除",
     "dismiss": "後で",
     "cancel": "キャンセル"

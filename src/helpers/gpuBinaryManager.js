@@ -367,11 +367,16 @@ function detectOrphanedGpuPacks(packs) {
 
 // Packs an older release installed that this version can't use (needsUpdate).
 // A pack on disk implies the user wants it, unless its flag says "false".
+// Packs sharing a `group` are alternatives for one engine (whisper CUDA and
+// Vulkan): while one of them works, the other is never used and Settings
+// shows only the working one, so an outdated sibling isn't worth a notice.
 function detectOutdatedGpuPacks(packs) {
   return packs
     .filter(
-      ({ manager, enabledEnvVar }) =>
-        (process.env[enabledEnvVar] || "").toLowerCase() !== "false" && manager.needsUpdate()
+      ({ manager, enabledEnvVar, group }) =>
+        (process.env[enabledEnvVar] || "").toLowerCase() !== "false" &&
+        manager.needsUpdate() &&
+        !packs.some((other) => group && other.group === group && other.manager.isDownloaded())
     )
     .map(({ manager }) => manager.config.name);
 }

@@ -3833,9 +3833,10 @@
     "activationFailedDescription": "OpenWhispr verwendet die CPU-Transkription.",
     "reasoningActivationFailedDescription": "OpenWhispr verwendet die CPU-Verarbeitung.",
     "retryActivation": "GPU-Beschleunigung erneut versuchen",
-    "updateNeeded": "GPU-Paket muss aktualisiert werden",
-    "updateNeededDescription": "Diese Version von OpenWhispr kann dein installiertes GPU-Paket nicht verwenden. Aktualisiere es, um die GPU-Beschleunigung wieder einzuschalten.",
-    "updateButton": "GPU-Paket aktualisieren",
+    "redownloadNeeded": "GPU-Paket muss erneut heruntergeladen werden",
+    "redownloadNeededDescription": "Diese Version von OpenWhispr kann dein installiertes GPU-Paket nicht verwenden. Lade es erneut herunter, um die GPU-Beschleunigung wieder einzuschalten.",
+    "redownloadButton": "GPU-Paket erneut herunterladen",
+    "downloadFailed": "Das GPU-Paket konnte nicht heruntergeladen werden.",
     "remove": "Entfernen",
     "dismiss": "Nicht jetzt",
     "cancel": "Abbrechen"

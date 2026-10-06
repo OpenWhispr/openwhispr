@@ -3662,9 +3662,10 @@
     "activationFailedDescription": "OpenWhispr 已切换为 CPU 转录。",
     "reasoningActivationFailedDescription": "OpenWhispr 已切换为 CPU 处理。",
     "retryActivation": "重试 GPU 加速",
-    "updateNeeded": "GPU 加速包需要更新",
-    "updateNeededDescription": "此版本的 OpenWhispr 无法使用已安装的 GPU 加速包。请更新以重新启用 GPU 加速。",
-    "updateButton": "更新 GPU 加速包",
+    "redownloadNeeded": "需要重新下载 GPU 加速包",
+    "redownloadNeededDescription": "此版本的 OpenWhispr 无法使用已安装的 GPU 加速包。请重新下载以重新启用 GPU 加速。",
+    "redownloadButton": "重新下载 GPU 加速包",
+    "downloadFailed": "无法下载 GPU 加速包。",
     "remove": "移除",
     "dismiss": "暂不启用",
     "cancel": "取消"

@@ -3437,7 +3437,7 @@ class IPCHandlers {
       const { detectNvidiaGpu } = require("../utils/gpuDetection");
       const gpuInfo = await detectNvidiaGpu();
       if (!this.whisperCudaManager) {
-        return { downloaded: false, downloading: false, path: null, gpuInfo };
+        return { downloaded: false, needsUpdate: false, downloading: false, path: null, gpuInfo };
       }
       return {
         downloaded: this.whisperCudaManager.isDownloaded(),

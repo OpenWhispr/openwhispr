@@ -4742,9 +4742,10 @@
     "activationFailedDescription": "انتقل OpenWhispr إلى استخدام وحدة المعالجة المركزية (CPU) للتفريغ الصوتي.",
     "reasoningActivationFailedDescription": "انتقل OpenWhispr إلى استخدام وحدة المعالجة المركزية (CPU) للمعالجة.",
     "retryActivation": "إعادة محاولة تفعيل GPU",
-    "updateNeeded": "حزمة GPU بحاجة إلى تحديث",
-    "updateNeededDescription": "لا يمكن لهذا الإصدار من OpenWhispr استخدام حزمة GPU المثبتة. حدّثها لإعادة تشغيل تسريع GPU.",
-    "updateButton": "تحديث حزمة GPU",
+    "redownloadNeeded": "تحتاج حزمة GPU إلى إعادة التنزيل",
+    "redownloadNeededDescription": "لا يمكن لهذا الإصدار من OpenWhispr استخدام حزمة GPU المثبتة. أعد تنزيلها لإعادة تشغيل تسريع GPU.",
+    "redownloadButton": "إعادة تنزيل حزمة GPU",
+    "downloadFailed": "تعذّر تنزيل حزمة GPU.",
     "remove": "إزالة",
     "dismiss": "ليس الآن",
     "cancel": "إلغاء"
