@@ -69,6 +69,7 @@ const originalLoad = Module._load;
 function loadClipboardManager({
   spawn,
   spawnSync,
+  cosmicAppId,
   accessibility = true,
   realModifierWait = false,
 } = {}) {
@@ -82,6 +83,9 @@ function loadClipboardManager({
           isTrustedAccessibilityClient: () => accessibility,
         },
       };
+    }
+    if (request === "./cosmicToplevel" && cosmicAppId !== undefined) {
+      return { getCosmicActiveAppId: async () => cosmicAppId };
     }
     if (request === "child_process" && (spawn || spawnSync)) {
       return { ...childProcess, ...(spawn && { spawn }), ...(spawnSync && { spawnSync }) };
@@ -442,11 +446,11 @@ for (const [appId, expected] of [
     const spawnCalls = [];
     const TestClipboardManager = loadClipboardManager({
       spawn: createSuccessfulSpawn(spawnCalls),
+      cosmicAppId: appId,
     });
     const manager = new TestClipboardManager();
     manager.commandExists = (command) => command === "wtype";
     manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
-    manager._detectCosmicWindowClass = async () => appId;
 
     await withWaylandEnvironment("COSMIC", () => manager.pasteLinux(null));
 
@@ -461,11 +465,11 @@ test("COSMIC ignores xdotool and keeps Shift+Insert for a window that is not a t
   const TestClipboardManager = loadClipboardManager({
     spawn: createSpawn(spawnCalls, [1, 0]),
     spawnSync: () => ({ status: 0, stdout: Buffer.from("4194322\n") }),
+    cosmicAppId: "code",
   });
   const manager = new TestClipboardManager();
   manager.commandExists = (command) => command === "xdotool";
   manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
-  manager._detectCosmicWindowClass = async () => "code";
 
   await withWaylandEnvironment("COSMIC", async () => {
     process.env.DISPLAY = ":0";

@@ -68,9 +68,7 @@ function getCosmicActiveAppId(env = process.env) {
     const timer = setTimeout(() => finish(null), TIMEOUT_MS);
 
     const handleEvent = (objectId, opcode, body) => {
-      if (objectId === DISPLAY && opcode === 0) {
-        finish(null); // wl_display.error
-      } else if (objectId === REGISTRY && opcode === 0) {
+      if (objectId === REGISTRY && opcode === 0) {
         // wl_registry.global: name, interface, version
         if (readString(body, 4) === TOPLEVEL_INFO) toplevelInfoName = body.readUInt32LE(0);
       } else if (objectId === GLOBALS_LISTED && toplevelInfoName === null) {

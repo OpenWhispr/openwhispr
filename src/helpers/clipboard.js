@@ -697,10 +697,6 @@ class ClipboardManager {
     }
   }
 
-  _detectCosmicWindowClass() {
-    return getCosmicActiveAppId();
-  }
-
   // A paste or copy chord injected while the user still holds a modifier reaches
   // the target as a different shortcut (Super+Ctrl+V), and the text is lost.
   // Resolves { state, waitedMs }: "released" (waitedMs > 0 when it had to wait),
@@ -1642,7 +1638,7 @@ class ClipboardManager {
     }
 
     if (!detectedWindowClass && isCosmic) {
-      detectedWindowClass = await this._detectCosmicWindowClass();
+      detectedWindowClass = await getCosmicActiveAppId();
       if (detectedWindowClass) {
         debugLogger.debug("COSMIC window class detected", { detectedWindowClass }, "clipboard");
       }

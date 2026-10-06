@@ -2296,7 +2296,7 @@
         "recheck": "Revérifier",
         "copy": "Copier",
         "ydotoolDesc": "Outil d'automatisation de saisie pour Wayland",
-        "wtypeDesc": "Outil d'automatisation de saisie recommandé sur les compositeurs wlroots",
+        "wtypeDesc": "Outil d'automatisation de saisie recommandé sur les compositeurs wlroots ; sous COSMIC, sert à coller dans les terminaux",
         "ydotooldDesc": "Daemon pour ydotool (paquet séparé sur Ubuntu/Pop!_OS)",
         "uinputDesc": "Accès au périphérique d'entrée du noyau",
         "uinputRuleFound": "Règle présente mais inactive. Un redémarrage devrait résoudre le problème.",

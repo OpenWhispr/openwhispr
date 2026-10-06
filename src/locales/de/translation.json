@@ -2296,7 +2296,7 @@
         "recheck": "Erneut prüfen",
         "copy": "Kopieren",
         "ydotoolDesc": "Eingabeautomatisierung für Wayland",
-        "wtypeDesc": "Bevorzugte Eingabeautomatisierung für wlroots-Compositoren",
+        "wtypeDesc": "Bevorzugte Eingabeautomatisierung für wlroots-Compositoren; unter COSMIC zum Einfügen in Terminals genutzt",
         "ydotooldDesc": "Daemon für ydotool (separates Paket unter Ubuntu/Pop!_OS)",
         "uinputDesc": "Zugriff auf das Kernel-Eingabegerät",
         "uinputRuleFound": "Regel vorhanden, aber nicht aktiv. Ein Neustart sollte das beheben.",

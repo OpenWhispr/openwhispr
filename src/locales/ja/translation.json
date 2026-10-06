@@ -2001,7 +2001,7 @@
         "recheck": "再確認",
         "copy": "コピー",
         "ydotoolDesc": "Wayland 用入力自動化ツール",
-        "wtypeDesc": "wlroots 系コンポジターで推奨される入力自動化ツール",
+        "wtypeDesc": "wlroots 系コンポジターで推奨される入力自動化ツール。COSMIC ではターミナルへの貼り付けに使用",
         "ydotooldDesc": "ydotool デーモン（Ubuntu/Pop!_OS では別パッケージ）",
         "uinputDesc": "カーネル入力デバイスへのアクセス",
         "uinputRuleFound": "ルールは存在しますが未適用です。再起動で解決するはずです。",

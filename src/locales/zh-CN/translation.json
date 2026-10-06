@@ -2001,7 +2001,7 @@
         "recheck": "重新检查",
         "copy": "复制",
         "ydotoolDesc": "Wayland 输入自动化工具",
-        "wtypeDesc": "wlroots 合成器上的首选输入自动化工具",
+        "wtypeDesc": "wlroots 合成器上的首选输入自动化工具；在 COSMIC 上用于向终端粘贴",
         "ydotooldDesc": "ydotool 守护进程（Ubuntu/Pop!_OS 上为独立包）",
         "uinputDesc": "内核输入设备访问",
         "uinputRuleFound": "规则已存在但未生效，重启应可解决。",

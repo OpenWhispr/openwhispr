@@ -1980,7 +1980,7 @@
         "recheck": "Verificar novamente",
         "copy": "Copiar",
         "ydotoolDesc": "Ferramenta de automação de entrada para Wayland",
-        "wtypeDesc": "Ferramenta de automação de entrada preferida em compositores wlroots",
+        "wtypeDesc": "Ferramenta de automação de entrada preferida em compositores wlroots; no COSMIC, usada para colar em terminais",
         "ydotooldDesc": "Daemon do ydotool (pacote separado no Ubuntu/Pop!_OS)",
         "uinputDesc": "Acesso ao dispositivo de entrada do kernel",
         "uinputRuleFound": "Regra presente mas não ativa. Uma reinicialização deve resolver.",
