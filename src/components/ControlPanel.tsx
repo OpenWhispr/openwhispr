@@ -389,9 +389,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     }
   }, [authLoaded, isSignedIn]);
 
+  // A ref, not a per-run flag: StrictMode's remount must not cancel the first drain.
+  const meetingNavigationMounted = useRef(false);
   useEffect(() => {
-    let mounted = true;
-    const isCurrent = () => mounted;
+    meetingNavigationMounted.current = true;
+    const isCurrent = () => meetingNavigationMounted.current;
     const drain = async () => {
       const data = await window.electronAPI?.getPendingMeetingNoteNavigation?.();
       if (!data) return;
@@ -446,7 +448,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     safeDrain();
     const cleanup = window.electronAPI?.onMeetingNoteNavigationPending?.(safeDrain);
     return () => {
-      mounted = false;
+      meetingNavigationMounted.current = false;
       cleanup?.();
     };
   }, []);

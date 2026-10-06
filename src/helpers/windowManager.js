@@ -333,9 +333,7 @@ class WindowManager {
     return Boolean(
       owner &&
       owner === this._meetingNotificationOwner &&
-      owner.window === this.notificationWindow &&
       !owner.window.isDestroyed() &&
-      owner.prompt === this._pendingNotificationData &&
       !this._onboardingActive &&
       owner.detection &&
       this.meetingDetectionEngine?.activeDetections?.get(owner.prompt.detectionId) ===
@@ -368,11 +366,8 @@ class WindowManager {
     if (!win || win.isDestroyed() || sender !== win.webContents) return;
     if (process.platform !== "linux") win.setIgnoreMouseEvents(!interactive, { forward: true });
     const owner = this._meetingNotificationOwner;
-    if (owner) {
-      owner.pointerInside = interactive;
-      this.updateMeetingNotificationPause(owner);
-    } else if (interactive) this._notificationDismissTimer.pause();
-    else this._notificationDismissTimer.resume();
+    owner.pointerInside = interactive;
+    this.updateMeetingNotificationPause(owner);
   }
 
   setMeetingNotificationSurface(owner, state) {

@@ -11,9 +11,7 @@ const originalLoad = Module._load;
 // Registers the real handler closures against a fake `this` (the scaffolding
 // from agentDictationPillIpc.test.js), with userData in a temporary directory.
 const handlers = new Map();
-const broadcasts = [];
 const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "account-scope-ipc-"));
-let tokenState = { token: null, generation: 0 };
 
 const electronStub = {
   app: {
@@ -59,18 +57,6 @@ const electronStub = {
 
 Module._load = function loadWithMocks(request, parent, isMain) {
   if (request === "electron") return electronStub;
-  if (parent?.filename === handlersModulePath) {
-    if (request === "./tokenStore") {
-      return {
-        get: () => tokenState.token,
-        getState: () => ({ ...tokenState }),
-        subscribe: () => () => {},
-      };
-    }
-    if (request === "./windowBroadcast") {
-      return { broadcastToWindows: (channel, data) => broadcasts.push([channel, data]) };
-    }
-  }
   return originalLoad.call(this, request, parent, isMain);
 };
 
@@ -125,7 +111,7 @@ function setupMeeting(t) {
     captureMeetingNotificationOwner: (s, id) =>
       s === sender && id === owner.sessionId ? owner : null,
     isMeetingNotificationOwner: (o) => o === owner,
-    sendToControlPanel: (...args) => broadcasts.push(args),
+    sendToControlPanel: () => {},
   };
   const service = Object.create(IPCHandlersClass.prototype);
   Object.assign(service, { databaseManager: db, windowManager: manager, _noteFilesEnabled: false });
