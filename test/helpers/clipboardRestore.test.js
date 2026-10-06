@@ -66,7 +66,12 @@ const originalLoad = Module._load;
 // The held-modifier wait spawns the fast-paste binary ahead of every Linux paste.
 // Tests that pin the paste chain's spawn sequence see it as already released;
 // the wait itself is covered by tests that load with `realModifierWait`.
-function loadClipboardManager({ spawn, accessibility = true, realModifierWait = false } = {}) {
+function loadClipboardManager({
+  spawn,
+  spawnSync,
+  accessibility = true,
+  realModifierWait = false,
+} = {}) {
   delete require.cache[clipboardModulePath];
 
   Module._load = function loadWithMocks(request, parent, isMain) {
@@ -78,8 +83,8 @@ function loadClipboardManager({ spawn, accessibility = true, realModifierWait = 
         },
       };
     }
-    if (request === "child_process" && spawn) {
-      return { ...childProcess, spawn };
+    if (request === "child_process" && (spawn || spawnSync)) {
+      return { ...childProcess, ...(spawn && { spawn }), ...(spawnSync && { spawnSync }) };
     }
     return originalLoad.call(this, request, parent, isMain);
   };
@@ -415,6 +420,62 @@ test("failed wtype continues to native Shift+Insert uinput", async () => {
     ["wtype", "/tmp/linux-fast-paste"]
   );
   assert.deepEqual(spawnCalls[1].args, ["--uinput", "--shift-insert"]);
+});
+
+// Warp binds paste to Ctrl+Shift+V only, and COSMIC's own app ids must not read as the
+// "st" terminal ("system76").
+for (const [appId, expected] of [
+  [
+    "dev.warp.warp",
+    {
+      command: "wtype",
+      args: ["-M", "ctrl", "-M", "shift", "-k", "v", "-m", "shift", "-m", "ctrl"],
+    },
+  ],
+  [
+    "com.system76.cosmicedit",
+    { command: "/tmp/linux-fast-paste", args: ["--uinput", "--shift-insert"] },
+  ],
+  [null, { command: "/tmp/linux-fast-paste", args: ["--uinput", "--shift-insert"] }],
+]) {
+  test(`COSMIC pastes into ${appId ?? "an undetected window"} with ${expected.command}`, async () => {
+    const spawnCalls = [];
+    const TestClipboardManager = loadClipboardManager({
+      spawn: createSuccessfulSpawn(spawnCalls),
+    });
+    const manager = new TestClipboardManager();
+    manager.commandExists = (command) => command === "wtype";
+    manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+    manager._detectCosmicWindowClass = async () => appId;
+
+    await withWaylandEnvironment("COSMIC", () => manager.pasteLinux(null));
+
+    assert.deepEqual(spawnCalls, [expected]);
+  });
+}
+
+// COSMIC's XWayland keeps naming the last X11 window while a native Wayland window has
+// focus, and COSMIC gives no PID to spot an Electron app hosting a TUI.
+test("COSMIC ignores xdotool and keeps Shift+Insert for a window that is not a terminal", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSpawn(spawnCalls, [1, 0]),
+    spawnSync: () => ({ status: 0, stdout: Buffer.from("4194322\n") }),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (command) => command === "xdotool";
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._detectCosmicWindowClass = async () => "code";
+
+  await withWaylandEnvironment("COSMIC", async () => {
+    process.env.DISPLAY = ":0";
+    await manager.pasteLinux(null);
+  });
+
+  assert.deepEqual(
+    spawnCalls.map((call) => call.args),
+    [["--uinput", "--shift-insert"], ["--shift-insert"]]
+  );
 });
 
 test("GNOME tries uinput before a tokenless portal", async () => {
