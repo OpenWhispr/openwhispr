@@ -942,6 +942,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         noteId: args.noteId ?? null,
         sessionId,
         autoEndEligible: args.autoEndEligible,
+        aecEnabled: getSettings().meetingAecEnabled,
       });
       const micCapturePromise = getMeetingMicConstraints().then(async (constraints) => {
         if (!isCurrentStart()) return null;

@@ -123,6 +123,8 @@
       "osReserved": "\"{{hotkey}}\" はデスクトップ環境で予約されている可能性があります。",
       "rightModifierNeedsListener": "\"{{hotkey}}\" はこのデスクトップでは使用できません。ショートカットには通常のキーが必要です。Control+Alt+Space のようにキーを追加してください。",
       "holdNeedsReleaseKey": "ホールドして話すには、macOS が離したことを検知できるキーが必要です。Globe、右 Option のような右側のキー、または修飾キー付きのショートカットです。タップならどのキーでも使えます。",
+      "holdNeedsRegularKey": "ホールドを使うには、Control+Alt+Space のようにショートカットに通常のキーを追加してください。デスクトップは修飾キーだけを押し続けていることを検知できません。",
+      "holdNeedsGnomePortal": "ホールドを使うには、GNOME 48 以降に含まれるグローバルショートカットポータルが必要です。タップはポータルがなくても使えます。",
       "registrationFailed": "\"{{hotkey}}\" を登録できませんでした。別のアプリケーションで使用されている可能性があります。",
       "windowsKeyListenerMissing": "\"{{hotkey}}\" には Windows のキーリスナーが必要ですが、このインストールにはありません。通常のキーを使うショートカットを選んでください。",
       "updateFailedCheckFormat": "「{{hotkey}}」へのホットキーの更新に失敗しました。形式が正しいか確認してください。",
@@ -160,7 +162,7 @@
     "close": "閉じる"
   },
   "windows": {
-    "pttUnavailable": "プッシュトゥトークのネイティブリスナーが利用できません"
+    "pttUnavailable": "OpenWhispr のキーリスナーを利用できません。"
   },
   "common": {
     "continue": "続ける",
@@ -2276,6 +2278,12 @@
       },
       "transcriptionPreview": "リアルタイム文字起こしプレビュー",
       "transcriptionPreviewDescription": "クリーンアップ前にフローティングウィンドウで文字起こしを表示",
+      "aec": {
+        "toggle": {
+          "title": "会議のエコーキャンセル",
+          "description": "マイクに漏れ込む会議の音声をキャンセルします。ヘッドフォンやイヤフォンを使用しているときはオフのままにしてください。キャンセルすべきエコーがなく、あなたの声を完全に抑制してしまう可能性があります。"
+        }
+      },
       "vad": {
         "title": "音声アクティビティ検出",
         "description": "ローカル Whisper 文字起こしで Silero VAD が発話を検出・分割する方法を設定します",
@@ -3660,6 +3668,10 @@
     "activationFailedDescription": "OpenWhispr は CPU 文字起こしに切り替えました。",
     "reasoningActivationFailedDescription": "OpenWhispr は CPU 処理に切り替えました。",
     "retryActivation": "GPU アクセラレーションを再試行",
+    "redownloadNeeded": "GPU パックの再ダウンロードが必要です",
+    "redownloadNeededDescription": "このバージョンの OpenWhispr はインストール済みの GPU パックを使用できません。再ダウンロードすると GPU アクセラレーションが再び有効になります。",
+    "redownloadButton": "GPU パックを再ダウンロード",
+    "downloadFailed": "GPU パックをダウンロードできませんでした。",
     "remove": "削除",
     "dismiss": "後で",
     "cancel": "キャンセル"
@@ -3687,7 +3699,7 @@
       },
       "gpuPackMigration": {
         "title": "GPU パックの再ダウンロードが必要です",
-        "description": "アップデートにより古い GPU パックのインストール（{{packs}}）が削除されました。設定から再ダウンロードすると GPU アクセラレーションが復元されます。"
+        "description": "このバージョンでは以前の GPU パック（{{packs}}）を使用できません。設定から再ダウンロードすると GPU アクセラレーションが再び有効になります。"
       },
       "cleanupFailed": {
         "title": "クリーンアップに失敗しました",

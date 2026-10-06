@@ -123,6 +123,8 @@
       "osReserved": "\"{{hotkey}}\" pode estar reservada pelo seu ambiente de desktop.",
       "rightModifierNeedsListener": "\"{{hotkey}}\" não pode ser usada neste ambiente de trabalho, cujos atalhos precisam de uma tecla normal. Adicione uma tecla, como Control+Alt+Space.",
       "holdNeedsReleaseKey": "Segurar para falar precisa de uma tecla cuja soltura o macOS detecte: Globo, uma tecla direita como Option direita ou um atalho com modificador. Tocar funciona com qualquer tecla.",
+      "holdNeedsRegularKey": "Para usar Segurar, adicione uma tecla normal ao atalho, como Control+Alt+Space. O ambiente de desktop não consegue detectar quando você segura apenas teclas modificadoras.",
+      "holdNeedsGnomePortal": "Para usar Segurar, o GNOME precisa do portal de atalhos globais, incluído a partir do GNOME 48. Toque funciona sem ele.",
       "registrationFailed": "Não foi possível registrar \"{{hotkey}}\". Pode estar em uso por outro aplicativo.",
       "windowsKeyListenerMissing": "\"{{hotkey}}\" precisa do listener de teclas do Windows, que está faltando nesta instalação. Escolha um atalho com uma tecla comum.",
       "updateFailedCheckFormat": "Não foi possível atualizar o atalho para \"{{hotkey}}\". Verifique se o formato é válido.",
@@ -139,7 +141,7 @@
     "loginItems": "As configurações de itens de início não estão disponíveis nesta plataforma."
   },
   "windows": {
-    "pttUnavailable": "O listener nativo de Push-to-Talk não está disponível"
+    "pttUnavailable": "O listener de teclas do OpenWhispr não está disponível."
   },
   "common": {
     "continue": "Continuar",
@@ -2255,6 +2257,12 @@
       },
       "transcriptionPreview": "Pré-visualização ao vivo",
       "transcriptionPreviewDescription": "Mostrar transcrição em janela flutuante antes da limpeza",
+      "aec": {
+        "toggle": {
+          "title": "Cancelamento de eco para reuniões",
+          "description": "Cancela o áudio da reunião que vaza para o seu microfone. Deixe isto desativado ao usar fones de ouvido ou auriculares — não há eco para cancelar e pode suprimir totalmente a sua voz."
+        }
+      },
       "vad": {
         "title": "Detecção de atividade de voz",
         "description": "Configure como o Silero VAD detecta e segmenta a fala na transcrição local do Whisper",
@@ -3660,6 +3668,10 @@
     "activationFailedDescription": "OpenWhispr mudou para a transcrição por CPU.",
     "reasoningActivationFailedDescription": "OpenWhispr mudou para o processamento por CPU.",
     "retryActivation": "Tentar aceleração por GPU novamente",
+    "redownloadNeeded": "O pacote GPU precisa ser baixado novamente",
+    "redownloadNeededDescription": "Esta versão do OpenWhispr não consegue usar o pacote GPU instalado. Baixe-o novamente para reativar a aceleração GPU.",
+    "redownloadButton": "Baixar o pacote GPU novamente",
+    "downloadFailed": "Não foi possível baixar o pacote GPU.",
     "remove": "Remover",
     "dismiss": "Agora não",
     "cancel": "Cancelar"
@@ -3687,7 +3699,7 @@
       },
       "gpuPackMigration": {
         "title": "O pacote GPU precisa ser baixado novamente",
-        "description": "Uma atualização removeu uma instalação desatualizada do pacote GPU ({{packs}}). Baixe-o novamente nas Configurações para restaurar a aceleração GPU."
+        "description": "Esta versão não consegue usar o pacote GPU anterior ({{packs}}). Baixe-o novamente nas Configurações para reativar a aceleração GPU."
       },
       "cleanupFailed": {
         "title": "Falha na limpeza",

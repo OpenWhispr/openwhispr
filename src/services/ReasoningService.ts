@@ -943,6 +943,16 @@ class ReasoningService extends BaseReasoningService {
             displayText,
             ...(metadata ? { metadata } : {}),
           };
+        } else if (chunk.type === "tool-error") {
+          // A call the SDK rejected (unknown tool, invalid input) never ran; without
+          // a result it would read as cut off mid-send in the chat and its history.
+          const cause = chunk.error;
+          yield {
+            type: "tool_result",
+            callId: chunk.toolCallId,
+            toolName: chunk.toolName,
+            displayText: `Error: ${cause instanceof Error ? cause.message : String(cause)}`,
+          };
         } else if (chunk.type === "abort") {
           canFlushFilteredText = false;
           finishFilteredText();

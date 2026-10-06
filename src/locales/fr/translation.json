@@ -123,6 +123,8 @@
       "osReserved": "\"{{hotkey}}\" peut être réservé par votre environnement de bureau.",
       "rightModifierNeedsListener": "« {{hotkey}} » ne peut pas être utilisé sur ce bureau, dont les raccourcis exigent une touche normale. Ajoutez une touche, par exemple Control+Alt+Space.",
       "holdNeedsReleaseKey": "Maintenir pour parler nécessite une touche dont macOS détecte le relâchement : Globe, une touche droite comme Option droite, ou un raccourci avec modificateur. Appuyer fonctionne avec n’importe quelle touche.",
+      "holdNeedsRegularKey": "Pour utiliser le mode Maintenir, ajoutez une touche normale au raccourci, par exemple Control+Alt+Space. Votre bureau ne peut pas signaler le maintien de touches de modification seules.",
+      "holdNeedsGnomePortal": "Pour utiliser le mode Maintenir, GNOME a besoin de son portail de raccourcis globaux, inclus à partir de GNOME 48. Le mode Appui fonctionne sans lui.",
       "registrationFailed": "Impossible d'enregistrer \"{{hotkey}}\". Il est peut-être utilisé par une autre application.",
       "windowsKeyListenerMissing": "\"{{hotkey}}\" nécessite l'écouteur de touches Windows, absent de cette installation. Choisissez un raccourci avec une touche classique.",
       "updateFailedCheckFormat": "Impossible de mettre à jour le raccourci vers \"{{hotkey}}\". Vérifiez que le format est valide.",
@@ -160,7 +162,7 @@
     "close": "Fermer"
   },
   "windows": {
-    "pttUnavailable": "L'écouteur natif Push-to-Talk n'est pas disponible"
+    "pttUnavailable": "L'écouteur de touches d'OpenWhispr n'est pas disponible."
   },
   "common": {
     "continue": "Continuer",
@@ -2571,6 +2573,12 @@
       },
       "transcriptionPreview": "Aperçu en direct",
       "transcriptionPreviewDescription": "Afficher la transcription dans une fenêtre flottante avant correction",
+      "aec": {
+        "toggle": {
+          "title": "Annulation d'écho pour les réunions",
+          "description": "Annule l'audio de la réunion qui s'infiltre dans votre microphone. Laissez cette option désactivée lorsque vous utilisez un casque ou des écouteurs — il n'y a aucun écho à annuler et cela peut supprimer entièrement votre voix."
+        }
+      },
       "vad": {
         "title": "Détection d'activité vocale",
         "description": "Configurez la manière dont Silero VAD détecte et segmente la parole pour la transcription locale Whisper",
@@ -3831,6 +3839,10 @@
     "activationFailedDescription": "OpenWhispr est passé à la transcription par CPU.",
     "reasoningActivationFailedDescription": "OpenWhispr est passé au traitement par CPU.",
     "retryActivation": "Réessayer l'accélération GPU",
+    "redownloadNeeded": "Le pack GPU doit être retéléchargé",
+    "redownloadNeededDescription": "Cette version d'OpenWhispr ne peut pas utiliser votre pack GPU installé. Retéléchargez-le pour réactiver l'accélération GPU.",
+    "redownloadButton": "Retélécharger le pack GPU",
+    "downloadFailed": "Impossible de télécharger le pack GPU.",
     "remove": "Supprimer",
     "dismiss": "Pas maintenant",
     "cancel": "Annuler"
@@ -3858,7 +3870,7 @@
       },
       "gpuPackMigration": {
         "title": "Le pack GPU doit être retéléchargé",
-        "description": "Une mise à jour a supprimé une installation obsolète du pack GPU ({{packs}}). Retéléchargez-le dans les paramètres pour rétablir l'accélération GPU."
+        "description": "Cette version ne peut pas utiliser votre ancien pack GPU ({{packs}}). Retéléchargez-le dans les paramètres pour réactiver l'accélération GPU."
       },
       "cleanupFailed": {
         "title": "Échec du nettoyage",
