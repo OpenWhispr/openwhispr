@@ -776,7 +776,10 @@ export default function TranscriptionModelPicker({
       setGpuFailed(!!status?.gpuFailed);
       setGpuFailReason(status?.gpuFailReason ?? null);
       setGpuNeedsUpdate(!!status?.needsUpdate);
-      // A download this card started before Settings was closed is still running
+      // A failed attempt's error must not outlive the state it was about
+      setGpuDownloadError(null);
+      // A download is still running that no pending call here may report the
+      // end of: one started before Settings was opened, or on another card
       if (status?.downloading) {
         setGpuDownloading(true);
         setGpuResumedDownload(true);
