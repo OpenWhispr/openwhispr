@@ -2454,7 +2454,9 @@ class WindowManager {
           panel.webContents.send("meeting-note-navigation-pending");
         };
         operation.deliver = deliver;
-        if (panel.webContents.isLoading()) panel.webContents.once("did-finish-load", deliver);
+        // Not did-finish-load: creating a panel resolves inside it, with isLoading() still true.
+        // Waiting keeps a reloading panel's outgoing document from taking the navigation.
+        if (panel.webContents.isLoading()) panel.webContents.once("did-stop-loading", deliver);
         else deliver();
       } catch {
         this._settleMeetingNavigation(operation, { success: false, code: "START_FAILED" });
@@ -2469,7 +2471,7 @@ class WindowManager {
     clearTimeout(operation.timer);
     operation.panel?.removeListener("closed", operation.onClose);
     operation.contents?.removeListener("render-process-gone", operation.onClose);
-    if (operation.deliver) operation.contents.removeListener("did-finish-load", operation.deliver);
+    if (operation.deliver) operation.contents.removeListener("did-stop-loading", operation.deliver);
     if (this._pendingMeetingNoteNavigation === operation.payload)
       this._pendingMeetingNoteNavigation = null;
     operation.resolve(result);

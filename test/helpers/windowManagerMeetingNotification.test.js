@@ -886,9 +886,10 @@ async function navigationFixture() {
   };
   owner.committedNoteId = 9;
   const panel = new EventEmitter();
+  let loading = false;
   panel.isDestroyed = () => false;
   panel.webContents = new EventEmitter();
-  panel.webContents.isLoading = () => false;
+  panel.webContents.isLoading = () => loading;
   panel.webContents.send = () => {};
   manager.controlPanelWindow = panel;
   manager.createControlPanelWindow = async () => {};
@@ -903,6 +904,15 @@ async function navigationFixture() {
     },
     row,
     start: () => manager.queueMeetingNoteNavigation(payload, { owner }),
+    // Like Electron, a new panel's load resolves inside did-finish-load, while
+    // isLoading() is still true; did-stop-loading clears it a tick later.
+    createPanel: async () => {
+      loading = true;
+      setImmediate(() => {
+        loading = false;
+        panel.webContents.emit("did-stop-loading");
+      });
+    },
   };
 }
 
@@ -999,11 +1009,14 @@ test("panel destruction and account retirement cancel pending navigation", async
   }
 });
 
-test("a loading panel's onboarding gate closes the prompt but not its navigation", async () => {
+test("a Start that creates the panel delivers once it loads, past the onboarding gate", async () => {
   const f = await navigationFixture();
   try {
     // A fresh control panel document raises the gate, which hides every prompt.
-    f.manager.createControlPanelWindow = async () => f.manager.setOnboardingActive(true);
+    f.manager.createControlPanelWindow = async () => {
+      f.manager.setOnboardingActive(true);
+      await f.createPanel();
+    };
     const pending = f.start();
     await new Promise(setImmediate);
     assert.equal(f.manager.notificationWindow, null);
