@@ -69,8 +69,10 @@ for (const code of ["AUTH_EXPIRED", "AUTH_REQUIRED"]) {
     assert.ok(i18n.exists("notes.meeting.signInRequired"));
     assert.equal(toast.description, i18n.t("notes.meeting.signInRequired"));
     assert.equal(toast.duration, 8000);
-    assert.equal(toast.action.props.children, i18n.t("common.signIn"));
-    toast.action.props.onClick();
+    assert.equal(toast.actions.length, 1);
+    assert.equal(toast.actions[0].label, i18n.t("common.signIn"));
+    assert.equal(toast.actionsAlign, "end");
+    toast.actions[0].onClick();
     assert.equal(globalThis.__signInRequests, 1);
   });
 }
@@ -83,6 +85,6 @@ test("any other start failure keeps its message and offers no sign-in", async (t
   });
 
   assert.equal(toast.description, "Token request failed: 500");
-  assert.equal(toast.action, undefined);
+  assert.equal(toast.actions, undefined);
   assert.equal(toast.duration, undefined);
 });

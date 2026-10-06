@@ -1,7 +1,6 @@
 import { createElement, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "./ui/useToast";
-import { ToastActionButton } from "./ui/Toast";
 import {
   getActiveRecordingSessionId,
   getMicAnalyser,
@@ -84,9 +83,8 @@ export default function MeetingRecordingMount(): null {
       description: errorKey ? t(errorKey, { provider: argument }) : error,
       variant: "destructive",
       duration: needsSignIn ? 8000 : undefined,
-      action: needsSignIn
-        ? createElement(ToastActionButton, { onClick: requestSignIn, children: t("common.signIn") })
-        : undefined,
+      actions: needsSignIn ? [{ label: t("common.signIn"), onClick: requestSignIn }] : undefined,
+      actionsAlign: needsSignIn ? "end" : undefined,
     });
     // errorNonce re-fires this toast when the same error repeats back-to-back.
   }, [error, errorNonce, toast, t]);

@@ -2217,23 +2217,6 @@ export default function SettingsPage({
 
                 <SettingsPanel>
                   <SettingsPanelRow>
-                    <Button
-                      onClick={handleSignOut}
-                      variant="outline"
-                      disabled={isSigningOut}
-                      size="sm"
-                      className="w-full text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50"
-                    >
-                      <LogOut className="me-1.5 h-3.5 w-3.5" />
-                      {isSigningOut
-                        ? t("settingsPage.account.signOut.signingOut")
-                        : t("settingsPage.account.signOut.signOut")}
-                    </Button>
-                  </SettingsPanelRow>
-                </SettingsPanel>
-
-                <SettingsPanel>
-                  <SettingsPanelRow>
                     <SettingsRow
                       label={t("settingsPage.account.deleteAccount.label")}
                       description={t("settingsPage.account.deleteAccount.labelDescription")}
@@ -2253,6 +2236,21 @@ export default function SettingsPage({
                     </SettingsRow>
                   </SettingsPanelRow>
                 </SettingsPanel>
+
+                <div className="flex justify-end">
+                  <Button
+                    onClick={handleSignOut}
+                    variant="outline"
+                    disabled={isSigningOut}
+                    size="sm"
+                    className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50"
+                  >
+                    <LogOut className="me-1.5 h-3.5 w-3.5" />
+                    {isSigningOut
+                      ? t("settingsPage.account.signOut.signingOut")
+                      : t("settingsPage.account.signOut.signOut")}
+                  </Button>
+                </div>
               </>
             ) : isLoaded ? (
               <>
@@ -4618,156 +4616,158 @@ EOF`,
                   </SettingsPanelRow>
                 )}
 
-                <SettingsPanelRow>
-                  <div className="space-y-2.5">
-                    <Button
-                      onClick={async () => {
-                        try {
-                          const result = await checkForUpdates();
-                          if (result && !result.updateAvailable) {
-                            toast({
-                              title: t("settingsPage.general.updates.dialogs.noUpdates.title"),
-                              description: t(
-                                "settingsPage.general.updates.dialogs.noUpdates.description"
-                              ),
-                            });
-                          }
-                        } catch {
-                          showAlertDialog({
-                            title: t("settingsPage.general.updates.dialogs.checkFailed.title"),
-                            description: t(
-                              "settingsPage.general.updates.dialogs.checkFailed.description"
-                            ),
-                          });
-                        }
-                      }}
-                      disabled={
-                        checkingForUpdates ||
-                        updateStatus.isDevelopment ||
-                        !updateStatus.isSupported
-                      }
-                      variant="outline"
-                      className="w-full"
-                      size="sm"
-                    >
-                      <RefreshCw
-                        size={13}
-                        className={`me-1.5 ${checkingForUpdates ? "animate-spin" : ""}`}
-                      />
-                      {checkingForUpdates
-                        ? t("settingsPage.general.updates.checking")
-                        : t("settingsPage.general.updates.checkForUpdates")}
-                    </Button>
-
-                    {isUpdateAvailable && !updateStatus.updateDownloaded && (
-                      <div className="space-y-2">
-                        <Button
-                          onClick={async () => {
-                            try {
-                              await downloadUpdate();
-                            } catch {
-                              showAlertDialog({
-                                title: t(
-                                  "settingsPage.general.updates.dialogs.downloadFailed.title"
-                                ),
-                                description: t(
-                                  "settingsPage.general.updates.dialogs.downloadFailed.description"
-                                ),
-                              });
-                            }
-                          }}
-                          disabled={downloadingUpdate}
-                          variant="success"
-                          className="w-full"
-                          size="sm"
-                        >
-                          <Download
-                            size={13}
-                            className={`me-1.5 ${downloadingUpdate ? "animate-pulse" : ""}`}
-                          />
-                          {downloadingUpdate
-                            ? t("settingsPage.general.updates.downloading", {
-                                progress: Math.round(updateDownloadProgress),
-                              })
-                            : t("settingsPage.general.updates.downloadUpdate", {
-                                version: updateInfo?.version || "",
-                              })}
-                        </Button>
-
-                        {downloadingUpdate && (
-                          <div className="h-1 w-full overflow-hidden rounded-full bg-muted/50">
-                            <div
-                              className="h-full bg-success transition-[width] duration-200 rounded-full"
-                              style={{
-                                width: `${Math.min(100, Math.max(0, updateDownloadProgress))}%`,
-                              }}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {updateStatus.updateDownloaded && (
-                      <Button
-                        onClick={() => {
-                          showConfirmDialog({
-                            title: t("settingsPage.general.updates.dialogs.installUpdate.title"),
-                            description: t(
-                              "settingsPage.general.updates.dialogs.installUpdate.description",
-                              { version: updateInfo?.version || "" }
-                            ),
-                            confirmText: t(
-                              "settingsPage.general.updates.dialogs.installUpdate.confirmText"
-                            ),
-                            onConfirm: async () => {
+                {(isUpdateAvailable ||
+                  updateStatus.updateDownloaded ||
+                  updateInfo?.releaseNotes) && (
+                  <SettingsPanelRow>
+                    <div className="space-y-2.5">
+                      {isUpdateAvailable && !updateStatus.updateDownloaded && (
+                        <div className="space-y-2">
+                          <Button
+                            onClick={async () => {
                               try {
-                                await installUpdateAction();
+                                await downloadUpdate();
                               } catch {
                                 showAlertDialog({
                                   title: t(
-                                    "settingsPage.general.updates.dialogs.installFailed.title"
+                                    "settingsPage.general.updates.dialogs.downloadFailed.title"
                                   ),
                                   description: t(
-                                    "settingsPage.general.updates.dialogs.installFailed.description"
+                                    "settingsPage.general.updates.dialogs.downloadFailed.description"
                                   ),
                                 });
                               }
-                            },
-                          });
-                        }}
-                        disabled={installInitiated}
-                        className="w-full"
-                        size="sm"
-                      >
-                        <RefreshCw
-                          size={14}
-                          className={`me-2 ${installInitiated ? "animate-spin" : ""}`}
-                        />
-                        {installInitiated
-                          ? t("settingsPage.general.updates.restarting")
-                          : t("settingsPage.general.updates.installAndRestart")}
-                      </Button>
-                    )}
-                  </div>
+                            }}
+                            disabled={downloadingUpdate}
+                            variant="success"
+                            className="w-full"
+                            size="sm"
+                          >
+                            <Download
+                              size={13}
+                              className={`me-1.5 ${downloadingUpdate ? "animate-pulse" : ""}`}
+                            />
+                            {downloadingUpdate
+                              ? t("settingsPage.general.updates.downloading", {
+                                  progress: Math.round(updateDownloadProgress),
+                                })
+                              : t("settingsPage.general.updates.downloadUpdate", {
+                                  version: updateInfo?.version || "",
+                                })}
+                          </Button>
 
-                  {updateInfo?.releaseNotes && (
-                    <div className="mt-4 pt-4 border-t border-border/70">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-                        <BidiInterpolatedText
-                          text={t("settingsPage.general.updates.whatsNew", {
-                            version: BIDI_VALUE_TOKEN,
-                          })}
-                          value={updateInfo.version}
-                        />
-                      </p>
-                      <div
-                        className="text-xs text-muted-foreground [&_ul]:list-disc [&_ul]:ps-4 [&_ul]:space-y-1 [&_ol]:list-decimal [&_ol]:ps-4 [&_ol]:space-y-1 [&_li]:ps-1 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_a]:text-link [&_a]:underline"
-                        dangerouslySetInnerHTML={{ __html: updateInfo.releaseNotes }}
-                      />
+                          {downloadingUpdate && (
+                            <div className="h-1 w-full overflow-hidden rounded-full bg-muted/50">
+                              <div
+                                className="h-full bg-success transition-[width] duration-200 rounded-full"
+                                style={{
+                                  width: `${Math.min(100, Math.max(0, updateDownloadProgress))}%`,
+                                }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {updateStatus.updateDownloaded && (
+                        <Button
+                          onClick={() => {
+                            showConfirmDialog({
+                              title: t("settingsPage.general.updates.dialogs.installUpdate.title"),
+                              description: t(
+                                "settingsPage.general.updates.dialogs.installUpdate.description",
+                                { version: updateInfo?.version || "" }
+                              ),
+                              confirmText: t(
+                                "settingsPage.general.updates.dialogs.installUpdate.confirmText"
+                              ),
+                              onConfirm: async () => {
+                                try {
+                                  await installUpdateAction();
+                                } catch {
+                                  showAlertDialog({
+                                    title: t(
+                                      "settingsPage.general.updates.dialogs.installFailed.title"
+                                    ),
+                                    description: t(
+                                      "settingsPage.general.updates.dialogs.installFailed.description"
+                                    ),
+                                  });
+                                }
+                              },
+                            });
+                          }}
+                          disabled={installInitiated}
+                          className="w-full"
+                          size="sm"
+                        >
+                          <RefreshCw
+                            size={14}
+                            className={`me-2 ${installInitiated ? "animate-spin" : ""}`}
+                          />
+                          {installInitiated
+                            ? t("settingsPage.general.updates.restarting")
+                            : t("settingsPage.general.updates.installAndRestart")}
+                        </Button>
+                      )}
                     </div>
-                  )}
-                </SettingsPanelRow>
+
+                    {updateInfo?.releaseNotes && (
+                      <div className="mt-4 pt-4 border-t border-border/70">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                          <BidiInterpolatedText
+                            text={t("settingsPage.general.updates.whatsNew", {
+                              version: BIDI_VALUE_TOKEN,
+                            })}
+                            value={updateInfo.version}
+                          />
+                        </p>
+                        <div
+                          className="text-xs text-muted-foreground [&_ul]:list-disc [&_ul]:ps-4 [&_ul]:space-y-1 [&_ol]:list-decimal [&_ol]:ps-4 [&_ol]:space-y-1 [&_li]:ps-1 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_a]:text-link [&_a]:underline"
+                          dangerouslySetInnerHTML={{ __html: updateInfo.releaseNotes }}
+                        />
+                      </div>
+                    )}
+                  </SettingsPanelRow>
+                )}
               </SettingsPanel>
+              <div className="mt-5 flex justify-end">
+                <Button
+                  onClick={async () => {
+                    try {
+                      const result = await checkForUpdates();
+                      if (result && !result.updateAvailable) {
+                        toast({
+                          title: t("settingsPage.general.updates.dialogs.noUpdates.title"),
+                          description: t(
+                            "settingsPage.general.updates.dialogs.noUpdates.description"
+                          ),
+                        });
+                      }
+                    } catch {
+                      showAlertDialog({
+                        title: t("settingsPage.general.updates.dialogs.checkFailed.title"),
+                        description: t(
+                          "settingsPage.general.updates.dialogs.checkFailed.description"
+                        ),
+                      });
+                    }
+                  }}
+                  disabled={
+                    checkingForUpdates || updateStatus.isDevelopment || !updateStatus.isSupported
+                  }
+                  variant="outline"
+                  size="sm"
+                >
+                  <RefreshCw
+                    size={13}
+                    className={`me-1.5 ${checkingForUpdates ? "animate-spin" : ""}`}
+                  />
+                  {checkingForUpdates
+                    ? t("settingsPage.general.updates.checking")
+                    : t("settingsPage.general.updates.checkForUpdates")}
+                </Button>
+              </div>
             </div>
 
             {/* Developer Tools */}
