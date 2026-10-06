@@ -39,10 +39,24 @@ function buildGenericInstruction(langCode: string): string {
   return template.replace("{{code}}", langCode);
 }
 
+export interface LanguageOptionInfo {
+  code: string;
+  label: string;
+  flag: string;
+}
+
+const LANGUAGE_BY_CODE = new Map<string, LanguageOptionInfo>(
+  registry.languages.map((l) => [l.code, l])
+);
+
+export function getLanguageOption(code: string | null | undefined): LanguageOptionInfo | undefined {
+  if (!code) return undefined;
+  return LANGUAGE_BY_CODE.get(code);
+}
+
 export function getLanguageLabel(code: string | null | undefined): string {
   if (!code) return "";
-  const entry = registry.languages.find((l) => l.code === code);
-  return entry?.label ?? code;
+  return getLanguageOption(code)?.label ?? code;
 }
 
 export { WHISPER_LANGUAGES, ASSEMBLYAI_UNIVERSAL3_PRO_LANGUAGES };

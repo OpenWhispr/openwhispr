@@ -1844,6 +1844,10 @@
       "cleanupFailed": {
         "title": "فشل التنقيح",
         "description": "تم لصق الإملاء الأصلي دون تنقيح بالذكاء الاصطناعي."
+      },
+      "streamingLanguageSwitch": {
+        "title": "??????? ????? ??? ??????? ??????",
+        "description": "???? ??? ????? ??????? ?????? ???????. ??????? {{language}} ??? ??? ????? ????."
       }
     },
     "mic": {
@@ -1851,7 +1855,8 @@
       "recording": "جاري التسجيل...",
       "processing": "جاري المعالجة...",
       "clickToSpeak": "انقر للتحدث",
-      "waitingForMicrophone": "في انتظار الميكروفون…"
+      "waitingForMicrophone": "في انتظار الميكروفون…",
+      "languageTooltip": "?????: {{language}} ? ???? ???????"
     },
     "buttons": {
       "cancelRecording": "إلغاء التسجيل",
@@ -1863,7 +1868,8 @@
       "hideForNow": "إخفاء الآن",
       "askAssistant": "اسأل المساعد",
       "busyRecording": "أنهِ التسجيل الحالي أولاً",
-      "startMeetingRecording": "بدء تسجيل الاجتماع"
+      "startMeetingRecording": "بدء تسجيل الاجتماع",
+      "language": "??? ?????"
     }
   },
   "calendar": {
@@ -4058,12 +4064,13 @@
       "uiLabel": "لغة الواجهة",
       "uiDescription": "اختر اللغة المستخدمة في واجهة OpenWhispr",
       "transcriptionLabel": "لغة التفريغ الصوتي",
-      "transcriptionDescription": "اختر اللغة التي تتحدث بها للحصول على تفريغ صوتي أكثر دقة",
+      "transcriptionDescription": "???? ?? ??? ??? {{max}} ???? ????? ??? ? ???? ????? ?????? ?? ???? ???????",
       "chineseScriptLabel": "الكتابة الصينية (الإملاء)",
       "chineseScriptDescription": "عند اكتشاف اللغة الصينية، سيتم تحويل النص المُملى إلى أحرف مبسطة أو تقليدية. اللغة الصينية المنطوقة هي نفسها في كلتا الحالتين؛ لا يُرجع Whisper سوى نظام كتابة واحد.",
       "chineseScriptAsTranscribed": "الإبقاء على النص كما تم تفريغه",
       "chineseScriptSimplified": "مبسطة (简体)",
-      "chineseScriptTraditional": "تقليدية (繁體)"
+      "chineseScriptTraditional": "تقليدية (繁體)",
+      "removeLanguage": "????? {{language}}"
     },
     "noteFiles": {
       "title": "حفظ الملاحظات كملفات",
@@ -4393,7 +4400,15 @@
   },
   "languageSelector": {
     "noLanguagesFound": "لم يتم العثور على لغات",
-    "searchPlaceholder": "البحث في اللغات"
+    "searchPlaceholder": "البحث في اللغات",
+    "lastLanguageHint": "??? ????? ??? ????? ??? ????? ?????",
+    "maxLanguagesHint": "?? ?????? ??? ???? ?????? ?????? {{max}} ????",
+    "selectedCount_zero": "{{count}} ???",
+    "selectedCount_one": "{{count}} ???",
+    "selectedCount_two": "{{count}} ?????",
+    "selectedCount_few": "{{count}} ????",
+    "selectedCount_many": "{{count}} ???",
+    "selectedCount_other": "{{count}} ???"
   },
   "microphoneSettings": {
     "builtIn": "(مدمج)",

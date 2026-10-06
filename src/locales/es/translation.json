@@ -6,12 +6,13 @@
       "uiLabel": "Idioma de la interfaz",
       "uiDescription": "Elige el idioma usado en la interfaz de OpenWhispr",
       "transcriptionLabel": "Idioma de transcripción",
-      "transcriptionDescription": "Elige el idioma que hablas para mejorar la precisión",
+      "transcriptionDescription": "Elige hasta {{max}} idiomas que hablas — cambia el idioma activo desde el panel de dictado",
       "chineseScriptLabel": "Escritura china (dictado)",
       "chineseScriptDescription": "Cuando se detecte chino, convierte las transcripciones dictadas a caracteres simplificados o tradicionales. El chino hablado suena igual; Whisper solo devuelve una escritura.",
       "chineseScriptAsTranscribed": "Mantener como se transcribió",
       "chineseScriptSimplified": "Simplificado (简体)",
-      "chineseScriptTraditional": "Tradicional (繁體)"
+      "chineseScriptTraditional": "Tradicional (繁體)",
+      "removeLanguage": "Quitar {{language}}"
     },
     "noteFiles": {
       "title": "Guardar notas como archivos",
@@ -1414,7 +1415,11 @@
   },
   "languageSelector": {
     "noLanguagesFound": "No se encontraron idiomas",
-    "searchPlaceholder": "Buscar idiomas"
+    "searchPlaceholder": "Buscar idiomas",
+    "lastLanguageHint": "Debe quedar seleccionado al menos un idioma",
+    "maxLanguagesHint": "Límite de {{max}} idiomas alcanzado",
+    "selectedCount_one": "{{count}} idioma",
+    "selectedCount_other": "{{count}} idiomas"
   },
   "microphoneSettings": {
     "builtIn": "(Integrado)",
@@ -3757,6 +3762,10 @@
       "cleanupFailed": {
         "title": "Limpieza fallida",
         "description": "Tu dictado se pegó sin limpieza con IA."
+      },
+      "streamingLanguageSwitch": {
+        "title": "El idioma se aplicará a tu próximo dictado",
+        "description": "Esta transcripción en vivo mantiene el idioma anterior. {{language}} se aplicará cuando inicies un nuevo dictado."
       }
     },
     "mic": {
@@ -3764,7 +3773,8 @@
       "recording": "Grabando...",
       "processing": "Procesando...",
       "clickToSpeak": "Haz clic para hablar",
-      "waitingForMicrophone": "Esperando el micrófono…"
+      "waitingForMicrophone": "Esperando el micrófono…",
+      "languageTooltip": "Idioma: {{language}} — haz clic para cambiar"
     },
     "buttons": {
       "cancelRecording": "Cancelar grabación",
@@ -3776,7 +3786,8 @@
       "hideForNow": "Ocultar por ahora",
       "askAssistant": "Preguntar al asistente",
       "busyRecording": "Primero termina la grabación actual",
-      "startMeetingRecording": "Iniciar grabación de reunión"
+      "startMeetingRecording": "Iniciar grabación de reunión",
+      "language": "Idioma de transcripción"
     }
   },
   "dictationAgent": {

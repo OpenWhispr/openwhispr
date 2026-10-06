@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Check, Search, X } from "../icons";
+import { MAX_PREFERRED_LANGUAGES } from "../../helpers/languagePreferences";
 import OnboardingList from "./OnboardingList";
 import {
   displayOnboardingLanguageLabel,
@@ -23,10 +25,12 @@ export default function LanguageSelectionStep({
   noResultsLabel,
   selectedLabel,
 }: LanguageSelectionStepProps) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const languages = useMemo(() => getOnboardingLanguageOptions(query, selected), [query, selected]);
 
   const toggle = (code: string) => {
+    if (!selected.includes(code) && selected.length >= MAX_PREFERRED_LANGUAGES) return;
     onChange(
       selected.includes(code) ? selected.filter((item) => item !== code) : [...selected, code]
     );
@@ -86,14 +90,24 @@ export default function LanguageSelectionStep({
         ) : (
           languages.map((language) => {
             const checked = selected.includes(language.code);
+            const limitReached = !checked && selected.length >= MAX_PREFERRED_LANGUAGES;
             return (
               <button
                 key={language.code}
                 type="button"
                 role="checkbox"
                 aria-checked={checked}
+                aria-disabled={limitReached || undefined}
+                disabled={limitReached}
+                title={
+                  limitReached
+                    ? t("languageSelector.maxLanguagesHint", { max: MAX_PREFERRED_LANGUAGES })
+                    : undefined
+                }
                 onClick={() => toggle(language.code)}
-                className="onboarding-list-row w-full text-start"
+                className={`onboarding-list-row w-full text-start ${
+                  limitReached ? "cursor-not-allowed opacity-50" : ""
+                }`}
               >
                 {/* The control keeps its light stroke when checked — the spec's
                     asset carries both the fill and the #E3E3E3 border. */}

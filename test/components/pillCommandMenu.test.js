@@ -15,6 +15,12 @@ async function renderMenu(t, props) {
   return renderToStaticMarkup(
     createElement(mod.PillCommandMenu, {
       buttonRef: { current: null },
+      menuRef: { current: null },
+      languageMenuTriggerRef: { current: null },
+      showLanguageSwitcher: false,
+      languageOptions: [],
+      preferredLanguage: "auto",
+      onSelectLanguage: () => {},
       align: "right",
       isRecording: false,
       agentAllowed: true,
@@ -68,4 +74,18 @@ test("the command menu offers a meeting recording only while idle and allowed", 
   assert.match(await renderMenu(t, {}), /startMeetingRecording/);
   assert.doesNotMatch(await renderMenu(t, { isRecording: true }), /startMeetingRecording/);
   assert.doesNotMatch(await renderMenu(t, { meetingAllowed: false }), /startMeetingRecording/);
+});
+
+test("the language menu preserves upstream actions and renders every preset", async (t) => {
+  const markup = await renderMenu(t, {
+    showLanguageSwitcher: true,
+    languageOptions: ["en", "fr", "de", "es", "ja"],
+    preferredLanguage: "fr",
+  });
+
+  assert.match(markup, /askAssistant/);
+  assert.match(markup, /startMeetingRecording/);
+  assert.match(markup, /hideForNow/);
+  assert.equal((markup.match(/role="menuitemradio"/g) ?? []).length, 5);
+  assert.match(markup, /aria-checked="true"/);
 });

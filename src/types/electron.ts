@@ -2080,6 +2080,7 @@ declare global {
       startControlPanelDrag: () => Promise<void>;
       stopControlPanelDrag: () => Promise<void>;
       setMainWindowInteractivity: (interactive: boolean) => Promise<void>;
+      setMainWindowMenuFocus?: (open: boolean) => Promise<{ success: boolean }>;
       setMainWindowInputRegion: (region: MainWindowInputRegion | null) => Promise<boolean>;
       onMainWindowVisibilityChanged: (callback: (visible: boolean) => void) => () => void;
       setNotificationInteractivity: (interactive: boolean) => Promise<void>;
@@ -2089,7 +2090,9 @@ declare global {
           | "RECORDING"
           | "DICTATION_ERROR"
           | "DICTATION_ERROR_WITH_TRANSCRIPT"
+          | "WITH_LANGUAGE"
           | "WITH_MENU"
+          | "WITH_MENU_LANGUAGE"
           | "WITH_TOAST"
           | "EXPANDED"
           | "ASSISTANT"
@@ -3381,6 +3384,7 @@ declare global {
         language?: string;
         display?: boolean;
       }) => Promise<{ success: boolean }>;
+      updateDictationPreviewLanguage?: (language: string | null) => Promise<{ success: boolean }>;
       stopDictationPreview?: (opts?: {
         showCleanup?: boolean;
         flushed?: boolean;

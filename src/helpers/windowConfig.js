@@ -150,7 +150,13 @@ const WINDOW_SIZES = {
     width: DICTATION_ERROR_WINDOW_LIMITS.width,
     height: 168,
   },
+  // Match the shared footprint so the chip, recording pill, and cancel
+  // control fit without resizing on hover or recording edges.
+  WITH_LANGUAGE: PILL_WINDOW_SIZE,
   WITH_MENU: { width: 240, height: 280 },
+  // Taller variant for the command menu when it includes the language section;
+  // using it only then avoids an invisible click-eating strip above the menu.
+  WITH_MENU_LANGUAGE: { width: 240, height: 400 },
   WITH_TOAST: { width: 400, height: 500 },
   EXPANDED: { width: 400, height: 500 },
   ASSISTANT: ASSISTANT_WINDOW_SIZE,

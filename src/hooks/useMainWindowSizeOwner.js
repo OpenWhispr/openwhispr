@@ -22,6 +22,9 @@ export function useMainWindowSizeOwner({
   dictationErrorActionCount,
   toastCount,
   isCommandMenuOpen,
+  isLanguageMenuOpen,
+  commandMenuIncludesLanguage,
+  wantsLanguageWidth,
   isCompactPill,
   isDictationActive,
   assistantOpen,
@@ -104,10 +107,12 @@ export function useMainWindowSizeOwner({
     panelSizeReservationRef.current = false;
     const target = resolveMainWindowSizeKey({
       panelOpen: false,
-      menuOpen: isCommandMenuOpen,
+      menuOpen: isCommandMenuOpen || isLanguageMenuOpen,
+      menuIncludesLanguage: commandMenuIncludesLanguage,
       toastCount,
       compactPill: isCompactPill,
       dictationErrorActionCount,
+      wantsLanguageWidth,
     });
     const prev = lastSizeKeyRef.current;
     lastSizeKeyRef.current = target;
@@ -181,6 +186,9 @@ export function useMainWindowSizeOwner({
     liveTranscriptMounted,
     liveTranscriptOpenRef,
     isCommandMenuOpen,
+    isLanguageMenuOpen,
+    commandMenuIncludesLanguage,
+    wantsLanguageWidth,
     toastCount,
     isCompactPill,
     dictationErrorActionCount,

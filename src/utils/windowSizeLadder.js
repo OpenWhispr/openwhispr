@@ -4,28 +4,32 @@
 // closing — higher states always win.
 export const SIZE_RANK = {
   BASE: 0,
-  RECORDING: 1,
-  DICTATION_ERROR: 2,
-  DICTATION_ERROR_WITH_TRANSCRIPT: 3,
-  WITH_MENU: 4,
-  WITH_TOAST: 5,
-  EXPANDED: 6,
-  ASSISTANT: 7,
+  WITH_LANGUAGE: 1,
+  RECORDING: 2,
+  DICTATION_ERROR: 3,
+  DICTATION_ERROR_WITH_TRANSCRIPT: 4,
+  WITH_MENU: 5,
+  WITH_MENU_LANGUAGE: 5,
+  WITH_TOAST: 6,
+  EXPANDED: 7,
+  ASSISTANT: 8,
 };
 
 export function resolveMainWindowSizeKey({
   panelOpen,
   menuOpen,
+  menuIncludesLanguage = false,
   toastCount,
   compactPill,
   dictationErrorActionCount = 0,
+  wantsLanguageWidth = false,
 }) {
   if (panelOpen) return "ASSISTANT";
   if (dictationErrorActionCount > 1) return "DICTATION_ERROR_WITH_TRANSCRIPT";
   if (dictationErrorActionCount === 1) return "DICTATION_ERROR";
   if (menuOpen && (toastCount > 0 || compactPill)) return "EXPANDED";
-  if (menuOpen) return "WITH_MENU";
+  if (menuOpen) return menuIncludesLanguage ? "WITH_MENU_LANGUAGE" : "WITH_MENU";
   if (toastCount > 0) return "WITH_TOAST";
-  if (compactPill) return "RECORDING";
-  return "BASE";
+  if (compactPill) return wantsLanguageWidth ? "WITH_LANGUAGE" : "RECORDING";
+  return wantsLanguageWidth ? "WITH_LANGUAGE" : "BASE";
 }

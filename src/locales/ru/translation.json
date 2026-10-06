@@ -6,12 +6,13 @@
       "uiLabel": "Язык интерфейса",
       "uiDescription": "Выберите язык интерфейса OpenWhispr",
       "transcriptionLabel": "Язык транскрипции",
-      "transcriptionDescription": "Выберите язык, на котором вы говорите, для более точной транскрипции",
+      "transcriptionDescription": "Выберите до {{max}} языков, на которых вы говорите — активный язык можно переключать в панели диктовки",
       "chineseScriptLabel": "Китайская письменность (диктовка)",
       "chineseScriptDescription": "Когда обнаружен китайский, преобразовать надиктованные транскрипты в упрощенные или традиционные иероглифы. На слух китайский одинаков; Whisper возвращает только одну письменность.",
       "chineseScriptAsTranscribed": "Оставить как распознано",
       "chineseScriptSimplified": "Упрощенный (简体)",
-      "chineseScriptTraditional": "Традиционный (繁體)"
+      "chineseScriptTraditional": "Традиционный (繁體)",
+      "removeLanguage": "Убрать {{language}}"
     },
     "noteFiles": {
       "title": "Сохранять заметки как файлы",
@@ -1361,7 +1362,13 @@
   },
   "languageSelector": {
     "noLanguagesFound": "Языки не найдены",
-    "searchPlaceholder": "Поиск языков"
+    "searchPlaceholder": "Поиск языков",
+    "lastLanguageHint": "Хотя бы один язык должен оставаться выбранным",
+    "maxLanguagesHint": "Достигнут лимит в {{max}} языков",
+    "selectedCount_one": "{{count}} язык",
+    "selectedCount_few": "{{count}} ?????",
+    "selectedCount_many": "{{count}} ??????",
+    "selectedCount_other": "{{count}} языка"
   },
   "microphoneSettings": {
     "builtIn": "(Встроенный)",
@@ -3748,6 +3755,10 @@
       "cleanupFailed": {
         "title": "Не удалось выполнить очистку",
         "description": "Диктовка вставлена без ИИ-очистки."
+      },
+      "streamingLanguageSwitch": {
+        "title": "Язык применится к следующей диктовке",
+        "description": "Текущая потоковая транскрипция продолжится на прежнем языке. {{language}} вступит в силу со следующей диктовки."
       }
     },
     "mic": {
@@ -3755,7 +3766,8 @@
       "recording": "Запись...",
       "processing": "Обработка...",
       "clickToSpeak": "Нажмите для записи",
-      "waitingForMicrophone": "Ожидание микрофона…"
+      "waitingForMicrophone": "Ожидание микрофона…",
+      "languageTooltip": "Язык: {{language}} — нажмите, чтобы переключить"
     },
     "buttons": {
       "cancelRecording": "Отменить запись",
@@ -3767,7 +3779,8 @@
       "hideForNow": "Скрыть",
       "askAssistant": "Спросить помощника",
       "busyRecording": "Сначала завершите текущую запись",
-      "startMeetingRecording": "Начать запись встречи"
+      "startMeetingRecording": "Начать запись встречи",
+      "language": "Язык транскрипции"
     }
   },
   "dictationAgent": {

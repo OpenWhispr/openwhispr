@@ -1584,6 +1584,12 @@ class IPCHandlers {
       return { success: true };
     });
 
+    ipcMain.handle("set-main-window-menu-focus", (event, open) => {
+      if (event.sender !== this.windowManager.mainWindow?.webContents) return null;
+      this.windowManager.setMainWindowMenuFocus(Boolean(open));
+      return { success: true };
+    });
+
     ipcMain.handle("set-main-window-input-region", (event, region) => {
       if (event.sender !== this.windowManager.mainWindow?.webContents) return null;
       return this.windowManager.setMainWindowInputRegion(region);
@@ -9515,6 +9521,16 @@ class IPCHandlers {
         return { success: true };
       }
     );
+
+    ipcMain.handle("update-dictation-preview-language", async (_event, language) => {
+      // Mid-recording language switch: retarget the chunked preview decode.
+      // The online Parakeet stream ignores the hint (auto-detect), so there is
+      // nothing to restart on that path.
+      if (dictationPreviewSessionActive) {
+        dictationPreviewLanguage = language || null;
+      }
+      return { success: true };
+    });
 
     ipcMain.on("dictation-preview-audio", (_event, audioBuffer) => {
       if (!dictationPreviewMode) return;

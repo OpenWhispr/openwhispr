@@ -1141,6 +1141,10 @@ export const useAudioRecording = (toast, options = {}) => {
     // recording's pill as processing.
     isProcessing: isProcessing || (isPasting && !isRecording),
     isStreaming,
+    // Keep translation-mode controls distinct from ordinary dictation while
+    // the requested translation recording is preparing or capturing audio.
+    isTranslationRequested:
+      (isPreparing || isRecording) && lastStartOptionsRef.current.translationRequested,
     isAssistantVoice,
     isPreparing,
     isStopping,

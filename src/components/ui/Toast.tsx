@@ -277,6 +277,14 @@ const ToastViewport: React.FC<{
             : "bottom-20 end-6"
           : "bottom-5 end-5"
       )}
+      // In the dictation panel an open menu raises the stack above itself
+      // via --toast-viewport-bottom (set in App.jsx); 5rem matches bottom-20.
+      // The error viewport keeps its own fixed anchor through the exit animation.
+      style={
+        isDictationPanel && !hasDictationError
+          ? { bottom: "var(--toast-viewport-bottom, 5rem)" }
+          : undefined
+      }
     >
       {toasts.map((toast) => (
         <Toast

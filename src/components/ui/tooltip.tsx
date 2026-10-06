@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 
 interface TooltipProps {
   children: React.ReactNode;
-  content: string;
+  content: React.ReactNode;
 }
 
 export const Tooltip = ({ children, content }: TooltipProps) => {
@@ -56,6 +56,8 @@ export const Tooltip = ({ children, content }: TooltipProps) => {
       </div>
       {isVisible &&
         position &&
+        content != null &&
+        content !== "" &&
         createPortal(
           <div
             ref={tooltipRef}
