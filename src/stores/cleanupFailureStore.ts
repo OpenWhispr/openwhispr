@@ -1,18 +1,16 @@
 import { create } from "zustand";
+import type { TechnicalErrorDetailsData } from "../components/ui/useToast";
 
 export interface CleanupFailure {
   message: string;
   messageKey?: string;
   messageParams?: Record<string, string | number>;
+  surface?: "transcription" | "llm";
+  settingsTarget?: string;
   action?: string;
   actionKey?: string;
   copyCommand?: string;
-  technicalDetails?: {
-    status?: number;
-    exceptionType?: string;
-    requestId?: string;
-    underlyingError?: string;
-  };
+  technicalDetails?: TechnicalErrorDetailsData;
 }
 
 interface CleanupFailureState {

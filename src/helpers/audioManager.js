@@ -89,6 +89,8 @@ import {
   resolveStreamingStartFallback,
 } from "./transcriptionFallback";
 import { transcriptionFailureOutcome } from "./transcriptionFailureOutcome";
+import { IPC_ERROR_FIELDS, errorFromIpcResult } from "./ipcErrorFields";
+import { asProviderError, providerHttpError, redactProviderBody } from "./providerHttpErrors";
 import {
   executeTranslationChain,
   hasTextContent,
@@ -158,6 +160,8 @@ const cleanupFailureFromError = (error) => ({
   message: error?.message || String(error),
   ...(error?.messageKey ? { messageKey: error.messageKey } : {}),
   ...(error?.messageParams ? { messageParams: error.messageParams } : {}),
+  ...(error?.surface ? { surface: error.surface } : {}),
+  ...(error?.settingsTarget ? { settingsTarget: error.settingsTarget } : {}),
   ...(error?.action ? { action: error.action } : {}),
   ...(error?.actionKey ? { actionKey: error.actionKey } : {}),
   ...(error?.copyCommand ? { copyCommand: error.copyCommand } : {}),
@@ -3638,12 +3642,21 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             .filter(Boolean)
             .slice(0, 100),
         });
-        const result = await call(proxyPayload);
+        // Managed Azure is enterprise: its failures keep their own shape.
+        const classifyProxyFailure = (err) =>
+          managedResolution
+            ? err
+            : asProviderError(err, { provider: proxySpec.displayName, surface: "transcription" });
+        let result;
+        try {
+          result = await call(proxyPayload);
+        } catch (err) {
+          throw classifyProxyFailure(err);
+        }
         if (result?.error) {
-          const err = new Error(result.error);
-          if (result.code) err.code = result.code;
-          if (result.messageKey) err.messageKey = result.messageKey;
-          throw err;
+          // Main serialises an unclassified network failure as its bare
+          // message (net::ERR_*), so classify the rebuilt error here.
+          throw classifyProxyFailure(errorFromIpcResult(result));
         }
         const proxyText = result?.text;
         if (!proxyText?.trim()) {
@@ -3805,14 +3818,29 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         "transcription"
       );
 
+      // Name the resolved route, not cloudTranscriptionProvider: self-hosted
+      // dictation keeps that setting (usually "openai") while posting to the
+      // user's own server.
+      const providerErrorContext = {
+        provider: route.provider === "groq" ? "Groq" : "OpenAI",
+        selfHosted: route.provider === "self-hosted" || route.provider === "custom",
+        model: route.model ?? model,
+        surface: "transcription",
+      };
+
       requestController = new AbortController();
       this._activeTranscriptionAbortController = requestController;
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers,
-        body: formData,
-        signal: requestController.signal,
-      });
+      let response;
+      try {
+        response = await fetch(endpoint, {
+          method: "POST",
+          headers,
+          body: formData,
+          signal: requestController.signal,
+        });
+      } catch (err) {
+        throw asProviderError(err, providerErrorContext);
+      }
 
       const responseContentType = response.headers.get("content-type") || "";
 
@@ -3833,18 +3861,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           "Transcription API error response",
           {
             status: response.status,
-            errorText,
+            errorText: redactProviderBody(errorText),
           },
           "transcription"
         );
-        const err = new Error(`API Error: ${response.status} ${errorText}`);
-        if (response.status === 401) err.code = "INVALID_KEY";
-        else if (response.status === 429) {
-          // The user's own provider rate-limited the request — not an OpenWhispr plan limit
-          err.code = "PROVIDER_RATE_LIMITED";
-          err.messageKey = "hooks.audioRecording.errorDescriptions.providerRateLimited";
-        } else if (response.status >= 500) err.code = "SERVER_ERROR";
-        throw err;
+        throw providerHttpError({
+          ...providerErrorContext,
+          status: response.status,
+          body: errorText,
+          headers: response.headers,
+        });
       }
 
       let result;
@@ -3997,8 +4023,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           const wrapped = new Error(
             `OpenAI API failed: ${error.message}. Local fallback also failed: ${fallbackError.message}`
           );
-          if (error.code) wrapped.code = error.code;
-          if (error.messageKey) wrapped.messageKey = error.messageKey;
+          // The toast renders the cloud failure, so its message params and details
+          // must survive the wrap, or the copy shows a bare "{{provider}}".
+          for (const key of IPC_ERROR_FIELDS) {
+            if (error[key] !== undefined) wrapped[key] = error[key];
+          }
           throw wrapped;
         }
       }

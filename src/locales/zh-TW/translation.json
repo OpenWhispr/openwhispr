@@ -773,6 +773,10 @@
       "label": "停用思考輸出",
       "help": "略過推理權杖以獲得更乾淨的輸出。建議用於清理。某些伺服器會忽略此提示。"
     },
+    "keepModelLoaded": {
+      "label": "保持模型載入",
+      "help": "閒置 5 分鐘後仍保留在記憶體中，不會卸載，下一次請求無需冷啟動。適用於所有使用本機模型的功能。"
+    },
     "selfHosted": {
       "endpointHelp": "指向本地網路中相容 OpenAI 的伺服器（例如 Ollama、LM Studio、vLLM 或 llama-server）。"
     },
@@ -3664,6 +3668,10 @@
     "activationFailedDescription": "OpenWhispr 已切換為 CPU 轉錄。",
     "reasoningActivationFailedDescription": "OpenWhispr 已切換為 CPU 處理。",
     "retryActivation": "重試 GPU 加速",
+    "redownloadNeeded": "需要重新下載 GPU 加速包",
+    "redownloadNeededDescription": "此版本的 OpenWhispr 無法使用已安裝的 GPU 加速包。請重新下載以重新啟用 GPU 加速。",
+    "redownloadButton": "重新下載 GPU 加速包",
+    "downloadFailed": "無法下載 GPU 加速包。",
     "remove": "移除",
     "dismiss": "暫時不要",
     "cancel": "取消"
@@ -3691,7 +3699,7 @@
       },
       "gpuPackMigration": {
         "title": "需要重新下載 GPU 加速包",
-        "description": "更新移除了過時的 GPU 加速包安裝（{{packs}}）。請在設定中重新下載以恢復 GPU 加速。"
+        "description": "此版本無法使用先前的 GPU 加速包（{{packs}}）。請在設定中重新下載以重新啟用 GPU 加速。"
       },
       "cleanupFailed": {
         "title": "清理失敗",
@@ -4800,6 +4808,49 @@
         "NOTE_UNAVAILABLE": "此筆記無法使用。請重試，不要建立替代筆記。",
         "START_FAILED": "無法完成，請重試。"
       }
+    }
+  },
+  "providerErrors": {
+    "authFailed": "{{provider}} 拒絕了你的 API 金鑰。",
+    "accessDenied": "{{provider}} 拒絕存取。你的金鑰可能不包含此模型。",
+    "quotaExhausted": "你的 {{provider}} 帳戶額度已用盡。",
+    "rateLimited": "{{provider}} 限制了請求頻率。請稍候再試。",
+    "modelNotFound": "{{provider}} 無法識別模型「{{model}}」。",
+    "modelNotFoundNoModel": "{{provider}} 無法識別所選的模型。",
+    "payloadTooLarge": "這段錄音對 {{provider}} 來說太大了。",
+    "requestTooLarge": "這個請求對 {{provider}} 來說太大了。",
+    "badRequest": "{{provider}} 無法處理此請求。",
+    "unavailable": "{{provider}} 目前發生問題。請稍後再試。",
+    "timeout": "{{provider}} 回應逾時。",
+    "unreachable": "無法連線到 {{provider}}。請檢查你的網路連線。",
+    "noResponse": "未能收到 {{provider}} 的回應。請檢查你的 API 金鑰和網路連線。",
+    "unknown": "{{provider}} 回傳了意外的錯誤。",
+    "keyMissing": "尚未為 {{provider}} 設定 API 金鑰。請在「設定 → 語言模型」中新增。",
+    "selfHosted": {
+      "authFailed": "你的伺服器拒絕了 API 金鑰。",
+      "accessDenied": "你的伺服器拒絕存取。該金鑰可能不包含此模型。",
+      "quotaExhausted": "你的伺服器回報該帳戶額度已用盡。",
+      "rateLimited": "你的伺服器限制了請求頻率。請稍候再試。",
+      "modelNotFound": "你的伺服器無法識別模型「{{model}}」。",
+      "modelNotFoundNoModel": "你的伺服器無法識別所選的模型。",
+      "payloadTooLarge": "這段錄音對你的伺服器來說太大了。",
+      "requestTooLarge": "這個請求對你的伺服器來說太大了。",
+      "badRequest": "你的伺服器無法處理此請求。",
+      "unavailable": "你的伺服器目前發生問題。請稍後再試。",
+      "timeout": "你的伺服器回應逾時。",
+      "unreachable": "無法連線到你的伺服器。請確認它正在執行。",
+      "noResponse": "未能收到你的伺服器的回應。請檢查它的 API 金鑰，並確認它正在執行。",
+      "unknown": "你的伺服器回傳了意外的錯誤。"
+    },
+    "openSettings": "開啟設定",
+    "copyDetails": "複製詳細資訊",
+    "titles": {
+      "transcription": "轉錄失敗",
+      "llm": "AI 請求失敗"
+    },
+    "details": {
+      "provider": "服務商",
+      "requestId": "請求 ID"
     }
   }
 }

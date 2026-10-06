@@ -70,6 +70,7 @@ function buildResponseError(statusCode, body) {
 
 class LlamaServerManager {
   constructor() {
+    this.keepResident = false;
     this.process = null;
     this.port = null;
     this.ready = false;
@@ -195,6 +196,8 @@ class LlamaServerManager {
       await this.stop();
     }
 
+    // Residency may have been turned off while the old server stopped.
+    this.clearIdleTimer();
     this.startupPromise = this._doStart(modelPath, options);
     try {
       await this.startupPromise;
@@ -609,8 +612,20 @@ class LlamaServerManager {
     }
   }
 
+  // The "Keep model loaded" setting. Every window resends it on load and when
+  // its local-model or policy inputs change, so only a change may touch the timer.
+  setKeepResident(keepResident) {
+    if (this.keepResident === keepResident) return;
+    this.keepResident = keepResident;
+    if (keepResident) this.clearIdleTimer();
+    // A start in progress arms the timer itself once the server is ready.
+    else if (this.process && !this.startupPromise) this.resetIdleTimer();
+  }
+
   resetIdleTimer() {
     this.clearIdleTimer();
+    // Explicit stop, model/context changes and app shutdown still release it.
+    if (this.keepResident) return;
     const timer = setTimeout(async () => {
       // Streaming chat talks to the port directly, so only the server knows
       // whether an answer that outlived the timeout is still being generated.
