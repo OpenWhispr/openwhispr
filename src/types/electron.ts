@@ -134,7 +134,7 @@ export type TranscriptionErrorCode =
 export type MeetingPromptVariant = "detected" | "starting" | "underway";
 
 export interface MeetingNotificationData {
-  sessionId?: string;
+  sessionId: string;
   detectionId: string;
   source: string;
   key: string;
@@ -3368,11 +3368,7 @@ declare global {
         request: { requestId: string; name: string; spaceId: number }
       ) => Promise<MeetingResult<MeetingDestinationContext & { createdFolder: MeetingFolderRef }>>;
       onMeetingNotificationFolderCreated: (
-        callback: (hint: {
-          folderId: number;
-          accountId: string | null;
-          authGeneration: number;
-        }) => void
+        callback: (hint: { folderId: number }) => void
       ) => () => void;
       setMeetingNotificationSurface: (
         sessionId: string,

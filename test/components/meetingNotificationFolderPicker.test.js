@@ -252,7 +252,9 @@ test("a successful create with a failed selection retries only selection", async
   await c.click(c.button("Create & select"));
   assert.ok(c.container.querySelector('[role="alert"]'));
   await c.click(c.button("Create & select"));
-  assert.equal(c.calls.filter((x) => x[0] === "create").length, 1);
+  const creates = c.calls.filter((x) => x[0] === "create");
+  assert.equal(creates.length, 2);
+  assert.equal(creates[1][1].requestId, creates[0][1].requestId);
   assert.equal(selections, 2);
   assert.equal(c.container.querySelector('[role="dialog"]'), null);
 });

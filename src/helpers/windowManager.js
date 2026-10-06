@@ -316,7 +316,7 @@ class WindowManager {
     const owner = this._meetingNotificationOwner;
     return owner &&
       owner.window.webContents === sender &&
-      (sessionId === undefined || sessionId === owner.sessionId) &&
+      sessionId === owner.sessionId &&
       this.isMeetingNotificationOwner(owner)
       ? owner
       : null;
@@ -351,12 +351,7 @@ class WindowManager {
 
   updateMeetingNotificationPause(owner) {
     if (owner !== this._meetingNotificationOwner) return;
-    if (
-      owner.pointerInside ||
-      owner.mode !== "closed" ||
-      owner.createInFlight ||
-      owner.responseInFlight
-    ) {
+    if (owner.pointerInside || owner.mode !== "closed" || owner.responseInFlight) {
       this._notificationDismissTimer.pause();
     } else this._notificationDismissTimer.resume();
   }
@@ -2486,7 +2481,6 @@ class WindowManager {
               this._settleMeetingNavigation(operation, { success: false, code: "START_FAILED" }),
             15000
           );
-          operation.delivered = true;
           this._pendingMeetingNoteNavigation = payload;
           panel.webContents.send("meeting-note-navigation-pending");
         };

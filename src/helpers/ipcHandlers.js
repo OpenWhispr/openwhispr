@@ -736,8 +736,6 @@ class IPCHandlers {
           if (notification)
             this.windowManager.sendToControlPanel("meeting-notification-folder-created", {
               folderId: folder.id,
-              accountId,
-              authGeneration,
             });
           if (this._noteFilesEnabled) require("./markdownMirror").ensureFolder(folder.name);
         } catch (error) {
@@ -819,8 +817,6 @@ class IPCHandlers {
       return { success: false, code: "LINKED_NOTE_CHANGED", context: contextResult.value };
     if (!contextResult.value.spaces.some((space) => space.id === request.spaceId))
       return { success: false, code: "SPACE_UNAVAILABLE" };
-    owner.createInFlight = true;
-    this.windowManager.updateMeetingNotificationPause(owner);
     try {
       let ref = cached?.ref;
       if (ref) {
@@ -847,9 +843,6 @@ class IPCHandlers {
         : refreshed;
     } catch {
       return { success: false, code: "CREATE_FAILED" };
-    } finally {
-      owner.createInFlight = false;
-      this.windowManager.updateMeetingNotificationPause(owner);
     }
   }
 

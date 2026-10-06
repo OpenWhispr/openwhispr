@@ -437,23 +437,12 @@ class MeetingDetectionEngine {
   }
 
   handleNotificationResponse(detectionId, action, options = {}, owner) {
-    owner ??= this.windowManager.captureMeetingNotificationOwner?.(
-      this.windowManager.notificationWindow?.webContents
-    );
-    if (
-      !owner ||
-      owner.prompt.detectionId !== detectionId ||
-      !this.windowManager.isMeetingNotificationOwner(owner)
-    ) {
-      return Promise.resolve({ success: false, code: "STALE_NOTIFICATION" });
-    }
     if (!["start", "join", "dismiss"].includes(action))
       return Promise.resolve({ success: false, code: "INVALID_REQUEST" });
     if (owner.responsePromise) return owner.responsePromise;
     if (action === "dismiss") {
       this._dismiss();
-      if (this.activeDetections.get(detectionId) === owner.detection)
-        this.activeDetections.delete(detectionId);
+      this.activeDetections.delete(detectionId);
       this.windowManager.dismissMeetingNotification({ notifyEngine: false });
       return Promise.resolve({ success: true, value: null });
     }
@@ -477,8 +466,6 @@ class MeetingDetectionEngine {
   }
 
   async _startNotification(owner, action, options) {
-    if (!this.windowManager.isMeetingNotificationOwner(owner))
-      return { success: false, code: "STALE_NOTIFICATION" };
     if (action === "join" && !owner.joinDispatched) {
       owner.joinDispatched = true;
       const joinUrl = getMeetingJoinUrl(owner.detection.event);
@@ -544,19 +531,9 @@ class MeetingDetectionEngine {
       this._meetingModeActive = false;
       return navigation ?? { success: false, code: "START_FAILED" };
     }
-    if (!this.windowManager.isMeetingNotificationScope(owner.scope)) {
-      this._meetingModeActive = false;
-      return { success: false, code: "ACCOUNT_CHANGED" };
-    }
     this.audioActivityDetector.resetPrompt();
-    if (this.activeDetections.get(owner.prompt.detectionId) === owner.detection)
-      this.activeDetections.delete(owner.prompt.detectionId);
-    if (
-      this.windowManager._meetingNotificationOwner === owner ||
-      this.windowManager.isMeetingNotificationOwner(owner)
-    ) {
-      this.windowManager.dismissMeetingNotification({ notifyEngine: false });
-    }
+    this.activeDetections.delete(owner.prompt.detectionId);
+    this.windowManager.dismissMeetingNotification({ notifyEngine: false });
     return { success: true, value: null };
   }
 

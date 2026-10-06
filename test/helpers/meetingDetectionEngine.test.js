@@ -115,7 +115,6 @@ test("explicitly dismissing an audio prompt still starts the mic cooldown", asyn
   engine.setPreferences({ audioDetection: true, processDetection: true });
   audioDetector.emit("sustained-audio-detected", { durationMs: 2000, detectedAt: 0 });
   const owner = { prompt: shown[0], detection: engine.activeDetections.get(shown[0].detectionId) };
-  engine.windowManager.isMeetingNotificationOwner = () => true;
   await engine.handleNotificationResponse(shown[0].detectionId, "dismiss", {}, owner);
 
   assert.equal(audioDetector.dismissals, 1, "an explicit decline must keep its cooldown");
@@ -309,9 +308,7 @@ function ownedNotification(t) {
   let current = true;
   Object.assign(ctx.windowManager, {
     meetingRecentDestinations: [],
-    captureMeetingNotificationOwner: () => (current ? owner : null),
     isMeetingNotificationOwner: (o) => current && o === owner,
-    isMeetingNotificationScope: () => current,
     updateMeetingNotificationPause() {},
     dismissMeetingNotification() {
       current = false;

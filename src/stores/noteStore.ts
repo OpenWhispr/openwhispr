@@ -340,13 +340,13 @@ export async function loadSpaces(): Promise<SpaceItem[]> {
   return items;
 }
 
-export async function loadFolders(isCurrent: () => boolean = () => true): Promise<FolderItem[]> {
+export async function loadFolders(): Promise<FolderItem[]> {
   const gen = ++foldersLoadGeneration;
   const [items, counts] = await Promise.all([
     window.electronAPI.getFolders(),
     window.electronAPI.getFolderNoteCounts(),
   ]);
-  if (gen !== foldersLoadGeneration || !isCurrent()) return items;
+  if (gen !== foldersLoadGeneration) return items;
   const folderCounts: Record<number, number> = {};
   const spaceRootCounts: Record<number, number> = {};
   counts.forEach((c) => {
@@ -359,49 +359,19 @@ export async function loadFolders(isCurrent: () => boolean = () => true): Promis
 
 // The notification does not boot SyncService. A mounted panel refreshes local
 // rows first, then lets the existing sync policy decide whether to push them.
-export function subscribeMeetingNotificationFolders(): () => void {
-  let generation = 0;
-  let mounted = true;
-  const invalidate = () => {
-    generation += 1;
-  };
-  const offToken = window.electronAPI.onAuthTokenStateChanged?.(invalidate);
-  const offScope = window.electronAPI.onActiveAccountScopeChanged?.(invalidate);
-  const offFolder = window.electronAPI.onMeetingNotificationFolderCreated?.(async (hint) => {
-    const captured = generation;
-    const isCurrent = () => mounted && captured === generation;
+export function subscribeMeetingNotificationFolders(): (() => void) | undefined {
+  return window.electronAPI.onMeetingNotificationFolderCreated?.(async ({ folderId }) => {
     try {
-      const [token, scope] = await Promise.all([
-        window.electronAPI.authGetTokenState?.(),
-        window.electronAPI.getActiveAccountScope?.(),
-      ]);
-      if (!isCurrent() || !token || token.generation !== hint.authGeneration) return;
+      const folders = await loadFolders();
       if (
-        token.token
-          ? scope?.accountId !== hint.accountId || scope.authGeneration !== hint.authGeneration
-          : hint.accountId !== null
-      )
-        return;
-      const folders = await loadFolders(isCurrent);
-      if (
-        isCurrent() &&
-        folders.some(
-          (folder) => folder.id === hint.folderId && !folder.deleted_at && !folder.left_team
-        )
+        folders.some((folder) => folder.id === folderId && !folder.deleted_at && !folder.left_team)
       ) {
-        syncService.debouncedPush("folder", hint.folderId);
+        syncService.debouncedPush("folder", folderId);
       }
     } catch {
       /* Startup loading and pending SQLite rows recover a lost hint. */
     }
   });
-  return () => {
-    mounted = false;
-    invalidate();
-    offToken?.();
-    offScope?.();
-    offFolder?.();
-  };
 }
 
 const containerLoadGenerations = new Map<string, number>();
