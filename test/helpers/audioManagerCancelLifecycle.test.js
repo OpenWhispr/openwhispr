@@ -299,18 +299,10 @@ async function loadCancelGuardManagerClass(t) {
       `,
       // The real store: capturing recordCleanupFailure is the whole point of
       // the streaming-fallback-leak test below, so the mock just makes its
-      // calls observable. cleanupFailureFromError stays a plain passthrough
-      // of the fields audioManager reads off the thrown error.
+      // calls observable.
       "/stores/cleanupFailureStore": `
         export const recordCleanupFailure = (message) => {
           globalThis.__streamingLeakCleanupFailureCalls.push(message);
-        };
-        export const cleanupFailureFromError = (error) => {
-          const failure = { message: error?.message || String(error) };
-          for (const key of ["code", "messageKey", "messageParams", "surface", "settingsTarget", "action", "actionKey", "copyCommand", "technicalDetails"]) {
-            if (error?.[key]) failure[key] = error[key];
-          }
-          return failure;
         };
       `,
       // processWithOpenWhisprCloud's "agent" route walks through

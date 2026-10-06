@@ -285,6 +285,7 @@ export function asProviderError(err, ctx) {
   if (!err || typeof err !== "object" || err.messageKey || err.name === "AbortError") return err;
   const inner = err.name === "AI_RetryError" && err.lastError ? err.lastError : err;
   const netError = electronNetError(inner);
+  const nodeCode = [inner.code, inner.cause?.code].find((code) => NETWORK_CODES.has(code));
   let classified = null;
   if (typeof inner.statusCode === "number") {
     classified = providerHttpError({
@@ -296,16 +297,18 @@ export function asProviderError(err, ctx) {
   } else if (inner.code === "LLM_REQUEST_TIMEOUT" || inner.name === "TimeoutError") {
     classified = providerError(C.TIMEOUT, ctx);
   } else if (netError) {
-    classified = providerError(
-      ELECTRON_NET_TIMEOUTS.has(netError) ? C.TIMEOUT : C.UNREACHABLE,
-      ctx
-    );
+    classified = providerError(ELECTRON_NET_TIMEOUTS.has(netError) ? C.TIMEOUT : C.UNREACHABLE, {
+      ...ctx,
+      technicalDetails: { underlyingError: netError },
+    });
   } else if (
-    NETWORK_CODES.has(inner.code) ||
-    NETWORK_CODES.has(inner.cause?.code) ||
+    nodeCode ||
     (inner instanceof TypeError && /fetch failed|network/i.test(inner.message))
   ) {
-    classified = providerError(C.UNREACHABLE, ctx);
+    classified = providerError(C.UNREACHABLE, {
+      ...ctx,
+      ...(nodeCode ? { technicalDetails: { underlyingError: nodeCode } } : {}),
+    });
   } else if (inner instanceof TypeError && /failed to fetch/i.test(inner.message)) {
     // Chromium's fetch also reports a CORS-blocked HTTP error this way (OpenAI
     // answers a bad sk- key with a 401 that has no CORS header), so online it

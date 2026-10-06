@@ -50,13 +50,6 @@ test("cleanup failure details ride the raw result instead of notifying before pa
         export const recordCleanupFailure = (failure) => {
           globalThis.__cleanupFallbackImmediateNotifications.push(failure);
         };
-        export const cleanupFailureFromError = (error) => {
-          const failure = { message: error?.message || String(error) };
-          for (const key of ["code", "messageKey", "messageParams", "surface", "settingsTarget", "action", "actionKey", "copyCommand", "technicalDetails"]) {
-            if (error?.[key]) failure[key] = error[key];
-          }
-          return failure;
-        };
       `,
     },
   });
@@ -286,4 +279,45 @@ test("translation cleanup failures survive successful and skipped translation fo
     });
     assert.deepEqual(manager._takePendingResultExtras(), {});
   }
+});
+
+test("a classified provider cleanup failure keeps the fields its toast needs", async (t) => {
+  const { createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-classified-cleanup-failure-",
+    settingsKey: "__classifiedCleanupFailureSettings",
+  });
+  const failure = Object.assign(new Error("OpenAI rejected your API key."), {
+    code: "PROVIDER_AUTH_FAILED",
+    messageKey: "providerErrors.authFailed",
+    messageParams: { provider: "OpenAI" },
+    settingsTarget: "llms",
+    surface: "llm",
+    technicalDetails: { provider: "OpenAI", status: 401 },
+  });
+  const manager = createManager({
+    pendingCleanupFailure: null,
+    processWithReasoningModel: async () => {
+      throw failure;
+    },
+  });
+
+  await manager.runTranslationChain({
+    text: "raw dictation",
+    settings: { translationSourceLanguage: "en", translationTargetLanguage: "en" },
+    agentName: null,
+    route: { model: "translation-model", cleanupReachable: true, cleanupConfig: {}, config: {} },
+    cleanup: { mode: "model", model: "cleanup-model" },
+  });
+
+  assert.deepEqual(manager._takePendingResultExtras(), {
+    cleanupFailure: {
+      message: failure.message,
+      code: failure.code,
+      messageKey: failure.messageKey,
+      messageParams: failure.messageParams,
+      surface: failure.surface,
+      settingsTarget: failure.settingsTarget,
+      technicalDetails: failure.technicalDetails,
+    },
+  });
 });

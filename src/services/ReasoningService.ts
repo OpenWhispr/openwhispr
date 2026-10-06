@@ -419,16 +419,14 @@ class ReasoningService extends BaseReasoningService {
           }
           throw llmRequestTimeoutError(timeoutSeconds);
         }
-        // A network failure (stopped LAN server, DNS) has no status, so the
-        // classified error still retries.
-        throw asProviderError(error, errorContext);
+        throw error;
       } finally {
         clearTimeout(timeoutId);
         this.activeRequestControllers.delete(controller);
       }
     }, createApiRetryStrategy()).catch((error) => {
-      // The deadline is classified only once it has left withRetry, so it is
-      // still attempted exactly once.
+      // Classified only once it has left withRetry, so the deadline is still
+      // attempted exactly once.
       throw asProviderError(error, errorContext);
     });
 

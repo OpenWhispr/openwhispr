@@ -113,6 +113,25 @@ test("a network failure (net::ERR_INTERNET_DISCONNECTED) resolves classified ins
   assert.match(result.error, /Couldn't reach Anthropic/);
 });
 
+test("an Anthropic HTTP failure resolves with classified IPC fields", async () => {
+  fetchBehavior = async () =>
+    new Response(
+      '{"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API."}}',
+      { status: 400, headers: { "request-id": "req_9" } }
+    );
+
+  const result = await anthropicHandler({ sender: {} }, "hello", "claude-sonnet-5", null, {});
+
+  assert.equal(result.success, false);
+  assert.equal(result.code, "PROVIDER_QUOTA_EXHAUSTED");
+  assert.equal(result.messageKey, "providerErrors.quotaExhausted");
+  assert.deepEqual(result.messageParams, { provider: "Anthropic" });
+  assert.equal(result.settingsTarget, "llms");
+  assert.equal(result.status, 400);
+  assert.equal(result.technicalDetails.requestId, "req_9");
+  assert.equal(result.error, "Your Anthropic account is out of credit.");
+});
+
 test("an already-classified failure (missing key) passes through unchanged", async () => {
   const noKeyThis = {
     sessionId: "test-session",

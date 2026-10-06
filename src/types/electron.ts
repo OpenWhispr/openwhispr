@@ -3,6 +3,8 @@ import type { PermissionGuideState, PermissionGuideAction } from "./permissionGu
 import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 import type { UsageResponse } from "../lib/usageStore";
 import type { OrgPolicy } from "./policy";
+import type { TechnicalErrorDetailsData } from "../components/ui/useToast";
+import type { ProviderSettingsTarget } from "../utils/describeProviderError";
 import type {
   ManagedEnterpriseConfig,
   ManagedEnterpriseRequestContext,
@@ -168,13 +170,7 @@ export interface IpcErrorFields {
   messageKey?: string;
   messageParams?: Record<string, string | number>;
   settingsTarget?: string;
-  technicalDetails?: {
-    provider?: string;
-    status?: number;
-    exceptionType?: string;
-    requestId?: string;
-    underlyingError?: string;
-  };
+  technicalDetails?: TechnicalErrorDetailsData;
   status?: number;
   surface?: "transcription" | "llm";
 }
@@ -1277,7 +1273,7 @@ declare global {
       }>;
       hideWindow: () => Promise<void>;
       showDictationPanel: () => Promise<void>;
-      openSettingsSection?: (section: "speechToText" | "llms") => Promise<{ success: boolean }>;
+      openSettingsSection?: (section: ProviderSettingsTarget) => Promise<{ success: boolean }>;
       captureDictationTarget?: () => Promise<{ success: boolean; pid: number | null }>;
       onToggleDictation: (callback: () => void) => () => void;
       onToggleVoiceAgent?: (callback: () => void) => () => void;

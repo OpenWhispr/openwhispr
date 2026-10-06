@@ -91,7 +91,6 @@ import {
 import { transcriptionFailureOutcome } from "./transcriptionFailureOutcome";
 import { IPC_ERROR_FIELDS, errorFromIpcResult } from "./ipcErrorFields";
 import { asProviderError, providerHttpError, redactProviderBody } from "./providerHttpErrors";
-import { cleanupFailureFromError } from "../stores/cleanupFailureStore";
 import {
   executeTranslationChain,
   hasTextContent,
@@ -156,6 +155,19 @@ const PREVIEW_FLUSH_WATCHDOG_MS = 1000;
 const neverCancelled = () => false;
 const MIN_SPARSE_RECORDING_DURATION_SECONDS = 3;
 const MIN_UNIQUE_WORD_GAIN = 2;
+
+const cleanupFailureFromError = (error) => ({
+  message: error?.message || String(error),
+  ...(error?.code ? { code: error.code } : {}),
+  ...(error?.messageKey ? { messageKey: error.messageKey } : {}),
+  ...(error?.messageParams ? { messageParams: error.messageParams } : {}),
+  ...(error?.surface ? { surface: error.surface } : {}),
+  ...(error?.settingsTarget ? { settingsTarget: error.settingsTarget } : {}),
+  ...(error?.action ? { action: error.action } : {}),
+  ...(error?.actionKey ? { actionKey: error.actionKey } : {}),
+  ...(error?.copyCommand ? { copyCommand: error.copyCommand } : {}),
+  ...(error?.technicalDetails ? { technicalDetails: error.technicalDetails } : {}),
+});
 
 const cloudSignInRequiredError = () => {
   const err = new Error(

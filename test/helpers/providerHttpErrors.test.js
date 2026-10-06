@@ -253,9 +253,15 @@ test("asProviderError classifies timeouts and network failures", async () => {
   const ctx = { provider: "Groq", surface: "llm" };
   assert.equal(asProviderError(Object.assign(new Error("t"), { code: "LLM_REQUEST_TIMEOUT" }), ctx).code, "PROVIDER_TIMEOUT");
   assert.equal(asProviderError(Object.assign(new Error("t"), { name: "TimeoutError" }), ctx).code, "PROVIDER_TIMEOUT");
-  assert.equal(asProviderError(Object.assign(new Error("x"), { code: "ENOTFOUND" }), ctx).code, "PROVIDER_UNREACHABLE");
-  assert.equal(asProviderError(Object.assign(new Error("x"), { cause: { code: "ECONNREFUSED" } }), ctx).code, "PROVIDER_UNREACHABLE");
-  assert.equal(asProviderError(new TypeError("fetch failed"), ctx).code, "PROVIDER_UNREACHABLE");
+  const notFound = asProviderError(Object.assign(new Error("x"), { code: "ENOTFOUND" }), ctx);
+  assert.equal(notFound.code, "PROVIDER_UNREACHABLE");
+  assert.equal(notFound.technicalDetails.underlyingError, "ENOTFOUND");
+  const refused = asProviderError(Object.assign(new Error("x"), { cause: { code: "ECONNREFUSED" } }), ctx);
+  assert.equal(refused.code, "PROVIDER_UNREACHABLE");
+  assert.equal(refused.technicalDetails.underlyingError, "ECONNREFUSED");
+  const fetchFailed = asProviderError(new TypeError("fetch failed"), ctx);
+  assert.equal(fetchFailed.code, "PROVIDER_UNREACHABLE");
+  assert.deepEqual(fetchFailed.technicalDetails, { provider: "Groq" });
 });
 
 // Chromium reports a CORS-blocked HTTP error as "Failed to fetch" too: OpenAI's
@@ -270,6 +276,7 @@ test("an online \"Failed to fetch\" points at the key and connection; offline it
   assert.equal(online.code, "PROVIDER_NO_RESPONSE");
   assert.equal(online.message, "Couldn't get a response from OpenAI. Check your API key and connection.");
   assert.equal(online.settingsTarget, "speechToText");
+  assert.deepEqual(online.technicalDetails, { provider: "OpenAI" }, "nothing beyond the message");
 
   Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
   const offline = asProviderError(new TypeError("Failed to fetch"), ctx);
@@ -303,9 +310,13 @@ test("asProviderError classifies Electron net::ERR_* rejections and leaves net::
     assert.equal(classified.code, "PROVIDER_UNREACHABLE", message);
     assert.equal(classified.messageKey, "providerErrors.unreachable");
     assert.equal(classified.cause, raw);
+    // Main serialises only the message, so Copy details is the one place the code survives.
+    assert.equal(classified.technicalDetails.underlyingError, message);
   }
   for (const message of ["net::ERR_TIMED_OUT", "net::ERR_CONNECTION_TIMED_OUT"]) {
-    assert.equal(asProviderError(new Error(message), ctx).code, "PROVIDER_TIMEOUT", message);
+    const timeout = asProviderError(new Error(message), ctx);
+    assert.equal(timeout.code, "PROVIDER_TIMEOUT", message);
+    assert.equal(timeout.technicalDetails.underlyingError, message);
   }
   const aborted = new Error("net::ERR_ABORTED");
   assert.equal(asProviderError(aborted, ctx), aborted);

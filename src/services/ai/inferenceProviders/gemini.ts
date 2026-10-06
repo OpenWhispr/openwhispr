@@ -158,15 +158,13 @@ export const geminiProvider: InferenceProvider = {
         if ((error as Error).name === "AbortError") {
           throw llmRequestTimeoutError(timeoutSeconds);
         }
-        // The throw above is already classified and passes through asProviderError
-        // unchanged; an unclassified network failure (no statusCode) gets one here.
-        throw asProviderError(error, { provider: "Gemini", model, surface: "llm" });
+        throw error;
       } finally {
         clearTimeout(timeoutId);
       }
     }, createApiRetryStrategy()).catch((error) => {
-      // The deadline is classified only once it has left withRetry, so it is
-      // still attempted exactly once.
+      // Classified only once it has left withRetry, so the deadline is still
+      // attempted exactly once.
       throw asProviderError(error, { provider: "Gemini", model, surface: "llm" });
     });
 

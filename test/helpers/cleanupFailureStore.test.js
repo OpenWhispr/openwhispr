@@ -40,27 +40,3 @@ test("consuming an empty store returns zero, so a re-run cannot toast the same f
   assert.equal(store.consumeCleanupFailures(), 1);
   assert.equal(store.consumeCleanupFailures(), 0);
 });
-
-test("cleanupFailureFromError keeps classified provider fields", async () => {
-  const store = await load();
-  const failure = store.cleanupFailureFromError(
-    Object.assign(new Error("OpenAI rejected your API key."), {
-      code: "PROVIDER_AUTH_FAILED",
-      messageKey: "providerErrors.authFailed",
-      messageParams: { provider: "OpenAI" },
-      settingsTarget: "llms",
-      surface: "llm",
-      technicalDetails: { status: 401 },
-    })
-  );
-  assert.deepEqual(failure, {
-    message: "OpenAI rejected your API key.",
-    code: "PROVIDER_AUTH_FAILED",
-    messageKey: "providerErrors.authFailed",
-    messageParams: { provider: "OpenAI" },
-    settingsTarget: "llms",
-    surface: "llm",
-    technicalDetails: { status: 401 },
-  });
-  assert.deepEqual(store.cleanupFailureFromError("plain"), { message: "plain" });
-});

@@ -45,7 +45,21 @@ async function transcribeAudio({
   audioBuffer,
   language,
 }) {
-  const token = await getCortiToken({ environment, tenant, clientId, clientSecret });
+  const token = await getCortiToken({ environment, tenant, clientId, clientSecret }).catch(
+    (error) => {
+      if (typeof error.status !== "number") throw error;
+      debugLogger.warn("Corti authentication failed", {
+        status: error.status,
+        body: redactProviderBody(error.message),
+      });
+      throw providerHttpError({
+        provider: "Corti",
+        status: error.status,
+        body: error.message,
+        surface: "transcription",
+      });
+    }
+  );
   const base = `https://api.${environment}.corti.app/v2`;
 
   debugLogger.debug(

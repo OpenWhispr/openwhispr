@@ -368,18 +368,16 @@ export const openaiProvider: InferenceProvider = {
             });
             continue;
           }
-          throw classifyFinalError((lastRetryableError || error) as Error);
+          throw lastRetryableError || error;
         } finally {
           clearTimeout(timeoutId);
         }
       }
 
-      const finalError = lastRetryableError || lastError;
-      if (!finalError) throw new Error("No OpenAI endpoint responded");
-      throw classifyFinalError(finalError);
+      throw lastRetryableError || lastError || new Error("No OpenAI endpoint responded");
     }, retryStrategy).catch((error) => {
-      // The deadline is classified only once it has left withRetry, so it is
-      // still attempted exactly once.
+      // Classified only once it has left withRetry, so the deadline is still
+      // attempted exactly once.
       throw classifyFinalError(error as Error);
     });
 
