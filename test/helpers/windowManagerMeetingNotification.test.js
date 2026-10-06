@@ -146,7 +146,7 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
   if (request === "./dockManager") return {};
   if (request === "./i18nMain") return { i18nMain: { t: (key) => key } };
   if (request === "./windowConfig") {
-    const notificationSize = { width: 392, height: 92 };
+    const notificationSize = { width: 416, height: 84 };
     return {
       ...originalLoad.call(this, request, parent, isMain),
       MAIN_WINDOW_CONFIG: {},
@@ -432,7 +432,7 @@ test("window creation uses the notification dimensions and position", async () =
         x: notificationWindow.options.x,
         y: notificationWindow.options.y,
       },
-      { acceptFirstMouse: true, width: 392, height: 92, x: 608, y: 16 }
+      { acceptFirstMouse: true, width: 416, height: 84, x: 584, y: 16 }
     );
     // Each live prompt receives an opaque lifetime ID in addition to its data.
     const { sessionId, ...pending } = manager._pendingNotificationData;
@@ -915,11 +915,7 @@ async function navigationFixture() {
       row = next;
     },
     row,
-    start: () =>
-      manager.queueMeetingNoteNavigation(payload, {
-        owner,
-        isCurrent: () => manager.isMeetingNotificationOwner(owner),
-      }),
+    start: () => manager.queueMeetingNoteNavigation(payload, { owner }),
   };
 }
 
@@ -991,23 +987,47 @@ test("an absent editor times out and late confirmation cannot authorize recordin
   }
 });
 
-test("panel destruction and prompt/account retirement cancel pending navigation", async () => {
-  for (const cause of ["panel", "prompt", "account"]) {
+test("panel destruction and account retirement cancel pending navigation", async () => {
+  for (const cause of ["panel", "account"]) {
     const f = await navigationFixture();
+    const contents = f.panel.webContents;
     try {
       const pending = f.start();
       await new Promise(setImmediate);
-      if (cause === "panel") f.panel.emit("closed");
-      if (cause === "prompt") f.manager.dismissMeetingNotification();
+      if (cause === "panel") {
+        // Electron's getter throws once the window is destroyed.
+        Object.defineProperty(f.panel, "webContents", {
+          get() {
+            throw new Error("Object has been destroyed");
+          },
+        });
+        f.panel.emit("closed");
+      }
       if (cause === "account") f.manager.retireMeetingNotificationScope();
       assert.equal((await pending).success, false);
-      assert.equal(
-        f.manager.confirmMeetingNoteNavigation(f.panel.webContents, "navigate-one").success,
-        false
-      );
+      assert.equal(f.manager.confirmMeetingNoteNavigation(contents, "navigate-one").success, false);
     } finally {
       f.manager.dismissMeetingNotification();
     }
+  }
+});
+
+test("a loading panel's onboarding gate closes the prompt but not its navigation", async () => {
+  const f = await navigationFixture();
+  try {
+    // A fresh control panel document raises the gate, which hides every prompt.
+    f.manager.createControlPanelWindow = async () => f.manager.setOnboardingActive(true);
+    const pending = f.start();
+    await new Promise(setImmediate);
+    assert.equal(f.manager.notificationWindow, null);
+    assert.deepEqual(f.manager.consumePendingMeetingNoteNavigation(f.panel.webContents), f.payload);
+    assert.equal(
+      f.manager.confirmMeetingNoteNavigation(f.panel.webContents, "navigate-one").success,
+      true
+    );
+    assert.equal((await pending).success, true);
+  } finally {
+    f.manager.dismissMeetingNotification();
   }
 });
 
@@ -1076,7 +1096,6 @@ test("closing a destroyed native window does not read its webContents getter", a
     },
   });
   assert.doesNotThrow(() => manager.dismissMeetingNotification());
-  assert.equal(contents.listenerCount("destroyed"), 0);
   assert.equal(contents.listenerCount("render-process-gone"), 0);
 });
 

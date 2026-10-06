@@ -309,6 +309,11 @@ export default function MeetingNotificationOverlay(): ReactElement {
       setBusy(true);
       loadGeneration.current++;
       try {
+        if (action === "dismiss") {
+          // Main closes the window as soon as it handles a dismiss: slide out first.
+          setIsVisible(false);
+          await new Promise<void>((resolve) => setTimeout(resolve, 200));
+        }
         const result = await window.electronAPI?.meetingNotificationRespond?.(
           current.detectionId,
           action,

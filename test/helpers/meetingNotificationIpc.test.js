@@ -9,9 +9,7 @@ const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
 
 // Registers the real handler closures against a fake `this` (the scaffolding
-// from agentDictationPillIpc.test.js) with the bearer state under test control
-// and the binding file in a temporary userData directory, so the scope
-// handlers run against the real accountScopeBinding.
+// from agentDictationPillIpc.test.js), with userData in a temporary directory.
 const handlers = new Map();
 const broadcasts = [];
 const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "account-scope-ipc-"));
@@ -87,26 +85,8 @@ function anything() {
   });
 }
 
-// Each call with the binding file as it stood then: a connect must be stopped
-// only once the scope it ran under is gone.
-const connectorCalls = [];
-const connectorManager = {
-  accountChanged: () => connectorCalls.push(["accountChanged", readBinding()?.accountId ?? null]),
-  notifyStatusChanged: async () => connectorCalls.push(["notifyStatusChanged"]),
-};
-
-function readBinding() {
-  return require("../../src/helpers/accountScopeBinding").read();
-}
-
-const databaseScopes = [];
-const databaseManager = new Proxy(
-  { setActiveAccountId: (accountId) => databaseScopes.push(accountId) },
-  { get: (value, property) => (property in value ? value[property] : anything()) }
-);
-
 function buildFakeThis() {
-  const target = { sessionId: "test-session", connectorManager, databaseManager };
+  const target = { sessionId: "test-session" };
   return new Proxy(target, {
     get: (value, property) => (property in value ? value[property] : anything()),
   });
@@ -145,7 +125,6 @@ function setupMeeting(t) {
     captureMeetingNotificationOwner: (s, id) =>
       s === sender && id === owner.sessionId ? owner : null,
     isMeetingNotificationOwner: (o) => o === owner,
-    updateMeetingNotificationPause() {},
     sendToControlPanel: (...args) => broadcasts.push(args),
   };
   const service = Object.create(IPCHandlersClass.prototype);

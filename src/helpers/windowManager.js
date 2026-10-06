@@ -52,6 +52,13 @@ const {
   WindowPositionUtil,
 } = require("./windowConfig");
 const AGENT_DICTATION_PILL_SIZE = Object.freeze({ ...WINDOW_SIZES.BASE });
+// The collapsed prompt card, inset 4px inside the notification window.
+const MEETING_NOTIFICATION_CARD_REGION = Object.freeze({
+  x: 4,
+  y: 4,
+  width: NOTIFICATION_WINDOW_CONFIG.width - 8,
+  height: NOTIFICATION_WINDOW_CONFIG.height - 8,
+});
 const { centeredBounds, clampedBounds } = require("./onboardingWindowBounds");
 const { ONBOARDING_DEMO_KINDS, isOnboardingInputAllowed } = require("./onboardingInputPolicy");
 const { createHotkeyRepeatGate } = require("./hotkeyRepeatGate");
@@ -391,7 +398,7 @@ class WindowManager {
           r.y < 0 ||
           r.width <= 0 ||
           r.height <= 0 ||
-          r.x + r.width > 416 ||
+          r.x + r.width > NOTIFICATION_WINDOW_CONFIG.width ||
           r.y + r.height > 4096
       )
     ) {
@@ -2241,7 +2248,6 @@ class WindowManager {
     // after the replacement already took over the reference and the countdown.
     win.on("closed", () => {
       if (this.notificationWindow !== win) return;
-      this._cancelMeetingNavigation("STALE_NOTIFICATION");
       const closedDetectionId = this._pendingNotificationData?.detectionId ?? null;
       this.notificationWindow = null;
       this._meetingNotificationOwner = null;
@@ -2290,14 +2296,14 @@ class WindowManager {
     win.on("closed", () => {
       notificationContents.removeListener("render-process-gone", retireRenderer);
     });
-    if (process.platform === "linux") win.setShape([{ x: 4, y: 4, width: 408, height: 76 }]);
+    if (process.platform === "linux") win.setShape([MEETING_NOTIFICATION_CARD_REGION]);
     win.on("blur", () => {
       if (!this.isMeetingNotificationOwner(owner) || owner.mode === "closed") return;
       this.setMeetingNotificationSurface(owner, {
         revision: owner.layoutRevision + 1,
         mode: "closed",
-        contentHeight: 84,
-        regions: [{ x: 4, y: 4, width: 408, height: 76 }],
+        contentHeight: NOTIFICATION_WINDOW_CONFIG.height,
+        regions: [MEETING_NOTIFICATION_CARD_REGION],
         focus: "release",
       });
       win.webContents.send("meeting-notification-surface-closed", {
@@ -2388,7 +2394,6 @@ class WindowManager {
 
   dismissMeetingNotification({ notifyEngine = true, flushQueued = true } = {}) {
     const notification = this._pendingNotificationData;
-    this._cancelMeetingNavigation("STALE_NOTIFICATION");
     this._meetingNotificationOwner = null;
     this._pendingNotificationData = null;
     if (this._notificationReadyFallback) {
@@ -2425,7 +2430,8 @@ class WindowManager {
       this.sendToControlPanel("meeting-note-navigation-pending");
       return;
     }
-    if (!options?.isCurrent()) return { success: false, code: "STALE_NOTIFICATION" };
+    if (!this.isMeetingNotificationOwner(options.owner))
+      return { success: false, code: "STALE_NOTIFICATION" };
     this._cancelMeetingNavigation("STALE_NOTIFICATION");
     let resolve;
     const result = new Promise((done) => {
@@ -2434,7 +2440,9 @@ class WindowManager {
     const operation = {
       payload,
       owner: options.owner,
-      isCurrent: options.isCurrent,
+      // The Start is committed: a loading panel's onboarding gate closes the
+      // prompt, so only an account change may invalidate the navigation.
+      isCurrent: () => this.isMeetingNotificationScope(options.owner.scope),
       resolve,
       consumed: false,
       panel: null,
@@ -2456,6 +2464,7 @@ class WindowManager {
         const panel = this.controlPanelWindow;
         if (!panel || panel.isDestroyed()) throw new Error("Panel unavailable");
         operation.panel = panel;
+        operation.contents = panel.webContents;
         operation.onClose = () =>
           this._settleMeetingNavigation(operation, { success: false, code: "START_FAILED" });
         panel.once("closed", operation.onClose);
@@ -2493,9 +2502,8 @@ class WindowManager {
     this._meetingNavigationOperation = null;
     clearTimeout(operation.timer);
     operation.panel?.removeListener("closed", operation.onClose);
-    operation.panel?.webContents.removeListener("render-process-gone", operation.onClose);
-    if (operation.deliver)
-      operation.panel?.webContents.removeListener("did-finish-load", operation.deliver);
+    operation.contents?.removeListener("render-process-gone", operation.onClose);
+    if (operation.deliver) operation.contents.removeListener("did-finish-load", operation.deliver);
     if (this._pendingMeetingNoteNavigation === operation.payload)
       this._pendingMeetingNoteNavigation = null;
     operation.resolve(result);
@@ -2514,7 +2522,7 @@ class WindowManager {
         !operation ||
         operation.payload !== payload ||
         operation.panel !== this.controlPanelWindow ||
-        operation.panel.webContents !== sender ||
+        operation.contents !== sender ||
         !operation.isCurrent()
       )
         return null;
@@ -2531,7 +2539,7 @@ class WindowManager {
       operation.payload.navigationId !== navigationId ||
       !operation.consumed ||
       operation.panel !== this.controlPanelWindow ||
-      operation.panel.webContents !== sender
+      operation.contents !== sender
     ) {
       return { success: false, code: "STALE_NOTIFICATION" };
     }

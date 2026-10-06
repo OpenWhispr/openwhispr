@@ -832,7 +832,7 @@ class IPCHandlers {
 
   _handleAuthTokenChange({ generation, token }) {
     if (this._meetingTokenGeneration !== generation) {
-      this.windowManager?.retireMeetingNotificationScope?.();
+      this.windowManager.retireMeetingNotificationScope();
       this._meetingTokenGeneration = generation;
     }
     this.enterpriseIdentityManager?.clear();
@@ -2359,7 +2359,7 @@ class IPCHandlers {
         this.databaseManager.activeAccountId !== accountId ||
         (accountId !== null && previousScope?.accountId !== accountId)
       ) {
-        this.windowManager?.retireMeetingNotificationScope?.();
+        this.windowManager.retireMeetingNotificationScope();
       }
       this.databaseManager.setActiveAccountId(accountId);
       if (accountId !== null) accountScopeBinding.persist(accountId, state.token);

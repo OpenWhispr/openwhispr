@@ -308,7 +308,10 @@ test("a failed dismiss never opens the folder picker", async (t) => {
   const c = await mount(t, {
     meetingNotificationRespond: async () => ({ success: false, code: "STALE_NOTIFICATION" }),
   });
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   await c.click(c.byLabel("Dismiss meeting notification"));
+  await React.act(async () => t.mock.timers.tick(200));
+  t.mock.timers.reset();
   assert.equal(c.container.querySelector('[role="dialog"]'), null);
 });
 
@@ -391,8 +394,13 @@ test("captured card swipe keeps pointer interactivity until release", async (t) 
     )
   );
   assert.equal(interactivity.at(-1), true);
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   await React.act(async () => surface.dispatchEvent(event("pointerup", 150)));
-  assert.equal(c.calls.filter((x) => x[0] === "start" && x[2] === "dismiss").length, 1);
+  const dismissals = () => c.calls.filter((x) => x[0] === "start" && x[2] === "dismiss").length;
+  assert.equal(dismissals(), 0, "the card slides out before main closes the window");
+  await React.act(async () => t.mock.timers.tick(200));
+  t.mock.timers.reset();
+  assert.equal(dismissals(), 1);
 });
 
 test("selection feedback uses 200/600/400 milliseconds and repeats from a fresh start", async (t) => {
