@@ -138,6 +138,7 @@ export type TranscriptionErrorCode =
   | "PROVIDER_UNAVAILABLE"
   | "PROVIDER_TIMEOUT"
   | "PROVIDER_UNREACHABLE"
+  | "PROVIDER_NO_RESPONSE"
   | "PROVIDER_ERROR"
   | null;
 
@@ -2174,7 +2175,8 @@ declare global {
       onLinuxPttPermissionDenied?: (callback: () => void) => () => void;
 
       // Settings shortcut (Cmd+, / Ctrl+,)
-      onShowSettings?: (callback: (section?: string) => void) => () => void;
+      onShowSettings?: (callback: () => void) => () => void;
+      getPendingSettingsSection?: () => Promise<string | null>;
 
       // Accessibility permission events (macOS)
       markMacAccessibilityFeaturesReady?: (expectedAccountScope?: ActiveAccountScope) => void;

@@ -12,16 +12,14 @@ export const transcriptionFailureOutcome = (error) => {
   if (error.message === "No audio detected") {
     return { noAudio: true, keepAudio: false, report: null };
   }
-  const classified = Boolean(error.messageKey) && !error.selectionEditFatal;
   return {
     noAudio: false,
     keepAudio: true,
     report: {
       title: error.selectionEditFatal ? "Selection Edit Failed" : "Transcription Error",
-      description:
-        error.selectionEditFatal || classified
-          ? error.message
-          : `Transcription failed: ${error.message}`,
+      description: error.selectionEditFatal
+        ? error.message
+        : `Transcription failed: ${error.message}`,
       code: error.code,
       messageKey: error.messageKey,
       ...(error.messageParams !== undefined ? { messageParams: error.messageParams } : {}),

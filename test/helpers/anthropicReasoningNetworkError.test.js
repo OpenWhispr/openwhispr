@@ -98,25 +98,20 @@ test.after(() => {
 });
 
 // Electron's net.fetch rejects with a plain Error carrying the Chromium net
-// error as its message and no code; a TypeError is the renderer fetch shape.
-for (const [label, makeError] of [
-  ["net::ERR_INTERNET_DISCONNECTED", () => new Error("net::ERR_INTERNET_DISCONNECTED")],
-  ["TypeError: Failed to fetch", () => new TypeError("Failed to fetch")],
-]) {
-  test(`a network failure (${label}) resolves classified instead of a bare error`, async () => {
-    fetchBehavior = async () => {
-      throw makeError();
-    };
+// error as its message and no code.
+test("a network failure (net::ERR_INTERNET_DISCONNECTED) resolves classified instead of a bare error", async () => {
+  fetchBehavior = async () => {
+    throw new Error("net::ERR_INTERNET_DISCONNECTED");
+  };
 
-    const result = await anthropicHandler({ sender: {} }, "hello", "claude-sonnet-5", null, {});
+  const result = await anthropicHandler({ sender: {} }, "hello", "claude-sonnet-5", null, {});
 
-    assert.equal(result.success, false);
-    assert.equal(result.code, "PROVIDER_UNREACHABLE");
-    assert.equal(result.messageKey, "providerErrors.unreachable");
-    assert.equal(result.surface, "llm");
-    assert.match(result.error, /Couldn't reach Anthropic/);
-  });
-}
+  assert.equal(result.success, false);
+  assert.equal(result.code, "PROVIDER_UNREACHABLE");
+  assert.equal(result.messageKey, "providerErrors.unreachable");
+  assert.equal(result.surface, "llm");
+  assert.match(result.error, /Couldn't reach Anthropic/);
+});
 
 test("an already-classified failure (missing key) passes through unchanged", async () => {
   const noKeyThis = {

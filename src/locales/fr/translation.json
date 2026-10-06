@@ -4772,6 +4772,7 @@
     "unavailable": "{{provider}} rencontre actuellement des problèmes. Réessayez dans un instant.",
     "timeout": "{{provider}} a pris trop de temps à répondre.",
     "unreachable": "Impossible de contacter {{provider}}. Vérifiez votre connexion.",
+    "noResponse": "Aucune réponse de {{provider}}. Vérifiez votre clé API et votre connexion.",
     "unknown": "{{provider}} a renvoyé une erreur inattendue.",
     "keyMissing": "Aucune clé API n’est définie pour {{provider}}. Ajoutez-la dans Réglages → Modèles de langage.",
     "selfHosted": {
@@ -4787,6 +4788,7 @@
       "unavailable": "Votre serveur rencontre actuellement des problèmes. Réessayez dans un instant.",
       "timeout": "Votre serveur a pris trop de temps à répondre.",
       "unreachable": "Impossible de contacter votre serveur. Vérifiez qu’il est en cours d’exécution.",
+      "noResponse": "Aucune réponse de votre serveur. Vérifiez sa clé API et qu’il est en cours d’exécution.",
       "unknown": "Votre serveur a renvoyé une erreur inattendue.",
       "keyMissing": "Aucune clé API n’est définie pour votre serveur. Ajoutez-la dans Réglages → Modèles de langage."
     },

@@ -13,6 +13,7 @@ export const PROVIDER_ERROR_CODES = Object.freeze({
   UNAVAILABLE: "PROVIDER_UNAVAILABLE",
   TIMEOUT: "PROVIDER_TIMEOUT",
   UNREACHABLE: "PROVIDER_UNREACHABLE",
+  NO_RESPONSE: "PROVIDER_NO_RESPONSE",
   ERROR: "PROVIDER_ERROR",
   KEY_MISSING: "API_KEY_MISSING",
 });
@@ -23,10 +24,6 @@ export const PROVIDER_SETTINGS_TARGETS = Object.freeze(["speechToText", "llms"])
 
 export const isProviderSettingsTarget = (value) => PROVIDER_SETTINGS_TARGETS.includes(value);
 
-// IPC input is untrusted: only a known section string reaches the control panel.
-export const settingsSectionFromIpc = (value) =>
-  typeof value === "string" && isProviderSettingsTarget(value) ? value : undefined;
-
 const SETTINGS_TARGET_BY_SURFACE = { transcription: "speechToText", llm: "llms" };
 
 // Only failures the user fixes in Settings get the deep link.
@@ -35,6 +32,7 @@ const FIXABLE = new Set([
   C.ACCESS_DENIED,
   C.QUOTA_EXHAUSTED,
   C.MODEL_NOT_FOUND,
+  C.NO_RESPONSE,
   C.KEY_MISSING,
 ]);
 
@@ -49,6 +47,7 @@ const MESSAGE_KEYS = {
   [C.UNAVAILABLE]: "providerErrors.unavailable",
   [C.TIMEOUT]: "providerErrors.timeout",
   [C.UNREACHABLE]: "providerErrors.unreachable",
+  [C.NO_RESPONSE]: "providerErrors.noResponse",
   [C.ERROR]: "providerErrors.unknown",
 };
 
@@ -70,6 +69,8 @@ const ENGLISH = {
   "providerErrors.unavailable": "{{provider}} is having problems right now. Try again shortly.",
   "providerErrors.timeout": "{{provider}} took too long to respond.",
   "providerErrors.unreachable": "Couldn't reach {{provider}}. Check your connection.",
+  "providerErrors.noResponse":
+    "Couldn't get a response from {{provider}}. Check your API key and connection.",
   "providerErrors.unknown": "{{provider}} returned an unexpected error.",
   "providerErrors.keyMissing":
     "No API key is set for {{provider}}. Add it in Settings → Language Models.",
@@ -89,6 +90,8 @@ const ENGLISH = {
     "Your server is having problems right now. Try again shortly.",
   "providerErrors.selfHosted.timeout": "Your server took too long to respond.",
   "providerErrors.selfHosted.unreachable": "Couldn't reach your server. Check that it's running.",
+  "providerErrors.selfHosted.noResponse":
+    "Couldn't get a response from your server. Check its API key and that it's running.",
   "providerErrors.selfHosted.unknown": "Your server returned an unexpected error.",
   "providerErrors.selfHosted.keyMissing":
     "No API key is set for your server. Add it in Settings → Language Models.",
@@ -300,9 +303,17 @@ export function asProviderError(err, ctx) {
   } else if (
     NETWORK_CODES.has(inner.code) ||
     NETWORK_CODES.has(inner.cause?.code) ||
-    (inner instanceof TypeError && /failed to fetch|fetch failed|network/i.test(inner.message))
+    (inner instanceof TypeError && /fetch failed|network/i.test(inner.message))
   ) {
     classified = providerError(C.UNREACHABLE, ctx);
+  } else if (inner instanceof TypeError && /failed to fetch/i.test(inner.message)) {
+    // Chromium's fetch also reports a CORS-blocked HTTP error this way (OpenAI
+    // answers a bad sk- key with a 401 that has no CORS header), so online it
+    // may be the key. Main never sees this message.
+    classified = providerError(
+      globalThis.navigator?.onLine === false ? C.UNREACHABLE : C.NO_RESPONSE,
+      ctx
+    );
   }
   if (!classified) return err;
   classified.cause = err;

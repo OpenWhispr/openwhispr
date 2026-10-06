@@ -139,7 +139,7 @@ test("a self-hosted chat stream failure logs a redacted body", async (t) => {
   assert.equal(streamError.data.body.includes(LEAKED_KEY), false);
 });
 
-test("a BYOK AI SDK stream failure logs its status and a redacted body before classifying", async (t) => {
+test("a BYOK AI SDK stream failure logs its status and a redacted body", async (t) => {
   const { reasoningService, logger } = await loadReasoningService(
     t,
     "openwhispr-error-logging-sdk-stream-test-",

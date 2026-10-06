@@ -55,7 +55,7 @@ test("a BYOK request that hits its client-side deadline surfaces as PROVIDER_TIM
   assert.doesNotMatch(error.message, /timed out after/);
 });
 
-test("a stopped self-hosted server surfaces as PROVIDER_UNREACHABLE, still retried", async (t) => {
+test("a stopped self-hosted server surfaces as PROVIDER_NO_RESPONSE, still retried", async (t) => {
   const reasoningService = await loadReasoningService(t, "openwhispr-provider-unreachable-test-");
   const calls = mockFetch(t, async () => {
     throw new TypeError("Failed to fetch");
@@ -78,8 +78,33 @@ test("a stopped self-hosted server surfaces as PROVIDER_UNREACHABLE, still retri
   const error = await outcome;
 
   assert.equal(calls.length, 4, "a network failure keeps its retries");
-  assert.equal(error.code, "PROVIDER_UNREACHABLE");
-  assert.equal(error.messageKey, "providerErrors.selfHosted.unreachable");
+  assert.equal(error.code, "PROVIDER_NO_RESPONSE");
+  assert.equal(error.messageKey, "providerErrors.selfHosted.noResponse");
+  assert.equal(error.surface, "llm");
+});
+
+test("a stopped LAN server on a chat without tools is classified, not a raw fetch error", async (t) => {
+  const reasoningService = await loadReasoningService(t, "openwhispr-lan-stream-fetch-test-");
+  mockFetch(t, async () => {
+    throw new TypeError("Failed to fetch");
+  });
+
+  const error = await (async () => {
+    for await (const _chunk of reasoningService.processTextStreamingAI(
+      [{ role: "user", content: "hi" }],
+      "some-model",
+      "lan",
+      { systemPrompt: "be brief", lanUrl: "http://127.0.0.1:11434/v1" }
+    )) {
+      // drain
+    }
+  })().then(
+    () => assert.fail("expected the stream to fail"),
+    (err) => err
+  );
+
+  assert.equal(error.code, "PROVIDER_NO_RESPONSE");
+  assert.equal(error.messageKey, "providerErrors.selfHosted.noResponse");
   assert.equal(error.surface, "llm");
 });
 

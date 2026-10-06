@@ -4772,6 +4772,7 @@
     "unavailable": "{{provider}} 目前發生問題。請稍後再試。",
     "timeout": "{{provider}} 回應逾時。",
     "unreachable": "無法連線到 {{provider}}。請檢查你的網路連線。",
+    "noResponse": "未能收到 {{provider}} 的回應。請檢查你的 API 金鑰和網路連線。",
     "unknown": "{{provider}} 回傳了意外的錯誤。",
     "keyMissing": "尚未為 {{provider}} 設定 API 金鑰。請在「設定 → 語言模型」中新增。",
     "selfHosted": {
@@ -4787,6 +4788,7 @@
       "unavailable": "你的伺服器目前發生問題。請稍後再試。",
       "timeout": "你的伺服器回應逾時。",
       "unreachable": "無法連線到你的伺服器。請確認它正在執行。",
+      "noResponse": "未能收到你的伺服器的回應。請檢查它的 API 金鑰，並確認它正在執行。",
       "unknown": "你的伺服器回傳了意外的錯誤。",
       "keyMissing": "尚未為你的伺服器設定 API 金鑰。請在「設定 → 語言模型」中新增。"
     },

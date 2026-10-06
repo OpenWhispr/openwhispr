@@ -1037,9 +1037,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
 
   // Settings shortcut (Cmd+, / Ctrl+,)
-  onShowSettings: registerListener("show-settings", (callback) => (_event, section) =>
-    callback(typeof section === "string" ? section : undefined)
-  ),
+  onShowSettings: registerListener("show-settings", (callback) => () => callback()),
+  getPendingSettingsSection: () => ipcRenderer.invoke("get-pending-settings-section"),
 
   // Accessibility permission events (macOS)
   onAccessibilityMissing: (callback) => {

@@ -56,12 +56,8 @@ export function createApiRetryStrategy() {
       // An empty account stays empty: retrying only delays the message.
       if (error?.code === "PROVIDER_QUOTA_EXHAUSTED") return false;
 
-      const status = error?.status ?? error?.response?.status;
-
-      // The same deadline once classified; a 408/504 carries a status and retries below.
-      if (error?.code === "PROVIDER_TIMEOUT" && typeof status !== "number") return false;
-
       // No HTTP status means the request never got an answer (network drop).
+      const status = error?.status ?? error?.response?.status;
       if (typeof status !== "number") return true;
 
       // Most 4xx are deterministic rejections. 408 is a request timeout and 429 is

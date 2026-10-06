@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 
 const load = () => import("../../src/helpers/transcriptionFailureOutcome.js");
 
-test("a classified provider failure keeps its fields and drops the raw prefix", async () => {
+test("a classified provider failure keeps its fields", async () => {
   const { transcriptionFailureOutcome } = await load();
   const error = Object.assign(new Error("Mistral rejected your API key."), {
     code: "PROVIDER_AUTH_FAILED",
@@ -15,7 +15,6 @@ test("a classified provider failure keeps its fields and drops the raw prefix", 
   });
   const { report, keepAudio } = transcriptionFailureOutcome(error);
   assert.equal(keepAudio, true);
-  assert.equal(report.description, "Mistral rejected your API key.");
   assert.equal(report.code, "PROVIDER_AUTH_FAILED");
   assert.deepEqual(report.messageParams, { provider: "Mistral" });
   assert.equal(report.settingsTarget, "speechToText");

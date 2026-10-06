@@ -35,7 +35,7 @@ const { classifyAndLog } = require("./networkErrors");
 const { resolveSystemDefaultMicrophone } = require("./systemDefaultMicrophone");
 const { ipcErrorFields } = require("./ipcErrorFields");
 const {
-  settingsSectionFromIpc,
+  isProviderSettingsTarget,
   providerHttpError,
   providerError,
   asProviderError,
@@ -1533,9 +1533,8 @@ class IPCHandlers {
     });
 
     ipcMain.handle("open-settings-section", async (_event, section) => {
-      const target = settingsSectionFromIpc(section);
-      if (!target) return { success: false };
-      await this.windowManager.openSettings(target);
+      if (!isProviderSettingsTarget(section)) return { success: false };
+      await this.windowManager.openSettings(section);
       return { success: true };
     });
 
@@ -11915,6 +11914,10 @@ class IPCHandlers {
 
     ipcMain.handle("get-pending-note-navigation", async () => {
       return this.windowManager?.consumePendingNoteNavigation() ?? null;
+    });
+
+    ipcMain.handle("get-pending-settings-section", async () => {
+      return this.windowManager?.consumePendingSettingsSection() ?? null;
     });
 
     ipcMain.handle("meeting-notification-ready", async (event) => {

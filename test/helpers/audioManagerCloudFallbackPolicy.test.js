@@ -156,8 +156,8 @@ test("cloud->local fallback under org policy", async (t) => {
     // A real Blob: the direct fetch builds FormData, which rejects the stub above.
     const recording = new Blob(["recording"], { type: "audio/webm" });
     await assert.rejects(createManager().processWithOpenAIAPI(recording, {}), (error) => {
-      assert.equal(error.code, "PROVIDER_UNREACHABLE");
-      assert.equal(error.messageKey, "providerErrors.unreachable");
+      assert.equal(error.code, "PROVIDER_NO_RESPONSE");
+      assert.equal(error.messageKey, "providerErrors.noResponse");
       // Without params the toast would render the literal "{{provider}}".
       assert.deepEqual(error.messageParams, { provider: "OpenAI" });
       assert.equal(error.surface, "transcription");

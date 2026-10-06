@@ -133,20 +133,11 @@ test("an exhausted quota does not retry, but a plain rate limit still does", asy
   assert.equal(shouldRetry(Object.assign(new Error("slow down"), { status: 429 })), true);
 });
 
-test("a classified client-side timeout (no status) does not retry, but a 408 or 504 still does", async () => {
+test("a classified 408 or 504 timeout still retries", async () => {
   const { createApiRetryStrategy } = await load();
-  const { asProviderError, providerHttpError } = await import(
-    "../../src/helpers/providerHttpErrors.js"
-  );
-  const { llmRequestTimeoutError } = await import("../../src/helpers/llmRequestTimeout.js");
+  const { providerHttpError } = await import("../../src/helpers/providerHttpErrors.js");
   const { shouldRetry } = createApiRetryStrategy();
   const ctx = { provider: "Groq", surface: "llm" };
-
-  const deadline = asProviderError(llmRequestTimeoutError(30), ctx);
-  assert.equal(deadline.code, "PROVIDER_TIMEOUT");
-  assert.equal(shouldRetry(deadline), false);
-  const netTimeout = asProviderError(new Error("net::ERR_TIMED_OUT"), ctx);
-  assert.equal(shouldRetry(netTimeout), false);
 
   for (const status of [408, 504]) {
     const gatewayTimeout = providerHttpError({ ...ctx, status, body: "" });

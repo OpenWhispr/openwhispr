@@ -383,22 +383,14 @@ class ReasoningService extends BaseReasoningService {
             errorData = { error: errorText || res.statusText };
           }
 
-          // errorData.error is often a string, but some providers (and most
-          // self-hosted servers) nest a code/type object with no .message —
-          // stringifying that object directly prints "[object Object]".
           // Providers echo the rejected key back, so every logged field is redacted.
-          const loggedErrorMessage = redactProviderBody(
-            typeof errorData?.error?.message === "string"
-              ? errorData.error.message
-              : typeof errorData?.error === "string"
-                ? errorData.error
-                : errorData
-          );
           logger.logReasoning(`${providerName.toUpperCase()}_API_ERROR_DETAIL`, {
             status: res.status,
             statusText: res.statusText,
             error: redactProviderBody(errorData),
-            errorMessage: loggedErrorMessage,
+            errorMessage: redactProviderBody(
+              extractApiErrorMessage(errorData, `${providerName} API error: ${res.status}`)
+            ),
             fullResponse: redactProviderBody(errorText),
           });
           throw providerHttpError({
@@ -687,6 +679,12 @@ class ReasoningService extends BaseReasoningService {
       abortController.abort();
     }, timeoutSeconds * 1000);
 
+    const selfHostedErrorContext = {
+      provider: "self-hosted",
+      selfHosted: true,
+      model,
+      surface: "llm",
+    };
     let response: Response;
     try {
       response = await fetchWithParamFallback(
@@ -705,15 +703,11 @@ class ReasoningService extends BaseReasoningService {
       if ((error as Error).name === "AbortError" && abortController.signal.aborted) {
         if (!timeoutTriggered) return;
         throw route.kind === "self-hosted"
-          ? providerError("PROVIDER_TIMEOUT", {
-              provider: "self-hosted",
-              selfHosted: true,
-              model,
-              surface: "llm",
-            })
+          ? providerError("PROVIDER_TIMEOUT", selfHostedErrorContext)
           : new Error("Streaming request timed out");
       }
-      throw error;
+      // A stopped LAN server rejects the fetch before any response.
+      throw route.kind === "self-hosted" ? asProviderError(error, selfHostedErrorContext) : error;
     }
 
     if (!response.ok) {
@@ -725,13 +719,10 @@ class ReasoningService extends BaseReasoningService {
       });
       if (route.kind === "self-hosted") {
         throw providerHttpError({
-          provider: "self-hosted",
-          selfHosted: true,
-          model,
+          ...selfHostedErrorContext,
           status: response.status,
           body: errorText,
           headers: response.headers,
-          surface: "llm",
         });
       }
       let errorMessage: string;
@@ -800,12 +791,7 @@ class ReasoningService extends BaseReasoningService {
       if ((error as Error).name === "AbortError" && abortController.signal.aborted) {
         if (!timeoutTriggered) return;
         throw route.kind === "self-hosted"
-          ? providerError("PROVIDER_TIMEOUT", {
-              provider: "self-hosted",
-              selfHosted: true,
-              model,
-              surface: "llm",
-            })
+          ? providerError("PROVIDER_TIMEOUT", selfHostedErrorContext)
           : new Error("Streaming request timed out");
       }
       throw error;
@@ -1037,29 +1023,20 @@ class ReasoningService extends BaseReasoningService {
         // alongside LAN (config.lanUrl) — both are the user's own server.
         // OpenRouter is a cloud provider and keeps its own display name.
         const isSelfHosted = mode === "self-hosted" || provider === "custom";
-        const sdkError = error as {
-          name?: string;
-          lastError?: { statusCode?: number; responseBody?: string };
-          statusCode?: number;
-          responseBody?: string;
-        };
-        const failure =
-          sdkError.name === "AI_RetryError" && sdkError.lastError ? sdkError.lastError : sdkError;
-        logger.warn(
-          "BYOK chat stream failed",
-          {
-            provider,
-            status: failure.statusCode,
-            body: redactProviderBody(failure.responseBody),
-          },
-          "reasoning"
-        );
-        throw asProviderError(error, {
+        const classified = asProviderError(error, {
           provider: isSelfHosted ? "self-hosted" : getProviderDisplayName(provider),
           selfHosted: isSelfHosted,
           model,
           surface: "llm",
         });
+        // The classified details already hold the status and the redacted body.
+        const details = classified.technicalDetails;
+        logger.warn(
+          "BYOK chat stream failed",
+          { provider, status: details?.status, body: details?.underlyingError },
+          "reasoning"
+        );
+        throw classified;
       }
       throw error;
     } finally {

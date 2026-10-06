@@ -104,6 +104,7 @@ export default function TranscriptionItem({
     errorCode === "PROVIDER_ACCESS_DENIED" ||
     errorCode === "PROVIDER_QUOTA_EXHAUSTED" ||
     errorCode === "PROVIDER_MODEL_NOT_FOUND" ||
+    errorCode === "PROVIDER_NO_RESPONSE" ||
     errorCode === "MODEL_NOT_AVAILABLE" ||
     errorCode === "CUSTOM_ENDPOINT_INVALID";
   const isLimitError = errorCode === "LIMIT_REACHED";

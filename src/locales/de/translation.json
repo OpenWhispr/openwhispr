@@ -4772,6 +4772,7 @@
     "unavailable": "{{provider}} hat derzeit Probleme. Versuchen Sie es in Kürze erneut.",
     "timeout": "{{provider}} hat zu lange zum Antworten gebraucht.",
     "unreachable": "{{provider}} konnte nicht erreicht werden. Überprüfen Sie Ihre Verbindung.",
+    "noResponse": "Keine Antwort von {{provider}} erhalten. Überprüfen Sie Ihren API-Schlüssel und Ihre Verbindung.",
     "unknown": "{{provider}} hat einen unerwarteten Fehler zurückgegeben.",
     "keyMissing": "Für {{provider}} ist kein API-Schlüssel hinterlegt. Fügen Sie ihn unter Einstellungen → Sprachmodelle hinzu.",
     "selfHosted": {
@@ -4787,6 +4788,7 @@
       "unavailable": "Ihr Server hat derzeit Probleme. Versuchen Sie es in Kürze erneut.",
       "timeout": "Ihr Server hat zu lange zum Antworten gebraucht.",
       "unreachable": "Ihr Server konnte nicht erreicht werden. Überprüfen Sie, ob er läuft.",
+      "noResponse": "Keine Antwort von Ihrem Server erhalten. Überprüfen Sie seinen API-Schlüssel und ob er läuft.",
       "unknown": "Ihr Server hat einen unerwarteten Fehler zurückgegeben.",
       "keyMissing": "Für Ihren Server ist kein API-Schlüssel hinterlegt. Fügen Sie ihn unter Einstellungen → Sprachmodelle hinzu."
     },

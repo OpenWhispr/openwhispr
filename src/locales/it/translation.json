@@ -4772,6 +4772,7 @@
     "unavailable": "{{provider}} sta avendo problemi in questo momento. Riprova a breve.",
     "timeout": "{{provider}} ha impiegato troppo tempo a rispondere.",
     "unreachable": "Impossibile contattare {{provider}}. Controlla la tua connessione.",
+    "noResponse": "Nessuna risposta da {{provider}}. Controlla la tua chiave API e la connessione.",
     "unknown": "{{provider}} ha restituito un errore imprevisto.",
     "keyMissing": "Nessuna chiave API impostata per {{provider}}. Aggiungila in Impostazioni → Modelli linguistici.",
     "selfHosted": {
@@ -4787,6 +4788,7 @@
       "unavailable": "Il tuo server sta avendo problemi in questo momento. Riprova a breve.",
       "timeout": "Il tuo server ha impiegato troppo tempo a rispondere.",
       "unreachable": "Impossibile contattare il tuo server. Verifica che sia in esecuzione.",
+      "noResponse": "Nessuna risposta dal tuo server. Verifica la sua chiave API e che sia in esecuzione.",
       "unknown": "Il tuo server ha restituito un errore imprevisto.",
       "keyMissing": "Nessuna chiave API impostata per il tuo server. Aggiungila in Impostazioni → Modelli linguistici."
     },

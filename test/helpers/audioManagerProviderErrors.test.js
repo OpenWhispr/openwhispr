@@ -57,7 +57,7 @@ test("a self-hosted 404 blames the user's server, not OpenAI", async (t) => {
   assert.doesNotMatch(error.message, /OpenAI/);
 });
 
-test("a direct-fetch network failure is classified as unreachable", async (t) => {
+test("a direct-fetch \"Failed to fetch\" asks to check the key and connection", async (t) => {
   const manager = await loadManager(t, { cloudTranscriptionProvider: "groq" });
   t.mock.method(globalThis, "fetch", async () => {
     throw new TypeError("Failed to fetch");
@@ -65,8 +65,9 @@ test("a direct-fetch network failure is classified as unreachable", async (t) =>
 
   const error = await rejection(manager.processWithOpenAIAPI(recording()));
 
-  assert.equal(error.code, "PROVIDER_UNREACHABLE");
-  assert.equal(error.messageKey, "providerErrors.unreachable");
+  assert.equal(error.code, "PROVIDER_NO_RESPONSE");
+  assert.equal(error.messageKey, "providerErrors.noResponse");
+  assert.equal(error.settingsTarget, "speechToText");
   assert.equal(error.messageParams.provider, "Groq");
   assert.equal(error.surface, "transcription");
 });

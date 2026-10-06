@@ -432,15 +432,18 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   }, []);
 
   useEffect(() => {
-    const cleanup = window.electronAPI?.onShowSettings?.((section) => {
-      // A bare request (app-menu Cmd+,) keeps an open modal on its current
-      // section; only a named section moves it.
+    // A named section waits in main (it can outrace this listener on a cold
+    // start); a bare request (app-menu Cmd+,) keeps an open modal where it is.
+    const drain = async (showAnyway: boolean) => {
+      const section = await window.electronAPI?.getPendingSettingsSection?.();
       if (section) {
         setSettingsSection(section);
         setSettingsRequest((count) => count + 1);
       }
-      setShowSettings(true);
-    });
+      if (section || showAnyway) setShowSettings(true);
+    };
+    drain(false);
+    const cleanup = window.electronAPI?.onShowSettings?.(() => drain(true));
     return () => cleanup?.();
   }, []);
 

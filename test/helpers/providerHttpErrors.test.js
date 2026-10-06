@@ -255,7 +255,26 @@ test("asProviderError classifies timeouts and network failures", async () => {
   assert.equal(asProviderError(Object.assign(new Error("t"), { name: "TimeoutError" }), ctx).code, "PROVIDER_TIMEOUT");
   assert.equal(asProviderError(Object.assign(new Error("x"), { code: "ENOTFOUND" }), ctx).code, "PROVIDER_UNREACHABLE");
   assert.equal(asProviderError(Object.assign(new Error("x"), { cause: { code: "ECONNREFUSED" } }), ctx).code, "PROVIDER_UNREACHABLE");
-  assert.equal(asProviderError(new TypeError("Failed to fetch"), ctx).code, "PROVIDER_UNREACHABLE");
+  assert.equal(asProviderError(new TypeError("fetch failed"), ctx).code, "PROVIDER_UNREACHABLE");
+});
+
+// Chromium reports a CORS-blocked HTTP error as "Failed to fetch" too: OpenAI's
+// 401 for a bad sk- key carries no CORS header in the dictation window.
+test("an online \"Failed to fetch\" points at the key and connection; offline it stays unreachable", async (t) => {
+  const { asProviderError } = await load();
+  const ctx = { provider: "OpenAI", surface: "transcription" };
+  t.after(() => delete navigator.onLine);
+
+  Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
+  const online = asProviderError(new TypeError("Failed to fetch"), ctx);
+  assert.equal(online.code, "PROVIDER_NO_RESPONSE");
+  assert.equal(online.message, "Couldn't get a response from OpenAI. Check your API key and connection.");
+  assert.equal(online.settingsTarget, "speechToText");
+
+  Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+  const offline = asProviderError(new TypeError("Failed to fetch"), ctx);
+  assert.equal(offline.code, "PROVIDER_UNREACHABLE");
+  assert.equal(offline.settingsTarget, undefined);
 });
 
 test("rate limits name the provider on the LLM surface and keep the dictation copy on transcription", async () => {
@@ -348,7 +367,7 @@ async function everyClassification() {
       }
       errors.push(providerHttpError({ ...base, status: 404, body: "model_not_found", model: "m-1" }));
       errors.push(providerHttpError({ ...base, status: 404, body: "model_not_found" }));
-      for (const code of [C.TIMEOUT, C.UNREACHABLE, C.KEY_MISSING]) {
+      for (const code of [C.TIMEOUT, C.UNREACHABLE, C.NO_RESPONSE, C.KEY_MISSING]) {
         errors.push(providerError(code, base));
       }
     }
