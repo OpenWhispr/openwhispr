@@ -20,7 +20,7 @@ import { MeetingNotificationCard } from "./MeetingNotificationCard";
 import { MeetingNotificationFolderPicker } from "./MeetingNotificationFolderPicker";
 import { meetingFolderLabel } from "./meetingFolderLabel";
 import { Check, ChevronDown } from "./icons";
-import "./meetingNotification.css";
+import "../styles/meeting-notification.css";
 import {
   getMeetingNotificationPresentation,
   initializeMeetingNotificationOverlay,
@@ -87,19 +87,17 @@ export default function MeetingNotificationOverlay(): ReactElement {
     setError(null);
   }, []);
   const loadContext = useCallback(async () => {
-    const current = dataRef.current;
-    if (!current) return;
+    if (!dataRef.current) return;
     const generation = ++loadGeneration.current;
     try {
-      const result = await window.electronAPI.getMeetingNotificationDestination(current.sessionId);
-      if (dataRef.current !== current || generation !== loadGeneration.current) return;
+      const result = await window.electronAPI.getMeetingNotificationDestination();
+      if (generation !== loadGeneration.current) return;
       if (result.success === true) {
         setContext(result.value);
         setError(null);
       } else setError(result.code);
     } catch {
-      if (dataRef.current === current && generation === loadGeneration.current)
-        setError("FOLDERS_UNAVAILABLE");
+      if (generation === loadGeneration.current) setError("FOLDERS_UNAVAILABLE");
     }
   }, []);
   useEffect(
@@ -120,22 +118,14 @@ export default function MeetingNotificationOverlay(): ReactElement {
       }),
     [loadContext]
   );
-  useEffect(
-    () => () => {
-      dataRef.current = null;
-      feedbackTimers.current.forEach(clearTimeout);
-    },
-    []
-  );
+  useEffect(() => () => feedbackTimers.current.forEach(clearTimeout), []);
   useEffect(() => {
     const offClose = window.electronAPI.onMeetingNotificationSurfaceClosed?.((state) => {
-      if (state.sessionId !== dataRef.current?.sessionId) return;
       layoutRevision.current = Math.max(layoutRevision.current, state.revision);
       changeMode("closed", false);
     });
     const offResize = window.electronAPI.onMeetingNotificationSurfaceResized?.((state) => {
-      if (state.sessionId === dataRef.current?.sessionId)
-        layoutRevision.current = Math.max(layoutRevision.current, state.revision);
+      layoutRevision.current = Math.max(layoutRevision.current, state.revision);
     });
     return () => {
       offClose?.();
@@ -147,7 +137,7 @@ export default function MeetingNotificationOverlay(): ReactElement {
     if (!data || !surfaceRef.current) return;
     let active = true;
     const report = () => {
-      if (!active || dataRef.current !== data) return;
+      if (!active) return;
       const elements = [
         ...surfaceRef.current!.querySelectorAll<HTMLElement>("[data-meeting-region]"),
       ];
@@ -179,7 +169,7 @@ export default function MeetingNotificationOverlay(): ReactElement {
       focusIntent.current = "keep";
       const focusEpoch = focusGeneration.current;
       void window.electronAPI
-        .setMeetingNotificationSurface(data.sessionId, {
+        .setMeetingNotificationSurface({
           revision: ++layoutRevision.current,
           mode: modeRef.current,
           contentHeight: height,
@@ -187,7 +177,7 @@ export default function MeetingNotificationOverlay(): ReactElement {
           focus,
         })
         .then((result) => {
-          if (dataRef.current !== data || result.success !== true) return;
+          if (result.success !== true) return;
           if (result.value.maxHeight) setMaxHeight(result.value.maxHeight);
           if (
             focus === "request" &&
@@ -238,22 +228,17 @@ export default function MeetingNotificationOverlay(): ReactElement {
       ref: MeetingFolderRef,
       createRequest?: { requestId: string; name: string; spaceId: number }
     ) => {
-      const current = dataRef.current;
-      if (!current || operation.current) return;
+      if (!dataRef.current || operation.current) return;
       const op = {};
       operation.current = op;
       setBusy(true);
       setError(null);
       loadGeneration.current++;
       const generation = editorGeneration.current;
-      const isCurrent = () =>
-        dataRef.current === current && generation === editorGeneration.current;
+      const isCurrent = () => generation === editorGeneration.current;
       try {
         if (createRequest) {
-          const created = await window.electronAPI.createMeetingNotificationFolder(
-            current.sessionId,
-            createRequest
-          );
+          const created = await window.electronAPI.createMeetingNotificationFolder(createRequest);
           if (!isCurrent()) return;
           if (created.success === false) {
             if (created.context) setContext(created.context);
@@ -264,10 +249,7 @@ export default function MeetingNotificationOverlay(): ReactElement {
           setContext(created.value);
         }
         if (!isCurrent()) return;
-        const selected = await window.electronAPI.selectMeetingNotificationFolder(
-          current.sessionId,
-          ref
-        );
+        const selected = await window.electronAPI.selectMeetingNotificationFolder(ref);
         if (!isCurrent()) return;
         if (selected.success === true) confirmSelection(selected.value, ref);
         else {
@@ -304,12 +286,8 @@ export default function MeetingNotificationOverlay(): ReactElement {
         const result = await window.electronAPI?.meetingNotificationRespond?.(
           current.detectionId,
           action,
-          {
-            sessionId: current.sessionId,
-            ...(context?.existingNote ? { existingNote: context.existingNote } : {}),
-          }
+          context?.existingNote ? { existingNote: context.existingNote } : {}
         );
-        if (dataRef.current !== current) return;
         // A dismiss that fails leaves nothing to choose, so it never opens the picker.
         if (result?.success === true || action === "dismiss") setIsVisible(false);
         else {
@@ -318,7 +296,6 @@ export default function MeetingNotificationOverlay(): ReactElement {
           setError(result?.code ?? "START_FAILED");
         }
       } catch {
-        if (dataRef.current !== current) return;
         if (action === "dismiss") setIsVisible(false);
         else {
           changeMode("list");

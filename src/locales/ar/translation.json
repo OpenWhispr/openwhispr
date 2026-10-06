@@ -4911,7 +4911,6 @@
       "linked": "لهذا الاجتماع ملاحظة بالفعل. ستبقى في {{destination}} عند الانضمام.",
       "errors": {
         "STALE_NOTIFICATION": "لم يعد هذا الإشعار ساريًا.",
-        "ACCOUNT_CHANGED": "تغير حسابك. افتح إشعار اجتماع جديدًا.",
         "INVALID_REQUEST": "تعذر الإكمال. حاول مجددًا.",
         "FOLDERS_UNAVAILABLE": "تعذر تحميل المجلدات.",
         "FOLDER_UNAVAILABLE": "هذا الموقع غير متاح. اختر مجلدًا آخر.",

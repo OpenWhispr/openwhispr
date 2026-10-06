@@ -4789,7 +4789,6 @@
       "linked": "Für diese Besprechung gibt es bereits eine Notiz. Beim Beitreten bleibt sie in {{destination}}.",
       "errors": {
         "STALE_NOTIFICATION": "Diese Benachrichtigung ist nicht mehr aktuell.",
-        "ACCOUNT_CHANGED": "Dein Konto hat sich geändert. Öffne eine neue Besprechungsbenachrichtigung.",
         "INVALID_REQUEST": "Vorgang fehlgeschlagen. Bitte erneut versuchen.",
         "FOLDERS_UNAVAILABLE": "Ordner konnten nicht geladen werden.",
         "FOLDER_UNAVAILABLE": "Dieser Speicherort ist nicht verfügbar. Wähle einen anderen Ordner.",

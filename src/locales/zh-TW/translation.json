@@ -4789,7 +4789,6 @@
       "linked": "此會議已有筆記。加入後，筆記仍儲存在{{destination}}。",
       "errors": {
         "STALE_NOTIFICATION": "此通知已失效。",
-        "ACCOUNT_CHANGED": "帳號已變更。請開啟新的會議通知。",
         "INVALID_REQUEST": "無法完成，請重試。",
         "FOLDERS_UNAVAILABLE": "無法載入資料夾。",
         "FOLDER_UNAVAILABLE": "此儲存位置無法使用。請選擇其他資料夾。",

@@ -101,15 +101,13 @@ function setupMeeting(t) {
   if (!db) return null;
   const sender = {};
   const owner = {
-    sessionId: "session-one",
     detection: {},
     selectedDestination: null,
     createRequests: new Map(),
   };
   const manager = {
     meetingRecentDestinations: [],
-    captureMeetingNotificationOwner: (s, id) =>
-      s === sender && id === owner.sessionId ? owner : null,
+    captureMeetingNotificationOwner: (s) => (s === sender ? owner : null),
     isMeetingNotificationOwner: (o) => o === owner,
     sendToControlPanel: () => {},
   };
@@ -131,20 +129,14 @@ function setupMeeting(t) {
   };
 }
 
-test("only the current notification sender and session can read/select/create", (t) => {
+test("only the current notification sender can read/select/create", (t) => {
   const ctx = setupMeeting(t);
   if (!ctx) return;
-  for (const [sender, id] of [
-    [{}, "session-one"],
-    [ctx.sender, "old-session"],
-  ]) {
-    const result = handlers.get("get-meeting-notification-destination")({ sender }, id);
-    assert.equal(result.code, "STALE_NOTIFICATION");
-  }
-  const result = handlers.get("get-meeting-notification-destination")(
-    { sender: ctx.sender },
-    "session-one"
+  assert.equal(
+    handlers.get("get-meeting-notification-destination")({ sender: {} }).code,
+    "STALE_NOTIFICATION"
   );
+  const result = handlers.get("get-meeting-notification-destination")({ sender: ctx.sender });
   assert.equal(result.success, true);
   assert.equal(result.value.recentDestinations.length, 0);
 });

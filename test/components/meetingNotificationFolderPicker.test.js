@@ -71,7 +71,6 @@ async function mount(t, overrides = {}, setupDom = () => {}) {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   setupDom(dom);
   const data = {
-    sessionId: "one",
     detectionId: "event",
     source: "calendar",
     key: "event",
@@ -87,19 +86,19 @@ async function mount(t, overrides = {}, setupDom = () => {}) {
     onMeetingNotificationData: (cb) => ((callbacks.data = cb), () => {}),
     meetingNotificationReady: async () => {},
     setNotificationInteractivity: async () => {},
-    setMeetingNotificationSurface: async (_id, s) => ({
+    setMeetingNotificationSurface: async (s) => ({
       success: true,
       value: { width: 416, height: s.contentHeight },
     }),
     onMeetingNotificationSurfaceClosed: (cb) => ((callbacks.blur = cb), () => {}),
     onMeetingNotificationSurfaceResized: () => () => {},
     getMeetingNotificationDestination: async () => ({ success: true, value: context }),
-    selectMeetingNotificationFolder: async (_id, ref) => {
+    selectMeetingNotificationFolder: async (ref) => {
       calls.push(["select", ref]);
       context = { ...context, selectedDestination: ref, recentDestinations: [ref] };
       return { success: true, value: context };
     },
-    createMeetingNotificationFolder: async (_id, req) => {
+    createMeetingNotificationFolder: async (req) => {
       calls.push(["create", req]);
       const ref = { folderId: 99, spaceId: req.spaceId };
       context = {
@@ -239,7 +238,7 @@ test("two recents fill with three fallbacks and an outside selection remains vis
 test("a successful create with a failed selection retries only selection", async (t) => {
   const c = await mount(t);
   let selections = 0;
-  c.api.selectMeetingNotificationFolder = async (_id, ref) => {
+  c.api.selectMeetingNotificationFolder = async (ref) => {
     selections++;
     c.calls.push(["select", ref]);
     return selections === 1
@@ -341,7 +340,7 @@ test("a late existing root note replaces choices with an explanation in the same
 test("folder refresh cannot discard the intentional focus acknowledgment", async (t) => {
   const c = await mount(t);
   let focusReply;
-  c.api.setMeetingNotificationSurface = async (_id, state) =>
+  c.api.setMeetingNotificationSurface = async (state) =>
     state.focus === "request"
       ? new Promise((r) => (focusReply = r))
       : { success: true, value: { width: 416, height: 84 } };
@@ -462,7 +461,7 @@ test("initial surface includes tall localized card layout before entrance animat
   await mount(
     t,
     {
-      setMeetingNotificationSurface: async (_id, state) => {
+      setMeetingNotificationSurface: async (state) => {
         reports.push(state);
         return { success: true, value: { width: 416, height: state.contentHeight } };
       },
@@ -521,7 +520,7 @@ test("existing and created selections keep the same visible card with confirmati
   const card = c.container.querySelector('[data-meeting-region="card"]');
   const motion = card.parentElement;
   const surfaceCalls = [];
-  c.api.setMeetingNotificationSurface = async (_id, state) => {
+  c.api.setMeetingNotificationSurface = async (state) => {
     surfaceCalls.push(state);
     return { success: true, value: { width: 416, height: state.contentHeight } };
   };

@@ -4789,7 +4789,6 @@
       "linked": "Cette réunion a déjà une note. Elle restera dans {{destination}} lorsque vous rejoindrez la réunion.",
       "errors": {
         "STALE_NOTIFICATION": "Cette notification n’est plus à jour.",
-        "ACCOUNT_CHANGED": "Votre compte a changé. Ouvrez une nouvelle notification de réunion.",
         "INVALID_REQUEST": "Impossible de terminer. Réessayez.",
         "FOLDERS_UNAVAILABLE": "Impossible de charger les dossiers.",
         "FOLDER_UNAVAILABLE": "Cette destination est indisponible. Choisissez un autre dossier.",

@@ -1,6 +1,5 @@
 const { app, screen, BrowserWindow, dialog, ipcMain, Menu } = require("electron");
 const debugLogger = require("./debugLogger");
-const { randomUUID } = require("node:crypto");
 const tokenStore = require("./tokenStore");
 const accountScopeBinding = require("./accountScopeBinding");
 const {
@@ -307,12 +306,9 @@ class WindowManager {
     return boundAccountId === database.activeAccountId;
   }
 
-  captureMeetingNotificationOwner(sender, sessionId) {
+  captureMeetingNotificationOwner(sender) {
     const owner = this._meetingNotificationOwner;
-    return owner &&
-      owner.window.webContents === sender &&
-      sessionId === owner.sessionId &&
-      this.isMeetingNotificationOwner(owner)
+    return owner && owner.window.webContents === sender && this.isMeetingNotificationOwner(owner)
       ? owner
       : null;
   }
@@ -333,7 +329,7 @@ class WindowManager {
   retireMeetingNotificationScope() {
     this.meetingRecentDestinations = [];
     this._pendingMeetingNoteNavigation = null;
-    this._cancelMeetingNavigation("ACCOUNT_CHANGED");
+    this._cancelMeetingNavigation("STALE_NOTIFICATION");
     if (this.meetingDetectionEngine) {
       this.meetingDetectionEngine._notificationQueue = [];
       this.meetingDetectionEngine.activeDetections.clear();
@@ -2254,10 +2250,8 @@ class WindowManager {
     // dictation panel and assistant pill.
     WindowPositionUtil.setupAlwaysOnTop(win, { level: "screen-saver" });
 
-    promptData = { ...promptData, sessionId: randomUUID() };
     this._pendingNotificationData = promptData;
     const owner = {
-      sessionId: promptData.sessionId,
       prompt: promptData,
       window: win,
       detection: this.meetingDetectionEngine?.activeDetections?.get(promptData.detectionId),
@@ -2288,7 +2282,6 @@ class WindowManager {
         focus: "release",
       });
       win.webContents.send("meeting-notification-surface-closed", {
-        sessionId: owner.sessionId,
         revision: owner.layoutRevision,
       });
     });
@@ -2300,7 +2293,6 @@ class WindowManager {
         focus: "keep",
       });
       win.webContents.send("meeting-notification-surface-resized", {
-        sessionId: owner.sessionId,
         revision: owner.layoutRevision,
       });
     };

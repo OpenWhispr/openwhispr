@@ -4789,7 +4789,6 @@
       "linked": "Esta reunião já tem uma nota. Ao entrar, ela permanecerá em {{destination}}.",
       "errors": {
         "STALE_NOTIFICATION": "Esta notificação não está mais atualizada.",
-        "ACCOUNT_CHANGED": "Sua conta mudou. Abra uma nova notificação de reunião.",
         "INVALID_REQUEST": "Não foi possível concluir. Tente novamente.",
         "FOLDERS_UNAVAILABLE": "Não foi possível carregar as pastas.",
         "FOLDER_UNAVAILABLE": "Este destino não está disponível. Escolha outra pasta.",

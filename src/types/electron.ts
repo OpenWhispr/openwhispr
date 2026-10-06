@@ -134,7 +134,6 @@ export type TranscriptionErrorCode =
 export type MeetingPromptVariant = "detected" | "starting" | "underway";
 
 export interface MeetingNotificationData {
-  sessionId: string;
   detectionId: string;
   source: string;
   key: string;
@@ -174,7 +173,6 @@ export interface MeetingSurfaceState {
 
 export type MeetingError =
   | "STALE_NOTIFICATION"
-  | "ACCOUNT_CHANGED"
   | "INVALID_REQUEST"
   | "FOLDERS_UNAVAILABLE"
   | "FOLDER_UNAVAILABLE"
@@ -3356,29 +3354,26 @@ declare global {
       onMeetingAutoEndRequested?: (
         callback: (request: MeetingAutoEndRequest) => void
       ) => () => void;
-      getMeetingNotificationDestination: (
-        sessionId: string
-      ) => Promise<MeetingResult<MeetingDestinationContext>>;
+      getMeetingNotificationDestination: () => Promise<MeetingResult<MeetingDestinationContext>>;
       selectMeetingNotificationFolder: (
-        sessionId: string,
         folder: MeetingFolderRef
       ) => Promise<MeetingResult<MeetingDestinationContext>>;
-      createMeetingNotificationFolder: (
-        sessionId: string,
-        request: { requestId: string; name: string; spaceId: number }
-      ) => Promise<MeetingResult<MeetingDestinationContext & { createdFolder: MeetingFolderRef }>>;
+      createMeetingNotificationFolder: (request: {
+        requestId: string;
+        name: string;
+        spaceId: number;
+      }) => Promise<MeetingResult<MeetingDestinationContext & { createdFolder: MeetingFolderRef }>>;
       onMeetingNotificationFolderCreated: (
         callback: (hint: { folderId: number }) => void
       ) => () => void;
       setMeetingNotificationSurface: (
-        sessionId: string,
         state: MeetingSurfaceState
       ) => Promise<MeetingResult<{ width: number; height: number; maxHeight: number }>>;
       onMeetingNotificationSurfaceClosed: (
-        callback: (data: { sessionId: string; revision: number }) => void
+        callback: (data: { revision: number }) => void
       ) => () => void;
       onMeetingNotificationSurfaceResized: (
-        callback: (data: { sessionId: string; revision: number }) => void
+        callback: (data: { revision: number }) => void
       ) => () => void;
       getMeetingNotificationData?: () => Promise<MeetingNotificationData | null>;
       meetingNotificationReady?: () => Promise<void>;
@@ -3386,7 +3381,6 @@ declare global {
         detectionId: string,
         action: string,
         options?: {
-          sessionId: string;
           existingNote?: Pick<MeetingExistingNote, "noteId" | "spaceId" | "folderId">;
         }
       ) => Promise<MeetingResult<null>>;

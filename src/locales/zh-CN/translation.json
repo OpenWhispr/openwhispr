@@ -4789,7 +4789,6 @@
       "linked": "此会议已有笔记。加入后，笔记仍保存在{{destination}}。",
       "errors": {
         "STALE_NOTIFICATION": "此通知已失效。",
-        "ACCOUNT_CHANGED": "账号已更改。请打开新的会议通知。",
         "INVALID_REQUEST": "无法完成，请重试。",
         "FOLDERS_UNAVAILABLE": "无法加载文件夹。",
         "FOLDER_UNAVAILABLE": "此保存位置不可用。请选择其他文件夹。",

@@ -1372,18 +1372,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "meeting-auto-end-requested",
     (callback) => (_event, data) => callback(data)
   ),
-  getMeetingNotificationDestination: (sessionId) =>
-    ipcRenderer.invoke("get-meeting-notification-destination", sessionId),
-  selectMeetingNotificationFolder: (sessionId, folder) =>
-    ipcRenderer.invoke("select-meeting-notification-folder", sessionId, folder),
-  createMeetingNotificationFolder: (sessionId, request) =>
-    ipcRenderer.invoke("create-meeting-notification-folder", sessionId, request),
+  getMeetingNotificationDestination: () =>
+    ipcRenderer.invoke("get-meeting-notification-destination"),
+  selectMeetingNotificationFolder: (folder) =>
+    ipcRenderer.invoke("select-meeting-notification-folder", folder),
+  createMeetingNotificationFolder: (request) =>
+    ipcRenderer.invoke("create-meeting-notification-folder", request),
   onMeetingNotificationFolderCreated: registerListener(
     "meeting-notification-folder-created",
     (callback) => (_event, data) => callback(data)
   ),
-  setMeetingNotificationSurface: (sessionId, state) =>
-    ipcRenderer.invoke("set-meeting-notification-surface", sessionId, state),
+  setMeetingNotificationSurface: (state) =>
+    ipcRenderer.invoke("set-meeting-notification-surface", state),
   onMeetingNotificationSurfaceClosed: registerListener(
     "meeting-notification-surface-closed",
     (callback) => (_event, data) => callback(data)

@@ -4789,7 +4789,6 @@
       "linked": "This meeting already has a note. Joining keeps it in {{destination}}.",
       "errors": {
         "STALE_NOTIFICATION": "This notification is no longer current.",
-        "ACCOUNT_CHANGED": "Your account changed. Open a new meeting notification.",
         "INVALID_REQUEST": "Could not finish. Please retry.",
         "FOLDERS_UNAVAILABLE": "Folders could not be loaded.",
         "FOLDER_UNAVAILABLE": "This destination is unavailable. Choose another folder.",

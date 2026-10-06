@@ -519,12 +519,7 @@ class MeetingDetectionEngine {
     // replace this prompt and cancel the Start after its note is saved.
     this._meetingModeActive = true;
     const navigation = await this.windowManager.queueMeetingNoteNavigation(
-      {
-        ...owner.authorizedNote,
-        event: owner.detection.event,
-        trigger: "calendar-join",
-        navigationId: randomUUID(),
-      },
+      { ...owner.authorizedNote, navigationId: randomUUID() },
       { owner }
     );
     if (!navigation.success) {

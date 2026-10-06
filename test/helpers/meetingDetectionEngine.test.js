@@ -299,7 +299,6 @@ function ownedNotification(t) {
   };
   ctx.engine.activeDetections.set("calendar:event", detection);
   const owner = {
-    sessionId: "one",
     prompt: { detectionId: "calendar:event" },
     detection,
     selectedDestination: null,

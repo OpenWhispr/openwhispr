@@ -4789,7 +4789,6 @@
       "linked": "この会議にはすでにノートがあります。参加しても{{destination}}に保存されます。",
       "errors": {
         "STALE_NOTIFICATION": "この通知は無効になりました。",
-        "ACCOUNT_CHANGED": "アカウントが変わりました。新しい会議通知を開いてください。",
         "INVALID_REQUEST": "完了できませんでした。再試行してください。",
         "FOLDERS_UNAVAILABLE": "フォルダーを読み込めませんでした。",
         "FOLDER_UNAVAILABLE": "この保存先は利用できません。別のフォルダーを選択してください。",

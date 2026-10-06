@@ -4789,7 +4789,6 @@
       "linked": "Questa riunione ha già una nota. Partecipando, la nota resterà in {{destination}}.",
       "errors": {
         "STALE_NOTIFICATION": "Questa notifica non è più attuale.",
-        "ACCOUNT_CHANGED": "Il tuo account è cambiato. Apri una nuova notifica di riunione.",
         "INVALID_REQUEST": "Impossibile completare. Riprova.",
         "FOLDERS_UNAVAILABLE": "Impossibile caricare le cartelle.",
         "FOLDER_UNAVAILABLE": "Questa destinazione non è disponibile. Scegli un’altra cartella.",

@@ -11889,34 +11889,31 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("get-meeting-notification-destination", (event, sessionId) =>
+    ipcMain.handle("get-meeting-notification-destination", (event) =>
       this.getMeetingNotificationDestination(
-        this.windowManager.captureMeetingNotificationOwner(event.sender, sessionId)
+        this.windowManager.captureMeetingNotificationOwner(event.sender)
       )
     );
-    ipcMain.handle("select-meeting-notification-folder", (event, sessionId, ref) =>
+    ipcMain.handle("select-meeting-notification-folder", (event, ref) =>
       this.selectMeetingNotificationFolder(
-        this.windowManager.captureMeetingNotificationOwner(event.sender, sessionId),
+        this.windowManager.captureMeetingNotificationOwner(event.sender),
         ref
       )
     );
-    ipcMain.handle("create-meeting-notification-folder", (event, sessionId, request) =>
+    ipcMain.handle("create-meeting-notification-folder", (event, request) =>
       this.createMeetingNotificationFolder(
-        this.windowManager.captureMeetingNotificationOwner(event.sender, sessionId),
+        this.windowManager.captureMeetingNotificationOwner(event.sender),
         request
       )
     );
 
-    ipcMain.handle("set-meeting-notification-surface", (event, sessionId, state) => {
-      const owner = this.windowManager.captureMeetingNotificationOwner(event.sender, sessionId);
+    ipcMain.handle("set-meeting-notification-surface", (event, state) => {
+      const owner = this.windowManager.captureMeetingNotificationOwner(event.sender);
       return this.windowManager.setMeetingNotificationSurface(owner, state);
     });
 
     ipcMain.handle("meeting-notification-respond", (event, detectionId, action, options) => {
-      const owner = this.windowManager.captureMeetingNotificationOwner(
-        event.sender,
-        options?.sessionId
-      );
+      const owner = this.windowManager.captureMeetingNotificationOwner(event.sender);
       if (!owner || owner.prompt.detectionId !== detectionId)
         return { success: false, code: "STALE_NOTIFICATION" };
       return this.meetingDetectionEngine.handleNotificationResponse(

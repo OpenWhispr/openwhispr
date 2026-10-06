@@ -434,10 +434,8 @@ test("window creation uses the notification dimensions and position", async () =
       },
       { acceptFirstMouse: true, width: 416, height: 84, x: 584, y: 16 }
     );
-    // Each live prompt receives an opaque lifetime ID in addition to its data.
-    const { sessionId, ...pending } = manager._pendingNotificationData;
-    assert.equal(typeof sessionId, "string");
-    assert.deepEqual(pending, notification);
+    // The payload the overlay fetches is stored verbatim.
+    assert.deepEqual(manager._pendingNotificationData, notification);
 
     notificationWindow.loadDeferred.resolve();
     await showPromise;
@@ -737,13 +735,7 @@ async function showOwned(manager, id = "calendar:editing") {
   win.loadDeferred.resolve();
   await showing;
   manager.showNotificationWindow(win.webContents);
-  return {
-    win,
-    owner: manager.captureMeetingNotificationOwner(
-      win.webContents,
-      manager._pendingNotificationData.sessionId
-    ),
-  };
+  return { win, owner: manager.captureMeetingNotificationOwner(win.webContents) };
 }
 const surface = (revision, mode = "form", focus = "keep") => ({
   revision,
@@ -810,11 +802,7 @@ test("reused detection strings and stale layout cannot mutate the current prompt
   try {
     const first = await showOwned(manager);
     const second = await showOwned(manager);
-    assert.notEqual(first.owner.sessionId, second.owner.sessionId);
-    assert.equal(
-      manager.captureMeetingNotificationOwner(first.win.webContents, second.owner.sessionId),
-      null
-    );
+    assert.equal(manager.captureMeetingNotificationOwner(first.win.webContents), null);
     assert.equal(
       manager.setMeetingNotificationSurface(first.owner, surface(20)).code,
       "STALE_NOTIFICATION"

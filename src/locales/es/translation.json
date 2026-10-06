@@ -4789,7 +4789,6 @@
       "linked": "Esta reunión ya tiene una nota. Al unirte, permanecerá en {{destination}}.",
       "errors": {
         "STALE_NOTIFICATION": "Esta notificación ya no está vigente.",
-        "ACCOUNT_CHANGED": "Tu cuenta ha cambiado. Abre una nueva notificación de reunión.",
         "INVALID_REQUEST": "No se pudo completar. Vuelve a intentarlo.",
         "FOLDERS_UNAVAILABLE": "No se pudieron cargar las carpetas.",
         "FOLDER_UNAVAILABLE": "Este destino no está disponible. Elige otra carpeta.",
