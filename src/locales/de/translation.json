@@ -179,7 +179,7 @@
     "recommended": "Empfohlen",
     "active": "Aktiv",
     "managedByOrg": "Von Ihrer Organisation verwaltet",
-    "freeAccountRequired": "Kostenloses Konto erforderlich",
+    "signInRequired": "Anmeldung erforderlich",
     "signIn": "Anmelden",
     "comingSoon": "Demnächst verfügbar",
     "cloud": "Cloud",

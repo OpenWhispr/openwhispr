@@ -148,6 +148,8 @@ export interface InferenceModeOption {
   id: InferenceMode;
   disabled?: boolean;
   badge?: string;
+  /** Clicking the tile asks the user to sign in, so it reads as an action, not as disabled. */
+  signInRequired?: boolean;
   label: string;
   description: string;
   icon: React.ReactNode;
@@ -169,17 +171,18 @@ export function InferenceModeSelector({
       {modes.map((mode) => {
         const isActive = activeMode === mode.id;
         const isDisabled = !!mode.disabled;
+        const isDimmed = isDisabled && !mode.signInRequired;
         return (
           <SettingsPanelRow
             key={mode.id}
             className={`transition-colors ${
-              isDisabled ? "" : "hover:bg-foreground/3 dark:hover:bg-white/3"
+              isDimmed ? "" : "hover:bg-foreground/3 dark:hover:bg-white/3"
             }`}
           >
             <button
               onClick={() => onSelect(mode.id)}
               className={`w-full flex items-center gap-3 text-start cursor-pointer group ${
-                isDisabled ? "opacity-60" : ""
+                isDimmed ? "opacity-60" : ""
               }`}
             >
               <div
@@ -201,6 +204,11 @@ export function InferenceModeSelector({
                   {isActive && !isDisabled && (
                     <span className="text-xs font-medium text-primary bg-primary/10 dark:bg-primary/15 px-1.5 py-px rounded-sm">
                       {t("common.active")}
+                    </span>
+                  )}
+                  {mode.signInRequired && (
+                    <span className="text-xs font-medium text-primary bg-primary/10 dark:bg-primary/15 px-1.5 py-px rounded-sm group-hover:underline">
+                      {t("common.signInRequired")}
                     </span>
                   )}
                   {isDisabled && mode.badge && (

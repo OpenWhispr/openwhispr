@@ -179,7 +179,7 @@
     "recommended": "推荐",
     "active": "已激活",
     "managedByOrg": "由您的组织管理",
-    "freeAccountRequired": "需要免费账户",
+    "signInRequired": "需要登录",
     "signIn": "登录",
     "comingSoon": "即将推出",
     "cloud": "云端",

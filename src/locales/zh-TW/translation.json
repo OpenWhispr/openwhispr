@@ -179,7 +179,7 @@
     "recommended": "推薦",
     "active": "使用中",
     "managedByOrg": "由您的組織管理",
-    "freeAccountRequired": "需要免費帳戶",
+    "signInRequired": "需要登入",
     "signIn": "登入",
     "comingSoon": "即將推出",
     "cloud": "雲端",

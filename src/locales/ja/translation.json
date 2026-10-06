@@ -179,7 +179,7 @@
     "recommended": "推奨",
     "active": "有効",
     "managedByOrg": "組織によって管理されています",
-    "freeAccountRequired": "無料アカウントが必要です",
+    "signInRequired": "サインインが必要です",
     "signIn": "サインイン",
     "comingSoon": "近日公開",
     "cloud": "クラウド",

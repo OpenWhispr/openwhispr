@@ -179,7 +179,7 @@
     "recommended": "Рекомендуется",
     "active": "Активно",
     "managedByOrg": "Управляется вашей организацией",
-    "freeAccountRequired": "Требуется бесплатный аккаунт",
+    "signInRequired": "Требуется вход",
     "signIn": "Войти",
     "comingSoon": "Скоро",
     "cloud": "Облако",
