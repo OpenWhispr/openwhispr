@@ -33,6 +33,7 @@ const DRAG_MOVE_TOLERANCE_PX = 2;
 const {
   MAIN_WINDOW_CONFIG,
   CONTROL_PANEL_CONFIG,
+  CONTROL_PANEL_MIN_SIZE,
   ONBOARDING_WINDOW_SIZES,
   NOTIFICATION_WINDOW_CONFIG,
   fitAssistantContentWindowToWorkArea,
@@ -1325,6 +1326,7 @@ class WindowManager {
     }
 
     this.controlPanelWindow = new BrowserWindow(CONTROL_PANEL_CONFIG);
+    this._applyControlPanelMinimumSize(this.controlPanelWindow);
     this._onboardingRestoreBounds = null;
     this._onboardingWindowMode = null;
     this._onboardingWindowState = null;
@@ -1667,6 +1669,16 @@ class WindowManager {
     win.show();
     win.focus();
     dockManager.setControlPanelVisible(true);
+  }
+
+  // Clamped to the work area like the onboarding floors, so a display smaller
+  // than CONTROL_PANEL_MIN_SIZE can still fit the whole window.
+  _applyControlPanelMinimumSize(win) {
+    const { workArea } = screen.getDisplayMatching(win.getBounds());
+    win.setMinimumSize(
+      Math.min(CONTROL_PANEL_MIN_SIZE.width, workArea.width),
+      Math.min(CONTROL_PANEL_MIN_SIZE.height, workArea.height)
+    );
   }
 
   // Compact onboarding starts at smaller bounds, but both modes expose the
@@ -2222,6 +2234,11 @@ class WindowManager {
     const display = screen.getPrimaryDisplay();
     const workArea = display.workArea;
     const width = Math.round(workArea.width / 3);
+    // The side-panel layout drops the sidebar, so the snapped column may sit
+    // below the control panel's minimum width (setBounds would otherwise clamp
+    // it up and push the window past the right edge of the work area).
+    const [minWidth, minHeight] = win.getMinimumSize();
+    win.setMinimumSize(Math.min(minWidth, width), minHeight);
     win.setBounds({
       x: workArea.x + workArea.width - width,
       y: workArea.y,
@@ -2234,6 +2251,7 @@ class WindowManager {
   restoreControlPanelFromMeetingMode() {
     const win = this.controlPanelWindow;
     if (!win || win.isDestroyed()) return;
+    this._applyControlPanelMinimumSize(win);
     if (this._preMeetingBounds) {
       win.setBounds(this._preMeetingBounds);
       this._preMeetingBounds = null;
