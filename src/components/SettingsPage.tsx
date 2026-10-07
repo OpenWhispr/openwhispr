@@ -2215,6 +2215,21 @@ export default function SettingsPage({
                   }}
                 />
 
+                <div className="flex justify-end">
+                  <Button
+                    onClick={handleSignOut}
+                    variant="outline"
+                    disabled={isSigningOut}
+                    size="sm"
+                    className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50"
+                  >
+                    <LogOut className="me-1.5 h-3.5 w-3.5" />
+                    {isSigningOut
+                      ? t("settingsPage.account.signOut.signingOut")
+                      : t("settingsPage.account.signOut.signOut")}
+                  </Button>
+                </div>
+
                 <SettingsPanel>
                   <SettingsPanelRow>
                     <SettingsRow
@@ -2236,21 +2251,6 @@ export default function SettingsPage({
                     </SettingsRow>
                   </SettingsPanelRow>
                 </SettingsPanel>
-
-                <div className="flex justify-end">
-                  <Button
-                    onClick={handleSignOut}
-                    variant="outline"
-                    disabled={isSigningOut}
-                    size="sm"
-                    className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50"
-                  >
-                    <LogOut className="me-1.5 h-3.5 w-3.5" />
-                    {isSigningOut
-                      ? t("settingsPage.account.signOut.signingOut")
-                      : t("settingsPage.account.signOut.signOut")}
-                  </Button>
-                </div>
               </>
             ) : isLoaded ? (
               <>
