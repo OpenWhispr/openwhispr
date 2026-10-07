@@ -955,7 +955,10 @@ UI icons come from `src/components/icons/` (vendored Nucleo core outline compone
 - Privacy settings button hidden in UI (not applicable on Linux)
 - Recommend `pavucontrol` for audio device management
 - **GPU compositing**: on, as on Windows, except whenever an NVIDIA kernel module (proprietary or open, any version) is loaded (`linuxGpuCompositing.js`, `/proc/driver/nvidia/version`): it flickered transparent windows in #203, Chromium's blocklist doesn't catch it, and explicit sync (driver 555+, Xwayland 24.1+, compositor support) can't be checked before app ready. Anyone else can turn it off with `--disable-gpu-compositing` in `open-whispr-flags.conf`, read by the packaged launcher (`scripts/lib/linux-launcher.js`). The mode is logged at startup, which only reaches the log file at `--log-level=debug`
-- **Dialog overlays**: the full-window dialog overlays (shared `Dialog`, Settings, Ctrl+K, referral) skip their default backdrop blur on Linux (`ui/overlayBlur.ts`), since Linux can still composite on the CPU, where a full-window blur is redrawn on every repaint inside the dialog (#2298); a blur passed through `overlayClassName` still applies
+- **Backdrop blurs**: Linux can still composite on the CPU, where a large blur is redrawn on every repaint above it (#2298):
+  - On Linux (`ui/overlayBlur.ts`), the full-window dialog overlays (shared `Dialog`, Settings, Ctrl+K, referral) skip their default backdrop blur; a blur passed through `overlayClassName` still applies
+  - On Linux, the note action overlay (`ActionProcessingOverlay`), whose scanner animation never stops, uses a denser scrim and an opaque card, so the scanner line passes behind the label
+  - Settings cards (`SettingsPanel`), the Settings selects and the `LanguageSelector` trigger sit on an opaque pane, so they carry no blur on any platform
 - **Launch at login**: XDG autostart entry at `~/.config/autostart/open-whispr.desktop` (see `linuxAutostart.js`), since Electron's `setLoginItemSettings()` does nothing on Linux
   - Disabling it from GNOME Tweaks or KDE's autostart editor is reflected in the Settings toggle
   - "Start minimized" is handled app-side by the `startMinimized` setting, not by the desktop entry

@@ -7,6 +7,13 @@ import { blurBehindOverlays } from "../ui/overlayBlur";
 import type { ActionProcessingState } from "../../hooks/useActionProcessing";
 import type { NoteActionProgress } from "../../stores/actionProcessingStore";
 
+// The card's tint mixed into the background rather than laid over it: opaque, so on Linux, with
+// no blur, the scanner line passes behind the label instead of through it.
+const OPAQUE_ACCENT_CARD =
+  "bg-[color-mix(in_oklab,var(--color-accent)_6%,var(--color-background))] dark:bg-[color-mix(in_oklab,var(--color-accent)_8%,var(--color-background))]";
+const OPAQUE_SUCCESS_CARD =
+  "bg-[color-mix(in_oklab,var(--color-success)_6%,var(--color-background))] dark:bg-[color-mix(in_oklab,var(--color-success)_8%,var(--color-background))]";
+
 interface ActionProcessingOverlayProps {
   state: ActionProcessingState;
   actionName: string | null;
@@ -88,13 +95,14 @@ export default function ActionProcessingOverlay({
           isSuccess
             ? "border-success/12 dark:border-success/15"
             : "border-accent/12 dark:border-accent/15",
-          // Opaque on Linux, so the unblurred scanner line passes behind the label, not through it.
           blurBehindOverlays
             ? cn(
                 isSuccess ? "bg-success/6 dark:bg-success/8" : "bg-accent/6 dark:bg-accent/8",
                 "backdrop-blur-xl"
               )
-            : "bg-background",
+            : isSuccess
+              ? OPAQUE_SUCCESS_CARD
+              : OPAQUE_ACCENT_CARD,
           "border rounded-xl px-6 py-3 shadow-elevated",
           "transition-colors duration-300"
         )}
