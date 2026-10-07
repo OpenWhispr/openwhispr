@@ -92,6 +92,10 @@ export default function AccountLayout() {
         options={{ title: 'Parakeet Benchmark', headerLargeTitle: false }}
       />
       <Stack.Screen
+        name="qwen-benchmark"
+        options={{ title: 'Qwen Benchmark', headerLargeTitle: false }}
+      />
+      <Stack.Screen
         name="licenses"
         options={{ title: 'Licenses & Attribution', headerLargeTitle: false }}
       />

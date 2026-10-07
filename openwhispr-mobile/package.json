@@ -79,6 +79,7 @@
     "expo-updates": "~55.0.33",
     "expo-video": "~55.0.21",
     "expo-web-browser": "~55.0.20",
+    "llama.rn": "0.12.9",
     "lucide-react-native": "^0.545.0",
     "nativewind": "^4.2.1",
     "react": "19.2.0",

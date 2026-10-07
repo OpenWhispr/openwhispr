@@ -129,6 +129,10 @@ module.exports = () => {
       entitlements: {
         ...(expo.ios?.entitlements ?? {}),
         'com.apple.security.application-groups': [environment.appGroupId],
+        // The on-device LLM (llama.rn) needs more than the default per-app memory limit on
+        // 6 GB iPhones. Main app only: the keyboard and Live Activity extensions run no model.
+        'com.apple.developer.kernel.increased-memory-limit': true,
+        'com.apple.developer.kernel.extended-virtual-addressing': true,
       },
       infoPlist: {
         ...iosInfoPlist,

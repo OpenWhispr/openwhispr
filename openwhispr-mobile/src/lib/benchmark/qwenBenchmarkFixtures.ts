@@ -1,0 +1,60 @@
+// Inputs for the Qwen spike benchmark (runQwenBenchmark.ts). The dictations keep the fillers,
+// self-corrections and missing punctuation real dictation has, so cleanup has work to do. The
+// meeting is used only when the phone has no meeting note of its own.
+
+export const CLEANUP_SHORT_FIXTURE =
+  "um so I wanted to follow up on the the budget thing from yesterday basically we need the final numbers by friday no wait thursday because sarah's out on friday and uh can you also loop in david from finance he had some questions about the q3 projections and whether we're counting the new hires thanks";
+
+export const CLEANUP_LONG_FIXTURE = [
+  "okay so here's where we are with the launch um the beta went out to about two hundred users last week and the feedback has been mostly good but there are like three things that keep coming up",
+  "the first one is onboarding people are getting stuck on the permissions screen because they don't understand why we need microphone access before they've even tried the app so I think we should move that step later or at least explain it better you know like a short sentence about why",
+  "the second thing is sync uh a bunch of people said their notes didn't show up on their laptop right away and when we looked into it it's because the sync only runs when the app is open which is not what anyone expects so jordan is looking at doing it in the background but that's probably a week of work",
+  'and the third thing which honestly worries me the most is battery um a few people on older iPhones said the app was draining like ten percent an hour while recording which seems way too high so we need to profile that before we go wider',
+  "so my proposal is we hold the public launch by two weeks fix onboarding and battery first and do sync right after launch unless jordan finds it's smaller than we think",
+  "oh and one more thing marketing wants the press release by the twentieth so if we slip we need to tell them by monday at the latest otherwise they'll have already booked the embargo with the journalists",
+  "let me know what you think and if anyone disagrees with pushing the date I'd rather hear it now than in the standup on thursday",
+].join(' ');
+
+export const SYNTHETIC_MEETING_LINES = [
+  "Priya: Okay, let's get started. The main thing today is the Q4 roadmap, and then hiring if we have time.",
+  'Marcus: Before we start, can we talk about the incident from Tuesday? Customers are still asking.',
+  'Priya: Sure, quickly. Marcus, can you summarize what happened?',
+  'Marcus: The sync service ran out of database connections around 2 PM. About forty minutes of degraded sync for roughly 8% of users. Root cause was a connection leak in the retry path we shipped Monday.',
+  'Lena: Is the fix out?',
+  "Marcus: The hotfix went out Wednesday morning. We also added an alert on connection pool usage, so we'd catch it at 80% next time instead of at 100%.",
+  'Priya: Good. Do we owe customers anything?',
+  "Marcus: Support sent an apology to the affected accounts. I'd like to write a public postmortem too. I can have a draft by Friday.",
+  "Priya: Please do. Okay, roadmap. Lena, you've been collecting the candidates.",
+  'Lena: We have five big items. Offline mode, the Android app, team workspaces, the API for integrations, and the redesign of the editor.',
+  "Tom: We can't do five. Realistically we have capacity for two, maybe two and a half.",
+  'Lena: Agreed. Based on the survey, team workspaces is the top request from paying customers by a wide margin. Offline mode is second.',
+  "Tom: Team workspaces touches permissions, billing and sync. That's a big one. I'd estimate eight to ten weeks with three engineers.",
+  'Priya: And offline mode?',
+  "Tom: Offline mode is mostly client work. Maybe five weeks with two people, but the conflict resolution is the risky part. If we get that wrong we lose people's notes.",
+  "Marcus: Given Tuesday, I'd be nervous about shipping big sync changes and offline mode in the same quarter. They both change how sync behaves.",
+  "Priya: That's a fair point. What if we do workspaces first and start offline mode as a design spike only?",
+  'Tom: That works. The spike could answer the conflict question without committing to ship.',
+  'Lena: What about the API? Two of our biggest prospects asked for it in their contracts.',
+  'Priya: How big is it?',
+  'Tom: A read-only API is small. Two or three weeks for one engineer. Write access is much bigger because of permissions.',
+  "Priya: Then let's commit to the read-only API this quarter, workspaces as the main project, and the offline spike. Android and the editor redesign move to Q1.",
+  "Lena: I'll update the roadmap doc and share it with the wider team by Monday.",
+  'Priya: Thanks. Decision: workspaces, read-only API, offline spike. Any objections?',
+  "Marcus: None from me, as long as workspaces gets a proper load test before launch. I don't want another Tuesday.",
+  "Tom: Agreed. I'll add a load-testing milestone to the plan.",
+  'Priya: Okay, hiring. We have budget for two engineers this quarter.',
+  "Lena: The backend role has three candidates in final rounds. The mobile role hasn't had good applicants yet.",
+  "Tom: For mobile, I'd rather wait than hire the wrong person. Can we ask the recruiters to look for people with offline sync experience? That would help with the spike too.",
+  'Priya: Good idea. Lena, can you talk to the recruiters this week?',
+  'Lena: Yes, I will.',
+  'Marcus: One more thing on hiring. The on-call rotation is three people right now. If the backend hire starts in November, can they join on-call by December?',
+  "Priya: Let's aim for that, but only after shadowing for two weeks.",
+  "Tom: I'll set up the shadowing schedule once we have a start date.",
+  "Priya: Last item. The customer advisory board meets on the 14th. Who's presenting?",
+  'Lena: I can present the roadmap. Marcus, could you cover reliability and the postmortem?',
+  'Marcus: Sure, as long as the postmortem is published by then.',
+  "Priya: Great. Let's wrap up. Action items: Marcus drafts the postmortem by Friday, Lena updates the roadmap by Monday and talks to the recruiters, Tom adds the load-test milestone and the shadowing schedule.",
+  "Tom: And someone should tell the Android early-access users that it's moving to Q1.",
+  "Lena: I'll draft that message and send it to Priya for review.",
+  'Priya: Perfect. Thanks, everyone.',
+];
