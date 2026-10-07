@@ -23,6 +23,7 @@ const MEETING_ERROR_KEYS: Record<string, string> = {
   unsupportedSelfHosted: "notes.meeting.unsupportedSelfHosted",
   unsupportedProvider: "notes.meeting.unsupportedProvider",
   noProviderSelected: "notes.meeting.noProviderSelected",
+  customEndpointNotConfigured: "notes.meeting.customEndpointNotConfigured",
 };
 
 export default function MeetingRecordingMount(): null {
