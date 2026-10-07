@@ -643,6 +643,7 @@ class AudioManager {
     this._streamingCancellationGeneration = 0;
     this._activeTranscriptionAbortController = null;
     this._activeStreamingSessionId = null;
+    this._activeStreamingProviderName = null;
     this.streamingFallbackRecorder = null;
     this.streamingFallbackChunks = [];
     this.voiceAgentRequested = false;
@@ -1026,8 +1027,23 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.sttConfigFetchedAt = null;
   }
 
-  getStreamingProvider() {
-    return STREAMING_PROVIDERS[this.getStreamingProviderName()];
+  getStreamingProvider(name = this.getStreamingProviderName()) {
+    return STREAMING_PROVIDERS[name];
+  }
+
+  // The provider the active streaming session started on. The sttConfig can be
+  // refreshed mid-recording and resolve a different provider, but the open
+  // socket, its final and its disconnect belong to the one that started.
+  getActiveStreamingProviderName() {
+    return this._activeStreamingProviderName ?? this.getStreamingProviderName();
+  }
+
+  // Only the session that set the active fields clears them: a newer start
+  // may already own them.
+  _endStreamingSession(sessionId) {
+    if (this._activeStreamingSessionId !== sessionId) return;
+    this._activeStreamingSessionId = null;
+    this._activeStreamingProviderName = null;
   }
 
   getStreamingProviderName() {
@@ -4588,7 +4604,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return { needsFallback: true };
     }
     const fallbackReason = resolveStreamingStartFallback({
-      providerName: this.getStreamingProviderName(),
+      providerName: this.getActiveStreamingProviderName(),
       cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
       result: res,
     });
@@ -4660,6 +4676,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this._streamingFailoverReason = null;
       this._streamingSpeechGateState = createLocalSpeechGateState();
       this._activeStreamingSessionId = sessionId;
+      this._activeStreamingProviderName = this.getStreamingProviderName();
       const ownsSession = () => this._activeStreamingSessionId === sessionId;
       const cancellationGeneration = this._streamingCancellationGeneration;
       startWasCancelled = () => cancellationGeneration !== this._streamingCancellationGeneration;
@@ -4722,7 +4739,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       this.streamingProcessor = new AudioWorkletNode(audioContext, "pcm-streaming-processor");
-      const provider = this.getStreamingProvider();
+      const provider = this.getStreamingProvider(this.getActiveStreamingProviderName());
       // Decided once, with the provider, so a config refresh mid-recording
       // cannot change how this session's stream errors are handled. Only a
       // session whose fallback recorder started has a capture to fail over
@@ -4730,7 +4747,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const failsOver =
         Boolean(this.streamingFallbackRecorder) &&
         isManagedOrukeetStream({
-          providerName: this.getStreamingProviderName(),
+          providerName: this.getActiveStreamingProviderName(),
           cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
         });
 
@@ -4821,7 +4838,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (startWasCancelled()) {
         // Cancelled while the mic was opening: never flip to recording.
         await this.cleanupStreaming();
-        if (ownsSession()) this._activeStreamingSessionId = null;
+        this._endStreamingSession(sessionId);
         // cancelStreamingRecording may already be awaiting this start's
         // settlement before it can disconnect the provider.
         this._settleStreamingStart();
@@ -4840,7 +4857,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const { useLocalWhisper } = streamingSettings;
         const res = await provider.start(
           buildStreamingSessionOptions({
-            providerName: this.getStreamingProviderName(),
+            providerName: this.getActiveStreamingProviderName(),
             settings: streamingSettings,
             language: this.getEffectiveSttLanguage(streamingSettings),
             keyterms: this.getKeyterms(),
@@ -4877,7 +4894,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.recordingStartTime = null;
         this.stopRequestedDuringStreamingStart = false;
         await this.cleanupStreaming();
-        if (ownsSession()) this._activeStreamingSessionId = null;
+        this._endStreamingSession(sessionId);
         this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
         logger.debug("Streaming unavailable, falling back to regular recording", {}, "streaming");
         return this.startRecording();
@@ -4927,9 +4944,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         );
         this.cachedMicDeviceId = null;
         await this.cleanupStreaming();
-        if (this._activeStreamingSessionId === sessionId) {
-          this._activeStreamingSessionId = null;
-        }
+        this._endStreamingSession(sessionId);
         this.isRecording = false;
         this.recordingStartTime = null;
         this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
@@ -4938,7 +4953,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       logger.error(
         "Failed to start streaming recording",
-        { provider: this.getStreamingProviderName(), error: error.message, code: error.code },
+        { provider: this.getActiveStreamingProviderName(), error: error.message, code: error.code },
         "streaming"
       );
 
@@ -4973,9 +4988,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       });
 
       await this.cleanupStreaming();
-      if (this._activeStreamingSessionId === sessionId) {
-        this._activeStreamingSessionId = null;
-      }
+      this._endStreamingSession(sessionId);
       this.isRecording = false;
       this.recordingStartTime = null;
       this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
@@ -5031,9 +5044,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this._streamingStopPromise = null;
         this._streamingStopMode = null;
       }
-      if (this._activeStreamingSessionId === sessionId) {
-        this._activeStreamingSessionId = null;
-      }
+      this._endStreamingSession(sessionId);
 
       // Finalization has several provider/reasoning awaits. A thrown error must
       // never leave the renderer or main process stuck in a busy lifecycle.
@@ -5073,6 +5084,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     const sessionId = this._activeStreamingSessionId;
+    const providerName = this.getActiveStreamingProviderName();
     const cancelPromise = (async () => {
       this._requestStreamingCancellation();
       this.stopRequestedDuringStreamingStart = false;
@@ -5094,7 +5106,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           this.micRecovery.stop();
           this.cleanupStreamingAudio();
           this.cleanupStreamingListeners(sessionId);
-          return this.getStreamingProvider().stop?.();
+          return this.getStreamingProvider(providerName).stop?.();
         })
         .catch((error) => {
           logger.debug(
@@ -5116,9 +5128,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this._streamingStopPromise = null;
         this._streamingStopMode = null;
       }
-      if (this._activeStreamingSessionId === sessionId) {
-        this._activeStreamingSessionId = null;
-      }
+      this._endStreamingSession(sessionId);
       this.isRecording = false;
       this.isProcessing = false;
       this.isStreaming = false;
@@ -5135,6 +5145,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return false;
     }
 
+    const providerName = this.getActiveStreamingProviderName();
     const cancellationGeneration = this._streamingCancellationGeneration;
     const wasCancelled = () => cancellationGeneration !== this._streamingCancellationGeneration;
     const abandonFinalization = async () => {
@@ -5142,7 +5153,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.cleanupStreamingListeners(sessionId);
       this._streamingFallbackSegments = [];
       try {
-        await this.getStreamingProvider().stop?.();
+        await this.getStreamingProvider(providerName).stop?.();
       } catch (error) {
         logger.debug(
           "Streaming disconnect after cancellation failed",
@@ -5177,7 +5188,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const t0 = performance.now();
     let finalText = this.streamingFinalText || "";
 
-    const provider = this.getStreamingProvider();
+    const provider = this.getStreamingProvider(providerName);
     let acknowledgedFinal = null;
     let finalAcknowledged = false;
     let orukeetFinal = null;
@@ -5345,7 +5356,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     let batchWarning = null;
     let batchFallbackResult = null;
     let failureReport = null;
-    const isOrukeetStream = this.getStreamingProviderName() === "orukeet";
+    const isOrukeetStream = providerName === "orukeet";
     const detectedLanguageFields = isOrukeetStream
       ? orukeetDetectedLanguageFields(orukeetFinal)
       : {};
@@ -5461,7 +5472,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               customPrompt,
               language: this.getCleanupLanguage(stSettings),
               locale: stSettings.uiLanguage || "en",
-              sttProvider: this.getStreamingProviderName(),
+              sttProvider: providerName,
               sttModel: streamingSttModel,
               sttProcessingMs: streamingSttProcessingMs,
               sttWordCount: streamingSttWordCount,
@@ -5520,7 +5531,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                 ? {
                     mode: "cloudReason",
                     meta: {
-                      sttProvider: this.getStreamingProviderName(),
+                      sttProvider: providerName,
                       sttModel: streamingSttModel,
                       sttProcessingMs: streamingSttProcessingMs,
                       sttWordCount: streamingSttWordCount,
@@ -5669,7 +5680,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         durationMs: durationSeconds
           ? Math.round(durationSeconds * 1000)
           : Math.round(tBeforePaste - t0),
-        provider: batchFallbackResult?.source || `${this.getStreamingProviderName()}-streaming`,
+        provider: batchFallbackResult?.source || `${providerName}-streaming`,
         model: batchFallbackResult ? null : streamingSttModel || null,
       };
       if (wasCancelled()) return true;
@@ -5677,7 +5688,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         success: true,
         text: finalText,
         rawText: batchFallbackResult?.rawText || rawStreamingText || finalText,
-        source: batchFallbackResult?.source || `${this.getStreamingProviderName()}-streaming`,
+        source: batchFallbackResult?.source || `${providerName}-streaming`,
         clientTranscriptionId,
         analyticsOccurredAt: resultAnalyticsOccurredAt,
         // The upgrade prompt opens on these, as after a batch recording.
@@ -5701,7 +5712,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                 durationSeconds ?? 0,
                 {
                   sendLogs: !usedCloudReasoning,
-                  sttProvider: this.getStreamingProviderName(),
+                  sttProvider: providerName,
                   sttModel: streamingSttModel,
                   sttProcessingMs: streamingSttProcessingMs,
                   sttLanguage: streamingSttLanguage,
@@ -5898,12 +5909,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.micRecovery.stop();
     this.cleanupStreamingAudio();
     this.cleanupStreamingListeners(sessionId);
-    if (this._activeStreamingSessionId === sessionId) {
-      this._activeStreamingSessionId = null;
-    }
+    this._endStreamingSession(sessionId);
   }
 
   cleanup() {
+    // Read before cleanupStreaming ends the session below.
+    const streamingProviderName = this.getActiveStreamingProviderName();
     this.micRecovery.stop();
     this._unsubscribeSettings?.();
     this.preparedMicCapture.cancel();
@@ -5927,7 +5938,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.workletBlobUrl = null;
     }
     try {
-      this.getStreamingProvider().stop?.();
+      this.getStreamingProvider(streamingProviderName).stop?.();
     } catch (e) {
       // Ignore errors during cleanup (page may be unloading)
     }
