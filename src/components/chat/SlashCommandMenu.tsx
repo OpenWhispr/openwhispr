@@ -43,7 +43,7 @@ export default function SlashCommandMenu({
       // Keep focus in the composer, wherever the press lands.
       onMouseDown={(event) => event.preventDefault()}
       // Rows line up with the draft's text.
-      className="flex min-h-0 flex-1 flex-col px-1.5 pt-2.5 animate-[glass-in_0.26s_ease-out] motion-reduce:animate-none"
+      className="flex min-h-0 flex-1 flex-col px-1.5 pt-2.5 animate-[fade-in-up_0.2s_ease-out] motion-reduce:animate-none"
     >
       {/* The keys the composer answers to while the menu is open. */}
       <div
@@ -99,7 +99,7 @@ export default function SlashCommandMenu({
               className={cn(
                 "flex w-full shrink-0 items-center gap-3 rounded-xl px-2.5 py-2 text-start text-xs",
                 "transition-[background-color,color,translate] duration-200 ease-out",
-                "animate-[glass-in_0.3s_cubic-bezier(0.22,1,0.36,1)_backwards] motion-reduce:animate-none",
+                "animate-[fade-in-up_0.3s_cubic-bezier(0.22,1,0.36,1)_backwards] motion-reduce:animate-none",
                 isActive
                   ? "translate-x-1 bg-foreground/[0.07] text-foreground rtl:-translate-x-1 dark:bg-white/[0.08]"
                   : "text-foreground/70",

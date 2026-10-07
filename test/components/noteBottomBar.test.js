@@ -42,6 +42,19 @@ test("recording state renders no backdrop-filter surface over the live transcrip
   assert.ok(html.includes("shadow-(--shadow-glass)"), "capsules keep the glass rim shadow");
 });
 
+test("the bar and the open chat never blur the note behind them", async (t) => {
+  for (const chatOpen of [false, true]) {
+    const html = await renderBottomBar(t, {
+      chatOpen,
+      chatContent: createElement("div", null, "Chat"),
+    });
+    assert.ok(
+      !/backdrop-|blur-\[/.test(html),
+      `no blur with the chat ${chatOpen ? "open" : "closed"}`
+    );
+  }
+});
+
 test("in-view chat expands the existing capsule around one composer", async (t) => {
   const html = await renderBottomBar(t, {
     chatOpen: true,
