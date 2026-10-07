@@ -111,6 +111,36 @@ test("finalized segments accumulate across endpoints in live updates", async () 
   }
 });
 
+test("createOnlineStream holds a use for its whole lifetime, not just creation", async () => {
+  const mock = await startMockOnlineServer({});
+  try {
+    const server = onlineWsServerAt(mock.port);
+    const stream = server.createOnlineStream({});
+    assert.equal(server.activeUses, 1, "the stream must hold a use while open");
+
+    stream.sendPcm16(Buffer.alloc(3200));
+    await stream.finish();
+
+    assert.equal(server.activeUses, 0, "finish() must release the use");
+  } finally {
+    await mock.close();
+  }
+});
+
+test("createOnlineStream releases its use even when aborted", async () => {
+  const mock = await startMockOnlineServer({});
+  try {
+    const server = onlineWsServerAt(mock.port);
+    const stream = server.createOnlineStream({});
+    stream.abort();
+    await stream.finish();
+
+    assert.equal(server.activeUses, 0, "abort() must release the use via settle()");
+  } finally {
+    await mock.close();
+  }
+});
+
 test("createOnlineStream rejects offline-runtime sessions and dead servers", () => {
   const offline = onlineWsServerAt(1);
   offline.modelRuntime = "offline";

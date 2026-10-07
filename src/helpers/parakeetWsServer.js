@@ -61,6 +61,31 @@ class ParakeetWsServer {
     this.startingLanguage = null;
     this.healthCheckInterval = null;
     this.cachedBinaryPaths = {};
+    // Tracks in-flight transcribe()/createOnlineStream() callers using the
+    // current process, so a model switch can't stop it out from under them.
+    this.activeUses = 0;
+    this.drainWaiters = [];
+  }
+
+  // transcribe()/createOnlineStream() hold a use for as long as they're
+  // talking to the current process; start() must drain to zero before it
+  // may stop() that process out from under them (#live-debugging-findings 3).
+  _acquireUse() {
+    this.activeUses++;
+  }
+
+  _releaseUse() {
+    this.activeUses--;
+    if (this.activeUses === 0) {
+      const waiters = this.drainWaiters;
+      this.drainWaiters = [];
+      for (const resolve of waiters) resolve();
+    }
+  }
+
+  _waitForDrain() {
+    if (this.activeUses === 0) return Promise.resolve();
+    return new Promise((resolve) => this.drainWaiters.push(resolve));
   }
 
   getWsBinaryPath(runtime = "offline") {
@@ -99,7 +124,12 @@ class ParakeetWsServer {
     // Assigned before any await so concurrent callers can never double-spawn.
     this.startupPromise = (async () => {
       try {
-        if (this.process) await this.stop();
+        if (this.process) {
+          // Don't pull the process out from under an in-flight transcribe()
+          // or createOnlineStream() caller still using it.
+          await this._waitForDrain();
+          await this.stop();
+        }
         await this._doStart(modelName, modelDir, runtime, language);
       } finally {
         this.startupPromise = null;
@@ -297,11 +327,12 @@ class ParakeetWsServer {
       throw new Error("parakeet-ws server is not running");
     }
 
-    if (this.modelRuntime === "online") {
-      return this._transcribeOnline(samplesBuffer, signal);
-    }
-
-    return this._transcribeOffline(samplesBuffer, sampleRate, signal);
+    this._acquireUse();
+    const result =
+      this.modelRuntime === "online"
+        ? this._transcribeOnline(samplesBuffer, signal)
+        : this._transcribeOffline(samplesBuffer, sampleRate, signal);
+    return result.finally(() => this._releaseUse());
   }
 
   _transcribeOffline(samplesBuffer, sampleRate, signal) {
@@ -457,6 +488,10 @@ class ParakeetWsServer {
       throw new Error("createOnlineStream requires an online-runtime model");
     }
 
+    // Held for the stream's whole lifetime (released once in settle()), not
+    // just this synchronous call — this is what start() actually waits on.
+    this._acquireUse();
+
     const results = createOnlineAccumulator();
     const pendingChunks = [];
     let finishResolve = null;
@@ -482,6 +517,7 @@ class ParakeetWsServer {
       if (closed) return;
       closed = true;
       clearIdleTimer();
+      this._releaseUse();
       if (finishResolve) finishResolve({ text: results.text(), truncated });
     };
 
