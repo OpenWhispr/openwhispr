@@ -8,9 +8,8 @@
  * repairs a selection after a successful fetch, so it misses an offline launch
  * and loses the race against the first request of a session.
  *
- * Each provider's remap is one-shot, keyed by its own sentinel: repointing a
- * selection the user never chose is a repair, but doing it again to a model
- * they picked back would be the app arguing with them.
+ * Each provider's startup remap is one-shot, keyed by its own sentinel.
+ * Tinfoil selections restored later are also normalized at request dispatch.
  *
  * That makes the sentinel, not the table, the unit of work: an id added under a
  * key a released build already writes reaches nobody who has launched it, so
@@ -18,38 +17,8 @@
  * test/helpers/retiredCloudModels.test.js trips on either edit, which forces
  * the decision into the diff but cannot check you made it.
  */
-export interface RetiredProviderModels {
-  migratedKey: string;
-  models: Record<string, string>;
-}
-
-export const RETIRED_CLOUD_MODELS: Record<string, RetiredProviderModels> = {
-  // Retired 2026-08-16. The key predates this table and is already set on
-  // installed apps, so it stays exactly as it shipped.
-  groq: {
-    migratedKey: "_retiredGroqModelsMigrated",
-    models: {
-      "qwen/qwen3-32b": "openai/gpt-oss-120b",
-      "llama-3.3-70b-versatile": "openai/gpt-oss-120b",
-      "llama-3.1-8b-instant": "openai/gpt-oss-20b",
-    },
-  },
-  // All three shipped as seed entries — deepseek-v4-pro in v1.7.4, kimi-k2-6
-  // through v1.8.3, glm-5-2 through v1.9.2 — so anyone who simply took a
-  // default can be on one. deepseek-v4-flash was never seeded but was served
-  // live, and was deepseek-v4-pro's replacement here, until Tinfoil retired it
-  // for deepseek-v4-1-flash (seen 2026-09-18). The first key shipped in
-  // v1.10.0, so adding it rotated the key.
-  tinfoil: {
-    migratedKey: "_retiredTinfoilModelsMigrated2",
-    models: {
-      "glm-5-2": "glm-5-3",
-      "deepseek-v4-pro": "deepseek-v4-1-flash",
-      "deepseek-v4-flash": "deepseek-v4-1-flash",
-      "kimi-k2-6": "kimi-k3",
-    },
-  },
-};
+export { RETIRED_CLOUD_MODELS } from "./retiredCloudModelPolicy.js";
+import { RETIRED_CLOUD_MODELS } from "./retiredCloudModelPolicy.js";
 
 interface RetiredModelStorage {
   getItem(key: string): string | null;

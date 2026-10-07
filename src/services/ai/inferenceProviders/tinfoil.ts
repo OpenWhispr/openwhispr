@@ -1,3 +1,4 @@
+import { resolveRetiredCloudModel } from "../../../config/retiredCloudModelPolicy.js";
 import type { InferenceProvider } from "./types";
 import { TOKEN_LIMITS } from "../../../config/constants";
 import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
@@ -18,6 +19,7 @@ import { wrapCleanupTranscript } from "../../../config/prompts";
 export const tinfoilProvider: InferenceProvider = {
   id: "tinfoil",
   async call({ text, model, agentName, config, ctx }) {
+    model = resolveRetiredCloudModel("tinfoil", model);
     logger.logReasoning("TINFOIL_START", { model, agentName });
 
     const apiKey = await ctx.getApiKey("tinfoil");

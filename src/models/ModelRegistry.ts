@@ -1,5 +1,6 @@
 import modelDataRaw from "./modelRegistryData.json";
 import { isCloudCleanupMode, getSettings } from "../stores/settingsStore";
+import { isSelectableTinfoilModel } from "../config/retiredCloudModelPolicy.js";
 import { readCachedTinfoilModels } from "./tinfoilModelCache";
 import { filterMeetingStreamingProviders } from "../helpers/meetingTranscriptionRouting";
 import type { InferenceMode } from "../types/electron";
@@ -319,6 +320,8 @@ export function getCloudProviderDefaultModelId(providerId: string): string | und
 }
 
 export function applyTinfoilModels(models: CloudModelDefinition[]): void {
+  models = models.filter(isSelectableTinfoilModel);
+  if (models.length === 0) return;
   const provider = getTinfoilCloudProvider();
   if (provider) {
     provider.models = models;
