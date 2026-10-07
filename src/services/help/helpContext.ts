@@ -22,9 +22,19 @@ export function projectHelpSettings(
     add("translationKey", state.translationKey);
     add("meetingKey", state.meetingKey);
     add("activationMode", state.activationMode);
+    add(
+      "activationModeLabel",
+      state.activationMode === "push" ? "Hold" : state.activationMode === "tap" ? "Tap" : null
+    );
   }
   if (topic === "microphone" || topic === "meetings") {
     add("microphoneSelectionMode", state.microphoneSelectionMode);
+    const microphoneLabels: Record<string, string> = {
+      system: "System Default",
+      "built-in": "Prefer Built-in Microphone",
+      specific: "Specific microphone",
+    };
+    add("microphoneSelectionModeLabel", microphoneLabels[String(state.microphoneSelectionMode)]);
     if (state.microphoneSelectionMode === "specific")
       add("selectedMicDeviceLabel", state.selectedMicDeviceLabel);
     add("microphonePermission", basics.microphonePermission);

@@ -7,6 +7,8 @@ import { TechnicalErrorDetails } from "../ui/TechnicalErrorDetails";
 import { openProviderSettings } from "../../utils/describeProviderError";
 import type { MessageError, ToolCallInfo } from "./types";
 import { extractNoteCards } from "./noteCards";
+import { HelpEvidence } from "./GroundedHelpEvidence";
+import { extractHelpEvidence } from "./helpEvidence";
 import { toolIcons } from "./toolIcons";
 import { ApprovalCard } from "./ApprovalCard";
 import { approvalKey, useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
@@ -223,7 +225,9 @@ export const ChatMessage = memo(function ChatMessage({
     );
   }
 
-  const hasToolCalls = toolCalls && toolCalls.length > 0;
+  const helpEvidence = extractHelpEvidence(toolCalls);
+  const visibleToolCalls = toolCalls?.filter((tc) => tc.name !== "grounded_product_help");
+  const hasToolCalls = visibleToolCalls && visibleToolCalls.length > 0;
   const hasContent = content.length > 0;
   const noteCards = extractNoteCards(toolCalls, t("notes.list.untitledNote"));
 
@@ -246,7 +250,7 @@ export const ChatMessage = memo(function ChatMessage({
               (hasContent || noteCards.length > 0) && "mb-2 pb-1.5 border-b border-border/70"
             )}
           >
-            {toolCalls.map((tc) => (
+            {visibleToolCalls.map((tc) => (
               <ToolCallItem key={tc.id} messageId={messageId} toolCall={tc} />
             ))}
           </div>
@@ -258,6 +262,8 @@ export const ChatMessage = memo(function ChatMessage({
             className="text-[13px] leading-relaxed [&_p]:text-[13px] [&_li]:text-[13px]"
           />
         )}
+
+        {helpEvidence && <HelpEvidence evidence={helpEvidence} />}
 
         {isStreaming && hasContent && (
           <span

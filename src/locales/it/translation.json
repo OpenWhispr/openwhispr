@@ -4819,21 +4819,25 @@
     }
   },
   "productHelp": {
-    "title": "Aiuto OpenWhispr",
-    "description": "Guide ufficiali e impostazioni pertinenti. Non servono account o modelli IA.",
-    "topics": "Argomenti",
-    "essentials": "Guida offline (inglese)",
-    "openArticle": "Leggi l’articolo completo",
     "sources": "Documentazione ufficiale",
     "loading": "Ricerca nella documentazione ufficiale…",
-    "policyFallback": "I criteri della tua organizzazione limitano la ricerca online. La guida offline resta disponibile.",
-    "offline": "Impossibile consultare la documentazione aggiornata. Usa la guida offline o riprova.",
-    "refresh": "Aggiorna",
     "settings": "Impostazioni attuali",
-    "settingsNote": "Scelte salvate e autorizzazioni note, in sola lettura; nessun test dei dispositivi. In questa vista le impostazioni restano sul dispositivo.",
-    "policy": "Assistente consentito",
-    "on": "Attivo",
-    "off": "Disattivo",
+    "guidance": "Guida integrata (in inglese). Consultare la documentazione non aggiorna questa guida.",
+    "settingsNote": "Scelte e autorizzazioni note lette per questa risposta, senza modificarle; i dispositivi non vengono testati.",
+    "readAt": "Letto il {{time}}",
+    "sourceStatus": {
+      "live": "Articolo recuperato",
+      "bundled": "Guida integrata di riserva"
+    },
+    "reason": {
+      "policy": "I criteri della tua organizzazione limitano la consultazione della documentazione online.",
+      "rateLimit": "È stato raggiunto il limite di consultazione della documentazione online. Viene mostrata la guida integrata.",
+      "unavailable": "Non è stato possibile verificare la documentazione attuale. Viene mostrata la guida integrata."
+    },
+    "openFailed": "Impossibile aprire l’articolo. Puoi copiare il link e aprirlo nel browser.",
+    "unknownAnswer": "Non posso verificare questa funzione o controllo nella guida integrata di OpenWhispr. Non ho modificato alcuna impostazione. Consulta la documentazione ufficiale o descrivi l’impostazione che vedi.",
+    "mixedAnswer": "Posso mostrare qui la guida di OpenWhispr senza effettuare modifiche. Poni la domanda di assistenza separatamente dall’altra azione; non ho eseguito quell’azione.",
+    "unavailableAnswer": "La guida di OpenWhispr è temporaneamente non disponibile. Riprova o apri la documentazione ufficiale.",
     "topicsList": {
       "hotkeys": "Scorciatoie",
       "microphone": "Microfono",
@@ -4843,6 +4847,14 @@
       "language": "Lingue",
       "backup": "Backup",
       "assistant": "Assistente"
-    }
+    },
+    "appVersion": "Versione dell’app",
+    "platform": "Piattaforma",
+    "osVersion": "Versione del sistema operativo",
+    "processing": "Elaborazione",
+    "engine": "Motore",
+    "policy": "Assistente consentito dai criteri",
+    "on": "Attivo",
+    "off": "Disattivo"
   }
 }

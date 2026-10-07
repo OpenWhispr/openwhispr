@@ -4819,21 +4819,25 @@
     }
   },
   "productHelp": {
-    "title": "Aide OpenWhispr",
-    "description": "Guides officiels et réglages utiles. Aucun compte ni modèle IA requis.",
-    "topics": "Rubriques d’aide",
-    "essentials": "Guide hors ligne (anglais)",
-    "openArticle": "Lire l’article complet",
     "sources": "Documentation officielle",
     "loading": "Recherche dans la documentation officielle…",
-    "policyFallback": "La politique de votre organisation limite la recherche en ligne. Le guide hors ligne reste disponible.",
-    "offline": "La documentation actuelle n’a pas pu être consultée. Utilisez le guide hors ligne ou réessayez.",
-    "refresh": "Actualiser",
     "settings": "Réglages actuels",
-    "settingsNote": "Choix enregistrés et autorisations connues en lecture seule ; aucun test des appareils. Dans cette vue, les réglages restent sur cet appareil.",
-    "policy": "Assistant autorisé",
-    "on": "Activé",
-    "off": "Désactivé",
+    "guidance": "Guide intégré (en anglais). La consultation de la documentation ne met pas ce guide à jour.",
+    "settingsNote": "Choix et autorisations connus relevés pour cette réponse, en lecture seule ; vos appareils ne sont pas testés.",
+    "readAt": "Consulté le {{time}}",
+    "sourceStatus": {
+      "live": "Article récupéré",
+      "bundled": "Guide intégré de secours"
+    },
+    "reason": {
+      "policy": "La politique de votre organisation limite la consultation de la documentation en ligne.",
+      "rateLimit": "La limite de consultation de la documentation en ligne est atteinte. Le guide intégré est affiché.",
+      "unavailable": "La documentation actuelle n’a pas pu être vérifiée. Le guide intégré est affiché."
+    },
+    "openFailed": "Impossible d’ouvrir l’article. Vous pouvez copier son lien et l’ouvrir dans votre navigateur.",
+    "unknownAnswer": "Je ne peux pas vérifier cette fonctionnalité ou commande à partir du guide intégré d’OpenWhispr. Je n’ai modifié aucun réglage. Consultez la documentation officielle ou décrivez le réglage visible.",
+    "mixedAnswer": "Je peux afficher ici l’aide OpenWhispr en lecture seule. Posez la question d’aide séparément de l’autre action ; je n’ai pas effectué cette action.",
+    "unavailableAnswer": "L’aide OpenWhispr est temporairement indisponible. Réessayez ou ouvrez la documentation officielle.",
     "topicsList": {
       "hotkeys": "Raccourcis",
       "microphone": "Microphone",
@@ -4843,6 +4847,14 @@
       "language": "Langues",
       "backup": "Sauvegarde",
       "assistant": "Assistant"
-    }
+    },
+    "appVersion": "Version de l’application",
+    "platform": "Plateforme",
+    "osVersion": "Version du système",
+    "processing": "Traitement",
+    "engine": "Moteur",
+    "policy": "Assistant autorisé par la politique",
+    "on": "Activé",
+    "off": "Désactivé"
   }
 }

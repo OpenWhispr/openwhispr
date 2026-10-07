@@ -4819,21 +4819,25 @@
     }
   },
   "productHelp": {
-    "title": "OpenWhispr 帮助",
-    "description": "官方指南和相关设置。无需账户或 AI 模型。",
-    "topics": "帮助主题",
-    "essentials": "离线指南（英语）",
-    "openArticle": "阅读完整文章",
     "sources": "官方文档",
     "loading": "正在查询官方文档…",
-    "policyFallback": "组织策略限制了在线查询。离线指南仍可使用。",
-    "offline": "无法查询最新文档。请使用离线指南或重试。",
-    "refresh": "刷新",
     "settings": "当前应用设置",
-    "settingsNote": "只读显示已保存的选项和已知权限，不会测试设备。在此帮助视图中，设置保留在本设备上。",
-    "policy": "允许使用助手",
-    "on": "开启",
-    "off": "关闭",
+    "guidance": "内置指南（英文）。查询文档不会更新此指南。",
+    "settingsNote": "为本次回复读取的设置和已知权限；不会更改设置或测试设备。",
+    "readAt": "读取时间：{{time}}",
+    "sourceStatus": {
+      "live": "已获取文章",
+      "bundled": "内置备用指南"
+    },
+    "reason": {
+      "policy": "您组织的策略限制了在线文档查询。",
+      "rateLimit": "在线文档查询已达到上限。现显示内置指南。",
+      "unavailable": "无法核实当前文档。现显示内置指南。"
+    },
+    "openFailed": "无法打开文章。您可以复制链接并在浏览器中打开。",
+    "unknownAnswer": "我无法根据 OpenWhispr 内置指南核实该功能或控件。我没有更改任何设置。请查阅官方文档，或描述您看到的设置。",
+    "mixedAnswer": "我可以在此提供只读的 OpenWhispr 帮助。请将产品帮助问题与其他操作分开提出；我没有执行该操作。",
+    "unavailableAnswer": "OpenWhispr 帮助暂时不可用。请重试或打开官方文档。",
     "topicsList": {
       "hotkeys": "快捷键",
       "microphone": "麦克风",
@@ -4843,6 +4847,14 @@
       "language": "语言",
       "backup": "备份",
       "assistant": "助手"
-    }
+    },
+    "appVersion": "应用版本",
+    "platform": "平台",
+    "osVersion": "操作系统版本",
+    "processing": "处理方式",
+    "engine": "引擎",
+    "policy": "策略允许使用助手",
+    "on": "开启",
+    "off": "关闭"
   }
 }

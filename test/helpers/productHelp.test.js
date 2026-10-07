@@ -11,7 +11,7 @@ const controller = () => new AbortController();
 const searchContent = [
   {
     type: "text",
-    text: "Title: Shortcuts\nLink: https://docs.openwhispr.com/help/dictation/hotkeys\nPage: help/dictation/hotkeys\nContent: Official help",
+    text: "---\ntitle: Shortcuts\n---\nComplete official help",
   },
 ];
 function fixture(content = searchContent) {
@@ -42,7 +42,7 @@ test("guest retrieval uses only fixed topics, a fixed host, and no credentials",
   );
   assert.equal(result.source, "live");
   assert.equal(result.articles[0].url, "https://docs.openwhispr.com/help/dictation/hotkeys");
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 4);
   for (const call of calls) {
     assert.equal(call.url, "https://docs.openwhispr.com/mcp");
     assert.equal(call.options.credentials, "omit");
@@ -52,10 +52,13 @@ test("guest retrieval uses only fixed topics, a fixed host, and no credentials",
       /PRIVATE NOTE|SECRET|Authorization|Cookie|submit_feedback/
     );
   }
-  assert.equal(calls[2].body.params.arguments.query, topics.hotkeys.query);
+  assert.deepEqual(
+    calls.slice(2).map((c) => c.body.params.arguments.command),
+    topics.hotkeys.paths.map((path) => `cat ${path}.mdx`)
+  );
 });
 
-test("read accepts only discovered/curated strict article paths and creates its own command", async () => {
+test("read accepts only topic-scoped curated strict article paths and creates its own command", async () => {
   const { fetch, calls } = fixture([{ type: "text", text: "Article text" }]);
   const help = createProductHelp({ fetch });
   for (const page of [
@@ -64,6 +67,10 @@ test("read accepts only discovered/curated strict article paths and creates its 
     "/help/../secret",
     "https://evil.test/x",
     "/help/unknown-private-note",
+    "/guides/local-models",
+    "help/dictation/hotkeys",
+    "/help/dictation/hotkeys.mdx",
+    "/help/dictation/hotkeys%2f..",
   ]) {
     await assert.rejects(
       help.lookup({ topic: "hotkeys", page }, { signal: controller().signal, allowed: true }),
@@ -76,7 +83,7 @@ test("read accepts only discovered/curated strict article paths and creates its 
     { signal: controller().signal, allowed: true }
   );
   assert.equal(r.articles[0].text, "Article text");
-  assert.equal(calls[2].body.params.arguments.command, "head -160 /help/dictation/hotkeys.mdx");
+  assert.equal(calls[2].body.params.arguments.command, "cat /help/dictation/hotkeys.mdx");
 });
 
 test("policy refusal, unavailable network, malformed response, rate limits retain bundled help", async () => {
@@ -118,7 +125,7 @@ test("policy refusal, unavailable network, malformed response, rate limits retai
       .reason,
     "rateLimit"
   );
-  assert.equal(f.calls.length, 36);
+  assert.equal(f.calls.length, 48);
 });
 
 test("untrusted result cannot supply foreign URLs or execute another operation", async () => {
@@ -133,8 +140,13 @@ test("untrusted result cannot supply foreign URLs or execute another operation",
     { topic: "hotkeys" },
     { signal: controller().signal, allowed: true }
   );
-  assert.equal(r.articles.length, 1);
-  assert.equal(f.calls.length, 3);
+  assert.equal(r.articles.length, 2);
+  assert.ok(r.articles.every((a) => topics.hotkeys.paths.includes(a.path)));
+  assert.ok(r.articles.every((a) => a.url === `https://docs.openwhispr.com${a.path}`));
+  assert.equal(f.calls.length, 4);
+  assert.ok(
+    f.calls.slice(2).every((c) => c.body.params.name === "query_docs_filesystem_open_whispr")
+  );
 });
 
 test("cancellation aborts transport and does not become an offline answer", async () => {
@@ -300,4 +312,54 @@ test("the main-process helper loads using only files included in desktop packagi
     typeof require(path.join(root, "src/helpers/productHelp.js")).createProductHelp,
     "function"
   );
+});
+
+test("complete article reads preserve relevant guidance past old snippet limits", async () => {
+  const text = "Introduction\n".repeat(1200) + "Hold: release the shortcut to stop recording.";
+  const f = fixture([{ type: "text", text }]);
+  const result = await createProductHelp({ fetch: f.fetch }).lookup(
+    { topic: "hotkeys" },
+    { signal: controller().signal, allowed: true }
+  );
+  assert.equal(result.source, "live");
+  assert.equal(result.articles[0].text, text);
+});
+
+test("incomplete, error and oversized article content is explicitly bundled", async () => {
+  for (const text of [
+    "",
+    "Error: file not found",
+    "exit: 1\n--- stderr ---\ncat: missing",
+    "[output truncated]",
+    "x".repeat(64001),
+  ]) {
+    const f = fixture([{ type: "text", text }]);
+    const result = await createProductHelp({ fetch: f.fetch }).lookup(
+      { topic: "hotkeys" },
+      { signal: controller().signal, allowed: true }
+    );
+    assert.equal(result.source, "bundled");
+    assert.equal(result.reason, "unavailable");
+    assert.equal(result.retrievedAt, null);
+  }
+});
+
+test("context supplies canonical labels and reads the new value on every projection", async () => {
+  const { projectHelpSettings } = await import("../../src/services/help/helpContext.ts");
+  const state = {
+    activeDictationKey: "RightCommand",
+    activationMode: "push",
+    microphoneSelectionMode: "system",
+  };
+  const project = (topic) =>
+    projectHelpSettings(topic, state, {}, { mode: "local", provider: "local" }, true);
+  assert.equal(project("hotkeys").activationModeLabel, "Hold");
+  assert.equal(project("hotkeys").dictationKey, "RightCommand");
+  state.activeDictationKey = "Control+Alt+K";
+  state.activationMode = "tap";
+  assert.equal(project("hotkeys").dictationKey, "Control+Alt+K");
+  assert.equal(project("hotkeys").activationModeLabel, "Tap");
+  assert.equal(project("microphone").microphoneSelectionModeLabel, "System Default");
+  state.activationMode = "unknown";
+  assert.equal(project("hotkeys").activationModeLabel, null);
 });

@@ -63,9 +63,15 @@ export async function getHelpContext(topic: HelpTopic) {
   return {
     platform: basics.platform,
     version: basics.version,
+    appVersion: basics.version,
+    platformLabel:
+      ({ darwin: "macOS", win32: "Windows", linux: "Linux" } as Record<string, string>)[
+        basics.platform
+      ] || "Unknown",
+    osVersion: null,
     readAt: new Date().toISOString(),
     policyStatus: policy.status,
     values,
-    note: "Read-only saved configuration and known permission state, not a device test. Missing values are unknown. Processing selections may be constrained by organisation policy.",
+    note: "Read-only current saved configuration and known permission state, not a device test. appVersion/version is the OpenWhispr app version; osVersion is unknown. Use canonical labels: push means Hold, not Tap. Activation mode does not determine local or cloud processing. Missing values are unknown. Processing selections may be constrained by organisation policy.",
   };
 }

@@ -5,7 +5,7 @@ const AgentStreamRequestRegistry = require("./agentStreamRequestRegistry");
 const ENDPOINT = "https://docs.openwhispr.com/mcp";
 const ORIGIN = "https://docs.openwhispr.com";
 const MAX_RESPONSE_BYTES = 128 * 1024;
-const MAX_TEXT = 12000;
+const MAX_TEXT = 64000;
 
 function validPage(value) {
   return (
@@ -74,47 +74,18 @@ function parseRpc(text, id) {
   throw new Error("Missing help response");
 }
 
-function searchArticles(result) {
-  const articles = [];
-  for (const item of (result.content || []).slice(0, 20)) {
-    if (item.type !== "text" || typeof item.text !== "string") continue;
-    const match = item.text.match(
-      /^Title: ([^\n]+)\nLink: (https:\/\/[^\n]+)\nPage: ([^\n]+)\nContent: ([\s\S]*)$/
-    );
-    if (!match) continue;
-    const url = new URL(match[2]);
-    const page = "/" + match[3].replace(/^\//, "");
-    if (
-      url.origin !== ORIGIN ||
-      url.username ||
-      url.password ||
-      url.search ||
-      url.pathname !== page ||
-      !validPage(page)
-    )
-      continue;
-    articles.push({
-      title: match[1].slice(0, 150),
-      url: url.href,
-      path: page,
-      text: match[4].slice(0, 3000),
-    });
-    if (articles.length === 4) break;
-  }
-  return articles;
-}
-
 function createProductHelp({ fetch, now = Date.now }) {
   // Public, fixed-topic queries only: no account credentials, settings or user text.
   let windowStart = now();
   let requests = 0;
-  const knownPages = new Set(Object.values(topics).map((topic) => topic.path));
   async function lookup({ topic, page }, { signal, allowed }) {
     if (
       !Object.hasOwn(topics, topic) ||
-      (page !== undefined && (!validPage(page) || !knownPages.has(page)))
+      (page !== undefined && (!validPage(page) || !topics[topic].paths.includes(page)))
     )
-      throw new Error("Invalid help request");
+      throw new Error(
+        "Invalid help request: use an exact path returned for this topic, including its leading slash and without .mdx. Stop retrying the path; request the topic essentials instead."
+      );
     if (signal.aborted) throw new Error("Cancelled");
     if (!allowed) return bundled(topic, "policy");
     if (now() - windowStart >= 60000) {
@@ -153,32 +124,42 @@ function createProductHelp({ fetch, now = Date.now }) {
         clientInfo: { name: "openwhispr-help", version: "1" },
       });
       await rpc(null, "notifications/initialized", {});
-      const result = await rpc(
-        2,
-        "tools/call",
-        page
-          ? {
-              name: "query_docs_filesystem_open_whispr",
-              arguments: { command: `head -160 ${page}.mdx` },
-            }
-          : { name: "search_open_whispr", arguments: { query: topics[topic].query } }
-      );
-      const articles = page
-        ? [
-            {
-              title: page.split("/").pop(),
-              path: page,
-              url: ORIGIN + page,
-              text: (result.content || [])
-                .filter((c) => c.type === "text" && typeof c.text === "string")
-                .map((c) => c.text)
-                .join("\n")
-                .slice(0, MAX_TEXT),
-            },
-          ]
-        : searchArticles(result);
-      if (!articles.length || !articles[0].text) return bundled(topic, "unavailable");
-      for (const article of articles) knownPages.add(article.path);
+      // Read complete curated pages, not broad search snippets that can rank another
+      // platform first or truncate the instructions that answer the question.
+      const paths = page ? [page] : topics[topic].paths;
+      const articles = [];
+      for (const [index, path] of paths.entries()) {
+        const result = await rpc(2 + index, "tools/call", {
+          name: "query_docs_filesystem_open_whispr",
+          arguments: { command: `cat ${path}.mdx` },
+        });
+        const rawText = (result.content || [])
+          .filter((c) => c.type === "text" && typeof c.text === "string")
+          .map((c) => c.text)
+          .join("\n");
+        const exit = rawText.match(/^exit:\s*(\d+)/);
+        if (exit && exit[1] !== "0") return bundled(topic, "unavailable");
+        const text = rawText.replace(/^exit: 0\r?\n--- stdout ---\r?\n/, "");
+        // A partial, empty or failed page is not complete evidence. Fall back
+        // explicitly rather than silently clipping content and calling it live.
+        if (
+          !text.trim() ||
+          text.length > MAX_TEXT ||
+          /^(?:error:|file not found|no such file)/im.test(text) ||
+          /\[(?:output |content )?truncated\]/i.test(text)
+        ) {
+          return bundled(topic, "unavailable");
+        }
+        articles.push({
+          title:
+            text.match(/^# (.+)$/m)?.[1] ||
+            text.match(/^title:\s*["']?([^"'\n]+)/m)?.[1] ||
+            path.split("/").pop(),
+          path,
+          url: ORIGIN + path,
+          text,
+        });
+      }
       return { source: "live", reason: null, retrievedAt: new Date(now()).toISOString(), articles };
     } catch {
       if (signal.aborted) throw new Error("Cancelled");
@@ -245,5 +226,4 @@ module.exports = {
   remoteHelpAllowed,
   validPage,
   parseRpc,
-  searchArticles,
 };

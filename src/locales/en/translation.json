@@ -4819,21 +4819,25 @@
     }
   },
   "productHelp": {
-    "title": "OpenWhispr Help",
-    "description": "Official guides and relevant settings. No account or AI model needed.",
-    "topics": "Help topics",
-    "essentials": "Offline essentials (English)",
-    "openArticle": "Read full article",
     "sources": "Official documentation",
     "loading": "Looking up official documentation…",
-    "policyFallback": "Your organisation’s policy limits online lookup. Offline essentials remain available.",
-    "offline": "Current documentation could not be checked. Use the offline essentials or try again.",
-    "refresh": "Refresh",
     "settings": "Current app settings",
-    "settingsNote": "Read-only saved choices and known permissions; this does not test your devices. These settings stay on this device in this Help view.",
-    "policy": "Assistant allowed",
-    "on": "On",
-    "off": "Off",
+    "guidance": "Built-in guidance (English). Documentation lookup does not update this guidance.",
+    "settingsNote": "Read-only choices and known permissions captured for this reply; this does not test your devices.",
+    "readAt": "Read at {{time}}",
+    "sourceStatus": {
+      "live": "Article retrieved",
+      "bundled": "Built-in fallback"
+    },
+    "reason": {
+      "policy": "Your organisation’s policy limits online documentation lookup.",
+      "rateLimit": "Online documentation lookup reached its limit. Built-in guidance is shown.",
+      "unavailable": "Current documentation could not be checked. Built-in guidance is shown."
+    },
+    "openFailed": "Could not open the article. You can copy its link and open it in your browser.",
+    "unknownAnswer": "I cannot verify that feature or control from the built-in OpenWhispr guidance. I have not changed any settings. Check the official documentation or describe the setting you can see.",
+    "mixedAnswer": "I can show read-only OpenWhispr help here. Please ask the product-help question separately from the other action; I have not performed that action.",
+    "unavailableAnswer": "OpenWhispr help is temporarily unavailable. Try again or open the official documentation.",
     "topicsList": {
       "hotkeys": "Shortcuts",
       "microphone": "Microphone",
@@ -4843,6 +4847,14 @@
       "language": "Languages",
       "backup": "Backup",
       "assistant": "Assistant"
-    }
+    },
+    "appVersion": "App version",
+    "platform": "Platform",
+    "osVersion": "OS version",
+    "processing": "Processing",
+    "engine": "Engine",
+    "policy": "Assistant allowed by policy",
+    "on": "On",
+    "off": "Off"
   }
 }

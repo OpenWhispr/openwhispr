@@ -1,0 +1,109 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const React = require("react");
+const { createRoot } = require("react-dom/client");
+const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const { installInteractiveDom, findElement } = require("../lib/interactiveDom");
+
+const path = "/help/dictation/hotkeys";
+const source = {
+  title: "Shortcuts",
+  path,
+  url: `https://docs.openwhispr.com${path}`,
+  source: "bundled",
+  reason: "unavailable",
+};
+const call = (metadata = {}) => ({
+  id: "help",
+  name: "grounded_product_help",
+  arguments: "{}",
+  status: "completed",
+  metadata: {
+    kind: "grounded-help",
+    sources: [source],
+    facts: [{ label: "Activation mode", value: "Hold" }],
+    readAt: "2026-10-07T12:00:00.000Z",
+    ...metadata,
+  },
+});
+
+test("help evidence accepts only completed app metadata and exact allowlisted source links", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t);
+  const { extractHelpEvidence } = await vite.ssrLoadModule("/components/chat/helpEvidence.ts");
+  assert.equal(extractHelpEvidence([{ ...call(), name: "search_web" }]), null);
+  assert.equal(extractHelpEvidence([{ ...call(), status: "error" }]), null);
+  assert.equal(extractHelpEvidence([call({ kind: "model-help" })]), null);
+  const bad = [
+    { ...source, url: "https://evil.example" },
+    { ...source, path: "/help/dictation/../private" },
+    { ...source, path: "/help/dictation/hotkeys?token=secret" },
+    { ...source, url: `${source.url}#generated` },
+    { ...source, source: "claimed-live" },
+  ];
+  assert.equal(extractHelpEvidence([call({ sources: bad })]).sources.length, 0);
+  const evidence = extractHelpEvidence([call({ sources: [...bad, source, source] })]);
+  assert.equal(evidence.sources.length, 1);
+  assert.equal(evidence.sources[0].url, source.url);
+  assert.deepEqual(evidence.facts, [{ label: "Activation mode", value: "Hold" }]);
+});
+
+test("help evidence shows built-in guidance, per-source fallback, canonical facts, and real links in Chat", async (t) => {
+  let root;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  const vite = await createRendererServer(t, {
+    mockModules: {
+      "/ui/MarkdownRenderer": "export function MarkdownRenderer({content}) { return content; }",
+    },
+  });
+  const { ChatMessage } = await vite.ssrLoadModule("/components/chat/ChatMessage.tsx");
+  root = createRoot(container);
+  await React.act(async () =>
+    root.render(
+      React.createElement(ChatMessage, {
+        messageId: "answer",
+        role: "assistant",
+        content: "Reviewed answer",
+        isStreaming: false,
+        toolCalls: [call()],
+      })
+    )
+  );
+  assert.match(container.textContent, /productHelp.guidance/);
+  assert.match(container.textContent, /productHelp.reason.unavailable/);
+  assert.match(container.textContent, /productHelp.sourceStatus.bundled/);
+  assert.match(container.textContent, /Activation modecommon.hold/);
+  assert.doesNotMatch(container.textContent, /grounded_product_help/);
+  const facts = findElement(container, (element) => element.tagName === "DETAILS");
+  assert.equal(facts.getAttribute("open"), "");
+  const link = findElement(container, (element) => element.tagName === "A");
+  assert.equal(link.getAttribute("href"), source.url);
+});
+
+test("live and fallback sources keep separate statuses; malformed facts and dates are omitted", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t);
+  const { extractHelpEvidence } = await vite.ssrLoadModule("/components/chat/helpEvidence.ts");
+  const live = {
+    ...source,
+    path: "/help/dictation/hold-or-tap",
+    url: "https://docs.openwhispr.com/help/dictation/hold-or-tap",
+    source: "live",
+  };
+  const evidence = extractHelpEvidence([
+    call({
+      sources: [source, live],
+      facts: [{ label: "bad", value: { secret: "x" } }],
+      readAt: "not a timestamp",
+    }),
+  ]);
+  assert.equal(evidence.sources[0].reason, "unavailable");
+  assert.equal(evidence.sources[1].reason, null);
+  assert.equal(evidence.sources[1].source, "live");
+  assert.deepEqual(evidence.facts, []);
+  assert.equal(evidence.readAt, null);
+});

@@ -4819,21 +4819,25 @@
     }
   },
   "productHelp": {
-    "title": "OpenWhispr-Hilfe",
-    "description": "Offizielle Anleitungen und passende Einstellungen. Kein Konto oder KI-Modell nötig.",
-    "topics": "Hilfethemen",
-    "essentials": "Offline-Grundlagen (Englisch)",
-    "openArticle": "Vollständigen Artikel lesen",
     "sources": "Offizielle Dokumentation",
     "loading": "Offizielle Dokumentation wird durchsucht…",
-    "policyFallback": "Die Richtlinie deiner Organisation beschränkt die Online-Suche. Die Offline-Grundlagen bleiben verfügbar.",
-    "offline": "Die aktuelle Dokumentation konnte nicht geprüft werden. Nutze die Offline-Grundlagen oder versuche es erneut.",
-    "refresh": "Aktualisieren",
     "settings": "Aktuelle Einstellungen",
-    "settingsNote": "Gespeicherte Auswahl und bekannte Berechtigungen, nur lesbar; kein Gerätetest. In dieser Ansicht bleiben die Einstellungen auf diesem Gerät.",
-    "policy": "Assistent erlaubt",
-    "on": "Ein",
-    "off": "Aus",
+    "guidance": "Integrierte Hilfe (Englisch). Der Dokumentationsabruf aktualisiert diese Hinweise nicht.",
+    "settingsNote": "Schreibgeschützte Einstellungen und bekannte Berechtigungen für diese Antwort; Ihre Geräte werden nicht getestet.",
+    "readAt": "Gelesen am {{time}}",
+    "sourceStatus": {
+      "live": "Artikel abgerufen",
+      "bundled": "Integrierte Ersatzhilfe"
+    },
+    "reason": {
+      "policy": "Die Richtlinie Ihrer Organisation beschränkt den Onlineabruf der Dokumentation.",
+      "rateLimit": "Das Abruflimit der Onlinedokumentation wurde erreicht. Die integrierte Hilfe wird angezeigt.",
+      "unavailable": "Die aktuelle Dokumentation konnte nicht geprüft werden. Die integrierte Hilfe wird angezeigt."
+    },
+    "openFailed": "Der Artikel konnte nicht geöffnet werden. Kopieren Sie den Link und öffnen Sie ihn im Browser.",
+    "unknownAnswer": "Ich kann diese Funktion oder dieses Bedienelement anhand der integrierten OpenWhispr-Hilfe nicht bestätigen. Ich habe keine Einstellungen geändert. Prüfen Sie die offizielle Dokumentation oder beschreiben Sie die sichtbare Einstellung.",
+    "mixedAnswer": "Ich kann hier OpenWhispr-Hilfe ohne Änderungen anzeigen. Bitte stellen Sie die Frage zur Produkthilfe getrennt von der anderen Aktion; diese habe ich nicht ausgeführt.",
+    "unavailableAnswer": "Die OpenWhispr-Hilfe ist vorübergehend nicht verfügbar. Versuchen Sie es erneut oder öffnen Sie die offizielle Dokumentation.",
     "topicsList": {
       "hotkeys": "Tastenkürzel",
       "microphone": "Mikrofon",
@@ -4843,6 +4847,14 @@
       "language": "Sprachen",
       "backup": "Sicherung",
       "assistant": "Assistent"
-    }
+    },
+    "appVersion": "App-Version",
+    "platform": "Plattform",
+    "osVersion": "Betriebssystemversion",
+    "processing": "Verarbeitung",
+    "engine": "Engine",
+    "policy": "Assistent laut Richtlinie erlaubt",
+    "on": "Ein",
+    "off": "Aus"
   }
 }

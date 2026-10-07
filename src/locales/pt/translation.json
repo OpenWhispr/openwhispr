@@ -4819,21 +4819,25 @@
     }
   },
   "productHelp": {
-    "title": "Ajuda do OpenWhispr",
-    "description": "Guias oficiais e configurações relevantes. Sem conta ou modelo de IA.",
-    "topics": "Tópicos de ajuda",
-    "essentials": "Guia offline (inglês)",
-    "openArticle": "Ler artigo completo",
     "sources": "Documentação oficial",
     "loading": "Buscando documentação oficial…",
-    "policyFallback": "A política da sua organização limita a consulta online. O guia offline continua disponível.",
-    "offline": "Não foi possível consultar a documentação atual. Use o guia offline ou tente novamente.",
-    "refresh": "Atualizar",
     "settings": "Configurações atuais",
-    "settingsNote": "Opções salvas e permissões conhecidas, somente leitura; não testa seus dispositivos. Nesta tela, as configurações ficam neste dispositivo.",
-    "policy": "Assistente permitido",
-    "on": "Ativado",
-    "off": "Desativado",
+    "guidance": "Orientações integradas (em inglês). A consulta à documentação não atualiza estas orientações.",
+    "settingsNote": "Opções e permissões conhecidas consultadas para esta resposta, sem alterações; os dispositivos não são testados.",
+    "readAt": "Consultado em {{time}}",
+    "sourceStatus": {
+      "live": "Artigo obtido",
+      "bundled": "Orientações integradas de reserva"
+    },
+    "reason": {
+      "policy": "A política da sua organização limita a consulta à documentação online.",
+      "rateLimit": "O limite de consultas à documentação online foi atingido. São apresentadas as orientações integradas.",
+      "unavailable": "Não foi possível verificar a documentação atual. São apresentadas as orientações integradas."
+    },
+    "openFailed": "Não foi possível abrir o artigo. Pode copiar o link e abri-lo no navegador.",
+    "unknownAnswer": "Não consigo verificar essa funcionalidade ou controlo nas orientações integradas do OpenWhispr. Não alterei nenhuma definição. Consulte a documentação oficial ou descreva a definição que vê.",
+    "mixedAnswer": "Posso apresentar aqui a ajuda do OpenWhispr sem efetuar alterações. Faça a pergunta de ajuda separadamente da outra ação; não executei essa ação.",
+    "unavailableAnswer": "A ajuda do OpenWhispr está temporariamente indisponível. Tente novamente ou abra a documentação oficial.",
     "topicsList": {
       "hotkeys": "Atalhos",
       "microphone": "Microfone",
@@ -4843,6 +4847,14 @@
       "language": "Idiomas",
       "backup": "Backup",
       "assistant": "Assistente"
-    }
+    },
+    "appVersion": "Versão da aplicação",
+    "platform": "Plataforma",
+    "osVersion": "Versão do sistema operativo",
+    "processing": "Processamento",
+    "engine": "Motor",
+    "policy": "Assistente permitido pela política",
+    "on": "Ativado",
+    "off": "Desativado"
   }
 }

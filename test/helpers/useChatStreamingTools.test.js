@@ -138,7 +138,7 @@ test("a signed-out chat never offers them", async (t) => {
 });
 
 test("a free plan never offers them", async (t) => {
-  const { captured, offeredTools } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
+  const { captured, offeredTools, getMessages } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
     subscribed: false,
   });
   await captured.sendToAI("Email Josh", []);
@@ -933,7 +933,7 @@ test("official help is offered on Cloud Free", async (t) => {
     ],
   };
   const calls = [];
-  const { captured, offeredTools } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
+  const { captured, offeredTools, getMessages } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
     subscribed: false,
     electronAPI: {
       productHelp: async (id, input) => {
@@ -944,6 +944,84 @@ test("official help is offered on Cloud Free", async (t) => {
     },
   });
   await captured.sendToAI("How do I change an OpenWhispr shortcut?", []);
-  for (const name of ["search_openwhispr_help", "read_openwhispr_help", "get_openwhispr_context"])
-    assert.ok(offeredTools[0].includes(name));
+  assert.equal(offeredTools.length, 0, "grounded help must not depend on model tool selection");
+  assert.equal(calls.length, 1);
+  assert.equal(getMessages()[0].toolCalls[0].name, "grounded_product_help");
+});
+
+test("grounded help refreshes settings each turn and holds all external delivery before lookup", async (t) => {
+  const effects = [];
+  const { captured, getMessages, offeredTools, vite } = await renderChatStreaming(
+    t,
+    CONNECTOR_SURFACE,
+    {
+      settings: {
+        isSignedIn: false,
+        chatAgentMode: "local",
+        dictationKey: "RightCommand",
+        activeDictationKey: "RightCommand",
+        activationMode: "push",
+      },
+      subscribed: false,
+      electronAPI: {
+        productHelpBasics: async () => ({
+          platform: "darwin",
+          version: "1.10.2",
+          microphonePermission: "granted",
+          accessibilityPermission: "granted",
+        }),
+        productHelp: async (_id, input) => {
+          effects.push("lookup");
+          return { source: "bundled", reason: "unavailable", retrievedAt: null, articles: [] };
+        },
+        cancelProductHelp: () => {},
+        semanticSearchNotes: async () => {
+          throw new Error("must not search private notes");
+        },
+      },
+    }
+  );
+  const options = {
+    onHoldDelivery: (opts) => {
+      assert.equal(opts.preserveClipboard, true);
+      effects.push("hold");
+    },
+  };
+  await captured.sendToAI("What is my dictation shortcut currently set to?", [], options);
+  assert.deepEqual(effects.slice(0, 2), ["hold", "lookup"]);
+  const first = getMessages()[0];
+  assert.ok(first.toolCalls[0].metadata.facts.some((f) => f.value === "RightCommand"));
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  useSettingsStore.setState({ dictationKey: "Control+Alt+K", activeDictationKey: "Control+Alt+K" });
+  await captured.sendToAI("What is my dictation shortcut currently set to?", [first], options);
+  const second = getMessages()[1];
+  assert.ok(second.toolCalls[0].metadata.facts.some((f) => f.value === "Control+Alt+K"));
+  assert.equal(offeredTools.length, 0);
+});
+
+test("cancelled help never persists or delivers a late response", async (t) => {
+  let finish;
+  const pending = new Promise((resolve) => {
+    finish = resolve;
+  });
+  const completions = [];
+  const { captured, getMessages } = await renderChatStreaming(
+    t,
+    { onStreamComplete: (...args) => completions.push(args) },
+    {
+      electronAPI: {
+        productHelp: () => pending,
+        cancelProductHelp: () => {},
+        productHelpBasics: async () => ({ platform: "darwin", version: "1.10.2" }),
+      },
+    }
+  );
+  const send = captured.sendToAI("How does Hold mode work in OpenWhispr?", [], {
+    onComplete: () => completions.push("delivery"),
+  });
+  captured.cancelStream();
+  finish({ source: "bundled", articles: [] });
+  await send;
+  assert.equal(getMessages().length, 0);
+  assert.equal(completions.length, 0);
 });
