@@ -5,6 +5,9 @@ const requestedMainWindowPositions = [];
 const createdBrowserWindows = [];
 const screenListeners = [];
 const builtMenus = [];
+// What the macOS Spaces helper answers. WindowManager must show the window
+// either way, so a test can make it fail.
+let spacesReassertResult = true;
 
 // Same stub set as windowManagerMeetingNotification.test.js: WindowManager
 // pulls in electron + sibling managers at require time.
@@ -22,6 +25,7 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
       BrowserWindow: class FakeBrowserWindow {
         constructor(options) {
           this.options = options;
+          this.calls = [];
           this.protectionCalls = [];
           this.closeCalls = 0;
           this.setBoundsCalls = 0;
@@ -68,11 +72,15 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
         }
         showInactive() {
           this.visible = true;
+          this.calls.push("showInactive");
         }
         hide() {
           this.visible = false;
+          this.calls.push("hide");
         }
-        moveTop() {}
+        moveTop() {
+          this.calls.push("moveTop");
+        }
       },
       Menu: {
         buildFromTemplate: (template) => {
@@ -105,6 +113,9 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
   if (request === "./dragManager")
     return class {
       cleanup() {}
+      isDragActive() {
+        return false;
+      }
       async startWindowDrag() {
         return { success: true };
       }
@@ -113,6 +124,15 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
       }
     };
   if (request === "./menuManager") return {};
+  // Records into the window's own call log, so each test reads the re-assert's
+  // place among that window's show/hide/restore calls.
+  if (request === "./macosWindowSpaces")
+    return {
+      reassertAllSpaces: (win) => {
+        win.calls?.push("reassertAllSpaces");
+        return spacesReassertResult;
+      },
+    };
   if (request === "./devServerManager")
     return {
       DEV_SERVER_PORT: 5173,
@@ -154,15 +174,27 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
 const WindowManager = require("../../src/helpers/windowManager");
 Module._load = originalLoad;
 
-function fakeWindow({ visible }) {
+function fakeWindow({ visible, minimized = false }) {
   const calls = [];
+  const listeners = new Map();
   let isVisible = visible;
+  let isMinimized = minimized;
   return {
     calls,
+    listeners,
     window: {
+      calls,
+      on: (event, listener) => listeners.set(event, listener),
+      once: (event, listener) => listeners.set(event, listener),
+      webContents: { send: () => undefined },
       isDestroyed: () => false,
       isVisible: () => isVisible,
-      isMinimized: () => false,
+      isMinimized: () => isMinimized,
+      restore: () => {
+        isMinimized = false;
+        isVisible = true;
+        calls.push("restore");
+      },
       showInactive: () => {
         isVisible = true;
         calls.push("showInactive");
@@ -193,7 +225,17 @@ function makeManager(windowState) {
   manager._notifyMainWindowHorizontalDirection = () => undefined;
   manager.showAgentDictationPill = () => undefined;
   manager.hideAgentDictationPill = () => undefined;
-  return { manager, calls: fake.calls };
+  return { manager, calls: fake.calls, listeners: fake.listeners };
+}
+
+const countCalls = (calls, name) => calls.filter((call) => call === name).length;
+
+// The re-assert must reach a still-hidden window: once ordered in, a window
+// macOS pinned to one Space is already on the wrong desktop.
+function assertReassertedOnceBefore(calls, orderIn) {
+  assert.equal(countCalls(calls, "reassertAllSpaces"), 1, JSON.stringify(calls));
+  assert.ok(calls.includes(orderIn), `${orderIn} missing from ${JSON.stringify(calls)}`);
+  assert.ok(calls.indexOf("reassertAllSpaces") < calls.indexOf(orderIn), JSON.stringify(calls));
 }
 
 test("the Assistant response context menu exposes native Copy only for selected text", () => {
@@ -495,7 +537,7 @@ test("opening the assistant panel surfaces a hidden pill window without activati
     // focus() answers a user-granted activation with a whole-desktop Space
     // slide when another OpenWhispr window lives on a different Space. The
     // non-activating panel becomes key on click instead.
-    assert.deepEqual(calls, ["showInactive", "focusable:true"]);
+    assert.deepEqual(calls, ["reassertAllSpaces", "showInactive", "focusable:true"]);
   });
 });
 
@@ -504,7 +546,13 @@ test("opening the assistant panel focuses the pill window on Windows/Linux", () 
     withPlatform(platform, () => {
       const { manager, calls } = makeManager({ visible: false });
       manager.setAssistantPanelOpen(true);
-      assert.deepEqual(calls, ["showInactive", "focusable:true", "focus"], platform);
+      // The Spaces re-assert is asked for everywhere; the helper is a no-op
+      // off macOS.
+      assert.deepEqual(
+        calls,
+        ["reassertAllSpaces", "showInactive", "focusable:true", "focus"],
+        platform
+      );
     });
   }
 });
@@ -530,7 +578,7 @@ test("showDictationPanel still surfaces a hidden window while the panel is open"
   // Panel open but the window got hidden afterwards (tray Hide raced the open).
   manager._assistantPanelOpen = true;
   manager.showDictationPanel({ focus: true });
-  assert.deepEqual(calls, ["showInactive", "focus"]);
+  assert.deepEqual(calls, ["reassertAllSpaces", "showInactive", "focus"]);
 });
 
 test("hideDictationPanel refuses while an assistant command is busy or the panel is open", () => {
@@ -883,4 +931,347 @@ test("entering onboarding hides an already-visible companion pill", () => {
   manager.setOnboardingActive(true);
 
   assert.equal(pill.isVisible(), false);
+});
+
+// macOS can pin a hidden overlay panel to a single Space (a display
+// reconfiguration does it), after which every show lands on a desktop the user
+// is not looking at. Every hidden → shown edge re-joins it to every Space.
+
+test("showing a hidden pill re-joins it to every Space just before it is ordered in", () => {
+  const { manager, calls } = makeManager({ visible: false });
+  manager.showDictationPanel();
+  assertReassertedOnceBefore(calls, "showInactive");
+});
+
+test("a minimized pill is re-joined before restore() orders it back in", () => {
+  const { manager, calls } = makeManager({ visible: false, minimized: true });
+  manager.showDictationPanel();
+  assertReassertedOnceBefore(calls, "restore");
+});
+
+test("the first live transcript update re-joins a hidden pill before showing it", async () => {
+  const { manager, calls } = makeManager({ visible: false });
+  await manager.showTranscriptionPreview("hello");
+  assertReassertedOnceBefore(calls, "showInactive");
+});
+
+test("the pill still shows when the Spaces re-assert could not run", () => {
+  spacesReassertResult = false;
+  try {
+    const { manager, calls } = makeManager({ visible: false });
+    manager.showDictationPanel();
+    assertReassertedOnceBefore(calls, "showInactive");
+  } finally {
+    spacesReassertResult = true;
+  }
+});
+
+test("every show of the hidden Agent companion re-joins it to every Space first", () => {
+  createdBrowserWindows.length = 0;
+  const manager = new WindowManager();
+  manager.setOnboardingActive(false);
+  manager._assistantPanelOpen = true;
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    getBounds: () => ({ x: 1000, y: 100, width: 400, height: 600 }),
+  };
+
+  manager.showAgentDictationPill();
+  const pill = createdBrowserWindows.at(-1);
+  pill.webContentsListeners.get("did-finish-load")();
+  assertReassertedOnceBefore(pill.calls, "showInactive");
+
+  // The companion is hidden whenever the panel closes and reused on reopen.
+  manager.hideAgentDictationPill();
+  pill.calls.length = 0;
+  manager.showAgentDictationPill();
+  assertReassertedOnceBefore(pill.calls, "showInactive");
+});
+
+// registerMainWindowEvents also arms its 10 s first-show backstop; every timer
+// test below stays inside it.
+function registerMacMainWindowEvents(t, windowState) {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  t.after(() => t.mock.timers.reset());
+  screenListeners.length = 0;
+  const harness = makeManager(windowState);
+  withPlatform("darwin", () => harness.manager.registerMainWindowEvents());
+  const emitDisplayChange = (event) => {
+    for (const entry of screenListeners) {
+      if (entry.event === event) entry.listener();
+    }
+  };
+  return { ...harness, emitDisplayChange };
+}
+
+// #1886: re-applying Spaces membership to a visible window blinks it, and these
+// paths run on every show event, focus, preview chunk and panel toggle.
+test("preservation: a visible pill is never re-asserted by show, focus, preview or panel paths", async (t) => {
+  const { manager, calls, listeners } = registerMacMainWindowEvents(t, { visible: true });
+
+  manager.showDictationPanel();
+  manager.showDictationPanel({ focus: true });
+  await manager.showTranscriptionPreview("partial");
+  manager.completeTranscriptionPreview("final");
+  listeners.get("show")();
+  listeners.get("focus")();
+  manager.setAssistantPanelOpen(true);
+  manager.showDictationPanel();
+  manager.setAssistantPanelOpen(false);
+
+  assert.equal(countCalls(calls, "reassertAllSpaces"), 0, JSON.stringify(calls));
+});
+
+// With auto-hide off the pill never goes hidden, so the show-edge re-assert
+// never runs; a display change is the known trigger, so it recovers there.
+function assertRecoveredOnce(calls) {
+  assert.equal(countCalls(calls, "hide"), 1, JSON.stringify(calls));
+  assert.equal(countCalls(calls, "showInactive"), 1, JSON.stringify(calls));
+  assertReassertedOnceBefore(calls, "showInactive");
+  assert.ok(calls.indexOf("hide") < calls.indexOf("reassertAllSpaces"), JSON.stringify(calls));
+}
+
+test("a burst of display changes re-joins a visible, idle pill once, after it settles", (t) => {
+  const { calls, emitDisplayChange } = registerMacMainWindowEvents(t, { visible: true });
+
+  emitDisplayChange("display-removed");
+  t.mock.timers.tick(400);
+  emitDisplayChange("display-added");
+  t.mock.timers.tick(400);
+  emitDisplayChange("display-metrics-changed");
+  t.mock.timers.tick(400);
+  assert.equal(calls.length, 0, `still settling, nothing touched yet: ${JSON.stringify(calls)}`);
+
+  t.mock.timers.tick(2_000);
+  assertRecoveredOnce(calls);
+});
+
+test("a display change leaves a hidden pill to the re-assert on its next show", (t) => {
+  const { calls, emitDisplayChange } = registerMacMainWindowEvents(t, { visible: false });
+
+  emitDisplayChange("display-removed");
+  t.mock.timers.tick(2_000);
+
+  assert.deepEqual(calls, []);
+});
+
+test("a pill hidden while a display change settles is not shown again by it", (t) => {
+  const { manager, calls, emitDisplayChange } = registerMacMainWindowEvents(t, { visible: true });
+
+  emitDisplayChange("display-removed");
+  manager.hideDictationPanel();
+  t.mock.timers.tick(2_000);
+
+  assert.equal(countCalls(calls, "showInactive"), 0, JSON.stringify(calls));
+  assert.equal(countCalls(calls, "reassertAllSpaces"), 0, JSON.stringify(calls));
+});
+
+// A window created after the change is not pinned by it, and its first show
+// re-joins it to every Space anyway.
+test("a display change does nothing to a pill window recreated while it settles", (t) => {
+  const { manager, calls, emitDisplayChange } = registerMacMainWindowEvents(t, { visible: true });
+
+  emitDisplayChange("display-removed");
+  const recreated = fakeWindow({ visible: true });
+  manager.mainWindow = recreated.window;
+  t.mock.timers.tick(2_000);
+
+  assert.deepEqual(calls, []);
+  assert.deepEqual(recreated.calls, []);
+});
+
+for (const [label, interrupt] of [
+  ["the window is destroyed", ({ manager }) => (manager.mainWindow.isDestroyed = () => true)],
+  ["the window is gone", ({ manager }) => (manager.mainWindow = null)],
+  ["the app is quitting", ({ manager }) => (manager.isQuitting = true)],
+  ["onboarding has taken over", ({ manager }) => (manager._onboardingActive = true)],
+]) {
+  test(`a display change does nothing once ${label}`, (t) => {
+    const harness = registerMacMainWindowEvents(t, { visible: true });
+
+    harness.emitDisplayChange("display-removed");
+    interrupt(harness);
+    t.mock.timers.tick(2_000);
+
+    assert.deepEqual(harness.calls, []);
+  });
+}
+
+for (const [label, setBusy, clearBusy] of [
+  [
+    "mic preparation",
+    (manager) => manager.setDictationLifecycleState("preparing"),
+    (manager) => manager.setDictationLifecycleState("idle"),
+  ],
+  [
+    "a recording",
+    (manager) => manager.setDictationLifecycleState("recording"),
+    (manager) => manager.setDictationLifecycleState("idle"),
+  ],
+  [
+    "transcription",
+    (manager) => manager.setDictationLifecycleState("processing"),
+    (manager) => manager.setDictationLifecycleState("idle"),
+  ],
+  [
+    "a pill drag",
+    (manager) => (manager.dragManager.isDragActive = () => true),
+    (manager) => (manager.dragManager.isDragActive = () => false),
+  ],
+  [
+    "an open Agent panel",
+    (manager) => manager.setAssistantPanelOpen(true),
+    (manager) => manager.setAssistantPanelOpen(false),
+  ],
+  [
+    "an Agent command still thinking",
+    (manager) => manager.setAssistantPanelBusy(true),
+    (manager) => manager.setAssistantPanelBusy(false),
+  ],
+]) {
+  test(`a display change during ${label} recovers the pill once that is over`, (t) => {
+    const { manager, calls, emitDisplayChange } = registerMacMainWindowEvents(t, {
+      visible: true,
+    });
+    setBusy(manager);
+
+    emitDisplayChange("display-removed");
+    t.mock.timers.tick(2_000);
+    assert.equal(countCalls(calls, "hide"), 0, `hidden mid-${label}: ${JSON.stringify(calls)}`);
+
+    clearBusy(manager);
+    t.mock.timers.tick(2_000);
+    assertRecoveredOnce(calls);
+  });
+}
+
+// The companion is on screen for exactly as long as the Agent panel is open,
+// which the pill waits out, so the companion is recovered on its own with the
+// panel left open. It never takes focus, so cycling it costs the panel nothing.
+function registerMacCompanion(t) {
+  const harness = registerMacMainWindowEvents(t, { visible: true });
+  // makeManager stubs the companion out; these tests need the real one.
+  delete harness.manager.showAgentDictationPill;
+  delete harness.manager.hideAgentDictationPill;
+  createdBrowserWindows.length = 0;
+  withPlatform("darwin", () => harness.manager.setAssistantPanelOpen(true));
+  const pill = createdBrowserWindows.at(-1);
+  pill.webContentsListeners.get("did-finish-load")();
+  harness.calls.length = 0;
+  pill.calls.length = 0;
+  return { ...harness, pill };
+}
+
+const COMPANION_RECOVERY = ["hide", "reassertAllSpaces", "showInactive", "moveTop"];
+
+test("a display change re-joins the visible companion once, with the Agent panel left open", (t) => {
+  const { calls, pill, emitDisplayChange } = registerMacCompanion(t);
+
+  emitDisplayChange("display-removed");
+  t.mock.timers.tick(700);
+  assert.deepEqual(pill.calls, [], "still settling");
+
+  t.mock.timers.tick(100);
+  assert.deepEqual(pill.calls, COMPANION_RECOVERY);
+
+  // The pill keeps waiting out the open panel; the companion is not cycled again.
+  t.mock.timers.tick(5_000);
+  assert.deepEqual(pill.calls, COMPANION_RECOVERY);
+  assert.deepEqual(calls, [], "the pill holds the panel's keyboard focus: untouched");
+});
+
+test("a burst of display changes re-joins the companion once, after it settles", (t) => {
+  const { pill, emitDisplayChange } = registerMacCompanion(t);
+
+  emitDisplayChange("display-removed");
+  t.mock.timers.tick(400);
+  emitDisplayChange("display-added");
+  t.mock.timers.tick(400);
+  emitDisplayChange("display-metrics-changed");
+  t.mock.timers.tick(400);
+  assert.deepEqual(pill.calls, [], "still settling");
+
+  t.mock.timers.tick(2_000);
+  assert.deepEqual(pill.calls, COMPANION_RECOVERY);
+});
+
+test("once the Agent panel closes the pill is recovered, and the companion stays hidden", (t) => {
+  const { manager, calls, pill, emitDisplayChange } = registerMacCompanion(t);
+
+  emitDisplayChange("display-removed");
+  t.mock.timers.tick(2_000);
+  withPlatform("darwin", () => manager.setAssistantPanelOpen(false));
+  t.mock.timers.tick(2_000);
+
+  assertRecoveredOnce(calls);
+  assert.deepEqual(pill.calls, [...COMPANION_RECOVERY, "hide"]);
+});
+
+test("a companion hidden while a display change settles is not shown again by it", (t) => {
+  const { manager, pill, emitDisplayChange } = registerMacCompanion(t);
+
+  emitDisplayChange("display-removed");
+  manager.hideAgentDictationPill();
+  t.mock.timers.tick(2_000);
+
+  assert.deepEqual(pill.calls, ["hide"]);
+  assert.equal(pill.isVisible(), false);
+});
+
+for (const [label, interrupt] of [
+  ["destroyed", (pill) => (pill.isDestroyed = () => true)],
+  ["closed", (pill) => pill.close()],
+]) {
+  test(`a display change does nothing to a companion ${label} while it settles`, (t) => {
+    const { pill, emitDisplayChange } = registerMacCompanion(t);
+
+    emitDisplayChange("display-removed");
+    interrupt(pill);
+    t.mock.timers.tick(2_000);
+
+    assert.deepEqual(pill.calls, []);
+  });
+}
+
+for (const [label, setBusy, clearBusy] of [
+  [
+    "a recording",
+    (manager) => manager.setDictationLifecycleState("recording"),
+    (manager) => manager.setDictationLifecycleState("idle"),
+  ],
+  [
+    "a pill drag",
+    (manager) => (manager.dragManager.isDragActive = () => true),
+    (manager) => (manager.dragManager.isDragActive = () => false),
+  ],
+]) {
+  test(`a display change during ${label} recovers the companion once that is over`, (t) => {
+    const { manager, calls, pill, emitDisplayChange } = registerMacCompanion(t);
+    setBusy(manager);
+
+    emitDisplayChange("display-removed");
+    t.mock.timers.tick(2_000);
+    assert.deepEqual(pill.calls, [], `cycled mid-${label}`);
+
+    clearBusy(manager);
+    t.mock.timers.tick(2_000);
+    assert.deepEqual(pill.calls, COMPANION_RECOVERY);
+    assert.deepEqual(calls, []);
+  });
+}
+
+test("display changes never hide or re-show the pill on Windows or Linux", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  t.after(() => t.mock.timers.reset());
+  for (const platform of ["win32", "linux"]) {
+    screenListeners.length = 0;
+    const { manager, calls } = makeManager({ visible: true });
+    withPlatform(platform, () => manager.registerMainWindowEvents());
+
+    for (const { listener } of screenListeners) listener();
+    t.mock.timers.tick(2_000);
+
+    assert.equal(countCalls(calls, "hide"), 0, platform);
+    assert.equal(countCalls(calls, "reassertAllSpaces"), 0, platform);
+  }
 });

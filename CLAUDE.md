@@ -54,6 +54,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **macos-mic-listener.swift**: Swift source for the CoreAudio process-object microphone listener (event-driven mic detection); falls back to aggregate device activity and retries PID monitoring from its heartbeat
 - **globe-listener.swift**: Swift source for macOS Globe/Fn key detection
 - **macos-window-bounds.swift**: Swift source for the System Settings window reporter used by the onboarding permission guide. Prints the dialog's bounds, whether a sheet or authorization prompt is in front, which app owns the front window (`settings` / `self` / `other`, attributed by process because window owner names are localized) and whether System Settings is running. CoreGraphics window list only, so it needs neither Accessibility nor Screen Recording
+- **native/macos-window-spaces/**: Objective-C N-API addon (`macos-window-spaces.node`, loaded into the main process, not a sidecar) that re-joins an overlay panel to every Space. A display reconfiguration can pin a hidden Electron panel to one Space, and `ElectronNSPanel` keeps the all-Spaces bit set, so no Electron API can re-apply it; the addon calls NSWindow's own `setCollectionBehavior:` with the bit cleared, then the original behavior
 - **bin/**: Directory for compiled native binaries (whisper-cpp, nircmd, key/mic listeners)
 
 ### Helper Modules (src/helpers/)
@@ -168,6 +169,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **vectorIndex.js**: Qdrant collection management — upsert, delete, search
 - **windowConfig.js**: Centralized window configuration
 - **windowManager.js**: Window creation and lifecycle management
+- **macosWindowSpaces.js**: `reassertAllSpaces(window)` over `macos-window-spaces.node`, loaded on first use; a no-op off macOS, and a load or call failure logs once at debug and returns false. WindowManager calls it on every hidden → shown edge of the dictation pill and the Agent companion (`_showInactiveOnAllSpaces`, plus before `restore()`), never on a visible window: re-applying Spaces membership while visible blinks it (#1886). A pill that stays visible (auto-hide off) is cycled through hide → re-assert → show once display changes have settled for 750 ms, waiting out a dictation, a drag or an open/busy Agent panel. A visible Agent companion is cycled the same way with the panel left open, since it never takes focus
 - **cliBridge.js**: Loopback HTTP server on ports 8200–8219, bearer-token auth (token at `~/.openwhispr/cli-bridge.json`), 127.0.0.1-only. Used by the unified CLI to talk to a running desktop app. `POST /v1/transcribe` takes a file **path** (never audio) and runs the user's downloaded local model through `IPCHandlers.transcribeLocalFile`, approving the path with `approveAudioPath` first; `GET /v1/transcribe/models` lists local models with download state and the app's default (`localTranscriptionModels.js`, read from the `.env` pre-warm values).
 - **connectors/**: Agent connectors
   - `connectorManager.js` owns every outside action: `prepare` → ApprovalCard → `commit` for anything other people see, `runDirect` for private drafts. The model can never reach `commit`
@@ -315,6 +317,7 @@ Offline semantic search that finds notes by meaning, not just keywords. Used by 
 - **build-globe-listener.js**: Compiles macOS Globe key listener from Swift source
 - **build-macos-mic-listener.js**: Compiles macOS mic listener from Swift source
 - **build-macos-window-bounds.js**: Compiles the System Settings window reporter from Swift source
+- **build-macos-window-spaces.js**: Compiles the window-Spaces addon with clang against the pinned `node-api-headers` devDependency, for `--arch`/`TARGET_ARCH` like the Swift helpers. Part of `compile:native`; `prebuild:mac:arm64`/`prebuild:mac:x64` run `compile:native` with the matching `TARGET_ARCH`
 - **build-windows-key-listener.js**: Compiles Windows key listener (for local development)
 - **run-electron.js**: Development script to launch Electron with proper environment
 - **lib/download-utils.js**: Shared utilities for downloading and extracting files

@@ -1,6 +1,7 @@
 const { app, screen, BrowserWindow, dialog, ipcMain, Menu } = require("electron");
 const debugLogger = require("./debugLogger");
 const { createLinuxWindowInputRegion } = require("./linuxWindowInputRegion");
+const { reassertAllSpaces } = require("./macosWindowSpaces");
 // Aliased: this class has an openExternalUrl method wrapping the helper.
 const { openExternalUrl: openUrlInExternalBrowser } = require("./externalUrlOpener");
 const HotkeyManager = require("./hotkeyManager");
@@ -30,6 +31,10 @@ const {
 } = require("./dictationLifecycle");
 const { DEV_SERVER_PORT } = DevServerManager;
 const DRAG_MOVE_TOLERANCE_PX = 2;
+// How long display changes must settle before a visible pill is re-joined to
+// every Space: past the Dock's own Spaces rewrite (~100 ms after the event),
+// and long enough to fold a burst of events into one recovery.
+const ALL_SPACES_RECOVERY_DELAY_MS = 750;
 const {
   MAIN_WINDOW_CONFIG,
   CONTROL_PANEL_CONFIG,
@@ -72,6 +77,10 @@ class WindowManager {
     this._agentDictationPillSize = AGENT_DICTATION_PILL_SIZE;
     this._agentDictationPillHorizontalDirection = "left";
     this._agentDictationPillScreenListener = null;
+    this._allSpacesRecoveryListener = null;
+    this._allSpacesRecoveryTimer = null;
+    // Windows a display change left to re-join every Space, each until done.
+    this._allSpacesRecoveryPending = new Set();
     this._notificationDismissTimer = new NotificationDismissTimer(() => {
       // Dismiss first: a prompt raised from the timeout handler must not be
       // closed by this dismissal. The engine is not told the card closed either —
@@ -203,7 +212,7 @@ class WindowManager {
       if (this._assistantPanelOpen) {
         // The window may have been hidden while the command was in flight
         // (PTT tap, auto-hide, tray); focus() is a no-op on a hidden window.
-        if (!this.mainWindow.isVisible()) this.mainWindow.showInactive();
+        this._showInactiveOnAllSpaces(this.mainWindow);
         this.mainWindow.setFocusable(true);
         // macOS: never request app activation for the overlay. focus() calls
         // NSApp activate, and when another OpenWhispr window (control panel)
@@ -1431,7 +1440,7 @@ class WindowManager {
     // Partials arrive several times a second; re-showing a visible window
     // restacks it (and re-fires "show") on every chunk (#1262).
     if (!this.mainWindow.isVisible()) {
-      this.mainWindow.showInactive();
+      this._showInactiveOnAllSpaces(this.mainWindow);
       this.enforceMainWindowOnTop();
     }
   }
@@ -1558,6 +1567,18 @@ class WindowManager {
     return { applied: true, bounds: newPos };
   }
 
+  // The pill and the Agent companion are macOS panels that belong on every
+  // Space, but a display reconfiguration can pin a hidden one to a single
+  // Space, after which every show lands on a desktop the user is not looking
+  // at. Each hidden → shown edge re-joins the window to every Space first. A
+  // visible window is never touched: re-applying Spaces membership while it
+  // is on screen blinks it (#1886).
+  _showInactiveOnAllSpaces(win) {
+    if (win.isVisible()) return;
+    reassertAllSpaces(win);
+    win.showInactive();
+  }
+
   showDictationPanel(options = {}) {
     if (this._onboardingActive) return;
     const { focus = false, reposition = false, targetPidPromise } = options;
@@ -1565,7 +1586,7 @@ class WindowManager {
     if (this._assistantPanelOpen) {
       // The open panel owns geometry (no reposition), but it must never be
       // left invisible: surface the window if something hid it.
-      if (!this.mainWindow.isVisible()) this.mainWindow.showInactive();
+      this._showInactiveOnAllSpaces(this.mainWindow);
       if (focus) this.mainWindow.focus();
       return;
     }
@@ -1573,11 +1594,13 @@ class WindowManager {
       void this._repositionToActiveDisplay(targetPidPromise);
     }
     if (this.mainWindow.isMinimized()) {
+      // restore() orders the window back in itself, so it re-asserts first.
+      reassertAllSpaces(this.mainWindow);
       this.mainWindow.restore();
     }
     if (!this.mainWindow.isVisible()) {
       if (typeof this.mainWindow.showInactive === "function") {
-        this.mainWindow.showInactive();
+        this._showInactiveOnAllSpaces(this.mainWindow);
       } else {
         this.mainWindow.show();
       }
@@ -1936,7 +1959,7 @@ class WindowManager {
     if (!this._agentDictationPillReady) return;
     this.positionAgentDictationPill();
     WindowPositionUtil.setupAlwaysOnTop(pillWindow);
-    if (!pillWindow.isVisible()) pillWindow.showInactive();
+    this._showInactiveOnAllSpaces(pillWindow);
     pillWindow.moveTop?.();
   }
 
@@ -2001,6 +2024,19 @@ class WindowManager {
       }
     }
 
+    // Kept for the app's lifetime, like the companion's display listener.
+    if (process.platform === "darwin" && !this._allSpacesRecoveryListener) {
+      this._allSpacesRecoveryListener = () => {
+        for (const win of [this.mainWindow, this.agentDictationPillWindow]) {
+          if (win) this._allSpacesRecoveryPending.add(win);
+        }
+        this._scheduleAllSpacesRecovery();
+      };
+      screen.on("display-metrics-changed", this._allSpacesRecoveryListener);
+      screen.on("display-added", this._allSpacesRecoveryListener);
+      screen.on("display-removed", this._allSpacesRecoveryListener);
+    }
+
     // Safety timeout: force show the window if ready-to-show doesn't fire within 10 seconds
     const showTimeout = setTimeout(() => {
       if (
@@ -2039,6 +2075,51 @@ class WindowManager {
       if (pillWindow && !pillWindow.isDestroyed()) pillWindow.close();
       this.mainWindow = null;
     });
+  }
+
+  // A display change can pin a visible window too, and nothing else repairs
+  // it while it stays on screen: the pill with auto-hide off, the companion for
+  // as long as the Agent panel is open. Once the change settles, each window
+  // it found goes through the hidden → shown edge itself.
+  _scheduleAllSpacesRecovery() {
+    clearTimeout(this._allSpacesRecoveryTimer);
+    this._allSpacesRecoveryTimer = setTimeout(
+      () => this._recoverAllSpaces(),
+      ALL_SPACES_RECOVERY_DELAY_MS
+    );
+  }
+
+  // Each window leaves the queue once handled: one still waiting keeps the
+  // timer running without the other being cycled again.
+  _recoverAllSpaces() {
+    for (const win of this._allSpacesRecoveryPending) {
+      if (!this._recoverWindowOnAllSpaces(win)) this._allSpacesRecoveryPending.delete(win);
+    }
+    if (this._allSpacesRecoveryPending.size > 0) this._scheduleAllSpacesRecovery();
+  }
+
+  // Returns whether `win` has to wait. A window since replaced, destroyed or
+  // hidden needs nothing: a hidden one is re-joined by its next show, so it is
+  // never resurrected here.
+  _recoverWindowOnAllSpaces(win) {
+    const isPill = win === this.mainWindow && !win.isDestroyed() && win.isVisible();
+    const isCompanion =
+      win === this.agentDictationPillWindow && this._isAgentDictationPillAvailable();
+    if (!(isPill || isCompanion) || this.isQuitting || this._onboardingActive) return false;
+    // Hiding now would interrupt a dictation or a drag. The pill also waits out
+    // the Agent panel, which holds its keyboard focus; the companion never
+    // takes focus, so it is recovered with the panel still open.
+    if (
+      this._dictationLifecycleState !== DICTATION_LIFECYCLE.IDLE ||
+      this.dragManager.isDragActive() ||
+      (isPill && (this._assistantPanelOpen || this._assistantPanelBusy))
+    ) {
+      return true;
+    }
+    win.hide();
+    this._showInactiveOnAllSpaces(win);
+    if (isCompanion) win.moveTop?.();
+    return false;
   }
 
   enforceMainWindowOnTop() {
