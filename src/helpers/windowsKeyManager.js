@@ -20,7 +20,7 @@ class WindowsKeyManager extends EventEmitter {
     this.isSupported = process.platform === "win32";
     this.hasReportedError = false;
     this.hasReportedUnavailable = false;
-    this.listeners = new Map(); // key string -> child process
+    this.listeners = new Map(); // key string -> { child, startedAt, ready }
   }
 
   /**
@@ -66,7 +66,8 @@ class WindowsKeyManager extends EventEmitter {
     }
 
     this.hasReportedError = false;
-    this.listeners.set(key, child);
+    const entry = { child, startedAt: performance.now(), ready: false };
+    this.listeners.set(key, entry);
     debugLogger.debug("[WindowsKeyManager] Starting key listener", {
       key,
       binaryPath: listenerPath,
@@ -75,6 +76,7 @@ class WindowsKeyManager extends EventEmitter {
     let lineBuffer = "";
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
+      if (this.listeners.get(key) !== entry) return;
       lineBuffer += chunk;
       const lines = lineBuffer.split(/\r?\n/);
       lineBuffer = lines.pop();
@@ -94,17 +96,19 @@ class WindowsKeyManager extends EventEmitter {
     });
 
     child.on("error", (error) => {
-      if (this.listeners.get(key) === child) this.listeners.delete(key);
+      if (this.listeners.get(key) !== entry) return;
+      this._stopKey(key);
       this.reportError(error);
     });
 
     child.on("exit", (code, signal) => {
       const trailingLine = lineBuffer.trim();
-      if (trailingLine) this.handleOutputLine(trailingLine, key);
+      if (trailingLine && this.listeners.get(key) === entry)
+        this.handleOutputLine(trailingLine, key);
 
       // wasTracked is false for intentional stops (_stopKey deletes first), so this
       // reports only unexpected exits — including signal crashes, where code is null.
-      const wasTracked = this.listeners.get(key) === child;
+      const wasTracked = this.listeners.get(key) === entry;
       if (wasTracked) this.listeners.delete(key);
       if (wasTracked && (code || signal)) {
         this.reportError(
@@ -117,21 +121,26 @@ class WindowsKeyManager extends EventEmitter {
   }
 
   _stopKey(key) {
-    const child = this.listeners.get(key);
-    if (!child) return;
+    const entry = this.listeners.get(key);
+    if (!entry) return;
     this.listeners.delete(key);
     debugLogger.debug("[WindowsKeyManager] Stopping key listener", { key });
     try {
-      child.kill();
+      entry.child.kill();
     } catch {
       // Already gone
     }
   }
 
   handleOutputLine(line, key) {
+    const entry = this.listeners.get(key);
+    if (!entry) return;
     if (line === "READY") {
-      debugLogger.debug("[WindowsKeyManager] Listener ready", { key });
-      this.emit("ready", key);
+      if (entry.ready) return;
+      entry.ready = true;
+      const readiness = { durationMs: Math.round(performance.now() - entry.startedAt) };
+      debugLogger.debug("[WindowsKeyManager] Listener ready", { key, ...readiness });
+      this.emit("ready", key, readiness);
       return;
     }
 

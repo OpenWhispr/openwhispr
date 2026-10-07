@@ -12,8 +12,22 @@ const ENV_KEYS = ["HYPRLAND_CONFIG", "HYPRLAND_INSTANCE_SIGNATURE", "XDG_CONFIG_
 
 function loadManager(execFileSync) {
   delete require.cache[modulePath];
+  delete require.cache[require.resolve("../../src/helpers/shortcutCommand")];
   Module._load = function loadWithMocks(request, parent, isMain) {
-    if (request === "child_process") return { ...childProcess, execFileSync };
+    if (request === "child_process")
+      return {
+        ...childProcess,
+        execFile(command, args, _options, callback) {
+          process.nextTick(() => {
+            try {
+              callback(null, execFileSync(command, args));
+            } catch (err) {
+              callback(err);
+            }
+          });
+          return { kill() {} };
+        },
+      };
     return originalLoad.call(this, request, parent, isMain);
   };
   try {
@@ -172,7 +186,7 @@ test(
     const manager = new HyprlandShortcutManager();
     assert.equal(await manager.registerKeybinding("Control+Shift+Enter"), true);
 
-    assert.equal(HyprlandShortcutManager.getHyprlandConfigStatus().path, configPath);
+    assert.equal((await HyprlandShortcutManager.getHyprlandConfigStatus()).path, configPath);
     assert.ok(
       fs
         .readFileSync(configPath, "utf8")
@@ -275,7 +289,7 @@ test(
     assert.equal(await manager.registerKeybinding("Control+Shift+Enter"), true);
     assert.equal(hyprctl.calls.filter(({ args }) => args[0] === "systeminfo").length, 1);
 
-    assert.equal(HyprlandShortcutManager.getHyprlandConfigStatus().path, luaPath);
+    assert.equal((await HyprlandShortcutManager.getHyprlandConfigStatus()).path, luaPath);
     assert.match(fs.readFileSync(luaPath, "utf8"), /pcall\(require, .+openwhispr-binds\.lua/);
     assert.equal(
       (fs.readFileSync(luaPath, "utf8").match(/openwhispr-binds\.lua/g) || []).length,
@@ -480,7 +494,7 @@ test(
     const manager = new HyprlandShortcutManager();
 
     assert.equal(await manager.registerKeybinding("Control+Shift+Enter"), true);
-    assert.equal(HyprlandShortcutManager.getHyprlandConfigStatus().path, configPath);
+    assert.equal((await HyprlandShortcutManager.getHyprlandConfigStatus()).path, configPath);
     assert.equal(hyprctl.calls.filter(({ args }) => args[0] === "systeminfo").length, 0);
     assert.match(fs.readFileSync(configPath, "utf8"), /pcall\(require,/);
     assert.equal(fs.existsSync(path.join(path.dirname(configPath), "openwhispr-binds.lua")), true);
@@ -583,7 +597,7 @@ test(
     fs.mkdirSync(path.join(configDir, "openwhispr-binds.conf"));
     const HyprlandShortcutManager = loadManager(successfulHyprctl("hyprlang").execFileSync);
 
-    assert.equal(HyprlandShortcutManager.getHyprlandConfigStatus().canWrite, false);
+    assert.equal((await HyprlandShortcutManager.getHyprlandConfigStatus()).canWrite, false);
   })
 );
 
@@ -750,8 +764,8 @@ test(
     assert.equal(manager.callbacks.voiceAgent, cb.voiceAgent);
 
     const teardown = manager.unregisterKeybinding();
-    assert.deepEqual(manager.bindings, {});
     assert.equal(await teardown, true);
+    assert.deepEqual(manager.bindings, {});
     assert.equal(manager.bindings.voiceAgent, undefined);
     assert.equal(manager.bindings.translation, undefined);
   })

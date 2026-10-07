@@ -82,13 +82,14 @@ class LinuxKeyManager extends EventEmitter {
     }
 
     this.hasReportedError = false;
-    const entry = { child };
+    const entry = { child, startedAt: performance.now(), ready: false, inputAccessDenied: false };
     this.listeners.set(key, entry);
     debugLogger.debug("[LinuxKeyManager] Starting key listener", { key, binaryPath: listenerPath });
 
     let lineBuffer = "";
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
+      if (this.listeners.get(key) !== entry) return;
       lineBuffer += chunk;
       const lines = lineBuffer.split(/\r?\n/);
       lineBuffer = lines.pop();
@@ -107,13 +108,15 @@ class LinuxKeyManager extends EventEmitter {
     });
 
     child.on("error", (error) => {
-      if (this.listeners.get(key) === entry) this._stopKey(key);
+      if (this.listeners.get(key) !== entry) return;
+      this._stopKey(key);
       this.reportError(error);
     });
 
     child.on("exit", (code, signal) => {
       const trailingLine = lineBuffer.trim();
-      if (trailingLine) this.handleOutputLine(trailingLine, key);
+      if (trailingLine && this.listeners.get(key) === entry)
+        this.handleOutputLine(trailingLine, key);
 
       // wasTracked is false for intentional stops (_stopKey deletes first), so this
       // reports only unexpected exits — including signal crashes, where code is null.
@@ -142,13 +145,24 @@ class LinuxKeyManager extends EventEmitter {
   }
 
   handleOutputLine(line, key) {
+    const entry = this.listeners.get(key);
+    if (!entry) return;
     if (line === "READY") {
-      debugLogger.debug("[LinuxKeyManager] Listener ready", { key });
-      this.emit("ready", key);
+      if (entry.ready) return;
+      entry.ready = true;
+      // C emits READY even with no accessible keyboard. This acknowledges its
+      // event loop, not input access (nor a successful availability probe).
+      const readiness = {
+        durationMs: Math.round(performance.now() - entry.startedAt),
+        inputAccessDenied: entry.inputAccessDenied,
+      };
+      debugLogger.debug("[LinuxKeyManager] Listener ready", { key, ...readiness });
+      this.emit("ready", key, readiness);
       return;
     }
 
     if (line === "NO_PERMISSION") {
+      entry.inputAccessDenied = true;
       debugLogger.warn("[LinuxKeyManager] No permission to access input devices");
       this.emit("permission-denied");
       return;

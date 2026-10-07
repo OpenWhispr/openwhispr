@@ -1,10 +1,11 @@
-const { execFileSync } = require("child_process");
+const shortcutCommand = require("./shortcutCommand");
 const debugLogger = require("./debugLogger");
 const GnomeGlobalShortcutsPortal = require("./gnomeGlobalShortcutsPortal");
 
 const DBUS_SERVICE_NAME = "com.openwhispr.App";
 const DBUS_OBJECT_PATH = "/com/openwhispr/App";
 const DBUS_INTERFACE = "com.openwhispr.App";
+const DBUS_NAME_REQUEST_TIMEOUT_MS = 5000;
 
 // Per-slot gsettings paths and display names
 const SLOT_CONFIG = {
@@ -134,6 +135,7 @@ function getSlotConfig(slotName) {
 class GnomeShortcutManager {
   constructor() {
     this.bus = null;
+    this.closed = false;
     this.dictationCallback = null;
     this.meetingCallback = null;
     this.voiceAgentCallback = null;
@@ -141,6 +143,10 @@ class GnomeShortcutManager {
     this.globalShortcutsPortal = new GnomeGlobalShortcutsPortal();
     // Track which slots have been registered in gsettings
     this.registeredSlots = new Set();
+    this.commandController = new AbortController();
+    this.mutationQueue = Promise.resolve();
+    this.closeTask = null;
+    this.registrationUncertain = false;
   }
 
   static isGnome() {
@@ -175,21 +181,37 @@ class GnomeShortcutManager {
   // slot; its dbus-send command targets a method this app no longer exports,
   // so the entry errors silently forever and squats its key. Prune it once.
   removeRetiredAgentKeybinding() {
+    return this._queueMutation(() => this._removeRetiredAgentKeybinding());
+  }
+
+  _queueMutation(operation) {
+    const task = this.mutationQueue.catch(() => {}).then(operation);
+    this.mutationQueue = task;
+    return task;
+  }
+
+  _gsettings(args, cleanup = false) {
+    return shortcutCommand("gsettings", args, {
+      timeout: 5000,
+      signal: cleanup ? undefined : this.commandController.signal,
+    });
+  }
+
+  async _removeRetiredAgentKeybinding() {
     const retiredPath =
       "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr-agent/";
     try {
-      const existing = this.getExistingKeybindings();
-      if (!existing.includes(retiredPath)) return;
+      const existing = await this.getExistingKeybindings();
+      if (this.closed || !existing.includes(retiredPath)) return;
       const remaining = existing.filter((p) => p !== retiredPath);
       const bindingsStr = remaining.length ? "['" + remaining.join("', '") + "']" : "[]";
-      execFileSync(
-        "gsettings",
-        ["set", "org.gnome.settings-daemon.plugins.media-keys", "custom-keybindings", bindingsStr],
-        { stdio: "pipe" }
-      );
-      execFileSync("gsettings", ["reset-recursively", `${KEYBINDING_SCHEMA}:${retiredPath}`], {
-        stdio: "pipe",
-      });
+      await this._gsettings([
+        "set",
+        "org.gnome.settings-daemon.plugins.media-keys",
+        "custom-keybindings",
+        bindingsStr,
+      ]);
+      await this._gsettings(["reset-recursively", `${KEYBINDING_SCHEMA}:${retiredPath}`]);
       debugLogger.log("[GnomeShortcut] Removed retired chat-agent keybinding");
     } catch (err) {
       debugLogger.log(
@@ -200,6 +222,7 @@ class GnomeShortcutManager {
   }
 
   async initDBusService(dictationCallback) {
+    if (this.closed) return false;
     this.dictationCallback = dictationCallback;
 
     const dbusModule = getDBus();
@@ -212,10 +235,35 @@ class GnomeShortcutManager {
       // Without a listener, async socket errors (e.g. a stale
       // DBUS_SESSION_BUS_ADDRESS) crash the process as an unhandled
       // "error" event — sessionBus() returns before connecting.
+      let rejectNameRequest;
       this.bus.connection.on("error", (err) => {
         debugLogger.log("[GnomeShortcut] D-Bus connection error:", err.message);
+        rejectNameRequest?.(err);
       });
-      this.bus.requestName(DBUS_SERVICE_NAME, 0);
+      const bus = this.bus;
+      const nameReply = await new Promise((resolve, reject) => {
+        let settled = false;
+        const finish = (err, reply) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeoutId);
+          rejectNameRequest = null;
+          this.cancelNameRequest = null;
+          if (err) reject(err);
+          else resolve(reply);
+        };
+        rejectNameRequest = (err) => finish(err);
+        this.cancelNameRequest = () => finish(new Error("D-Bus name request cancelled"));
+        const timeoutId = setTimeout(
+          () => finish(new Error("D-Bus name request timed out")),
+          DBUS_NAME_REQUEST_TIMEOUT_MS
+        );
+        // DO_NOT_QUEUE: another app instance must not leave us waiting for its name.
+        bus.requestName(DBUS_SERVICE_NAME, 4, finish);
+      });
+      if (this.closed || this.bus !== bus || (nameReply !== 1 && nameReply !== 4)) {
+        throw new Error(`D-Bus name request returned ${nameReply}`);
+      }
       this.bus.exportInterface(
         {
           Toggle: () => {
@@ -252,8 +300,8 @@ class GnomeShortcutManager {
       );
 
       debugLogger.log("[GnomeShortcut] D-Bus service initialized successfully");
-      this.removeRetiredAgentKeybinding();
-      return true;
+      await this.removeRetiredAgentKeybinding();
+      return !this.closed;
     } catch (err) {
       debugLogger.log("[GnomeShortcut] Failed to initialize D-Bus service:", err.message);
       if (this.bus) {
@@ -265,23 +313,28 @@ class GnomeShortcutManager {
   }
 
   async initGlobalShortcutsPortal() {
+    if (this.closed) return false;
     return this.globalShortcutsPortal.init();
   }
 
   supportsPushToTalk() {
-    return this.globalShortcutsPortal.isAvailable();
+    // Unknown transport readiness is not evidence that Hold is unsupported.
+    return (
+      !this.globalShortcutsPortal.availabilityKnown || this.globalShortcutsPortal.isAvailable()
+    );
   }
 
   async registerPushToTalk(hotkey, callback) {
+    if (this.closed) return false;
     const preferredTrigger = GnomeShortcutManager.convertToPortalFormat(hotkey);
     if (!preferredTrigger) return false;
 
-    await this.unregisterKeybinding("dictation");
+    if (!(await this.unregisterKeybinding("dictation")) || this.closed) return false;
     const registered = await this.globalShortcutsPortal.registerKeybinding(
       preferredTrigger,
       callback
     );
-    if (!registered) {
+    if (!registered && !this.closed) {
       const tapShortcut = GnomeShortcutManager.convertToGnomeFormat(hotkey);
       await this.registerKeybinding(tapShortcut, "dictation");
     }
@@ -299,7 +352,12 @@ class GnomeShortcutManager {
     return VALID_SHORTCUT_PATTERN.test(shortcut);
   }
 
-  async registerKeybinding(shortcut = "<Alt>r", slotName = "dictation") {
+  registerKeybinding(shortcut = "<Alt>r", slotName = "dictation") {
+    return this._queueMutation(() => this._registerKeybinding(shortcut, slotName));
+  }
+
+  async _registerKeybinding(shortcut, slotName) {
+    if (this.closed || this.registrationUncertain) return false;
     if (!GnomeShortcutManager.isGnome()) {
       debugLogger.log("[GnomeShortcut] Not running on GNOME, skipping registration");
       return false;
@@ -323,9 +381,12 @@ class GnomeShortcutManager {
     const dbusMethod = SLOT_DBUS_METHOD[slotName] || "Toggle";
     const command = `dbus-send --session --type=method_call --dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.${dbusMethod}`;
 
+    let previousFields;
+    let alreadyRegistered = false;
+    let fieldsTouched = false;
     try {
-      const existing = this.getExistingKeybindings();
-      const alreadyRegistered = existing.includes(keybindingPath);
+      const existing = await this.getExistingKeybindings();
+      alreadyRegistered = existing.includes(keybindingPath);
 
       // Check if another custom shortcut already uses this binding
       debugLogger.log("[GnomeShortcut] Checking for conflicts", {
@@ -333,7 +394,7 @@ class GnomeShortcutManager {
         existingPaths: existing,
         ownPath: keybindingPath,
       });
-      const conflict = this.findConflictingBinding(shortcut, existing, keybindingPath);
+      const conflict = await this.findConflictingBinding(shortcut, existing, keybindingPath);
       if (conflict) {
         debugLogger.log(
           `[GnomeShortcut] Shortcut conflict — "${shortcut}" already used by "${conflict}"`,
@@ -345,43 +406,68 @@ class GnomeShortcutManager {
         return false;
       }
 
-      execFileSync(
-        "gsettings",
-        ["set", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "name", keybindingName],
-        { stdio: "pipe" }
-      );
-      execFileSync(
-        "gsettings",
-        ["set", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "binding", shortcut],
-        { stdio: "pipe" }
-      );
-      execFileSync(
-        "gsettings",
-        ["set", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "command", command],
-        { stdio: "pipe" }
-      );
+      // Preserve raw GVariant values for rollback of an existing slot.
+      previousFields = {};
+      for (const field of ["name", "binding", "command"]) {
+        previousFields[field] = (
+          await this._gsettings(["get", `${KEYBINDING_SCHEMA}:${keybindingPath}`, field])
+        ).trim();
+      }
+      if (this.closed) return false;
+      fieldsTouched = true;
+      this.registeredSlots.add(slotName); // teardown also owns partial writes
+      for (const [field, value] of [
+        ["name", keybindingName],
+        ["binding", shortcut],
+        ["command", command],
+      ]) {
+        await this._gsettings(["set", `${KEYBINDING_SCHEMA}:${keybindingPath}`, field, value]);
+      }
 
       if (!alreadyRegistered) {
         const newBindings = [...existing, keybindingPath];
         const bindingsStr = "['" + newBindings.join("', '") + "']";
-        execFileSync(
-          "gsettings",
-          [
-            "set",
-            "org.gnome.settings-daemon.plugins.media-keys",
-            "custom-keybindings",
-            bindingsStr,
-          ],
-          { stdio: "pipe" }
-        );
+        await this._gsettings([
+          "set",
+          "org.gnome.settings-daemon.plugins.media-keys",
+          "custom-keybindings",
+          bindingsStr,
+        ]);
       }
 
+      if (this.closed) return false;
       this.registeredSlots.add(slotName);
       debugLogger.log(
         `[GnomeShortcut] Keybinding "${shortcut}" registered for slot "${slotName}" successfully`
       );
       return true;
     } catch (err) {
+      if (fieldsTouched && !this.closed) {
+        try {
+          if (!alreadyRegistered) {
+            // A timed-out list write might have applied. Read it again rather
+            // than replacing unrelated paths from an old snapshot.
+            const current = await this.getExistingKeybindings();
+            const remaining = current.filter((entry) => entry !== keybindingPath);
+            await this._gsettings([
+              "set",
+              "org.gnome.settings-daemon.plugins.media-keys",
+              "custom-keybindings",
+              remaining.length ? "['" + remaining.join("', '") + "']" : "[]",
+            ]);
+          }
+          for (const [field, value] of Object.entries(previousFields)) {
+            await this._gsettings(["set", `${KEYBINDING_SCHEMA}:${keybindingPath}`, field, value]);
+          }
+          if (!alreadyRegistered) this.registeredSlots.delete(slotName);
+        } catch (rollbackErr) {
+          this.registrationUncertain = true;
+          debugLogger.log(
+            "[GnomeShortcut] Failed to restore previous slot fields:",
+            rollbackErr.message
+          );
+        }
+      }
       debugLogger.log(
         `[GnomeShortcut] Failed to register keybinding for slot "${slotName}":`,
         err.message
@@ -390,42 +476,41 @@ class GnomeShortcutManager {
     }
   }
 
-  async unregisterKeybinding(slotName = "dictation") {
+  unregisterKeybinding(slotName = "dictation") {
+    return this._queueMutation(() => this._unregisterKeybinding(slotName));
+  }
+
+  async _unregisterKeybinding(slotName) {
     const { path: keybindingPath } = getSlotConfig(slotName);
 
     try {
-      const existing = this.getExistingKeybindings();
+      const existing = await this.getExistingKeybindings(this.closed);
       const filtered = existing.filter((p) => p !== keybindingPath);
 
       if (filtered.length === 0) {
-        execFileSync(
-          "gsettings",
+        await this._gsettings(
           ["set", "org.gnome.settings-daemon.plugins.media-keys", "custom-keybindings", "[]"],
-          { stdio: "pipe" }
+          this.closed
         );
       } else {
         const bindingsStr = "['" + filtered.join("', '") + "']";
-        execFileSync(
-          "gsettings",
+        await this._gsettings(
           [
             "set",
             "org.gnome.settings-daemon.plugins.media-keys",
             "custom-keybindings",
             bindingsStr,
           ],
-          { stdio: "pipe" }
+          this.closed
         );
       }
 
-      execFileSync("gsettings", ["reset", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "name"], {
-        stdio: "pipe",
-      });
-      execFileSync("gsettings", ["reset", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "binding"], {
-        stdio: "pipe",
-      });
-      execFileSync("gsettings", ["reset", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "command"], {
-        stdio: "pipe",
-      });
+      for (const field of ["name", "binding", "command"]) {
+        await this._gsettings(
+          ["reset", `${KEYBINDING_SCHEMA}:${keybindingPath}`, field],
+          this.closed
+        );
+      }
 
       this.registeredSlots.delete(slotName);
       debugLogger.log(
@@ -441,7 +526,7 @@ class GnomeShortcutManager {
     }
   }
 
-  findConflictingBinding(shortcut, existingPaths, ownPath) {
+  async findConflictingBinding(shortcut, existingPaths, ownPath) {
     // Normalize for comparison: <Primary> = <Control>, sort modifiers, case-insensitive
     const normalize = (s) => {
       const mods = [];
@@ -456,29 +541,22 @@ class GnomeShortcutManager {
 
     for (const path of existingPaths) {
       if (path === ownPath) continue;
-      try {
-        const binding = execFileSync(
-          "gsettings",
-          ["get", `${KEYBINDING_SCHEMA}:${path}`, "binding"],
-          { encoding: "utf-8" }
-        )
-          .trim()
-          .replace(/^'|'$/g, "");
-        if (normalize(binding) === normalizedShortcut) return path;
-      } catch {}
+      const binding = (await this._gsettings(["get", `${KEYBINDING_SCHEMA}:${path}`, "binding"]))
+        .trim()
+        .replace(/^'|'$/g, "");
+      if (normalize(binding) === normalizedShortcut) return path;
     }
     return null;
   }
 
-  getExistingKeybindings() {
+  async getExistingKeybindings(cleanup = false) {
     try {
-      const output = execFileSync(
-        "gsettings",
+      const output = await this._gsettings(
         ["get", "org.gnome.settings-daemon.plugins.media-keys", "custom-keybindings"],
-        { encoding: "utf-8" }
+        cleanup
       );
       const match = output.match(/\[([^\]]*)\]/);
-      if (!match) return [];
+      if (!match) throw new Error("Malformed GNOME custom-keybindings list");
 
       const content = match[1];
       if (!content.trim()) return [];
@@ -489,7 +567,8 @@ class GnomeShortcutManager {
         .filter(Boolean);
     } catch (err) {
       debugLogger.log("[GnomeShortcut] Failed to read existing keybindings:", err.message);
-      return [];
+      // Never overwrite the shared desktop list on a failed/timed-out read.
+      throw err;
     }
   }
 
@@ -587,12 +666,25 @@ class GnomeShortcutManager {
     return [...modifiers, portalKey].join("+");
   }
 
-  async close() {
-    await this.globalShortcutsPortal.close();
+  close() {
+    if (this.closeTask) return this.closeTask;
+    this.closed = true;
+    this.commandController.abort(new Error("GNOME shortcut manager closed"));
+    this.cancelNameRequest?.();
+    const portalClose = this.globalShortcutsPortal.close();
     if (this.bus) {
       this.bus.connection.end();
       this.bus = null;
     }
+    this.closeTask = this._queueMutation(async () => {
+      let success = true;
+      for (const slot of [...this.registeredSlots]) {
+        if (!(await this._unregisterKeybinding(slot))) success = false;
+      }
+      await portalClose;
+      return success;
+    });
+    return this.closeTask;
   }
 }
 

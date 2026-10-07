@@ -4202,7 +4202,8 @@ class IPCHandlers {
       return await this.windowManager.updateHotkey(hotkey);
     });
 
-    ipcMain.handle("set-hotkey-listening-mode", async (event, enabled) => {
+    const applyHotkeyListeningMode = async (event, enabled) => {
+      const manager = this.windowManager.hotkeyManager;
       if (enabled) {
         const captureWindow = BrowserWindow.fromWebContents(event.sender);
         // Only the control panel owns editable hotkey fields. Refocusing the
@@ -4212,7 +4213,11 @@ class IPCHandlers {
           focusWindowsHotkeyCaptureWindow(captureWindow);
         }
       }
-      if (this._hotkeyCaptureMode === enabled) return { success: true, skipped: true };
+      if (
+        this._hotkeyCaptureMode === enabled &&
+        (enabled || !this.windowManager._nativeKeyCapturePending)
+      )
+        return { success: true, skipped: true };
       this._hotkeyCaptureMode = enabled;
       this.windowManager.setHotkeyListeningMode(enabled);
       ipcMain.emit("hotkey-listening-mode-changed", null, enabled);
@@ -4237,6 +4242,7 @@ class IPCHandlers {
         isRightSideModifier(hotkey);
 
       if (enabled) {
+        this.windowManager.resetWindowsPushState();
         // Entering capture mode — unregister ALL slots so none intercept keypresses.
         // Dictation is always active; meeting and agent may or may not be set.
         const allSlots = hotkeyManager.slots;
@@ -4300,7 +4306,7 @@ class IPCHandlers {
           hotkeyManager.isUsingKDE() ||
           hotkeyManager.isUsingGnome() ||
           hotkeyManager.isUsingHyprland();
-        if (!usesNativePath) {
+        if (!usesNativePath && hotkeyManager.hasEffectiveBinding()) {
           const { globalShortcut } = require("electron");
           // Re-register every globalShortcut-backed dictation hotkey (the slot
           // may hold several).
@@ -4327,7 +4333,12 @@ class IPCHandlers {
         this.windowManager.reconcileNativeKeyListeners();
 
         // On GNOME, re-register the keybinding with the effective hotkey
-        if (hotkeyManager.isUsingGnome() && hotkeyManager.gnomeManager && effectiveHotkey) {
+        if (
+          hotkeyManager.hasEffectiveBinding() &&
+          hotkeyManager.isUsingGnome() &&
+          hotkeyManager.gnomeManager &&
+          effectiveHotkey
+        ) {
           debugLogger.log(
             `[IPC] Re-registering GNOME keybinding "${effectiveHotkey}" after capture mode`
           );
@@ -4338,7 +4349,12 @@ class IPCHandlers {
         }
 
         // On Hyprland Wayland, re-register the keybinding with the effective hotkey
-        if (hotkeyManager.isUsingHyprland() && hotkeyManager.hyprlandManager && effectiveHotkey) {
+        if (
+          hotkeyManager.hasEffectiveBinding() &&
+          hotkeyManager.isUsingHyprland() &&
+          hotkeyManager.hyprlandManager &&
+          effectiveHotkey
+        ) {
           debugLogger.log(
             `[IPC] Re-registering Hyprland keybinding "${effectiveHotkey}" after capture mode`
           );
@@ -4349,7 +4365,12 @@ class IPCHandlers {
         }
 
         // On KDE (X11 or Wayland), re-register the keybinding with the effective hotkey
-        if (hotkeyManager.isUsingKDE() && hotkeyManager.kdeManager && effectiveHotkey) {
+        if (
+          hotkeyManager.hasEffectiveBinding() &&
+          hotkeyManager.isUsingKDE() &&
+          hotkeyManager.kdeManager &&
+          effectiveHotkey
+        ) {
           debugLogger.log(
             `[IPC] Re-registering KDE keybinding "${effectiveHotkey}" after capture mode`
           );
@@ -4388,15 +4409,50 @@ class IPCHandlers {
         }
       }
 
+      manager.assertStartupActive();
       return { success: true };
+    };
+    let nativeCaptureRevision = 0;
+    ipcMain.handle("set-hotkey-listening-mode", (event, enabled) => {
+      // Gate dispatch immediately; backend/config mutations wait in the same lane
+      // as startup and key/mode edits, including portal-request cancellation.
+      const manager = this.windowManager.hotkeyManager;
+      const changed = manager.isInListeningMode() !== enabled;
+      if (changed) {
+        nativeCaptureRevision++;
+        this.windowManager._nativeKeyCapturePending = true;
+      }
+      const revision = nativeCaptureRevision;
+      this.windowManager.setHotkeyListeningMode(enabled);
+      // HotkeyInput cleanup sends repeated "disabled" notifications. Those are
+      // not a newer user choice and must not cancel consent or supersede startup.
+      return manager.runHotkeyOperation(
+        async () => {
+          const result = await applyHotkeyListeningMode(event, enabled);
+          manager.assertStartupActive();
+          // A key update can settle between capture exit being requested and
+          // this restoration. Do not spawn listeners until all slots are back,
+          // or let an older exit release a newer capture's gate. Failed exits
+          // keep the gate and can retry rather than being skipped as a no-op.
+          if (result.success && !enabled && revision === nativeCaptureRevision) {
+            this.windowManager._nativeKeyCapturePending = false;
+          }
+          return result;
+        },
+        { userChange: changed }
+      );
     });
 
     ipcMain.handle("get-hotkey-mode-info", async (_event, requestedHotkey) => {
       const hotkeyManager = this.windowManager.hotkeyManager;
+      // A capability query without a proposed key must not inspect the placeholder.
+      if (!requestedHotkey) await hotkeyManager.registrationReady;
       const hotkey =
         typeof requestedHotkey === "string" && requestedHotkey.trim()
           ? requestedHotkey.split(",")[0].trim()
-          : hotkeyManager.getCurrentHotkey();
+          : hotkeyManager.hasEffectiveBinding()
+            ? hotkeyManager.getCurrentHotkey()
+            : hotkeyManager.resolvedStartupHotkey || hotkeyManager.getCurrentHotkey();
       const isUsingNativeShortcut = this.windowManager.isUsingNativeShortcutHotkeys();
       const supportsPushToTalk = hotkeyManager.supportsPushToTalk(hotkey);
 
@@ -5253,7 +5309,9 @@ class IPCHandlers {
     });
 
     ipcMain.handle("get-active-dictation-key", async () => {
-      const hotkeys = this.windowManager?.hotkeyManager?.getSlotHotkeys?.("dictation") ?? [];
+      const manager = this.windowManager?.hotkeyManager;
+      if (!manager?.hasEffectiveBinding()) return null;
+      const hotkeys = manager.getSlotHotkeys("dictation");
       return hotkeys.length > 0 ? hotkeys.join(",") : null;
     });
 
@@ -5265,8 +5323,9 @@ class IPCHandlers {
       return this.environmentManager.getActivationMode();
     });
 
-    ipcMain.handle("save-activation-mode", async (event, mode) => {
-      return this.environmentManager.saveActivationMode(mode);
+    ipcMain.handle("save-activation-mode", (event, mode) => {
+      // Use the same checked runtime transition as the Settings notification.
+      ipcMain.emit("activation-mode-changed", event, mode);
     });
 
     ipcMain.handle("get-ui-language", async () => {
@@ -11544,7 +11603,7 @@ class IPCHandlers {
     });
 
     // Agent mode handlers
-    ipcMain.handle("update-voice-agent-hotkey", async (_event, hotkey) => {
+    const updateVoiceAgentHotkey = async (_event, hotkey) => {
       const hotkeyManager = this.windowManager.hotkeyManager;
       const voiceAgentCallback = this.windowManager._voiceAgentHotkeyCallback;
       if (!voiceAgentCallback) {
@@ -11553,6 +11612,7 @@ class IPCHandlers {
 
       if (!hotkey) {
         const removed = await hotkeyManager.unregisterSlot("voiceAgent");
+        hotkeyManager.assertStartupActive();
         if (removed === false) return { success: false };
         this.environmentManager.saveVoiceAgentKey?.("");
         this.windowManager.reconcileNativeKeyListeners();
@@ -11563,6 +11623,7 @@ class IPCHandlers {
       const result = await hotkeyManager.registerSlot("voiceAgent", hotkey, voiceAgentCallback, {
         atomic: true,
       });
+      hotkeyManager.assertStartupActive();
       this.windowManager.reconcileNativeKeyListeners();
       if (result.success) {
         this.environmentManager.saveVoiceAgentKey?.(hotkey);
@@ -11571,13 +11632,18 @@ class IPCHandlers {
       }
 
       return { success: false, message: result.error };
-    });
+    };
+    ipcMain.handle("update-voice-agent-hotkey", (event, hotkey) =>
+      this.windowManager.hotkeyManager.runHotkeyOperation(() =>
+        updateVoiceAgentHotkey(event, hotkey)
+      )
+    );
 
     ipcMain.handle("get-voice-agent-key", async () => {
       return this.environmentManager.getVoiceAgentKey?.() || "";
     });
 
-    ipcMain.handle("update-translation-hotkey", async (_event, hotkey) => {
+    const updateTranslationHotkey = async (_event, hotkey) => {
       const hotkeyManager = this.windowManager.hotkeyManager;
       const translationCallback = this.windowManager._translationHotkeyCallback;
       if (!translationCallback) {
@@ -11586,6 +11652,7 @@ class IPCHandlers {
 
       if (!hotkey) {
         const removed = await hotkeyManager.unregisterSlot("translation");
+        hotkeyManager.assertStartupActive();
         if (removed === false) return { success: false };
         this.environmentManager.saveTranslationKey?.("");
         this.windowManager.reconcileNativeKeyListeners();
@@ -11596,6 +11663,7 @@ class IPCHandlers {
       const result = await hotkeyManager.registerSlot("translation", hotkey, translationCallback, {
         atomic: true,
       });
+      hotkeyManager.assertStartupActive();
       this.windowManager.reconcileNativeKeyListeners();
       if (result.success) {
         this.environmentManager.saveTranslationKey?.(hotkey);
@@ -11604,7 +11672,12 @@ class IPCHandlers {
       }
 
       return { success: false, message: result.error };
-    });
+    };
+    ipcMain.handle("update-translation-hotkey", (event, hotkey) =>
+      this.windowManager.hotkeyManager.runHotkeyOperation(() =>
+        updateTranslationHotkey(event, hotkey)
+      )
+    );
 
     ipcMain.handle("get-translation-key", async () => {
       return this.environmentManager.getTranslationKey?.() || "";

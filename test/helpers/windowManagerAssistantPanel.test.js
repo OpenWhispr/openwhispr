@@ -623,8 +623,13 @@ test("native Linux push-to-talk keeps only the dictation low-level listener", as
     const manager = new WindowManager();
     let reconciledKeys = null;
     manager.mainWindow = { isDestroyed: () => false };
+    manager._nativeKeyHandlersReady = true;
+    manager._startupHotkeySlotsReady = true;
     manager.hotkeyManager = {
       setActivationMode: async () => true,
+      assertStartupActive: () => undefined,
+      hasEffectiveBinding: () => true,
+      effectiveRegistrationMode: "push",
       isInListeningMode: () => false,
       isUsingNativeShortcut: () => true,
       getNativeListenerKeys: () => ["Control+Space", "Control+Shift+Space"],
@@ -632,6 +637,7 @@ test("native Linux push-to-talk keeps only the dictation low-level listener", as
     };
     await manager.setActivationModeCache("push");
     manager.linuxKeyManager = {
+      listeners: new Map(),
       setKeys: (keys) => {
         reconciledKeys = keys;
       },

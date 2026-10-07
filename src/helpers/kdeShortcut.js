@@ -109,14 +109,22 @@ const QT_KEYS = {
 };
 
 const COMPONENT_NAME = "openwhispr";
+const DBUS_CALL_TIMEOUT_MS = 5000;
 
 class KDEShortcutManager {
-  constructor() {
+  constructor({ callTimeoutMs = DBUS_CALL_TIMEOUT_MS } = {}) {
     this.bus = null;
+    this.closed = false;
     this.kglobalaccel = null;
     this.componentProxy = null;
     this.callbacks = new Map();
     this.registeredSlots = new Set();
+    this.pendingCalls = new Set();
+    this.pendingSlots = new Set();
+    this.callTimeoutMs = callTimeoutMs;
+    this.timedOut = false;
+    this.cleanupConfirmed = true;
+    this.closeTask = null;
   }
 
   static isKDE() {
@@ -150,7 +158,42 @@ class KDEShortcutManager {
     return qtKey;
   }
 
+  // A service deadline is not cancellation of a method already sent. Retire
+  // this connection and fence all sent writes with unRegister before fallback.
+  _withCancellation(invoke) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      let timeoutId;
+      const finish = (handler, value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        this.pendingCalls.delete(cancel);
+        handler(value);
+      };
+      const cancel = () => finish(reject, new Error("KDE shortcut operation cancelled"));
+      if (this.closed) return cancel();
+      this.pendingCalls.add(cancel);
+      timeoutId = setTimeout(() => {
+        this.timedOut = true;
+        const err = new Error("KDE shortcut service call timed out");
+        err.code = "KDE_SHORTCUT_TIMEOUT";
+        finish(reject, err);
+        void this.close();
+      }, this.callTimeoutMs);
+      try {
+        invoke(
+          (value) => finish(resolve, value),
+          (err) => finish(reject, err)
+        );
+      } catch (err) {
+        finish(reject, err);
+      }
+    });
+  }
+
   async init() {
+    if (this.closed) return false;
     const dbusModule = getDBus();
     if (!dbusModule) return false;
 
@@ -161,8 +204,9 @@ class KDEShortcutManager {
       // "error" event — sessionBus() returns before connecting.
       this.bus.connection.on("error", (err) => {
         debugLogger.log("[KDEShortcut] D-Bus connection error:", err.message);
+        void this.close();
       });
-      this.kglobalaccel = await new Promise((resolve, reject) => {
+      this.kglobalaccel = await this._withCancellation((resolve, reject) => {
         this.bus
           .getService("org.kde.kglobalaccel")
           .getInterface("/kglobalaccel", "org.kde.KGlobalAccel", (err, iface) => {
@@ -171,22 +215,26 @@ class KDEShortcutManager {
           });
       });
 
+      if (this.closed) {
+        this.kglobalaccel = null;
+        return false;
+      }
       debugLogger.log("[KDEShortcut] Connected to KGlobalAccel D-Bus");
       return true;
     } catch (err) {
       debugLogger.log("[KDEShortcut] Failed to connect:", err.message);
-      this.bus = null;
-      this.kglobalaccel = null;
+      await this.close();
       return false;
     }
   }
 
   async _listenForComponent() {
+    if (this.closed) return false;
     if (this.componentProxy) return true;
 
     try {
       const componentPath = `/component/${COMPONENT_NAME}`;
-      const iface = await new Promise((resolve, reject) => {
+      const iface = await this._withCancellation((resolve, reject) => {
         this.bus
           .getService("org.kde.kglobalaccel")
           .getInterface(componentPath, "org.kde.kglobalaccel.Component", (err, ifc) => {
@@ -195,7 +243,9 @@ class KDEShortcutManager {
           });
       });
 
+      if (this.closed) return false;
       iface.on("globalShortcutPressed", (componentUnique, shortcutUnique, timestamp) => {
+        if (this.closed) return;
         debugLogger.log("[KDEShortcut] Shortcut pressed", { componentUnique, shortcutUnique });
         // KGlobalAccel signal sends the actionUnique value as shortcutUnique.
         // Direct callback lookup by slotName should match. Fallback maps
@@ -212,6 +262,7 @@ class KDEShortcutManager {
         }
       });
       iface.on("globalShortcutReleased", (componentUnique, shortcutUnique) => {
+        if (this.closed) return;
         debugLogger.log("[KDEShortcut] Shortcut released", { componentUnique, shortcutUnique });
         const slotName = this.callbacks.has(shortcutUnique)
           ? shortcutUnique
@@ -245,7 +296,7 @@ class KDEShortcutManager {
   }
 
   async registerKeybinding(electronHotkey, slotName = "dictation", callback, isPushToTalk = false) {
-    if (!this.kglobalaccel) return false;
+    if (this.closed || !this.kglobalaccel) return false;
 
     const qtKey = KDEShortcutManager.convertToQtKeyCode(electronHotkey);
     if (qtKey === null) {
@@ -280,7 +331,7 @@ class KDEShortcutManager {
         const dbusModule = getDBus();
         // The invoke callback receives the unwrapped first return value (the
         // aas list of owner actionIds), not a message object with a body.
-        const owners = await new Promise((resolve, reject) => {
+        const owners = await this._withCancellation((resolve, reject) => {
           this.bus.invoke(
             {
               type: dbusModule.messageType.methodCall,
@@ -297,6 +348,7 @@ class KDEShortcutManager {
             }
           );
         });
+        if (this.closed) return false;
         if (Array.isArray(owners) && owners.length > 0) {
           const otherOwners = owners.filter(
             (aid) => Array.isArray(aid) && aid[0] !== COMPONENT_NAME
@@ -318,66 +370,83 @@ class KDEShortcutManager {
         );
       }
 
+      if (this.closed) return false;
       // Clear stale registration, then register with flag 0x02 (SetPresent).
       // Flag 0x02 overwrites any saved binding; flag 0 preserves stale values.
+      this.pendingSlots.add(slotName);
       try {
-        await new Promise((resolve, reject) => {
+        await this._withCancellation((resolve, reject) => {
           this.kglobalaccel.unRegister(actionId, (err) => {
             if (err) return reject(err);
             resolve();
           });
         });
       } catch {}
-      await new Promise((resolve, reject) => {
+      if (this.closed) return false;
+      await this._withCancellation((resolve, reject) => {
         this.kglobalaccel.doRegister(actionId, (err) => {
           if (err) return reject(err);
           resolve();
         });
       });
-      const result = await new Promise((resolve, reject) => {
+      if (this.closed) return false;
+      const result = await this._withCancellation((resolve, reject) => {
         this.kglobalaccel.setShortcut(actionId, [qtKey], 0x02, (err, res) => {
           if (err) return reject(err);
           resolve(res);
         });
       });
 
+      if (this.closed) return false;
       // Post-registration conflict check: if setShortcut assigned a different key,
       // another component owns it.
       const assignedKey = Array.isArray(result) && result.length > 0 ? result[0] : null;
-      if (assignedKey !== null && assignedKey !== qtKey) {
+      if (assignedKey !== qtKey) {
         debugLogger.log("[KDEShortcut] Shortcut conflict — setShortcut assigned different key", {
           slot: slotName,
           requested: `0x${qtKey.toString(16)}`,
-          assigned: `0x${assignedKey.toString(16)}`,
+          assigned: Number.isInteger(assignedKey) ? `0x${assignedKey.toString(16)}` : "invalid",
         });
+        let removed = false;
         try {
-          await new Promise((resolve, reject) => {
+          await this._withCancellation((resolve, reject) => {
             this.kglobalaccel.unRegister(actionId, (err) => {
               if (err) return reject(err);
               resolve();
             });
           });
+          removed = true;
         } catch {}
-        return "conflict";
+        if (!removed) {
+          await this.close();
+          return false;
+        }
+        return Number.isInteger(assignedKey) ? "conflict" : false;
       }
 
+      if (this.closed) return false;
       if (callback) this.callbacks.set(slotName, callback);
       this.registeredSlots.add(slotName);
 
       // Start listening for press events on the component
       const listening = await this._listenForComponent();
+      if (this.closed) return false;
       if (!listening) {
         debugLogger.log(
           `[KDEShortcut] Keybinding registered but listener failed for "${slotName}", unregistering`
         );
         try {
-          await new Promise((resolve, reject) => {
+          await this._withCancellation((resolve, reject) => {
             this.kglobalaccel.unRegister(actionId, (err) => {
               if (err) return reject(err);
               resolve();
             });
           });
-        } catch {}
+          this.callbacks.delete(slotName);
+          this.registeredSlots.delete(slotName);
+        } catch {
+          await this.close();
+        }
         return false;
       }
 
@@ -389,17 +458,23 @@ class KDEShortcutManager {
       return true;
     } catch (err) {
       debugLogger.log(`[KDEShortcut] Registration failed for "${slotName}":`, err.message);
+      if (!this.closed && this.pendingSlots.has(slotName)) {
+        if (!(await this.unregisterKeybinding(slotName))) await this.close();
+      }
       return false;
+    } finally {
+      if (this.closed) await this.closeTask;
+      this.pendingSlots.delete(slotName);
     }
   }
 
   async unregisterKeybinding(slotName = "dictation") {
-    if (!this.kglobalaccel) return;
+    if (!this.kglobalaccel) return false;
 
     const actionId = [COMPONENT_NAME, slotName, "OpenWhispr", `OpenWhispr ${slotName}`];
 
     try {
-      await new Promise((resolve, reject) => {
+      await this._withCancellation((resolve, reject) => {
         this.kglobalaccel.unRegister(actionId, (err) => {
           if (err) return reject(err);
           resolve();
@@ -408,8 +483,10 @@ class KDEShortcutManager {
       this.callbacks.delete(slotName);
       this.registeredSlots.delete(slotName);
       debugLogger.log("[KDEShortcut] Unregistered", { slot: slotName });
+      return true;
     } catch (err) {
       debugLogger.log(`[KDEShortcut] Unregister failed for "${slotName}":`, err.message);
+      return false;
     }
   }
 
@@ -418,37 +495,54 @@ class KDEShortcutManager {
   }
 
   close() {
-    // Best-effort cleanup on app shutdown. unRegister calls are async D-Bus
-    // calls that may not complete before disconnect, but KGlobalAccel will
-    // clean up stale registrations from dead processes anyway.
-    const promises = [];
-    for (const slotName of this.registeredSlots) {
-      const actionId = [COMPONENT_NAME, slotName, "OpenWhispr", `OpenWhispr ${slotName}`];
-      try {
-        promises.push(
-          new Promise((resolve, reject) => {
-            this.kglobalaccel?.unRegister(actionId, (err) => {
-              if (err) return reject(err);
-              resolve();
-            });
-          })
-        );
-      } catch {}
-    }
-
-    Promise.allSettled(promises).finally(() => {
-      if (this.bus) {
-        try {
-          this.bus.connection.end();
-        } catch {}
-        this.bus = null;
-        this.kglobalaccel = null;
-        this.componentProxy = null;
-      }
-    });
-
+    if (this.closeTask) return this.closeTask;
+    this.closed = true;
+    const bus = this.bus;
+    const iface = this.kglobalaccel;
+    const slots = new Set([...this.registeredSlots, ...this.pendingSlots]);
+    for (const cancel of [...this.pendingCalls]) cancel();
     this.callbacks.clear();
     this.registeredSlots.clear();
+    this.pendingSlots.clear();
+    this.cleanupConfirmed = slots.size === 0;
+
+    // KGlobalAccel implements these mutations synchronously. Send cleanup on
+    // the SAME connection after earlier writes, including a timed-out write.
+    // Never claim cleanup succeeded merely because we stopped awaiting a reply.
+    this.closeTask = Promise.resolve().then(async () => {
+      const removals = [...slots].map(
+        (slotName) =>
+          new Promise((resolve) => {
+            let settled = false;
+            const finish = (success) => {
+              if (settled) return;
+              settled = true;
+              clearTimeout(timer);
+              resolve(success);
+            };
+            const timer = setTimeout(() => finish(false), this.callTimeoutMs);
+            const actionId = [COMPONENT_NAME, slotName, "OpenWhispr", `OpenWhispr ${slotName}`];
+            try {
+              if (!iface) finish(false);
+              else iface.unRegister(actionId, (err) => finish(!err));
+            } catch {
+              finish(false);
+            }
+          })
+      );
+      const results = await Promise.all(removals);
+      this.cleanupConfirmed = results.every(Boolean);
+      if (!this.cleanupConfirmed)
+        debugLogger.log("[KDEShortcut] Cleanup unconfirmed; refusing fallback registration");
+      try {
+        bus?.connection.end();
+      } catch {}
+      if (this.bus === bus) this.bus = null;
+      this.kglobalaccel = null;
+      this.componentProxy = null;
+      return this.cleanupConfirmed;
+    });
+    return this.closeTask;
   }
 }
 

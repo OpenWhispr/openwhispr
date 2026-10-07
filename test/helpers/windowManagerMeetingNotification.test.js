@@ -65,6 +65,8 @@ class FakeBrowserWindow extends EventEmitter {
 class FakeHotkeyManager {
   unregisterAll() {}
 
+  assertStartupActive() {}
+
   isInListeningMode() {
     return false;
   }

@@ -1121,15 +1121,17 @@ async function startApp() {
   windowManager.setFloatingIconAutoHide(environmentManager.getFloatingIconAutoHide());
   windowManager.setPanelStartPosition(environmentManager.getPanelStartPosition());
 
-  let activationModeChangeQueue = Promise.resolve();
+  let activationIntent = 0;
   ipcMain.on("activation-mode-changed", (_event, mode) => {
-    activationModeChangeQueue = activationModeChangeQueue
-      .then(async () => {
+    const intent = ++activationIntent;
+    hotkeyManager
+      .runHotkeyOperation(async () => {
         const success = await windowManager.setActivationModeCache(mode);
+        hotkeyManager.assertStartupActive();
         const effectiveMode = windowManager.getActivationMode();
         if (success) {
           environmentManager.saveActivationMode(effectiveMode);
-        } else {
+        } else if (intent === activationIntent) {
           for (const browserWindow of BrowserWindow.getAllWindows()) {
             if (!browserWindow.isDestroyed()) {
               browserWindow.webContents.send("setting-updated", {
@@ -1179,21 +1181,55 @@ async function startApp() {
   const launchedHidden = wasLaunchedAtLoginHidden();
   const startMinimized = environmentManager.getStartMinimized() || launchedHidden;
   if (debugLogger) debugLogger.info("Start minimized", { enabled: startMinimized, launchedHidden });
-  await windowManager.createMainWindow();
-  // The activation mode was cached before the hotkey was registered, so a saved
-  // Hold could not be checked against its key until now.
-  if (
-    windowManager.getActivationMode() === "push" &&
-    !windowManager.hotkeyManager.supportsPushToTalk()
-  ) {
-    await windowManager.setActivationModeCache("tap");
-    environmentManager.saveActivationMode("tap");
-    for (const browserWindow of BrowserWindow.getAllWindows()) {
-      if (!browserWindow.isDestroyed()) {
-        browserWindow.webContents.send("setting-updated", { key: "activationMode", value: "tap" });
+  // Install callbacks before a renderer can change the optional slots.
+  const isVoiceAgentPress = createHotkeyRepeatGate();
+  const voiceAgentHotkeyCallback = () => {
+    if (hotkeyManager.operationActive || hotkeyManager.isInListeningMode()) return;
+    if (!isVoiceAgentPress()) return;
+    windowManager.sendToggleVoiceAgent();
+  };
+  windowManager._voiceAgentHotkeyCallback = voiceAgentHotkeyCallback;
+  const isTranslationPress = createHotkeyRepeatGate();
+  const translationHotkeyCallback = () => {
+    if (hotkeyManager.operationActive || hotkeyManager.isInListeningMode()) return;
+    if (!isTranslationPress()) return;
+    windowManager.sendToggleTranslation();
+  };
+  windowManager._translationHotkeyCallback = translationHotkeyCallback;
+  const isMeetingPress = createHotkeyRepeatGate();
+  const meetingHotkeyCallback = () => {
+    if (hotkeyManager.operationActive || hotkeyManager.isInListeningMode()) return;
+    if (!isMeetingPress()) return;
+    debugLogger.info("Meeting hotkey triggered", {}, "meeting");
+    windowManager.startManualMeeting();
+  };
+
+  windowManager._meetingHotkeyCallback = meetingHotkeyCallback;
+
+  ipcMain.handle("register-meeting-hotkey", (_event, hotkey) =>
+    hotkeyManager.runHotkeyOperation(async () => {
+      if (hotkey) {
+        const result = await hotkeyManager.registerSlot("meeting", hotkey, meetingHotkeyCallback, {
+          atomic: true,
+        });
+        hotkeyManager.assertStartupActive();
+        windowManager.reconcileNativeKeyListeners();
+        if (result.success) {
+          environmentManager.saveMeetingKey(hotkey);
+          return { success: true };
+        }
+        return { success: false, message: result.error };
       }
-    }
-  }
+      const removed = await hotkeyManager.unregisterSlot("meeting");
+      hotkeyManager.assertStartupActive();
+      if (removed === false) return { success: false };
+      environmentManager.saveMeetingKey("");
+      windowManager.reconcileNativeKeyListeners();
+      return { success: true };
+    })
+  );
+
+  await windowManager.createMainWindow();
   if (!startMinimized) {
     await windowManager.createControlPanelWindow();
   }
@@ -1215,104 +1251,6 @@ async function startApp() {
     }
     await flushPendingNoteDeepLink();
   }
-
-  await hotkeyManager.hyprlandRegistrationReady;
-
-  // Set up voice agent hotkey (dictation routed straight to the dictation
-  // agent, bypassing cleanup). Tap-only slots gate autorepeat like the
-  // dictation toggle does.
-  const isVoiceAgentPress = createHotkeyRepeatGate();
-  const voiceAgentHotkeyCallback = () => {
-    if (!isVoiceAgentPress()) return;
-    windowManager.sendToggleVoiceAgent();
-  };
-  windowManager._voiceAgentHotkeyCallback = voiceAgentHotkeyCallback;
-
-  const savedVoiceAgentKey = environmentManager.getVoiceAgentKey?.() || "";
-  if (savedVoiceAgentKey) {
-    const result = await hotkeyManager.registerSlot(
-      "voiceAgent",
-      savedVoiceAgentKey,
-      voiceAgentHotkeyCallback
-    );
-    if (!result.success) {
-      debugLogger.warn(
-        "Failed to restore voice agent hotkey",
-        { hotkey: savedVoiceAgentKey },
-        "hotkey"
-      );
-    }
-    hotkeyManager.notifyRestoreFailures(savedVoiceAgentKey, result);
-  }
-
-  // Set up translation hotkey (dictation cleaned up and translated into the
-  // configured target language before pasting)
-  const isTranslationPress = createHotkeyRepeatGate();
-  const translationHotkeyCallback = () => {
-    if (!isTranslationPress()) return;
-    windowManager.sendToggleTranslation();
-  };
-  windowManager._translationHotkeyCallback = translationHotkeyCallback;
-
-  const savedTranslationKey = environmentManager.getTranslationKey?.() || "";
-  if (savedTranslationKey) {
-    const result = await hotkeyManager.registerSlot(
-      "translation",
-      savedTranslationKey,
-      translationHotkeyCallback
-    );
-    if (!result.success) {
-      debugLogger.warn(
-        "Failed to restore translation hotkey",
-        { hotkey: savedTranslationKey },
-        "hotkey"
-      );
-    }
-    hotkeyManager.notifyRestoreFailures(savedTranslationKey, result);
-  }
-
-  // Set up meeting mode hotkey
-  const isMeetingPress = createHotkeyRepeatGate();
-  const meetingHotkeyCallback = () => {
-    if (!isMeetingPress()) return;
-    debugLogger.info("Meeting hotkey triggered", {}, "meeting");
-    windowManager.startManualMeeting();
-  };
-
-  const savedMeetingKey = environmentManager.getMeetingKey?.() || "";
-  if (savedMeetingKey) {
-    const result = await hotkeyManager.registerSlot(
-      "meeting",
-      savedMeetingKey,
-      meetingHotkeyCallback
-    );
-    debugLogger.info(
-      "Meeting hotkey startup registration",
-      { savedMeetingKey, ...result },
-      "meeting"
-    );
-    hotkeyManager.notifyRestoreFailures(savedMeetingKey, result);
-  }
-
-  ipcMain.handle("register-meeting-hotkey", async (_event, hotkey) => {
-    if (hotkey) {
-      const result = await hotkeyManager.registerSlot("meeting", hotkey, meetingHotkeyCallback, {
-        atomic: true,
-      });
-      windowManager.reconcileNativeKeyListeners();
-      if (result.success) {
-        environmentManager.saveMeetingKey(hotkey);
-        return { success: true };
-      }
-      return { success: false, message: result.error };
-    } else {
-      const removed = await hotkeyManager.unregisterSlot("meeting");
-      if (removed === false) return { success: false };
-      environmentManager.saveMeetingKey("");
-      windowManager.reconcileNativeKeyListeners();
-      return { success: true };
-    }
-  });
 
   // Phase 2: Initialize remaining managers after windows are visible
   initializeDeferredManagers();
@@ -1428,6 +1366,7 @@ async function startApp() {
 
   updateManager.checkForUpdatesOnStartup();
 
+  let syncMacNativeHotkeyConfiguration = null;
   if (process.platform === "darwin") {
     const { isGlobeLikeHotkey, isMouseButtonHotkey } = require("./src/helpers/hotkeyManager");
     let globeKeyDownTime = 0;
@@ -1645,7 +1584,7 @@ async function startApp() {
     });
 
     const MAC_NATIVE_HOTKEY_SLOTS = ["dictation", "voiceAgent", "translation"];
-    const syncMacNativeHotkeyConfiguration = () => {
+    syncMacNativeHotkeyConfiguration = () => {
       globeKeyManager.setConfiguration(
         hotkeyManager.getMacNativeListenerConfig(MAC_NATIVE_HOTKEY_SLOTS)
       );
@@ -1803,6 +1742,8 @@ async function startApp() {
     // Dictation supports push-to-talk and needs the overlay window; meeting
     // drives other windows (matching their globalShortcut callbacks and macOS).
     const dispatchNativeKeyDown = (key) => {
+      if (hotkeyManager.operationActive || !hotkeyManager.hasEffectiveBinding()) return;
+      if (hotkeyManager.isInListeningMode()) return;
       if (hotkeyManager.slotHasHotkey("dictation", key)) {
         if (!isLiveWindow(windowManager.mainWindow)) return;
         if (windowManager.getActivationMode() === "push") {
@@ -1823,13 +1764,12 @@ async function startApp() {
 
     // Only dictation drives push-to-talk, so only its key-up matters.
     const dispatchNativeKeyUp = (key) => {
-      if (!hotkeyManager.slotHasHotkey("dictation", key)) return;
       if (windowManager.winPushState?.active) {
         windowManager.handleWindowsPushKeyUp(key);
-      } else if (
-        isLiveWindow(windowManager.mainWindow) &&
-        windowManager.getActivationMode() === "push"
-      ) {
+        return;
+      }
+      if (!hotkeyManager.slotHasHotkey("dictation", key)) return;
+      if (isLiveWindow(windowManager.mainWindow) && windowManager.getActivationMode() === "push") {
         windowManager.handleWindowsPushKeyUp(key);
       }
     };
@@ -1848,9 +1788,9 @@ async function startApp() {
     });
 
     nativeKeyManager.on("unavailable", () => {
-      debugLogger.debug(
-        "[Push-to-Talk] Native key listener unavailable - falling back to toggle mode"
-      );
+      debugLogger.debug("[Push-to-Talk] Native key listener unavailable", {
+        role: hotkeyManager.isUsingNativeShortcut() ? "optional-release" : "required",
+      });
       if (isWindows && isLiveWindow(windowManager.mainWindow)) {
         windowManager.mainWindow.webContents.send("windows-ptt-unavailable", {
           reason: "binary_not_found",
@@ -1859,8 +1799,16 @@ async function startApp() {
       }
     });
 
-    nativeKeyManager.on("ready", () => {
-      debugLogger.debug("[Push-to-Talk] Native key listener ready and listening");
+    nativeKeyManager.on("ready", (key, readiness) => {
+      debugLogger.debug("[Push-to-Talk] Native key listener ready", {
+        key,
+        ...readiness,
+        role: hotkeyManager.isUsingNativeShortcut() ? "optional-release" : "required",
+        startupElapsedMs:
+          windowManager._nativeListenerStartupStartedAt == null
+            ? null
+            : Math.round(performance.now() - windowManager._nativeListenerStartupStartedAt),
+      });
     });
 
     if (!isWindows) {
@@ -1881,14 +1829,86 @@ async function startApp() {
       });
     }
 
-    const STARTUP_DELAY_MS = 3000;
-    setTimeout(() => windowManager.reconcileNativeKeyListeners(), STARTUP_DELAY_MS);
+    // Availability probes used during registration do not start a listener.
+    // Only enable reconciliation after every dispatch/diagnostic handler exists;
+    // slot restoration and the mutation lane supply the remaining prerequisites.
+    hotkeyManager.on("operation-settled", () => windowManager.reconcileNativeKeyListeners());
+    windowManager._nativeKeyHandlersReady = true;
+    windowManager.reconcileNativeKeyListeners();
 
     ipcMain.on("hotkey-changed", () => {
       windowManager.resetWindowsPushState();
       windowManager.reconcileNativeKeyListeners();
     });
   }
+
+  // Window/services/dispatch setup is independent of slow registration and portal
+  // consent. This continuation owns reconciliation and restores slots in order.
+  const finishHotkeyStartup = async (outcome) => {
+    hotkeyManager.assertStartupActive();
+    if (outcome.status === "cancelled") return;
+    if (hotkeyManager.isInListeningMode()) return { status: "capture" };
+    // Read the latest mode and binding after any already-queued user changes.
+    const revision = hotkeyManager.intentRevision;
+    if (
+      hotkeyManager.hasEffectiveBinding() &&
+      hotkeyManager.activationCapabilityResolved &&
+      windowManager.getActivationMode() === "push" &&
+      !hotkeyManager.supportsPushToTalk()
+    ) {
+      const changed = await windowManager.setActivationModeCache("tap");
+      hotkeyManager.assertStartupActive();
+      if (changed && revision === hotkeyManager.intentRevision) {
+        environmentManager.saveActivationMode("tap");
+        for (const win of BrowserWindow.getAllWindows()) {
+          if (!win.isDestroyed()) {
+            win.webContents.send("setting-updated", { key: "activationMode", value: "tap" });
+          }
+        }
+      }
+    }
+    // Read preferences here, not before readiness: an early clear/change must
+    // not be overwritten by a startup snapshot. Do not restore during capture.
+    if (hotkeyManager.isInListeningMode()) return { status: "capture" };
+    const slots = [
+      ["voiceAgent", () => environmentManager.getVoiceAgentKey?.(), voiceAgentHotkeyCallback],
+      ["translation", () => environmentManager.getTranslationKey?.(), translationHotkeyCallback],
+      ["meeting", () => environmentManager.getMeetingKey?.(), meetingHotkeyCallback],
+    ];
+    for (const [slot, getKey, callback] of slots) {
+      hotkeyManager.assertStartupActive();
+      const key = getKey() || "";
+      if (!key || hotkeyManager.getSlotHotkey(slot)) continue;
+      const result = await hotkeyManager.registerSlot(slot, key, callback);
+      hotkeyManager.assertStartupActive();
+      hotkeyManager.notifyRestoreFailures(key, result);
+    }
+    if (hotkeyManager.isInListeningMode()) return { status: "capture" };
+    // Accessibility readiness can precede optional-slot restoration.
+    syncMacNativeHotkeyConfiguration?.();
+    windowManager._startupHotkeySlotsReady = true;
+    windowManager.reconcileNativeKeyListeners();
+  };
+  windowManager.onHotkeyStartupSettled = (task) => {
+    const controller = hotkeyManager.startupController;
+    windowManager.hotkeyStartupContinuation = task
+      .then(async (outcome) => {
+        if (outcome.status === "cancelled") return;
+        let result;
+        do {
+          // Wait outside the mutation lane: capture exit needs that lane itself.
+          await hotkeyManager.waitForCaptureEnd();
+          if (controller.signal.aborted) return;
+          result = await hotkeyManager.runHotkeyOperation(() => finishHotkeyStartup(outcome), {
+            userChange: false,
+          });
+        } while (result?.status === "capture");
+      })
+      .catch((err) =>
+        debugLogger.warn("Hotkey startup continuation failed", { error: err.message })
+      );
+  };
+  windowManager.onHotkeyStartupSettled(windowManager.hotkeyStartupTask);
 }
 
 ipcMain.on("mac-accessibility-features-ready", (_event, expectedAccountScope) => {
@@ -2060,12 +2080,13 @@ if (gotSingleInstanceLock) {
       return;
     }
     event.preventDefault();
-    performSyncTeardown();
-    sidecarRegistry.shutdownAll().finally(() => app.exit(0));
+    const hotkeyTeardown = performSyncTeardown();
+    Promise.allSettled([hotkeyTeardown, sidecarRegistry.shutdownAll()]).finally(() => app.exit(0));
   });
 }
 
 function performSyncTeardown() {
+  let hotkeyTeardown;
   if (wakeRewarmTimer) {
     clearTimeout(wakeRewarmTimer);
     wakeRewarmTimer = null;
@@ -2080,7 +2101,7 @@ function performSyncTeardown() {
     cliBridge = null;
   }
   if (hotkeyManager) {
-    hotkeyManager.unregisterAll();
+    hotkeyTeardown = hotkeyManager.unregisterAll();
   } else {
     globalShortcut.unregisterAll();
   }
@@ -2099,4 +2120,5 @@ function performSyncTeardown() {
   if (ipcHandlers) ipcHandlers._cleanupTextEditMonitor();
   if (textEditMonitor) textEditMonitor.stopMonitoring();
   if (updateManager) updateManager.cleanup();
+  return hotkeyTeardown;
 }

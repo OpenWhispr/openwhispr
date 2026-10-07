@@ -46,6 +46,11 @@ class GnomeGlobalShortcutsPortal {
     this.sessionHandle = null;
     this.callback = null;
     this.available = false;
+    this.availabilityKnown = false;
+    this.closed = false;
+    this.pendingRequests = new Set();
+    this.requestGeneration = 0;
+    this.cancellationRevision = 0;
     this.activationListener = null;
     this.deactivationListener = null;
     this.callTimeoutMs = callTimeoutMs;
@@ -53,6 +58,7 @@ class GnomeGlobalShortcutsPortal {
   }
 
   async init() {
+    if (this.closed) return false;
     if (this.bus) return this.available;
 
     const dbusModule = getDBus();
@@ -82,10 +88,20 @@ class GnomeGlobalShortcutsPortal {
         signature: "ss",
         body: [GLOBAL_SHORTCUTS_INTERFACE, "version"],
       });
+      if (this.closed) return false;
+      this.availabilityKnown = true;
       this.available = Number(readVariant(version)) >= 1;
       if (!this.available) await this.close();
       return this.available;
     } catch (err) {
+      // Only an explicit missing interface/service is a capability verdict;
+      // transport errors and deadlines leave Hold intent unresolved.
+      this.availabilityKnown = [
+        "org.freedesktop.DBus.Error.ServiceUnknown",
+        "org.freedesktop.DBus.Error.UnknownInterface",
+        "org.freedesktop.DBus.Error.UnknownMethod",
+        "org.freedesktop.DBus.Error.UnknownProperty",
+      ].includes(err.name);
       debugLogger.log(
         "[GnomeGlobalShortcutsPortal] Global Shortcuts portal unavailable:",
         err.message
@@ -100,9 +116,12 @@ class GnomeGlobalShortcutsPortal {
   }
 
   async registerKeybinding(preferredTrigger, callback) {
-    if (!(await this.init())) return false;
+    const revision = this.cancellationRevision;
+    if (!(await this.init()) || this.closed || revision !== this.cancellationRevision) return false;
 
-    await this.unregisterKeybinding();
+    await this.unregisterKeybinding(false);
+    if (this.closed || revision !== this.cancellationRevision) return false;
+    const generation = this.requestGeneration;
     this.callback = callback;
 
     try {
@@ -119,6 +138,8 @@ class GnomeGlobalShortcutsPortal {
         ],
         createRequestToken
       );
+      if (this.closed || generation !== this.requestGeneration)
+        throw new Error("Portal registration cancelled");
       this.sessionHandle = readDict(session).get("session_handle");
       if (!this.sessionHandle) throw new Error("Portal did not return a session handle");
 
@@ -143,6 +164,8 @@ class GnomeGlobalShortcutsPortal {
         ],
         bindRequestToken
       );
+      if (this.closed || generation !== this.requestGeneration)
+        throw new Error("Portal registration cancelled");
       const shortcuts = readDict(result).get("shortcuts") || [];
       if (!shortcuts.some(([id]) => id === "dictation")) {
         throw new Error("Portal did not bind the dictation shortcut");
@@ -160,7 +183,14 @@ class GnomeGlobalShortcutsPortal {
     }
   }
 
-  async unregisterKeybinding() {
+  cancelPendingRequests(superseded = true) {
+    if (superseded) this.cancellationRevision++;
+    this.requestGeneration++;
+    for (const cancel of [...this.pendingRequests]) cancel();
+  }
+
+  async unregisterKeybinding(superseded = true) {
+    this.cancelPendingRequests(superseded);
     this._removeShortcutListeners();
     this.callback = null;
     if (!this.sessionHandle || !this.bus) return;
@@ -180,6 +210,7 @@ class GnomeGlobalShortcutsPortal {
   }
 
   async close() {
+    this.closed = true;
     await this.unregisterKeybinding();
     const bus = this.bus;
     this.bus = null;
@@ -240,10 +271,15 @@ class GnomeGlobalShortcutsPortal {
 
   async _request(member, signature, body, token) {
     const bus = this.bus;
+    const generation = this.requestGeneration;
     const requestPath = this._requestPath(token);
     const signal = bus.mangle(requestPath, REQUEST_INTERFACE, "Response");
     const match = `type='signal',sender='${PORTAL_SERVICE}',path='${requestPath}',interface='${REQUEST_INTERFACE}',member='Response'`;
     await this._addMatch(match);
+    if (this.closed || generation !== this.requestGeneration) {
+      bus.removeMatch(match, () => undefined);
+      throw new Error("Portal request cancelled");
+    }
 
     return new Promise((resolve, reject) => {
       let settled = false;
@@ -251,6 +287,7 @@ class GnomeGlobalShortcutsPortal {
       const cleanup = () => {
         clearTimeout(timeoutId);
         bus.signals.removeListener(signal, onResponse);
+        this.pendingRequests.delete(cancel);
         try {
           bus.removeMatch(match, () => undefined);
         } catch {}
@@ -262,15 +299,32 @@ class GnomeGlobalShortcutsPortal {
         if (err) reject(err);
         else resolve(result);
       };
+      const cancel = () => {
+        // Request.Close emits no Response. Settle locally and tell the portal to
+        // close consent, including requests whose initial method reply is pending.
+        finish(new Error("Portal request cancelled"));
+        try {
+          bus.invoke(
+            {
+              destination: PORTAL_SERVICE,
+              path: requestPath,
+              interface: REQUEST_INTERFACE,
+              member: "Close",
+            },
+            () => undefined
+          );
+        } catch {}
+      };
+      this.pendingRequests.add(cancel);
       const onResponse = ([response, results]) => {
         if (response === 0) finish(null, results);
         else finish(new Error(`Portal request was rejected (${response})`));
       };
       bus.signals.once(signal, onResponse);
-      timeoutId = setTimeout(
-        () => finish(new Error(`Portal request "${member}" timed out`)),
-        this.requestTimeoutMs
-      );
+      timeoutId = setTimeout(() => {
+        finish(new Error(`Portal request "${member}" timed out`));
+        cancel();
+      }, this.requestTimeoutMs);
       timeoutId.unref?.();
       bus.invoke(
         {
