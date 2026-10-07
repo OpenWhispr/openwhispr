@@ -1599,7 +1599,7 @@
         "trial": "剩余 {{days}} 天——无限转录",
         "unlimited": "无限制",
         "accessUntil": "可使用至 {{date}}",
-        "storePaymentIssue": "应用商店未能续订此订阅。请在应用商店中更新付款方式以继续使用 Pro。"
+        "storePaymentIssue": "应用商店未能续订此订阅。请在应用商店中更新付款方式以继续使用当前套餐。"
       },
       "planLabels": {
         "free": "免费版",

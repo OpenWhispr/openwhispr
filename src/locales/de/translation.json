@@ -1894,7 +1894,7 @@
         "trial": "Noch {{days}} Tage – unbegrenzte Transkriptionen",
         "unlimited": "Unbegrenzt",
         "accessUntil": "Zugang bis {{date}}",
-        "storePaymentIssue": "Ihr App-Store konnte dieses Abo nicht verlängern. Aktualisieren Sie dort Ihre Zahlungsmethode, um Pro zu behalten."
+        "storePaymentIssue": "Ihr App-Store konnte dieses Abo nicht verlängern. Aktualisieren Sie dort Ihre Zahlungsmethode, um Ihren Tarif zu behalten."
       },
       "planLabels": {
         "free": "Kostenlos",

@@ -1444,9 +1444,7 @@ export default function SettingsPage({
   // Reads the usage payload, not the workspace store, so the upgrade affordances
   // stay hidden across the window where the store is still loading.
   const isWorkspaceCovered =
-    !usage?.isPersonallySubscribed &&
-    !usage?.storeBilling &&
-    (usage?.entitledWorkspaceIds?.length ?? 0) > 0;
+    !usage?.isPersonallySubscribed && (usage?.entitledWorkspaceIds?.length ?? 0) > 0;
   // Null until the store resolves, so the label waits rather than guessing a tier.
   const coveringPlanLabel =
     isWorkspaceCovered && coveringWorkspaces.length
@@ -1889,6 +1887,8 @@ export default function SettingsPage({
     isPersonallySubscribed: usage?.isPersonallySubscribed ?? false,
     storeBilling,
     isWorkspaceCovered,
+    hasPeriodEnd: Boolean(usage?.currentPeriodEnd),
+    hasCoveringWorkspaceNames: coveringWorkspaceNames.length > 0,
   });
   const storeUrl = storeBilling?.store ? storeSubscriptionsUrl(storeBilling.store) : null;
   const periodEndDate = usage?.currentPeriodEnd
@@ -2420,42 +2420,35 @@ export default function SettingsPage({
                                       t("settingsPage.account.planLabels.free"))
                             }
                             description={
-                              accountPlan.row === "trial"
+                              accountPlan.description === "trial"
                                 ? t("settingsPage.account.planDescriptions.trial", {
                                     days: usage.trialDaysLeft,
                                   })
-                                : accountPlan.row === "pastDue"
+                                : accountPlan.description === "pastDue"
                                   ? t("settingsPage.account.planDescriptions.pastDue", {
                                       used: usage.wordsUsed.toLocaleString(i18n.language),
                                       limit: usage.limit.toLocaleString(i18n.language),
                                     })
-                                  : accountPlan.row === "store" &&
-                                      storeBilling?.status === "past_due"
+                                  : accountPlan.description === "storePaymentIssue"
                                     ? t("settingsPage.account.planDescriptions.storePaymentIssue")
-                                    : accountPlan.row === "personal" || accountPlan.row === "store"
-                                      ? periodEndDate
-                                        ? // A canceled store subscription stays entitled
-                                          // until the period it was paid for ends.
-                                          storeBilling?.status === "canceled"
-                                          ? t("settingsPage.account.planDescriptions.accessUntil", {
-                                              date: periodEndDate,
-                                            })
-                                          : t("settingsPage.account.planDescriptions.nextBilling", {
-                                              date: periodEndDate,
-                                            })
-                                        : t("settingsPage.account.planDescriptions.unlimited")
-                                      : coveringWorkspaceNames.length > 0
-                                        ? t("settingsPage.unifiedBilling.providedBy", {
-                                            workspaces: coveringWorkspaceNames.join(", "),
+                                    : accountPlan.description === "accessUntil"
+                                      ? t("settingsPage.account.planDescriptions.accessUntil", {
+                                          date: periodEndDate,
+                                        })
+                                      : accountPlan.description === "nextBilling"
+                                        ? t("settingsPage.account.planDescriptions.nextBilling", {
+                                            date: periodEndDate,
                                           })
-                                        : // usage.limit is -1 once subscribed, which the
-                                          // free-usage copy would print as "-1 words".
-                                          isWorkspaceCovered
+                                        : accountPlan.description === "unlimited"
                                           ? t("settingsPage.account.planDescriptions.unlimited")
-                                          : t("settingsPage.account.planDescriptions.freeUsage", {
-                                              used: usage.wordsUsed.toLocaleString(i18n.language),
-                                              limit: usage.limit.toLocaleString(i18n.language),
-                                            })
+                                          : accountPlan.description === "providedBy"
+                                            ? t("settingsPage.unifiedBilling.providedBy", {
+                                                workspaces: coveringWorkspaceNames.join(", "),
+                                              })
+                                            : t("settingsPage.account.planDescriptions.freeUsage", {
+                                                used: usage.wordsUsed.toLocaleString(i18n.language),
+                                                limit: usage.limit.toLocaleString(i18n.language),
+                                              })
                             }
                           >
                             {accountPlan.row === "trial" ? (
@@ -2683,7 +2676,8 @@ export default function SettingsPage({
                     <div
                       className={cn(
                         "rounded-md border-2 p-2.5 flex flex-col",
-                        (usage?.isPersonallySubscribed || storeBilling) && usage?.plan === "pro"
+                        (usage?.isPersonallySubscribed || (storeBilling && !isWorkspaceCovered)) &&
+                          usage?.plan === "pro"
                           ? "border-primary/40 bg-primary/5 dark:border-primary/30 dark:bg-primary/8"
                           : "border-primary/20 bg-primary/2 dark:border-primary/15 dark:bg-primary/3"
                       )}

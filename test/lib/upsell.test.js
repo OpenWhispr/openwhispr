@@ -134,6 +134,9 @@ test("a mobile-app subscriber is never offered a Stripe checkout or switch (#253
   assert.equal(decide({ isTrial: true }), "currentPlan");
   // Stripe's switch-plan can't move a store subscription to Pro.
   assert.equal(decide({ plan: "business" }), "none");
+  // A workspace seat outranks the store plan, as in the account row.
+  assert.equal(decide({ isWorkspaceCovered: true }), "coveredByWorkspace");
+  assert.equal(decide({ isWorkspaceCovered: true, plan: "business" }), "coveredByWorkspace");
 });
 
 const resolve = (o) =>
@@ -143,6 +146,8 @@ const resolve = (o) =>
     isPersonallySubscribed: false,
     storeBilling: null,
     isWorkspaceCovered: false,
+    hasPeriodEnd: true,
+    hasCoveringWorkspaceNames: false,
     ...o,
   });
 const appStore = (status = "active") => ({ store: "app_store", status });
@@ -150,39 +155,99 @@ const appStore = (status = "active") => ({ store: "app_store", status });
 test("the account row shows a mobile-app plan and sends billing to the store (#2535)", () => {
   assert.deepEqual(resolve({ storeBilling: appStore() }), {
     row: "store",
+    description: "nextBilling",
     action: "manageInStore",
   });
   assert.deepEqual(resolve({ storeBilling: appStore("past_due") }), {
     row: "store",
+    description: "storePaymentIssue",
+    action: "manageInStore",
+  });
+  // Still entitled until the paid period ends, but it won't renew.
+  assert.deepEqual(resolve({ storeBilling: appStore("canceled") }), {
+    row: "store",
+    description: "accessUntil",
+    action: "manageInStore",
+  });
+  // A non-expiring purchase has no period end.
+  assert.deepEqual(resolve({ storeBilling: appStore(), hasPeriodEnd: false }), {
+    row: "store",
+    description: "unlimited",
     action: "manageInStore",
   });
   // A store trial is still a trial, but upgrading through Stripe would bill twice.
   assert.deepEqual(resolve({ isTrial: true, storeBilling: appStore("trialing") }), {
     row: "trial",
+    description: "trial",
     action: "manageInStore",
   });
   // An API that doesn't name the store gets a note, never a guessed link.
   assert.deepEqual(resolve({ storeBilling: { store: null, status: "active" } }), {
     row: "store",
+    description: "nextBilling",
     action: "storeNote",
+  });
+});
+
+test("a workspace seat outranks a store plan in the row, but the store keeps the button", () => {
+  assert.deepEqual(
+    resolve({
+      storeBilling: appStore(),
+      isWorkspaceCovered: true,
+      hasCoveringWorkspaceNames: true,
+    }),
+    { row: "workspaceOrFree", description: "providedBy", action: "manageInStore" }
+  );
+  // Before the workspace store loads there are no names to show yet.
+  assert.deepEqual(resolve({ storeBilling: appStore("past_due"), isWorkspaceCovered: true }), {
+    row: "workspaceOrFree",
+    description: "unlimited",
+    action: "manageInStore",
   });
 });
 
 test("the account row keeps its existing Stripe, workspace and free paths", () => {
   assert.deepEqual(resolve({ isPersonallySubscribed: true }), {
     row: "personal",
+    description: "nextBilling",
+    action: "manageBilling",
+  });
+  assert.deepEqual(resolve({ isPersonallySubscribed: true, hasPeriodEnd: false }), {
+    row: "personal",
+    description: "unlimited",
     action: "manageBilling",
   });
   assert.deepEqual(resolve({ isPersonallySubscribed: true, isTrial: true }), {
     row: "trial",
+    description: "trial",
     action: "upgrade",
   });
-  assert.deepEqual(resolve({ isPastDue: true }), { row: "pastDue", action: "updatePayment" });
-  assert.deepEqual(resolve({ isWorkspaceCovered: true }), {
+  assert.deepEqual(resolve({ isPastDue: true }), {
+    row: "pastDue",
+    description: "pastDue",
+    action: "updatePayment",
+  });
+  // A trial outranks past due in the row; the recovery button still shows.
+  assert.deepEqual(resolve({ isTrial: true, isPastDue: true }), {
+    row: "trial",
+    description: "trial",
+    action: "updatePayment",
+  });
+  assert.deepEqual(resolve({ isWorkspaceCovered: true, hasCoveringWorkspaceNames: true }), {
     row: "workspaceOrFree",
+    description: "providedBy",
     action: "none",
   });
-  assert.deepEqual(resolve({}), { row: "workspaceOrFree", action: "upgrade" });
+  assert.deepEqual(resolve({ isWorkspaceCovered: true }), {
+    row: "workspaceOrFree",
+    description: "unlimited",
+    action: "none",
+  });
+  assert.deepEqual(resolve({}), {
+    row: "workspaceOrFree",
+    description: "freeUsage",
+    action: "upgrade",
+  });
 });
 
 test("each store links to its own subscriptions page", () => {

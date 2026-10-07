@@ -1652,7 +1652,7 @@
         "trial": "{{days}} días restantes: transcripciones ilimitadas",
         "unlimited": "Ilimitado",
         "accessUntil": "Acceso hasta el {{date}}",
-        "storePaymentIssue": "Tu tienda de aplicaciones no pudo renovar esta suscripción. Actualiza allí tu método de pago para conservar Pro."
+        "storePaymentIssue": "Tu tienda de aplicaciones no pudo renovar esta suscripción. Actualiza allí tu método de pago para conservar tu plan."
       },
       "planLabels": {
         "free": "Gratis",

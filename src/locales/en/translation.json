@@ -1894,7 +1894,7 @@
         "trial": "{{days}} days remaining - unlimited transcriptions",
         "unlimited": "Unlimited",
         "accessUntil": "Access until {{date}}",
-        "storePaymentIssue": "Your app store couldn't renew this subscription. Update your payment method there to keep Pro."
+        "storePaymentIssue": "Your app store couldn't renew this subscription. Update your payment method there to keep your plan."
       },
       "planLabels": {
         "free": "Free",

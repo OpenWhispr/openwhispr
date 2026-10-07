@@ -1894,7 +1894,7 @@
         "trial": "{{days}} jours restants - transcriptions illimitées",
         "unlimited": "Illimité",
         "accessUntil": "Accès jusqu'au {{date}}",
-        "storePaymentIssue": "Votre boutique d'applications n'a pas pu renouveler cet abonnement. Mettez-y à jour votre moyen de paiement pour conserver Pro."
+        "storePaymentIssue": "Votre boutique d'applications n'a pas pu renouveler cet abonnement. Mettez-y à jour votre moyen de paiement pour conserver votre forfait."
       },
       "planLabels": {
         "free": "Gratuit",

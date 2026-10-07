@@ -1578,7 +1578,7 @@
         "trial": "{{days}} dias restantes — transcrições ilimitadas",
         "unlimited": "Ilimitado",
         "accessUntil": "Acesso até {{date}}",
-        "storePaymentIssue": "A loja de apps não conseguiu renovar esta assinatura. Atualize lá sua forma de pagamento para manter o Pro."
+        "storePaymentIssue": "A loja de apps não conseguiu renovar esta assinatura. Atualize lá sua forma de pagamento para manter seu plano."
       },
       "planLabels": {
         "free": "Gratuito",

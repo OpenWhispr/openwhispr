@@ -1599,7 +1599,7 @@
         "trial": "剩餘 {{days}} 天——無限轉錄",
         "unlimited": "無限",
         "accessUntil": "可使用至 {{date}}",
-        "storePaymentIssue": "應用程式商店無法續訂此訂閱。請在商店中更新付款方式以繼續使用 Pro。"
+        "storePaymentIssue": "應用程式商店無法續訂此訂閱。請在商店中更新付款方式以繼續使用目前方案。"
       },
       "planLabels": {
         "free": "免費",

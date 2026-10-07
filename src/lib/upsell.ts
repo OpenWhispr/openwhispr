@@ -42,7 +42,9 @@ export interface ProPlanCardInput {
 }
 
 export function decideProPlanCardCta(i: ProPlanCardInput): ProPlanCardCta {
-  if (i.isStoreBilled) return i.plan === "business" ? "none" : "currentPlan";
+  // A workspace seat outranks a store plan, as it does in the account row.
+  if (i.isStoreBilled && !i.isWorkspaceCovered)
+    return i.plan === "business" ? "none" : "currentPlan";
   if ((i.isPersonallySubscribed && i.plan === "pro" && !i.isTrial) || i.isTrial)
     return "currentPlan";
   if (i.isPersonallySubscribed && i.plan === "business") return "downgradeToPro";
@@ -55,6 +57,17 @@ export function decideProPlanCardCta(i: ProPlanCardInput): ProPlanCardCta {
 /** Which plan the account row shows, in precedence order. */
 export type AccountPlanRow = "trial" | "pastDue" | "personal" | "store" | "workspaceOrFree";
 
+/** The account row's description text. */
+export type AccountPlanDescription =
+  | "trial"
+  | "pastDue"
+  | "storePaymentIssue"
+  | "accessUntil"
+  | "nextBilling"
+  | "unlimited"
+  | "providedBy"
+  | "freeUsage";
+
 /** The account row's billing button. `storeNote` is store billing on an API that doesn't name the store. */
 export type AccountPlanAction =
   "updatePayment" | "manageBilling" | "manageInStore" | "storeNote" | "upgrade" | "none";
@@ -66,21 +79,48 @@ export interface AccountPlanInput {
   isPersonallySubscribed: boolean;
   storeBilling: StoreBilling | null;
   isWorkspaceCovered: boolean;
+  hasPeriodEnd: boolean;
+  /** The workspace store has loaded the covering workspaces, so their names can be shown. */
+  hasCoveringWorkspaceNames: boolean;
 }
 
 export function resolveAccountPlan(i: AccountPlanInput): {
   row: AccountPlanRow;
+  description: AccountPlanDescription;
   action: AccountPlanAction;
 } {
+  // A workspace seat outranks a store plan for the row, but the store still
+  // bills, so the button stays on the store.
   const row: AccountPlanRow = i.isTrial
     ? "trial"
     : i.isPastDue
       ? "pastDue"
       : i.isPersonallySubscribed
         ? "personal"
-        : i.storeBilling
+        : i.storeBilling && !i.isWorkspaceCovered
           ? "store"
           : "workspaceOrFree";
+  const storeStatus = row === "store" ? i.storeBilling?.status : undefined;
+  const description: AccountPlanDescription =
+    row === "trial" || row === "pastDue"
+      ? row
+      : row === "workspaceOrFree"
+        ? i.hasCoveringWorkspaceNames
+          ? "providedBy"
+          : // usage.limit is -1 once subscribed, which the free-usage copy
+            // would print as "-1 words".
+            i.isWorkspaceCovered
+            ? "unlimited"
+            : "freeUsage"
+        : storeStatus === "past_due"
+          ? "storePaymentIssue"
+          : !i.hasPeriodEnd
+            ? "unlimited"
+            : // A canceled store subscription stays entitled until the period
+              // it was paid for ends.
+              storeStatus === "canceled"
+              ? "accessUntil"
+              : "nextBilling";
   const action: AccountPlanAction = i.isPastDue
     ? "updatePayment"
     : i.storeBilling
@@ -92,7 +132,7 @@ export function resolveAccountPlan(i: AccountPlanInput): {
         : i.isWorkspaceCovered
           ? "none"
           : "upgrade";
-  return { row, action };
+  return { row, description, action };
 }
 
 const STORE_SUBSCRIPTIONS_URL: Record<ProviderStore, string> = {

@@ -1599,7 +1599,7 @@
         "trial": "{{days}} giorni rimanenti — trascrizioni illimitate",
         "unlimited": "Illimitato",
         "accessUntil": "Accesso fino al {{date}}",
-        "storePaymentIssue": "Lo store di app non è riuscito a rinnovare questo abbonamento. Aggiorna lì il metodo di pagamento per mantenere Pro."
+        "storePaymentIssue": "Lo store di app non è riuscito a rinnovare questo abbonamento. Aggiorna lì il metodo di pagamento per mantenere il tuo piano."
       },
       "planLabels": {
         "free": "Gratuito",
