@@ -11043,6 +11043,10 @@ class IPCHandlers {
           "streaming"
         );
 
+        // Buffer before the token fetch (a network round trip for BYOK, even when
+        // a warm socket will carry the session) so assemblyai-streaming-send has
+        // somewhere to put the first frames.
+        this.assemblyAiStreaming.beginConnecting();
         let token = byok ? null : this.assemblyAiStreaming.getCachedToken();
         if (!token) {
           debugLogger.debug("Fetching streaming token", { byok }, "streaming");
@@ -11086,6 +11090,8 @@ class IPCHandlers {
         };
       } catch (error) {
         debugLogger.error("AssemblyAI streaming start error", { error: error.message });
+        // Nothing is in flight after a failed start, so its held audio goes too.
+        this.assemblyAiStreaming?.cleanup();
         if (error.code === "AUTH_EXPIRED") {
           return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
         }
@@ -11608,6 +11614,9 @@ class IPCHandlers {
           await this.cortiStreaming.disconnect(false);
         }
 
+        // Buffer before the token mint (a network round trip unless cached) so
+        // corti-streaming-send has somewhere to put the first frames.
+        this.cortiStreaming.beginConnecting();
         const { token, environment, tenant } = await this._mintStoredCortiToken(options);
         const win = BrowserWindow.fromWebContents(event.sender);
 
@@ -11634,6 +11643,8 @@ class IPCHandlers {
         return { success: true };
       } catch (error) {
         debugLogger.error("Corti streaming start error", { error: error.message }, "streaming");
+        // Nothing is in flight after a failed start, so its held audio goes too.
+        this.cortiStreaming?.cleanup();
         return { success: false, error: error.message, code: error.code };
       }
     });

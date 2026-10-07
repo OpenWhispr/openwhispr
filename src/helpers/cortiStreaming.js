@@ -29,6 +29,7 @@ class CortiStreaming {
     this.configAccepted = false;
     this.preConfigBuffer = [];
     this.preConfigBufferSize = 0;
+    this.bufferingAudio = false;
     this.sessionStartedAt = null;
     this.audioBytesSent = 0;
     this.currentModel = "corti-transcribe";
@@ -61,6 +62,15 @@ class CortiStreaming {
     return configuration;
   }
 
+  // Starts holding audio before the socket exists, covering the token mint, the
+  // handshake and the wait for CONFIG_ACCEPTED so sendAudio() doesn't drop the
+  // first words.
+  beginConnecting() {
+    this.bufferingAudio = true;
+    this.preConfigBuffer = [];
+    this.preConfigBufferSize = 0;
+  }
+
   async connect(options = {}) {
     const { token, environment, tenant } = options;
     if (!token || !environment || !tenant) {
@@ -76,14 +86,15 @@ class CortiStreaming {
     this.completedSegments = [];
     this.configAccepted = false;
     this.connectionLossNotified = false;
-    this.preConfigBuffer = [];
-    this.preConfigBufferSize = 0;
+    // The caller may already be holding audio from before its token mint.
+    if (!this.bufferingAudio) this.beginConnecting();
     this.audioBytesSent = 0;
     this.sampleRate = options.sampleRate || SAMPLE_RATE;
 
     // Reuse the pre-warmed socket for an instant start; cold-connect otherwise.
     if (this.useWarmConnection()) {
       debugLogger.debug("Corti using warm connection - instant start");
+      this.flushPreConfigBuffer();
       return;
     }
 
@@ -386,7 +397,8 @@ class CortiStreaming {
   }
 
   flushPreConfigBuffer() {
-    if (this.preConfigBuffer.length === 0) return;
+    // A stale socket's ack can arrive while this start has no open socket yet.
+    if (this.preConfigBuffer.length === 0 || this.ws?.readyState !== WebSocket.OPEN) return;
     debugLogger.debug("Corti flushing pre-config buffer", {
       chunks: this.preConfigBuffer.length,
       bytes: this.preConfigBufferSize,
@@ -400,18 +412,18 @@ class CortiStreaming {
   }
 
   sendAudio(pcmBuffer) {
+    if (!this.configAccepted) {
+      // Corti rejects audio sent before it acks config; cap the startup buffer at ~3s.
+      if (!this.bufferingAudio || this.preConfigBufferSize >= 3 * this.sampleRate * 2) {
+        return false;
+      }
+      const copy = Buffer.from(pcmBuffer);
+      this.preConfigBuffer.push(copy);
+      this.preConfigBufferSize += copy.length;
+      return true;
+    }
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       return false;
-    }
-
-    if (!this.configAccepted) {
-      // Corti rejects audio sent before it acks config; cap the handshake buffer at ~3s.
-      if (this.preConfigBufferSize < 3 * this.sampleRate * 2) {
-        const copy = Buffer.from(pcmBuffer);
-        this.preConfigBuffer.push(copy);
-        this.preConfigBufferSize += copy.length;
-      }
-      return true;
     }
 
     this.audioBytesSent += pcmBuffer.length;
@@ -479,6 +491,7 @@ class CortiStreaming {
     this.connectionTimeout = null;
     this.preConfigBuffer = [];
     this.preConfigBufferSize = 0;
+    this.bufferingAudio = false;
 
     if (this.ws) {
       try {
