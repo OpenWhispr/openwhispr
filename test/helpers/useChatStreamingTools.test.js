@@ -1079,7 +1079,7 @@ for (const provider of ["Cloud", "BYOK"]) {
               {
                 title: "Hotkeys",
                 path: "/help/dictation/hotkeys",
-                url: "https://docs\.openwhispr\.com/help/dictation/hotkeys",
+                url: "https://docs.openwhispr.com/help/dictation/hotkeys",
                 text: "ARTICLE_BODY_SENTINEL: use Settings to change hotkeys.",
               },
             ],
