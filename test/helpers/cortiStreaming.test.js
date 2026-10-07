@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { once } = require("node:events");
+const { EventEmitter, once } = require("node:events");
 const { WebSocketServer } = require("ws");
 
 const CortiStreaming = require("../../src/helpers/cortiStreaming");
@@ -96,4 +96,34 @@ test("audio held before the config is accepted is capped at three seconds", () =
   const held = Array.from({ length: 100 }, () => streaming.sendAudio(Buffer.alloc(FRAME_BYTES)));
 
   assert.deepEqual(held, [...Array(60).fill(true), ...Array(40).fill(false)]);
+});
+
+test("events from a socket this start replaced leave the start alone", () => {
+  const streaming = new CortiStreaming();
+  const staleSocket = new EventEmitter();
+  streaming.attachSocketHandlers(staleSocket);
+  streaming.beginConnecting();
+  streaming.sendAudio(Buffer.alloc(FRAME_BYTES));
+
+  staleSocket.emit("message", Buffer.from(JSON.stringify({ type: "CONFIG_ACCEPTED" })));
+  staleSocket.emit("close", 1000, Buffer.alloc(0));
+
+  assert.equal(streaming.configAccepted, false, "a stale ack marked the new start accepted");
+  assert.equal(streaming.preConfigBufferSize, FRAME_BYTES, "a stale close wiped the held audio");
+  assert.equal(streaming.sendAudio(Buffer.alloc(FRAME_BYTES)), true, "the start stopped holding");
+});
+
+test("a stop before the socket exists drops the audio the start was holding", async () => {
+  const streaming = new CortiStreaming();
+  streaming.beginConnecting();
+  streaming.sendAudio(Buffer.alloc(FRAME_BYTES));
+
+  await streaming.disconnect(true);
+
+  assert.equal(
+    streaming.sendAudio(Buffer.alloc(FRAME_BYTES)),
+    false,
+    "a stopped client held audio"
+  );
+  assert.equal(streaming.preConfigBufferSize, 0);
 });

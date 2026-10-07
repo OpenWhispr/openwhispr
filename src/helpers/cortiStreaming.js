@@ -111,22 +111,27 @@ class CortiStreaming {
         reject(new Error("Corti WebSocket connection timeout"));
       }, WEBSOCKET_TIMEOUT_MS);
 
-      this.ws = new WebSocket(url);
-      this.ws.on("open", () => {
+      const ws = new WebSocket(url);
+      this.ws = ws;
+      ws.on("open", () => {
         debugLogger.debug("Corti WebSocket connected, sending config");
-        this.ws.send(JSON.stringify({ type: "config", configuration }));
+        ws.send(JSON.stringify({ type: "config", configuration }));
       });
-      this.attachSocketHandlers(this.ws);
+      this.attachSocketHandlers(ws);
     });
   }
 
   // Live-socket wiring shared by the cold connect and a promoted warm connection.
+  // A socket that cleanup() already replaced can still deliver an ack, error or
+  // close; those events must not touch the start now using this.ws.
   attachSocketHandlers(ws) {
     ws.on("message", (data) => {
+      if (ws !== this.ws) return;
       this.handleMessage(data);
     });
 
     ws.on("error", (error) => {
+      if (ws !== this.ws) return;
       const wasActive = this.isConnected;
       debugLogger.error("Corti WebSocket error", { error: error.message });
       this.cleanup();
@@ -143,6 +148,7 @@ class CortiStreaming {
     });
 
     ws.on("close", (code, reason) => {
+      if (ws !== this.ws) return;
       const wasActive = this.isConnected;
       debugLogger.debug("Corti WebSocket closed", {
         code,
@@ -459,7 +465,11 @@ class CortiStreaming {
   }
 
   async disconnect(closeStream = true) {
-    if (!this.ws) return { text: this.accumulatedText };
+    if (!this.ws) {
+      // A stop before the socket exists must not leave the start's held audio behind.
+      this.cleanup();
+      return { text: this.accumulatedText };
+    }
 
     this.isDisconnecting = true;
 
