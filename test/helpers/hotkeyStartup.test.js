@@ -193,6 +193,7 @@ for (const changed of [false, true]) {
       {
         getActivationMode: () => "push",
         hotkeyManager: {
+          isUsingNativeShortcut: () => true,
           getSavedDictationHotkey: async () => "Scrolllock",
           supportsPushToTalk: () => false,
         },
@@ -204,6 +205,31 @@ for (const changed of [false, true]) {
     assert.equal(notifications.length, changed ? 1 : 0);
   });
 }
+
+// Without a desktop backend the hotkey registers during startup, and a fallback
+// can replace the first saved hotkey, so the registered one decides.
+test("startup checks the registered hotkey when no desktop backend delays it", async () => {
+  const checked = [];
+  const notifications = [];
+  await startupHoldCheck(
+    {
+      getActivationMode: () => "push",
+      hotkeyManager: {
+        isUsingNativeShortcut: () => false,
+        getSavedDictationHotkey: async () => "Control+Shift+Space",
+        getCurrentHotkey: () => "F8",
+        supportsPushToTalk: (hotkey) => {
+          checked.push(hotkey);
+          return hotkey !== "F8";
+        },
+      },
+      setActivationModeCache: async () => true,
+    },
+    { notifications }
+  );
+  assert.deepEqual(checked, ["F8"]);
+  assert.equal(notifications.length, 1);
+});
 
 test("startup checks Hold before the control panel opens and the hotkey registers", () => {
   const main = mainSource();

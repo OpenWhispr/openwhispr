@@ -1092,17 +1092,18 @@ function startAuthBridgeServer() {
   });
 }
 
-// Startup restores the saved activation mode before the saved hotkey registers,
-// and the backend registers that hotkey in this mode. Check the saved hotkey,
-// not the provisional default it replaces, so a supported Hold is kept and an
-// unsupported one becomes Tap before registration. This is a runtime fallback,
-// not a change to the user's saved preference: the next launch retries it.
+// Startup restores the saved activation mode before any hotkey registers. Desktop
+// backends (GNOME, KDE, Hyprland) register the saved hotkey a moment later, in
+// this mode, so check that hotkey rather than the provisional default it
+// replaces: a supported Hold is kept and an unsupported one becomes Tap before
+// registration. Elsewhere, check the hotkey that registered. This is a runtime
+// fallback, not a change to the user's saved preference: the next launch retries it.
 async function dropUnsupportedStartupHold() {
-  const savedHotkey = await windowManager.hotkeyManager.getSavedDictationHotkey();
-  if (
-    windowManager.getActivationMode() === "push" &&
-    !windowManager.hotkeyManager.supportsPushToTalk(savedHotkey)
-  ) {
+  const manager = windowManager.hotkeyManager;
+  const hotkey = manager.isUsingNativeShortcut()
+    ? await manager.getSavedDictationHotkey()
+    : manager.getCurrentHotkey();
+  if (windowManager.getActivationMode() === "push" && !manager.supportsPushToTalk(hotkey)) {
     const changed = await windowManager.setActivationModeCache("tap");
     if (changed) {
       for (const browserWindow of BrowserWindow.getAllWindows()) {
