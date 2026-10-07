@@ -1578,6 +1578,10 @@ declare global {
         noteId: number,
         format: "txt" | "srt" | "json" | "md"
       ) => Promise<{ success: boolean; error?: string }>;
+      formatTranscript: (
+        noteId: number,
+        format: "txt" | "srt" | "json" | "md"
+      ) => Promise<{ success: boolean; content?: string; error?: string }>;
       exportDictionary: (words: string[]) => Promise<{ success: boolean; error?: string }>;
       searchNotes: (
         query: string,
