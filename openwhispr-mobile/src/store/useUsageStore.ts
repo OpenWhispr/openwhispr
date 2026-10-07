@@ -25,7 +25,7 @@ interface UsageStore {
 
 let nextRequestId = 0;
 
-function getUsageOwnerKey(): string | null {
+export function getUsageOwnerKey(): string | null {
   const { user, isGuest, sessionCookie } = useAuthStore.getState();
   if (!user || isGuest || !sessionCookie) return null;
   return `${user.id}:${sessionCookie}`;

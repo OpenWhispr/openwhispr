@@ -1,8 +1,8 @@
+import { useOnboardingStep } from '@/hooks/useOnboardingStep';
 import { useEffect } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
 import { AnimatedKeyboardPreview } from '@/components/onboarding/AnimatedKeyboardPreview';
-import { useOnboardingStore } from '@/store/useOnboardingStore';
 
 const WELCOME_VIDEO = require('../../../../assets/onboarding/videos/welcome-setup.mp4');
 const WELCOME_VIDEO_ASPECT_RATIO = 720 / 630;
@@ -43,7 +43,7 @@ function getExpoVideoModule(): ExpoVideoModule | null {
 }
 
 export function WelcomeStep() {
-  const goNext = useOnboardingStore((s) => s.goNext);
+  const { goNext } = useOnboardingStep('welcome');
 
   return (
     <OnboardingShell

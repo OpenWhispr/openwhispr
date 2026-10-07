@@ -1,12 +1,17 @@
-import { type ReactElement, type ReactNode } from 'react';
-import { Pressable, View } from 'react-native';
+import { useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
+import { SystemIcon } from '@/components/ui/SystemIcon';
+import { describeOnboardingError } from '@/lib/onboardingErrors';
 
 interface OnboardingShellProps {
   progress?: { current: number; total: number };
-  onSkip?: () => void;
+  onSkip?: () => void | Promise<unknown>;
+  onBack?: () => void | Promise<unknown>;
+  /** Shows a question-mark button in the top-right for steps a user can get stuck on. */
+  onHelp?: () => void;
   /** Label for the top-right dismiss affordance. Onboarding steps skip ahead;
    * standalone screens that reuse this shell close instead. */
   skipLabel?: string;
@@ -19,16 +24,20 @@ interface OnboardingShellProps {
   ctaLabel: string;
   ctaDisabled?: boolean;
   ctaLoading?: boolean;
-  onCta: () => void;
+  onCta: () => void | Promise<unknown>;
   secondaryCtaLabel?: string;
-  onSecondaryCta?: () => void;
+  onSecondaryCta?: () => void | Promise<unknown>;
   secondaryCtaVariant?: 'link' | 'card';
   children?: ReactNode;
 }
 
+type OnboardingAction = 'primary' | 'secondary' | 'back' | 'skip';
+
 export function OnboardingShell({
   progress,
   onSkip,
+  onBack,
+  onHelp,
   skipLabel = 'Skip',
   title,
   titleAccent,
@@ -43,64 +52,156 @@ export function OnboardingShell({
   secondaryCtaVariant = 'link',
   children,
 }: OnboardingShellProps): ReactElement {
+  const inFlight = useRef(false);
+  const failedAction = useRef<OnboardingAction | null>(null);
+  const [busyAction, setBusyAction] = useState<OnboardingAction | null>(null);
+  const busy = busyAction !== null;
+  const [error, setError] = useState<string | null>(null);
+  const run = async (actionName: OnboardingAction): Promise<void> => {
+    if (inFlight.current) return;
+    const action = { primary: onCta, secondary: onSecondaryCta, back: onBack, skip: onSkip }[
+      actionName
+    ];
+    if (!action) return;
+    inFlight.current = true;
+    setBusyAction(actionName);
+    setError(null);
+    try {
+      await action();
+    } catch (cause) {
+      failedAction.current = actionName;
+      setError(describeOnboardingError(cause, 'Could not save your progress. Try again.'));
+    } finally {
+      inFlight.current = false;
+      setBusyAction(null);
+    }
+  };
   return (
     <SafeAreaView className="flex-1 bg-systemBackground" edges={['top', 'bottom']}>
-      <View className="flex-row items-center justify-between px-6 pt-2">
-        <View className="flex-1 pr-4">
-          {progress ? (
-            <Text className="text-[13px] font-medium text-secondaryLabel">
-              Step {progress.current} of {progress.total}
-            </Text>
+      <View className="flex-1">
+        <View className="flex-row items-center justify-between px-6 pt-2">
+          {onBack ? (
+            <Pressable
+              onPress={() => run('back')}
+              disabled={busy}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              className="mr-4 py-2"
+            >
+              <SystemIcon
+                name="chevron.left"
+                mdName="ChevronLeft"
+                size={20}
+                color="secondaryLabel"
+              />
+            </Pressable>
+          ) : null}
+          <View className="flex-1 pr-4">
+            {progress ? (
+              <Text className="text-[13px] font-medium text-secondaryLabel">
+                Step {progress.current} of {progress.total}
+              </Text>
+            ) : null}
+          </View>
+          {onHelp ? (
+            <Pressable
+              onPress={onHelp}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Help"
+              className={onSkip ? 'mr-4' : undefined}
+            >
+              <SystemIcon
+                name="questionmark.circle"
+                mdName="CircleHelp"
+                size={22}
+                color="secondaryLabel"
+              />
+            </Pressable>
+          ) : null}
+          {onSkip ? (
+            <Pressable
+              onPress={() => run('skip')}
+              disabled={busy}
+              hitSlop={12}
+              accessibilityRole="button"
+            >
+              <Text className="text-[15px] font-medium text-secondaryLabel">{skipLabel}</Text>
+            </Pressable>
           ) : null}
         </View>
-        {onSkip ? (
-          <Pressable onPress={onSkip} hitSlop={12} accessibilityRole="button">
-            <Text className="text-[15px] font-medium text-secondaryLabel">{skipLabel}</Text>
-          </Pressable>
-        ) : null}
-      </View>
 
-      <View className="flex-1 px-6 pt-8">
-        {titleNode ?? (
-          <Text
-            accessibilityRole="header"
-            className="text-[30px] font-medium leading-[36px] text-label"
-          >
-            {renderTitle(title, titleAccent)}
-          </Text>
-        )}
-        {subtitle ? (
-          <Text className="mt-2 text-[16px] leading-[21px] text-secondaryLabel">{subtitle}</Text>
-        ) : null}
-
-        <View className="mt-6 flex-1">{children}</View>
-      </View>
-
-      <View className="px-6 pb-4">
-        <Button onPress={onCta} disabled={ctaDisabled} loading={ctaLoading} size="lg">
-          {ctaLabel}
-        </Button>
-        {secondaryCtaLabel && onSecondaryCta ? (
-          secondaryCtaVariant === 'card' ? (
-            <Pressable
-              onPress={onSecondaryCta}
-              accessibilityRole="button"
-              className="mt-3 items-center justify-center rounded-full border border-separator bg-secondarySystemGroupedBackground py-4 active:opacity-80"
+        <View className="flex-1 px-6 pt-8">
+          {titleNode ?? (
+            <Text
+              accessibilityRole="header"
+              className="text-[30px] font-medium leading-[36px] text-label"
             >
-              <Text className="text-[16px] font-semibold text-label">{secondaryCtaLabel}</Text>
-            </Pressable>
-          ) : (
-            <Pressable
-              onPress={onSecondaryCta}
-              className="mt-3 items-center justify-center py-2"
-              accessibilityRole="button"
-            >
-              <Text className="text-[15px] font-medium text-secondaryLabel">
-                {secondaryCtaLabel}
+              {renderTitle(title, titleAccent)}
+            </Text>
+          )}
+          {subtitle ? (
+            <Text className="mt-2 text-[16px] leading-[21px] text-secondaryLabel">{subtitle}</Text>
+          ) : null}
+
+          <View className="mt-6 flex-1">{children}</View>
+        </View>
+
+        <View className="px-6 pb-4">
+          {error ? (
+            <View className="mb-3 flex-row items-center gap-3">
+              <Text accessibilityRole="alert" className="flex-1 text-[14px] text-systemRed">
+                {error}
               </Text>
-            </Pressable>
-          )
-        ) : null}
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy || (failedAction.current === 'primary' && ctaDisabled)}
+                hitSlop={12}
+                onPress={() => {
+                  if (failedAction.current) run(failedAction.current);
+                }}
+              >
+                <Text className="text-[15px] font-medium text-primary">Retry</Text>
+              </Pressable>
+            </View>
+          ) : null}
+          <Button
+            onPress={() => run('primary')}
+            disabled={ctaDisabled || busy}
+            loading={ctaLoading || busyAction === 'primary'}
+            size="lg"
+          >
+            {ctaLabel}
+          </Button>
+          {secondaryCtaLabel && onSecondaryCta ? (
+            secondaryCtaVariant === 'card' ? (
+              <Pressable
+                onPress={() => run('secondary')}
+                disabled={busy}
+                accessibilityRole="button"
+                accessibilityState={{ busy: busyAction === 'secondary', disabled: busy }}
+                className="mt-3 flex-row items-center justify-center gap-2 rounded-full border border-separator bg-secondarySystemGroupedBackground py-4 active:opacity-80"
+              >
+                {busyAction === 'secondary' ? <ActivityIndicator size="small" /> : null}
+                <Text className="text-[16px] font-semibold text-label">{secondaryCtaLabel}</Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                onPress={() => run('secondary')}
+                disabled={busy}
+                className="mt-3 flex-row items-center justify-center gap-2 py-2"
+                accessibilityRole="button"
+                accessibilityState={{ busy: busyAction === 'secondary', disabled: busy }}
+              >
+                {busyAction === 'secondary' ? <ActivityIndicator size="small" /> : null}
+                <Text className="text-[15px] font-medium text-secondaryLabel">
+                  {secondaryCtaLabel}
+                </Text>
+              </Pressable>
+            )
+          ) : null}
+        </View>
       </View>
     </SafeAreaView>
   );

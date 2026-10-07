@@ -28,10 +28,12 @@ export function useMainProcessNotifications({
       });
     });
 
-    const unsubscribeFailed = window.electronAPI?.onHotkeyRegistrationFailed?.((_data) => {
+    // Main's translated reason names the hotkey, which matters when several slots
+    // restore at startup.
+    const unsubscribeFailed = window.electronAPI?.onHotkeyRegistrationFailed?.((data) => {
       toast({
         title: t("app.toasts.hotkeyUnavailable.title"),
-        description: t("app.toasts.hotkeyUnavailable.description"),
+        description: data?.error || t("app.toasts.hotkeyUnavailable.description"),
         duration: 10000,
       });
     });

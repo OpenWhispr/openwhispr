@@ -87,18 +87,41 @@ function anything() {
   });
 }
 
+// Each call with the binding file as it stood then: a connect must be stopped
+// only once the scope it ran under is gone.
+const connectorCalls = [];
+const connectorManager = {
+  accountChanged: () => connectorCalls.push(["accountChanged", readBinding()?.accountId ?? null]),
+  notifyStatusChanged: async () => connectorCalls.push(["notifyStatusChanged"]),
+};
+
+function readBinding() {
+  return require("../../src/helpers/accountScopeBinding").read();
+}
+
+const databaseScopes = [];
+const databaseManager = new Proxy(
+  { setActiveAccountId: (accountId) => databaseScopes.push(accountId) },
+  { get: (value, property) => (property in value ? value[property] : anything()) }
+);
+
 function buildFakeThis() {
-  const target = { sessionId: "test-session" };
+  const target = { sessionId: "test-session", connectorManager, databaseManager };
   return new Proxy(target, {
     get: (value, property) => (property in value ? value[property] : anything()),
   });
 }
 
+let fakeThis;
+let handleAuthTokenChange;
+
 test.before(() => {
   delete require.cache[handlersModulePath];
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
-  Ctor.prototype.setupHandlers.call(buildFakeThis());
+  fakeThis = buildFakeThis();
+  Ctor.prototype.setupHandlers.call(fakeThis);
+  handleAuthTokenChange = (state) => Ctor.prototype._handleAuthTokenChange.call(fakeThis, state);
 });
 
 test.after(() => {
@@ -147,4 +170,39 @@ test("a validated sign-out clears the scope and broadcasts the clearing", async 
   assert.deepEqual(await setScope(null, 4), { success: true });
   assert.equal(await getScope(), null);
   assert.deepEqual(broadcasts, [["active-account-scope-changed", null]]);
+});
+
+test("a scope change stops connects another account started, after the scope moves", async () => {
+  tokenState = { token: "token-c", generation: 5 };
+  connectorCalls.length = 0;
+  await setScope("account-c", 5);
+  await setScope(null, 5);
+  assert.deepEqual(connectorCalls, [
+    ["accountChanged", "account-c"],
+    ["notifyStatusChanged"],
+    ["accountChanged", null],
+    ["notifyStatusChanged"],
+  ]);
+});
+
+test("a sign-out in main stops connects without waiting for the renderer", async () => {
+  tokenState = { token: "token-d", generation: 6 };
+  await setScope("account-d", 6);
+  connectorCalls.length = 0;
+
+  // A rotated token isn't another account: connects keep running.
+  handleAuthTokenChange({ generation: 7, token: "token-e" });
+  assert.deepEqual(connectorCalls, [["notifyStatusChanged"]]);
+
+  connectorCalls.length = 0;
+  databaseScopes.length = 0;
+  broadcasts.length = 0;
+  handleAuthTokenChange({ generation: 8, token: null });
+  assert.deepEqual(connectorCalls, [["accountChanged", null], ["notifyStatusChanged"]]);
+  assert.equal(readBinding(), null);
+  assert.deepEqual(databaseScopes, [null]);
+  assert.deepEqual(broadcasts, [
+    ["active-account-scope-changed", null],
+    ["auth-token-state-changed", { generation: 8, hasToken: false }],
+  ]);
 });

@@ -33,6 +33,7 @@ process.env.NODE_ENV = "test";
 
 const DatabaseManager = require("../../src/helpers/database.js");
 const CliBridge = require("../../src/helpers/cliBridge.js");
+const { call } = require("./harness/cliBridge.js");
 
 function isNativeBindingUnavailable(error) {
   const message = String(error?.message || error);
@@ -64,16 +65,6 @@ function createBridge(t) {
   broadcasts.length = 0;
   const bridge = new CliBridge({ databaseManager: db });
   return { bridge, db, broadcasts };
-}
-
-function call(bridge, method, pathname, body) {
-  for (const route of bridge.routes) {
-    if (route.method !== method) continue;
-    const params = route.match(pathname);
-    if (!params) continue;
-    return route.handler({ params, query: new URLSearchParams(), body });
-  }
-  throw new Error(`No route for ${method} ${pathname}`);
 }
 
 test("GET /v1/dictionary/list returns the stored words", (t) => {

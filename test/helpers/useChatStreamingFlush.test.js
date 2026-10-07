@@ -443,3 +443,26 @@ for (const withContent of [true, false]) {
     await assertNoLateWrites(harness);
   });
 }
+
+test("plainTextResponse appends the plain-text instruction to the system prompt", async (t) => {
+  const requestBodies = [];
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  globalThis.fetch = async (_url, init) => {
+    requestBodies.push(String(init?.body));
+    return new Response(sseEvent({ content: "ok" }, "stop") + "data: [DONE]\n\n", {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    });
+  };
+  const harness = await renderChatStreaming(t);
+
+  await harness.captured.sendToAI("draft a reply", [], { plainTextResponse: true });
+  await harness.captured.sendToAI("draft a reply", []);
+
+  assert.equal(requestBodies.length, 2);
+  assert.match(requestBodies[0], /OUTPUT FORMAT:/);
+  assert.doesNotMatch(requestBodies[1], /OUTPUT FORMAT:/);
+});

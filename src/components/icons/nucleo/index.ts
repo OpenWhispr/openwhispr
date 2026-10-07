@@ -31,7 +31,6 @@ export { ClockOutline24 } from "./ClockOutline24";
 export { Cloud2Outline24 } from "./Cloud2Outline24";
 export { CloudUpload2Outline24 } from "./CloudUpload2Outline24";
 export { CodeOutline24 } from "./CodeOutline24";
-export { ComposeOutline24 } from "./ComposeOutline24";
 export { ConsoleOutline24 } from "./ConsoleOutline24";
 export { Copy2Outline24 } from "./Copy2Outline24";
 export { CreditCardOutline24 } from "./CreditCardOutline24";

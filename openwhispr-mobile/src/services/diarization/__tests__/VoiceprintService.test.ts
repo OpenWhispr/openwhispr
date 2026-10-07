@@ -19,6 +19,7 @@ import {
   VOICE_ENROLLMENT_NO_USABLE_EMBEDDING,
   VOICE_ENROLLMENT_SPEECH_ANALYSIS_FAILED,
   VOICE_ENROLLMENT_STORAGE_FAILED,
+  VOICE_ENROLLMENT_NO_MEANINGFUL_SPEAKER,
   VOICE_ENROLLMENT_SHORT_SPEECH,
   VOICE_ENROLLMENT_TRANSCODE_FAILED,
   type EnrollVoiceProfileDeps,
@@ -187,6 +188,39 @@ describe('evaluateEnrollmentQuality', () => {
     );
   });
 
+  it.each([
+    ['low speech ratio', { speechRatio: 0.2 }, VOICE_ENROLLMENT_LOW_SPEECH_RATIO],
+    ['low SNR', { peakDb: -20, noiseFloorDb: -28 }, VOICE_ENROLLMENT_LOW_SNR],
+  ])('keeps the level analysis on a %s rejection', (_name, overrides, code) => {
+    const speechActivity = { ...passingAnalysis, ...overrides };
+
+    expect(evaluateEnrollmentQuality({ speechActivity, diarization: diarization() })).toMatchObject(
+      { ok: false, code, speechActivity },
+    );
+  });
+
+  it('keeps the level analysis on a short-speech rejection', () => {
+    const speechActivity = { ...passingAnalysis, speechActivityMs: 5_000 };
+
+    expect(
+      evaluateEnrollmentQuality({
+        speechActivity,
+        diarization: diarization({ segments: [{ start: 0, end: 5, speakerId: 0 }] }),
+      }),
+    ).toMatchObject({ ok: false, code: VOICE_ENROLLMENT_SHORT_SPEECH, speechActivity });
+  });
+
+  it('keeps the level analysis when no single speaker was heard for long enough', () => {
+    const speechActivity = passingAnalysis;
+
+    expect(
+      evaluateEnrollmentQuality({
+        speechActivity,
+        diarization: diarization({ segments: [{ start: 0, end: 1, speakerId: 0 }] }),
+      }),
+    ).toMatchObject({ ok: false, code: VOICE_ENROLLMENT_NO_MEANINGFUL_SPEAKER, speechActivity });
+  });
+
   it('accepts VAD-short analysis when diarization attributes enough single-speaker speech', () => {
     expect(
       evaluateEnrollmentQuality({
@@ -285,6 +319,7 @@ describe('enrollVoiceProfile', () => {
 
     await expect(enrollVoiceProfile(enrollInput, deps)).rejects.toMatchObject({
       code: VOICE_ENROLLMENT_LOW_SPEECH_RATIO,
+      quality: { speechActivity: { speechRatio: 0.1 } },
     });
     expect(calls.diarize).toEqual([]);
   });
@@ -487,6 +522,25 @@ describe('identifyNoteSpeakers', () => {
     };
     return { deps, calls };
   };
+
+  it('writes nothing to a speaker that already carries the label, which would resync the note', () => {
+    const { deps, calls } = makeIdentificationDeps({
+      speakers: [
+        speaker({
+          displayName: 'Alice',
+          speakerStatus: 'confirmed',
+          speakerLocked: 0,
+          speakerLockSource: null,
+          profileId: 10,
+        }),
+      ],
+    });
+
+    const result = identifyNoteSpeakers(7, { speaker_0: [1, 0] }, deps);
+
+    expect(calls.updateSpeaker).toEqual([]);
+    expect(result.updatedSpeakerIds).toEqual([]);
+  });
 
   it('auto-labels a high-confidence unlocked speaker and sets profileId', () => {
     const { deps, calls } = makeIdentificationDeps();

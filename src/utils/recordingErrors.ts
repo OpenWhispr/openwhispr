@@ -1,15 +1,22 @@
 import { TFunction } from "i18next";
+import { describeProviderError } from "./describeProviderError";
 
 type RecordingError = {
   code?: string;
   title: string;
   description?: string;
   messageKey?: string;
+  messageParams?: Record<string, string | number | boolean>;
+  surface?: string;
   /** Toast variant; defaults to destructive for genuine failures. */
   variant?: "default" | "destructive";
 };
 
 export function getRecordingErrorTitle(error: RecordingError, t: TFunction): string {
+  if (error.code === "ACCESSIBILITY_PERMISSION_REQUIRED") {
+    return t("hooks.audioRecording.pastePermission.title");
+  }
+  if (error.code === "PASTE_FAILED") return t("hooks.audioRecording.pasteFailed.title");
   if (error.code?.startsWith("SELECTION_EDIT_")) {
     return t("hooks.audioRecording.selectionEditing.notAppliedTitle");
   }
@@ -28,10 +35,18 @@ export function getRecordingErrorTitle(error: RecordingError, t: TFunction): str
     return t("hooks.audioRecording.errorTitles.dailyLimitReached");
   if (error.code === "PROVIDER_RATE_LIMITED")
     return t("hooks.audioRecording.errorTitles.providerRateLimited");
+  if (error.code?.startsWith("PROVIDER_")) {
+    return t(
+      error.surface === "llm" ? "providerErrors.titles.llm" : "providerErrors.titles.transcription"
+    );
+  }
   return error.title;
 }
 
 export function getRecordingErrorDescription(error: RecordingError, t: TFunction): string {
-  if (error.messageKey) return t(error.messageKey);
+  if (error.code === "ACCESSIBILITY_PERMISSION_REQUIRED") {
+    return t("hooks.audioRecording.pastePermission.description");
+  }
+  if (error.messageKey) return describeProviderError(error, t).description;
   return error.description ?? "";
 }

@@ -9,7 +9,11 @@ const DragManager = require("./dragManager");
 const MainWindowPlacementCoordinator = require("./mainWindowPlacementCoordinator");
 const MenuManager = require("./menuManager");
 const DevServerManager = require("./devServerManager");
-const { isAllowedAppNavigation, isExternalBrowserUrl } = require("./navigationGuard");
+const {
+  isAllowedAppNavigation,
+  isExternalBrowserUrl,
+  isExternalOpenUrl,
+} = require("./navigationGuard");
 const { pathToFileURL } = require("url");
 const dockManager = require("./dockManager");
 const { i18nMain } = require("./i18nMain");
@@ -100,6 +104,7 @@ class WindowManager {
     this._assistantPanelBusy = false;
     this._pendingMeetingNoteNavigation = null;
     this._pendingNoteNavigation = null;
+    this._pendingSettingsSection = null;
 
     app.on("before-quit", () => {
       this.isQuitting = true;
@@ -124,6 +129,7 @@ class WindowManager {
     this.setMainWindowInteractivity(false);
     this.registerMainWindowEvents();
     this.registerAssistantSelectionContextMenu();
+    this.registerExternalLinkHandlers(this.mainWindow, false);
 
     // Register load event handlers BEFORE loading to catch all events
     this.mainWindow.webContents.on(
@@ -931,7 +937,7 @@ class WindowManager {
       // sites in main.js; a stop-press capture resolves the same frontmost
       // app, since NSWorkspace ignores the overlay panel.
       const targetPidPromise = this.textEditMonitor?.captureTargetPid?.();
-      void this.selectionManager?.captureTarget?.();
+      void this.selectionManager?.captureTarget?.({ force: !isStarting });
       if (!isStarting) {
         this._mainWindowPlacementCoordinator.cancelPending();
       }
@@ -1267,6 +1273,44 @@ class WindowManager {
     });
   }
 
+  // Links in either window open in the default browser, never in an in-app
+  // window or by navigating the app away from itself.
+  registerExternalLinkHandlers(window, isControlPanel) {
+    window.webContents.on("will-navigate", (event, url) => {
+      // getAppUrl() is null in packaged builds; exactly one of the two is set.
+      const appUrl =
+        DevServerManager.getAppUrl(isControlPanel) ??
+        pathToFileURL(DevServerManager.getAppFilePath(isControlPanel).path).href;
+
+      if (isAllowedAppNavigation(url, appUrl)) {
+        return;
+      }
+
+      event.preventDefault();
+      if (isExternalBrowserUrl(url)) {
+        this.openExternalUrl(url);
+      } else {
+        debugLogger.debug("Blocked untrusted navigation", { url }, "window");
+      }
+    });
+
+    window.webContents.setWindowOpenHandler(({ url }) => {
+      if (isExternalOpenUrl(url)) {
+        this.openExternalUrl(url);
+      } else {
+        debugLogger.debug("Blocked untrusted window open", { url }, "window");
+      }
+      return { action: "deny" };
+    });
+
+    window.webContents.on("did-create-window", (childWindow, details) => {
+      childWindow.close();
+      if (details.url && isExternalOpenUrl(details.url)) {
+        this.openExternalUrl(details.url, false);
+      }
+    });
+  }
+
   async createControlPanelWindow() {
     if (this.controlPanelWindow && !this.controlPanelWindow.isDestroyed()) {
       if (this.controlPanelWindow.isMinimized()) {
@@ -1285,35 +1329,7 @@ class WindowManager {
     this._onboardingWindowMode = null;
     this._onboardingWindowState = null;
 
-    this.controlPanelWindow.webContents.on("will-navigate", (event, url) => {
-      // getAppUrl() is null in packaged builds; exactly one of the two is set.
-      const appUrl =
-        DevServerManager.getAppUrl(true) ??
-        pathToFileURL(DevServerManager.getAppFilePath(true).path).href;
-
-      if (isAllowedAppNavigation(url, appUrl)) {
-        return;
-      }
-
-      event.preventDefault();
-      if (isExternalBrowserUrl(url)) {
-        this.openExternalUrl(url);
-      } else {
-        debugLogger.debug("Blocked untrusted navigation", { url }, "window");
-      }
-    });
-
-    this.controlPanelWindow.webContents.setWindowOpenHandler(({ url }) => {
-      this.openExternalUrl(url);
-      return { action: "deny" };
-    });
-
-    this.controlPanelWindow.webContents.on("did-create-window", (childWindow, details) => {
-      childWindow.close();
-      if (details.url && !details.url.startsWith("devtools://")) {
-        this.openExternalUrl(details.url, false);
-      }
-    });
+    this.registerExternalLinkHandlers(this.controlPanelWindow, true);
 
     // Nothing else shows this window: ready-to-show deliberately doesn't, so the
     // renderer can pick the onboarding size first and avoid a visible
@@ -1573,6 +1589,7 @@ class WindowManager {
 
   setOnboardingActive(active) {
     const nextActive = active === true;
+    if (!nextActive) this.permissionGuide?.close();
     if (nextActive === this._onboardingActive) {
       if (nextActive) this._hideNormalAppSurfaces();
       return true;
@@ -1770,6 +1787,9 @@ class WindowManager {
     // A demo left running when the panel hides would keep swallowing normal
     // dictations (paste suppressed, transcripts rerouted to the demo session).
     this.endOnboardingDemo();
+    // The guide cannot watch the panel's hide event (occlusion fires it too),
+    // so the one real hide path tells it.
+    this.permissionGuide?.close(false, true);
     this.controlPanelWindow.hide();
     dockManager.setControlPanelVisible(false);
   }
@@ -2237,11 +2257,20 @@ class WindowManager {
     }
   }
 
-  async openSettings() {
+  // A named section waits here like a note navigation: a control panel created
+  // by this call registers its show-settings listener only after the event.
+  async openSettings(section) {
+    if (section) this._pendingSettingsSection = section;
     await this.createControlPanelWindow();
     if (this.controlPanelWindow && !this.controlPanelWindow.isDestroyed()) {
       this.controlPanelWindow.webContents.send("show-settings");
     }
+  }
+
+  consumePendingSettingsSection() {
+    const section = this._pendingSettingsSection;
+    this._pendingSettingsSection = null;
+    return section;
   }
 
   showLoadFailureDialog(windowName, errorCode, errorDescription, validatedURL) {

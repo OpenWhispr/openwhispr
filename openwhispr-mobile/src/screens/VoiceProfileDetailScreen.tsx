@@ -9,7 +9,7 @@ import { useNotesStore } from '@/store/useNotesStore';
 import { confirmDestructive } from '@/lib/alerts';
 import { safeHaptics } from '@/lib/utils';
 import { iosColor } from '@/config/colors';
-import { SpaceGrotesk } from '@/lib/fonts';
+import { AppFont } from '@/lib/fonts';
 
 const formatDate = (value: string | null): string => {
   if (!value) return 'On this device';
@@ -53,7 +53,7 @@ function FieldRow({
         returnKeyType="done"
         testID={testID}
         className="flex-1 py-3 text-[17px] text-label"
-        style={{ fontFamily: SpaceGrotesk.regular }}
+        style={{ fontFamily: AppFont.regular }}
       />
     </View>
   );
@@ -120,7 +120,7 @@ export default function VoiceProfileDetailScreen() {
     }
   }, [email, profile, updateVoiceProfile]);
 
-  const reenroll = useCallback(() => {
+  const retrain = useCallback(() => {
     if (!profile) return;
     router.push(`/(tabs)/(notes)/voice-enrollment?profileId=${profile.id}`);
   }, [profile, router]);
@@ -153,10 +153,12 @@ export default function VoiceProfileDetailScreen() {
         <View className="items-center gap-2.5 pb-1 pt-2">
           <SpeakerAvatar name={profile.displayName} isOwner={isOwner} size={76} />
           <View className="flex-row items-center gap-2">
-            <Text className="text-[22px] font-bold text-label">{profile.displayName}</Text>
+            <Text accessibilityRole="header" className="text-[22px] font-bold text-label">
+              {profile.displayName}
+            </Text>
             {isOwner ? (
               <View className="rounded-md bg-tertiarySystemFill px-2 py-0.5">
-                <Text className="text-[12px] font-semibold text-secondaryLabel">Owner</Text>
+                <Text className="text-[12px] font-semibold text-secondaryLabel">You</Text>
               </View>
             ) : null}
           </View>
@@ -187,31 +189,30 @@ export default function VoiceProfileDetailScreen() {
           Adding an email lets meeting notes link this speaker to calendar invites later.
         </Text>
 
-        <SectionHeader label="Voiceprint" />
+        <SectionHeader label="Voice sample" />
         <GroupedList dividerInset={16}>
           <View className="min-h-[46px] flex-row items-center justify-between px-4 py-3">
             <Text className="text-[16px] text-secondaryLabel">Samples</Text>
             <Text className="text-[16px] font-medium text-label">{profile.sampleCount}</Text>
           </View>
           <View className="min-h-[46px] flex-row items-center justify-between px-4 py-3">
-            <Text className="text-[16px] text-secondaryLabel">Enrolled</Text>
+            <Text className="text-[16px] text-secondaryLabel">Added</Text>
             <Text className="text-[16px] font-medium text-label">
               {formatDate(profile.createdAt)}
             </Text>
           </View>
           <GroupedList.Row
-            onPress={reenroll}
+            onPress={retrain}
             accessibilityRole="button"
-            accessibilityLabel="Re-enroll Voice"
+            accessibilityLabel="Retrain Voice"
             testID="voice-profile-reenroll"
             contentInsetLeft={16}
           >
-            <Text className="text-[17px] font-medium text-brand">Re-enroll Voice</Text>
+            <Text className="text-[17px] font-medium text-brand">Retrain Voice</Text>
           </GroupedList.Row>
         </GroupedList>
         <Text className="mt-2 px-4 text-[13px] leading-5 text-secondaryLabel">
-          Re-recording replaces this speaker's voiceprint. Past transcripts keep their existing
-          labels.
+          Retraining replaces this voice sample. Past transcripts keep their existing labels.
         </Text>
 
         <View className="mt-6">

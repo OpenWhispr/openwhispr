@@ -91,30 +91,45 @@ export const SettingsRow: React.FC<SettingsRowProps> = ({
 export function SettingsPanel({
   children,
   className = "",
+  as: Element = "div",
 }: {
   children: React.ReactNode;
   className?: string;
+  /** "ol" for a panel of numbered steps, whose rows are then "li". */
+  as?: "div" | "ol";
 }) {
   return (
-    <div
+    <Element
       className={`rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 backdrop-blur-sm divide-y divide-border/60 dark:divide-border-subtle/50 ${className}`}
     >
       {children}
-    </div>
+    </Element>
   );
 }
 
 export function SettingsPanelRow({
   children,
   className = "",
+  as: Element = "div",
 }: {
   children: React.ReactNode;
   className?: string;
+  as?: "div" | "li";
 }) {
   const { isCompact } = useSettingsLayout();
 
   return (
-    <div className={`${isCompact ? "px-3 py-2.5" : "px-4 py-3"} ${className}`}>{children}</div>
+    <Element className={`${isCompact ? "px-3 py-2.5" : "px-4 py-3"} ${className}`}>
+      {children}
+    </Element>
+  );
+}
+
+export function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70 mb-2 ps-1">
+      {children}
+    </div>
   );
 }
 

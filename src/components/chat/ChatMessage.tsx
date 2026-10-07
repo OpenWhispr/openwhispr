@@ -1,17 +1,23 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Copy, Check, Search, FileText, ChevronDown, ChevronRight, CircleAlert } from "../icons";
 import { cn } from "../lib/utils";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
-import type { ToolCallInfo } from "./types";
+import { TechnicalErrorDetails } from "../ui/TechnicalErrorDetails";
+import { openProviderSettings } from "../../utils/describeProviderError";
+import type { MessageError, ToolCallInfo } from "./types";
 import { extractNoteCards } from "./noteCards";
 import { toolIcons } from "./toolIcons";
+import { ApprovalCard } from "./ApprovalCard";
+import { approvalKey, useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
 
 interface ChatMessageProps {
+  messageId: string;
   role: "user" | "assistant";
   content: string;
   isStreaming: boolean;
   toolCalls?: ToolCallInfo[];
+  error?: MessageError;
   onOpenNote?: (noteId: number) => void;
 }
 
@@ -120,6 +126,15 @@ function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
   );
 }
 
+// Subscribes to its own approval entry only, so editing one card doesn't
+// re-render every message in the thread.
+function ToolCallItem({ messageId, toolCall }: { messageId: string; toolCall: ToolCallInfo }) {
+  const approval = useConnectorApprovalStore(
+    (state) => state.entries[approvalKey(messageId, toolCall.id)]
+  );
+  return approval ? <ApprovalCard entry={approval} /> : <ToolCallStep toolCall={toolCall} />;
+}
+
 function NoteCard({
   noteId,
   title,
@@ -162,11 +177,15 @@ function NoteCard({
   );
 }
 
-export function ChatMessage({
+// Memoized: hosts re-render on every keystroke in their composer (or, for note chat, in
+// the note), and only the streaming reply's props change between those renders.
+export const ChatMessage = memo(function ChatMessage({
+  messageId,
   role,
   content,
   isStreaming,
   toolCalls,
+  error,
   onOpenNote,
 }: ChatMessageProps) {
   const { t } = useTranslation();
@@ -196,7 +215,9 @@ export function ChatMessage({
             "text-[13px] leading-relaxed"
           )}
         >
-          <span dir="auto">{content}</span>
+          <span dir="auto" className="whitespace-pre-wrap">
+            {content}
+          </span>
         </div>
       </div>
     );
@@ -226,7 +247,7 @@ export function ChatMessage({
             )}
           >
             {toolCalls.map((tc) => (
-              <ToolCallStep key={tc.id} toolCall={tc} />
+              <ToolCallItem key={tc.id} messageId={messageId} toolCall={tc} />
             ))}
           </div>
         )}
@@ -250,6 +271,17 @@ export function ChatMessage({
             {t("agentMode.input.thinking")}...
           </span>
         )}
+
+        {error?.settingsTarget && (
+          <button
+            type="button"
+            onClick={() => openProviderSettings(error.settingsTarget!)}
+            className="mt-1.5 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded-sm"
+          >
+            {t("providerErrors.openSettings")}
+          </button>
+        )}
+        {error?.technicalDetails && <TechnicalErrorDetails details={error.technicalDetails} />}
 
         {noteCards.length > 0 && !isStreaming && (
           <div>
@@ -282,4 +314,4 @@ export function ChatMessage({
       </div>
     </div>
   );
-}
+});

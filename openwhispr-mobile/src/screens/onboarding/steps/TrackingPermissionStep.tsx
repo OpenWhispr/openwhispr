@@ -1,3 +1,4 @@
+import { useOnboardingStep } from '@/hooks/useOnboardingStep';
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 import { ActivityIndicator, ScrollView, View } from 'react-native';
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
@@ -11,6 +12,7 @@ import {
   requestTrackingAuthorization,
 } from '@/lib/trackingTransparency';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
+import { describeOnboardingError } from '@/lib/onboardingErrors';
 
 type ScreenState = 'checking' | 'ready';
 
@@ -26,7 +28,7 @@ const BENEFITS: Benefit[] = [
 ];
 
 export function TrackingPermissionStep(): ReactElement {
-  const finish = useOnboardingStore((state) => state.finish);
+  const { goNext } = useOnboardingStep('tracking-permission');
   const markRequestAttempted = useOnboardingStore(
     (state) => state.markTrackingAuthorizationRequestAttempted,
   );
@@ -35,21 +37,23 @@ export function TrackingPermissionStep(): ReactElement {
   );
   const [screenState, setScreenState] = useState<ScreenState>('checking');
   const [requesting, setRequesting] = useState(false);
+  const [advanceError, setAdvanceError] = useState<string | null>(null);
   const checkedRef = useRef(false);
   const requestInFlightRef = useRef(false);
   const finishingRef = useRef(false);
 
-  const finishOnboarding = useCallback(async (): Promise<void> => {
+  const continueToCompletion = useCallback(async (): Promise<void> => {
     if (finishingRef.current) return;
     finishingRef.current = true;
+    setAdvanceError(null);
 
     try {
-      await finish();
+      await goNext();
     } catch (error) {
       finishingRef.current = false;
-      Sentry.captureException(error);
+      setAdvanceError(describeOnboardingError(error, 'Could not save progress.'));
     }
-  }, [finish]);
+  }, [goNext]);
 
   useEffect(() => {
     if (checkedRef.current) return;
@@ -61,21 +65,21 @@ export function TrackingPermissionStep(): ReactElement {
         setAppsFlyerTrackingAuthorizationStatus(status);
 
         if (status !== 'notDetermined' || requestAttempted) {
-          await finishOnboarding();
+          await continueToCompletion();
           return;
         }
 
         setScreenState('ready');
       } catch (error) {
         Sentry.captureException(error);
-        await finishOnboarding();
+        await continueToCompletion();
       }
     };
 
     checkAuthorization().catch((error: unknown): void => {
       Sentry.captureException(error);
     });
-  }, [finishOnboarding, requestAttempted]);
+  }, [continueToCompletion, requestAttempted]);
 
   const handleContinue = useCallback(async (): Promise<void> => {
     if (requestInFlightRef.current || finishingRef.current) return;
@@ -88,7 +92,7 @@ export function TrackingPermissionStep(): ReactElement {
         await markRequestAttempted();
       } catch (error) {
         Sentry.captureException(error);
-        await finishOnboarding();
+        await continueToCompletion();
         return;
       }
 
@@ -99,12 +103,25 @@ export function TrackingPermissionStep(): ReactElement {
         Sentry.captureException(error);
       }
 
-      await finishOnboarding();
+      await continueToCompletion();
     } finally {
       requestInFlightRef.current = false;
       setRequesting(false);
     }
-  }, [finishOnboarding, markRequestAttempted]);
+  }, [continueToCompletion, markRequestAttempted]);
+
+  if (advanceError) {
+    return (
+      <OnboardingShell
+        title="Your privacy choice is saved"
+        subtitle={advanceError}
+        ctaLabel="Retry"
+        onCta={continueToCompletion}
+      >
+        <View className="flex-1" />
+      </OnboardingShell>
+    );
+  }
 
   if (screenState === 'checking') {
     return (

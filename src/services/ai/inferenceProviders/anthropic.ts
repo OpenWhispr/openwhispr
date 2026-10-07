@@ -2,6 +2,7 @@ import type { InferenceProvider } from "./types";
 import { getCloudModel } from "../../../models/ModelRegistry";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 import logger from "../../../utils/logger";
+import { errorFromIpcResult } from "../../../helpers/ipcErrorFields";
 
 export const anthropicProvider: InferenceProvider = {
   id: "anthropic",
@@ -36,8 +37,9 @@ export const anthropicProvider: InferenceProvider = {
 
     if (!result.success) {
       logger.logReasoning("ANTHROPIC_ERROR", { model, processingTimeMs, error: result.error });
-      // Carry the main process's i18n key (a truncated cleanup) so the toast can translate it.
-      throw Object.assign(new Error(result.error), { messageKey: result.messageKey });
+      // Main resolves with the serialized error (code, i18n key, status…) so the
+      // toast can translate it.
+      throw errorFromIpcResult(result);
     }
 
     logger.logReasoning("ANTHROPIC_SUCCESS", {

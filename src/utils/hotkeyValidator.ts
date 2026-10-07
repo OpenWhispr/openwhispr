@@ -659,9 +659,9 @@ export function validateHotkey(
   const modifierCount = parts.filter((part) => normalizeModifier(part, platform) !== null).length;
   const hasBaseKey = parts.length > modifierCount;
 
-  // Only Windows routes a modifier-only chord to a native low-level hook. macOS
-  // has no equivalent — the Globe listener reports Fn, right-side modifiers and
-  // mouse buttons, nothing else — and Electron cannot register an accelerator
+  // Windows and Linux route a modifier-only chord to a native low-level listener;
+  // macOS has no equivalent — the Globe listener reports Fn, right-side modifiers
+  // and mouse buttons, nothing else — and Electron cannot register an accelerator
   // without a key, so the chord would be accepted here and then fail to bind.
   if (!hasBaseKey && modifierCount >= 2 && platform === "darwin") {
     return {
@@ -681,15 +681,6 @@ export function validateHotkey(
           platform === "darwin"
             ? "Single modifier hotkeys must use the right-side key (e.g., RightOption). Or add a regular key (e.g., Control+Space)."
             : "Single modifier hotkeys must use the right-side key (e.g., RightOption). Or use two modifiers (e.g., Control+Alt).",
-        errorCode: "LEFT_MODIFIER_ONLY",
-      };
-    }
-    // Right-side single modifiers require native listeners (not available on Linux)
-    if (platform === "linux") {
-      return {
-        valid: false,
-        error:
-          "Right-side single modifier hotkeys are not supported on Linux. Use two modifiers (e.g., Control+Alt) instead.",
         errorCode: "LEFT_MODIFIER_ONLY",
       };
     }

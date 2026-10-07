@@ -55,3 +55,17 @@ describe('cleanupTranscript for an anonymous session', () => {
     await expect(cleanupTranscript('um hello there')).resolves.toBe('cleaned:um hello there');
   });
 });
+
+it('cleans BYOK text without an OpenWhispr account', async () => {
+  mockAuthState = { user: null };
+  const inferenceRoute = {
+    mode: 'providers',
+    scope: 'cleanup',
+    providerId: 'openai',
+    modelId: 'gpt-4.1-mini',
+    endpoint: 'https://api.openai.com/v1',
+    credentialRef: 'provider.openai',
+  } as const;
+  await expect(cleanupTranscript('um hello', { inferenceRoute })).resolves.toBe('cleaned:um hello');
+  expect(mockProcessText).toHaveBeenCalledWith(expect.objectContaining({ inferenceRoute }));
+});

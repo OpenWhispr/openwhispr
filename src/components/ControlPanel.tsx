@@ -53,6 +53,10 @@ import {
 import ControlPanelSidebar from "./ControlPanelSidebar";
 import ControlPanelTopBar from "./ControlPanelTopBar";
 import { useControlPanelNavItems, type ControlPanelView } from "./controlPanelNav";
+import {
+  DEFAULT_INTEGRATIONS_SECTION,
+  type IntegrationsSection,
+} from "./integrations/integrationsSections";
 import MeetingRecordingMount from "./MeetingRecordingMount";
 import MeetingRecordingPill from "./notes/MeetingRecordingPill";
 import NewNoteMenu from "./notes/NewNoteMenu";
@@ -79,6 +83,7 @@ import { applyChineseScript, resolveChineseScriptTarget } from "../utils/chinese
 import { getAgentName } from "../utils/agentName";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
+import { providerErrorToastProps } from "../utils/describeProviderError";
 import SpaceSyncToastListener from "./notes/SpaceSyncToastListener";
 import { syncService } from "../services/SyncService.js";
 import logger from "../utils/logger";
@@ -92,10 +97,6 @@ import {
 const platform = getCachedPlatform();
 
 const SIDEBAR_WIDTH_PX = 192;
-
-// Bump to force a one-time full semantic reindex on next launch (see the
-// reindex effect for the per-version history).
-const SEMANTIC_REINDEX_VERSION = 2;
 
 const SettingsModal = React.lazy(() => import("./SettingsModal"));
 const ReferralModal = React.lazy(() => import("./ReferralModal"));
@@ -125,6 +126,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const [settingsSection, setSettingsSection] = useState<string | undefined>(
     initialSettingsSection
   );
+  // Counts named show-settings requests, so asking again for the section the
+  // modal was opened at still lands there after the user moved elsewhere in it.
+  const [settingsRequest, setSettingsRequest] = useState(0);
   const [aiCTADismissed, setAiCTADismissed] = useState(
     () => localStorage.getItem("aiCTADismissed") === "true"
   );
@@ -139,6 +143,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const [showSearch, setShowSearch] = useState(false);
   const showDiscarded = useShowDiscarded();
   const [activeView, setActiveView] = useState<ControlPanelView>("home");
+  const [integrationsSection, setIntegrationsSection] = useState<IntegrationsSection>(
+    DEFAULT_INTEGRATIONS_SECTION
+  );
   const navItems = useControlPanelNavItems();
   const {
     collapsed: sidebarCollapsed,
@@ -283,26 +290,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     });
   }, []);
 
-  // One-time background reindex, versioned: v1 backfilled space_id payloads
-  // after the spaces migration; v2 backfills cloud-pulled notes, which were
-  // never incrementally indexed before the upsert-from-cloud handler gained a
-  // vector upsert. Delayed so the Qdrant sidecar has time to come up; if it
-  // isn't ready yet the flag stays unset and the next launch retries.
-  useEffect(() => {
-    if (Number(localStorage.getItem("semanticReindexVersion")) >= SEMANTIC_REINDEX_VERSION) return;
-    const timer = setTimeout(() => {
-      window.electronAPI
-        ?.semanticReindexAll?.()
-        .then((result) => {
-          if (result?.success) {
-            localStorage.setItem("semanticReindexVersion", String(SEMANTIC_REINDEX_VERSION));
-          }
-        })
-        .catch(() => {});
-    }, 15_000);
-    return () => clearTimeout(timer);
-  }, []);
-
   useEffect(() => {
     if (platform !== "darwin") return;
     window.electronAPI?.getPostMigrationState?.().then((state) => {
@@ -445,9 +432,18 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   }, []);
 
   useEffect(() => {
-    const cleanup = window.electronAPI?.onShowSettings?.(() => {
-      setShowSettings(true);
-    });
+    // A named section waits in main (it can outrace this listener on a cold
+    // start); a bare request (app-menu Cmd+,) keeps an open modal where it is.
+    const drain = async (showAnyway: boolean) => {
+      const section = await window.electronAPI?.getPendingSettingsSection?.();
+      if (section) {
+        setSettingsSection(section);
+        setSettingsRequest((count) => count + 1);
+      }
+      if (section || showAnyway) setShowSettings(true);
+    };
+    drain(false);
+    const cleanup = window.electronAPI?.onShowSettings?.(() => drain(true));
     return () => cleanup?.();
   }, []);
 
@@ -665,19 +661,17 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                     settings.translationSourceLanguage,
                     settings.translationTargetLanguage
                   ),
-                  onCleanupError: (cleanupError: Error & { messageKey?: string }) => {
+                  onCleanupError: (cleanupError: unknown) => {
                     logger.warn(
                       "Cleanup step failed in translation chain, translating raw transcript",
-                      { error: cleanupError.message },
+                      { error: (cleanupError as Error).message },
                       "transcription"
                     );
                     // The chain still translates the raw transcript, so say why cleanup
                     // was dropped rather than reporting a clean success (#2091).
                     toast({
                       title: t("app.toasts.cleanupFailed.title"),
-                      description: cleanupError.messageKey
-                        ? t(cleanupError.messageKey)
-                        : cleanupError.message,
+                      ...providerErrorToastProps(cleanupError, t),
                       variant: "destructive",
                     });
                   },
@@ -746,10 +740,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             } catch (cleanupError) {
               // The row keeps its raw transcript, so the retry must not look like it
               // cleaned anything — report why, the way dictation does (#2091).
-              const failure = cleanupError as Error & { messageKey?: string };
               toast({
                 title: t("app.toasts.cleanupFailed.title"),
-                description: failure.messageKey ? t(failure.messageKey) : failure.message,
+                ...providerErrorToastProps(cleanupError, t),
                 variant: "destructive",
               });
             }
@@ -800,7 +793,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         } else {
           toast({
             title: t("controlPanel.history.retryError"),
-            description: result.messageKey ? t(result.messageKey) : result.error,
+            ...providerErrorToastProps({ ...result, message: result.error }, t),
             variant: "destructive",
           });
         }
@@ -929,6 +922,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       {showSettings && (
         <Suspense fallback={null}>
           <SettingsModal
+            // SettingsModal reads initialSection only on open, so a named request remounts it.
+            key={`${settingsSection ?? "default"}-${settingsRequest}`}
             open={showSettings}
             onOpenChange={(open) => {
               setShowSettings(open);
@@ -1192,11 +1187,15 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   onRetryTranscription={retryTranscription}
                   showDiscarded={showDiscarded}
                   onToggleDiscarded={toggleShowDiscarded}
+                  userName={user?.name}
                   onOpenSettings={(section) => {
                     setSettingsSection(section);
                     setShowSettings(true);
                   }}
-                  onOpenIntegrations={() => setActiveView("integrations")}
+                  onOpenIntegrations={() => {
+                    setIntegrationsSection("calendars");
+                    setActiveView("integrations");
+                  }}
                 />
               )}
               {activeView === "insights" && (
@@ -1256,6 +1255,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                       setSettingsSection("plansBilling");
                       setShowSettings(true);
                     }}
+                    section={integrationsSection}
+                    onSectionChange={setIntegrationsSection}
                   />
                 </Suspense>
               )}

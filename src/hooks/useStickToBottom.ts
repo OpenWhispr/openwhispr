@@ -76,7 +76,8 @@ export function useStickToBottom<T extends HTMLElement>(
       if (followerRef.current?.isFollowing()) pinToBottom(node);
     });
     ro.observe(node);
-    if (content) ro.observe(content);
+    // Border box, so bottom padding that makes room for an overlay (the chat composer) re-pins too.
+    if (content) ro.observe(content, { box: "border-box" });
     return () => ro.disconnect();
   }, [dep, resetToTop]);
 

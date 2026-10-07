@@ -35,7 +35,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
 
@@ -72,13 +72,13 @@ jobs:
           Compress-Archive -Path "resources/bin/meeting-aec-helper-win32-x64.exe" -DestinationPath "meeting-aec-helper-win32-x64.zip"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: meeting-aec-helper-${{ matrix.platform }}-${{ matrix.arch }}
           path: meeting-aec-helper-${{ matrix.platform }}-${{ matrix.arch }}.*
 
       - name: Create or update release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: meeting-aec-helper-v${{ inputs.version || '1.0.0' }}
           name: Meeting AEC Helper v${{ inputs.version || '1.0.0' }}

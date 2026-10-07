@@ -7,14 +7,23 @@ const REQUEST_TIMEOUT = 30000;
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000;
 const MAX_REDIRECTS = 5;
+const RELEASE_PAGE_SIZE = 100;
+const MAX_RELEASE_PAGES = 20;
+
+// Node's global agent keeps sockets alive, and a socket only returns to the pool (where it
+// stops holding the event loop open) once its response has been read to the end. A redirect
+// or error body we never read pins the socket until the server drops it, often for minutes.
+function discardBody(response) {
+  response.resume();
+}
 
 /**
- * Fetch JSON from a URL with proper error handling.
+ * Fetch JSON and response headers from a URL.
  * @param {string} url - URL to fetch
  * @param {number} [redirectCount=0] - Current redirect count (internal use)
- * @returns {Promise<object>} - Parsed JSON response
+ * @returns {Promise<{json: object, headers: object}>}
  */
-function fetchJson(url, redirectCount = 0) {
+function fetchJsonResponse(url, redirectCount = 0) {
   return new Promise((resolve, reject) => {
     if (redirectCount > MAX_REDIRECTS) {
       reject(new Error("Too many redirects"));
@@ -40,19 +49,21 @@ function fetchJson(url, redirectCount = 0) {
     https
       .get(url, options, (res) => {
         if ([301, 302, 303, 307, 308].includes(res.statusCode)) {
+          discardBody(res);
           const location = res.headers.location;
           if (!location) {
             reject(new Error("Redirect without location header"));
             return;
           }
           const redirectUrl = location.startsWith("/") ? new URL(location, url).href : location;
-          fetchJson(redirectUrl, redirectCount + 1)
+          fetchJsonResponse(redirectUrl, redirectCount + 1)
             .then(resolve)
             .catch(reject);
           return;
         }
 
         if (res.statusCode !== 200) {
+          discardBody(res);
           reject(new Error(`HTTP ${res.statusCode}`));
           return;
         }
@@ -61,7 +72,7 @@ function fetchJson(url, redirectCount = 0) {
         res.on("data", (chunk) => (data += chunk));
         res.on("end", () => {
           try {
-            resolve(JSON.parse(data));
+            resolve({ json: JSON.parse(data), headers: res.headers });
           } catch (e) {
             reject(new Error(`Failed to parse JSON: ${e.message}`));
           }
@@ -69,8 +80,62 @@ function fetchJson(url, redirectCount = 0) {
         res.on("error", reject);
       })
       .on("error", reject)
-      .on("timeout", () => reject(new Error("Request timeout")));
+      .on("timeout", function onTimeout() {
+        // Destroying rejects through the "error" handler and frees the stalled socket.
+        this.destroy(new Error("Request timeout"));
+      });
   });
+}
+
+function fetchJson(url) {
+  return fetchJsonResponse(url).then((response) => response.json);
+}
+
+/**
+ * Return the next URL from a GitHub `Link` header, or null when this is the last page.
+ * @param {string | undefined} linkHeader
+ * @returns {string | null}
+ */
+function parseGithubNextLink(linkHeader) {
+  if (!linkHeader) {
+    return null;
+  }
+
+  for (const part of linkHeader.split(",")) {
+    if (!/rel=["']?next["']?/i.test(part)) {
+      continue;
+    }
+    const match = part.match(/<([^>]+)>/);
+    if (match) {
+      return match[1];
+    }
+  }
+
+  return null;
+}
+
+/**
+ * First non-draft release whose tag starts with `tagPrefix`.
+ * GitHub lists releases newest-first, so the first hit is the latest match.
+ * @param {unknown} releases
+ * @param {string} tagPrefix
+ * @param {boolean} includePrerelease
+ * @returns {object | null}
+ */
+function matchReleaseByPrefix(releases, tagPrefix, includePrerelease) {
+  if (!Array.isArray(releases)) {
+    return null;
+  }
+
+  for (const release of releases) {
+    if (release.draft) continue;
+    if (!includePrerelease && release.prerelease) continue;
+    if (release.tag_name && release.tag_name.startsWith(tagPrefix)) {
+      return release;
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -78,7 +143,7 @@ function fetchJson(url, redirectCount = 0) {
  * @param {string} repo - Repository in "owner/repo" format
  * @param {object} options - Options
  * @param {string} [options.tag] - Exact tag to fetch (works for any release age, no pagination)
- * @param {string} [options.tagPrefix] - Latest release whose tag starts with this prefix (searches the 50 most recent only)
+ * @param {string} [options.tagPrefix] - Latest release whose tag starts with this prefix (walks GitHub release pages)
  * @param {boolean} [options.includePrerelease=false] - Include prereleases (tagPrefix only)
  * @returns {Promise<{tag: string, assets: Array<{name: string, url: string}>, url: string} | null>}
  */
@@ -98,20 +163,15 @@ async function fetchLatestRelease(repo, options = {}) {
       return formatRelease(release);
     }
 
-    const url = `https://api.github.com/repos/${repo}/releases?per_page=50`;
-    const releases = await fetchJson(url);
+    let pageUrl = `https://api.github.com/repos/${repo}/releases?per_page=${RELEASE_PAGE_SIZE}`;
 
-    if (!Array.isArray(releases)) {
-      return null;
-    }
-
-    // Find the latest release matching the prefix
-    for (const release of releases) {
-      if (release.draft) continue;
-      if (!includePrerelease && release.prerelease) continue;
-      if (release.tag_name && release.tag_name.startsWith(tagPrefix)) {
-        return formatRelease(release);
+    for (let page = 0; page < MAX_RELEASE_PAGES && pageUrl; page++) {
+      const { json, headers } = await fetchJsonResponse(pageUrl);
+      const match = matchReleaseByPrefix(json, tagPrefix, includePrerelease);
+      if (match) {
+        return formatRelease(match);
       }
+      pageUrl = parseGithubNextLink(headers.link);
     }
 
     return null;
@@ -161,8 +221,9 @@ function downloadFile(url, dest, retryCount = 0) {
         return;
       }
 
-      activeRequest = https.get(currentUrl, (response) => {
+      const req = https.get(currentUrl, (response) => {
         if ([301, 302, 303, 307, 308].includes(response.statusCode)) {
+          discardBody(response);
           const location = response.headers.location;
           if (!location) {
             cleanup();
@@ -209,12 +270,21 @@ function downloadFile(url, dest, retryCount = 0) {
         });
       });
 
-      activeRequest.on("error", (err) => {
+      activeRequest = req;
+
+      // A redirect we already followed can still error or time out while its body drains;
+      // that must not tear down the request that replaced it.
+      req.on("error", (err) => {
+        if (req !== activeRequest) return;
         cleanup();
         reject(err);
       });
 
-      activeRequest.setTimeout(REQUEST_TIMEOUT, () => {
+      req.setTimeout(REQUEST_TIMEOUT, () => {
+        if (req !== activeRequest) {
+          req.destroy();
+          return;
+        }
         cleanup();
         reject(new Error("Connection timed out"));
       });

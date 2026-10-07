@@ -48,7 +48,8 @@ class MeetingDetectionEngine {
     this.windowManager = windowManager;
     this.databaseManager = databaseManager;
     this.activeDetections = new Map();
-    this.preferences = { processDetection: true, audioDetection: true };
+    // Saved renderer preferences arrive after engine startup.
+    this.preferences = { processDetection: false, audioDetection: false };
     this._userRecording = false;
     this._meetingModeActive = false;
     this._notificationQueue = [];
@@ -563,9 +564,9 @@ class MeetingDetectionEngine {
     });
   }
 
-  /** Navigates to the note already linked to a calendar event, if any. */
+  /** Navigates to the user's own note already linked to a calendar event, if any. */
   async _resumeExistingEventNote(event, trigger) {
-    const existingNote = this.databaseManager.getNoteByCalendarEventId(event.id);
+    const existingNote = this.databaseManager.getOwnNoteByCalendarEventId(event.id);
     if (!existingNote?.id) return false;
     debugLogger.info(
       "Reusing existing note for calendar meeting",
@@ -736,10 +737,6 @@ class MeetingDetectionEngine {
 
     this._syncMeetingProcessDetector();
     this._syncAudioActivityDetector();
-  }
-
-  getPreferences() {
-    return { ...this.preferences };
   }
 
   start() {

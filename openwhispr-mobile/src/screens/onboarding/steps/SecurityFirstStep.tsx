@@ -1,8 +1,8 @@
+import { useOnboardingStep } from '@/hooks/useOnboardingStep';
 import { View } from 'react-native';
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { Text } from '@/components/ui/Text';
-import { useOnboardingStore } from '@/store/useOnboardingStore';
 
 const TRUST_POINTS = [
   'No selling your data',
@@ -11,7 +11,7 @@ const TRUST_POINTS = [
 ];
 
 export function SecurityFirstStep() {
-  const goNext = useOnboardingStore((s) => s.goNext);
+  const { goNext } = useOnboardingStep('security-first');
 
   return (
     <OnboardingShell
