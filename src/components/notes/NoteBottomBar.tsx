@@ -12,6 +12,7 @@ const RECORDING_SURFACE = "bg-surface-2/95 shadow-(--shadow-glass)";
 // a soft spring that settles just past its mark.
 const UNFOLD =
   "duration-[480ms] ease-[cubic-bezier(0.25,1.15,0.4,1)] motion-reduce:transition-none";
+const DRAG_START_THRESHOLD_PX = 3;
 
 interface NoteBottomBarProps {
   isRecording: boolean;
@@ -82,14 +83,25 @@ export default function NoteBottomBar({
       const stopLayout = floatingPanelRef?.(panel, container);
       // Decided on press, while a menu it dismisses is still open, but acted on at click:
       // closing drops the note's bottom inset, which would move the note under the press.
-      let pressedOutside = false;
+      let outsidePress: { x: number; y: number } | null = null;
       const handlePointerDown = (event: PointerEvent) => {
-        pressedOutside = !slot.contains(event.target as Node) && !hasLayerAbove(panel, document);
+        outsidePress =
+          !slot.contains(event.target as Node) && !hasLayerAbove(panel, document)
+            ? { x: event.clientX, y: event.clientY }
+            : null;
       };
-      // A keyboard click (detail 0) has no press of its own, so a stale one mustn't count for it.
+      // A keyboard click (detail 0) has no press of its own, so a stale one mustn't count for it,
+      // and a drag (selecting text) ends in a click too but isn't one.
       const handleClick = (event: MouseEvent) => {
-        if (pressedOutside && event.detail > 0) onClickOutside?.();
-        pressedOutside = false;
+        if (
+          outsidePress &&
+          event.detail > 0 &&
+          Math.abs(event.clientX - outsidePress.x) < DRAG_START_THRESHOLD_PX &&
+          Math.abs(event.clientY - outsidePress.y) < DRAG_START_THRESHOLD_PX
+        ) {
+          onClickOutside?.();
+        }
+        outsidePress = null;
       };
       document.addEventListener("pointerdown", handlePointerDown, true);
       document.addEventListener("click", handleClick, true);

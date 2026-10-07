@@ -200,6 +200,12 @@ test("a click outside the open chat closes it, unless it dismisses a menu over t
   outside.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true, detail: 1 }));
   assert.equal(closed, 0, "a click that dismisses a menu over the page only closes the menu");
 
+  press(outside);
+  outside.dispatchEvent(
+    new MouseEvent("click", { bubbles: true, composed: true, detail: 1, clientX: 40 })
+  );
+  assert.equal(closed, 0, "a drag that selects the note's text keeps it open");
+
   click(outside);
   assert.equal(closed, 1);
 
