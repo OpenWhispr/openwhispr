@@ -4,7 +4,6 @@ import { useOnboardingStore, type OnboardingStepId } from '@/store/useOnboarding
 import { VoiceAgentStep } from './steps/VoiceAgentStep';
 import { ToneStep } from './steps/ToneStep';
 import { GetStartedStep } from './steps/GetStartedStep';
-import { SecurityFirstStep } from './steps/SecurityFirstStep';
 import { WelcomeStep } from './steps/WelcomeStep';
 import { KeyboardIntroStep } from './steps/KeyboardIntroStep';
 import { KeyboardSwitchStep } from './steps/KeyboardSwitchStep';
@@ -23,7 +22,6 @@ import { TrackingPermissionStep } from './steps/TrackingPermissionStep';
 // which is safer than falling back to a placeholder at runtime.
 const STEP_COMPONENTS: Record<OnboardingStepId, ComponentType> = {
   'get-started': GetStartedStep,
-  'security-first': SecurityFirstStep,
   welcome: WelcomeStep,
   'keyboard-intro': KeyboardIntroStep,
   'keyboard-switch': KeyboardSwitchStep,
