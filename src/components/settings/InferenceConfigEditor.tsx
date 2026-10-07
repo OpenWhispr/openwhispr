@@ -115,7 +115,14 @@ export default function InferenceConfigEditor({
           icon: <Building2 className="w-4 h-4" />,
         },
       ] as InferenceModeOption[]
-    ).filter((mode) => !allowedModes || allowedModes.includes(mode.id)),
+    ).filter((mode) =>
+      // OpenWhispr Cloud and Cloud Providers (BYOK) are removed from the normal
+      // pickers; they only appear when a caller explicitly allow-lists them
+      // (the BYOK-only vision override passes allowedModes={["providers"]}).
+      mode.id === "openwhispr" || mode.id === "providers"
+        ? (allowedModes?.includes(mode.id) ?? false)
+        : !allowedModes || allowedModes.includes(mode.id)
+    ),
     "llm",
     config.mode,
     {

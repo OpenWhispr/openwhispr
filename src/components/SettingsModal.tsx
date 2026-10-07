@@ -5,10 +5,8 @@ import {
   Sliders,
   Mic,
   Brain,
-  UserCircle,
   Wrench,
   Keyboard,
-  CreditCard,
   Shield,
   ShieldCheck,
   Users,
@@ -64,20 +62,6 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
   const sidebarItems: SidebarItem<SettingsSectionType>[] = useMemo(() => {
     const items: SidebarItem<SettingsSectionType>[] = [
       {
-        id: "account",
-        label: t("settingsModal.sections.account.label"),
-        icon: UserCircle,
-        description: t("settingsModal.sections.account.description"),
-        group: t("settingsModal.groups.account"),
-      },
-      {
-        id: "plansBilling",
-        label: t("settingsModal.sections.plansBilling.label"),
-        icon: CreditCard,
-        description: t("settingsModal.sections.plansBilling.description"),
-        group: t("settingsModal.groups.account"),
-      },
-      {
         id: "workspace" as const,
         label: t("settingsModal.sections.workspace.label"),
         icon: Users,
@@ -131,7 +115,7 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
   }, [t, isSignedIn]);
 
   const resolveSection = (section: string | undefined): SettingsSectionType => {
-    if (!section) return "account";
+    if (!section) return "general";
     return (SECTION_ALIASES[section] ?? section) as SettingsSectionType;
   };
 

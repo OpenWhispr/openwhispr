@@ -147,12 +147,11 @@ export default function SetupChoiceStep({
     transcriptionProviders: getTranscriptionProviders(),
     llmProviders: modelRegistry.getCloudProviders(),
   });
-  const {
-    cloud: cloudAllowed,
-    local: localAllowed,
-    byok: byokAllowed,
-    selfHosted: selfHostedAllowed,
-  } = availability;
+  const { local: localAllowed, selfHosted: selfHostedAllowed } = availability;
+  // OpenWhispr Cloud and Cloud Providers (BYOK) are removed from the app; only
+  // Local (and self-hosted under More options) remain.
+  const cloudAllowed = false;
+  const byokAllowed = false;
   const moreOptionsAllowed = byokAllowed || selfHostedAllowed;
 
   const chooseCloud = () => {

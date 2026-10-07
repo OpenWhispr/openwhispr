@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Cloud, Key, Cpu, Network, ShieldCheck } from "../icons";
+import { Cpu, Network, ShieldCheck } from "../icons";
 import {
   TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
   TRANSCRIPTION_POLICY_PROVIDER_IDS,
@@ -51,20 +51,6 @@ export function UploadTranscriptionPanel() {
     isModeAllowed,
   } = usePolicyModeOptions<InferenceModeOption>(
     [
-      {
-        id: "openwhispr",
-        label: t("settingsPage.transcription.modes.openwhispr"),
-        description: t("settingsPage.transcription.modes.openwhisprDesc"),
-        icon: <Cloud className="w-4 h-4" />,
-        disabled: !isSignedIn,
-        badge: !isSignedIn ? t("common.freeAccountRequired") : undefined,
-      },
-      {
-        id: "providers",
-        label: t("settingsPage.transcription.modes.providers"),
-        description: t("settingsPage.transcription.modes.providersDesc"),
-        icon: <Key className="w-4 h-4" />,
-      },
       {
         id: "local",
         label: t("settingsPage.transcription.modes.local"),

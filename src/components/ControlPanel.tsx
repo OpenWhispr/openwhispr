@@ -1018,7 +1018,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             onOpenReferrals={() => setShowReferrals(true)}
             onInviteTeam={inviteWorkspace ? () => setShowInviteTeam(true) : undefined}
             onUpgrade={() => {
-              setSettingsSection("plansBilling");
+              setSettingsSection("general");
               setShowSettings(true);
             }}
             isOverLimit={usage?.isOverLimit ?? false}
@@ -1112,7 +1112,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                           size="sm"
                           className="h-7 text-xs"
                           onClick={() => {
-                            setSettingsSection("account");
+                            setSettingsSection("general");
                             setShowSettings(true);
                           }}
                         >
@@ -1202,7 +1202,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 <Suspense fallback={null}>
                   <InsightsView
                     onSignIn={() => {
-                      setSettingsSection("account");
+                      setSettingsSection("general");
                       setShowSettings(true);
                     }}
                   />
@@ -1252,7 +1252,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   <IntegrationsView
                     isPaid={usage?.hasPaidAccessOptimistic ?? false}
                     onUpgrade={() => {
-                      setSettingsSection("plansBilling");
+                      setSettingsSection("general");
                       setShowSettings(true);
                     }}
                     section={integrationsSection}
