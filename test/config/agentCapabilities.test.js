@@ -228,6 +228,6 @@ test("models without tools point to the existing documentation site", async () =
   const text = describeUnavailable([
     { name: "Tools", reason: "modelTooSmall", where: LOCATIONS.models },
   ]);
-  assert.match(text, /https:\/\/docs.openwhispr.com/);
+  assert.match(text, /https:\/\/docs\.openwhispr\.com/);
   assert.doesNotMatch(text, /Support → OpenWhispr Help/);
 });
