@@ -9,6 +9,9 @@ require.cache[require.resolve("electron")] = {
       isRegistered: () => false,
       unregisterAll: () => undefined,
     },
+    app: {
+      isPackaged: false,
+    },
     BrowserWindow: class {
       static getAllWindows() {
         return [];
@@ -397,3 +400,68 @@ test("a Linux listener failure keeps the modifier-only suggestions", async () =>
     assert.ok(manager.getSuggestions("Alt+R").includes("Control+Super"));
   });
 });
+
+// KDE Wayland: saved Hold activation mode must survive startup when the saved hotkey
+// is a regular key combination (e.g. Control+Space). (#2518)
+test("KDE startup preserves Hold activation mode once hotkeyRegistrationReady resolves", async () => {
+  await withPlatform("linux", async () => {
+    const originalEnv = process.env.DICTATION_KEY;
+    const originalDesktop = process.env.XDG_CURRENT_DESKTOP;
+    process.env.DICTATION_KEY = "Control+Space";
+    process.env.XDG_CURRENT_DESKTOP = "KDE";
+    try {
+      const manager = new HotkeyManager();
+      manager.activationMode = "push";
+
+      // Mock KDE shortcut manager
+      manager.initializeKDEShortcuts = async () => {
+        manager.useKDE = true;
+        manager.kdeManager = {
+          registerKeybinding: async (hotkey, slot, callback, isPush) => true,
+          close: () => undefined,
+        };
+        return true;
+      };
+
+      const dummyWin = {
+        webContents: {
+          isLoading: () => false,
+          once: () => undefined,
+          executeJavaScript: async () => "",
+        },
+      };
+
+      // Before initializeHotkey, constructor default is Control+Super (modifier-only)
+      assert.equal(manager.currentHotkey, "Control+Super");
+
+      await manager.initializeHotkey(dummyWin, () => undefined);
+
+      // Immediately after initializeHotkey returns, hotkeyRegistrationReady is pending (1s delay).
+      // At this point, currentHotkey is still Control+Super.
+      assert.equal(manager.currentHotkey, "Control+Super");
+      assert.equal(manager.supportsPushToTalk(), false);
+
+      // Once hotkeyRegistrationReady resolves, currentHotkey is updated to saved hotkey ("Control+Space")
+      await manager.hotkeyRegistrationReady;
+      assert.equal(manager.currentHotkey, "Control+Space");
+      assert.equal(manager.supportsPushToTalk(), true);
+    } finally {
+      if (originalEnv !== undefined) {
+        process.env.DICTATION_KEY = originalEnv;
+      } else {
+        delete process.env.DICTATION_KEY;
+      }
+      if (originalDesktop !== undefined) {
+        process.env.XDG_CURRENT_DESKTOP = originalDesktop;
+      } else {
+        delete process.env.XDG_CURRENT_DESKTOP;
+      }
+    }
+  });
+});
+
+test("hyprlandRegistrationReady getter aliases hotkeyRegistrationReady for backwards compatibility", () => {
+  const manager = new HotkeyManager();
+  assert.equal(manager.hyprlandRegistrationReady, manager.hotkeyRegistrationReady);
+});
+

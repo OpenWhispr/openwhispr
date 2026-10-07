@@ -116,7 +116,7 @@ class HotkeyManager extends EventEmitter {
     this.hyprlandManager = null;
     this.useHyprland = false;
     this.hyprlandInitializationAttempted = false;
-    this.hyprlandRegistrationReady = Promise.resolve();
+    this.hotkeyRegistrationReady = Promise.resolve();
     this.kdeManager = null;
     this.useKDE = false;
     // Injected by main.js: LinuxKeyManager or WindowsKeyManager checkAvailability.
@@ -134,6 +134,11 @@ class HotkeyManager extends EventEmitter {
     if (!Array.isArray(slot.hotkeys)) slot.hotkeys = [];
     if (!Array.isArray(slot.accelerators)) slot.accelerators = [];
     return slot;
+  }
+
+  // Backwards compatibility alias for Hyprland registration promise (#1811)
+  get hyprlandRegistrationReady() {
+    return this.hotkeyRegistrationReady;
   }
 
   // Primary (first) dictation hotkey; setting it replaces the whole list.
@@ -1081,7 +1086,9 @@ class HotkeyManager extends EventEmitter {
           }
         };
 
-        setTimeout(registerGnomeHotkey, HOTKEY_REGISTRATION_DELAY_MS);
+        this.hotkeyRegistrationReady = new Promise((resolve) =>
+          setTimeout(resolve, HOTKEY_REGISTRATION_DELAY_MS)
+        ).then(registerGnomeHotkey);
         this.isInitialized = true;
         return;
       }
@@ -1130,7 +1137,7 @@ class HotkeyManager extends EventEmitter {
           }
         };
 
-        this.hyprlandRegistrationReady = new Promise((resolve) =>
+        this.hotkeyRegistrationReady = new Promise((resolve) =>
           setTimeout(resolve, HOTKEY_REGISTRATION_DELAY_MS)
         ).then(registerHyprlandHotkey);
         this.isInitialized = true;
@@ -1191,7 +1198,9 @@ class HotkeyManager extends EventEmitter {
           }
         };
 
-        setTimeout(registerKDEHotkey, HOTKEY_REGISTRATION_DELAY_MS);
+        this.hotkeyRegistrationReady = new Promise((resolve) =>
+          setTimeout(resolve, HOTKEY_REGISTRATION_DELAY_MS)
+        ).then(registerKDEHotkey);
         this.isInitialized = true;
         return;
       }
