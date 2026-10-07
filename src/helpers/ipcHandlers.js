@@ -612,6 +612,13 @@ async function chunkedCloudTranscribe({
 const CLEANUP_TRUNCATED_MESSAGE_KEY = "hooks.audioRecording.errorDescriptions.cleanupTruncated";
 const CLEANUP_EMPTY_REPLY_MESSAGE_KEY = "hooks.audioRecording.errorDescriptions.cleanupEmptyReply";
 
+const {
+  isMeetingFolderRef,
+  resolveMeetingDestination,
+  rememberMeetingDestination,
+  meetingDestinationContext,
+} = require("./meetingNotificationDestination");
+
 class IPCHandlers {
   constructor(managers) {
     this.environmentManager = managers.environmentManager;
@@ -703,7 +710,125 @@ class IPCHandlers {
     }
   }
 
+  createFolderWithEffects(name, spaceId) {
+    const result = this.databaseManager.createFolder(name, spaceId);
+    if (result?.success && result?.folder) {
+      setImmediate(() => {
+        broadcastToWindows("folder-created", result.folder);
+        if (this._noteFilesEnabled) {
+          const markdownMirror = require("./markdownMirror");
+          markdownMirror.ensureFolder(result.folder.name);
+        }
+      });
+    }
+    return result;
+  }
+
+  getMeetingNotificationDestination(owner) {
+    if (!this.windowManager.isMeetingNotificationOwner(owner))
+      return { success: false, code: "STALE_NOTIFICATION" };
+    try {
+      const context = meetingDestinationContext(
+        this.databaseManager,
+        owner,
+        this.windowManager.meetingRecentDestinations
+      );
+      this.windowManager.meetingRecentDestinations = context.recentDestinations;
+      return { success: true, value: context };
+    } catch (error) {
+      return {
+        success: false,
+        code: error.code === "NOTE_UNAVAILABLE" ? error.code : "FOLDERS_UNAVAILABLE",
+      };
+    }
+  }
+
+  selectMeetingNotificationFolder(owner, ref) {
+    const result = this.getMeetingNotificationDestination(owner);
+    if (!result.success) return result;
+    if (result.value.existingNote)
+      return { success: false, code: "LINKED_NOTE_CHANGED", context: result.value };
+    if (!isMeetingFolderRef(ref)) return { success: false, code: "INVALID_REQUEST" };
+    const folder = result.value.folders.find(
+      (f) => f.id === ref.folderId && f.space_id === ref.spaceId
+    );
+    if (!folder) return { success: false, code: "FOLDER_UNAVAILABLE" };
+    owner.selectedDestination = { folderId: folder.id, spaceId: folder.space_id };
+    this.windowManager.meetingRecentDestinations = rememberMeetingDestination(
+      this.windowManager.meetingRecentDestinations,
+      owner.selectedDestination
+    );
+    return {
+      success: true,
+      value: {
+        ...result.value,
+        selectedDestination: owner.selectedDestination,
+        recentDestinations: this.windowManager.meetingRecentDestinations,
+      },
+    };
+  }
+
+  createMeetingNotificationFolder(owner, request) {
+    if (!this.windowManager.isMeetingNotificationOwner(owner))
+      return { success: false, code: "STALE_NOTIFICATION" };
+    if (
+      !request ||
+      typeof request.requestId !== "string" ||
+      !request.requestId.trim() ||
+      request.requestId.length > 128 ||
+      typeof request.name !== "string" ||
+      !Number.isSafeInteger(request.spaceId) ||
+      request.spaceId <= 0
+    )
+      return { success: false, code: "INVALID_REQUEST" };
+    const name = request.name.trim();
+    if (!name) return { success: false, code: "FOLDER_NAME_REQUIRED" };
+    const cached = owner.createRequests.get(request.requestId);
+    if (cached && (cached.name !== name || cached.spaceId !== request.spaceId))
+      return { success: false, code: "INVALID_REQUEST" };
+    // Bound per-prompt retry bookkeeping. Successful IDs stay stable for the prompt's lifetime.
+    if (!cached && owner.createRequests.size >= 32)
+      return { success: false, code: "INVALID_REQUEST" };
+    const contextResult = this.getMeetingNotificationDestination(owner);
+    if (!contextResult.success) return contextResult;
+    if (contextResult.value.existingNote)
+      return { success: false, code: "LINKED_NOTE_CHANGED", context: contextResult.value };
+    if (!contextResult.value.spaces.some((space) => space.id === request.spaceId))
+      return { success: false, code: "SPACE_UNAVAILABLE" };
+    try {
+      let ref = cached?.ref;
+      if (ref) {
+        if (!resolveMeetingDestination(this.databaseManager, ref))
+          return { success: false, code: "FOLDER_UNAVAILABLE" };
+      } else {
+        const result = this.createFolderWithEffects(name, request.spaceId);
+        if (!result?.success || !result.folder)
+          return {
+            success: false,
+            code:
+              result?.error === "A folder with that name already exists"
+                ? "FOLDER_NAME_TAKEN"
+                : result?.error === "Space not found"
+                  ? "SPACE_UNAVAILABLE"
+                  : "CREATE_FAILED",
+          };
+        ref = { folderId: result.folder.id, spaceId: result.folder.space_id };
+        owner.createRequests.set(request.requestId, { name, spaceId: request.spaceId, ref });
+        this.windowManager.sendToControlPanel("meeting-notification-folder-created", {
+          folderId: ref.folderId,
+        });
+      }
+      const refreshed = this.getMeetingNotificationDestination(owner);
+      return refreshed.success
+        ? { success: true, value: { ...refreshed.value, createdFolder: ref } }
+        : refreshed;
+    } catch {
+      return { success: false, code: "CREATE_FAILED" };
+    }
+  }
+
   _handleAuthTokenChange({ generation, token }) {
+    this.windowManager.retireMeetingNotificationScope();
     this.enterpriseIdentityManager?.clear();
     if (!token) {
       this.databaseManager.setActiveAccountId(null);
@@ -2192,19 +2317,9 @@ class IPCHandlers {
       return this.databaseManager.getFolders(spaceId);
     });
 
-    ipcMain.handle("db-create-folder", async (event, name, spaceId) => {
-      const result = this.databaseManager.createFolder(name, spaceId);
-      if (result?.success && result?.folder) {
-        setImmediate(() => {
-          broadcastToWindows("folder-created", result.folder);
-          if (this._noteFilesEnabled) {
-            const markdownMirror = require("./markdownMirror");
-            markdownMirror.ensureFolder(result.folder.name);
-          }
-        });
-      }
-      return result;
-    });
+    ipcMain.handle("db-create-folder", (_event, name, spaceId) =>
+      this.createFolderWithEffects(name, spaceId)
+    );
 
     ipcMain.handle("db-delete-folder", async (event, id) => {
       const folderName = this._noteFilesEnabled ? this._getFolderName(id) : null;
@@ -2276,6 +2391,16 @@ class IPCHandlers {
               ? "Invalid account scope"
               : "Authentication context changed before account scoping",
         };
+      }
+      const previousScope = accountScopeBinding.resolveActiveAccountScope({
+        ...state,
+        binding: accountScopeBinding.read(),
+      });
+      if (
+        this.databaseManager.activeAccountId !== accountId ||
+        (accountId !== null && previousScope?.accountId !== accountId)
+      ) {
+        this.windowManager.retireMeetingNotificationScope();
       }
       this.databaseManager.setActiveAccountId(accountId);
       if (accountId !== null) accountScopeBinding.persist(accountId, state.token);
@@ -11927,14 +12052,43 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("meeting-notification-respond", async (_event, detectionId, action) => {
-      try {
-        await this.meetingDetectionEngine.handleNotificationResponse(detectionId, action);
-        return { success: true };
-      } catch (error) {
-        return { success: false, error: error.message };
-      }
+    ipcMain.handle("get-meeting-notification-destination", (event) =>
+      this.getMeetingNotificationDestination(
+        this.windowManager.captureMeetingNotificationOwner(event.sender)
+      )
+    );
+    ipcMain.handle("select-meeting-notification-folder", (event, ref) =>
+      this.selectMeetingNotificationFolder(
+        this.windowManager.captureMeetingNotificationOwner(event.sender),
+        ref
+      )
+    );
+    ipcMain.handle("create-meeting-notification-folder", (event, request) =>
+      this.createMeetingNotificationFolder(
+        this.windowManager.captureMeetingNotificationOwner(event.sender),
+        request
+      )
+    );
+
+    ipcMain.handle("set-meeting-notification-surface", (event, state) => {
+      const owner = this.windowManager.captureMeetingNotificationOwner(event.sender);
+      return this.windowManager.setMeetingNotificationSurface(owner, state);
     });
+
+    ipcMain.handle("meeting-notification-respond", (event, detectionId, action, options) => {
+      const owner = this.windowManager.captureMeetingNotificationOwner(event.sender);
+      if (!owner || owner.prompt.detectionId !== detectionId)
+        return { success: false, code: "STALE_NOTIFICATION" };
+      return this.meetingDetectionEngine.handleNotificationResponse(
+        detectionId,
+        action,
+        options,
+        owner
+      );
+    });
+    ipcMain.handle("confirm-meeting-note-navigation", (event, navigationId, status) =>
+      this.windowManager.confirmMeetingNoteNavigation(event.sender, navigationId, status)
+    );
 
     ipcMain.handle("join-calendar-meeting", async (_event, eventId) => {
       try {
@@ -11947,12 +12101,13 @@ class IPCHandlers {
 
     ipcMain.handle("start-manual-meeting", () => this.windowManager.startManualMeeting());
 
-    ipcMain.handle("get-meeting-notification-data", async () => {
+    ipcMain.handle("get-meeting-notification-data", async (event) => {
+      if (this.windowManager?.notificationWindow?.webContents !== event.sender) return null;
       return this.windowManager?._pendingNotificationData ?? null;
     });
 
-    ipcMain.handle("get-pending-meeting-note-navigation", async () => {
-      return this.windowManager?.consumePendingMeetingNoteNavigation() ?? null;
+    ipcMain.handle("get-pending-meeting-note-navigation", async (event) => {
+      return this.windowManager?.consumePendingMeetingNoteNavigation(event.sender) ?? null;
     });
 
     ipcMain.handle("get-pending-note-navigation", async () => {

@@ -1415,6 +1415,7 @@
     "waylandClipboardTitle": "Wayland でのクリップボードモード",
     "windowsReady": "Windows は自動貼り付けに標準対応しています。設定は不要です！",
     "withoutToolPrefix": "このツールがない場合、OpenWhispr はテキストをクリップボードにコピーします。Ctrl+V で手動で貼り付けてください。",
+    "wtypeCosmicTerminalsDescription": "COSMIC では、Warp などのターミナルは wtype 経由でのみ貼り付けを受け取ります。その他のアプリには wtype なしで貼り付けられます。",
     "wtypeFallbackDescription": "この wlroots 系コンポジターでは wtype が推奨される自動貼り付け方法です。代替手段も利用できますが、信頼性が低い場合があります。",
     "xwaylandAppsOnly": "自動貼り付けは XWayland アプリのみで動作します"
   },
@@ -2001,7 +2002,7 @@
         "recheck": "再確認",
         "copy": "コピー",
         "ydotoolDesc": "Wayland 用入力自動化ツール",
-        "wtypeDesc": "wlroots 系コンポジターで推奨される入力自動化ツール",
+        "wtypeDesc": "wlroots 系コンポジターで推奨される入力自動化ツール。COSMIC ではターミナルへの貼り付けに使用",
         "ydotooldDesc": "ydotool デーモン（Ubuntu/Pop!_OS では別パッケージ）",
         "uinputDesc": "カーネル入力デバイスへのアクセス",
         "uinputRuleFound": "ルールは存在しますが未適用です。再起動で解決するはずです。",
@@ -4773,7 +4774,42 @@
       "underway": "会議はすでに進行中のようです。メモを取りますか？"
     },
     "start": "メモを取る",
-    "join": "参加して文字起こし"
+    "join": "参加して文字起こし",
+    "folders": {
+      "choose": "会議フォルダーを選択",
+      "search": "フォルダーを検索",
+      "clear": "検索をクリア",
+      "private": "プライベート",
+      "shared": "共有",
+      "current": "現在の保存先",
+      "recent": "最近使用したフォルダー",
+      "folders": "フォルダー",
+      "new": "新しいフォルダー",
+      "name": "名前",
+      "location": "保存先",
+      "cancel": "キャンセル",
+      "create": "作成して選択",
+      "empty": "フォルダーが見つかりません。別の名前を検索するか、作成してください。",
+      "loading": "フォルダーを読み込み中…",
+      "unavailable": "フォルダーを読み込めませんでした。",
+      "retry": "再試行",
+      "dismiss": "会議通知を閉じる",
+      "selected": "{{destination}}を選択しました",
+      "linked": "この会議にはすでにノートがあります。参加しても{{destination}}に保存されます。",
+      "errors": {
+        "STALE_NOTIFICATION": "この通知は無効になりました。",
+        "INVALID_REQUEST": "完了できませんでした。再試行してください。",
+        "FOLDERS_UNAVAILABLE": "フォルダーを読み込めませんでした。",
+        "FOLDER_UNAVAILABLE": "この保存先は利用できません。別のフォルダーを選択してください。",
+        "SPACE_UNAVAILABLE": "この保存先は利用できません。別のフォルダーを選択してください。",
+        "FOLDER_NAME_REQUIRED": "フォルダー名を入力してください。",
+        "FOLDER_NAME_TAKEN": "この保存先には同名のフォルダーがあります。",
+        "CREATE_FAILED": "完了できませんでした。再試行してください。",
+        "LINKED_NOTE_CHANGED": "保存先を確認し、もう一度参加してください。",
+        "NOTE_UNAVAILABLE": "このノートは利用できません。新規作成せずに再試行してください。",
+        "START_FAILED": "完了できませんでした。再試行してください。"
+      }
+    }
   },
   "providerErrors": {
     "authFailed": "{{provider}} がAPIキーを拒否しました。",

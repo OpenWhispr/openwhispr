@@ -1468,6 +1468,7 @@
     "waylandClipboardTitle": "Modo portapapeles en Wayland",
     "windowsReady": "Windows es compatible con el pegado automático de forma nativa. ¡No se requiere configuración!",
     "withoutToolPrefix": "Sin esta herramienta, OpenWhispr copiará el texto al portapapeles. Luego puedes pegarlo manualmente con Ctrl+V.",
+    "wtypeCosmicTerminalsDescription": "En COSMIC, las terminales como Warp solo reciben el texto pegado mediante wtype. En las demás aplicaciones ya se pega sin él.",
     "wtypeFallbackDescription": "wtype es el método de pegado automático preferido para este compositor wlroots. Hay una alternativa disponible, pero puede ser menos fiable.",
     "xwaylandAppsOnly": "el pegado automático funciona solo en apps XWayland"
   },
@@ -2054,7 +2055,7 @@
         "recheck": "Volver a comprobar",
         "copy": "Copiar",
         "ydotoolDesc": "Herramienta de automatización de entrada para Wayland",
-        "wtypeDesc": "Herramienta de automatización de entrada preferida en compositores wlroots",
+        "wtypeDesc": "Herramienta de automatización de entrada preferida en compositores wlroots; en COSMIC, se usa para pegar en terminales",
         "ydotooldDesc": "Daemon de ydotool (paquete separado en Ubuntu/Pop!_OS)",
         "uinputDesc": "Acceso al dispositivo de entrada del kernel",
         "uinputRuleFound": "Regla presente pero no activa. Un reinicio debería solucionarlo.",
@@ -4773,7 +4774,42 @@
       "underway": "Parece que tu reunión ya está en curso. ¿Quieres tomar notas?"
     },
     "start": "Tomar notas",
-    "join": "Unirse y transcribir"
+    "join": "Unirse y transcribir",
+    "folders": {
+      "choose": "Elegir carpeta de la reunión",
+      "search": "Buscar carpetas",
+      "clear": "Borrar búsqueda",
+      "private": "Privado",
+      "shared": "Compartido",
+      "current": "Destino actual",
+      "recent": "Usadas recientemente",
+      "folders": "Carpetas",
+      "new": "Nueva carpeta",
+      "name": "Nombre",
+      "location": "Ubicación",
+      "cancel": "Cancelar",
+      "create": "Crear y seleccionar",
+      "empty": "No se encontraron carpetas. Prueba otro nombre o crea una carpeta.",
+      "loading": "Cargando carpetas…",
+      "unavailable": "No se pudieron cargar las carpetas.",
+      "retry": "Reintentar",
+      "dismiss": "Cerrar notificación de reunión",
+      "selected": "{{destination}} seleccionado",
+      "linked": "Esta reunión ya tiene una nota. Al unirte, permanecerá en {{destination}}.",
+      "errors": {
+        "STALE_NOTIFICATION": "Esta notificación ya no está vigente.",
+        "INVALID_REQUEST": "No se pudo completar. Vuelve a intentarlo.",
+        "FOLDERS_UNAVAILABLE": "No se pudieron cargar las carpetas.",
+        "FOLDER_UNAVAILABLE": "Este destino no está disponible. Elige otra carpeta.",
+        "SPACE_UNAVAILABLE": "Este destino no está disponible. Elige otra carpeta.",
+        "FOLDER_NAME_REQUIRED": "Introduce un nombre de carpeta.",
+        "FOLDER_NAME_TAKEN": "Ya existe una carpeta con ese nombre en esta ubicación.",
+        "CREATE_FAILED": "No se pudo completar. Vuelve a intentarlo.",
+        "LINKED_NOTE_CHANGED": "Revisa el destino y vuelve a unirte.",
+        "NOTE_UNAVAILABLE": "Esta nota no está disponible. Reintenta sin crear otra.",
+        "START_FAILED": "No se pudo completar. Vuelve a intentarlo."
+      }
+    }
   },
   "providerErrors": {
     "authFailed": "{{provider}} rechazó tu clave de API.",

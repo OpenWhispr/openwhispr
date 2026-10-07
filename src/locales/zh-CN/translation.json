@@ -1415,6 +1415,7 @@
     "waylandClipboardTitle": "Wayland 上的剪贴板模式",
     "windowsReady": "Windows 原生支持自动粘贴，无需额外设置！",
     "withoutToolPrefix": "如果不安装此工具，OpenWhispr 会将文本复制到剪贴板，你可以使用 Ctrl+V 手动粘贴。",
+    "wtypeCosmicTerminalsDescription": "在 COSMIC 上，Warp 等终端只能通过 wtype 接收粘贴的文本。其他应用无需 wtype 即可粘贴。",
     "wtypeFallbackDescription": "wtype 是此 wlroots 合成器上的首选自动粘贴方式。有备用方案可用，但可能不太可靠。",
     "xwaylandAppsOnly": "自动粘贴仅适用于 XWayland 应用"
   },
@@ -2001,7 +2002,7 @@
         "recheck": "重新检查",
         "copy": "复制",
         "ydotoolDesc": "Wayland 输入自动化工具",
-        "wtypeDesc": "wlroots 合成器上的首选输入自动化工具",
+        "wtypeDesc": "wlroots 合成器上的首选输入自动化工具；在 COSMIC 上用于向终端粘贴",
         "ydotooldDesc": "ydotool 守护进程（Ubuntu/Pop!_OS 上为独立包）",
         "uinputDesc": "内核输入设备访问",
         "uinputRuleFound": "规则已存在但未生效，重启应可解决。",
@@ -4773,7 +4774,42 @@
       "underway": "你的会议似乎已在进行中。要开始记录吗？"
     },
     "start": "开始记录",
-    "join": "加入并转录"
+    "join": "加入并转录",
+    "folders": {
+      "choose": "选择会议文件夹",
+      "search": "搜索文件夹",
+      "clear": "清除搜索",
+      "private": "私密",
+      "shared": "共享",
+      "current": "当前保存位置",
+      "recent": "最近使用",
+      "folders": "文件夹",
+      "new": "新建文件夹",
+      "name": "名称",
+      "location": "位置",
+      "cancel": "取消",
+      "create": "创建并选择",
+      "empty": "未找到文件夹。请搜索其他名称或创建文件夹。",
+      "loading": "正在加载文件夹…",
+      "unavailable": "无法加载文件夹。",
+      "retry": "重试",
+      "dismiss": "关闭会议通知",
+      "selected": "已选择{{destination}}",
+      "linked": "此会议已有笔记。加入后，笔记仍保存在{{destination}}。",
+      "errors": {
+        "STALE_NOTIFICATION": "此通知已失效。",
+        "INVALID_REQUEST": "无法完成，请重试。",
+        "FOLDERS_UNAVAILABLE": "无法加载文件夹。",
+        "FOLDER_UNAVAILABLE": "此保存位置不可用。请选择其他文件夹。",
+        "SPACE_UNAVAILABLE": "此保存位置不可用。请选择其他文件夹。",
+        "FOLDER_NAME_REQUIRED": "请输入文件夹名称。",
+        "FOLDER_NAME_TAKEN": "此位置已存在同名文件夹。",
+        "CREATE_FAILED": "无法完成，请重试。",
+        "LINKED_NOTE_CHANGED": "请检查保存位置，然后重新加入。",
+        "NOTE_UNAVAILABLE": "此笔记不可用。请重试，不要创建替代笔记。",
+        "START_FAILED": "无法完成，请重试。"
+      }
+    }
   },
   "providerErrors": {
     "authFailed": "{{provider}} 拒绝了你的 API 密钥。",

@@ -1,4 +1,5 @@
 #define _GNU_SOURCE
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -367,13 +368,25 @@ static const char *terminal_classes[] = {
     "terminator", "xterm", "urxvt", "rxvt", "tilix", "terminology",
     "wezterm", "foot", "st", "yakuake", "ghostty", "guake", "tilda",
     "hyper", "tabby", "sakura", "warp", "termius", "waveterm",
-    "ptyxis", "kgx", "org.gnome.console", NULL
+    "ptyxis", "kgx", "org.gnome.console", "cosmicterm", "xst", "stterm", NULL
 };
+
+/* A short name like "st" would match inside unrelated names
+ * ("com.system76.CosmicEdit"), so it must be a whole word. */
+static int contains_terminal_name(const char *wm_class, const char *name) {
+    size_t len = strlen(name);
+    if (len > 2) return strcasestr(wm_class, name) != NULL;
+    for (const char *p = wm_class; (p = strcasestr(p, name)); p++) {
+        if ((p == wm_class || !isalnum((unsigned char)p[-1])) && !isalnum((unsigned char)p[len]))
+            return 1;
+    }
+    return 0;
+}
 
 static int is_terminal(const char *wm_class) {
     if (!wm_class) return 0;
     for (int i = 0; terminal_classes[i]; i++) {
-        if (strcasestr(wm_class, terminal_classes[i]))
+        if (contains_terminal_name(wm_class, terminal_classes[i]))
             return 1;
     }
     return 0;

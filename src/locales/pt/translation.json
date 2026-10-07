@@ -1394,6 +1394,7 @@
     "waylandClipboardTitle": "Modo área de transferência no Wayland",
     "windowsReady": "O Windows suporta colagem automática nativamente. Nenhuma configuração necessária!",
     "withoutToolPrefix": "Sem essa ferramenta, o OpenWhispr copiará o texto para a área de transferência. Você poderá colar manualmente com Ctrl+V.",
+    "wtypeCosmicTerminalsDescription": "No COSMIC, terminais como o Warp só recebem texto colado pelo wtype. Nos outros apps, a colagem já funciona sem ele.",
     "wtypeFallbackDescription": "O wtype é o método de colagem automática preferido para este compositor wlroots. Há uma alternativa disponível, mas ela pode ser menos confiável.",
     "xwaylandAppsOnly": "a colagem automática funciona apenas para apps XWayland"
   },
@@ -1980,7 +1981,7 @@
         "recheck": "Verificar novamente",
         "copy": "Copiar",
         "ydotoolDesc": "Ferramenta de automação de entrada para Wayland",
-        "wtypeDesc": "Ferramenta de automação de entrada preferida em compositores wlroots",
+        "wtypeDesc": "Ferramenta de automação de entrada preferida em compositores wlroots; no COSMIC, usada para colar em terminais",
         "ydotooldDesc": "Daemon do ydotool (pacote separado no Ubuntu/Pop!_OS)",
         "uinputDesc": "Acesso ao dispositivo de entrada do kernel",
         "uinputRuleFound": "Regra presente mas não ativa. Uma reinicialização deve resolver.",
@@ -4773,7 +4774,42 @@
       "underway": "Parece que sua reunião já está em andamento. Quer fazer anotações?"
     },
     "start": "Fazer anotações",
-    "join": "Entrar e transcrever"
+    "join": "Entrar e transcrever",
+    "folders": {
+      "choose": "Escolher pasta da reunião",
+      "search": "Pesquisar pastas",
+      "clear": "Limpar pesquisa",
+      "private": "Privado",
+      "shared": "Compartilhado",
+      "current": "Destino atual",
+      "recent": "Usadas recentemente",
+      "folders": "Pastas",
+      "new": "Nova pasta",
+      "name": "Nome",
+      "location": "Local",
+      "cancel": "Cancelar",
+      "create": "Criar e selecionar",
+      "empty": "Nenhuma pasta encontrada. Tente outro nome ou crie uma pasta.",
+      "loading": "Carregando pastas…",
+      "unavailable": "Não foi possível carregar as pastas.",
+      "retry": "Tentar novamente",
+      "dismiss": "Fechar notificação de reunião",
+      "selected": "{{destination}} selecionado",
+      "linked": "Esta reunião já tem uma nota. Ao entrar, ela permanecerá em {{destination}}.",
+      "errors": {
+        "STALE_NOTIFICATION": "Esta notificação não está mais atualizada.",
+        "INVALID_REQUEST": "Não foi possível concluir. Tente novamente.",
+        "FOLDERS_UNAVAILABLE": "Não foi possível carregar as pastas.",
+        "FOLDER_UNAVAILABLE": "Este destino não está disponível. Escolha outra pasta.",
+        "SPACE_UNAVAILABLE": "Este destino não está disponível. Escolha outra pasta.",
+        "FOLDER_NAME_REQUIRED": "Digite um nome para a pasta.",
+        "FOLDER_NAME_TAKEN": "Já existe uma pasta com esse nome neste local.",
+        "CREATE_FAILED": "Não foi possível concluir. Tente novamente.",
+        "LINKED_NOTE_CHANGED": "Confira o destino e entre novamente.",
+        "NOTE_UNAVAILABLE": "Esta nota não está disponível. Tente novamente sem criar outra.",
+        "START_FAILED": "Não foi possível concluir. Tente novamente."
+      }
+    }
   },
   "providerErrors": {
     "authFailed": "{{provider}} rejeitou sua chave de API.",

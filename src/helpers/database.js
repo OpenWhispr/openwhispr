@@ -5164,7 +5164,7 @@ class DatabaseManager {
   // event the same id, so a teammate's synced note for the meeting must never
   // match, or both apps record into one note. Ownership follows ownsNote() in
   // spacePermissions.ts, plus Personal rows synced before owners were recorded.
-  getOwnNoteByCalendarEventId(eventId) {
+  getOwnNoteByCalendarEventId(eventId, { throwOnError = false } = {}) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const accountScope = this._accountScopeCondition("notes");
@@ -5188,8 +5188,27 @@ class DatabaseManager {
         { error: error.message },
         "notes"
       );
+      if (throwOnError) throw error;
       return null;
     }
+  }
+
+  createMeetingNoteForNotification({ title, folderId, spaceId, eventId, participants }) {
+    return this.db.transaction(() => {
+      const existing = eventId
+        ? this.getOwnNoteByCalendarEventId(eventId, { throwOnError: true })
+        : null;
+      if (existing) return { created: false, note: existing };
+      const { note } = this.saveNote(title, "", "meeting", null, null, folderId, spaceId);
+      if (!note) throw new Error("Meeting note not saved");
+      if (!eventId) return { created: true, note };
+      const result = this.updateNote(note.id, {
+        calendar_event_id: eventId,
+        ...(participants ? { participants } : {}),
+      });
+      if (!result.success || !result.note) throw new Error("Meeting metadata not saved");
+      return { created: true, note: result.note };
+    })();
   }
 
   // With a source (see contactSource), records that it has seen these

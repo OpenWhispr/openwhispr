@@ -1415,6 +1415,7 @@
     "waylandClipboardTitle": "Wayland 剪貼簿模式",
     "windowsReady": "Windows 內建支援自動貼上。不需要額外設定！",
     "withoutToolPrefix": "若未安裝此工具，OpenWhispr 會將文字複製到剪貼簿。你可以使用 Ctrl+V 手動貼上。",
+    "wtypeCosmicTerminalsDescription": "在 COSMIC 上，Warp 等終端機只能透過 wtype 接收貼上的文字。其他應用程式不需要 wtype 即可貼上。",
     "wtypeFallbackDescription": "wtype 是此 wlroots 合成器上的首選自動貼上方式。有備用方案可用，但可能較不可靠。",
     "xwaylandAppsOnly": "自動貼上僅適用於 XWayland 應用程式"
   },
@@ -2001,7 +2002,7 @@
         "recheck": "重新檢查",
         "copy": "複製",
         "ydotoolDesc": "Wayland 輸入自動化工具",
-        "wtypeDesc": "wlroots 合成器上的首選輸入自動化工具",
+        "wtypeDesc": "wlroots 合成器上的首選輸入自動化工具；在 COSMIC 上用於向終端機貼上",
         "ydotooldDesc": "ydotool 常駐程式（Ubuntu/Pop!_OS 上為獨立套件）",
         "uinputDesc": "核心輸入裝置存取",
         "uinputRuleFound": "規則已存在但未生效，重新開機應可解決。",
@@ -4773,7 +4774,42 @@
       "underway": "你的會議似乎已在進行中。要開始記錄嗎？"
     },
     "start": "開始記錄",
-    "join": "加入並轉錄"
+    "join": "加入並轉錄",
+    "folders": {
+      "choose": "選擇會議資料夾",
+      "search": "搜尋資料夾",
+      "clear": "清除搜尋",
+      "private": "私人",
+      "shared": "共用",
+      "current": "目前儲存位置",
+      "recent": "最近使用",
+      "folders": "資料夾",
+      "new": "新增資料夾",
+      "name": "名稱",
+      "location": "位置",
+      "cancel": "取消",
+      "create": "建立並選取",
+      "empty": "找不到資料夾。請搜尋其他名稱或建立資料夾。",
+      "loading": "正在載入資料夾…",
+      "unavailable": "無法載入資料夾。",
+      "retry": "重試",
+      "dismiss": "關閉會議通知",
+      "selected": "已選取{{destination}}",
+      "linked": "此會議已有筆記。加入後，筆記仍儲存在{{destination}}。",
+      "errors": {
+        "STALE_NOTIFICATION": "此通知已失效。",
+        "INVALID_REQUEST": "無法完成，請重試。",
+        "FOLDERS_UNAVAILABLE": "無法載入資料夾。",
+        "FOLDER_UNAVAILABLE": "此儲存位置無法使用。請選擇其他資料夾。",
+        "SPACE_UNAVAILABLE": "此儲存位置無法使用。請選擇其他資料夾。",
+        "FOLDER_NAME_REQUIRED": "請輸入資料夾名稱。",
+        "FOLDER_NAME_TAKEN": "此位置已有同名資料夾。",
+        "CREATE_FAILED": "無法完成，請重試。",
+        "LINKED_NOTE_CHANGED": "請檢查儲存位置，然後重新加入。",
+        "NOTE_UNAVAILABLE": "此筆記無法使用。請重試，不要建立替代筆記。",
+        "START_FAILED": "無法完成，請重試。"
+      }
+    }
   },
   "providerErrors": {
     "authFailed": "{{provider}} 拒絕了你的 API 金鑰。",

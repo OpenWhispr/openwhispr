@@ -1510,6 +1510,7 @@
     "waylandClipboardTitle": "Zwischenablage-Modus unter Wayland",
     "windowsReady": "Windows unterstützt automatisches Einfügen direkt. Keine Einrichtung erforderlich!",
     "withoutToolPrefix": "Ohne dieses Tool kopiert OpenWhispr den Text in Ihre Zwischenablage. Sie können ihn dann manuell mit Ctrl+V einfügen.",
+    "wtypeCosmicTerminalsDescription": "Unter COSMIC empfangen Terminals wie Warp eingefügten Text nur über wtype. In andere Apps wird bereits ohne wtype eingefügt.",
     "wtypeFallbackDescription": "wtype ist die bevorzugte Methode für automatisches Einfügen auf diesem wlroots-Compositor. Eine Alternative ist verfügbar, kann aber weniger zuverlässig sein.",
     "xwaylandAppsOnly": "Automatisches Einfügen funktioniert nur für XWayland-Apps"
   },
@@ -2296,7 +2297,7 @@
         "recheck": "Erneut prüfen",
         "copy": "Kopieren",
         "ydotoolDesc": "Eingabeautomatisierung für Wayland",
-        "wtypeDesc": "Bevorzugte Eingabeautomatisierung für wlroots-Compositoren",
+        "wtypeDesc": "Bevorzugte Eingabeautomatisierung für wlroots-Compositoren; unter COSMIC zum Einfügen in Terminals genutzt",
         "ydotooldDesc": "Daemon für ydotool (separates Paket unter Ubuntu/Pop!_OS)",
         "uinputDesc": "Zugriff auf das Kernel-Eingabegerät",
         "uinputRuleFound": "Regel vorhanden, aber nicht aktiv. Ein Neustart sollte das beheben.",
@@ -4773,7 +4774,42 @@
       "underway": "Es klingt, als wäre dein Meeting schon im Gange. Notizen aufnehmen?"
     },
     "start": "Notizen aufnehmen",
-    "join": "Beitreten & transkribieren"
+    "join": "Beitreten & transkribieren",
+    "folders": {
+      "choose": "Besprechungsordner auswählen",
+      "search": "Ordner suchen",
+      "clear": "Suche löschen",
+      "private": "Privat",
+      "shared": "Geteilt",
+      "current": "Aktueller Speicherort",
+      "recent": "Zuletzt verwendet",
+      "folders": "Ordner",
+      "new": "Neuer Ordner",
+      "name": "Name",
+      "location": "Speicherort",
+      "cancel": "Abbrechen",
+      "create": "Erstellen und auswählen",
+      "empty": "Keine Ordner gefunden. Suche einen anderen Namen oder erstelle einen Ordner.",
+      "loading": "Ordner werden geladen…",
+      "unavailable": "Ordner konnten nicht geladen werden.",
+      "retry": "Erneut versuchen",
+      "dismiss": "Besprechungsbenachrichtigung schließen",
+      "selected": "{{destination}} ausgewählt",
+      "linked": "Für diese Besprechung gibt es bereits eine Notiz. Beim Beitreten bleibt sie in {{destination}}.",
+      "errors": {
+        "STALE_NOTIFICATION": "Diese Benachrichtigung ist nicht mehr aktuell.",
+        "INVALID_REQUEST": "Vorgang fehlgeschlagen. Bitte erneut versuchen.",
+        "FOLDERS_UNAVAILABLE": "Ordner konnten nicht geladen werden.",
+        "FOLDER_UNAVAILABLE": "Dieser Speicherort ist nicht verfügbar. Wähle einen anderen Ordner.",
+        "SPACE_UNAVAILABLE": "Dieser Speicherort ist nicht verfügbar. Wähle einen anderen Ordner.",
+        "FOLDER_NAME_REQUIRED": "Gib einen Ordnernamen ein.",
+        "FOLDER_NAME_TAKEN": "An diesem Speicherort existiert bereits ein Ordner mit diesem Namen.",
+        "CREATE_FAILED": "Vorgang fehlgeschlagen. Bitte erneut versuchen.",
+        "LINKED_NOTE_CHANGED": "Prüfe den Speicherort und tritt erneut bei.",
+        "NOTE_UNAVAILABLE": "Diese Notiz ist nicht verfügbar. Versuche es erneut, ohne eine neue zu erstellen.",
+        "START_FAILED": "Vorgang fehlgeschlagen. Bitte erneut versuchen."
+      }
+    }
   },
   "providerErrors": {
     "authFailed": "{{provider}} hat Ihren API-Schlüssel abgelehnt.",
