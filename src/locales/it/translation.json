@@ -773,6 +773,10 @@
       "label": "Disattiva output di ragionamento",
       "help": "Salta i token di ragionamento per un output più pulito. Consigliato per la pulizia. Alcuni server ignorano questo suggerimento."
     },
+    "keepModelLoaded": {
+      "label": "Mantieni il modello caricato",
+      "help": "Resta in memoria invece di essere rimosso dopo 5 minuti di inattività, così la richiesta successiva evita l'avvio a freddo. Vale per tutte le funzioni che usano un modello locale."
+    },
     "selfHosted": {
       "endpointHelp": "Punta a un server compatibile con OpenAI sulla tua rete locale (es. Ollama, LM Studio, vLLM o llama-server)."
     },
@@ -3664,6 +3668,10 @@
     "activationFailedDescription": "OpenWhispr sta usando la trascrizione CPU.",
     "reasoningActivationFailedDescription": "OpenWhispr sta usando l'elaborazione CPU.",
     "retryActivation": "Riprova l'accelerazione GPU",
+    "redownloadNeeded": "Il pacchetto GPU deve essere scaricato di nuovo",
+    "redownloadNeededDescription": "Questa versione di OpenWhispr non può usare il pacchetto GPU installato. Scaricalo di nuovo per riattivare l'accelerazione GPU.",
+    "redownloadButton": "Scarica di nuovo il pacchetto GPU",
+    "downloadFailed": "Impossibile scaricare il pacchetto GPU.",
     "remove": "Rimuovi",
     "dismiss": "Non ora",
     "cancel": "Annulla"
@@ -3691,7 +3699,7 @@
       },
       "gpuPackMigration": {
         "title": "Il pacchetto GPU deve essere scaricato di nuovo",
-        "description": "Un aggiornamento ha rimosso un'installazione obsoleta del pacchetto GPU ({{packs}}). Scaricalo di nuovo nelle Impostazioni per ripristinare l'accelerazione GPU."
+        "description": "Questa versione non può usare il pacchetto GPU precedente ({{packs}}). Scaricalo di nuovo nelle Impostazioni per riattivare l'accelerazione GPU."
       },
       "cleanupFailed": {
         "title": "Pulizia non riuscita",
@@ -4766,5 +4774,48 @@
     },
     "start": "Prendi appunti",
     "join": "Partecipa e trascrivi"
+  },
+  "providerErrors": {
+    "authFailed": "{{provider}} ha rifiutato la tua chiave API.",
+    "accessDenied": "{{provider}} ha negato l’accesso. La tua chiave potrebbe non includere questo modello.",
+    "quotaExhausted": "Il tuo account {{provider}} ha esaurito il credito.",
+    "rateLimited": "{{provider}} ha limitato la richiesta. Attendi un momento e riprova.",
+    "modelNotFound": "{{provider}} non riconosce il modello “{{model}}”.",
+    "modelNotFoundNoModel": "{{provider}} non riconosce il modello selezionato.",
+    "payloadTooLarge": "Questa registrazione è troppo grande per {{provider}}.",
+    "requestTooLarge": "Questa richiesta è troppo grande per {{provider}}.",
+    "badRequest": "{{provider}} non è riuscito a elaborare questa richiesta.",
+    "unavailable": "{{provider}} sta avendo problemi in questo momento. Riprova a breve.",
+    "timeout": "{{provider}} ha impiegato troppo tempo a rispondere.",
+    "unreachable": "Impossibile contattare {{provider}}. Controlla la tua connessione.",
+    "noResponse": "Nessuna risposta da {{provider}}. Controlla la tua chiave API e la connessione.",
+    "unknown": "{{provider}} ha restituito un errore imprevisto.",
+    "keyMissing": "Nessuna chiave API impostata per {{provider}}. Aggiungila in Impostazioni → Modelli linguistici.",
+    "selfHosted": {
+      "authFailed": "Il tuo server ha rifiutato la chiave API.",
+      "accessDenied": "Il tuo server ha negato l’accesso. La chiave potrebbe non includere questo modello.",
+      "quotaExhausted": "Il tuo server segnala che l'account ha esaurito il credito.",
+      "rateLimited": "Il tuo server ha limitato la richiesta. Attendi un momento e riprova.",
+      "modelNotFound": "Il tuo server non riconosce il modello “{{model}}”.",
+      "modelNotFoundNoModel": "Il tuo server non riconosce il modello selezionato.",
+      "payloadTooLarge": "Questa registrazione è troppo grande per il tuo server.",
+      "requestTooLarge": "Questa richiesta è troppo grande per il tuo server.",
+      "badRequest": "Il tuo server non è riuscito a elaborare questa richiesta.",
+      "unavailable": "Il tuo server sta avendo problemi in questo momento. Riprova a breve.",
+      "timeout": "Il tuo server ha impiegato troppo tempo a rispondere.",
+      "unreachable": "Impossibile contattare il tuo server. Verifica che sia in esecuzione.",
+      "noResponse": "Nessuna risposta dal tuo server. Verifica la sua chiave API e che sia in esecuzione.",
+      "unknown": "Il tuo server ha restituito un errore imprevisto."
+    },
+    "openSettings": "Apri Impostazioni",
+    "copyDetails": "Copia dettagli",
+    "titles": {
+      "transcription": "Trascrizione non riuscita",
+      "llm": "Richiesta IA non riuscita"
+    },
+    "details": {
+      "provider": "Provider",
+      "requestId": "ID richiesta"
+    }
   }
 }

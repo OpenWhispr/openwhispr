@@ -66,6 +66,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - Linux: before any paste or selection-copy chord, `linux-fast-paste --capabilities --await-modifier-release <ms>` waits for physically held modifiers to be released (XKB state on X11, `EVIOCGKEY` on Wayland; `unknown` without `/dev/input` access pastes as before). A chord injected into held keys arrives as a different shortcut, and a virtual device cannot release another device's key (#2113). Still held after 1.5 s → not pasted, `reason: "modifiers-held"`, and the renderer shows the dictation-error pill with the transcript on the clipboard; a selection edit blocked the same way reports `code: "modifiers_held"` and gets the same pill (the assistant caret paste reports the same code, for logs only). `ydotoold`'s virtual keyboard is ignored, since an interrupted chord can leave its modifier down, and an unreadable key state is logged once per session. The wait runs before `pasteLinux` detects the target window, and a selection copy that had to wait looks the target up again, since focus can move while a key is held: a fresh capture then runs the command on its own (`focus_moved`), and a revalidated session declines as `target_changed`. Retry on a modifiers-held pill pastes the kept transcript again rather than recording again (the macOS/Windows push force-stop pill keeps its record-again Retry, since neither platform waits for held keys), ignores clicks while its paste is pending, and never dismisses a newer pill. `useAudioRecording` keeps the pill in processing until the paste attempt settles (the audio manager settles before the paste starts), but never reports that to main, which drops dictation hotkeys while processing; a paste held back after the next dictation started leaves the transcript on the clipboard without a pill. The helper measures its wait on `CLOCK_MONOTONIC`, since the JS watchdog kills it at timeout + 1 s
 - **database.js**: SQLite operations for transcription history
 - **debugLogger.js**: Debug logging system with file output
+- **providerHttpErrors.js**: Pure ESM classifier for BYOK provider failures (transcription and AI models), shared by main (require(esm)) and renderer. `providerHttpError({ provider, status, body, headers, model, surface, selfHosted })` builds an Error carrying `code` (`PROVIDER_AUTH_FAILED`, `PROVIDER_QUOTA_EXHAUSTED`, …), `messageKey` (`providerErrors.*`), `messageParams`, `settingsTarget` (`speechToText`/`llms`, fixable errors only) and redacted `technicalDetails`; `asProviderError` classifies AI SDK, timeout and network errors and leaves already-keyed errors alone. Raw provider bodies never reach UI text. Rendered by `src/utils/describeProviderError.ts`
 - **devServerManager.js**: Vite dev server integration
 - **dockManager.js**: Single owner of the macOS Dock icon
   - The icon follows the control panel: it appears when the panel opens and goes away when the panel closes to the tray, so no other caller (in particular the dictation panel's hide path) can resurrect it
@@ -203,7 +204,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **ui/RichTextEditor.tsx**: Tiptap note editor. Note bodies (`content`, `enhanced_content`) are stored as Markdown via tiptap-markdown (`html: false`)
   - `RichTextEditorExtensions.ts` holds the extension list (`RichTextEditor` adds the mention extension in front of it); order matters: at equal priority, later extensions' keymaps and clipboard props run first
   - `RichTextEditorTable.ts` keeps every table to what a GFM pipe table can store: header first row, one single-line paragraph per cell, no merged cells, no alignment or column widths. Pasted cells are flattened while parsing, a normalizer fixes what commands and pastes leave behind, and the table serializer escapes `|` in cells. Tests: `test/components/richTextEditor.test.js` (happy-dom)
-  - Floating menus: `RichTextEditorFormatMenu.tsx` shows one formatting toolbar (marks, text style, lists, quote, insert table) above selected text (Tiptap `BubbleMenu`) and beside the caret on an empty top-level line (`FloatingMenu`); `RichTextEditorTableMenu.tsx` is the table's `⋯` menu. They share `RichTextEditorMenus.ts`: a menu hides when focus leaves it, so dropdowns portal into the menu element itself, never into the editor's scroller (EditorContent moves the scroller's children when a note closes); `useHideOnFocusLeave` hides a menu when focus leaves from inside it or after a click on it, which Tiptap misses. The menus detach their element without unmounting it, so buttons use a native `title` rather than `<Tooltip>`, and a dropdown inside a menu is controlled and closed from the menu's `onHide` — otherwise it stays open over a scroll-locked page when the menu hides. Keep menu props stable, or each render dispatches an `updateOptions` transaction
+  - Floating menus: `RichTextEditorFormatMenu.tsx` shows one formatting toolbar (marks, text style, lists, quote, insert table) above selected text (Tiptap `BubbleMenu`) and below the caret on an empty top-level line, flipping above when there's no room (`FloatingMenu`); `RichTextEditorTableMenu.tsx` is the table's `⋯` menu. They share `RichTextEditorMenus.ts`: a menu hides when focus leaves it, so dropdowns portal into the menu element itself, never into the editor's scroller (EditorContent moves the scroller's children when a note closes); `useHideOnFocusLeave` hides a menu when focus leaves from inside it or after a click on it, which Tiptap misses. The menus detach their element without unmounting it, so buttons use a native `title` rather than `<Tooltip>`, and a dropdown inside a menu is controlled and closed from the menu's `onHide` — otherwise it stays open over a scroll-locked page when the menu hides. Keep menu props stable, or each render dispatches an `updateOptions` transaction
 
 ### React Hooks (src/hooks/)
 
@@ -385,6 +386,7 @@ Settings stored in localStorage with these keys:
 - `hotkey`: Custom hotkey configuration
 - `hasCompletedOnboarding`: Onboarding completion flag
 - `customDictionary`: JSON array of words/phrases for improved transcription accuracy
+- `keepLocalModelLoaded`: Keeps the shared llama-server loaded instead of unloading it after 5 idle minutes (#1207; default off). Synced to main with `sync-startup-preferences`, outside its policy gate; `LlamaServerManager.setKeepResident` acts only on a change, since every window resyncs on load
 - `emailDraftTarget`: Where email drafts open (`auto`, `gmail`, `gmailSend`, `outlookWork`, `outlookPersonal`, `mailto`); `gmailSend` sends through the Gmail connector's approval card ("Send from chat (Gmail)"); an unknown value reads as `auto`
 
 Secret env vars (12 total: 7 BYOK API keys + 5 enterprise cloud creds — see `SECRET_KEYS` in `environment.js`) are encrypted at rest via Electron `safeStorage` and stored as per-key files under `userData/secure-keys/`. They are loaded into `process.env` at startup by `EnvironmentManager.init()`. Renderer reads them via IPC (`get-*-key`) and writes via debounced IPC (`save-*-key`). On Linux without a keyring, secrets fall back to plaintext.
@@ -561,9 +563,9 @@ Native Windows support for true push-to-talk functionality using low-level keybo
 
 - Compiled from source by `scripts/build-windows-key-listener.js`, part of `compile:native`, so every `prebuild*`, `predev:main` and `prestart` chain on a Windows host builds it; neither script runs on other hosts
 - Fallback: prebuilt binary from GitHub releases (`windows-key-listener-v*` tags) via `scripts/download-windows-key-listener.js`
-- Release CI (`release.yml`, `build-and-notarize.yml`) compiles it with MSVC during `build:win`. Its earlier download step only acts on a `resources/bin` cache miss, and the fresh download is then newer than the source, so it ships uncompiled
+- Release CI (`release.yml`, `build-and-notarize.yml`) compiles it with MSVC during `build:win`
 - CI workflow: `.github/workflows/build-windows-key-listener.yml` rebuilds the prebuilt binary when `resources/windows-key-listener.c` changes on main
-- Without the binary, Hold is unavailable (a saved Hold is reset to Tap at startup), modifier-only hotkeys are refused, and the default hotkey becomes `F8` (`hotkeyManager.js`)
+- `afterPack.js` fails a Windows package without the binary. A dev run without it starts with Hold unavailable (a saved Hold is reset to Tap at startup), modifier-only hotkeys refused, and `F8` as the default hotkey (`hotkeyManager.js`)
 
 **IPC Events**:
 
@@ -890,7 +892,7 @@ UI icons come from `src/components/icons/` (vendored Nucleo core outline compone
 
 5. **Windows Push-to-Talk Binary**:
    - Compiled from `resources/windows-key-listener.c` whenever `compile:native` runs on a Windows host (`prebuild:win`, `predev:main`, …); the prebuilt binary download from GitHub releases is the fallback
-   - If neither produces it, Hold and modifier-only hotkeys are unavailable and the default hotkey becomes `F8`
+   - If neither compiling nor the download produces it, `afterPack.js` fails the Windows build; an unpackaged dev run starts without it, with Hold and modifier-only hotkeys unavailable and `F8` as the default hotkey
    - To compile locally: install Visual Studio Build Tools or MinGW-w64
    - CI workflow (`.github/workflows/build-windows-key-listener.yml`) rebuilds the prebuilt binary when `resources/windows-key-listener.c` changes on main
 
@@ -939,7 +941,7 @@ UI icons come from `src/components/icons/` (vendored Nucleo core outline compone
   - Uses Windows Low-Level Keyboard Hook (`WH_KEYBOARD_LL`)
   - Supports compound hotkeys (e.g., `Ctrl+Shift+F11`)
   - Compiled from source during the build, with the prebuilt GitHub release binary as fallback (see section 12, Binary Distribution)
-  - Without it, Hold and modifier-only hotkeys are unavailable and the default hotkey becomes `F8`
+  - `afterPack.js` fails a Windows package without it
 
 **Linux**:
 

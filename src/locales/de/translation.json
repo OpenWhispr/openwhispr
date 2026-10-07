@@ -773,6 +773,10 @@
       "label": "Denkausgabe deaktivieren",
       "help": "Überspringt Reasoning-Token für eine sauberere Ausgabe. Empfohlen für Bereinigung. Einige Server ignorieren diesen Hinweis."
     },
+    "keepModelLoaded": {
+      "label": "Modell geladen lassen",
+      "help": "Bleibt im Speicher, statt nach 5 Minuten Inaktivität entladen zu werden, sodass bei der nächsten Anfrage der Kaltstart entfällt. Gilt für alle Funktionen mit lokalem Modell."
+    },
     "selfHosted": {
       "endpointHelp": "Zeige auf einen OpenAI-kompatiblen Server in deinem lokalen Netzwerk (z. B. Ollama, LM Studio, vLLM oder llama-server)."
     },
@@ -3835,6 +3839,10 @@
     "activationFailedDescription": "OpenWhispr verwendet die CPU-Transkription.",
     "reasoningActivationFailedDescription": "OpenWhispr verwendet die CPU-Verarbeitung.",
     "retryActivation": "GPU-Beschleunigung erneut versuchen",
+    "redownloadNeeded": "GPU-Paket muss erneut heruntergeladen werden",
+    "redownloadNeededDescription": "Diese Version von OpenWhispr kann dein installiertes GPU-Paket nicht verwenden. Lade es erneut herunter, um die GPU-Beschleunigung wieder einzuschalten.",
+    "redownloadButton": "GPU-Paket erneut herunterladen",
+    "downloadFailed": "Das GPU-Paket konnte nicht heruntergeladen werden.",
     "remove": "Entfernen",
     "dismiss": "Nicht jetzt",
     "cancel": "Abbrechen"
@@ -3862,7 +3870,7 @@
       },
       "gpuPackMigration": {
         "title": "GPU-Paket muss erneut heruntergeladen werden",
-        "description": "Ein Update hat eine veraltete GPU-Paket-Installation entfernt ({{packs}}). Lade es in den Einstellungen erneut herunter, um die GPU-Beschleunigung wiederherzustellen."
+        "description": "Diese Version kann dein bisheriges GPU-Paket ({{packs}}) nicht verwenden. Lade es in den Einstellungen erneut herunter, um die GPU-Beschleunigung wieder einzuschalten."
       },
       "cleanupFailed": {
         "title": "Bereinigung fehlgeschlagen",
@@ -4766,5 +4774,48 @@
     },
     "start": "Notizen aufnehmen",
     "join": "Beitreten & transkribieren"
+  },
+  "providerErrors": {
+    "authFailed": "{{provider}} hat Ihren API-Schlüssel abgelehnt.",
+    "accessDenied": "{{provider}} hat den Zugriff verweigert. Ihr Schlüssel deckt dieses Modell möglicherweise nicht ab.",
+    "quotaExhausted": "Ihr {{provider}}-Konto hat kein Guthaben mehr.",
+    "rateLimited": "{{provider}} hat die Anfrage begrenzt. Warten Sie einen Moment und versuchen Sie es erneut.",
+    "modelNotFound": "{{provider}} kennt das Modell „{{model}}“ nicht.",
+    "modelNotFoundNoModel": "{{provider}} kennt das ausgewählte Modell nicht.",
+    "payloadTooLarge": "Diese Aufnahme ist für {{provider}} zu groß.",
+    "requestTooLarge": "Diese Anfrage ist für {{provider}} zu groß.",
+    "badRequest": "{{provider}} konnte diese Anfrage nicht verarbeiten.",
+    "unavailable": "{{provider}} hat derzeit Probleme. Versuchen Sie es in Kürze erneut.",
+    "timeout": "{{provider}} hat zu lange zum Antworten gebraucht.",
+    "unreachable": "{{provider}} konnte nicht erreicht werden. Überprüfen Sie Ihre Verbindung.",
+    "noResponse": "Keine Antwort von {{provider}} erhalten. Überprüfen Sie Ihren API-Schlüssel und Ihre Verbindung.",
+    "unknown": "{{provider}} hat einen unerwarteten Fehler zurückgegeben.",
+    "keyMissing": "Für {{provider}} ist kein API-Schlüssel hinterlegt. Fügen Sie ihn unter Einstellungen → Sprachmodelle hinzu.",
+    "selfHosted": {
+      "authFailed": "Ihr Server hat den API-Schlüssel abgelehnt.",
+      "accessDenied": "Ihr Server hat den Zugriff verweigert. Der Schlüssel deckt dieses Modell möglicherweise nicht ab.",
+      "quotaExhausted": "Ihr Server meldet, dass das Konto kein Guthaben mehr hat.",
+      "rateLimited": "Ihr Server hat die Anfrage begrenzt. Warten Sie einen Moment und versuchen Sie es erneut.",
+      "modelNotFound": "Ihr Server kennt das Modell „{{model}}“ nicht.",
+      "modelNotFoundNoModel": "Ihr Server kennt das ausgewählte Modell nicht.",
+      "payloadTooLarge": "Diese Aufnahme ist für Ihren Server zu groß.",
+      "requestTooLarge": "Diese Anfrage ist für Ihren Server zu groß.",
+      "badRequest": "Ihr Server konnte diese Anfrage nicht verarbeiten.",
+      "unavailable": "Ihr Server hat derzeit Probleme. Versuchen Sie es in Kürze erneut.",
+      "timeout": "Ihr Server hat zu lange zum Antworten gebraucht.",
+      "unreachable": "Ihr Server konnte nicht erreicht werden. Überprüfen Sie, ob er läuft.",
+      "noResponse": "Keine Antwort von Ihrem Server erhalten. Überprüfen Sie seinen API-Schlüssel und ob er läuft.",
+      "unknown": "Ihr Server hat einen unerwarteten Fehler zurückgegeben."
+    },
+    "openSettings": "Einstellungen öffnen",
+    "copyDetails": "Details kopieren",
+    "titles": {
+      "transcription": "Transkription fehlgeschlagen",
+      "llm": "KI-Anfrage fehlgeschlagen"
+    },
+    "details": {
+      "provider": "Anbieter",
+      "requestId": "Anfrage-ID"
+    }
   }
 }

@@ -5,6 +5,7 @@ import { isEnterpriseProvider } from "../../models/ModelRegistry";
 import { providerSupportsImages } from "../../services/ai/inferenceProviders";
 import { getSettings, useSettingsStore } from "../../stores/settingsStore";
 import { resolveChatStreamingInference } from "../../helpers/dictationAgentInference.js";
+import { describeProviderError } from "../../utils/describeProviderError";
 import logger from "../../utils/logger";
 import {
   isAgentAllowed,
@@ -783,13 +784,22 @@ export function useChatStreaming({
               "reasoning"
             );
             announceResponse();
+            const failure = describeProviderError(error, t);
+            const messageError =
+              failure.technicalDetails || failure.settingsTarget
+                ? {
+                    technicalDetails: failure.technicalDetails,
+                    settingsTarget: failure.settingsTarget,
+                  }
+                : undefined;
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantId
                   ? {
                       ...m,
-                      content: `${t("agentMode.chat.errorPrefix")}: ${(error as Error).message}`,
+                      content: `${t("agentMode.chat.errorPrefix")}: ${failure.description}`,
                       isStreaming: false,
+                      ...(messageError ? { error: messageError } : {}),
                     }
                   : m
               )

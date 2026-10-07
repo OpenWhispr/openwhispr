@@ -83,6 +83,7 @@ import { applyChineseScript, resolveChineseScriptTarget } from "../utils/chinese
 import { getAgentName } from "../utils/agentName";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
+import { providerErrorToastProps } from "../utils/describeProviderError";
 import SpaceSyncToastListener from "./notes/SpaceSyncToastListener";
 import { syncService } from "../services/SyncService.js";
 import logger from "../utils/logger";
@@ -125,6 +126,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const [settingsSection, setSettingsSection] = useState<string | undefined>(
     initialSettingsSection
   );
+  // Counts named show-settings requests, so asking again for the section the
+  // modal was opened at still lands there after the user moved elsewhere in it.
+  const [settingsRequest, setSettingsRequest] = useState(0);
   const [aiCTADismissed, setAiCTADismissed] = useState(
     () => localStorage.getItem("aiCTADismissed") === "true"
   );
@@ -428,9 +432,18 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   }, []);
 
   useEffect(() => {
-    const cleanup = window.electronAPI?.onShowSettings?.(() => {
-      setShowSettings(true);
-    });
+    // A named section waits in main (it can outrace this listener on a cold
+    // start); a bare request (app-menu Cmd+,) keeps an open modal where it is.
+    const drain = async (showAnyway: boolean) => {
+      const section = await window.electronAPI?.getPendingSettingsSection?.();
+      if (section) {
+        setSettingsSection(section);
+        setSettingsRequest((count) => count + 1);
+      }
+      if (section || showAnyway) setShowSettings(true);
+    };
+    drain(false);
+    const cleanup = window.electronAPI?.onShowSettings?.(() => drain(true));
     return () => cleanup?.();
   }, []);
 
@@ -648,19 +661,17 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                     settings.translationSourceLanguage,
                     settings.translationTargetLanguage
                   ),
-                  onCleanupError: (cleanupError: Error & { messageKey?: string }) => {
+                  onCleanupError: (cleanupError: unknown) => {
                     logger.warn(
                       "Cleanup step failed in translation chain, translating raw transcript",
-                      { error: cleanupError.message },
+                      { error: (cleanupError as Error).message },
                       "transcription"
                     );
                     // The chain still translates the raw transcript, so say why cleanup
                     // was dropped rather than reporting a clean success (#2091).
                     toast({
                       title: t("app.toasts.cleanupFailed.title"),
-                      description: cleanupError.messageKey
-                        ? t(cleanupError.messageKey)
-                        : cleanupError.message,
+                      ...providerErrorToastProps(cleanupError, t),
                       variant: "destructive",
                     });
                   },
@@ -729,10 +740,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             } catch (cleanupError) {
               // The row keeps its raw transcript, so the retry must not look like it
               // cleaned anything — report why, the way dictation does (#2091).
-              const failure = cleanupError as Error & { messageKey?: string };
               toast({
                 title: t("app.toasts.cleanupFailed.title"),
-                description: failure.messageKey ? t(failure.messageKey) : failure.message,
+                ...providerErrorToastProps(cleanupError, t),
                 variant: "destructive",
               });
             }
@@ -783,7 +793,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         } else {
           toast({
             title: t("controlPanel.history.retryError"),
-            description: result.messageKey ? t(result.messageKey) : result.error,
+            ...providerErrorToastProps({ ...result, message: result.error }, t),
             variant: "destructive",
           });
         }
@@ -912,6 +922,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       {showSettings && (
         <Suspense fallback={null}>
           <SettingsModal
+            // SettingsModal reads initialSection only on open, so a named request remounts it.
+            key={`${settingsSection ?? "default"}-${settingsRequest}`}
             open={showSettings}
             onOpenChange={(open) => {
               setShowSettings(open);

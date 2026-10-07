@@ -120,7 +120,7 @@ async function main() {
       fs.unlinkSync(zipPath);
     }
 
-    // Don't fail the build - Push-to-Talk can fall back to tap mode
+    // Don't fail here: afterPack stops a Windows build that lacks the listener
     console.log(
       "[windows-key-listener] Push-to-Talk will use fallback mode (compile locally or tap mode)"
     );

@@ -42,6 +42,13 @@ import { detectEndpointDialect } from "./ai/thinkingSuppressionDialects";
 import { openCodeSessionHeaders } from "./ai/openCodeSession";
 import { createStreamingThinkFilter } from "./ai/streamingThinkFilter";
 import { extractApiErrorMessage } from "./ai/apiErrorMessage";
+import {
+  PROVIDER_ERROR_CODES,
+  asProviderError,
+  providerError,
+  providerHttpError,
+  redactProviderBody,
+} from "../helpers/providerHttpErrors.js";
 import { clearTinfoilClientCache } from "./ai/tinfoilClient";
 import { resolveChatRoute } from "../helpers/chatRouting";
 import { assertAgentAllowedByPolicy, assertReasoningAllowedByPolicy } from "./reasoningPolicy";
@@ -250,10 +257,10 @@ class ReasoningService extends BaseReasoningService {
         provider,
         error: errorMsg,
       });
-      const error = new Error(errorMsg) as Error & { code: string; provider: string };
-      error.code = "API_KEY_MISSING";
-      error.provider = displayName;
-      throw error;
+      throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+        provider: displayName,
+        surface: "llm",
+      });
     }
 
     return apiKey;
@@ -329,6 +336,13 @@ class ReasoningService extends BaseReasoningService {
     // Minted before the retry loop so every attempt of this call is one conversation.
     const openCodeHeaders = openCodeSessionHeaders(endpoint);
 
+    const errorContext = {
+      provider: providerName,
+      selfHosted: providerName === "LAN",
+      model,
+      surface: "llm",
+    };
+
     const requestGeneration = this.requestCancellationGeneration;
     const response = await withRetry(async () => {
       if (requestGeneration !== this.requestCancellationGeneration) {
@@ -369,19 +383,22 @@ class ReasoningService extends BaseReasoningService {
             errorData = { error: errorText || res.statusText };
           }
 
-          const errorMessage = extractApiErrorMessage(
-            errorData,
-            `${providerName} API error: ${res.status}`
-          );
-
+          // Providers echo the rejected key back, so every logged field is redacted.
           logger.logReasoning(`${providerName.toUpperCase()}_API_ERROR_DETAIL`, {
             status: res.status,
             statusText: res.statusText,
-            error: errorData,
-            errorMessage,
-            fullResponse: errorText.substring(0, 500),
+            error: redactProviderBody(errorData),
+            errorMessage: redactProviderBody(
+              extractApiErrorMessage(errorData, `${providerName} API error: ${res.status}`)
+            ),
+            fullResponse: redactProviderBody(errorText),
           });
-          throw httpError(errorMessage, res.status);
+          throw providerHttpError({
+            ...errorContext,
+            status: res.status,
+            body: errorText,
+            headers: res.headers,
+          });
         }
 
         const jsonResponse = await res.json();
@@ -407,7 +424,11 @@ class ReasoningService extends BaseReasoningService {
         clearTimeout(timeoutId);
         this.activeRequestControllers.delete(controller);
       }
-    }, createApiRetryStrategy());
+    }, createApiRetryStrategy()).catch((error) => {
+      // Classified only once it has left withRetry, so the deadline is still
+      // attempted exactly once.
+      throw asProviderError(error, errorContext);
+    });
 
     if (!response.choices || !response.choices[0]) {
       logger.logReasoning(`${providerName.toUpperCase()}_RESPONSE_ERROR`, {
@@ -656,6 +677,11 @@ class ReasoningService extends BaseReasoningService {
       abortController.abort();
     }, timeoutSeconds * 1000);
 
+    const selfHostedErrorContext = {
+      selfHosted: true,
+      model,
+      surface: "llm",
+    };
     let response: Response;
     try {
       response = await fetchWithParamFallback(
@@ -673,22 +699,38 @@ class ReasoningService extends BaseReasoningService {
       clearTimeout(timeoutId);
       if ((error as Error).name === "AbortError" && abortController.signal.aborted) {
         if (!timeoutTriggered) return;
-        throw new Error("Streaming request timed out");
+        throw route.kind === "self-hosted"
+          ? providerError(PROVIDER_ERROR_CODES.TIMEOUT, selfHostedErrorContext)
+          : new Error("Streaming request timed out");
       }
-      throw error;
+      // A stopped LAN server rejects the fetch before any response.
+      throw route.kind === "self-hosted" ? asProviderError(error, selfHostedErrorContext) : error;
     }
 
     if (!response.ok) {
       clearTimeout(timeoutId);
       const errorText = await response.text();
+      logger.logReasoning("AGENT_STREAM_ERROR", {
+        status: response.status,
+        body: redactProviderBody(errorText),
+      });
+      if (route.kind === "self-hosted") {
+        throw providerHttpError({
+          ...selfHostedErrorContext,
+          status: response.status,
+          body: errorText,
+          headers: response.headers,
+        });
+      }
       let errorMessage: string;
       try {
-        const errorData = JSON.parse(errorText);
-        errorMessage = extractApiErrorMessage(errorData, `API error: ${response.status}`);
+        errorMessage = extractApiErrorMessage(
+          JSON.parse(errorText),
+          `API error: ${response.status}`
+        );
       } catch {
         errorMessage = errorText || `API error: ${response.status}`;
       }
-      logger.logReasoning("AGENT_STREAM_ERROR", { status: response.status, errorMessage });
       throw new Error(errorMessage);
     }
 
@@ -745,7 +787,9 @@ class ReasoningService extends BaseReasoningService {
     } catch (error) {
       if ((error as Error).name === "AbortError" && abortController.signal.aborted) {
         if (!timeoutTriggered) return;
-        throw new Error("Streaming request timed out");
+        throw route.kind === "self-hosted"
+          ? providerError(PROVIDER_ERROR_CODES.TIMEOUT, selfHostedErrorContext)
+          : new Error("Streaming request timed out");
       }
       throw error;
     } finally {
@@ -978,6 +1022,28 @@ class ReasoningService extends BaseReasoningService {
       if (abortController.signal.aborted) {
         yield { type: "done", finishReason: "stop" };
         return;
+      }
+      // BYOK and LAN-with-tools failures arrive as AI SDK errors; enterprise
+      // providers have their own mappers and local errors their own keys.
+      if (mode === "providers" || mode === "self-hosted") {
+        // A "custom" BYOK provider (config.baseUrl) counts as self-hosted
+        // alongside LAN (config.lanUrl) — both are the user's own server.
+        // OpenRouter is a cloud provider and keeps its own display name.
+        const isSelfHosted = mode === "self-hosted" || provider === "custom";
+        const classified = asProviderError(error, {
+          provider: getProviderDisplayName(provider),
+          selfHosted: isSelfHosted,
+          model,
+          surface: "llm",
+        });
+        // The classified details already hold the status and the redacted body.
+        const details = classified.technicalDetails;
+        logger.warn(
+          "BYOK chat stream failed",
+          { provider, status: details?.status, body: details?.underlyingError },
+          "reasoning"
+        );
+        throw classified;
       }
       throw error;
     } finally {

@@ -773,6 +773,10 @@
       "label": "Disable thinking output",
       "help": "Skips reasoning tokens for cleaner output. Recommended for cleanup. Some servers ignore this hint."
     },
+    "keepModelLoaded": {
+      "label": "Keep model loaded",
+      "help": "Stays in memory instead of unloading after 5 idle minutes, so the next request skips the cold start. Applies to all features using a local model."
+    },
     "selfHosted": {
       "endpointHelp": "Point to an OpenAI-compatible server on your local network (e.g. Ollama, LM Studio, vLLM, or llama-server)."
     },
@@ -3835,6 +3839,10 @@
     "activationFailedDescription": "OpenWhispr switched to CPU transcription.",
     "reasoningActivationFailedDescription": "OpenWhispr switched to CPU processing.",
     "retryActivation": "Retry GPU acceleration",
+    "redownloadNeeded": "GPU pack needs re-downloading",
+    "redownloadNeededDescription": "This version of OpenWhispr can't use your installed GPU pack. Download it again to turn GPU acceleration back on.",
+    "redownloadButton": "Re-download GPU pack",
+    "downloadFailed": "Couldn't download the GPU pack.",
     "remove": "Remove",
     "dismiss": "Not now",
     "cancel": "Cancel"
@@ -3862,7 +3870,7 @@
       },
       "gpuPackMigration": {
         "title": "GPU pack needs re-downloading",
-        "description": "An update removed an outdated GPU pack installation ({{packs}}). Re-download it in Settings to restore GPU acceleration."
+        "description": "This version can't use your earlier GPU pack ({{packs}}). Download it again in Settings to turn GPU acceleration back on."
       },
       "cleanupFailed": {
         "title": "Cleanup failed",
@@ -4766,5 +4774,48 @@
     },
     "start": "Take notes",
     "join": "Join & transcribe"
+  },
+  "providerErrors": {
+    "authFailed": "{{provider}} rejected your API key.",
+    "accessDenied": "{{provider}} denied access. Your key may not include this model.",
+    "quotaExhausted": "Your {{provider}} account is out of credit.",
+    "rateLimited": "{{provider}} rate-limited the request. Wait a moment and try again.",
+    "modelNotFound": "{{provider}} doesn't recognize the model “{{model}}”.",
+    "modelNotFoundNoModel": "{{provider}} doesn't recognize the selected model.",
+    "payloadTooLarge": "This recording is too large for {{provider}}.",
+    "requestTooLarge": "This request is too large for {{provider}}.",
+    "badRequest": "{{provider}} couldn't process this request.",
+    "unavailable": "{{provider}} is having problems right now. Try again shortly.",
+    "timeout": "{{provider}} took too long to respond.",
+    "unreachable": "Couldn't reach {{provider}}. Check your connection.",
+    "noResponse": "Couldn't get a response from {{provider}}. Check your API key and connection.",
+    "unknown": "{{provider}} returned an unexpected error.",
+    "keyMissing": "No API key is set for {{provider}}. Add it in Settings → Language Models.",
+    "selfHosted": {
+      "authFailed": "Your server rejected the API key.",
+      "accessDenied": "Your server denied access. The key may not include this model.",
+      "quotaExhausted": "Your server says the account is out of credit.",
+      "rateLimited": "Your server rate-limited the request. Wait a moment and try again.",
+      "modelNotFound": "Your server doesn't recognize the model “{{model}}”.",
+      "modelNotFoundNoModel": "Your server doesn't recognize the selected model.",
+      "payloadTooLarge": "This recording is too large for your server.",
+      "requestTooLarge": "This request is too large for your server.",
+      "badRequest": "Your server couldn't process this request.",
+      "unavailable": "Your server is having problems right now. Try again shortly.",
+      "timeout": "Your server took too long to respond.",
+      "unreachable": "Couldn't reach your server. Check that it's running.",
+      "noResponse": "Couldn't get a response from your server. Check its API key and that it's running.",
+      "unknown": "Your server returned an unexpected error."
+    },
+    "openSettings": "Open Settings",
+    "copyDetails": "Copy details",
+    "titles": {
+      "transcription": "Transcription failed",
+      "llm": "AI request failed"
+    },
+    "details": {
+      "provider": "Provider",
+      "requestId": "Request ID"
+    }
   }
 }

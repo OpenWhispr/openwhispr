@@ -102,3 +102,77 @@ test("technical AWS details use the selected UI language", async (t) => {
   assert.match(markup, /Error subyacente: Bedrock overloaded/);
   assert.match(markup, /aria-label="Copiar detalles técnicos"/);
 });
+
+async function recordClassifiedCleanupFailure(t, { dictationWindow }) {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+    delete globalThis.__cleanupFailureToasts;
+  });
+  globalThis.__cleanupFailureToasts = [];
+  installBrowserGlobals(t);
+  const container = installHookDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-cleanup-failure-toast-llm-",
+    mockModules: {
+      "/ui/useToast": `
+        export const useToast = () => ({
+          toast: (props) => globalThis.__cleanupFailureToasts.push(props)
+        });
+      `,
+      "/utils/windowContext": `
+        export const isDictationPanelWindow = () => ${dictationWindow};
+      `,
+    },
+  });
+  const { default: CleanupFailureToastListener } = await vite.ssrLoadModule(
+    "/components/CleanupFailureToastListener.tsx"
+  );
+  const { default: i18n } = await vite.ssrLoadModule("/i18n.ts");
+  await i18n.changeLanguage("en");
+  const { recordCleanupFailure, useCleanupFailureStore } = await vite.ssrLoadModule(
+    "/stores/cleanupFailureStore.ts"
+  );
+  useCleanupFailureStore.setState({ pending: 0, lastMessage: "", lastFailure: null });
+
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(CleanupFailureToastListener)));
+
+  await React.act(async () =>
+    recordCleanupFailure({
+      message: "OpenAI rejected your API key.",
+      surface: "llm",
+      messageKey: "providerErrors.authFailed",
+      messageParams: { provider: "OpenAI" },
+      settingsTarget: "llms",
+      technicalDetails: { provider: "OpenAI", status: 401 },
+    })
+  );
+  return globalThis.__cleanupFailureToasts.at(-1);
+}
+
+test("a classified cleanup failure says why, then that the dictation went in raw, with Open Settings and Copy details", async (t) => {
+  const toastProps = await recordClassifiedCleanupFailure(t, { dictationWindow: false });
+  assert.equal(toastProps.title, "Cleanup failed");
+  assert.equal(
+    toastProps.description,
+    "OpenAI rejected your API key.\nOriginal dictation pasted without AI cleanup."
+  );
+  assert.deepEqual(
+    toastProps.actions.map(({ label, iconOnly }) => ({ label, iconOnly })),
+    [
+      { label: "Open Settings", iconOnly: undefined },
+      { label: "Copy details", iconOnly: true },
+    ]
+  );
+  assert.equal(toastProps.technicalDetails, undefined, "details are behind Copy details");
+  assert.equal(toastProps.secondaryDescription, undefined);
+  assert.equal(toastProps.presentation, undefined);
+});
+
+test("in the dictation window a classified cleanup failure uses the pill's error card", async (t) => {
+  const toastProps = await recordClassifiedCleanupFailure(t, { dictationWindow: true });
+  assert.equal(toastProps.presentation, "dictation-error");
+  assert.equal(toastProps.duration, 10_000);
+  assert.equal(toastProps.actions.length, 2);
+});

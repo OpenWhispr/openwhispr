@@ -10,6 +10,13 @@
         "expiry": "2026-11-01T00:00:00Z",
         "notes": "node-forge 1.4.0 is patched with the nested DigestAlgorithm validation from https://github.com/digitalbazaar/forge/pull/1152. npm audit cannot detect patch-package fixes. CI and postinstall run test:security against every locked copy before Expo tools run. Remove this exception and the patch when an upstream fixed release is installed; review by 2026-11-01."
       }
+    },
+    {
+      "GHSA-vfj7-8cjw-p6xm": {
+        "active": true,
+        "expiry": "2026-11-01T00:00:00Z",
+        "notes": "braces <=3.0.3 stack exhaustion on deeply nested patterns; no patched release exists (3.0.3 is the latest). It is reached only through build tooling (micromatch and chokidar under Metro, Jest and Tailwind) with glob patterns from the project's own config, never from app users or network input, and it is not in the app bundle. Remove this exception once a fixed braces release can be installed; review by 2026-11-01."
+      }
     }
   ]
 }

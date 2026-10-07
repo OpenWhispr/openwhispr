@@ -1,4 +1,5 @@
 import { DICTIONARY_ECHO_CODE } from "../utils/dictionaryEchoFilter.js";
+import { IPC_ERROR_FIELDS } from "./ipcErrorFields.js";
 
 // How a transcription failure ends, for batch recordings and re-uploaded
 // streaming ones alike. Silence is not reported. A transcript discarded as an
@@ -12,16 +13,14 @@ export const transcriptionFailureOutcome = (error) => {
   if (error.message === "No audio detected") {
     return { noAudio: true, keepAudio: false, report: null };
   }
-  return {
-    noAudio: false,
-    keepAudio: true,
-    report: {
-      title: error.selectionEditFatal ? "Selection Edit Failed" : "Transcription Error",
-      description: error.selectionEditFatal
-        ? error.message
-        : `Transcription failed: ${error.message}`,
-      code: error.code,
-      messageKey: error.messageKey,
-    },
+  const report = {
+    title: error.selectionEditFatal ? "Selection Edit Failed" : "Transcription Error",
+    description: error.selectionEditFatal
+      ? error.message
+      : `Transcription failed: ${error.message}`,
   };
+  for (const key of IPC_ERROR_FIELDS) {
+    if (error[key] !== undefined) report[key] = error[key];
+  }
+  return { noAudio: false, keepAudio: true, report };
 };

@@ -773,6 +773,10 @@
       "label": "Desactivar salida de razonamiento",
       "help": "Omite los tokens de razonamiento para una salida más limpia. Recomendado para limpieza. Algunos servidores ignoran esta indicación."
     },
+    "keepModelLoaded": {
+      "label": "Mantener el modelo cargado",
+      "help": "Permanece en memoria en lugar de liberarse tras 5 minutos de inactividad, así la siguiente solicitud evita el arranque en frío. Se aplica a todas las funciones que usan un modelo local."
+    },
     "selfHosted": {
       "endpointHelp": "Apunta a un servidor compatible con OpenAI en tu red local (p. ej. Ollama, LM Studio, vLLM o llama-server)."
     },
@@ -3717,6 +3721,10 @@
     "activationFailedDescription": "OpenWhispr cambió a la transcripción por CPU.",
     "reasoningActivationFailedDescription": "OpenWhispr cambió al procesamiento por CPU.",
     "retryActivation": "Reintentar aceleración GPU",
+    "redownloadNeeded": "Es necesario volver a descargar el paquete GPU",
+    "redownloadNeededDescription": "Esta versión de OpenWhispr no puede usar tu paquete GPU instalado. Vuelve a descargarlo para volver a activar la aceleración GPU.",
+    "redownloadButton": "Volver a descargar el paquete GPU",
+    "downloadFailed": "No se pudo descargar el paquete GPU.",
     "remove": "Eliminar",
     "dismiss": "Ahora no",
     "cancel": "Cancelar"
@@ -3744,7 +3752,7 @@
       },
       "gpuPackMigration": {
         "title": "Es necesario volver a descargar el paquete GPU",
-        "description": "Una actualización eliminó una instalación obsoleta del paquete GPU ({{packs}}). Vuelve a descargarlo en Configuración para restaurar la aceleración GPU."
+        "description": "Esta versión no puede usar tu paquete GPU anterior ({{packs}}). Vuelve a descargarlo en Configuración para volver a activar la aceleración GPU."
       },
       "cleanupFailed": {
         "title": "Limpieza fallida",
@@ -4766,5 +4774,48 @@
     },
     "start": "Tomar notas",
     "join": "Unirse y transcribir"
+  },
+  "providerErrors": {
+    "authFailed": "{{provider}} rechazó tu clave de API.",
+    "accessDenied": "{{provider}} denegó el acceso. Es posible que tu clave no incluya este modelo.",
+    "quotaExhausted": "Tu cuenta de {{provider}} se ha quedado sin crédito.",
+    "rateLimited": "{{provider}} limitó la solicitud. Espera un momento e inténtalo de nuevo.",
+    "modelNotFound": "{{provider}} no reconoce el modelo «{{model}}».",
+    "modelNotFoundNoModel": "{{provider}} no reconoce el modelo seleccionado.",
+    "payloadTooLarge": "Esta grabación es demasiado grande para {{provider}}.",
+    "requestTooLarge": "Esta solicitud es demasiado grande para {{provider}}.",
+    "badRequest": "{{provider}} no pudo procesar esta solicitud.",
+    "unavailable": "{{provider}} está teniendo problemas en este momento. Inténtalo de nuevo en breve.",
+    "timeout": "{{provider}} tardó demasiado en responder.",
+    "unreachable": "No se pudo conectar con {{provider}}. Comprueba tu conexión.",
+    "noResponse": "No se recibió respuesta de {{provider}}. Comprueba tu clave de API y tu conexión.",
+    "unknown": "{{provider}} devolvió un error inesperado.",
+    "keyMissing": "No hay ninguna clave de API configurada para {{provider}}. Añádela en Ajustes → Modelos de lenguaje.",
+    "selfHosted": {
+      "authFailed": "Tu servidor rechazó la clave de API.",
+      "accessDenied": "Tu servidor denegó el acceso. Es posible que la clave no incluya este modelo.",
+      "quotaExhausted": "Tu servidor indica que la cuenta se ha quedado sin crédito.",
+      "rateLimited": "Tu servidor limitó la solicitud. Espera un momento e inténtalo de nuevo.",
+      "modelNotFound": "Tu servidor no reconoce el modelo «{{model}}».",
+      "modelNotFoundNoModel": "Tu servidor no reconoce el modelo seleccionado.",
+      "payloadTooLarge": "Esta grabación es demasiado grande para tu servidor.",
+      "requestTooLarge": "Esta solicitud es demasiado grande para tu servidor.",
+      "badRequest": "Tu servidor no pudo procesar esta solicitud.",
+      "unavailable": "Tu servidor está teniendo problemas en este momento. Inténtalo de nuevo en breve.",
+      "timeout": "Tu servidor tardó demasiado en responder.",
+      "unreachable": "No se pudo conectar con tu servidor. Comprueba que esté en funcionamiento.",
+      "noResponse": "No se recibió respuesta de tu servidor. Comprueba su clave de API y que esté en funcionamiento.",
+      "unknown": "Tu servidor devolvió un error inesperado."
+    },
+    "openSettings": "Abrir Ajustes",
+    "copyDetails": "Copiar detalles",
+    "titles": {
+      "transcription": "Error de transcripción",
+      "llm": "Error en la solicitud de IA"
+    },
+    "details": {
+      "provider": "Proveedor",
+      "requestId": "ID de solicitud"
+    }
   }
 }

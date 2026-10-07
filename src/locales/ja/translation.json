@@ -773,6 +773,10 @@
       "label": "思考出力を無効にする",
       "help": "推論トークンをスキップして出力をクリーンに保ちます。クリーンアップに推奨。一部のサーバーはこのヒントを無視します。"
     },
+    "keepModelLoaded": {
+      "label": "モデルを読み込んだままにする",
+      "help": "5分間使われなくてもアンロードせずメモリに保持するため、次のリクエストでコールドスタートが発生しません。ローカルモデルを使うすべての機能に適用されます。"
+    },
     "selfHosted": {
       "endpointHelp": "ローカルネットワーク上の OpenAI 互換サーバーを指定します（例: Ollama、LM Studio、vLLM、llama-server）。"
     },
@@ -3664,6 +3668,10 @@
     "activationFailedDescription": "OpenWhispr は CPU 文字起こしに切り替えました。",
     "reasoningActivationFailedDescription": "OpenWhispr は CPU 処理に切り替えました。",
     "retryActivation": "GPU アクセラレーションを再試行",
+    "redownloadNeeded": "GPU パックの再ダウンロードが必要です",
+    "redownloadNeededDescription": "このバージョンの OpenWhispr はインストール済みの GPU パックを使用できません。再ダウンロードすると GPU アクセラレーションが再び有効になります。",
+    "redownloadButton": "GPU パックを再ダウンロード",
+    "downloadFailed": "GPU パックをダウンロードできませんでした。",
     "remove": "削除",
     "dismiss": "後で",
     "cancel": "キャンセル"
@@ -3691,7 +3699,7 @@
       },
       "gpuPackMigration": {
         "title": "GPU パックの再ダウンロードが必要です",
-        "description": "アップデートにより古い GPU パックのインストール（{{packs}}）が削除されました。設定から再ダウンロードすると GPU アクセラレーションが復元されます。"
+        "description": "このバージョンでは以前の GPU パック（{{packs}}）を使用できません。設定から再ダウンロードすると GPU アクセラレーションが再び有効になります。"
       },
       "cleanupFailed": {
         "title": "クリーンアップに失敗しました",
@@ -4766,5 +4774,48 @@
     },
     "start": "メモを取る",
     "join": "参加して文字起こし"
+  },
+  "providerErrors": {
+    "authFailed": "{{provider}} がAPIキーを拒否しました。",
+    "accessDenied": "{{provider}} がアクセスを拒否しました。お使いのキーがこのモデルに対応していない可能性があります。",
+    "quotaExhausted": "{{provider}} アカウントのクレジットが不足しています。",
+    "rateLimited": "{{provider}} がリクエストを制限しました。しばらく待ってからもう一度お試しください。",
+    "modelNotFound": "{{provider}} はモデル「{{model}}」を認識できません。",
+    "modelNotFoundNoModel": "{{provider}} は選択されたモデルを認識できません。",
+    "payloadTooLarge": "この録音は {{provider}} には大きすぎます。",
+    "requestTooLarge": "このリクエストは {{provider}} には大きすぎます。",
+    "badRequest": "{{provider}} はこのリクエストを処理できませんでした。",
+    "unavailable": "{{provider}} で現在問題が発生しています。しばらくしてから再度お試しください。",
+    "timeout": "{{provider}} からの応答に時間がかかりすぎました。",
+    "unreachable": "{{provider}} に接続できませんでした。接続を確認してください。",
+    "noResponse": "{{provider}} から応答がありませんでした。APIキーと接続を確認してください。",
+    "unknown": "{{provider}} から予期しないエラーが返されました。",
+    "keyMissing": "{{provider}} のAPIキーが設定されていません。設定 → 言語モデル から追加してください。",
+    "selfHosted": {
+      "authFailed": "サーバーがAPIキーを拒否しました。",
+      "accessDenied": "サーバーがアクセスを拒否しました。キーがこのモデルに対応していない可能性があります。",
+      "quotaExhausted": "サーバーがアカウントのクレジット不足を報告しています。",
+      "rateLimited": "サーバーがリクエストを制限しました。しばらく待ってからもう一度お試しください。",
+      "modelNotFound": "サーバーはモデル「{{model}}」を認識できません。",
+      "modelNotFoundNoModel": "サーバーは選択されたモデルを認識できません。",
+      "payloadTooLarge": "この録音はサーバーには大きすぎます。",
+      "requestTooLarge": "このリクエストはサーバーには大きすぎます。",
+      "badRequest": "サーバーはこのリクエストを処理できませんでした。",
+      "unavailable": "サーバーで現在問題が発生しています。しばらくしてから再度お試しください。",
+      "timeout": "サーバーからの応答に時間がかかりすぎました。",
+      "unreachable": "サーバーに接続できませんでした。サーバーが起動しているか確認してください。",
+      "noResponse": "サーバーから応答がありませんでした。APIキーとサーバーが起動しているかを確認してください。",
+      "unknown": "サーバーから予期しないエラーが返されました。"
+    },
+    "openSettings": "設定を開く",
+    "copyDetails": "詳細をコピー",
+    "titles": {
+      "transcription": "文字起こしに失敗しました",
+      "llm": "AIリクエストに失敗しました"
+    },
+    "details": {
+      "provider": "プロバイダー",
+      "requestId": "リクエストID"
+    }
   }
 }
