@@ -131,15 +131,21 @@ On GNOME and KDE, the first automatic paste can show a remote-interaction permis
 
 **Symptoms:** The dictation pill or other transparent windows flicker
 
-**Fix:** Turn off GPU compositing (OpenWhispr already does this on NVIDIA's proprietary driver). With the official AppImage, deb, rpm or tar.gz build, add this line to `~/.config/open-whispr-flags.conf` (`$XDG_CONFIG_HOME/open-whispr-flags.conf` if you set `XDG_CONFIG_HOME`; create the file if it doesn't exist):
+**Cause:** OpenWhispr composites on the GPU, except whenever an NVIDIA driver is loaded, where it already composites on the CPU. Some other drivers can flicker transparent windows too.
 
-```text
---disable-gpu-compositing
-```
+**Fix:**
 
-Then quit OpenWhispr and start it again. Closing the window only hides it, so quit from the tray icon, or, if your desktop shows no tray icon (GNOME without the AppIndicator extension), run `pkill -x open-whispr-app`.
+1. With the official AppImage, deb, rpm or tar.gz build, add this line to `~/.config/open-whispr-flags.conf` (`$XDG_CONFIG_HOME/open-whispr-flags.conf` if you set `XDG_CONFIG_HOME`; create the file if it doesn't exist, and save it with Unix (LF) line endings):
+
+   ```text
+   --disable-gpu-compositing
+   ```
+
+2. Quit OpenWhispr and start it again. Closing the window only hides it, so quit from the tray icon, or, if your desktop shows no tray icon (GNOME without the AppIndicator extension), run `pkill -x open-whispr-app`.
 
 The interface then composites on the CPU, so hover effects and scrolling can feel slower. Delete the line to undo it.
+
+When you report the flicker, add `--log-level=debug` on its own line in the same file, restart, and attach the newest `~/.config/OpenWhispr/logs/debug-*.log`. Its "Linux GPU compositing" line shows which mode OpenWhispr started in.
 
 ### Linux System Audio PipeWire Issues
 

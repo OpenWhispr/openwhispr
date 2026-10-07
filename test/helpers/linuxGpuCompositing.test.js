@@ -19,13 +19,13 @@ function withPlatform(platform, run) {
 const nvidiaLoaded = (filePath) => filePath === NVIDIA_DRIVER_VERSION_PATH;
 const noNvidia = () => false;
 
-test("keeps CPU compositing on Linux while the NVIDIA proprietary driver is loaded", () => {
+test("keeps CPU compositing on Linux while an NVIDIA driver is loaded", () => {
   withPlatform("linux", () => {
     assert.equal(shouldDisableGpuCompositing(nvidiaLoaded), true);
   });
 });
 
-test("composites on the GPU on Linux without the NVIDIA proprietary driver", () => {
+test("composites on the GPU on Linux without an NVIDIA driver", () => {
   withPlatform("linux", () => {
     assert.equal(shouldDisableGpuCompositing(noNvidia), false);
   });

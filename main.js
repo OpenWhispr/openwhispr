@@ -114,7 +114,7 @@ if (process.platform === "linux") {
   app.commandLine.appendSwitch("enable-transparent-visuals");
 }
 
-// Linux composites on the GPU except on NVIDIA's proprietary driver (#203). Anyone else whose
+// Linux composites on the GPU except while an NVIDIA driver is loaded (#203). Anyone else whose
 // transparent windows flicker can add --disable-gpu-compositing to the launcher's flags file
 // (scripts/lib/linux-launcher.js).
 const gpuCompositingDisabledForNvidia = shouldDisableGpuCompositing();
@@ -454,7 +454,8 @@ function initializeCoreManagers() {
   debugLogger = require("./src/helpers/debugLogger");
   debugLogger.ensureFileLogging();
   if (process.platform === "linux") {
-    // The compositing mode is final once the GPU process has reported its info.
+    // The compositing mode is settled once the GPU process has reported its info; a GPU
+    // process crash can still drop it to software later, logged below.
     app
       .getGPUInfo("basic")
       .catch(() => {})
