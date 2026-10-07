@@ -86,7 +86,7 @@ async function fixture(t, fetchImpl) {
         assert.equal(options.headers.Authorization, "Bearer account-a");
         assert.equal(options.headers["x-openwhispr-policy-version"], "1");
         // The server mints only for builds that declare they can run Orukeet.
-        assert.equal(options.headers["x-openwhispr-capabilities"], "orukeet");
+        assert.equal(options.headers["x-openwhispr-capabilities"], "orukeet,orukeet-pipeline-v2");
         assert.equal(options.useSessionCookies, false);
         assert.equal(options.redirect, "error");
         return Response.json(session());

@@ -1012,11 +1012,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   isSttConfigStale(now = Date.now()) {
     // Re-check opt-in language experiments frequently so a server rollback
     // takes effect on the next recording after at most 30 s of cached config.
-    const ttl = ["shadow", "supported-0.30", "supported-0.10"].includes(
-      this.sttConfig?.orukeetLanguageRouting
-    )
-      ? 30000
-      : STT_CONFIG_TTL_MS;
+    const ttl =
+      ["shadow", "supported-0.30", "supported-0.10"].includes(
+        this.sttConfig?.orukeetLanguageRouting
+      ) || this.sttConfig?.orukeetPipeline === "gemma12"
+        ? 30000
+        : STT_CONFIG_TTL_MS;
     return !this.sttConfig || !this.sttConfigFetchedAt || now - this.sttConfigFetchedAt > ttl;
   }
 
@@ -4364,6 +4365,27 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return this.sttConfig.dictation?.mode === "streaming";
   }
 
+  getPipelineCleanupOptions(settings) {
+    if (
+      this.sttConfig?.orukeetPipeline !== "gemma12" ||
+      settings.useLocalWhisper ||
+      settings.cloudTranscriptionMode !== "openwhispr" ||
+      !settings.useCleanupModel ||
+      !isCloudCleanupMode() ||
+      (settings.cleanupCloudMode || "openwhispr") !== "openwhispr" ||
+      this.voiceAgentRequested ||
+      this.translationRequested
+    )
+      return undefined;
+    return {
+      agentName: getAgentName() || "",
+      customDictionary: getDictionaryHintWords(settings),
+      customPrompt: settings.customPrompts?.cleanup || undefined,
+      language: this.getCleanupLanguage(settings) || undefined,
+      locale: settings.uiLanguage || "en",
+    };
+  }
+
   async warmupStreamingConnection({ isSignedIn: isSignedInOverride } = {}) {
     if (!this.isRecordingAllowedByPolicy()) {
       logger.debug("Streaming warmup skipped by workspace policy", {}, "streaming");
@@ -4388,6 +4410,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               language: settings.preferredLanguage,
               keyterms: this.getKeyterms(),
               voiceAgentRequested: this.voiceAgentRequested,
+              pipelineOptions: this.getPipelineCleanupOptions(settings),
             })
           );
           // Throw error to trigger retry if AUTH_EXPIRED
@@ -4819,6 +4842,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             language: this.getEffectiveSttLanguage(streamingSettings),
             keyterms: this.getKeyterms(),
             voiceAgentRequested: this.voiceAgentRequested,
+            pipelineOptions: this.getPipelineCleanupOptions(streamingSettings),
           })
         );
 
@@ -5445,34 +5469,42 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           );
         } else if (route.kind === "cleanup" && cleanupCloudMode === "openwhispr") {
           const customPrompt = this.getCustomPrompt();
-          const reasonResult = await withSessionRefresh(async () => {
-            const res = await window.electronAPI.cloudReason(finalText, {
-              agentName,
-              promptMode: "cleanup",
-              purpose: "cleanup",
-              customDictionary: getDictionaryHintWords(stSettings),
-              customPrompt,
-              language: this.getCleanupLanguage(stSettings),
-              locale: stSettings.uiLanguage || "en",
-              sttProvider: this.getStreamingProviderName(),
-              sttModel: streamingSttModel,
-              sttProcessingMs: streamingSttProcessingMs,
-              sttWordCount: streamingSttWordCount,
-              sttLanguage: streamingSttLanguage,
-              ...detectedLanguageFields,
-              audioDurationMs: durationSeconds ? Math.round(durationSeconds * 1000) : undefined,
-              audioSizeBytes: streamingAudioBytesSent || undefined,
-              audioFormat: "linear16",
-            });
-            if (!res.success) {
-              const err = new Error(res.error || "Cloud reasoning failed");
-              err.code = res.code;
-              throw err;
-            }
-            return res;
-          });
+          const combined =
+            orukeetFinal?.cleanupStatus === "complete" &&
+            JSON.stringify(orukeetFinal.cleanupOptions) ===
+              JSON.stringify(this.getPipelineCleanupOptions(stSettings)) &&
+            typeof orukeetFinal.cleanupText === "string" &&
+            hasTextContent(orukeetFinal.cleanupText);
+          const reasonResult = combined
+            ? { success: true, text: orukeetFinal.cleanupText, model: "gemma-4-12b" }
+            : await withSessionRefresh(async () => {
+                const res = await window.electronAPI.cloudReason(finalText, {
+                  agentName,
+                  promptMode: "cleanup",
+                  purpose: "cleanup",
+                  customDictionary: getDictionaryHintWords(stSettings),
+                  customPrompt,
+                  language: this.getCleanupLanguage(stSettings),
+                  locale: stSettings.uiLanguage || "en",
+                  sttProvider: this.getStreamingProviderName(),
+                  sttModel: streamingSttModel,
+                  sttProcessingMs: streamingSttProcessingMs,
+                  sttWordCount: streamingSttWordCount,
+                  sttLanguage: streamingSttLanguage,
+                  ...detectedLanguageFields,
+                  audioDurationMs: durationSeconds ? Math.round(durationSeconds * 1000) : undefined,
+                  audioSizeBytes: streamingAudioBytesSent || undefined,
+                  audioFormat: "linear16",
+                });
+                if (!res.success) {
+                  const err = new Error(res.error || "Cloud reasoning failed");
+                  err.code = res.code;
+                  throw err;
+                }
+                return res;
+              });
 
-          usedCloudReasoning = true;
+          usedCloudReasoning = !combined;
           if (reasonResult.success && hasTextContent(reasonResult.text)) {
             if (!customPrompt) assertValidCleanupOutput(finalText, reasonResult.text);
             finalText = reasonResult.text;
@@ -5690,7 +5722,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           try {
             await withSessionRefresh(async () => {
               const res = await window.electronAPI.cloudStreamingUsage(
-                finalText,
+                orukeetFinal ? rawStreamingText : finalText,
                 durationSeconds ?? 0,
                 {
                   sendLogs: !usedCloudReasoning,

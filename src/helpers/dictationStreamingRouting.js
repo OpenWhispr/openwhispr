@@ -187,6 +187,7 @@ export function buildStreamingSessionOptions({
   language,
   keyterms,
   voiceAgentRequested = false,
+  pipelineOptions,
 }) {
   const options = {
     provider: providerName,
@@ -205,6 +206,7 @@ export function buildStreamingSessionOptions({
   }
   if (providerName === "orukeet") {
     options.model = ORUKEET_MODEL;
+    if (options.mode !== "byok" && pipelineOptions) options.pipelineOptions = pipelineOptions;
     if (options.mode === "byok") {
       options.baseUrl = settings.remoteTranscriptionUrl || settings.cloudTranscriptionBaseUrl;
     }

@@ -92,6 +92,14 @@ export interface NoteRecordingProvider {
 // main process defaults a missing value to "openai-realtime" for pre-1.8.4
 // renderers (#1624).
 export interface DictationRealtimeSessionOptions {
+  pipelineOptions?: {
+    agentName?: string;
+    customDictionary?: string[];
+    customPrompt?: string;
+    language?: string;
+    locale?: string;
+    tone?: string;
+  };
   provider: string;
   baseUrl?: string;
   model?: string;
@@ -1293,6 +1301,7 @@ declare global {
             dictation?: { mode: string };
             notes?: { mode: string };
             streamingProvider?: string;
+            orukeetPipeline?: "gemma12";
             orukeetLanguageRouting?: "off" | "shadow" | "supported-0.30" | "supported-0.10";
           } & PolicyFailureMetadata)
         | null

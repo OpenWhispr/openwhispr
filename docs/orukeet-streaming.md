@@ -52,3 +52,34 @@ Orukeet transcribes 25 languages (`bg cs da de el en es et fi fr hr hu it lt lv 
 - With cloud cleanup on, a re-transcribed wake-word command or selection edit writes no transcription log, so the gate never sees its estimate. The Cloud batch path decides whether to log before it knows the route, and only cleanup writes the combined log.
 
 The 0.90 threshold is Oruk's classifier score, not a calibrated probability. It caught 92% of unsupported FLEURS clips at 6 seconds and 62.5% at 3 seconds, while flagging 0.4% and 1.2% of supported ones. See [streaming language metadata](orukeet-streaming-language.md). The final carries the latest completed estimate, so the 3-second estimate decides only recordings shorter than 6 seconds. The desktop acts on it rather than waiting because a false flag costs one batch round trip and counts once toward the backend gate, while a miss pastes nonsense.
+
+## Combined cloud cleanup
+
+An updated backend can return `orukeetPipeline: "gemma12"` with the normal
+Orukeet streaming configuration. This desktop declares `orukeet-pipeline-v2`
+and uses it only for ordinary managed cloud cleanup. Local/BYOK, voice-agent,
+translation and the separate supported-language-score cohort keep their paths.
+
+The main process calls `POST /api/stt/orukeet/pipeline-session` with cleanup
+options (dictionary, custom prompt, language, locale and agent name). The backend
+builds the same prompt as `/api/reason`, applies account/policy/usage checks, and
+returns a single-use, 60-second grant. The desktop accepts only the fixed
+OpenWhispr hostname and the documented Gemma 12B regional paths. Both the grant
+and WebSocket `ready` must confirm account limits.
+
+Audio streams while recording. The one final result carries raw ASR and cleaned
+text separately; ordinary cleanup reuses the latter only if it completed and the
+settings still match. Otherwise it uses the existing cleanup call. Language
+fallback keeps its own transcript and cleanup. Duplicate finals cannot paste or
+submit usage twice, and a canceled recording cannot return a final.
+
+Completed GPU cleanup includes a signed, account-bound token-usage receipt.
+The main process relays it to `/api/stt/orukeet/pipeline-usage`, retrying transient
+failures three times without holding up paste. The backend verifies the signature
+and deduplicates its UUID. This is token telemetry, not an extra word charge or a
+durable offline billing channel; raw ASR words still go through the existing
+idempotent `/api/streaming-usage` request.
+
+The combined configuration refreshes after 30 seconds. Disabling the backend
+pipeline flag refuses new grants immediately; the desktop retains captured audio
+and uses its existing authorized fallback. Already active recordings can finish.

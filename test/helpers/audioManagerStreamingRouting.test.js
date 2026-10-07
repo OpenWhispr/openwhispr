@@ -629,3 +629,11 @@ test("opt-in language routing refreshes within 30 seconds for rollback without c
     assert.equal(manager.isSttConfigStale(at + 900001), true);
   }
 });
+
+test("combined-pipeline config expires after 30 seconds even when language routing is off", async (t) => {
+  const manager = await loadManager(t);
+  manager.setSttConfig({ orukeetLanguageRouting: "off", orukeetPipeline: "gemma12" });
+  const at = manager.sttConfigFetchedAt;
+  assert.equal(manager.isSttConfigStale(at + 30000), false);
+  assert.equal(manager.isSttConfigStale(at + 30001), true);
+});

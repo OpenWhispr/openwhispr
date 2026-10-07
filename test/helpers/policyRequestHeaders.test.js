@@ -9,12 +9,12 @@ const {
 
 test("adds the exact policy capability, canonical app version and client capability headers", () => {
   assert.equal(POLICY_CAPABILITY_VERSION, "1");
-  assert.equal(CLIENT_CAPABILITIES, "orukeet");
+  assert.equal(CLIENT_CAPABILITIES, "orukeet,orukeet-pipeline-v2");
   assert.deepEqual(withPolicyRequestHeaders({ Authorization: "Bearer token" }, "1.8.1"), {
     Authorization: "Bearer token",
     "x-openwhispr-policy-version": "1",
     "x-openwhispr-version": "1.8.1",
-    "x-openwhispr-capabilities": "orukeet",
+    "x-openwhispr-capabilities": "orukeet,orukeet-pipeline-v2",
   });
 });
 
@@ -31,7 +31,7 @@ test("does not allow callers to override desktop policy capability headers", () 
     {
       "x-openwhispr-policy-version": "1",
       "x-openwhispr-version": "1.8.1",
-      "x-openwhispr-capabilities": "orukeet",
+      "x-openwhispr-capabilities": "orukeet,orukeet-pipeline-v2",
     }
   );
 });

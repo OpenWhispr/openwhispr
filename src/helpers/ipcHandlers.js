@@ -8473,6 +8473,7 @@ class IPCHandlers {
         options.mode,
         options.model,
         options.baseUrl,
+        options.pipelineOptions,
       ]);
 
     const connectDictationStreaming = async (event, options) => {
@@ -8506,6 +8507,8 @@ class IPCHandlers {
           provider === "orukeet"
             ? new OrukeetStreaming(isCloud ? MANAGED_STREAM_OPTIONS : {})
             : new OpenAIRealtimeStreaming();
+        streaming.onUsageError = () =>
+          debugLogger.error("Combined cleanup usage could not be recorded");
         setupDictationCallbacks(streaming, event);
         // Assign before the token fetch (a real network round trip) so
         // dictation-realtime-send has a live instance to buffer into instead
@@ -8522,6 +8525,7 @@ class IPCHandlers {
                 proxyFetch,
                 tokenStore,
                 withPolicyHeaders,
+                pipelineOptions: options.pipelineOptions,
               });
             } else {
               await streaming.connect({

@@ -1785,3 +1785,61 @@ test("group-score fallback failure still discards the unsupported transcript", a
   );
   assert.equal(r.errors.length, 1);
 });
+
+test("combined cleanup is reused once, while changed options or failed cleanup use the ordinary route", async (t) => {
+  const AudioManager = await loadManagerClass(t, {
+    "/stores/settingsStore": `
+      export const getSettings = () => globalThis.__streamingFinalizationSettings;
+      export const getEffectiveCleanupModel = () => null;
+      export const selectResolvedLLMConfig = () => ({ model: null, provider: null });
+      export const isCloudCleanupMode = () => true;
+      export const isCloudDictationAgentMode = () => false;
+      export const isCloudTranslationMode = () => false;
+    `,
+  });
+  for (const [cleanupStatus, changed, calls] of [
+    ["complete", false, 0],
+    ["complete", true, 1],
+    ["fallback", false, 1],
+  ]) {
+    const options = { customDictionary: ["Orukeet"], language: "en" };
+    const { reasonCalls, usage, published } = await stopManagedDictation(AudioManager, {
+      final: {
+        success: true,
+        text: "please send invoice 128",
+        cleanupStatus,
+        cleanupText: "Please send invoice 128.",
+        cleanupOptions: options,
+      },
+      settings: { useCleanupModel: true, cleanupCloudMode: "openwhispr", customPrompts: {} },
+      overrides: {
+        getPipelineCleanupOptions: () => (changed ? { ...options, language: "fr" } : options),
+        finalizeChineseScript: async (text) => text,
+      },
+    });
+    assert.equal(reasonCalls.length, calls);
+    assert.equal(published[0].rawText, "please send invoice 128");
+    assert.equal(
+      published[0].text,
+      calls ? "please send invoice 128。" : "Please send invoice 128."
+    );
+    assert.equal(usage.length, 1);
+  }
+});
+
+test("combined text never replaces an unsupported-language fallback", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const { uploads, published, reasonCalls } = await stopManagedDictation(AudioManager, {
+    final: {
+      ...JA_FINAL,
+      cleanupStatus: "complete",
+      cleanupText: "Wrong cleanup.",
+      cleanupOptions: {},
+    },
+    upload: async () => ({ text: "明日の会議", rawText: "明日の会議" }),
+    overrides: { getPipelineCleanupOptions: () => ({}) },
+  });
+  assert.equal(uploads.length, 1);
+  assert.equal(reasonCalls.length, 0);
+  assert.equal(published[0].text, "明日の会議");
+});
