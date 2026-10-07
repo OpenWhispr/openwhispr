@@ -145,7 +145,10 @@ test("unset upload/meeting local providers inherit dictation, and onboarding mir
     assert.equal(state().localTranscriptionProvider, "nvidia");
     assert.equal(state().uploadLocalTranscriptionProvider, "nvidia");
     assert.equal(state().meetingLocalTranscriptionProvider, "nvidia");
-    assert.equal(selectResolvedUploadTranscription(state()).localTranscriptionProvider, "nvidia");
+    assert.equal(
+      selectResolvedUploadTranscription(state(), state()).localTranscriptionProvider,
+      "nvidia"
+    );
     assert.equal(selectResolvedMeetingTranscription(state()).localTranscriptionProvider, "nvidia");
   });
 
