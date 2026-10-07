@@ -379,7 +379,7 @@ export function useChatStreaming({
                 name: "grounded_product_help",
                 arguments: "{}",
                 status: "completed",
-                result: t("productHelp.essentials"),
+                result: t("productHelp.guidance"),
                 metadata: result.metadata,
               },
             ];
