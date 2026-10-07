@@ -111,7 +111,7 @@ export function AssistantPanel({
   onConversationReset,
   onSelectionContextChange,
 }: AssistantPanelProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const { handleMouseDown, handleMouseUp } = useWindowDrag();
   const voiceAgentKey = useSettingsStore((state) => state.voiceAgentKey);
@@ -158,9 +158,12 @@ export function AssistantPanel({
     copy: handleCopy,
     copyText,
     confirmCopied,
-  } = useCopyFeedback(helpAnswerPlainText(responseContent, helpEvidence, t), {
-    resetMs: MANUAL_COPY_FEEDBACK_MS,
-  });
+  } = useCopyFeedback(
+    helpAnswerPlainText(responseContent, helpEvidence, t, i18n?.resolvedLanguage),
+    {
+      resetMs: MANUAL_COPY_FEEDBACK_MS,
+    }
+  );
 
   useEffect(() => {
     onConversationIdChange(persistence.conversationId);
@@ -523,7 +526,6 @@ export function AssistantPanel({
                     content={displayedResponse}
                     className="text-[15px] leading-relaxed text-foreground selection:bg-agent-brand/35 selection:text-foreground [&_p]:text-[15px] [&_li]:text-[15px]"
                   />
-                  {helpEvidence && <HelpEvidence evidence={helpEvidence} />}
                   {latestAssistantMessage?.isStreaming && (
                     <span
                       className="ms-0.5 inline-block h-4 w-0.5 align-middle bg-foreground/70"
@@ -531,6 +533,7 @@ export function AssistantPanel({
                     />
                   )}
                 </div>
+                {helpEvidence && <HelpEvidence evidence={helpEvidence} />}
                 {/* Outside responseSelectionRootRef: a drag-select + copy over the
                     response must never pick up these affordances. */}
                 {latestAssistantMessage?.error?.settingsTarget && (

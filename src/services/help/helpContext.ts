@@ -6,7 +6,7 @@ export function projectHelpSettings(
   basics: HelpBasics,
   chat: { mode: string; provider: string },
   agentAllowed: boolean
-) {
+): Record<string, string | boolean | null> {
   const values: Record<string, string | boolean | null> = {};
   const add = (key: string, value: unknown) => {
     values[key] =
@@ -22,26 +22,14 @@ export function projectHelpSettings(
     add("translationKey", state.translationKey);
     add("meetingKey", state.meetingKey);
     add("activationMode", state.activationMode);
-    add(
-      "activationModeLabel",
-      state.activationMode === "push" ? "Hold" : state.activationMode === "tap" ? "Tap" : null
-    );
   }
   if (topic === "microphone" || topic === "meetings") {
     add("microphoneSelectionMode", state.microphoneSelectionMode);
-    const microphoneLabels: Record<string, string> = {
-      system: "System Default",
-      "built-in": "Prefer Built-in Microphone",
-      specific: "Specific microphone",
-    };
-    add("microphoneSelectionModeLabel", microphoneLabels[String(state.microphoneSelectionMode)]);
-    if (state.microphoneSelectionMode === "specific")
-      add("selectedMicDeviceLabel", state.selectedMicDeviceLabel);
     add("microphonePermission", basics.microphonePermission);
   }
   if (topic === "meetings") add("systemAudioPermission", basics.systemAudioPermission);
   if (topic === "models" || topic === "meetings") {
-    const engine = (prefix: string) => {
+    const engine = (prefix: string): string | null => {
       const key = (name: string) =>
         prefix ? prefix + name[0].toUpperCase() + name.slice(1) : name;
       const mode = state[key("transcriptionMode")];

@@ -1,39 +1,51 @@
+import registry from "../../models/modelRegistryData.json";
 import type { TFunction } from "i18next";
+import { formatHotkeyListLabel } from "../../utils/hotkeys";
 import type { HelpEvidenceData } from "./helpEvidence";
 import { markdownToPlainText } from "../../helpers/markdownToPlainText";
 
 const factLabels: Record<string, string> = {
-  "App version": "productHelp.appVersion",
-  Platform: "productHelp.platform",
-  "OS version": "productHelp.osVersion",
-  "Dictation shortcut": "settingsPage.general.hotkey.title",
-  "Voice Assistant shortcut": "settingsPage.general.voiceAgentHotkey.title",
-  "Translation shortcut": "settingsPage.general.translationHotkey.title",
-  "Meeting shortcut": "settingsPage.general.meetingHotkey.title",
-  "Activation mode": "settingsPage.general.hotkey.activationMode",
-  "Microphone selection": "microphoneSettings.inputDevice",
-  "Selected microphone": "settingsPage.general.microphone.title",
-  "Microphone permission": "onboarding.permissions.microphoneTitle",
-  "Accessibility permission": "onboarding.permissions.accessibilityTitle",
-  "System audio permission": "settingsPage.permissions.systemAudioTitle",
-  "Assistant allowed by policy": "productHelp.policy",
-  "Chat provider": "providerErrors.details.provider",
-  "Interface language": "settings.language.uiLabel",
-  "Transcription language": "settings.language.transcriptionLabel",
-  "Cloud backup": "settingsPage.privacy.cloudBackup",
-  "Google Calendar connected": "integrations.googleCalendar.title",
-  "Microsoft Calendar connected": "integrations.microsoftCalendar.title",
-  "Apple Calendar connected": "integrations.appleCalendar.title",
+  appVersion: "productHelp.appVersion",
+  platform: "productHelp.platform",
+  dictationKey: "settingsPage.general.hotkey.title",
+  voiceAgentKey: "settingsPage.general.voiceAgentHotkey.title",
+  translationKey: "settingsPage.general.translationHotkey.title",
+  meetingKey: "settingsPage.general.meetingHotkey.title",
+  activationMode: "settingsPage.general.hotkey.activationMode",
+  microphoneSelectionMode: "microphoneSettings.inputDevice",
+  microphonePermission: "productHelp.microphonePermission",
+  accessibilityPermission: "onboarding.permissions.accessibilityTitle",
+  systemAudioPermission: "settingsPage.permissions.systemAudioTitle",
+  agentAllowed: "productHelp.policy",
+  chatProvider: "providerErrors.details.provider",
+  uiLanguage: "settings.language.uiLabel",
+  preferredLanguage: "settings.language.transcriptionLabel",
+  cloudBackupEnabled: "settingsPage.privacy.cloudBackup",
+  gcalConnected: "integrations.googleCalendar.title",
+  mcalConnected: "integrations.microsoftCalendar.title",
+  appleCalendarConnected: "integrations.appleCalendar.title",
 };
-const activities: Record<string, string> = {
-  Dictation: "settingsPage.speechToText.tabs.dictation",
-  Meeting: "settingsPage.speechToText.tabs.noteRecording",
-  Upload: "settingsPage.speechToText.tabs.upload",
-  Chat: "settingsPage.llms.tabs.chatIntelligence",
-  "Voice Assistant": "settingsPage.llms.tabs.dictationAgent",
-  Cleanup: "settingsPage.llms.tabs.dictationCleanup",
+const activityKeys: Record<string, [string, string]> = {
+  transcriptionMode: ["dictation", "processing"],
+  meetingTranscriptionMode: ["noteRecording", "processing"],
+  uploadTranscriptionMode: ["upload", "processing"],
+  dictationEngine: ["dictation", "engine"],
+  meetingEngine: ["noteRecording", "engine"],
+  uploadEngine: ["upload", "engine"],
 };
 const factValues: Record<string, string> = {
+  push: "common.hold",
+  tap: "common.tap",
+  system: "microphoneSettings.systemDefault",
+  "built-in": "microphoneSettings.preferBuiltIn.label",
+  "Prefer Built-in Microphone": "microphoneSettings.preferBuiltIn.label",
+  specific: "productHelp.specificMicrophone",
+  "Specific microphone": "productHelp.specificMicrophone",
+  granted: "productHelp.permissionGranted",
+  denied: "productHelp.permissionDenied",
+  restricted: "productHelp.permissionRestricted",
+  "not-determined": "productHelp.permissionNotDetermined",
+  unknown: "common.unknown",
   Hold: "common.hold",
   Tap: "common.tap",
   "System Default": "microphoneSettings.systemDefault",
@@ -46,23 +58,63 @@ const factValues: Record<string, string> = {
   providers: "settingsPage.aiModels.modes.providers",
 };
 
-export function helpFactLabel(label: string, t: TFunction): string {
-  if (factLabels[label]) return t(factLabels[label], { defaultValue: label });
-  const match = label.match(/^(.*) (processing|engine)$/);
-  return match && activities[match[1]]
-    ? `${t(activities[match[1]])} (${t(`productHelp.${match[2]}`)})`
-    : label;
+const providerNames = new Map(
+  [
+    ...registry.transcriptionProviders,
+    ...registry.cloudProviders,
+    ...registry.enterpriseProviders,
+    ...registry.localProviders,
+  ].map((provider) => [provider.id, provider.name])
+);
+providerNames.set("whisper-local", "Whisper");
+providerNames.set("parakeet", "NVIDIA Parakeet");
+
+export function helpFactLabel(key: string, t: TFunction): string {
+  if (factLabels[key]) return t(factLabels[key]);
+  const activity = activityKeys[key];
+  if (activity)
+    return `${t(`settingsPage.speechToText.tabs.${activity[0]}`)} (${t(`productHelp.${activity[1]}`)})`;
+  const modeLabels: Record<string, string> = {
+    chatMode: "chatIntelligence",
+    voiceAssistantMode: "dictationAgent",
+    cleanupMode: "dictationCleanup",
+  };
+  return modeLabels[key]
+    ? `${t(`settingsPage.llms.tabs.${modeLabels[key]}`)} (${t("productHelp.processing")})`
+    : key;
 }
 
-export function helpFactValue(value: string, t: TFunction): string {
-  return factValues[value] ? t(factValues[value]) : value;
+export function helpFactValue(value: string, t: TFunction, key?: string, locale?: string): string {
+  if (value === "Unknown" || value === "unknown") return t("common.unknown");
+  if (key && ["dictationKey", "voiceAgentKey", "translationKey", "meetingKey"].includes(key))
+    return formatHotkeyListLabel(value);
+  if (key === "platform")
+    return (
+      ({ darwin: "macOS", win32: "Windows", linux: "Linux" } as Record<string, string>)[value] ??
+      value
+    );
+  if (key === "uiLanguage" || key === "preferredLanguage") {
+    try {
+      return (
+        new Intl.DisplayNames(locale ? [locale] : undefined, { type: "language" }).of(value) ??
+        value
+      );
+    } catch {
+      return value;
+    }
+  }
+  if (factValues[value]) return t(factValues[value]);
+  if (key && ["chatProvider", "dictationEngine", "meetingEngine", "uploadEngine"].includes(key))
+    return providerNames.get(value) ?? t("common.unknown");
+  return value;
 }
 
 /** Explicit Copy keeps the help qualifications and validated links with the answer. */
 export function helpAnswerPlainText(
   content: string,
   evidence: HelpEvidenceData | null,
-  t: TFunction
+  t: TFunction,
+  locale?: string
 ): string {
   if (!evidence) return content;
   const lines = [markdownToPlainText(content), "", t("productHelp.guidance")];
@@ -73,7 +125,9 @@ export function helpAnswerPlainText(
     if (evidence.readAt)
       lines.push(t("productHelp.readAt", { time: new Date(evidence.readAt).toLocaleString() }));
     for (const fact of evidence.facts)
-      lines.push(`${helpFactLabel(fact.label, t)}: ${helpFactValue(fact.value, t)}`);
+      lines.push(
+        `${helpFactLabel(fact.key, t)}: ${helpFactValue(fact.value, t, fact.key, locale)}`
+      );
   }
   if (evidence.sources.length) {
     lines.push("", t("productHelp.sources"));

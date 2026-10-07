@@ -45,7 +45,7 @@ test("help evidence accepts only completed app metadata and exact allowlisted so
   const evidence = extractHelpEvidence([call({ sources: [...bad, source, source] })]);
   assert.equal(evidence.sources.length, 1);
   assert.equal(evidence.sources[0].url, source.url);
-  assert.deepEqual(evidence.facts, [{ label: "Activation mode", value: "Hold" }]);
+  assert.deepEqual(evidence.facts, [{ key: "activationMode", value: "Hold" }]);
 });
 
 test("help evidence shows built-in guidance, per-source fallback, canonical facts, and real links in Chat", async (t) => {
@@ -76,10 +76,10 @@ test("help evidence shows built-in guidance, per-source fallback, canonical fact
   assert.match(container.textContent, /productHelp.guidance/);
   assert.match(container.textContent, /productHelp.reason.unavailable/);
   assert.match(container.textContent, /productHelp.sourceStatus.bundled/);
-  assert.match(container.textContent, /Activation modecommon.hold/);
+  assert.match(container.textContent, /settingsPage.general.hotkey.activationModecommon.hold/);
   assert.doesNotMatch(container.textContent, /grounded_product_help/);
   const facts = findElement(container, (element) => element.tagName === "DETAILS");
-  assert.equal(facts.getAttribute("open"), "");
+  assert.equal(facts.getAttribute("open"), null);
   const link = findElement(container, (element) => element.tagName === "A");
   assert.equal(link.getAttribute("href"), source.url);
 });
@@ -152,11 +152,66 @@ test("Chat explicit Copy strips help markup and keeps settings and fallback link
   assert.match(copied, /1\. Choose your microphone\./);
   assert.doesNotMatch(copied, /\*\*/);
   assert.match(copied, /productHelp.reason.unavailable/);
-  assert.match(copied, /Activation mode: common.hold/);
+  assert.match(copied, /settingsPage.general.hotkey.activationMode: common.hold/);
   assert.ok(copied.includes(source.url));
   // Ordinary model messages retain their existing raw Markdown copy behavior.
   await render(undefined);
   await React.act(async () => button.dispatchEvent({ type: "click", bubbles: true }));
   assert.equal(copied, content);
   await React.act(async () => t.mock.timers.tick(1500));
+});
+
+test("current tool evidence combines citations without retaining settings snapshots", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t);
+  const { extractHelpEvidence } = await vite.ssrLoadModule("/components/chat/helpEvidence.ts");
+  const evidence = extractHelpEvidence([
+    {
+      ...call({ kind: "product-help", facts: [{ key: "dictationKey", value: "F9" }] }),
+      name: "search_openwhispr_help",
+    },
+    {
+      ...call({ kind: "product-help", sources: [], settingsRead: true }),
+      name: "get_openwhispr_context",
+    },
+  ]);
+  assert.equal(evidence.sources.length, 1);
+  assert.deepEqual(evidence.facts, []);
+  assert.equal(evidence.readAt, "2026-10-07T12:00:00.000Z");
+});
+
+test("legacy facts use stable keys, omit private devices and unknown OS, and format human values", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t);
+  const { extractHelpEvidence } = await vite.ssrLoadModule("/components/chat/helpEvidence.ts");
+  const { helpFactLabel, helpFactValue } = await vite.ssrLoadModule(
+    "/components/chat/helpEvidenceText.ts"
+  );
+  const evidence = extractHelpEvidence([
+    call({
+      facts: [
+        { label: "Selected microphone", value: "Private user's microphone" },
+        { label: "OS version", value: "Unknown" },
+        { label: "Microphone selection", value: "System Default" },
+        { label: "Microphone permission", value: "granted" },
+        { key: "dictationKey", value: "RightCommand" },
+      ],
+    }),
+  ]);
+  assert.deepEqual(
+    evidence.facts.map((fact) => fact.key),
+    ["microphoneSelectionMode", "microphonePermission", "dictationKey"]
+  );
+  const translate = (key) => key;
+  assert.notEqual(
+    helpFactLabel("microphonePermission", translate),
+    helpFactLabel("microphoneSelectionMode", translate)
+  );
+  assert.equal(helpFactValue("RightCommand", translate, "dictationKey"), "Right Cmd");
+  assert.equal(
+    helpFactValue("granted", translate, "microphonePermission"),
+    "productHelp.permissionGranted"
+  );
+  assert.equal(helpFactValue("whisper-local", translate, "dictationEngine"), "Whisper");
+  assert.equal(helpFactValue("private-provider-id", translate, "chatProvider"), "common.unknown");
 });

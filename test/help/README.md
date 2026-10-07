@@ -1,45 +1,26 @@
-# Product help acceptance cases
+# Product help evaluation
 
-Run the application-boundary regression suite:
+Product questions now use the normal selected-model flow and bounded documentation/context tools. The old keyword routing and app-written answer path were removed. `cases.js` retains twelve manual acceptance prompts, each with three paraphrases and two repeats; it is not a current automated model-quality certificate.
+
+Run focused checks with Node 24:
 
 ```sh
-node --import tsx --test test/help/*.test.js
+node --import tsx --test test/help/*.test.js test/helpers/productHelp.test.js test/components/helpEvidence.test.js
+node --import tsx --test test/helpers/useChatStreamingTools.test.js
 ```
 
-`cases.js` converts all twelve 2026-10-07 native-QA specifications into three paraphrases with two consecutive runs each. `groundedHelp.test.js` executes the actual app-controlled routing/answer code against injected settings and documentation dependencies. It changes the shortcut between runs, injects malicious retrieved prose and malformed source paths, simulates documentation/context failure, and checks cancellation. It verifies factual fields, supported-answer coverage, deliberate abstention and bounded read-only dependencies separately. This is synthetic application-boundary proof; the hook and UI need their own delivery and rendering tests.
+These fixtures check transport bounds, privacy/policy fallback, projection, compact metadata, normal Chat routing and evidence rendering. Mocked model/tool calls do not prove live model factuality or native device behavior.
 
-Evaluate saved provider/native output without accessing credentials:
+The legacy capture evaluator remains useful for inspecting historical English captures:
 
 ```sh
 node scripts/help-eval.js /absolute/path/captures.jsonl --require-live
 ```
 
-Each line is a JSON record. Capture complete rendered answer text (including the visible settings and Markdown source links), not only the message's prose. `metadata` contains the message's grounded-help metadata. Use factual observations from instrumentation; do not copy a model's claim that it did not change anything into observations.
+Each capture records `caseId`, `prompt`, `provider`, `model`, `provenance`, `transport`, `content`, `metadata`, `observations` and `latencyMs`. Capture rendered prose and visible source links. Record observations from instrumentation, never from the model's assertions about its own actions. Pin application SHA, documentation revision and local model quantization in the accompanying report. Keep personal paths, account names and private environment details out of committed captures and reports.
 
-```json
-{
-  "caseId": "fresh-settings",
-  "prompt": "What is my dictation shortcut currently set to?",
-  "provider": "groq",
-  "model": "openai/gpt-oss-120b",
-  "provenance": "live-native",
-  "transport": "bypassed-app-grounded-help",
-  "content": "Dictation shortcut: Control+Alt+K",
-  "expectedShortcut": "Control+Alt+K",
-  "metadata": { "answerStatus": "answered", "sources": [] },
-  "observations": { "freshContextRead": true },
-  "latencyMs": 42
-}
-```
+The evaluator checks finite English patterns and originally targeted deterministic guidance. `--require-live` checks native provenance; it does not prove model inference occurred. Historical `transport: "bypassed-app-grounded-help"` captures are evidence only for the removed architecture. They must not count as acceptance for model-generated help. The existing unknown-OS and fixed-version assertions are historical case requirements, not requirements to render an unknown OS row in the current UI.
 
-Required capture fields depend on the case:
+Fresh model acceptance must exercise Cloud, Groq GPT-OSS120B and Qwen3.5 4B Q4_K_M through real inference, with each case's three paraphrases repeated twice. Verify the resulting claims against sources, language, settings freshness, fallback honesty, bounded lookups, and observed clipboard/settings effects. Include multilingual prompts and ordinary non-help/mixed requests. A smoke sample remains a smoke sample. Report physical offline, packaged cross-platform and native account/policy checks separately; do not mark unrun checks as passed.
 
-- `fresh-settings`: `expectedShortcut`, observed `freshContextRead`.
-- `no-side-effects`: observed `settingsUnchanged`, `externalPasteUnchanged`, `readOnlyTools`.
-- `invalid-page`: observed `lookupCount` and `invalidSourceExcluded`.
-- `citation-support` and `docs-outage`: structured `metadata.sources` and the rendered clickable links in `content`.
-- Every capture: exact provider/model, provenance (`live-native`, `live-provider`, or `synthetic`), prompt and case ID. Pin application SHA, documentation source/revision and local model quantization in the enclosing evidence report.
-
-Exit 1 means a known regression failed, a case was missing or `--require-live` found non-native captures. Exit 2 means malformed input. The report includes per-provider/model counts, distinct paraphrases, abstentions, missing cases, failures, latency and transport separately. Run every case across Cloud, Groq GPT-OSS 120B and Qwen3.5 4B Q4_K_M, with three paraphrases and two repeats, before claiming that matrix complete. A small smoke sample remains a smoke sample. Provider transport being bypassed for deterministic product help is expected; test unrelated model chat separately to establish its transport works.
-
-The evaluator checks known forbidden inventions and required facts. It explicitly leaves general factual correctness unassessed: matching keywords does not prove all statements are supported. It does not claim a universal hallucination rate or prove physical native side effects from synthetic fixtures. Do not mark an unrun provider/model or physical offline test as passed.
+Exit 1 from the legacy evaluator means a known assertion failed, a case was missing or native provenance was absent when required. Exit 2 means malformed input. Its keyword checks do not establish general factual correctness, a universal hallucination rate, or physical side effects.

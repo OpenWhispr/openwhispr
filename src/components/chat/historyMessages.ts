@@ -52,14 +52,18 @@ function traceArgument(call: ToolCallInfo): string | null {
  */
 export function toolTrace(toolCalls: ReadonlyArray<ToolCallInfo> | undefined): string {
   if (!toolCalls?.length) return "";
-  const entries = toolCalls.map((call) => {
-    const arg = traceArgument(call);
-    // A call still executing was cut off before its result arrived, but its side
-    // effect may have happened (a send commits in main after Esc).
-    const unrecorded = call.status === "executing" ? " (outcome not recorded)" : "";
-    return `${call.name}${arg ? ` ("${arg}")` : ""}${unrecorded}`;
-  });
-  return `${TRACE_OPENING} ${entries.join(", ")}]`;
+  // Older versions stored built-in help evidence as a synthetic tool call. It
+  // was never a model tool and must not teach future turns to invoke it.
+  const entries = toolCalls
+    .filter((call) => call.name !== "grounded_product_help")
+    .map((call) => {
+      const arg = traceArgument(call);
+      // A call still executing was cut off before its result arrived, but its side
+      // effect may have happened (a send commits in main after Esc).
+      const unrecorded = call.status === "executing" ? " (outcome not recorded)" : "";
+      return `${call.name}${arg ? ` ("${arg}")` : ""}${unrecorded}`;
+    });
+  return entries.length ? `${TRACE_OPENING} ${entries.join(", ")}]` : "";
 }
 
 /**

@@ -191,14 +191,16 @@ export const ChatMessage = memo(function ChatMessage({
   error,
   onOpenNote,
 }: ChatMessageProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [copied, setCopied] = useState(false);
 
   const helpEvidence = role === "assistant" ? extractHelpEvidence(toolCalls) : null;
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(helpAnswerPlainText(content, helpEvidence, t));
+      await navigator.clipboard.writeText(
+        helpAnswerPlainText(content, helpEvidence, t, i18n?.resolvedLanguage)
+      );
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {

@@ -6,13 +6,7 @@ import { providerSupportsImages } from "../../services/ai/inferenceProviders";
 import { getSettings, useSettingsStore } from "../../stores/settingsStore";
 import { resolveChatStreamingInference } from "../../helpers/dictationAgentInference.js";
 import { describeProviderError } from "../../utils/describeProviderError";
-import { detectHelpRequest, runGroundedHelp } from "../../services/help/groundedHelp";
-import {
-  getHelpContext,
-  lookupHelp,
-  HELP_TOPICS,
-  type HelpTopic,
-} from "../../services/help/productHelp";
+import { productHelpMetadata } from "../../services/help/productHelp";
 import logger from "../../utils/logger";
 import {
   isAgentAllowed,
@@ -140,6 +134,8 @@ interface UseChatStreamingOptions {
    * onboarding demo answers with suggested times instead).
    */
   nameUnavailableCapabilities?: boolean;
+  /** Disable product-help tools on guided surfaces such as the onboarding demo. */
+  productHelpEnabled?: boolean;
   /**
    * The note's meeting (note chat). Its attendees are listed for the model
    * only in a send that offers connector tools, so recipients come from them.
@@ -206,6 +202,7 @@ export function useChatStreaming({
   searchScope,
   allowConnectors = false,
   nameUnavailableCapabilities = true,
+  productHelpEnabled = true,
   noteMeeting,
   onStreamComplete,
   onResponseContent,
@@ -336,76 +333,6 @@ export function useChatStreaming({
           responseAnnounced = true;
           if (!options?.suppressResponseContent) onResponseContent?.();
         };
-        // Read-only help does not need an inference entitlement, selected model,
-        // private-note RAG, or model-chosen tools. Only the immediately preceding
-        // help answer can give a short follow-up its topic.
-        const precedingAssistant = [...allMessages].reverse().find((m) => m.role === "assistant");
-        const helpMetadata = precedingAssistant?.toolCalls?.find(
-          (tc) => tc.name === "grounded_product_help"
-        )?.metadata;
-        const previousTopics =
-          helpMetadata && !Array.isArray(helpMetadata) && Array.isArray(helpMetadata.topics)
-            ? helpMetadata.topics.filter((topic): topic is HelpTopic =>
-                HELP_TOPICS.includes(topic as HelpTopic)
-              )
-            : [];
-        const helpRequest = !options?.requestText
-          ? detectHelpRequest(userText, previousTopics)
-          : null;
-        if (helpRequest) {
-          const assistantId = crypto.randomUUID();
-          const toolCallId = crypto.randomUUID();
-          const context = toolScope.createContext({ messageId: assistantId, toolCallId });
-          // Preserve both caret and clipboard before any asynchronous operation.
-          context.onHoldDelivery({ preserveClipboard: true });
-          announceResponse();
-          setAgentState("thinking");
-          beginToolActivity("grounded_product_help", t("productHelp.loading"));
-          try {
-            const result = await runGroundedHelp(helpRequest, context.signal, {
-              lookup: lookupHelp,
-              context: getHelpContext,
-            });
-            if (cancelled() || !mountedRef.current) return;
-            const content =
-              result.metadata.answerStatus === "clarify"
-                ? t("productHelp.mixedAnswer")
-                : result.metadata.answerStatus === "abstained"
-                  ? t("productHelp.unknownAnswer")
-                  : result.content;
-            const toolCalls: ToolCallInfo[] = [
-              {
-                id: toolCallId,
-                name: "grounded_product_help",
-                arguments: "{}",
-                status: "completed",
-                result: t("productHelp.guidance"),
-                metadata: result.metadata,
-              },
-            ];
-            setMessages((prev) => [
-              ...prev,
-              { id: assistantId, role: "assistant", content, isStreaming: false, toolCalls },
-            ]);
-            onStreamComplete?.(assistantId, content, toolCalls);
-            await options?.onComplete?.({ assistantId, content, toolCalls });
-          } catch {
-            if (!cancelled() && mountedRef.current) {
-              const content = t("productHelp.unavailableAnswer");
-              setMessages((prev) => [
-                ...prev,
-                { id: assistantId, role: "assistant", content, isStreaming: false },
-              ]);
-              onStreamComplete?.(assistantId, content);
-            }
-          } finally {
-            if (!cancelled() && mountedRef.current) {
-              setAgentState("idle");
-              completeToolActivity();
-            }
-          }
-          return;
-        }
         const settings = getSettings();
         const { config: llmConfig, attachScreenContext } = resolveChatStreamingInference(settings, {
           inferenceScope,
@@ -490,7 +417,7 @@ export function useChatStreaming({
           connectorsOffered = connectors !== undefined;
           // Triggers ride in the tool description, so a snippet edit rebuilds the registry.
           const snippetKey = settings.snippets.map((s) => s.trigger).join("|");
-          const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${snippetKey}-${connectors?.emailDraftTarget ?? "no-connectors"}-${connectors?.readyConnectorIds.join(",") ?? ""}`;
+          const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${productHelpEnabled}-${snippetKey}-${connectors?.emailDraftTarget ?? "no-connectors"}-${connectors?.readyConnectorIds.join(",") ?? ""}`;
           if (toolRegistryRef.current?.key === cacheKey) {
             registry = toolRegistryRef.current.registry;
           } else {
@@ -500,6 +427,7 @@ export function useChatStreaming({
               cloudBackupEnabled: settings.cloudBackupEnabled,
               searchScope: scope,
               webSearchEnabled,
+              productHelpEnabled,
               vocabulary: {
                 getDictionary: () => getSettings().customDictionary,
                 updateDictionary: (changes) =>
@@ -777,7 +705,11 @@ export function useChatStreaming({
                                 status: "completed" as const,
                                 result: toolDisplayTexts.get(chunk.callId) ?? chunk.displayText,
                                 ...(chunk.metadata && !isQueryResultData(chunk.metadata)
-                                  ? { metadata: chunk.metadata }
+                                  ? {
+                                      metadata:
+                                        productHelpMetadata(tc.name, chunk.metadata) ??
+                                        chunk.metadata,
+                                    }
                                   : {}),
                               }
                             : tc
@@ -892,6 +824,7 @@ export function useChatStreaming({
       inferenceScope,
       allowConnectors,
       nameUnavailableCapabilities,
+      productHelpEnabled,
       t,
       setMessages,
       onStreamComplete,

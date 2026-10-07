@@ -3887,7 +3887,10 @@
       "copiedToClipboard": "Copiado al portapapeles",
       "openNote": "Abrir nota",
       "unknownTool": "Herramienta desconocida: {{name}}",
-      "invalidArgs": "Argumentos de herramienta no válidos para {{name}}"
+      "invalidArgs": "Argumentos de herramienta no válidos para {{name}}",
+      "search_openwhispr_helpName": "Buscar ayuda de OpenWhispr",
+      "read_openwhispr_helpName": "Leer ayuda de OpenWhispr",
+      "get_openwhispr_contextName": "Leer ajustes de OpenWhispr"
     }
   },
   "assistant": {
@@ -4822,7 +4825,7 @@
     "sources": "Documentación oficial",
     "loading": "Buscando documentación oficial…",
     "settings": "Ajustes actuales",
-    "guidance": "Guía integrada (en inglés). Consultar la documentación no actualiza esta guía.",
+    "guidance": "Documentación y ajustes usados para esta respuesta.",
     "settingsNote": "Opciones y permisos conocidos consultados para esta respuesta, sin modificarlos; no se prueban los dispositivos.",
     "readAt": "Consultado: {{time}}",
     "sourceStatus": {
@@ -4832,7 +4835,8 @@
     "reason": {
       "policy": "La política de tu organización limita la consulta de documentación en línea.",
       "rateLimit": "Se alcanzó el límite de consultas de documentación en línea. Se muestra la guía integrada.",
-      "unavailable": "No se pudo comprobar la documentación actual. Se muestra la guía integrada."
+      "unavailable": "No se pudo comprobar la documentación actual. Se muestra la guía integrada.",
+      "privacy": "Tus ajustes de privacidad mantienen la consulta de documentación sin conexión."
     },
     "openFailed": "No se pudo abrir el artículo. Puedes copiar el enlace y abrirlo en tu navegador.",
     "unknownAnswer": "No puedo verificar esa función o control con la guía integrada de OpenWhispr. No he cambiado ninguna configuración. Consulta la documentación oficial o describe el ajuste que ves.",
@@ -4855,6 +4859,12 @@
     "engine": "Motor",
     "policy": "Asistente permitido por la política",
     "on": "Activado",
-    "off": "Desactivado"
+    "off": "Desactivado",
+    "microphonePermission": "Permiso del micrófono",
+    "specificMicrophone": "Micrófono específico",
+    "permissionGranted": "Permitido",
+    "permissionDenied": "Denegado",
+    "permissionRestricted": "Restringido",
+    "permissionNotDetermined": "No solicitado"
   }
 }

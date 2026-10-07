@@ -3834,7 +3834,10 @@
       "copiedToClipboard": "已复制到剪贴板",
       "openNote": "打开笔记",
       "unknownTool": "未知工具：{{name}}",
-      "invalidArgs": "{{name}} 的工具参数无效"
+      "invalidArgs": "{{name}} 的工具参数无效",
+      "search_openwhispr_helpName": "搜索 OpenWhispr 帮助",
+      "read_openwhispr_helpName": "阅读 OpenWhispr 帮助",
+      "get_openwhispr_contextName": "读取 OpenWhispr 设置"
     }
   },
   "assistant": {
@@ -4822,7 +4825,7 @@
     "sources": "官方文档",
     "loading": "正在查询官方文档…",
     "settings": "当前应用设置",
-    "guidance": "内置指南（英文）。查询文档不会更新此指南。",
+    "guidance": "此回复使用的文档和设置。",
     "settingsNote": "为本次回复读取的设置和已知权限；不会更改设置或测试设备。",
     "readAt": "读取时间：{{time}}",
     "sourceStatus": {
@@ -4832,7 +4835,8 @@
     "reason": {
       "policy": "您组织的策略限制了在线文档查询。",
       "rateLimit": "在线文档查询已达到上限。现显示内置指南。",
-      "unavailable": "无法核实当前文档。现显示内置指南。"
+      "unavailable": "无法核实当前文档。现显示内置指南。",
+      "privacy": "您的隐私设置将文档查询限制为离线内容。"
     },
     "openFailed": "无法打开文章。您可以复制链接并在浏览器中打开。",
     "unknownAnswer": "我无法根据 OpenWhispr 内置指南核实该功能或控件。我没有更改任何设置。请查阅官方文档，或描述您看到的设置。",
@@ -4855,6 +4859,12 @@
     "engine": "引擎",
     "policy": "策略允许使用助手",
     "on": "开启",
-    "off": "关闭"
+    "off": "关闭",
+    "microphonePermission": "麦克风权限",
+    "specificMicrophone": "指定麦克风",
+    "permissionGranted": "已允许",
+    "permissionDenied": "已拒绝",
+    "permissionRestricted": "受限",
+    "permissionNotDetermined": "尚未请求"
   }
 }

@@ -4005,7 +4005,10 @@
       "copiedToClipboard": "In die Zwischenablage kopiert",
       "openNote": "Notiz öffnen",
       "unknownTool": "Unbekanntes Werkzeug: {{name}}",
-      "invalidArgs": "Ungültige Tool-Argumente für {{name}}"
+      "invalidArgs": "Ungültige Tool-Argumente für {{name}}",
+      "search_openwhispr_helpName": "OpenWhispr-Hilfe suchen",
+      "read_openwhispr_helpName": "OpenWhispr-Hilfe lesen",
+      "get_openwhispr_contextName": "OpenWhispr-Einstellungen lesen"
     }
   },
   "assistant": {
@@ -4822,7 +4825,7 @@
     "sources": "Offizielle Dokumentation",
     "loading": "Offizielle Dokumentation wird durchsucht…",
     "settings": "Aktuelle Einstellungen",
-    "guidance": "Integrierte Hilfe (Englisch). Der Dokumentationsabruf aktualisiert diese Hinweise nicht.",
+    "guidance": "Dokumentation und Einstellungen für diese Antwort.",
     "settingsNote": "Schreibgeschützte Einstellungen und bekannte Berechtigungen für diese Antwort; Ihre Geräte werden nicht getestet.",
     "readAt": "Gelesen am {{time}}",
     "sourceStatus": {
@@ -4832,7 +4835,8 @@
     "reason": {
       "policy": "Die Richtlinie Ihrer Organisation beschränkt den Onlineabruf der Dokumentation.",
       "rateLimit": "Das Abruflimit der Onlinedokumentation wurde erreicht. Die integrierte Hilfe wird angezeigt.",
-      "unavailable": "Die aktuelle Dokumentation konnte nicht geprüft werden. Die integrierte Hilfe wird angezeigt."
+      "unavailable": "Die aktuelle Dokumentation konnte nicht geprüft werden. Die integrierte Hilfe wird angezeigt.",
+      "privacy": "Deine Datenschutzeinstellungen beschränken die Dokumentationssuche auf Offline-Inhalte."
     },
     "openFailed": "Der Artikel konnte nicht geöffnet werden. Kopieren Sie den Link und öffnen Sie ihn im Browser.",
     "unknownAnswer": "Ich kann diese Funktion oder dieses Bedienelement anhand der integrierten OpenWhispr-Hilfe nicht bestätigen. Ich habe keine Einstellungen geändert. Prüfen Sie die offizielle Dokumentation oder beschreiben Sie die sichtbare Einstellung.",
@@ -4855,6 +4859,12 @@
     "engine": "Engine",
     "policy": "Assistent laut Richtlinie erlaubt",
     "on": "Ein",
-    "off": "Aus"
+    "off": "Aus",
+    "microphonePermission": "Mikrofonberechtigung",
+    "specificMicrophone": "Bestimmtes Mikrofon",
+    "permissionGranted": "Erlaubt",
+    "permissionDenied": "Verweigert",
+    "permissionRestricted": "Eingeschränkt",
+    "permissionNotDetermined": "Nicht angefragt"
   }
 }

@@ -33,7 +33,7 @@ function fixture(content = searchContent) {
   return { calls, fetch };
 }
 
-test("guest retrieval uses only fixed topics, a fixed host, and no credentials", async () => {
+test("permitted retrieval uses only fixed topics, a fixed host, and no credentials", async () => {
   const { fetch, calls } = fixture();
   const help = createProductHelp({ fetch });
   const result = await help.lookup(
@@ -304,7 +304,8 @@ test("the main-process helper loads using only files included in desktop packagi
   for (const file of [
     "helpers/productHelp.js",
     "helpers/agentStreamRequestRegistry.js",
-    "helpers/parakeetCapability.js",
+    "helpers/appVersion.js",
+    "helpers/productHelpFallback.js",
     "config/productHelpTopics.json",
   ])
     fs.copyFileSync(path.join(__dirname, "../../src", file), path.join(root, "src", file));
@@ -315,7 +316,7 @@ test("the main-process helper loads using only files included in desktop packagi
 });
 
 test("complete article reads preserve relevant guidance past old snippet limits", async () => {
-  const text = "Introduction\n".repeat(1200) + "Hold: release the shortcut to stop recording.";
+  const text = "Introduction\n".repeat(600) + "Hold: release the shortcut to stop recording.";
   const f = fixture([{ type: "text", text }]);
   const result = await createProductHelp({ fetch: f.fetch }).lookup(
     { topic: "hotkeys" },
@@ -331,7 +332,7 @@ test("incomplete, error and oversized article content is explicitly bundled", as
     "Error: file not found",
     "exit: 1\n--- stderr ---\ncat: missing",
     "[output truncated]",
-    "x".repeat(64001),
+    "x".repeat(12001),
   ]) {
     const f = fixture([{ type: "text", text }]);
     const result = await createProductHelp({ fetch: f.fetch }).lookup(
@@ -344,22 +345,111 @@ test("incomplete, error and oversized article content is explicitly bundled", as
   }
 });
 
-test("context supplies canonical labels and reads the new value on every projection", async () => {
+test("context reads current stable values without labels or private device names", async () => {
   const { projectHelpSettings } = await import("../../src/services/help/helpContext.ts");
   const state = {
     activeDictationKey: "RightCommand",
     activationMode: "push",
-    microphoneSelectionMode: "system",
+    microphoneSelectionMode: "specific",
+    selectedMicDeviceLabel: "Private Person's Device",
   };
   const project = (topic) =>
     projectHelpSettings(topic, state, {}, { mode: "local", provider: "local" }, true);
-  assert.equal(project("hotkeys").activationModeLabel, "Hold");
+  assert.equal(project("hotkeys").activationMode, "push");
   assert.equal(project("hotkeys").dictationKey, "RightCommand");
   state.activeDictationKey = "Control+Alt+K";
   state.activationMode = "tap";
   assert.equal(project("hotkeys").dictationKey, "Control+Alt+K");
-  assert.equal(project("hotkeys").activationModeLabel, "Tap");
-  assert.equal(project("microphone").microphoneSelectionModeLabel, "System Default");
-  state.activationMode = "unknown";
-  assert.equal(project("hotkeys").activationModeLabel, null);
+  assert.equal(project("hotkeys").activationMode, "tap");
+  assert.equal(project("microphone").microphoneSelectionMode, "specific");
+  assert.equal(project("microphone").selectedMicDeviceLabel, undefined);
+});
+
+const { remoteHelpPolicyState } = require("../../src/helpers/productHelp");
+const { createConnectorPolicyResolver } = require("../../src/helpers/connectors/connectorIpc");
+const managed = (features = {}) => ({
+  success: true,
+  managed: true,
+  policy: {
+    features: { webSearchEnabled: true, ...features },
+    llm: { allowedModes: ["providers"] },
+  },
+});
+
+test("help policy distinguishes outages from explicit agent/network denials", () => {
+  assert.equal(remoteHelpPolicyState({ success: false }), "unavailable");
+  assert.equal(remoteHelpPolicyState(managed({ agentEnabled: false })), "blocked");
+  assert.equal(remoteHelpPolicyState(managed({ webSearchEnabled: false })), "blocked");
+  assert.equal(remoteHelpPolicyState(managed()), "allowed");
+});
+
+test("help resolver reuses account-bound cached policy on timeout or outage, never after an auth change", async () => {
+  for (const failure of [
+    () => new Promise(() => {}),
+    async () => {
+      throw Error("offline");
+    },
+    async () => ({ success: false }),
+  ]) {
+    for (const cached of [managed(), managed({ agentEnabled: false }), null]) {
+      const resolver = createConnectorPolicyResolver({
+        getAuthHeader: async () => ({ Authorization: "fixture" }),
+        getPolicy: failure,
+        peekPolicy: () => cached,
+        getAuthGeneration: () => 1,
+        timeoutMs: 5,
+        classifySnapshot: remoteHelpPolicyState,
+        fallbackOnUnavailable: true,
+      });
+      assert.equal(
+        await resolver({}),
+        cached === null
+          ? "unavailable"
+          : cached.policy.features.agentEnabled === false
+            ? "blocked"
+            : "allowed"
+      );
+    }
+  }
+  let generation = 1;
+  let peeks = 0;
+  const resolver = createConnectorPolicyResolver({
+    getAuthHeader: async () => ({ Authorization: "fixture" }),
+    getPolicy: async () => {
+      generation++;
+      return { success: false };
+    },
+    peekPolicy: () => {
+      peeks++;
+      return managed();
+    },
+    getAuthGeneration: () => generation,
+    classifySnapshot: remoteHelpPolicyState,
+    fallbackOnUnavailable: true,
+  });
+  assert.equal(await resolver({}), "unavailable");
+  assert.equal(peeks, 0);
+});
+
+test("signed-out IPC, unavailable policy and explicit denial never fetch and have accurate fallback reasons", async () => {
+  for (const [verdict, reason] of [
+    ["signed_out", "privacy"],
+    ["unavailable", "unavailable"],
+    ["blocked", "policy"],
+  ]) {
+    const handlers = {};
+    registerProductHelpIpc({
+      ipcMain: { handle: (n, f) => (handlers[n] = f), on: () => {} },
+      fetch: async () => {
+        throw Error("must not fetch");
+      },
+      canLookup: async () => verdict,
+      getBasics: () => ({}),
+    });
+    const sender = Object.assign(new EventEmitter(), { id: 1 });
+    assert.equal(
+      (await handlers["product-help"]({ sender }, "id", { topic: "hotkeys" })).reason,
+      reason
+    );
+  }
 });

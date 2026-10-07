@@ -17,7 +17,7 @@ const { WHISPER_GPU_FAILURE_REASON_KEYS } = require("./whisperGpuFailureReason")
 const { BYOK_API_KEYS } = require("../config/secretKeys");
 const tokenStore = require("./tokenStore");
 const accountScopeBinding = require("./accountScopeBinding");
-const { registerProductHelpIpc, remoteHelpAllowed } = require("./productHelp");
+const { registerProductHelpIpc, remoteHelpPolicyState } = require("./productHelp");
 const { createCloudApiRequestHandler } = require("./cloudApiRequest");
 const { decodeLeaderboardPngDataUrl, leaderboardImageFilename } = require("./leaderboardImage");
 const { withPolicyRequestHeaders } = require("./policyRequestHeaders");
@@ -6241,25 +6241,18 @@ class IPCHandlers {
     registerProductHelpIpc({
       ipcMain,
       fetch: proxyFetch,
-      canLookup: async (event, signal) => {
-        const generation = tokenStore.getState().generation;
-        try {
-          const authHeaders = await getAuthHeader(event);
-          if (generation !== tokenStore.getState().generation || signal.aborted) return false;
-          if (!Object.keys(authHeaders).length) return true;
-          const snapshot = await workspacePolicyManager.getPolicy({
-            authHeaders,
-            expectedAuthGeneration: generation,
-          });
-          return (
-            !signal.aborted &&
-            generation === tokenStore.getState().generation &&
-            remoteHelpAllowed(snapshot, app.getVersion())
-          );
-        } catch {
-          return false;
-        }
-      },
+      canLookup: createConnectorPolicyResolver({
+        getAuthHeader: createConnectorAuthLookup({
+          hasBearerToken: () => Boolean(tokenStore.get()),
+          windowFor: (event) => BrowserWindow.fromWebContents(event.sender),
+          authHeaderFor: getAuthHeaderFromWindow,
+        }),
+        getPolicy: (options) => workspacePolicyManager.getPolicy(options),
+        peekPolicy: (options) => workspacePolicyManager.peekPolicy(options),
+        getAuthGeneration: () => tokenStore.getState().generation,
+        classifySnapshot: (snapshot) => remoteHelpPolicyState(snapshot, app.getVersion()),
+        fallbackOnUnavailable: true,
+      }),
       getBasics: () => ({
         // checkAccess reads the cached permission verdict; it never requests access.
         systemAudioPermission:

@@ -44,14 +44,14 @@
   "backup": {
     "query": "OpenWhispr cloud backup sync notes devices local storage",
     "path": "/help/notes/sync-across-devices",
-    "text": "Cloud backup controls syncing notes across devices.\n\n- **Processing:** Backup is separate from the model used for transcription or assistant answers.\n- **Organisation policy:** Your organisation may restrict backup or processing choices.",
+    "text": "Cloud backup controls syncing notes across devices.\n\n- **Processing:** Backup is separate from the model used for transcription or assistant answers.\n- **Organization policy:** Your organization may restrict backup or processing choices.",
     "paths": ["/help/notes/sync-across-devices"],
     "reviewedAt": "2026-10-07"
   },
   "assistant": {
     "query": "OpenWhispr chat agent tools model availability voice assistant",
     "path": "/help/agent/chat-agent",
-    "text": "Chat has its own language-model selection.\n\n1. **Choose the Chat model.** Open Settings → AI Models → Language Models → Chat. Speech-to-text, cleanup and Voice Assistant use separate selections.\n2. **If a provider request fails.** Retry or review the selected Chat provider and model.\n\n- **Tools:** Availability depends on the model, connections and organisation policy. Small or unrecognised local models may run without tools.\n- **Product help:** Chat can show reviewed guidance and read-only current settings even when the selected model cannot answer. Help cannot verify credentials or service availability from saved settings.",
+    "text": "Chat has its own language-model selection.\n\n1. **Choose the Chat model.** Open Settings → AI Models → Language Models → Chat. Speech-to-text, cleanup and Voice Assistant use separate selections.\n2. **If a provider request fails.** Retry or review the selected Chat provider and model.\n\n- **Tools:** Availability depends on the model, connections and organization policy. Small or unrecognized local models may run without tools.\n- **Product help:** When the selected model supports tools, Chat can retrieve official documentation and read-only current settings to answer product questions. Help answers require a working model; open the official documentation if it is unavailable. Help cannot verify credentials or service availability from saved settings.",
     "paths": ["/help/agent/chat-agent"],
     "reviewedAt": "2026-10-07"
   }

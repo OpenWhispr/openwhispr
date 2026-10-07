@@ -57,6 +57,8 @@ function createConnectorPolicyResolver({
   peekPolicy,
   getAuthGeneration,
   timeoutMs = POLICY_TIMEOUT_MS,
+  classifySnapshot = connectorPolicyState,
+  fallbackOnUnavailable = false,
 }) {
   // The deadline and the failure handling cover the whole resolution,
   // including the auth-header lookup: nothing here can hang or throw.
@@ -74,7 +76,9 @@ function createConnectorPolicyResolver({
       // Assigned before the fetch: the deadline's fallback peeks this request.
       request = { expectedAuthGeneration, authHeaders };
       const snapshot = await getPolicy(request);
-      return connectorPolicyState(snapshot);
+      return expectedAuthGeneration === getAuthGeneration()
+        ? classifySnapshot(snapshot)
+        : "unavailable";
     })().catch(() => "unavailable");
 
     let timer;
@@ -83,11 +87,13 @@ function createConnectorPolicyResolver({
     });
     try {
       const state = await Promise.race([resolution, deadline]);
-      if (state !== null) return state;
+      if (state !== null && !(fallbackOnUnavailable && state === "unavailable")) return state;
       // A refresh that outlives the deadline must not override the verdict
       // already held for this account; with none held, fail closed.
       try {
-        return request && peekPolicy ? connectorPolicyState(peekPolicy(request)) : "unavailable";
+        return request && request.expectedAuthGeneration === getAuthGeneration() && peekPolicy
+          ? classifySnapshot(peekPolicy(request))
+          : "unavailable";
       } catch {
         return "unavailable";
       }

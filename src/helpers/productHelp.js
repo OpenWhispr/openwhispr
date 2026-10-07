@@ -1,11 +1,13 @@
-const { compareVersions } = require("./parakeetCapability");
+const { compareAppVersions, isCanonicalAppVersion } = require("./appVersion");
+const { DOCS_ORIGIN: ORIGIN, bundledHelp: bundled } = require("./productHelpFallback");
 const topics = require("../config/productHelpTopics.json");
 const AgentStreamRequestRegistry = require("./agentStreamRequestRegistry");
 
-const ENDPOINT = "https://docs.openwhispr.com/mcp";
-const ORIGIN = "https://docs.openwhispr.com";
+const ENDPOINT = `${ORIGIN}/mcp`;
 const MAX_RESPONSE_BYTES = 128 * 1024;
-const MAX_TEXT = 64000;
+// Bound the whole model payload: oversize evidence falls back explicitly.
+const MAX_TEXT = 12000;
+const MAX_TOTAL_TEXT = 24000;
 
 function validPage(value) {
   return (
@@ -13,23 +15,6 @@ function validPage(value) {
     value.length <= 160 &&
     /^\/(?:help|guides|platform|integrations)\/[a-z0-9-]+(?:\/[a-z0-9-]+)*$/.test(value)
   );
-}
-
-function bundled(topic, reason) {
-  const article = topics[topic];
-  return {
-    source: "bundled",
-    reason,
-    retrievedAt: null,
-    articles: [
-      {
-        title: topic,
-        url: ORIGIN + article.path,
-        path: article.path,
-        text: article.text,
-      },
-    ],
-  };
 }
 
 async function readBounded(response) {
@@ -87,7 +72,15 @@ function createProductHelp({ fetch, now = Date.now }) {
         "Invalid help request: use an exact path returned for this topic, including its leading slash and without .mdx. Stop retrying the path; request the topic essentials instead."
       );
     if (signal.aborted) throw new Error("Cancelled");
-    if (!allowed) return bundled(topic, "policy");
+    if (allowed !== true && allowed !== "allowed")
+      return bundled(
+        topic,
+        allowed === "blocked" || allowed === false
+          ? "policy"
+          : allowed === "signed_out"
+            ? "privacy"
+            : "unavailable"
+      );
     if (now() - windowStart >= 60000) {
       windowStart = now();
       requests = 0;
@@ -128,6 +121,7 @@ function createProductHelp({ fetch, now = Date.now }) {
       // platform first or truncate the instructions that answer the question.
       const paths = page ? [page] : topics[topic].paths;
       const articles = [];
+      let totalText = 0;
       for (const [index, path] of paths.entries()) {
         const result = await rpc(2 + index, "tools/call", {
           name: "query_docs_filesystem_open_whispr",
@@ -145,12 +139,14 @@ function createProductHelp({ fetch, now = Date.now }) {
         if (
           !text.trim() ||
           text.length > MAX_TEXT ||
+          (totalText += text.length) > MAX_TOTAL_TEXT ||
           /^(?:error:|file not found|no such file)/im.test(text) ||
           /\[(?:output |content )?truncated\]/i.test(text)
         ) {
           return bundled(topic, "unavailable");
         }
         articles.push({
+          untrusted: true,
           title:
             text.match(/^# (.+)$/m)?.[1] ||
             text.match(/^title:\s*["']?([^"'\n]+)/m)?.[1] ||
@@ -169,20 +165,26 @@ function createProductHelp({ fetch, now = Date.now }) {
   return { lookup };
 }
 
+function remoteHelpPolicyState(snapshot, appVersion) {
+  if (snapshot?.success !== true || typeof snapshot.managed !== "boolean") return "unavailable";
+  if (!snapshot.managed) return "allowed";
+  const policy = snapshot.policy;
+  if (!policy?.features || !Array.isArray(policy.llm?.allowedModes)) return "unavailable";
+  if (
+    policy.minAppVersion &&
+    (!isCanonicalAppVersion(policy.minAppVersion) || !isCanonicalAppVersion(appVersion))
+  )
+    return "unavailable";
+  return (policy.minAppVersion && compareAppVersions(appVersion, policy.minAppVersion) < 0) ||
+    policy.features.agentEnabled === false ||
+    policy.features.webSearchEnabled !== true ||
+    !policy.llm.allowedModes.some((mode) => mode === "openwhispr" || mode === "providers")
+    ? "blocked"
+    : "allowed";
+}
+
 function remoteHelpAllowed(snapshot, appVersion) {
-  if (snapshot?.success !== true) return false;
-  if (snapshot.managed === false) return true;
-  return (
-    snapshot.managed === true &&
-    (!snapshot.policy?.minAppVersion ||
-      (typeof appVersion === "string" &&
-        /^\d+\.\d+\.\d+$/.test(appVersion) &&
-        compareVersions(appVersion, snapshot.policy.minAppVersion) >= 0)) &&
-    snapshot.policy?.features?.webSearchEnabled === true &&
-    snapshot.policy?.llm?.allowedModes?.some(
-      (mode) => mode === "openwhispr" || mode === "providers"
-    )
-  );
+  return remoteHelpPolicyState(snapshot, appVersion) === "allowed";
 }
 
 function registerProductHelpIpc({ ipcMain, fetch, canLookup, getBasics }) {
@@ -199,13 +201,14 @@ function registerProductHelpIpc({ ipcMain, fetch, canLookup, getBasics }) {
     const destroyed = () => requests.cancelSender(sender.id);
     sender.once("destroyed", destroyed);
     try {
-      const policySignal = AbortSignal.any([controller.signal, AbortSignal.timeout(1500)]);
+      // The shared resolver owns the deadline and cached-policy fallback.
+      const policySignal = controller.signal;
       const allowed = await new Promise((resolve) => {
-        const stop = () => resolve(false);
+        const stop = () => resolve("unavailable");
         policySignal.addEventListener("abort", stop, { once: true });
         Promise.resolve()
           .then(() => canLookup(event, policySignal))
-          .then(resolve, () => resolve(false))
+          .then(resolve, () => resolve("unavailable"))
           .finally(() => policySignal.removeEventListener("abort", stop));
       });
       return await help.lookup(input || {}, { signal: controller.signal, allowed });
@@ -224,6 +227,5 @@ module.exports = {
   createProductHelp,
   registerProductHelpIpc,
   remoteHelpAllowed,
-  validPage,
-  parseRpc,
+  remoteHelpPolicyState,
 };

@@ -3834,7 +3834,10 @@
       "copiedToClipboard": "Copiado para a área de transferência",
       "openNote": "Abrir nota",
       "unknownTool": "Ferramenta desconhecida: {{name}}",
-      "invalidArgs": "Argumentos de ferramenta inválidos para {{name}}"
+      "invalidArgs": "Argumentos de ferramenta inválidos para {{name}}",
+      "search_openwhispr_helpName": "Buscar ajuda do OpenWhispr",
+      "read_openwhispr_helpName": "Ler ajuda do OpenWhispr",
+      "get_openwhispr_contextName": "Ler configurações do OpenWhispr"
     }
   },
   "assistant": {
@@ -4822,7 +4825,7 @@
     "sources": "Documentação oficial",
     "loading": "Buscando documentação oficial…",
     "settings": "Configurações atuais",
-    "guidance": "Orientações integradas (em inglês). A consulta à documentação não atualiza estas orientações.",
+    "guidance": "Documentação e configurações usadas nesta resposta.",
     "settingsNote": "Opções e permissões conhecidas consultadas para esta resposta, sem alterações; os dispositivos não são testados.",
     "readAt": "Consultado em {{time}}",
     "sourceStatus": {
@@ -4832,11 +4835,12 @@
     "reason": {
       "policy": "A política da sua organização limita a consulta à documentação online.",
       "rateLimit": "O limite de consultas à documentação online foi atingido. São apresentadas as orientações integradas.",
-      "unavailable": "Não foi possível verificar a documentação atual. São apresentadas as orientações integradas."
+      "unavailable": "Não foi possível verificar a documentação atual. São apresentadas as orientações integradas.",
+      "privacy": "Suas configurações de privacidade mantêm a consulta à documentação offline."
     },
-    "openFailed": "Não foi possível abrir o artigo. Pode copiar o link e abri-lo no navegador.",
-    "unknownAnswer": "Não consigo verificar essa funcionalidade ou controlo nas orientações integradas do OpenWhispr. Não alterei nenhuma definição. Consulte a documentação oficial ou descreva a definição que vê.",
-    "mixedAnswer": "Posso apresentar aqui a ajuda do OpenWhispr sem efetuar alterações. Faça a pergunta de ajuda separadamente da outra ação; não executei essa ação.",
+    "openFailed": "Não foi possível abrir o artigo. Você pode copiar o link e abri-lo no navegador.",
+    "unknownAnswer": "Não consigo verificar esse recurso ou controle nas orientações integradas do OpenWhispr. Não alterei nenhuma configuração. Consulte a documentação oficial ou descreva a configuração que você vê.",
+    "mixedAnswer": "Posso mostrar a ajuda do OpenWhispr aqui sem fazer alterações. Faça a pergunta de ajuda separadamente da outra ação; não executei essa ação.",
     "unavailableAnswer": "A ajuda do OpenWhispr está temporariamente indisponível. Tente novamente ou abra a documentação oficial.",
     "topicsList": {
       "hotkeys": "Atalhos",
@@ -4848,13 +4852,19 @@
       "backup": "Backup",
       "assistant": "Assistente"
     },
-    "appVersion": "Versão da aplicação",
+    "appVersion": "Versão do aplicativo",
     "platform": "Plataforma",
-    "osVersion": "Versão do sistema operativo",
+    "osVersion": "Versão do sistema operacional",
     "processing": "Processamento",
-    "engine": "Motor",
+    "engine": "Mecanismo",
     "policy": "Assistente permitido pela política",
     "on": "Ativado",
-    "off": "Desativado"
+    "off": "Desativado",
+    "microphonePermission": "Permissão do microfone",
+    "specificMicrophone": "Microfone específico",
+    "permissionGranted": "Permitida",
+    "permissionDenied": "Negada",
+    "permissionRestricted": "Restrita",
+    "permissionNotDetermined": "Não solicitada"
   }
 }

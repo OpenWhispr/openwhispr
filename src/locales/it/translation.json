@@ -3834,7 +3834,10 @@
       "copiedToClipboard": "Copiato negli appunti",
       "openNote": "Apri nota",
       "unknownTool": "Strumento sconosciuto: {{name}}",
-      "invalidArgs": "Argomenti dello strumento non validi per {{name}}"
+      "invalidArgs": "Argomenti dello strumento non validi per {{name}}",
+      "search_openwhispr_helpName": "Cerca nella guida di OpenWhispr",
+      "read_openwhispr_helpName": "Leggi la guida di OpenWhispr",
+      "get_openwhispr_contextName": "Leggi le impostazioni di OpenWhispr"
     }
   },
   "assistant": {
@@ -4822,7 +4825,7 @@
     "sources": "Documentazione ufficiale",
     "loading": "Ricerca nella documentazione ufficiale…",
     "settings": "Impostazioni attuali",
-    "guidance": "Guida integrata (in inglese). Consultare la documentazione non aggiorna questa guida.",
+    "guidance": "Documentazione e impostazioni usate per questa risposta.",
     "settingsNote": "Scelte e autorizzazioni note lette per questa risposta, senza modificarle; i dispositivi non vengono testati.",
     "readAt": "Letto il {{time}}",
     "sourceStatus": {
@@ -4832,7 +4835,8 @@
     "reason": {
       "policy": "I criteri della tua organizzazione limitano la consultazione della documentazione online.",
       "rateLimit": "È stato raggiunto il limite di consultazione della documentazione online. Viene mostrata la guida integrata.",
-      "unavailable": "Non è stato possibile verificare la documentazione attuale. Viene mostrata la guida integrata."
+      "unavailable": "Non è stato possibile verificare la documentazione attuale. Viene mostrata la guida integrata.",
+      "privacy": "Le impostazioni di privacy mantengono offline la consultazione della documentazione."
     },
     "openFailed": "Impossibile aprire l’articolo. Puoi copiare il link e aprirlo nel browser.",
     "unknownAnswer": "Non posso verificare questa funzione o controllo nella guida integrata di OpenWhispr. Non ho modificato alcuna impostazione. Consulta la documentazione ufficiale o descrivi l’impostazione che vedi.",
@@ -4855,6 +4859,12 @@
     "engine": "Motore",
     "policy": "Assistente consentito dai criteri",
     "on": "Attivo",
-    "off": "Disattivo"
+    "off": "Disattivo",
+    "microphonePermission": "Autorizzazione del microfono",
+    "specificMicrophone": "Microfono specifico",
+    "permissionGranted": "Consentita",
+    "permissionDenied": "Negata",
+    "permissionRestricted": "Limitata",
+    "permissionNotDetermined": "Non richiesta"
   }
 }

@@ -3834,7 +3834,10 @@
       "copiedToClipboard": "已複製到剪貼簿",
       "openNote": "開啟筆記",
       "unknownTool": "未知工具：{{name}}",
-      "invalidArgs": "{{name}} 的工具參數無效"
+      "invalidArgs": "{{name}} 的工具參數無效",
+      "search_openwhispr_helpName": "搜尋 OpenWhispr 說明",
+      "read_openwhispr_helpName": "閱讀 OpenWhispr 說明",
+      "get_openwhispr_contextName": "讀取 OpenWhispr 設定"
     }
   },
   "assistant": {
@@ -4822,7 +4825,7 @@
     "sources": "官方文件",
     "loading": "正在查詢官方文件…",
     "settings": "目前應用程式設定",
-    "guidance": "內建指南（英文）。查詢文件不會更新此指南。",
+    "guidance": "此回覆使用的文件和設定。",
     "settingsNote": "為本次回覆讀取的設定和已知權限；不會變更設定或測試裝置。",
     "readAt": "讀取時間：{{time}}",
     "sourceStatus": {
@@ -4832,7 +4835,8 @@
     "reason": {
       "policy": "您組織的政策限制了線上文件查詢。",
       "rateLimit": "線上文件查詢已達上限。目前顯示內建指南。",
-      "unavailable": "無法核實目前的文件。目前顯示內建指南。"
+      "unavailable": "無法核實目前的文件。目前顯示內建指南。",
+      "privacy": "您的隱私設定將文件查詢限制為離線內容。"
     },
     "openFailed": "無法開啟文章。您可以複製連結並在瀏覽器中開啟。",
     "unknownAnswer": "我無法根據 OpenWhispr 內建指南核實該功能或控制項。我沒有變更任何設定。請查閱官方文件，或描述您看到的設定。",
@@ -4855,6 +4859,12 @@
     "engine": "引擎",
     "policy": "政策允許使用助理",
     "on": "開啟",
-    "off": "關閉"
+    "off": "關閉",
+    "microphonePermission": "麥克風權限",
+    "specificMicrophone": "指定麥克風",
+    "permissionGranted": "已允許",
+    "permissionDenied": "已拒絕",
+    "permissionRestricted": "受限",
+    "permissionNotDetermined": "尚未請求"
   }
 }

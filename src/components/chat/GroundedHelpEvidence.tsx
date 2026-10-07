@@ -4,12 +4,12 @@ import type { HelpEvidenceData } from "./helpEvidence";
 import { helpFactLabel, helpFactValue } from "./helpEvidenceText";
 
 export function HelpEvidence({ evidence }: { evidence: HelpEvidenceData }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [openFailed, setOpenFailed] = useState(false);
   const reasons = [...new Set(evidence.sources.flatMap((source) => source.reason ?? []))];
 
   return (
-    <div className="mt-3 border-t border-border/70 pt-2 text-xs" data-help-evidence>
+    <div className="select-none mt-3 border-t border-border/70 pt-2 text-xs" data-help-evidence>
       <p className="text-muted-foreground">{t("productHelp.guidance")}</p>
       {reasons.map((reason) => (
         <p key={reason} className="mt-1 text-muted-foreground">
@@ -17,7 +17,7 @@ export function HelpEvidence({ evidence }: { evidence: HelpEvidenceData }) {
         </p>
       ))}
       {evidence.facts.length > 0 && (
-        <details className="mt-2" open>
+        <details className="mt-2">
           <summary className="cursor-pointer font-medium">{t("productHelp.settings")}</summary>
           <p className="mt-1 text-muted-foreground">{t("productHelp.settingsNote")}</p>
           {evidence.readAt && (
@@ -27,12 +27,10 @@ export function HelpEvidence({ evidence }: { evidence: HelpEvidenceData }) {
           )}
           <dl className="mt-1 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-3 gap-y-1">
             {evidence.facts.map((fact, index) => (
-              <div key={`${fact.label}-${index}`} className="contents">
-                <dt className="text-muted-foreground break-words">
-                  {helpFactLabel(fact.label, t)}
-                </dt>
+              <div key={`${fact.key}-${index}`} className="contents">
+                <dt className="text-muted-foreground break-words">{helpFactLabel(fact.key, t)}</dt>
                 <dd dir="auto" className="break-words">
-                  {helpFactValue(fact.value, t)}
+                  {helpFactValue(fact.value, t, fact.key, i18n?.resolvedLanguage)}
                 </dd>
               </div>
             ))}
