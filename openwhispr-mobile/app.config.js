@@ -119,12 +119,34 @@ module.exports = () => {
   const iosQueries = iosInfoPlist.LSApplicationQueriesSchemes ?? [];
   const googleCalendar = createGoogleCalendarConfig(environment);
 
+  const affiliateDomain = firstNonEmpty(process.env.EXPO_PUBLIC_AFFILIATE_DOMAIN);
+  const affiliatePublishableKey = firstNonEmpty(process.env.EXPO_PUBLIC_AFFILIATE_PUBLISHABLE_KEY);
+  const affiliate =
+    affiliateDomain && affiliatePublishableKey
+      ? { domain: affiliateDomain, publishableKey: affiliatePublishableKey }
+      : undefined;
+  if (
+    affiliate &&
+    (!affiliatePublishableKey.startsWith('dub_pk_') ||
+      affiliateDomain !==
+        (environment.isDevelopment
+          ? 'open-whispr-affiliate-sandbox.dub.link'
+          : 'try.openwhispr.com'))
+  )
+    throw new Error(
+      'Affiliate configuration must match the app environment and use a publishable key',
+    );
+
   return {
     ...expo,
     name: expo.name,
     scheme: singleOrMany([environment.scheme, googleCalendar.iosRedirectScheme]),
     ios: {
       ...expo.ios,
+      associatedDomains: unique([
+        ...(expo.ios?.associatedDomains ?? []),
+        ...(affiliate ? [`applinks:${affiliate.domain}`] : []),
+      ]),
       bundleIdentifier: environment.iosBundleIdentifier,
       entitlements: {
         ...(expo.ios?.entitlements ?? {}),
@@ -148,6 +170,7 @@ module.exports = () => {
     plugins: withBrandFonts(expo.plugins),
     extra: {
       ...expo.extra,
+      affiliate,
       openWhispr: {
         ...environment,
         googleCalendar,
