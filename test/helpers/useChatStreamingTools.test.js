@@ -1125,7 +1125,10 @@ for (const provider of ["Cloud", "BYOK"]) {
     assert.match(JSON.stringify(modelOutputs), /ARTICLE_BODY_SENTINEL/);
     assert.match(JSON.stringify(modelOutputs), /Control\+Alt\+Q/);
     const saved = getMessages().find((message) => message.role === "assistant").toolCalls;
-    assert.match(JSON.stringify(saved), /https:\/\/docs\.openwhispr\.com\/help\/dictation\/hotkeys/);
+    assert.match(
+      JSON.stringify(saved),
+      /https:\/\/docs\.openwhispr\.com\/help\/dictation\/hotkeys/
+    );
     assert.doesNotMatch(
       JSON.stringify(saved),
       /ARTICLE_BODY_SENTINEL|Control\+Alt\+Q|activationMode/
