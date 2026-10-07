@@ -3200,7 +3200,10 @@
         "opening": "جاري الفتح...",
         "updatePaymentMethod": "تحديث طريقة الدفع",
         "contactOwnerTitle": "اتصل بمالك مساحة العمل الخاصة بك",
-        "contactOwnerDescription": "يمكن لمالك مساحة العمل فقط تحديث الفوترة لمساحة العمل هذه."
+        "contactOwnerDescription": "يمكن لمالك مساحة العمل فقط تحديث الفوترة لمساحة العمل هذه.",
+        "manageInAppStore": "الإدارة في App Store",
+        "manageInGooglePlay": "الإدارة في Google Play",
+        "managedInMobileStore": "تتم الفوترة عبر متجر التطبيقات على هاتفك. أدِر الاشتراك من هاتفك."
       },
       "checkout": {
         "couldNotOpenDescription": "واجهنا مشكلة في فتح صفحة الدفع. يرجى المحاولة مرة أخرى.",
@@ -3224,7 +3227,9 @@
         "nextBilling": "الفوترة القادمة: {{date}}",
         "pastDue": "{{used}} من {{limit}} كلمة مجانية هذا الأسبوع - قم بتحديث الدفع لاستعادة Pro",
         "trial": "عدد الأيام المتبقية: {{days}} - تفريغ غير محدود",
-        "unlimited": "غير محدود"
+        "unlimited": "غير محدود",
+        "accessUntil": "الوصول حتى {{date}}",
+        "storePaymentIssue": "تعذّر على متجر التطبيقات تجديد هذا الاشتراك. حدّث طريقة الدفع هناك للاحتفاظ بـ Pro."
       },
       "planLabels": {
         "free": "مجاني",

@@ -1865,7 +1865,10 @@
         "opening": "Ouverture...",
         "updatePaymentMethod": "Mettre à jour le moyen de paiement",
         "contactOwnerTitle": "Contactez le propriétaire de l'espace de travail",
-        "contactOwnerDescription": "Seul le propriétaire de l'espace de travail peut modifier sa facturation."
+        "contactOwnerDescription": "Seul le propriétaire de l'espace de travail peut modifier sa facturation.",
+        "manageInAppStore": "Gérer dans l'App Store",
+        "manageInGooglePlay": "Gérer dans Google Play",
+        "managedInMobileStore": "Facturé via la boutique d'applications de votre téléphone. Gérez-le depuis votre téléphone."
       },
       "checkout": {
         "couldNotOpenDescription": "Nous avons eu un problème pour ouvrir la page de paiement. Veuillez réessayer.",
@@ -1889,7 +1892,9 @@
         "nextBilling": "Prochaine facturation : {{date}}",
         "pastDue": "{{used}} / {{limit}} mots gratuits cette semaine - mettez à jour le paiement pour restaurer Pro",
         "trial": "{{days}} jours restants - transcriptions illimitées",
-        "unlimited": "Illimité"
+        "unlimited": "Illimité",
+        "accessUntil": "Accès jusqu'au {{date}}",
+        "storePaymentIssue": "Votre boutique d'applications n'a pas pu renouveler cet abonnement. Mettez-y à jour votre moyen de paiement pour conserver Pro."
       },
       "planLabels": {
         "free": "Gratuit",

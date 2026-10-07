@@ -1570,7 +1570,10 @@
         "opening": "開いています...",
         "updatePaymentMethod": "お支払い方法を更新",
         "contactOwnerTitle": "ワークスペースのオーナーにご連絡ください",
-        "contactOwnerDescription": "このワークスペースの請求を更新できるのはオーナーのみです。"
+        "contactOwnerDescription": "このワークスペースの請求を更新できるのはオーナーのみです。",
+        "manageInAppStore": "App Store で管理",
+        "manageInGooglePlay": "Google Play で管理",
+        "managedInMobileStore": "スマートフォンのアプリストアで請求されています。スマートフォンから管理してください。"
       },
       "checkout": {
         "couldNotOpenDescription": "購入ページを開く際に問題が発生しました。もう一度お試しください。",
@@ -1594,7 +1597,9 @@
         "nextBilling": "次の請求日: {{date}}",
         "pastDue": "今週 {{used}} / {{limit}} 無料ワード使用済み - お支払い方法を更新して Pro を復元",
         "trial": "残り {{days}} 日 - 無制限の文字起こし",
-        "unlimited": "無制限"
+        "unlimited": "無制限",
+        "accessUntil": "{{date}} まで利用可能",
+        "storePaymentIssue": "アプリストアでこのサブスクリプションを更新できませんでした。Pro を継続するには、ストアでお支払い方法を更新してください。"
       },
       "planLabels": {
         "free": "無料",

@@ -1623,7 +1623,10 @@
         "opening": "Abriendo...",
         "updatePaymentMethod": "Actualizar método de pago",
         "contactOwnerTitle": "Contacta al propietario del espacio de trabajo",
-        "contactOwnerDescription": "Solo el propietario del espacio de trabajo puede actualizar su facturación."
+        "contactOwnerDescription": "Solo el propietario del espacio de trabajo puede actualizar su facturación.",
+        "manageInAppStore": "Gestionar en App Store",
+        "manageInGooglePlay": "Gestionar en Google Play",
+        "managedInMobileStore": "Se factura a través de la tienda de aplicaciones de tu teléfono. Gestiónala desde tu teléfono."
       },
       "checkout": {
         "couldNotOpenDescription": "Tuvimos problemas al abrir la página de pago. Inténtalo de nuevo.",
@@ -1647,7 +1650,9 @@
         "nextBilling": "Próxima facturación: {{date}}",
         "pastDue": "{{used}} / {{limit}} palabras gratis esta semana: actualiza el pago para restaurar Pro",
         "trial": "{{days}} días restantes: transcripciones ilimitadas",
-        "unlimited": "Ilimitado"
+        "unlimited": "Ilimitado",
+        "accessUntil": "Acceso hasta el {{date}}",
+        "storePaymentIssue": "Tu tienda de aplicaciones no pudo renovar esta suscripción. Actualiza allí tu método de pago para conservar Pro."
       },
       "planLabels": {
         "free": "Gratis",

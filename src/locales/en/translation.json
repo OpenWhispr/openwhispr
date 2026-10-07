@@ -1865,7 +1865,10 @@
         "opening": "Opening...",
         "updatePaymentMethod": "Update Payment Method",
         "contactOwnerTitle": "Contact your workspace owner",
-        "contactOwnerDescription": "Only the workspace owner can update billing for this workspace."
+        "contactOwnerDescription": "Only the workspace owner can update billing for this workspace.",
+        "manageInAppStore": "Manage in App Store",
+        "manageInGooglePlay": "Manage in Google Play",
+        "managedInMobileStore": "Billed through your phone's app store. Manage it from your phone."
       },
       "checkout": {
         "couldNotOpenDescription": "We had trouble opening the checkout page. Please try again.",
@@ -1889,7 +1892,9 @@
         "nextBilling": "Next billing: {{date}}",
         "pastDue": "{{used}} / {{limit}} free words this week - update payment to restore Pro",
         "trial": "{{days}} days remaining - unlimited transcriptions",
-        "unlimited": "Unlimited"
+        "unlimited": "Unlimited",
+        "accessUntil": "Access until {{date}}",
+        "storePaymentIssue": "Your app store couldn't renew this subscription. Update your payment method there to keep Pro."
       },
       "planLabels": {
         "free": "Free",

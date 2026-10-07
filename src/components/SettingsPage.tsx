@@ -132,7 +132,7 @@ import {
 } from "../stores/settingsStore";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { highestPlan } from "../lib/usageStore";
-import { decideProPlanCardCta } from "../lib/upsell";
+import { decideProPlanCardCta, resolveAccountPlan, storeSubscriptionsUrl } from "../lib/upsell";
 import {
   canChangeCloudBackupPreference,
   effectiveAudioRetentionDays,
@@ -1444,7 +1444,9 @@ export default function SettingsPage({
   // Reads the usage payload, not the workspace store, so the upgrade affordances
   // stay hidden across the window where the store is still loading.
   const isWorkspaceCovered =
-    !usage?.isPersonallySubscribed && (usage?.entitledWorkspaceIds?.length ?? 0) > 0;
+    !usage?.isPersonallySubscribed &&
+    !usage?.storeBilling &&
+    (usage?.entitledWorkspaceIds?.length ?? 0) > 0;
   // Null until the store resolves, so the label waits rather than guessing a tier.
   const coveringPlanLabel =
     isWorkspaceCovered && coveringWorkspaces.length
@@ -1875,10 +1877,27 @@ export default function SettingsPage({
     isSignedIn,
     planStateKnown,
     isPersonallySubscribed: usage?.isPersonallySubscribed ?? false,
+    isStoreBilled: Boolean(usage?.storeBilling),
     plan: usage?.plan ?? "free",
     isTrial: usage?.isTrial ?? false,
     isWorkspaceCovered,
   });
+  const storeBilling = usage?.storeBilling ?? null;
+  const accountPlan = resolveAccountPlan({
+    isTrial: usage?.isTrial ?? false,
+    isPastDue: usage?.isPastDue ?? false,
+    isPersonallySubscribed: usage?.isPersonallySubscribed ?? false,
+    storeBilling,
+    isWorkspaceCovered,
+  });
+  const storeUrl = storeBilling?.store ? storeSubscriptionsUrl(storeBilling.store) : null;
+  const periodEndDate = usage?.currentPeriodEnd
+    ? new Date(usage.currentPeriodEnd).toLocaleDateString(i18n.language, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : null;
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isDeleteAccountDialogOpen, setIsDeleteAccountDialogOpen] = useState(false);
@@ -2389,11 +2408,11 @@ export default function SettingsPage({
                         <SettingsPanelRow>
                           <SettingsRow
                             label={
-                              usage.isTrial
+                              accountPlan.row === "trial"
                                 ? t("settingsPage.account.planLabels.trial")
-                                : usage.isPastDue
+                                : accountPlan.row === "pastDue"
                                   ? t("settingsPage.account.planLabels.free")
-                                  : usage.isPersonallySubscribed
+                                  : accountPlan.row === "personal" || accountPlan.row === "store"
                                     ? usage.plan === "business"
                                       ? t("settingsPage.account.planLabels.business")
                                       : t("settingsPage.account.planLabels.pro")
@@ -2401,45 +2420,51 @@ export default function SettingsPage({
                                       t("settingsPage.account.planLabels.free"))
                             }
                             description={
-                              usage.isTrial
+                              accountPlan.row === "trial"
                                 ? t("settingsPage.account.planDescriptions.trial", {
                                     days: usage.trialDaysLeft,
                                   })
-                                : usage.isPastDue
+                                : accountPlan.row === "pastDue"
                                   ? t("settingsPage.account.planDescriptions.pastDue", {
                                       used: usage.wordsUsed.toLocaleString(i18n.language),
                                       limit: usage.limit.toLocaleString(i18n.language),
                                     })
-                                  : usage.isPersonallySubscribed
-                                    ? usage.currentPeriodEnd
-                                      ? t("settingsPage.account.planDescriptions.nextBilling", {
-                                          date: new Date(usage.currentPeriodEnd).toLocaleDateString(
-                                            i18n.language,
-                                            { month: "short", day: "numeric", year: "numeric" }
-                                          ),
-                                        })
-                                      : t("settingsPage.account.planDescriptions.unlimited")
-                                    : coveringWorkspaceNames.length > 0
-                                      ? t("settingsPage.unifiedBilling.providedBy", {
-                                          workspaces: coveringWorkspaceNames.join(", "),
-                                        })
-                                      : // usage.limit is -1 once subscribed, which the
-                                        // free-usage copy would print as "-1 words".
-                                        isWorkspaceCovered
-                                        ? t("settingsPage.account.planDescriptions.unlimited")
-                                        : t("settingsPage.account.planDescriptions.freeUsage", {
-                                            used: usage.wordsUsed.toLocaleString(i18n.language),
-                                            limit: usage.limit.toLocaleString(i18n.language),
+                                  : accountPlan.row === "store" &&
+                                      storeBilling?.status === "past_due"
+                                    ? t("settingsPage.account.planDescriptions.storePaymentIssue")
+                                    : accountPlan.row === "personal" || accountPlan.row === "store"
+                                      ? periodEndDate
+                                        ? // A canceled store subscription stays entitled
+                                          // until the period it was paid for ends.
+                                          storeBilling?.status === "canceled"
+                                          ? t("settingsPage.account.planDescriptions.accessUntil", {
+                                              date: periodEndDate,
+                                            })
+                                          : t("settingsPage.account.planDescriptions.nextBilling", {
+                                              date: periodEndDate,
+                                            })
+                                        : t("settingsPage.account.planDescriptions.unlimited")
+                                      : coveringWorkspaceNames.length > 0
+                                        ? t("settingsPage.unifiedBilling.providedBy", {
+                                            workspaces: coveringWorkspaceNames.join(", "),
                                           })
+                                        : // usage.limit is -1 once subscribed, which the
+                                          // free-usage copy would print as "-1 words".
+                                          isWorkspaceCovered
+                                          ? t("settingsPage.account.planDescriptions.unlimited")
+                                          : t("settingsPage.account.planDescriptions.freeUsage", {
+                                              used: usage.wordsUsed.toLocaleString(i18n.language),
+                                              limit: usage.limit.toLocaleString(i18n.language),
+                                            })
                             }
                           >
-                            {usage.isTrial ? (
+                            {accountPlan.row === "trial" ? (
                               <Badge variant="info">{t("settingsPage.account.badges.trial")}</Badge>
-                            ) : usage.isPastDue ? (
+                            ) : accountPlan.row === "pastDue" ? (
                               <Badge variant="destructive">
                                 {t("settingsPage.account.badges.pastDue")}
                               </Badge>
-                            ) : usage.isPersonallySubscribed ? (
+                            ) : accountPlan.row === "personal" || accountPlan.row === "store" ? (
                               <Badge variant="success">
                                 {usage.plan === "business"
                                   ? t("settingsPage.account.badges.business")
@@ -2498,7 +2523,7 @@ export default function SettingsPage({
                         )}
 
                         <SettingsPanelRow>
-                          {usage.isPastDue ? (
+                          {accountPlan.action === "updatePayment" ? (
                             <Button
                               onClick={() => void openBillingPortal()}
                               disabled={isOpeningBilling}
@@ -2514,7 +2539,22 @@ export default function SettingsPage({
                                 t("settingsPage.account.billing.updatePaymentMethod")
                               )}
                             </Button>
-                          ) : usage.isPersonallySubscribed && !usage.isTrial ? (
+                          ) : accountPlan.action === "manageInStore" && storeUrl ? (
+                            <Button
+                              onClick={() => void window.electronAPI?.openExternal?.(storeUrl)}
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                            >
+                              {storeBilling?.store === "play_store"
+                                ? t("settingsPage.account.billing.manageInGooglePlay")
+                                : t("settingsPage.account.billing.manageInAppStore")}
+                            </Button>
+                          ) : accountPlan.action === "storeNote" ? (
+                            <p className="text-xs text-muted-foreground">
+                              {t("settingsPage.account.billing.managedInMobileStore")}
+                            </p>
+                          ) : accountPlan.action === "manageBilling" ? (
                             <Button
                               onClick={() => void openBillingPortal()}
                               variant="outline"
@@ -2526,7 +2566,7 @@ export default function SettingsPage({
                                 ? t("settingsPage.account.billing.opening")
                                 : t("settingsPage.account.billing.manageBilling")}
                             </Button>
-                          ) : isWorkspaceCovered ? null : (
+                          ) : accountPlan.action === "none" ? null : (
                             <Button
                               onClick={async () => {
                                 setCheckoutTier("plan-upgrade");
@@ -2568,6 +2608,7 @@ export default function SettingsPage({
                         "rounded-md p-2.5 flex flex-col",
                         planStateKnown &&
                           !usage?.isPersonallySubscribed &&
+                          !storeBilling &&
                           !usage?.isTrial &&
                           !isWorkspaceCovered
                           ? "border-2 border-primary/30 bg-primary/3 dark:border-primary/20 dark:bg-primary/5"
@@ -2630,7 +2671,7 @@ export default function SettingsPage({
                             ? t("settingsPage.account.billing.opening")
                             : t("settingsPage.account.pricing.downgrade")}
                         </Button>
-                      ) : planStateKnown && !isWorkspaceCovered ? (
+                      ) : planStateKnown && !isWorkspaceCovered && !storeBilling ? (
                         <div className="mt-2 text-center">
                           <span className="text-[9px] font-medium text-primary/70">
                             {t("settingsPage.account.pricing.currentPlan")}
@@ -2642,7 +2683,7 @@ export default function SettingsPage({
                     <div
                       className={cn(
                         "rounded-md border-2 p-2.5 flex flex-col",
-                        usage?.isPersonallySubscribed && usage?.plan === "pro"
+                        (usage?.isPersonallySubscribed || storeBilling) && usage?.plan === "pro"
                           ? "border-primary/40 bg-primary/5 dark:border-primary/30 dark:bg-primary/8"
                           : "border-primary/20 bg-primary/2 dark:border-primary/15 dark:bg-primary/3"
                       )}

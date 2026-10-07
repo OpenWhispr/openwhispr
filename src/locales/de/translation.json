@@ -1865,7 +1865,10 @@
         "opening": "Wird geöffnet...",
         "updatePaymentMethod": "Zahlungsmethode aktualisieren",
         "contactOwnerTitle": "Wenden Sie sich an den Workspace-Inhaber",
-        "contactOwnerDescription": "Nur der Workspace-Inhaber kann die Abrechnung für diesen Workspace ändern."
+        "contactOwnerDescription": "Nur der Workspace-Inhaber kann die Abrechnung für diesen Workspace ändern.",
+        "manageInAppStore": "Im App Store verwalten",
+        "manageInGooglePlay": "In Google Play verwalten",
+        "managedInMobileStore": "Abrechnung über den App-Store Ihres Smartphones. Verwalten Sie das Abo auf Ihrem Smartphone."
       },
       "checkout": {
         "couldNotOpenDescription": "Die Checkout-Seite konnte nicht geöffnet werden. Bitte versuchen Sie es erneut.",
@@ -1889,7 +1892,9 @@
         "nextBilling": "Nächste Abrechnung: {{date}}",
         "pastDue": "{{used}} / {{limit}} kostenlose Wörter diese Woche – Zahlung aktualisieren, um Pro wiederherzustellen",
         "trial": "Noch {{days}} Tage – unbegrenzte Transkriptionen",
-        "unlimited": "Unbegrenzt"
+        "unlimited": "Unbegrenzt",
+        "accessUntil": "Zugang bis {{date}}",
+        "storePaymentIssue": "Ihr App-Store konnte dieses Abo nicht verlängern. Aktualisieren Sie dort Ihre Zahlungsmethode, um Pro zu behalten."
       },
       "planLabels": {
         "free": "Kostenlos",

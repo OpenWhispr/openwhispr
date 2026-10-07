@@ -1570,7 +1570,10 @@
         "opening": "開啟中...",
         "updatePaymentMethod": "更新付款方式",
         "contactOwnerTitle": "請聯絡工作區擁有者",
-        "contactOwnerDescription": "只有工作區擁有者才能更新該工作區的帳單。"
+        "contactOwnerDescription": "只有工作區擁有者才能更新該工作區的帳單。",
+        "manageInAppStore": "在 App Store 中管理",
+        "manageInGooglePlay": "在 Google Play 中管理",
+        "managedInMobileStore": "透過手機的應用程式商店計費。請在手機上管理訂閱。"
       },
       "checkout": {
         "couldNotOpenDescription": "開啟結帳頁面時發生問題。請再試一次。",
@@ -1594,7 +1597,9 @@
         "nextBilling": "下次扣款日：{{date}}",
         "pastDue": "本週 {{used}} / {{limit}} 免費字數——更新付款方式以恢復 Pro",
         "trial": "剩餘 {{days}} 天——無限轉錄",
-        "unlimited": "無限"
+        "unlimited": "無限",
+        "accessUntil": "可使用至 {{date}}",
+        "storePaymentIssue": "應用程式商店無法續訂此訂閱。請在商店中更新付款方式以繼續使用 Pro。"
       },
       "planLabels": {
         "free": "免費",
