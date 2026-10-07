@@ -183,6 +183,7 @@ const {
 const {
   createServerTokenPoster,
   fetchRealtimeTokenForProvider,
+  isSignInRefusal,
 } = require("./realtimeTokenProviders");
 const { getCalendarAvailability } = require("./calendarAvailabilityService");
 
@@ -7478,7 +7479,12 @@ class IPCHandlers {
           }
           resetMeetingReconnectAudio();
           if (!win.isDestroyed()) {
-            win.webContents.send("meeting-transcription-error", error.message);
+            // A renewal refused for the session gets a sentinel the renderer explains,
+            // instead of the API's bare "Invalid session" (#2427).
+            win.webContents.send(
+              "meeting-transcription-error",
+              isSignInRefusal(error) ? "signInExpired" : error.message
+            );
           }
           return canRestoreOld;
         }

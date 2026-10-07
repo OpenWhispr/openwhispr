@@ -55,7 +55,7 @@ async function startWithResult(t, startResult) {
   );
   assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
   assert.equal(globalThis.__signInToasts.length, 1);
-  return { toast: globalThis.__signInToasts[0], i18n };
+  return { toast: globalThis.__signInToasts[0], i18n, store };
 }
 
 for (const code of ["AUTH_EXPIRED", "AUTH_REQUIRED"]) {
@@ -83,5 +83,25 @@ test("any other start failure keeps its message and offers no sign-in", async (t
   });
 
   assert.equal(toast.description, "Token request failed: 500");
+  assert.equal(toast.actions, undefined);
+});
+
+test("a session that expires mid-recording is explained without a Sign in action", async (t) => {
+  // Signing in reloads the Control Panel, which would take a running recording with it.
+  const { i18n, store } = await startWithResult(t, {
+    success: false,
+    error: "Token request failed: 500",
+    status: 500,
+  });
+  await React.act(async () =>
+    store.useMeetingRecordingStore.setState((state) => ({
+      error: "signInExpired",
+      errorNonce: state.errorNonce + 1,
+    }))
+  );
+
+  const toast = globalThis.__signInToasts[1];
+  assert.ok(i18n.exists("notes.meeting.signInExpired"));
+  assert.equal(toast.description, i18n.t("notes.meeting.signInExpired"));
   assert.equal(toast.actions, undefined);
 });

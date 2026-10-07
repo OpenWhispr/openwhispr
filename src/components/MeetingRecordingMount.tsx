@@ -25,6 +25,8 @@ const MEETING_ERROR_KEYS: Record<string, string> = {
   unsupportedProvider: "notes.meeting.unsupportedProvider",
   noProviderSelected: "notes.meeting.noProviderSelected",
   signInRequired: "notes.meeting.signInRequired",
+  // Mid-recording, so no Sign in action: signing in reloads this window and the recording with it.
+  signInExpired: "notes.meeting.signInExpired",
 };
 
 export default function MeetingRecordingMount(): null {
@@ -82,7 +84,7 @@ export default function MeetingRecordingMount(): null {
       title: t("notes.meeting.title"),
       description: errorKey ? t(errorKey, { provider: argument }) : error,
       variant: "destructive",
-      duration: needsSignIn ? 8000 : undefined,
+      duration: needsSignIn || sentinel === "signInExpired" ? 8000 : undefined,
       actions: needsSignIn ? [{ label: t("common.signIn"), onClick: requestSignIn }] : undefined,
       actionsAlign: needsSignIn ? "end" : undefined,
     });

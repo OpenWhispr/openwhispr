@@ -163,3 +163,16 @@ test("meeting connects forward the credential mode", () => {
     assert.match(block, /^\s*mode: options\.mode,$/m);
   }
 });
+
+test("a mid-meeting renewal refused for the session reports the sign-in sentinel", () => {
+  // The 55-minute renewal and reconnects mint new tokens; a stale session used to
+  // reach the toast as the API's bare "Invalid session" (#2427).
+  const reconnectCatch = source.slice(
+    source.indexOf('debugLogger.error("Meeting stream reconnect failed"'),
+    source.indexOf("return canRestoreOld;")
+  );
+  assert.match(
+    reconnectCatch,
+    /"meeting-transcription-error",\s*isSignInRefusal\(error\) \? "signInExpired" : error\.message/
+  );
+});

@@ -342,3 +342,32 @@ test("server tokens: a success posts the body with credential and policy headers
   assert.equal(requests[0].init.headers["x-policy"], "applied");
   assert.equal(requests[0].init.body, '{"streams":1}');
 });
+
+test("server tokens: only session refusals count as sign-in refusals", async () => {
+  const { isSignInRefusal } = await load();
+  const refusal = async (overrides) => {
+    try {
+      await (
+        await serverTokenPoster(overrides)
+      )("/api/openai-realtime-token");
+    } catch (error) {
+      return error;
+    }
+    assert.fail("expected the token request to be refused");
+  };
+  assert.equal(
+    isSignInRefusal(await refusal({ proxyFetch: async () => jsonResponse(401, {}) })),
+    true
+  );
+  assert.equal(isSignInRefusal(await refusal({ getAuthHeader: async () => ({}) })), true);
+  assert.equal(
+    isSignInRefusal(
+      await refusal({ proxyFetch: async () => jsonResponse(403, { code: "POLICY_BLOCKED" }) })
+    ),
+    false
+  );
+  assert.equal(
+    isSignInRefusal(await refusal({ proxyFetch: async () => jsonResponse(500, null) })),
+    false
+  );
+});

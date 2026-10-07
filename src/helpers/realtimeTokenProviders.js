@@ -174,8 +174,12 @@ function createServerTokenPoster({
   };
 }
 
+const isSignInRefusal = (error) =>
+  error?.code === "AUTH_EXPIRED" || error?.code === "AUTH_REQUIRED";
+
 module.exports = {
   REALTIME_TOKEN_PROVIDERS,
   createServerTokenPoster,
   fetchRealtimeTokenForProvider,
+  isSignInRefusal,
 };

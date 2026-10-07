@@ -3137,6 +3137,7 @@
       "unsupportedProvider": "La registrazione delle note non può usare {{provider}} per la trascrizione dal vivo. Apri le Impostazioni e scegli Locale o un provider in streaming.",
       "noProviderSelected": "Nessun provider selezionato per la registrazione delle note. Apri le Impostazioni e scegli Locale o un provider in streaming.",
       "signInRequired": "La registrazione delle note richiede l'accesso. Accedi, per favore.",
+      "signInExpired": "La sessione è scaduta, quindi la registrazione delle note non può rinnovare la connessione e potrebbe interrompersi. Accedi di nuovo al termine di questa registrazione.",
       "systemAudioSilent": {
         "title": "Nessun audio della riunione rilevato finora",
         "description": "Finora solo il tuo microfono ha captato suoni. Sei in una videochiamata? Verifica che l'audio della riunione venga riprodotto su questo computer e non sia disattivato. Stai registrando di persona? Puoi ignorare questo avviso: il tuo microfono cattura la stanza."
