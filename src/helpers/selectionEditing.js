@@ -10,7 +10,7 @@ SELECTION EDITING MODE:
 
 export function buildSelectionEditSystemPrompt(basePrompt, completionMarker = "") {
   const markerInstruction = completionMarker
-    ? `\n- Immediately append the exact marker shown on the next line after the final replacement character, with no added space or newline. End there: nothing may follow the marker (no period, whitespace, or explanation). The desktop app removes it before replacing the selection.\n${completionMarker}`
+    ? `\n- The desktop app removes the completion marker before replacing the selection. Nothing may follow the marker (no period, whitespace, or explanation).\n- Immediately append this exact completion marker after the final replacement character, with no added spaces or newline: ${completionMarker}`
     : "";
   return `${String(basePrompt ?? "").trim()}${SELECTION_EDIT_SYSTEM_SUFFIX}${markerInstruction}`;
 }

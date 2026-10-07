@@ -204,3 +204,97 @@ test("a late local result after cancellation cannot bank an edit, and legitimate
   );
   assert.equal(manager.pendingSelectionEdit.sessionId, "captured-session");
 });
+
+test("wake removal keeps short operands before exact and fuzzy names, including hotkey instructions", async (t) => {
+  const { createManager } = await setup(t);
+  for (const prefix of ["A.", "B.", "10.", "123.", "🙂."]) {
+    for (const name of ["OpenWhispr", "OpenWhisper", "Open Whispr", "Open Whisper"]) {
+      for (const voiceAgentRequested of [false, true]) {
+        const instruction = `${prefix}  ${name}, replace the entire selection with the operand before your name.`;
+        const expected = voiceAgentRequested
+          ? instruction
+          : `${prefix}  replace the entire selection with the operand before your name.`;
+        let request;
+        const manager = createManager({
+          voiceAgentRequested,
+          processWithReasoningModel: async (prompt) => {
+            request = prompt;
+            return '{"replacement":"synthetic"}';
+          },
+        });
+        await manager.processAgentCommand(instruction, "local-model", "OpenWhispr", {
+          ...config,
+          wakeWordLanguage: "en",
+        });
+        assert.ok(request.includes(`Editing instruction:\n${expected}\n\nReturn`), request);
+        assert.equal(manager.pendingSelectionEdit.sessionId, "captured-session");
+      }
+    }
+  }
+});
+
+test("non-local empty and truncated failures use selection recovery and retain provider metadata", async (t) => {
+  const { createManager, vite } = await setup(t);
+  const { emptyOutputError, truncatedOutputError } = await vite.ssrLoadModule(
+    "/services/ai/chatRequestBody.ts"
+  );
+  const causes = [
+    [
+      emptyOutputError(),
+      "SELECTION_EDIT_EMPTY_RESPONSE",
+      "hooks.audioRecording.selectionEditing.emptyResponse",
+    ],
+    [
+      truncatedOutputError(),
+      "SELECTION_EDIT_OUTPUT_TRUNCATED",
+      "hooks.audioRecording.selectionEditing.truncatedResponse",
+    ],
+    [
+      Object.assign(new Error("auth"), {
+        code: "PROVIDER_AUTH_FAILED",
+        messageKey: "providerErrors.auth",
+        messageParams: { provider: "OpenAI" },
+        settingsTarget: "llms",
+        technicalDetails: "HTTP 401",
+      }),
+      "PROVIDER_AUTH_FAILED",
+      "providerErrors.auth",
+    ],
+    [
+      Object.assign(new Error("network"), {
+        code: "PROVIDER_NETWORK_ERROR",
+        messageKey: "providerErrors.network",
+        messageParams: { provider: "OpenAI" },
+        technicalDetails: "connection refused",
+      }),
+      "PROVIDER_NETWORK_ERROR",
+      "providerErrors.network",
+    ],
+  ];
+  for (const [cause, code, messageKey] of causes) {
+    const originalKey = cause.messageKey;
+    const manager = createManager({
+      processWithReasoningModel: async () => {
+        throw cause;
+      },
+    });
+    await assert.rejects(
+      manager.processAgentCommand("edit", "cloud-model", "Agent", {
+        ...config,
+        provider: "openai",
+      }),
+      (error) => {
+        assert.equal(error.code, code);
+        assert.equal(error.messageKey, messageKey);
+        assert.equal(error.selectionEditFatal, true);
+        assert.equal(error.cause, cause);
+        for (const key of ["messageParams", "settingsTarget", "technicalDetails"])
+          assert.equal(error[key], cause[key]);
+        return true;
+      }
+    );
+    assert.equal(cause.messageKey, originalKey, "ordinary cleanup's error is unchanged");
+    assert.equal(manager.pendingSelectionEdit, undefined);
+    assert.equal(manager.pendingAssistantConversation, undefined);
+  }
+});

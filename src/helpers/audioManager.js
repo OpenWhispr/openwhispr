@@ -1,4 +1,8 @@
 import ReasoningService from "../services/ReasoningService";
+import {
+  EMPTY_OUTPUT_MESSAGE_KEY,
+  TRUNCATED_OUTPUT_MESSAGE_KEY,
+} from "../services/ai/chatRequestBody";
 import logger from "../utils/logger";
 import { assertValidCleanupOutput } from "../utils/cleanupOutput";
 import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
@@ -2918,9 +2922,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         OUTPUT_COMPLETION_UNVERIFIED: "invalidResponse",
         OUTPUT_TRUNCATED: "truncatedResponse",
       };
-      const failure = failures[cause.code];
+      const outputCode =
+        cause.messageKey === EMPTY_OUTPUT_MESSAGE_KEY
+          ? "SELECTION_EDIT_EMPTY_RESPONSE"
+          : cause.messageKey === TRUNCATED_OUTPUT_MESSAGE_KEY
+            ? "OUTPUT_TRUNCATED"
+            : cause.code;
+      const failure = failures[outputCode];
       error.code = failure
-        ? `SELECTION_EDIT_${cause.code.replace(/^SELECTION_EDIT_/, "")}`
+        ? `SELECTION_EDIT_${outputCode.replace(/^SELECTION_EDIT_/, "")}`
         : cause.code || "SELECTION_EDIT_REASONING_FAILED";
       error.messageKey = failure
         ? `hooks.audioRecording.selectionEditing.${failure}`

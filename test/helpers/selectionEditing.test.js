@@ -89,7 +89,8 @@ test("the marker contract is exact, unique, and never demonstrated with a traili
   const { buildSelectionEditSystemPrompt, extractSelectionEditReplacement } = await load();
   const marker = "__OPENWHISPR_SELECTION_COMPLETE_test__";
   const prompt = buildSelectionEditSystemPrompt("", marker);
-  assert.ok(prompt.split("\n").includes(marker));
+  assert.ok(prompt.endsWith(`: ${marker}`));
+  assert.ok(!prompt.includes(`\n${marker}`));
   assert.ok(!prompt.includes(`${marker}.`));
   for (const output of [
     `edit${marker}.`,

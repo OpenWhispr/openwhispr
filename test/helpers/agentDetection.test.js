@@ -400,3 +400,28 @@ test("CJK normalization does not invent a trigger the transcript never had", asy
   assert.equal(detectAgentName("Jarvis明日の予定は", "Jarvis", "ja", snippets), true);
   assert.equal(detectAgentName("Jarvis总结这条笔记", "Jarvis", "zh", snippets), true);
 });
+
+test("format-preserving wake removal chooses the closest overlapping name without consuming operands", async () => {
+  const { stripAgentAddressPreservingFormatting: strip } = await load();
+  for (const [input, language, expected] of [
+    ["B. OpenWhispr, use B.", "en", "B. use B."],
+    ["!. OpenWhispr, use punctuation.", "en", "!. use punctuation."],
+    [
+      "🙂.  OpenWhispr、「か\u3099」を「き」に変えて。",
+      "ja",
+      "🙂.  「か\u3099」を「き」に変えて。",
+    ],
+    ["10。OpenWhispr，把旧改为新。", "zh", "10。把旧改为新。"],
+    [
+      "Hey Open Whisper, replace OpenWhispr with Assistant.",
+      "en",
+      "replace OpenWhispr with Assistant.",
+    ],
+    [
+      "Open Whisper, say this. OpenWhispr, keep this literal.",
+      "en",
+      "say this. OpenWhispr, keep this literal.",
+    ],
+  ])
+    assert.equal(strip(input, "OpenWhispr", language), expected, input);
+});
