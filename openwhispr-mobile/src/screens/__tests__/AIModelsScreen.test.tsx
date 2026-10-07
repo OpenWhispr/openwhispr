@@ -219,3 +219,12 @@ it('flags a provider workflow whose key was removed', async () => {
   mockCredentialListener?.();
   expect(await screen.findByText('Groq · Key missing')).toBeTruthy();
 });
+
+it.each([
+  ['unsupportedDevice', 'Not supported on this iPhone'],
+  ['unsupportedOS', 'Needs iOS 26'],
+])('says when this iPhone cannot run Apple Intelligence (%s)', async (status, label) => {
+  mockReadiness.mockResolvedValue({ status, tokenCounting: false });
+  render(<AIModelsScreen />);
+  expect(await screen.findByText(new RegExp(`Status: ${label}\\.`))).toBeTruthy();
+});

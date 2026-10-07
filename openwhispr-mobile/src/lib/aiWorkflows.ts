@@ -26,6 +26,10 @@ export const UNSET_PROVIDER_NOTES: Partial<Record<MobileInferenceScope, string>>
 export const UNSET_ON_DEVICE_CLEANUP_NOTE =
   'Not saved yet. On-Device mode skips cleanup until you choose On-Device or Bring Your Own Key.';
 
+// The same, on an iPhone that can never run On-Device cleanup.
+export const UNSET_UNSUPPORTED_CLEANUP_NOTE =
+  "Not saved yet. This iPhone can't run On-Device cleanup, so On-Device mode skips it until you choose Bring Your Own Key.";
+
 // What On-Device mode means for each workflow other than dictation.
 export const ON_DEVICE_MODE_NOTES: Partial<Record<MobileInferenceScope, string>> = {
   upload:

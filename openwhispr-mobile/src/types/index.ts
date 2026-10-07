@@ -131,6 +131,9 @@ export type LocalReasoningStatus =
   | 'ready'
   | 'disabled'
   | 'unavailable'
+  // This iPhone can never run Apple Intelligence, or not on its iOS version.
+  | 'unsupportedDevice'
+  | 'unsupportedOS'
   | 'appleIntelligenceOff'
   | 'modelNotReady';
 

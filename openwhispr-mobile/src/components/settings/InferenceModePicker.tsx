@@ -9,9 +9,11 @@ type Props = {
   // null when no mode is saved and none applies, so nothing is shown as picked.
   selectedMode: InferenceMode | null;
   onSelect: (mode: InferenceMode) => void;
+  // Modes this phone can never run, each with the reason shown in place of its description.
+  unavailable?: Partial<Record<InferenceMode, string>>;
 };
 
-export function InferenceModePicker({ scope, selectedMode, onSelect }: Props) {
+export function InferenceModePicker({ scope, selectedMode, onSelect, unavailable }: Props) {
   const modes = getInferenceModes(scope);
   return (
     <SettingsSection title="Mode">
@@ -22,7 +24,8 @@ export function InferenceModePicker({ scope, selectedMode, onSelect }: Props) {
           icon={opt.icon}
           mdIcon={opt.mdIcon}
           title={opt.title}
-          description={opt.description}
+          description={unavailable?.[opt.mode] ?? opt.description}
+          disabled={!!unavailable?.[opt.mode]}
           onPress={() => onSelect(opt.mode)}
           selected={selectedMode === opt.mode}
           rightElement={
