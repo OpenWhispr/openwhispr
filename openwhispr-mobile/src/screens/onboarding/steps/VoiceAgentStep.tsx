@@ -19,11 +19,11 @@ import { addKeyboardStatusChangedListener } from '../../../../modules/app-group-
 
 type Phase = 'start' | 'asking' | 'first-draft' | 'refined' | 'done';
 
-// What users say in the live try, and what the example shows when the live try can't run. The
-// request names the company and asks for a short email so the draft leaves few blanks, usually just
-// the sender's name, for the follow-up to fill in.
+// What users say in the live try, and what the example shows when the live try can't run. It's kept
+// short so it's easy to repeat, and names the company and when so the draft leaves nothing to fill
+// in but the sender's name, which the follow-up adds.
 const REQUEST =
-  'I cancelled my Netflix subscription last month but got charged again. Draft a short email asking for a refund.';
+  'I cancelled Netflix last month but got charged again. Draft a message asking for a refund.';
 const EXAMPLE_DRAFT =
   'Hi Netflix Support,\n\nI cancelled my subscription last month, but I was charged again this month. Could you please refund this charge?\n\nThanks';
 
@@ -37,7 +37,7 @@ const INSTRUCTIONS: Record<Phase, ReactNode> = {
     </>
   ),
   asking: `Say: “${REQUEST}”`,
-  'first-draft': 'Now tap Ask for changes and fill in the blanks. Say: “My name is …”',
+  'first-draft': 'Now tap Ask for changes and add your name. Say: “My name is …”',
   refined: 'Tap ✓ to insert it.',
   done: 'That’s your voice assistant.',
 };
