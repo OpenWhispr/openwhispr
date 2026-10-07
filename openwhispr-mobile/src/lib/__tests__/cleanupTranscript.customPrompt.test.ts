@@ -132,7 +132,7 @@ describe('cleanupTranscript privacy hint follows the resolved route', () => {
     expect(req.routing).toBeUndefined();
   });
 
-  it('marks provider cleanup in private mode as private content', async () => {
+  it('sends provider cleanup in private mode to the provider the user saved for it', async () => {
     mockActiveMode = 'private';
     mockConfig = { cleanupEnabled: true, defaultMode: 'private' };
     await cleanupTranscript('um hello there', {
@@ -146,6 +146,6 @@ describe('cleanupTranscript privacy hint follows the resolved route', () => {
         credentialRef: 'provider.openai',
       },
     });
-    expect(lastRequest().routing).toEqual({ isPrivateNote: true });
+    expect(lastRequest().routing).toEqual({ sendToChosenProvider: true });
   });
 });

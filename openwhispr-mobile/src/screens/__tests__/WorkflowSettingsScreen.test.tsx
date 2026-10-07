@@ -443,7 +443,9 @@ it('shows no cleanup mode for a private-mode user who has not saved one, since c
   render(<WorkflowSettingsScreen />);
   expect(selectedMode()).toBeUndefined();
   expect(
-    screen.getByText('Not saved yet. On-Device mode skips cleanup until you choose On-Device.'),
+    screen.getByText(
+      'Not saved yet. On-Device mode skips cleanup until you choose On-Device or Bring Your Own Key.',
+    ),
   ).toBeTruthy();
   expect(screen.queryByText('Runs on Apple Intelligence on this iPhone.')).toBeNull();
 });
@@ -789,7 +791,7 @@ it('explains that On-Device mode skips a saved Cloud cleanup choice', () => {
   expect(selectedMode()).toBe('OpenWhispr Cloud');
   expect(
     screen.getByText(
-      'On-Device cleanup runs on this iPhone. Any other choice is skipped until dictation leaves On-Device, so the transcript never leaves this phone.',
+      'In On-Device mode, cleanup runs on this iPhone, or sends only the transcript text to your provider with Bring Your Own Key. OpenWhispr Cloud cleanup is skipped until dictation leaves On-Device.',
     ),
   ).toBeTruthy();
 });

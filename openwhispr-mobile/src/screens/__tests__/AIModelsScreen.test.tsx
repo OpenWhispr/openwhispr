@@ -140,18 +140,26 @@ it('shows what each workflow really does while On-Device mode is on', async () =
   await screen.findByText(/Status: Ready/);
 });
 
-it.each([
-  ['nothing saved', undefined],
-  ['a provider', { mode: 'providers', providerId: 'openai', modelId: 'gpt-5-mini' }],
-])('shows cleanup as skipped in On-Device mode with %s', async (_label, cleanup) => {
+it('shows cleanup as skipped in On-Device mode with nothing saved', async () => {
+  mockActiveMode = 'private';
+  mockConfig = { defaultMode: 'private', inference: { dictation: { mode: 'local' } } };
+  render(<AIModelsScreen />);
+  expect(screen.getByText('Skipped')).toBeTruthy();
+  await screen.findByText(/Status: Ready/);
+});
+
+it('names the cleanup provider in On-Device mode, which cleans On-Device transcripts', async () => {
   mockActiveMode = 'private';
   mockConfig = {
     defaultMode: 'private',
-    inference: { dictation: { mode: 'local' }, ...(cleanup ? { cleanup } : {}) },
+    inference: {
+      dictation: { mode: 'local' },
+      cleanup: { mode: 'providers', providerId: 'openai', modelId: 'gpt-5-mini' },
+    },
   };
   render(<AIModelsScreen />);
-  expect(screen.getByText('Skipped')).toBeTruthy();
-  expect(screen.queryByText('OpenAI')).toBeNull();
+  expect(screen.queryByText('Skipped')).toBeNull();
+  expect(screen.getByText('OpenAI')).toBeTruthy();
   await screen.findByText(/Status: Ready/);
 });
 

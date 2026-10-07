@@ -122,6 +122,9 @@ export interface ReasoningResponse {
 export interface ReasoningRoutingOptions {
   isPrivateNote?: boolean;
   allowCloudFallback?: boolean;
+  // The provider route is the one the user saved for this workflow, which is their
+  // consent to send it this content, even in On-Device mode.
+  sendToChosenProvider?: boolean;
 }
 
 export type LocalReasoningStatus =

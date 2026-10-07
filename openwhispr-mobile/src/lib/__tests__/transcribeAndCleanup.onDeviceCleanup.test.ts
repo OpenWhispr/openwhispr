@@ -1,7 +1,7 @@
 /**
- * A transcript made on this phone is cleaned only when the user chose On-Device
- * cleanup, and then only by Apple Intelligence on this phone. Any other cleanup
- * choice would send it off the device, so the raw transcript is kept.
+ * A transcript made on this phone is cleaned by Apple Intelligence when the user chose
+ * On-Device cleanup, or by the provider they saved for cleanup with their own key. Cloud
+ * or no choice would send it off the device unasked, so the raw transcript is kept.
  */
 import { TranscriptionService } from '@/services/transcription/TranscriptionService';
 import { transcribeAndCleanup } from '@/lib/transcribeAndCleanup';
@@ -124,9 +124,39 @@ it('cleans an On-Device upload on this phone outside On-Device mode too', async 
   expect(result.text).toBe('cleaned:um hello there');
 });
 
+it('cleans an On-Device transcript with the provider saved for cleanup', async () => {
+  mockConfig = {
+    cleanupEnabled: true,
+    defaultMode: 'private',
+    inference: {
+      dictation: { mode: 'local' },
+      cleanup: {
+        mode: 'providers',
+        providerId: 'openai',
+        modelId: 'gpt-5-mini',
+        credentialRef: 'provider.openai',
+      },
+    },
+  };
+
+  const result = await transcribeOnDevice();
+
+  expect(mockReason).toHaveBeenCalledTimes(1);
+  const req = mockReason.mock.calls[0][0] as Record<string, unknown>;
+  expect(req.inferenceRoute).toMatchObject({
+    mode: 'providers',
+    scope: 'cleanup',
+    providerId: 'openai',
+    modelId: 'gpt-5-mini',
+  });
+  expect(req.routing).toEqual({ sendToChosenProvider: true });
+  expect(mockReadiness).not.toHaveBeenCalled();
+  expect(result.text).toBe('cleaned:um hello there');
+  expect(result.cleanupApplied).toBe(true);
+});
+
 it.each([
   ['OpenWhispr Cloud', { mode: 'openwhispr' }],
-  ['a provider', { mode: 'providers', providerId: 'openai', modelId: 'gpt-5-mini' }],
   ['nothing saved', undefined],
 ])('keeps an On-Device transcript raw when cleanup is set to %s', async (_label, cleanup) => {
   mockConfig = {
