@@ -1577,6 +1577,27 @@ class IPCHandlers {
     }
   }
 
+  _formatTranscript(note, format, options) {
+    const transcriptFormatter = require("./transcriptFormatter");
+    const segments = JSON.parse(note.transcript || "[]");
+    const speakerMappings = this._buildSpeakerMappings(note.id);
+    // The renderer resolves the original recorder from the space roster;
+    // legacy segments need that fallback because they have no session recorder.
+    const recorderLabel =
+      typeof options?.recorderLabel === "string" ? options.recorderLabel.trim() : "";
+    const formatOptions = { recorderLabel };
+    if (format === "txt") {
+      return transcriptFormatter.formatTxt(note, segments, speakerMappings, formatOptions);
+    }
+    if (format === "srt") {
+      return transcriptFormatter.formatSrt(segments, speakerMappings, note, formatOptions);
+    }
+    if (format === "md") {
+      return transcriptFormatter.formatMd(note, segments, speakerMappings, formatOptions);
+    }
+    return transcriptFormatter.formatJson(note, segments, speakerMappings, formatOptions);
+  }
+
   _buildSpeakerMappings(noteId) {
     const arr = this.databaseManager.getSpeakerMappings(noteId);
     const map = {};
@@ -4823,11 +4844,9 @@ class IPCHandlers {
       try {
         const note = this.databaseManager.getNote(noteId);
         if (!note) return { success: false, error: "Note not found" };
-
-        const segments = JSON.parse(note.transcript || "[]");
-        if (!segments.length) return { success: false, error: "No transcript available" };
-
-        const speakerMappings = this._buildSpeakerMappings(noteId);
+        if (!JSON.parse(note.transcript || "[]").length) {
+          return { success: false, error: "No transcript available" };
+        }
 
         const { dialog } = require("electron");
         const fs = require("fs");
@@ -4847,47 +4866,24 @@ class IPCHandlers {
 
         if (result.canceled || !result.filePath) return { success: false };
 
-        // The renderer resolves the original recorder from the space roster;
-        // legacy segments need that fallback because they have no session recorder.
-        const recorderLabel =
-          typeof options?.recorderLabel === "string" ? options.recorderLabel.trim() : "";
-        const formatOptions = { recorderLabel };
-        const transcriptFormatter = require("./transcriptFormatter");
-        let exportContent;
-        if (format === "txt") {
-          exportContent = transcriptFormatter.formatTxt(
-            note,
-            segments,
-            speakerMappings,
-            formatOptions
-          );
-        } else if (format === "srt") {
-          exportContent = transcriptFormatter.formatSrt(
-            segments,
-            speakerMappings,
-            note,
-            formatOptions
-          );
-        } else if (format === "md") {
-          exportContent = transcriptFormatter.formatMd(
-            note,
-            segments,
-            speakerMappings,
-            formatOptions
-          );
-        } else {
-          exportContent = transcriptFormatter.formatJson(
-            note,
-            segments,
-            speakerMappings,
-            formatOptions
-          );
-        }
-
-        fs.writeFileSync(result.filePath, exportContent, "utf-8");
+        fs.writeFileSync(result.filePath, this._formatTranscript(note, format, options), "utf-8");
         return { success: true };
       } catch (error) {
         debugLogger.error("Error exporting transcript", { error: error.message }, "notes");
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("format-transcript", async (event, noteId, format, options) => {
+      try {
+        const note = this.databaseManager.getNote(noteId);
+        if (!note) return { success: false, error: "Note not found" };
+        if (!JSON.parse(note.transcript || "[]").length) {
+          return { success: false, error: "No transcript available" };
+        }
+        return { success: true, content: this._formatTranscript(note, format, options) };
+      } catch (error) {
+        debugLogger.error("Error formatting transcript", { error: error.message }, "notes");
         return { success: false, error: error.message };
       }
     });

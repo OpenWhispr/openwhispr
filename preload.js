@@ -315,6 +315,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   exportNote: (noteId, format) => ipcRenderer.invoke("export-note", noteId, format),
   exportTranscript: (noteId, format, options) =>
     ipcRenderer.invoke("export-transcript", noteId, format, options),
+  formatTranscript: (noteId, format, options) =>
+    ipcRenderer.invoke("format-transcript", noteId, format, options),
   exportDictionary: (words) => ipcRenderer.invoke("export-dictionary", words),
   searchNotes: (query, limit, spaceId, folderId, spaceIds) =>
     ipcRenderer.invoke("db-search-notes", query, limit, spaceId, folderId, spaceIds),
