@@ -1,5 +1,7 @@
 # Local selected-text editing repair — 6 October 2026
 
+Latest: [6 October independent-review repairs and validation](review-repairs.md). The original qualification below remains historical; model quality and native acceptance are still open.
+
 Question: can a strict response contract and dedicated local edit request fix the observed refusal without accepting incorrect edits as proven correct?
 
 **The response contract is repaired; Qwen 3.5 2B edit quality remains insufficiently reliable. This branch is a draft for engineering review, not release acceptance.** All model fixtures/results here are synthetic. No real note, selection, dictionary, account, or audio was used.
