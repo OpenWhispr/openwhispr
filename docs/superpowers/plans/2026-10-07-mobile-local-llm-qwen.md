@@ -10,8 +10,10 @@
 
 `ReasoningService`, `cleanupTranscript`, `localMeetingNotes`, `useNotesStore` and the note chat keep calling the same functions. Those functions now pick an engine per task and report which engine ran.
 
+**Platform:** iOS only. There is no Android app; Android-related code paths are out of scope.
+
 **Tech stack:**
-- `llama.rn` 0.12.9: llama.cpp for React Native; Metal on iOS, CPU on Android, new architecture only.
+- `llama.rn` 0.12.9: llama.cpp for React Native; Metal on iOS, new architecture only.
 - `expo-device`: model name and total RAM.
 - `expo-file-system/legacy` downloads, following the Parakeet downloader pattern.
 - Jest with inline `jest.mock`.
@@ -25,13 +27,14 @@
 - **Thinking off** (`enable_thinking: false`). `stripThinkingTags` (`src/services/reasoning/buildProviderPrompt.ts:20`) stays as a safety net.
 - **Runtime:** `llama.rn`, so any future GGUF can replace the model without native changes.
 
-## Proposed defaults (confirm with the user, see Open questions)
+## Answered by the user (2026-10-07)
 
 - **Engine choice when both engines are ready (iOS with Apple Intelligence):**
   - Cleanup → Apple. It's fast, needs no extra memory, and works in the background.
   - Meeting notes and note chat → Qwen. It has a 16K context instead of 4K, so most meetings fit in one pass.
   - If the preferred engine isn't ready, use the other.
-- **Platforms:** iOS and Android ship together. Android has no on-device LLM today, so it gains the most.
+- **iPhones with Apple Intelligence** are offered the download too, for long meetings.
+- **Backgrounded keyboard cleanup** that Qwen can't finish in the background is cleaned when the user next opens OpenWhispr. It is not skipped.
 - **Onboarding:** the LLM download is **not** added to onboarding (1.3 GB is too much there). It is offered from Settings, and when a user picks On-Device for a text workflow with no engine ready.
 
 ## Facts this plan relies on (verified in the code)
@@ -50,7 +53,6 @@
   - `src/screens/WorkflowSettingsScreen.tsx:671-673`
   - `src/screens/NoteEditorScreen.tsx:856`
   - Mobile has no i18n; strings are inline English.
-- **Android:** `AppleLLM` returns `unsupportedOS`, so On-Device text mode is listed but refused (`src/lib/workflowModeSwitch.ts:44-49`).
 - **Keyboard extension:** it runs no inference. Cleanup for keyboard dictation runs in the **host app while it is backgrounded** (`src/hooks/useKeyboardHandoff.ts:952`). iOS does not allow Metal work in the background.
 - **ASR memory arbitration** already exists: `LocalTranscriptionService.transcribe` releases the idle engine (`src/services/transcription/LocalTranscriptionService.ts:104-116`).
   - `LocalWhisperService` already runs whisper.rn with `useGpu: false` because of an iOS 26 Metal abort (`LocalWhisperService.ts:59-66`). **The spike must check llama.rn's Metal backend for the same problem.**
@@ -88,8 +90,6 @@ Throwaway branch off this one. Results are written into "Spike results" at the b
   - iPhone 13 (4 GB): expect a failure. This is the proof for the eligibility threshold.
   - iPhone 14 or 15 (6 GB).
   - iPhone 15 Pro or 16 (8 GB).
-  - One 8 GB Android (Pixel 8 or Galaxy S23).
-  - One 6 GB Android.
 - [ ] **0.4 Metal on iOS 26.** Check that `n_gpu_layers > 0` doesn't abort the way whisper.rn did. If it does, use CPU only and re-measure.
 - [ ] **0.5 Background behaviour.** From the keyboard handoff flow, with the app backgrounded, run cleanup:
   - (a) with a GPU context;
@@ -109,7 +109,7 @@ Throwaway branch off this one. Results are written into "Spike results" at the b
 
 ---
 
-## Phase 1: Engine, download, eligibility, routing (iOS and Android)
+## Phase 1: Engine, download, eligibility, routing
 
 ### 1.1 Device capability (`src/lib/deviceCapability.ts`, new)
 
@@ -120,7 +120,7 @@ Throwaway branch off this one. Results are written into "Spike results" at the b
   - `totalMemoryBytes` from `Device.totalMemory`;
   - `llmEligible = totalMemoryBytes >= LLM_MIN_TOTAL_MEMORY_BYTES` (5 GiB, a constant).
 - [ ] `formatIneligibleReason(cap)` produces, for example: "On-device AI needs a phone with at least 6 GB of memory. iPhone 13 has 4 GB, so cleanup and notes use OpenWhispr Cloud." Show the RAM rounded to the advertised size: `Math.round(bytes / 2^30)`.
-- [ ] iOS runtime headroom: add `availableMemoryBytes()` to a new tiny local module `modules/memory-probe`, which moves `MemoryProbe.swift` out of `parakeet-asr` so both modules share it. On Android, use `ActivityManager.MemoryInfo.availMem`, or skip the check in v1 and rely on the RAM gate. The spike decides.
+- [ ] iOS runtime headroom: add `availableMemoryBytes()` to a new tiny local module `modules/memory-probe`, which moves `MemoryProbe.swift` out of `parakeet-asr` so both modules share it.
 - [ ] Tests: `src/lib/__tests__/deviceCapability.test.ts`, covering 3.7 GB (4 GB phone) → ineligible, 5.6 GB → eligible, a missing `modelName`, and a `null` total memory → ineligible with a generic reason.
 
 ### 1.2 Model catalog and downloader
@@ -156,7 +156,7 @@ Throwaway branch off this one. Results are written into "Spike results" at the b
   - Before `initLlama`, release the ASR engines (`LocalWhisperService.cleanup()` and `LocalParakeetService.cleanup()`). Add the reverse in `LocalTranscriptionService.transcribe`: release Qwen before loading ASR.
   - On iOS, refuse to load when `availableMemoryBytes() <` the spike's minimum. That raises `LOCAL_LLM_INSUFFICIENT_MEMORY` instead of letting iOS kill the app.
   - Unload after the idle delay, on `AppState` → background (unless a job is running), and when meeting recording starts. Recording needs ASR memory and must never compete with the LLM.
-- [ ] **Background:** follow the spike's choice. The default if it's unclear: when `AppState.currentState !== 'active'`, use a CPU-only context, and if that is too slow, skip and let cleanup return the raw text through its existing `onSkipped` path.
+- [ ] **Background:** follow the spike's choice. The default if it's unclear: when `AppState.currentState !== 'active'`, use a CPU-only context, and if that is too slow, queue the dictation and clean it when the app next becomes active (the user's choice: deferred, never skipped). The queue needs a pending-cleanup marker on the transcript and a drain on `AppState` → active; design it in Phase 1 from the spike's numbers.
 - [ ] **Errors:** map them to new `LocalReasoningErrorCode` values: `LOCAL_LLM_FAILED`, `LOCAL_LLM_INSUFFICIENT_MEMORY`, `LOCAL_LLM_NOT_DOWNLOADED`.
 - [ ] **Tests:** `src/services/llm/__tests__/LocalQwenService.test.ts`, mocking `llama.rn` inline:
   - ASR is released before load;
@@ -184,7 +184,7 @@ Throwaway branch off this one. Results are written into "Spike results" at the b
   ```
 
   It also defines `appleEngine`, which wraps the current `AppleLLM` calls without changing their behaviour, and `qwenEngine`, which wraps `LocalQwenService`.
-- [ ] **`pickLocalEngine(task)`** returns the engine to use, or `null` with the best readiness to explain why. It encodes the Proposed defaults rule. It is a pure function over `{ appleReadiness, qwenReadiness, task, appState }`, unit-tested in `src/lib/localLlm/__tests__/pickLocalEngine.test.ts`.
+- [ ] **`pickLocalEngine(task)`** returns the engine to use, or `null` with the best readiness to explain why. It encodes the engine rule under "Answered by the user". It is a pure function over `{ appleReadiness, qwenReadiness, task, appState }`, unit-tested in `src/lib/localLlm/__tests__/pickLocalEngine.test.ts`.
 - [ ] **`src/lib/localReasoning.ts`:**
   - `getLocalReasoningReadiness({ refresh, task })` returns the picked engine's readiness, plus a new `engine?: LocalEngineId` field.
   - The readiness type gains the statuses `notDownloaded` and `deviceNotEligible`.
@@ -199,7 +199,7 @@ Throwaway branch off this one. Results are written into "Spike results" at the b
 - [ ] **`cleanupTranscript.ts:54`:** `LOCAL_CLEANUP_MAX_TRANSCRIPT_TOKENS` becomes `0.8 × engine.outputReserve`. Set Qwen's reserve from the spike, likely 2048, so longer dictations get cleaned.
 - [ ] **Routing tests:**
   - Update `localReasoning.test.ts`, `ReasoningService.localRouting.test.ts`, `localMeetingNotes.test.ts` and `transcribeAndCleanup.onDeviceCleanup.test.ts` for engine selection.
-  - Add: Android with Qwen ready → local cleanup runs; iOS with both ready → cleanup on Apple and notes on Qwen; Apple off and Qwen ready → everything on Qwen.
+  - Add: no Apple Intelligence and Qwen ready → local cleanup runs; both ready → cleanup on Apple and notes on Qwen; Apple off and Qwen ready → everything on Qwen.
 
 ### 1.5 Settings UI and copy
 
@@ -209,7 +209,6 @@ Throwaway branch off this one. Results are written into "Spike results" at the b
   - On an ineligible device, a disabled card with `formatIneligibleReason`. Tested in `src/screens/__tests__/LocalLlmModelScreen.test.tsx`.
 - [ ] **`AIModelsScreen.tsx:163` On-Device section:**
   - Add an "On-Device AI Model" row. It shows Qwen's status ("Not downloaded", "Ready", "Needs 6 GB of memory") and opens the screen above.
-  - Hide the "Local Apple Intelligence" row on Android.
   - Update the description copy so it no longer implies Apple is the only engine.
 - [ ] **`WorkflowSettingsScreen.tsx:671` footer** names the engine that will run. Examples: "Runs on Apple Intelligence on this iPhone." / "Runs on Qwen3.5 2B on this phone." / "Download the On-Device AI model to use this."
 - [ ] **`workflowModeSwitch.ts:43-67` text-scope gate:**
@@ -222,9 +221,8 @@ Throwaway branch off this one. Results are written into "Spike results" at the b
 ### 1.6 Native config (final)
 
 - [ ] **`package.json`:** pin `llama.rn` to `0.12.9` exactly, and add `expo-device`.
-- [ ] **`app.base.json`:** add the `llama.rn` plugin. Don't use the plugin's `enableEntitlements`; entitlements are explicit in `app.config.js`. Include OpenCL only if the spike shows a win on Android.
+- [ ] **`app.base.json`:** add the `llama.rn` plugin. Don't use the plugin's `enableEntitlements`; entitlements are explicit in `app.config.js`.
 - [ ] **`app.config.js`:** add the two kernel entitlements to the main app only. Add a test in the style of the existing `plugins/*/__tests__` so the extensions never get them.
-- [ ] **Android:** arm64-v8a only. Add the ProGuard keep rule `-keep class com.rnllama.** { *; }` through `expo-build-properties` if minify is on.
 - [ ] **Manual step (user):** enable "Increased Memory Limit" and "Extended Virtual Addressing" on the App ID in the Apple Developer portal, or confirm EAS syncs them. Bump the app version, because `runtimeVersion` is `appVersion`.
 - [ ] **`CONTRIBUTING.md`:** note the new entitlements under "Physical iOS Devices and Forks".
 
@@ -233,7 +231,7 @@ Throwaway branch off this one. Results are written into "Spike results" at the b
 - [ ] `npm run check` and `npm test -- --runInBand` in `openwhispr-mobile`.
 - [ ] Device pass over the 0.3 matrix:
   - an ineligible message on the 4 GB iPhone;
-  - download → cleanup → meeting notes on 6 GB and 8 GB iPhones and on Android;
+  - download → cleanup → meeting notes on 6 GB and 8 GB iPhones;
   - keyboard dictation cleanup with the app backgrounded;
   - start a meeting recording while Qwen is loaded → Qwen unloads and ASR loads;
   - delete the model → the On-Device text workflows report "not downloaded".
@@ -251,13 +249,6 @@ Throwaway branch off this one. Results are written into "Spike results" at the b
 
 - **Dictation agent in private mode:** `src/lib/dictationAgent.ts:14-15` disables it today. With Qwen it could run with no tools.
 - **Keyboard composer on-device:** `AgentStreamClient.ts:168-171` throws today. It needs streaming (llama.rn's token callback) and a small tool set (≤ 3 tools).
-
-## Open questions for the user
-
-1. **Engine preference when both are ready:** is it OK to use Apple for cleanup and Qwen for notes and chat (Proposed defaults)? Alternatively, a user-facing picker.
-2. **Should iPhones with Apple Intelligence see the download at all?** Recommended yes, for long meetings.
-3. **Android in Phase 1 (recommended), or iOS first?**
-4. **Backgrounded keyboard cleanup on phones without Apple Intelligence:** if the spike shows CPU-only is too slow, is "cleaned when you next open OpenWhispr" acceptable, or should cleanup be skipped for those dictations?
 
 ## Risks
 
