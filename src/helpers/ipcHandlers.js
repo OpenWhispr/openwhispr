@@ -5261,8 +5261,10 @@ class IPCHandlers {
       return this.windowManager?.hotkeyManager?.getEffectiveDefaultHotkey() ?? null;
     });
 
+    // The mode in effect: startup can fall back to Tap for this session while
+    // the saved preference stays Hold for the next launch.
     ipcMain.handle("get-activation-mode", async () => {
-      return this.environmentManager.getActivationMode();
+      return this.windowManager.getActivationMode();
     });
 
     ipcMain.handle("save-activation-mode", async (event, mode) => {
