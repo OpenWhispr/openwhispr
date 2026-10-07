@@ -180,7 +180,10 @@ const {
   getMeetingStreamingClient,
   getMeetingConnectionKey,
 } = require("./meetingStreamingProviders");
-const { fetchRealtimeTokenForProvider } = require("./realtimeTokenProviders");
+const {
+  createServerTokenPoster,
+  fetchRealtimeTokenForProvider,
+} = require("./realtimeTokenProviders");
 const { getCalendarAvailability } = require("./calendarAvailabilityService");
 
 // Meeting capture runs at 24 kHz (see meetingRecordingStore AudioContext); cloud
@@ -7488,46 +7491,13 @@ class IPCHandlers {
     };
 
     const fetchRealtimeToken = async (event, options, { streams } = {}) => {
-      const postServerToken = async (path, body = {}) => {
-        const apiUrl = getApiUrl();
-        if (!apiUrl) {
-          const err = new Error("OpenWhispr API URL not configured");
-          err.code = "NO_API";
-          throw err;
-        }
-        const authHeader = await getAuthHeader(event);
-        if (!Object.keys(authHeader).length) {
-          throw Object.assign(new Error("Not authenticated"), { code: "AUTH_REQUIRED" });
-        }
-        const url = `${apiUrl}${path}`;
-        let response;
-        try {
-          response = await proxyFetch(url, {
-            method: "POST",
-            headers: withPolicyHeaders({ "Content-Type": "application/json", ...authHeader }),
-            body: JSON.stringify(body),
-          });
-        } catch (err) {
-          const classified = classifyAndLog(err, url);
-          if (classified.isNetworkError) {
-            throw Object.assign(new Error(err.message || "Network request failed"), {
-              code: "NETWORK_ERROR",
-              networkCode: classified.code,
-              messageKey: classified.messageKey,
-            });
-          }
-          throw err;
-        }
-        if (!response.ok) {
-          const error = await readPolicyResponseError(
-            response,
-            `Token request failed: ${response.status}`
-          );
-          if (response.status === 401 && !error.code) error.code = "AUTH_EXPIRED";
-          throw error;
-        }
-        return response.json();
-      };
+      const postServerToken = createServerTokenPoster({
+        getApiUrl,
+        getAuthHeader: () => getAuthHeader(event),
+        proxyFetch,
+        withPolicyHeaders,
+        classifyAndLog,
+      });
 
       return fetchRealtimeTokenForProvider(
         options.provider,

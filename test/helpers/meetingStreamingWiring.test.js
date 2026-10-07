@@ -101,7 +101,10 @@ test("the system-audio watchdog is armed beside the silence timer and torn down 
   // that reported stalls it could not recover from.
   const armStart = source.indexOf("const startMeetingSystemAudioWatchdog");
   assert.ok(armStart >= 0);
-  const armSection = source.slice(armStart, source.indexOf("const rollbackMeetingTranscriptionStart"));
+  const armSection = source.slice(
+    armStart,
+    source.indexOf("const rollbackMeetingTranscriptionStart")
+  );
   assert.match(armSection, /clearMeetingSystemAudioTicker\(\);/);
   assert.doesNotMatch(armSection, /stopMeetingSystemAudioWatchdog\(\);/);
   assert.doesNotMatch(armSection, /detachCapture\(\)/);
@@ -109,11 +112,7 @@ test("the system-audio watchdog is armed beside the silence timer and torn down 
   // Every path that clears the one-shot timer also stops the watchdog, plus the
   // mic-only fallback, which strands the restart hook on a dead manager.
   for (const [label, from, to] of [
-    [
-      "rollback",
-      "const rollbackMeetingTranscriptionStart",
-      "const setupDictationCallbacks",
-    ],
+    ["rollback", "const rollbackMeetingTranscriptionStart", "const setupDictationCallbacks"],
     ["stop", "const stopMeetingTranscription", "const meetingTranscriptionLifecycle"],
     ["mic-only fallback", "const fallBackToMicOnly", "const startMeetingSystemAudio = async"],
   ]) {
@@ -163,16 +162,4 @@ test("meeting connects forward the credential mode", () => {
     // Anchored: an unanchored match also accepts the key commented out.
     assert.match(block, /^\s*mode: options\.mode,$/m);
   }
-});
-
-test("realtime-token refusals carry a sign-in code", () => {
-  // The token request answers a stale session with 401 "Invalid session" and no
-  // code; without one, Note Recording toasts that raw text instead of offering
-  // sign-in (#2427).
-  const helper = source.slice(
-    source.indexOf("const postServerToken"),
-    source.indexOf("return fetchRealtimeTokenForProvider(")
-  );
-  assert.match(helper, /new Error\("Not authenticated"\), \{ code: "AUTH_REQUIRED" \}/);
-  assert.match(helper, /response\.status === 401 && !error\.code\) error\.code = "AUTH_EXPIRED"/);
 });

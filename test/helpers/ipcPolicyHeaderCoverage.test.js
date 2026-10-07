@@ -56,9 +56,11 @@ test("chunk pool recovery cannot abort inline multipart uploads", () => {
 });
 
 test("the shared realtime-token helper applies policy headers", () => {
+  // realtimeTokenProviders.test.js pins that createServerTokenPoster sends its
+  // request through withPolicyHeaders; this pins that main hands it the real one.
   assert.match(
     source,
-    /const postServerToken[\s\S]{0,900}?headers:\s*withPolicyHeaders\(/,
+    /createServerTokenPoster\(\{[\s\S]{0,300}?\bwithPolicyHeaders,/,
     "the shared realtime-token helper must apply policy headers"
   );
 });
