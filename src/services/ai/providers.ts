@@ -54,6 +54,9 @@ export async function getAIModel(
     case "corti":
       // Corti's gateway is Chat Completions-compatible, not the OpenAI Responses API.
       return createOpenAI({ apiKey, baseURL: API_ENDPOINTS.CORTI_MODELS_BASE }).chat(model);
+    case "xai":
+      // xAI is Chat Completions-compatible; no extra SDK package needed.
+      return createOpenAI({ apiKey, baseURL: API_ENDPOINTS.XAI_BASE }).chat(model);
     case "custom":
       // Custom OpenAI-compatible servers implement Chat Completions, not the Responses API.
       // One model instance answers one turn, so its session header is that turn's.
