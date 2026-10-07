@@ -1415,6 +1415,7 @@
     "waylandClipboardTitle": "Wayland 上的剪贴板模式",
     "windowsReady": "Windows 原生支持自动粘贴，无需额外设置！",
     "withoutToolPrefix": "如果不安装此工具，OpenWhispr 会将文本复制到剪贴板，你可以使用 Ctrl+V 手动粘贴。",
+    "wtypeCosmicTerminalsDescription": "在 COSMIC 上，Warp 等终端只能通过 wtype 接收粘贴的文本。其他应用无需 wtype 即可粘贴。",
     "wtypeFallbackDescription": "wtype 是此 wlroots 合成器上的首选自动粘贴方式。有备用方案可用，但可能不太可靠。",
     "xwaylandAppsOnly": "自动粘贴仅适用于 XWayland 应用"
   },

@@ -961,7 +961,7 @@ UI icons come from `src/components/icons/` (vendored Nucleo core outline compone
   - **X11**: `xdotool` (recommended)
   - **Hyprland Wayland**: `wtype`, then `hyprctl` sendshortcut (avoids the sendshortcut stuck-modifier bug when wtype is installed)
   - **Sway/wlroots Wayland**: `wtype` (requires the virtual keyboard protocol)
-  - **COSMIC Wayland**: `wtype` for terminals (Warp has no Shift+Insert paste); other windows paste with uinput Shift+Insert
+  - **COSMIC Wayland**: `wtype` for terminals (Warp has no Shift+Insert paste); other windows paste with uinput Shift+Insert. Settings and onboarding ask for `wtype` there once something else pastes (`needsWtype` in `src/utils/linuxPasteTools.ts`), but `checkPasteTools` never reports it as the method
   - **GNOME/KDE Wayland**: RemoteDesktop portal keysyms, then uinput/ydotool
   - **Wayland physical fallback**: Shift+Insert avoids layout-sensitive KEY_V; `ydotool` requires the `ydotoold` daemon
   - Terminal detection: Auto-detects terminal emulators and uses Ctrl+Shift+V

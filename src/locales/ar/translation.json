@@ -4447,6 +4447,7 @@
     "waylandClipboardTitle": "وضع الحافظة في Wayland",
     "windowsReady": "نظام Windows يدعم اللصق التلقائي بشكل افتراضي. لا يتطلب أي إعداد!",
     "withoutToolPrefix": "بدون هذه الأداة، سيقوم OpenWhispr بنسخ النص إلى الحافظة الخاصة بك. يمكنك بعد ذلك اللصق يدويًا باستخدام Ctrl+V.",
+    "wtypeCosmicTerminalsDescription": "على COSMIC، لا تستقبل الطرفيات مثل Warp النص الملصق إلا عبر wtype. أما التطبيقات الأخرى فيعمل فيها اللصق بدونه.",
     "wtypeFallbackDescription": "يُعد wtype الطريقة المفضلة للصق التلقائي في مركب wlroots هذا. يتوفر بديل آخر، ولكنه قد يكون أقل موثوقية.",
     "xwaylandAppsOnly": "اللصق التلقائي يعمل مع تطبيقات XWayland فقط"
   },

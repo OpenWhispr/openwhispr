@@ -2373,7 +2373,7 @@ Would you like to open System Settings now?`;
       };
     }
 
-    const { isWayland, xwaylandAvailable, isGnome, isKde, isWlroots, isHyprland } =
+    const { isWayland, xwaylandAvailable, isGnome, isKde, isWlroots, isHyprland, isCosmic } =
       getLinuxSessionInfo();
     const linuxFastPaste = this.resolveLinuxFastPasteBinary();
     const hasNativeBinary = !!linuxFastPaste;
@@ -2394,7 +2394,9 @@ Would you like to open System Settings now?`;
 
     const tools = [];
     const hasHyprlandShortcut = isWayland && isHyprland && this.commandExists("hyprctl");
-    const hasWtype = isWayland && isWlroots && this.commandExists("wtype");
+    // On COSMIC wtype only pastes into terminals, so it is reported for the setup
+    // guidance but never listed as a paste tool or method there.
+    const hasWtype = isWayland && (isWlroots || isCosmic) && this.commandExists("wtype");
     const canUseYdotool = this.commandExists("ydotool") && this._isYdotoolDaemonRunning();
     const canUseXdotool = !isWayland || xwaylandAvailable;
 
@@ -2429,7 +2431,7 @@ Would you like to open System Settings now?`;
     let method = null;
     if (!isWayland) {
       method = nativeBinaryUsable ? "xtest" : tools[0] || null;
-    } else if (hasWtype) {
+    } else if (hasWtype && isWlroots) {
       method = "wtype";
     } else if (hasHyprlandShortcut) {
       method = "hyprland-sendshortcut";
@@ -2452,6 +2454,7 @@ Would you like to open System Settings now?`;
       hasUinput,
       hasWtype,
       isWlroots,
+      isCosmic,
       tools,
       recommendedInstall,
     };

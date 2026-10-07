@@ -482,6 +482,27 @@ test("COSMIC ignores xdotool and keeps Shift+Insert for a window that is not a t
   );
 });
 
+// On COSMIC wtype only pastes into terminals, so it is reported for the guidance
+// without becoming the paste method.
+test("COSMIC reports wtype without making it the paste method", async (t) => {
+  const platform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "linux" });
+  t.after(() => Object.defineProperty(process, "platform", platform));
+  const TestClipboardManager = loadClipboardManager();
+  const manager = new TestClipboardManager();
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._canAccessUinput = () => true;
+
+  for (const hasWtype of [true, false]) {
+    manager.commandExists = (command) => hasWtype && command === "wtype";
+    const status = await withWaylandEnvironment("COSMIC", () => manager.checkPasteTools());
+    assert.equal(status.isCosmic, true);
+    assert.equal(status.hasWtype, hasWtype);
+    assert.equal(status.method, "uinput");
+    assert.deepEqual(status.tools, []);
+  }
+});
+
 test("GNOME tries uinput before a tokenless portal", async () => {
   const spawnCalls = [];
   const TestClipboardManager = loadClipboardManager({

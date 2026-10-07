@@ -1407,6 +1407,7 @@ export default function SettingsPage({
     hasGroup: boolean;
     isKde: boolean;
     isWlroots: boolean;
+    isCosmic: boolean;
     hasXclip: boolean;
     hasXsel: boolean;
     isNixOS: boolean;
@@ -3494,7 +3495,7 @@ export default function SettingsPage({
                       key: "hasWtype",
                       label: "wtype",
                       ok: ydotoolStatus.hasWtype,
-                      required: ydotoolStatus.isWlroots,
+                      required: ydotoolStatus.isWlroots || ydotoolStatus.isCosmic,
                       desc: t("settingsPage.general.waylandPaste.wtypeDesc"),
                       steps: [
                         {
