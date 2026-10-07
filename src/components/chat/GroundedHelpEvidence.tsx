@@ -42,6 +42,7 @@ const factValues: Record<string, string> = {
   Off: "productHelp.off",
   local: "common.local",
   cloud: "common.cloud",
+  openwhispr: "settingsPage.aiModels.modes.openwhispr",
   providers: "settingsPage.aiModels.modes.providers",
 };
 
