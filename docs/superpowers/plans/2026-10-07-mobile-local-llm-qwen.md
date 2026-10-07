@@ -76,12 +76,12 @@
 
 Throwaway branch off this one. Results are written into "Spike results" at the bottom of this file.
 
-- [ ] **0.1 Native dependency**
+- [x] **0.1 Native dependency** (done on `spike/mobile-local-llm-qwen`)
   - `npx expo install llama.rn@0.12.9`, then add the `llama.rn` config plugin to `app.base.json`.
   - Add `com.apple.developer.kernel.increased-memory-limit` and `com.apple.developer.kernel.extended-virtual-addressing` to the main-app entitlements in `app.config.js` only, not the extensions.
   - Prebuild and build on a device.
   - Confirm it links next to `whisper.rn`: both vendor ggml and should use prefixed symbols (`lm_ggml_*` vs `wsp_ggml_*`).
-- [ ] **0.2 Benchmark screen.** Add a dev-only `QwenBenchmarkScreen`, modelled on `ParakeetBenchmarkScreen`. It sideloads the GGUF, then runs cleanup and meeting-notes prompts while the existing `PeakSampler` (`startMemorySampling`) records:
+- [x] **0.2 Benchmark screen** (done; see Spike results for how to run it). Add a dev-only `QwenBenchmarkScreen`, modelled on `ParakeetBenchmarkScreen`. It downloads the GGUF, then runs cleanup and meeting-notes prompts while the existing `PeakSampler` (`startMemorySampling`) records:
   - peak `phys_footprint` and minimum available memory;
   - load time;
   - prefill and decode speed;
@@ -221,7 +221,7 @@ Throwaway branch off this one. Results are written into "Spike results" at the b
 ### 1.6 Native config (final)
 
 - [ ] **`package.json`:** pin `llama.rn` to `0.12.9` exactly, and add `expo-device`.
-- [ ] **`app.base.json`:** add the `llama.rn` plugin. Don't use the plugin's `enableEntitlements`; entitlements are explicit in `app.config.js`.
+- [ ] **`app.base.json`:** no llama.rn plugin; see Spike results.
 - [ ] **`app.config.js`:** add the two kernel entitlements to the main app only. Add a test in the style of the existing `plugins/*/__tests__` so the extensions never get them.
 - [ ] **Manual step (user):** enable "Increased Memory Limit" and "Extended Virtual Addressing" on the App ID in the Apple Developer portal, or confirm EAS syncs them. Bump the app version, because `runtimeVersion` is `appVersion`.
 - [ ] **`CONTRIBUTING.md`:** note the new entitlements under "Physical iOS Devices and Forks".
@@ -259,4 +259,26 @@ Throwaway branch off this one. Results are written into "Spike results" at the b
 
 ## Spike results
 
-_To be filled in after Phase 0._
+**Status (2026-10-07):** the spike build is on branch `spike/mobile-local-llm-qwen`. Steps 0.1 and 0.2 are done; 0.3–0.7 need a physical iPhone. Hugging Face and GitHub are blocked from the cloud environment that built it, so no model has run yet.
+
+### How to run it
+
+1. Check out `spike/mobile-local-llm-qwen`, then in `openwhispr-mobile` run `npm ci` under Node 24 and `npm run ios` with a physical iPhone attached.
+   - `npm ci` downloads llama.rn's prebuilt iOS framework from GitHub releases (its postinstall), so the machine needs GitHub access.
+   - Signing needs the two memory capabilities on the App ID. With automatic signing, Xcode adds them; otherwise enable them in the Developer portal.
+2. Open `openwhispr-dev://qwen-benchmark` on the phone (paste it into Safari).
+3. Tap Download (about 1.3 GB, straight from Hugging Face).
+4. Do these runs on each phone:
+   - Metal · 16384, Metal · 4096, CPU · 16384;
+   - the background test with CPU · 4096: tap it, go to the Home Screen within 15 s, and come back after a minute.
+5. Tap **Copy as JSON** and paste the result into the PR or chat. It contains measurements only, never model output. Do read "Show output" on the meeting-notes run yourself, to judge the notes' quality.
+
+The meeting-notes run uses the longest meeting note on the phone when there is one, which makes quality judgments meaningful. Otherwise it uses a built-in sample, which is repeated to fill 16K tokens and is only good for speed and memory.
+
+### Findings so far (from the build, not from a device)
+
+- **No llama.rn config plugin is needed.** Its podspec sets `-std=c++20` itself, and the repo's `withIosCxxStandard` plugin already covers the other pods. The plugin's entitlements apply only to the production profile, and its other changes are Android-only. Entitlements stay explicit in `app.config.js`. A prebuild confirmed they land on the main app only, and that llama.rn autolinks as the `llama-rn` pod. This supersedes the `app.base.json` step in 1.6.
+- **Install size:** llama.rn's postinstall fetches a 682 MB xcframework with iOS, tvOS and simulator slices. The iOS device slice is 114 MB including dSYMs. Measure the actual IPA growth on the first device build.
+- **Qwen3.5 is a hybrid model** (recurrent plus attention layers). llama.rn can clear its state only as a whole (`clearCache`), so the spike clears between tasks. Phase 2's "reuse the system-prompt KV cache" is probably not possible for this model; verify before planning it.
+- **CPU-only runs** set both `n_gpu_layers: 0` and `no_gpu_devices: true`. The second keeps Metal from initialising at all, which matters for the background test.
+- **Thinking off:** the runs set `enable_thinking: false` with `reasoning_format: 'auto'`, so any thinking that still comes back lands in `reasoning_content` and is reported as "Thinking leaked".
