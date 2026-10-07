@@ -111,11 +111,17 @@ class CortiStreaming {
 
   // Live-socket wiring shared by the cold connect and a promoted warm connection.
   attachSocketHandlers(ws) {
+    // A socket dropped for a new session still delivers its close (and any late
+    // frames) afterwards; those must not tear down or reject the new session.
+    const isReplaced = () => this.ws !== null && this.ws !== ws;
+
     ws.on("message", (data) => {
+      if (isReplaced()) return;
       this.handleMessage(data);
     });
 
     ws.on("error", (error) => {
+      if (isReplaced()) return;
       const wasActive = this.isConnected;
       debugLogger.error("Corti WebSocket error", { error: error.message });
       this.cleanup();
@@ -132,6 +138,7 @@ class CortiStreaming {
     });
 
     ws.on("close", (code, reason) => {
+      if (isReplaced()) return;
       const wasActive = this.isConnected;
       debugLogger.debug("Corti WebSocket closed", {
         code,
