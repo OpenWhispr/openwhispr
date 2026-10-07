@@ -73,3 +73,14 @@ test("a card below the CUDA kernel floor is never offered the CUDA pack", async 
   assert.equal(pickWhisperGpuBackend(cuda(BELOW_FLOOR, OUTDATED), vulkan(true)), "vulkan");
   assert.equal(pickWhisperGpuBackend(cuda(BELOW_FLOOR, OUTDATED), vulkan(false)), null);
 });
+
+test("the pack main reports in use wins over every other rule (#1736)", async () => {
+  const { pickWhisperGpuBackend } = await load();
+  const IN_USE = { downloaded: true, inUse: true };
+  // Both packs installed and CUDA failed: the server runs Vulkan
+  assert.equal(pickWhisperGpuBackend(cuda(NVIDIA, DOWNLOADED), vulkan(true, IN_USE)), "vulkan");
+  // A CUDA-only install below the kernel floor still describes the CUDA pack
+  assert.equal(pickWhisperGpuBackend(cuda(BELOW_FLOOR, IN_USE), vulkan(true)), "cuda");
+  // A Vulkan pack on a GPU detection doesn't recognize
+  assert.equal(pickWhisperGpuBackend(cuda(NO_NVIDIA), vulkan(false, IN_USE)), "vulkan");
+});

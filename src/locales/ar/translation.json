@@ -404,6 +404,10 @@
       "label": "تعطيل مخرجات التفكير",
       "help": "يتخطى رموز الاستنتاج للحصول على مخرجات أنظف. موصى به للتنظيف. تتجاهل بعض الخوادم هذا التلميح."
     },
+    "keepModelLoaded": {
+      "label": "إبقاء النموذج محمّلاً",
+      "help": "يبقى في الذاكرة بدلًا من إزالته بعد 5 دقائق من عدم النشاط، فيتجنّب الطلب التالي البدء البارد. ينطبق على كل الميزات التي تستخدم نموذجًا محليًا."
+    },
     "selfHosted": {
       "endpointHelp": "أدخل عنوان خادم متوافق مع OpenAI على شبكتك المحلية (مثل Ollama أو LM Studio أو vLLM أو llama-server)."
     },
@@ -1749,10 +1753,7 @@
       "copiedToClipboard": "تم النسخ إلى حافظتك",
       "openNote": "فتح الملاحظة",
       "unknownTool": "أداة غير معروفة: {{name}}",
-      "invalidArgs": "وسيطات غير صالحة للأداة {{name}}",
-      "search_openwhispr_helpStatus": "جارٍ البحث في الوثائق الرسمية…",
-      "read_openwhispr_helpStatus": "جارٍ البحث في الوثائق الرسمية…",
-      "get_openwhispr_contextStatus": "إعدادات التطبيق الحالية"
+      "invalidArgs": "وسيطات غير صالحة للأداة {{name}}"
     }
   },
   "noteEditor": {
@@ -4895,6 +4896,49 @@
     },
     "start": "تدوين الملاحظات",
     "join": "انضمام وتفريغ صوتي"
+  },
+  "providerErrors": {
+    "authFailed": "رفض {{provider}} مفتاح API الخاص بك.",
+    "accessDenied": "رفض {{provider}} الوصول. قد لا يشمل مفتاحك هذا النموذج.",
+    "quotaExhausted": "نفذ الرصيد في حساب {{provider}} الخاص بك.",
+    "rateLimited": "قام {{provider}} بتقييد معدل الطلب. انتظر لحظة وحاول مرة أخرى.",
+    "modelNotFound": "لا يتعرّف {{provider}} على النموذج “{{model}}”.",
+    "modelNotFoundNoModel": "لا يتعرّف {{provider}} على النموذج المحدد.",
+    "payloadTooLarge": "هذا التسجيل أكبر من أن يقبله {{provider}}.",
+    "requestTooLarge": "هذا الطلب أكبر من أن يقبله {{provider}}.",
+    "badRequest": "تعذّر على {{provider}} معالجة هذا الطلب.",
+    "unavailable": "يواجه {{provider}} مشكلات الآن. حاول مرة أخرى بعد قليل.",
+    "timeout": "استغرق {{provider}} وقتًا طويلاً للاستجابة.",
+    "unreachable": "تعذّر الوصول إلى {{provider}}. تحقق من اتصالك.",
+    "noResponse": "تعذّر الحصول على رد من {{provider}}. تحقق من مفتاح API واتصالك.",
+    "unknown": "أعاد {{provider}} خطأ غير متوقع.",
+    "keyMissing": "لا يوجد مفتاح API مضبوط لـ {{provider}}. أضفه في الإعدادات ← النماذج اللغوية.",
+    "selfHosted": {
+      "authFailed": "رفض خادمك مفتاح API.",
+      "accessDenied": "رفض خادمك الوصول. قد لا يشمل المفتاح هذا النموذج.",
+      "quotaExhausted": "يفيد خادمك بأن الحساب قد نفذ رصيده.",
+      "rateLimited": "قام خادمك بتقييد معدل الطلب. انتظر لحظة وحاول مرة أخرى.",
+      "modelNotFound": "لا يتعرّف خادمك على النموذج “{{model}}”.",
+      "modelNotFoundNoModel": "لا يتعرّف خادمك على النموذج المحدد.",
+      "payloadTooLarge": "هذا التسجيل أكبر من أن يقبله خادمك.",
+      "requestTooLarge": "هذا الطلب أكبر من أن يقبله خادمك.",
+      "badRequest": "تعذّر على خادمك معالجة هذا الطلب.",
+      "unavailable": "يواجه خادمك مشكلات الآن. حاول مرة أخرى بعد قليل.",
+      "timeout": "استغرق خادمك وقتًا طويلاً للاستجابة.",
+      "unreachable": "تعذّر الوصول إلى خادمك. تحقق من أنه قيد التشغيل.",
+      "noResponse": "تعذّر الحصول على رد من خادمك. تحقق من مفتاح API الخاص به ومن أنه قيد التشغيل.",
+      "unknown": "أعاد خادمك خطأ غير متوقع."
+    },
+    "openSettings": "فتح الإعدادات",
+    "copyDetails": "نسخ التفاصيل",
+    "titles": {
+      "transcription": "فشل التفريغ الصوتي",
+      "llm": "فشل طلب الذكاء الاصطناعي"
+    },
+    "details": {
+      "provider": "المزوّد",
+      "requestId": "معرّف الطلب"
+    }
   },
   "productHelp": {
     "title": "مساعدة OpenWhispr",

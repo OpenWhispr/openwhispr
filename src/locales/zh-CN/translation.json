@@ -773,6 +773,10 @@
       "label": "禁用思考输出",
       "help": "跳过推理令牌以获得更清晰的输出。推荐用于清理。某些服务器会忽略此提示。"
     },
+    "keepModelLoaded": {
+      "label": "保持模型加载",
+      "help": "空闲 5 分钟后仍保留在内存中，不会卸载，下一次请求无需冷启动。适用于所有使用本地模型的功能。"
+    },
     "selfHosted": {
       "endpointHelp": "指向本地网络中兼容 OpenAI 的服务器（例如 Ollama、LM Studio、vLLM 或 llama-server）。"
     },
@@ -3830,10 +3834,7 @@
       "copiedToClipboard": "已复制到剪贴板",
       "openNote": "打开笔记",
       "unknownTool": "未知工具：{{name}}",
-      "invalidArgs": "{{name}} 的工具参数无效",
-      "search_openwhispr_helpStatus": "正在查询官方文档…",
-      "read_openwhispr_helpStatus": "正在查询官方文档…",
-      "get_openwhispr_contextStatus": "当前应用设置"
+      "invalidArgs": "{{name}} 的工具参数无效"
     }
   },
   "assistant": {
@@ -4773,6 +4774,49 @@
     },
     "start": "开始记录",
     "join": "加入并转录"
+  },
+  "providerErrors": {
+    "authFailed": "{{provider}} 拒绝了你的 API 密钥。",
+    "accessDenied": "{{provider}} 拒绝了访问。你的密钥可能不包含此模型。",
+    "quotaExhausted": "你的 {{provider}} 账户额度已用尽。",
+    "rateLimited": "{{provider}} 限制了请求频率。请稍候再试。",
+    "modelNotFound": "{{provider}} 不识别模型“{{model}}”。",
+    "modelNotFoundNoModel": "{{provider}} 不识别所选的模型。",
+    "payloadTooLarge": "此录音对 {{provider}} 来说太大了。",
+    "requestTooLarge": "此请求对 {{provider}} 来说太大了。",
+    "badRequest": "{{provider}} 无法处理此请求。",
+    "unavailable": "{{provider}} 目前遇到了问题。请稍后重试。",
+    "timeout": "{{provider}} 响应超时。",
+    "unreachable": "无法连接到 {{provider}}。请检查你的网络连接。",
+    "noResponse": "未能收到 {{provider}} 的响应。请检查你的 API 密钥和网络连接。",
+    "unknown": "{{provider}} 返回了一个意外错误。",
+    "keyMissing": "尚未为 {{provider}} 设置 API 密钥。请在“设置 → 语言模型”中添加。",
+    "selfHosted": {
+      "authFailed": "你的服务器拒绝了 API 密钥。",
+      "accessDenied": "你的服务器拒绝了访问。该密钥可能不包含此模型。",
+      "quotaExhausted": "你的服务器报告该账户额度已用尽。",
+      "rateLimited": "你的服务器限制了请求频率。请稍候再试。",
+      "modelNotFound": "你的服务器不识别模型“{{model}}”。",
+      "modelNotFoundNoModel": "你的服务器不识别所选的模型。",
+      "payloadTooLarge": "此录音对你的服务器来说太大了。",
+      "requestTooLarge": "此请求对你的服务器来说太大了。",
+      "badRequest": "你的服务器无法处理此请求。",
+      "unavailable": "你的服务器目前遇到了问题。请稍后重试。",
+      "timeout": "你的服务器响应超时。",
+      "unreachable": "无法连接到你的服务器。请检查它是否正在运行。",
+      "noResponse": "未能收到你的服务器的响应。请检查它的 API 密钥以及它是否正在运行。",
+      "unknown": "你的服务器返回了一个意外错误。"
+    },
+    "openSettings": "打开设置",
+    "copyDetails": "复制详情",
+    "titles": {
+      "transcription": "转录失败",
+      "llm": "AI 请求失败"
+    },
+    "details": {
+      "provider": "服务商",
+      "requestId": "请求 ID"
+    }
   },
   "productHelp": {
     "title": "OpenWhispr 帮助",

@@ -42,6 +42,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useUsage } from "../../hooks/useUsage";
 import { useSettings } from "../../hooks/useSettings";
 import { requestSignIn } from "../../utils/requestSignIn";
+import { describeProviderError } from "../../utils/describeProviderError";
 import {
   getAllReasoningModels,
   getBatchTranscriptionModel,
@@ -758,7 +759,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           errorKey
             ? t(`notes.upload.${errorKey}`)
             : res.messageKey
-              ? t(res.messageKey)
+              ? describeProviderError({ ...res, message: res.error }, t).description
               : res.error || t("notes.upload.transcriptionFailed")
         );
         setState("error");
@@ -773,7 +774,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       if (errorKey) {
         setError(t(`notes.upload.${errorKey}`));
       } else {
-        setError(err instanceof Error ? err.message : t("notes.upload.errorOccurred"));
+        setError(
+          err instanceof Error
+            ? describeProviderError(err, t).description
+            : t("notes.upload.errorOccurred")
+        );
       }
       setState("error");
     }

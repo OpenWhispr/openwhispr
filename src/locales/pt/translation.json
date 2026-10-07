@@ -752,6 +752,10 @@
       "label": "Desativar saída de raciocínio",
       "help": "Ignora tokens de raciocínio para uma saída mais limpa. Recomendado para limpeza. Alguns servidores ignoram esta dica."
     },
+    "keepModelLoaded": {
+      "label": "Manter o modelo carregado",
+      "help": "Fica na memória em vez de ser removido após 5 minutos de inatividade, assim o próximo pedido evita a inicialização a frio. Vale para todos os recursos que usam um modelo local."
+    },
     "selfHosted": {
       "endpointHelp": "Aponte para um servidor compatível com OpenAI na sua rede local (ex.: Ollama, LM Studio, vLLM ou llama-server)."
     },
@@ -3830,10 +3834,7 @@
       "copiedToClipboard": "Copiado para a área de transferência",
       "openNote": "Abrir nota",
       "unknownTool": "Ferramenta desconhecida: {{name}}",
-      "invalidArgs": "Argumentos de ferramenta inválidos para {{name}}",
-      "search_openwhispr_helpStatus": "Buscando documentação oficial…",
-      "read_openwhispr_helpStatus": "Buscando documentação oficial…",
-      "get_openwhispr_contextStatus": "Configurações atuais"
+      "invalidArgs": "Argumentos de ferramenta inválidos para {{name}}"
     }
   },
   "assistant": {
@@ -4773,6 +4774,49 @@
     },
     "start": "Fazer anotações",
     "join": "Entrar e transcrever"
+  },
+  "providerErrors": {
+    "authFailed": "{{provider}} rejeitou sua chave de API.",
+    "accessDenied": "{{provider}} negou o acesso. Sua chave pode não incluir este modelo.",
+    "quotaExhausted": "Sua conta {{provider}} está sem crédito.",
+    "rateLimited": "{{provider}} limitou a solicitação. Aguarde um momento e tente novamente.",
+    "modelNotFound": "{{provider}} não reconhece o modelo “{{model}}”.",
+    "modelNotFoundNoModel": "{{provider}} não reconhece o modelo selecionado.",
+    "payloadTooLarge": "Esta gravação é grande demais para {{provider}}.",
+    "requestTooLarge": "Esta solicitação é grande demais para {{provider}}.",
+    "badRequest": "{{provider}} não conseguiu processar esta solicitação.",
+    "unavailable": "{{provider}} está com problemas no momento. Tente novamente em breve.",
+    "timeout": "{{provider}} demorou demais para responder.",
+    "unreachable": "Não foi possível conectar-se a {{provider}}. Verifique sua conexão.",
+    "noResponse": "Não foi possível obter uma resposta de {{provider}}. Verifique sua chave de API e sua conexão.",
+    "unknown": "{{provider}} retornou um erro inesperado.",
+    "keyMissing": "Nenhuma chave de API definida para {{provider}}. Adicione-a em Configurações → Modelos de linguagem.",
+    "selfHosted": {
+      "authFailed": "Seu servidor rejeitou a chave de API.",
+      "accessDenied": "Seu servidor negou o acesso. A chave pode não incluir este modelo.",
+      "quotaExhausted": "Seu servidor informa que a conta está sem crédito.",
+      "rateLimited": "Seu servidor limitou a solicitação. Aguarde um momento e tente novamente.",
+      "modelNotFound": "Seu servidor não reconhece o modelo “{{model}}”.",
+      "modelNotFoundNoModel": "Seu servidor não reconhece o modelo selecionado.",
+      "payloadTooLarge": "Esta gravação é grande demais para o seu servidor.",
+      "requestTooLarge": "Esta solicitação é grande demais para o seu servidor.",
+      "badRequest": "Seu servidor não conseguiu processar esta solicitação.",
+      "unavailable": "Seu servidor está com problemas no momento. Tente novamente em breve.",
+      "timeout": "Seu servidor demorou demais para responder.",
+      "unreachable": "Não foi possível conectar-se ao seu servidor. Verifique se ele está em execução.",
+      "noResponse": "Não foi possível obter uma resposta do seu servidor. Verifique a chave de API dele e se ele está em execução.",
+      "unknown": "Seu servidor retornou um erro inesperado."
+    },
+    "openSettings": "Abrir Configurações",
+    "copyDetails": "Copiar detalhes",
+    "titles": {
+      "transcription": "Falha na transcrição",
+      "llm": "Falha na solicitação de IA"
+    },
+    "details": {
+      "provider": "Provedor",
+      "requestId": "ID da solicitação"
+    }
   },
   "productHelp": {
     "title": "Ajuda do OpenWhispr",

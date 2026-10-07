@@ -52,6 +52,16 @@ test("ReasoningService entry points enforce the org policy", async (t) => {
     });
   };
 
+  // A custom endpoint's 400 body ("expected test stop") now classifies as a
+  // provider bad-request error; its original text survives on
+  // technicalDetails.underlyingError rather than as the top-level message.
+  const rejectsExpectedTestStop = (promise) =>
+    assert.rejects(promise, (err) => {
+      assert.equal(err.code, "PROVIDER_BAD_REQUEST");
+      assert.match(err.technicalDetails?.underlyingError ?? "", /expected test stop/);
+      return true;
+    });
+
   await t.test("processText rejects a BYOK provider outside the allowlist", async () => {
     setPolicy({ llmModes: ["providers"], llmByokProviders: ["anthropic"] });
     await assert.rejects(
@@ -203,13 +213,12 @@ test("ReasoningService entry points enforce the org policy", async (t) => {
     };
 
     try {
-      await assert.rejects(
+      await rejectsExpectedTestStop(
         reasoningService.processText("hi", "other-model", null, {
           provider: "custom",
           baseUrl: "https://other-scope.example.com/v1",
           inferenceScope: "chatIntelligence",
-        }),
-        { message: "expected test stop" }
+        })
       );
       assert.ok(requests.length > 0);
       for (const request of requests) {
@@ -223,12 +232,11 @@ test("ReasoningService entry points enforce the org policy", async (t) => {
 
       // The cleanup endpoint itself still gets the shared key.
       requests.length = 0;
-      await assert.rejects(
+      await rejectsExpectedTestStop(
         reasoningService.processText("hi", "cleanup-model", null, {
           provider: "custom",
           baseUrl: "https://cleanup.example.com/v1",
-        }),
-        { message: "expected test stop" }
+        })
       );
       assert.ok(requests.some((request) => request.auth === "Bearer cleanup-secret"));
     } finally {
@@ -256,9 +264,7 @@ test("ReasoningService entry points enforce the org policy", async (t) => {
     };
 
     try {
-      await assert.rejects(reasoningService.processText("hi", "custom-model"), {
-        message: "expected test stop",
-      });
+      await rejectsExpectedTestStop(reasoningService.processText("hi", "custom-model"));
       assert.ok(requestedUrls.length > 0);
       assert.ok(requestedUrls.every((url) => url.startsWith("https://custom.example.com/v1/")));
     } finally {
@@ -289,9 +295,8 @@ test("ReasoningService entry points enforce the org policy", async (t) => {
     };
 
     try {
-      await assert.rejects(
-        reasoningService.processText("hi", "llama-3.3-70b-versatile"),
-        { message: "expected test stop" }
+      await rejectsExpectedTestStop(
+        reasoningService.processText("hi", "llama-3.3-70b-versatile")
       );
       assert.ok(requestedUrls.length > 0);
       assert.ok(requestedUrls.every((url) => url.startsWith("https://api.openai.com/")));

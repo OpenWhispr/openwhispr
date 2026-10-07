@@ -99,6 +99,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("paste-at-captured-target", sessionId, text, options),
   hideWindow: () => ipcRenderer.invoke("hide-window"),
   showDictationPanel: () => ipcRenderer.invoke("show-dictation-panel"),
+  openSettingsSection: (section) => ipcRenderer.invoke("open-settings-section", section),
   captureDictationTarget: () => ipcRenderer.invoke("capture-dictation-target"),
   onToggleDictation: registerListener("toggle-dictation", (callback) => () => callback()),
   onToggleVoiceAgent: registerListener("toggle-voice-agent", (callback) => () => callback()),
@@ -461,6 +462,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   onGpuFallbackNotification: registerListener(
     "gpu-fallback-notification",
+    (callback) => () => callback()
+  ),
+  // Main changed the installed packs or the remembered GPU failure (#1736)
+  onWhisperGpuStatusChanged: registerListener(
+    "whisper-gpu-status-changed",
     (callback) => () => callback()
   ),
 
@@ -1037,6 +1043,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Settings shortcut (Cmd+, / Ctrl+,)
   onShowSettings: registerListener("show-settings", (callback) => () => callback()),
+  getPendingSettingsSection: () => ipcRenderer.invoke("get-pending-settings-section"),
 
   // Accessibility permission events (macOS)
   onAccessibilityMissing: (callback) => {
