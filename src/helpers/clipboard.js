@@ -245,6 +245,16 @@ class ClipboardManager {
     return null;
   }
 
+  // `--type text` so a copied image never comes back as raw bytes.
+  _readWaylandClipboardText() {
+    if (!this._isWayland() || !this.commandExists("wl-paste")) return null;
+    try {
+      const result = spawnSync("wl-paste", ["--no-newline", "--type", "text"], { timeout: 200 });
+      if (result.status === 0) return result.stdout.toString();
+    } catch {}
+    return null;
+  }
+
   // Accepts a Linux window class or a macOS app name.
   isTerminalSignature(signature) {
     if (!signature) return false;
@@ -823,7 +833,10 @@ class ClipboardManager {
     }
     if (keys.length > 0) return { type: "formats", data };
 
-    return { type: "text", data: text };
+    // The app runs on XWayland, and the compositor refuses its reads of a native
+    // Wayland app's clipboard while a Wayland window is focused (KWin does). Saving
+    // that empty read would make the restore wipe the user's clipboard (#2055).
+    return { type: "text", data: this._readWaylandClipboardText() ?? text };
   }
 
   _restoreClipboard(original) {
@@ -1778,7 +1791,10 @@ class ClipboardManager {
         const tryPortalPaste = async () => {
           try {
             await this._runPortalPaste(linuxFastPaste, {
-              shiftInsert: useShiftInsert,
+              // KWin resolves portal keysyms in the active layout only: on a
+              // non-Latin layout there is no XK_v, so Ctrl+V arrives as Ctrl alone
+              // while the helper still exits 0 (#2055). Insert is in every layout.
+              shiftInsert: useShiftInsert || isKde,
               terminal: isTerminalTarget,
             });
             this.safeLog("✅ Paste successful using linux-fast-paste --portal (RemoteDesktop)");
