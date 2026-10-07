@@ -1,0 +1,53 @@
+# Product-help grounding repair — 7 October 2026
+
+Original QA: PR #2517 at `f27bf30403d5c3f7d73c5decaf14549858edc858`. Repair includes current main `a1cdf62ac`, including its existing friendly provider errors. Three implementation agents owned evidence/context, Chat presentation, and executable evaluation; a fresh fourth agent reviewed pinned integrated commits independently.
+
+## Findings and disposition
+
+| Original finding                                                             | Repair and observed proof                                                                                                                                                                                             | Remaining boundary                                                                                                                                       |
+| ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Wrong product facts, STT/LLM confusion, invented controls and privacy claims | Reviewed app-owned answer blocks; native Cloud/Groq/Qwen-selected Chat shows separate speech/Chat setup, Hold privacy distinction and unknown-feature refusal. Model-generated prose is bypassed for recognized help. | English routing and maintained guidance coverage are finite. No claim of arbitrary-model factual accuracy.                                               |
+| Stale same-chat settings                                                     | Fresh context on every guarded turn. Automated shortcut fixture changes RightCommand → Control+Alt+K; native same-chat activation setting changes Hold → Tap → Hold.                                                  | Native modifier-only shortcut was preserved; actual shortcut-change acceptance was not repeated.                                                         |
+| `push` misread as Tap                                                        | Canonical Hold label projected and rendered by app; native current-settings cards show Hold, then Tap only after the deliberate test change.                                                                          | Other platform UI acceptance pending.                                                                                                                    |
+| Missing/broken sources                                                       | Deterministic validated official links and per-source status in Chat. Native Hotkeys/Microphone/Models/Assistant links observed.                                                                                      | A retrieved link does not certify every statement; guidance is explicitly built-in.                                                                      |
+| Invalid page loops                                                           | Strict curated topic/path allowlist; at most one malformed-path recovery network lookup per model turn, later calls use bundled essentials. Tests reject external/cross-topic paths and verify bounded recovery.      | Native recognized help has no model-selected path or retry loop; malformed tool requests tested with fixtures.                                           |
+| Irrelevant/truncated retrieval and private-note lookup                       | Complete curated page reads, failure/oversize fallback; guarded hook returns before RAG or inference. Live hotkeys, models and microphone supporting pages retrieved successfully.                                    | Live docs contain known older Chat statements. Draft docs #44 remains unmerged.                                                                          |
+| Undisclosed fallback and raw provider errors                                 | App source/fallback rendering; inherited main friendly error UI. Automated outage/policy/provider-error coverage.                                                                                                     | Final native outage rerun pending: instrumented restart blocked in Keychain before a test question. Excluded as a product result.                        |
+| Extra Help panel                                                             | ProductHelpDialog and Support menu entry removed; existing Chat renders evidence/settings. UI tests and native Chat verified.                                                                                         | No separate browser reintroduced.                                                                                                                        |
+| Side effects/external paste                                                  | App-controlled help holds caret and clipboard before lookup; tools remain read-only. Hook tests verify hold, no RAG/inference, cancellation. Initial native Groq help left staging .env hash identical.               | Fresh native external TextEdit sentinel check and voice delivery not completed after restart blocker. Original QA sentinel pass remains historical only. |
+
+## Automated and independent review
+
+- Twelve cases × three paraphrases × two turns = 72 synthetic guarded turns. Plus ordinary/mixed routing, unknown-control, cancellation and evaluator rejection tests: 26 tests pass.
+- Helper/tool coverage: 15 tests pass. Evidence UI: 3 tests pass. Existing shared hook regression file plus new guarded tests: 39 pass.
+- One initial full hook run had a timing-sensitive existing Esc test fail; isolated rerun and complete 39-test rerun passed. This is recorded rather than hidden.
+- TypeScript, locale-key consistency, scoped ESLint and production renderer build passed. Existing bundler chunk warnings remain. Generated build output removed.
+- Independent review at `3ebc7fb8a` found ordinary-follow-up interception, missed supported topics, and unverified controls wrongly counted answered. Repairs included at `067d3edac` exposed calendar-data over-routing; repaired at `c075441fa6a4b38bf742355c4cd1900b671d05df`. The reviewer verified all reported cases, 26 tests, and no remaining actionable issue within those failure classes. Final `79d77705e` only localizes the existing `openwhispr` processing label to OpenWhispr Cloud; UI tests passed again.
+
+## Native evidence
+
+macOS Electron 41.10.7 / Node 24.18.0 / app 1.10.2, Vite 5183, existing staging profile and production backend. Only synthetic Chat input. No new weights or account changes.
+
+| Saved assistant message | Configuration / observation                                                                                                                               |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 49                      | Groq-selected guarded help: RightCommand, Hold, System Default, granted mic/accessibility, app 1.10.2, OS version Unknown; actual official links visible. |
+| 51                      | Groq-selected guarded offline-model and Hold privacy guidance; sources visible.                                                                           |
+| 53                      | Unknown Quantum Dictation toggle honestly unverified.                                                                                                     |
+| 55                      | Actual Groq GPT-OSS120B generation: `TRANSPORT CHECK`.                                                                                                    |
+| 57                      | Cloud-selected guarded help with fresh Chat processing and correct model distinction.                                                                     |
+| 59                      | Actual Cloud generation: `CLOUD TRANSPORT CHECK`.                                                                                                         |
+| 61                      | Same chat after deliberate Hold → Tap change: current card shows Tap.                                                                                     |
+| 63                      | Same chat after restoring Hold and selecting installed Qwen3.5 4B Q4_K_M: card shows Hold and Local/qwen.                                                 |
+| 65                      | Actual local Qwen generation: `LOCAL TRANSPORT CHECK`; llama-server startup logged successfully.                                                          |
+
+Guarded replies above are app-rendered, not outputs generated by those models. Transport smoke checks establish only actual inference availability, not broad model answer quality. Full twelve-case live/native matrix and repeated provider-generated quality evals are not claimed.
+
+The synthetic JSON messages are retained locally in the task's `help-repair/native-messages.json` artifact. No credentials or private notes are exported. Initial staging `.env` SHA256 before/after Groq checks: `c3c63cb3281742766c0bd0f5e076f0eb0dcbe35256b7ba51f8860f4450ffb062`.
+
+## Rig and remaining handoff
+
+Kept rig: `/Users/joshuadavidpadoa/dev/ow-help-2517-test`, to preserve existing Electron identity, native permissions and installed runtime. Original staging backup is untouched. RightCommand, Hold and System Default remain unchanged/restored. At the last completed UI step, Chat is temporarily Qwen3.5 4B; restore inactive local choice to Qwen3.5 9B and active Chat to Groq GPT-OSS120B after startup is unblocked.
+
+A scoped docs-outage hook restart stalled before app windows in `SecKeychainFindGenericPassword` (macOS Keychain), confirmed by a process sample. Computer Use refuses access to SecurityAgent. Hook mode returned online and normal launcher restarted without `NODE_OPTIONS`; normal restart also awaits Keychain. User was asked to handle the native prompt. No security protections bypassed and no keys read or changed. No successful native outage run is claimed from that attempt.
+
+No merge, deployment, public documentation publication, Slack or email send performed. Titan primary working tree and other sessions' worktrees remain untouched.
