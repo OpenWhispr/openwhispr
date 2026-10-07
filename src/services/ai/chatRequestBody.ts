@@ -37,6 +37,12 @@ export function applyChatCompletionsParams(
     maxTokens: number;
   }
 ): void {
+  if (config.s1MiniCleanup) {
+    requestBody.max_tokens = maxTokens;
+    requestBody.temperature = 0;
+    requestBody.chat_template_kwargs = { enable_thinking: false };
+    return;
+  }
   const providerKey = provider.toLowerCase();
   // No systemPrompt override means the default cleanup path: a deterministic
   // transform, so zero temperature.
@@ -136,9 +142,12 @@ const STRIPPABLE_SHAPED_PARAMS = [
 export async function fetchWithParamFallback(
   doFetch: () => Promise<Response>,
   requestBody: Record<string, unknown>,
-  logRejection: (details: { status: number; stripped: string[] }) => void
+  logRejection: (details: { status: number; stripped: string[] }) => void,
+  skipParamFallback = false
 ): Promise<Response> {
   let res = await doFetch();
+  // S1-mini's template flag and greedy decoding are required, not optional hints.
+  if (skipParamFallback) return res;
   if (res.ok || (res.status !== 400 && res.status !== 422)) return res;
 
   if (requestBody.reasoning) {

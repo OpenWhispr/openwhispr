@@ -1,4 +1,30 @@
 {
+  "s1Mini": {
+    "options": "Opzioni",
+    "description": "S1-mini di Superwhisper supporta solo la pulizia dei dettati in inglese. Scegli le opzioni qui sotto. Il ragionamento è sempre disattivato.",
+    "styling": "Stile",
+    "structure": "Struttura",
+    "context": "Contesto",
+    "values": {
+      "casual": "Informale",
+      "semi-casual": "Piuttosto informale",
+      "semi-formal": "Piuttosto formale",
+      "formal": "Formale",
+      "prose": "Paragrafi",
+      "lists": "Consenti elenchi",
+      "general": "Generale",
+      "email": "Email"
+    },
+    "help": {
+      "styling": "Maiuscole, punteggiatura e contrazioni.",
+      "structure": "Mantieni i paragrafi o consenti elenchi puntati.",
+      "context": "Testo generico o saluti e formule di chiusura delle email."
+    },
+    "licenseSummary": "Apache 2.0 + obbligo di indicazione del nome",
+    "license": "Licenza",
+    "notice": "Avviso",
+    "modelDescription": "Solo inglese · Pulizia dei dettati (Q4_K_M)"
+  },
   "settings": {
     "language": {
       "sectionTitle": "Lingua",

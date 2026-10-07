@@ -1,4 +1,30 @@
 {
+  "s1Mini": {
+    "options": "选项",
+    "description": "Superwhisper 的 S1-mini 仅支持英语听写整理。请在下方选择选项。思考模式始终关闭。",
+    "styling": "风格",
+    "structure": "结构",
+    "context": "场景",
+    "values": {
+      "casual": "随意",
+      "semi-casual": "较随意",
+      "semi-formal": "较正式",
+      "formal": "正式",
+      "prose": "段落",
+      "lists": "允许列表",
+      "general": "通用",
+      "email": "电子邮件"
+    },
+    "help": {
+      "styling": "调整大小写、标点和缩略形式。",
+      "structure": "保留段落或允许项目符号列表。",
+      "context": "通用文本或电子邮件的问候语和落款。"
+    },
+    "licenseSummary": "Apache 2.0 + 名称标注要求",
+    "license": "许可证",
+    "notice": "声明",
+    "modelDescription": "仅限英语 · 听写整理（Q4_K_M）"
+  },
   "settings": {
     "language": {
       "sectionTitle": "语言",
