@@ -52,6 +52,33 @@ test("source metadata alone does not establish rendered citation or factual supp
   assert.deepEqual(result.failures, ["invalid source URL", "missing clickable citation"]);
 });
 
+test("Hold check distinguishes control instructions from the current activation mode", () => {
+  const guidance =
+    "Activation Mode is directly below Dictation Hotkey: Tap means press once to start and again to stop; Hold means hold while speaking and release to stop.";
+  assert.deepEqual(
+    evaluateRecord({
+      caseId: "hold-label",
+      content: `${guidance}\nActivation mode: Hold`,
+      metadata: { facts: [{ label: "Activation mode", value: "Hold" }] },
+    }).failures,
+    []
+  );
+  for (const content of [
+    "Your mode is Tap. Hold is available.",
+    "You are currently using Tap, not Hold.",
+    "Current activation mode: Tap. Hold is available.",
+  ]) {
+    assert.ok(evaluateRecord({ caseId: "hold-label", content }).failures.includes("hold"));
+  }
+  assert.ok(
+    evaluateRecord({
+      caseId: "hold-label",
+      content: guidance,
+      metadata: { facts: [{ label: "Activation mode", value: "Tap" }] },
+    }).failures.includes("hold")
+  );
+});
+
 test("missing side-effect and freshness observations cannot silently pass", () => {
   const result = evaluateRecord({
     caseId: "no-side-effects",

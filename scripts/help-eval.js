@@ -10,7 +10,12 @@ const checks = {
     typeof r.expectedShortcut === "string" && r.content.includes(r.expectedShortcut),
   hold: (r) =>
     /\bHold\b/.test(r.content) &&
-    !/(?:current|using|set to|mode is)[^\n.]{0,35}\bTap\b/i.test(r.content),
+    !r.metadata?.facts?.some(
+      (fact) => /^Activation mode$/i.test(fact.label) && fact.value !== "Hold"
+    ) &&
+    !/(?:current(?:ly)?(?: activation)?(?: mode)?|using|set to|mode is)\s*(?:(?:is|set to|using)\s*)?[:=]?\s*[*`"]*\bTap\b/i.test(
+      r.content
+    ),
   processingSeparation: (r) =>
     /(?:separate|does not|doesn.t|not determine|not a|independent)/i.test(r.content) &&
     /(?:processing|transcription|speech-to-text)/i.test(r.content),
