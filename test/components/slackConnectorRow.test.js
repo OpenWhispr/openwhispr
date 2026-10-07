@@ -77,7 +77,6 @@ test("Connect runs the browser flow once and says why it failed", async (t) => {
         row,
         isPaid: true,
         blockedByOrg: false,
-        onUpgrade() {},
       })
     )
   );
@@ -140,7 +139,6 @@ async function renderDisconnectedRow(t, { connectorConnect }) {
         row,
         isPaid: true,
         blockedByOrg: false,
-        onUpgrade() {},
       })
     )
   );
@@ -238,7 +236,6 @@ async function renderConnectedRow(t, { connectorDisconnect }) {
         row,
         isPaid: true,
         blockedByOrg: false,
-        onUpgrade() {},
       })
     )
   );

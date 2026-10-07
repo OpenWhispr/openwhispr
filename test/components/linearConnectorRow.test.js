@@ -93,9 +93,7 @@ async function renderLinearRow(
   const { createRoot } = require("react-dom/client");
   root = createRoot(container);
   await React.act(async () =>
-    root.render(
-      React.createElement(ConnectorLoginRow, { row, isPaid, blockedByOrg, onUpgrade() {} })
-    )
+    root.render(React.createElement(ConnectorLoginRow, { row, isPaid, blockedByOrg }))
   );
   // Let the status load from the mount effect commit.
   await React.act(async () => {});
@@ -172,10 +170,10 @@ test("a free plan can still disconnect a Linear login it has", async (t) => {
   assert.equal(hasButton(connected.container, "connectors.linear.connect"), false);
 });
 
-test("a free plan without a Linear login sees the upsell and no Connect", async (t) => {
+test("a free plan without a Linear login still sees what Linear does, with no button", async (t) => {
   const { container } = await renderLinearRow(t, { status: DISCONNECTED, isPaid: false });
-  assert.match(container.textContent, /connectors\.linear\.proRequired/);
-  assert.equal(hasButton(container, "integrations.api.viewPlans"), true);
+  assert.match(container.textContent, /connectors\.linear\.description/);
+  assert.equal(hasButton(container, "integrations.api.viewPlans"), false);
   assert.equal(hasButton(container, "connectors.linear.connect"), false);
 });
 

@@ -116,20 +116,48 @@ test("HTTP statuses map to coded errors without leaking the key", async () => {
     );
   };
 
-  for (const status of [401, 403]) {
-    const error = await statusError(status);
-    assert.equal(error.code, "INVALID_KEY");
-    assert.equal(error.message.includes("sk-secret"), false);
-  }
+  const unauthorized = await statusError(401);
+  assert.equal(unauthorized.code, "PROVIDER_AUTH_FAILED");
+  assert.equal(unauthorized.message.includes("sk-secret"), false);
+
+  // A bare 403 with no key-signal body is access-denied, not an auth failure —
+  // the shared classifier only promotes 403 to PROVIDER_AUTH_FAILED when the
+  // body itself names an invalid/incorrect key.
+  const forbidden = await statusError(403);
+  assert.equal(forbidden.code, "PROVIDER_ACCESS_DENIED");
+  assert.equal(forbidden.message.includes("sk-secret"), false);
+
   assert.equal((await statusError(429)).code, "PROVIDER_RATE_LIMITED");
-  assert.equal((await statusError(500)).code, "SERVER_ERROR");
+  assert.equal((await statusError(500)).code, "PROVIDER_UNAVAILABLE");
 
   // Google's real answer to a bad key, captured from the live API.
   const badKey = await statusError(400, '{"error":{"reason":"API_KEY_INVALID"}}');
-  assert.equal(badKey.code, "INVALID_KEY");
+  assert.equal(badKey.code, "PROVIDER_AUTH_FAILED");
   assert.equal(badKey.message.includes("sk-secret"), false);
 
-  assert.equal((await statusError(400, "unsupported mime")).code, undefined);
+  assert.equal((await statusError(400, "unsupported mime")).code, "PROVIDER_BAD_REQUEST");
+});
+
+test("failures carry the classified key and Gemini as provider", async () => {
+  const fetchImpl = async () => ({
+    ok: false,
+    status: 400,
+    text: async () => '{"error":{"details":[{"reason":"API_KEY_INVALID"}]}}',
+  });
+  await assert.rejects(
+    () =>
+      transcribeWithGemini(
+        { audioBuffer: AUDIO, model: "m", contentType: "audio/mp3", apiKey: "k" },
+        fetchImpl
+      ),
+    (error) => {
+      assert.equal(error.messageKey, "providerErrors.authFailed");
+      assert.deepEqual(error.messageParams, { provider: "Gemini" });
+      assert.equal(error.settingsTarget, "speechToText");
+      assert.equal(error.technicalDetails.status, 400);
+      return true;
+    }
+  );
 });
 
 test("a failed interaction status rejects even on HTTP 200", async () => {
@@ -149,6 +177,25 @@ test("any non-completed status rejects instead of returning empty text", async (
     transcribeWithGemini({ audioBuffer: AUDIO, apiKey: "k" }, fetchImpl),
     /did not complete \(status: budget_exceeded\)/
   );
+});
+
+test("an HTTP failure logs its status and a redacted body", async (t) => {
+  const debugLogger = require("../../src/helpers/debugLogger");
+  const warnings = [];
+  t.mock.method(debugLogger, "warn", (message, meta) => warnings.push({ message, meta }));
+  const fetchImpl = async () => ({
+    ok: false,
+    status: 400,
+    text: async () => '{"error":{"message":"API key not valid: AIzaSyLeakedKey123"}}',
+  });
+
+  await assert.rejects(transcribeWithGemini({ audioBuffer: AUDIO, apiKey: "k" }, fetchImpl));
+
+  const failure = warnings.find(({ message }) => message === "Gemini transcription failed");
+  assert.ok(failure, "the failure must be logged");
+  assert.equal(failure.meta.status, 400);
+  assert.match(failure.meta.body, /API key not valid/);
+  assert.equal(failure.meta.body.includes("AIzaSyLeakedKey123"), false);
 });
 
 test("canonical mime types map onto Gemini's documented ones", async () => {

@@ -11,6 +11,7 @@ import { tagActionItemOwners, type MentionPerson } from "../utils/mentionMarkdow
 import type { ActionItem, NoteItem } from "../types/electron";
 import { estimateNoteTokens, planNoteChunks, splitChunkInHalf } from "../helpers/noteChunking";
 import type { LocalInferenceError } from "../utils/localInferenceError";
+import type { TechnicalErrorDetailsData } from "../components/ui/useToast";
 import type { ReasoningConfig } from "../services/BaseReasoningService";
 import {
   EMPTY_OUTPUT_MESSAGE_KEY,
@@ -91,6 +92,8 @@ export interface ActionErrorEvent {
   messageParams?: Record<string, string | number>;
   /** Not a failure: the run found nothing to write, so the toast only informs. */
   notice?: boolean;
+  settingsTarget?: string;
+  technicalDetails?: TechnicalErrorDetailsData;
 }
 
 interface ActionProcessingStoreState {
@@ -586,10 +589,13 @@ export function runBackgroundAction(
       processingFlags.set(noteId, false);
       clearNoteState(noteId);
       const message = err instanceof Error ? err.message : labels.actionFailed;
-      const { messageKey, messageParams, notice } = (err ?? {}) as {
+      const { messageKey, messageParams, notice, settingsTarget, technicalDetails } = (err ??
+        {}) as {
         messageKey?: string;
         messageParams?: Record<string, string | number>;
         notice?: boolean;
+        settingsTarget?: string;
+        technicalDetails?: TechnicalErrorDetailsData;
       };
       pushErrorEvent({
         noteId,
@@ -597,6 +603,8 @@ export function runBackgroundAction(
         messageKey: (messageKey && NOTE_ERROR_KEYS[messageKey]) || messageKey,
         messageParams,
         notice,
+        settingsTarget,
+        technicalDetails,
       });
     } finally {
       if (activeRuns.get(noteId) === runId) activeRuns.delete(noteId);

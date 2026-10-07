@@ -181,7 +181,6 @@ async function renderGithubRow(
           row,
           isPaid,
           blockedByOrg,
-          onUpgrade() {},
           ...props,
         })
       )

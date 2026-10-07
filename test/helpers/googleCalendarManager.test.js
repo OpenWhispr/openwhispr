@@ -77,7 +77,7 @@ test("_syncCalendar fetches all pages when nextPageToken is returned", async () 
     throw new Error(`Unexpected path: ${path}`);
   };
 
-  const calendar = { id: "cal-1", account_email: "test@example.com" };
+  const calendar = { id: "cal-1", account_email: "test@example.com", is_primary: 1 };
   await manager._syncCalendar(calendar);
 
   assert.equal(apiCalls.length, 2, "should make 2 API calls for 2 pages");
@@ -375,5 +375,55 @@ test("_syncCalendar trusts self as the user only on the account's primary calend
       [0, ["dana@example.com"]],
       [1, []],
     ]
+  );
+});
+
+async function syncGoogleResponse(calendar, attendees) {
+  const rows = [];
+  const GoogleCalendarManager = loadManagerModule();
+  const manager = new GoogleCalendarManager(
+    {
+      removeStaleCalendarEvents: () => {},
+      upsertCalendarEvents: (events) => rows.push(...events),
+      removeCalendarEvents: () => {},
+      updateCalendarSyncToken: () => {},
+      syncCalendarContacts: () => {},
+    },
+    null,
+    { scheduleNextMeeting: () => {} }
+  );
+  manager._apiGet = async () => ({
+    items: [
+      {
+        id: "meeting",
+        summary: "Planning",
+        status: "confirmed",
+        start: { dateTime: "2026-10-01T10:00:00Z" },
+        end: { dateTime: "2026-10-01T11:00:00Z" },
+        attendees,
+      },
+    ],
+  });
+  await manager._syncCalendar(calendar);
+  return rows[0].self_response_status;
+}
+
+test("Google RSVP on a shared calendar uses the connected account's attendee", async () => {
+  const shared = { id: "colleague@example.com", account_email: "me@example.com" };
+  const colleague = { email: "colleague@example.com", self: true, responseStatus: "declined" };
+  assert.equal(
+    await syncGoogleResponse(shared, [
+      colleague,
+      { email: "ME@example.com", responseStatus: "accepted" },
+    ]),
+    "accepted"
+  );
+  assert.equal(await syncGoogleResponse(shared, [colleague]), "unknown");
+  assert.equal(
+    await syncGoogleResponse(shared, [
+      colleague,
+      { email: "me@example.com", responseStatus: "unrecognized" },
+    ]),
+    "unknown"
   );
 });

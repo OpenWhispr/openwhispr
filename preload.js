@@ -65,6 +65,19 @@ const registerListener = (channel, handlerFactory) => {
 contextBridge.exposeInMainWorld("electronAPI", {
   setOnboardingWindowMode: (mode) => ipcRenderer.invoke("onboarding-set-window-mode", mode),
   setOnboardingActive: (active) => ipcRenderer.invoke("onboarding-set-active", active),
+  openPermissionGuide: (state) => ipcRenderer.invoke("permission-guide-open", state),
+  closePermissionGuide: () => ipcRenderer.invoke("permission-guide-close"),
+  getPermissionGuideState: () => ipcRenderer.invoke("permission-guide-state"),
+  permissionGuideAction: (action) => ipcRenderer.send("permission-guide-action", action),
+  startPermissionGuideDrag: (target) => ipcRenderer.send("permission-guide-drag", target),
+  onPermissionGuideState: registerListener(
+    "permission-guide-state-changed",
+    (callback) => (_event, state) => callback(state)
+  ),
+  onPermissionGuideAction: registerListener(
+    "permission-guide-action",
+    (callback) => (_event, action) => callback(action)
+  ),
   markMacAccessibilityFeaturesReady: (expectedAccountScope) =>
     expectedAccountScope
       ? ipcRenderer.send("mac-accessibility-features-ready", expectedAccountScope)
@@ -86,6 +99,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("paste-at-captured-target", sessionId, text, options),
   hideWindow: () => ipcRenderer.invoke("hide-window"),
   showDictationPanel: () => ipcRenderer.invoke("show-dictation-panel"),
+  openSettingsSection: (section) => ipcRenderer.invoke("open-settings-section", section),
   captureDictationTarget: () => ipcRenderer.invoke("capture-dictation-target"),
   onToggleDictation: registerListener("toggle-dictation", (callback) => () => callback()),
   onToggleVoiceAgent: registerListener("toggle-voice-agent", (callback) => () => callback()),
@@ -450,6 +464,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "gpu-fallback-notification",
     (callback) => () => callback()
   ),
+  // Main changed the installed packs or the remembered GPU failure (#1736)
+  onWhisperGpuStatusChanged: registerListener(
+    "whisper-gpu-status-changed",
+    (callback) => () => callback()
+  ),
 
   // One-time "GPU pack needs re-downloading" notice from the legacy-layout migration
   getGpuPackMigrationNotice: () => ipcRenderer.invoke("get-gpu-pack-migration-notice"),
@@ -733,6 +752,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getSystemDefaultMicrophone: (options) =>
     ipcRenderer.invoke("get-system-default-microphone", options),
   checkSystemAudioAccess: () => ipcRenderer.invoke("check-system-audio-access"),
+  verifySystemAudioAccess: () => ipcRenderer.invoke("permission-guide-verify-system-audio"),
   requestSystemAudioAccess: () => ipcRenderer.invoke("request-system-audio-access"),
   openMicrophoneSettings: () => ipcRenderer.invoke("open-microphone-settings"),
   openSoundInputSettings: () => ipcRenderer.invoke("open-sound-input-settings"),
@@ -1023,6 +1043,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Settings shortcut (Cmd+, / Ctrl+,)
   onShowSettings: registerListener("show-settings", (callback) => () => callback()),
+  getPendingSettingsSection: () => ipcRenderer.invoke("get-pending-settings-section"),
 
   // Accessibility permission events (macOS)
   onAccessibilityMissing: (callback) => {

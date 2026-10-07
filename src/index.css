@@ -241,7 +241,9 @@
      is cleared here rather than filled. The compact frame owns the complete
      480x576 surface, including its rounded corners. */
   body:has(.onboarding-canvas.compact),
-  body:has(.onboarding-canvas.compact) #root {
+  body:has(.onboarding-canvas.compact) #root,
+  body:has(.permission-settings-overlay),
+  body:has(.permission-settings-overlay) #root {
     background: transparent;
   }
 
@@ -1894,11 +1896,6 @@ a:hover {
   pointer-events: none;
   float: inline-start;
   height: 0;
-}
-
-/* The empty-line format toolbar sits where the placeholder would show. */
-.rich-text-editor-content:has(~ .rich-text-editor-line-menu) p.is-editor-empty:first-child::before {
-  content: none;
 }
 
 /* Dark mode adjustments */

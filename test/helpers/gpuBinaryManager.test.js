@@ -468,6 +468,39 @@ test("Windows whisper GPU packs require every app-local MSVC runtime library", (
   }
 });
 
+test("needs update: a binary without the libraries this version requires is outdated, not missing", () => {
+  const manager = requiredLibrariesManager();
+  assert.equal(manager.needsUpdate(), false, "nothing on disk is a pack never downloaded");
+
+  const packDir = seedPack("test-pack", ["server-out"]);
+  assert.equal(manager.needsUpdate(), true);
+  assert.equal(manager.isDownloaded(), false);
+
+  fs.writeFileSync(path.join(packDir, "msvcp140.dll"), "runtime");
+  fs.writeFileSync(path.join(packDir, "vcruntime140.dll"), "runtime");
+  assert.equal(manager.needsUpdate(), false);
+  assert.equal(manager.isDownloaded(), true);
+});
+
+test("needs update: a 1.9.x Windows CUDA pack (whisper.cpp 0.0.9, no MSVC runtime) is outdated (#2424)", () => {
+  const manager = useWindowsAsset(new WhisperCudaManager());
+  seedPack(manager.config.dirName, [
+    "whisper-server-win32-x64-cuda.exe",
+    "cublas64_12.dll",
+    "cublasLt64_12.dll",
+    "cudart64_12.dll",
+  ]);
+  assert.equal(manager.isDownloaded(), false);
+  assert.equal(manager.needsUpdate(), true);
+});
+
+test("needs update: a pack with no required libraries is never outdated", () => {
+  seedPack("whisper-cuda", ["whisper-server-linux-x64-cuda"]);
+  const manager = new WhisperCudaManager();
+  assert.equal(manager.isDownloaded(), true);
+  assert.equal(manager.needsUpdate(), false);
+});
+
 test("Windows whisper Vulkan installs the MSVC runtime libraries from its release archive", async () => {
   const manager = useWindowsAsset(new WhisperVulkanManager());
   manager.config.expectedDigests = undefined;
@@ -601,6 +634,58 @@ test("orphan detection: enabled flag with no pack on disk is reported for the no
     delete process.env.LLAMA_VULKAN_ENABLED;
     delete process.env.NONE_ENABLED;
   }
+});
+
+test("outdated detection: an outdated pack is reported apart from orphans, unless opted out", () => {
+  const { detectOrphanedGpuPacks, detectOutdatedGpuPacks } = GpuBinaryManager;
+  const cuda = useWindowsAsset(new WhisperCudaManager());
+  const packs = [{ manager: cuda, enabledEnvVar: "WHISPER_CUDA_ENABLED" }];
+  seedPack(cuda.config.dirName, ["whisper-server-win32-x64-cuda.exe"]);
+
+  try {
+    process.env.WHISPER_CUDA_ENABLED = "true";
+    assert.deepEqual(detectOutdatedGpuPacks(packs), ["CUDA whisper"]);
+    assert.deepEqual(detectOrphanedGpuPacks(packs), [], "on disk, so not an orphan");
+
+    // A pack on disk is wanted even when the .env flag was lost (#1340)
+    delete process.env.WHISPER_CUDA_ENABLED;
+    assert.deepEqual(detectOutdatedGpuPacks(packs), ["CUDA whisper"]);
+
+    process.env.WHISPER_CUDA_ENABLED = "FALSE";
+    assert.deepEqual(detectOutdatedGpuPacks(packs), []);
+  } finally {
+    delete process.env.WHISPER_CUDA_ENABLED;
+  }
+});
+
+test("outdated detection: an outdated pack beside a working one for the same engine is not reported", () => {
+  const { detectOutdatedGpuPacks } = GpuBinaryManager;
+  const cuda = useWindowsAsset(new WhisperCudaManager());
+  const vulkan = useWindowsAsset(new WhisperVulkanManager());
+  const ungrouped = [
+    { manager: cuda, enabledEnvVar: "WHISPER_CUDA_ENABLED" },
+    { manager: vulkan, enabledEnvVar: "WHISPER_VULKAN_ENABLED" },
+  ];
+  const grouped = ungrouped.map((pack) => ({ ...pack, group: "whisper" }));
+
+  // CUDA re-downloaded, the Vulkan pack from 1.9.x left behind
+  seedPack(cuda.config.dirName, [
+    "whisper-server-win32-x64-cuda.exe",
+    ...WINDOWS_MSVC_RUNTIME_LIBRARIES,
+  ]);
+  seedPack(vulkan.config.dirName, ["whisper-server-win32-x64-vulkan.exe"]);
+  assert.deepEqual(detectOutdatedGpuPacks(grouped), []);
+  assert.deepEqual(detectOutdatedGpuPacks(ungrouped), ["Vulkan whisper"]);
+
+  // Both outdated: both are reported
+  fs.rmSync(path.join(cuda.binDir, "vcruntime140.dll"));
+  assert.deepEqual(detectOutdatedGpuPacks(grouped), ["CUDA whisper", "Vulkan whisper"]);
+
+  // And the mirror: Vulkan re-downloaded, CUDA left behind
+  for (const library of WINDOWS_MSVC_RUNTIME_LIBRARIES) {
+    fs.writeFileSync(path.join(vulkan.binDir, library), "x");
+  }
+  assert.deepEqual(detectOutdatedGpuPacks(grouped), []);
 });
 
 test("getStatus reflects supported/downloaded/downloading", async () => {
