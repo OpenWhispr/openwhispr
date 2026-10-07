@@ -2,6 +2,9 @@ import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } fr
 import { useTranslation } from "react-i18next";
 import { Check, Copy, Plus, X } from "../icons";
 import { BrandMarkIcon } from "./BrandMarkIcon";
+import { HelpEvidence } from "../chat/GroundedHelpEvidence";
+import { extractHelpEvidence } from "../chat/helpEvidence";
+import { helpAnswerPlainText } from "../chat/helpEvidenceText";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
 import { TechnicalErrorDetails } from "../ui/TechnicalErrorDetails";
 import { openProviderSettings } from "../../utils/describeProviderError";
@@ -149,12 +152,13 @@ export function AssistantPanel({
     .reverse()
     .find((message) => message.role === "assistant");
   const responseContent = latestAssistantMessage?.content ?? "";
+  const helpEvidence = extractHelpEvidence(latestAssistantMessage?.toolCalls);
   const {
     copied,
     copy: handleCopy,
     copyText,
     confirmCopied,
-  } = useCopyFeedback(responseContent, {
+  } = useCopyFeedback(helpAnswerPlainText(responseContent, helpEvidence, t), {
     resetMs: MANUAL_COPY_FEEDBACK_MS,
   });
 
@@ -519,6 +523,7 @@ export function AssistantPanel({
                     content={displayedResponse}
                     className="text-[15px] leading-relaxed text-foreground selection:bg-agent-brand/35 selection:text-foreground [&_p]:text-[15px] [&_li]:text-[15px]"
                   />
+                  {helpEvidence && <HelpEvidence evidence={helpEvidence} />}
                   {latestAssistantMessage?.isStreaming && (
                     <span
                       className="ms-0.5 inline-block h-4 w-0.5 align-middle bg-foreground/70"

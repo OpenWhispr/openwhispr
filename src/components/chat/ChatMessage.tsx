@@ -7,6 +7,7 @@ import { TechnicalErrorDetails } from "../ui/TechnicalErrorDetails";
 import { openProviderSettings } from "../../utils/describeProviderError";
 import type { MessageError, ToolCallInfo } from "./types";
 import { extractNoteCards } from "./noteCards";
+import { helpAnswerPlainText } from "./helpEvidenceText";
 import { HelpEvidence } from "./GroundedHelpEvidence";
 import { extractHelpEvidence } from "./helpEvidence";
 import { toolIcons } from "./toolIcons";
@@ -193,9 +194,11 @@ export const ChatMessage = memo(function ChatMessage({
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
 
+  const helpEvidence = role === "assistant" ? extractHelpEvidence(toolCalls) : null;
+
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(content);
+      await navigator.clipboard.writeText(helpAnswerPlainText(content, helpEvidence, t));
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -225,7 +228,6 @@ export const ChatMessage = memo(function ChatMessage({
     );
   }
 
-  const helpEvidence = extractHelpEvidence(toolCalls);
   const visibleToolCalls = toolCalls?.filter((tc) => tc.name !== "grounded_product_help");
   const hasToolCalls = visibleToolCalls && visibleToolCalls.length > 0;
   const hasContent = content.length > 0;

@@ -107,3 +107,56 @@ test("live and fallback sources keep separate statuses; malformed facts and date
   assert.deepEqual(evidence.facts, []);
   assert.equal(evidence.readAt, null);
 });
+
+test("Chat explicit Copy strips help markup and keeps settings and fallback links", async (t) => {
+  let root;
+  const originalClipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+  let copied;
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: {
+      writeText: async (text) => {
+        copied = text;
+      },
+    },
+  });
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+    if (originalClipboard) Object.defineProperty(navigator, "clipboard", originalClipboard);
+    else delete navigator.clipboard;
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  const vite = await createRendererServer(t);
+  const { ChatMessage } = await vite.ssrLoadModule("/components/chat/ChatMessage.tsx");
+  root = createRoot(container);
+  const content = require("../../src/config/productHelpTopics.json").microphone.text;
+  const render = (toolCalls) =>
+    React.act(async () =>
+      root.render(
+        React.createElement(ChatMessage, {
+          messageId: "help",
+          role: "assistant",
+          content,
+          isStreaming: false,
+          toolCalls,
+        })
+      )
+    );
+  await render([call()]);
+  assert.ok(findElement(container, (el) => el.tagName === "OL"));
+  assert.ok(findElement(container, (el) => el.tagName === "STRONG"));
+  const button = findElement(container, (el) => el.tagName === "BUTTON");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  await React.act(async () => button.dispatchEvent({ type: "click", bubbles: true }));
+  assert.match(copied, /1\. Choose your microphone\./);
+  assert.doesNotMatch(copied, /\*\*/);
+  assert.match(copied, /productHelp.reason.unavailable/);
+  assert.match(copied, /Activation mode: common.hold/);
+  assert.ok(copied.includes(source.url));
+  // Ordinary model messages retain their existing raw Markdown copy behavior.
+  await render(undefined);
+  await React.act(async () => button.dispatchEvent({ type: "click", bubbles: true }));
+  assert.equal(copied, content);
+  await React.act(async () => t.mock.timers.tick(1500));
+});

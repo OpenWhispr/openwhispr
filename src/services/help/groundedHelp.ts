@@ -1,7 +1,7 @@
 import topics from "../../config/productHelpTopics.json";
 import type { HelpTopic, HelpResult, getHelpContext } from "./productHelp";
 
-export const HELP_GUIDANCE_REVISION = "desktop-1.10.2-help-2026-10-07";
+export const HELP_GUIDANCE_REVISION = "desktop-1.10.2-help-2026-10-07-formatting";
 export interface HelpRequest {
   topics: HelpTopic[];
   unsupported: boolean;

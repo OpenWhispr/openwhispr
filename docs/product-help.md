@@ -2,6 +2,8 @@
 
 Recognized English product-help questions in the existing Chat/assistant surface are answered from eight reviewed, versioned, built-in guidance blocks. The app refreshes relevant settings on every turn and renders those facts and validated source links itself. It does not ask the selected model to invent or paraphrase the answer. The separately added Support Help browser/settings panel has been removed.
 
+Reviewed help uses short introductions, bold action labels, numbered instructions and bullets. Chat and the Voice Assistant use the existing Markdown renderer and share the validated settings/source block. Explicit Copy produces readable plain text with list numbering, localized settings, fallback disclosure and canonical source URLs. Ordinary model-message copy behavior is unchanged.
+
 This path works without an account, subscription, remaining transcription allowance or usable inference model. UI labels and uncertainty/fallback messages use all eleven app locales; the guidance itself is labeled English. Hold/Tap, app version, platform and unknown OS version are distinct facts. A permission or processing selection is not proof that a device works or that the whole app is offline.
 
 Routing uses explicit English intent rules. Supported help topics include shortcuts, microphone, models, meetings, calendars, languages, backup and assistant settings. Known unsupported control requests abstain; mixed help/actions ask for separate requests. Ordinary text transformations and calendar-data requests retain normal chat. This is finite routing coverage, not a guarantee for every language or paraphrase. Requests with an explicit note-action `requestText` retain their existing action flow.
