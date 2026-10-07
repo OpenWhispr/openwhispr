@@ -2,6 +2,7 @@
 // late — the flag has to come from a relaunch.
 const { XWAYLAND_FLAG, shouldForceXWayland } = require("./src/helpers/xwayland");
 const { createHotkeyRepeatGate } = require("./src/helpers/hotkeyRepeatGate");
+const { shouldDisableGpuCompositing } = require("./src/helpers/linuxGpuCompositing");
 
 if (shouldForceXWayland(process.argv)) {
   const { spawn } = require("child_process");
@@ -108,10 +109,16 @@ if (process.platform === "win32") {
 
 // Fix transparent window flickering on Linux: --enable-transparent-visuals requires
 // the compositor to set up an ARGB visual before any windows are created.
-// --disable-gpu-compositing prevents GPU compositing conflicts with the compositor.
 if (process.platform === "linux") {
   app.commandLine.appendSwitch("gtk-version", "3");
   app.commandLine.appendSwitch("enable-transparent-visuals");
+}
+
+// Linux composites on the GPU except while an NVIDIA driver is loaded (#203). Anyone else whose
+// transparent windows flicker can add --disable-gpu-compositing to the launcher's flags file
+// (scripts/lib/linux-launcher.js).
+const gpuCompositingDisabledForNvidia = shouldDisableGpuCompositing();
+if (gpuCompositingDisabledForNvidia) {
   app.commandLine.appendSwitch("disable-gpu-compositing");
 }
 
@@ -301,7 +308,11 @@ const SelectionManager = require("./src/helpers/selectionManager");
 const { PermissionGuideManager } = require("./src/helpers/permissionGuideManager");
 const WhisperCudaManager = require("./src/helpers/whisperCudaManager");
 const WhisperVulkanManager = require("./src/helpers/whisperVulkanManager");
-const { migrateLegacyBinDir, detectOrphanedGpuPacks } = require("./src/helpers/gpuBinaryManager");
+const {
+  migrateLegacyBinDir,
+  detectOrphanedGpuPacks,
+  detectOutdatedGpuPacks,
+} = require("./src/helpers/gpuBinaryManager");
 const { resetWhisperGpuFailureOnUpgrade } = require("./src/helpers/whisperGpuUpgradeReset");
 const GoogleCalendarManager = require("./src/helpers/googleCalendarManager");
 const MicrosoftCalendarManager = require("./src/helpers/microsoftCalendarManager");
@@ -442,6 +453,23 @@ function initializeCoreManagers() {
 
   debugLogger = require("./src/helpers/debugLogger");
   debugLogger.ensureFileLogging();
+  if (process.platform === "linux") {
+    // The compositing mode is settled once the GPU process has reported its info; a GPU
+    // process crash can still drop it to software later, logged below.
+    app
+      .getGPUInfo("basic")
+      .catch(() => {})
+      .then(() => {
+        debugLogger.info("Linux GPU compositing", {
+          status: app.getGPUFeatureStatus().gpu_compositing,
+          disabledForNvidia: gpuCompositingDisabledForNvidia,
+        });
+      });
+  }
+  app.on("child-process-gone", (_event, details) => {
+    if (details.type !== "GPU") return;
+    debugLogger.warn("GPU process gone", { reason: details.reason, exitCode: details.exitCode });
+  });
   // Registration runs before app ready, when the logger cannot write its file yet.
   if (linuxSchemeHandler?.reason) {
     debugLogger.warn("Could not register the Linux URL scheme handler entry", {
@@ -544,13 +572,33 @@ function initializeCoreManagers() {
     // notice, leaving those users on a silent CPU fallback: an enabled flag
     // with no pack on disk only happens via such data loss. recordOnce gates
     // each pack to one notice so a dismissed toast doesn't return every launch.
-    const orphanedPacks = detectOrphanedGpuPacks([
-      { manager: whisperCudaManager, enabledEnvVar: "WHISPER_CUDA_ENABLED" },
-      { manager: whisperVulkanManager, enabledEnvVar: "WHISPER_VULKAN_ENABLED" },
+    const gpuPacks = [
+      { manager: whisperCudaManager, enabledEnvVar: "WHISPER_CUDA_ENABLED", group: "whisper" },
+      { manager: whisperVulkanManager, enabledEnvVar: "WHISPER_VULKAN_ENABLED", group: "whisper" },
       { manager: llamaVulkanManager, enabledEnvVar: "LLAMA_VULKAN_ENABLED" },
-    ]);
+    ];
+    const orphanedPacks = detectOrphanedGpuPacks(gpuPacks);
     if (orphanedPacks.length > 0) {
       require("./src/helpers/gpuPackMigrationNotice").recordOnce(orphanedPacks);
+    }
+    // A pack an older release installed that this version can't use (#2424)
+    // otherwise looks like a pack that was never downloaded: say so once per
+    // app version, even to a user who already saw the orphan notice for it.
+    // Only whisper packs can be outdated, so only a user on local whisper
+    // (the only mode whose Settings shows the pack) is told.
+    const outdatedPacks = detectOutdatedGpuPacks(gpuPacks);
+    if (outdatedPacks.length > 0) {
+      const whisperInUse = !!process.env.LOCAL_WHISPER_MODEL;
+      debugLogger.info("GPU packs from an older release need re-downloading", {
+        packs: outdatedPacks,
+        notified: whisperInUse,
+      });
+      if (whisperInUse) {
+        require("./src/helpers/gpuPackMigrationNotice").recordOnce(
+          outdatedPacks,
+          `outdated-${app.getVersion()}`
+        );
+      }
     }
     // Lets every server start resolve its GPU backend from installed packs
     whisperManager.setGpuBinaryManagers({ cuda: whisperCudaManager, vulkan: whisperVulkanManager });

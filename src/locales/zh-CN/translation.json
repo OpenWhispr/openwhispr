@@ -123,6 +123,8 @@
       "osReserved": "\"{{hotkey}}\" 可能被系统保留。",
       "rightModifierNeedsListener": "\"{{hotkey}}\" 无法在此桌面上使用，其快捷键需要包含一个普通按键。请添加一个按键，例如 Control+Alt+Space。",
       "holdNeedsReleaseKey": "按住说话需要 macOS 能检测到松开的按键：Globe、右侧 Option 之类的右侧按键，或带修饰键的快捷键。点按可用于任何按键。",
+      "holdNeedsRegularKey": "要使用按住模式，请在快捷键中添加一个普通按键，例如 Control+Alt+Space。桌面环境无法检测仅按住修饰键的操作。",
+      "holdNeedsGnomePortal": "要使用按住模式，GNOME 需要全局快捷键门户（GNOME 48 及更高版本自带）。点按无需该门户。",
       "registrationFailed": "无法注册 \"{{hotkey}}\"，该快捷键可能已被其他应用占用。",
       "windowsKeyListenerMissing": "\"{{hotkey}}\" 需要 Windows 按键监听器，但此安装中缺少该组件。请选择包含普通按键的快捷键。",
       "updateFailedCheckFormat": "无法将快捷键更新为 \"{{hotkey}}\"，请检查格式是否有效。",
@@ -160,7 +162,7 @@
     "close": "关闭"
   },
   "windows": {
-    "pttUnavailable": "按住说话原生监听器不可用"
+    "pttUnavailable": "OpenWhispr 按键监听器不可用。"
   },
   "common": {
     "continue": "继续",
@@ -770,6 +772,10 @@
     "disableThinking": {
       "label": "禁用思考输出",
       "help": "跳过推理令牌以获得更清晰的输出。推荐用于清理。某些服务器会忽略此提示。"
+    },
+    "keepModelLoaded": {
+      "label": "保持模型加载",
+      "help": "空闲 5 分钟后仍保留在内存中，不会卸载，下一次请求无需冷启动。适用于所有使用本地模型的功能。"
     },
     "selfHosted": {
       "endpointHelp": "指向本地网络中兼容 OpenAI 的服务器（例如 Ollama、LM Studio、vLLM 或 llama-server）。"
@@ -1409,6 +1415,7 @@
     "waylandClipboardTitle": "Wayland 上的剪贴板模式",
     "windowsReady": "Windows 原生支持自动粘贴，无需额外设置！",
     "withoutToolPrefix": "如果不安装此工具，OpenWhispr 会将文本复制到剪贴板，你可以使用 Ctrl+V 手动粘贴。",
+    "wtypeCosmicTerminalsDescription": "在 COSMIC 上，Warp 等终端只能通过 wtype 接收粘贴的文本。其他应用无需 wtype 即可粘贴。",
     "wtypeFallbackDescription": "wtype 是此 wlroots 合成器上的首选自动粘贴方式。有备用方案可用，但可能不太可靠。",
     "xwaylandAppsOnly": "自动粘贴仅适用于 XWayland 应用"
   },
@@ -1995,7 +2002,7 @@
         "recheck": "重新检查",
         "copy": "复制",
         "ydotoolDesc": "Wayland 输入自动化工具",
-        "wtypeDesc": "wlroots 合成器上的首选输入自动化工具",
+        "wtypeDesc": "wlroots 合成器上的首选输入自动化工具；在 COSMIC 上用于向终端粘贴",
         "ydotooldDesc": "ydotool 守护进程（Ubuntu/Pop!_OS 上为独立包）",
         "uinputDesc": "内核输入设备访问",
         "uinputRuleFound": "规则已存在但未生效，重启应可解决。",
@@ -2272,6 +2279,12 @@
       },
       "transcriptionPreview": "实时转录预览",
       "transcriptionPreviewDescription": "在浮动窗口中显示转录结果，然后再进行文本整理",
+      "aec": {
+        "toggle": {
+          "title": "会议回声消除",
+          "description": "消除泄漏到麦克风中的会议音频。使用耳机或耳塞时请关闭此功能——没有需要消除的回声，而且它可能会完全抑制您的声音。"
+        }
+      },
       "vad": {
         "title": "语音活动检测",
         "description": "配置 Silero VAD 如何为本地 Whisper 转录检测并切分语音",
@@ -3656,6 +3669,10 @@
     "activationFailedDescription": "OpenWhispr 已切换为 CPU 转录。",
     "reasoningActivationFailedDescription": "OpenWhispr 已切换为 CPU 处理。",
     "retryActivation": "重试 GPU 加速",
+    "redownloadNeeded": "需要重新下载 GPU 加速包",
+    "redownloadNeededDescription": "此版本的 OpenWhispr 无法使用已安装的 GPU 加速包。请重新下载以重新启用 GPU 加速。",
+    "redownloadButton": "重新下载 GPU 加速包",
+    "downloadFailed": "无法下载 GPU 加速包。",
     "remove": "移除",
     "dismiss": "暂不启用",
     "cancel": "取消"
@@ -3683,7 +3700,7 @@
       },
       "gpuPackMigration": {
         "title": "需要重新下载 GPU 加速包",
-        "description": "更新移除了过时的 GPU 加速包安装（{{packs}}）。请在设置中重新下载以恢复 GPU 加速。"
+        "description": "此版本无法使用之前的 GPU 加速包（{{packs}}）。请在设置中重新下载以重新启用 GPU 加速。"
       },
       "cleanupFailed": {
         "title": "清理失败",
@@ -4757,6 +4774,84 @@
       "underway": "你的会议似乎已在进行中。要开始记录吗？"
     },
     "start": "开始记录",
-    "join": "加入并转录"
+    "join": "加入并转录",
+    "folders": {
+      "choose": "选择会议文件夹",
+      "search": "搜索文件夹",
+      "clear": "清除搜索",
+      "private": "私密",
+      "shared": "共享",
+      "current": "当前保存位置",
+      "recent": "最近使用",
+      "folders": "文件夹",
+      "new": "新建文件夹",
+      "name": "名称",
+      "location": "位置",
+      "cancel": "取消",
+      "create": "创建并选择",
+      "empty": "未找到文件夹。请搜索其他名称或创建文件夹。",
+      "loading": "正在加载文件夹…",
+      "unavailable": "无法加载文件夹。",
+      "retry": "重试",
+      "dismiss": "关闭会议通知",
+      "selected": "已选择{{destination}}",
+      "linked": "此会议已有笔记。加入后，笔记仍保存在{{destination}}。",
+      "errors": {
+        "STALE_NOTIFICATION": "此通知已失效。",
+        "INVALID_REQUEST": "无法完成，请重试。",
+        "FOLDERS_UNAVAILABLE": "无法加载文件夹。",
+        "FOLDER_UNAVAILABLE": "此保存位置不可用。请选择其他文件夹。",
+        "SPACE_UNAVAILABLE": "此保存位置不可用。请选择其他文件夹。",
+        "FOLDER_NAME_REQUIRED": "请输入文件夹名称。",
+        "FOLDER_NAME_TAKEN": "此位置已存在同名文件夹。",
+        "CREATE_FAILED": "无法完成，请重试。",
+        "LINKED_NOTE_CHANGED": "请检查保存位置，然后重新加入。",
+        "NOTE_UNAVAILABLE": "此笔记不可用。请重试，不要创建替代笔记。",
+        "START_FAILED": "无法完成，请重试。"
+      }
+    }
+  },
+  "providerErrors": {
+    "authFailed": "{{provider}} 拒绝了你的 API 密钥。",
+    "accessDenied": "{{provider}} 拒绝了访问。你的密钥可能不包含此模型。",
+    "quotaExhausted": "你的 {{provider}} 账户额度已用尽。",
+    "rateLimited": "{{provider}} 限制了请求频率。请稍候再试。",
+    "modelNotFound": "{{provider}} 不识别模型“{{model}}”。",
+    "modelNotFoundNoModel": "{{provider}} 不识别所选的模型。",
+    "payloadTooLarge": "此录音对 {{provider}} 来说太大了。",
+    "requestTooLarge": "此请求对 {{provider}} 来说太大了。",
+    "badRequest": "{{provider}} 无法处理此请求。",
+    "unavailable": "{{provider}} 目前遇到了问题。请稍后重试。",
+    "timeout": "{{provider}} 响应超时。",
+    "unreachable": "无法连接到 {{provider}}。请检查你的网络连接。",
+    "noResponse": "未能收到 {{provider}} 的响应。请检查你的 API 密钥和网络连接。",
+    "unknown": "{{provider}} 返回了一个意外错误。",
+    "keyMissing": "尚未为 {{provider}} 设置 API 密钥。请在“设置 → 语言模型”中添加。",
+    "selfHosted": {
+      "authFailed": "你的服务器拒绝了 API 密钥。",
+      "accessDenied": "你的服务器拒绝了访问。该密钥可能不包含此模型。",
+      "quotaExhausted": "你的服务器报告该账户额度已用尽。",
+      "rateLimited": "你的服务器限制了请求频率。请稍候再试。",
+      "modelNotFound": "你的服务器不识别模型“{{model}}”。",
+      "modelNotFoundNoModel": "你的服务器不识别所选的模型。",
+      "payloadTooLarge": "此录音对你的服务器来说太大了。",
+      "requestTooLarge": "此请求对你的服务器来说太大了。",
+      "badRequest": "你的服务器无法处理此请求。",
+      "unavailable": "你的服务器目前遇到了问题。请稍后重试。",
+      "timeout": "你的服务器响应超时。",
+      "unreachable": "无法连接到你的服务器。请检查它是否正在运行。",
+      "noResponse": "未能收到你的服务器的响应。请检查它的 API 密钥以及它是否正在运行。",
+      "unknown": "你的服务器返回了一个意外错误。"
+    },
+    "openSettings": "打开设置",
+    "copyDetails": "复制详情",
+    "titles": {
+      "transcription": "转录失败",
+      "llm": "AI 请求失败"
+    },
+    "details": {
+      "provider": "服务商",
+      "requestId": "请求 ID"
+    }
   }
 }

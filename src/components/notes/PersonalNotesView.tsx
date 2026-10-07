@@ -119,7 +119,7 @@ interface PersonalNotesViewProps {
   onOpenSettings?: (section: string) => void;
   meetingRecordingRequest?: {
     noteId: number;
-    folderId: number;
+    folderId: number | null;
     event: any;
   } | null;
   onMeetingRecordingRequestHandled?: () => void;
@@ -615,7 +615,7 @@ export default function PersonalNotesView({
       args: {
         noteId: meetingRecordingRequest.noteId,
         noteTitle: note?.title ?? null,
-        folderId: note?.folder_id ?? meetingRecordingRequest.folderId ?? null,
+        folderId: note ? note.folder_id : (meetingRecordingRequest.folderId ?? null),
         seedSegments,
         diarizationEnabled:
           note?.diarization_enabled == null ? null : note.diarization_enabled === 1,

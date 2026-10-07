@@ -1407,6 +1407,7 @@ export default function SettingsPage({
     hasGroup: boolean;
     isKde: boolean;
     isWlroots: boolean;
+    isCosmic: boolean;
     hasXclip: boolean;
     hasXsel: boolean;
     isNixOS: boolean;
@@ -1581,7 +1582,6 @@ export default function SettingsPage({
     isUsingNativeShortcut,
     isUsingHyprland,
     hyprlandConfigStatus,
-    supportsPushToTalk,
     pushToTalkUnavailableReason,
     linuxInputAccessDenied,
   } = useHotkeyModeInfo("settings", dictationKey);
@@ -3495,7 +3495,7 @@ export default function SettingsPage({
                       key: "hasWtype",
                       label: "wtype",
                       ok: ydotoolStatus.hasWtype,
-                      required: ydotoolStatus.isWlroots,
+                      required: ydotoolStatus.isWlroots || ydotoolStatus.isCosmic,
                       desc: t("settingsPage.general.waylandPaste.wtypeDesc"),
                       steps: [
                         {
@@ -4037,13 +4037,15 @@ EOF`,
                       <ActivationModeSelector
                         value={activationMode}
                         onChange={setActivationMode}
-                        pushDisabledReason={
-                          !supportsPushToTalk
-                            ? pushToTalkUnavailableReason || t("windows.pttUnavailable")
-                            : undefined
-                        }
+                        pushDisabledReason={pushToTalkUnavailableReason ?? undefined}
                       />
                     </div>
+                    {/* Denied input access gets the setup box below instead. */}
+                    {pushToTalkUnavailableReason && !linuxInputAccessDenied && (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {pushToTalkUnavailableReason}
+                      </p>
+                    )}
                     {getCachedPlatform() === "linux" &&
                       (activationMode === "push" || linuxInputAccessDenied) && (
                         <LinuxPttSetupInfo

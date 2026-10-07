@@ -1092,15 +1092,17 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                     variant="onboarding"
                     value={activationMode}
                     onChange={setActivationMode}
-                    pushDisabledReason={
-                      !supportsPushToTalk
-                        ? pushToTalkUnavailableReason || t("windows.pttUnavailable")
-                        : undefined
-                    }
+                    pushDisabledReason={pushToTalkUnavailableReason ?? undefined}
                   />
                 </div>
+                {/* Denied input access gets the setup box below instead. */}
+                {pushToTalkUnavailableReason && !linuxInputAccessDenied && (
+                  <p className="mt-2 text-start text-xs leading-[1.4] text-[var(--onboarding-text-secondary)]">
+                    {pushToTalkUnavailableReason}
+                  </p>
+                )}
                 {platform === "linux" && (activationMode === "push" || linuxInputAccessDenied) && (
-                  <LinuxPttSetupInfo isAvailable={!linuxInputAccessDenied && supportsPushToTalk} />
+                  <LinuxPttSetupInfo isAvailable={!linuxInputAccessDenied} />
                 )}
               </div>
             )}

@@ -123,6 +123,8 @@
       "osReserved": "\"{{hotkey}}\" may be reserved by your desktop environment.",
       "rightModifierNeedsListener": "\"{{hotkey}}\" can't be used on this desktop, whose shortcuts need a regular key. Add a key, such as Control+Alt+Space.",
       "holdNeedsReleaseKey": "Hold-to-talk needs a key macOS can see you release: Globe, a right-side key like Right Option, or a shortcut with a modifier. Tap works with any key.",
+      "holdNeedsRegularKey": "To use Hold, add a regular key to the shortcut, such as Control+Alt+Space. Your desktop can't report holding modifier keys alone.",
+      "holdNeedsGnomePortal": "To use Hold, GNOME needs its global shortcuts portal, which comes with GNOME 48 and newer. Tap works without it.",
       "registrationFailed": "Could not register \"{{hotkey}}\". It may be in use by another application.",
       "windowsKeyListenerMissing": "\"{{hotkey}}\" needs the Windows key listener, which this install is missing. Choose a shortcut with a regular key.",
       "updateFailedCheckFormat": "Failed to update hotkey to \"{{hotkey}}\". Check the format is valid.",
@@ -160,7 +162,7 @@
     "close": "Close"
   },
   "windows": {
-    "pttUnavailable": "Push-to-Talk native listener not available"
+    "pttUnavailable": "OpenWhispr's key listener isn't available."
   },
   "common": {
     "continue": "Continue",
@@ -770,6 +772,10 @@
     "disableThinking": {
       "label": "Disable thinking output",
       "help": "Skips reasoning tokens for cleaner output. Recommended for cleanup. Some servers ignore this hint."
+    },
+    "keepModelLoaded": {
+      "label": "Keep model loaded",
+      "help": "Stays in memory instead of unloading after 5 idle minutes, so the next request skips the cold start. Applies to all features using a local model."
     },
     "selfHosted": {
       "endpointHelp": "Point to an OpenAI-compatible server on your local network (e.g. Ollama, LM Studio, vLLM, or llama-server)."
@@ -1504,6 +1510,7 @@
     "waylandClipboardTitle": "Clipboard Mode on Wayland",
     "windowsReady": "Windows supports automatic pasting out of the box. No setup required!",
     "withoutToolPrefix": "Without this tool, OpenWhispr will copy text to your clipboard. You can then paste manually with Ctrl+V.",
+    "wtypeCosmicTerminalsDescription": "On COSMIC, terminals such as Warp only receive pasted text through wtype. Other apps already paste without it.",
     "wtypeFallbackDescription": "wtype is the preferred auto-paste method for this wlroots compositor. A fallback is available, but may be less reliable.",
     "xwaylandAppsOnly": "automatic pasting works for XWayland apps only"
   },
@@ -2290,7 +2297,7 @@
         "recheck": "Re-check",
         "copy": "Copy",
         "ydotoolDesc": "Input automation tool for Wayland",
-        "wtypeDesc": "Preferred input automation tool on wlroots compositors",
+        "wtypeDesc": "Preferred input automation tool on wlroots compositors; on COSMIC, used to paste into terminals",
         "ydotooldDesc": "Daemon for ydotool (separate package on Ubuntu/Pop!_OS)",
         "uinputDesc": "Kernel input device access",
         "uinputRuleFound": "Rule present but not active. A reboot should fix it.",
@@ -2567,6 +2574,12 @@
       },
       "transcriptionPreview": "Live Transcription Preview",
       "transcriptionPreviewDescription": "Show transcription in a floating window before cleanup",
+      "aec": {
+        "toggle": {
+          "title": "Echo cancellation for meetings",
+          "description": "Cancel meeting audio that leaks into your microphone. Leave this off when using headphones or earphones — there is no echo to cancel and it can suppress your voice entirely."
+        }
+      },
       "vad": {
         "title": "Voice Activity Detection",
         "description": "Configure how Silero VAD detects and segments speech for local Whisper transcription",
@@ -3827,6 +3840,10 @@
     "activationFailedDescription": "OpenWhispr switched to CPU transcription.",
     "reasoningActivationFailedDescription": "OpenWhispr switched to CPU processing.",
     "retryActivation": "Retry GPU acceleration",
+    "redownloadNeeded": "GPU pack needs re-downloading",
+    "redownloadNeededDescription": "This version of OpenWhispr can't use your installed GPU pack. Download it again to turn GPU acceleration back on.",
+    "redownloadButton": "Re-download GPU pack",
+    "downloadFailed": "Couldn't download the GPU pack.",
     "remove": "Remove",
     "dismiss": "Not now",
     "cancel": "Cancel"
@@ -3854,7 +3871,7 @@
       },
       "gpuPackMigration": {
         "title": "GPU pack needs re-downloading",
-        "description": "An update removed an outdated GPU pack installation ({{packs}}). Re-download it in Settings to restore GPU acceleration."
+        "description": "This version can't use your earlier GPU pack ({{packs}}). Download it again in Settings to turn GPU acceleration back on."
       },
       "cleanupFailed": {
         "title": "Cleanup failed",
@@ -4757,6 +4774,84 @@
       "underway": "It sounds like your meeting is underway. Want to take notes?"
     },
     "start": "Take notes",
-    "join": "Join & transcribe"
+    "join": "Join and transcribe",
+    "folders": {
+      "choose": "Choose meeting folder",
+      "search": "Search folders",
+      "clear": "Clear search",
+      "private": "Private",
+      "shared": "Shared",
+      "current": "Current destination",
+      "recent": "Recently used",
+      "folders": "Folders",
+      "new": "New folder",
+      "name": "Name",
+      "location": "Location",
+      "cancel": "Cancel",
+      "create": "Create & select",
+      "empty": "No folders found. Try another name, or create a folder.",
+      "loading": "Loading folders…",
+      "unavailable": "Folders could not be loaded.",
+      "retry": "Retry",
+      "dismiss": "Dismiss meeting notification",
+      "selected": "Selected {{destination}}",
+      "linked": "This meeting already has a note. Joining keeps it in {{destination}}.",
+      "errors": {
+        "STALE_NOTIFICATION": "This notification is no longer current.",
+        "INVALID_REQUEST": "Could not finish. Please retry.",
+        "FOLDERS_UNAVAILABLE": "Folders could not be loaded.",
+        "FOLDER_UNAVAILABLE": "This destination is unavailable. Choose another folder.",
+        "SPACE_UNAVAILABLE": "This destination is unavailable. Choose another folder.",
+        "FOLDER_NAME_REQUIRED": "Enter a folder name.",
+        "FOLDER_NAME_TAKEN": "A folder with that name already exists in this location.",
+        "CREATE_FAILED": "Could not finish. Please retry.",
+        "LINKED_NOTE_CHANGED": "Review the destination, then join again.",
+        "NOTE_UNAVAILABLE": "This note is unavailable. Retry without creating a replacement.",
+        "START_FAILED": "Could not finish. Please retry."
+      }
+    }
+  },
+  "providerErrors": {
+    "authFailed": "{{provider}} rejected your API key.",
+    "accessDenied": "{{provider}} denied access. Your key may not include this model.",
+    "quotaExhausted": "Your {{provider}} account is out of credit.",
+    "rateLimited": "{{provider}} rate-limited the request. Wait a moment and try again.",
+    "modelNotFound": "{{provider}} doesn't recognize the model “{{model}}”.",
+    "modelNotFoundNoModel": "{{provider}} doesn't recognize the selected model.",
+    "payloadTooLarge": "This recording is too large for {{provider}}.",
+    "requestTooLarge": "This request is too large for {{provider}}.",
+    "badRequest": "{{provider}} couldn't process this request.",
+    "unavailable": "{{provider}} is having problems right now. Try again shortly.",
+    "timeout": "{{provider}} took too long to respond.",
+    "unreachable": "Couldn't reach {{provider}}. Check your connection.",
+    "noResponse": "Couldn't get a response from {{provider}}. Check your API key and connection.",
+    "unknown": "{{provider}} returned an unexpected error.",
+    "keyMissing": "No API key is set for {{provider}}. Add it in Settings → Language Models.",
+    "selfHosted": {
+      "authFailed": "Your server rejected the API key.",
+      "accessDenied": "Your server denied access. The key may not include this model.",
+      "quotaExhausted": "Your server says the account is out of credit.",
+      "rateLimited": "Your server rate-limited the request. Wait a moment and try again.",
+      "modelNotFound": "Your server doesn't recognize the model “{{model}}”.",
+      "modelNotFoundNoModel": "Your server doesn't recognize the selected model.",
+      "payloadTooLarge": "This recording is too large for your server.",
+      "requestTooLarge": "This request is too large for your server.",
+      "badRequest": "Your server couldn't process this request.",
+      "unavailable": "Your server is having problems right now. Try again shortly.",
+      "timeout": "Your server took too long to respond.",
+      "unreachable": "Couldn't reach your server. Check that it's running.",
+      "noResponse": "Couldn't get a response from your server. Check its API key and that it's running.",
+      "unknown": "Your server returned an unexpected error."
+    },
+    "openSettings": "Open Settings",
+    "copyDetails": "Copy details",
+    "titles": {
+      "transcription": "Transcription failed",
+      "llm": "AI request failed"
+    },
+    "details": {
+      "provider": "Provider",
+      "requestId": "Request ID"
+    }
   }
 }

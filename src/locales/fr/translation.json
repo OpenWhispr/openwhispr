@@ -123,6 +123,8 @@
       "osReserved": "\"{{hotkey}}\" peut être réservé par votre environnement de bureau.",
       "rightModifierNeedsListener": "« {{hotkey}} » ne peut pas être utilisé sur ce bureau, dont les raccourcis exigent une touche normale. Ajoutez une touche, par exemple Control+Alt+Space.",
       "holdNeedsReleaseKey": "Maintenir pour parler nécessite une touche dont macOS détecte le relâchement : Globe, une touche droite comme Option droite, ou un raccourci avec modificateur. Appuyer fonctionne avec n’importe quelle touche.",
+      "holdNeedsRegularKey": "Pour utiliser le mode Maintenir, ajoutez une touche normale au raccourci, par exemple Control+Alt+Space. Votre bureau ne peut pas signaler le maintien de touches de modification seules.",
+      "holdNeedsGnomePortal": "Pour utiliser le mode Maintenir, GNOME a besoin de son portail de raccourcis globaux, inclus à partir de GNOME 48. Le mode Appui fonctionne sans lui.",
       "registrationFailed": "Impossible d'enregistrer \"{{hotkey}}\". Il est peut-être utilisé par une autre application.",
       "windowsKeyListenerMissing": "\"{{hotkey}}\" nécessite l'écouteur de touches Windows, absent de cette installation. Choisissez un raccourci avec une touche classique.",
       "updateFailedCheckFormat": "Impossible de mettre à jour le raccourci vers \"{{hotkey}}\". Vérifiez que le format est valide.",
@@ -160,7 +162,7 @@
     "close": "Fermer"
   },
   "windows": {
-    "pttUnavailable": "L'écouteur natif Push-to-Talk n'est pas disponible"
+    "pttUnavailable": "L'écouteur de touches d'OpenWhispr n'est pas disponible."
   },
   "common": {
     "continue": "Continuer",
@@ -770,6 +772,10 @@
     "disableThinking": {
       "label": "Désactiver la sortie de raisonnement",
       "help": "Ignore les jetons de raisonnement pour une sortie plus propre. Recommandé pour le nettoyage. Certains serveurs ignorent cette indication."
+    },
+    "keepModelLoaded": {
+      "label": "Garder le modèle chargé",
+      "help": "Reste en mémoire au lieu d'être déchargé après 5 minutes d'inactivité, ce qui évite un démarrage à froid à la requête suivante. S'applique à toutes les fonctionnalités utilisant un modèle local."
     },
     "selfHosted": {
       "endpointHelp": "Pointez vers un serveur compatible OpenAI sur votre réseau local (par ex. Ollama, LM Studio, vLLM ou llama-server)."
@@ -1504,6 +1510,7 @@
     "waylandClipboardTitle": "Mode presse-papiers sur Wayland",
     "windowsReady": "Windows prend en charge le collage automatique nativement. Aucune configuration requise !",
     "withoutToolPrefix": "Sans cet outil, OpenWhispr copiera le texte dans le presse-papiers. Vous pourrez ensuite coller manuellement avec Ctrl+V.",
+    "wtypeCosmicTerminalsDescription": "Sous COSMIC, les terminaux comme Warp ne reçoivent le texte collé que via wtype. Les autres applications collent déjà sans lui.",
     "wtypeFallbackDescription": "wtype est la méthode de collage automatique recommandée pour ce compositeur wlroots. Une solution de repli est disponible, mais elle peut être moins fiable.",
     "xwaylandAppsOnly": "le collage automatique fonctionne uniquement pour les apps XWayland"
   },
@@ -2290,7 +2297,7 @@
         "recheck": "Revérifier",
         "copy": "Copier",
         "ydotoolDesc": "Outil d'automatisation de saisie pour Wayland",
-        "wtypeDesc": "Outil d'automatisation de saisie recommandé sur les compositeurs wlroots",
+        "wtypeDesc": "Outil d'automatisation de saisie recommandé sur les compositeurs wlroots ; sous COSMIC, sert à coller dans les terminaux",
         "ydotooldDesc": "Daemon pour ydotool (paquet séparé sur Ubuntu/Pop!_OS)",
         "uinputDesc": "Accès au périphérique d'entrée du noyau",
         "uinputRuleFound": "Règle présente mais inactive. Un redémarrage devrait résoudre le problème.",
@@ -2567,6 +2574,12 @@
       },
       "transcriptionPreview": "Aperçu en direct",
       "transcriptionPreviewDescription": "Afficher la transcription dans une fenêtre flottante avant correction",
+      "aec": {
+        "toggle": {
+          "title": "Annulation d'écho pour les réunions",
+          "description": "Annule l'audio de la réunion qui s'infiltre dans votre microphone. Laissez cette option désactivée lorsque vous utilisez un casque ou des écouteurs — il n'y a aucun écho à annuler et cela peut supprimer entièrement votre voix."
+        }
+      },
       "vad": {
         "title": "Détection d'activité vocale",
         "description": "Configurez la manière dont Silero VAD détecte et segmente la parole pour la transcription locale Whisper",
@@ -3827,6 +3840,10 @@
     "activationFailedDescription": "OpenWhispr est passé à la transcription par CPU.",
     "reasoningActivationFailedDescription": "OpenWhispr est passé au traitement par CPU.",
     "retryActivation": "Réessayer l'accélération GPU",
+    "redownloadNeeded": "Le pack GPU doit être retéléchargé",
+    "redownloadNeededDescription": "Cette version d'OpenWhispr ne peut pas utiliser votre pack GPU installé. Retéléchargez-le pour réactiver l'accélération GPU.",
+    "redownloadButton": "Retélécharger le pack GPU",
+    "downloadFailed": "Impossible de télécharger le pack GPU.",
     "remove": "Supprimer",
     "dismiss": "Pas maintenant",
     "cancel": "Annuler"
@@ -3854,7 +3871,7 @@
       },
       "gpuPackMigration": {
         "title": "Le pack GPU doit être retéléchargé",
-        "description": "Une mise à jour a supprimé une installation obsolète du pack GPU ({{packs}}). Retéléchargez-le dans les paramètres pour rétablir l'accélération GPU."
+        "description": "Cette version ne peut pas utiliser votre ancien pack GPU ({{packs}}). Retéléchargez-le dans les paramètres pour réactiver l'accélération GPU."
       },
       "cleanupFailed": {
         "title": "Échec du nettoyage",
@@ -4757,6 +4774,84 @@
       "underway": "On dirait que votre réunion est déjà en cours. Vous voulez prendre des notes ?"
     },
     "start": "Prendre des notes",
-    "join": "Rejoindre et transcrire"
+    "join": "Rejoindre et transcrire",
+    "folders": {
+      "choose": "Choisir le dossier de réunion",
+      "search": "Rechercher des dossiers",
+      "clear": "Effacer la recherche",
+      "private": "Privé",
+      "shared": "Partagé",
+      "current": "Destination actuelle",
+      "recent": "Récemment utilisés",
+      "folders": "Dossiers",
+      "new": "Nouveau dossier",
+      "name": "Nom",
+      "location": "Emplacement",
+      "cancel": "Annuler",
+      "create": "Créer et sélectionner",
+      "empty": "Aucun dossier trouvé. Essayez un autre nom ou créez un dossier.",
+      "loading": "Chargement des dossiers…",
+      "unavailable": "Impossible de charger les dossiers.",
+      "retry": "Réessayer",
+      "dismiss": "Fermer la notification de réunion",
+      "selected": "{{destination}} sélectionné",
+      "linked": "Cette réunion a déjà une note. Elle restera dans {{destination}} lorsque vous rejoindrez la réunion.",
+      "errors": {
+        "STALE_NOTIFICATION": "Cette notification n’est plus à jour.",
+        "INVALID_REQUEST": "Impossible de terminer. Réessayez.",
+        "FOLDERS_UNAVAILABLE": "Impossible de charger les dossiers.",
+        "FOLDER_UNAVAILABLE": "Cette destination est indisponible. Choisissez un autre dossier.",
+        "SPACE_UNAVAILABLE": "Cette destination est indisponible. Choisissez un autre dossier.",
+        "FOLDER_NAME_REQUIRED": "Saisissez un nom de dossier.",
+        "FOLDER_NAME_TAKEN": "Un dossier porte déjà ce nom à cet emplacement.",
+        "CREATE_FAILED": "Impossible de terminer. Réessayez.",
+        "LINKED_NOTE_CHANGED": "Vérifiez la destination, puis rejoignez à nouveau.",
+        "NOTE_UNAVAILABLE": "Cette note est indisponible. Réessayez sans en créer une autre.",
+        "START_FAILED": "Impossible de terminer. Réessayez."
+      }
+    }
+  },
+  "providerErrors": {
+    "authFailed": "{{provider}} a rejeté votre clé API.",
+    "accessDenied": "{{provider}} a refusé l’accès. Votre clé ne couvre peut-être pas ce modèle.",
+    "quotaExhausted": "Votre compte {{provider}} n’a plus de crédit.",
+    "rateLimited": "{{provider}} a limité la requête. Patientez un instant et réessayez.",
+    "modelNotFound": "{{provider}} ne reconnaît pas le modèle « {{model}} ».",
+    "modelNotFoundNoModel": "{{provider}} ne reconnaît pas le modèle sélectionné.",
+    "payloadTooLarge": "Cet enregistrement est trop volumineux pour {{provider}}.",
+    "requestTooLarge": "Cette requête est trop volumineuse pour {{provider}}.",
+    "badRequest": "{{provider}} n’a pas pu traiter cette requête.",
+    "unavailable": "{{provider}} rencontre actuellement des problèmes. Réessayez dans un instant.",
+    "timeout": "{{provider}} a pris trop de temps à répondre.",
+    "unreachable": "Impossible de contacter {{provider}}. Vérifiez votre connexion.",
+    "noResponse": "Aucune réponse de {{provider}}. Vérifiez votre clé API et votre connexion.",
+    "unknown": "{{provider}} a renvoyé une erreur inattendue.",
+    "keyMissing": "Aucune clé API n’est définie pour {{provider}}. Ajoutez-la dans Réglages → Modèles de langage.",
+    "selfHosted": {
+      "authFailed": "Votre serveur a rejeté la clé API.",
+      "accessDenied": "Votre serveur a refusé l’accès. La clé ne couvre peut-être pas ce modèle.",
+      "quotaExhausted": "Votre serveur indique que le compte n’a plus de crédit.",
+      "rateLimited": "Votre serveur a limité la requête. Patientez un instant et réessayez.",
+      "modelNotFound": "Votre serveur ne reconnaît pas le modèle « {{model}} ».",
+      "modelNotFoundNoModel": "Votre serveur ne reconnaît pas le modèle sélectionné.",
+      "payloadTooLarge": "Cet enregistrement est trop volumineux pour votre serveur.",
+      "requestTooLarge": "Cette requête est trop volumineuse pour votre serveur.",
+      "badRequest": "Votre serveur n’a pas pu traiter cette requête.",
+      "unavailable": "Votre serveur rencontre actuellement des problèmes. Réessayez dans un instant.",
+      "timeout": "Votre serveur a pris trop de temps à répondre.",
+      "unreachable": "Impossible de contacter votre serveur. Vérifiez qu’il est en cours d’exécution.",
+      "noResponse": "Aucune réponse de votre serveur. Vérifiez sa clé API et qu’il est en cours d’exécution.",
+      "unknown": "Votre serveur a renvoyé une erreur inattendue."
+    },
+    "openSettings": "Ouvrir les réglages",
+    "copyDetails": "Copier les détails",
+    "titles": {
+      "transcription": "Échec de la transcription",
+      "llm": "Échec de la requête IA"
+    },
+    "details": {
+      "provider": "Fournisseur",
+      "requestId": "ID de requête"
+    }
   }
 }

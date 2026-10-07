@@ -275,6 +275,7 @@ const BOOLEAN_SETTINGS = new Set([
   "autoGenerateNoteTitle",
   "useCleanupModel",
   "useDictationAgent",
+  "keepLocalModelLoaded",
   "voiceAgentScreenContext",
   "useDictationAgentVisionModel",
   "useDictationTranslation",
@@ -292,6 +293,7 @@ const BOOLEAN_SETTINGS = new Set([
   "dictationSileroEnabled",
   "noteRecordingSileroEnabled",
   "meetingSileroEnabled",
+  "meetingAecEnabled",
   "isSignedIn",
   "autoPasteEnabled",
   "keepTranscriptionInClipboard",
@@ -906,6 +908,7 @@ export interface SettingsState
   dictationSileroEnabled: boolean;
   noteRecordingSileroEnabled: boolean;
   meetingSileroEnabled: boolean;
+  meetingAecEnabled: boolean;
   whisperVadThreshold: number;
   whisperVadMinSpeechDurationMs: number;
   whisperVadMinSilenceDurationMs: number;
@@ -925,6 +928,7 @@ export interface SettingsState
   remoteTranscriptionModel: string;
   cleanupMode: InferenceMode;
   cleanupRemoteUrl: string;
+  keepLocalModelLoaded: boolean;
 
   meetingTranscriptionMode: InferenceMode;
   meetingUseLocalWhisper: boolean;
@@ -1032,6 +1036,7 @@ export interface SettingsState
   setRemoteTranscriptionModel: (model: string) => void;
   setCleanupMode: (mode: InferenceMode) => void;
   setCleanupRemoteUrl: (url: string) => void;
+  setKeepLocalModelLoaded: (value: boolean) => void;
 
   setMeetingTranscriptionMode: (mode: InferenceMode) => void;
   setMeetingUseLocalWhisper: (value: boolean) => void;
@@ -1221,6 +1226,7 @@ export interface SettingsState
   setDictationSileroEnabled: (value: boolean) => void;
   setNoteRecordingSileroEnabled: (value: boolean) => void;
   setMeetingSileroEnabled: (value: boolean) => void;
+  setMeetingAecEnabled: (value: boolean) => void;
   setWhisperVadThreshold: (value: number) => void;
   setWhisperVadMinSpeechDurationMs: (value: number) => void;
   setWhisperVadMinSilenceDurationMs: (value: number) => void;
@@ -1669,6 +1675,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   dictationSileroEnabled: readBoolean("dictationSileroEnabled", false),
   noteRecordingSileroEnabled: readBoolean("noteRecordingSileroEnabled", true),
   meetingSileroEnabled: readBoolean("meetingSileroEnabled", true),
+  // Acoustic echo cancellation for meetings is opt-in: on headsets there's no
+  // echo to cancel and it can suppress the mic entirely. See ipcHandlers AEC gate.
+  meetingAecEnabled: readBoolean("meetingAecEnabled", false),
   whisperVadThreshold: clampVadValue("threshold", readString("whisperVadThreshold", "0.5")),
   whisperVadMinSpeechDurationMs: clampVadValue(
     "minSpeechDurationMs",
@@ -1723,6 +1732,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     return "openwhispr" as InferenceMode;
   })(),
   cleanupRemoteUrl: readString("cleanupRemoteUrl", ""),
+  keepLocalModelLoaded: readBoolean("keepLocalModelLoaded", false),
 
   meetingTranscriptionMode: (() => {
     const v = readString("meetingTranscriptionMode", "openwhispr");
@@ -1818,6 +1828,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setRemoteTranscriptionModel: createStringSetter("remoteTranscriptionModel"),
   setCleanupMode: createStringSetter("cleanupMode") as (mode: InferenceMode) => void,
   setCleanupRemoteUrl: createStringSetter("cleanupRemoteUrl"),
+  setKeepLocalModelLoaded: createBooleanSetter("keepLocalModelLoaded"),
 
   setMeetingTranscriptionMode: createStringSetter("meetingTranscriptionMode") as (
     mode: InferenceMode
@@ -2480,6 +2491,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       window.electronAPI?.setWhisperVadConfig?.({ meetingSileroEnabled: value });
     }
   },
+  setMeetingAecEnabled: createBooleanSetter("meetingAecEnabled"),
   setWhisperVadThreshold: (value: number) => {
     const next = clampVadValue("threshold", value);
     if (isBrowser) localStorage.setItem("whisperVadThreshold", String(next));
