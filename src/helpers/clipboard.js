@@ -1645,8 +1645,12 @@ class ClipboardManager {
     // can't be classified, or for Konsole which silently drops simulated Ctrl+Shift+V.
     // Electron apps (VS Code, Cursor) host TUI terminals too, so route them to
     // Shift+Insert on any desktop environment, even when their class is detected.
+    // Emacs binds Ctrl+V to scrolling, not paste. Match the class exactly.
     const useShiftInsert =
-      detectedIsKonsole || detectedIsElectron || (isWayland && windowSignals.length === 0);
+      detectedWindowClass === "emacs" ||
+      detectedIsKonsole ||
+      detectedIsElectron ||
+      (isWayland && windowSignals.length === 0);
     const isTerminalTarget =
       windowSignals.length > 0 && LINUX_TERMINAL_CLASSES.some((term) => signalsMatch(term));
     const hyprlandShortcut = useShiftInsert
