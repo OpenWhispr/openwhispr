@@ -1120,6 +1120,20 @@ async function dropUnsupportedStartupHold() {
   }
 }
 
+// A desktop backend that cannot register falls back to globalShortcut after the
+// first check, and globalShortcut may still be reading the saved hotkey, so
+// check again once that registration settles.
+async function checkStartupHold() {
+  windowManager.hotkeyManager.once("hotkey-loaded", () => {
+    dropUnsupportedStartupHold().catch((err) => {
+      debugLogger.warn("[HotkeyManager] Startup activation mode recheck failed", {
+        error: err.message,
+      });
+    });
+  });
+  await dropUnsupportedStartupHold();
+}
+
 // Main application startup
 async function startApp() {
   // Await so a stale sidecar is confirmed dead before new ones can spawn and
@@ -1208,7 +1222,7 @@ async function startApp() {
   const startMinimized = environmentManager.getStartMinimized() || launchedHidden;
   if (debugLogger) debugLogger.info("Start minimized", { enabled: startMinimized, launchedHidden });
   await windowManager.createMainWindow();
-  await dropUnsupportedStartupHold();
+  await checkStartupHold();
   if (!startMinimized) {
     await windowManager.createControlPanelWindow();
   }
