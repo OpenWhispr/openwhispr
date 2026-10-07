@@ -176,3 +176,39 @@ test("context/lookup outage preserves unknown facts and bundled evidence", async
   assert.deepEqual(result.metadata.facts, []);
   assert.doesNotMatch(result.content, /RightCommand|Control\+Alt\+K/);
 });
+
+test("help follow-ups do not hijack ordinary chat or quoted product text", async () => {
+  const { detectHelpRequest } = await load();
+  for (const text of [
+    "Write a poem about it",
+    "Summarize my notes now",
+    "Translate this into French: I use OpenWhispr for work",
+  ])
+    assert.equal(detectHelpRequest(text, ["hotkeys"]), null);
+  for (const text of ["How do I record a meeting?", "Which model am I using for Chat?"])
+    assert.ok(detectHelpRequest(text));
+});
+
+test("unverified named controls abstain without accepting the premise", async () => {
+  const { detectHelpRequest, runGroundedHelp } = await load();
+  const request = detectHelpRequest("How do I enable turbo microphone mode in OpenWhispr?");
+  const result = await runGroundedHelp(request, new AbortController().signal, fixture().deps);
+  assert.equal(result.metadata.answerStatus, "abstained");
+  assert.match(result.content, /cannot verify/);
+});
+
+test("elliptical help context never captures unrelated questions", async () => {
+  const { detectHelpRequest } = await load();
+  for (const text of [
+    "What is the weather now?",
+    "Can you tell me what is in my notes now?",
+    "Could you translate this: I use OpenWhispr?",
+  ])
+    assert.equal(detectHelpRequest(text, ["hotkeys"]), null, text);
+  for (const text of [
+    "How do I connect my Google Calendar?",
+    "Why is cloud backup not syncing my notes?",
+    "How do I change the interface language?",
+  ])
+    assert.ok(detectHelpRequest(text), text);
+});

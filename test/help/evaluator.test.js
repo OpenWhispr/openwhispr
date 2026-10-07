@@ -96,3 +96,13 @@ test("empty or unknown captures are not acceptance evidence", () => {
   assert.equal(evaluate([]).missingCases.length, 12);
   assert.deepEqual(evaluateRecord({ caseId: "not-a-case" }).failures, ["unknown case id"]);
 });
+
+test("an official but unrelated article cannot satisfy source relevance", () => {
+  const url = "https://docs.openwhispr.com/help/meetings/record-a-meeting";
+  const result = evaluateRecord({
+    caseId: "citation-support",
+    content: `Hold. [Meeting](${url})`,
+    metadata: { sources: [{ url, path: "/help/meetings/record-a-meeting" }] },
+  });
+  assert.deepEqual(result.failures, ["invalid source URL"]);
+});

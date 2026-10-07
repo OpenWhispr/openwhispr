@@ -4,6 +4,7 @@
  */
 const fs = require("node:fs");
 const { cases } = require("../test/help/cases");
+const topics = require("../src/config/productHelpTopics.json");
 const checks = {
   currentShortcut: (r) =>
     typeof r.expectedShortcut === "string" && r.content.includes(r.expectedShortcut),
@@ -31,6 +32,7 @@ const checks = {
     ),
   boundedRecovery: (r) =>
     Number.isInteger(r.observations?.lookupCount) &&
+    r.observations.lookupCount >= 0 &&
     r.observations.lookupCount <= 2 &&
     r.observations.invalidSourceExcluded === true,
 };
@@ -57,6 +59,7 @@ function evaluateRecord(record) {
         if (
           url.origin !== "https://docs.openwhispr.com" ||
           url.pathname !== source.path ||
+          !spec.topics.some((topic) => topics[topic].path === source.path) ||
           url.search ||
           url.hash ||
           url.username ||
