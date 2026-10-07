@@ -16,6 +16,17 @@ export function detectHelpRequest(
 ): HelpRequest | null {
   const value = text.toLowerCase();
   const product = /open\s?whispr/.test(value);
+  const calendarHelp =
+    /\b(calendar)\b/.test(value) &&
+    /\b(connect|integrat\w*|disconnect|configure|permission|sync|not working|troubleshoot)\b/.test(
+      value
+    );
+  if (
+    /\bcalendar\b/.test(value) &&
+    !calendarHelp &&
+    /\b(my|today|tomorrow|next|schedule|events|meetings)\b/.test(value)
+  )
+    return null;
   // A product name inside text to rewrite/translate is content, not a help intent.
   const ordinaryAction =
     /^(?:(?:please|can you|could you|would you|will you|help me)\s+)*(?:write|compose|summari[sz]e|translate|rewrite|edit|proofread|find|search|send|email|calculate)\b/.test(
@@ -75,7 +86,8 @@ export function detectHelpRequest(
   const appSpecific =
     (/\boffline\b/.test(value) && /\b(speech.to.text|language models?)\b/.test(value)) ||
     product ||
-    /\b(calendar|cloud backup|interface language|transcription language|translation language)\b/.test(
+    calendarHelp ||
+    /\b(cloud backup|interface language|transcription language|translation language)\b/.test(
       value
     ) ||
     /\b(dictation|hotkeys?|activation|hold mode|tap mode|transcription|openwhispr)\b/.test(value) ||
@@ -102,10 +114,9 @@ export function detectHelpRequest(
   const selected = matches.length ? matches : followup ? previousTopics : [];
   // Unknown named controls must not be confirmed merely because a known topic matches.
   const controlRequest =
-    /\b(enable|activate|turn on|switch on)\b/.test(value) &&
+    /\b(enable|activate|turn on|switch on|where|find|locate)\b/.test(value) &&
     /\b(mode|toggle|feature)\b/.test(value);
-  const supportedControl =
-    /\b(?:enable|activate|turn on|switch on)\s+(?:the\s+)?(?:hold|tap)\s+mode\b/.test(value);
+  const supportedControl = /\b(?:hold|tap|activation)\s+mode\b/.test(value);
   const unknownControl =
     (controlRequest && !supportedControl) ||
     /\b(quantum|offline.only|gpt.?4.turbo|claude.?3)\b/.test(value);

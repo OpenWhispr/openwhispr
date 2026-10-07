@@ -212,3 +212,17 @@ test("elliptical help context never captures unrelated questions", async () => {
   ])
     assert.ok(detectHelpRequest(text), text);
 });
+
+test("calendar data requests keep normal tools and unknown location requests abstain", async () => {
+  const { detectHelpRequest } = await load();
+  for (const text of [
+    "What is on my calendar tomorrow?",
+    "Show my calendar for today",
+    "When is my next calendar meeting?",
+  ])
+    assert.equal(detectHelpRequest(text), null, text);
+  assert.equal(
+    detectHelpRequest("Where is the turbo microphone mode toggle in OpenWhispr?").unsupported,
+    true
+  );
+});
