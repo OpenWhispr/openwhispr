@@ -7607,7 +7607,7 @@ class IPCHandlers {
           resetMeetingReconnectAudio();
           oldMic?.disconnect().catch(() => {});
           oldSystem?.disconnect().catch(() => {});
-          meetingConnectionKey = getMeetingConnectionKey(options);
+          meetingConnectionKey = getMeetingConnectionKey(options, credentialGeneration);
 
           debugLogger.info("Meeting streams reconnected", { attempt: meetingReconnectCount });
           meetingReconnectCount = 0;
@@ -7725,7 +7725,8 @@ class IPCHandlers {
       (systemAudioMode === "unsupported" || !!this._meetingSystemStreaming?.isConnected);
 
     const connectRealtimeStreaming = async (event, options) => {
-      const connectionKey = getMeetingConnectionKey(options);
+      // Read before the key is, so a save during the token fetch marks these connections stale.
+      const connectionKey = getMeetingConnectionKey(options, credentialGeneration);
       const StreamingClass = getMeetingStreamingClient(options.provider);
       if (this._meetingMicStreaming?.isConnected) {
         await this._meetingMicStreaming.disconnect();
@@ -8901,7 +8902,7 @@ class IPCHandlers {
       }
 
       const { mode: systemAudioMode } = await getMeetingSystemAudioPlan();
-      const requestedConnectionKey = getMeetingConnectionKey(options);
+      const requestedConnectionKey = getMeetingConnectionKey(options, credentialGeneration);
 
       if (
         isMeetingStreamingConnected(systemAudioMode) &&
@@ -8998,7 +8999,7 @@ class IPCHandlers {
       try {
         const systemAudioPlan = await getMeetingSystemAudioPlan({ refreshWindowsCapability: true });
         let { mode: systemAudioMode, strategy: systemAudioStrategy } = systemAudioPlan;
-        const requestedConnectionKey = getMeetingConnectionKey(options);
+        const requestedConnectionKey = getMeetingConnectionKey(options, credentialGeneration);
         meetingEchoLeakDetector.reset();
         meetingOneOnOneAttendee = resolveOneOnOneAttendeeForNote(options.noteId);
         meetingOneOnOneProfileBound = false;

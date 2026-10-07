@@ -96,6 +96,14 @@ class FakeStreaming {
 class FakeOrukeet extends FakeStreaming {}
 
 const modulePath = require.resolve("../../src/helpers/ipcHandlers");
+// Meetings resolve their streaming clients through this table instead.
+const meetingProvidersPath = require.resolve("../../src/helpers/meetingStreamingProviders");
+const streamingModules = [
+  "./assemblyAiStreaming",
+  "./deepgramStreaming",
+  "./cortiStreaming",
+  "./openaiRealtimeStreaming",
+];
 const originalLoad = Module._load;
 const electron = {
   app: {
@@ -116,7 +124,7 @@ const electron = {
       ok: true,
       json: async () => {
         const token = await fetchToken(init.headers.Authorization);
-        return { token, clientSecret: token };
+        return { token, clientSecret: token, clientSecrets: [token, token] };
       },
     }),
   },
@@ -128,16 +136,13 @@ const electron = {
 };
 Module._load = function (request, parent, isMain) {
   if (request === "electron") return electron;
+  if (parent?.filename === meetingProvidersPath) {
+    if (streamingModules.includes(request)) return FakeStreaming;
+    if (request === "./tinfoilRealtimeStreaming")
+      return { TinfoilRealtimeStreaming: FakeStreaming };
+  }
   if (parent?.filename === modulePath) {
-    if (
-      [
-        "./assemblyAiStreaming",
-        "./deepgramStreaming",
-        "./cortiStreaming",
-        "./openaiRealtimeStreaming",
-      ].includes(request)
-    )
-      return FakeStreaming;
+    if (streamingModules.includes(request)) return FakeStreaming;
     if (request === "./orukeetStreaming")
       return { OrukeetStreaming: FakeOrukeet, MANAGED_STREAM_OPTIONS: {} };
     if (request === "./geminiLiveStreaming")
@@ -175,6 +180,10 @@ const target = {
   _dictationStreaming: null,
   _dictationConnectPromise: null,
   _dictationIdleTimer: null,
+  _meetingMicStreaming: null,
+  _meetingSystemStreaming: null,
+  // A system audio tap on every platform, so each meeting opens two streams.
+  audioTapManager: { isSupported: () => true, start: async () => {}, stop: async () => {} },
   _mintStoredCortiToken: async () => ({
     token: await fetchToken(environmentManager.getCortiClientSecret()),
     environment: "us",
@@ -456,4 +465,123 @@ test("an unknown realtime provider still fails closed", async () => {
   const result = await invoke("dictation-realtime-warmup", { mode: "byok", provider: "unknown" });
   assert.equal(result.success, false);
   assert.match(result.error, /Unsupported realtime token provider/);
+});
+
+// provider, the saver of the key both meeting streams authenticate with, the mode,
+// and the session token that key mints. Corti and Tinfoil read their saved
+// credentials whatever the mode says.
+const MEETING = [
+  ["openai-realtime", "save-openai-key", "byok", (key) => key],
+  ["assemblyai-realtime", "save-assemblyai-key", "byok", (key) => `token-${key}`],
+  ["deepgram-realtime", "save-deepgram-key", "byok", (key) => key],
+  ["corti-realtime", "save-corti-client-secret", "byok", (key) => `token-${key}`],
+  ["tinfoil-realtime", "save-tinfoil-key", "byok", (key) => key],
+  ["corti-realtime", "save-corti-client-secret", "openwhispr", (key) => `token-${key}`],
+  ["tinfoil-realtime", "save-tinfoil-key", "openwhispr", (key) => key],
+];
+const meetingStreams = () => [target._meetingMicStreaming, target._meetingSystemStreaming];
+const assertMeetingStreams = ([mic, system]) => {
+  assert.equal(target._meetingMicStreaming, mic);
+  assert.equal(target._meetingSystemStreaming, system);
+};
+const resetMeeting = (t) => {
+  t.after(() => invoke("meeting-transcription-stop"));
+  target._meetingMicStreaming = null;
+  target._meetingSystemStreaming = null;
+};
+
+for (const [provider, saveChannel, mode, tokenFor] of MEETING) {
+  const options = { provider, mode };
+
+  test(`${provider} (${mode}): a meeting start rides the connections its prepare opened`, async (t) => {
+    resetMeeting(t);
+    invoke(saveChannel, "A");
+    assert.deepEqual(await invoke("meeting-transcription-prepare", options), { success: true });
+    const prepared = meetingStreams();
+    assert.equal((await invoke("meeting-transcription-start", options)).success, true);
+    assertMeetingStreams(prepared);
+    for (const streaming of prepared) assert.equal(streaming.token, tokenFor("A"));
+  });
+
+  test(`${provider} (${mode}): a key saved between meeting prepare and start reaches the meeting`, async (t) => {
+    resetMeeting(t);
+    invoke(saveChannel, "A");
+    await invoke("meeting-transcription-prepare", options);
+    invoke(saveChannel, "B");
+    assert.equal((await invoke("meeting-transcription-start", options)).success, true);
+    for (const streaming of meetingStreams()) assert.equal(streaming.token, tokenFor("B"));
+  });
+}
+
+for (const [provider, saveChannel, mode] of MEETING.filter(([name]) =>
+  ["assemblyai-realtime", "corti-realtime"].includes(name)
+)) {
+  test(`${provider} (${mode}): a key saved while the meeting prepare mints is not ridden by the start`, async (t) => {
+    t.after(() => (fetchToken = mintToken));
+    resetMeeting(t);
+    const options = { provider, mode };
+    invoke(saveChannel, "A");
+    const minting = deferred();
+    const minted = deferred();
+    fetchToken = async (key) => {
+      minting.resolve();
+      await minted.promise;
+      return mintToken(key);
+    };
+    const preparing = invoke("meeting-transcription-prepare", options);
+    // The prepare has read the old key and is waiting on its session token.
+    await minting.promise;
+    invoke(saveChannel, "B");
+    minted.resolve();
+    assert.deepEqual(await preparing, { success: true });
+    assert.equal((await invoke("meeting-transcription-start", options)).success, true);
+    for (const streaming of meetingStreams()) assert.equal(streaming.token, "token-B");
+  });
+}
+
+// Corti and Tinfoil never open a managed connection.
+for (const [provider, saveChannel] of MEETING.filter(
+  ([name]) => !["corti-realtime", "tinfoil-realtime"].includes(name)
+)) {
+  test(`${provider}: a key save leaves a managed prepared meeting in place`, async (t) => {
+    withManagedApi(t);
+    resetMeeting(t);
+    const options = { provider, mode: "openwhispr" };
+    assert.deepEqual(await invoke("meeting-transcription-prepare", options), { success: true });
+    const prepared = meetingStreams();
+    invoke(saveChannel, "B");
+    assert.equal((await invoke("meeting-transcription-start", options)).success, true);
+    assertMeetingStreams(prepared);
+  });
+}
+
+test("a key saved mid-meeting leaves the live meeting alone", async (t) => {
+  resetMeeting(t);
+  invoke("save-deepgram-key", "A");
+  const options = { provider: "deepgram-realtime", mode: "byok" };
+  assert.equal((await invoke("meeting-transcription-start", options)).success, true);
+  const live = meetingStreams();
+  invoke("save-deepgram-key", "B");
+  assertMeetingStreams(live);
+  for (const streaming of live) {
+    assert.equal(streaming.isConnected, true);
+    assert.equal(streaming.disconnects, 0);
+  }
+});
+
+test("a prepare after a mid-meeting renewal leaves the live meeting alone", async (t) => {
+  resetMeeting(t);
+  invoke("save-deepgram-key", "A");
+  const options = { provider: "deepgram-realtime", mode: "byok" };
+  await invoke("meeting-transcription-start", options);
+  const [mic] = meetingStreams();
+  mic.onSessionExpired({ proactive: true });
+  await new Promise(setImmediate);
+  const renewed = meetingStreams();
+  assert.notEqual(renewed[0], mic);
+  assert.deepEqual(await invoke("meeting-transcription-prepare", options), {
+    success: true,
+    alreadyPrepared: true,
+  });
+  assertMeetingStreams(renewed);
 });
