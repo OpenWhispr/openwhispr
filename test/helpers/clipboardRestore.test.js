@@ -239,12 +239,19 @@ test("restore is skipped when another clipboard write wins the race", async () =
 
 // XWayland can't read a native Wayland app's clipboard while a Wayland window is
 // focused, and restoring that empty read wiped the user's clipboard (#2055).
-// wl-paste exits 1 for an empty or non-text clipboard.
-for (const [status, saved] of [
-  [0, "copied in a Wayland app"],
-  [1, ""],
+// wl-paste exits 1 for an empty or non-text clipboard, and a read killed by the
+// timeout (status null) may have written only part of the text.
+for (const { when, status, stdout, saved } of [
+  {
+    when: "wl-paste exits 0",
+    status: 0,
+    stdout: "copied in a Wayland app",
+    saved: "copied in a Wayland app",
+  },
+  { when: "wl-paste exits 1", status: 1, stdout: "", saved: "" },
+  { when: "wl-paste times out mid-read", status: null, stdout: "copied in a Way", saved: "" },
 ]) {
-  test(`an unreadable Wayland clipboard is saved as "${saved}" when wl-paste exits ${status}`, async (t) => {
+  test(`an unreadable Wayland clipboard is saved as "${saved}" when ${when}`, async (t) => {
     const platform = Object.getOwnPropertyDescriptor(process, "platform");
     Object.defineProperty(process, "platform", { value: "linux" });
     t.after(() => Object.defineProperty(process, "platform", platform));
@@ -253,7 +260,7 @@ for (const [status, saved] of [
     const Manager = loadClipboardManager({
       spawnSync: (command, args) => {
         spawnSyncCalls.push({ command, args });
-        return { status, stdout: Buffer.from(saved) };
+        return { status, stdout: Buffer.from(stdout) };
       },
     });
     const manager = new Manager();
@@ -286,6 +293,33 @@ test("a clipboard XWayland can read is saved without asking wl-paste", async (t)
   const snapshot = await withWaylandEnvironment("KDE", () => manager._saveClipboard());
 
   assert.deepEqual(snapshot, { type: "text", data: "readable over X11" });
+  assert.deepEqual(spawnSyncCalls, []);
+});
+
+test("an empty clipboard on X11 is saved without asking wl-paste", async (t) => {
+  const platform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "linux" });
+  const { XDG_SESSION_TYPE, WAYLAND_DISPLAY } = process.env;
+  process.env.XDG_SESSION_TYPE = "x11";
+  delete process.env.WAYLAND_DISPLAY;
+  t.after(() => {
+    Object.defineProperty(process, "platform", platform);
+    if (XDG_SESSION_TYPE === undefined) delete process.env.XDG_SESSION_TYPE;
+    else process.env.XDG_SESSION_TYPE = XDG_SESSION_TYPE;
+    if (WAYLAND_DISPLAY !== undefined) process.env.WAYLAND_DISPLAY = WAYLAND_DISPLAY;
+  });
+  resetClipboard({ formats: [] });
+  const spawnSyncCalls = [];
+  const Manager = loadClipboardManager({
+    spawnSync: (command, args) => {
+      spawnSyncCalls.push({ command, args });
+      return { status: 0, stdout: Buffer.from("Wayland side") };
+    },
+  });
+  const manager = new Manager();
+  manager.commandExists = (command) => command === "wl-paste";
+
+  assert.deepEqual(manager._saveClipboard(), { type: "text", data: "" });
   assert.deepEqual(spawnSyncCalls, []);
 });
 
@@ -694,6 +728,39 @@ for (const windowClass of ["chromium", "kitty"]) {
     );
   });
 }
+
+// The Shift+Insert switch for #2055 is KWin-specific: a detected GNOME window
+// keeps Ctrl+V through the portal.
+test("GNOME portal sends Ctrl+V to a detected window", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSpawn(spawnCalls, [0]),
+    spawnSync: (command, args) => {
+      if (command === "xdotool" && args.includes("getwindowclassname")) {
+        return { status: 0, stdout: Buffer.from("firefox\n") };
+      }
+      if (command === "xdotool" && args.length === 1) {
+        return { status: 0, stdout: Buffer.from("42\n") };
+      }
+      return { status: 1, stdout: Buffer.from("") };
+    },
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (command) => command === "xdotool";
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._readPortalToken = () => "restore-token";
+  manager._savePortalToken = () => {};
+
+  await withWaylandEnvironment("GNOME", () => {
+    process.env.DISPLAY = ":0";
+    return manager.pasteLinux(null);
+  });
+
+  assert.deepEqual(
+    spawnCalls.map((call) => call.args),
+    [["--portal", "--restore-token", "restore-token"]]
+  );
+});
 
 test("portal exit zero succeeds with or without a restore token", async () => {
   const calls = [];
