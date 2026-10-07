@@ -98,134 +98,117 @@ function fixture(backend, savedHotkey = "Scrolllock", registrationResult = true)
   };
 }
 
-for (const backend of ["Hyprland", "GNOME", "KDE"]) {
-  for (const hotkey of ["Scrolllock", "Control+Shift+Space"]) {
-    test(`${backend} startup waits for saved ${hotkey} before validating Hold`, async () => {
-      const f = fixture(backend, hotkey);
-      await f.cache.setActivationModeCache("push");
-      let complete = false;
-      const init = f.manager
-        .initializeHotkey(f.window, () => {})
-        .then(() => {
-          complete = true;
-        });
-      await tick();
-      assert.equal(complete, false);
-      assert.equal(f.manager.isInitialized, false);
-      assert.equal(f.timers.length, 1);
-      f.timers.shift().callback();
-      await init;
-      assert.equal(f.manager.isInitialized, true);
-      assert.equal(f.manager.currentHotkey, hotkey);
-      assert.equal(f.manager.supportsPushToTalk(), true);
-      assert.equal(f.manager.activationMode, "push");
-      assert.equal(f.cache._cachedActivationMode, "push");
-      assert.deepEqual(f.registrations, [{ hotkey, push: true }]);
-    });
-  }
-  test(`${backend} startup awaits globalShortcut fallback when native registration fails`, async () => {
-    const f = fixture(backend, "Scrolllock", false);
-    let release;
-    let complete = false;
-    f.manager.loadSavedHotkeyOrDefault = async () => {
-      await new Promise((resolve) => {
-        release = resolve;
-      });
-      f.manager.currentHotkey = "F8";
-    };
-    const init = f.manager
-      .initializeHotkey(f.window, () => {})
-      .then(() => {
-        complete = true;
-      });
-    await tick();
-    f.timers.shift().callback();
-    await tick();
-    assert.equal(complete, false);
-    assert.equal(f.manager.isInitialized, false);
-    assert.equal(typeof release, "function");
-    release();
-    await init;
-    assert.equal(f.manager.currentHotkey, "F8");
-    assert.equal(f.manager.isInitialized, true);
+const mainSource = () => fs.readFileSync(path.join(__dirname, "../../main.js"), "utf8");
+
+// Runs main.js's startup Hold check, the code between createMainWindow() and the
+// backend's delayed registration, against the given window manager.
+function startupHoldCheck(windowManager, { writes = [], notifications = [] } = {}) {
+  const main = mainSource();
+  const start = main.indexOf("async function dropUnsupportedStartupHold() {");
+  assert.notEqual(start, -1);
+  const fn = main.slice(start, main.indexOf("\n}\n", start) + 3);
+  return vm.runInNewContext(`(async () => {${fn}\nawait dropUnsupportedStartupHold();})()`, {
+    windowManager,
+    environmentManager: { saveActivationMode: (mode) => writes.push(mode) },
+    debugLogger: { warn() {} },
+    BrowserWindow: {
+      getAllWindows: () => [
+        {
+          isDestroyed: () => false,
+          webContents: { send: (...args) => notifications.push(args) },
+        },
+      ],
+    },
   });
 }
 
-test("globalShortcut startup waits for page load and saved shortcut registration", async () => {
-  const f = fixture("globalShortcut");
-  f.window.webContents.isLoading = () => true;
-  let release;
-  let complete = false;
-  f.manager.loadSavedHotkeyOrDefault = async () => {
-    await new Promise((resolve) => {
-      release = resolve;
-    });
-    f.manager.currentHotkey = "F8";
-  };
-  const init = f.manager
-    .initializeHotkey(f.window, () => {})
-    .then(() => {
-      complete = true;
-    });
-  await tick();
-  assert.equal(complete, false);
-  assert.equal(release, undefined);
-  f.window.webContents.emit("did-finish-load");
-  await tick();
-  assert.equal(complete, false);
-  release();
-  await init;
-  assert.equal(f.manager.currentHotkey, "F8");
-});
+// Mirrors startApp: restore the saved Hold, start the backend (registration is
+// still pending behind its timer), run the check, then let registration run.
+async function startWithSavedHold(f) {
+  const writes = [];
+  const notifications = [];
+  await f.cache.setActivationModeCache("push");
+  await f.manager.initializeHotkey(f.window, () => {});
+  assert.equal(f.timers.length, 1, "the saved hotkey has not registered yet");
+  await startupHoldCheck(
+    {
+      getActivationMode: () => f.cache._cachedActivationMode,
+      hotkeyManager: f.manager,
+      setActivationModeCache: (mode) => f.cache.setActivationModeCache(mode),
+    },
+    { writes, notifications }
+  );
+  f.registrations.length = 0;
+  f.timers.shift().callback();
+  for (let i = 0; i < 5; i++) await tick();
+  return { writes, notifications };
+}
 
-test("failed environment shortcut registration awaits the saved shortcut fallback", async () => {
-  const f = fixture("globalShortcut");
-  f.context.process.env.DICTATION_KEY = "F8";
-  f.manager.setupShortcuts = () => ({ success: false });
-  let release;
-  let complete = false;
-  f.manager.loadSavedHotkeyOrDefault = () =>
-    new Promise((resolve) => {
-      release = resolve;
+for (const backend of ["Hyprland", "GNOME", "KDE"]) {
+  for (const hotkey of ["Scrolllock", "Control+Shift+Space"]) {
+    test(`${backend} startup keeps a saved Hold for saved ${hotkey}`, async () => {
+      const f = fixture(backend, hotkey);
+      const { writes, notifications } = await startWithSavedHold(f);
+      assert.equal(f.cache._cachedActivationMode, "push");
+      assert.equal(f.manager.activationMode, "push");
+      assert.deepEqual(notifications, []);
+      assert.deepEqual(writes, []);
+      assert.deepEqual(f.registrations, [{ hotkey, push: true }]);
+      assert.equal(f.manager.currentHotkey, hotkey);
     });
-  const init = f.manager
-    .initializeHotkey(f.window, () => {})
-    .then(() => {
-      complete = true;
-    });
-  await tick();
-  assert.equal(complete, false);
-  release();
-  await init;
-  assert.equal(f.manager.isInitialized, true);
+  }
+
+  const modifierOnly = `${backend} startup drops Hold before registering a modifier-only hotkey`;
+  test(modifierOnly, async () => {
+    const f = fixture(backend, "Control+Alt");
+    const { writes, notifications } = await startWithSavedHold(f);
+    assert.equal(f.cache._cachedActivationMode, "tap");
+    assert.equal(notifications.length, 1);
+    assert.deepEqual(writes, [], "the saved Hold is retried next launch");
+    assert.deepEqual(f.registrations, [{ hotkey: "Control+Alt", push: false }]);
+  });
+}
+
+const noPortal = "GNOME without the shortcuts portal drops Hold before its key registers";
+test(noPortal, async () => {
+  const f = fixture("GNOME");
+  f.manager.initializeGnomeShortcuts = async () => {
+    f.manager.useGnome = true;
+    f.manager.gnomeManager = { supportsPushToTalk: () => false };
+    return true;
+  };
+  const { writes, notifications } = await startWithSavedHold(f);
+  assert.equal(f.cache._cachedActivationMode, "tap");
+  assert.equal(notifications.length, 1);
+  assert.deepEqual(writes, []);
+  assert.deepEqual(f.registrations, [{ hotkey: "Scrolllock", push: false }]);
+  assert.equal(f.manager.useGnome, true, "the GNOME binding was kept");
 });
 
 for (const changed of [false, true]) {
   test(`startup Tap fallback preserves the saved preference when registration ${changed ? "succeeds" : "fails"}`, async () => {
-    const main = fs.readFileSync(path.join(__dirname, "../../main.js"), "utf8");
-    const start = main.indexOf('  if (\n    windowManager.getActivationMode() === "push"');
-    assert.notEqual(start, -1);
-    const block = main.slice(start, main.indexOf("  if (!startMinimized)", start));
     const notifications = [];
     const writes = [];
-    await vm.runInNewContext(`(async () => {${block}})()`, {
-      windowManager: {
+    await startupHoldCheck(
+      {
         getActivationMode: () => "push",
-        hotkeyManager: { supportsPushToTalk: () => false },
+        hotkeyManager: {
+          getSavedDictationHotkey: async () => "Scrolllock",
+          supportsPushToTalk: () => false,
+        },
         setActivationModeCache: async () => changed,
       },
-      environmentManager: { saveActivationMode: (mode) => writes.push(mode) },
-      debugLogger: { warn() {} },
-      BrowserWindow: {
-        getAllWindows: () => [
-          {
-            isDestroyed: () => false,
-            webContents: { send: (...args) => notifications.push(args) },
-          },
-        ],
-      },
-    });
+      { writes, notifications }
+    );
     assert.equal(writes.length, 0);
     assert.equal(notifications.length, changed ? 1 : 0);
   });
 }
+
+test("startup checks Hold before the control panel opens and the hotkey registers", () => {
+  const main = mainSource();
+  const created = main.indexOf("  await windowManager.createMainWindow();\n");
+  assert.notEqual(created, -1);
+  const next = created + "  await windowManager.createMainWindow();\n".length;
+  assert.ok(main.startsWith("  await dropUnsupportedStartupHold();\n", next));
+});

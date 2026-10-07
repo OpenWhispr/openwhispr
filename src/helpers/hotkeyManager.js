@@ -1055,8 +1055,7 @@ class HotkeyManager extends EventEmitter {
       if (gnomeOk) {
         const registerGnomeHotkey = async () => {
           try {
-            // DE backends bind one accelerator per slot — use the primary hotkey.
-            const hotkey = parseHotkeyList(await this.getSavedHotkey())[0] || DEFAULT_HOTKEY;
+            const hotkey = await this.getSavedDictationHotkey();
             const success = await this.registerGnomeDictationHotkey(hotkey, callback);
             if (success) {
               this.currentHotkey = hotkey;
@@ -1068,7 +1067,7 @@ class HotkeyManager extends EventEmitter {
               );
               if (!ok) {
                 this.useGnome = false;
-                await this.loadSavedHotkeyOrDefault(mainWindow, callback);
+                this.loadSavedHotkeyOrDefault(mainWindow, callback);
               }
             }
           } catch (err) {
@@ -1077,12 +1076,11 @@ class HotkeyManager extends EventEmitter {
               err.message
             );
             this.useGnome = false;
-            await this.loadSavedHotkeyOrDefault(mainWindow, callback);
+            this.loadSavedHotkeyOrDefault(mainWindow, callback);
           }
         };
 
-        await new Promise((resolve) => setTimeout(resolve, HOTKEY_REGISTRATION_DELAY_MS));
-        await registerGnomeHotkey();
+        setTimeout(registerGnomeHotkey, HOTKEY_REGISTRATION_DELAY_MS);
         this.isInitialized = true;
         return;
       }
@@ -1099,8 +1097,7 @@ class HotkeyManager extends EventEmitter {
       if (hyprlandOk) {
         const registerHyprlandHotkey = async () => {
           try {
-            // DE backends bind one accelerator per slot — use the primary hotkey.
-            const hotkey = parseHotkeyList(await this.getSavedHotkey())[0] || DEFAULT_HOTKEY;
+            const hotkey = await this.getSavedDictationHotkey();
 
             const success = await this.hyprlandManager.registerKeybinding(
               hotkey,
@@ -1118,7 +1115,7 @@ class HotkeyManager extends EventEmitter {
               );
               if (!ok) {
                 this.useHyprland = false;
-                await this.loadSavedHotkeyOrDefault(mainWindow, callback);
+                this.loadSavedHotkeyOrDefault(mainWindow, callback);
               }
             }
           } catch (err) {
@@ -1127,14 +1124,13 @@ class HotkeyManager extends EventEmitter {
               err.message
             );
             this.useHyprland = false;
-            await this.loadSavedHotkeyOrDefault(mainWindow, callback);
+            this.loadSavedHotkeyOrDefault(mainWindow, callback);
           }
         };
 
         this.hyprlandRegistrationReady = new Promise((resolve) =>
           setTimeout(resolve, HOTKEY_REGISTRATION_DELAY_MS)
         ).then(registerHyprlandHotkey);
-        await this.hyprlandRegistrationReady;
         this.isInitialized = true;
         return;
       }
@@ -1148,8 +1144,7 @@ class HotkeyManager extends EventEmitter {
       if (kdeOk) {
         const registerKDEHotkey = async () => {
           try {
-            // DE backends bind one accelerator per slot — use the primary hotkey.
-            const hotkey = parseHotkeyList(await this.getSavedHotkey())[0] || DEFAULT_HOTKEY;
+            const hotkey = await this.getSavedDictationHotkey();
             const result = await this.kdeManager.registerKeybinding(
               hotkey,
               "dictation",
@@ -1179,7 +1174,7 @@ class HotkeyManager extends EventEmitter {
               this.kdeManager.close();
               this.kdeManager = null;
               this.useKDE = false;
-              await this.loadSavedHotkeyOrDefault(mainWindow, callback);
+              this.loadSavedHotkeyOrDefault(mainWindow, callback);
             }
           } catch (err) {
             debugLogger.log(
@@ -1189,12 +1184,11 @@ class HotkeyManager extends EventEmitter {
             this.kdeManager?.close();
             this.kdeManager = null;
             this.useKDE = false;
-            await this.loadSavedHotkeyOrDefault(mainWindow, callback);
+            this.loadSavedHotkeyOrDefault(mainWindow, callback);
           }
         };
 
-        await new Promise((resolve) => setTimeout(resolve, HOTKEY_REGISTRATION_DELAY_MS));
-        await registerKDEHotkey();
+        setTimeout(registerKDEHotkey, HOTKEY_REGISTRATION_DELAY_MS);
         this.isInitialized = true;
         return;
       }
@@ -1213,13 +1207,15 @@ class HotkeyManager extends EventEmitter {
         debugLogger.log(`[HotkeyManager] Hotkey "${envHotkey}" registered from env`);
       } else {
         debugLogger.log(`[HotkeyManager] Env hotkey "${envHotkey}" failed, waiting for page`);
-        await this.loadSavedHotkeyOrDefault(mainWindow, callback);
+        this.loadSavedHotkeyOrDefault(mainWindow, callback);
       }
     } else {
+      const loadHotkey = () => this.loadSavedHotkeyOrDefault(mainWindow, callback);
       if (mainWindow.webContents.isLoading()) {
-        await new Promise((resolve) => mainWindow.webContents.once("did-finish-load", resolve));
+        mainWindow.webContents.once("did-finish-load", loadHotkey);
+      } else {
+        loadHotkey();
       }
-      await this.loadSavedHotkeyOrDefault(mainWindow, callback);
     }
 
     this.isInitialized = true;
@@ -1352,6 +1348,12 @@ class HotkeyManager extends EventEmitter {
       debugLogger.warn("[HotkeyManager] Main window not available for setting sync");
       return false;
     }
+  }
+
+  // DE backends bind one accelerator per slot, so startup registers the primary
+  // saved hotkey. main.js checks a saved Hold against the same key.
+  async getSavedDictationHotkey() {
+    return parseHotkeyList(await this.getSavedHotkey())[0] || DEFAULT_HOTKEY;
   }
 
   async getSavedHotkey() {

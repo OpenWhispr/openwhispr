@@ -1092,6 +1092,33 @@ function startAuthBridgeServer() {
   });
 }
 
+// Startup restores the saved activation mode before the saved hotkey registers,
+// and the backend registers that hotkey in this mode. Check the saved hotkey,
+// not the provisional default it replaces, so a supported Hold is kept and an
+// unsupported one becomes Tap before registration. This is a runtime fallback,
+// not a change to the user's saved preference: the next launch retries it.
+async function dropUnsupportedStartupHold() {
+  const savedHotkey = await windowManager.hotkeyManager.getSavedDictationHotkey();
+  if (
+    windowManager.getActivationMode() === "push" &&
+    !windowManager.hotkeyManager.supportsPushToTalk(savedHotkey)
+  ) {
+    const changed = await windowManager.setActivationModeCache("tap");
+    if (changed) {
+      for (const browserWindow of BrowserWindow.getAllWindows()) {
+        if (!browserWindow.isDestroyed()) {
+          browserWindow.webContents.send("setting-updated", {
+            key: "activationMode",
+            value: "tap",
+          });
+        }
+      }
+    } else {
+      debugLogger.warn("[HotkeyManager] Could not apply startup activation mode fallback");
+    }
+  }
+}
+
 // Main application startup
 async function startApp() {
   // Await so a stale sidecar is confirmed dead before new ones can spawn and
@@ -1180,28 +1207,7 @@ async function startApp() {
   const startMinimized = environmentManager.getStartMinimized() || launchedHidden;
   if (debugLogger) debugLogger.info("Start minimized", { enabled: startMinimized, launchedHidden });
   await windowManager.createMainWindow();
-  // initializeHotkey now waits for the saved key and any registration fallbacks.
-  // Validate the effective key, never the constructor's provisional shortcut.
-  if (
-    windowManager.getActivationMode() === "push" &&
-    !windowManager.hotkeyManager.supportsPushToTalk()
-  ) {
-    const changed = await windowManager.setActivationModeCache("tap");
-    if (changed) {
-      // This is a runtime fallback, not a change to the user's saved preference.
-      // Retry the requested mode on the next launch.
-      for (const browserWindow of BrowserWindow.getAllWindows()) {
-        if (!browserWindow.isDestroyed()) {
-          browserWindow.webContents.send("setting-updated", {
-            key: "activationMode",
-            value: "tap",
-          });
-        }
-      }
-    } else {
-      debugLogger.warn("[HotkeyManager] Could not apply startup activation mode fallback");
-    }
-  }
+  await dropUnsupportedStartupHold();
   if (!startMinimized) {
     await windowManager.createControlPanelWindow();
   }
