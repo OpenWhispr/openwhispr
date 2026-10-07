@@ -402,9 +402,10 @@ test("CJK normalization does not invent a trigger the transcript never had", asy
 });
 
 test("format-preserving wake removal chooses the closest overlapping name without consuming operands", async () => {
-  const { stripAgentAddressPreservingFormatting: strip } = await load();
+  const { stripAgentAddressPreservingFormatting: strip, detectAgentName } = await load();
   for (const [input, language, expected] of [
     ["B. OpenWhispr, use B.", "en", "B. use B."],
+    ["OpenWhisp, R. Use the letter after your name.", "en", "R. Use the letter after your name."],
     ["!. OpenWhispr, use punctuation.", "en", "!. use punctuation."],
     [
       "🙂.  OpenWhispr、「か\u3099」を「き」に変えて。",
@@ -424,4 +425,5 @@ test("format-preserving wake removal chooses the closest overlapping name withou
     ],
   ])
     assert.equal(strip(input, "OpenWhispr", language), expected, input);
+  assert.equal(detectAgentName("「OpenWhispr、選択範囲を短くして。」", "OpenWhispr", "ja"), true);
 });

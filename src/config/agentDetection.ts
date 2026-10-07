@@ -229,18 +229,17 @@ function locateAgentAddress(
   const maxSpan = Math.max(2, detectionName.split(/\s+/).length);
 
   let address: AgentAddress | null = null;
-  let bestDistance = maxEdits + 1;
+  let bestDistance = maxEdits;
   let searchEnd = words.length;
   for (let i = 0; i < searchEnd; i++) {
-    if (!words[i]) continue;
     const cueBefore = i > 0 && (VOCATIVE_CUES.has(words[i - 1]) || localizedCues.has(words[i - 1]));
     let joined = "";
-    for (let span = 0; span < maxSpan && i + span < words.length; span++) {
+    for (let span = 0; span < maxSpan && i + span < searchEnd; span++) {
       joined += words[i + span];
       if (Math.abs(joined.length - nameLower.length) > maxEdits) continue;
       const distance = levenshteinDistance(joined, nameLower);
       if (
-        distance < bestDistance &&
+        distance <= bestDistance &&
         // A cue names the agent outright, so it outranks a trigger the words
         // happen to span; without one the trigger the user configured wins.
         (cueBefore ||
@@ -256,9 +255,9 @@ function locateAgentAddress(
           ? nameEnd + 1
           : nameEnd;
         const start = cueBefore ? i - 1 : i;
-        // Only compare overlapping candidates: an exact name later in the
-        // command must not displace its first address. Within that address,
-        // prefer "OpenWhispr" over the fuzzy window "B. OpenWhispr".
+        // Refine only the prefix of the first match: "B. OpenWhispr"
+        // must prefer "OpenWhispr", without extending a fuzzy name over
+        // a following operand ("OpenWhisp, R.").
         if (!address) searchEnd = nameEnd;
         bestDistance = distance;
         address = {

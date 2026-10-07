@@ -155,6 +155,11 @@ test("wake removal preserves literal operands, spacing and original Unicode in l
       "ねぇ、OpenWhispr、「こんにちは。」を「こんばんは。」に置き換えて。",
       "「こんにちは。」を「こんばんは。」に置き換えて。",
     ],
+    [
+      "en",
+      "OpenWhisp, R. Replace the selection with the letter after your name.",
+      "R. Replace the selection with the letter after your name.",
+    ],
     ["en", 'Hey OpenWhispr, replace "a  b" with "c\n\td".', 'replace "a  b" with "c\n\td".'],
     [
       "ja",
