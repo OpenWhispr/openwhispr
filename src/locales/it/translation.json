@@ -179,7 +179,7 @@
     "recommended": "Consigliato",
     "active": "Attivo",
     "managedByOrg": "Gestito dalla tua organizzazione",
-    "freeAccountRequired": "Account gratuito richiesto",
+    "accountRequired": "Account richiesto",
     "comingSoon": "Prossimamente",
     "cloud": "Cloud",
     "local": "Locale",
@@ -339,7 +339,7 @@
           }
         },
         "byok": {
-          "title": "Provider API",
+          "title": "Porta la tua chiave",
           "description": "Usa la tua chiave API."
         },
         "local": {
@@ -1807,11 +1807,11 @@
       "enableTextCleanupDescription": "L'IA rimuove parole superflue, corregge grammatica e punteggiatura",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
-        "providers": "Provider cloud",
+        "providers": "Porta la tua chiave",
         "local": "Locale",
         "selfHosted": "Self-hosted",
         "openwhisprDesc": "Risultati affidabili. Nessuna configurazione necessaria.",
-        "providersDesc": "Usa la tua chiave API.",
+        "providersDesc": "Usa la tua chiave API per connettere il tuo provider LLM preferito.",
         "localDesc": "Modelli sul dispositivo. Totalmente privato.",
         "selfHostedDesc": "Il tuo server nella tua rete.",
         "enterprise": "Enterprise",
@@ -3741,18 +3741,6 @@
       "permissionDescription": "macOS richiede l'autorizzazione alla registrazione dello schermo per catturare lo schermo.",
       "relaunchHint": "La registrazione dello schermo è stata concessa mentre OpenWhispr era in esecuzione. Chiudi e riapri OpenWhispr per iniziare a catturare gli screenshot."
     },
-    "modes": {
-      "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "Usa l'assistente gestito da OpenWhispr, senza bisogno di chiave API.",
-      "providers": "Usa la tua chiave API",
-      "providersDesc": "Connettiti a OpenAI, Anthropic, Gemini o Groq con la tua chiave API.",
-      "local": "Locale",
-      "localDesc": "Esegui un LLM locale sul tuo dispositivo, totalmente privato.",
-      "selfHosted": "Self-hosted",
-      "selfHostedDesc": "Punta a un endpoint self-hosted compatibile con OpenAI.",
-      "enterprise": "Enterprise",
-      "enterpriseDesc": "Usa AWS Bedrock, Azure OpenAI o Google Vertex."
-    },
     "prompt": {
       "title": "Prompt dell'assistente",
       "description": "Il prompt di sistema usato quando viene rilevata la parola di attivazione. In assenza, usa quello predefinito integrato."
@@ -3762,19 +3750,7 @@
     "settings": {
       "systemPrompt": "Prompt di Sistema",
       "systemPromptDescription": "Istruzioni personalizzate per l'assistente",
-      "systemPromptPlaceholder": "Inserisci un prompt di sistema personalizzato...",
-      "modes": {
-        "openwhispr": "OpenWhispr Cloud",
-        "providers": "Provider Cloud",
-        "local": "Locale",
-        "selfHosted": "Self-Hosted",
-        "openwhisprDesc": "Risultati affidabili. Nessuna configurazione necessaria.",
-        "providersDesc": "Porta la tua chiave API.",
-        "localDesc": "Modelli sul dispositivo. Completamente privato.",
-        "selfHostedDesc": "Il tuo server sulla tua rete.",
-        "enterprise": "Enterprise",
-        "enterpriseDesc": "Usa l'account cloud della tua organizzazione (AWS, Azure, GCP)."
-      }
+      "systemPromptPlaceholder": "Inserisci un prompt di sistema personalizzato..."
     },
     "chat": {
       "errorPrefix": "Errore",
