@@ -1854,7 +1854,7 @@
     "account": {
       "badges": {
         "free": "Free",
-        "limitReached": "Limit reached",
+        "limitReached": "Cloud limit reached",
         "pastDue": "Past due",
         "pro": "Pro",
         "business": "Business",
@@ -1890,7 +1890,8 @@
         "title": "We couldn't process your payment"
       },
       "planDescriptions": {
-        "freeUsage": "{{used}} / {{limit}} words this week",
+        "freeUsage": "{{used}} / {{limit}} OpenWhispr Cloud words this week",
+        "byokUnlimited": "Your own API keys and local models remain unlimited.",
         "nextBilling": "Next billing: {{date}}",
         "pastDue": "{{used}} / {{limit}} free words this week - update payment to restore Pro",
         "trial": "{{days}} days remaining - unlimited transcriptions",
@@ -2010,8 +2011,8 @@
       "title": "Account",
       "toasts": {
         "approachingLimit": {
-          "description": "You've used {{used}} of {{limit}} free words this week. Upgrade to Pro for unlimited use.",
-          "title": "Approaching weekly limit"
+          "description": "You've used {{used}} of {{limit}} OpenWhispr Cloud words this week. Your own API keys and local models remain unlimited.",
+          "title": "Approaching Cloud word limit"
         }
       },
       "trialCta": {
@@ -2827,8 +2828,8 @@
     "inviteTeam": "Invite your team",
     "settings": "Settings",
     "support": "Support",
-    "limitReached": "Weekly limit reached",
-    "limitReachedDescription": "Upgrade to Pro for unlimited transcriptions.",
+    "limitReached": "Cloud limit reached",
+    "limitReachedDescription": "Your own API keys and local models remain unlimited.",
     "viewPlans": "View Plans",
     "upgradeTitle": "Upgrade to Pro",
     "upgradeDescription": "Unlimited, more accurate, faster transcription.",

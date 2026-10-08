@@ -1854,7 +1854,7 @@
     "account": {
       "badges": {
         "free": "Gratuit",
-        "limitReached": "Limite atteinte",
+        "limitReached": "Limite cloud atteinte",
         "pastDue": "Paiement en retard",
         "pro": "Pro",
         "business": "Business",
@@ -1890,7 +1890,8 @@
         "title": "Nous n'avons pas pu traiter votre paiement"
       },
       "planDescriptions": {
-        "freeUsage": "{{used}} / {{limit}} mots cette semaine",
+        "freeUsage": "{{used}} / {{limit}} mots sur OpenWhispr Cloud cette semaine",
+        "byokUnlimited": "Vos propres clés API et les modèles locaux restent utilisables sans limite.",
         "nextBilling": "Prochaine facturation : {{date}}",
         "pastDue": "{{used}} / {{limit}} mots gratuits cette semaine - mettez à jour le paiement pour restaurer Pro",
         "trial": "{{days}} jours restants - transcriptions illimitées",
@@ -2010,8 +2011,8 @@
       "title": "Compte",
       "toasts": {
         "approachingLimit": {
-          "description": "Vous avez utilisé {{used}} de {{limit}} mots gratuits cette semaine. Passez à Pro pour une utilisation illimitée.",
-          "title": "Limite hebdomadaire bientôt atteinte"
+          "description": "Vous avez utilisé {{used}} mots sur {{limit}} sur OpenWhispr Cloud cette semaine. Vos propres clés API et les modèles locaux restent utilisables sans limite.",
+          "title": "Limite de mots cloud bientôt atteinte"
         }
       },
       "trialCta": {
@@ -2953,8 +2954,8 @@
     "inviteTeam": "Invitez votre équipe",
     "settings": "Paramètres",
     "support": "Assistance",
-    "limitReached": "Limite hebdomadaire atteinte",
-    "limitReachedDescription": "Passez à Pro pour des transcriptions illimitées.",
+    "limitReached": "Limite cloud atteinte",
+    "limitReachedDescription": "Vos propres clés API et les modèles locaux restent utilisables sans limite.",
     "viewPlans": "Voir les forfaits",
     "upgradeTitle": "Passer à Pro",
     "upgradeDescription": "Transcription illimitée, plus précise et plus rapide.",

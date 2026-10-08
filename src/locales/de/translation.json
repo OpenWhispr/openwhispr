@@ -1854,7 +1854,7 @@
     "account": {
       "badges": {
         "free": "Kostenlos",
-        "limitReached": "Limit erreicht",
+        "limitReached": "Cloud-Limit erreicht",
         "pastDue": "Überfällig",
         "pro": "Pro",
         "business": "Business",
@@ -1890,7 +1890,8 @@
         "title": "Ihre Zahlung konnte nicht verarbeitet werden"
       },
       "planDescriptions": {
-        "freeUsage": "{{used}} / {{limit}} Wörter diese Woche",
+        "freeUsage": "{{used}} / {{limit}} Wörter in OpenWhispr Cloud diese Woche",
+        "byokUnlimited": "Eigene API-Schlüssel und lokale Modelle bleiben unbegrenzt nutzbar.",
         "nextBilling": "Nächste Abrechnung: {{date}}",
         "pastDue": "{{used}} / {{limit}} kostenlose Wörter diese Woche – Zahlung aktualisieren, um Pro wiederherzustellen",
         "trial": "Noch {{days}} Tage – unbegrenzte Transkriptionen",
@@ -2010,8 +2011,8 @@
       "title": "Konto",
       "toasts": {
         "approachingLimit": {
-          "description": "Sie haben diese Woche {{used}} von {{limit}} kostenlosen Wörtern verwendet. Upgraden Sie auf Pro für unbegrenzte Nutzung.",
-          "title": "Wochenlimit fast erreicht"
+          "description": "Du hast diese Woche {{used}} von {{limit}} Wörtern in OpenWhispr Cloud genutzt. Eigene API-Schlüssel und lokale Modelle bleiben unbegrenzt nutzbar.",
+          "title": "Cloud-Wortlimit fast erreicht"
         }
       },
       "trialCta": {
@@ -2953,8 +2954,8 @@
     "inviteTeam": "Team einladen",
     "settings": "Einstellungen",
     "support": "Support",
-    "limitReached": "Wochenlimit erreicht",
-    "limitReachedDescription": "Upgraden Sie auf Pro für unbegrenzte Transkriptionen.",
+    "limitReached": "Cloud-Limit erreicht",
+    "limitReachedDescription": "Eigene API-Schlüssel und lokale Modelle bleiben unbegrenzt nutzbar.",
     "viewPlans": "Tarife ansehen",
     "upgradeTitle": "Auf Pro upgraden",
     "upgradeDescription": "Unbegrenzte, genauere und schnellere Transkription.",

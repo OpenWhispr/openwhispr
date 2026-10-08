@@ -1559,7 +1559,7 @@
     "account": {
       "badges": {
         "free": "免費",
-        "limitReached": "已達上限",
+        "limitReached": "已達雲端上限",
         "pastDue": "款項逾期",
         "pro": "Pro",
         "business": "Business",
@@ -1595,7 +1595,8 @@
         "title": "我們無法處理你的付款"
       },
       "planDescriptions": {
-        "freeUsage": "本週已使用 {{used}} / {{limit}} 字",
+        "freeUsage": "本週 OpenWhispr Cloud 已使用 {{used}} / {{limit}} 字",
+        "byokUnlimited": "使用自己的 API 金鑰和本機模型仍不受此限制。",
         "nextBilling": "下次扣款日：{{date}}",
         "pastDue": "本週 {{used}} / {{limit}} 免費字數——更新付款方式以恢復 Pro",
         "trial": "剩餘 {{days}} 天——無限轉錄",
@@ -1619,8 +1620,8 @@
       "title": "帳號",
       "toasts": {
         "approachingLimit": {
-          "description": "你本週已使用 {{used}} / {{limit}} 免費字數。升級至 Pro 即可無限使用。",
-          "title": "即將達到每週上限"
+          "description": "本週已使用 {{used}} / {{limit}} 個 OpenWhispr Cloud 字。使用自己的 API 金鑰和本機模型仍不受此限制。",
+          "title": "即將達到雲端字數上限"
         }
       },
       "trialCta": {
@@ -3600,8 +3601,8 @@
     "inviteTeam": "邀請你的團隊",
     "settings": "設定",
     "support": "支援",
-    "limitReached": "已達每週上限",
-    "limitReachedDescription": "升級至 Pro 即可無限轉錄。",
+    "limitReached": "已達雲端上限",
+    "limitReachedDescription": "使用自己的 API 金鑰和本機模型仍不受此限制。",
     "viewPlans": "查看方案",
     "upgradeTitle": "升級至 Pro",
     "upgradeDescription": "無限量、更準確、更快速的轉錄。",

@@ -1559,7 +1559,7 @@
     "account": {
       "badges": {
         "free": "無料",
-        "limitReached": "上限到達",
+        "limitReached": "クラウドの上限に達しました",
         "pastDue": "支払い遅延",
         "pro": "Pro",
         "business": "Business",
@@ -1595,7 +1595,8 @@
         "title": "お支払いを処理できませんでした"
       },
       "planDescriptions": {
-        "freeUsage": "今週 {{used}} / {{limit}} ワード使用済み",
+        "freeUsage": "今週の OpenWhispr Cloud 使用量：{{used}} / {{limit}} ワード",
+        "byokUnlimited": "独自の API キーとローカルモデルは引き続き無制限で利用できます。",
         "nextBilling": "次の請求日: {{date}}",
         "pastDue": "今週 {{used}} / {{limit}} 無料ワード使用済み - お支払い方法を更新して Pro を復元",
         "trial": "残り {{days}} 日 - 無制限の文字起こし",
@@ -1718,8 +1719,8 @@
       "title": "アカウント",
       "toasts": {
         "approachingLimit": {
-          "description": "今週 {{used}} / {{limit}} 無料ワードを使用しました。Pro にアップグレードして無制限にご利用ください。",
-          "title": "週間利用上限に近づいています"
+          "description": "今週、OpenWhispr Cloud で {{limit}} ワード中 {{used}} ワードを使用しました。独自の API キーとローカルモデルは引き続き無制限で利用できます。",
+          "title": "クラウドのワード上限に近づいています"
         }
       },
       "trialCta": {
@@ -3600,8 +3601,8 @@
     "inviteTeam": "チームを招待",
     "settings": "設定",
     "support": "サポート",
-    "limitReached": "週間の利用上限に達しました",
-    "limitReachedDescription": "Pro にアップグレードして無制限の文字起こしをご利用ください。",
+    "limitReached": "クラウドの上限に達しました",
+    "limitReachedDescription": "独自の API キーとローカルモデルは引き続き無制限で利用できます。",
     "viewPlans": "プランを見る",
     "upgradeTitle": "Pro にアップグレード",
     "upgradeDescription": "無制限・高精度・高速の文字起こし。",
