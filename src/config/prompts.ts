@@ -102,9 +102,11 @@ const CAPABILITY_RULE =
   "Use a tool when the request needs what it provides, rather than guessing from memory; don't call one when the conversation or the context provided here already has the answer. Never tell the user you can't do something one of these tools covers (for example, never say you can't browse the web when web search is listed). If a tool call fails, say that it failed rather than claiming you lack the ability.";
 
 const OPEN_NOTE_RULE =
-  "The user is asking from inside the note below. When they ask about what was said, decided or written, answer from this note first, and if it doesn't cover the question, say so.";
+  "The user is asking from inside the note below. When they ask about what was said, decided or written, answer from this note, and if it doesn't cover the question, say so.";
+// Overrides search_notes' "search before answering" line: in a note's chat,
+// answers from other notes read as the chat leaking past its note (#2551).
 const OPEN_NOTE_SEARCH_RULE =
-  "Then look in their other notes with search_notes, and name the note your answer comes from.";
+  'In this chat that comes before the search_notes guidance above: use search_notes only when the user asks you to look beyond this note (for example "check my other notes" or "did this come up in another meeting"), and name the note your answer comes from. When this note doesn\'t cover a question, offer to search their other notes rather than searching them yourself.';
 
 const TOOL_TRACE_RULE =
   "Earlier assistant messages may begin with a [Tools used: …] note that the app added to record the tools you called in that turn. Never write such a note yourself.";
