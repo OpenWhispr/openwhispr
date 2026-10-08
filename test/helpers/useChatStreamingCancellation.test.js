@@ -5,6 +5,7 @@ const path = require("node:path");
 const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 const {
+  SIGNED_OUT_AUTH_MOCK,
   createRendererServer,
   installBrowserGlobals,
   installHookDom,
@@ -57,6 +58,7 @@ async function renderChatStreaming(
   const container = live ? installHookDom(t) : null;
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-chat-streaming-cancellation-test-",
+    mockModules: SIGNED_OUT_AUTH_MOCK,
   });
   const [{ default: viteI18next }, { initReactI18next }] = await Promise.all([
     vite.ssrLoadModule("i18next"),
