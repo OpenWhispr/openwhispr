@@ -123,8 +123,8 @@ async function installHappyDom(t) {
   return happyWindow;
 }
 
-test("a click outside the open chat closes it, unless it dismisses a menu over the page", async (t) => {
-  const { document, PointerEvent, MouseEvent } = await installHappyDom(t);
+test("a click outside or an Esc closes the open chat, unless it dismisses a menu over the page", async (t) => {
+  const { document, PointerEvent, MouseEvent, KeyboardEvent } = await installHappyDom(t);
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-note-bottom-bar-outside-test-",
     mockModules: {
@@ -143,6 +143,7 @@ test("a click outside the open chat closes it, unless it dismisses a menu over t
   document.body.append(outside, host);
   const root = createRoot(host);
   let closed = 0;
+  let escaped = 0;
   const render = (chatOpen) =>
     act(async () =>
       root.render(
@@ -154,6 +155,7 @@ test("a click outside the open chat closes it, unless it dismisses a menu over t
           chatOpen,
           actionChips: createElement("button", { id: "in-chat" }, "Chip"),
           onClickOutside: () => closed++,
+          onInputEscape: () => escaped++,
         })
       )
     );
@@ -197,6 +199,21 @@ test("a click outside the open chat closes it, unless it dismisses a menu over t
 
   click(outside);
   assert.equal(closed, 1);
+
+  const pressEscape = () =>
+    document
+      .getElementById("in-chat")
+      .dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })
+      );
+  // Radix closes a menu on a capturing document listener and prevents the key's default.
+  const closeMenu = (event) => event.preventDefault();
+  document.addEventListener("keydown", closeMenu, true);
+  pressEscape();
+  document.removeEventListener("keydown", closeMenu, true);
+  assert.equal(escaped, 0, "an Esc that closes a menu over the chat only closes the menu");
+  pressEscape();
+  assert.equal(escaped, 1, "Esc closes the chat from anywhere in it, not just the composer");
 
   await render(false);
   click(outside);

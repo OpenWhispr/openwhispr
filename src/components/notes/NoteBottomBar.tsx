@@ -162,6 +162,11 @@ export default function NoteBottomBar({
           data-note-chat-panel
           aria-hidden={hideInput}
           inert={hideInput}
+          // From anywhere in the open chat, not just the composer. An Esc that closes a menu
+          // (Radix prevents its default) closes only the menu.
+          onKeyDown={(event) => {
+            if (event.key === "Escape" && chatOpen && !event.defaultPrevented) onInputEscape?.();
+          }}
           className={cn(
             // Bottom-anchored: while it grows, what doesn't fit yet overflows the top, not the composer.
             // Its height animates between the bar's 48px and auto.
@@ -191,7 +196,6 @@ export default function NoteBottomBar({
               onDraftChange={onDraftChange}
               onTextSubmit={onAskSubmit}
               onFocus={onInputFocus}
-              onEscape={onInputEscape}
               focusOnIdle={chatOpen}
               voiceDraft={chatOpen}
               placeholder={t("embeddedChat.askPlaceholder")}
