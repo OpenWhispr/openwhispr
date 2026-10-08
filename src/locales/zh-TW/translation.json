@@ -212,7 +212,8 @@
     "policyUnresolved": "貴組織的設定尚未載入完成。請稍後再試。",
     "managedConfigLoading": "正在檢查您組織的託管設定。請稍候再試。",
     "managedConfigUnavailable": "託管企業存取無法使用。請重新登入或聯絡管理員。",
-    "managedPolicyConflict": "託管存取已被您工作區的政策封鎖。請聯絡管理員。"
+    "managedPolicyConflict": "託管存取已被您工作區的政策封鎖。請聯絡管理員。",
+    "resizePanel": "調整面板大小"
   },
   "onboarding": {
     "rehaul": {
@@ -3181,6 +3182,7 @@
     },
     "actions": {
       "allActions": "全部動作",
+      "selectAction": "選擇動作",
       "manage": "管理動作...",
       "addAction": "新增動作",
       "editAction": "編輯動作",
@@ -3200,7 +3202,7 @@
       "emptyReply": "模型傳回了空白回覆。請再試一次，或選擇其他模型。",
       "builtin": {
         "generateNotes": {
-          "name": "生成筆記",
+          "name": "AI 摘要",
           "description": "清理、結構化和增強您的筆記"
         },
         "followUpEmail": {
@@ -3209,7 +3211,7 @@
           "cta": "草擬跟進郵件"
         },
         "detailedNotes": {
-          "name": "AI 摘要",
+          "name": "詳細筆記",
           "description": "準確、完整的會議筆記，包含決策和行動項目"
         },
         "makeTodos": {
@@ -3276,6 +3278,7 @@
       "managerTitle": "範本與動作",
       "manage": "管理範本...",
       "select": "選擇範本",
+      "regenerate": "重新產生",
       "addTemplate": "新增範本",
       "editTemplate": "編輯範本",
       "namePlaceholder": "範本名稱",
@@ -3409,7 +3412,7 @@
         "chips": {
           "catchUp": "幫我補上進度",
           "keyDecisions": "列出關鍵決策",
-          "inFlight": "顯示進行中的專案"
+          "openActionItems": "列出待辦事項"
         }
       },
       "invite": "邀請",
@@ -3802,7 +3805,10 @@
       "typeMessage": "輸入訊息...",
       "send": "傳送",
       "voiceDraftStreamingOnly": "目前的轉錄服務商僅支援即時聽寫，因此無法使用語音輸入。請在「設定 → 語音轉文字」中選擇其他服務商。",
-      "commands": "指令"
+      "commands": "指令",
+      "slashNavigate": "瀏覽",
+      "slashSelect": "選擇",
+      "slashClose": "關閉"
     },
     "tools": {
       "search_notesName": "搜尋筆記",
@@ -4654,15 +4660,10 @@
   },
   "embeddedChat": {
     "askPlaceholder": "詢問關於筆記的任何問題",
-    "title": "聊天",
-    "emptyState": "就這條筆記提個問題",
-    "dock": "固定到側邊欄",
-    "undock": "從側邊欄取消固定",
     "close": "關閉聊天",
     "newChat": "新對話",
     "conversationSelector": "切換對話",
     "history": "歷史記錄",
-    "quickActions": "快速操作",
     "generateSummary": "產生摘要"
   },
   "transcriptionPreview": {

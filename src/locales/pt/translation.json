@@ -191,7 +191,8 @@
     "policyUnresolved": "As configurações da sua organização ainda não foram carregadas. Tente novamente em instantes.",
     "managedConfigLoading": "Verificando a configuração gerenciada da sua organização. Tente novamente em instantes.",
     "managedConfigUnavailable": "O acesso empresarial gerenciado está indisponível. Entre novamente ou entre em contato com o administrador.",
-    "managedPolicyConflict": "O acesso gerenciado está bloqueado pela política do seu espaço de trabalho. Entre em contato com o administrador."
+    "managedPolicyConflict": "O acesso gerenciado está bloqueado pela política do seu espaço de trabalho. Entre em contato com o administrador.",
+    "resizePanel": "Redimensionar painel"
   },
   "onboarding": {
     "rehaul": {
@@ -3181,6 +3182,7 @@
     },
     "actions": {
       "allActions": "Todas as ações",
+      "selectAction": "Selecionar ação",
       "manage": "Gerenciar ações...",
       "addAction": "Nova ação",
       "editAction": "Editar ação",
@@ -3200,7 +3202,7 @@
       "emptyReply": "O modelo retornou uma resposta vazia. Tente novamente ou escolha outro modelo.",
       "builtin": {
         "generateNotes": {
-          "name": "Gerar notas",
+          "name": "Resumo com IA",
           "description": "Limpar, estruturar e aprimorar suas notas"
         },
         "followUpEmail": {
@@ -3209,7 +3211,7 @@
           "cta": "Redigir e-mail de acompanhamento"
         },
         "detailedNotes": {
-          "name": "Resumo com IA",
+          "name": "Notas detalhadas",
           "description": "Notas de reunião precisas e completas com decisões e ações"
         },
         "makeTodos": {
@@ -3276,6 +3278,7 @@
       "managerTitle": "Modelos e ações",
       "manage": "Gerenciar modelos...",
       "select": "Escolher modelo",
+      "regenerate": "Gerar novamente",
       "addTemplate": "Novo modelo",
       "editTemplate": "Editar modelo",
       "namePlaceholder": "Nome do modelo",
@@ -3409,7 +3412,7 @@
         "chips": {
           "catchUp": "Me atualize",
           "keyDecisions": "Liste as decisões principais",
-          "inFlight": "Mostre os projetos em andamento"
+          "openActionItems": "Liste as tarefas pendentes"
         }
       },
       "invite": "Convidar",
@@ -3802,7 +3805,10 @@
       "typeMessage": "Digite uma mensagem...",
       "send": "Enviar",
       "voiceDraftStreamingOnly": "A entrada por voz não está disponível com seu provedor de transcrição: ele só suporta ditado ao vivo. Escolha outro provedor em Configurações → Fala para texto.",
-      "commands": "Comandos"
+      "commands": "Comandos",
+      "slashNavigate": "para navegar",
+      "slashSelect": "para selecionar",
+      "slashClose": "para fechar"
     },
     "tools": {
       "search_notesName": "Pesquisar notas",
@@ -4654,15 +4660,10 @@
   },
   "embeddedChat": {
     "askPlaceholder": "Pergunte sobre sua nota",
-    "title": "Chat",
-    "emptyState": "Faça uma pergunta sobre esta nota",
-    "dock": "Fixar na barra lateral",
-    "undock": "Desafixar da barra lateral",
     "close": "Fechar chat",
     "newChat": "Novo chat",
     "conversationSelector": "Trocar conversa",
     "history": "Histórico",
-    "quickActions": "Ações rápidas",
     "generateSummary": "Gerar resumo"
   },
   "transcriptionPreview": {

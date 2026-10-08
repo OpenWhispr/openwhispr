@@ -40,8 +40,9 @@ function SquareMark({ strokeWidth = 2, ...props }: MarkProps) {
   );
 }
 
-// The note editor's formatting glyphs, drawn to the same 24px grid as the
-// vendored Nucleo outline set (2px stroke, round caps, 3–21 bounds).
+// Glyphs Nucleo lacks (the note editor's formatting marks, a slash command),
+// drawn to the same 24px grid as the vendored Nucleo outline set (2px stroke,
+// round caps, 3–21 bounds).
 const glyph = (children: SVGProps<SVGSVGElement>["children"]) =>
   function Glyph({ strokeWidth = 2, ...props }: MarkProps) {
     return (
@@ -136,6 +137,46 @@ const QuoteMark = glyph(
   </>
 );
 
+const SquareSlashMark = glyph(
+  <>
+    <rect x="3" y="3" width="18" height="18" rx="4" />
+    <path d="M14.5 7.5l-5 9" />
+  </>
+);
+
+// Copy, in the same soft-cornered squares as SquareSlash.
+const CopyRoundedMark = glyph(
+  <>
+    <rect x="8.5" y="8.5" width="12.5" height="12.5" rx="3.5" />
+    <path d="M15.5 8.5V6.5A3.5 3.5 0 0 0 12 3H6.5A3.5 3.5 0 0 0 3 6.5V12a3.5 3.5 0 0 0 3.5 3.5h2" />
+  </>
+);
+
+// The docked note chat's pills, drawn from the design's own icons (Lucide's shapes).
+const FolderRoundedMark = glyph(
+  <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+);
+
+const ListEndMark = glyph(
+  <>
+    <path d="M16 12H3" />
+    <path d="M16 6H3" />
+    <path d="M10 18H3" />
+    <path d="M21 6v10a2 2 0 0 1-2 2h-5" />
+    <path d="m16 20-2-2 2-2" />
+  </>
+);
+
+const TextCursorInputMark = glyph(
+  <>
+    <path d="M5 4h1a3 3 0 0 1 3 3 3 3 0 0 1 3-3h1" />
+    <path d="M9 7v10" />
+    <path d="M13 20h-1a3 3 0 0 1-3-3 3 3 0 0 1-3 3H5" />
+    <path d="M5 16H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h1" />
+    <path d="M13 8h7a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-7" />
+  </>
+);
+
 const TableMark = glyph(
   <>
     <rect x="3" y="4" width="18" height="16" rx="2" />
@@ -147,12 +188,17 @@ const TableMark = glyph(
 
 export const Circle = createIcon("circle", CircleMark);
 export const Square = createIcon("square", SquareMark);
+export const SquareSlash = createIcon("square-slash", SquareSlashMark);
 export const Bold = createIcon("bold", BoldMark);
+export const CopyRounded = createIcon("copy-rounded", CopyRoundedMark);
+export const FolderRounded = createIcon("folder-rounded", FolderRoundedMark);
 export const Heading = createIcon("heading", HeadingMark);
 export const Italic = createIcon("italic", ItalicMark);
 export const List = createIcon("list", ListMark);
 export const ListChecks = createIcon("list-checks", ListChecksMark);
+export const ListEnd = createIcon("list-end", ListEndMark);
 export const ListOrdered = createIcon("list-ordered", ListOrderedMark);
 export const Quote = createIcon("quote", QuoteMark);
 export const Strikethrough = createIcon("strikethrough", StrikethroughMark);
 export const Table = createIcon("table", TableMark);
+export const TextCursorInput = createIcon("text-cursor-input", TextCursorInputMark);

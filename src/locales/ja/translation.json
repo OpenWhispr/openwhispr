@@ -212,7 +212,8 @@
     "policyUnresolved": "組織の設定がまだ読み込まれていません。しばらくしてからもう一度お試しください。",
     "managedConfigLoading": "組織のマネージド設定を確認しています。しばらくしてからもう一度お試しください。",
     "managedConfigUnavailable": "マネージド エンタープライズ アクセスを利用できません。再度サインインするか、管理者にお問い合わせください。",
-    "managedPolicyConflict": "ワークスペースのポリシーによりマネージド アクセスがブロックされています。管理者にお問い合わせください。"
+    "managedPolicyConflict": "ワークスペースのポリシーによりマネージド アクセスがブロックされています。管理者にお問い合わせください。",
+    "resizePanel": "パネルのサイズを変更"
   },
   "onboarding": {
     "rehaul": {
@@ -2961,6 +2962,7 @@
     },
     "actions": {
       "allActions": "すべてのアクション",
+      "selectAction": "アクションを選択",
       "manage": "アクションを管理...",
       "addAction": "新しいアクション",
       "editAction": "アクションを編集",
@@ -2980,7 +2982,7 @@
       "emptyReply": "モデルから空の応答が返されました。もう一度お試しいただくか、別のモデルを選択してください。",
       "builtin": {
         "generateNotes": {
-          "name": "ノートを生成",
+          "name": "AI要約",
           "description": "ノートを整理、構成、強化する"
         },
         "followUpEmail": {
@@ -2989,7 +2991,7 @@
           "cta": "フォローアップメールを作成"
         },
         "detailedNotes": {
-          "name": "AI要約",
+          "name": "詳細ノート",
           "description": "決定事項とアクションを含む正確で網羅的な会議ノート"
         },
         "makeTodos": {
@@ -3056,6 +3058,7 @@
       "managerTitle": "テンプレートとアクション",
       "manage": "テンプレートを管理...",
       "select": "テンプレートを選択",
+      "regenerate": "再生成",
       "addTemplate": "新しいテンプレート",
       "editTemplate": "テンプレートを編集",
       "namePlaceholder": "テンプレート名",
@@ -3337,7 +3340,7 @@
         "chips": {
           "catchUp": "最新情報をまとめて",
           "keyDecisions": "重要な決定事項を一覧に",
-          "inFlight": "進行中のプロジェクトを表示"
+          "openActionItems": "未完了のアクションアイテムを一覧に"
         }
       },
       "invite": "招待",
@@ -3802,7 +3805,10 @@
       "typeMessage": "メッセージを入力...",
       "send": "送信",
       "voiceDraftStreamingOnly": "現在の文字起こしプロバイダーはライブ音声入力のみに対応しているため、音声入力は利用できません。設定 → 音声テキスト変換 で別のプロバイダーを選択してください。",
-      "commands": "コマンド"
+      "commands": "コマンド",
+      "slashNavigate": "で移動",
+      "slashSelect": "で選択",
+      "slashClose": "で閉じる"
     },
     "tools": {
       "search_notesName": "ノートを検索",
@@ -4654,15 +4660,10 @@
   },
   "embeddedChat": {
     "askPlaceholder": "ノートについて何でも質問",
-    "title": "チャット",
-    "emptyState": "このノートについて質問してください",
-    "dock": "サイドバーに固定",
-    "undock": "サイドバーから外す",
     "close": "チャットを閉じる",
     "newChat": "新しいチャット",
     "conversationSelector": "会話を切り替え",
     "history": "履歴",
-    "quickActions": "クイックアクション",
     "generateSummary": "要約を作成"
   },
   "transcriptionPreview": {

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { Plus, Sparkles } from "../icons";
 import { useToast } from "../ui/useToast";
+import { PanelResizeHandle } from "../ui/PanelResizeHandle";
 import NoteEditor from "./NoteEditor";
 import SpacesTree from "./SpacesTree";
 import { ContainerOverview } from "./overview/ContainerOverview";
@@ -10,6 +11,7 @@ import NotesStructureIntroDialog from "./NotesStructureIntroDialog";
 import ActionManagerDialog from "./ActionManagerDialog";
 import AddNotesToFolderDialog from "./AddNotesToFolderDialog";
 import { useActionProcessing } from "../../hooks/useActionProcessing";
+import { useResizableWidth } from "../../hooks/useResizableWidth";
 import type { NoteMoveTarget } from "../../hooks/useNoteDragAndDrop";
 import type { ActionItem, ActionKind, NoteItem } from "../../types/electron";
 import { buildNoteRunInput } from "../../helpers/templatePrompts";
@@ -127,6 +129,12 @@ interface PersonalNotesViewProps {
   onInvitationEntryHandled?: () => void;
 }
 
+// The list's CSS cap: 30% of the view it shares with the note.
+function notesListMaxWidth(panel: HTMLElement): number {
+  const view = panel.parentElement?.parentElement;
+  return Math.floor((view?.clientWidth ?? Infinity) * 0.3);
+}
+
 export default function PersonalNotesView({
   onOpenSettings,
   meetingRecordingRequest,
@@ -140,6 +148,14 @@ export default function PersonalNotesView({
   const notes = useNotes();
   const activeNoteId = useActiveNoteId();
   const isSidePanelLayout = isMeetingMode || (isNarrowWindow && activeNoteId != null);
+  const notesListResize = useResizableWidth<HTMLDivElement>({
+    storageKey: "notesSidebarWidth",
+    edge: "end",
+    min: 180,
+    max: 420,
+    getDragMax: notesListMaxWidth,
+  });
+  const notesListWidth = notesListResize.width ?? 208;
   const activeFolderId = useActiveFolderId();
   const [isSaving, setIsSaving] = useState(false);
   const [draft, setDraftState] = useState<NoteEditorDraft | null>(null);
@@ -717,10 +733,24 @@ export default function PersonalNotesView({
   return (
     <div className="flex h-full">
       <div
-        className="shrink-0 overflow-hidden transition-[width] duration-300 ease-out"
-        style={{ width: isSidePanelLayout ? 0 : "13rem" }}
+        className={cn(
+          // A wide list never takes more than 30% of the window, so the note and its chat keep room.
+          "max-w-[30%] shrink-0 overflow-hidden transition-[width] duration-300 ease-out",
+          // Follows the pointer while it's dragged; the transition is for collapsing.
+          notesListResize.isResizing && "transition-none"
+        )}
+        style={{ width: isSidePanelLayout ? 0 : notesListWidth }}
       >
-        <div className="w-52 shrink-0 border-e border-border dark:border-white/10 flex flex-col h-full">
+        <div
+          ref={notesListResize.panelRef}
+          className="relative max-w-full shrink-0 border-e border-border dark:border-white/10 flex flex-col h-full"
+          style={{ width: notesListWidth }}
+        >
+          <PanelResizeHandle
+            edge="end"
+            isResizing={notesListResize.isResizing}
+            onPointerDown={notesListResize.startResize}
+          />
           <div className="px-2 pt-2 pb-1 shrink-0 space-y-0.5">
             <button
               onClick={() => setManagerKind("template")}
