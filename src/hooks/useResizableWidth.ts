@@ -69,8 +69,11 @@ export function useResizableWidth<T extends HTMLElement>({
         handle.removeEventListener("pointercancel", end);
         setIsResizing(false);
         if (next === null) return;
+        // What the panel shows, which a CSS cap (the docked chat's 70%) can hold below the drag.
+        const settled = Math.round(panel.getBoundingClientRect().width);
+        setWidth(settled);
         try {
-          localStorage.setItem(storageKey, String(next));
+          localStorage.setItem(storageKey, String(settled));
         } catch {
           // The width still applies until the app restarts.
         }
