@@ -128,8 +128,10 @@ export function ChatInput({
   const isCompactNote = variant === "note" && !outlined;
   // These variants send with a 32px circle; the mic takes the same circle so the two swap in place.
   const hasRoundSend = variant === "assistant" || variant === "note" || variant === "sidebar";
-  // Centers a 32px control on one line of the outlined composer's 36px row.
-  const outlinedRowCenter = outlined && "mb-0.5";
+  // These composers are 48px tall at rest with bottom-anchored controls, which these margins
+  // center on the first line: the outlined note composer, and the docked one until it expands.
+  const centersFirstLine = outlined || variant === "sidebar";
+  const rowCenter = centersFirstLine && "mb-0.5";
 
   const isIdle = agentState === "idle";
   const isListening = agentState === "listening";
@@ -277,7 +279,7 @@ export function ChatInput({
         className={cn(
           "flex items-center gap-2 min-h-11",
           variant === "sidebar"
-            ? "h-14 items-end rounded-2xl bg-background ps-3.5 pe-2 py-1.5 focus-within:h-40 dark:bg-surface-1"
+            ? "h-12 items-end rounded-2xl bg-background ps-3.5 pe-2 py-1.5 focus-within:h-40 dark:bg-surface-1"
             : "rounded-3xl ps-4 pe-1.5 py-1.5",
           isCompactNote && "h-12 overflow-hidden",
           variant === "assistant"
@@ -442,8 +444,8 @@ export function ChatInput({
                 className={cn(
                   "flex items-center justify-center w-7 h-7 rounded-full shrink-0",
                   expandOnFocus && COLLAPSED_ROW_CENTER,
-                  // Centers the 28px stop on one line of the outlined composer's 36px row.
-                  outlined && "mb-1",
+                  // The 28px stop's share of the same centering.
+                  centersFirstLine && "mb-1",
                   "text-muted-foreground/70 hover:text-foreground hover:bg-foreground/8",
                   "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
                   "transition-colors duration-100"
@@ -462,7 +464,7 @@ export function ChatInput({
                 aria-label={t("agentMode.input.send")}
                 className={cn(
                   "rounded-full shrink-0",
-                  outlinedRowCenter,
+                  rowCenter,
                   voiceDraft && "animate-[scale-in_0.15s_ease-out_backwards]",
                   "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
                   "transition-all duration-100",
@@ -500,7 +502,7 @@ export function ChatInput({
                 className={cn(
                   "flex items-center justify-center rounded-full shrink-0",
                   hasRoundSend ? "size-8" : cn("w-7 h-7", expandOnFocus && COLLAPSED_ROW_CENTER),
-                  outlinedRowCenter,
+                  rowCenter,
                   "animate-[scale-in_0.15s_ease-out_backwards]",
                   GRADIENT_CIRCLE,
                   "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
