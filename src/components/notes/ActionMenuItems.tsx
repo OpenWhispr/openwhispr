@@ -1,8 +1,9 @@
 import { useTranslation } from "react-i18next";
-import { Settings2, Sparkles, MessageSquareText } from "../icons";
+import { Settings2 } from "../icons";
 import { DropdownMenuItem, DropdownMenuSeparator } from "../ui/dropdown-menu";
 import { getActionName, getActionDescription } from "../../stores/actionStore";
 import type { ActionItem } from "../../types/electron";
+import { getActionIcon } from "./actionIcons";
 
 export interface ActionMenuItemsProps {
   /** Actions only; templates have their own picker. */
@@ -36,7 +37,7 @@ export default function ActionMenuItems({
   return (
     <>
       {actions.map((action) => {
-        const OutputIcon = action.output === "summary" ? Sparkles : MessageSquareText;
+        const Icon = getActionIcon(action);
         return (
           <DropdownMenuItem
             key={action.id}
@@ -44,7 +45,7 @@ export default function ActionMenuItems({
             disabled={!canRun(action)}
             className="text-xs gap-2.5 rounded-md px-2.5 py-1.5"
           >
-            <OutputIcon size={12} className="text-accent/50 shrink-0" />
+            <Icon size={14} className="shrink-0 text-primary" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
                 <span dir="auto" className="font-medium truncate">

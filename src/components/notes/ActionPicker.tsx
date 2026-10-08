@@ -50,7 +50,7 @@ export default function ActionPicker({
           "gap-1.5 ps-3 pe-2.5 disabled:pointer-events-none disabled:opacity-40"
         )}
       >
-        <Icon size={13} className="shrink-0 text-foreground/60" />
+        <Icon size={14} className="shrink-0 text-primary" />
         <span dir="auto" className="max-w-40 truncate">
           {getActionCta(current, t)}
         </span>
