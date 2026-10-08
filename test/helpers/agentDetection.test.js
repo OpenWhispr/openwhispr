@@ -10,6 +10,7 @@ test("stripAgentAddress removes the leading cue and name, keeping the command", 
     "make this formal"
   );
   assert.equal(stripAgentAddress("Max take a note", "Max"), "take a note");
+  assert.equal(stripAgentAddress("7. Jarvis, set a timer", "Jarvis"), "set a timer");
   assert.equal(
     stripAgentAddress("That's everything. OpenWhispr, format this", "OpenWhispr"),
     "That's everything. format this"

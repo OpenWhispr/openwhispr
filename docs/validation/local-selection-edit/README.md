@@ -8,7 +8,7 @@ Question: can a strict response contract and dedicated local edit request fix th
 
 ## Changes and bounded proof
 
-- Shared marker prompt now demonstrates the exact nonce on its own line. Periods, partial/wrong/duplicate markers and trailing junk remain invalid. Format and empty-output failures have typed errors distinct from truncation.
+- Shared marker prompt now places the exact nonce inline at the end of its instruction, with no demonstrated period or newline. Periods, partial/wrong/duplicate markers and trailing junk remain invalid. Format and empty-output failures have typed errors distinct from truncation.
 - Bundled local selection editing uses a dedicated prompt and schema-constrained one-field JSON response. The field is forwarded through renderer config, IPC, local bridge, model manager and llama-server. Strict parsing rejects ambiguous envelopes; decoded text retains quotes, whitespace and literal thinking tags. Default cleanup/chat requests have no schema.
 - Only a confirmed `stop` with real answer content can supply a structured edit. Reasoning-only, unknown completion and truncated responses fail. Validation precedes session banking; cancellation, capture/session/target checks remain.
 - Explicit custom Assistant preferences and dictionary hints are subordinate to the requested edit. The ordinary dictation prompt and automatic language/script conversion no longer alter a local edit. Other providers retain their existing marker route with the corrected contract.

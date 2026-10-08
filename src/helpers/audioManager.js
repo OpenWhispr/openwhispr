@@ -2873,9 +2873,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       });
       selectionConfig.responseFormat = SELECTION_EDIT_RESPONSE_FORMAT;
       selectionConfig.disableThinking = true;
-      if (selectionConfig.textOnlySystemPrompt) {
-        selectionConfig.textOnlySystemPrompt = selectionConfig.systemPrompt;
-      }
       const instruction = this.voiceAgentRequested
         ? text
         : stripAgentAddressPreservingFormatting(
@@ -2890,15 +2887,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         config?.systemPrompt,
         completionMarker
       );
+      if (selectionConfig.textOnlySystemPrompt) {
+        // The text-only retry prompt must carry the same selection-edit
+        // instructions and marker, or a rejected screenshot loses the command.
+        selectionConfig.textOnlySystemPrompt = buildSelectionEditSystemPrompt(
+          selectionConfig.textOnlySystemPrompt,
+          completionMarker
+        );
+      }
       userPrompt = buildSelectionEditUserPrompt(text, capture.text);
-    }
-    if (!isLocalSelection && selectionConfig.textOnlySystemPrompt) {
-      // The text-only retry prompt must carry the same selection-edit
-      // instructions and marker, or a rejected screenshot loses the command.
-      selectionConfig.textOnlySystemPrompt = buildSelectionEditSystemPrompt(
-        selectionConfig.textOnlySystemPrompt,
-        completionMarker
-      );
     }
 
     try {
@@ -2918,20 +2915,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const error = Object.assign(new Error(`Selection edit failed: ${cause.message}`), cause);
       const failures = {
         SELECTION_EDIT_INVALID_RESPONSE: "invalidResponse",
-        SELECTION_EDIT_EMPTY_RESPONSE: "emptyResponse",
         OUTPUT_COMPLETION_UNVERIFIED: "invalidResponse",
+        SELECTION_EDIT_EMPTY_RESPONSE: "emptyResponse",
+        [EMPTY_OUTPUT_MESSAGE_KEY]: "emptyResponse",
         OUTPUT_TRUNCATED: "truncatedResponse",
+        [TRUNCATED_OUTPUT_MESSAGE_KEY]: "truncatedResponse",
       };
-      const outputCode =
-        cause.messageKey === EMPTY_OUTPUT_MESSAGE_KEY
-          ? "SELECTION_EDIT_EMPTY_RESPONSE"
-          : cause.messageKey === TRUNCATED_OUTPUT_MESSAGE_KEY
-            ? "OUTPUT_TRUNCATED"
-            : cause.code;
-      const failure = failures[outputCode];
-      error.code = failure
-        ? `SELECTION_EDIT_${outputCode.replace(/^SELECTION_EDIT_/, "")}`
-        : cause.code || "SELECTION_EDIT_REASONING_FAILED";
+      const failure = failures[cause.messageKey] || failures[cause.code];
+      error.code = cause.code || "SELECTION_EDIT_REASONING_FAILED";
       error.messageKey = failure
         ? `hooks.audioRecording.selectionEditing.${failure}`
         : cause.messageKey || "hooks.audioRecording.selectionEditing.reasoningFailed";

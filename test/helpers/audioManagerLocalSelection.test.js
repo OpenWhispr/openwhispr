@@ -93,12 +93,12 @@ test("invalid, empty and truncated local edits fail before banking the captured 
     ['{"replacement":" "}', "SELECTION_EDIT_EMPTY_RESPONSE", "emptyResponse"],
     [
       Object.assign(new Error("truncated"), { code: "OUTPUT_TRUNCATED" }),
-      "SELECTION_EDIT_OUTPUT_TRUNCATED",
+      "OUTPUT_TRUNCATED",
       "truncatedResponse",
     ],
     [
       Object.assign(new Error("unknown finish"), { code: "OUTPUT_COMPLETION_UNVERIFIED" }),
-      "SELECTION_EDIT_OUTPUT_COMPLETION_UNVERIFIED",
+      "OUTPUT_COMPLETION_UNVERIFIED",
       "invalidResponse",
     ],
   ];
@@ -246,12 +246,12 @@ test("non-local empty and truncated failures use selection recovery and retain p
   const causes = [
     [
       emptyOutputError(),
-      "SELECTION_EDIT_EMPTY_RESPONSE",
+      "SELECTION_EDIT_REASONING_FAILED",
       "hooks.audioRecording.selectionEditing.emptyResponse",
     ],
     [
       truncatedOutputError(),
-      "SELECTION_EDIT_OUTPUT_TRUNCATED",
+      "SELECTION_EDIT_REASONING_FAILED",
       "hooks.audioRecording.selectionEditing.truncatedResponse",
     ],
     [

@@ -192,7 +192,8 @@ function locateAgentAddress(
   transcript: string,
   agentName: string,
   language?: string,
-  snippets?: Snippet[] | null
+  snippets?: Snippet[] | null,
+  refinePrefix = false
 ): AgentAddress | null {
   const name = agentName.trim();
   if (!name || name.length < 2) return null;
@@ -255,9 +256,9 @@ function locateAgentAddress(
           ? nameEnd + 1
           : nameEnd;
         const start = cueBefore ? i - 1 : i;
-        // Refine only the prefix of the first match: "B. OpenWhispr"
-        // must prefer "OpenWhispr", without extending a fuzzy name over
-        // a following operand ("OpenWhisp, R.").
+        // Selection edits refine only the prefix of the first match:
+        // "B. OpenWhispr" must prefer "OpenWhispr", without extending a fuzzy
+        // name over a following operand ("OpenWhisp, R.").
         if (!address) searchEnd = nameEnd;
         bestDistance = distance;
         address = {
@@ -268,6 +269,7 @@ function locateAgentAddress(
           sourceEnd: originAt(wordStarts[addressEnd - 1] + rawWords[addressEnd - 1].length - 1) + 1,
           sourceIsNfc: normalizeCjk,
         };
+        if (!refinePrefix) return address;
       }
     }
   }
@@ -310,7 +312,7 @@ export function stripAgentAddressPreservingFormatting(
   language?: string,
   snippets?: Snippet[] | null
 ): string {
-  const address = locateAgentAddress(transcript, agentName, language, snippets);
+  const address = locateAgentAddress(transcript, agentName, language, snippets, true);
   if (!address) return transcript;
   let { sourceStart: start, sourceEnd: end } = address;
   if (address.sourceIsNfc && transcript !== transcript.normalize("NFC")) {

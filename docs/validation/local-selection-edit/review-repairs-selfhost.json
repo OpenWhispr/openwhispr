@@ -1,7 +1,7 @@
 {
   "revision": "review repair working tree",
   "evidence": "live inference through actual custom and LAN adapters into parent-owned loopback Qwen server; no vendor cloud or native acceptance",
-  "model": "/Users/joshuadavidpadoa/.cache/openwhispr/models/Qwen_Qwen3.5-2B-Q4_K_M.gguf",
+  "model": "Qwen_Qwen3.5-2B-Q4_K_M.gguf",
   "build": "b9763-dec5ca557",
   "context": 16384,
   "rows": [
@@ -49,8 +49,8 @@
       "response": {
         "models": [
           {
-            "name": "/Users/joshuadavidpadoa/.cache/openwhispr/models/Qwen_Qwen3.5-2B-Q4_K_M.gguf",
-            "model": "/Users/joshuadavidpadoa/.cache/openwhispr/models/Qwen_Qwen3.5-2B-Q4_K_M.gguf",
+            "name": "Qwen_Qwen3.5-2B-Q4_K_M.gguf",
+            "model": "Qwen_Qwen3.5-2B-Q4_K_M.gguf",
             "modified_at": "",
             "size": "",
             "digest": "",
@@ -72,9 +72,9 @@
         "object": "list",
         "data": [
           {
-            "id": "/Users/joshuadavidpadoa/.cache/openwhispr/models/Qwen_Qwen3.5-2B-Q4_K_M.gguf",
+            "id": "Qwen_Qwen3.5-2B-Q4_K_M.gguf",
             "aliases": [
-              "/Users/joshuadavidpadoa/.cache/openwhispr/models/Qwen_Qwen3.5-2B-Q4_K_M.gguf"
+              "Qwen_Qwen3.5-2B-Q4_K_M.gguf"
             ],
             "tags": [],
             "object": "model",
@@ -127,7 +127,7 @@
           }
         ],
         "created": 1791336761,
-        "model": "/Users/joshuadavidpadoa/.cache/openwhispr/models/Qwen_Qwen3.5-2B-Q4_K_M.gguf",
+        "model": "Qwen_Qwen3.5-2B-Q4_K_M.gguf",
         "system_fingerprint": "b9763-dec5ca557",
         "object": "chat.completion",
         "usage": {
@@ -186,7 +186,7 @@
           }
         ],
         "created": 1791336762,
-        "model": "/Users/joshuadavidpadoa/.cache/openwhispr/models/Qwen_Qwen3.5-2B-Q4_K_M.gguf",
+        "model": "Qwen_Qwen3.5-2B-Q4_K_M.gguf",
         "system_fingerprint": "b9763-dec5ca557",
         "object": "chat.completion",
         "usage": {
@@ -248,7 +248,7 @@
           }
         ],
         "created": 1791336763,
-        "model": "/Users/joshuadavidpadoa/.cache/openwhispr/models/Qwen_Qwen3.5-2B-Q4_K_M.gguf",
+        "model": "Qwen_Qwen3.5-2B-Q4_K_M.gguf",
         "system_fingerprint": "b9763-dec5ca557",
         "object": "chat.completion",
         "usage": {
@@ -310,7 +310,7 @@
           }
         ],
         "created": 1791336764,
-        "model": "/Users/joshuadavidpadoa/.cache/openwhispr/models/Qwen_Qwen3.5-2B-Q4_K_M.gguf",
+        "model": "Qwen_Qwen3.5-2B-Q4_K_M.gguf",
         "system_fingerprint": "b9763-dec5ca557",
         "object": "chat.completion",
         "usage": {

@@ -8,11 +8,11 @@
 
 **Tech stack:** Electron, React, TypeScript/JavaScript, Node 24, node:test + tsx, llama-server's existing JSON response-format support. No new runtime dependency, provider, setting, or approval UI.
 
-**Spec:** `/Users/joshuadavidpadoa/dev/titan/artefacts/reports/2026-10-06-local-selection-edit-rca.md` and `/Users/joshuadavidpadoa/dev/titan/docs/handovers/2026-10-06-local-selection-edit-implementation-next.md`.
+**Spec:** the 2026-10-06 local selection-edit RCA and implementation handover (kept outside this repository).
 
 ## Global constraints
 
-- Base: `f770e9211` (`origin/main`), implementation checkout `/Users/joshuadavidpadoa/dev/ow-local-selection-edit-20261006`; main agent owns branch/worktree lifecycle.
+- Base: `f770e9211` (`origin/main`); main agent owns branch/worktree lifecycle.
 - Do not alter `/Applications/OpenWhispr.app`, production profiles/settings, real notes, or concurrent work. Synthetic fixtures and a disposable development profile only.
 - Do not merge, deploy, release, send external messages, switch local text to cloud, change the default model, or redesign the product.
 - Preserve nonempty output, exact contract, truncation, cancellation, captured session, and target checks. An empty response is never permission to delete the selection. A legitimate unchanged response remains allowed.
@@ -70,7 +70,7 @@ Changes since the investigated checkout that affect the repair:
   ```js
   const marker = "__OPENWHISPR_SELECTION_COMPLETE_regression__";
   const prompt = buildSelectionEditSystemPrompt("custom preference", marker);
-  assert.ok(prompt.split("\n").includes(marker));
+  assert.ok(prompt.endsWith(`: ${marker}`));
   assert.ok(!prompt.includes(marker + "."));
   assert.throws(
     () => extractSelectionEditReplacement("Edited" + marker + ".", marker),
@@ -82,7 +82,7 @@ Changes since the investigated checkout that affect the repair:
   );
   ```
 
-- [x] Run `node --import tsx --test test/helpers/selectionEditing.test.js` and retain the baseline failures. Then put the exact marker on its own instruction line, explicitly forbid anything after it, and require exactly one occurrence. Preserve replacement whitespace and the nonblank guard. Missing/wrong/partial/duplicate/trailing-junk marker responses are invalid responses, not proof of token truncation.
+- [x] Run `node --import tsx --test test/helpers/selectionEditing.test.js` and retain the baseline failures. Then put the exact marker inline at the end of its instruction, with no demonstrated period or newline, explicitly forbid anything after it, and require exactly one occurrence. Preserve replacement whitespace and the nonblank guard. Missing/wrong/partial/duplicate/trailing-junk marker responses are invalid responses, not proof of token truncation.
 - [x] Add `extractLocalSelectionEditReplacement(result)` with a strict lexical envelope for exactly `{"replacement": <JSON string>}` before `JSON.parse`. An anchored one-property envelope rejects duplicate/extra keys that `JSON.parse` alone loses. Parse the entire matched object; JSON.parse still validates escapes/control characters. Require a nonblank string and return it without trimming. Reject fences, prefixes, suffixes, arrays, null, wrong types and duplicate keys.
 - [x] Pin exact round trips and typed rejection cases:
 
