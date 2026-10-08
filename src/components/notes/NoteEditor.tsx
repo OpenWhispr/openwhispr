@@ -282,15 +282,14 @@ export default function NoteEditor({
     selectedViewMode === "enhanced" && !enhancement ? "raw" : selectedViewMode;
   const [chatMode, setChatMode] = useState<EmbeddedChatMode>("hidden");
   const [chatDraft, setChatDraft] = useState("");
-  const handleChatModeChange = useCallback((mode: EmbeddedChatMode) => {
+  const closeChat = useCallback(() => {
     if (
-      mode === "hidden" &&
       document.activeElement instanceof HTMLElement &&
       document.activeElement.closest("[data-note-chat-panel]")
     ) {
       document.activeElement.blur();
     }
-    setChatMode(mode);
+    setChatMode("hidden");
   }, []);
   const [folderSearch, setFolderSearch] = useState("");
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
@@ -905,10 +904,10 @@ export default function NoteEditor({
         return;
       }
       // Uncover the summary the action rewrites; a docked chat already sits beside it.
-      if (chatMode === "floating") handleChatModeChange("hidden");
+      if (chatMode === "floating") closeChat();
       onRunNoteAction?.(action);
     },
-    [chatMode, handleChatAction, handleChatModeChange, onRunNoteAction]
+    [chatMode, closeChat, handleChatAction, onRunNoteAction]
   );
   const offersActions =
     !isRecording &&
@@ -938,8 +937,6 @@ export default function NoteEditor({
     onRunAction: runAction,
     onManageActions: () => onManageActions?.("action"),
   };
-
-  const closeChat = useCallback(() => handleChatModeChange("hidden"), [handleChatModeChange]);
 
   const handleChatInputFocus = useCallback(() => {
     if (chatMode === "hidden") {

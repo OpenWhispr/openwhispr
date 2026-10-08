@@ -3,6 +3,7 @@ import { useChatPersistence } from "../components/chat/useChatPersistence";
 import { useChatStreaming, type SendToAIOptions } from "../components/chat/useChatStreaming";
 import { useChatMessageSender } from "../components/chat/useChatMessageSender";
 import type { Message, AgentState } from "../components/chat/types";
+import { deriveConversationTitle } from "../lib/conversationTitle";
 import { attendeesForUser } from "../utils/noteAttendees";
 import type { CalendarAttendee } from "../types/calendar";
 import type { NoteAttendeesRequest } from "../types/connectors";
@@ -175,7 +176,10 @@ export function useEmbeddedChat({
 
   const createConversation = useCallback(
     async (text: string) => {
-      const id = await persistence.createConversation(`Note: ${noteTitle || "Untitled"}`, noteId);
+      const id = await persistence.createConversation(
+        deriveConversationTitle(text, `Note: ${noteTitle || "Untitled"}`),
+        noteId
+      );
       void fetchNoteConversations();
       return id;
     },

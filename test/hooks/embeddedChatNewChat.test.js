@@ -26,8 +26,8 @@ const MOCKS = {
       return {
         messages,
         setMessages,
-        createConversation: async () => {
-          globalThis.__created += 1;
+        createConversation: async (title) => {
+          globalThis.__created.push(title);
           return 2;
         },
         saveUserMessage: async () => {},
@@ -48,7 +48,7 @@ test("a message sent into a new chat leaves the open conversation behind", async
     delete globalThis.__created;
   });
   globalThis.__sent = [];
-  globalThis.__created = 0;
+  globalThis.__created = [];
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
@@ -76,7 +76,7 @@ test("a message sent into a new chat leaves the open conversation behind", async
 
   await React.act(async () => chat.sendMessage("Follow-up"));
   assert.deepEqual(globalThis.__sent, [["Earlier question", "Follow-up"]]);
-  assert.equal(globalThis.__created, 0, "a plain send continues it");
+  assert.deepEqual(globalThis.__created, [], "a plain send continues it");
 
   await React.act(async () => chat.sendInNewChat("New question"));
   assert.deepEqual(
@@ -84,5 +84,9 @@ test("a message sent into a new chat leaves the open conversation behind", async
     ["New question"],
     "no earlier messages reach the model"
   );
-  assert.equal(globalThis.__created, 1, "and the message starts a conversation of its own");
+  assert.deepEqual(
+    globalThis.__created,
+    ["New question"],
+    "and the message starts a conversation of its own, named after it"
+  );
 });
