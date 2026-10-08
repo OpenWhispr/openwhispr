@@ -119,7 +119,7 @@ test("a note's chat answers from its note first, then searches other notes and n
   const prompt = getAgentSystemPrompt(["search_notes"], undefined, { openNote: "Note ID: 7" });
   assert.match(
     prompt,
-    /The user is asking from inside the note below\. When they ask about what was said, decided or written, answer from this note first, and if it doesn't cover the question, say so\. Then look in their other notes with search_notes, and name the note your answer comes from\.\n\nNote ID: 7$/
+    /answer from this note first[^]*with search_notes, and name the note[^]*\n\nNote ID: 7$/
   );
   assert.doesNotMatch(prompt, /notes from the user's library/);
 

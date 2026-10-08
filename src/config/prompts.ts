@@ -101,7 +101,6 @@ const TOOL_GROUPS: Record<string, string> = {
 const CAPABILITY_RULE =
   "Use a tool when the request needs what it provides, rather than guessing from memory; don't call one when the conversation or the context provided here already has the answer. Never tell the user you can't do something one of these tools covers (for example, never say you can't browse the web when web search is listed). If a tool call fails, say that it failed rather than claiming you lack the ability.";
 
-// A note's chat answers from its note; other notes come second, and named.
 const OPEN_NOTE_RULE =
   "The user is asking from inside the note below. When they ask about what was said, decided or written, answer from this note first, and if it doesn't cover the question, say so.";
 const OPEN_NOTE_SEARCH_RULE =

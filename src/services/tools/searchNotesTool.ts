@@ -104,11 +104,6 @@ export function createSearchNotesTool(options: SearchToolOptions): ToolDefinitio
   };
 }
 
-// Only the note chat's own attendee block may carry its fence.
-function preview(text: string): string {
-  return withoutAttendeesFence(text.slice(0, MAX_CONTENT_LENGTH));
-}
-
 function summaryText(
   count: number,
   query: string,
@@ -140,7 +135,9 @@ async function executeLocalSearch(
     date: note.created_at,
     type: note.note_type,
     space: spaceNameById.get(note.space_id) ?? null,
-    content: preview(note.enhanced_content || note.content),
+    content: withoutAttendeesFence(
+      (note.enhanced_content || note.content).slice(0, MAX_CONTENT_LENGTH)
+    ),
   }));
 
   return {
@@ -175,7 +172,9 @@ async function executeCloudSearch(
       type: cn.note_type,
       score: cn.score,
       space: cn.space_id ? (spaceNameByCloudId.get(cn.space_id) ?? null) : privateSpaceName,
-      content: preview(cn.enhanced_content || cn.content),
+      content: withoutAttendeesFence(
+        (cn.enhanced_content || cn.content).slice(0, MAX_CONTENT_LENGTH)
+      ),
     }))
   );
 
