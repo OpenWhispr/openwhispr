@@ -118,11 +118,12 @@ export default function EmbeddedChat({
 
   const header = (
     <div
-      className={cn("flex items-center shrink-0", mode === "sidebar" ? "h-16 px-6" : "h-9 px-3")}
+      className={cn("flex items-center shrink-0", mode === "sidebar" ? "h-14 px-5" : "h-9 px-3")}
     >
       {headerTitle}
       <div className="flex-1" />
-      <div className="flex items-center gap-0.5">
+      {/* Docked, the icons sit as far from the right edge as the clock does from the left. */}
+      <div className={cn("flex items-center", mode === "sidebar" ? "-me-2 gap-3" : "gap-0.5")}>
         {mode === "floating" ? (
           <button
             onClick={() => onModeChange("sidebar")}
@@ -138,7 +139,7 @@ export default function EmbeddedChat({
             className="flex size-8 items-center justify-center rounded-full text-foreground/65 transition-colors hover:bg-foreground/6 hover:text-foreground"
             aria-label={t("embeddedChat.newChat")}
           >
-            <Plus size={18} />
+            <Plus size={16} />
           </button>
         )}
         <button
@@ -149,7 +150,7 @@ export default function EmbeddedChat({
           )}
           aria-label={t("embeddedChat.close")}
         >
-          <X size={mode === "sidebar" ? 18 : 13} />
+          <X size={mode === "sidebar" ? 16 : 13} />
         </button>
       </div>
     </div>

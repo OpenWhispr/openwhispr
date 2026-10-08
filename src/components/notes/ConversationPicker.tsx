@@ -40,12 +40,12 @@ export function ConversationPicker({
           className={cn(
             "inline-flex items-center rounded-md transition-colors duration-150 outline-none hover:bg-foreground/5",
             variant === "sidebar"
-              ? "gap-2 px-1 py-1 text-sm text-foreground/65 hover:text-foreground"
+              ? "-ms-1 gap-2.5 px-1 py-1 text-sm text-foreground/65 hover:text-foreground"
               : "-ms-1.5 gap-1 px-1.5 py-0.5 text-xs font-medium text-foreground/50 hover:text-foreground/70"
           )}
           aria-label={t("embeddedChat.conversationSelector")}
         >
-          {variant === "sidebar" && <Clock size={18} className="shrink-0" />}
+          {variant === "sidebar" && <Clock size={16} className="shrink-0" />}
           <span className={cn("truncate max-w-40", titleClassName)}>
             {variant === "sidebar"
               ? t("embeddedChat.history")
