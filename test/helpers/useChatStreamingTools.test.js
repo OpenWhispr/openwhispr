@@ -598,15 +598,17 @@ async function renderNoteChat(
     }
   );
   const prompts = [];
+  const configs = [];
   rendered.reasoningService.processTextStreamingCloud.mock.mockImplementation(
     (_messages, config) => {
       prompts.push(config.systemPrompt);
+      configs.push(config);
       return (async function* () {
         yield { type: "done", finishReason: "stop" };
       })();
     }
   );
-  return { ...rendered, lookups, prompts };
+  return { ...rendered, lookups, prompts, configs };
 }
 
 test("a note chat with connectors lists the note's attendees and how to read 'everyone'", async (t) => {
@@ -707,7 +709,7 @@ function libraryWithOneHit(searches) {
 
 test("a note's chat answers from its note and adds no other notes up front", async (t) => {
   const searches = [];
-  const { captured, prompts } = await renderNoteChat(
+  const { captured, prompts, configs } = await renderNoteChat(
     t,
     {},
     { electronAPI: libraryWithOneHit(searches) }
@@ -715,13 +717,15 @@ test("a note's chat answers from its note and adds no other notes up front", asy
   await captured.sendToAI("What price are we testing?", []);
 
   assert.deepEqual(searches, []);
+  // The server leaves out memories of other conversations too.
+  assert.equal(configs[0].noteChat, true);
   assert.match(prompts[0], /inside the note below\.[^\n]*\n\nNote ID: 7\nTitle: Kickoff/);
   assert.doesNotMatch(prompts[0], /notes from the user's library/);
 });
 
 test("a chat that isn't about a note still lists the library notes a question finds", async (t) => {
   const searches = [];
-  const { captured, prompts } = await renderNoteChat(
+  const { captured, prompts, configs } = await renderNoteChat(
     t,
     { openNote: undefined, noteMeeting: undefined },
     { electronAPI: libraryWithOneHit(searches) }
@@ -729,6 +733,7 @@ test("a chat that isn't about a note still lists the library notes a question fi
   await captured.sendToAI("What price are we testing?", []);
 
   assert.deepEqual(searches, ["What price are we testing?"]);
+  assert.equal(configs[0].noteChat, undefined);
   assert.match(
     prompts[0],
     /notes from the user's library[^]*<note id="3" title="Pricing sync Sep 29">\nTesting \$15 against \$12/

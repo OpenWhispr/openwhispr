@@ -627,6 +627,8 @@ export function useChatStreaming({
               })),
               executeToolCall,
               ...(cloudScreenContext ? { screenContext: cloudScreenContext } : {}),
+              // So the server keeps memories of other conversations out of a note's chat.
+              ...(openNoteRef.current ? { noteChat: true } : {}),
             });
           } else {
             const aiTools = registry?.toAISDKFormat(
