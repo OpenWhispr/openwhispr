@@ -119,6 +119,9 @@ class HotkeyManager extends EventEmitter {
     this.hyprlandRegistrationReady = Promise.resolve();
     this.kdeManager = null;
     this.useKDE = false;
+    // Until GNOME or Hyprland binds the saved hotkey, the dictation slot holds a
+    // placeholder, so a mode change must not re-register it.
+    this.nativeRegistrationPending = false;
     // Injected by main.js: LinuxKeyManager or WindowsKeyManager checkAvailability.
     // Kept as a function so this module never requires the manager it asks about.
     this.nativeListenerProbe = null;
@@ -561,6 +564,12 @@ class HotkeyManager extends EventEmitter {
         });
       }
       return false;
+    }
+
+    // The pending registration binds the saved hotkey in this mode.
+    if (this.nativeRegistrationPending) {
+      this.activationMode = nextMode;
+      return true;
     }
 
     let success = true;
@@ -1054,6 +1063,7 @@ class HotkeyManager extends EventEmitter {
 
       if (gnomeOk) {
         const registerGnomeHotkey = async () => {
+          this.nativeRegistrationPending = false;
           try {
             const hotkey = await this.getSavedDictationHotkey();
             const success = await this.registerGnomeDictationHotkey(hotkey, callback);
@@ -1080,6 +1090,7 @@ class HotkeyManager extends EventEmitter {
           }
         };
 
+        this.nativeRegistrationPending = true;
         setTimeout(registerGnomeHotkey, HOTKEY_REGISTRATION_DELAY_MS);
         this.isInitialized = true;
         return;
@@ -1096,6 +1107,7 @@ class HotkeyManager extends EventEmitter {
 
       if (hyprlandOk) {
         const registerHyprlandHotkey = async () => {
+          this.nativeRegistrationPending = false;
           try {
             const hotkey = await this.getSavedDictationHotkey();
 
@@ -1128,6 +1140,7 @@ class HotkeyManager extends EventEmitter {
           }
         };
 
+        this.nativeRegistrationPending = true;
         this.hyprlandRegistrationReady = new Promise((resolve) =>
           setTimeout(resolve, HOTKEY_REGISTRATION_DELAY_MS)
         ).then(registerHyprlandHotkey);

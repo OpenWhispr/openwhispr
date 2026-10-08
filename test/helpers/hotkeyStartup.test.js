@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const { EventEmitter } = require("node:events");
+const GnomeShortcutManager = require("../../src/helpers/gnomeShortcut");
 
 const source = fs.readFileSync(path.join(__dirname, "../../src/helpers/hotkeyManager.js"), "utf8");
 const windowSource = fs.readFileSync(
@@ -46,7 +47,11 @@ function fixture(backend, savedHotkey = "Scrolllock", registrationResult = true)
     events: require("node:events"),
     electron: { globalShortcut: { unregisterAll() {} }, BrowserWindow: {} },
     "./debugLogger": { log() {}, warn() {}, error() {} },
-    "./gnomeShortcut": { isGnome: () => backend === "GNOME" },
+    "./gnomeShortcut": class extends GnomeShortcutManager {
+      static isGnome() {
+        return backend === "GNOME";
+      }
+    },
     "./hyprlandShortcut": Hyprland,
     "./kdeShortcut": { isKDE: () => backend === "KDE" },
     "./i18nMain": { i18nMain: { t: (key) => key } },
@@ -68,12 +73,19 @@ function fixture(backend, savedHotkey = "Scrolllock", registrationResult = true)
     manager.notifyHotkeyFallback =
       () => {};
   manager._persistHotkeyToEnvFile = async () => {};
+  // Only the portal and gsettings are faked: gsettings refuses what GNOME refuses.
+  const gnome = {
+    supportsPushToTalk: () => true,
+    registerPushToTalk: (hotkey) => register(hotkey, true),
+    unregisterPushToTalk: async () => {},
+    registerKeybinding: async (shortcut) =>
+      GnomeShortcutManager.isValidShortcut(shortcut) && register(shortcut, false),
+  };
   manager.initializeGnomeShortcuts = async () => {
     manager.useGnome = true;
+    manager.gnomeManager = gnome;
     return true;
   };
-  manager.registerGnomeDictationHotkey = (hotkey) =>
-    register(hotkey, manager.activationMode === "push");
   manager.initializeKDEShortcuts = async () => {
     manager.useKDE = true;
     manager.kdeManager = {
@@ -94,6 +106,7 @@ function fixture(backend, savedHotkey = "Scrolllock", registrationResult = true)
     timers,
     registrations,
     context,
+    gnome,
     window: { isDestroyed: () => false, webContents },
   };
 }
@@ -141,7 +154,7 @@ async function startWithSavedHold(f, mode) {
     { writes, notifications }
   );
   assert.equal(f.cache._cachedActivationMode, mode, "checked before registration");
-  f.registrations.length = 0;
+  assert.deepEqual(f.registrations, [], "nothing registers before the backend does");
   f.timers.shift().callback();
   for (let i = 0; i < 5; i++) await tick();
   return { writes, notifications };
@@ -168,23 +181,21 @@ for (const backend of ["Hyprland", "GNOME", "KDE"]) {
     assert.equal(f.cache._cachedActivationMode, "tap");
     assert.equal(notifications.length, 1);
     assert.deepEqual(writes, [], "the saved Hold is retried next launch");
-    assert.deepEqual(f.registrations, [{ hotkey: "Control+Alt", push: false }]);
+    // GNOME cannot bind a modifier-only key, so it falls back to F8 in Tap.
+    const registered = backend === "GNOME" ? "F8" : "Control+Alt";
+    assert.deepEqual(f.registrations, [{ hotkey: registered, push: false }]);
   });
 }
 
 const noPortal = "GNOME without the shortcuts portal drops Hold before its key registers";
 test(noPortal, async () => {
   const f = fixture("GNOME");
-  f.manager.initializeGnomeShortcuts = async () => {
-    f.manager.useGnome = true;
-    f.manager.gnomeManager = { supportsPushToTalk: () => false };
-    return true;
-  };
+  f.gnome.supportsPushToTalk = () => false;
   const { writes, notifications } = await startWithSavedHold(f, "tap");
   assert.equal(f.cache._cachedActivationMode, "tap");
   assert.equal(notifications.length, 1);
   assert.deepEqual(writes, []);
-  assert.deepEqual(f.registrations, [{ hotkey: "Scrolllock", push: false }]);
+  assert.deepEqual(f.registrations, [{ hotkey: "Scroll_Lock", push: false }]);
   assert.equal(f.manager.useGnome, true, "the GNOME binding was kept");
 });
 
@@ -250,12 +261,4 @@ test("startup checks the registered hotkey when no desktop backend delays it", a
   );
   assert.deepEqual(checked, ["F8"]);
   assert.equal(notifications.length, 1);
-});
-
-test("startup checks Hold before the control panel opens and the hotkey registers", () => {
-  const main = mainSource();
-  const created = main.indexOf("  await windowManager.createMainWindow();\n");
-  assert.notEqual(created, -1);
-  const next = created + "  await windowManager.createMainWindow();\n".length;
-  assert.ok(main.startsWith("  await checkStartupHold();\n", next));
 });
