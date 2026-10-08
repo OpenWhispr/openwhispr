@@ -676,6 +676,23 @@ test("cloud agent streaming correlates events to the initiating request", async 
   assert.deepEqual(bridge.cleanupCounts, { chunk: 1, error: 1, end: 1 });
 });
 
+test("a note chat's cloud stream tells main it is a note chat", async (t) => {
+  const bridge = createAgentStreamBridge();
+  const { reasoningService } = await loadReasoningService(t, "openwhispr-cloud-agent-note-chat-", {
+    window: { electronAPI: bridge.electronAPI },
+  });
+  const stream = reasoningService.processTextStreamingCloud([{ role: "user", content: "hello" }], {
+    systemPrompt: "Answer the user.",
+    noteChat: true,
+  });
+  const pending = stream.next();
+  await waitForMicrotasks();
+
+  assert.equal(bridge.startCalls[0][2].noteChat, true);
+  reasoningService.cancelActiveStream();
+  await pending;
+});
+
 test("cancelling a cloud agent stream aborts main and ends the local generator", async (t) => {
   const bridge = createAgentStreamBridge();
   const { reasoningService } = await loadReasoningService(

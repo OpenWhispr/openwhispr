@@ -1087,6 +1087,7 @@ class ReasoningService extends BaseReasoningService {
       tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
       // Press-time screenshot; the server routes to its vision chain when present.
       screenContext?: { data: string; mediaType: string };
+      noteChat?: boolean;
     }
   ): {
     stream: AsyncGenerator<
@@ -1193,6 +1194,7 @@ class ReasoningService extends BaseReasoningService {
         toolCallId: string
       ) => Promise<ToolExecutionResult>;
       screenContext?: { data: string; mediaType: string };
+      noteChat?: boolean;
     }
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
     // Capture synchronously so a cancel before the first next() is observed.
@@ -1211,6 +1213,7 @@ class ReasoningService extends BaseReasoningService {
         toolCallId: string
       ) => Promise<ToolExecutionResult>;
       screenContext?: { data: string; mediaType: string };
+      noteChat?: boolean;
     },
     operationGeneration: number
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
@@ -1228,6 +1231,7 @@ class ReasoningService extends BaseReasoningService {
         systemPrompt: config.systemPrompt,
         tools: config.tools,
         screenContext: config.screenContext,
+        noteChat: config.noteChat,
       });
 
       const pendingToolCalls: Array<{ id: string; name: string; arguments: string }> = [];

@@ -118,8 +118,13 @@ interface UseChatStreamingOptions {
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   /** Settings scope the conversation resolves its provider and model from. */
   inferenceScope?: ChatStreamingScope;
-  /** Optional note context to prepend to the system prompt (used by embedded note chat). */
+  /** Notes listed in the system prompt as possibly relevant (container overview chat). */
   noteContext?: string;
+  /**
+   * The note a note's chat is about. The model answers from it first, and no
+   * other notes are added up front: it reaches them through search_notes.
+   */
+  openNote?: string;
   /** Optional container scope applied to RAG and the search_notes tool (container overview chat). */
   searchScope?: ContainerScope;
   /**
@@ -196,6 +201,7 @@ export function useChatStreaming({
   setMessages,
   inferenceScope = "chatIntelligence",
   noteContext: externalNoteContext,
+  openNote,
   searchScope,
   allowConnectors = false,
   nameUnavailableCapabilities = true,
@@ -211,6 +217,8 @@ export function useChatStreaming({
   const messagesRef = useRef<Message[]>([]);
   const noteContextRef = useRef(externalNoteContext);
   noteContextRef.current = externalNoteContext;
+  const openNoteRef = useRef(openNote);
+  openNoteRef.current = openNote;
   const searchScopeRef = useRef(searchScope);
   searchScopeRef.current = searchScope;
   const noteMeetingRef = useRef(noteMeeting);
@@ -460,17 +468,20 @@ export function useChatStreaming({
           },
         });
 
-        // A note action is about the note in context; other notes would only add noise.
+        // A note's chat is about its note: other notes up front would compete with
+        // it, and search_notes still reaches them when it doesn't answer.
         const [ragContext, attendeesContext] = await Promise.all([
-          options?.requestText ? "" : buildRAGContext(userText, scope),
+          openNoteRef.current ? "" : buildRAGContext(userText, scope),
           connectorsOffered ? buildNoteAttendeesContext(noteMeetingRef.current) : "",
         ]);
         if (cancelled() || !mountedRef.current) return;
         // Only main's attendee block may carry its fence: note text and search
         // results can't fake a second list.
-        const combinedContext = [
+        const openNoteContext = [withoutAttendeesFence(openNoteRef.current ?? ""), attendeesContext]
+          .filter(Boolean)
+          .join("\n\n");
+        const libraryContext = [
           withoutAttendeesFence(noteContextRef.current ?? ""),
-          attendeesContext,
           withoutAttendeesFence(ragContext),
         ]
           .filter(Boolean)
@@ -478,9 +489,10 @@ export function useChatStreaming({
         // The user's dictionary rides on every conversation so replies use their
         // jargon — same suffix the dictation prompts carry.
         let systemPrompt = appendDictionarySuffix(
-          getAgentSystemPrompt(registry?.getAll(), combinedContext || undefined, {
+          getAgentSystemPrompt(registry?.getAll(), libraryContext || undefined, {
             unavailable: nameUnavailableCapabilities ? unavailable : [],
             toolTrace: registry !== null,
+            openNote: openNoteContext || undefined,
           }),
           getDictionaryHintWords(settings),
           settings.uiLanguage
@@ -615,6 +627,8 @@ export function useChatStreaming({
               })),
               executeToolCall,
               ...(cloudScreenContext ? { screenContext: cloudScreenContext } : {}),
+              // So the server marks its memories as past conversations, not facts about the note.
+              ...(openNoteRef.current ? { noteChat: true } : {}),
             });
           } else {
             const aiTools = registry?.toAISDKFormat(

@@ -113,3 +113,18 @@ test("unavailable capabilities sit after the tools and before the note context",
   const note = prompt.indexOf("Note ID: 7");
   assert.ok(tools !== -1 && tools < unavailable && unavailable < note);
 });
+
+test("a note's chat answers from its note first, then searches other notes and names the one used", async () => {
+  const { getAgentSystemPrompt } = await load();
+  const prompt = getAgentSystemPrompt(["search_notes"], undefined, { openNote: "Note ID: 7" });
+  assert.match(
+    prompt,
+    /answer from this note first[^]*with search_notes, and name the note[^]*\n\nNote ID: 7$/
+  );
+  assert.doesNotMatch(prompt, /notes from the user's library/);
+
+  // Without search_notes there's nothing to look in.
+  const withoutTools = getAgentSystemPrompt([], undefined, { openNote: "Note ID: 7" });
+  assert.match(withoutTools, /say so\.\n\nNote ID: 7$/);
+  assert.doesNotMatch(withoutTools, /search_notes/);
+});

@@ -2,6 +2,7 @@ import type { SpaceItem } from "../../types/electron";
 import type { ContainerScope } from "../../types/chat";
 import type { ToolDefinition, ToolResult } from "./ToolRegistry";
 import { resolveLocalNoteId, resolveSpace } from "./utils";
+import { withoutAttendeesFence } from "../../utils/noteAttendees";
 
 const MAX_CONTENT_LENGTH = 500;
 
@@ -130,11 +131,13 @@ async function executeLocalSearch(
   const spaceNameById = new Map(spaces.map((s) => [s.id, s.name]));
   const results = notes.map((note) => ({
     id: note.id,
-    title: note.title,
+    title: withoutAttendeesFence(note.title),
     date: note.created_at,
     type: note.note_type,
     space: spaceNameById.get(note.space_id) ?? null,
-    content: (note.enhanced_content || note.content).slice(0, MAX_CONTENT_LENGTH),
+    content: withoutAttendeesFence(
+      (note.enhanced_content || note.content).slice(0, MAX_CONTENT_LENGTH)
+    ),
   }));
 
   return {
@@ -164,12 +167,14 @@ async function executeCloudSearch(
   const results = await Promise.all(
     cloudNotes.map(async (cn) => ({
       id: await resolveLocalNoteId(cn.client_note_id),
-      title: cn.title,
+      title: cn.title && withoutAttendeesFence(cn.title),
       date: cn.created_at,
       type: cn.note_type,
       score: cn.score,
       space: cn.space_id ? (spaceNameByCloudId.get(cn.space_id) ?? null) : privateSpaceName,
-      content: (cn.enhanced_content || cn.content).slice(0, MAX_CONTENT_LENGTH),
+      content: withoutAttendeesFence(
+        (cn.enhanced_content || cn.content).slice(0, MAX_CONTENT_LENGTH)
+      ),
     }))
   );
 
