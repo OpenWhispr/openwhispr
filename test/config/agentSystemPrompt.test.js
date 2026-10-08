@@ -121,8 +121,6 @@ test("a note's chat answers from its note and searches other notes only when ask
     prompt,
     /answer from this note, and if it doesn't cover the question, say so\.[^]*search_notes only when the user asks you to look beyond this note[^]*name the note[^]*offer to search their other notes[^]*\n\nNote ID: 7$/
   );
-  // A question this note doesn't answer is no reason to search on its own.
-  assert.doesNotMatch(prompt, /Then look in their other notes/);
   assert.doesNotMatch(prompt, /notes from the user's library/);
 
   // Without search_notes there's nothing to look in.

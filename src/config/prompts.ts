@@ -106,7 +106,7 @@ const OPEN_NOTE_RULE =
 // Overrides search_notes' "search before answering" line: in a note's chat,
 // answers from other notes read as the chat leaking past its note (#2551).
 const OPEN_NOTE_SEARCH_RULE =
-  'In this chat that comes before the search_notes guidance above: use search_notes only when the user asks you to look beyond this note (for example "check my other notes" or "did this come up in another meeting"), and name the note your answer comes from. When this note doesn\'t cover a question, offer to search their other notes rather than searching them yourself.';
+  'In this chat, this rule overrides the search_notes guidance above: use search_notes only when the user asks you to look beyond this note (for example "check my other notes" or "did this come up in another meeting"), and name the note your answer comes from. When this note doesn\'t cover a question, offer to search their other notes rather than searching them yourself.';
 
 const TOOL_TRACE_RULE =
   "Earlier assistant messages may begin with a [Tools used: …] note that the app added to record the tools you called in that turn. Never write such a note yourself.";
