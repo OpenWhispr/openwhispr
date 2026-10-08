@@ -70,8 +70,8 @@ export function SlowDownloadSheet({
               <View className="flex-row items-center gap-2">
                 <SystemIcon name="cloud.fill" mdName="Cloud" size={16} color="brand" />
                 <Text className="flex-1 text-[13px] leading-[18px] text-secondaryLabel">
-                  Turn the Cloud toggle <Text className="font-semibold text-label">off</Text> on the
-                  home screen to switch to Private once it&apos;s ready.
+                  Turn on <Text className="font-semibold text-label">Private Mode</Text> in Settings
+                  → AI Models to switch once it&apos;s ready.
                 </Text>
               </View>
             </View>

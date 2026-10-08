@@ -70,7 +70,7 @@ function scopesToPin(leavingMode: ProcessingMode): MobileInferenceScope[] {
   return leavingMode === 'private' ? ['upload', 'notes', 'agent'] : ['upload', 'notes'];
 }
 
-// The Home toggle and the Dictation page both own the dictation mode;
+// The Private Mode switch and the Dictation page both own the dictation mode;
 // writing the scope selection alongside defaultMode keeps routing and UI in step.
 export function dictationModeConfig(
   config: UserConfig | null,

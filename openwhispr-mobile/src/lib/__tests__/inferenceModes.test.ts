@@ -43,7 +43,7 @@ it('keeps an explicit upload choice when toggling between Cloud and On-Device', 
   expect(dictationModeConfig(explicit, 'private').inference?.upload).toEqual({ mode: 'local' });
 });
 
-it('keeps the dictation selection in step with the Cloud toggle', () => {
+it('keeps the dictation selection in step with Private mode', () => {
   const config = {
     defaultMode: 'private' as const,
     inference: {

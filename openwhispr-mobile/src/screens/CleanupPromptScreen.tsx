@@ -41,7 +41,7 @@ export default function CleanupPromptScreen() {
   const inactiveNotice = !cleanupEnabled
     ? 'Text Cleanup is off. Your prompt is saved and applies once you turn it on.'
     : activeMode === 'private' && cleanupMode !== 'local' && cleanupMode !== 'providers'
-      ? 'On-Device mode skips cleanup unless it is set to On-Device or Bring Your Own Key. Your prompt is saved and applies when it runs.'
+      ? 'Private mode skips cleanup unless it is set to On-Device or Bring Your Own Key. Your prompt is saved and applies when it runs.'
       : activeMode === 'providers' && !cleanupMode
         ? 'Bring Your Own Key skips cleanup until Text Cleanup has a selection. Your prompt is saved and applies once it does.'
         : null;

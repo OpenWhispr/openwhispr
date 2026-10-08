@@ -33,6 +33,8 @@ import { workflowSaveConfig } from '@/lib/inferenceModes';
 import { InferenceModePicker } from '@/components/settings/InferenceModePicker';
 import {
   ON_DEVICE_MODE_NOTES,
+  PRIVATE_MODE_LOCKED,
+  PRIVATE_MODE_LOCKED_REASON,
   UNSET_ON_DEVICE_CLEANUP_NOTE,
   UNSET_UNSUPPORTED_CLEANUP_NOTE,
   UNSET_PROVIDER_NOTES,
@@ -241,7 +243,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   const setActiveMode = useProcessingModeStore((state) => state.setActiveMode);
   const activeMode = useProcessingModeStore((state) => state.activeMode);
   const savedSelection = config?.inference?.[scope] ?? unsetSelection(scope, activeMode);
-  // On-Device mode skips an unsaved cleanup, so the On-Device default must not look picked.
+  // Private mode skips an unsaved cleanup, so the On-Device default must not look picked.
   const cleanupUnsaved =
     scope === 'cleanup' && activeMode === 'private' && !config?.inference?.cleanup;
   // Tracks the saved selection, except while a Bring Your Own Key draft is being set up.
@@ -306,6 +308,16 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
     (selection.mode === 'providers' && savedSelection.mode !== 'providers'
       ? 'Save to switch to Bring Your Own Key.'
       : undefined);
+  // Private mode is switched in AI Models, so a mode it never runs here can't be picked.
+  const modeUnavailable: Partial<Record<InferenceMode, string>> = {
+    ...Object.fromEntries(
+      (activeMode === 'private' ? (PRIVATE_MODE_LOCKED[scope] ?? []) : []).map((mode) => [
+        mode,
+        PRIVATE_MODE_LOCKED_REASON,
+      ]),
+    ),
+    ...(onDeviceUnsupported ? { local: onDeviceUnsupported } : {}),
+  };
   // Keys are stored per provider (per server for Custom), so every workflow on it shares one.
   const keyOwner =
     provider?.id === 'custom' ? 'this server' : providerDisplayName(provider?.id ?? '');
@@ -687,7 +699,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
               scope={speechScope ? 'speech' : 'text'}
               selectedMode={shownMode}
               onSelect={chooseMode}
-              unavailable={onDeviceUnsupported ? { local: onDeviceUnsupported } : undefined}
+              unavailable={modeUnavailable}
             />
             {modeNote ? <SectionFooter>{modeNote}</SectionFooter> : null}
             {selection.mode === 'local' && speechScope ? (

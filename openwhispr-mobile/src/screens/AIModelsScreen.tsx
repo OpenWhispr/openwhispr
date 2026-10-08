@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/useToast';
 import { confirmDestructive } from '@/lib/alerts';
 import { WORKFLOW_LABELS, WORKFLOWS, workflowSummary } from '@/lib/aiWorkflows';
 import { getLocalReasoningReadiness } from '@/lib/localReasoning';
+import { setPrivateMode } from '@/lib/workflowModeSwitch';
 import type { InferenceSelection, MobileInferenceScope } from '@/lib/mobileProviders';
 import {
   clearProviderCredentials,
@@ -138,6 +139,20 @@ export default function AIModelsScreen(): React.JSX.Element {
     );
   }
 
+  const privateMode = activeMode === 'private';
+
+  async function togglePrivateMode(enabled: boolean): Promise<void> {
+    if (busy) return;
+    setBusy(true);
+    try {
+      if ((await setPrivateMode(enabled)) === 'switched') {
+        showToast(enabled ? 'Private mode on.' : 'Private mode off.', 'success');
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const onDeviceUnavailable =
     localReadiness && localReadiness.status !== 'ready'
       ? localReasoningStatusLabel(localReadiness)
@@ -146,9 +161,32 @@ export default function AIModelsScreen(): React.JSX.Element {
   return (
     <View className="flex-1 bg-systemBackground">
       <SettingsScreen>
-        <Text className="mb-4 px-8 text-[13px] text-secondaryLabel">
-          Each workflow picks its own mode.
-        </Text>
+        {/* The one place the app-wide mode is set: with it on, the workflow pages show only
+            On-Device, so a choice there can't look saved and then be ignored. */}
+        <SettingsSection>
+          <SettingsRow
+            iconStyle="line"
+            icon="lock"
+            mdIcon="Lock"
+            title="Private Mode"
+            description={
+              privateMode
+                ? 'Workflows run on this iPhone. Turn it off to choose a mode for each one.'
+                : 'Run workflows on this iPhone instead of Cloud.'
+            }
+            rightElement={
+              <SettingsSwitch
+                accessibilityLabel="Private Mode"
+                value={privateMode}
+                disabled={busy}
+                onValueChange={(enabled) => {
+                  void togglePrivateMode(enabled);
+                }}
+              />
+            }
+            showChevron={false}
+          />
+        </SettingsSection>
         <SettingsSection title="Workflows">
           {WORKFLOWS.map((scope) => (
             <SettingsRow

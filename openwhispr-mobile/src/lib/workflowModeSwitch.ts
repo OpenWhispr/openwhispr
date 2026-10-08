@@ -33,7 +33,7 @@ async function transcriptionModelReady(): Promise<ModeSwitchResult | null> {
     return 'refused';
   }
   // Nothing to run yet: open the model list, where every on-device model can be
-  // downloaded, as the Home toggle does.
+  // downloaded.
   if (readiness.status === 'missing') {
     router.push('/(account)/model-download');
     return 'needs-model';
@@ -49,7 +49,7 @@ async function appleIntelligenceReady(): Promise<boolean> {
 }
 
 // Applies OpenWhispr Cloud or On-Device to a workflow as soon as it is tapped, after the same
-// sign-in and model checks the Home toggle runs.
+// sign-in and model checks Private mode runs.
 export async function switchWorkflowMode(
   scope: MobileInferenceScope,
   mode: 'openwhispr' | 'local',
@@ -78,8 +78,21 @@ export async function switchWorkflowMode(
   return 'switched';
 }
 
+// The Private mode switch in AI Models. On runs every workflow on this phone; off hands dictation
+// back to Cloud, or to the provider it is saved to.
+export async function setPrivateMode(enabled: boolean): Promise<ModeSwitchResult> {
+  if (enabled) return switchWorkflowMode('dictation', 'local');
+  const { config, updateConfig } = useConfigStore.getState();
+  if (config?.inference?.dictation?.mode === 'providers') {
+    useProcessingModeStore.getState().setActiveMode('providers', true);
+    await updateConfig({ defaultMode: 'providers' });
+    return 'switched';
+  }
+  return switchWorkflowMode('dictation', 'openwhispr');
+}
+
 // Saves the on-device model for a workflow; undefined means Automatic. The pick is also
-// remembered so switching back to On-Device, from here or the Home toggle, restores it.
+// remembered so switching back to On-Device, from here or Private mode, restores it.
 export async function pickLocalModel(
   scope: SpeechScope,
   model: LocalModelKey | undefined,
