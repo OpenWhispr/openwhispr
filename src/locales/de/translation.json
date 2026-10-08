@@ -4692,13 +4692,10 @@
     "title": "Chat",
     "emptyState": "Stelle eine Frage zu dieser Notiz",
     "dock": "In Seitenleiste andocken",
-    "undock": "Von Seitenleiste abdocken",
     "close": "Chat schließen",
     "newChat": "Neuer Chat",
     "conversationSelector": "Unterhaltung wechseln",
-    "history": "Verlauf",
-    "quickActions": "Schnellaktionen",
-    "generateSummary": "Zusammenfassung erstellen"
+    "history": "Verlauf"
   },
   "transcriptionPreview": {
     "label": "Vorschau",

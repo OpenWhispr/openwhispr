@@ -1,24 +1,15 @@
 import { useEffect, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { X, PanelRight, Plus, AlignLeft } from "../icons";
+import { X, PanelRight, Plus } from "../icons";
 import { cn } from "../lib/utils";
 import { ChatMessages } from "../chat/ChatMessages";
 import { ChatInput } from "../chat/ChatInput";
 import type { SlashCommand } from "../chat/slashCommands";
 import { BrandMarkIcon } from "../dictation/BrandMarkIcon";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../ui/dropdown-menu";
 import type { Message, AgentState } from "../chat/types";
 import { setActiveNoteId, setActiveFolderId } from "../../stores/noteStore";
-import { getActionName } from "../../stores/actionStore";
-import type { ActionItem } from "../../types/electron";
 import type { ContainerConversationItem } from "../../hooks/useContainerChat";
 import { ConversationPicker } from "./ConversationPicker";
-import { getActionIcon } from "./actionIcons";
 
 export type EmbeddedChatMode = "hidden" | "floating" | "sidebar";
 
@@ -36,11 +27,8 @@ interface EmbeddedChatProps {
   onSwitchConversation?: (id: number) => void;
   onNewChat?: () => void;
   active?: boolean;
-  /** The note's chat actions, offered as quick actions beside the sidebar composer. */
-  chatActions?: ActionItem[];
-  onRunChatAction?: (action: ActionItem) => void;
-  /** Writes the note's AI summary with its template; absent when it can't run now. */
-  onGenerateSummary?: () => void;
+  /** Shown above the sidebar composer; the floating chat's host places its own. */
+  actionChips?: React.ReactNode;
   slashCommands?: SlashCommand[];
 }
 
@@ -82,9 +70,7 @@ export default function EmbeddedChat({
   onSwitchConversation,
   onNewChat,
   active = true,
-  chatActions = [],
-  onRunChatAction,
-  onGenerateSummary,
+  actionChips,
   slashCommands,
 }: EmbeddedChatProps) {
   const { t } = useTranslation();
@@ -112,25 +98,6 @@ export default function EmbeddedChat({
 
   if (mode === "hidden") return null;
 
-  const quickActions = [
-    ...(onGenerateSummary
-      ? [
-          {
-            key: "summary",
-            label: t("embeddedChat.generateSummary"),
-            Icon: AlignLeft,
-            run: onGenerateSummary,
-          },
-        ]
-      : []),
-    ...chatActions.map((action) => ({
-      key: action.client_id,
-      label: getActionName(action, t),
-      Icon: getActionIcon(action),
-      run: () => onRunChatAction?.(action),
-    })),
-  ];
-
   const hasConversationSelector =
     noteConversations !== undefined && onSwitchConversation !== undefined;
 
@@ -142,7 +109,6 @@ export default function EmbeddedChat({
       onNewChat={onNewChat}
       titleClassName="max-w-32"
       variant={mode === "sidebar" ? "sidebar" : "default"}
-      onUndock={mode === "sidebar" ? () => onModeChange("floating") : undefined}
     />
   ) : (
     <span className="text-xs font-medium text-foreground/50">
@@ -234,47 +200,7 @@ export default function EmbeddedChat({
             slashMenuOpen ? "mt-3 flex min-h-0 flex-1 flex-col" : "shrink-0"
           )}
         >
-          <div
-            className={cn(
-              "scrollbar-hidden flex items-center gap-1.5 overflow-x-auto px-1 pb-2",
-              slashMenuOpen && "hidden"
-            )}
-          >
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  disabled={agentState !== "idle"}
-                  aria-label={t("embeddedChat.quickActions")}
-                  className="flex size-8 shrink-0 items-center justify-center rounded-full border border-dashed border-foreground/35 bg-background text-foreground/55 transition-colors hover:text-foreground disabled:opacity-40 dark:bg-surface-2"
-                >
-                  <Plus size={14} />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" side="top" sideOffset={8}>
-                {quickActions.map(({ key, label, Icon, run }) => (
-                  <DropdownMenuItem key={key} onClick={run}>
-                    <Icon size={15} className="text-primary" />
-                    {label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            {quickActions.map(({ key, label, Icon, run }) => (
-              <button
-                key={key}
-                type="button"
-                // Keep focus in the composer so it doesn't collapse and slide the pills away.
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={run}
-                disabled={agentState !== "idle"}
-                className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border/70 bg-background px-2.5 text-xs text-foreground/65 transition-colors hover:text-foreground disabled:opacity-40 dark:border-white/10 dark:bg-surface-2"
-              >
-                <Icon size={14} className="text-primary" />
-                {label}
-              </button>
-            ))}
-          </div>
+          {actionChips && !slashMenuOpen && <div className="px-1 pb-2">{actionChips}</div>}
           <ChatInput
             className="w-full"
             variant="sidebar"
@@ -285,6 +211,8 @@ export default function EmbeddedChat({
             onTextSubmit={onTextSubmit}
             onCancel={onCancel}
             voiceDraft
+            // It opens from a send in the ask bar or from Dock, and the conversation moves here.
+            autoFocus
             focusOnIdle={false}
             placeholder={t("embeddedChat.askPlaceholder")}
             slashCommands={slashCommands}

@@ -4660,13 +4660,10 @@
     "title": "Чат",
     "emptyState": "Задайте вопрос об этой заметке",
     "dock": "Закрепить на боковой панели",
-    "undock": "Открепить от боковой панели",
     "close": "Закрыть чат",
     "newChat": "Новый чат",
     "conversationSelector": "Сменить беседу",
-    "history": "История",
-    "quickActions": "Быстрые действия",
-    "generateSummary": "Создать сводку"
+    "history": "История"
   },
   "transcriptionPreview": {
     "label": "Предпросмотр",

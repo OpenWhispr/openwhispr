@@ -4692,13 +4692,10 @@
     "title": "Chat",
     "emptyState": "Ask a question about this note",
     "dock": "Dock to sidebar",
-    "undock": "Undock from sidebar",
     "close": "Close chat",
     "newChat": "New chat",
     "conversationSelector": "Switch conversation",
-    "history": "History",
-    "quickActions": "Quick actions",
-    "generateSummary": "Generate summary"
+    "history": "History"
   },
   "transcriptionPreview": {
     "label": "Preview",

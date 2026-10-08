@@ -4814,13 +4814,10 @@
     "title": "الدردشة",
     "emptyState": "اسأل سؤالًا حول هذه الملاحظة",
     "dock": "إرساء في الشريط الجانبي",
-    "undock": "إلغاء الإرساء من الشريط الجانبي",
     "close": "إغلاق الدردشة",
     "newChat": "محادثة جديدة",
     "conversationSelector": "تبديل المحادثة",
-    "history": "السجل",
-    "quickActions": "إجراءات سريعة",
-    "generateSummary": "إنشاء ملخص"
+    "history": "السجل"
   },
   "transcriptionPreview": {
     "label": "معاينة",

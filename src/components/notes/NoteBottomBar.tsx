@@ -130,7 +130,8 @@ export default function NoteBottomBar({
           chatOpen && "opacity-0"
         )}
       />
-      {callout && !chatOpen && !hideInput && (
+      {/* Stays put beside a docked chat, where the composer it sits on folds away. */}
+      {callout && !chatOpen && (
         <div className="pointer-events-auto relative mb-3 flex justify-center">{callout}</div>
       )}
       {/* The composer's slot: the panel always fills it, so the composer never moves. */}

@@ -4616,13 +4616,10 @@
     "title": "チャット",
     "emptyState": "このノートについて質問してください",
     "dock": "サイドバーに固定",
-    "undock": "サイドバーから外す",
     "close": "チャットを閉じる",
     "newChat": "新しいチャット",
     "conversationSelector": "会話を切り替え",
-    "history": "履歴",
-    "quickActions": "クイックアクション",
-    "generateSummary": "要約を作成"
+    "history": "履歴"
   },
   "transcriptionPreview": {
     "label": "プレビュー",

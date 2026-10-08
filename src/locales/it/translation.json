@@ -4616,13 +4616,10 @@
     "title": "Chat",
     "emptyState": "Fai una domanda su questa nota",
     "dock": "Ancora nella barra laterale",
-    "undock": "Sgancia dalla barra laterale",
     "close": "Chiudi chat",
     "newChat": "Nuova chat",
     "conversationSelector": "Cambia conversazione",
-    "history": "Cronologia",
-    "quickActions": "Azioni rapide",
-    "generateSummary": "Genera riepilogo"
+    "history": "Cronologia"
   },
   "transcriptionPreview": {
     "label": "Anteprima",

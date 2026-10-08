@@ -4616,13 +4616,10 @@
     "title": "聊天",
     "emptyState": "就这条笔记提个问题",
     "dock": "固定到侧边栏",
-    "undock": "从侧边栏取消固定",
     "close": "关闭聊天",
     "newChat": "新对话",
     "conversationSelector": "切换对话",
-    "history": "历史记录",
-    "quickActions": "快捷操作",
-    "generateSummary": "生成摘要"
+    "history": "历史记录"
   },
   "transcriptionPreview": {
     "label": "预览",

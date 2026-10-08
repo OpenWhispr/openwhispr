@@ -464,7 +464,6 @@ export default function NoteEditor({
 
   const templates = useActionsOfKind("template");
   const noteActions = useActionsOfKind("action");
-  const chatActions = useMemo(() => noteActions.filter((a) => a.output === "chat"), [noteActions]);
   // Regenerating keeps the note's template; a first summary uses the default.
   const noteTemplate = resolveTemplate(templates, note.enhancement_template_id);
   const isActionRunning = actionProcessingState === "processing";
@@ -869,11 +868,10 @@ export default function NoteEditor({
     [enhancement, note.id]
   );
 
+  // Whatever the ask bar sends, the conversation carries on in the docked chat.
   const handleAskSubmit = useCallback(
     (text: string) => {
-      if (chatMode === "hidden") {
-        setChatMode("floating");
-      }
+      setChatMode("sidebar");
       // The chat is still replying: keep the question as the draft instead of dropping it.
       if (embeddedChat.agentState !== "idle") {
         setChatDraft(text);
@@ -881,21 +879,19 @@ export default function NoteEditor({
       }
       embeddedChat.sendMessage(text);
     },
-    [chatMode, embeddedChat]
+    [embeddedChat]
   );
 
   // The chat shows the action's name while the model gets its prompt.
   const handleChatAction = useCallback(
     (action: ActionItem) => {
       if (embeddedChat.agentState !== "idle") return;
-      if (chatMode === "hidden") {
-        setChatMode("floating");
-      }
+      setChatMode("sidebar");
       void embeddedChat.sendMessage(getActionCta(action, t), {
         requestText: compileChatActionPrompt(action, { fromSummary: !!enhancement }),
       });
     },
-    [chatMode, embeddedChat, enhancement, t]
+    [embeddedChat, enhancement, t]
   );
 
   const runAction = useCallback(
@@ -931,6 +927,15 @@ export default function NoteEditor({
         run: () => runAction(action),
       }))
     : undefined;
+  // The floating chat and the docked one never show at once, so they share the chips.
+  const actionChips = offersActions && (
+    <ActionChips
+      actions={noteActions}
+      canRun={canRunAction}
+      onRunAction={runAction}
+      onManageActions={() => onManageActions?.("action")}
+    />
+  );
 
   const closeChat = useCallback(() => handleChatModeChange("hidden"), [handleChatModeChange]);
 
@@ -1497,16 +1502,7 @@ export default function NoteEditor({
                 />
               )
             }
-            actionChips={
-              offersActions && (
-                <ActionChips
-                  actions={noteActions}
-                  canRun={canRunAction}
-                  onRunAction={runAction}
-                  onManageActions={() => onManageActions?.("action")}
-                />
-              )
-            }
+            actionChips={actionChips}
             slashCommands={actionCommands}
             callout={
               showSummaryCallout &&
@@ -1548,14 +1544,8 @@ export default function NoteEditor({
           activeConversationId={embeddedChat.activeConversationId}
           onSwitchConversation={embeddedChat.switchConversation}
           onNewChat={embeddedChat.startNewChat}
-          chatActions={chatActions}
-          onRunChatAction={handleChatAction}
+          actionChips={actionChips}
           slashCommands={actionCommands}
-          onGenerateSummary={
-            canRunTemplate && noteTemplate && !isActionRunning
-              ? () => onRunNoteAction?.(noteTemplate)
-              : undefined
-          }
         />
       )}
       <ShareNoteDialog

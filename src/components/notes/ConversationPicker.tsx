@@ -1,4 +1,4 @@
-import { ChevronDown, Clock, PanelRightClose, Plus } from "../icons";
+import { ChevronDown, Clock, Plus } from "../icons";
 import { useTranslation } from "react-i18next";
 import { useUiLocale } from "../../hooks/useUiLocale";
 import type { ContainerConversationItem } from "../../hooks/useContainerChat";
@@ -19,7 +19,6 @@ interface ConversationPickerProps {
   onNewChat?: () => void;
   titleClassName?: string;
   variant?: "default" | "sidebar";
-  onUndock?: () => void;
 }
 
 export function ConversationPicker({
@@ -29,7 +28,6 @@ export function ConversationPicker({
   onNewChat,
   titleClassName,
   variant = "default",
-  onUndock,
 }: ConversationPickerProps) {
   const { t } = useTranslation();
   const locale = useUiLocale();
@@ -81,15 +79,6 @@ export function ConversationPicker({
                 </span>
               </DropdownMenuItem>
             ))}
-          </>
-        )}
-        {onUndock && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onUndock} className="text-xs gap-2 rounded-md px-2 py-1.5">
-              <PanelRightClose size={12} className="text-foreground/45 shrink-0" />
-              {t("embeddedChat.undock")}
-            </DropdownMenuItem>
           </>
         )}
       </DropdownMenuContent>

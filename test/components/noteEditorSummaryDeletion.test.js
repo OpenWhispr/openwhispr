@@ -146,7 +146,7 @@ async function loadNoteEditor(t) {
       electronAPI: {
         getSpeakerProfiles: async () => [],
         getSpeakerMappings: async () => [],
-        getActions: async () => [TEMPLATE, DEFAULT_TEMPLATE],
+        getActions: async () => [TEMPLATE, DEFAULT_TEMPLATE, ...(globalThis.__noteActions ?? [])],
       },
     },
   });
@@ -192,6 +192,8 @@ async function loadNoteEditor(t) {
           globalThis.__embeddedChatOptions = options;
           return {
             messages: [],
+            agentState: globalThis.__embeddedChatAgentState ?? "idle",
+            sendMessage: (...args) => globalThis.__embeddedChatSent?.push(args),
             send() {},
             reset() {},
             isStreaming: false,
@@ -487,5 +489,82 @@ test("the collapsed composer keeps its send button while the note has no actions
   const { render, latest, unmount } = await loadNoteEditor(t);
   await render(ENHANCEMENT);
   assert.ok(!findBottomBar(latest()).props.actionPicker);
+  await unmount();
+});
+
+function findDockedChat(tree) {
+  let chat = null;
+  walk(tree, (node) => {
+    if (!chat && node.props.mode === "sidebar") chat = node;
+  });
+  return chat;
+}
+
+test("a question sent from the ask bar opens the docked chat, where the conversation continues", async (t) => {
+  globalThis.__embeddedChatSent = [];
+  t.after(() => delete globalThis.__embeddedChatSent);
+  const { render, latest, unmount } = await loadNoteEditor(t);
+
+  await render(ENHANCEMENT);
+  await React.act(async () => findBottomBar(latest()).props.onInputFocus());
+  assert.equal(findBottomBar(latest()).props.chatOpen, true, "focus still unfolds the bar");
+  assert.equal(findDockedChat(latest()), null);
+
+  await React.act(async () => findBottomBar(latest()).props.onAskSubmit("What did we decide?"));
+  const bar = findBottomBar(latest());
+  assert.equal(bar.props.chatOpen, false);
+  assert.equal(bar.props.hideInput, true, "the ask bar folds away");
+  assert.ok(findDockedChat(latest()), "the docked chat opens");
+  assert.deepEqual(globalThis.__embeddedChatSent, [["What did we decide?"]]);
+  await unmount();
+});
+
+test("a chat action from the collapsed picker opens the docked chat with the same chips", async (t) => {
+  const followUp = {
+    ...TEMPLATE,
+    id: 3,
+    client_id: "follow-up",
+    kind: "action",
+    name: "Follow-up",
+    prompt: "Draft a follow-up.",
+    sections: null,
+    output: "chat",
+    translation_key: null,
+  };
+  globalThis.__noteActions = [followUp];
+  globalThis.__embeddedChatSent = [];
+  t.after(() => {
+    delete globalThis.__noteActions;
+    delete globalThis.__embeddedChatSent;
+  });
+  const { render, latest, unmount } = await loadNoteEditor(t);
+
+  await render(ENHANCEMENT);
+  const bar = findBottomBar(latest());
+  await React.act(async () => bar.props.actionPicker.props.onRunAction(followUp));
+
+  const docked = findDockedChat(latest());
+  assert.ok(docked, "the docked chat opens without the bar ever unfolding");
+  assert.equal(docked.props.actionChips, findBottomBar(latest()).props.actionChips);
+  assert.equal(docked.props.slashCommands.length, 1, "and offers the same / menu");
+  const [[shown, { requestText }]] = globalThis.__embeddedChatSent;
+  assert.equal(shown, "Follow-up");
+  assert.ok(requestText.includes("Draft a follow-up."));
+  await unmount();
+});
+
+test("a question sent while a reply is still coming waits as the docked chat's draft", async (t) => {
+  globalThis.__embeddedChatAgentState = "streaming";
+  globalThis.__embeddedChatSent = [];
+  t.after(() => {
+    delete globalThis.__embeddedChatAgentState;
+    delete globalThis.__embeddedChatSent;
+  });
+  const { render, latest, unmount } = await loadNoteEditor(t);
+
+  await render(ENHANCEMENT);
+  await React.act(async () => findBottomBar(latest()).props.onAskSubmit("And the budget?"));
+  assert.deepEqual(globalThis.__embeddedChatSent, []);
+  assert.equal(findDockedChat(latest()).props.draftText, "And the budget?");
   await unmount();
 });

@@ -288,37 +288,33 @@ test("picking from the picker makes its main button run that action at once", as
   assert.deepEqual(ran, ["Create outline", "Create outline"]);
 });
 
-test("the sidebar chat offers the note's chat actions, and Generate summary writes the summary", async (t) => {
+test("the docked chat shows the note's chips between its messages and its composer", async (t) => {
   const EmbeddedChat = await load(t, "/components/notes/EmbeddedChat.tsx");
-  const ran = [];
-  const props = {
-    mode: "sidebar",
-    onModeChange: () => {},
-    messages: [],
-    onTextSubmit: (text) => ran.push(["chat", text]),
-    onCancel: () => {},
-    chatActions: [FOLLOW_UP],
-    onRunChatAction: (a) => ran.push(["action", a.name]),
-    onGenerateSummary: () => ran.push(["summary"]),
-    slashCommands: [{ id: "cmd", label: "Follow-up email", run: () => {} }],
-  };
+  const chips = React.createElement("div", { "data-chips": "" });
+  const slashCommands = [{ id: "cmd", label: "Follow-up email", run: () => {} }];
+  const tree = collect(
+    renderTree(EmbeddedChat, {
+      mode: "sidebar",
+      onModeChange: () => {},
+      messages: [],
+      agentState: "idle",
+      onTextSubmit: () => {},
+      onCancel: () => {},
+      actionChips: chips,
+      slashCommands,
+    })
+  );
 
-  const idle = collect(renderTree(EmbeddedChat, { ...props, agentState: "idle" }));
-  const pills = idle.filter((node) => node.type === "button" && node.props.onMouseDown);
+  const order = tree.filter(
+    (node) => node === chips || node.props.emptyState || node.props.variant === "sidebar"
+  );
   assert.deepEqual(
-    pills.map((pill) => pill.key),
-    ["summary", FOLLOW_UP.client_id]
+    order.map((node) =>
+      node === chips ? "chips" : node.props.emptyState ? "messages" : "composer"
+    ),
+    ["messages", "chips", "composer"]
   );
-  for (const pill of pills) pill.props.onClick();
-  assert.deepEqual(ran, [["summary"], ["action", "Follow-up email"]]);
-  const composer = idle.find((node) => node.props.variant === "sidebar");
-  assert.equal(composer.props.slashCommands, props.slashCommands, "/ reaches the sidebar composer");
-
-  const streaming = collect(renderTree(EmbeddedChat, { ...props, agentState: "streaming" })).filter(
-    (node) => node.type === "button" && node.props.onMouseDown
-  );
-  assert.equal(streaming.length, 2);
-  for (const pill of streaming) {
-    assert.equal(pill.props.disabled, true, "no quick action starts while a reply streams");
-  }
+  const composer = order.at(-1);
+  assert.equal(composer.props.slashCommands, slashCommands, "/ reaches the docked composer");
+  assert.equal(composer.props.autoFocus, true, "a send from the ask bar lands in it");
 });
