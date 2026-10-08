@@ -15,6 +15,7 @@ import {
   Plus,
   Check,
   ChevronDown,
+  Copy,
   ShieldCheck,
   Users,
 } from "../icons";
@@ -41,6 +42,7 @@ import {
 import { NoteSharingService } from "../../services/NoteSharingService";
 import { fetchSpaceRoster } from "../../hooks/useSpaceRoster";
 import { useAuth } from "../../hooks/useAuth";
+import { useToast } from "../ui/useToast";
 import { RichTextEditor } from "../ui/RichTextEditor";
 import type { Editor } from "@tiptap/react";
 import { MeetingTranscriptChat, SelectionBar } from "./MeetingTranscriptChat";
@@ -116,6 +118,11 @@ const TRANSCRIPT_EXPORT_LABEL_KEYS = {
   srt: "notes.editor.asSubtitles",
   md: "notes.editor.asTranscriptMarkdown",
   json: "notes.editor.asJson",
+} as const;
+const COPY_LABEL_KEYS = {
+  transcript: "notes.editor.copyTranscript",
+  raw: "notes.editor.copyNotes",
+  enhanced: "notes.editor.copySummary",
 } as const;
 const NOTE_EXPORT_LABEL_KEYS = {
   md: "notes.editor.asMarkdown",
@@ -964,6 +971,43 @@ export default function NoteEditor({
   const noteDate = formatNoteDate(note.created_at, locale);
   const shortDate = formatShortDate(note.created_at, locale);
 
+  const { toast } = useToast();
+  const [copied, setCopied] = useState(false);
+  const copiedTimeoutRef = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (copiedTimeoutRef.current) window.clearTimeout(copiedTimeoutRef.current);
+    },
+    []
+  );
+  // The live transcript isn't saved until recording stops, so the stored copy would be stale.
+  const canCopy =
+    viewMode === "transcript"
+      ? hasMeetingTranscript && !isRecording
+      : viewMode === "enhanced"
+        ? !!enhancement?.content.trim()
+        : !!note.content.trim();
+
+  const handleCopy = useCallback(async () => {
+    try {
+      let text: string;
+      if (viewMode === "transcript") {
+        const result = await window.electronAPI.formatTranscript(note.id, "md");
+        if (!result.success || result.content == null) throw new Error(result.error);
+        text = result.content;
+      } else {
+        text = viewMode === "enhanced" ? (enhancement?.content ?? "") : note.content;
+      }
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      if (copiedTimeoutRef.current) window.clearTimeout(copiedTimeoutRef.current);
+      copiedTimeoutRef.current = window.setTimeout(() => setCopied(false), 1500);
+    } catch (err) {
+      console.error("Note copy failed:", err);
+      toast({ title: t("notes.editor.copyFailed"), variant: "destructive" });
+    }
+  }, [viewMode, note.id, note.content, enhancement?.content, toast, t]);
+
   const openShare = useCallback((intent: "open" | "copy-link") => {
     setShareIntent(intent);
     setShareDialogOpen(true);
@@ -1272,6 +1316,24 @@ export default function NoteEditor({
                   onStop={onStopRecording}
                 />
               )}
+              <button
+                type="button"
+                onClick={handleCopy}
+                disabled={!canCopy}
+                aria-label={t(copied ? "notes.editor.copied" : COPY_LABEL_KEYS[viewMode])}
+                title={t(copied ? "notes.editor.copied" : COPY_LABEL_KEYS[viewMode])}
+                className={cn(
+                  SPLIT_BUTTON_GROUP_CLASS,
+                  SPLIT_BUTTON_SEGMENT_CLASS,
+                  "h-[30px] w-[30px] shrink-0 justify-center disabled:pointer-events-none disabled:opacity-40"
+                )}
+              >
+                {copied ? (
+                  <Check size={13} className="text-primary" />
+                ) : (
+                  <Copy size={13} className="text-foreground/60" />
+                )}
+              </button>
               <div className={cn(SPLIT_BUTTON_GROUP_CLASS, "h-[30px] shrink-0")}>
                 <button
                   type="button"

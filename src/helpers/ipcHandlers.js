@@ -1103,6 +1103,16 @@ class IPCHandlers {
     return map;
   }
 
+  _formatTranscript(note, format) {
+    const transcriptFormatter = require("./transcriptFormatter");
+    const segments = JSON.parse(note.transcript || "[]");
+    const speakerMappings = this._buildSpeakerMappings(note.id);
+    if (format === "txt") return transcriptFormatter.formatTxt(note, segments, speakerMappings);
+    if (format === "srt") return transcriptFormatter.formatSrt(segments, speakerMappings, note);
+    if (format === "md") return transcriptFormatter.formatMd(note, segments, speakerMappings);
+    return transcriptFormatter.formatJson(note, segments, speakerMappings);
+  }
+
   _buildSpeakerMappings(noteId) {
     const arr = this.databaseManager.getSpeakerMappings(noteId);
     const map = {};
@@ -2946,11 +2956,9 @@ class IPCHandlers {
       try {
         const note = this.databaseManager.getNote(noteId);
         if (!note) return { success: false, error: "Note not found" };
-
-        const segments = JSON.parse(note.transcript || "[]");
-        if (!segments.length) return { success: false, error: "No transcript available" };
-
-        const speakerMappings = this._buildSpeakerMappings(noteId);
+        if (!JSON.parse(note.transcript || "[]").length) {
+          return { success: false, error: "No transcript available" };
+        }
 
         const { dialog } = require("electron");
         const fs = require("fs");
@@ -2970,22 +2978,24 @@ class IPCHandlers {
 
         if (result.canceled || !result.filePath) return { success: false };
 
-        const transcriptFormatter = require("./transcriptFormatter");
-        let exportContent;
-        if (format === "txt") {
-          exportContent = transcriptFormatter.formatTxt(note, segments, speakerMappings);
-        } else if (format === "srt") {
-          exportContent = transcriptFormatter.formatSrt(segments, speakerMappings, note);
-        } else if (format === "md") {
-          exportContent = transcriptFormatter.formatMd(note, segments, speakerMappings);
-        } else {
-          exportContent = transcriptFormatter.formatJson(note, segments, speakerMappings);
-        }
-
-        fs.writeFileSync(result.filePath, exportContent, "utf-8");
+        fs.writeFileSync(result.filePath, this._formatTranscript(note, format), "utf-8");
         return { success: true };
       } catch (error) {
         debugLogger.error("Error exporting transcript", { error: error.message }, "notes");
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("format-transcript", async (event, noteId, format) => {
+      try {
+        const note = this.databaseManager.getNote(noteId);
+        if (!note) return { success: false, error: "Note not found" };
+        if (!JSON.parse(note.transcript || "[]").length) {
+          return { success: false, error: "No transcript available" };
+        }
+        return { success: true, content: this._formatTranscript(note, format) };
+      } catch (error) {
+        debugLogger.error("Error formatting transcript", { error: error.message }, "notes");
         return { success: false, error: error.message };
       }
     });
