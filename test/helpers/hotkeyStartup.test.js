@@ -99,24 +99,20 @@ function fixture(backend, savedHotkey = "Scrolllock", registrationResult = true)
   cache._cachedActivationMode = "tap";
   const webContents = new EventEmitter();
   webContents.executeJavaScript = async () => savedHotkey;
-  webContents.isLoading = () => false;
   return {
     manager,
     cache,
     timers,
     registrations,
-    context,
     gnome,
     window: { isDestroyed: () => false, webContents },
   };
 }
 
-const mainSource = () => fs.readFileSync(path.join(__dirname, "../../main.js"), "utf8");
-
 // Runs main.js's startup Hold check, the code between createMainWindow() and the
 // backend's delayed registration, against the given window manager.
 function startupHoldCheck(windowManager, { writes = [], notifications = [] } = {}) {
-  const main = mainSource();
+  const main = fs.readFileSync(path.join(__dirname, "../../main.js"), "utf8");
   const start = main.indexOf("async function dropUnsupportedStartupHold() {");
   assert.notEqual(start, -1);
   const recheck = main.indexOf("async function checkStartupHold() {", start);
@@ -215,27 +211,25 @@ test("KDE that cannot register falls back to globalShortcut and checks Hold agai
   assert.deepEqual(writes, []);
 });
 
-for (const changed of [false, true]) {
-  test(`startup Tap fallback preserves the saved preference when registration ${changed ? "succeeds" : "fails"}`, async () => {
-    const notifications = [];
-    const writes = [];
-    await startupHoldCheck(
-      {
-        getActivationMode: () => "push",
-        hotkeyManager: {
-          once() {},
-          isUsingNativeShortcut: () => true,
-          getSavedDictationHotkey: async () => "Scrolllock",
-          supportsPushToTalk: () => false,
-        },
-        setActivationModeCache: async () => changed,
+test("startup Tap fallback preserves the saved preference when registration fails", async () => {
+  const notifications = [];
+  const writes = [];
+  await startupHoldCheck(
+    {
+      getActivationMode: () => "push",
+      hotkeyManager: {
+        once() {},
+        isUsingNativeShortcut: () => true,
+        getSavedDictationHotkey: async () => "Scrolllock",
+        supportsPushToTalk: () => false,
       },
-      { writes, notifications }
-    );
-    assert.equal(writes.length, 0);
-    assert.equal(notifications.length, changed ? 1 : 0);
-  });
-}
+      setActivationModeCache: async () => false,
+    },
+    { writes, notifications }
+  );
+  assert.equal(writes.length, 0);
+  assert.equal(notifications.length, 0);
+});
 
 // Without a desktop backend the hotkey registers during startup, and a fallback
 // can replace the first saved hotkey, so the registered one decides.

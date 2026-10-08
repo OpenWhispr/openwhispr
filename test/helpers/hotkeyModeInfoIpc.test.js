@@ -83,7 +83,9 @@ test.before(() => {
       isUsingHyprlandHotkeys: () => hotkeyManager.isUsingHyprland(),
       isUsingKDEHotkeys: () => hotkeyManager.isUsingKDE(),
       isUsingNativeShortcutHotkeys: () => hotkeyManager.isUsingNativeShortcut(),
+      getActivationMode: () => "tap",
     },
+    environmentManager: { getActivationMode: () => "push" },
   };
   IPCHandlers.prototype.setupHandlers.call(
     new Proxy(target, {
@@ -193,4 +195,10 @@ test("Windows with its key listener still offers Hold", async () => {
 
   assert.equal(info.supportsPushToTalk, true);
   assert.equal(info.pushToTalkUnavailableReason, null);
+});
+
+// Startup may fall back to Tap for the session while keeping a saved Hold for
+// the next launch. A window that syncs afterwards must show the mode in effect.
+test("renderers read the activation mode in effect, not the saved preference", async () => {
+  assert.equal(await handlers.get("get-activation-mode")({}), "tap");
 });

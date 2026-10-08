@@ -1099,11 +1099,12 @@ function startAuthBridgeServer() {
 // registration. Elsewhere, check the hotkey that registered. This is a runtime
 // fallback, not a change to the user's saved preference: the next launch retries it.
 async function dropUnsupportedStartupHold() {
+  if (windowManager.getActivationMode() !== "push") return;
   const manager = windowManager.hotkeyManager;
   const hotkey = manager.isUsingNativeShortcut()
     ? await manager.getSavedDictationHotkey()
     : manager.getCurrentHotkey();
-  if (windowManager.getActivationMode() === "push" && !manager.supportsPushToTalk(hotkey)) {
+  if (!manager.supportsPushToTalk(hotkey)) {
     const changed = await windowManager.setActivationModeCache("tap");
     if (changed) {
       for (const browserWindow of BrowserWindow.getAllWindows()) {

@@ -566,7 +566,6 @@ class HotkeyManager extends EventEmitter {
       return false;
     }
 
-    // The pending registration binds the saved hotkey in this mode.
     if (this.nativeRegistrationPending) {
       this.activationMode = nextMode;
       return true;
