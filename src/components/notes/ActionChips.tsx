@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Blocks, SquareSlash } from "../icons";
+import { Blocks, SquareSlash, TextCursorInput } from "../icons";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent } from "../ui/dropdown-menu";
 import { cn } from "../lib/utils";
 import { getActionName, getActionDescription } from "../../stores/actionStore";
 import type { ActionItem } from "../../types/electron";
 import ActionMenuItems, { ActionOutputBadge, type ActionMenuItemsProps } from "./ActionMenuItems";
+import { getActionIcon } from "./actionIcons";
 
 const VISIBLE_CHIPS = 4;
 
@@ -17,7 +18,21 @@ const CHIP_CLASS = cn(
   "animate-[fade-in-up_0.32s_cubic-bezier(0.22,1,0.36,1)_backwards] motion-reduce:animate-none"
 );
 
+// The docked chat's tray: filled pills on the tray, each with its action's icon.
+const DOCKED_CHIP_CLASS = cn(
+  CHIP_CLASS,
+  "bg-background text-foreground/70 dark:bg-surface-1",
+  "enabled:hover:bg-surface-3 focus-visible:bg-surface-3 dark:enabled:hover:bg-surface-2 dark:focus-visible:bg-surface-2"
+);
+
 const chipEntrance = (index: number) => ({ animationDelay: `${140 + index * 40}ms` });
+
+interface ActionChipsProps extends ActionMenuItemsProps {
+  /** The docked chat's look: filled pills, each with its action's icon. */
+  docked?: boolean;
+  /** A first pill that writes the note's AI summary; absent when the note has no template to run. */
+  generateSummary?: { run: () => void; disabled: boolean };
+}
 
 /**
  * The first actions as one-click chips, then every action behind "All actions" at the end.
@@ -28,17 +43,26 @@ export default function ActionChips({
   canRun,
   onRunAction,
   onManageActions,
-}: ActionMenuItemsProps) {
+  docked = false,
+  generateSummary,
+}: ActionChipsProps) {
   const { t } = useTranslation();
   const [previewed, setPreviewed] = useState<ActionItem | null>(null);
   const description = previewed && getActionDescription(previewed, t);
+  const chipClass = docked ? DOCKED_CHIP_CLASS : CHIP_CLASS;
+  const iconFor = (action: ActionItem) => (docked ? getActionIcon(action) : SquareSlash);
+  const iconClass = cn("shrink-0", docked && "text-primary");
+  const PreviewedIcon = previewed && iconFor(previewed);
+  const leadingChips = generateSummary ? 1 : 0;
 
   return (
     <div className="relative">
       {previewed && (
         <div className="pointer-events-none absolute bottom-full start-0 z-10 mb-2 flex w-full max-w-md items-center gap-3 rounded-2xl border border-black/[0.06] bg-popover p-3 shadow-(--shadow-chat-card) animate-[fade-in-up_0.18s_ease-out] motion-reduce:animate-none dark:border-white/10">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-foreground/6">
-            <SquareSlash size={16} className="text-foreground/70" />
+            {PreviewedIcon && (
+              <PreviewedIcon size={16} className={docked ? "text-primary" : "text-foreground/70"} />
+            )}
           </span>
           <span className="min-w-0 flex-1">
             <span dir="auto" className="block truncate text-sm font-medium text-foreground">
@@ -56,40 +80,63 @@ export default function ActionChips({
       {/* Left as a row, so moving between chips swaps the card instead of replaying it. */}
       <div onPointerLeave={() => setPreviewed(null)} className="flex items-center gap-1">
         {/* Only the chips scroll, so All actions stays in reach in a narrow chat. */}
-        <div className="scrollbar-hidden flex min-w-0 flex-1 items-center gap-1 overflow-x-auto pe-6 [mask-image:linear-gradient(to_right,#000_calc(100%_-_1.5rem),transparent)] rtl:[mask-image:linear-gradient(to_left,#000_calc(100%_-_1.5rem),transparent)]">
-          {actions.slice(0, VISIBLE_CHIPS).map((action, index) => (
+        <div
+          className={cn(
+            "scrollbar-hidden flex min-w-0 flex-1 items-center overflow-x-auto pe-6",
+            docked ? "gap-1.5" : "gap-1",
+            "[mask-image:linear-gradient(to_right,#000_calc(100%_-_1.5rem),transparent)] rtl:[mask-image:linear-gradient(to_left,#000_calc(100%_-_1.5rem),transparent)]"
+          )}
+        >
+          {generateSummary && (
             <button
-              key={action.id}
               type="button"
-              // Keep focus in the composer, so an open chat can take a follow-up right away.
               onMouseDown={(event) => event.preventDefault()}
-              // Running it disables the chips, so the card would otherwise sit over the reply.
-              onClick={() => {
-                setPreviewed(null);
-                onRunAction(action);
-              }}
-              // Pointer, not mouse: React drops mouse events on disabled buttons.
-              onPointerEnter={() => setPreviewed(action)}
-              onFocus={() => setPreviewed(action)}
-              onBlur={() => setPreviewed(null)}
-              disabled={!canRun(action)}
-              className={CHIP_CLASS}
-              style={chipEntrance(index)}
+              onClick={generateSummary.run}
+              onPointerEnter={() => setPreviewed(null)}
+              disabled={generateSummary.disabled}
+              className={chipClass}
+              style={chipEntrance(0)}
             >
-              <SquareSlash size={13} className="shrink-0" />
-              <span dir="auto">{getActionName(action, t)}</span>
+              <TextCursorInput size={14} className={iconClass} />
+              {t("embeddedChat.generateSummary")}
             </button>
-          ))}
+          )}
+          {actions.slice(0, VISIBLE_CHIPS).map((action, index) => {
+            const Icon = iconFor(action);
+            return (
+              <button
+                key={action.id}
+                type="button"
+                // Keep focus in the composer, so an open chat can take a follow-up right away.
+                onMouseDown={(event) => event.preventDefault()}
+                // Running it disables the chips, so the card would otherwise sit over the reply.
+                onClick={() => {
+                  setPreviewed(null);
+                  onRunAction(action);
+                }}
+                // Pointer, not mouse: React drops mouse events on disabled buttons.
+                onPointerEnter={() => setPreviewed(action)}
+                onFocus={() => setPreviewed(action)}
+                onBlur={() => setPreviewed(null)}
+                disabled={!canRun(action)}
+                className={chipClass}
+                style={chipEntrance(leadingChips + index)}
+              >
+                <Icon size={docked ? 14 : 13} className={iconClass} />
+                <span dir="auto">{getActionName(action, t)}</span>
+              </button>
+            );
+          })}
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
               onPointerEnter={() => setPreviewed(null)}
-              className={CHIP_CLASS}
-              style={chipEntrance(Math.min(actions.length, VISIBLE_CHIPS))}
+              className={chipClass}
+              style={chipEntrance(leadingChips + Math.min(actions.length, VISIBLE_CHIPS))}
             >
-              <Blocks size={13} className="shrink-0" />
+              <Blocks size={docked ? 14 : 13} className={iconClass} />
               {t("notes.actions.allActions")}
             </button>
           </DropdownMenuTrigger>

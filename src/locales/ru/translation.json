@@ -4663,7 +4663,8 @@
     "close": "Закрыть чат",
     "newChat": "Новый чат",
     "conversationSelector": "Сменить беседу",
-    "history": "История"
+    "history": "История",
+    "generateSummary": "Создать сводку"
   },
   "transcriptionPreview": {
     "label": "Предпросмотр",

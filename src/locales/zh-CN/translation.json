@@ -4619,7 +4619,8 @@
     "close": "关闭聊天",
     "newChat": "新对话",
     "conversationSelector": "切换对话",
-    "history": "历史记录"
+    "history": "历史记录",
+    "generateSummary": "生成摘要"
   },
   "transcriptionPreview": {
     "label": "预览",

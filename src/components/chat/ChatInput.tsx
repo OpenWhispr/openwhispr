@@ -277,7 +277,7 @@ export function ChatInput({
         className={cn(
           "flex items-center gap-2 min-h-11",
           variant === "sidebar"
-            ? "h-14 items-end rounded-3xl bg-background ps-4 pe-2 py-1.5 focus-within:h-40 dark:bg-surface-2"
+            ? "h-14 items-end rounded-xl bg-background ps-3.5 pe-2 py-1.5 focus-within:h-40 dark:bg-surface-1"
             : "rounded-3xl ps-4 pe-1.5 py-1.5",
           isCompactNote && "h-12 overflow-hidden",
           variant === "assistant"
@@ -290,7 +290,7 @@ export function ChatInput({
           // The outlined note composer draws an inset ring, which takes no room and sits where
           // the bar's outline was, so nothing in it moves as the chat opens.
           variant === "sidebar"
-            ? "border border-border/80 dark:border-white/14"
+            ? "border border-black/[0.08] dark:border-white/[0.08]"
             : variant === "note"
               ? outlined
                 ? "border-0 ring-1 ring-inset ring-primary/20 focus-within:ring-primary/45 dark:ring-primary/25 dark:focus-within:ring-primary/50"
@@ -311,7 +311,10 @@ export function ChatInput({
               ? "focus-within:border-foreground/15 focus-within:ring-2 focus-within:ring-foreground/5"
               : variant === "note"
                 ? ""
-                : "focus-within:border-black/15 dark:focus-within:border-white/22 focus-within:ring-[3px] focus-within:ring-primary/8")
+                : variant === "sidebar"
+                  ? // The tray around it already frames it; a ring would read as a second border.
+                    "focus-within:border-black/15 dark:focus-within:border-white/15"
+                  : "focus-within:border-black/15 dark:focus-within:border-white/22 focus-within:ring-[3px] focus-within:ring-primary/8")
         )}
       >
         {isListening && (

@@ -4695,7 +4695,8 @@
     "close": "Chat schließen",
     "newChat": "Neuer Chat",
     "conversationSelector": "Unterhaltung wechseln",
-    "history": "Verlauf"
+    "history": "Verlauf",
+    "generateSummary": "Zusammenfassung erstellen"
   },
   "transcriptionPreview": {
     "label": "Vorschau",

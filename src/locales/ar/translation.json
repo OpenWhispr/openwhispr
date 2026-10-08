@@ -4817,7 +4817,8 @@
     "close": "إغلاق الدردشة",
     "newChat": "محادثة جديدة",
     "conversationSelector": "تبديل المحادثة",
-    "history": "السجل"
+    "history": "السجل",
+    "generateSummary": "إنشاء ملخص"
   },
   "transcriptionPreview": {
     "label": "معاينة",

@@ -927,15 +927,12 @@ export default function NoteEditor({
         run: () => runAction(action),
       }))
     : undefined;
-  // Both chats show the same chips.
-  const actionChips = offersActions && (
-    <ActionChips
-      actions={noteActions}
-      canRun={canRunAction}
-      onRunAction={runAction}
-      onManageActions={() => onManageActions?.("action")}
-    />
-  );
+  const chipProps = {
+    actions: noteActions,
+    canRun: canRunAction,
+    onRunAction: runAction,
+    onManageActions: () => onManageActions?.("action"),
+  };
 
   const closeChat = useCallback(() => handleChatModeChange("hidden"), [handleChatModeChange]);
 
@@ -1502,7 +1499,7 @@ export default function NoteEditor({
                 />
               )
             }
-            actionChips={actionChips}
+            actionChips={offersActions && <ActionChips {...chipProps} />}
             slashCommands={actionCommands}
             callout={
               showSummaryCallout &&
@@ -1544,7 +1541,19 @@ export default function NoteEditor({
           activeConversationId={embeddedChat.activeConversationId}
           onSwitchConversation={embeddedChat.switchConversation}
           onNewChat={embeddedChat.startNewChat}
-          actionChips={actionChips}
+          actionChips={
+            offersActions && (
+              <ActionChips
+                {...chipProps}
+                docked
+                generateSummary={
+                  canRunTemplate && noteTemplate
+                    ? { run: () => onRunNoteAction?.(noteTemplate), disabled: isActionRunning }
+                    : undefined
+                }
+              />
+            )
+          }
           slashCommands={actionCommands}
         />
       )}

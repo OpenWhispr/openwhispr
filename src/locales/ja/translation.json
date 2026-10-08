@@ -4619,7 +4619,8 @@
     "close": "チャットを閉じる",
     "newChat": "新しいチャット",
     "conversationSelector": "会話を切り替え",
-    "history": "履歴"
+    "history": "履歴",
+    "generateSummary": "要約を作成"
   },
   "transcriptionPreview": {
     "label": "プレビュー",

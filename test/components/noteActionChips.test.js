@@ -177,6 +177,30 @@ test("hovering a chip shows what its action does above the row", async (t) => {
   assert.equal(description(), null, "and once the action runs, so it can't cover the reply");
 });
 
+test("the docked chips lead with Generate summary, held back while a summary is being written", async (t) => {
+  const ActionChips = await load(t, "/components/notes/ActionChips.tsx");
+  const ran = [];
+  const props = {
+    actions: ACTIONS,
+    canRun: () => true,
+    onRunAction: (a) => ran.push(a.name),
+    onManageActions: () => {},
+    docked: true,
+  };
+  const buttons = (generateSummary) =>
+    collect(renderTree(ActionChips, { ...props, generateSummary })).filter(
+      (node) => node.type === "button" && node.props.onClick
+    );
+
+  const idle = buttons({ run: () => ran.push("summary"), disabled: false });
+  assert.equal(idle.length, 5, "Generate summary, then the first four actions");
+  idle[0].props.onClick();
+  idle[1].props.onClick();
+  assert.deepEqual(ran, ["summary", "Follow-up email"]);
+  assert.equal(buttons({ run: () => {}, disabled: true })[0].props.disabled, true);
+  assert.equal(buttons(undefined).length, 4, "no pill when the note has no template to run");
+});
+
 test("the action menu lists every action, then Manage Actions", async (t) => {
   const ActionMenuItems = await load(t, "/components/notes/ActionMenuItems.tsx");
   const ran = [];

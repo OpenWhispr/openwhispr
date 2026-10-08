@@ -4695,7 +4695,8 @@
     "close": "Fermer le chat",
     "newChat": "Nouvelle discussion",
     "conversationSelector": "Changer de conversation",
-    "history": "Historique"
+    "history": "Historique",
+    "generateSummary": "Générer un résumé"
   },
   "transcriptionPreview": {
     "label": "Aperçu",

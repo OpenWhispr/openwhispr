@@ -4619,7 +4619,8 @@
     "close": "Chiudi chat",
     "newChat": "Nuova chat",
     "conversationSelector": "Cambia conversazione",
-    "history": "Cronologia"
+    "history": "Cronologia",
+    "generateSummary": "Genera riepilogo"
   },
   "transcriptionPreview": {
     "label": "Anteprima",

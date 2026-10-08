@@ -1,6 +1,6 @@
 import {
-  ClipboardCheck,
-  FileText,
+  FolderRounded,
+  ListEnd,
   Mail,
   MessageSquareText,
   Send,
@@ -10,8 +10,8 @@ import {
 
 const ACTION_ICONS: Record<string, IconComponent> = {
   mail: Mail,
-  "clipboard-check": ClipboardCheck,
-  "file-text": FileText,
+  "clipboard-check": ListEnd,
+  "file-text": FolderRounded,
   send: Send,
   sparkles: Sparkles,
 };

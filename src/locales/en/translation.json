@@ -4695,7 +4695,8 @@
     "close": "Close chat",
     "newChat": "New chat",
     "conversationSelector": "Switch conversation",
-    "history": "History"
+    "history": "History",
+    "generateSummary": "Generate summary"
   },
   "transcriptionPreview": {
     "label": "Preview",

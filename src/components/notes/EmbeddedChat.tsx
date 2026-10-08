@@ -190,17 +190,18 @@ export default function EmbeddedChat({
 
   return (
     <div className="flex min-h-0 w-1/2 min-w-80 max-w-2xl shrink-0 p-4" data-note-chat-panel>
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-4xl border border-border/60 bg-surface-1 dark:border-white/10 dark:bg-surface-1">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[20px] border border-border/60 bg-surface-1 dark:border-white/10 dark:bg-surface-1">
         <div className={cn("flex min-h-0 flex-1 flex-col", slashMenuOpen && "hidden")}>
           {chatBody}
         </div>
+        {/* One tray holds the chips and the composer. */}
         <div
           className={cn(
-            "mx-3 mb-3",
+            "mx-3 mb-3 rounded-2xl border border-black/[0.06] bg-foreground/[0.04] p-1 dark:border-white/[0.06] dark:bg-white/[0.05]",
             slashMenuOpen ? "mt-3 flex min-h-0 flex-1 flex-col" : "shrink-0"
           )}
         >
-          {actionChips && !slashMenuOpen && <div className="px-1 pb-2">{actionChips}</div>}
+          {actionChips && !slashMenuOpen && <div className="px-1 pt-1 pb-1.5">{actionChips}</div>}
           <ChatInput
             className="w-full"
             variant="sidebar"

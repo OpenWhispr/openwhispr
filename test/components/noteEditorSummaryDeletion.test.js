@@ -519,7 +519,7 @@ test("a question sent from the ask bar opens the docked chat, where the conversa
   await unmount();
 });
 
-test("a chat action from the collapsed picker opens the docked chat with the same chips", async (t) => {
+test("a chat action from the collapsed picker opens the docked chat, with the actions and Generate summary", async (t) => {
   const followUp = {
     ...TEMPLATE,
     id: 3,
@@ -538,15 +538,20 @@ test("a chat action from the collapsed picker opens the docked chat with the sam
     delete globalThis.__embeddedChatSent;
   });
   const { render, latest, unmount } = await loadNoteEditor(t);
+  const ran = [];
 
-  await render(ENHANCEMENT);
+  await render(ENHANCEMENT, { onRunNoteAction: (action) => ran.push(action.client_id) });
   const bar = findBottomBar(latest());
   await React.act(async () => bar.props.actionPicker.props.onRunAction(followUp));
 
   const docked = findDockedChat(latest());
   assert.ok(docked, "the docked chat opens without the bar ever unfolding");
-  assert.equal(docked.props.actionChips, findBottomBar(latest()).props.actionChips);
+  const chips = docked.props.actionChips.props;
+  assert.equal(chips.docked, true);
+  assert.deepEqual(chips.actions, [followUp]);
   assert.equal(docked.props.slashCommands.length, 1, "and offers the same / menu");
+  chips.generateSummary.run();
+  assert.deepEqual(ran, [DEFAULT_TEMPLATE.client_id], "Generate summary runs the default template");
   const [[shown, { requestText }]] = globalThis.__embeddedChatSent;
   assert.equal(shown, "Follow-up");
   assert.ok(requestText.includes("Draft a follow-up."));

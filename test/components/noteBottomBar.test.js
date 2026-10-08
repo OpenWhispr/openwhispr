@@ -91,16 +91,6 @@ test("the collapsed composer offers the action picker; the chips wait for the ch
   );
 });
 
-test("the summary callout stays put while the chat is docked and the composer folds away", async (t) => {
-  const html = await renderBottomBar(t, {
-    hideInput: true,
-    callout: createElement("button", null, "Generate summary"),
-  });
-
-  assert.ok(html.includes("Generate summary"));
-  assert.ok(!html.includes("<textarea"));
-});
-
 // The real DOM pieces the open chat needs: containment, pointer events, ResizeObserver.
 async function installHappyDom(t) {
   const { Window } = await import("happy-dom");
