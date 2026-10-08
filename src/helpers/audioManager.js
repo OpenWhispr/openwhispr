@@ -147,6 +147,7 @@ import {
   SELECTION_EDIT_RESPONSE_FORMAT,
   extractSelectionEditReplacement,
   getSelectionCaptureDisposition,
+  isSelectionQuestionResponse,
 } from "./selectionEditing";
 import {
   REALTIME_MODELS,
@@ -2965,11 +2966,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         selectionConfig
       );
       if (wasCancelled()) return text;
-      const replacement = isLocalSelection
-        ? extractLocalSelectionEditReplacement(result)
-        : extractSelectionEditReplacement(result, completionMarker);
-      this.pendingSelectionEdit = { sessionId: capture.sessionId };
-      return replacement;
+      if (!isSelectionQuestionResponse(result, completionMarker)) {
+        const replacement = isLocalSelection
+          ? extractLocalSelectionEditReplacement(result)
+          : extractSelectionEditReplacement(result, completionMarker);
+        this.pendingSelectionEdit = { sessionId: capture.sessionId };
+        return replacement;
+      }
     } catch (cause) {
       const error = Object.assign(new Error(`Selection edit failed: ${cause.message}`), cause);
       const failure =
@@ -2982,6 +2985,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       error.cause = cause;
       throw error;
     }
+
+    // The editor judged the command a question about the selection: answer it
+    // in the panel with the selection quoted, leaving the selection untouched.
+    return this._bankPanelAgentCommand(text, agentName, config, {
+      selectedText: capture.text,
+    });
   }
 
   async isReasoningAvailable() {
