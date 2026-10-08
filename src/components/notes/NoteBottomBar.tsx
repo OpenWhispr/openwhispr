@@ -1,7 +1,6 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChatInput } from "../chat/ChatInput";
-import type { AgentState } from "../chat/types";
 import type { SlashCommand } from "../chat/slashCommands";
 import { cn } from "../lib/utils";
 import { hasLayerAbove } from "../ui/useDismissGuard";
@@ -34,8 +33,6 @@ interface NoteBottomBarProps {
   footnote?: React.ReactNode;
   hideInput?: boolean;
   chatOpen?: boolean;
-  agentState?: AgentState;
-  onCancel?: () => void;
   floatingPanelRef?: (panel: HTMLDivElement, container: HTMLElement) => void | (() => void);
 }
 
@@ -54,8 +51,6 @@ export default function NoteBottomBar({
   footnote,
   hideInput = false,
   chatOpen = false,
-  agentState = "idle",
-  onCancel,
   floatingPanelRef,
 }: NoteBottomBarProps) {
   const { t } = useTranslation();
@@ -172,7 +167,12 @@ export default function NoteBottomBar({
             // Its height animates between the bar's 48px and auto.
             "pointer-events-auto relative flex min-w-0 flex-col justify-end rounded-3xl transition-[height,opacity] [interpolate-size:allow-keywords]",
             UNFOLD,
-            chatOpen || hideInput ? "overflow-hidden" : "overflow-visible",
+            // Open, it clips only while it unfolds, so a chip's hover card can show above it.
+            hideInput
+              ? "overflow-hidden"
+              : chatOpen
+                ? "animate-[clip-while-unfolding_480ms] motion-reduce:animate-none"
+                : "overflow-visible",
             hideInput && "opacity-0 pointer-events-none"
           )}
         >
@@ -185,12 +185,11 @@ export default function NoteBottomBar({
               className="w-full min-w-0"
               variant="note"
               outlined={chatOpen}
-              agentState={agentState}
+              agentState="idle"
               partialTranscript=""
               draftText={draftText}
               onDraftChange={onDraftChange}
               onTextSubmit={onAskSubmit}
-              onCancel={onCancel}
               onFocus={onInputFocus}
               onEscape={onInputEscape}
               focusOnIdle={chatOpen}

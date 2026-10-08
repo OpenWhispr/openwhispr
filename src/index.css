@@ -1316,6 +1316,15 @@ a:hover {
   }
 }
 
+/* Holds a clip only while it runs, so what overflows during an unfold stays hidden
+   and nothing is clipped at rest. */
+@keyframes clip-while-unfolding {
+  from,
+  to {
+    clip-path: inset(0 round 1.5rem);
+  }
+}
+
 @keyframes check-pop {
   0% {
     transform: scale(0);

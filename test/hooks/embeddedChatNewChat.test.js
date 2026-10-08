@@ -22,9 +22,7 @@ const MOCKS = {
   "/chat/useChatPersistence": `
     import { useState } from "react";
     export function useChatPersistence() {
-      const [messages, setMessages] = useState([
-        { id: "m0", role: "user", content: "Earlier question", isStreaming: false },
-      ]);
+      const [messages, setMessages] = useState([]);
       return {
         messages,
         setMessages,
@@ -34,7 +32,8 @@ const MOCKS = {
         },
         saveUserMessage: async () => {},
         saveAssistantMessage() {},
-        loadConversation: async () => {},
+        loadConversation: async () =>
+          setMessages([{ id: "m0", role: "user", content: "Earlier question", isStreaming: false }]),
         handleNewChat: () => setMessages([]),
       };
     }
@@ -70,7 +69,10 @@ test("a message sent into a new chat leaves the open conversation behind", async
   }
   root = createRoot(container);
   await React.act(async () => root.render(React.createElement(Harness)));
-  assert.equal(chat.activeConversationId, 1, "the note's latest conversation is open");
+  assert.equal(chat.activeConversationId, null, "the note opens on a new conversation");
+
+  await React.act(async () => chat.switchConversation(1));
+  assert.equal(chat.activeConversationId, 1);
 
   await React.act(async () => chat.sendMessage("Follow-up"));
   assert.deepEqual(globalThis.__sent, [["Earlier question", "Follow-up"]]);

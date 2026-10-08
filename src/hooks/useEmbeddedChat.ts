@@ -136,20 +136,14 @@ export function useEmbeddedChat({
     noteIdRef.current = noteId;
     if (!noteId) return;
 
+    // The chat opens on a new conversation (see sendInNewChat); earlier ones are in its history.
+    persistence.handleNewChat();
+    setConversationId(null);
     let stale = false;
     (async () => {
       const conversations = await window.electronAPI?.getConversationsForNote?.(noteId);
       if (stale || noteIdRef.current !== noteId) return;
       setNoteConversations(conversations ?? []);
-      if (conversations?.length) {
-        const mostRecent = conversations[0];
-        await persistence.loadConversation(mostRecent.id);
-        if (stale || noteIdRef.current !== noteId) return;
-        setConversationId(mostRecent.id);
-      } else {
-        persistence.handleNewChat();
-        setConversationId(null);
-      }
     })();
 
     return () => {

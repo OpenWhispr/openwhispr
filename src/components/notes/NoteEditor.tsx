@@ -1472,8 +1472,6 @@ export default function NoteEditor({
             onInputEscape={closeChat}
             onClickOutside={closeChat}
             chatOpen={chatMode === "floating"}
-            agentState={chatMode === "floating" ? embeddedChat.agentState : "idle"}
-            onCancel={embeddedChat.cancelStream}
             floatingPanelRef={floatingChatPanelRef}
             actionPicker={
               offersActions &&

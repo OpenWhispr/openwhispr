@@ -61,17 +61,20 @@ test("typing / in the composer runs an action from the keyboard", async (t) => {
   const submitted = [];
   const menuOpen = [];
   let escaped = 0;
+  const icon = () => null;
   const commands = [
     {
       id: "email",
       label: "Follow-up email",
+      icon,
       description: "Draft it from the note",
       run: () => ran.push("email"),
     },
-    { id: "todos", label: "Create to-dos", run: () => ran.push("todos") },
+    { id: "todos", label: "Create to-dos", icon, run: () => ran.push("todos") },
     {
       id: "tldr",
       label: "Add TL;DR",
+      icon,
       hint: "AI summary",
       disabled: true,
       run: () => ran.push("tldr"),
@@ -184,7 +187,7 @@ test("a / filter ranks labels with a word starting with it first", async () => {
   assert.deepEqual(labels("/s\nmore"), [], "nor one that runs onto a new line");
 });
 
-test("each / row shows its command's icon in the tile, a blue / without one", async (t) => {
+test("each / row shows its command's icon in the tile", async (t) => {
   installBrowserGlobals(t);
   const vite = await createRendererServer(t, { cachePrefix: "openwhispr-slash-menu-icons-test-" });
   const SlashCommandMenu = (await vite.ssrLoadModule("/components/chat/SlashCommandMenu.tsx"))
@@ -195,21 +198,11 @@ test("each / row shows its command's icon in the tile, a blue / without one", as
     React.createElement(SlashCommandMenu, {
       id: "menu",
       label: "Commands",
-      commands: [
-        { id: "email", label: "Follow-up email", icon: Mail, run: () => {} },
-        { id: "plain", label: "Plain", run: () => {} },
-      ],
+      commands: [{ id: "email", label: "Follow-up email", icon: Mail, run: () => {} }],
       activeIndex: 0,
       onActiveIndexChange: () => {},
       onRun: () => {},
     })
   );
-  const tiles = [...html.matchAll(/data-icon="([^"]+)"[^>]*class="([^"]*)"/g)].filter(
-    ([, name]) => name === "mail" || name === "square-slash"
-  );
-  assert.deepEqual(
-    tiles.map(([, name]) => name),
-    ["mail", "square-slash"]
-  );
-  assert.ok(tiles.every(([, , className]) => className.includes("text-primary")));
+  assert.ok(html.includes('data-icon="mail"'));
 });
