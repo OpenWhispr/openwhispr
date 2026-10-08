@@ -101,6 +101,12 @@ const TOOL_GROUPS: Record<string, string> = {
 const CAPABILITY_RULE =
   "Use a tool when the request needs what it provides, rather than guessing from memory; don't call one when the conversation or the context provided here already has the answer. Never tell the user you can't do something one of these tools covers (for example, never say you can't browse the web when web search is listed). If a tool call fails, say that it failed rather than claiming you lack the ability.";
 
+// A note's chat answers from its note; other notes come second, and named.
+const OPEN_NOTE_RULE =
+  "The user is asking from inside the note below. When they ask about what was said, decided or written, answer from this note first, and if it doesn't cover the question, say so.";
+const OPEN_NOTE_SEARCH_RULE =
+  "Then look in their other notes with search_notes, and name the note your answer comes from.";
+
 const TOOL_TRACE_RULE =
   "Earlier assistant messages may begin with a [Tools used: …] note that the app added to record the tools you called in that turn. Never write such a note yourself.";
 
@@ -116,6 +122,8 @@ export interface AgentSystemPromptOptions {
   unavailable?: ReadonlyArray<UnavailableCapability>;
   /** History carries [Tools used: …] notes on earlier assistant turns. */
   toolTrace?: boolean;
+  /** The note a note's chat was opened from (with its attendees), answered from before any other note. */
+  openNote?: string;
 }
 
 function toolGroup(tool: PromptTool): string {
@@ -162,6 +170,11 @@ export function getAgentSystemPrompt(
 
   const unavailable = describeUnavailable(options.unavailable ?? []);
   if (unavailable) prompt += "\n\n" + unavailable;
+
+  if (options.openNote) {
+    const canSearch = tools.some((tool) => tool.name === "search_notes");
+    prompt += `\n\n${OPEN_NOTE_RULE}${canSearch ? ` ${OPEN_NOTE_SEARCH_RULE}` : ""}\n\n${options.openNote}`;
+  }
 
   if (noteContext) {
     prompt +=

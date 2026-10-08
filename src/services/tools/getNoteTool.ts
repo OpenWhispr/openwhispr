@@ -1,4 +1,5 @@
 import type { ToolDefinition, ToolResult } from "./ToolRegistry";
+import { withoutAttendeesFence } from "../../utils/noteAttendees";
 
 export const getNoteTool: ToolDefinition = {
   name: "get_note",
@@ -31,12 +32,13 @@ export const getNoteTool: ToolDefinition = {
         };
       }
 
+      // Only the note chat's own attendee block may carry its fence.
       return {
         success: true,
         data: {
           id: note.id,
-          title: note.title,
-          content: note.enhanced_content || note.content,
+          title: withoutAttendeesFence(note.title),
+          content: withoutAttendeesFence(note.enhanced_content || note.content),
           type: note.note_type,
           folder_id: note.folder_id,
           created_at: note.created_at,

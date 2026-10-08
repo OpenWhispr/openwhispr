@@ -78,7 +78,7 @@ export function useEmbeddedChat({
     },
   });
 
-  const noteContext = useMemo(
+  const openNote = useMemo(
     () =>
       [
         `Note ID: ${noteId}`,
@@ -108,7 +108,7 @@ export function useEmbeddedChat({
   const streaming = useChatStreaming({
     messages: persistence.messages,
     setMessages: persistence.setMessages,
-    noteContext,
+    openNote,
     allowConnectors: true,
     noteMeeting,
     onStreamComplete: (_id, content, toolCalls) => {
