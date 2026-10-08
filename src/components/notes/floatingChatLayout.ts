@@ -53,6 +53,34 @@ export function observeFloatingChatSize(
   return (): void => observer.disconnect();
 }
 
+interface BottomBarHeightOptions {
+  bar: HTMLElement;
+  container: HTMLElement;
+}
+
+/**
+ * Publishes how much of the note's bottom the bar covers, chips, callout and an
+ * open chat included, in --bottom-overlay-height. The note editor scrolls the
+ * caret clear of it.
+ */
+export function observeBottomBarHeight(
+  { bar, container }: BottomBarHeightOptions,
+  createResizeObserver: (callback: () => void) => ResizeObserverHandle = (callback) =>
+    new ResizeObserver(callback)
+): () => void {
+  const publish = (): void =>
+    container.style.setProperty("--bottom-overlay-height", `${bar.offsetHeight}px`);
+
+  publish();
+  const observer = createResizeObserver(publish);
+  observer.observe(bar);
+
+  return (): void => {
+    observer.disconnect();
+    container.style.removeProperty("--bottom-overlay-height");
+  };
+}
+
 export function isNearScrollBottom(metrics: ScrollMetrics): boolean {
   return getScrollBottomDistance(metrics) <= SCROLL_BOTTOM_THRESHOLD_PX;
 }

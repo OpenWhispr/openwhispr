@@ -1709,8 +1709,9 @@ a:hover {
 .rich-text-editor-content {
   outline: none;
   unicode-bidi: plaintext;
-  /* The bottom clears the note's ask bar and the action chips above it. */
-  padding-block: 0.75rem 7.5rem;
+  /* The bottom lets the last line scroll clear of the note's bottom bar, chips, callout
+     and an open chat included: NoteBottomBar publishes its height. */
+  padding-block: 0.75rem max(7.5rem, var(--bottom-overlay-height, 0px));
   /* Centers the text in the page column (PAGE_CONTENT_WIDTH_CLASS) with padding, not a
      max-width, so the editable area spans the pane and a margin click places the caret. */
   padding-inline: max(1.25rem, calc((100% - var(--container-5xl)) / 2 + 1.25rem));

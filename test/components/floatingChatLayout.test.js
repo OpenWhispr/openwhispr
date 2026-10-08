@@ -161,6 +161,42 @@ test("the in-view chat always opens at two-thirds height and ignores content gro
   assert.equal(disconnected, true);
 });
 
+test("the bottom bar publishes the height it covers, so the editor keeps the caret above it", async () => {
+  const { observeBottomBarHeight } = await load();
+  const bar = createElement({ offsetHeight: 138 });
+  const container = createElement();
+  const observed = [];
+  let onResize;
+  let disconnected = false;
+
+  const cleanup = observeBottomBarHeight({ bar, container }, (callback) => {
+    onResize = callback;
+    return {
+      observe(element) {
+        observed.push(element);
+      },
+      disconnect() {
+        disconnected = true;
+      },
+    };
+  });
+
+  assert.equal(container.style.getPropertyValue("--bottom-overlay-height"), "138px");
+  assert.deepEqual(observed, [bar]);
+
+  bar.offsetHeight = 186;
+  onResize();
+  assert.equal(
+    container.style.getPropertyValue("--bottom-overlay-height"),
+    "186px",
+    "follows the bar as the summary callout or the chat grows it"
+  );
+
+  cleanup();
+  assert.equal(disconnected, true);
+  assert.equal(container.style.getPropertyValue("--bottom-overlay-height"), "");
+});
+
 test("the note viewport caps the in-view chat in a short window", async () => {
   const { observeFloatingChatSize } = await load();
   const panel = { style: { height: "" } };

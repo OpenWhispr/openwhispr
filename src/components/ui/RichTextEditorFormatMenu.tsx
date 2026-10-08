@@ -40,6 +40,7 @@ import {
   runCommand,
   useHideOnFocusLeave,
   useMenuDropdown,
+  useRepositionAfterScroll,
   type ChainCommand,
 } from "./RichTextEditorMenus";
 import { insertEmptyTable, isOnEmptyLine } from "./RichTextEditorTable";
@@ -262,6 +263,8 @@ export function RichTextEditorFormatMenu({ editor }: { editor: Editor }) {
   const onSelection = useMenuDropdown();
   const onEmptyLine = useMenuDropdown(LINE_MENU_OPTIONS);
   useHideOnFocusLeave(editor, MENU_KEYS);
+  // The selection menu waits for the selection to settle before it measures.
+  useRepositionAfterScroll(editor, LINE_MENU, onEmptyLine.menuRef);
   return (
     <>
       <BubbleMenu

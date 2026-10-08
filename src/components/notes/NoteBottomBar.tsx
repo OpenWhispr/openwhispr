@@ -1,10 +1,10 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { ChatInput } from "../chat/ChatInput";
 import type { AgentState } from "../chat/types";
 import type { SlashCommand } from "../chat/slashCommands";
 import { cn } from "../lib/utils";
-import { observeFloatingChatSize } from "./floatingChatLayout";
+import { observeBottomBarHeight, observeFloatingChatSize } from "./floatingChatLayout";
 
 const RECORDING_SURFACE = "bg-surface-2/95 shadow-(--shadow-glass)";
 
@@ -47,6 +47,14 @@ export default function NoteBottomBar({
 }: NoteBottomBarProps) {
   const { t } = useTranslation();
 
+  const barRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const bar = barRef.current;
+    const container = bar?.parentElement;
+    if (!bar || !container) return;
+    return observeBottomBarHeight({ bar, container });
+  }, []);
+
   const attachPanel = useCallback(
     (panel: HTMLDivElement | null) => {
       if (!panel) return;
@@ -74,6 +82,7 @@ export default function NoteBottomBar({
 
   return (
     <div
+      ref={barRef}
       className={cn(
         "pointer-events-none absolute inset-x-0 bottom-0 z-20 px-5 pt-6",
         footnote ? "pb-1.5" : "pb-7"

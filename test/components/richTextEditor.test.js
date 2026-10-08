@@ -1061,3 +1061,96 @@ test("the menus mount without error on an editor useEditor already destroyed", a
     )
   );
 });
+
+const VIEWPORT = 600;
+const LINE = 24;
+const LONG_NOTE = Array.from({ length: 30 }, (_, index) => `Line ${index + 1}`).join("\n\n");
+
+/**
+ * happy-dom has no layout. Gives the editor's scroller a 600px viewport and every
+ * top-level block a 24px line, so ProseMirror's scrollIntoView and the menus find
+ * the caret where a browser would. Returns the caret's rect, relative to the
+ * scroller's top.
+ */
+function fakeLayout(t, editor) {
+  const { view } = editor;
+  const scroller = view.dom.parentElement;
+  // Only the scroller scrolls. happy-dom keeps a scrollTop set on any element, so
+  // ProseMirror would scroll the caret's paragraph into view inside itself.
+  let proto = scroller;
+  while (!Object.hasOwn(proto, "scrollTop")) proto = Object.getPrototypeOf(proto);
+  const scrollTopDescriptor = Object.getOwnPropertyDescriptor(proto, "scrollTop");
+  let scrollTop = 0;
+  Object.defineProperty(proto, "scrollTop", {
+    configurable: true,
+    get() {
+      return this === scroller ? scrollTop : 0;
+    },
+    set(value) {
+      if (this === scroller) scrollTop = Math.max(0, value);
+    },
+  });
+  // Floating UI keeps the menus inside the window, which happy-dom gives no size.
+  const { documentElement } = happyWindow.document;
+  Object.defineProperty(documentElement, "clientWidth", { value: 1024, configurable: true });
+  Object.defineProperty(documentElement, "clientHeight", { value: 768, configurable: true });
+  t.after(() => {
+    Object.defineProperty(proto, "scrollTop", scrollTopDescriptor);
+    delete documentElement.clientWidth;
+    delete documentElement.clientHeight;
+  });
+  const box = { x: 0, y: 0, left: 0, top: 0, right: 800, bottom: VIEWPORT, width: 800 };
+  scroller.getBoundingClientRect = () => ({ ...box, height: VIEWPORT });
+  const size = {
+    clientWidth: 800,
+    offsetWidth: 800,
+    clientHeight: VIEWPORT,
+    offsetHeight: VIEWPORT,
+  };
+  for (const [name, value] of Object.entries(size)) {
+    Object.defineProperty(scroller, name, { value, configurable: true });
+  }
+  view.coordsAtPos = (pos) => {
+    const top = view.state.doc.resolve(pos).index(0) * LINE - scroller.scrollTop;
+    return { left: 40, right: 40, top, bottom: top + LINE };
+  };
+  return () => view.coordsAtPos(view.state.selection.head);
+}
+
+test("typing at the end of a long note keeps the caret clear of the note's bottom bar", async (t) => {
+  const notes = await mountNotes(t, LONG_NOTE);
+  const caret = fakeLayout(t, notes.editor());
+  const clearance = () => VIEWPORT - caret().bottom;
+  const enter = () => notes.act(() => pressKey(notes.editor(), "Enter"));
+  await notes.act(() => notes.editor().commands.focus("end"));
+
+  await enter();
+  assert.equal(clearance(), 5, "with nothing over the editor, ProseMirror's usual margin");
+
+  // NoteBottomBar publishes its height on an ancestor, and a browser inherits it
+  // down to the editor. happy-dom doesn't inherit custom properties.
+  notes.host.firstElementChild.style.setProperty("--bottom-overlay-height", "138px");
+  for (let line = 1; line <= 3; line++) {
+    await enter();
+    assert.equal(clearance(), 138, `new line ${line} sits just above the bar`);
+  }
+  assert.deepEqual(notes.errors, []);
+});
+
+test("the empty-line toolbar stays on the caret when Enter scrolls the note", async (t) => {
+  const notes = await mountNotes(t, LONG_NOTE);
+  const caret = fakeLayout(t, notes.editor());
+  const scroller = notes.editor().view.dom.parentElement;
+  await notes.act(() => notes.editor().commands.focus("end"));
+  const scrolledBefore = scroller.scrollTop;
+
+  await notes.act(() => pressKey(notes.editor(), "Enter"));
+  assert.ok(scroller.scrollTop > scrolledBefore, "Enter scrolled the editor");
+  const menu = happyWindow.document.querySelector(".rich-text-editor-line-menu");
+  assert.equal(!!menu?.isConnected, true, "the toolbar shows on the new empty line");
+  // Floating UI finds no offset parent in happy-dom, so it places the toolbar in
+  // viewport coordinates: beside the caret, centered on it (it has no height here).
+  const { top, bottom } = caret();
+  assert.equal(parseFloat(menu.style.top), (top + bottom) / 2);
+  assert.deepEqual(notes.errors, []);
+});

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { ChainedCommands, Editor } from "@tiptap/core";
+import type { Transaction } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
 import type { BubbleMenuProps } from "@tiptap/react/menus";
 
@@ -48,6 +49,38 @@ export function useHideOnFocusLeave(editor: Editor, pluginKeys: readonly string[
     scroller.addEventListener("focusout", onFocusOut);
     return () => scroller.removeEventListener("focusout", onFocusOut);
   }, [editor, pluginKeys]);
+}
+
+/**
+ * ProseMirror scrolls the caret into view after the menus measured it, so a menu
+ * placed by a transaction that scrolled the note sits off by the scroll. Tiptap
+ * only re-places menus when the window scrolls, never the editor's scroller. So
+ * place a shown menu again in the next frame, before it is painted.
+ */
+export function useRepositionAfterScroll(
+  editor: Editor,
+  pluginKey: string,
+  menuRef: RefObject<HTMLElement | null>
+): void {
+  useEffect(() => {
+    if (editor.isDestroyed) return;
+    let frame = 0;
+    // Tiptap hides a menu by detaching its element.
+    const isShown = (): boolean => !!menuRef.current?.isConnected;
+    const onTransaction = ({ transaction }: { transaction: Transaction }): void => {
+      if (!transaction.scrolledIntoView || !isShown()) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (editor.isDestroyed || !isShown()) return;
+        editor.view.dispatch(editor.state.tr.setMeta(pluginKey, "updatePosition"));
+      });
+    };
+    editor.on("transaction", onTransaction);
+    return () => {
+      cancelAnimationFrame(frame);
+      editor.off("transaction", onTransaction);
+    };
+  }, [editor, pluginKey, menuRef]);
 }
 
 /**
