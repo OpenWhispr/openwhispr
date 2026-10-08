@@ -87,6 +87,7 @@ import {
 } from "../../stores/actionStore";
 import { compileChatActionPrompt } from "../../helpers/templatePrompts";
 import type { SlashCommand } from "../chat/slashCommands";
+import type { Message } from "../chat/types";
 import { formatNoteDate, formatRelativeTime, formatShortDate } from "../../utils/dateFormatting";
 import {
   buildLlmTranscript,
@@ -123,6 +124,7 @@ const NOTE_EXPORT_LABEL_KEYS = {
   md: "notes.editor.asMarkdown",
   txt: "notes.editor.asPlainText",
 } as const;
+const NO_MESSAGES: Message[] = [];
 
 export interface Enhancement {
   content: string;
@@ -281,7 +283,7 @@ export default function NoteEditor({
     selectedViewMode === "enhanced" && !enhancement ? "raw" : selectedViewMode;
   const [chatMode, setChatMode] = useState<EmbeddedChatMode>("hidden");
   // The in-view chat mounts on its first open and then stays, so it can fade out as it
-  // closes; a note whose chat is never opened doesn't render its conversation at all.
+  // closes; a note whose chat is never opened doesn't render it at all.
   const [inViewChatMounted, setInViewChatMounted] = useState(false);
   if (chatMode === "floating" && !inViewChatMounted) setInViewChatMounted(true);
   const [chatDraft, setChatDraft] = useState("");
@@ -1473,18 +1475,15 @@ export default function NoteEditor({
             chatContent={
               chatMode !== "sidebar" &&
               inViewChatMounted && (
+                // Only starts a conversation: the conversation and its history are in the docked chat.
                 <EmbeddedChat
                   mode="floating"
                   active={chatMode === "floating"}
                   onModeChange={handleChatModeChange}
-                  messages={embeddedChat.messages}
+                  messages={NO_MESSAGES}
                   agentState={embeddedChat.agentState}
                   onTextSubmit={embeddedChat.sendMessage}
                   onCancel={embeddedChat.cancelStream}
-                  noteConversations={embeddedChat.noteConversations}
-                  activeConversationId={embeddedChat.activeConversationId}
-                  onSwitchConversation={embeddedChat.switchConversation}
-                  onNewChat={embeddedChat.startNewChat}
                 />
               )
             }

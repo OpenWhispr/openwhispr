@@ -191,7 +191,9 @@ async function loadNoteEditor(t) {
         export function useEmbeddedChat(options) {
           globalThis.__embeddedChatOptions = options;
           return {
-            messages: [],
+            messages: globalThis.__embeddedChatMessages ?? [],
+            noteConversations: globalThis.__embeddedChatConversations,
+            switchConversation() {},
             agentState: globalThis.__embeddedChatAgentState ?? "idle",
             sendMessage: (...args) => globalThis.__embeddedChatSent?.push(args),
             send() {},
@@ -516,6 +518,30 @@ test("a question sent from the ask bar opens the docked chat, where the conversa
   assert.equal(bar.props.hideInput, true, "the ask bar folds away");
   assert.ok(findDockedChat(latest()), "the docked chat opens");
   assert.deepEqual(globalThis.__embeddedChatSent, [["What did we decide?"]]);
+  await unmount();
+});
+
+test("the in-view chat only starts a conversation; the docked chat holds it and its history", async (t) => {
+  const messages = [{ id: "m1", role: "user", content: "Who owns the copy pass?" }];
+  const conversations = [{ id: 7, title: "Copy pass", updated_at: "2026-10-08" }];
+  globalThis.__embeddedChatMessages = messages;
+  globalThis.__embeddedChatConversations = conversations;
+  t.after(() => {
+    delete globalThis.__embeddedChatMessages;
+    delete globalThis.__embeddedChatConversations;
+  });
+  const { render, latest, unmount } = await loadNoteEditor(t);
+
+  await render(ENHANCEMENT);
+  await React.act(async () => findBottomBar(latest()).props.onInputFocus());
+  const inView = findBottomBar(latest()).props.chatContent.props;
+  assert.deepEqual(inView.messages, [], "no earlier messages in the in-view chat");
+  assert.equal(inView.noteConversations, undefined, "and no history to switch to");
+
+  await React.act(async () => findBottomBar(latest()).props.onAskSubmit("And the deadline?"));
+  const docked = findDockedChat(latest()).props;
+  assert.equal(docked.messages, messages);
+  assert.equal(docked.noteConversations, conversations);
   await unmount();
 });
 
