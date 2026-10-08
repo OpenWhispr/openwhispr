@@ -72,6 +72,7 @@ const REPLACEMENT_OBJECT =
   /^[\t\n\r ]*\{[\t\n\r ]*"replacement"[\t\n\r ]*:[\t\n\r ]*"(?:[^"\\\u0000-\u001f]|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))*"[\t\n\r ]*\}[\t\n\r ]*$/;
 
 export function extractLocalSelectionEditReplacement(result) {
+  if (typeof result === "string" && !result.trim()) return requireReplacement(result);
   if (typeof result !== "string" || !REPLACEMENT_OBJECT.test(result)) throw invalidResponse();
   return requireReplacement(JSON.parse(result).replacement);
 }

@@ -48,7 +48,7 @@ let total = 0;
 try {
   for (const fixture of cases) {
     for (const seed of seeds) {
-      const system = buildLocalSelectionEditSystemPrompt(fixture.preferences);
+      const system = buildLocalSelectionEditSystemPrompt();
       const body = {
         messages: [
           { role: "system", content: system },

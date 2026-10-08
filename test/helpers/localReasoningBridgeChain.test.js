@@ -158,7 +158,8 @@ test("structured selection output reaches the wire and preserves literal thinkin
 });
 
 test("structured selection output requires confirmed completion and real answer content", async (t) => {
-  const { SELECTION_EDIT_RESPONSE_FORMAT } = await import("../../src/helpers/selectionEditing.js");
+  const { SELECTION_EDIT_RESPONSE_FORMAT, extractLocalSelectionEditReplacement } =
+    await import("../../src/helpers/selectionEditing.js");
   let reply;
   const { bridge, modelId } = await setupChain(t, () => reply);
   for (const finishReason of ["length", "max_tokens", undefined, null, "tool_calls", "unknown"]) {
@@ -187,10 +188,12 @@ test("structured selection output requires confirmed completion and real answer 
         },
       ],
     };
-    await assert.rejects(
-      bridge.processText("edit", modelId, { responseFormat: SELECTION_EDIT_RESPONSE_FORMAT }),
-      { code: "SELECTION_EDIT_EMPTY_RESPONSE" }
-    );
+    const response = await bridge.processText("edit", modelId, {
+      responseFormat: SELECTION_EDIT_RESPONSE_FORMAT,
+    });
+    assert.throws(() => extractLocalSelectionEditReplacement(response), {
+      code: "SELECTION_EDIT_EMPTY_RESPONSE",
+    });
   }
 });
 

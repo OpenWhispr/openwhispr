@@ -59,14 +59,15 @@ class LocalReasoningService {
       });
 
       const result = await modelManager.runInference(modelId, text, inferenceConfig);
-      const stripThinking = config.disableThinking !== false;
+      let cleanResult = result;
       // Thinking tags inside a JSON string are document data. The caller
       // validates the complete envelope instead of stripping anything from it.
-      const cleanResult = config.responseFormat
-        ? result
-        : stripThinking
+      if (!config.responseFormat) {
+        const stripThinking = config.disableThinking !== false;
+        cleanResult = stripThinking
           ? (await import("../helpers/stripThinking.js")).stripThinkingTags(result)
           : result.trim();
+      }
 
       const processingTime = Date.now() - startTime;
 

@@ -864,12 +864,9 @@ class ModelManager {
       // A typed failure (a context overflow, say) must keep its identity, or
       // the renderer cannot translate it and the user sees raw server text.
       if (
-        [
-          "CONTEXT_TOO_LARGE",
-          "OUTPUT_TRUNCATED",
-          "OUTPUT_COMPLETION_UNVERIFIED",
-          "SELECTION_EDIT_EMPTY_RESPONSE",
-        ].includes(error.code)
+        ["CONTEXT_TOO_LARGE", "OUTPUT_TRUNCATED", "OUTPUT_COMPLETION_UNVERIFIED"].includes(
+          error.code
+        )
       ) {
         throw new ModelError(error.message, error.code, {
           modelId,

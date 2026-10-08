@@ -122,7 +122,6 @@ test("local JSON replacement preserves document bytes and rejects ambiguous enve
   for (const response of [
     null,
     123,
-    "",
     "null",
     "[]",
     '"text"',
@@ -143,8 +142,8 @@ test("local JSON replacement preserves document bytes and rejects ambiguous enve
       code: "SELECTION_EDIT_INVALID_RESPONSE",
     });
   }
-  for (const replacement of ["", " \t\n"]) {
-    assert.throws(() => extractLocalSelectionEditReplacement(JSON.stringify({ replacement })), {
+  for (const response of ["", " \n", '{"replacement":""}', '{"replacement":" \\t\\n"}']) {
+    assert.throws(() => extractLocalSelectionEditReplacement(response), {
       code: "SELECTION_EDIT_EMPTY_RESPONSE",
     });
   }

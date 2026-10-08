@@ -92,7 +92,10 @@ test("invalid, empty and truncated local edits fail before banking the captured 
     ['{"replacement":"x","replacement":"y"}', "SELECTION_EDIT_INVALID_RESPONSE", "invalidResponse"],
     ['{"replacement":" "}', "SELECTION_EDIT_EMPTY_RESPONSE", "emptyResponse"],
     [
-      Object.assign(new Error("truncated"), { code: "OUTPUT_TRUNCATED" }),
+      Object.assign(new Error("truncated"), {
+        code: "OUTPUT_TRUNCATED",
+        messageKey: "hooks.audioRecording.errorDescriptions.cleanupTruncated",
+      }),
       "OUTPUT_TRUNCATED",
       "truncatedResponse",
     ],

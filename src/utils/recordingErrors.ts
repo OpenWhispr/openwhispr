@@ -18,7 +18,7 @@ export function getRecordingErrorTitle(error: RecordingError, t: TFunction): str
     return t("hooks.audioRecording.pastePermission.title");
   }
   if (error.code === "PASTE_FAILED") return t("hooks.audioRecording.pasteFailed.title");
-  if (error.selectionEditFatal || error.code?.startsWith("SELECTION_EDIT_")) {
+  if (error.selectionEditFatal) {
     return t("hooks.audioRecording.selectionEditing.notAppliedTitle");
   }
   if (error.code === "NETWORK_ERROR") return t(error.title);

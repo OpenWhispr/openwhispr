@@ -801,12 +801,7 @@ class LlamaServerManager {
               // A cut-off reply with no content spent its whole budget reasoning
               // (#2187): there is no answer to return, whichever field the
               // reasoning sits in. Lenient callers still accept a partial answer.
-              if (
-                truncated &&
-                (options.requireCompleteOutput ||
-                  options.responseFormat ||
-                  !message?.content?.trim())
-              ) {
+              if (truncated && (options.requireCompleteOutput || !message?.content?.trim())) {
                 // The renderer maps the code to the cleanup toast's wording (#2091).
                 const error = new Error("Model output was truncated");
                 error.code = "OUTPUT_TRUNCATED";
@@ -827,15 +822,7 @@ class LlamaServerManager {
                   );
                   return;
                 }
-                if (typeof message?.content !== "string" || !message.content.trim()) {
-                  reject(
-                    Object.assign(new Error("Model returned no selection edit answer"), {
-                      code: "SELECTION_EDIT_EMPTY_RESPONSE",
-                    })
-                  );
-                  return;
-                }
-                resolve(message.content);
+                resolve(typeof message?.content === "string" ? message.content : "");
                 return;
               }
               // Some builds still route a suppressed-thinking answer into

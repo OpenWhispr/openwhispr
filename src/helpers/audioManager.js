@@ -2859,15 +2859,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       temperature: config?.temperature ?? 0.2,
       requireCompleteOutput: true,
     };
-    const completionMarker = `__OPENWHISPR_SELECTION_COMPLETE_${crypto.randomUUID()}__`;
     const isLocalSelection = config?.provider === "local";
     let userPrompt;
+    let completionMarker;
     if (isLocalSelection) {
       const settings = getSettings();
       selectionConfig.systemPrompt = buildLocalSelectionEditSystemPrompt({
-        customPrompt: (settings.customPrompts?.dictationAgent || "").replace(
+        customPrompt: (settings.customPrompts.dictationAgent || "").replace(
           /\{\{agentName\}\}/g,
-          agentName || "Assistant"
+          agentName?.trim() || "Assistant"
         ),
         dictionary: getDictionaryHintWords(settings),
       });
@@ -2883,6 +2883,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           );
       userPrompt = buildLocalSelectionEditUserPrompt(instruction, capture.text);
     } else {
+      completionMarker = `__OPENWHISPR_SELECTION_COMPLETE_${crypto.randomUUID()}__`;
       selectionConfig.systemPrompt = buildSelectionEditSystemPrompt(
         config?.systemPrompt,
         completionMarker
@@ -2918,7 +2919,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         OUTPUT_COMPLETION_UNVERIFIED: "invalidResponse",
         SELECTION_EDIT_EMPTY_RESPONSE: "emptyResponse",
         [EMPTY_OUTPUT_MESSAGE_KEY]: "emptyResponse",
-        OUTPUT_TRUNCATED: "truncatedResponse",
         [TRUNCATED_OUTPUT_MESSAGE_KEY]: "truncatedResponse",
       };
       const failure = failures[cause.messageKey] || failures[cause.code];
