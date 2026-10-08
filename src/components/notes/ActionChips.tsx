@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Blocks, SquareSlash, TextCursorInput } from "../icons";
+import { Blocks, TextCursorInput } from "../icons";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent } from "../ui/dropdown-menu";
 import { cn } from "../lib/utils";
 import { getActionName, getActionDescription } from "../../stores/actionStore";
@@ -13,22 +13,24 @@ const VISIBLE_CHIPS = 4;
 const CHIP_CLASS = cn(
   "inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-xs text-foreground/60",
   // A disabled chip still takes the pointer, so moving onto one moves the card to it.
-  "enabled:hover:bg-foreground/[0.07] enabled:hover:text-foreground disabled:cursor-default disabled:text-foreground/30 dark:enabled:hover:bg-white/[0.08]",
+  "enabled:hover:bg-foreground/[0.07] enabled:hover:text-foreground disabled:cursor-default disabled:text-foreground/30 disabled:[&_svg]:opacity-40 dark:enabled:hover:bg-white/[0.08]",
   "transition-colors duration-150 focus:outline-none focus-visible:bg-foreground/6 focus-visible:text-foreground",
   "animate-[fade-in-up_0.32s_cubic-bezier(0.22,1,0.36,1)_backwards] motion-reduce:animate-none"
 );
 
-// The docked chat's tray: filled pills on the tray, each with its action's icon.
+// The docked chat's tray: filled pills on the tray.
 const DOCKED_CHIP_CLASS = cn(
   CHIP_CLASS,
   "bg-background text-foreground/70 dark:bg-surface-1",
   "enabled:hover:bg-surface-3 focus-visible:bg-surface-3 dark:enabled:hover:bg-surface-2 dark:focus-visible:bg-surface-2"
 );
 
+const CHIP_ICON_CLASS = "shrink-0 text-primary";
+
 const chipEntrance = (index: number) => ({ animationDelay: `${140 + index * 40}ms` });
 
 interface ActionChipsProps extends ActionMenuItemsProps {
-  /** The docked chat's look: filled pills, each with its action's icon. */
+  /** The docked chat's look: filled pills on its tray. */
   docked?: boolean;
   /** A first pill that writes the note's AI summary; absent when the note has no template to run. */
   generateSummary?: { run: () => void; disabled: boolean };
@@ -50,9 +52,7 @@ export default function ActionChips({
   const [previewed, setPreviewed] = useState<ActionItem | null>(null);
   const description = previewed && getActionDescription(previewed, t);
   const chipClass = docked ? DOCKED_CHIP_CLASS : CHIP_CLASS;
-  const iconFor = (action: ActionItem) => (docked ? getActionIcon(action) : SquareSlash);
-  const iconClass = cn("shrink-0", docked && "text-primary");
-  const PreviewedIcon = previewed && iconFor(previewed);
+  const PreviewedIcon = previewed && getActionIcon(previewed);
   const leadingChips = generateSummary ? 1 : 0;
 
   return (
@@ -60,9 +60,7 @@ export default function ActionChips({
       {previewed && (
         <div className="pointer-events-none absolute bottom-full start-0 z-10 mb-2 flex w-full max-w-md items-center gap-3 rounded-2xl border border-black/[0.06] bg-popover p-3 shadow-(--shadow-chat-card) animate-[fade-in-up_0.18s_ease-out] motion-reduce:animate-none dark:border-white/10">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-foreground/6">
-            {PreviewedIcon && (
-              <PreviewedIcon size={16} className={docked ? "text-primary" : "text-foreground/70"} />
-            )}
+            {PreviewedIcon && <PreviewedIcon size={16} className="text-primary" />}
           </span>
           <span className="min-w-0 flex-1">
             <span dir="auto" className="block truncate text-sm font-medium text-foreground">
@@ -97,12 +95,12 @@ export default function ActionChips({
               className={chipClass}
               style={chipEntrance(0)}
             >
-              <TextCursorInput size={14} className={iconClass} />
+              <TextCursorInput size={14} className={CHIP_ICON_CLASS} />
               {t("embeddedChat.generateSummary")}
             </button>
           )}
           {actions.slice(0, VISIBLE_CHIPS).map((action, index) => {
-            const Icon = iconFor(action);
+            const Icon = getActionIcon(action);
             return (
               <button
                 key={action.id}
@@ -122,7 +120,7 @@ export default function ActionChips({
                 className={chipClass}
                 style={chipEntrance(leadingChips + index)}
               >
-                <Icon size={docked ? 14 : 13} className={iconClass} />
+                <Icon size={14} className={CHIP_ICON_CLASS} />
                 <span dir="auto">{getActionName(action, t)}</span>
               </button>
             );
@@ -136,7 +134,7 @@ export default function ActionChips({
               className={chipClass}
               style={chipEntrance(leadingChips + Math.min(actions.length, VISIBLE_CHIPS))}
             >
-              <Blocks size={docked ? 14 : 13} className={iconClass} />
+              <Blocks size={14} className={CHIP_ICON_CLASS} />
               {t("notes.actions.allActions")}
             </button>
           </DropdownMenuTrigger>

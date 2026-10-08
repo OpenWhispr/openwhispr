@@ -44,10 +44,7 @@ test("recording state renders no backdrop-filter surface over the live transcrip
 
 test("the bar and the open chat never blur the note behind them", async (t) => {
   for (const chatOpen of [false, true]) {
-    const html = await renderBottomBar(t, {
-      chatOpen,
-      chatContent: createElement("div", null, "Chat"),
-    });
+    const html = await renderBottomBar(t, { chatOpen });
     assert.ok(
       !/backdrop-|blur-\[/.test(html),
       `no blur with the chat ${chatOpen ? "open" : "closed"}`
@@ -56,17 +53,13 @@ test("the bar and the open chat never blur the note behind them", async (t) => {
 });
 
 test("in-view chat expands the existing capsule around one composer", async (t) => {
-  const html = await renderBottomBar(t, {
-    chatOpen: true,
-    chatContent: createElement("div", null, "Chat"),
-  });
+  const html = await renderBottomBar(t, { chatOpen: true });
 
   assert.equal((html.match(/<textarea/g) ?? []).length, 1);
 });
 
 test("the collapsed composer offers the action picker; the chips wait for the chat to open", async (t) => {
   const props = {
-    chatContent: createElement("div", null, "Previous conversation"),
     actionPicker: createElement("button", null, "Action picker"),
     actionChips: createElement("button", null, "All actions"),
     callout: createElement("button", null, "Generate summary"),
@@ -84,11 +77,7 @@ test("the collapsed composer offers the action picker; the chips wait for the ch
   const open = await renderBottomBar(t, { ...props, chatOpen: true });
   assert.ok(!open.includes("Action picker"), "the picker steps aside once the chat opens");
   assert.equal(open.split("All actions").length, 2, "the chips show once");
-  assert.ok(
-    open.indexOf("Previous conversation") < open.indexOf("All actions") &&
-      open.indexOf("All actions") < open.indexOf("<textarea"),
-    "between the chat's messages and the composer"
-  );
+  assert.ok(open.indexOf("All actions") < open.indexOf("<textarea"), "above the composer");
 });
 
 // The real DOM pieces the open chat needs: containment, pointer events, ResizeObserver.
@@ -163,7 +152,7 @@ test("a click outside the open chat closes it, unless it dismisses a menu over t
           onDraftChange: () => {},
           onAskSubmit: () => {},
           chatOpen,
-          chatContent: createElement("button", { id: "in-chat" }, "Chat"),
+          actionChips: createElement("button", { id: "in-chat" }, "Chip"),
           onClickOutside: () => closed++,
         })
       )

@@ -4689,9 +4689,6 @@
   },
   "embeddedChat": {
     "askPlaceholder": "Ask anything about your note",
-    "title": "Chat",
-    "emptyState": "Ask a question about this note",
-    "dock": "Dock to sidebar",
     "close": "Close chat",
     "newChat": "New chat",
     "conversationSelector": "Switch conversation",

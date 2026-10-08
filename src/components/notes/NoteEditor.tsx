@@ -87,7 +87,6 @@ import {
 } from "../../stores/actionStore";
 import { compileChatActionPrompt } from "../../helpers/templatePrompts";
 import type { SlashCommand } from "../chat/slashCommands";
-import type { Message } from "../chat/types";
 import { formatNoteDate, formatRelativeTime, formatShortDate } from "../../utils/dateFormatting";
 import {
   buildLlmTranscript,
@@ -124,7 +123,6 @@ const NOTE_EXPORT_LABEL_KEYS = {
   md: "notes.editor.asMarkdown",
   txt: "notes.editor.asPlainText",
 } as const;
-const NO_MESSAGES: Message[] = [];
 
 export interface Enhancement {
   content: string;
@@ -282,10 +280,6 @@ export default function NoteEditor({
   const viewMode: MeetingViewMode =
     selectedViewMode === "enhanced" && !enhancement ? "raw" : selectedViewMode;
   const [chatMode, setChatMode] = useState<EmbeddedChatMode>("hidden");
-  // The in-view chat mounts on its first open and then stays, so it can fade out as it
-  // closes; a note whose chat is never opened doesn't render it at all.
-  const [inViewChatMounted, setInViewChatMounted] = useState(false);
-  if (chatMode === "floating" && !inViewChatMounted) setInViewChatMounted(true);
   const [chatDraft, setChatDraft] = useState("");
   const handleChatModeChange = useCallback((mode: EmbeddedChatMode) => {
     if (
@@ -870,7 +864,7 @@ export default function NoteEditor({
     [enhancement, note.id]
   );
 
-  // Whatever the ask bar sends, the conversation carries on in the docked chat.
+  // Whatever the ask bar sends starts a new conversation, which carries on in the docked chat.
   const handleAskSubmit = useCallback(
     (text: string) => {
       setChatMode("sidebar");
@@ -879,21 +873,28 @@ export default function NoteEditor({
         setChatDraft(text);
         return;
       }
-      embeddedChat.sendMessage(text);
+      embeddedChat.sendInNewChat(text);
     },
     [embeddedChat]
   );
 
-  // The chat shows the action's name while the model gets its prompt.
+  // The chat shows the action's name while the model gets its prompt. Run from the docked
+  // chat, it continues the open conversation; from the ask bar, it starts a new one.
   const handleChatAction = useCallback(
     (action: ActionItem) => {
       if (embeddedChat.agentState !== "idle") return;
-      setChatMode("sidebar");
-      void embeddedChat.sendMessage(getActionCta(action, t), {
+      const cta = getActionCta(action, t);
+      const options = {
         requestText: compileChatActionPrompt(action, { fromSummary: !!enhancement }),
-      });
+      };
+      if (chatMode === "sidebar") {
+        void embeddedChat.sendMessage(cta, options);
+        return;
+      }
+      setChatMode("sidebar");
+      embeddedChat.sendInNewChat(cta, options);
     },
-    [embeddedChat, enhancement, t]
+    [chatMode, embeddedChat, enhancement, t]
   );
 
   const runAction = useCallback(
@@ -1472,21 +1473,6 @@ export default function NoteEditor({
             agentState={chatMode === "floating" ? embeddedChat.agentState : "idle"}
             onCancel={embeddedChat.cancelStream}
             floatingPanelRef={floatingChatPanelRef}
-            chatContent={
-              chatMode !== "sidebar" &&
-              inViewChatMounted && (
-                // Only starts a conversation: the conversation and its history are in the docked chat.
-                <EmbeddedChat
-                  mode="floating"
-                  active={chatMode === "floating"}
-                  onModeChange={handleChatModeChange}
-                  messages={NO_MESSAGES}
-                  agentState={embeddedChat.agentState}
-                  onTextSubmit={embeddedChat.sendMessage}
-                  onCancel={embeddedChat.cancelStream}
-                />
-              )
-            }
             actionPicker={
               offersActions &&
               noteActions.length > 0 && (
@@ -1528,8 +1514,7 @@ export default function NoteEditor({
       </div>
       {chatMode === "sidebar" && (
         <EmbeddedChat
-          mode="sidebar"
-          onModeChange={handleChatModeChange}
+          onClose={closeChat}
           messages={embeddedChat.messages}
           agentState={embeddedChat.agentState}
           draftText={chatDraft}

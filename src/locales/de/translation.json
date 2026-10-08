@@ -4689,9 +4689,6 @@
   },
   "embeddedChat": {
     "askPlaceholder": "Frag etwas zu deiner Notiz",
-    "title": "Chat",
-    "emptyState": "Stelle eine Frage zu dieser Notiz",
-    "dock": "In Seitenleiste andocken",
     "close": "Chat schließen",
     "newChat": "Neuer Chat",
     "conversationSelector": "Unterhaltung wechseln",

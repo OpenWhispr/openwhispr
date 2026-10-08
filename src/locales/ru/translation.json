@@ -4657,9 +4657,6 @@
   },
   "embeddedChat": {
     "askPlaceholder": "Спросите о своей заметке",
-    "title": "Чат",
-    "emptyState": "Задайте вопрос об этой заметке",
-    "dock": "Закрепить на боковой панели",
     "close": "Закрыть чат",
     "newChat": "Новый чат",
     "conversationSelector": "Сменить беседу",

@@ -134,7 +134,7 @@ test("hovering a chip shows what its action does above the row", async (t) => {
   );
   const chip = findElement(
     container,
-    (el) => el.tagName === "BUTTON" && el.textContent === "Create to-dos"
+    (el) => el.tagName === "BUTTON" && el.textContent.trim() === "Create to-dos"
   );
   const description = () => findElement(container, (el) => el.textContent === "List every to-do");
   const pointer = (type) =>
@@ -159,7 +159,7 @@ test("hovering a chip shows what its action does above the row", async (t) => {
     null,
     "and the next chip, even a disabled one, swaps it to its own action"
   );
-  assert.ok(card.textContent.startsWith(followUpChip.textContent));
+  assert.ok(card.textContent.trim().startsWith(followUpChip.textContent.trim()));
   assert.ok(
     findElement(container, (el) => el === card),
     "without remounting the card, so its entrance doesn't replay"
@@ -318,9 +318,12 @@ test("the docked chat shows the note's chips between its messages and its compos
   const slashCommands = [{ id: "cmd", label: "Follow-up email", run: () => {} }];
   const tree = collect(
     renderTree(EmbeddedChat, {
-      mode: "sidebar",
-      onModeChange: () => {},
+      onClose: () => {},
       messages: [],
+      noteConversations: [],
+      activeConversationId: null,
+      onSwitchConversation: () => {},
+      onNewChat: () => {},
       agentState: "idle",
       onTextSubmit: () => {},
       onCancel: () => {},
@@ -330,7 +333,7 @@ test("the docked chat shows the note's chips between its messages and its compos
   );
 
   const order = tree.filter(
-    (node) => node === chips || node.props.emptyState || node.props.variant === "sidebar"
+    (node) => node === chips || node.props.emptyState || node.props.onTextSubmit
   );
   assert.deepEqual(
     order.map((node) =>

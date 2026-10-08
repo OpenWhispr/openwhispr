@@ -4613,9 +4613,6 @@
   },
   "embeddedChat": {
     "askPlaceholder": "Pregunta sobre tu nota",
-    "title": "Chat",
-    "emptyState": "Haz una pregunta sobre esta nota",
-    "dock": "Anclar a la barra lateral",
     "close": "Cerrar chat",
     "newChat": "Nuevo chat",
     "conversationSelector": "Cambiar conversación",

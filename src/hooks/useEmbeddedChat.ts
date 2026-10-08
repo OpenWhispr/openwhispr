@@ -45,6 +45,8 @@ interface UseEmbeddedChatReturn {
   activeConversationId: number | null;
   switchConversation: (id: number) => Promise<void>;
   startNewChat: () => void;
+  /** Starts a new conversation with this message. */
+  sendInNewChat: (text: string, options?: SendToAIOptions) => void;
 }
 
 // Stable, so a note without participants doesn't rebuild noteMeeting on
@@ -200,6 +202,25 @@ export function useEmbeddedChat({
     [sendMessageWithResult]
   );
 
+  // The sender reads the conversation of the render it was made in, so a message that
+  // starts a new chat waits for the render that cleared the old one.
+  const [newChatMessage, setNewChatMessage] = useState<{
+    text: string;
+    options?: SendToAIOptions;
+  } | null>(null);
+  const sendInNewChat = useCallback(
+    (text: string, options?: SendToAIOptions) => {
+      startNewChat();
+      setNewChatMessage({ text, options });
+    },
+    [startNewChat]
+  );
+  useEffect(() => {
+    if (!newChatMessage) return;
+    setNewChatMessage(null);
+    void sendMessageWithResult(newChatMessage.text, newChatMessage.options);
+  }, [newChatMessage, sendMessageWithResult]);
+
   return {
     messages: persistence.messages,
     // As in ChatView: a cancelled send can hold the submission lock until an in-flight
@@ -213,5 +234,6 @@ export function useEmbeddedChat({
     activeConversationId: conversationId,
     switchConversation,
     startNewChat,
+    sendInNewChat,
   };
 }

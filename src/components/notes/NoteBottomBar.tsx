@@ -5,7 +5,7 @@ import type { AgentState } from "../chat/types";
 import type { SlashCommand } from "../chat/slashCommands";
 import { cn } from "../lib/utils";
 import { hasLayerAbove } from "../ui/useDismissGuard";
-import { observeFloatingChatSize } from "./floatingChatLayout";
+import { observeFloatingChatMaxHeight } from "./floatingChatLayout";
 
 const RECORDING_SURFACE = "bg-surface-2/95 shadow-(--shadow-glass)";
 // One curve for everything that moves as the chat opens, so it unfolds as one piece:
@@ -34,7 +34,6 @@ interface NoteBottomBarProps {
   footnote?: React.ReactNode;
   hideInput?: boolean;
   chatOpen?: boolean;
-  chatContent?: React.ReactNode;
   agentState?: AgentState;
   onCancel?: () => void;
   floatingPanelRef?: (panel: HTMLDivElement, container: HTMLElement) => void | (() => void);
@@ -55,7 +54,6 @@ export default function NoteBottomBar({
   footnote,
   hideInput = false,
   chatOpen = false,
-  chatContent,
   agentState = "idle",
   onCancel,
   floatingPanelRef,
@@ -68,15 +66,18 @@ export default function NoteBottomBar({
       if (!panel) return;
       if (!chatOpen) {
         panel.style.height = "48px";
+        panel.style.maxHeight = "";
         return;
       }
+      // Open, it fits the chips and the composer (or the / menu), within a cap.
+      panel.style.height = "auto";
 
       // Panel → composer slot (with the card) → bar → the note view the bar floats over.
       const slot = panel.parentElement;
       const container = slot?.parentElement?.parentElement;
       if (!slot || !container) return;
 
-      const stopSizing = observeFloatingChatSize({
+      const stopSizing = observeFloatingChatMaxHeight({
         panel,
         container,
       });
@@ -168,26 +169,13 @@ export default function NoteBottomBar({
           inert={hideInput}
           className={cn(
             // Bottom-anchored: while it grows, what doesn't fit yet overflows the top, not the composer.
-            "pointer-events-auto relative flex min-w-0 flex-col justify-end rounded-3xl transition-[height,opacity]",
+            // Its height animates between the bar's 48px and auto.
+            "pointer-events-auto relative flex min-w-0 flex-col justify-end rounded-3xl transition-[height,opacity] [interpolate-size:allow-keywords]",
             UNFOLD,
             chatOpen || hideInput ? "overflow-hidden" : "overflow-visible",
             hideInput && "opacity-0 pointer-events-none"
           )}
         >
-          <div
-            aria-hidden={!chatOpen}
-            inert={!chatOpen}
-            className={cn(
-              "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden transition-[opacity,transform] motion-reduce:transition-none",
-              // In just behind the card as it opens; out at once as it closes.
-              chatOpen
-                ? "translate-y-0 opacity-100 duration-300 delay-150 ease-out"
-                : "translate-y-2 opacity-0 duration-150",
-              slashMenuOpen && "hidden"
-            )}
-          >
-            {chatContent}
-          </div>
           {actionChips && chatOpen && !slashMenuOpen && (
             <div className="shrink-0 px-1.5 pt-2 pb-1">{actionChips}</div>
           )}

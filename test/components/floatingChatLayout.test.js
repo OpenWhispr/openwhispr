@@ -140,15 +140,15 @@ test("viewport resizes preserve pinned content without yanking a reader", async 
   assert.equal(container.style.getPropertyValue("--floating-inset"), "");
 });
 
-test("the in-view chat always opens at two-thirds height and ignores content growth", async () => {
-  const { observeFloatingChatSize } = await load();
-  const panel = { style: { height: "" } };
+test("the in-view chat grows to fit, up to two-thirds height, whatever its content", async () => {
+  const { observeFloatingChatMaxHeight } = await load();
+  const panel = { style: { maxHeight: "" } };
   const container = { clientHeight: 600 };
   const observed = [];
   let onResize;
   let disconnected = false;
 
-  const cleanup = observeFloatingChatSize({ panel, container }, (callback) => {
+  const cleanup = observeFloatingChatMaxHeight({ panel, container }, (callback) => {
     onResize = callback;
     return {
       observe(element) {
@@ -160,41 +160,41 @@ test("the in-view chat always opens at two-thirds height and ignores content gro
     };
   });
 
-  assert.equal(panel.style.height, "400px");
-  assert.deepEqual(observed, [container], "message and composer resizes cannot grow the panel");
+  assert.equal(panel.style.maxHeight, "400px");
+  assert.deepEqual(observed, [container], "content resizes cannot raise the cap");
 
   onResize();
-  assert.equal(panel.style.height, "400px", "content changes scroll inside a fixed panel");
+  assert.equal(panel.style.maxHeight, "400px", "content changes scroll inside the capped panel");
 
   container.clientHeight = 360;
   onResize();
-  assert.equal(panel.style.height, "240px", "the panel follows viewport changes");
+  assert.equal(panel.style.maxHeight, "240px", "the cap follows viewport changes");
 
   cleanup();
   assert.equal(disconnected, true);
 });
 
 test("the note viewport caps the in-view chat in a short window", async () => {
-  const { observeFloatingChatSize } = await load();
-  const panel = { style: { height: "" } };
+  const { observeFloatingChatMaxHeight } = await load();
+  const panel = { style: { maxHeight: "" } };
   const container = { clientHeight: 600 };
   let onResize;
-  const stopSelected = observeFloatingChatSize({ panel, container }, (callback) => {
+  const stopSelected = observeFloatingChatMaxHeight({ panel, container }, (callback) => {
     onResize = callback;
     return { observe() {}, disconnect() {} };
   });
-  assert.equal(panel.style.height, "400px");
+  assert.equal(panel.style.maxHeight, "400px");
 
   onResize();
-  assert.equal(panel.style.height, "400px", "long chat history stays inside the panel");
+  assert.equal(panel.style.maxHeight, "400px", "a long / menu stays inside the cap");
 
   container.clientHeight = 900;
   onResize();
-  assert.equal(panel.style.height, "600px", "only viewport changes resize the panel");
+  assert.equal(panel.style.maxHeight, "600px", "only viewport changes move the cap");
 
   container.clientHeight = 240;
   onResize();
-  assert.equal(panel.style.height, "120px", "the top clearance caps a short viewport");
+  assert.equal(panel.style.maxHeight, "120px", "the top clearance caps a short viewport");
   stopSelected();
 });
 

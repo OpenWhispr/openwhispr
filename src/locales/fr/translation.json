@@ -4689,9 +4689,6 @@
   },
   "embeddedChat": {
     "askPlaceholder": "Posez une question sur votre note",
-    "title": "Chat",
-    "emptyState": "Posez une question sur cette note",
-    "dock": "Ancrer dans la barre latérale",
     "close": "Fermer le chat",
     "newChat": "Nouvelle discussion",
     "conversationSelector": "Changer de conversation",

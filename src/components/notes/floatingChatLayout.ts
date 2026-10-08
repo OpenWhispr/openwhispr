@@ -37,14 +37,15 @@ interface FloatingChatSizeOptions {
   container: HTMLElement;
 }
 
-export function observeFloatingChatSize(
+/** The open chat grows to fit its content, up to two-thirds of the note view. */
+export function observeFloatingChatMaxHeight(
   { panel, container }: FloatingChatSizeOptions,
   createResizeObserver: (callback: () => void) => ResizeObserverHandle = (callback) =>
     new ResizeObserver(callback)
 ): () => void {
   const updateHeight = (): void => {
     const availableHeight = Math.max(0, container.clientHeight - FLOATING_CHAT_TOP_CLEARANCE_PX);
-    panel.style.height = `${Math.min((container.clientHeight * 2) / 3, availableHeight)}px`;
+    panel.style.maxHeight = `${Math.min((container.clientHeight * 2) / 3, availableHeight)}px`;
   };
 
   updateHeight();

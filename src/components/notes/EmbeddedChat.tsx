@@ -1,6 +1,6 @@
-import { useEffect, useCallback, useState } from "react";
+import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { X, PanelRight, Plus } from "../icons";
+import { X, Plus } from "../icons";
 import { cn } from "../lib/utils";
 import { ChatMessages } from "../chat/ChatMessages";
 import { ChatInput } from "../chat/ChatInput";
@@ -11,54 +11,29 @@ import { setActiveNoteId, setActiveFolderId } from "../../stores/noteStore";
 import type { ContainerConversationItem } from "../../hooks/useContainerChat";
 import { ConversationPicker } from "./ConversationPicker";
 
+/** Closed, the ask bar open over the note (floating), or the chat docked beside it (sidebar). */
 export type EmbeddedChatMode = "hidden" | "floating" | "sidebar";
 
 interface EmbeddedChatProps {
-  mode: EmbeddedChatMode;
-  onModeChange: (mode: EmbeddedChatMode) => void;
+  onClose: () => void;
   messages: Message[];
   agentState: AgentState;
   draftText?: string;
   onDraftChange?: (text: string) => void;
   onTextSubmit: (text: string) => void;
   onCancel: () => void;
-  noteConversations?: ContainerConversationItem[];
-  activeConversationId?: number | null;
-  onSwitchConversation?: (id: number) => void;
-  onNewChat?: () => void;
-  active?: boolean;
-  /** Shown above the sidebar composer; the floating chat's host places its own. */
+  noteConversations: ContainerConversationItem[];
+  activeConversationId: number | null;
+  onSwitchConversation: (id: number) => void;
+  onNewChat: () => void;
+  /** Shown in the tray above the composer. */
   actionChips?: React.ReactNode;
   slashCommands?: SlashCommand[];
 }
 
-function EmptyState({ floating }: { floating: boolean }) {
-  const { t } = useTranslation();
-  return (
-    <div
-      className={cn(
-        "flex h-full flex-col items-center justify-center gap-3 px-4 text-center select-none",
-        floating ? "min-h-48" : "min-h-40"
-      )}
-    >
-      {floating ? (
-        <>
-          <BrandMarkIcon size={36} className="text-foreground/20 dark:text-muted-foreground/35" />
-          <p className="max-w-64 text-sm text-muted-foreground">{t("embeddedChat.emptyState")}</p>
-        </>
-      ) : (
-        <BrandMarkIcon
-          size={72}
-          className="text-foreground/10 drop-shadow-sm dark:text-foreground/15"
-        />
-      )}
-    </div>
-  );
-}
-
+/** The note's chat, docked beside it: the conversation, its history and a composer. */
 export default function EmbeddedChat({
-  mode,
-  onModeChange,
+  onClose,
   messages,
   agentState,
   draftText,
@@ -69,7 +44,6 @@ export default function EmbeddedChat({
   activeConversationId,
   onSwitchConversation,
   onNewChat,
-  active = true,
   actionChips,
   slashCommands,
 }: EmbeddedChatProps) {
@@ -82,118 +56,54 @@ export default function EmbeddedChat({
     setActiveNoteId(noteId);
   }, []);
 
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === "Escape" && mode === "floating" && active) {
-        onModeChange("hidden");
-      }
-    },
-    [mode, onModeChange, active]
-  );
-
-  useEffect(() => {
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [handleKeyDown]);
-
-  if (mode === "hidden") return null;
-
-  const hasConversationSelector =
-    noteConversations !== undefined && onSwitchConversation !== undefined;
-
-  const headerTitle = hasConversationSelector ? (
-    <ConversationPicker
-      conversations={noteConversations}
-      activeConversationId={activeConversationId}
-      onSwitchConversation={onSwitchConversation}
-      onNewChat={onNewChat}
-      titleClassName="max-w-32"
-      variant={mode === "sidebar" ? "sidebar" : "default"}
-    />
-  ) : (
-    <span className="text-xs font-medium text-foreground/50">
-      {t(mode === "sidebar" ? "embeddedChat.history" : "embeddedChat.title")}
-    </span>
-  );
-
-  const header = (
-    <div
-      className={cn("flex items-center shrink-0", mode === "sidebar" ? "h-14 px-5" : "h-9 px-3")}
-    >
-      {headerTitle}
-      <div className="flex-1" />
-      {/* Docked, the icons sit as far from the right edge as the clock does from the left. */}
-      <div className={cn("flex items-center", mode === "sidebar" ? "-me-2 gap-3" : "gap-0.5")}>
-        {mode === "floating" ? (
-          <button
-            onClick={() => onModeChange("sidebar")}
-            className="h-6 w-6 flex items-center justify-center rounded-md text-foreground/45 hover:bg-foreground/6 transition-colors"
-            aria-label={t("embeddedChat.dock")}
-          >
-            <PanelRight size={13} className="rtl:scale-x-[-1]" />
-          </button>
-        ) : null}
-        {mode === "sidebar" && onNewChat && (
-          <button
-            onClick={onNewChat}
-            className="flex size-8 items-center justify-center rounded-full text-foreground/65 transition-colors hover:bg-foreground/6 hover:text-foreground"
-            aria-label={t("embeddedChat.newChat")}
-          >
-            <Plus size={16} />
-          </button>
-        )}
-        <button
-          onClick={() => onModeChange("hidden")}
-          className={cn(
-            "flex items-center justify-center text-foreground/45 transition-colors hover:bg-foreground/6 hover:text-foreground",
-            mode === "sidebar" ? "size-8 rounded-full" : "h-6 w-6 rounded-md"
-          )}
-          aria-label={t("embeddedChat.close")}
-        >
-          <X size={mode === "sidebar" ? 16 : 13} />
-        </button>
-      </div>
-    </div>
-  );
-
-  const chatBody = (
-    <>
-      {header}
-      <div
-        className={cn(
-          "flex-1 min-h-0 flex flex-col **:data-chat-bubble:max-w-full",
-          mode === "floating" && "min-w-0 max-w-full **:data-chat-bubble:break-words"
-        )}
-      >
-        <ChatMessages
-          messages={messages}
-          emptyState={<EmptyState floating={mode === "floating"} />}
-          onOpenNote={handleOpenNote}
-          plainBubbles
-          scrollClassName={
-            mode === "floating"
-              ? cn(
-                  "min-w-0 max-w-full overflow-x-hidden",
-                  messages.length === 0 && "scrollbar-hidden"
-                )
-              : messages.length === 0
-                ? "scrollbar-hidden"
-                : undefined
-          }
-        />
-      </div>
-    </>
-  );
-
-  if (mode === "floating") {
-    return chatBody;
-  }
-
   return (
     <div className="flex min-h-0 w-1/2 min-w-80 max-w-2xl shrink-0 p-3" data-note-chat-panel>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[20px] border border-border/60 bg-surface-1 dark:border-white/10 dark:bg-surface-1">
         <div className={cn("flex min-h-0 flex-1 flex-col", slashMenuOpen && "hidden")}>
-          {chatBody}
+          <div className="flex h-14 shrink-0 items-center px-5">
+            <ConversationPicker
+              conversations={noteConversations}
+              activeConversationId={activeConversationId}
+              onSwitchConversation={onSwitchConversation}
+              onNewChat={onNewChat}
+              titleClassName="max-w-32"
+              variant="sidebar"
+            />
+            <div className="flex-1" />
+            {/* The icons sit as far from the right edge as the clock does from the left. */}
+            <div className="-me-2 flex items-center gap-3">
+              <button
+                onClick={onNewChat}
+                className="flex size-8 items-center justify-center rounded-full text-foreground/65 transition-colors hover:bg-foreground/6 hover:text-foreground"
+                aria-label={t("embeddedChat.newChat")}
+              >
+                <Plus size={16} />
+              </button>
+              <button
+                onClick={onClose}
+                className="flex size-8 items-center justify-center rounded-full text-foreground/45 transition-colors hover:bg-foreground/6 hover:text-foreground"
+                aria-label={t("embeddedChat.close")}
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col **:data-chat-bubble:max-w-full">
+            <ChatMessages
+              messages={messages}
+              emptyState={
+                <div className="flex h-full min-h-40 select-none items-center justify-center">
+                  <BrandMarkIcon
+                    size={72}
+                    className="text-foreground/10 drop-shadow-sm dark:text-foreground/15"
+                  />
+                </div>
+              }
+              onOpenNote={handleOpenNote}
+              plainBubbles
+              scrollClassName={messages.length === 0 ? "scrollbar-hidden" : undefined}
+            />
+          </div>
         </div>
         {/* One tray holds the chips and the composer. */}
         <div
@@ -213,7 +123,7 @@ export default function EmbeddedChat({
             onTextSubmit={onTextSubmit}
             onCancel={onCancel}
             voiceDraft
-            // It opens from a send in the ask bar or from Dock, and the conversation moves here.
+            // It opens from a send in the ask bar, and the conversation moves here.
             autoFocus
             focusOnIdle={false}
             placeholder={t("embeddedChat.askPlaceholder")}

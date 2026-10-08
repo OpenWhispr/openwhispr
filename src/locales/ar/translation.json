@@ -4811,9 +4811,6 @@
   },
   "embeddedChat": {
     "askPlaceholder": "اسأل أي شيء عن ملاحظتك",
-    "title": "الدردشة",
-    "emptyState": "اسأل سؤالًا حول هذه الملاحظة",
-    "dock": "إرساء في الشريط الجانبي",
     "close": "إغلاق الدردشة",
     "newChat": "محادثة جديدة",
     "conversationSelector": "تبديل المحادثة",

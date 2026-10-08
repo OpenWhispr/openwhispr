@@ -4613,9 +4613,6 @@
   },
   "embeddedChat": {
     "askPlaceholder": "詢問關於筆記的任何問題",
-    "title": "聊天",
-    "emptyState": "就這條筆記提個問題",
-    "dock": "固定到側邊欄",
     "close": "關閉聊天",
     "newChat": "新對話",
     "conversationSelector": "切換對話",
