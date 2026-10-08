@@ -248,3 +248,126 @@ test('wire bodies: dictation posts the bare {"streams":1}; meetings post model+l
     { path: "/api/gemini-live-token", json: "{}" },
   ]);
 });
+
+// A Cloud note recording whose token request is refused used to toast the API's
+// bare "Invalid session" / "Not authenticated"; these codes let it offer sign-in (#2427).
+const serverTokenPoster = async (overrides = {}) => {
+  const { createServerTokenPoster } = await load();
+  return createServerTokenPoster({
+    getApiUrl: () => "https://api.example",
+    getAuthHeader: async () => ({ Authorization: "Bearer stale" }),
+    proxyFetch: async () => jsonResponse(200, { clientSecret: "secret" }),
+    withPolicyHeaders: (headers) => headers,
+    classifyAndLog: () => ({ isNetworkError: false }),
+    ...overrides,
+  });
+};
+
+test("server tokens: a code-less 401 is AUTH_EXPIRED and keeps the server's message", async () => {
+  const post = await serverTokenPoster({
+    proxyFetch: async () => jsonResponse(401, { error: "Invalid session" }),
+  });
+  await assert.rejects(post("/api/openai-realtime-token"), {
+    message: "Invalid session",
+    code: "AUTH_EXPIRED",
+    status: 401,
+  });
+});
+
+test("server tokens: a missing credential is AUTH_REQUIRED and never reaches the API", async () => {
+  let fetched = false;
+  const post = await serverTokenPoster({
+    getAuthHeader: async () => ({}),
+    proxyFetch: async () => {
+      fetched = true;
+      return jsonResponse(200, {});
+    },
+  });
+  await assert.rejects(post("/api/openai-realtime-token"), {
+    message: "Not authenticated",
+    code: "AUTH_REQUIRED",
+  });
+  assert.equal(fetched, false);
+});
+
+test("server tokens: codes the API sends are kept, and other refusals stay untagged", async () => {
+  const refuse = async (status, body) =>
+    (await serverTokenPoster({ proxyFetch: async () => jsonResponse(status, body) }))(
+      "/api/openai-realtime-token"
+    );
+  await assert.rejects(refuse(401, { error: "Session expired", code: "SESSION_REVOKED" }), {
+    code: "SESSION_REVOKED",
+  });
+  await assert.rejects(refuse(403, { error: "Blocked", code: "POLICY_BLOCKED" }), {
+    code: "POLICY_BLOCKED",
+  });
+  await assert.rejects(refuse(500, null), (error) => {
+    assert.equal(error.message, "Token request failed: 500");
+    assert.equal(error.code, undefined);
+    return true;
+  });
+});
+
+test("server tokens: a network failure is NETWORK_ERROR, not a sign-in prompt", async () => {
+  const post = await serverTokenPoster({
+    proxyFetch: async () => {
+      throw Object.assign(new Error("getaddrinfo ENOTFOUND"), { code: "ENOTFOUND" });
+    },
+    classifyAndLog: () => ({
+      isNetworkError: true,
+      code: "ENOTFOUND",
+      messageKey: "streaming.errors.cloudUnreachable.dnsBlocked",
+    }),
+  });
+  await assert.rejects(post("/api/openai-realtime-token"), {
+    code: "NETWORK_ERROR",
+    networkCode: "ENOTFOUND",
+  });
+});
+
+test("server tokens: a success posts the body with credential and policy headers", async () => {
+  const requests = [];
+  const post = await serverTokenPoster({
+    proxyFetch: async (url, init) => {
+      requests.push({ url, init });
+      return jsonResponse(200, { clientSecret: "secret" });
+    },
+    withPolicyHeaders: (headers) => ({ ...headers, "x-policy": "applied" }),
+  });
+  assert.deepEqual(await post("/api/openai-realtime-token", { streams: 1 }), {
+    clientSecret: "secret",
+  });
+  assert.equal(requests[0].url, "https://api.example/api/openai-realtime-token");
+  assert.equal(requests[0].init.headers.Authorization, "Bearer stale");
+  assert.equal(requests[0].init.headers["x-policy"], "applied");
+  assert.equal(requests[0].init.body, '{"streams":1}');
+});
+
+test("server tokens: only session refusals count as sign-in refusals", async () => {
+  const { isSignInRefusal } = await load();
+  const refusal = async (overrides) => {
+    try {
+      await (
+        await serverTokenPoster(overrides)
+      )("/api/openai-realtime-token");
+    } catch (error) {
+      return error;
+    }
+    assert.fail("expected the token request to be refused");
+  };
+  assert.equal(
+    isSignInRefusal(await refusal({ proxyFetch: async () => jsonResponse(401, {}) })),
+    true
+  );
+  assert.equal(isSignInRefusal(await refusal({ getAuthHeader: async () => ({}) })), true);
+  assert.equal(
+    isSignInRefusal(
+      await refusal({ proxyFetch: async () => jsonResponse(403, { code: "POLICY_BLOCKED" }) })
+    ),
+    false
+  );
+  assert.equal(
+    isSignInRefusal(await refusal({ proxyFetch: async () => jsonResponse(500, null) })),
+    false
+  );
+});

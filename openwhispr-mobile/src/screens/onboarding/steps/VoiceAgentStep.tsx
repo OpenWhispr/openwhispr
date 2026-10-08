@@ -19,11 +19,13 @@ import { addKeyboardStatusChangedListener } from '../../../../modules/app-group-
 
 type Phase = 'start' | 'asking' | 'first-draft' | 'refined' | 'done';
 
-// What users say in the live try, and what the example shows when the live try can't run.
+// What users say in the live try, and what the example shows when the live try can't run. It's kept
+// short so it's easy to repeat, and names the company and when so the draft leaves nothing to fill
+// in but the sender's name, which the follow-up adds.
 const REQUEST =
-  'I cancelled my subscription last month but got charged again. Draft an email asking them to refund it.';
+  'I cancelled Netflix last month but got charged again. Draft a message asking for a refund.';
 const EXAMPLE_DRAFT =
-  'Hi,\n\nI cancelled my subscription last month, but I was charged again this month. Could you please refund this charge?\n\nThanks';
+  'Hi Netflix Support,\n\nI cancelled my subscription last month, but I was charged again this month. Could you please refund this charge?\n\nThanks';
 
 // The field is focused on arrival, so the first instruction points straight at the keyboard's agent
 // button, drawn with the same glyph the keyboard uses.
@@ -35,7 +37,7 @@ const INSTRUCTIONS: Record<Phase, ReactNode> = {
     </>
   ),
   asking: `Say: “${REQUEST}”`,
-  'first-draft': 'Now tap Ask for changes and say: “Make it firmer.”',
+  'first-draft': 'Now tap Ask for changes and add your name. Say: “My name is …”',
   refined: 'Tap ✓ to insert it.',
   done: 'That’s your voice assistant.',
 };

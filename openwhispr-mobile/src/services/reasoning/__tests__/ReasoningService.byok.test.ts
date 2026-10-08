@@ -99,6 +99,34 @@ it('honors private mode even for hint-less BYOK cleanup', async () => {
   expect(api.post).not.toHaveBeenCalled();
 });
 
+it('sends On-Device mode text to the provider the user chose for the workflow', async () => {
+  jest
+    .mocked(useProcessingModeStore.getState)
+    .mockReturnValue({ activeMode: 'private' } as ReturnType<
+      typeof useProcessingModeStore.getState
+    >);
+  await expect(
+    ReasoningService.processText({ text: 'um result', routing: { sendToChosenProvider: true } }),
+  ).resolves.toEqual({ text: 'Clean result.', model: 'gpt-4o-mini' });
+  expect(resolveMobileProviderRoute).toHaveBeenCalledWith('cleanup', route, false, true);
+  expect(processProviderText).toHaveBeenCalledTimes(1);
+  expect(api.post).not.toHaveBeenCalled();
+});
+
+it('ignores a chosen-provider permission on a route that is not a provider', async () => {
+  jest
+    .mocked(useProcessingModeStore.getState)
+    .mockReturnValue({ activeMode: 'private' } as ReturnType<
+      typeof useProcessingModeStore.getState
+    >);
+  jest.mocked(getInferenceSelection).mockReturnValue({ mode: 'local' });
+  await expect(
+    ReasoningService.processText({ text: 'private', routing: { sendToChosenProvider: true } }),
+  ).rejects.toThrow();
+  expect(processProviderText).not.toHaveBeenCalled();
+  expect(api.post).not.toHaveBeenCalled();
+});
+
 it('passes explicit one-request remote permission to the provider route resolver', async () => {
   await ReasoningService.processText({
     text: 'private',

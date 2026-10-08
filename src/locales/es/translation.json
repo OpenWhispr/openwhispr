@@ -123,6 +123,8 @@
       "osReserved": "\"{{hotkey}}\" puede estar reservada por tu entorno de escritorio.",
       "rightModifierNeedsListener": "\"{{hotkey}}\" no se puede usar en este escritorio, cuyos atajos necesitan una tecla normal. Añade una tecla, como Control+Alt+Space.",
       "holdNeedsReleaseKey": "Mantener para hablar necesita una tecla cuya liberación macOS pueda detectar: Globo, una tecla derecha como Opción derecha o un atajo con modificador. Pulsar funciona con cualquier tecla.",
+      "holdNeedsRegularKey": "Para usar Mantener, añade una tecla normal al atajo, como Control+Alt+Space. Tu escritorio no puede detectar cuándo mantienes pulsadas solo teclas modificadoras.",
+      "holdNeedsGnomePortal": "Para usar Mantener, GNOME necesita su portal de atajos globales, incluido desde GNOME 48. Pulsar funciona sin él.",
       "registrationFailed": "No se pudo registrar \"{{hotkey}}\". Puede estar en uso por otra aplicación.",
       "windowsKeyListenerMissing": "\"{{hotkey}}\" necesita el detector de teclas de Windows, que falta en esta instalación. Elige un atajo con una tecla normal.",
       "updateFailedCheckFormat": "No se pudo actualizar el atajo a \"{{hotkey}}\". Comprueba que el formato sea válido.",
@@ -160,7 +162,7 @@
     "close": "Cerrar"
   },
   "windows": {
-    "pttUnavailable": "El módulo nativo de Push-to-Talk no está disponible"
+    "pttUnavailable": "El detector de teclas de OpenWhispr no está disponible."
   },
   "common": {
     "continue": "Continuar",
@@ -177,7 +179,8 @@
     "recommended": "Recomendado",
     "active": "Activo",
     "managedByOrg": "Gestionado por tu organización",
-    "freeAccountRequired": "Cuenta gratuita requerida",
+    "signInRequired": "Inicio de sesión requerido",
+    "signIn": "Iniciar sesión",
     "comingSoon": "Próximamente",
     "cloud": "Nube",
     "local": "Local",
@@ -209,7 +212,8 @@
     "policyUnresolved": "La configuración de tu organización aún no se ha cargado. Inténtalo de nuevo en un momento.",
     "managedConfigLoading": "Comprobando la configuración gestionada de tu organización. Inténtalo de nuevo en un momento.",
     "managedConfigUnavailable": "El acceso empresarial gestionado no está disponible. Vuelve a iniciar sesión o contacta a tu administrador.",
-    "managedPolicyConflict": "El acceso gestionado está bloqueado por la política de tu espacio de trabajo. Contacta a tu administrador."
+    "managedPolicyConflict": "El acceso gestionado está bloqueado por la política de tu espacio de trabajo. Contacta a tu administrador.",
+    "resizePanel": "Cambiar el tamaño del panel"
   },
   "onboarding": {
     "rehaul": {
@@ -771,6 +775,10 @@
       "label": "Desactivar salida de razonamiento",
       "help": "Omite los tokens de razonamiento para una salida más limpia. Recomendado para limpieza. Algunos servidores ignoran esta indicación."
     },
+    "keepModelLoaded": {
+      "label": "Mantener el modelo cargado",
+      "help": "Permanece en memoria en lugar de liberarse tras 5 minutos de inactividad, así la siguiente solicitud evita el arranque en frío. Se aplica a todas las funciones que usan un modelo local."
+    },
     "selfHosted": {
       "endpointHelp": "Apunta a un servidor compatible con OpenAI en tu red local (p. ej. Ollama, LM Studio, vLLM o llama-server)."
     },
@@ -965,7 +973,10 @@
         "modifiersHeldClipboardFailed": "OpenWhispr generó la edición, pero una tecla modificadora (como Ctrl o Mayús) seguía pulsada, así que no se aplicó, y tampoco se pudo copiar al portapapeles.",
         "unavailable": "OpenWhispr no pudo leer de forma segura el texto seleccionado. Revisa los permisos de accesibilidad o automatización.",
         "tooLarge": "La selección es demasiado grande. Selecciona 6.000 caracteres o menos.",
-        "reasoningFailed": "La IA no pudo completar la edición. El texto original no se modificó."
+        "reasoningFailed": "La IA no pudo completar la edición. El texto original no se modificó.",
+        "invalidResponse": "La IA devolvió una respuesta de edición no válida. No se reemplazó nada. Selecciona el texto e inténtalo de nuevo.",
+        "emptyResponse": "La IA devolvió una edición vacía. No se reemplazó nada. Prueba con una instrucción más específica.",
+        "truncatedResponse": "La IA se detuvo antes de completar la edición. No se reemplazó nada. Prueba seleccionando menos texto."
       },
       "pastePermission": {
         "title": "Permitir el pegado automático",
@@ -978,7 +989,8 @@
       },
       "pasteFailed": {
         "title": "No se pudo pegar automáticamente"
-      }
+      },
+      "interruptedRecordingRecovered": "Recuperado después de que OpenWhispr se cerrara antes de terminar este dictado."
     },
     "clipboard": {
       "pasteFailed": {
@@ -1462,6 +1474,7 @@
     "waylandClipboardTitle": "Modo portapapeles en Wayland",
     "windowsReady": "Windows es compatible con el pegado automático de forma nativa. ¡No se requiere configuración!",
     "withoutToolPrefix": "Sin esta herramienta, OpenWhispr copiará el texto al portapapeles. Luego puedes pegarlo manualmente con Ctrl+V.",
+    "wtypeCosmicTerminalsDescription": "En COSMIC, las terminales como Warp solo reciben el texto pegado mediante wtype. En las demás aplicaciones ya se pega sin él.",
     "wtypeFallbackDescription": "wtype es el método de pegado automático preferido para este compositor wlroots. Hay una alternativa disponible, pero puede ser menos fiable.",
     "xwaylandAppsOnly": "el pegado automático funciona solo en apps XWayland"
   },
@@ -1532,6 +1545,7 @@
   },
   "settingsModal": {
     "managedByOrg": "Algunos ajustes están gestionados por tu organización.",
+    "managedAccount": "Cuenta gestionada",
     "groups": {
       "account": "Cuenta",
       "app": "Aplicación",
@@ -1617,7 +1631,10 @@
         "opening": "Abriendo...",
         "updatePaymentMethod": "Actualizar método de pago",
         "contactOwnerTitle": "Contacta al propietario del espacio de trabajo",
-        "contactOwnerDescription": "Solo el propietario del espacio de trabajo puede actualizar su facturación."
+        "contactOwnerDescription": "Solo el propietario del espacio de trabajo puede actualizar su facturación.",
+        "manageInAppStore": "Gestionar en App Store",
+        "manageInGooglePlay": "Gestionar en Google Play",
+        "managedInMobileStore": "Se factura a través de la tienda de aplicaciones de tu teléfono. Gestiónala desde tu teléfono."
       },
       "checkout": {
         "couldNotOpenDescription": "Tuvimos problemas al abrir la página de pago. Inténtalo de nuevo.",
@@ -1641,7 +1658,9 @@
         "nextBilling": "Próxima facturación: {{date}}",
         "pastDue": "{{used}} / {{limit}} palabras gratis esta semana: actualiza el pago para restaurar Pro",
         "trial": "{{days}} días restantes: transcripciones ilimitadas",
-        "unlimited": "Ilimitado"
+        "unlimited": "Ilimitado",
+        "accessUntil": "Acceso hasta el {{date}}",
+        "storePaymentIssue": "Tu tienda de aplicaciones no pudo renovar esta suscripción. Actualiza allí tu método de pago para conservar tu plan."
       },
       "planLabels": {
         "free": "Gratis",
@@ -2048,7 +2067,7 @@
         "recheck": "Volver a comprobar",
         "copy": "Copiar",
         "ydotoolDesc": "Herramienta de automatización de entrada para Wayland",
-        "wtypeDesc": "Herramienta de automatización de entrada preferida en compositores wlroots",
+        "wtypeDesc": "Herramienta de automatización de entrada preferida en compositores wlroots; en COSMIC, se usa para pegar en terminales",
         "ydotooldDesc": "Daemon de ydotool (paquete separado en Ubuntu/Pop!_OS)",
         "uinputDesc": "Acceso al dispositivo de entrada del kernel",
         "uinputRuleFound": "Regla presente pero no activa. Un reinicio debería solucionarlo.",
@@ -2325,6 +2344,12 @@
       },
       "transcriptionPreview": "Vista previa en vivo",
       "transcriptionPreviewDescription": "Mostrar transcripción en una ventana flotante antes de la corrección",
+      "aec": {
+        "toggle": {
+          "title": "Cancelación de eco para reuniones",
+          "description": "Cancela el audio de la reunión que se filtra en tu micrófono. Déjalo desactivado cuando uses auriculares o audífonos: no hay eco que cancelar y puede suprimir tu voz por completo."
+        }
+      },
       "vad": {
         "title": "Detección de actividad de voz",
         "description": "Configura cómo Silero VAD detecta y segmenta el habla para la transcripción local con Whisper",
@@ -2369,7 +2394,8 @@
           }
         }
       },
-      "meetingEnterpriseOnly": "Tu organización solo permite la transcripción en nube empresarial, que aún no cubre la grabación de reuniones."
+      "meetingEnterpriseOnly": "Tu organización solo permite la transcripción en nube empresarial, que aún no cubre la grabación de reuniones.",
+      "meetingCloudSignedOut": "Las grabaciones de notas no pueden iniciarse con OpenWhispr Cloud sin haber iniciado sesión. Elige otro motor arriba."
     },
     "intelligence": {
       "gpuDevice": {
@@ -3175,6 +3201,8 @@
       "unsupportedSelfHosted": "La grabación de notas aún no puede usar un servidor propio. Abre Ajustes y elige Local o un proveedor de streaming.",
       "unsupportedProvider": "La grabación de notas no puede usar {{provider}} para transcripción en vivo. Abre Ajustes y elige Local o un proveedor de streaming.",
       "noProviderSelected": "No hay ningún proveedor seleccionado para la grabación de notas. Abre Ajustes y elige Local o un proveedor de streaming.",
+      "signInRequired": "La grabación de notas requiere iniciar sesión. Por favor, inicia sesión.",
+      "signInExpired": "Tu sesión ha caducado, así que la grabación de notas no puede renovar su conexión y podría detenerse. Vuelve a iniciar sesión cuando termine esta grabación.",
       "systemAudioSilent": {
         "title": "Aún no se detecta el audio de la reunión",
         "description": "Hasta ahora solo tu micrófono ha captado sonido. ¿Estás en una videollamada? Comprueba que el audio de la reunión se reproduce en este equipo y no está silenciado. ¿Estás grabando en persona? Puedes ignorar este aviso: tu micrófono capta la sala."
@@ -3207,6 +3235,7 @@
     },
     "actions": {
       "allActions": "Todas las acciones",
+      "selectAction": "Seleccionar acción",
       "manage": "Gestionar acciones...",
       "addAction": "Nueva acción",
       "editAction": "Editar acción",
@@ -3226,7 +3255,7 @@
       "emptyReply": "El modelo devolvió una respuesta vacía. Vuelve a intentarlo o elige otro modelo.",
       "builtin": {
         "generateNotes": {
-          "name": "Generar notas",
+          "name": "Resumen con IA",
           "description": "Limpiar, estructurar y mejorar tus notas"
         },
         "followUpEmail": {
@@ -3235,7 +3264,7 @@
           "cta": "Redactar correo de seguimiento"
         },
         "detailedNotes": {
-          "name": "Resumen con IA",
+          "name": "Notas detalladas",
           "description": "Notas de reunión precisas y completas con decisiones y tareas"
         },
         "makeTodos": {
@@ -3302,6 +3331,7 @@
       "managerTitle": "Plantillas y acciones",
       "manage": "Gestionar plantillas...",
       "select": "Elegir plantilla",
+      "regenerate": "Regenerar",
       "addTemplate": "Nueva plantilla",
       "editTemplate": "Editar plantilla",
       "namePlaceholder": "Nombre de la plantilla",
@@ -3435,7 +3465,7 @@
         "chips": {
           "catchUp": "Ponme al día",
           "keyDecisions": "Lista las decisiones clave",
-          "inFlight": "Muestra los proyectos en curso"
+          "openActionItems": "Lista las tareas pendientes"
         }
       },
       "invite": "Invitar",
@@ -3709,6 +3739,10 @@
     "activationFailedDescription": "OpenWhispr cambió a la transcripción por CPU.",
     "reasoningActivationFailedDescription": "OpenWhispr cambió al procesamiento por CPU.",
     "retryActivation": "Reintentar aceleración GPU",
+    "redownloadNeeded": "Es necesario volver a descargar el paquete GPU",
+    "redownloadNeededDescription": "Esta versión de OpenWhispr no puede usar tu paquete GPU instalado. Vuelve a descargarlo para volver a activar la aceleración GPU.",
+    "redownloadButton": "Volver a descargar el paquete GPU",
+    "downloadFailed": "No se pudo descargar el paquete GPU.",
     "remove": "Eliminar",
     "dismiss": "Ahora no",
     "cancel": "Cancelar"
@@ -3736,7 +3770,7 @@
       },
       "gpuPackMigration": {
         "title": "Es necesario volver a descargar el paquete GPU",
-        "description": "Una actualización eliminó una instalación obsoleta del paquete GPU ({{packs}}). Vuelve a descargarlo en Configuración para restaurar la aceleración GPU."
+        "description": "Esta versión no puede usar tu paquete GPU anterior ({{packs}}). Vuelve a descargarlo en Configuración para volver a activar la aceleración GPU."
       },
       "cleanupFailed": {
         "title": "Limpieza fallida",
@@ -3824,7 +3858,10 @@
       "typeMessage": "Escribe un mensaje...",
       "send": "Enviar",
       "voiceDraftStreamingOnly": "La entrada de voz no está disponible con tu proveedor de transcripción: solo admite dictado en directo. Elige otro proveedor en Ajustes → Voz a texto.",
-      "commands": "Comandos"
+      "commands": "Comandos",
+      "slashNavigate": "para navegar",
+      "slashSelect": "para seleccionar",
+      "slashClose": "para cerrar"
     },
     "tools": {
       "search_notesName": "Buscar notas",
@@ -4623,15 +4660,10 @@
   },
   "embeddedChat": {
     "askPlaceholder": "Pregunta sobre tu nota",
-    "title": "Chat",
-    "emptyState": "Haz una pregunta sobre esta nota",
-    "dock": "Anclar a la barra lateral",
-    "undock": "Desanclar de la barra lateral",
     "close": "Cerrar chat",
     "newChat": "Nuevo chat",
     "conversationSelector": "Cambiar conversación",
     "history": "Historial",
-    "quickActions": "Acciones rápidas",
     "generateSummary": "Generar resumen"
   },
   "transcriptionPreview": {
@@ -4757,6 +4789,84 @@
       "underway": "Parece que tu reunión ya está en curso. ¿Quieres tomar notas?"
     },
     "start": "Tomar notas",
-    "join": "Unirse y transcribir"
+    "join": "Unirse y transcribir",
+    "folders": {
+      "choose": "Elegir carpeta de la reunión",
+      "search": "Buscar carpetas",
+      "clear": "Borrar búsqueda",
+      "private": "Privado",
+      "shared": "Compartido",
+      "current": "Destino actual",
+      "recent": "Usadas recientemente",
+      "folders": "Carpetas",
+      "new": "Nueva carpeta",
+      "name": "Nombre",
+      "location": "Ubicación",
+      "cancel": "Cancelar",
+      "create": "Crear y seleccionar",
+      "empty": "No se encontraron carpetas. Prueba otro nombre o crea una carpeta.",
+      "loading": "Cargando carpetas…",
+      "unavailable": "No se pudieron cargar las carpetas.",
+      "retry": "Reintentar",
+      "dismiss": "Cerrar notificación de reunión",
+      "selected": "{{destination}} seleccionado",
+      "linked": "Esta reunión ya tiene una nota. Al unirte, permanecerá en {{destination}}.",
+      "errors": {
+        "STALE_NOTIFICATION": "Esta notificación ya no está vigente.",
+        "INVALID_REQUEST": "No se pudo completar. Vuelve a intentarlo.",
+        "FOLDERS_UNAVAILABLE": "No se pudieron cargar las carpetas.",
+        "FOLDER_UNAVAILABLE": "Este destino no está disponible. Elige otra carpeta.",
+        "SPACE_UNAVAILABLE": "Este destino no está disponible. Elige otra carpeta.",
+        "FOLDER_NAME_REQUIRED": "Introduce un nombre de carpeta.",
+        "FOLDER_NAME_TAKEN": "Ya existe una carpeta con ese nombre en esta ubicación.",
+        "CREATE_FAILED": "No se pudo completar. Vuelve a intentarlo.",
+        "LINKED_NOTE_CHANGED": "Revisa el destino y vuelve a unirte.",
+        "NOTE_UNAVAILABLE": "Esta nota no está disponible. Reintenta sin crear otra.",
+        "START_FAILED": "No se pudo completar. Vuelve a intentarlo."
+      }
+    }
+  },
+  "providerErrors": {
+    "authFailed": "{{provider}} rechazó tu clave de API.",
+    "accessDenied": "{{provider}} denegó el acceso. Es posible que tu clave no incluya este modelo.",
+    "quotaExhausted": "Tu cuenta de {{provider}} se ha quedado sin crédito.",
+    "rateLimited": "{{provider}} limitó la solicitud. Espera un momento e inténtalo de nuevo.",
+    "modelNotFound": "{{provider}} no reconoce el modelo «{{model}}».",
+    "modelNotFoundNoModel": "{{provider}} no reconoce el modelo seleccionado.",
+    "payloadTooLarge": "Esta grabación es demasiado grande para {{provider}}.",
+    "requestTooLarge": "Esta solicitud es demasiado grande para {{provider}}.",
+    "badRequest": "{{provider}} no pudo procesar esta solicitud.",
+    "unavailable": "{{provider}} está teniendo problemas en este momento. Inténtalo de nuevo en breve.",
+    "timeout": "{{provider}} tardó demasiado en responder.",
+    "unreachable": "No se pudo conectar con {{provider}}. Comprueba tu conexión.",
+    "noResponse": "No se recibió respuesta de {{provider}}. Comprueba tu clave de API y tu conexión.",
+    "unknown": "{{provider}} devolvió un error inesperado.",
+    "keyMissing": "No hay ninguna clave de API configurada para {{provider}}. Añádela en Ajustes → Modelos de lenguaje.",
+    "selfHosted": {
+      "authFailed": "Tu servidor rechazó la clave de API.",
+      "accessDenied": "Tu servidor denegó el acceso. Es posible que la clave no incluya este modelo.",
+      "quotaExhausted": "Tu servidor indica que la cuenta se ha quedado sin crédito.",
+      "rateLimited": "Tu servidor limitó la solicitud. Espera un momento e inténtalo de nuevo.",
+      "modelNotFound": "Tu servidor no reconoce el modelo «{{model}}».",
+      "modelNotFoundNoModel": "Tu servidor no reconoce el modelo seleccionado.",
+      "payloadTooLarge": "Esta grabación es demasiado grande para tu servidor.",
+      "requestTooLarge": "Esta solicitud es demasiado grande para tu servidor.",
+      "badRequest": "Tu servidor no pudo procesar esta solicitud.",
+      "unavailable": "Tu servidor está teniendo problemas en este momento. Inténtalo de nuevo en breve.",
+      "timeout": "Tu servidor tardó demasiado en responder.",
+      "unreachable": "No se pudo conectar con tu servidor. Comprueba que esté en funcionamiento.",
+      "noResponse": "No se recibió respuesta de tu servidor. Comprueba su clave de API y que esté en funcionamiento.",
+      "unknown": "Tu servidor devolvió un error inesperado."
+    },
+    "openSettings": "Abrir Ajustes",
+    "copyDetails": "Copiar detalles",
+    "titles": {
+      "transcription": "Error de transcripción",
+      "llm": "Error en la solicitud de IA"
+    },
+    "details": {
+      "provider": "Proveedor",
+      "requestId": "ID de solicitud"
+    }
   }
 }

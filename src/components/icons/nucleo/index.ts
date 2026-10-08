@@ -99,7 +99,6 @@ export { ServerOutline24 } from "./ServerOutline24";
 export { ShareRight2Outline24 } from "./ShareRight2Outline24";
 export { ShieldCheckOutline24 } from "./ShieldCheckOutline24";
 export { ShieldOutline24 } from "./ShieldOutline24";
-export { SidebarRightOutline24 } from "./SidebarRightOutline24";
 export { Sliders2Outline24 } from "./Sliders2Outline24";
 export { Sliders2VerticalOutline24 } from "./Sliders2VerticalOutline24";
 export { SparkleOutline24 } from "./SparkleOutline24";

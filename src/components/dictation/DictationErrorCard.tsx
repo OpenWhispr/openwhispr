@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { RotateCcw, ScrollText, Settings, Copy, Check, X } from "../icons";
+import { Check, X } from "../icons";
 import { ASSISTANT_PANEL_SIZE_LIMITS } from "../../helpers/voiceSurfaceGeometry.mjs";
 import { cn } from "../lib/utils";
 import type { ToastActionConfig } from "../ui/useToast";
+import { TOAST_ACTION_ICONS } from "../ui/toastActionIcons";
 
 interface DictationErrorCardProps {
   title?: string;
@@ -17,13 +18,6 @@ interface DictationErrorCardProps {
   progressPaused?: boolean;
   ready?: boolean;
 }
-
-const ACTION_ICONS = {
-  retry: RotateCcw,
-  transcript: ScrollText,
-  settings: Settings,
-  copy: Copy,
-};
 
 function ErrorAction({
   action,
@@ -70,7 +64,7 @@ function ErrorAction({
     resetTimer.current = setTimeout(() => setResult(undefined), 1800);
   };
 
-  const Icon = result === true ? Check : action.icon ? ACTION_ICONS[action.icon] : null;
+  const Icon = result === true ? Check : action.icon ? TOAST_ACTION_ICONS[action.icon] : null;
   const label =
     result === true
       ? action.feedback?.successLabel
@@ -82,8 +76,10 @@ function ErrorAction({
       type="button"
       onClick={() => void handleClick()}
       disabled={pending}
+      title={action.iconOnly ? label : undefined}
       className={cn(
-        "inline-flex h-8 min-w-0 shrink-0 items-center justify-center gap-1.5 rounded-full px-4",
+        "inline-flex h-8 min-w-0 shrink-0 items-center justify-center gap-1.5 rounded-full",
+        action.iconOnly ? "w-8" : "px-4",
         "text-sm font-medium transition-[background-color,color,transform] duration-150",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 active:scale-[0.98] disabled:cursor-wait",
         primary
@@ -92,7 +88,10 @@ function ErrorAction({
       )}
     >
       {Icon && <Icon className="size-3.5 shrink-0" aria-hidden="true" />}
-      <span className="truncate" aria-live={action.feedback ? "polite" : undefined}>
+      <span
+        className={action.iconOnly ? "sr-only" : "truncate"}
+        aria-live={action.feedback ? "polite" : undefined}
+      >
         {label}
       </span>
     </button>
@@ -129,7 +128,7 @@ function ErrorDescription({ text, hotkey }: { text: string; hotkey?: string }) {
   );
 }
 
-/** Shared one/two-action error surface for the floating dictation window. */
+/** Shared error surface (title, description, actions) for the floating dictation window. */
 export function DictationErrorCard({
   title,
   description,
@@ -215,10 +214,16 @@ export function DictationErrorCard({
     <ErrorAction
       key={`${action.label}-${index}`}
       action={action}
-      primary={index === 0}
+      primary={index === 0 && !action.iconOnly}
       onAction={onAction}
     />
   );
+
+  // Up to two labelled actions share one row with the icon-only ones after them.
+  const labelledActions = actions.filter((action) => !action.iconOnly);
+  const iconActions = actions.filter((action) => action.iconOnly);
+  const singleRow = labelledActions.length <= 2;
+  const rowActions = singleRow ? [...labelledActions, ...iconActions] : actions;
 
   return (
     <section
@@ -268,7 +273,21 @@ export function DictationErrorCard({
       {hasSecondaryAction ? (
         <div className="px-2 py-3">
           {text}
-          <div className="mt-3 grid grid-cols-2 gap-2">{actions.map(renderAction)}</div>
+          <div
+            className={cn("mt-3 grid gap-2", !singleRow && "grid-cols-2")}
+            style={
+              singleRow
+                ? {
+                    gridTemplateColumns: [
+                      ...labelledActions.map(() => "minmax(0, 1fr)"),
+                      ...iconActions.map(() => "2rem"),
+                    ].join(" "),
+                  }
+                : undefined
+            }
+          >
+            {rowActions.map(renderAction)}
+          </div>
         </div>
       ) : (
         <div className="flex items-center gap-2 px-2 py-3">

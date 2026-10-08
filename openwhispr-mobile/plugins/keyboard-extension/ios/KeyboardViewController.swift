@@ -99,6 +99,66 @@ private final class KeyButton: UIButton {
   }
 }
 
+/// Route through row/stack boundaries so a key's enlarged target also works in
+/// the gaps between rows. UIKit's default hit testing stops at a parent whose
+/// bounds do not contain the touch, before consulting the key's point(inside:).
+/// Touches no key claims keep UIKit's default target.
+private final class KeyboardRowsStack: UIStackView {
+  /// Padding around the rows that still routes to the nearest key, as the system
+  /// keyboard does at its edges.
+  var touchMargins = UIEdgeInsets.zero
+
+  override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+    let expanded = bounds.inset(
+      by: UIEdgeInsets(
+        top: -touchMargins.top,
+        left: -touchMargins.left,
+        bottom: -touchMargins.bottom,
+        right: -touchMargins.right
+      )
+    )
+    return expanded.contains(point)
+  }
+
+  override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+    guard let defaultTarget = super.hitTest(point, with: event) else { return nil }
+
+    var nearest: KeyButton?
+    var nearestDistance = CGFloat.infinity
+    var nearestCenterDistance = CGFloat.infinity
+
+    func visit(_ view: UIView) {
+      guard !view.isHidden, view.isUserInteractionEnabled, view.alpha >= 0.01 else { return }
+      if let key = view as? KeyButton {
+        guard key.isEnabled,
+              key.point(inside: key.convert(point, from: self), with: event) else { return }
+
+        // Prefer the visible key rectangle over another key's expanded area.
+        // In a gap, choose the nearer edge; center distance breaks edge ties.
+        // This avoids UIKit's reverse-subview-order bias in overlapping targets.
+        let rect = key.convert(key.bounds, to: self)
+        let dx = max(rect.minX - point.x, 0, point.x - rect.maxX)
+        let dy = max(rect.minY - point.y, 0, point.y - rect.maxY)
+        let distance = dx * dx + dy * dy
+        let centerDX = point.x - rect.midX
+        let centerDY = point.y - rect.midY
+        let centerDistance = centerDX * centerDX + centerDY * centerDY
+        if distance < nearestDistance
+          || (distance == nearestDistance && centerDistance < nearestCenterDistance) {
+          nearest = key
+          nearestDistance = distance
+          nearestCenterDistance = centerDistance
+        }
+        return
+      }
+      view.subviews.forEach(visit)
+    }
+
+    subviews.forEach(visit)
+    return nearest ?? defaultTarget
+  }
+}
+
 private extension UIColor {
   func brightened(by amount: CGFloat) -> UIColor {
     var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
@@ -517,7 +577,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   // the in-flight transcription. Hidden in every other state.
   private let processingCancelButton = UIButton(type: .system)
   private let toneButton = KeyButton(type: .system)
-  private let keyboardRowsStack = UIStackView()
+  private let keyboardRowsStack = KeyboardRowsStack()
   private let lettersRowsStack = UIStackView()
   private let numbersRowsStack = UIStackView()
 
@@ -590,10 +650,6 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private var isObservingHandoffNotifications = false
   private var didBuildKeyboard = false
   private var lastMetricsWidth: CGFloat = 0
-  private var rootLeadingConstraint: NSLayoutConstraint?
-  private var rootTrailingConstraint: NSLayoutConstraint?
-  private var rootTopConstraint: NSLayoutConstraint?
-  private var rootBottomConstraint: NSLayoutConstraint?
   private var dictationStripHeightConstraint: NSLayoutConstraint?
   private var keyboardHeightConstraint: NSLayoutConstraint?
   private var rowHeightConstraints: [NSLayoutConstraint] = []
@@ -915,32 +971,20 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
     rootStack.axis = .vertical
     rootStack.spacing = metrics.rootSectionSpacing
+    // The padding is a layout margin, not an offset from the edges, so the stack
+    // spans the whole keyboard and touches in the padding can reach the rows.
+    rootStack.isLayoutMarginsRelativeArrangement = true
+    rootStack.insetsLayoutMarginsFromSafeArea = false
     rootStack.translatesAutoresizingMaskIntoConstraints = false
     view.addSubview(rootStack)
 
-    rootLeadingConstraint = rootStack.leadingAnchor.constraint(
-      equalTo: view.leadingAnchor,
-      constant: metrics.rootHorizontalPadding
-    )
-    rootTrailingConstraint = rootStack.trailingAnchor.constraint(
-      equalTo: view.trailingAnchor,
-      constant: -metrics.rootHorizontalPadding
-    )
-    rootTopConstraint = rootStack.topAnchor.constraint(
-      equalTo: view.topAnchor,
-      constant: metrics.rootTopPadding
-    )
-    rootBottomConstraint = rootStack.bottomAnchor.constraint(
-      equalTo: view.bottomAnchor,
-      constant: -metrics.rootBottomPadding
-    )
-
     NSLayoutConstraint.activate([
-      rootLeadingConstraint,
-      rootTrailingConstraint,
-      rootTopConstraint,
-      rootBottomConstraint,
-    ].compactMap { $0 })
+      rootStack.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      rootStack.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      rootStack.topAnchor.constraint(equalTo: view.topAnchor),
+      rootStack.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+    ])
+    applyRootPadding()
 
     setupDictationStrip()
     setupKeyboardArea()
@@ -1935,6 +1979,23 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     rowHeightConstraints.append(constraint)
   }
 
+  private func applyRootPadding() {
+    rootStack.directionalLayoutMargins = NSDirectionalEdgeInsets(
+      top: metrics.rootTopPadding,
+      leading: metrics.rootHorizontalPadding,
+      bottom: metrics.rootBottomPadding,
+      trailing: metrics.rootHorizontalPadding
+    )
+    // The rows take the padding at the keyboard's sides and bottom, and the half
+    // of the gap below the dictation strip that is nearer to them.
+    keyboardRowsStack.touchMargins = UIEdgeInsets(
+      top: metrics.rootSectionSpacing / 2,
+      left: metrics.rootHorizontalPadding,
+      bottom: metrics.rootBottomPadding,
+      right: metrics.rootHorizontalPadding
+    )
+  }
+
   private func refreshMetricsIfNeeded() {
     let width = view.bounds.width
     guard width.isFinite, width > 0, abs(width - lastMetricsWidth) > 1 else { return }
@@ -1944,10 +2005,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     guard nextMetrics != metrics else { return }
     metrics = nextMetrics
 
-    rootLeadingConstraint?.constant = metrics.rootHorizontalPadding
-    rootTrailingConstraint?.constant = -metrics.rootHorizontalPadding
-    rootTopConstraint?.constant = metrics.rootTopPadding
-    rootBottomConstraint?.constant = -metrics.rootBottomPadding
+    applyRootPadding()
     rootStack.spacing = metrics.rootSectionSpacing
     keyboardRowsStack.spacing = metrics.keyboardRowSpacing
     lettersRowsStack.spacing = metrics.keyboardRowSpacing
@@ -2061,6 +2119,13 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         characterButtons.append(button)
       }
       rowStack.addArrangedSubview(button)
+    }
+
+    // Like the system keyboard, an inset row's end keys take taps in the inset.
+    if let first = rowStack.arrangedSubviews.first as? KeyButton,
+       let last = rowStack.arrangedSubviews.last as? KeyButton {
+      first.hitTestOutsets.left += inset
+      last.hitTestOutsets.right += inset
     }
 
     return rowContainer
@@ -2222,7 +2287,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       nextKeyboardButton.topAnchor.constraint(equalTo: rowContainer.topAnchor),
       nextKeyboardButton.bottomAnchor.constraint(equalTo: rowContainer.bottomAnchor),
 
-      modeButton.leadingAnchor.constraint(equalTo: nextKeyboardButton.trailingAnchor, constant: metrics.keySpacing),
+      modeButton.leadingAnchor.constraint(
+        equalTo: nextKeyboardButton.trailingAnchor,
+        constant: needsInputModeSwitchKey ? metrics.keySpacing : 0
+      ),
       modeButton.topAnchor.constraint(equalTo: rowContainer.topAnchor),
       modeButton.bottomAnchor.constraint(equalTo: rowContainer.bottomAnchor),
 
@@ -2290,6 +2358,14 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     role: KeyRole
   ) -> KeyButton {
     let button = KeyButton(type: .custom)
+    // Each key's target reaches its neighbours and the keyboard's padding, so no
+    // gap or pixel-rounding sliver is dead; KeyboardRowsStack resolves overlaps.
+    button.hitTestOutsets = UIEdgeInsets(
+      top: metrics.keyboardRowSpacing,
+      left: metrics.keySpacing,
+      bottom: metrics.keyboardRowSpacing,
+      right: metrics.keySpacing
+    )
     button.layer.cornerRadius = metrics.keyCornerRadius
     button.layer.cornerCurve = .continuous
 

@@ -14,7 +14,6 @@ import {
   localModelCoversLanguages,
   selectLocalEngine,
   type LocalEngineAvailability,
-  type LocalEngineChoice,
 } from '@/services/transcription/localEngine';
 import { useModelDownloadStore } from '@/store/useModelDownloadStore';
 
@@ -23,11 +22,16 @@ type Props = {
   picked: LocalModelKey | undefined;
 };
 
-function modelInUse(choice: LocalEngineChoice): string {
+function modelInUse(languages: string[], availability: LocalEngineAvailability): string {
+  const choice = selectLocalEngine(languages, availability);
   if (choice.engine === 'none') return 'No model is downloaded yet.';
   const key: LocalModelKey =
     choice.engine === 'whisper' ? 'whisper-base' : `parakeet-${choice.version}`;
-  return `Using ${LOCAL_MODEL_TITLES[key]}.`;
+  // Automatic uses the only downloaded model even when it misses a language.
+  const missesLanguages = localModelCoversLanguages(key, languages)
+    ? ''
+    : " It doesn't cover your languages.";
+  return `Using ${LOCAL_MODEL_TITLES[key]}.${missesLanguages}`;
 }
 
 function radio(selected: boolean): { icon: string; mdIcon: 'CircleCheck' | 'Circle' } {
@@ -74,7 +78,7 @@ export function OnDeviceModelSection({ scope, picked }: Props): React.JSX.Elemen
         {...radio(!effectivePick)}
         iconStyle="line"
         title="Automatic"
-        description={`Best downloaded model for your languages. ${modelInUse(selectLocalEngine(languages, availability))}`}
+        description={`Best downloaded model for your languages. ${modelInUse(languages, availability)}`}
         selected={!effectivePick}
         showChevron={false}
         onPress={() => pickLocalModel(scope, undefined)}

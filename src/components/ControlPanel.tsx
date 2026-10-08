@@ -57,6 +57,7 @@ import {
   DEFAULT_INTEGRATIONS_SECTION,
   type IntegrationsSection,
 } from "./integrations/integrationsSections";
+import { navigateMeetingNotification } from "./meetingNotificationNavigation";
 import MeetingRecordingMount from "./MeetingRecordingMount";
 import MeetingRecordingPill from "./notes/MeetingRecordingPill";
 import NewNoteMenu from "./notes/NewNoteMenu";
@@ -64,7 +65,7 @@ import NewNoteMenu from "./notes/NewNoteMenu";
 import { getCachedPlatform } from "../utils/platform";
 import { isAccessibilitySkipped } from "../utils/permissions";
 import { useGpuBannerAvailability } from "../hooks/useGpuBannerAvailability";
-import { useCreateNote } from "../hooks/useCreateNote";
+import { startRecordingForNote, useCreateNote } from "../hooks/useCreateNote";
 import { useSignInCloudNudge } from "../hooks/useSignInCloudNudge";
 import {
   setActiveNoteId,
@@ -72,6 +73,7 @@ import {
   navigateToContainer,
   useActiveNoteId,
   initializeNotes,
+  subscribeMeetingNotificationFolders,
 } from "../stores/noteStore";
 import { fetchProviders as fetchStreamingProviders } from "../stores/streamingProvidersStore";
 import {
@@ -83,6 +85,7 @@ import { applyChineseScript, resolveChineseScriptTarget } from "../utils/chinese
 import { getAgentName } from "../utils/agentName";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
+import { providerErrorToastProps } from "../utils/describeProviderError";
 import SpaceSyncToastListener from "./notes/SpaceSyncToastListener";
 import { syncService } from "../services/SyncService.js";
 import logger from "../utils/logger";
@@ -115,6 +118,7 @@ interface ControlPanelProps {
 
 export default function ControlPanel({ initialSettingsSection }: ControlPanelProps = {}) {
   const { t } = useTranslation();
+  useEffect(subscribeMeetingNotificationFolders, []);
   const history = useTranscriptions();
   const [isLoading, setIsLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(!!initialSettingsSection);
@@ -125,6 +129,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const [settingsSection, setSettingsSection] = useState<string | undefined>(
     initialSettingsSection
   );
+  // Counts named show-settings requests, so asking again for the section the
+  // modal was opened at still lands there after the user moved elsewhere in it.
+  const [settingsRequest, setSettingsRequest] = useState(0);
   const [aiCTADismissed, setAiCTADismissed] = useState(
     () => localStorage.getItem("aiCTADismissed") === "true"
   );
@@ -160,7 +167,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const recordingFolderId = useMeetingRecordingStore((s) => s.recordingFolderId);
   const [meetingRecordingRequest, setMeetingRecordingRequest] = useState<{
     noteId: number;
-    folderId: number;
+    folderId: number | null;
     event: any;
   } | null>(null);
   const [gpuBannerDismissed, setGpuBannerDismissed] = useState(
@@ -386,10 +393,41 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     }
   }, [authLoaded, isSignedIn]);
 
+  // A ref, not a per-run flag: StrictMode's remount must not cancel the first drain.
+  const meetingNavigationMounted = useRef(false);
   useEffect(() => {
+    meetingNavigationMounted.current = true;
+    const isCurrent = () => meetingNavigationMounted.current;
     const drain = async () => {
       const data = await window.electronAPI?.getPendingMeetingNoteNavigation?.();
       if (!data) return;
+      if (data.navigationId) {
+        if (!isCurrent() || data.spaceId == null) {
+          await window.electronAPI.confirmMeetingNoteNavigation(data.navigationId, "cancel");
+          return;
+        }
+        setActiveView("personal-notes");
+        await navigateMeetingNotification(
+          { ...data, navigationId: data.navigationId, spaceId: data.spaceId },
+          isCurrent,
+          () => import("./notes/PersonalNotesView"),
+          (note) => {
+            void startRecordingForNote(note)
+              .then((accepted) => {
+                if (!accepted) void window.electronAPI?.restoreFromMeetingMode?.();
+              })
+              .catch((error) =>
+                logger.warn(
+                  "Failed to start notification recording",
+                  { error: String(error) },
+                  "meeting"
+                )
+              );
+          }
+        );
+        return;
+      }
+      if (!isCurrent()) return;
       setActiveFolderId(data.folderId);
       setActiveNoteId(data.noteId);
       setActiveView("personal-notes");
@@ -398,7 +436,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         folderId: data.folderId,
         event: data.event,
       });
-      initializeNotes(null, 50, data.folderId);
+      void initializeNotes(null, 50, data.folderId);
       if (
         data.trigger === "hotkey" &&
         useSettingsStore.getState().meetingHotkeyLayoutMode === "side-panel"
@@ -406,9 +444,17 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         window.electronAPI?.snapToMeetingMode?.();
       }
     };
-    drain();
-    const cleanup = window.electronAPI?.onMeetingNoteNavigationPending?.(drain);
-    return () => cleanup?.();
+    const safeDrain = () => {
+      void drain().catch((error) =>
+        logger.warn("Failed to open meeting note", { error: String(error) }, "meeting")
+      );
+    };
+    safeDrain();
+    const cleanup = window.electronAPI?.onMeetingNoteNavigationPending?.(safeDrain);
+    return () => {
+      meetingNavigationMounted.current = false;
+      cleanup?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -428,9 +474,18 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   }, []);
 
   useEffect(() => {
-    const cleanup = window.electronAPI?.onShowSettings?.(() => {
-      setShowSettings(true);
-    });
+    // A named section waits in main (it can outrace this listener on a cold
+    // start); a bare request (app-menu Cmd+,) keeps an open modal where it is.
+    const drain = async (showAnyway: boolean) => {
+      const section = await window.electronAPI?.getPendingSettingsSection?.();
+      if (section) {
+        setSettingsSection(section);
+        setSettingsRequest((count) => count + 1);
+      }
+      if (section || showAnyway) setShowSettings(true);
+    };
+    drain(false);
+    const cleanup = window.electronAPI?.onShowSettings?.(() => drain(true));
     return () => cleanup?.();
   }, []);
 
@@ -648,19 +703,17 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                     settings.translationSourceLanguage,
                     settings.translationTargetLanguage
                   ),
-                  onCleanupError: (cleanupError: Error & { messageKey?: string }) => {
+                  onCleanupError: (cleanupError: unknown) => {
                     logger.warn(
                       "Cleanup step failed in translation chain, translating raw transcript",
-                      { error: cleanupError.message },
+                      { error: (cleanupError as Error).message },
                       "transcription"
                     );
                     // The chain still translates the raw transcript, so say why cleanup
                     // was dropped rather than reporting a clean success (#2091).
                     toast({
                       title: t("app.toasts.cleanupFailed.title"),
-                      description: cleanupError.messageKey
-                        ? t(cleanupError.messageKey)
-                        : cleanupError.message,
+                      ...providerErrorToastProps(cleanupError, t),
                       variant: "destructive",
                     });
                   },
@@ -729,10 +782,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             } catch (cleanupError) {
               // The row keeps its raw transcript, so the retry must not look like it
               // cleaned anything — report why, the way dictation does (#2091).
-              const failure = cleanupError as Error & { messageKey?: string };
               toast({
                 title: t("app.toasts.cleanupFailed.title"),
-                description: failure.messageKey ? t(failure.messageKey) : failure.message,
+                ...providerErrorToastProps(cleanupError, t),
                 variant: "destructive",
               });
             }
@@ -783,7 +835,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         } else {
           toast({
             title: t("controlPanel.history.retryError"),
-            description: result.messageKey ? t(result.messageKey) : result.error,
+            ...providerErrorToastProps({ ...result, message: result.error }, t),
             variant: "destructive",
           });
         }
@@ -912,6 +964,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       {showSettings && (
         <Suspense fallback={null}>
           <SettingsModal
+            // SettingsModal reads initialSection only on open, so a named request remounts it.
+            key={`${settingsSection ?? "default"}-${settingsRequest}`}
             open={showSettings}
             onOpenChange={(open) => {
               setShowSettings(open);

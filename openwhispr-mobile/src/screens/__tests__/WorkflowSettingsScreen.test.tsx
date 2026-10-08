@@ -33,6 +33,11 @@ jest.mock('expo-router', () => ({
     mockFocusEffect = effect;
   },
 }));
+const mockLocalReadiness = jest.fn();
+jest.mock('@/lib/localReasoning', () => ({
+  ...jest.requireActual('@/lib/localReasoning'),
+  getLocalReasoningReadiness: (...args: unknown[]) => mockLocalReadiness(...args),
+}));
 jest.mock('@/lib/privateMode', () => ({
   getPrivateModeReadiness: () => mockPrivateReadiness(),
 }));
@@ -135,6 +140,7 @@ beforeEach(() => {
     return 'switched';
   });
   mockPrivateReadiness.mockResolvedValue({ status: 'missing', modelName: 'Parakeet v2' });
+  mockLocalReadiness.mockResolvedValue({ status: 'ready', tokenCounting: true });
   mockActiveMode = 'cloud';
   mockPolicy.mockResolvedValue({ status: 'unmanaged' });
   mockTestConnection.mockResolvedValue({ ok: true, verification: 'catalog-only' });
@@ -443,7 +449,9 @@ it('shows no cleanup mode for a private-mode user who has not saved one, since c
   render(<WorkflowSettingsScreen />);
   expect(selectedMode()).toBeUndefined();
   expect(
-    screen.getByText('Not saved yet. On-Device mode skips cleanup until you choose On-Device.'),
+    screen.getByText(
+      'Not saved yet. On-Device mode skips cleanup until you choose On-Device or Bring Your Own Key.',
+    ),
   ).toBeTruthy();
   expect(screen.queryByText('Runs on Apple Intelligence on this iPhone.')).toBeNull();
 });
@@ -789,7 +797,7 @@ it('explains that On-Device mode skips a saved Cloud cleanup choice', () => {
   expect(selectedMode()).toBe('OpenWhispr Cloud');
   expect(
     screen.getByText(
-      'On-Device cleanup runs on this iPhone. Any other choice is skipped until dictation leaves On-Device, so the transcript never leaves this phone.',
+      'In On-Device mode, cleanup runs on this iPhone, or sends only the transcript text to your provider with Bring Your Own Key. OpenWhispr Cloud cleanup is skipped until dictation leaves On-Device.',
     ),
   ).toBeTruthy();
 });
@@ -1034,5 +1042,64 @@ describe('a custom server reached under /v1', () => {
     await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalled());
     expect(mockSetCredential).not.toHaveBeenCalled();
     expect(mockUpdateConfig.mock.calls[0][0].inference.dictation.credentialRef).toBeUndefined();
+  });
+});
+
+function modeRow(title: string): { props: { accessibilityState?: Record<string, unknown> } } {
+  let row = screen.getByText(title).parent;
+  while (row && !row.props.accessibilityState) row = row.parent;
+  if (!row) throw new Error(`No row for ${title}`);
+  return row;
+}
+
+describe('an iPhone that cannot run Apple Intelligence', () => {
+  const NEEDS = 'On-Device AI needs an iPhone with Apple Intelligence (iPhone 15 Pro or later).';
+
+  beforeEach(() => {
+    mockLocalReadiness.mockResolvedValue({ status: 'unsupportedDevice', tokenCounting: false });
+  });
+
+  it.each(['cleanup', 'notes', 'agent'])(
+    'disables On-Device for %s and says what it needs',
+    async (scope) => {
+      mockScope = scope;
+      render(<WorkflowSettingsScreen />);
+
+      expect(await screen.findByText(NEEDS)).toBeTruthy();
+      expect(modeRow('On-Device').props.accessibilityState?.disabled).toBe(true);
+      fireEvent.press(screen.getByText('On-Device'));
+      expect(mockSwitchMode).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps On-Device dictation, which runs its own speech model', async () => {
+    mockScope = 'dictation';
+    render(<WorkflowSettingsScreen />);
+
+    await act(async () => {});
+    expect(screen.queryByText(NEEDS)).not.toBeOnTheScreen();
+    expect(modeRow('On-Device').props.accessibilityState?.disabled).toBeFalsy();
+  });
+
+  it('keeps On-Device available while Apple Intelligence is only turned off', async () => {
+    mockLocalReadiness.mockResolvedValue({ status: 'appleIntelligenceOff', tokenCounting: false });
+    mockScope = 'cleanup';
+    render(<WorkflowSettingsScreen />);
+
+    await act(async () => {});
+    expect(modeRow('On-Device').props.accessibilityState?.disabled).toBeFalsy();
+  });
+
+  it('points an unsaved On-Device-mode cleanup at Bring Your Own Key', async () => {
+    mockActiveMode = 'private';
+    mockConfig = { defaultMode: 'private', inference: {} };
+    mockScope = 'cleanup';
+    render(<WorkflowSettingsScreen />);
+
+    expect(
+      await screen.findByText(
+        "Not saved yet. This iPhone can't run On-Device cleanup, so On-Device mode skips it until you choose Bring Your Own Key.",
+      ),
+    ).toBeTruthy();
   });
 });

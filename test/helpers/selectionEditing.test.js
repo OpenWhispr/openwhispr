@@ -28,7 +28,9 @@ test("builds a structured prompt that keeps instruction and selection separate",
   assert.match(systemPrompt, new RegExp(marker));
 
   assert.equal(extractSelectionEditReplacement(`Improved text${marker}`, marker), "Improved text");
-  assert.throws(() => extractSelectionEditReplacement("Truncated text", marker), /incomplete/);
+  assert.throws(() => extractSelectionEditReplacement("Missing marker", marker), {
+    code: "SELECTION_EDIT_INVALID_RESPONSE",
+  });
 
   assert.equal(getSelectionCaptureDisposition({ status: "editable" }), "caret");
   assert.equal(getSelectionCaptureDisposition({ status: "none" }), "standalone");
@@ -78,5 +80,71 @@ test("extractSelectionEditReplacement supports empty or omitted completionMarker
   );
 
   assert.throws(() => extractSelectionEditReplacement("   ", ""), /empty selection edit/);
-  assert.throws(() => extractSelectionEditReplacement(123, ""), /incomplete/);
+  assert.throws(() => extractSelectionEditReplacement(123, ""), {
+    code: "SELECTION_EDIT_INVALID_RESPONSE",
+  });
+});
+
+test("the marker contract is exact, unique, and never demonstrated with a trailing period", async () => {
+  const { buildSelectionEditSystemPrompt, extractSelectionEditReplacement } = await load();
+  const marker = "__OPENWHISPR_SELECTION_COMPLETE_test__";
+  const prompt = buildSelectionEditSystemPrompt("", marker);
+  assert.ok(prompt.endsWith(`: ${marker}`));
+  assert.ok(!prompt.includes(`\n${marker}`));
+  assert.ok(!prompt.includes(`${marker}.`));
+  for (const output of [
+    `edit${marker}.`,
+    `edit${marker} junk`,
+    `edit${marker}\n`,
+    `edit${marker.slice(0, -1)}`,
+    "edit__wrong__",
+    `edit${marker}${marker}`,
+  ]) {
+    assert.throws(() => extractSelectionEditReplacement(output, marker), {
+      code: "SELECTION_EDIT_INVALID_RESPONSE",
+    });
+  }
+  assert.equal(extractSelectionEditReplacement(`  edit\n${marker}`, marker), "  edit\n");
+  for (const output of [marker, ` \n${marker}`]) {
+    assert.throws(() => extractSelectionEditReplacement(output, marker), {
+      code: "SELECTION_EDIT_EMPTY_RESPONSE",
+    });
+  }
+});
+
+test("local JSON replacement preserves document bytes and rejects ambiguous envelopes", async () => {
+  const { extractLocalSelectionEditReplacement } = await load();
+  const replacement = '  "quoted" \\path\n<think>literal document</think> ☕\t\r\n';
+  assert.equal(
+    extractLocalSelectionEditReplacement(` \n${JSON.stringify({ replacement })}\t`),
+    replacement
+  );
+  for (const response of [
+    null,
+    123,
+    "null",
+    "[]",
+    '"text"',
+    "{}",
+    '{"replacement":null}',
+    '{"replacement":123}',
+    '{"replacement":[]}',
+    '{"replacement":"first","replacement":"second"}',
+    '{"replacement":"first","replace\\u006dent":"second"}',
+    '{"replacement":"ok","extra":true}',
+    '{"replacement":"ok"}junk',
+    '```json\n{"replacement":"ok"}\n```',
+    '<think>reason</think>{"replacement":"ok"}',
+    '{"replacement":"unfinished}',
+    '{"replacement":"bad\\q"}',
+  ]) {
+    assert.throws(() => extractLocalSelectionEditReplacement(response), {
+      code: "SELECTION_EDIT_INVALID_RESPONSE",
+    });
+  }
+  for (const response of ["", " \n", '{"replacement":""}', '{"replacement":" \\t\\n"}']) {
+    assert.throws(() => extractLocalSelectionEditReplacement(response), {
+      code: "SELECTION_EDIT_EMPTY_RESPONSE",
+    });
+  }
 });

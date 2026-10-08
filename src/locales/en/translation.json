@@ -123,6 +123,8 @@
       "osReserved": "\"{{hotkey}}\" may be reserved by your desktop environment.",
       "rightModifierNeedsListener": "\"{{hotkey}}\" can't be used on this desktop, whose shortcuts need a regular key. Add a key, such as Control+Alt+Space.",
       "holdNeedsReleaseKey": "Hold-to-talk needs a key macOS can see you release: Globe, a right-side key like Right Option, or a shortcut with a modifier. Tap works with any key.",
+      "holdNeedsRegularKey": "To use Hold, add a regular key to the shortcut, such as Control+Alt+Space. Your desktop can't report holding modifier keys alone.",
+      "holdNeedsGnomePortal": "To use Hold, GNOME needs its global shortcuts portal, which comes with GNOME 48 and newer. Tap works without it.",
       "registrationFailed": "Could not register \"{{hotkey}}\". It may be in use by another application.",
       "windowsKeyListenerMissing": "\"{{hotkey}}\" needs the Windows key listener, which this install is missing. Choose a shortcut with a regular key.",
       "updateFailedCheckFormat": "Failed to update hotkey to \"{{hotkey}}\". Check the format is valid.",
@@ -160,7 +162,7 @@
     "close": "Close"
   },
   "windows": {
-    "pttUnavailable": "Push-to-Talk native listener not available"
+    "pttUnavailable": "OpenWhispr's key listener isn't available."
   },
   "common": {
     "continue": "Continue",
@@ -177,7 +179,8 @@
     "recommended": "Recommended",
     "active": "Active",
     "managedByOrg": "Managed by your organization",
-    "freeAccountRequired": "Free account required",
+    "signInRequired": "Sign in Required",
+    "signIn": "Sign in",
     "comingSoon": "Coming Soon",
     "cloud": "Cloud",
     "local": "Local",
@@ -209,7 +212,8 @@
     "policyUnresolved": "Your organization's settings haven't loaded yet. Try again in a moment.",
     "managedConfigLoading": "Checking your organization's managed setup. Try again in a moment.",
     "managedConfigUnavailable": "Managed enterprise access is unavailable. Sign in again or contact your administrator.",
-    "managedPolicyConflict": "Managed access is blocked by your workspace policy. Contact your administrator."
+    "managedPolicyConflict": "Managed access is blocked by your workspace policy. Contact your administrator.",
+    "resizePanel": "Resize panel"
   },
   "onboarding": {
     "rehaul": {
@@ -771,6 +775,10 @@
       "label": "Disable thinking output",
       "help": "Skips reasoning tokens for cleaner output. Recommended for cleanup. Some servers ignore this hint."
     },
+    "keepModelLoaded": {
+      "label": "Keep model loaded",
+      "help": "Stays in memory instead of unloading after 5 idle minutes, so the next request skips the cold start. Applies to all features using a local model."
+    },
     "selfHosted": {
       "endpointHelp": "Point to an OpenAI-compatible server on your local network (e.g. Ollama, LM Studio, vLLM, or llama-server)."
     },
@@ -965,7 +973,10 @@
         "modifiersHeldClipboardFailed": "OpenWhispr generated the edit, but a modifier key (like Ctrl or Shift) was still held down, so it was not applied, and it could not be copied to the clipboard either.",
         "unavailable": "OpenWhispr could not safely read the selected text. Check accessibility or input automation permissions and try again.",
         "tooLarge": "The selection is too large to edit safely. Select 6,000 characters or fewer.",
-        "reasoningFailed": "The AI could not complete the selection edit. Your original text was not changed."
+        "reasoningFailed": "The AI could not complete the selection edit. Your original text was not changed.",
+        "invalidResponse": "The AI returned an invalid edit response. Nothing was replaced. Select the text and try again.",
+        "emptyResponse": "The AI returned an empty edit. Nothing was replaced. Try a more specific instruction.",
+        "truncatedResponse": "The AI stopped before completing the edit. Nothing was replaced. Try selecting less text."
       },
       "pastePermission": {
         "title": "Allow automatic pasting",
@@ -978,7 +989,8 @@
       },
       "pasteFailed": {
         "title": "Couldn't paste automatically"
-      }
+      },
+      "interruptedRecordingRecovered": "Recovered after OpenWhispr closed before this dictation finished."
     },
     "clipboard": {
       "pasteFailed": {
@@ -1504,6 +1516,7 @@
     "waylandClipboardTitle": "Clipboard Mode on Wayland",
     "windowsReady": "Windows supports automatic pasting out of the box. No setup required!",
     "withoutToolPrefix": "Without this tool, OpenWhispr will copy text to your clipboard. You can then paste manually with Ctrl+V.",
+    "wtypeCosmicTerminalsDescription": "On COSMIC, terminals such as Warp only receive pasted text through wtype. Other apps already paste without it.",
     "wtypeFallbackDescription": "wtype is the preferred auto-paste method for this wlroots compositor. A fallback is available, but may be less reliable.",
     "xwaylandAppsOnly": "automatic pasting works for XWayland apps only"
   },
@@ -1574,6 +1587,7 @@
   },
   "settingsModal": {
     "managedByOrg": "Some settings are managed by your organization.",
+    "managedAccount": "Managed account",
     "groups": {
       "account": "Account",
       "app": "App",
@@ -1859,7 +1873,10 @@
         "opening": "Opening...",
         "updatePaymentMethod": "Update Payment Method",
         "contactOwnerTitle": "Contact your workspace owner",
-        "contactOwnerDescription": "Only the workspace owner can update billing for this workspace."
+        "contactOwnerDescription": "Only the workspace owner can update billing for this workspace.",
+        "manageInAppStore": "Manage in App Store",
+        "manageInGooglePlay": "Manage in Google Play",
+        "managedInMobileStore": "Billed through your phone's app store. Manage it from your phone."
       },
       "checkout": {
         "couldNotOpenDescription": "We had trouble opening the checkout page. Please try again.",
@@ -1883,7 +1900,9 @@
         "nextBilling": "Next billing: {{date}}",
         "pastDue": "{{used}} / {{limit}} free words this week - update payment to restore Pro",
         "trial": "{{days}} days remaining - unlimited transcriptions",
-        "unlimited": "Unlimited"
+        "unlimited": "Unlimited",
+        "accessUntil": "Access until {{date}}",
+        "storePaymentIssue": "Your app store couldn't renew this subscription. Update your payment method there to keep your plan."
       },
       "planLabels": {
         "free": "Free",
@@ -2290,7 +2309,7 @@
         "recheck": "Re-check",
         "copy": "Copy",
         "ydotoolDesc": "Input automation tool for Wayland",
-        "wtypeDesc": "Preferred input automation tool on wlroots compositors",
+        "wtypeDesc": "Preferred input automation tool on wlroots compositors; on COSMIC, used to paste into terminals",
         "ydotooldDesc": "Daemon for ydotool (separate package on Ubuntu/Pop!_OS)",
         "uinputDesc": "Kernel input device access",
         "uinputRuleFound": "Rule present but not active. A reboot should fix it.",
@@ -2567,6 +2586,12 @@
       },
       "transcriptionPreview": "Live Transcription Preview",
       "transcriptionPreviewDescription": "Show transcription in a floating window before cleanup",
+      "aec": {
+        "toggle": {
+          "title": "Echo cancellation for meetings",
+          "description": "Cancel meeting audio that leaks into your microphone. Leave this off when using headphones or earphones — there is no echo to cancel and it can suppress your voice entirely."
+        }
+      },
       "vad": {
         "title": "Voice Activity Detection",
         "description": "Configure how Silero VAD detects and segments speech for local Whisper transcription",
@@ -2611,7 +2636,8 @@
           }
         }
       },
-      "meetingEnterpriseOnly": "Your organization only allows enterprise cloud transcription, which does not cover meeting recording yet."
+      "meetingEnterpriseOnly": "Your organization only allows enterprise cloud transcription, which does not cover meeting recording yet.",
+      "meetingCloudSignedOut": "Note recordings can't start on OpenWhispr Cloud while you're signed out. Choose another engine above."
     },
     "intelligence": {
       "gpuDevice": {
@@ -3474,6 +3500,8 @@
       "unsupportedSelfHosted": "Note Recording can't use a self-hosted endpoint yet. Open Settings and choose Local or a streaming provider.",
       "unsupportedProvider": "Note Recording can't use {{provider}} for live transcription. Open Settings and choose Local or a streaming provider.",
       "noProviderSelected": "No provider is selected for Note Recording. Open Settings and choose Local or a streaming provider.",
+      "signInRequired": "Note Recording requires you to be signed in. Please sign in.",
+      "signInExpired": "Your sign-in has expired, so Note Recording can't renew its connection and may stop. Sign in again once this recording ends.",
       "systemAudioSilent": {
         "title": "No meeting audio detected yet",
         "description": "Only your microphone has picked up sound so far. On a video call? Check that the meeting audio is playing on this computer and isn't muted. Recording in person? You can ignore this — your microphone captures the room."
@@ -3525,6 +3553,7 @@
       "chunkProgress": "Part {{step}} of {{total}}",
       "emptyReply": "The model returned an empty reply. Try again, or pick a different model.",
       "allActions": "All actions",
+      "selectAction": "Select action",
       "manage": "Manage Actions...",
       "addAction": "New Action",
       "editAction": "Edit Action",
@@ -3541,7 +3570,7 @@
       "emptyEditorDescription": "Choose an action from the list or create a new one",
       "builtin": {
         "generateNotes": {
-          "name": "Generate Notes",
+          "name": "AI Summary",
           "description": "Clean up, structure, and enhance your notes"
         },
         "followUpEmail": {
@@ -3550,11 +3579,11 @@
           "cta": "Draft a follow-up email"
         },
         "detailedNotes": {
-          "name": "AI Summary",
+          "name": "Detailed Notes",
           "description": "Accurate, comprehensive meeting notes with decisions and action items"
         },
         "makeTodos": {
-          "name": "Make to-dos",
+          "name": "Create to-dos",
           "description": "List every to-do and its owner in the chat"
         },
         "createOutline": {
@@ -3617,6 +3646,7 @@
       "managerTitle": "Templates & Actions",
       "manage": "Manage Templates...",
       "select": "Choose template",
+      "regenerate": "Regenerate",
       "addTemplate": "New Template",
       "editTemplate": "Edit Template",
       "namePlaceholder": "Template name",
@@ -3734,7 +3764,7 @@
         "chips": {
           "catchUp": "Catch me up",
           "keyDecisions": "List key decisions",
-          "inFlight": "Show in flight projects"
+          "openActionItems": "List open action items"
         }
       },
       "invite": "Invite",
@@ -3827,6 +3857,10 @@
     "activationFailedDescription": "OpenWhispr switched to CPU transcription.",
     "reasoningActivationFailedDescription": "OpenWhispr switched to CPU processing.",
     "retryActivation": "Retry GPU acceleration",
+    "redownloadNeeded": "GPU pack needs re-downloading",
+    "redownloadNeededDescription": "This version of OpenWhispr can't use your installed GPU pack. Download it again to turn GPU acceleration back on.",
+    "redownloadButton": "Re-download GPU pack",
+    "downloadFailed": "Couldn't download the GPU pack.",
     "remove": "Remove",
     "dismiss": "Not now",
     "cancel": "Cancel"
@@ -3854,7 +3888,7 @@
       },
       "gpuPackMigration": {
         "title": "GPU pack needs re-downloading",
-        "description": "An update removed an outdated GPU pack installation ({{packs}}). Re-download it in Settings to restore GPU acceleration."
+        "description": "This version can't use your earlier GPU pack ({{packs}}). Download it again in Settings to turn GPU acceleration back on."
       },
       "cleanupFailed": {
         "title": "Cleanup failed",
@@ -3942,7 +3976,10 @@
       "typeMessage": "Type a message...",
       "send": "Send",
       "voiceDraftStreamingOnly": "Voice input isn't available with your transcription provider: it only supports live dictation. Choose another provider in Settings → Speech to Text.",
-      "commands": "Commands"
+      "commands": "Commands",
+      "slashNavigate": "to navigate",
+      "slashSelect": "to select",
+      "slashClose": "to close"
     },
     "tools": {
       "search_notesName": "Search notes",
@@ -4699,15 +4736,10 @@
   },
   "embeddedChat": {
     "askPlaceholder": "Ask anything about your note",
-    "title": "Chat",
-    "emptyState": "Ask a question about this note",
-    "dock": "Dock to sidebar",
-    "undock": "Undock from sidebar",
     "close": "Close chat",
     "newChat": "New chat",
     "conversationSelector": "Switch conversation",
     "history": "History",
-    "quickActions": "Quick actions",
     "generateSummary": "Generate summary"
   },
   "transcriptionPreview": {
@@ -4757,6 +4789,84 @@
       "underway": "It sounds like your meeting is underway. Want to take notes?"
     },
     "start": "Take notes",
-    "join": "Join & transcribe"
+    "join": "Join and transcribe",
+    "folders": {
+      "choose": "Choose meeting folder",
+      "search": "Search folders",
+      "clear": "Clear search",
+      "private": "Private",
+      "shared": "Shared",
+      "current": "Current destination",
+      "recent": "Recently used",
+      "folders": "Folders",
+      "new": "New folder",
+      "name": "Name",
+      "location": "Location",
+      "cancel": "Cancel",
+      "create": "Create & select",
+      "empty": "No folders found. Try another name, or create a folder.",
+      "loading": "Loading folders…",
+      "unavailable": "Folders could not be loaded.",
+      "retry": "Retry",
+      "dismiss": "Dismiss meeting notification",
+      "selected": "Selected {{destination}}",
+      "linked": "This meeting already has a note. Joining keeps it in {{destination}}.",
+      "errors": {
+        "STALE_NOTIFICATION": "This notification is no longer current.",
+        "INVALID_REQUEST": "Could not finish. Please retry.",
+        "FOLDERS_UNAVAILABLE": "Folders could not be loaded.",
+        "FOLDER_UNAVAILABLE": "This destination is unavailable. Choose another folder.",
+        "SPACE_UNAVAILABLE": "This destination is unavailable. Choose another folder.",
+        "FOLDER_NAME_REQUIRED": "Enter a folder name.",
+        "FOLDER_NAME_TAKEN": "A folder with that name already exists in this location.",
+        "CREATE_FAILED": "Could not finish. Please retry.",
+        "LINKED_NOTE_CHANGED": "Review the destination, then join again.",
+        "NOTE_UNAVAILABLE": "This note is unavailable. Retry without creating a replacement.",
+        "START_FAILED": "Could not finish. Please retry."
+      }
+    }
+  },
+  "providerErrors": {
+    "authFailed": "{{provider}} rejected your API key.",
+    "accessDenied": "{{provider}} denied access. Your key may not include this model.",
+    "quotaExhausted": "Your {{provider}} account is out of credit.",
+    "rateLimited": "{{provider}} rate-limited the request. Wait a moment and try again.",
+    "modelNotFound": "{{provider}} doesn't recognize the model “{{model}}”.",
+    "modelNotFoundNoModel": "{{provider}} doesn't recognize the selected model.",
+    "payloadTooLarge": "This recording is too large for {{provider}}.",
+    "requestTooLarge": "This request is too large for {{provider}}.",
+    "badRequest": "{{provider}} couldn't process this request.",
+    "unavailable": "{{provider}} is having problems right now. Try again shortly.",
+    "timeout": "{{provider}} took too long to respond.",
+    "unreachable": "Couldn't reach {{provider}}. Check your connection.",
+    "noResponse": "Couldn't get a response from {{provider}}. Check your API key and connection.",
+    "unknown": "{{provider}} returned an unexpected error.",
+    "keyMissing": "No API key is set for {{provider}}. Add it in Settings → Language Models.",
+    "selfHosted": {
+      "authFailed": "Your server rejected the API key.",
+      "accessDenied": "Your server denied access. The key may not include this model.",
+      "quotaExhausted": "Your server says the account is out of credit.",
+      "rateLimited": "Your server rate-limited the request. Wait a moment and try again.",
+      "modelNotFound": "Your server doesn't recognize the model “{{model}}”.",
+      "modelNotFoundNoModel": "Your server doesn't recognize the selected model.",
+      "payloadTooLarge": "This recording is too large for your server.",
+      "requestTooLarge": "This request is too large for your server.",
+      "badRequest": "Your server couldn't process this request.",
+      "unavailable": "Your server is having problems right now. Try again shortly.",
+      "timeout": "Your server took too long to respond.",
+      "unreachable": "Couldn't reach your server. Check that it's running.",
+      "noResponse": "Couldn't get a response from your server. Check its API key and that it's running.",
+      "unknown": "Your server returned an unexpected error."
+    },
+    "openSettings": "Open Settings",
+    "copyDetails": "Copy details",
+    "titles": {
+      "transcription": "Transcription failed",
+      "llm": "AI request failed"
+    },
+    "details": {
+      "provider": "Provider",
+      "requestId": "Request ID"
+    }
   }
 }

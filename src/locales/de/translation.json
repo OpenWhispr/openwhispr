@@ -123,6 +123,8 @@
       "osReserved": "\"{{hotkey}}\" ist möglicherweise von Ihrer Desktop-Umgebung reserviert.",
       "rightModifierNeedsListener": "„{{hotkey}}“ kann auf diesem Desktop nicht verwendet werden, da seine Tastenkürzel eine normale Taste benötigen. Fügen Sie eine Taste hinzu, z. B. Control+Alt+Space.",
       "holdNeedsReleaseKey": "Halten zum Sprechen braucht eine Taste, deren Loslassen macOS erkennt: Globe, eine rechte Taste wie Rechte Option oder ein Kürzel mit Modifikator. Tippen funktioniert mit jeder Taste.",
+      "holdNeedsRegularKey": "Um Halten zu nutzen, fügen Sie dem Kürzel eine normale Taste hinzu, z. B. Control+Alt+Space. Ihr Desktop kann das Halten reiner Modifikatortasten nicht melden.",
+      "holdNeedsGnomePortal": "Um Halten zu nutzen, braucht GNOME das Portal für globale Tastenkürzel, das ab GNOME 48 enthalten ist. Tippen funktioniert auch ohne.",
       "registrationFailed": "\"{{hotkey}}\" konnte nicht registriert werden. Möglicherweise wird es von einer anderen Anwendung verwendet.",
       "windowsKeyListenerMissing": "\"{{hotkey}}\" benötigt den Windows-Tasten-Listener, der in dieser Installation fehlt. Wählen Sie ein Tastenkürzel mit einer normalen Taste.",
       "updateFailedCheckFormat": "Hotkey konnte nicht auf \"{{hotkey}}\" aktualisiert werden. Prüfen Sie, ob das Format gültig ist.",
@@ -160,7 +162,7 @@
     "close": "Schließen"
   },
   "windows": {
-    "pttUnavailable": "Der native Push-to-Talk-Listener ist nicht verfügbar"
+    "pttUnavailable": "Der OpenWhispr-Tasten-Listener ist nicht verfügbar."
   },
   "common": {
     "continue": "Weiter",
@@ -177,7 +179,8 @@
     "recommended": "Empfohlen",
     "active": "Aktiv",
     "managedByOrg": "Von Ihrer Organisation verwaltet",
-    "freeAccountRequired": "Kostenloses Konto erforderlich",
+    "signInRequired": "Anmeldung erforderlich",
+    "signIn": "Anmelden",
     "comingSoon": "Demnächst verfügbar",
     "cloud": "Cloud",
     "local": "Lokal",
@@ -209,7 +212,8 @@
     "policyUnresolved": "Die Einstellungen deiner Organisation wurden noch nicht geladen. Versuche es gleich noch einmal.",
     "managedConfigLoading": "Die verwaltete Einrichtung Ihrer Organisation wird überprüft. Versuchen Sie es gleich noch einmal.",
     "managedConfigUnavailable": "Der verwaltete Unternehmenszugriff ist nicht verfügbar. Melden Sie sich erneut an oder wenden Sie sich an Ihren Administrator.",
-    "managedPolicyConflict": "Der verwaltete Zugriff wird durch Ihre Workspace-Richtlinie blockiert. Wenden Sie sich an Ihren Administrator."
+    "managedPolicyConflict": "Der verwaltete Zugriff wird durch Ihre Workspace-Richtlinie blockiert. Wenden Sie sich an Ihren Administrator.",
+    "resizePanel": "Bereichsgröße ändern"
   },
   "onboarding": {
     "rehaul": {
@@ -771,6 +775,10 @@
       "label": "Denkausgabe deaktivieren",
       "help": "Überspringt Reasoning-Token für eine sauberere Ausgabe. Empfohlen für Bereinigung. Einige Server ignorieren diesen Hinweis."
     },
+    "keepModelLoaded": {
+      "label": "Modell geladen lassen",
+      "help": "Bleibt im Speicher, statt nach 5 Minuten Inaktivität entladen zu werden, sodass bei der nächsten Anfrage der Kaltstart entfällt. Gilt für alle Funktionen mit lokalem Modell."
+    },
     "selfHosted": {
       "endpointHelp": "Zeige auf einen OpenAI-kompatiblen Server in deinem lokalen Netzwerk (z. B. Ollama, LM Studio, vLLM oder llama-server)."
     },
@@ -965,7 +973,10 @@
         "modifiersHeldClipboardFailed": "OpenWhispr hat die Bearbeitung erstellt, aber eine Sondertaste (z. B. Strg oder Umschalt) war noch gedrückt, daher wurde sie nicht angewendet und konnte auch nicht in die Zwischenablage kopiert werden.",
         "unavailable": "OpenWhispr konnte den ausgewählten Text nicht sicher lesen. Prüfe die Bedienungshilfen oder Eingabeautomatisierung.",
         "tooLarge": "Die Auswahl ist zu groß. Wähle höchstens 6.000 Zeichen aus.",
-        "reasoningFailed": "Die KI konnte die Auswahlbearbeitung nicht abschließen. Dein ursprünglicher Text wurde nicht geändert."
+        "reasoningFailed": "Die KI konnte die Auswahlbearbeitung nicht abschließen. Dein ursprünglicher Text wurde nicht geändert.",
+        "invalidResponse": "Die KI hat eine ungültige Bearbeitungsantwort zurückgegeben. Es wurde nichts ersetzt. Wähle den Text aus und versuche es erneut.",
+        "emptyResponse": "Die KI hat eine leere Bearbeitung zurückgegeben. Es wurde nichts ersetzt. Versuche eine genauere Anweisung.",
+        "truncatedResponse": "Die KI hat die Bearbeitung vorzeitig beendet. Es wurde nichts ersetzt. Versuche, weniger Text auszuwählen."
       },
       "pastePermission": {
         "title": "Automatisches Einfügen erlauben",
@@ -978,7 +989,8 @@
       },
       "pasteFailed": {
         "title": "Automatisches Einfügen fehlgeschlagen"
-      }
+      },
+      "interruptedRecordingRecovered": "Wiederhergestellt, nachdem OpenWhispr vor dem Ende dieses Diktats beendet wurde."
     },
     "clipboard": {
       "pasteFailed": {
@@ -1504,6 +1516,7 @@
     "waylandClipboardTitle": "Zwischenablage-Modus unter Wayland",
     "windowsReady": "Windows unterstützt automatisches Einfügen direkt. Keine Einrichtung erforderlich!",
     "withoutToolPrefix": "Ohne dieses Tool kopiert OpenWhispr den Text in Ihre Zwischenablage. Sie können ihn dann manuell mit Ctrl+V einfügen.",
+    "wtypeCosmicTerminalsDescription": "Unter COSMIC empfangen Terminals wie Warp eingefügten Text nur über wtype. In andere Apps wird bereits ohne wtype eingefügt.",
     "wtypeFallbackDescription": "wtype ist die bevorzugte Methode für automatisches Einfügen auf diesem wlroots-Compositor. Eine Alternative ist verfügbar, kann aber weniger zuverlässig sein.",
     "xwaylandAppsOnly": "Automatisches Einfügen funktioniert nur für XWayland-Apps"
   },
@@ -1574,6 +1587,7 @@
   },
   "settingsModal": {
     "managedByOrg": "Einige Einstellungen werden von Ihrer Organisation verwaltet.",
+    "managedAccount": "Verwaltetes Konto",
     "groups": {
       "account": "Konto",
       "app": "App",
@@ -1859,7 +1873,10 @@
         "opening": "Wird geöffnet...",
         "updatePaymentMethod": "Zahlungsmethode aktualisieren",
         "contactOwnerTitle": "Wenden Sie sich an den Workspace-Inhaber",
-        "contactOwnerDescription": "Nur der Workspace-Inhaber kann die Abrechnung für diesen Workspace ändern."
+        "contactOwnerDescription": "Nur der Workspace-Inhaber kann die Abrechnung für diesen Workspace ändern.",
+        "manageInAppStore": "Im App Store verwalten",
+        "manageInGooglePlay": "In Google Play verwalten",
+        "managedInMobileStore": "Abrechnung über den App-Store Ihres Smartphones. Verwalten Sie das Abo auf Ihrem Smartphone."
       },
       "checkout": {
         "couldNotOpenDescription": "Die Checkout-Seite konnte nicht geöffnet werden. Bitte versuchen Sie es erneut.",
@@ -1883,7 +1900,9 @@
         "nextBilling": "Nächste Abrechnung: {{date}}",
         "pastDue": "{{used}} / {{limit}} kostenlose Wörter diese Woche – Zahlung aktualisieren, um Pro wiederherzustellen",
         "trial": "Noch {{days}} Tage – unbegrenzte Transkriptionen",
-        "unlimited": "Unbegrenzt"
+        "unlimited": "Unbegrenzt",
+        "accessUntil": "Zugang bis {{date}}",
+        "storePaymentIssue": "Ihr App-Store konnte dieses Abo nicht verlängern. Aktualisieren Sie dort Ihre Zahlungsmethode, um Ihren Tarif zu behalten."
       },
       "planLabels": {
         "free": "Kostenlos",
@@ -2290,7 +2309,7 @@
         "recheck": "Erneut prüfen",
         "copy": "Kopieren",
         "ydotoolDesc": "Eingabeautomatisierung für Wayland",
-        "wtypeDesc": "Bevorzugte Eingabeautomatisierung für wlroots-Compositoren",
+        "wtypeDesc": "Bevorzugte Eingabeautomatisierung für wlroots-Compositoren; unter COSMIC zum Einfügen in Terminals genutzt",
         "ydotooldDesc": "Daemon für ydotool (separates Paket unter Ubuntu/Pop!_OS)",
         "uinputDesc": "Zugriff auf das Kernel-Eingabegerät",
         "uinputRuleFound": "Regel vorhanden, aber nicht aktiv. Ein Neustart sollte das beheben.",
@@ -2567,6 +2586,12 @@
       },
       "transcriptionPreview": "Live-Transkriptionsvorschau",
       "transcriptionPreviewDescription": "Transkription vor der Bereinigung in einem Fenster anzeigen",
+      "aec": {
+        "toggle": {
+          "title": "Echounterdrückung für Meetings",
+          "description": "Unterdrückt Meeting-Audio, das in Ihr Mikrofon gelangt. Lassen Sie dies bei Verwendung von Kopfhörern oder Ohrhörern deaktiviert – es gibt kein Echo zu unterdrücken und es kann Ihre Stimme vollständig unterdrücken."
+        }
+      },
       "vad": {
         "title": "Sprachaktivitätserkennung",
         "description": "Konfiguriere, wie Silero VAD Sprache für die lokale Whisper-Transkription erkennt und segmentiert",
@@ -2611,7 +2636,8 @@
           }
         }
       },
-      "meetingEnterpriseOnly": "Ihre Organisation erlaubt nur Unternehmens-Cloud-Transkription, die Besprechungsaufnahmen noch nicht abdeckt."
+      "meetingEnterpriseOnly": "Ihre Organisation erlaubt nur Unternehmens-Cloud-Transkription, die Besprechungsaufnahmen noch nicht abdeckt.",
+      "meetingCloudSignedOut": "Notizaufnahmen mit OpenWhispr Cloud können nicht starten, solange Sie abgemeldet sind. Wählen Sie oben eine andere Engine."
     },
     "intelligence": {
       "gpuDevice": {
@@ -3474,6 +3500,8 @@
       "unsupportedSelfHosted": "Die Notizaufnahme kann noch keinen selbst gehosteten Endpunkt verwenden. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
       "unsupportedProvider": "Die Notizaufnahme kann {{provider}} nicht für die Live-Transkription verwenden. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
       "noProviderSelected": "Für die Notizaufnahme ist kein Anbieter ausgewählt. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
+      "signInRequired": "Für die Notizaufnahme musst du angemeldet sein. Bitte melde dich an.",
+      "signInExpired": "Deine Anmeldung ist abgelaufen, daher kann die Notizaufnahme ihre Verbindung nicht erneuern und stoppt möglicherweise. Melde dich nach dem Ende dieser Aufnahme erneut an.",
       "systemAudioSilent": {
         "title": "Noch kein Meeting-Ton erkannt",
         "description": "Bisher hat nur Ihr Mikrofon Ton aufgenommen. Sie sind in einem Videoanruf? Prüfen Sie, ob der Meeting-Ton auf diesem Computer wiedergegeben wird und nicht stummgeschaltet ist. Sie nehmen vor Ort auf? Dann können Sie diesen Hinweis ignorieren – Ihr Mikrofon nimmt den Raum auf."
@@ -3525,6 +3553,7 @@
       "chunkProgress": "Teil {{step}} von {{total}}",
       "emptyReply": "Das Modell hat eine leere Antwort zurückgegeben. Versuchen Sie es erneut oder wählen Sie ein anderes Modell.",
       "allActions": "Alle Aktionen",
+      "selectAction": "Aktion auswählen",
       "manage": "Aktionen verwalten...",
       "addAction": "Neue Aktion",
       "editAction": "Aktion bearbeiten",
@@ -3541,7 +3570,7 @@
       "emptyEditorDescription": "Wählen Sie eine Aktion aus der Liste oder erstellen Sie eine neue",
       "builtin": {
         "generateNotes": {
-          "name": "Notizen generieren",
+          "name": "KI-Zusammenfassung",
           "description": "Notizen bereinigen, strukturieren und verbessern"
         },
         "followUpEmail": {
@@ -3550,7 +3579,7 @@
           "cta": "Follow-up-E-Mail entwerfen"
         },
         "detailedNotes": {
-          "name": "KI-Zusammenfassung",
+          "name": "Ausführliche Notizen",
           "description": "Präzise, umfassende Meeting-Notizen mit Entscheidungen und Aufgaben"
         },
         "makeTodos": {
@@ -3617,6 +3646,7 @@
       "managerTitle": "Vorlagen & Aktionen",
       "manage": "Vorlagen verwalten...",
       "select": "Vorlage auswählen",
+      "regenerate": "Neu generieren",
       "addTemplate": "Neue Vorlage",
       "editTemplate": "Vorlage bearbeiten",
       "namePlaceholder": "Name der Vorlage",
@@ -3734,7 +3764,7 @@
         "chips": {
           "catchUp": "Bring mich auf den neuesten Stand",
           "keyDecisions": "Liste die wichtigsten Entscheidungen auf",
-          "inFlight": "Zeig laufende Projekte"
+          "openActionItems": "Liste die offenen Aufgaben auf"
         }
       },
       "invite": "Einladen",
@@ -3827,6 +3857,10 @@
     "activationFailedDescription": "OpenWhispr verwendet die CPU-Transkription.",
     "reasoningActivationFailedDescription": "OpenWhispr verwendet die CPU-Verarbeitung.",
     "retryActivation": "GPU-Beschleunigung erneut versuchen",
+    "redownloadNeeded": "GPU-Paket muss erneut heruntergeladen werden",
+    "redownloadNeededDescription": "Diese Version von OpenWhispr kann dein installiertes GPU-Paket nicht verwenden. Lade es erneut herunter, um die GPU-Beschleunigung wieder einzuschalten.",
+    "redownloadButton": "GPU-Paket erneut herunterladen",
+    "downloadFailed": "Das GPU-Paket konnte nicht heruntergeladen werden.",
     "remove": "Entfernen",
     "dismiss": "Nicht jetzt",
     "cancel": "Abbrechen"
@@ -3854,7 +3888,7 @@
       },
       "gpuPackMigration": {
         "title": "GPU-Paket muss erneut heruntergeladen werden",
-        "description": "Ein Update hat eine veraltete GPU-Paket-Installation entfernt ({{packs}}). Lade es in den Einstellungen erneut herunter, um die GPU-Beschleunigung wiederherzustellen."
+        "description": "Diese Version kann dein bisheriges GPU-Paket ({{packs}}) nicht verwenden. Lade es in den Einstellungen erneut herunter, um die GPU-Beschleunigung wieder einzuschalten."
       },
       "cleanupFailed": {
         "title": "Bereinigung fehlgeschlagen",
@@ -3942,7 +3976,10 @@
       "typeMessage": "Nachricht eingeben...",
       "send": "Senden",
       "voiceDraftStreamingOnly": "Spracheingabe ist mit Ihrem Transkriptionsanbieter nicht verfügbar: Er unterstützt nur Live-Diktat. Wählen Sie unter Einstellungen → Sprache zu Text einen anderen Anbieter.",
-      "commands": "Befehle"
+      "commands": "Befehle",
+      "slashNavigate": "zum Navigieren",
+      "slashSelect": "zum Auswählen",
+      "slashClose": "zum Schließen"
     },
     "tools": {
       "search_notesName": "Notizen durchsuchen",
@@ -4699,15 +4736,10 @@
   },
   "embeddedChat": {
     "askPlaceholder": "Frag etwas zu deiner Notiz",
-    "title": "Chat",
-    "emptyState": "Stelle eine Frage zu dieser Notiz",
-    "dock": "In Seitenleiste andocken",
-    "undock": "Von Seitenleiste abdocken",
     "close": "Chat schließen",
     "newChat": "Neuer Chat",
     "conversationSelector": "Unterhaltung wechseln",
     "history": "Verlauf",
-    "quickActions": "Schnellaktionen",
     "generateSummary": "Zusammenfassung erstellen"
   },
   "transcriptionPreview": {
@@ -4757,6 +4789,84 @@
       "underway": "Es klingt, als wäre dein Meeting schon im Gange. Notizen aufnehmen?"
     },
     "start": "Notizen aufnehmen",
-    "join": "Beitreten & transkribieren"
+    "join": "Beitreten & transkribieren",
+    "folders": {
+      "choose": "Besprechungsordner auswählen",
+      "search": "Ordner suchen",
+      "clear": "Suche löschen",
+      "private": "Privat",
+      "shared": "Geteilt",
+      "current": "Aktueller Speicherort",
+      "recent": "Zuletzt verwendet",
+      "folders": "Ordner",
+      "new": "Neuer Ordner",
+      "name": "Name",
+      "location": "Speicherort",
+      "cancel": "Abbrechen",
+      "create": "Erstellen und auswählen",
+      "empty": "Keine Ordner gefunden. Suche einen anderen Namen oder erstelle einen Ordner.",
+      "loading": "Ordner werden geladen…",
+      "unavailable": "Ordner konnten nicht geladen werden.",
+      "retry": "Erneut versuchen",
+      "dismiss": "Besprechungsbenachrichtigung schließen",
+      "selected": "{{destination}} ausgewählt",
+      "linked": "Für diese Besprechung gibt es bereits eine Notiz. Beim Beitreten bleibt sie in {{destination}}.",
+      "errors": {
+        "STALE_NOTIFICATION": "Diese Benachrichtigung ist nicht mehr aktuell.",
+        "INVALID_REQUEST": "Vorgang fehlgeschlagen. Bitte erneut versuchen.",
+        "FOLDERS_UNAVAILABLE": "Ordner konnten nicht geladen werden.",
+        "FOLDER_UNAVAILABLE": "Dieser Speicherort ist nicht verfügbar. Wähle einen anderen Ordner.",
+        "SPACE_UNAVAILABLE": "Dieser Speicherort ist nicht verfügbar. Wähle einen anderen Ordner.",
+        "FOLDER_NAME_REQUIRED": "Gib einen Ordnernamen ein.",
+        "FOLDER_NAME_TAKEN": "An diesem Speicherort existiert bereits ein Ordner mit diesem Namen.",
+        "CREATE_FAILED": "Vorgang fehlgeschlagen. Bitte erneut versuchen.",
+        "LINKED_NOTE_CHANGED": "Prüfe den Speicherort und tritt erneut bei.",
+        "NOTE_UNAVAILABLE": "Diese Notiz ist nicht verfügbar. Versuche es erneut, ohne eine neue zu erstellen.",
+        "START_FAILED": "Vorgang fehlgeschlagen. Bitte erneut versuchen."
+      }
+    }
+  },
+  "providerErrors": {
+    "authFailed": "{{provider}} hat Ihren API-Schlüssel abgelehnt.",
+    "accessDenied": "{{provider}} hat den Zugriff verweigert. Ihr Schlüssel deckt dieses Modell möglicherweise nicht ab.",
+    "quotaExhausted": "Ihr {{provider}}-Konto hat kein Guthaben mehr.",
+    "rateLimited": "{{provider}} hat die Anfrage begrenzt. Warten Sie einen Moment und versuchen Sie es erneut.",
+    "modelNotFound": "{{provider}} kennt das Modell „{{model}}“ nicht.",
+    "modelNotFoundNoModel": "{{provider}} kennt das ausgewählte Modell nicht.",
+    "payloadTooLarge": "Diese Aufnahme ist für {{provider}} zu groß.",
+    "requestTooLarge": "Diese Anfrage ist für {{provider}} zu groß.",
+    "badRequest": "{{provider}} konnte diese Anfrage nicht verarbeiten.",
+    "unavailable": "{{provider}} hat derzeit Probleme. Versuchen Sie es in Kürze erneut.",
+    "timeout": "{{provider}} hat zu lange zum Antworten gebraucht.",
+    "unreachable": "{{provider}} konnte nicht erreicht werden. Überprüfen Sie Ihre Verbindung.",
+    "noResponse": "Keine Antwort von {{provider}} erhalten. Überprüfen Sie Ihren API-Schlüssel und Ihre Verbindung.",
+    "unknown": "{{provider}} hat einen unerwarteten Fehler zurückgegeben.",
+    "keyMissing": "Für {{provider}} ist kein API-Schlüssel hinterlegt. Fügen Sie ihn unter Einstellungen → Sprachmodelle hinzu.",
+    "selfHosted": {
+      "authFailed": "Ihr Server hat den API-Schlüssel abgelehnt.",
+      "accessDenied": "Ihr Server hat den Zugriff verweigert. Der Schlüssel deckt dieses Modell möglicherweise nicht ab.",
+      "quotaExhausted": "Ihr Server meldet, dass das Konto kein Guthaben mehr hat.",
+      "rateLimited": "Ihr Server hat die Anfrage begrenzt. Warten Sie einen Moment und versuchen Sie es erneut.",
+      "modelNotFound": "Ihr Server kennt das Modell „{{model}}“ nicht.",
+      "modelNotFoundNoModel": "Ihr Server kennt das ausgewählte Modell nicht.",
+      "payloadTooLarge": "Diese Aufnahme ist für Ihren Server zu groß.",
+      "requestTooLarge": "Diese Anfrage ist für Ihren Server zu groß.",
+      "badRequest": "Ihr Server konnte diese Anfrage nicht verarbeiten.",
+      "unavailable": "Ihr Server hat derzeit Probleme. Versuchen Sie es in Kürze erneut.",
+      "timeout": "Ihr Server hat zu lange zum Antworten gebraucht.",
+      "unreachable": "Ihr Server konnte nicht erreicht werden. Überprüfen Sie, ob er läuft.",
+      "noResponse": "Keine Antwort von Ihrem Server erhalten. Überprüfen Sie seinen API-Schlüssel und ob er läuft.",
+      "unknown": "Ihr Server hat einen unerwarteten Fehler zurückgegeben."
+    },
+    "openSettings": "Einstellungen öffnen",
+    "copyDetails": "Details kopieren",
+    "titles": {
+      "transcription": "Transkription fehlgeschlagen",
+      "llm": "KI-Anfrage fehlgeschlagen"
+    },
+    "details": {
+      "provider": "Anbieter",
+      "requestId": "Anfrage-ID"
+    }
   }
 }

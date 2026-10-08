@@ -39,6 +39,15 @@ function createElement(overrides = {}) {
   };
 }
 
+// Opening the chat leaves the note where it was; a reader scrolls to its end to be followed.
+function scrollToBottom(contentRoot, scroller) {
+  const bottom = scroller.scrollHeight - scroller.clientHeight;
+  scroller.scrollTop = bottom - 100;
+  contentRoot.dispatch("scroll");
+  scroller.scrollTop = bottom;
+  contentRoot.dispatch("scroll");
+}
+
 test("near-bottom detection uses the real scroll range", async () => {
   const { isNearScrollBottom } = await load();
 
@@ -100,13 +109,17 @@ test("viewport resizes preserve pinned content without yanking a reader", async 
   );
 
   assert.deepEqual(observedElements, [panel, contentRoot]);
-  assert.equal(container.style.getPropertyValue("--floating-inset"), "232px");
+  assert.equal(container.style.getPropertyValue("--floating-inset"), "240px");
+  assert.equal(scheduledFrames.size, 0, "opening the chat doesn't scroll the note");
+  resizeCallback();
+  assert.equal(scheduledFrames.size, 0, "nor does the panel growing as it opens");
+  assert.equal(scroller.scrollTop, 700);
 
-  scheduledFrames.get(nextFrameId)();
+  scrollToBottom(contentRoot, scroller);
   scroller.clientHeight = 150;
   resizeCallback();
   scheduledFrames.get(nextFrameId)();
-  assert.equal(scroller.scrollTop, 850, "a pinned scroller follows a viewport shrink");
+  assert.equal(scroller.scrollTop, 850, "a reader at the bottom follows a viewport shrink");
 
   scroller.scrollTop = 600;
   contentRoot.dispatch("scroll");
@@ -127,15 +140,15 @@ test("viewport resizes preserve pinned content without yanking a reader", async 
   assert.equal(container.style.getPropertyValue("--floating-inset"), "");
 });
 
-test("the in-view chat always opens at two-thirds height and ignores content growth", async () => {
-  const { observeFloatingChatSize } = await load();
-  const panel = { style: { height: "" } };
+test("the in-view chat grows to fit, up to three-quarters height, whatever its content", async () => {
+  const { observeFloatingChatMaxHeight } = await load();
+  const panel = { style: { maxHeight: "" } };
   const container = { clientHeight: 600 };
   const observed = [];
   let onResize;
   let disconnected = false;
 
-  const cleanup = observeFloatingChatSize({ panel, container }, (callback) => {
+  const cleanup = observeFloatingChatMaxHeight({ panel, container }, (callback) => {
     onResize = callback;
     return {
       observe(element) {
@@ -147,41 +160,41 @@ test("the in-view chat always opens at two-thirds height and ignores content gro
     };
   });
 
-  assert.equal(panel.style.height, "400px");
-  assert.deepEqual(observed, [container], "message and composer resizes cannot grow the panel");
+  assert.equal(panel.style.maxHeight, "450px");
+  assert.deepEqual(observed, [container], "content resizes cannot raise the cap");
 
   onResize();
-  assert.equal(panel.style.height, "400px", "content changes scroll inside a fixed panel");
+  assert.equal(panel.style.maxHeight, "450px", "content changes scroll inside the capped panel");
 
   container.clientHeight = 360;
   onResize();
-  assert.equal(panel.style.height, "240px", "the panel follows viewport changes");
+  assert.equal(panel.style.maxHeight, "240px", "the cap follows viewport changes");
 
   cleanup();
   assert.equal(disconnected, true);
 });
 
 test("the note viewport caps the in-view chat in a short window", async () => {
-  const { observeFloatingChatSize } = await load();
-  const panel = { style: { height: "" } };
+  const { observeFloatingChatMaxHeight } = await load();
+  const panel = { style: { maxHeight: "" } };
   const container = { clientHeight: 600 };
   let onResize;
-  const stopSelected = observeFloatingChatSize({ panel, container }, (callback) => {
+  const stopSelected = observeFloatingChatMaxHeight({ panel, container }, (callback) => {
     onResize = callback;
     return { observe() {}, disconnect() {} };
   });
-  assert.equal(panel.style.height, "400px");
+  assert.equal(panel.style.maxHeight, "450px");
 
   onResize();
-  assert.equal(panel.style.height, "400px", "long chat history stays inside the panel");
+  assert.equal(panel.style.maxHeight, "450px", "a long / menu stays inside the cap");
 
   container.clientHeight = 900;
   onResize();
-  assert.equal(panel.style.height, "600px", "only viewport changes resize the panel");
+  assert.equal(panel.style.maxHeight, "675px", "only viewport changes move the cap");
 
   container.clientHeight = 240;
   onResize();
-  assert.equal(panel.style.height, "128px", "the top clearance caps a short viewport");
+  assert.equal(panel.style.maxHeight, "120px", "the top clearance caps a short viewport");
   stopSelected();
 });
 
@@ -230,10 +243,12 @@ test("upward wheel intent cancels resize pinning until the reader returns to bot
     clientHeight: 300,
     contains: (target) => target === transcriptRow,
   });
-  const { contentRoot, scheduledFrames, resizeCallback, nextFrameId, cleanup } =
-    createLayoutHarness(observeFloatingChatLayout, { scroller });
+  const { contentRoot, scheduledFrames, resizeCallback, cleanup } = createLayoutHarness(
+    observeFloatingChatLayout,
+    { scroller }
+  );
 
-  scheduledFrames.get(nextFrameId)();
+  scrollToBottom(contentRoot, scroller);
   resizeCallback();
   assert.equal(scheduledFrames.size, 1, "a followed resize schedules a bottom correction");
 
@@ -265,7 +280,7 @@ test("upward wheel over chrome outside the scroller keeps following", async () =
   const harness = createLayoutHarness(observeFloatingChatLayout, { scroller });
   const { contentRoot, scheduledFrames } = harness;
 
-  scheduledFrames.get(harness.nextFrameId)();
+  scrollToBottom(contentRoot, scroller);
   harness.resizeCallback();
   assert.equal(scheduledFrames.size, 1, "a followed resize schedules a bottom correction");
 

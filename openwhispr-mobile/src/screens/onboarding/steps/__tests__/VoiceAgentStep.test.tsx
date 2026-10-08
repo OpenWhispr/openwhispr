@@ -59,8 +59,8 @@ jest.mock('@/store/useAuthStore', () => ({
 // The field is focused on arrival, and the glyph is the keyboard's own agent button.
 const START = 'Tap the [wand.and.stars] button on your keyboard.';
 const ASK =
-  'Say: “I cancelled my subscription last month but got charged again. Draft an email asking them to refund it.”';
-const FOLLOW_UP = 'Now tap Ask for changes and say: “Make it firmer.”';
+  'Say: “I cancelled Netflix last month but got charged again. Draft a message asking for a refund.”';
+const FOLLOW_UP = 'Now tap Ask for changes and add your name. Say: “My name is …”';
 const INSERT = 'Tap ✓ to insert it.';
 const DONE = 'That’s your voice assistant.';
 const ACCOUNT_REQUIRED =
@@ -124,7 +124,7 @@ it('shows the refund request and a drafted email when the live try is unavailabl
   const screen = render(<VoiceAgentStep />);
   expect(
     screen.getByText(
-      '“I cancelled my subscription last month but got charged again. Draft an email asking them to refund it.”',
+      '“I cancelled Netflix last month but got charged again. Draft a message asking for a refund.”',
     ),
   ).toBeTruthy();
   expect(screen.getByText(/Could you please refund this charge\?/)).toBeTruthy();

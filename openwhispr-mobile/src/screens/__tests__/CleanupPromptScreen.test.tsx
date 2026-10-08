@@ -96,8 +96,21 @@ describe('CleanupPromptScreen — guidance', () => {
     mockActiveMode = 'private';
     render(<CleanupPromptScreen />);
     expect(
-      screen.getByText(/On-Device mode skips cleanup unless it is set to On-Device/),
+      screen.getByText(
+        /On-Device mode skips cleanup unless it is set to On-Device or Bring Your Own Key/,
+      ),
     ).toBeTruthy();
+  });
+
+  it('treats provider cleanup in On-Device mode as using the prompt', () => {
+    mockActiveMode = 'private';
+    mockConfig = {
+      defaultMode: 'private',
+      cleanupEnabled: true,
+      inference: { cleanup: { mode: 'providers', providerId: 'openai', modelId: 'gpt-5-mini' } },
+    };
+    render(<CleanupPromptScreen />);
+    expect(screen.queryByText(NOTICE)).not.toBeOnTheScreen();
   });
 
   it('treats On-Device cleanup in On-Device mode as using the prompt', () => {

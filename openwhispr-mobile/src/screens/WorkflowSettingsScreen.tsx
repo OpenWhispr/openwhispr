@@ -34,6 +34,7 @@ import { InferenceModePicker } from '@/components/settings/InferenceModePicker';
 import {
   ON_DEVICE_MODE_NOTES,
   UNSET_ON_DEVICE_CLEANUP_NOTE,
+  UNSET_UNSUPPORTED_CLEANUP_NOTE,
   UNSET_PROVIDER_NOTES,
   WORKFLOW_LABELS,
   WORKFLOWS,
@@ -45,6 +46,11 @@ import { getDictationAgentName, isDictationAgentEnabled } from '@/lib/dictationA
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { switchWorkflowMode } from '@/lib/workflowModeSwitch';
 import { getPrivateModeReadiness } from '@/lib/privateMode';
+import {
+  getLocalReasoningReadiness,
+  getLocalReasoningUnavailableMessage,
+  isLocalReasoningUnsupported,
+} from '@/lib/localReasoning';
 import {
   discoverProviderModels,
   testProviderConnection,
@@ -267,8 +273,32 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   const models = provider?.models.length ? provider.models : discoveredModels;
   const shownMode =
     cleanupUnsaved && selection.mode === savedSelection.mode ? null : selection.mode;
+  const speechScope = scope === 'dictation' || scope === 'upload' ? scope : null;
+  // On-Device text workflows run on Apple Intelligence, which some iPhones can never run.
+  const [onDeviceUnsupported, setOnDeviceUnsupported] = useState<string | null>(null);
+  useEffect(() => {
+    if (speechScope) return undefined;
+    let cancelled = false;
+    getLocalReasoningReadiness()
+      .then((readiness) => {
+        if (cancelled) return;
+        setOnDeviceUnsupported(
+          isLocalReasoningUnsupported(readiness)
+            ? getLocalReasoningUnavailableMessage(readiness)
+            : null,
+        );
+      })
+      .catch(() => undefined);
+    return (): void => {
+      cancelled = true;
+    };
+  }, [speechScope]);
   const modeNote =
-    (shownMode === null ? UNSET_ON_DEVICE_CLEANUP_NOTE : undefined) ??
+    (shownMode === null
+      ? onDeviceUnsupported
+        ? UNSET_UNSUPPORTED_CLEANUP_NOTE
+        : UNSET_ON_DEVICE_CLEANUP_NOTE
+      : undefined) ??
     (activeMode === 'private' ? ON_DEVICE_MODE_NOTES[scope] : undefined) ??
     (activeMode === 'providers' && !config?.inference?.[scope]
       ? UNSET_PROVIDER_NOTES[scope]
@@ -276,7 +306,6 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
     (selection.mode === 'providers' && savedSelection.mode !== 'providers'
       ? 'Save to switch to Bring Your Own Key.'
       : undefined);
-  const speechScope = scope === 'dictation' || scope === 'upload' ? scope : null;
   // Keys are stored per provider (per server for Custom), so every workflow on it shares one.
   const keyOwner =
     provider?.id === 'custom' ? 'this server' : providerDisplayName(provider?.id ?? '');
@@ -658,6 +687,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
               scope={speechScope ? 'speech' : 'text'}
               selectedMode={shownMode}
               onSelect={chooseMode}
+              unavailable={onDeviceUnsupported ? { local: onDeviceUnsupported } : undefined}
             />
             {modeNote ? <SectionFooter>{modeNote}</SectionFooter> : null}
             {selection.mode === 'local' && speechScope ? (

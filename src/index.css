@@ -102,6 +102,10 @@
   --shadow-glass:
     inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(255, 255, 255, 0.45),
     0 2px 10px rgba(15, 23, 42, 0.06);
+  /* The open note chat: the glass rim over a deep, soft lift. */
+  --shadow-chat-card:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85), inset 0 0 0 1px rgba(255, 255, 255, 0.5),
+    0 28px 64px -24px rgba(15, 23, 42, 0.3), 0 2px 10px rgba(15, 23, 42, 0.06);
   /* Same rim on brand-blue surfaces (mic/send buttons): the app icon's glass.
      Softer than --shadow-glass because it sits on colour. */
   --shadow-brand-glass:
@@ -186,6 +190,9 @@
   --shadow-glass:
     inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.05),
     0 2px 12px rgba(0, 0, 0, 0.35);
+  --shadow-chat-card:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 32px 72px -24px rgba(0, 0, 0, 0.8), 0 2px 12px rgba(0, 0, 0, 0.35);
   --shadow-brand-tile: var(--shadow-brand-glass), 0 10px 24px -8px rgb(0 0 0 / 0.6);
 }
 
@@ -1311,6 +1318,15 @@ a:hover {
   }
 }
 
+/* Holds a clip only while it runs, so what overflows during an unfold stays hidden
+   and nothing is clipped at rest. */
+@keyframes clip-while-unfolding {
+  from,
+  to {
+    clip-path: inset(0 round 1.5rem);
+  }
+}
+
 @keyframes check-pop {
   0% {
     transform: scale(0);
@@ -1709,8 +1725,7 @@ a:hover {
 .rich-text-editor-content {
   outline: none;
   unicode-bidi: plaintext;
-  /* The bottom clears the note's ask bar and the action chips above it. */
-  padding-block: 0.75rem 7.5rem;
+  padding-block: 0.75rem 5rem;
   /* Centers the text in the page column (PAGE_CONTENT_WIDTH_CLASS) with padding, not a
      max-width, so the editable area spans the pane and a margin click places the caret. */
   padding-inline: max(1.25rem, calc((100% - var(--container-5xl)) / 2 + 1.25rem));
@@ -1896,11 +1911,6 @@ a:hover {
   pointer-events: none;
   float: inline-start;
   height: 0;
-}
-
-/* The empty-line format toolbar sits where the placeholder would show. */
-.rich-text-editor-content:has(~ .rich-text-editor-line-menu) p.is-editor-empty:first-child::before {
-  content: none;
 }
 
 /* Dark mode adjustments */

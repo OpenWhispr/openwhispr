@@ -9,7 +9,6 @@ import { GLASS_SURFACE } from "../ui/glass";
 import { useToast } from "../ui/useToast";
 import { formatMmSs } from "../../utils/formatDuration";
 import { useVoiceDraft } from "./useVoiceDraft";
-import { Popover, PopoverAnchor, PopoverContent } from "../ui/popover";
 import SlashCommandMenu from "./SlashCommandMenu";
 import { matchSlashCommands, slashOptionId, type SlashCommand } from "./slashCommands";
 import type { AgentState } from "./types";
@@ -34,12 +33,15 @@ interface ChatInputProps {
   draftText?: string;
   onDraftChange?: (text: string) => void;
   onFocus?: () => void;
-  onEscape?: () => void;
+  /** Shown instead of the send or mic button while idle. */
+  trailingContent?: React.ReactNode;
   focusOnIdle?: boolean;
   expandOnFocus?: boolean;
   expandOnFocusSize?: "standard" | "compact";
   /** Offered in a menu while the draft is "/" plus an optional filter. */
   slashCommands?: SlashCommand[];
+  /** The menu fills the host above the composer, so the host hides what it would cover. */
+  onSlashMenuOpenChange?: (open: boolean) => void;
 }
 
 function RecordingIndicator() {
@@ -84,11 +86,12 @@ export function ChatInput({
   draftText,
   onDraftChange,
   onFocus,
-  onEscape,
+  trailingContent,
   focusOnIdle = true,
   expandOnFocus = false,
   expandOnFocusSize = "standard",
   slashCommands,
+  onSlashMenuOpenChange,
 }: ChatInputProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -121,6 +124,12 @@ export function ChatInput({
   const isVoiceRecording = voice.status === "recording";
   const isVoiceTranscribing = voice.status === "transcribing";
   const isCompactNote = variant === "note" && !outlined;
+  // These variants send with a 32px circle; the mic takes the same circle so the two swap in place.
+  const hasRoundSend = variant === "assistant" || variant === "note" || variant === "sidebar";
+  // These composers are 48px tall at rest with bottom-anchored controls, which these margins
+  // center on the first line: the outlined note composer, and the docked one until it expands.
+  const centersFirstLine = outlined || variant === "sidebar";
+  const rowCenter = centersFirstLine && "mb-0.5";
 
   const isIdle = agentState === "idle";
   const isListening = agentState === "listening";
@@ -137,6 +146,11 @@ export function ChatInput({
     [slashCommands, isFocused, isIdle, inputText]
   );
   const activeSlashIndex = Math.min(slashIndex, slashMatches.length - 1);
+  const isSlashMenuOpen = slashMatches.length > 0;
+
+  useLayoutEffect(() => {
+    onSlashMenuOpenChange?.(isSlashMenuOpen);
+  }, [isSlashMenuOpen, onSlashMenuOpenChange]);
 
   const runSlashCommand = useCallback(
     (command: SlashCommand) => {
@@ -164,7 +178,7 @@ export function ChatInput({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (slashMatches.length > 0 && !e.nativeEvent.isComposing) {
+      if (isSlashMenuOpen && !e.nativeEvent.isComposing) {
         const step = e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0;
         if (step !== 0) {
           e.preventDefault();
@@ -191,19 +205,12 @@ export function ChatInput({
           return;
         }
       }
-      if (e.key === "Escape" && onEscape) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.currentTarget.blur();
-        onEscape();
-        return;
-      }
       if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
         e.preventDefault();
         handleSubmit();
       }
     },
-    [handleSubmit, onEscape, slashMatches, activeSlashIndex, runSlashCommand, setInputText]
+    [handleSubmit, isSlashMenuOpen, slashMatches, activeSlashIndex, runSlashCommand, setInputText]
   );
 
   useLayoutEffect(() => {
@@ -234,48 +241,44 @@ export function ChatInput({
   }, [isIdle, focusOnIdle]);
 
   return (
-    <div className={cn("shrink-0", className ?? "px-3 pb-3 pt-1")}>
-      {slashCommands && (
-        <Popover open={slashMatches.length > 0}>
-          <PopoverAnchor virtualRef={composerRef} />
-          <PopoverContent
-            side="top"
-            className="w-72 p-1"
-            // Focus stays in the composer, which drives the menu from the keyboard.
-            onOpenAutoFocus={(event) => event.preventDefault()}
-            onCloseAutoFocus={(event) => event.preventDefault()}
-          >
-            <SlashCommandMenu
-              id={slashMenuId}
-              label={t("agentMode.input.commands")}
-              commands={slashMatches}
-              activeIndex={activeSlashIndex}
-              onActiveIndexChange={setSlashIndex}
-              onRun={runSlashCommand}
-            />
-          </PopoverContent>
-        </Popover>
+    <div
+      className={cn(
+        isSlashMenuOpen ? "flex min-h-0 flex-1 flex-col" : "shrink-0",
+        className ?? "px-3 pb-3 pt-1"
+      )}
+    >
+      {isSlashMenuOpen && (
+        <SlashCommandMenu
+          id={slashMenuId}
+          label={t("agentMode.input.commands")}
+          commands={slashMatches}
+          activeIndex={activeSlashIndex}
+          onActiveIndexChange={setSlashIndex}
+          onRun={runSlashCommand}
+        />
       )}
       <div
         ref={composerRef}
         className={cn(
           "flex items-center gap-2 min-h-11",
           variant === "sidebar"
-            ? "h-14 items-end rounded-3xl bg-background ps-4 pe-2 py-1.5 focus-within:h-40 dark:bg-surface-2"
+            ? "h-12 items-end rounded-2xl bg-background ps-3.5 pe-2 py-1.5 focus-within:h-40 dark:bg-surface-1"
             : "rounded-3xl ps-4 pe-1.5 py-1.5",
           isCompactNote && "h-12 overflow-hidden",
           variant === "assistant"
             ? "min-h-12 bg-card shadow-sm dark:bg-surface-2"
             : variant === "note"
               ? outlined
-                ? "min-h-12 bg-background"
+                ? "min-h-12 bg-white/55 dark:bg-white/[0.035]"
                 : "min-h-12 bg-transparent"
               : variant === "default" && GLASS_SURFACE,
+          // The outlined note composer draws an inset ring, which takes no room and sits where
+          // the bar's outline was, so nothing in it moves as the chat opens.
           variant === "sidebar"
-            ? "border border-border/80 dark:border-white/14"
+            ? "border border-black/[0.08] dark:border-white/[0.08]"
             : variant === "note"
               ? outlined
-                ? "border border-border/70 dark:border-white/14"
+                ? "border-0 ring-1 ring-inset ring-primary/20 focus-within:ring-primary/45 dark:ring-primary/25 dark:focus-within:ring-primary/50"
                 : "border-0"
               : "border border-black/10 dark:border-white/14",
           variant === "sidebar"
@@ -287,13 +290,16 @@ export function ChatInput({
                     ? "focus-within:h-[clamp(min(18vh,7rem),var(--composer-fit-height,0px),min(36vh,14rem))]"
                     : "focus-within:h-[clamp(min(20vh,8rem),var(--composer-fit-height,0px),min(40vh,16rem))]"
                 )
-              : "transition-[border-color,box-shadow] duration-200",
+              : "transition-[border-color,box-shadow,background-color] duration-200",
           isIdle &&
             (variant === "assistant"
               ? "focus-within:border-foreground/15 focus-within:ring-2 focus-within:ring-foreground/5"
               : variant === "note"
                 ? ""
-                : "focus-within:border-black/15 dark:focus-within:border-white/22 focus-within:ring-[3px] focus-within:ring-primary/8")
+                : variant === "sidebar"
+                  ? // The tray around it already frames it; a ring would read as a second border.
+                    "focus-within:border-black/15 dark:focus-within:border-white/15"
+                  : "focus-within:border-black/15 dark:focus-within:border-white/22 focus-within:ring-[3px] focus-within:ring-primary/8")
         )}
       >
         {isListening && (
@@ -393,9 +399,9 @@ export function ChatInput({
               }}
               onBlur={() => setIsFocused(false)}
               aria-autocomplete={slashCommands ? "list" : undefined}
-              aria-controls={slashMatches.length > 0 ? slashMenuId : undefined}
+              aria-controls={isSlashMenuOpen ? slashMenuId : undefined}
               aria-activedescendant={
-                slashMatches.length > 0 ? slashOptionId(slashMenuId, activeSlashIndex) : undefined
+                isSlashMenuOpen ? slashOptionId(slashMenuId, activeSlashIndex) : undefined
               }
               // Read-only, not disabled: disabling would drop focus for the length of every reply.
               readOnly={isBusy}
@@ -406,6 +412,8 @@ export function ChatInput({
                 variant === "default" ? "text-[13px]" : "text-sm",
                 "text-foreground placeholder:text-muted-foreground/70",
                 "min-w-0 min-h-8 max-h-32 resize-none overflow-y-auto border-0 px-0 py-1.5 leading-5",
+                // One line fills the 36px row, as the bare note composer's does.
+                outlined && "min-h-9",
                 (expandOnFocus || variant === "sidebar" || isCompactNote) && "min-h-0 max-h-none",
                 isBusy && "text-muted-foreground/70 cursor-not-allowed"
               )}
@@ -419,6 +427,8 @@ export function ChatInput({
                 className={cn(
                   "flex items-center justify-center w-7 h-7 rounded-full shrink-0",
                   expandOnFocus && COLLAPSED_ROW_CENTER,
+                  // The 28px stop's share of the same centering.
+                  centersFirstLine && "mb-1",
                   "text-muted-foreground/70 hover:text-foreground hover:bg-foreground/8",
                   "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
                   "transition-colors duration-100"
@@ -426,24 +436,29 @@ export function ChatInput({
               >
                 <Square size={12} className="fill-current" />
               </button>
+            ) : isIdle && trailingContent ? (
+              trailingContent
             ) : isIdle && (inputText.trim() || !voiceDraft) ? (
+              // Keyed apart from the mic, so each swap mounts a new button and replays its pop-in.
               <button
+                key="send"
                 onClick={handleSubmit}
                 disabled={!inputText.trim()}
                 aria-label={t("agentMode.input.send")}
                 className={cn(
                   "rounded-full shrink-0",
+                  rowCenter,
                   voiceDraft && "animate-[scale-in_0.15s_ease-out_backwards]",
                   "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
                   "transition-all duration-100",
                   inputText.trim()
                     ? "hover:brightness-110 active:scale-95"
-                    : variant === "assistant" || variant === "note" || variant === "sidebar"
+                    : hasRoundSend
                       ? "cursor-default"
                       : "opacity-30 saturate-0 cursor-default"
                 )}
               >
-                {variant === "assistant" || variant === "note" || variant === "sidebar" ? (
+                {hasRoundSend ? (
                   <span
                     className={cn(
                       "flex size-8 items-center justify-center rounded-full",
@@ -458,6 +473,7 @@ export function ChatInput({
               </button>
             ) : isIdle ? (
               <button
+                key="mic"
                 onClick={voice.start}
                 disabled={voice.streamingOnlyProvider}
                 aria-label={t("notes.editor.transcribe")}
@@ -467,8 +483,10 @@ export function ChatInput({
                     : t("notes.editor.transcribe")
                 }
                 className={cn(
-                  "flex items-center justify-center w-7 h-7 rounded-full shrink-0",
-                  expandOnFocus && COLLAPSED_ROW_CENTER,
+                  "flex items-center justify-center rounded-full shrink-0",
+                  hasRoundSend ? "size-8" : cn("w-7 h-7", expandOnFocus && COLLAPSED_ROW_CENTER),
+                  rowCenter,
+                  "animate-[scale-in_0.15s_ease-out_backwards]",
                   GRADIENT_CIRCLE,
                   "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
                   "transition-all duration-100",
@@ -477,7 +495,7 @@ export function ChatInput({
                     : "hover:brightness-110 active:scale-95"
                 )}
               >
-                <Mic size={14} />
+                <Mic size={hasRoundSend ? 16 : 14} />
               </button>
             ) : null}
           </div>

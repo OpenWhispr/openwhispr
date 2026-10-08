@@ -103,37 +103,26 @@ for (const action of BUILTIN_ACTIONS) {
   });
 }
 
-test("launch puts the default AI Summary template first, under its current name", (t) => {
+test("launch puts the default AI Summary template first, then Detailed Notes", (t) => {
   const db = createDb(t);
   if (!db) return;
-  // As main shipped them: Generate Notes first, and the default under its old name.
+  // As an earlier build ordered them, with Detailed Notes as the default.
   db.db
     .prepare("UPDATE actions SET sort_order = 0 WHERE translation_key = ?")
-    .run(GENERATE_NOTES_KEY);
-  db.db
-    .prepare("UPDATE actions SET sort_order = 1, name = 'Detailed Notes' WHERE translation_key = ?")
     .run(DETAILED_NOTES_KEY);
+  db.db
+    .prepare("UPDATE actions SET sort_order = 1 WHERE translation_key = ?")
+    .run(GENERATE_NOTES_KEY);
   db.db.close();
 
   relaunch((migrated) => {
     const [first, second] = migrated.getActions();
-    assert.equal(first.translation_key, DETAILED_NOTES_KEY);
-    assert.equal(first.name, "AI Summary");
-    assert.equal(second.translation_key, GENERATE_NOTES_KEY);
-    migrated.db
-      .prepare("UPDATE actions SET name = 'Team notes' WHERE translation_key = ?")
-      .run(DETAILED_NOTES_KEY);
-  });
-  relaunch((again) => {
-    assert.equal(
-      builtinRows(again, DETAILED_NOTES_KEY)[0].name,
-      "Team notes",
-      "the user's name stays"
-    );
+    assert.equal(first.translation_key, GENERATE_NOTES_KEY);
+    assert.equal(second.translation_key, DETAILED_NOTES_KEY);
   });
 });
 
-test("an upgrade to sections keeps a name the user gave the default template", (t) => {
+test("an upgrade to sections keeps a name the user gave Detailed Notes", (t) => {
   const db = createDb(t);
   if (!db) return;
   const detailed = BUILTIN_ACTIONS.find((a) => a.translationKey === DETAILED_NOTES_KEY);
@@ -235,7 +224,7 @@ test("an older build renaming the newer built-ins doesn't stop the next launch",
   const db = createDb(t);
   if (!db) return;
   const newerKeys = ["notes.actions.builtin.makeTodos", "notes.actions.builtin.createOutline"];
-  // What a build that predates Make to-dos and Create outline does to their rows.
+  // What a build that predates Create to-dos and Create outline does to their rows.
   db.db
     .prepare(
       "UPDATE actions SET translation_key = ? WHERE is_builtin = 1 AND translation_key IN (?, ?)"
