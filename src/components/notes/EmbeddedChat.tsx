@@ -68,9 +68,10 @@ export default function EmbeddedChat({
     <div
       ref={resize.panelRef}
       // Half the note view until it's resized; resized, it can take 70%, and the note keeps the rest.
-      // In a narrow window (a meeting's side panel), at most half.
+      // Its minimum is never more than half the row, and in a narrow window (a meeting's side
+      // panel) it takes at most half.
       className={cn(
-        "relative flex min-h-0 min-w-80 shrink-0 p-3 max-lg:min-w-0 max-lg:max-w-[50%]",
+        "relative flex min-h-0 min-w-[min(20rem,50%)] shrink-0 p-3 max-lg:max-w-[50%]",
         resize.width === null ? "w-1/2 max-w-2xl" : "max-w-[70%]"
       )}
       style={resize.width === null ? undefined : { width: resize.width }}
