@@ -179,3 +179,16 @@ test("a minimized control panel is restored without show() when the opener does 
 
   assert.deepEqual(sequence, ["dock:visible", "restore", "focus"]);
 });
+
+test("showing the control panel cancels the visibility backstop", () => {
+  // A backstop left armed would restore the panel after the user minimized it.
+  const { windowManager } = createManagers();
+  windowManager.controlPanelWindow = createControlPanel();
+  windowManager._controlPanelVisibilityTimer = setTimeout(() => {
+    sequence.push("backstop");
+  }, 0);
+
+  windowManager.showControlPanel();
+
+  assert.equal(windowManager._controlPanelVisibilityTimer, null);
+});

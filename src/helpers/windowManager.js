@@ -1811,6 +1811,7 @@ class WindowManager {
   showControlPanel({ activate = true } = {}) {
     const win = this.controlPanelWindow;
     if (!win || win.isDestroyed()) return;
+    this._clearControlPanelVisibilityTimer();
     dockManager.setControlPanelVisible(true);
     if (win.isMinimized()) win.restore();
     if (activate || !win.isVisible()) win.show();
