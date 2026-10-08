@@ -63,8 +63,8 @@ function outcomeUrl(value: unknown): string | null {
 function traceOutcome(call: ToolCallInfo): string | null {
   const data = call.metadata;
   if (!data || Array.isArray(data) || typeof data.status !== "string") return null;
+  if (!Object.hasOwn(ACTION_OUTCOME, data.status)) return null;
   const outcome = ACTION_OUTCOME[data.status];
-  if (!outcome) return null;
   if (data.status !== "sent") return outcome;
   const created = [traceText(data.reference), outcomeUrl(data.url)].filter(Boolean);
   return created.length ? `${outcome}: ${created.join(" ")}` : outcome;

@@ -229,6 +229,7 @@ test("a reference or link that could break the note is cleaned or left out", asy
   );
   assert.equal(outcome({ status: "sent", reference: 42 }), "[Tools used: github_comment (sent)]");
   assert.equal(outcome({ status: "bogus" }), "[Tools used: github_comment]");
+  assert.equal(outcome({ status: "constructor" }), "[Tools used: github_comment]");
 });
 
 test("a query cut at the limit never splits a surrogate pair", async () => {
