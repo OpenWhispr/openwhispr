@@ -1005,10 +1005,10 @@ class WindowManager {
   // The one entry for starting a meeting by hand: the meeting hotkey, the pill's
   // command menu, and the tray. Fails closed during onboarding and while a
   // hotkey is being captured, like every hotkey slot.
-  async startManualMeeting() {
+  async startManualMeeting(options) {
     if (this.hotkeyManager.isInListeningMode() || !this.isMeetingInputAllowed()) return;
     try {
-      await this.meetingDetectionEngine?.startManualMeeting();
+      await this.meetingDetectionEngine?.startManualMeeting(options);
     } catch (error) {
       debugLogger.error("Failed to start manual meeting", { error: error.message }, "meeting");
     }
@@ -1451,9 +1451,9 @@ class WindowManager {
     });
   }
 
-  async createControlPanelWindow() {
+  async createControlPanelWindow(options) {
     if (this.controlPanelWindow && !this.controlPanelWindow.isDestroyed()) {
-      this.showControlPanel();
+      this.showControlPanel(options);
       return;
     }
 
@@ -1805,13 +1805,15 @@ class WindowManager {
   // re-activates the app, which macOS does not honour, so a window surfaced
   // before it is left behind the previously frontmost app. show() runs even
   // for a visible window, since on macOS it activates the app while another
-  // app is active and focus() does not.
-  showControlPanel() {
+  // app is active and focus() does not. `activate: false` skips that for an
+  // open panel, for openers that send the user to another app (joining a
+  // meeting, the meeting hotkey mid-call): the panel updates behind it.
+  showControlPanel({ activate = true } = {}) {
     const win = this.controlPanelWindow;
     if (!win || win.isDestroyed()) return;
     dockManager.setControlPanelVisible(true);
     if (win.isMinimized()) win.restore();
-    win.show();
+    if (activate || !win.isVisible()) win.show();
     win.focus();
   }
 
@@ -2406,7 +2408,7 @@ class WindowManager {
   async queueMeetingNoteNavigation(payload, options) {
     if (!payload.navigationId) {
       this._pendingMeetingNoteNavigation = payload;
-      await this.createControlPanelWindow();
+      await this.createControlPanelWindow(options);
       this.sendToControlPanel("meeting-note-navigation-pending");
       return;
     }
@@ -2432,7 +2434,7 @@ class WindowManager {
     );
     void (async () => {
       try {
-        await this.createControlPanelWindow();
+        await this.createControlPanelWindow({ activate: options.activate });
         if (this._meetingNavigationOperation !== operation) return;
         const panel = this.controlPanelWindow;
         if (!panel || panel.isDestroyed()) throw new Error("Panel unavailable");
@@ -2543,9 +2545,9 @@ class WindowManager {
     return result;
   }
 
-  async queueNoteNavigation(payload) {
+  async queueNoteNavigation(payload, options) {
     this._pendingNoteNavigation = payload;
-    await this.createControlPanelWindow();
+    await this.createControlPanelWindow(options);
     this.sendToControlPanel("note-navigation-pending");
   }
 

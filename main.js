@@ -1318,7 +1318,8 @@ async function startApp() {
   const meetingHotkeyCallback = () => {
     if (!isMeetingPress()) return;
     debugLogger.info("Meeting hotkey triggered", {}, "meeting");
-    windowManager.startManualMeeting();
+    // Usually pressed mid-call: an open panel updates behind the meeting app.
+    windowManager.startManualMeeting({ activate: false });
   };
 
   const savedMeetingKey = environmentManager.getMeetingKey?.() || "";
@@ -1859,7 +1860,7 @@ async function startApp() {
       } else if (hotkeyManager.slotHasHotkey("translation", key)) {
         windowManager.sendToggleTranslation();
       } else if (hotkeyManager.slotHasHotkey("meeting", key)) {
-        windowManager.startManualMeeting();
+        windowManager.startManualMeeting({ activate: false });
       }
     };
 

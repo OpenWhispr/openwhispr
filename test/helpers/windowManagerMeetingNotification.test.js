@@ -1031,6 +1031,26 @@ test("a Start that creates the panel delivers once it loads, past the onboarding
   }
 });
 
+test("a Join navigation leaves an open panel behind the meeting it opened", async () => {
+  const f = await navigationFixture();
+  try {
+    const opened = [];
+    f.manager.createControlPanelWindow = async (options) => opened.push(options);
+    const pending = f.manager.queueMeetingNoteNavigation(f.payload, {
+      owner: f.owner,
+      activate: false,
+    });
+    await new Promise(setImmediate);
+    f.manager.consumePendingMeetingNoteNavigation(f.panel.webContents);
+    f.manager.confirmMeetingNoteNavigation(f.panel.webContents, "navigate-one");
+    assert.equal((await pending).success, true);
+    await f.manager.queueMeetingNoteNavigation({ noteId: 9 }, { activate: false });
+    assert.deepEqual(opened, [{ activate: false }, { activate: false }]);
+  } finally {
+    f.manager.dismissMeetingNotification();
+  }
+});
+
 test("replacing an audio prompt retires only its captured detection", async () => {
   const manager = createNormalWindowManager();
   try {

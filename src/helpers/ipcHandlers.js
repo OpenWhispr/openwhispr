@@ -12176,7 +12176,11 @@ class IPCHandlers {
 
     ipcMain.handle("join-calendar-meeting", async (_event, eventId) => {
       try {
-        await this.meetingDetectionEngine.joinCalendarMeeting(eventId);
+        // Sent from the open panel, which may have just opened the meeting
+        // link: leave the meeting in front rather than pulling the panel back.
+        await this.meetingDetectionEngine.joinCalendarMeeting(eventId, "calendar-join", {
+          activate: false,
+        });
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message };

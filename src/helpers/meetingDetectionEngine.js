@@ -518,9 +518,11 @@ class MeetingDetectionEngine {
     // Entered before navigation so a detection arriving meanwhile cannot
     // replace this prompt and cancel the Start after its note is saved.
     this._meetingModeActive = true;
+    // Join leaves the meeting it just opened in front: an open panel updates
+    // behind it instead of covering the call.
     const navigation = await this.windowManager.queueMeetingNoteNavigation(
       { ...owner.authorizedNote, navigationId: randomUUID() },
-      { owner }
+      { owner, activate: action !== "join" }
     );
     if (!navigation.success) {
       this._meetingModeActive = false;
@@ -532,7 +534,7 @@ class MeetingDetectionEngine {
     return { success: true, value: null };
   }
 
-  async startManualMeeting() {
+  async startManualMeeting(options) {
     debugLogger.info("Starting manual meeting", {}, "meeting");
 
     // A live meeting already owns a note: a second start would leave the recording
@@ -540,13 +542,13 @@ class MeetingDetectionEngine {
     if (this._recordingSession) {
       const { noteId } = this._recordingSession;
       debugLogger.info("Manual meeting ignored — a recording is live", { noteId }, "meeting");
-      if (noteId != null) await this.windowManager.queueNoteNavigation({ noteId });
+      if (noteId != null) await this.windowManager.queueNoteNavigation({ noteId }, options);
       return;
     }
 
     const activeEvents = this.databaseManager.getActiveEvents();
     if (activeEvents?.length > 0) {
-      return this.joinCalendarMeeting(activeEvents[0].id, "hotkey");
+      return this.joinCalendarMeeting(activeEvents[0].id, "hotkey", options);
     }
 
     this._meetingModeActive = true;
@@ -568,16 +570,19 @@ class MeetingDetectionEngine {
 
     broadcastToWindows("note-added", noteResult.note);
 
-    await this.windowManager.queueMeetingNoteNavigation({
-      noteId: noteResult.note.id,
-      folderId: meetingsFolder.id,
-      event,
-      trigger: "hotkey",
-    });
+    await this.windowManager.queueMeetingNoteNavigation(
+      {
+        noteId: noteResult.note.id,
+        folderId: meetingsFolder.id,
+        event,
+        trigger: "hotkey",
+      },
+      options
+    );
   }
 
   /** Navigates to the user's own note already linked to a calendar event, if any. */
-  async _resumeExistingEventNote(event, trigger) {
+  async _resumeExistingEventNote(event, trigger, options) {
     const existingNote = this.databaseManager.getOwnNoteByCalendarEventId(event.id);
     if (!existingNote?.id) return false;
     debugLogger.info(
@@ -585,16 +590,19 @@ class MeetingDetectionEngine {
       { eventId: event.id, noteId: existingNote.id, trigger },
       "meeting"
     );
-    await this.windowManager.queueMeetingNoteNavigation({
-      noteId: existingNote.id,
-      folderId: existingNote.folder_id ?? this.databaseManager.getMeetingsFolder()?.id,
-      event,
-      trigger,
-    });
+    await this.windowManager.queueMeetingNoteNavigation(
+      {
+        noteId: existingNote.id,
+        folderId: existingNote.folder_id ?? this.databaseManager.getMeetingsFolder()?.id,
+        event,
+        trigger,
+      },
+      options
+    );
     return true;
   }
 
-  async joinCalendarMeeting(eventId, trigger = "calendar-join") {
+  async joinCalendarMeeting(eventId, trigger = "calendar-join", options) {
     this._meetingModeActive = true;
     debugLogger.info("Joining calendar meeting", { eventId, trigger }, "meeting");
 
@@ -606,7 +614,7 @@ class MeetingDetectionEngine {
     }
 
     // Joining the same event twice resumes its note instead of creating a duplicate.
-    if (await this._resumeExistingEventNote(calEvent, trigger)) {
+    if (await this._resumeExistingEventNote(calEvent, trigger, options)) {
       return;
     }
 
@@ -631,12 +639,15 @@ class MeetingDetectionEngine {
 
     broadcastToWindows("note-added", updateResult?.note || noteResult.note);
 
-    await this.windowManager.queueMeetingNoteNavigation({
-      noteId: noteResult.note.id,
-      folderId: meetingsFolder.id,
-      event: calEvent,
-      trigger,
-    });
+    await this.windowManager.queueMeetingNoteNavigation(
+      {
+        noteId: noteResult.note.id,
+        folderId: meetingsFolder.id,
+        event: calEvent,
+        trigger,
+      },
+      options
+    );
   }
 
   // A card can vanish without a response — a compositor kill, a load failure,

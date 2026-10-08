@@ -48,11 +48,15 @@ Module._load = originalLoad;
 
 // A control panel that is hidden to the tray, minimized, or open. Restoring a
 // minimized window also shows it, as it does in Electron.
-function createControlPanel({ visible: initiallyVisible = false, minimized = false } = {}) {
+function createControlPanel({
+  visible: initiallyVisible = false,
+  minimized = false,
+  destroyed = false,
+} = {}) {
   let visible = initiallyVisible;
   let isMinimized = minimized;
   return {
-    isDestroyed: () => false,
+    isDestroyed: () => destroyed,
     isVisible: () => visible,
     isMinimized: () => isMinimized,
     restore() {
@@ -145,4 +149,33 @@ test("opening the tray after the control panel was destroyed reports the Dock be
   await trayManager.toggleControlPanelFromTray();
 
   assert.deepEqual(sequence, ["dock:visible", "show", "focus"]);
+});
+
+test("an open control panel stays behind the frontmost app when the opener does not activate", () => {
+  // Joining a meeting or the meeting hotkey mid-call: focus() leaves the
+  // meeting app in front, show() would pull the panel over it.
+  const { windowManager } = createManagers();
+  windowManager.controlPanelWindow = createControlPanel({ visible: true });
+
+  windowManager.showControlPanel({ activate: false });
+
+  assert.deepEqual(sequence, ["dock:visible", "focus"]);
+});
+
+test("a hidden control panel is still shown when the opener does not activate", async () => {
+  const { windowManager } = createManagers();
+  windowManager.controlPanelWindow = createControlPanel();
+
+  await windowManager.createControlPanelWindow({ activate: false });
+
+  assert.deepEqual(sequence, ["dock:visible", "show", "focus"]);
+});
+
+test("a minimized control panel is restored without show() when the opener does not activate", () => {
+  const { windowManager } = createManagers();
+  windowManager.controlPanelWindow = createControlPanel({ minimized: true });
+
+  windowManager.showControlPanel({ activate: false });
+
+  assert.deepEqual(sequence, ["dock:visible", "restore", "focus"]);
 });
