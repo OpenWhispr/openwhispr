@@ -56,7 +56,8 @@ export function useResizableWidth<T extends HTMLElement>({
       const startX = event.clientX;
       const startWidth = panel.getBoundingClientRect().width;
       const options = { edge, rtl: getComputedStyle(panel).direction === "rtl", min, max };
-      let next = startWidth;
+      // A click that never moves saves nothing, so the panel keeps its default width.
+      let next: number | null = null;
 
       const move = (moveEvent: PointerEvent) => {
         next = resizedWidth(startWidth, moveEvent.clientX - startX, options);
@@ -67,6 +68,7 @@ export function useResizableWidth<T extends HTMLElement>({
         handle.removeEventListener("pointerup", end);
         handle.removeEventListener("pointercancel", end);
         setIsResizing(false);
+        if (next === null) return;
         try {
           localStorage.setItem(storageKey, String(next));
         } catch {
