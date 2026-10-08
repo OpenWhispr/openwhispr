@@ -33,6 +33,12 @@ interface EmbeddedChatProps {
   slashCommands?: SlashCommand[];
 }
 
+// The share of the row the CSS lets the chat take: 70%, or half below the `lg` breakpoint.
+function chatMaxWidth(panel: HTMLElement): number {
+  const share = window.matchMedia("(min-width: 1024px)").matches ? 0.7 : 0.5;
+  return Math.floor((panel.parentElement?.clientWidth ?? Infinity) * share);
+}
+
 /** The note's chat, docked beside it: the conversation, its history and a composer. */
 export default function EmbeddedChat({
   onClose,
@@ -56,6 +62,7 @@ export default function EmbeddedChat({
     edge: "start",
     min: 320,
     max: 1200,
+    getDragMax: chatMaxWidth,
   });
 
   const handleOpenNote = useCallback(async (noteId: number) => {

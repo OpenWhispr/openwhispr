@@ -129,6 +129,12 @@ interface PersonalNotesViewProps {
   onInvitationEntryHandled?: () => void;
 }
 
+// The list's CSS cap: 30% of the view it shares with the note.
+function notesListMaxWidth(panel: HTMLElement): number {
+  const view = panel.parentElement?.parentElement;
+  return Math.floor((view?.clientWidth ?? Infinity) * 0.3);
+}
+
 export default function PersonalNotesView({
   onOpenSettings,
   meetingRecordingRequest,
@@ -147,6 +153,7 @@ export default function PersonalNotesView({
     edge: "end",
     min: 180,
     max: 420,
+    getDragMax: notesListMaxWidth,
   });
   const notesListWidth = notesListResize.width ?? 208;
   const activeFolderId = useActiveFolderId();
@@ -727,7 +734,8 @@ export default function PersonalNotesView({
     <div className="flex h-full">
       <div
         className={cn(
-          "shrink-0 overflow-hidden transition-[width] duration-300 ease-out",
+          // A wide list never takes more than 30% of the window, so the note and its chat keep room.
+          "max-w-[30%] shrink-0 overflow-hidden transition-[width] duration-300 ease-out",
           // Follows the pointer while it's dragged; the transition is for collapsing.
           notesListResize.isResizing && "transition-none"
         )}
@@ -735,7 +743,7 @@ export default function PersonalNotesView({
       >
         <div
           ref={notesListResize.panelRef}
-          className="relative shrink-0 border-e border-border dark:border-white/10 flex flex-col h-full"
+          className="relative max-w-full shrink-0 border-e border-border dark:border-white/10 flex flex-col h-full"
           style={{ width: notesListWidth }}
         >
           <PanelResizeHandle

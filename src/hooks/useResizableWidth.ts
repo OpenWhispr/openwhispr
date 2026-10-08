@@ -8,7 +8,12 @@ interface ResizableWidthOptions {
   edge: PanelEdge;
   min: number;
   max: number;
+  /** A tighter cap for this drag, for a panel whose CSS cap depends on its surroundings. */
+  getDragMax?: (panel: HTMLElement) => number;
 }
+
+/** Pointer travel before a press counts as a drag, so a click saves no width. */
+const DRAG_SLOP_PX = 3;
 
 /** The panel's width after the pointer moved `deltaX` pixels from where its drag started. */
 export function resizedWidth(
@@ -40,6 +45,7 @@ export function useResizableWidth<T extends HTMLElement>({
   edge,
   min,
   max,
+  getDragMax,
 }: ResizableWidthOptions) {
   const panelRef = useRef<T>(null);
   const [width, setWidth] = useState(() => readStoredWidth(storageKey, min, max));
@@ -55,18 +61,27 @@ export function useResizableWidth<T extends HTMLElement>({
       handle.setPointerCapture(event.pointerId);
       const startX = event.clientX;
       const startWidth = panel.getBoundingClientRect().width;
-      const options = { edge, rtl: getComputedStyle(panel).direction === "rtl", min, max };
-      // A click that never moves saves nothing, so the panel keeps its default width.
+      // Past the CSS cap the panel stops while the pointer goes on, so the drag is held to it.
+      const dragMax = Math.max(min, Math.min(max, getDragMax?.(panel) ?? max));
+      const options = { edge, rtl: getComputedStyle(panel).direction === "rtl", min, max: dragMax };
+      // A click that never drags saves nothing, so the panel keeps its default width.
       let next: number | null = null;
+      let ended = false;
 
       const move = (moveEvent: PointerEvent) => {
-        next = resizedWidth(startWidth, moveEvent.clientX - startX, options);
+        const deltaX = moveEvent.clientX - startX;
+        if (next === null && Math.abs(deltaX) < DRAG_SLOP_PX) return;
+        next = resizedWidth(startWidth, deltaX, options);
         setWidth(next);
       };
       const end = () => {
+        // pointerup is followed by lostpointercapture, which also ends a drag the browser took away.
+        if (ended) return;
+        ended = true;
         handle.removeEventListener("pointermove", move);
         handle.removeEventListener("pointerup", end);
         handle.removeEventListener("pointercancel", end);
+        handle.removeEventListener("lostpointercapture", end);
         setIsResizing(false);
         if (next === null) return;
         // What the panel shows, which a CSS cap (the docked chat's 70%) can hold below the drag.
@@ -81,9 +96,10 @@ export function useResizableWidth<T extends HTMLElement>({
       handle.addEventListener("pointermove", move);
       handle.addEventListener("pointerup", end);
       handle.addEventListener("pointercancel", end);
+      handle.addEventListener("lostpointercapture", end);
       setIsResizing(true);
     },
-    [edge, max, min, storageKey]
+    [edge, getDragMax, max, min, storageKey]
   );
 
   return { panelRef, width, isResizing, startResize };

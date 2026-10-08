@@ -532,6 +532,7 @@ export default function NoteEditor({
     noteOwnedByUser: ownedByUser,
     selfEmail: user?.email ?? null,
     noteCalendarEventId: note.calendar_event_id,
+    onNewChatUnsent: setChatDraft,
   });
 
   const refreshSpeakerProfiles = useCallback(() => {
