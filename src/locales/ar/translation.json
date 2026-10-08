@@ -92,7 +92,8 @@
       },
       "pasteFailed": {
         "title": "تعذّر اللصق تلقائيًا"
-      }
+      },
+      "interruptedRecordingRecovered": "تمت استعادته بعد إغلاق OpenWhispr قبل انتهاء هذا الإملاء."
     },
     "clipboard": {
       "pasteFailed": {
@@ -4255,7 +4256,8 @@
     "logout": "تسجيل الخروج",
     "managedConfigLoading": "جارٍ التحقق من الإعداد المُدار لمؤسستك. أعد المحاولة بعد لحظات.",
     "managedConfigUnavailable": "الوصول المُدار للمؤسسة غير متاح. سجّل الدخول مرة أخرى أو اتصل بالمسؤول.",
-    "managedPolicyConflict": "الوصول المُدار محظور بموجب سياسة مساحة العمل الخاصة بك. اتصل بالمسؤول."
+    "managedPolicyConflict": "الوصول المُدار محظور بموجب سياسة مساحة العمل الخاصة بك. اتصل بالمسؤول.",
+    "resizePanel": "تغيير حجم اللوحة"
   },
   "streaming": {
     "errors": {
@@ -4470,6 +4472,7 @@
   },
   "settingsModal": {
     "managedByOrg": "تتم إدارة بعض الإعدادات بواسطة مؤسستك.",
+    "managedAccount": "حساب مُدار",
     "groups": {
       "account": "الحساب",
       "app": "التطبيق",

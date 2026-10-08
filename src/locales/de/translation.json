@@ -212,7 +212,8 @@
     "policyUnresolved": "Die Einstellungen deiner Organisation wurden noch nicht geladen. Versuche es gleich noch einmal.",
     "managedConfigLoading": "Die verwaltete Einrichtung Ihrer Organisation wird überprüft. Versuchen Sie es gleich noch einmal.",
     "managedConfigUnavailable": "Der verwaltete Unternehmenszugriff ist nicht verfügbar. Melden Sie sich erneut an oder wenden Sie sich an Ihren Administrator.",
-    "managedPolicyConflict": "Der verwaltete Zugriff wird durch Ihre Workspace-Richtlinie blockiert. Wenden Sie sich an Ihren Administrator."
+    "managedPolicyConflict": "Der verwaltete Zugriff wird durch Ihre Workspace-Richtlinie blockiert. Wenden Sie sich an Ihren Administrator.",
+    "resizePanel": "Bereichsgröße ändern"
   },
   "onboarding": {
     "rehaul": {
@@ -988,7 +989,8 @@
       },
       "pasteFailed": {
         "title": "Automatisches Einfügen fehlgeschlagen"
-      }
+      },
+      "interruptedRecordingRecovered": "Wiederhergestellt, nachdem OpenWhispr vor dem Ende dieses Diktats beendet wurde."
     },
     "clipboard": {
       "pasteFailed": {
@@ -1585,6 +1587,7 @@
   },
   "settingsModal": {
     "managedByOrg": "Einige Einstellungen werden von Ihrer Organisation verwaltet.",
+    "managedAccount": "Verwaltetes Konto",
     "groups": {
       "account": "Konto",
       "app": "App",

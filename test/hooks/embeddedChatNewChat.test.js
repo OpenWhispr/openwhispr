@@ -27,6 +27,7 @@ const MOCKS = {
         messages,
         setMessages,
         createConversation: async (title) => {
+          if (globalThis.__failCreate) throw new Error("offline");
           globalThis.__created.push(title);
           return 2;
         },
@@ -89,4 +90,44 @@ test("a message sent into a new chat leaves the open conversation behind", async
     ["New question · Kickoff"],
     "and the message starts a conversation of its own, named after it and the note"
   );
+});
+
+test("a question that could not start a new chat goes back to the caller as a draft", async (t) => {
+  let root;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+    delete globalThis.__sent;
+    delete globalThis.__created;
+    delete globalThis.__failCreate;
+  });
+  globalThis.__sent = [];
+  globalThis.__created = [];
+  globalThis.__failCreate = true;
+  installBrowserGlobals(t, {
+    window: { electronAPI: { getConversationsForNote: async () => [] } },
+  });
+  const container = installInteractiveDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-embedded-chat-unsent-test-",
+    mockModules: MOCKS,
+  });
+  const { useEmbeddedChat } = await vite.ssrLoadModule("/hooks/useEmbeddedChat.ts");
+  const unsent = [];
+  let chat;
+  function Harness() {
+    chat = useEmbeddedChat({
+      noteId: 5,
+      folderId: null,
+      noteTitle: "Kickoff",
+      noteContent: "",
+      onNewChatUnsent: (text) => unsent.push(text),
+    });
+    return null;
+  }
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(Harness)));
+
+  await React.act(async () => chat.sendInNewChat("Will this go?"));
+  assert.deepEqual(unsent, ["Will this go?"]);
+  assert.deepEqual(globalThis.__sent, [], "nothing reached the model");
 });

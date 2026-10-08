@@ -191,7 +191,8 @@
     "policyUnresolved": "As configurações da sua organização ainda não foram carregadas. Tente novamente em instantes.",
     "managedConfigLoading": "Verificando a configuração gerenciada da sua organização. Tente novamente em instantes.",
     "managedConfigUnavailable": "O acesso empresarial gerenciado está indisponível. Entre novamente ou entre em contato com o administrador.",
-    "managedPolicyConflict": "O acesso gerenciado está bloqueado pela política do seu espaço de trabalho. Entre em contato com o administrador."
+    "managedPolicyConflict": "O acesso gerenciado está bloqueado pela política do seu espaço de trabalho. Entre em contato com o administrador.",
+    "resizePanel": "Redimensionar painel"
   },
   "onboarding": {
     "rehaul": {
@@ -967,7 +968,8 @@
       },
       "pasteFailed": {
         "title": "Não foi possível colar automaticamente"
-      }
+      },
+      "interruptedRecordingRecovered": "Recuperado após o OpenWhispr fechar antes de terminar este ditado."
     },
     "clipboard": {
       "pasteFailed": {
@@ -1469,6 +1471,7 @@
   },
   "settingsModal": {
     "managedByOrg": "Algumas configurações são gerenciadas pela sua organização.",
+    "managedAccount": "Conta gerenciada",
     "groups": {
       "account": "Conta",
       "app": "Aplicativo",

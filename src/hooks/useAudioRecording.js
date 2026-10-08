@@ -343,6 +343,11 @@ export const useAudioRecording = (toast, options = {}) => {
     // would otherwise wait on the device lookup before the mic can open.
     void audioManagerRef.current.cacheMicrophoneDeviceId?.();
 
+    // Keep this at mount: it opens the recording spool, which a hung main process would block.
+    void audioManagerRef.current.recoverInterruptedRecordings?.(
+      t("hooks.audioRecording.interruptedRecordingRecovered")
+    );
+
     // Reset stale main-process state after a renderer reload or crash recovery.
     reportLifecycle("idle");
 

@@ -143,6 +143,7 @@ export type TranscriptionErrorCode =
   | "PROVIDER_UNREACHABLE"
   | "PROVIDER_NO_RESPONSE"
   | "PROVIDER_ERROR"
+  | "CRASH_RECOVERY"
   | null;
 
 export type MeetingPromptVariant = "detected" | "starting" | "underway";

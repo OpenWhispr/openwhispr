@@ -212,7 +212,8 @@
     "policyUnresolved": "組織の設定がまだ読み込まれていません。しばらくしてからもう一度お試しください。",
     "managedConfigLoading": "組織のマネージド設定を確認しています。しばらくしてからもう一度お試しください。",
     "managedConfigUnavailable": "マネージド エンタープライズ アクセスを利用できません。再度サインインするか、管理者にお問い合わせください。",
-    "managedPolicyConflict": "ワークスペースのポリシーによりマネージド アクセスがブロックされています。管理者にお問い合わせください。"
+    "managedPolicyConflict": "ワークスペースのポリシーによりマネージド アクセスがブロックされています。管理者にお問い合わせください。",
+    "resizePanel": "パネルのサイズを変更"
   },
   "onboarding": {
     "rehaul": {
@@ -988,7 +989,8 @@
       },
       "pasteFailed": {
         "title": "自動貼り付けに失敗しました"
-      }
+      },
+      "interruptedRecordingRecovered": "このディクテーションの完了前に OpenWhispr が終了したため、録音を復元しました。"
     },
     "clipboard": {
       "pasteFailed": {
@@ -1490,6 +1492,7 @@
   },
   "settingsModal": {
     "managedByOrg": "一部の設定は組織によって管理されています。",
+    "managedAccount": "管理対象アカウント",
     "groups": {
       "account": "アカウント",
       "app": "アプリ",

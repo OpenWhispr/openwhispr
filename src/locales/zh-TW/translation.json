@@ -212,7 +212,8 @@
     "policyUnresolved": "貴組織的設定尚未載入完成。請稍後再試。",
     "managedConfigLoading": "正在檢查您組織的託管設定。請稍候再試。",
     "managedConfigUnavailable": "託管企業存取無法使用。請重新登入或聯絡管理員。",
-    "managedPolicyConflict": "託管存取已被您工作區的政策封鎖。請聯絡管理員。"
+    "managedPolicyConflict": "託管存取已被您工作區的政策封鎖。請聯絡管理員。",
+    "resizePanel": "調整面板大小"
   },
   "onboarding": {
     "rehaul": {
@@ -988,7 +989,8 @@
       },
       "pasteFailed": {
         "title": "無法自動貼上"
-      }
+      },
+      "interruptedRecordingRecovered": "OpenWhispr 在本次語音輸入完成前關閉，已復原此錄音。"
     },
     "clipboard": {
       "pasteFailed": {
@@ -1490,6 +1492,7 @@
   },
   "settingsModal": {
     "managedByOrg": "部分設定由您的組織管理。",
+    "managedAccount": "受管理的帳戶",
     "groups": {
       "account": "帳戶",
       "app": "應用程式",

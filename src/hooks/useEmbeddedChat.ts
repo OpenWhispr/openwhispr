@@ -27,6 +27,8 @@ interface UseEmbeddedChatOptions {
   /** The note's calendar event, whose organizer main adds to the attendees. */
   noteCalendarEventId?: string | null;
   noteSummary?: string;
+  /** A message `sendInNewChat` could not send, so the caller can put it back as a draft. */
+  onNewChatUnsent?: (text: string) => void;
 }
 
 interface NoteConversationItem {
@@ -65,6 +67,7 @@ export function useEmbeddedChat({
   selfEmail = null,
   noteCalendarEventId = null,
   noteSummary,
+  onNewChatUnsent,
 }: UseEmbeddedChatOptions): UseEmbeddedChatReturn {
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [noteConversations, setNoteConversations] = useState<NoteConversationItem[]>([]);
@@ -140,16 +143,7 @@ export function useEmbeddedChat({
     // The chat opens on a new conversation (see sendInNewChat); earlier ones are in its history.
     persistence.handleNewChat();
     setConversationId(null);
-    let stale = false;
-    (async () => {
-      const conversations = await window.electronAPI?.getConversationsForNote?.(noteId);
-      if (stale || noteIdRef.current !== noteId) return;
-      setNoteConversations(conversations ?? []);
-    })();
-
-    return () => {
-      stale = true;
-    };
+    void fetchNoteConversations();
   }, [noteId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // useChatStreaming returns a fresh object every render; cancelStream is
@@ -219,8 +213,15 @@ export function useEmbeddedChat({
   useEffect(() => {
     if (!newChatMessage) return;
     setNewChatMessage(null);
-    void sendMessageWithResult(newChatMessage.text, newChatMessage.options);
-  }, [newChatMessage, sendMessageWithResult]);
+    const { text, options } = newChatMessage;
+    // A send that never started (lock held, conversation not created) must not eat the question.
+    sendMessageWithResult(text, options).then(
+      (sent) => {
+        if (!sent) onNewChatUnsent?.(text);
+      },
+      () => onNewChatUnsent?.(text)
+    );
+  }, [newChatMessage, onNewChatUnsent, sendMessageWithResult]);
 
   return {
     messages: persistence.messages,

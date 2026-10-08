@@ -212,7 +212,8 @@
     "policyUnresolved": "Les paramètres de votre organisation ne sont pas encore chargés. Réessayez dans un instant.",
     "managedConfigLoading": "Vérification de la configuration gérée de votre organisation en cours. Réessayez dans un instant.",
     "managedConfigUnavailable": "L'accès d'entreprise géré est indisponible. Reconnectez-vous ou contactez votre administrateur.",
-    "managedPolicyConflict": "L'accès géré est bloqué par la politique de votre espace de travail. Contactez votre administrateur."
+    "managedPolicyConflict": "L'accès géré est bloqué par la politique de votre espace de travail. Contactez votre administrateur.",
+    "resizePanel": "Redimensionner le panneau"
   },
   "onboarding": {
     "rehaul": {
@@ -988,7 +989,8 @@
       },
       "pasteFailed": {
         "title": "Collage automatique impossible"
-      }
+      },
+      "interruptedRecordingRecovered": "Récupérée après la fermeture d'OpenWhispr avant la fin de cette dictée."
     },
     "clipboard": {
       "pasteFailed": {
@@ -1585,6 +1587,7 @@
   },
   "settingsModal": {
     "managedByOrg": "Certains paramètres sont gérés par votre organisation.",
+    "managedAccount": "Compte géré",
     "groups": {
       "account": "Compte",
       "app": "Application",

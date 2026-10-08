@@ -199,6 +199,14 @@ test("the docked chips lead with Generate summary, held back while a summary is 
   assert.deepEqual(ran, ["summary", "Follow-up email"]);
   assert.equal(buttons({ run: () => {}, disabled: true })[0].props.disabled, true);
   assert.equal(buttons(undefined).length, 4, "no pill when the note has no template to run");
+
+  // All actions (the menu's trigger) leads the docked row and opens toward the chips.
+  const order = (docked) =>
+    collect(renderTree(ActionChips, { ...props, docked }))
+      .filter((node) => node.props.align || (node.type === "button" && node.props.onClick))
+      .map((node) => node.props.align ?? "chip");
+  assert.deepEqual(order(true).slice(0, 2), ["start", "chip"]);
+  assert.deepEqual(order(false).slice(-2), ["chip", "end"], "the in-view chat keeps it last");
 });
 
 test("the action menu lists every action, then Manage Actions", async (t) => {

@@ -212,7 +212,8 @@
     "policyUnresolved": "Le impostazioni della tua organizzazione non sono ancora state caricate. Riprova tra un momento.",
     "managedConfigLoading": "Verifica della configurazione gestita della tua organizzazione in corso. Riprova tra un momento.",
     "managedConfigUnavailable": "L'accesso aziendale gestito non è disponibile. Accedi di nuovo o contatta l'amministratore.",
-    "managedPolicyConflict": "L'accesso gestito è bloccato dai criteri del tuo spazio di lavoro. Contatta l'amministratore."
+    "managedPolicyConflict": "L'accesso gestito è bloccato dai criteri del tuo spazio di lavoro. Contatta l'amministratore.",
+    "resizePanel": "Ridimensiona il pannello"
   },
   "onboarding": {
     "rehaul": {
@@ -988,7 +989,8 @@
       },
       "pasteFailed": {
         "title": "Impossibile incollare automaticamente"
-      }
+      },
+      "interruptedRecordingRecovered": "Recuperata dopo la chiusura di OpenWhispr prima della fine di questa dettatura."
     },
     "clipboard": {
       "pasteFailed": {
@@ -1490,6 +1492,7 @@
   },
   "settingsModal": {
     "managedByOrg": "Alcune impostazioni sono gestite dalla tua organizzazione.",
+    "managedAccount": "Account gestito",
     "groups": {
       "account": "Account",
       "app": "App",

@@ -10,6 +10,8 @@ import type { Message, AgentState } from "../chat/types";
 import { setActiveNoteId, setActiveFolderId } from "../../stores/noteStore";
 import type { ContainerConversationItem } from "../../hooks/useContainerChat";
 import { ConversationPicker } from "./ConversationPicker";
+import { PanelResizeHandle } from "../ui/PanelResizeHandle";
+import { useResizableWidth } from "../../hooks/useResizableWidth";
 
 /** Closed, the ask bar open over the note (floating), or the chat docked beside it (sidebar). */
 export type EmbeddedChatMode = "hidden" | "floating" | "sidebar";
@@ -31,6 +33,12 @@ interface EmbeddedChatProps {
   slashCommands?: SlashCommand[];
 }
 
+// The share of the row the CSS lets the chat take: 70%, or half below the `lg` breakpoint.
+function chatMaxWidth(panel: HTMLElement): number {
+  const share = window.matchMedia("(min-width: 1024px)").matches ? 0.7 : 0.5;
+  return Math.floor((panel.parentElement?.clientWidth ?? Infinity) * share);
+}
+
 /** The note's chat, docked beside it: the conversation, its history and a composer. */
 export default function EmbeddedChat({
   onClose,
@@ -49,6 +57,13 @@ export default function EmbeddedChat({
 }: EmbeddedChatProps) {
   const { t } = useTranslation();
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
+  const resize = useResizableWidth<HTMLDivElement>({
+    storageKey: "noteChatWidth",
+    edge: "start",
+    min: 320,
+    max: 1200,
+    getDragMax: chatMaxWidth,
+  });
 
   const handleOpenNote = useCallback(async (noteId: number) => {
     const note = await window.electronAPI.getNote(noteId);
@@ -57,7 +72,25 @@ export default function EmbeddedChat({
   }, []);
 
   return (
-    <div className="flex min-h-0 w-1/2 min-w-80 max-w-2xl shrink-0 p-3" data-note-chat-panel>
+    <div
+      ref={resize.panelRef}
+      // Half the note view until it's resized; resized, it can take 70%, and the note keeps the rest.
+      // Its minimum is never more than half the row, and in a narrow window (a meeting's side
+      // panel) it takes at most half.
+      className={cn(
+        "relative flex min-h-0 min-w-[min(20rem,50%)] shrink-0 p-3 max-lg:max-w-[50%]",
+        resize.width === null ? "w-1/2 max-w-2xl" : "max-w-[70%]"
+      )}
+      style={resize.width === null ? undefined : { width: resize.width }}
+      data-note-chat-panel
+    >
+      <PanelResizeHandle
+        edge="start"
+        isResizing={resize.isResizing}
+        onPointerDown={resize.startResize}
+        // Fills the gutter between the note and the chat.
+        className="w-3"
+      />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[20px] border border-border/60 bg-surface-1 dark:border-white/10 dark:bg-surface-1">
         <div className={cn("flex min-h-0 flex-1 flex-col", slashMenuOpen && "hidden")}>
           <div className="flex h-14 shrink-0 items-center px-5">
