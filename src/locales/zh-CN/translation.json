@@ -209,7 +209,8 @@
     "policyUnresolved": "您所在组织的设置尚未加载完成。请稍后再试。",
     "managedConfigLoading": "正在检查您组织的托管设置。请稍候再试。",
     "managedConfigUnavailable": "托管企业访问不可用。请重新登录或联系管理员。",
-    "managedPolicyConflict": "托管访问已被您工作区的策略阻止。请联系管理员。"
+    "managedPolicyConflict": "托管访问已被您工作区的策略阻止。请联系管理员。",
+    "resizePanel": "调整面板大小"
   },
   "onboarding": {
     "rehaul": {
