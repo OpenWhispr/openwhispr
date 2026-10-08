@@ -177,7 +177,8 @@ export default function NoteBottomBar({
           )}
         >
           {actionChips && chatOpen && !slashMenuOpen && (
-            <div className="shrink-0 px-1.5 pt-2 pb-1">{actionChips}</div>
+            // Centered between the card's top edge and the composer.
+            <div className="shrink-0 px-1.5 pt-0.5 pb-2.5">{actionChips}</div>
           )}
           {!hideInput && (
             <ChatInput
