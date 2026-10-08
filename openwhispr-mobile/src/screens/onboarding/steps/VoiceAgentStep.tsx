@@ -19,13 +19,11 @@ import { addKeyboardStatusChangedListener } from '../../../../modules/app-group-
 
 type Phase = 'start' | 'asking' | 'first-draft' | 'refined' | 'done';
 
-// What users say in the live try, and what the example shows when the live try can't run. It's kept
-// short so it's easy to repeat, and names the company and when so the draft leaves nothing to fill
-// in but the sender's name, which the follow-up adds.
-const REQUEST =
-  'I cancelled Netflix last month but got charged again. Draft a message asking for a refund.';
-const EXAMPLE_DRAFT =
-  'Hi Netflix Support,\n\nI cancelled my subscription last month, but I was charged again this month. Could you please refund this charge?\n\nThanks';
+// What users say in the live try, and what the example shows when the live try can't run. The agent
+// brackets every fact it isn't given, so the request leaves just one (the new meeting time) for the
+// follow-up to fill in.
+const REQUEST = 'Tell Sam I’m running late and ask if we can push our meeting.';
+const EXAMPLE_DRAFT = 'Hey Sam, I’m running late. Could we push our meeting a bit?';
 
 // The field is focused on arrival, so the first instruction points straight at the keyboard's agent
 // button, drawn with the same glyph the keyboard uses.
@@ -37,7 +35,7 @@ const INSTRUCTIONS: Record<Phase, ReactNode> = {
     </>
   ),
   asking: `Say: “${REQUEST}”`,
-  'first-draft': 'Now tap Ask for changes and add your name. Say: “My name is …”',
+  'first-draft': 'Now tap Ask for changes and add a time. Say: “Make it 3 PM.”',
   refined: 'Tap ✓ to insert it.',
   done: 'That’s your voice assistant.',
 };
@@ -181,7 +179,7 @@ export function VoiceAgentStep(): ReactElement {
             ) : null}
             <View className="rounded-2xl border border-separator bg-secondarySystemGroupedBackground px-4 pb-4 pt-3">
               <Text className="mb-2 text-[11px] font-bold uppercase tracking-wider text-tertiaryLabel">
-                To: Support
+                To: Sam
               </Text>
               <TextInput
                 ref={input}
