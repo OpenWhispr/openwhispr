@@ -3,7 +3,6 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
-const { EventEmitter } = require("node:events");
 const GnomeShortcutManager = require("../../src/helpers/gnomeShortcut");
 
 const source = fs.readFileSync(path.join(__dirname, "../../src/helpers/hotkeyManager.js"), "utf8");
@@ -97,8 +96,7 @@ function fixture(backend, savedHotkey = "Scrolllock", registrationResult = true)
   const cache = vm.runInNewContext(`({${cacheMethod}})`);
   cache.hotkeyManager = manager;
   cache._cachedActivationMode = "tap";
-  const webContents = new EventEmitter();
-  webContents.executeJavaScript = async () => savedHotkey;
+  const webContents = { executeJavaScript: async () => savedHotkey };
   return {
     manager,
     cache,
@@ -145,7 +143,7 @@ async function startWithSavedHold(f, mode) {
     {
       getActivationMode: () => f.cache._cachedActivationMode,
       hotkeyManager: f.manager,
-      setActivationModeCache: (mode) => f.cache.setActivationModeCache(mode),
+      setActivationModeCache: (next) => f.cache.setActivationModeCache(next),
     },
     { writes, notifications }
   );
@@ -194,6 +192,30 @@ test(noPortal, async () => {
   assert.deepEqual(f.registrations, [{ hotkey: "Scroll_Lock", push: false }]);
   assert.equal(f.manager.useGnome, true, "the GNOME binding was kept");
 });
+
+// The registration delay can elapse while main.js still reads the saved hotkey.
+for (const backend of ["GNOME", "Hyprland"]) {
+  test(`${backend} drops Hold when its registration starts during the check`, async () => {
+    const f = fixture(backend, "Control+Alt");
+    const reads = [];
+    f.window.webContents.executeJavaScript = () => new Promise((resolve) => reads.push(resolve));
+    await f.cache.setActivationModeCache("push");
+    await f.manager.initializeHotkey(f.window, () => {});
+    const check = startupHoldCheck({
+      getActivationMode: () => f.cache._cachedActivationMode,
+      hotkeyManager: f.manager,
+      setActivationModeCache: (next) => f.cache.setActivationModeCache(next),
+    });
+    f.timers.shift().callback();
+    reads[0]("Control+Alt");
+    await check;
+    reads[1]("Control+Alt");
+    for (let i = 0; i < 5; i++) await tick();
+    assert.equal(f.cache._cachedActivationMode, "tap");
+    const registered = backend === "GNOME" ? "F8" : "Control+Alt";
+    assert.deepEqual(f.registrations, [{ hotkey: registered, push: false }]);
+  });
+}
 
 // Without its evdev listener a Linux session cannot hold through globalShortcut.
 test("KDE that cannot register falls back to globalShortcut and checks Hold again", async () => {

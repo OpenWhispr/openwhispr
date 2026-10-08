@@ -1062,9 +1062,9 @@ class HotkeyManager extends EventEmitter {
 
       if (gnomeOk) {
         const registerGnomeHotkey = async () => {
-          this.nativeRegistrationPending = false;
           try {
             const hotkey = await this.getSavedDictationHotkey();
+            this.nativeRegistrationPending = false;
             const success = await this.registerGnomeDictationHotkey(hotkey, callback);
             if (success) {
               this.currentHotkey = hotkey;
@@ -1106,9 +1106,9 @@ class HotkeyManager extends EventEmitter {
 
       if (hyprlandOk) {
         const registerHyprlandHotkey = async () => {
-          this.nativeRegistrationPending = false;
           try {
             const hotkey = await this.getSavedDictationHotkey();
+            this.nativeRegistrationPending = false;
 
             const success = await this.hyprlandManager.registerKeybinding(
               hotkey,
