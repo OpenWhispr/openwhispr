@@ -168,12 +168,14 @@ export default function SidebarModal<T extends string>({
                 {notice && !isCompact && (
                   <div className="flex justify-center px-4 pb-1">
                     <span
+                      aria-hidden="true"
                       title={notice.description}
                       className="inline-flex items-center gap-1.5 text-center text-[11px] text-primary"
                     >
                       {notice.icon}
                       {notice.label}
                     </span>
+                    <span className="sr-only">{notice.description}</span>
                   </div>
                 )}
 
