@@ -21,6 +21,9 @@ import { addKeyboardStatusChangedListener } from '../../../../modules/app-group-
 
 const SAMPLE_EMAIL =
   'Hey Tim, excited to chat. Are you free next Friday at 3pm… actually, 4pm? Thanks, Chad';
+// What the sample comes out as, shown when the live try can't run.
+const EXAMPLE_EMAIL =
+  'Hey Tim,\n\nExcited to chat. Are you free next Friday at 4pm?\n\nThanks,\nChad';
 
 const GMAIL_ICON = require('../../../../assets/onboarding/app-icons/gmail.png');
 const MAIL_ICON = require('../../../../assets/onboarding/app-icons/mail.png');
@@ -76,9 +79,9 @@ export function DictationEmailStep(): ReactElement {
   }, [ensureSession]);
 
   const note = localSelected
-    ? 'Practice uses Cloud. Skip it to keep Local.'
+    ? 'Practice uses Cloud. Here’s an example instead.'
     : !user
-      ? 'Cloud practice needs a connection. Try again or skip for now.'
+      ? 'Cloud practice needs a connection. Here’s an example instead.'
       : status === 'recording'
         ? 'Listening…'
         : busy
@@ -116,34 +119,54 @@ export function DictationEmailStep(): ReactElement {
             <Text className="w-16 text-[14px] text-tertiaryLabel">Subject</Text>
             <Text className="text-[14px] font-medium text-label">Quick sync</Text>
           </View>
-          <View className="px-4 pb-4 pt-3">
-            <Text className="mb-2 text-[11px] font-bold uppercase tracking-wider text-tertiaryLabel">
-              Read this aloud
-            </Text>
-            <TextInput
-              ref={input}
-              accessibilityLabel="Your dictated email"
-              value={value}
-              onChangeText={(text) => {
-                setValue(text);
-                // Native readiness precedes the keyboard consuming its pending transcript, and the
-                // status stays ready afterwards, so dismiss once per dictation, not on every edit.
-                if (dismissOnInsert.current && text.trim()) {
-                  dismissOnInsert.current = false;
-                  Keyboard.dismiss();
-                }
-              }}
-              editable={liveAvailable}
-              autoFocus={liveAvailable}
-              multiline
-              placeholder={SAMPLE_EMAIL}
-              placeholderTextColor="#9CA3AF"
-              style={styles.emailInput}
-              textAlignVertical="top"
-              autoCorrect={false}
-              scrollEnabled
-            />
-          </View>
+          {/* Without a live try the field would be a dead box that looks tappable, so the card shows
+              the sample and its result instead. */}
+          {liveAvailable ? (
+            <View className="px-4 pb-4 pt-3">
+              <Text className="mb-2 text-[11px] font-bold uppercase tracking-wider text-tertiaryLabel">
+                Read this aloud
+              </Text>
+              <TextInput
+                ref={input}
+                accessibilityLabel="Your dictated email"
+                value={value}
+                onChangeText={(text) => {
+                  setValue(text);
+                  // Native readiness precedes the keyboard consuming its pending transcript, and the
+                  // status stays ready afterwards, so dismiss once per dictation, not on every edit.
+                  if (dismissOnInsert.current && text.trim()) {
+                    dismissOnInsert.current = false;
+                    Keyboard.dismiss();
+                  }
+                }}
+                autoFocus
+                multiline
+                placeholder={SAMPLE_EMAIL}
+                placeholderTextColor="#9CA3AF"
+                style={styles.emailInput}
+                textAlignVertical="top"
+                autoCorrect={false}
+                scrollEnabled
+              />
+            </View>
+          ) : (
+            <View className="gap-4 px-4 pb-4 pt-3">
+              <View>
+                <Text className="mb-2 text-[11px] font-bold uppercase tracking-wider text-tertiaryLabel">
+                  You say
+                </Text>
+                <Text className="text-[15px] leading-[21px] text-secondaryLabel">
+                  “{SAMPLE_EMAIL}”
+                </Text>
+              </View>
+              <View>
+                <Text className="mb-2 text-[11px] font-bold uppercase tracking-wider text-tertiaryLabel">
+                  OpenWhispr writes
+                </Text>
+                <Text className="text-[16px] leading-[22px] text-label">{EXAMPLE_EMAIL}</Text>
+              </View>
+            </View>
+          )}
         </View>
 
         <Text
