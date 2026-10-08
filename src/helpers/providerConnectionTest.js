@@ -132,6 +132,11 @@ function normalizeBaseUrl(value) {
 // Self-hosted servers (LM Studio, Ollama, vLLM) serve the API under /v1 even
 // when users enter the bare origin, and LM Studio's native REST base
 // (/api/v1 or /api/v0) has its OpenAI-compatible sibling at /v1.
+// Mirror of versionedPathSuffix in src/config/constants.ts: a base ending in a
+// version segment other than /v1 (Z.ai's /api/coding/paas/v4) is already a
+// complete mount, so it gets no /v1 sibling probe (#2381).
+const versionedPathSuffix = /\/(v\d+([a-z].*)?|api\/v\d+)$/i;
+
 function getModelListBaseCandidates(base) {
   const normalized = normalizeBaseUrl(base);
   if (!normalized) return [];
@@ -140,7 +145,7 @@ function getModelListBaseCandidates(base) {
   if (nativeApiMatch) {
     return [normalized, joinUrlDecorators(`${nativeApiMatch[1]}/v1`, query, hash)];
   }
-  if (path.endsWith("/v1")) return [normalized];
+  if (path.endsWith("/v1") || versionedPathSuffix.test(path)) return [normalized];
   return [normalized, joinUrlDecorators(`${path}/v1`, query, hash)];
 }
 
