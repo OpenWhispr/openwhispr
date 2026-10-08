@@ -277,7 +277,7 @@ export function ChatInput({
         className={cn(
           "flex items-center gap-2 min-h-11",
           variant === "sidebar"
-            ? "h-14 items-end rounded-xl bg-background ps-3.5 pe-2 py-1.5 focus-within:h-40 dark:bg-surface-1"
+            ? "h-14 items-end rounded-2xl bg-background ps-3.5 pe-2 py-1.5 focus-within:h-40 dark:bg-surface-1"
             : "rounded-3xl ps-4 pe-1.5 py-1.5",
           isCompactNote && "h-12 overflow-hidden",
           variant === "assistant"
