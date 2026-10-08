@@ -717,7 +717,7 @@ test("a note's chat answers from its note and adds no other notes up front", asy
   await captured.sendToAI("What price are we testing?", []);
 
   assert.deepEqual(searches, []);
-  // The server leaves out memories of other conversations too.
+  // So the server marks its memories as past conversations.
   assert.equal(configs[0].noteChat, true);
   assert.match(prompts[0], /inside the note below\.[^\n]*\n\nNote ID: 7\nTitle: Kickoff/);
   assert.doesNotMatch(prompts[0], /notes from the user's library/);

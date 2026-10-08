@@ -627,7 +627,7 @@ export function useChatStreaming({
               })),
               executeToolCall,
               ...(cloudScreenContext ? { screenContext: cloudScreenContext } : {}),
-              // So the server keeps memories of other conversations out of a note's chat.
+              // So the server marks its memories as past conversations, not facts about the note.
               ...(openNoteRef.current ? { noteChat: true } : {}),
             });
           } else {
