@@ -59,7 +59,10 @@ jest.mock('@/components/settings/OnDeviceModelSection', () => ({
     </MockText>
   ),
 }));
-jest.mock('@/hooks/useConfigToggle', () => ({ useConfigToggle: () => jest.fn() }));
+const mockToggle = jest.fn();
+jest.mock('@/hooks/useConfigToggle', () => ({
+  useConfigToggle: (key: string) => (value: unknown) => mockToggle(key, value),
+}));
 jest.mock('@/store/useCustomPromptsStore', () => ({
   useCustomPromptsStore: (selector: (state: unknown) => unknown) =>
     selector({ customPrompts: { cleanup: mockStoredPrompt } }),
@@ -118,6 +121,7 @@ jest.mock('@/services/providers/ProviderCredentials', () => ({
 }));
 
 import { WorkflowSettingsScreen } from '../WorkflowSettingsScreen';
+import { PRIVATE_MODE_LOCKED_REASON } from '@/lib/aiWorkflows';
 
 function chooseProvider(provider: string): void {
   fireEvent.press(screen.getByText('Provider'));
@@ -735,20 +739,56 @@ it('asks for a key when none is saved', async () => {
   await waitFor(() => expect(mockCredentialStatus).toHaveBeenCalled());
 });
 
-it('turns Chat & Voice Assistant on and off from the top of its page', () => {
-  mockScope = 'agent';
-  const view = render(<WorkflowSettingsScreen />);
-  const page = JSON.stringify(view.toJSON());
-  expect(page.indexOf('Enable Chat & Voice Assistant')).toBeLessThan(
-    page.indexOf('OpenWhispr Cloud'),
-  );
-  fireEvent.press(screen.getByText('Voice Assistant'));
-  expect(mockPush).toHaveBeenCalledWith('/(account)/dictation-agent');
-  mockConfig = { defaultMode: 'cloud', dictationAgentEnabled: false };
-  view.rerender(<WorkflowSettingsScreen />);
-  expect(screen.queryByText('OpenWhispr Cloud')).toBeNull();
-  expect(screen.queryByText('Voice Assistant')).toBeNull();
-  expect(screen.getByText('Note chat and the voice assistant are off.')).toBeTruthy();
+describe('note chat and the voice assistant', () => {
+  beforeEach(() => {
+    mockScope = 'agent';
+  });
+
+  it('switch apart at the top of their page', () => {
+    const view = render(<WorkflowSettingsScreen />);
+    const page = JSON.stringify(view.toJSON());
+    expect(page.indexOf('Note Chat')).toBeLessThan(page.indexOf('OpenWhispr Cloud'));
+    fireEvent(screen.getByLabelText('Note Chat'), 'valueChange', false);
+    expect(mockToggle).toHaveBeenCalledWith('noteChatEnabled', false);
+    // Note chat stops following the voice assistant's switch once that is changed.
+    fireEvent(screen.getByLabelText('Voice Assistant'), 'valueChange', false);
+    expect(mockUpdateConfig).toHaveBeenCalledWith({
+      dictationAgentEnabled: false,
+      noteChatEnabled: true,
+    });
+    fireEvent.press(screen.getByText('Voice Assistant Settings'));
+    expect(mockPush).toHaveBeenCalledWith('/(account)/dictation-agent');
+  });
+
+  it('keep the model choice while note chat is on and the voice assistant off', () => {
+    mockConfig = { defaultMode: 'cloud', dictationAgentEnabled: false, noteChatEnabled: true };
+    render(<WorkflowSettingsScreen />);
+    expect(screen.getByLabelText('Note Chat').props.value).toBe(true);
+    expect(screen.getByLabelText('Voice Assistant').props.value).toBe(false);
+    expect(screen.getByText('OpenWhispr Cloud')).toBeTruthy();
+    expect(screen.queryByText('Voice Assistant Settings')).toBeNull();
+    expect(screen.queryByText('Note chat and the voice assistant are off.')).toBeNull();
+  });
+
+  // The one switch both shared before is still what an existing user's choice is saved in.
+  it('are both off, with no model choice, when the old shared switch was turned off', () => {
+    mockConfig = { defaultMode: 'cloud', dictationAgentEnabled: false };
+    render(<WorkflowSettingsScreen />);
+    expect(screen.getByLabelText('Note Chat').props.value).toBe(false);
+    expect(screen.queryByText('OpenWhispr Cloud')).toBeNull();
+    expect(screen.getByText('Note chat and the voice assistant are off.')).toBeTruthy();
+  });
+
+  it('show the voice assistant off in Private mode, while note chat stays on', () => {
+    mockActiveMode = 'private';
+    mockConfig = { defaultMode: 'private', dictationAgentEnabled: true };
+    render(<WorkflowSettingsScreen />);
+    expect(screen.getByLabelText('Note Chat').props.value).toBe(true);
+    expect(screen.getByLabelText('Voice Assistant').props.value).toBe(false);
+    expect(screen.getByLabelText('Voice Assistant').props.disabled).toBe(true);
+    expect(screen.getAllByText(PRIVATE_MODE_LOCKED_REASON).length).toBeGreaterThan(0);
+    expect(screen.queryByText('Voice Assistant Settings')).toBeNull();
+  });
 });
 
 it('shows a default cleanup prompt as Default', () => {
@@ -913,9 +953,10 @@ it.each([
   render(<WorkflowSettingsScreen />);
   for (const title of locked) expect(modeDisabled(title)).toBe(true);
   for (const title of open) expect(modeDisabled(title)).toBe(false);
+  // The agent page's Voice Assistant switch is off for the same reason.
   expect(
     screen.queryAllByText('Off while Private mode is on. Turn it off in AI Models.'),
-  ).toHaveLength(locked.length);
+  ).toHaveLength(locked.length + (scope === 'agent' ? 1 : 0));
 });
 
 it('locks no mode outside Private mode', () => {

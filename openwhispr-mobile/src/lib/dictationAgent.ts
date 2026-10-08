@@ -15,6 +15,24 @@ export function isDictationAgentApplicable(mode: ProcessingMode, config: UserCon
   return (mode === 'cloud' || mode === 'providers') && isDictationAgentEnabled(config);
 }
 
+export function isNoteChatEnabled(config: UserConfig): boolean {
+  return config.noteChatEnabled ?? isDictationAgentEnabled(config);
+}
+
+// Switching the voice assistant also saves note chat as it stands, so chat stops following the
+// voice assistant's switch from then on.
+export function voiceAssistantToggleConfig(
+  config: UserConfig | null,
+  enabled: boolean,
+): Partial<UserConfig> {
+  return {
+    dictationAgentEnabled: enabled,
+    ...(config?.noteChatEnabled === undefined
+      ? { noteChatEnabled: config ? isNoteChatEnabled(config) : true }
+      : {}),
+  };
+}
+
 function levenshteinDistance(a: string, b: string): number {
   const m = a.length;
   const n = b.length;

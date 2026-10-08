@@ -7,7 +7,12 @@ import { SettingsSwitch } from '@/components/ui/SettingsSwitch';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useConfigToggle } from '@/hooks/useConfigToggle';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
-import { getDictationAgentName, isDictationAgentEnabled } from '@/lib/dictationAgent';
+import {
+  getDictationAgentName,
+  isDictationAgentEnabled,
+  voiceAssistantToggleConfig,
+} from '@/lib/dictationAgent';
+import { PRIVATE_MODE_LOCKED_REASON } from '@/lib/aiWorkflows';
 import { safeHaptics } from '@/lib/utils';
 import { iosColor } from '@/config/colors';
 import { AppFont } from '@/lib/fonts';
@@ -23,7 +28,7 @@ export function DictationAgentScreen(): React.JSX.Element {
   // Bring Your Own Key skips the assistant until it has a selection of its own.
   const unavailableNotice =
     activeMode === 'private'
-      ? 'Voice Assistant needs Cloud or Bring Your Own Key mode. Your settings are saved and apply once one is active.'
+      ? `${PRIVATE_MODE_LOCKED_REASON} Your settings are saved and apply once Private mode is off.`
       : activeMode === 'providers' && !agentSelected
         ? 'Bring Your Own Key skips the voice assistant until Chat & Voice Assistant has a selection. Your settings are saved and apply once it does.'
         : null;
@@ -34,7 +39,13 @@ export function DictationAgentScreen(): React.JSX.Element {
 
   const [nameValue, setNameValue] = useState(currentName);
 
-  const handleToggleEnabled = useConfigToggle('dictationAgentEnabled');
+  const handleToggleEnabled = useCallback(
+    (value: boolean): void => {
+      safeHaptics('light');
+      void updateConfig(voiceAssistantToggleConfig(config, value));
+    },
+    [config, updateConfig],
+  );
   const handleToggleShareContext = useConfigToggle('dictationAgentShareContext');
 
   const commitName = useCallback((): void => {
@@ -75,10 +86,11 @@ export function DictationAgentScreen(): React.JSX.Element {
             icon="person.wave.2"
             mdIcon="UserRoundCog"
             title="Enable Voice Assistant"
-            description="Say your assistant’s name while dictating to have OpenWhispr rewrite what you said. Also turns note chat on or off."
+            description="Say your assistant’s name while dictating to have OpenWhispr rewrite what you said."
             rightElement={
               <SettingsSwitch
-                value={enabled}
+                // Shows what runs: the voice assistant is off wherever it can't run.
+                value={enabled && isAvailable}
                 onValueChange={handleToggleEnabled}
                 disabled={!isAvailable}
               />
