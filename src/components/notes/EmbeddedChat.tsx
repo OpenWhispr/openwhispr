@@ -189,7 +189,7 @@ export default function EmbeddedChat({
   }
 
   return (
-    <div className="flex min-h-0 w-1/2 min-w-80 max-w-2xl shrink-0 p-4" data-note-chat-panel>
+    <div className="flex min-h-0 w-1/2 min-w-80 max-w-2xl shrink-0 p-3" data-note-chat-panel>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[20px] border border-border/60 bg-surface-1 dark:border-white/10 dark:bg-surface-1">
         <div className={cn("flex min-h-0 flex-1 flex-col", slashMenuOpen && "hidden")}>
           {chatBody}
