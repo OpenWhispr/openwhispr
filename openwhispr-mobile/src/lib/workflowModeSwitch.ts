@@ -10,6 +10,7 @@ import {
   getLocalReasoningUnavailableMessage,
 } from '@/lib/localReasoning';
 import type { LocalModelKey } from '@/lib/localModelCatalog';
+import type { UserConfig } from '@/types';
 import type { InferenceSelection, MobileInferenceScope } from '@/lib/mobileProviders';
 import { getPrivateModeReadiness, getPrivateModeUnavailableMessage } from '@/lib/privateMode';
 
@@ -78,14 +79,27 @@ export async function switchWorkflowMode(
   return 'switched';
 }
 
-// The Private mode switch in AI Models. On runs every workflow on this phone; off hands dictation
-// back to Cloud, or to the provider it is saved to.
+// The provider turning Private mode off returns dictation to: the one dictation is saved to, or
+// the last one used when Private mode was turned on from Bring Your Own Key.
+function returnProvider(config: UserConfig | null): InferenceSelection | undefined {
+  const saved = config?.inference?.dictation;
+  if (saved?.mode === 'providers') return saved;
+  if (config?.privateModeReturn !== 'providers') return undefined;
+  return Object.values(config.rememberedInference?.dictation ?? {}).find(
+    (selection) => selection.mode === 'providers',
+  );
+}
+
+// The Private mode switch in AI Models. On keeps dictation and uploads on this phone; off hands
+// dictation back to Cloud, or to Bring Your Own Key when that is where Private mode was turned on.
 export async function setPrivateMode(enabled: boolean): Promise<ModeSwitchResult> {
   if (enabled) return switchWorkflowMode('dictation', 'local');
   const { config, updateConfig } = useConfigStore.getState();
-  if (config?.inference?.dictation?.mode === 'providers') {
-    useProcessingModeStore.getState().setActiveMode('providers', true);
-    await updateConfig({ defaultMode: 'providers' });
+  const provider = returnProvider(config);
+  if (provider) {
+    const { activeMode, setActiveMode } = useProcessingModeStore.getState();
+    setActiveMode('providers', true);
+    await updateConfig(workflowSaveConfig(config, 'dictation', provider, activeMode));
     return 'switched';
   }
   return switchWorkflowMode('dictation', 'openwhispr');

@@ -17,6 +17,7 @@ import { useOnboardingPracticeMode } from '@/hooks/useOnboardingPracticeMode';
 import { useOnboardingStep } from '@/hooks/useOnboardingStep';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useHandoffStore } from '@/store/useHandoffStore';
+import { hasRealAccountHistory } from '@/sync/syncIdentity';
 import { addKeyboardStatusChangedListener } from '../../../../modules/app-group-storage/src';
 
 const SAMPLE_EMAIL =
@@ -33,7 +34,13 @@ export function DictationEmailStep(): ReactElement {
   const { goNext, progress } = useOnboardingStep('dictation-email');
   const { localSelected } = useOnboardingPracticeMode();
   const user = useAuthStore((state) => state.user);
+  const isGuest = useAuthStore((state) => state.isGuest);
   const ensureSession = useAuthStore((state) => state.ensureAnonymousSession);
+  // A guest declined an account, and a device with account history must not get a new identity
+  // (its first sync would read as an account switch and wipe that account's notes), so neither
+  // can get a session here, and Retry would only ever fail.
+  const [noHistory] = useState(() => !hasRealAccountHistory());
+  const sessionPossible = !isGuest && noHistory;
   const isTranscribing = useHandoffStore((state) => state.isTranscribing);
   const input = useRef<TextInput>(null);
   const dismissOnInsert = useRef(false);
@@ -78,17 +85,18 @@ export function DictationEmailStep(): ReactElement {
     input.current?.focus();
   }, [ensureSession]);
 
-  const note = localSelected
-    ? 'Practice uses Cloud. Here’s an example instead.'
-    : !user
-      ? 'Cloud practice needs a connection. Here’s an example instead.'
-      : status === 'recording'
-        ? 'Listening…'
-        : busy
-          ? 'Transcribing…'
-          : value.trim()
-            ? 'Your email is ready'
-            : 'Tap the field, then the keyboard mic. Practice uses Cloud.';
+  const note =
+    localSelected || (!user && !sessionPossible)
+      ? 'Practice uses Cloud. Here’s an example instead.'
+      : !user
+        ? 'Cloud practice needs a connection. Here’s an example instead.'
+        : status === 'recording'
+          ? 'Listening…'
+          : busy
+            ? 'Transcribing…'
+            : value.trim()
+              ? 'Your email is ready'
+              : 'Tap the field, then the keyboard mic. Practice uses Cloud.';
 
   return (
     <OnboardingShell
@@ -100,7 +108,9 @@ export function DictationEmailStep(): ReactElement {
       ctaLabel="Continue"
       ctaDisabled={busy}
       onCta={goNext}
-      secondaryCtaLabel={!localSelected && (error || !user) ? 'Retry' : undefined}
+      secondaryCtaLabel={
+        !localSelected && (error || (!user && sessionPossible)) ? 'Retry' : undefined
+      }
       onSecondaryCta={retry}
     >
       <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>

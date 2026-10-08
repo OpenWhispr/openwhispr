@@ -7,6 +7,7 @@ const mockPrivateReadiness = jest.fn();
 const mockLocalReasoningReadiness = jest.fn();
 let mockConfig: Record<string, unknown> | null = null;
 let mockUser: Record<string, unknown> | null = { id: 'user-1' };
+let mockActiveMode = 'cloud';
 
 jest.mock('expo-router', () => ({ router: { push: (...args: unknown[]) => mockPush(...args) } }));
 jest.mock('@/store/useConfigStore', () => ({
@@ -15,7 +16,9 @@ jest.mock('@/store/useConfigStore', () => ({
   },
 }));
 jest.mock('@/store/useProcessingModeStore', () => ({
-  useProcessingModeStore: { getState: () => ({ setActiveMode: mockSetActiveMode }) },
+  useProcessingModeStore: {
+    getState: () => ({ activeMode: mockActiveMode, setActiveMode: mockSetActiveMode }),
+  },
 }));
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: mockUser }) },
@@ -37,6 +40,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockConfig = { defaultMode: 'cloud', inference: { dictation: { mode: 'openwhispr' } } };
   mockUser = { id: 'user-1' };
+  mockActiveMode = 'cloud';
   mockPrivateReadiness.mockResolvedValue({ status: 'ready', modelName: 'Parakeet v2' });
   mockLocalReasoningReadiness.mockResolvedValue({ status: 'ready', tokenCounting: false });
   alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
@@ -178,15 +182,80 @@ describe('setPrivateMode', () => {
     });
   });
 
-  // A guest is kept in Private mode without a saved choice, so dictation can still name a provider.
-  it('turns off into the provider dictation is saved to', async () => {
+  it('remembers Bring Your Own Key when turned on from it', async () => {
+    mockActiveMode = 'providers';
+    mockConfig = {
+      defaultMode: 'providers',
+      inference: { dictation: { mode: 'providers', providerId: 'openai' } },
+    };
+    await expect(setPrivateMode(true)).resolves.toBe('switched');
+    expect(mockUpdateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ defaultMode: 'private', privateModeReturn: 'providers' }),
+    );
+  });
+
+  // Turning it off must not send audio to Cloud for someone who was using their own key.
+  it('turns off into the last provider used when it was turned on from Bring Your Own Key', async () => {
+    mockActiveMode = 'private';
+    mockConfig = {
+      defaultMode: 'private',
+      privateModeReturn: 'providers',
+      inference: { dictation: { mode: 'local' } },
+      rememberedInference: {
+        dictation: {
+          local: { mode: 'local', modelId: 'whisper-base' },
+          groq: { mode: 'providers', providerId: 'groq', modelId: 'whisper-large-v3' },
+          openai: { mode: 'providers', providerId: 'openai', modelId: 'gpt-4o-transcribe' },
+        },
+      },
+    };
+    await expect(setPrivateMode(false)).resolves.toBe('switched');
+    expect(mockSetActiveMode).toHaveBeenCalledWith('providers', true);
+    const update = mockUpdateConfig.mock.calls[0][0];
+    expect(update).toMatchObject({
+      defaultMode: 'providers',
+      inference: {
+        dictation: { mode: 'providers', providerId: 'groq', modelId: 'whisper-large-v3' },
+        // Leaving Private mode keeps the workflows that followed it on this phone.
+        upload: { mode: 'local' },
+        notes: { mode: 'local' },
+        agent: { mode: 'local' },
+      },
+      pinnedInference: ['upload', 'notes', 'agent'],
+    });
+    expect(update).toHaveProperty('privateModeReturn', undefined);
+  });
+
+  // Needs no account, so a guest kept in Private mode can still leave it this way.
+  it('turns off into the provider dictation is saved to without signing in', async () => {
+    mockUser = null;
+    mockActiveMode = 'private';
     mockConfig = {
       defaultMode: 'providers',
       inference: { dictation: { mode: 'providers', providerId: 'openai' } },
     };
     await expect(setPrivateMode(false)).resolves.toBe('switched');
     expect(mockSetActiveMode).toHaveBeenCalledWith('providers', true);
-    expect(mockUpdateConfig).toHaveBeenCalledWith({ defaultMode: 'providers' });
+    expect(mockUpdateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        defaultMode: 'providers',
+        inference: expect.objectContaining({
+          dictation: { mode: 'providers', providerId: 'openai' },
+        }),
+      }),
+    );
+    expect(alert).not.toHaveBeenCalled();
+  });
+
+  it('turns off into Cloud, not an old provider, when it was turned on from Cloud', async () => {
+    mockActiveMode = 'private';
+    mockConfig = {
+      defaultMode: 'private',
+      inference: { dictation: { mode: 'local' } },
+      rememberedInference: { dictation: { openai: { mode: 'providers', providerId: 'openai' } } },
+    };
+    await expect(setPrivateMode(false)).resolves.toBe('switched');
+    expect(mockSetActiveMode).toHaveBeenCalledWith('cloud', true);
   });
 
   it('stays on when a signed-out user would need Cloud', async () => {

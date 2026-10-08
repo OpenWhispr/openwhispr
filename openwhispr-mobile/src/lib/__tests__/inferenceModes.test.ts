@@ -162,6 +162,49 @@ describe('workflowSaveConfig', () => {
       inference: { dictation: { mode: 'openwhispr' } },
     });
   });
+
+  describe('where Private mode returns to', () => {
+    const fromProviders: UserConfig = {
+      defaultMode: 'private',
+      privateModeReturn: 'providers',
+      inference: { dictation: { mode: 'local' } },
+    };
+
+    it('is Bring Your Own Key when Private mode is turned on from it', () => {
+      const config: UserConfig = {
+        defaultMode: 'providers',
+        inference: { dictation: groqDictation },
+      };
+      expect(
+        workflowSaveConfig(config, 'dictation', { mode: 'local' }, 'providers').privateModeReturn,
+      ).toBe('providers');
+    });
+
+    it('is not set when Private mode is turned on from Cloud', () => {
+      const config: UserConfig = { defaultMode: 'cloud' };
+      expect(
+        workflowSaveConfig(config, 'dictation', { mode: 'local' }, 'cloud'),
+      ).not.toHaveProperty('privateModeReturn');
+    });
+
+    it('survives picking another on-device model', () => {
+      const next = workflowSaveConfig(
+        fromProviders,
+        'dictation',
+        { mode: 'local', modelId: 'whisper-base' },
+        'private',
+      );
+      expect(next.privateModeReturn).toBe('providers');
+    });
+
+    it.each([
+      ['Cloud', { mode: 'openwhispr' as const }],
+      ['Bring Your Own Key', groqDictation],
+    ])('is cleared when dictation leaves Private mode for %s', (_label, selection) => {
+      const next = workflowSaveConfig(fromProviders, 'dictation', selection, 'private');
+      expect(next).toHaveProperty('privateModeReturn', undefined);
+    });
+  });
 });
 
 describe('getInferenceModes', () => {

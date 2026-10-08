@@ -141,11 +141,21 @@ export function workflowSaveConfig(
     : {};
   if (scope === 'dictation') {
     const mode = inferenceToProcessingMode(selection.mode);
+    // Picking another on-device model keeps where Private mode returns to; leaving it clears it.
+    const privateModeReturn =
+      mode !== 'private'
+        ? undefined
+        : activeMode === 'private'
+          ? config?.privateModeReturn
+          : activeMode === 'providers'
+            ? 'providers'
+            : undefined;
     return {
       ...rememberedInference,
       ...(mode === 'providers'
         ? providerDictationConfig(config, selection, activeMode)
         : dictationModeConfig(config, mode)),
+      ...(privateModeReturn || config?.privateModeReturn ? { privateModeReturn } : {}),
     };
   }
   return {

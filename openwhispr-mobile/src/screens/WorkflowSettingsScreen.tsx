@@ -29,7 +29,7 @@ import {
   removeProviderCredential,
   setProviderCredential,
 } from '@/services/providers/ProviderCredentials';
-import { workflowSaveConfig } from '@/lib/inferenceModes';
+import { MODE_LABELS, workflowSaveConfig } from '@/lib/inferenceModes';
 import { InferenceModePicker } from '@/components/settings/InferenceModePicker';
 import {
   ON_DEVICE_MODE_NOTES,
@@ -242,7 +242,16 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   const updateConfig = useConfigStore((state) => state.updateConfig);
   const setActiveMode = useProcessingModeStore((state) => state.setActiveMode);
   const activeMode = useProcessingModeStore((state) => state.activeMode);
-  const savedSelection = config?.inference?.[scope] ?? unsetSelection(scope, activeMode);
+  const storedSelection = config?.inference?.[scope] ?? unsetSelection(scope, activeMode);
+  // Private mode runs dictation and uploads on this phone whatever is saved, so a saved mode it
+  // locks shows as On-Device (Automatic), which is what runs, and stays saved for later.
+  const lockedByPrivateMode =
+    activeMode === 'private' &&
+    (scope === 'dictation' || scope === 'upload') &&
+    !!PRIVATE_MODE_LOCKED[scope]?.includes(storedSelection.mode);
+  const savedSelection: InferenceSelection = lockedByPrivateMode
+    ? { mode: 'local' }
+    : storedSelection;
   // Private mode skips an unsaved cleanup, so the On-Device default must not look picked.
   const cleanupUnsaved =
     scope === 'cleanup' && activeMode === 'private' && !config?.inference?.cleanup;
@@ -301,12 +310,17 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
         ? UNSET_UNSUPPORTED_CLEANUP_NOTE
         : UNSET_ON_DEVICE_CLEANUP_NOTE
       : undefined) ??
+    (lockedByPrivateMode && ON_DEVICE_MODE_NOTES[scope]
+      ? `${ON_DEVICE_MODE_NOTES[scope]} Your ${MODE_LABELS[storedSelection.mode]} choice applies again when Private mode is off.`
+      : undefined) ??
     (activeMode === 'private' ? ON_DEVICE_MODE_NOTES[scope] : undefined) ??
     (activeMode === 'providers' && !config?.inference?.[scope]
       ? UNSET_PROVIDER_NOTES[scope]
       : undefined) ??
     (selection.mode === 'providers' && savedSelection.mode !== 'providers'
-      ? 'Save to switch to Bring Your Own Key.'
+      ? activeMode === 'private'
+        ? 'Save to switch to Bring Your Own Key. This turns Private mode off.'
+        : 'Save to switch to Bring Your Own Key.'
       : undefined);
   // Private mode is switched in AI Models, so a mode it never runs here can't be picked.
   const modeUnavailable: Partial<Record<InferenceMode, string>> = {

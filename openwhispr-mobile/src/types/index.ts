@@ -16,6 +16,9 @@ export interface UserConfig {
   // Workflows held on the previous mode when dictation moved to Bring Your Own Key,
   // as opposed to ones the user chose; only these are released when dictation leaves it.
   pinnedInference?: MobileInferenceScope[];
+  // Set while Private mode is on after being turned on from Bring Your Own Key, so turning it
+  // off goes back to the last provider rather than to Cloud.
+  privateModeReturn?: 'providers';
   defaultMode: ProcessingMode;
   cleanupEnabled?: boolean;
   autoGenerateNoteTitle?: boolean;

@@ -27,11 +27,17 @@ jest.mock('@/store/useProcessingModeStore', () => ({
   },
 }));
 let mockUser: { id: string } | null = { id: 'anon' };
+let mockIsGuest = false;
+let mockAccountHistory = false;
 const mockEnsureSession = jest.fn();
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: Object.assign(
     (selector: (s: unknown) => unknown) =>
-      selector({ user: mockUser, ensureAnonymousSession: mockEnsureSession }),
+      selector({
+        user: mockUser,
+        isGuest: mockIsGuest,
+        ensureAnonymousSession: mockEnsureSession,
+      }),
     { getState: () => ({ user: mockUser }) },
   ),
 }));
@@ -39,6 +45,9 @@ let mockSavedMode: 'private' | 'cloud' = 'cloud';
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: (selector: (s: unknown) => unknown) =>
     selector({ config: { defaultMode: mockSavedMode } }),
+}));
+jest.mock('@/sync/syncIdentity', () => ({
+  hasRealAccountHistory: () => mockAccountHistory,
 }));
 jest.mock('@/store/useHandoffStore', () => ({
   useHandoffStore: (selector: (s: unknown) => unknown) => selector({ isTranscribing: false }),
@@ -49,6 +58,8 @@ beforeEach(() => {
   mockMode = null;
   mockSavedMode = 'cloud';
   mockUser = { id: 'anon' };
+  mockIsGuest = false;
+  mockAccountHistory = false;
   mockNext.mockResolvedValue(undefined);
   mockEnsureSession.mockResolvedValue(undefined);
 });
@@ -161,7 +172,7 @@ it('keeps a saved Local default when replaying onboarding', () => {
   expectExample(screen);
 });
 
-// Replaying onboarding signed out on a device that synced an account mints no session.
+// First run offline: no session yet, and one can still be made.
 it('shows the example with a retry when there is no session', () => {
   mockUser = null;
   const screen = render(<DictationEmailStep />);
@@ -170,6 +181,20 @@ it('shows the example with a retry when there is no session', () => {
   ).toBeTruthy();
   expectExample(screen);
   expect(screen.getByText('Retry')).toBeTruthy();
+});
+
+// A guest declined an account, and a device that synced one must not get a new identity (it
+// would wipe that account's notes), so a retry could only fail.
+it.each([
+  ['a guest', () => (mockIsGuest = true)],
+  ['a device that synced an account', () => (mockAccountHistory = true)],
+])('shows the example without a retry for %s', (_label, arrange) => {
+  mockUser = null;
+  arrange();
+  const screen = render(<DictationEmailStep />);
+  expect(screen.getByText('Practice uses Cloud. Here’s an example instead.')).toBeTruthy();
+  expectExample(screen);
+  expect(screen.queryByText('Retry')).toBeNull();
 });
 
 it('swaps the example for a focused field once a retry gets a session', async () => {

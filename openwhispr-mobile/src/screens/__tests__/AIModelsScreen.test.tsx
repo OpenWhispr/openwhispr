@@ -240,7 +240,9 @@ describe('Private Mode switch', () => {
   it('shows Private mode off, with what turning it on does', async () => {
     render(<AIModelsScreen />);
     expect(screen.getByLabelText('Private Mode').props.value).toBe(false);
-    expect(screen.getByText('Run workflows on this iPhone instead of Cloud.')).toBeTruthy();
+    expect(
+      screen.getByText('Keep audio on this iPhone and ask before notes leave it.'),
+    ).toBeTruthy();
     await screen.findByText(/Status: Ready/);
   });
 
@@ -249,7 +251,9 @@ describe('Private Mode switch', () => {
     render(<AIModelsScreen />);
     expect(screen.getByLabelText('Private Mode').props.value).toBe(true);
     expect(
-      screen.getByText('Workflows run on this iPhone. Turn it off to choose a mode for each one.'),
+      screen.getByText(
+        'Audio stays on this iPhone, notes ask before leaving it, and the voice assistant is off.',
+      ),
     ).toBeTruthy();
     await screen.findByText(/Status: Ready/);
   });

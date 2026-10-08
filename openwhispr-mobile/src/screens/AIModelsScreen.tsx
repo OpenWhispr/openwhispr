@@ -6,7 +6,6 @@ import { SettingsRow, SettingsSection } from '@/components/ui/SettingsSection';
 import { SettingsScreen } from '@/components/ui/SettingsScreen';
 import { SettingsSwitch } from '@/components/ui/SettingsSwitch';
 import type { LucideIconName } from '@/components/ui/SystemIcon';
-import { Text } from '@/components/ui/Text';
 import { Toast } from '@/components/ui/Toast';
 import { useConfigToggle } from '@/hooks/useConfigToggle';
 import { useToast } from '@/hooks/useToast';
@@ -161,8 +160,8 @@ export default function AIModelsScreen(): React.JSX.Element {
   return (
     <View className="flex-1 bg-systemBackground">
       <SettingsScreen>
-        {/* The one place the app-wide mode is set: with it on, the workflow pages show only
-            On-Device, so a choice there can't look saved and then be ignored. */}
+        {/* The one place Private mode is switched: with it on, the workflow pages lock the modes
+            it never runs, so a choice there can't look saved and then be ignored. */}
         <SettingsSection>
           <SettingsRow
             iconStyle="line"
@@ -171,8 +170,8 @@ export default function AIModelsScreen(): React.JSX.Element {
             title="Private Mode"
             description={
               privateMode
-                ? 'Workflows run on this iPhone. Turn it off to choose a mode for each one.'
-                : 'Run workflows on this iPhone instead of Cloud.'
+                ? 'Audio stays on this iPhone, notes ask before leaving it, and the voice assistant is off.'
+                : 'Keep audio on this iPhone and ask before notes leave it.'
             }
             rightElement={
               <SettingsSwitch
