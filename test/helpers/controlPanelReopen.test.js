@@ -180,6 +180,31 @@ test("a minimized control panel is restored without show() when the opener does 
   assert.deepEqual(sequence, ["dock:visible", "restore", "focus"]);
 });
 
+test("showing the control panel without a live window touches neither the Dock nor a window", async () => {
+  // open-url and the tray's create path rely on this instead of their own checks.
+  const { windowManager, trayManager } = createManagers();
+
+  windowManager.showControlPanel();
+  windowManager.controlPanelWindow = createControlPanel({ destroyed: true });
+  windowManager.showControlPanel();
+  windowManager.controlPanelWindow = null;
+  trayManager.setCreateControlPanelCallback(async () => {});
+  await trayManager.toggleControlPanelFromTray();
+
+  assert.deepEqual(sequence, []);
+});
+
+test("the first show leaves an already visible control panel where it is", () => {
+  // It runs on every onboarding window-mode change; showing again would pull
+  // the panel over System Settings during the permission steps.
+  const { windowManager } = createManagers();
+  windowManager.controlPanelWindow = createControlPanel({ visible: true });
+
+  windowManager._showControlPanel();
+
+  assert.deepEqual(sequence, []);
+});
+
 test("showing the control panel cancels the visibility backstop", () => {
   // A backstop left armed would restore the panel after the user minimized it.
   const { windowManager } = createManagers();
