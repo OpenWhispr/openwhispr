@@ -927,7 +927,7 @@ export default function NoteEditor({
         run: () => runAction(action),
       }))
     : undefined;
-  // The floating chat and the docked one never show at once, so they share the chips.
+  // Both chats show the same chips.
   const actionChips = offersActions && (
     <ActionChips
       actions={noteActions}

@@ -553,6 +553,37 @@ test("a chat action from the collapsed picker opens the docked chat with the sam
   await unmount();
 });
 
+test("a summary action from the collapsed picker runs on the summary and leaves the chat closed", async (t) => {
+  const shorten = {
+    ...TEMPLATE,
+    id: 4,
+    client_id: "shorten",
+    kind: "action",
+    name: "Shorten",
+    prompt: "Shorten it.",
+    sections: null,
+    output: "summary",
+    translation_key: null,
+  };
+  globalThis.__noteActions = [shorten];
+  globalThis.__embeddedChatSent = [];
+  t.after(() => {
+    delete globalThis.__noteActions;
+    delete globalThis.__embeddedChatSent;
+  });
+  const { render, latest, unmount } = await loadNoteEditor(t);
+  const ran = [];
+
+  await render(ENHANCEMENT, { onRunNoteAction: (action) => ran.push(action.client_id) });
+  const bar = findBottomBar(latest());
+  await React.act(async () => bar.props.actionPicker.props.onRunAction(shorten));
+
+  assert.deepEqual(ran, ["shorten"]);
+  assert.equal(findDockedChat(latest()), null);
+  assert.deepEqual(globalThis.__embeddedChatSent, []);
+  await unmount();
+});
+
 test("a question sent while a reply is still coming waits as the docked chat's draft", async (t) => {
   globalThis.__embeddedChatAgentState = "streaming";
   globalThis.__embeddedChatSent = [];

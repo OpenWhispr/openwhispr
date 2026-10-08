@@ -56,7 +56,7 @@ export default function ActionChips({
       {/* Left as a row, so moving between chips swaps the card instead of replaying it. */}
       <div onPointerLeave={() => setPreviewed(null)} className="flex items-center gap-1">
         {/* Only the chips scroll, so All actions stays in reach in a narrow chat. */}
-        <div className="scrollbar-hidden flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [mask-image:linear-gradient(to_right,#000_calc(100%_-_1.5rem),transparent)] rtl:[mask-image:linear-gradient(to_left,#000_calc(100%_-_1.5rem),transparent)]">
+        <div className="scrollbar-hidden flex min-w-0 flex-1 items-center gap-1 overflow-x-auto pe-6 [mask-image:linear-gradient(to_right,#000_calc(100%_-_1.5rem),transparent)] rtl:[mask-image:linear-gradient(to_left,#000_calc(100%_-_1.5rem),transparent)]">
           {actions.slice(0, VISIBLE_CHIPS).map((action, index) => (
             <button
               key={action.id}

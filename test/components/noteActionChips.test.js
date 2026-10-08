@@ -146,14 +146,14 @@ test("hovering a chip shows what its action does above the row", async (t) => {
 
   const card = description().parentNode.parentNode;
   const followUpChip = findElement(container, (el) => el.tagName === "BUTTON");
-  const row = followUpChip.parentNode;
+  const strip = followUpChip.parentNode;
   const move = (from, to) =>
     React.act(async () =>
       from.dispatchEvent({ type: "pointerout", bubbles: true, relatedTarget: to })
     );
-  await move(chip, row);
+  await move(chip, strip);
   assert.ok(description(), "crossing the gap between chips keeps the card up");
-  await move(row, followUpChip);
+  await move(strip, followUpChip);
   assert.equal(
     description(),
     null,
