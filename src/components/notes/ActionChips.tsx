@@ -37,7 +37,8 @@ interface ActionChipsProps extends ActionMenuItemsProps {
 }
 
 /**
- * The first actions as one-click chips, then every action behind "All actions" at the end.
+ * The first actions as one-click chips, and every action behind "All actions": at the end of
+ * the row, or at its start in the docked chat.
  * A hovered or focused chip shows what its action does above the row.
  */
 export default function ActionChips({
@@ -53,7 +54,38 @@ export default function ActionChips({
   const description = previewed && getActionDescription(previewed, t);
   const chipClass = docked ? DOCKED_CHIP_CLASS : CHIP_CLASS;
   const PreviewedIcon = previewed && getActionIcon(previewed);
-  const leadingChips = generateSummary ? 1 : 0;
+  // Docked, All actions leads the row and scrolls with the chips, opening toward them.
+  const firstChip = (docked ? 1 : 0) + (generateSummary ? 1 : 0);
+  const allActions = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          onPointerEnter={() => setPreviewed(null)}
+          className={chipClass}
+          style={chipEntrance(docked ? 0 : firstChip + Math.min(actions.length, VISIBLE_CHIPS))}
+        >
+          <Blocks size={14} className={CHIP_ICON_CLASS} />
+          {t("notes.actions.allActions")}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align={docked ? "start" : "end"}
+        side="top"
+        sideOffset={8}
+        // The docked chat sits 24px in from the window's edge; the menu stays inside that too.
+        collisionPadding={docked ? 24 : undefined}
+        className="min-w-48"
+      >
+        <ActionMenuItems
+          actions={actions}
+          canRun={canRun}
+          onRunAction={onRunAction}
+          onManageActions={onManageActions}
+        />
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 
   return (
     <div className="relative">
@@ -77,7 +109,7 @@ export default function ActionChips({
       )}
       {/* Left as a row, so moving between chips swaps the card instead of replaying it. */}
       <div onPointerLeave={() => setPreviewed(null)} className="flex items-center gap-1">
-        {/* Only the chips scroll, so All actions stays in reach in a narrow chat. */}
+        {/* In the in-view chat only the chips scroll, so All actions at the end stays in reach. */}
         <div
           className={cn(
             "scrollbar-hidden flex min-w-0 flex-1 items-center overflow-x-auto pe-6",
@@ -85,6 +117,7 @@ export default function ActionChips({
             "[mask-image:linear-gradient(to_right,#000_calc(100%_-_1.5rem),transparent)] rtl:[mask-image:linear-gradient(to_left,#000_calc(100%_-_1.5rem),transparent)]"
           )}
         >
+          {docked && allActions}
           {generateSummary && (
             <button
               type="button"
@@ -93,7 +126,7 @@ export default function ActionChips({
               onPointerEnter={() => setPreviewed(null)}
               disabled={generateSummary.disabled}
               className={chipClass}
-              style={chipEntrance(0)}
+              style={chipEntrance(docked ? 1 : 0)}
             >
               <TextCursorInput size={14} className={CHIP_ICON_CLASS} />
               {t("embeddedChat.generateSummary")}
@@ -118,7 +151,7 @@ export default function ActionChips({
                 onBlur={() => setPreviewed(null)}
                 disabled={!canRun(action)}
                 className={chipClass}
-                style={chipEntrance(leadingChips + index)}
+                style={chipEntrance(firstChip + index)}
               >
                 <Icon size={14} className={CHIP_ICON_CLASS} />
                 <span dir="auto">{getActionName(action, t)}</span>
@@ -126,27 +159,7 @@ export default function ActionChips({
             );
           })}
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              onPointerEnter={() => setPreviewed(null)}
-              className={chipClass}
-              style={chipEntrance(leadingChips + Math.min(actions.length, VISIBLE_CHIPS))}
-            >
-              <Blocks size={14} className={CHIP_ICON_CLASS} />
-              {t("notes.actions.allActions")}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" side="top" sideOffset={8} className="min-w-48">
-            <ActionMenuItems
-              actions={actions}
-              canRun={canRun}
-              onRunAction={onRunAction}
-              onManageActions={onManageActions}
-            />
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {!docked && allActions}
       </div>
     </div>
   );
