@@ -231,6 +231,26 @@ test("KDE that cannot register falls back to globalShortcut and checks Hold agai
   assert.deepEqual(writes, []);
 });
 
+test("startup Tap fallback preserves the saved preference when registration fails", async () => {
+  const notifications = [];
+  const writes = [];
+  await startupHoldCheck(
+    {
+      getActivationMode: () => "push",
+      hotkeyManager: {
+        once() {},
+        isUsingNativeShortcut: () => true,
+        getSavedDictationHotkey: async () => "Scrolllock",
+        supportsPushToTalk: () => false,
+      },
+      setActivationModeCache: async () => false,
+    },
+    { writes, notifications }
+  );
+  assert.equal(writes.length, 0);
+  assert.equal(notifications.length, 0);
+});
+
 // Without a desktop backend the hotkey registers during startup, and a fallback
 // can replace the first saved hotkey, so the registered one decides.
 test("startup checks the registered hotkey when no desktop backend delays it", async () => {
@@ -255,4 +275,12 @@ test("startup checks the registered hotkey when no desktop backend delays it", a
   );
   assert.deepEqual(checked, ["F8"]);
   assert.equal(notifications.length, 1);
+});
+
+test("startup checks Hold before the control panel opens and the hotkey registers", () => {
+  const main = fs.readFileSync(path.join(__dirname, "../../main.js"), "utf8");
+  const created = main.indexOf("  await windowManager.createMainWindow();\n");
+  assert.notEqual(created, -1);
+  const next = created + "  await windowManager.createMainWindow();\n".length;
+  assert.ok(main.startsWith("  await checkStartupHold();\n", next));
 });
