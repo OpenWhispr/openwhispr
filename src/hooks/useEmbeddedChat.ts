@@ -176,12 +176,11 @@ export function useEmbeddedChat({
 
   const createConversation = useCallback(
     async (text: string) => {
+      const noteName = noteTitle || "Untitled";
       const id = await persistence.createConversation(
-        // The note's name first, so the Control Panel's chat list still says which note it's from.
-        deriveConversationTitle(
-          `${noteTitle || "Untitled"}: ${text}`,
-          `Note: ${noteTitle || "Untitled"}`
-        ),
+        // The message first, so a note's History entries differ; then the note, so the
+        // Control Panel's chat list still says which note it's from.
+        `${deriveConversationTitle(text, noteName)} · ${noteName}`,
         noteId
       );
       void fetchNoteConversations();
