@@ -975,9 +975,14 @@ class ReasoningService extends BaseReasoningService {
           const displayText =
             typeof output === "string" ? output : output?.error ? String(output.error) : "Done";
           // Mirror the cloud path: successful object outputs become metadata so
-          // tool-result cards (note cards) render on BYOK/local too.
+          // tool-result cards (note cards) render on BYOK/local too. Only the
+          // registry's bare { error } wrapper is a failure: a connector's own
+          // "failed" result carries `error` beside its status, and the history
+          // reads that status.
+          const isToolFailure =
+            output && typeof output === "object" && "error" in output && !("status" in output);
           const metadata =
-            output && typeof output === "object" && !("error" in output)
+            output && typeof output === "object" && !isToolFailure
               ? (output as ToolMetadata)
               : undefined;
           yield {

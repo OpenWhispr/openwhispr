@@ -109,7 +109,7 @@ const OPEN_NOTE_SEARCH_RULE =
   'In this chat, this rule overrides the search_notes guidance above: use search_notes only when the user asks you to look beyond this note (for example "check my other notes" or "did this come up in another meeting"), and name the note your answer comes from. When this note doesn\'t cover a question, offer to search their other notes rather than searching them yourself.';
 
 const TOOL_TRACE_RULE =
-  "Earlier assistant messages may begin with a [Tools used: …] note that the app added to record the tools you called in that turn. Never write such a note yourself.";
+  "Earlier assistant messages may begin with a [Tools used: …] note that the app added to record the tools you called in that turn and how each action turned out. An action marked sent or draft opened already happened: never do it again unless the user asks, and use its reference or link when you need it. One that may have been sent must not be retried. When the user answers your question or asks you to retry, do only what is still outstanding. Never write such a note yourself.";
 
 const PLACEHOLDER_RULE =
   "Never leave placeholders such as [Your Name] in an email or message the user will send.";

@@ -152,6 +152,19 @@ test("a failed tool output yields no metadata and keeps the error as displayText
   assert.equal(toolResult.displayText, "Something failed");
 });
 
+test("a connector's failed result is still metadata, so its outcome reaches later turns", async (t) => {
+  // Connector results always succeed and carry their own `error` beside the status;
+  // only the registry's bare { error } wrapper means the tool itself failed.
+  const failed = { status: "failed", errorCode: "network", error: "Couldn't reach Slack" };
+  const toolResult = await runToolMetadataScenario(
+    t,
+    "openwhispr-tool-metadata-connector-failed-test-",
+    async () => ({ success: true, data: failed, displayText: "That didn't work." })
+  );
+
+  assert.deepEqual(toolResult.metadata, failed);
+});
+
 test("a successful string tool output yields no metadata", async (t) => {
   const toolResult = await runToolMetadataScenario(
     t,
