@@ -60,7 +60,6 @@ test("typing / in the composer runs an action from the keyboard", async (t) => {
   const drafts = [];
   const submitted = [];
   const menuOpen = [];
-  let escaped = 0;
   const icon = () => null;
   const commands = [
     {
@@ -90,7 +89,6 @@ test("typing / in the composer runs an action from the keyboard", async (t) => {
           draftText,
           onDraftChange: (text) => drafts.push(text),
           onTextSubmit: (text) => submitted.push(text),
-          onEscape: () => escaped++,
           focusOnIdle: false,
           slashCommands: commands,
           onSlashMenuOpenChange: (open) => menuOpen.push(open),
@@ -153,7 +151,6 @@ test("typing / in the composer runs an action from the keyboard", async (t) => {
   drafts.length = 0;
   await key(textarea, "Escape");
   assert.deepEqual(drafts, [""], "Escape clears the filter");
-  assert.equal(escaped, 0, "Escape dismisses the menu, not the composer");
 
   await render("/");
   await key(textarea, "Tab", { shiftKey: true });

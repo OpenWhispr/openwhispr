@@ -33,7 +33,6 @@ interface ChatInputProps {
   draftText?: string;
   onDraftChange?: (text: string) => void;
   onFocus?: () => void;
-  onEscape?: () => void;
   /** Shown instead of the send or mic button while idle. */
   trailingContent?: React.ReactNode;
   focusOnIdle?: boolean;
@@ -87,7 +86,6 @@ export function ChatInput({
   draftText,
   onDraftChange,
   onFocus,
-  onEscape,
   trailingContent,
   focusOnIdle = true,
   expandOnFocus = false,
@@ -207,27 +205,12 @@ export function ChatInput({
           return;
         }
       }
-      if (e.key === "Escape" && onEscape) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.currentTarget.blur();
-        onEscape();
-        return;
-      }
       if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
         e.preventDefault();
         handleSubmit();
       }
     },
-    [
-      handleSubmit,
-      onEscape,
-      isSlashMenuOpen,
-      slashMatches,
-      activeSlashIndex,
-      runSlashCommand,
-      setInputText,
-    ]
+    [handleSubmit, isSlashMenuOpen, slashMatches, activeSlashIndex, runSlashCommand, setInputText]
   );
 
   useLayoutEffect(() => {

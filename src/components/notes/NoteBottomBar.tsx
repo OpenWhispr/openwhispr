@@ -163,9 +163,12 @@ export default function NoteBottomBar({
           aria-hidden={hideInput}
           inert={hideInput}
           // From anywhere in the open chat, not just the composer. An Esc that closes a menu
-          // (Radix prevents its default) closes only the menu.
+          // (Radix prevents its default) closes only the menu, and one that closes the chat
+          // stops here, so the note doesn't also clear its transcript selection.
           onKeyDown={(event) => {
-            if (event.key === "Escape" && chatOpen && !event.defaultPrevented) onInputEscape?.();
+            if (event.key !== "Escape" || !chatOpen || event.defaultPrevented) return;
+            event.stopPropagation();
+            onInputEscape?.();
           }}
           className={cn(
             // Bottom-anchored: while it grows, what doesn't fit yet overflows the top, not the composer.

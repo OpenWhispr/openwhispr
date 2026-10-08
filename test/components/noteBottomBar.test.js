@@ -212,8 +212,14 @@ test("a click outside or an Esc closes the open chat, unless it dismisses a menu
   pressEscape();
   document.removeEventListener("keydown", closeMenu, true);
   assert.equal(escaped, 0, "an Esc that closes a menu over the chat only closes the menu");
+  // The note clears a transcript selection on any Esc that reaches the page.
+  let reachedPage = 0;
+  const countPageEscape = () => reachedPage++;
+  document.addEventListener("keydown", countPageEscape);
   pressEscape();
+  document.removeEventListener("keydown", countPageEscape);
   assert.equal(escaped, 1, "Esc closes the chat from anywhere in it, not just the composer");
+  assert.equal(reachedPage, 0, "and goes no further");
 
   await render(false);
   click(outside);

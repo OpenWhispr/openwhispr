@@ -86,7 +86,7 @@ test("a message sent into a new chat leaves the open conversation behind", async
   );
   assert.deepEqual(
     globalThis.__created,
-    ["New question"],
-    "and the message starts a conversation of its own, named after it"
+    ["Kickoff: New question"],
+    "and the message starts a conversation of its own, named after the note and it"
   );
 });
