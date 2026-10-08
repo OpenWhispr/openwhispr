@@ -228,7 +228,7 @@ export function useChatStreaming({
   // be signed with the previous account's name.
   const { user } = useAuth();
   const userNameRef = useRef<string | null>(null);
-  userNameRef.current = typeof user?.name === "string" ? user.name : null;
+  userNameRef.current = user?.name ?? null;
   const toolRegistryRef = useRef<{ key: string; registry: ToolRegistry } | null>(null);
   const toolActivityStartedAtRef = useRef<number | null>(null);
   const toolActivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);

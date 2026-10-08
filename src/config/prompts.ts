@@ -114,13 +114,17 @@ const PLACEHOLDER_RULE =
 const UNNAMED_SIGN_OFF_RULE = `${PLACEHOLDER_RULE} You don't know the user's name, so end an email without a signature line.`;
 const MAX_USER_NAME_LENGTH = 100;
 
+// Controls and format characters, except ZWNJ and ZWJ: Persian and Indic
+// names and emoji need them (the same exception as queryResult.js).
+const HIDDEN_CHARACTERS = /(?![‌‍])[\p{Cc}\p{Cf}]/gu;
+
 // The account name goes into the prompt as one plain line: no line breaks or
 // invisible characters that could restructure the prompt, and an address
 // (an account with no name set) is not a name to sign with.
 function promptUserName(name: string | null | undefined): string | null {
-  if (typeof name !== "string") return null;
+  if (!name) return null;
   const plain = name
-    .replace(/[\p{Cc}\p{Cf}]/gu, " ")
+    .replace(HIDDEN_CHARACTERS, " ")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, MAX_USER_NAME_LENGTH)

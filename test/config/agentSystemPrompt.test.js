@@ -163,6 +163,12 @@ test("the name joins the prompt as one plain line", async () => {
     /The user's name is/
   );
 
+  // ZWNJ and ZWJ are part of Persian and Indic names (and emoji), not hidden text.
+  assert.match(
+    getAgentSystemPrompt([], undefined, { userName: "Farzane\u200Cye 👩\u200D💻" }),
+    /The user's name is Farzane\u200Cye 👩\u200D💻\./u
+  );
+
   const long = getAgentSystemPrompt([], undefined, { userName: "A".repeat(500) });
   assert.match(long, /The user's name is A{100}\./);
 });
