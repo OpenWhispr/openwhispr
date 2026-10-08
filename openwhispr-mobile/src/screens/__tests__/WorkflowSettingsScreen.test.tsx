@@ -45,8 +45,18 @@ jest.mock('@/lib/workflowModeSwitch', () => ({
   switchWorkflowMode: (...args: unknown[]) => mockSwitchMode(...args),
 }));
 jest.mock('@/components/settings/OnDeviceModelSection', () => ({
-  OnDeviceModelSection: ({ scope, picked }: { scope: string; picked?: string }) => (
-    <MockText>{`On-device models for ${scope}, picked ${picked ?? 'Automatic'}`}</MockText>
+  OnDeviceModelSection: ({
+    scope,
+    picked,
+    lockedChoice,
+  }: {
+    scope: string;
+    picked?: string;
+    lockedChoice?: boolean;
+  }) => (
+    <MockText>
+      {`On-device models for ${scope}, picked ${picked ?? 'Automatic'}${lockedChoice ? ', choice locked' : ''}`}
+    </MockText>
   ),
 }));
 jest.mock('@/hooks/useConfigToggle', () => ({ useConfigToggle: () => jest.fn() }));
@@ -842,8 +852,26 @@ it('shows On-Device for an upload choice Private mode locks, and keeps that choi
     ),
   ).toBeTruthy();
   expect(screen.queryByLabelText('API key')).toBeNull();
+  // Tapping the Automatic row it shows must not replace the saved choice either.
+  expect(
+    screen.getByText('On-device models for upload, picked Automatic, choice locked'),
+  ).toBeTruthy();
   fireEvent.press(screen.getByText('On-Device'));
   expect(mockSwitchMode).not.toHaveBeenCalled();
+  expect(mockUpdateConfig).not.toHaveBeenCalled();
+});
+
+it('names a locked Cloud upload choice in the note', () => {
+  mockConfig = { defaultMode: 'private', inference: { upload: { mode: 'openwhispr' } } };
+  mockActiveMode = 'private';
+  mockScope = 'upload';
+  render(<WorkflowSettingsScreen />);
+  expect(selectedMode()).toBe('On-Device');
+  expect(
+    screen.getByText(
+      'Private mode keeps uploads on this iPhone. Your OpenWhispr Cloud choice applies again when Private mode is off.',
+    ),
+  ).toBeTruthy();
 });
 
 it('shows On-Device for a guest whose saved Cloud dictation Private mode overrides', () => {
@@ -851,6 +879,9 @@ it('shows On-Device for a guest whose saved Cloud dictation Private mode overrid
   mockActiveMode = 'private';
   render(<WorkflowSettingsScreen />);
   expect(selectedMode()).toBe('On-Device');
+  fireEvent.press(screen.getByText('On-Device'));
+  expect(mockSwitchMode).not.toHaveBeenCalled();
+  expect(mockUpdateConfig).not.toHaveBeenCalled();
 });
 
 it('keeps the plain upload note when uploads already run on this phone', () => {

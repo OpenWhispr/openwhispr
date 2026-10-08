@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert, Platform } from 'react-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
 const mockClearCredentials = jest.fn().mockResolvedValue(undefined);
@@ -276,6 +276,24 @@ describe('Private Mode switch', () => {
     fireEvent(screen.getByLabelText('Private Mode'), 'valueChange', true);
     await waitFor(() => expect(mockSetPrivateMode).toHaveBeenCalledWith(true));
     expect(screen.queryByTestId('toast-success')).toBeNull();
+    await screen.findByText(/Status: Ready/);
+  });
+
+  // Turning on waits for the model check; the switch must not bounce back off meanwhile, nor take a
+  // second tap.
+  it('holds the requested state while switching, then settles on the real mode', async () => {
+    let finish: (result: string) => void = () => undefined;
+    mockSetPrivateMode.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    render(<AIModelsScreen />);
+    fireEvent(screen.getByLabelText('Private Mode'), 'valueChange', true);
+    await waitFor(() => expect(screen.getByLabelText('Private Mode').props.disabled).toBe(true));
+    expect(screen.getByLabelText('Private Mode').props.value).toBe(true);
+    fireEvent(screen.getByLabelText('Private Mode'), 'valueChange', false);
+    expect(mockSetPrivateMode).toHaveBeenCalledTimes(1);
+
+    await act(async () => finish('refused'));
+    expect(screen.getByLabelText('Private Mode').props.value).toBe(false);
+    expect(screen.getByLabelText('Private Mode').props.disabled).toBe(false);
     await screen.findByText(/Status: Ready/);
   });
 });

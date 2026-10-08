@@ -148,7 +148,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
       // decodes Opus, so route private-mode Opus uploads there instead.
       if (transcriptionProvider === 'local' && isOggOpus(file.name, file.mimeType, file.uri)) {
         throw new Error(
-          'Opus audio can only be transcribed in Cloud mode right now. Switch to Cloud mode and try again.',
+          "Opus audio can't be transcribed on this iPhone yet. In Account → AI Models, turn off Private Mode or set Uploads to OpenWhispr Cloud, then try again.",
         );
       }
 

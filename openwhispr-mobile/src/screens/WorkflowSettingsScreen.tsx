@@ -722,6 +722,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
                 picked={
                   isLocalModelKey(savedSelection.modelId) ? savedSelection.modelId : undefined
                 }
+                lockedChoice={lockedByPrivateMode}
               />
             ) : null}
             {shownMode === 'local' && !speechScope ? (

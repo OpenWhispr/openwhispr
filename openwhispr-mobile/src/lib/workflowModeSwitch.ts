@@ -11,8 +11,14 @@ import {
 } from '@/lib/localReasoning';
 import type { LocalModelKey } from '@/lib/localModelCatalog';
 import type { UserConfig } from '@/types';
-import type { InferenceSelection, MobileInferenceScope } from '@/lib/mobileProviders';
+import {
+  resolveMobileInferenceRoute,
+  type InferenceSelection,
+  type MobileInferenceScope,
+} from '@/lib/mobileProviders';
 import { getPrivateModeReadiness, getPrivateModeUnavailableMessage } from '@/lib/privateMode';
+import { getProviderCredentialStatus } from '@/services/providers/ProviderCredentials';
+import { getProviderPolicy } from '@/services/providers/ProviderPolicy';
 
 type SpeechScope = 'dictation' | 'upload';
 
@@ -84,19 +90,36 @@ export async function switchWorkflowMode(
 function returnProvider(config: UserConfig | null): InferenceSelection | undefined {
   const saved = config?.inference?.dictation;
   if (saved?.mode === 'providers') return saved;
-  if (config?.privateModeReturn !== 'providers') return undefined;
+  if (!config?.privateModeReturn) return undefined;
   return Object.values(config.rememberedInference?.dictation ?? {}).find(
     (selection) => selection.mode === 'providers',
   );
 }
 
+// A provider whose key was removed, or that the organization no longer allows, can't take
+// dictation back. A policy still loading doesn't count against it.
+async function providerUsable(selection: InferenceSelection): Promise<boolean> {
+  const resolved = resolveMobileInferenceRoute({
+    scope: 'dictation',
+    selection,
+    policy: await getProviderPolicy(),
+  });
+  if (!resolved.ok) return resolved.code === 'POLICY_UNRESOLVED';
+  if (!selection.credentialRef) return true;
+  const status = await getProviderCredentialStatus(selection.credentialRef).catch(() => ({
+    isConfigured: true,
+  }));
+  return status.isConfigured;
+}
+
 // The Private mode switch in AI Models. On keeps dictation and uploads on this phone; off hands
-// dictation back to Cloud, or to Bring Your Own Key when that is where Private mode was turned on.
+// dictation back to Cloud, or to Bring Your Own Key when that is where Private mode was turned on
+// and the provider can still run.
 export async function setPrivateMode(enabled: boolean): Promise<ModeSwitchResult> {
   if (enabled) return switchWorkflowMode('dictation', 'local');
   const { config, updateConfig } = useConfigStore.getState();
   const provider = returnProvider(config);
-  if (provider) {
+  if (provider && (await providerUsable(provider))) {
     const { activeMode, setActiveMode } = useProcessingModeStore.getState();
     setActiveMode('providers', true);
     await updateConfig(workflowSaveConfig(config, 'dictation', provider, activeMode));

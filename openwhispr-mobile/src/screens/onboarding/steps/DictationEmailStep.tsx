@@ -48,6 +48,10 @@ export function DictationEmailStep(): ReactElement {
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState<string | null>(null);
   const liveAvailable = !localSelected && !!user;
+  // A practice error only means something while the field is shown; without it, Retry would offer
+  // a session where none can be made.
+  const shownError = liveAvailable ? error : null;
+  const canRetry = liveAvailable ? !!error : !localSelected && sessionPossible;
   const busy =
     status === 'recording' || status === 'transcribing' || status === 'cleaning' || isTranscribing;
 
@@ -82,21 +86,23 @@ export function DictationEmailStep(): ReactElement {
     setError(null);
     setStatus('idle');
     setValue('');
+    // Refocuses a field already shown; one swapped in for the example focuses itself (autoFocus).
     input.current?.focus();
   }, [ensureSession]);
 
-  const note =
-    localSelected || (!user && !sessionPossible)
-      ? 'Practice uses Cloud. Here’s an example instead.'
-      : !user
+  const note = localSelected
+    ? 'Practice uses Cloud. Here’s an example instead.'
+    : !user
+      ? sessionPossible
         ? 'Cloud practice needs a connection. Here’s an example instead.'
-        : status === 'recording'
-          ? 'Listening…'
-          : busy
-            ? 'Transcribing…'
-            : value.trim()
-              ? 'Your email is ready'
-              : 'Tap the field, then the keyboard mic. Practice uses Cloud.';
+        : 'Cloud practice needs an account. Here’s an example instead.'
+      : status === 'recording'
+        ? 'Listening…'
+        : busy
+          ? 'Transcribing…'
+          : value.trim()
+            ? 'Your email is ready'
+            : 'Tap the field, then the keyboard mic. Practice uses Cloud.';
 
   return (
     <OnboardingShell
@@ -108,9 +114,7 @@ export function DictationEmailStep(): ReactElement {
       ctaLabel="Continue"
       ctaDisabled={busy}
       onCta={goNext}
-      secondaryCtaLabel={
-        !localSelected && (error || (!user && sessionPossible)) ? 'Retry' : undefined
-      }
+      secondaryCtaLabel={canRetry ? 'Retry' : undefined}
       onSecondaryCta={retry}
     >
       <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
@@ -180,11 +184,11 @@ export function DictationEmailStep(): ReactElement {
         </View>
 
         <Text
-          accessibilityRole={error ? 'alert' : undefined}
+          accessibilityRole={shownError ? 'alert' : undefined}
           accessibilityLiveRegion="polite"
-          className={`mt-3 text-[13px] ${error ? 'text-systemRed' : 'text-secondaryLabel'}`}
+          className={`mt-3 text-[13px] ${shownError ? 'text-systemRed' : 'text-secondaryLabel'}`}
         >
-          {error ?? note}
+          {shownError ?? note}
         </Text>
 
         {/* Reassurance — works anywhere */}

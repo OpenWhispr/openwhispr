@@ -138,16 +138,21 @@ export default function AIModelsScreen(): React.JSX.Element {
     );
   }
 
+  // The switch shows the requested state while the checks run, rather than snapping back to the
+  // current mode until they finish; it settles on the real mode either way.
+  const [requestedPrivateMode, setRequestedPrivateMode] = useState<boolean | null>(null);
   const privateMode = activeMode === 'private';
 
   async function togglePrivateMode(enabled: boolean): Promise<void> {
     if (busy) return;
     setBusy(true);
+    setRequestedPrivateMode(enabled);
     try {
       if ((await setPrivateMode(enabled)) === 'switched') {
         showToast(enabled ? 'Private mode on.' : 'Private mode off.', 'success');
       }
     } finally {
+      setRequestedPrivateMode(null);
       setBusy(false);
     }
   }
@@ -176,7 +181,7 @@ export default function AIModelsScreen(): React.JSX.Element {
             rightElement={
               <SettingsSwitch
                 accessibilityLabel="Private Mode"
-                value={privateMode}
+                value={requestedPrivateMode ?? privateMode}
                 disabled={busy}
                 onValueChange={(enabled) => {
                   void togglePrivateMode(enabled);

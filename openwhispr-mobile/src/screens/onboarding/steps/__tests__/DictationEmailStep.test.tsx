@@ -110,7 +110,9 @@ it('offers retry after a recording failure, without an example', async () => {
   expect(screen.queryByText('You say')).toBeNull();
   expect(screen.getByLabelText('Your dictated email')).toBeTruthy();
   fireEvent.press(screen.getByText('Retry'));
-  await waitFor(() => expect(mockEnsureSession).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(screen.queryByText('Network unavailable')).toBeNull());
+  expect(mockEnsureSession).toHaveBeenCalledTimes(1);
+  expect(screen.queryByText('Retry')).toBeNull();
 });
 
 it('keeps Local selected when revisiting practice', () => {
@@ -192,8 +194,37 @@ it.each([
   mockUser = null;
   arrange();
   const screen = render(<DictationEmailStep />);
-  expect(screen.getByText('Practice uses Cloud. Here’s an example instead.')).toBeTruthy();
+  expect(
+    screen.getByText('Cloud practice needs an account. Here’s an example instead.'),
+  ).toBeTruthy();
   expectExample(screen);
+  expect(screen.queryByText('Retry')).toBeNull();
+});
+
+// The keyboard can still report a failed dictation while the example is shown; a Retry then would
+// make a session for an account that must not get one.
+it.each([
+  ['a guest', () => (mockIsGuest = true)],
+  ['a device that synced an account', () => (mockAccountHistory = true)],
+  ['Local', () => (mockSavedMode = 'private')],
+])('ignores a keyboard failure while showing the example for %s', (_label, arrange) => {
+  mockUser = null;
+  arrange();
+  const screen = render(<DictationEmailStep />);
+  act(() => mockListener({ status: 'setup_required', error: 'Open OpenWhispr to finish setup.' }));
+  expect(screen.queryByText('Open OpenWhispr to finish setup.')).toBeNull();
+  expect(screen.queryByText('Retry')).toBeNull();
+  expectExample(screen);
+  expect(mockEnsureSession).not.toHaveBeenCalled();
+});
+
+// "Reset onboarding" while signed in: the account is already there, so practice runs.
+it('lets a signed-in account with synced notes practice live', () => {
+  mockAccountHistory = true;
+  mockUser = { id: 'user-1' };
+  const screen = render(<DictationEmailStep />);
+  expect(screen.queryByText('You say')).toBeNull();
+  expect(screen.getByLabelText('Your dictated email').props.autoFocus).toBe(true);
   expect(screen.queryByText('Retry')).toBeNull();
 });
 
@@ -208,6 +239,8 @@ it('swaps the example for a focused field once a retry gets a session', async ()
   screen.rerender(<DictationEmailStep />);
   expect(screen.queryByText('You say')).toBeNull();
   expect(screen.getByLabelText('Your dictated email').props.autoFocus).toBe(true);
+  expect(screen.queryByText('Retry')).toBeNull();
+  expect(screen.queryByText(/Still no connection/)).toBeNull();
 });
 
 it('explains why Cloud practice could not be retried', async () => {

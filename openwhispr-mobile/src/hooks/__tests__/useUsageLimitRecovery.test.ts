@@ -50,7 +50,7 @@ jest.mock('@/components/ui/UsageMeter', () => ({
 function expectQuotaGuidance(): void {
   expect(Alert.alert).toHaveBeenCalledWith(
     'Weekly Limit Reached',
-    expect.stringContaining('Switch to Private Mode'),
+    expect.stringContaining('Turn on Private Mode in Account → AI Models'),
     expect.arrayContaining([
       expect.objectContaining({ text: 'View Usage', onPress: expect.any(Function) }),
       expect.objectContaining({ text: 'Upgrade', onPress: expect.any(Function) }),
