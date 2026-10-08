@@ -119,8 +119,9 @@ class HotkeyManager extends EventEmitter {
     this.hyprlandRegistrationReady = Promise.resolve();
     this.kdeManager = null;
     this.useKDE = false;
-    // Until GNOME or Hyprland binds the saved hotkey, the dictation slot holds a
-    // placeholder, so a mode change must not re-register it.
+    // While the GNOME or Hyprland registration waits to read the saved hotkey, the
+    // dictation slot holds a placeholder, so a mode change must not re-register it:
+    // the registration takes the mode right after that read.
     this.nativeRegistrationPending = false;
     // Injected by main.js: LinuxKeyManager or WindowsKeyManager checkAvailability.
     // Kept as a function so this module never requires the manager it asks about.

@@ -1115,8 +1115,6 @@ async function dropUnsupportedStartupHold() {
           });
         }
       }
-    } else {
-      debugLogger.warn("[HotkeyManager] Could not apply startup activation mode fallback");
     }
   }
 }

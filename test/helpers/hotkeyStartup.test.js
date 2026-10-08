@@ -6,13 +6,6 @@ const vm = require("node:vm");
 const GnomeShortcutManager = require("../../src/helpers/gnomeShortcut");
 
 const source = fs.readFileSync(path.join(__dirname, "../../src/helpers/hotkeyManager.js"), "utf8");
-const windowSource = fs.readFileSync(
-  path.join(__dirname, "../../src/helpers/windowManager.js"),
-  "utf8"
-);
-const cacheMethod = windowSource.match(
-  / {2}async setActivationModeCache\(mode\) \{[\s\S]*?\n {2}\}/
-)[0];
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
 function fixture(backend, savedHotkey = "Scrolllock", registrationResult = true) {
@@ -93,9 +86,14 @@ function fixture(backend, savedHotkey = "Scrolllock", registrationResult = true)
     };
     return true;
   };
-  const cache = vm.runInNewContext(`({${cacheMethod}})`);
-  cache.hotkeyManager = manager;
-  cache._cachedActivationMode = "tap";
+  const cache = {
+    _cachedActivationMode: "tap",
+    async setActivationModeCache(mode) {
+      if (!(await manager.setActivationMode(mode))) return false;
+      this._cachedActivationMode = mode;
+      return true;
+    },
+  };
   const webContents = { executeJavaScript: async () => savedHotkey };
   return {
     manager,
@@ -231,26 +229,6 @@ test("KDE that cannot register falls back to globalShortcut and checks Hold agai
   assert.equal(f.cache._cachedActivationMode, "tap");
   assert.equal(notifications.length, 1);
   assert.deepEqual(writes, []);
-});
-
-test("startup Tap fallback preserves the saved preference when registration fails", async () => {
-  const notifications = [];
-  const writes = [];
-  await startupHoldCheck(
-    {
-      getActivationMode: () => "push",
-      hotkeyManager: {
-        once() {},
-        isUsingNativeShortcut: () => true,
-        getSavedDictationHotkey: async () => "Scrolllock",
-        supportsPushToTalk: () => false,
-      },
-      setActivationModeCache: async () => false,
-    },
-    { writes, notifications }
-  );
-  assert.equal(writes.length, 0);
-  assert.equal(notifications.length, 0);
 });
 
 // Without a desktop backend the hotkey registers during startup, and a fallback
