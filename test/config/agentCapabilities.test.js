@@ -222,3 +222,12 @@ test("a model too small for tools may still use the prompt's notes and write tex
   assert.match(text, /can still use anything already in this prompt, such as note text/);
   assert.match(text, /write any text the user asks for/);
 });
+
+test("models without tools point to the existing documentation site", async () => {
+  const { describeUnavailable } = await load();
+  const text = describeUnavailable([
+    { name: "Tools", reason: "modelTooSmall", where: LOCATIONS.models },
+  ]);
+  assert.match(text, /https:\/\/docs\.openwhispr\.com/);
+  assert.doesNotMatch(text, /Support → OpenWhispr Help/);
+});

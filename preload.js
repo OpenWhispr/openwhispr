@@ -1128,6 +1128,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
 
   // Agent cloud tools
+  productHelp: (id, input) => ipcRenderer.invoke("product-help", id, input),
+  cancelProductHelp: (id) => ipcRenderer.send("product-help-cancel", id),
+  productHelpBasics: () => ipcRenderer.invoke("product-help-basics"),
   agentWebSearch: (query, numResults) => ipcRenderer.invoke("agent-web-search", query, numResults),
   agentOpenNote: (noteId) => ipcRenderer.invoke("agent-open-note", noteId),
 

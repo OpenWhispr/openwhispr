@@ -4019,7 +4019,10 @@
       "copiedToClipboard": "Copied to your clipboard",
       "openNote": "Open note",
       "unknownTool": "Unknown tool: {{name}}",
-      "invalidArgs": "Invalid tool arguments for {{name}}"
+      "invalidArgs": "Invalid tool arguments for {{name}}",
+      "search_openwhispr_helpName": "Search OpenWhispr help",
+      "read_openwhispr_helpName": "Read OpenWhispr help",
+      "get_openwhispr_contextName": "Read OpenWhispr settings"
     }
   },
   "assistant": {
@@ -4866,5 +4869,51 @@
       "provider": "Provider",
       "requestId": "Request ID"
     }
+  },
+  "productHelp": {
+    "sources": "Official documentation",
+    "loading": "Looking up official documentation…",
+    "settings": "Current app settings",
+    "guidance": "Documentation and settings used for this reply.",
+    "settingsNote": "Read-only choices and known permissions captured for this reply; this does not test your devices.",
+    "readAt": "Read at {{time}}",
+    "sourceStatus": {
+      "live": "Article retrieved",
+      "bundled": "Built-in fallback"
+    },
+    "reason": {
+      "policy": "Your organization’s policy limits online documentation lookup.",
+      "rateLimit": "Online documentation lookup reached its limit. Built-in guidance is shown.",
+      "unavailable": "Current documentation could not be checked. Built-in guidance is shown.",
+      "privacy": "Your privacy settings keep documentation lookup offline."
+    },
+    "openFailed": "Could not open the article. You can copy its link and open it in your browser.",
+    "unknownAnswer": "I cannot verify that feature or control from the built-in OpenWhispr guidance. I have not changed any settings. Check the official documentation or describe the setting you can see.",
+    "mixedAnswer": "I can show read-only OpenWhispr help here. Please ask the product-help question separately from the other action; I have not performed that action.",
+    "unavailableAnswer": "OpenWhispr help is temporarily unavailable. Try again or open the official documentation.",
+    "topicsList": {
+      "hotkeys": "Shortcuts",
+      "microphone": "Microphone",
+      "models": "Models",
+      "meetings": "Meetings",
+      "calendar": "Calendars",
+      "language": "Languages",
+      "backup": "Backup",
+      "assistant": "Assistant"
+    },
+    "appVersion": "App version",
+    "platform": "Platform",
+    "osVersion": "OS version",
+    "processing": "Processing",
+    "engine": "Engine",
+    "policy": "Assistant allowed by policy",
+    "on": "On",
+    "off": "Off",
+    "microphonePermission": "Microphone permission",
+    "specificMicrophone": "Specific microphone",
+    "permissionGranted": "Allowed",
+    "permissionDenied": "Denied",
+    "permissionRestricted": "Restricted",
+    "permissionNotDetermined": "Not requested"
   }
 }

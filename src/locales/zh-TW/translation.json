@@ -3848,7 +3848,10 @@
       "copiedToClipboard": "已複製到剪貼簿",
       "openNote": "開啟筆記",
       "unknownTool": "未知工具：{{name}}",
-      "invalidArgs": "{{name}} 的工具參數無效"
+      "invalidArgs": "{{name}} 的工具參數無效",
+      "search_openwhispr_helpName": "搜尋 OpenWhispr 說明",
+      "read_openwhispr_helpName": "閱讀 OpenWhispr 說明",
+      "get_openwhispr_contextName": "讀取 OpenWhispr 設定"
     }
   },
   "assistant": {
@@ -4866,5 +4869,51 @@
       "provider": "服務商",
       "requestId": "請求 ID"
     }
+  },
+  "productHelp": {
+    "sources": "官方文件",
+    "loading": "正在查詢官方文件…",
+    "settings": "目前應用程式設定",
+    "guidance": "此回覆使用的文件和設定。",
+    "settingsNote": "為本次回覆讀取的設定和已知權限；不會變更設定或測試裝置。",
+    "readAt": "讀取時間：{{time}}",
+    "sourceStatus": {
+      "live": "已取得文章",
+      "bundled": "內建備用指南"
+    },
+    "reason": {
+      "policy": "您組織的政策限制了線上文件查詢。",
+      "rateLimit": "線上文件查詢已達上限。目前顯示內建指南。",
+      "unavailable": "無法核實目前的文件。目前顯示內建指南。",
+      "privacy": "您的隱私設定將文件查詢限制為離線內容。"
+    },
+    "openFailed": "無法開啟文章。您可以複製連結並在瀏覽器中開啟。",
+    "unknownAnswer": "我無法根據 OpenWhispr 內建指南核實該功能或控制項。我沒有變更任何設定。請查閱官方文件，或描述您看到的設定。",
+    "mixedAnswer": "我可以在此提供唯讀的 OpenWhispr 說明。請將產品說明問題與其他操作分開提出；我沒有執行該操作。",
+    "unavailableAnswer": "OpenWhispr 說明暫時無法使用。請重試或開啟官方文件。",
+    "topicsList": {
+      "hotkeys": "快捷鍵",
+      "microphone": "麥克風",
+      "models": "模型",
+      "meetings": "會議",
+      "calendar": "行事曆",
+      "language": "語言",
+      "backup": "備份",
+      "assistant": "助理"
+    },
+    "appVersion": "應用程式版本",
+    "platform": "平台",
+    "osVersion": "作業系統版本",
+    "processing": "處理方式",
+    "engine": "引擎",
+    "policy": "政策允許使用助理",
+    "on": "開啟",
+    "off": "關閉",
+    "microphonePermission": "麥克風權限",
+    "specificMicrophone": "指定麥克風",
+    "permissionGranted": "已允許",
+    "permissionDenied": "已拒絕",
+    "permissionRestricted": "受限",
+    "permissionNotDetermined": "尚未請求"
   }
 }

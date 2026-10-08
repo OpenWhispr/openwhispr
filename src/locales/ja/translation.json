@@ -3848,7 +3848,10 @@
       "copiedToClipboard": "クリップボードにコピーしました",
       "openNote": "ノートを開く",
       "unknownTool": "不明なツール: {{name}}",
-      "invalidArgs": "{{name}} のツール引数が無効です"
+      "invalidArgs": "{{name}} のツール引数が無効です",
+      "search_openwhispr_helpName": "OpenWhisprのヘルプを検索",
+      "read_openwhispr_helpName": "OpenWhisprのヘルプを読む",
+      "get_openwhispr_contextName": "OpenWhisprの設定を読む"
     }
   },
   "assistant": {
@@ -4866,5 +4869,51 @@
       "provider": "プロバイダー",
       "requestId": "リクエストID"
     }
+  },
+  "productHelp": {
+    "sources": "公式ドキュメント",
+    "loading": "公式ドキュメントを検索中…",
+    "settings": "現在のアプリ設定",
+    "guidance": "この回答で使用したドキュメントと設定。",
+    "settingsNote": "この回答のために読み取った設定と既知の権限です。設定の変更やデバイスのテストは行いません。",
+    "readAt": "取得日時：{{time}}",
+    "sourceStatus": {
+      "live": "記事を取得済み",
+      "bundled": "内蔵ガイドで代替"
+    },
+    "reason": {
+      "policy": "組織のポリシーによりオンラインドキュメントの取得が制限されています。",
+      "rateLimit": "オンラインドキュメントの取得上限に達しました。内蔵ガイドを表示しています。",
+      "unavailable": "現在のドキュメントを確認できませんでした。内蔵ガイドを表示しています。",
+      "privacy": "プライバシー設定により、ドキュメントの参照はオフラインで行われます。"
+    },
+    "openFailed": "記事を開けませんでした。リンクをコピーしてブラウザーで開いてください。",
+    "unknownAnswer": "内蔵のOpenWhisprガイドでは、その機能や操作項目を確認できません。設定は変更していません。公式ドキュメントを確認するか、表示されている設定を説明してください。",
+    "mixedAnswer": "ここでは設定を変更せずにOpenWhisprのヘルプを表示できます。製品に関する質問は他の操作と分けてお尋ねください。その操作は実行していません。",
+    "unavailableAnswer": "OpenWhisprのヘルプは一時的に利用できません。再試行するか、公式ドキュメントを開いてください。",
+    "topicsList": {
+      "hotkeys": "ショートカット",
+      "microphone": "マイク",
+      "models": "モデル",
+      "meetings": "会議",
+      "calendar": "カレンダー",
+      "language": "言語",
+      "backup": "バックアップ",
+      "assistant": "アシスタント"
+    },
+    "appVersion": "アプリのバージョン",
+    "platform": "プラットフォーム",
+    "osVersion": "OSのバージョン",
+    "processing": "処理",
+    "engine": "エンジン",
+    "policy": "ポリシーによるアシスタントの許可",
+    "on": "オン",
+    "off": "オフ",
+    "microphonePermission": "マイクの権限",
+    "specificMicrophone": "指定したマイク",
+    "permissionGranted": "許可済み",
+    "permissionDenied": "拒否",
+    "permissionRestricted": "制限あり",
+    "permissionNotDetermined": "未要求"
   }
 }

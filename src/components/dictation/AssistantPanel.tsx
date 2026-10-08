@@ -2,6 +2,9 @@ import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } fr
 import { useTranslation } from "react-i18next";
 import { Check, Copy, Plus, X } from "../icons";
 import { BrandMarkIcon } from "./BrandMarkIcon";
+import { HelpEvidence } from "../chat/GroundedHelpEvidence";
+import { extractHelpEvidence } from "../chat/helpEvidence";
+import { helpAnswerPlainText } from "../chat/helpEvidenceText";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
 import { TechnicalErrorDetails } from "../ui/TechnicalErrorDetails";
 import { openProviderSettings } from "../../utils/describeProviderError";
@@ -108,7 +111,7 @@ export function AssistantPanel({
   onConversationReset,
   onSelectionContextChange,
 }: AssistantPanelProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const { handleMouseDown, handleMouseUp } = useWindowDrag();
   const voiceAgentKey = useSettingsStore((state) => state.voiceAgentKey);
@@ -149,14 +152,18 @@ export function AssistantPanel({
     .reverse()
     .find((message) => message.role === "assistant");
   const responseContent = latestAssistantMessage?.content ?? "";
+  const helpEvidence = extractHelpEvidence(latestAssistantMessage?.toolCalls);
   const {
     copied,
     copy: handleCopy,
     copyText,
     confirmCopied,
-  } = useCopyFeedback(responseContent, {
-    resetMs: MANUAL_COPY_FEEDBACK_MS,
-  });
+  } = useCopyFeedback(
+    helpAnswerPlainText(responseContent, helpEvidence, t, i18n?.resolvedLanguage),
+    {
+      resetMs: MANUAL_COPY_FEEDBACK_MS,
+    }
+  );
 
   useEffect(() => {
     onConversationIdChange(persistence.conversationId);
@@ -526,6 +533,7 @@ export function AssistantPanel({
                     />
                   )}
                 </div>
+                {helpEvidence && <HelpEvidence evidence={helpEvidence} />}
                 {/* Outside responseSelectionRootRef: a drag-select + copy over the
                     response must never pick up these affordances. */}
                 {latestAssistantMessage?.error?.settingsTarget && (

@@ -62,6 +62,20 @@ private/internal addresses are rejected.
 | `*.googlevideo.com`                                                                | HTTPS    | 443  | YouTube media CDN — the actual audio stream download.                        |
 | _User-pasted hosts_                                                                | HTTPS    | 443  | Direct audio/video URL imports contact whatever public host the user pastes. |
 
+## Required for product help lookup (optional feature)
+
+Contacted when the assistant retrieves official help and both privacy settings
+and organization policy permit online documentation lookup. The assistant must be
+enabled (`agentEnabled`); the existing web-search policy (`webSearchEnabled`) also
+controls documentation lookups. Signed-out and fully-local configurations use
+bundled reference material without contacting this host. Only fixed public product-topic
+queries and article paths are sent; settings and conversation content are not
+sent to this host. Bundled essentials remain available without this connection.
+
+| Host                  | Protocol | Port | Purpose                                     |
+| --------------------- | -------- | ---- | ------------------------------------------- |
+| `docs.openwhispr.com` | HTTPS    | 443  | Public documentation search/read at `/mcp`. |
+
 ## BYOK provider hosts (only if configured)
 
 Required only when a user configures their own API key for the corresponding

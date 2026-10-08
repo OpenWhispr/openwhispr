@@ -163,3 +163,17 @@ test("history keeps the last 20 messages", async () => {
   assert.equal(history.length, 20);
   assert.equal(history[0].content, "m5");
 });
+
+test("historical built-in help remains readable without inventing a model tool", async () => {
+  const { toHistoryMessages, toolTrace } = await load();
+  const help = call("grounded_product_help", {}, { metadata: { topics: ["hotkeys"] } });
+  assert.equal(toolTrace([help]), "");
+  assert.equal(
+    toolTrace([help, call("web_search", { query: "official docs" })]),
+    '[Tools used: web_search ("official docs")]'
+  );
+  assert.deepEqual(
+    toHistoryMessages([assistant("Earlier guidance.", [help])], { includeToolTrace: true }),
+    [{ role: "assistant", content: "Earlier guidance." }]
+  );
+});

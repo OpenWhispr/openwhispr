@@ -3015,6 +3015,13 @@ declare global {
       ) => () => void;
       onAgentStreamEnd?: (callback: (payload: { requestId: string }) => void) => () => void;
 
+      productHelp: (
+        id: string,
+        input: { topic: string; page?: string }
+      ) => Promise<import("../services/help/productHelp").HelpResult>;
+      cancelProductHelp: (id: string) => void;
+      productHelpBasics: () => Promise<import("../services/help/productHelp").HelpBasics>;
+
       // Agent cloud tools
       agentOpenNote?: (noteId: number) => Promise<{ success: boolean; error?: string }>;
       agentWebSearch?: (

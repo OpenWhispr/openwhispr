@@ -1757,7 +1757,10 @@
       "copiedToClipboard": "تم النسخ إلى حافظتك",
       "openNote": "فتح الملاحظة",
       "unknownTool": "أداة غير معروفة: {{name}}",
-      "invalidArgs": "وسيطات غير صالحة للأداة {{name}}"
+      "invalidArgs": "وسيطات غير صالحة للأداة {{name}}",
+      "search_openwhispr_helpName": "البحث في مساعدة OpenWhispr",
+      "read_openwhispr_helpName": "قراءة مساعدة OpenWhispr",
+      "get_openwhispr_contextName": "قراءة إعدادات OpenWhispr"
     }
   },
   "noteEditor": {
@@ -4988,5 +4991,51 @@
       "provider": "المزوّد",
       "requestId": "معرّف الطلب"
     }
+  },
+  "productHelp": {
+    "sources": "الوثائق الرسمية",
+    "loading": "جارٍ البحث في الوثائق الرسمية…",
+    "settings": "إعدادات التطبيق الحالية",
+    "guidance": "الوثائق والإعدادات المستخدمة في هذا الرد.",
+    "settingsNote": "خيارات وأذونات معروفة تمت قراءتها لهذا الرد دون تعديلها؛ لا يتم اختبار أجهزتك.",
+    "readAt": "تمت القراءة في {{time}}",
+    "sourceStatus": {
+      "live": "تم جلب المقال",
+      "bundled": "إرشادات مدمجة بديلة"
+    },
+    "reason": {
+      "policy": "تحدّ سياسة مؤسستك من البحث في الوثائق عبر الإنترنت.",
+      "rateLimit": "تم بلوغ حد البحث في الوثائق عبر الإنترنت. تُعرض الإرشادات المدمجة.",
+      "unavailable": "تعذّر التحقق من الوثائق الحالية. تُعرض الإرشادات المدمجة.",
+      "privacy": "تُبقي إعدادات الخصوصية البحث في الوثائق دون اتصال."
+    },
+    "openFailed": "تعذّر فتح المقال. يمكنك نسخ الرابط وفتحه في المتصفح.",
+    "unknownAnswer": "لا أستطيع التحقق من هذه الميزة أو عنصر التحكم من إرشادات OpenWhispr المدمجة. لم أغيّر أي إعدادات. راجع الوثائق الرسمية أو صِف الإعداد الذي تراه.",
+    "mixedAnswer": "يمكنني عرض مساعدة OpenWhispr هنا دون إجراء تغييرات. يرجى طرح سؤال المساعدة بشكل منفصل عن الإجراء الآخر؛ لم أنفّذ ذلك الإجراء.",
+    "unavailableAnswer": "مساعدة OpenWhispr غير متاحة مؤقتًا. حاول مجددًا أو افتح الوثائق الرسمية.",
+    "topicsList": {
+      "hotkeys": "الاختصارات",
+      "microphone": "الميكروفون",
+      "models": "النماذج",
+      "meetings": "الاجتماعات",
+      "calendar": "التقويمات",
+      "language": "اللغات",
+      "backup": "النسخ الاحتياطي",
+      "assistant": "المساعد"
+    },
+    "appVersion": "إصدار التطبيق",
+    "platform": "المنصة",
+    "osVersion": "إصدار نظام التشغيل",
+    "processing": "المعالجة",
+    "engine": "المحرك",
+    "policy": "تسمح السياسة باستخدام المساعد",
+    "on": "مفعّل",
+    "off": "معطّل",
+    "microphonePermission": "إذن الميكروفون",
+    "specificMicrophone": "ميكروفون محدد",
+    "permissionGranted": "مسموح",
+    "permissionDenied": "مرفوض",
+    "permissionRestricted": "مقيّد",
+    "permissionNotDetermined": "لم يُطلب"
   }
 }
