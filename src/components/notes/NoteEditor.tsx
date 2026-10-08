@@ -76,6 +76,7 @@ import EmbeddedChat, { type EmbeddedChatMode } from "./EmbeddedChat";
 import { useEmbeddedChat } from "../../hooks/useEmbeddedChat";
 import ActionChips from "./ActionChips";
 import ActionPicker from "./ActionPicker";
+import { getActionIcon } from "./actionIcons";
 import TemplatePicker from "./TemplatePicker";
 import {
   getActionCta,
@@ -922,6 +923,7 @@ export default function NoteEditor({
     ? noteActions.map((action) => ({
         id: action.client_id,
         label: getActionName(action, t),
+        icon: getActionIcon(action),
         hint: t(
           action.output === "summary" ? "notes.actions.output.summary" : "notes.actions.output.chat"
         ),

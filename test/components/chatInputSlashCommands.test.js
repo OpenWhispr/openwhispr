@@ -183,3 +183,33 @@ test("a / filter ranks labels with a word starting with it first", async () => {
   assert.deepEqual(labels("Summarize /s"), [], "only a draft that starts with / asks");
   assert.deepEqual(labels("/s\nmore"), [], "nor one that runs onto a new line");
 });
+
+test("each / row shows its command's icon in the tile, a blue / without one", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t, { cachePrefix: "openwhispr-slash-menu-icons-test-" });
+  const SlashCommandMenu = (await vite.ssrLoadModule("/components/chat/SlashCommandMenu.tsx"))
+    .default;
+  const { Mail } = await vite.ssrLoadModule("/components/icons/index.ts");
+  const { renderToStaticMarkup } = require("react-dom/server");
+  const html = renderToStaticMarkup(
+    React.createElement(SlashCommandMenu, {
+      id: "menu",
+      label: "Commands",
+      commands: [
+        { id: "email", label: "Follow-up email", icon: Mail, run: () => {} },
+        { id: "plain", label: "Plain", run: () => {} },
+      ],
+      activeIndex: 0,
+      onActiveIndexChange: () => {},
+      onRun: () => {},
+    })
+  );
+  const tiles = [...html.matchAll(/data-icon="([^"]+)"[^>]*class="([^"]*)"/g)].filter(
+    ([, name]) => name === "mail" || name === "square-slash"
+  );
+  assert.deepEqual(
+    tiles.map(([, name]) => name),
+    ["mail", "square-slash"]
+  );
+  assert.ok(tiles.every(([, , className]) => className.includes("text-primary")));
+});

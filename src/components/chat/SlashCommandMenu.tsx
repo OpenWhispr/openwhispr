@@ -81,6 +81,7 @@ export default function SlashCommandMenu({
       >
         {commands.map((command, index) => {
           const isActive = index === activeIndex;
+          const Icon = command.icon ?? SquareSlash;
           return (
             <button
               key={command.id}
@@ -112,7 +113,7 @@ export default function SlashCommandMenu({
                   isActive ? "bg-foreground/10 dark:bg-white/[0.12]" : "bg-foreground/[0.06]"
                 )}
               >
-                <SquareSlash size={15} className="text-foreground/70" />
+                <Icon size={15} className="text-primary" />
               </span>
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span dir="auto" className="truncate text-[13px] font-medium">

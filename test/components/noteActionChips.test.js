@@ -346,3 +346,14 @@ test("the docked chat shows the note's chips between its messages and its compos
   assert.equal(composer.props.slashCommands, slashCommands, "/ reaches the docked composer");
   assert.equal(composer.props.autoFocus, true, "a send from the ask bar lands in it");
 });
+
+test("actions show the design's icons, and an icon this build doesn't know shows a /", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t, { cachePrefix: "openwhispr-action-icons-test-" });
+  const { getActionIcon } = await vite.ssrLoadModule("/components/notes/actionIcons.ts");
+  const icons = await vite.ssrLoadModule("/components/icons/index.ts");
+
+  assert.equal(getActionIcon({ icon: "clipboard-check" }), icons.ListEnd);
+  assert.equal(getActionIcon({ icon: "file-text" }), icons.FolderRounded);
+  assert.equal(getActionIcon({ icon: "rocket" }), icons.SquareSlash);
+});

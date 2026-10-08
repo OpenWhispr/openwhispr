@@ -2,9 +2,9 @@ import {
   FolderRounded,
   ListEnd,
   Mail,
-  MessageSquareText,
   Send,
   Sparkles,
+  SquareSlash,
   type IconComponent,
 } from "../icons";
 
@@ -16,5 +16,6 @@ const ACTION_ICONS: Record<string, IconComponent> = {
   sparkles: Sparkles,
 };
 
+// An icon this build doesn't know (say, one synced from a newer client) shows the "/" of a command.
 export const getActionIcon = (action: { icon: string }): IconComponent =>
-  ACTION_ICONS[action.icon] ?? MessageSquareText;
+  ACTION_ICONS[action.icon] ?? SquareSlash;

@@ -1,6 +1,10 @@
+import type { IconComponent } from "../icons";
+
 export interface SlashCommand {
   id: string;
   label: string;
+  /** Drawn in the row's tile; a "/" when absent. */
+  icon?: IconComponent;
   /** A short tag after the label, such as where the command's output goes. */
   hint?: string;
   description?: string;
