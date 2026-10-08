@@ -300,7 +300,8 @@ test("picking from the picker makes its main button run that action at once", as
     findElement(
       container,
       (el) =>
-        el.getAttribute?.("data-menu-item") !== null && el.textContent.startsWith("Create outline")
+        el.getAttribute?.("data-menu-item") !== null &&
+        el.textContent.trim().startsWith("Create outline")
     )
   );
   assert.equal(
