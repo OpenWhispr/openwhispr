@@ -123,6 +123,8 @@
       "osReserved": "\"{{hotkey}}\" peut être réservé par votre environnement de bureau.",
       "rightModifierNeedsListener": "« {{hotkey}} » ne peut pas être utilisé sur ce bureau, dont les raccourcis exigent une touche normale. Ajoutez une touche, par exemple Control+Alt+Space.",
       "holdNeedsReleaseKey": "Maintenir pour parler nécessite une touche dont macOS détecte le relâchement : Globe, une touche droite comme Option droite, ou un raccourci avec modificateur. Appuyer fonctionne avec n’importe quelle touche.",
+      "holdNeedsRegularKey": "Pour utiliser le mode Maintenir, ajoutez une touche normale au raccourci, par exemple Control+Alt+Space. Votre bureau ne peut pas signaler le maintien de touches de modification seules.",
+      "holdNeedsGnomePortal": "Pour utiliser le mode Maintenir, GNOME a besoin de son portail de raccourcis globaux, inclus à partir de GNOME 48. Le mode Appui fonctionne sans lui.",
       "registrationFailed": "Impossible d'enregistrer \"{{hotkey}}\". Il est peut-être utilisé par une autre application.",
       "windowsKeyListenerMissing": "\"{{hotkey}}\" nécessite l'écouteur de touches Windows, absent de cette installation. Choisissez un raccourci avec une touche classique.",
       "updateFailedCheckFormat": "Impossible de mettre à jour le raccourci vers \"{{hotkey}}\". Vérifiez que le format est valide.",
@@ -160,7 +162,7 @@
     "close": "Fermer"
   },
   "windows": {
-    "pttUnavailable": "L'écouteur natif Push-to-Talk n'est pas disponible"
+    "pttUnavailable": "L'écouteur de touches d'OpenWhispr n'est pas disponible."
   },
   "common": {
     "continue": "Continuer",
@@ -177,7 +179,8 @@
     "recommended": "Recommandé",
     "active": "Actif",
     "managedByOrg": "Géré par votre organisation",
-    "freeAccountRequired": "Compte gratuit requis",
+    "signInRequired": "Connexion requise",
+    "signIn": "Se connecter",
     "comingSoon": "Bientôt disponible",
     "cloud": "Cloud",
     "local": "Local",
@@ -579,6 +582,20 @@
         "title": "Un téléchargement ne s'est pas terminé",
         "description": "Vérifiez votre connexion et l'espace disque disponible, puis réessayez. Si le problème persiste, contactez votre administrateur."
       }
+    },
+    "permissionGuide": {
+      "label": "Guide des autorisations",
+      "return": "Revenir à la configuration",
+      "missingApp": "Ou sélectionnez l’app avec +",
+      "failed": "Impossible de vérifier l’accès.",
+      "microphone": "Activez OpenWhispr dans Microphone.",
+      "accessibility": "Glissez OpenWhispr dans Accessibilité, puis activez-le.",
+      "systemAudio": "Activez OpenWhispr sous Enregistrement audio du système uniquement.",
+      "screenContext": "Glissez OpenWhispr dans Enregistrement de l’écran et de l’audio système, puis activez-le.",
+      "settings": "Réglages",
+      "check": "Vérifier",
+      "restart": "Relancer l’app",
+      "restartRequired": "Redémarrez OpenWhispr pour appliquer l’accès à l’écran."
     }
   },
   "streaming": {
@@ -756,6 +773,10 @@
     "disableThinking": {
       "label": "Désactiver la sortie de raisonnement",
       "help": "Ignore les jetons de raisonnement pour une sortie plus propre. Recommandé pour le nettoyage. Certains serveurs ignorent cette indication."
+    },
+    "keepModelLoaded": {
+      "label": "Garder le modèle chargé",
+      "help": "Reste en mémoire au lieu d'être déchargé après 5 minutes d'inactivité, ce qui évite un démarrage à froid à la requête suivante. S'applique à toutes les fonctionnalités utilisant un modèle local."
     },
     "selfHosted": {
       "endpointHelp": "Pointez vers un serveur compatible OpenAI sur votre réseau local (par ex. Ollama, LM Studio, vLLM ou llama-server)."
@@ -951,7 +972,10 @@
         "modifiersHeldClipboardFailed": "OpenWhispr a généré la modification, mais une touche de modification (comme Ctrl ou Maj) était encore enfoncée, elle n'a donc pas été appliquée, et elle n'a pas pu être copiée dans le presse-papiers non plus.",
         "unavailable": "OpenWhispr n’a pas pu lire la sélection en toute sécurité. Vérifiez les autorisations d’accessibilité ou d’automatisation.",
         "tooLarge": "La sélection est trop grande. Sélectionnez au maximum 6 000 caractères.",
-        "reasoningFailed": "L’IA n’a pas pu terminer la modification. Le texte d’origine n’a pas été modifié."
+        "reasoningFailed": "L’IA n’a pas pu terminer la modification. Le texte d’origine n’a pas été modifié.",
+        "invalidResponse": "L’IA a renvoyé une réponse de modification invalide. Rien n’a été remplacé. Sélectionnez le texte et réessayez.",
+        "emptyResponse": "L’IA a renvoyé une modification vide. Rien n’a été remplacé. Essayez une instruction plus précise.",
+        "truncatedResponse": "L’IA s’est arrêtée avant de terminer la modification. Rien n’a été remplacé. Essayez de sélectionner moins de texte."
       },
       "pastePermission": {
         "title": "Autoriser le collage automatique",
@@ -1490,6 +1514,7 @@
     "waylandClipboardTitle": "Mode presse-papiers sur Wayland",
     "windowsReady": "Windows prend en charge le collage automatique nativement. Aucune configuration requise !",
     "withoutToolPrefix": "Sans cet outil, OpenWhispr copiera le texte dans le presse-papiers. Vous pourrez ensuite coller manuellement avec Ctrl+V.",
+    "wtypeCosmicTerminalsDescription": "Sous COSMIC, les terminaux comme Warp ne reçoivent le texte collé que via wtype. Les autres applications collent déjà sans lui.",
     "wtypeFallbackDescription": "wtype est la méthode de collage automatique recommandée pour ce compositeur wlroots. Une solution de repli est disponible, mais elle peut être moins fiable.",
     "xwaylandAppsOnly": "le collage automatique fonctionne uniquement pour les apps XWayland"
   },
@@ -1845,7 +1870,10 @@
         "opening": "Ouverture...",
         "updatePaymentMethod": "Mettre à jour le moyen de paiement",
         "contactOwnerTitle": "Contactez le propriétaire de l'espace de travail",
-        "contactOwnerDescription": "Seul le propriétaire de l'espace de travail peut modifier sa facturation."
+        "contactOwnerDescription": "Seul le propriétaire de l'espace de travail peut modifier sa facturation.",
+        "manageInAppStore": "Gérer dans l'App Store",
+        "manageInGooglePlay": "Gérer dans Google Play",
+        "managedInMobileStore": "Facturé via la boutique d'applications de votre téléphone. Gérez-le depuis votre téléphone."
       },
       "checkout": {
         "couldNotOpenDescription": "Nous avons eu un problème pour ouvrir la page de paiement. Veuillez réessayer.",
@@ -1869,7 +1897,9 @@
         "nextBilling": "Prochaine facturation : {{date}}",
         "pastDue": "{{used}} / {{limit}} mots gratuits cette semaine - mettez à jour le paiement pour restaurer Pro",
         "trial": "{{days}} jours restants - transcriptions illimitées",
-        "unlimited": "Illimité"
+        "unlimited": "Illimité",
+        "accessUntil": "Accès jusqu'au {{date}}",
+        "storePaymentIssue": "Votre boutique d'applications n'a pas pu renouveler cet abonnement. Mettez-y à jour votre moyen de paiement pour conserver votre forfait."
       },
       "planLabels": {
         "free": "Gratuit",
@@ -2276,7 +2306,7 @@
         "recheck": "Revérifier",
         "copy": "Copier",
         "ydotoolDesc": "Outil d'automatisation de saisie pour Wayland",
-        "wtypeDesc": "Outil d'automatisation de saisie recommandé sur les compositeurs wlroots",
+        "wtypeDesc": "Outil d'automatisation de saisie recommandé sur les compositeurs wlroots ; sous COSMIC, sert à coller dans les terminaux",
         "ydotooldDesc": "Daemon pour ydotool (paquet séparé sur Ubuntu/Pop!_OS)",
         "uinputDesc": "Accès au périphérique d'entrée du noyau",
         "uinputRuleFound": "Règle présente mais inactive. Un redémarrage devrait résoudre le problème.",
@@ -2553,6 +2583,12 @@
       },
       "transcriptionPreview": "Aperçu en direct",
       "transcriptionPreviewDescription": "Afficher la transcription dans une fenêtre flottante avant correction",
+      "aec": {
+        "toggle": {
+          "title": "Annulation d'écho pour les réunions",
+          "description": "Annule l'audio de la réunion qui s'infiltre dans votre microphone. Laissez cette option désactivée lorsque vous utilisez un casque ou des écouteurs — il n'y a aucun écho à annuler et cela peut supprimer entièrement votre voix."
+        }
+      },
       "vad": {
         "title": "Détection d'activité vocale",
         "description": "Configurez la manière dont Silero VAD détecte et segmente la parole pour la transcription locale Whisper",
@@ -2597,7 +2633,8 @@
           }
         }
       },
-      "meetingEnterpriseOnly": "Votre organisation n'autorise que la transcription cloud d'entreprise, qui ne couvre pas encore l'enregistrement des réunions."
+      "meetingEnterpriseOnly": "Votre organisation n'autorise que la transcription cloud d'entreprise, qui ne couvre pas encore l'enregistrement des réunions.",
+      "meetingCloudSignedOut": "Les enregistrements de notes ne peuvent pas démarrer avec OpenWhispr Cloud tant que vous êtes déconnecté. Choisissez un autre moteur ci-dessus."
     },
     "intelligence": {
       "gpuDevice": {
@@ -3460,6 +3497,8 @@
       "unsupportedSelfHosted": "L'enregistrement de notes ne peut pas encore utiliser un serveur auto-hébergé. Ouvrez les Réglages et choisissez Local ou un fournisseur en streaming.",
       "unsupportedProvider": "L'enregistrement de notes ne peut pas utiliser {{provider}} pour la transcription en direct. Ouvrez les Réglages et choisissez Local ou un fournisseur en streaming.",
       "noProviderSelected": "Aucun fournisseur n'est sélectionné pour l'enregistrement de notes. Ouvrez les Réglages et choisissez Local ou un fournisseur en streaming.",
+      "signInRequired": "L'enregistrement de notes nécessite d'être connecté. Veuillez vous connecter.",
+      "signInExpired": "Votre session a expiré : l'enregistrement de notes ne peut pas renouveler sa connexion et risque de s'arrêter. Reconnectez-vous une fois cet enregistrement terminé.",
       "systemAudioSilent": {
         "title": "Aucun son de réunion détecté pour le moment",
         "description": "Seul votre microphone a capté du son jusqu'à présent. Vous êtes en visioconférence ? Vérifiez que le son de la réunion est diffusé sur cet ordinateur et qu'il n'est pas coupé. Vous enregistrez en présentiel ? Vous pouvez ignorer ce message : votre microphone capte la salle."
@@ -3815,6 +3854,10 @@
     "activationFailedDescription": "OpenWhispr est passé à la transcription par CPU.",
     "reasoningActivationFailedDescription": "OpenWhispr est passé au traitement par CPU.",
     "retryActivation": "Réessayer l'accélération GPU",
+    "redownloadNeeded": "Le pack GPU doit être retéléchargé",
+    "redownloadNeededDescription": "Cette version d'OpenWhispr ne peut pas utiliser votre pack GPU installé. Retéléchargez-le pour réactiver l'accélération GPU.",
+    "redownloadButton": "Retélécharger le pack GPU",
+    "downloadFailed": "Impossible de télécharger le pack GPU.",
     "remove": "Supprimer",
     "dismiss": "Pas maintenant",
     "cancel": "Annuler"
@@ -3842,7 +3885,7 @@
       },
       "gpuPackMigration": {
         "title": "Le pack GPU doit être retéléchargé",
-        "description": "Une mise à jour a supprimé une installation obsolète du pack GPU ({{packs}}). Retéléchargez-le dans les paramètres pour rétablir l'accélération GPU."
+        "description": "Cette version ne peut pas utiliser votre ancien pack GPU ({{packs}}). Retéléchargez-le dans les paramètres pour réactiver l'accélération GPU."
       },
       "cleanupFailed": {
         "title": "Échec du nettoyage",
@@ -4007,10 +4050,8 @@
   },
   "integrations": {
     "title": "Intégrations",
-    "description": "Connectez des services pour booster votre productivité",
     "googleCalendar": {
       "title": "Google Calendar",
-      "optional": "Facultatif",
       "description": "Remplissez automatiquement les titres et participants des réunions depuis votre calendrier.",
       "connect": "Connecter Google Calendar",
       "connecting": "Connexion...",
@@ -4029,7 +4070,6 @@
     },
     "microsoftCalendar": {
       "title": "Microsoft Calendar",
-      "optional": "Facultatif",
       "description": "Lisez les réunions depuis votre calendrier Outlook ou Microsoft 365.",
       "connect": "Connecter Microsoft Calendar",
       "connected": "Connecté",
@@ -4044,7 +4084,6 @@
     },
     "appleCalendar": {
       "title": "Calendrier Apple",
-      "optional": "Facultatif",
       "description": "Lisez les réunions depuis Calendar.app — iCloud, Google, Exchange et Outlook au même endroit.",
       "connect": "Connecter le Calendrier Apple",
       "connected": "Connecté",
@@ -4057,35 +4096,24 @@
       "connectFailed": "Échec de la connexion",
       "connectFailedDescription": "Une erreur s'est produite lors de la connexion à Calendar.app. Redémarrez OpenWhispr et réessayez."
     },
-    "sections": {
-      "connectors": "Connecteurs",
-      "calendar": "Calendrier",
-      "api": "API",
-      "mcp": "MCP",
-      "cli": "CLI"
-    },
     "api": {
-      "title": "Clés API",
       "description": "Gérez les clés API pour un accès programmatique",
       "proRequired": "Passez à un plan payant pour accéder à l'API",
-      "manage": "Gérer les clés",
       "viewPlans": "Voir les forfaits",
-      "dialogTitle": "Clés API"
+      "useWith": "Utilisez une clé avec"
     },
     "mcp": {
-      "title": "Apportez vos notes à vos outils d'IA",
       "description": "Discutez, recherchez et travaillez avec vos notes dans Claude, ChatGPT et Cursor.",
       "step1": "Dans votre outil d'IA, ajoutez OpenWhispr MCP avec l'URL publique",
-      "step2": "Créez une clé API ci-dessus avec les permissions dont vous avez besoin.",
+      "step2": "Créez une clé API avec les permissions dont vous avez besoin.",
       "step3": "Collez la clé comme en-tête Authorization pour vous connecter.",
       "learnMore": "En savoir plus",
-      "viewPlans": "Voir les forfaits",
-      "copyUrl": "Copier l'URL MCP",
       "proRequired": "Passez à un plan payant pour connecter OpenWhispr à Claude, ChatGPT et Cursor.",
+      "worksWith": "Fonctionne avec",
+      "copyUrl": "Copier l'URL MCP",
       "copied": "Copié"
     },
     "cli": {
-      "title": "Accès en ligne de commande",
       "description": "Donnez à votre assistant l'accès à vos notes depuis le terminal.",
       "installLabel": "Installer",
       "learnMore": "Lire la documentation",
@@ -4115,8 +4143,26 @@
       "upgrade": "Passer au supérieur"
     },
     "notABot": {
-      "title": "OpenWhispr est un enregistreur de réunions, pas un bot",
       "description": "OpenWhispr capture l'audio directement depuis votre système — il ne rejoint jamais vos réunions en tant que participant. Connectez simplement votre calendrier et prenez vos notes normalement."
+    },
+    "nav": {
+      "label": "Sections des intégrations",
+      "groups": {
+        "assistant": "Assistant",
+        "meetings": "Réunions",
+        "developer": "Développeurs"
+      },
+      "sections": {
+        "connectors": "Connecteurs",
+        "calendars": "Calendriers",
+        "api": "Clés API",
+        "mcp": "Serveur MCP",
+        "cli": "Ligne de commande"
+      },
+      "docs": "Documentation des intégrations"
+    },
+    "connectors": {
+      "description": "Laissez l'assistant utiliser vos outils. Vous approuvez chaque e-mail, message et ticket avant son envoi."
     }
   },
   "connectors": {
@@ -4282,7 +4328,6 @@
       "title": "Brouillons d'e-mails",
       "description": "L'assistant ouvre un brouillon pré-rempli dans votre application de messagerie. Vous le vérifiez et appuyez vous-même sur Envoyer.",
       "descriptionSend": "L'assistant affiche une carte d'e-mail dans le chat. L'e-mail n'est envoyé depuis votre Gmail que lorsque vous appuyez sur Envoyer.",
-      "proRequired": "Passez à un plan payant pour que l'assistant rédige des e-mails pour vous.",
       "unavailable": "Les brouillons d'e-mails ne sont pas disponibles pour le moment.",
       "targetLabel": "Rédiger les e-mails dans",
       "autoResolved": "Automatique · {{target}}",
@@ -4297,14 +4342,13 @@
     },
     "slack": {
       "title": "Slack",
-      "description": "L'assistant peut publier des messages dans des canaux et à des personnes en votre nom. Vous approuvez chaque message avant son envoi.",
+      "description": "Publie des messages dans des canaux et à des personnes.",
       "connect": "Connecter",
       "reconnect": "Reconnecter",
       "disconnect": "Déconnecter",
       "connecting": "Terminez la connexion dans votre navigateur…",
       "connectedAs": "Connecté en tant que {{account}} dans {{workspace}}",
       "needsReconnect": "Slack doit être reconnecté.",
-      "proRequired": "Passez à un plan payant pour que l'assistant envoie des messages Slack pour vous.",
       "errors": {
         "connect_failed": "Impossible de connecter Slack. Réessayez.",
         "disconnect_failed": "Impossible de déconnecter Slack. Réessayez.",
@@ -4328,7 +4372,7 @@
     },
     "github": {
       "title": "GitHub",
-      "description": "L'assistant peut rechercher des issues et des pull requests, créer des issues et commenter en votre nom, uniquement dans les dépôts que vous choisissez. Il ne peut pas lire votre code, et vous approuvez chaque issue et chaque commentaire avant sa publication.",
+      "description": "Tickets et commentaires dans les dépôts de votre choix. Il ne peut pas lire votre code.",
       "connect": "Connecter",
       "reconnect": "Reconnecter",
       "disconnect": "Déconnecter",
@@ -4337,7 +4381,6 @@
       "connectedAs_empty": "Connecté en tant que {{account}} · aucun dépôt pour l'instant",
       "connectedAs_unknown": "Connecté en tant que {{account}}",
       "needsReconnect": "GitHub doit être reconnecté.",
-      "proRequired": "Passez à un plan payant pour que l'assistant gère les issues GitHub pour vous.",
       "reviewOnGithub": "Vérifier sur GitHub",
       "disconnectedHint": "Déconnecté de cet ordinateur. GitHub conserve l'autorisation d'OpenWhispr jusqu'à ce que vous la retiriez sur GitHub.",
       "errors": {
@@ -4369,7 +4412,7 @@
     },
     "gmail": {
       "title": "Gmail",
-      "description": "L'assistant peut envoyer des e-mails depuis votre compte Gmail. Il ne peut pas lire vos e-mails, et vous appuyez vous-même sur Envoyer pour chaque e-mail.",
+      "description": "Envoie des e-mails depuis votre compte. Il ne peut pas lire vos e-mails.",
       "connect": "Connecter",
       "reconnect": "Reconnecter",
       "disconnect": "Déconnecter",
@@ -4377,7 +4420,6 @@
       "connectedAs": "Connecté en tant que {{account}}",
       "needsReconnect": "Gmail doit être reconnecté.",
       "grantKept": "Déconnecté. Google Agenda utilise la même autorisation Google : OpenWhispr reste donc listé dans votre compte Google jusqu'à ce que vous déconnectiez aussi Google Agenda.",
-      "proRequired": "Passez à un plan payant pour que l'assistant envoie des e-mails depuis Gmail pour vous.",
       "errors": {
         "connect_failed": "Impossible de connecter Gmail. Réessayez.",
         "disconnect_failed": "Impossible de déconnecter Gmail. Réessayez.",
@@ -4404,14 +4446,13 @@
     },
     "linear": {
       "title": "Linear",
-      "description": "L'assistant peut rechercher vos tickets Linear et créer des tickets et des commentaires en votre nom. Vous approuvez chaque ticket et chaque commentaire avant son envoi.",
+      "description": "Recherche des tickets, crée des tickets et des commentaires.",
       "connect": "Connecter",
       "reconnect": "Reconnecter",
       "disconnect": "Déconnecter",
       "connecting": "Terminez la connexion dans votre navigateur…",
       "connectedAs": "Connecté en tant que {{account}} dans {{workspace}}",
       "needsReconnect": "Linear doit être reconnecté.",
-      "proRequired": "Passez à un plan payant pour que l'assistant travaille dans Linear pour vous.",
       "errors": {
         "connect_failed": "Impossible de connecter Linear. Réessayez.",
         "disconnect_failed": "Impossible de déconnecter Linear. Réessayez.",
@@ -4568,7 +4609,10 @@
       "gmailDraftLimit": "Seuls {{max}} e-mails peuvent être préparés par demande.",
       "queryResults": "Résultats trouvés : {{total}}",
       "cardLimit": "Seules {{max}} cartes peuvent être préparées par demande."
-    }
+    },
+    "beta": "Bêta",
+    "upsell": "Les connecteurs sont inclus dans les forfaits payants. Passez à un forfait payant pour que l'assistant agisse dans vos outils.",
+    "locked": "Inclus dans les forfaits payants"
   },
   "notesView": {
     "searchPlaceholder": "Rechercher des notes…",
@@ -4742,6 +4786,84 @@
       "underway": "On dirait que votre réunion est déjà en cours. Vous voulez prendre des notes ?"
     },
     "start": "Prendre des notes",
-    "join": "Rejoindre et transcrire"
+    "join": "Rejoindre et transcrire",
+    "folders": {
+      "choose": "Choisir le dossier de réunion",
+      "search": "Rechercher des dossiers",
+      "clear": "Effacer la recherche",
+      "private": "Privé",
+      "shared": "Partagé",
+      "current": "Destination actuelle",
+      "recent": "Récemment utilisés",
+      "folders": "Dossiers",
+      "new": "Nouveau dossier",
+      "name": "Nom",
+      "location": "Emplacement",
+      "cancel": "Annuler",
+      "create": "Créer et sélectionner",
+      "empty": "Aucun dossier trouvé. Essayez un autre nom ou créez un dossier.",
+      "loading": "Chargement des dossiers…",
+      "unavailable": "Impossible de charger les dossiers.",
+      "retry": "Réessayer",
+      "dismiss": "Fermer la notification de réunion",
+      "selected": "{{destination}} sélectionné",
+      "linked": "Cette réunion a déjà une note. Elle restera dans {{destination}} lorsque vous rejoindrez la réunion.",
+      "errors": {
+        "STALE_NOTIFICATION": "Cette notification n’est plus à jour.",
+        "INVALID_REQUEST": "Impossible de terminer. Réessayez.",
+        "FOLDERS_UNAVAILABLE": "Impossible de charger les dossiers.",
+        "FOLDER_UNAVAILABLE": "Cette destination est indisponible. Choisissez un autre dossier.",
+        "SPACE_UNAVAILABLE": "Cette destination est indisponible. Choisissez un autre dossier.",
+        "FOLDER_NAME_REQUIRED": "Saisissez un nom de dossier.",
+        "FOLDER_NAME_TAKEN": "Un dossier porte déjà ce nom à cet emplacement.",
+        "CREATE_FAILED": "Impossible de terminer. Réessayez.",
+        "LINKED_NOTE_CHANGED": "Vérifiez la destination, puis rejoignez à nouveau.",
+        "NOTE_UNAVAILABLE": "Cette note est indisponible. Réessayez sans en créer une autre.",
+        "START_FAILED": "Impossible de terminer. Réessayez."
+      }
+    }
+  },
+  "providerErrors": {
+    "authFailed": "{{provider}} a rejeté votre clé API.",
+    "accessDenied": "{{provider}} a refusé l’accès. Votre clé ne couvre peut-être pas ce modèle.",
+    "quotaExhausted": "Votre compte {{provider}} n’a plus de crédit.",
+    "rateLimited": "{{provider}} a limité la requête. Patientez un instant et réessayez.",
+    "modelNotFound": "{{provider}} ne reconnaît pas le modèle « {{model}} ».",
+    "modelNotFoundNoModel": "{{provider}} ne reconnaît pas le modèle sélectionné.",
+    "payloadTooLarge": "Cet enregistrement est trop volumineux pour {{provider}}.",
+    "requestTooLarge": "Cette requête est trop volumineuse pour {{provider}}.",
+    "badRequest": "{{provider}} n’a pas pu traiter cette requête.",
+    "unavailable": "{{provider}} rencontre actuellement des problèmes. Réessayez dans un instant.",
+    "timeout": "{{provider}} a pris trop de temps à répondre.",
+    "unreachable": "Impossible de contacter {{provider}}. Vérifiez votre connexion.",
+    "noResponse": "Aucune réponse de {{provider}}. Vérifiez votre clé API et votre connexion.",
+    "unknown": "{{provider}} a renvoyé une erreur inattendue.",
+    "keyMissing": "Aucune clé API n’est définie pour {{provider}}. Ajoutez-la dans Réglages → Modèles de langage.",
+    "selfHosted": {
+      "authFailed": "Votre serveur a rejeté la clé API.",
+      "accessDenied": "Votre serveur a refusé l’accès. La clé ne couvre peut-être pas ce modèle.",
+      "quotaExhausted": "Votre serveur indique que le compte n’a plus de crédit.",
+      "rateLimited": "Votre serveur a limité la requête. Patientez un instant et réessayez.",
+      "modelNotFound": "Votre serveur ne reconnaît pas le modèle « {{model}} ».",
+      "modelNotFoundNoModel": "Votre serveur ne reconnaît pas le modèle sélectionné.",
+      "payloadTooLarge": "Cet enregistrement est trop volumineux pour votre serveur.",
+      "requestTooLarge": "Cette requête est trop volumineuse pour votre serveur.",
+      "badRequest": "Votre serveur n’a pas pu traiter cette requête.",
+      "unavailable": "Votre serveur rencontre actuellement des problèmes. Réessayez dans un instant.",
+      "timeout": "Votre serveur a pris trop de temps à répondre.",
+      "unreachable": "Impossible de contacter votre serveur. Vérifiez qu’il est en cours d’exécution.",
+      "noResponse": "Aucune réponse de votre serveur. Vérifiez sa clé API et qu’il est en cours d’exécution.",
+      "unknown": "Votre serveur a renvoyé une erreur inattendue."
+    },
+    "openSettings": "Ouvrir les réglages",
+    "copyDetails": "Copier les détails",
+    "titles": {
+      "transcription": "Échec de la transcription",
+      "llm": "Échec de la requête IA"
+    },
+    "details": {
+      "provider": "Fournisseur",
+      "requestId": "ID de requête"
+    }
   }
 }

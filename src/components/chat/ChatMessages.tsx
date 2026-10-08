@@ -68,6 +68,7 @@ export function ChatMessages({
                 content={msg.content}
                 isStreaming={msg.isStreaming}
                 toolCalls={msg.toolCalls}
+                error={msg.error}
                 onOpenNote={onOpenNote}
                 plain={plainBubbles}
               />

@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { Check, Copy, Plus, X } from "../icons";
 import { BrandMarkIcon } from "./BrandMarkIcon";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
+import { TechnicalErrorDetails } from "../ui/TechnicalErrorDetails";
+import { openProviderSettings } from "../../utils/describeProviderError";
 import { Button } from "../ui/button";
 import { useChatPersistence } from "../chat/useChatPersistence";
 import { useChatStreaming } from "../chat/useChatStreaming";
@@ -508,21 +510,39 @@ export function AssistantPanel({
             }`}
           >
             {displayedResponse ? (
-              <div
-                ref={responseSelectionRootRef}
-                style={{ animation: "agent-message-in 160ms ease-out both" }}
-              >
-                <StableAssistantMarkdown
-                  content={displayedResponse}
-                  className="text-[15px] leading-relaxed text-foreground selection:bg-agent-brand/35 selection:text-foreground [&_p]:text-[15px] [&_li]:text-[15px]"
-                />
-                {latestAssistantMessage?.isStreaming && (
-                  <span
-                    className="ms-0.5 inline-block h-4 w-0.5 align-middle bg-foreground/70"
-                    style={{ animation: "agent-cursor-blink 1s ease-in-out infinite" }}
+              <>
+                <div
+                  ref={responseSelectionRootRef}
+                  style={{ animation: "agent-message-in 160ms ease-out both" }}
+                >
+                  <StableAssistantMarkdown
+                    content={displayedResponse}
+                    className="text-[15px] leading-relaxed text-foreground selection:bg-agent-brand/35 selection:text-foreground [&_p]:text-[15px] [&_li]:text-[15px]"
                   />
+                  {latestAssistantMessage?.isStreaming && (
+                    <span
+                      className="ms-0.5 inline-block h-4 w-0.5 align-middle bg-foreground/70"
+                      style={{ animation: "agent-cursor-blink 1s ease-in-out infinite" }}
+                    />
+                  )}
+                </div>
+                {/* Outside responseSelectionRootRef: a drag-select + copy over the
+                    response must never pick up these affordances. */}
+                {latestAssistantMessage?.error?.settingsTarget && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      openProviderSettings(latestAssistantMessage.error!.settingsTarget!)
+                    }
+                    className="mt-2 text-[13px] font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded-sm"
+                  >
+                    {t("providerErrors.openSettings")}
+                  </button>
                 )}
-              </div>
+                {latestAssistantMessage?.error?.technicalDetails && (
+                  <TechnicalErrorDetails details={latestAssistantMessage.error.technicalDetails} />
+                )}
+              </>
             ) : null}
             {panelApprovals.map((entry) => (
               <ApprovalCard key={entry.key} entry={entry} />

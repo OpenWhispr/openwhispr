@@ -123,6 +123,8 @@
       "osReserved": "\"{{hotkey}}\" pode estar reservada pelo seu ambiente de desktop.",
       "rightModifierNeedsListener": "\"{{hotkey}}\" não pode ser usada neste ambiente de trabalho, cujos atalhos precisam de uma tecla normal. Adicione uma tecla, como Control+Alt+Space.",
       "holdNeedsReleaseKey": "Segurar para falar precisa de uma tecla cuja soltura o macOS detecte: Globo, uma tecla direita como Option direita ou um atalho com modificador. Tocar funciona com qualquer tecla.",
+      "holdNeedsRegularKey": "Para usar Segurar, adicione uma tecla normal ao atalho, como Control+Alt+Space. O ambiente de desktop não consegue detectar quando você segura apenas teclas modificadoras.",
+      "holdNeedsGnomePortal": "Para usar Segurar, o GNOME precisa do portal de atalhos globais, incluído a partir do GNOME 48. Toque funciona sem ele.",
       "registrationFailed": "Não foi possível registrar \"{{hotkey}}\". Pode estar em uso por outro aplicativo.",
       "windowsKeyListenerMissing": "\"{{hotkey}}\" precisa do listener de teclas do Windows, que está faltando nesta instalação. Escolha um atalho com uma tecla comum.",
       "updateFailedCheckFormat": "Não foi possível atualizar o atalho para \"{{hotkey}}\". Verifique se o formato é válido.",
@@ -139,7 +141,7 @@
     "loginItems": "As configurações de itens de início não estão disponíveis nesta plataforma."
   },
   "windows": {
-    "pttUnavailable": "O listener nativo de Push-to-Talk não está disponível"
+    "pttUnavailable": "O listener de teclas do OpenWhispr não está disponível."
   },
   "common": {
     "continue": "Continuar",
@@ -156,7 +158,8 @@
     "recommended": "Recomendado",
     "active": "Ativo",
     "managedByOrg": "Gerenciado pela sua organização",
-    "freeAccountRequired": "Conta gratuita necessária",
+    "signInRequired": "Login necessário",
+    "signIn": "Entrar",
     "comingSoon": "Em breve",
     "cloud": "Nuvem",
     "local": "Local",
@@ -558,6 +561,20 @@
         "title": "Um download não foi concluído",
         "description": "Verifique sua conexão e o espaço livre em disco e tente novamente. Se continuar falhando, entre em contato com seu administrador."
       }
+    },
+    "permissionGuide": {
+      "label": "Guia de permissões",
+      "return": "Voltar à configuração",
+      "missingApp": "Ou selecione o app com +",
+      "failed": "Não foi possível verificar o acesso.",
+      "microphone": "Ative o OpenWhispr em Microfone.",
+      "accessibility": "Arraste o OpenWhispr para Acessibilidade e ative-o.",
+      "systemAudio": "Ative o OpenWhispr em Apenas gravação de áudio do sistema.",
+      "screenContext": "Arraste o OpenWhispr para Gravação de tela e áudio do sistema e ative-o.",
+      "settings": "Abrir Ajustes",
+      "check": "Verificar novamente",
+      "restart": "Reiniciar app",
+      "restartRequired": "Reinicie o OpenWhispr para aplicar o acesso à tela."
     }
   },
   "streaming": {
@@ -735,6 +752,10 @@
     "disableThinking": {
       "label": "Desativar saída de raciocínio",
       "help": "Ignora tokens de raciocínio para uma saída mais limpa. Recomendado para limpeza. Alguns servidores ignoram esta dica."
+    },
+    "keepModelLoaded": {
+      "label": "Manter o modelo carregado",
+      "help": "Fica na memória em vez de ser removido após 5 minutos de inatividade, assim o próximo pedido evita a inicialização a frio. Vale para todos os recursos que usam um modelo local."
     },
     "selfHosted": {
       "endpointHelp": "Aponte para um servidor compatível com OpenAI na sua rede local (ex.: Ollama, LM Studio, vLLM ou llama-server)."
@@ -930,7 +951,10 @@
         "modifiersHeldClipboardFailed": "O OpenWhispr gerou a edição, mas uma tecla modificadora (como Ctrl ou Shift) ainda estava pressionada, por isso ela não foi aplicada e também não foi possível copiá-la para a área de transferência.",
         "unavailable": "O OpenWhispr não conseguiu ler o texto selecionado com segurança. Verifique as permissões de acessibilidade ou automação.",
         "tooLarge": "A seleção é muito grande. Selecione no máximo 6.000 caracteres.",
-        "reasoningFailed": "A IA não conseguiu concluir a edição. O texto original não foi alterado."
+        "reasoningFailed": "A IA não conseguiu concluir a edição. O texto original não foi alterado.",
+        "invalidResponse": "A IA retornou uma resposta de edição inválida. Nada foi substituído. Selecione o texto e tente novamente.",
+        "emptyResponse": "A IA retornou uma edição vazia. Nada foi substituído. Tente uma instrução mais específica.",
+        "truncatedResponse": "A IA parou antes de concluir a edição. Nada foi substituído. Tente selecionar menos texto."
       },
       "pastePermission": {
         "title": "Permitir colagem automática",
@@ -1374,6 +1398,7 @@
     "waylandClipboardTitle": "Modo área de transferência no Wayland",
     "windowsReady": "O Windows suporta colagem automática nativamente. Nenhuma configuração necessária!",
     "withoutToolPrefix": "Sem essa ferramenta, o OpenWhispr copiará o texto para a área de transferência. Você poderá colar manualmente com Ctrl+V.",
+    "wtypeCosmicTerminalsDescription": "No COSMIC, terminais como o Warp só recebem texto colado pelo wtype. Nos outros apps, a colagem já funciona sem ele.",
     "wtypeFallbackDescription": "O wtype é o método de colagem automática preferido para este compositor wlroots. Há uma alternativa disponível, mas ela pode ser menos confiável.",
     "xwaylandAppsOnly": "a colagem automática funciona apenas para apps XWayland"
   },
@@ -1529,7 +1554,10 @@
         "opening": "Abrindo...",
         "updatePaymentMethod": "Atualizar forma de pagamento",
         "contactOwnerTitle": "Fale com o proprietário do workspace",
-        "contactOwnerDescription": "Apenas o proprietário do workspace pode atualizar a cobrança dele."
+        "contactOwnerDescription": "Apenas o proprietário do workspace pode atualizar a cobrança dele.",
+        "manageInAppStore": "Gerenciar na App Store",
+        "manageInGooglePlay": "Gerenciar no Google Play",
+        "managedInMobileStore": "Cobrado pela loja de apps do seu celular. Gerencie pelo celular."
       },
       "checkout": {
         "couldNotOpenDescription": "Tivemos dificuldade em abrir a página de checkout. Tente novamente.",
@@ -1553,7 +1581,9 @@
         "nextBilling": "Próxima cobrança: {{date}}",
         "pastDue": "{{used}} / {{limit}} palavras gratuitas esta semana — atualize o pagamento para restaurar o Pro",
         "trial": "{{days}} dias restantes — transcrições ilimitadas",
-        "unlimited": "Ilimitado"
+        "unlimited": "Ilimitado",
+        "accessUntil": "Acesso até {{date}}",
+        "storePaymentIssue": "A loja de apps não conseguiu renovar esta assinatura. Atualize lá sua forma de pagamento para manter seu plano."
       },
       "planLabels": {
         "free": "Gratuito",
@@ -1960,7 +1990,7 @@
         "recheck": "Verificar novamente",
         "copy": "Copiar",
         "ydotoolDesc": "Ferramenta de automação de entrada para Wayland",
-        "wtypeDesc": "Ferramenta de automação de entrada preferida em compositores wlroots",
+        "wtypeDesc": "Ferramenta de automação de entrada preferida em compositores wlroots; no COSMIC, usada para colar em terminais",
         "ydotooldDesc": "Daemon do ydotool (pacote separado no Ubuntu/Pop!_OS)",
         "uinputDesc": "Acesso ao dispositivo de entrada do kernel",
         "uinputRuleFound": "Regra presente mas não ativa. Uma reinicialização deve resolver.",
@@ -2237,6 +2267,12 @@
       },
       "transcriptionPreview": "Pré-visualização ao vivo",
       "transcriptionPreviewDescription": "Mostrar transcrição em janela flutuante antes da limpeza",
+      "aec": {
+        "toggle": {
+          "title": "Cancelamento de eco para reuniões",
+          "description": "Cancela o áudio da reunião que vaza para o seu microfone. Deixe isto desativado ao usar fones de ouvido ou auriculares — não há eco para cancelar e pode suprimir totalmente a sua voz."
+        }
+      },
       "vad": {
         "title": "Detecção de atividade de voz",
         "description": "Configure como o Silero VAD detecta e segmenta a fala na transcrição local do Whisper",
@@ -2281,7 +2317,8 @@
           }
         }
       },
-      "meetingEnterpriseOnly": "A sua organização só permite transcrição em nuvem corporativa, que ainda não abrange a gravação de reuniões."
+      "meetingEnterpriseOnly": "A sua organização só permite transcrição em nuvem corporativa, que ainda não abrange a gravação de reuniões.",
+      "meetingCloudSignedOut": "As gravações de notas não podem começar no OpenWhispr Cloud enquanto você estiver desconectado. Escolha outro motor acima."
     },
     "intelligence": {
       "gpuDevice": {
@@ -3108,6 +3145,8 @@
       "unsupportedSelfHosted": "A gravação de notas ainda não pode usar um endpoint auto-hospedado. Abra as Configurações e escolha Local ou um provedor de streaming.",
       "unsupportedProvider": "A gravação de notas não pode usar {{provider}} para transcrição ao vivo. Abra as Configurações e escolha Local ou um provedor de streaming.",
       "noProviderSelected": "Nenhum provedor está selecionado para a gravação de notas. Abra as Configurações e escolha Local ou um provedor de streaming.",
+      "signInRequired": "A gravação de notas exige que você entre na sua conta. Entre para continuar.",
+      "signInExpired": "Sua sessão expirou, então a gravação de notas não consegue renovar a conexão e pode parar. Entre novamente quando esta gravação terminar.",
       "systemAudioSilent": {
         "title": "Nenhum áudio da reunião detectado até agora",
         "description": "Até agora, apenas o seu microfone captou som. Está em uma videochamada? Verifique se o áudio da reunião está sendo reproduzido neste computador e não está silenciado. Está gravando presencialmente? Você pode ignorar este aviso: seu microfone capta o ambiente."
@@ -3644,6 +3683,10 @@
     "activationFailedDescription": "OpenWhispr mudou para a transcrição por CPU.",
     "reasoningActivationFailedDescription": "OpenWhispr mudou para o processamento por CPU.",
     "retryActivation": "Tentar aceleração por GPU novamente",
+    "redownloadNeeded": "O pacote GPU precisa ser baixado novamente",
+    "redownloadNeededDescription": "Esta versão do OpenWhispr não consegue usar o pacote GPU instalado. Baixe-o novamente para reativar a aceleração GPU.",
+    "redownloadButton": "Baixar o pacote GPU novamente",
+    "downloadFailed": "Não foi possível baixar o pacote GPU.",
     "remove": "Remover",
     "dismiss": "Agora não",
     "cancel": "Cancelar"
@@ -3671,7 +3714,7 @@
       },
       "gpuPackMigration": {
         "title": "O pacote GPU precisa ser baixado novamente",
-        "description": "Uma atualização removeu uma instalação desatualizada do pacote GPU ({{packs}}). Baixe-o novamente nas Configurações para restaurar a aceleração GPU."
+        "description": "Esta versão não consegue usar o pacote GPU anterior ({{packs}}). Baixe-o novamente nas Configurações para reativar a aceleração GPU."
       },
       "cleanupFailed": {
         "title": "Falha na limpeza",
@@ -3836,10 +3879,8 @@
   },
   "integrations": {
     "title": "Integrações",
-    "description": "Conecte serviços para turbinar seu fluxo de trabalho",
     "googleCalendar": {
       "title": "Google Calendar",
-      "optional": "Opcional",
       "description": "Preencha automaticamente títulos e participantes das reuniões a partir do seu calendário.",
       "connect": "Conectar Google Calendar",
       "connecting": "Conectando...",
@@ -3858,7 +3899,6 @@
     },
     "microsoftCalendar": {
       "title": "Microsoft Calendar",
-      "optional": "Opcional",
       "description": "Leia reuniões do seu calendário do Outlook ou Microsoft 365.",
       "connect": "Conectar Microsoft Calendar",
       "connected": "Conectado",
@@ -3873,7 +3913,6 @@
     },
     "appleCalendar": {
       "title": "Calendário da Apple",
-      "optional": "Opcional",
       "description": "Leia reuniões do Calendar.app — iCloud, Google, Exchange e Outlook em um só lugar.",
       "connect": "Conectar Calendário da Apple",
       "connected": "Conectado",
@@ -3886,35 +3925,24 @@
       "connectFailed": "Falha na conexão",
       "connectFailedDescription": "Ocorreu um erro ao conectar ao Calendar.app. Reinicie o OpenWhispr e tente novamente."
     },
-    "sections": {
-      "connectors": "Conectores",
-      "calendar": "Calendário",
-      "api": "API",
-      "mcp": "MCP",
-      "cli": "CLI"
-    },
     "api": {
-      "title": "Chaves de API",
       "description": "Gerencie chaves de API para acesso programático",
       "proRequired": "Atualize para um plano pago para acessar a API",
-      "manage": "Gerenciar chaves",
       "viewPlans": "Ver planos",
-      "dialogTitle": "Chaves de API"
+      "useWith": "Use uma chave com"
     },
     "mcp": {
-      "title": "Leve suas notas para suas ferramentas de IA",
       "description": "Converse, pesquise e trabalhe com suas notas no Claude, ChatGPT e Cursor.",
       "step1": "Na sua ferramenta de IA, adicione OpenWhispr MCP usando a URL pública",
-      "step2": "Crie uma chave de API acima com os escopos necessários.",
+      "step2": "Crie uma chave de API com os escopos necessários.",
       "step3": "Cole a chave como cabeçalho Authorization para conectar.",
       "learnMore": "Saiba mais",
-      "viewPlans": "Ver planos",
-      "copyUrl": "Copiar URL do MCP",
       "proRequired": "Atualize para um plano pago para conectar o OpenWhispr ao Claude, ChatGPT e Cursor.",
+      "worksWith": "Funciona com",
+      "copyUrl": "Copiar URL do MCP",
       "copied": "Copiado"
     },
     "cli": {
-      "title": "Acesso pela linha de comando",
       "description": "Dê ao seu assistente acesso às suas notas pelo terminal.",
       "installLabel": "Instalar",
       "learnMore": "Ler a documentação",
@@ -3944,8 +3972,26 @@
       "upgrade": "Atualizar"
     },
     "notABot": {
-      "title": "O OpenWhispr é um gravador de reuniões, não um bot",
       "description": "O OpenWhispr captura áudio diretamente do seu sistema — ele nunca entra nas suas reuniões como participante. Basta conectar seu calendário e fazer anotações normalmente."
+    },
+    "nav": {
+      "label": "Seções de integrações",
+      "groups": {
+        "assistant": "Assistente",
+        "meetings": "Reuniões",
+        "developer": "Desenvolvedor"
+      },
+      "sections": {
+        "connectors": "Conectores",
+        "calendars": "Calendários",
+        "api": "Chaves de API",
+        "mcp": "Servidor MCP",
+        "cli": "Linha de comando"
+      },
+      "docs": "Documentação de integrações"
+    },
+    "connectors": {
+      "description": "Deixe o assistente usar suas ferramentas. Você aprova cada e-mail, mensagem e issue antes do envio."
     }
   },
   "connectors": {
@@ -4111,7 +4157,6 @@
       "title": "Rascunhos de e-mail",
       "description": "O assistente abre um rascunho pré-preenchido no seu aplicativo de e-mail. Você revisa e aperta Enviar.",
       "descriptionSend": "O assistente mostra um cartão de e-mail no chat. O e-mail só é enviado pelo seu Gmail quando você aperta Enviar.",
-      "proRequired": "Atualize para um plano pago para que o assistente escreva rascunhos de e-mail para você.",
       "unavailable": "Os rascunhos de e-mail não estão disponíveis no momento.",
       "targetLabel": "Criar rascunhos de e-mail em",
       "autoResolved": "Automático · {{target}}",
@@ -4126,14 +4171,13 @@
     },
     "slack": {
       "title": "Slack",
-      "description": "O assistente pode publicar mensagens em canais e para pessoas em seu nome. Você aprova cada mensagem antes de ela ser enviada.",
+      "description": "Publica mensagens em canais e para pessoas.",
       "connect": "Conectar",
       "reconnect": "Reconectar",
       "disconnect": "Desconectar",
       "connecting": "Termine de conectar no seu navegador…",
       "connectedAs": "Conectado como {{account}} em {{workspace}}",
       "needsReconnect": "O Slack precisa ser reconectado.",
-      "proRequired": "Atualize para um plano pago para que o assistente envie mensagens do Slack por você.",
       "errors": {
         "connect_failed": "Não foi possível conectar o Slack. Tente novamente.",
         "disconnect_failed": "Não foi possível desconectar o Slack. Tente novamente.",
@@ -4157,7 +4201,7 @@
     },
     "github": {
       "title": "GitHub",
-      "description": "O assistente pode pesquisar issues e pull requests, criar issues e comentar em seu nome, apenas nos repositórios que você escolher. Ele não consegue ler seu código, e você aprova cada issue e comentário antes de ser publicado.",
+      "description": "Issues e comentários nos repositórios que você escolher. Ele não consegue ler seu código.",
       "connect": "Conectar",
       "reconnect": "Reconectar",
       "disconnect": "Desconectar",
@@ -4166,7 +4210,6 @@
       "connectedAs_empty": "Conectado como {{account}} · nenhum repositório ainda",
       "connectedAs_unknown": "Conectado como {{account}}",
       "needsReconnect": "O GitHub precisa ser reconectado.",
-      "proRequired": "Atualize para um plano pago para que o assistente trabalhe com issues do GitHub por você.",
       "reviewOnGithub": "Revisar no GitHub",
       "disconnectedHint": "Desconectado deste computador. O GitHub mantém a autorização do OpenWhispr até você removê-la lá.",
       "errors": {
@@ -4198,7 +4241,7 @@
     },
     "gmail": {
       "title": "Gmail",
-      "description": "O assistente pode enviar e-mails pela sua conta do Gmail. Ele não consegue ler seus e-mails, e você aperta Enviar em cada e-mail.",
+      "description": "Envia e-mails pela sua conta. Ele não consegue ler seus e-mails.",
       "connect": "Conectar",
       "reconnect": "Reconectar",
       "disconnect": "Desconectar",
@@ -4206,7 +4249,6 @@
       "connectedAs": "Conectado como {{account}}",
       "needsReconnect": "O Gmail precisa ser reconectado.",
       "grantKept": "Desconectado. O Google Agenda usa a mesma permissão do Google, então o OpenWhispr continua listado na sua Conta do Google até você desconectar o Google Agenda também.",
-      "proRequired": "Atualize para um plano pago para que o assistente envie e-mails pelo Gmail por você.",
       "errors": {
         "connect_failed": "Não foi possível conectar o Gmail. Tente novamente.",
         "disconnect_failed": "Não foi possível desconectar o Gmail. Tente novamente.",
@@ -4233,14 +4275,13 @@
     },
     "linear": {
       "title": "Linear",
-      "description": "O assistente pode pesquisar suas issues do Linear e criar issues e comentários em seu nome. Você aprova cada issue e comentário antes de ser enviado.",
+      "description": "Pesquisa issues e cria issues e comentários.",
       "connect": "Conectar",
       "reconnect": "Reconectar",
       "disconnect": "Desconectar",
       "connecting": "Termine de conectar no seu navegador…",
       "connectedAs": "Conectado como {{account}} em {{workspace}}",
       "needsReconnect": "O Linear precisa ser reconectado.",
-      "proRequired": "Atualize para um plano pago para que o assistente trabalhe no Linear por você.",
       "errors": {
         "connect_failed": "Não foi possível conectar o Linear. Tente novamente.",
         "disconnect_failed": "Não foi possível desconectar o Linear. Tente novamente.",
@@ -4397,7 +4438,10 @@
       "gmailDraftLimit": "Só é possível preparar {{max}} e-mails por solicitação.",
       "queryResults": "Resultados encontrados: {{total}}",
       "cardLimit": "Só é possível preparar {{max}} cartões por solicitação."
-    }
+    },
+    "beta": "Beta",
+    "upsell": "Os conectores estão incluídos nos planos pagos. Faça upgrade para o assistente trabalhar nas suas ferramentas.",
+    "locked": "Incluído nos planos pagos"
   },
   "calendar": {
     "title": "Google Agenda",
@@ -4742,6 +4786,84 @@
       "underway": "Parece que sua reunião já está em andamento. Quer fazer anotações?"
     },
     "start": "Fazer anotações",
-    "join": "Entrar e transcrever"
+    "join": "Entrar e transcrever",
+    "folders": {
+      "choose": "Escolher pasta da reunião",
+      "search": "Pesquisar pastas",
+      "clear": "Limpar pesquisa",
+      "private": "Privado",
+      "shared": "Compartilhado",
+      "current": "Destino atual",
+      "recent": "Usadas recentemente",
+      "folders": "Pastas",
+      "new": "Nova pasta",
+      "name": "Nome",
+      "location": "Local",
+      "cancel": "Cancelar",
+      "create": "Criar e selecionar",
+      "empty": "Nenhuma pasta encontrada. Tente outro nome ou crie uma pasta.",
+      "loading": "Carregando pastas…",
+      "unavailable": "Não foi possível carregar as pastas.",
+      "retry": "Tentar novamente",
+      "dismiss": "Fechar notificação de reunião",
+      "selected": "{{destination}} selecionado",
+      "linked": "Esta reunião já tem uma nota. Ao entrar, ela permanecerá em {{destination}}.",
+      "errors": {
+        "STALE_NOTIFICATION": "Esta notificação não está mais atualizada.",
+        "INVALID_REQUEST": "Não foi possível concluir. Tente novamente.",
+        "FOLDERS_UNAVAILABLE": "Não foi possível carregar as pastas.",
+        "FOLDER_UNAVAILABLE": "Este destino não está disponível. Escolha outra pasta.",
+        "SPACE_UNAVAILABLE": "Este destino não está disponível. Escolha outra pasta.",
+        "FOLDER_NAME_REQUIRED": "Digite um nome para a pasta.",
+        "FOLDER_NAME_TAKEN": "Já existe uma pasta com esse nome neste local.",
+        "CREATE_FAILED": "Não foi possível concluir. Tente novamente.",
+        "LINKED_NOTE_CHANGED": "Confira o destino e entre novamente.",
+        "NOTE_UNAVAILABLE": "Esta nota não está disponível. Tente novamente sem criar outra.",
+        "START_FAILED": "Não foi possível concluir. Tente novamente."
+      }
+    }
+  },
+  "providerErrors": {
+    "authFailed": "{{provider}} rejeitou sua chave de API.",
+    "accessDenied": "{{provider}} negou o acesso. Sua chave pode não incluir este modelo.",
+    "quotaExhausted": "Sua conta {{provider}} está sem crédito.",
+    "rateLimited": "{{provider}} limitou a solicitação. Aguarde um momento e tente novamente.",
+    "modelNotFound": "{{provider}} não reconhece o modelo “{{model}}”.",
+    "modelNotFoundNoModel": "{{provider}} não reconhece o modelo selecionado.",
+    "payloadTooLarge": "Esta gravação é grande demais para {{provider}}.",
+    "requestTooLarge": "Esta solicitação é grande demais para {{provider}}.",
+    "badRequest": "{{provider}} não conseguiu processar esta solicitação.",
+    "unavailable": "{{provider}} está com problemas no momento. Tente novamente em breve.",
+    "timeout": "{{provider}} demorou demais para responder.",
+    "unreachable": "Não foi possível conectar-se a {{provider}}. Verifique sua conexão.",
+    "noResponse": "Não foi possível obter uma resposta de {{provider}}. Verifique sua chave de API e sua conexão.",
+    "unknown": "{{provider}} retornou um erro inesperado.",
+    "keyMissing": "Nenhuma chave de API definida para {{provider}}. Adicione-a em Configurações → Modelos de linguagem.",
+    "selfHosted": {
+      "authFailed": "Seu servidor rejeitou a chave de API.",
+      "accessDenied": "Seu servidor negou o acesso. A chave pode não incluir este modelo.",
+      "quotaExhausted": "Seu servidor informa que a conta está sem crédito.",
+      "rateLimited": "Seu servidor limitou a solicitação. Aguarde um momento e tente novamente.",
+      "modelNotFound": "Seu servidor não reconhece o modelo “{{model}}”.",
+      "modelNotFoundNoModel": "Seu servidor não reconhece o modelo selecionado.",
+      "payloadTooLarge": "Esta gravação é grande demais para o seu servidor.",
+      "requestTooLarge": "Esta solicitação é grande demais para o seu servidor.",
+      "badRequest": "Seu servidor não conseguiu processar esta solicitação.",
+      "unavailable": "Seu servidor está com problemas no momento. Tente novamente em breve.",
+      "timeout": "Seu servidor demorou demais para responder.",
+      "unreachable": "Não foi possível conectar-se ao seu servidor. Verifique se ele está em execução.",
+      "noResponse": "Não foi possível obter uma resposta do seu servidor. Verifique a chave de API dele e se ele está em execução.",
+      "unknown": "Seu servidor retornou um erro inesperado."
+    },
+    "openSettings": "Abrir Configurações",
+    "copyDetails": "Copiar detalhes",
+    "titles": {
+      "transcription": "Falha na transcrição",
+      "llm": "Falha na solicitação de IA"
+    },
+    "details": {
+      "provider": "Provedor",
+      "requestId": "ID da solicitação"
+    }
   }
 }

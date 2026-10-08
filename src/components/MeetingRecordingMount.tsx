@@ -11,6 +11,7 @@ import {
 } from "../stores/meetingRecordingStore";
 import { requestMeetingRecordingAutoEnd } from "../helpers/meetingRecordingSession";
 import logger from "../utils/logger";
+import { requestSignIn } from "../utils/requestSignIn";
 
 const EMA_PREV = 0.5;
 const EMA_NEXT = 0.5;
@@ -23,6 +24,9 @@ const MEETING_ERROR_KEYS: Record<string, string> = {
   unsupportedSelfHosted: "notes.meeting.unsupportedSelfHosted",
   unsupportedProvider: "notes.meeting.unsupportedProvider",
   noProviderSelected: "notes.meeting.noProviderSelected",
+  signInRequired: "notes.meeting.signInRequired",
+  // Mid-recording, so no Sign in action: signing in reloads this window and the recording with it.
+  signInExpired: "notes.meeting.signInExpired",
 };
 
 export default function MeetingRecordingMount(): null {
@@ -75,10 +79,14 @@ export default function MeetingRecordingMount(): null {
     if (!error) return;
     const [sentinel, argument] = error.split(":");
     const errorKey = MEETING_ERROR_KEYS[sentinel];
+    const needsSignIn = sentinel === "signInRequired";
     toast({
       title: t("notes.meeting.title"),
       description: errorKey ? t(errorKey, { provider: argument }) : error,
       variant: "destructive",
+      duration: needsSignIn || sentinel === "signInExpired" ? 8000 : undefined,
+      actions: needsSignIn ? [{ label: t("common.signIn"), onClick: requestSignIn }] : undefined,
+      actionsAlign: needsSignIn ? "end" : undefined,
     });
     // errorNonce re-fires this toast when the same error repeats back-to-back.
   }, [error, errorNonce, toast, t]);

@@ -123,6 +123,8 @@
       "osReserved": "\"{{hotkey}}\" ist möglicherweise von Ihrer Desktop-Umgebung reserviert.",
       "rightModifierNeedsListener": "„{{hotkey}}“ kann auf diesem Desktop nicht verwendet werden, da seine Tastenkürzel eine normale Taste benötigen. Fügen Sie eine Taste hinzu, z. B. Control+Alt+Space.",
       "holdNeedsReleaseKey": "Halten zum Sprechen braucht eine Taste, deren Loslassen macOS erkennt: Globe, eine rechte Taste wie Rechte Option oder ein Kürzel mit Modifikator. Tippen funktioniert mit jeder Taste.",
+      "holdNeedsRegularKey": "Um Halten zu nutzen, fügen Sie dem Kürzel eine normale Taste hinzu, z. B. Control+Alt+Space. Ihr Desktop kann das Halten reiner Modifikatortasten nicht melden.",
+      "holdNeedsGnomePortal": "Um Halten zu nutzen, braucht GNOME das Portal für globale Tastenkürzel, das ab GNOME 48 enthalten ist. Tippen funktioniert auch ohne.",
       "registrationFailed": "\"{{hotkey}}\" konnte nicht registriert werden. Möglicherweise wird es von einer anderen Anwendung verwendet.",
       "windowsKeyListenerMissing": "\"{{hotkey}}\" benötigt den Windows-Tasten-Listener, der in dieser Installation fehlt. Wählen Sie ein Tastenkürzel mit einer normalen Taste.",
       "updateFailedCheckFormat": "Hotkey konnte nicht auf \"{{hotkey}}\" aktualisiert werden. Prüfen Sie, ob das Format gültig ist.",
@@ -160,7 +162,7 @@
     "close": "Schließen"
   },
   "windows": {
-    "pttUnavailable": "Der native Push-to-Talk-Listener ist nicht verfügbar"
+    "pttUnavailable": "Der OpenWhispr-Tasten-Listener ist nicht verfügbar."
   },
   "common": {
     "continue": "Weiter",
@@ -177,7 +179,8 @@
     "recommended": "Empfohlen",
     "active": "Aktiv",
     "managedByOrg": "Von Ihrer Organisation verwaltet",
-    "freeAccountRequired": "Kostenloses Konto erforderlich",
+    "signInRequired": "Anmeldung erforderlich",
+    "signIn": "Anmelden",
     "comingSoon": "Demnächst verfügbar",
     "cloud": "Cloud",
     "local": "Lokal",
@@ -579,6 +582,20 @@
         "title": "Ein Download wurde nicht abgeschlossen",
         "description": "Prüfen Sie Ihre Verbindung und den freien Speicherplatz und versuchen Sie es erneut. Wenn der Fehler weiterhin auftritt, wenden Sie sich an Ihren Administrator."
       }
+    },
+    "permissionGuide": {
+      "label": "Berechtigungsassistent",
+      "return": "Zurück zur Einrichtung",
+      "missingApp": "Oder wähle die App über +",
+      "failed": "Zugriff konnte nicht geprüft werden.",
+      "microphone": "Aktiviere OpenWhispr unter Mikrofon.",
+      "accessibility": "Ziehe OpenWhispr in Bedienungshilfen und aktiviere es.",
+      "systemAudio": "Aktiviere OpenWhispr unter „Nur Systemaudioaufnahme“.",
+      "screenContext": "Ziehe OpenWhispr in „Bildschirm- & Systemaudioaufnahme“ und aktiviere es.",
+      "settings": "Einstellungen",
+      "check": "Erneut prüfen",
+      "restart": "App neu starten",
+      "restartRequired": "Starte OpenWhispr für den Bildschirmzugriff neu."
     }
   },
   "streaming": {
@@ -756,6 +773,10 @@
     "disableThinking": {
       "label": "Denkausgabe deaktivieren",
       "help": "Überspringt Reasoning-Token für eine sauberere Ausgabe. Empfohlen für Bereinigung. Einige Server ignorieren diesen Hinweis."
+    },
+    "keepModelLoaded": {
+      "label": "Modell geladen lassen",
+      "help": "Bleibt im Speicher, statt nach 5 Minuten Inaktivität entladen zu werden, sodass bei der nächsten Anfrage der Kaltstart entfällt. Gilt für alle Funktionen mit lokalem Modell."
     },
     "selfHosted": {
       "endpointHelp": "Zeige auf einen OpenAI-kompatiblen Server in deinem lokalen Netzwerk (z. B. Ollama, LM Studio, vLLM oder llama-server)."
@@ -951,7 +972,10 @@
         "modifiersHeldClipboardFailed": "OpenWhispr hat die Bearbeitung erstellt, aber eine Sondertaste (z. B. Strg oder Umschalt) war noch gedrückt, daher wurde sie nicht angewendet und konnte auch nicht in die Zwischenablage kopiert werden.",
         "unavailable": "OpenWhispr konnte den ausgewählten Text nicht sicher lesen. Prüfe die Bedienungshilfen oder Eingabeautomatisierung.",
         "tooLarge": "Die Auswahl ist zu groß. Wähle höchstens 6.000 Zeichen aus.",
-        "reasoningFailed": "Die KI konnte die Auswahlbearbeitung nicht abschließen. Dein ursprünglicher Text wurde nicht geändert."
+        "reasoningFailed": "Die KI konnte die Auswahlbearbeitung nicht abschließen. Dein ursprünglicher Text wurde nicht geändert.",
+        "invalidResponse": "Die KI hat eine ungültige Bearbeitungsantwort zurückgegeben. Es wurde nichts ersetzt. Wähle den Text aus und versuche es erneut.",
+        "emptyResponse": "Die KI hat eine leere Bearbeitung zurückgegeben. Es wurde nichts ersetzt. Versuche eine genauere Anweisung.",
+        "truncatedResponse": "Die KI hat die Bearbeitung vorzeitig beendet. Es wurde nichts ersetzt. Versuche, weniger Text auszuwählen."
       },
       "pastePermission": {
         "title": "Automatisches Einfügen erlauben",
@@ -1490,6 +1514,7 @@
     "waylandClipboardTitle": "Zwischenablage-Modus unter Wayland",
     "windowsReady": "Windows unterstützt automatisches Einfügen direkt. Keine Einrichtung erforderlich!",
     "withoutToolPrefix": "Ohne dieses Tool kopiert OpenWhispr den Text in Ihre Zwischenablage. Sie können ihn dann manuell mit Ctrl+V einfügen.",
+    "wtypeCosmicTerminalsDescription": "Unter COSMIC empfangen Terminals wie Warp eingefügten Text nur über wtype. In andere Apps wird bereits ohne wtype eingefügt.",
     "wtypeFallbackDescription": "wtype ist die bevorzugte Methode für automatisches Einfügen auf diesem wlroots-Compositor. Eine Alternative ist verfügbar, kann aber weniger zuverlässig sein.",
     "xwaylandAppsOnly": "Automatisches Einfügen funktioniert nur für XWayland-Apps"
   },
@@ -1845,7 +1870,10 @@
         "opening": "Wird geöffnet...",
         "updatePaymentMethod": "Zahlungsmethode aktualisieren",
         "contactOwnerTitle": "Wenden Sie sich an den Workspace-Inhaber",
-        "contactOwnerDescription": "Nur der Workspace-Inhaber kann die Abrechnung für diesen Workspace ändern."
+        "contactOwnerDescription": "Nur der Workspace-Inhaber kann die Abrechnung für diesen Workspace ändern.",
+        "manageInAppStore": "Im App Store verwalten",
+        "manageInGooglePlay": "In Google Play verwalten",
+        "managedInMobileStore": "Abrechnung über den App-Store Ihres Smartphones. Verwalten Sie das Abo auf Ihrem Smartphone."
       },
       "checkout": {
         "couldNotOpenDescription": "Die Checkout-Seite konnte nicht geöffnet werden. Bitte versuchen Sie es erneut.",
@@ -1869,7 +1897,9 @@
         "nextBilling": "Nächste Abrechnung: {{date}}",
         "pastDue": "{{used}} / {{limit}} kostenlose Wörter diese Woche – Zahlung aktualisieren, um Pro wiederherzustellen",
         "trial": "Noch {{days}} Tage – unbegrenzte Transkriptionen",
-        "unlimited": "Unbegrenzt"
+        "unlimited": "Unbegrenzt",
+        "accessUntil": "Zugang bis {{date}}",
+        "storePaymentIssue": "Ihr App-Store konnte dieses Abo nicht verlängern. Aktualisieren Sie dort Ihre Zahlungsmethode, um Ihren Tarif zu behalten."
       },
       "planLabels": {
         "free": "Kostenlos",
@@ -2276,7 +2306,7 @@
         "recheck": "Erneut prüfen",
         "copy": "Kopieren",
         "ydotoolDesc": "Eingabeautomatisierung für Wayland",
-        "wtypeDesc": "Bevorzugte Eingabeautomatisierung für wlroots-Compositoren",
+        "wtypeDesc": "Bevorzugte Eingabeautomatisierung für wlroots-Compositoren; unter COSMIC zum Einfügen in Terminals genutzt",
         "ydotooldDesc": "Daemon für ydotool (separates Paket unter Ubuntu/Pop!_OS)",
         "uinputDesc": "Zugriff auf das Kernel-Eingabegerät",
         "uinputRuleFound": "Regel vorhanden, aber nicht aktiv. Ein Neustart sollte das beheben.",
@@ -2553,6 +2583,12 @@
       },
       "transcriptionPreview": "Live-Transkriptionsvorschau",
       "transcriptionPreviewDescription": "Transkription vor der Bereinigung in einem Fenster anzeigen",
+      "aec": {
+        "toggle": {
+          "title": "Echounterdrückung für Meetings",
+          "description": "Unterdrückt Meeting-Audio, das in Ihr Mikrofon gelangt. Lassen Sie dies bei Verwendung von Kopfhörern oder Ohrhörern deaktiviert – es gibt kein Echo zu unterdrücken und es kann Ihre Stimme vollständig unterdrücken."
+        }
+      },
       "vad": {
         "title": "Sprachaktivitätserkennung",
         "description": "Konfiguriere, wie Silero VAD Sprache für die lokale Whisper-Transkription erkennt und segmentiert",
@@ -2597,7 +2633,8 @@
           }
         }
       },
-      "meetingEnterpriseOnly": "Ihre Organisation erlaubt nur Unternehmens-Cloud-Transkription, die Besprechungsaufnahmen noch nicht abdeckt."
+      "meetingEnterpriseOnly": "Ihre Organisation erlaubt nur Unternehmens-Cloud-Transkription, die Besprechungsaufnahmen noch nicht abdeckt.",
+      "meetingCloudSignedOut": "Notizaufnahmen mit OpenWhispr Cloud können nicht starten, solange Sie abgemeldet sind. Wählen Sie oben eine andere Engine."
     },
     "intelligence": {
       "gpuDevice": {
@@ -3460,6 +3497,8 @@
       "unsupportedSelfHosted": "Die Notizaufnahme kann noch keinen selbst gehosteten Endpunkt verwenden. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
       "unsupportedProvider": "Die Notizaufnahme kann {{provider}} nicht für die Live-Transkription verwenden. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
       "noProviderSelected": "Für die Notizaufnahme ist kein Anbieter ausgewählt. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
+      "signInRequired": "Für die Notizaufnahme musst du angemeldet sein. Bitte melde dich an.",
+      "signInExpired": "Deine Anmeldung ist abgelaufen, daher kann die Notizaufnahme ihre Verbindung nicht erneuern und stoppt möglicherweise. Melde dich nach dem Ende dieser Aufnahme erneut an.",
       "systemAudioSilent": {
         "title": "Noch kein Meeting-Ton erkannt",
         "description": "Bisher hat nur Ihr Mikrofon Ton aufgenommen. Sie sind in einem Videoanruf? Prüfen Sie, ob der Meeting-Ton auf diesem Computer wiedergegeben wird und nicht stummgeschaltet ist. Sie nehmen vor Ort auf? Dann können Sie diesen Hinweis ignorieren – Ihr Mikrofon nimmt den Raum auf."
@@ -3815,6 +3854,10 @@
     "activationFailedDescription": "OpenWhispr verwendet die CPU-Transkription.",
     "reasoningActivationFailedDescription": "OpenWhispr verwendet die CPU-Verarbeitung.",
     "retryActivation": "GPU-Beschleunigung erneut versuchen",
+    "redownloadNeeded": "GPU-Paket muss erneut heruntergeladen werden",
+    "redownloadNeededDescription": "Diese Version von OpenWhispr kann dein installiertes GPU-Paket nicht verwenden. Lade es erneut herunter, um die GPU-Beschleunigung wieder einzuschalten.",
+    "redownloadButton": "GPU-Paket erneut herunterladen",
+    "downloadFailed": "Das GPU-Paket konnte nicht heruntergeladen werden.",
     "remove": "Entfernen",
     "dismiss": "Nicht jetzt",
     "cancel": "Abbrechen"
@@ -3842,7 +3885,7 @@
       },
       "gpuPackMigration": {
         "title": "GPU-Paket muss erneut heruntergeladen werden",
-        "description": "Ein Update hat eine veraltete GPU-Paket-Installation entfernt ({{packs}}). Lade es in den Einstellungen erneut herunter, um die GPU-Beschleunigung wiederherzustellen."
+        "description": "Diese Version kann dein bisheriges GPU-Paket ({{packs}}) nicht verwenden. Lade es in den Einstellungen erneut herunter, um die GPU-Beschleunigung wieder einzuschalten."
       },
       "cleanupFailed": {
         "title": "Bereinigung fehlgeschlagen",
@@ -4007,10 +4050,8 @@
   },
   "integrations": {
     "title": "Integrationen",
-    "description": "Verbinde Dienste, um deinen Workflow zu verbessern",
     "googleCalendar": {
       "title": "Google Calendar",
-      "optional": "Optional",
       "description": "Meeting-Titel und Teilnehmer automatisch aus deinem Kalender übernehmen.",
       "connect": "Google Calendar verbinden",
       "connecting": "Verbinde...",
@@ -4029,7 +4070,6 @@
     },
     "microsoftCalendar": {
       "title": "Microsoft Calendar",
-      "optional": "Optional",
       "description": "Besprechungen aus deinem Outlook- oder Microsoft 365-Kalender lesen.",
       "connect": "Microsoft Calendar verbinden",
       "connected": "Verbunden",
@@ -4044,7 +4084,6 @@
     },
     "appleCalendar": {
       "title": "Apple Kalender",
-      "optional": "Optional",
       "description": "Termine aus Calendar.app lesen — iCloud, Google, Exchange und Outlook an einem Ort.",
       "connect": "Apple Kalender verbinden",
       "connected": "Verbunden",
@@ -4057,35 +4096,24 @@
       "connectFailed": "Verbindung fehlgeschlagen",
       "connectFailedDescription": "Beim Verbinden mit Calendar.app ist ein Fehler aufgetreten. Starte OpenWhispr neu und versuche es erneut."
     },
-    "sections": {
-      "connectors": "Konnektoren",
-      "calendar": "Kalender",
-      "api": "API",
-      "mcp": "MCP",
-      "cli": "CLI"
-    },
     "api": {
-      "title": "API-Schlüssel",
       "description": "Verwalte API-Schlüssel für programmatischen Zugriff",
       "proRequired": "Upgrade auf einen kostenpflichtigen Plan, um die API zu nutzen",
-      "manage": "Schlüssel verwalten",
       "viewPlans": "Pläne ansehen",
-      "dialogTitle": "API-Schlüssel"
+      "useWith": "Nutze einen Schlüssel mit"
     },
     "mcp": {
-      "title": "Bring deine Notizen in deine KI-Tools",
       "description": "Chatte, suche und arbeite mit deinen Notizen in Claude, ChatGPT und Cursor.",
       "step1": "Füge OpenWhispr MCP in deinem KI-Tool mit der öffentlichen URL hinzu",
-      "step2": "Erstelle oben einen API-Schlüssel mit den benötigten Berechtigungen.",
+      "step2": "Erstelle einen API-Schlüssel mit den benötigten Berechtigungen.",
       "step3": "Füge den Schlüssel als Authorization-Header ein, um zu verbinden.",
       "learnMore": "Mehr erfahren",
-      "viewPlans": "Pläne ansehen",
-      "copyUrl": "MCP-URL kopieren",
       "proRequired": "Upgrade auf einen kostenpflichtigen Plan, um OpenWhispr mit Claude, ChatGPT und Cursor zu verbinden.",
+      "worksWith": "Funktioniert mit",
+      "copyUrl": "MCP-URL kopieren",
       "copied": "Kopiert"
     },
     "cli": {
-      "title": "Kommandozeilen-Zugriff",
       "description": "Gib deinem Assistenten über das Terminal Zugriff auf deine Notizen.",
       "installLabel": "Installieren",
       "learnMore": "Dokumentation lesen",
@@ -4115,8 +4143,26 @@
       "upgrade": "Upgrade"
     },
     "notABot": {
-      "title": "OpenWhispr ist ein Meeting-Rekorder, kein Bot",
       "description": "OpenWhispr erfasst Audio direkt von deinem System — es nimmt niemals als Teilnehmer an deinen Meetings teil. Verbinde einfach deinen Kalender und mach Notizen wie gewohnt."
+    },
+    "nav": {
+      "label": "Integrationsbereiche",
+      "groups": {
+        "assistant": "Assistent",
+        "meetings": "Meetings",
+        "developer": "Entwickler"
+      },
+      "sections": {
+        "connectors": "Konnektoren",
+        "calendars": "Kalender",
+        "api": "API-Schlüssel",
+        "mcp": "MCP-Server",
+        "cli": "Kommandozeile"
+      },
+      "docs": "Integrations-Doku"
+    },
+    "connectors": {
+      "description": "Lass den Assistenten deine Tools nutzen. Du bestätigst jede E-Mail, jede Nachricht und jedes Issue, bevor es rausgeht."
     }
   },
   "connectors": {
@@ -4282,7 +4328,6 @@
       "title": "E-Mail-Entwürfe",
       "description": "Der Assistent öffnet einen vorausgefüllten Entwurf in deiner E-Mail-App. Du prüfst ihn und klickst selbst auf Senden.",
       "descriptionSend": "Der Assistent zeigt im Chat eine E-Mail-Karte. Sie wird erst über dein Gmail gesendet, wenn du auf Senden klickst.",
-      "proRequired": "Upgrade auf einen kostenpflichtigen Plan, damit der Assistent E-Mails für dich entwirft.",
       "unavailable": "E-Mail-Entwürfe sind gerade nicht verfügbar.",
       "targetLabel": "E-Mails entwerfen in",
       "autoResolved": "Automatisch · {{target}}",
@@ -4297,14 +4342,13 @@
     },
     "slack": {
       "title": "Slack",
-      "description": "Der Assistent kann Nachrichten in Kanälen und an Personen in deinem Namen posten. Du bestätigst jede Nachricht, bevor sie gesendet wird.",
+      "description": "Nachrichten in Kanälen und an Personen posten.",
       "connect": "Verbinden",
       "reconnect": "Erneut verbinden",
       "disconnect": "Trennen",
       "connecting": "Schließe die Verbindung in deinem Browser ab…",
       "connectedAs": "Verbunden als {{account}} in {{workspace}}",
       "needsReconnect": "Slack muss erneut verbunden werden.",
-      "proRequired": "Upgrade auf einen kostenpflichtigen Plan, damit der Assistent Slack-Nachrichten für dich sendet.",
       "errors": {
         "connect_failed": "Slack konnte nicht verbunden werden. Versuche es erneut.",
         "disconnect_failed": "Slack konnte nicht getrennt werden. Versuche es erneut.",
@@ -4328,7 +4372,7 @@
     },
     "github": {
       "title": "GitHub",
-      "description": "Der Assistent kann Issues und Pull Requests durchsuchen, Issues erstellen und in deinem Namen kommentieren, nur in den Repositorys, die du auswählst. Er kann deinen Code nicht lesen, und du bestätigst jedes Issue und jeden Kommentar, bevor er gepostet wird.",
+      "description": "Issues und Kommentare in den Repositorys deiner Wahl. Deinen Code kann er nicht lesen.",
       "connect": "Verbinden",
       "reconnect": "Erneut verbinden",
       "disconnect": "Trennen",
@@ -4337,7 +4381,6 @@
       "connectedAs_empty": "Verbunden als {{account}} · noch keine Repositorys",
       "connectedAs_unknown": "Verbunden als {{account}}",
       "needsReconnect": "GitHub muss erneut verbunden werden.",
-      "proRequired": "Upgrade auf einen kostenpflichtigen Plan, damit der Assistent für dich mit GitHub-Issues arbeitet.",
       "reviewOnGithub": "Auf GitHub prüfen",
       "disconnectedHint": "Von diesem Computer getrennt. GitHub behält die Autorisierung von OpenWhispr, bis du sie dort entfernst.",
       "errors": {
@@ -4369,7 +4412,7 @@
     },
     "gmail": {
       "title": "Gmail",
-      "description": "Der Assistent kann E-Mails über dein Gmail-Konto senden. Er kann deine E-Mails nicht lesen, und du klickst bei jeder E-Mail selbst auf Senden.",
+      "description": "E-Mails von deinem Konto senden. Deine E-Mails kann er nicht lesen.",
       "connect": "Verbinden",
       "reconnect": "Erneut verbinden",
       "disconnect": "Trennen",
@@ -4377,7 +4420,6 @@
       "connectedAs": "Verbunden als {{account}}",
       "needsReconnect": "Gmail muss erneut verbunden werden.",
       "grantKept": "Getrennt. Google Kalender nutzt dieselbe Google-Berechtigung, daher bleibt OpenWhispr in deinem Google-Konto aufgeführt, bis du auch Google Kalender trennst.",
-      "proRequired": "Upgrade auf einen kostenpflichtigen Plan, damit der Assistent E-Mails über Gmail für dich sendet.",
       "errors": {
         "connect_failed": "Gmail konnte nicht verbunden werden. Versuche es erneut.",
         "disconnect_failed": "Gmail konnte nicht getrennt werden. Versuche es erneut.",
@@ -4404,14 +4446,13 @@
     },
     "linear": {
       "title": "Linear",
-      "description": "Der Assistent kann deine Linear-Issues durchsuchen und in deinem Namen Issues und Kommentare erstellen. Du bestätigst jedes Issue und jeden Kommentar, bevor sie gesendet werden.",
+      "description": "Issues durchsuchen sowie Issues und Kommentare erstellen.",
       "connect": "Verbinden",
       "reconnect": "Erneut verbinden",
       "disconnect": "Trennen",
       "connecting": "Schließe die Verbindung in deinem Browser ab…",
       "connectedAs": "Verbunden als {{account}} in {{workspace}}",
       "needsReconnect": "Linear muss erneut verbunden werden.",
-      "proRequired": "Upgrade auf einen kostenpflichtigen Plan, damit der Assistent für dich in Linear arbeitet.",
       "errors": {
         "connect_failed": "Linear konnte nicht verbunden werden. Versuche es erneut.",
         "disconnect_failed": "Linear konnte nicht getrennt werden. Versuche es erneut.",
@@ -4568,7 +4609,10 @@
       "gmailDraftLimit": "Pro Anfrage können nur {{max}} E-Mails vorbereitet werden.",
       "queryResults": "Gefundene Ergebnisse: {{total}}",
       "cardLimit": "Pro Anfrage können nur {{max}} Karten vorbereitet werden."
-    }
+    },
+    "beta": "Beta",
+    "upsell": "Konnektoren sind in kostenpflichtigen Tarifen enthalten. Upgrade, damit der Assistent in deinen Tools arbeiten kann.",
+    "locked": "In kostenpflichtigen Tarifen enthalten"
   },
   "notesView": {
     "searchPlaceholder": "Notizen durchsuchen…",
@@ -4742,6 +4786,84 @@
       "underway": "Es klingt, als wäre dein Meeting schon im Gange. Notizen aufnehmen?"
     },
     "start": "Notizen aufnehmen",
-    "join": "Beitreten & transkribieren"
+    "join": "Beitreten & transkribieren",
+    "folders": {
+      "choose": "Besprechungsordner auswählen",
+      "search": "Ordner suchen",
+      "clear": "Suche löschen",
+      "private": "Privat",
+      "shared": "Geteilt",
+      "current": "Aktueller Speicherort",
+      "recent": "Zuletzt verwendet",
+      "folders": "Ordner",
+      "new": "Neuer Ordner",
+      "name": "Name",
+      "location": "Speicherort",
+      "cancel": "Abbrechen",
+      "create": "Erstellen und auswählen",
+      "empty": "Keine Ordner gefunden. Suche einen anderen Namen oder erstelle einen Ordner.",
+      "loading": "Ordner werden geladen…",
+      "unavailable": "Ordner konnten nicht geladen werden.",
+      "retry": "Erneut versuchen",
+      "dismiss": "Besprechungsbenachrichtigung schließen",
+      "selected": "{{destination}} ausgewählt",
+      "linked": "Für diese Besprechung gibt es bereits eine Notiz. Beim Beitreten bleibt sie in {{destination}}.",
+      "errors": {
+        "STALE_NOTIFICATION": "Diese Benachrichtigung ist nicht mehr aktuell.",
+        "INVALID_REQUEST": "Vorgang fehlgeschlagen. Bitte erneut versuchen.",
+        "FOLDERS_UNAVAILABLE": "Ordner konnten nicht geladen werden.",
+        "FOLDER_UNAVAILABLE": "Dieser Speicherort ist nicht verfügbar. Wähle einen anderen Ordner.",
+        "SPACE_UNAVAILABLE": "Dieser Speicherort ist nicht verfügbar. Wähle einen anderen Ordner.",
+        "FOLDER_NAME_REQUIRED": "Gib einen Ordnernamen ein.",
+        "FOLDER_NAME_TAKEN": "An diesem Speicherort existiert bereits ein Ordner mit diesem Namen.",
+        "CREATE_FAILED": "Vorgang fehlgeschlagen. Bitte erneut versuchen.",
+        "LINKED_NOTE_CHANGED": "Prüfe den Speicherort und tritt erneut bei.",
+        "NOTE_UNAVAILABLE": "Diese Notiz ist nicht verfügbar. Versuche es erneut, ohne eine neue zu erstellen.",
+        "START_FAILED": "Vorgang fehlgeschlagen. Bitte erneut versuchen."
+      }
+    }
+  },
+  "providerErrors": {
+    "authFailed": "{{provider}} hat Ihren API-Schlüssel abgelehnt.",
+    "accessDenied": "{{provider}} hat den Zugriff verweigert. Ihr Schlüssel deckt dieses Modell möglicherweise nicht ab.",
+    "quotaExhausted": "Ihr {{provider}}-Konto hat kein Guthaben mehr.",
+    "rateLimited": "{{provider}} hat die Anfrage begrenzt. Warten Sie einen Moment und versuchen Sie es erneut.",
+    "modelNotFound": "{{provider}} kennt das Modell „{{model}}“ nicht.",
+    "modelNotFoundNoModel": "{{provider}} kennt das ausgewählte Modell nicht.",
+    "payloadTooLarge": "Diese Aufnahme ist für {{provider}} zu groß.",
+    "requestTooLarge": "Diese Anfrage ist für {{provider}} zu groß.",
+    "badRequest": "{{provider}} konnte diese Anfrage nicht verarbeiten.",
+    "unavailable": "{{provider}} hat derzeit Probleme. Versuchen Sie es in Kürze erneut.",
+    "timeout": "{{provider}} hat zu lange zum Antworten gebraucht.",
+    "unreachable": "{{provider}} konnte nicht erreicht werden. Überprüfen Sie Ihre Verbindung.",
+    "noResponse": "Keine Antwort von {{provider}} erhalten. Überprüfen Sie Ihren API-Schlüssel und Ihre Verbindung.",
+    "unknown": "{{provider}} hat einen unerwarteten Fehler zurückgegeben.",
+    "keyMissing": "Für {{provider}} ist kein API-Schlüssel hinterlegt. Fügen Sie ihn unter Einstellungen → Sprachmodelle hinzu.",
+    "selfHosted": {
+      "authFailed": "Ihr Server hat den API-Schlüssel abgelehnt.",
+      "accessDenied": "Ihr Server hat den Zugriff verweigert. Der Schlüssel deckt dieses Modell möglicherweise nicht ab.",
+      "quotaExhausted": "Ihr Server meldet, dass das Konto kein Guthaben mehr hat.",
+      "rateLimited": "Ihr Server hat die Anfrage begrenzt. Warten Sie einen Moment und versuchen Sie es erneut.",
+      "modelNotFound": "Ihr Server kennt das Modell „{{model}}“ nicht.",
+      "modelNotFoundNoModel": "Ihr Server kennt das ausgewählte Modell nicht.",
+      "payloadTooLarge": "Diese Aufnahme ist für Ihren Server zu groß.",
+      "requestTooLarge": "Diese Anfrage ist für Ihren Server zu groß.",
+      "badRequest": "Ihr Server konnte diese Anfrage nicht verarbeiten.",
+      "unavailable": "Ihr Server hat derzeit Probleme. Versuchen Sie es in Kürze erneut.",
+      "timeout": "Ihr Server hat zu lange zum Antworten gebraucht.",
+      "unreachable": "Ihr Server konnte nicht erreicht werden. Überprüfen Sie, ob er läuft.",
+      "noResponse": "Keine Antwort von Ihrem Server erhalten. Überprüfen Sie seinen API-Schlüssel und ob er läuft.",
+      "unknown": "Ihr Server hat einen unerwarteten Fehler zurückgegeben."
+    },
+    "openSettings": "Einstellungen öffnen",
+    "copyDetails": "Details kopieren",
+    "titles": {
+      "transcription": "Transkription fehlgeschlagen",
+      "llm": "KI-Anfrage fehlgeschlagen"
+    },
+    "details": {
+      "provider": "Anbieter",
+      "requestId": "Anfrage-ID"
+    }
   }
 }

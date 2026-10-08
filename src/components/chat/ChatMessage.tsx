@@ -12,7 +12,9 @@ import {
 } from "../icons";
 import { cn } from "../lib/utils";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
-import type { ToolCallInfo } from "./types";
+import { TechnicalErrorDetails } from "../ui/TechnicalErrorDetails";
+import { openProviderSettings } from "../../utils/describeProviderError";
+import type { MessageError, ToolCallInfo } from "./types";
 import { extractNoteCards } from "./noteCards";
 import { toolIcons } from "./toolIcons";
 import { ApprovalCard } from "./ApprovalCard";
@@ -24,6 +26,7 @@ interface ChatMessageProps {
   content: string;
   isStreaming: boolean;
   toolCalls?: ToolCallInfo[];
+  error?: MessageError;
   onOpenNote?: (noteId: number) => void;
   plain?: boolean;
 }
@@ -192,6 +195,7 @@ export const ChatMessage = memo(function ChatMessage({
   content,
   isStreaming,
   toolCalls,
+  error,
   onOpenNote,
   plain = false,
 }: ChatMessageProps) {
@@ -280,6 +284,17 @@ export const ChatMessage = memo(function ChatMessage({
             {t("agentMode.input.thinking")}...
           </span>
         )}
+
+        {error?.settingsTarget && (
+          <button
+            type="button"
+            onClick={() => openProviderSettings(error.settingsTarget!)}
+            className="mt-1.5 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded-sm"
+          >
+            {t("providerErrors.openSettings")}
+          </button>
+        )}
+        {error?.technicalDetails && <TechnicalErrorDetails details={error.technicalDetails} />}
 
         {noteCards.length > 0 && !isStreaming && (
           <div>

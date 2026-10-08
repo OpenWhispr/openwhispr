@@ -2,6 +2,8 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "../icons";
+import { cn } from "../lib/utils";
+import { blurBehindOverlays } from "./overlayBlur";
 import { InfoBox } from "./InfoBox";
 import { SettingsLayoutProvider } from "./useSettingsLayout";
 import { useDismissGuard } from "./useDismissGuard";
@@ -111,7 +113,12 @@ export default function SidebarModal<T extends string>({
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Overlay
+          className={cn(
+            "fixed inset-0 z-50 bg-black/60 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+            blurBehindOverlays && "backdrop-blur-sm"
+          )}
+        />
         <DialogPrimitive.Content
           ref={registerContent}
           // Radix focuses the first tabbable on open, which is the close button;

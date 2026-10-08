@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
+import { Lock } from "../icons";
 import { Button } from "../ui/button";
 import { SettingsPanelRow } from "../ui/SettingsSection";
 import { RecentActions } from "./RecentActions";
+import { BetaBadge } from "./BetaBadge";
 import { ensureConnectorStatus, useConnectorStatusStore } from "../../stores/connectorStatusStore";
 import type { ConnectorRowSpec } from "./connectorRows";
 
@@ -40,19 +42,17 @@ export interface ConnectorLoginRowProps {
   row: ConnectorRowSpec;
   isPaid: boolean;
   blockedByOrg: boolean;
-  onUpgrade: () => void;
 }
 
 /**
  * One connector's login in Settings → Connectors: Connect, Reconnect,
- * Disconnect, the plan upsell and its recent actions. Copy lives under
- * `connectors.<connectorId>.*`.
+ * Disconnect, the locked state on a free plan and its recent actions. Copy
+ * lives under `connectors.<connectorId>.*`.
  */
 export function ConnectorLoginRow({
   row,
   isPaid,
   blockedByOrg,
-  onUpgrade,
 }: ConnectorLoginRowProps): ReactElement | null {
   const {
     id: connectorId,
@@ -205,13 +205,16 @@ export function ConnectorLoginRow({
   if (phase === "connecting" && (!connected || needsReconnect)) summary = copy("connecting");
   else if (needsReconnect) summary = copy("needsReconnect");
   else if (connected && status) summary = copy("connectedAs", accountSummary(status));
-  else if (!isPaid) summary = copy("proRequired");
+  // A free plan sees the connector dimmed, without Connect; the section's one upsell sits above.
+  // Only what describes the connector dims: notes about a login just removed stay readable.
+  const locked = !isPaid && !connected;
+  const dimmed = locked ? "opacity-60" : "";
 
   return (
     <SettingsPanelRow>
       <div className="flex items-center gap-3">
         <div
-          className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+          className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${dimmed} ${
             brandIcon
               ? "bg-white dark:bg-surface-raised shadow-[0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-none dark:border dark:border-white/10"
               : "bg-primary/5 dark:bg-primary/10"
@@ -220,10 +223,15 @@ export function ConnectorLoginRow({
           {icon}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-foreground">{copy("title")}</p>
-          <p className="text-xs text-muted-foreground/70 mt-0.5 leading-relaxed" dir="auto">
-            {summary}
-          </p>
+          <div className={dimmed}>
+            <div className="flex items-center gap-1.5">
+              <p className="text-xs font-semibold text-foreground">{copy("title")}</p>
+              <BetaBadge />
+            </div>
+            <p className="text-xs text-muted-foreground/70 mt-0.5 leading-relaxed" dir="auto">
+              {summary}
+            </p>
+          </div>
           {phase === "connecting" && ConnectingDetail && (
             <div ref={connectingDetail}>
               <ConnectingDetail connectorId={connectorId} />
@@ -267,10 +275,13 @@ export function ConnectorLoginRow({
               {copy("connect")}
             </Button>
           )}
-          {!connected && !isPaid && (
-            <Button size="sm" className="shrink-0" onClick={onUpgrade}>
-              {t("integrations.api.viewPlans")}
-            </Button>
+          {locked && (
+            <Lock
+              size={14}
+              role="img"
+              aria-label={t("connectors.locked")}
+              className="text-muted-foreground opacity-60"
+            />
           )}
         </div>
       </div>

@@ -5148,29 +5148,55 @@ class DatabaseManager {
     }
   }
 
-  getNoteByCalendarEventId(eventId, excludeNoteId = null) {
+  // Join & transcribe resumes this note. Google gives every invitee's copy of an
+  // event the same id, so a teammate's synced note for the meeting must never
+  // match, or both apps record into one note. Ownership follows ownsNote() in
+  // spacePermissions.ts, plus Personal rows synced before owners were recorded.
+  getOwnNoteByCalendarEventId(eventId, { throwOnError = false } = {}) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const accountScope = this._accountScopeCondition("notes");
-      const base = `SELECT * FROM notes
-                    WHERE calendar_event_id = ? AND deleted_at IS NULL
-                      AND ${accountScope.sql}`;
-      if (excludeNoteId) {
-        return (
-          this.db
-            .prepare(`${base} AND id != ? LIMIT 1`)
-            .get(eventId, ...accountScope.params, excludeNoteId) || null
-        );
-      }
-      return this.db.prepare(`${base} LIMIT 1`).get(eventId, ...accountScope.params) || null;
+      return (
+        this.db
+          .prepare(
+            `SELECT notes.* FROM notes
+             JOIN spaces ON spaces.id = notes.space_id
+             WHERE notes.calendar_event_id = ? AND notes.deleted_at IS NULL
+               AND ${accountScope.sql}
+               AND (notes.cloud_id IS NULL OR notes.owner_user_id = ?
+                 OR (notes.owner_user_id IS NULL AND spaces.kind = 'private'))
+             ORDER BY datetime(notes.created_at) DESC, notes.id DESC
+             LIMIT 1`
+          )
+          .get(eventId, ...accountScope.params, this.activeAccountId) || null
+      );
     } catch (error) {
       debugLogger.error(
         "Error getting note by calendar event id",
         { error: error.message },
         "notes"
       );
+      if (throwOnError) throw error;
       return null;
     }
+  }
+
+  createMeetingNoteForNotification({ title, folderId, spaceId, eventId, participants }) {
+    return this.db.transaction(() => {
+      const existing = eventId
+        ? this.getOwnNoteByCalendarEventId(eventId, { throwOnError: true })
+        : null;
+      if (existing) return { created: false, note: existing };
+      const { note } = this.saveNote(title, "", "meeting", null, null, folderId, spaceId);
+      if (!note) throw new Error("Meeting note not saved");
+      if (!eventId) return { created: true, note };
+      const result = this.updateNote(note.id, {
+        calendar_event_id: eventId,
+        ...(participants ? { participants } : {}),
+      });
+      if (!result.success || !result.note) throw new Error("Meeting metadata not saved");
+      return { created: true, note: result.note };
+    })();
   }
 
   // With a source (see contactSource), records that it has seen these

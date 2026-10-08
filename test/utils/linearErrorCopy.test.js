@@ -117,7 +117,6 @@ test("the Linear row, browser page, card note, link and receipts have copy in ev
       ]),
       ["connectedAs", linear.connectedAs],
       ["needsReconnect", linear.needsReconnect],
-      ["proRequired", linear.proRequired],
       ...ROW_ERRORS.map((code) => [`errors.${code}`, linear.errors[code]]),
       ...["connectedTitle", "connectedBody", "failedTitle", "failedBody"].map((key) => [
         `browser.${key}`,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Key, Copy, Check, Trash2, Plus, Shield, AlertTriangle } from "./icons";
 import { Button } from "./ui/button";
@@ -44,7 +44,12 @@ function formatRelativeTime(dateString: string): string {
   return `${months}mo ago`;
 }
 
-export default function ApiKeysSection() {
+interface ApiKeysSectionProps {
+  /** Bumped by a "Create API key" elsewhere; opens the create dialog once keys load. */
+  createRequest?: number;
+}
+
+export default function ApiKeysSection({ createRequest = 0 }: ApiKeysSectionProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
 
@@ -52,6 +57,7 @@ export default function ApiKeysSection() {
   const [isLoading, setIsLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState<ApiKey | null>(null);
+  const handledCreateRequest = useRef(0);
 
   const fetchKeys = useCallback(async () => {
     try {
@@ -67,6 +73,13 @@ export default function ApiKeysSection() {
   useEffect(() => {
     fetchKeys();
   }, [fetchKeys]);
+
+  // At the key limit there's nothing to create; the list says so instead.
+  useEffect(() => {
+    if (isLoading || createRequest === handledCreateRequest.current) return;
+    handledCreateRequest.current = createRequest;
+    if (keys.length < MAX_API_KEYS) setCreateOpen(true);
+  }, [createRequest, isLoading, keys.length]);
 
   const handleRevoke = async () => {
     if (!revokeTarget) return;

@@ -470,7 +470,12 @@ test("a timeout-owned abort during raw response reading remains a timeout error"
     undefined
   );
 
-  await assert.rejects(collectAgentText(stream), /Streaming request timed out/);
+  // A LAN/self-hosted timeout is now classified instead of the generic message.
+  await assert.rejects(collectAgentText(stream), (err) => {
+    assert.equal(err.code, "PROVIDER_TIMEOUT");
+    assert.equal(err.messageKey, "providerErrors.selfHosted.timeout");
+    return true;
+  });
 });
 
 // Was "does not flush buffered text after error" and asserted the stream
@@ -822,5 +827,53 @@ test("a provider error part rejects the agent stream instead of ending it silent
     registry.toAISDKFormat()
   );
 
-  await assert.rejects(collectAgentText(stream), /Incorrect API key/);
+  // The AI SDK error part is now classified; the provider's original message
+  // survives on the preserved cause rather than as the top-level message.
+  await assert.rejects(collectAgentText(stream), (err) => {
+    assert.equal(err.code, "PROVIDER_AUTH_FAILED");
+    assert.match(err.cause?.message ?? "", /Incorrect API key/);
+    return true;
+  });
+});
+
+// A "custom" BYOK endpoint (config.baseUrl) is a user's own server just like
+// LAN (config.lanUrl), but it takes a different route.kind ("provider", not
+// "self-hosted"), so the mode check alone would miss it and report "OpenAI"
+// (getProviderDisplayName("custom") has no registry entry to fall back on).
+test("a custom BYOK endpoint's provider error part is classified self-hosted, not OpenAI", async (t) => {
+  const { reasoningService } = await loadReasoningService(
+    t,
+    "openwhispr-stream-custom-selfhosted-test-"
+  );
+
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({ error: { message: "Incorrect API key provided", type: "invalid_request_error" } }),
+      { status: 401, headers: { "content-type": "application/json" } }
+    );
+
+  const stream = reasoningService.processTextStreamingAI(
+    [{ role: "user", content: "hello" }],
+    "cleanup-model",
+    "custom",
+    {
+      systemPrompt: "Answer the user.",
+      baseUrl: "http://127.0.0.1:11434/v1",
+      customApiKey: "test-key",
+      disableThinking: true,
+    },
+    undefined
+  );
+
+  await assert.rejects(collectAgentText(stream), (err) => {
+    assert.equal(err.code, "PROVIDER_AUTH_FAILED");
+    assert.equal(err.messageKey, "providerErrors.selfHosted.authFailed");
+    assert.equal(err.technicalDetails.provider, "Your server");
+    assert.match(err.message, /^Your server /);
+    return true;
+  });
 });

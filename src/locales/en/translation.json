@@ -123,6 +123,8 @@
       "osReserved": "\"{{hotkey}}\" may be reserved by your desktop environment.",
       "rightModifierNeedsListener": "\"{{hotkey}}\" can't be used on this desktop, whose shortcuts need a regular key. Add a key, such as Control+Alt+Space.",
       "holdNeedsReleaseKey": "Hold-to-talk needs a key macOS can see you release: Globe, a right-side key like Right Option, or a shortcut with a modifier. Tap works with any key.",
+      "holdNeedsRegularKey": "To use Hold, add a regular key to the shortcut, such as Control+Alt+Space. Your desktop can't report holding modifier keys alone.",
+      "holdNeedsGnomePortal": "To use Hold, GNOME needs its global shortcuts portal, which comes with GNOME 48 and newer. Tap works without it.",
       "registrationFailed": "Could not register \"{{hotkey}}\". It may be in use by another application.",
       "windowsKeyListenerMissing": "\"{{hotkey}}\" needs the Windows key listener, which this install is missing. Choose a shortcut with a regular key.",
       "updateFailedCheckFormat": "Failed to update hotkey to \"{{hotkey}}\". Check the format is valid.",
@@ -160,7 +162,7 @@
     "close": "Close"
   },
   "windows": {
-    "pttUnavailable": "Push-to-Talk native listener not available"
+    "pttUnavailable": "OpenWhispr's key listener isn't available."
   },
   "common": {
     "continue": "Continue",
@@ -177,7 +179,8 @@
     "recommended": "Recommended",
     "active": "Active",
     "managedByOrg": "Managed by your organization",
-    "freeAccountRequired": "Free account required",
+    "signInRequired": "Sign in Required",
+    "signIn": "Sign in",
     "comingSoon": "Coming Soon",
     "cloud": "Cloud",
     "local": "Local",
@@ -579,6 +582,20 @@
         "title": "A download didn't finish",
         "description": "Check your connection and free disk space, then retry. If it keeps failing, contact your administrator."
       }
+    },
+    "permissionGuide": {
+      "label": "Permission guide",
+      "return": "Return to onboarding",
+      "missingApp": "Or use + to select the app",
+      "failed": "Could not check access.",
+      "microphone": "Turn on OpenWhispr in Microphone.",
+      "accessibility": "Drag OpenWhispr into Accessibility, then turn it on.",
+      "systemAudio": "Turn on OpenWhispr under System Audio Recording Only.",
+      "screenContext": "Drag OpenWhispr into Screen & System Audio Recording, then turn it on.",
+      "settings": "Open Settings",
+      "check": "Check again",
+      "restart": "Restart OpenWhispr",
+      "restartRequired": "Restart OpenWhispr to apply screen access."
     }
   },
   "streaming": {
@@ -756,6 +773,10 @@
     "disableThinking": {
       "label": "Disable thinking output",
       "help": "Skips reasoning tokens for cleaner output. Recommended for cleanup. Some servers ignore this hint."
+    },
+    "keepModelLoaded": {
+      "label": "Keep model loaded",
+      "help": "Stays in memory instead of unloading after 5 idle minutes, so the next request skips the cold start. Applies to all features using a local model."
     },
     "selfHosted": {
       "endpointHelp": "Point to an OpenAI-compatible server on your local network (e.g. Ollama, LM Studio, vLLM, or llama-server)."
@@ -951,7 +972,10 @@
         "modifiersHeldClipboardFailed": "OpenWhispr generated the edit, but a modifier key (like Ctrl or Shift) was still held down, so it was not applied, and it could not be copied to the clipboard either.",
         "unavailable": "OpenWhispr could not safely read the selected text. Check accessibility or input automation permissions and try again.",
         "tooLarge": "The selection is too large to edit safely. Select 6,000 characters or fewer.",
-        "reasoningFailed": "The AI could not complete the selection edit. Your original text was not changed."
+        "reasoningFailed": "The AI could not complete the selection edit. Your original text was not changed.",
+        "invalidResponse": "The AI returned an invalid edit response. Nothing was replaced. Select the text and try again.",
+        "emptyResponse": "The AI returned an empty edit. Nothing was replaced. Try a more specific instruction.",
+        "truncatedResponse": "The AI stopped before completing the edit. Nothing was replaced. Try selecting less text."
       },
       "pastePermission": {
         "title": "Allow automatic pasting",
@@ -1490,6 +1514,7 @@
     "waylandClipboardTitle": "Clipboard Mode on Wayland",
     "windowsReady": "Windows supports automatic pasting out of the box. No setup required!",
     "withoutToolPrefix": "Without this tool, OpenWhispr will copy text to your clipboard. You can then paste manually with Ctrl+V.",
+    "wtypeCosmicTerminalsDescription": "On COSMIC, terminals such as Warp only receive pasted text through wtype. Other apps already paste without it.",
     "wtypeFallbackDescription": "wtype is the preferred auto-paste method for this wlroots compositor. A fallback is available, but may be less reliable.",
     "xwaylandAppsOnly": "automatic pasting works for XWayland apps only"
   },
@@ -1845,7 +1870,10 @@
         "opening": "Opening...",
         "updatePaymentMethod": "Update Payment Method",
         "contactOwnerTitle": "Contact your workspace owner",
-        "contactOwnerDescription": "Only the workspace owner can update billing for this workspace."
+        "contactOwnerDescription": "Only the workspace owner can update billing for this workspace.",
+        "manageInAppStore": "Manage in App Store",
+        "manageInGooglePlay": "Manage in Google Play",
+        "managedInMobileStore": "Billed through your phone's app store. Manage it from your phone."
       },
       "checkout": {
         "couldNotOpenDescription": "We had trouble opening the checkout page. Please try again.",
@@ -1869,7 +1897,9 @@
         "nextBilling": "Next billing: {{date}}",
         "pastDue": "{{used}} / {{limit}} free words this week - update payment to restore Pro",
         "trial": "{{days}} days remaining - unlimited transcriptions",
-        "unlimited": "Unlimited"
+        "unlimited": "Unlimited",
+        "accessUntil": "Access until {{date}}",
+        "storePaymentIssue": "Your app store couldn't renew this subscription. Update your payment method there to keep your plan."
       },
       "planLabels": {
         "free": "Free",
@@ -2276,7 +2306,7 @@
         "recheck": "Re-check",
         "copy": "Copy",
         "ydotoolDesc": "Input automation tool for Wayland",
-        "wtypeDesc": "Preferred input automation tool on wlroots compositors",
+        "wtypeDesc": "Preferred input automation tool on wlroots compositors; on COSMIC, used to paste into terminals",
         "ydotooldDesc": "Daemon for ydotool (separate package on Ubuntu/Pop!_OS)",
         "uinputDesc": "Kernel input device access",
         "uinputRuleFound": "Rule present but not active. A reboot should fix it.",
@@ -2553,6 +2583,12 @@
       },
       "transcriptionPreview": "Live Transcription Preview",
       "transcriptionPreviewDescription": "Show transcription in a floating window before cleanup",
+      "aec": {
+        "toggle": {
+          "title": "Echo cancellation for meetings",
+          "description": "Cancel meeting audio that leaks into your microphone. Leave this off when using headphones or earphones — there is no echo to cancel and it can suppress your voice entirely."
+        }
+      },
       "vad": {
         "title": "Voice Activity Detection",
         "description": "Configure how Silero VAD detects and segments speech for local Whisper transcription",
@@ -2597,7 +2633,8 @@
           }
         }
       },
-      "meetingEnterpriseOnly": "Your organization only allows enterprise cloud transcription, which does not cover meeting recording yet."
+      "meetingEnterpriseOnly": "Your organization only allows enterprise cloud transcription, which does not cover meeting recording yet.",
+      "meetingCloudSignedOut": "Note recordings can't start on OpenWhispr Cloud while you're signed out. Choose another engine above."
     },
     "intelligence": {
       "gpuDevice": {
@@ -3460,6 +3497,8 @@
       "unsupportedSelfHosted": "Note Recording can't use a self-hosted endpoint yet. Open Settings and choose Local or a streaming provider.",
       "unsupportedProvider": "Note Recording can't use {{provider}} for live transcription. Open Settings and choose Local or a streaming provider.",
       "noProviderSelected": "No provider is selected for Note Recording. Open Settings and choose Local or a streaming provider.",
+      "signInRequired": "Note Recording requires you to be signed in. Please sign in.",
+      "signInExpired": "Your sign-in has expired, so Note Recording can't renew its connection and may stop. Sign in again once this recording ends.",
       "systemAudioSilent": {
         "title": "No meeting audio detected yet",
         "description": "Only your microphone has picked up sound so far. On a video call? Check that the meeting audio is playing on this computer and isn't muted. Recording in person? You can ignore this — your microphone captures the room."
@@ -3815,6 +3854,10 @@
     "activationFailedDescription": "OpenWhispr switched to CPU transcription.",
     "reasoningActivationFailedDescription": "OpenWhispr switched to CPU processing.",
     "retryActivation": "Retry GPU acceleration",
+    "redownloadNeeded": "GPU pack needs re-downloading",
+    "redownloadNeededDescription": "This version of OpenWhispr can't use your installed GPU pack. Download it again to turn GPU acceleration back on.",
+    "redownloadButton": "Re-download GPU pack",
+    "downloadFailed": "Couldn't download the GPU pack.",
     "remove": "Remove",
     "dismiss": "Not now",
     "cancel": "Cancel"
@@ -3842,7 +3885,7 @@
       },
       "gpuPackMigration": {
         "title": "GPU pack needs re-downloading",
-        "description": "An update removed an outdated GPU pack installation ({{packs}}). Re-download it in Settings to restore GPU acceleration."
+        "description": "This version can't use your earlier GPU pack ({{packs}}). Download it again in Settings to turn GPU acceleration back on."
       },
       "cleanupFailed": {
         "title": "Cleanup failed",
@@ -4007,10 +4050,8 @@
   },
   "integrations": {
     "title": "Integrations",
-    "description": "Connect services to supercharge your workflow",
     "googleCalendar": {
       "title": "Google Calendar",
-      "optional": "Optional",
       "description": "Auto-fill meeting titles and attendees from your calendar.",
       "connect": "Connect Google Calendar",
       "connecting": "Connecting...",
@@ -4029,7 +4070,6 @@
     },
     "microsoftCalendar": {
       "title": "Microsoft Calendar",
-      "optional": "Optional",
       "description": "Read meetings from your Outlook or Microsoft 365 calendar.",
       "connect": "Connect Microsoft Calendar",
       "connected": "Connected",
@@ -4044,7 +4084,6 @@
     },
     "appleCalendar": {
       "title": "Apple Calendar",
-      "optional": "Optional",
       "description": "Read meetings from Calendar.app — iCloud, Google, Exchange, and Outlook in one place.",
       "connect": "Connect Apple Calendar",
       "connected": "Connected",
@@ -4057,35 +4096,24 @@
       "connectFailed": "Connection Failed",
       "connectFailedDescription": "Something went wrong while connecting to Calendar.app. Please restart OpenWhispr and try again."
     },
-    "sections": {
-      "connectors": "Connectors",
-      "calendar": "Calendar",
-      "api": "API",
-      "mcp": "MCP",
-      "cli": "CLI"
-    },
     "api": {
-      "title": "API keys",
       "description": "Manage API keys for programmatic access",
       "proRequired": "Upgrade to a paid plan to access the API",
-      "manage": "Manage keys",
       "viewPlans": "View Plans",
-      "dialogTitle": "API keys"
+      "useWith": "Use a key with"
     },
     "mcp": {
-      "title": "Bring your notes to your AI tools",
       "description": "Chat, search, and work with your notes inside Claude, ChatGPT, and Cursor.",
       "step1": "In your AI tool, add OpenWhispr MCP using the public URL",
-      "step2": "Create an API key above with the scopes you need.",
+      "step2": "Create an API key with the scopes you need.",
       "step3": "Paste the key as the Authorization header to connect.",
       "learnMore": "Learn more",
-      "viewPlans": "View Plans",
-      "copyUrl": "Copy MCP URL",
       "proRequired": "Upgrade to a paid plan to connect OpenWhispr to Claude, ChatGPT, and Cursor.",
+      "worksWith": "Works with",
+      "copyUrl": "Copy MCP URL",
       "copied": "Copied"
     },
     "cli": {
-      "title": "Command-line access",
       "description": "Give your assistant access to your notes from the terminal.",
       "installLabel": "Install",
       "learnMore": "Read the docs",
@@ -4115,8 +4143,26 @@
       "upgrade": "Upgrade"
     },
     "notABot": {
-      "title": "OpenWhispr is a meeting recorder, not a bot",
       "description": "OpenWhispr captures audio directly from your system — it never joins your meetings as a participant. Just connect your calendar and take notes as normal."
+    },
+    "nav": {
+      "label": "Integration sections",
+      "groups": {
+        "assistant": "Assistant",
+        "meetings": "Meetings",
+        "developer": "Developer"
+      },
+      "sections": {
+        "connectors": "Connectors",
+        "calendars": "Calendars",
+        "api": "API keys",
+        "mcp": "MCP server",
+        "cli": "Command line"
+      },
+      "docs": "Integration docs"
+    },
+    "connectors": {
+      "description": "Let the assistant use your tools. You approve every email, message and issue before it goes out."
     }
   },
   "connectors": {
@@ -4282,7 +4328,6 @@
       "title": "Email drafts",
       "description": "The assistant opens a pre-filled draft in your email app. You review it and press Send yourself.",
       "descriptionSend": "The assistant shows an email card in the chat. It's sent from your Gmail only when you press Send.",
-      "proRequired": "Upgrade to a paid plan to let the assistant draft emails for you.",
       "unavailable": "Email drafts aren't available right now.",
       "targetLabel": "Draft emails in",
       "autoResolved": "Automatic · {{target}}",
@@ -4297,14 +4342,13 @@
     },
     "slack": {
       "title": "Slack",
-      "description": "The assistant can post messages to channels and people as you. You approve every message before it's sent.",
+      "description": "Post messages to channels and people.",
       "connect": "Connect",
       "reconnect": "Reconnect",
       "disconnect": "Disconnect",
       "connecting": "Finish connecting in your browser…",
       "connectedAs": "Connected as {{account}} in {{workspace}}",
       "needsReconnect": "Slack needs to be reconnected.",
-      "proRequired": "Upgrade to a paid plan to let the assistant send Slack messages for you.",
       "errors": {
         "connect_failed": "Couldn't connect Slack. Try again.",
         "disconnect_failed": "Couldn't disconnect Slack. Try again.",
@@ -4328,7 +4372,7 @@
     },
     "github": {
       "title": "GitHub",
-      "description": "The assistant can search issues and pull requests, create issues and comment as you, only in the repositories you choose. It can't read your code, and you approve every issue and comment before it's posted.",
+      "description": "Issues and comments in the repositories you choose. It can't read your code.",
       "connect": "Connect",
       "reconnect": "Reconnect",
       "disconnect": "Disconnect",
@@ -4337,7 +4381,6 @@
       "connectedAs_empty": "Connected as {{account}} · no repositories yet",
       "connectedAs_unknown": "Connected as {{account}}",
       "needsReconnect": "GitHub needs to be reconnected.",
-      "proRequired": "Upgrade to a paid plan to let the assistant work with GitHub issues for you.",
       "reviewOnGithub": "Review on GitHub",
       "disconnectedHint": "Disconnected from this computer. GitHub keeps OpenWhispr's authorization until you remove it there.",
       "errors": {
@@ -4369,7 +4412,7 @@
     },
     "gmail": {
       "title": "Gmail",
-      "description": "The assistant can send emails from your Gmail account. It can't read your mail, and you press Send on every email yourself.",
+      "description": "Send email from your account. It can't read your mail.",
       "connect": "Connect",
       "reconnect": "Reconnect",
       "disconnect": "Disconnect",
@@ -4377,7 +4420,6 @@
       "connectedAs": "Connected as {{account}}",
       "needsReconnect": "Gmail needs to be reconnected.",
       "grantKept": "Disconnected. Google Calendar uses the same Google permission, so OpenWhispr stays listed in your Google Account until you disconnect Google Calendar too.",
-      "proRequired": "Upgrade to a paid plan to let the assistant send emails from Gmail for you.",
       "errors": {
         "connect_failed": "Couldn't connect Gmail. Try again.",
         "disconnect_failed": "Couldn't disconnect Gmail. Try again.",
@@ -4404,14 +4446,13 @@
     },
     "linear": {
       "title": "Linear",
-      "description": "The assistant can search your Linear issues and create issues and comments as you. You approve every issue and comment before it's sent.",
+      "description": "Search issues and create issues and comments.",
       "connect": "Connect",
       "reconnect": "Reconnect",
       "disconnect": "Disconnect",
       "connecting": "Finish connecting in your browser…",
       "connectedAs": "Connected as {{account}} in {{workspace}}",
       "needsReconnect": "Linear needs to be reconnected.",
-      "proRequired": "Upgrade to a paid plan to let the assistant work in Linear for you.",
       "errors": {
         "connect_failed": "Couldn't connect Linear. Try again.",
         "disconnect_failed": "Couldn't disconnect Linear. Try again.",
@@ -4568,7 +4609,10 @@
       "gmailDraftLimit": "Only {{max}} emails can be prepared per request.",
       "queryResults": "Results found: {{total}}",
       "cardLimit": "Only {{max}} cards can be prepared per request."
-    }
+    },
+    "beta": "Beta",
+    "upsell": "Connectors are included with paid plans. Upgrade to let the assistant work in your tools.",
+    "locked": "Included with paid plans"
   },
   "notesView": {
     "searchPlaceholder": "Search notes…",
@@ -4742,6 +4786,84 @@
       "underway": "It sounds like your meeting is underway. Want to take notes?"
     },
     "start": "Take notes",
-    "join": "Join & transcribe"
+    "join": "Join and transcribe",
+    "folders": {
+      "choose": "Choose meeting folder",
+      "search": "Search folders",
+      "clear": "Clear search",
+      "private": "Private",
+      "shared": "Shared",
+      "current": "Current destination",
+      "recent": "Recently used",
+      "folders": "Folders",
+      "new": "New folder",
+      "name": "Name",
+      "location": "Location",
+      "cancel": "Cancel",
+      "create": "Create & select",
+      "empty": "No folders found. Try another name, or create a folder.",
+      "loading": "Loading folders…",
+      "unavailable": "Folders could not be loaded.",
+      "retry": "Retry",
+      "dismiss": "Dismiss meeting notification",
+      "selected": "Selected {{destination}}",
+      "linked": "This meeting already has a note. Joining keeps it in {{destination}}.",
+      "errors": {
+        "STALE_NOTIFICATION": "This notification is no longer current.",
+        "INVALID_REQUEST": "Could not finish. Please retry.",
+        "FOLDERS_UNAVAILABLE": "Folders could not be loaded.",
+        "FOLDER_UNAVAILABLE": "This destination is unavailable. Choose another folder.",
+        "SPACE_UNAVAILABLE": "This destination is unavailable. Choose another folder.",
+        "FOLDER_NAME_REQUIRED": "Enter a folder name.",
+        "FOLDER_NAME_TAKEN": "A folder with that name already exists in this location.",
+        "CREATE_FAILED": "Could not finish. Please retry.",
+        "LINKED_NOTE_CHANGED": "Review the destination, then join again.",
+        "NOTE_UNAVAILABLE": "This note is unavailable. Retry without creating a replacement.",
+        "START_FAILED": "Could not finish. Please retry."
+      }
+    }
+  },
+  "providerErrors": {
+    "authFailed": "{{provider}} rejected your API key.",
+    "accessDenied": "{{provider}} denied access. Your key may not include this model.",
+    "quotaExhausted": "Your {{provider}} account is out of credit.",
+    "rateLimited": "{{provider}} rate-limited the request. Wait a moment and try again.",
+    "modelNotFound": "{{provider}} doesn't recognize the model “{{model}}”.",
+    "modelNotFoundNoModel": "{{provider}} doesn't recognize the selected model.",
+    "payloadTooLarge": "This recording is too large for {{provider}}.",
+    "requestTooLarge": "This request is too large for {{provider}}.",
+    "badRequest": "{{provider}} couldn't process this request.",
+    "unavailable": "{{provider}} is having problems right now. Try again shortly.",
+    "timeout": "{{provider}} took too long to respond.",
+    "unreachable": "Couldn't reach {{provider}}. Check your connection.",
+    "noResponse": "Couldn't get a response from {{provider}}. Check your API key and connection.",
+    "unknown": "{{provider}} returned an unexpected error.",
+    "keyMissing": "No API key is set for {{provider}}. Add it in Settings → Language Models.",
+    "selfHosted": {
+      "authFailed": "Your server rejected the API key.",
+      "accessDenied": "Your server denied access. The key may not include this model.",
+      "quotaExhausted": "Your server says the account is out of credit.",
+      "rateLimited": "Your server rate-limited the request. Wait a moment and try again.",
+      "modelNotFound": "Your server doesn't recognize the model “{{model}}”.",
+      "modelNotFoundNoModel": "Your server doesn't recognize the selected model.",
+      "payloadTooLarge": "This recording is too large for your server.",
+      "requestTooLarge": "This request is too large for your server.",
+      "badRequest": "Your server couldn't process this request.",
+      "unavailable": "Your server is having problems right now. Try again shortly.",
+      "timeout": "Your server took too long to respond.",
+      "unreachable": "Couldn't reach your server. Check that it's running.",
+      "noResponse": "Couldn't get a response from your server. Check its API key and that it's running.",
+      "unknown": "Your server returned an unexpected error."
+    },
+    "openSettings": "Open Settings",
+    "copyDetails": "Copy details",
+    "titles": {
+      "transcription": "Transcription failed",
+      "llm": "AI request failed"
+    },
+    "details": {
+      "provider": "Provider",
+      "requestId": "Request ID"
+    }
   }
 }
