@@ -56,12 +56,14 @@ function invalidResponse() {
   });
 }
 
+function emptyResponse() {
+  return Object.assign(new Error("Model returned an empty selection edit"), {
+    code: "SELECTION_EDIT_EMPTY_RESPONSE",
+  });
+}
+
 function requireReplacement(replacement) {
-  if (!replacement.trim()) {
-    throw Object.assign(new Error("Model returned an empty selection edit"), {
-      code: "SELECTION_EDIT_EMPTY_RESPONSE",
-    });
-  }
+  if (!replacement.trim()) throw emptyResponse();
   return replacement;
 }
 
@@ -72,7 +74,7 @@ const REPLACEMENT_OBJECT =
   /^[\t\n\r ]*\{[\t\n\r ]*"replacement"[\t\n\r ]*:[\t\n\r ]*"(?:[^"\\\u0000-\u001f]|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))*"[\t\n\r ]*\}[\t\n\r ]*$/;
 
 export function extractLocalSelectionEditReplacement(result) {
-  if (typeof result === "string" && !result.trim()) return requireReplacement(result);
+  if (typeof result === "string" && !result.trim()) throw emptyResponse();
   if (typeof result !== "string" || !REPLACEMENT_OBJECT.test(result)) throw invalidResponse();
   return requireReplacement(JSON.parse(result).replacement);
 }

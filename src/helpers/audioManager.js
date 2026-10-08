@@ -556,6 +556,16 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
   },
 };
 
+// Selection-edit copy for a failed reply, looked up by the cause's messageKey,
+// then by its code.
+const SELECTION_EDIT_FAILURE_COPY = {
+  SELECTION_EDIT_INVALID_RESPONSE: "invalidResponse",
+  OUTPUT_COMPLETION_UNVERIFIED: "invalidResponse",
+  SELECTION_EDIT_EMPTY_RESPONSE: "emptyResponse",
+  [EMPTY_OUTPUT_MESSAGE_KEY]: "emptyResponse",
+  [TRUNCATED_OUTPUT_MESSAGE_KEY]: "truncatedResponse",
+};
+
 class AudioManager {
   constructor() {
     this.mediaRecorder = null;
@@ -2914,14 +2924,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return replacement;
     } catch (cause) {
       const error = Object.assign(new Error(`Selection edit failed: ${cause.message}`), cause);
-      const failures = {
-        SELECTION_EDIT_INVALID_RESPONSE: "invalidResponse",
-        OUTPUT_COMPLETION_UNVERIFIED: "invalidResponse",
-        SELECTION_EDIT_EMPTY_RESPONSE: "emptyResponse",
-        [EMPTY_OUTPUT_MESSAGE_KEY]: "emptyResponse",
-        [TRUNCATED_OUTPUT_MESSAGE_KEY]: "truncatedResponse",
-      };
-      const failure = failures[cause.messageKey] || failures[cause.code];
+      const failure =
+        SELECTION_EDIT_FAILURE_COPY[cause.messageKey] || SELECTION_EDIT_FAILURE_COPY[cause.code];
       error.code = cause.code || "SELECTION_EDIT_REASONING_FAILED";
       error.messageKey = failure
         ? `hooks.audioRecording.selectionEditing.${failure}`
