@@ -107,7 +107,7 @@ const OPEN_NOTE_SEARCH_RULE =
   "Then look in their other notes with search_notes, and name the note your answer comes from.";
 
 const TOOL_TRACE_RULE =
-  "Earlier assistant messages may begin with a [Tools used: …] note that the app added to record the tools you called in that turn. Never write such a note yourself.";
+  "Earlier assistant messages may begin with a [Tools used: …] note that the app added to record the tools you called in that turn and how each action turned out. An action marked sent or draft opened already happened: never do it again unless the user asks, and use its reference or link when you need it. One that may have been sent must not be retried. When the user answers your question or asks you to retry, do only what is still outstanding. Never write such a note yourself.";
 
 /** What the prompt reads from a tool: its name, and for connector tools their own line. */
 export interface PromptTool {

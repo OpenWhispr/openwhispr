@@ -82,6 +82,11 @@ test("the tool-trace rule rides only with traced history", async () => {
     getAgentSystemPrompt(["web_search"], undefined, { toolTrace: true }),
     /\[Tools used: …\] note .* Never write such a note yourself/
   );
+  // A follow-up ("it's #engineering", "retry") must not redo what already went out.
+  assert.match(
+    getAgentSystemPrompt(["web_search"], undefined, { toolTrace: true }),
+    /marked sent or draft opened already happened.*never do it again unless the user asks/
+  );
   assert.doesNotMatch(getAgentSystemPrompt(["web_search"]), /Tools used/);
 });
 
