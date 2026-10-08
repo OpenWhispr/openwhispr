@@ -140,16 +140,7 @@ export function useEmbeddedChat({
     // The chat opens on a new conversation (see sendInNewChat); earlier ones are in its history.
     persistence.handleNewChat();
     setConversationId(null);
-    let stale = false;
-    (async () => {
-      const conversations = await window.electronAPI?.getConversationsForNote?.(noteId);
-      if (stale || noteIdRef.current !== noteId) return;
-      setNoteConversations(conversations ?? []);
-    })();
-
-    return () => {
-      stale = true;
-    };
+    void fetchNoteConversations();
   }, [noteId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // useChatStreaming returns a fresh object every render; cancelStream is
