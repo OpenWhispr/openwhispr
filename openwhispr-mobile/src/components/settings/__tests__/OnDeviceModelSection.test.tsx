@@ -93,3 +93,12 @@ it('does not let a model that misses a language be picked, and falls back to Aut
   expect(mockPickLocalModel).not.toHaveBeenCalled();
   expect(isSelected('Automatic')).toBe(true);
 });
+
+it('says when the model Automatic falls back to misses the languages', async () => {
+  mockLanguages = ['ja'];
+  mockAvailability = { ...mockAvailability, parakeetV2Downloaded: false };
+  render(<OnDeviceModelSection scope="dictation" picked={undefined} />);
+  expect(
+    await screen.findByText(/Using Parakeet v3\. It doesn't cover your languages\./),
+  ).toBeTruthy();
+});

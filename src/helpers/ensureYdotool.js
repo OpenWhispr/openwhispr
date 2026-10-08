@@ -193,13 +193,14 @@ function getYdotoolStatus() {
   const hasUinput = isUinputAccessible();
   const hasUdevRule = udevRuleExists();
   const hasGroup = userInInputGroup();
-  const { isWayland, isKde, isWlroots } = getLinuxSessionInfo();
+  const { isWayland, isKde, isWlroots, isCosmic } = getLinuxSessionInfo();
 
   return {
     isLinux: process.platform === "linux",
     isWayland,
     isKde,
     isWlroots,
+    isCosmic,
     hasYdotool,
     hasYdotoold,
     hasWtype,

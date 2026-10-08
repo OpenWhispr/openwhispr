@@ -170,7 +170,7 @@ export default function LanguageSelector({
           group relative w-full flex items-center justify-between gap-2
           h-7 px-2.5 text-start
           rounded text-xs font-medium
-          border shadow-sm backdrop-blur-sm
+          border shadow-sm
           transition-[background-color,border-color,transform] duration-200 ease-out
           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-1
           ${

@@ -621,6 +621,11 @@ class AudioManager {
     this._onApiKeyChanged = () => {
       this.cachedApiKey = null;
       this.cachedApiKeyProvider = null;
+      // Replace a socket warmed with the previous key now rather than at the next
+      // start. A key save in Settings is no reason to open the mic.
+      if (!this.isRecording && !this.isProcessing && this.shouldUseStreaming()) {
+        this.warmupStreamingConnection({ warmMic: false });
+      }
     };
     window.addEventListener("api-key-changed", this._onApiKeyChanged);
 
@@ -4446,7 +4451,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return this.sttConfig.dictation?.mode === "streaming";
   }
 
-  async warmupStreamingConnection({ isSignedIn: isSignedInOverride } = {}) {
+  async warmupStreamingConnection({ isSignedIn: isSignedInOverride, warmMic = true } = {}) {
     if (!this.isRecordingAllowedByPolicy()) {
       logger.debug("Streaming warmup skipped by workspace policy", {}, "streaming");
       return false;
@@ -4502,7 +4507,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         // Warm up the OS audio driver by briefly acquiring the mic, then
         // releasing. TTL-gated: drivers go cold again after idle, so this must
         // re-fire once the warm window lapses (#845).
-        await this._warmMicDriverIfCold("streaming");
+        if (warmMic) await this._warmMicDriverIfCold("streaming");
 
         this.warmupFailureStreak = 0;
         logger.info(

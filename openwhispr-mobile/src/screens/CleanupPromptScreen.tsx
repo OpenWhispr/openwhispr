@@ -36,12 +36,12 @@ export default function CleanupPromptScreen() {
   const baseline = override ?? DEFAULT_CLEANUP_PROMPT;
   const [draft, setDraft] = useState(baseline);
 
-  // On-Device transcripts are cleaned only by On-Device cleanup, and Bring Your Own Key
-  // skips cleanup until it has a selection.
+  // On-Device transcripts are cleaned only by On-Device cleanup or a saved provider, and
+  // Bring Your Own Key skips cleanup until it has a selection.
   const inactiveNotice = !cleanupEnabled
     ? 'Text Cleanup is off. Your prompt is saved and applies once you turn it on.'
-    : activeMode === 'private' && cleanupMode !== 'local'
-      ? 'On-Device mode skips cleanup unless it is set to On-Device. Your prompt is saved and applies when it runs.'
+    : activeMode === 'private' && cleanupMode !== 'local' && cleanupMode !== 'providers'
+      ? 'On-Device mode skips cleanup unless it is set to On-Device or Bring Your Own Key. Your prompt is saved and applies when it runs.'
       : activeMode === 'providers' && !cleanupMode
         ? 'Bring Your Own Key skips cleanup until Text Cleanup has a selection. Your prompt is saved and applies once it does.'
         : null;

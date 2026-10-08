@@ -179,7 +179,8 @@
     "recommended": "Recommandé",
     "active": "Actif",
     "managedByOrg": "Géré par votre organisation",
-    "freeAccountRequired": "Compte gratuit requis",
+    "signInRequired": "Connexion requise",
+    "signIn": "Se connecter",
     "comingSoon": "Bientôt disponible",
     "cloud": "Cloud",
     "local": "Local",
@@ -1513,6 +1514,7 @@
     "waylandClipboardTitle": "Mode presse-papiers sur Wayland",
     "windowsReady": "Windows prend en charge le collage automatique nativement. Aucune configuration requise !",
     "withoutToolPrefix": "Sans cet outil, OpenWhispr copiera le texte dans le presse-papiers. Vous pourrez ensuite coller manuellement avec Ctrl+V.",
+    "wtypeCosmicTerminalsDescription": "Sous COSMIC, les terminaux comme Warp ne reçoivent le texte collé que via wtype. Les autres applications collent déjà sans lui.",
     "wtypeFallbackDescription": "wtype est la méthode de collage automatique recommandée pour ce compositeur wlroots. Une solution de repli est disponible, mais elle peut être moins fiable.",
     "xwaylandAppsOnly": "le collage automatique fonctionne uniquement pour les apps XWayland"
   },
@@ -1868,7 +1870,10 @@
         "opening": "Ouverture...",
         "updatePaymentMethod": "Mettre à jour le moyen de paiement",
         "contactOwnerTitle": "Contactez le propriétaire de l'espace de travail",
-        "contactOwnerDescription": "Seul le propriétaire de l'espace de travail peut modifier sa facturation."
+        "contactOwnerDescription": "Seul le propriétaire de l'espace de travail peut modifier sa facturation.",
+        "manageInAppStore": "Gérer dans l'App Store",
+        "manageInGooglePlay": "Gérer dans Google Play",
+        "managedInMobileStore": "Facturé via la boutique d'applications de votre téléphone. Gérez-le depuis votre téléphone."
       },
       "checkout": {
         "couldNotOpenDescription": "Nous avons eu un problème pour ouvrir la page de paiement. Veuillez réessayer.",
@@ -1892,7 +1897,9 @@
         "nextBilling": "Prochaine facturation : {{date}}",
         "pastDue": "{{used}} / {{limit}} mots gratuits cette semaine - mettez à jour le paiement pour restaurer Pro",
         "trial": "{{days}} jours restants - transcriptions illimitées",
-        "unlimited": "Illimité"
+        "unlimited": "Illimité",
+        "accessUntil": "Accès jusqu'au {{date}}",
+        "storePaymentIssue": "Votre boutique d'applications n'a pas pu renouveler cet abonnement. Mettez-y à jour votre moyen de paiement pour conserver votre forfait."
       },
       "planLabels": {
         "free": "Gratuit",
@@ -2299,7 +2306,7 @@
         "recheck": "Revérifier",
         "copy": "Copier",
         "ydotoolDesc": "Outil d'automatisation de saisie pour Wayland",
-        "wtypeDesc": "Outil d'automatisation de saisie recommandé sur les compositeurs wlroots",
+        "wtypeDesc": "Outil d'automatisation de saisie recommandé sur les compositeurs wlroots ; sous COSMIC, sert à coller dans les terminaux",
         "ydotooldDesc": "Daemon pour ydotool (paquet séparé sur Ubuntu/Pop!_OS)",
         "uinputDesc": "Accès au périphérique d'entrée du noyau",
         "uinputRuleFound": "Règle présente mais inactive. Un redémarrage devrait résoudre le problème.",
@@ -2626,7 +2633,8 @@
           }
         }
       },
-      "meetingEnterpriseOnly": "Votre organisation n'autorise que la transcription cloud d'entreprise, qui ne couvre pas encore l'enregistrement des réunions."
+      "meetingEnterpriseOnly": "Votre organisation n'autorise que la transcription cloud d'entreprise, qui ne couvre pas encore l'enregistrement des réunions.",
+      "meetingCloudSignedOut": "Les enregistrements de notes ne peuvent pas démarrer avec OpenWhispr Cloud tant que vous êtes déconnecté. Choisissez un autre moteur ci-dessus."
     },
     "intelligence": {
       "gpuDevice": {
@@ -3489,6 +3497,8 @@
       "unsupportedSelfHosted": "L'enregistrement de notes ne peut pas encore utiliser un serveur auto-hébergé. Ouvrez les Réglages et choisissez Local ou un fournisseur en streaming.",
       "unsupportedProvider": "L'enregistrement de notes ne peut pas utiliser {{provider}} pour la transcription en direct. Ouvrez les Réglages et choisissez Local ou un fournisseur en streaming.",
       "noProviderSelected": "Aucun fournisseur n'est sélectionné pour l'enregistrement de notes. Ouvrez les Réglages et choisissez Local ou un fournisseur en streaming.",
+      "signInRequired": "L'enregistrement de notes nécessite d'être connecté. Veuillez vous connecter.",
+      "signInExpired": "Votre session a expiré : l'enregistrement de notes ne peut pas renouveler sa connexion et risque de s'arrêter. Reconnectez-vous une fois cet enregistrement terminé.",
       "systemAudioSilent": {
         "title": "Aucun son de réunion détecté pour le moment",
         "description": "Seul votre microphone a capté du son jusqu'à présent. Vous êtes en visioconférence ? Vérifiez que le son de la réunion est diffusé sur cet ordinateur et qu'il n'est pas coupé. Vous enregistrez en présentiel ? Vous pouvez ignorer ce message : votre microphone capte la salle."
@@ -4776,7 +4786,42 @@
       "underway": "On dirait que votre réunion est déjà en cours. Vous voulez prendre des notes ?"
     },
     "start": "Prendre des notes",
-    "join": "Rejoindre et transcrire"
+    "join": "Rejoindre et transcrire",
+    "folders": {
+      "choose": "Choisir le dossier de réunion",
+      "search": "Rechercher des dossiers",
+      "clear": "Effacer la recherche",
+      "private": "Privé",
+      "shared": "Partagé",
+      "current": "Destination actuelle",
+      "recent": "Récemment utilisés",
+      "folders": "Dossiers",
+      "new": "Nouveau dossier",
+      "name": "Nom",
+      "location": "Emplacement",
+      "cancel": "Annuler",
+      "create": "Créer et sélectionner",
+      "empty": "Aucun dossier trouvé. Essayez un autre nom ou créez un dossier.",
+      "loading": "Chargement des dossiers…",
+      "unavailable": "Impossible de charger les dossiers.",
+      "retry": "Réessayer",
+      "dismiss": "Fermer la notification de réunion",
+      "selected": "{{destination}} sélectionné",
+      "linked": "Cette réunion a déjà une note. Elle restera dans {{destination}} lorsque vous rejoindrez la réunion.",
+      "errors": {
+        "STALE_NOTIFICATION": "Cette notification n’est plus à jour.",
+        "INVALID_REQUEST": "Impossible de terminer. Réessayez.",
+        "FOLDERS_UNAVAILABLE": "Impossible de charger les dossiers.",
+        "FOLDER_UNAVAILABLE": "Cette destination est indisponible. Choisissez un autre dossier.",
+        "SPACE_UNAVAILABLE": "Cette destination est indisponible. Choisissez un autre dossier.",
+        "FOLDER_NAME_REQUIRED": "Saisissez un nom de dossier.",
+        "FOLDER_NAME_TAKEN": "Un dossier porte déjà ce nom à cet emplacement.",
+        "CREATE_FAILED": "Impossible de terminer. Réessayez.",
+        "LINKED_NOTE_CHANGED": "Vérifiez la destination, puis rejoignez à nouveau.",
+        "NOTE_UNAVAILABLE": "Cette note est indisponible. Réessayez sans en créer une autre.",
+        "START_FAILED": "Impossible de terminer. Réessayez."
+      }
+    }
   },
   "providerErrors": {
     "authFailed": "{{provider}} a rejeté votre clé API.",

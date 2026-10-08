@@ -9,6 +9,7 @@ const TOKEN_EXPIRY_MS = 300000;
 const REWARM_DELAY_MS = 2000;
 const MAX_REWARM_ATTEMPTS = 10;
 const KEEPALIVE_INTERVAL_MS = 15000;
+const COLD_START_BUFFER_MAX = 3 * SAMPLE_RATE * 2; // 3 seconds of 16-bit PCM
 const MIN_FRAME_MS = 50;
 // AssemblyAI hard-closes the session outside 50-1000 ms but documents 50-250 ms
 // as the supported shape, so the split targets the recommended ceiling: 1000 would
@@ -53,6 +54,7 @@ class AssemblyAiStreaming {
     this.isDisconnecting = false;
     this.pendingAudio = [];
     this.pendingAudioBytes = 0;
+    this.bufferingAudio = false;
     this.completedSegments = [];
     this.speechStartedAt = null;
   }
@@ -166,20 +168,21 @@ class AssemblyAiStreaming {
 
     return new Promise((resolve, reject) => {
       let settled = false;
+      const socket = new WebSocket(url);
+      this.warmConnection = socket;
+
       const warmupTimeout = setTimeout(() => {
         if (settled) return;
         settled = true;
-        this.cleanupWarmConnection();
+        if (this.warmConnection === socket) this.cleanupWarmConnection();
         reject(new Error("AssemblyAI warmup connection timeout"));
       }, WEBSOCKET_TIMEOUT_MS);
 
-      this.warmConnection = new WebSocket(url);
-
-      this.warmConnection.on("open", () => {
+      socket.on("open", () => {
         debugLogger.debug("AssemblyAI warm connection socket opened");
       });
 
-      this.warmConnection.on("message", (data) => {
+      socket.on("message", (data) => {
         try {
           const message = JSON.parse(data.toString());
           if (message.type === "Begin" && !settled) {
@@ -196,18 +199,26 @@ class AssemblyAiStreaming {
         }
       });
 
-      this.warmConnection.on("error", (error) => {
+      socket.on("error", (error) => {
         clearTimeout(warmupTimeout);
         debugLogger.error("AssemblyAI warmup connection error", { error: error.message });
-        this.cleanupWarmConnection();
+        if (this.warmConnection === socket) this.cleanupWarmConnection();
         if (!settled) {
           settled = true;
           reject(error);
         }
       });
 
-      this.warmConnection.on("close", (code, reason) => {
+      socket.on("close", (code, reason) => {
         clearTimeout(warmupTimeout);
+        // A dropped socket closes after its replacement may have opened; leave that one be.
+        if (this.warmConnection !== socket) {
+          if (!settled) {
+            settled = true;
+            reject(new Error(`AssemblyAI warmup connection closed before ready (code: ${code})`));
+          }
+          return;
+        }
         this.stopKeepAlive();
         const wasReady = this.warmConnectionReady;
         const savedOptions = this.warmConnectionOptions ? { ...this.warmConnectionOptions } : null;
@@ -338,6 +349,14 @@ class AssemblyAiStreaming {
     );
   }
 
+  // Starts holding audio before the socket exists, covering the token fetch and
+  // the handshake so sendAudio() doesn't drop the first words.
+  beginConnecting() {
+    this.bufferingAudio = true;
+    this.pendingAudio = [];
+    this.pendingAudioBytes = 0;
+  }
+
   async connect(options = {}) {
     const { token } = options;
     if (!token) {
@@ -354,6 +373,8 @@ class AssemblyAiStreaming {
     this.lastTurnText = "";
     this.turns = [];
     this.connectionLossNotified = false;
+    // The caller may already be holding audio from before its token fetch.
+    if (!this.bufferingAudio) this.beginConnecting();
 
     this.adoptMode(options);
     // The server pins speech_model at Begin, so a warm socket opened for another
@@ -378,6 +399,7 @@ class AssemblyAiStreaming {
     if (this.hasWarmConnection()) {
       if (this.useWarmConnection()) {
         debugLogger.debug("AssemblyAI using warm connection - instant start");
+        this.sendPendingAudio();
         return;
       }
     }
@@ -473,6 +495,9 @@ class AssemblyAiStreaming {
               "transcription"
             );
           }
+          // Audio held through the handshake goes out now: a short dictation may
+          // send no further frame to carry it.
+          this.sendPendingAudio();
           if (this.pendingResolve) {
             this.pendingResolve();
             this.pendingResolve = null;
@@ -584,14 +609,29 @@ class AssemblyAiStreaming {
 
   sendAudio(pcmBuffer) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      return false;
+      // Held only while a start is in flight (up to three seconds), then framed like live audio.
+      if (
+        !this.bufferingAudio ||
+        this.isConnected ||
+        this.pendingAudioBytes >= COLD_START_BUFFER_MAX
+      ) {
+        return false;
+      }
+      this.pendingAudio.push(Buffer.from(pcmBuffer));
+      this.pendingAudioBytes += pcmBuffer.length;
+      return true;
     }
 
     this.pendingAudio.push(pcmBuffer);
     this.pendingAudioBytes += pcmBuffer.length;
+    this.sendPendingAudio();
+    return true;
+  }
+
+  sendPendingAudio() {
     const minBytes = minFrameBytes(this.sessionSampleRate);
     if (this.pendingAudioBytes < minBytes) {
-      return true;
+      return;
     }
 
     const frame = Buffer.concat(this.pendingAudio, this.pendingAudioBytes);
@@ -613,7 +653,6 @@ class AssemblyAiStreaming {
       this.pendingAudio.push(remainder);
       this.pendingAudioBytes = remainder.length;
     }
-    return true;
   }
 
   forceEndpoint() {
@@ -670,6 +709,7 @@ class AssemblyAiStreaming {
 
     this.pendingAudio = [];
     this.pendingAudioBytes = 0;
+    this.bufferingAudio = false;
     this.completedSegments = [];
     this.speechStartedAt = null;
 

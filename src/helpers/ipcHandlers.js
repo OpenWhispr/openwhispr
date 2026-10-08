@@ -180,7 +180,11 @@ const {
   getMeetingStreamingClient,
   getMeetingConnectionKey,
 } = require("./meetingStreamingProviders");
-const { fetchRealtimeTokenForProvider } = require("./realtimeTokenProviders");
+const {
+  createServerTokenPoster,
+  fetchRealtimeTokenForProvider,
+  isSignInRefusal,
+} = require("./realtimeTokenProviders");
 const { getCalendarAvailability } = require("./calendarAvailabilityService");
 
 // Meeting capture runs at 24 kHz (see meetingRecordingStore AudioContext); cloud
@@ -612,6 +616,13 @@ async function chunkedCloudTranscribe({
 const CLEANUP_TRUNCATED_MESSAGE_KEY = "hooks.audioRecording.errorDescriptions.cleanupTruncated";
 const CLEANUP_EMPTY_REPLY_MESSAGE_KEY = "hooks.audioRecording.errorDescriptions.cleanupEmptyReply";
 
+const {
+  isMeetingFolderRef,
+  resolveMeetingDestination,
+  rememberMeetingDestination,
+  meetingDestinationContext,
+} = require("./meetingNotificationDestination");
+
 class IPCHandlers {
   constructor(managers) {
     this.environmentManager = managers.environmentManager;
@@ -703,7 +714,125 @@ class IPCHandlers {
     }
   }
 
+  createFolderWithEffects(name, spaceId) {
+    const result = this.databaseManager.createFolder(name, spaceId);
+    if (result?.success && result?.folder) {
+      setImmediate(() => {
+        broadcastToWindows("folder-created", result.folder);
+        if (this._noteFilesEnabled) {
+          const markdownMirror = require("./markdownMirror");
+          markdownMirror.ensureFolder(result.folder.name);
+        }
+      });
+    }
+    return result;
+  }
+
+  getMeetingNotificationDestination(owner) {
+    if (!this.windowManager.isMeetingNotificationOwner(owner))
+      return { success: false, code: "STALE_NOTIFICATION" };
+    try {
+      const context = meetingDestinationContext(
+        this.databaseManager,
+        owner,
+        this.windowManager.meetingRecentDestinations
+      );
+      this.windowManager.meetingRecentDestinations = context.recentDestinations;
+      return { success: true, value: context };
+    } catch (error) {
+      return {
+        success: false,
+        code: error.code === "NOTE_UNAVAILABLE" ? error.code : "FOLDERS_UNAVAILABLE",
+      };
+    }
+  }
+
+  selectMeetingNotificationFolder(owner, ref) {
+    const result = this.getMeetingNotificationDestination(owner);
+    if (!result.success) return result;
+    if (result.value.existingNote)
+      return { success: false, code: "LINKED_NOTE_CHANGED", context: result.value };
+    if (!isMeetingFolderRef(ref)) return { success: false, code: "INVALID_REQUEST" };
+    const folder = result.value.folders.find(
+      (f) => f.id === ref.folderId && f.space_id === ref.spaceId
+    );
+    if (!folder) return { success: false, code: "FOLDER_UNAVAILABLE" };
+    owner.selectedDestination = { folderId: folder.id, spaceId: folder.space_id };
+    this.windowManager.meetingRecentDestinations = rememberMeetingDestination(
+      this.windowManager.meetingRecentDestinations,
+      owner.selectedDestination
+    );
+    return {
+      success: true,
+      value: {
+        ...result.value,
+        selectedDestination: owner.selectedDestination,
+        recentDestinations: this.windowManager.meetingRecentDestinations,
+      },
+    };
+  }
+
+  createMeetingNotificationFolder(owner, request) {
+    if (!this.windowManager.isMeetingNotificationOwner(owner))
+      return { success: false, code: "STALE_NOTIFICATION" };
+    if (
+      !request ||
+      typeof request.requestId !== "string" ||
+      !request.requestId.trim() ||
+      request.requestId.length > 128 ||
+      typeof request.name !== "string" ||
+      !Number.isSafeInteger(request.spaceId) ||
+      request.spaceId <= 0
+    )
+      return { success: false, code: "INVALID_REQUEST" };
+    const name = request.name.trim();
+    if (!name) return { success: false, code: "FOLDER_NAME_REQUIRED" };
+    const cached = owner.createRequests.get(request.requestId);
+    if (cached && (cached.name !== name || cached.spaceId !== request.spaceId))
+      return { success: false, code: "INVALID_REQUEST" };
+    // Bound per-prompt retry bookkeeping. Successful IDs stay stable for the prompt's lifetime.
+    if (!cached && owner.createRequests.size >= 32)
+      return { success: false, code: "INVALID_REQUEST" };
+    const contextResult = this.getMeetingNotificationDestination(owner);
+    if (!contextResult.success) return contextResult;
+    if (contextResult.value.existingNote)
+      return { success: false, code: "LINKED_NOTE_CHANGED", context: contextResult.value };
+    if (!contextResult.value.spaces.some((space) => space.id === request.spaceId))
+      return { success: false, code: "SPACE_UNAVAILABLE" };
+    try {
+      let ref = cached?.ref;
+      if (ref) {
+        if (!resolveMeetingDestination(this.databaseManager, ref))
+          return { success: false, code: "FOLDER_UNAVAILABLE" };
+      } else {
+        const result = this.createFolderWithEffects(name, request.spaceId);
+        if (!result?.success || !result.folder)
+          return {
+            success: false,
+            code:
+              result?.error === "A folder with that name already exists"
+                ? "FOLDER_NAME_TAKEN"
+                : result?.error === "Space not found"
+                  ? "SPACE_UNAVAILABLE"
+                  : "CREATE_FAILED",
+          };
+        ref = { folderId: result.folder.id, spaceId: result.folder.space_id };
+        owner.createRequests.set(request.requestId, { name, spaceId: request.spaceId, ref });
+        this.windowManager.sendToControlPanel("meeting-notification-folder-created", {
+          folderId: ref.folderId,
+        });
+      }
+      const refreshed = this.getMeetingNotificationDestination(owner);
+      return refreshed.success
+        ? { success: true, value: { ...refreshed.value, createdFolder: ref } }
+        : refreshed;
+    } catch {
+      return { success: false, code: "CREATE_FAILED" };
+    }
+  }
+
   _handleAuthTokenChange({ generation, token }) {
+    this.windowManager.retireMeetingNotificationScope();
     this.enterpriseIdentityManager?.clear();
     if (!token) {
       this.databaseManager.setActiveAccountId(null);
@@ -1610,9 +1739,28 @@ class IPCHandlers {
       return this.windowManager.resizeDictationErrorWindowToContent(surfaceHeight);
     });
 
+    // Counts changes to any key in Settings. A streaming socket keeps the count it
+    // was opened under, so a start never reuses one authenticated before a change.
+    let credentialGeneration = 0;
+    const saveSecretKey = (getter, saver, storeKey) => (event, key) => {
+      if (typeof key !== "string") throw new TypeError("API key must be a string");
+      // Committing an unedited key field saves the same value again.
+      const changed = this.environmentManager[getter]() !== key;
+      const result = this.environmentManager[saver](key);
+      if (!changed) return result;
+      credentialGeneration += 1;
+      // Notify peers by setting name only; leave the editor's pending input alone.
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed() && win.webContents.id !== event.sender.id) {
+          win.webContents.send("api-key-updated", storeKey);
+        }
+      }
+      return result;
+    };
+
     for (const k of BYOK_API_KEYS) {
       ipcMain.handle(`get-${k.base}-key`, () => this.environmentManager[k.get]());
-      ipcMain.handle(`save-${k.base}-key`, (event, key) => this.environmentManager[k.save](key));
+      ipcMain.handle(`save-${k.base}-key`, saveSecretKey(k.get, k.save, k.storeKey));
     }
 
     ipcMain.handle("db-save-transcription", async (event, text, rawText, options) => {
@@ -2192,19 +2340,9 @@ class IPCHandlers {
       return this.databaseManager.getFolders(spaceId);
     });
 
-    ipcMain.handle("db-create-folder", async (event, name, spaceId) => {
-      const result = this.databaseManager.createFolder(name, spaceId);
-      if (result?.success && result?.folder) {
-        setImmediate(() => {
-          broadcastToWindows("folder-created", result.folder);
-          if (this._noteFilesEnabled) {
-            const markdownMirror = require("./markdownMirror");
-            markdownMirror.ensureFolder(result.folder.name);
-          }
-        });
-      }
-      return result;
-    });
+    ipcMain.handle("db-create-folder", (_event, name, spaceId) =>
+      this.createFolderWithEffects(name, spaceId)
+    );
 
     ipcMain.handle("db-delete-folder", async (event, id) => {
       const folderName = this._noteFilesEnabled ? this._getFolderName(id) : null;
@@ -2276,6 +2414,16 @@ class IPCHandlers {
               ? "Invalid account scope"
               : "Authentication context changed before account scoping",
         };
+      }
+      const previousScope = accountScopeBinding.resolveActiveAccountScope({
+        ...state,
+        binding: accountScopeBinding.read(),
+      });
+      if (
+        this.databaseManager.activeAccountId !== accountId ||
+        (accountId !== null && previousScope?.accountId !== accountId)
+      ) {
+        this.windowManager.retireMeetingNotificationScope();
       }
       this.databaseManager.setActiveAccountId(accountId);
       if (accountId !== null) accountScopeBinding.persist(accountId, state.token);
@@ -4735,17 +4883,19 @@ class IPCHandlers {
       return this.environmentManager.getCortiClientId();
     });
 
-    ipcMain.handle("save-corti-client-id", async (event, key) => {
-      return this.environmentManager.saveCortiClientId(key);
-    });
+    ipcMain.handle(
+      "save-corti-client-id",
+      saveSecretKey("getCortiClientId", "saveCortiClientId", "cortiClientId")
+    );
 
     ipcMain.handle("get-corti-client-secret", async () => {
       return this.environmentManager.getCortiClientSecret();
     });
 
-    ipcMain.handle("save-corti-client-secret", async (event, key) => {
-      return this.environmentManager.saveCortiClientSecret(key);
-    });
+    ipcMain.handle(
+      "save-corti-client-secret",
+      saveSecretKey("getCortiClientSecret", "saveCortiClientSecret", "cortiClientSecret")
+    );
 
     ipcMain.handle(
       "proxy-corti-transcription",
@@ -4810,17 +4960,23 @@ class IPCHandlers {
       return this.environmentManager.getCustomTranscriptionKey();
     });
 
-    ipcMain.handle("save-custom-transcription-key", async (event, key) => {
-      return this.environmentManager.saveCustomTranscriptionKey(key);
-    });
+    ipcMain.handle(
+      "save-custom-transcription-key",
+      saveSecretKey(
+        "getCustomTranscriptionKey",
+        "saveCustomTranscriptionKey",
+        "customTranscriptionApiKey"
+      )
+    );
 
     ipcMain.handle("get-cleanup-custom-key", async () => {
       return this.environmentManager.getCleanupCustomKey();
     });
 
-    ipcMain.handle("save-cleanup-custom-key", async (event, key) => {
-      return this.environmentManager.saveCleanupCustomKey(key);
-    });
+    ipcMain.handle(
+      "save-cleanup-custom-key",
+      saveSecretKey("getCleanupCustomKey", "saveCleanupCustomKey", "cleanupCustomApiKey")
+    );
 
     // Enterprise provider key handlers
     ipcMain.handle("get-bedrock-region", async () => {
@@ -4838,21 +4994,28 @@ class IPCHandlers {
     ipcMain.handle("get-bedrock-access-key-id", async () => {
       return this.environmentManager.getBedrockAccessKeyId();
     });
-    ipcMain.handle("save-bedrock-access-key-id", async (event, key) => {
-      return this.environmentManager.saveBedrockAccessKeyId(key);
-    });
+    ipcMain.handle(
+      "save-bedrock-access-key-id",
+      saveSecretKey("getBedrockAccessKeyId", "saveBedrockAccessKeyId", "bedrockAccessKeyId")
+    );
     ipcMain.handle("get-bedrock-secret-access-key", async () => {
       return this.environmentManager.getBedrockSecretAccessKey();
     });
-    ipcMain.handle("save-bedrock-secret-access-key", async (event, key) => {
-      return this.environmentManager.saveBedrockSecretAccessKey(key);
-    });
+    ipcMain.handle(
+      "save-bedrock-secret-access-key",
+      saveSecretKey(
+        "getBedrockSecretAccessKey",
+        "saveBedrockSecretAccessKey",
+        "bedrockSecretAccessKey"
+      )
+    );
     ipcMain.handle("get-bedrock-session-token", async () => {
       return this.environmentManager.getBedrockSessionToken();
     });
-    ipcMain.handle("save-bedrock-session-token", async (event, key) => {
-      return this.environmentManager.saveBedrockSessionToken(key);
-    });
+    ipcMain.handle(
+      "save-bedrock-session-token",
+      saveSecretKey("getBedrockSessionToken", "saveBedrockSessionToken", "bedrockSessionToken")
+    );
     ipcMain.handle("get-azure-endpoint", async () => {
       return this.environmentManager.getAzureEndpoint();
     });
@@ -4862,9 +5025,10 @@ class IPCHandlers {
     ipcMain.handle("get-azure-api-key", async () => {
       return this.environmentManager.getAzureApiKey();
     });
-    ipcMain.handle("save-azure-api-key", async (event, key) => {
-      return this.environmentManager.saveAzureApiKey(key);
-    });
+    ipcMain.handle(
+      "save-azure-api-key",
+      saveSecretKey("getAzureApiKey", "saveAzureApiKey", "azureApiKey")
+    );
     ipcMain.handle("get-azure-deployment", async () => {
       return this.environmentManager.getAzureDeployment();
     });
@@ -4892,9 +5056,10 @@ class IPCHandlers {
     ipcMain.handle("get-vertex-api-key", async () => {
       return this.environmentManager.getVertexApiKey();
     });
-    ipcMain.handle("save-vertex-api-key", async (event, key) => {
-      return this.environmentManager.saveVertexApiKey(key);
-    });
+    ipcMain.handle(
+      "save-vertex-api-key",
+      saveSecretKey("getVertexApiKey", "saveVertexApiKey", "vertexApiKey")
+    );
 
     // Enterprise provider test connection
     ipcMain.handle("test-enterprise-connection", async (event, provider, config) => {
@@ -7442,7 +7607,7 @@ class IPCHandlers {
           resetMeetingReconnectAudio();
           oldMic?.disconnect().catch(() => {});
           oldSystem?.disconnect().catch(() => {});
-          meetingConnectionKey = getMeetingConnectionKey(options);
+          meetingConnectionKey = getMeetingConnectionKey(options, credentialGeneration);
 
           debugLogger.info("Meeting streams reconnected", { attempt: meetingReconnectCount });
           meetingReconnectCount = 0;
@@ -7475,7 +7640,12 @@ class IPCHandlers {
           }
           resetMeetingReconnectAudio();
           if (!win.isDestroyed()) {
-            win.webContents.send("meeting-transcription-error", error.message);
+            // A renewal refused for the session gets a sentinel the renderer explains,
+            // instead of the API's bare "Invalid session" (#2427).
+            win.webContents.send(
+              "meeting-transcription-error",
+              isSignInRefusal(error) ? "signInExpired" : error.message
+            );
           }
           return canRestoreOld;
         }
@@ -7488,39 +7658,13 @@ class IPCHandlers {
     };
 
     const fetchRealtimeToken = async (event, options, { streams } = {}) => {
-      const postServerToken = async (path, body = {}) => {
-        const apiUrl = getApiUrl();
-        if (!apiUrl) {
-          const err = new Error("OpenWhispr API URL not configured");
-          err.code = "NO_API";
-          throw err;
-        }
-        const authHeader = await getAuthHeader(event);
-        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
-        const url = `${apiUrl}${path}`;
-        let response;
-        try {
-          response = await proxyFetch(url, {
-            method: "POST",
-            headers: withPolicyHeaders({ "Content-Type": "application/json", ...authHeader }),
-            body: JSON.stringify(body),
-          });
-        } catch (err) {
-          const classified = classifyAndLog(err, url);
-          if (classified.isNetworkError) {
-            throw Object.assign(new Error(err.message || "Network request failed"), {
-              code: "NETWORK_ERROR",
-              networkCode: classified.code,
-              messageKey: classified.messageKey,
-            });
-          }
-          throw err;
-        }
-        if (!response.ok) {
-          throw await readPolicyResponseError(response, `Token request failed: ${response.status}`);
-        }
-        return response.json();
-      };
+      const postServerToken = createServerTokenPoster({
+        getApiUrl,
+        getAuthHeader: () => getAuthHeader(event),
+        proxyFetch,
+        withPolicyHeaders,
+        classifyAndLog,
+      });
 
       return fetchRealtimeTokenForProvider(
         options.provider,
@@ -7581,7 +7725,8 @@ class IPCHandlers {
       (systemAudioMode === "unsupported" || !!this._meetingSystemStreaming?.isConnected);
 
     const connectRealtimeStreaming = async (event, options) => {
-      const connectionKey = getMeetingConnectionKey(options);
+      // Read before the key is, so a save during the token fetch marks these connections stale.
+      const connectionKey = getMeetingConnectionKey(options, credentialGeneration);
       const StreamingClass = getMeetingStreamingClient(options.provider);
       if (this._meetingMicStreaming?.isConnected) {
         await this._meetingMicStreaming.disconnect();
@@ -8634,14 +8779,19 @@ class IPCHandlers {
     };
 
     // What a dictation connection was opened for; a start or warmup reuses one
-    // only when nothing about the route changed.
-    const dictationConnectionKey = (options) =>
-      JSON.stringify([
-        options.provider || "openai-realtime",
+    // only when nothing about the route changed and, for a connection that reads
+    // a saved key, no key was saved since.
+    const dictationConnectionKey = (options) => {
+      const provider = options.provider || "openai-realtime";
+      const readsSavedKey = options.mode === "byok" || provider === "tinfoil-realtime";
+      return JSON.stringify([
+        provider,
         options.mode,
         options.model,
         options.baseUrl,
+        readsSavedKey ? credentialGeneration : null,
       ]);
+    };
 
     const connectDictationStreaming = async (event, options) => {
       // Older renderers did not label the OpenAI dictation adapter. Dictation
@@ -8752,7 +8902,7 @@ class IPCHandlers {
       }
 
       const { mode: systemAudioMode } = await getMeetingSystemAudioPlan();
-      const requestedConnectionKey = getMeetingConnectionKey(options);
+      const requestedConnectionKey = getMeetingConnectionKey(options, credentialGeneration);
 
       if (
         isMeetingStreamingConnected(systemAudioMode) &&
@@ -8849,7 +8999,7 @@ class IPCHandlers {
       try {
         const systemAudioPlan = await getMeetingSystemAudioPlan({ refreshWindowsCapability: true });
         let { mode: systemAudioMode, strategy: systemAudioStrategy } = systemAudioPlan;
-        const requestedConnectionKey = getMeetingConnectionKey(options);
+        const requestedConnectionKey = getMeetingConnectionKey(options, credentialGeneration);
         meetingEchoLeakDetector.reset();
         meetingOneOnOneAttendee = resolveOneOnOneAttendeeForNote(options.noteId);
         meetingOneOnOneProfileBound = false;
@@ -10846,6 +10996,23 @@ class IPCHandlers {
         ? fetchRealtimeToken(event, { mode: "byok", provider: "assemblyai-realtime" })
         : fetchStreamingToken(event);
 
+    // A warm socket opened before the latest key save still carries the old key;
+    // dropping it sends the start out on a fresh connect with the new one. Starts
+    // check right before connecting, because a warmup that was still minting can
+    // open its socket during the start's own token fetch.
+    const dropStaleWarmConnection = (streaming) => {
+      if (streaming.warmConnectionOptions?.credentialGeneration !== credentialGeneration) {
+        streaming.cleanupWarmConnection();
+      }
+    };
+
+    // A warmup replaces a stale ready socket instead of reporting it warm, so the
+    // next start finds one with the new key. A socket still opening is left to the
+    // start: closing it mid-handshake would fail the warmup that opened it.
+    const dropStaleReadyWarmConnection = (streaming) => {
+      if (streaming.hasWarmConnection()) dropStaleWarmConnection(streaming);
+    };
+
     ipcMain.handle("assemblyai-streaming-warmup", async (event, options = {}) => {
       try {
         const byok = options.mode === "byok";
@@ -10857,19 +11024,26 @@ class IPCHandlers {
           this.assemblyAiStreaming = new AssemblyAiStreaming();
         }
         this.assemblyAiStreaming.adoptMode(options);
+        if (byok) dropStaleReadyWarmConnection(this.assemblyAiStreaming);
 
         if (this.assemblyAiStreaming.hasWarmConnection()) {
           debugLogger.debug("AssemblyAI connection already warm", {}, "streaming");
           return { success: true, alreadyWarm: true };
         }
 
+        // Read before the key is, so a save during the mint marks this socket stale.
+        const generation = credentialGeneration;
         let token = byok ? null : this.assemblyAiStreaming.getCachedToken();
         if (!token) {
           debugLogger.debug("Fetching new streaming token for warmup", { byok }, "streaming");
           token = await fetchAssemblyAiToken(event, byok);
         }
 
-        await this.assemblyAiStreaming.warmup({ ...options, token });
+        await this.assemblyAiStreaming.warmup({
+          ...options,
+          token,
+          credentialGeneration: generation,
+        });
         debugLogger.debug("AssemblyAI connection warmed up", {}, "streaming");
 
         return { success: true };
@@ -10918,6 +11092,10 @@ class IPCHandlers {
           "streaming"
         );
 
+        // Buffer before the token fetch (a network round trip for BYOK, even when
+        // a warm socket will carry the session) so assemblyai-streaming-send has
+        // somewhere to put the first frames.
+        this.assemblyAiStreaming.beginConnecting();
         let token = byok ? null : this.assemblyAiStreaming.getCachedToken();
         if (!token) {
           debugLogger.debug("Fetching streaming token", { byok }, "streaming");
@@ -10952,6 +11130,7 @@ class IPCHandlers {
           }
         };
 
+        if (byok) dropStaleWarmConnection(this.assemblyAiStreaming);
         await this.assemblyAiStreaming.connect({ ...options, token });
         debugLogger.debug("AssemblyAI streaming started", {}, "streaming");
 
@@ -10961,6 +11140,8 @@ class IPCHandlers {
         };
       } catch (error) {
         debugLogger.error("AssemblyAI streaming start error", { error: error.message });
+        // Nothing is in flight after a failed start, so its held audio goes too.
+        this.assemblyAiStreaming?.cleanup();
         if (error.code === "AUTH_EXPIRED") {
           return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
         }
@@ -11113,12 +11294,14 @@ class IPCHandlers {
         this.deepgramStreaming.adoptMode(options);
 
         setDeepgramTokenRefreshFn(event, byok);
+        if (byok) dropStaleReadyWarmConnection(this.deepgramStreaming);
 
         if (this.deepgramStreaming.hasWarmConnection()) {
           debugLogger.debug("Deepgram connection already warm", {}, "streaming");
           return { success: true, alreadyWarm: true };
         }
 
+        const generation = credentialGeneration;
         let token = byok ? null : this.deepgramStreaming.getCachedToken();
         if (!token) {
           debugLogger.debug(
@@ -11129,7 +11312,11 @@ class IPCHandlers {
           token = await fetchDeepgramToken(event, byok);
         }
 
-        await this.deepgramStreaming.warmup({ ...options, token });
+        await this.deepgramStreaming.warmup({
+          ...options,
+          token,
+          credentialGeneration: generation,
+        });
         debugLogger.debug("Deepgram connection warmed up", {}, "streaming");
 
         return { success: true };
@@ -11168,6 +11355,7 @@ class IPCHandlers {
           this.deepgramStreaming = new DeepgramStreaming();
         }
         this.deepgramStreaming.adoptMode(options);
+        if (byok) dropStaleWarmConnection(this.deepgramStreaming);
 
         setDeepgramTokenRefreshFn(event, byok);
 
@@ -11329,6 +11517,11 @@ class IPCHandlers {
       return streaming;
     };
 
+    // What a Gemini connection authenticated with: a managed one never serves a
+    // BYOK start or the reverse, and a BYOK one is not reused after a key save.
+    const geminiConnectionKey = (options) =>
+      options.mode === "byok" ? `byok:${credentialGeneration}` : "managed";
+
     const connectGeminiStreaming = (event, options) => {
       if (geminiConnectInFlight) return geminiConnectInFlight;
       geminiConnectInFlight = (async () => {
@@ -11339,6 +11532,7 @@ class IPCHandlers {
         // Buffer before the token fetch (a real network round trip) so
         // gemini-streaming-send has somewhere to put the first frames.
         streaming.beginConnecting();
+        streaming.connectionKey = geminiConnectionKey(options);
         const token = await fetchRealtimeToken(event, tokenOptions);
         await streaming.connect({
           ...options,
@@ -11376,7 +11570,10 @@ class IPCHandlers {
       try {
         const streaming = ensureGeminiStreaming(event);
         if (geminiConnectInFlight) await geminiConnectInFlight;
-        const usedWarmConnection = streaming.isConnected && !options.forceNew;
+        const usedWarmConnection =
+          streaming.isConnected &&
+          !options.forceNew &&
+          streaming.connectionKey === geminiConnectionKey(options);
         if (!usedWarmConnection) {
           if (streaming.isConnected) await streaming.disconnect(false);
           await connectGeminiStreaming(event, options);
@@ -11457,9 +11654,11 @@ class IPCHandlers {
         if (!this.cortiStreaming) {
           this.cortiStreaming = new CortiStreaming();
         }
+        dropStaleReadyWarmConnection(this.cortiStreaming);
         if (this.cortiStreaming.hasWarmConnection() || this.cortiStreaming.isConnected) {
           return { success: true, alreadyWarm: true };
         }
+        const generation = credentialGeneration;
         const { token, environment, tenant } = await this._mintStoredCortiToken(options);
         await this.cortiStreaming.warmup({
           token,
@@ -11467,6 +11666,7 @@ class IPCHandlers {
           tenant,
           language: options.language,
           keyterms: options.keyterms,
+          credentialGeneration: generation,
         });
         return { success: true };
       } catch (error) {
@@ -11483,6 +11683,9 @@ class IPCHandlers {
           await this.cortiStreaming.disconnect(false);
         }
 
+        // Buffer before the token mint (a network round trip unless cached) so
+        // corti-streaming-send has somewhere to put the first frames.
+        this.cortiStreaming.beginConnecting();
         const { token, environment, tenant } = await this._mintStoredCortiToken(options);
         const win = BrowserWindow.fromWebContents(event.sender);
 
@@ -11499,6 +11702,7 @@ class IPCHandlers {
           if (win && !win.isDestroyed()) win.webContents.send("corti-session-end", data);
         };
 
+        dropStaleWarmConnection(this.cortiStreaming);
         await this.cortiStreaming.connect({
           token,
           environment,
@@ -11509,6 +11713,8 @@ class IPCHandlers {
         return { success: true };
       } catch (error) {
         debugLogger.error("Corti streaming start error", { error: error.message }, "streaming");
+        // Nothing is in flight after a failed start, so its held audio goes too.
+        this.cortiStreaming?.cleanup();
         return { success: false, error: error.message, code: error.code };
       }
     });
@@ -11927,14 +12133,43 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("meeting-notification-respond", async (_event, detectionId, action) => {
-      try {
-        await this.meetingDetectionEngine.handleNotificationResponse(detectionId, action);
-        return { success: true };
-      } catch (error) {
-        return { success: false, error: error.message };
-      }
+    ipcMain.handle("get-meeting-notification-destination", (event) =>
+      this.getMeetingNotificationDestination(
+        this.windowManager.captureMeetingNotificationOwner(event.sender)
+      )
+    );
+    ipcMain.handle("select-meeting-notification-folder", (event, ref) =>
+      this.selectMeetingNotificationFolder(
+        this.windowManager.captureMeetingNotificationOwner(event.sender),
+        ref
+      )
+    );
+    ipcMain.handle("create-meeting-notification-folder", (event, request) =>
+      this.createMeetingNotificationFolder(
+        this.windowManager.captureMeetingNotificationOwner(event.sender),
+        request
+      )
+    );
+
+    ipcMain.handle("set-meeting-notification-surface", (event, state) => {
+      const owner = this.windowManager.captureMeetingNotificationOwner(event.sender);
+      return this.windowManager.setMeetingNotificationSurface(owner, state);
     });
+
+    ipcMain.handle("meeting-notification-respond", (event, detectionId, action, options) => {
+      const owner = this.windowManager.captureMeetingNotificationOwner(event.sender);
+      if (!owner || owner.prompt.detectionId !== detectionId)
+        return { success: false, code: "STALE_NOTIFICATION" };
+      return this.meetingDetectionEngine.handleNotificationResponse(
+        detectionId,
+        action,
+        options,
+        owner
+      );
+    });
+    ipcMain.handle("confirm-meeting-note-navigation", (event, navigationId, status) =>
+      this.windowManager.confirmMeetingNoteNavigation(event.sender, navigationId, status)
+    );
 
     ipcMain.handle("join-calendar-meeting", async (_event, eventId) => {
       try {
@@ -11947,12 +12182,13 @@ class IPCHandlers {
 
     ipcMain.handle("start-manual-meeting", () => this.windowManager.startManualMeeting());
 
-    ipcMain.handle("get-meeting-notification-data", async () => {
+    ipcMain.handle("get-meeting-notification-data", async (event) => {
+      if (this.windowManager?.notificationWindow?.webContents !== event.sender) return null;
       return this.windowManager?._pendingNotificationData ?? null;
     });
 
-    ipcMain.handle("get-pending-meeting-note-navigation", async () => {
-      return this.windowManager?.consumePendingMeetingNoteNavigation() ?? null;
+    ipcMain.handle("get-pending-meeting-note-navigation", async (event) => {
+      return this.windowManager?.consumePendingMeetingNoteNavigation(event.sender) ?? null;
     });
 
     ipcMain.handle("get-pending-note-navigation", async () => {

@@ -357,6 +357,21 @@ export async function loadFolders(): Promise<FolderItem[]> {
   return items;
 }
 
+// The notification does not boot SyncService. A mounted panel refreshes local
+// rows first, then lets the existing sync policy decide whether to push them.
+export function subscribeMeetingNotificationFolders(): (() => void) | undefined {
+  return window.electronAPI.onMeetingNotificationFolderCreated?.(async ({ folderId }) => {
+    try {
+      const folders = await loadFolders();
+      if (folders.some((folder) => folder.id === folderId)) {
+        syncService.debouncedPush("folder", folderId);
+      }
+    } catch {
+      /* Startup loading and pending SQLite rows recover a lost hint. */
+    }
+  });
+}
+
 const containerLoadGenerations = new Map<string, number>();
 const containerLoadsInFlight = new Map<string, Promise<NoteItem[]>>();
 

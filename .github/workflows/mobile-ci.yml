@@ -102,7 +102,7 @@ jobs:
     name: Mobile native Swift tests
     needs: changes
     if: needs.changes.outputs.mobile == 'true'
-    # Compiles the Foundation-only Swift sources and their tests, which need Xcode's toolchain.
+    # Compiles native Swift sources and their tests, which need Xcode's toolchain (the keyboard's UIKit tests build for Mac Catalyst).
     runs-on: macos-latest
     timeout-minutes: 15
     steps:
@@ -117,6 +117,8 @@ jobs:
         run: python3 openwhispr-mobile/plugins/hotkey-dictation/tests/run-hotkey-logic-tests.py
       - name: Run Live Activity resolver tests
         run: sh openwhispr-mobile/modules/live-activity/tests/run-resolver-tests.sh
+      - name: Run keyboard touch routing tests
+        run: python3 openwhispr-mobile/plugins/keyboard-extension/tests/run-keyboard-touch-tests.py
 
   mobile-status:
     name: Mobile CI

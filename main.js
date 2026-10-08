@@ -2,6 +2,7 @@
 // late — the flag has to come from a relaunch.
 const { XWAYLAND_FLAG, shouldForceXWayland } = require("./src/helpers/xwayland");
 const { createHotkeyRepeatGate } = require("./src/helpers/hotkeyRepeatGate");
+const { shouldDisableGpuCompositing } = require("./src/helpers/linuxGpuCompositing");
 
 if (shouldForceXWayland(process.argv)) {
   const { spawn } = require("child_process");
@@ -108,10 +109,16 @@ if (process.platform === "win32") {
 
 // Fix transparent window flickering on Linux: --enable-transparent-visuals requires
 // the compositor to set up an ARGB visual before any windows are created.
-// --disable-gpu-compositing prevents GPU compositing conflicts with the compositor.
 if (process.platform === "linux") {
   app.commandLine.appendSwitch("gtk-version", "3");
   app.commandLine.appendSwitch("enable-transparent-visuals");
+}
+
+// Linux composites on the GPU except while an NVIDIA driver is loaded (#203). Anyone else whose
+// transparent windows flicker can add --disable-gpu-compositing to the launcher's flags file
+// (scripts/lib/linux-launcher.js).
+const gpuCompositingDisabledForNvidia = shouldDisableGpuCompositing();
+if (gpuCompositingDisabledForNvidia) {
   app.commandLine.appendSwitch("disable-gpu-compositing");
 }
 
@@ -446,6 +453,23 @@ function initializeCoreManagers() {
 
   debugLogger = require("./src/helpers/debugLogger");
   debugLogger.ensureFileLogging();
+  if (process.platform === "linux") {
+    // The compositing mode is settled once the GPU process has reported its info; a GPU
+    // process crash can still drop it to software later, logged below.
+    app
+      .getGPUInfo("basic")
+      .catch(() => {})
+      .then(() => {
+        debugLogger.info("Linux GPU compositing", {
+          status: app.getGPUFeatureStatus().gpu_compositing,
+          disabledForNvidia: gpuCompositingDisabledForNvidia,
+        });
+      });
+  }
+  app.on("child-process-gone", (_event, details) => {
+    if (details.type !== "GPU") return;
+    debugLogger.warn("GPU process gone", { reason: details.reason, exitCode: details.exitCode });
+  });
   // Registration runs before app ready, when the logger cannot write its file yet.
   if (linuxSchemeHandler?.reason) {
     debugLogger.warn("Could not register the Linux URL scheme handler entry", {

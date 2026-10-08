@@ -73,3 +73,15 @@ test("does not let a stale SWAYSOCK override a named compositor", () => {
     assert.equal(session[expectedFlag], true, name);
   }
 });
+
+test("detects COSMIC without treating it as wlroots", () => {
+  const session = getLinuxSessionInfo({
+    XDG_SESSION_TYPE: "wayland",
+    XDG_CURRENT_DESKTOP: "COSMIC",
+    WAYLAND_DISPLAY: "wayland-1",
+    DISPLAY: ":0",
+  });
+
+  assert.equal(session.isCosmic, true);
+  assert.equal(session.isWlroots, false);
+});

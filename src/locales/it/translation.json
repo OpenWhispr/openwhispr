@@ -179,7 +179,8 @@
     "recommended": "Consigliato",
     "active": "Attivo",
     "managedByOrg": "Gestito dalla tua organizzazione",
-    "freeAccountRequired": "Account gratuito richiesto",
+    "signInRequired": "Accesso richiesto",
+    "signIn": "Accedi",
     "comingSoon": "Prossimamente",
     "cloud": "Cloud",
     "local": "Locale",
@@ -1418,6 +1419,7 @@
     "waylandClipboardTitle": "Modalità appunti su Wayland",
     "windowsReady": "Windows supporta l'incollaggio automatico senza configurazione aggiuntiva!",
     "withoutToolPrefix": "Senza questo strumento, OpenWhispr copierà il testo negli appunti. Potrai poi incollare manualmente con Ctrl+V.",
+    "wtypeCosmicTerminalsDescription": "Su COSMIC, i terminali come Warp ricevono il testo incollato solo tramite wtype. Nelle altre app l'incollaggio funziona già senza.",
     "wtypeFallbackDescription": "wtype è il metodo di incollaggio automatico preferito per questo compositor wlroots. È disponibile un'alternativa, ma potrebbe essere meno affidabile.",
     "xwaylandAppsOnly": "l'incollaggio automatico funziona solo per le app XWayland"
   },
@@ -1573,7 +1575,10 @@
         "opening": "Apertura...",
         "updatePaymentMethod": "Aggiorna metodo di pagamento",
         "contactOwnerTitle": "Contatta il proprietario dell'area di lavoro",
-        "contactOwnerDescription": "Solo il proprietario dell'area di lavoro può aggiornarne la fatturazione."
+        "contactOwnerDescription": "Solo il proprietario dell'area di lavoro può aggiornarne la fatturazione.",
+        "manageInAppStore": "Gestisci nell'App Store",
+        "manageInGooglePlay": "Gestisci su Google Play",
+        "managedInMobileStore": "Addebitato tramite lo store di app del tuo telefono. Gestiscilo dal telefono."
       },
       "checkout": {
         "couldNotOpenDescription": "Si è verificato un problema nell'apertura della pagina di pagamento. Riprova.",
@@ -1597,7 +1602,9 @@
         "nextBilling": "Prossima fatturazione: {{date}}",
         "pastDue": "{{used}} / {{limit}} parole gratuite questa settimana — aggiorna il pagamento per ripristinare Pro",
         "trial": "{{days}} giorni rimanenti — trascrizioni illimitate",
-        "unlimited": "Illimitato"
+        "unlimited": "Illimitato",
+        "accessUntil": "Accesso fino al {{date}}",
+        "storePaymentIssue": "Lo store di app non è riuscito a rinnovare questo abbonamento. Aggiorna lì il metodo di pagamento per mantenere il tuo piano."
       },
       "planLabels": {
         "free": "Gratuito",
@@ -2004,7 +2011,7 @@
         "recheck": "Ricontrolla",
         "copy": "Copia",
         "ydotoolDesc": "Strumento di automazione input per Wayland",
-        "wtypeDesc": "Strumento di automazione input preferito sui compositor wlroots",
+        "wtypeDesc": "Strumento di automazione input preferito sui compositor wlroots; su COSMIC, usato per incollare nei terminali",
         "ydotooldDesc": "Daemon per ydotool (pacchetto separato su Ubuntu/Pop!_OS)",
         "uinputDesc": "Accesso al dispositivo di input del kernel",
         "uinputRuleFound": "Regola presente ma non attiva. Un riavvio dovrebbe risolvere.",
@@ -2331,7 +2338,8 @@
           }
         }
       },
-      "meetingEnterpriseOnly": "La tua organizzazione consente solo la trascrizione su cloud aziendale, che non copre ancora la registrazione delle riunioni."
+      "meetingEnterpriseOnly": "La tua organizzazione consente solo la trascrizione su cloud aziendale, che non copre ancora la registrazione delle riunioni.",
+      "meetingCloudSignedOut": "Le registrazioni delle note non possono avviarsi con OpenWhispr Cloud finché non hai effettuato l'accesso. Scegli un altro motore qui sopra."
     },
     "intelligence": {
       "gpuDevice": {
@@ -3137,6 +3145,8 @@
       "unsupportedSelfHosted": "La registrazione delle note non può ancora usare un endpoint self-hosted. Apri le Impostazioni e scegli Locale o un provider in streaming.",
       "unsupportedProvider": "La registrazione delle note non può usare {{provider}} per la trascrizione dal vivo. Apri le Impostazioni e scegli Locale o un provider in streaming.",
       "noProviderSelected": "Nessun provider selezionato per la registrazione delle note. Apri le Impostazioni e scegli Locale o un provider in streaming.",
+      "signInRequired": "La registrazione delle note richiede l'accesso. Accedi, per favore.",
+      "signInExpired": "La sessione è scaduta, quindi la registrazione delle note non può rinnovare la connessione e potrebbe interrompersi. Accedi di nuovo al termine di questa registrazione.",
       "systemAudioSilent": {
         "title": "Nessun audio della riunione rilevato finora",
         "description": "Finora solo il tuo microfono ha captato suoni. Sei in una videochiamata? Verifica che l'audio della riunione venga riprodotto su questo computer e non sia disattivato. Stai registrando di persona? Puoi ignorare questo avviso: il tuo microfono cattura la stanza."
@@ -4776,7 +4786,42 @@
       "underway": "Sembra che la tua riunione sia già in corso. Vuoi prendere appunti?"
     },
     "start": "Prendi appunti",
-    "join": "Partecipa e trascrivi"
+    "join": "Partecipa e trascrivi",
+    "folders": {
+      "choose": "Scegli cartella della riunione",
+      "search": "Cerca cartelle",
+      "clear": "Cancella ricerca",
+      "private": "Privato",
+      "shared": "Condiviso",
+      "current": "Destinazione attuale",
+      "recent": "Usate di recente",
+      "folders": "Cartelle",
+      "new": "Nuova cartella",
+      "name": "Nome",
+      "location": "Posizione",
+      "cancel": "Annulla",
+      "create": "Crea e seleziona",
+      "empty": "Nessuna cartella trovata. Prova un altro nome o crea una cartella.",
+      "loading": "Caricamento cartelle…",
+      "unavailable": "Impossibile caricare le cartelle.",
+      "retry": "Riprova",
+      "dismiss": "Chiudi notifica riunione",
+      "selected": "{{destination}} selezionato",
+      "linked": "Questa riunione ha già una nota. Partecipando, la nota resterà in {{destination}}.",
+      "errors": {
+        "STALE_NOTIFICATION": "Questa notifica non è più attuale.",
+        "INVALID_REQUEST": "Impossibile completare. Riprova.",
+        "FOLDERS_UNAVAILABLE": "Impossibile caricare le cartelle.",
+        "FOLDER_UNAVAILABLE": "Questa destinazione non è disponibile. Scegli un’altra cartella.",
+        "SPACE_UNAVAILABLE": "Questa destinazione non è disponibile. Scegli un’altra cartella.",
+        "FOLDER_NAME_REQUIRED": "Inserisci un nome per la cartella.",
+        "FOLDER_NAME_TAKEN": "Esiste già una cartella con questo nome in questa posizione.",
+        "CREATE_FAILED": "Impossibile completare. Riprova.",
+        "LINKED_NOTE_CHANGED": "Controlla la destinazione, poi partecipa di nuovo.",
+        "NOTE_UNAVAILABLE": "Questa nota non è disponibile. Riprova senza crearne un’altra.",
+        "START_FAILED": "Impossibile completare. Riprova."
+      }
+    }
   },
   "providerErrors": {
     "authFailed": "{{provider}} ha rifiutato la tua chiave API.",

@@ -63,6 +63,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - macOS: AppleScript-based paste with accessibility permission check
   - Windows: PowerShell SendKeys with nircmd.exe fallback
   - Linux: compositor-aware Wayland paste (Hyprland sendshortcut, wlroots wtype, GNOME/KDE portal keysyms) with native uinput/XTest and system-tool fallbacks
+  - Linux COSMIC: paste reads the focused app from cosmic-comp's `zcosmic_toplevel_info_v1` (`cosmicToplevel.js`, a minimal Wayland wire client, bound at version 1, which still sends app_id and state), never from xdotool, whose XWayland answer goes stale while a native Wayland window has focus. A known terminal is pasted through wtype (Ctrl+Shift+V; Shift+Insert for Konsole); everything else keeps uinput Shift+Insert, since COSMIC gives no PID to spot Electron apps hosting TUIs. Short terminal names (`st`) match whole words only, or every `com.system76.*` app id would read as a terminal
   - Linux: before any paste or selection-copy chord, `linux-fast-paste --capabilities --await-modifier-release <ms>` waits for physically held modifiers to be released (XKB state on X11, `EVIOCGKEY` on Wayland; `unknown` without `/dev/input` access pastes as before). A chord injected into held keys arrives as a different shortcut, and a virtual device cannot release another device's key (#2113). Still held after 1.5 s → not pasted, `reason: "modifiers-held"`, and the renderer shows the dictation-error pill with the transcript on the clipboard; a selection edit blocked the same way reports `code: "modifiers_held"` and gets the same pill (the assistant caret paste reports the same code, for logs only). `ydotoold`'s virtual keyboard is ignored, since an interrupted chord can leave its modifier down, and an unreadable key state is logged once per session. The wait runs before `pasteLinux` detects the target window, and a selection copy that had to wait looks the target up again, since focus can move while a key is held: a fresh capture then runs the command on its own (`focus_moved`), and a revalidated session declines as `target_changed`. Retry on a modifiers-held pill pastes the kept transcript again rather than recording again (the macOS/Windows push force-stop pill keeps its record-again Retry, since neither platform waits for held keys), ignores clicks while its paste is pending, and never dismisses a newer pill. `useAudioRecording` keeps the pill in processing until the paste attempt settles (the audio manager settles before the paste starts), but never reports that to main, which drops dictation hotkeys while processing; a paste held back after the next dictation started leaves the transcript on the clipboard without a pill. The helper measures its wait on `CLOCK_MONOTONIC`, since the JS watchdog kills it at timeout + 1 s
 - **database.js**: SQLite operations for transcription history
 - **debugLogger.js**: Debug logging system with file output
@@ -315,7 +316,7 @@ Offline semantic search that finds notes by meaning, not just keywords. Used by 
 - **build-globe-listener.js**: Compiles macOS Globe key listener from Swift source
 - **build-macos-mic-listener.js**: Compiles macOS mic listener from Swift source
 - **build-macos-window-bounds.js**: Compiles the System Settings window reporter from Swift source
-- **build-windows-key-listener.js**: Compiles Windows key listener (for local development)
+- **build-windows-key-listener.js**: Compiles the Windows key listener (MSVC, MinGW or clang) whenever `compile:native` runs on a Windows host, downloading the prebuilt binary when no compiler works; skips a binary newer than its source
 - **run-electron.js**: Development script to launch Electron with proper environment
 - **lib/download-utils.js**: Shared utilities for downloading and extracting files
   - `fetchLatestRelease(repo, options)`: Fetches latest release from GitHub API
@@ -561,10 +562,11 @@ Native Windows support for true push-to-talk functionality using low-level keybo
 
 **Binary Distribution**:
 
-- Prebuilt binary downloaded from GitHub releases (`windows-key-listener-v*` tags)
-- Download script: `scripts/download-windows-key-listener.js`
-- CI workflow: `.github/workflows/build-windows-key-listener.yml`
-- Fallback to tap mode if binary unavailable
+- Compiled from source by `scripts/build-windows-key-listener.js`, part of `compile:native`, so every `prebuild*`, `predev:main` and `prestart` chain on a Windows host builds it; neither script runs on other hosts
+- Fallback: prebuilt binary from GitHub releases (`windows-key-listener-v*` tags) via `scripts/download-windows-key-listener.js`
+- Release CI (`release.yml`, `build-and-notarize.yml`) compiles it with MSVC during `build:win`
+- CI workflow: `.github/workflows/build-windows-key-listener.yml` rebuilds the prebuilt binary when `resources/windows-key-listener.c` changes on main
+- `afterPack.js` fails a Windows package without the binary. A dev run without it starts with Hold unavailable (a saved Hold is reset to Tap at startup), modifier-only hotkeys refused, and `F8` as the default hotkey (`hotkeyManager.js`)
 
 **IPC Events**:
 
@@ -876,6 +878,7 @@ UI icons come from `src/components/icons/` (vendored Nucleo core outline compone
      - X11: xdotool fallback if native binary unavailable
      - Hyprland Wayland: wtype → sendshortcut → uinput/ydotool
      - Sway/wlroots Wayland: wtype → uinput/ydotool
+     - COSMIC Wayland: wtype for a detected terminal → uinput/ydotool
      - GNOME/KDE Wayland: portal keysyms → uinput/ydotool
      - Physical Wayland fallbacks use Shift+Insert to avoid layout-sensitive KEY_V
    - Windows: PowerShell SendKeys (built-in) or nircmd.exe (bundled)
@@ -890,10 +893,10 @@ UI icons come from `src/components/icons/` (vendored Nucleo core outline compone
    - **Lockfile**: Always use Node 24 when running `npm install` (matches CI). If your local Node version differs, use `nvm exec 24 npm install`. Running `npm install` with a different major version will produce an incompatible `package-lock.json` that breaks `npm ci` in CI.
 
 5. **Windows Push-to-Talk Binary**:
-   - Prebuilt binary downloaded automatically on Windows during build
-   - If neither compiling nor the download produces it, `afterPack.js` fails the Windows build
+   - Compiled from `resources/windows-key-listener.c` whenever `compile:native` runs on a Windows host (`prebuild:win`, `predev:main`, …); the prebuilt binary download from GitHub releases is the fallback
+   - If neither compiling nor the download produces it, `afterPack.js` fails the Windows build; an unpackaged dev run starts without it, with Hold and modifier-only hotkeys unavailable and `F8` as the default hotkey
    - To compile locally: install Visual Studio Build Tools or MinGW-w64
-   - CI workflow (`.github/workflows/build-windows-key-listener.yml`) auto-builds on push to main
+   - CI workflow (`.github/workflows/build-windows-key-listener.yml`) rebuilds the prebuilt binary when `resources/windows-key-listener.c` changes on main
 
 6. **Meeting Detection Not Working**:
    - Check debug logs for "event-driven" vs "polling" mode; macOS also logs `macOS microphone detection capability` as `PID` or `AGGREGATE`
@@ -939,8 +942,8 @@ UI icons come from `src/components/icons/` (vendored Nucleo core outline compone
 - **Push-to-Talk**: Native key listener binary (`windows-key-listener.exe`) enables true push-to-talk
   - Uses Windows Low-Level Keyboard Hook (`WH_KEYBOARD_LL`)
   - Supports compound hotkeys (e.g., `Ctrl+Shift+F11`)
-  - Prebuilt binary auto-downloaded from GitHub releases
-  - Falls back to tap mode if unavailable
+  - Compiled from source during the build, with the prebuilt GitHub release binary as fallback (see section 12, Binary Distribution)
+  - `afterPack.js` fails a Windows package without it
 
 **Linux**:
 
@@ -951,7 +954,11 @@ UI icons come from `src/components/icons/` (vendored Nucleo core outline compone
 - No standardized URL scheme for system settings (user must open manually)
 - Privacy settings button hidden in UI (not applicable on Linux)
 - Recommend `pavucontrol` for audio device management
-- **Dialog overlays**: the full-window dialog overlays (shared `Dialog`, Settings, Ctrl+K, referral) skip their default backdrop blur on Linux (`ui/overlayBlur.ts`). Linux composites on the CPU (`--disable-gpu-compositing` in `main.js`), where a full-window blur is redrawn on every repaint inside the dialog (#2298); a blur passed through `overlayClassName` still applies
+- **GPU compositing**: on, as on Windows, except whenever an NVIDIA kernel module (proprietary or open, any version) is loaded (`linuxGpuCompositing.js`, `/proc/driver/nvidia/version`): it flickered transparent windows in #203, Chromium's blocklist doesn't catch it, and explicit sync (driver 555+, Xwayland 24.1+, compositor support) can't be checked before app ready. Anyone else can turn it off with `--disable-gpu-compositing` in `open-whispr-flags.conf`, read by the packaged launcher (`scripts/lib/linux-launcher.js`). The mode is logged at startup, which only reaches the log file at `--log-level=debug`
+- **Backdrop blurs**: Linux can still composite on the CPU, where a large blur is redrawn on every repaint above it (#2298):
+  - On Linux (`ui/overlayBlur.ts`), the full-window dialog overlays (shared `Dialog`, Settings, Ctrl+K, referral) skip their default backdrop blur; a blur passed through `overlayClassName` still applies
+  - On Linux, the note action overlay (`ActionProcessingOverlay`), whose scanner animation never stops, uses a denser scrim and an opaque card, so the scanner line passes behind the label
+  - Settings cards (`SettingsPanel`), the Settings selects and the `LanguageSelector` trigger sit on an opaque pane, so they carry no blur on any platform
 - **Launch at login**: XDG autostart entry at `~/.config/autostart/open-whispr.desktop` (see `linuxAutostart.js`), since Electron's `setLoginItemSettings()` does nothing on Linux
   - Disabling it from GNOME Tweaks or KDE's autostart editor is reflected in the Settings toggle
   - "Start minimized" is handled app-side by the `startMinimized` setting, not by the desktop entry
@@ -959,6 +966,7 @@ UI icons come from `src/components/icons/` (vendored Nucleo core outline compone
   - **X11**: `xdotool` (recommended)
   - **Hyprland Wayland**: `wtype`, then `hyprctl` sendshortcut (avoids the sendshortcut stuck-modifier bug when wtype is installed)
   - **Sway/wlroots Wayland**: `wtype` (requires the virtual keyboard protocol)
+  - **COSMIC Wayland**: `wtype` for terminals (Warp has no Shift+Insert paste); other windows paste with uinput Shift+Insert. Settings and onboarding ask for `wtype` there once something else pastes (`needsWtype` in `src/utils/linuxPasteTools.ts`), but `checkPasteTools` never reports it as the method
   - **GNOME/KDE Wayland**: RemoteDesktop portal keysyms, then uinput/ydotool
   - **Wayland physical fallback**: Shift+Insert avoids layout-sensitive KEY_V; `ydotool` requires the `ydotoold` daemon
   - Terminal detection: Auto-detects terminal emulators and uses Ctrl+Shift+V

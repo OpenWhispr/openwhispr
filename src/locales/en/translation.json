@@ -179,7 +179,8 @@
     "recommended": "Recommended",
     "active": "Active",
     "managedByOrg": "Managed by your organization",
-    "freeAccountRequired": "Free account required",
+    "signInRequired": "Sign in Required",
+    "signIn": "Sign in",
     "comingSoon": "Coming Soon",
     "cloud": "Cloud",
     "local": "Local",
@@ -1513,6 +1514,7 @@
     "waylandClipboardTitle": "Clipboard Mode on Wayland",
     "windowsReady": "Windows supports automatic pasting out of the box. No setup required!",
     "withoutToolPrefix": "Without this tool, OpenWhispr will copy text to your clipboard. You can then paste manually with Ctrl+V.",
+    "wtypeCosmicTerminalsDescription": "On COSMIC, terminals such as Warp only receive pasted text through wtype. Other apps already paste without it.",
     "wtypeFallbackDescription": "wtype is the preferred auto-paste method for this wlroots compositor. A fallback is available, but may be less reliable.",
     "xwaylandAppsOnly": "automatic pasting works for XWayland apps only"
   },
@@ -1868,7 +1870,10 @@
         "opening": "Opening...",
         "updatePaymentMethod": "Update Payment Method",
         "contactOwnerTitle": "Contact your workspace owner",
-        "contactOwnerDescription": "Only the workspace owner can update billing for this workspace."
+        "contactOwnerDescription": "Only the workspace owner can update billing for this workspace.",
+        "manageInAppStore": "Manage in App Store",
+        "manageInGooglePlay": "Manage in Google Play",
+        "managedInMobileStore": "Billed through your phone's app store. Manage it from your phone."
       },
       "checkout": {
         "couldNotOpenDescription": "We had trouble opening the checkout page. Please try again.",
@@ -1892,7 +1897,9 @@
         "nextBilling": "Next billing: {{date}}",
         "pastDue": "{{used}} / {{limit}} free words this week - update payment to restore Pro",
         "trial": "{{days}} days remaining - unlimited transcriptions",
-        "unlimited": "Unlimited"
+        "unlimited": "Unlimited",
+        "accessUntil": "Access until {{date}}",
+        "storePaymentIssue": "Your app store couldn't renew this subscription. Update your payment method there to keep your plan."
       },
       "planLabels": {
         "free": "Free",
@@ -2299,7 +2306,7 @@
         "recheck": "Re-check",
         "copy": "Copy",
         "ydotoolDesc": "Input automation tool for Wayland",
-        "wtypeDesc": "Preferred input automation tool on wlroots compositors",
+        "wtypeDesc": "Preferred input automation tool on wlroots compositors; on COSMIC, used to paste into terminals",
         "ydotooldDesc": "Daemon for ydotool (separate package on Ubuntu/Pop!_OS)",
         "uinputDesc": "Kernel input device access",
         "uinputRuleFound": "Rule present but not active. A reboot should fix it.",
@@ -2626,7 +2633,8 @@
           }
         }
       },
-      "meetingEnterpriseOnly": "Your organization only allows enterprise cloud transcription, which does not cover meeting recording yet."
+      "meetingEnterpriseOnly": "Your organization only allows enterprise cloud transcription, which does not cover meeting recording yet.",
+      "meetingCloudSignedOut": "Note recordings can't start on OpenWhispr Cloud while you're signed out. Choose another engine above."
     },
     "intelligence": {
       "gpuDevice": {
@@ -3489,6 +3497,8 @@
       "unsupportedSelfHosted": "Note Recording can't use a self-hosted endpoint yet. Open Settings and choose Local or a streaming provider.",
       "unsupportedProvider": "Note Recording can't use {{provider}} for live transcription. Open Settings and choose Local or a streaming provider.",
       "noProviderSelected": "No provider is selected for Note Recording. Open Settings and choose Local or a streaming provider.",
+      "signInRequired": "Note Recording requires you to be signed in. Please sign in.",
+      "signInExpired": "Your sign-in has expired, so Note Recording can't renew its connection and may stop. Sign in again once this recording ends.",
       "systemAudioSilent": {
         "title": "No meeting audio detected yet",
         "description": "Only your microphone has picked up sound so far. On a video call? Check that the meeting audio is playing on this computer and isn't muted. Recording in person? You can ignore this — your microphone captures the room."
@@ -4776,7 +4786,42 @@
       "underway": "It sounds like your meeting is underway. Want to take notes?"
     },
     "start": "Take notes",
-    "join": "Join & transcribe"
+    "join": "Join and transcribe",
+    "folders": {
+      "choose": "Choose meeting folder",
+      "search": "Search folders",
+      "clear": "Clear search",
+      "private": "Private",
+      "shared": "Shared",
+      "current": "Current destination",
+      "recent": "Recently used",
+      "folders": "Folders",
+      "new": "New folder",
+      "name": "Name",
+      "location": "Location",
+      "cancel": "Cancel",
+      "create": "Create & select",
+      "empty": "No folders found. Try another name, or create a folder.",
+      "loading": "Loading folders…",
+      "unavailable": "Folders could not be loaded.",
+      "retry": "Retry",
+      "dismiss": "Dismiss meeting notification",
+      "selected": "Selected {{destination}}",
+      "linked": "This meeting already has a note. Joining keeps it in {{destination}}.",
+      "errors": {
+        "STALE_NOTIFICATION": "This notification is no longer current.",
+        "INVALID_REQUEST": "Could not finish. Please retry.",
+        "FOLDERS_UNAVAILABLE": "Folders could not be loaded.",
+        "FOLDER_UNAVAILABLE": "This destination is unavailable. Choose another folder.",
+        "SPACE_UNAVAILABLE": "This destination is unavailable. Choose another folder.",
+        "FOLDER_NAME_REQUIRED": "Enter a folder name.",
+        "FOLDER_NAME_TAKEN": "A folder with that name already exists in this location.",
+        "CREATE_FAILED": "Could not finish. Please retry.",
+        "LINKED_NOTE_CHANGED": "Review the destination, then join again.",
+        "NOTE_UNAVAILABLE": "This note is unavailable. Retry without creating a replacement.",
+        "START_FAILED": "Could not finish. Please retry."
+      }
+    }
   },
   "providerErrors": {
     "authFailed": "{{provider}} rejected your API key.",

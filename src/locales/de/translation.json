@@ -179,7 +179,8 @@
     "recommended": "Empfohlen",
     "active": "Aktiv",
     "managedByOrg": "Von Ihrer Organisation verwaltet",
-    "freeAccountRequired": "Kostenloses Konto erforderlich",
+    "signInRequired": "Anmeldung erforderlich",
+    "signIn": "Anmelden",
     "comingSoon": "Demnächst verfügbar",
     "cloud": "Cloud",
     "local": "Lokal",
@@ -1513,6 +1514,7 @@
     "waylandClipboardTitle": "Zwischenablage-Modus unter Wayland",
     "windowsReady": "Windows unterstützt automatisches Einfügen direkt. Keine Einrichtung erforderlich!",
     "withoutToolPrefix": "Ohne dieses Tool kopiert OpenWhispr den Text in Ihre Zwischenablage. Sie können ihn dann manuell mit Ctrl+V einfügen.",
+    "wtypeCosmicTerminalsDescription": "Unter COSMIC empfangen Terminals wie Warp eingefügten Text nur über wtype. In andere Apps wird bereits ohne wtype eingefügt.",
     "wtypeFallbackDescription": "wtype ist die bevorzugte Methode für automatisches Einfügen auf diesem wlroots-Compositor. Eine Alternative ist verfügbar, kann aber weniger zuverlässig sein.",
     "xwaylandAppsOnly": "Automatisches Einfügen funktioniert nur für XWayland-Apps"
   },
@@ -1868,7 +1870,10 @@
         "opening": "Wird geöffnet...",
         "updatePaymentMethod": "Zahlungsmethode aktualisieren",
         "contactOwnerTitle": "Wenden Sie sich an den Workspace-Inhaber",
-        "contactOwnerDescription": "Nur der Workspace-Inhaber kann die Abrechnung für diesen Workspace ändern."
+        "contactOwnerDescription": "Nur der Workspace-Inhaber kann die Abrechnung für diesen Workspace ändern.",
+        "manageInAppStore": "Im App Store verwalten",
+        "manageInGooglePlay": "In Google Play verwalten",
+        "managedInMobileStore": "Abrechnung über den App-Store Ihres Smartphones. Verwalten Sie das Abo auf Ihrem Smartphone."
       },
       "checkout": {
         "couldNotOpenDescription": "Die Checkout-Seite konnte nicht geöffnet werden. Bitte versuchen Sie es erneut.",
@@ -1892,7 +1897,9 @@
         "nextBilling": "Nächste Abrechnung: {{date}}",
         "pastDue": "{{used}} / {{limit}} kostenlose Wörter diese Woche – Zahlung aktualisieren, um Pro wiederherzustellen",
         "trial": "Noch {{days}} Tage – unbegrenzte Transkriptionen",
-        "unlimited": "Unbegrenzt"
+        "unlimited": "Unbegrenzt",
+        "accessUntil": "Zugang bis {{date}}",
+        "storePaymentIssue": "Ihr App-Store konnte dieses Abo nicht verlängern. Aktualisieren Sie dort Ihre Zahlungsmethode, um Ihren Tarif zu behalten."
       },
       "planLabels": {
         "free": "Kostenlos",
@@ -2299,7 +2306,7 @@
         "recheck": "Erneut prüfen",
         "copy": "Kopieren",
         "ydotoolDesc": "Eingabeautomatisierung für Wayland",
-        "wtypeDesc": "Bevorzugte Eingabeautomatisierung für wlroots-Compositoren",
+        "wtypeDesc": "Bevorzugte Eingabeautomatisierung für wlroots-Compositoren; unter COSMIC zum Einfügen in Terminals genutzt",
         "ydotooldDesc": "Daemon für ydotool (separates Paket unter Ubuntu/Pop!_OS)",
         "uinputDesc": "Zugriff auf das Kernel-Eingabegerät",
         "uinputRuleFound": "Regel vorhanden, aber nicht aktiv. Ein Neustart sollte das beheben.",
@@ -2626,7 +2633,8 @@
           }
         }
       },
-      "meetingEnterpriseOnly": "Ihre Organisation erlaubt nur Unternehmens-Cloud-Transkription, die Besprechungsaufnahmen noch nicht abdeckt."
+      "meetingEnterpriseOnly": "Ihre Organisation erlaubt nur Unternehmens-Cloud-Transkription, die Besprechungsaufnahmen noch nicht abdeckt.",
+      "meetingCloudSignedOut": "Notizaufnahmen mit OpenWhispr Cloud können nicht starten, solange Sie abgemeldet sind. Wählen Sie oben eine andere Engine."
     },
     "intelligence": {
       "gpuDevice": {
@@ -3489,6 +3497,8 @@
       "unsupportedSelfHosted": "Die Notizaufnahme kann noch keinen selbst gehosteten Endpunkt verwenden. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
       "unsupportedProvider": "Die Notizaufnahme kann {{provider}} nicht für die Live-Transkription verwenden. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
       "noProviderSelected": "Für die Notizaufnahme ist kein Anbieter ausgewählt. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
+      "signInRequired": "Für die Notizaufnahme musst du angemeldet sein. Bitte melde dich an.",
+      "signInExpired": "Deine Anmeldung ist abgelaufen, daher kann die Notizaufnahme ihre Verbindung nicht erneuern und stoppt möglicherweise. Melde dich nach dem Ende dieser Aufnahme erneut an.",
       "systemAudioSilent": {
         "title": "Noch kein Meeting-Ton erkannt",
         "description": "Bisher hat nur Ihr Mikrofon Ton aufgenommen. Sie sind in einem Videoanruf? Prüfen Sie, ob der Meeting-Ton auf diesem Computer wiedergegeben wird und nicht stummgeschaltet ist. Sie nehmen vor Ort auf? Dann können Sie diesen Hinweis ignorieren – Ihr Mikrofon nimmt den Raum auf."
@@ -4776,7 +4786,42 @@
       "underway": "Es klingt, als wäre dein Meeting schon im Gange. Notizen aufnehmen?"
     },
     "start": "Notizen aufnehmen",
-    "join": "Beitreten & transkribieren"
+    "join": "Beitreten & transkribieren",
+    "folders": {
+      "choose": "Besprechungsordner auswählen",
+      "search": "Ordner suchen",
+      "clear": "Suche löschen",
+      "private": "Privat",
+      "shared": "Geteilt",
+      "current": "Aktueller Speicherort",
+      "recent": "Zuletzt verwendet",
+      "folders": "Ordner",
+      "new": "Neuer Ordner",
+      "name": "Name",
+      "location": "Speicherort",
+      "cancel": "Abbrechen",
+      "create": "Erstellen und auswählen",
+      "empty": "Keine Ordner gefunden. Suche einen anderen Namen oder erstelle einen Ordner.",
+      "loading": "Ordner werden geladen…",
+      "unavailable": "Ordner konnten nicht geladen werden.",
+      "retry": "Erneut versuchen",
+      "dismiss": "Besprechungsbenachrichtigung schließen",
+      "selected": "{{destination}} ausgewählt",
+      "linked": "Für diese Besprechung gibt es bereits eine Notiz. Beim Beitreten bleibt sie in {{destination}}.",
+      "errors": {
+        "STALE_NOTIFICATION": "Diese Benachrichtigung ist nicht mehr aktuell.",
+        "INVALID_REQUEST": "Vorgang fehlgeschlagen. Bitte erneut versuchen.",
+        "FOLDERS_UNAVAILABLE": "Ordner konnten nicht geladen werden.",
+        "FOLDER_UNAVAILABLE": "Dieser Speicherort ist nicht verfügbar. Wähle einen anderen Ordner.",
+        "SPACE_UNAVAILABLE": "Dieser Speicherort ist nicht verfügbar. Wähle einen anderen Ordner.",
+        "FOLDER_NAME_REQUIRED": "Gib einen Ordnernamen ein.",
+        "FOLDER_NAME_TAKEN": "An diesem Speicherort existiert bereits ein Ordner mit diesem Namen.",
+        "CREATE_FAILED": "Vorgang fehlgeschlagen. Bitte erneut versuchen.",
+        "LINKED_NOTE_CHANGED": "Prüfe den Speicherort und tritt erneut bei.",
+        "NOTE_UNAVAILABLE": "Diese Notiz ist nicht verfügbar. Versuche es erneut, ohne eine neue zu erstellen.",
+        "START_FAILED": "Vorgang fehlgeschlagen. Bitte erneut versuchen."
+      }
+    }
   },
   "providerErrors": {
     "authFailed": "{{provider}} hat Ihren API-Schlüssel abgelehnt.",

@@ -1025,6 +1025,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("hotkey-registration-failed", listener);
     return () => ipcRenderer.removeListener("hotkey-registration-failed", listener);
   },
+  onApiKeyUpdated: registerListener(
+    "api-key-updated",
+    (callback) => (_event, storeKey) => callback(storeKey)
+  ),
   onSettingUpdated: (callback) => {
     const listener = (_event, data) => callback?.(data);
     ipcRenderer.on("setting-updated", listener);
@@ -1379,10 +1383,32 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "meeting-auto-end-requested",
     (callback) => (_event, data) => callback(data)
   ),
+  getMeetingNotificationDestination: () =>
+    ipcRenderer.invoke("get-meeting-notification-destination"),
+  selectMeetingNotificationFolder: (folder) =>
+    ipcRenderer.invoke("select-meeting-notification-folder", folder),
+  createMeetingNotificationFolder: (request) =>
+    ipcRenderer.invoke("create-meeting-notification-folder", request),
+  onMeetingNotificationFolderCreated: registerListener(
+    "meeting-notification-folder-created",
+    (callback) => (_event, data) => callback(data)
+  ),
+  setMeetingNotificationSurface: (state) =>
+    ipcRenderer.invoke("set-meeting-notification-surface", state),
+  onMeetingNotificationSurfaceClosed: registerListener(
+    "meeting-notification-surface-closed",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onMeetingNotificationSurfaceResized: registerListener(
+    "meeting-notification-surface-resized",
+    (callback) => (_event, data) => callback(data)
+  ),
   getMeetingNotificationData: () => ipcRenderer.invoke("get-meeting-notification-data"),
   meetingNotificationReady: () => ipcRenderer.invoke("meeting-notification-ready"),
-  meetingNotificationRespond: (detectionId, action) =>
-    ipcRenderer.invoke("meeting-notification-respond", detectionId, action),
+  meetingNotificationRespond: (detectionId, action, options) =>
+    ipcRenderer.invoke("meeting-notification-respond", detectionId, action, options),
+  confirmMeetingNoteNavigation: (navigationId, status) =>
+    ipcRenderer.invoke("confirm-meeting-note-navigation", navigationId, status),
   joinCalendarMeeting: (eventId) => ipcRenderer.invoke("join-calendar-meeting", eventId),
   startManualMeeting: () => ipcRenderer.invoke("start-manual-meeting"),
   getPendingMeetingNoteNavigation: () => ipcRenderer.invoke("get-pending-meeting-note-navigation"),

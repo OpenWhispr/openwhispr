@@ -179,7 +179,8 @@
     "recommended": "Recomendado",
     "active": "Activo",
     "managedByOrg": "Gestionado por tu organización",
-    "freeAccountRequired": "Cuenta gratuita requerida",
+    "signInRequired": "Inicio de sesión requerido",
+    "signIn": "Iniciar sesión",
     "comingSoon": "Próximamente",
     "cloud": "Nube",
     "local": "Local",
@@ -1471,6 +1472,7 @@
     "waylandClipboardTitle": "Modo portapapeles en Wayland",
     "windowsReady": "Windows es compatible con el pegado automático de forma nativa. ¡No se requiere configuración!",
     "withoutToolPrefix": "Sin esta herramienta, OpenWhispr copiará el texto al portapapeles. Luego puedes pegarlo manualmente con Ctrl+V.",
+    "wtypeCosmicTerminalsDescription": "En COSMIC, las terminales como Warp solo reciben el texto pegado mediante wtype. En las demás aplicaciones ya se pega sin él.",
     "wtypeFallbackDescription": "wtype es el método de pegado automático preferido para este compositor wlroots. Hay una alternativa disponible, pero puede ser menos fiable.",
     "xwaylandAppsOnly": "el pegado automático funciona solo en apps XWayland"
   },
@@ -1626,7 +1628,10 @@
         "opening": "Abriendo...",
         "updatePaymentMethod": "Actualizar método de pago",
         "contactOwnerTitle": "Contacta al propietario del espacio de trabajo",
-        "contactOwnerDescription": "Solo el propietario del espacio de trabajo puede actualizar su facturación."
+        "contactOwnerDescription": "Solo el propietario del espacio de trabajo puede actualizar su facturación.",
+        "manageInAppStore": "Gestionar en App Store",
+        "manageInGooglePlay": "Gestionar en Google Play",
+        "managedInMobileStore": "Se factura a través de la tienda de aplicaciones de tu teléfono. Gestiónala desde tu teléfono."
       },
       "checkout": {
         "couldNotOpenDescription": "Tuvimos problemas al abrir la página de pago. Inténtalo de nuevo.",
@@ -1650,7 +1655,9 @@
         "nextBilling": "Próxima facturación: {{date}}",
         "pastDue": "{{used}} / {{limit}} palabras gratis esta semana: actualiza el pago para restaurar Pro",
         "trial": "{{days}} días restantes: transcripciones ilimitadas",
-        "unlimited": "Ilimitado"
+        "unlimited": "Ilimitado",
+        "accessUntil": "Acceso hasta el {{date}}",
+        "storePaymentIssue": "Tu tienda de aplicaciones no pudo renovar esta suscripción. Actualiza allí tu método de pago para conservar tu plan."
       },
       "planLabels": {
         "free": "Gratis",
@@ -2057,7 +2064,7 @@
         "recheck": "Volver a comprobar",
         "copy": "Copiar",
         "ydotoolDesc": "Herramienta de automatización de entrada para Wayland",
-        "wtypeDesc": "Herramienta de automatización de entrada preferida en compositores wlroots",
+        "wtypeDesc": "Herramienta de automatización de entrada preferida en compositores wlroots; en COSMIC, se usa para pegar en terminales",
         "ydotooldDesc": "Daemon de ydotool (paquete separado en Ubuntu/Pop!_OS)",
         "uinputDesc": "Acceso al dispositivo de entrada del kernel",
         "uinputRuleFound": "Regla presente pero no activa. Un reinicio debería solucionarlo.",
@@ -2384,7 +2391,8 @@
           }
         }
       },
-      "meetingEnterpriseOnly": "Tu organización solo permite la transcripción en nube empresarial, que aún no cubre la grabación de reuniones."
+      "meetingEnterpriseOnly": "Tu organización solo permite la transcripción en nube empresarial, que aún no cubre la grabación de reuniones.",
+      "meetingCloudSignedOut": "Las grabaciones de notas no pueden iniciarse con OpenWhispr Cloud sin haber iniciado sesión. Elige otro motor arriba."
     },
     "intelligence": {
       "gpuDevice": {
@@ -3190,6 +3198,8 @@
       "unsupportedSelfHosted": "La grabación de notas aún no puede usar un servidor propio. Abre Ajustes y elige Local o un proveedor de streaming.",
       "unsupportedProvider": "La grabación de notas no puede usar {{provider}} para transcripción en vivo. Abre Ajustes y elige Local o un proveedor de streaming.",
       "noProviderSelected": "No hay ningún proveedor seleccionado para la grabación de notas. Abre Ajustes y elige Local o un proveedor de streaming.",
+      "signInRequired": "La grabación de notas requiere iniciar sesión. Por favor, inicia sesión.",
+      "signInExpired": "Tu sesión ha caducado, así que la grabación de notas no puede renovar su conexión y podría detenerse. Vuelve a iniciar sesión cuando termine esta grabación.",
       "systemAudioSilent": {
         "title": "Aún no se detecta el audio de la reunión",
         "description": "Hasta ahora solo tu micrófono ha captado sonido. ¿Estás en una videollamada? Comprueba que el audio de la reunión se reproduce en este equipo y no está silenciado. ¿Estás grabando en persona? Puedes ignorar este aviso: tu micrófono capta la sala."
@@ -4776,7 +4786,42 @@
       "underway": "Parece que tu reunión ya está en curso. ¿Quieres tomar notas?"
     },
     "start": "Tomar notas",
-    "join": "Unirse y transcribir"
+    "join": "Unirse y transcribir",
+    "folders": {
+      "choose": "Elegir carpeta de la reunión",
+      "search": "Buscar carpetas",
+      "clear": "Borrar búsqueda",
+      "private": "Privado",
+      "shared": "Compartido",
+      "current": "Destino actual",
+      "recent": "Usadas recientemente",
+      "folders": "Carpetas",
+      "new": "Nueva carpeta",
+      "name": "Nombre",
+      "location": "Ubicación",
+      "cancel": "Cancelar",
+      "create": "Crear y seleccionar",
+      "empty": "No se encontraron carpetas. Prueba otro nombre o crea una carpeta.",
+      "loading": "Cargando carpetas…",
+      "unavailable": "No se pudieron cargar las carpetas.",
+      "retry": "Reintentar",
+      "dismiss": "Cerrar notificación de reunión",
+      "selected": "{{destination}} seleccionado",
+      "linked": "Esta reunión ya tiene una nota. Al unirte, permanecerá en {{destination}}.",
+      "errors": {
+        "STALE_NOTIFICATION": "Esta notificación ya no está vigente.",
+        "INVALID_REQUEST": "No se pudo completar. Vuelve a intentarlo.",
+        "FOLDERS_UNAVAILABLE": "No se pudieron cargar las carpetas.",
+        "FOLDER_UNAVAILABLE": "Este destino no está disponible. Elige otra carpeta.",
+        "SPACE_UNAVAILABLE": "Este destino no está disponible. Elige otra carpeta.",
+        "FOLDER_NAME_REQUIRED": "Introduce un nombre de carpeta.",
+        "FOLDER_NAME_TAKEN": "Ya existe una carpeta con ese nombre en esta ubicación.",
+        "CREATE_FAILED": "No se pudo completar. Vuelve a intentarlo.",
+        "LINKED_NOTE_CHANGED": "Revisa el destino y vuelve a unirte.",
+        "NOTE_UNAVAILABLE": "Esta nota no está disponible. Reintenta sin crear otra.",
+        "START_FAILED": "No se pudo completar. Vuelve a intentarlo."
+      }
+    }
   },
   "providerErrors": {
     "authFailed": "{{provider}} rechazó tu clave de API.",

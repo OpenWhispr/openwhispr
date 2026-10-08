@@ -49,7 +49,7 @@ export interface DictationProcessingResult {
 }
 
 // The transcript before any cleanup pass: returned for local/private transcripts
-// that On-Device cleanup won't clean, and when a cancel short-circuits cleanup.
+// that no chosen cleanup will clean, and when a cancel short-circuits cleanup.
 function rawTranscriptResult(transcription: TranscriptionResponse): DictationProcessingResult {
   const originalText = transcription.originalText || transcription.text;
   return {
@@ -61,9 +61,11 @@ function rawTranscriptResult(transcription: TranscriptionResponse): DictationPro
   };
 }
 
-// The pinned route decides where cleanup runs, and a local job always pins a local one;
-// the saved choice decides whether it runs, read live like cleanupEnabled.
-function cleansOnDevice(request: TranscriptionRequest): boolean {
+// The pinned route decides where cleanup runs. A local job pins a local one unless the
+// user saved a cleanup provider, which is only pinned from that saved choice; whether
+// On-Device cleanup runs is read live, like cleanupEnabled.
+function cleansLocalTranscript(request: TranscriptionRequest): boolean {
+  if (request.cleanupRoute?.mode === 'providers') return true;
   return (
     request.cleanupRoute?.mode === 'local' && cleanupSavedOnDevice(useConfigStore.getState().config)
   );
@@ -185,9 +187,9 @@ async function runSerialTranscribeAndCleanup(
   const originalText = transcription.text;
   lifecycle.onRawTranscript?.(originalText, transcription);
 
-  // Local/private transcripts must never leave the device — not even for the
-  // cleanup pass — so they are cleaned only by On-Device cleanup.
-  if (transcription.provider === 'local' && !cleansOnDevice(request)) {
+  // Local/private transcripts leave the device only for the cleanup provider the
+  // user saved; otherwise they are cleaned by On-Device cleanup or not at all.
+  if (transcription.provider === 'local' && !cleansLocalTranscript(request)) {
     return rawTranscriptResult(transcription);
   }
 
