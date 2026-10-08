@@ -49,4 +49,4 @@ Dependency manifests are unchanged from the original base. The pre-push CI run p
 
 No merge, deployment, release, GitHub review/comment, default-model switch, cloud fallback, dependency update, production profile/app modification or native document edit was performed. CI's inherited dependency-audit problem remains separate. The target/session/cancellation guards and known same-app identical-text limitation are unchanged. Native persisted text, one undo, real wake/hotkey, cleanup-on/off, focus/expiry/new-recording races, clipboard restoration and physical-platform acceptance remain open.
 
-Full reproduction scripts, all attempted prompt results, independent reviews, logs and lifecycle receipt are preserved with the Titan handoff on `codex/pr2523-review-repairs-handoff-20261006`, under `docs/reviews/2026-10-06-pr2523-repairs/`.
+Full reproduction scripts, all attempted prompt results, independent reviews, logs and lifecycle receipt are preserved in the author's handoff evidence (kept outside this repository).
