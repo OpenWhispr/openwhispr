@@ -51,6 +51,31 @@ function MarkdownImage({
   );
 }
 
+interface MarkdownNode {
+  type: string;
+  value?: string;
+  children?: MarkdownNode[];
+}
+
+const BREAK_TAG = /^<br\s*\/?>$/i;
+
+// A GFM table row is a single line, so models break lines inside a cell with
+// <br>. Raw HTML renders as escaped text, so only a bare <br> tag is turned
+// into a Markdown line break; every other tag, and a <br> with attributes,
+// stays literal.
+function remarkBreakTags(): (tree: MarkdownNode) => void {
+  const visit = (node: MarkdownNode): void => {
+    node.children?.forEach((child, index, siblings) => {
+      if (child.type === "html" && BREAK_TAG.test(child.value ?? "")) {
+        siblings[index] = { type: "break" };
+      } else {
+        visit(child);
+      }
+    });
+  };
+  return visit;
+}
+
 // Stable component types preserve DOM state, including table scroll positions.
 const markdownComponents: Components = {
   h1: ({ children }): ReactElement => (
@@ -128,7 +153,7 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps):
     <div dir="auto" className={className}>
       <FootnotePrefixContext value={footnotePrefix}>
         <Markdown
-          remarkPlugins={[remarkGfm]}
+          remarkPlugins={[remarkGfm, remarkBreakTags]}
           remarkRehypeOptions={{ clobberPrefix: footnotePrefix }}
           components={markdownComponents}
         >
