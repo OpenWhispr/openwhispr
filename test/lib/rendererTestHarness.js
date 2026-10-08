@@ -322,7 +322,14 @@ function installMicCaptureGlobals(t) {
   });
 }
 
+// The real useAuth loads the auth client, whose session work outlives a test's
+// browser globals; hooks that only read the user get a signed-out stand-in.
+const SIGNED_OUT_AUTH_MOCK = {
+  "/hooks/useAuth": `export const useAuth = () => ({ isLoaded: true, isSignedIn: false, user: null });`,
+};
+
 module.exports = {
+  SIGNED_OUT_AUTH_MOCK,
   createRendererServer,
   installBrowserGlobals,
   installHookDom,

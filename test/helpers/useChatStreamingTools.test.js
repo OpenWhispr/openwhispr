@@ -4,7 +4,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
-const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const {
+  SIGNED_OUT_AUTH_MOCK,
+  createRendererServer,
+  installBrowserGlobals,
+} = require("../lib/rendererTestHarness");
 
 // Drives the real useChatStreaming hook (one synchronous render, then its
 // sendToAI closure; see useChatStreamingCancellation.test.js) on the
@@ -13,7 +17,7 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 async function renderChatStreaming(
   t,
   hookOptions = {},
-  { settings = {}, electronAPI = {}, subscribed = true } = {}
+  { settings = {}, electronAPI = {}, subscribed = true, mockModules = {} } = {}
 ) {
   installBrowserGlobals(t, {
     initialStorage: { isSubscribed: String(subscribed) },
@@ -21,6 +25,7 @@ async function renderChatStreaming(
   });
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-chat-streaming-tools-test-",
+    mockModules: { ...SIGNED_OUT_AUTH_MOCK, ...mockModules },
   });
   const [{ default: viteI18next }, { initReactI18next }] = await Promise.all([
     vite.ssrLoadModule("i18next"),
@@ -963,4 +968,38 @@ test("the onboarding demo isn't told to send the user off to enable anything", a
   );
   await captured.sendToAI("Reply with times I'm free", []);
   assert.doesNotMatch(systemPromptOf(sentMessages[0]), /Not available in this conversation/);
+});
+
+// Sends capture the prompt the cloud agent receives.
+async function promptsFor(t, mockModules) {
+  const rendered = await renderChatStreaming(t, CONNECTOR_SURFACE, { mockModules });
+  const prompts = [];
+  rendered.reasoningService.processTextStreamingCloud.mock.mockImplementation(
+    (_messages, config) => {
+      prompts.push(config.systemPrompt);
+      return (async function* () {
+        yield { type: "done", finishReason: "stop" };
+      })();
+    }
+  );
+  await rendered.captured.sendToAI("Email Josh a summary", []);
+  return prompts;
+}
+
+test("the signed-in user's name reaches the prompt, so emails are signed with it", async (t) => {
+  const prompts = await promptsFor(t, {
+    "/hooks/useAuth": `
+      export function useAuth() {
+        return { isLoaded: true, isSignedIn: true, user: { name: "Chad Piha", email: "chad@example.com" } };
+      }
+    `,
+  });
+  assert.match(prompts[0], /The user's name is Chad Piha\./);
+  assert.doesNotMatch(prompts[0], /You don't know the user's name/);
+});
+
+test("with no account name the prompt asks for no signature rather than a placeholder", async (t) => {
+  const prompts = await promptsFor(t);
+  assert.doesNotMatch(prompts[0], /The user's name is/);
+  assert.match(prompts[0], /You don't know the user's name/);
 });

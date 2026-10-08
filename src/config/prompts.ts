@@ -102,12 +102,44 @@ const CAPABILITY_RULE =
   "Use a tool when the request needs what it provides, rather than guessing from memory; don't call one when the conversation or the context provided here already has the answer. Never tell the user you can't do something one of these tools covers (for example, never say you can't browse the web when web search is listed). If a tool call fails, say that it failed rather than claiming you lack the ability.";
 
 const OPEN_NOTE_RULE =
-  "The user is asking from inside the note below. When they ask about what was said, decided or written, answer from this note first, and if it doesn't cover the question, say so.";
+  "The user is asking from inside the note below. When they ask about what was said, decided or written, answer from this note, and if it doesn't cover the question, say so.";
+// Overrides search_notes' "search before answering" line: in a note's chat,
+// answers from other notes read as the chat leaking past its note (#2551).
 const OPEN_NOTE_SEARCH_RULE =
-  "Then look in their other notes with search_notes, and name the note your answer comes from.";
+  'In this chat, this rule overrides the search_notes guidance above: use search_notes only when the user asks you to look beyond this note (for example "check my other notes" or "did this come up in another meeting"), and name the note your answer comes from. When this note doesn\'t cover a question, offer to search their other notes rather than searching them yourself.';
 
 const TOOL_TRACE_RULE =
   "Earlier assistant messages may begin with a [Tools used: …] note that the app added to record the tools you called in that turn. Never write such a note yourself.";
+
+const PLACEHOLDER_RULE =
+  "Never leave placeholders such as [Your Name] in an email or message the user will send.";
+const UNNAMED_SIGN_OFF_RULE = `${PLACEHOLDER_RULE} You don't know the user's name, so end an email without a signature line.`;
+const MAX_USER_NAME_LENGTH = 100;
+
+// Controls and format characters, except ZWNJ and ZWJ: Persian and Indic
+// names and emoji need them (the same exception as queryResult.js).
+const HIDDEN_CHARACTERS = /(?![‌‍])[\p{Cc}\p{Cf}]/gu;
+
+// The account name goes into the prompt as one plain line: no line breaks or
+// invisible characters that could restructure the prompt, and an address
+// (an account with no name set) is not a name to sign with.
+function promptUserName(name: string | null | undefined): string | null {
+  if (!name) return null;
+  const plain = name
+    .replace(HIDDEN_CHARACTERS, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, MAX_USER_NAME_LENGTH)
+    .trim();
+  return plain && !plain.includes("@") ? plain : null;
+}
+
+function signOffRule(userName: string | null | undefined): string {
+  const name = promptUserName(userName);
+  return name
+    ? `The user's name is ${name}. When you write an email for the user to send, sign it with their name. ${PLACEHOLDER_RULE}`
+    : UNNAMED_SIGN_OFF_RULE;
+}
 
 /** What the prompt reads from a tool: its name, and for connector tools their own line. */
 export interface PromptTool {
@@ -123,6 +155,8 @@ export interface AgentSystemPromptOptions {
   toolTrace?: boolean;
   /** The note a note's chat was opened from (with its attendees), answered from before any other note. */
   openNote?: string;
+  /** The signed-in user's name, so drafts are signed with it instead of a placeholder. */
+  userName?: string | null;
 }
 
 function toolGroup(tool: PromptTool): string {
@@ -169,6 +203,8 @@ export function getAgentSystemPrompt(
 
   const unavailable = describeUnavailable(options.unavailable ?? []);
   if (unavailable) prompt += "\n\n" + unavailable;
+
+  prompt += "\n\n" + signOffRule(options.userName);
 
   if (options.openNote) {
     const canSearch = tools.some((tool) => tool.name === "search_notes");

@@ -16,6 +16,7 @@ import {
   isWebSearchBlockedByOrg,
 } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
+import { useAuth } from "../../hooks/useAuth";
 import { getUsageState } from "../../lib/usageStore";
 import { readIsSubscribed } from "../../lib/subscriptionFlag";
 import { hasConnectorPlan } from "../../utils/connectorEligibility";
@@ -223,6 +224,11 @@ export function useChatStreaming({
   searchScopeRef.current = searchScope;
   const noteMeetingRef = useRef(noteMeeting);
   noteMeetingRef.current = noteMeeting;
+  // Only an account bound to this session: after a switch, drafts must not
+  // be signed with the previous account's name.
+  const { user } = useAuth();
+  const userNameRef = useRef<string | null>(null);
+  userNameRef.current = user?.name ?? null;
   const toolRegistryRef = useRef<{ key: string; registry: ToolRegistry } | null>(null);
   const toolActivityStartedAtRef = useRef<number | null>(null);
   const toolActivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -493,6 +499,7 @@ export function useChatStreaming({
             unavailable: nameUnavailableCapabilities ? unavailable : [],
             toolTrace: registry !== null,
             openNote: openNoteContext || undefined,
+            userName: userNameRef.current,
           }),
           getDictionaryHintWords(settings),
           settings.uiLanguage
