@@ -3239,19 +3239,24 @@
           "description": "Fluxo de trabalho, dificuldades, reações e citações de um participante"
         },
         "shorten": {
-          "name": "Encurtar",
-          "description": "Deixe o resumo com cerca de metade do tamanho",
-          "cta": "Encurtar o resumo"
+          "name": "Encurtar as notas",
+          "description": "Encurta o resumo de IA salvo mantendo os fatos principais",
+          "cta": "Encurtar as notas"
         },
         "addTldr": {
-          "name": "Adicionar TL;DR",
-          "description": "Coloque um TL;DR de duas ou três frases no início do resumo",
-          "cta": "Adicionar um TL;DR"
+          "name": "Escrever um resumo breve",
+          "description": "Escreve um resumo de duas ou três frases no chat",
+          "cta": "Escrever um resumo breve"
         },
         "slackUpdate": {
           "name": "Atualização no Slack",
           "description": "Escreva uma breve atualização para a equipe no Slack",
           "cta": "Escrever uma atualização no Slack"
+        },
+        "lengthen": {
+          "name": "Expandir as notas",
+          "description": "Expande o resumo de IA salvo com detalhes fundamentados no conteúdo",
+          "cta": "Expandir as notas"
         }
       },
       "errors": {
@@ -3264,12 +3269,10 @@
       },
       "tab": "Ações",
       "output": {
-        "auto": "Automático",
         "chat": "Chat",
         "summary": "Resumo com IA",
-        "chatHint": "Responde no chat da nota e deixa o resumo com IA como está.",
-        "summaryHint": "Edita o resumo com IA da nota, ou escreve um a partir da transcrição se ainda não houver.",
-        "autoHint": "Lê o prompt ao salvar e escolhe o chat ou o resumo com IA."
+        "chatHint": "Esta ação responde no chat. Seu resumo de IA salvo permanece inalterado.",
+        "summaryHint": "Esta ação integrada atualiza seu resumo de IA salvo. Você pode desfazer a alteração."
       },
       "applied": "Resumo com IA atualizado com {{name}}"
     },
@@ -4663,8 +4666,7 @@
     "close": "Fechar chat",
     "newChat": "Novo chat",
     "conversationSelector": "Trocar conversa",
-    "history": "Histórico",
-    "generateSummary": "Gerar resumo"
+    "history": "Histórico"
   },
   "transcriptionPreview": {
     "label": "Pré-visualização",

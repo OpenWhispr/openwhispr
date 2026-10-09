@@ -7,7 +7,12 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 // cut off at that ceiling and saved anyway, with no error and nothing in the
 // UI to say the notes were incomplete (#2142).
 
-const ACTION = { id: 1, name: "Generate Notes", prompt: "Summarize the meeting." };
+const ACTION = {
+  kind: "template",
+  id: 1,
+  name: "Generate Notes",
+  prompt: "Summarize the meeting.",
+};
 const LABELS = { noModel: "no model", noEndpoint: "no endpoint", actionFailed: "failed" };
 const STORED_NOTE = {
   title: "Untitled Note",
@@ -194,6 +199,8 @@ test("a summary action rewrites only the summary and never saves a clipped rewri
     id: 4,
     client_id: "c0ffee00-0000-4000-8000-000000000002",
     kind: "action",
+    is_builtin: 1,
+    translation_key: "notes.actions.builtin.shorten",
     output: "summary",
     name: "Shorten",
     prompt: "Make it half as long.",
@@ -254,6 +261,8 @@ test("a cut-off or empty rewrite reports a notes error, not the dictation one pr
         id: 5,
         client_id: "shorten",
         kind: "action",
+        is_builtin: 1,
+        translation_key: "notes.actions.builtin.shorten",
         output: "summary",
         name: "Shorten",
         prompt: "x",
@@ -273,11 +282,13 @@ test("a summary action on a note without a summary writes one from the transcrip
   const { store, calls, updates } = await loadStore(t);
   const action = {
     id: 6,
-    client_id: "tldr",
+    client_id: "notes.actions.builtin.lengthen",
     kind: "action",
+    is_builtin: 1,
+    translation_key: "notes.actions.builtin.lengthen",
     output: "summary",
-    name: "TL;DR",
-    prompt: "Add a TL;DR.",
+    name: "Make notes longer",
+    prompt: "Add supported detail.",
   };
 
   store.runBackgroundAction(
@@ -290,7 +301,7 @@ test("a summary action on a note without a summary writes one from the transcrip
   );
 
   await waitFor(() => updates.length > 0, "the note to be written");
-  assert.match(calls[0].config.systemPrompt, /no AI summary yet[\s\S]*Add a TL;DR\.$/);
+  assert.match(calls[0].config.systemPrompt, /no AI summary yet[\s\S]*Add supported detail\.$/);
   assert.equal(calls[0].text, "## Meeting Transcript\nAlice: we ship Friday.");
   assert.equal(calls[0].config.requireCompleteOutput, undefined, "nothing to lose yet");
   assert.deepEqual(Object.keys(updates[0].payload), [
@@ -312,6 +323,8 @@ test("a run hands Undo the summary fields it overwrote, and the title when it re
     id: 7,
     client_id: "shorten",
     kind: "action",
+    is_builtin: 1,
+    translation_key: "notes.actions.builtin.shorten",
     output: "summary",
     name: "Shorten",
     prompt: "x",
@@ -370,7 +383,7 @@ test("Undo of a first summary clears it with an empty string, which sync can't i
 });
 
 test("a write the database refused offers no Undo and reports the failure", async (t) => {
-  const { store, updates } = await loadStore(t);
+  const { store } = await loadStore(t);
   globalThis.__updateNoteFails = true;
   store.runBackgroundAction(
     17,
@@ -460,3 +473,89 @@ test("a summary that merely contains the marker is still saved", async (t) => {
   }
   assert.deepEqual(store.consumeErrorEvents(), []);
 });
+
+for (const key of ["shorten", "lengthen"]) {
+  test(`${key} rewrites the requested note and queues Undo even with stale chat output`, async (t) => {
+    const { store, calls, updates } = await loadStore(t);
+    const action = {
+      id: 100,
+      kind: "action",
+      is_builtin: 1,
+      translation_key: `notes.actions.builtin.${key}`,
+      output: "chat",
+      name: "Edited name",
+      prompt: "Revise accurately",
+    };
+    store.runBackgroundAction(
+      101,
+      "## Current Summary\nFriday launch",
+      "new-hash",
+      action,
+      { isCloudMode: true, fromSummary: true, allowTitleGeneration: true },
+      LABELS
+    );
+    await waitFor(() => updates.length === 1, "summary write");
+    assert.equal(updates[0].noteId, 101);
+    assert.deepEqual(Object.keys(updates[0].payload), ["enhanced_content"]);
+    assert.equal(calls[0].config.requireCompleteOutput, true);
+    assert.equal(globalThis.__titleRequests, 0);
+    const [undo] = store.consumeAppliedEvents();
+    assert.equal(undo.noteId, 101);
+    assert.equal(undo.previous.enhanced_content, STORED_NOTE.enhanced_content);
+    assert.equal(undo.previous.enhancement_template_id, STORED_NOTE.enhancement_template_id);
+  });
+}
+
+test("chat actions cannot invoke a model or write a summary through the background runner", async (t) => {
+  const { store, calls, updates } = await loadStore(t);
+  const actions = [
+    { kind: "action", is_builtin: 1, translation_key: "notes.actions.builtin.addTldr" },
+    { kind: "action", is_builtin: 1, translation_key: "notes.actions.builtin.followUpEmail" },
+    { kind: "action", is_builtin: 0, translation_key: "notes.actions.builtin.shorten" },
+    { kind: "action", is_builtin: 0, client_id: "notes.actions.builtin.lengthen" },
+  ];
+  for (const action of actions)
+    store.runBackgroundAction(
+      102,
+      "notes",
+      "hash",
+      { ...action, output: "summary", name: "Make notes shorter", prompt: "Replace saved summary" },
+      { isCloudMode: true, fromSummary: true },
+      LABELS
+    );
+  assert.deepEqual(calls, []);
+  assert.deepEqual(updates, []);
+  assert.equal(store.consumeErrorEvents().length, actions.length);
+  assert.deepEqual(store.consumeAppliedEvents(), []);
+});
+
+for (const key of ["shorten", "lengthen"]) {
+  test(`cancelling ${key} before a provider returns keeps the saved summary and Undo queue unchanged`, async (t) => {
+    const { store, calls, updates } = await loadStore(t);
+    let finish;
+    globalThis.__processTextResult = new Promise((resolve) => {
+      finish = resolve;
+    });
+    const action = {
+      kind: "action",
+      is_builtin: 1,
+      translation_key: `notes.actions.builtin.${key}`,
+      name: key,
+      prompt: "Revise",
+    };
+    store.runBackgroundAction(
+      120,
+      "## Current Summary\nOriginal",
+      "hash",
+      action,
+      { isCloudMode: true, fromSummary: true },
+      LABELS
+    );
+    await waitFor(() => calls.length === 1, "provider start");
+    store.cancelAction(120);
+    finish("A late reply");
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(updates, []);
+    assert.deepEqual(store.consumeAppliedEvents(), []);
+  });
+}

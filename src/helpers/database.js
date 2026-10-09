@@ -12,6 +12,7 @@ const { parseEventTime } = require("./calendarAvailability");
 // a naive value must never outrank created_at when dating a historical row.
 const { hasExplicitTimeZone, parseDbTimestamp, toDbTimestamp } = require("./dbTimestamp");
 const { BUILTIN_ACTIONS, GENERATE_NOTES_KEY, NOTE_ACTION_LIMITS } = require("./builtinActions");
+const { getActionOutput } = require("./actionOutput");
 const { normalizeSections } = require("./templatePrompts");
 const {
   ANALYTICS_COUNTER_VERSION,
@@ -103,7 +104,7 @@ function resolveActionFields(kind, fields) {
     description,
     prompt,
     sections: sections.length > 0 ? JSON.stringify(sections) : null,
-    output,
+    output: getActionOutput({ ...fields, kind }),
   };
 }
 
@@ -115,7 +116,7 @@ function toActionItem(row) {
   } catch {
     sections = null;
   }
-  return { ...row, sections };
+  return { ...row, sections, output: getActionOutput(row) };
 }
 
 function rowMatchesSnapshot(row, snapshot, fields) {
@@ -649,10 +650,9 @@ class DatabaseManager {
 
       // Built-ins: insert any that are missing, and roll a new default out to rows
       // that are still a previous flat default (never a user edit). A built-in's
-      // kind is fixed, so it is settled whatever the prompt; its output is only
-      // filled in, since the user may point an action at the summary instead.
+      // kind and destination are fixed, regardless of prompt edits.
       const selectBuiltin = this.db.prepare(
-        "SELECT id, prompt, sections FROM actions WHERE is_builtin = 1 AND translation_key = ?"
+        "SELECT id, name, description, prompt, sections FROM actions WHERE is_builtin = 1 AND translation_key = ?"
       );
       const insertBuiltin = this.db.prepare(
         "INSERT INTO actions (name, description, prompt, icon, is_builtin, sort_order, translation_key, client_id, kind, sections, output) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)"
@@ -661,7 +661,7 @@ class DatabaseManager {
         "UPDATE actions SET description = ?, prompt = ?, sections = ? WHERE id = ?"
       );
       const settleBuiltin = this.db.prepare(
-        "UPDATE actions SET client_id = ?, kind = ?, sort_order = ?, output = COALESCE(output, ?) WHERE id = ?"
+        "UPDATE actions SET client_id = ?, kind = ?, sort_order = ?, output = ?, name = ?, description = ? WHERE id = ?"
       );
       for (const action of BUILTIN_ACTIONS) {
         const sections = action.sections ? JSON.stringify(action.sections) : null;
@@ -681,7 +681,9 @@ class DatabaseManager {
           );
           continue;
         }
-        if (existing.sections === null && action.previousPrompts.includes(existing.prompt)) {
+        const upgradesPrompt =
+          existing.sections === null && action.previousPrompts.includes(existing.prompt);
+        if (upgradesPrompt) {
           upgradeBuiltin.run(action.description, action.prompt, sections, existing.id);
         }
         settleBuiltin.run(
@@ -689,8 +691,24 @@ class DatabaseManager {
           action.kind,
           action.sortOrder,
           action.output,
+          action.previousNames?.includes(existing.name) ? action.name : existing.name,
+          (
+            action.previousDescriptions?.length
+              ? action.previousDescriptions.includes(existing.description)
+              : upgradesPrompt
+          )
+            ? action.description
+            : existing.description,
           existing.id
         );
+      }
+
+      // Old custom destinations remain accepted on the wire, but only the two
+      // built-in length actions can write summaries. Preserve every other field.
+      const settleOutput = this.db.prepare("UPDATE actions SET output = ? WHERE id = ?");
+      for (const row of this.db.prepare("SELECT * FROM actions").all()) {
+        const output = getActionOutput(row);
+        if (row.output !== output) settleOutput.run(output, row.id);
       }
 
       const actionsWithoutClientId = this.db

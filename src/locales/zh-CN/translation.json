@@ -3239,19 +3239,24 @@
           "description": "参与者的工作流程、痛点、反应和原话"
         },
         "shorten": {
-          "name": "精简",
-          "description": "把摘要缩短到大约一半",
-          "cta": "精简摘要"
+          "name": "缩短笔记",
+          "description": "缩短已保存的 AI 摘要，同时保留关键事实",
+          "cta": "缩短笔记"
         },
         "addTldr": {
-          "name": "添加 TL;DR",
-          "description": "在摘要开头加上两三句话的 TL;DR",
-          "cta": "添加 TL;DR"
+          "name": "撰写简短摘要",
+          "description": "在聊天中撰写两到三句话的简短摘要",
+          "cta": "撰写简短摘要"
         },
         "slackUpdate": {
           "name": "Slack 更新",
           "description": "写一条发到 Slack 的简短团队更新",
           "cta": "写一条 Slack 更新"
+        },
+        "lengthen": {
+          "name": "扩充笔记",
+          "description": "用有依据的细节扩充已保存的 AI 摘要",
+          "cta": "扩充笔记"
         }
       },
       "errors": {
@@ -3264,12 +3269,10 @@
       },
       "tab": "操作",
       "output": {
-        "auto": "自动",
         "chat": "聊天",
         "summary": "AI 摘要",
-        "chatHint": "在笔记的聊天中回复，AI 摘要保持不变。",
-        "summaryHint": "编辑笔记的 AI 摘要；如果还没有摘要，就根据转录内容生成一份。",
-        "autoHint": "保存时读取提示词，并选择聊天或 AI 摘要。"
+        "chatHint": "此操作会在聊天中回复，不会更改已保存的 AI 摘要。",
+        "summaryHint": "此内置操作会更新已保存的 AI 摘要。你可以撤销更改。"
       },
       "applied": "已使用 {{name}} 更新 AI 摘要"
     },
@@ -4663,8 +4666,7 @@
     "close": "关闭聊天",
     "newChat": "新对话",
     "conversationSelector": "切换对话",
-    "history": "历史记录",
-    "generateSummary": "生成摘要"
+    "history": "历史记录"
   },
   "transcriptionPreview": {
     "label": "预览",

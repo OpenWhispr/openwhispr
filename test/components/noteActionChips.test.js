@@ -29,7 +29,14 @@ const FOLLOW_UP = action({
   name: "Follow-up email",
   translation_key: "notes.actions.builtin.followUpEmail",
 });
-const SHORTEN = action({ id: 3, client_id: "shorten", name: "Shorten", output: "summary" });
+const SHORTEN = action({
+  id: 3,
+  client_id: "shorten",
+  name: "Make notes shorter",
+  output: "summary",
+  is_builtin: 1,
+  translation_key: "notes.actions.builtin.shorten",
+});
 
 async function load(t, path, initialStorage) {
   installBrowserGlobals(t, { initialStorage });
@@ -64,11 +71,19 @@ const ACTIONS = [
   FOLLOW_UP,
   action({ id: 4, client_id: "todos", name: "Create to-dos" }),
   SHORTEN,
-  action({ id: 5, client_id: "tldr", name: "Add TL;DR", output: "summary" }),
+  action({
+    id: 7,
+    client_id: "lengthen",
+    name: "Make notes longer",
+    output: "summary",
+    is_builtin: 1,
+    translation_key: "notes.actions.builtin.lengthen",
+  }),
+  action({ id: 5, client_id: "tldr", name: "Write TL;DR", output: "chat" }),
   action({ id: 6, client_id: "outline", name: "Create outline" }),
 ];
 
-test("the open chat shows the first four actions as chips that run on click, disabled while they can't", async (t) => {
+test("the open chat shows the first five actions as chips that run on click, disabled while they can't", async (t) => {
   const ActionChips = await load(t, "/components/notes/ActionChips.tsx");
   const ran = [];
   const props = {
@@ -82,11 +97,11 @@ test("the open chat shows the first four actions as chips that run on click, dis
   const chips = tree.filter((node) => node.type === "button" && node.props.onClick);
   assert.deepEqual(
     chips.map((chip) => chip.key),
-    ["2", "4", "3", "5"]
+    ["2", "4", "3", "7", "5"]
   );
   assert.deepEqual(
     chips.map((chip) => chip.props.disabled),
-    [false, false, true, true],
+    [false, false, true, true, false],
     "a chip is disabled while its action can't run"
   );
   chips[0].props.onClick();
@@ -177,7 +192,7 @@ test("hovering a chip shows what its action does above the row", async (t) => {
   assert.equal(description(), null, "and once the action runs, so it can't cover the reply");
 });
 
-test("the docked chips lead with Generate summary, held back while a summary is being written", async (t) => {
+test("both chat chip rows show five actions without Generate summary", async (t) => {
   const ActionChips = await load(t, "/components/notes/ActionChips.tsx");
   const ran = [];
   const props = {
@@ -185,20 +200,18 @@ test("the docked chips lead with Generate summary, held back while a summary is 
     canRun: () => true,
     onRunAction: (a) => ran.push(a.name),
     onManageActions: () => {},
-    docked: true,
   };
-  const buttons = (generateSummary) =>
-    collect(renderTree(ActionChips, { ...props, generateSummary })).filter(
-      (node) => node.type === "button" && node.props.onClick
+  for (const docked of [false, true]) {
+    const tree = collect(renderTree(ActionChips, { ...props, docked }));
+    const buttons = tree.filter((node) => node.type === "button" && node.props.onClick);
+    assert.deepEqual(
+      buttons.map((node) => node.key),
+      ["2", "4", "3", "7", "5"]
     );
-
-  const idle = buttons({ run: () => ran.push("summary"), disabled: false });
-  assert.equal(idle.length, 5, "Generate summary, then the first four actions");
-  idle[0].props.onClick();
-  idle[1].props.onClick();
-  assert.deepEqual(ran, ["summary", "Follow-up email"]);
-  assert.equal(buttons({ run: () => {}, disabled: true })[0].props.disabled, true);
-  assert.equal(buttons(undefined).length, 4, "no pill when the note has no template to run");
+    assert.ok(!tree.some((node) => node.props.children === "embeddedChat.generateSummary"));
+    buttons[0].props.onClick();
+  }
+  assert.deepEqual(ran, ["Follow-up email", "Follow-up email"]);
 
   // All actions (the menu's trigger) leads the docked row and opens toward the chips.
   const order = (docked) =>
@@ -224,7 +237,7 @@ test("the action menu lists every action, then Manage Actions", async (t) => {
   assert.equal(menuItems.length, ACTIONS.length + 1, "every action, then Manage Actions");
   assert.deepEqual(
     menuItems.slice(0, -1).map((item) => item.props.disabled),
-    [false, false, true, true, false]
+    [false, false, true, true, false, false]
   );
   menuItems.at(-2).props.onClick();
   menuItems.at(-1).props.onClick();

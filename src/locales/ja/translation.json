@@ -3019,19 +3019,24 @@
           "description": "参加者のワークフロー、課題、反応、発言の引用"
         },
         "shorten": {
-          "name": "短くする",
-          "description": "要約を約半分の長さにします",
-          "cta": "要約を短くする"
+          "name": "ノートを短くする",
+          "description": "重要な事実を残して保存済みのAI要約を短くします",
+          "cta": "ノートを短くする"
         },
         "addTldr": {
-          "name": "TL;DRを追加",
-          "description": "要約の先頭に2〜3文のTL;DRを追加します",
-          "cta": "TL;DRを追加"
+          "name": "短い要約を書く",
+          "description": "2〜3文の短い要約をチャットに書きます",
+          "cta": "短い要約を書く"
         },
         "slackUpdate": {
           "name": "Slack用の共有",
           "description": "Slackに投稿するチーム向けの短い共有文を作成します",
           "cta": "Slack用の共有を書く"
+        },
+        "lengthen": {
+          "name": "ノートを詳しくする",
+          "description": "内容に裏付けられた詳細を保存済みのAI要約に追加します",
+          "cta": "ノートを詳しくする"
         }
       },
       "errors": {
@@ -3044,12 +3049,10 @@
       },
       "tab": "アクション",
       "output": {
-        "auto": "自動",
         "chat": "チャット",
         "summary": "AI要約",
-        "chatHint": "ノートのチャットで回答し、AI要約はそのまま残します。",
-        "summaryHint": "ノートのAI要約を編集します。要約がまだない場合は文字起こしから作成します。",
-        "autoHint": "保存時にプロンプトを読み取り、チャットかAI要約かを選びます。"
+        "chatHint": "このアクションはチャットに返信します。保存済みのAI要約は変更されません。",
+        "summaryHint": "この組み込みアクションは保存済みのAI要約を更新します。変更は元に戻せます。"
       },
       "applied": "{{name}}でAI要約を更新しました"
     },
@@ -4663,8 +4666,7 @@
     "close": "チャットを閉じる",
     "newChat": "新しいチャット",
     "conversationSelector": "会話を切り替え",
-    "history": "履歴",
-    "generateSummary": "要約を作成"
+    "history": "履歴"
   },
   "transcriptionPreview": {
     "label": "プレビュー",

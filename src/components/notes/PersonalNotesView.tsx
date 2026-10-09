@@ -15,7 +15,6 @@ import { useResizableWidth } from "../../hooks/useResizableWidth";
 import type { NoteMoveTarget } from "../../hooks/useNoteDragAndDrop";
 import type { ActionItem, ActionKind, NoteItem } from "../../types/electron";
 import { buildNoteRunInput } from "../../helpers/templatePrompts";
-import { inferActionOutput } from "../../utils/inferActionOutput";
 import {
   useSettingsStore,
   selectIsCloudNoteFormattingMode,
@@ -825,7 +824,6 @@ export default function PersonalNotesView({
               open={managerKind !== null}
               onOpenChange={(open) => !open && setManagerKind(null)}
               initialKind={managerKind ?? "template"}
-              onInferOutput={(prompt) => inferActionOutput(prompt, effectiveModelId, isCloudMode)}
             />
           </>
         ) : activeContext && overviewSpace ? (

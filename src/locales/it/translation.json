@@ -3239,19 +3239,24 @@
           "description": "Flusso di lavoro, problemi, reazioni e citazioni di un partecipante"
         },
         "shorten": {
-          "name": "Accorcia",
-          "description": "Rendi il riepilogo lungo circa la metà",
-          "cta": "Accorcia il riepilogo"
+          "name": "Accorcia le note",
+          "description": "Accorcia il riepilogo IA salvato mantenendo i fatti principali",
+          "cta": "Accorcia le note"
         },
         "addTldr": {
-          "name": "Aggiungi TL;DR",
-          "description": "Metti un TL;DR di due o tre frasi all'inizio del riepilogo",
-          "cta": "Aggiungi un TL;DR"
+          "name": "Scrivi un breve riepilogo",
+          "description": "Scrivi un riepilogo di due o tre frasi nella chat",
+          "cta": "Scrivi un breve riepilogo"
         },
         "slackUpdate": {
           "name": "Aggiornamento Slack",
           "description": "Scrivi un breve aggiornamento per il team da pubblicare su Slack",
           "cta": "Scrivi un aggiornamento Slack"
+        },
+        "lengthen": {
+          "name": "Amplia le note",
+          "description": "Amplia il riepilogo IA salvato con dettagli supportati dal contenuto",
+          "cta": "Amplia le note"
         }
       },
       "errors": {
@@ -3264,12 +3269,10 @@
       },
       "tab": "Azioni",
       "output": {
-        "auto": "Automatico",
         "chat": "Chat",
         "summary": "Riepilogo AI",
-        "chatHint": "Risponde nella chat della nota e lascia invariato il riepilogo AI.",
-        "summaryHint": "Modifica il riepilogo AI della nota, oppure lo scrive dalla trascrizione se non c'è ancora.",
-        "autoHint": "Legge il prompt al salvataggio e sceglie la chat o il riepilogo AI."
+        "chatHint": "Questa azione risponde nella chat. Il riepilogo IA salvato resta invariato.",
+        "summaryHint": "Questa azione integrata aggiorna il riepilogo IA salvato. Puoi annullare la modifica."
       },
       "applied": "Riepilogo AI aggiornato con {{name}}"
     },
@@ -4663,8 +4666,7 @@
     "close": "Chiudi chat",
     "newChat": "Nuova chat",
     "conversationSelector": "Cambia conversazione",
-    "history": "Cronologia",
-    "generateSummary": "Genera riepilogo"
+    "history": "Cronologia"
   },
   "transcriptionPreview": {
     "label": "Anteprima",

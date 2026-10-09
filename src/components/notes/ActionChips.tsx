@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Blocks, TextCursorInput } from "../icons";
+import { Blocks } from "../icons";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent } from "../ui/dropdown-menu";
 import { cn } from "../lib/utils";
 import { getActionName, getActionDescription } from "../../stores/actionStore";
@@ -8,7 +8,7 @@ import type { ActionItem } from "../../types/electron";
 import ActionMenuItems, { ActionOutputBadge, type ActionMenuItemsProps } from "./ActionMenuItems";
 import { getActionIcon } from "./actionIcons";
 
-const VISIBLE_CHIPS = 4;
+const VISIBLE_CHIPS = 5;
 
 const CHIP_CLASS = cn(
   "inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-xs text-foreground/60",
@@ -32,8 +32,6 @@ const chipEntrance = (index: number) => ({ animationDelay: `${140 + index * 40}m
 interface ActionChipsProps extends ActionMenuItemsProps {
   /** The docked chat's look: filled pills on its tray. */
   docked?: boolean;
-  /** A first pill that writes the note's AI summary; absent when the note has no template to run. */
-  generateSummary?: { run: () => void; disabled: boolean };
 }
 
 /**
@@ -47,7 +45,6 @@ export default function ActionChips({
   onRunAction,
   onManageActions,
   docked = false,
-  generateSummary,
 }: ActionChipsProps) {
   const { t } = useTranslation();
   const [previewed, setPreviewed] = useState<ActionItem | null>(null);
@@ -55,7 +52,7 @@ export default function ActionChips({
   const chipClass = docked ? DOCKED_CHIP_CLASS : CHIP_CLASS;
   const PreviewedIcon = previewed && getActionIcon(previewed);
   // Docked, All actions leads the row and scrolls with the chips, opening toward them.
-  const firstChip = (docked ? 1 : 0) + (generateSummary ? 1 : 0);
+  const firstChip = docked ? 1 : 0;
   const allActions = (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -118,20 +115,6 @@ export default function ActionChips({
           )}
         >
           {docked && allActions}
-          {generateSummary && (
-            <button
-              type="button"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={generateSummary.run}
-              onPointerEnter={() => setPreviewed(null)}
-              disabled={generateSummary.disabled}
-              className={chipClass}
-              style={chipEntrance(docked ? 1 : 0)}
-            >
-              <TextCursorInput size={14} className={CHIP_ICON_CLASS} />
-              {t("embeddedChat.generateSummary")}
-            </button>
-          )}
           {actions.slice(0, VISIBLE_CHIPS).map((action, index) => {
             const Icon = getActionIcon(action);
             return (

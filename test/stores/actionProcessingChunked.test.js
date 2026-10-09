@@ -5,7 +5,12 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 // A note that does not fit the local model's window is summarised in parts and
 // then merged (#2142 part 3). Everything that fits keeps today's single call.
 
-const ACTION = { id: 1, name: "Generate Notes", prompt: "Summarize the meeting." };
+const ACTION = {
+  kind: "template",
+  id: 1,
+  name: "Generate Notes",
+  prompt: "Summarize the meeting.",
+};
 const LABELS = { noModel: "no model", noEndpoint: "no endpoint", actionFailed: "failed" };
 const LINE = "Alice: we agreed to ship the billing migration on Friday after QA.\n";
 const BIG_BUDGET = { success: true, maxContextTokens: 131072, modelName: "Qwen3.5 9B" };
@@ -180,11 +185,13 @@ test("a summary action writing a first summary splits a refused recording like a
   const { store, calls, updates } = await loadStore(t, { failFirst: true });
   const tldr = {
     id: 2,
-    client_id: "tldr",
+    client_id: "notes.actions.builtin.lengthen",
     kind: "action",
+    is_builtin: 1,
+    translation_key: "notes.actions.builtin.lengthen",
     output: "summary",
     name: "Add TL;DR",
-    prompt: "Add a TL;DR.",
+    prompt: "Add supported detail.",
   };
   run(store, 30, longMaterial(400), { fromSummary: false }, tldr);
   await waitFor(() => updates.length > 0, "save");
@@ -200,7 +207,7 @@ test("a summary action writing a first summary splits a refused recording like a
     assert.equal(part.config.refuseClippedByWindow, false);
   }
   assert.equal(calls.at(-1).config.requireCompleteOutput, undefined);
-  assert.match(calls.at(-1).config.systemPrompt, /no AI summary yet[\s\S]*Add a TL;DR\./);
+  assert.match(calls.at(-1).config.systemPrompt, /no AI summary yet[\s\S]*Add supported detail\./);
   assert.deepEqual(Object.keys(updates[0].payload), [
     "enhanced_content",
     "enhanced_at_content_hash",

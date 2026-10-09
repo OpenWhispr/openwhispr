@@ -194,3 +194,17 @@ test("a chat action works from the summary when there is one, and the transcript
     );
   }
 });
+
+test("TL;DR is a standalone chat reply and lengthening keeps supported facts", async () => {
+  const { BUILTIN_ACTIONS, compileChatActionPrompt } = await load();
+  const tldr = BUILTIN_ACTIONS.find((a) => a.translationKey.endsWith(".addTldr"));
+  assert.equal(tldr.output, "chat");
+  const request = compileChatActionPrompt(tldr, { fromSummary: true });
+  assert.match(request, /two- or three-sentence TL;DR/);
+  assert.match(request, /Return only the TL;DR in chat/);
+  assert.doesNotMatch(request, /Leave the rest|at the very top|complete revised summary/);
+  const longer = BUILTIN_ACTIONS.find((a) => a.translationKey.endsWith(".lengthen"));
+  assert.match(longer.prompt, /Never invent facts/);
+  assert.match(longer.prompt, /do not pad with repetition/);
+  assert.match(longer.prompt, /keep every name, number, date, decision, and action item/);
+});

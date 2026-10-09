@@ -3607,19 +3607,24 @@
           "description": "Arbeitsablauf, Probleme, Reaktionen und Zitate einer teilnehmenden Person"
         },
         "shorten": {
-          "name": "Kürzen",
-          "description": "Die Zusammenfassung etwa halb so lang machen",
-          "cta": "Zusammenfassung kürzen"
+          "name": "Notizen kürzen",
+          "description": "Die gespeicherte KI-Zusammenfassung kürzen und wichtige Fakten beibehalten",
+          "cta": "Notizen kürzen"
         },
         "addTldr": {
-          "name": "TL;DR hinzufügen",
-          "description": "Ein TL;DR aus zwei oder drei Sätzen an den Anfang der Zusammenfassung setzen",
-          "cta": "TL;DR hinzufügen"
+          "name": "Kurzfassung schreiben",
+          "description": "Eine Kurzfassung mit zwei bis drei Sätzen im Chat schreiben",
+          "cta": "Kurzfassung schreiben"
         },
         "slackUpdate": {
           "name": "Slack-Update",
           "description": "Ein kurzes Team-Update für Slack schreiben",
           "cta": "Slack-Update schreiben"
+        },
+        "lengthen": {
+          "name": "Notizen erweitern",
+          "description": "Die gespeicherte KI-Zusammenfassung mit belegten Details erweitern",
+          "cta": "Notizen erweitern"
         }
       },
       "errors": {
@@ -3632,12 +3637,10 @@
       },
       "tab": "Aktionen",
       "output": {
-        "auto": "Automatisch",
         "chat": "Chat",
         "summary": "KI-Zusammenfassung",
-        "chatHint": "Antwortet im Chat der Notiz und lässt die KI-Zusammenfassung unverändert.",
-        "summaryHint": "Bearbeitet die KI-Zusammenfassung der Notiz oder erstellt sie aus dem Transkript, falls es noch keine gibt.",
-        "autoHint": "Liest beim Speichern den Prompt und wählt den Chat oder die KI-Zusammenfassung."
+        "chatHint": "Diese Aktion antwortet im Chat. Deine gespeicherte KI-Zusammenfassung bleibt unverändert.",
+        "summaryHint": "Diese integrierte Aktion aktualisiert deine gespeicherte KI-Zusammenfassung. Du kannst die Änderung rückgängig machen."
       },
       "applied": "KI-Zusammenfassung mit {{name}} aktualisiert"
     },
@@ -4739,8 +4742,7 @@
     "close": "Chat schließen",
     "newChat": "Neuer Chat",
     "conversationSelector": "Unterhaltung wechseln",
-    "history": "Verlauf",
-    "generateSummary": "Zusammenfassung erstellen"
+    "history": "Verlauf"
   },
   "transcriptionPreview": {
     "label": "Vorschau",

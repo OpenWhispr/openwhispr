@@ -8,16 +8,15 @@ import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
 import { useToast } from "../ui/useToast";
 import { cn } from "../lib/utils";
 import { useActionsOfKind, initializeActions, getActionName } from "../../stores/actionStore";
+import { getActionOutput } from "../../helpers/actionOutput";
 import { NOTE_ACTION_LIMITS } from "../../helpers/builtinActions";
 import { normalizeSections } from "../../helpers/templatePrompts";
-import type { ActionItem, ActionKind, ActionOutput, TemplateSection } from "../../types/electron";
+import type { ActionItem, ActionKind, TemplateSection } from "../../types/electron";
 
 interface ActionManagerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialKind: ActionKind;
-  /** Picks chat or summary for an action saved with Auto. */
-  onInferOutput: (prompt: string) => Promise<ActionOutput>;
 }
 
 // Rows keep a stable key while sections are reordered or removed.
@@ -37,12 +36,6 @@ const TEXTAREA_CLASS = cn(
   "font-mono text-[13px]"
 );
 
-const OUTPUT_HINT_KEYS = {
-  auto: "notes.actions.output.autoHint",
-  chat: "notes.actions.output.chatHint",
-  summary: "notes.actions.output.summaryHint",
-} as const;
-
 const ICON_BUTTON_CLASS =
   "p-1 rounded-md text-muted-foreground/70 hover:text-foreground/70 hover:bg-foreground/5 dark:hover:bg-white/6 transition-colors duration-150 disabled:opacity-30 disabled:pointer-events-none";
 
@@ -50,7 +43,6 @@ export default function ActionManagerDialog({
   open,
   onOpenChange,
   initialKind,
-  onInferOutput,
 }: ActionManagerDialogProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -60,7 +52,6 @@ export default function ActionManagerDialog({
   const [description, setDescription] = useState("");
   const [prompt, setPrompt] = useState("");
   const [sections, setSections] = useState<SectionDraft[]>([]);
-  const [output, setOutput] = useState<ActionOutput | "auto">("auto");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -73,7 +64,6 @@ export default function ActionManagerDialog({
     setDescription("");
     setPrompt("");
     setSections([]);
-    setOutput("auto");
     setEditingId(null);
   };
 
@@ -101,7 +91,6 @@ export default function ActionManagerDialog({
     setDescription(action.description);
     setPrompt(action.prompt);
     setSections(toDrafts(action.sections));
-    setOutput(action.output ?? "chat");
     setIsCreating(false);
   };
 
@@ -155,7 +144,7 @@ export default function ActionManagerDialog({
     try {
       const fields = isTemplate
         ? { sections: savedSections }
-        : { output: output === "auto" ? await onInferOutput(prompt.trim()) : output };
+        : { output: selectedAction ? getActionOutput(selectedAction) : ("chat" as const) };
       const result =
         editingId !== null
           ? await window.electronAPI.updateAction(editingId, {
@@ -176,6 +165,8 @@ export default function ActionManagerDialog({
         return;
       }
       if (editingId === null) setIsCreating(false);
+    } catch {
+      toast({ title: t("notes.actions.errors.saveFailed"), variant: "destructive" });
     } finally {
       setIsSaving(false);
     }
@@ -189,8 +180,7 @@ export default function ActionManagerDialog({
       ? name !== selectedAction.name ||
         description !== selectedAction.description ||
         prompt !== selectedAction.prompt ||
-        JSON.stringify(savedSections) !== JSON.stringify(selectedAction.sections ?? []) ||
-        (!isTemplate && output !== selectedAction.output)
+        JSON.stringify(savedSections) !== JSON.stringify(selectedAction.sections ?? [])
       : false;
 
   return (
@@ -202,7 +192,7 @@ export default function ActionManagerDialog({
         <div className="flex h-[min(44rem,85vh)]">
           {/* Left panel — template/action list */}
           <div
-            // Auto can take a moment on save; switching away then would drop the new draft.
+            // Keep the draft selected until the save has finished.
             inert={isSaving}
             className={cn(
               "w-56 shrink-0 border-e border-border dark:border-white/10 flex flex-col bg-card/50 dark:bg-surface-1/30",
@@ -400,30 +390,13 @@ export default function ActionManagerDialog({
                   />
 
                   {!isTemplate && (
-                    <div className="space-y-1.5">
-                      <Tabs
-                        value={output}
-                        onValueChange={(value) => setOutput(value as ActionOutput | "auto")}
-                      >
-                        <TabsList className="h-8 px-1 py-0.5">
-                          {/* A saved action keeps the output it was given, so Auto is for new ones. */}
-                          {editingId === null && (
-                            <TabsTrigger value="auto" className="px-3 py-1 text-xs">
-                              {t("notes.actions.output.auto")}
-                            </TabsTrigger>
-                          )}
-                          <TabsTrigger value="chat" className="px-3 py-1 text-xs">
-                            {t("notes.actions.output.chat")}
-                          </TabsTrigger>
-                          <TabsTrigger value="summary" className="px-3 py-1 text-xs">
-                            {t("notes.actions.output.summary")}
-                          </TabsTrigger>
-                        </TabsList>
-                      </Tabs>
-                      <p className="text-xs text-muted-foreground/70">
-                        {t(OUTPUT_HINT_KEYS[output])}
-                      </p>
-                    </div>
+                    <p className="text-xs text-muted-foreground/70">
+                      {t(
+                        selectedAction && getActionOutput(selectedAction) === "summary"
+                          ? "notes.actions.output.summaryHint"
+                          : "notes.actions.output.chatHint"
+                      )}
+                    </p>
                   )}
 
                   {/* Prompt — a template's context, or what an action does */}
