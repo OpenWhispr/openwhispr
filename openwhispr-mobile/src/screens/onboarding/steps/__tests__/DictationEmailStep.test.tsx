@@ -110,7 +110,7 @@ it('offers retry after a recording failure, without an example', async () => {
   expect(screen.queryByText('You say')).toBeNull();
   expect(screen.getByLabelText('Your dictated email')).toBeTruthy();
   fireEvent.press(screen.getByText('Retry'));
-  await waitFor(() => expect(screen.queryByText('Network unavailable')).toBeNull());
+  await waitFor(() => expect(screen.queryByText('Network unavailable')).not.toBeOnTheScreen());
   expect(mockEnsureSession).toHaveBeenCalledTimes(1);
   expect(screen.queryByText('Retry')).toBeNull();
 });
