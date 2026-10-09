@@ -517,9 +517,17 @@ class AssemblyAiStreaming {
                 break;
               }
 
-              if (previousTurn && previousTurn.normalized === normalizedTranscript) {
-                // AssemblyAI can emit the same turn twice (raw then formatted). Replace previous
-                // turn only when this variant is formatted, otherwise ignore duplicate.
+              // AssemblyAI ends each turn twice (raw then formatted) under one turn_order.
+              // Match on turn_order: formatting can change the words, and the speaker can
+              // repeat themselves in the next turn. Text is the fallback without turn_order.
+              const isSameTurn =
+                previousTurn &&
+                (Number.isInteger(message.turn_order) && Number.isInteger(previousTurn.order)
+                  ? previousTurn.order === message.turn_order
+                  : previousTurn.normalized === normalizedTranscript);
+
+              if (isSameTurn) {
+                // Replace previous turn only when this variant is formatted, otherwise ignore duplicate.
                 if (message.turn_is_formatted && previousTurn.text !== trimmedTranscript) {
                   previousTurn.text = trimmedTranscript;
                   this.completedSegments[this.completedSegments.length - 1] = trimmedTranscript;
@@ -541,6 +549,7 @@ class AssemblyAiStreaming {
               const speechTimestamp = this.speechStartedAt || Date.now();
               this.speechStartedAt = null;
               this.turns.push({
+                order: message.turn_order,
                 text: trimmedTranscript,
                 normalized: normalizedTranscript,
                 startedAt: speechTimestamp,

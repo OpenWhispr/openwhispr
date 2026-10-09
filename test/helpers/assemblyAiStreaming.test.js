@@ -418,3 +418,61 @@ test("a warm connection opened at another sample rate is not reused", async () =
     }
   });
 });
+
+// With format_turns=true AssemblyAI ends every turn twice under one turn_order:
+// an unformatted end_of_turn, then its formatted replacement.
+function endOfTurn(turnOrder, transcript, formatted) {
+  return JSON.stringify({
+    type: "Turn",
+    turn_order: turnOrder,
+    end_of_turn: true,
+    turn_is_formatted: formatted,
+    transcript,
+  });
+}
+
+function collectFinals(streaming) {
+  const finals = [];
+  streaming.onFinalTranscript = (text) => finals.push(text);
+  return finals;
+}
+
+test("a repeated utterance in the next turn is kept, not dropped as the formatted duplicate", () => {
+  const streaming = new AssemblyAiStreaming();
+  const finals = collectFinals(streaming);
+
+  streaming.handleMessage(endOfTurn(0, "yeah", false));
+  streaming.handleMessage(endOfTurn(0, "Yeah.", true));
+  streaming.handleMessage(endOfTurn(1, "yeah", false));
+  streaming.handleMessage(endOfTurn(1, "Yeah.", true));
+
+  assert.equal(streaming.accumulatedText, "Yeah. Yeah.");
+  assert.deepEqual(streaming.completedSegments, ["Yeah.", "Yeah."]);
+  assert.equal(finals.at(-1), "Yeah. Yeah.");
+});
+
+test("a formatted turn whose words changed replaces its unformatted final instead of repeating it", () => {
+  const streaming = new AssemblyAiStreaming();
+  const finals = collectFinals(streaming);
+
+  streaming.handleMessage(endOfTurn(0, "i paid twenty five dollars", false));
+  streaming.handleMessage(endOfTurn(0, "I paid $25.", true));
+
+  assert.equal(streaming.accumulatedText, "I paid $25.");
+  assert.deepEqual(streaming.completedSegments, ["I paid $25."]);
+  assert.deepEqual(finals, ["i paid twenty five dollars", "I paid $25."]);
+});
+
+test("without turn_order a formatted final still replaces its matching unformatted final", () => {
+  const streaming = new AssemblyAiStreaming();
+  const finals = collectFinals(streaming);
+  const turn = (transcript, formatted) =>
+    JSON.stringify({ type: "Turn", end_of_turn: true, turn_is_formatted: formatted, transcript });
+
+  streaming.handleMessage(turn("my name is sonny", false));
+  streaming.handleMessage(turn("My name is Sonny.", true));
+  streaming.handleMessage(turn("my name is sonny", false));
+
+  assert.equal(streaming.accumulatedText, "My name is Sonny.");
+  assert.deepEqual(finals, ["my name is sonny", "My name is Sonny."]);
+});
