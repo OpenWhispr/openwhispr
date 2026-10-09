@@ -80,6 +80,38 @@ async function waitFor(predicate, label) {
   throw new Error(`timed out waiting for ${label}`);
 }
 
+test("templates and summary actions carry source fidelity once, apart from the material and the saved summary", async (t) => {
+  const { SOURCE_FIDELITY_RULE } = await import("../../src/helpers/sourceFidelity.js");
+  const { BUILTIN_ACTIONS } = await import("../../src/helpers/builtinActions.js");
+  const { store, calls, updates } = await loadStore(t);
+  const material = "## Meeting Transcript\nAlice: Not approved; Bob will check this weekend.";
+  const summary = "## Current Summary\n- Bob will check this weekend; not approved yet.";
+  const reply = "- Not approved yet. Bob will check this weekend.";
+  globalThis.__processTextResult = reply;
+
+  for (const key of ["generateNotes", "shorten", "lengthen"]) {
+    const builtin = BUILTIN_ACTIONS.find((action) => action.translationKey.endsWith(`.${key}`));
+    for (const fromSummary of [false, true]) {
+      const noteId = 100 + updates.length;
+      const input = builtin.kind === "action" && fromSummary ? summary : material;
+      store.runBackgroundAction(
+        noteId,
+        input,
+        `hash-${noteId}`,
+        { ...builtin, id: noteId, translation_key: builtin.translationKey },
+        { modelId: "gpt-4.1", isCloudMode: true, isMeetingNote: true, fromSummary },
+        LABELS
+      );
+      await waitFor(() => updates.some((update) => update.noteId === noteId), "the summary save");
+
+      assert.equal(calls.at(-1).config.systemPrompt.split(SOURCE_FIDELITY_RULE).length - 1, 1);
+      assert.equal(calls.at(-1).text, input, "the instructions stay separate from source material");
+      assert.equal(updates.at(-1).payload.enhanced_content, reply, "only model output is saved");
+      assert.equal(updates.at(-1).payload.content, undefined, "personal notes are unchanged");
+    }
+  }
+});
+
 test("note formatting asks for enough output tokens to hold a long meeting summary", async (t) => {
   const { store, calls, updates } = await loadStore(t);
 

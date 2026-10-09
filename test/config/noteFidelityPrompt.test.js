@@ -19,10 +19,14 @@ test("source fidelity instructions reach chat and every note-generation entry po
       prompts.push(
         compileSummaryActionPrompt({ prompt: "Shorten this" }, { fromSummary, isMeetingNote })
       );
-      prompts.push(compileChatActionPrompt({ prompt: "Draft a follow-up" }, { fromSummary }));
+      prompts.push(
+        getAgentSystemPrompt([]) +
+          "\n\n" +
+          compileChatActionPrompt({ prompt: "Draft a follow-up" }, { fromSummary })
+      );
     }
   }
-  for (const prompt of prompts) assert.ok(prompt.includes(SOURCE_FIDELITY_RULE));
+  for (const prompt of prompts) assert.equal(prompt.split(SOURCE_FIDELITY_RULE).length - 1, 1);
   assert.match(SOURCE_FIDELITY_RULE, /uncertainty, negation, and status/);
   assert.match(SOURCE_FIDELITY_RULE, /task with its stated owner and deadline/);
   assert.match(SOURCE_FIDELITY_RULE, /before\/after timing/);
