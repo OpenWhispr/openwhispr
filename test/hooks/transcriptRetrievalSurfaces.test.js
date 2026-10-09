@@ -316,7 +316,7 @@ test("switching notes during a note read drops cancelled transcript evidence bef
 });
 
 test("the note chat sends a transcript whole when it fits the model, else a preview", async (t) => {
-  const transcript =
+  let transcript =
     "Alex: Review the agenda. ".repeat(1200) + "Priya: The launch code is violet heron.";
   let root;
   let reasoning;
@@ -415,63 +415,17 @@ test("the note chat sends a transcript whole when it fits the model, else a prev
     whole,
     "a whole-note action keeps the whole transcript"
   );
-});
-
-test("a note stored as segments reaches the note chat as speaker lines, not JSON", async (t) => {
-  let root;
-  let reasoning;
-  t.after(async () => {
-    if (root) await React.act(async () => root.unmount());
-    reasoning?.destroy();
-  });
-  installBrowserGlobals(t, {
-    initialStorage: { isSubscribed: "false" },
-    window: {
-      clearInterval: noop,
-      electronAPI: {
-        getConversationsForNote: async () => [],
-        createAgentConversation: async () => ({ id: 1 }),
-        addAgentMessage: async () => {},
-      },
-    },
-  });
-  const container = installInteractiveDom(t);
-  const vite = await createRendererServer(t, { mockModules: SIGNED_OUT_AUTH_MOCK });
-  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
-  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
-  usePolicyStore.setState({ status: "unmanaged", policy: null });
-  useSettingsStore.setState({ isSignedIn: true, chatAgentMode: "openwhispr" });
-  reasoning = (await vite.ssrLoadModule("/services/ReasoningService.ts")).default;
-  let systemPrompt;
-  t.mock.method(reasoning, "processTextStreamingCloud", (_messages, config) => {
-    systemPrompt = config.systemPrompt;
-    return (async function* () {
-      yield { type: "content", text: "ok" };
-      yield { type: "done", finishReason: "stop" };
-    })();
-  });
-  const segments = JSON.stringify([
-    { text: "Ship it Friday.", speakerName: "Priya", source: "system", timestamp: 1700000000000 },
-    { text: "Agreed.", source: "mic", timestamp: 1700000005000 },
-  ]);
-  const { useEmbeddedChat } = await vite.ssrLoadModule("/hooks/useEmbeddedChat.ts");
-  let chat;
-  function Harness() {
-    chat = useEmbeddedChat({
-      noteId: 7,
-      folderId: null,
-      noteTitle: "Launch",
-      noteContent: "",
-      noteTranscript: segments,
-    });
-    return null;
-  }
-  root = createRoot(container);
+  // About a token per CJK character: under the old character budget, over the token one.
+  transcript = "決定事項を確認した。".repeat(600);
   await React.act(async () => root.render(React.createElement(Harness)));
-  await React.act(async () => chat.sendMessage(REQUEST));
-  assert.ok(
-    systemPrompt.includes(JSON.stringify("Priya: Ship it Friday.\nNote taker: Agreed.")),
-    "the transcript is readable lines"
+  assert.deepEqual(
+    await ask(local("qwen3.5-9b-q4_k_m")),
+    { whole: false, preview: true, rule: true },
+    "a CJK transcript is budgeted by tokens, not characters"
   );
-  assert.ok(!systemPrompt.includes("speakerName"));
+  assert.deepEqual(
+    await ask({ chatAgentMode: "openwhispr" }),
+    whole,
+    "hosted still takes it whole"
+  );
 });

@@ -35,7 +35,7 @@ import {
 import { resolveUnavailableCapabilities } from "../../config/agentCapabilities";
 import { getDictionaryHintWords } from "../../utils/snippets";
 import { noteAttendeesContext, withoutAttendeesFence } from "../../utils/noteAttendees";
-import { FULL_TRANSCRIPT_MAX_CHARS } from "../../utils/transcriptEvidence";
+import { FULL_TRANSCRIPT_MAX_TOKENS } from "../../utils/transcriptEvidence";
 import { createToolRegistry } from "../../services/tools";
 import {
   executeTool,
@@ -132,7 +132,7 @@ interface UseChatStreamingOptions {
    * The note a note's chat is about. The model answers from it first, and no
    * other notes are added up front: it reaches them through search_notes.
    */
-  openNote?: string | ((maxTranscriptChars: number) => OpenNoteContext);
+  openNote?: string | ((maxTranscriptTokens: number) => OpenNoteContext);
   /** Optional container scope applied to RAG and the search_notes tool (container overview chat). */
   searchScope?: ContainerScope;
   /**
@@ -494,15 +494,15 @@ export function useChatStreaming({
         if (cancelled() || !mountedRef.current) return;
         // A transcript too long for the model is read through get_note, except
         // by whole-note actions, which work from the complete source.
-        const maxTranscriptChars =
+        const maxTranscriptTokens =
           registry?.get("get_note") && !options?.requestText
-            ? FULL_TRANSCRIPT_MAX_CHARS[
+            ? FULL_TRANSCRIPT_MAX_TOKENS[
                 !isCloudAgent && (isLocalProvider || isLanAgent) ? "selfHosted" : "hosted"
               ]
             : Infinity;
         const currentNote: OpenNoteContext =
           typeof openNoteRef.current === "function"
-            ? openNoteRef.current(maxTranscriptChars)
+            ? openNoteRef.current(maxTranscriptTokens)
             : { text: openNoteRef.current ?? "", transcriptPreview: false };
         // Only main's attendee block may carry its fence: note text and search
         // results can't fake a second list.

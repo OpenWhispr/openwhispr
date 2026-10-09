@@ -2,6 +2,7 @@ import type { ToolDefinition, ToolResult } from "./ToolRegistry";
 import { withoutAttendeesFence } from "../../utils/noteAttendees";
 import {
   NOTE_TAKER_LABEL,
+  isTranscriptRevision,
   isTranscriptRevisionCurrent,
   readableTranscript,
   transcriptPage,
@@ -34,7 +35,7 @@ function failure(displayText: string): ToolResult {
 
 export const getNoteTool: ToolDefinition = {
   name: "get_note",
-  description: `Get a note's separate personal content, saved AI summary, and the start of its source transcript by ID. Read before editing to identify the intended field. Use search_notes first if the note ID is unknown. For more of the transcript, supply transcript_query (a literal phrase or a speaker's name) or transcript_offset; these calls return only a 500-character passage of \`Speaker: text\` lines (the person taking the notes is "${NOTE_TAKER_LABEL}"), with time references and paging metadata.`,
+  description: `Get a note's separate personal content, saved AI summary, and the start of its source transcript by ID. Read before editing to identify the intended field. Use search_notes first if the note ID is unknown. For more of the transcript, supply transcript_query (a literal phrase or a speaker's name) or a transcript_offset past 0; these calls return only a 500-character passage of \`Speaker: text\` lines (the person taking the notes is "${NOTE_TAKER_LABEL}"), with the times it spans and paging metadata.`,
   parameters: {
     type: "object",
     properties: {
@@ -82,12 +83,13 @@ export const getNoteTool: ToolDefinition = {
         `Invalid transcript_query: pass a phrase of at most ${MAX_QUERY_LENGTH} characters.`
       );
     }
-    if (revision === null) {
+    if (revision === null || (revision !== undefined && !isTranscriptRevision(revision))) {
       return failure(
         "Invalid transcript_revision: pass the string from a previous get_note result."
       );
     }
-    const transcriptOnly = query !== undefined || offset !== undefined;
+    // Offset 0 is the default many models fill in, so it still reads the whole note.
+    const transcriptOnly = query !== undefined || (offset ?? 0) > 0;
 
     try {
       const note = await window.electronAPI.getNote(id);

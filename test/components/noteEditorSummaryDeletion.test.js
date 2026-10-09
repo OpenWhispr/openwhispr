@@ -435,7 +435,7 @@ test("the note's chat learns who is viewing the note and its calendar event", as
   await unmount();
 });
 
-test("the note's chat names the user's own speakers and leaves attendees to the attendee block", async (t) => {
+test("the note's chat labels speakers as get_note does and leaves attendees to the attendee block", async (t) => {
   t.after(() => {
     delete globalThis.__embeddedChatOptions;
     delete globalThis.__noteEditorAuth;
@@ -451,15 +451,19 @@ test("the note's chat names the user's own speakers and leaves attendees to the 
   ]);
   const chatTranscript = () => globalThis.__embeddedChatOptions.noteTranscript;
 
+  const lines = "Note taker: I'll send the deck.\nOthers: Thanks.";
   await render(ENHANCEMENT, { note: { ...NOTE, transcript } });
-  assert.match(chatTranscript(), /Chad: I'll send the deck\./);
+  assert.equal(
+    chatTranscript(),
+    `## Meeting Context\nThe user taking these notes ("Note taker" in the transcript) is Chad <chad@example.com>.\n\n${lines}`
+  );
   assert.doesNotMatch(chatTranscript(), /Dana Wu|Invited participants/);
 
-  // A teammate's recording: its mic lines are theirs, so the chat keeps it as stored.
+  // A teammate's recording: its note taker is the teammate, so the user isn't named.
   await render(ENHANCEMENT, {
     note: { ...NOTE, transcript, cloud_id: "cloud-1", owner_user_id: "user-alice" },
   });
-  assert.equal(chatTranscript(), transcript);
+  assert.equal(chatTranscript(), lines);
   await unmount();
 });
 

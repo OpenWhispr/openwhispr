@@ -212,11 +212,21 @@ test("compaction leaves edit reads, unrelated action outcomes and the latest ste
   const pairs = [...step(page(0)), ...step(page(1)), ...step(page(2)), ...step(page(3))];
   assert.deepEqual(passages(compactTranscriptHistory(pairs, 4)), [2, 3]);
   assert.deepEqual(passages(compactTranscriptHistory(pairs, 2)), [1, 2, 3]);
+
+  // A query that matched nothing stays, so the model doesn't search for it again,
+  // and it doesn't take one of the two places kept for passages.
+  const miss = [
+    "get_note",
+    { id: 9, transcript_only: true, transcript: "", transcript_match_found: false },
+  ];
+  const afterMiss = compactTranscriptHistory([...step(miss), ...pairs.slice(4)]);
+  assert.deepEqual(afterMiss[1].content[0].output.value, miss[1]);
+  assert.deepEqual(passages(afterMiss), [2, 3]);
 });
 
 for (const provider of ["local SDK", "cloud"]) {
   test(`${provider}: parallel passages from one step all reach the next request`, async (t) => {
-    const parallel = [0, 500, 1000].map((offset) => ({
+    const parallel = [500, 1000, 1500].map((offset) => ({
       id: `page-${offset}`,
       name: "get_note",
       arguments: JSON.stringify({ id: 7, transcript_offset: offset }),
@@ -309,7 +319,7 @@ for (const provider of ["local SDK", "cloud"]) {
     assert.equal(requests.length, 2);
     const followUp = JSON.stringify(requests[1]);
     assert.doesNotMatch(followUp, /transcript_omitted/);
-    for (const offset of [0, 500, 1000])
+    for (const offset of [500, 1000, 1500])
       assert.match(followUp, new RegExp(`transcript_start\\\\?":${offset},`));
   });
 }

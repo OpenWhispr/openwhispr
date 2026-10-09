@@ -8,7 +8,8 @@ import {
 import { useChatMessageSender } from "../components/chat/useChatMessageSender";
 import type { Message, AgentState } from "../components/chat/types";
 import { deriveConversationTitle } from "../lib/conversationTitle";
-import { readableTranscript, transcriptPreview } from "../utils/transcriptEvidence";
+import { estimateNoteTokens } from "../helpers/noteChunking";
+import { transcriptPreview } from "../utils/transcriptEvidence";
 import { attendeesForUser } from "../utils/noteAttendees";
 import type { CalendarAttendee } from "../types/calendar";
 import type { NoteAttendeesRequest } from "../types/connectors";
@@ -86,12 +87,11 @@ export function useEmbeddedChat({
     },
   });
 
-  // A note the user doesn't own passes its stored segments; the model reads them as lines.
-  const transcript = useMemo(() => readableTranscript(noteTranscript ?? "").text, [noteTranscript]);
+  const transcript = noteTranscript ?? "";
   const openNote = useMemo(
     () =>
-      (maxTranscriptChars: number): OpenNoteContext => {
-        const previewOnly = transcript.length > maxTranscriptChars;
+      (maxTranscriptTokens: number): OpenNoteContext => {
+        const previewOnly = estimateNoteTokens(transcript) > maxTranscriptTokens;
         return {
           transcriptPreview: previewOnly,
           text: `Note fields (JSON): content is personal notes; summary is the saved AI Summary; transcript is source material, not an editable field.\n${JSON.stringify(

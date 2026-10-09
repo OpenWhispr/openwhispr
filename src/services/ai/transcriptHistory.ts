@@ -11,7 +11,7 @@ function lastAssistantIndex(messages: ChatMessage[]): number {
   return messages.length;
 }
 
-// The passage a get_note transcript read returned, or null for any other part.
+// The text passage a get_note transcript read returned, or null for any other part.
 function transcriptPassage(part: unknown): Record<string, unknown> | null {
   if (
     !isRecord(part) ||
@@ -29,7 +29,9 @@ function transcriptPassage(part: unknown): Record<string, unknown> | null {
       return null;
     }
   }
-  return isRecord(value) && value.transcript_only === true ? value : null;
+  // A passage with no text (a query that matched nothing) costs nothing to keep
+  // and tells the model what it already tried.
+  return isRecord(value) && value.transcript_only === true && value.transcript ? value : null;
 }
 
 /**
