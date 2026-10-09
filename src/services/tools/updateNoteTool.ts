@@ -20,12 +20,19 @@ export const updateNoteTool: ToolDefinition = {
       content: {
         type: "string",
         description:
-          "Complete replacement of the user's personal notes only, not the AI summary or transcript. Omit unless editing this field; an empty string clears it.",
+          "Complete replacement of the user's personal notes only, not the AI summary or transcript. Omit unless editing this field. Blank strings are ignored; use clear_fields only when the user explicitly asks to clear the entire field.",
       },
       summary: {
         type: "string",
         description:
-          "Complete replacement of the saved AI Summary only. Preserve unrelated sections exactly. Omit unless editing this field; an empty string clears it.",
+          "Complete replacement of the saved AI Summary only. Preserve unrelated sections exactly. Omit unless editing this field. Blank strings are ignored; use clear_fields only when the user explicitly asks to clear the entire field.",
+      },
+      clear_fields: {
+        type: "array",
+        items: { type: "string", enum: ["content", "summary"] },
+        uniqueItems: true,
+        description:
+          "Fields to clear entirely, only when explicitly requested by the user. For section removal, supply the remaining text instead. Never infer clear intent from an empty optional field.",
       },
       folder: {
         type: "string",
@@ -41,31 +48,57 @@ export const updateNoteTool: ToolDefinition = {
     args: Record<string, unknown>,
     context?: ToolExecutionContext
   ): Promise<ToolResult> {
-    const id = args.id as number;
-    const title = args.title as string | undefined;
-    const content = args.content as string | undefined;
-    const summary = args.summary as string | undefined;
-    const folderName = args.folder as string | undefined;
-
-    if (!title && typeof content !== "string" && typeof summary !== "string" && !folderName) {
+    const id = args.id;
+    const clearFields = args.clear_fields ?? [];
+    const invalidField = ["title", "content", "summary", "folder"].find(
+      (key) => args[key] != null && typeof args[key] !== "string"
+    );
+    if (
+      typeof id !== "number" ||
+      !Number.isSafeInteger(id) ||
+      id <= 0 ||
+      invalidField ||
+      !Array.isArray(clearFields) ||
+      clearFields.some((field) => field !== "content" && field !== "summary")
+    ) {
+      return { success: false, data: null, displayText: "Invalid note update arguments" };
+    }
+    const title = typeof args.title === "string" && args.title.trim() ? args.title : undefined;
+    const folderName =
+      typeof args.folder === "string" && args.folder.trim() ? args.folder : undefined;
+    const updates: Parameters<typeof window.electronAPI.updateNote>[1] = {};
+    const ignoredFields: string[] = [];
+    if (title) updates.title = title;
+    for (const field of ["content", "summary"] as const) {
+      const value = args[field];
+      const clear = clearFields.includes(field);
+      if (clear && typeof value === "string" && value.trim()) {
+        return {
+          success: false,
+          data: null,
+          displayText: `Cannot replace and clear ${field} together`,
+        };
+      }
+      if (clear) updates[field === "summary" ? "enhanced_content" : field] = "";
+      else if (typeof value === "string" && value.trim())
+        updates[field === "summary" ? "enhanced_content" : field] = value;
+      else if (typeof value === "string") ignoredFields.push(field);
+    }
+    if (!Object.keys(updates).length && !folderName) {
       return {
         success: false,
         data: null,
-        displayText: "At least one of title, content, summary, or folder must be provided",
+        displayText:
+          "No changes supplied. Blank fields are ignored; use clear_fields only for an explicitly requested whole-field clear.",
       };
     }
 
     try {
       const note = await window.electronAPI.getNote(id);
       if (context?.signal.aborted) return { success: false, data: null, displayText: "" };
-      if (!note) {
+      if (!note || note.deleted_at) {
         return { success: false, data: null, displayText: `Note with ID ${id} not found` };
       }
-
-      const updates: Record<string, string | number | null> = {};
-      if (title) updates.title = title;
-      if (typeof content === "string") updates.content = content;
-      if (typeof summary === "string") updates.enhanced_content = summary;
 
       let folderCreated = false;
       if (folderName) {
@@ -84,10 +117,28 @@ export const updateNoteTool: ToolDefinition = {
       }
 
       if (context?.signal.aborted) return { success: false, data: null, displayText: "" };
-      const result = await window.electronAPI.updateNote(id, updates);
+      const result = await window.electronAPI.updateNote(
+        id,
+        {
+          ...updates,
+          ...(clearFields.length && {
+            clear_fields: clearFields.map((field) =>
+              field === "summary" ? "enhanced_content" : "content"
+            ),
+          }),
+        },
+        {
+          undoable: true,
+          expected: note,
+        }
+      );
 
       if (!result.success) {
-        return { success: false, data: null, displayText: "Failed to update note" };
+        return {
+          success: false,
+          data: null,
+          displayText: `Failed to update note${result.error ? `: ${result.error}` : ""}`,
+        };
       }
 
       syncService.debouncedPush("note", id);
@@ -98,11 +149,12 @@ export const updateNoteTool: ToolDefinition = {
         data: {
           id,
           title: title || note.title,
+          ignoredFields,
           updatedFields: Object.keys(updates).map((field) =>
             field === "enhanced_content" ? "summary" : field
           ),
         },
-        displayText: `Updated note: "${title || note.title}"${suffix}`,
+        displayText: `Updated note: "${title || note.title}"${suffix}${ignoredFields.length ? `. Ignored blank fields: ${ignoredFields.join(", ")}` : ""}`,
       };
     } catch (error) {
       return {

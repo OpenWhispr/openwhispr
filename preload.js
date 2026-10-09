@@ -229,7 +229,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getNotes: (noteType, limit, folderId, spaceId) =>
     ipcRenderer.invoke("db-get-notes", noteType, limit, folderId, spaceId),
   getSpaceNotes: (spaceId, limit) => ipcRenderer.invoke("db-get-space-notes", spaceId, limit),
-  updateNote: (id, updates) => ipcRenderer.invoke("db-update-note", id, updates),
+  updateNote: (id, updates, options) => ipcRenderer.invoke("db-update-note", id, updates, options),
+  getNoteUndos: () => ipcRenderer.invoke("db-get-note-undos"),
+  undoNoteUpdate: (token) => ipcRenderer.invoke("db-undo-note-update", token),
+  discardNoteUndo: (id, token) => ipcRenderer.invoke("db-discard-note-undo", id, token),
   deleteNote: (id) => ipcRenderer.invoke("db-delete-note", id),
   exportNote: (noteId, format) => ipcRenderer.invoke("export-note", noteId, format),
   exportTranscript: (noteId, format) => ipcRenderer.invoke("export-transcript", noteId, format),

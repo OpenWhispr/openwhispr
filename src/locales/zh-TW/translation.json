@@ -3423,6 +3423,11 @@
       "author": {
         "you": "你"
       }
+    },
+    "assistantUndo": {
+      "applied": "助理已更新「{{title}}」",
+      "changed": "助理編輯後，這篇筆記又有變更，無法復原。",
+      "failed": "無法復原編輯，請再試一次。"
     }
   },
   "dictionary": {

@@ -62,7 +62,9 @@ for (const surface of ["note chat", "assistant panel"]) {
             clearInterval: noop,
             electronAPI: {
               getNote: async () => ({ ...stored }),
-              updateNote: async (_id, updates) => {
+              updateNote: async (_id, updates, options) => {
+                assert.equal(options.undoable, true);
+                assert.equal(options.expected.id, stored.id);
                 Object.assign(stored, updates);
                 return { success: true };
               },
@@ -128,6 +130,16 @@ for (const surface of ["note chat", "assistant panel"]) {
             yield { type: "tool_calls", calls: [call] };
             const saved = await execute(call.name, JSON.parse(call.arguments));
             assert.deepEqual(saved.updatedFields, ["summary"]);
+            const renamed = await execute("update_note", {
+              id: 7,
+              title: "Renamed workshop",
+              content: "",
+              summary: "",
+            });
+            assert.deepEqual(renamed.updatedFields, ["title"]);
+            assert.deepEqual(renamed.ignoredFields, ["content", "summary"]);
+            assert.equal(stored.content, "Bring a notebook.");
+            assert.equal(stored.enhanced_content, EDITED);
             yield {
               type: "tool_result",
               callId: "edit",
@@ -214,6 +226,7 @@ for (const surface of ["note chat", "assistant panel"]) {
           assert.equal(settled, true);
         }
         assert.equal(stored.enhanced_content, EDITED);
+        assert.equal(stored.title, "Renamed workshop");
         assert.equal(stored.content, "Bring a notebook.");
         assert.equal(stored.transcript, "Source transcript only.");
         assert.deepEqual(externalActions, []);

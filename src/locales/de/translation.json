@@ -3774,6 +3774,11 @@
       "author": {
         "you": "Du"
       }
+    },
+    "assistantUndo": {
+      "applied": "Der Assistent hat „{{title}}“ aktualisiert",
+      "changed": "Diese Notiz wurde nach der Änderung des Assistenten erneut geändert. Rückgängig ist nicht mehr verfügbar.",
+      "failed": "Die Änderung konnte nicht rückgängig gemacht werden. Bitte versuche es erneut."
     }
   },
   "dictionary": {

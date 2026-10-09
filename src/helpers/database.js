@@ -2,6 +2,7 @@ const Database = require("better-sqlite3");
 const path = require("path");
 const fs = require("fs");
 const { randomUUID } = require("crypto");
+const noteUndo = require("./noteUndo");
 const debugLogger = require("./debugLogger");
 const { buildNoteSearchQuery } = require("./noteSearch");
 const { normalizeStoredSpeakerCount } = require("./speakerCount");
@@ -1497,6 +1498,7 @@ class DatabaseManager {
         )
       `);
       this._initVectorChangeJournal();
+      noteUndo.initializeNoteUndo(this.db);
 
       return true;
     } catch (error) {
@@ -3278,7 +3280,20 @@ class DatabaseManager {
     }
   }
 
-  updateNote(id, updates) {
+  getNoteUndos() {
+    return noteUndo.getNoteUndos(this);
+  }
+
+  undoNoteUpdate(token) {
+    return noteUndo.undoNoteUpdate(this, token);
+  }
+
+  discardNoteUndo(id, token) {
+    return noteUndo.discardNoteUndo(this, id, token);
+  }
+
+  updateNote(id, updates, options) {
+    if (options?.undoable) return noteUndo.updateNoteWithUndo(this, id, updates, options.expected);
     try {
       if (!this.db) throw new Error("Database not initialized");
       if (!this.getNote(id)) return { success: false, error: "Note not found" };

@@ -3774,6 +3774,11 @@
       "author": {
         "you": "You"
       }
+    },
+    "assistantUndo": {
+      "applied": "Assistant updated “{{title}}”",
+      "changed": "This note changed after the assistant edit. Undo is no longer available.",
+      "failed": "Could not undo the edit. Please try again."
     }
   },
   "dictionary": {

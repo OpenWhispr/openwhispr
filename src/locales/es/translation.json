@@ -3475,6 +3475,11 @@
       "author": {
         "you": "Tú"
       }
+    },
+    "assistantUndo": {
+      "applied": "El asistente actualizó «{{title}}»",
+      "changed": "Esta nota cambió después de la edición del asistente. Ya no se puede deshacer.",
+      "failed": "No se pudo deshacer la edición. Inténtalo de nuevo."
     }
   },
   "dictionary": {
