@@ -3949,8 +3949,6 @@
     "cli": {
       "description": "Dai al tuo assistente l'accesso alle note dal terminale.",
       "installLabel": "Installa",
-      "copyDocsLink": "Copia link della documentazione",
-      "docsLinkCopied": "Link della documentazione copiato",
       "viewPlans": "Visualizza i piani",
       "local": {
         "label": "Locale",

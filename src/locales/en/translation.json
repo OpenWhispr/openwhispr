@@ -4119,8 +4119,6 @@
     "cli": {
       "description": "Give your assistant access to your notes from the terminal.",
       "installLabel": "Install",
-      "copyDocsLink": "Copy docs link",
-      "docsLinkCopied": "Docs link copied",
       "viewPlans": "View Plans",
       "local": {
         "label": "Local",

@@ -3949,8 +3949,6 @@
     "cli": {
       "description": "Dê ao seu assistente acesso às suas notas pelo terminal.",
       "installLabel": "Instalar",
-      "copyDocsLink": "Copiar link da documentação",
-      "docsLinkCopied": "Link da documentação copiado",
       "viewPlans": "Ver planos",
       "local": {
         "label": "Local",

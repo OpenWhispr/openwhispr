@@ -3949,8 +3949,6 @@
     "cli": {
       "description": "讓你的助理透過終端機存取你的筆記。",
       "installLabel": "安裝",
-      "copyDocsLink": "複製文件連結",
-      "docsLinkCopied": "已複製文件連結",
       "viewPlans": "查看方案",
       "local": {
         "label": "本機",

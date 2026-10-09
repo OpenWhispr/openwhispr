@@ -3949,8 +3949,6 @@
     "cli": {
       "description": "让你的助手通过终端访问你的笔记。",
       "installLabel": "安装",
-      "copyDocsLink": "复制文档链接",
-      "docsLinkCopied": "已复制文档链接",
       "viewPlans": "查看套餐",
       "local": {
         "label": "本地",

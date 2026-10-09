@@ -683,8 +683,6 @@
     "cli": {
       "description": "امنح مساعدك حق الوصول إلى ملاحظاتك من الجهاز الطرفي (terminal).",
       "installLabel": "تثبيت",
-      "copyDocsLink": "نسخ رابط الوثائق",
-      "docsLinkCopied": "تم نسخ رابط الوثائق",
       "viewPlans": "عرض الخطط",
       "local": {
         "label": "محلي (Local)",

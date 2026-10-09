@@ -3949,8 +3949,6 @@
     "cli": {
       "description": "ターミナルからアシスタントにメモへのアクセスを許可します。",
       "installLabel": "インストール",
-      "copyDocsLink": "ドキュメントリンクをコピー",
-      "docsLinkCopied": "ドキュメントリンクをコピーしました",
       "viewPlans": "プランを表示",
       "local": {
         "label": "ローカル",

@@ -4119,8 +4119,6 @@
     "cli": {
       "description": "Gib deinem Assistenten über das Terminal Zugriff auf deine Notizen.",
       "installLabel": "Installieren",
-      "copyDocsLink": "Doku-Link kopieren",
-      "docsLinkCopied": "Doku-Link kopiert",
       "viewPlans": "Pläne ansehen",
       "local": {
         "label": "Lokal",
