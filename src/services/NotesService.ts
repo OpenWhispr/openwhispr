@@ -79,9 +79,7 @@ async function create(note: NoteInput): Promise<CloudNote> {
   return cloudPost<CloudNote>("/api/notes/create", note);
 }
 
-async function batchCreate(
-  notes: NoteInput[]
-): Promise<{
+async function batchCreate(notes: NoteInput[]): Promise<{
   created: {
     client_note_id: string;
     id: string;
