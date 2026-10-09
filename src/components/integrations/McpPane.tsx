@@ -1,6 +1,5 @@
 import type { ReactElement, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { ExternalLink } from "../icons";
 import { Button } from "../ui/button";
 import { CopyableCommand } from "../ui/CopyableCommand";
 import { SettingsPanel, SettingsPanelRow } from "../ui/SettingsSection";
@@ -26,30 +25,6 @@ interface McpPaneProps {
   onCreateKey: () => void;
 }
 
-interface StepProps {
-  number: number;
-  /** Centre the number on a single-line step that sits beside a button. */
-  centered?: boolean;
-  children: ReactNode;
-}
-
-function Step({ number, centered = false, children }: StepProps): ReactElement {
-  return (
-    <SettingsPanelRow as="li">
-      <div className={`flex gap-3 ${centered ? "items-center" : "items-start"}`}>
-        {/* The list already gives each step its position. */}
-        <span
-          aria-hidden="true"
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary"
-        >
-          {number}
-        </span>
-        <div className="flex-1 min-w-0">{children}</div>
-      </div>
-    </SettingsPanelRow>
-  );
-}
-
 export function McpPane({ title, isPaid, onUpgrade, onCreateKey }: McpPaneProps): ReactElement {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -58,17 +33,7 @@ export function McpPane({ title, isPaid, onUpgrade, onCreateKey }: McpPaneProps)
     <IntegrationsPane
       title={title}
       description={t("integrations.mcp.description")}
-      actions={
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => window.electronAPI?.openExternal?.(MCP_DOCS_URL)}
-          className="gap-1.5 text-muted-foreground"
-        >
-          {t("integrations.mcp.learnMore")}
-          <ExternalLink className="h-3 w-3" />
-        </Button>
-      }
+      docsUrl={MCP_DOCS_URL}
     >
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 ps-1 text-xs">
         <span className="text-muted-foreground/80">{t("integrations.mcp.worksWith")}</span>
@@ -91,8 +56,8 @@ export function McpPane({ title, isPaid, onUpgrade, onCreateKey }: McpPaneProps)
 
       {!isPaid && <UpsellBar message={t("integrations.mcp.proRequired")} onUpgrade={onUpgrade} />}
 
-      <SettingsPanel as="ol">
-        <Step number={1}>
+      <SettingsPanel>
+        <SettingsPanelRow>
           <p className="text-xs leading-5 font-medium text-foreground mb-2">
             {t("integrations.mcp.step1")}
           </p>
@@ -103,12 +68,25 @@ export function McpPane({ title, isPaid, onUpgrade, onCreateKey }: McpPaneProps)
               toast({ title: t("integrations.mcp.copied"), variant: "success", duration: 2000 })
             }
           />
-        </Step>
-        <Step number={2} centered>
-          <div className="flex items-center gap-3">
-            <p className="flex-1 min-w-0 text-xs font-medium text-foreground">
-              {t("integrations.mcp.step2")}
-            </p>
+        </SettingsPanelRow>
+        <SettingsPanelRow>
+          <h3 className="text-xs font-semibold text-foreground">
+            {t("integrations.mcp.oauthTitle")}
+          </h3>
+          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+            {t("integrations.mcp.oauthDescription")}
+          </p>
+        </SettingsPanelRow>
+        <SettingsPanelRow>
+          <div className="flex flex-wrap items-start gap-3">
+            <div className="flex-1 basis-60 min-w-0">
+              <h3 className="text-xs font-semibold text-foreground">
+                {t("integrations.mcp.apiKeyTitle")}
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                {t("integrations.mcp.apiKeyDescription")}
+              </p>
+            </div>
             <Button
               variant="outline"
               size="sm"
@@ -119,10 +97,10 @@ export function McpPane({ title, isPaid, onUpgrade, onCreateKey }: McpPaneProps)
               {t("apiKeysSection.createButton")}
             </Button>
           </div>
-        </Step>
-        <Step number={3} centered>
-          <p className="text-xs font-medium text-foreground">{t("integrations.mcp.step3")}</p>
-        </Step>
+          <code dir="ltr" className="block text-xs text-foreground mt-2 break-all select-all">
+            Authorization: Bearer YOUR_API_KEY
+          </code>
+        </SettingsPanelRow>
       </SettingsPanel>
     </IntegrationsPane>
   );

@@ -671,18 +671,18 @@
     "mcp": {
       "description": "الدردشة والبحث والعمل مع ملاحظاتك داخل Claude وChatGPT وCursor.",
       "step1": "في أداة الذكاء الاصطناعي الخاصة بك، أضف OpenWhispr MCP باستخدام عنوان URL العام",
-      "step2": "أنشئ مفتاح API بالنطاقات (scopes) التي تحتاجها.",
-      "step3": "الصق المفتاح في ترويسة Authorization للاتصال.",
-      "learnMore": "اعرف المزيد",
       "proRequired": "قم بالترقية إلى خطة مدفوعة لتوصيل OpenWhispr بـ Claude وChatGPT وCursor.",
       "worksWith": "يعمل مع",
       "copyUrl": "نسخ عنوان URL لـ MCP",
-      "copied": "تم النسخ"
+      "copied": "تم النسخ",
+      "oauthTitle": "تسجيل الدخول باستخدام OAuth",
+      "oauthDescription": "في عميل يدعم OAuth، أضف عنوان URL للخادم، ثم سجّل الدخول إلى OpenWhispr واسمح بالوصول. لا تحتاج إلى مفتاح API.",
+      "apiKeyTitle": "استخدام مفتاح API",
+      "apiKeyDescription": "للعملاء الذين يقبلون ترويسات الطلبات، أنشئ مفتاح API شخصيًا بالأذونات التي تحتاجها واستخدم الترويسة أدناه."
     },
     "cli": {
       "description": "امنح مساعدك حق الوصول إلى ملاحظاتك من الجهاز الطرفي (terminal).",
       "installLabel": "تثبيت",
-      "learnMore": "اقرأ الوثائق",
       "copyDocsLink": "نسخ رابط الوثائق",
       "docsLinkCopied": "تم نسخ رابط الوثائق",
       "viewPlans": "عرض الخطط",
@@ -729,7 +729,8 @@
     },
     "connectors": {
       "description": "دع المساعد يستخدم أدواتك. توافق على كل بريد ورسالة ومهمة قبل إرسالها."
-    }
+    },
+    "readDocs": "اقرأ الوثائق"
   },
   "connectors": {
     "approval": {
@@ -896,15 +897,17 @@
       "descriptionSend": "يعرض المساعد بطاقة بريد إلكتروني في الدردشة، ولا يُرسل البريد من Gmail الخاص بك إلا عندما تضغط إرسال.",
       "unavailable": "مسودات البريد الإلكتروني غير متاحة حاليًا.",
       "targetLabel": "صياغة رسائل البريد الإلكتروني في",
-      "autoResolved": "تلقائي · {{target}}",
       "targets": {
         "gmail": "Gmail",
         "outlookWork": "Outlook (العمل أو المدرسة)",
         "outlookPersonal": "Outlook.com",
-        "mailto": "تطبيق البريد الافتراضي",
+        "mailto": "تطبيق بريد النظام",
         "gmailSend": "الإرسال من الدردشة (Gmail)",
-        "gmailSendConnectFirst": "الإرسال من الدردشة (Gmail) · اربط Gmail أدناه"
-      }
+        "gmailSendConnectFirst": "الإرسال من الدردشة (Gmail) · اربط Gmail أدناه",
+        "auto": "تلقائي"
+      },
+      "automaticHint": "حاليًا: {{target}}. يتبع حساباتك المتصلة.",
+      "systemMailHint": "يستخدم معالج البريد الإلكتروني الذي أعددته على جهاز الكمبيوتر."
     },
     "slack": {
       "title": "Slack",
@@ -1527,7 +1530,6 @@
   "apiKeysSection": {
     "title": "مفاتيح API",
     "description": "أنشئ مفاتيح للوصول إلى API الخاص بـ OpenWhispr برمجيًا.",
-    "docsLink": "مستندات API",
     "empty": "لا توجد مفاتيح API بعد",
     "createButton": "إنشاء مفتاح API",
     "create": {

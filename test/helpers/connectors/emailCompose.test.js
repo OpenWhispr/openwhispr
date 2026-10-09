@@ -18,14 +18,16 @@ test("web targets round-trip every field exactly", async () => {
     outlookPersonal: { host: "outlook.live.com", subjectKey: "subject" },
   };
   for (const [target, { host, subjectKey }] of Object.entries(expected)) {
-    const { url, clipboardText } = buildComposeRequest({ target, ...TRICKY });
-    const parsed = new URL(url);
-    assert.equal(parsed.host, host, target);
-    assert.equal(parsed.searchParams.get("to"), TRICKY.to.join(","), target);
-    assert.equal(parsed.searchParams.get("cc"), TRICKY.cc.join(","), target);
-    assert.equal(parsed.searchParams.get(subjectKey), TRICKY.subject, target);
-    assert.equal(parsed.searchParams.get("body"), TRICKY.body, target);
-    assert.equal(clipboardText, null, target);
+    for (const platform of ["darwin", "win32", "linux"]) {
+      const { url, clipboardText } = buildComposeRequest({ target, platform, ...TRICKY });
+      const parsed = new URL(url);
+      assert.equal(parsed.host, host, target);
+      assert.equal(parsed.searchParams.get("to"), TRICKY.to.join(","), target);
+      assert.equal(parsed.searchParams.get("cc"), TRICKY.cc.join(","), target);
+      assert.equal(parsed.searchParams.get(subjectKey), TRICKY.subject, target);
+      assert.equal(parsed.searchParams.get("body"), TRICKY.body, target);
+      assert.equal(clipboardText, null, target);
+    }
   }
 });
 

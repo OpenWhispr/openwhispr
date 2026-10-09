@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { ExternalLink } from "./icons";
+import { Plus } from "./icons";
 import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { useSettingsStore } from "../stores/settingsStore";
@@ -64,6 +64,7 @@ export default function IntegrationsView({
   );
   if (!mounted.has(section)) setMounted(new Set(mounted).add(section));
   const [createKeyRequest, setCreateKeyRequest] = useState(0);
+  const [canCreateKey, setCanCreateKey] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const paneElements = useRef<Partial<Record<IntegrationsSection, HTMLDivElement | null>>>({});
   const focusOpenedSection = useRef(false);
@@ -113,21 +114,24 @@ export default function IntegrationsView({
       <IntegrationsPane
         title={titleOf("api")}
         description={t("integrations.api.description")}
+        docsUrl={API_DOCS_URL}
         actions={
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => window.electronAPI?.openExternal?.(API_DOCS_URL)}
-            className="gap-1.5 text-muted-foreground"
-          >
-            {t("apiKeysSection.docsLink")}
-            <ExternalLink className="h-3 w-3" />
-          </Button>
+          isPaid && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!canCreateKey}
+              onClick={() => setCreateKeyRequest((request) => request + 1)}
+            >
+              <Plus className="h-3.5 w-3.5 me-1.5" />
+              {t("apiKeysSection.createButton")}
+            </Button>
+          )
         }
       >
         {isPaid ? (
           <>
-            <ApiKeysSection createRequest={createKeyRequest} />
+            <ApiKeysSection createRequest={createKeyRequest} onCanCreateChange={setCanCreateKey} />
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 ps-1 text-xs text-muted-foreground">
               <span>{t("integrations.api.useWith")}</span>
               {(
@@ -199,7 +203,7 @@ export default function IntegrationsView({
           </Select>
         </div>
 
-        <div ref={scroller} className="flex-1 min-h-0 overflow-y-auto px-8 pt-2 pb-6 @max-2xl:px-5">
+        <div ref={scroller} className="flex-1 min-h-0 overflow-y-auto px-8 pt-1 pb-6 @max-2xl:px-5">
           <div className="max-w-[760px]">
             {INTEGRATIONS_SECTIONS.filter((id) => mounted.has(id)).map((id) => (
               <div

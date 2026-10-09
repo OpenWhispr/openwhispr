@@ -3937,18 +3937,18 @@
     "mcp": {
       "description": "Claude、ChatGPT、Cursor内でメモを使ってチャット、検索、作業ができます。",
       "step1": "AIツールで、公開URLを使用してOpenWhispr MCPを追加します",
-      "step2": "必要なスコープを持つAPIキーを作成します。",
-      "step3": "キーを Authorization ヘッダーとして貼り付けて接続します。",
-      "learnMore": "詳細",
       "proRequired": "OpenWhispr を Claude、ChatGPT、Cursor に接続するには、有料プランへのアップグレードが必要です。",
       "worksWith": "対応アプリ",
       "copyUrl": "MCP URLをコピー",
-      "copied": "コピーしました"
+      "copied": "コピーしました",
+      "oauthTitle": "OAuth でログイン",
+      "oauthDescription": "OAuth 対応のクライアントにサーバー URL を追加し、OpenWhispr にログインしてアクセスを許可します。API キーは不要です。",
+      "apiKeyTitle": "API キーを使用",
+      "apiKeyDescription": "リクエストヘッダーに対応するクライアントでは、必要な権限を持つ個人用 API キーを作成し、以下のヘッダーを使用してください。"
     },
     "cli": {
       "description": "ターミナルからアシスタントにメモへのアクセスを許可します。",
       "installLabel": "インストール",
-      "learnMore": "ドキュメントを読む",
       "copyDocsLink": "ドキュメントリンクをコピー",
       "docsLinkCopied": "ドキュメントリンクをコピーしました",
       "viewPlans": "プランを表示",
@@ -3995,7 +3995,8 @@
     },
     "connectors": {
       "description": "アシスタントがあなたのツールを使えるようにします。メール、メッセージ、課題はすべて送信前にあなたが承認します。"
-    }
+    },
+    "readDocs": "ドキュメントを読む"
   },
   "connectors": {
     "approval": {
@@ -4162,15 +4163,17 @@
       "descriptionSend": "アシスタントがチャットにメールのカードを表示します。送信を押したときだけ、Gmail から送信されます。",
       "unavailable": "現在メール下書きを利用できません。",
       "targetLabel": "メールを作成するアプリ",
-      "autoResolved": "自動 · {{target}}",
       "targets": {
         "gmail": "Gmail",
         "outlookWork": "Outlook（職場または学校）",
         "outlookPersonal": "Outlook.com",
-        "mailto": "既定のメールアプリ",
+        "mailto": "システムのメールアプリ",
         "gmailSend": "チャットから送信（Gmail）",
-        "gmailSendConnectFirst": "チャットから送信（Gmail）· 下で Gmail を接続"
-      }
+        "gmailSendConnectFirst": "チャットから送信（Gmail）· 下で Gmail を接続",
+        "auto": "自動"
+      },
+      "automaticHint": "現在：{{target}}。接続済みのアカウントに応じて選択します。",
+      "systemMailHint": "コンピューターで設定したメールハンドラーを使用します。"
     },
     "slack": {
       "title": "Slack",
@@ -4608,7 +4611,6 @@
   "apiKeysSection": {
     "title": "APIキー",
     "description": "アカウントへのプログラムアクセス用のキーを管理",
-    "docsLink": "APIドキュメント",
     "empty": "APIキーはまだありません",
     "createButton": "キーを作成",
     "create": {

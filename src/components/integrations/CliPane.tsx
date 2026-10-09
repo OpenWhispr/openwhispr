@@ -1,6 +1,6 @@
 import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Copy, ExternalLink } from "../icons";
+import { Check, Copy } from "../icons";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { CopyableCommand } from "../ui/CopyableCommand";
@@ -43,6 +43,7 @@ export function CliPane({ title, isPaid, onUpgrade }: CliPaneProps): ReactElemen
     <IntegrationsPane
       title={title}
       description={t("integrations.cli.description")}
+      docsUrl={CLI_DOCS_URL}
       actions={
         <>
           <Button
@@ -57,15 +58,6 @@ export function CliPane({ title, isPaid, onUpgrade }: CliPaneProps): ReactElemen
               <Copy className="h-3 w-3" />
             )}
             {t("integrations.cli.copyDocsLink")}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => window.electronAPI?.openExternal?.(CLI_DOCS_URL)}
-            className="gap-1.5"
-          >
-            {t("integrations.cli.learnMore")}
-            <ExternalLink className="h-3 w-3" />
           </Button>
         </>
       }
