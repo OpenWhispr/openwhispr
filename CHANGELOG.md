@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Dictation
+
+- **Modifier-only shortcuts on macOS.** Option+Command, Control+Option and the other two- and three-modifier chords can now be the dictation, voice assistant or translation shortcut on a Mac, as they already could on Windows and Linux, so anyone used to that shortcut in another dictation app can keep it. The native listener that already watches the Globe key reports the chord. Hold records while the chord is held. Tap starts on release, and a chord that another key joined (Option+Command+Esc, Option+Command+D) is left to that shortcut instead of starting dictation under it. Settings used to suggest Control+Option and Option+Command on macOS and then refuse them as "not supported on macOS".
+
 ## [1.10.3] - 2026-10-09
 
 The assistant can now act in other apps: it drafts and sends email, posts to Slack, and works with Linear and GitHub issues, always behind a card you approve. Notes get templates for the AI Summary, actions that answer in a docked chat, and real tables. OpenWhispr also uses far less memory when idle, shows a plain-language error when your API key or provider fails, and fixes a long list of bugs on Linux, Windows and macOS.
