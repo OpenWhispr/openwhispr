@@ -1,3 +1,4 @@
+import { hasNoteRevision, hasPendingNoteClear } from "../helpers/noteFieldSync.js";
 import type {
   NoteItem,
   FolderItem,
@@ -41,6 +42,7 @@ import {
   buildNoteCreatePayload,
   buildNoteUpdatePayload,
   isCloudEntryNewer,
+  isCloudNoteNewer,
   normalizeTimestamp,
 } from "../helpers/cloudSyncGuards.js";
 import { resolveRendererCloudNoteCreate, type CloudNoteCreateResult } from "./noteCreateAck";
@@ -794,6 +796,10 @@ export class SyncService {
   private async pushNote(id: number): Promise<void> {
     const note = await window.electronAPI.getNote?.(id);
     if (!note) return;
+    if (note.cloud_id && hasPendingNoteClear(note) && !hasNoteRevision(note.cloud_revision)) {
+      this.requestSyncAll("retry");
+      return;
+    }
     if (readNoteConflictIds().has(note.client_note_id)) {
       // An unresolved conflict: the editor's debounced push would auto-resolve
       // it as local-wins (or 409-spam) before the user chose Keep or Refresh.
@@ -827,7 +833,8 @@ export class SyncService {
           note,
           note.cloud_id,
           cloud.updated_at,
-          cloud.user_id ?? null
+          cloud.user_id ?? null,
+          cloud.revision ?? null
         );
       } else {
         await this.createCloudNote(note, cloudFolderId, scope);
@@ -871,7 +878,10 @@ export class SyncService {
     note: NoteItem,
     cloud: CloudNoteCreateResult
   ): Promise<void> {
-    await resolveRendererCloudNoteCreate(note, cloud, (cloudId) => NotesService.delete(cloudId));
+    const outcome = await resolveRendererCloudNoteCreate(note, cloud, (cloudId) =>
+      NotesService.delete(cloudId)
+    );
+    if (outcome === "write-rejected") this.requestSyncAll("retry");
   }
 
   private async createCloudNote(
@@ -1753,8 +1763,17 @@ export class SyncService {
   }
 
   private async pushPendingNotes(teamOnly = false): Promise<void> {
-    const pending =
-      (await window.electronAPI.getPendingNotes?.(teamOnly ? "team" : undefined)) ?? [];
+    let pending = (await window.electronAPI.getPendingNotes?.(teamOnly ? "team" : undefined)) ?? [];
+    if (
+      pending.some(
+        (note) =>
+          note.cloud_id && hasPendingNoteClear(note) && !hasNoteRevision(note.cloud_revision)
+      )
+    ) {
+      // An unchanged cloud row may be absent from the delta feed after upgrading.
+      await this.pullNotes(teamOnly, true);
+      pending = (await window.electronAPI.getPendingNotes?.(teamOnly ? "team" : undefined)) ?? [];
+    }
     if (pending.length === 0) return;
     this.teamPassMovedWork = true;
 
@@ -1803,7 +1822,8 @@ export class SyncService {
           note,
           note.cloud_id!,
           cloud.updated_at,
-          cloud.user_id ?? null
+          cloud.user_id ?? null,
+          cloud.revision ?? null
         );
         this.clear404(NOTE_UPDATE_404_KEY, note.client_note_id);
       } catch (err) {
@@ -1845,13 +1865,21 @@ export class SyncService {
             ...scope,
           }))
         );
-        for (const { client_note_id, id: cloudId, updated_at } of created) {
+        for (const {
+          client_note_id,
+          id: cloudId,
+          updated_at,
+          revision,
+          write_applied,
+        } of created) {
           const local = chunk.find(({ note }) => note.client_note_id === client_note_id);
           if (local) {
             await this.acknowledgeCloudNoteCreate(local.note, {
               id: cloudId,
               client_note_id,
               updated_at: updated_at ?? null,
+              revision,
+              write_applied,
             });
           }
         }
@@ -1983,7 +2011,7 @@ export class SyncService {
               if (cloudNote.deleted_at) {
                 await window.electronAPI.hardDeleteNote?.(local.id);
                 await this.settleNoteConflict(local.client_note_id);
-              } else if (isCloudEntryNewer(cloudNote.updated_at, local.updated_at)) {
+              } else if (isCloudNoteNewer(cloudNote, local)) {
                 // 'error' rows carry unpushed work just like 'pending' ones.
                 if (local.sync_status !== "synced") {
                   await this.surfaceNoteConflict(local.client_note_id, cloudNote);
@@ -2032,7 +2060,29 @@ export class SyncService {
           }
 
           if (local?.deleted_at) continue;
-          if (!local || isCloudEntryNewer(cloudNote.updated_at, local.updated_at)) {
+          if (
+            local &&
+            !hasNoteRevision(local.cloud_revision) &&
+            hasNoteRevision(cloudNote.revision) &&
+            local.cloud_id === cloudNote.id
+          ) {
+            if (
+              normalizeTimestamp(local.cloud_updated_at) ===
+              normalizeTimestamp(cloudNote.updated_at)
+            ) {
+              await window.electronAPI.setNoteCloudBase?.(
+                local.id,
+                cloudNote.updated_at,
+                cloudNote.revision,
+                false
+              );
+              local.cloud_revision = cloudNote.revision;
+            } else if (local.sync_status !== "synced") {
+              await this.surfaceNoteConflict(local.client_note_id, cloudNote);
+              continue;
+            }
+          }
+          if (!local || isCloudNoteNewer(cloudNote, local)) {
             if (local && local.sync_status !== "synced") {
               // A newer cloud copy over unpushed local edits ('pending' or
               // 'error'): surface the conflict to the editor banner instead

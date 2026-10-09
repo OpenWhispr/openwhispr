@@ -2711,29 +2711,31 @@ class IPCHandlers {
     });
     ipcMain.handle(
       "db-acknowledge-note-create",
-      (_, id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, settleIfUnchanged) =>
+      (_, id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, settleIfUnchanged, cloudRevision) =>
         this.databaseManager.acknowledgeNoteCreate(
           id,
           snapshot,
           cloudId,
           cloudUpdatedAt,
           ownerUserId,
-          settleIfUnchanged
+          settleIfUnchanged,
+          cloudRevision
         )
     );
     ipcMain.handle(
       "db-mark-note-synced-if-unchanged",
-      (_, id, snapshot, expectedCloudId, cloudUpdatedAt, ownerUserId) =>
+      (_, id, snapshot, expectedCloudId, cloudUpdatedAt, ownerUserId, cloudRevision) =>
         this.databaseManager.markNoteSyncedIfUnchanged(
           id,
           snapshot,
           expectedCloudId,
           cloudUpdatedAt,
-          ownerUserId
+          ownerUserId,
+          cloudRevision
         )
     );
-    ipcMain.handle("db-set-note-cloud-base", (_, id, cloudUpdatedAt) =>
-      this.databaseManager.setNoteCloudBase(id, cloudUpdatedAt)
+    ipcMain.handle("db-set-note-cloud-base", (_, id, cloudUpdatedAt, cloudRevision, keepLocal) =>
+      this.databaseManager.setNoteCloudBase(id, cloudUpdatedAt, cloudRevision, keepLocal)
     );
     ipcMain.handle("db-set-note-owner-from-cloud", (_, id, ownerUserId) =>
       this.databaseManager.setNoteOwnerFromCloud(id, ownerUserId)

@@ -1,3 +1,5 @@
+import { hasNoteRevision, hasPendingNoteClear, noteFieldUpdates } from "./noteFieldSync.js";
+
 // Sync guards shared by SyncService and the node --test suite (#1290).
 
 // SQLite `datetime('now')` yields "YYYY-MM-DD HH:MM:SS" (no T, no millis, no Z);
@@ -26,7 +28,13 @@ export function isCloudEntryNewer(cloudUpdatedAt, localUpdatedAt) {
 // sends it. `cloudFolderId` is the note's folder already mapped to its cloud
 // id (null when folderless or unmapped).
 export function buildNoteUpdatePayload(note, cloudFolderId) {
+  if (hasPendingNoteClear(note) && !hasNoteRevision(note.cloud_revision)) {
+    throw new Error("Note clear is waiting for server revision support");
+  }
   return {
+    ...(hasNoteRevision(note.cloud_revision)
+      ? { base_revision: note.cloud_revision, field_updates: noteFieldUpdates(note) }
+      : {}),
     title: note.title,
     content: note.content,
     enhanced_content: note.enhanced_content,
@@ -59,8 +67,22 @@ export function buildNoteUpdatePayload(note, cloudFolderId) {
 // the server stores it as-is — mobile's delta cursor (the newest updated_at
 // it has seen) would then skip the row forever. PATCHes are server-stamped.
 export function buildNoteCreatePayload(note, cloudFolderId) {
-  const payload = buildNoteUpdatePayload(note, cloudFolderId);
+  const payload = buildNoteUpdatePayload(
+    { ...note, content_sync_operation: null, enhanced_content_sync_operation: null },
+    cloudFolderId
+  );
   delete payload.base_updated_at;
+  delete payload.base_revision;
+  delete payload.field_updates;
   delete payload.updated_at;
   return payload;
+}
+
+// A server revision orders same-millisecond edits and survives local clock skew.
+export function isCloudNoteNewer(cloud, local) {
+  if (hasNoteRevision(cloud.revision) && hasNoteRevision(local.cloud_revision)) {
+    return cloud.revision > local.cloud_revision;
+  }
+  if (hasNoteRevision(local.cloud_revision)) return false;
+  return isCloudEntryNewer(cloud.updated_at, local.updated_at);
 }

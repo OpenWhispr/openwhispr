@@ -970,7 +970,8 @@ export default function NoteEditor({
   // Advancing the base first is what lets the next push succeed instead of
   // 409ing against the same conflict and re-raising the banner.
   const handleConflictKeep = useCallback(() => {
-    if (conflict) void window.electronAPI.setNoteCloudBase?.(note.id, conflict.updated_at);
+    if (conflict)
+      void window.electronAPI.setNoteCloudBase?.(note.id, conflict.updated_at, conflict.revision);
     clearNoteConflict(note.client_note_id);
   }, [conflict, note.id, note.client_note_id]);
 

@@ -431,6 +431,9 @@ export interface NoteItem {
   // Server updated_at this device last acked (push response or pull); echoed
   // as base_updated_at on the next PATCH. Null = pre-guard row, pushes LWW.
   cloud_updated_at?: string | null;
+  cloud_revision?: number | null;
+  content_sync_operation?: "set" | "clear" | null;
+  enhanced_content_sync_operation?: "set" | "clear" | null;
   created_at: string;
   updated_at: string;
   client_note_id: string;
@@ -471,6 +474,9 @@ export type NotePushSnapshot = Pick<
   | "sync_status"
   | "deleted_at"
   | "cloud_updated_at"
+  | "cloud_revision"
+  | "content_sync_operation"
+  | "enhanced_content_sync_operation"
   | "left_team"
 >;
 
@@ -1597,6 +1603,7 @@ declare global {
       updateNote: (
         id: number,
         updates: {
+          clear_fields?: Array<"content" | "enhanced_content">;
           title?: string;
           content?: string;
           enhanced_content?: string | null;
@@ -3495,16 +3502,23 @@ declare global {
         cloudId: string,
         cloudUpdatedAt?: string | null,
         ownerUserId?: string | null,
-        settleIfUnchanged?: boolean
+        settleIfUnchanged?: boolean,
+        cloudRevision?: number | null
       ) => Promise<NoteCreateAckResult>;
       markNoteSyncedIfUnchanged?: (
         id: number,
         snapshot: NoteUpdateSnapshot,
         expectedCloudId: string,
         cloudUpdatedAt?: string | null,
-        ownerUserId?: string | null
+        ownerUserId?: string | null,
+        cloudRevision?: number | null
       ) => Promise<NoteUpdateAckResult>;
-      setNoteCloudBase?: (id: number, cloudUpdatedAt: string | null) => Promise<void>;
+      setNoteCloudBase?: (
+        id: number,
+        cloudUpdatedAt: string | null,
+        cloudRevision?: number | null,
+        keepLocal?: boolean
+      ) => Promise<void>;
       setNoteOwnerFromCloud?: (id: number, ownerUserId: string) => Promise<void>;
       countTeamNotesMissingOwner?: () => Promise<number>;
       markNoteSyncError?: (id: number) => Promise<void>;

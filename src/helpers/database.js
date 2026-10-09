@@ -1,4 +1,5 @@
 const Database = require("better-sqlite3");
+const { NOTE_TEXT_FIELDS, hasNoteRevision, hasPendingNoteClear } = require("./noteFieldSync");
 const path = require("path");
 const fs = require("fs");
 const { randomUUID } = require("crypto");
@@ -37,6 +38,8 @@ const NOTE_CREATE_ACK_FIELDS = [
   "title",
   "content",
   "enhanced_content",
+  "content_sync_operation",
+  "enhanced_content_sync_operation",
   "enhancement_prompt",
   "enhancement_template_id",
   "enhanced_at_content_hash",
@@ -56,7 +59,12 @@ const NOTE_CREATE_ACK_FIELDS = [
   "deleted_at",
 ];
 // A PATCH additionally pins the server base and any pending scope retraction.
-const NOTE_PATCH_ACK_FIELDS = [...NOTE_CREATE_ACK_FIELDS, "cloud_updated_at", "left_team"];
+const NOTE_PATCH_ACK_FIELDS = [
+  ...NOTE_CREATE_ACK_FIELDS,
+  "cloud_updated_at",
+  "cloud_revision",
+  "left_team",
+];
 // Must mirror FolderPushSnapshot in src/types/electron.ts.
 const FOLDER_ACK_FIELDS = [
   "client_folder_id",
@@ -399,6 +407,17 @@ class DatabaseManager {
         this.db.exec("ALTER TABLE notes ADD COLUMN enhancement_template_id TEXT");
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
+      }
+      for (const definition of [
+        "cloud_revision INTEGER",
+        "content_sync_operation TEXT",
+        "enhanced_content_sync_operation TEXT",
+      ]) {
+        try {
+          this.db.exec(`ALTER TABLE notes ADD COLUMN ${definition}`);
+        } catch (err) {
+          if (!err.message.includes("duplicate column")) throw err;
+        }
       }
       try {
         this.db.exec("ALTER TABLE notes ADD COLUMN cloud_id TEXT");
@@ -3312,7 +3331,61 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       if (!this.getNote(id)) return { success: false, error: "Note not found" };
       updates = { ...updates };
+      const previous = this.getNote(id);
+      const clears = updates.clear_fields ?? [];
+      if (!Array.isArray(clears) || clears.some((field) => !NOTE_TEXT_FIELDS.includes(field))) {
+        return { success: false, error: "Invalid note clear fields" };
+      }
+      for (const field of NOTE_TEXT_FIELDS) {
+        delete updates[`${field}_sync_operation`];
+        if (clears.includes(field)) {
+          if (
+            updates[field] != null &&
+            (typeof updates[field] !== "string" || updates[field].trim())
+          ) {
+            return { success: false, error: "A clear cannot include nonempty text" };
+          }
+          updates[field] = field === "content" ? "" : null;
+          updates[`${field}_sync_operation`] = "clear";
+          if (field === "enhanced_content") {
+            updates.enhancement_prompt = null;
+            updates.enhancement_template_id = null;
+            updates.enhanced_at_content_hash = null;
+          }
+        } else if (
+          typeof updates[field] === "string" &&
+          updates[field].trim() &&
+          updates[field] !== previous[field]
+        ) {
+          updates[`${field}_sync_operation`] = "set";
+        } else if (updates[field] !== undefined && !updates[field]?.trim()) {
+          // Preserve the existing local save contract, but never turn an
+          // untrusted blank into a sync operation.
+          updates[`${field}_sync_operation`] =
+            !previous[field]?.trim() && previous[`${field}_sync_operation`] === "clear"
+              ? "clear"
+              : null;
+        }
+      }
+      if (
+        !clears.includes("enhanced_content") &&
+        (updates.enhanced_content === undefined || updates.enhanced_content?.trim()) &&
+        (updates.enhanced_content ?? previous.enhanced_content)?.trim() &&
+        ["enhancement_prompt", "enhancement_template_id", "enhanced_at_content_hash"].some(
+          (key) => updates[key] !== undefined && updates[key] !== previous[key]
+        )
+      ) {
+        updates.enhanced_content_sync_operation = "set";
+      }
+      delete updates.clear_fields;
       delete updates.account_id;
+      delete updates.cloud_revision;
+      if (
+        updates.cloud_id === null ||
+        (updates.client_note_id && updates.client_note_id !== previous.client_note_id)
+      ) {
+        updates.cloud_revision = null;
+      }
       if (updates.folder_id != null) {
         // D2: a note's space always follows its folder's space.
         const folder = this._getFolderInAccountScope(updates.folder_id);
@@ -3347,6 +3420,9 @@ class DatabaseManager {
         }
       }
       const allowedFields = [
+        "content_sync_operation",
+        "enhanced_content_sync_operation",
+        "cloud_revision",
         "title",
         "content",
         "enhanced_content",
@@ -4110,7 +4186,7 @@ class DatabaseManager {
             .map((row) => row.id);
           if (preservedIds.length > 0) {
             const relocateNote = this.db.prepare(
-              "UPDATE notes SET space_id = ?, folder_id = NULL, client_note_id = ?, cloud_id = NULL, cloud_updated_at = NULL, owner_user_id = NULL, updated_by_user_id = NULL, sync_status = 'pending', left_team = 0, is_shared = 0, share_token = NULL, updated_at = datetime('now') WHERE id = ?"
+              "UPDATE notes SET space_id = ?, folder_id = NULL, client_note_id = ?, cloud_id = NULL, cloud_updated_at = NULL, cloud_revision = NULL, owner_user_id = NULL, updated_by_user_id = NULL, sync_status = 'pending', left_team = 0, is_shared = 0, share_token = NULL, updated_at = datetime('now') WHERE id = ?"
             );
             const detachNoteConversation = this.db.prepare(
               "UPDATE agent_conversations SET space_id = NULL, folder_id = NULL WHERE note_id = ?"
@@ -6221,6 +6297,33 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       const spaceId = localSpaceId ?? this.getPrivateSpaceId();
       const accountId = this._accountIdForSpace(spaceId);
+      const existing = this.db
+        .prepare("SELECT * FROM notes WHERE client_note_id = ?")
+        .get(cloudNote.client_note_id);
+      if (existing && existing.account_id !== accountId) throw new Error("Note account mismatch");
+      if (existing?.cloud_id && existing.cloud_id !== cloudNote.id)
+        throw new Error("Note cloud identity mismatch");
+      const versioned = hasNoteRevision(cloudNote.revision);
+      if (
+        existing &&
+        hasNoteRevision(existing.cloud_revision) &&
+        (!versioned || cloudNote.revision < existing.cloud_revision)
+      )
+        return existing;
+      const clearsContent =
+        versioned && cloudNote.content_state === "clear" && !cloudNote.content?.trim();
+      const clearsSummary =
+        versioned &&
+        cloudNote.enhanced_content_state === "clear" &&
+        !cloudNote.enhanced_content?.trim();
+      cloudNote = { ...cloudNote };
+      if (!cloudNote.content?.trim()) cloudNote.content = "";
+      if (!cloudNote.enhanced_content?.trim()) cloudNote.enhanced_content = null;
+      if (clearsSummary) {
+        cloudNote.enhancement_prompt = null;
+        cloudNote.enhancement_template_id = null;
+        cloudNote.enhanced_at_content_hash = null;
+      }
       const hasExplicitCreator = Object.prototype.hasOwnProperty.call(
         cloudNote,
         "created_by_user_id"
@@ -6244,7 +6347,7 @@ class DatabaseManager {
         "enhancement_template_id"
       )
         ? `CASE
-            WHEN COALESCE(excluded.enhanced_content, '') = '' AND COALESCE(enhanced_content, '') <> ''
+            WHEN ${clearsSummary ? 0 : 1} AND COALESCE(excluded.enhanced_content, '') = '' AND COALESCE(enhanced_content, '') <> ''
             THEN enhancement_template_id ELSE excluded.enhancement_template_id END`
         : "enhancement_template_id";
       // Sync must never replace non-empty local content/enhanced_content/
@@ -6255,23 +6358,23 @@ class DatabaseManager {
           enhancement_prompt, enhancement_template_id, enhanced_at_content_hash, note_type, source_file,
           audio_duration_seconds, transcript, folder_id, space_id, participants, calendar_event_id,
           diarization_enabled, expected_speaker_count, updated_by_user_id, owner_user_id, created_by_user_id, sync_status, created_at, updated_at,
-          cloud_updated_at, account_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', ?, ?, ?, ?)
+          cloud_updated_at, account_id, cloud_revision)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', ?, ?, ?, ?, ?)
         ON CONFLICT(client_note_id) DO UPDATE SET
           cloud_id = excluded.cloud_id,
           title = excluded.title,
           content = CASE
-            WHEN COALESCE(excluded.content, '') = '' AND COALESCE(content, '') <> ''
+            WHEN ${clearsContent ? 0 : 1} AND COALESCE(excluded.content, '') = '' AND COALESCE(content, '') <> ''
             THEN content ELSE excluded.content END,
           enhanced_content = CASE
-            WHEN COALESCE(excluded.enhanced_content, '') = '' AND COALESCE(enhanced_content, '') <> ''
+            WHEN ${clearsSummary ? 0 : 1} AND COALESCE(excluded.enhanced_content, '') = '' AND COALESCE(enhanced_content, '') <> ''
             THEN enhanced_content ELSE excluded.enhanced_content END,
           enhancement_prompt = CASE
-            WHEN COALESCE(excluded.enhanced_content, '') = '' AND COALESCE(enhanced_content, '') <> ''
+            WHEN ${clearsSummary ? 0 : 1} AND COALESCE(excluded.enhanced_content, '') = '' AND COALESCE(enhanced_content, '') <> ''
             THEN enhancement_prompt ELSE excluded.enhancement_prompt END,
           enhancement_template_id = ${templateIdUpdate},
           enhanced_at_content_hash = CASE
-            WHEN COALESCE(excluded.enhanced_content, '') = '' AND COALESCE(enhanced_content, '') <> ''
+            WHEN ${clearsSummary ? 0 : 1} AND COALESCE(excluded.enhanced_content, '') = '' AND COALESCE(enhanced_content, '') <> ''
             THEN enhanced_at_content_hash ELSE excluded.enhanced_at_content_hash END,
           transcript = CASE
             WHEN COALESCE(excluded.transcript, '') = '' AND COALESCE(transcript, '') <> ''
@@ -6289,7 +6392,10 @@ class DatabaseManager {
           sync_status = 'synced',
           left_team = 0,
           updated_at = excluded.updated_at,
-          cloud_updated_at = excluded.cloud_updated_at
+          cloud_updated_at = excluded.cloud_updated_at,
+          cloud_revision = excluded.cloud_revision,
+          content_sync_operation = NULL,
+          enhanced_content_sync_operation = NULL
       `);
       stmt.run(
         cloudNote.client_note_id,
@@ -6316,7 +6422,8 @@ class DatabaseManager {
         cloudNote.created_at,
         cloudNote.updated_at,
         cloudNote.updated_at,
-        accountId
+        accountId,
+        versioned ? cloudNote.revision : null
       );
       return this.db
         .prepare("SELECT * FROM notes WHERE client_note_id = ?")
@@ -6371,7 +6478,8 @@ class DatabaseManager {
     cloudId,
     cloudUpdatedAt = null,
     ownerUserId = null,
-    settleIfUnchanged = true
+    settleIfUnchanged = true,
+    cloudRevision = null
   ) {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -6414,16 +6522,26 @@ class DatabaseManager {
         // identity as owing a scope retraction even when backup is disabled.
         const leftTeam = this._leftTeamDuringPush(snapshot.space_id, current.space_id);
 
-        if (unchanged && settleIfUnchanged) {
+        // Creates carry snapshots, not field operations. A queued operation
+        // follows as a revisioned PATCH after the identity is acknowledged.
+        const hasOperations = NOTE_TEXT_FIELDS.some((field) => snapshot[`${field}_sync_operation`]);
+        if (unchanged && settleIfUnchanged && !hasOperations) {
           this.db
             .prepare(
               `UPDATE notes
                SET sync_status = 'synced', cloud_id = ?, left_team = 0,
-                   cloud_updated_at = ?,
+                   cloud_updated_at = ?, cloud_revision = ?,
                    owner_user_id = ?
                WHERE id = ? AND client_note_id = ? AND cloud_id IS NULL`
             )
-            .run(cloudId, cloudUpdatedAt, ownerUserId, id, expectedClientNoteId);
+            .run(
+              cloudId,
+              cloudUpdatedAt,
+              hasNoteRevision(cloudRevision) ? cloudRevision : null,
+              ownerUserId,
+              id,
+              expectedClientNoteId
+            );
           return { success: true, outcome: "synced" };
         }
 
@@ -6431,13 +6549,21 @@ class DatabaseManager {
           .prepare(
             `UPDATE notes
              SET cloud_id = ?,
-                 cloud_updated_at = ?,
+                 cloud_updated_at = ?, cloud_revision = ?,
                  owner_user_id = ?,
                  sync_status = 'pending',
                  left_team = CASE WHEN ? = 1 THEN 1 ELSE left_team END
              WHERE id = ? AND client_note_id = ? AND cloud_id IS NULL`
           )
-          .run(cloudId, cloudUpdatedAt, ownerUserId, leftTeam, id, expectedClientNoteId);
+          .run(
+            cloudId,
+            cloudUpdatedAt,
+            hasNoteRevision(cloudRevision) ? cloudRevision : null,
+            ownerUserId,
+            leftTeam,
+            id,
+            expectedClientNoteId
+          );
         return { success: true, outcome: "pending" };
       })();
     } catch (error) {
@@ -6455,7 +6581,8 @@ class DatabaseManager {
     snapshot,
     expectedCloudId,
     cloudUpdatedAt = null,
-    ownerUserId = null
+    ownerUserId = null,
+    cloudRevision = null
   ) {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -6476,6 +6603,14 @@ class DatabaseManager {
           return { success: true, outcome: "identity-changed", changes: 0 };
         }
 
+        const incomingRevision = hasNoteRevision(cloudRevision) ? cloudRevision : null;
+        if (
+          (hasNoteRevision(current.cloud_revision) &&
+            (incomingRevision === null || incomingRevision < current.cloud_revision)) ||
+          (hasPendingNoteClear(snapshot) && incomingRevision === null)
+        ) {
+          return { success: true, outcome: "pending", changes: 0 };
+        }
         const unchanged = rowMatchesSnapshot(current, snapshot, NOTE_PATCH_ACK_FIELDS);
         const nextCloudUpdatedAt = (() => {
           if (!cloudUpdatedAt) return current.cloud_updated_at;
@@ -6494,12 +6629,19 @@ class DatabaseManager {
           const result = this.db
             .prepare(
               `UPDATE notes
-               SET sync_status = 'synced', left_team = 0,
-                   cloud_updated_at = ?,
+               SET sync_status = 'synced', left_team = 0, content_sync_operation = NULL, enhanced_content_sync_operation = NULL,
+                   cloud_updated_at = ?, cloud_revision = ?,
                    owner_user_id = COALESCE(?, owner_user_id)
                WHERE id = ? AND client_note_id = ? AND cloud_id = ?`
             )
-            .run(nextCloudUpdatedAt, ownerUserId, id, snapshot.client_note_id, expectedCloudId);
+            .run(
+              nextCloudUpdatedAt,
+              incomingRevision,
+              ownerUserId,
+              id,
+              snapshot.client_note_id,
+              expectedCloudId
+            );
           return { success: true, outcome: "synced", changes: result.changes };
         }
 
@@ -6510,11 +6652,18 @@ class DatabaseManager {
         this.db
           .prepare(
             `UPDATE notes
-             SET cloud_updated_at = ?,
+             SET cloud_updated_at = ?, cloud_revision = ?,
                  owner_user_id = COALESCE(?, owner_user_id)
              WHERE id = ? AND client_note_id = ? AND cloud_id = ?`
           )
-          .run(nextCloudUpdatedAt, ownerUserId, id, snapshot.client_note_id, expectedCloudId);
+          .run(
+            nextCloudUpdatedAt,
+            incomingRevision,
+            ownerUserId,
+            id,
+            snapshot.client_note_id,
+            expectedCloudId
+          );
         return { success: true, outcome: "pending", changes: 0 };
       })();
     } catch (error) {
@@ -6575,11 +6724,30 @@ class DatabaseManager {
   // Records the server revision the user knowingly overwrites ("Keep editing"
   // on the conflict banner). Deliberately leaves updated_at and sync_status
   // alone — the local edit stays pending and pushes with the advanced base.
-  setNoteCloudBase(id, cloudUpdatedAt) {
+  setNoteCloudBase(id, cloudUpdatedAt, cloudRevision = null, keepLocal = true) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       if (!this.getNote(id)) return { success: false };
-      this.db.prepare("UPDATE notes SET cloud_updated_at = ? WHERE id = ?").run(cloudUpdatedAt, id);
+      const current = this.getNote(id);
+      if (
+        hasNoteRevision(current.cloud_revision) &&
+        (!hasNoteRevision(cloudRevision) || cloudRevision < current.cloud_revision)
+      )
+        return { success: false };
+      // Keep is a deliberate restoration of the visible local snapshot. The
+      // capability backfill passes false and must never grant this intent.
+      if (keepLocal && hasNoteRevision(cloudRevision)) {
+        for (const field of NOTE_TEXT_FIELDS) {
+          if (current[field]?.trim()) {
+            this.db
+              .prepare(`UPDATE notes SET ${field}_sync_operation = 'set' WHERE id = ?`)
+              .run(id);
+          }
+        }
+      }
+      this.db
+        .prepare("UPDATE notes SET cloud_updated_at = ?, cloud_revision = ? WHERE id = ?")
+        .run(cloudUpdatedAt, hasNoteRevision(cloudRevision) ? cloudRevision : null, id);
       return { success: true };
     } catch (error) {
       debugLogger.error("Error setting note cloud base", { error: error.message }, "database");
@@ -6941,7 +7109,7 @@ class DatabaseManager {
         this._deleteSpeakerRowsForNotes(serverOwnedChildren, id);
         this.db.prepare(`DELETE FROM notes WHERE id IN (${serverOwnedChildren})`).run(id);
         const relocateNote = this.db.prepare(
-          "UPDATE notes SET space_id = ?, folder_id = ?, client_note_id = ?, cloud_id = NULL, cloud_updated_at = NULL, owner_user_id = NULL, updated_by_user_id = NULL, sync_status = 'pending', left_team = 0, is_shared = 0, share_token = NULL, updated_at = datetime('now') WHERE id = ?"
+          "UPDATE notes SET space_id = ?, folder_id = ?, client_note_id = ?, cloud_id = NULL, cloud_updated_at = NULL, cloud_revision = NULL, owner_user_id = NULL, updated_by_user_id = NULL, sync_status = 'pending', left_team = 0, is_shared = 0, share_token = NULL, updated_at = datetime('now') WHERE id = ?"
         );
         const detachNoteConversation = this.db.prepare(
           "UPDATE agent_conversations SET space_id = NULL, folder_id = NULL WHERE note_id = ?"

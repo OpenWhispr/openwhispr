@@ -1167,7 +1167,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getNoteByClientId: (clientNoteId) => ipcRenderer.invoke("db-get-note-by-client-id", clientNoteId),
   upsertNoteFromCloud: (cloudNote, localFolderId, localSpaceId) =>
     ipcRenderer.invoke("db-upsert-note-from-cloud", cloudNote, localFolderId, localSpaceId),
-  acknowledgeNoteCreate: (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, settleIfUnchanged) =>
+  acknowledgeNoteCreate: (
+    id,
+    snapshot,
+    cloudId,
+    cloudUpdatedAt,
+    ownerUserId,
+    settleIfUnchanged,
+    cloudRevision
+  ) =>
     ipcRenderer.invoke(
       "db-acknowledge-note-create",
       id,
@@ -1175,19 +1183,28 @@ contextBridge.exposeInMainWorld("electronAPI", {
       cloudId,
       cloudUpdatedAt,
       ownerUserId,
-      settleIfUnchanged
+      settleIfUnchanged,
+      cloudRevision
     ),
-  markNoteSyncedIfUnchanged: (id, snapshot, expectedCloudId, cloudUpdatedAt, ownerUserId) =>
+  markNoteSyncedIfUnchanged: (
+    id,
+    snapshot,
+    expectedCloudId,
+    cloudUpdatedAt,
+    ownerUserId,
+    cloudRevision
+  ) =>
     ipcRenderer.invoke(
       "db-mark-note-synced-if-unchanged",
       id,
       snapshot,
       expectedCloudId,
       cloudUpdatedAt,
-      ownerUserId
+      ownerUserId,
+      cloudRevision
     ),
-  setNoteCloudBase: (id, cloudUpdatedAt) =>
-    ipcRenderer.invoke("db-set-note-cloud-base", id, cloudUpdatedAt),
+  setNoteCloudBase: (id, cloudUpdatedAt, cloudRevision, keepLocal) =>
+    ipcRenderer.invoke("db-set-note-cloud-base", id, cloudUpdatedAt, cloudRevision, keepLocal),
   setNoteOwnerFromCloud: (id, ownerUserId) =>
     ipcRenderer.invoke("db-set-note-owner-from-cloud", id, ownerUserId),
   countTeamNotesMissingOwner: () => ipcRenderer.invoke("db-count-team-notes-missing-owner"),

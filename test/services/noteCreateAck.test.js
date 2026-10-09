@@ -35,6 +35,7 @@ test("resolveCloudNoteCreate deletes a proven orphan create", async () => {
     "2026-07-29T10:00:00.000Z",
     "owner-42",
     true,
+    null,
   ]);
   assert.deepEqual(calls[1], ["delete", "cloud-note-42"]);
 });
@@ -136,7 +137,7 @@ test("resolveCloudNoteCreateBatch routes migration results by snapshot identity"
   );
 
   assert.deepEqual(acknowledgements, [
-    [otherNote.id, otherNote, "cloud-note-84", "2026-07-29T14:00:00.000Z", null, false],
+    [otherNote.id, otherNote, "cloud-note-84", "2026-07-29T14:00:00.000Z", null, false, null],
   ]);
   assert.deepEqual(deleted, ["cloud-note-84"]);
   assert.deepEqual(results, ["orphan-cleaned"]);
@@ -231,3 +232,30 @@ test("an account reset cleans an invalidated migration without touching SQLite",
   assert.deepEqual(deleted, ["old-account-cloud"]);
   assert.deepEqual(results, ["orphan-cleaned"]);
 });
+
+for (const invalidated of [false, true]) {
+  test(`a rejected create never cleans an existing row (invalidated=${invalidated})`, async () => {
+    const { resolveCloudNoteCreate } = await import("../../src/services/noteCreateAck.ts");
+    let acknowledged = false;
+    const outcome = await resolveCloudNoteCreate(
+      note,
+      {
+        id: "protected",
+        client_note_id: note.client_note_id,
+        revision: 12,
+        write_applied: false,
+      },
+      {
+        acknowledge: async (...args) => {
+          acknowledged = true;
+          assert.equal(args[6], null);
+          return { success: true, outcome: "orphaned" };
+        },
+        deleteCloud: () => assert.fail("Rejected create is not owned by this request"),
+      },
+      { requestStillCurrent: () => !invalidated }
+    );
+    assert.equal(outcome, "write-rejected");
+    assert.equal(acknowledged, !invalidated);
+  });
+}

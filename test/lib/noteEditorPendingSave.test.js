@@ -140,7 +140,7 @@ test("keeps document and enhanced writes with different owners separate", async 
       },
       {
         noteId: 2,
-        updates: { enhanced_content: null },
+        updates: { enhanced_content: null, clear_fields: ["enhanced_content"] },
       },
     ]
   );

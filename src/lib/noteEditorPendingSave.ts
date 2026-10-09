@@ -10,6 +10,7 @@ export type NoteDraftMutation =
   | { sourceNoteId: number; field: "enhancedContent"; value: string | null };
 
 export interface PendingDocumentSnapshot {
+  readonly clearContent?: boolean;
   readonly noteId: number;
   readonly title: string;
   readonly content: string;
@@ -21,6 +22,7 @@ export interface PendingEnhancedSnapshot {
 }
 
 export type PendingNoteUpdates = {
+  readonly clear_fields?: Array<"content" | "enhanced_content">;
   readonly title?: string;
   readonly content?: string;
   readonly enhanced_content?: string | null;
@@ -75,6 +77,14 @@ export function collectPendingNoteWrites(
           title: document.title,
           content: document.content,
           enhanced_content: enhanced.enhancedContent,
+          ...(document.clearContent || !enhanced.enhancedContent?.trim()
+            ? {
+                clear_fields: [
+                  ...(document.clearContent ? ["content" as const] : []),
+                  ...(!enhanced.enhancedContent?.trim() ? ["enhanced_content" as const] : []),
+                ],
+              }
+            : {}),
         },
       },
     ];
@@ -84,13 +94,20 @@ export function collectPendingNoteWrites(
   if (document) {
     writes.push({
       noteId: document.noteId,
-      updates: { title: document.title, content: document.content },
+      updates: {
+        title: document.title,
+        content: document.content,
+        ...(document.clearContent ? { clear_fields: ["content"] } : {}),
+      },
     });
   }
   if (enhanced) {
     writes.push({
       noteId: enhanced.noteId,
-      updates: { enhanced_content: enhanced.enhancedContent },
+      updates: {
+        enhanced_content: enhanced.enhancedContent,
+        ...(!enhanced.enhancedContent?.trim() ? { clear_fields: ["enhanced_content"] } : {}),
+      },
     });
   }
   return writes;
