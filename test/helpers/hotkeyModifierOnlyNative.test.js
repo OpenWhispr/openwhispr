@@ -51,6 +51,59 @@ for (const platform of ["win32", "linux"]) {
   });
 }
 
+// macOS watches modifier-only chords with the Globe listener, which names a
+// chord by its modifiers in a fixed order whatever the hotkey's spelling.
+test("modifier-only chords skip globalShortcut on darwin and go to the Globe listener", async () => {
+  setPlatform("darwin");
+  const mgr = new HotkeyManager();
+
+  const result = await mgr.registerSlot("dictation", "Command+Alt", noop);
+
+  assert.equal(result.success, true);
+  assert.deepEqual(mgr.getSlotHotkeys("dictation"), ["Command+Alt"]);
+  assert.equal(registered.size, 0, "globalShortcut must not be used for a modifier-only chord");
+  assert.deepEqual(mgr.getMacNativeListenerConfig(["dictation"]).modifierChords, [
+    "option+command",
+  ]);
+  assert.equal(mgr.slotHasMacModifierChord("dictation", "option+command"), true);
+  assert.equal(mgr.slotHasMacModifierChord("dictation", "control+option"), false);
+  assert.equal(mgr.supportsPushToTalk("Command+Alt"), true, "the listener reports release");
+});
+
+test("a modifier chord spelled differently is the same chord on darwin", async () => {
+  setPlatform("darwin");
+  const mgr = new HotkeyManager();
+
+  await mgr.registerSlot("dictation", "Alt+Command", noop);
+  const result = await mgr.registerSlot("voiceAgent", "Cmd+Option", noop);
+
+  assert.equal(result.success, false, "the chord already belongs to dictation");
+  assert.equal(result.reason, "slot_conflict");
+});
+
+test("Command+Super is one key on darwin, not a chord", async () => {
+  setPlatform("darwin");
+  const mgr = new HotkeyManager();
+
+  const result = await mgr.registerSlot("dictation", "Command+Super", noop);
+
+  assert.equal(result.success, false);
+  assert.equal(registered.size, 0);
+});
+
+test("toMacModifierChord orders modifiers and resolves aliases", () => {
+  const { toMacModifierChord } = HotkeyManager;
+
+  assert.equal(toMacModifierChord("Command+Alt"), "option+command");
+  assert.equal(toMacModifierChord("Option+Cmd"), "option+command");
+  assert.equal(toMacModifierChord("Shift+Control"), "control+shift");
+  assert.equal(toMacModifierChord("CommandOrControl+Alt"), "option+command");
+  assert.equal(toMacModifierChord("Command+Super"), null);
+  assert.equal(toMacModifierChord("Control+Alt+Space"), null);
+  assert.equal(toMacModifierChord("RightOption"), null);
+  assert.equal(toMacModifierChord("GLOBE"), null);
+});
+
 test("a right-side single modifier also reaches the native listener on linux", async () => {
   setPlatform("linux");
   const mgr = new HotkeyManager();

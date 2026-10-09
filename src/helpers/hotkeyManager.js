@@ -63,6 +63,35 @@ function isModifierOnlyHotkey(hotkey) {
   return hotkey.split("+").every((part) => MODIFIER_NAMES.has(part.toLowerCase()));
 }
 
+// The macOS listener names a modifier-only chord by its modifiers in a fixed
+// order ("option+command"), whatever spelling or order the hotkey used, so the
+// same chord typed as Command+Alt or Alt+Cmd matches the event it reports.
+const MAC_CHORD_MODIFIER_ORDER = ["control", "option", "command", "shift"];
+const MAC_CHORD_MODIFIER_BY_NAME = {
+  control: "control",
+  ctrl: "control",
+  alt: "option",
+  option: "option",
+  command: "command",
+  cmd: "command",
+  commandorcontrol: "command",
+  cmdorctrl: "command",
+  super: "command",
+  meta: "command",
+  win: "command",
+  shift: "shift",
+};
+
+function toMacModifierChord(hotkey) {
+  if (!isModifierOnlyHotkey(hotkey)) return null;
+  const modifiers = new Set(
+    hotkey.split("+").map((part) => MAC_CHORD_MODIFIER_BY_NAME[part.toLowerCase()])
+  );
+  // Command+Super both mean ⌘ on a Mac: that is one key, not a chord.
+  if (modifiers.size < 2) return null;
+  return MAC_CHORD_MODIFIER_ORDER.filter((name) => modifiers.has(name)).join("+");
+}
+
 function isGlobeLikeHotkey(hotkey) {
   return hotkey === "GLOBE" || hotkey === "Fn";
 }
@@ -447,6 +476,12 @@ class HotkeyManager extends EventEmitter {
     return (this.slots.get(slotName)?.hotkeys ?? []).includes(key);
   }
 
+  // True if `slotName` binds the modifier-only chord the macOS listener reported.
+  slotHasMacModifierChord(slotName, chord) {
+    if (!chord) return false;
+    return this.getSlotHotkeys(slotName).some((hotkey) => toMacModifierChord(hotkey) === chord);
+  }
+
   // Name of the slot that owns `key`, or null. First match wins.
   findSlotByHotkey(key) {
     if (!key) return null;
@@ -622,11 +657,12 @@ class HotkeyManager extends EventEmitter {
     return true;
   }
 
-  // Which mouse buttons the macOS listener must swallow for these slots, and
-  // whether OpenWhispr owns Globe — if it does, macOS's own standalone Globe
-  // action has to stand down.
+  // Which mouse buttons the macOS listener must swallow for these slots, which
+  // modifier-only chords it must report, and whether OpenWhispr owns Globe — if
+  // it does, macOS's own standalone Globe action has to stand down.
   getMacNativeListenerConfig(slotNames) {
     const mouseButtons = new Set();
+    const modifierChords = new Set();
     let suppressGlobeAction = false;
 
     for (const slotName of slotNames) {
@@ -635,11 +671,18 @@ class HotkeyManager extends EventEmitter {
           mouseButtons.add(hotkey);
         } else if (isGlobeLikeHotkey(hotkey)) {
           suppressGlobeAction = true;
+        } else {
+          const chord = toMacModifierChord(hotkey);
+          if (chord) modifierChords.add(chord);
         }
       }
     }
 
-    return { mouseButtons: [...mouseButtons], suppressGlobeAction };
+    return {
+      mouseButtons: [...mouseButtons],
+      suppressGlobeAction,
+      modifierChords: [...modifierChords].sort(),
+    };
   }
 
   // A hotkey only the Linux evdev listener or windows-key-listener.exe can serve
@@ -718,13 +761,24 @@ class HotkeyManager extends EventEmitter {
         return { success: true, hotkey, accelerator: null };
       }
 
-      // Both Windows and Linux watch modifier-only chords with a low-level
-      // listener; Electron cannot build an accelerator without a regular key,
+      // Every platform watches modifier-only chords with a native listener:
+      // Windows and Linux with their low-level key hooks, macOS with the Globe
+      // listener. Electron cannot build an accelerator without a regular key,
       // so registering one would fail and reject an otherwise valid hotkey.
-      if (
-        isModifierOnlyHotkey(hotkey) &&
-        (process.platform === "win32" || process.platform === "linux")
-      ) {
+      if (isModifierOnlyHotkey(hotkey)) {
+        if (process.platform === "darwin") {
+          if (!toMacModifierChord(hotkey)) {
+            return {
+              success: false,
+              hotkey,
+              error: i18nMain.t("hotkey.errors.registrationFailed", { hotkey }),
+            };
+          }
+          debugLogger.log(
+            `[HotkeyManager] Modifier chord "${hotkey}" set - using macOS native listener`
+          );
+          return { success: true, hotkey, accelerator: null };
+        }
         const unavailable = this._nativeListenerUnavailable(hotkey);
         if (unavailable) return unavailable;
         debugLogger.log(`[HotkeyManager] Modifier-only "${hotkey}" set - using native listener`);
@@ -895,9 +949,11 @@ class HotkeyManager extends EventEmitter {
           (otherHotkey) =>
             HyprlandShortcutManager.getCanonicalBinding(otherHotkey) === hyprlandBinding
         );
+      const chord = process.platform === "darwin" ? toMacModifierChord(hotkey) : null;
       const match =
         otherHotkeys.includes(hotkey) ||
         (accelerator && otherAccelerators.includes(accelerator)) ||
+        (chord && otherHotkeys.some((otherHotkey) => toMacModifierChord(otherHotkey) === chord)) ||
         hasEquivalentHyprlandBinding;
       if (match) {
         debugLogger.warn(
@@ -1732,4 +1788,5 @@ module.exports = HotkeyManager;
 module.exports.isGlobeLikeHotkey = isGlobeLikeHotkey;
 module.exports.isModifierOnlyHotkey = isModifierOnlyHotkey;
 module.exports.isRightSideModifier = isRightSideModifier;
+module.exports.toMacModifierChord = toMacModifierChord;
 module.exports.isMouseButtonHotkey = isMouseButtonHotkey;
