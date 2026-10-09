@@ -3,7 +3,6 @@ import ReactDOM from "react-dom/client";
 import { I18nextProvider } from "react-i18next";
 import AppRouter from "./AppRouter.jsx";
 import ErrorBoundary from "./components/ErrorBoundary.tsx";
-import AssistantNoteUndoListener from "./components/notes/AssistantNoteUndoListener.tsx";
 import CleanupFailureToastListener from "./components/CleanupFailureToastListener.tsx";
 import TinfoilModelSwitchToastListener from "./components/TinfoilModelSwitchToastListener.tsx";
 import GpuPackMigrationToastListener from "./components/GpuPackMigrationToastListener.tsx";
@@ -32,7 +31,6 @@ root.render(
         <I18nDirectionProvider>
           <SettingsProvider>
             <ToastProvider>
-              <AssistantNoteUndoListener />
               <TinfoilModelSwitchToastListener />
               <CleanupFailureToastListener />
               <GpuPackMigrationToastListener />

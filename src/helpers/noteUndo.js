@@ -22,6 +22,9 @@ const GUARDED_FIELDS = [
   "created_at",
 ];
 const EDITABLE_FIELDS = ["title", "content", "enhanced_content", "folder_id"];
+// Outlives a cancelled turn, a renderer reload and an unfocused panel, but an
+// edit is never offered again at a later launch.
+const UNDO_TTL_MS = 10 * 60 * 1000;
 
 function initializeNoteUndo(db) {
   db.exec(`
@@ -29,7 +32,8 @@ function initializeNoteUndo(db) {
       note_id INTEGER PRIMARY KEY REFERENCES notes(id) ON DELETE CASCADE,
       token TEXT NOT NULL UNIQUE,
       account_id TEXT,
-      previous TEXT NOT NULL
+      previous TEXT NOT NULL,
+      created_at INTEGER NOT NULL
     );
     CREATE TRIGGER IF NOT EXISTS assistant_note_undo_update AFTER UPDATE ON notes
     WHEN ${GUARDED_FIELDS.filter((field) => field !== "owner_user_id")
@@ -40,6 +44,7 @@ function initializeNoteUndo(db) {
     CREATE TRIGGER IF NOT EXISTS assistant_note_undo_delete AFTER DELETE ON notes
     BEGIN DELETE FROM assistant_note_undo WHERE note_id = OLD.id; END;
   `);
+  db.prepare("DELETE FROM assistant_note_undo WHERE created_at < ?").run(Date.now() - UNDO_TTL_MS);
 }
 
 function updateNoteWithUndo(manager, id, updates, expected) {
@@ -72,21 +77,12 @@ function updateNoteWithUndo(manager, id, updates, expected) {
     if (!Object.keys(previous).length && !updates.clear_fields?.length)
       return { success: true, note: before };
     const result = manager.updateNote(id, updates);
-    if (!result.success) return result;
-    // A deliberate summary clear may also reset its generation metadata.
-    for (const key of [
-      "enhancement_prompt",
-      "enhancement_template_id",
-      "enhanced_at_content_hash",
-    ]) {
-      if (before[key] !== result.note[key]) previous[key] = before[key];
-    }
-    if (!Object.keys(previous).length) return result;
+    if (!result.success || !Object.keys(previous).length) return result;
     manager.db
       .prepare(
-        "INSERT OR REPLACE INTO assistant_note_undo (note_id, token, account_id, previous) VALUES (?, ?, ?, ?)"
+        "INSERT OR REPLACE INTO assistant_note_undo (note_id, token, account_id, previous, created_at) VALUES (?, ?, ?, ?, ?)"
       )
-      .run(id, randomUUID(), manager.activeAccountId, JSON.stringify(previous));
+      .run(id, randomUUID(), manager.activeAccountId, JSON.stringify(previous), Date.now());
     return result;
   })();
 }
@@ -98,10 +94,10 @@ function getNoteUndos(manager) {
       `
     SELECT u.token, notes.id AS noteId, notes.title
     FROM assistant_note_undo u JOIN notes ON notes.id = u.note_id
-    WHERE notes.deleted_at IS NULL AND u.account_id IS ? AND ${scope.sql}
+    WHERE notes.deleted_at IS NULL AND u.account_id IS ? AND u.created_at >= ? AND ${scope.sql}
   `
     )
-    .all(manager.activeAccountId, ...scope.params);
+    .all(manager.activeAccountId, Date.now() - UNDO_TTL_MS, ...scope.params);
 }
 
 function undoNoteUpdate(manager, token) {
@@ -110,7 +106,10 @@ function undoNoteUpdate(manager, token) {
       .prepare("SELECT * FROM assistant_note_undo WHERE token = ?")
       .get(token);
     const note =
-      saved && saved.account_id === manager.activeAccountId && manager.getNote(saved.note_id);
+      saved &&
+      saved.account_id === manager.activeAccountId &&
+      saved.created_at >= Date.now() - UNDO_TTL_MS &&
+      manager.getNote(saved.note_id);
     if (!note || note.deleted_at) return { success: false, error: "note_changed" };
     const previous = JSON.parse(saved.previous);
     if (previous.folder_id != null) {
@@ -145,6 +144,7 @@ function discardNoteUndo(manager, id, token) {
 }
 
 module.exports = {
+  UNDO_TTL_MS,
   initializeNoteUndo,
   updateNoteWithUndo,
   getNoteUndos,

@@ -5,6 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const Module = require("node:module");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const { UNDO_TTL_MS, initializeNoteUndo } = require("../../src/helpers/noteUndo");
 
 // Real SQLite and the real tool/registry, with only Electron/provider transport stubbed.
 test("safe assistant edits and atomic Undo", async (t) => {
@@ -115,6 +116,39 @@ test("safe assistant edits and atomic Undo", async (t) => {
         assert.equal(database.getNote(note.id).content, note.content);
         assert.equal(database.getNote(note.id).enhanced_content, note.enhanced_content);
       }
+    }
+  );
+
+  await t.test(
+    "a numeric string ID edits the note; a malformed one names the argument",
+    async () => {
+      const note = fresh();
+      assert.equal((await edit(note, { id: String(note.id), title: "By string" })).success, true);
+      assert.equal(database.getNote(note.id).title, "By string");
+      const result = await edit(note, { id: `${note.id}x`, title: "Rejected" });
+      assert.equal(result.success, false);
+      assert.equal(result.displayText, "Invalid note update argument: id");
+      assert.equal(database.getNote(note.id).title, "By string");
+    }
+  );
+
+  await t.test(
+    "an expired recovery is neither offered nor restorable, and launch prunes it",
+    async () => {
+      const note = fresh();
+      await edit(note, { title: "Old edit" });
+      const token = tokenFor(note.id);
+      database.db
+        .prepare("UPDATE assistant_note_undo SET created_at = ? WHERE token = ?")
+        .run(Date.now() - UNDO_TTL_MS - 1, token);
+      assert.equal(tokenFor(note.id), undefined);
+      assert.equal(database.undoNoteUpdate(token).success, false);
+      assert.equal(database.getNote(note.id).title, "Old edit");
+      initializeNoteUndo(database.db);
+      const remaining = database.db
+        .prepare("SELECT COUNT(*) AS count FROM assistant_note_undo WHERE token = ?")
+        .get(token);
+      assert.equal(remaining.count, 0);
     }
   );
 

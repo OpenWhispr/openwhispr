@@ -47,20 +47,24 @@ export const updateNoteTool: ToolDefinition = {
     args: Record<string, unknown>,
     context?: ToolExecutionContext
   ): Promise<ToolResult> {
-    const id = args.id;
+    // Models sometimes send the ID as a numeric string, which get_note accepts.
+    const id = typeof args.id === "string" && /^\d+$/.test(args.id) ? Number(args.id) : args.id;
     const clearFields = args.clear_fields ?? [];
+    const invalid = (argument: string): ToolResult => ({
+      success: false,
+      data: null,
+      displayText: `Invalid note update argument: ${argument}`,
+    });
+    if (typeof id !== "number" || !Number.isSafeInteger(id) || id <= 0) return invalid("id");
     const invalidField = ["title", "content", "summary", "folder"].find(
       (key) => args[key] != null && typeof args[key] !== "string"
     );
+    if (invalidField) return invalid(invalidField);
     if (
-      typeof id !== "number" ||
-      !Number.isSafeInteger(id) ||
-      id <= 0 ||
-      invalidField ||
       !Array.isArray(clearFields) ||
       clearFields.some((field) => field !== "content" && field !== "summary")
     ) {
-      return { success: false, data: null, displayText: "Invalid note update arguments" };
+      return invalid("clear_fields");
     }
     const title = typeof args.title === "string" && args.title.trim() ? args.title : undefined;
     const folderName =

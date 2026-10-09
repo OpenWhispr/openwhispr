@@ -26,6 +26,7 @@ import { VoiceModePanelCore } from "./components/dictation/VoiceModePanelCore";
 import { PillTooltip } from "./components/dictation/PillTooltip";
 import { PillCommandMenu } from "./components/dictation/PillCommandMenu";
 import { LiquidCancelButton } from "./components/dictation/LiquidCancelButton";
+import AssistantNoteUndoListener from "./components/notes/AssistantNoteUndoListener";
 import { createMainWindowResizeCoordinator } from "./utils/mainWindowResizeCoordinator";
 import {
   ASSISTANT_FOOTER_TRANSITION_TIMING,
@@ -847,6 +848,8 @@ export default function App() {
           />
         )}
       </VoiceModePanelCore>
+      {/* The assistant panel edits notes here; its Undo shows once the panel has focus. */}
+      <AssistantNoteUndoListener />
     </div>
   );
 }
