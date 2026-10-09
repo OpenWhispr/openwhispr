@@ -3937,20 +3937,18 @@
     "mcp": {
       "description": "Converse, pesquise e trabalhe com suas notas no Claude, ChatGPT e Cursor.",
       "step1": "Na sua ferramenta de IA, adicione OpenWhispr MCP usando a URL pública",
-      "step2": "Crie uma chave de API com os escopos necessários.",
-      "step3": "Cole a chave como cabeçalho Authorization para conectar.",
-      "learnMore": "Saiba mais",
       "proRequired": "Atualize para um plano pago para conectar o OpenWhispr ao Claude, ChatGPT e Cursor.",
       "worksWith": "Funciona com",
       "copyUrl": "Copiar URL do MCP",
-      "copied": "Copiado"
+      "copied": "Copiado",
+      "oauthTitle": "Entrar com OAuth",
+      "oauthDescription": "Em um cliente compatível com OAuth, adicione a URL do servidor, entre no OpenWhispr e autorize o acesso. Não é necessária uma chave de API.",
+      "apiKeyTitle": "Usar uma chave de API",
+      "apiKeyDescription": "Para clientes que aceitam cabeçalhos de solicitação, crie uma chave de API pessoal com as permissões necessárias e use o cabeçalho abaixo."
     },
     "cli": {
       "description": "Dê ao seu assistente acesso às suas notas pelo terminal.",
       "installLabel": "Instalar",
-      "learnMore": "Ler a documentação",
-      "copyDocsLink": "Copiar link da documentação",
-      "docsLinkCopied": "Link da documentação copiado",
       "viewPlans": "Ver planos",
       "local": {
         "label": "Local",
@@ -3995,7 +3993,8 @@
     },
     "connectors": {
       "description": "Deixe o assistente usar suas ferramentas. Você aprova cada e-mail, mensagem e issue antes do envio."
-    }
+    },
+    "readDocs": "Ler a documentação"
   },
   "connectors": {
     "approval": {
@@ -4162,15 +4161,17 @@
       "descriptionSend": "O assistente mostra um cartão de e-mail no chat. O e-mail só é enviado pelo seu Gmail quando você aperta Enviar.",
       "unavailable": "Os rascunhos de e-mail não estão disponíveis no momento.",
       "targetLabel": "Criar rascunhos de e-mail em",
-      "autoResolved": "Automático · {{target}}",
       "targets": {
         "gmail": "Gmail",
         "outlookWork": "Outlook (trabalho ou escola)",
         "outlookPersonal": "Outlook.com",
-        "mailto": "Aplicativo de e-mail padrão",
+        "mailto": "Aplicativo de e-mail do sistema",
         "gmailSend": "Enviar pelo chat (Gmail)",
-        "gmailSendConnectFirst": "Enviar pelo chat (Gmail) · conecte o Gmail abaixo"
-      }
+        "gmailSendConnectFirst": "Enviar pelo chat (Gmail) · conecte o Gmail abaixo",
+        "auto": "Automático"
+      },
+      "automaticHint": "Atual: {{target}}. Segue suas contas conectadas.",
+      "systemMailHint": "Usa o gerenciador de e-mail configurado no seu computador."
     },
     "slack": {
       "title": "Slack",
@@ -4608,7 +4609,6 @@
   "apiKeysSection": {
     "title": "Chaves API",
     "description": "Crie chaves para acessar a API do OpenWhispr programaticamente.",
-    "docsLink": "Docs da API",
     "empty": "Nenhuma chave API ainda",
     "createButton": "Criar chave API",
     "create": {

@@ -3937,20 +3937,18 @@
     "mcp": {
       "description": "在 Claude、ChatGPT 和 Cursor 中与你的笔记一起聊天、搜索和工作。",
       "step1": "在你的 AI 工具中，使用公开 URL 添加 OpenWhispr MCP",
-      "step2": "创建具有所需权限的 API 密钥。",
-      "step3": "将密钥粘贴为 Authorization 标头以连接。",
-      "learnMore": "了解更多",
       "proRequired": "升级到付费计划，以将 OpenWhispr 连接到 Claude、ChatGPT 和 Cursor。",
       "worksWith": "支持",
       "copyUrl": "复制 MCP URL",
-      "copied": "已复制"
+      "copied": "已复制",
+      "oauthTitle": "通过 OAuth 登录",
+      "oauthDescription": "在支持 OAuth 的客户端中添加服务器 URL，然后登录 OpenWhispr 并授权访问。无需 API 密钥。",
+      "apiKeyTitle": "使用 API 密钥",
+      "apiKeyDescription": "对于支持请求标头的客户端，请创建具有所需权限的个人 API 密钥，并使用以下标头。"
     },
     "cli": {
       "description": "让你的助手通过终端访问你的笔记。",
       "installLabel": "安装",
-      "learnMore": "查看文档",
-      "copyDocsLink": "复制文档链接",
-      "docsLinkCopied": "已复制文档链接",
       "viewPlans": "查看套餐",
       "local": {
         "label": "本地",
@@ -3995,7 +3993,8 @@
     },
     "connectors": {
       "description": "让助手使用您的工具。每封邮件、每条消息和每个议题发出前都需要您批准。"
-    }
+    },
+    "readDocs": "阅读文档"
   },
   "connectors": {
     "approval": {
@@ -4162,15 +4161,17 @@
       "descriptionSend": "助手会在聊天中显示一张邮件卡片，只有在您点击发送后才会通过您的 Gmail 发出。",
       "unavailable": "邮件草稿暂时不可用。",
       "targetLabel": "在此处起草邮件",
-      "autoResolved": "自动 · {{target}}",
       "targets": {
         "gmail": "Gmail",
         "outlookWork": "Outlook（工作或学校）",
         "outlookPersonal": "Outlook.com",
-        "mailto": "默认邮件应用",
+        "mailto": "系统邮件应用",
         "gmailSend": "在聊天中发送（Gmail）",
-        "gmailSendConnectFirst": "在聊天中发送（Gmail）· 请在下方连接 Gmail"
-      }
+        "gmailSendConnectFirst": "在聊天中发送（Gmail）· 请在下方连接 Gmail",
+        "auto": "自动"
+      },
+      "automaticHint": "当前：{{target}}。根据已连接的账户选择。",
+      "systemMailHint": "使用电脑上配置的邮件处理程序。"
     },
     "slack": {
       "title": "Slack",
@@ -4608,7 +4609,6 @@
   "apiKeysSection": {
     "title": "API 密钥",
     "description": "创建密钥以编程方式访问 OpenWhispr API。",
-    "docsLink": "API 文档",
     "empty": "暂无 API 密钥",
     "createButton": "创建 API 密钥",
     "create": {

@@ -1307,7 +1307,6 @@
   "apiKeysSection": {
     "title": "API Keys",
     "description": "Create keys to access the OpenWhispr API programmatically.",
-    "docsLink": "API Docs",
     "empty": "No API keys yet",
     "createButton": "Create API Key",
     "create": {
@@ -4108,20 +4107,18 @@
     "mcp": {
       "description": "Chat, search, and work with your notes inside Claude, ChatGPT, and Cursor.",
       "step1": "In your AI tool, add OpenWhispr MCP using the public URL",
-      "step2": "Create an API key with the scopes you need.",
-      "step3": "Paste the key as the Authorization header to connect.",
-      "learnMore": "Learn more",
       "proRequired": "Upgrade to a paid plan to connect OpenWhispr to Claude, ChatGPT, and Cursor.",
       "worksWith": "Works with",
       "copyUrl": "Copy MCP URL",
-      "copied": "Copied"
+      "copied": "Copied",
+      "oauthTitle": "Sign in with OAuth",
+      "oauthDescription": "In a client that supports OAuth, add the server URL, then sign in to OpenWhispr and approve access. No API key needed.",
+      "apiKeyTitle": "Use an API key",
+      "apiKeyDescription": "For clients that accept request headers, create a personal API key with the permissions you need and use the header below."
     },
     "cli": {
       "description": "Give your assistant access to your notes from the terminal.",
       "installLabel": "Install",
-      "learnMore": "Read the docs",
-      "copyDocsLink": "Copy docs link",
-      "docsLinkCopied": "Docs link copied",
       "viewPlans": "View Plans",
       "local": {
         "label": "Local",
@@ -4166,7 +4163,8 @@
     },
     "connectors": {
       "description": "Let the assistant use your tools. You approve every email, message and issue before it goes out."
-    }
+    },
+    "readDocs": "Read the docs"
   },
   "connectors": {
     "approval": {
@@ -4333,15 +4331,17 @@
       "descriptionSend": "The assistant shows an email card in the chat. It's sent from your Gmail only when you press Send.",
       "unavailable": "Email drafts aren't available right now.",
       "targetLabel": "Draft emails in",
-      "autoResolved": "Automatic · {{target}}",
       "targets": {
         "gmail": "Gmail",
         "outlookWork": "Outlook (work or school)",
         "outlookPersonal": "Outlook.com",
-        "mailto": "Default mail app",
+        "mailto": "System mail app",
         "gmailSend": "Send from chat (Gmail)",
-        "gmailSendConnectFirst": "Send from chat (Gmail) · connect Gmail below"
-      }
+        "gmailSendConnectFirst": "Send from chat (Gmail) · connect Gmail below",
+        "auto": "Automatic"
+      },
+      "automaticHint": "Currently: {{target}}. Follows your connected accounts.",
+      "systemMailHint": "Uses the email handler set up on your computer."
     },
     "slack": {
       "title": "Slack",
