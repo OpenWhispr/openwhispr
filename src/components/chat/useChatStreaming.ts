@@ -159,6 +159,8 @@ export interface SendToAIOptions {
    * chat shows and saves (a note action shows its name while its prompt is sent).
    */
   requestText?: string;
+  /** This turn isn't offered update_note, so it can't change a note (a note's chat action). */
+  keepNotesUnchanged?: boolean;
   /** Keeps a caret-destined voice response in the compact pill while it streams. */
   suppressResponseContent?: boolean;
   /** Asks the model for plain prose because the answer will be pasted into a plain-text app. */
@@ -427,7 +429,8 @@ export function useChatStreaming({
           connectorsOffered = connectors !== undefined;
           // Triggers ride in the tool description, so a snippet edit rebuilds the registry.
           const snippetKey = settings.snippets.map((s) => s.trigger).join("|");
-          const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${snippetKey}-${connectors?.emailDraftTarget ?? "no-connectors"}-${connectors?.readyConnectorIds.join(",") ?? ""}`;
+          const keepNotesUnchanged = !!options?.keepNotesUnchanged;
+          const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${snippetKey}-${connectors?.emailDraftTarget ?? "no-connectors"}-${connectors?.readyConnectorIds.join(",") ?? ""}-${keepNotesUnchanged}`;
           if (toolRegistryRef.current?.key === cacheKey) {
             registry = toolRegistryRef.current.registry;
           } else {
@@ -445,6 +448,7 @@ export function useChatStreaming({
                 setSnippets: (snippets) => useSettingsStore.getState().setSnippets(snippets),
               },
               connectors,
+              keepNotesUnchanged,
             });
             toolRegistryRef.current = { key: cacheKey, registry };
           }
