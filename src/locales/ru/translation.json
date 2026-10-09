@@ -219,11 +219,11 @@
     "rehaul": {
       "permissions": {
         "title": "Настройте OpenWhispr за 3 минуты",
-        "microphoneDescription": "Превращает сказанное в текст. Работает только во время записи.",
-        "accessibilityDescription": "Вставляет текст в приложение, которым вы пользуетесь.",
+        "microphoneDescription": "Слушает только во время записи.",
+        "accessibilityDescription": "Вставляет текст в любое приложение.",
         "systemAudioTitle": "Системное аудио",
-        "systemAudioDescription": "Записывает других участников ваших звонков для заметок о встречах. Только во время записи.",
-        "screenContextDescription": "Показывает помощнику ваш экран, когда вы его о чём-то просите. Никогда не сохраняется.",
+        "systemAudioDescription": "Записывает собеседников в звонках.",
+        "screenContextDescription": "Показывает помощнику ваш экран.",
         "enable": "Включить",
         "enabled": "Включено"
       },
@@ -1172,6 +1172,7 @@
     },
     "signedIn": {
       "welcomeBack": "С возвращением",
+      "welcomeBackNamed": "С возвращением, {{name}}",
       "notYou": "Это не вы? Выйти"
     },
     "sso": {

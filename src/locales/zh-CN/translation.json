@@ -219,11 +219,11 @@
     "rehaul": {
       "permissions": {
         "title": "3 分钟完成 OpenWhispr 设置",
-        "microphoneDescription": "把你说的话变成文字。仅在录音时开启。",
-        "accessibilityDescription": "把文字粘贴到你正在使用的应用里。",
+        "microphoneDescription": "仅在录音时收音。",
+        "accessibilityDescription": "把文字粘贴到任意应用。",
         "systemAudioTitle": "系统音频",
-        "systemAudioDescription": "为会议笔记录下通话中的其他人。仅在录音时开启。",
-        "screenContextDescription": "当你向语音助手提问时，让它看到你屏幕上的内容。绝不保存。",
+        "systemAudioDescription": "录下通话中的其他人。",
+        "screenContextDescription": "让助手看到你的屏幕。",
         "enable": "启用",
         "enabled": "已启用"
       },
@@ -1172,6 +1172,7 @@
     },
     "signedIn": {
       "welcomeBack": "欢迎回来",
+      "welcomeBackNamed": "欢迎回来，{{name}}",
       "notYou": "不是你？退出登录"
     },
     "sso": {

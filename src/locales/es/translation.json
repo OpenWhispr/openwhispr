@@ -219,11 +219,11 @@
     "rehaul": {
       "permissions": {
         "title": "Configura OpenWhispr en 3 minutos",
-        "microphoneDescription": "Convierte lo que dices en texto. Solo se activa mientras grabas.",
-        "accessibilityDescription": "Pega el texto en la aplicación que estás usando.",
+        "microphoneDescription": "Solo escucha mientras grabas.",
+        "accessibilityDescription": "Pega el texto en cualquier app.",
         "systemAudioTitle": "Audio del Sistema",
-        "systemAudioDescription": "Graba a las demás personas de tus llamadas para las notas de reuniones. Solo mientras grabas.",
-        "screenContextDescription": "Deja que tu asistente de voz vea tu pantalla cuando le pides algo. Nunca se guarda.",
+        "systemAudioDescription": "Graba a los demás en tus llamadas.",
+        "screenContextDescription": "Deja que el asistente vea tu pantalla.",
         "enable": "Activar",
         "enabled": "Activado"
       },
@@ -1172,6 +1172,7 @@
     },
     "signedIn": {
       "welcomeBack": "Bienvenido de nuevo",
+      "welcomeBackNamed": "Bienvenido de nuevo, {{name}}",
       "notYou": "¿No eres tú? Cerrar sesión"
     },
     "sso": {
