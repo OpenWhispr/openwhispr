@@ -796,7 +796,10 @@ export class SyncService {
   private async pushNote(id: number): Promise<void> {
     const note = await window.electronAPI.getNote?.(id);
     if (!note) return;
-    if (note.cloud_id && hasPendingNoteClear(note) && !hasNoteRevision(note.cloud_revision)) {
+    if (
+      note.cloud_create_rejected ||
+      (note.cloud_id && hasPendingNoteClear(note) && !hasNoteRevision(note.cloud_revision))
+    ) {
       this.requestSyncAll("retry");
       return;
     }
@@ -1767,7 +1770,8 @@ export class SyncService {
     if (
       pending.some(
         (note) =>
-          note.cloud_id && hasPendingNoteClear(note) && !hasNoteRevision(note.cloud_revision)
+          note.cloud_create_rejected ||
+          (note.cloud_id && hasPendingNoteClear(note) && !hasNoteRevision(note.cloud_revision))
       )
     ) {
       // An unchanged cloud row may be absent from the delta feed after upgrading.
@@ -1782,7 +1786,7 @@ export class SyncService {
     const conflicted = readNoteConflictIds();
     const pushable: Array<{ note: NoteItem; scope: PushScopeFields }> = [];
     for (const note of pending) {
-      if (conflicted.has(note.client_note_id)) {
+      if (note.cloud_create_rejected || conflicted.has(note.client_note_id)) {
         // An unresolved pull conflict: pushing now would auto-resolve it as
         // local-wins before the user chose Keep or Refresh (which clear the
         // registry entry and unblock the row).
@@ -2000,6 +2004,13 @@ export class SyncService {
             // registry keeps in localStorage.
             this.clear404(NOTE_UPDATE_404_KEY, local.client_note_id);
             await this.settleNoteConflict(local.client_note_id);
+            continue;
+          }
+
+          // Rejected create retries must be resolved against the actual row,
+          // even when its timestamp predates the local offline snapshot.
+          if (local?.cloud_create_rejected && !cloudNote.deleted_at) {
+            await this.surfaceNoteConflict(local.client_note_id, cloudNote);
             continue;
           }
 

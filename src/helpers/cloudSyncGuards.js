@@ -28,6 +28,8 @@ export function isCloudEntryNewer(cloudUpdatedAt, localUpdatedAt) {
 // sends it. `cloudFolderId` is the note's folder already mapped to its cloud
 // id (null when folderless or unmapped).
 export function buildNoteUpdatePayload(note, cloudFolderId) {
+  if (note.cloud_create_rejected)
+    throw new Error("Note create conflict must be resolved before pushing");
   if (hasPendingNoteClear(note) && !hasNoteRevision(note.cloud_revision)) {
     throw new Error("Note clear is waiting for server revision support");
   }

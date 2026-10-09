@@ -103,7 +103,7 @@ test("note edits preserve separate stored fields, reopen correctly, and report f
       (await updateNoteTool.execute({ id: note.id, clear_fields: ["summary"] })).success,
       true
     );
-    assert.equal(database.getNote(note.id).enhanced_content, "");
+    assert.equal(database.getNote(note.id).enhanced_content, null);
     assert.equal(database.getNote(note.id).content, CONTENT);
     assert.equal(
       (await updateNoteTool.execute({ id: note.id, clear_fields: ["content"] })).success,

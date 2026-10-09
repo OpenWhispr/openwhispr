@@ -432,6 +432,7 @@ export interface NoteItem {
   // as base_updated_at on the next PATCH. Null = pre-guard row, pushes LWW.
   cloud_updated_at?: string | null;
   cloud_revision?: number | null;
+  cloud_create_rejected?: number;
   content_sync_operation?: "set" | "clear" | null;
   enhanced_content_sync_operation?: "set" | "clear" | null;
   created_at: string;
@@ -3503,7 +3504,8 @@ declare global {
         cloudUpdatedAt?: string | null,
         ownerUserId?: string | null,
         settleIfUnchanged?: boolean,
-        cloudRevision?: number | null
+        cloudRevision?: number | null,
+        writeRejected?: boolean
       ) => Promise<NoteCreateAckResult>;
       markNoteSyncedIfUnchanged?: (
         id: number,

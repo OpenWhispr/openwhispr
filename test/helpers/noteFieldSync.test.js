@@ -326,6 +326,9 @@ test("a rejected create retry links without a fresh base and parks stale intent 
   );
   assert.equal(outcome, "write-rejected");
   assert.equal(db.getNote(row.id).cloud_revision, null);
+  reopen(db);
+  assert.equal(db.getNote(row.id).cloud_create_rejected, 1);
+  assert.throws(() => buildNoteUpdatePayload(db.getNote(row.id), null), /conflict/);
   const service = await client(t, db, cloud);
   await service.pushPendingNotes();
   await service.pullNotes(false, true);
@@ -333,4 +336,40 @@ test("a rejected create retry links without a fresh base and parks stale intent 
   assert.equal(cloud.row().content, "Newer device edit");
   assert.equal(db.getNote(row.id).content, "Offline edit");
   assert.notEqual(db.getNote(row.id).sync_status, "synced");
+});
+
+test("a rejected legacy create stays parked across failed pulls, restart, and debounced push", async (t) => {
+  const { resolveCloudNoteCreate } = require("../../src/services/noteCreateAck.ts");
+  const db = createDb(t);
+  if (!db) return;
+  const row = db.upsertNoteFromCloud(INITIAL, null);
+  db.updateNote(row.id, { cloud_id: null, cloud_updated_at: null, content: "Old local text" });
+  const snapshot = db.getNote(row.id);
+  await resolveCloudNoteCreate(
+    snapshot,
+    { ...INITIAL, write_applied: false },
+    {
+      acknowledge: (...args) => db.acknowledgeNoteCreate(...args),
+      deleteCloud: () => assert.fail("Never delete a rejected create"),
+    }
+  );
+  reopen(db);
+  const fallback = createFakeCloud();
+  let patches = 0;
+  const cloud = {
+    request: async (opts) => {
+      if (opts.path.startsWith("/api/notes/list")) throw new Error("Offline");
+      if (opts.path === "/api/notes/update") patches++;
+      return fallback.request(opts);
+    },
+  };
+  const service = await client(t, db, cloud);
+  await service.pushPendingNotes();
+  await service.pushNote(row.id);
+  assert.equal(patches, 0);
+  assert.equal(db.getNote(row.id).cloud_create_rejected, 1);
+  // Keep clears quarantine only through the deliberate conflict resolution.
+  db.setNoteCloudBase(row.id, INITIAL.updated_at, INITIAL.revision);
+  assert.equal(db.getNote(row.id).cloud_create_rejected, 0);
+  assert.equal(buildNoteUpdatePayload(db.getNote(row.id), null).field_updates.content, "set");
 });

@@ -17,7 +17,8 @@ export interface NoteCreateAckDependencies {
     cloudUpdatedAt: string | null,
     ownerUserId: string | null,
     settleIfUnchanged: boolean,
-    cloudRevision?: number | null
+    cloudRevision?: number | null,
+    writeRejected?: boolean
   ) => Promise<NoteCreateAckResult | undefined>;
   deleteCloud: (cloudId: string) => Promise<void>;
   onInvalidResponse?: (expectedClientNoteId: string, receivedClientNoteId: string | null) => void;
@@ -84,7 +85,8 @@ export async function resolveCloudNoteCreate(
     cloud.write_applied === false ? (note.cloud_updated_at ?? null) : (cloud.updated_at ?? null),
     cloud.user_id ?? null,
     (options.settleIfUnchanged ?? true) && cloud.write_applied !== false,
-    cloud.write_applied === false ? (note.cloud_revision ?? null) : (cloud.revision ?? null)
+    cloud.write_applied === false ? (note.cloud_revision ?? null) : (cloud.revision ?? null),
+    cloud.write_applied === false
   );
   if (!result) return "bridge-unavailable";
   // A rejected idempotent POST did not create or update this server row.
@@ -126,7 +128,8 @@ function rendererDependencies(
       cloudUpdatedAt,
       ownerUserId,
       settleIfUnchanged,
-      cloudRevision
+      cloudRevision,
+      writeRejected
     ) =>
       window.electronAPI.acknowledgeNoteCreate?.(
         id,
@@ -135,7 +138,8 @@ function rendererDependencies(
         cloudUpdatedAt,
         ownerUserId,
         settleIfUnchanged,
-        cloudRevision
+        cloudRevision,
+        writeRejected
       ),
     deleteCloud,
     onInvalidResponse: (expected, received) =>

@@ -91,7 +91,8 @@ function createElectronApi(db, options = {}) {
       cloudUpdatedAt,
       ownerUserId,
       settleIfUnchanged,
-      cloudRevision
+      cloudRevision,
+      writeRejected
     ) =>
       db.acknowledgeNoteCreate(
         id,
@@ -100,7 +101,8 @@ function createElectronApi(db, options = {}) {
         cloudUpdatedAt,
         ownerUserId,
         settleIfUnchanged,
-        cloudRevision
+        cloudRevision,
+        writeRejected
       ),
     markNoteSyncedIfUnchanged: async (
       id,

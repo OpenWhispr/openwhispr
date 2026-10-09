@@ -410,6 +410,7 @@ class DatabaseManager {
       }
       for (const definition of [
         "cloud_revision INTEGER",
+        "cloud_create_rejected INTEGER NOT NULL DEFAULT 0",
         "content_sync_operation TEXT",
         "enhanced_content_sync_operation TEXT",
       ]) {
@@ -3380,11 +3381,13 @@ class DatabaseManager {
       delete updates.clear_fields;
       delete updates.account_id;
       delete updates.cloud_revision;
+      delete updates.cloud_create_rejected;
       if (
         updates.cloud_id === null ||
         (updates.client_note_id && updates.client_note_id !== previous.client_note_id)
       ) {
         updates.cloud_revision = null;
+        updates.cloud_create_rejected = 0;
       }
       if (updates.folder_id != null) {
         // D2: a note's space always follows its folder's space.
@@ -3423,6 +3426,7 @@ class DatabaseManager {
         "content_sync_operation",
         "enhanced_content_sync_operation",
         "cloud_revision",
+        "cloud_create_rejected",
         "title",
         "content",
         "enhanced_content",
@@ -4186,7 +4190,7 @@ class DatabaseManager {
             .map((row) => row.id);
           if (preservedIds.length > 0) {
             const relocateNote = this.db.prepare(
-              "UPDATE notes SET space_id = ?, folder_id = NULL, client_note_id = ?, cloud_id = NULL, cloud_updated_at = NULL, cloud_revision = NULL, owner_user_id = NULL, updated_by_user_id = NULL, sync_status = 'pending', left_team = 0, is_shared = 0, share_token = NULL, updated_at = datetime('now') WHERE id = ?"
+              "UPDATE notes SET space_id = ?, folder_id = NULL, client_note_id = ?, cloud_id = NULL, cloud_updated_at = NULL, cloud_revision = NULL, cloud_create_rejected = 0, owner_user_id = NULL, updated_by_user_id = NULL, sync_status = 'pending', left_team = 0, is_shared = 0, share_token = NULL, updated_at = datetime('now') WHERE id = ?"
             );
             const detachNoteConversation = this.db.prepare(
               "UPDATE agent_conversations SET space_id = NULL, folder_id = NULL WHERE note_id = ?"
@@ -6394,6 +6398,7 @@ class DatabaseManager {
           updated_at = excluded.updated_at,
           cloud_updated_at = excluded.cloud_updated_at,
           cloud_revision = excluded.cloud_revision,
+          cloud_create_rejected = 0,
           content_sync_operation = NULL,
           enhanced_content_sync_operation = NULL
       `);
@@ -6479,7 +6484,8 @@ class DatabaseManager {
     cloudUpdatedAt = null,
     ownerUserId = null,
     settleIfUnchanged = true,
-    cloudRevision = null
+    cloudRevision = null,
+    writeRejected = false
   ) {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -6525,7 +6531,7 @@ class DatabaseManager {
         // Creates carry snapshots, not field operations. A queued operation
         // follows as a revisioned PATCH after the identity is acknowledged.
         const hasOperations = NOTE_TEXT_FIELDS.some((field) => snapshot[`${field}_sync_operation`]);
-        if (unchanged && settleIfUnchanged && !hasOperations) {
+        if (unchanged && settleIfUnchanged && !hasOperations && !writeRejected) {
           this.db
             .prepare(
               `UPDATE notes
@@ -6551,7 +6557,7 @@ class DatabaseManager {
              SET cloud_id = ?,
                  cloud_updated_at = ?, cloud_revision = ?,
                  owner_user_id = ?,
-                 sync_status = 'pending',
+                 sync_status = 'pending', cloud_create_rejected = ?,
                  left_team = CASE WHEN ? = 1 THEN 1 ELSE left_team END
              WHERE id = ? AND client_note_id = ? AND cloud_id IS NULL`
           )
@@ -6560,6 +6566,7 @@ class DatabaseManager {
             cloudUpdatedAt,
             hasNoteRevision(cloudRevision) ? cloudRevision : null,
             ownerUserId,
+            writeRejected ? 1 : 0,
             leftTeam,
             id,
             expectedClientNoteId
@@ -6603,6 +6610,7 @@ class DatabaseManager {
           return { success: true, outcome: "identity-changed", changes: 0 };
         }
 
+        if (current.cloud_create_rejected) return { success: true, outcome: "pending", changes: 0 };
         const incomingRevision = hasNoteRevision(cloudRevision) ? cloudRevision : null;
         if (
           (hasNoteRevision(current.cloud_revision) &&
@@ -6746,8 +6754,15 @@ class DatabaseManager {
         }
       }
       this.db
-        .prepare("UPDATE notes SET cloud_updated_at = ?, cloud_revision = ? WHERE id = ?")
-        .run(cloudUpdatedAt, hasNoteRevision(cloudRevision) ? cloudRevision : null, id);
+        .prepare(
+          "UPDATE notes SET cloud_updated_at = ?, cloud_revision = ?, cloud_create_rejected = CASE WHEN ? THEN 0 ELSE cloud_create_rejected END WHERE id = ?"
+        )
+        .run(
+          cloudUpdatedAt,
+          hasNoteRevision(cloudRevision) ? cloudRevision : null,
+          keepLocal ? 1 : 0,
+          id
+        );
       return { success: true };
     } catch (error) {
       debugLogger.error("Error setting note cloud base", { error: error.message }, "database");
@@ -7109,7 +7124,7 @@ class DatabaseManager {
         this._deleteSpeakerRowsForNotes(serverOwnedChildren, id);
         this.db.prepare(`DELETE FROM notes WHERE id IN (${serverOwnedChildren})`).run(id);
         const relocateNote = this.db.prepare(
-          "UPDATE notes SET space_id = ?, folder_id = ?, client_note_id = ?, cloud_id = NULL, cloud_updated_at = NULL, cloud_revision = NULL, owner_user_id = NULL, updated_by_user_id = NULL, sync_status = 'pending', left_team = 0, is_shared = 0, share_token = NULL, updated_at = datetime('now') WHERE id = ?"
+          "UPDATE notes SET space_id = ?, folder_id = ?, client_note_id = ?, cloud_id = NULL, cloud_updated_at = NULL, cloud_revision = NULL, cloud_create_rejected = 0, owner_user_id = NULL, updated_by_user_id = NULL, sync_status = 'pending', left_team = 0, is_shared = 0, share_token = NULL, updated_at = datetime('now') WHERE id = ?"
         );
         const detachNoteConversation = this.db.prepare(
           "UPDATE agent_conversations SET space_id = NULL, folder_id = NULL WHERE note_id = ?"

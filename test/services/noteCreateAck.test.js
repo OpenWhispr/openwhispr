@@ -36,6 +36,7 @@ test("resolveCloudNoteCreate deletes a proven orphan create", async () => {
     "owner-42",
     true,
     null,
+    false,
   ]);
   assert.deepEqual(calls[1], ["delete", "cloud-note-42"]);
 });
@@ -137,7 +138,16 @@ test("resolveCloudNoteCreateBatch routes migration results by snapshot identity"
   );
 
   assert.deepEqual(acknowledgements, [
-    [otherNote.id, otherNote, "cloud-note-84", "2026-07-29T14:00:00.000Z", null, false, null],
+    [
+      otherNote.id,
+      otherNote,
+      "cloud-note-84",
+      "2026-07-29T14:00:00.000Z",
+      null,
+      false,
+      null,
+      false,
+    ],
   ]);
   assert.deepEqual(deleted, ["cloud-note-84"]);
   assert.deepEqual(results, ["orphan-cleaned"]);

@@ -1174,7 +1174,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     cloudUpdatedAt,
     ownerUserId,
     settleIfUnchanged,
-    cloudRevision
+    cloudRevision,
+    writeRejected
   ) =>
     ipcRenderer.invoke(
       "db-acknowledge-note-create",
@@ -1184,7 +1185,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       cloudUpdatedAt,
       ownerUserId,
       settleIfUnchanged,
-      cloudRevision
+      cloudRevision,
+      writeRejected
     ),
   markNoteSyncedIfUnchanged: (
     id,

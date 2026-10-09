@@ -163,10 +163,10 @@ test("safe assistant edits and atomic Undo", async (t) => {
       assert.equal(result.success, true);
       assert.deepEqual(result.data.updatedFields, [field]);
       const key = field === "summary" ? "enhanced_content" : field;
-      assert.equal(database.getNote(note.id)[key], "");
+      assert.equal(database.getNote(note.id)[key] ?? "", "");
       database.db.close();
       database.db = new (require("better-sqlite3"))(path.join(directory, "transcriptions.db"));
-      assert.equal(database.getNote(note.id)[key], "");
+      assert.equal(database.getNote(note.id)[key] ?? "", "");
       assert.equal(database.undoNoteUpdate(tokenFor(note.id)).success, true);
       const restored = database.getNote(note.id);
       for (const key of [
@@ -376,7 +376,8 @@ test("safe assistant edits and atomic Undo", async (t) => {
       "2026-10-09",
       "owner-one"
     );
-    assert.equal(ack.outcome, "synced");
+    assert.equal(ack.outcome, "pending");
+    assert.equal(database.getNote(note.id).cloud_id, `cloud-${note.id}`);
     assert.equal(tokenFor(note.id), token);
     assert.equal(database.undoNoteUpdate(token).success, true);
     assert.equal(database.getNote(note.id).title, note.title);

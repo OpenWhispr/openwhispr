@@ -2711,7 +2711,17 @@ class IPCHandlers {
     });
     ipcMain.handle(
       "db-acknowledge-note-create",
-      (_, id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, settleIfUnchanged, cloudRevision) =>
+      (
+        _,
+        id,
+        snapshot,
+        cloudId,
+        cloudUpdatedAt,
+        ownerUserId,
+        settleIfUnchanged,
+        cloudRevision,
+        writeRejected
+      ) =>
         this.databaseManager.acknowledgeNoteCreate(
           id,
           snapshot,
@@ -2719,7 +2729,8 @@ class IPCHandlers {
           cloudUpdatedAt,
           ownerUserId,
           settleIfUnchanged,
-          cloudRevision
+          cloudRevision,
+          writeRejected
         )
     );
     ipcMain.handle(
