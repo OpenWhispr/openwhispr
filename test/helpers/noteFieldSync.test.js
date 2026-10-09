@@ -365,7 +365,9 @@ test("a rejected legacy create stays parked across failed pulls, restart, and de
   };
   const service = await client(t, db, cloud);
   await service.pushPendingNotes();
+  const requestRetry = t.mock.method(service, "requestSyncAll", () => {});
   await service.pushNote(row.id);
+  assert.equal(requestRetry.mock.callCount(), 1);
   assert.equal(patches, 0);
   assert.equal(db.getNote(row.id).cloud_create_rejected, 1);
   // Keep clears quarantine only through the deliberate conflict resolution.
