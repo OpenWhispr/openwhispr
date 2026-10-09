@@ -35,7 +35,11 @@ const offeredTokens = new Set();
 const undoTurns = new Map();
 const JOURNAL_COLUMNS = ["note_id", "token", "account_id", "previous", "created_at"];
 
-function initializeNoteUndo(db) {
+// One transaction: a step that fails after the DROP would otherwise leave the
+// triggers pointing at a missing journal, failing every note write.
+const initializeNoteUndo = (db) => db.transaction(() => setUpJournal(db))();
+
+function setUpJournal(db) {
   // Recoveries are short-lived, so a journal of another shape (an earlier
   // build's) is dropped rather than migrated.
   const columns = db
