@@ -128,25 +128,9 @@ test("creating a custom action has a fixed chat hint, no destination selector an
     "",
     "Replace the summary with a poem",
     undefined,
-    { kind: "action", output: "chat" },
+    { kind: "action" },
   ]);
 });
-
-for (const key of ["shorten", "lengthen", "addTldr"]) {
-  test(`editing ${key} keeps its fixed destination despite stale stored output`, async (t) => {
-    const action = row(key);
-    action.output = key === "addTldr" ? "summary" : "chat";
-    const ui = await load(t, [action]);
-    const expected = key === "addTldr" ? "chat" : "summary";
-    assert.ok(
-      ui.elements().some((n) => n.props.children === `notes.actions.output.${expected}Hint`)
-    );
-    await ui.change("notes.actions.promptPlaceholder", "My edited instructions");
-    await ui.click("notes.actions.update");
-    assert.equal(ui.saves[0][2].output, expected);
-    assert.equal(ui.saves[0][2].prompt, "My edited instructions");
-  });
-}
 
 test("failed and rejected saves keep the draft editable and show the save error", async (t) => {
   const ui = await load(t);

@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useMemo, useCallback, type ComponentProps } from "react";
-import { getActionOutput } from "../../helpers/actionOutput";
 import { useTranslation } from "react-i18next";
 import { useUiLocale } from "../../hooks/useUiLocale";
 import {
@@ -901,7 +900,7 @@ export default function NoteEditor({
 
   const runAction = useCallback(
     (action: ActionItem) => {
-      if (getActionOutput(action) === "chat") {
+      if (action.output === "chat") {
         handleChatAction(action);
         return;
       }
@@ -919,16 +918,14 @@ export default function NoteEditor({
   // for the reply the chat is still writing.
   const canRunAction = (action: ActionItem) =>
     hasNoteMaterial &&
-    (getActionOutput(action) === "summary" ? !isActionRunning : embeddedChat.agentState === "idle");
+    (action.output === "summary" ? !isActionRunning : embeddedChat.agentState === "idle");
   const actionCommands: SlashCommand[] | undefined = offersActions
     ? noteActions.map((action) => ({
         id: action.client_id,
         label: getActionName(action, t),
         icon: getActionIcon(action),
         hint: t(
-          getActionOutput(action) === "summary"
-            ? "notes.actions.output.summary"
-            : "notes.actions.output.chat"
+          action.output === "summary" ? "notes.actions.output.summary" : "notes.actions.output.chat"
         ),
         description: getActionDescription(action, t),
         disabled: !canRunAction(action),

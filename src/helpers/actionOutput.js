@@ -1,11 +1,11 @@
+import { BUILTIN_ACTIONS } from "./builtinActions.js";
+
 // Destinations are fixed by built-in identity, never by editable copy or stored output.
 /** @returns {"summary" | "chat" | null} */
 export function getActionOutput(action) {
   if (action.kind === "template") return null;
-  return action.kind === "action" &&
+  const builtin =
     action.is_builtin === 1 &&
-    (action.translation_key === "notes.actions.builtin.shorten" ||
-      action.translation_key === "notes.actions.builtin.lengthen")
-    ? "summary"
-    : "chat";
+    BUILTIN_ACTIONS.find((entry) => entry.translationKey === action.translation_key);
+  return builtin?.output === "summary" ? "summary" : "chat";
 }

@@ -4,7 +4,6 @@ import { DropdownMenuItem, DropdownMenuSeparator } from "../ui/dropdown-menu";
 import { getActionName, getActionDescription } from "../../stores/actionStore";
 import type { ActionItem } from "../../types/electron";
 import { getActionIcon } from "./actionIcons";
-import { getActionOutput } from "../../helpers/actionOutput";
 
 export interface ActionMenuItemsProps {
   /** Actions only; templates have their own picker. */
@@ -20,9 +19,7 @@ export function ActionOutputBadge({ action }: { action: ActionItem }) {
   return (
     <span className="text-[10px] font-medium px-1 py-px rounded bg-foreground/5 dark:bg-white/6 text-muted-foreground/70 shrink-0">
       {t(
-        getActionOutput(action) === "summary"
-          ? "notes.actions.output.summary"
-          : "notes.actions.output.chat"
+        action.output === "summary" ? "notes.actions.output.summary" : "notes.actions.output.chat"
       )}
     </span>
   );

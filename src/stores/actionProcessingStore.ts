@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { getActionOutput } from "../helpers/actionOutput";
 import { NOTE_OUTPUT_MAX_TOKENS, NOTHING_TO_SUMMARIZE } from "../helpers/builtinActions";
 import { stripThinkingTags } from "../helpers/stripThinking";
 import { compileSummaryActionPrompt, compileTemplatePrompt } from "../helpers/templatePrompts";
@@ -454,10 +453,6 @@ export function runBackgroundAction(
   options: RunActionOptions,
   labels: RunActionLabels
 ): void {
-  if (action.kind !== "template" && getActionOutput(action) !== "summary") {
-    pushErrorEvent({ noteId, message: labels.actionFailed });
-    return;
-  }
   if (processingFlags.get(noteId)) return;
 
   const modelId = options.modelId;

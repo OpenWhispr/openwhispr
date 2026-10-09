@@ -8,7 +8,6 @@ import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
 import { useToast } from "../ui/useToast";
 import { cn } from "../lib/utils";
 import { useActionsOfKind, initializeActions, getActionName } from "../../stores/actionStore";
-import { getActionOutput } from "../../helpers/actionOutput";
 import { NOTE_ACTION_LIMITS } from "../../helpers/builtinActions";
 import { normalizeSections } from "../../helpers/templatePrompts";
 import { getActionIcon } from "./actionIcons";
@@ -143,9 +142,7 @@ export default function ActionManagerDialog({
     if (!canSave) return;
     setIsSaving(true);
     try {
-      const fields = isTemplate
-        ? { sections: savedSections }
-        : { output: selectedAction ? getActionOutput(selectedAction) : ("chat" as const) };
+      const fields = isTemplate ? { sections: savedSections } : {};
       const result =
         editingId !== null
           ? await window.electronAPI.updateAction(editingId, {
@@ -397,7 +394,7 @@ export default function ActionManagerDialog({
                     {t(
                       isTemplate
                         ? "notes.templates.outputHint"
-                        : selectedAction && getActionOutput(selectedAction) === "summary"
+                        : selectedAction?.output === "summary"
                           ? "notes.actions.output.summaryHint"
                           : "notes.actions.output.chatHint"
                     )}

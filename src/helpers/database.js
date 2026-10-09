@@ -104,7 +104,7 @@ function resolveActionFields(kind, fields) {
     description,
     prompt,
     sections: sections.length > 0 ? JSON.stringify(sections) : null,
-    output: getActionOutput({ ...fields, kind }),
+    output,
   };
 }
 
@@ -652,13 +652,13 @@ class DatabaseManager {
       // that are still a previous flat default (never a user edit). A built-in's
       // kind and destination are fixed, regardless of prompt edits.
       const selectBuiltin = this.db.prepare(
-        "SELECT id, name, description, prompt, sections, icon FROM actions WHERE is_builtin = 1 AND translation_key = ?"
+        "SELECT id, name, description, prompt, sections FROM actions WHERE is_builtin = 1 AND translation_key = ?"
       );
       const insertBuiltin = this.db.prepare(
         "INSERT INTO actions (name, description, prompt, icon, is_builtin, sort_order, translation_key, client_id, kind, sections, output) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)"
       );
       const upgradeBuiltin = this.db.prepare(
-        "UPDATE actions SET description = ?, prompt = ?, sections = ? WHERE id = ?"
+        "UPDATE actions SET prompt = ?, sections = ? WHERE id = ?"
       );
       const settleBuiltin = this.db.prepare(
         "UPDATE actions SET client_id = ?, kind = ?, sort_order = ?, output = ?, name = ?, description = ?, icon = ? WHERE id = ?"
@@ -684,7 +684,7 @@ class DatabaseManager {
         const upgradesPrompt =
           existing.sections === null && action.previousPrompts.includes(existing.prompt);
         if (upgradesPrompt) {
-          upgradeBuiltin.run(action.description, action.prompt, sections, existing.id);
+          upgradeBuiltin.run(action.prompt, sections, existing.id);
         }
         settleBuiltin.run(
           action.translationKey,
@@ -699,17 +699,9 @@ class DatabaseManager {
           )
             ? action.description
             : existing.description,
-          action.previousIcons?.includes(existing.icon) ? action.icon : existing.icon,
+          action.icon,
           existing.id
         );
-      }
-
-      // Old custom destinations remain accepted on the wire, but only the two
-      // built-in length actions can write summaries. Preserve every other field.
-      const settleOutput = this.db.prepare("UPDATE actions SET output = ? WHERE id = ?");
-      for (const row of this.db.prepare("SELECT * FROM actions").all()) {
-        const output = getActionOutput(row);
-        if (row.output !== output) settleOutput.run(output, row.id);
       }
 
       const actionsWithoutClientId = this.db

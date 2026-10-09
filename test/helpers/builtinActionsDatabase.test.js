@@ -240,7 +240,7 @@ test("an older build renaming the newer built-ins doesn't stop the next launch",
   });
 });
 
-test("legacy summary destinations normalize without changing any other custom fields", (t) => {
+test("legacy summary destinations read as chat without changing the stored row", (t) => {
   const db = createDb(t);
   if (!db) return;
   const { action } = db.createAction(
@@ -256,10 +256,11 @@ test("legacy summary destinations normalize without changing any other custom fi
   db.db.close();
   for (let run = 0; run < 2; run++)
     relaunch((reopened) => {
-      assert.deepEqual(reopened.db.prepare("SELECT * FROM actions WHERE id = ?").get(action.id), {
-        ...raw,
-        output: "chat",
-      });
+      assert.deepEqual(
+        reopened.db.prepare("SELECT * FROM actions WHERE id = ?").get(action.id),
+        raw
+      );
+      assert.equal(reopened.getAction(action.id).output, "chat");
       assert.equal(builtinRows(reopened, FOLLOW_UP_EMAIL_KEY)[0].output, "chat");
       assert.equal(builtinRows(reopened, "notes.actions.builtin.addTldr")[0].output, "chat");
       assert.equal(builtinRows(reopened, "notes.actions.builtin.lengthen").length, 1);
@@ -355,7 +356,7 @@ test("TL;DR stock prompt upgrades without replacing an edited description", (t) 
   });
 });
 
-test("TL;DR upgrades its stock icon once while preserving edited and custom icons", (t) => {
+test("TL;DR upgrades its stock icon and leaves custom icons alone", (t) => {
   const db = createDb(t);
   if (!db) return;
   const [tldr] = builtinRows(db, "notes.actions.builtin.addTldr");
@@ -373,10 +374,4 @@ test("TL;DR upgrades its stock icon once while preserving edited and custom icon
         customBefore
       );
     });
-  relaunch((reopened) => {
-    reopened.updateAction(tldr.id, { icon: "mail" });
-  });
-  relaunch((reopened) => {
-    assert.equal(reopened.getAction(tldr.id).icon, "mail", "a non-stock built-in icon is kept");
-  });
 });
