@@ -67,6 +67,9 @@ export default function ActionChips({
         <button
           type="button"
           onPointerEnter={() => setPreviewed(null)}
+          onFocus={(event) => {
+            event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" });
+          }}
           className={chipClass}
           style={chipEntrance(docked ? 0 : firstChip + visibleActions.length)}
         >
