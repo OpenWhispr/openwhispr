@@ -15,8 +15,7 @@ export type ValidationErrorCode =
   | "DUPLICATE"
   | "RESERVED"
   | "INVALID_GLOBE"
-  | "FN_COMBINATION_UNSUPPORTED"
-  | "MODIFIER_ONLY_UNSUPPORTED";
+  | "FN_COMBINATION_UNSUPPORTED";
 
 export interface ValidationResult {
   valid: boolean;
@@ -655,32 +654,25 @@ export function validateHotkey(
     };
   }
 
-  // Check for modifier-only hotkeys: require right-side for single modifier, or 2+ modifiers
-  const modifierCount = parts.filter((part) => normalizeModifier(part, platform) !== null).length;
+  // Check for modifier-only hotkeys: require right-side for single modifier, or
+  // 2+ distinct modifiers. Every platform watches a modifier-only chord with a
+  // native listener (Windows/Linux key hooks, the macOS Globe listener), since
+  // Electron cannot register an accelerator without a key.
+  const normalizedModifiers = parts
+    .map((part) => normalizeModifier(part, platform))
+    .filter((modifier): modifier is string => modifier !== null);
+  const modifierCount = normalizedModifiers.length;
   const hasBaseKey = parts.length > modifierCount;
+  // Command+Super both mean ⌘ on macOS: that is one key, not a chord.
+  const distinctModifierCount = new Set(normalizedModifiers).size;
 
-  // Windows and Linux route a modifier-only chord to a native low-level listener;
-  // macOS has no equivalent — the Globe listener reports Fn, right-side modifiers
-  // and mouse buttons, nothing else — and Electron cannot register an accelerator
-  // without a key, so the chord would be accepted here and then fail to bind.
-  if (!hasBaseKey && modifierCount >= 2 && platform === "darwin") {
-    return {
-      valid: false,
-      error:
-        "Two-modifier shortcuts are not supported on macOS. Use a right-side modifier on its own (e.g. RightOption), or add a regular key.",
-      errorCode: "MODIFIER_ONLY_UNSUPPORTED",
-    };
-  }
-
-  if (!hasBaseKey && modifierCount === 1) {
+  if (!hasBaseKey && distinctModifierCount === 1) {
     const singleMod = parts[0];
-    if (!isRightSideModifier(singleMod)) {
+    if (modifierCount > 1 || !isRightSideModifier(singleMod)) {
       return {
         valid: false,
         error:
-          platform === "darwin"
-            ? "Single modifier hotkeys must use the right-side key (e.g., RightOption). Or add a regular key (e.g., Control+Space)."
-            : "Single modifier hotkeys must use the right-side key (e.g., RightOption). Or use two modifiers (e.g., Control+Alt).",
+          "Single modifier hotkeys must use the right-side key (e.g., RightOption). Or use two modifiers (e.g., Control+Alt).",
         errorCode: "LEFT_MODIFIER_ONLY",
       };
     }
