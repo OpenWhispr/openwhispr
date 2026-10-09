@@ -67,8 +67,11 @@ export default function AssistantNoteUndoListener() {
                     const result = await window.electronAPI.undoNoteUpdate(edit.token);
                     if (!active) return;
                     // A refusal means the recovery is gone; a failed save keeps
-                    // it, so the toast stays for another try.
+                    // it, so the toast stays for another try. A gone recovery
+                    // keeps the button disabled: the dismissed toast is still
+                    // clickable while it animates out.
                     const gone = result.success || result.error === "note_changed";
+                    busy = gone;
                     if (gone) {
                       dismissRef.current(id);
                       visible.current.delete(edit.token);
@@ -84,13 +87,12 @@ export default function AssistantNoteUndoListener() {
                       });
                     }
                   } catch {
+                    busy = false;
                     if (active)
                       toast({
                         description: t("notes.assistantUndo.failed"),
                         variant: "destructive",
                       });
-                  } finally {
-                    busy = false;
                   }
                 }}
               >

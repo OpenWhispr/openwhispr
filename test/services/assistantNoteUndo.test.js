@@ -75,6 +75,9 @@ test("safe assistant edits and atomic Undo", async (t) => {
         });
         assert.equal(result.success, true);
         assert.deepEqual(result.data.ignoredFields, ["content", "summary"]);
+        // The model is told the blanks cleared nothing; the user sees only the edit.
+        assert.match(result.data.guidance, /nothing was cleared.*clear_fields/);
+        assert.doesNotMatch(result.displayText, /blank|clear_fields/i);
         const saved = database.getNote(note.id);
         for (const key of [
           "content",
@@ -422,6 +425,7 @@ test("safe assistant edits and atomic Undo", async (t) => {
     const renamed = await edit(note, { title: "", folder: " ", content: "Kept" });
     assert.equal(renamed.success, true);
     assert.deepEqual(renamed.data.ignoredFields, ["title", "folder"]);
+    assert.doesNotMatch(renamed.data.guidance, /clear_fields/);
     assert.equal(database.getNote(note.id).title, note.title);
   });
 
@@ -457,6 +461,18 @@ test("safe assistant edits and atomic Undo", async (t) => {
     );
     assert.equal(direct.success, false);
     assert.equal(database.getNote(note.id).transcript, note.transcript);
+  });
+
+  await t.test("clearing a never-written summary writes nothing and keeps the last Undo", async () => {
+    const note = fresh();
+    database.updateNote(note.id, { enhanced_content: null });
+    await edit(note, { title: "Renamed first" }, "turn-1");
+    const token = tokenFor(note.id);
+    database.updateNote(note.id, { sync_status: "synced" });
+    assert.equal((await edit(note, { clear_fields: ["summary"] }, "turn-2")).success, true);
+    assert.equal(database.getNote(note.id).enhanced_content, null);
+    assert.equal(database.getNote(note.id).sync_status, "synced");
+    assert.equal(tokenFor(note.id), token);
   });
 
   await t.test("a toast's discard retires only its own recovery", async () => {
@@ -515,6 +531,23 @@ test("safe assistant edits and atomic Undo", async (t) => {
     const note = fresh();
     await edit(note, { title: "After repair" });
     assert.equal(database.undoNoteUpdate(tokenFor(note.id)).success, true);
+  });
+
+  await t.test("a setup that fails after dropping the journal leaves note writes working", (t) => {
+    database.db.exec(`
+      DROP TABLE assistant_note_undo;
+      CREATE TABLE assistant_note_undo (note_id INTEGER PRIMARY KEY, token TEXT, previous TEXT);
+    `);
+    const exec = database.db.exec.bind(database.db);
+    const failure = t.mock.method(database.db, "exec", (sql) => {
+      if (sql.includes("CREATE TABLE")) throw new Error("SQLITE_FULL: database or disk is full");
+      return exec(sql);
+    });
+    assert.throws(() => initializeNoteUndo(database.db), /SQLITE_FULL/);
+    failure.mock.restore();
+    const note = fresh();
+    assert.equal(database.updateNote(note.id, { title: "Plain edit" }).success, true);
+    initializeNoteUndo(database.db);
   });
 
   await t.test("without the journal, assistant edits still save", async () => {

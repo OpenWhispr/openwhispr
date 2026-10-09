@@ -138,6 +138,7 @@ for (const surface of ["note chat", "assistant panel"]) {
             });
             assert.deepEqual(renamed.updatedFields, ["title"]);
             assert.deepEqual(renamed.ignoredFields, ["content", "summary"]);
+            assert.match(renamed.guidance, /nothing was cleared.*clear_fields/);
             assert.equal(stored.content, "Bring a notebook.");
             assert.equal(stored.enhanced_content, EDITED);
             yield {

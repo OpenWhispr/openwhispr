@@ -20,6 +20,15 @@ async function lockNote(id: number): Promise<() => void> {
   };
 }
 
+// For the model only (the tool step shows displayText): a blank sent the old way
+// to clear a field succeeds without clearing it, so say so plainly.
+function ignoredFieldsGuidance(ignoredFields: string[]): string {
+  const clearHint = ignoredFields.some((field) => field === "content" || field === "summary")
+    ? " To empty content or summary, call update_note again with clear_fields; until then, don't tell the user a field was cleared."
+    : "";
+  return `Ignored blank ${ignoredFields.join(", ")}: nothing was cleared.${clearHint}`;
+}
+
 const isClearFields = (value: unknown): value is Array<"content" | "summary"> =>
   Array.isArray(value) && value.every((field) => field === "content" || field === "summary");
 
@@ -182,8 +191,9 @@ export const updateNoteTool: ToolDefinition = {
           updatedFields: Object.keys(updates).map((field) =>
             field === "enhanced_content" ? "summary" : field
           ),
+          ...(ignoredFields.length > 0 && { guidance: ignoredFieldsGuidance(ignoredFields) }),
         },
-        displayText: `Updated note: "${title || note.title}"${suffix}${ignoredFields.length ? `. Ignored blank fields: ${ignoredFields.join(", ")}` : ""}`,
+        displayText: `Updated note: "${title || note.title}"${suffix}`,
       };
     } catch (error) {
       return {

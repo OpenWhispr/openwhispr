@@ -181,6 +181,17 @@ test("Undo errors stay visible and double clicks cannot issue parallel restores"
   assert.deepEqual(state.pushes, []);
 });
 
+test("a click on a toast that is animating out after its Undo does nothing", async (t) => {
+  const state = await setup(t);
+  state.setEdits([one]);
+  await state.emit("note");
+  await React.act(async () => state.toasts[0].action.props.onClick());
+  state.setResult({ success: false, error: "note_changed" });
+  await React.act(async () => state.toasts[0].action.props.onClick());
+  assert.deepEqual(state.calls, ["first"]);
+  assert.equal(state.toasts.length, 1, "no error toast after a successful Undo");
+});
+
 test("scope changes dismiss old note names and ignore an outstanding list response", async (t) => {
   const state = await setup(t);
   state.setEdits([one]);
