@@ -3423,6 +3423,11 @@
       "author": {
         "you": "Tu"
       }
+    },
+    "assistantUndo": {
+      "applied": "L’assistente ha aggiornato «{{title}}»",
+      "changed": "Questa nota è cambiata dopo la modifica dell’assistente. Non è più possibile annullarla.",
+      "failed": "Impossibile annullare la modifica. Riprova."
     }
   },
   "dictionary": {

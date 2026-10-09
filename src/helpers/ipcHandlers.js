@@ -2239,8 +2239,25 @@ class IPCHandlers {
       return this.databaseManager.getNotesForSpace(spaceId, limit);
     });
 
-    ipcMain.handle("db-update-note", async (event, id, updates) => {
-      const result = this.databaseManager.updateNote(id, updates);
+    ipcMain.handle("db-get-note-undos", () => this.databaseManager.getNoteUndos());
+    ipcMain.handle("db-claim-note-undo", (_event, token) =>
+      this.databaseManager.claimNoteUndo(token)
+    );
+    ipcMain.handle("db-discard-note-undo", (_event, id, token) =>
+      this.databaseManager.discardNoteUndo(id, token)
+    );
+    ipcMain.handle("db-undo-note-update", (_event, token) => {
+      const result = this.databaseManager.undoNoteUpdate(token);
+      if (result?.success && result?.note) {
+        setImmediate(() => broadcastToWindows("note-updated", result.note));
+        this.notifyVectorChanges();
+        this._asyncMirrorWrite(result.note);
+      }
+      return result;
+    });
+
+    ipcMain.handle("db-update-note", async (event, id, updates, options) => {
+      const result = this.databaseManager.updateNote(id, updates, options);
       if (result?.success && result?.note) {
         setImmediate(() => broadcastToWindows("note-updated", result.note));
         this.notifyVectorChanges();

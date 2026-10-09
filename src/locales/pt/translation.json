@@ -3423,6 +3423,11 @@
       "author": {
         "you": "Você"
       }
+    },
+    "assistantUndo": {
+      "applied": "O assistente atualizou “{{title}}”",
+      "changed": "Esta nota mudou após a edição do assistente. Já não é possível desfazer.",
+      "failed": "Não foi possível desfazer a edição. Tente novamente."
     }
   },
   "dictionary": {

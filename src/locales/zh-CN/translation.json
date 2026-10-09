@@ -3423,6 +3423,11 @@
       "author": {
         "you": "你"
       }
+    },
+    "assistantUndo": {
+      "applied": "助手已更新“{{title}}”",
+      "changed": "助手编辑后，这篇笔记又发生了更改，无法撤销。",
+      "failed": "无法撤销编辑，请重试。"
     }
   },
   "dictionary": {

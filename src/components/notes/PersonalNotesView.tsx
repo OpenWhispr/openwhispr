@@ -407,6 +407,7 @@ export default function PersonalNotesView({
   }, [activeNote, commitDraft, transitionToNote]);
 
   const scheduleDocumentSave = useCallback((snapshot: NoteEditorDraft) => {
+    void window.electronAPI.discardNoteUndo?.(snapshot.noteId);
     const current = pendingDocumentRef.current;
     if (current) clearTimeout(current.timer);
 
@@ -434,6 +435,7 @@ export default function PersonalNotesView({
   }, []);
 
   const scheduleEnhancedSave = useCallback((snapshot: NoteEditorDraft) => {
+    void window.electronAPI.discardNoteUndo?.(snapshot.noteId);
     const current = pendingEnhancedRef.current;
     if (current) clearTimeout(current.timer);
 

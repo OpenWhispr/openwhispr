@@ -2,6 +2,7 @@ const Database = require("better-sqlite3");
 const path = require("path");
 const fs = require("fs");
 const { randomUUID } = require("crypto");
+const noteUndo = require("./noteUndo");
 const debugLogger = require("./debugLogger");
 const { buildNoteSearchQuery } = require("./noteSearch");
 const { normalizeStoredSpeakerCount } = require("./speakerCount");
@@ -1497,6 +1498,14 @@ class DatabaseManager {
         )
       `);
       this._initVectorChangeJournal();
+      try {
+        noteUndo.initializeNoteUndo(this.db);
+        this.noteUndoReady = true;
+      } catch (error) {
+        // Undo is a convenience: it must never keep the notes database from
+        // opening. Without it, assistant edits save as plain updates.
+        debugLogger.error("Assistant note Undo unavailable", { error: error.message }, "database");
+      }
 
       return true;
     } catch (error) {
@@ -3278,7 +3287,27 @@ class DatabaseManager {
     }
   }
 
-  updateNote(id, updates) {
+  getNoteUndos() {
+    return this.noteUndoReady ? noteUndo.getNoteUndos(this) : [];
+  }
+
+  claimNoteUndo(token) {
+    return this.noteUndoReady && noteUndo.claimNoteUndo(this, token);
+  }
+
+  undoNoteUpdate(token) {
+    if (!this.noteUndoReady) return { success: false, error: "note_changed" };
+    return noteUndo.undoNoteUpdate(this, token);
+  }
+
+  discardNoteUndo(id, token) {
+    if (this.noteUndoReady) noteUndo.discardNoteUndo(this, id, token);
+  }
+
+  updateNote(id, updates, options) {
+    if (options?.undoable && this.noteUndoReady) {
+      return noteUndo.updateNoteWithUndo(this, id, updates, options.expected, options.turn);
+    }
     try {
       if (!this.db) throw new Error("Database not initialized");
       if (!this.getNote(id)) return { success: false, error: "Note not found" };

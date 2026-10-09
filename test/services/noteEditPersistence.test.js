@@ -41,7 +41,7 @@ test("note edits preserve separate stored fields, reopen correctly, and report f
     window: {
       electronAPI: {
         getNote: async (id) => database.getNote(id),
-        updateNote: async (id, updates) => database.updateNote(id, updates),
+        updateNote: async (id, updates, options) => database.updateNote(id, updates, options),
       },
     },
   });
@@ -86,11 +86,29 @@ test("note edits preserve separate stored fields, reopen correctly, and report f
       assert.deepEqual(result.data.updatedFields, ["summary"]);
     }
   );
+  await t.test("rename with unrelated blank fields preserves both documents", async () => {
+    const before = database.getNote(note.id);
+    const result = await updateNoteTool.execute({
+      id: note.id,
+      title: "Renamed",
+      content: "",
+      summary: "",
+    });
+    assert.equal(result.success, true);
+    assert.equal(database.getNote(note.id).content, before.content);
+    assert.equal(database.getNote(note.id).enhanced_content, before.enhanced_content);
+  });
   await t.test("explicit empty summary and content clear only the chosen field", async () => {
-    assert.equal((await updateNoteTool.execute({ id: note.id, summary: "" })).success, true);
+    assert.equal(
+      (await updateNoteTool.execute({ id: note.id, clear_fields: ["summary"] })).success,
+      true
+    );
     assert.equal(database.getNote(note.id).enhanced_content, "");
     assert.equal(database.getNote(note.id).content, CONTENT);
-    assert.equal((await updateNoteTool.execute({ id: note.id, content: "" })).success, true);
+    assert.equal(
+      (await updateNoteTool.execute({ id: note.id, clear_fields: ["content"] })).success,
+      true
+    );
     assert.equal(database.getNote(note.id).content, "");
     database.updateNote(note.id, { content: CONTENT, enhanced_content: SUMMARY });
   });

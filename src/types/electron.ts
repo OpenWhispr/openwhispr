@@ -1616,8 +1616,15 @@ declare global {
           owner_user_id?: string | null;
           updated_by_user_id?: string | null;
           left_team?: number;
-        }
+        },
+        options?: { undoable: true; expected: NoteItem; turn?: string }
       ) => Promise<{ success: boolean; note?: NoteItem; error?: string }>;
+      getNoteUndos: () => Promise<Array<{ token: string; noteId: number; title: string }>>;
+      claimNoteUndo: (token: string) => Promise<boolean>;
+      undoNoteUpdate: (
+        token: string
+      ) => Promise<{ success: boolean; note?: NoteItem; error?: string }>;
+      discardNoteUndo: (id: number, token?: string) => Promise<void>;
       deleteNote: (id: number) => Promise<{ success: boolean }>;
       exportNote: (
         noteId: number,

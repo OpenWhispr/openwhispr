@@ -3774,6 +3774,11 @@
       "author": {
         "you": "Vous"
       }
+    },
+    "assistantUndo": {
+      "applied": "L’assistant a modifié « {{title}} »",
+      "changed": "Cette note a changé après la modification de l’assistant. Il n’est plus possible de l’annuler.",
+      "failed": "Impossible d’annuler la modification. Réessayez."
     }
   },
   "dictionary": {
