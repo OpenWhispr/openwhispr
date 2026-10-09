@@ -1229,12 +1229,15 @@ class ReasoningService extends BaseReasoningService {
       operationGeneration !== this.cloudOperationGeneration;
     const maxSteps = config.tools?.length ? ReasoningService.MAX_TOOL_STEPS : 1;
     let currentMessages = [...messages];
+    // Each call gets its own assistant/tool pair, so the results the model
+    // hasn't seen yet start where the last step's pairs do.
+    let latestStepStart = currentMessages.length;
 
     for (let step = 0; step < maxSteps; step++) {
       if (operationWasCancelled()) return;
+      currentMessages = compactTranscriptHistory(currentMessages, latestStepStart);
       // The screenshot rides every step of the tool loop so the model keeps
       // its vision after tool results come back.
-      currentMessages = compactTranscriptHistory(currentMessages);
       const ipcStream = this.streamFromIPC(currentMessages, {
         systemPrompt: config.systemPrompt,
         tools: config.tools,
@@ -1265,6 +1268,7 @@ class ReasoningService extends BaseReasoningService {
         return;
       }
 
+      latestStepStart = currentMessages.length;
       for (const call of pendingToolCalls) {
         if (operationWasCancelled()) return;
         let toolResult: ToolExecutionResult;

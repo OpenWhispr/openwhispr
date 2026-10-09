@@ -1,11 +1,31 @@
 import type { ToolDefinition, ToolResult } from "./ToolRegistry";
 import { withoutAttendeesFence } from "../../utils/noteAttendees";
-import { transcriptPage } from "../../utils/transcriptEvidence";
+import {
+  NOTE_TAKER_LABEL,
+  isTranscriptRevisionCurrent,
+  readableTranscript,
+  transcriptPage,
+  transcriptRevision,
+} from "../../utils/transcriptEvidence";
+
+const MAX_QUERY_LENGTH = 120;
+
+// Models often send explicit null for optional arguments, and numbers as strings.
+function optionalArg(value: unknown): unknown {
+  return value === null ? undefined : value;
+}
+
+function integerArg(value: unknown): unknown {
+  return typeof value === "string" && /^\d+$/.test(value.trim()) ? Number(value) : value;
+}
+
+function failure(displayText: string): ToolResult {
+  return { success: false, data: null, displayText };
+}
 
 export const getNoteTool: ToolDefinition = {
   name: "get_note",
-  description:
-    "Get a note's separate personal content, saved AI summary, and source transcript by ID. Read before editing to identify the intended field. Use search_notes first if the note ID is unknown. For more transcript evidence, supply transcript_query (literal phrase) or transcript_offset; these calls return only a 500-character passage, with speaker/time references and paging metadata.",
+  description: `Get a note's separate personal content, saved AI summary, and the start of its source transcript by ID. Read before editing to identify the intended field. Use search_notes first if the note ID is unknown. For more of the transcript, supply transcript_query (a literal phrase or a speaker's name) or transcript_offset; these calls return only a 500-character passage of \`Speaker: text\` lines (the person taking the notes is "${NOTE_TAKER_LABEL}"), with time references and paging metadata.`,
   parameters: {
     type: "object",
     properties: {
@@ -15,15 +35,15 @@ export const getNoteTool: ToolDefinition = {
       },
       transcript_query: {
         type: "string",
-        maxLength: 120,
+        maxLength: MAX_QUERY_LENGTH,
         description:
-          "Case-insensitive literal word or phrase to find anywhere in the transcript. Omit to read sequentially. No match is not proof the topic was absent.",
+          "Case-insensitive literal word, phrase or speaker name to find in the transcript. Omit to read sequentially. No match is not proof the topic was absent.",
       },
       transcript_offset: {
         type: "integer",
         minimum: 0,
         description:
-          "Readable transcript character offset, default 0. Use transcript_next_offset for more text or the next match with the same query.",
+          "Character offset in get_note's transcript text, default 0. Use transcript_next_offset for more text or the next match with the same query.",
       },
       transcript_revision: {
         type: "string",
@@ -37,60 +57,60 @@ export const getNoteTool: ToolDefinition = {
   readOnly: true,
 
   async execute(args: Record<string, unknown>): Promise<ToolResult> {
-    const id = args.id as number;
-    const query = args.transcript_query;
-    const offset = args.transcript_offset ?? 0;
-    const transcriptOnly = query !== undefined || args.transcript_offset !== undefined;
-    if (
-      !Number.isSafeInteger(id) ||
-      id <= 0 ||
-      !Number.isSafeInteger(offset) ||
-      (offset as number) < 0 ||
-      (query !== undefined && (typeof query !== "string" || !query.trim() || query.length > 120)) ||
-      (args.transcript_revision !== undefined && typeof args.transcript_revision !== "string")
-    ) {
-      return {
-        success: false,
-        data: null,
-        displayText: "Invalid note ID or transcript query/offset.",
-      };
+    const id = integerArg(args.id);
+    const rawQuery = optionalArg(args.transcript_query);
+    const query = typeof rawQuery === "string" && !rawQuery.trim() ? undefined : rawQuery;
+    const offset = integerArg(optionalArg(args.transcript_offset));
+    const revision = optionalArg(args.transcript_revision);
+    if (!Number.isSafeInteger(id) || (id as number) <= 0) {
+      return failure("Invalid note ID: pass the note's numeric id.");
     }
+    if (offset !== undefined && (!Number.isSafeInteger(offset) || (offset as number) < 0)) {
+      return failure("Invalid transcript_offset: pass a whole number of 0 or more.");
+    }
+    if (query !== undefined && (typeof query !== "string" || query.length > MAX_QUERY_LENGTH)) {
+      return failure(
+        `Invalid transcript_query: pass a phrase of at most ${MAX_QUERY_LENGTH} characters.`
+      );
+    }
+    if (revision !== undefined && typeof revision !== "string") {
+      return failure(
+        "Invalid transcript_revision: pass the string from a previous get_note result."
+      );
+    }
+    const transcriptOnly = query !== undefined || offset !== undefined;
 
     try {
-      const note = await window.electronAPI.getNote(id);
+      const note = await window.electronAPI.getNote(id as number);
 
       if (!note) {
-        return {
-          success: false,
-          data: null,
-          displayText: `Note with ID ${id} not found`,
-        };
+        return failure(`Note with ID ${id} not found`);
       }
 
-      const raw = note.transcript ?? "";
-      const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
-      const revision = Array.from(new Uint8Array(digest), (byte) =>
-        byte.toString(16).padStart(2, "0")
-      ).join("");
-      if (args.transcript_revision !== undefined && args.transcript_revision !== revision) {
-        return {
-          success: false,
-          data: null,
-          displayText:
-            "Transcript changed. Restart get_note transcript retrieval at offset 0 without transcript_revision.",
-        };
+      const mappings = await window.electronAPI.getSpeakerMappings?.(id as number);
+      const transcript = readableTranscript(
+        note.transcript ?? "",
+        Object.fromEntries(
+          (mappings ?? []).map((mapping) => [mapping.speaker_id, mapping.display_name])
+        )
+      );
+      if (
+        revision !== undefined &&
+        !(await isTranscriptRevisionCurrent(transcript.text, revision as string))
+      ) {
+        return failure(
+          "Transcript changed. Restart get_note transcript retrieval at offset 0 without transcript_revision."
+        );
       }
-      const mappings = transcriptOnly ? await window.electronAPI.getSpeakerMappings?.(id) : [];
-      const speakerMappings = Object.fromEntries(
-        (mappings ?? []).map((mapping) => [mapping.speaker_id, mapping.display_name])
-      );
       const page = transcriptPage(
-        raw,
-        offset as number,
-        query as string | undefined,
-        speakerMappings
+        transcript,
+        (offset as number | undefined) ?? 0,
+        query as string | undefined
       );
-      const evidence = { ...page, transcript_revision: revision };
+      const evidence = {
+        ...page,
+        transcript_revision: await transcriptRevision(transcript.text, page.transcript_end),
+      };
       if (transcriptOnly) {
         return {
           success: true,
@@ -116,11 +136,7 @@ export const getNoteTool: ToolDefinition = {
         displayText: `Retrieved note: "${note.title}"`,
       };
     } catch (error) {
-      return {
-        success: false,
-        data: null,
-        displayText: `Failed to get note: ${(error as Error).message}`,
-      };
+      return failure(`Failed to get note: ${(error as Error).message}`);
     }
   },
 };

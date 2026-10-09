@@ -35,6 +35,7 @@ import {
 import { resolveUnavailableCapabilities } from "../../config/agentCapabilities";
 import { getDictionaryHintWords } from "../../utils/snippets";
 import { noteAttendeesContext, withoutAttendeesFence } from "../../utils/noteAttendees";
+import { FULL_TRANSCRIPT_MAX_CHARS } from "../../utils/transcriptEvidence";
 import { createToolRegistry } from "../../services/tools";
 import {
   executeTool,
@@ -114,6 +115,12 @@ async function buildRAGContext(userText: string, scope?: ContainerScope): Promis
  */
 export type ChatStreamingScope = "chatIntelligence" | "dictationAgent";
 
+export interface OpenNoteContext {
+  text: string;
+  /** Only the start of the transcript is included; get_note reads the rest. */
+  transcriptPreview: boolean;
+}
+
 interface UseChatStreamingOptions {
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
@@ -125,7 +132,7 @@ interface UseChatStreamingOptions {
    * The note a note's chat is about. The model answers from it first, and no
    * other notes are added up front: it reaches them through search_notes.
    */
-  openNote?: string | ((useTranscriptPreview: boolean) => string);
+  openNote?: string | ((maxTranscriptChars: number) => OpenNoteContext);
   /** Optional container scope applied to RAG and the search_notes tool (container overview chat). */
   searchScope?: ContainerScope;
   /**
@@ -485,14 +492,21 @@ export function useChatStreaming({
           connectorsOffered ? buildNoteAttendeesContext(noteMeetingRef.current) : "",
         ]);
         if (cancelled() || !mountedRef.current) return;
+        // A transcript too long for the model is read through get_note, except
+        // by whole-note actions, which work from the complete source.
+        const maxTranscriptChars =
+          registry?.get("get_note") && !options?.requestText
+            ? FULL_TRANSCRIPT_MAX_CHARS[
+                !isCloudAgent && (isLocalProvider || isLanAgent) ? "selfHosted" : "hosted"
+              ]
+            : Infinity;
+        const currentNote: OpenNoteContext =
+          typeof openNoteRef.current === "function"
+            ? openNoteRef.current(maxTranscriptChars)
+            : { text: openNoteRef.current ?? "", transcriptPreview: false };
         // Only main's attendee block may carry its fence: note text and search
         // results can't fake a second list.
-        // Whole-note actions retain their complete source; ordinary questions can retrieve passages.
-        const currentNote =
-          typeof openNoteRef.current === "function"
-            ? openNoteRef.current(!!registry?.get("get_note") && !options?.requestText)
-            : openNoteRef.current;
-        const openNoteContext = [withoutAttendeesFence(currentNote ?? ""), attendeesContext]
+        const openNoteContext = [withoutAttendeesFence(currentNote.text), attendeesContext]
           .filter(Boolean)
           .join("\n\n");
         const libraryContext = [
@@ -508,6 +522,7 @@ export function useChatStreaming({
             unavailable: nameUnavailableCapabilities ? unavailable : [],
             toolTrace: registry !== null,
             openNote: openNoteContext || undefined,
+            openNoteTranscriptPreview: currentNote.transcriptPreview,
             userName: userNameRef.current,
           }),
           getDictionaryHintWords(settings),

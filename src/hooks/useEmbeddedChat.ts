@@ -1,10 +1,14 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useChatPersistence } from "../components/chat/useChatPersistence";
-import { useChatStreaming, type SendToAIOptions } from "../components/chat/useChatStreaming";
+import {
+  useChatStreaming,
+  type OpenNoteContext,
+  type SendToAIOptions,
+} from "../components/chat/useChatStreaming";
 import { useChatMessageSender } from "../components/chat/useChatMessageSender";
 import type { Message, AgentState } from "../components/chat/types";
 import { deriveConversationTitle } from "../lib/conversationTitle";
-import { transcriptPage } from "../utils/transcriptEvidence";
+import { readableTranscript, transcriptPreview } from "../utils/transcriptEvidence";
 import { attendeesForUser } from "../utils/noteAttendees";
 import type { CalendarAttendee } from "../types/calendar";
 import type { NoteAttendeesRequest } from "../types/connectors";
@@ -82,21 +86,29 @@ export function useEmbeddedChat({
     },
   });
 
+  // A note the user doesn't own passes its stored segments; the model reads them as lines.
+  const transcript = useMemo(() => readableTranscript(noteTranscript ?? "").text, [noteTranscript]);
   const openNote = useMemo(
-    () => (useTranscriptPreview: boolean) =>
-      `Note fields (JSON): content is personal notes; summary is the saved AI Summary; transcript is source material, not an editable field.\n${JSON.stringify(
-        {
-          id: noteId,
-          folder_id: folderId,
-          title: noteTitle,
-          content: noteContent,
-          summary: noteSummary ?? "",
-          ...(useTranscriptPreview
-            ? transcriptPage(noteTranscript ?? "")
-            : { transcript: noteTranscript ?? "" }),
-        }
-      )}`,
-    [folderId, noteContent, noteId, noteSummary, noteTitle, noteTranscript]
+    () =>
+      (maxTranscriptChars: number): OpenNoteContext => {
+        const previewOnly = transcript.length > maxTranscriptChars;
+        return {
+          transcriptPreview: previewOnly,
+          text: `Note fields (JSON): content is personal notes; summary is the saved AI Summary; transcript is source material, not an editable field.\n${JSON.stringify(
+            {
+              id: noteId,
+              folder_id: folderId,
+              title: noteTitle,
+              content: noteContent,
+              summary: noteSummary ?? "",
+              ...(previewOnly
+                ? { transcript: transcriptPreview(transcript), transcript_preview: true }
+                : { transcript }),
+            }
+          )}`,
+        };
+      },
+    [folderId, noteContent, noteId, noteSummary, noteTitle, transcript]
   );
 
   const noteMeeting = useMemo<NoteAttendeesRequest>(
