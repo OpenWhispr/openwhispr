@@ -98,6 +98,7 @@ test("Fn is treated as Globe, including as a secondary hotkey", () => {
   assert.deepEqual(mgr.getMacNativeListenerConfig(MAC_SLOTS), {
     mouseButtons: [],
     suppressGlobeAction: true,
+    modifierChords: [],
   });
 });
 
@@ -112,12 +113,29 @@ test("mouse buttons are collected across slots and de-duplicated", () => {
   assert.equal(config.suppressGlobeAction, false);
 });
 
+test("modifier-only chords are collected across slots in the listener's canonical form", () => {
+  const mgr = makeManager({
+    dictation: ["Command+Alt", "F8"],
+    voiceAgent: "Alt+Command",
+    translation: "Shift+Control",
+    meeting: "Control+Alt",
+  });
+  const config = mgr.getMacNativeListenerConfig(MAC_SLOTS);
+  assert.deepEqual(config.modifierChords, ["control+shift", "option+command"]);
+  assert.equal(config.suppressGlobeAction, false);
+  assert.equal(mgr.slotHasMacModifierChord("dictation", "option+command"), true);
+  assert.equal(mgr.slotHasMacModifierChord("voiceAgent", "option+command"), true);
+  assert.equal(mgr.slotHasMacModifierChord("translation", "option+command"), false);
+  assert.equal(mgr.slotHasMacModifierChord("dictation", "control+option"), false);
+});
+
 test("slots outside the requested list are ignored", () => {
   // meeting is not wired to the macOS native listener.
   const mgr = makeManager({ dictation: "F8", meeting: "GLOBE" });
   assert.deepEqual(mgr.getMacNativeListenerConfig(MAC_SLOTS), {
     mouseButtons: [],
     suppressGlobeAction: false,
+    modifierChords: [],
   });
 });
 
@@ -126,6 +144,7 @@ test("no native macOS hotkeys means nothing to configure", () => {
   assert.deepEqual(mgr.getMacNativeListenerConfig(MAC_SLOTS), {
     mouseButtons: [],
     suppressGlobeAction: false,
+    modifierChords: [],
   });
 });
 
