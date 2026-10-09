@@ -46,7 +46,8 @@ const MOCKS = {
   `,
   "/ApiKeysSection": `
     import React from "react";
-    export default function ApiKeysSection({ createRequest }) {
+    export default function ApiKeysSection({ createRequest, onCanCreateChange }) {
+      React.useEffect(() => { onCanCreateChange(true); }, [onCanCreateChange]);
       return React.createElement("div", null, "API KEYS SECTION create:" + createRequest);
     }
   `,
@@ -124,8 +125,16 @@ async function renderView(
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
   });
+  const openedUrls = [];
   installBrowserGlobals(t, {
-    window: { electronAPI: { getPlatform: () => "darwin", openExternal() {} } },
+    window: {
+      electronAPI: {
+        getPlatform: () => "darwin",
+        openExternal(url) {
+          openedUrls.push(url);
+        },
+      },
+    },
   });
   globalThis.__connectorStatuses = statuses;
   globalThis.__gcalAccounts = gcalAccounts;
@@ -158,7 +167,7 @@ async function renderView(
   }
   root = createRoot(container);
   await React.act(async () => root.render(createElement(Harness)));
-  return { container, upgrades };
+  return { container, upgrades, openedUrls };
 }
 
 test("sectionMeta shows counts on a paid plan and plan badges on a free one", async (t) => {
@@ -347,4 +356,41 @@ test("a free plan still sees MCP's setup steps, with Create API key disabled", a
     buttonWithText(container, "apiKeysSection.createButton").getAttribute("disabled"),
     null
   );
+});
+
+test("the API header opens the existing creation dialog through its request", async (t) => {
+  const { container } = await renderView(t, { section: "api" });
+  const createButton = buttonWithText(container, "apiKeysSection.createButton");
+  assert.ok(createButton);
+  assert.equal(createButton.getAttribute("disabled") !== null, false);
+  await React.act(async () => click(createButton));
+  assert.match(shownText(container), /API KEYS SECTION create:1/);
+});
+
+test("API, MCP and CLI use one docs label and open their own documentation", async (t) => {
+  const { container, openedUrls } = await renderView(t, { section: "api" });
+  for (const [section, url] of [
+    ["api", "https://docs.openwhispr.com/api/overview"],
+    ["mcp", "https://docs.openwhispr.com/integrations/mcp"],
+    ["cli", "https://docs.openwhispr.com/cli/install"],
+  ]) {
+    await React.act(async () => click(navButton(container, section)));
+    const pane = heading(container, `integrations.nav.sections.${section}`).parentNode.parentNode;
+    await React.act(async () => click(buttonWithText(pane, "integrations.readDocs")));
+    assert.equal(openedUrls.at(-1), url);
+  }
+});
+
+test("MCP offers OAuth and API-key alternatives on free and paid plans", async (t) => {
+  for (const isPaid of [true, false])
+    await t.test(String(isPaid), async (st) => {
+      const { container } = await renderView(st, { section: "mcp", isPaid });
+      assert.match(shownText(container), /integrations\.mcp\.oauthDescription/);
+      assert.match(shownText(container), /integrations\.mcp\.apiKeyDescription/);
+      assert.match(shownText(container), /Authorization: Bearer YOUR_API_KEY/);
+      assert.equal(
+        buttonWithText(container, "apiKeysSection.createButton").getAttribute("disabled") !== null,
+        !isPaid
+      );
+    });
 });

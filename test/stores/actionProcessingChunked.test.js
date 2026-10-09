@@ -506,7 +506,8 @@ test("a shorter consolidation is usable even when its section count stays the sa
     },
   });
   const material = {
-    notes: "manual note ".repeat(2325),
+    // Leave room for the shared fidelity instructions while still forcing two reductions.
+    notes: "manual note ".repeat(2250),
     meetingContext: "",
     transcript: LINE.repeat(1400),
   };

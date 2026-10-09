@@ -150,7 +150,6 @@ jest.mock('@/components/ui/SwipeableCard', () => ({
   SwipeableCard: ({ children }: { children: React.ReactNode }) => children,
 }));
 jest.mock('@/components/ui/Glass', () => ({ Glass: () => null }));
-jest.mock('@/components/ui/CloudIcon', () => ({ CloudIcon: () => null }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/components/ui/DictationModeControl', () => ({ DictationModeControl: () => null }));
 jest.mock('@/components/ui/UsageMeter', () => ({ UsageLimitBanner: () => null }));
@@ -193,34 +192,26 @@ describe('HomeScreen Pro completion', () => {
   });
 });
 
-describe('HomeScreen mode control', () => {
+// Private mode is set in AI Models; Home only shows that it's on.
+describe('HomeScreen Private mode badge', () => {
   afterEach(() => {
     mockProcessingModeStoreState.activeMode = 'cloud';
   });
 
-  it('is a button that opens the Dictation page in Bring Your Own Key mode', () => {
-    mockProcessingModeStoreState.activeMode = 'providers';
+  it('opens AI Models from the badge while Private mode is on', () => {
+    mockProcessingModeStoreState.activeMode = 'private';
     render(<HomeScreen />);
-    const control = screen.getByLabelText('Transcription: Bring Your Own Key');
-    expect(control.props.accessibilityRole).toBe('button');
-    expect(control.props.accessibilityState?.checked).toBeUndefined();
-    expect(control.props.accessibilityHint).toBe('Opens Dictation settings.');
+    const badge = screen.getByLabelText('Private mode is on');
+    expect(badge.props.accessibilityRole).toBe('button');
+    fireEvent.press(badge);
+    expect(require('expo-router').router.push).toHaveBeenCalledWith('/(account)/ai-models');
   });
 
-  it('is a Cloud switch otherwise', () => {
+  it.each(['cloud', 'providers'])('shows no mode switch or badge in %s mode', (mode) => {
+    mockProcessingModeStoreState.activeMode = mode;
     render(<HomeScreen />);
-    const control = screen.getByLabelText('Cloud transcription');
-    expect(control.props.accessibilityRole).toBe('switch');
-    expect(control.props.accessibilityState).toMatchObject({ checked: true });
-  });
-
-  it('opens the Dictation page when dictation uses your own key', () => {
-    mockProcessingModeStoreState.activeMode = 'providers';
-    render(<HomeScreen />);
-    fireEvent.press(screen.getByLabelText('Transcription: Bring Your Own Key'));
-    expect(require('expo-router').router.push).toHaveBeenCalledWith({
-      pathname: '/(account)/ai-workflow',
-      params: { scope: 'dictation' },
-    });
+    expect(screen.queryByLabelText('Private mode is on')).toBeNull();
+    expect(screen.queryByLabelText('Cloud transcription')).toBeNull();
+    expect(screen.queryByLabelText('Transcription: Bring Your Own Key')).toBeNull();
   });
 });

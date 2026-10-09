@@ -17,10 +17,14 @@ import { useOnboardingPracticeMode } from '@/hooks/useOnboardingPracticeMode';
 import { useOnboardingStep } from '@/hooks/useOnboardingStep';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useHandoffStore } from '@/store/useHandoffStore';
+import { hasRealAccountHistory } from '@/sync/syncIdentity';
 import { addKeyboardStatusChangedListener } from '../../../../modules/app-group-storage/src';
 
 const SAMPLE_EMAIL =
   'Hey Tim, excited to chat. Are you free next Friday at 3pm… actually, 4pm? Thanks, Chad';
+// What the sample comes out as, shown when the live try can't run.
+const EXAMPLE_EMAIL =
+  'Hey Tim,\n\nExcited to chat. Are you free next Friday at 4pm?\n\nThanks,\nChad';
 
 const GMAIL_ICON = require('../../../../assets/onboarding/app-icons/gmail.png');
 const MAIL_ICON = require('../../../../assets/onboarding/app-icons/mail.png');
@@ -30,7 +34,13 @@ export function DictationEmailStep(): ReactElement {
   const { goNext, progress } = useOnboardingStep('dictation-email');
   const { localSelected } = useOnboardingPracticeMode();
   const user = useAuthStore((state) => state.user);
+  const isGuest = useAuthStore((state) => state.isGuest);
   const ensureSession = useAuthStore((state) => state.ensureAnonymousSession);
+  // A guest declined an account, and a device with account history must not get a new identity
+  // (its first sync would read as an account switch and wipe that account's notes), so neither
+  // can get a session here, and Retry would only ever fail.
+  const [noHistory] = useState(() => !hasRealAccountHistory());
+  const sessionPossible = !isGuest && noHistory;
   const isTranscribing = useHandoffStore((state) => state.isTranscribing);
   const input = useRef<TextInput>(null);
   const dismissOnInsert = useRef(false);
@@ -38,6 +48,10 @@ export function DictationEmailStep(): ReactElement {
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState<string | null>(null);
   const liveAvailable = !localSelected && !!user;
+  // A practice error only means something while the field is shown; without it, Retry would offer
+  // a session where none can be made.
+  const shownError = liveAvailable ? error : null;
+  const canRetry = liveAvailable ? !!error : !localSelected && sessionPossible;
   const busy =
     status === 'recording' || status === 'transcribing' || status === 'cleaning' || isTranscribing;
 
@@ -72,13 +86,16 @@ export function DictationEmailStep(): ReactElement {
     setError(null);
     setStatus('idle');
     setValue('');
+    // Refocuses a field already shown; one swapped in for the example focuses itself (autoFocus).
     input.current?.focus();
   }, [ensureSession]);
 
   const note = localSelected
-    ? 'Practice uses Cloud. Skip it to keep Local.'
+    ? 'Practice uses Cloud. Here’s an example instead.'
     : !user
-      ? 'Cloud practice needs a connection. Try again or skip for now.'
+      ? sessionPossible
+        ? 'Cloud practice needs a connection. Here’s an example instead.'
+        : 'Cloud practice needs an account. Here’s an example instead.'
       : status === 'recording'
         ? 'Listening…'
         : busy
@@ -97,7 +114,7 @@ export function DictationEmailStep(): ReactElement {
       ctaLabel="Continue"
       ctaDisabled={busy}
       onCta={goNext}
-      secondaryCtaLabel={!localSelected && (error || !user) ? 'Retry' : undefined}
+      secondaryCtaLabel={canRetry ? 'Retry' : undefined}
       onSecondaryCta={retry}
     >
       <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
@@ -116,42 +133,62 @@ export function DictationEmailStep(): ReactElement {
             <Text className="w-16 text-[14px] text-tertiaryLabel">Subject</Text>
             <Text className="text-[14px] font-medium text-label">Quick sync</Text>
           </View>
-          <View className="px-4 pb-4 pt-3">
-            <Text className="mb-2 text-[11px] font-bold uppercase tracking-wider text-tertiaryLabel">
-              Read this aloud
-            </Text>
-            <TextInput
-              ref={input}
-              accessibilityLabel="Your dictated email"
-              value={value}
-              onChangeText={(text) => {
-                setValue(text);
-                // Native readiness precedes the keyboard consuming its pending transcript, and the
-                // status stays ready afterwards, so dismiss once per dictation, not on every edit.
-                if (dismissOnInsert.current && text.trim()) {
-                  dismissOnInsert.current = false;
-                  Keyboard.dismiss();
-                }
-              }}
-              editable={liveAvailable}
-              autoFocus={liveAvailable}
-              multiline
-              placeholder={SAMPLE_EMAIL}
-              placeholderTextColor="#9CA3AF"
-              style={styles.emailInput}
-              textAlignVertical="top"
-              autoCorrect={false}
-              scrollEnabled
-            />
-          </View>
+          {/* Without a live try the field would be a dead box that looks tappable, so the card shows
+              the sample and its result instead. */}
+          {liveAvailable ? (
+            <View className="px-4 pb-4 pt-3">
+              <Text className="mb-2 text-[11px] font-bold uppercase tracking-wider text-tertiaryLabel">
+                Read this aloud
+              </Text>
+              <TextInput
+                ref={input}
+                accessibilityLabel="Your dictated email"
+                value={value}
+                onChangeText={(text) => {
+                  setValue(text);
+                  // Native readiness precedes the keyboard consuming its pending transcript, and the
+                  // status stays ready afterwards, so dismiss once per dictation, not on every edit.
+                  if (dismissOnInsert.current && text.trim()) {
+                    dismissOnInsert.current = false;
+                    Keyboard.dismiss();
+                  }
+                }}
+                autoFocus
+                multiline
+                placeholder={SAMPLE_EMAIL}
+                placeholderTextColor="#9CA3AF"
+                style={styles.emailInput}
+                textAlignVertical="top"
+                autoCorrect={false}
+                scrollEnabled
+              />
+            </View>
+          ) : (
+            <View className="gap-4 px-4 pb-4 pt-3">
+              <View>
+                <Text className="mb-2 text-[11px] font-bold uppercase tracking-wider text-tertiaryLabel">
+                  You say
+                </Text>
+                <Text className="text-[15px] leading-[21px] text-secondaryLabel">
+                  “{SAMPLE_EMAIL}”
+                </Text>
+              </View>
+              <View>
+                <Text className="mb-2 text-[11px] font-bold uppercase tracking-wider text-tertiaryLabel">
+                  OpenWhispr writes
+                </Text>
+                <Text className="text-[16px] leading-[22px] text-label">{EXAMPLE_EMAIL}</Text>
+              </View>
+            </View>
+          )}
         </View>
 
         <Text
-          accessibilityRole={error ? 'alert' : undefined}
+          accessibilityRole={shownError ? 'alert' : undefined}
           accessibilityLiveRegion="polite"
-          className={`mt-3 text-[13px] ${error ? 'text-systemRed' : 'text-secondaryLabel'}`}
+          className={`mt-3 text-[13px] ${shownError ? 'text-systemRed' : 'text-secondaryLabel'}`}
         >
-          {error ?? note}
+          {shownError ?? note}
         </Text>
 
         {/* Reassurance — works anywhere */}

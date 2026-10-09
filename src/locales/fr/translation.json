@@ -1307,7 +1307,6 @@
   "apiKeysSection": {
     "title": "Clés API",
     "description": "Créez des clés pour accéder à l'API OpenWhispr de manière programmatique.",
-    "docsLink": "Docs de l'API",
     "empty": "Aucune clé API pour le moment",
     "createButton": "Créer une clé API",
     "create": {
@@ -4112,20 +4111,18 @@
     "mcp": {
       "description": "Discutez, recherchez et travaillez avec vos notes dans Claude, ChatGPT et Cursor.",
       "step1": "Dans votre outil d'IA, ajoutez OpenWhispr MCP avec l'URL publique",
-      "step2": "Créez une clé API avec les permissions dont vous avez besoin.",
-      "step3": "Collez la clé comme en-tête Authorization pour vous connecter.",
-      "learnMore": "En savoir plus",
       "proRequired": "Passez à un plan payant pour connecter OpenWhispr à Claude, ChatGPT et Cursor.",
       "worksWith": "Fonctionne avec",
       "copyUrl": "Copier l'URL MCP",
-      "copied": "Copié"
+      "copied": "Copié",
+      "oauthTitle": "Se connecter avec OAuth",
+      "oauthDescription": "Dans un client compatible OAuth, ajoutez l’URL du serveur, puis connectez-vous à OpenWhispr et autorisez l’accès. Aucune clé API requise.",
+      "apiKeyTitle": "Utiliser une clé API",
+      "apiKeyDescription": "Pour les clients acceptant les en-têtes de requête, créez une clé API personnelle avec les autorisations nécessaires et utilisez l’en-tête ci-dessous."
     },
     "cli": {
       "description": "Donnez à votre assistant l'accès à vos notes depuis le terminal.",
       "installLabel": "Installer",
-      "learnMore": "Lire la documentation",
-      "copyDocsLink": "Copier le lien de la documentation",
-      "docsLinkCopied": "Lien de la documentation copié",
       "viewPlans": "Voir les forfaits",
       "local": {
         "label": "Local",
@@ -4170,7 +4167,8 @@
     },
     "connectors": {
       "description": "Laissez l'assistant utiliser vos outils. Vous approuvez chaque e-mail, message et ticket avant son envoi."
-    }
+    },
+    "readDocs": "Lire la documentation"
   },
   "connectors": {
     "approval": {
@@ -4337,15 +4335,17 @@
       "descriptionSend": "L'assistant affiche une carte d'e-mail dans le chat. L'e-mail n'est envoyé depuis votre Gmail que lorsque vous appuyez sur Envoyer.",
       "unavailable": "Les brouillons d'e-mails ne sont pas disponibles pour le moment.",
       "targetLabel": "Rédiger les e-mails dans",
-      "autoResolved": "Automatique · {{target}}",
       "targets": {
         "gmail": "Gmail",
         "outlookWork": "Outlook (professionnel ou scolaire)",
         "outlookPersonal": "Outlook.com",
-        "mailto": "Application de messagerie par défaut",
+        "mailto": "Application mail du système",
         "gmailSend": "Envoyer depuis le chat (Gmail)",
-        "gmailSendConnectFirst": "Envoyer depuis le chat (Gmail) · connectez Gmail ci-dessous"
-      }
+        "gmailSendConnectFirst": "Envoyer depuis le chat (Gmail) · connectez Gmail ci-dessous",
+        "auto": "Automatique"
+      },
+      "automaticHint": "Actuellement : {{target}}. Suit vos comptes connectés.",
+      "systemMailHint": "Utilise le gestionnaire de courrier configuré sur votre ordinateur."
     },
     "slack": {
       "title": "Slack",

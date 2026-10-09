@@ -91,37 +91,30 @@ export const SettingsRow: React.FC<SettingsRowProps> = ({
 export function SettingsPanel({
   children,
   className = "",
-  as: Element = "div",
 }: {
   children: React.ReactNode;
   className?: string;
-  /** "ol" for a panel of numbered steps, whose rows are then "li". */
-  as?: "div" | "ol";
 }) {
   return (
-    <Element
+    <div
       className={`rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 divide-y divide-border/60 dark:divide-border-subtle/50 ${className}`}
     >
       {children}
-    </Element>
+    </div>
   );
 }
 
 export function SettingsPanelRow({
   children,
   className = "",
-  as: Element = "div",
 }: {
   children: React.ReactNode;
   className?: string;
-  as?: "div" | "li";
 }) {
   const { isCompact } = useSettingsLayout();
 
   return (
-    <Element className={`${isCompact ? "px-3 py-2.5" : "px-4 py-3"} ${className}`}>
-      {children}
-    </Element>
+    <div className={`${isCompact ? "px-3 py-2.5" : "px-4 py-3"} ${className}`}>{children}</div>
   );
 }
 

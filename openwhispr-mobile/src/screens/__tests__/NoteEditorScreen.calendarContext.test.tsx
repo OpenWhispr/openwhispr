@@ -528,6 +528,7 @@ beforeEach(() => {
   mockAuthState.user = { id: 'user-1', email: 'user@example.com', emailVerified: true };
   mockConfigState.config.inference = undefined;
   mockConfigState.config.dictationAgentEnabled = undefined;
+  mockConfigState.config.noteChatEnabled = undefined;
   mockProcessingModeState.activeMode = 'cloud';
   mockActions = [defaultAction()];
   mockActionsState.actions = mockActions;
@@ -743,11 +744,20 @@ describe('NoteEditorScreen note chat', () => {
     expect(queryByTestId('chat-suggestion-Key decisions')).toBeNull();
   });
 
-  it('hides every Ask entry point when Chat & Voice Assistant is off', () => {
-    mockConfigState.config.dictationAgentEnabled = false;
+  it.each([
+    ['note chat is off', { noteChatEnabled: false }],
+    ['the old shared switch was turned off', { dictationAgentEnabled: false }],
+  ])('hides every Ask entry point when %s', (_label, settings) => {
+    Object.assign(mockConfigState.config, settings);
     const { queryByText, queryByTestId } = render(<NoteEditorScreen />);
     expect(queryByText('Ask about this note')).toBeNull();
     expect(queryByTestId(PILL)).toBeNull();
+  });
+
+  it('keeps note chat when only the voice assistant is off', () => {
+    Object.assign(mockConfigState.config, { dictationAgentEnabled: false, noteChatEnabled: true });
+    const { getByTestId } = render(<NoteEditorScreen />);
+    expect(getByTestId(PILL)).toBeTruthy();
   });
 
   it('sends a meeting shortcut prompt immediately when its chip is tapped', async () => {

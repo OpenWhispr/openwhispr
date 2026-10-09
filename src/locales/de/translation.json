@@ -1307,7 +1307,6 @@
   "apiKeysSection": {
     "title": "API-Schlüssel",
     "description": "Erstellen Sie Schlüssel für den programmatischen Zugriff auf die OpenWhispr-API.",
-    "docsLink": "API-Dokumentation",
     "empty": "Noch keine API-Schlüssel",
     "createButton": "API-Schlüssel erstellen",
     "create": {
@@ -4112,20 +4111,18 @@
     "mcp": {
       "description": "Chatte, suche und arbeite mit deinen Notizen in Claude, ChatGPT und Cursor.",
       "step1": "Füge OpenWhispr MCP in deinem KI-Tool mit der öffentlichen URL hinzu",
-      "step2": "Erstelle einen API-Schlüssel mit den benötigten Berechtigungen.",
-      "step3": "Füge den Schlüssel als Authorization-Header ein, um zu verbinden.",
-      "learnMore": "Mehr erfahren",
       "proRequired": "Upgrade auf einen kostenpflichtigen Plan, um OpenWhispr mit Claude, ChatGPT und Cursor zu verbinden.",
       "worksWith": "Funktioniert mit",
       "copyUrl": "MCP-URL kopieren",
-      "copied": "Kopiert"
+      "copied": "Kopiert",
+      "oauthTitle": "Mit OAuth anmelden",
+      "oauthDescription": "Füge die Server-URL in einem Client mit OAuth-Unterstützung hinzu. Melde dich dann bei OpenWhispr an und erlaube den Zugriff. Kein API-Schlüssel nötig.",
+      "apiKeyTitle": "API-Schlüssel verwenden",
+      "apiKeyDescription": "Erstelle für Clients, die Anfrage-Header akzeptieren, einen persönlichen API-Schlüssel mit den benötigten Berechtigungen und verwende den folgenden Header."
     },
     "cli": {
       "description": "Gib deinem Assistenten über das Terminal Zugriff auf deine Notizen.",
       "installLabel": "Installieren",
-      "learnMore": "Dokumentation lesen",
-      "copyDocsLink": "Doku-Link kopieren",
-      "docsLinkCopied": "Doku-Link kopiert",
       "viewPlans": "Pläne ansehen",
       "local": {
         "label": "Lokal",
@@ -4170,7 +4167,8 @@
     },
     "connectors": {
       "description": "Lass den Assistenten deine Tools nutzen. Du bestätigst jede E-Mail, jede Nachricht und jedes Issue, bevor es rausgeht."
-    }
+    },
+    "readDocs": "Dokumentation lesen"
   },
   "connectors": {
     "approval": {
@@ -4337,15 +4335,17 @@
       "descriptionSend": "Der Assistent zeigt im Chat eine E-Mail-Karte. Sie wird erst über dein Gmail gesendet, wenn du auf Senden klickst.",
       "unavailable": "E-Mail-Entwürfe sind gerade nicht verfügbar.",
       "targetLabel": "E-Mails entwerfen in",
-      "autoResolved": "Automatisch · {{target}}",
       "targets": {
         "gmail": "Gmail",
         "outlookWork": "Outlook (geschäftlich oder Schule)",
         "outlookPersonal": "Outlook.com",
-        "mailto": "Standard-E-Mail-App",
+        "mailto": "Mail-App des Systems",
         "gmailSend": "Aus dem Chat senden (Gmail)",
-        "gmailSendConnectFirst": "Aus dem Chat senden (Gmail) · Gmail unten verbinden"
-      }
+        "gmailSendConnectFirst": "Aus dem Chat senden (Gmail) · Gmail unten verbinden",
+        "auto": "Automatisch"
+      },
+      "automaticHint": "Aktuell: {{target}}. Richtet sich nach deinen verbundenen Konten.",
+      "systemMailHint": "Verwendet die auf deinem Computer eingerichtete E-Mail-Anwendung."
     },
     "slack": {
       "title": "Slack",

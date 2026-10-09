@@ -1265,7 +1265,6 @@
   "apiKeysSection": {
     "title": "Claves API",
     "description": "Crea claves para acceder a la API de OpenWhispr de forma programática.",
-    "docsLink": "Docs de la API",
     "empty": "Aún no hay claves API",
     "createButton": "Crear clave API",
     "create": {
@@ -3994,20 +3993,18 @@
     "mcp": {
       "description": "Chatea, busca y trabaja con tus notas en Claude, ChatGPT y Cursor.",
       "step1": "En tu herramienta de IA, añade OpenWhispr MCP usando la URL pública",
-      "step2": "Crea una clave API con los permisos que necesites.",
-      "step3": "Pega la clave como cabecera Authorization para conectar.",
-      "learnMore": "Más información",
       "proRequired": "Actualiza a un plan de pago para conectar OpenWhispr con Claude, ChatGPT y Cursor.",
       "worksWith": "Funciona con",
       "copyUrl": "Copiar URL de MCP",
-      "copied": "Copiado"
+      "copied": "Copiado",
+      "oauthTitle": "Iniciar sesión con OAuth",
+      "oauthDescription": "En un cliente compatible con OAuth, añade la URL del servidor, inicia sesión en OpenWhispr y autoriza el acceso. No necesitas una clave API.",
+      "apiKeyTitle": "Usar una clave API",
+      "apiKeyDescription": "Para clientes que acepten encabezados de solicitud, crea una clave API personal con los permisos necesarios y usa el encabezado siguiente."
     },
     "cli": {
       "description": "Dale a tu asistente acceso a tus notas desde la terminal.",
       "installLabel": "Instalar",
-      "learnMore": "Leer la documentación",
-      "copyDocsLink": "Copiar enlace de la documentación",
-      "docsLinkCopied": "Enlace de la documentación copiado",
       "viewPlans": "Ver planes",
       "local": {
         "label": "Local",
@@ -4052,7 +4049,8 @@
     },
     "connectors": {
       "description": "Deja que el asistente use tus herramientas. Apruebas cada correo, mensaje e incidencia antes de que se envíe."
-    }
+    },
+    "readDocs": "Leer la documentación"
   },
   "connectors": {
     "approval": {
@@ -4219,15 +4217,17 @@
       "descriptionSend": "El asistente muestra una tarjeta de correo en el chat. Solo se envía desde tu Gmail cuando pulsas Enviar.",
       "unavailable": "Los borradores de correo no están disponibles en este momento.",
       "targetLabel": "Redactar correos en",
-      "autoResolved": "Automático · {{target}}",
       "targets": {
         "gmail": "Gmail",
         "outlookWork": "Outlook (trabajo o escuela)",
         "outlookPersonal": "Outlook.com",
-        "mailto": "Aplicación de correo predeterminada",
+        "mailto": "Aplicación de correo del sistema",
         "gmailSend": "Enviar desde el chat (Gmail)",
-        "gmailSendConnectFirst": "Enviar desde el chat (Gmail) · conecta Gmail abajo"
-      }
+        "gmailSendConnectFirst": "Enviar desde el chat (Gmail) · conecta Gmail abajo",
+        "auto": "Automático"
+      },
+      "automaticHint": "Ahora: {{target}}. Sigue tus cuentas conectadas.",
+      "systemMailHint": "Usa el gestor de correo configurado en tu ordenador."
     },
     "slack": {
       "title": "Slack",

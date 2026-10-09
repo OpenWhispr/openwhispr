@@ -15,6 +15,7 @@ import { BRAND } from '@/config/colors';
 import { AppFont } from '@/lib/fonts';
 import { safeHaptics } from '@/lib/utils';
 import { useAuthStore } from '@/store/useAuthStore';
+import { hasRealAccountHistory } from '@/sync/syncIdentity';
 import { addKeyboardStatusChangedListener } from '../../../../modules/app-group-storage/src';
 
 type Phase = 'start' | 'asking' | 'first-draft' | 'refined' | 'done';
@@ -53,6 +54,9 @@ export function VoiceAgentStep(): ReactElement {
   const { goNext, goBack, progress } = useOnboardingStep('voice-agent');
   const { localSelected } = useOnboardingPracticeMode();
   const user = useAuthStore((state) => state.user);
+  const isGuest = useAuthStore((state) => state.isGuest);
+  // As on the dictation step: a guest, or a device with account history, never gets a session here.
+  const [noHistory] = useState(() => !hasRealAccountHistory());
   const input = useRef<TextInput>(null);
   const draftsReady = useRef(0);
   const lastDraftAt = useRef<string | undefined>(undefined);
@@ -118,7 +122,9 @@ export function VoiceAgentStep(): ReactElement {
   const fallbackNote = localSelected
     ? 'The voice assistant uses Cloud. Here’s an example instead.'
     : !user
-      ? 'The voice assistant needs a connection. Here’s an example instead.'
+      ? !isGuest && noHistory
+        ? 'The voice assistant needs a connection. Here’s an example instead.'
+        : 'The voice assistant needs an account. Here’s an example instead.'
       : errorNote;
 
   return (

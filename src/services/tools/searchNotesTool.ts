@@ -4,7 +4,7 @@ import type { ToolDefinition, ToolResult } from "./ToolRegistry";
 import { resolveLocalNoteId, resolveSpace } from "./utils";
 import { withoutAttendeesFence } from "../../utils/noteAttendees";
 
-const MAX_CONTENT_LENGTH = 500;
+export const MAX_CONTENT_LENGTH = 500;
 
 interface SearchToolOptions {
   useCloudSearch: boolean;

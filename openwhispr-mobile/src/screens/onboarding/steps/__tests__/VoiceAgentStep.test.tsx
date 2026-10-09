@@ -52,8 +52,14 @@ jest.mock('@/store/useConfigStore', () => ({
     selector({ config: { defaultMode: mockSavedMode } }),
 }));
 let mockUser: { id: string } | null = { id: 'anon' };
+let mockIsGuest = false;
+let mockAccountHistory = false;
 jest.mock('@/store/useAuthStore', () => ({
-  useAuthStore: (selector: (s: unknown) => unknown) => selector({ user: mockUser }),
+  useAuthStore: (selector: (s: unknown) => unknown) =>
+    selector({ user: mockUser, isGuest: mockIsGuest }),
+}));
+jest.mock('@/sync/syncIdentity', () => ({
+  hasRealAccountHistory: () => mockAccountHistory,
 }));
 
 // The field is focused on arrival, and the glyph is the keyboard's own agent button.
@@ -74,6 +80,8 @@ beforeEach(() => {
   mockMode = null;
   mockSavedMode = 'cloud';
   mockUser = { id: 'anon' };
+  mockIsGuest = false;
+  mockAccountHistory = false;
   mockNext.mockResolvedValue(undefined);
   mockBack.mockResolvedValue(undefined);
 });
@@ -309,6 +317,19 @@ it('shows the example when there is no session to try the agent with', () => {
   const screen = render(<VoiceAgentStep />);
   expect(
     screen.getByText('The voice assistant needs a connection. Here’s an example instead.'),
+  ).toBeTruthy();
+  expect(screen.getByText('Example request')).toBeTruthy();
+});
+
+it.each([
+  ['a guest', () => (mockIsGuest = true)],
+  ['a device that synced an account', () => (mockAccountHistory = true)],
+])('says the voice assistant needs an account for %s', (_label, arrange) => {
+  mockUser = null;
+  arrange();
+  const screen = render(<VoiceAgentStep />);
+  expect(
+    screen.getByText('The voice assistant needs an account. Here’s an example instead.'),
   ).toBeTruthy();
   expect(screen.getByText('Example request')).toBeTruthy();
 });

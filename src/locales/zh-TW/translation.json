@@ -3941,20 +3941,18 @@
     "mcp": {
       "description": "在 Claude、ChatGPT 和 Cursor 中與你的筆記一起聊天、搜尋和工作。",
       "step1": "在你的 AI 工具中，使用公開 URL 新增 OpenWhispr MCP",
-      "step2": "建立具有所需權限的 API 金鑰。",
-      "step3": "將金鑰貼上為 Authorization 標頭以連線。",
-      "learnMore": "瞭解更多",
       "proRequired": "升級到付費方案，以將 OpenWhispr 連接到 Claude、ChatGPT 和 Cursor。",
       "worksWith": "支援",
       "copyUrl": "複製 MCP URL",
-      "copied": "已複製"
+      "copied": "已複製",
+      "oauthTitle": "透過 OAuth 登入",
+      "oauthDescription": "在支援 OAuth 的用戶端中新增伺服器 URL，然後登入 OpenWhispr 並授權存取。不需要 API 金鑰。",
+      "apiKeyTitle": "使用 API 金鑰",
+      "apiKeyDescription": "對於支援請求標頭的用戶端，請建立具有所需權限的個人 API 金鑰，並使用以下標頭。"
     },
     "cli": {
       "description": "讓你的助理透過終端機存取你的筆記。",
       "installLabel": "安裝",
-      "learnMore": "查看文件",
-      "copyDocsLink": "複製文件連結",
-      "docsLinkCopied": "已複製文件連結",
       "viewPlans": "查看方案",
       "local": {
         "label": "本機",
@@ -3999,7 +3997,8 @@
     },
     "connectors": {
       "description": "讓助理使用您的工具。每封郵件、每則訊息和每個議題送出前都需要您核准。"
-    }
+    },
+    "readDocs": "閱讀文件"
   },
   "connectors": {
     "approval": {
@@ -4166,15 +4165,17 @@
       "descriptionSend": "助理會在聊天中顯示一張郵件卡片，只有在您按下傳送後才會透過您的 Gmail 寄出。",
       "unavailable": "郵件草稿暫時無法使用。",
       "targetLabel": "在此撰寫郵件",
-      "autoResolved": "自動 · {{target}}",
       "targets": {
         "gmail": "Gmail",
         "outlookWork": "Outlook（公司或學校）",
         "outlookPersonal": "Outlook.com",
-        "mailto": "預設郵件應用程式",
+        "mailto": "系統郵件應用程式",
         "gmailSend": "在聊天中傳送（Gmail）",
-        "gmailSendConnectFirst": "在聊天中傳送（Gmail）· 請在下方連接 Gmail"
-      }
+        "gmailSendConnectFirst": "在聊天中傳送（Gmail）· 請在下方連接 Gmail",
+        "auto": "自動"
+      },
+      "automaticHint": "目前：{{target}}。依已連線的帳戶選擇。",
+      "systemMailHint": "使用電腦上設定的郵件處理程式。"
     },
     "slack": {
       "title": "Slack",
@@ -4612,7 +4613,6 @@
   "apiKeysSection": {
     "title": "API 金鑰",
     "description": "建立金鑰以程式化方式存取 OpenWhispr API。",
-    "docsLink": "API 文件",
     "empty": "尚無 API 金鑰",
     "createButton": "建立 API 金鑰",
     "create": {
