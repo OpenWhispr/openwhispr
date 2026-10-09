@@ -11,6 +11,7 @@ import { useActionsOfKind, initializeActions, getActionName } from "../../stores
 import { getActionOutput } from "../../helpers/actionOutput";
 import { NOTE_ACTION_LIMITS } from "../../helpers/builtinActions";
 import { normalizeSections } from "../../helpers/templatePrompts";
+import { getActionIcon } from "./actionIcons";
 import type { ActionItem, ActionKind, TemplateSection } from "../../types/electron";
 
 interface ActionManagerDialogProps {
@@ -249,66 +250,69 @@ export default function ActionManagerDialog({
                 </div>
               ) : (
                 <div className="space-y-0.5">
-                  {items.map((action) => (
-                    <div
-                      key={action.id}
-                      onClick={() => handleSelectAction(action)}
-                      className={cn(
-                        "flex items-center gap-2 w-full px-2.5 py-2 rounded-md text-start group cursor-pointer",
-                        "transition-colors duration-150",
-                        selectedId === action.id && !isCreating
-                          ? "bg-accent/8 dark:bg-accent/10"
-                          : "hover:bg-foreground/3 dark:hover:bg-white/3"
-                      )}
-                    >
-                      <Sparkles
-                        size={12}
+                  {items.map((action) => {
+                    const Icon = isTemplate ? Sparkles : getActionIcon(action);
+                    return (
+                      <div
+                        key={action.id}
+                        onClick={() => handleSelectAction(action)}
                         className={cn(
-                          "shrink-0 transition-colors duration-150",
+                          "flex items-center gap-2 w-full px-2.5 py-2 rounded-md text-start group cursor-pointer",
+                          "transition-colors duration-150",
                           selectedId === action.id && !isCreating
-                            ? "text-accent/60"
-                            : "text-muted-foreground/70"
+                            ? "bg-accent/8 dark:bg-accent/10"
+                            : "hover:bg-foreground/3 dark:hover:bg-white/3"
                         )}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span
+                      >
+                        <Icon
+                          size={12}
+                          className={cn(
+                            "shrink-0 transition-colors duration-150",
+                            selectedId === action.id && !isCreating
+                              ? "text-accent/60"
+                              : "text-muted-foreground/70"
+                          )}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={cn(
+                                "text-xs font-medium truncate",
+                                selectedId === action.id && !isCreating
+                                  ? "text-foreground"
+                                  : "text-foreground/70"
+                              )}
+                            >
+                              {getActionName(action, t)}
+                            </span>
+                            {action.is_builtin === 1 && (
+                              <span className="text-[10px] font-medium px-1 py-px rounded bg-foreground/5 dark:bg-white/6 text-muted-foreground/70 shrink-0">
+                                {t("notes.actions.builtIn")}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {action.is_builtin !== 1 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(action.id);
+                            }}
+                            aria-label={t("notes.context.delete")}
                             className={cn(
-                              "text-xs font-medium truncate",
-                              selectedId === action.id && !isCreating
-                                ? "text-foreground"
-                                : "text-foreground/70"
+                              "p-1 rounded-md shrink-0",
+                              "text-muted-foreground/0 group-hover:text-muted-foreground/70",
+                              "hover:text-destructive/60! hover:bg-destructive/5",
+                              "active:bg-destructive/8",
+                              "transition-all duration-150"
                             )}
                           >
-                            {getActionName(action, t)}
-                          </span>
-                          {action.is_builtin === 1 && (
-                            <span className="text-[10px] font-medium px-1 py-px rounded bg-foreground/5 dark:bg-white/6 text-muted-foreground/70 shrink-0">
-                              {t("notes.actions.builtIn")}
-                            </span>
-                          )}
-                        </div>
+                            <Trash2 size={11} />
+                          </button>
+                        )}
                       </div>
-                      {action.is_builtin !== 1 && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete(action.id);
-                          }}
-                          aria-label={t("notes.context.delete")}
-                          className={cn(
-                            "p-1 rounded-md shrink-0",
-                            "text-muted-foreground/0 group-hover:text-muted-foreground/70",
-                            "hover:text-destructive/60! hover:bg-destructive/5",
-                            "active:bg-destructive/8",
-                            "transition-all duration-150"
-                          )}
-                        >
-                          <Trash2 size={11} />
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -389,15 +393,15 @@ export default function ActionManagerDialog({
                     className="h-9"
                   />
 
-                  {!isTemplate && (
-                    <p className="text-xs text-muted-foreground/70">
-                      {t(
-                        selectedAction && getActionOutput(selectedAction) === "summary"
+                  <p className="text-xs text-muted-foreground/70">
+                    {t(
+                      isTemplate
+                        ? "notes.templates.outputHint"
+                        : selectedAction && getActionOutput(selectedAction) === "summary"
                           ? "notes.actions.output.summaryHint"
                           : "notes.actions.output.chatHint"
-                      )}
-                    </p>
-                  )}
+                    )}
+                  </p>
 
                   {/* Prompt — a template's context, or what an action does */}
                   <div className="flex flex-col flex-1 space-y-1.5">

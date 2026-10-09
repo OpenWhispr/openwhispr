@@ -55,6 +55,7 @@ for (const action of BUILTIN_ACTIONS) {
     assert.equal(rows[0].prompt, action.prompt);
     assert.equal(rows[0].kind, action.kind);
     assert.equal(rows[0].output, action.output);
+    assert.equal(rows[0].icon, action.icon);
     assert.equal(rows[0].client_id, translationKey);
     assert.deepEqual(rows[0].sections, action.sections);
   });
@@ -351,5 +352,31 @@ test("TL;DR stock prompt upgrades without replacing an edited description", (t) 
     assert.equal(action.prompt, tldr.prompt);
     assert.equal(action.description, "My description");
     assert.equal(action.output, "chat");
+  });
+});
+
+test("TL;DR upgrades its stock icon once while preserving edited and custom icons", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const [tldr] = builtinRows(db, "notes.actions.builtin.addTldr");
+  const custom = db.createAction("Write TL;DR", "My description", "My prompt", "sparkles", {
+    kind: "action",
+  }).action;
+  const customBefore = db.db.prepare("SELECT * FROM actions WHERE id = ?").get(custom.id);
+  db.db.prepare("UPDATE actions SET icon = 'sparkles' WHERE id = ?").run(tldr.id);
+  db.db.close();
+  for (let run = 0; run < 2; run++)
+    relaunch((reopened) => {
+      assert.equal(reopened.getAction(tldr.id).icon, "message-square-text");
+      assert.deepEqual(
+        reopened.db.prepare("SELECT * FROM actions WHERE id = ?").get(custom.id),
+        customBefore
+      );
+    });
+  relaunch((reopened) => {
+    reopened.updateAction(tldr.id, { icon: "mail" });
+  });
+  relaunch((reopened) => {
+    assert.equal(reopened.getAction(tldr.id).icon, "mail", "a non-stock built-in icon is kept");
   });
 });

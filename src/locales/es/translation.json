@@ -3350,7 +3350,8 @@
       "noSectionsHint": "Sin secciones, el contexto es la instrucción completa para el resumen.",
       "noTemplates": "Aún no hay plantillas",
       "emptyEditorTitle": "Seleccionar plantilla",
-      "emptyEditorDescription": "Elige una plantilla de la lista o crea una nueva"
+      "emptyEditorDescription": "Elige una plantilla de la lista o crea una nueva",
+      "outputHint": "Al aplicar una plantilla, se crea o reemplaza el resumen de IA a partir de tus notas y la transcripción."
     },
     "empty": {
       "title": "Todavía no hay notas aquí",

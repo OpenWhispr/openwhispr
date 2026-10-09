@@ -3665,7 +3665,8 @@
       "noSectionsHint": "Without sections, the context is the whole instruction for the summary.",
       "noTemplates": "No templates yet",
       "emptyEditorTitle": "Select a template",
-      "emptyEditorDescription": "Choose a template from the list or create a new one"
+      "emptyEditorDescription": "Choose a template from the list or create a new one",
+      "outputHint": "Applying a template creates or replaces the AI summary using your notes and transcript."
     },
     "onboarding": {
       "llm": {

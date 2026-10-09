@@ -3665,7 +3665,8 @@
       "noSectionsHint": "Sans sections, le contexte constitue toute la consigne du résumé.",
       "noTemplates": "Aucun modèle pour l'instant",
       "emptyEditorTitle": "Sélectionner un modèle",
-      "emptyEditorDescription": "Choisissez un modèle dans la liste ou créez-en un nouveau"
+      "emptyEditorDescription": "Choisissez un modèle dans la liste ou créez-en un nouveau",
+      "outputHint": "Appliquer un modèle crée ou remplace le résumé IA à partir de vos notes et de la transcription."
     },
     "onboarding": {
       "llm": {

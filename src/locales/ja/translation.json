@@ -3077,7 +3077,8 @@
       "noSectionsHint": "セクションがない場合、コンテキストが要約への指示のすべてになります。",
       "noTemplates": "テンプレートはまだありません",
       "emptyEditorTitle": "テンプレートを選択",
-      "emptyEditorDescription": "リストからテンプレートを選択するか、新しく作成してください"
+      "emptyEditorDescription": "リストからテンプレートを選択するか、新しく作成してください",
+      "outputHint": "テンプレートを適用すると、ノートと文字起こしをもとにAI要約を作成、または置き換えます。"
     },
     "empty": {
       "title": "まだノートがありません",

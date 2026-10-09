@@ -3665,7 +3665,8 @@
       "noSectionsHint": "Ohne Abschnitte ist der Kontext die gesamte Anweisung für die Zusammenfassung.",
       "noTemplates": "Noch keine Vorlagen",
       "emptyEditorTitle": "Vorlage auswählen",
-      "emptyEditorDescription": "Wählen Sie eine Vorlage aus der Liste oder erstellen Sie eine neue"
+      "emptyEditorDescription": "Wählen Sie eine Vorlage aus der Liste oder erstellen Sie eine neue",
+      "outputHint": "Eine Vorlage erstellt oder ersetzt die KI-Zusammenfassung anhand deiner Notizen und des Transkripts."
     },
     "onboarding": {
       "llm": {

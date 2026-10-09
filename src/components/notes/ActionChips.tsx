@@ -5,7 +5,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent } from "../ui/dr
 import { cn } from "../lib/utils";
 import { getActionName, getActionDescription } from "../../stores/actionStore";
 import type { ActionItem } from "../../types/electron";
-import ActionMenuItems, { ActionOutputBadge, type ActionMenuItemsProps } from "./ActionMenuItems";
+import ActionMenuItems, { type ActionMenuItemsProps } from "./ActionMenuItems";
 import { getActionIcon } from "./actionIcons";
 
 const VISIBLE_CHIPS = 5;
@@ -51,6 +51,14 @@ export default function ActionChips({
   const description = previewed && getActionDescription(previewed, t);
   const chipClass = docked ? DOCKED_CHIP_CLASS : CHIP_CLASS;
   const PreviewedIcon = previewed && getActionIcon(previewed);
+  const visibleActions = actions
+    .slice(0, VISIBLE_CHIPS)
+    .filter(
+      (action) =>
+        docked ||
+        action.is_builtin !== 1 ||
+        action.translation_key !== "notes.actions.builtin.lengthen"
+    );
   // Docked, All actions leads the row and scrolls with the chips, opening toward them.
   const firstChip = docked ? 1 : 0;
   const allActions = (
@@ -60,7 +68,7 @@ export default function ActionChips({
           type="button"
           onPointerEnter={() => setPreviewed(null)}
           className={chipClass}
-          style={chipEntrance(docked ? 0 : firstChip + Math.min(actions.length, VISIBLE_CHIPS))}
+          style={chipEntrance(docked ? 0 : firstChip + visibleActions.length)}
         >
           <Blocks size={14} className={CHIP_ICON_CLASS} />
           {t("notes.actions.allActions")}
@@ -101,7 +109,6 @@ export default function ActionChips({
               </span>
             )}
           </span>
-          <ActionOutputBadge action={previewed} />
         </div>
       )}
       {/* Left as a row, so moving between chips swaps the card instead of replaying it. */}
@@ -109,13 +116,13 @@ export default function ActionChips({
         {/* In the in-view chat only the chips scroll, so All actions at the end stays in reach. */}
         <div
           className={cn(
-            "scrollbar-hidden flex min-w-0 flex-1 items-center overflow-x-auto pe-6",
+            "scrollbar-hidden flex min-w-0 flex-1 items-center overflow-x-auto scroll-pe-6 pe-6",
             docked ? "gap-1.5" : "gap-1",
             "[mask-image:linear-gradient(to_right,#000_calc(100%_-_1.5rem),transparent)] rtl:[mask-image:linear-gradient(to_left,#000_calc(100%_-_1.5rem),transparent)]"
           )}
         >
           {docked && allActions}
-          {actions.slice(0, VISIBLE_CHIPS).map((action, index) => {
+          {visibleActions.map((action, index) => {
             const Icon = getActionIcon(action);
             return (
               <button
@@ -130,7 +137,10 @@ export default function ActionChips({
                 }}
                 // Pointer, not mouse: React drops mouse events on disabled buttons.
                 onPointerEnter={() => setPreviewed(action)}
-                onFocus={() => setPreviewed(action)}
+                onFocus={(event) => {
+                  event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" });
+                  setPreviewed(action);
+                }}
                 onBlur={() => setPreviewed(null)}
                 disabled={!canRun(action)}
                 className={chipClass}

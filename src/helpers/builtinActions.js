@@ -456,6 +456,7 @@ const builtinAction = ({
   previousPrompts = [],
   previousNames = [],
   previousDescriptions = [],
+  previousIcons = [],
   icon = "sparkles",
   sortOrder,
 }) => ({
@@ -469,6 +470,7 @@ const builtinAction = ({
   previousPrompts,
   previousNames,
   previousDescriptions,
+  previousIcons,
   icon,
   sortOrder,
 });
@@ -553,6 +555,8 @@ export const BUILTIN_ACTIONS = [
   builtinAction({
     key: "addTldr",
     name: "Write TL;DR",
+    icon: "message-square-text",
+    previousIcons: ["sparkles"],
     previousNames: ["Add TL;DR"],
     previousDescriptions: ["Put a two- or three-sentence TL;DR at the top of the summary"],
     description: "Write a two- or three-sentence TL;DR in chat",

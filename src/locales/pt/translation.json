@@ -3297,7 +3297,8 @@
       "noSectionsHint": "Sem seções, o contexto é a instrução completa para o resumo.",
       "noTemplates": "Nenhum modelo ainda",
       "emptyEditorTitle": "Selecionar modelo",
-      "emptyEditorDescription": "Escolha um modelo da lista ou crie um novo"
+      "emptyEditorDescription": "Escolha um modelo da lista ou crie um novo",
+      "outputHint": "Aplicar um modelo cria ou substitui o resumo de IA usando suas notas e a transcrição."
     },
     "empty": {
       "title": "Ainda não há notas aqui",

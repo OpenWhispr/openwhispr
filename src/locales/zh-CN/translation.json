@@ -3297,7 +3297,8 @@
       "noSectionsHint": "没有章节时，背景就是摘要的全部指令。",
       "noTemplates": "暂无模板",
       "emptyEditorTitle": "选择模板",
-      "emptyEditorDescription": "从列表中选择一个模板或创建新模板"
+      "emptyEditorDescription": "从列表中选择一个模板或创建新模板",
+      "outputHint": "应用模板会根据你的笔记和转录内容创建或替换 AI 摘要。"
     },
     "empty": {
       "title": "这里还没有笔记",

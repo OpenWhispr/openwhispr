@@ -3297,7 +3297,8 @@
       "noSectionsHint": "Senza sezioni, il contesto è l'intera istruzione per il riepilogo.",
       "noTemplates": "Nessun modello ancora",
       "emptyEditorTitle": "Seleziona un modello",
-      "emptyEditorDescription": "Scegli un modello dall'elenco o creane uno nuovo"
+      "emptyEditorDescription": "Scegli un modello dall'elenco o creane uno nuovo",
+      "outputHint": "Applicare un modello crea o sostituisce il riepilogo IA usando le tue note e la trascrizione."
     },
     "empty": {
       "title": "Ancora nessuna nota qui",
