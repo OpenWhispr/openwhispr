@@ -96,6 +96,10 @@ function updateNoteWithUndo(manager, id, updates, expected, turn) {
     const live = liveUndo(manager, "note_id", id);
     const result = manager.updateNote(id, updates);
     if (!result.success) return result;
+    // A summary clear also resets its prompt and hash; Undo restores them too.
+    for (const key of ["enhancement_prompt", "enhanced_at_content_hash"]) {
+      if (!(key in previous) && before[key] !== result.note[key]) previous[key] = before[key];
+    }
     // Edits of one note in the same turn (e.g. a summary rewrite and a rename)
     // share one Undo that restores each field's oldest value.
     const sameTurn = turn != null && live && undoTurns.get(live.token) === turn;
@@ -146,7 +150,15 @@ function undoNoteUpdate(manager, token) {
         return { success: false, error: "note_changed" };
       }
     }
-    const result = manager.updateNote(note.id, previous);
+    // Restoring an empty field is a deliberate clear, so it syncs; a bare blank
+    // would stay on this device while the edit came back from the cloud.
+    const clearFields = ["content", "enhanced_content"].filter(
+      (key) => key in previous && !previous[key]?.trim()
+    );
+    const result = manager.updateNote(note.id, {
+      ...previous,
+      ...(clearFields.length > 0 && { clear_fields: clearFields }),
+    });
     if (result.success)
       manager.db.prepare("DELETE FROM assistant_note_undo WHERE token = ?").run(token);
     return result;

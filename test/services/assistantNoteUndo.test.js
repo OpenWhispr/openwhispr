@@ -181,6 +181,15 @@ test("safe assistant edits and atomic Undo", async (t) => {
       assert.equal(tokenFor(note.id), undefined);
     });
 
+  await t.test("Undo of a first summary is a clear that syncs", async () => {
+    const note = database.saveNote("Untouched", "Private notes", "meeting").note;
+    await edit(database.getNote(note.id), { summary: "Written by the assistant" });
+    assert.equal(database.undoNoteUpdate(tokenFor(note.id)).success, true);
+    const restored = database.getNote(note.id);
+    assert.equal(restored.enhanced_content ?? "", "");
+    assert.equal(restored.enhanced_content_sync_operation, "clear");
+  });
+
   await t.test(
     "partial section removal; edits in one turn share an Undo, a later turn's stands alone",
     async () => {
