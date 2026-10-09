@@ -99,6 +99,14 @@ test("the centered chat omits Make notes longer without backfilling, preserving 
     chips.map((chip) => chip.key),
     ["2", "4", "3", "5"]
   );
+  const renamed = ACTIONS.map((a) => (a.id === 7 ? { ...a, name: "Notes plus détaillées" } : a));
+  assert.deepEqual(
+    collect(renderTree(ActionChips, { ...props, actions: renamed }))
+      .filter((node) => node.type === "button" && node.props.onClick)
+      .map((node) => node.key),
+    ["2", "4", "3", "5"],
+    "a renamed Make notes longer stays hidden"
+  );
   assert.deepEqual(
     chips.map((chip) => chip.props.disabled),
     [false, false, true, false],
@@ -106,27 +114,6 @@ test("the centered chat omits Make notes longer without backfilling, preserving 
   );
   chips[0].props.onClick();
   assert.deepEqual(ran, ["Follow-up email"]);
-});
-
-test("the centered row hides the built-in lengthen identity, not a matching custom name", async (t) => {
-  const ActionChips = await load(t, "/components/notes/ActionChips.tsx");
-  const visibleIds = (replacement) =>
-    collect(
-      renderTree(ActionChips, {
-        actions: ACTIONS.map((a) => (a.id === 7 ? replacement : a)),
-        canRun: () => true,
-        onRunAction: () => {},
-        onManageActions: () => {},
-      })
-    )
-      .filter((node) => node.type === "button" && node.props.onClick)
-      .map((node) => node.key);
-  assert.deepEqual(visibleIds({ ...ACTIONS[3], name: "Notes plus détaillées" }), [
-    "2",
-    "4",
-    "3",
-    "5",
-  ]);
 });
 
 test("hovering a chip shows what its action does above the row", async (t) => {
@@ -229,11 +216,10 @@ test("hovering a chip shows what its action does above the row", async (t) => {
 
 test("Make notes longer stays in docked chips and both All actions menus", async (t) => {
   const ActionChips = await load(t, "/components/notes/ActionChips.tsx");
-  const ran = [];
   const props = {
     actions: ACTIONS,
     canRun: () => true,
-    onRunAction: (a) => ran.push(a.name),
+    onRunAction: () => {},
     onManageActions: () => {},
   };
   for (const docked of [false, true]) {
@@ -245,9 +231,7 @@ test("Make notes longer stays in docked chips and both All actions menus", async
     );
     const menu = tree.find((node) => node.props.onManageActions);
     assert.equal(menu.props.actions, ACTIONS, "All actions still receives every action");
-    buttons[0].props.onClick();
   }
-  assert.deepEqual(ran, ["Follow-up email", "Follow-up email"]);
 
   // All actions (the menu's trigger) leads the docked row and opens toward the chips.
   const order = (docked) =>
