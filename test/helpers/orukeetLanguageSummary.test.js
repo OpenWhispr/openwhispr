@@ -36,3 +36,11 @@ test("reference annotations supply explicit denominators and incomplete windows 
   assert.equal(r.rules.candidate030.supportedDiverted, 1);
   assert.equal(r.rules.candidate030.supportedTotal, 1);
 });
+
+test("exported server metadata is readable without renderer debug logs", () => {
+  const result = summarize([
+    { metadata: { orukeetLanguageRouting: event }, expectedSupported: false },
+  ]);
+  assert.equal(result.events, 1);
+  assert.equal(result.rules.candidate030.unsupportedCaught, 1);
+});

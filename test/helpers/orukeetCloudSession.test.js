@@ -86,7 +86,10 @@ async function fixture(t, fetchImpl) {
         assert.equal(options.headers.Authorization, "Bearer account-a");
         assert.equal(options.headers["x-openwhispr-policy-version"], "1");
         // The server mints only for builds that declare they can run Orukeet.
-        assert.equal(options.headers["x-openwhispr-capabilities"], "orukeet,orukeet-pipeline-v2");
+        assert.equal(
+          options.headers["x-openwhispr-capabilities"],
+          "orukeet,orukeet-pipeline-v2,orukeet-language-routing"
+        );
         assert.equal(options.useSessionCookies, false);
         assert.equal(options.redirect, "error");
         return Response.json(session());
@@ -251,4 +254,17 @@ test("only the exact authenticated language-preview route can opt into preview s
     },
   ])
     assert.throws(() => validateSession(altered), /Invalid Orukeet cloud session/);
+});
+
+test("consistent language preview lookalike is rejected", () => {
+  const baseUrl = "https://orukeet.gizmovoice.ai.attacker.test/preview/language-routing";
+  assert.throws(
+    () =>
+      validateSession({
+        ...session(),
+        baseUrl,
+        websocketUrl: `${baseUrl.replace("https:", "wss:")}/v1/audio/transcriptions/stream`,
+      }),
+    /Invalid Orukeet cloud session/
+  );
 });

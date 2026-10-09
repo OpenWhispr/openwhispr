@@ -13,7 +13,12 @@ function summarize(records) {
       supportedTotal: 0,
     };
   for (const record of records) {
-    const row = record?.meta ?? record?.comparison ?? record;
+    const row =
+      record?.metadata?.orukeetLanguageRouting ??
+      record?.orukeetLanguageRouting ??
+      record?.meta ??
+      record?.comparison ??
+      record;
     if (
       row?.version !== 1 ||
       typeof row.eligible !== "boolean" ||

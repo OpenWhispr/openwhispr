@@ -57,6 +57,7 @@ import {
   effectiveLocalHistoryEnabled,
   isAgentAllowed,
   isCloudBackupAllowed,
+  isLlmSelectionAllowed,
   isTranscriptionContextAllowed,
   isTranscriptionSelectionAllowed,
 } from "../stores/policyRules";
@@ -157,6 +158,8 @@ import {
   resolveStreamingProviderName,
   buildStreamingSessionOptions,
   evaluateOrukeetLanguageRouting,
+  hasOrukeetExperiment,
+  ORUKEET_EXPERIMENT_CONFIG_TTL_MS,
 } from "./dictationStreamingRouting";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
@@ -673,6 +676,8 @@ class AudioManager {
     this._activeTranscriptionAbortController = null;
     this._activeStreamingSessionId = null;
     this._activeStreamingProviderName = null;
+    this._activeStreamingConfig = null;
+    this._activePipelineOptions = undefined;
     this.streamingFallbackRecorder = null;
     this.streamingFallbackChunks = [];
     this._recordingSpool = null;
@@ -1065,12 +1070,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   isSttConfigStale(now = Date.now()) {
     // Re-check opt-in language experiments frequently so a server rollback
     // takes effect on the next recording after at most 30 s of cached config.
-    const ttl =
-      ["shadow", "supported-0.30", "supported-0.10"].includes(
-        this.sttConfig?.orukeetLanguageRouting
-      ) || this.sttConfig?.orukeetPipeline === "gemma12"
-        ? 30000
-        : STT_CONFIG_TTL_MS;
+    const ttl = hasOrukeetExperiment(this.sttConfig)
+      ? ORUKEET_EXPERIMENT_CONFIG_TTL_MS
+      : STT_CONFIG_TTL_MS;
     return !this.sttConfig || !this.sttConfigFetchedAt || now - this.sttConfigFetchedAt > ttl;
   }
 
@@ -1096,6 +1098,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (this._activeStreamingSessionId !== sessionId) return;
     this._activeStreamingSessionId = null;
     this._activeStreamingProviderName = null;
+    this._activeStreamingConfig = null;
+    this._activePipelineOptions = undefined;
   }
 
   getStreamingProviderName() {
@@ -3508,6 +3512,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const streamingFallbackReason =
       metadata.streamingFallbackReason ?? this.consumeStreamingFallbackReason(settings);
     if (streamingFallbackReason) opts.streamingFallbackReason = streamingFallbackReason;
+    if (metadata.orukeetLanguageRouting)
+      opts.orukeetLanguageRouting = metadata.orukeetLanguageRouting;
+    if (metadata.orukeetCleanup) opts.orukeetCleanup = metadata.orukeetCleanup;
     // Orukeet's audio estimate rides along for the backend's per-user gate
     // only. It is never the declared `language`: /api/transcribe picks models
     // by declared language, and the fallback must be the request the user
@@ -3598,6 +3605,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               language: this.getCleanupLanguage(settings),
               locale: settings.uiLanguage || "en",
               streamingFallbackReason,
+              orukeetLanguageRouting: metadata.orukeetLanguageRouting,
+              orukeetCleanup: metadata.orukeetCleanup,
               ...detectedLanguageFields,
               sttProvider: result.sttProvider,
               sttModel: result.sttModel,
@@ -3644,6 +3653,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                     mode: "cloudReason",
                     meta: {
                       streamingFallbackReason,
+                      orukeetLanguageRouting: metadata.orukeetLanguageRouting,
+                      orukeetCleanup: metadata.orukeetCleanup,
                       ...detectedLanguageFields,
                       sttProvider: result.sttProvider,
                       sttModel: result.sttModel,
@@ -4591,6 +4602,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       settings.cloudTranscriptionMode !== "openwhispr" ||
       !settings.useCleanupModel ||
       !isCloudCleanupMode() ||
+      !isLlmSelectionAllowed(usePolicyStore.getState(), { mode: "openwhispr" }) ||
       (settings.cleanupCloudMode || "openwhispr") !== "openwhispr" ||
       this.voiceAgentRequested ||
       this.translationRequested
@@ -4599,7 +4611,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return {
       agentName: getAgentName() || "",
       customDictionary: getDictionaryHintWords(settings),
-      customPrompt: settings.customPrompts?.cleanup || undefined,
+      customPrompt: this.getCustomPrompt(),
       language: this.getCleanupLanguage(settings) || undefined,
       locale: settings.uiLanguage || "en",
     };
@@ -4881,6 +4893,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this._streamingSpeechGateState = createLocalSpeechGateState();
       this._activeStreamingSessionId = sessionId;
       this._activeStreamingProviderName = this.getStreamingProviderName();
+      this._activeStreamingConfig = { ...this.sttConfig };
+      this._activePipelineOptions = this.getPipelineCleanupOptions(getSettings());
       const ownsSession = () => this._activeStreamingSessionId === sessionId;
       const cancellationGeneration = this._streamingCancellationGeneration;
       startWasCancelled = () => cancellationGeneration !== this._streamingCancellationGeneration;
@@ -5067,7 +5081,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             language: this.getEffectiveSttLanguage(streamingSettings),
             keyterms: this.getKeyterms(),
             voiceAgentRequested: this.voiceAgentRequested,
-            pipelineOptions: this.getPipelineCleanupOptions(streamingSettings),
+            pipelineOptions: this._activePipelineOptions,
           })
         );
 
@@ -5559,7 +5573,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     const stSettings = getSettings();
     const streamingSttModel = stopResult?.model || "nova-3";
-    const streamingSttProcessingMs = Math.round(tTerminate - t0);
+    const streamingSttProcessingMs = Number.isFinite(orukeetFinal?.asrFinalMs)
+      ? Math.round(orukeetFinal.asrFinalMs)
+      : Math.round(tTerminate - t0);
     const streamingAudioBytesSent = stopResult?.audioBytesSent || 0;
     const streamingSttLanguage =
       getBaseLanguageCode(this.getEffectiveSttLanguage(stSettings)) || undefined;
@@ -5582,9 +5598,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       final: orukeetFinal,
       mode:
         isOrukeetStream && stSettings.cloudTranscriptionMode === "openwhispr"
-          ? this.sttConfig?.orukeetLanguageRouting
+          ? (this._activeStreamingConfig || this.sttConfig)?.orukeetLanguageRouting
           : undefined,
     });
+    const orukeetLanguageRouting = languageRouting.comparison
+      ? {
+          ...languageRouting.comparison,
+          fallbackAvailable:
+            fallbackBlob?.size > 0 && resolveStreamingFallbackTarget(stSettings) === "cloud",
+        }
+      : undefined;
+    const orukeetCleanup = orukeetFinal?.cleanup;
+    const orukeetTelemetry = { orukeetLanguageRouting, orukeetCleanup };
     if (isOrukeetStream && languageRouting.comparison) {
       logger.info(
         "Orukeet language routing comparison",
@@ -5636,8 +5661,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           {
             durationSeconds,
             analyticsOccurredAt: analyticsOccurredAt.toISOString(),
-            streamingFallbackReason: "language_detected_unsupported",
+            streamingFallbackReason:
+              languageRouting.comparison && !languageRouting.comparison.legacyFallback
+                ? "language_supported_score_low"
+                : "language_detected_unsupported",
             detectedLanguageFields,
+            ...orukeetTelemetry,
           },
           wasCancelled
         );
@@ -5702,11 +5731,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           const combined =
             orukeetFinal?.cleanupStatus === "complete" &&
             JSON.stringify(orukeetFinal.cleanupOptions) ===
-              JSON.stringify(this.getPipelineCleanupOptions(stSettings)) &&
+              JSON.stringify(this._activePipelineOptions) &&
             typeof orukeetFinal.cleanupText === "string" &&
             hasTextContent(orukeetFinal.cleanupText);
           const reasonResult = combined
-            ? { success: true, text: orukeetFinal.cleanupText, model: "gemma-4-12b" }
+            ? { success: true, text: orukeetFinal.cleanupText, model: orukeetCleanup?.model }
             : await withSessionRefresh(async () => {
                 const res = await window.electronAPI.cloudReason(finalText, {
                   agentName,
@@ -5722,6 +5751,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                   sttWordCount: streamingSttWordCount,
                   sttLanguage: streamingSttLanguage,
                   ...detectedLanguageFields,
+                  ...orukeetTelemetry,
                   audioDurationMs: durationSeconds ? Math.round(durationSeconds * 1000) : undefined,
                   audioSizeBytes: streamingAudioBytesSent || undefined,
                   audioFormat: "linear16",
@@ -5781,6 +5811,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                       sttWordCount: streamingSttWordCount,
                       sttLanguage: streamingSttLanguage,
                       ...detectedLanguageFields,
+                      ...orukeetTelemetry,
                       audioDurationMs: durationSeconds
                         ? Math.round(durationSeconds * 1000)
                         : undefined,
@@ -5947,7 +5978,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           try {
             await withSessionRefresh(async () => {
               const res = await window.electronAPI.cloudStreamingUsage(
-                orukeetFinal ? rawStreamingText : finalText,
+                orukeetFinal?.cleanupStatus ? rawStreamingText : finalText,
                 durationSeconds ?? 0,
                 {
                   sendLogs: !usedCloudReasoning,
@@ -5956,6 +5987,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                   sttProcessingMs: streamingSttProcessingMs,
                   sttLanguage: streamingSttLanguage,
                   ...detectedLanguageFields,
+                  ...orukeetTelemetry,
                   audioSizeBytes: streamingAudioBytesSent || undefined,
                   audioFormat: "linear16",
                   clientTotalMs,
@@ -6020,6 +6052,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.onTranscriptionComplete?.({ success: true, text: "" });
     }
 
+    this.voiceAgentRequested = false;
+    this.translationRequested = false;
     if (this.shouldUseStreaming()) {
       this.warmupStreamingConnection().catch((e) => {
         logger.debug("Background re-warm failed", { error: e.message }, "streaming");

@@ -139,3 +139,27 @@ test("comparison logs contain only the allowlisted metadata, including on malfor
   assert.equal(bad.comparison.supportedScore, null);
   assert.equal(bad.comparison.analyzedSeconds, null);
 });
+
+test("supported-score modes never remove a legacy unsupported-language fallback", async () => {
+  const { evaluateOrukeetLanguageRouting: run } = await load();
+  for (const mode of ["supported-0.30", "supported-0.10", "shadow"]) {
+    const result = run({
+      language: "auto",
+      final: { ...final, language: "ja", languageConfidence: 0.95, languageSupportedScore: 0.5 },
+      mode,
+    });
+    assert.equal(result.fallback, true);
+    assert.equal(result.comparison.selectedFallback, true);
+    assert.equal(result.comparison.candidate030, false);
+  }
+});
+
+test("top-score comparator never labels a supported top language unsupported", async () => {
+  const { evaluateOrukeetLanguageRouting: run } = await load();
+  const result = run({
+    final: { ...final, language: "en", languageConfidence: 0.9 },
+    mode: "shadow",
+  });
+  assert.equal(result.comparison.top05Fallback, false);
+  assert.equal(result.comparison.selectedFallback, false);
+});

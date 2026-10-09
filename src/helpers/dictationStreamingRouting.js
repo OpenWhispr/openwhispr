@@ -44,6 +44,13 @@ export function shouldRetranscribeOrukeetLanguage({ language, final }) {
 // Opt-in, server-controlled rollout. Missing/unknown modes retain the existing
 // rule; shadow records the comparison without changing the user's result.
 const ORUKEET_LANGUAGE_ROUTING_MODES = new Set(["shadow", "supported-0.30", "supported-0.10"]);
+export const ORUKEET_EXPERIMENT_CONFIG_TTL_MS = 30000;
+export function hasOrukeetExperiment(config) {
+  return (
+    ORUKEET_LANGUAGE_ROUTING_MODES.has(config?.orukeetLanguageRouting) ||
+    config?.orukeetPipeline === "gemma12"
+  );
+}
 const validScore = (value) => Number.isFinite(value) && value >= 0 && value <= 1;
 
 export function evaluateOrukeetLanguageRouting({ language, final, mode }) {
@@ -66,7 +73,8 @@ export function evaluateOrukeetLanguageRouting({ language, final, mode }) {
   const candidate030 = eligible ? score <= 0.3 : null;
   const candidate010 = eligible ? score <= 0.1 : null;
   const candidate = mode === "supported-0.30" ? candidate030 : candidate010;
-  const fallback = mode === "shadow" || candidate === null ? legacyFallback : candidate;
+  const fallback =
+    mode === "shadow" || candidate === null ? legacyFallback : legacyFallback || candidate;
 
   // Explicit allowlist: never spread a final result, settings, transcript,
   // recording, token, account identifier or arbitrary server fields into logs.

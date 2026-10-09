@@ -52,7 +52,7 @@ On an expanded 950-clip FLEURS read-speech panel (38 languages, including Bengal
 
 These are diagnostic results on read speech, not production error rates. The group rule is independent of the top label. Both proposed group cutoffs caught all 121 eligible clips in the five added languages. Those languages are included in the detector's 107-label vocabulary; this does not validate languages outside that vocabulary or code-switching.
 
-The 3.2% is **19 of 596 supported-language test clips**, not 3.2% of all traffic. The earlier 0.4% was 1 of 240 supported clips on a smaller panel using the stricter top-score ≥0.90 rule. On this expanded six-second panel, that same strict rule diverted 4/596 (0.7%). Both the panel and the routing rule changed; the two headline percentages are not a like-for-like model regression.
+The supported-total ≤0.30 rule wrongly diverted **19 of 596 supported-language test clips (3.2%)**, not 3.2% of all traffic. The earlier 0.4% was 1 of 240 supported clips on a smaller panel using the stricter top-score ≥0.90 rule. On this expanded six-second panel, that same strict rule diverted 4/596 (0.7%). Both the panel and the routing rule changed; the two headline percentages are not a like-for-like model regression.
 
 For the expanded panel's three-second windows (325 unsupported and 625 supported clips):
 
@@ -69,45 +69,24 @@ The six-second group cutoffs produce too many false fallbacks at three seconds. 
 
 The new routing policy is off by default. The authenticated `/api/stt-config` response can set `orukeetLanguageRouting` for a test cohort:
 
-| Value                            | Behavior                                         |
-| -------------------------------- | ------------------------------------------------ |
-| Absent, `"off"`, or unrecognized | Existing top-label rule; no comparison event     |
-| `"shadow"`                       | Existing routing; log both group-score decisions |
-| `"supported-0.30"`               | Use supported total ≤0.30 when eligible          |
-| `"supported-0.10"`               | Use supported total ≤0.10 when eligible          |
+| Value                            | Behavior                                             |
+| -------------------------------- | ---------------------------------------------------- |
+| Absent, `"off"`, or unrecognized | Existing top-label rule; no comparison event         |
+| `"shadow"`                       | Existing routing; log both group-score decisions     |
+| `"supported-0.30"`               | Existing rule OR supported total ≤0.30 when eligible |
+| `"supported-0.10"`               | Existing rule OR supported total ≤0.10 when eligible |
 
 Eligibility requires Auto language, a valid final supported score, and `languageAudioSeconds >= 6`. Explicit language choices and BYOK behavior stay unchanged. Missing scores or shorter analyzed windows use the existing rule. The retained recording and existing Cloud fallback handle the actual re-transcription; failure never pastes the rejected Orukeet transcript or performs cleanup twice.
 
 A recording lasting six seconds does not guarantee a completed six-second detector pass. For example, a paced 6.1-second recording finalized with the three-second estimate during validation. Never substitute recording duration for `languageAudioSeconds`, or wait for detection to complete before finalizing.
 
-### Preview endpoint
+### Session compatibility
 
-The authenticated test base URL is:
-
-`https://orukeet.gizmovoice.ai/preview/language-routing`
-
-It runs in US West and shares the existing ASR worker. Production's base URL stays unchanged. Use the existing service key **on the backend only** to mint a token at `POST /v1/client-token` under the preview base. Keep the current `account_id` and `socket_role` mint body and account/quota checks. The returned token is single-use and expires after 60 seconds.
-
-For an allowlisted test account, the Cloud session response should return:
-
-- `baseUrl`: `https://orukeet.gizmovoice.ai/preview/language-routing`
-- `websocketUrl`: `wss://orukeet.gizmovoice.ai/preview/language-routing/v1/audio/transcriptions/stream`
-- The existing token, protocol, model and expiry fields unchanged.
-
-The desktop accepts this exact URL pair alongside production. It rejects other hosts, arbitrary paths, query parameters and mismatched pairs. Use a build containing this change for managed preview sessions. No service key belongs in the renderer or session response.
-
-For a direct operator test, load the existing key into `ORUKEET_SERVICE_KEY` using your secret manager. Optionally set `ORUKEET_ACCOUNT_ID` to exercise an account-scoped session. Convert a recording to raw PCM and replay it at microphone speed:
-
-```sh
-ffmpeg -i recording.wav -ar 16000 -ac 1 -f s16le recording.pcm
-node scripts/preview-orukeet-language.cjs recording.pcm
-```
-
-This uses the desktop streaming adapter and prints only scores, analyzed duration, transcript length and timing. It does not save or print the transcript. Use recordings you have permission to test. The preview is an internal evaluation route, not a throughput benchmark or production rollout.
+The desktop declares the `orukeet-language-routing` capability. The backend only returns a preview URL or language-routing flag to clients carrying that capability; older clients keep their production URL and normal streaming behavior. The adapter accepts only exact approved HTTPS/WSS URL pairs, including `https://orukeet.gizmovoice.ai/preview/language-routing`; lookalike hosts, arbitrary paths and query parameters are rejected. Session credentials stay in the main process. Operator setup and direct replay instructions are in the private deployment handoff.
 
 ### Comparison logs and validation
 
-Opt-in managed dictations emit one `Orukeet language routing comparison` event through the existing application logger, at its normal info level. The event contains only allowlisted scores, analyzed duration, a validated language code and routing decisions. It contains no transcript, audio, token or account identifier. Comparison logging adds no detector call or request on the finalization path; existing application log retention/settings apply.
+Opt-in managed dictations carry `orukeetLanguageRouting` on the existing authenticated streaming-usage request, or on the batch/cleanup request when a fallback or cleanup owns the log. The server persists the allowlisted decision independently of renderer debug logging. It contains mode, supported score, analyzed duration and the compared rule decisions; it contains no transcript, audio or credential. BYOK sends no comparison. A group-score-only fallback uses `language_supported_score_low`; a legacy-rule fallback retains `language_detected_unsupported`.
 
 Export comparison events as JSONL and run:
 
@@ -115,7 +94,7 @@ Export comparison events as JSONL and run:
 node scripts/summarize-orukeet-language-routing.cjs comparison-events.jsonl
 ```
 
-The script accepts application log records with `meta`, or the comparison object itself. It reports eligible counts and disagreements. Accuracy needs a reference: a reviewer may add `expectedSupported: true` or `false` to the outer JSON object after checking the actual recording/language. Without reference labels, the script does not calculate a false-fallback rate or recall from the detector's own guess. Do not include recordings or transcripts in the exported comparison file.
+The script accepts exported server records with `metadata.orukeetLanguageRouting`, records with `meta`, or the comparison object itself. It reports eligible counts and disagreements. Accuracy needs a reference: a reviewer may add `expectedSupported: true` or `false` to the outer JSON object after checking the actual recording/language. Without reference labels, the script does not calculate a false-fallback rate or recall from the detector's own guess. Do not include recordings or transcripts in the exported comparison file.
 
 Start with `shadow` for internal testers and collect real dictation, including the reported failure, noise, short recordings and language switching. Review cases where the rules disagree, and supported-language examples even when they agree. Then choose a cutoff and enable it for the test cohort before expanding it.
 
@@ -123,4 +102,4 @@ Start with `shadow` for internal testers and collect real dictation, including t
 
 Set `orukeetLanguageRouting` to `"off"` or remove it from `/api/stt-config`, and restore the production URL pair in the session endpoint. While an experiment is enabled, config expires after 30 seconds and refreshes at the next normal config check; restarting the app refreshes it immediately. Normal config retains its existing 15-minute TTL. No client rebuild is needed to roll back this flag.
 
-The preview also has an operator-side admission switch that can reject new preview requests immediately while existing recordings finish. It does not change production routing. Server operators should use the deployment handoff's rollback command rather than editing the shared production URL map manually.
+Provider, routing mode and cleanup options are captured at recording start, so a config refresh or rollback never switches an in-progress recording to a different provider. Operator admission and deployment commands live in the private handoff.

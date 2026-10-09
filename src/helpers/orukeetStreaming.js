@@ -1,9 +1,19 @@
 const WebSocket = require("ws");
+const {
+  ORUKEET_MODEL,
+  ORUKEET_PCM_PROTOCOL,
+  ORUKEET_PIPELINE_PROTOCOL,
+  ORUKEET_CLEANUP_MODEL,
+  isOrukeetClientToken,
+} = require("./orukeetProtocol");
 
 const MAX_PENDING_BYTES = 2 * 1024 * 1024;
 // Mono 16 kHz PCM16.
 const BYTES_PER_SECOND = 32000;
 const MAX_FINAL_WAIT_MS = 30000;
+const PIPELINE_CLEANUP_BUDGET_MS = 15000;
+const PIPELINE_FINAL_MARGIN_MS = 2000;
+const finiteMetric = (value) => (Number.isFinite(value) && value >= 0 ? value : undefined);
 
 // Managed Cloud keeps the capture for a batch upload, so a stalled or
 // unreachable GPU host should fail over within seconds rather than hold the
@@ -95,7 +105,7 @@ class OrukeetStreaming {
     this.pendingAudio = [];
     this.pendingBytes = 0;
     this.audioBytesSent = 0;
-    this.currentModel = "orukeet-v0.1.0";
+    this.currentModel = ORUKEET_MODEL;
     this.result = null;
     this.finalPromise = null;
     this.intentionalClose = false;
@@ -109,7 +119,7 @@ class OrukeetStreaming {
     baseUrl,
     apiKey,
     clientToken,
-    protocol = "orukeet.pcm.v1",
+    protocol = ORUKEET_PCM_PROTOCOL,
     requireAccountLimits = false,
   }) {
     if (this.intentionalClose || this.failure || this.ws) {
@@ -118,13 +128,10 @@ class OrukeetStreaming {
     if (Boolean(apiKey) === Boolean(clientToken)) {
       throw new Error("Supply exactly one Orukeet service key or client token");
     }
-    const pipeline = protocol === "orukeet.pipeline.v2";
-    if (!["orukeet.pcm.v1", "orukeet.pipeline.v2"].includes(protocol))
+    const pipeline = protocol === ORUKEET_PIPELINE_PROTOCOL;
+    if (![ORUKEET_PCM_PROTOCOL, ORUKEET_PIPELINE_PROTOCOL].includes(protocol))
       throw new Error("Invalid protocol");
-    if (
-      clientToken &&
-      !(pipeline ? /^[A-Za-z0-9._-]{1,160}$/ : /^[A-Za-z0-9._-]{1,96}$/).test(clientToken)
-    ) {
+    if (clientToken && !isOrukeetClientToken(clientToken, pipeline)) {
       throw new Error("Invalid Orukeet client token");
     }
     this.pipeline = pipeline;
@@ -210,6 +217,11 @@ class OrukeetStreaming {
       const metadata = languageMetadata(message);
       if (metadata.language || Number.isFinite(metadata.languageSupportedScore))
         this.onLanguage?.(metadata);
+    } else if (message.type === "transcript") {
+      if (!this.pipeline || !this.finalResolve || typeof message.text !== "string") return;
+      // This is ASR completion, before cleanup starts. Never paste this provisional
+      // event; retain its timing separately from the eventual combined final.
+      this.asrFinalMs ??= Math.max(0, performance.now() - this.finalStartedAt);
     } else if (message.type === "final") {
       // A duplicate or unsolicited final must never result in a second paste.
       if (this.result) return;
@@ -235,6 +247,20 @@ class OrukeetStreaming {
               cleanupText: message.text,
               cleanupStatus: message.cleanup_status,
               cleanupOptions: this.cleanupOptions,
+              asrFinalMs: this.asrFinalMs ?? Math.max(0, performance.now() - this.finalStartedAt),
+              cleanup: {
+                status: message.cleanup_status,
+                ...(message.cleanup_status === "complete" &&
+                message.cleanup_method === "model" &&
+                message.cleanup_model === ORUKEET_CLEANUP_MODEL
+                  ? { model: ORUKEET_CLEANUP_MODEL }
+                  : {}),
+                processingMs: finiteMetric(message.cleanup_ms),
+                queueMs: finiteMetric(message.cleanup_queue_ms),
+                firstTextMs: finiteMetric(message.cleanup_first_text_ms),
+                inputTokens: finiteMetric(message.cleanup_input_tokens),
+                outputTokens: finiteMetric(message.cleanup_output_tokens),
+              },
             }
           : {}),
         model: message.model || this.currentModel,
@@ -344,6 +370,7 @@ class OrukeetStreaming {
     if (!this.isConnected) return Promise.reject(new Error("Orukeet connection is not ready"));
     if (!this.audioBytesSent)
       return Promise.resolve({ text: "", model: this.currentModel, audioBytesSent: 0 });
+    this.finalStartedAt = performance.now();
     this.finalPromise = new Promise((resolve, reject) => {
       this.finalResolve = resolve;
       this.finalReject = reject;
@@ -357,7 +384,12 @@ class OrukeetStreaming {
         this.finalTimer = setTimeout(
           timedOut,
           this.pipeline
-            ? Math.max(18000, this.finalTimeoutMs(audioSeconds))
+            ? Math.min(
+                MAX_FINAL_WAIT_MS,
+                this.finalTimeoutMs(audioSeconds) +
+                  PIPELINE_CLEANUP_BUDGET_MS +
+                  PIPELINE_FINAL_MARGIN_MS
+              )
             : this.finalTimeoutMs(audioSeconds)
         );
       });
@@ -425,4 +457,11 @@ class OrukeetStreaming {
   }
 }
 
-module.exports = { OrukeetStreaming, streamingUrl, MANAGED_STREAM_OPTIONS };
+module.exports = {
+  OrukeetStreaming,
+  streamingUrl,
+  MANAGED_STREAM_OPTIONS,
+  MAX_FINAL_WAIT_MS,
+  PIPELINE_CLEANUP_BUDGET_MS,
+  PIPELINE_FINAL_MARGIN_MS,
+};

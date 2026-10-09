@@ -102,7 +102,6 @@ export interface DictationRealtimeSessionOptions {
     customPrompt?: string;
     language?: string;
     locale?: string;
-    tone?: string;
   };
   provider: string;
   baseUrl?: string;
@@ -963,6 +962,36 @@ export interface ScreenRecordingAccessResult {
 export type CloudReasonPurpose = "cleanup" | "assistant" | "translation" | "noteFormatting";
 
 // Orukeet's audio language estimate, reported for the backend's per-user gate.
+export interface OrukeetLanguageRoutingTelemetry {
+  version: 1;
+  mode: "shadow" | "supported-0.30" | "supported-0.10";
+  auto: boolean;
+  eligible: boolean;
+  analyzedSeconds: number | null;
+  topLanguage: string | null;
+  topScore: number | null;
+  supportedScore: number | null;
+  legacyFallback: boolean;
+  top05Fallback: boolean;
+  candidate030: boolean | null;
+  candidate010: boolean | null;
+  selectedFallback: boolean;
+  fallbackAvailable: boolean;
+}
+export interface OrukeetCleanupTelemetry {
+  status: "complete" | "fallback" | "skipped";
+  model?: "gemma-4-12b";
+  processingMs?: number;
+  queueMs?: number;
+  firstTextMs?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+}
+export interface OrukeetTelemetry {
+  orukeetLanguageRouting?: OrukeetLanguageRoutingTelemetry;
+  orukeetCleanup?: OrukeetCleanupTelemetry;
+}
+
 export interface SttDetectedLanguageFields {
   sttDetectedLanguage?: string;
   sttDetectedLanguageConfidence?: number;
@@ -2532,7 +2561,8 @@ declare global {
           analyticsOccurredAt?: string;
           // Why a managed-streaming user's dictation went batch (rollout metric).
           streamingFallbackReason?: string;
-        } & SttDetectedLanguageFields
+        } & SttDetectedLanguageFields &
+          OrukeetTelemetry
       ) => Promise<
         {
           success: boolean;
@@ -2560,7 +2590,8 @@ declare global {
           language?: string;
           locale?: string;
           streamingFallbackReason?: string;
-        } & SttDetectedLanguageFields
+        } & SttDetectedLanguageFields &
+          OrukeetTelemetry
       ) => Promise<{
         success: boolean;
         text?: string;
@@ -2590,7 +2621,8 @@ declare global {
           analyticsOccurredAt?: string;
           analyticsWordCount?: number;
           analyticsCounterVersion?: number;
-        } & SttDetectedLanguageFields
+        } & SttDetectedLanguageFields &
+          OrukeetTelemetry
       ) => Promise<{
         success: boolean;
         wordsUsed?: number;

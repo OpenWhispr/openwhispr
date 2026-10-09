@@ -1511,8 +1511,8 @@ async function stopManagedDictation(
     return { success: true, text: `${text}。` };
   };
   const usage = [];
-  globalThis.window.electronAPI.cloudStreamingUsage = async (_text, _seconds, opts) => {
-    usage.push(opts);
+  globalThis.window.electronAPI.cloudStreamingUsage = async (text, seconds, opts) => {
+    usage.push({ ...opts, text, seconds });
     return { success: true };
   };
   let usageSettled;
@@ -1909,7 +1909,12 @@ test("language-score rollout modes reach the real finalization path without leak
       JSON.stringify(globalThis.__orukeetRoutingLog),
       /PRIVATE DICTATION|Cloud result/
     );
-    if (mode !== "off") assert.equal(globalThis.__orukeetRoutingLog[0].fallbackAvailable, true);
+    if (mode !== "off") {
+      assert.equal(globalThis.__orukeetRoutingLog[0].fallbackAvailable, true);
+      const telemetry = expected ? result.uploads[0] : result.usage[0];
+      assert.deepEqual(telemetry.orukeetLanguageRouting, globalThis.__orukeetRoutingLog[0]);
+      if (expected) assert.equal(telemetry.streamingFallbackReason, "language_supported_score_low");
+    }
   }
 });
 
@@ -1935,6 +1940,11 @@ test("language-score routing uses analyzed time and preserves explicit language,
       ...overrides,
     });
     assert.equal(r.uploads.length, 0, JSON.stringify(overrides));
+    if (
+      overrides.settings?.cloudTranscriptionMode === "byok" ||
+      overrides.providerName === "deepgram"
+    )
+      assert.equal(r.usage[0].orukeetLanguageRouting, undefined);
   }
 });
 
@@ -1969,10 +1979,11 @@ test("combined cleanup is reused once, while changed options or failed cleanup u
       export const isCloudTranslationMode = () => false;
     `,
   });
-  for (const [cleanupStatus, changed, calls] of [
-    ["complete", false, 0],
-    ["complete", true, 1],
-    ["fallback", false, 1],
+  for (const [cleanupStatus, changed, calls, empty] of [
+    ["complete", false, 0, false],
+    ["complete", true, 1, false],
+    ["fallback", false, 1, false],
+    ["complete", false, 1, true],
   ]) {
     const options = { customDictionary: ["Orukeet"], language: "en" };
     const { reasonCalls, usage, published } = await stopManagedDictation(AudioManager, {
@@ -1980,12 +1991,20 @@ test("combined cleanup is reused once, while changed options or failed cleanup u
         success: true,
         text: "please send invoice 128",
         cleanupStatus,
-        cleanupText: "Please send invoice 128.",
+        cleanupText: empty ? "" : "Please send invoice 128.",
+        asrFinalMs: 103,
+        cleanup: {
+          status: cleanupStatus,
+          model: "gemma-4-12b",
+          processingMs: 220,
+          inputTokens: 40,
+          outputTokens: 8,
+        },
         cleanupOptions: options,
       },
       settings: { useCleanupModel: true, cleanupCloudMode: "openwhispr", customPrompts: {} },
       overrides: {
-        getPipelineCleanupOptions: () => (changed ? { ...options, language: "fr" } : options),
+        _activePipelineOptions: changed ? { ...options, language: "fr" } : options,
         finalizeChineseScript: async (text) => text,
       },
     });
@@ -1996,6 +2015,10 @@ test("combined cleanup is reused once, while changed options or failed cleanup u
       calls ? "please send invoice 128。" : "Please send invoice 128."
     );
     assert.equal(usage.length, 1);
+    assert.equal(usage[0].text, "please send invoice 128");
+    assert.equal(usage[0].sendLogs, calls === 0);
+    assert.equal(usage[0].sttProcessingMs, 103);
+    assert.equal(usage[0].orukeetCleanup.processingMs, 220);
   }
 });
 
@@ -2014,4 +2037,71 @@ test("combined text never replaces an unsupported-language fallback", async (t) 
   assert.equal(uploads.length, 1);
   assert.equal(reasonCalls.length, 0);
   assert.equal(published[0].text, "明日の会議");
+});
+
+test("ordinary Orukeet and BYOK streams continue metering processed text", async (t) => {
+  const AudioManager = await loadManagerClass(t, {
+    "/stores/settingsStore": `
+    export const getSettings = () => globalThis.__streamingFinalizationSettings;
+    export const getEffectiveCleanupModel = () => null;
+    export const selectResolvedLLMConfig = () => ({ model: null, provider: null });
+    export const isCloudCleanupMode = () => true;
+    export const isCloudDictationAgentMode = () => false;
+    export const isCloudTranslationMode = () => false;
+  `,
+  });
+  for (const cloudTranscriptionMode of ["openwhispr", "byok"]) {
+    const result = await stopManagedDictation(AudioManager, {
+      final: { success: true, text: "um please send invoice 128" },
+      settings: {
+        cloudTranscriptionMode,
+        useCleanupModel: true,
+        cleanupCloudMode: "openwhispr",
+        customPrompts: { cleanup: "Keep text." },
+      },
+    });
+    assert.equal(result.usage[0].text, result.published[0].text);
+    assert.equal(result.usage[0].text, "um please send invoice 128。");
+    assert.equal(result.usage[0].sendLogs, false);
+  }
+});
+
+test("recording config snapshot survives a rollback until the next recording", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const result = await stopManagedDictation(AudioManager, {
+    final: { ...JA_FINAL, languageConfidence: 0.55, languageSupportedScore: 0.02 },
+    overrides: {
+      _activeStreamingConfig: { orukeetLanguageRouting: "supported-0.30" },
+      sttConfig: { orukeetLanguageRouting: "off", streamingProvider: "deepgram" },
+    },
+    upload: async () => ({ text: "Cloud result" }),
+  });
+  assert.equal(result.uploads.length, 1);
+  assert.equal(result.uploads[0].orukeetLanguageRouting.mode, "supported-0.30");
+  assert.equal(result.manager._activeStreamingConfig, null);
+});
+
+test("combined options are captured and passed through recording start", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  useManagedOrukeetSettings();
+  installCapture(t);
+  const options = { customDictionary: ["Orukeet"], language: "en" };
+  let sent;
+  const { manager } = createStartingManager(AudioManager, {
+    providerName: "orukeet",
+    provider: startingOrukeetProvider({
+      start: async (value) => {
+        sent = value;
+        return { success: true };
+      },
+    }),
+  });
+  manager.getPipelineCleanupOptions = () => options;
+  manager.sttConfig = { orukeetPipeline: "gemma12", orukeetLanguageRouting: "shadow" };
+  await manager.startStreamingRecording();
+  assert.deepEqual(sent.pipelineOptions, options);
+  assert.equal(manager._activePipelineOptions, options);
+  manager.setSttConfig({ streamingProvider: "deepgram" });
+  assert.equal(manager._activeStreamingConfig.orukeetPipeline, "gemma12");
+  await manager.cancelStreamingRecording();
 });

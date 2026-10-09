@@ -6583,6 +6583,10 @@ class IPCHandlers {
           sttDetectedLanguageConfidence: opts.sttDetectedLanguageConfidence,
           sttDetectedLanguageAudioSeconds: opts.sttDetectedLanguageAudioSeconds,
           sttDetectedLanguageStatus: opts.sttDetectedLanguageStatus,
+          orukeetLanguageRouting: opts.orukeetLanguageRouting
+            ? JSON.stringify(opts.orukeetLanguageRouting)
+            : undefined,
+          orukeetCleanup: opts.orukeetCleanup ? JSON.stringify(opts.orukeetCleanup) : undefined,
         };
 
         debugLogger.debug("Cloud transcribe request", { audioSize: audioData.length }, "cloud-api");
@@ -8827,8 +8831,9 @@ class IPCHandlers {
           provider === "orukeet"
             ? new OrukeetStreaming(isCloud ? MANAGED_STREAM_OPTIONS : {})
             : new OpenAIRealtimeStreaming();
-        streaming.onUsageError = () =>
-          debugLogger.error("Combined cleanup usage could not be recorded");
+        if (provider === "orukeet")
+          streaming.onUsageError = (metadata) =>
+            debugLogger.error("Combined cleanup usage could not be recorded", metadata);
         setupDictationCallbacks(streaming, event);
         // Assign before the token fetch (a real network round trip) so
         // dictation-realtime-send has a live instance to buffer into instead
@@ -9849,6 +9854,8 @@ class IPCHandlers {
             sttDetectedLanguageConfidence: opts.sttDetectedLanguageConfidence,
             sttDetectedLanguageAudioSeconds: opts.sttDetectedLanguageAudioSeconds,
             sttDetectedLanguageStatus: opts.sttDetectedLanguageStatus,
+            orukeetLanguageRouting: opts.orukeetLanguageRouting,
+            orukeetCleanup: opts.orukeetCleanup,
             audioDurationMs: opts.audioDurationMs,
             audioSizeBytes: opts.audioSizeBytes,
             audioFormat: opts.audioFormat,
@@ -10097,6 +10104,8 @@ class IPCHandlers {
               sttDetectedLanguageConfidence: opts.sttDetectedLanguageConfidence,
               sttDetectedLanguageAudioSeconds: opts.sttDetectedLanguageAudioSeconds,
               sttDetectedLanguageStatus: opts.sttDetectedLanguageStatus,
+              orukeetLanguageRouting: opts.orukeetLanguageRouting,
+              orukeetCleanup: opts.orukeetCleanup,
               audioSizeBytes: opts.audioSizeBytes,
               audioFormat: opts.audioFormat,
               clientTotalMs: opts.clientTotalMs,
