@@ -116,9 +116,7 @@ function toActionItem(row) {
     sections = null;
   }
   // Destinations are fixed by built-in identity, never by editable copy or stored output.
-  const builtin =
-    row.is_builtin === 1 &&
-    BUILTIN_ACTIONS.find((action) => action.translationKey === row.translation_key);
+  const builtin = BUILTIN_ACTIONS.find((action) => action.translationKey === row.translation_key);
   const output =
     row.kind === "template" ? null : builtin?.output === "summary" ? "summary" : "chat";
   return { ...row, sections, output };

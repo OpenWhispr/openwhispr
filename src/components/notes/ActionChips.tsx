@@ -53,12 +53,7 @@ export default function ActionChips({
   const PreviewedIcon = previewed && getActionIcon(previewed);
   const visibleActions = actions
     .slice(0, VISIBLE_CHIPS)
-    .filter(
-      (action) =>
-        docked ||
-        action.is_builtin !== 1 ||
-        action.translation_key !== "notes.actions.builtin.lengthen"
-    );
+    .filter((action) => docked || action.translation_key !== "notes.actions.builtin.lengthen");
   // Docked, All actions leads the row and scrolls with the chips, opening toward them.
   const firstChip = docked ? 1 : 0;
   const allActions = (

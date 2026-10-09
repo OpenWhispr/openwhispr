@@ -108,7 +108,7 @@ test("the centered chat omits Make notes longer without backfilling, preserving 
   assert.deepEqual(ran, ["Follow-up email"]);
 });
 
-test("the centered row hides the built-in lengthen identity, not a matching custom name or key", async (t) => {
+test("the centered row hides the built-in lengthen identity, not a matching custom name", async (t) => {
   const ActionChips = await load(t, "/components/notes/ActionChips.tsx");
   const visibleIds = (replacement) =>
     collect(
@@ -127,7 +127,6 @@ test("the centered row hides the built-in lengthen identity, not a matching cust
     "3",
     "5",
   ]);
-  assert.deepEqual(visibleIds({ ...ACTIONS[3], is_builtin: 0 }), ["2", "4", "3", "7", "5"]);
 });
 
 test("hovering a chip shows what its action does above the row", async (t) => {

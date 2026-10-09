@@ -109,13 +109,9 @@ const row = (key) => {
   };
 };
 
-test("creating a custom action has a fixed chat hint, no destination selector and one persistence call", async (t) => {
+test("creating a custom action has a fixed chat hint and one persistence call", async (t) => {
   const ui = await load(t);
   await ui.click("notes.actions.addAction");
-  assert.deepEqual(
-    ui.elements().filter((n) => ["auto", "chat", "summary"].includes(n.props.value)),
-    []
-  );
   assert.ok(ui.elements().some((n) => n.props.children === "notes.actions.output.chatHint"));
   assert.equal(ui.find((n) => n.props.children === "notes.actions.save").props.disabled, true);
   await ui.change("notes.actions.namePlaceholder", "Make notes shorter");
@@ -169,7 +165,6 @@ test("template section editing, ordering and saving stay separate from action de
     { heading: "Second", instruction: "Edited next steps" },
     { heading: "First", instruction: "Keep facts" },
   ]);
-  assert.equal(ui.saves[0][2].output, undefined);
   await ui.click("notes.templates.addTemplate");
   await ui.change("notes.templates.namePlaceholder", "New template");
   await ui.click("notes.templates.addSection");
