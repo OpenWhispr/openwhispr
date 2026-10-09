@@ -76,11 +76,23 @@ export function readableTranscript(
   );
 }
 
+// Says whether the note taker is the user, so "my" questions reach the right lines.
+function noteTakerContext(owner: MeetingIdentity | null): string {
+  if (!owner) {
+    return `## Meeting Context\nSomeone other than the user took these notes ("${NOTE_TAKER_LABEL}" in the transcript).`;
+  }
+  return (
+    buildMeetingContext({ ...owner, participants: [] }, NOTE_TAKER_LABEL) ||
+    `## Meeting Context\nThe user took these notes ("${NOTE_TAKER_LABEL}" in the transcript).`
+  );
+}
+
 /**
  * The open note's transcript for its chat, labelled as get_note labels it, so a
- * speaker the model sees can be searched for. On the user's own note it says
- * who the note taker is; invitees are left to the filtered attendee block that
- * comes with connector tools. Null when there are no segments to label.
+ * speaker the model sees can be searched for, after a line saying who the note
+ * taker is. `owner` is the user on their own note, null on someone else's;
+ * invitees are left to the filtered attendee block that comes with connector
+ * tools. Null when there are no segments to label.
  */
 export function noteChatTranscript(
   segments: TranscriptSegment[],
@@ -89,12 +101,7 @@ export function noteChatTranscript(
 ): string | null {
   const transcript = readableSegments(segments, speakerMappings);
   if (!transcript) return null;
-  return [
-    owner ? buildMeetingContext({ ...owner, participants: [] }, NOTE_TAKER_LABEL) : "",
-    transcript.text,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  return `${noteTakerContext(owner)}\n\n${transcript.text}`;
 }
 
 // Null when no segment has text.
@@ -157,7 +164,7 @@ interface TranscriptPage {
   transcript_truncated: boolean;
   transcript_next_offset: number | null;
   transcript_match_found?: boolean;
-  /** When the passage's first and last timed lines were spoken. */
+  /** When the passage's earliest and latest timed lines were spoken. */
   transcript_time_seconds?: { start: number; end: number };
 }
 
@@ -199,7 +206,7 @@ export function transcriptPage(
     transcript_next_offset: nextOffset !== null && nextOffset < text.length ? nextOffset : null,
     ...(query === undefined ? {} : { transcript_match_found: found }),
     ...(times.length
-      ? { transcript_time_seconds: { start: times[0], end: times[times.length - 1] } }
+      ? { transcript_time_seconds: { start: Math.min(...times), end: Math.max(...times) } }
       : {}),
   };
 }

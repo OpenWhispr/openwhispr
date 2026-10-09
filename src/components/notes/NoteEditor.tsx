@@ -503,7 +503,7 @@ export default function NoteEditor({
   );
 
   // The chat labels speakers as get_note does, so a name it sees can be searched
-  // for; only the user's own note says who the note taker is.
+  // for, and says whether the note taker is the user.
   const chatTranscript = useMemo(
     () =>
       noteChatTranscript(displaySegments, speakerMappings, ownedByUser ? meetingIdentity : null) ??

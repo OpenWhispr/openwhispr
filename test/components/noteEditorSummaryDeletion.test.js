@@ -463,7 +463,10 @@ test("the note's chat labels speakers as get_note does and leaves attendees to t
   await render(ENHANCEMENT, {
     note: { ...NOTE, transcript, cloud_id: "cloud-1", owner_user_id: "user-alice" },
   });
-  assert.equal(chatTranscript(), lines);
+  assert.equal(
+    chatTranscript(),
+    `## Meeting Context\nSomeone other than the user took these notes ("Note taker" in the transcript).\n\n${lines}`
+  );
   await unmount();
 });
 

@@ -144,6 +144,9 @@ test("malicious-looking transcript remains data and per-line metadata cannot def
     { start: 0, end: 199 },
     "one span, however many lines the passage holds"
   );
+  stored.transcript = JSON.stringify([5, 0, 9].map((timestamp) => ({ text: "x", timestamp })));
+  const unordered = (await tool.execute({ id: 7 })).data;
+  assert.deepEqual(unordered.transcript_time_seconds, { start: 0, end: 9 }, "earliest to latest");
   stored.transcript = JSON.stringify(
     Array.from({ length: 200 }, () => ({ text: "x", speakerName: attack.repeat(20) }))
   );
@@ -370,8 +373,11 @@ test("the note chat labels speakers exactly as get_note does", async () => {
   const lines =
     "Priya: Ship it Friday.\nNote taker: Agreed.\nNote taker: Mapped to me.\nSpeaker 1: In the room.";
   assert.equal(data.transcript, lines);
-  // A teammate's note: saved names apply, and nobody is named as the note taker.
-  assert.equal(noteChatTranscript(segments, mappings, null), lines);
+  // A teammate's note: saved names apply, and the note taker isn't the user.
+  assert.equal(
+    noteChatTranscript(segments, mappings, null),
+    `## Meeting Context\nSomeone other than the user took these notes ("Note taker" in the transcript).\n\n${lines}`
+  );
   // The user's own note says who the note taker is, without listing invitees.
   const owner = {
     selfName: "Chad",
@@ -381,6 +387,11 @@ test("the note chat labels speakers exactly as get_note does", async () => {
   assert.equal(
     noteChatTranscript(segments, mappings, owner),
     `## Meeting Context\nThe user taking these notes ("Note taker" in the transcript) is Chad <chad@example.com>.\n\n${lines}`
+  );
+  // Signed out, the user's own note still says the note taker is the user.
+  assert.equal(
+    noteChatTranscript(segments, mappings, { selfName: null, selfEmail: null, participants: [] }),
+    `## Meeting Context\nThe user took these notes ("Note taker" in the transcript).\n\n${lines}`
   );
   assert.equal(noteChatTranscript([], mappings, owner), null, "plain text keeps the stored text");
 });
