@@ -1,4 +1,9 @@
 import {
+  isSelectableTinfoilModel,
+  resolveRetiredCloudModel,
+  RETIRED_TINFOIL_MODEL_NAMES,
+} from "../config/retiredCloudModelPolicy.js";
+import {
   applyTinfoilModels,
   getCloudProviderDefaultModelId,
   getTinfoilModels,
@@ -34,7 +39,7 @@ export const DESCRIPTION_KEYS: Record<string, string> = {
 };
 
 function toCloudModels(catalog: TinfoilCatalogModel[]): CloudModelDefinition[] {
-  return catalog.map((model) => ({
+  return catalog.filter(isSelectableTinfoilModel).map((model) => ({
     id: model.id,
     name: model.name,
     description: model.description,
@@ -73,13 +78,18 @@ function reconcileSelectedModels(
     const selected = settings[model];
     if (typeof selected !== "string" || !selected || available.has(selected)) continue;
 
-    setStringSetting(model, replacement.id);
+    const explicitReplacement = resolveRetiredCloudModel("tinfoil", selected);
+    const target = models.find((m) => m.id === explicitReplacement) ?? replacement;
+    setStringSetting(model, target.id);
     // Several scopes can share a retired model; say so once.
     if (announced.has(selected)) continue;
     announced.add(selected);
     recordTinfoilModelSwitch({
-      from: previous.find((m) => m.id === selected)?.name ?? selected,
-      to: replacement.name,
+      from:
+        RETIRED_TINFOIL_MODEL_NAMES[selected] ??
+        previous.find((m) => m.id === selected)?.name ??
+        selected,
+      to: target.name,
     });
   }
 }

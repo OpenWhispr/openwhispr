@@ -1,5 +1,6 @@
 // Tinfoil's model list comes from the attested endpoint.
 // Fetching from the main process rather than the renderer lets every window share one request.
+const { isSelectableTinfoilModel } = require("../config/retiredCloudModelPolicy.js");
 const debugLogger = require("./debugLogger");
 const { tinfoilSecureFetch } = require("./tinfoilSecureClient");
 
@@ -35,6 +36,7 @@ function parseModels(payload) {
   }
   return data
     .filter((model) => typeof model?.id === "string" && model.id && isChatModel(model))
+    .filter(isSelectableTinfoilModel)
     .map(toCatalogModel);
 }
 

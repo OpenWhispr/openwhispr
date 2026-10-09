@@ -1,3 +1,4 @@
+import { resolveRetiredCloudModel } from "../../config/retiredCloudModelPolicy.js";
 import type { LanguageModel } from "ai";
 import type { TinfoilAI } from "tinfoil";
 import { refreshTinfoilModels } from "../../models/tinfoilModels";
@@ -76,7 +77,7 @@ export async function getTinfoilLanguageModel(
   model: string
 ): Promise<LanguageModel> {
   const provider = await getTinfoilAISDKProvider(apiKey);
-  return provider(model);
+  return provider(resolveRetiredCloudModel("tinfoil", model));
 }
 
 export function clearTinfoilClientCache(): void {
