@@ -543,6 +543,7 @@ test("the docked chat holds the conversation and its history, and its chips cont
   const [cta, options] = globalThis.__embeddedChatSent.at(-1);
   assert.equal(cta, "Follow-up", "the docked chat's own chip continues the open conversation");
   assert.ok(options.requestText.includes("Draft a follow-up."));
+  assert.equal(options.keepNotesUnchanged, true, "and can't change the note");
   await unmount();
 });
 
@@ -567,10 +568,11 @@ test("a chat action from the collapsed picker opens the docked chat, with the ac
   assert.deepEqual(chips.actions, [FOLLOW_UP]);
   assert.equal(docked.props.slashCommands.length, 1, "and offers the same / menu");
   assert.deepEqual(ran, []);
-  const [[marker, shown, { requestText }]] = globalThis.__embeddedChatSent;
+  const [[marker, shown, { requestText, keepNotesUnchanged }]] = globalThis.__embeddedChatSent;
   assert.equal(marker, "new chat", "from the ask bar it starts a new conversation");
   assert.equal(shown, "Follow-up");
   assert.ok(requestText.includes("Draft a follow-up."));
+  assert.equal(keepNotesUnchanged, true, "its result goes in the chat, never into the note");
   await unmount();
 });
 

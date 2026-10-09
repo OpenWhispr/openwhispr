@@ -887,6 +887,8 @@ export default function NoteEditor({
       const cta = getActionCta(action, t);
       const options = {
         requestText: compileChatActionPrompt(action, { fromSummary: !!enhancement }),
+        // Its result belongs in the chat: the editor promises the note stays as it is.
+        keepNotesUnchanged: true,
       };
       if (chatMode === "sidebar") {
         void embeddedChat.sendMessage(cta, options);

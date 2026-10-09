@@ -197,6 +197,11 @@ test("a chat action works from the summary when there is one, and the transcript
     );
     assert.match(
       compileChatActionPrompt(action, { fromSummary }),
+      /Leave the note, its AI summary and its title unchanged: when the instructions ask for an edit, write the edited text here instead\./,
+      "an edit-style action shows its result instead of saving it"
+    );
+    assert.match(
+      compileChatActionPrompt(action, { fromSummary }),
       /in the language the note is written in, not the language of these instructions/,
       "the English action prompt doesn't turn a German note's answer into English"
     );

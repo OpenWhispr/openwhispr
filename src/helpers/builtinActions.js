@@ -409,9 +409,10 @@ Instructions: `;
 
 // A chat action is sent as the user's turn in the note chat, whose system prompt
 // already carries the whole note. It works from the AI summary when there is one.
-// The note chat can offer connector tools; a one-click action answers in the chat.
+// The note chat can offer connector tools; a one-click action answers in the chat
+// and never edits the note (its turn isn't offered update_note).
 const CHAT_ACTION_ANSWER_RULE =
-  "Write your answer here in the chat as text. Don't use a tool to draft, send or post it, unless the instructions explicitly ask you to send, post or file something. Answer in the language the note is written in, not the language of these instructions.";
+  "Write your answer here in the chat as text. Don't use a tool to draft, send or post it, unless the instructions explicitly ask you to send, post or file something. Leave the note, its AI summary and its title unchanged: when the instructions ask for an edit, write the edited text here instead. Answer in the language the note is written in, not the language of these instructions.";
 export const CHAT_ACTION_ON_SUMMARY_PREAMBLE = `Work from the AI summary of the note I'm viewing (it's in your context), and use its transcript only if the instructions below ask for it. ${CHAT_ACTION_ANSWER_RULE} Follow these instructions:
 
 `;
