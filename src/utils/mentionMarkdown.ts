@@ -36,15 +36,30 @@ const TASK_OWNER_LINE = /^(\s*[-*]\s*\[[ xX]\]\s+\S.*?)(\s+[—–-]\s+)(\S.*?)\
 const OWNER_SPLIT = /\s*(?:,|&|\/|\band\b)\s*/i;
 
 interface NameIndex {
-  byFullName: Map<string, MentionPerson>;
+  byFullName: Map<string, MentionPerson | null>;
   byFirstName: Map<string, MentionPerson | null>;
 }
 
 function buildNameIndex(people: MentionPerson[]): NameIndex {
-  const byFullName = new Map<string, MentionPerson>();
+  const byFullName = new Map<string, MentionPerson | null>();
   for (const person of people) {
     const name = sanitizeLabel(person.name).toLowerCase();
-    if (name && !byFullName.has(name)) byFullName.set(name, person);
+    if (!name) continue;
+    if (!byFullName.has(name)) {
+      byFullName.set(name, person);
+      continue;
+    }
+    const existing = byFullName.get(name);
+    if (!existing) continue;
+    if (!existing.email && person.email) {
+      byFullName.set(name, person);
+    } else if (
+      existing.email &&
+      person.email &&
+      existing.email.trim().toLowerCase() !== person.email.trim().toLowerCase()
+    ) {
+      byFullName.set(name, null);
+    }
   }
   // First names resolve only when unambiguous across all known people.
   const byFirstName = new Map<string, MentionPerson | null>();
@@ -58,7 +73,10 @@ function buildNameIndex(people: MentionPerson[]): NameIndex {
 function matchOwner(raw: string, index: NameIndex): MentionPerson | null {
   const owner = raw.trim().replace(/^@/, "").replace(/[.:]$/, "").toLowerCase();
   if (!owner) return null;
-  return index.byFullName.get(owner) ?? index.byFirstName.get(owner) ?? null;
+  return (
+    (index.byFullName.has(owner) ? index.byFullName.get(owner) : index.byFirstName.get(owner)) ??
+    null
+  );
 }
 
 /**

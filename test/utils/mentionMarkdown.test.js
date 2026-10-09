@@ -66,6 +66,48 @@ test("leaves ambiguous first names untouched", async () => {
   assert.equal(tagActionItemOwners(line, people), line);
 });
 
+test("does not choose between attendees with the same full name", async () => {
+  const { tagActionItemOwners } = await load();
+  const people = [
+    { name: "Alex Morgan", email: "alex.design@example.test" },
+    { name: "Alex Morgan", email: "alex.engineering@example.test" },
+  ];
+  for (const roster of [people, [...people].reverse()]) {
+    for (const owner of ["Alex Morgan", "Alex", "Sean and Alex Morgan"]) {
+      const line = `- [ ] Send the proposal — ${owner}`;
+      assert.equal(tagActionItemOwners(line, [...roster, PEOPLE[2]]), line);
+    }
+  }
+});
+
+test("normalizing a display name must not hide conflicting attendee emails", async () => {
+  const { tagActionItemOwners } = await load();
+  const line = "- [ ] Send the proposal — Alex Morgan";
+  assert.equal(
+    tagActionItemOwners(line, [
+      { name: "Alex  Morgan", email: "alex.design@example.test" },
+      { name: "ALEX MORGAN", email: "alex.engineering@example.test" },
+    ]),
+    line
+  );
+});
+
+test("duplicate records and name-only speaker labels retain the known attendee email", async () => {
+  const { tagActionItemOwners } = await load();
+  const attendee = { name: "Alex Morgan", email: "alex@example.test" };
+  for (const people of [
+    [attendee, { ...attendee }],
+    [attendee, { ...attendee, email: "ALEX@example.test" }],
+    [{ ...attendee, email: null }, attendee],
+    [attendee, { ...attendee, email: null }],
+  ]) {
+    assert.equal(
+      tagActionItemOwners("- [ ] Send the proposal — Alex", people),
+      "- [ ] Send the proposal — [@Alex Morgan](mention:alex%40example.test)"
+    );
+  }
+});
+
 test("tags multiple owners only when every owner is known", async () => {
   const { tagActionItemOwners } = await load();
   assert.equal(

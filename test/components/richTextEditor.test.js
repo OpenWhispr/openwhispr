@@ -734,6 +734,66 @@ const pointerDown = (element) =>
   element.dispatchEvent(
     new happyWindow.PointerEvent("pointerdown", { bubbles: true, button: 0, pointerType: "mouse" })
   );
+
+test("owner chips retain their names and email identities after editing and reloading a note", async (t) => {
+  const { tagActionItemOwners } = await import("../../src/utils/mentionMarkdown.ts");
+  const markdown = tagActionItemOwners(
+    "- [ ] Send the proposal — Zoë\n- [ ] Review the plan — Ravi",
+    [
+      { name: "Zoë Rivera", email: "zoe@example.test" },
+      { name: "Ravi", email: null },
+    ]
+  );
+  const notes = await mountNotes(t, markdown);
+  const chips = () =>
+    [...notes.host.querySelectorAll("span[data-mention]")].map((chip) => ({
+      name: [...chip.childNodes]
+        .filter((node) => node.nodeType === 3)
+        .map((node) => node.textContent)
+        .join(""),
+      email: chip.getAttribute("title"),
+    }));
+  assert.deepEqual(chips(), [
+    { name: "Zoë Rivera", email: "zoe@example.test" },
+    { name: "Ravi", email: null },
+  ]);
+  await notes.act(() => {
+    notes.editor().commands.setTextSelection(3);
+    notes.editor().commands.updateAttributes("taskItem", { checked: true });
+  });
+  const saved = notes.saved();
+  assert.match(saved, /\[x\] Send the proposal — \[@Zoë Rivera\]\(mention:zoe%40example.test\)/);
+  assert.match(saved, /\[@Ravi\]\(mention:Ravi\)/);
+  await notes.act(() => notes.editor().commands.setContent(saved));
+  assert.equal(markdownOf(notes.editor()), saved.trim());
+  assert.deepEqual(chips(), [
+    { name: "Zoë Rivera", email: "zoe@example.test" },
+    { name: "Ravi", email: null },
+  ]);
+  assert.deepEqual(notes.errors, []);
+});
+
+test("ambiguous owners remain editable plain text beside saved attendee chips", async (t) => {
+  const { tagActionItemOwners } = await import("../../src/utils/mentionMarkdown.ts");
+  const markdown = tagActionItemOwners(
+    "- [ ] Send the proposal — Alex Morgan\n- [ ] Review the plan — Casey",
+    [
+      { name: "Alex Morgan", email: "alex.design@example.test" },
+      { name: "Alex Morgan", email: "alex.engineering@example.test" },
+      { name: "Casey", email: "casey@example.test" },
+    ]
+  );
+  const notes = await mountNotes(t, markdown);
+  assert.equal(notes.host.querySelectorAll("span[data-mention]").length, 1);
+  assert.deepEqual(markdownOf(notes.editor()).split(/\n+/), markdown.split("\n"));
+  await notes.act(() => {
+    notes.editor().commands.setTextSelection(3);
+    notes.editor().commands.insertContent("Please ");
+  });
+  assert.match(notes.saved(), /Please Send the proposal — Alex Morgan/);
+  assert.doesNotMatch(notes.saved(), /mention:alex\./);
+  assert.deepEqual(notes.errors, []);
+});
 const clickButton = (element) => {
   element.dispatchEvent(
     new happyWindow.MouseEvent("mousedown", { bubbles: true, cancelable: true, button: 0 })

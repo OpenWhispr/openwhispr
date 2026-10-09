@@ -17,8 +17,8 @@ const isSelfParticipant = (participant: CalendarAttendee, identity: MeetingIdent
 /**
  * Speaker label for the LLM payload. Mirrors the precedence the exporter
  * applies in transcriptFormatter.js: explicit name → cluster mapping →
- * "Speaker N" → source fallback. The mic track is the note owner, so it
- * carries their real name instead of an anonymous "You" whenever it is known.
+ * "Speaker N" → source fallback. An unnamed mic track falls back to the
+ * note owner's real name instead of an anonymous "You" whenever it is known.
  */
 export function resolveLlmSpeakerLabel(
   segment: TranscriptSegment,
@@ -26,9 +26,9 @@ export function resolveLlmSpeakerLabel(
   selfLabel: string,
   t: Translate
 ): string {
-  if (segment.source === "mic" || segment.speaker === "you") return selfLabel;
   const resolved = resolveSegmentSpeakerName(segment, speakerMappings);
   if (resolved) return resolved;
+  if (segment.source === "mic" || segment.speaker === "you") return selfLabel;
   if (segment.speaker) {
     const num = Number.parseInt(segment.speaker.replace("speaker_", ""), 10);
     if (!Number.isNaN(num)) return t("notes.speaker.label", { n: num + 1 });
@@ -75,7 +75,8 @@ export function buildMeetingContext(identity: MeetingIdentity, selfLabel: string
 
 /**
  * Everyone we can name around a note — the note owner, calendar participants,
- * mapped speaker clusters, and named segments — deduplicated by display name.
+ * mapped speaker clusters, and named segments. Same-name attendees with
+ * different emails stay distinct so tagging can detect ambiguous owners.
  * Feeds the editor's @mention suggestions and action-item owner tagging.
  */
 export function collectKnownPeople(
@@ -84,14 +85,26 @@ export function collectKnownPeople(
   segments: TranscriptSegment[]
 ): MentionPerson[] {
   const people: MentionPerson[] = [];
-  const seen = new Set<string>();
+  const byName = new Map<string, MentionPerson[]>();
   const push = (name: string | null | undefined, email: string | null | undefined) => {
     const trimmed = name?.trim();
     if (!trimmed) return;
     const key = trimmed.toLowerCase();
-    if (seen.has(key)) return;
-    seen.add(key);
-    people.push({ name: trimmed, email: email?.trim() || null });
+    const address = email?.trim() || null;
+    const existing = byName.get(key) ?? [];
+    if (existing.length > 0) {
+      if (!address || existing.some((p) => p.email?.toLowerCase() === address.toLowerCase()))
+        return;
+      const nameOnly = existing.find((p) => !p.email);
+      if (nameOnly) {
+        nameOnly.email = address;
+        return;
+      }
+    }
+    const person = { name: trimmed, email: address };
+    existing.push(person);
+    byName.set(key, existing);
+    people.push(person);
   };
 
   push(identity.selfName, identity.selfEmail);
