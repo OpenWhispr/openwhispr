@@ -56,7 +56,6 @@ export const updateNoteTool: ToolDefinition = {
     }
 
     try {
-      if (context?.signal.aborted) return { success: false, data: null, displayText: "" };
       const note = await window.electronAPI.getNote(id);
       if (context?.signal.aborted) return { success: false, data: null, displayText: "" };
       if (!note) {

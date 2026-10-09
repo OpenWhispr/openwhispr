@@ -50,6 +50,7 @@ test("note edits preserve separate stored fields, reopen correctly, and report f
   t.mock.method(syncService, "debouncedPush", (...args) => pushes.push(args));
   const { updateNoteTool } = await vite.ssrLoadModule("/services/tools/updateNoteTool.ts");
   const { getNoteTool } = await vite.ssrLoadModule("/services/tools/getNoteTool.ts");
+  const { MAX_CONTENT_LENGTH } = await vite.ssrLoadModule("/services/tools/searchNotesTool.ts");
 
   await t.test(
     "get_note identifies personal content, summary and transcript separately",
@@ -57,9 +58,18 @@ test("note edits preserve separate stored fields, reopen correctly, and report f
       const result = await getNoteTool.execute({ id: note.id });
       assert.equal(result.data.content, CONTENT);
       assert.equal(result.data.summary, SUMMARY);
-      assert.equal(result.data.transcript, TRANSCRIPT);
+      assert.equal(result.data.transcript, "I will send the poll by Sunday.");
+      assert.equal(result.data.transcript_truncated, false);
     }
   );
+  await t.test("get_note cuts a long transcript and says so", async () => {
+    const long = JSON.stringify(Array.from({ length: 100 }, () => ({ text: "Long meeting." })));
+    database.updateNote(note.id, { transcript: long });
+    const { data } = await getNoteTool.execute({ id: note.id });
+    database.updateNote(note.id, { transcript: TRANSCRIPT });
+    assert.equal(data.transcript.length, MAX_CONTENT_LENGTH);
+    assert.equal(data.transcript_truncated, true);
+  });
   await t.test(
     "removing a summary section changes only its stored field, including after reopen",
     async () => {

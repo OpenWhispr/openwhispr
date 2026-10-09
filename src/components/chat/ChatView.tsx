@@ -96,7 +96,10 @@ export default function ChatView() {
       cancelStream();
       setActiveConversationId(id);
       setIsNewChat(false);
-      await persistence.loadConversation(id);
+      if ((await persistence.loadConversation(id)) === null) {
+        setActiveConversationId(null);
+        setIsNewChat(true);
+      }
     },
     [activeConversationId, cancelStream, persistence]
   );

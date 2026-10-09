@@ -40,8 +40,9 @@ export function normalizeSections(value) {
 
 /**
  * A template with sections is compiled around the shared notes rules. One with
- * only a prompt keeps the request it always had: standalone built-ins get the
- * material preamble, everything else the generic system prompt.
+ * only a prompt keeps the request it always had after the shared fidelity rule:
+ * standalone built-ins get the material preamble, everything else the generic
+ * system prompt.
  */
 export function compileTemplatePrompt(template, { isMeetingNote = false } = {}) {
   const preamble =
