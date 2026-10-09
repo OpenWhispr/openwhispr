@@ -399,6 +399,7 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
 
 - `LOCAL_TRANSCRIPTION_PROVIDER`: Transcription engine (`nvidia` for Parakeet)
 - `PARAKEET_MODEL`: Selected Parakeet model name (e.g., `parakeet-tdt-0.6b-v3`)
+- `OPENWHISPR_LOG_LEVEL`: Log level written by the Settings debug toggle (`set-debug-logging`): `debug` when on, `info` when off
 
 ### 6. Language Support
 
