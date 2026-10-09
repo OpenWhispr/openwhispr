@@ -3284,6 +3284,10 @@ class DatabaseManager {
     return noteUndo.getNoteUndos(this);
   }
 
+  claimNoteUndo(token) {
+    return noteUndo.claimNoteUndo(this, token);
+  }
+
   undoNoteUpdate(token) {
     return noteUndo.undoNoteUpdate(this, token);
   }
@@ -3293,7 +3297,9 @@ class DatabaseManager {
   }
 
   updateNote(id, updates, options) {
-    if (options?.undoable) return noteUndo.updateNoteWithUndo(this, id, updates, options.expected);
+    if (options?.undoable) {
+      return noteUndo.updateNoteWithUndo(this, id, updates, options.expected, options.turn);
+    }
     try {
       if (!this.db) throw new Error("Database not initialized");
       if (!this.getNote(id)) return { success: false, error: "Note not found" };

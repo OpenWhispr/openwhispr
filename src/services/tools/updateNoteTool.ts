@@ -2,6 +2,24 @@ import type { ToolDefinition, ToolExecutionContext, ToolResult } from "./ToolReg
 import { resolveFolderId } from "./utils";
 import { syncService } from "../SyncService.js";
 
+// The AI SDK runs a step's tool calls concurrently. Edits of one note take
+// turns, so the second reads the first's write instead of failing main's check
+// that the note is unchanged since this call read it.
+const noteLocks = new Map<number, Promise<void>>();
+
+async function lockNote(id: number): Promise<() => void> {
+  const previous = noteLocks.get(id) ?? Promise.resolve();
+  let release = (): void => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  const tail = previous.then(() => held);
+  noteLocks.set(id, tail);
+  await previous;
+  return () => {
+    release();
+    if (noteLocks.get(id) === tail) noteLocks.delete(id);
+  };
+}
+
 export const updateNoteTool: ToolDefinition = {
   name: "update_note",
   description:
@@ -96,6 +114,7 @@ export const updateNoteTool: ToolDefinition = {
       };
     }
 
+    const unlock = await lockNote(id);
     try {
       const note = await window.electronAPI.getNote(id);
       if (context?.signal.aborted) return { success: false, data: null, displayText: "" };
@@ -133,6 +152,7 @@ export const updateNoteTool: ToolDefinition = {
         {
           undoable: true,
           expected: note,
+          turn: context?.messageId,
         }
       );
 
@@ -165,6 +185,8 @@ export const updateNoteTool: ToolDefinition = {
         data: null,
         displayText: `Failed to update note: ${(error as Error).message}`,
       };
+    } finally {
+      unlock();
     }
   },
 };

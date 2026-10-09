@@ -231,6 +231,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getSpaceNotes: (spaceId, limit) => ipcRenderer.invoke("db-get-space-notes", spaceId, limit),
   updateNote: (id, updates, options) => ipcRenderer.invoke("db-update-note", id, updates, options),
   getNoteUndos: () => ipcRenderer.invoke("db-get-note-undos"),
+  claimNoteUndo: (token) => ipcRenderer.invoke("db-claim-note-undo", token),
   undoNoteUpdate: (token) => ipcRenderer.invoke("db-undo-note-update", token),
   discardNoteUndo: (id, token) => ipcRenderer.invoke("db-discard-note-undo", id, token),
   deleteNote: (id) => ipcRenderer.invoke("db-delete-note", id),

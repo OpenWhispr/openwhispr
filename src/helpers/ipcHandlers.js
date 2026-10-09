@@ -2240,6 +2240,9 @@ class IPCHandlers {
     });
 
     ipcMain.handle("db-get-note-undos", () => this.databaseManager.getNoteUndos());
+    ipcMain.handle("db-claim-note-undo", (_event, token) =>
+      this.databaseManager.claimNoteUndo(token)
+    );
     ipcMain.handle("db-discard-note-undo", (_event, id, token) =>
       this.databaseManager.discardNoteUndo(id, token)
     );

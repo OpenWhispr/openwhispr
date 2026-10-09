@@ -45,8 +45,11 @@ export function RichTextEditor({
     ],
     content: value,
     editable: !disabled,
-    onUpdate: ({ editor: ed }) => {
-      if (suppressUpdateRef.current) return;
+    onUpdate: ({ editor: ed, transaction }) => {
+      // A plugin's appended change (the trailing paragraph after a list, added
+      // on the first click) is not an edit; saving it would also discard the
+      // assistant's Undo for the note.
+      if (suppressUpdateRef.current || !transaction.docChanged) return;
 
       const md = (ed.storage as any).markdown.getMarkdown() as string;
       internalValueRef.current = md;

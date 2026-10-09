@@ -56,7 +56,11 @@ test("safe assistant edits and atomic Undo", async (t) => {
     return database.getNote(note.id);
   };
   const tokenFor = (id) => database.getNoteUndos().find((edit) => edit.noteId === id)?.token;
-  const edit = (note, updates) => updateNoteTool.execute({ id: note.id, ...updates });
+  const edit = (note, updates, turn) =>
+    updateNoteTool.execute(
+      { id: note.id, ...updates },
+      turn && { messageId: turn, signal: new AbortController().signal }
+    );
 
   for (const operation of ["rename", "move"])
     await t.test(
@@ -178,21 +182,89 @@ test("safe assistant edits and atomic Undo", async (t) => {
     });
 
   await t.test(
-    "partial section removal and successive edits undo only the latest change",
+    "partial section removal; edits in one turn share an Undo, a later turn's stands alone",
     async () => {
       const note = fresh();
-      await edit(note, { summary: "## Next\nDo it" });
+      await edit(note, { summary: "## Next\nDo it" }, "turn-1");
       const first = tokenFor(note.id);
-      await edit(note, { title: "Renamed" });
+      await edit(note, { title: "Renamed" }, "turn-1");
       const second = tokenFor(note.id);
       assert.notEqual(second, first);
       assert.equal(database.undoNoteUpdate(first).success, false);
-      assert.equal(database.undoNoteUpdate(second).success, true);
-      assert.equal(database.getNote(note.id).title, note.title);
-      assert.equal(database.getNote(note.id).enhanced_content, "## Next\nDo it");
+      await edit(note, { content: "Later turn" }, "turn-2");
+      assert.equal(database.undoNoteUpdate(tokenFor(note.id)).success, true);
       assert.equal(database.getNote(note.id).content, note.content);
+      assert.equal(database.getNote(note.id).title, "Renamed", "an earlier turn stays applied");
+      assert.equal(tokenFor(note.id), undefined);
+
+      const other = fresh();
+      await edit(other, { summary: "## Next\nDo it" }, "turn-3");
+      await edit(other, { title: "Renamed" }, "turn-3");
+      assert.equal(database.undoNoteUpdate(tokenFor(other.id)).success, true);
+      assert.equal(database.getNote(other.id).title, other.title);
+      assert.equal(database.getNote(other.id).enhanced_content, other.enhanced_content);
     }
   );
+
+  await t.test("edits of one note in the same model step both apply", async () => {
+    const note = fresh();
+    const results = await Promise.all([
+      edit(note, { summary: "## Next\nDo it" }, "step"),
+      edit(note, { content: "Added reminder" }, "step"),
+    ]);
+    assert.deepEqual(
+      results.map((result) => result.success),
+      [true, true]
+    );
+    assert.equal(database.getNote(note.id).enhanced_content, "## Next\nDo it");
+    assert.equal(database.getNote(note.id).content, "Added reminder");
+    assert.equal(database.undoNoteUpdate(tokenFor(note.id)).success, true);
+    assert.equal(database.getNote(note.id).enhanced_content, note.enhanced_content);
+    assert.equal(database.getNote(note.id).content, note.content);
+  });
+
+  await t.test("the cloud pull echoing a cleared summary keeps Undo", async () => {
+    const note = fresh();
+    await edit(note, { clear_fields: ["summary"] });
+    const token = tokenFor(note.id);
+    const saved = database.getNote(note.id);
+    database.upsertNoteFromCloud(
+      {
+        ...saved,
+        id: `cloud-${note.id}`,
+        created_at: "2026-10-09T00:00:00.000Z",
+        updated_at: "2099-01-01T00:00:00.000Z",
+      },
+      saved.folder_id,
+      saved.space_id
+    );
+    assert.equal(database.getNote(note.id).enhanced_content, null, "the pull stores NULL");
+    assert.equal(tokenFor(note.id), token);
+    assert.equal(database.undoNoteUpdate(token).success, true);
+    assert.equal(database.getNote(note.id).enhanced_content, note.enhanced_content);
+  });
+
+  await t.test("each recovery is offered once", async () => {
+    const note = fresh();
+    await edit(note, { title: "Offered" });
+    const token = tokenFor(note.id);
+    assert.equal(database.claimNoteUndo(token), true);
+    assert.equal(database.claimNoteUndo(token), false);
+    assert.equal(database.claimNoteUndo("missing"), false);
+    assert.equal(database.undoNoteUpdate(token).success, true, "claiming keeps it restorable");
+  });
+
+  await t.test("launch replaces an older Undo trigger", async () => {
+    database.db.exec(`
+      DROP TRIGGER assistant_note_undo_update;
+      CREATE TRIGGER assistant_note_undo_update AFTER UPDATE ON notes BEGIN SELECT 1; END;
+    `);
+    initializeNoteUndo(database.db);
+    const note = fresh();
+    await edit(note, { title: "Renamed" });
+    database.updateNote(note.id, { content: "Manual edit" });
+    assert.equal(tokenFor(note.id), undefined);
+  });
 
   await t.test("failed save rolls back and cannot create recovery or sync", async () => {
     const note = fresh();
@@ -335,6 +407,7 @@ test("safe assistant edits and atomic Undo", async (t) => {
     database.setActiveAccountId("account-two");
     assert.equal(database.getNote(note.id), null);
     assert.equal(tokenFor(note.id), undefined);
+    assert.equal(database.claimNoteUndo(token), false);
     assert.equal(database.undoNoteUpdate(token).success, false);
     database.setActiveAccountId("account-one");
     assert.equal(database.undoNoteUpdate(token).success, true);

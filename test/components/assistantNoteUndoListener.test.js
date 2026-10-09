@@ -11,6 +11,8 @@ async function setup(t, focused = true) {
     calls = [],
     pushes = [];
   const listeners = new Map();
+  // Main's claim: each recovery is offered by one window, once.
+  const claimed = new Set();
   let edits = [],
     result = { success: true },
     root;
@@ -25,6 +27,7 @@ async function setup(t, focused = true) {
       removeEventListener: (event) => listeners.delete(event),
       electronAPI: {
         getNoteUndos: async () => edits,
+        claimNoteUndo: async (token) => !claimed.has(token) && !!claimed.add(token),
         undoNoteUpdate: async (token) => {
           calls.push(token);
           if (result instanceof Error) throw result;
@@ -73,6 +76,7 @@ async function setup(t, focused = true) {
     dismissed,
     calls,
     pushes,
+    claimed,
     emit,
     setResult: (value) => {
       result = value;
@@ -84,6 +88,9 @@ async function setup(t, focused = true) {
       focused = true;
       await emit("focus");
     },
+    blur: () => {
+      focused = false;
+    },
     remount: async () => {
       await React.act(async () => root.unmount());
       await mount();
@@ -92,7 +99,7 @@ async function setup(t, focused = true) {
 }
 const one = { noteId: 7, token: "first", title: "First note" };
 
-test("background and reopened windows offer persisted Undo; it targets the edited note", async (t) => {
+test("a background window offers Undo once focused; it targets the edited note", async (t) => {
   const state = await setup(t, false);
   state.setEdits([one]);
   await state.emit("note");
@@ -103,12 +110,34 @@ test("background and reopened windows offer persisted Undo; it targets the edite
   assert.equal(state.toasts[0].duration, 6000);
   await state.emit("focus");
   assert.equal(state.toasts.length, 1);
-  await state.remount();
-  assert.equal(state.toasts.length, 2, "recovery survives a renderer restart");
-  await React.act(async () => state.toasts[1].action.props.onClick());
+  await React.act(async () => state.toasts[0].action.props.onClick());
   assert.deepEqual(state.calls, ["first"]);
   assert.deepEqual(state.pushes, [["note", 7]]);
-  assert.ok(state.dismissed.includes("toast-2"));
+  assert.ok(state.dismissed.includes("toast-1"));
+});
+
+test("an edit offered elsewhere or before a reload is not offered again", async (t) => {
+  const state = await setup(t);
+  state.claimed.add("other-window");
+  state.setEdits([{ ...one, token: "other-window" }]);
+  await state.emit("note");
+  assert.equal(state.toasts.length, 0, "another window already offered it");
+  state.setEdits([one]);
+  await state.emit("note");
+  assert.equal(state.toasts.length, 1);
+  await state.remount();
+  assert.equal(state.toasts.length, 1, "a reload does not offer it again");
+});
+
+test("an unfocused window drops its toast once the recovery is gone", async (t) => {
+  const state = await setup(t);
+  state.setEdits([one]);
+  await state.emit("note");
+  state.blur();
+  state.setEdits([]);
+  await state.emit("note");
+  assert.ok(state.dismissed.includes("toast-1"), "undone in the other window");
+  assert.equal(state.toasts.length, 1);
 });
 
 test("a later edit replaces the old toast and unavailable Undo explains the refusal", async (t) => {

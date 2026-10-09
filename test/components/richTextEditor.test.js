@@ -763,6 +763,16 @@ async function openTableMenu(notes, caretCell = "Ana") {
   await notes.act(() => pointerDown(byLabel("notes.editor.table.actions")));
 }
 
+test("clicking into a note that ends in a list saves nothing until the user edits", async (t) => {
+  // The trailing-node plugin appends a paragraph on the first selection change;
+  // saving that would also retire the assistant's Undo for the note.
+  const notes = await mountNotes(t, "## Action items\n\n- Ana: draft the brief\n- Raj: book it");
+  await notes.act(() => notes.editor().commands.setTextSelection(5));
+  assert.equal(notes.saved(), undefined);
+  await notes.act(() => notes.editor().commands.insertContent("ZZ"));
+  assert.match(notes.saved(), /ZZ/);
+});
+
 test("Delete table from the menu works in a note that re-renders on every change", async (t) => {
   const notes = await mountNotes(t);
   await openTableMenu(notes);
