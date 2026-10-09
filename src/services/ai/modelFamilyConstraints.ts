@@ -9,7 +9,7 @@
  * like thinkingSuppressionDialects.
  */
 export interface ModelFamilyConstraints {
-  family: "gpt-oss" | "qwen" | "magistral";
+  family: "gpt-oss" | "qwen" | "magistral" | "glm-5.3";
   reasoningEffort?: {
     /** Value that best approximates "thinking off" for reasoning_effort. */
     suppressValue: string;
@@ -40,6 +40,13 @@ const FAMILIES: Array<ModelFamilyConstraints & { match: RegExp }> = [
     // qwen3 accepts none|default only (Groq's enum; "none" is also what the
     // generic dialect sends everywhere, so the fact is provider-agnostic).
     reasoningEffort: { suppressValue: "none" },
+  },
+  {
+    family: "glm-5.3",
+    match: /glm[-_]?5[-.]?3/,
+    // GLM-5.3/Flash always reason: low|high|max only, no off switch.
+    // "low" is the closest to off; no cleanupValue, default sends nothing.
+    reasoningEffort: { suppressValue: "low" },
   },
   {
     family: "magistral",
