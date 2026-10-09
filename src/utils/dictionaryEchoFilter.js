@@ -1,3 +1,5 @@
+import { getChineseScriptPromptBias } from "./chineseScript.js";
+
 const normalize = (s) =>
   s
     .toLowerCase()
@@ -26,6 +28,10 @@ const MIN_CONSECUTIVE_TERM_RUN = 3;
 const PROMPT_DELIMITER_RE = /[,、，]/;
 const TRAILING_DELIMITER_RE = /[,、，]\s*$/;
 
+// The hint list's entries, normalized, in the order the prompt carries them.
+const promptTerms = (dictionaryPrompt) =>
+  dictionaryPrompt.split(PROMPT_DELIMITER_RE).map(normalize).filter(Boolean);
+
 const hasLoopedWord = (textWords) => {
   const counts = new Map();
   for (const word of textWords) {
@@ -40,15 +46,11 @@ const hasLoopedWord = (textWords) => {
 // the prompt's own order — a literal continuation of the hint list, however long.
 const matchesConsecutiveTermRun = (textWords, dictionaryPrompt) => {
   const promptSequence = [];
-  let termIndex = 0;
-  for (const term of dictionaryPrompt.split(PROMPT_DELIMITER_RE)) {
-    const normalizedTerm = normalize(term);
-    if (!normalizedTerm) continue;
-    for (const word of normalizedTerm.split(" ")) {
+  promptTerms(dictionaryPrompt).forEach((term, termIndex) => {
+    for (const word of term.split(" ")) {
       promptSequence.push({ word, termIndex });
     }
-    termIndex++;
-  }
+  });
   for (let start = 0; start + textWords.length <= promptSequence.length; start++) {
     let offset = 0;
     while (offset < textWords.length && promptSequence[start + offset].word === textWords[offset]) {
@@ -129,44 +131,57 @@ export function isLikelyDictionaryPromptFragment(text, dictionaryPrompt) {
 // Prompt-conditioned models can recite the hint list after the speech ends
 // ("... Thanks, you. OpenWhispr, n8n."). matchesDictionaryPrompt cannot see
 // that: the real speech dilutes its word ratios (#2581). The recited tail is a
-// sentence of its own, made only of 2+ prompt entries in the prompt's own
-// order, so that is the only shape removed. A sentence that ends on a single
-// dictionary word, terms used inside speech, and a whole-text echo (left to
-// matchesDictionaryPrompt) are untouched.
+// sentence of its own, made only of custom-dictionary entries in the prompt's
+// own consecutive order: MIN_CONSECUTIVE_TERM_RUN+ of them from anywhere in the
+// list, or two when they open it, which is where observed recitals start.
+// Snippet triggers ride in the same prompt (getDictionaryHintWords) but are
+// phrases people say, so they never count (#1889). A whole-text echo is left to
+// matchesDictionaryPrompt.
 const MIN_TRAILING_ECHO_TERMS = 2;
-// ASCII terminators need trailing whitespace so "Node.js" stays one term; the
-// CJK ones do not, which also splits the Chinese script bias off its terms.
+// ASCII terminators need trailing whitespace so "Node.js" stays one term.
 const SENTENCE_BREAK_RE = /[.!?]\s+|[。！？]\s*/g;
-const PROMPT_TERM_BREAK_RE = /[,、，]|[.!?]\s+|[。！？]\s*/;
+// "e.g.", "Mr.", an initial, a list marker ("1.") or an ellipsis end in a
+// period without ending the sentence, so the text after them is not a tail.
+const NON_TERMINAL_PERIOD_RE = /(?:^|[\s(])(?:e\.g|i\.e|etc|vs|mrs?|ms|dr|st|\p{L}|\d{1,2})$|\.$/iu;
+// mergeWhisperPrompt sends `${bias} ${dictionary}`; the bias is not a term list.
+const SCRIPT_PROMPT_BIASES = ["simplified", "traditional"].map(getChineseScriptPromptBias);
 
-export function stripTrailingDictionaryEcho(text, dictionaryPrompt) {
-  if (!text || !dictionaryPrompt) return text;
+const withoutScriptBias = (prompt) => {
+  const bias = SCRIPT_PROMPT_BIASES.find((candidate) => prompt.startsWith(candidate));
+  return bias ? prompt.slice(bias.length) : prompt;
+};
 
-  const termIndexes = new Map();
-  for (const term of dictionaryPrompt.split(PROMPT_TERM_BREAK_RE)) {
-    const normalizedTerm = normalize(term);
-    if (normalizedTerm && !termIndexes.has(normalizedTerm)) {
-      termIndexes.set(normalizedTerm, termIndexes.size);
-    }
+export function stripTrailingDictionaryEcho(text, sentPrompt, dictionary) {
+  if (typeof text !== "string" || typeof sentPrompt !== "string" || !Array.isArray(dictionary)) {
+    return text;
   }
+
+  const dictionaryTerms = new Set(
+    dictionary.filter((term) => typeof term === "string").flatMap(promptTerms)
+  );
+  const termIndexes = new Map();
+  promptTerms(withoutScriptBias(sentPrompt)).forEach((term, index) => {
+    if (dictionaryTerms.has(term) && !termIndexes.has(term)) termIndexes.set(term, index);
+  });
+  if (termIndexes.size < MIN_TRAILING_ECHO_TERMS) return text;
 
   const body = text.trimEnd();
   let tailStart = -1;
   for (const match of body.matchAll(SENTENCE_BREAK_RE)) {
-    if (match.index + match[0].length < body.length) tailStart = match.index + match[0].length;
+    const end = match.index + match[0].length;
+    if (end >= body.length) continue;
+    if (match[0][0] === "." && NON_TERMINAL_PERIOD_RE.test(body.slice(0, match.index))) continue;
+    tailStart = end;
   }
   if (tailStart <= 0) return text;
 
-  const tailTerms = body.slice(tailStart).split(PROMPT_DELIMITER_RE).map(normalize).filter(Boolean);
-  if (tailTerms.length < MIN_TRAILING_ECHO_TERMS) return text;
-
-  let previousIndex = null;
-  for (const term of tailTerms) {
-    const index = termIndexes.get(term);
-    if (index === undefined) return text;
-    if (previousIndex !== null && index !== previousIndex + 1) return text;
-    previousIndex = index;
+  const tailIndexes = promptTerms(body.slice(tailStart)).map((term) => termIndexes.get(term));
+  if (tailIndexes.length < MIN_TRAILING_ECHO_TERMS) return text;
+  for (let i = 0; i < tailIndexes.length; i++) {
+    if (tailIndexes[i] === undefined) return text;
+    if (i > 0 && tailIndexes[i] !== tailIndexes[i - 1] + 1) return text;
   }
+  if (tailIndexes.length < MIN_CONSECUTIVE_TERM_RUN && tailIndexes[0] !== 0) return text;
 
   return body.slice(0, tailStart).trimEnd();
 }

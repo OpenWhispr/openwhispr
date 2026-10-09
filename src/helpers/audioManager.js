@@ -854,8 +854,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   // Drops a hint list the model recited after the speech (#2581). Pass the
   // prompt the request actually carried: a capped prompt can only echo itself.
+  // Only custom-dictionary entries count, never the snippet triggers beside them.
   stripTrailingDictionaryEcho(text, sentPrompt) {
-    const stripped = stripTrailingDictionaryEcho(text, sentPrompt);
+    const stripped = stripTrailingDictionaryEcho(text, sentPrompt, this.getCustomDictionaryArray());
     if (stripped !== text) {
       logger.debug(
         "Stripped trailing dictionary echo",
@@ -3909,6 +3910,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           formData.append("keywords[]", keyword);
         }
       }
+      // The terms the model could recite. gpt-transcribe got them as keywords[]
+      // plus the prompt's overflow; when the overflow was capped, count only the
+      // keywords.
+      const sentDictionaryPrompt = usesKeywords
+        ? trimmedPrompt.truncated
+          ? dictionaryKeywords(dictionary).join(", ")
+          : dictionary
+        : dictionaryPrompt;
 
       const shouldStream = this.shouldStreamTranscription(model, provider);
       if (shouldStream) {
@@ -4066,7 +4075,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
         const rawText = this.stripTrailingDictionaryEcho(
           result.text,
-          model === "orukeet-v0.1.0" ? null : dictionaryPrompt
+          model === "orukeet-v0.1.0" ? null : sentDictionaryPrompt
         );
 
         const reasoningStart = performance.now();

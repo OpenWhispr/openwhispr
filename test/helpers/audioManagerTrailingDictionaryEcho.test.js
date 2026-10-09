@@ -29,30 +29,35 @@ test("OpenAI-compatible transcription drops a dictionary list recited after the 
     cachePrefix: "openwhispr-trailing-dictionary-echo-test-",
     settingsKey: "__trailingDictionaryEchoSettings",
   });
-  setSettings({
-    useLocalWhisper: false,
-    allowLocalFallback: false,
-    cloudTranscriptionProvider: "openai",
-  });
+  // The prompt is built by the real getCustomDictionaryPrompt/getWhisperPrompt
+  // from these settings, snippet triggers included.
+  const useDictionary = (customDictionary, snippets = []) =>
+    setSettings({
+      useLocalWhisper: false,
+      allowLocalFallback: false,
+      cloudTranscriptionProvider: "openai",
+      customDictionary,
+      snippets,
+    });
   const audioBlob = new Blob([new ArrayBuffer(8)], { type: "audio/webm" });
-  const makeManager = (prompt, model = "whisper-1") =>
-    createManager({
+  const makeManager = (dictionary, model = "whisper-1", snippets = []) => {
+    useDictionary(dictionary, snippets);
+    return createManager({
       getEffectiveSttLanguage: () => "auto",
       getTranscriptionModel: () => model,
       getTranscriptionEndpoint: () => "https://stt.example.test/v1/audio/transcriptions",
       getAPIKey: async () => "test-key",
-      getCustomDictionaryPrompt: () => prompt,
-      getWhisperPrompt: () => prompt,
       getKeyterms: () => [],
       shouldStreamTranscription: () => false,
       processTranscription: async (text) => text,
       isReasoningAvailable: async () => false,
     });
+  };
 
   await t.test("the recited tail is removed from text and rawText", async () => {
     respondWith(t, "Appreciate the time. Thanks, all. Thanks, you. OpenWhispr, n8n.");
 
-    const result = await makeManager("OpenWhispr, n8n").processWithOpenAIAPI(audioBlob, {});
+    const result = await makeManager(["OpenWhispr", "n8n"]).processWithOpenAIAPI(audioBlob, {});
 
     assert.equal(result.success, true);
     assert.equal(result.rawText, "Appreciate the time. Thanks, all. Thanks, you.");
@@ -62,7 +67,7 @@ test("OpenAI-compatible transcription drops a dictionary list recited after the 
   await t.test("a whole-response echo is still discarded as before", async () => {
     respondWith(t, "OpenWhispr, n8n.");
 
-    await assert.rejects(makeManager("OpenWhispr, n8n").processWithOpenAIAPI(audioBlob, {}), {
+    await assert.rejects(makeManager(["OpenWhispr", "n8n"]).processWithOpenAIAPI(audioBlob, {}), {
       code: "DICTIONARY_ECHO",
     });
   });
@@ -74,16 +79,39 @@ test("OpenAI-compatible transcription drops a dictionary list recited after the 
     );
     const prompts = respondWith(t, "We shipped it. SpecializedTerm098, SpecializedTerm099.");
 
-    const result = await makeManager(terms.join(", ")).processWithOpenAIAPI(audioBlob, {});
+    const result = await makeManager(terms).processWithOpenAIAPI(audioBlob, {});
 
     assert.ok(!prompts[0].includes("SpecializedTerm098"), "fixture must cap the prompt");
     assert.equal(result.rawText, "We shipped it. SpecializedTerm098, SpecializedTerm099.");
   });
 
+  await t.test("a snippet trigger said as its own sentence is kept", async () => {
+    respondWith(t, "Text him. On my way, see you.");
+    const manager = makeManager(["OpenWhispr", "n8n"], "whisper-1", [
+      { trigger: "on my way, see you", replacement: "On my way, see you soon!" },
+    ]);
+
+    const result = await manager.processWithOpenAIAPI(audioBlob, {});
+
+    assert.equal(result.rawText, "Text him. On my way, see you.");
+  });
+
+  await t.test("gpt-transcribe compares against the terms it sent as keywords[]", async (t) => {
+    const prompts = respondWith(t, "Appreciate the time. Thanks, you. OpenWhispr, n8n.");
+
+    const result = await makeManager(["OpenWhispr", "n8n"], "gpt-transcribe").processWithOpenAIAPI(
+      audioBlob,
+      {}
+    );
+
+    assert.equal(prompts[0], null, "the dictionary must ride keywords[], not the prompt");
+    assert.equal(result.rawText, "Appreciate the time. Thanks, you.");
+  });
+
   await t.test("a model that is sent no prompt keeps its whole transcript", async () => {
     const prompts = respondWith(t, "Thanks, you. OpenWhispr, n8n.");
 
-    const result = await makeManager("OpenWhispr, n8n", "orukeet-v0.1.0").processWithOpenAIAPI(
+    const result = await makeManager(["OpenWhispr", "n8n"], "orukeet-v0.1.0").processWithOpenAIAPI(
       audioBlob,
       {}
     );

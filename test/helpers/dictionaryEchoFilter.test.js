@@ -355,16 +355,19 @@ test("payloadSendsDictionaryBias: nullish or malformed payloads never enable the
 
 // #2581: a prompt-conditioned model recited the hint list after the speech.
 // The real speech dilutes matchesDictionaryPrompt's ratios, so only the
-// trailing list is removed and everything spoken is kept.
+// trailing list is removed and everything spoken is kept. The prompt is the
+// hint list as sent; the third argument is the user's own dictionary.
+const entries = (prompt) => prompt.split(", ");
 
 test("stripTrailingDictionaryEcho removes a two-term echo appended to speech", async () => {
   const { matchesDictionaryPrompt, stripTrailingDictionaryEcho } =
     await import("../../src/utils/dictionaryEchoFilter.js");
   const text = "Appreciate the time. Thanks, all. Thanks, you. OpenWhispr, n8n.";
+  const prompt = "OpenWhispr, n8n";
 
-  assert.equal(matchesDictionaryPrompt(text, "OpenWhispr, n8n"), false);
+  assert.equal(matchesDictionaryPrompt(text, prompt), false);
   assert.equal(
-    stripTrailingDictionaryEcho(text, "OpenWhispr, n8n"),
+    stripTrailingDictionaryEcho(text, prompt, entries(prompt)),
     "Appreciate the time. Thanks, all. Thanks, you."
   );
 });
@@ -372,25 +375,51 @@ test("stripTrailingDictionaryEcho removes a two-term echo appended to speech", a
 test("stripTrailingDictionaryEcho removes a whole recited list, case and punctuation aside", async () => {
   const { stripTrailingDictionaryEcho } = await import("../../src/utils/dictionaryEchoFilter.js");
   const prompt = "OpenWhispr, n8n, Traefik, Tailscale, Claude Code, kubectl";
+  const dictionary = entries(prompt);
 
   assert.equal(
     stripTrailingDictionaryEcho(
       "All right. Appreciate the time. Thanks, you. OpenWhispr, n8n, Traefik, Tailscale, Claude Code, kubectl",
-      prompt
+      prompt,
+      dictionary
     ),
     "All right. Appreciate the time. Thanks, you."
   );
   assert.equal(
-    stripTrailingDictionaryEcho("Ship it today! traefik, tailscale, claude code,", prompt),
+    stripTrailingDictionaryEcho(
+      "Ship it today! traefik, tailscale, claude code,",
+      prompt,
+      dictionary
+    ),
     "Ship it today!"
   );
   assert.equal(
     stripTrailingDictionaryEcho(
       "下周发布。OpenWhispr、n8n。",
-      `以下是简体中文。语言、学习、软件、网络。 ${prompt}`
+      `以下是简体中文。语言、学习、软件、网络。 ${prompt}`,
+      dictionary
     ),
     "下周发布。"
   );
+});
+
+test("stripTrailingDictionaryEcho counts two entries only when they open the list", async () => {
+  const { stripTrailingDictionaryEcho } = await import("../../src/utils/dictionaryEchoFilter.js");
+  const prompt = "OpenWhispr, n8n, Traefik, Tailscale, Claude Code, kubectl";
+  const dictionary = entries(prompt);
+
+  // Three or more consecutive entries are a recital from anywhere in the list.
+  assert.equal(
+    stripTrailingDictionaryEcho(
+      "We shipped it. Tailscale, Claude Code, kubectl.",
+      prompt,
+      dictionary
+    ),
+    "We shipped it."
+  );
+  // Two consecutive entries from mid-list are a short list the user said.
+  const said = "Here are the tools I use. Traefik, Tailscale.";
+  assert.equal(stripTrailingDictionaryEcho(said, prompt, dictionary), said);
 });
 
 test("stripTrailingDictionaryEcho keeps a sentence that ends on one dictionary word", async () => {
@@ -402,7 +431,7 @@ test("stripTrailingDictionaryEcho keeps a sentence that ends on one dictionary w
     "That was flaky. Tailscale.",
     "That was flaky. Tailscale, Tailscale.",
   ]) {
-    assert.equal(stripTrailingDictionaryEcho(text, prompt), text);
+    assert.equal(stripTrailingDictionaryEcho(text, prompt, entries(prompt)), text);
   }
 });
 
@@ -423,8 +452,64 @@ test("stripTrailingDictionaryEcho keeps dictionary terms used inside speech", as
     // A spoken word between the terms.
     "It is ready. OpenWhispr, then n8n.",
   ]) {
-    assert.equal(stripTrailingDictionaryEcho(text, prompt), text);
+    assert.equal(stripTrailingDictionaryEcho(text, prompt, entries(prompt)), text);
   }
+});
+
+test("stripTrailingDictionaryEcho does not treat an abbreviation as a sentence break", async () => {
+  const { stripTrailingDictionaryEcho } = await import("../../src/utils/dictionaryEchoFilter.js");
+  const prompt = "OpenWhispr, n8n, Traefik";
+
+  for (const text of [
+    "Use the tools e.g. OpenWhispr, n8n",
+    "Use the tools, i.e. OpenWhispr, n8n.",
+    "Ask Mr. OpenWhispr, n8n",
+    "Step 1. OpenWhispr, n8n",
+    "So... OpenWhispr, n8n",
+  ]) {
+    assert.equal(stripTrailingDictionaryEcho(text, prompt, entries(prompt)), text);
+  }
+  // A year is not a list marker: the sentence before it still ends there.
+  assert.equal(
+    stripTrailingDictionaryEcho("We shipped in 2026. OpenWhispr, n8n.", prompt, entries(prompt)),
+    "We shipped in 2026."
+  );
+});
+
+test("stripTrailingDictionaryEcho keeps an entry containing a period whole", async () => {
+  const { stripTrailingDictionaryEcho } = await import("../../src/utils/dictionaryEchoFilter.js");
+  const prompt = "St. Louis, Chicago, J. R. R. Tolkien";
+
+  assert.equal(
+    stripTrailingDictionaryEcho("Done. St. Louis, Chicago", prompt, entries(prompt)),
+    "Done."
+  );
+  assert.equal(
+    stripTrailingDictionaryEcho("I read it. Louis, Chicago", prompt, entries(prompt)),
+    "I read it. Louis, Chicago"
+  );
+});
+
+test("stripTrailingDictionaryEcho never strips a snippet trigger or the script bias", async () => {
+  const { stripTrailingDictionaryEcho } = await import("../../src/utils/dictionaryEchoFilter.js");
+  const dictionary = ["OpenWhispr", "n8n"];
+
+  // getDictionaryHintWords appends snippet triggers after the dictionary.
+  const withTrigger = "OpenWhispr, n8n, on my way, see you";
+  for (const text of ["Text him. On my way, see you.", "Text him. n8n, on my way, see you."]) {
+    assert.equal(stripTrailingDictionaryEcho(text, withTrigger, dictionary), text);
+  }
+
+  // The Chinese script bias's generic words are not dictionary entries.
+  const biased = "以下是简体中文。语言、学习、软件、网络。 OpenWhispr, n8n";
+  assert.equal(
+    stripTrailingDictionaryEcho("我们看看。语言、学习。", biased, dictionary),
+    "我们看看。语言、学习。"
+  );
+  assert.equal(
+    stripTrailingDictionaryEcho("我们看看。软件、网络、OpenWhispr。", biased, dictionary),
+    "我们看看。软件、网络、OpenWhispr。"
+  );
 });
 
 test("stripTrailingDictionaryEcho leaves a whole-response echo to matchesDictionaryPrompt", async () => {
@@ -432,7 +517,7 @@ test("stripTrailingDictionaryEcho leaves a whole-response echo to matchesDiction
     await import("../../src/utils/dictionaryEchoFilter.js");
 
   assert.equal(
-    stripTrailingDictionaryEcho("OpenWhispr, n8n.", "OpenWhispr, n8n"),
+    stripTrailingDictionaryEcho("OpenWhispr, n8n.", "OpenWhispr, n8n", ["OpenWhispr", "n8n"]),
     "OpenWhispr, n8n."
   );
   assert.equal(matchesDictionaryPrompt("OpenWhispr, n8n.", "OpenWhispr, n8n"), true);
@@ -441,10 +526,24 @@ test("stripTrailingDictionaryEcho leaves a whole-response echo to matchesDiction
 test("stripTrailingDictionaryEcho only compares against the prompt it was given", async () => {
   const { stripTrailingDictionaryEcho } = await import("../../src/utils/dictionaryEchoFilter.js");
   const text = "Thanks, you. OpenWhispr, n8n.";
+  const dictionary = ["OpenWhispr", "n8n", "Traefik", "Tailscale"];
 
-  assert.equal(stripTrailingDictionaryEcho(text, null), text);
-  assert.equal(stripTrailingDictionaryEcho(text, ""), text);
+  assert.equal(stripTrailingDictionaryEcho(text, null, dictionary), text);
+  assert.equal(stripTrailingDictionaryEcho(text, "", dictionary), text);
   // Terms the capped prompt never carried cannot have been recited from it.
-  assert.equal(stripTrailingDictionaryEcho(text, "Traefik, Tailscale"), text);
-  assert.equal(stripTrailingDictionaryEcho(null, "OpenWhispr, n8n"), null);
+  assert.equal(stripTrailingDictionaryEcho(text, "Traefik, Tailscale", dictionary), text);
+});
+
+test("stripTrailingDictionaryEcho returns non-string input untouched", async () => {
+  const { stripTrailingDictionaryEcho } = await import("../../src/utils/dictionaryEchoFilter.js");
+  const prompt = "OpenWhispr, n8n";
+
+  assert.equal(stripTrailingDictionaryEcho(null, prompt, entries(prompt)), null);
+  assert.equal(stripTrailingDictionaryEcho(undefined, prompt, entries(prompt)), undefined);
+  assert.deepEqual(stripTrailingDictionaryEcho({ text: "x" }, prompt, entries(prompt)), {
+    text: "x",
+  });
+  const text = "Thanks, you. OpenWhispr, n8n.";
+  assert.equal(stripTrailingDictionaryEcho(text, ["OpenWhispr", "n8n"], entries(prompt)), text);
+  assert.equal(stripTrailingDictionaryEcho(text, prompt, undefined), text);
 });
