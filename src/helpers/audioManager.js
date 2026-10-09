@@ -169,6 +169,15 @@ const PREVIEW_FLUSH_WATCHDOG_MS = 1000;
 const neverCancelled = () => false;
 const MIN_SPARSE_RECORDING_DURATION_SECONDS = 3;
 const MIN_UNIQUE_WORD_GAIN = 2;
+// A pause-heavy dictation with a dictionary prompt can cause Whisper's decoder
+// to halt prematurely after a long pause and invent a concluding word (#2474).
+// Normal speech averages ~2.0-2.5 words/s. An un-truncated long dictation with
+// typical pauses stays above 0.7-1.0 words/s (even a 92s recording with multiple
+// long pauses of 2-12s has 62 words, or ~0.67 words/s). When prompt bias terminates
+// the decoder early, speech density drops drastically (e.g. 38 words over 92s,
+// or < 0.45 words/s).
+const MIN_PROMPT_TRUNCATION_RECORDING_DURATION_SECONDS = 10;
+const MAX_PROMPT_TRUNCATION_WORDS_PER_SECOND = 0.5;
 
 const cleanupFailureFromError = (error) => ({
   message: error?.message || String(error),
@@ -2304,6 +2313,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         );
         const initialFragment = analyzeDictionaryPromptFragment(result.text, dictionaryPrompt);
         const dictionaryPromptFragment = !strictDictionaryEcho && initialFragment.isPromptFragment;
+        const initialWordCount = countSpokenWords(result.text);
+        const isSparsePromptTranscription =
+          Boolean(dictionaryPrompt) &&
+          !strictDictionaryEcho &&
+          Number.isFinite(metadata.durationSeconds) &&
+          metadata.durationSeconds >= MIN_PROMPT_TRUNCATION_RECORDING_DURATION_SECONDS &&
+          initialWordCount / metadata.durationSeconds < MAX_PROMPT_TRUNCATION_WORDS_PER_SECOND;
         // A non-repeated fragment can only be replaced by the sparse-recording rule
         // below, so on a short recording the retry would be decoded and then discarded.
         const retryCanBeAdopted =
@@ -2312,9 +2328,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           (Number.isFinite(metadata.durationSeconds) &&
             metadata.durationSeconds >= MIN_SPARSE_RECORDING_DURATION_SECONDS);
 
-        if ((strictDictionaryEcho || dictionaryPromptFragment) && retryCanBeAdopted) {
+        if (
+          (strictDictionaryEcho || dictionaryPromptFragment || isSparsePromptTranscription) &&
+          retryCanBeAdopted
+        ) {
           // A prompt-free, VAD-free retry distinguishes real speech from Whisper
-          // continuing either the whole dictionary prompt or a short fragment of it.
+          // continuing either the whole dictionary prompt or a short fragment of it,
+          // as well as Whisper prematurely halting after a pause due to prompt bias (#2474).
           const retryStart = performance.now();
           let retry = null;
           try {
@@ -2365,7 +2385,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           logger.info(
             "Local dictionary-prompt recovery attempt",
             {
-              reason: strictDictionaryEcho ? "strict-echo" : "prompt-fragment",
+              reason: strictDictionaryEcho
+                ? "strict-echo"
+                : dictionaryPromptFragment
+                  ? "prompt-fragment"
+                  : "prompt-truncated",
               retryDurationMs: Math.round(performance.now() - retryStart),
               promptLength: dictionaryPrompt.length,
               initialTextLength: result.text.length,
