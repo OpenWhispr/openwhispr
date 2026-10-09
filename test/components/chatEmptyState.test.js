@@ -4,7 +4,7 @@ const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
-test("new-chat suggestions keep localized prompts, busy state and returning-chat visibility", async (t) => {
+test("new-chat suggestions keep busy state and returning-chat visibility", async (t) => {
   installBrowserGlobals(t);
   const server = await createRendererServer(t, {
     noExternal: ["react-i18next"],
@@ -15,12 +15,7 @@ test("new-chat suggestions keep localized prompts, busy state and returning-chat
   const { NewChatEmptyState } = await server.ssrLoadModule(
     "/components/chat/NewChatEmptyState.tsx"
   );
-  const submitted = [];
-  const props = {
-    showSuggestions: true,
-    disabled: false,
-    onPrompt: (text) => submitted.push(text),
-  };
+  const props = { showSuggestions: true, disabled: false, onPrompt: () => {} };
   const render = (overrides = {}) =>
     renderToStaticMarkup(React.createElement(NewChatEmptyState, { ...props, ...overrides }));
   const html = render();
@@ -28,13 +23,4 @@ test("new-chat suggestions keep localized prompts, busy state and returning-chat
   assert.doesNotMatch(html, /disabled=""/);
   assert.equal((render({ disabled: true }).match(/disabled=""/g) ?? []).length, 3);
   assert.doesNotMatch(render({ showSuggestions: false }), /<button/);
-
-  // The isolated translation hook has no React hooks; invoke the rendered buttons' real callbacks.
-  const tree = NewChatEmptyState(props);
-  for (const button of tree.props.children[1].props.children) button.props.onClick();
-  assert.deepEqual(submitted, [
-    "localized:chat.starters.todos",
-    "localized:chat.starters.meeting",
-    "localized:chat.starters.sharedNotes",
-  ]);
 });

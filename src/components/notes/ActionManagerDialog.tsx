@@ -216,19 +216,11 @@ export default function ActionManagerDialog({
                 onValueChange={(value) => showKind(value as ActionKind)}
                 className="flex-1 min-w-0"
               >
-                <TabsList variant="pill" className="h-auto w-full">
-                  <TabsTrigger
-                    value="template"
-                    variant="pill"
-                    className="h-auto min-h-8 min-w-0 flex-1 whitespace-normal px-2 py-1 text-xs"
-                  >
+                <TabsList variant="pill" className="w-full">
+                  <TabsTrigger value="template" variant="pill" className="flex-1 px-2 text-xs">
                     {t("notes.templates.tab")}
                   </TabsTrigger>
-                  <TabsTrigger
-                    value="action"
-                    variant="pill"
-                    className="h-auto min-h-8 min-w-0 flex-1 whitespace-normal px-2 py-1 text-xs"
-                  >
+                  <TabsTrigger value="action" variant="pill" className="flex-1 px-2 text-xs">
                     {t("notes.actions.tab")}
                   </TabsTrigger>
                 </TabsList>
