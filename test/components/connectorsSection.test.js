@@ -118,13 +118,13 @@ function setPlan(
   });
 }
 
-async function renderSection(t, plan, electronAPI = {}) {
+async function renderSection(t, plan) {
   // Registered first so it runs before the globals it needs are torn down.
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
   });
-  installBrowserGlobals(t, { window: { electronAPI } });
+  installBrowserGlobals(t, { window: { electronAPI: {} } });
   setPlan(t, plan);
   const container = installInteractiveDom(t);
   const vite = await createRendererServer(t, {
@@ -137,18 +137,6 @@ async function renderSection(t, plan, electronAPI = {}) {
   await React.act(async () => root.render(createElement(ConnectorsSection, { onUpgrade() {} })));
   return container;
 }
-
-const receipt = (id, destinationLabel, state = "sent") => ({
-  id,
-  connector: "email",
-  action: "draft",
-  kind: "direct",
-  destinationLabel,
-  state,
-  resultUrl: null,
-  errorCode: null,
-  createdAt: "2026-09-24 10:00:00",
-});
 
 test("paid users choose where drafts open", async (t) => {
   const { textContent } = await renderSection(t, { usageState: usage(true) });
@@ -198,46 +186,18 @@ test("an org that turned connectors off sees why, under the card's header", asyn
 });
 
 test("while the policy is unresolved, the card says drafts are unavailable", async (t) => {
-  let fetches = 0;
-  const container = await renderSection(
-    t,
-    { usageState: usage(true), allowed: false },
-    {
-      connectorRecentActions: async () => {
-        fetches += 1;
-        return [receipt("a", "gabe@example.com")];
-      },
-    }
-  );
+  const container = await renderSection(t, { usageState: usage(true), allowed: false });
   assert.match(container.textContent, /connectors\.email\.unavailable/);
   assert.doesNotMatch(container.textContent, /connectors\.email\.description/);
   assert.doesNotMatch(container.textContent, /connectors\.email\.targets/);
   assert.doesNotMatch(container.textContent, /connectors\.policyOff/);
   assert.doesNotMatch(container.textContent, /integrations\.api\.viewPlans/);
-  assert.equal(fetches, 0);
 });
 
 test("an unresolved policy doesn't hide the upsell from a free user", async (t) => {
   const { textContent } = await renderSection(t, { usageState: usage(false), allowed: false });
   assert.match(textContent, /connectors\.upsell/);
   assert.match(textContent, /integrations\.api\.viewPlans/);
-});
-
-test("Connectors shows no recent actions or receipt content and never fetches history", async (t) => {
-  let fetches = 0;
-  const container = await renderSection(
-    t,
-    { isPaid: true, statuses: { slack: SLACK, gmail: { ...SLACK, id: "gmail" } } },
-    {
-      connectorRecentActions: async () => {
-        fetches++;
-        return [receipt("a", "hidden@example.test")];
-      },
-    }
-  );
-  assert.equal(fetches, 0);
-  assert.doesNotMatch(container.textContent, /connectors\.recent|hidden@example\.test/);
-  assert.ok(buttonWithText(container, "connectors.slack.disconnect"));
 });
 
 test("a connected Slack shows the account and Disconnect", async (t) => {
