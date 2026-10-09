@@ -10,10 +10,11 @@ export type NoteDraftMutation =
   | { sourceNoteId: number; field: "enhancedContent"; value: string | null };
 
 export interface PendingDocumentSnapshot {
-  readonly clearContent?: boolean;
   readonly noteId: number;
   readonly title: string;
   readonly content: string;
+  /** The user emptied the notes, so the save is a deliberate clear that syncs. */
+  readonly clearContent: boolean;
 }
 
 export interface PendingEnhancedSnapshot {
@@ -22,10 +23,10 @@ export interface PendingEnhancedSnapshot {
 }
 
 export type PendingNoteUpdates = {
-  readonly clear_fields?: Array<"content" | "enhanced_content">;
   readonly title?: string;
   readonly content?: string;
   readonly enhanced_content?: string | null;
+  readonly clear_fields?: Array<"content" | "enhanced_content">;
 };
 
 export interface PendingNoteWrite {
@@ -65,51 +66,47 @@ export function applyNoteDraftMutation(
   return { ...draft, [mutation.field]: mutation.value };
 }
 
+export function documentSaveUpdates(document: PendingDocumentSnapshot): PendingNoteUpdates {
+  return {
+    title: document.title,
+    content: document.content,
+    ...(document.clearContent && { clear_fields: ["content"] }),
+  };
+}
+
+export function enhancedSaveUpdates(enhanced: PendingEnhancedSnapshot): PendingNoteUpdates {
+  return {
+    enhanced_content: enhanced.enhancedContent,
+    ...(!enhanced.enhancedContent?.trim() && { clear_fields: ["enhanced_content"] }),
+  };
+}
+
 export function collectPendingNoteWrites(
   document: PendingDocumentSnapshot | null,
   enhanced: PendingEnhancedSnapshot | null
 ): PendingNoteWrite[] {
   if (document && enhanced && document.noteId === enhanced.noteId) {
+    const documentUpdates = documentSaveUpdates(document);
+    const enhancedUpdates = enhancedSaveUpdates(enhanced);
+    const clearFields = [
+      ...(documentUpdates.clear_fields ?? []),
+      ...(enhancedUpdates.clear_fields ?? []),
+    ];
     return [
       {
         noteId: document.noteId,
         updates: {
-          title: document.title,
-          content: document.content,
-          enhanced_content: enhanced.enhancedContent,
-          ...(document.clearContent || !enhanced.enhancedContent?.trim()
-            ? {
-                clear_fields: [
-                  ...(document.clearContent ? ["content" as const] : []),
-                  ...(!enhanced.enhancedContent?.trim() ? ["enhanced_content" as const] : []),
-                ],
-              }
-            : {}),
+          ...documentUpdates,
+          ...enhancedUpdates,
+          ...(clearFields.length > 0 && { clear_fields: clearFields }),
         },
       },
     ];
   }
 
   const writes: PendingNoteWrite[] = [];
-  if (document) {
-    writes.push({
-      noteId: document.noteId,
-      updates: {
-        title: document.title,
-        content: document.content,
-        ...(document.clearContent ? { clear_fields: ["content"] } : {}),
-      },
-    });
-  }
-  if (enhanced) {
-    writes.push({
-      noteId: enhanced.noteId,
-      updates: {
-        enhanced_content: enhanced.enhancedContent,
-        ...(!enhanced.enhancedContent?.trim() ? { clear_fields: ["enhanced_content"] } : {}),
-      },
-    });
-  }
+  if (document) writes.push({ noteId: document.noteId, updates: documentSaveUpdates(document) });
+  if (enhanced) writes.push({ noteId: enhanced.noteId, updates: enhancedSaveUpdates(enhanced) });
   return writes;
 }
 

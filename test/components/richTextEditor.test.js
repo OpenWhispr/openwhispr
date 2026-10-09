@@ -669,16 +669,18 @@ async function mountNotes(t, markdown = `Intro\n\n${TABLE}\n\nAfter`) {
   const editorRef = { current: null };
   let showOtherNote;
   let setDisabled;
-  let saved;
+  let setNoteValue;
+  const changes = [];
   function Note({ initial }) {
     const [value, setValue] = React.useState(initial);
     const [disabled, updateDisabled] = React.useState(false);
     setDisabled = updateDisabled;
+    setNoteValue = setValue;
     return React.createElement(RichTextEditor, {
       value,
       disabled,
       onChange: (markdown) => {
-        saved = markdown;
+        changes.push(markdown);
         setValue(markdown);
       },
       editorRef,
@@ -723,9 +725,13 @@ async function mountNotes(t, markdown = `Intro\n\n${TABLE}\n\nAfter`) {
     editor: () => editorRef.current,
     errors,
     host,
+    /** Every Markdown the note saved through onChange, in order. */
+    changes,
     /** The Markdown the note last saved through onChange. */
-    saved: () => saved,
+    saved: () => changes.at(-1),
     setDisabled: (disabled) => setDisabled(disabled),
+    /** Replaces the note's value from outside the editor, as a summary arriving does. */
+    setValue: (markdown) => setNoteValue(markdown),
     showOtherNote: () => showOtherNote(),
   };
 }
@@ -780,6 +786,29 @@ test("Delete table from the menu works in a note that re-renders on every change
   assert.deepEqual(notes.errors, []);
   assert.equal(markdownOf(notes.editor()), "Intro\n\nAfter");
   assert.equal(notes.saved().trim(), "Intro\n\nAfter");
+});
+
+test("undo never reverts a value set from outside the editor", async (t) => {
+  // One editor serves every tab and note: undoing a tab switch would save the
+  // previous tab's text, often empty, over this one.
+  const notes = await mountNotes(t, "Transcript tab");
+  await notes.act(() => notes.setValue("Summary tab"));
+  await notes.act(() => notes.editor().commands.undo());
+  assert.equal(markdownOf(notes.editor()), "Summary tab");
+  assert.deepEqual(notes.changes, [], "nothing saved over the summary");
+});
+
+test("undo still reverts typing after a value set from outside the editor", async (t) => {
+  const notes = await mountNotes(t, "Transcript tab");
+  await notes.act(() => notes.setValue("Summary tab"));
+  await notes.act(() => {
+    notes.editor().commands.setTextSelection(notes.editor().state.doc.content.size - 1);
+    type(notes.editor(), " edited");
+  });
+  assert.equal(notes.saved().trim(), "Summary tab edited");
+  await notes.act(() => notes.editor().commands.undo());
+  assert.equal(markdownOf(notes.editor()), "Summary tab");
+  assert.equal(notes.saved().trim(), "Summary tab");
 });
 
 test("the table menu disables actions that would break or empty the table", async (t) => {

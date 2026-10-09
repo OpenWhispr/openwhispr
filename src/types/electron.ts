@@ -489,6 +489,20 @@ export interface NoteCreateAckResult {
   outcome: "synced" | "pending" | "already-linked" | "orphaned" | "unresolved";
 }
 
+export interface NoteCreateAckWriteOptions {
+  settleIfUnchanged?: boolean;
+  cloudRevision?: number | null;
+  // The server refused the create without writing it (write_applied: false).
+  writeRejected?: boolean;
+}
+
+export interface NoteCloudBaseOptions {
+  // The user chose Keep on the conflict banner.
+  keepLocal?: boolean;
+  // Fields the conflicting cloud copy deliberately cleared.
+  clearedFields?: Array<"content" | "enhanced_content">;
+}
+
 export interface NoteUpdateAckResult {
   success: boolean;
   outcome: "synced" | "pending" | "identity-changed";
@@ -3503,9 +3517,7 @@ declare global {
         cloudId: string,
         cloudUpdatedAt?: string | null,
         ownerUserId?: string | null,
-        settleIfUnchanged?: boolean,
-        cloudRevision?: number | null,
-        writeRejected?: boolean
+        options?: NoteCreateAckWriteOptions
       ) => Promise<NoteCreateAckResult>;
       markNoteSyncedIfUnchanged?: (
         id: number,
@@ -3519,8 +3531,8 @@ declare global {
         id: number,
         cloudUpdatedAt: string | null,
         cloudRevision?: number | null,
-        keepLocal?: boolean
-      ) => Promise<void>;
+        options?: NoteCloudBaseOptions
+      ) => Promise<{ success: boolean; note?: NoteItem }>;
       setNoteOwnerFromCloud?: (id: number, ownerUserId: string) => Promise<void>;
       countTeamNotesMissingOwner?: () => Promise<number>;
       markNoteSyncError?: (id: number) => Promise<void>;

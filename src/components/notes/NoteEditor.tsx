@@ -87,6 +87,7 @@ import {
   useActionsOfKind,
 } from "../../stores/actionStore";
 import { compileChatActionPrompt } from "../../helpers/templatePrompts";
+import { clearedNoteFields } from "../../helpers/noteFieldSync.js";
 import type { SlashCommand } from "../chat/slashCommands";
 import { formatNoteDate, formatRelativeTime, formatShortDate } from "../../utils/dateFormatting";
 import {
@@ -968,10 +969,19 @@ export default function NoteEditor({
 
   // Keep the local edits, overwriting the cloud revision the user just saw.
   // Advancing the base first is what lets the next push succeed instead of
-  // 409ing against the same conflict and re-raising the banner.
-  const handleConflictKeep = useCallback(() => {
-    if (conflict)
-      void window.electronAPI.setNoteCloudBase?.(note.id, conflict.updated_at, conflict.revision);
+  // 409ing against the same conflict and re-raising the banner. A field the
+  // other device cleared and this one never edited takes the clear rather
+  // than resurrecting it.
+  const handleConflictKeep = useCallback(async () => {
+    if (conflict) {
+      const result = await window.electronAPI.setNoteCloudBase?.(
+        note.id,
+        conflict.updated_at,
+        conflict.revision,
+        { keepLocal: true, clearedFields: clearedNoteFields(conflict) }
+      );
+      if (result?.note) updateNoteInStore(result.note);
+    }
     clearNoteConflict(note.client_note_id);
   }, [conflict, note.id, note.client_note_id]);
 

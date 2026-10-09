@@ -3330,9 +3330,9 @@ class DatabaseManager {
     }
     try {
       if (!this.db) throw new Error("Database not initialized");
-      if (!this.getNote(id)) return { success: false, error: "Note not found" };
-      updates = { ...updates };
       const previous = this.getNote(id);
+      if (!previous) return { success: false, error: "Note not found" };
+      updates = { ...updates };
       const clears = updates.clear_fields ?? [];
       if (!Array.isArray(clears) || clears.some((field) => !NOTE_TEXT_FIELDS.includes(field))) {
         return { success: false, error: "Invalid note clear fields" };
@@ -3348,9 +3348,10 @@ class DatabaseManager {
           }
           updates[field] = field === "content" ? "" : null;
           updates[`${field}_sync_operation`] = "clear";
+          // The template is the note's choice, not summary text: keeping it
+          // lets "Generate AI Summary" rerun the same template.
           if (field === "enhanced_content") {
             updates.enhancement_prompt = null;
-            updates.enhancement_template_id = null;
             updates.enhanced_at_content_hash = null;
           }
         } else if (
@@ -6304,14 +6305,28 @@ class DatabaseManager {
       const existing = this.db
         .prepare("SELECT * FROM notes WHERE client_note_id = ?")
         .get(cloudNote.client_note_id);
-      if (existing && existing.account_id !== accountId) throw new Error("Note account mismatch");
-      if (existing?.cloud_id && existing.cloud_id !== cloudNote.id)
-        throw new Error("Note cloud identity mismatch");
+      // Rows without an account (created signed out or before attribution) and
+      // personal<->team moves are adopted as before; only another account's
+      // row or another cloud row is left alone. Never throw: one bad row would
+      // abort the whole pull and stall its cursor.
+      const otherAccount = existing?.account_id && accountId && existing.account_id !== accountId;
+      const otherCloudRow = existing?.cloud_id && existing.cloud_id !== cloudNote.id;
+      if (otherAccount || otherCloudRow) {
+        debugLogger.warn(
+          "Skipping cloud note that belongs to another local row",
+          { otherAccount: Boolean(otherAccount), otherCloudRow: Boolean(otherCloudRow) },
+          "database"
+        );
+        return existing;
+      }
       const versioned = hasNoteRevision(cloudNote.revision);
+      // A copy older than the revision this device acknowledged is stale. One
+      // without a revision (an API that predates them) applies as before and
+      // drops the local revision.
       if (
-        existing &&
-        hasNoteRevision(existing.cloud_revision) &&
-        (!versioned || cloudNote.revision < existing.cloud_revision)
+        versioned &&
+        hasNoteRevision(existing?.cloud_revision) &&
+        cloudNote.revision < existing.cloud_revision
       )
         return existing;
       const clearsContent =
@@ -6325,7 +6340,6 @@ class DatabaseManager {
       if (!cloudNote.enhanced_content?.trim()) cloudNote.enhanced_content = null;
       if (clearsSummary) {
         cloudNote.enhancement_prompt = null;
-        cloudNote.enhancement_template_id = null;
         cloudNote.enhanced_at_content_hash = null;
       }
       const hasExplicitCreator = Object.prototype.hasOwnProperty.call(
@@ -6345,18 +6359,24 @@ class DatabaseManager {
       const updaterUpdate = hasExplicitUpdater
         ? "excluded.updated_by_user_id"
         : "updated_by_user_id";
+      // Sync must never replace non-empty local content/enhanced_content/
+      // transcript with an empty cloud value (#1290, the #938 invariant),
+      // unless the cloud recorded that empty value as a deliberate clear.
+      // The enhancement prompt/hash/template travel with enhanced_content.
+      const keepsLocalContent = clearsContent
+        ? "0"
+        : "COALESCE(excluded.content, '') = '' AND COALESCE(content, '') <> ''";
+      const keepsLocalSummary = clearsSummary
+        ? "0"
+        : "COALESCE(excluded.enhanced_content, '') = '' AND COALESCE(enhanced_content, '') <> ''";
       // An API that predates template ids omits the key; keep the local one.
       const templateIdUpdate = Object.prototype.hasOwnProperty.call(
         cloudNote,
         "enhancement_template_id"
       )
-        ? `CASE
-            WHEN ${clearsSummary ? 0 : 1} AND COALESCE(excluded.enhanced_content, '') = '' AND COALESCE(enhanced_content, '') <> ''
+        ? `CASE WHEN ${keepsLocalSummary}
             THEN enhancement_template_id ELSE excluded.enhancement_template_id END`
         : "enhancement_template_id";
-      // Sync must never replace non-empty local content/enhanced_content/
-      // transcript with an empty cloud value (#1290, the #938 invariant).
-      // The enhancement prompt/hash/template travel with enhanced_content.
       const stmt = this.db.prepare(`
         INSERT INTO notes (client_note_id, cloud_id, title, content, enhanced_content,
           enhancement_prompt, enhancement_template_id, enhanced_at_content_hash, note_type, source_file,
@@ -6367,18 +6387,14 @@ class DatabaseManager {
         ON CONFLICT(client_note_id) DO UPDATE SET
           cloud_id = excluded.cloud_id,
           title = excluded.title,
-          content = CASE
-            WHEN ${clearsContent ? 0 : 1} AND COALESCE(excluded.content, '') = '' AND COALESCE(content, '') <> ''
+          content = CASE WHEN ${keepsLocalContent}
             THEN content ELSE excluded.content END,
-          enhanced_content = CASE
-            WHEN ${clearsSummary ? 0 : 1} AND COALESCE(excluded.enhanced_content, '') = '' AND COALESCE(enhanced_content, '') <> ''
+          enhanced_content = CASE WHEN ${keepsLocalSummary}
             THEN enhanced_content ELSE excluded.enhanced_content END,
-          enhancement_prompt = CASE
-            WHEN ${clearsSummary ? 0 : 1} AND COALESCE(excluded.enhanced_content, '') = '' AND COALESCE(enhanced_content, '') <> ''
+          enhancement_prompt = CASE WHEN ${keepsLocalSummary}
             THEN enhancement_prompt ELSE excluded.enhancement_prompt END,
           enhancement_template_id = ${templateIdUpdate},
-          enhanced_at_content_hash = CASE
-            WHEN ${clearsSummary ? 0 : 1} AND COALESCE(excluded.enhanced_content, '') = '' AND COALESCE(enhanced_content, '') <> ''
+          enhanced_at_content_hash = CASE WHEN ${keepsLocalSummary}
             THEN enhanced_at_content_hash ELSE excluded.enhanced_at_content_hash END,
           transcript = CASE
             WHEN COALESCE(excluded.transcript, '') = '' AND COALESCE(transcript, '') <> ''
@@ -6477,16 +6493,17 @@ class DatabaseManager {
   // base/owner. A purge forks the client_note_id, so the relocated Personal
   // row is never mutated. Partial migration creates explicitly opt out of
   // settling so a later full PATCH still delivers fields the POST omitted.
+  // writeRejected links a create the server refused without writing it, so
+  // the row stays parked until a pull resolves it (cloud_create_rejected).
   acknowledgeNoteCreate(
     id,
     snapshot,
     cloudId,
     cloudUpdatedAt = null,
     ownerUserId = null,
-    settleIfUnchanged = true,
-    cloudRevision = null,
-    writeRejected = false
+    options = {}
   ) {
+    const { settleIfUnchanged = true, cloudRevision = null, writeRejected = false } = options;
     try {
       if (!this.db) throw new Error("Database not initialized");
       if (!this.getNote(id)) {
@@ -6528,16 +6545,17 @@ class DatabaseManager {
         // identity as owing a scope retraction even when backup is disabled.
         const leftTeam = this._leftTeamDuringPush(snapshot.space_id, current.space_id);
 
-        // Creates carry snapshots, not field operations. A queued operation
-        // follows as a revisioned PATCH after the identity is acknowledged.
-        const hasOperations = NOTE_TEXT_FIELDS.some((field) => snapshot[`${field}_sync_operation`]);
-        if (unchanged && settleIfUnchanged && !hasOperations && !writeRejected) {
+        // The create carried the snapshot's text, which satisfies a set. A
+        // clear still follows as a revisioned PATCH: a retried create preserves
+        // text the server already holds.
+        if (unchanged && settleIfUnchanged && !hasPendingNoteClear(snapshot) && !writeRejected) {
           this.db
             .prepare(
               `UPDATE notes
                SET sync_status = 'synced', cloud_id = ?, left_team = 0,
                    cloud_updated_at = ?, cloud_revision = ?,
-                   owner_user_id = ?
+                   owner_user_id = ?,
+                   content_sync_operation = NULL, enhanced_content_sync_operation = NULL
                WHERE id = ? AND client_note_id = ? AND cloud_id IS NULL`
             )
             .run(
@@ -6611,11 +6629,14 @@ class DatabaseManager {
         }
 
         if (current.cloud_create_rejected) return { success: true, outcome: "pending", changes: 0 };
+        // An older response arriving out of order must not regress the
+        // revision. A response without one (an API that predates revisions)
+        // drops it, so pushes fall back to the timestamp base.
         const incomingRevision = hasNoteRevision(cloudRevision) ? cloudRevision : null;
         if (
-          (hasNoteRevision(current.cloud_revision) &&
-            (incomingRevision === null || incomingRevision < current.cloud_revision)) ||
-          (hasPendingNoteClear(snapshot) && incomingRevision === null)
+          incomingRevision !== null &&
+          hasNoteRevision(current.cloud_revision) &&
+          incomingRevision < current.cloud_revision
         ) {
           return { success: true, outcome: "pending", changes: 0 };
         }
@@ -6730,40 +6751,54 @@ class DatabaseManager {
   }
 
   // Records the server revision the user knowingly overwrites ("Keep editing"
-  // on the conflict banner). Deliberately leaves updated_at and sync_status
-  // alone — the local edit stays pending and pushes with the advanced base.
-  setNoteCloudBase(id, cloudUpdatedAt, cloudRevision = null, keepLocal = true) {
+  // on the conflict banner, keepLocal) or that the capability backfill found
+  // equal to this device's base. Deliberately leaves updated_at and
+  // sync_status alone — a local edit stays pending and pushes with the
+  // advanced base.
+  setNoteCloudBase(id, cloudUpdatedAt, cloudRevision = null, options = {}) {
+    const { keepLocal = false, clearedFields = [] } = options;
     try {
       if (!this.db) throw new Error("Database not initialized");
-      if (!this.getNote(id)) return { success: false };
-      const current = this.getNote(id);
-      if (
-        hasNoteRevision(current.cloud_revision) &&
-        (!hasNoteRevision(cloudRevision) || cloudRevision < current.cloud_revision)
-      )
-        return { success: false };
-      // Keep is a deliberate restoration of the visible local snapshot. The
-      // capability backfill passes false and must never grant this intent.
-      if (keepLocal && hasNoteRevision(cloudRevision)) {
-        for (const field of NOTE_TEXT_FIELDS) {
-          if (current[field]?.trim()) {
-            this.db
-              .prepare(`UPDATE notes SET ${field}_sync_operation = 'set' WHERE id = ?`)
-              .run(id);
+      return this.db.transaction(() => {
+        const current = this.getNote(id);
+        if (!current) return { success: false };
+        const revision = hasNoteRevision(cloudRevision) ? cloudRevision : null;
+        if (
+          hasNoteRevision(current.cloud_revision) &&
+          revision !== null &&
+          revision < current.cloud_revision
+        )
+          return { success: false };
+        if (keepLocal) {
+          for (const field of NOTE_TEXT_FIELDS) {
+            if (current[`${field}_sync_operation`]) continue;
+            if (clearedFields.includes(field)) {
+              // The other device cleared a field this one never edited: take
+              // the clear rather than resurrect it.
+              this.db
+                .prepare(
+                  field === "content"
+                    ? "UPDATE notes SET content = '' WHERE id = ?"
+                    : "UPDATE notes SET enhanced_content = NULL, enhancement_prompt = NULL, enhanced_at_content_hash = NULL WHERE id = ?"
+                )
+                .run(id);
+            } else if (current[field]?.trim()) {
+              // Keep restores the visible local snapshot over the cloud copy.
+              this.db
+                .prepare(`UPDATE notes SET ${field}_sync_operation = 'set' WHERE id = ?`)
+                .run(id);
+            }
           }
         }
-      }
-      this.db
-        .prepare(
-          "UPDATE notes SET cloud_updated_at = ?, cloud_revision = ?, cloud_create_rejected = CASE WHEN ? THEN 0 ELSE cloud_create_rejected END WHERE id = ?"
-        )
-        .run(
-          cloudUpdatedAt,
-          hasNoteRevision(cloudRevision) ? cloudRevision : null,
-          keepLocal ? 1 : 0,
-          id
-        );
-      return { success: true };
+        this.db
+          .prepare(
+            `UPDATE notes SET cloud_updated_at = ?, cloud_revision = ?,
+               cloud_create_rejected = CASE WHEN ? THEN 0 ELSE cloud_create_rejected END
+             WHERE id = ?`
+          )
+          .run(cloudUpdatedAt, revision, keepLocal ? 1 : 0, id);
+        return { success: true, note: this.getNote(id) };
+      })();
     } catch (error) {
       debugLogger.error("Error setting note cloud base", { error: error.message }, "database");
       throw error;

@@ -1,4 +1,4 @@
-import { hasNoteRevision, hasPendingNoteClear } from "../helpers/noteFieldSync.js";
+import { hasNoteRevision, noteAwaitsCloudResolution } from "../helpers/noteFieldSync.js";
 import type {
   NoteItem,
   FolderItem,
@@ -796,11 +796,10 @@ export class SyncService {
   private async pushNote(id: number): Promise<void> {
     const note = await window.electronAPI.getNote?.(id);
     if (!note) return;
-    if (
-      note.cloud_create_rejected ||
-      (note.cloud_id && hasPendingNoteClear(note) && !hasNoteRevision(note.cloud_revision))
-    ) {
-      this.requestSyncAll("retry");
+    if (noteAwaitsCloudResolution(note)) {
+      // Only a full pass resolves it; stay throttled so typing in the note
+      // doesn't start one per debounced push.
+      this.requestSyncAll("interval");
       return;
     }
     if (readNoteConflictIds().has(note.client_note_id)) {
@@ -1767,13 +1766,7 @@ export class SyncService {
 
   private async pushPendingNotes(teamOnly = false): Promise<void> {
     let pending = (await window.electronAPI.getPendingNotes?.(teamOnly ? "team" : undefined)) ?? [];
-    if (
-      pending.some(
-        (note) =>
-          note.cloud_create_rejected ||
-          (note.cloud_id && hasPendingNoteClear(note) && !hasNoteRevision(note.cloud_revision))
-      )
-    ) {
+    if (pending.some(noteAwaitsCloudResolution)) {
       // An unchanged cloud row may be absent from the delta feed after upgrading.
       await this.pullNotes(teamOnly, true);
       pending = (await window.electronAPI.getPendingNotes?.(teamOnly ? "team" : undefined)) ?? [];
@@ -1786,10 +1779,11 @@ export class SyncService {
     const conflicted = readNoteConflictIds();
     const pushable: Array<{ note: NoteItem; scope: PushScopeFields }> = [];
     for (const note of pending) {
-      if (note.cloud_create_rejected || conflicted.has(note.client_note_id)) {
-        // An unresolved pull conflict: pushing now would auto-resolve it as
-        // local-wins before the user chose Keep or Refresh (which clear the
-        // registry entry and unblock the row).
+      if (noteAwaitsCloudResolution(note) || conflicted.has(note.client_note_id)) {
+        // An unresolved pull conflict or rejected create: pushing now would
+        // auto-resolve it as local-wins before the user chose Keep or Refresh
+        // (which clear the registry entry and unblock the row). A clear with
+        // no server base waits for the pull above to supply a revision.
         continue;
       }
       if (note.folder_id && blockedFolderIds.has(note.folder_id)) {
@@ -2077,15 +2071,17 @@ export class SyncService {
             hasNoteRevision(cloudNote.revision) &&
             local.cloud_id === cloudNote.id
           ) {
-            if (
+            // Adopt the revision when this device's base is the server's
+            // current row. An unpushed edit on a row acked before timestamp
+            // bases existed pushed last-write-wins until now; it still does.
+            const sameBase =
               normalizeTimestamp(local.cloud_updated_at) ===
-              normalizeTimestamp(cloudNote.updated_at)
-            ) {
+              normalizeTimestamp(cloudNote.updated_at);
+            if (sameBase || (!local.cloud_updated_at && local.sync_status !== "synced")) {
               await window.electronAPI.setNoteCloudBase?.(
                 local.id,
                 cloudNote.updated_at,
-                cloudNote.revision,
-                false
+                cloudNote.revision
               );
               local.cloud_revision = cloudNote.revision;
             } else if (local.sync_status !== "synced") {

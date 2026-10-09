@@ -34,9 +34,7 @@ test("resolveCloudNoteCreate deletes a proven orphan create", async () => {
     "cloud-note-42",
     "2026-07-29T10:00:00.000Z",
     "owner-42",
-    true,
-    null,
-    false,
+    { settleIfUnchanged: true, cloudRevision: null, writeRejected: false },
   ]);
   assert.deepEqual(calls[1], ["delete", "cloud-note-42"]);
 });
@@ -144,9 +142,7 @@ test("resolveCloudNoteCreateBatch routes migration results by snapshot identity"
       "cloud-note-84",
       "2026-07-29T14:00:00.000Z",
       null,
-      false,
-      null,
-      false,
+      { settleIfUnchanged: false, cloudRevision: null, writeRejected: false },
     ],
   ]);
   assert.deepEqual(deleted, ["cloud-note-84"]);
@@ -258,7 +254,12 @@ for (const invalidated of [false, true]) {
       {
         acknowledge: async (...args) => {
           acknowledged = true;
-          assert.equal(args[6], null);
+          // No fresh base or revision: the server never wrote this request.
+          assert.deepEqual(args[5], {
+            settleIfUnchanged: false,
+            cloudRevision: null,
+            writeRejected: true,
+          });
           return { success: true, outcome: "orphaned" };
         },
         deleteCloud: () => assert.fail("Rejected create is not owned by this request"),

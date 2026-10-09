@@ -1,4 +1,9 @@
-import type { NoteCreateAckResult, NoteCreateSnapshot, NoteItem } from "../types/electron";
+import type {
+  NoteCreateAckResult,
+  NoteCreateAckWriteOptions,
+  NoteCreateSnapshot,
+  NoteItem,
+} from "../types/electron";
 
 export interface CloudNoteCreateResult {
   id: string;
@@ -16,9 +21,7 @@ export interface NoteCreateAckDependencies {
     cloudId: string,
     cloudUpdatedAt: string | null,
     ownerUserId: string | null,
-    settleIfUnchanged: boolean,
-    cloudRevision?: number | null,
-    writeRejected?: boolean
+    options: NoteCreateAckWriteOptions
   ) => Promise<NoteCreateAckResult | undefined>;
   deleteCloud: (cloudId: string) => Promise<void>;
   onInvalidResponse?: (expectedClientNoteId: string, receivedClientNoteId: string | null) => void;
@@ -78,21 +81,24 @@ export async function resolveCloudNoteCreate(
       : cleanupOrphanedCreate(cloud, dependencies);
   }
 
+  const writeRejected = cloud.write_applied === false;
   const result = await dependencies.acknowledge(
     note.id,
     note,
     cloud.id,
-    cloud.write_applied === false ? (note.cloud_updated_at ?? null) : (cloud.updated_at ?? null),
+    writeRejected ? (note.cloud_updated_at ?? null) : (cloud.updated_at ?? null),
     cloud.user_id ?? null,
-    (options.settleIfUnchanged ?? true) && cloud.write_applied !== false,
-    cloud.write_applied === false ? (note.cloud_revision ?? null) : (cloud.revision ?? null),
-    cloud.write_applied === false
+    {
+      settleIfUnchanged: (options.settleIfUnchanged ?? true) && !writeRejected,
+      cloudRevision: writeRejected ? (note.cloud_revision ?? null) : (cloud.revision ?? null),
+      writeRejected,
+    }
   );
   if (!result) return "bridge-unavailable";
   // A rejected idempotent POST did not create or update this server row.
   // Link its identity for pull/conflict resolution, but grant neither a new
   // write base nor authority to delete it as an orphan of this request.
-  if (cloud.write_applied === false) return "write-rejected";
+  if (writeRejected) return "write-rejected";
   if (result.outcome !== "orphaned") return result.outcome;
 
   return cleanupOrphanedCreate(cloud, dependencies);
@@ -121,25 +127,14 @@ function rendererDependencies(
   deleteCloud: (cloudId: string) => Promise<void>
 ): NoteCreateAckDependencies {
   return {
-    acknowledge: async (
-      id,
-      snapshot,
-      cloudId,
-      cloudUpdatedAt,
-      ownerUserId,
-      settleIfUnchanged,
-      cloudRevision,
-      writeRejected
-    ) =>
+    acknowledge: async (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) =>
       window.electronAPI.acknowledgeNoteCreate?.(
         id,
         snapshot,
         cloudId,
         cloudUpdatedAt,
         ownerUserId,
-        settleIfUnchanged,
-        cloudRevision,
-        writeRejected
+        options
       ),
     deleteCloud,
     onInvalidResponse: (expected, received) =>

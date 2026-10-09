@@ -376,7 +376,8 @@ test("safe assistant edits and atomic Undo", async (t) => {
       "2026-10-09",
       "owner-one"
     );
-    assert.equal(ack.outcome, "pending");
+    // The create carried the edited text, so it settles in one request.
+    assert.equal(ack.outcome, "synced");
     assert.equal(database.getNote(note.id).cloud_id, `cloud-${note.id}`);
     assert.equal(tokenFor(note.id), token);
     assert.equal(database.undoNoteUpdate(token).success, true);

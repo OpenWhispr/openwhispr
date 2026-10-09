@@ -146,6 +146,70 @@ test("keeps document and enhanced writes with different owners separate", async 
   );
 });
 
+test("a save payload carries a clear only for emptied notes or a blank summary", async () => {
+  const { documentSaveUpdates, enhancedSaveUpdates } = await load();
+
+  assert.deepEqual(
+    documentSaveUpdates({ noteId: 1, title: "A title", content: "", clearContent: true }),
+    { title: "A title", content: "", clear_fields: ["content"] }
+  );
+  // A blank body alone is untrusted (a title edit, a load that came back empty).
+  assert.deepEqual(
+    documentSaveUpdates({ noteId: 1, title: "A title", content: "", clearContent: false }),
+    { title: "A title", content: "" }
+  );
+  for (const blank of [null, "", "  \n"]) {
+    assert.deepEqual(enhancedSaveUpdates({ noteId: 1, enhancedContent: blank }), {
+      enhanced_content: blank,
+      clear_fields: ["enhanced_content"],
+    });
+  }
+  assert.deepEqual(enhancedSaveUpdates({ noteId: 1, enhancedContent: "A summary" }), {
+    enhanced_content: "A summary",
+  });
+});
+
+test("pending clears flush with the writes they belong to", async () => {
+  const { collectPendingNoteWrites } = await load();
+  const cleared = { noteId: 1, title: "A title", content: "", clearContent: true };
+  const kept = { noteId: 1, title: "A title", content: "A body", clearContent: false };
+
+  assert.deepEqual(collectPendingNoteWrites(cleared, null), [
+    { noteId: 1, updates: { title: "A title", content: "", clear_fields: ["content"] } },
+  ]);
+  assert.deepEqual(collectPendingNoteWrites(null, { noteId: 1, enhancedContent: "" }), [
+    { noteId: 1, updates: { enhanced_content: "", clear_fields: ["enhanced_content"] } },
+  ]);
+  assert.deepEqual(collectPendingNoteWrites(cleared, { noteId: 1, enhancedContent: "" }), [
+    {
+      noteId: 1,
+      updates: {
+        title: "A title",
+        content: "",
+        enhanced_content: "",
+        clear_fields: ["content", "enhanced_content"],
+      },
+    },
+  ]);
+  assert.deepEqual(collectPendingNoteWrites(cleared, { noteId: 1, enhancedContent: "Summary" }), [
+    {
+      noteId: 1,
+      updates: {
+        title: "A title",
+        content: "",
+        enhanced_content: "Summary",
+        clear_fields: ["content"],
+      },
+    },
+  ]);
+  assert.deepEqual(collectPendingNoteWrites(kept, { noteId: 1, enhancedContent: "Summary" }), [
+    {
+      noteId: 1,
+      updates: { title: "A title", content: "A body", enhanced_content: "Summary" },
+    },
+  ]);
+});
+
 test("models B's editor event before the A-to-B parent transition, then returns to A", async () => {
   const { applyNoteDraftMutation, planNoteTransition } = await load();
   const noteA = note(1, "A body", "A enhancement");

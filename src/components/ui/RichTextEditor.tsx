@@ -79,7 +79,9 @@ export function RichTextEditor({
     suppressUpdateRef.current = true;
 
     const { from, to } = editor.state.selection;
-    editor.commands.setContent(value);
+    // Kept out of undo history: the editor is reused across tabs and notes, so
+    // undoing this would bring back another document and save it over this one.
+    editor.chain().setMeta("addToHistory", false).setContent(value).run();
 
     // Restore cursor position within bounds
     const docSize = editor.state.doc.content.size;

@@ -61,11 +61,14 @@ async function mountListener(
   return { store, writes, focusListeners };
 }
 
+// A first summary's Undo: clear_fields has to reach the database, or the
+// restore is a local blank and the summary syncs back.
 const PREVIOUS = {
   enhanced_content: null,
   enhancement_prompt: null,
   enhancement_template_id: null,
   enhanced_at_content_hash: null,
+  clear_fields: ["enhanced_content"],
 };
 const APPLIED = {
   noteId: 4,

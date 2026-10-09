@@ -75,6 +75,8 @@ import { markIntroSeen, NOTES_STRUCTURE_INTRO, shouldShowIntro } from "../../lib
 import {
   applyNoteDraftMutation,
   collectPendingNoteWrites,
+  documentSaveUpdates,
+  enhancedSaveUpdates,
   planNoteTransition,
   shouldCancelPendingSavesForDelete,
   type NoteEditorDraft,
@@ -406,41 +408,31 @@ export default function PersonalNotesView({
     }
   }, [activeNote, commitDraft, transitionToNote]);
 
-  const scheduleDocumentSave = useCallback(
-    (
-      snapshot: NoteEditorDraft,
-      clearContent = pendingDocumentRef.current?.clearContent ?? false
-    ) => {
-      void window.electronAPI.discardNoteUndo?.(snapshot.noteId);
-      const current = pendingDocumentRef.current;
-      if (current) clearTimeout(current.timer);
+  const scheduleDocumentSave = useCallback((snapshot: NoteEditorDraft, clearContent: boolean) => {
+    void window.electronAPI.discardNoteUndo?.(snapshot.noteId);
+    const current = pendingDocumentRef.current;
+    if (current) clearTimeout(current.timer);
 
-      const pending: PendingDocumentSave = {
-        noteId: snapshot.noteId,
-        title: snapshot.title,
-        content: snapshot.content,
-        clearContent,
-        timer: setTimeout(async () => {
-          if (pendingDocumentRef.current !== pending) return;
-          pendingDocumentRef.current = null;
-          setIsSaving(true);
-          try {
-            await window.electronAPI.updateNote(pending.noteId, {
-              title: pending.title,
-              content: pending.content,
-              ...(pending.clearContent ? { clear_fields: ["content" as const] } : {}),
-            });
-          } catch (err) {
-            logger.warn("Failed to save note", { error: (err as Error).message }, "notes");
-          } finally {
-            setIsSaving(false);
-          }
-        }, 1000),
-      };
-      pendingDocumentRef.current = pending;
-    },
-    []
-  );
+    const pending: PendingDocumentSave = {
+      noteId: snapshot.noteId,
+      title: snapshot.title,
+      content: snapshot.content,
+      clearContent,
+      timer: setTimeout(async () => {
+        if (pendingDocumentRef.current !== pending) return;
+        pendingDocumentRef.current = null;
+        setIsSaving(true);
+        try {
+          await window.electronAPI.updateNote(pending.noteId, documentSaveUpdates(pending));
+        } catch (err) {
+          logger.warn("Failed to save note", { error: (err as Error).message }, "notes");
+        } finally {
+          setIsSaving(false);
+        }
+      }, 1000),
+    };
+    pendingDocumentRef.current = pending;
+  }, []);
 
   const scheduleEnhancedSave = useCallback((snapshot: NoteEditorDraft) => {
     void window.electronAPI.discardNoteUndo?.(snapshot.noteId);
@@ -455,12 +447,7 @@ export default function PersonalNotesView({
         pendingEnhancedRef.current = null;
         setIsSaving(true);
         try {
-          await window.electronAPI.updateNote(pending.noteId, {
-            enhanced_content: pending.enhancedContent,
-            ...(!pending.enhancedContent?.trim()
-              ? { clear_fields: ["enhanced_content" as const] }
-              : {}),
-          });
+          await window.electronAPI.updateNote(pending.noteId, enhancedSaveUpdates(pending));
         } catch (err) {
           logger.warn(
             "Failed to save enhanced note content",
@@ -484,7 +471,9 @@ export default function PersonalNotesView({
       });
       if (!next) return;
       commitDraft(next);
-      scheduleDocumentSave(next);
+      // A title edit before the save fires shares that save, so it keeps a clear of the notes.
+      const pending = pendingDocumentRef.current;
+      scheduleDocumentSave(next, pending?.noteId === next.noteId && pending.clearContent);
     },
     [commitDraft, scheduleDocumentSave]
   );

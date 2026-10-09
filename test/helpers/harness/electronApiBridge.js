@@ -84,26 +84,8 @@ function createElectronApi(db, options = {}) {
     getNoteByClientId: async (clientNoteId) => db.getNoteByClientId(clientNoteId),
     upsertNoteFromCloud: async (cloudNote, localFolderId, localSpaceId) =>
       db.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId),
-    acknowledgeNoteCreate: async (
-      id,
-      snapshot,
-      cloudId,
-      cloudUpdatedAt,
-      ownerUserId,
-      settleIfUnchanged,
-      cloudRevision,
-      writeRejected
-    ) =>
-      db.acknowledgeNoteCreate(
-        id,
-        snapshot,
-        cloudId,
-        cloudUpdatedAt,
-        ownerUserId,
-        settleIfUnchanged,
-        cloudRevision,
-        writeRejected
-      ),
+    acknowledgeNoteCreate: async (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) =>
+      db.acknowledgeNoteCreate(id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options),
     markNoteSyncedIfUnchanged: async (
       id,
       snapshot,
@@ -120,8 +102,8 @@ function createElectronApi(db, options = {}) {
         ownerUserId,
         cloudRevision
       ),
-    setNoteCloudBase: async (id, cloudUpdatedAt, cloudRevision, keepLocal) =>
-      db.setNoteCloudBase(id, cloudUpdatedAt, cloudRevision, keepLocal),
+    setNoteCloudBase: async (id, cloudUpdatedAt, cloudRevision, options) =>
+      db.setNoteCloudBase(id, cloudUpdatedAt, cloudRevision, options),
     markNoteSyncError: async (id) => db.markNoteSyncError(id),
     setNoteOwnerFromCloud: async (id, ownerUserId) => db.setNoteOwnerFromCloud(id, ownerUserId),
     countTeamNotesMissingOwner: async () => db.countTeamNotesMissingOwner(),

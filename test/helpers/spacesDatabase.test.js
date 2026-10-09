@@ -968,7 +968,7 @@ test("acknowledgeNoteCreate settles only the exact create snapshot", (t) => {
     "migration-cloud-id",
     "2026-07-29T11:30:00.000Z",
     null,
-    false
+    { settleIfUnchanged: false }
   );
   const afterPartial = db.getNote(partial.id);
   assert.equal(partialAck.outcome, "pending");

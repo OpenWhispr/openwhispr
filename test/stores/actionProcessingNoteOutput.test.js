@@ -327,6 +327,7 @@ test("a run hands Undo the summary fields it overwrote, and the title when it re
     LABELS
   );
   await waitFor(() => updates.length === 1, "the rewrite to be written");
+  // A summary to put back is a plain set, never a clear.
   assert.deepEqual(store.consumeAppliedEvents(), [
     { noteId: 15, action: shorten, previous: summaryFields },
   ]);
@@ -346,9 +347,9 @@ test("a run hands Undo the summary fields it overwrote, and the title when it re
   assert.deepEqual(previous, { ...summaryFields, title: STORED_NOTE.title });
 });
 
-test("Undo of a first summary clears it with an empty string, which sync can't ignore", async (t) => {
-  // The API keeps its copy when a push sends null (COALESCE), so a null here
-  // would bring the undone summary back on the next pull.
+test("Undo of a first summary is an explicit clear, which syncs to every device", async (t) => {
+  // A blank without clear_fields stays local, so the undone summary would come
+  // back on the next pull and stay on teammates' devices.
   const { store, updates } = await loadStore(t, {
     title: "Untitled Note",
     enhanced_content: null,
@@ -366,7 +367,8 @@ test("Undo of a first summary clears it with an empty string, which sync can't i
   );
   await waitFor(() => updates.length === 1, "the first summary to be written");
   const [{ previous }] = store.consumeAppliedEvents();
-  assert.equal(previous.enhanced_content, "");
+  assert.equal(previous.enhanced_content, null);
+  assert.deepEqual(previous.clear_fields, ["enhanced_content"]);
 });
 
 test("a write the database refused offers no Undo and reports the failure", async (t) => {
