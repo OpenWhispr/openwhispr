@@ -30,7 +30,6 @@ export const updateNoteTool: ToolDefinition = {
       clear_fields: {
         type: "array",
         items: { type: "string", enum: ["content", "summary"] },
-        uniqueItems: true,
         description:
           "Fields to clear entirely, only when explicitly requested by the user. For section removal, supply the remaining text instead. Never infer clear intent from an empty optional field.",
       },
