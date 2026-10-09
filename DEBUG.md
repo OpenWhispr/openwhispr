@@ -24,15 +24,17 @@ OPENWHISPR_LOG_LEVEL=debug
 
 **Env file locations:**
 
-- macOS: `~/Library/Application Support/OpenWhispr/.env`
-- Windows: `%APPDATA%\OpenWhispr\.env`
-- Linux: `~/.config/OpenWhispr/.env`
+- macOS: `~/Library/Application Support/open-whispr/.env`
+- Windows: `%APPDATA%\open-whispr\.env`
+- Linux: `~/.config/open-whispr/.env`
 
 ## Log File Locations
 
-- **macOS**: `~/Library/Application Support/OpenWhispr/logs/debug-*.log`
-- **Windows**: `%APPDATA%\OpenWhispr\logs\debug-*.log`
-- **Linux**: `~/.config/OpenWhispr/logs/debug-*.log`
+- **macOS**: `~/Library/Application Support/open-whispr/logs/debug-*.log`
+- **Windows**: `%APPDATA%\open-whispr\logs\debug-*.log`
+- **Linux**: `~/.config/open-whispr/logs/debug-*.log`
+
+These folders are for release builds. Development and staging builds use `OpenWhispr-development` and `OpenWhispr-staging` in the same parent folder instead. With debug mode on, **Settings → System → Debug Logging → Open Logs Folder** opens the right folder for the build you are running.
 
 ## What Gets Logged
 
