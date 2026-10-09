@@ -415,19 +415,66 @@ test("selectRacingMicEntryIndices without a system timestamp evaluates every ris
   assert.deepEqual(indices, [0]);
 });
 
-test("characterization: the backward-scan break stops before an older bleed-flagged entry whose commit time still races (Phase 1 flips break→continue)", () => {
-  // From the 2026-08-17 verification: array is committedAt-ordered, windows are per-candidate.
-  const E = micSeg({ hasBleedEvidence: true, timestamp: NOW - 8300, committedAt: NOW - 5300 }); // commit race passes the 6 s window
-  const C = micSeg({ timestamp: NOW - 7500, committedAt: NOW - 4500 }); // non-bleed: fails 4 s on both races, ts < NOW-6000 → break
+test("a newer mic segment with an old capture time does not hide an earlier echo still inside its commit window", () => {
+  // Holdback commits the echo seconds after it was captured, then a later mic
+  // segment is appended. The list is commit order. The later segment's capture
+  // time is already outside the 6s window; the echo's commit time is not.
+  const echo = micSeg({
+    hasBleedEvidence: true,
+    timestamp: NOW - 8300,
+    committedAt: NOW - 5300,
+  });
+  const later = micSeg({ timestamp: NOW - 7500, committedAt: NOW - 4500 });
   const indices = selectRacingMicEntryIndices({
-    segments: [E, C],
+    segments: [echo, later],
     systemText: "x",
     systemTimestamp: NOW,
     hasNearbyTranscriptMatch: () => true,
     duplicateWindowMs: DUPLICATE_WINDOW,
     retractWindowMs: RETRACT_WINDOW,
   });
-  assert.deepEqual(indices, [], "TODAY: E is never scanned. Phase 1 expects [0].");
+  assert.deepEqual(indices, [0]);
+});
+
+test("every earlier echo still inside the commit window is retracted, newest first", () => {
+  const older = micSeg({
+    hasBleedEvidence: true,
+    timestamp: NOW - 9000,
+    committedAt: NOW - 5800,
+  });
+  const newerEcho = micSeg({
+    hasBleedEvidence: true,
+    timestamp: NOW - 8200,
+    committedAt: NOW - 5200,
+  });
+  const later = micSeg({ timestamp: NOW - 7600, committedAt: NOW - 4600 });
+  const indices = selectRacingMicEntryIndices({
+    segments: [older, newerEcho, later],
+    systemText: "x",
+    systemTimestamp: NOW,
+    hasNearbyTranscriptMatch: () => true,
+    duplicateWindowMs: DUPLICATE_WINDOW,
+    retractWindowMs: RETRACT_WINDOW,
+  });
+  assert.deepEqual(indices, [1, 0]);
+});
+
+test("an earlier echo outside the commit window stays after the scan passes a newer segment", () => {
+  const ancient = micSeg({
+    hasBleedEvidence: true,
+    timestamp: NOW - 20000,
+    committedAt: NOW - 17000,
+  });
+  const later = micSeg({ timestamp: NOW - 7500, committedAt: NOW - 4500 });
+  const indices = selectRacingMicEntryIndices({
+    segments: [ancient, later],
+    systemText: "x",
+    systemTimestamp: NOW,
+    hasNearbyTranscriptMatch: () => true,
+    duplicateWindowMs: DUPLICATE_WINDOW,
+    retractWindowMs: RETRACT_WINDOW,
+  });
+  assert.deepEqual(indices, []);
 });
 
 test("partitionOverlappingPendingMicFinals splits pending finals by system overlap, preserving order and using relaxed matching for double_talk", () => {
