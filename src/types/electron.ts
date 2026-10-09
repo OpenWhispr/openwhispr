@@ -496,17 +496,31 @@ export interface NoteCreateAckWriteOptions {
   writeRejected?: boolean;
 }
 
+// A cloud note row's text fields, as a pull or a write response carries them.
+export interface NoteCloudText {
+  content?: string | null;
+  enhanced_content?: string | null;
+  enhancement_prompt?: string | null;
+  enhanced_at_content_hash?: string | null;
+  enhancement_template_id?: string | null;
+  content_state?: "set" | "clear" | null;
+  enhanced_content_state?: "set" | "clear" | null;
+}
+
 export interface NoteCloudBaseOptions {
   // The user chose Keep on the conflict banner.
   keepLocal?: boolean;
-  // Fields the conflicting cloud copy deliberately cleared.
-  clearedFields?: Array<"content" | "enhanced_content">;
+  // The conflicting cloud copy Keep merges against: fields this device never
+  // edited take its values.
+  cloudNote?: NoteCloudText;
 }
 
 export interface NoteUpdateAckResult {
   success: boolean;
   outcome: "synced" | "pending" | "identity-changed";
   changes: number;
+  // Present when the ack took the server's copy of a text field.
+  note?: NoteItem;
 }
 
 export type ShareVisibility = "private" | "link" | "domain" | "invited";
@@ -3525,7 +3539,8 @@ declare global {
         expectedCloudId: string,
         cloudUpdatedAt?: string | null,
         ownerUserId?: string | null,
-        cloudRevision?: number | null
+        cloudRevision?: number | null,
+        cloudNote?: NoteCloudText | null
       ) => Promise<NoteUpdateAckResult>;
       setNoteCloudBase?: (
         id: number,
@@ -3535,6 +3550,7 @@ declare global {
       ) => Promise<{ success: boolean; note?: NoteItem }>;
       setNoteOwnerFromCloud?: (id: number, ownerUserId: string) => Promise<void>;
       countTeamNotesMissingOwner?: () => Promise<number>;
+      countNotesMissingRevision?: (spaceKind?: "private" | "team") => Promise<number>;
       markNoteSyncError?: (id: number) => Promise<void>;
       restoreNoteAfterDeniedDelete?: (id: number) => Promise<{ success: boolean; id: number }>;
       hardDeleteNote?: (id: number) => Promise<void>;

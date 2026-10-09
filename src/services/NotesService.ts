@@ -79,7 +79,7 @@ async function create(note: NoteInput): Promise<CloudNote> {
   return cloudPost<CloudNote>("/api/notes/create", note);
 }
 
-async function batchCreate(notes: NoteInput[]): Promise<{
+interface NoteBatchCreateResult {
   created: {
     client_note_id: string;
     id: string;
@@ -87,16 +87,10 @@ async function batchCreate(notes: NoteInput[]): Promise<{
     revision?: number;
     write_applied?: boolean;
   }[];
-}> {
-  return cloudPost<{
-    created: {
-      client_note_id: string;
-      id: string;
-      updated_at?: string;
-      revision?: number;
-      write_applied?: boolean;
-    }[];
-  }>("/api/notes/batch-create", { notes });
+}
+
+async function batchCreate(notes: NoteInput[]): Promise<NoteBatchCreateResult> {
+  return cloudPost<NoteBatchCreateResult>("/api/notes/batch-create", { notes });
 }
 
 async function update(id: string, updates: Partial<NoteInput>): Promise<CloudNote> {

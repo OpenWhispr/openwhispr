@@ -92,7 +92,8 @@ function createElectronApi(db, options = {}) {
       expectedCloudId,
       cloudUpdatedAt,
       ownerUserId,
-      cloudRevision
+      cloudRevision,
+      cloudNote
     ) =>
       db.markNoteSyncedIfUnchanged(
         id,
@@ -100,13 +101,15 @@ function createElectronApi(db, options = {}) {
         expectedCloudId,
         cloudUpdatedAt,
         ownerUserId,
-        cloudRevision
+        cloudRevision,
+        cloudNote
       ),
     setNoteCloudBase: async (id, cloudUpdatedAt, cloudRevision, options) =>
       db.setNoteCloudBase(id, cloudUpdatedAt, cloudRevision, options),
     markNoteSyncError: async (id) => db.markNoteSyncError(id),
     setNoteOwnerFromCloud: async (id, ownerUserId) => db.setNoteOwnerFromCloud(id, ownerUserId),
     countTeamNotesMissingOwner: async () => db.countTeamNotesMissingOwner(),
+    countNotesMissingRevision: async (spaceKind) => db.countNotesMissingRevision(spaceKind),
     restoreNoteAfterDeniedDelete: async (id) => db.restoreNoteAfterDeniedDelete(id),
     hardDeleteNote: async (id) => db.hardDeleteNote(id),
 

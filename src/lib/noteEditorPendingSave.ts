@@ -13,6 +13,13 @@ export interface PendingDocumentSnapshot {
   readonly noteId: number;
   readonly title: string;
   readonly content: string;
+  /**
+   * The user edited the notes before this save. Otherwise the save writes only
+   * the title: the draft's notes may predate a pull or ack the store applied
+   * meanwhile, and writing them back would undo it (a cleared field would
+   * return as an edit).
+   */
+  readonly contentEdited: boolean;
   /** The user emptied the notes, so the save is a deliberate clear that syncs. */
   readonly clearContent: boolean;
 }
@@ -67,6 +74,7 @@ export function applyNoteDraftMutation(
 }
 
 export function documentSaveUpdates(document: PendingDocumentSnapshot): PendingNoteUpdates {
+  if (!document.contentEdited && !document.clearContent) return { title: document.title };
   return {
     title: document.title,
     content: document.content,

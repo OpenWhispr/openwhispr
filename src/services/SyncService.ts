@@ -1,4 +1,8 @@
-import { hasNoteRevision, noteAwaitsCloudResolution } from "../helpers/noteFieldSync.js";
+import {
+  hasUnrevisionedNoteClear,
+  hasNoteRevision,
+  noteAwaitsCloudResolution,
+} from "../helpers/noteFieldSync.js";
 import type {
   NoteItem,
   FolderItem,
@@ -253,6 +257,14 @@ export class SyncService {
   private snippetsDirty = false;
   // One owner_user_id backfill probe per session (see backfillNoteOwners).
   private ownerBackfillChecked = false;
+  // Whether the API keeps note revisions; null until a pulled row or the
+  // probe (noteRevisionsSupported) shows it.
+  private noteRevisionsKnown: boolean | null = null;
+  // One snapshot pull per session each for clears on rows without a revision
+  // (see pushPendingNotes) and rows synced before revisions
+  // (backfillNoteRevisions).
+  private unrevisionedClearPullDone = false;
+  private revisionBackfillChecked = false;
   private pushTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private teamSpacesRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private teamSpacesRetryAttempt = 0;
@@ -796,15 +808,17 @@ export class SyncService {
   private async pushNote(id: number): Promise<void> {
     const note = await window.electronAPI.getNote?.(id);
     if (!note) return;
-    if (noteAwaitsCloudResolution(note)) {
-      // Only a full pass resolves it; stay throttled so typing in the note
-      // doesn't start one per debounced push.
-      this.requestSyncAll("interval");
-      return;
-    }
     if (readNoteConflictIds().has(note.client_note_id)) {
       // An unresolved conflict: the editor's debounced push would auto-resolve
       // it as local-wins (or 409-spam) before the user chose Keep or Refresh.
+      return;
+    }
+    // Until a pass shows the server has no revisions, a clear on a row without
+    // a revision waits for the full pass that resolves it.
+    if (noteAwaitsCloudResolution(note, this.noteRevisionsKnown !== false)) {
+      // Only a full pass resolves it; stay throttled so typing in the note
+      // doesn't start one per debounced push.
+      this.requestSyncAll("interval");
       return;
     }
 
@@ -836,7 +850,8 @@ export class SyncService {
           note.cloud_id,
           cloud.updated_at,
           cloud.user_id ?? null,
-          cloud.revision ?? null
+          cloud.revision ?? null,
+          cloud
         );
       } else {
         await this.createCloudNote(note, cloudFolderId, scope);
@@ -1744,6 +1759,9 @@ export class SyncService {
     // A parked pull left its cursors in place, so the next pass re-sees the
     // parked rows — typically after syncSpaces has mirrored the missing team.
     await this.pullNotes(teamOnly);
+    // After the delta pull, which usually shows whether the server keeps
+    // revisions without a probe.
+    await this.backfillNoteRevisions(teamOnly);
   }
 
   // Team notes mirrored before owner_user_id existed have a NULL owner, and
@@ -1764,10 +1782,57 @@ export class SyncService {
     }
   }
 
+  // Rows synced before revisions carry none, and an unchanged server row never
+  // re-enters a delta pull, so a clear made elsewhere while this device ran a
+  // release that kept the text would never arrive. One snapshot pull per
+  // session applies them (pullNotes takes a clean pre-revision row whole),
+  // and only against a server that keeps revisions: an older API would
+  // otherwise repeat it every session for nothing.
+  private async backfillNoteRevisions(teamOnly: boolean): Promise<void> {
+    if (this.revisionBackfillChecked) return;
+    try {
+      const missing =
+        (await window.electronAPI.countNotesMissingRevision?.(teamOnly ? "team" : undefined)) ?? 0;
+      // An unanswered probe retries on the next pass.
+      const supported = missing > 0 ? await this.noteRevisionsSupported() : false;
+      if (supported === null) return;
+      this.revisionBackfillChecked = true;
+      if (supported) await this.pullNotes(teamOnly, true);
+    } catch (err) {
+      console.error("Note revision backfill failed:", err);
+    }
+  }
+
+  // A pull usually answers this already; otherwise one row is enough to tell.
+  private async noteRevisionsSupported(): Promise<boolean | null> {
+    if (this.noteRevisionsKnown === null) {
+      try {
+        const { notes } = await NotesService.list(1);
+        const row = notes.find((note) => !note.access_removed);
+        if (row) this.noteRevisionsKnown = hasNoteRevision(row.revision);
+      } catch (err) {
+        console.error("Note revision probe failed:", err);
+      }
+    }
+    return this.noteRevisionsKnown;
+  }
+
   private async pushPendingNotes(teamOnly = false): Promise<void> {
     let pending = (await window.electronAPI.getPendingNotes?.(teamOnly ? "team" : undefined)) ?? [];
-    if (pending.some(noteAwaitsCloudResolution)) {
-      // An unchanged cloud row may be absent from the delta feed after upgrading.
+    const conflicted = readNoteConflictIds();
+    // A surfaced conflict already holds its cloud copy; only rows still
+    // awaiting one need the snapshot pull, as an unchanged cloud row may be
+    // absent from the delta feed. A rejected create pulls until its conflict
+    // surfaces; a clear on a row without a revision once per session, when
+    // the server keeps revisions (the pull adopts one or surfaces a conflict,
+    // see pullNotes).
+    const unresolved = pending.filter((note) => !conflicted.has(note.client_note_id));
+    const pullsForUnrevisionedClear =
+      !this.unrevisionedClearPullDone &&
+      unresolved.some(hasUnrevisionedNoteClear) &&
+      (await this.noteRevisionsSupported()) === true;
+    if (pullsForUnrevisionedClear || unresolved.some((note) => note.cloud_create_rejected)) {
+      this.unrevisionedClearPullDone ||= pullsForUnrevisionedClear;
       await this.pullNotes(teamOnly, true);
       pending = (await window.electronAPI.getPendingNotes?.(teamOnly ? "team" : undefined)) ?? [];
     }
@@ -1776,14 +1841,16 @@ export class SyncService {
 
     const { localToCloud, blockedFolderIds } = await this.buildLocalToCloudFolderMap();
     const ctx = await this.buildSpaceContext();
-    const conflicted = readNoteConflictIds();
     const pushable: Array<{ note: NoteItem; scope: PushScopeFields }> = [];
     for (const note of pending) {
-      if (noteAwaitsCloudResolution(note) || conflicted.has(note.client_note_id)) {
+      if (
+        conflicted.has(note.client_note_id) ||
+        noteAwaitsCloudResolution(note, this.noteRevisionsKnown === true)
+      ) {
         // An unresolved pull conflict or rejected create: pushing now would
         // auto-resolve it as local-wins before the user chose Keep or Refresh
         // (which clear the registry entry and unblock the row). A clear with
-        // no server base waits for the pull above to supply a revision.
+        // no revision waits for a pull to supply one.
         continue;
       }
       if (note.folder_id && blockedFolderIds.has(note.folder_id)) {
@@ -1821,7 +1888,8 @@ export class SyncService {
           note.cloud_id!,
           cloud.updated_at,
           cloud.user_id ?? null,
-          cloud.revision ?? null
+          cloud.revision ?? null,
+          cloud
         );
         this.clear404(NOTE_UPDATE_404_KEY, note.client_note_id);
       } catch (err) {
@@ -1967,6 +2035,9 @@ export class SyncService {
           // per-note tombstone; denial restores the journaled row in place,
           // while confirmation removes it with the folder cascade.
           if (local?.folder_delete_pending) continue;
+          if (!cloudNote.access_removed) {
+            this.noteRevisionsKnown = hasNoteRevision(cloudNote.revision);
+          }
 
           // Copy the cloud owner before any last-write-wins decision: an
           // unchanged note skips the upsert but must still gain its owner
@@ -2065,31 +2136,35 @@ export class SyncService {
           }
 
           if (local?.deleted_at) continue;
-          if (
+          const preRevision =
             local &&
             !hasNoteRevision(local.cloud_revision) &&
             hasNoteRevision(cloudNote.revision) &&
-            local.cloud_id === cloudNote.id
-          ) {
+            local.cloud_id === cloudNote.id;
+          if (preRevision && local.sync_status !== "synced") {
             // Adopt the revision when this device's base is the server's
             // current row. An unpushed edit on a row acked before timestamp
             // bases existed pushed last-write-wins until now; it still does.
             const sameBase =
               normalizeTimestamp(local.cloud_updated_at) ===
               normalizeTimestamp(cloudNote.updated_at);
-            if (sameBase || (!local.cloud_updated_at && local.sync_status !== "synced")) {
-              await window.electronAPI.setNoteCloudBase?.(
-                local.id,
-                cloudNote.updated_at,
-                cloudNote.revision
-              );
-              local.cloud_revision = cloudNote.revision;
-            } else if (local.sync_status !== "synced") {
+            if (!sameBase && local.cloud_updated_at) {
               await this.surfaceNoteConflict(local.client_note_id, cloudNote);
               continue;
             }
+            await window.electronAPI.setNoteCloudBase?.(
+              local.id,
+              cloudNote.updated_at,
+              cloudNote.revision
+            );
+            local.cloud_revision = cloudNote.revision;
           }
-          if (!local || isCloudNoteNewer(cloudNote, local)) {
+          // A clean row synced before revisions takes the cloud copy whole:
+          // adopting only the revision would mark the copies equal from now
+          // on, so a clear made elsewhere while this device ran a release that
+          // kept the text would never arrive.
+          const cleanPreRevision = preRevision && local.sync_status === "synced";
+          if (!local || cleanPreRevision || isCloudNoteNewer(cloudNote, local)) {
             if (local && local.sync_status !== "synced") {
               // A newer cloud copy over unpushed local edits ('pending' or
               // 'error'): surface the conflict to the editor banner instead

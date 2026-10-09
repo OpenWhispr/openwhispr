@@ -46,6 +46,7 @@ function createDatabaseManager() {
       id INTEGER PRIMARY KEY,
       title TEXT NOT NULL,
       content TEXT NOT NULL,
+      content_sync_operation TEXT,
       note_type TEXT NOT NULL DEFAULT 'personal',
       source_file TEXT,
       audio_duration_seconds REAL,

@@ -1,5 +1,13 @@
 const Database = require("better-sqlite3");
-const { NOTE_TEXT_FIELDS, hasNoteRevision, hasPendingNoteClear } = require("./noteFieldSync");
+const {
+  NOTE_TEXT_FIELDS,
+  SUMMARY_CLEARED_METADATA,
+  SUMMARY_METADATA,
+  clearedNoteFields,
+  cloudTextUpdates,
+  hasNoteRevision,
+  hasPendingNoteClear,
+} = require("./noteFieldSync");
 const path = require("path");
 const fs = require("fs");
 const { randomUUID } = require("crypto");
@@ -29,6 +37,13 @@ const { app } = require("electron");
 // Server-enforced trigger cap (openwhispr-api); enforced here so one oversized
 // trigger can't 400 the whole sync batch.
 const MAX_SNIPPET_TRIGGER_LENGTH = 100;
+
+// Text a local writer creates is the user's: recording it as a set lets
+// conflict Keep tell it from text this device merely pulled. A blank stays
+// unmarked, as it never clears anything.
+function typedTextOperation(text) {
+  return typeof text === "string" && text.trim() ? "set" : null;
+}
 
 // Every local field a note create (POST) carries; the acknowledgement compares
 // these atomically against the pushed snapshot. Must mirror NotePushSnapshot
@@ -408,6 +423,7 @@ class DatabaseManager {
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
+      let addedSyncOperations = false;
       for (const definition of [
         "cloud_revision INTEGER",
         "cloud_create_rejected INTEGER NOT NULL DEFAULT 0",
@@ -416,10 +432,12 @@ class DatabaseManager {
       ]) {
         try {
           this.db.exec(`ALTER TABLE notes ADD COLUMN ${definition}`);
+          if (definition.startsWith("content_sync_operation")) addedSyncOperations = true;
         } catch (err) {
           if (!err.message.includes("duplicate column")) throw err;
         }
       }
+      if (addedSyncOperations) this._markUnsyncedNoteTextAsSet();
       try {
         this.db.exec("ALTER TABLE notes ADD COLUMN cloud_id TEXT");
       } catch (err) {
@@ -3062,11 +3080,12 @@ class DatabaseManager {
       const clientNoteId = randomUUID();
       const accountId = this._accountIdForSpace(spaceId);
       const stmt = this.db.prepare(
-        "INSERT INTO notes (title, content, note_type, source_file, audio_duration_seconds, folder_id, space_id, client_note_id, account_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO notes (title, content, content_sync_operation, note_type, source_file, audio_duration_seconds, folder_id, space_id, client_note_id, account_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       );
       const result = stmt.run(
         title,
         content,
+        typedTextOperation(content),
         noteType,
         sourceFile,
         audioDuration,
@@ -3117,9 +3136,9 @@ class DatabaseManager {
       }
 
       const insert = this.db.prepare(`
-        INSERT INTO notes (client_note_id, title, content, note_type, source_file,
+        INSERT INTO notes (client_note_id, title, content, content_sync_operation, note_type, source_file,
           folder_id, space_id, account_id, transcript, participants, sync_status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending',
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending',
           COALESCE(?, datetime('now')), COALESCE(?, datetime('now')))
         ON CONFLICT(client_note_id) DO NOTHING
       `);
@@ -3135,6 +3154,7 @@ class DatabaseManager {
               row.clientNoteId,
               row.title,
               row.content,
+              typedTextOperation(row.content),
               noteType,
               row.sourceFile,
               folderId,
@@ -3348,11 +3368,8 @@ class DatabaseManager {
           }
           updates[field] = field === "content" ? "" : null;
           updates[`${field}_sync_operation`] = "clear";
-          // The template is the note's choice, not summary text: keeping it
-          // lets "Generate AI Summary" rerun the same template.
           if (field === "enhanced_content") {
-            updates.enhancement_prompt = null;
-            updates.enhanced_at_content_hash = null;
+            for (const key of SUMMARY_CLEARED_METADATA) updates[key] = null;
           }
         } else if (
           typeof updates[field] === "string" &&
@@ -3373,9 +3390,7 @@ class DatabaseManager {
         !clears.includes("enhanced_content") &&
         (updates.enhanced_content === undefined || updates.enhanced_content?.trim()) &&
         (updates.enhanced_content ?? previous.enhanced_content)?.trim() &&
-        ["enhancement_prompt", "enhancement_template_id", "enhanced_at_content_hash"].some(
-          (key) => updates[key] !== undefined && updates[key] !== previous[key]
-        )
+        SUMMARY_METADATA.some((key) => updates[key] !== undefined && updates[key] !== previous[key])
       ) {
         updates.enhanced_content_sync_operation = "set";
       }
@@ -6329,18 +6344,14 @@ class DatabaseManager {
         cloudNote.revision < existing.cloud_revision
       )
         return existing;
-      const clearsContent =
-        versioned && cloudNote.content_state === "clear" && !cloudNote.content?.trim();
-      const clearsSummary =
-        versioned &&
-        cloudNote.enhanced_content_state === "clear" &&
-        !cloudNote.enhanced_content?.trim();
+      const cleared = versioned ? clearedNoteFields(cloudNote) : [];
+      const clearsContent = cleared.includes("content");
+      const clearsSummary = cleared.includes("enhanced_content");
       cloudNote = { ...cloudNote };
       if (!cloudNote.content?.trim()) cloudNote.content = "";
       if (!cloudNote.enhanced_content?.trim()) cloudNote.enhanced_content = null;
       if (clearsSummary) {
-        cloudNote.enhancement_prompt = null;
-        cloudNote.enhanced_at_content_hash = null;
+        for (const key of SUMMARY_CLEARED_METADATA) cloudNote[key] = null;
       }
       const hasExplicitCreator = Object.prototype.hasOwnProperty.call(
         cloudNote,
@@ -6601,13 +6612,18 @@ class DatabaseManager {
   // identity that issued it. Purge/revocation forks in place, so numeric id
   // alone is never sufficient. An exact pushed snapshot settles; newer work
   // on the same identity remains pending while advancing its server base.
+  // cloudNote is the response row: a text field this device pushed without
+  // an edit and has not touched since takes the server's copy (see
+  // cloudTextUpdates), so the ack never pins a revision over text the server
+  // no longer holds (a clear this device missed, or a blank it left out).
   markNoteSyncedIfUnchanged(
     id,
     snapshot,
     expectedCloudId,
     cloudUpdatedAt = null,
     ownerUserId = null,
-    cloudRevision = null
+    cloudRevision = null,
+    cloudNote = null
   ) {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -6641,6 +6657,19 @@ class DatabaseManager {
           return { success: true, outcome: "pending", changes: 0 };
         }
         const unchanged = rowMatchesSnapshot(current, snapshot, NOTE_PATCH_ACK_FIELDS);
+        const adopted = cloudNote
+          ? cloudTextUpdates(
+              current,
+              cloudNote,
+              NOTE_TEXT_FIELDS.filter(
+                (field) =>
+                  !current[`${field}_sync_operation`] &&
+                  (current[field] ?? null) === (snapshot[field] ?? null)
+              )
+            )
+          : {};
+        this._setNoteColumns(id, adopted);
+        const note = Object.keys(adopted).length > 0 ? this.getNote(id) : undefined;
         const nextCloudUpdatedAt = (() => {
           if (!cloudUpdatedAt) return current.cloud_updated_at;
           if (!current.cloud_updated_at) return cloudUpdatedAt;
@@ -6671,7 +6700,7 @@ class DatabaseManager {
               snapshot.client_note_id,
               expectedCloudId
             );
-          return { success: true, outcome: "synced", changes: result.changes };
+          return { success: true, outcome: "synced", changes: result.changes, note };
         }
 
         // The delivered PATCH still advances this identity's base; otherwise
@@ -6693,7 +6722,7 @@ class DatabaseManager {
             snapshot.client_note_id,
             expectedCloudId
           );
-        return { success: true, outcome: "pending", changes: 0 };
+        return { success: true, outcome: "pending", changes: 0, note };
       })();
     } catch (error) {
       debugLogger.error(
@@ -6750,13 +6779,44 @@ class DatabaseManager {
     }
   }
 
+  // Clean cloud-backed notes synced before the server kept revisions. Their
+  // server rows may never re-enter a delta pull, so a snapshot pull applies
+  // them while any remain. spaceKind narrows like getPendingNotes.
+  countNotesMissingRevision(spaceKind = null) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const accountScope = this._accountScopeCondition("n");
+      const row = this.db
+        .prepare(
+          `SELECT COUNT(*) AS count FROM notes n
+             JOIN spaces s ON s.id = n.space_id
+            WHERE n.sync_status = 'synced' AND n.deleted_at IS NULL
+              AND n.cloud_id IS NOT NULL AND n.cloud_revision IS NULL
+              AND (? IS NULL OR s.kind = ?)
+              AND ${accountScope.sql}`
+        )
+        .get(spaceKind, spaceKind, ...accountScope.params);
+      return row?.count ?? 0;
+    } catch (error) {
+      debugLogger.error(
+        "Error counting notes missing a revision",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
   // Records the server revision the user knowingly overwrites ("Keep editing"
-  // on the conflict banner, keepLocal) or that the capability backfill found
-  // equal to this device's base. Deliberately leaves updated_at and
-  // sync_status alone — a local edit stays pending and pushes with the
-  // advanced base.
+  // on the conflict banner, keepLocal) or that a pull found equal to this
+  // device's base. Deliberately leaves updated_at and sync_status alone — a
+  // local edit stays pending and pushes with the advanced base. Keep merges
+  // per field against the conflicting cloud copy: a field this device edited
+  // (it has a sync operation) keeps the local value, and one it never edited
+  // takes the cloud's, set or clear, so Keep never pushes a stale copy over
+  // another device's edit.
   setNoteCloudBase(id, cloudUpdatedAt, cloudRevision = null, options = {}) {
-    const { keepLocal = false, clearedFields = [] } = options;
+    const { keepLocal = false, cloudNote = null } = options;
     try {
       if (!this.db) throw new Error("Database not initialized");
       return this.db.transaction(() => {
@@ -6769,26 +6829,15 @@ class DatabaseManager {
           revision < current.cloud_revision
         )
           return { success: false };
-        if (keepLocal) {
-          for (const field of NOTE_TEXT_FIELDS) {
-            if (current[`${field}_sync_operation`]) continue;
-            if (clearedFields.includes(field)) {
-              // The other device cleared a field this one never edited: take
-              // the clear rather than resurrect it.
-              this.db
-                .prepare(
-                  field === "content"
-                    ? "UPDATE notes SET content = '' WHERE id = ?"
-                    : "UPDATE notes SET enhanced_content = NULL, enhancement_prompt = NULL, enhanced_at_content_hash = NULL WHERE id = ?"
-                )
-                .run(id);
-            } else if (current[field]?.trim()) {
-              // Keep restores the visible local snapshot over the cloud copy.
-              this.db
-                .prepare(`UPDATE notes SET ${field}_sync_operation = 'set' WHERE id = ?`)
-                .run(id);
-            }
-          }
+        if (keepLocal && cloudNote) {
+          this._setNoteColumns(
+            id,
+            cloudTextUpdates(
+              current,
+              cloudNote,
+              NOTE_TEXT_FIELDS.filter((field) => !current[`${field}_sync_operation`])
+            )
+          );
         }
         this.db
           .prepare(
@@ -6803,6 +6852,46 @@ class DatabaseManager {
       debugLogger.error("Error setting note cloud base", { error: error.message }, "database");
       throw error;
     }
+  }
+
+  // Runs once, when the sync operation columns are added. Unsynced text from
+  // a build without them is the user's own edit, so it is marked as a set:
+  // Keep then keeps it rather than taking the cloud's copy, and a
+  // revision-aware push sends it. A blank stays unmarked, since a released
+  // build's blank is no deliberate clear. A database that predates sync
+  // status has never synced any of its notes.
+  _markUnsyncedNoteTextAsSet() {
+    const hasSyncStatus = this.db
+      .prepare("PRAGMA table_info(notes)")
+      .all()
+      .some((column) => column.name === "sync_status");
+    const rows = this.db
+      .prepare(
+        `SELECT id, content, enhanced_content FROM notes
+         ${hasSyncStatus ? "WHERE sync_status IS NOT 'synced'" : ""}`
+      )
+      .all();
+    const mark = this.db.prepare(
+      `UPDATE notes SET content_sync_operation = ?, enhanced_content_sync_operation = ?
+       WHERE id = ?`
+    );
+    this.db.transaction(() => {
+      for (const row of rows) {
+        const content = typedTextOperation(row.content);
+        const summary = typedTextOperation(row.enhanced_content);
+        if (content || summary) mark.run(content, summary, row.id);
+      }
+    })();
+  }
+
+  // Writes sync-owned columns (from cloudTextUpdates) without touching
+  // updated_at or sync_status. Keys come from that fixed set, never input.
+  _setNoteColumns(id, columns) {
+    const keys = Object.keys(columns);
+    if (keys.length === 0) return;
+    this.db
+      .prepare(`UPDATE notes SET ${keys.map((key) => `${key} = ?`).join(", ")} WHERE id = ?`)
+      .run(...Object.values(columns), id);
   }
 
   markNoteSyncError(id) {

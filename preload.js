@@ -1183,7 +1183,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     expectedCloudId,
     cloudUpdatedAt,
     ownerUserId,
-    cloudRevision
+    cloudRevision,
+    cloudNote
   ) =>
     ipcRenderer.invoke(
       "db-mark-note-synced-if-unchanged",
@@ -1192,13 +1193,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
       expectedCloudId,
       cloudUpdatedAt,
       ownerUserId,
-      cloudRevision
+      cloudRevision,
+      cloudNote
     ),
   setNoteCloudBase: (id, cloudUpdatedAt, cloudRevision, options) =>
     ipcRenderer.invoke("db-set-note-cloud-base", id, cloudUpdatedAt, cloudRevision, options),
   setNoteOwnerFromCloud: (id, ownerUserId) =>
     ipcRenderer.invoke("db-set-note-owner-from-cloud", id, ownerUserId),
   countTeamNotesMissingOwner: () => ipcRenderer.invoke("db-count-team-notes-missing-owner"),
+  countNotesMissingRevision: (spaceKind) =>
+    ipcRenderer.invoke("db-count-notes-missing-revision", spaceKind),
   markNoteSyncError: (id) => ipcRenderer.invoke("db-mark-note-sync-error", id),
   restoreNoteAfterDeniedDelete: (id) =>
     ipcRenderer.invoke("db-restore-note-after-denied-delete", id),

@@ -789,8 +789,8 @@ test("Delete table from the menu works in a note that re-renders on every change
 });
 
 test("undo never reverts a value set from outside the editor", async (t) => {
-  // One editor serves every tab and note: undoing a tab switch would save the
-  // previous tab's text, often empty, over this one.
+  // A sync pull or an assistant edit replaces the note: undoing that would save
+  // the text it replaced, often empty, over it.
   const notes = await mountNotes(t, "Transcript tab");
   await notes.act(() => notes.setValue("Summary tab"));
   await notes.act(() => notes.editor().commands.undo());
@@ -809,6 +809,68 @@ test("undo still reverts typing after a value set from outside the editor", asyn
   await notes.act(() => notes.editor().commands.undo());
   assert.equal(markdownOf(notes.editor()), "Summary tab");
   assert.equal(notes.saved().trim(), "Summary tab");
+});
+
+// Undo maps earlier steps onto a value set from outside, and a step that
+// spanned the whole document maps onto the whole new value.
+for (const [when, wait] of [
+  ["at once", 30],
+  ["after the undo group closed", 600],
+]) {
+  test(`undo of a select-all delete never brings its text back over a value set from outside, ${when}`, async (t) => {
+    // The cleared summary's text would be saved over the notes, or the notes'
+    // over the summary, and sync to every device.
+    const notes = await mountNotes(t, "Summary paragraph one\n\nSummary two");
+    await notes.act(() => {
+      notes.editor().commands.selectAll();
+      pressKey(notes.editor(), "Backspace");
+    }, wait);
+    assert.equal(notes.saved(), "");
+    await notes.act(() => notes.setValue("Personal notes body\n\nMore notes"));
+    notes.changes.length = 0;
+    await notes.act(() => notes.editor().commands.undo());
+    assert.equal(markdownOf(notes.editor()), "Personal notes body\n\nMore notes");
+    assert.deepEqual(notes.changes, [], "nothing saved over the new value");
+  });
+}
+
+test("undo of typing over a select-all never replaces a value set from outside", async (t) => {
+  const notes = await mountNotes(t, "Summary paragraph one\n\nSummary two");
+  await notes.act(() => {
+    notes.editor().commands.selectAll();
+    type(notes.editor(), "x");
+  });
+  assert.equal(notes.saved(), "x");
+  await notes.act(() => notes.setValue("Pulled from another device"));
+  notes.changes.length = 0;
+  await notes.act(() => notes.editor().commands.undo());
+  assert.equal(markdownOf(notes.editor()), "Pulled from another device");
+  assert.deepEqual(notes.changes, []);
+});
+
+test("the echo of the user's own save keeps typing undoable", async (t) => {
+  const notes = await mountNotes(t, "Notes body");
+  await notes.act(() => {
+    notes.editor().commands.setTextSelection(notes.editor().state.doc.content.size - 1);
+    type(notes.editor(), " typed");
+  });
+  await notes.act(() => notes.setValue(notes.saved()));
+  await notes.act(() => notes.editor().commands.undo());
+  assert.equal(markdownOf(notes.editor()), "Notes body");
+  assert.equal(notes.saved().trim(), "Notes body");
+});
+
+test("a whitespace-only note saved empty keeps its caret and its undo", async (t) => {
+  const notes = await mountNotes(t, "");
+  await notes.act(() => type(notes.editor(), "   "));
+  assert.equal(notes.saved(), "   ");
+  const caret = notes.editor().state.selection.from;
+  // The store saves a blank note as empty and echoes that back.
+  await notes.act(() => notes.setValue(""));
+  assert.equal(notes.editor().state.selection.from, caret);
+  assert.equal(notes.editor().state.doc.textContent, "   ");
+  await notes.act(() => notes.editor().commands.undo());
+  assert.equal(notes.editor().state.doc.textContent, "");
 });
 
 test("the table menu disables actions that would break or empty the table", async (t) => {

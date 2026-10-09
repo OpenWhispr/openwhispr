@@ -1,4 +1,5 @@
 const { randomUUID } = require("crypto");
+const { NOTE_TEXT_FIELDS, SUMMARY_CLEARED_METADATA } = require("./noteFieldSync");
 
 // Sync acknowledgements are not edits. All semantic changes (including SQL
 // writers outside updateNote) retire the previous assistant's recovery token.
@@ -97,7 +98,7 @@ function updateNoteWithUndo(manager, id, updates, expected, turn) {
     const result = manager.updateNote(id, updates);
     if (!result.success) return result;
     // A summary clear also resets its prompt and hash; Undo restores them too.
-    for (const key of ["enhancement_prompt", "enhanced_at_content_hash"]) {
+    for (const key of SUMMARY_CLEARED_METADATA) {
       if (!(key in previous) && before[key] !== result.note[key]) previous[key] = before[key];
     }
     // Edits of one note in the same turn (e.g. a summary rewrite and a rename)
@@ -152,9 +153,7 @@ function undoNoteUpdate(manager, token) {
     }
     // Restoring an empty field is a deliberate clear, so it syncs; a bare blank
     // would stay on this device while the edit came back from the cloud.
-    const clearFields = ["content", "enhanced_content"].filter(
-      (key) => key in previous && !previous[key]?.trim()
-    );
+    const clearFields = NOTE_TEXT_FIELDS.filter((key) => key in previous && !previous[key]?.trim());
     const result = manager.updateNote(note.id, {
       ...previous,
       ...(clearFields.length > 0 && { clear_fields: clearFields }),

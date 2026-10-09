@@ -27,17 +27,28 @@ export function isCloudEntryNewer(cloudUpdatedAt, localUpdatedAt) {
 // every push would fork duplicate notes; only the one-shot migration branch
 // sends it. `cloudFolderId` is the note's folder already mapped to its cloud
 // id (null when folderless or unmapped).
+//
+// A revision-aware write sends a text field only with its operation. Text
+// without one must be unchanged since the last ack, and locally it need not
+// be: a pull keeps local text over a blank the cloud never marked as a clear,
+// and resending that text would overwrite newer text written elsewhere. So it
+// stays out, and the summary metadata with the summary.
 export function buildNoteUpdatePayload(note, cloudFolderId) {
+  const revisioned = hasNoteRevision(note.cloud_revision);
+  const fieldUpdates = noteFieldUpdates(note);
+  const sends = (field) => !revisioned || field in fieldUpdates;
   return {
-    ...(hasNoteRevision(note.cloud_revision)
-      ? { base_revision: note.cloud_revision, field_updates: noteFieldUpdates(note) }
-      : {}),
+    ...(revisioned ? { base_revision: note.cloud_revision, field_updates: fieldUpdates } : {}),
     title: note.title,
-    content: pushedText(note, "content"),
-    enhanced_content: pushedText(note, "enhanced_content"),
-    enhancement_prompt: note.enhancement_prompt,
-    enhancement_template_id: note.enhancement_template_id,
-    enhanced_at_content_hash: note.enhanced_at_content_hash,
+    content: sends("content") ? pushedText(note, "content") : undefined,
+    enhanced_content: sends("enhanced_content") ? pushedText(note, "enhanced_content") : undefined,
+    ...(sends("enhanced_content")
+      ? {
+          enhancement_prompt: note.enhancement_prompt,
+          enhancement_template_id: note.enhancement_template_id,
+          enhanced_at_content_hash: note.enhanced_at_content_hash,
+        }
+      : {}),
     note_type: note.note_type,
     source_file: note.source_file,
     audio_duration_seconds: note.audio_duration_seconds,
@@ -75,7 +86,12 @@ function pushedText(note, field) {
 export function buildNoteCreatePayload(note, cloudFolderId) {
   const payload = {
     ...buildNoteUpdatePayload(
-      { ...note, content_sync_operation: null, enhanced_content_sync_operation: null },
+      {
+        ...note,
+        cloud_revision: null,
+        content_sync_operation: null,
+        enhanced_content_sync_operation: null,
+      },
       cloudFolderId
     ),
     // Create requires content, and a blank there never clears existing text.

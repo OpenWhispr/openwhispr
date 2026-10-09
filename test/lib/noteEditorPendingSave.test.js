@@ -97,7 +97,7 @@ test("rejects foreign and stale source-note mutations without changing the draft
 
 test("collects document and enhanced writes under their captured owner", async () => {
   const { collectPendingNoteWrites } = await load();
-  const documentA = { noteId: 1, title: "A title", content: "A body" };
+  const documentA = { noteId: 1, title: "A title", content: "A body", contentEdited: true };
   const enhancedA = { noteId: 1, enhancedContent: "A enhancement" };
 
   assert.deepEqual(collectPendingNoteWrites(null, null), []);
@@ -130,7 +130,7 @@ test("keeps document and enhanced writes with different owners separate", async 
 
   assert.deepEqual(
     collectPendingNoteWrites(
-      { noteId: 1, title: "A title", content: "0" },
+      { noteId: 1, title: "A title", content: "0", contentEdited: true },
       { noteId: 2, enhancedContent: null }
     ),
     [
@@ -150,12 +150,24 @@ test("a save payload carries a clear only for emptied notes or a blank summary",
   const { documentSaveUpdates, enhancedSaveUpdates } = await load();
 
   assert.deepEqual(
-    documentSaveUpdates({ noteId: 1, title: "A title", content: "", clearContent: true }),
+    documentSaveUpdates({
+      noteId: 1,
+      title: "A title",
+      content: "",
+      contentEdited: true,
+      clearContent: true,
+    }),
     { title: "A title", content: "", clear_fields: ["content"] }
   );
   // A blank body alone is untrusted (a title edit, a load that came back empty).
   assert.deepEqual(
-    documentSaveUpdates({ noteId: 1, title: "A title", content: "", clearContent: false }),
+    documentSaveUpdates({
+      noteId: 1,
+      title: "A title",
+      content: "",
+      contentEdited: true,
+      clearContent: false,
+    }),
     { title: "A title", content: "" }
   );
   for (const blank of [null, "", "  \n"]) {
@@ -169,10 +181,42 @@ test("a save payload carries a clear only for emptied notes or a blank summary",
   });
 });
 
+// The draft's notes may predate a pull or ack the store applied while the
+// save waited; writing them back would turn a clear into an edit.
+test("a save with only a title edit writes only the title", async () => {
+  const { documentSaveUpdates, collectPendingNoteWrites, planNoteTransition } = await load();
+  const titleOnly = {
+    noteId: 1,
+    title: "Retitled",
+    content: "Stale notes",
+    contentEdited: false,
+    clearContent: false,
+  };
+  assert.deepEqual(documentSaveUpdates(titleOnly), { title: "Retitled" });
+  assert.deepEqual(collectPendingNoteWrites(titleOnly, { noteId: 1, enhancedContent: "S" }), [
+    { noteId: 1, updates: { title: "Retitled", enhanced_content: "S" } },
+  ]);
+  assert.deepEqual(planNoteTransition(null, titleOnly, null).writes, [
+    { noteId: 1, updates: { title: "Retitled" } },
+  ]);
+});
+
 test("pending clears flush with the writes they belong to", async () => {
   const { collectPendingNoteWrites } = await load();
-  const cleared = { noteId: 1, title: "A title", content: "", clearContent: true };
-  const kept = { noteId: 1, title: "A title", content: "A body", clearContent: false };
+  const cleared = {
+    noteId: 1,
+    title: "A title",
+    content: "",
+    contentEdited: true,
+    clearContent: true,
+  };
+  const kept = {
+    noteId: 1,
+    title: "A title",
+    content: "A body",
+    contentEdited: true,
+    clearContent: false,
+  };
 
   assert.deepEqual(collectPendingNoteWrites(cleared, null), [
     { noteId: 1, updates: { title: "A title", content: "", clear_fields: ["content"] } },
@@ -272,6 +316,7 @@ test("edit A then immediately switch to B keeps empty, zero, and raw content own
       noteId: editedA.noteId,
       title: editedA.title,
       content: editedA.content,
+      contentEdited: true,
     };
     assert.equal(
       applyNoteDraftMutation(editedA, {
@@ -335,7 +380,7 @@ test("an overview transition flushes captured owners and clears the draft", asyn
 
   const transition = planNoteTransition(
     null,
-    { noteId: 1, title: "A title", content: "A body" },
+    { noteId: 1, title: "A title", content: "A body", contentEdited: true },
     { noteId: 2, enhancedContent: "B enhancement" }
   );
 
