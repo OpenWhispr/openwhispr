@@ -460,3 +460,25 @@ test("a summary that merely contains the marker is still saved", async (t) => {
   }
   assert.deepEqual(store.consumeErrorEvents(), []);
 });
+
+test("cancelling a summary action before a provider returns keeps the saved summary and Undo queue unchanged", async (t) => {
+  const { store, calls, updates } = await loadStore(t);
+  let finish;
+  globalThis.__processTextResult = new Promise((resolve) => {
+    finish = resolve;
+  });
+  store.runBackgroundAction(
+    120,
+    "## Current Summary\nOriginal",
+    "hash",
+    { kind: "action", name: "Shorten", prompt: "Revise" },
+    { isCloudMode: true, fromSummary: true },
+    LABELS
+  );
+  await waitFor(() => calls.length === 1, "provider start");
+  store.cancelAction(120);
+  finish("A late reply");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(updates, []);
+  assert.deepEqual(store.consumeAppliedEvents(), []);
+});
