@@ -37,10 +37,12 @@ function speakerLabel(segment: TranscriptSegment, speakerMappings: Record<string
   if (typeof resolved === "string" && resolved) {
     return resolved.trim().toLowerCase() === "you" ? NOTE_TAKER_LABEL : resolved;
   }
-  if (segment.source === "mic" || segment.speaker === "you") return NOTE_TAKER_LABEL;
+  if (segment.speaker === "you") return NOTE_TAKER_LABEL;
+  // Numbered from 1, as the note shows speakers. An in-person meeting is
+  // diarized on the mic, so a numbered mic speaker isn't the note taker.
   const numbered = typeof segment.speaker === "string" && /^speaker_(\d+)$/.exec(segment.speaker);
-  // Numbered from 1, as the note shows speakers.
   if (numbered) return `Speaker ${Number(numbered[1]) + 1}`;
+  if (segment.source === "mic") return NOTE_TAKER_LABEL;
   if (typeof segment.speaker === "string" && segment.speaker) return segment.speaker;
   return segment.source === "system" ? "Others" : "";
 }

@@ -230,6 +230,7 @@ test("null optional arguments and numeric strings read the note as if they were 
     { id: 7, transcript_query: null, transcript_offset: null, transcript_revision: null },
     { id: "7" },
     { id: 7, transcript_query: "   " },
+    { id: 7, transcript_query: "", transcript_offset: "", transcript_revision: "" },
   ]) {
     const { success, data } = await tool.execute(args);
     assert.equal(success, true, JSON.stringify(args));
@@ -318,11 +319,13 @@ test("lines name the person taking the notes and number unnamed speakers as the 
     { text: "Me too.", speakerName: "You", source: "mic" },
     { text: "Sounds good.", speaker: "speaker_0", source: "system" },
     { text: "Unattributed remark.", source: "system" },
+    // An in-person meeting is diarized on the mic, so its speakers are numbered there.
+    { text: "I'll own the budget.", speaker: "speaker_1", source: "mic" },
   ]);
   const { data } = await tool.execute({ id: 7, transcript_offset: 0 });
   assert.equal(
     data.transcript,
-    "Note taker: I'll draft the plan.\nNote taker: Me too.\nSpeaker 1: Sounds good.\nOthers: Unattributed remark."
+    "Note taker: I'll draft the plan.\nNote taker: Me too.\nSpeaker 1: Sounds good.\nOthers: Unattributed remark.\nSpeaker 2: I'll own the budget."
   );
   const mine = (await tool.execute({ id: 7, transcript_query: "note taker" })).data;
   assert.equal(mine.transcript_match_found, true);

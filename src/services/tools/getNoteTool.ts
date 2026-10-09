@@ -10,9 +10,10 @@ import {
 
 const MAX_QUERY_LENGTH = 120;
 
-// Models often send explicit null for optional arguments, and numbers as strings.
+// Models often send explicit null or a blank string for optional arguments, and
+// numbers as strings.
 function optionalArg(value: unknown): unknown {
-  return value === null ? undefined : value;
+  return value === null || (typeof value === "string" && !value.trim()) ? undefined : value;
 }
 
 function integerArg(value: unknown): unknown {
@@ -58,8 +59,7 @@ export const getNoteTool: ToolDefinition = {
 
   async execute(args: Record<string, unknown>): Promise<ToolResult> {
     const id = integerArg(args.id);
-    const rawQuery = optionalArg(args.transcript_query);
-    const query = typeof rawQuery === "string" && !rawQuery.trim() ? undefined : rawQuery;
+    const query = optionalArg(args.transcript_query);
     const offset = integerArg(optionalArg(args.transcript_offset));
     const revision = optionalArg(args.transcript_revision);
     if (!Number.isSafeInteger(id) || (id as number) <= 0) {
