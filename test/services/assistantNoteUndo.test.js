@@ -452,6 +452,18 @@ test("safe assistant edits and atomic Undo", async (t) => {
     assert.equal(database.getNote(note.id).transcript, note.transcript);
   });
 
+  await t.test("clearing a never-written summary writes nothing and keeps the last Undo", async () => {
+    const note = fresh();
+    database.updateNote(note.id, { enhanced_content: null });
+    await edit(note, { title: "Renamed first" }, "turn-1");
+    const token = tokenFor(note.id);
+    database.updateNote(note.id, { sync_status: "synced" });
+    assert.equal((await edit(note, { clear_fields: ["summary"] }, "turn-2")).success, true);
+    assert.equal(database.getNote(note.id).enhanced_content, null);
+    assert.equal(database.getNote(note.id).sync_status, "synced");
+    assert.equal(tokenFor(note.id), token);
+  });
+
   await t.test("a toast's discard retires only its own recovery", async () => {
     const note = fresh();
     await edit(note, { title: "First" });

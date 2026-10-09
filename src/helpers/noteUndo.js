@@ -92,7 +92,7 @@ function updateNoteWithUndo(manager, id, updates, expected, turn) {
     const previous = Object.fromEntries(
       Object.keys(updates)
         .filter((key) => key !== "clear_fields")
-        .filter((key) => before[key] !== updates[key])
+        .filter((key) => !sameValue(before[key], updates[key]))
         .map((key) => [key, before[key]])
     );
     if (!Object.keys(previous).length) return { success: true, note: before };
