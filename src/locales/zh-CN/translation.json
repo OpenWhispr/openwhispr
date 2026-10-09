@@ -237,8 +237,7 @@
         "title": "选择你的听写快捷键",
         "titleLineOne": "选择你的",
         "titleLineTwo": "听写快捷键",
-        "description": "想说话代替打字时按下它。在任何应用中都能用。",
-        "activation": "点按还是按住？"
+        "description": "想说话代替打字时按下它。在任何应用中都能用。"
       },
       "assistantHotkey": {
         "title": "设置 OpenWhispr Assistant",
@@ -496,7 +495,6 @@
       "description": "配置触发听写的方式",
       "hotkey": "快捷键",
       "mode": "模式",
-      "tapDescription": "按下开始/停止",
       "holdDescription": "按住说话",
       "test": "测试",
       "hotkeyToStartStop": "{{hotkey}} 开始/停止",

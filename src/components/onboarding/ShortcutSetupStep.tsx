@@ -23,8 +23,12 @@ function HotkeyChord({ value, compact = false }: { value: string; compact?: bool
           key={id}
           // Surface, bevel and border live in .onboarding-keycap so the cap is
           // styled in one place; only the box metrics vary by size here.
+          // Fixed per size so a row of caps lines up; wide enough for the longest
+          // common label ("right command"), growing only past that.
           className={`onboarding-keycap relative flex flex-col justify-between rounded-xl border text-[var(--onboarding-text-primary)] ${
-            compact ? "h-12 min-w-16 px-2.5 py-2 text-xs" : "h-24 min-w-32 px-3 py-3 text-base"
+            compact
+              ? "h-12 min-w-28 px-2.5 py-2 text-xs"
+              : "h-24 min-w-36 px-3 py-3 text-base [--onboarding-keycap-depth:2px]"
           }`}
         >
           <span
@@ -41,9 +45,11 @@ function HotkeyChord({ value, compact = false }: { value: string; compact?: bool
               symbol
             )}
           </span>
-          <span className="self-start font-medium leading-none text-[var(--onboarding-text-secondary)]">
-            {label}
-          </span>
+          {label && (
+            <span className="self-start font-medium leading-none text-[var(--onboarding-keycap-label)]">
+              {label}
+            </span>
+          )}
         </kbd>
       ))}
     </div>
@@ -67,8 +73,9 @@ interface ShortcutSetupStepProps {
 }
 
 /**
- * Opens empty and listening, with the recommendations as one-click picks; either
- * way the key is registered on the spot.
+ * Opens empty and listening. The recommendations are hints, not picks: the user
+ * presses the key themselves, which both teaches it and proves it reaches the
+ * app before it is registered.
  */
 export default function ShortcutSetupStep({
   value,
@@ -167,7 +174,8 @@ export default function ShortcutSetupStep({
           {errorMessage ||
             (heldModifiers ? (
               <div className="pointer-events-none flex flex-col items-center gap-3">
-                <HotkeyChord value={heldModifiers} compact />
+                {/* Same size as the saved chord, so the cap doesn't jump on release. */}
+                <HotkeyChord value={heldModifiers} compact={dense} />
                 <p className="text-sm leading-[1.4] text-[var(--onboarding-text-tertiary)]">
                   {t("onboarding.rehaul.hotkey.holding")}
                 </p>
@@ -205,17 +213,14 @@ export default function ShortcutSetupStep({
           <>
             <span>{recommendedLabel}</span>
             {recommendations.map((hotkey) => (
-              <button
+              <kbd
                 key={hotkey}
-                type="button"
-                onClick={() => void confirm(hotkey)}
-                disabled={isConfirming}
-                className={`onboarding-pressable rounded-full bg-[var(--onboarding-surface-tertiary)] text-[var(--onboarding-text-secondary)] hover:bg-[var(--onboarding-surface-tertiary-hover)] hover:text-[var(--onboarding-text-primary)] disabled:cursor-default ${
+                className={`select-none rounded-full bg-[var(--onboarding-surface-tertiary)] text-[var(--onboarding-text-secondary)] ${
                   dense ? "px-2.5 py-1 text-xs" : "px-3 py-1.5 text-sm"
                 }`}
               >
                 {formatRecommendedHotkey(hotkey)}
-              </button>
+              </kbd>
             ))}
           </>
         )}

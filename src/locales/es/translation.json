@@ -237,8 +237,7 @@
         "title": "Elige tu atajo de dictado",
         "titleLineOne": "Elige tu",
         "titleLineTwo": "atajo de dictado",
-        "description": "Púlsalo cuando quieras hablar en vez de escribir. Funciona en cualquier aplicación.",
-        "activation": "¿Pulsar o mantener?"
+        "description": "Púlsalo cuando quieras hablar en vez de escribir. Funciona en cualquier aplicación."
       },
       "assistantHotkey": {
         "title": "Configura OpenWhispr Assistant",
@@ -496,7 +495,6 @@
       "description": "Configura cómo activar el dictado",
       "hotkey": "Atajo",
       "mode": "Modo",
-      "tapDescription": "Pulsa para iniciar/detener",
       "holdDescription": "Mantén pulsado mientras hablas",
       "test": "Prueba",
       "hotkeyToStartStop": "{{hotkey}} para iniciar/detener",

@@ -21,8 +21,8 @@ export type OnboardingStepId =
   | "languages"
   | "use-cases"
   | "dictation-hotkey"
-  /** No longer routed — tap/hold lives on dictation-hotkey. Kept so a session
-      saved on it still parses and reconciles onto its neighbour. */
+  /** No longer routed — onboarding picks tap/hold automatically. Kept so a
+      session saved on it still parses and reconciles onto its neighbour. */
   | "activation-mode"
   | "dictation-demo"
   | "assistant-hotkey"
