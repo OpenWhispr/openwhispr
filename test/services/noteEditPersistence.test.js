@@ -86,7 +86,9 @@ test("note edits preserve separate stored fields, reopen correctly, and report f
   });
   await t.test("a rejected save does not claim an update or schedule sync", async () => {
     const before = pushes.length;
-    const stub = t.mock.method(window.electronAPI, "updateNote", async () => ({ success: false }));
+    const stub = t.mock.method(globalThis.window.electronAPI, "updateNote", async () => ({
+      success: false,
+    }));
     const result = await updateNoteTool.execute({ id: note.id, summary: EDITED });
     stub.mock.restore();
     assert.equal(result.success, false);
@@ -96,7 +98,7 @@ test("note edits preserve separate stored fields, reopen correctly, and report f
   });
   await t.test("cancellation while reading the note prevents the pending write", async () => {
     const controller = new AbortController();
-    const stub = t.mock.method(window.electronAPI, "getNote", async (id) => {
+    const stub = t.mock.method(globalThis.window.electronAPI, "getNote", async (id) => {
       controller.abort();
       return database.getNote(id);
     });

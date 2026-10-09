@@ -16,7 +16,8 @@ export interface ChatPersistence {
     noteId?: number | null,
     scope?: ContainerScope
   ) => Promise<number>;
-  loadConversation: (id: number) => Promise<boolean>;
+  /** False for an obsolete load; null for a missing conversation; true when loaded. */
+  loadConversation: (id: number) => Promise<boolean | null>;
   /** Changes when the user leaves this conversation, including before a send starts. */
   getSessionVersion: () => number;
   saveUserMessage: (text: string) => Promise<void>;
@@ -78,7 +79,8 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
       // tombstoned row and the session is never persisted.
       conversationIdRef.current = null;
       setConversationId(null);
-      return false;
+      setMessages([]);
+      return null;
     }
     conversationIdRef.current = id;
     setConversationId(id);
