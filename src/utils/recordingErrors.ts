@@ -8,6 +8,7 @@ type RecordingError = {
   messageKey?: string;
   messageParams?: Record<string, string | number | boolean>;
   surface?: string;
+  selectionEditFatal?: boolean;
   /** Toast variant; defaults to destructive for genuine failures. */
   variant?: "default" | "destructive";
 };
@@ -17,7 +18,7 @@ export function getRecordingErrorTitle(error: RecordingError, t: TFunction): str
     return t("hooks.audioRecording.pastePermission.title");
   }
   if (error.code === "PASTE_FAILED") return t("hooks.audioRecording.pasteFailed.title");
-  if (error.code?.startsWith("SELECTION_EDIT_")) {
+  if (error.selectionEditFatal) {
     return t("hooks.audioRecording.selectionEditing.notAppliedTitle");
   }
   if (error.code === "NETWORK_ERROR") return t(error.title);

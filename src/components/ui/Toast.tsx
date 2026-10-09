@@ -328,6 +328,7 @@ const Toast: React.FC<
   technicalDetails,
   action,
   actions,
+  actionsAlign = "start",
   presentation = "standard",
   variant = "default",
   duration = 3500,
@@ -503,7 +504,12 @@ const Toast: React.FC<
           )}
           <TechnicalErrorDetails details={technicalDetails} onDark />
           {rowActions && (
-            <div className="mt-2 flex items-center gap-1.5">
+            <div
+              className={cn(
+                "mt-2 flex items-center gap-1.5",
+                actionsAlign === "end" && "justify-end"
+              )}
+            >
               {rowActions.map((rowAction, index) => (
                 <StandardToastAction
                   key={`${rowAction.label}-${index}`}

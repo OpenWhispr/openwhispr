@@ -119,6 +119,10 @@ class HotkeyManager extends EventEmitter {
     this.hyprlandRegistrationReady = Promise.resolve();
     this.kdeManager = null;
     this.useKDE = false;
+    // While the GNOME or Hyprland registration waits to read the saved hotkey, the
+    // dictation slot holds a placeholder, so a mode change must not re-register it:
+    // the registration takes the mode right after that read.
+    this.nativeRegistrationPending = false;
     // Injected by main.js: LinuxKeyManager or WindowsKeyManager checkAvailability.
     // Kept as a function so this module never requires the manager it asks about.
     this.nativeListenerProbe = null;
@@ -561,6 +565,11 @@ class HotkeyManager extends EventEmitter {
         });
       }
       return false;
+    }
+
+    if (this.nativeRegistrationPending) {
+      this.activationMode = nextMode;
+      return true;
     }
 
     let success = true;
@@ -1055,8 +1064,8 @@ class HotkeyManager extends EventEmitter {
       if (gnomeOk) {
         const registerGnomeHotkey = async () => {
           try {
-            // DE backends bind one accelerator per slot — use the primary hotkey.
-            const hotkey = parseHotkeyList(await this.getSavedHotkey())[0] || DEFAULT_HOTKEY;
+            const hotkey = await this.getSavedDictationHotkey();
+            this.nativeRegistrationPending = false;
             const success = await this.registerGnomeDictationHotkey(hotkey, callback);
             if (success) {
               this.currentHotkey = hotkey;
@@ -1081,6 +1090,7 @@ class HotkeyManager extends EventEmitter {
           }
         };
 
+        this.nativeRegistrationPending = true;
         setTimeout(registerGnomeHotkey, HOTKEY_REGISTRATION_DELAY_MS);
         this.isInitialized = true;
         return;
@@ -1098,8 +1108,8 @@ class HotkeyManager extends EventEmitter {
       if (hyprlandOk) {
         const registerHyprlandHotkey = async () => {
           try {
-            // DE backends bind one accelerator per slot — use the primary hotkey.
-            const hotkey = parseHotkeyList(await this.getSavedHotkey())[0] || DEFAULT_HOTKEY;
+            const hotkey = await this.getSavedDictationHotkey();
+            this.nativeRegistrationPending = false;
 
             const success = await this.hyprlandManager.registerKeybinding(
               hotkey,
@@ -1130,6 +1140,7 @@ class HotkeyManager extends EventEmitter {
           }
         };
 
+        this.nativeRegistrationPending = true;
         this.hyprlandRegistrationReady = new Promise((resolve) =>
           setTimeout(resolve, HOTKEY_REGISTRATION_DELAY_MS)
         ).then(registerHyprlandHotkey);
@@ -1146,8 +1157,7 @@ class HotkeyManager extends EventEmitter {
       if (kdeOk) {
         const registerKDEHotkey = async () => {
           try {
-            // DE backends bind one accelerator per slot — use the primary hotkey.
-            const hotkey = parseHotkeyList(await this.getSavedHotkey())[0] || DEFAULT_HOTKEY;
+            const hotkey = await this.getSavedDictationHotkey();
             const result = await this.kdeManager.registerKeybinding(
               hotkey,
               "dictation",
@@ -1351,6 +1361,12 @@ class HotkeyManager extends EventEmitter {
       debugLogger.warn("[HotkeyManager] Main window not available for setting sync");
       return false;
     }
+  }
+
+  // DE backends bind one accelerator per slot, so startup registers the primary
+  // saved hotkey. main.js checks a saved Hold against the same key.
+  async getSavedDictationHotkey() {
+    return parseHotkeyList(await this.getSavedHotkey())[0] || DEFAULT_HOTKEY;
   }
 
   async getSavedHotkey() {

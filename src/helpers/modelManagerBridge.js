@@ -837,6 +837,7 @@ class ModelManager {
         max_tokens: grantedMaxTokens,
         disableThinking: options.disableThinking,
         requireCompleteOutput: options.requireCompleteOutput || refuseWindowClip,
+        responseFormat: options.responseFormat,
       });
 
       const totalTime = Date.now() - startTime;
@@ -862,7 +863,11 @@ class ModelManager {
       }
       // A typed failure (a context overflow, say) must keep its identity, or
       // the renderer cannot translate it and the user sees raw server text.
-      if (error.code === "CONTEXT_TOO_LARGE" || error.code === "OUTPUT_TRUNCATED") {
+      if (
+        ["CONTEXT_TOO_LARGE", "OUTPUT_TRUNCATED", "OUTPUT_COMPLETION_UNVERIFIED"].includes(
+          error.code
+        )
+      ) {
         throw new ModelError(error.message, error.code, {
           modelId,
           modelName: modelInfo.model.name,

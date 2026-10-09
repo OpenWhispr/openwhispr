@@ -179,7 +179,8 @@
     "recommended": "Recommended",
     "active": "Active",
     "managedByOrg": "Managed by your organization",
-    "freeAccountRequired": "Free account required",
+    "signInRequired": "Sign in Required",
+    "signIn": "Sign in",
     "comingSoon": "Coming Soon",
     "cloud": "Cloud",
     "local": "Local",
@@ -211,7 +212,8 @@
     "policyUnresolved": "Your organization's settings haven't loaded yet. Try again in a moment.",
     "managedConfigLoading": "Checking your organization's managed setup. Try again in a moment.",
     "managedConfigUnavailable": "Managed enterprise access is unavailable. Sign in again or contact your administrator.",
-    "managedPolicyConflict": "Managed access is blocked by your workspace policy. Contact your administrator."
+    "managedPolicyConflict": "Managed access is blocked by your workspace policy. Contact your administrator.",
+    "resizePanel": "Resize panel"
   },
   "onboarding": {
     "rehaul": {
@@ -971,7 +973,10 @@
         "modifiersHeldClipboardFailed": "OpenWhispr generated the edit, but a modifier key (like Ctrl or Shift) was still held down, so it was not applied, and it could not be copied to the clipboard either.",
         "unavailable": "OpenWhispr could not safely read the selected text. Check accessibility or input automation permissions and try again.",
         "tooLarge": "The selection is too large to edit safely. Select 6,000 characters or fewer.",
-        "reasoningFailed": "The AI could not complete the selection edit. Your original text was not changed."
+        "reasoningFailed": "The AI could not complete the selection edit. Your original text was not changed.",
+        "invalidResponse": "The AI returned an invalid edit response. Nothing was replaced. Select the text and try again.",
+        "emptyResponse": "The AI returned an empty edit. Nothing was replaced. Try a more specific instruction.",
+        "truncatedResponse": "The AI stopped before completing the edit. Nothing was replaced. Try selecting less text."
       },
       "pastePermission": {
         "title": "Allow automatic pasting",
@@ -984,7 +989,8 @@
       },
       "pasteFailed": {
         "title": "Couldn't paste automatically"
-      }
+      },
+      "interruptedRecordingRecovered": "Recovered after OpenWhispr closed before this dictation finished."
     },
     "clipboard": {
       "pasteFailed": {
@@ -1301,7 +1307,6 @@
   "apiKeysSection": {
     "title": "API Keys",
     "description": "Create keys to access the OpenWhispr API programmatically.",
-    "docsLink": "API Docs",
     "empty": "No API keys yet",
     "createButton": "Create API Key",
     "create": {
@@ -1510,6 +1515,7 @@
     "waylandClipboardTitle": "Clipboard Mode on Wayland",
     "windowsReady": "Windows supports automatic pasting out of the box. No setup required!",
     "withoutToolPrefix": "Without this tool, OpenWhispr will copy text to your clipboard. You can then paste manually with Ctrl+V.",
+    "wtypeCosmicTerminalsDescription": "On COSMIC, terminals such as Warp only receive pasted text through wtype. Other apps already paste without it.",
     "wtypeFallbackDescription": "wtype is the preferred auto-paste method for this wlroots compositor. A fallback is available, but may be less reliable.",
     "xwaylandAppsOnly": "automatic pasting works for XWayland apps only"
   },
@@ -1580,6 +1586,7 @@
   },
   "settingsModal": {
     "managedByOrg": "Some settings are managed by your organization.",
+    "managedAccount": "Managed account",
     "groups": {
       "account": "Account",
       "app": "App",
@@ -1865,7 +1872,10 @@
         "opening": "Opening...",
         "updatePaymentMethod": "Update Payment Method",
         "contactOwnerTitle": "Contact your workspace owner",
-        "contactOwnerDescription": "Only the workspace owner can update billing for this workspace."
+        "contactOwnerDescription": "Only the workspace owner can update billing for this workspace.",
+        "manageInAppStore": "Manage in App Store",
+        "manageInGooglePlay": "Manage in Google Play",
+        "managedInMobileStore": "Billed through your phone's app store. Manage it from your phone."
       },
       "checkout": {
         "couldNotOpenDescription": "We had trouble opening the checkout page. Please try again.",
@@ -1889,7 +1899,9 @@
         "nextBilling": "Next billing: {{date}}",
         "pastDue": "{{used}} / {{limit}} free words this week - update payment to restore Pro",
         "trial": "{{days}} days remaining - unlimited transcriptions",
-        "unlimited": "Unlimited"
+        "unlimited": "Unlimited",
+        "accessUntil": "Access until {{date}}",
+        "storePaymentIssue": "Your app store couldn't renew this subscription. Update your payment method there to keep your plan."
       },
       "planLabels": {
         "free": "Free",
@@ -2296,7 +2308,7 @@
         "recheck": "Re-check",
         "copy": "Copy",
         "ydotoolDesc": "Input automation tool for Wayland",
-        "wtypeDesc": "Preferred input automation tool on wlroots compositors",
+        "wtypeDesc": "Preferred input automation tool on wlroots compositors; on COSMIC, used to paste into terminals",
         "ydotooldDesc": "Daemon for ydotool (separate package on Ubuntu/Pop!_OS)",
         "uinputDesc": "Kernel input device access",
         "uinputRuleFound": "Rule present but not active. A reboot should fix it.",
@@ -2623,7 +2635,8 @@
           }
         }
       },
-      "meetingEnterpriseOnly": "Your organization only allows enterprise cloud transcription, which does not cover meeting recording yet."
+      "meetingEnterpriseOnly": "Your organization only allows enterprise cloud transcription, which does not cover meeting recording yet.",
+      "meetingCloudSignedOut": "Note recordings can't start on OpenWhispr Cloud while you're signed out. Choose another engine above."
     },
     "intelligence": {
       "gpuDevice": {
@@ -3486,6 +3499,8 @@
       "unsupportedSelfHosted": "Note Recording can't use a self-hosted endpoint yet. Open Settings and choose Local or a streaming provider.",
       "unsupportedProvider": "Note Recording can't use {{provider}} for live transcription. Open Settings and choose Local or a streaming provider.",
       "noProviderSelected": "No provider is selected for Note Recording. Open Settings and choose Local or a streaming provider.",
+      "signInRequired": "Note Recording requires you to be signed in. Please sign in.",
+      "signInExpired": "Your sign-in has expired, so Note Recording can't renew its connection and may stop. Sign in again once this recording ends.",
       "systemAudioSilent": {
         "title": "No meeting audio detected yet",
         "description": "Only your microphone has picked up sound so far. On a video call? Check that the meeting audio is playing on this computer and isn't muted. Recording in person? You can ignore this — your microphone captures the room."
@@ -3537,6 +3552,7 @@
       "chunkProgress": "Part {{step}} of {{total}}",
       "emptyReply": "The model returned an empty reply. Try again, or pick a different model.",
       "allActions": "All actions",
+      "selectAction": "Select action",
       "manage": "Manage Actions...",
       "addAction": "New Action",
       "editAction": "Edit Action",
@@ -3553,7 +3569,7 @@
       "emptyEditorDescription": "Choose an action from the list or create a new one",
       "builtin": {
         "generateNotes": {
-          "name": "Generate Notes",
+          "name": "AI Summary",
           "description": "Clean up, structure, and enhance your notes"
         },
         "followUpEmail": {
@@ -3562,11 +3578,11 @@
           "cta": "Draft a follow-up email"
         },
         "detailedNotes": {
-          "name": "AI Summary",
+          "name": "Detailed Notes",
           "description": "Accurate, comprehensive meeting notes with decisions and action items"
         },
         "makeTodos": {
-          "name": "Make to-dos",
+          "name": "Create to-dos",
           "description": "List every to-do and its owner in the chat"
         },
         "createOutline": {
@@ -3590,19 +3606,24 @@
           "description": "Workflow, pain points, reactions, and quotes from a participant"
         },
         "shorten": {
-          "name": "Shorten",
-          "description": "Make the summary about half as long",
-          "cta": "Shorten the summary"
+          "name": "Make notes shorter",
+          "description": "Shorten the saved AI summary while keeping key facts",
+          "cta": "Make notes shorter"
         },
         "addTldr": {
-          "name": "Add TL;DR",
-          "description": "Put a two- or three-sentence TL;DR at the top of the summary",
-          "cta": "Add a TL;DR"
+          "name": "Write TL;DR",
+          "description": "Write a two- or three-sentence TL;DR in chat",
+          "cta": "Write TL;DR"
         },
         "slackUpdate": {
           "name": "Slack update",
           "description": "Write a short team update to post in Slack",
           "cta": "Write a Slack update"
+        },
+        "lengthen": {
+          "name": "Make notes longer",
+          "description": "Expand the saved AI summary with supported detail",
+          "cta": "Make notes longer"
         }
       },
       "errors": {
@@ -3615,12 +3636,10 @@
       },
       "tab": "Actions",
       "output": {
-        "auto": "Auto",
         "chat": "Chat",
         "summary": "AI summary",
-        "chatHint": "Answers in the note's chat and leaves the AI summary as it is.",
-        "summaryHint": "Edits the note's AI summary, or writes one from the transcript if there isn't one yet.",
-        "autoHint": "Reads the prompt when you save and picks the chat or the AI summary."
+        "chatHint": "This action replies in chat. Your saved AI summary stays unchanged.",
+        "summaryHint": "This built-in action updates your saved AI summary. You can undo the change."
       },
       "applied": "AI summary updated with {{name}}"
     },
@@ -3629,6 +3648,7 @@
       "managerTitle": "Templates & Actions",
       "manage": "Manage Templates...",
       "select": "Choose template",
+      "regenerate": "Regenerate",
       "addTemplate": "New Template",
       "editTemplate": "Edit Template",
       "namePlaceholder": "Template name",
@@ -3644,7 +3664,8 @@
       "noSectionsHint": "Without sections, the context is the whole instruction for the summary.",
       "noTemplates": "No templates yet",
       "emptyEditorTitle": "Select a template",
-      "emptyEditorDescription": "Choose a template from the list or create a new one"
+      "emptyEditorDescription": "Choose a template from the list or create a new one",
+      "outputHint": "Applying a template creates or replaces the AI summary using your notes and transcript."
     },
     "onboarding": {
       "llm": {
@@ -3746,7 +3767,7 @@
         "chips": {
           "catchUp": "Catch me up",
           "keyDecisions": "List key decisions",
-          "inFlight": "Show in flight projects"
+          "openActionItems": "List open action items"
         }
       },
       "invite": "Invite",
@@ -3958,7 +3979,10 @@
       "typeMessage": "Type a message...",
       "send": "Send",
       "voiceDraftStreamingOnly": "Voice input isn't available with your transcription provider: it only supports live dictation. Choose another provider in Settings → Speech to Text.",
-      "commands": "Commands"
+      "commands": "Commands",
+      "slashNavigate": "to navigate",
+      "slashSelect": "to select",
+      "slashClose": "to close"
     },
     "tools": {
       "search_notesName": "Search notes",
@@ -4087,20 +4111,18 @@
     "mcp": {
       "description": "Chat, search, and work with your notes inside Claude, ChatGPT, and Cursor.",
       "step1": "In your AI tool, add OpenWhispr MCP using the public URL",
-      "step2": "Create an API key with the scopes you need.",
-      "step3": "Paste the key as the Authorization header to connect.",
-      "learnMore": "Learn more",
       "proRequired": "Upgrade to a paid plan to connect OpenWhispr to Claude, ChatGPT, and Cursor.",
       "worksWith": "Works with",
       "copyUrl": "Copy MCP URL",
-      "copied": "Copied"
+      "copied": "Copied",
+      "oauthTitle": "Sign in with OAuth",
+      "oauthDescription": "In a client that supports OAuth, add the server URL, then sign in to OpenWhispr and approve access. No API key needed.",
+      "apiKeyTitle": "Use an API key",
+      "apiKeyDescription": "For clients that accept request headers, create a personal API key with the permissions you need and use the header below."
     },
     "cli": {
       "description": "Give your assistant access to your notes from the terminal.",
       "installLabel": "Install",
-      "learnMore": "Read the docs",
-      "copyDocsLink": "Copy docs link",
-      "docsLinkCopied": "Docs link copied",
       "viewPlans": "View Plans",
       "local": {
         "label": "Local",
@@ -4145,7 +4167,8 @@
     },
     "connectors": {
       "description": "Let the assistant use your tools. You approve every email, message and issue before it goes out."
-    }
+    },
+    "readDocs": "Read the docs"
   },
   "connectors": {
     "approval": {
@@ -4312,15 +4335,17 @@
       "descriptionSend": "The assistant shows an email card in the chat. It's sent from your Gmail only when you press Send.",
       "unavailable": "Email drafts aren't available right now.",
       "targetLabel": "Draft emails in",
-      "autoResolved": "Automatic · {{target}}",
       "targets": {
         "gmail": "Gmail",
         "outlookWork": "Outlook (work or school)",
         "outlookPersonal": "Outlook.com",
-        "mailto": "Default mail app",
+        "mailto": "System mail app",
         "gmailSend": "Send from chat (Gmail)",
-        "gmailSendConnectFirst": "Send from chat (Gmail) · connect Gmail below"
-      }
+        "gmailSendConnectFirst": "Send from chat (Gmail) · connect Gmail below",
+        "auto": "Automatic"
+      },
+      "automaticHint": "Currently: {{target}}. Follows your connected accounts.",
+      "systemMailHint": "Uses the email handler set up on your computer."
     },
     "slack": {
       "title": "Slack",
@@ -4715,16 +4740,10 @@
   },
   "embeddedChat": {
     "askPlaceholder": "Ask anything about your note",
-    "title": "Chat",
-    "emptyState": "Ask a question about this note",
-    "dock": "Dock to sidebar",
-    "undock": "Undock from sidebar",
     "close": "Close chat",
     "newChat": "New chat",
     "conversationSelector": "Switch conversation",
-    "history": "History",
-    "quickActions": "Quick actions",
-    "generateSummary": "Generate summary"
+    "history": "History"
   },
   "transcriptionPreview": {
     "label": "Preview",
@@ -4773,7 +4792,42 @@
       "underway": "It sounds like your meeting is underway. Want to take notes?"
     },
     "start": "Take notes",
-    "join": "Join & transcribe"
+    "join": "Join and transcribe",
+    "folders": {
+      "choose": "Choose meeting folder",
+      "search": "Search folders",
+      "clear": "Clear search",
+      "private": "Private",
+      "shared": "Shared",
+      "current": "Current destination",
+      "recent": "Recently used",
+      "folders": "Folders",
+      "new": "New folder",
+      "name": "Name",
+      "location": "Location",
+      "cancel": "Cancel",
+      "create": "Create & select",
+      "empty": "No folders found. Try another name, or create a folder.",
+      "loading": "Loading folders…",
+      "unavailable": "Folders could not be loaded.",
+      "retry": "Retry",
+      "dismiss": "Dismiss meeting notification",
+      "selected": "Selected {{destination}}",
+      "linked": "This meeting already has a note. Joining keeps it in {{destination}}.",
+      "errors": {
+        "STALE_NOTIFICATION": "This notification is no longer current.",
+        "INVALID_REQUEST": "Could not finish. Please retry.",
+        "FOLDERS_UNAVAILABLE": "Folders could not be loaded.",
+        "FOLDER_UNAVAILABLE": "This destination is unavailable. Choose another folder.",
+        "SPACE_UNAVAILABLE": "This destination is unavailable. Choose another folder.",
+        "FOLDER_NAME_REQUIRED": "Enter a folder name.",
+        "FOLDER_NAME_TAKEN": "A folder with that name already exists in this location.",
+        "CREATE_FAILED": "Could not finish. Please retry.",
+        "LINKED_NOTE_CHANGED": "Review the destination, then join again.",
+        "NOTE_UNAVAILABLE": "This note is unavailable. Retry without creating a replacement.",
+        "START_FAILED": "Could not finish. Please retry."
+      }
+    }
   },
   "providerErrors": {
     "authFailed": "{{provider}} rejected your API key.",

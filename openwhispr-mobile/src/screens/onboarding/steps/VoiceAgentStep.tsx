@@ -15,15 +15,16 @@ import { BRAND } from '@/config/colors';
 import { AppFont } from '@/lib/fonts';
 import { safeHaptics } from '@/lib/utils';
 import { useAuthStore } from '@/store/useAuthStore';
+import { hasRealAccountHistory } from '@/sync/syncIdentity';
 import { addKeyboardStatusChangedListener } from '../../../../modules/app-group-storage/src';
 
 type Phase = 'start' | 'asking' | 'first-draft' | 'refined' | 'done';
 
-// What users say in the live try, and what the example shows when the live try can't run.
-const REQUEST =
-  'I cancelled my subscription last month but got charged again. Draft an email asking them to refund it.';
-const EXAMPLE_DRAFT =
-  'Hi,\n\nI cancelled my subscription last month, but I was charged again this month. Could you please refund this charge?\n\nThanks';
+// What users say in the live try, and what the example shows when the live try can't run. The agent
+// brackets every fact it isn't given, so the request leaves just one (the new meeting time) for the
+// follow-up to fill in.
+const REQUEST = 'Tell Sam I’m running late and ask if we can push our meeting.';
+const EXAMPLE_DRAFT = 'Hey Sam, I’m running late. Could we push our meeting a bit?';
 
 // The field is focused on arrival, so the first instruction points straight at the keyboard's agent
 // button, drawn with the same glyph the keyboard uses.
@@ -35,7 +36,7 @@ const INSTRUCTIONS: Record<Phase, ReactNode> = {
     </>
   ),
   asking: `Say: “${REQUEST}”`,
-  'first-draft': 'Now tap Ask for changes and say: “Make it firmer.”',
+  'first-draft': 'Now tap Ask for changes and add a time. Say: “Make it 3 PM.”',
   refined: 'Tap ✓ to insert it.',
   done: 'That’s your voice assistant.',
 };
@@ -53,6 +54,9 @@ export function VoiceAgentStep(): ReactElement {
   const { goNext, goBack, progress } = useOnboardingStep('voice-agent');
   const { localSelected } = useOnboardingPracticeMode();
   const user = useAuthStore((state) => state.user);
+  const isGuest = useAuthStore((state) => state.isGuest);
+  // As on the dictation step: a guest, or a device with account history, never gets a session here.
+  const [noHistory] = useState(() => !hasRealAccountHistory());
   const input = useRef<TextInput>(null);
   const draftsReady = useRef(0);
   const lastDraftAt = useRef<string | undefined>(undefined);
@@ -118,7 +122,9 @@ export function VoiceAgentStep(): ReactElement {
   const fallbackNote = localSelected
     ? 'The voice assistant uses Cloud. Here’s an example instead.'
     : !user
-      ? 'The voice assistant needs a connection. Here’s an example instead.'
+      ? !isGuest && noHistory
+        ? 'The voice assistant needs a connection. Here’s an example instead.'
+        : 'The voice assistant needs an account. Here’s an example instead.'
       : errorNote;
 
   return (
@@ -179,7 +185,7 @@ export function VoiceAgentStep(): ReactElement {
             ) : null}
             <View className="rounded-2xl border border-separator bg-secondarySystemGroupedBackground px-4 pb-4 pt-3">
               <Text className="mb-2 text-[11px] font-bold uppercase tracking-wider text-tertiaryLabel">
-                To: Support
+                To: Sam
               </Text>
               <TextInput
                 ref={input}

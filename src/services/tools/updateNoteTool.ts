@@ -1,11 +1,11 @@
-import type { ToolDefinition, ToolResult } from "./ToolRegistry";
+import type { ToolDefinition, ToolExecutionContext, ToolResult } from "./ToolRegistry";
 import { resolveFolderId } from "./utils";
 import { syncService } from "../SyncService.js";
 
 export const updateNoteTool: ToolDefinition = {
   name: "update_note",
   description:
-    "Before moving to a folder, always call list_folders first. Reuse an existing folder whenever one is a reasonable semantic fit for the note's topic, even if the user didn't name it. Only pass a new folder name when nothing existing fits. Updates a note's title, content, or folder (auto-created if missing). Use the note ID from context if provided; otherwise search_notes first.",
+    "Updates a note's title, personal content, AI summary, or folder. Read get_note first to identify the field that contains the text being edited; content and summary are separate documents. Supply only the changed field, never the combined note context or transcript. Before moving to a folder, call list_folders and reuse an existing folder when its topic fits; only pass a new name when nothing existing fits. Use the note ID from context if provided; otherwise search_notes first.",
   parameters: {
     type: "object",
     properties: {
@@ -19,7 +19,13 @@ export const updateNoteTool: ToolDefinition = {
       },
       content: {
         type: "string",
-        description: "New content for the note (optional)",
+        description:
+          "Complete replacement of the user's personal notes only, not the AI summary or transcript. Omit unless editing this field; an empty string clears it.",
+      },
+      summary: {
+        type: "string",
+        description:
+          "Complete replacement of the saved AI Summary only. Preserve unrelated sections exactly. Omit unless editing this field; an empty string clears it.",
       },
       folder: {
         type: "string",
@@ -31,29 +37,35 @@ export const updateNoteTool: ToolDefinition = {
   },
   readOnly: false,
 
-  async execute(args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(
+    args: Record<string, unknown>,
+    context?: ToolExecutionContext
+  ): Promise<ToolResult> {
     const id = args.id as number;
     const title = args.title as string | undefined;
     const content = args.content as string | undefined;
+    const summary = args.summary as string | undefined;
     const folderName = args.folder as string | undefined;
 
-    if (!title && !content && !folderName) {
+    if (!title && typeof content !== "string" && typeof summary !== "string" && !folderName) {
       return {
         success: false,
         data: null,
-        displayText: "At least one of title, content, or folder must be provided",
+        displayText: "At least one of title, content, summary, or folder must be provided",
       };
     }
 
     try {
       const note = await window.electronAPI.getNote(id);
+      if (context?.signal.aborted) return { success: false, data: null, displayText: "" };
       if (!note) {
         return { success: false, data: null, displayText: `Note with ID ${id} not found` };
       }
 
       const updates: Record<string, string | number | null> = {};
       if (title) updates.title = title;
-      if (content) updates.content = content;
+      if (typeof content === "string") updates.content = content;
+      if (typeof summary === "string") updates.enhanced_content = summary;
 
       let folderCreated = false;
       if (folderName) {
@@ -71,6 +83,7 @@ export const updateNoteTool: ToolDefinition = {
         folderCreated = resolved.created;
       }
 
+      if (context?.signal.aborted) return { success: false, data: null, displayText: "" };
       const result = await window.electronAPI.updateNote(id, updates);
 
       if (!result.success) {
@@ -82,7 +95,13 @@ export const updateNoteTool: ToolDefinition = {
       const suffix = folderCreated ? ` (moved to new folder "${folderName}")` : "";
       return {
         success: true,
-        data: { id, title: title || note.title },
+        data: {
+          id,
+          title: title || note.title,
+          updatedFields: Object.keys(updates).map((field) =>
+            field === "enhanced_content" ? "summary" : field
+          ),
+        },
         displayText: `Updated note: "${title || note.title}"${suffix}`,
       };
     } catch (error) {

@@ -52,15 +52,20 @@ jest.mock('@/store/useConfigStore', () => ({
     selector({ config: { defaultMode: mockSavedMode } }),
 }));
 let mockUser: { id: string } | null = { id: 'anon' };
+let mockIsGuest = false;
+let mockAccountHistory = false;
 jest.mock('@/store/useAuthStore', () => ({
-  useAuthStore: (selector: (s: unknown) => unknown) => selector({ user: mockUser }),
+  useAuthStore: (selector: (s: unknown) => unknown) =>
+    selector({ user: mockUser, isGuest: mockIsGuest }),
+}));
+jest.mock('@/sync/syncIdentity', () => ({
+  hasRealAccountHistory: () => mockAccountHistory,
 }));
 
 // The field is focused on arrival, and the glyph is the keyboard's own agent button.
 const START = 'Tap the [wand.and.stars] button on your keyboard.';
-const ASK =
-  'Say: “I cancelled my subscription last month but got charged again. Draft an email asking them to refund it.”';
-const FOLLOW_UP = 'Now tap Ask for changes and say: “Make it firmer.”';
+const ASK = 'Say: “Tell Sam I’m running late and ask if we can push our meeting.”';
+const FOLLOW_UP = 'Now tap Ask for changes and add a time. Say: “Make it 3 PM.”';
 const INSERT = 'Tap ✓ to insert it.';
 const DONE = 'That’s your voice assistant.';
 const ACCOUNT_REQUIRED =
@@ -75,6 +80,8 @@ beforeEach(() => {
   mockMode = null;
   mockSavedMode = 'cloud';
   mockUser = { id: 'anon' };
+  mockIsGuest = false;
+  mockAccountHistory = false;
   mockNext.mockResolvedValue(undefined);
   mockBack.mockResolvedValue(undefined);
 });
@@ -109,26 +116,24 @@ it('nudges with a haptic each time the instruction changes', () => {
   expect(safeHaptics).toHaveBeenCalledTimes(3);
   fireEvent.changeText(
     screen.getByLabelText('Your message'),
-    'Hi, please refund this charge and confirm my subscription is cancelled.',
+    'Hey Sam, I’m running late. Could we push our meeting to 3 PM?',
   );
   expect(safeHaptics).toHaveBeenLastCalledWith('success');
 });
 
-it('addresses the practice email to Support', () => {
+it('addresses the practice message to Sam', () => {
   const screen = render(<VoiceAgentStep />);
-  expect(screen.getByText('To: Support')).toBeTruthy();
+  expect(screen.getByText('To: Sam')).toBeTruthy();
 });
 
-it('shows the refund request and a drafted email when the live try is unavailable', () => {
+it('shows the request and a drafted message when the live try is unavailable', () => {
   mockUser = null;
   const screen = render(<VoiceAgentStep />);
   expect(
-    screen.getByText(
-      '“I cancelled my subscription last month but got charged again. Draft an email asking them to refund it.”',
-    ),
+    screen.getByText('“Tell Sam I’m running late and ask if we can push our meeting.”'),
   ).toBeTruthy();
-  expect(screen.getByText(/Could you please refund this charge\?/)).toBeTruthy();
-  expect(screen.queryByText(/confirm/)).toBeNull();
+  expect(screen.getByText(/Could we push our meeting a bit\?/)).toBeTruthy();
+  expect(screen.queryByText(/3 PM/)).toBeNull();
   expect(screen.queryByText(/lunch/)).toBeNull();
 });
 
@@ -146,7 +151,7 @@ it('walks through a request, a spoken follow-up and inserting the result', () =>
   expect(screen.getByText(INSERT)).toBeTruthy();
   fireEvent.changeText(
     screen.getByLabelText('Your message'),
-    'Hi, please refund this charge and confirm my subscription is cancelled.',
+    'Hey Sam, I’m running late. Could we push our meeting to 3 PM?',
   );
   expect(screen.getByText(DONE)).toBeTruthy();
 });
@@ -155,7 +160,7 @@ it('does not count ordinary dictation as trying the agent', () => {
   const screen = render(<VoiceAgentStep />);
   emit('recording');
   emit('ready');
-  fireEvent.changeText(screen.getByLabelText('Your message'), 'Please refund the charge.');
+  fireEvent.changeText(screen.getByLabelText('Your message'), 'Running late, can we push?');
   expect(screen.queryByText(DONE)).toBeNull();
   expect(screen.getByText(ASK)).toBeTruthy();
 });
@@ -187,7 +192,7 @@ it('keeps the first draft insertable when the refinement fails', () => {
   expect(screen.queryByText('Example request')).toBeNull();
   fireEvent.changeText(
     screen.getByLabelText('Your message'),
-    'Hi, please refund this charge and confirm my subscription is cancelled.',
+    'Hey Sam, I’m running late. Could we push our meeting to 3 PM?',
   );
   expect(screen.getByText(DONE)).toBeTruthy();
   expect(screen.queryByText('Retry')).toBeNull();
@@ -211,14 +216,12 @@ it('keeps the finished step when an agent error arrives after inserting the draf
   emit('agent_ready', undefined, '1000');
   fireEvent.changeText(
     screen.getByLabelText('Your message'),
-    'Hi, please refund this charge and confirm my subscription is cancelled.',
+    'Hey Sam, I’m running late. Could we push our meeting to 3 PM?',
   );
   emit('agent_error', 'account_required');
   expect(screen.getByText(DONE)).toBeTruthy();
   expect(
-    screen.getByDisplayValue(
-      'Hi, please refund this charge and confirm my subscription is cancelled.',
-    ),
+    screen.getByDisplayValue('Hey Sam, I’m running late. Could we push our meeting to 3 PM?'),
   ).toBeTruthy();
   expect(screen.queryByText(ACCOUNT_REQUIRED)).toBeNull();
   expect(screen.queryByText('Example request')).toBeNull();
@@ -314,6 +317,19 @@ it('shows the example when there is no session to try the agent with', () => {
   const screen = render(<VoiceAgentStep />);
   expect(
     screen.getByText('The voice assistant needs a connection. Here’s an example instead.'),
+  ).toBeTruthy();
+  expect(screen.getByText('Example request')).toBeTruthy();
+});
+
+it.each([
+  ['a guest', () => (mockIsGuest = true)],
+  ['a device that synced an account', () => (mockAccountHistory = true)],
+])('says the voice assistant needs an account for %s', (_label, arrange) => {
+  mockUser = null;
+  arrange();
+  const screen = render(<VoiceAgentStep />);
+  expect(
+    screen.getByText('The voice assistant needs an account. Here’s an example instead.'),
   ).toBeTruthy();
   expect(screen.getByText('Example request')).toBeTruthy();
 });

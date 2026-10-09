@@ -179,7 +179,8 @@
     "recommended": "推薦",
     "active": "使用中",
     "managedByOrg": "由您的組織管理",
-    "freeAccountRequired": "需要免費帳戶",
+    "signInRequired": "需要登入",
+    "signIn": "登入",
     "comingSoon": "即將推出",
     "cloud": "雲端",
     "local": "本機",
@@ -211,7 +212,8 @@
     "policyUnresolved": "貴組織的設定尚未載入完成。請稍後再試。",
     "managedConfigLoading": "正在檢查您組織的託管設定。請稍候再試。",
     "managedConfigUnavailable": "託管企業存取無法使用。請重新登入或聯絡管理員。",
-    "managedPolicyConflict": "託管存取已被您工作區的政策封鎖。請聯絡管理員。"
+    "managedPolicyConflict": "託管存取已被您工作區的政策封鎖。請聯絡管理員。",
+    "resizePanel": "調整面板大小"
   },
   "onboarding": {
     "rehaul": {
@@ -971,7 +973,10 @@
         "modifiersHeldClipboardFailed": "OpenWhispr 已產生編輯結果，但修飾鍵（如 Ctrl 或 Shift）仍處於按住狀態，因此未套用，也無法複製到剪貼簿。",
         "unavailable": "OpenWhispr 無法安全讀取選取的文字。請檢查輔助使用或輸入自動化權限。",
         "tooLarge": "選取內容過長。請選取不超過 6,000 個字元。",
-        "reasoningFailed": "AI 無法完成選取文字編輯。原始文字未被變更。"
+        "reasoningFailed": "AI 無法完成選取文字編輯。原始文字未被變更。",
+        "invalidResponse": "AI 傳回的編輯回應格式無效。未取代任何內容。請選取文字後重試。",
+        "emptyResponse": "AI 傳回了空白的編輯結果。未取代任何內容。請嘗試更具體的指示。",
+        "truncatedResponse": "AI 在完成編輯之前停止了。未取代任何內容。請嘗試選取較少的文字。"
       },
       "pastePermission": {
         "title": "允許自動貼上",
@@ -984,7 +989,8 @@
       },
       "pasteFailed": {
         "title": "無法自動貼上"
-      }
+      },
+      "interruptedRecordingRecovered": "OpenWhispr 在本次語音輸入完成前關閉，已復原此錄音。"
     },
     "clipboard": {
       "pasteFailed": {
@@ -1415,6 +1421,7 @@
     "waylandClipboardTitle": "Wayland 剪貼簿模式",
     "windowsReady": "Windows 內建支援自動貼上。不需要額外設定！",
     "withoutToolPrefix": "若未安裝此工具，OpenWhispr 會將文字複製到剪貼簿。你可以使用 Ctrl+V 手動貼上。",
+    "wtypeCosmicTerminalsDescription": "在 COSMIC 上，Warp 等終端機只能透過 wtype 接收貼上的文字。其他應用程式不需要 wtype 即可貼上。",
     "wtypeFallbackDescription": "wtype 是此 wlroots 合成器上的首選自動貼上方式。有備用方案可用，但可能較不可靠。",
     "xwaylandAppsOnly": "自動貼上僅適用於 XWayland 應用程式"
   },
@@ -1485,6 +1492,7 @@
   },
   "settingsModal": {
     "managedByOrg": "部分設定由您的組織管理。",
+    "managedAccount": "受管理的帳戶",
     "groups": {
       "account": "帳戶",
       "app": "應用程式",
@@ -1570,7 +1578,10 @@
         "opening": "開啟中...",
         "updatePaymentMethod": "更新付款方式",
         "contactOwnerTitle": "請聯絡工作區擁有者",
-        "contactOwnerDescription": "只有工作區擁有者才能更新該工作區的帳單。"
+        "contactOwnerDescription": "只有工作區擁有者才能更新該工作區的帳單。",
+        "manageInAppStore": "在 App Store 中管理",
+        "manageInGooglePlay": "在 Google Play 中管理",
+        "managedInMobileStore": "透過手機的應用程式商店計費。請在手機上管理訂閱。"
       },
       "checkout": {
         "couldNotOpenDescription": "開啟結帳頁面時發生問題。請再試一次。",
@@ -1594,7 +1605,9 @@
         "nextBilling": "下次扣款日：{{date}}",
         "pastDue": "本週 {{used}} / {{limit}} 免費字數——更新付款方式以恢復 Pro",
         "trial": "剩餘 {{days}} 天——無限轉錄",
-        "unlimited": "無限"
+        "unlimited": "無限",
+        "accessUntil": "可使用至 {{date}}",
+        "storePaymentIssue": "應用程式商店無法續訂此訂閱。請在商店中更新付款方式以繼續使用目前方案。"
       },
       "planLabels": {
         "free": "免費",
@@ -2001,7 +2014,7 @@
         "recheck": "重新檢查",
         "copy": "複製",
         "ydotoolDesc": "Wayland 輸入自動化工具",
-        "wtypeDesc": "wlroots 合成器上的首選輸入自動化工具",
+        "wtypeDesc": "wlroots 合成器上的首選輸入自動化工具；在 COSMIC 上用於向終端機貼上",
         "ydotooldDesc": "ydotool 常駐程式（Ubuntu/Pop!_OS 上為獨立套件）",
         "uinputDesc": "核心輸入裝置存取",
         "uinputRuleFound": "規則已存在但未生效，重新開機應可解決。",
@@ -2328,7 +2341,8 @@
           }
         }
       },
-      "meetingEnterpriseOnly": "貴組織僅允許企業雲端轉錄，尚不支援會議錄音。"
+      "meetingEnterpriseOnly": "貴組織僅允許企業雲端轉錄，尚不支援會議錄音。",
+      "meetingCloudSignedOut": "未登入時，無法使用 OpenWhispr Cloud 開始筆記錄音。請在上方選擇其他引擎。"
     },
     "intelligence": {
       "gpuDevice": {
@@ -3134,6 +3148,8 @@
       "unsupportedSelfHosted": "筆記錄音尚不支援自架端點。請開啟設定，選擇本機或支援串流的服務商。",
       "unsupportedProvider": "筆記錄音無法使用 {{provider}} 進行即時轉錄。請開啟設定，選擇本機或支援串流的服務商。",
       "noProviderSelected": "尚未為筆記錄音選擇服務商。請開啟設定，選擇本機或支援串流的服務商。",
+      "signInRequired": "筆記錄音需要登入，請先登入。",
+      "signInExpired": "登入已過期，筆記錄音無法更新連線，可能會中斷。請在本次錄音結束後重新登入。",
       "systemAudioSilent": {
         "title": "尚未偵測到會議音訊",
         "description": "到目前為止，只有您的麥克風收到聲音。正在進行視訊通話？請檢查會議音訊是否正在此電腦上播放且未被靜音。正在進行現場錄音？您可以忽略此提示——您的麥克風會收錄房間內的聲音。"
@@ -3166,6 +3182,7 @@
     },
     "actions": {
       "allActions": "全部動作",
+      "selectAction": "選擇動作",
       "manage": "管理動作...",
       "addAction": "新增動作",
       "editAction": "編輯動作",
@@ -3185,7 +3202,7 @@
       "emptyReply": "模型傳回了空白回覆。請再試一次，或選擇其他模型。",
       "builtin": {
         "generateNotes": {
-          "name": "生成筆記",
+          "name": "AI 摘要",
           "description": "清理、結構化和增強您的筆記"
         },
         "followUpEmail": {
@@ -3194,7 +3211,7 @@
           "cta": "草擬跟進郵件"
         },
         "detailedNotes": {
-          "name": "AI 摘要",
+          "name": "詳細筆記",
           "description": "準確、完整的會議筆記，包含決策和行動項目"
         },
         "makeTodos": {
@@ -3222,19 +3239,24 @@
           "description": "參與者的工作流程、痛點、反應和原話"
         },
         "shorten": {
-          "name": "精簡",
-          "description": "把摘要縮短到大約一半",
-          "cta": "精簡摘要"
+          "name": "縮短筆記",
+          "description": "縮短已儲存的 AI 摘要，同時保留關鍵事實",
+          "cta": "縮短筆記"
         },
         "addTldr": {
-          "name": "新增 TL;DR",
-          "description": "在摘要開頭加上兩三句話的 TL;DR",
-          "cta": "新增 TL;DR"
+          "name": "撰寫簡短摘要",
+          "description": "在聊天中撰寫兩到三句話的簡短摘要",
+          "cta": "撰寫簡短摘要"
         },
         "slackUpdate": {
           "name": "Slack 更新",
           "description": "寫一則發到 Slack 的簡短團隊更新",
           "cta": "寫一則 Slack 更新"
+        },
+        "lengthen": {
+          "name": "擴充筆記",
+          "description": "用有依據的細節擴充已儲存的 AI 摘要",
+          "cta": "擴充筆記"
         }
       },
       "errors": {
@@ -3247,12 +3269,10 @@
       },
       "tab": "動作",
       "output": {
-        "auto": "自動",
         "chat": "聊天",
         "summary": "AI 摘要",
-        "chatHint": "在筆記的聊天中回覆，AI 摘要維持不變。",
-        "summaryHint": "編輯筆記的 AI 摘要；如果還沒有摘要，就根據轉錄內容產生一份。",
-        "autoHint": "儲存時讀取提示詞，並選擇聊天或 AI 摘要。"
+        "chatHint": "此動作會在聊天中回覆，不會變更已儲存的 AI 摘要。",
+        "summaryHint": "此內建動作會更新已儲存的 AI 摘要。你可以復原變更。"
       },
       "applied": "已使用 {{name}} 更新 AI 摘要"
     },
@@ -3261,6 +3281,7 @@
       "managerTitle": "範本與動作",
       "manage": "管理範本...",
       "select": "選擇範本",
+      "regenerate": "重新產生",
       "addTemplate": "新增範本",
       "editTemplate": "編輯範本",
       "namePlaceholder": "範本名稱",
@@ -3276,7 +3297,8 @@
       "noSectionsHint": "沒有段落時，背景就是摘要的完整指示。",
       "noTemplates": "尚無範本",
       "emptyEditorTitle": "選擇範本",
-      "emptyEditorDescription": "從列表中選擇一個範本或建立新範本"
+      "emptyEditorDescription": "從列表中選擇一個範本或建立新範本",
+      "outputHint": "套用範本會根據你的筆記和轉錄內容建立或取代 AI 摘要。"
     },
     "empty": {
       "title": "這裡還沒有筆記",
@@ -3394,7 +3416,7 @@
         "chips": {
           "catchUp": "幫我補上進度",
           "keyDecisions": "列出關鍵決策",
-          "inFlight": "顯示進行中的專案"
+          "openActionItems": "列出待辦事項"
         }
       },
       "invite": "邀請",
@@ -3787,7 +3809,10 @@
       "typeMessage": "輸入訊息...",
       "send": "傳送",
       "voiceDraftStreamingOnly": "目前的轉錄服務商僅支援即時聽寫，因此無法使用語音輸入。請在「設定 → 語音轉文字」中選擇其他服務商。",
-      "commands": "指令"
+      "commands": "指令",
+      "slashNavigate": "瀏覽",
+      "slashSelect": "選擇",
+      "slashClose": "關閉"
     },
     "tools": {
       "search_notesName": "搜尋筆記",
@@ -3916,20 +3941,18 @@
     "mcp": {
       "description": "在 Claude、ChatGPT 和 Cursor 中與你的筆記一起聊天、搜尋和工作。",
       "step1": "在你的 AI 工具中，使用公開 URL 新增 OpenWhispr MCP",
-      "step2": "建立具有所需權限的 API 金鑰。",
-      "step3": "將金鑰貼上為 Authorization 標頭以連線。",
-      "learnMore": "瞭解更多",
       "proRequired": "升級到付費方案，以將 OpenWhispr 連接到 Claude、ChatGPT 和 Cursor。",
       "worksWith": "支援",
       "copyUrl": "複製 MCP URL",
-      "copied": "已複製"
+      "copied": "已複製",
+      "oauthTitle": "透過 OAuth 登入",
+      "oauthDescription": "在支援 OAuth 的用戶端中新增伺服器 URL，然後登入 OpenWhispr 並授權存取。不需要 API 金鑰。",
+      "apiKeyTitle": "使用 API 金鑰",
+      "apiKeyDescription": "對於支援請求標頭的用戶端，請建立具有所需權限的個人 API 金鑰，並使用以下標頭。"
     },
     "cli": {
       "description": "讓你的助理透過終端機存取你的筆記。",
       "installLabel": "安裝",
-      "learnMore": "查看文件",
-      "copyDocsLink": "複製文件連結",
-      "docsLinkCopied": "已複製文件連結",
       "viewPlans": "查看方案",
       "local": {
         "label": "本機",
@@ -3974,7 +3997,8 @@
     },
     "connectors": {
       "description": "讓助理使用您的工具。每封郵件、每則訊息和每個議題送出前都需要您核准。"
-    }
+    },
+    "readDocs": "閱讀文件"
   },
   "connectors": {
     "approval": {
@@ -4141,15 +4165,17 @@
       "descriptionSend": "助理會在聊天中顯示一張郵件卡片，只有在您按下傳送後才會透過您的 Gmail 寄出。",
       "unavailable": "郵件草稿暫時無法使用。",
       "targetLabel": "在此撰寫郵件",
-      "autoResolved": "自動 · {{target}}",
       "targets": {
         "gmail": "Gmail",
         "outlookWork": "Outlook（公司或學校）",
         "outlookPersonal": "Outlook.com",
-        "mailto": "預設郵件應用程式",
+        "mailto": "系統郵件應用程式",
         "gmailSend": "在聊天中傳送（Gmail）",
-        "gmailSendConnectFirst": "在聊天中傳送（Gmail）· 請在下方連接 Gmail"
-      }
+        "gmailSendConnectFirst": "在聊天中傳送（Gmail）· 請在下方連接 Gmail",
+        "auto": "自動"
+      },
+      "automaticHint": "目前：{{target}}。依已連線的帳戶選擇。",
+      "systemMailHint": "使用電腦上設定的郵件處理程式。"
     },
     "slack": {
       "title": "Slack",
@@ -4587,7 +4613,6 @@
   "apiKeysSection": {
     "title": "API 金鑰",
     "description": "建立金鑰以程式化方式存取 OpenWhispr API。",
-    "docsLink": "API 文件",
     "empty": "尚無 API 金鑰",
     "createButton": "建立 API 金鑰",
     "create": {
@@ -4639,16 +4664,10 @@
   },
   "embeddedChat": {
     "askPlaceholder": "詢問關於筆記的任何問題",
-    "title": "聊天",
-    "emptyState": "就這條筆記提個問題",
-    "dock": "固定到側邊欄",
-    "undock": "從側邊欄取消固定",
     "close": "關閉聊天",
     "newChat": "新對話",
     "conversationSelector": "切換對話",
-    "history": "歷史記錄",
-    "quickActions": "快速操作",
-    "generateSummary": "產生摘要"
+    "history": "歷史記錄"
   },
   "transcriptionPreview": {
     "label": "預覽",
@@ -4773,7 +4792,42 @@
       "underway": "你的會議似乎已在進行中。要開始記錄嗎？"
     },
     "start": "開始記錄",
-    "join": "加入並轉錄"
+    "join": "加入並轉錄",
+    "folders": {
+      "choose": "選擇會議資料夾",
+      "search": "搜尋資料夾",
+      "clear": "清除搜尋",
+      "private": "私人",
+      "shared": "共用",
+      "current": "目前儲存位置",
+      "recent": "最近使用",
+      "folders": "資料夾",
+      "new": "新增資料夾",
+      "name": "名稱",
+      "location": "位置",
+      "cancel": "取消",
+      "create": "建立並選取",
+      "empty": "找不到資料夾。請搜尋其他名稱或建立資料夾。",
+      "loading": "正在載入資料夾…",
+      "unavailable": "無法載入資料夾。",
+      "retry": "重試",
+      "dismiss": "關閉會議通知",
+      "selected": "已選取{{destination}}",
+      "linked": "此會議已有筆記。加入後，筆記仍儲存在{{destination}}。",
+      "errors": {
+        "STALE_NOTIFICATION": "此通知已失效。",
+        "INVALID_REQUEST": "無法完成，請重試。",
+        "FOLDERS_UNAVAILABLE": "無法載入資料夾。",
+        "FOLDER_UNAVAILABLE": "此儲存位置無法使用。請選擇其他資料夾。",
+        "SPACE_UNAVAILABLE": "此儲存位置無法使用。請選擇其他資料夾。",
+        "FOLDER_NAME_REQUIRED": "請輸入資料夾名稱。",
+        "FOLDER_NAME_TAKEN": "此位置已有同名資料夾。",
+        "CREATE_FAILED": "無法完成，請重試。",
+        "LINKED_NOTE_CHANGED": "請檢查儲存位置，然後重新加入。",
+        "NOTE_UNAVAILABLE": "此筆記無法使用。請重試，不要建立替代筆記。",
+        "START_FAILED": "無法完成，請重試。"
+      }
+    }
   },
   "providerErrors": {
     "authFailed": "{{provider}} 拒絕了你的 API 金鑰。",

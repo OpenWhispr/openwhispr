@@ -1,9 +1,10 @@
 // Built-in note templates and actions. The database seeds any that are missing
 // on startup and only rewrites a row whose prompt still equals a previous
 // default, so a user's edited prompt is never touched. A template writes the AI
-// summary: Generate Notes wraps its prompt in the generic system prompt, and
-// Detailed Notes is compiled from sections (see templatePrompts.js). An action
-// either edits the summary or answers in the note chat.
+// summary: AI Summary, the default (Generate Notes' key), wraps its prompt in the
+// generic system prompt, and Detailed Notes is compiled from sections (see
+// templatePrompts.js). An action either edits the summary or answers in the note
+// chat.
 
 export const GENERATE_NOTES_KEY = "notes.actions.builtin.generateNotes";
 export const DETAILED_NOTES_KEY = "notes.actions.builtin.detailedNotes";
@@ -343,7 +344,11 @@ const SLACK_UPDATE_PROMPT = `Write a short Slack message I can post to my team a
 
 const SHORTEN_PROMPT = `Make it about half as long. Keep every decision, number, date, name, and action item; cut repetition, background, and detail that would not change what anyone does next.`;
 
-const ADD_TLDR_PROMPT = `Add a "## TL;DR" section at the very top: two or three sentences on what the meeting decided and what happens next. Leave the rest of the summary exactly as it is.`;
+const ADD_TLDR_PROMPT_PREVIOUS = `Add a "## TL;DR" section at the very top: two or three sentences on what the meeting decided and what happens next. Leave the rest of the summary exactly as it is.`;
+
+const WRITE_TLDR_PROMPT = `Write a two- or three-sentence TL;DR of what the note says, what was decided, and what happens next. Use only supported facts. Return only the TL;DR in chat, without repeating or rewriting the full summary.`;
+
+const LENGTHEN_PROMPT = `Make the notes more detailed using only facts supported by the current summary and reference material. Expand compressed points with relevant context and explanations; keep every name, number, date, decision, and action item. Never invent facts, commitments, or identities, and do not pad with repetition. If the material does not support more detail, keep the notes accurate rather than forcing extra length.`;
 
 // System-prompt wrappers the note action store puts around a built-in or
 // custom action prompt. They live here, with the action prompts, so the live
@@ -404,9 +409,10 @@ Instructions: `;
 
 // A chat action is sent as the user's turn in the note chat, whose system prompt
 // already carries the whole note. It works from the AI summary when there is one.
-// The note chat can offer connector tools; a one-click action answers in the chat.
+// The note chat can offer connector tools; a one-click action answers in the chat
+// and never edits the note (its turn isn't offered update_note).
 const CHAT_ACTION_ANSWER_RULE =
-  "Write your answer here in the chat as text. Don't use a tool to draft, send or post it, unless the instructions explicitly ask you to send, post or file something. Answer in the language the note is written in, not the language of these instructions.";
+  "Write your answer here in the chat as text. Don't use a tool to draft, send or post it, unless the instructions explicitly ask you to send, post or file something. Leave the note, its AI summary and its title unchanged: when the instructions ask for an edit, write the edited text here instead. Answer in the language the note is written in, not the language of these instructions.";
 export const CHAT_ACTION_ON_SUMMARY_PREAMBLE = `Work from the AI summary of the note I'm viewing (it's in your context), and use its transcript only if the instructions below ask for it. ${CHAT_ACTION_ANSWER_RULE} Follow these instructions:
 
 `;
@@ -448,6 +454,9 @@ const builtinAction = ({
   description,
   prompt,
   output,
+  previousPrompts = [],
+  previousNames = [],
+  previousDescriptions = [],
   icon = "sparkles",
   sortOrder,
 }) => ({
@@ -458,7 +467,9 @@ const builtinAction = ({
   prompt,
   sections: null,
   output,
-  previousPrompts: [],
+  previousPrompts,
+  previousNames,
+  previousDescriptions,
   icon,
   sortOrder,
 });
@@ -469,8 +480,8 @@ export const BUILTIN_ACTIONS = [
   {
     translationKey: DETAILED_NOTES_KEY,
     kind: "template",
-    // The default template, and the prompt AI summaries always used.
-    name: "AI Summary",
+    // The prompt 1.10.2's Generate AI Summary button used.
+    name: "Detailed Notes",
     description: "Accurate, comprehensive meeting notes with decisions and action items",
     prompt: "",
     sections: DETAILED_NOTES_SECTIONS,
@@ -481,12 +492,13 @@ export const BUILTIN_ACTIONS = [
       DETAILED_NOTES_PROMPT_1_10_2,
     ],
     icon: "sparkles",
-    sortOrder: 0,
+    sortOrder: 1,
   },
   {
     translationKey: GENERATE_NOTES_KEY,
     kind: "template",
-    name: "Generate Notes",
+    // The default template.
+    name: "AI Summary",
     description: "Clean up, structure, and enhance your notes",
     prompt: GENERATE_NOTES_PROMPT,
     sections: null,
@@ -498,7 +510,7 @@ export const BUILTIN_ACTIONS = [
       GENERATE_NOTES_PROMPT_1_10_2,
     ],
     icon: "sparkles",
-    sortOrder: 1,
+    sortOrder: 0,
   },
   {
     translationKey: FOLLOW_UP_EMAIL_KEY,
@@ -514,7 +526,7 @@ export const BUILTIN_ACTIONS = [
   },
   builtinAction({
     key: "makeTodos",
-    name: "Make to-dos",
+    name: "Create to-dos",
     description: "List every to-do and its owner in the chat",
     prompt: MAKE_TODOS_PROMPT,
     output: "chat",
@@ -523,19 +535,33 @@ export const BUILTIN_ACTIONS = [
   }),
   builtinAction({
     key: "shorten",
-    name: "Shorten",
-    description: "Make the summary about half as long",
+    name: "Make notes shorter",
+    previousNames: ["Shorten"],
+    previousDescriptions: ["Make the summary about half as long"],
+    description: "Shorten the saved AI summary while keeping key facts",
     prompt: SHORTEN_PROMPT,
     output: "summary",
     sortOrder: 4,
   }),
   builtinAction({
-    key: "addTldr",
-    name: "Add TL;DR",
-    description: "Put a two- or three-sentence TL;DR at the top of the summary",
-    prompt: ADD_TLDR_PROMPT,
+    key: "lengthen",
+    name: "Make notes longer",
+    description: "Expand the saved AI summary with supported detail",
+    prompt: LENGTHEN_PROMPT,
     output: "summary",
     sortOrder: 5,
+  }),
+  builtinAction({
+    key: "addTldr",
+    name: "Write TL;DR",
+    icon: "message-square-text",
+    previousNames: ["Add TL;DR"],
+    previousDescriptions: ["Put a two- or three-sentence TL;DR at the top of the summary"],
+    description: "Write a two- or three-sentence TL;DR in chat",
+    prompt: WRITE_TLDR_PROMPT,
+    previousPrompts: [ADD_TLDR_PROMPT_PREVIOUS],
+    output: "chat",
+    sortOrder: 6,
   }),
   builtinAction({
     key: "createOutline",
@@ -544,7 +570,7 @@ export const BUILTIN_ACTIONS = [
     prompt: CREATE_OUTLINE_PROMPT,
     output: "chat",
     icon: "file-text",
-    sortOrder: 6,
+    sortOrder: 7,
   }),
   builtinAction({
     key: "slackUpdate",
@@ -553,7 +579,7 @@ export const BUILTIN_ACTIONS = [
     prompt: SLACK_UPDATE_PROMPT,
     output: "chat",
     icon: "send",
-    sortOrder: 7,
+    sortOrder: 8,
   }),
   builtinTemplate({
     key: "oneOnOne",
@@ -561,7 +587,7 @@ export const BUILTIN_ACTIONS = [
     description: "Updates, feedback, growth, and next steps from a one-on-one",
     prompt: ONE_ON_ONE_CONTEXT,
     sections: ONE_ON_ONE_SECTIONS,
-    sortOrder: 8,
+    sortOrder: 9,
   }),
   builtinTemplate({
     key: "standUp",
@@ -569,7 +595,7 @@ export const BUILTIN_ACTIONS = [
     description: "Each person's progress, plans, and blockers",
     prompt: STAND_UP_CONTEXT,
     sections: STAND_UP_SECTIONS,
-    sortOrder: 9,
+    sortOrder: 10,
   }),
   builtinTemplate({
     key: "salesCall",
@@ -577,7 +603,7 @@ export const BUILTIN_ACTIONS = [
     description: "Needs, objections, budget, and the decision process",
     prompt: SALES_CALL_CONTEXT,
     sections: SALES_CALL_SECTIONS,
-    sortOrder: 10,
+    sortOrder: 11,
   }),
   builtinTemplate({
     key: "userInterview",
@@ -585,7 +611,7 @@ export const BUILTIN_ACTIONS = [
     description: "Workflow, pain points, reactions, and quotes from a participant",
     prompt: USER_INTERVIEW_CONTEXT,
     sections: USER_INTERVIEW_SECTIONS,
-    sortOrder: 11,
+    sortOrder: 12,
   }),
 ];
 

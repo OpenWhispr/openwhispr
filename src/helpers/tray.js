@@ -2,7 +2,6 @@ const { Tray, Menu, nativeImage, app, systemPreferences } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const debugLogger = require("./debugLogger");
-const dockManager = require("./dockManager");
 const { i18nMain } = require("./i18nMain");
 const { windowsTrayIdentity } = require("../../package.json");
 
@@ -110,14 +109,7 @@ class TrayManager {
       this.syncControlPanelWindow();
 
       if (this.controlPanelWindow && !this.controlPanelWindow.isDestroyed()) {
-        if (this.controlPanelWindow.isMinimized()) {
-          this.controlPanelWindow.restore();
-        }
-        if (!this.controlPanelWindow.isVisible()) {
-          this.controlPanelWindow.show();
-        }
-        this.controlPanelWindow.focus();
-        dockManager.setControlPanelVisible(true);
+        this.windowManager.showControlPanel();
         if (this.controlPanelWindow.webContents.isCrashed()) {
           this.controlPanelWindow.webContents.reload();
         }
@@ -127,12 +119,7 @@ class TrayManager {
       if (this.createControlPanelCallback) {
         await this.createControlPanelCallback();
         this.syncControlPanelWindow();
-
-        if (this.controlPanelWindow && !this.controlPanelWindow.isDestroyed()) {
-          this.controlPanelWindow.show();
-          this.controlPanelWindow.focus();
-          dockManager.setControlPanelVisible(true);
-        }
+        this.windowManager.showControlPanel();
         return;
       }
 

@@ -11,12 +11,7 @@ const { parseEventTime } = require("./calendarAvailability");
 // keeps the cloud created_at but lets timestamp default to the local pull, so
 // a naive value must never outrank created_at when dating a historical row.
 const { hasExplicitTimeZone, parseDbTimestamp, toDbTimestamp } = require("./dbTimestamp");
-const {
-  BUILTIN_ACTIONS,
-  DETAILED_NOTES_KEY,
-  GENERATE_NOTES_KEY,
-  NOTE_ACTION_LIMITS,
-} = require("./builtinActions");
+const { BUILTIN_ACTIONS, GENERATE_NOTES_KEY, NOTE_ACTION_LIMITS } = require("./builtinActions");
 const { normalizeSections } = require("./templatePrompts");
 const {
   ANALYTICS_COUNTER_VERSION,
@@ -120,7 +115,11 @@ function toActionItem(row) {
   } catch {
     sections = null;
   }
-  return { ...row, sections };
+  // Destinations are fixed by built-in identity, never by editable copy or stored output.
+  const builtin = BUILTIN_ACTIONS.find((action) => action.translationKey === row.translation_key);
+  const output =
+    row.kind === "template" ? null : builtin?.output === "summary" ? "summary" : "chat";
+  return { ...row, sections, output };
 }
 
 function rowMatchesSnapshot(row, snapshot, fields) {
@@ -652,28 +651,20 @@ class DatabaseManager {
         )
         .run(GENERATE_NOTES_KEY, ...builtinKeys);
 
-      // Detailed Notes became the default "AI Summary"; a name the user chose stays.
-      this.db
-        .prepare(
-          "UPDATE actions SET name = 'AI Summary' WHERE is_builtin = 1 AND translation_key = ? AND name = 'Detailed Notes'"
-        )
-        .run(DETAILED_NOTES_KEY);
-
       // Built-ins: insert any that are missing, and roll a new default out to rows
       // that are still a previous flat default (never a user edit). A built-in's
-      // kind is fixed, so it is settled whatever the prompt; its output is only
-      // filled in, since the user may point an action at the summary instead.
+      // kind and destination are fixed, regardless of prompt edits.
       const selectBuiltin = this.db.prepare(
-        "SELECT id, prompt, sections FROM actions WHERE is_builtin = 1 AND translation_key = ?"
+        "SELECT id, name, description, prompt, sections FROM actions WHERE is_builtin = 1 AND translation_key = ?"
       );
       const insertBuiltin = this.db.prepare(
         "INSERT INTO actions (name, description, prompt, icon, is_builtin, sort_order, translation_key, client_id, kind, sections, output) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)"
       );
       const upgradeBuiltin = this.db.prepare(
-        "UPDATE actions SET description = ?, prompt = ?, sections = ? WHERE id = ?"
+        "UPDATE actions SET prompt = ?, sections = ? WHERE id = ?"
       );
       const settleBuiltin = this.db.prepare(
-        "UPDATE actions SET client_id = ?, kind = ?, sort_order = ?, output = COALESCE(output, ?) WHERE id = ?"
+        "UPDATE actions SET client_id = ?, kind = ?, sort_order = ?, output = ?, name = ?, description = ?, icon = ? WHERE id = ?"
       );
       for (const action of BUILTIN_ACTIONS) {
         const sections = action.sections ? JSON.stringify(action.sections) : null;
@@ -693,14 +684,25 @@ class DatabaseManager {
           );
           continue;
         }
-        if (existing.sections === null && action.previousPrompts.includes(existing.prompt)) {
-          upgradeBuiltin.run(action.description, action.prompt, sections, existing.id);
+        const upgradesPrompt =
+          existing.sections === null && action.previousPrompts.includes(existing.prompt);
+        if (upgradesPrompt) {
+          upgradeBuiltin.run(action.prompt, sections, existing.id);
         }
         settleBuiltin.run(
           action.translationKey,
           action.kind,
           action.sortOrder,
           action.output,
+          action.previousNames?.includes(existing.name) ? action.name : existing.name,
+          (
+            action.previousDescriptions?.length
+              ? action.previousDescriptions.includes(existing.description)
+              : upgradesPrompt
+          )
+            ? action.description
+            : existing.description,
+          action.icon,
           existing.id
         );
       }
@@ -5164,7 +5166,7 @@ class DatabaseManager {
   // event the same id, so a teammate's synced note for the meeting must never
   // match, or both apps record into one note. Ownership follows ownsNote() in
   // spacePermissions.ts, plus Personal rows synced before owners were recorded.
-  getOwnNoteByCalendarEventId(eventId) {
+  getOwnNoteByCalendarEventId(eventId, { throwOnError = false } = {}) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const accountScope = this._accountScopeCondition("notes");
@@ -5188,8 +5190,27 @@ class DatabaseManager {
         { error: error.message },
         "notes"
       );
+      if (throwOnError) throw error;
       return null;
     }
+  }
+
+  createMeetingNoteForNotification({ title, folderId, spaceId, eventId, participants }) {
+    return this.db.transaction(() => {
+      const existing = eventId
+        ? this.getOwnNoteByCalendarEventId(eventId, { throwOnError: true })
+        : null;
+      if (existing) return { created: false, note: existing };
+      const { note } = this.saveNote(title, "", "meeting", null, null, folderId, spaceId);
+      if (!note) throw new Error("Meeting note not saved");
+      if (!eventId) return { created: true, note };
+      const result = this.updateNote(note.id, {
+        calendar_event_id: eventId,
+        ...(participants ? { participants } : {}),
+      });
+      if (!result.success || !result.note) throw new Error("Meeting metadata not saved");
+      return { created: true, note: result.note };
+    })();
   }
 
   // With a source (see contactSource), records that it has seen these

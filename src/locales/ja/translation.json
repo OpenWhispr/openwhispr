@@ -179,7 +179,8 @@
     "recommended": "推奨",
     "active": "有効",
     "managedByOrg": "組織によって管理されています",
-    "freeAccountRequired": "無料アカウントが必要です",
+    "signInRequired": "サインインが必要です",
+    "signIn": "サインイン",
     "comingSoon": "近日公開",
     "cloud": "クラウド",
     "local": "ローカル",
@@ -211,7 +212,8 @@
     "policyUnresolved": "組織の設定がまだ読み込まれていません。しばらくしてからもう一度お試しください。",
     "managedConfigLoading": "組織のマネージド設定を確認しています。しばらくしてからもう一度お試しください。",
     "managedConfigUnavailable": "マネージド エンタープライズ アクセスを利用できません。再度サインインするか、管理者にお問い合わせください。",
-    "managedPolicyConflict": "ワークスペースのポリシーによりマネージド アクセスがブロックされています。管理者にお問い合わせください。"
+    "managedPolicyConflict": "ワークスペースのポリシーによりマネージド アクセスがブロックされています。管理者にお問い合わせください。",
+    "resizePanel": "パネルのサイズを変更"
   },
   "onboarding": {
     "rehaul": {
@@ -971,7 +973,10 @@
         "modifiersHeldClipboardFailed": "OpenWhispr は編集を生成しましたが、修飾キー（Ctrl や Shift など）が押されたままだったため、適用されず、クリップボードにもコピーできませんでした。",
         "unavailable": "OpenWhispr は選択したテキストを安全に読み取れませんでした。アクセシビリティまたは入力自動化の権限を確認してください。",
         "tooLarge": "選択範囲が大きすぎます。6,000文字以内を選択してください。",
-        "reasoningFailed": "AI は選択範囲の編集を完了できませんでした。元のテキストは変更されていません。"
+        "reasoningFailed": "AI は選択範囲の編集を完了できませんでした。元のテキストは変更されていません。",
+        "invalidResponse": "AI が無効な編集応答を返しました。テキストは置き換えられていません。テキストを選択して、もう一度お試しください。",
+        "emptyResponse": "AI が空の編集結果を返しました。テキストは置き換えられていません。より具体的な指示をお試しください。",
+        "truncatedResponse": "AI が編集の完了前に停止しました。テキストは置き換えられていません。選択するテキストを減らしてお試しください。"
       },
       "pastePermission": {
         "title": "自動貼り付けを許可",
@@ -984,7 +989,8 @@
       },
       "pasteFailed": {
         "title": "自動貼り付けに失敗しました"
-      }
+      },
+      "interruptedRecordingRecovered": "このディクテーションの完了前に OpenWhispr が終了したため、録音を復元しました。"
     },
     "clipboard": {
       "pasteFailed": {
@@ -1415,6 +1421,7 @@
     "waylandClipboardTitle": "Wayland でのクリップボードモード",
     "windowsReady": "Windows は自動貼り付けに標準対応しています。設定は不要です！",
     "withoutToolPrefix": "このツールがない場合、OpenWhispr はテキストをクリップボードにコピーします。Ctrl+V で手動で貼り付けてください。",
+    "wtypeCosmicTerminalsDescription": "COSMIC では、Warp などのターミナルは wtype 経由でのみ貼り付けを受け取ります。その他のアプリには wtype なしで貼り付けられます。",
     "wtypeFallbackDescription": "この wlroots 系コンポジターでは wtype が推奨される自動貼り付け方法です。代替手段も利用できますが、信頼性が低い場合があります。",
     "xwaylandAppsOnly": "自動貼り付けは XWayland アプリのみで動作します"
   },
@@ -1485,6 +1492,7 @@
   },
   "settingsModal": {
     "managedByOrg": "一部の設定は組織によって管理されています。",
+    "managedAccount": "管理対象アカウント",
     "groups": {
       "account": "アカウント",
       "app": "アプリ",
@@ -1570,7 +1578,10 @@
         "opening": "開いています...",
         "updatePaymentMethod": "お支払い方法を更新",
         "contactOwnerTitle": "ワークスペースのオーナーにご連絡ください",
-        "contactOwnerDescription": "このワークスペースの請求を更新できるのはオーナーのみです。"
+        "contactOwnerDescription": "このワークスペースの請求を更新できるのはオーナーのみです。",
+        "manageInAppStore": "App Store で管理",
+        "manageInGooglePlay": "Google Play で管理",
+        "managedInMobileStore": "スマートフォンのアプリストアで請求されています。スマートフォンから管理してください。"
       },
       "checkout": {
         "couldNotOpenDescription": "購入ページを開く際に問題が発生しました。もう一度お試しください。",
@@ -1594,7 +1605,9 @@
         "nextBilling": "次の請求日: {{date}}",
         "pastDue": "今週 {{used}} / {{limit}} 無料ワード使用済み - お支払い方法を更新して Pro を復元",
         "trial": "残り {{days}} 日 - 無制限の文字起こし",
-        "unlimited": "無制限"
+        "unlimited": "無制限",
+        "accessUntil": "{{date}} まで利用可能",
+        "storePaymentIssue": "アプリストアでこのサブスクリプションを更新できませんでした。プランを継続するには、ストアでお支払い方法を更新してください。"
       },
       "planLabels": {
         "free": "無料",
@@ -2001,7 +2014,7 @@
         "recheck": "再確認",
         "copy": "コピー",
         "ydotoolDesc": "Wayland 用入力自動化ツール",
-        "wtypeDesc": "wlroots 系コンポジターで推奨される入力自動化ツール",
+        "wtypeDesc": "wlroots 系コンポジターで推奨される入力自動化ツール。COSMIC ではターミナルへの貼り付けに使用",
         "ydotooldDesc": "ydotool デーモン（Ubuntu/Pop!_OS では別パッケージ）",
         "uinputDesc": "カーネル入力デバイスへのアクセス",
         "uinputRuleFound": "ルールは存在しますが未適用です。再起動で解決するはずです。",
@@ -2328,7 +2341,8 @@
           }
         }
       },
-      "meetingEnterpriseOnly": "組織はエンタープライズクラウドの文字起こしのみを許可しており、会議の録音にはまだ対応していません。"
+      "meetingEnterpriseOnly": "組織はエンタープライズクラウドの文字起こしのみを許可しており、会議の録音にはまだ対応していません。",
+      "meetingCloudSignedOut": "サインアウト中は OpenWhispr Cloud でノート録音を開始できません。上で別のエンジンを選択してください。"
     },
     "intelligence": {
       "gpuDevice": {
@@ -2948,6 +2962,7 @@
     },
     "actions": {
       "allActions": "すべてのアクション",
+      "selectAction": "アクションを選択",
       "manage": "アクションを管理...",
       "addAction": "新しいアクション",
       "editAction": "アクションを編集",
@@ -2967,7 +2982,7 @@
       "emptyReply": "モデルから空の応答が返されました。もう一度お試しいただくか、別のモデルを選択してください。",
       "builtin": {
         "generateNotes": {
-          "name": "ノートを生成",
+          "name": "AI要約",
           "description": "ノートを整理、構成、強化する"
         },
         "followUpEmail": {
@@ -2976,7 +2991,7 @@
           "cta": "フォローアップメールを作成"
         },
         "detailedNotes": {
-          "name": "AI要約",
+          "name": "詳細ノート",
           "description": "決定事項とアクションを含む正確で網羅的な会議ノート"
         },
         "makeTodos": {
@@ -3004,19 +3019,24 @@
           "description": "参加者のワークフロー、課題、反応、発言の引用"
         },
         "shorten": {
-          "name": "短くする",
-          "description": "要約を約半分の長さにします",
-          "cta": "要約を短くする"
+          "name": "ノートを短くする",
+          "description": "重要な事実を残して保存済みのAI要約を短くします",
+          "cta": "ノートを短くする"
         },
         "addTldr": {
-          "name": "TL;DRを追加",
-          "description": "要約の先頭に2〜3文のTL;DRを追加します",
-          "cta": "TL;DRを追加"
+          "name": "短い要約を書く",
+          "description": "2〜3文の短い要約をチャットに書きます",
+          "cta": "短い要約を書く"
         },
         "slackUpdate": {
           "name": "Slack用の共有",
           "description": "Slackに投稿するチーム向けの短い共有文を作成します",
           "cta": "Slack用の共有を書く"
+        },
+        "lengthen": {
+          "name": "ノートを詳しくする",
+          "description": "内容に裏付けられた詳細を保存済みのAI要約に追加します",
+          "cta": "ノートを詳しくする"
         }
       },
       "errors": {
@@ -3029,12 +3049,10 @@
       },
       "tab": "アクション",
       "output": {
-        "auto": "自動",
         "chat": "チャット",
         "summary": "AI要約",
-        "chatHint": "ノートのチャットで回答し、AI要約はそのまま残します。",
-        "summaryHint": "ノートのAI要約を編集します。要約がまだない場合は文字起こしから作成します。",
-        "autoHint": "保存時にプロンプトを読み取り、チャットかAI要約かを選びます。"
+        "chatHint": "このアクションはチャットに返信します。保存済みのAI要約は変更されません。",
+        "summaryHint": "この組み込みアクションは保存済みのAI要約を更新します。変更は元に戻せます。"
       },
       "applied": "{{name}}でAI要約を更新しました"
     },
@@ -3043,6 +3061,7 @@
       "managerTitle": "テンプレートとアクション",
       "manage": "テンプレートを管理...",
       "select": "テンプレートを選択",
+      "regenerate": "再生成",
       "addTemplate": "新しいテンプレート",
       "editTemplate": "テンプレートを編集",
       "namePlaceholder": "テンプレート名",
@@ -3058,7 +3077,8 @@
       "noSectionsHint": "セクションがない場合、コンテキストが要約への指示のすべてになります。",
       "noTemplates": "テンプレートはまだありません",
       "emptyEditorTitle": "テンプレートを選択",
-      "emptyEditorDescription": "リストからテンプレートを選択するか、新しく作成してください"
+      "emptyEditorDescription": "リストからテンプレートを選択するか、新しく作成してください",
+      "outputHint": "テンプレートを適用すると、ノートと文字起こしをもとにAI要約を作成、または置き換えます。"
     },
     "empty": {
       "title": "まだノートがありません",
@@ -3201,6 +3221,8 @@
       "unsupportedSelfHosted": "ノート録音はまだセルフホストのエンドポイントを利用できません。設定を開き、ローカルまたはストリーミング対応プロバイダーを選択してください。",
       "unsupportedProvider": "ノート録音ではライブ文字起こしに {{provider}} を利用できません。設定を開き、ローカルまたはストリーミング対応プロバイダーを選択してください。",
       "noProviderSelected": "ノート録音のプロバイダーが選択されていません。設定を開き、ローカルまたはストリーミング対応プロバイダーを選択してください。",
+      "signInRequired": "ノート録音にはサインインが必要です。サインインしてください。",
+      "signInExpired": "サインインの有効期限が切れたため、ノート録音の接続を更新できず、録音が停止する可能性があります。この録音が終わったら、もう一度サインインしてください。",
       "systemAudioSilent": {
         "title": "会議の音声がまだ検出されていません",
         "description": "これまでのところ、音声を拾っているのはマイクのみです。ビデオ会議中の場合は、会議の音声がこのコンピューターで再生されており、ミュートになっていないことを確認してください。対面で録音している場合は、この通知は無視してかまいません。マイクが室内の音を拾います。"
@@ -3322,7 +3344,7 @@
         "chips": {
           "catchUp": "最新情報をまとめて",
           "keyDecisions": "重要な決定事項を一覧に",
-          "inFlight": "進行中のプロジェクトを表示"
+          "openActionItems": "未完了のアクションアイテムを一覧に"
         }
       },
       "invite": "招待",
@@ -3787,7 +3809,10 @@
       "typeMessage": "メッセージを入力...",
       "send": "送信",
       "voiceDraftStreamingOnly": "現在の文字起こしプロバイダーはライブ音声入力のみに対応しているため、音声入力は利用できません。設定 → 音声テキスト変換 で別のプロバイダーを選択してください。",
-      "commands": "コマンド"
+      "commands": "コマンド",
+      "slashNavigate": "で移動",
+      "slashSelect": "で選択",
+      "slashClose": "で閉じる"
     },
     "tools": {
       "search_notesName": "ノートを検索",
@@ -3916,20 +3941,18 @@
     "mcp": {
       "description": "Claude、ChatGPT、Cursor内でメモを使ってチャット、検索、作業ができます。",
       "step1": "AIツールで、公開URLを使用してOpenWhispr MCPを追加します",
-      "step2": "必要なスコープを持つAPIキーを作成します。",
-      "step3": "キーを Authorization ヘッダーとして貼り付けて接続します。",
-      "learnMore": "詳細",
       "proRequired": "OpenWhispr を Claude、ChatGPT、Cursor に接続するには、有料プランへのアップグレードが必要です。",
       "worksWith": "対応アプリ",
       "copyUrl": "MCP URLをコピー",
-      "copied": "コピーしました"
+      "copied": "コピーしました",
+      "oauthTitle": "OAuth でログイン",
+      "oauthDescription": "OAuth 対応のクライアントにサーバー URL を追加し、OpenWhispr にログインしてアクセスを許可します。API キーは不要です。",
+      "apiKeyTitle": "API キーを使用",
+      "apiKeyDescription": "リクエストヘッダーに対応するクライアントでは、必要な権限を持つ個人用 API キーを作成し、以下のヘッダーを使用してください。"
     },
     "cli": {
       "description": "ターミナルからアシスタントにメモへのアクセスを許可します。",
       "installLabel": "インストール",
-      "learnMore": "ドキュメントを読む",
-      "copyDocsLink": "ドキュメントリンクをコピー",
-      "docsLinkCopied": "ドキュメントリンクをコピーしました",
       "viewPlans": "プランを表示",
       "local": {
         "label": "ローカル",
@@ -3974,7 +3997,8 @@
     },
     "connectors": {
       "description": "アシスタントがあなたのツールを使えるようにします。メール、メッセージ、課題はすべて送信前にあなたが承認します。"
-    }
+    },
+    "readDocs": "ドキュメントを読む"
   },
   "connectors": {
     "approval": {
@@ -4141,15 +4165,17 @@
       "descriptionSend": "アシスタントがチャットにメールのカードを表示します。送信を押したときだけ、Gmail から送信されます。",
       "unavailable": "現在メール下書きを利用できません。",
       "targetLabel": "メールを作成するアプリ",
-      "autoResolved": "自動 · {{target}}",
       "targets": {
         "gmail": "Gmail",
         "outlookWork": "Outlook（職場または学校）",
         "outlookPersonal": "Outlook.com",
-        "mailto": "既定のメールアプリ",
+        "mailto": "システムのメールアプリ",
         "gmailSend": "チャットから送信（Gmail）",
-        "gmailSendConnectFirst": "チャットから送信（Gmail）· 下で Gmail を接続"
-      }
+        "gmailSendConnectFirst": "チャットから送信（Gmail）· 下で Gmail を接続",
+        "auto": "自動"
+      },
+      "automaticHint": "現在：{{target}}。接続済みのアカウントに応じて選択します。",
+      "systemMailHint": "コンピューターで設定したメールハンドラーを使用します。"
     },
     "slack": {
       "title": "Slack",
@@ -4587,7 +4613,6 @@
   "apiKeysSection": {
     "title": "APIキー",
     "description": "アカウントへのプログラムアクセス用のキーを管理",
-    "docsLink": "APIドキュメント",
     "empty": "APIキーはまだありません",
     "createButton": "キーを作成",
     "create": {
@@ -4639,16 +4664,10 @@
   },
   "embeddedChat": {
     "askPlaceholder": "ノートについて何でも質問",
-    "title": "チャット",
-    "emptyState": "このノートについて質問してください",
-    "dock": "サイドバーに固定",
-    "undock": "サイドバーから外す",
     "close": "チャットを閉じる",
     "newChat": "新しいチャット",
     "conversationSelector": "会話を切り替え",
-    "history": "履歴",
-    "quickActions": "クイックアクション",
-    "generateSummary": "要約を作成"
+    "history": "履歴"
   },
   "transcriptionPreview": {
     "label": "プレビュー",
@@ -4773,7 +4792,42 @@
       "underway": "会議はすでに進行中のようです。メモを取りますか？"
     },
     "start": "メモを取る",
-    "join": "参加して文字起こし"
+    "join": "参加して文字起こし",
+    "folders": {
+      "choose": "会議フォルダーを選択",
+      "search": "フォルダーを検索",
+      "clear": "検索をクリア",
+      "private": "プライベート",
+      "shared": "共有",
+      "current": "現在の保存先",
+      "recent": "最近使用したフォルダー",
+      "folders": "フォルダー",
+      "new": "新しいフォルダー",
+      "name": "名前",
+      "location": "保存先",
+      "cancel": "キャンセル",
+      "create": "作成して選択",
+      "empty": "フォルダーが見つかりません。別の名前を検索するか、作成してください。",
+      "loading": "フォルダーを読み込み中…",
+      "unavailable": "フォルダーを読み込めませんでした。",
+      "retry": "再試行",
+      "dismiss": "会議通知を閉じる",
+      "selected": "{{destination}}を選択しました",
+      "linked": "この会議にはすでにノートがあります。参加しても{{destination}}に保存されます。",
+      "errors": {
+        "STALE_NOTIFICATION": "この通知は無効になりました。",
+        "INVALID_REQUEST": "完了できませんでした。再試行してください。",
+        "FOLDERS_UNAVAILABLE": "フォルダーを読み込めませんでした。",
+        "FOLDER_UNAVAILABLE": "この保存先は利用できません。別のフォルダーを選択してください。",
+        "SPACE_UNAVAILABLE": "この保存先は利用できません。別のフォルダーを選択してください。",
+        "FOLDER_NAME_REQUIRED": "フォルダー名を入力してください。",
+        "FOLDER_NAME_TAKEN": "この保存先には同名のフォルダーがあります。",
+        "CREATE_FAILED": "完了できませんでした。再試行してください。",
+        "LINKED_NOTE_CHANGED": "保存先を確認し、もう一度参加してください。",
+        "NOTE_UNAVAILABLE": "このノートは利用できません。新規作成せずに再試行してください。",
+        "START_FAILED": "完了できませんでした。再試行してください。"
+      }
+    }
   },
   "providerErrors": {
     "authFailed": "{{provider}} がAPIキーを拒否しました。",

@@ -16,6 +16,10 @@ export interface UserConfig {
   // Workflows held on the previous mode when dictation moved to Bring Your Own Key,
   // as opposed to ones the user chose; only these are released when dictation leaves it.
   pinnedInference?: MobileInferenceScope[];
+  // Set while Private mode is on after being turned on from Bring Your Own Key, so turning it
+  // off goes back to the last provider rather than to Cloud, with the workflows it held
+  // (pinnedInference) held on the same selections again.
+  privateModeReturn?: { pinned: Partial<Record<MobileInferenceScope, InferenceSelection>> };
   defaultMode: ProcessingMode;
   cleanupEnabled?: boolean;
   autoGenerateNoteTitle?: boolean;
@@ -39,6 +43,8 @@ export interface UserConfig {
   appleLocalIntelligenceEnabled?: boolean;
   // Dictation agent (cloud-only, default on)
   dictationAgentEnabled?: boolean;
+  // Note chat, which once shared dictationAgentEnabled's switch and follows it until set.
+  noteChatEnabled?: boolean;
   dictationAgentName?: string;
   dictationAgentShareContext?: boolean;
 }
@@ -122,12 +128,18 @@ export interface ReasoningResponse {
 export interface ReasoningRoutingOptions {
   isPrivateNote?: boolean;
   allowCloudFallback?: boolean;
+  // The provider route is the one the user saved for this workflow, which is their
+  // consent to send it this content, even in On-Device mode.
+  sendToChosenProvider?: boolean;
 }
 
 export type LocalReasoningStatus =
   | 'ready'
   | 'disabled'
   | 'unavailable'
+  // This iPhone can never run Apple Intelligence, or not on its iOS version.
+  | 'unsupportedDevice'
+  | 'unsupportedOS'
   | 'appleIntelligenceOff'
   | 'modelNotReady';
 

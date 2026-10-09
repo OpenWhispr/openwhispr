@@ -158,7 +158,8 @@
     "recommended": "Recomendado",
     "active": "Ativo",
     "managedByOrg": "Gerenciado pela sua organização",
-    "freeAccountRequired": "Conta gratuita necessária",
+    "signInRequired": "Login necessário",
+    "signIn": "Entrar",
     "comingSoon": "Em breve",
     "cloud": "Nuvem",
     "local": "Local",
@@ -190,7 +191,8 @@
     "policyUnresolved": "As configurações da sua organização ainda não foram carregadas. Tente novamente em instantes.",
     "managedConfigLoading": "Verificando a configuração gerenciada da sua organização. Tente novamente em instantes.",
     "managedConfigUnavailable": "O acesso empresarial gerenciado está indisponível. Entre novamente ou entre em contato com o administrador.",
-    "managedPolicyConflict": "O acesso gerenciado está bloqueado pela política do seu espaço de trabalho. Entre em contato com o administrador."
+    "managedPolicyConflict": "O acesso gerenciado está bloqueado pela política do seu espaço de trabalho. Entre em contato com o administrador.",
+    "resizePanel": "Redimensionar painel"
   },
   "onboarding": {
     "rehaul": {
@@ -950,7 +952,10 @@
         "modifiersHeldClipboardFailed": "O OpenWhispr gerou a edição, mas uma tecla modificadora (como Ctrl ou Shift) ainda estava pressionada, por isso ela não foi aplicada e também não foi possível copiá-la para a área de transferência.",
         "unavailable": "O OpenWhispr não conseguiu ler o texto selecionado com segurança. Verifique as permissões de acessibilidade ou automação.",
         "tooLarge": "A seleção é muito grande. Selecione no máximo 6.000 caracteres.",
-        "reasoningFailed": "A IA não conseguiu concluir a edição. O texto original não foi alterado."
+        "reasoningFailed": "A IA não conseguiu concluir a edição. O texto original não foi alterado.",
+        "invalidResponse": "A IA retornou uma resposta de edição inválida. Nada foi substituído. Selecione o texto e tente novamente.",
+        "emptyResponse": "A IA retornou uma edição vazia. Nada foi substituído. Tente uma instrução mais específica.",
+        "truncatedResponse": "A IA parou antes de concluir a edição. Nada foi substituído. Tente selecionar menos texto."
       },
       "pastePermission": {
         "title": "Permitir colagem automática",
@@ -963,7 +968,8 @@
       },
       "pasteFailed": {
         "title": "Não foi possível colar automaticamente"
-      }
+      },
+      "interruptedRecordingRecovered": "Recuperado após o OpenWhispr fechar antes de terminar este ditado."
     },
     "clipboard": {
       "pasteFailed": {
@@ -1394,6 +1400,7 @@
     "waylandClipboardTitle": "Modo área de transferência no Wayland",
     "windowsReady": "O Windows suporta colagem automática nativamente. Nenhuma configuração necessária!",
     "withoutToolPrefix": "Sem essa ferramenta, o OpenWhispr copiará o texto para a área de transferência. Você poderá colar manualmente com Ctrl+V.",
+    "wtypeCosmicTerminalsDescription": "No COSMIC, terminais como o Warp só recebem texto colado pelo wtype. Nos outros apps, a colagem já funciona sem ele.",
     "wtypeFallbackDescription": "O wtype é o método de colagem automática preferido para este compositor wlroots. Há uma alternativa disponível, mas ela pode ser menos confiável.",
     "xwaylandAppsOnly": "a colagem automática funciona apenas para apps XWayland"
   },
@@ -1464,6 +1471,7 @@
   },
   "settingsModal": {
     "managedByOrg": "Algumas configurações são gerenciadas pela sua organização.",
+    "managedAccount": "Conta gerenciada",
     "groups": {
       "account": "Conta",
       "app": "Aplicativo",
@@ -1549,7 +1557,10 @@
         "opening": "Abrindo...",
         "updatePaymentMethod": "Atualizar forma de pagamento",
         "contactOwnerTitle": "Fale com o proprietário do workspace",
-        "contactOwnerDescription": "Apenas o proprietário do workspace pode atualizar a cobrança dele."
+        "contactOwnerDescription": "Apenas o proprietário do workspace pode atualizar a cobrança dele.",
+        "manageInAppStore": "Gerenciar na App Store",
+        "manageInGooglePlay": "Gerenciar no Google Play",
+        "managedInMobileStore": "Cobrado pela loja de apps do seu celular. Gerencie pelo celular."
       },
       "checkout": {
         "couldNotOpenDescription": "Tivemos dificuldade em abrir a página de checkout. Tente novamente.",
@@ -1573,7 +1584,9 @@
         "nextBilling": "Próxima cobrança: {{date}}",
         "pastDue": "{{used}} / {{limit}} palavras gratuitas esta semana — atualize o pagamento para restaurar o Pro",
         "trial": "{{days}} dias restantes — transcrições ilimitadas",
-        "unlimited": "Ilimitado"
+        "unlimited": "Ilimitado",
+        "accessUntil": "Acesso até {{date}}",
+        "storePaymentIssue": "A loja de apps não conseguiu renovar esta assinatura. Atualize lá sua forma de pagamento para manter seu plano."
       },
       "planLabels": {
         "free": "Gratuito",
@@ -1980,7 +1993,7 @@
         "recheck": "Verificar novamente",
         "copy": "Copiar",
         "ydotoolDesc": "Ferramenta de automação de entrada para Wayland",
-        "wtypeDesc": "Ferramenta de automação de entrada preferida em compositores wlroots",
+        "wtypeDesc": "Ferramenta de automação de entrada preferida em compositores wlroots; no COSMIC, usada para colar em terminais",
         "ydotooldDesc": "Daemon do ydotool (pacote separado no Ubuntu/Pop!_OS)",
         "uinputDesc": "Acesso ao dispositivo de entrada do kernel",
         "uinputRuleFound": "Regra presente mas não ativa. Uma reinicialização deve resolver.",
@@ -2307,7 +2320,8 @@
           }
         }
       },
-      "meetingEnterpriseOnly": "A sua organização só permite transcrição em nuvem corporativa, que ainda não abrange a gravação de reuniões."
+      "meetingEnterpriseOnly": "A sua organização só permite transcrição em nuvem corporativa, que ainda não abrange a gravação de reuniões.",
+      "meetingCloudSignedOut": "As gravações de notas não podem começar no OpenWhispr Cloud enquanto você estiver desconectado. Escolha outro motor acima."
     },
     "intelligence": {
       "gpuDevice": {
@@ -3134,6 +3148,8 @@
       "unsupportedSelfHosted": "A gravação de notas ainda não pode usar um endpoint auto-hospedado. Abra as Configurações e escolha Local ou um provedor de streaming.",
       "unsupportedProvider": "A gravação de notas não pode usar {{provider}} para transcrição ao vivo. Abra as Configurações e escolha Local ou um provedor de streaming.",
       "noProviderSelected": "Nenhum provedor está selecionado para a gravação de notas. Abra as Configurações e escolha Local ou um provedor de streaming.",
+      "signInRequired": "A gravação de notas exige que você entre na sua conta. Entre para continuar.",
+      "signInExpired": "Sua sessão expirou, então a gravação de notas não consegue renovar a conexão e pode parar. Entre novamente quando esta gravação terminar.",
       "systemAudioSilent": {
         "title": "Nenhum áudio da reunião detectado até agora",
         "description": "Até agora, apenas o seu microfone captou som. Está em uma videochamada? Verifique se o áudio da reunião está sendo reproduzido neste computador e não está silenciado. Está gravando presencialmente? Você pode ignorar este aviso: seu microfone capta o ambiente."
@@ -3166,6 +3182,7 @@
     },
     "actions": {
       "allActions": "Todas as ações",
+      "selectAction": "Selecionar ação",
       "manage": "Gerenciar ações...",
       "addAction": "Nova ação",
       "editAction": "Editar ação",
@@ -3185,7 +3202,7 @@
       "emptyReply": "O modelo retornou uma resposta vazia. Tente novamente ou escolha outro modelo.",
       "builtin": {
         "generateNotes": {
-          "name": "Gerar notas",
+          "name": "Resumo com IA",
           "description": "Limpar, estruturar e aprimorar suas notas"
         },
         "followUpEmail": {
@@ -3194,7 +3211,7 @@
           "cta": "Redigir e-mail de acompanhamento"
         },
         "detailedNotes": {
-          "name": "Resumo com IA",
+          "name": "Notas detalhadas",
           "description": "Notas de reunião precisas e completas com decisões e ações"
         },
         "makeTodos": {
@@ -3222,19 +3239,24 @@
           "description": "Fluxo de trabalho, dificuldades, reações e citações de um participante"
         },
         "shorten": {
-          "name": "Encurtar",
-          "description": "Deixe o resumo com cerca de metade do tamanho",
-          "cta": "Encurtar o resumo"
+          "name": "Encurtar as notas",
+          "description": "Encurta o resumo de IA salvo mantendo os fatos principais",
+          "cta": "Encurtar as notas"
         },
         "addTldr": {
-          "name": "Adicionar TL;DR",
-          "description": "Coloque um TL;DR de duas ou três frases no início do resumo",
-          "cta": "Adicionar um TL;DR"
+          "name": "Escrever um resumo breve",
+          "description": "Escreve um resumo de duas ou três frases no chat",
+          "cta": "Escrever um resumo breve"
         },
         "slackUpdate": {
           "name": "Atualização no Slack",
           "description": "Escreva uma breve atualização para a equipe no Slack",
           "cta": "Escrever uma atualização no Slack"
+        },
+        "lengthen": {
+          "name": "Expandir as notas",
+          "description": "Expande o resumo de IA salvo com detalhes fundamentados no conteúdo",
+          "cta": "Expandir as notas"
         }
       },
       "errors": {
@@ -3247,12 +3269,10 @@
       },
       "tab": "Ações",
       "output": {
-        "auto": "Automático",
         "chat": "Chat",
         "summary": "Resumo com IA",
-        "chatHint": "Responde no chat da nota e deixa o resumo com IA como está.",
-        "summaryHint": "Edita o resumo com IA da nota, ou escreve um a partir da transcrição se ainda não houver.",
-        "autoHint": "Lê o prompt ao salvar e escolhe o chat ou o resumo com IA."
+        "chatHint": "Esta ação responde no chat. Seu resumo de IA salvo permanece inalterado.",
+        "summaryHint": "Esta ação integrada atualiza seu resumo de IA salvo. Você pode desfazer a alteração."
       },
       "applied": "Resumo com IA atualizado com {{name}}"
     },
@@ -3261,6 +3281,7 @@
       "managerTitle": "Modelos e ações",
       "manage": "Gerenciar modelos...",
       "select": "Escolher modelo",
+      "regenerate": "Gerar novamente",
       "addTemplate": "Novo modelo",
       "editTemplate": "Editar modelo",
       "namePlaceholder": "Nome do modelo",
@@ -3276,7 +3297,8 @@
       "noSectionsHint": "Sem seções, o contexto é a instrução completa para o resumo.",
       "noTemplates": "Nenhum modelo ainda",
       "emptyEditorTitle": "Selecionar modelo",
-      "emptyEditorDescription": "Escolha um modelo da lista ou crie um novo"
+      "emptyEditorDescription": "Escolha um modelo da lista ou crie um novo",
+      "outputHint": "Aplicar um modelo cria ou substitui o resumo de IA usando suas notas e a transcrição."
     },
     "empty": {
       "title": "Ainda não há notas aqui",
@@ -3394,7 +3416,7 @@
         "chips": {
           "catchUp": "Me atualize",
           "keyDecisions": "Liste as decisões principais",
-          "inFlight": "Mostre os projetos em andamento"
+          "openActionItems": "Liste as tarefas pendentes"
         }
       },
       "invite": "Convidar",
@@ -3787,7 +3809,10 @@
       "typeMessage": "Digite uma mensagem...",
       "send": "Enviar",
       "voiceDraftStreamingOnly": "A entrada por voz não está disponível com seu provedor de transcrição: ele só suporta ditado ao vivo. Escolha outro provedor em Configurações → Fala para texto.",
-      "commands": "Comandos"
+      "commands": "Comandos",
+      "slashNavigate": "para navegar",
+      "slashSelect": "para selecionar",
+      "slashClose": "para fechar"
     },
     "tools": {
       "search_notesName": "Pesquisar notas",
@@ -3916,20 +3941,18 @@
     "mcp": {
       "description": "Converse, pesquise e trabalhe com suas notas no Claude, ChatGPT e Cursor.",
       "step1": "Na sua ferramenta de IA, adicione OpenWhispr MCP usando a URL pública",
-      "step2": "Crie uma chave de API com os escopos necessários.",
-      "step3": "Cole a chave como cabeçalho Authorization para conectar.",
-      "learnMore": "Saiba mais",
       "proRequired": "Atualize para um plano pago para conectar o OpenWhispr ao Claude, ChatGPT e Cursor.",
       "worksWith": "Funciona com",
       "copyUrl": "Copiar URL do MCP",
-      "copied": "Copiado"
+      "copied": "Copiado",
+      "oauthTitle": "Entrar com OAuth",
+      "oauthDescription": "Em um cliente compatível com OAuth, adicione a URL do servidor, entre no OpenWhispr e autorize o acesso. Não é necessária uma chave de API.",
+      "apiKeyTitle": "Usar uma chave de API",
+      "apiKeyDescription": "Para clientes que aceitam cabeçalhos de solicitação, crie uma chave de API pessoal com as permissões necessárias e use o cabeçalho abaixo."
     },
     "cli": {
       "description": "Dê ao seu assistente acesso às suas notas pelo terminal.",
       "installLabel": "Instalar",
-      "learnMore": "Ler a documentação",
-      "copyDocsLink": "Copiar link da documentação",
-      "docsLinkCopied": "Link da documentação copiado",
       "viewPlans": "Ver planos",
       "local": {
         "label": "Local",
@@ -3974,7 +3997,8 @@
     },
     "connectors": {
       "description": "Deixe o assistente usar suas ferramentas. Você aprova cada e-mail, mensagem e issue antes do envio."
-    }
+    },
+    "readDocs": "Ler a documentação"
   },
   "connectors": {
     "approval": {
@@ -4141,15 +4165,17 @@
       "descriptionSend": "O assistente mostra um cartão de e-mail no chat. O e-mail só é enviado pelo seu Gmail quando você aperta Enviar.",
       "unavailable": "Os rascunhos de e-mail não estão disponíveis no momento.",
       "targetLabel": "Criar rascunhos de e-mail em",
-      "autoResolved": "Automático · {{target}}",
       "targets": {
         "gmail": "Gmail",
         "outlookWork": "Outlook (trabalho ou escola)",
         "outlookPersonal": "Outlook.com",
-        "mailto": "Aplicativo de e-mail padrão",
+        "mailto": "Aplicativo de e-mail do sistema",
         "gmailSend": "Enviar pelo chat (Gmail)",
-        "gmailSendConnectFirst": "Enviar pelo chat (Gmail) · conecte o Gmail abaixo"
-      }
+        "gmailSendConnectFirst": "Enviar pelo chat (Gmail) · conecte o Gmail abaixo",
+        "auto": "Automático"
+      },
+      "automaticHint": "Atual: {{target}}. Segue suas contas conectadas.",
+      "systemMailHint": "Usa o gerenciador de e-mail configurado no seu computador."
     },
     "slack": {
       "title": "Slack",
@@ -4587,7 +4613,6 @@
   "apiKeysSection": {
     "title": "Chaves API",
     "description": "Crie chaves para acessar a API do OpenWhispr programaticamente.",
-    "docsLink": "Docs da API",
     "empty": "Nenhuma chave API ainda",
     "createButton": "Criar chave API",
     "create": {
@@ -4639,16 +4664,10 @@
   },
   "embeddedChat": {
     "askPlaceholder": "Pergunte sobre sua nota",
-    "title": "Chat",
-    "emptyState": "Faça uma pergunta sobre esta nota",
-    "dock": "Fixar na barra lateral",
-    "undock": "Desafixar da barra lateral",
     "close": "Fechar chat",
     "newChat": "Novo chat",
     "conversationSelector": "Trocar conversa",
-    "history": "Histórico",
-    "quickActions": "Ações rápidas",
-    "generateSummary": "Gerar resumo"
+    "history": "Histórico"
   },
   "transcriptionPreview": {
     "label": "Pré-visualização",
@@ -4773,7 +4792,42 @@
       "underway": "Parece que sua reunião já está em andamento. Quer fazer anotações?"
     },
     "start": "Fazer anotações",
-    "join": "Entrar e transcrever"
+    "join": "Entrar e transcrever",
+    "folders": {
+      "choose": "Escolher pasta da reunião",
+      "search": "Pesquisar pastas",
+      "clear": "Limpar pesquisa",
+      "private": "Privado",
+      "shared": "Compartilhado",
+      "current": "Destino atual",
+      "recent": "Usadas recentemente",
+      "folders": "Pastas",
+      "new": "Nova pasta",
+      "name": "Nome",
+      "location": "Local",
+      "cancel": "Cancelar",
+      "create": "Criar e selecionar",
+      "empty": "Nenhuma pasta encontrada. Tente outro nome ou crie uma pasta.",
+      "loading": "Carregando pastas…",
+      "unavailable": "Não foi possível carregar as pastas.",
+      "retry": "Tentar novamente",
+      "dismiss": "Fechar notificação de reunião",
+      "selected": "{{destination}} selecionado",
+      "linked": "Esta reunião já tem uma nota. Ao entrar, ela permanecerá em {{destination}}.",
+      "errors": {
+        "STALE_NOTIFICATION": "Esta notificação não está mais atualizada.",
+        "INVALID_REQUEST": "Não foi possível concluir. Tente novamente.",
+        "FOLDERS_UNAVAILABLE": "Não foi possível carregar as pastas.",
+        "FOLDER_UNAVAILABLE": "Este destino não está disponível. Escolha outra pasta.",
+        "SPACE_UNAVAILABLE": "Este destino não está disponível. Escolha outra pasta.",
+        "FOLDER_NAME_REQUIRED": "Digite um nome para a pasta.",
+        "FOLDER_NAME_TAKEN": "Já existe uma pasta com esse nome neste local.",
+        "CREATE_FAILED": "Não foi possível concluir. Tente novamente.",
+        "LINKED_NOTE_CHANGED": "Confira o destino e entre novamente.",
+        "NOTE_UNAVAILABLE": "Esta nota não está disponível. Tente novamente sem criar outra.",
+        "START_FAILED": "Não foi possível concluir. Tente novamente."
+      }
+    }
   },
   "providerErrors": {
     "authFailed": "{{provider}} rejeitou sua chave de API.",

@@ -975,9 +975,14 @@ class ReasoningService extends BaseReasoningService {
           const displayText =
             typeof output === "string" ? output : output?.error ? String(output.error) : "Done";
           // Mirror the cloud path: successful object outputs become metadata so
-          // tool-result cards (note cards) render on BYOK/local too.
+          // tool-result cards (note cards) render on BYOK/local too. Only the
+          // registry's bare { error } wrapper is a failure: a connector's own
+          // "failed" result carries `error` beside its status, and the history
+          // reads that status.
+          const isToolFailure =
+            output && typeof output === "object" && "error" in output && !("status" in output);
           const metadata =
-            output && typeof output === "object" && !("error" in output)
+            output && typeof output === "object" && !isToolFailure
               ? (output as ToolMetadata)
               : undefined;
           yield {
@@ -1087,6 +1092,7 @@ class ReasoningService extends BaseReasoningService {
       tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
       // Press-time screenshot; the server routes to its vision chain when present.
       screenContext?: { data: string; mediaType: string };
+      noteChat?: boolean;
     }
   ): {
     stream: AsyncGenerator<
@@ -1193,6 +1199,7 @@ class ReasoningService extends BaseReasoningService {
         toolCallId: string
       ) => Promise<ToolExecutionResult>;
       screenContext?: { data: string; mediaType: string };
+      noteChat?: boolean;
     }
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
     // Capture synchronously so a cancel before the first next() is observed.
@@ -1211,6 +1218,7 @@ class ReasoningService extends BaseReasoningService {
         toolCallId: string
       ) => Promise<ToolExecutionResult>;
       screenContext?: { data: string; mediaType: string };
+      noteChat?: boolean;
     },
     operationGeneration: number
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
@@ -1218,7 +1226,11 @@ class ReasoningService extends BaseReasoningService {
     const operationWasCancelled = (): boolean =>
       operationGeneration !== this.cloudOperationGeneration;
     const maxSteps = config.tools?.length ? ReasoningService.MAX_TOOL_STEPS : 1;
-    let currentMessages = [...messages];
+    // The Cloud API prepends systemPrompt itself. Keep any distinct system instructions.
+    let currentMessages =
+      messages[0]?.role === "system" && messages[0].content === config.systemPrompt
+        ? messages.slice(1)
+        : [...messages];
 
     for (let step = 0; step < maxSteps; step++) {
       if (operationWasCancelled()) return;
@@ -1228,6 +1240,7 @@ class ReasoningService extends BaseReasoningService {
         systemPrompt: config.systemPrompt,
         tools: config.tools,
         screenContext: config.screenContext,
+        noteChat: config.noteChat,
       });
 
       const pendingToolCalls: Array<{ id: string; name: string; arguments: string }> = [];

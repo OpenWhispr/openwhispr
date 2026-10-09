@@ -567,9 +567,7 @@ class SelectionManager {
     if (target.kind === "atspi-pid" && (await this._isTerminalPid(target.id))) return capture;
     // macOS targets normally carry the copier's NSWorkspace app name, already
     // matched above; only an unnamed target needs its executable resolved so a
-    // terminal cannot become a caret destination. Never resolve a
-    // named one — `ps` reports bundle paths like "Visual Studio Code" whose
-    // "st" substring would misread editors as terminals.
+    // terminal cannot become a caret destination.
     if (
       target.kind === "mac-pid" &&
       !this._targetSignature(target) &&
@@ -608,8 +606,8 @@ class SelectionManager {
   async _readTargetNames(pid) {
     const executablePath = await this._readExecutablePath(pid);
     if (!executablePath) return "";
-    // Match the bundle and executable names, not the whole path — segments
-    // like "/System/" would collide with short signatures such as "st".
+    // Match the bundle and executable names, not the whole path, so a directory
+    // name can't read as a terminal signature.
     const bundleName = executablePath.match(/\/([^/]+)\.app\//)?.[1] ?? "";
     const executableName = executablePath.split("/").pop() ?? "";
     return `${bundleName} ${executableName}`.trim();

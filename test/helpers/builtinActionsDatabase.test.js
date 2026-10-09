@@ -55,6 +55,7 @@ for (const action of BUILTIN_ACTIONS) {
     assert.equal(rows[0].prompt, action.prompt);
     assert.equal(rows[0].kind, action.kind);
     assert.equal(rows[0].output, action.output);
+    assert.equal(rows[0].icon, action.icon);
     assert.equal(rows[0].client_id, translationKey);
     assert.deepEqual(rows[0].sections, action.sections);
   });
@@ -103,37 +104,26 @@ for (const action of BUILTIN_ACTIONS) {
   });
 }
 
-test("launch puts the default AI Summary template first, under its current name", (t) => {
+test("launch puts the default AI Summary template first, then Detailed Notes", (t) => {
   const db = createDb(t);
   if (!db) return;
-  // As main shipped them: Generate Notes first, and the default under its old name.
+  // As an earlier build ordered them, with Detailed Notes as the default.
   db.db
     .prepare("UPDATE actions SET sort_order = 0 WHERE translation_key = ?")
-    .run(GENERATE_NOTES_KEY);
-  db.db
-    .prepare("UPDATE actions SET sort_order = 1, name = 'Detailed Notes' WHERE translation_key = ?")
     .run(DETAILED_NOTES_KEY);
+  db.db
+    .prepare("UPDATE actions SET sort_order = 1 WHERE translation_key = ?")
+    .run(GENERATE_NOTES_KEY);
   db.db.close();
 
   relaunch((migrated) => {
     const [first, second] = migrated.getActions();
-    assert.equal(first.translation_key, DETAILED_NOTES_KEY);
-    assert.equal(first.name, "AI Summary");
-    assert.equal(second.translation_key, GENERATE_NOTES_KEY);
-    migrated.db
-      .prepare("UPDATE actions SET name = 'Team notes' WHERE translation_key = ?")
-      .run(DETAILED_NOTES_KEY);
-  });
-  relaunch((again) => {
-    assert.equal(
-      builtinRows(again, DETAILED_NOTES_KEY)[0].name,
-      "Team notes",
-      "the user's name stays"
-    );
+    assert.equal(first.translation_key, GENERATE_NOTES_KEY);
+    assert.equal(second.translation_key, DETAILED_NOTES_KEY);
   });
 });
 
-test("an upgrade to sections keeps a name the user gave the default template", (t) => {
+test("an upgrade to sections keeps a name the user gave Detailed Notes", (t) => {
   const db = createDb(t);
   if (!db) return;
   const detailed = BUILTIN_ACTIONS.find((a) => a.translationKey === DETAILED_NOTES_KEY);
@@ -210,7 +200,7 @@ test("templates and actions are validated and normalized when saved", (t) => {
     sections: [{ heading: "Ignored", instruction: "" }],
   });
   assert.equal(action.success, true);
-  assert.equal(action.action.output, "summary");
+  assert.equal(action.action.output, "chat");
   assert.equal(action.action.sections, null, "only templates have sections");
   assert.equal(
     db.createAction("Ask", "", "Draft it.", undefined, { kind: "action" }).action.output,
@@ -234,8 +224,8 @@ test("templates and actions are validated and normalized when saved", (t) => {
 test("an older build renaming the newer built-ins doesn't stop the next launch", (t) => {
   const db = createDb(t);
   if (!db) return;
-  const newerKeys = ["notes.actions.builtin.makeTodos", "notes.actions.builtin.createOutline"];
-  // What a build that predates Make to-dos and Create outline does to their rows.
+  const newerKeys = ["notes.actions.builtin.makeTodos", "notes.actions.builtin.lengthen"];
+  // What a build that predates these built-ins does to their rows.
   db.db
     .prepare(
       "UPDATE actions SET translation_key = ? WHERE is_builtin = 1 AND translation_key IN (?, ?)"
@@ -250,14 +240,138 @@ test("an older build renaming the newer built-ins doesn't stop the next launch",
   });
 });
 
-test("a built-in action pointed at the summary stays there across launches", (t) => {
+test("legacy summary destinations read as chat without changing the stored row", (t) => {
   const db = createDb(t);
   if (!db) return;
-  const [email] = builtinRows(db, FOLLOW_UP_EMAIL_KEY);
-  assert.equal(db.updateAction(email.id, { output: "summary" }).success, true);
+  const { action } = db.createAction(
+    "Make notes shorter",
+    "Keep this description",
+    "My edited prompt",
+    "mail",
+    { kind: "action" }
+  );
+  db.db.prepare("UPDATE actions SET output = 'summary' WHERE kind = 'action'").run();
+  const raw = db.db.prepare("SELECT * FROM actions WHERE id = ?").get(action.id);
+  assert.equal(db.getAction(action.id).output, "chat", "reads ignore stale output before restart");
   db.db.close();
+  for (let run = 0; run < 2; run++)
+    relaunch((reopened) => {
+      assert.deepEqual(
+        reopened.db.prepare("SELECT * FROM actions WHERE id = ?").get(action.id),
+        raw
+      );
+      assert.equal(reopened.getAction(action.id).output, "chat");
+      assert.equal(builtinRows(reopened, FOLLOW_UP_EMAIL_KEY)[0].output, "chat");
+      assert.equal(builtinRows(reopened, "notes.actions.builtin.addTldr")[0].output, "chat");
+      assert.equal(builtinRows(reopened, "notes.actions.builtin.lengthen").length, 1);
+    });
+});
 
-  relaunch((reopened) => {
-    assert.equal(builtinRows(reopened, FOLLOW_UP_EMAIL_KEY)[0].output, "summary");
+test("writes enforce stored built-in identity and still reject invalid destinations", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  for (const key of ["shorten", "lengthen"]) {
+    const [row] = builtinRows(db, `notes.actions.builtin.${key}`);
+    const updated = db.updateAction(row.id, {
+      output: "chat",
+      prompt: "Edited instructions",
+      is_builtin: 0,
+      translation_key: null,
+    });
+    assert.equal(updated.action.output, "summary");
+    assert.equal(updated.action.prompt, "Edited instructions");
+  }
+  const { action } = db.createAction("Make notes longer", "", "Update the summary", undefined, {
+    kind: "action",
+    output: "summary",
   });
+  const updated = db.updateAction(action.id, {
+    output: "summary",
+    is_builtin: 1,
+    translation_key: "notes.actions.builtin.lengthen",
+    client_id: "notes.actions.builtin.lengthen",
+  });
+  assert.equal(updated.action.output, "chat");
+  assert.equal(updated.action.client_id, action.client_id);
+  assert.equal(db.updateAction(action.id, { output: "auto" }).success, false);
+  assert.equal(
+    db.createAction("Bad", "", "x", undefined, { kind: "action", output: "unknown" }).success,
+    false
+  );
+});
+
+test("renamed built-ins upgrade stock labels but keep user edits", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const renamed = BUILTIN_ACTIONS.filter((a) => a.previousNames?.length);
+  for (const a of renamed)
+    db.db
+      .prepare("UPDATE actions SET name = ?, description = ? WHERE translation_key = ?")
+      .run(a.previousNames[0], a.previousDescriptions[0], a.translationKey);
+  db.db.close();
+  relaunch((upgraded) => {
+    for (const a of renamed) {
+      const [row] = builtinRows(upgraded, a.translationKey);
+      assert.equal(row.name, a.name);
+      assert.equal(row.description, a.description);
+      upgraded.updateAction(row.id, {
+        name: "My label",
+        description: "My description",
+        prompt: "My prompt",
+      });
+    }
+    assert.deepEqual(
+      upgraded
+        .getActions()
+        .filter((a) => a.kind === "action")
+        .slice(0, 5)
+        .map((a) => a.translation_key.split(".").pop()),
+      ["followUpEmail", "makeTodos", "shorten", "lengthen", "addTldr"]
+    );
+  });
+  relaunch((steady) => {
+    for (const a of renamed) {
+      const [row] = builtinRows(steady, a.translationKey);
+      assert.equal(row.name, "My label");
+      assert.equal(row.description, "My description");
+      assert.equal(row.prompt, "My prompt");
+    }
+  });
+});
+
+test("TL;DR stock prompt upgrades without replacing an edited description", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const tldr = BUILTIN_ACTIONS.find((a) => a.translationKey.endsWith(".addTldr"));
+  const [row] = builtinRows(db, tldr.translationKey);
+  db.db
+    .prepare("UPDATE actions SET prompt = ?, description = ? WHERE id = ?")
+    .run(tldr.previousPrompts[0], "My description", row.id);
+  db.db.close();
+  relaunch((upgraded) => {
+    const action = upgraded.getAction(row.id);
+    assert.equal(action.prompt, tldr.prompt);
+    assert.equal(action.description, "My description");
+    assert.equal(action.output, "chat");
+  });
+});
+
+test("TL;DR upgrades its stock icon and leaves custom icons alone", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const [tldr] = builtinRows(db, "notes.actions.builtin.addTldr");
+  const custom = db.createAction("Write TL;DR", "My description", "My prompt", "sparkles", {
+    kind: "action",
+  }).action;
+  const customBefore = db.db.prepare("SELECT * FROM actions WHERE id = ?").get(custom.id);
+  db.db.prepare("UPDATE actions SET icon = 'sparkles' WHERE id = ?").run(tldr.id);
+  db.db.close();
+  for (let run = 0; run < 2; run++)
+    relaunch((reopened) => {
+      assert.equal(reopened.getAction(tldr.id).icon, "message-square-text");
+      assert.deepEqual(
+        reopened.db.prepare("SELECT * FROM actions WHERE id = ?").get(custom.id),
+        customBefore
+      );
+    });
 });

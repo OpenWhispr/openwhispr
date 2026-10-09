@@ -1,4 +1,5 @@
 import type { ModelDefinition } from "../models/ModelRegistry";
+import type { ReasoningConfig } from "../services/BaseReasoningService";
 import type { PermissionGuideState, PermissionGuideAction } from "./permissionGuide";
 import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 import type { UsageResponse } from "../lib/usageStore";
@@ -152,6 +153,7 @@ export type TranscriptionErrorCode =
   | "PROVIDER_UNREACHABLE"
   | "PROVIDER_NO_RESPONSE"
   | "PROVIDER_ERROR"
+  | "CRASH_RECOVERY"
   | null;
 
 export type MeetingPromptVariant = "detected" | "starting" | "underway";
@@ -164,6 +166,52 @@ export interface MeetingNotificationData {
   variant: MeetingPromptVariant;
   joinUrl: string | null;
 }
+
+export interface MeetingFolderRef {
+  folderId: number;
+  spaceId: number;
+}
+export interface MeetingExistingNote {
+  noteId: number;
+  spaceId: number;
+  folderId: number | null;
+  spaceName: string;
+  folderName: string | null;
+  shared: boolean;
+}
+export interface MeetingDestinationContext {
+  folders: FolderItem[];
+  spaces: SpaceItem[];
+  defaultDestination: MeetingFolderRef | null;
+  selectedDestination: MeetingFolderRef | null;
+  recentDestinations: MeetingFolderRef[];
+  existingNote: MeetingExistingNote | null;
+}
+
+export interface MeetingSurfaceState {
+  revision: number;
+  mode: "closed" | "list" | "form";
+  contentHeight: number;
+  regions: { x: number; y: number; width: number; height: number }[];
+  focus: "request" | "release" | "keep";
+}
+
+export type MeetingError =
+  | "STALE_NOTIFICATION"
+  | "INVALID_REQUEST"
+  | "FOLDERS_UNAVAILABLE"
+  | "FOLDER_UNAVAILABLE"
+  | "SPACE_UNAVAILABLE"
+  | "FOLDER_NAME_REQUIRED"
+  | "FOLDER_NAME_TAKEN"
+  | "CREATE_FAILED"
+  | "LINKED_NOTE_CHANGED"
+  | "NOTE_UNAVAILABLE"
+  | "START_FAILED";
+
+export type MeetingResult<T> =
+  | { success: true; value: T }
+  | { success: false; code: MeetingError; context?: MeetingDestinationContext };
 
 /** Why auto-end concluded the meeting is over. */
 export type MeetingAutoEndReason = "mic-released" | "silence" | "process-exit";
@@ -1063,6 +1111,7 @@ export interface PasteToolsResult {
   hasUinput?: boolean;
   hasWtype?: boolean;
   isWlroots?: boolean;
+  isCosmic?: boolean;
   tools?: string[];
   recommendedInstall?: string;
 }
@@ -1978,7 +2027,7 @@ declare global {
         text: string,
         modelId: string,
         agentName: string | null,
-        config: any
+        config: ReasoningConfig
       ) => Promise<{
         success: boolean;
         text?: string;
@@ -2179,6 +2228,7 @@ declare global {
         isNixOS: boolean;
         isKde: boolean;
         isWlroots: boolean;
+        isCosmic: boolean;
         hasXclip: boolean;
         hasXsel: boolean;
       }>;
@@ -2194,6 +2244,7 @@ declare global {
       onHotkeyRegistrationFailed?: (
         callback: (data: { hotkey: string; error: string; suggestions: string[] }) => void
       ) => () => void;
+      onApiKeyUpdated?: (callback: (storeKey: string) => void) => () => void;
       onSettingUpdated?: (callback: (data: { key: string; value: unknown }) => void) => () => void;
       onDictationKeyActive?: (callback: (key: string) => void) => () => void;
       onLinuxPttPermissionDenied?: (callback: () => void) => () => void;
@@ -2955,6 +3006,7 @@ declare global {
           systemPrompt?: string;
           tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
           screenContext?: { data: string; mediaType: string };
+          noteChat?: boolean;
         }
       ) => void;
       cancelAgentStream?: (requestId: string) => void;
@@ -3362,17 +3414,47 @@ declare global {
       onMeetingAutoEndRequested?: (
         callback: (request: MeetingAutoEndRequest) => void
       ) => () => void;
+      getMeetingNotificationDestination: () => Promise<MeetingResult<MeetingDestinationContext>>;
+      selectMeetingNotificationFolder: (
+        folder: MeetingFolderRef
+      ) => Promise<MeetingResult<MeetingDestinationContext>>;
+      createMeetingNotificationFolder: (request: {
+        requestId: string;
+        name: string;
+        spaceId: number;
+      }) => Promise<MeetingResult<MeetingDestinationContext & { createdFolder: MeetingFolderRef }>>;
+      onMeetingNotificationFolderCreated: (
+        callback: (hint: { folderId: number }) => void
+      ) => () => void;
+      setMeetingNotificationSurface: (
+        state: MeetingSurfaceState
+      ) => Promise<MeetingResult<{ width: number; height: number; maxHeight: number }>>;
+      onMeetingNotificationSurfaceClosed: (
+        callback: (data: { revision: number }) => void
+      ) => () => void;
+      onMeetingNotificationSurfaceResized: (
+        callback: (data: { revision: number }) => void
+      ) => () => void;
       getMeetingNotificationData?: () => Promise<MeetingNotificationData | null>;
       meetingNotificationReady?: () => Promise<void>;
       meetingNotificationRespond?: (
         detectionId: string,
-        action: string
-      ) => Promise<{ success: boolean }>;
+        action: string,
+        options?: {
+          existingNote?: Pick<MeetingExistingNote, "noteId" | "spaceId" | "folderId">;
+        }
+      ) => Promise<MeetingResult<null>>;
+      confirmMeetingNoteNavigation: (
+        navigationId: string,
+        status?: "ready" | "cancel"
+      ) => Promise<MeetingResult<NoteItem>>;
       joinCalendarMeeting?: (eventId: string) => Promise<{ success: boolean }>;
       startManualMeeting?: () => Promise<void>;
       getPendingMeetingNoteNavigation?: () => Promise<{
+        navigationId?: string;
+        spaceId?: number;
         noteId: number;
-        folderId: number;
+        folderId: number | null;
         event: any;
         trigger?: "hotkey" | "manual" | "calendar-join";
       } | null>;

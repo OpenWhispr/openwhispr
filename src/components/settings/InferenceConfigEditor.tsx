@@ -88,7 +88,7 @@ export default function InferenceConfigEditor({
           description: t(`${prefix}.openwhisprDesc`),
           icon: <Cloud className="w-4 h-4" />,
           disabled: !isSignedIn,
-          badge: !isSignedIn ? t("common.freeAccountRequired") : undefined,
+          signInRequired: !isSignedIn,
         },
         {
           id: "providers",

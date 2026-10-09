@@ -1,9 +1,12 @@
 import type { ToolDefinition, ToolResult } from "./ToolRegistry";
+import { withoutAttendeesFence } from "../../utils/noteAttendees";
+import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
+import { MAX_CONTENT_LENGTH } from "./searchNotesTool";
 
 export const getNoteTool: ToolDefinition = {
   name: "get_note",
   description:
-    "Get the full content of a specific note by ID. Use search_notes first to find the note ID.",
+    "Get a note's separate personal content, saved AI summary, and source transcript by ID. Read before editing to identify the intended field. Use search_notes first if the note ID is unknown.",
   parameters: {
     type: "object",
     properties: {
@@ -31,12 +34,21 @@ export const getNoteTool: ToolDefinition = {
         };
       }
 
+      const segments = parseTranscriptSegments(note.transcript ?? "");
+      const transcript = segments.length
+        ? segments.map((segment) => segment.text).join("\n")
+        : (note.transcript ?? "");
+
+      // Only the note chat's own attendee block may carry its fence.
       return {
         success: true,
         data: {
           id: note.id,
-          title: note.title,
-          content: note.enhanced_content || note.content,
+          title: withoutAttendeesFence(note.title),
+          content: withoutAttendeesFence(note.content),
+          summary: withoutAttendeesFence(note.enhanced_content ?? ""),
+          transcript: withoutAttendeesFence(transcript.slice(0, MAX_CONTENT_LENGTH)),
+          transcript_truncated: transcript.length > MAX_CONTENT_LENGTH,
           type: note.note_type,
           folder_id: note.folder_id,
           created_at: note.created_at,
