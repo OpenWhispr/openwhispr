@@ -95,64 +95,67 @@ export const geminiProvider: InferenceProvider = {
       generationConfig,
     };
 
-    const response = await withRetry(async () => {
-      // Metadata only: body previews can leak transcript text or base64 screenshots.
-      logger.logReasoning("GEMINI_REQUEST", {
-        endpoint: `${API_ENDPOINTS.GEMINI}/models/${model}:generateContent`,
-        model,
-        hasApiKey: !!apiKey,
-        hasScreenContext: !!config.screenContext,
-        generationConfig,
-        textLength: text.length,
-      });
-
-      const controller = new AbortController();
-      const timeoutSeconds = getLlmRequestTimeoutSeconds({ scope: config.inferenceScope });
-      const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
-      try {
-        const res = await fetch(`${API_ENDPOINTS.GEMINI}/models/${model}:generateContent`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-          body: JSON.stringify(requestBody),
-          signal: controller.signal,
+    const response = await withRetry(
+      async () => {
+        // Metadata only: body previews can leak transcript text or base64 screenshots.
+        logger.logReasoning("GEMINI_REQUEST", {
+          endpoint: `${API_ENDPOINTS.GEMINI}/models/${model}:generateContent`,
+          model,
+          hasApiKey: !!apiKey,
+          hasScreenContext: !!config.screenContext,
+          generationConfig,
+          textLength: text.length,
         });
 
-        if (!res.ok) {
-          const errorText = await res.text();
-          logger.logReasoning("GEMINI_API_ERROR_DETAIL", {
-            status: res.status,
-            statusText: res.statusText,
-            fullResponse: redactProviderBody(errorText),
+        const controller = new AbortController();
+        const timeoutSeconds = getLlmRequestTimeoutSeconds({ scope: config.inferenceScope });
+        const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
+        try {
+          const res = await fetch(`${API_ENDPOINTS.GEMINI}/models/${model}:generateContent`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+            body: JSON.stringify(requestBody),
+            signal: controller.signal,
           });
 
-          throw providerHttpError({
-            provider: "Gemini",
-            model,
-            status: res.status,
-            body: errorText,
-            headers: res.headers,
-            surface: "llm",
-          });
-        }
+          if (!res.ok) {
+            const errorText = await res.text();
+            logger.logReasoning("GEMINI_API_ERROR_DETAIL", {
+              status: res.status,
+              statusText: res.statusText,
+              fullResponse: redactProviderBody(errorText),
+            });
 
-        const jsonResponse = (await res.json()) as GeminiResponse;
-        logger.logReasoning("GEMINI_RAW_RESPONSE", {
-          hasResponse: !!jsonResponse,
-          hasCandidates: !!jsonResponse?.candidates,
-          candidatesLength: jsonResponse?.candidates?.length || 0,
-          finishReason: jsonResponse?.candidates?.[0]?.finishReason,
-          usageMetadata: jsonResponse?.usageMetadata,
-        });
-        return jsonResponse;
-      } catch (error) {
-        if ((error as Error).name === "AbortError") {
-          throw llmRequestTimeoutError(timeoutSeconds);
+            throw providerHttpError({
+              provider: "Gemini",
+              model,
+              status: res.status,
+              body: errorText,
+              headers: res.headers,
+              surface: "llm",
+            });
+          }
+
+          const jsonResponse = (await res.json()) as GeminiResponse;
+          logger.logReasoning("GEMINI_RAW_RESPONSE", {
+            hasResponse: !!jsonResponse,
+            hasCandidates: !!jsonResponse?.candidates,
+            candidatesLength: jsonResponse?.candidates?.length || 0,
+            finishReason: jsonResponse?.candidates?.[0]?.finishReason,
+            usageMetadata: jsonResponse?.usageMetadata,
+          });
+          return jsonResponse;
+        } catch (error) {
+          if ((error as Error).name === "AbortError") {
+            throw llmRequestTimeoutError(timeoutSeconds);
+          }
+          throw error;
+        } finally {
+          clearTimeout(timeoutId);
         }
-        throw error;
-      } finally {
-        clearTimeout(timeoutId);
-      }
-    }, createApiRetryStrategy()).catch((error) => {
+      },
+      { ...createApiRetryStrategy(), ...(config.skipProviderRetries ? { maxRetries: 0 } : {}) }
+    ).catch((error) => {
       // Classified only once it has left withRetry, so the deadline is still
       // attempted exactly once.
       throw asProviderError(error, { provider: "Gemini", model, surface: "llm" });
