@@ -74,6 +74,17 @@ test("deepgram and assemblyai are offered for note recording", async () => {
   assert.ok(meetingIds.includes("assemblyai"));
 });
 
+test("xai is offered for note recording and resolves to the xAI client", async () => {
+  const { STREAMING_CLIENT_BY_PROVIDER } = await load();
+  const { getMeetingStreamingTranscriptionProviders } =
+    await import("../../src/models/ModelRegistry.ts");
+  const XaiStreaming = (await import("../../src/helpers/xaiStreaming.js")).default;
+
+  const meetingIds = getMeetingStreamingTranscriptionProviders().map((provider) => provider.id);
+  assert.ok(meetingIds.includes("xai"));
+  assert.equal(STREAMING_CLIENT_BY_PROVIDER["xai-realtime"], XaiStreaming);
+});
+
 test("allow-list rejects unknown and batch-only providers", async () => {
   const { ALLOWED_MEETING_PROVIDERS } = await load();
 

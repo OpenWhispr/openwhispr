@@ -16,6 +16,7 @@ const deps = (overrides = {}) => ({
     getDeepgramKey: () => "dg-key",
     getAssemblyAIKey: () => "aai-key",
     getGeminiKey: () => "gm-key",
+    getXaiKey: () => "xai-key",
     ...overrides.environmentManager,
   },
   proxyFetch: overrides.proxyFetch || (async () => jsonResponse(200, { token: "aai-token" })),
@@ -136,6 +137,18 @@ test("deepgram byok duplicates the key; cloud mints per stream", async () => {
   );
 });
 
+test("xai shares the raw key across both meeting streams", async () => {
+  const { fetchRealtimeTokenForProvider } = await load();
+  assert.deepEqual(
+    await fetchRealtimeTokenForProvider("xai-realtime", deps(), { mode: "byok" }, { streams: 2 }),
+    ["xai-key", "xai-key"]
+  );
+  assert.equal(
+    await fetchRealtimeTokenForProvider("xai-realtime", deps(), { mode: "byok" }),
+    "xai-key"
+  );
+});
+
 test("gemini byok duplicates the raw key; cloud mints one token per stream", async () => {
   const { fetchRealtimeTokenForProvider } = await load();
   // The raw key opens the Live socket itself and survives any number of
@@ -188,12 +201,14 @@ test("missing byok keys throw configuration errors, not token errors", async () 
     getDeepgramKey: () => "",
     getAssemblyAIKey: () => "",
     getGeminiKey: () => "",
+    getXaiKey: () => "",
   };
   for (const provider of [
     "openai-realtime",
     "deepgram-realtime",
     "assemblyai-realtime",
     "gemini-realtime",
+    "xai-realtime",
   ]) {
     await assert.rejects(
       fetchRealtimeTokenForProvider(provider, deps({ environmentManager: empty }), {

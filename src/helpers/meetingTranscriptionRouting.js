@@ -11,6 +11,7 @@ export const MEETING_STREAMING_PROVIDER_IDS = [
   "deepgram",
   "corti",
   "tinfoil",
+  "xai",
 ];
 
 export function filterMeetingStreamingProviders(providers) {
@@ -99,6 +100,10 @@ export function resolveMeetingTranscriptionOptions({
       tenant: cortiTenant,
       keyterms,
     };
+  }
+
+  if (provider.id === "xai") {
+    return { ...options, keyterms };
   }
 
   return options;
