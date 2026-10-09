@@ -182,7 +182,7 @@ export default function IntegrationsView({
 
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Outside the scroller, so it stays in view and keeps focus after a pick. */}
-        <div className="px-5 pt-2 pb-2 @2xl:hidden">
+        <div className="px-5 pt-6 pb-2 @2xl:hidden">
           <Select
             value={section}
             onValueChange={(value) => onSectionChange(value as IntegrationsSection)}
@@ -203,7 +203,7 @@ export default function IntegrationsView({
           </Select>
         </div>
 
-        <div ref={scroller} className="flex-1 min-h-0 overflow-y-auto px-8 pt-1 pb-6 @max-2xl:px-5">
+        <div ref={scroller} className="flex-1 min-h-0 overflow-y-auto px-8 pt-6 pb-6 @max-2xl:px-5">
           <div className="max-w-[760px]">
             {INTEGRATIONS_SECTIONS.filter((id) => mounted.has(id)).map((id) => (
               <div
