@@ -69,7 +69,10 @@ function isPrivateHost(hostname) {
   }
 
   const isIPv6 = h.includes(":");
-  if (isIPv6 && (h.startsWith("fe80") || h.startsWith("fc") || h.startsWith("fd"))) return true;
+  // Link-local is fe80::/10 (fe80–febf), not only the fe80 hextet. Kept in sync
+  // with isPrivateHost in src/utils/urlUtils.ts and isPrivateIp in
+  // src/helpers/urlAudioDownloader.js; unique local is fc00::/7 (fc/fd).
+  if (isIPv6 && (/^fe[89ab]/.test(h) || h.startsWith("fc") || h.startsWith("fd"))) return true;
   if (h.endsWith(".local")) return true;
   if (h.endsWith(".ts.net")) return true;
 
