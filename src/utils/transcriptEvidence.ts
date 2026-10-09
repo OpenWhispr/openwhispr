@@ -107,11 +107,23 @@ function literalPattern(query: string): RegExp {
   return new RegExp(words.join("\\s+"), "giu");
 }
 
+interface TranscriptPage {
+  transcript: string;
+  transcript_start: number;
+  transcript_end: number;
+  transcript_length: number;
+  transcript_truncated: boolean;
+  transcript_next_offset: number | null;
+  transcript_match_found?: boolean;
+  transcript_segments?: ReadableTranscript["references"];
+  transcript_segments_truncated?: boolean;
+}
+
 export function transcriptPage(
   { text, references }: ReadableTranscript,
   offset = 0,
   query?: string
-) {
+): TranscriptPage {
   const pattern = query ? literalPattern(query) : null;
   const match = pattern ? (text.slice(offset).matchAll(pattern).next().value ?? null) : null;
   const found = query === undefined || match !== null;
@@ -130,6 +142,8 @@ export function transcriptPage(
     for (const shown of text.slice(start, end).matchAll(pattern)) {
       nextOffset = start + shown.index + shown[0].length;
     }
+    // Continuing is only worth a call when another match follows.
+    if (nextOffset !== null && text.slice(nextOffset).search(pattern) === -1) nextOffset = null;
   }
   const overlapping = references.filter((segment) => segment.end > start && segment.start < end);
   return {

@@ -11,10 +11,31 @@ function lastAssistantIndex(messages: ChatMessage[]): number {
   return messages.length;
 }
 
+// The passage a get_note transcript read returned, or null for any other part.
+function transcriptPassage(part: unknown): Record<string, unknown> | null {
+  if (
+    !isRecord(part) ||
+    part.type !== "tool-result" ||
+    part.toolName !== "get_note" ||
+    !isRecord(part.output)
+  ) {
+    return null;
+  }
+  let value: unknown = part.output.value;
+  if (part.output.type === "text" && typeof value === "string") {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+  return isRecord(value) && value.transcript_only === true ? value : null;
+}
+
 /**
  * Keep recent passages without replaying every page during an active tool loop.
- * Results from `latestStepStart` on haven't reached the model yet, so all of
- * them stay; older passages are kept, newest first, up to the retained count.
+ * Passages from `latestStepStart` on haven't reached the model yet, so all of
+ * them stay; together with them, only the newest RETAINED_PASSAGES are kept.
  * The AI SDK adds each step as one assistant message plus its tool results,
  * which the default finds.
  */
@@ -22,51 +43,34 @@ export function compactTranscriptHistory<T extends ChatMessage>(
   messages: T[],
   latestStepStart = lastAssistantIndex(messages)
 ): T[] {
+  const compacted = [...messages];
   let retained = 0;
-  return messages
-    .map((message, index) => ({ message, index }))
-    .reverse()
-    .map(({ message, index }) => {
-      if (message.role !== "tool" || !Array.isArray(message.content)) return message;
-      const content = message.content
-        .slice()
-        .reverse()
-        .map((part) => {
-          if (
-            !isRecord(part) ||
-            part.type !== "tool-result" ||
-            part.toolName !== "get_note" ||
-            !isRecord(part.output)
-          )
-            return part;
-          const output = part.output;
-          let value: unknown = output.value;
-          if (output.type === "text" && typeof value === "string") {
-            try {
-              value = JSON.parse(value);
-            } catch {
-              return part;
-            }
-          }
-          if (!isRecord(value) || value.transcript_only !== true) return part;
-          if (++retained <= RETAINED_PASSAGES || index >= latestStepStart) return part;
-          // Where the passage was, so the model can read it again.
-          const omitted = {
-            id: value.id,
-            transcript_omitted: true,
-            transcript_start: value.transcript_start,
-            transcript_end: value.transcript_end,
-          };
-          return {
-            ...part,
-            output: {
-              ...output,
-              value: output.type === "text" ? JSON.stringify(omitted) : omitted,
-            },
-          };
-        })
-        .reverse();
-      return { ...message, content };
-    })
-    .reverse();
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index];
+    if (message.role !== "tool" || !Array.isArray(message.content)) continue;
+    const content = [...message.content];
+    let changed = false;
+    for (let partIndex = content.length - 1; partIndex >= 0; partIndex--) {
+      const part = content[partIndex] as { output: Record<string, unknown> };
+      const passage = transcriptPassage(part);
+      if (!passage || ++retained <= RETAINED_PASSAGES || index >= latestStepStart) continue;
+      // Where the passage was, so the model can read it again.
+      const omitted = {
+        id: passage.id,
+        transcript_omitted: true,
+        transcript_start: passage.transcript_start,
+        transcript_end: passage.transcript_end,
+      };
+      content[partIndex] = {
+        ...part,
+        output: {
+          ...part.output,
+          value: part.output.type === "text" ? JSON.stringify(omitted) : omitted,
+        },
+      };
+      changed = true;
+    }
+    if (changed) compacted[index] = { ...message, content };
+  }
+  return compacted;
 }

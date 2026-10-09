@@ -43,7 +43,7 @@ test("a question omitted from the summary retrieves evidence near the end withou
   assert.ok(data.transcript_start > 500);
   assert.equal(data.transcript_end, data.transcript_length);
   assert.equal(data.transcript_truncated, true, "a tail passage is still partial");
-  assert.ok(data.transcript_next_offset > data.transcript_start);
+  assert.equal(data.transcript_next_offset, null, "the only match leaves nothing to continue to");
   assert.ok(data.transcript_segments.some((s) => s.timestamp_seconds === 300));
   assert.equal(data.content, undefined);
   assert.equal(data.summary, undefined);
@@ -224,6 +224,16 @@ test("late evidence preserves saved speaker mappings and locked names, with time
   }
 });
 
+test("a failed speaker-name lookup still reads the note with its stored labels", async () => {
+  const tool = await getTool();
+  global.window.electronAPI.getSpeakerMappings = async () => {
+    throw new Error("database is locked");
+  };
+  const { success, data } = await tool.execute({ id: 7, transcript_query: "launch code" });
+  assert.equal(success, true);
+  assert.match(data.transcript, /Priya: The launch code is violet heron\./);
+});
+
 test("null optional arguments and numeric strings read the note as if they were omitted", async () => {
   const tool = await getTool();
   for (const args of [
@@ -269,6 +279,11 @@ test("a query continues past every match its passage already shows", async () =>
     })
   ).data;
   assert.match(second.transcript, /decision four/);
+  assert.equal(second.transcript_next_offset, null, "no later match, so no call to waste");
+  stored.transcript = `${"filler ".repeat(100)}the only decision. ${"filler ".repeat(200)}`;
+  const only = (await tool.execute({ id: 7, transcript_query: "decision" })).data;
+  assert.equal(only.transcript_match_found, true);
+  assert.equal(only.transcript_next_offset, null);
 });
 
 test("a recording that keeps appending can still be paged; an edit to text already read cannot", async () => {
