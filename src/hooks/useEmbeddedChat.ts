@@ -157,7 +157,7 @@ export function useEmbeddedChat({
     async (id: number) => {
       if (id === conversationId) return;
       cancelStream();
-      await persistence.loadConversation(id);
+      if ((await persistence.loadConversation(id)) === false) return;
       setConversationId(id);
     },
     [cancelStream, conversationId, persistence]
@@ -215,14 +215,15 @@ export function useEmbeddedChat({
     if (!newChatMessage) return;
     setNewChatMessage(null);
     const { text, options } = newChatMessage;
+    const version = persistence.getSessionVersion?.();
+    const restoreDraft = () => {
+      if (version === persistence.getSessionVersion?.()) onNewChatUnsent?.(text);
+    };
     // A send that never started (lock held, conversation not created) must not eat the question.
-    sendMessageWithResult(text, options).then(
-      (sent) => {
-        if (!sent) onNewChatUnsent?.(text);
-      },
-      () => onNewChatUnsent?.(text)
-    );
-  }, [newChatMessage, onNewChatUnsent, sendMessageWithResult]);
+    sendMessageWithResult(text, options).then((sent) => {
+      if (!sent) restoreDraft();
+    }, restoreDraft);
+  }, [newChatMessage, onNewChatUnsent, persistence, sendMessageWithResult]);
 
   return {
     messages: persistence.messages,

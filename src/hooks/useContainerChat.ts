@@ -111,7 +111,7 @@ export function useContainerChat({
     async (id: number) => {
       if (id === conversationId) return;
       cancelStream();
-      await persistence.loadConversation(id);
+      if ((await persistence.loadConversation(id)) === false) return;
       setConversationId(id);
     },
     [cancelStream, conversationId, persistence]
