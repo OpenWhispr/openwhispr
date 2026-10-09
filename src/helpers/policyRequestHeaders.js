@@ -4,7 +4,7 @@ const POLICY_CAPABILITY_VERSION = "1";
 // Features this build can actually run. The server gates Orukeet on this token,
 // not on the version alone, so an older build that passes the version gate is
 // never handed a route it would silently reroute.
-const CLIENT_CAPABILITIES = "orukeet";
+const CLIENT_CAPABILITIES = "orukeet,orukeet-pipeline-v2,orukeet-language-routing";
 
 function withPolicyRequestHeaders(headers, appVersion) {
   if (!isCanonicalAppVersion(appVersion)) {

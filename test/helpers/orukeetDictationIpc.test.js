@@ -43,6 +43,7 @@ const backendFetch = async (url, options) => {
   assert.ok(
     [
       "https://api.openwhispr.test/api/stt/orukeet/session",
+      "https://api.openwhispr.test/api/stt/orukeet/pipeline-session",
       "https://api.openwhispr.test/api/reason",
       "https://api.openwhispr.test/api/streaming-usage",
       "https://api.openwhispr.test/api/transcribe",
@@ -110,7 +111,12 @@ Module._load = function loadWithMocks(request, parent, isMain) {
             super({
               ...options,
               createSocket: (url, options, protocols) => {
-                assert.equal(url, cloudSession.websocketUrl);
+                assert.equal(
+                  url,
+                  protocols?.[0] === "orukeet.pipeline.v2"
+                    ? "wss://orukeet.gizmovoice.ai/preview/gemma12/v1/pipeline/stream"
+                    : cloudSession.websocketUrl
+                );
                 assert.equal(
                   options.headers.Authorization,
                   protocols ? undefined : "Bearer test-key"
@@ -175,6 +181,9 @@ test.before(async () => {
         sample_rate: 16000,
         encoding: "pcm_s16le",
         max_seconds: 600,
+        ...(socket.protocol === "orukeet.pipeline.v2"
+          ? { pipeline_protocol: 2, cleanup: true, account_limits: true }
+          : {}),
       })
     );
     let bytes = 0;
@@ -188,7 +197,12 @@ test.before(async () => {
           return;
         }
         socket.send(
-          JSON.stringify({ type: "language", language: "en", language_confidence: 0.99 })
+          JSON.stringify({
+            type: "language",
+            language: "en",
+            language_confidence: 0.99,
+            language_supported_score: 0.995,
+          })
         );
         socket.send(
           JSON.stringify({
@@ -197,6 +211,7 @@ test.before(async () => {
             model: "orukeet-v0.1.0",
             language: "en",
             language_confidence: 0.99,
+            language_supported_score: 0.995,
             language_audio_seconds: 6,
           })
         );
@@ -228,10 +243,12 @@ test("registered managed IPC streams startup audio and returns exactly one compl
   assert.equal(final.text, "Recorded 1280 bytes");
   assert.equal(final.language, "en");
   assert.equal(final.languageConfidence, 0.99);
+  assert.equal(final.languageSupportedScore, 0.995);
   assert.equal(final.languageAudioSeconds, 6);
   assert.deepEqual(messages.find(([channel]) => channel === "dictation-realtime-language")?.[1], {
     language: "en",
     languageConfidence: 0.99,
+    languageSupportedScore: 0.995,
   });
   assert.equal(messages.filter(([channel]) => channel === "dictation-realtime-final").length, 1);
   assert.equal((await handlers.get("dictation-realtime-stop")()).text, final.text);
@@ -502,4 +519,97 @@ test("an idle Orukeet warm socket closes after 60 seconds and start cancels expi
   assert.equal(target._dictationIdleTimer, null);
   assert.equal(target._dictationStreaming.isConnected, true);
   await handlers.get("dictation-realtime-stop")();
+});
+
+test("pipeline options reach minting through IPC warmup and changed options replace the cached connection", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  const calls = [];
+  backendResponse = async (url, request) => {
+    assert.ok(url.endsWith("pipeline-session"));
+    const body = JSON.parse(request.body);
+    calls.push(body);
+    return Response.json({
+      ...cloudSession,
+      baseUrl: "https://orukeet.gizmovoice.ai/preview/gemma12",
+      websocketUrl: "wss://orukeet.gizmovoice.ai/preview/gemma12/v1/pipeline/stream",
+      protocol: "orukeet.pipeline.v2",
+      cleanup: true,
+      cleanupModel: "gemma-4-12b",
+      requireAccountLimits: true,
+    });
+  };
+  const first = { customDictionary: ["Orukeet"], customPrompt: "Keep names." };
+  assert.equal(
+    (
+      await handlers.get("dictation-realtime-warmup")(event, {
+        ...managedOptions,
+        pipelineOptions: first,
+      })
+    ).success,
+    true
+  );
+  assert.equal(
+    (
+      await handlers.get("dictation-realtime-start")(event, {
+        ...managedOptions,
+        pipelineOptions: first,
+      })
+    ).success,
+    true
+  );
+  assert.equal(calls.length, 1);
+  const second = { ...first, customDictionary: ["Chad"] };
+  assert.equal(
+    (
+      await handlers.get("dictation-realtime-start")(event, {
+        ...managedOptions,
+        pipelineOptions: second,
+      })
+    ).success,
+    true
+  );
+  assert.deepEqual(
+    calls.map((entry) => entry.cleanupOptions),
+    [first, second]
+  );
+  await handlers.get("dictation-realtime-stop")();
+});
+
+test("server telemetry survives streaming usage, fallback upload and cloud cleanup IPC", async () => {
+  const metadata = {
+    orukeetLanguageRouting: {
+      version: 1,
+      mode: "shadow",
+      supportedScore: 0.02,
+      selectedFallback: false,
+    },
+    orukeetCleanup: {
+      status: "complete",
+      model: "gemma-4-12b",
+      inputTokens: 40,
+      outputTokens: 8,
+      processingMs: 220,
+    },
+  };
+  const bodies = [];
+  backendResponse = async (url, request) => {
+    bodies.push([url, request.body]);
+    return Response.json({ text: "result", recorded: true });
+  };
+  await handlers.get("cloud-streaming-usage")(event, "raw", 6, metadata);
+  await handlers.get("cloud-reason")(event, "raw", { purpose: "cleanup", ...metadata });
+  await handlers.get("cloud-transcribe")(event, new Uint8Array(64).buffer, {
+    streamingFallbackReason: "language_supported_score_low",
+    ...metadata,
+  });
+  for (const [, body] of bodies.slice(0, 2)) {
+    const parsed = JSON.parse(body);
+    assert.deepEqual(parsed.orukeetLanguageRouting, metadata.orukeetLanguageRouting);
+    assert.deepEqual(parsed.orukeetCleanup, metadata.orukeetCleanup);
+  }
+  const multipart = Buffer.from(bodies[2][1]).toString("latin1");
+  assert.ok(multipart.includes(JSON.stringify(metadata.orukeetLanguageRouting)));
+  assert.ok(multipart.includes(JSON.stringify(metadata.orukeetCleanup)));
+  assert.match(multipart, /language_supported_score_low/);
+  assert.doesNotMatch(multipart, /\[object Object\]/);
 });

@@ -57,6 +57,7 @@ import {
   effectiveLocalHistoryEnabled,
   isAgentAllowed,
   isCloudBackupAllowed,
+  isLlmSelectionAllowed,
   isTranscriptionContextAllowed,
   isTranscriptionSelectionAllowed,
 } from "../stores/policyRules";
@@ -156,7 +157,9 @@ import {
   resolveManagedOrukeetRoute,
   resolveStreamingProviderName,
   buildStreamingSessionOptions,
-  shouldRetranscribeOrukeetLanguage,
+  evaluateOrukeetLanguageRouting,
+  hasOrukeetExperiment,
+  ORUKEET_EXPERIMENT_CONFIG_TTL_MS,
 } from "./dictationStreamingRouting";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
@@ -672,6 +675,9 @@ class AudioManager {
     this._streamingCancellationGeneration = 0;
     this._activeTranscriptionAbortController = null;
     this._activeStreamingSessionId = null;
+    this._activeStreamingProviderName = null;
+    this._activeStreamingConfig = null;
+    this._activePipelineOptions = undefined;
     this.streamingFallbackRecorder = null;
     this.streamingFallbackChunks = [];
     this._recordingSpool = null;
@@ -1062,11 +1068,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   isSttConfigStale(now = Date.now()) {
-    return (
-      !this.sttConfig ||
-      !this.sttConfigFetchedAt ||
-      now - this.sttConfigFetchedAt > STT_CONFIG_TTL_MS
-    );
+    // Re-check opt-in language experiments frequently so a server rollback
+    // takes effect on the next recording after at most 30 s of cached config.
+    const ttl = hasOrukeetExperiment(this.sttConfig)
+      ? ORUKEET_EXPERIMENT_CONFIG_TTL_MS
+      : STT_CONFIG_TTL_MS;
+    return !this.sttConfig || !this.sttConfigFetchedAt || now - this.sttConfigFetchedAt > ttl;
   }
 
   invalidateSttConfig() {
@@ -1074,8 +1081,25 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.sttConfigFetchedAt = null;
   }
 
-  getStreamingProvider() {
-    return STREAMING_PROVIDERS[this.getStreamingProviderName()];
+  getStreamingProvider(name = this.getStreamingProviderName()) {
+    return STREAMING_PROVIDERS[name];
+  }
+
+  // The provider the active streaming session started on. The sttConfig can be
+  // refreshed mid-recording and resolve a different provider, but the open
+  // socket, its final and its disconnect belong to the one that started.
+  getActiveStreamingProviderName() {
+    return this._activeStreamingProviderName ?? this.getStreamingProviderName();
+  }
+
+  // Only the session that set the active fields clears them: a newer start
+  // may already own them.
+  _endStreamingSession(sessionId) {
+    if (this._activeStreamingSessionId !== sessionId) return;
+    this._activeStreamingSessionId = null;
+    this._activeStreamingProviderName = null;
+    this._activeStreamingConfig = null;
+    this._activePipelineOptions = undefined;
   }
 
   getStreamingProviderName() {
@@ -3488,6 +3512,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const streamingFallbackReason =
       metadata.streamingFallbackReason ?? this.consumeStreamingFallbackReason(settings);
     if (streamingFallbackReason) opts.streamingFallbackReason = streamingFallbackReason;
+    if (metadata.orukeetLanguageRouting)
+      opts.orukeetLanguageRouting = metadata.orukeetLanguageRouting;
+    if (metadata.orukeetCleanup) opts.orukeetCleanup = metadata.orukeetCleanup;
     // Orukeet's audio estimate rides along for the backend's per-user gate
     // only. It is never the declared `language`: /api/transcribe picks models
     // by declared language, and the fallback must be the request the user
@@ -3578,6 +3605,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               language: this.getCleanupLanguage(settings),
               locale: settings.uiLanguage || "en",
               streamingFallbackReason,
+              orukeetLanguageRouting: metadata.orukeetLanguageRouting,
+              orukeetCleanup: metadata.orukeetCleanup,
               ...detectedLanguageFields,
               sttProvider: result.sttProvider,
               sttModel: result.sttModel,
@@ -3624,6 +3653,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                     mode: "cloudReason",
                     meta: {
                       streamingFallbackReason,
+                      orukeetLanguageRouting: metadata.orukeetLanguageRouting,
+                      orukeetCleanup: metadata.orukeetCleanup,
                       ...detectedLanguageFields,
                       sttProvider: result.sttProvider,
                       sttModel: result.sttModel,
@@ -4564,6 +4595,28 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return this.sttConfig.dictation?.mode === "streaming";
   }
 
+  getPipelineCleanupOptions(settings) {
+    if (
+      this.sttConfig?.orukeetPipeline !== "gemma12" ||
+      settings.useLocalWhisper ||
+      settings.cloudTranscriptionMode !== "openwhispr" ||
+      !settings.useCleanupModel ||
+      !isCloudCleanupMode() ||
+      !isLlmSelectionAllowed(usePolicyStore.getState(), { mode: "openwhispr" }) ||
+      (settings.cleanupCloudMode || "openwhispr") !== "openwhispr" ||
+      this.voiceAgentRequested ||
+      this.translationRequested
+    )
+      return undefined;
+    return {
+      agentName: getAgentName() || "",
+      customDictionary: getDictionaryHintWords(settings),
+      customPrompt: this.getCustomPrompt(),
+      language: this.getCleanupLanguage(settings) || undefined,
+      locale: settings.uiLanguage || "en",
+    };
+  }
+
   async warmupStreamingConnection({ isSignedIn: isSignedInOverride, warmMic = true } = {}) {
     if (!this.isRecordingAllowedByPolicy()) {
       logger.debug("Streaming warmup skipped by workspace policy", {}, "streaming");
@@ -4588,6 +4641,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               language: settings.preferredLanguage,
               keyterms: this.getKeyterms(),
               voiceAgentRequested: this.voiceAgentRequested,
+              pipelineOptions: this.getPipelineCleanupOptions(settings),
             })
           );
           // Throw error to trigger retry if AUTH_EXPIRED
@@ -4766,7 +4820,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return { needsFallback: true };
     }
     const fallbackReason = resolveStreamingStartFallback({
-      providerName: this.getStreamingProviderName(),
+      providerName: this.getActiveStreamingProviderName(),
       cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
       result: res,
     });
@@ -4838,6 +4892,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this._streamingFailoverReason = null;
       this._streamingSpeechGateState = createLocalSpeechGateState();
       this._activeStreamingSessionId = sessionId;
+      this._activeStreamingProviderName = this.getStreamingProviderName();
+      this._activeStreamingConfig = { ...this.sttConfig };
+      this._activePipelineOptions = this.getPipelineCleanupOptions(getSettings());
       const ownsSession = () => this._activeStreamingSessionId === sessionId;
       const cancellationGeneration = this._streamingCancellationGeneration;
       startWasCancelled = () => cancellationGeneration !== this._streamingCancellationGeneration;
@@ -4901,7 +4958,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       this.streamingProcessor = new AudioWorkletNode(audioContext, "pcm-streaming-processor");
-      const provider = this.getStreamingProvider();
+      const provider = this.getStreamingProvider(this.getActiveStreamingProviderName());
       // Decided once, with the provider, so a config refresh mid-recording
       // cannot change how this session's stream errors are handled. Only a
       // session whose fallback recorder started has a capture to fail over
@@ -4909,7 +4966,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const failsOver =
         Boolean(this.streamingFallbackRecorder) &&
         isManagedOrukeetStream({
-          providerName: this.getStreamingProviderName(),
+          providerName: this.getActiveStreamingProviderName(),
           cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
         });
 
@@ -5000,7 +5057,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (startWasCancelled()) {
         // Cancelled while the mic was opening: never flip to recording.
         await this.cleanupStreaming();
-        if (ownsSession()) this._activeStreamingSessionId = null;
+        this._endStreamingSession(sessionId);
         // cancelStreamingRecording may already be awaiting this start's
         // settlement before it can disconnect the provider.
         this._settleStreamingStart();
@@ -5019,11 +5076,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const { useLocalWhisper } = streamingSettings;
         const res = await provider.start(
           buildStreamingSessionOptions({
-            providerName: this.getStreamingProviderName(),
+            providerName: this.getActiveStreamingProviderName(),
             settings: streamingSettings,
             language: this.getEffectiveSttLanguage(streamingSettings),
             keyterms: this.getKeyterms(),
             voiceAgentRequested: this.voiceAgentRequested,
+            pipelineOptions: this._activePipelineOptions,
           })
         );
 
@@ -5056,7 +5114,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.recordingStartTime = null;
         this.stopRequestedDuringStreamingStart = false;
         await this.cleanupStreaming();
-        if (ownsSession()) this._activeStreamingSessionId = null;
+        this._endStreamingSession(sessionId);
         this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
         logger.debug("Streaming unavailable, falling back to regular recording", {}, "streaming");
         return this.startRecording();
@@ -5111,9 +5169,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         );
         this.cachedMicDeviceId = null;
         await this.cleanupStreaming();
-        if (this._activeStreamingSessionId === sessionId) {
-          this._activeStreamingSessionId = null;
-        }
+        this._endStreamingSession(sessionId);
         this.isRecording = false;
         this.recordingStartTime = null;
         this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
@@ -5122,7 +5178,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       logger.error(
         "Failed to start streaming recording",
-        { provider: this.getStreamingProviderName(), error: error.message, code: error.code },
+        { provider: this.getActiveStreamingProviderName(), error: error.message, code: error.code },
         "streaming"
       );
 
@@ -5157,9 +5213,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       });
 
       await this.cleanupStreaming();
-      if (this._activeStreamingSessionId === sessionId) {
-        this._activeStreamingSessionId = null;
-      }
+      this._endStreamingSession(sessionId);
       this.isRecording = false;
       this.recordingStartTime = null;
       this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
@@ -5219,9 +5273,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this._streamingStopPromise = null;
         this._streamingStopMode = null;
       }
-      if (this._activeStreamingSessionId === sessionId) {
-        this._activeStreamingSessionId = null;
-      }
+      this._endStreamingSession(sessionId);
 
       // Finalization has several provider/reasoning awaits. A thrown error must
       // never leave the renderer or main process stuck in a busy lifecycle.
@@ -5262,6 +5314,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     const sessionId = this._activeStreamingSessionId;
     const spool = this._takeRecordingSpool();
+    const providerName = this.getActiveStreamingProviderName();
     const cancelPromise = (async () => {
       this._requestStreamingCancellation();
       this.stopRequestedDuringStreamingStart = false;
@@ -5283,7 +5336,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           this.micRecovery.stop();
           this.cleanupStreamingAudio();
           this.cleanupStreamingListeners(sessionId);
-          return this.getStreamingProvider().stop?.();
+          return this.getStreamingProvider(providerName).stop?.();
         })
         .catch((error) => {
           logger.debug(
@@ -5306,9 +5359,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this._streamingStopPromise = null;
         this._streamingStopMode = null;
       }
-      if (this._activeStreamingSessionId === sessionId) {
-        this._activeStreamingSessionId = null;
-      }
+      this._endStreamingSession(sessionId);
       this.isRecording = false;
       this.isProcessing = false;
       this.isStreaming = false;
@@ -5325,6 +5376,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return false;
     }
 
+    const providerName = this.getActiveStreamingProviderName();
     const cancellationGeneration = this._streamingCancellationGeneration;
     const wasCancelled = () => cancellationGeneration !== this._streamingCancellationGeneration;
     const abandonFinalization = async () => {
@@ -5332,7 +5384,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.cleanupStreamingListeners(sessionId);
       this._streamingFallbackSegments = [];
       try {
-        await this.getStreamingProvider().stop?.();
+        await this.getStreamingProvider(providerName).stop?.();
       } catch (error) {
         logger.debug(
           "Streaming disconnect after cancellation failed",
@@ -5367,7 +5419,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const t0 = performance.now();
     let finalText = this.streamingFinalText || "";
 
-    const provider = this.getStreamingProvider();
+    const provider = this.getStreamingProvider(providerName);
     let acknowledgedFinal = null;
     let finalAcknowledged = false;
     let orukeetFinal = null;
@@ -5521,7 +5573,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     const stSettings = getSettings();
     const streamingSttModel = stopResult?.model || "nova-3";
-    const streamingSttProcessingMs = Math.round(tTerminate - t0);
+    const streamingSttProcessingMs = Number.isFinite(orukeetFinal?.asrFinalMs)
+      ? Math.round(orukeetFinal.asrFinalMs)
+      : Math.round(tTerminate - t0);
     const streamingAudioBytesSent = stopResult?.audioBytesSent || 0;
     const streamingSttLanguage =
       getBaseLanguageCode(this.getEffectiveSttLanguage(stSettings)) || undefined;
@@ -5535,10 +5589,38 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     let batchWarning = null;
     let batchFallbackResult = null;
     let failureReport = null;
-    const isOrukeetStream = this.getStreamingProviderName() === "orukeet";
+    const isOrukeetStream = providerName === "orukeet";
     const detectedLanguageFields = isOrukeetStream
       ? orukeetDetectedLanguageFields(orukeetFinal)
       : {};
+    const languageRouting = evaluateOrukeetLanguageRouting({
+      language: streamingSttLanguage,
+      final: orukeetFinal,
+      mode:
+        isOrukeetStream && stSettings.cloudTranscriptionMode === "openwhispr"
+          ? (this._activeStreamingConfig || this.sttConfig)?.orukeetLanguageRouting
+          : undefined,
+    });
+    const orukeetLanguageRouting = languageRouting.comparison
+      ? {
+          ...languageRouting.comparison,
+          fallbackAvailable:
+            fallbackBlob?.size > 0 && resolveStreamingFallbackTarget(stSettings) === "cloud",
+        }
+      : undefined;
+    const orukeetCleanup = orukeetFinal?.cleanup;
+    const orukeetTelemetry = { orukeetLanguageRouting, orukeetCleanup };
+    if (isOrukeetStream && languageRouting.comparison) {
+      logger.info(
+        "Orukeet language routing comparison",
+        {
+          ...languageRouting.comparison,
+          fallbackAvailable:
+            fallbackBlob?.size > 0 && resolveStreamingFallbackTarget(stSettings) === "cloud",
+        },
+        "streaming"
+      );
+    }
 
     // Orukeet renders speech outside its 25 languages as confident nonsense.
     // With a confident final estimate, send the kept recording through Cloud
@@ -5548,7 +5630,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       isOrukeetStream &&
       fallbackBlob?.size > 0 &&
       resolveStreamingFallbackTarget(stSettings) === "cloud" &&
-      shouldRetranscribeOrukeetLanguage({ language: streamingSttLanguage, final: orukeetFinal })
+      languageRouting.fallback
     ) {
       logger.info(
         "Orukeet detected an unsupported language, re-transcribing through Cloud",
@@ -5579,8 +5661,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           {
             durationSeconds,
             analyticsOccurredAt: analyticsOccurredAt.toISOString(),
-            streamingFallbackReason: "language_detected_unsupported",
+            streamingFallbackReason:
+              languageRouting.comparison && !languageRouting.comparison.legacyFallback
+                ? "language_supported_score_low"
+                : "language_detected_unsupported",
             detectedLanguageFields,
+            ...orukeetTelemetry,
           },
           wasCancelled
         );
@@ -5642,34 +5728,43 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           );
         } else if (route.kind === "cleanup" && cleanupCloudMode === "openwhispr") {
           const customPrompt = this.getCustomPrompt();
-          const reasonResult = await withSessionRefresh(async () => {
-            const res = await window.electronAPI.cloudReason(finalText, {
-              agentName,
-              promptMode: "cleanup",
-              purpose: "cleanup",
-              customDictionary: getDictionaryHintWords(stSettings),
-              customPrompt,
-              language: this.getCleanupLanguage(stSettings),
-              locale: stSettings.uiLanguage || "en",
-              sttProvider: this.getStreamingProviderName(),
-              sttModel: streamingSttModel,
-              sttProcessingMs: streamingSttProcessingMs,
-              sttWordCount: streamingSttWordCount,
-              sttLanguage: streamingSttLanguage,
-              ...detectedLanguageFields,
-              audioDurationMs: durationSeconds ? Math.round(durationSeconds * 1000) : undefined,
-              audioSizeBytes: streamingAudioBytesSent || undefined,
-              audioFormat: "linear16",
-            });
-            if (!res.success) {
-              const err = new Error(res.error || "Cloud reasoning failed");
-              err.code = res.code;
-              throw err;
-            }
-            return res;
-          });
+          const combined =
+            orukeetFinal?.cleanupStatus === "complete" &&
+            JSON.stringify(orukeetFinal.cleanupOptions) ===
+              JSON.stringify(this._activePipelineOptions) &&
+            typeof orukeetFinal.cleanupText === "string" &&
+            hasTextContent(orukeetFinal.cleanupText);
+          const reasonResult = combined
+            ? { success: true, text: orukeetFinal.cleanupText, model: orukeetCleanup?.model }
+            : await withSessionRefresh(async () => {
+                const res = await window.electronAPI.cloudReason(finalText, {
+                  agentName,
+                  promptMode: "cleanup",
+                  purpose: "cleanup",
+                  customDictionary: getDictionaryHintWords(stSettings),
+                  customPrompt,
+                  language: this.getCleanupLanguage(stSettings),
+                  locale: stSettings.uiLanguage || "en",
+                  sttProvider: providerName,
+                  sttModel: streamingSttModel,
+                  sttProcessingMs: streamingSttProcessingMs,
+                  sttWordCount: streamingSttWordCount,
+                  sttLanguage: streamingSttLanguage,
+                  ...detectedLanguageFields,
+                  ...orukeetTelemetry,
+                  audioDurationMs: durationSeconds ? Math.round(durationSeconds * 1000) : undefined,
+                  audioSizeBytes: streamingAudioBytesSent || undefined,
+                  audioFormat: "linear16",
+                });
+                if (!res.success) {
+                  const err = new Error(res.error || "Cloud reasoning failed");
+                  err.code = res.code;
+                  throw err;
+                }
+                return res;
+              });
 
-          usedCloudReasoning = true;
+          usedCloudReasoning = !combined;
           if (reasonResult.success && hasTextContent(reasonResult.text)) {
             if (!customPrompt) assertValidCleanupOutput(finalText, reasonResult.text);
             finalText = reasonResult.text;
@@ -5710,12 +5805,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                 ? {
                     mode: "cloudReason",
                     meta: {
-                      sttProvider: this.getStreamingProviderName(),
+                      sttProvider: providerName,
                       sttModel: streamingSttModel,
                       sttProcessingMs: streamingSttProcessingMs,
                       sttWordCount: streamingSttWordCount,
                       sttLanguage: streamingSttLanguage,
                       ...detectedLanguageFields,
+                      ...orukeetTelemetry,
                       audioDurationMs: durationSeconds
                         ? Math.round(durationSeconds * 1000)
                         : undefined,
@@ -5854,7 +5950,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         durationMs: durationSeconds
           ? Math.round(durationSeconds * 1000)
           : Math.round(tBeforePaste - t0),
-        provider: batchFallbackResult?.source || `${this.getStreamingProviderName()}-streaming`,
+        provider: batchFallbackResult?.source || `${providerName}-streaming`,
         model: batchFallbackResult ? null : streamingSttModel || null,
       };
       if (wasCancelled()) return true;
@@ -5862,7 +5958,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         success: true,
         text: finalText,
         rawText: batchFallbackResult?.rawText || rawStreamingText || finalText,
-        source: batchFallbackResult?.source || `${this.getStreamingProviderName()}-streaming`,
+        source: batchFallbackResult?.source || `${providerName}-streaming`,
         clientTranscriptionId,
         analyticsOccurredAt: resultAnalyticsOccurredAt,
         // The upgrade prompt opens on these, as after a batch recording.
@@ -5882,15 +5978,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           try {
             await withSessionRefresh(async () => {
               const res = await window.electronAPI.cloudStreamingUsage(
-                finalText,
+                orukeetFinal?.cleanupStatus ? rawStreamingText : finalText,
                 durationSeconds ?? 0,
                 {
                   sendLogs: !usedCloudReasoning,
-                  sttProvider: this.getStreamingProviderName(),
+                  sttProvider: providerName,
                   sttModel: streamingSttModel,
                   sttProcessingMs: streamingSttProcessingMs,
                   sttLanguage: streamingSttLanguage,
                   ...detectedLanguageFields,
+                  ...orukeetTelemetry,
                   audioSizeBytes: streamingAudioBytesSent || undefined,
                   audioFormat: "linear16",
                   clientTotalMs,
@@ -5955,6 +6052,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.onTranscriptionComplete?.({ success: true, text: "" });
     }
 
+    this.voiceAgentRequested = false;
+    this.translationRequested = false;
     if (this.shouldUseStreaming()) {
       this.warmupStreamingConnection().catch((e) => {
         logger.debug("Background re-warm failed", { error: e.message }, "streaming");
@@ -6084,12 +6183,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this._takeRecordingSpool()?.finish();
     this.cleanupStreamingAudio();
     this.cleanupStreamingListeners(sessionId);
-    if (this._activeStreamingSessionId === sessionId) {
-      this._activeStreamingSessionId = null;
-    }
+    this._endStreamingSession(sessionId);
   }
 
   cleanup() {
+    // Read before cleanupStreaming ends the session below.
+    const streamingProviderName = this.getActiveStreamingProviderName();
     this.micRecovery.stop();
     this._unsubscribeSettings?.();
     this.preparedMicCapture.cancel();
@@ -6113,7 +6212,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.workletBlobUrl = null;
     }
     try {
-      this.getStreamingProvider().stop?.();
+      this.getStreamingProvider(streamingProviderName).stop?.();
     } catch (e) {
       // Ignore errors during cleanup (page may be unloading)
     }

@@ -124,6 +124,62 @@ test("language hints are advisory and the final language is passed through", asy
 });
 
 for (const metadata of [
+  { language: "hi", language_confidence: 0.55, language_supported_score: 0.02 },
+  { language: "en", language_confidence: 0.3, language_supported_score: 0.75 },
+  { language: null, language_confidence: null, language_supported_score: 0.01 },
+  { language: "hi", language_confidence: 1, language_supported_score: 0 },
+  { language: "en", language_confidence: 1, language_supported_score: 1 },
+]) {
+  test(`supported language score reaches hints and final: ${JSON.stringify(metadata)}`, async (t) => {
+    const { adapter, options } = await fixture(t, (socket, event) => {
+      if (event.type === "commit") {
+        socket.send(JSON.stringify({ type: "language", ...metadata, language_audio_seconds: 6 }));
+        socket.send(
+          JSON.stringify({
+            type: "final",
+            text: "Transcript",
+            ...metadata,
+            language_audio_seconds: 6,
+          })
+        );
+      }
+    });
+    const hints = [];
+    adapter.onLanguage = (value) => hints.push(value);
+    await adapter.connect(options);
+    adapter.sendAudio(Buffer.alloc(640));
+    const result = await adapter.finalize();
+    assert.equal(hints.length, 1);
+    assert.equal(hints[0].languageSupportedScore, metadata.language_supported_score);
+    assert.equal(result.languageSupportedScore, metadata.language_supported_score);
+    assert.equal(result.languageAudioSeconds, 6);
+    assert.equal(result.language, metadata.language);
+  });
+}
+
+for (const score of [undefined, null, "0.5", true, -0.1, 1.1]) {
+  test(`invalid or absent supported score stays absent: ${String(score)}`, async (t) => {
+    const { adapter, options } = await fixture(t, (socket, event) => {
+      if (event.type === "commit")
+        socket.send(
+          JSON.stringify({
+            type: "final",
+            text: "Transcript",
+            language: "en",
+            language_confidence: 0.9,
+            language_supported_score: score,
+          })
+        );
+    });
+    await adapter.connect(options);
+    adapter.sendAudio(Buffer.alloc(640));
+    const result = await adapter.finalize();
+    assert.equal(result.languageSupportedScore, undefined);
+    assert.equal(result.language, "en");
+  });
+}
+
+for (const metadata of [
   { language: null, language_confidence: null },
   { language: "english", language_confidence: 0.9 },
   { language: "en", language_confidence: "0.9" },

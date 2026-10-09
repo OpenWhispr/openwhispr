@@ -613,3 +613,27 @@ for (const translationRequested of [false, true]) {
     }
   });
 }
+
+test("opt-in language routing refreshes within 30 seconds for rollback without changing normal cache TTL", async (t) => {
+  const manager = await loadManager(t);
+  for (const mode of ["shadow", "supported-0.30", "supported-0.10"]) {
+    manager.setSttConfig({ orukeetLanguageRouting: mode });
+    const at = manager.sttConfigFetchedAt;
+    assert.equal(manager.isSttConfigStale(at + 30000), false);
+    assert.equal(manager.isSttConfigStale(at + 30001), true);
+  }
+  for (const mode of [undefined, "off", "invalid"]) {
+    manager.setSttConfig({ orukeetLanguageRouting: mode });
+    const at = manager.sttConfigFetchedAt;
+    assert.equal(manager.isSttConfigStale(at + 30001), false);
+    assert.equal(manager.isSttConfigStale(at + 900001), true);
+  }
+});
+
+test("combined-pipeline config expires after 30 seconds even when language routing is off", async (t) => {
+  const manager = await loadManager(t);
+  manager.setSttConfig({ orukeetLanguageRouting: "off", orukeetPipeline: "gemma12" });
+  const at = manager.sttConfigFetchedAt;
+  assert.equal(manager.isSttConfigStale(at + 30000), false);
+  assert.equal(manager.isSttConfigStale(at + 30001), true);
+});

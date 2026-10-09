@@ -96,6 +96,13 @@ export interface NoteRecordingProvider {
 // main process defaults a missing value to "openai-realtime" for pre-1.8.4
 // renderers (#1624).
 export interface DictationRealtimeSessionOptions {
+  pipelineOptions?: {
+    agentName?: string;
+    customDictionary?: string[];
+    customPrompt?: string;
+    language?: string;
+    locale?: string;
+  };
   provider: string;
   baseUrl?: string;
   model?: string;
@@ -111,6 +118,8 @@ export interface DictationRealtimeSessionOptions {
 export interface DictationLanguageMetadata {
   language: string | null;
   languageConfidence: number | null;
+  // Sum of detector scores for Orukeet's 25 languages, not a calibrated probability.
+  languageSupportedScore?: number;
   languageAudioSeconds?: number;
 }
 
@@ -953,6 +962,36 @@ export interface ScreenRecordingAccessResult {
 export type CloudReasonPurpose = "cleanup" | "assistant" | "translation" | "noteFormatting";
 
 // Orukeet's audio language estimate, reported for the backend's per-user gate.
+export interface OrukeetLanguageRoutingTelemetry {
+  version: 1;
+  mode: "shadow" | "supported-0.30" | "supported-0.10";
+  auto: boolean;
+  eligible: boolean;
+  analyzedSeconds: number | null;
+  topLanguage: string | null;
+  topScore: number | null;
+  supportedScore: number | null;
+  legacyFallback: boolean;
+  top05Fallback: boolean;
+  candidate030: boolean | null;
+  candidate010: boolean | null;
+  selectedFallback: boolean;
+  fallbackAvailable: boolean;
+}
+export interface OrukeetCleanupTelemetry {
+  status: "complete" | "fallback" | "skipped";
+  model?: "gemma-4-12b";
+  processingMs?: number;
+  queueMs?: number;
+  firstTextMs?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+}
+export interface OrukeetTelemetry {
+  orukeetLanguageRouting?: OrukeetLanguageRoutingTelemetry;
+  orukeetCleanup?: OrukeetCleanupTelemetry;
+}
+
 export interface SttDetectedLanguageFields {
   sttDetectedLanguage?: string;
   sttDetectedLanguageConfidence?: number;
@@ -1390,6 +1429,8 @@ declare global {
             dictation?: { mode: string };
             notes?: { mode: string };
             streamingProvider?: string;
+            orukeetPipeline?: "gemma12";
+            orukeetLanguageRouting?: "off" | "shadow" | "supported-0.30" | "supported-0.10";
           } & PolicyFailureMetadata)
         | null
       >;
@@ -2520,7 +2561,8 @@ declare global {
           analyticsOccurredAt?: string;
           // Why a managed-streaming user's dictation went batch (rollout metric).
           streamingFallbackReason?: string;
-        } & SttDetectedLanguageFields
+        } & SttDetectedLanguageFields &
+          OrukeetTelemetry
       ) => Promise<
         {
           success: boolean;
@@ -2548,7 +2590,8 @@ declare global {
           language?: string;
           locale?: string;
           streamingFallbackReason?: string;
-        } & SttDetectedLanguageFields
+        } & SttDetectedLanguageFields &
+          OrukeetTelemetry
       ) => Promise<{
         success: boolean;
         text?: string;
@@ -2578,7 +2621,8 @@ declare global {
           analyticsOccurredAt?: string;
           analyticsWordCount?: number;
           analyticsCounterVersion?: number;
-        } & SttDetectedLanguageFields
+        } & SttDetectedLanguageFields &
+          OrukeetTelemetry
       ) => Promise<{
         success: boolean;
         wordsUsed?: number;
