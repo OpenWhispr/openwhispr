@@ -58,7 +58,7 @@ test("note edits preserve separate stored fields, reopen correctly, and report f
       const result = await getNoteTool.execute({ id: note.id });
       assert.equal(result.data.content, CONTENT);
       assert.equal(result.data.summary, SUMMARY);
-      assert.equal(result.data.transcript, "I will send the poll by Sunday.");
+      assert.equal(result.data.transcript, "Alex: I will send the poll by Sunday.");
       assert.equal(result.data.transcript_truncated, false);
     }
   );

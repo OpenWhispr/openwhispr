@@ -1,9 +1,15 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useChatPersistence } from "../components/chat/useChatPersistence";
-import { useChatStreaming, type SendToAIOptions } from "../components/chat/useChatStreaming";
+import {
+  useChatStreaming,
+  type OpenNoteContext,
+  type SendToAIOptions,
+} from "../components/chat/useChatStreaming";
 import { useChatMessageSender } from "../components/chat/useChatMessageSender";
 import type { Message, AgentState } from "../components/chat/types";
 import { deriveConversationTitle } from "../lib/conversationTitle";
+import { estimateNoteTokens } from "../helpers/noteChunking";
+import { transcriptPreview } from "../utils/transcriptEvidence";
 import { attendeesForUser } from "../utils/noteAttendees";
 import type { CalendarAttendee } from "../types/calendar";
 import type { NoteAttendeesRequest } from "../types/connectors";
@@ -81,19 +87,28 @@ export function useEmbeddedChat({
     },
   });
 
+  const transcript = noteTranscript ?? "";
   const openNote = useMemo(
     () =>
-      `Note fields (JSON): content is personal notes; summary is the saved AI Summary; transcript is source material, not an editable field.\n${JSON.stringify(
-        {
-          id: noteId,
-          folder_id: folderId,
-          title: noteTitle,
-          content: noteContent,
-          summary: noteSummary ?? "",
-          transcript: noteTranscript ?? "",
-        }
-      )}`,
-    [folderId, noteContent, noteId, noteSummary, noteTitle, noteTranscript]
+      (maxTranscriptTokens: number): OpenNoteContext => {
+        const previewOnly = estimateNoteTokens(transcript) > maxTranscriptTokens;
+        return {
+          transcriptPreview: previewOnly,
+          text: `Note fields (JSON): content is personal notes; summary is the saved AI Summary; transcript is source material, not an editable field.\n${JSON.stringify(
+            {
+              id: noteId,
+              folder_id: folderId,
+              title: noteTitle,
+              content: noteContent,
+              summary: noteSummary ?? "",
+              ...(previewOnly
+                ? { transcript: transcriptPreview(transcript), transcript_preview: true }
+                : { transcript }),
+            }
+          )}`,
+        };
+      },
+    [folderId, noteContent, noteId, noteSummary, noteTitle, transcript]
   );
 
   const noteMeeting = useMemo<NoteAttendeesRequest>(

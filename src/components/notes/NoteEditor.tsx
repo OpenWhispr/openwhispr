@@ -89,12 +89,8 @@ import {
 import { compileChatActionPrompt } from "../../helpers/templatePrompts";
 import type { SlashCommand } from "../chat/slashCommands";
 import { formatNoteDate, formatRelativeTime, formatShortDate } from "../../utils/dateFormatting";
-import {
-  buildLlmTranscript,
-  buildMeetingContext,
-  collectKnownPeople,
-  type MeetingIdentity,
-} from "../../utils/llmTranscript";
+import { collectKnownPeople, type MeetingIdentity } from "../../utils/llmTranscript";
+import { noteChatTranscript } from "../../utils/transcriptEvidence";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
 import {
   applyTranscriptSpeakerPatch,
@@ -506,20 +502,15 @@ export default function NoteEditor({
     [meetingIdentity, speakerMappings, displaySegments]
   );
 
-  // The chat reads the user's own meeting the way note formatting does: who the
-  // user is and named speakers, not the stored segment JSON. Invitees are left to
-  // the filtered attendee block that comes with connector tools (a chat without
-  // them names only speakers), and a teammate's mic lines aren't the user's.
-  const chatTranscript = useMemo(() => {
-    if (displaySegments.length === 0 || !ownedByUser) return note.transcript ?? undefined;
-    const selfLabel = meetingIdentity.selfName || t("notes.speaker.you");
-    return [
-      buildMeetingContext({ ...meetingIdentity, participants: [] }, selfLabel),
-      buildLlmTranscript(displaySegments, speakerMappings, selfLabel, t),
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-  }, [displaySegments, meetingIdentity, note.transcript, ownedByUser, speakerMappings, t]);
+  // The chat labels speakers as get_note does, so a name it sees can be searched
+  // for, and says whether the note taker is the user.
+  const chatTranscript = useMemo(
+    () =>
+      noteChatTranscript(displaySegments, speakerMappings, ownedByUser ? meetingIdentity : null) ??
+      note.transcript ??
+      undefined,
+    [displaySegments, meetingIdentity, note.transcript, ownedByUser, speakerMappings]
+  );
 
   const embeddedChat = useEmbeddedChat({
     noteId: note.id,
