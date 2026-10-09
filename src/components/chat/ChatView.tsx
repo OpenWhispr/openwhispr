@@ -8,58 +8,14 @@ import { ChatInput } from "./ChatInput";
 import ConversationList from "./ConversationList";
 import { ConfirmDialog } from "../ui/dialog";
 import { PAGE_CONTENT_WIDTH_CLASS } from "../ui/pageWidth";
-import { BrandMarkIcon } from "../dictation/BrandMarkIcon";
+import { NewChatEmptyState } from "./NewChatEmptyState";
 import { useDialogs } from "../../hooks/useDialogs";
 import { getCachedPlatform } from "../../utils/platform";
-import { Check, FileText, Video } from "../icons";
 import { observeChatComposerInset } from "./composerLayout";
 
 const CommandSearch = lazy(() => import("../CommandSearch"));
 
 const platform = getCachedPlatform();
-
-const STARTER_PROMPTS = [
-  { key: "chat.starters.todos", icon: Check },
-  { key: "chat.starters.meeting", icon: Video },
-  { key: "chat.starters.sharedNotes", icon: FileText },
-] as const;
-
-function NewChatEmptyState({
-  onPrompt,
-  showSuggestions,
-  disabled,
-}: {
-  onPrompt: (prompt: string) => void;
-  showSuggestions: boolean;
-  disabled: boolean;
-}) {
-  const { t } = useTranslation();
-  return (
-    <div className="flex h-full min-h-80 flex-col items-center justify-center px-4 pb-[var(--chat-composer-inset,5rem)] text-center">
-      <BrandMarkIcon size={64} className="text-foreground/15 dark:text-muted-foreground/35" />
-      {showSuggestions && (
-        <div className="mt-8 grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-3">
-          {STARTER_PROMPTS.map(({ key, icon: Icon }) => (
-            <button
-              key={key}
-              type="button"
-              disabled={disabled}
-              onClick={() => onPrompt(t(key))}
-              className="flex min-h-24 flex-col items-start justify-between rounded-2xl border border-border bg-card p-4 text-start text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10"
-            >
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                <Icon size={16} />
-              </span>
-              <span className="max-w-full truncate" title={t(key)}>
-                {t(key)}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default function ChatView() {
   const { t } = useTranslation();
