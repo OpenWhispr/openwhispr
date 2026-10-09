@@ -33,8 +33,18 @@ const UNDO_TTL_MS = 10 * 60 * 1000;
 const offeredTokens = new Set();
 // The chat turn (assistant message) that made each recovery.
 const undoTurns = new Map();
+const JOURNAL_COLUMNS = ["note_id", "token", "account_id", "previous", "created_at"];
 
 function initializeNoteUndo(db) {
+  // Recoveries are short-lived, so a journal of another shape (an earlier
+  // build's) is dropped rather than migrated.
+  const columns = db
+    .prepare("PRAGMA table_info(assistant_note_undo)")
+    .all()
+    .map((column) => column.name);
+  if (columns.length && columns.join() !== JOURNAL_COLUMNS.join()) {
+    db.exec("DROP TABLE assistant_note_undo");
+  }
   db.exec(`
     CREATE TABLE IF NOT EXISTS assistant_note_undo (
       note_id INTEGER PRIMARY KEY REFERENCES notes(id) ON DELETE CASCADE,
@@ -50,7 +60,8 @@ function initializeNoteUndo(db) {
       .join(" OR ")}
       OR (OLD.owner_user_id IS NOT NULL AND OLD.owner_user_id IS NOT NEW.owner_user_id)
     BEGIN DELETE FROM assistant_note_undo WHERE note_id = NEW.id; END;
-    CREATE TRIGGER IF NOT EXISTS assistant_note_undo_delete AFTER DELETE ON notes
+    DROP TRIGGER IF EXISTS assistant_note_undo_delete;
+    CREATE TRIGGER assistant_note_undo_delete AFTER DELETE ON notes
     BEGIN DELETE FROM assistant_note_undo WHERE note_id = OLD.id; END;
   `);
   db.prepare("DELETE FROM assistant_note_undo WHERE created_at < ?").run(Date.now() - UNDO_TTL_MS);
@@ -80,12 +91,11 @@ function updateNoteWithUndo(manager, id, updates, expected, turn) {
         .filter((key) => before[key] !== updates[key])
         .map((key) => [key, before[key]])
     );
-    if (!Object.keys(previous).length && !updates.clear_fields?.length)
-      return { success: true, note: before };
+    if (!Object.keys(previous).length) return { success: true, note: before };
     // Read before the write: the update trigger retires the live recovery.
     const live = liveUndo(manager, "note_id", id);
     const result = manager.updateNote(id, updates);
-    if (!result.success || !Object.keys(previous).length) return result;
+    if (!result.success) return result;
     // Edits of one note in the same turn (e.g. a summary rewrite and a rename)
     // share one Undo that restores each field's oldest value.
     const sameTurn = turn != null && live && undoTurns.get(live.token) === turn;
@@ -136,13 +146,7 @@ function undoNoteUpdate(manager, token) {
         return { success: false, error: "note_changed" };
       }
     }
-    const clearFields = ["content", "enhanced_content"].filter(
-      (key) => key in previous && (previous[key] == null || previous[key] === "")
-    );
-    const result = manager.updateNote(note.id, {
-      ...previous,
-      ...(clearFields.length && { clear_fields: clearFields }),
-    });
+    const result = manager.updateNote(note.id, previous);
     if (result.success)
       manager.db.prepare("DELETE FROM assistant_note_undo WHERE token = ?").run(token);
     return result;
@@ -155,16 +159,17 @@ function claimNoteUndo(manager, token) {
   return true;
 }
 
+// Runs on every keystroke in the note editor, so it is a single statement.
 function discardNoteUndo(manager, id, token) {
-  if (!manager.getNote(id)) return;
+  const scope = manager._accountScopeCondition("notes");
   // A toast may expire after a newer edit; only that toast's token is retired.
-  if (token)
-    manager.db
-      .prepare(
-        "DELETE FROM assistant_note_undo WHERE note_id = ? AND token = ? AND account_id IS ?"
-      )
-      .run(id, token, manager.activeAccountId);
-  else manager.db.prepare("DELETE FROM assistant_note_undo WHERE note_id = ?").run(id);
+  const byToken = token ? " AND token = ? AND account_id IS ?" : "";
+  manager.db
+    .prepare(
+      `DELETE FROM assistant_note_undo WHERE note_id = ?
+        AND note_id IN (SELECT id FROM notes WHERE ${scope.sql})${byToken}`
+    )
+    .run(id, ...scope.params, ...(token ? [token, manager.activeAccountId] : []));
 }
 
 module.exports = {

@@ -296,19 +296,24 @@ test("safe assistant edits and atomic Undo", async (t) => {
         });
         return result;
       });
-      const pending = executeTool(
-        updateNoteTool,
-        { id: note.id, content: "Assistant replacement" },
-        { signal: controller.signal }
-      );
-      await saving;
-      controller.abort();
-      assert.equal((await pending).success, false);
-      assert.equal(database.getNote(other.id).content, other.content);
-      assert.equal(database.undoNoteUpdate(tokenFor(note.id)).success, true);
-      release();
-      await new Promise((resolve) => setImmediate(resolve));
-      stub.mock.restore();
+      // A failed assertion must not leave the stalled stub in place: every
+      // later edit would wait on it forever.
+      try {
+        const pending = executeTool(
+          updateNoteTool,
+          { id: note.id, content: "Assistant replacement" },
+          { signal: controller.signal }
+        );
+        await saving;
+        controller.abort();
+        assert.equal((await pending).success, false);
+        assert.equal(database.getNote(other.id).content, other.content);
+        assert.equal(database.undoNoteUpdate(tokenFor(note.id)).success, true);
+      } finally {
+        release?.();
+        await new Promise((resolve) => setImmediate(resolve));
+        stub.mock.restore();
+      }
       assert.equal(database.getNote(note.id).content, note.content);
     }
   );
@@ -396,6 +401,123 @@ test("safe assistant edits and atomic Undo", async (t) => {
     failure.mock.restore();
     assert.equal(tokenFor(note.id), token);
     assert.equal(database.getNote(note.id).title, "Recoverable");
+  });
+
+  await t.test("a removal that would leave a field empty is pointed to clear_fields", async () => {
+    const note = fresh();
+    const result = await edit(note, { summary: " " });
+    assert.equal(result.success, false);
+    assert.match(result.displayText, /removal that leaves nothing\), use clear_fields/);
+    const renamed = await edit(note, { title: "", folder: " ", content: "Kept" });
+    assert.equal(renamed.success, true);
+    assert.deepEqual(renamed.data.ignoredFields, ["title", "folder"]);
+    assert.equal(database.getNote(note.id).title, note.title);
+  });
+
+  await t.test("a trashed note is not edited", async () => {
+    const note = fresh();
+    database.updateNote(note.id, { deleted_at: "2026-10-09" });
+    const result = await edit(note, { title: "Edited in the trash" });
+    assert.equal(result.success, false);
+    assert.match(result.displayText, /in the trash/);
+    const trashed = database.getNote(note.id);
+    assert.equal(
+      database.updateNote(note.id, { title: "Direct" }, { undoable: true, expected: trashed })
+        .success,
+      false
+    );
+    assert.equal(database.getNote(note.id).title, note.title);
+    assert.equal(tokenFor(note.id), undefined);
+  });
+
+  await t.test("an unchanged or unsupported edit writes nothing", async () => {
+    const note = fresh();
+    database.updateNote(note.id, { sync_status: "synced" });
+    assert.equal((await edit(note, { title: note.title })).success, true);
+    database.updateNote(note.id, { content: "" });
+    database.updateNote(note.id, { sync_status: "synced" });
+    assert.equal((await edit(note, { clear_fields: ["content"] })).success, true);
+    assert.equal(database.getNote(note.id).sync_status, "synced");
+    assert.equal(tokenFor(note.id), undefined);
+    const direct = database.updateNote(
+      note.id,
+      { transcript: "Rewritten" },
+      { undoable: true, expected: database.getNote(note.id) }
+    );
+    assert.equal(direct.success, false);
+    assert.equal(database.getNote(note.id).transcript, note.transcript);
+  });
+
+  await t.test("a toast's discard retires only its own recovery", async () => {
+    const note = fresh();
+    await edit(note, { title: "First" });
+    const first = tokenFor(note.id);
+    await edit(note, { title: "Second" });
+    const second = tokenFor(note.id);
+    database.discardNoteUndo(note.id, first);
+    assert.equal(tokenFor(note.id), second);
+    database.discardNoteUndo(note.id, second);
+    assert.equal(tokenFor(note.id), undefined);
+  });
+
+  await t.test(
+    "a folder that moved to another space is neither a target nor restored",
+    async () => {
+      database.setActiveAccountId("account-team");
+      const team = database.db
+        .prepare(
+          "INSERT INTO spaces (client_space_id, kind, name) VALUES ('undo-team', 'team', 'Team')"
+        )
+        .run().lastInsertRowid;
+      database.db
+        .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, 'account-team')")
+        .run(team);
+      const moveToTeam = (folder) =>
+        database.db.prepare("UPDATE folders SET space_id = ? WHERE id = ?").run(team, folder.id);
+      const note = fresh();
+      const target = database.createFolder(`Target ${note.id}`, note.space_id).folder;
+      moveToTeam(target);
+      const refused = database.updateNote(
+        note.id,
+        { folder_id: target.id },
+        { undoable: true, expected: note }
+      );
+      assert.equal(refused.success, false);
+      assert.equal(database.getNote(note.id).space_id, note.space_id);
+
+      const original = database.createFolder(`Original ${note.id}`, note.space_id).folder;
+      database.updateNote(note.id, { folder_id: original.id });
+      await edit(database.getNote(note.id), { folder: `Moved ${note.id}` });
+      moveToTeam(original);
+      assert.equal(database.undoNoteUpdate(tokenFor(note.id)).success, false);
+      assert.equal(database.getNote(note.id).space_id, note.space_id);
+      database.setActiveAccountId(null);
+    }
+  );
+
+  await t.test("a journal of an earlier shape is replaced at launch", async () => {
+    database.db.exec(`
+      DROP TABLE assistant_note_undo;
+      CREATE TABLE assistant_note_undo (note_id INTEGER PRIMARY KEY, token TEXT, previous TEXT);
+    `);
+    initializeNoteUndo(database.db);
+    const note = fresh();
+    await edit(note, { title: "After repair" });
+    assert.equal(database.undoNoteUpdate(tokenFor(note.id)).success, true);
+  });
+
+  await t.test("without the journal, assistant edits still save", async () => {
+    database.noteUndoReady = false;
+    try {
+      const note = fresh();
+      assert.equal((await edit(note, { title: "No journal" })).success, true);
+      assert.equal(database.getNote(note.id).title, "No journal");
+      assert.deepEqual(database.getNoteUndos(), []);
+      assert.equal(database.claimNoteUndo("any"), false);
+      database.discardNoteUndo(note.id);
+    } finally {
+      database.noteUndoReady = true;
+    }
   });
 
   await t.test("real account scope hides and refuses another account's recovery", async () => {

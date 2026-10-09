@@ -151,7 +151,21 @@ test("a later edit replaces the old toast and unavailable Undo explains the refu
   await React.act(async () => state.toasts[1].action.props.onClick());
   assert.deepEqual(state.calls, ["second"]);
   assert.match(state.toasts[2].description, /changed.*Undo/);
+  assert.ok(state.dismissed.includes("toast-2"), "a refused Undo cannot be clicked again");
   assert.deepEqual(state.pushes, []);
+});
+
+test("a failed restore keeps the toast; closing it retires only its recovery", async (t) => {
+  const state = await setup(t);
+  state.setEdits([{ ...one, title: "" }]);
+  await state.emit("note");
+  assert.match(state.toasts[0].title, /Untitled/);
+  state.setResult({ success: false, error: "disk full" });
+  await React.act(async () => state.toasts[0].action.props.onClick());
+  assert.match(state.toasts[1].description, /Could not undo/);
+  assert.equal(state.dismissed.includes("toast-1"), false);
+  await React.act(async () => state.toasts[0].onClose());
+  assert.deepEqual(state.calls.at(-1), [7, "first"]);
 });
 
 test("Undo errors stay visible and double clicks cannot issue parallel restores", async (t) => {

@@ -20,6 +20,9 @@ async function lockNote(id: number): Promise<() => void> {
   };
 }
 
+const isClearFields = (value: unknown): value is Array<"content" | "summary"> =>
+  Array.isArray(value) && value.every((field) => field === "content" || field === "summary");
+
 export const updateNoteTool: ToolDefinition = {
   name: "update_note",
   description:
@@ -49,7 +52,7 @@ export const updateNoteTool: ToolDefinition = {
         type: "array",
         items: { type: "string", enum: ["content", "summary"] },
         description:
-          "Fields to clear entirely, only when explicitly requested by the user. For section removal, supply the remaining text instead. Never infer clear intent from an empty optional field.",
+          "Fields to empty, only when the user asks to clear the field or to remove text that is all of it. For any other section removal, supply the remaining text instead. Never infer clear intent from an empty optional field.",
       },
       folder: {
         type: "string",
@@ -67,7 +70,7 @@ export const updateNoteTool: ToolDefinition = {
   ): Promise<ToolResult> {
     // Models sometimes send the ID as a numeric string, which get_note accepts.
     const id = typeof args.id === "string" && /^\d+$/.test(args.id) ? Number(args.id) : args.id;
-    const clearFields = args.clear_fields ?? [];
+    const clearFields: unknown = args.clear_fields ?? [];
     const invalid = (argument: string): ToolResult => ({
       success: false,
       data: null,
@@ -78,18 +81,18 @@ export const updateNoteTool: ToolDefinition = {
       (key) => args[key] != null && typeof args[key] !== "string"
     );
     if (invalidField) return invalid(invalidField);
-    if (
-      !Array.isArray(clearFields) ||
-      clearFields.some((field) => field !== "content" && field !== "summary")
-    ) {
-      return invalid("clear_fields");
+    if (!isClearFields(clearFields)) {
+      return invalid('clear_fields (an array of "content" and/or "summary")');
     }
+    const isBlank = (value: unknown): value is string => typeof value === "string" && !value.trim();
     const title = typeof args.title === "string" && args.title.trim() ? args.title : undefined;
     const folderName =
       typeof args.folder === "string" && args.folder.trim() ? args.folder : undefined;
     const updates: Parameters<typeof window.electronAPI.updateNote>[1] = {};
     const ignoredFields: string[] = [];
     if (title) updates.title = title;
+    else if (isBlank(args.title)) ignoredFields.push("title");
+    if (!folderName && isBlank(args.folder)) ignoredFields.push("folder");
     for (const field of ["content", "summary"] as const) {
       const value = args[field];
       const clear = clearFields.includes(field);
@@ -103,14 +106,14 @@ export const updateNoteTool: ToolDefinition = {
       if (clear) updates[field === "summary" ? "enhanced_content" : field] = "";
       else if (typeof value === "string" && value.trim())
         updates[field === "summary" ? "enhanced_content" : field] = value;
-      else if (typeof value === "string") ignoredFields.push(field);
+      else if (isBlank(value)) ignoredFields.push(field);
     }
     if (!Object.keys(updates).length && !folderName) {
       return {
         success: false,
         data: null,
         displayText:
-          "No changes supplied. Blank fields are ignored; use clear_fields only for an explicitly requested whole-field clear.",
+          "No changes supplied. Blank fields are ignored; to empty content or summary (a requested clear, or a removal that leaves nothing), use clear_fields.",
       };
     }
 
@@ -118,8 +121,11 @@ export const updateNoteTool: ToolDefinition = {
     try {
       const note = await window.electronAPI.getNote(id);
       if (context?.signal.aborted) return { success: false, data: null, displayText: "" };
-      if (!note || note.deleted_at) {
+      if (!note) {
         return { success: false, data: null, displayText: `Note with ID ${id} not found` };
+      }
+      if (note.deleted_at) {
+        return { success: false, data: null, displayText: `Note with ID ${id} is in the trash` };
       }
 
       let folderCreated = false;

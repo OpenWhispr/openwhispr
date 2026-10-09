@@ -1498,7 +1498,14 @@ class DatabaseManager {
         )
       `);
       this._initVectorChangeJournal();
-      noteUndo.initializeNoteUndo(this.db);
+      try {
+        noteUndo.initializeNoteUndo(this.db);
+        this.noteUndoReady = true;
+      } catch (error) {
+        // Undo is a convenience: it must never keep the notes database from
+        // opening. Without it, assistant edits save as plain updates.
+        debugLogger.error("Assistant note Undo unavailable", { error: error.message }, "database");
+      }
 
       return true;
     } catch (error) {
@@ -3281,23 +3288,24 @@ class DatabaseManager {
   }
 
   getNoteUndos() {
-    return noteUndo.getNoteUndos(this);
+    return this.noteUndoReady ? noteUndo.getNoteUndos(this) : [];
   }
 
   claimNoteUndo(token) {
-    return noteUndo.claimNoteUndo(this, token);
+    return this.noteUndoReady && noteUndo.claimNoteUndo(this, token);
   }
 
   undoNoteUpdate(token) {
+    if (!this.noteUndoReady) return { success: false, error: "note_changed" };
     return noteUndo.undoNoteUpdate(this, token);
   }
 
   discardNoteUndo(id, token) {
-    return noteUndo.discardNoteUndo(this, id, token);
+    if (this.noteUndoReady) noteUndo.discardNoteUndo(this, id, token);
   }
 
   updateNote(id, updates, options) {
-    if (options?.undoable) {
+    if (options?.undoable && this.noteUndoReady) {
       return noteUndo.updateNoteWithUndo(this, id, updates, options.expected, options.turn);
     }
     try {

@@ -48,7 +48,9 @@ export default function AssistantNoteUndoListener() {
           if (!active || scope !== startScope) return;
           let busy = false;
           const id = toast({
-            title: t("notes.assistantUndo.applied", { title: edit.title }),
+            title: t("notes.assistantUndo.applied", {
+              title: edit.title || t("notes.list.untitled"),
+            }),
             duration: 6000,
             // Only the close button retires the recovery; a toast that timed
             // out leaves it for the editor's discard or the TTL.
@@ -64,13 +66,20 @@ export default function AssistantNoteUndoListener() {
                   try {
                     const result = await window.electronAPI.undoNoteUpdate(edit.token);
                     if (!active) return;
-                    if (result.success) {
-                      syncService.debouncedPush("note", edit.noteId);
+                    // A refusal means the recovery is gone; a failed save keeps
+                    // it, so the toast stays for another try.
+                    const gone = result.success || result.error === "note_changed";
+                    if (gone) {
                       dismissRef.current(id);
                       visible.current.delete(edit.token);
+                    }
+                    if (result.success) {
+                      syncService.debouncedPush("note", edit.noteId);
                     } else {
                       toast({
-                        description: t("notes.assistantUndo.changed"),
+                        description: t(
+                          gone ? "notes.assistantUndo.changed" : "notes.assistantUndo.failed"
+                        ),
                         variant: "destructive",
                       });
                     }
