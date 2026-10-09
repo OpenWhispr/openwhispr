@@ -352,3 +352,99 @@ test("payloadSendsDictionaryBias: nullish or malformed payloads never enable the
   assert.equal(payloadSendsDictionaryBias(undefined), false);
   assert.equal(payloadSendsDictionaryBias("prompt"), false);
 });
+
+// #2581: a prompt-conditioned model recited the hint list after the speech.
+// The real speech dilutes matchesDictionaryPrompt's ratios, so only the
+// trailing list is removed and everything spoken is kept.
+
+test("stripTrailingDictionaryEcho removes a two-term echo appended to speech", async () => {
+  const { matchesDictionaryPrompt, stripTrailingDictionaryEcho } =
+    await import("../../src/utils/dictionaryEchoFilter.js");
+  const text = "Appreciate the time. Thanks, all. Thanks, you. OpenWhispr, n8n.";
+
+  assert.equal(matchesDictionaryPrompt(text, "OpenWhispr, n8n"), false);
+  assert.equal(
+    stripTrailingDictionaryEcho(text, "OpenWhispr, n8n"),
+    "Appreciate the time. Thanks, all. Thanks, you."
+  );
+});
+
+test("stripTrailingDictionaryEcho removes a whole recited list, case and punctuation aside", async () => {
+  const { stripTrailingDictionaryEcho } = await import("../../src/utils/dictionaryEchoFilter.js");
+  const prompt = "OpenWhispr, n8n, Traefik, Tailscale, Claude Code, kubectl";
+
+  assert.equal(
+    stripTrailingDictionaryEcho(
+      "All right. Appreciate the time. Thanks, you. OpenWhispr, n8n, Traefik, Tailscale, Claude Code, kubectl",
+      prompt
+    ),
+    "All right. Appreciate the time. Thanks, you."
+  );
+  assert.equal(
+    stripTrailingDictionaryEcho("Ship it today! traefik, tailscale, claude code,", prompt),
+    "Ship it today!"
+  );
+  assert.equal(
+    stripTrailingDictionaryEcho(
+      "下周发布。OpenWhispr、n8n。",
+      `以下是简体中文。语言、学习、软件、网络。 ${prompt}`
+    ),
+    "下周发布。"
+  );
+});
+
+test("stripTrailingDictionaryEcho keeps a sentence that ends on one dictionary word", async () => {
+  const { stripTrailingDictionaryEcho } = await import("../../src/utils/dictionaryEchoFilter.js");
+  const prompt = "OpenWhispr, n8n, Traefik, Tailscale";
+
+  for (const text of [
+    "The VPN was flaky, so we moved it to Tailscale.",
+    "That was flaky. Tailscale.",
+    "That was flaky. Tailscale, Tailscale.",
+  ]) {
+    assert.equal(stripTrailingDictionaryEcho(text, prompt), text);
+  }
+});
+
+test("stripTrailingDictionaryEcho keeps dictionary terms used inside speech", async () => {
+  const { stripTrailingDictionaryEcho } = await import("../../src/utils/dictionaryEchoFilter.js");
+  const prompt = "OpenWhispr, n8n, Traefik, Tailscale, Claude Code";
+
+  for (const text of [
+    // Leading list, then real speech: only a tail can be an appended echo.
+    "OpenWhispr, n8n. Those are the two tools I set up today.",
+    // Terms mid-sentence, even consecutive ones in prompt order.
+    "Today I wired OpenWhispr, n8n and Traefik together.",
+    "We route it through Traefik, Tailscale.",
+    // Its own sentence, but out of the prompt's order: dictation, not recital.
+    "Which ones did you pick? Tailscale, Traefik.",
+    // One term is a prefix of a spoken word, not the term itself.
+    "It is ready. Open, n8n.",
+    // A spoken word between the terms.
+    "It is ready. OpenWhispr, then n8n.",
+  ]) {
+    assert.equal(stripTrailingDictionaryEcho(text, prompt), text);
+  }
+});
+
+test("stripTrailingDictionaryEcho leaves a whole-response echo to matchesDictionaryPrompt", async () => {
+  const { matchesDictionaryPrompt, stripTrailingDictionaryEcho } =
+    await import("../../src/utils/dictionaryEchoFilter.js");
+
+  assert.equal(
+    stripTrailingDictionaryEcho("OpenWhispr, n8n.", "OpenWhispr, n8n"),
+    "OpenWhispr, n8n."
+  );
+  assert.equal(matchesDictionaryPrompt("OpenWhispr, n8n.", "OpenWhispr, n8n"), true);
+});
+
+test("stripTrailingDictionaryEcho only compares against the prompt it was given", async () => {
+  const { stripTrailingDictionaryEcho } = await import("../../src/utils/dictionaryEchoFilter.js");
+  const text = "Thanks, you. OpenWhispr, n8n.";
+
+  assert.equal(stripTrailingDictionaryEcho(text, null), text);
+  assert.equal(stripTrailingDictionaryEcho(text, ""), text);
+  // Terms the capped prompt never carried cannot have been recited from it.
+  assert.equal(stripTrailingDictionaryEcho(text, "Traefik, Tailscale"), text);
+  assert.equal(stripTrailingDictionaryEcho(null, "OpenWhispr, n8n"), null);
+});

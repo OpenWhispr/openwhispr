@@ -127,6 +127,7 @@ import {
   dictionaryEchoError,
   matchesDictionaryPrompt,
   payloadSendsDictionaryBias,
+  stripTrailingDictionaryEcho,
 } from "../utils/dictionaryEchoFilter.js";
 import { dictionaryPromptLimit, trimDictionaryPrompt } from "../utils/dictionaryPromptCap.js";
 import {
@@ -849,6 +850,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       matchesDictionaryPrompt(text, this.getCustomDictionaryPrompt()) ||
       matchesDictionaryPrompt(text, this.getWhisperPrompt())
     );
+  }
+
+  // Drops a hint list the model recited after the speech (#2581). Pass the
+  // prompt the request actually carried: a capped prompt can only echo itself.
+  stripTrailingDictionaryEcho(text, sentPrompt) {
+    const stripped = stripTrailingDictionaryEcho(text, sentPrompt);
+    if (stripped !== text) {
+      logger.debug(
+        "Stripped trailing dictionary echo",
+        { originalLength: text.length, strippedLength: stripped.length },
+        "transcription"
+      );
+    }
+    return stripped;
   }
 
   setCallbacks({
@@ -3530,11 +3545,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     });
     timings.transcriptionProcessingDurationMs = Math.round(performance.now() - transcriptionStart);
 
-    const rawText = result.text;
-    if (this.isDictionaryEcho(rawText)) {
+    if (this.isDictionaryEcho(result.text)) {
       throw dictionaryEchoError();
     }
-    let processedText = result.text;
+    const rawText = this.stripTrailingDictionaryEcho(result.text, dictionaryPrompt);
+    let processedText = rawText;
     if (processedText) {
       const reasoningStart = performance.now();
       const agentName = getAgentName();
@@ -3742,6 +3757,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           throw new Error(`${proxySpec.displayName} transcription is unavailable in this window`);
         }
         const apiCallStart = performance.now();
+        const proxyDictionaryPrompt = this.getWhisperPrompt(apiSettings);
         const proxyPayload = proxySpec.buildPayload({
           audioBuffer: await optimizedAudio.arrayBuffer(),
           model,
@@ -3749,7 +3765,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           apiSettings,
           managedResolution,
           mimeType: optimizedAudio.type || "audio/webm",
-          dictionaryPrompt: this.getWhisperPrompt(apiSettings),
+          dictionaryPrompt: proxyDictionaryPrompt,
           keyterms: this.getKeyterms()
             .map((t) => t.trim().slice(0, 50))
             .filter(Boolean)
@@ -3771,11 +3787,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           // message (net::ERR_*), so classify the rebuilt error here.
           throw classifyProxyFailure(errorFromIpcResult(result));
         }
-        const proxyText = result?.text;
+        const sendsDictionaryBias = payloadSendsDictionaryBias(proxyPayload);
+        const proxyText = this.stripTrailingDictionaryEcho(
+          result?.text,
+          sendsDictionaryBias ? proxyDictionaryPrompt : null
+        );
         if (!proxyText?.trim()) {
           throw new Error(`No text transcribed - ${proxySpec.displayName} response was empty`);
         }
-        if (payloadSendsDictionaryBias(proxyPayload) && this.isDictionaryEcho(proxyText)) {
+        if (sendsDictionaryBias && this.isDictionaryEcho(result.text)) {
           throw dictionaryEchoError();
         }
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
@@ -4044,10 +4064,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           throw dictionaryEchoError();
         }
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
-        const rawText = result.text;
+        const rawText = this.stripTrailingDictionaryEcho(
+          result.text,
+          model === "orukeet-v0.1.0" ? null : dictionaryPrompt
+        );
 
         const reasoningStart = performance.now();
-        const text = await this.processTranscription(result.text, "openai", wasCancelled);
+        const text = await this.processTranscription(rawText, "openai", wasCancelled);
         timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
 
         const source = (await this.isReasoningAvailable()) ? "openai-reasoned" : "openai";

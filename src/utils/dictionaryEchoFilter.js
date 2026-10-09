@@ -126,6 +126,51 @@ export function isLikelyDictionaryPromptFragment(text, dictionaryPrompt) {
   return analyzeDictionaryPromptFragment(text, dictionaryPrompt).isPromptFragment;
 }
 
+// Prompt-conditioned models can recite the hint list after the speech ends
+// ("... Thanks, you. OpenWhispr, n8n."). matchesDictionaryPrompt cannot see
+// that: the real speech dilutes its word ratios (#2581). The recited tail is a
+// sentence of its own, made only of 2+ prompt entries in the prompt's own
+// order, so that is the only shape removed. A sentence that ends on a single
+// dictionary word, terms used inside speech, and a whole-text echo (left to
+// matchesDictionaryPrompt) are untouched.
+const MIN_TRAILING_ECHO_TERMS = 2;
+// ASCII terminators need trailing whitespace so "Node.js" stays one term; the
+// CJK ones do not, which also splits the Chinese script bias off its terms.
+const SENTENCE_BREAK_RE = /[.!?]\s+|[。！？]\s*/g;
+const PROMPT_TERM_BREAK_RE = /[,、，]|[.!?]\s+|[。！？]\s*/;
+
+export function stripTrailingDictionaryEcho(text, dictionaryPrompt) {
+  if (!text || !dictionaryPrompt) return text;
+
+  const termIndexes = new Map();
+  for (const term of dictionaryPrompt.split(PROMPT_TERM_BREAK_RE)) {
+    const normalizedTerm = normalize(term);
+    if (normalizedTerm && !termIndexes.has(normalizedTerm)) {
+      termIndexes.set(normalizedTerm, termIndexes.size);
+    }
+  }
+
+  const body = text.trimEnd();
+  let tailStart = -1;
+  for (const match of body.matchAll(SENTENCE_BREAK_RE)) {
+    if (match.index + match[0].length < body.length) tailStart = match.index + match[0].length;
+  }
+  if (tailStart <= 0) return text;
+
+  const tailTerms = body.slice(tailStart).split(PROMPT_DELIMITER_RE).map(normalize).filter(Boolean);
+  if (tailTerms.length < MIN_TRAILING_ECHO_TERMS) return text;
+
+  let previousIndex = null;
+  for (const term of tailTerms) {
+    const index = termIndexes.get(term);
+    if (index === undefined) return text;
+    if (previousIndex !== null && index !== previousIndex + 1) return text;
+    previousIndex = index;
+  }
+
+  return body.slice(0, tailStart).trimEnd();
+}
+
 // A provider that never received the dictionary can't echo it back: the echo
 // check only applies when the outgoing payload actually carried dictionary
 // bias (Tinfoil's `prompt`, Mistral's `contextBias`, xAI/Gemini's `keyterms`).
