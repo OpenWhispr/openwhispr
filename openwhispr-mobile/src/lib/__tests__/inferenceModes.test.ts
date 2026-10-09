@@ -43,7 +43,7 @@ it('keeps an explicit upload choice when toggling between Cloud and On-Device', 
   expect(dictationModeConfig(explicit, 'private').inference?.upload).toEqual({ mode: 'local' });
 });
 
-it('keeps the dictation selection in step with the Cloud toggle', () => {
+it('keeps the dictation selection in step with Private mode', () => {
   const config = {
     defaultMode: 'private' as const,
     inference: {
@@ -160,6 +160,91 @@ describe('workflowSaveConfig', () => {
     expect(next).toEqual({
       defaultMode: 'cloud',
       inference: { dictation: { mode: 'openwhispr' } },
+    });
+  });
+
+  describe('where Private mode returns to', () => {
+    const fromProviders: UserConfig = {
+      defaultMode: 'private',
+      privateModeReturn: { pinned: { upload: { mode: 'openwhispr' } } },
+      inference: { dictation: { mode: 'local' } },
+    };
+
+    it('is Bring Your Own Key, with what it held, when Private mode is turned on from it', () => {
+      const config: UserConfig = {
+        defaultMode: 'providers',
+        inference: {
+          dictation: groqDictation,
+          upload: { mode: 'openwhispr' },
+          notes: { mode: 'local' },
+        },
+        pinnedInference: ['upload'],
+      };
+      const next = workflowSaveConfig(config, 'dictation', { mode: 'local' }, 'providers');
+      // Notes is the user's own choice, so only the held upload is recorded.
+      expect(next.privateModeReturn).toEqual({ pinned: { upload: { mode: 'openwhispr' } } });
+      expect(next.inference).toEqual({ dictation: { mode: 'local' }, notes: { mode: 'local' } });
+    });
+
+    it('is not set when Private mode is turned on from Cloud', () => {
+      const config: UserConfig = { defaultMode: 'cloud' };
+      expect(
+        workflowSaveConfig(config, 'dictation', { mode: 'local' }, 'cloud'),
+      ).not.toHaveProperty('privateModeReturn');
+    });
+
+    it('survives picking another on-device model', () => {
+      const next = workflowSaveConfig(
+        fromProviders,
+        'dictation',
+        { mode: 'local', modelId: 'whisper-base' },
+        'private',
+      );
+      expect(next.privateModeReturn).toEqual(fromProviders.privateModeReturn);
+    });
+
+    it.each([
+      ['Cloud', { mode: 'openwhispr' as const }],
+      ['Bring Your Own Key', groqDictation],
+    ])('is cleared when dictation leaves Private mode for %s', (_label, selection) => {
+      const next = workflowSaveConfig(fromProviders, 'dictation', selection, 'private');
+      expect(next).toHaveProperty('privateModeReturn', undefined);
+    });
+
+    it('holds what Bring Your Own Key held when dictation goes back to it', () => {
+      const next = workflowSaveConfig(fromProviders, 'dictation', groqDictation, 'private');
+      expect(next.inference).toEqual({ dictation: groqDictation, upload: { mode: 'openwhispr' } });
+      expect(next.pinnedInference).toEqual(['upload']);
+    });
+
+    it('keeps a choice made in Private mode over what Bring Your Own Key held', () => {
+      const config: UserConfig = {
+        ...fromProviders,
+        inference: {
+          dictation: { mode: 'local' },
+          upload: { mode: 'local', modelId: 'whisper-base' },
+        },
+      };
+      const next = workflowSaveConfig(config, 'dictation', groqDictation, 'private');
+      expect(next.inference?.upload).toEqual({ mode: 'local', modelId: 'whisper-base' });
+      expect(next).not.toHaveProperty('pinnedInference');
+    });
+
+    it('holds workflows on this phone when Private mode was not turned on from it', () => {
+      const config: UserConfig = {
+        defaultMode: 'private',
+        inference: { dictation: { mode: 'local' } },
+      };
+      const next = workflowSaveConfig(config, 'dictation', groqDictation, 'private');
+      expect(next.pinnedInference).toEqual(['upload', 'notes', 'agent']);
+    });
+
+    // Replaying onboarding writes the mode directly, and must not leave a stale return behind.
+    it.each(['cloud', 'private'] as const)('is cleared by choosing %s outright', (mode) => {
+      expect(dictationModeConfig(fromProviders, mode)).toHaveProperty(
+        'privateModeReturn',
+        undefined,
+      );
     });
   });
 });

@@ -16,6 +16,10 @@ export interface UserConfig {
   // Workflows held on the previous mode when dictation moved to Bring Your Own Key,
   // as opposed to ones the user chose; only these are released when dictation leaves it.
   pinnedInference?: MobileInferenceScope[];
+  // Set while Private mode is on after being turned on from Bring Your Own Key, so turning it
+  // off goes back to the last provider rather than to Cloud, with the workflows it held
+  // (pinnedInference) held on the same selections again.
+  privateModeReturn?: { pinned: Partial<Record<MobileInferenceScope, InferenceSelection>> };
   defaultMode: ProcessingMode;
   cleanupEnabled?: boolean;
   autoGenerateNoteTitle?: boolean;
@@ -39,6 +43,8 @@ export interface UserConfig {
   appleLocalIntelligenceEnabled?: boolean;
   // Dictation agent (cloud-only, default on)
   dictationAgentEnabled?: boolean;
+  // Note chat, which once shared dictationAgentEnabled's switch and follows it until set.
+  noteChatEnabled?: boolean;
   dictationAgentName?: string;
   dictationAgentShareContext?: boolean;
 }

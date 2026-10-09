@@ -2,7 +2,7 @@ import type { InferenceSelection } from '@/lib/mobileProviders';
 import { MODE_LABELS } from '@/lib/inferenceModes';
 import { isLocalModelKey, LOCAL_MODEL_TITLES } from '@/lib/localModelCatalog';
 import { providerDisplayName, type MobileInferenceScope } from '@/lib/mobileProviders';
-import type { ProcessingMode, UserConfig } from '@/types';
+import type { InferenceMode, ProcessingMode, UserConfig } from '@/types';
 
 export const WORKFLOW_LABELS: Record<MobileInferenceScope, string> = {
   dictation: 'Dictation',
@@ -21,26 +21,36 @@ export const UNSET_PROVIDER_NOTES: Partial<Record<MobileInferenceScope, string>>
     'Not saved yet. The voice assistant is skipped until you save a selection; note chat uses OpenWhispr Cloud.',
 };
 
-// On-Device mode skips cleanup until On-Device or a provider is saved for it, so the unset
+// Private mode skips cleanup until On-Device or a provider is saved for it, so the unset
 // page picks nothing.
 export const UNSET_ON_DEVICE_CLEANUP_NOTE =
-  'Not saved yet. On-Device mode skips cleanup until you choose On-Device or Bring Your Own Key.';
+  'Not saved yet. Private mode skips cleanup until you choose On-Device or Bring Your Own Key.';
 
 // The same, on an iPhone that can never run On-Device cleanup.
 export const UNSET_UNSUPPORTED_CLEANUP_NOTE =
-  "Not saved yet. This iPhone can't run On-Device cleanup, so On-Device mode skips it until you choose Bring Your Own Key.";
+  "Not saved yet. This iPhone can't run On-Device cleanup, so Private mode skips it until you choose Bring Your Own Key.";
 
-// What On-Device mode means for each workflow other than dictation.
+// What Private mode means for each workflow other than dictation.
 export const ON_DEVICE_MODE_NOTES: Partial<Record<MobileInferenceScope, string>> = {
-  upload:
-    'On-Device mode keeps this on your iPhone. Your choice applies when dictation leaves On-Device.',
+  upload: 'Private mode keeps uploads on this iPhone.',
   notes:
-    'On-Device mode formats notes on this iPhone and asks before sending one to your choice here.',
+    'Private mode formats notes on this iPhone and asks before sending one to your choice here.',
   cleanup:
-    'In On-Device mode, cleanup runs on this iPhone, or sends only the transcript text to your provider with Bring Your Own Key. OpenWhispr Cloud cleanup is skipped until dictation leaves On-Device.',
+    'In Private mode, cleanup runs on this iPhone, or sends only the transcript text to your provider with Bring Your Own Key. OpenWhispr Cloud cleanup is skipped until Private mode is off.',
   agent:
-    'In On-Device mode the voice assistant is off, and note chat asks before sending a note off this iPhone.',
+    'In Private mode the voice assistant is off, and note chat asks before sending a note off this iPhone.',
 };
+
+// Modes Private mode never runs for a workflow, so its page can't offer them as if they would.
+// Dictation keeps Bring Your Own Key, since saving it leaves Private mode (no account needed).
+// Notes and chat keep every mode: Private mode asks before sending a note to the one chosen.
+export const PRIVATE_MODE_LOCKED: Partial<Record<MobileInferenceScope, InferenceMode[]>> = {
+  dictation: ['openwhispr'],
+  upload: ['openwhispr', 'providers'],
+  cleanup: ['openwhispr'],
+};
+
+export const PRIVATE_MODE_LOCKED_REASON = 'Off while Private mode is on. Turn it off in AI Models.';
 
 // A local transcript is cleaned on the phone when cleanup is saved as On-Device.
 export function cleanupSavedOnDevice(config: UserConfig | null): boolean {

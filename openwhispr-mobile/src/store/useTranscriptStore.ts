@@ -369,7 +369,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
         rerouted ?? (provider === current.provider ? current : snapshotTextInference(provider));
       if (provider !== 'local' && activeMode === 'private') {
         throw new Error(
-          'This recording used a remote provider. Leave private mode to retry its original route.',
+          'This recording used a remote provider. Turn off Private Mode in Account → AI Models to retry its original route.',
         );
       }
       const retryCount = (current.retryCount ?? 0) + 1;
