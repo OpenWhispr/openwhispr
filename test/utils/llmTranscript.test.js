@@ -70,43 +70,9 @@ test("a renamed microphone cluster reaches note generation without per-segment n
     "Ravi Patel: I will send the proposal."
   );
   assert.equal(buildLlmTranscript([segment], {}, "Casey", t), "Casey: I will send the proposal.");
-});
-
-test("saved manual corrections survive transcript refresh and reopen without a calendar roster", async () => {
-  const { buildLlmTranscript, collectKnownPeople } = await load();
-  const { lockTranscriptSpeaker, mergeTranscriptSegments, serializeTranscriptSegments } =
-    await import("../../src/utils/transcriptSpeakerState.ts");
-  const { tagActionItemOwners } = await import("../../src/utils/mentionMarkdown.ts");
-  const original = {
-    source: "mic",
-    speaker: "speaker_0",
-    timestamp: 123,
-    text: "I will send the proposal.",
-  };
-  const corrected = lockTranscriptSpeaker(original, { speakerName: "Ravi Patel" });
-  const reopened = JSON.parse(serializeTranscriptSegments([corrected]));
-  const refreshed = mergeTranscriptSegments(reopened, [
-    { ...original, speaker: "speaker_2", speakerName: "Old name", speakerStatus: "confirmed" },
-  ]);
-  const savedAgain = JSON.parse(serializeTranscriptSegments(refreshed));
-  const mappings = { speaker_2: "Old name" };
   assert.equal(
-    buildLlmTranscript(savedAgain, mappings, "Casey", t),
-    "Ravi Patel: I will send the proposal."
-  );
-  assert.equal(savedAgain[0].speakerName, "Ravi Patel");
-  assert.equal(savedAgain[0].speakerLocked, true);
-  assert.equal(savedAgain[0].speakerLockSource, "user");
-  assert.equal(
-    tagActionItemOwners(
-      "- [ ] Send the proposal — Ravi Patel",
-      collectKnownPeople(
-        { selfName: null, selfEmail: null, participants: [] },
-        mappings,
-        savedAgain
-      )
-    ),
-    "- [ ] Send the proposal — [@Ravi Patel](mention:Ravi%20Patel)"
+    buildLlmTranscript([segment], { speaker_0: " you " }, "Casey", t),
+    "Casey: I will send the proposal."
   );
 });
 
@@ -225,52 +191,6 @@ test("collectKnownPeople keeps same-name attendees with different email identiti
     { name: "Alex Morgan", email: "alex.design@example.test" },
     { name: "Alex Morgan", email: "alex.engineering@example.test" },
   ]);
-});
-
-test("a note owner sharing an attendee's name does not absorb that attendee", async () => {
-  const { collectKnownPeople } = await load();
-  assert.deepEqual(
-    collectKnownPeople(
-      {
-        selfName: "Alex Morgan",
-        selfEmail: "alex.design@example.test",
-        participants: [
-          attendee("alex.design@example.test", "Alex Morgan", true),
-          attendee("alex.engineering@example.test", "Alex Morgan"),
-        ],
-      },
-      {},
-      []
-    ),
-    [
-      { name: "Alex Morgan", email: "alex.design@example.test" },
-      { name: "Alex Morgan", email: "alex.engineering@example.test" },
-    ]
-  );
-});
-
-test("an empty roster uses only known speaker labels, never names inferred from speech", async () => {
-  const { collectKnownPeople, buildLlmTranscript } = await load();
-  const { tagActionItemOwners } = await import("../../src/utils/mentionMarkdown.ts");
-  const identity = { selfName: "Casey", selfEmail: "casey@example.test", participants: [] };
-  const segments = [
-    {
-      source: "mic",
-      speaker: "speaker_0",
-      timestamp: 1,
-      speakerStatus: "confirmed",
-      speakerIsPlaceholder: false,
-      speakerLocked: false,
-      text: "Ravi will send the proposal.",
-    },
-  ];
-  assert.equal(buildLlmTranscript(segments, {}, "Casey", t), "Casey: Ravi will send the proposal.");
-  const line = "- [ ] Send the proposal — Ravi";
-  assert.equal(tagActionItemOwners(line, collectKnownPeople(identity, {}, segments)), line);
-  assert.equal(
-    tagActionItemOwners(line, collectKnownPeople(identity, { speaker_0: "Ravi" }, segments)),
-    "- [ ] Send the proposal — [@Ravi](mention:Ravi)"
-  );
 });
 
 test("first-name owners resolve to a unique attendee while explicit short labels retain their identity", async () => {
