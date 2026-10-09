@@ -4,6 +4,7 @@ const {
   ORUKEET_PCM_PROTOCOL,
   ORUKEET_PIPELINE_PROTOCOL,
   ORUKEET_CLEANUP_MODEL,
+  ORUKEET_CLEANUP_RUNTIME_MODELS,
   isOrukeetClientToken,
 } = require("./orukeetProtocol");
 
@@ -252,7 +253,7 @@ class OrukeetStreaming {
                 status: message.cleanup_status,
                 ...(message.cleanup_status === "complete" &&
                 message.cleanup_method === "model" &&
-                message.cleanup_model === ORUKEET_CLEANUP_MODEL
+                ORUKEET_CLEANUP_RUNTIME_MODELS.includes(message.cleanup_model)
                   ? { model: ORUKEET_CLEANUP_MODEL }
                   : {}),
                 processingMs: finiteMetric(message.cleanup_ms),

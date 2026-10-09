@@ -384,19 +384,57 @@ test(
   "ASR arrival timing stays separate from cleanup and only real model work has attribution",
   { timeout: 2500 },
   async (t) => {
-    for (const extra of [
+    for (const { extra, model } of [
       {
-        cleanup_status: "complete",
-        cleanup_method: "model",
-        cleanup_model: "gemma-4-12b",
-        cleanup_ms: 230,
-        cleanup_input_tokens: 31,
-        cleanup_output_tokens: 9,
+        extra: {
+          cleanup_status: "complete",
+          cleanup_method: "model",
+          cleanup_model: "gemma-4-12b",
+          cleanup_ms: 230,
+          cleanup_input_tokens: 31,
+          cleanup_output_tokens: 9,
+        },
+        model: "gemma-4-12b",
       },
-      { cleanup_status: "complete", cleanup_method: "passthrough", cleanup_model: null },
-      { cleanup_status: "fallback" },
-      { cleanup_status: "skipped" },
-      { cleanup_status: "complete", cleanup_method: "model", cleanup_model: "untrusted" },
+      {
+        extra: {
+          cleanup_status: "complete",
+          cleanup_method: "model",
+          cleanup_model: "gemma-4-12B-it-qat",
+          cleanup_ms: 230,
+          cleanup_input_tokens: 31,
+          cleanup_output_tokens: 9,
+        },
+        model: "gemma-4-12b",
+      },
+      {
+        extra: {
+          cleanup_status: "complete",
+          cleanup_method: "passthrough",
+          cleanup_model: "gemma-4-12B-it-qat",
+        },
+      },
+      {
+        extra: {
+          cleanup_status: "fallback",
+          cleanup_method: "model",
+          cleanup_model: "gemma-4-12B-it-qat",
+        },
+      },
+      {
+        extra: {
+          cleanup_status: "skipped",
+          cleanup_method: "model",
+          cleanup_model: "gemma-4-12b",
+        },
+      },
+      {
+        extra: {
+          cleanup_status: "complete",
+          cleanup_method: "model",
+          cleanup_model: "untrusted",
+        },
+      },
     ]) {
       const adapter = fixture(t);
       await adapter.connect(validateSession(session, true));
@@ -409,14 +447,7 @@ test(
       const result = await adapter.finalize();
       assert.ok(result.asrFinalMs < performance.now() - adapter.finalStartedAt - 10);
       assert.equal(result.cleanup.status, extra.cleanup_status);
-      assert.equal(
-        result.cleanup.model,
-        extra.cleanup_status === "complete" &&
-          extra.cleanup_method === "model" &&
-          extra.cleanup_model === "gemma-4-12b"
-          ? "gemma-4-12b"
-          : undefined
-      );
+      assert.equal(result.cleanup.model, model);
       assert.equal(result.cleanup.processingMs, extra.cleanup_ms);
       assert.equal(result.cleanup.inputTokens, extra.cleanup_input_tokens);
     }

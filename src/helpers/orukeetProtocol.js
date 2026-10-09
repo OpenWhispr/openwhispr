@@ -5,6 +5,8 @@ const ORUKEET_PCM_PROTOCOL = "orukeet.pcm.v1";
 const ORUKEET_PIPELINE_PROTOCOL = "orukeet.pipeline.v2";
 const ORUKEET_CLEANUP_VARIANT = "gemma12";
 const ORUKEET_CLEANUP_MODEL = "gemma-4-12b";
+// Older GPU images report their runtime quantization ID in the final event.
+const ORUKEET_CLEANUP_RUNTIME_MODELS = Object.freeze([ORUKEET_CLEANUP_MODEL, "gemma-4-12B-it-qat"]);
 const ORUKEET_SESSION_PATH = "/api/stt/orukeet/session";
 const ORUKEET_PIPELINE_SESSION_PATH = "/api/stt/orukeet/pipeline-session";
 const ORUKEET_PIPELINE_USAGE_PATH = "/api/stt/orukeet/pipeline-usage";
@@ -29,6 +31,7 @@ module.exports = {
   ORUKEET_PIPELINE_PROTOCOL,
   ORUKEET_CLEANUP_VARIANT,
   ORUKEET_CLEANUP_MODEL,
+  ORUKEET_CLEANUP_RUNTIME_MODELS,
   ORUKEET_SESSION_PATH,
   ORUKEET_PIPELINE_SESSION_PATH,
   ORUKEET_PIPELINE_USAGE_PATH,
