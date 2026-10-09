@@ -3239,19 +3239,24 @@
           "description": "參與者的工作流程、痛點、反應和原話"
         },
         "shorten": {
-          "name": "精簡",
-          "description": "把摘要縮短到大約一半",
-          "cta": "精簡摘要"
+          "name": "縮短筆記",
+          "description": "縮短已儲存的 AI 摘要，同時保留關鍵事實",
+          "cta": "縮短筆記"
         },
         "addTldr": {
-          "name": "新增 TL;DR",
-          "description": "在摘要開頭加上兩三句話的 TL;DR",
-          "cta": "新增 TL;DR"
+          "name": "撰寫簡短摘要",
+          "description": "在聊天中撰寫兩到三句話的簡短摘要",
+          "cta": "撰寫簡短摘要"
         },
         "slackUpdate": {
           "name": "Slack 更新",
           "description": "寫一則發到 Slack 的簡短團隊更新",
           "cta": "寫一則 Slack 更新"
+        },
+        "lengthen": {
+          "name": "擴充筆記",
+          "description": "用有依據的細節擴充已儲存的 AI 摘要",
+          "cta": "擴充筆記"
         }
       },
       "errors": {
@@ -3264,12 +3269,10 @@
       },
       "tab": "動作",
       "output": {
-        "auto": "自動",
         "chat": "聊天",
         "summary": "AI 摘要",
-        "chatHint": "在筆記的聊天中回覆，AI 摘要維持不變。",
-        "summaryHint": "編輯筆記的 AI 摘要；如果還沒有摘要，就根據轉錄內容產生一份。",
-        "autoHint": "儲存時讀取提示詞，並選擇聊天或 AI 摘要。"
+        "chatHint": "此動作會在聊天中回覆，不會變更已儲存的 AI 摘要。",
+        "summaryHint": "此內建動作會更新已儲存的 AI 摘要。你可以復原變更。"
       },
       "applied": "已使用 {{name}} 更新 AI 摘要"
     },
@@ -3294,7 +3297,8 @@
       "noSectionsHint": "沒有段落時，背景就是摘要的完整指示。",
       "noTemplates": "尚無範本",
       "emptyEditorTitle": "選擇範本",
-      "emptyEditorDescription": "從列表中選擇一個範本或建立新範本"
+      "emptyEditorDescription": "從列表中選擇一個範本或建立新範本",
+      "outputHint": "套用範本會根據你的筆記和轉錄內容建立或取代 AI 摘要。"
     },
     "empty": {
       "title": "這裡還沒有筆記",
@@ -4663,8 +4667,7 @@
     "close": "關閉聊天",
     "newChat": "新對話",
     "conversationSelector": "切換對話",
-    "history": "歷史記錄",
-    "generateSummary": "產生摘要"
+    "history": "歷史記錄"
   },
   "transcriptionPreview": {
     "label": "預覽",

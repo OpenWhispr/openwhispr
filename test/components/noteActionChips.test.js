@@ -29,7 +29,14 @@ const FOLLOW_UP = action({
   name: "Follow-up email",
   translation_key: "notes.actions.builtin.followUpEmail",
 });
-const SHORTEN = action({ id: 3, client_id: "shorten", name: "Shorten", output: "summary" });
+const SHORTEN = action({
+  id: 3,
+  client_id: "shorten",
+  name: "Make notes shorter",
+  output: "summary",
+  is_builtin: 1,
+  translation_key: "notes.actions.builtin.shorten",
+});
 
 async function load(t, path, initialStorage) {
   installBrowserGlobals(t, { initialStorage });
@@ -64,11 +71,19 @@ const ACTIONS = [
   FOLLOW_UP,
   action({ id: 4, client_id: "todos", name: "Create to-dos" }),
   SHORTEN,
-  action({ id: 5, client_id: "tldr", name: "Add TL;DR", output: "summary" }),
+  action({
+    id: 7,
+    client_id: "lengthen",
+    name: "Make notes longer",
+    output: "summary",
+    is_builtin: 1,
+    translation_key: "notes.actions.builtin.lengthen",
+  }),
+  action({ id: 5, client_id: "tldr", name: "Write TL;DR", output: "chat" }),
   action({ id: 6, client_id: "outline", name: "Create outline" }),
 ];
 
-test("the open chat shows the first four actions as chips that run on click, disabled while they can't", async (t) => {
+test("the centered chat omits Make notes longer without backfilling, preserving click and busy state", async (t) => {
   const ActionChips = await load(t, "/components/notes/ActionChips.tsx");
   const ran = [];
   const props = {
@@ -84,9 +99,17 @@ test("the open chat shows the first four actions as chips that run on click, dis
     chips.map((chip) => chip.key),
     ["2", "4", "3", "5"]
   );
+  const renamed = ACTIONS.map((a) => (a.id === 7 ? { ...a, name: "Notes plus détaillées" } : a));
+  assert.deepEqual(
+    collect(renderTree(ActionChips, { ...props, actions: renamed }))
+      .filter((node) => node.type === "button" && node.props.onClick)
+      .map((node) => node.key),
+    ["2", "4", "3", "5"],
+    "a renamed Make notes longer stays hidden"
+  );
   assert.deepEqual(
     chips.map((chip) => chip.props.disabled),
-    [false, false, true, true],
+    [false, false, true, false],
     "a chip is disabled while its action can't run"
   );
   chips[0].props.onClick();
@@ -145,6 +168,15 @@ test("hovering a chip shows what its action does above the row", async (t) => {
   assert.ok(description(), "the hovered action's description shows");
 
   const card = description().parentNode.parentNode;
+  assert.equal(
+    card.textContent.trim(),
+    "Create to-dosList every to-do",
+    "the hover keeps its title and description without a destination badge"
+  );
+  assert.ok(
+    findElement(card, (el) => el.tagName === "SVG"),
+    "the action icon remains"
+  );
   const followUpChip = findElement(container, (el) => el.tagName === "BUTTON");
   const strip = followUpChip.parentNode;
   const move = (from, to) =>
@@ -175,30 +207,31 @@ test("hovering a chip shows what its action does above the row", async (t) => {
   await pointer("click");
   assert.equal(ran, 1);
   assert.equal(description(), null, "and once the action runs, so it can't cover the reply");
+  await pointer("focusin");
+  assert.ok(description(), "keyboard focus shows the same action preview without running it");
+  assert.equal(ran, 1);
+  await pointer("focusout");
+  assert.equal(description(), null, "moving keyboard focus away dismisses the preview");
 });
 
-test("the docked chips lead with Generate summary, held back while a summary is being written", async (t) => {
+test("Make notes longer stays in docked chips and both All actions menus", async (t) => {
   const ActionChips = await load(t, "/components/notes/ActionChips.tsx");
-  const ran = [];
   const props = {
     actions: ACTIONS,
     canRun: () => true,
-    onRunAction: (a) => ran.push(a.name),
+    onRunAction: () => {},
     onManageActions: () => {},
-    docked: true,
   };
-  const buttons = (generateSummary) =>
-    collect(renderTree(ActionChips, { ...props, generateSummary })).filter(
-      (node) => node.type === "button" && node.props.onClick
+  for (const docked of [false, true]) {
+    const tree = collect(renderTree(ActionChips, { ...props, docked }));
+    const buttons = tree.filter((node) => node.type === "button" && node.props.onClick);
+    assert.deepEqual(
+      buttons.map((node) => node.key),
+      docked ? ["2", "4", "3", "7", "5"] : ["2", "4", "3", "5"]
     );
-
-  const idle = buttons({ run: () => ran.push("summary"), disabled: false });
-  assert.equal(idle.length, 5, "Generate summary, then the first four actions");
-  idle[0].props.onClick();
-  idle[1].props.onClick();
-  assert.deepEqual(ran, ["summary", "Follow-up email"]);
-  assert.equal(buttons({ run: () => {}, disabled: true })[0].props.disabled, true);
-  assert.equal(buttons(undefined).length, 4, "no pill when the note has no template to run");
+    const menu = tree.find((node) => node.props.onManageActions);
+    assert.equal(menu.props.actions, ACTIONS, "All actions still receives every action");
+  }
 
   // All actions (the menu's trigger) leads the docked row and opens toward the chips.
   const order = (docked) =>
@@ -224,7 +257,7 @@ test("the action menu lists every action, then Manage Actions", async (t) => {
   assert.equal(menuItems.length, ACTIONS.length + 1, "every action, then Manage Actions");
   assert.deepEqual(
     menuItems.slice(0, -1).map((item) => item.props.disabled),
-    [false, false, true, true, false]
+    [false, false, true, true, false, false]
   );
   menuItems.at(-2).props.onClick();
   menuItems.at(-1).props.onClick();

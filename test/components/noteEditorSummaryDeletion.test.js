@@ -140,7 +140,7 @@ function baseProps(enhancement) {
   };
 }
 
-async function loadNoteEditor(t) {
+async function loadNoteEditor(t, permission) {
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
@@ -215,6 +215,15 @@ async function loadNoteEditor(t) {
     },
   });
 
+  if (permission) {
+    const { updateShareCache } = await vite.ssrLoadModule("/stores/noteStore.ts");
+    updateShareCache("shared-note", () => ({
+      share: { visibility: "private" },
+      invitations: [],
+      rawToken: null,
+      access: { my_permission: permission },
+    }));
+  }
   const mod = await vite.ssrLoadModule("/components/notes/NoteEditor.tsx");
   const NoteEditor = mod.default;
 
@@ -537,7 +546,7 @@ test("the docked chat holds the conversation and its history, and its chips cont
   await unmount();
 });
 
-test("a chat action from the collapsed picker opens the docked chat, with the actions and Generate summary", async (t) => {
+test("a chat action from the collapsed picker opens the docked chat, with the actions", async (t) => {
   globalThis.__noteActions = [FOLLOW_UP];
   globalThis.__embeddedChatSent = [];
   t.after(() => {
@@ -557,8 +566,7 @@ test("a chat action from the collapsed picker opens the docked chat, with the ac
   assert.equal(chips.docked, true);
   assert.deepEqual(chips.actions, [FOLLOW_UP]);
   assert.equal(docked.props.slashCommands.length, 1, "and offers the same / menu");
-  chips.generateSummary.run();
-  assert.deepEqual(ran, [DEFAULT_TEMPLATE.client_id], "Generate summary runs the default template");
+  assert.deepEqual(ran, []);
   const [[marker, shown, { requestText }]] = globalThis.__embeddedChatSent;
   assert.equal(marker, "new chat", "from the ask bar it starts a new conversation");
   assert.equal(shown, "Follow-up");
@@ -611,4 +619,128 @@ test("a question sent while a reply is still coming waits as the docked chat's d
   assert.deepEqual(globalThis.__embeddedChatSent, []);
   assert.equal(findDockedChat(latest()).props.draftText, "And the budget?");
   await unmount();
+});
+
+for (const surface of ["picker", "floating", "sidebar", "slash"]) {
+  test(`${surface} dispatch, busy states and hints follow the destination`, async (t) => {
+    const rows = [
+      FOLLOW_UP,
+      {
+        ...FOLLOW_UP,
+        id: 4,
+        client_id: "tldr",
+        is_builtin: 1,
+        translation_key: "notes.actions.builtin.addTldr",
+      },
+      {
+        ...FOLLOW_UP,
+        id: 5,
+        client_id: "custom",
+        name: "Make notes shorter",
+        is_builtin: 0,
+        translation_key: null,
+      },
+      ...["shorten", "lengthen"].map((key, i) => ({
+        ...FOLLOW_UP,
+        id: 6 + i,
+        client_id: key,
+        is_builtin: 1,
+        translation_key: `notes.actions.builtin.${key}`,
+        output: "summary",
+      })),
+    ];
+    globalThis.__noteActions = rows;
+    globalThis.__embeddedChatSent = [];
+    t.after(() => {
+      delete globalThis.__noteActions;
+      delete globalThis.__embeddedChatSent;
+      delete globalThis.__embeddedChatAgentState;
+    });
+    let cleanup;
+    t.after(() => cleanup?.());
+    const { render, latest, unmount } = await loadNoteEditor(t);
+    const originalHTMLElement = globalThis.HTMLElement;
+    globalThis.HTMLElement = globalThis.window.HTMLElement;
+    cleanup = async () => {
+      await unmount();
+      if (originalHTMLElement === undefined) delete globalThis.HTMLElement;
+      else globalThis.HTMLElement = originalHTMLElement;
+    };
+    const written = [];
+    const overrides = { onRunNoteAction: (a) => written.push(a.client_id) };
+    await render(ENHANCEMENT, overrides);
+    if (surface === "floating")
+      await React.act(async () => findBottomBar(latest()).props.onInputFocus());
+    if (surface === "sidebar")
+      await React.act(async () => findBottomBar(latest()).props.onAskSubmit("open"));
+    const bar = findBottomBar(latest());
+    const commands =
+      surface === "sidebar"
+        ? findDockedChat(latest()).props.slashCommands
+        : bar.props.slashCommands;
+    const controls =
+      surface === "picker"
+        ? bar.props.actionPicker.props
+        : surface === "sidebar"
+          ? findDockedChat(latest()).props.actionChips.props
+          : bar.props.actionChips.props;
+    // The same dispatch callbacks feed the actual chips and All actions menu.
+    for (const row of rows) {
+      await React.act(async () =>
+        surface === "slash"
+          ? commands.find((c) => c.id === row.client_id).run()
+          : controls.onRunAction(row)
+      );
+    }
+    assert.deepEqual(written, ["shorten", "lengthen"]);
+    assert.equal(globalThis.__embeddedChatSent.length, surface === "sidebar" ? 4 : 3);
+    if (!findDockedChat(latest()))
+      await React.act(async () => findBottomBar(latest()).props.onAskSubmit("reopen"));
+    const currentCommands = findDockedChat(latest()).props.slashCommands;
+    assert.deepEqual(
+      currentCommands.map((c) => c.hint),
+      [
+        "notes.actions.output.chat",
+        "notes.actions.output.chat",
+        "notes.actions.output.chat",
+        "notes.actions.output.summary",
+        "notes.actions.output.summary",
+      ]
+    );
+    globalThis.__embeddedChatAgentState = "streaming";
+    await render(ENHANCEMENT, overrides);
+    assert.deepEqual(
+      findDockedChat(latest()).props.slashCommands.map((c) => c.disabled),
+      [true, true, true, false, false]
+    );
+    globalThis.__embeddedChatAgentState = "idle";
+    await render(ENHANCEMENT, { ...overrides, actionProcessingState: "processing" });
+    assert.deepEqual(
+      findDockedChat(latest()).props.slashCommands.map((c) => c.disabled),
+      [false, false, false, true, true]
+    );
+    await render(ENHANCEMENT, { ...overrides, isRecording: true });
+    assert.equal(findDockedChat(latest()).props.slashCommands, undefined);
+  });
+}
+
+test("a read-only shared note offers no action picker, chips, slash menu or summary generation", async (t) => {
+  globalThis.__noteActions = [FOLLOW_UP];
+  t.after(() => delete globalThis.__noteActions);
+  const { render, latest, unmount } = await loadNoteEditor(t, "viewer");
+  try {
+    await render(undefined, {
+      note: { ...NOTE, cloud_id: "shared-note", enhanced_content: null },
+      onRunNoteAction() {
+        throw new Error("must not run");
+      },
+    });
+    const bar = findBottomBar(latest()).props;
+    assert.ok(!bar.actionPicker);
+    assert.ok(!bar.actionChips);
+    assert.equal(bar.slashCommands, undefined);
+    assert.ok(!bar.callout);
+  } finally {
+    await unmount();
+  }
 });

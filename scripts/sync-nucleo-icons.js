@@ -103,7 +103,6 @@ export {
   SquareSlash,
   Strikethrough,
   Table,
-  TextCursorInput,
 } from "./primitives";
 
 ${exportLines.join("\n")}

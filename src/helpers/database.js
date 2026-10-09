@@ -115,7 +115,11 @@ function toActionItem(row) {
   } catch {
     sections = null;
   }
-  return { ...row, sections };
+  // Destinations are fixed by built-in identity, never by editable copy or stored output.
+  const builtin = BUILTIN_ACTIONS.find((action) => action.translationKey === row.translation_key);
+  const output =
+    row.kind === "template" ? null : builtin?.output === "summary" ? "summary" : "chat";
+  return { ...row, sections, output };
 }
 
 function rowMatchesSnapshot(row, snapshot, fields) {
@@ -649,19 +653,18 @@ class DatabaseManager {
 
       // Built-ins: insert any that are missing, and roll a new default out to rows
       // that are still a previous flat default (never a user edit). A built-in's
-      // kind is fixed, so it is settled whatever the prompt; its output is only
-      // filled in, since the user may point an action at the summary instead.
+      // kind and destination are fixed, regardless of prompt edits.
       const selectBuiltin = this.db.prepare(
-        "SELECT id, prompt, sections FROM actions WHERE is_builtin = 1 AND translation_key = ?"
+        "SELECT id, name, description, prompt, sections FROM actions WHERE is_builtin = 1 AND translation_key = ?"
       );
       const insertBuiltin = this.db.prepare(
         "INSERT INTO actions (name, description, prompt, icon, is_builtin, sort_order, translation_key, client_id, kind, sections, output) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)"
       );
       const upgradeBuiltin = this.db.prepare(
-        "UPDATE actions SET description = ?, prompt = ?, sections = ? WHERE id = ?"
+        "UPDATE actions SET prompt = ?, sections = ? WHERE id = ?"
       );
       const settleBuiltin = this.db.prepare(
-        "UPDATE actions SET client_id = ?, kind = ?, sort_order = ?, output = COALESCE(output, ?) WHERE id = ?"
+        "UPDATE actions SET client_id = ?, kind = ?, sort_order = ?, output = ?, name = ?, description = ?, icon = ? WHERE id = ?"
       );
       for (const action of BUILTIN_ACTIONS) {
         const sections = action.sections ? JSON.stringify(action.sections) : null;
@@ -681,14 +684,25 @@ class DatabaseManager {
           );
           continue;
         }
-        if (existing.sections === null && action.previousPrompts.includes(existing.prompt)) {
-          upgradeBuiltin.run(action.description, action.prompt, sections, existing.id);
+        const upgradesPrompt =
+          existing.sections === null && action.previousPrompts.includes(existing.prompt);
+        if (upgradesPrompt) {
+          upgradeBuiltin.run(action.prompt, sections, existing.id);
         }
         settleBuiltin.run(
           action.translationKey,
           action.kind,
           action.sortOrder,
           action.output,
+          action.previousNames?.includes(existing.name) ? action.name : existing.name,
+          (
+            action.previousDescriptions?.length
+              ? action.previousDescriptions.includes(existing.description)
+              : upgradesPrompt
+          )
+            ? action.description
+            : existing.description,
+          action.icon,
           existing.id
         );
       }

@@ -3606,19 +3606,24 @@
           "description": "Méthode de travail, difficultés, réactions et citations d'un participant"
         },
         "shorten": {
-          "name": "Raccourcir",
-          "description": "Réduire le résumé de moitié environ",
-          "cta": "Raccourcir le résumé"
+          "name": "Raccourcir les notes",
+          "description": "Raccourcir le résumé IA enregistré en conservant les faits essentiels",
+          "cta": "Raccourcir les notes"
         },
         "addTldr": {
-          "name": "Ajouter un TL;DR",
-          "description": "Placer un TL;DR de deux ou trois phrases en tête du résumé",
-          "cta": "Ajouter un TL;DR"
+          "name": "Rédiger un résumé bref",
+          "description": "Rédiger un résumé de deux ou trois phrases dans le chat",
+          "cta": "Rédiger un résumé bref"
         },
         "slackUpdate": {
           "name": "Point Slack",
           "description": "Rédiger un court point d'équipe à publier sur Slack",
           "cta": "Rédiger un point Slack"
+        },
+        "lengthen": {
+          "name": "Développer les notes",
+          "description": "Enrichir le résumé IA enregistré avec des détails étayés par le contenu",
+          "cta": "Développer les notes"
         }
       },
       "errors": {
@@ -3631,12 +3636,10 @@
       },
       "tab": "Actions",
       "output": {
-        "auto": "Auto",
         "chat": "Chat",
         "summary": "Résumé IA",
-        "chatHint": "Répond dans le chat de la note et laisse le résumé IA tel quel.",
-        "summaryHint": "Modifie le résumé IA de la note, ou le rédige à partir de la transcription s'il n'y en a pas encore.",
-        "autoHint": "Lit le prompt à l'enregistrement et choisit le chat ou le résumé IA."
+        "chatHint": "Cette action répond dans le chat. Votre résumé IA enregistré reste inchangé.",
+        "summaryHint": "Cette action intégrée met à jour votre résumé IA enregistré. Vous pouvez annuler la modification."
       },
       "applied": "Résumé IA mis à jour avec {{name}}"
     },
@@ -3661,7 +3664,8 @@
       "noSectionsHint": "Sans sections, le contexte constitue toute la consigne du résumé.",
       "noTemplates": "Aucun modèle pour l'instant",
       "emptyEditorTitle": "Sélectionner un modèle",
-      "emptyEditorDescription": "Choisissez un modèle dans la liste ou créez-en un nouveau"
+      "emptyEditorDescription": "Choisissez un modèle dans la liste ou créez-en un nouveau",
+      "outputHint": "Appliquer un modèle crée ou remplace le résumé IA à partir de vos notes et de la transcription."
     },
     "onboarding": {
       "llm": {
@@ -4739,8 +4743,7 @@
     "close": "Fermer le chat",
     "newChat": "Nouvelle discussion",
     "conversationSelector": "Changer de conversation",
-    "history": "Historique",
-    "generateSummary": "Générer un résumé"
+    "history": "Historique"
   },
   "transcriptionPreview": {
     "label": "Aperçu",

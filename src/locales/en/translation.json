@@ -3606,19 +3606,24 @@
           "description": "Workflow, pain points, reactions, and quotes from a participant"
         },
         "shorten": {
-          "name": "Shorten",
-          "description": "Make the summary about half as long",
-          "cta": "Shorten the summary"
+          "name": "Make notes shorter",
+          "description": "Shorten the saved AI summary while keeping key facts",
+          "cta": "Make notes shorter"
         },
         "addTldr": {
-          "name": "Add TL;DR",
-          "description": "Put a two- or three-sentence TL;DR at the top of the summary",
-          "cta": "Add a TL;DR"
+          "name": "Write TL;DR",
+          "description": "Write a two- or three-sentence TL;DR in chat",
+          "cta": "Write TL;DR"
         },
         "slackUpdate": {
           "name": "Slack update",
           "description": "Write a short team update to post in Slack",
           "cta": "Write a Slack update"
+        },
+        "lengthen": {
+          "name": "Make notes longer",
+          "description": "Expand the saved AI summary with supported detail",
+          "cta": "Make notes longer"
         }
       },
       "errors": {
@@ -3631,12 +3636,10 @@
       },
       "tab": "Actions",
       "output": {
-        "auto": "Auto",
         "chat": "Chat",
         "summary": "AI summary",
-        "chatHint": "Answers in the note's chat and leaves the AI summary as it is.",
-        "summaryHint": "Edits the note's AI summary, or writes one from the transcript if there isn't one yet.",
-        "autoHint": "Reads the prompt when you save and picks the chat or the AI summary."
+        "chatHint": "This action replies in chat. Your saved AI summary stays unchanged.",
+        "summaryHint": "This built-in action updates your saved AI summary. You can undo the change."
       },
       "applied": "AI summary updated with {{name}}"
     },
@@ -3661,7 +3664,8 @@
       "noSectionsHint": "Without sections, the context is the whole instruction for the summary.",
       "noTemplates": "No templates yet",
       "emptyEditorTitle": "Select a template",
-      "emptyEditorDescription": "Choose a template from the list or create a new one"
+      "emptyEditorDescription": "Choose a template from the list or create a new one",
+      "outputHint": "Applying a template creates or replaces the AI summary using your notes and transcript."
     },
     "onboarding": {
       "llm": {
@@ -4739,8 +4743,7 @@
     "close": "Close chat",
     "newChat": "New chat",
     "conversationSelector": "Switch conversation",
-    "history": "History",
-    "generateSummary": "Generate summary"
+    "history": "History"
   },
   "transcriptionPreview": {
     "label": "Preview",

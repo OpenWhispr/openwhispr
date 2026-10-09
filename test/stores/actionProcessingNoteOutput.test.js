@@ -273,11 +273,11 @@ test("a summary action on a note without a summary writes one from the transcrip
   const { store, calls, updates } = await loadStore(t);
   const action = {
     id: 6,
-    client_id: "tldr",
+    client_id: "notes.actions.builtin.lengthen",
     kind: "action",
     output: "summary",
-    name: "TL;DR",
-    prompt: "Add a TL;DR.",
+    name: "Make notes longer",
+    prompt: "Add supported detail.",
   };
 
   store.runBackgroundAction(
@@ -290,7 +290,7 @@ test("a summary action on a note without a summary writes one from the transcrip
   );
 
   await waitFor(() => updates.length > 0, "the note to be written");
-  assert.match(calls[0].config.systemPrompt, /no AI summary yet[\s\S]*Add a TL;DR\.$/);
+  assert.match(calls[0].config.systemPrompt, /no AI summary yet[\s\S]*Add supported detail\.$/);
   assert.equal(calls[0].text, "## Meeting Transcript\nAlice: we ship Friday.");
   assert.equal(calls[0].config.requireCompleteOutput, undefined, "nothing to lose yet");
   assert.deepEqual(Object.keys(updates[0].payload), [
@@ -370,7 +370,7 @@ test("Undo of a first summary clears it with an empty string, which sync can't i
 });
 
 test("a write the database refused offers no Undo and reports the failure", async (t) => {
-  const { store, updates } = await loadStore(t);
+  const { store } = await loadStore(t);
   globalThis.__updateNoteFails = true;
   store.runBackgroundAction(
     17,
@@ -459,4 +459,26 @@ test("a summary that merely contains the marker is still saved", async (t) => {
     assert.equal(updates[index].payload.enhanced_content, reply);
   }
   assert.deepEqual(store.consumeErrorEvents(), []);
+});
+
+test("cancelling a summary action before a provider returns keeps the saved summary and Undo queue unchanged", async (t) => {
+  const { store, calls, updates } = await loadStore(t);
+  let finish;
+  globalThis.__processTextResult = new Promise((resolve) => {
+    finish = resolve;
+  });
+  store.runBackgroundAction(
+    120,
+    "## Current Summary\nOriginal",
+    "hash",
+    { kind: "action", name: "Shorten", prompt: "Revise" },
+    { isCloudMode: true, fromSummary: true },
+    LABELS
+  );
+  await waitFor(() => calls.length === 1, "provider start");
+  store.cancelAction(120);
+  finish("A late reply");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(updates, []);
+  assert.deepEqual(store.consumeAppliedEvents(), []);
 });

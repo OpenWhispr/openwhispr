@@ -1523,19 +1523,7 @@ export default function NoteEditor({
           activeConversationId={embeddedChat.activeConversationId}
           onSwitchConversation={embeddedChat.switchConversation}
           onNewChat={embeddedChat.startNewChat}
-          actionChips={
-            offersActions && (
-              <ActionChips
-                {...chipProps}
-                docked
-                generateSummary={
-                  canRunTemplate && noteTemplate
-                    ? { run: () => onRunNoteAction?.(noteTemplate), disabled: isActionRunning }
-                    : undefined
-                }
-              />
-            )
-          }
+          actionChips={offersActions && <ActionChips {...chipProps} docked />}
           slashCommands={actionCommands}
         />
       )}
