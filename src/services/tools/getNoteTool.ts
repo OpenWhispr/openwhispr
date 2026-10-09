@@ -4,7 +4,7 @@ import { withoutAttendeesFence } from "../../utils/noteAttendees";
 export const getNoteTool: ToolDefinition = {
   name: "get_note",
   description:
-    "Get the full content of a specific note by ID. Use search_notes first to find the note ID.",
+    "Get a note's separate personal content, saved AI summary, and source transcript by ID. Read before editing to identify the intended field. Use search_notes first if the note ID is unknown.",
   parameters: {
     type: "object",
     properties: {
@@ -38,7 +38,9 @@ export const getNoteTool: ToolDefinition = {
         data: {
           id: note.id,
           title: withoutAttendeesFence(note.title),
-          content: withoutAttendeesFence(note.enhanced_content || note.content),
+          content: withoutAttendeesFence(note.content),
+          summary: withoutAttendeesFence(note.enhanced_content ?? ""),
+          transcript: withoutAttendeesFence(note.transcript ?? ""),
           type: note.note_type,
           folder_id: note.folder_id,
           created_at: note.created_at,

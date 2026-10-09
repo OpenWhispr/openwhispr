@@ -20,6 +20,7 @@ import {
   SUMMARY_ACTION_FROM_MATERIAL_PROMPT,
   SUMMARY_ACTION_SYSTEM_PROMPT,
 } from "./builtinActions.js";
+import { SOURCE_FIDELITY_RULE } from "./sourceFidelity.js";
 
 /**
  * Trimmed sections whose heading has text besides Markdown heading marks ("#"s
@@ -43,7 +44,8 @@ export function normalizeSections(value) {
  * material preamble, everything else the generic system prompt.
  */
 export function compileTemplatePrompt(template, { isMeetingNote = false } = {}) {
-  const preamble = isMeetingNote ? MEETING_INPUT_PREAMBLE : NOTE_INPUT_PREAMBLE;
+  const preamble =
+    SOURCE_FIDELITY_RULE + "\n\n" + (isMeetingNote ? MEETING_INPUT_PREAMBLE : NOTE_INPUT_PREAMBLE);
   const sections = normalizeSections(template.sections);
   if (sections.length > 0) {
     const context = (template.prompt ?? "").trim();
@@ -66,17 +68,27 @@ export function compileTemplatePrompt(template, { isMeetingNote = false } = {}) 
   if (template.translation_key && STANDALONE_PROMPT_KEYS.has(template.translation_key)) {
     return preamble + template.prompt;
   }
-  return (isMeetingNote ? MEETING_SYSTEM_PROMPT : BASE_SYSTEM_PROMPT) + template.prompt;
+  return (
+    SOURCE_FIDELITY_RULE +
+    "\n\n" +
+    (isMeetingNote ? MEETING_SYSTEM_PROMPT : BASE_SYSTEM_PROMPT) +
+    template.prompt
+  );
 }
 
 export function compileSummaryActionPrompt(action, { fromSummary, isMeetingNote = false }) {
-  if (fromSummary) return SUMMARY_ACTION_SYSTEM_PROMPT + action.prompt;
+  if (fromSummary)
+    return SOURCE_FIDELITY_RULE + "\n\n" + SUMMARY_ACTION_SYSTEM_PROMPT + action.prompt;
   const preamble = isMeetingNote ? MEETING_INPUT_PREAMBLE : NOTE_INPUT_PREAMBLE;
-  return preamble + SUMMARY_ACTION_FROM_MATERIAL_PROMPT + action.prompt;
+  return (
+    SOURCE_FIDELITY_RULE + "\n\n" + preamble + SUMMARY_ACTION_FROM_MATERIAL_PROMPT + action.prompt
+  );
 }
 
 export function compileChatActionPrompt(action, { fromSummary }) {
   return (
+    SOURCE_FIDELITY_RULE +
+    "\n\n" +
     (fromSummary ? CHAT_ACTION_ON_SUMMARY_PREAMBLE : CHAT_ACTION_ON_MATERIAL_PREAMBLE) +
     action.prompt
   );

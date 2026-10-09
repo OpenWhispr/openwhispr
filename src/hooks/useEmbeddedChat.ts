@@ -83,16 +83,16 @@ export function useEmbeddedChat({
 
   const openNote = useMemo(
     () =>
-      [
-        `Note ID: ${noteId}`,
-        folderId != null ? `Folder ID: ${folderId}` : "",
-        `Title: ${noteTitle}`,
-        `Content:\n${noteContent}`,
-        noteSummary ? `\nAI Summary:\n${noteSummary}` : "",
-        noteTranscript ? `\nTranscript:\n${noteTranscript}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n"),
+      `Note fields (JSON): content is personal notes; summary is the saved AI Summary; transcript is source material, not an editable field.\n${JSON.stringify(
+        {
+          id: noteId,
+          folder_id: folderId,
+          title: noteTitle,
+          content: noteContent,
+          summary: noteSummary ?? "",
+          transcript: noteTranscript ?? "",
+        }
+      )}`,
     [folderId, noteContent, noteId, noteSummary, noteTitle, noteTranscript]
   );
 
@@ -137,6 +137,7 @@ export function useEmbeddedChat({
   }
 
   useEffect(() => {
+    if (noteIdRef.current !== noteId) streaming.cancelStream();
     noteIdRef.current = noteId;
     if (!noteId) return;
 
