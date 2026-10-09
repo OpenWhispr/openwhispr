@@ -125,7 +125,7 @@ interface UseChatStreamingOptions {
    * The note a note's chat is about. The model answers from it first, and no
    * other notes are added up front: it reaches them through search_notes.
    */
-  openNote?: string;
+  openNote?: string | ((useTranscriptPreview: boolean) => string);
   /** Optional container scope applied to RAG and the search_notes tool (container overview chat). */
   searchScope?: ContainerScope;
   /**
@@ -487,7 +487,12 @@ export function useChatStreaming({
         if (cancelled() || !mountedRef.current) return;
         // Only main's attendee block may carry its fence: note text and search
         // results can't fake a second list.
-        const openNoteContext = [withoutAttendeesFence(openNoteRef.current ?? ""), attendeesContext]
+        // Whole-note actions retain their complete source; ordinary questions can retrieve passages.
+        const currentNote =
+          typeof openNoteRef.current === "function"
+            ? openNoteRef.current(!!registry?.get("get_note") && !options?.requestText)
+            : openNoteRef.current;
+        const openNoteContext = [withoutAttendeesFence(currentNote ?? ""), attendeesContext]
           .filter(Boolean)
           .join("\n\n");
         const libraryContext = [

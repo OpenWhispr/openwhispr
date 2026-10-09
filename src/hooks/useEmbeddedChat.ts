@@ -4,6 +4,7 @@ import { useChatStreaming, type SendToAIOptions } from "../components/chat/useCh
 import { useChatMessageSender } from "../components/chat/useChatMessageSender";
 import type { Message, AgentState } from "../components/chat/types";
 import { deriveConversationTitle } from "../lib/conversationTitle";
+import { transcriptPage } from "../utils/transcriptEvidence";
 import { attendeesForUser } from "../utils/noteAttendees";
 import type { CalendarAttendee } from "../types/calendar";
 import type { NoteAttendeesRequest } from "../types/connectors";
@@ -82,7 +83,7 @@ export function useEmbeddedChat({
   });
 
   const openNote = useMemo(
-    () =>
+    () => (useTranscriptPreview: boolean) =>
       `Note fields (JSON): content is personal notes; summary is the saved AI Summary; transcript is source material, not an editable field.\n${JSON.stringify(
         {
           id: noteId,
@@ -90,7 +91,9 @@ export function useEmbeddedChat({
           title: noteTitle,
           content: noteContent,
           summary: noteSummary ?? "",
-          transcript: noteTranscript ?? "",
+          ...(useTranscriptPreview
+            ? transcriptPage(noteTranscript ?? "")
+            : { transcript: noteTranscript ?? "" }),
         }
       )}`,
     [folderId, noteContent, noteId, noteSummary, noteTitle, noteTranscript]

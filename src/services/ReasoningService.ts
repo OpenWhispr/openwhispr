@@ -20,6 +20,7 @@ import {
   llmRequestTimeoutError,
 } from "../helpers/llmRequestTimeout.js";
 import { streamText, stepCountIs } from "ai";
+import { compactTranscriptHistory } from "./ai/transcriptHistory";
 import { getAIModel } from "./ai/providers";
 import { createEnterpriseChatModel } from "./ai/enterpriseChatModel";
 import { getManagedScopeResolution } from "../stores/enterpriseIdentityStore";
@@ -939,6 +940,7 @@ class ReasoningService extends BaseReasoningService {
       })) as import("ai").ModelMessage[],
       tools: tools || undefined,
       stopWhen: stepCountIs(tools ? ReasoningService.MAX_TOOL_STEPS : 1),
+      prepareStep: ({ messages }) => ({ messages: compactTranscriptHistory(messages) }),
       abortSignal: abortController.signal,
       ...(useTemperature ? { temperature: config.temperature ?? 0.3 } : {}),
       maxOutputTokens: config.maxTokens || 4096,
@@ -1232,6 +1234,7 @@ class ReasoningService extends BaseReasoningService {
       if (operationWasCancelled()) return;
       // The screenshot rides every step of the tool loop so the model keeps
       // its vision after tool results come back.
+      currentMessages = compactTranscriptHistory(currentMessages);
       const ipcStream = this.streamFromIPC(currentMessages, {
         systemPrompt: config.systemPrompt,
         tools: config.tools,
