@@ -89,17 +89,12 @@ export function collectKnownPeople(
   const push = (name: string | null | undefined, email: string | null | undefined) => {
     const trimmed = name?.trim();
     if (!trimmed) return;
-    const key = trimmed.toLowerCase();
+    const key = trimmed.replace(/\s+/g, " ").toLowerCase();
     const address = email?.trim() || null;
     const existing = byName.get(key) ?? [];
     if (existing.length > 0) {
       if (!address || existing.some((p) => p.email?.toLowerCase() === address.toLowerCase()))
         return;
-      const nameOnly = existing.find((p) => !p.email);
-      if (nameOnly) {
-        nameOnly.email = address;
-        return;
-      }
     }
     const person = { name: trimmed, email: address };
     existing.push(person);

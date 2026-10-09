@@ -794,6 +794,38 @@ test("ambiguous owners remain editable plain text beside saved attendee chips", 
   assert.doesNotMatch(notes.saved(), /mention:alex\./);
   assert.deepEqual(notes.errors, []);
 });
+
+test("a manually chosen same-name attendee survives checkbox editing and reopening", async (t) => {
+  const { tagActionItemOwners, buildMentionMarkdown } =
+    await import("../../src/utils/mentionMarkdown.ts");
+  const people = [
+    { name: "Alex Morgan", email: "alex.design@example.test" },
+    { name: "Alex Morgan", email: "alex.engineering@example.test" },
+  ];
+  const markdown = `- [ ] Send the proposal — ${buildMentionMarkdown(people[1])}`;
+  const notes = await mountNotes(t, markdown);
+  assert.equal(
+    notes.host.querySelector("span[data-mention]").getAttribute("title"),
+    "alex.engineering@example.test"
+  );
+  await notes.act(() => {
+    notes.editor().commands.setTextSelection(3);
+    notes.editor().commands.updateAttributes("taskItem", { checked: true });
+  });
+  const saved = notes.saved();
+  assert.match(saved, /\[x\] Send the proposal/);
+  assert.match(saved, /mention:alex.engineering%40example.test/);
+  assert.doesNotMatch(saved, /mention:alex.design/);
+  const reopened = tagActionItemOwners(saved, [...people].reverse());
+  assert.equal(reopened, saved);
+  await notes.act(() => notes.editor().commands.setContent(reopened));
+  assert.equal(markdownOf(notes.editor()), saved.trim());
+  assert.equal(
+    notes.host.querySelector("span[data-mention]").getAttribute("title"),
+    "alex.engineering@example.test"
+  );
+  assert.deepEqual(notes.errors, []);
+});
 const clickButton = (element) => {
   element.dispatchEvent(
     new happyWindow.MouseEvent("mousedown", { bubbles: true, cancelable: true, button: 0 })

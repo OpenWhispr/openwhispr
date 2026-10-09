@@ -92,19 +92,33 @@ test("normalizing a display name must not hide conflicting attendee emails", asy
   );
 });
 
-test("duplicate records and name-only speaker labels retain the known attendee email", async () => {
+test("duplicate records retain the known attendee email", async () => {
   const { tagActionItemOwners } = await load();
   const attendee = { name: "Alex Morgan", email: "alex@example.test" };
   for (const people of [
     [attendee, { ...attendee }],
     [attendee, { ...attendee, email: "ALEX@example.test" }],
-    [{ ...attendee, email: null }, attendee],
-    [attendee, { ...attendee, email: null }],
   ]) {
     assert.equal(
       tagActionItemOwners("- [ ] Send the proposal — Alex", people),
       "- [ ] Send the proposal — [@Alex Morgan](mention:alex%40example.test)"
     );
+  }
+});
+
+test("a name-only identity does not inherit a same-name person's email", async () => {
+  const { tagActionItemOwners } = await load();
+  const attendee = { name: "Alex Morgan", email: "alex@example.test" };
+  const unnamedAddress = { ...attendee, email: null };
+  for (const people of [
+    [unnamedAddress, attendee],
+    [attendee, unnamedAddress],
+    [attendee, unnamedAddress, attendee],
+  ]) {
+    for (const owner of ["Alex Morgan", "Alex"]) {
+      const line = `- [ ] Send the proposal — ${owner}`;
+      assert.equal(tagActionItemOwners(line, people), line);
+    }
   }
 });
 

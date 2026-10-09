@@ -72,6 +72,44 @@ test("a renamed microphone cluster reaches note generation without per-segment n
   assert.equal(buildLlmTranscript([segment], {}, "Casey", t), "Casey: I will send the proposal.");
 });
 
+test("saved manual corrections survive transcript refresh and reopen without a calendar roster", async () => {
+  const { buildLlmTranscript, collectKnownPeople } = await load();
+  const { lockTranscriptSpeaker, mergeTranscriptSegments, serializeTranscriptSegments } =
+    await import("../../src/utils/transcriptSpeakerState.ts");
+  const { tagActionItemOwners } = await import("../../src/utils/mentionMarkdown.ts");
+  const original = {
+    source: "mic",
+    speaker: "speaker_0",
+    timestamp: 123,
+    text: "I will send the proposal.",
+  };
+  const corrected = lockTranscriptSpeaker(original, { speakerName: "Ravi Patel" });
+  const reopened = JSON.parse(serializeTranscriptSegments([corrected]));
+  const refreshed = mergeTranscriptSegments(reopened, [
+    { ...original, speaker: "speaker_2", speakerName: "Old name", speakerStatus: "confirmed" },
+  ]);
+  const savedAgain = JSON.parse(serializeTranscriptSegments(refreshed));
+  const mappings = { speaker_2: "Old name" };
+  assert.equal(
+    buildLlmTranscript(savedAgain, mappings, "Casey", t),
+    "Ravi Patel: I will send the proposal."
+  );
+  assert.equal(savedAgain[0].speakerName, "Ravi Patel");
+  assert.equal(savedAgain[0].speakerLocked, true);
+  assert.equal(savedAgain[0].speakerLockSource, "user");
+  assert.equal(
+    tagActionItemOwners(
+      "- [ ] Send the proposal — Ravi Patel",
+      collectKnownPeople(
+        { selfName: null, selfEmail: null, participants: [] },
+        mappings,
+        savedAgain
+      )
+    ),
+    "- [ ] Send the proposal — [@Ravi Patel](mention:Ravi%20Patel)"
+  );
+});
+
 test("system segments resolve name → mapping → Speaker N → Them", async () => {
   const { resolveLlmSpeakerLabel } = await load();
   const locked = {
@@ -248,9 +286,33 @@ test("first-name owners resolve to a unique attendee while explicit short labels
     tagActionItemOwners(line, collectKnownPeople(identity, { speaker_0: "Ravi Patel" }, [])),
     "- [ ] Send the proposal — [@Ravi Patel](mention:ravi%40example.test)"
   );
+  assert.equal(
+    tagActionItemOwners(line, collectKnownPeople(identity, { speaker_0: " Ravi  Patel " }, [])),
+    "- [ ] Send the proposal — [@Ravi Patel](mention:ravi%40example.test)"
+  );
   // A name-only label is not evidence that it belongs to the similarly named invitee.
   assert.equal(
     tagActionItemOwners(line, collectKnownPeople(identity, { speaker_0: "Ravi" }, [])),
     "- [ ] Send the proposal — [@Ravi](mention:Ravi)"
   );
+});
+
+test("an owner without an email stays distinct from a same-name invitee", async () => {
+  const { collectKnownPeople } = await load();
+  const { tagActionItemOwners } = await import("../../src/utils/mentionMarkdown.ts");
+  const people = collectKnownPeople(
+    {
+      selfName: "Alex Morgan",
+      selfEmail: null,
+      participants: [attendee("alex.other@example.test", "Alex Morgan")],
+    },
+    {},
+    []
+  );
+  assert.deepEqual(people, [
+    { name: "Alex Morgan", email: null },
+    { name: "Alex Morgan", email: "alex.other@example.test" },
+  ]);
+  const line = "- [ ] Send the proposal — Alex Morgan";
+  assert.equal(tagActionItemOwners(line, people), line);
 });

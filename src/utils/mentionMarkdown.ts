@@ -51,13 +51,7 @@ function buildNameIndex(people: MentionPerson[]): NameIndex {
     }
     const existing = byFullName.get(name);
     if (!existing) continue;
-    if (!existing.email && person.email) {
-      byFullName.set(name, person);
-    } else if (
-      existing.email &&
-      person.email &&
-      existing.email.trim().toLowerCase() !== person.email.trim().toLowerCase()
-    ) {
+    if (existing.email?.trim().toLowerCase() !== person.email?.trim().toLowerCase()) {
       byFullName.set(name, null);
     }
   }
