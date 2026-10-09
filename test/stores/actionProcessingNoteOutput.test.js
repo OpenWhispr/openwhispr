@@ -80,7 +80,7 @@ async function waitFor(predicate, label) {
   throw new Error(`timed out waiting for ${label}`);
 }
 
-test("standalone templates and summary actions keep fidelity out of the saved summary", async (t) => {
+test("templates and summary actions carry source fidelity once, apart from the material and the saved summary", async (t) => {
   const { SOURCE_FIDELITY_RULE } = await import("../../src/helpers/sourceFidelity.js");
   const { BUILTIN_ACTIONS } = await import("../../src/helpers/builtinActions.js");
   const { store, calls, updates } = await loadStore(t);
