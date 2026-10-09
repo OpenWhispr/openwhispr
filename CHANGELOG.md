@@ -7,14 +7,136 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+## [1.10.3] - 2026-10-09
 
-- **Idle OpenWhispr no longer keeps a vector database and an inference process running.** The Qdrant sidecar and the embedding model started on every launch and stayed up for the whole session, and the meeting detectors ran from boot even with meeting notifications turned off. Semantic search now starts on the first assistant search, serves keyword results while it warms up, and releases Qdrant and the embedding session after five minutes without a search. Note edits made while it is asleep are journaled in the notes database and indexed on the next activation, so search results stay complete. The microphone and meeting-app detectors start only once your saved notification preferences are loaded, stop when meeting notifications are off, and a detector stopped mid-scan can no longer come back reporting a meeting app. (#2143)
+The assistant can act in other apps: it drafts and sends email, posts to Slack, and searches, files and comments on Linear and GitHub issues, always behind a card you approve. Notes get templates for the AI Summary, actions that answer in a docked chat, and real tables with a formatting toolbar. An idle OpenWhispr no longer keeps a vector database and an inference process running, and failures from your own API keys read as plain language with a way to fix them. Teams meetings on Windows record everyone for the whole call, Linux composites on the GPU again, OpenWhispr Cloud dictation streams while you talk, and a long list of transcription, dictation, meeting and platform bugs are closed.
+
+### Assistant and connectors
+
+- **The assistant can draft email and look up contacts.** From typed chat or the voice panel, the assistant opens a pre-filled draft in Gmail, Outlook on the web (work or Outlook.com) or your default mail app, and finds a person's address from your calendar meetings and contacts. You review the draft and press Send yourself. Connectors are available on paid plans and follow your organization's policy, which fails closed. (#2331)
+- **Post to Slack after approval.** With Slack connected under Settings → Integrations → Connectors, the assistant can post a message as you. Nothing reaches Slack until you press **Send** on a card showing exactly what will go out. (#2369)
+- **Send email through Gmail, and connectors in note chat.** With Gmail connected, a drafted email becomes an editable card in the chat and is sent through the Gmail API only when you press **Send**. Every note's chat now gets the connector tools, and a meeting note puts its attendees in the chat's context. (#2385)
+- **Linear and GitHub issues from chat.** The assistant can search Linear issues and GitHub issues and pull requests, and create an issue or comment on one as you. Search results reach the model marked as untrusted, and every write goes through the approval card. GitHub works only in repositories where you installed the OpenWhispr GitHub App, which can't read code. (#2391, #2401, #2402)
+- **Follow-ups no longer redo a sent action.** History told the model which tools ran but not what they did, so answering a follow-up question could create a second issue or send an email again. Earlier turns now record each action's outcome. (#2575)
+- **Drafted emails are signed with your name** instead of a `[Your Name]` placeholder that could go out as written. With no name on the account, the email has no signature line. (#2576)
+- **The assistant knows what it can and can't do.** The prompt lists the tools on offer grouped by capability, names integrations that exist but aren't connected yet and how to enable them, and history shows the model which tools it used in earlier turns, so it stops answering "I don't have access to the web" when web search is right there. (#2503)
+- **Answers paste as plain text unless the app keeps Markdown.** A voice-command answer pasted at the caret arrived with `**bold**` as literal asterisks. Markdown editors, AI prompt boxes, Markdown chat tools and code editors keep Markdown; everything else gets plain text. (#2189)
+- **Questions about a selection open in the panel.** With text highlighted, "explain this" pasted the explanation over the selection. The edit model now tells an edit from a question, and a question is answered in the panel with the selection quoted. (#2577)
+- **Selection edits on local models are more reliable.** The bundled local model returns edits as structured JSON, short spoken words before the assistant's name are kept, and errors use selection-specific wording instead of dictation-cleanup text. (#2523)
 - **Assistant selection capture handles dormant macOS accessibility trees.** When accessibility exposes only a browser or Electron window, selection capture now tries a synthetic copy instead of assuming nothing is selected. The caret probe also waits long enough for its native retries to finish. Automatic answer delivery still requires a verified writable field at capture and delivery time: an unknown target keeps the answer in the panel and, with Auto-Paste enabled, copies it for manual paste. Dormant inputs still require manual paste because an empty copy cannot distinguish them from an integrated terminal, a page without an input, or some live selections. (#1952)
+- **Markdown images in replies are links, not fetches.** An image in an assistant or chat reply was fetched as soon as it rendered, so a prompt injection in a note, calendar event, web result or the clipboard could send data to a third-party server. Images now render as links that open only on click. (#2413)
+- **Note cards appear on BYOK and local models.** Tool results that carried data were dropped on those paths, so note cards only rendered on OpenWhispr Cloud. (#2346)
+- **`<br>` in table cells renders as a line break** in chat, note chat, folder chat and the assistant panel; every other HTML tag stays escaped. (#2572)
+- **Folder and space chats keep replies in the right conversation.** Switching conversations or starting a new chat mid-reply saved the reply into the newly selected conversation, and a question sent while the previous one was still being sent could be dropped. (#2433)
+
+### Notes
+
+- **Templates for the AI Summary, and actions that answer in chat.** Every note action used to overwrite the AI summary, so running Follow-up email replaced a meeting's summary with an email. Templates (a context plus ordered sections) now decide what the AI Summary looks like and always write it from the note's own material; the default "AI Summary" writes what the app always did. Actions are prompts run over a note: **Make notes shorter** and **Make notes longer** update the summary with a six-second Undo, and every other action, including your own, answers in the note's chat. Pick a template from the AI Summary tab, run actions from the chips above the ask bar or the `/` menu, and manage both in one dialog. A recording with nothing substantive in it gets a neutral notice instead of a placeholder summary. (#2397, #2578)
+- **The note chat lives in a docked panel and answers from the open note.** The ask bar starts conversations, and the panel beside the note holds them. The chat used to answer from other notes, because nothing told the model which note was open; it now answers from that note, says when the note doesn't cover a question, and searches other notes only when you ask it to. (#2557, #2562, #2574)
+- **Assistant edits land in the right field.** Removing a section from the AI Summary through chat could only write your own notes. The note tools now expose your notes, the AI Summary and the transcript separately. (#2588)
+- **Action items keep the right person.** When two attendees share a name, an action item no longer picks up whichever email comes first, and speaker names you corrected are applied before notes are generated. (#2587)
+- **Tables in the note editor, and a formatting toolbar.** A table written on mobile, through the API, by the assistant or by a note action was flattened into one run-on paragraph the first time the note was edited on desktop. Tables now render and stay editable, stored as GFM pipe tables. Selected text shows a formatting toolbar, and an empty line shows it below the caret. (#2255, #2509)
+- **Long recordings are summarized in parts when a local model can't fit them.** On a 16 GB Mac the recommended local models capped out near 16k tokens and refused long meetings. The summary now runs in parts and joins them. (#2172)
+- **Join & transcribe no longer crashes the note editor** with "The editor view is not available". (#2404)
+- **The tab strip stays in sync when the AI Summary is deleted.** The highlight stayed lit where the tab used to be, with no tab selected. (#2302)
+- **Header controls no longer overlap in narrow panes.** While recording, the tabs stack above the timer and sharing controls instead of covering them. (#2430)
+- **TXT export keeps literal text.** `report_final.csv`, `2 * 3` and code blocks lost their underscores, asterisks and paths. (#2456, thanks @hsusul)
+- **Export save dialogs no longer conflict over extensions** on macOS for `.md`, `.srt`, `.json` and `.txt`. (#2295)
+- **Copy link no longer breaks emailed invitations.** Without a raw share token, Copy link rotated it, which broke every invitation already sent; invite-only notes now copy the invitation link, and access rows granted through a space or workspace no longer offer controls the server rejects. (#2360)
+- **Team space is no longer in the New note dropdown;** create one from the Notes sidebar. (#2429)
 
 ### Meetings
 
 - **Teams meetings that recorded only your own voice.** Windows hands our native capture the audio of every app except ours — but not Microsoft Teams call audio, which arrives as digital silence no matter which process we aim at or which format we ask for, while the same audio is plainly there on the output device. Since 1.9.2 a recording that hit this switched to the fallback capture a few seconds in, except that the switch was armed only until the first sound we could hear: one notification, or Teams' own join chime, disarmed it, and the rest of the call was recorded without the other participants, with no warning beyond a generic “audio has gone quiet” three minutes later. The check now runs for the whole meeting and compares what we capture against what your speakers are really playing, so a call that goes missing after an earlier sound still switches over. The fallback only takes over once it hears audio our capture is missing, so a false alarm never drops a capture that was working. A meeting spent alongside continuously playing audio, such as music in a browser tab, can still mask it. (#1265, thanks @jaszczurovsky for the report, @TaiFeng and @jsholcomb for the workarounds, @wadamek65 and @KishenG for confirming, and @amarpreet2209 for finding in #1866 that the fallback capture hears Teams)
+- **Echo cancellation for meetings.** An opt-in toggle under Settings → Speech-to-Text → Note Recording for when speaker audio leaks into the mic track. (#1135, thanks @sochotnicky)
+- **Choose a folder from the meeting notification.** A split button lets you search folders, or create one in Private or a shared space, before notes start. (#2511)
+- **Live speaker identification on Linux.** The PipeWire capture dropped a fraction of a sample per buffer, so the identifier drifted almost a second behind over 15 minutes; with that fixed, Linux gets live speaker names like macOS and Windows. (#2453, thanks @kuleje)
+- **A reload no longer drops the live transcript.** Signing in or out, SSO and the crash screen's Reload could lose up to 30 seconds of transcript; the store now saves it as the window unloads, and signing out ends a live meeting first. (#2315)
+- **Join & transcribe never resumes a teammate's note.** Two teammates joining the same invite could record into one shared-space note and overwrite each other. (#2442)
+- **A Cloud note recording with an expired session offers sign-in** instead of a bare "Invalid session" toast. (#2435)
+- **A prepared meeting connection isn't reused after a key save,** so a meeting started after you change a key uses the new one. (#2543)
+- **Declined meetings drop off Home** after calendar sync, and accepting again brings them back. (#2431)
+- **Phantom speakers in uploaded recordings.** Clusters of short backchannels were turned into extra speakers, so a two-person call could show six. A cluster with under 10% of the speech and short average segments is now dropped. (#2403)
+- **Calendar polling stays stopped after a reset.** A sync still running when Reset app data stopped the calendars could restart polling. (#2447, thanks @hsusul)
+
+### Dictation
+
+- **OpenWhispr Cloud dictation streams while you talk.** Orukeet dictation streams audio during the recording and commits the transcript after the final flush, through the usual cleanup and paste pipeline. A dictation detected in a language Orukeet doesn't support is transcribed again by the Cloud provider. A stalled stream fails over within seconds, and a refused session, a commit refused for capacity or a session request that times out falls back to the Cloud upload without losing the opening words. (#2231, #2339, #2341, #2343, #2387, #2422, thanks @Nathan-Roll1)
+- **Dictation audio survives a hung or crashed app.** Audio is spooled while recording, and anything recorded before a hang or crash comes back on the next launch as a failed history entry with its audio, ready to transcribe again. (#2099, thanks @Adityakk9031)
+- **Cleanup no longer pastes your text twice.** When the cleanup model repeated the whole transcript, the doubled text was accepted; it now falls back to the raw transcript with the usual warning. (#2300)
+- **Self-hosted cleanup gets the key you just saved.** The dictation window only read secrets at startup, so a key saved afterwards never reached the server. (#2426, thanks @Abhishek-B-R)
+- **A voice assistant recording always takes the assistant route,** even when a translation flag lingered from an earlier recording. (#2309, thanks @hsusul)
+- **The pill's right-click menu fits at Center and Bottom Left,** and its hover highlight respects the menu's rounded corners. (#2212, #2227, thanks @clarkmaan)
+- **macOS auto-paste works on non-QWERTY layouts.** On Dvorak and similar layouts, the US key code for Cmd+V could send Cmd+. instead; the helper now resolves the key for the active layout. (#1612, thanks @IdrisGit)
+
+### Transcription
+
+- **Changed API keys apply without restarting.** A key saved in Settings didn't reach the dictation window until the next launch. Windows are now told a key changed (never its value) and each BYOK streaming dictation opens a fresh connection. (#2527, thanks @IdrisGit)
+- **AssemblyAI and Corti keep your opening words.** Audio captured before the socket was ready, including during BYOK AssemblyAI's token fetch, was dropped; up to three seconds are now held and sent in order. (#2547)
+- **Gemini Live keeps the last words.** When the last turn's final didn't arrive within the stop window, everything after the previous pause was lost. (#2263, thanks @hsusul)
+- **Custom STT endpoints that only accept WAV work.** Audio is re-encoded to WAV for custom endpoints and retries, so services such as MAI-Transcribe through OpenRouter stop rejecting every dictation. (#2029, thanks @marselsel)
+- **Large dictionaries no longer break BYOK `gpt-transcribe`.** OpenAI rejects uploads with roughly 1,000 parts or more, so a dictionary that size failed every dictation; keywords are capped at 900 and the rest go in the prompt. (#2314)
+- **Audio Upload gets its own self-hosted server.** The Upload tab's server URL and model read and wrote dictation's settings. Existing values are copied over once. (#2051, thanks @STiFLeR7)
+- **WAV files with odd-sized metadata chunks transcribe locally.** The readers ignored RIFF padding and threw "WAV data chunk not found". (#2485, thanks @hsusul)
+- **sherpa-onnx 1.13.8.** Cohere Transcribe returns nothing for silence instead of a hallucinated sentence. (#1951, thanks @emanuelet)
+- **GPU fallbacks say why.** When GPU transcription falls back to the CPU, Settings shows the error that caused it (Windows crash codes in hex), Retry updates an open Settings window, and the card shows which pack is in use. After an update that needs a newer GPU pack, the app says so instead of quietly running on the CPU. (#2317, #2335, #2501)
+
+### AI models
+
+- **Plain-language provider errors.** A failure from your own provider used to show the raw HTTP status and body. Transcription and AI-model errors now say what went wrong, such as "Mistral rejected your API key", with **Open Settings** and **Copy details**, in every locale. (#2510)
+- **Keep model loaded.** A setting under Settings → Language Models keeps the local model loaded instead of unloading it after five idle minutes, so a dictation after a break doesn't wait for a reload. (#2494, thanks @TrackerGit)
+- **Thinking models no longer answer with their reasoning.** With thinking on and the token budget spent on reasoning, the local server returned the reasoning as the answer. (#2200)
+- **The shared local model stays up while any feature uses it.** Settings changes and window loads stopped llama-server while another scope still needed it, costing a cold start. (#2328)
+- **Retired Tinfoil DeepSeek models move to `deepseek-v4-1-flash`.** (#2250)
+
+### Performance
+
+- **Idle OpenWhispr no longer keeps a vector database and an inference process running.** The Qdrant sidecar and the embedding model started on every launch and stayed up for the whole session, and the meeting detectors ran from boot even with meeting notifications turned off. Semantic search now starts on the first assistant search, serves keyword results while it warms up, and releases Qdrant and the embedding session after five minutes without a search. Note edits made while it is asleep are journaled in the notes database and indexed on the next activation, so search results stay complete. The microphone and meeting-app detectors start only once your saved notification preferences are loaded, stop when meeting notifications are off, and a detector stopped mid-scan can no longer come back reporting a meeting app. (#2143)
+- **The speaker model unloads when idle,** so the ONNX worker can exit after a meeting instead of holding its memory until the app quits. (#2371)
+
+### Onboarding and account
+
+- **Signing in no longer restarts onboarding,** and the bring-your-own-key steps reopen on your saved setup instead of looking wiped. (#2144)
+- **macOS permission helper.** Enable opens the native prompt or the right System Settings pane, with a small overlay attached to the window showing what to switch on. (#2294)
+- **Recover from a blocked paste on macOS.** When Accessibility permission is missing, a card offers **Open Settings** and **Copy to clipboard** instead of an internal error. (#2318)
+- **Local dictation setup no longer requires an assistant model.** (#2400, thanks @dajiaohuang)
+- **Sign in with Apple on Windows and Linux,** and the AppImage and tar.gz builds register the sign-in link handler, so browser sign-in works from them. (#1757, thanks @zhongwater123; #2312)
+- **Mobile-app subscribers see their plan.** A subscription bought in the App Store or Google Play showed as Free and offered a Stripe checkout; it now shows the plan with a link to manage it in the store. (#2541)
+
+### Settings and UI
+
+- **Integrations is split into sections with a sidebar:** Calendars, Connectors, API keys, MCP server and Command line, each showing what's connected. Setup copy is clearer, and email draft preferences are simpler. (#2444, #2589)
+- **Themed empty states and a greeting on Home,** with light and dark artwork across Home, Notes, Chat, Insights, Upload, Dictionary and Snippets, and refined chat composers. Insights shows layout-shaped placeholders while it loads. (#2337, #2202, #2448)
+- **Consistent controls.** Every button variant is a pill, every control panel page shares one 1024px content column, pill tabs are unified, and the organization-managed notice sits under the account name. (#2191, #2228, #2275, thanks @clarkmaan; #2590)
+
+### Linux
+
+- **GPU compositing is back,** except while an NVIDIA kernel module is loaded. Blurs that still cost CPU are dropped, so Settings no longer lags. (#2496, #2495, #2505)
+- **Auto-paste waits for held modifier keys.** A paste injected while a modifier was still held arrived as a different shortcut and the transcript was lost; a paste blocked for more than 1.5 seconds leaves the transcript on the clipboard with a Retry. (#2207)
+- **COSMIC terminals paste with Ctrl+Shift+V.** (#2519)
+- **Window detection no longer delays the start of dictation.** (#1945, thanks @IdrisGit)
+- **Hotkeys.** Modifier-only and right-side hotkeys reach the native listener, Hold is no longer reset to Tap at startup, Settings explains when Hold needs a regular key, and Hyprland gets native shortcuts for the voice assistant, translation and meeting hotkeys. (#2048, thanks @folks-samuel-cb; #2326, thanks @cadufpolis; #2493; #1811, thanks @IdrisGit)
+
+### Windows
+
+- **A missing key listener no longer leaves dead hotkeys.** Hold, modifier-only and right-side hotkeys are no longer offered when `windows-key-listener.exe` is missing, and builds find it again on GitHub's second page of releases. (#2239, #2147, thanks @stantheman0128)
+- **Downloads extract into paths with apostrophes.** (thanks @stantheman0128)
+- **The tray icon keeps its place across updates** in signed builds. (#2272)
+- **The portable build is discontinued.** It couldn't update itself; use the installer. (#2301)
+
+### macOS
+
+- **The control panel comes to the front when reopened** from the menu bar, the Dock or a deep link. (#2467)
+- **The menu-bar icon starts near the system controls** and then keeps the position you choose. (#2267)
+
+### CLI
+
+- **Updating a note that doesn't exist returns 404 `not_found`** instead of 500. (#2348, thanks @hsusul)
+
+### Security and build
+
+- **Electron 41.10.7** for the high-severity advisories published on 2026-09-29. (#2409)
+- **sherpa-onnx ships without the GPL espeak-ng library.** The bundled archives statically linked text-to-speech code licensed GPL-3.0; the app now uses the no-TTS builds and only the libraries it loads. (#2340)
 
 ## [1.10.2] - 2026-09-15
 
