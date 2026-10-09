@@ -1226,7 +1226,11 @@ class ReasoningService extends BaseReasoningService {
     const operationWasCancelled = (): boolean =>
       operationGeneration !== this.cloudOperationGeneration;
     const maxSteps = config.tools?.length ? ReasoningService.MAX_TOOL_STEPS : 1;
-    let currentMessages = [...messages];
+    // The Cloud API prepends systemPrompt itself. Keep any distinct system instructions.
+    let currentMessages =
+      messages[0]?.role === "system" && messages[0].content === config.systemPrompt
+        ? messages.slice(1)
+        : [...messages];
 
     for (let step = 0; step < maxSteps; step++) {
       if (operationWasCancelled()) return;

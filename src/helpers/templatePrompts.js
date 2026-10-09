@@ -87,9 +87,8 @@ export function compileSummaryActionPrompt(action, { fromSummary, isMeetingNote 
 }
 
 export function compileChatActionPrompt(action, { fromSummary }) {
+  // Chat supplies source fidelity in getAgentSystemPrompt; this is only the user request.
   return (
-    SOURCE_FIDELITY_RULE +
-    "\n\n" +
     (fromSummary ? CHAT_ACTION_ON_SUMMARY_PREAMBLE : CHAT_ACTION_ON_MATERIAL_PREAMBLE) +
     action.prompt
   );
