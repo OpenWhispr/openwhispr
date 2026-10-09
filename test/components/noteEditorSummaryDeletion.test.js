@@ -546,7 +546,7 @@ test("the docked chat holds the conversation and its history, and its chips cont
   await unmount();
 });
 
-test("a chat action from the collapsed picker opens the docked chat, with the actions but no Generate summary", async (t) => {
+test("a chat action from the collapsed picker opens the docked chat, with the actions", async (t) => {
   globalThis.__noteActions = [FOLLOW_UP];
   globalThis.__embeddedChatSent = [];
   t.after(() => {
@@ -566,7 +566,6 @@ test("a chat action from the collapsed picker opens the docked chat, with the ac
   assert.equal(chips.docked, true);
   assert.deepEqual(chips.actions, [FOLLOW_UP]);
   assert.equal(docked.props.slashCommands.length, 1, "and offers the same / menu");
-  assert.equal(chips.generateSummary, undefined);
   assert.deepEqual(ran, []);
   const [[marker, shown, { requestText }]] = globalThis.__embeddedChatSent;
   assert.equal(marker, "new chat", "from the ask bar it starts a new conversation");
@@ -581,12 +580,11 @@ test("a summary action from the collapsed picker runs on the summary and leaves 
     id: 4,
     client_id: "shorten",
     kind: "action",
-    is_builtin: 1,
-    name: "Make notes shorter",
+    name: "Shorten",
     prompt: "Shorten it.",
     sections: null,
     output: "summary",
-    translation_key: "notes.actions.builtin.shorten",
+    translation_key: null,
   };
   globalThis.__noteActions = [shorten];
   globalThis.__embeddedChatSent = [];

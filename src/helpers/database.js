@@ -12,7 +12,6 @@ const { parseEventTime } = require("./calendarAvailability");
 // a naive value must never outrank created_at when dating a historical row.
 const { hasExplicitTimeZone, parseDbTimestamp, toDbTimestamp } = require("./dbTimestamp");
 const { BUILTIN_ACTIONS, GENERATE_NOTES_KEY, NOTE_ACTION_LIMITS } = require("./builtinActions");
-const { getActionOutput } = require("./actionOutput");
 const { normalizeSections } = require("./templatePrompts");
 const {
   ANALYTICS_COUNTER_VERSION,
@@ -116,7 +115,13 @@ function toActionItem(row) {
   } catch {
     sections = null;
   }
-  return { ...row, sections, output: getActionOutput(row) };
+  // Destinations are fixed by built-in identity, never by editable copy or stored output.
+  const builtin =
+    row.is_builtin === 1 &&
+    BUILTIN_ACTIONS.find((action) => action.translationKey === row.translation_key);
+  const output =
+    row.kind === "template" ? null : builtin?.output === "summary" ? "summary" : "chat";
+  return { ...row, sections, output };
 }
 
 function rowMatchesSnapshot(row, snapshot, fields) {

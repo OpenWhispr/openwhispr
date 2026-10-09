@@ -7,12 +7,7 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 // cut off at that ceiling and saved anyway, with no error and nothing in the
 // UI to say the notes were incomplete (#2142).
 
-const ACTION = {
-  kind: "template",
-  id: 1,
-  name: "Generate Notes",
-  prompt: "Summarize the meeting.",
-};
+const ACTION = { id: 1, name: "Generate Notes", prompt: "Summarize the meeting." };
 const LABELS = { noModel: "no model", noEndpoint: "no endpoint", actionFailed: "failed" };
 const STORED_NOTE = {
   title: "Untitled Note",
@@ -199,8 +194,6 @@ test("a summary action rewrites only the summary and never saves a clipped rewri
     id: 4,
     client_id: "c0ffee00-0000-4000-8000-000000000002",
     kind: "action",
-    is_builtin: 1,
-    translation_key: "notes.actions.builtin.shorten",
     output: "summary",
     name: "Shorten",
     prompt: "Make it half as long.",
@@ -261,8 +254,6 @@ test("a cut-off or empty rewrite reports a notes error, not the dictation one pr
         id: 5,
         client_id: "shorten",
         kind: "action",
-        is_builtin: 1,
-        translation_key: "notes.actions.builtin.shorten",
         output: "summary",
         name: "Shorten",
         prompt: "x",
@@ -284,8 +275,6 @@ test("a summary action on a note without a summary writes one from the transcrip
     id: 6,
     client_id: "notes.actions.builtin.lengthen",
     kind: "action",
-    is_builtin: 1,
-    translation_key: "notes.actions.builtin.lengthen",
     output: "summary",
     name: "Make notes longer",
     prompt: "Add supported detail.",
@@ -323,8 +312,6 @@ test("a run hands Undo the summary fields it overwrote, and the title when it re
     id: 7,
     client_id: "shorten",
     kind: "action",
-    is_builtin: 1,
-    translation_key: "notes.actions.builtin.shorten",
     output: "summary",
     name: "Shorten",
     prompt: "x",

@@ -228,7 +228,7 @@ test("hovering a chip shows what its action does above the row", async (t) => {
   assert.equal(description(), null, "moving keyboard focus away dismisses the preview");
 });
 
-test("Make notes longer stays in docked chips and both All actions menus, with no Generate summary chip", async (t) => {
+test("Make notes longer stays in docked chips and both All actions menus", async (t) => {
   const ActionChips = await load(t, "/components/notes/ActionChips.tsx");
   const ran = [];
   const props = {
@@ -246,7 +246,6 @@ test("Make notes longer stays in docked chips and both All actions menus, with n
     );
     const menu = tree.find((node) => node.props.onManageActions);
     assert.equal(menu.props.actions, ACTIONS, "All actions still receives every action");
-    assert.ok(!tree.some((node) => node.props.children === "embeddedChat.generateSummary"));
     buttons[0].props.onClick();
   }
   assert.deepEqual(ran, ["Follow-up email", "Follow-up email"]);

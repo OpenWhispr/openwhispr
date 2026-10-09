@@ -5,12 +5,7 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 // A note that does not fit the local model's window is summarised in parts and
 // then merged (#2142 part 3). Everything that fits keeps today's single call.
 
-const ACTION = {
-  kind: "template",
-  id: 1,
-  name: "Generate Notes",
-  prompt: "Summarize the meeting.",
-};
+const ACTION = { id: 1, name: "Generate Notes", prompt: "Summarize the meeting." };
 const LABELS = { noModel: "no model", noEndpoint: "no endpoint", actionFailed: "failed" };
 const LINE = "Alice: we agreed to ship the billing migration on Friday after QA.\n";
 const BIG_BUDGET = { success: true, maxContextTokens: 131072, modelName: "Qwen3.5 9B" };
@@ -187,8 +182,6 @@ test("a summary action writing a first summary splits a refused recording like a
     id: 2,
     client_id: "notes.actions.builtin.lengthen",
     kind: "action",
-    is_builtin: 1,
-    translation_key: "notes.actions.builtin.lengthen",
     output: "summary",
     name: "Add TL;DR",
     prompt: "Add supported detail.",
