@@ -291,3 +291,59 @@ test("identity forks drop deferred receipts and prevent late acknowledgement", a
   assert.equal(await acknowledge(cloud), "orphan-unproven");
   assert.equal(db.getNote(id).cloud_id, null);
 });
+
+for (const batch of [false, true]) {
+  for (const field of ["content", "enhanced_content"]) {
+    test(`SyncService forwards ${batch ? "batch" : "single"} authoritative ${field} receipts`, async (t) => {
+      const { db, id, cloud } = setup(t);
+      clear(cloud, field);
+      const { service } = await sync(t, db, cloud);
+      const original = globals.window.electronAPI.cloudApiRequest;
+      let creates = 0;
+      globals.window.electronAPI.cloudApiRequest = async (opts) => {
+        if (opts.path === (batch ? "/api/notes/batch-create" : "/api/notes/create")) {
+          creates++;
+          const input = batch ? opts.body.notes[0] : opts.body;
+          assert.equal(input.updated_at, undefined);
+          assert.equal(input.base_revision, undefined);
+          return { success: true, data: batch ? { created: [cloud] } : cloud };
+        }
+        return original(opts);
+      };
+      if (batch) await service.pushPendingNotes();
+      else await service.pushNote(id);
+      assert.equal(creates, 1);
+      assert.equal(db.getNote(id)[field] ?? "", "");
+      assert.equal(db.getNote(id).sync_status, "synced");
+      assert.equal(db.getNote(id)[`${field}_sync_operation`], null);
+    });
+  }
+}
+
+for (const field of ["content", "enhanced_content"]) {
+  test(`legacy migration reconciles ${field} while retaining its omitted work`, async (t) => {
+    const { db, id, snapshot, cloud } = setup(t);
+    clear(cloud, field);
+    await sync(t, db, cloud);
+    globals.window.electronAPI.getNotes = async () => [snapshot];
+    const original = globals.window.electronAPI.cloudApiRequest;
+    let creates = 0;
+    globals.window.electronAPI.cloudApiRequest = async (opts) => {
+      if (opts.path === "/api/notes/batch-create") {
+        creates++;
+        assert.equal(opts.body.notes[0].enhanced_at_content_hash, "hash");
+        assert.equal(opts.body.notes[0].transcript, undefined);
+        return { success: true, data: { created: [cloud] } };
+      }
+      return original(opts);
+    };
+    const { startMigration } = require("../../src/stores/noteStore.ts");
+    await startMigration();
+    assert.equal(creates, 1);
+    assert.equal(db.getNote(id)[field] ?? "", "");
+    assert.equal(db.getNote(id)[`${field}_sync_operation`], null);
+    assert.equal(db.getNote(id).sync_status, "pending");
+    assert.equal(db.getNote(id).transcript, "Transcript");
+    assert.equal(db.getNote(id).enhanced_at_content_hash, field === "content" ? "hash" : null);
+  });
+}
