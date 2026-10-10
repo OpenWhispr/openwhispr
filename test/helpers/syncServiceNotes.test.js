@@ -603,7 +603,12 @@ test("a note pull failure is contained: the pass finishes and later stages still
   cloud.failWith("/api/notes/list", { status: 500, error: "list exploded" });
   await service.syncAll(true);
 
-  assert.equal(db.getNote(note.id).sync_status, "synced", "the push before the pull still lands");
+  assert.equal(cloud.note(note.client_note_id).content, "body", "the push before the pull lands");
+  assert.equal(
+    db.getNote(note.id).sync_status,
+    "pending",
+    "a receipt without a revision still needs an authoritative row before settling"
+  );
   assert.equal(cloud.logFor("/api/transcriptions/list").length, 1, "later stages still run");
   assert.equal(cloud.logFor("/api/snippets/list").length, 1);
   assert.equal(

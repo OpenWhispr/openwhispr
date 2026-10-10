@@ -130,6 +130,24 @@ function liveUndo(manager, column, value) {
     .get(value, manager.activeAccountId, Date.now() - UNDO_TTL_MS);
 }
 
+// Reconciliation of an untouched field is not a later edit to the fields a
+// live Undo restores. The normal trigger still retires overlapping recoveries.
+function preserveUnchangedUndo(manager, id, changedFields, write) {
+  if (!changedFields.length || !manager.noteUndoReady) return write();
+  const saved = liveUndo(manager, "note_id", id);
+  const preserves =
+    saved && !Object.keys(JSON.parse(saved.previous)).some((key) => changedFields.includes(key));
+  const result = write();
+  if (preserves) {
+    manager.db
+      .prepare(
+        "INSERT OR REPLACE INTO assistant_note_undo (note_id, token, account_id, previous, created_at) VALUES (?, ?, ?, ?, ?)"
+      )
+      .run(saved.note_id, saved.token, saved.account_id, saved.previous, saved.created_at);
+  }
+  return result;
+}
+
 function getNoteUndos(manager) {
   const scope = manager._accountScopeCondition("notes");
   return manager.db
@@ -195,4 +213,5 @@ module.exports = {
   claimNoteUndo,
   undoNoteUpdate,
   discardNoteUndo,
+  preserveUnchangedUndo,
 };

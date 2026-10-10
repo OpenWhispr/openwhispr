@@ -55,6 +55,8 @@ const NOTE_CREATE_ACK_FIELDS = [
   "enhanced_content",
   "content_sync_operation",
   "enhanced_content_sync_operation",
+  "content_edit_generation",
+  "enhanced_content_edit_generation",
   "enhancement_prompt",
   "enhancement_template_id",
   "enhanced_at_content_hash",
@@ -148,9 +150,19 @@ function toActionItem(row) {
 
 function rowMatchesSnapshot(row, snapshot, fields) {
   return fields.every((field) => {
-    const expected = snapshot[field] === undefined ? null : snapshot[field];
+    const fallback = field.endsWith("_edit_generation") ? 0 : null;
+    const expected = snapshot[field] === undefined ? fallback : snapshot[field];
     return row[field] === expected;
   });
+}
+
+function noteTextMatchesSnapshot(row, snapshot, field) {
+  return rowMatchesSnapshot(row, snapshot, [
+    field,
+    `${field}_sync_operation`,
+    `${field}_edit_generation`,
+    ...(field === "enhanced_content" ? SUMMARY_METADATA : []),
+  ]);
 }
 
 // An optimistically deleted folder still holds its server-side name until the
@@ -429,6 +441,8 @@ class DatabaseManager {
         "cloud_create_rejected INTEGER NOT NULL DEFAULT 0",
         "content_sync_operation TEXT",
         "enhanced_content_sync_operation TEXT",
+        "content_edit_generation INTEGER NOT NULL DEFAULT 0",
+        "enhanced_content_edit_generation INTEGER NOT NULL DEFAULT 0",
       ]) {
         try {
           this.db.exec(`ALTER TABLE notes ADD COLUMN ${definition}`);
@@ -3359,6 +3373,7 @@ class DatabaseManager {
       }
       for (const field of NOTE_TEXT_FIELDS) {
         delete updates[`${field}_sync_operation`];
+        delete updates[`${field}_edit_generation`];
         if (clears.includes(field)) {
           if (
             updates[field] != null &&
@@ -3475,6 +3490,21 @@ class DatabaseManager {
         }
       }
       if (fields.length === 0) return { success: false };
+      // Undo can return to the submitted text within the same SQLite second.
+      // Keep that newer intent distinct from the in-flight request snapshot.
+      for (const field of NOTE_TEXT_FIELDS) {
+        const keys = [
+          field,
+          `${field}_sync_operation`,
+          ...(field === "enhanced_content" ? SUMMARY_METADATA : []),
+        ];
+        if (
+          clears.includes(field) ||
+          keys.some((key) => updates[key] !== undefined && updates[key] !== previous[key])
+        ) {
+          fields.push(`${field}_edit_generation = ${field}_edit_generation + 1`);
+        }
+      }
       // Re-queue for cloud sync on any local edit, so post-sync field changes aren't
       // left local-only and overwritten by a later pull.
       if (!("sync_status" in updates)) {
@@ -6515,7 +6545,12 @@ class DatabaseManager {
     ownerUserId = null,
     options = {}
   ) {
-    const { settleIfUnchanged = true, cloudRevision = null, writeRejected = false } = options;
+    const {
+      settleIfUnchanged = true,
+      cloudRevision = null,
+      writeRejected = false,
+      cloudNote = null,
+    } = options;
     try {
       if (!this.db) throw new Error("Database not initialized");
       if (!this.getNote(id)) {
@@ -6551,15 +6586,34 @@ class DatabaseManager {
         }
 
         const unchanged = rowMatchesSnapshot(current, snapshot, NOTE_CREATE_ACK_FIELDS);
+        // An accepted idempotent POST may ignore a resend of cleared text.
+        // Reconcile only the field group this request still owns; a later
+        // edit/Undo or a pending clear must survive the acknowledgement.
+        const acknowledgedFields = writeRejected
+          ? []
+          : NOTE_TEXT_FIELDS.filter(
+              (field) =>
+                current[`${field}_sync_operation`] !== "clear" &&
+                noteTextMatchesSnapshot(current, snapshot, field)
+            );
+        const adopted = cloudNote ? cloudTextUpdates(current, cloudNote, acknowledgedFields) : {};
+        noteUndo.preserveUnchangedUndo(this, id, Object.keys(adopted), () => {
+          this._setNoteColumns(id, adopted);
+        });
+        if (acknowledgedFields.length > 0) {
+          this._setNoteColumns(
+            id,
+            Object.fromEntries(acknowledgedFields.map((field) => [`${field}_sync_operation`, null]))
+          );
+        }
 
         // If a team note was moved to Personal while POST was in flight, the
         // returned cloud row still lives in the old team. Mark the attached
         // identity as owing a scope retraction even when backup is disabled.
         const leftTeam = this._leftTeamDuringPush(snapshot.space_id, current.space_id);
 
-        // The create carried the snapshot's text, which satisfies a set. A
-        // clear still follows as a revisioned PATCH: a retried create preserves
-        // text the server already holds.
+        // A clear still follows as a revisioned PATCH: a retried create
+        // preserves text the server already holds.
         if (unchanged && settleIfUnchanged && !hasPendingNoteClear(snapshot) && !writeRejected) {
           this.db
             .prepare(
@@ -6578,7 +6632,11 @@ class DatabaseManager {
               id,
               expectedClientNoteId
             );
-          return { success: true, outcome: "synced" };
+          return {
+            success: true,
+            outcome: "synced",
+            ...(Object.keys(adopted).length > 0 && { note: this.getNote(id) }),
+          };
         }
 
         this.db
@@ -6601,7 +6659,11 @@ class DatabaseManager {
             id,
             expectedClientNoteId
           );
-        return { success: true, outcome: "pending" };
+        return {
+          success: true,
+          outcome: "pending",
+          ...(Object.keys(adopted).length > 0 && { note: this.getNote(id) }),
+        };
       })();
     } catch (error) {
       debugLogger.error("Error acknowledging note create", { error: error.message }, "database");
@@ -6665,7 +6727,7 @@ class DatabaseManager {
               NOTE_TEXT_FIELDS.filter(
                 (field) =>
                   !current[`${field}_sync_operation`] &&
-                  (current[field] ?? null) === (snapshot[field] ?? null)
+                  noteTextMatchesSnapshot(current, snapshot, field)
               )
             )
           : {};

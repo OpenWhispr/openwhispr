@@ -13,6 +13,7 @@ test("resolveCloudNoteCreate deletes a proven orphan create", async () => {
     note,
     {
       id: "cloud-note-42",
+      revision: 0,
       client_note_id: note.client_note_id,
       updated_at: "2026-07-29T10:00:00.000Z",
       user_id: "owner-42",
@@ -34,7 +35,7 @@ test("resolveCloudNoteCreate deletes a proven orphan create", async () => {
     "cloud-note-42",
     "2026-07-29T10:00:00.000Z",
     "owner-42",
-    { settleIfUnchanged: true, cloudRevision: null, writeRejected: false },
+    { settleIfUnchanged: true, cloudRevision: 0, writeRejected: false },
   ]);
   assert.deepEqual(calls[1], ["delete", "cloud-note-42"]);
 });
@@ -75,7 +76,7 @@ test("resolveCloudNoteCreate leaves newer local work pending without cleanup", a
   let deleted = false;
   const result = await resolveCloudNoteCreate(
     note,
-    { id: "cloud-note-42", client_note_id: note.client_note_id },
+    { id: "cloud-note-42", revision: 0, client_note_id: note.client_note_id },
     {
       acknowledge: async () => ({ success: true, outcome: "pending" }),
       deleteCloud: async () => {
@@ -94,7 +95,7 @@ test("resolveCloudNoteCreate treats orphan cleanup as best-effort", async () => 
   let reported = null;
   const result = await resolveCloudNoteCreate(
     note,
-    { id: "cloud-note-42", client_note_id: note.client_note_id },
+    { id: "cloud-note-42", revision: 0, client_note_id: note.client_note_id },
     {
       acknowledge: async () => ({ success: true, outcome: "orphaned" }),
       deleteCloud: async () => {
@@ -121,6 +122,7 @@ test("resolveCloudNoteCreateBatch routes migration results by snapshot identity"
     [
       {
         id: "cloud-note-84",
+        revision: 0,
         client_note_id: otherNote.client_note_id,
         updated_at: "2026-07-29T14:00:00.000Z",
       },
@@ -142,7 +144,7 @@ test("resolveCloudNoteCreateBatch routes migration results by snapshot identity"
       "cloud-note-84",
       "2026-07-29T14:00:00.000Z",
       null,
-      { settleIfUnchanged: false, cloudRevision: null, writeRejected: false },
+      { settleIfUnchanged: false, cloudRevision: 0, writeRejected: false },
     ],
   ]);
   assert.deepEqual(deleted, ["cloud-note-84"]);
@@ -188,7 +190,7 @@ test("a superseded migration run acknowledges instead of deleting the idempotent
   let deleted = false;
   const results = await resolveCloudNoteCreateBatch(
     [note],
-    [{ id: "shared-idempotent-cloud", client_note_id: note.client_note_id }],
+    [{ id: "shared-idempotent-cloud", revision: 0, client_note_id: note.client_note_id }],
     {
       acknowledge: async () => {
         acknowledged = true;
@@ -217,7 +219,7 @@ test("an account reset cleans an invalidated migration without touching SQLite",
   accountGeneration += 1;
   let acknowledged = false;
   const deleted = [];
-  const cloud = { id: "old-account-cloud", client_note_id: note.client_note_id };
+  const cloud = { id: "old-account-cloud", revision: 0, client_note_id: note.client_note_id };
   const results = await resolveCloudNoteCreateBatch(
     [note],
     [cloud],
