@@ -427,6 +427,7 @@ class DatabaseManager {
       for (const definition of [
         "cloud_revision INTEGER",
         "cloud_create_rejected INTEGER NOT NULL DEFAULT 0",
+        "cloud_create_pending TEXT",
         "content_sync_operation TEXT",
         "enhanced_content_sync_operation TEXT",
       ]) {
@@ -3398,12 +3399,14 @@ class DatabaseManager {
       delete updates.account_id;
       delete updates.cloud_revision;
       delete updates.cloud_create_rejected;
+      delete updates.cloud_create_pending;
       if (
         updates.cloud_id === null ||
         (updates.client_note_id && updates.client_note_id !== previous.client_note_id)
       ) {
         updates.cloud_revision = null;
         updates.cloud_create_rejected = 0;
+        updates.cloud_create_pending = null;
       }
       if (updates.folder_id != null) {
         // D2: a note's space always follows its folder's space.
@@ -3443,6 +3446,7 @@ class DatabaseManager {
         "enhanced_content_sync_operation",
         "cloud_revision",
         "cloud_create_rejected",
+        "cloud_create_pending",
         "title",
         "content",
         "enhanced_content",
@@ -4206,7 +4210,7 @@ class DatabaseManager {
             .map((row) => row.id);
           if (preservedIds.length > 0) {
             const relocateNote = this.db.prepare(
-              "UPDATE notes SET space_id = ?, folder_id = NULL, client_note_id = ?, cloud_id = NULL, cloud_updated_at = NULL, cloud_revision = NULL, cloud_create_rejected = 0, owner_user_id = NULL, updated_by_user_id = NULL, sync_status = 'pending', left_team = 0, is_shared = 0, share_token = NULL, updated_at = datetime('now') WHERE id = ?"
+              "UPDATE notes SET space_id = ?, folder_id = NULL, client_note_id = ?, cloud_id = NULL, cloud_updated_at = NULL, cloud_revision = NULL, cloud_create_rejected = 0, cloud_create_pending = NULL, owner_user_id = NULL, updated_by_user_id = NULL, sync_status = 'pending', left_team = 0, is_shared = 0, share_token = NULL, updated_at = datetime('now') WHERE id = ?"
             );
             const detachNoteConversation = this.db.prepare(
               "UPDATE agent_conversations SET space_id = NULL, folder_id = NULL WHERE note_id = ?"
@@ -6426,6 +6430,7 @@ class DatabaseManager {
           cloud_updated_at = excluded.cloud_updated_at,
           cloud_revision = excluded.cloud_revision,
           cloud_create_rejected = 0,
+          cloud_create_pending = NULL,
           content_sync_operation = NULL,
           enhanced_content_sync_operation = NULL
       `);
@@ -6514,7 +6519,14 @@ class DatabaseManager {
     ownerUserId = null,
     options = {}
   ) {
-    const { settleIfUnchanged = true, cloudRevision = null, writeRejected = false } = options;
+    let { settleIfUnchanged = true } = options;
+    const {
+      cloudRevision = null,
+      writeRejected = false,
+      cloudNote = null,
+      requiresReconciliation = false,
+      reconcilePending = false,
+    } = options;
     try {
       if (!this.db) throw new Error("Database not initialized");
       if (!this.getNote(id)) {
@@ -6539,7 +6551,10 @@ class DatabaseManager {
           };
         }
 
-        if (current.cloud_id) {
+        if (
+          current.cloud_id &&
+          !(reconcilePending && current.cloud_create_pending && current.cloud_id === cloudId)
+        ) {
           // Concurrent creates should be idempotent and return the same id.
           // A different id is ambiguous, though, so never replace the adopted
           // identity or authorize destructive cleanup in that case.
@@ -6549,13 +6564,109 @@ class DatabaseManager {
           };
         }
 
+        if (reconcilePending && current.cloud_create_pending) {
+          const pending = JSON.parse(current.cloud_create_pending);
+          snapshot = pending.snapshot;
+          settleIfUnchanged = pending.settleIfUnchanged;
+          if (!cloudNote) return { success: true, outcome: "awaiting-cloud" };
+          if (
+            hasNoteRevision(pending.revision) &&
+            hasNoteRevision(cloudRevision) &&
+            cloudRevision < pending.revision
+          )
+            return { success: true, outcome: "awaiting-cloud" };
+          if (
+            !hasNoteRevision(pending.revision) &&
+            pending.updatedAt &&
+            Date.parse(cloudUpdatedAt) < Date.parse(pending.updatedAt)
+          )
+            return { success: true, outcome: "awaiting-cloud" };
+          const sameReceipt = hasNoteRevision(pending.revision)
+            ? cloudRevision === pending.revision
+            : Boolean(
+                pending.updatedAt && Date.parse(pending.updatedAt) === Date.parse(cloudUpdatedAt)
+              );
+          if (!sameReceipt) {
+            // A pull can already contain another device's newer write. Only
+            // an unchanged full create can take it without a conflict choice.
+            if (
+              !settleIfUnchanged ||
+              hasPendingNoteClear(snapshot) ||
+              !rowMatchesSnapshot(current, snapshot, NOTE_CREATE_ACK_FIELDS) ||
+              options.localSpaceId === undefined
+            )
+              return { success: true, outcome: "conflict" };
+            const note = this.upsertNoteFromCloud(
+              {
+                ...cloudNote,
+                id: cloudId,
+                client_note_id: expectedClientNoteId,
+                updated_at: cloudUpdatedAt,
+                revision: cloudRevision,
+              },
+              options.localFolderId ?? null,
+              options.localSpaceId
+            );
+            return { success: true, outcome: "synced", note };
+          }
+        }
         const unchanged = rowMatchesSnapshot(current, snapshot, NOTE_CREATE_ACK_FIELDS);
+        const leftTeam = this._leftTeamDuringPush(snapshot.space_id, current.space_id);
+
+        // A metadata-only receipt proves identity, not which text survived
+        // the upsert. Save its request and keep every push gated until a pull
+        // reconciles that exact receipt (including after restart).
+        if (requiresReconciliation) {
+          this.db
+            .prepare(
+              `UPDATE notes SET cloud_id = ?, owner_user_id = ?,
+              sync_status = CASE WHEN sync_status = 'synced' THEN 'pending' ELSE sync_status END,
+              cloud_create_pending = ?,
+              left_team = CASE WHEN ? = 1 THEN 1 ELSE left_team END
+            WHERE id = ? AND client_note_id = ?`
+            )
+            .run(
+              cloudId,
+              ownerUserId,
+              JSON.stringify({
+                snapshot: {
+                  ...snapshot,
+                  sync_status: snapshot.sync_status === "synced" ? "pending" : snapshot.sync_status,
+                },
+                settleIfUnchanged,
+                revision: cloudRevision,
+                updatedAt: cloudUpdatedAt,
+              }),
+              leftTeam,
+              id,
+              expectedClientNoteId
+            );
+          return { success: true, outcome: "awaiting-cloud" };
+        }
+
+        // A create's submitted set may have been ignored by the server. Take
+        // the returned copy only for bundles still equal to that submission,
+        // and retire those sets even when another field was edited in flight.
+        // POST never delivers a deliberate clear; it still owes a PATCH.
+        if (cloudNote && !writeRejected) {
+          const fields = NOTE_TEXT_FIELDS.filter(
+            (field) =>
+              snapshot[`${field}_sync_operation`] !== "clear" &&
+              rowMatchesSnapshot(current, snapshot, [
+                field,
+                `${field}_sync_operation`,
+                ...(field === "enhanced_content" ? SUMMARY_METADATA : []),
+              ])
+          );
+          this._setNoteColumns(id, {
+            ...cloudTextUpdates(current, cloudNote, fields),
+            ...Object.fromEntries(fields.map((field) => [`${field}_sync_operation`, null])),
+          });
+        }
 
         // If a team note was moved to Personal while POST was in flight, the
         // returned cloud row still lives in the old team. Mark the attached
         // identity as owing a scope retraction even when backup is disabled.
-        const leftTeam = this._leftTeamDuringPush(snapshot.space_id, current.space_id);
-
         // The create carried the snapshot's text, which satisfies a set. A
         // clear still follows as a revisioned PATCH: a retried create preserves
         // text the server already holds.
@@ -6566,8 +6677,9 @@ class DatabaseManager {
                SET sync_status = 'synced', cloud_id = ?, left_team = 0,
                    cloud_updated_at = ?, cloud_revision = ?,
                    owner_user_id = ?,
-                   content_sync_operation = NULL, enhanced_content_sync_operation = NULL
-               WHERE id = ? AND client_note_id = ? AND cloud_id IS NULL`
+                   content_sync_operation = NULL, enhanced_content_sync_operation = NULL,
+                   cloud_create_pending = NULL
+               WHERE id = ? AND client_note_id = ?`
             )
             .run(
               cloudId,
@@ -6577,7 +6689,7 @@ class DatabaseManager {
               id,
               expectedClientNoteId
             );
-          return { success: true, outcome: "synced" };
+          return { success: true, outcome: "synced", ...(cloudNote && { note: this.getNote(id) }) };
         }
 
         this.db
@@ -6586,9 +6698,9 @@ class DatabaseManager {
              SET cloud_id = ?,
                  cloud_updated_at = ?, cloud_revision = ?,
                  owner_user_id = ?,
-                 sync_status = 'pending', cloud_create_rejected = ?,
+                 sync_status = 'pending', cloud_create_rejected = ?, cloud_create_pending = NULL,
                  left_team = CASE WHEN ? = 1 THEN 1 ELSE left_team END
-             WHERE id = ? AND client_note_id = ? AND cloud_id IS NULL`
+             WHERE id = ? AND client_note_id = ?`
           )
           .run(
             cloudId,
@@ -6600,7 +6712,7 @@ class DatabaseManager {
             id,
             expectedClientNoteId
           );
-        return { success: true, outcome: "pending" };
+        return { success: true, outcome: "pending", ...(cloudNote && { note: this.getNote(id) }) };
       })();
     } catch (error) {
       debugLogger.error("Error acknowledging note create", { error: error.message }, "database");
@@ -6644,7 +6756,8 @@ class DatabaseManager {
           return { success: true, outcome: "identity-changed", changes: 0 };
         }
 
-        if (current.cloud_create_rejected) return { success: true, outcome: "pending", changes: 0 };
+        if (current.cloud_create_rejected || current.cloud_create_pending)
+          return { success: true, outcome: "pending", changes: 0 };
         // An older response arriving out of order must not regress the
         // revision. A response without one (an API that predates revisions)
         // drops it, so pushes fall back to the timestamp base.
@@ -6842,10 +6955,11 @@ class DatabaseManager {
         this.db
           .prepare(
             `UPDATE notes SET cloud_updated_at = ?, cloud_revision = ?,
-               cloud_create_rejected = CASE WHEN ? THEN 0 ELSE cloud_create_rejected END
+               cloud_create_rejected = CASE WHEN ? THEN 0 ELSE cloud_create_rejected END,
+               cloud_create_pending = CASE WHEN ? THEN NULL ELSE cloud_create_pending END
              WHERE id = ?`
           )
-          .run(cloudUpdatedAt, revision, keepLocal ? 1 : 0, id);
+          .run(cloudUpdatedAt, revision, keepLocal ? 1 : 0, keepLocal ? 1 : 0, id);
         return { success: true, note: this.getNote(id) };
       })();
     } catch (error) {
@@ -7248,7 +7362,7 @@ class DatabaseManager {
         this._deleteSpeakerRowsForNotes(serverOwnedChildren, id);
         this.db.prepare(`DELETE FROM notes WHERE id IN (${serverOwnedChildren})`).run(id);
         const relocateNote = this.db.prepare(
-          "UPDATE notes SET space_id = ?, folder_id = ?, client_note_id = ?, cloud_id = NULL, cloud_updated_at = NULL, cloud_revision = NULL, cloud_create_rejected = 0, owner_user_id = NULL, updated_by_user_id = NULL, sync_status = 'pending', left_team = 0, is_shared = 0, share_token = NULL, updated_at = datetime('now') WHERE id = ?"
+          "UPDATE notes SET space_id = ?, folder_id = ?, client_note_id = ?, cloud_id = NULL, cloud_updated_at = NULL, cloud_revision = NULL, cloud_create_rejected = 0, cloud_create_pending = NULL, owner_user_id = NULL, updated_by_user_id = NULL, sync_status = 'pending', left_team = 0, is_shared = 0, share_token = NULL, updated_at = datetime('now') WHERE id = ?"
         );
         const detachNoteConversation = this.db.prepare(
           "UPDATE agent_conversations SET space_id = NULL, folder_id = NULL WHERE note_id = ?"

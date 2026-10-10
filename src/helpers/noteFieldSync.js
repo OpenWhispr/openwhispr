@@ -75,6 +75,8 @@ export function hasUnrevisionedNoteClear(note) {
 // an API without revisions such a clear pushes as it always has.
 export function noteAwaitsCloudResolution(note, serverKeepsRevisions) {
   return Boolean(
-    note.cloud_create_rejected || (serverKeepsRevisions && hasUnrevisionedNoteClear(note))
+    note.cloud_create_rejected ||
+    note.cloud_create_pending ||
+    (serverKeepsRevisions && hasUnrevisionedNoteClear(note))
   );
 }

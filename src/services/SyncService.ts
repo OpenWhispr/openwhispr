@@ -898,7 +898,7 @@ export class SyncService {
     const outcome = await resolveRendererCloudNoteCreate(note, cloud, (cloudId) =>
       NotesService.delete(cloudId)
     );
-    if (outcome === "write-rejected") this.requestSyncAll("retry");
+    if (outcome === "write-rejected" || outcome === "awaiting-cloud") this.requestSyncAll("retry");
   }
 
   private async createCloudNote(
@@ -1831,7 +1831,10 @@ export class SyncService {
       !this.unrevisionedClearPullDone &&
       unresolved.some(hasUnrevisionedNoteClear) &&
       (await this.noteRevisionsSupported()) === true;
-    if (pullsForUnrevisionedClear || unresolved.some((note) => note.cloud_create_rejected)) {
+    if (
+      pullsForUnrevisionedClear ||
+      unresolved.some((note) => note.cloud_create_rejected || note.cloud_create_pending)
+    ) {
       this.unrevisionedClearPullDone ||= pullsForUnrevisionedClear;
       await this.pullNotes(teamOnly, true);
       pending = (await window.electronAPI.getPendingNotes?.(teamOnly ? "team" : undefined)) ?? [];
@@ -1931,23 +1934,9 @@ export class SyncService {
             ...scope,
           }))
         );
-        for (const {
-          client_note_id,
-          id: cloudId,
-          updated_at,
-          revision,
-          write_applied,
-        } of created) {
-          const local = chunk.find(({ note }) => note.client_note_id === client_note_id);
-          if (local) {
-            await this.acknowledgeCloudNoteCreate(local.note, {
-              id: cloudId,
-              client_note_id,
-              updated_at: updated_at ?? null,
-              revision,
-              write_applied,
-            });
-          }
+        for (const cloud of created) {
+          const local = chunk.find(({ note }) => note.client_note_id === cloud.client_note_id);
+          if (local) await this.acknowledgeCloudNoteCreate(local.note, cloud);
         }
       } catch (err) {
         if (isAuthContextError(err)) throw err;
@@ -2079,7 +2068,7 @@ export class SyncService {
             continue;
           }
 
-          if (teamOnly && !cloudNote.space_id) {
+          if (teamOnly && !cloudNote.space_id && !local?.cloud_create_pending) {
             // A personal row whose local copy still sits in a team space
             // announces a team→personal transition — apply it, or a later
             // edit's push would re-team the privatized note.
@@ -2136,6 +2125,39 @@ export class SyncService {
           }
 
           if (local?.deleted_at) continue;
+          if (local?.cloud_create_pending) {
+            if (cloudNote.folder_id && !cloudToLocal.has(cloudNote.folder_id)) {
+              parkedRows++;
+              continue;
+            }
+            const result = await window.electronAPI.acknowledgeNoteCreate?.(
+              local.id,
+              local,
+              cloudNote.id,
+              cloudNote.updated_at,
+              cloudNote.user_id ?? null,
+              {
+                reconcilePending: true,
+                cloudNote,
+                cloudRevision: cloudNote.revision ?? null,
+                localFolderId: resolvePulledNoteFolderId(
+                  cloudNote,
+                  space.id,
+                  cloudToLocal,
+                  defaultFolderId
+                ),
+                localSpaceId: space.id,
+              }
+            );
+            if (result?.outcome === "conflict") {
+              await this.surfaceNoteConflict(local.client_note_id, cloudNote);
+            } else if (result?.outcome === "synced" || result?.outcome === "pending") {
+              await this.settleNoteConflict(local.client_note_id);
+            } else {
+              parkedRows++;
+            }
+            continue;
+          }
           const preRevision =
             local &&
             !hasNoteRevision(local.cloud_revision) &&

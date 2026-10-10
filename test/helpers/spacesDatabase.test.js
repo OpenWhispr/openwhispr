@@ -1753,3 +1753,17 @@ test("upsertSpaceFromCloud never adopts by team for multi-team spaces", (t) => {
   assert.notEqual(fresh.client_space_id, "legacy-client-id");
   assert.equal(fresh.sync_status, "pending", "a genuinely new space still backfills");
 });
+
+test("a deferred create receipt retains team retraction while personal backup is off", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const team = createTestTeamSpace(db, { name: "Deferred move" }).space;
+  const note = db.saveNote("Draft", "team work", "personal", null, null, null, team.id).note;
+  db.updateNote(note.id, { space_id: db.getPrivateSpaceId(), folder_id: null });
+  const ack = db.acknowledgeNoteCreate(note.id, note, "team-cloud", null, null, {
+    requiresReconciliation: true,
+  });
+  assert.equal(ack.outcome, "awaiting-cloud");
+  assert.equal(db.getNote(note.id).left_team, 1);
+  assert.ok(db.getPendingNotes("team").some((candidate) => candidate.id === note.id));
+});

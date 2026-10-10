@@ -1,5 +1,6 @@
 import { cloudGet, cloudPost, cloudPatch, cloudDelete } from "./cloudApi.js";
 import { buildNotesListPath } from "./noteListQuery";
+import type { CloudNoteCreateResult } from "./noteCreateAck";
 
 interface NoteInput {
   client_note_id?: string;
@@ -35,6 +36,7 @@ export interface CloudNote {
   content_state?: "set" | "clear" | null;
   enhanced_content_state?: "set" | "clear" | null;
   write_applied?: boolean;
+  row_created?: boolean;
   id: string;
   client_note_id: string | null;
   title: string | null;
@@ -80,13 +82,7 @@ async function create(note: NoteInput): Promise<CloudNote> {
 }
 
 interface NoteBatchCreateResult {
-  created: {
-    client_note_id: string;
-    id: string;
-    updated_at?: string;
-    revision?: number;
-    write_applied?: boolean;
-  }[];
+  created: CloudNoteCreateResult[];
 }
 
 async function batchCreate(notes: NoteInput[]): Promise<NoteBatchCreateResult> {

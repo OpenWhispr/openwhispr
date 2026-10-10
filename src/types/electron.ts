@@ -433,6 +433,7 @@ export interface NoteItem {
   cloud_updated_at?: string | null;
   cloud_revision?: number | null;
   cloud_create_rejected?: number;
+  cloud_create_pending?: string | null;
   content_sync_operation?: "set" | "clear" | null;
   enhanced_content_sync_operation?: "set" | "clear" | null;
   created_at: string;
@@ -486,7 +487,15 @@ export type NoteUpdateSnapshot = NotePushSnapshot;
 
 export interface NoteCreateAckResult {
   success: boolean;
-  outcome: "synced" | "pending" | "already-linked" | "orphaned" | "unresolved";
+  outcome:
+    | "synced"
+    | "pending"
+    | "already-linked"
+    | "orphaned"
+    | "unresolved"
+    | "awaiting-cloud"
+    | "conflict";
+  note?: NoteItem;
 }
 
 export interface NoteCreateAckWriteOptions {
@@ -494,6 +503,11 @@ export interface NoteCreateAckWriteOptions {
   cloudRevision?: number | null;
   // The server refused the create without writing it (write_applied: false).
   writeRejected?: boolean;
+  cloudNote?: NoteCloudText;
+  requiresReconciliation?: boolean;
+  reconcilePending?: boolean;
+  localFolderId?: number | null;
+  localSpaceId?: number;
 }
 
 // A cloud note row's text fields, as a pull or a write response carries them.

@@ -2,16 +2,18 @@ import type {
   NoteCreateAckResult,
   NoteCreateAckWriteOptions,
   NoteCreateSnapshot,
+  NoteCloudText,
   NoteItem,
 } from "../types/electron";
 
-export interface CloudNoteCreateResult {
+export interface CloudNoteCreateResult extends NoteCloudText {
   id: string;
   client_note_id: string | null;
   updated_at?: string | null;
   user_id?: string | null;
   revision?: number;
   write_applied?: boolean;
+  row_created?: boolean;
 }
 
 export interface NoteCreateAckDependencies {
@@ -36,6 +38,7 @@ export type NoteCreateResolution =
   | "invalid-response"
   | "unmatched-response"
   | "orphan-cleaned"
+  | "orphan-unproven"
   | "orphan-cleanup-failed";
 
 export interface NoteCreateAckOptions {
@@ -53,6 +56,9 @@ async function cleanupOrphanedCreate(
   cloud: CloudNoteCreateResult,
   dependencies: NoteCreateAckDependencies
 ): Promise<NoteCreateResolution> {
+  // Applied upserts can target an existing row. Only an atomic insertion
+  // receipt gives this request authority to clean up its cloud orphan.
+  if (cloud.row_created !== true) return "orphan-unproven";
   try {
     await dependencies.deleteCloud(cloud.id);
     return "orphan-cleaned";
@@ -82,6 +88,9 @@ export async function resolveCloudNoteCreate(
   }
 
   const writeRejected = cloud.write_applied === false;
+  const hasCloudText =
+    typeof cloud.content === "string" &&
+    (typeof cloud.enhanced_content === "string" || cloud.enhanced_content === null);
   const result = await dependencies.acknowledge(
     note.id,
     note,
@@ -92,6 +101,10 @@ export async function resolveCloudNoteCreate(
       settleIfUnchanged: (options.settleIfUnchanged ?? true) && !writeRejected,
       cloudRevision: writeRejected ? (note.cloud_revision ?? null) : (cloud.revision ?? null),
       writeRejected,
+      ...(!writeRejected && {
+        cloudNote: hasCloudText ? cloud : undefined,
+        requiresReconciliation: !hasCloudText,
+      }),
     }
   );
   if (!result) return "bridge-unavailable";
