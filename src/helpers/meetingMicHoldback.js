@@ -102,10 +102,10 @@ const isDuplicateMicSegment = ({
 
 /**
  * Indices (descending) of committed mic segments that an arriving system final
- * proves to be echo. Scans newest→oldest and stops early once a candidate is
- * older than the largest window (today's `break`; the array is committedAt-
- * ordered, so this is an optimisation that is only unsound under mixed
- * per-candidate windows — see the characterization test).
+ * proves to be echo. Segments are appended when they commit. Holdback commits
+ * a segment seconds after it was spoken, so a newer entry can have a capture
+ * time outside every window while an earlier entry's commit time is still
+ * inside its own. The scan walks the whole list.
  */
 const selectRacingMicEntryIndices = ({
   segments,
@@ -124,10 +124,7 @@ const selectRacingMicEntryIndices = ({
         candidate.hasBleedEvidence || candidate.likelyRenderBleed
           ? duplicateWindowMs
           : retractWindowMs;
-      if (!isWithinRetractWindow({ candidate, systemTimestamp, windowMs })) {
-        if (candidate.timestamp < systemTimestamp - duplicateWindowMs) break;
-        continue;
-      }
+      if (!isWithinRetractWindow({ candidate, systemTimestamp, windowMs })) continue;
     }
     const hasMicDuplicateRisk =
       candidate.likelyRenderBleed ||
