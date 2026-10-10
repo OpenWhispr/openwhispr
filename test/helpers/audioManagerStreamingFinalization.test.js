@@ -175,6 +175,73 @@ test("streaming completion keeps the recording occurrence time", async (t) => {
   assert.equal(completion.analyticsOccurredAt, new Date(recordingStartedAt).toISOString());
 });
 
+test("BYOK streams complete without sending transcripts to Cloud usage metering", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  for (const provider of ["gemini", "openai-realtime", "tinfoil-realtime", "corti", "orukeet"]) {
+    await t.test(provider, async () => {
+      globalThis.__streamingFinalizationSettings = {
+        useLocalWhisper: false,
+        cloudTranscriptionMode: "byok",
+        isSignedIn: true,
+        insightsSyncEnabled: true,
+      };
+      const { manager } = createFinalizingManager(AudioManager);
+      manager.streamingFinalText = "My own key still works.";
+      manager.getStreamingProviderName = () => provider;
+      manager.finalizeChineseScript = async (text) => text;
+      let completion;
+      manager.onTranscriptionComplete = (result) => {
+        completion = result;
+      };
+      const usageCalls = [];
+      globalThis.window.electronAPI.cloudStreamingUsage = async (...args) => {
+        usageCalls.push(args);
+        return { success: true };
+      };
+      const events = [];
+      globalThis.window.dispatchEvent = (event) => events.push(event.type);
+
+      await manager.stopStreamingRecording();
+      await new Promise(setImmediate);
+
+      assert.equal(completion.text, "My own key still works.");
+      assert.equal(completion.source, `${provider}-streaming`);
+      assert.ok(completion.clientTranscriptionId);
+      assert.ok(completion.analyticsOccurredAt);
+      assert.deepEqual(usageCalls, []);
+      assert.equal(events.includes("usage-changed"), false);
+    });
+  }
+});
+
+test("OpenWhispr Cloud streams still report usage even when the provider is Gemini", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  globalThis.__streamingFinalizationSettings = {
+    useLocalWhisper: false,
+    cloudTranscriptionMode: "openwhispr",
+    isSignedIn: true,
+  };
+  const { manager } = createFinalizingManager(AudioManager);
+  manager.streamingFinalText = "Cloud words count.";
+  manager.getStreamingProviderName = () => "gemini";
+  manager.finalizeChineseScript = async (text) => text;
+  const usageCalls = [];
+  globalThis.window.electronAPI.cloudStreamingUsage = async (...args) => {
+    usageCalls.push(args);
+    return { success: true };
+  };
+  const events = [];
+  globalThis.window.dispatchEvent = (event) => events.push(event.type);
+
+  await manager.stopStreamingRecording();
+  await new Promise(setImmediate);
+
+  assert.equal(usageCalls.length, 1);
+  assert.equal(usageCalls[0][0], "Cloud words count.");
+  assert.equal(usageCalls[0][2].sttProvider, "gemini");
+  assert.equal(events.includes("usage-changed"), true);
+});
+
 test("only a provider that prefers its stop transcript pastes it over the streamed finals", async (t) => {
   const AudioManager = await loadManagerClass(t);
   globalThis.window.dispatchEvent = () => true;
@@ -586,7 +653,9 @@ test("a no-final stream whose Cloud upload finds no speech keeps the recording q
 
 test("Orukeet uses the acknowledged final even if the transcript event is delayed", async (t) => {
   const AudioManager = await loadManagerClass(t);
+  useManagedOrukeetSettings();
   const { manager } = createFinalizingManager(AudioManager);
+  manager.getStreamingProviderName = () => "orukeet";
   manager.getStreamingProvider = () => ({
     finalizeAcknowledged: true,
     finalize: async () => ({ success: true, text: "Acknowledged final" }),
@@ -1390,8 +1459,13 @@ async function stopManagedDictation(
   const errors = [];
   manager.onError = (error) => errors.push(error);
   const stopResult = await manager.stopStreamingRecording();
-  // Usage settles only after a non-empty transcript is published.
-  if (published.some((result) => result.text)) await settled;
+  // Only Cloud streams report usage after publishing a non-empty transcript.
+  if (
+    published.some((result) => result.text) &&
+    globalThis.__streamingFinalizationSettings.cloudTranscriptionMode === "openwhispr"
+  ) {
+    await settled;
+  }
   return { manager, uploads, reasonCalls, usage, published, errors, stopResult };
 }
 

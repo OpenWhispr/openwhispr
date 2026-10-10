@@ -3207,7 +3207,7 @@
     "account": {
       "badges": {
         "free": "مجاني",
-        "limitReached": "تم بلوغ الحد الأقصى",
+        "limitReached": "تم بلوغ الحد السحابي",
         "pastDue": "متأخر الدفع",
         "pro": "Pro",
         "business": "Business",
@@ -3243,7 +3243,8 @@
         "title": "لم نتمكن من معالجة دفعتك"
       },
       "planDescriptions": {
-        "freeUsage": "{{used}} من {{limit}} كلمة هذا الأسبوع",
+        "freeUsage": "{{used}} من {{limit}} كلمة في OpenWhispr Cloud هذا الأسبوع",
+        "byokUnlimited": "يبقى استخدام مفاتيح API الخاصة بك والنماذج المحلية غير محدود.",
         "nextBilling": "الفوترة القادمة: {{date}}",
         "pastDue": "{{used}} من {{limit}} كلمة مجانية هذا الأسبوع - قم بتحديث الدفع لاستعادة Pro",
         "trial": "عدد الأيام المتبقية: {{days}} - تفريغ غير محدود",
@@ -3363,8 +3364,8 @@
       "title": "الحساب",
       "toasts": {
         "approachingLimit": {
-          "description": "لقد استخدمت {{used}} من أصل {{limit}} كلمة مجانية هذا الأسبوع. قم بالترقية إلى Pro للاستخدام غير المحدود.",
-          "title": "الاقتراب من الحد الأسبوعي"
+          "description": "استخدمت {{used}} من {{limit}} كلمة في OpenWhispr Cloud هذا الأسبوع. يبقى استخدام مفاتيح API الخاصة بك والنماذج المحلية غير محدود.",
+          "title": "الاقتراب من الحد السحابي للكلمات"
         }
       },
       "trialCta": {
@@ -4537,8 +4538,8 @@
     "inviteTeam": "ادعُ فريقك",
     "settings": "الإعدادات",
     "support": "الدعم",
-    "limitReached": "تم الوصول إلى الحد الأسبوعي",
-    "limitReachedDescription": "قم بالترقية إلى Pro للحصول على تفريغ صوتي غير محدود.",
+    "limitReached": "تم بلوغ الحد السحابي",
+    "limitReachedDescription": "يبقى استخدام مفاتيح API الخاصة بك والنماذج المحلية غير محدود.",
     "viewPlans": "عرض الخطط",
     "upgradeTitle": "الترقية إلى Pro",
     "upgradeDescription": "تفريغ صوتي غير محدود، أكثر دقة، وأسرع.",

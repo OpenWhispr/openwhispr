@@ -5877,7 +5877,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         ...(batchWarning ? { warning: batchWarning } : {}),
       });
 
-      if (!usedBatchFallback) {
+      // Only OpenWhispr Cloud streams consume the account's word allowance.
+      // BYOK/self-hosted transcripts stay out of the cloud metering endpoint;
+      // opted-in history and insights sync use their own persistence paths.
+      const usesOpenWhisprCloud =
+        !stSettings.useLocalWhisper && stSettings.cloudTranscriptionMode === "openwhispr";
+      if (!usedBatchFallback && usesOpenWhisprCloud) {
         (async () => {
           try {
             await withSessionRefresh(async () => {
@@ -5898,14 +5903,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                   // makes the row the server writes and the local one the same
                   // event. Held back until opt-in, a later sync would push the
                   // local copy under a second id and double every total.
-                  // Cosmetic caveat: the server labels its row mode
-                  // "openwhispr_cloud" whatever actually transcribed the audio,
-                  // and BYOK streaming reaches here too (tinfoil-realtime,
-                  // corti, openai-realtime — see resolveStreamingProviderName).
-                  // That row only exists when localDate rides along, which is
-                  // exactly when this device also pushes its own copy under the
-                  // same id, and last-write-wins replaces the label with the
-                  // real mode. Neither summary renders mode either way.
                   clientTranscriptionId,
                   ...(analyticsSyncEnabled()
                     ? {
@@ -5928,7 +5925,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           }
           window.dispatchEvent(new Event("usage-changed"));
         })();
-      } else {
+      } else if (usedBatchFallback || usedCloudReasoning) {
         window.dispatchEvent(new Event("usage-changed"));
       }
 

@@ -48,7 +48,7 @@ test("invalid completed cleanup keeps raw text across dictation routes", async (
       finalizeChineseScript: async (text) => text,
     });
 
-  for (const route of ["batch", "streaming", "translation"]) {
+  for (const route of ["batch", "streaming", "byok-streaming", "translation"]) {
     await t.test(
       `${route} Cloud cleanup snapshots its custom prompt and rejects duplicated output`,
       async () => {
@@ -69,7 +69,10 @@ test("invalid completed cleanup keeps raw text across dictation routes", async (
             result = await manager.processWithOpenWhisprCloud(new Blob(["synthetic audio"]));
             result = { ...result, ...manager._takePendingResultExtras() };
             assert.equal(result.rawText, RAW);
-          } else if (route === "streaming") {
+          } else if (route === "streaming" || route === "byok-streaming") {
+            useSettingsStore.setState({
+              cloudTranscriptionMode: route === "byok-streaming" ? "byok" : "openwhispr",
+            });
             Object.assign(manager, {
               streamingFinalText: RAW,
               streamingCleanupFns: [],
@@ -88,6 +91,8 @@ test("invalid completed cleanup keeps raw text across dictation routes", async (
               },
             });
             let usageOptions;
+            const usageEvents = [];
+            window.dispatchEvent = (event) => usageEvents.push(event.type);
             window.electronAPI.cloudStreamingUsage = async (text, seconds, options) => {
               usageOptions = options;
               return { success: true };
@@ -95,8 +100,11 @@ test("invalid completed cleanup keeps raw text across dictation routes", async (
             await manager._finalizeStreamingRecording(null);
             assert.equal(result.rawText, RAW);
             await new Promise(setImmediate);
-            // The successful /api/reason call already logged this dictation.
-            assert.equal(usageOptions?.sendLogs, false);
+            // Cloud cleanup refreshes billing even with BYOK transcription,
+            // but only a Cloud stream needs the streaming metering request.
+            assert.equal(usageEvents.includes("usage-changed"), true);
+            if (route === "byok-streaming") assert.equal(usageOptions, undefined);
+            else assert.equal(usageOptions?.sendLogs, false);
           } else {
             let translationInput;
             manager.processWithReasoningModel = async (text) => {

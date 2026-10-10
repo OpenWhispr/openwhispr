@@ -1617,7 +1617,7 @@
     "account": {
       "badges": {
         "free": "Gratis",
-        "limitReached": "Límite alcanzado",
+        "limitReached": "Límite de la nube alcanzado",
         "pastDue": "Pago vencido",
         "pro": "Pro",
         "business": "Business",
@@ -1653,7 +1653,8 @@
         "title": "No pudimos procesar tu pago"
       },
       "planDescriptions": {
-        "freeUsage": "{{used}} / {{limit}} palabras esta semana",
+        "freeUsage": "{{used}} / {{limit}} palabras de OpenWhispr Cloud esta semana",
+        "byokUnlimited": "Tus propias claves API y los modelos locales siguen sin límite.",
         "nextBilling": "Próxima facturación: {{date}}",
         "pastDue": "{{used}} / {{limit}} palabras gratis esta semana: actualiza el pago para restaurar Pro",
         "trial": "{{days}} días restantes: transcripciones ilimitadas",
@@ -1776,8 +1777,8 @@
       "title": "Cuenta",
       "toasts": {
         "approachingLimit": {
-          "description": "Has usado {{used}} de {{limit}} palabras gratis esta semana. Mejora a Pro para uso ilimitado.",
-          "title": "Cerca del límite semanal"
+          "description": "Has usado {{used}} de {{limit}} palabras de OpenWhispr Cloud esta semana. Tus propias claves API y los modelos locales siguen sin límite.",
+          "title": "Cerca del límite de palabras de la nube"
         }
       },
       "trialCta": {
@@ -3669,8 +3670,8 @@
     "inviteTeam": "Invita a tu equipo",
     "settings": "Configuración",
     "support": "Soporte",
-    "limitReached": "Límite semanal alcanzado",
-    "limitReachedDescription": "Mejora a Pro para transcripciones ilimitadas.",
+    "limitReached": "Límite de la nube alcanzado",
+    "limitReachedDescription": "Tus propias claves API y los modelos locales siguen sin límite.",
     "viewPlans": "Ver planes",
     "upgradeTitle": "Mejorar a Pro",
     "upgradeDescription": "Transcripción ilimitada, más precisa y más rápida.",
