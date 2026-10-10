@@ -598,6 +598,31 @@ test("proxied providers only run the dictionary-echo check when they sent bias",
   });
 });
 
+test("Gemini batch dictation forwards the selected mode to the main-process proxy", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-gemini-dictation-mode-test-",
+    settingsKey: "__geminiDictationModeSettings",
+  });
+  const calls = [];
+  window.electronAPI.proxyGeminiTranscription = async (payload) => {
+    calls.push(payload);
+    return { text: "Clean dictation" };
+  };
+  captureFetch(t, rejectFetch("Gemini must use its main-process proxy"));
+  const manager = createManager({ getTranscriptionModel: () => "gemini-3.5-transcribe" });
+  const audio = new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" });
+  for (const mode of ["smart", "verbatim"]) {
+    setSettings({
+      useLocalWhisper: false,
+      transcriptionMode: "providers",
+      cloudTranscriptionProvider: "gemini",
+      geminiDictationMode: mode,
+    });
+    assert.equal((await manager.processWithOpenAIAPI(audio)).text, "Clean dictation");
+    assert.equal(calls.at(-1).mode, mode);
+  }
+});
+
 test("config-error code survives a failed local fallback", async (t) => {
   const { window, setSettings, createManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-fallback-wrap-test-",

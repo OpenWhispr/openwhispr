@@ -1102,6 +1102,7 @@ export interface SettingsState
   setChineseScriptPreference: (value: ChineseScriptPreference) => void;
   setCloudTranscriptionProvider: (value: string) => void;
   setCloudTranscriptionModel: (value: string) => void;
+  setGeminiDictationMode: (value: "verbatim" | "smart") => void;
   setCloudTranscriptionBaseUrl: (value: string) => void;
   setCloudTranscriptionMode: (value: string) => void;
   switchCloudTranscriptionProvider: (
@@ -1517,6 +1518,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     DEFAULT_CLOUD_TRANSCRIPTION_PROVIDER
   ),
   cloudTranscriptionModel: readString("cloudTranscriptionModel", "gpt-4o-mini-transcribe"),
+  geminiDictationMode:
+    readString("geminiDictationMode", "verbatim") === "smart" ? "smart" : "verbatim",
   cloudTranscriptionBaseUrl: readString(
     "cloudTranscriptionBaseUrl",
     API_ENDPOINTS.TRANSCRIPTION_BASE
@@ -2015,6 +2018,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     createStringSetter("chineseScriptPreference")(normalizeChineseScriptPreference(value)),
   setCloudTranscriptionProvider: createStringSetter("cloudTranscriptionProvider"),
   setCloudTranscriptionModel: createStringSetter("cloudTranscriptionModel"),
+  setGeminiDictationMode: (value) =>
+    createStringSetter("geminiDictationMode")(value === "smart" ? "smart" : "verbatim"),
   setCloudTranscriptionBaseUrl: createStringSetter("cloudTranscriptionBaseUrl"),
 
   // Every provider shares one model slot per scope, so a plain provider write
@@ -2587,6 +2592,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       s.setCloudTranscriptionProvider(settings.cloudTranscriptionProvider);
     if (settings.cloudTranscriptionModel !== undefined)
       s.setCloudTranscriptionModel(settings.cloudTranscriptionModel);
+    if (settings.geminiDictationMode !== undefined)
+      s.setGeminiDictationMode(settings.geminiDictationMode);
     if (settings.cloudTranscriptionBaseUrl !== undefined)
       s.setCloudTranscriptionBaseUrl(settings.cloudTranscriptionBaseUrl);
     if (settings.cloudTranscriptionMode !== undefined)

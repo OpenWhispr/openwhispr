@@ -863,6 +863,12 @@
     }
   },
   "transcription": {
+    "geminiDictationMode": {
+      "label": "Modo de transcripción del dictado",
+      "verbatim": "Literal (predeterminado)",
+      "smart": "Smart",
+      "description": "Smart elimina muletillas y repeticiones y aplica correcciones habladas sin una llamada de limpieza adicional. Cambia tus palabras y puede omitir contenido intencionado. Literal conserva lo que dices. La configuración independiente de limpieza del dictado no cambia."
+    },
     "modelCard": "Ficha del modelo",
     "deleteModel": {
       "title": "Eliminar modelo",

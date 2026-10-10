@@ -863,6 +863,12 @@
     }
   },
   "transcription": {
+    "geminiDictationMode": {
+      "label": "Transkriptionsmodus für Diktate",
+      "verbatim": "Wortgetreu (Standard)",
+      "smart": "Smart",
+      "description": "Smart entfernt Füllwörter und Wiederholungen und setzt gesprochene Korrekturen ohne zusätzlichen Bereinigungsaufruf um. Dabei kann beabsichtigter Text verloren gehen. Wortgetreu bewahrt das Gesagte. Die separate Einstellung zur Diktatbereinigung bleibt unverändert."
+    },
     "modelCard": "Modellkarte",
     "deleteModel": {
       "title": "Modell löschen",

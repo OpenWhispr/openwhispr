@@ -529,11 +529,12 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
   gemini: {
     displayName: "Gemini",
     ipc: () => window.electronAPI?.proxyGeminiTranscription,
-    buildPayload: ({ audioBuffer, model, language, keyterms }) => ({
+    buildPayload: ({ audioBuffer, model, language, keyterms, apiSettings }) => ({
       audioBuffer,
       model,
       language,
       keyterms: keyterms.length > 0 ? keyterms : undefined,
+      mode: apiSettings.geminiDictationMode === "smart" ? "smart" : "verbatim",
     }),
   },
   xai: {

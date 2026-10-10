@@ -863,6 +863,12 @@
     }
   },
   "transcription": {
+    "geminiDictationMode": {
+      "label": "Modalità di trascrizione della dettatura",
+      "verbatim": "Letterale (predefinita)",
+      "smart": "Smart",
+      "description": "Smart elimina intercalari e ripetizioni e applica le correzioni pronunciate senza una chiamata di pulizia aggiuntiva. Modifica le tue parole e può omettere contenuti voluti. Letterale conserva ciò che dici. L’impostazione separata di pulizia della dettatura non cambia."
+    },
     "modelCard": "Scheda del modello",
     "deleteModel": {
       "title": "Elimina modello",

@@ -863,6 +863,12 @@
     }
   },
   "transcription": {
+    "geminiDictationMode": {
+      "label": "Mode de transcription de la dictée",
+      "verbatim": "Mot à mot (par défaut)",
+      "smart": "Smart",
+      "description": "Smart supprime les hésitations et répétitions et applique les corrections orales sans appel de nettoyage supplémentaire. Il modifie vos propos et peut omettre du contenu voulu. Mot à mot conserve ce que vous dites. Le réglage distinct de nettoyage de la dictée reste inchangé."
+    },
     "modelCard": "Fiche du modèle",
     "deleteModel": {
       "title": "Supprimer le modèle",

@@ -863,6 +863,12 @@
     }
   },
   "transcription": {
+    "geminiDictationMode": {
+      "label": "Dictation transcription mode",
+      "verbatim": "Verbatim (default)",
+      "smart": "Smart",
+      "description": "Smart removes fillers and repetitions and applies spoken corrections without a separate cleanup call. It changes your wording and may omit intended speech. Verbatim preserves what you say. This does not change the separate Dictation Cleanup setting."
+    },
     "modelCard": "Model card",
     "deleteModel": {
       "title": "Delete Model",
