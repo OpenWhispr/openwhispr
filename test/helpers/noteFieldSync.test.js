@@ -318,7 +318,7 @@ test("rejects unsupported/contradictory clears; another cloud row or account is 
   );
   assert.equal(db.getNote(row.id).transcript, INITIAL.transcript);
   const skipped = db.upsertNoteFromCloud({ ...INITIAL, id: "other-cloud", content: "Other" }, null);
-  assert.equal(skipped.cloud_id, INITIAL.id);
+  assert.equal(skipped, null);
   assert.equal(db.getNote(row.id).content, INITIAL.content);
   db.updateNote(row.id, { cloud_id: null, client_note_id: "forked-identity" });
   assert.equal(db.getNote(row.id).cloud_revision, null);

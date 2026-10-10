@@ -6332,7 +6332,8 @@ class DatabaseManager {
           { otherAccount: Boolean(otherAccount), otherCloudRow: Boolean(otherCloudRow) },
           "database"
         );
-        return existing;
+        // IPC broadcasts every returned note, so a skipped row must stay private.
+        return null;
       }
       const versioned = hasNoteRevision(cloudNote.revision);
       // A copy older than the revision this device acknowledged is stale. One

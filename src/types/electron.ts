@@ -3524,7 +3524,7 @@ declare global {
         cloudNote: Record<string, unknown>,
         localFolderId: number | null,
         localSpaceId?: number | null
-      ) => Promise<NoteItem>;
+      ) => Promise<NoteItem | null>;
       acknowledgeNoteCreate?: (
         id: number,
         snapshot: NoteCreateSnapshot,
