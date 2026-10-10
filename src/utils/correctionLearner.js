@@ -38,10 +38,13 @@ function editDistance(a, b) {
   return dp[m][n];
 }
 
-/** Tokenize text into words, stripping punctuation from edges */
+/**
+ * Tokenize text into words, stripping punctuation from edges. Control characters
+ * split words too: iTerm2's accessibility value contains NUL characters.
+ */
 function tokenize(text) {
   return text
-    .split(/\s+/)
+    .split(/[\s\p{Cc}]+/u)
     .map((w) => w.replace(/^[^\p{L}\p{N}_]+|[^\p{L}\p{N}_]+$/gu, ""))
     .filter((w) => w.length > 0);
 }

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Dictation
+
+- **Learned corrections no longer save joined words from iTerm2.** iTerm2's accessibility value contains NUL characters, which the correction learner didn't treat as word breaks, so editing a dictation there could save a junk entry such as `I␀don't` to your dictionary and miss the word you actually fixed. Control characters now separate words. (#2605)
+
 ## [1.10.3] - 2026-10-09
 
 The assistant can now act in other apps: it drafts and sends email, posts to Slack, and works with Linear and GitHub issues, always behind a card you approve. Notes get templates for the AI Summary, actions that answer in a docked chat, and real tables. OpenWhispr also uses far less memory when idle, shows a plain-language error when your API key or provider fails, and fixes a long list of bugs on Linux, Windows and macOS.

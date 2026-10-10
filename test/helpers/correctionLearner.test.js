@@ -59,3 +59,13 @@ test("the same correction appearing twice is only learned once", () => {
   const sinead = result.filter((w) => w.toLowerCase() === "sinead");
   assert.ok(sinead.length <= 1);
 });
+
+test("control characters separate words, so terminal field values don't learn joined words", () => {
+  // iTerm2's accessibility value contains NUL characters, so "I don't" can read back as "I\0don't"
+  assert.deepEqual(
+    extractCorrections("I don't know about that", "I\u0000don't know about that", []),
+    []
+  );
+  const result = extractCorrections("hey Shunade how are you", "hey\u0000Sinead how are you", []);
+  assert.ok(result.includes("Sinead"));
+});
