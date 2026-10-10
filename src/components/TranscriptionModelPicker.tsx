@@ -117,9 +117,11 @@ function LocalModelCard({
         <div className="shrink-0">
           {isDownloaded ? (
             <div
+              // Static glow like the cloud dot — an infinite pulse here burned
+              // idle GPU (#2521).
               className={`w-1.5 h-1.5 rounded-full ${
                 isSelected
-                  ? "bg-primary shadow-[0_0_6px_oklch(0.62_0.22_260/0.6)] animate-[pulse-glow_2s_ease-in-out_infinite]"
+                  ? "bg-primary shadow-[0_0_6px_oklch(0.62_0.22_260/0.6)]"
                   : "bg-success shadow-[0_0_4px_rgba(34,197,94,0.5)]"
               }`}
             />

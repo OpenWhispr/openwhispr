@@ -92,6 +92,7 @@ export function ModelCard({
         : "bg-muted-foreground/30";
     }
     if (isDownloaded) {
+      // Same static glow as the cloud dot — an infinite pulse here burned idle GPU.
       return isSelected
         ? "bg-primary shadow-[0_0_6px_oklch(0.62_0.22_260/0.6)]"
         : "bg-success shadow-[0_0_4px_rgba(34,197,94,0.5)]";
@@ -112,11 +113,7 @@ export function ModelCard({
       <div className="flex items-center gap-1.5">
         <div
           className={`w-1.5 h-1.5 rounded-full shrink-0 ${getStatusDotClass()} ${
-            isSelected && isDownloaded
-              ? "animate-[pulse-glow_2s_ease-in-out_infinite]"
-              : isDownloading
-                ? "animate-[spinner-rotate_1s_linear_infinite]"
-                : ""
+            isDownloading ? "animate-[spinner-rotate_1s_linear_infinite]" : ""
           }`}
         />
 
