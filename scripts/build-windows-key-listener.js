@@ -22,6 +22,7 @@ if (!isWindows) {
 
 const projectRoot = path.resolve(__dirname, "..");
 const cSource = path.join(projectRoot, "resources", "windows-key-listener.c");
+const csSource = path.join(projectRoot, "resources", "windows-key-listener.cs");
 const outputDir = path.join(projectRoot, "resources", "bin");
 const outputBinary = path.join(outputDir, "windows-key-listener.exe");
 
@@ -48,7 +49,7 @@ function isBinaryUpToDate() {
 
   try {
     const binaryStat = fs.statSync(outputBinary);
-    const sourceStat = fs.statSync(cSource);
+    const sourceStat = fs.existsSync(csSource) ? fs.statSync(csSource) : fs.statSync(cSource);
     return binaryStat.mtimeMs >= sourceStat.mtimeMs;
   } catch {
     return false;
@@ -108,6 +109,14 @@ function tryCompile() {
       useShell: true,
       getCommand: () =>
         `cl /O2 /nologo ${quotePath(cSource)} /Fe:${quotePath(outputBinary)} user32.lib`,
+    },
+    // C# Compiler (.NET Framework, built into Windows)
+    {
+      name: "CSC",
+      check: { command: "C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe", args: ["/?"] },
+      useShell: true,
+      getCommand: () =>
+        `"C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe" /nologo /optimize /target:winexe /out:${quotePath(outputBinary)} ${quotePath(csSource)}`,
     },
     // MinGW-w64 - can use shell: false
     {

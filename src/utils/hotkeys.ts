@@ -40,7 +40,7 @@ export function serializeHotkeyList(list: string[]): string {
 }
 
 export function isMouseButtonHotkey(hotkey: string): boolean {
-  return /^MouseButton[45]$/i.test(hotkey || "");
+  return /^MouseButton[345]$/i.test(hotkey || "");
 }
 
 /**
@@ -145,7 +145,10 @@ export function formatHotkeyLabelForPlatform(hotkey: string, platform: Platform)
   }
 
   if (isMouseButtonHotkey(hotkey)) {
-    return hotkey === "MouseButton4" ? "Mouse Button 4" : "Mouse Button 5";
+    if (hotkey.toLowerCase() === "mousebutton3") return "Mouse Button 3";
+    if (hotkey.toLowerCase() === "mousebutton4") return "Mouse Button 4";
+    if (hotkey.toLowerCase() === "mousebutton5") return "Mouse Button 5";
+    return hotkey;
   }
 
   if (hotkey.includes("+")) {
