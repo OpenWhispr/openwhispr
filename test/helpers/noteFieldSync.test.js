@@ -95,6 +95,8 @@ function protocolCloud(initial = INITIAL) {
         return { success: true, data: { notes: [copy(row)] } };
       if (opts.path !== "/api/notes/update") return fallback.request(opts);
       const input = copy(opts.body);
+      const revisioned = Number.isSafeInteger(row.revision);
+      const mobile = opts.headers?.["x-openwhispr-platform"] === "mobile";
       if (input.base_revision !== undefined && input.base_revision !== row.revision)
         return {
           success: false,
@@ -109,22 +111,28 @@ function protocolCloud(initial = INITIAL) {
       row.title = input.title ?? row.title;
       for (const field of ["content", "enhanced_content"]) {
         let operation = input.field_updates?.[field];
-        if (!operation && input.base_revision === undefined && input[field] === removed[field])
-          continue;
-        // Legacy writes: text applies, and a blank from a client with a
-        // timestamp base (and no revision) is a clear.
-        if (!operation && input[field]?.trim()) operation = "set";
         if (
           !operation &&
-          input[field] === "" &&
-          input.base_updated_at &&
-          input.base_revision === undefined
+          !mobile &&
+          input.base_revision === undefined &&
+          input[field] === removed[field]
         )
-          operation = "clear";
+          continue;
+        // Only mobile's timestamp-based legacy blank is an explicit clear.
+        // Desktop blanks still write, but leave their intent unknown.
+        if (!operation && input[field]?.trim()) operation = "set";
+        if (!operation && input[field] === "" && input.base_revision === undefined) {
+          if (revisioned && mobile && input.base_updated_at) operation = "clear";
+          else {
+            if (revisioned && row[field]) row[`${field}_state`] = null;
+            row[field] = "";
+            continue;
+          }
+        }
         if (!operation) continue;
         if (operation === "clear") removed[field] = row[field];
         row[field] = operation === "clear" ? (field === "content" ? "" : null) : input[field];
-        row[`${field}_state`] = operation;
+        if (revisioned) row[`${field}_state`] = operation;
         if (field === "enhanced_content") {
           for (const meta of ["enhancement_prompt", "enhanced_at_content_hash"])
             row[meta] = operation === "clear" ? null : (input[meta] ?? null);
@@ -132,7 +140,7 @@ function protocolCloud(initial = INITIAL) {
             row.enhancement_template_id = input.enhancement_template_id ?? null;
         }
       }
-      row.revision += 1;
+      if (revisioned) row.revision += 1;
       row.updated_at = new Date(Date.parse(row.updated_at) + 1).toISOString();
       return { success: true, data: copy(row) };
     },
@@ -581,6 +589,223 @@ const listCalls = (cloud, kind) =>
 const updateCalls = (cloud) => cloud.calls.filter((call) => call.path === "/api/notes/update");
 const withoutRevision = (db, id) =>
   db.db.prepare("UPDATE notes SET cloud_revision = NULL WHERE id = ?").run(id);
+
+function unansweredRevisionProbeOnce(
+  cloud,
+  response = { success: false, status: 503, error: "Temporary capability discovery outage" }
+) {
+  let failed = false;
+  return {
+    ...cloud,
+    async request(opts) {
+      const query = new URLSearchParams(opts.path.split("?")[1] ?? "");
+      if (!failed && opts.path.startsWith("/api/notes/list") && query.get("limit") === "1") {
+        failed = true;
+        cloud.calls.push(copy(opts));
+        return copy(response);
+      }
+      return cloud.request(opts);
+    },
+  };
+}
+
+for (const field of ["content", "enhanced_content"]) {
+  for (const timestampBase of [true, false]) {
+    const baseLabel = timestampBase ? "with a timestamp base" : "without a timestamp base";
+
+    test(`${field}: legacy blanks ${baseLabel} distinguish desktop unknown intent from mobile clears`, async () => {
+      for (const platform of ["desktop", "mobile"]) {
+        const cloud = protocolCloud();
+        const result = await cloud.request({
+          path: "/api/notes/update",
+          headers: { "x-openwhispr-platform": platform },
+          body: {
+            id: INITIAL.id,
+            [field]: "",
+            ...(timestampBase ? { base_updated_at: INITIAL.updated_at } : {}),
+          },
+        });
+        const clear = platform === "mobile" && timestampBase;
+        assert.equal(result.success, true);
+        assert.equal(cloud.row()[field] ?? "", "");
+        assert.equal(cloud.row()[`${field}_state`], clear ? "clear" : null);
+        if (field === "enhanced_content") {
+          assert.equal(cloud.row().enhancement_prompt, clear ? null : INITIAL.enhancement_prompt);
+          assert.equal(
+            cloud.row().enhanced_at_content_hash,
+            clear ? null : INITIAL.enhanced_at_content_hash
+          );
+          assert.equal(cloud.row().enhancement_template_id, INITIAL.enhancement_template_id);
+        }
+      }
+    });
+
+    test(`${field}: failed capability discovery ${baseLabel} preserves a clear until a revisioned retry converges`, async (t) => {
+      const a = createDb(t);
+      const b = createDb(t);
+      if (!a || !b) return;
+      const noteA = a.upsertNoteFromCloud(INITIAL, null);
+      const noteB = b.upsertNoteFromCloud(INITIAL, null);
+      withoutRevision(a, noteA.id);
+      if (!timestampBase)
+        a.db.prepare("UPDATE notes SET cloud_updated_at = NULL WHERE id = ?").run(noteA.id);
+      a.updateNote(noteA.id, { clear_fields: [field] });
+      const cloud = unansweredRevisionProbeOnce(protocolCloud());
+      const service = await client(t, a, cloud);
+      const ack = t.mock.method(windowStub.electronAPI, "markNoteSyncedIfUnchanged");
+      const adoptBase = t.mock.method(windowStub.electronAPI, "setNoteCloudBase");
+
+      await service.pushPendingNotes();
+      assert.equal(listCalls(cloud, "probe").length, 1);
+      assert.equal(updateCalls(cloud).length, 0);
+      assert.equal(ack.mock.callCount(), 0);
+      assert.equal(adoptBase.mock.callCount(), 0);
+      assert.deepEqual(cloud.row(), INITIAL);
+      reopen(a);
+      assert.equal(a.getNote(noteA.id).sync_status, "pending");
+      assert.equal(a.getNote(noteA.id)[`${field}_sync_operation`], "clear");
+      assert.equal(a.getNote(noteA.id).cloud_revision, null);
+
+      await service.pushPendingNotes();
+      assert.equal(listCalls(cloud, "probe").length, 2);
+      assert.equal(listCalls(cloud, "full").length, 1);
+      assert.equal(adoptBase.mock.callCount(), 1);
+      assert.deepEqual(adoptBase.mock.calls[0].arguments, [
+        noteA.id,
+        INITIAL.updated_at,
+        INITIAL.revision,
+      ]);
+      assert.equal(updateCalls(cloud).length, 1);
+      const payload = updateCalls(cloud)[0].body;
+      assert.equal(payload.base_revision, INITIAL.revision);
+      assert.equal(payload.base_updated_at, INITIAL.updated_at);
+      assert.deepEqual(payload.field_updates, { [field]: "clear" });
+      assert.equal(payload[field], "");
+      assert.equal(ack.mock.callCount(), 1);
+      assert.equal(a.getNote(noteA.id).sync_status, "synced");
+      assert.equal(a.getNote(noteA.id)[`${field}_sync_operation`], null);
+      assert.equal(a.getNote(noteA.id).cloud_revision, cloud.row().revision);
+      assert.equal(cloud.row()[`${field}_state`], "clear");
+
+      await (await client(t, b, cloud)).pullNotes(false, true);
+      reopen(b);
+      const peer = b.getNote(noteB.id);
+      assert.equal(peer[field] ?? "", "");
+      const other = field === "content" ? "enhanced_content" : "content";
+      assert.equal(peer[other], INITIAL[other]);
+      assert.equal(peer.transcript, INITIAL.transcript);
+      assert.equal(peer.cloud_revision, cloud.row().revision);
+      assert.equal(peer.enhancement_template_id, INITIAL.enhancement_template_id);
+      for (const meta of ["enhancement_prompt", "enhanced_at_content_hash"])
+        assert.equal(peer[meta], field === "enhanced_content" ? null : INITIAL[meta]);
+    });
+
+    test(`${field}: observed old API ${baseLabel} retains the legacy clear fallback`, async (t) => {
+      const db = createDb(t);
+      if (!db) return;
+      const {
+        revision: _revision,
+        content_state: _contentState,
+        enhanced_content_state: _summaryState,
+        ...legacy
+      } = INITIAL;
+      const row = db.upsertNoteFromCloud(legacy, null);
+      if (!timestampBase)
+        db.db.prepare("UPDATE notes SET cloud_updated_at = NULL WHERE id = ?").run(row.id);
+      db.updateNote(row.id, { clear_fields: [field] });
+      const cloud = protocolCloud(legacy);
+      const service = await client(t, db, cloud);
+      const ack = t.mock.method(windowStub.electronAPI, "markNoteSyncedIfUnchanged");
+      await service.pushPendingNotes();
+      assert.equal(listCalls(cloud, "probe").length, 1);
+      assert.equal(listCalls(cloud, "full").length, 0);
+      assert.equal(updateCalls(cloud).length, 1);
+      const payload = updateCalls(cloud)[0].body;
+      assert.equal(payload.base_revision, undefined);
+      assert.equal(payload.field_updates, undefined);
+      assert.equal(payload.base_updated_at, timestampBase ? INITIAL.updated_at : undefined);
+      assert.equal(payload[field], "");
+      assert.equal(cloud.row()[field], "");
+      assert.equal(cloud.row().revision, undefined);
+      assert.equal(ack.mock.callCount(), 1);
+      assert.equal(db.getNote(row.id).sync_status, "synced");
+      assert.equal(db.getNote(row.id)[`${field}_sync_operation`], null);
+      assert.equal(db.getNote(row.id).cloud_revision, null);
+      assert.equal(db.getNote(row.id).transcript, INITIAL.transcript);
+    });
+  }
+
+  test(`${field}: a stale timestamp base after failed discovery remains a pending conflict`, async (t) => {
+    const db = createDb(t);
+    if (!db) return;
+    const row = db.upsertNoteFromCloud(INITIAL, null);
+    withoutRevision(db, row.id);
+    db.updateNote(row.id, { clear_fields: [field] });
+    const cloud = unansweredRevisionProbeOnce(protocolCloud());
+    const service = await client(t, db, cloud);
+    const ack = t.mock.method(windowStub.electronAPI, "markNoteSyncedIfUnchanged");
+    await service.pushPendingNotes();
+    const newer = {
+      ...INITIAL,
+      [field]: "Edited elsewhere during the outage",
+      updated_at: "2026-01-02T00:00:00.000Z",
+      revision: 8,
+    };
+    cloud.replace(newer);
+    await service.pushPendingNotes();
+    await service.pushPendingNotes();
+    assert.equal(listCalls(cloud, "probe").length, 2);
+    assert.equal(listCalls(cloud, "full").length, 1);
+    assert.equal(updateCalls(cloud).length, 0);
+    assert.equal(ack.mock.callCount(), 0);
+    assert.equal(readNoteConflictIds().has(INITIAL.client_note_id), true);
+    assert.deepEqual(cloud.row(), newer);
+    assert.equal(db.getNote(row.id).sync_status, "pending");
+    assert.equal(db.getNote(row.id)[`${field}_sync_operation`], "clear");
+    assert.equal(db.getNote(row.id).cloud_revision, null);
+    assert.equal(db.getNote(row.id).cloud_updated_at, INITIAL.updated_at);
+  });
+}
+
+for (const [kind, notes] of [
+  ["empty", []],
+  [
+    "access-removed",
+    [{ id: INITIAL.id, client_note_id: INITIAL.client_note_id, access_removed: true }],
+  ],
+]) {
+  test(`${kind} discovery remains unknown until a readable revision allows both clears`, async (t) => {
+    const db = createDb(t);
+    if (!db) return;
+    const row = db.upsertNoteFromCloud(INITIAL, null);
+    withoutRevision(db, row.id);
+    db.updateNote(row.id, { clear_fields: ["content", "enhanced_content"] });
+    const cloud = unansweredRevisionProbeOnce(protocolCloud(), { success: true, data: { notes } });
+    const service = await client(t, db, cloud);
+    const ack = t.mock.method(windowStub.electronAPI, "markNoteSyncedIfUnchanged");
+    await service.pushPendingNotes();
+    assert.equal(updateCalls(cloud).length, 0);
+    assert.equal(ack.mock.callCount(), 0);
+    assert.equal(db.getNote(row.id).sync_status, "pending");
+    assert.equal(db.getNote(row.id).content_sync_operation, "clear");
+    assert.equal(db.getNote(row.id).enhanced_content_sync_operation, "clear");
+    assert.equal(db.getNote(row.id).cloud_revision, null);
+    assert.deepEqual(cloud.row(), INITIAL);
+    await service.pushPendingNotes();
+    assert.equal(listCalls(cloud, "probe").length, 2);
+    assert.equal(listCalls(cloud, "full").length, 1);
+    assert.equal(updateCalls(cloud).length, 1);
+    assert.equal(updateCalls(cloud)[0].body.base_revision, INITIAL.revision);
+    assert.deepEqual(updateCalls(cloud)[0].body.field_updates, {
+      content: "clear",
+      enhanced_content: "clear",
+    });
+    assert.equal(ack.mock.callCount(), 1);
+    assert.equal(db.getNote(row.id).sync_status, "synced");
+    assert.equal(cloud.row().content_state, "clear");
+    assert.equal(cloud.row().enhanced_content_state, "clear");
+  });
+}
 
 function rejectCreate(db, row, { cloudUpdatedAt = INITIAL.updated_at } = {}) {
   db.updateNote(row.id, { cloud_id: null, cloud_updated_at: cloudUpdatedAt, content: "Offline" });

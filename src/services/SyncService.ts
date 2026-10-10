@@ -1844,7 +1844,7 @@ export class SyncService {
     for (const note of pending) {
       if (
         conflicted.has(note.client_note_id) ||
-        noteAwaitsCloudResolution(note, this.noteRevisionsKnown === true)
+        noteAwaitsCloudResolution(note, this.noteRevisionsKnown !== false)
       ) {
         // An unresolved pull conflict or rejected create: pushing now would
         // auto-resolve it as local-wins before the user chose Keep or Refresh
