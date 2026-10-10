@@ -347,3 +347,53 @@ for (const field of ["content", "enhanced_content"]) {
     assert.equal(db.getNote(id).enhanced_at_content_hash, field === "content" ? "hash" : null);
   });
 }
+
+for (const field of ["content", "enhanced_content"]) {
+  for (const editsText of [false, true]) {
+    test(`Keep after deferred ${field} create sends only later edits (editsText=${editsText})`, async (t) => {
+      const { db, id, snapshot, cloud, acknowledge } = setup(t);
+      clear(cloud, field);
+      await acknowledge(lean(cloud));
+      db.updateNote(id, {
+        title: "My later title",
+        ...(editsText && { [field]: "My later text" }),
+      });
+      cloud.revision++;
+      cloud.title = "Other device title";
+      reopen(db);
+      const { service } = await sync(t, db, cloud);
+      const original = globals.window.electronAPI.cloudApiRequest;
+      const patches = [];
+      globals.window.electronAPI.cloudApiRequest = async (opts) => {
+        if (opts.path === "/api/notes/update") {
+          patches.push(opts.body);
+          return {
+            success: true,
+            data: {
+              ...cloud,
+              ...JSON.parse(JSON.stringify(opts.body)),
+              revision: cloud.revision + 1,
+            },
+          };
+        }
+        return original(opts);
+      };
+      await service.pushPendingNotes();
+      assert.equal(patches.length, 0);
+      assert.ok(readNoteConflictIds().has(snapshot.client_note_id));
+      db.setNoteCloudBase(id, cloud.updated_at, cloud.revision, {
+        keepLocal: true,
+        cloudNote: cloud,
+      });
+      require("../../src/stores/noteStore.ts").clearNoteConflict(snapshot.client_note_id);
+      await service.pushNote(id);
+      assert.equal(patches.length, 1);
+      assert.equal(patches[0].title, "My later title");
+      assert.equal(patches[0].base_revision, cloud.revision);
+      assert.equal(patches[0][field], editsText ? "My later text" : undefined);
+      assert.equal(patches[0].field_updates[field], editsText ? "set" : undefined);
+      assert.equal(db.getNote(id)[field] ?? "", editsText ? "My later text" : "");
+      assert.equal(db.getNote(id).cloud_create_pending, null);
+    });
+  }
+}

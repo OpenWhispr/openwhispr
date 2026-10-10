@@ -153,6 +153,24 @@ function rowMatchesSnapshot(row, snapshot, fields) {
   });
 }
 
+// An applied create acknowledges the submitted sets, even if the server kept
+// a clear instead. Later edits and undelivered clears still belong to this device.
+function acknowledgedCreateTextUpdates(current, snapshot, cloudNote) {
+  const fields = NOTE_TEXT_FIELDS.filter(
+    (field) =>
+      snapshot[`${field}_sync_operation`] !== "clear" &&
+      rowMatchesSnapshot(current, snapshot, [
+        field,
+        `${field}_sync_operation`,
+        ...(field === "enhanced_content" ? SUMMARY_METADATA : []),
+      ])
+  );
+  return {
+    ...cloudTextUpdates(current, cloudNote, fields),
+    ...Object.fromEntries(fields.map((field) => [`${field}_sync_operation`, null])),
+  };
+}
+
 // An optimistically deleted folder still holds its server-side name until the
 // DELETE is confirmed, so it must keep blocking reuse of that name.
 const FOLDER_NAME_TAKEN_FILTER = `(deleted_at IS NULL OR EXISTS (
@@ -6649,27 +6667,11 @@ class DatabaseManager {
         // and retire those sets even when another field was edited in flight.
         // POST never delivers a deliberate clear; it still owes a PATCH.
         if (cloudNote && !writeRejected) {
-          const fields = NOTE_TEXT_FIELDS.filter(
-            (field) =>
-              snapshot[`${field}_sync_operation`] !== "clear" &&
-              rowMatchesSnapshot(current, snapshot, [
-                field,
-                `${field}_sync_operation`,
-                ...(field === "enhanced_content" ? SUMMARY_METADATA : []),
-              ])
-          );
-          this._setNoteColumns(id, {
-            ...cloudTextUpdates(current, cloudNote, fields),
-            ...Object.fromEntries(fields.map((field) => [`${field}_sync_operation`, null])),
-          });
+          this._setNoteColumns(id, acknowledgedCreateTextUpdates(current, snapshot, cloudNote));
         }
 
-        // If a team note was moved to Personal while POST was in flight, the
-        // returned cloud row still lives in the old team. Mark the attached
-        // identity as owing a scope retraction even when backup is disabled.
-        // The create carried the snapshot's text, which satisfies a set. A
-        // clear still follows as a revisioned PATCH: a retried create preserves
-        // text the server already holds.
+        // A clear still follows as a revisioned PATCH. A team-to-Personal
+        // move stays pending for its scope retraction, even with backup off.
         if (unchanged && settleIfUnchanged && !hasPendingNoteClear(snapshot) && !writeRejected) {
           this.db
             .prepare(
@@ -6943,14 +6945,25 @@ class DatabaseManager {
         )
           return { success: false };
         if (keepLocal && cloudNote) {
-          this._setNoteColumns(
-            id,
-            cloudTextUpdates(
-              current,
+          // A deferred create may already have delivered (or had the server
+          // discard) these sets. Keep preserves edits made after that POST,
+          // not the unchanged submitted text a newer cloud copy cleared.
+          const acknowledged = current.cloud_create_pending
+            ? acknowledgedCreateTextUpdates(
+                current,
+                JSON.parse(current.cloud_create_pending).snapshot,
+                cloudNote
+              )
+            : {};
+          const merged = { ...current, ...acknowledged };
+          this._setNoteColumns(id, {
+            ...acknowledged,
+            ...cloudTextUpdates(
+              merged,
               cloudNote,
-              NOTE_TEXT_FIELDS.filter((field) => !current[`${field}_sync_operation`])
-            )
-          );
+              NOTE_TEXT_FIELDS.filter((field) => !merged[`${field}_sync_operation`])
+            ),
+          });
         }
         this.db
           .prepare(
