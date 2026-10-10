@@ -1,10 +1,22 @@
-import type { NoteCreateAckResult, NoteCreateSnapshot, NoteItem } from "../types/electron";
+import type {
+  NoteCreateAckResult,
+  NoteCreateAckWriteOptions,
+  NoteCreateSnapshot,
+  NoteCloudText,
+  NoteItem,
+} from "../types/electron";
+import { getValidatedAuthGeneration } from "../lib/authRequestContext";
 
-export interface CloudNoteCreateResult {
+export interface CloudNoteCreateResult extends NoteCloudText {
   id: string;
   client_note_id: string | null;
   updated_at?: string | null;
   user_id?: string | null;
+  revision?: number;
+  write_applied?: boolean;
+  row_created?: boolean;
+  deleted_at?: string | null;
+  access_removed?: boolean;
 }
 
 export interface NoteCreateAckDependencies {
@@ -14,7 +26,7 @@ export interface NoteCreateAckDependencies {
     cloudId: string,
     cloudUpdatedAt: string | null,
     ownerUserId: string | null,
-    settleIfUnchanged: boolean
+    options: NoteCreateAckWriteOptions
   ) => Promise<NoteCreateAckResult | undefined>;
   deleteCloud: (cloudId: string) => Promise<void>;
   onInvalidResponse?: (expectedClientNoteId: string, receivedClientNoteId: string | null) => void;
@@ -24,10 +36,12 @@ export interface NoteCreateAckDependencies {
 
 export type NoteCreateResolution =
   | NoteCreateAckResult["outcome"]
+  | "write-rejected"
   | "bridge-unavailable"
   | "invalid-response"
   | "unmatched-response"
   | "orphan-cleaned"
+  | "orphan-unproven"
   | "orphan-cleanup-failed";
 
 export interface NoteCreateAckOptions {
@@ -45,6 +59,9 @@ async function cleanupOrphanedCreate(
   cloud: CloudNoteCreateResult,
   dependencies: NoteCreateAckDependencies
 ): Promise<NoteCreateResolution> {
+  // Applied upserts can target an existing row. Only an atomic insertion
+  // receipt gives this request authority to clean up its cloud orphan.
+  if (cloud.row_created !== true) return "orphan-unproven";
   try {
     await dependencies.deleteCloud(cloud.id);
     return "orphan-cleaned";
@@ -68,18 +85,37 @@ export async function resolveCloudNoteCreate(
     return "invalid-response";
   }
   if (options.requestStillCurrent && !options.requestStillCurrent()) {
-    return cleanupOrphanedCreate(cloud, dependencies);
+    return cloud.write_applied === false
+      ? "write-rejected"
+      : cleanupOrphanedCreate(cloud, dependencies);
   }
 
+  if (cloud.deleted_at || cloud.access_removed) return "unresolved";
+  const writeRejected = cloud.write_applied === false;
+  const hasCloudText =
+    typeof cloud.content === "string" &&
+    (typeof cloud.enhanced_content === "string" || cloud.enhanced_content === null);
   const result = await dependencies.acknowledge(
     note.id,
     note,
     cloud.id,
-    cloud.updated_at ?? null,
+    writeRejected ? (note.cloud_updated_at ?? null) : (cloud.updated_at ?? null),
     cloud.user_id ?? null,
-    options.settleIfUnchanged ?? true
+    {
+      settleIfUnchanged: (options.settleIfUnchanged ?? true) && !writeRejected,
+      cloudRevision: writeRejected ? (note.cloud_revision ?? null) : (cloud.revision ?? null),
+      writeRejected,
+      ...(!writeRejected && {
+        cloudNote: hasCloudText ? cloud : undefined,
+        requiresReconciliation: !hasCloudText,
+      }),
+    }
   );
   if (!result) return "bridge-unavailable";
+  // A rejected idempotent POST did not create or update this server row.
+  // Link its identity for pull/conflict resolution, but grant neither a new
+  // write base nor authority to delete it as an orphan of this request.
+  if (writeRejected) return "write-rejected";
   if (result.outcome !== "orphaned") return result.outcome;
 
   return cleanupOrphanedCreate(cloud, dependencies);
@@ -108,14 +144,14 @@ function rendererDependencies(
   deleteCloud: (cloudId: string) => Promise<void>
 ): NoteCreateAckDependencies {
   return {
-    acknowledge: async (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, settleIfUnchanged) =>
+    acknowledge: async (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) =>
       window.electronAPI.acknowledgeNoteCreate?.(
         id,
         snapshot,
         cloudId,
         cloudUpdatedAt,
         ownerUserId,
-        settleIfUnchanged
+        options
       ),
     deleteCloud,
     onInvalidResponse: (expected, received) =>
@@ -143,7 +179,21 @@ export function resolveRendererCloudNoteCreate(
   deleteCloud: (cloudId: string) => Promise<void>,
   options: NoteCreateAckOptions = {}
 ): Promise<NoteCreateResolution> {
-  return resolveCloudNoteCreate(note, cloud, rendererDependencies(deleteCloud), options);
+  return resolveCloudNoteCreate(
+    note,
+    cloud,
+    rendererDependencies(deleteCloud),
+    rendererOptions(options)
+  );
+}
+
+function rendererOptions(options: NoteCreateAckOptions): NoteCreateAckOptions {
+  const generation = getValidatedAuthGeneration();
+  return {
+    ...options,
+    requestStillCurrent: () =>
+      getValidatedAuthGeneration() === generation && (options.requestStillCurrent?.() ?? true),
+  };
 }
 
 export function resolveRendererCloudNoteCreateBatch(
@@ -152,5 +202,10 @@ export function resolveRendererCloudNoteCreateBatch(
   deleteCloud: (cloudId: string) => Promise<void>,
   options: NoteCreateAckOptions = {}
 ): Promise<NoteCreateResolution[]> {
-  return resolveCloudNoteCreateBatch(notes, created, rendererDependencies(deleteCloud), options);
+  return resolveCloudNoteCreateBatch(
+    notes,
+    created,
+    rendererDependencies(deleteCloud),
+    rendererOptions(options)
+  );
 }

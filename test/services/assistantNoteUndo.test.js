@@ -166,10 +166,10 @@ test("safe assistant edits and atomic Undo", async (t) => {
       assert.equal(result.success, true);
       assert.deepEqual(result.data.updatedFields, [field]);
       const key = field === "summary" ? "enhanced_content" : field;
-      assert.equal(database.getNote(note.id)[key], "");
+      assert.equal(database.getNote(note.id)[key] ?? "", "");
       database.db.close();
       database.db = new (require("better-sqlite3"))(path.join(directory, "transcriptions.db"));
-      assert.equal(database.getNote(note.id)[key], "");
+      assert.equal(database.getNote(note.id)[key] ?? "", "");
       assert.equal(database.undoNoteUpdate(tokenFor(note.id)).success, true);
       const restored = database.getNote(note.id);
       for (const key of [
@@ -183,6 +183,15 @@ test("safe assistant edits and atomic Undo", async (t) => {
         assert.equal(restored[key], note[key]);
       assert.equal(tokenFor(note.id), undefined);
     });
+
+  await t.test("Undo of a first summary is a clear that syncs", async () => {
+    const note = database.saveNote("Untouched", "Private notes", "meeting").note;
+    await edit(database.getNote(note.id), { summary: "Written by the assistant" });
+    assert.equal(database.undoNoteUpdate(tokenFor(note.id)).success, true);
+    const restored = database.getNote(note.id);
+    assert.equal(restored.enhanced_content ?? "", "");
+    assert.equal(restored.enhanced_content_sync_operation, "clear");
+  });
 
   await t.test(
     "partial section removal; edits in one turn share an Undo, a later turn's stands alone",
@@ -379,7 +388,9 @@ test("safe assistant edits and atomic Undo", async (t) => {
       "2026-10-09",
       "owner-one"
     );
+    // The create carried the edited text, so it settles in one request.
     assert.equal(ack.outcome, "synced");
+    assert.equal(database.getNote(note.id).cloud_id, `cloud-${note.id}`);
     assert.equal(tokenFor(note.id), token);
     assert.equal(database.undoNoteUpdate(token).success, true);
     assert.equal(database.getNote(note.id).title, note.title);
@@ -452,17 +463,20 @@ test("safe assistant edits and atomic Undo", async (t) => {
     assert.equal(database.getNote(note.id).transcript, note.transcript);
   });
 
-  await t.test("clearing a never-written summary writes nothing and keeps the last Undo", async () => {
-    const note = fresh();
-    database.updateNote(note.id, { enhanced_content: null });
-    await edit(note, { title: "Renamed first" }, "turn-1");
-    const token = tokenFor(note.id);
-    database.updateNote(note.id, { sync_status: "synced" });
-    assert.equal((await edit(note, { clear_fields: ["summary"] }, "turn-2")).success, true);
-    assert.equal(database.getNote(note.id).enhanced_content, null);
-    assert.equal(database.getNote(note.id).sync_status, "synced");
-    assert.equal(tokenFor(note.id), token);
-  });
+  await t.test(
+    "clearing a never-written summary writes nothing and keeps the last Undo",
+    async () => {
+      const note = fresh();
+      database.updateNote(note.id, { enhanced_content: null });
+      await edit(note, { title: "Renamed first" }, "turn-1");
+      const token = tokenFor(note.id);
+      database.updateNote(note.id, { sync_status: "synced" });
+      assert.equal((await edit(note, { clear_fields: ["summary"] }, "turn-2")).success, true);
+      assert.equal(database.getNote(note.id).enhanced_content, null);
+      assert.equal(database.getNote(note.id).sync_status, "synced");
+      assert.equal(tokenFor(note.id), token);
+    }
+  );
 
   await t.test("a toast's discard retires only its own recovery", async () => {
     const note = fresh();

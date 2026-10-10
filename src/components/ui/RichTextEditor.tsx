@@ -18,6 +18,19 @@ interface RichTextEditorProps {
   mentionPeople?: MentionPerson[];
 }
 
+/**
+ * Starts a new undo history. Earlier steps would otherwise be mapped onto a
+ * value set from outside: one that spanned the whole document (select all,
+ * then type or delete) maps onto the whole new value, so Ctrl+Z would put the
+ * user's older text back over it and save that.
+ */
+function resetUndoHistory(editor: Editor): void {
+  const { plugins } = editor.state;
+  editor.unregisterPlugin("history");
+  // Reconfiguring keeps every other plugin's state; the history starts empty.
+  editor.view.updateState(editor.state.reconfigure({ plugins }));
+}
+
 export function RichTextEditor({
   value,
   onChange,
@@ -73,7 +86,9 @@ export function RichTextEditor({
   // Sync external value changes (e.g. dictation, programmatic updates)
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
-    if (value === internalValueRef.current) return;
+    // A whitespace-only note is saved empty; that echo is not a new value, and
+    // applying it would move the caret.
+    if (value === internalValueRef.current || (!value && !internalValueRef.current.trim())) return;
 
     internalValueRef.current = value;
     suppressUpdateRef.current = true;
@@ -86,6 +101,7 @@ export function RichTextEditor({
     const safeFrom = Math.min(from, docSize);
     const safeTo = Math.min(to, docSize);
     editor.commands.setTextSelection({ from: safeFrom, to: safeTo });
+    resetUndoHistory(editor);
 
     suppressUpdateRef.current = false;
   }, [value, editor]);

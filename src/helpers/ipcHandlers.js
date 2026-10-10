@@ -2711,32 +2711,50 @@ class IPCHandlers {
     });
     ipcMain.handle(
       "db-acknowledge-note-create",
-      (_, id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, settleIfUnchanged) =>
-        this.databaseManager.acknowledgeNoteCreate(
+      (_, id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) => {
+        const result = this.databaseManager.acknowledgeNoteCreate(
           id,
           snapshot,
           cloudId,
           cloudUpdatedAt,
           ownerUserId,
-          settleIfUnchanged
-        )
+          options
+        );
+        if (result.note) {
+          setImmediate(() => broadcastToWindows("note-synced", result.note));
+          this.notifyVectorChanges();
+        }
+        return result;
+      }
     );
     ipcMain.handle(
       "db-mark-note-synced-if-unchanged",
-      (_, id, snapshot, expectedCloudId, cloudUpdatedAt, ownerUserId) =>
-        this.databaseManager.markNoteSyncedIfUnchanged(
+      (_, id, snapshot, expectedCloudId, cloudUpdatedAt, ownerUserId, cloudRevision, cloudNote) => {
+        const result = this.databaseManager.markNoteSyncedIfUnchanged(
           id,
           snapshot,
           expectedCloudId,
           cloudUpdatedAt,
-          ownerUserId
-        )
+          ownerUserId,
+          cloudRevision,
+          cloudNote
+        );
+        // The ack took the server's copy of a field: refresh open editors.
+        if (result.note) {
+          setImmediate(() => broadcastToWindows("note-synced", result.note));
+          this.notifyVectorChanges();
+        }
+        return result;
+      }
     );
-    ipcMain.handle("db-set-note-cloud-base", (_, id, cloudUpdatedAt) =>
-      this.databaseManager.setNoteCloudBase(id, cloudUpdatedAt)
+    ipcMain.handle("db-set-note-cloud-base", (_, id, cloudUpdatedAt, cloudRevision, options) =>
+      this.databaseManager.setNoteCloudBase(id, cloudUpdatedAt, cloudRevision, options)
     );
     ipcMain.handle("db-set-note-owner-from-cloud", (_, id, ownerUserId) =>
       this.databaseManager.setNoteOwnerFromCloud(id, ownerUserId)
+    );
+    ipcMain.handle("db-count-notes-missing-revision", (_, spaceKind) =>
+      this.databaseManager.countNotesMissingRevision(spaceKind)
     );
     ipcMain.handle("db-count-team-notes-missing-owner", () =>
       this.databaseManager.countTeamNotesMissingOwner()

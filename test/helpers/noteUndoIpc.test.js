@@ -72,6 +72,8 @@ function anything() {
 
 const RESTORED = { id: 7, title: "Before the assistant" };
 let undoResult;
+let createAckResult;
+let createAckArgs;
 const effects = { vectors: 0, mirrored: [] };
 
 test.before(() => {
@@ -81,7 +83,13 @@ test.before(() => {
   const target = {
     notifyVectorChanges: () => effects.vectors++,
     _asyncMirrorWrite: (note) => effects.mirrored.push(note),
-    databaseManager: { undoNoteUpdate: () => undoResult },
+    databaseManager: {
+      undoNoteUpdate: () => undoResult,
+      acknowledgeNoteCreate: (...args) => {
+        createAckArgs = args;
+        return createAckResult;
+      },
+    },
   };
   Ctor.prototype.setupHandlers.call(
     new Proxy(target, {
@@ -117,4 +125,27 @@ test("a refused Undo writes nothing anywhere", async () => {
   assert.deepEqual(sent, []);
   assert.equal(effects.vectors, 0);
   assert.deepEqual(effects.mirrored, []);
+});
+
+test("a reconciled create broadcasts the authoritative note and wakes the index", async () => {
+  sent.length = 0;
+  effects.vectors = 0;
+  const cloudNote = { id: 7, content: "", enhanced_content: null };
+  createAckResult = { success: true, outcome: "synced", note: cloudNote };
+  const args = [7, { client_note_id: "client-7" }, "cloud-7", "timestamp", "owner", { cloudNote }];
+  assert.equal(await handlers.get("db-acknowledge-note-create")(null, ...args), createAckResult);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(createAckArgs, args);
+  assert.deepEqual(sent, [["note-synced", cloudNote]]);
+  assert.equal(effects.vectors, 1);
+});
+
+test("an unresolved create publishes no note state", async () => {
+  sent.length = 0;
+  effects.vectors = 0;
+  createAckResult = { success: true, outcome: "awaiting-cloud" };
+  await handlers.get("db-acknowledge-note-create")(null, 7, {}, "cloud-7");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(sent, []);
+  assert.equal(effects.vectors, 0);
 });

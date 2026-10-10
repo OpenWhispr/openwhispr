@@ -84,27 +84,32 @@ function createElectronApi(db, options = {}) {
     getNoteByClientId: async (clientNoteId) => db.getNoteByClientId(clientNoteId),
     upsertNoteFromCloud: async (cloudNote, localFolderId, localSpaceId) =>
       db.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId),
-    acknowledgeNoteCreate: async (
+    acknowledgeNoteCreate: async (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) =>
+      db.acknowledgeNoteCreate(id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options),
+    markNoteSyncedIfUnchanged: async (
       id,
       snapshot,
-      cloudId,
+      expectedCloudId,
       cloudUpdatedAt,
       ownerUserId,
-      settleIfUnchanged
+      cloudRevision,
+      cloudNote
     ) =>
-      db.acknowledgeNoteCreate(
+      db.markNoteSyncedIfUnchanged(
         id,
         snapshot,
-        cloudId,
+        expectedCloudId,
         cloudUpdatedAt,
         ownerUserId,
-        settleIfUnchanged
+        cloudRevision,
+        cloudNote
       ),
-    markNoteSyncedIfUnchanged: async (id, snapshot, expectedCloudId, cloudUpdatedAt, ownerUserId) =>
-      db.markNoteSyncedIfUnchanged(id, snapshot, expectedCloudId, cloudUpdatedAt, ownerUserId),
+    setNoteCloudBase: async (id, cloudUpdatedAt, cloudRevision, options) =>
+      db.setNoteCloudBase(id, cloudUpdatedAt, cloudRevision, options),
     markNoteSyncError: async (id) => db.markNoteSyncError(id),
     setNoteOwnerFromCloud: async (id, ownerUserId) => db.setNoteOwnerFromCloud(id, ownerUserId),
     countTeamNotesMissingOwner: async () => db.countTeamNotesMissingOwner(),
+    countNotesMissingRevision: async (spaceKind) => db.countNotesMissingRevision(spaceKind),
     restoreNoteAfterDeniedDelete: async (id) => db.restoreNoteAfterDeniedDelete(id),
     hardDeleteNote: async (id) => db.hardDeleteNote(id),
 

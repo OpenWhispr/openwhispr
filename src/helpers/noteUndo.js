@@ -1,4 +1,5 @@
 const { randomUUID } = require("crypto");
+const { NOTE_TEXT_FIELDS, SUMMARY_CLEARED_METADATA } = require("./noteFieldSync");
 
 // Sync acknowledgements are not edits. All semantic changes (including SQL
 // writers outside updateNote) retire the previous assistant's recovery token.
@@ -100,6 +101,10 @@ function updateNoteWithUndo(manager, id, updates, expected, turn) {
     const live = liveUndo(manager, "note_id", id);
     const result = manager.updateNote(id, updates);
     if (!result.success) return result;
+    // A summary clear also resets its prompt and hash; Undo restores them too.
+    for (const key of SUMMARY_CLEARED_METADATA) {
+      if (!(key in previous) && before[key] !== result.note[key]) previous[key] = before[key];
+    }
     // Edits of one note in the same turn (e.g. a summary rewrite and a rename)
     // share one Undo that restores each field's oldest value.
     const sameTurn = turn != null && live && undoTurns.get(live.token) === turn;
@@ -123,6 +128,24 @@ function liveUndo(manager, column, value) {
       `SELECT * FROM assistant_note_undo WHERE ${column} = ? AND account_id IS ? AND created_at >= ?`
     )
     .get(value, manager.activeAccountId, Date.now() - UNDO_TTL_MS);
+}
+
+// Reconciliation of an untouched field is not a later edit to the fields a
+// live Undo restores. The normal trigger still retires overlapping recoveries.
+function preserveUnchangedUndo(manager, id, changedFields, write) {
+  if (!changedFields.length || !manager.noteUndoReady) return write();
+  const saved = liveUndo(manager, "note_id", id);
+  const preserves =
+    saved && !Object.keys(JSON.parse(saved.previous)).some((key) => changedFields.includes(key));
+  const result = write();
+  if (preserves) {
+    manager.db
+      .prepare(
+        "INSERT OR REPLACE INTO assistant_note_undo (note_id, token, account_id, previous, created_at) VALUES (?, ?, ?, ?, ?)"
+      )
+      .run(saved.note_id, saved.token, saved.account_id, saved.previous, saved.created_at);
+  }
+  return result;
 }
 
 function getNoteUndos(manager) {
@@ -150,7 +173,13 @@ function undoNoteUpdate(manager, token) {
         return { success: false, error: "note_changed" };
       }
     }
-    const result = manager.updateNote(note.id, previous);
+    // Restoring an empty field is a deliberate clear, so it syncs; a bare blank
+    // would stay on this device while the edit came back from the cloud.
+    const clearFields = NOTE_TEXT_FIELDS.filter((key) => key in previous && !previous[key]?.trim());
+    const result = manager.updateNote(note.id, {
+      ...previous,
+      ...(clearFields.length > 0 && { clear_fields: clearFields }),
+    });
     if (result.success)
       manager.db.prepare("DELETE FROM assistant_note_undo WHERE token = ?").run(token);
     return result;
@@ -184,4 +213,5 @@ module.exports = {
   claimNoteUndo,
   undoNoteUpdate,
   discardNoteUndo,
+  preserveUnchangedUndo,
 };
