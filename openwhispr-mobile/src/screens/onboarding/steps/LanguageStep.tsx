@@ -38,6 +38,7 @@ const LANGUAGE_TO_COUNTRY: Record<string, string> = {
   ar: 'SA',
   hy: 'AM',
   az: 'AZ',
+  eu: 'ES',
   be: 'BY',
   bs: 'BA',
   bg: 'BG',
