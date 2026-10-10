@@ -219,11 +219,11 @@
     "rehaul": {
       "permissions": {
         "title": "Configurez OpenWhispr en 3 minutes",
-        "microphoneDescription": "Transforme ce que vous dites en texte. Actif seulement pendant l’enregistrement.",
-        "accessibilityDescription": "Colle le texte dans l’application que vous utilisez.",
+        "microphoneDescription": "N’écoute que pendant l’enregistrement.",
+        "accessibilityDescription": "Colle le texte dans vos apps.",
         "systemAudioTitle": "Audio Système",
-        "systemAudioDescription": "Enregistre vos interlocuteurs pour les notes de réunion. Actif seulement pendant l’enregistrement.",
-        "screenContextDescription": "Laisse votre assistant vocal voir votre écran quand vous le sollicitez. Jamais enregistré.",
+        "systemAudioDescription": "Enregistre vos interlocuteurs en appel.",
+        "screenContextDescription": "Montre votre écran à l’assistant.",
         "enable": "Activer",
         "enabled": "Activé"
       },
@@ -1172,6 +1172,7 @@
     },
     "signedIn": {
       "welcomeBack": "Bon retour",
+      "welcomeBackNamed": "Bon retour, {{name}}",
       "notYou": "Ce n’est pas vous ? Se déconnecter"
     },
     "sso": {

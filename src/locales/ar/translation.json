@@ -1236,6 +1236,7 @@
     },
     "signedIn": {
       "welcomeBack": "مرحبًا بك مرة أخرى",
+      "welcomeBackNamed": "مرحبًا بك مرة أخرى، {{name}}",
       "notYou": "لست أنت؟ تسجيل الخروج"
     },
     "sso": {
@@ -2571,11 +2572,11 @@
     "rehaul": {
       "permissions": {
         "title": "قم بإعداد OpenWhispr في 3 دقائق",
-        "microphoneDescription": "يحوّل ما تقوله إلى نص. يعمل أثناء التسجيل فقط.",
-        "accessibilityDescription": "يلصق النص في التطبيق الذي تستخدمه.",
+        "microphoneDescription": "يستمع أثناء التسجيل فقط.",
+        "accessibilityDescription": "يلصق النص في أي تطبيق.",
         "systemAudioTitle": "صوت النظام",
-        "systemAudioDescription": "يسجّل الأشخاص الآخرين في مكالماتك لملاحظات الاجتماع. أثناء التسجيل فقط.",
-        "screenContextDescription": "يتيح لمساعدك الصوتي رؤية شاشتك عندما تطلب منه شيئًا. لا يتم تخزينه أبدًا.",
+        "systemAudioDescription": "يسجّل الآخرين في مكالماتك.",
+        "screenContextDescription": "يتيح للمساعد رؤية شاشتك.",
         "enable": "تمكين",
         "enabled": "مُمكّن"
       },
