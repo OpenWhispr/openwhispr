@@ -237,8 +237,7 @@
         "title": "Wählen Sie Ihr Diktier-Tastenkürzel",
         "titleLineOne": "Wählen Sie Ihr",
         "titleLineTwo": "Diktier-Tastenkürzel",
-        "description": "Drücken Sie es, wann immer Sie sprechen statt tippen möchten. Funktioniert in jeder App.",
-        "activation": "Tippen oder halten?"
+        "description": "Drücken Sie es, wann immer Sie sprechen statt tippen möchten. Funktioniert in jeder App."
       },
       "assistantHotkey": {
         "title": "OpenWhispr Assistant einrichten",
@@ -496,7 +495,6 @@
       "description": "Legen Sie fest, wie Sie das Diktat auslösen",
       "hotkey": "Hotkey",
       "mode": "Modus",
-      "tapDescription": "Drücken zum Starten/Stoppen",
       "holdDescription": "Gedrückt halten beim Sprechen",
       "test": "Test",
       "hotkeyToStartStop": "{{hotkey}} zum Starten/Stoppen",

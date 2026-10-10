@@ -31,8 +31,8 @@ import { isAgentAllowed, isScreenContextAllowed } from "../stores/policyRules";
 import { useSettingsStore } from "../stores/settingsStore";
 import { getDefaultHotkey, parseHotkeyList, serializeHotkeyList } from "../utils/hotkeys";
 import {
-  DEFAULT_ASSISTANT_ONBOARDING_HOTKEY,
   formatHotkeyInstruction,
+  getRecommendedAssistantHotkeys,
   getRecommendedDictationHotkeys,
   resolveOnboardingAssistantHotkey,
   resolveOnboardingDictationHotkey,
@@ -71,8 +71,6 @@ import {
 } from "./onboarding/permissionGuideController";
 import { clearPendingLocalModels, hasPendingLocalModels } from "./onboarding/pendingLocalModels";
 import { resolveAssistantDemoScenario } from "./onboarding/assistantDemoScenario";
-import { ActivationModeSelector } from "./ui/ActivationModeSelector";
-import LinuxPttSetupInfo from "./ui/LinuxPttSetupInfo";
 
 interface OnboardingFlowProps {
   onComplete: (options?: { openSettings?: boolean }) => void;
@@ -135,7 +133,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     })
   );
   const [assistantHotkey, setAssistantHotkey] = useState(() =>
-    resolveOnboardingAssistantHotkey(parseHotkeyList(settings.voiceAgentKey)[0] ?? "")
+    resolveOnboardingAssistantHotkey(parseHotkeyList(settings.voiceAgentKey)[0] ?? "", platform)
   );
   // Seeded from main rather than getDefaultHotkey(): main already knows when the
   // platform default can't bind (GNOME/X11 reject modifier-only combos) and
@@ -211,12 +209,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     check: checkScreenRecording,
     request: requestScreenRecordingAccess,
   } = useScreenRecordingPermission();
-  const {
-    supportsPushToTalk,
-    pushToTalkUnavailableReason,
-    linuxInputAccessDenied,
-    loaded: hotkeyModeLoaded,
-  } = useHotkeyModeInfo("onboarding", dictationHotkey);
+  const { supportsPushToTalk, loaded: hotkeyModeLoaded } = useHotkeyModeInfo(
+    "onboarding",
+    dictationHotkey
+  );
   const { activationMode, setActivationMode } = settings;
   // This hook also starts the membership fetch for already-authenticated users;
   // relying on the login transition alone would leave resumed onboarding stuck
@@ -581,7 +577,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const confirmDictationHotkey = useCallback(
     async (value: string) => {
       // A key the OS cannot see released falls back to Tap rather than failing
-      // the pick; the card below shows Hold disabled with the reason.
+      // the pick; the mode can still be changed later in Settings.
       if (activationMode === "push") {
         const info = await window.electronAPI?.getHotkeyModeInfo?.(value);
         if (info && !info.supportsPushToTalk) setActivationMode("tap");
@@ -1063,7 +1059,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               }}
               recommended={
                 assistant
-                  ? DEFAULT_ASSISTANT_ONBOARDING_HOTKEY
+                  ? getRecommendedAssistantHotkeys(platform)
                   : getRecommendedDictationHotkeys(platform, recommendedDictationHotkey)
               }
               captureLabel={t("onboarding.rehaul.hotkey.capture")}
@@ -1073,39 +1069,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               onConfirm={assistant ? confirmAssistantHotkey : confirmDictationHotkey}
               dense={assistant}
             />
-            {!assistant && (
-              <div className="mx-auto mt-8 w-full max-w-md rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-4 py-3">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="min-w-0 text-start">
-                    <p className="text-sm font-medium leading-5 text-[var(--onboarding-text-primary)]">
-                      {t("onboarding.rehaul.dictationHotkey.activation")}
-                    </p>
-                    <p className="text-sm leading-5 text-[var(--onboarding-text-secondary)]">
-                      {t(
-                        activationMode === "push"
-                          ? "onboarding.activation.holdDescription"
-                          : "onboarding.activation.tapDescription"
-                      )}
-                    </p>
-                  </div>
-                  <ActivationModeSelector
-                    variant="onboarding"
-                    value={activationMode}
-                    onChange={setActivationMode}
-                    pushDisabledReason={pushToTalkUnavailableReason ?? undefined}
-                  />
-                </div>
-                {/* Denied input access gets the setup box below instead. */}
-                {pushToTalkUnavailableReason && !linuxInputAccessDenied && (
-                  <p className="mt-2 text-start text-xs leading-[1.4] text-[var(--onboarding-text-secondary)]">
-                    {pushToTalkUnavailableReason}
-                  </p>
-                )}
-                {platform === "linux" && (activationMode === "push" || linuxInputAccessDenied) && (
-                  <LinuxPttSetupInfo isAvailable={!linuxInputAccessDenied} />
-                )}
-              </div>
-            )}
           </div>
         );
       }

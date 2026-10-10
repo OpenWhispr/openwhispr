@@ -362,10 +362,14 @@ body:has(.onboarding-canvas) {
   /* Keycap. The cap is lit from above, so it needs its own top/bottom pair rather
      than reusing the surface tokens: in dark it has to sit *above* the page fill
      while still reading as a physical key. */
-  --onboarding-keycap-top: #eeeeee;
-  --onboarding-keycap-bottom: #dddddd;
-  --onboarding-keycap-bevel: #f8f8f8;
-  --onboarding-keycap-shadow: #0a0a0a;
+  --onboarding-keycap-top: #fafafa;
+  --onboarding-keycap-bottom: #efefef;
+  --onboarding-keycap-bevel: #ffffff;
+  --onboarding-keycap-border: #dcdcdc;
+  --onboarding-keycap-wall: #d4d4d4;
+  --onboarding-keycap-ambient: rgb(0 0 0 / 0.06);
+  /* 9:1 on the cap; text-secondary was 4.3:1 against the old bottom stop. */
+  --onboarding-keycap-label: #404040;
   /* Provider marks ship as full-colour SVGs; the onboarding rows want them
      monochrome. brightness(0) collapses to black, so dark has to invert after. */
   --onboarding-mark-monochrome: grayscale(1) brightness(0);
@@ -403,10 +407,14 @@ body.dark:has(.onboarding-canvas) {
   --onboarding-inverse-text: #0a0a0a;
   --onboarding-danger: #f87171;
   --onboarding-success: #4ade80;
-  --onboarding-keycap-top: #3a3a3a;
+  --onboarding-keycap-top: #303030;
   --onboarding-keycap-bottom: #262626;
-  --onboarding-keycap-bevel: #4d4d4d;
-  --onboarding-keycap-shadow: #000000;
+  --onboarding-keycap-bevel: rgb(255 255 255 / 0.06);
+  /* The cap is only 1.2:1 against the page, so the border gives it its edge. */
+  --onboarding-keycap-border: #3a3a3a;
+  --onboarding-keycap-wall: #0a0a0a;
+  --onboarding-keycap-ambient: rgb(0 0 0 / 0.4);
+  --onboarding-keycap-label: #d4d4d4;
   --onboarding-mark-monochrome: grayscale(1) brightness(0) invert(1);
   --onboarding-scrim: rgb(0 0 0 / 0.55);
 }
@@ -799,21 +807,21 @@ body:has(.onboarding-canvas) kbd {
 }
 
 .onboarding-keycap {
-  /* Light from above: a near-white top rolling into neutral-100 reads as a
-     physical cap, where a single flat fill reads as a grey box. */
+  /* Light from above: a slightly brighter top keeps the cap physical, where a
+     single flat fill reads as a grey box. */
   background-image: linear-gradient(
     to bottom,
     var(--onboarding-keycap-top),
     var(--onboarding-keycap-bottom)
   );
-  border-color: var(--onboarding-control-border);
+  border-color: var(--onboarding-keycap-border);
+  /* Depth scales with the cap (1px compact, 2px large via --onboarding-keycap-depth).
+     A wide ambient blur doubled the visual weight of a 48px cap. */
   box-shadow:
-    /* top bevel */
     inset 0 1px 0 var(--onboarding-keycap-bevel),
-    /* the cap's side wall */ 1px 3px 0 var(--onboarding-control-border),
-    /* contact shadow, then a wider ambient one */ 0 5px 5px
-      color-mix(in oklch, var(--onboarding-keycap-shadow) 9%, transparent),
-    0 12px 20px color-mix(in oklch, var(--onboarding-keycap-shadow) 8%, transparent);
+    0 var(--onboarding-keycap-depth, 1px) 0 var(--onboarding-keycap-wall),
+    0 var(--onboarding-keycap-depth, 1px) calc(var(--onboarding-keycap-depth, 1px) * 2)
+      var(--onboarding-keycap-ambient);
 }
 
 /* Today's day-card header: a mosaic of faint tiles over --gradient-calendar-today,

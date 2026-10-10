@@ -47,7 +47,7 @@ const LABELS: Record<string, string> = {
   Alt: "alt",
   Cmd: "command",
   Command: "command",
-  Shift: "Shift",
+  Shift: "shift",
   Win: "windows",
   Super: "super",
   "Globe/Fn": "fn",
@@ -86,6 +86,11 @@ function describeKeycap(part: string): Omit<HotkeyKeycapDescriptor, "id"> {
     return { label: "fn", symbol: "◎", icon: "globe" };
   }
 
+  // A letter, digit or F-key is its own label; "K" over "k" just said it twice.
+  if (part.length === 1 || /^F\d{1,2}$/.test(part)) {
+    return { label: "", symbol: part.toLocaleUpperCase() };
+  }
+
   return {
     label: LABELS[part] ?? part.toLocaleLowerCase(),
     symbol: SYMBOLS[part] ?? (part.length === 1 ? part.toLocaleUpperCase() : part),
@@ -93,10 +98,12 @@ function describeKeycap(part: string): Omit<HotkeyKeycapDescriptor, "id"> {
 }
 
 export function getHotkeyKeycaps(value: string): HotkeyKeycapDescriptor[] {
-  return formatHotkeyLabel(value)
-    .split("+")
-    .filter(Boolean)
-    .map((part, index) => ({ id: `${part}-${index}`, ...describeKeycap(part) }));
+  const parts = formatHotkeyLabel(value).split("+").filter(Boolean);
+  // Chords are saved without sides, so keys held while building one drop theirs
+  // too; otherwise "left control" turns into "control" the moment the chord lands.
+  // A lone key keeps its side: that is what makes Right Option a distinct pick.
+  const shown = parts.length > 1 ? parts.map((part) => part.replace(/^(Left|Right) /, "")) : parts;
+  return shown.map((part, index) => ({ id: `${part}-${index}`, ...describeKeycap(part) }));
 }
 
 export const formatHotkeyInstruction = (value: string) =>
@@ -106,7 +113,6 @@ export const formatRecommendedHotkey = (value: string) =>
   isGlobeLikeHotkey(value) ? "Globe/Fn" : formatHotkeyInstruction(value);
 
 export const MACOS_DEFAULT_ONBOARDING_HOTKEY = "RightOption";
-export const DEFAULT_ASSISTANT_ONBOARDING_HOTKEY = "CommandOrControl+Shift+Space";
 
 /**
  * The chord the dictation step opens on.
@@ -138,12 +144,28 @@ export const resolveOnboardingDictationHotkey = ({
 };
 
 /**
+ * Assistant picks, at most two keys each. No one chord is free on every platform:
+ * macOS reserves Cmd+Space (Spotlight), Linux desktops reserve Alt+Space (window
+ * menu), and GNOME, KDE and Hyprland can't watch a lone right modifier for this
+ * slot. So each platform gets its own:
+ * - macOS: Right Command, the free twin of dictation's Right Option, then
+ *   Option+Space, the usual assistant/launcher chord.
+ * - Windows: Alt+Space, the same launcher convention.
+ * - Linux: Super+J, a regular-key chord every desktop backend can bind.
+ */
+export const getRecommendedAssistantHotkeys = (platform: Platform): string[] => {
+  if (platform === "darwin") return ["RightCommand", "Alt+Space"];
+  if (platform === "win32") return ["Alt+Space"];
+  return ["Super+J"];
+};
+
+/**
  * The chord the assistant step opens on. `voiceAgentKey` is opt-in with no
  * platform default and nothing auto-registers it, so anything saved is the user's
  * own pick and there is no substitution to make.
  */
-export const resolveOnboardingAssistantHotkey = (savedHotkey: string): string =>
-  savedHotkey || DEFAULT_ASSISTANT_ONBOARDING_HOTKEY;
+export const resolveOnboardingAssistantHotkey = (savedHotkey: string, platform: Platform): string =>
+  savedHotkey || getRecommendedAssistantHotkeys(platform)[0];
 
 /**
  * One-key picks lead where the platform has a spare key: right Option on macOS,
@@ -158,7 +180,7 @@ export const getRecommendedDictationHotkeys = (
   platform: Platform,
   effectiveDefault: string
 ): string[] => {
-  if (platform === "darwin") return [MACOS_DEFAULT_ONBOARDING_HOTKEY, "GLOBE", "Control+R"];
+  if (platform === "darwin") return [MACOS_DEFAULT_ONBOARDING_HOTKEY, "GLOBE"];
   if (platform === "win32" && effectiveDefault === "Control+Super") {
     return ["RightControl", effectiveDefault];
   }
