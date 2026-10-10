@@ -2711,15 +2711,21 @@ class IPCHandlers {
     });
     ipcMain.handle(
       "db-acknowledge-note-create",
-      (_, id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) =>
-        this.databaseManager.acknowledgeNoteCreate(
+      (_, id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) => {
+        const result = this.databaseManager.acknowledgeNoteCreate(
           id,
           snapshot,
           cloudId,
           cloudUpdatedAt,
           ownerUserId,
           options
-        )
+        );
+        if (result.note) {
+          setImmediate(() => broadcastToWindows("note-synced", result.note));
+          this.notifyVectorChanges();
+        }
+        return result;
+      }
     );
     ipcMain.handle(
       "db-mark-note-synced-if-unchanged",

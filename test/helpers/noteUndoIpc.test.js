@@ -72,6 +72,7 @@ function anything() {
 
 const RESTORED = { id: 7, title: "Before the assistant" };
 let undoResult;
+let createAckResult;
 const effects = { vectors: 0, mirrored: [] };
 
 test.before(() => {
@@ -81,7 +82,10 @@ test.before(() => {
   const target = {
     notifyVectorChanges: () => effects.vectors++,
     _asyncMirrorWrite: (note) => effects.mirrored.push(note),
-    databaseManager: { undoNoteUpdate: () => undoResult },
+    databaseManager: {
+      undoNoteUpdate: () => undoResult,
+      acknowledgeNoteCreate: () => createAckResult,
+    },
   };
   Ctor.prototype.setupHandlers.call(
     new Proxy(target, {
@@ -117,4 +121,25 @@ test("a refused Undo writes nothing anywhere", async () => {
   assert.deepEqual(sent, []);
   assert.equal(effects.vectors, 0);
   assert.deepEqual(effects.mirrored, []);
+});
+
+test("a create acknowledgement that reconciles text refreshes editors and the index", async () => {
+  sent.length = 0;
+  effects.vectors = 0;
+  createAckResult = { success: true, outcome: "synced", note: { id: 7, content: "" } };
+  const result = await handlers.get("db-acknowledge-note-create")(null, 7, {}, "cloud-7");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(result, createAckResult);
+  assert.deepEqual(sent, [["note-synced", createAckResult.note]]);
+  assert.equal(effects.vectors, 1);
+});
+
+test("an identity-rejected create acknowledgement does not broadcast", async () => {
+  sent.length = 0;
+  effects.vectors = 0;
+  createAckResult = { success: true, outcome: "identity-changed" };
+  await handlers.get("db-acknowledge-note-create")(null, 7, {}, "old-account-cloud");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(sent, []);
+  assert.equal(effects.vectors, 0);
 });

@@ -49,7 +49,11 @@ import {
   isCloudNoteNewer,
   normalizeTimestamp,
 } from "../helpers/cloudSyncGuards.js";
-import { resolveRendererCloudNoteCreate, type CloudNoteCreateResult } from "./noteCreateAck";
+import {
+  resolveRendererCloudNoteCreate,
+  resolveRendererCloudNoteCreateBatch,
+  type CloudNoteCreateResult,
+} from "./noteCreateAck";
 import {
   clearUpdate404,
   isPermissionDenialCode,
@@ -1931,24 +1935,12 @@ export class SyncService {
             ...scope,
           }))
         );
-        for (const {
-          client_note_id,
-          id: cloudId,
-          updated_at,
-          revision,
-          write_applied,
-        } of created) {
-          const local = chunk.find(({ note }) => note.client_note_id === client_note_id);
-          if (local) {
-            await this.acknowledgeCloudNoteCreate(local.note, {
-              id: cloudId,
-              client_note_id,
-              updated_at: updated_at ?? null,
-              revision,
-              write_applied,
-            });
-          }
-        }
+        const outcomes = await resolveRendererCloudNoteCreateBatch(
+          chunk.map(({ note }) => note),
+          created,
+          (cloudId) => NotesService.delete(cloudId)
+        );
+        if (outcomes.includes("write-rejected")) this.requestSyncAll("retry");
       } catch (err) {
         if (isAuthContextError(err)) throw err;
         if (isSpaceAccessError(err) || isPermissionDenialError(err)) {

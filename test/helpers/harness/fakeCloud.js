@@ -272,7 +272,7 @@ function createFakeCloud(config = {}) {
         return {
           created: inputs.map((input) => {
             const row = upsertRow(noteCollection, input);
-            return { client_note_id: row.client_note_id, id: row.id };
+            return { client_note_id: row.client_note_id, id: row.id, updated_at: row.updated_at };
           }),
         };
       }
