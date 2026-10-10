@@ -2647,8 +2647,6 @@
         "gemini_gemma_4_26b_a4b_it": "Google の Gemma 4 MoE、4B アクティブパラメータ、256K コンテキスト",
         "groq_openai_gpt_oss_120b": "OpenAI のオープンソースフラッグシップ、500 T/秒",
         "groq_openai_gpt_oss_20b": "高速オープンソースモデル、1000 T/秒",
-        "groq_compound": "Groq の Compound システム、450 T/秒",
-        "groq_compound_mini": "高速 Compound システム、3x 低レイテンシー",
         "openai_gpt_6_astra": "コーディングと研究のための OpenAI の最も高性能なモデル",
         "openai_gpt_5_6_sol": "複雑なコーディングと研究のためのフラッグシップ GPT-5.6",
         "openai_gpt_5_6_terra": "日常業務向けのバランス型 GPT-5.6",

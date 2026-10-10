@@ -2647,8 +2647,6 @@
         "gemini_gemma_4_26b_a4b_it": "Gemma 4 MoE di Google, 4B parametri attivi, contesto 256K",
         "groq_openai_gpt_oss_120b": "Ammiraglia open source di OpenAI, 500 T/sec",
         "groq_openai_gpt_oss_20b": "Modello open source veloce, 1000 T/sec",
-        "groq_compound": "Sistema compound di Groq, 450 T/sec",
-        "groq_compound_mini": "Sistema compound veloce, 3x latenza ridotta",
         "openai_gpt_6_astra": "Il modello più capace di OpenAI per programmazione e ricerca",
         "openai_gpt_5_6_sol": "GPT-5.6 di punta per programmazione e ricerca complesse",
         "openai_gpt_5_6_terra": "GPT-5.6 bilanciato per il lavoro quotidiano",
