@@ -178,7 +178,7 @@ Scope: `notes:write` / `workspace:notes:write`. All fields optional — only pro
 - Without `base_revision`, a provided blank `content` or `enhanced_content` clears that field.
 - With `base_revision`, state each change in `field_updates`: `set` needs nonblank text, `clear` takes an omitted, null or blank value (`400 validation_error` otherwise). A stale `base_revision` answers `409 note_version_conflict` with `{ "error": { "code", "message" }, "data": <current note> }`; rebase on `data` and retry.
 - Clearing `enhanced_content` also removes its prompt and content hash but keeps `enhancement_template_id`.
-- After a clear, a write that resends exactly the text the clear removed leaves the field cleared (the rest of the write still applies).
+- A nonblank legacy v1 write restores the field even when it matches text removed by a clear. Exact stale resends are suppressed only for released desktop sync endpoints; mobile and v1 restores remain edits.
 
 **Delete Note** — `DELETE /notes/{id}`
 Scope: `notes:write` / `workspace:notes:write`. Soft-deletes the note. Returns `204 No Content`.
