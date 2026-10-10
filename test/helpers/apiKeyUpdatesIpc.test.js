@@ -92,6 +92,10 @@ class FakeStreaming {
     this.warmToken = null;
     return { text: "" };
   }
+  resetWarmIdleTimer(timeoutMs) {
+    this.idleTimerResets = (this.idleTimerResets || 0) + 1;
+    this.lastIdleTimeoutMs = timeoutMs;
+  }
 }
 class FakeOrukeet extends FakeStreaming {}
 
@@ -386,6 +390,20 @@ test("assemblyai: a socket opened on the old key loses to the save, even when it
   assert.equal(result.success, true);
   assert.equal(target.assemblyAiStreaming.rodeWarm, false);
   assert.equal(target.assemblyAiStreaming.token, "token-B");
+});
+
+test("assemblyai: a warmup while already warm resets the warm idle timer", async () => {
+  target.assemblyAiStreaming = null;
+  invoke("save-assemblyai-key", "A");
+  await invoke("assemblyai-streaming-warmup", { mode: "byok" });
+  assert.equal(target.assemblyAiStreaming.hasWarmConnection(), true);
+  const result = await invoke("assemblyai-streaming-warmup", {
+    mode: "byok",
+    idleTimeoutMs: 60000,
+  });
+  assert.equal(result.alreadyWarm, true);
+  assert.equal(target.assemblyAiStreaming.idleTimerResets, 1);
+  assert.equal(target.assemblyAiStreaming.lastIdleTimeoutMs, 60000);
 });
 
 test("gemini: a warm socket never crosses between managed and BYOK", async (t) => {
