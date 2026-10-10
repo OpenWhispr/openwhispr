@@ -1686,6 +1686,14 @@ class IPCHandlers {
       this.windowManager.showDictationPanel({ reposition: true });
     });
 
+    ipcMain.handle("is-control-panel-visible", () => {
+      return Boolean(
+        this.windowManager?.controlPanelWindow &&
+          !this.windowManager.controlPanelWindow.isDestroyed() &&
+          this.windowManager.controlPanelWindow.isVisible()
+      );
+    });
+
     ipcMain.handle("open-settings-section", async (_event, section) => {
       if (!isProviderSettingsTarget(section)) return { success: false };
       await this.windowManager.openSettings(section);

@@ -588,7 +588,11 @@ function initializeCoreManagers() {
     // (the only mode whose Settings shows the pack) is told.
     const outdatedPacks = detectOutdatedGpuPacks(gpuPacks);
     if (outdatedPacks.length > 0) {
-      const whisperInUse = !!process.env.LOCAL_WHISPER_MODEL;
+      const whisperInUse =
+        Boolean(process.env.LOCAL_WHISPER_MODEL) ||
+        process.env.LOCAL_TRANSCRIPTION_PROVIDER === "whisper" ||
+        (process.env.WHISPER_CUDA_ENABLED || "").toLowerCase() === "true" ||
+        (process.env.WHISPER_VULKAN_ENABLED || "").toLowerCase() === "true";
       debugLogger.info("GPU packs from an older release need re-downloading", {
         packs: outdatedPacks,
         notified: whisperInUse,

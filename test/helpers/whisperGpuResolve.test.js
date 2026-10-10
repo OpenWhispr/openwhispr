@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const WhisperManager = require("../../src/helpers/whisper.js");
 const { resolveFailedGpuBackends } = require("../../src/helpers/whisper.js");
+const debugLogger = require("../../src/helpers/debugLogger.js");
 
 // Every whisper-server start resolves its GPU backend from the current env +
 // installed packs + remembered failures. This is what makes "Enable GPU" work
@@ -163,4 +164,64 @@ for (const [name, packs, failed, optedOut, expected] of [
 test("without injected binary managers (macOS) no pack is in use", () => {
   process.env.WHISPER_GPU_FAILED = "cuda,vulkan";
   assert.equal(new WhisperManager().resolveGpuPackInUse(), null);
+});
+
+test("_warnIfGpuFallback logs warning when CUDA is enabled in env but pack is missing", () => {
+  const manager = managerWith({ cudaDownloaded: false });
+  process.env.WHISPER_CUDA_ENABLED = "true";
+
+  const originalWarn = debugLogger.warn;
+  const warned = [];
+  debugLogger.warn = (...args) => warned.push(args);
+
+  try {
+    manager._warnIfGpuFallback();
+    assert.equal(warned.length, 1);
+    assert.equal(warned[0][0], "Whisper CUDA enabled but cannot be used, falling back to CPU");
+    assert.equal(warned[0][1].reason, "pack not installed or missing required libraries");
+
+    // Deduplication check
+    manager._warnIfGpuFallback();
+    assert.equal(warned.length, 1);
+  } finally {
+    debugLogger.warn = originalWarn;
+  }
+});
+
+test("_warnIfGpuFallback logs warning when CUDA is enabled in env and pack needs update", () => {
+  const manager = new WhisperManager();
+  manager.setGpuBinaryManagers({
+    cuda: { isDownloaded: () => false, needsUpdate: () => true },
+    vulkan: { isDownloaded: () => false, needsUpdate: () => false },
+  });
+  process.env.WHISPER_CUDA_ENABLED = "true";
+
+  const originalWarn = debugLogger.warn;
+  const warned = [];
+  debugLogger.warn = (...args) => warned.push(args);
+
+  try {
+    manager._warnIfGpuFallback();
+    assert.equal(warned.length, 1);
+    assert.equal(warned[0][0], "Whisper CUDA enabled but cannot be used, falling back to CPU");
+    assert.equal(warned[0][1].reason, "pack needs update");
+  } finally {
+    debugLogger.warn = originalWarn;
+  }
+});
+
+test("_warnIfGpuFallback does not log when CUDA is downloaded and used", () => {
+  const manager = managerWith({ cudaDownloaded: true });
+  process.env.WHISPER_CUDA_ENABLED = "true";
+
+  const originalWarn = debugLogger.warn;
+  const warned = [];
+  debugLogger.warn = (...args) => warned.push(args);
+
+  try {
+    manager._warnIfGpuFallback();
+    assert.equal(warned.length, 0);
+  } finally {
+    debugLogger.warn = originalWarn;
+  }
 });

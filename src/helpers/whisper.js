@@ -101,6 +101,47 @@ class WhisperManager {
     return { useCuda, useVulkan };
   }
 
+  _warnIfGpuFallback() {
+    const { useCuda, useVulkan } = this.resolveGpuStartOptions();
+    const failed = resolveFailedGpuBackends(process.env.WHISPER_GPU_FAILED);
+    const cudaExplicit = (process.env.WHISPER_CUDA_ENABLED || "").toLowerCase() === "true";
+    const vulkanExplicit = (process.env.WHISPER_VULKAN_ENABLED || "").toLowerCase() === "true";
+
+    if (cudaExplicit && !useCuda) {
+      const reason = this._cudaBinaryManager?.needsUpdate?.()
+        ? "pack needs update"
+        : !this._cudaBinaryManager?.isDownloaded?.()
+          ? "pack not installed or missing required libraries"
+          : failed.includes("cuda")
+            ? "previous failure recorded"
+            : "not available";
+      const key = `cuda:${reason}`;
+      if (this._lastGpuFallbackWarning !== key) {
+        this._lastGpuFallbackWarning = key;
+        debugLogger.warn("Whisper CUDA enabled but cannot be used, falling back to CPU", {
+          pack: "CUDA whisper",
+          reason,
+        });
+      }
+    } else if (vulkanExplicit && !useVulkan && !useCuda) {
+      const reason = this._vulkanBinaryManager?.needsUpdate?.()
+        ? "pack needs update"
+        : !this._vulkanBinaryManager?.isDownloaded?.()
+          ? "pack not installed or missing required libraries"
+          : failed.includes("vulkan")
+            ? "previous failure recorded"
+            : "not available";
+      const key = `vulkan:${reason}`;
+      if (this._lastGpuFallbackWarning !== key) {
+        this._lastGpuFallbackWarning = key;
+        debugLogger.warn("Whisper Vulkan enabled but cannot be used, falling back to CPU", {
+          pack: "Vulkan whisper",
+          reason,
+        });
+      }
+    }
+  }
+
   // The pack the settings card describes, so the card never disagrees with the
   // server (#1736): the pack every server start picks now (a GPU server always
   // runs on it; while a pack change restarts the server, it names the target),
@@ -190,6 +231,7 @@ class WhisperManager {
         const modelPath = this.getModelPath(whisperModel);
 
         if (fs.existsSync(modelPath)) {
+          this._warnIfGpuFallback();
           debugLogger.info("Pre-warming whisper-server", {
             model: whisperModel,
             modelPath,
@@ -444,6 +486,7 @@ class WhisperManager {
       debugLogger.warn("VAD requested but ggml-silero model not found; running without VAD");
     }
 
+    this._warnIfGpuFallback();
     await this.serverManager.start(modelPath, {
       ...this.resolveGpuStartOptions(),
       vadEnabled,

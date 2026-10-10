@@ -1336,6 +1336,7 @@ declare global {
       }>;
       hideWindow: () => Promise<void>;
       showDictationPanel: () => Promise<void>;
+      isControlPanelVisible?: () => Promise<boolean>;
       openSettingsSection?: (section: ProviderSettingsTarget) => Promise<{ success: boolean }>;
       captureDictationTarget?: () => Promise<{ success: boolean; pid: number | null }>;
       onToggleDictation: (callback: () => void) => () => void;
