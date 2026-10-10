@@ -436,6 +436,9 @@ export interface NoteItem {
   cloud_create_pending?: string | null;
   content_sync_operation?: "set" | "clear" | null;
   enhanced_content_sync_operation?: "set" | "clear" | null;
+  // Local-only counters distinguish later edits/Undo from an in-flight snapshot.
+  content_edit_generation?: number;
+  enhanced_content_edit_generation?: number;
   created_at: string;
   updated_at: string;
   client_note_id: string;
@@ -479,6 +482,8 @@ export type NotePushSnapshot = Pick<
   | "cloud_revision"
   | "content_sync_operation"
   | "enhanced_content_sync_operation"
+  | "content_edit_generation"
+  | "enhanced_content_edit_generation"
   | "left_team"
 >;
 
@@ -3538,7 +3543,7 @@ declare global {
         cloudNote: Record<string, unknown>,
         localFolderId: number | null,
         localSpaceId?: number | null
-      ) => Promise<NoteItem>;
+      ) => Promise<NoteItem | null>;
       acknowledgeNoteCreate?: (
         id: number,
         snapshot: NoteCreateSnapshot,

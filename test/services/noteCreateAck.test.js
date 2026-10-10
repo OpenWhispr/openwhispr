@@ -284,3 +284,27 @@ for (const invalidated of [false, true]) {
     assert.equal(acknowledged, !invalidated);
   });
 }
+
+for (const blocked of [{ deleted_at: "2026-10-09T10:00:00Z" }, { access_removed: true }]) {
+  test(`create receipt cannot adopt an unavailable row: ${Object.keys(blocked)[0]}`, async () => {
+    const { resolveCloudNoteCreate } = await import("../../src/services/noteCreateAck.ts");
+    const note = { id: 42, client_note_id: "unavailable-note" };
+    assert.equal(
+      await resolveCloudNoteCreate(
+        note,
+        {
+          id: "cloud-unavailable",
+          client_note_id: note.client_note_id,
+          content: "Text",
+          enhanced_content: null,
+          ...blocked,
+        },
+        {
+          acknowledge: () => assert.fail("Unavailable row cannot be adopted"),
+          deleteCloud: () => assert.fail("Unavailable row cannot be deleted"),
+        }
+      ),
+      "unresolved"
+    );
+  });
+}

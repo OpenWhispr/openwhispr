@@ -5,6 +5,7 @@ import type {
   NoteCloudText,
   NoteItem,
 } from "../types/electron";
+import { getValidatedAuthGeneration } from "../lib/authRequestContext";
 
 export interface CloudNoteCreateResult extends NoteCloudText {
   id: string;
@@ -14,6 +15,8 @@ export interface CloudNoteCreateResult extends NoteCloudText {
   revision?: number;
   write_applied?: boolean;
   row_created?: boolean;
+  deleted_at?: string | null;
+  access_removed?: boolean;
 }
 
 export interface NoteCreateAckDependencies {
@@ -87,6 +90,7 @@ export async function resolveCloudNoteCreate(
       : cleanupOrphanedCreate(cloud, dependencies);
   }
 
+  if (cloud.deleted_at || cloud.access_removed) return "unresolved";
   const writeRejected = cloud.write_applied === false;
   const hasCloudText =
     typeof cloud.content === "string" &&
@@ -175,7 +179,21 @@ export function resolveRendererCloudNoteCreate(
   deleteCloud: (cloudId: string) => Promise<void>,
   options: NoteCreateAckOptions = {}
 ): Promise<NoteCreateResolution> {
-  return resolveCloudNoteCreate(note, cloud, rendererDependencies(deleteCloud), options);
+  return resolveCloudNoteCreate(
+    note,
+    cloud,
+    rendererDependencies(deleteCloud),
+    rendererOptions(options)
+  );
+}
+
+function rendererOptions(options: NoteCreateAckOptions): NoteCreateAckOptions {
+  const generation = getValidatedAuthGeneration();
+  return {
+    ...options,
+    requestStillCurrent: () =>
+      getValidatedAuthGeneration() === generation && (options.requestStillCurrent?.() ?? true),
+  };
 }
 
 export function resolveRendererCloudNoteCreateBatch(
@@ -184,5 +202,10 @@ export function resolveRendererCloudNoteCreateBatch(
   deleteCloud: (cloudId: string) => Promise<void>,
   options: NoteCreateAckOptions = {}
 ): Promise<NoteCreateResolution[]> {
-  return resolveCloudNoteCreateBatch(notes, created, rendererDependencies(deleteCloud), options);
+  return resolveCloudNoteCreateBatch(
+    notes,
+    created,
+    rendererDependencies(deleteCloud),
+    rendererOptions(options)
+  );
 }

@@ -260,9 +260,9 @@ export class SyncService {
   // Whether the API keeps note revisions; null until a pulled row or the
   // probe (noteRevisionsSupported) shows it.
   private noteRevisionsKnown: boolean | null = null;
-  // One snapshot pull per session each for clears on rows without a revision
-  // (see pushPendingNotes) and rows synced before revisions
-  // (backfillNoteRevisions).
+  // One successful snapshot per session each for clears without a revision
+  // (pushPendingNotes) and rows synced before revisions (backfillNoteRevisions).
+  // Incomplete pulls retry on a later ordinary pass.
   private unrevisionedClearPullDone = false;
   private revisionBackfillChecked = false;
   private pushTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -1784,7 +1784,7 @@ export class SyncService {
 
   // Rows synced before revisions carry none, and an unchanged server row never
   // re-enters a delta pull, so a clear made elsewhere while this device ran a
-  // release that kept the text would never arrive. One snapshot pull per
+  // release that kept the text would never arrive. One successful snapshot per
   // session applies them (pullNotes takes a clean pre-revision row whole),
   // and only against a server that keeps revisions: an older API would
   // otherwise repeat it every session for nothing.
@@ -1796,8 +1796,7 @@ export class SyncService {
       // An unanswered probe retries on the next pass.
       const supported = missing > 0 ? await this.noteRevisionsSupported() : false;
       if (supported === null) return;
-      this.revisionBackfillChecked = true;
-      if (supported) await this.pullNotes(teamOnly, true);
+      this.revisionBackfillChecked = !supported || (await this.pullNotes(teamOnly, true));
     } catch (err) {
       console.error("Note revision backfill failed:", err);
     }
@@ -1823,9 +1822,9 @@ export class SyncService {
     // A surfaced conflict already holds its cloud copy; only rows still
     // awaiting one need the snapshot pull, as an unchanged cloud row may be
     // absent from the delta feed. A rejected create pulls until its conflict
-    // surfaces; a clear on a row without a revision once per session, when
-    // the server keeps revisions (the pull adopts one or surfaces a conflict,
-    // see pullNotes).
+    // surfaces; a clear on a row without a revision gets one successful
+    // snapshot per session when the server keeps revisions (the pull adopts
+    // one or surfaces a conflict, see pullNotes).
     const unresolved = pending.filter((note) => !conflicted.has(note.client_note_id));
     const pullsForUnrevisionedClear =
       !this.unrevisionedClearPullDone &&
@@ -1835,8 +1834,8 @@ export class SyncService {
       pullsForUnrevisionedClear ||
       unresolved.some((note) => note.cloud_create_rejected || note.cloud_create_pending)
     ) {
-      this.unrevisionedClearPullDone ||= pullsForUnrevisionedClear;
-      await this.pullNotes(teamOnly, true);
+      const pulled = await this.pullNotes(teamOnly, true);
+      if (pullsForUnrevisionedClear && pulled) this.unrevisionedClearPullDone = true;
       pending = (await window.electronAPI.getPendingNotes?.(teamOnly ? "team" : undefined)) ?? [];
     }
     if (pending.length === 0) return;
@@ -1848,7 +1847,7 @@ export class SyncService {
     for (const note of pending) {
       if (
         conflicted.has(note.client_note_id) ||
-        noteAwaitsCloudResolution(note, this.noteRevisionsKnown === true)
+        noteAwaitsCloudResolution(note, this.noteRevisionsKnown !== false)
       ) {
         // An unresolved pull conflict or rejected create: pushing now would
         // auto-resolve it as local-wins before the user chose Keep or Refresh

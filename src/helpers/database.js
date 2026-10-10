@@ -55,6 +55,8 @@ const NOTE_CREATE_ACK_FIELDS = [
   "enhanced_content",
   "content_sync_operation",
   "enhanced_content_sync_operation",
+  "content_edit_generation",
+  "enhanced_content_edit_generation",
   "enhancement_prompt",
   "enhancement_template_id",
   "enhanced_at_content_hash",
@@ -148,9 +150,19 @@ function toActionItem(row) {
 
 function rowMatchesSnapshot(row, snapshot, fields) {
   return fields.every((field) => {
-    const expected = snapshot[field] === undefined ? null : snapshot[field];
+    const fallback = field.endsWith("_edit_generation") ? 0 : null;
+    const expected = snapshot[field] === undefined ? fallback : snapshot[field];
     return row[field] === expected;
   });
+}
+
+function noteTextMatchesSnapshot(row, snapshot, field) {
+  return rowMatchesSnapshot(row, snapshot, [
+    field,
+    `${field}_sync_operation`,
+    `${field}_edit_generation`,
+    ...(field === "enhanced_content" ? SUMMARY_METADATA : []),
+  ]);
 }
 
 // An applied create acknowledges the submitted sets, even if the server kept
@@ -159,11 +171,7 @@ function acknowledgedCreateTextUpdates(current, snapshot, cloudNote) {
   const fields = NOTE_TEXT_FIELDS.filter(
     (field) =>
       snapshot[`${field}_sync_operation`] !== "clear" &&
-      rowMatchesSnapshot(current, snapshot, [
-        field,
-        `${field}_sync_operation`,
-        ...(field === "enhanced_content" ? SUMMARY_METADATA : []),
-      ])
+      noteTextMatchesSnapshot(current, snapshot, field)
   );
   return {
     ...cloudTextUpdates(current, cloudNote, fields),
@@ -448,6 +456,8 @@ class DatabaseManager {
         "cloud_create_pending TEXT",
         "content_sync_operation TEXT",
         "enhanced_content_sync_operation TEXT",
+        "content_edit_generation INTEGER NOT NULL DEFAULT 0",
+        "enhanced_content_edit_generation INTEGER NOT NULL DEFAULT 0",
       ]) {
         try {
           this.db.exec(`ALTER TABLE notes ADD COLUMN ${definition}`);
@@ -3378,6 +3388,7 @@ class DatabaseManager {
       }
       for (const field of NOTE_TEXT_FIELDS) {
         delete updates[`${field}_sync_operation`];
+        delete updates[`${field}_edit_generation`];
         if (clears.includes(field)) {
           if (
             updates[field] != null &&
@@ -3497,6 +3508,21 @@ class DatabaseManager {
         }
       }
       if (fields.length === 0) return { success: false };
+      // Undo can return to the submitted text within the same SQLite second.
+      // Keep that newer intent distinct from the in-flight request snapshot.
+      for (const field of NOTE_TEXT_FIELDS) {
+        const keys = [
+          field,
+          `${field}_sync_operation`,
+          ...(field === "enhanced_content" ? SUMMARY_METADATA : []),
+        ];
+        if (
+          clears.includes(field) ||
+          keys.some((key) => updates[key] !== undefined && updates[key] !== previous[key])
+        ) {
+          fields.push(`${field}_edit_generation = ${field}_edit_generation + 1`);
+        }
+      }
       // Re-queue for cloud sync on any local edit, so post-sync field changes aren't
       // left local-only and overwritten by a later pull.
       if (!("sync_status" in updates)) {
@@ -6354,7 +6380,8 @@ class DatabaseManager {
           { otherAccount: Boolean(otherAccount), otherCloudRow: Boolean(otherCloudRow) },
           "database"
         );
-        return existing;
+        // IPC broadcasts every returned note, so a skipped row must stay private.
+        return null;
       }
       const versioned = hasNoteRevision(cloudNote.revision);
       // A copy older than the revision this device acknowledged is stale. One
@@ -6667,7 +6694,10 @@ class DatabaseManager {
         // and retire those sets even when another field was edited in flight.
         // POST never delivers a deliberate clear; it still owes a PATCH.
         if (cloudNote && !writeRejected) {
-          this._setNoteColumns(id, acknowledgedCreateTextUpdates(current, snapshot, cloudNote));
+          const adopted = acknowledgedCreateTextUpdates(current, snapshot, cloudNote);
+          noteUndo.preserveUnchangedUndo(this, id, Object.keys(adopted), () => {
+            this._setNoteColumns(id, adopted);
+          });
         }
 
         // A clear still follows as a revisioned PATCH. A team-to-Personal
@@ -6779,7 +6809,7 @@ class DatabaseManager {
               NOTE_TEXT_FIELDS.filter(
                 (field) =>
                   !current[`${field}_sync_operation`] &&
-                  (current[field] ?? null) === (snapshot[field] ?? null)
+                  noteTextMatchesSnapshot(current, snapshot, field)
               )
             )
           : {};
@@ -6956,13 +6986,16 @@ class DatabaseManager {
               )
             : {};
           const merged = { ...current, ...acknowledged };
-          this._setNoteColumns(id, {
+          const adopted = {
             ...acknowledged,
             ...cloudTextUpdates(
               merged,
               cloudNote,
               NOTE_TEXT_FIELDS.filter((field) => !merged[`${field}_sync_operation`])
             ),
+          };
+          noteUndo.preserveUnchangedUndo(this, id, Object.keys(adopted), () => {
+            this._setNoteColumns(id, adopted);
           });
         }
         this.db
