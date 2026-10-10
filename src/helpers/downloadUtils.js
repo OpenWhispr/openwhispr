@@ -294,10 +294,10 @@ async function downloadFile(url, destPath, options = {}) {
       debugLogger.info("Retrying download", { attempt, delay, startOffset });
       await sleep(delay);
 
-      // Update startOffset from temp file in case partial data was written
+      // A failed full-response restart may have discarded the old prefix entirely.
       try {
         const stats = await fsPromises.stat(tempPath);
-        if (stats.size > 0) startOffset = stats.size;
+        startOffset = stats.size;
       } catch {
         startOffset = 0;
       }
