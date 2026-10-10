@@ -1,4 +1,5 @@
 import { X } from "../icons";
+import type { SettingsNavigationStore } from "../../stores/settingsNavigationStore";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore, MAX_TRANSLATION_TARGETS } from "../../stores/settingsStore";
 import registry from "../../config/languageRegistry.json";
@@ -16,7 +17,11 @@ const TARGET_OPTIONS = registry.languages
 
 const OPTION_BY_CODE = new Map(TARGET_OPTIONS.map((o) => [o.value, o]));
 
-export default function DictationTranslationSettings() {
+export default function DictationTranslationSettings({
+  navigation,
+}: {
+  navigation?: SettingsNavigationStore;
+}) {
   const { t } = useTranslation();
   const useDictationTranslation = useSettingsStore((s) => s.useDictationTranslation);
   const setUseDictationTranslation = useSettingsStore((s) => s.setUseDictationTranslation);
@@ -56,7 +61,11 @@ export default function DictationTranslationSettings() {
             label={t("dictationTranslation.enabled")}
             description={t("dictationTranslation.enabledDescription")}
           >
-            <Toggle checked={useDictationTranslation} onChange={setUseDictationTranslation} />
+            <Toggle
+              ariaLabel={t("dictationTranslation.enabled")}
+              checked={useDictationTranslation}
+              onChange={setUseDictationTranslation}
+            />
           </SettingsRow>
         </SettingsPanelRow>
       </SettingsPanel>
@@ -70,6 +79,7 @@ export default function DictationTranslationSettings() {
                 description={t("dictationTranslation.sourceLanguageDescription")}
               >
                 <LanguageSelector
+                  ariaLabel={t("dictationTranslation.sourceLanguage")}
                   value={translationSourceLanguage}
                   onChange={setTranslationSourceLanguage}
                 />
@@ -104,7 +114,7 @@ export default function DictationTranslationSettings() {
                               onClick={() => setTranslationTargetLanguage(target)}
                               aria-pressed={isActive}
                               aria-label={t("dictationTranslation.activeTarget")}
-                              className="inline-flex items-center gap-1"
+                              className="inline-flex items-center gap-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                             >
                               {flag && <span aria-hidden="true">{flag}</span>}
                               <span>{label}</span>
@@ -116,7 +126,7 @@ export default function DictationTranslationSettings() {
                                 aria-label={t("dictationTranslation.removeTarget", {
                                   language: label,
                                 })}
-                                className="rounded-full p-0.5 hover:text-destructive"
+                                className="rounded-full p-0.5 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                               >
                                 <X className="h-3 w-3" />
                               </button>
@@ -128,6 +138,7 @@ export default function DictationTranslationSettings() {
                   )}
                   {!atCap && (
                     <LanguageSelector
+                      ariaLabel={t("dictationTranslation.addTarget")}
                       value=""
                       onChange={addTarget}
                       options={availableOptions}
@@ -145,7 +156,7 @@ export default function DictationTranslationSettings() {
             </p>
           )}
 
-          <InferenceConfigEditor scope="dictationTranslation" />
+          <InferenceConfigEditor scope="dictationTranslation" navigation={navigation} />
 
           <div className="border-t border-border/70 pt-6">
             <SectionHeader

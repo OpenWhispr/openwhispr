@@ -91,7 +91,7 @@ async function boot(t, { electronAPI = {}, initialStorage = {} } = {}) {
     "/stores/enterpriseIdentityStore.ts"
   );
   usePolicyStore.setState({ status: "managed", appVersion: "1.10.0", policy });
-  return { useEnterpriseIdentityStore, getManagedScopeResolution };
+  return { useEnterpriseIdentityStore, getManagedScopeResolution, usePolicyStore, vite };
 }
 
 test("an LLM-only enforced workspace never fails transcription closed on a config outage", async (t) => {
@@ -334,4 +334,76 @@ test("clear() never strands a signed-out user under a stale persisted hint", asy
   // (or their own former) organization's enforcement.
   assert.equal(getManagedScopeResolution("transcription", "auto").kind, "manual");
   assert.equal(getManagedScopeResolution("dictationCleanup", "auto").kind, "manual");
+});
+
+test("managed resolution is write-free in SSR/StrictMode; conflict diagnostics follow transitions, including policy-only changes", async (t) => {
+  const React = require("react");
+  const { renderToString } = require("react-dom/server");
+  const { createRoot } = require("react-dom/client");
+  const { installHookDom } = require("../lib/rendererTestHarness");
+  let root;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  const logs = [];
+  const { useEnterpriseIdentityStore, getManagedScopeResolution, usePolicyStore, vite } =
+    await boot(t, {
+      electronAPI: {
+        log: async (payload) => logs.push(payload),
+        getManagedEnterpriseConfig: async (a, w, g) => ({
+          success: true,
+          accountId: a,
+          workspaceId: w,
+          authGeneration: g,
+          config: azureSttRequired,
+        }),
+      },
+    });
+  const container = installHookDom(t);
+  const { useManagedScopeResolution } = await vite.ssrLoadModule(
+    "/stores/enterpriseIdentityStore.ts"
+  );
+  await useEnterpriseIdentityStore.getState().refresh("account-a", "workspace-a", 1);
+  const deniedPolicy = {
+    ...policy,
+    transcription: { ...policy.transcription, allowedEnterpriseProviders: [] },
+  };
+  usePolicyStore.setState({ policy: deniedPolicy });
+  await new Promise(setImmediate);
+  assert.equal(logs.length, 1);
+  logs.length = 0;
+  let result;
+  function Owner() {
+    result = useManagedScopeResolution("transcription", "auto");
+    return null;
+  }
+  renderToString(React.createElement(Owner));
+  // Zustand SSR deliberately reads getInitialState(), not imperative post-construction writes.
+  assert.equal(result.kind, "manual");
+  assert.equal(
+    getManagedScopeResolution("transcription", "manual").code,
+    "PROVIDER_POLICY_CONFLICT"
+  );
+  root = createRoot(container);
+  await React.act(async () =>
+    root.render(React.createElement(React.StrictMode, null, React.createElement(Owner)))
+  );
+  assert.equal(result.code, "PROVIDER_POLICY_CONFLICT");
+  assert.deepEqual(logs, [], "resolution and repeated render must never log IPC");
+  await React.act(async () => usePolicyStore.setState({ policy }));
+  assert.equal(result.kind, "managed", "policy alone must update a mounted resolver");
+  const optional = structuredClone(azureSttRequired);
+  optional.providers[0].mode = "managed_default";
+  optional.providers[0].allowManualSetup = true;
+  await React.act(async () => useEnterpriseIdentityStore.setState({ config: optional }));
+  await React.act(async () => usePolicyStore.setState({ policy: deniedPolicy }));
+  assert.equal(result.kind, "manual");
+  assert.equal(logs.length, 1);
+  logs.length = 0;
+  renderToString(React.createElement(Owner));
+  assert.equal(getManagedScopeResolution("transcription", "auto").kind, "manual");
+  await Promise.resolve();
+  assert.deepEqual(logs, []);
+  await React.act(async () => useEnterpriseIdentityStore.getState().clear());
+  assert.equal(result.kind, "manual");
 });

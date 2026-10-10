@@ -12,20 +12,29 @@ export function useScreenRecordingPermission() {
   const isMacOS = getCachedPlatform() === "darwin";
   const [access, setAccess] = useState<ScreenRecordingAccessResult | null>(null);
   const checkingRef = useRef(false);
+  const requestId = useRef(0);
 
   const check = useCallback(async () => {
     if (checkingRef.current) return;
+    const request = ++requestId.current;
     checkingRef.current = true;
     try {
       const result = await window.electronAPI?.checkScreenRecordingAccess?.();
-      setAccess(result ?? DEFAULT_ACCESS);
+      if (request === requestId.current) setAccess(result ?? DEFAULT_ACCESS);
+    } catch {
+      // Keep a confirmed grant when an OS refresh is temporarily unavailable.
     } finally {
-      checkingRef.current = false;
+      if (request === requestId.current) checkingRef.current = false;
     }
   }, []);
 
   useEffect(() => {
-    check();
+    void check();
+    const requests = requestId;
+    return () => {
+      ++requests.current;
+      checkingRef.current = false;
+    };
   }, [check]);
 
   // Screen Recording is granted in System Settings, outside the app — re-check
@@ -38,13 +47,18 @@ export function useScreenRecordingPermission() {
   }, [isMacOS, check]);
 
   const request = useCallback(async (): Promise<boolean> => {
+    const id = ++requestId.current;
+    checkingRef.current = true;
     try {
       const result = await window.electronAPI?.requestScreenRecordingAccess?.();
+      if (id !== requestId.current) return false;
       const next = result ?? DEFAULT_ACCESS;
       setAccess(next);
       return next.granted;
     } catch {
       return false;
+    } finally {
+      if (id === requestId.current) checkingRef.current = false;
     }
   }, []);
 

@@ -46,14 +46,10 @@ for (const k of BYOK_KEY_BRIDGES) {
  */
 const registerListener = (channel, handlerFactory) => {
   return (callback) => {
-    if (typeof callback !== "function") {
-      return () => {};
-    }
-
-    const listener =
-      typeof handlerFactory === "function"
-        ? handlerFactory(callback)
-        : (event, ...args) => callback(event, ...args);
+    const handler = typeof handlerFactory === "function" ? handlerFactory(callback) : callback;
+    // Preserve the legacy two-argument payload ABI, never the native event/sender.
+    // Custom adapters discard this inert slot to expose their named payload only.
+    const listener = (_event, ...args) => handler(undefined, ...args);
 
     ipcRenderer.on(channel, listener);
     return () => {
@@ -401,6 +397,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // BYOK API keys (get/save for every provider in the secretKeys manifest)
   ...secretKeyApi,
+  onSecretKeyChanged: registerListener(
+    "secret-key-changed",
+    (callback) => (_event, metadata) => callback(metadata)
+  ),
 
   // Clipboard functions
   checkAccessibilityPermission: (silent) =>
@@ -602,7 +602,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   unregisterCancelHotkey: () => ipcRenderer.invoke("unregister-cancel-hotkey"),
 
   // External link opener
-  openExternal: (url) => ipcRenderer.invoke("open-external", url),
+  openExternal: (url, expectedAuthGeneration) =>
+    ipcRenderer.invoke("open-external", url, expectedAuthGeneration),
 
   // Model management functions
   modelGetAll: () => ipcRenderer.invoke("model-get-all"),
@@ -792,10 +793,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   cloudStreamingUsage: (text, audioDurationSeconds, opts) =>
     ipcRenderer.invoke("cloud-streaming-usage", text, audioDurationSeconds, opts),
   cloudUsage: () => ipcRenderer.invoke("cloud-usage"),
-  cloudCheckout: (opts) => ipcRenderer.invoke("cloud-checkout", opts),
-  cloudBillingPortal: () => ipcRenderer.invoke("cloud-billing-portal"),
-  cloudSwitchPlan: (opts) => ipcRenderer.invoke("cloud-switch-plan", opts),
-  cloudPreviewSwitch: (opts) => ipcRenderer.invoke("cloud-preview-switch", opts),
+  cloudCheckout: (opts, generation) => ipcRenderer.invoke("cloud-checkout", opts, generation),
+  cloudBillingPortal: (generation) => ipcRenderer.invoke("cloud-billing-portal", generation),
+  cloudSwitchPlan: (opts, generation) => ipcRenderer.invoke("cloud-switch-plan", opts, generation),
+  cloudPreviewSwitch: (opts, generation) =>
+    ipcRenderer.invoke("cloud-preview-switch", opts, generation),
   cloudApiRequest: (opts) => ipcRenderer.invoke("cloud-api-request", opts),
   getSttConfig: () => ipcRenderer.invoke("get-stt-config"),
   getWorkspacePolicy: (accountId, expectedAuthGeneration) =>
@@ -1029,10 +1031,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("hotkey-registration-failed", listener);
     return () => ipcRenderer.removeListener("hotkey-registration-failed", listener);
   },
-  onApiKeyUpdated: registerListener(
-    "api-key-updated",
-    (callback) => (_event, storeKey) => callback(storeKey)
-  ),
   onSettingUpdated: (callback) => {
     const listener = (_event, data) => callback?.(data);
     ipcRenderer.on("setting-updated", listener);
@@ -1050,8 +1048,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
 
   // Settings shortcut (Cmd+, / Ctrl+,)
-  onShowSettings: registerListener("show-settings", (callback) => () => callback()),
-  getPendingSettingsSection: () => ipcRenderer.invoke("get-pending-settings-section"),
+  onShowSettings: registerListener(
+    "show-settings",
+    (callback) => (_event, request) => callback(request)
+  ),
+  getSettingsDocumentId: () => ipcRenderer.invoke("settings-document-id"),
+  setSettingsHostReady: (hostId, ready, documentId) =>
+    ipcRenderer.send("settings-host-ready", hostId, ready, documentId),
+  acknowledgeSettingsOpen: (hostId, requestId) =>
+    ipcRenderer.send("settings-open-consumed", hostId, requestId),
 
   // Accessibility permission events (macOS)
   onAccessibilityMissing: (callback) => {

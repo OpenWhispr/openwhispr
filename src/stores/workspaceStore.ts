@@ -11,12 +11,12 @@ interface WorkspaceState {
   loading: boolean;
   error: boolean;
   activeWorkspaceId: string | null;
-  members: WorkspaceMember[];
+  membersByWorkspace: Record<string, WorkspaceMember[]>;
 
   setActiveWorkspaceId: (id: string | null) => void;
   resetForAccountChange: () => void;
-  refresh: () => Promise<void>;
-  createWorkspace: (name: string) => Promise<Workspace>;
+  refresh: (afterMutation?: boolean) => Promise<void>;
+  createWorkspace: (name: string) => Promise<Workspace | null>;
   refreshMembers: (workspaceId: string) => Promise<void>;
 }
 
@@ -35,7 +35,8 @@ function writeActiveWorkspaceId(id: string | null): void {
 }
 
 let refreshPromise: Promise<void> | null = null;
-let membersRequestSeq = 0;
+const membersRequestSeq = new Map<string, number>();
+export const EMPTY_WORKSPACE_MEMBERS: WorkspaceMember[] = [];
 let accountGeneration = 0;
 
 /**
@@ -74,20 +75,17 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   loading: false,
   error: false,
   activeWorkspaceId: readActiveWorkspaceId(),
-  members: [],
+  membersByWorkspace: {},
 
   setActiveWorkspaceId: (id) => {
     writeActiveWorkspaceId(id);
-    // Invalidate in-flight member fetches so the old workspace's roster can't
-    // land under the new one.
-    membersRequestSeq++;
-    set({ activeWorkspaceId: id, members: [] });
+    set({ activeWorkspaceId: id });
     refreshForWorkspace(id);
   },
 
   resetForAccountChange: () => {
     accountGeneration += 1;
-    membersRequestSeq += 1;
+    membersRequestSeq.clear();
     // Let the next account start its own request. The identity check in the
     // old request prevents its result/finally block from touching new state.
     refreshPromise = null;
@@ -99,13 +97,20 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       loading: false,
       error: false,
       activeWorkspaceId: null,
-      members: [],
+      membersByWorkspace: {},
     });
   },
 
-  refresh: () => {
-    if (refreshPromise) return refreshPromise;
+  refresh: (afterMutation = false) => {
     const generation = accountGeneration;
+    if (refreshPromise) {
+      if (!afterMutation) return refreshPromise;
+      // A pre-write list cannot reconcile a completed write. Concurrent
+      // waiters share the fresh request started by the first continuation.
+      return refreshPromise.then(() => {
+        if (generation === accountGeneration) return get().refresh();
+      });
+    }
     set({ loading: true });
     let request!: Promise<void>;
     request = (async () => {
@@ -147,20 +152,23 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   createWorkspace: async (name) => {
     const generation = accountGeneration;
     const workspace = await WorkspacesService.create(name);
-    if (generation === accountGeneration) {
-      set((s) => ({ workspaces: [...s.workspaces, workspace] }));
-    }
+    if (generation !== accountGeneration) return null;
+    set((s) => ({ workspaces: [...s.workspaces, workspace] }));
     return workspace;
   },
 
   refreshMembers: async (workspaceId) => {
-    const seq = ++membersRequestSeq;
+    const generation = accountGeneration;
+    const seq = (membersRequestSeq.get(workspaceId) ?? 0) + 1;
+    membersRequestSeq.set(workspaceId, seq);
     try {
       const members = await WorkspacesService.listMembers(workspaceId);
-      // Discard stale responses when a newer request targets another workspace.
-      if (seq !== membersRequestSeq) return;
-      set({ members });
+      if (generation !== accountGeneration || seq !== membersRequestSeq.get(workspaceId)) return;
+      set((state) => ({
+        membersByWorkspace: { ...state.membersByWorkspace, [workspaceId]: members },
+      }));
     } catch (error) {
+      if (generation !== accountGeneration || seq !== membersRequestSeq.get(workspaceId)) return;
       logger.error(
         "Failed to load workspace members",
         { error: (error as Error).message },

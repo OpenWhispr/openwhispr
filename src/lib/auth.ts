@@ -132,7 +132,6 @@ export function getGracePeriodRemainingMs(): number {
 }
 
 export async function signOut(): Promise<void> {
-  credentialAccountCache = null;
   try {
     await authClient.signOut();
   } catch {
@@ -313,17 +312,11 @@ export async function openAdminConsole(): Promise<void> {
   openExternalLink(url);
 }
 
-// Cache only successful results; errors fail open without being cached. Cleared
-// in signOut() so a different account never inherits a stale value.
-let credentialAccountCache: boolean | null = null;
-
 export async function hasCredentialAccount(): Promise<boolean> {
-  if (credentialAccountCache !== null) return credentialAccountCache;
   try {
     const { data, error } = await authClient.listAccounts();
     if (error || !data) return true;
-    credentialAccountCache = data.some((account) => account.providerId === "credential");
-    return credentialAccountCache;
+    return data.some((account) => account.providerId === "credential");
   } catch {
     return true;
   }

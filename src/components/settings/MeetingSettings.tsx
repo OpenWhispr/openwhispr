@@ -1,4 +1,6 @@
 import { useCallback } from "react";
+import type { SettingsNavigationStore } from "../../stores/settingsNavigationStore";
+import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
 import { Cloud, Key, Cpu, Network } from "../icons";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -27,7 +29,11 @@ export function MeetingSpeakerDetectionRow() {
       label={t("settings.meeting.speakerDetection.title")}
       description={t("settings.meeting.speakerDetection.description")}
     >
-      <Toggle checked={speakerDiarizationEnabled} onChange={setSpeakerDiarizationEnabled} />
+      <Toggle
+        ariaLabel={t("settings.meeting.speakerDetection.title")}
+        checked={speakerDiarizationEnabled}
+        onChange={setSpeakerDiarizationEnabled}
+      />
     </SettingsRow>
   );
 }
@@ -49,7 +55,11 @@ function MeetingEchoCancellationRow() {
 
 const noop = () => {};
 
-export function MeetingTranscriptionPanel() {
+export function MeetingTranscriptionPanel({
+  navigation,
+}: {
+  navigation?: SettingsNavigationStore;
+}) {
   const { t } = useTranslation();
   const policySnapshot = usePolicySnapshot();
 
@@ -73,7 +83,29 @@ export function MeetingTranscriptionPanel() {
     meetingCloudTranscriptionBaseUrl,
     setMeetingCloudTranscriptionBaseUrl,
     setMeetingCloudTranscriptionMode,
-  } = useSettingsStore();
+  } = useSettingsStore(
+    useShallow((s) => ({
+      isSignedIn: s.isSignedIn,
+      meetingTranscriptionMode: s.meetingTranscriptionMode,
+      setMeetingTranscriptionMode: s.setMeetingTranscriptionMode,
+      setMeetingUseLocalWhisper: s.setMeetingUseLocalWhisper,
+      meetingWhisperModel: s.meetingWhisperModel,
+      setMeetingWhisperModel: s.setMeetingWhisperModel,
+      meetingLocalTranscriptionProvider: s.meetingLocalTranscriptionProvider,
+      setMeetingLocalTranscriptionProvider: s.setMeetingLocalTranscriptionProvider,
+      meetingParakeetModel: s.meetingParakeetModel,
+      setMeetingParakeetModel: s.setMeetingParakeetModel,
+      meetingCohereModel: s.meetingCohereModel,
+      setMeetingCohereModel: s.setMeetingCohereModel,
+      meetingCloudTranscriptionProvider: s.meetingCloudTranscriptionProvider,
+      setMeetingCloudTranscriptionProvider: s.setMeetingCloudTranscriptionProvider,
+      meetingCloudTranscriptionModel: s.meetingCloudTranscriptionModel,
+      setMeetingCloudTranscriptionModel: s.setMeetingCloudTranscriptionModel,
+      meetingCloudTranscriptionBaseUrl: s.meetingCloudTranscriptionBaseUrl,
+      setMeetingCloudTranscriptionBaseUrl: s.setMeetingCloudTranscriptionBaseUrl,
+      setMeetingCloudTranscriptionMode: s.setMeetingCloudTranscriptionMode,
+    }))
+  );
   const {
     modes: transcriptionModes,
     effectiveMode: effectiveTranscriptionMode,
@@ -147,6 +179,7 @@ export function MeetingTranscriptionPanel() {
 
   const renderTranscriptionPicker = (mode: "cloud" | "local") => (
     <TranscriptionModelPicker
+      settingsNavigation={navigation}
       streamingOnly
       transcriptionContext="meeting"
       selectedCloudProvider={meetingCloudTranscriptionProvider}

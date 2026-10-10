@@ -214,16 +214,15 @@ function withManagedApi(t) {
 const rodeWarm = (provider, property, result) =>
   provider === "gemini" ? result.usedWarmConnection : target[property].rodeWarm;
 
-test("every secret saver notifies peers by name only, including removal", () => {
+// Renderers hear about a change from the environment manager's secret-key-changed event.
+test("every secret saver saves its key, including removal, without notifying windows itself", () => {
   for (const { channel, storeKey, get } of bindings) {
     for (const value of ["secret-sentinel", ""]) {
       notifications.length = 0;
       assert.deepEqual(invoke(channel, value), { success: true });
       assert.equal(environmentManager[get](), value);
-      assert.deepEqual(notifications, [[2, "api-key-updated", storeKey]]);
-      notifications.length = 0;
       assert.deepEqual(invoke(channel, value), { success: true });
-      assert.deepEqual(notifications, [], `${storeKey} re-saved unchanged`);
+      assert.deepEqual(notifications, [], storeKey);
     }
   }
   assert.throws(

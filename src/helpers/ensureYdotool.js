@@ -1,6 +1,8 @@
 const fs = require("fs");
 const os = require("os");
-const { spawnSync } = require("child_process");
+const { execFile, spawnSync } = require("child_process");
+const { promisify } = require("util");
+const execFileAsync = promisify(execFile);
 const { dialog } = require("electron");
 const { getLinuxSessionInfo } = require("./linuxSession");
 
@@ -56,23 +58,6 @@ function isUinputAccessible() {
   } catch {
     return false;
   }
-}
-
-function udevRuleExists() {
-  const ruleDirs = ["/etc/udev/rules.d", "/usr/lib/udev/rules.d", "/lib/udev/rules.d"];
-  for (const dir of ruleDirs) {
-    try {
-      const files = fs.readdirSync(dir);
-      for (const file of files) {
-        if (!file.endsWith(".rules")) continue;
-        try {
-          const content = fs.readFileSync(`${dir}/${file}`, "utf-8");
-          if (content.includes("uinput")) return true;
-        } catch {}
-      }
-    } catch {}
-  }
-  return false;
 }
 
 function userInInputGroup() {
@@ -174,33 +159,66 @@ async function ensureYdotool() {
   }
 }
 
-function isNixOS() {
-  try {
-    if (fs.existsSync("/etc/NIXOS")) return true;
-    const osRelease = fs.readFileSync("/etc/os-release", "utf8");
-    return /^ID=("?)nixos\1$/m.test(osRelease);
-  } catch {
-    return false;
-  }
-}
-
-function getYdotoolStatus() {
-  const hasYdotool = commandExists("ydotool");
-  const hasYdotoold = commandExists("ydotoold");
-  const hasWtype = commandExists("wtype");
-  const daemonRunning = isYdotooldRunning();
-  const hasService = serviceFileExists();
-  const hasUinput = isUinputAccessible();
-  const hasUdevRule = udevRuleExists();
-  const hasGroup = userInInputGroup();
+async function getYdotoolStatus() {
   const { isWayland, isKde, isWlroots, isCosmic } = getLinuxSessionInfo();
-
-  return {
-    isLinux: process.platform === "linux",
+  const isLinux = process.platform === "linux";
+  const status = {
+    isLinux,
     isWayland,
     isKde,
     isWlroots,
     isCosmic,
+    hasYdotool: false,
+    hasYdotoold: false,
+    hasWtype: false,
+    daemonRunning: false,
+    hasService: false,
+    hasUinput: false,
+    hasUdevRule: false,
+    hasGroup: false,
+    isNixOS: false,
+    hasXclip: false,
+    hasXsel: false,
+  };
+  if (!isLinux || !isWayland) return status;
+
+  const run = async (file, args, timeout = 5000) => {
+    try {
+      const { stdout } = await execFileAsync(file, args, { timeout });
+      return stdout.trim();
+    } catch {
+      return "";
+    }
+  };
+  const exists = (file, mode) =>
+    fs.promises.access(file, mode).then(
+      () => true,
+      () => false
+    );
+  const servicePaths = [
+    "/usr/lib/systemd/user/ydotoold.service",
+    "/usr/lib/systemd/user/ydotool.service",
+    `${os.homedir()}/.config/systemd/user/ydotoold.service`,
+  ];
+  const checkRules = async () => {
+    for (const dir of ["/etc/udev/rules.d", "/usr/lib/udev/rules.d", "/lib/udev/rules.d"]) {
+      for (const file of await fs.promises.readdir(dir).catch(() => [])) {
+        if (!file.endsWith(".rules")) continue;
+        const rule = await fs.promises.readFile(`${dir}/${file}`, "utf8").catch(() => "");
+        if (rule.includes("uinput")) return true;
+      }
+    }
+    return false;
+  };
+  const checkDaemon = async () =>
+    (await run("systemctl", ["--user", "is-active", "ydotoold"])) === "active" ||
+    (await run("systemctl", ["--user", "is-active", "ydotool"])) === "active" ||
+    !!(await run("pgrep", ["-x", "ydotoold"]));
+  const checkNixOS = async () =>
+    (await exists("/etc/NIXOS")) ||
+    /^ID=("?)nixos\1$/m.test(await fs.promises.readFile("/etc/os-release", "utf8").catch(() => ""));
+
+  const [
     hasYdotool,
     hasYdotoold,
     hasWtype,
@@ -209,7 +227,35 @@ function getYdotoolStatus() {
     hasUinput,
     hasUdevRule,
     hasGroup,
-    isNixOS: isNixOS(),
+    nixOS,
+    hasXclip,
+    hasXsel,
+  ] = await Promise.all([
+    run("which", ["ydotool"]).then(Boolean),
+    run("which", ["ydotoold"]).then(Boolean),
+    run("which", ["wtype"]).then(Boolean),
+    checkDaemon(),
+    Promise.all(servicePaths.map((file) => exists(file))).then((results) => results.some(Boolean)),
+    exists("/dev/uinput", fs.constants.W_OK),
+    checkRules(),
+    run("groups", []).then((groups) => groups.includes("input")),
+    checkNixOS(),
+    isKde && run("which", ["xclip"], 1000).then(Boolean),
+    isKde && run("which", ["xsel"], 1000).then(Boolean),
+  ]);
+  return {
+    ...status,
+    hasYdotool,
+    hasYdotoold,
+    hasWtype,
+    daemonRunning,
+    hasService,
+    hasUinput,
+    hasUdevRule,
+    hasGroup,
+    isNixOS: nixOS,
+    hasXclip: !!hasXclip,
+    hasXsel: !!hasXsel,
   };
 }
 

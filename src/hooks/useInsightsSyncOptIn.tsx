@@ -13,7 +13,7 @@ import { usePolicyStore } from "../stores/policyStore";
 import { syncService } from "../services/SyncService.js";
 import type { AnalyticsSyncContext } from "../types/electron";
 import { useAuth } from "./useAuth";
-import { useSettings } from "./useSettings";
+import { useSettingsStore } from "../stores/settingsStore";
 
 /**
  * Single owner of the Insights Sync opt-in, shared by Settings and the Insights
@@ -50,7 +50,8 @@ export function useInsightsSyncOptIn() {
   const { toast } = useToast();
   const { user } = useAuth();
   const userId = user?.id ?? null;
-  const { insightsSyncEnabled, setInsightsSyncEnabled } = useSettings();
+  const insightsSyncEnabled = useSettingsStore((settings) => settings.insightsSyncEnabled);
+  const setInsightsSyncEnabled = useSettingsStore((settings) => settings.setInsightsSyncEnabled);
   const [unclaimedCount, setUnclaimedCount] = useState(0);
   const [awaitingUploadCount, setAwaitingUploadCount] = useState(0);
   const consentOwnerRef = useRef({});

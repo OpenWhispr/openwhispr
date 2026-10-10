@@ -6,6 +6,7 @@ const {
   enterpriseTileCta,
   hasActiveWorkspaceSubscription,
   isEnterpriseConsoleAvailable,
+  workspaceBillingSnapshot,
 } = require("../../src/lib/workspaceBilling.ts");
 
 const workspace = (overrides = {}) => ({
@@ -14,6 +15,59 @@ const workspace = (overrides = {}) => ({
   role: "owner",
   stripe_subscription_id: null,
   ...overrides,
+});
+
+test("workspaceBillingSnapshot: billing inputs change quote identity, metadata does not", () => {
+  const current = workspace({
+    id: "one",
+    name: "First",
+    seats: 2,
+    seats_used: 2,
+    plan: "business",
+    stripe_customer_id: "customer",
+    stripe_subscription_id: "sub",
+    current_period_end: "2026-11-01",
+    trial_ends_at: null,
+    cancel_at_period_end: false,
+    updated_at: "old",
+    billing_manager: null,
+    is_billable: true,
+  });
+  const snapshot = workspaceBillingSnapshot(current);
+  assert.equal(workspaceBillingSnapshot({ ...current }), snapshot);
+  for (const change of [
+    { id: "two" },
+    { role: "admin" },
+    { seats: 3 },
+    { seats_used: 1 },
+    { plan: "enterprise" },
+    { plan: "pro" },
+    { status: "past_due" },
+    { stripe_customer_id: "customer-new" },
+    { stripe_subscription_id: "sub-new" },
+    { stripe_subscription_id: null },
+    { current_period_end: "2026-12-01" },
+    { trial_ends_at: "2026-11-01" },
+    { cancel_at_period_end: true },
+  ]) {
+    assert.notEqual(
+      workspaceBillingSnapshot({ ...current, ...change }),
+      snapshot,
+      JSON.stringify(change)
+    );
+  }
+  for (const change of [
+    { name: "Renamed" },
+    { updated_at: "new" },
+    { billing_manager: "Alice" },
+    { is_billable: false },
+  ]) {
+    assert.equal(
+      workspaceBillingSnapshot({ ...current, ...change }),
+      snapshot,
+      JSON.stringify(change)
+    );
+  }
 });
 
 test("hasActiveWorkspaceSubscription: paid plan and entitled status, nothing else", () => {

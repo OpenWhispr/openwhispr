@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useReducer, useCallback, useEffect, useRef } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { useDialogs } from "./useDialogs";
@@ -49,6 +49,49 @@ interface ModelDownloadTerminalEvent {
 
 type LLMDownloadProgressData = LocalLLMDownloadProgressEvent & { sequence?: number };
 
+type DownloadState = {
+  downloads: Record<string, LocalModelDownloadStatus>;
+  terminals: Record<string, number>;
+};
+type DownloadAction =
+  | { type: "progress" | "start"; status: LocalModelDownloadStatus }
+  | { type: "terminal" | "remove"; modelId: string; sequence?: number };
+
+export function modelDownloadTransition(
+  state: DownloadState,
+  action: DownloadAction
+): DownloadState {
+  if ("status" in action) {
+    const status = action.status;
+    const terminal = state.terminals[status.modelId];
+    if (action.type !== "start" && terminal !== undefined && status.sequence <= terminal)
+      return state;
+    const existing = state.downloads[status.modelId];
+    if (action.type !== "start" && existing && existing.sequence > status.sequence) return state;
+    return { ...state, downloads: { ...state.downloads, [status.modelId]: status } };
+  }
+  const { modelId, sequence } = action;
+  if (action.type === "terminal") {
+    return {
+      ...state,
+      terminals: {
+        ...state.terminals,
+        [modelId]: Math.max(
+          state.terminals[modelId] ?? 0,
+          sequence ?? state.downloads[modelId]?.sequence ?? 0
+        ),
+      },
+    };
+  }
+  const existing = state.downloads[modelId];
+  if (!existing) return state;
+  // A second terminal can arrive while the first reconciliation is still pending.
+  const terminal = Math.max(state.terminals[modelId] ?? 0, sequence ?? existing.sequence);
+  if (existing.sequence > terminal) return state;
+  const { [modelId]: _removed, ...downloads } = state.downloads;
+  return { ...state, downloads, terminals: { ...state.terminals, [modelId]: terminal } };
+}
+
 export function formatETA(seconds: number): string {
   if (seconds < 60) return `${Math.round(seconds)}s`;
   const minutes = Math.floor(seconds / 60);
@@ -98,12 +141,14 @@ export function useModelDownload({
   const { t } = useTranslation();
   const { showAlertDialog } = useDialogs();
   const { toast } = useToast();
-  const [downloads, setDownloads] = useState<Record<string, LocalModelDownloadStatus>>({});
+  const [{ downloads }, dispatchDownload] = useReducer(modelDownloadTransition, {
+    downloads: {},
+    terminals: {},
+  });
   const [cancellingModels, setCancellingModels] = useState<Set<string>>(new Set());
   const [downloadErrors, setDownloadErrors] = useState<Record<string, string>>({});
   const ownedRequestsRef = useRef(new Map<string, ModelDownloadTerminalEvent | null>());
   const settlingDownloadsRef = useRef(new Set<string>());
-  const terminalSequencesRef = useRef<Record<string, number>>({});
   const lastProgressUpdateRef = useRef<Record<string, number>>({});
   const onDownloadCompleteRef = useRef(onDownloadComplete);
   const onModelsClearedRef = useRef(onModelsCleared);
@@ -125,24 +170,13 @@ export function useModelDownload({
   const updateDownload = useCallback(
     (status: LocalModelDownloadStatus) => {
       if (status.modelType !== modelType) return;
-      setDownloads((current) => {
-        const terminalSequence = terminalSequencesRef.current[status.modelId] || 0;
-        if (status.sequence !== 0 && status.sequence <= terminalSequence) return current;
-        const existing = current[status.modelId];
-        if (existing && existing.sequence > status.sequence) return current;
-        return { ...current, [status.modelId]: status };
-      });
+      dispatchDownload({ type: "progress", status });
     },
     [modelType]
   );
 
   const removeDownload = useCallback((modelId: string, sequence?: number) => {
-    setDownloads((current) => {
-      const existing = current[modelId];
-      if (!existing || (sequence !== undefined && existing.sequence > sequence)) return current;
-      const { [modelId]: _removed, ...remaining } = current;
-      return remaining;
-    });
+    dispatchDownload({ type: "remove", modelId, sequence });
   }, []);
 
   const clearCancelling = useCallback((modelId: string) => {
@@ -179,12 +213,7 @@ export function useModelDownload({
       code?: string,
       sequence?: number
     ): Promise<void> => {
-      if (sequence !== undefined) {
-        terminalSequencesRef.current[modelId] = Math.max(
-          terminalSequencesRef.current[modelId] || 0,
-          sequence
-        );
-      }
+      dispatchDownload({ type: "terminal", modelId, sequence });
       if (ownedRequestsRef.current.has(modelId)) {
         ownedRequestsRef.current.set(modelId, { type, error, code, sequence });
         return;
@@ -312,14 +341,17 @@ export function useModelDownload({
         const { [modelId]: _removed, ...remaining } = current;
         return remaining;
       });
-      updateDownload({
-        modelType,
-        modelId,
-        phase: "downloading",
-        progress: 0,
-        downloadedBytes: 0,
-        totalBytes: 0,
-        sequence: 0,
+      dispatchDownload({
+        type: "start",
+        status: {
+          modelType,
+          modelId,
+          phase: "downloading",
+          progress: 0,
+          downloadedBytes: 0,
+          totalBytes: 0,
+          sequence: 0,
+        },
       });
       lastProgressUpdateRef.current[modelId] = 0;
 
@@ -391,7 +423,7 @@ export function useModelDownload({
             terminalEvent.sequence
           );
         } else if (!keepActiveDownloadState) {
-          await settleDownload(modelId);
+          await settleDownload(modelId, terminalEvent?.sequence);
         }
       }
     },
@@ -410,26 +442,18 @@ export function useModelDownload({
   const deleteModel = useCallback(
     async (modelId: string, onComplete?: () => void) => {
       try {
-        if (modelType === "whisper") {
-          const result = await window.electronAPI?.deleteWhisperModel(modelId);
-          if (result?.success) {
-            toast({
-              title: t("hooks.modelDownload.modelDeleted.title"),
-              description: t("hooks.modelDownload.modelDeleted.descriptionWithSpace", {
-                sizeMb: result.freed_mb,
-              }),
-            });
-          }
-        } else if (modelType === "parakeet") {
-          const result = await window.electronAPI?.deleteParakeetModel(modelId);
-          if (result?.success) {
-            toast({
-              title: t("hooks.modelDownload.modelDeleted.title"),
-              description: t("hooks.modelDownload.modelDeleted.descriptionWithSpace", {
-                sizeMb: result.freed_mb,
-              }),
-            });
-          }
+        if (modelType === "whisper" || modelType === "parakeet") {
+          const result =
+            modelType === "whisper"
+              ? await window.electronAPI?.deleteWhisperModel(modelId)
+              : await window.electronAPI?.deleteParakeetModel(modelId);
+          if (!result?.success) throw new Error(result?.error ?? "");
+          toast({
+            title: t("hooks.modelDownload.modelDeleted.title"),
+            description: t("hooks.modelDownload.modelDeleted.descriptionWithSpace", {
+              sizeMb: result.freed_mb,
+            }),
+          });
         } else {
           // model-delete reports failure by resolving, not throwing — leaving the
           // model on disk, so the scopes pointing at it must stay untouched.

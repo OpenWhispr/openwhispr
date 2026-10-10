@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useAuth } from "./useAuth";
 import { withSessionRefresh } from "../lib/auth";
+import { getValidatedAuthGeneration, getBoundSessionGeneration } from "../lib/authRequestContext";
 import {
   getUsageState,
   isPastDueUsage,
@@ -53,7 +54,7 @@ export interface UseUsageResult {
   openCheckout: (opts?: {
     plan?: "monthly" | "annual";
     tier?: "pro" | "business";
-  }) => Promise<{ success: boolean; error?: string }>;
+  }) => Promise<{ success: boolean; error?: string; code?: string }>;
   openBillingPortal: () => Promise<{ success: boolean; error?: string; code?: string }>;
   switchPlan: (opts: {
     plan: "monthly" | "annual";
@@ -72,6 +73,23 @@ export interface UseUsageResult {
     error?: string;
   }>;
 }
+
+// Checkout can outlive the Settings owner that opened the browser. Any still-mounted
+// useUsage owner in this renderer can consume its return-focus refresh.
+let pendingBillingRefetch: { accountId: string; generation: number } | null = null;
+
+function billingContextCurrent(accountId: string | null, generation: number | null) {
+  return Boolean(
+    accountId &&
+    generation != null &&
+    getValidatedAuthGeneration() === generation &&
+    getBoundSessionGeneration(accountId) === generation
+  );
+}
+const obsoleteBillingRequest = () => ({
+  success: false as const,
+  code: "AUTH_CONTEXT_CHANGED",
+});
 
 async function fetchUsageResponse(): Promise<UsageResponse> {
   const cloudUsage = window.electronAPI?.cloudUsage;
@@ -92,14 +110,20 @@ export function useUsage(): UseUsageResult | null {
   const state = useSyncExternalStore(subscribeUsage, getUsageState);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const checkoutInFlightRef = useRef(false);
-  const pendingRefetchRef = useRef(false);
 
   const accountId = isSignedIn ? (user?.id ?? null) : null;
+  const authGeneration = getValidatedAuthGeneration();
 
   useEffect(() => {
     if (!isLoaded) return;
+    if (
+      pendingBillingRefetch &&
+      !billingContextCurrent(pendingBillingRefetch.accountId, pendingBillingRefetch.generation)
+    ) {
+      pendingBillingRefetch = null;
+    }
     setUsageAccount(accountId);
-  }, [isLoaded, accountId]);
+  }, [isLoaded, accountId, authGeneration]);
 
   useEffect(() => {
     if (!isLoaded || !accountId) return;
@@ -107,8 +131,12 @@ export function useUsage(): UseUsageResult | null {
     void loadUsage(fetchUsageResponse);
 
     const handleFocus = () => {
-      if (!pendingRefetchRef.current) return;
-      pendingRefetchRef.current = false;
+      if (
+        pendingBillingRefetch?.accountId !== accountId ||
+        !billingContextCurrent(accountId, pendingBillingRefetch.generation)
+      )
+        return;
+      pendingBillingRefetch = null;
       void loadUsage(fetchUsageResponse, { force: true });
     };
     const handleUsageChanged = () => {
@@ -134,7 +162,8 @@ export function useUsage(): UseUsageResult | null {
     async (opts?: {
       plan?: "monthly" | "annual";
       tier?: "pro" | "business";
-    }): Promise<{ success: boolean; error?: string }> => {
+    }): Promise<{ success: boolean; error?: string; code?: string }> => {
+      if (!billingContextCurrent(accountId, authGeneration)) return obsoleteBillingRequest();
       if (checkoutInFlightRef.current)
         return { success: false, error: "Checkout already in progress" };
       if (!window.electronAPI?.cloudCheckout || !window.electronAPI?.openExternal) {
@@ -143,19 +172,26 @@ export function useUsage(): UseUsageResult | null {
       checkoutInFlightRef.current = true;
       setCheckoutLoading(true);
       try {
-        const result = await window.electronAPI.cloudCheckout(opts);
+        const result = await window.electronAPI.cloudCheckout(opts, authGeneration!);
+        if (!billingContextCurrent(accountId, authGeneration)) return obsoleteBillingRequest();
         if (result.success && result.url) {
-          pendingRefetchRef.current = true;
-          await window.electronAPI.openExternal(result.url);
+          const opened = await window.electronAPI.openExternal(result.url, authGeneration!);
+          if (!billingContextCurrent(accountId, authGeneration)) return obsoleteBillingRequest();
+          if (!opened.success) return opened;
+          pendingBillingRefetch = { accountId: accountId!, generation: authGeneration! };
           return { success: true };
         }
-        return { success: false, error: result.error || "Failed to start checkout" };
+        return {
+          success: false,
+          error: result.error || "Failed to start checkout",
+          code: result.code,
+        };
       } finally {
         checkoutInFlightRef.current = false;
         setCheckoutLoading(false);
       }
     },
-    []
+    [accountId, authGeneration]
   );
 
   const openBillingPortal = useCallback(async (): Promise<{
@@ -163,6 +199,7 @@ export function useUsage(): UseUsageResult | null {
     error?: string;
     code?: string;
   }> => {
+    if (!billingContextCurrent(accountId, authGeneration)) return obsoleteBillingRequest();
     if (checkoutInFlightRef.current) return { success: false, error: "Already loading" };
     if (!window.electronAPI?.cloudBillingPortal || !window.electronAPI?.openExternal) {
       return { success: false, error: "App not ready" };
@@ -170,10 +207,13 @@ export function useUsage(): UseUsageResult | null {
     checkoutInFlightRef.current = true;
     setCheckoutLoading(true);
     try {
-      const result = await window.electronAPI.cloudBillingPortal();
+      const result = await window.electronAPI.cloudBillingPortal(authGeneration!);
+      if (!billingContextCurrent(accountId, authGeneration)) return obsoleteBillingRequest();
       if (result.success && result.url) {
-        pendingRefetchRef.current = true;
-        await window.electronAPI.openExternal(result.url);
+        const opened = await window.electronAPI.openExternal(result.url, authGeneration!);
+        if (!billingContextCurrent(accountId, authGeneration)) return obsoleteBillingRequest();
+        if (!opened.success) return opened;
+        pendingBillingRefetch = { accountId: accountId!, generation: authGeneration! };
         return { success: true };
       }
       return {
@@ -185,13 +225,14 @@ export function useUsage(): UseUsageResult | null {
       checkoutInFlightRef.current = false;
       setCheckoutLoading(false);
     }
-  }, []);
+  }, [accountId, authGeneration]);
 
   const switchPlan = useCallback(
     async (opts: {
       plan: "monthly" | "annual";
       tier: "pro" | "business";
     }): Promise<{ success: boolean; alreadyOnPlan?: boolean; error?: string }> => {
+      if (!billingContextCurrent(accountId, authGeneration)) return obsoleteBillingRequest();
       if (checkoutInFlightRef.current) return { success: false, error: "Already loading" };
       if (!window.electronAPI?.cloudSwitchPlan) {
         return { success: false, error: "App not ready" };
@@ -199,25 +240,28 @@ export function useUsage(): UseUsageResult | null {
       checkoutInFlightRef.current = true;
       setCheckoutLoading(true);
       try {
-        const result = await window.electronAPI.cloudSwitchPlan(opts);
+        const result = await window.electronAPI.cloudSwitchPlan(opts, authGeneration!);
+        if (!billingContextCurrent(accountId, authGeneration)) return obsoleteBillingRequest();
         if (result.success) await refetch();
-        return result;
+        return billingContextCurrent(accountId, authGeneration) ? result : obsoleteBillingRequest();
       } finally {
         checkoutInFlightRef.current = false;
         setCheckoutLoading(false);
       }
     },
-    [refetch]
+    [accountId, authGeneration, refetch]
   );
 
   const previewSwitchPlan = useCallback(
     async (opts: { plan: "monthly" | "annual"; tier: "pro" | "business" }) => {
+      if (!billingContextCurrent(accountId, authGeneration)) return obsoleteBillingRequest();
       if (!window.electronAPI?.cloudPreviewSwitch) {
         return { success: false as const, error: "App not ready" };
       }
-      return window.electronAPI.cloudPreviewSwitch(opts);
+      const result = await window.electronAPI.cloudPreviewSwitch(opts, authGeneration!);
+      return billingContextCurrent(accountId, authGeneration) ? result : obsoleteBillingRequest();
     },
-    []
+    [accountId, authGeneration]
   );
 
   if (!isSignedIn) return null;

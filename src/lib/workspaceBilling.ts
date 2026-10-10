@@ -6,6 +6,23 @@ const ENTITLED_STATUSES = new Set(["active", "trialing"]);
 
 type WorkspaceBillingState = Pick<Workspace, "plan" | "status" | "role" | "stripe_subscription_id">;
 
+/** Quote ownership excludes labels/timestamps but includes all known billing inputs. */
+export function workspaceBillingSnapshot(workspace: Workspace): string {
+  return JSON.stringify([
+    workspace.id,
+    workspace.role,
+    workspace.seats,
+    workspace.seats_used,
+    workspace.plan,
+    workspace.status,
+    workspace.stripe_customer_id,
+    workspace.stripe_subscription_id,
+    workspace.current_period_end,
+    workspace.trial_ends_at,
+    workspace.cancel_at_period_end,
+  ]);
+}
+
 /** Mirrors the API's `hasActiveWorkspaceSubscription`: a paid plan that is currently entitled. */
 export function hasActiveWorkspaceSubscription(
   workspace: Pick<WorkspaceBillingState, "plan" | "status">

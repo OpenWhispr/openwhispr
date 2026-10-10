@@ -119,4 +119,18 @@ const BYOK_API_KEYS = [
   },
 ];
 
-module.exports = { BYOK_API_KEYS };
+// Metadata only: events identify the changed renderer field, never its value.
+const SECRET_STORE_KEYS_BY_ENV = {
+  ...Object.fromEntries(BYOK_API_KEYS.map((key) => [key.env, key.storeKey])),
+  CORTI_CLIENT_ID: "cortiClientId",
+  CORTI_CLIENT_SECRET: "cortiClientSecret",
+  CUSTOM_TRANSCRIPTION_API_KEY: "customTranscriptionApiKey",
+  CUSTOM_CLEANUP_API_KEY: "cleanupCustomApiKey",
+  BEDROCK_ACCESS_KEY_ID: "bedrockAccessKeyId",
+  BEDROCK_SECRET_ACCESS_KEY: "bedrockSecretAccessKey",
+  BEDROCK_SESSION_TOKEN: "bedrockSessionToken",
+  AZURE_OPENAI_API_KEY: "azureApiKey",
+  VERTEX_API_KEY: "vertexApiKey",
+};
+
+module.exports = { BYOK_API_KEYS, SECRET_STORE_KEYS_BY_ENV };

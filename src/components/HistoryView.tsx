@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "./lib/utils";
 import { useUiLocale } from "../hooks/useUiLocale";
@@ -38,7 +38,7 @@ interface HistoryViewProps {
   userName?: string | null;
 }
 
-export default function HistoryView({
+function HistoryView({
   history,
   isLoading,
   hotkey,
@@ -241,3 +241,5 @@ export default function HistoryView({
     </div>
   );
 }
+
+export default memo(HistoryView);

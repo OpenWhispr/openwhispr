@@ -1,5 +1,6 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useShallow } from "zustand/react/shallow";
 import { Loader2, Search } from "./icons";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -10,6 +11,7 @@ import CustomModelInput from "./ui/CustomModelInput";
 import TestConnectionButton from "./TestConnectionButton";
 import { REASONING_PROVIDERS } from "../models/ModelRegistry";
 import { useSettingsStore } from "../stores/settingsStore";
+import { usePolicyStore } from "../stores/policyStore";
 import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
 import { adjustBedrockModelForRegion, BEDROCK_REGIONS } from "../utils/bedrockRegions";
 
@@ -62,12 +64,18 @@ function AuthModeToggle({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const { t } = useTranslation();
   return (
-    <div className="flex gap-1 p-0.5 bg-muted rounded-md w-fit">
+    <div
+      role="group"
+      aria-label={t("reasoning.enterprise.authMode")}
+      className="flex gap-1 p-0.5 bg-muted rounded-md w-fit"
+    >
       {options.map((opt) => (
         <button
           key={opt.id}
           type="button"
+          aria-pressed={value === opt.id}
           onClick={() => onChange(opt.id)}
           className={`px-2.5 py-1 text-xs rounded-sm transition-colors ${
             value === opt.id
@@ -82,8 +90,12 @@ function AuthModeToggle({
   );
 }
 
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <label className="text-xs font-medium text-muted-foreground">{children}</label>;
+function FieldLabel({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) {
+  return (
+    <label htmlFor={htmlFor} className="text-xs font-medium text-muted-foreground">
+      {children}
+    </label>
+  );
 }
 
 function FieldHint({ children }: { children: React.ReactNode }) {
@@ -108,6 +120,8 @@ function useSuggestedModels(provider: "bedrock" | "vertex") {
   }, [t, provider]);
 }
 
+const EMPTY_CATALOG: ModelCardOption[] = [];
+
 type BedrockCatalogState =
   | { status: "idle" }
   | { status: "loading" }
@@ -116,10 +130,35 @@ type BedrockCatalogState =
 
 function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderConfigProps) {
   const { t } = useTranslation();
-  const store = useSettingsStore();
+  const fieldId = useId();
+  const store = useSettingsStore(
+    useShallow((s) => ({
+      bedrockAuthMode: s.bedrockAuthMode,
+      setBedrockAuthMode: s.setBedrockAuthMode,
+      bedrockRegion: s.bedrockRegion,
+      setBedrockRegion: s.setBedrockRegion,
+      bedrockProfile: s.bedrockProfile,
+      setBedrockProfile: s.setBedrockProfile,
+      bedrockAccessKeyId: s.bedrockAccessKeyId,
+      setBedrockAccessKeyId: s.setBedrockAccessKeyId,
+      bedrockSecretAccessKey: s.bedrockSecretAccessKey,
+      setBedrockSecretAccessKey: s.setBedrockSecretAccessKey,
+      bedrockSessionToken: s.bedrockSessionToken,
+      setBedrockSessionToken: s.setBedrockSessionToken,
+    }))
+  );
   const suggestedModels = useSuggestedModels("bedrock");
-  const [catalog, setCatalog] = useState<BedrockCatalogState>({ status: "idle" });
+  const [catalogState, setCatalogState] = useState<{
+    lease: object | null;
+    data: BedrockCatalogState;
+  }>({
+    lease: null,
+    data: { status: "idle" },
+  });
+  const [catalogVisited, setCatalogVisited] = useState(false);
   const catalogRequestRef = useRef(0);
+  const accountId = usePolicyStore((s) => s.accountId);
+  const authGeneration = usePolicyStore((s) => s.authGeneration);
 
   const regionModels = useMemo(
     () =>
@@ -138,26 +177,53 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
     bedrockSessionToken: store.bedrockAuthMode === "keys" ? store.bedrockSessionToken : "",
   });
 
-  const loadCatalog = async (region: string) => {
+  const catalogOwner = JSON.stringify([
+    accountId,
+    authGeneration,
+    store.bedrockAuthMode,
+    getConnectionConfig(),
+  ]);
+  const [configuration, setConfiguration] = useState({ key: catalogOwner });
+  if (configuration.key !== catalogOwner) setConfiguration({ key: catalogOwner });
+  const catalog: BedrockCatalogState =
+    catalogState.lease === configuration ? catalogState.data : { status: "idle" };
+  const catalogLeaseRef = useRef<object | null>(null);
+  const bindCatalog = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (!node) return;
+      catalogLeaseRef.current = configuration;
+      return () => {
+        if (catalogLeaseRef.current === configuration) catalogLeaseRef.current = null;
+      };
+    },
+    [configuration]
+  );
+
+  const loadCatalog = async () => {
     const requestId = ++catalogRequestRef.current;
-    setCatalog({ status: "loading" });
-    const result = await window.electronAPI?.listBedrockModels?.({
-      ...getConnectionConfig(),
-      bedrockRegion: region,
-    });
-    if (requestId !== catalogRequestRef.current) return;
-    if (result?.success && result.models) {
-      setCatalog({
-        status: "loaded",
-        models: result.models.map((m) => ({ value: m.value, label: m.label, group: m.vendor })),
-      });
-    } else {
-      setCatalog({
-        status: "error",
-        error:
-          result?.error ||
-          t("reasoning.enterprise.modelListError", { defaultValue: "Could not load models." }),
-      });
+    const isCurrent = () =>
+      catalogLeaseRef.current === configuration && requestId === catalogRequestRef.current;
+    const publish = (data: BedrockCatalogState) => {
+      if (isCurrent()) setCatalogState({ lease: configuration, data });
+    };
+    publish({ status: "loading" });
+    try {
+      const result = await window.electronAPI?.listBedrockModels?.(getConnectionConfig());
+      if (!isCurrent()) return;
+      if (result?.success && Array.isArray(result.models)) {
+        publish({
+          status: "loaded",
+          models: result.models.map((m) => ({ value: m.value, label: m.label, group: m.vendor })),
+        });
+        setCatalogVisited(true);
+      } else {
+        publish({
+          status: "error",
+          error: result?.error || t("reasoning.enterprise.modelListError"),
+        });
+      }
+    } catch {
+      publish({ status: "error", error: t("reasoning.enterprise.modelListError") });
     }
   };
 
@@ -165,7 +231,6 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
     store.setBedrockRegion(region);
     const adjusted = adjustBedrockModelForRegion(reasoningModel, region);
     if (adjusted !== reasoningModel) setReasoningModel(adjusted);
-    if (catalog.status !== "idle") void loadCatalog(region);
   };
 
   const getTestConfig = () => ({
@@ -174,7 +239,7 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
   });
 
   return (
-    <div className="space-y-3">
+    <div ref={bindCatalog} className="space-y-3">
       <div className="space-y-1.5">
         <FieldLabel>
           {t("reasoning.enterprise.authMode", { defaultValue: "Authentication" })}
@@ -198,11 +263,12 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
       {store.bedrockAuthMode === "sso" ? (
         <div className="space-y-2">
           <div className="space-y-1.5">
-            <FieldLabel>
+            <FieldLabel htmlFor={`${fieldId}-profile`}>
               {t("reasoning.enterprise.profile", { defaultValue: "Profile Name" })}
             </FieldLabel>
             <Input
               dir="ltr"
+              id={`${fieldId}-profile`}
               value={store.bedrockProfile}
               onChange={(e) => store.setBedrockProfile(e.target.value)}
               placeholder="default"
@@ -219,10 +285,12 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
       ) : (
         <div className="space-y-2">
           <div className="space-y-1.5">
-            <FieldLabel>
+            <FieldLabel htmlFor={`${fieldId}-access-key`}>
               {t("reasoning.enterprise.accessKeyId", { defaultValue: "Access Key ID" })}
             </FieldLabel>
             <ApiKeyInput
+              id={`${fieldId}-access-key`}
+              ariaLabel={t("reasoning.enterprise.accessKeyId")}
               apiKey={store.bedrockAccessKeyId}
               setApiKey={store.setBedrockAccessKeyId}
               label=""
@@ -230,36 +298,41 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
             />
           </div>
           <div className="space-y-1.5">
-            <FieldLabel>
+            <FieldLabel htmlFor={`${fieldId}-secret-key`}>
               {t("reasoning.enterprise.secretAccessKey", { defaultValue: "Secret Access Key" })}
             </FieldLabel>
             <ApiKeyInput
+              id={`${fieldId}-secret-key`}
+              ariaLabel={t("reasoning.enterprise.secretAccessKey")}
               apiKey={store.bedrockSecretAccessKey}
               setApiKey={store.setBedrockSecretAccessKey}
               label=""
             />
           </div>
           <div className="space-y-1.5">
-            <FieldLabel>
+            <FieldLabel htmlFor={`${fieldId}-session-token`}>
               {t("reasoning.enterprise.sessionToken", {
                 defaultValue: "Session Token (optional)",
               })}
             </FieldLabel>
-            <Input
-              dir="ltr"
-              value={store.bedrockSessionToken}
-              onChange={(e) => store.setBedrockSessionToken(e.target.value)}
-              placeholder=""
-              className="text-sm"
+            <ApiKeyInput
+              id={`${fieldId}-session-token`}
+              ariaLabel={t("reasoning.enterprise.sessionToken")}
+              apiKey={store.bedrockSessionToken}
+              setApiKey={store.setBedrockSessionToken}
+              label=""
             />
           </div>
         </div>
       )}
 
       <div className="space-y-1.5">
-        <FieldLabel>{t("reasoning.enterprise.region", { defaultValue: "Region" })}</FieldLabel>
+        <FieldLabel htmlFor={`${fieldId}-region`}>
+          {t("reasoning.enterprise.region", { defaultValue: "Region" })}
+        </FieldLabel>
         <select
           dir="ltr"
+          id={`${fieldId}-region`}
           value={store.bedrockRegion}
           onChange={(e) => handleRegionChange(e.target.value)}
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -286,8 +359,8 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
         </div>
       )}
 
-      {catalog.status === "loaded" ? (
-        <div className="space-y-1.5">
+      {catalogVisited && (
+        <div hidden={catalog.status !== "loaded"} className="space-y-1.5">
           <FieldLabel>
             {t("reasoning.enterprise.allModels", {
               defaultValue: "All Models in {{region}}",
@@ -295,12 +368,13 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
             })}
           </FieldLabel>
           <SearchableModelList
-            models={catalog.models}
+            models={catalog.status === "loaded" ? catalog.models : EMPTY_CATALOG}
             selectedModel={reasoningModel}
             onModelSelect={setReasoningModel}
           />
         </div>
-      ) : (
+      )}
+      {catalog.status !== "loaded" && (
         <div className="space-y-1.5">
           <Button
             type="button"
@@ -309,7 +383,7 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
             className="w-full"
             aria-busy={catalog.status === "loading"}
             onClick={() => {
-              if (catalog.status !== "loading") void loadCatalog(store.bedrockRegion);
+              if (catalog.status !== "loading") void loadCatalog();
             }}
           >
             {catalog.status === "loading" ? (
@@ -335,14 +409,30 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
 
       <CustomModelInput value={reasoningModel} onChange={setReasoningModel} />
 
-      <TestConnectionButton provider="bedrock" getConfig={getTestConfig} />
+      <TestConnectionButton
+        provider="bedrock"
+        getConfig={getTestConfig}
+        configurationKey={JSON.stringify([store.bedrockAuthMode, getTestConfig()])}
+      />
     </div>
   );
 }
 
 function AzureConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderConfigProps) {
   const { t } = useTranslation();
-  const store = useSettingsStore();
+  const fieldId = useId();
+  const store = useSettingsStore(
+    useShallow((s) => ({
+      azureEndpoint: s.azureEndpoint,
+      setAzureEndpoint: s.setAzureEndpoint,
+      azureApiKey: s.azureApiKey,
+      setAzureApiKey: s.setAzureApiKey,
+      azureDeploymentName: s.azureDeploymentName,
+      setAzureDeploymentName: s.setAzureDeploymentName,
+      azureApiVersion: s.azureApiVersion,
+      setAzureApiVersion: s.setAzureApiVersion,
+    }))
+  );
 
   const getTestConfig = () => ({
     azureEndpoint: store.azureEndpoint,
@@ -354,11 +444,12 @@ function AzureConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderCo
   return (
     <div className="space-y-3">
       <div className="space-y-1.5">
-        <FieldLabel>
+        <FieldLabel htmlFor={`${fieldId}-endpoint`}>
           {t("reasoning.enterprise.endpoint", { defaultValue: "Endpoint URL" })}
         </FieldLabel>
         <Input
           dir="ltr"
+          id={`${fieldId}-endpoint`}
           value={store.azureEndpoint}
           onChange={(e) => store.setAzureEndpoint(e.target.value)}
           placeholder="https://yourresource.openai.azure.com"
@@ -373,16 +464,22 @@ function AzureConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderCo
       </div>
 
       <div className="space-y-1.5">
-        <FieldLabel>API Key</FieldLabel>
-        <ApiKeyInput apiKey={store.azureApiKey} setApiKey={store.setAzureApiKey} label="" />
+        <FieldLabel htmlFor={`${fieldId}-api-key`}>{t("common.apiKey")}</FieldLabel>
+        <ApiKeyInput
+          id={`${fieldId}-api-key`}
+          apiKey={store.azureApiKey}
+          setApiKey={store.setAzureApiKey}
+          label=""
+        />
       </div>
 
       <div className="space-y-1.5">
-        <FieldLabel>
+        <FieldLabel htmlFor={`${fieldId}-deployment`}>
           {t("reasoning.enterprise.deploymentName", { defaultValue: "Deployment Name" })}
         </FieldLabel>
         <Input
           dir="ltr"
+          id={`${fieldId}-deployment`}
           value={store.azureDeploymentName}
           onChange={(e) => {
             store.setAzureDeploymentName(e.target.value);
@@ -399,11 +496,12 @@ function AzureConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderCo
       </div>
 
       <div className="space-y-1.5">
-        <FieldLabel>
+        <FieldLabel htmlFor={`${fieldId}-version`}>
           {t("reasoning.enterprise.apiVersion", { defaultValue: "API Version" })}
         </FieldLabel>
         <Input
           dir="ltr"
+          id={`${fieldId}-version`}
           value={store.azureApiVersion}
           onChange={(e) => store.setAzureApiVersion(e.target.value)}
           placeholder="2024-10-21"
@@ -411,14 +509,30 @@ function AzureConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderCo
         />
       </div>
 
-      <TestConnectionButton provider="azure" getConfig={getTestConfig} />
+      <TestConnectionButton
+        provider="azure"
+        getConfig={getTestConfig}
+        configurationKey={JSON.stringify(getTestConfig())}
+      />
     </div>
   );
 }
 
 function VertexConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderConfigProps) {
   const { t } = useTranslation();
-  const store = useSettingsStore();
+  const fieldId = useId();
+  const store = useSettingsStore(
+    useShallow((s) => ({
+      vertexAuthMode: s.vertexAuthMode,
+      setVertexAuthMode: s.setVertexAuthMode,
+      vertexProject: s.vertexProject,
+      setVertexProject: s.setVertexProject,
+      vertexLocation: s.vertexLocation,
+      setVertexLocation: s.setVertexLocation,
+      vertexApiKey: s.vertexApiKey,
+      setVertexApiKey: s.setVertexApiKey,
+    }))
+  );
   const suggestedModels = useSuggestedModels("vertex");
 
   const getTestConfig = () => ({
@@ -454,8 +568,9 @@ function VertexConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderC
 
       {store.vertexAuthMode === "apikey" ? (
         <div className="space-y-1.5">
-          <FieldLabel>API Key</FieldLabel>
+          <FieldLabel htmlFor={`${fieldId}-api-key`}>{t("common.apiKey")}</FieldLabel>
           <ApiKeyInput
+            id={`${fieldId}-api-key`}
             apiKey={store.vertexApiKey}
             setApiKey={store.setVertexApiKey}
             label=""
@@ -474,11 +589,12 @@ function VertexConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderC
       )}
 
       <div className="space-y-1.5">
-        <FieldLabel>
+        <FieldLabel htmlFor={`${fieldId}-project`}>
           {t("reasoning.enterprise.projectId", { defaultValue: "Project ID" })}
         </FieldLabel>
         <Input
           dir="ltr"
+          id={`${fieldId}-project`}
           value={store.vertexProject}
           onChange={(e) => store.setVertexProject(e.target.value)}
           placeholder="my-gcp-project-123"
@@ -487,9 +603,12 @@ function VertexConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderC
       </div>
 
       <div className="space-y-1.5">
-        <FieldLabel>{t("reasoning.enterprise.location", { defaultValue: "Location" })}</FieldLabel>
+        <FieldLabel htmlFor={`${fieldId}-location`}>
+          {t("reasoning.enterprise.location", { defaultValue: "Location" })}
+        </FieldLabel>
         <select
           dir="ltr"
+          id={`${fieldId}-location`}
           value={store.vertexLocation}
           onChange={(e) => store.setVertexLocation(e.target.value)}
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -518,7 +637,11 @@ function VertexConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderC
 
       <CustomModelInput value={reasoningModel} onChange={setReasoningModel} />
 
-      <TestConnectionButton provider="vertex" getConfig={getTestConfig} />
+      <TestConnectionButton
+        provider="vertex"
+        getConfig={getTestConfig}
+        configurationKey={JSON.stringify([store.vertexAuthMode, getTestConfig()])}
+      />
     </div>
   );
 }

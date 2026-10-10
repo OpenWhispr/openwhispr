@@ -1,16 +1,21 @@
 import { useTranslation } from "react-i18next";
+import type { SettingsNavigationStore } from "../../stores/settingsNavigationStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { SectionHeader } from "../ui/SettingsSection";
 import InferenceConfigEditor from "./InferenceConfigEditor";
 
-export default function ChatAgentSettings() {
+export default function ChatAgentSettings({
+  navigation,
+}: {
+  navigation?: SettingsNavigationStore;
+}) {
   const { t } = useTranslation();
   const chatAgentPrompt = useSettingsStore((s) => s.customPrompts.chatAgent);
   const setCustomPrompt = useSettingsStore((s) => s.setCustomPrompt);
 
   return (
     <div className="space-y-6">
-      <InferenceConfigEditor scope="chatIntelligence" />
+      <InferenceConfigEditor scope="chatIntelligence" navigation={navigation} />
 
       <div>
         <SectionHeader
@@ -18,6 +23,7 @@ export default function ChatAgentSettings() {
           description={t("agentMode.settings.systemPromptDescription")}
         />
         <textarea
+          aria-label={t("agentMode.settings.systemPrompt")}
           dir="auto"
           value={chatAgentPrompt}
           onChange={(e) => setCustomPrompt("chatAgent", e.target.value)}

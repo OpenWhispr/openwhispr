@@ -88,16 +88,18 @@ export function ProviderTabs({
           <button
             key={provider.id}
             data-tab-button
+            data-tab-id={provider.id}
             type="button"
             disabled={isDisabled}
             aria-disabled={isDisabled}
+            aria-pressed={isSelected}
             title={isDisabled ? provider.disabledLabel : undefined}
             onClick={() => {
               if (isDisabled) return;
               onSelect(provider.id);
             }}
             className={cn(
-              "relative z-10 flex items-center gap-1 px-2.5 py-1 rounded-full font-medium text-xs whitespace-nowrap transition-colors duration-150",
+              "relative z-10 flex items-center gap-1 px-2.5 py-1 rounded-full font-medium text-xs whitespace-nowrap transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
               isDisabled
                 ? "text-muted-foreground/70 cursor-not-allowed ring-1 ring-border/40 dark:ring-white/5"
                 : isSelected

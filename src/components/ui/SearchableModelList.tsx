@@ -175,7 +175,6 @@ export default function SearchableModelList({
   };
 
   const activeRow = activeIndex >= 0 ? rows[activeIndex] : undefined;
-  const activeId = activeRow?.type === "model" ? `${listboxId}-${activeRow.data.value}` : undefined;
   const selectedMatches = !!selectedOption && matchesQuery(selectedOption, normalizedQuery);
   const showEmpty = normalizedQuery.length > 0 && matchCount === 0 && !selectedMatches;
 
@@ -193,19 +192,22 @@ export default function SearchableModelList({
           onKeyDown={handleKeyDown}
           placeholder={t("reasoning.custom.searchPlaceholder")}
           aria-label={t("reasoning.custom.searchPlaceholder")}
-          role="combobox"
-          aria-expanded={rows.length > 0}
+          type="search"
           aria-controls={listboxId}
-          aria-activedescendant={activeId}
+          aria-describedby={`${listboxId}-active`}
           className="h-9 pl-8 text-sm"
         />
       </div>
+
+      <span id={`${listboxId}-active`} role="status" className="sr-only">
+        {activeRow?.type === "model" ? activeRow.data.label : ""}
+      </span>
 
       {rows.length > 0 && (
         <div ref={scrollRef} className="overflow-y-auto pe-0.5 max-h-80">
           <div
             id={listboxId}
-            role="listbox"
+            role="group"
             aria-label={t("reasoning.custom.searchPlaceholder")}
             style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}
           >
@@ -237,8 +239,6 @@ export default function SearchableModelList({
                   ) : (
                     <div
                       id={`${listboxId}-${row.data.value}`}
-                      role="option"
-                      aria-selected={row.data.value === selectedModel}
                       className={`pb-0.5 rounded-md ${isActive ? "ring-1 ring-primary/50" : ""}`}
                     >
                       <ModelCard

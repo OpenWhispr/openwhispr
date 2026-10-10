@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { useAuth } from "../../hooks/useAuth";
-import { useSettings } from "../../hooks/useSettings";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { getBaseLanguageCode } from "../../utils/languageSupport";
 import {
@@ -25,7 +25,34 @@ interface UseVoiceDraftOptions {
  */
 export function useVoiceDraft({ onTranscript, onError }: UseVoiceDraftOptions) {
   const { isSignedIn } = useAuth();
-  const settings = useSettings();
+  const settings = useSettingsStore(
+    useShallow((state) => ({
+      useLocalWhisper: state.useLocalWhisper,
+      whisperModel: state.whisperModel,
+      localTranscriptionProvider: state.localTranscriptionProvider,
+      parakeetModel: state.parakeetModel,
+      cohereModel: state.cohereModel,
+      cloudTranscriptionMode: state.cloudTranscriptionMode,
+      cloudTranscriptionProvider: state.cloudTranscriptionProvider,
+      cloudTranscriptionBaseUrl: state.cloudTranscriptionBaseUrl,
+      cloudTranscriptionModel: state.cloudTranscriptionModel,
+      preferredLanguage: state.preferredLanguage,
+      transcriptionMode: state.transcriptionMode,
+      remoteTranscriptionUrl: state.remoteTranscriptionUrl,
+      remoteTranscriptionModel: state.remoteTranscriptionModel,
+      cortiEnvironment: state.cortiEnvironment,
+      cortiTenant: state.cortiTenant,
+      openaiApiKey: state.openaiApiKey,
+      groqApiKey: state.groqApiKey,
+      xaiApiKey: state.xaiApiKey,
+      mistralApiKey: state.mistralApiKey,
+      geminiApiKey: state.geminiApiKey,
+      tinfoilApiKey: state.tinfoilApiKey,
+      deepgramApiKey: state.deepgramApiKey,
+      assemblyaiApiKey: state.assemblyaiApiKey,
+      customTranscriptionApiKey: state.customTranscriptionApiKey,
+    }))
+  );
   const {
     useLocalWhisper,
     whisperModel,
@@ -40,9 +67,9 @@ export function useVoiceDraft({ onTranscript, onError }: UseVoiceDraftOptions) {
     transcriptionMode,
     remoteTranscriptionUrl,
     remoteTranscriptionModel,
+    cortiEnvironment,
+    cortiTenant,
   } = settings;
-  const cortiEnvironment = useSettingsStore((s) => s.cortiEnvironment);
-  const cortiTenant = useSettingsStore((s) => s.cortiTenant);
 
   const [status, setStatus] = useState<VoiceDraftStatus>("idle");
   const [elapsed, setElapsed] = useState(0);

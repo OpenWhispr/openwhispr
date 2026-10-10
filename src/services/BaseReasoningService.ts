@@ -10,6 +10,8 @@ export interface ReasoningConfig {
   temperature?: number;
   contextSize?: number;
   systemPrompt?: string;
+  /** Request-local cleanup template, without changing cleanup wrapping/sampling/purpose. */
+  cleanupPrompt?: string;
   lanUrl?: string;
   baseUrl?: string;
   customApiKey?: string;
@@ -54,12 +56,13 @@ export abstract class BaseReasoningService {
     return getSettings().uiLanguage || "en";
   }
 
-  protected getSystemPrompt(agentName: string | null): string {
+  protected getSystemPrompt(agentName: string | null, promptTemplate?: string): string {
     return getCleanupSystemPrompt(
       agentName,
       this.getCustomDictionary(),
       this.getPreferredLanguage(),
-      this.getUiLanguage()
+      this.getUiLanguage(),
+      promptTemplate
     );
   }
 

@@ -49,6 +49,10 @@ import { getCachedPlatform } from "../utils/platform";
 import { pickWhisperGpuBackend } from "../utils/whisperGpuPack";
 import logger from "../utils/logger";
 import type { ParakeetCheckResult } from "../types/electron";
+import {
+  useSettingsModelVisible,
+  type SettingsNavigationStore,
+} from "../stores/settingsNavigationStore";
 
 interface LocalModel {
   model: string;
@@ -108,12 +112,19 @@ function LocalModelCard({
 
   return (
     <div
-      onClick={handleClick}
       className={`relative w-full text-start overflow-hidden rounded-md border transition-colors duration-200 group ${
         isSelected ? cardStyles.modelCard.selected : cardStyles.modelCard.default
       } ${isDownloaded && !isSelected ? "cursor-pointer" : ""}`}
     >
-      <div className="flex items-center gap-1.5 p-2">
+      <button
+        type="button"
+        aria-label={name}
+        aria-pressed={isSelected}
+        disabled={!isDownloaded}
+        onClick={handleClick}
+        className="absolute inset-0 w-full rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+      />
+      <div className="flex items-center gap-1.5 p-2 pointer-events-none">
         <div className="shrink-0">
           {isDownloaded ? (
             <div
@@ -148,7 +159,7 @@ function LocalModelCard({
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="relative z-10 pointer-events-none flex items-center gap-1.5 shrink-0">
           {isDownloaded ? (
             <>
               {isSelected && (
@@ -163,7 +174,7 @@ function LocalModelCard({
                 }}
                 size="icon"
                 variant="ghost"
-                className="size-6 text-muted-foreground/70 hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,opacity,transform] active:scale-95"
+                className="pointer-events-auto size-6 text-muted-foreground/70 hover:text-destructive opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-[color,opacity,transform] active:scale-95"
               >
                 <Trash2 size={12} />
               </Button>
@@ -177,7 +188,7 @@ function LocalModelCard({
               disabled={isCancelling || isInstalling}
               size="sm"
               variant="outline"
-              className="h-6 px-2.5 text-xs text-destructive border-destructive/25 hover:bg-destructive/8"
+              className="pointer-events-auto h-6 px-2.5 text-xs text-destructive border-destructive/25 hover:bg-destructive/8"
             >
               <X size={11} className="me-0.5" />
               {isCancelling ? "..." : t("common.cancel")}
@@ -190,7 +201,7 @@ function LocalModelCard({
               }}
               size="sm"
               variant="default"
-              className="h-6 px-2.5 text-xs"
+              className="pointer-events-auto h-6 px-2.5 text-xs"
             >
               <Download size={11} className="me-1" />
               {t("common.download")}
@@ -207,7 +218,7 @@ function LocalModelCard({
             event.stopPropagation();
             createExternalLinkHandler(modelCardUrl)(event);
           }}
-          className="inline-block ms-7 mb-2 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="relative z-10 inline-block ms-7 mb-2 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           {t("transcription.modelCard")}
         </a>
@@ -219,6 +230,8 @@ function LocalModelCard({
 interface TranscriptionModelPickerProps {
   /** Settings scope whose provider/model keys this picker edits. */
   transcriptionContext?: TranscriptionPolicyContext;
+  /** Only Settings callers opt into section/subtab-aware routine status reads. */
+  settingsNavigation?: SettingsNavigationStore;
   selectedCloudProvider: string;
   /**
    * Policy reconciliation only — a user-driven pick goes through
@@ -422,6 +435,7 @@ function GpuWarningRow({
 
 export default function TranscriptionModelPicker({
   transcriptionContext = "dictation",
+  settingsNavigation,
   selectedCloudProvider,
   onCloudProviderSelect,
   selectedCloudModel,
@@ -505,6 +519,12 @@ export default function TranscriptionModelPicker({
   const [gpuActivating, setGpuActivating] = useState(false);
   // Live truth from the running server; "active" is never inferred from a download
   const [gpuActive, setGpuActive] = useState(false);
+  const visible = useSettingsModelVisible(
+    settingsNavigation,
+    "speechToText",
+    transcriptionContext === "meeting" ? "noteRecording" : transcriptionContext
+  );
+  const gpuRequests = useRef({ status: 0, pack: 0, action: 0, fallback: 0 });
 
   useEffect(() => {
     const organization = getSelectedASROrganization(selectedLocalProvider, selectedLocalModel);
@@ -546,12 +566,18 @@ export default function TranscriptionModelPicker({
   const parakeetModelsLoadQueueRef = useRef<Promise<void>>(Promise.resolve());
   const loadLocalModelsRef = useRef<(() => Promise<void>) | null>(null);
   const loadParakeetModelsRef = useRef<(() => Promise<void>) | null>(null);
-  const selectedLocalModelRef = useRef(selectedLocalModel);
+  const localModelsRequestRef = useRef(0);
+  const parakeetModelsRequestRef = useRef(0);
+  const selectionOwnerRef = useRef<{
+    model: string;
+    provider: string;
+    context: TranscriptionPolicyContext;
+  } | null>(null);
   const onLocalModelSelectRef = useRef(onLocalModelSelect);
 
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
   const colorScheme: ColorScheme = variant === "settings" ? "purple" : "blue";
-  const styles = useMemo(() => MODEL_PICKER_COLORS[colorScheme], [colorScheme]);
+  const styles = MODEL_PICKER_COLORS[colorScheme];
   const policyState = usePolicySnapshot();
   const providerAllowed = useCallback(
     (providerId: string) => isProviderAllowedByPolicy(policyState, "transcription", providerId),
@@ -601,37 +627,58 @@ export default function TranscriptionModelPicker({
   );
 
   useEffect(() => {
-    selectedLocalModelRef.current = selectedLocalModel;
-  }, [selectedLocalModel]);
+    hasLoadedRef.current = false;
+    hasLoadedParakeetRef.current = false;
+    selectionOwnerRef.current = {
+      model: selectedLocalModel,
+      provider: selectedLocalProvider,
+      context: transcriptionContext,
+    };
+    return () => {
+      selectionOwnerRef.current = null;
+    };
+  }, [selectedLocalModel, selectedLocalProvider, transcriptionContext]);
   useEffect(() => {
     onLocalModelSelectRef.current = onLocalModelSelect;
   }, [onLocalModelSelect]);
 
-  const validateAndSelectModel = useCallback((loadedModels: LocalModel[]) => {
-    const current = selectedLocalModelRef.current;
-    if (!current) return;
+  const validateAndSelectModel = useCallback((loadedModels: LocalModel[], sherpa = false) => {
+    const current = selectionOwnerRef.current;
+    if (!current?.model) return;
+    if (sherpa ? !isSherpaLocalProvider(current.provider) : current.provider !== "whisper") return;
 
-    // The whisper list loads on a mere browse of the Whisper tab, so the
-    // committed selection can be a foreign id (a Parakeet model while nvidia
-    // is committed) — only replace ids this list owns.
-    const currentEntry = loadedModels.find((m) => m.model === current);
-    if (!currentEntry || currentEntry.downloaded) return;
+    // Both lists include undownloaded catalog entries. Only an explicit missing
+    // entry proves deletion; browsing another backend must not change selection.
+    const currentEntry = loadedModels.find((m) => m.model === current.model);
+    if (!currentEntry || currentEntry.downloaded !== false) return;
 
-    const downloaded = loadedModels.filter((m) => m.downloaded);
-    onLocalModelSelectRef.current(downloaded[0]?.model ?? "", "whisper");
+    const replacement = loadedModels.find(
+      (m) =>
+        m.downloaded &&
+        (!sherpa ||
+          (getASRModelOrganization(m.model) === "cohere" ? "cohere" : "nvidia") ===
+            current.provider)
+    );
+    onLocalModelSelectRef.current(replacement?.model ?? "", current.provider);
   }, []);
 
   const loadLocalModels = useCallback(() => {
+    const owner = selectionOwnerRef.current;
+    const request = ++localModelsRequestRef.current;
+    const isCurrent = () =>
+      owner !== null &&
+      owner === selectionOwnerRef.current &&
+      request === localModelsRequestRef.current;
     const load = async () => {
+      if (!isCurrent()) return;
       try {
         const result = await window.electronAPI?.listWhisperModels();
-        if (result?.success) {
+        if (isCurrent() && result?.success && Array.isArray(result.models)) {
           setLocalModels(result.models);
           validateAndSelectModel(result.models);
         }
       } catch (error) {
         logger.error("Failed to load models", { error }, "models");
-        setLocalModels([]);
       }
     };
 
@@ -641,22 +688,29 @@ export default function TranscriptionModelPicker({
   }, [validateAndSelectModel]);
 
   const loadParakeetModels = useCallback(() => {
+    const owner = selectionOwnerRef.current;
+    const request = ++parakeetModelsRequestRef.current;
+    const isCurrent = () =>
+      owner !== null &&
+      owner === selectionOwnerRef.current &&
+      request === parakeetModelsRequestRef.current;
     const load = async () => {
+      if (!isCurrent()) return;
       try {
         const result = await window.electronAPI?.listParakeetModels();
-        if (result?.success) {
+        if (isCurrent() && result?.success && Array.isArray(result.models)) {
           setParakeetModels(result.models);
+          validateAndSelectModel(result.models, true);
         }
       } catch (error) {
         logger.error("Failed to load Parakeet models", { error }, "models");
-        setParakeetModels([]);
       }
     };
 
     const queuedLoad = parakeetModelsLoadQueueRef.current.then(load);
     parakeetModelsLoadQueueRef.current = queuedLoad;
     return queuedLoad;
-  }, []);
+  }, [validateAndSelectModel]);
 
   const effectiveCloudSelection = useMemo(() => {
     // Every provider's URL counts as known, including policy-blocked ones and
@@ -743,7 +797,13 @@ export default function TranscriptionModelPicker({
       hasLoadedParakeetRef.current = true;
       loadParakeetModelsRef.current?.();
     }
-  }, [effectiveLocal, internalLocalProvider]);
+  }, [
+    effectiveLocal,
+    internalLocalProvider,
+    selectedLocalModel,
+    selectedLocalProvider,
+    transcriptionContext,
+  ]);
 
   useEffect(() => {
     if (effectiveLocal) return;
@@ -762,11 +822,13 @@ export default function TranscriptionModelPicker({
   }, [loadLocalModels, loadParakeetModels]);
 
   const readGpuStatus = useCallback(async () => {
+    const request = ++gpuRequests.current.pack;
     try {
       const [cuda, vulkan] = await Promise.all([
         window.electronAPI?.getCudaWhisperStatus?.(),
         window.electronAPI?.getVulkanWhisperStatus?.(),
       ]);
+      if (request !== gpuRequests.current.pack) return;
       // No pack to show or offer hides the card. A re-read can land here after
       // another card removed the pack this one shows, so reset, never keep it.
       const backend = pickWhisperGpuBackend(cuda, vulkan);
@@ -790,10 +852,15 @@ export default function TranscriptionModelPicker({
   useEffect(() => {
     if (!effectiveLocal || internalLocalProvider !== "whisper") return;
     if (getCachedPlatform() === "darwin") return;
+    const owner = gpuRequests.current;
     readGpuStatus();
     // Retry on the fallback pop-up, or Remove on another card, changes the
     // packs or the saved failure while this card stays mounted (#1736)
-    return window.electronAPI?.onWhisperGpuStatusChanged?.(readGpuStatus);
+    const dispose = window.electronAPI?.onWhisperGpuStatusChanged?.(readGpuStatus);
+    return () => {
+      owner.pack++;
+      dispose?.();
+    };
   }, [effectiveLocal, internalLocalProvider, readGpuStatus]);
 
   useEffect(() => {
@@ -807,21 +874,28 @@ export default function TranscriptionModelPicker({
 
   useEffect(() => {
     if (!gpuResumedDownload || !gpuBackend) return;
+    let cancelled = false;
     const id = setInterval(async () => {
+      const request = ++gpuRequests.current.pack;
       try {
         const status =
           gpuBackend === "cuda"
             ? await window.electronAPI?.getCudaWhisperStatus?.()
             : await window.electronAPI?.getVulkanWhisperStatus?.();
-        if (!status || status.downloading) return;
+        if (cancelled || request !== gpuRequests.current.pack || !status || status.downloading)
+          return;
         setGpuResumedDownload(false);
         setGpuDownloading(false);
         setGpuDownloaded(status.downloaded);
         setGpuFailed(!!status.gpuFailed);
+        setGpuFailReason(status.gpuFailReason ?? null);
         setGpuNeedsUpdate(!!status.needsUpdate);
       } catch {}
     }, 1000);
-    return () => clearInterval(id);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, [gpuResumedDownload, gpuBackend]);
 
   // Live server state: "GPU acceleration active" reflects what the server is
@@ -829,11 +903,21 @@ export default function TranscriptionModelPicker({
   // silently falls back to CPU). Faster poll while an activation is in flight.
   // Polls again at once when a re-read switches the card to another pack.
   useEffect(() => {
-    if (!effectiveLocal || internalLocalProvider !== "whisper" || !gpuDownloaded) return;
+    if (
+      !effectiveLocal ||
+      internalLocalProvider !== "whisper" ||
+      !gpuDownloaded ||
+      (!visible && !gpuActivating) ||
+      gpuDownloading
+    )
+      return;
+    let cancelled = false;
     const poll = () => {
+      const request = ++gpuRequests.current.status;
       window.electronAPI
         ?.whisperServerStatus?.()
         .then((status) => {
+          if (cancelled || request !== gpuRequests.current.status) return;
           setGpuActive(!!status?.gpuAccelerated);
           if (status?.gpuAccelerated) setGpuActivating(false);
         })
@@ -841,8 +925,19 @@ export default function TranscriptionModelPicker({
     };
     poll();
     const id = setInterval(poll, gpuActivating ? 1000 : 5000);
-    return () => clearInterval(id);
-  }, [effectiveLocal, internalLocalProvider, gpuDownloaded, gpuActivating, gpuBackend]);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [
+    effectiveLocal,
+    internalLocalProvider,
+    gpuDownloaded,
+    gpuActivating,
+    visible,
+    gpuDownloading,
+    gpuBackend,
+  ]);
 
   // Safety valve: a Vulkan cold start can take up to ~2 minutes (see #698);
   // past that the live status or a fallback notification settles the state.
@@ -856,7 +951,11 @@ export default function TranscriptionModelPicker({
   // saves the failure before it notifies, so the re-read shows the pack main
   // now reports in use, exactly as reopening Settings would (#1736).
   useEffect(() => {
+    const owner = gpuRequests.current;
     const onFallback = () => {
+      gpuRequests.current.status++;
+      gpuRequests.current.pack++;
+      gpuRequests.current.fallback++;
       setGpuFailed(true);
       // Never show the previous failure's reason while the new one loads
       setGpuFailReason(null);
@@ -867,13 +966,20 @@ export default function TranscriptionModelPicker({
     const disposeCuda = window.electronAPI?.onCudaFallbackNotification?.(onFallback);
     const disposeVulkan = window.electronAPI?.onGpuFallbackNotification?.(onFallback);
     return () => {
+      owner.action++;
+      owner.pack++;
       disposeCuda?.();
       disposeVulkan?.();
     };
   }, [readGpuStatus]);
 
   const handleGpuDownload = async () => {
+    const action = ++gpuRequests.current.action;
+    const fallback = gpuRequests.current.fallback;
+    gpuRequests.current.status++;
+    gpuRequests.current.pack++;
     setGpuDownloading(true);
+    setGpuResumedDownload(false);
     setGpuDownloadError(null);
     gpuDownloadCancelledRef.current = false;
     try {
@@ -881,32 +987,48 @@ export default function TranscriptionModelPicker({
         gpuBackend === "cuda"
           ? await window.electronAPI?.downloadCudaWhisperBinary?.()
           : await window.electronAPI?.downloadVulkanWhisperBinary?.();
+      if (action !== gpuRequests.current.action) return;
+      gpuRequests.current.status++;
+      gpuRequests.current.pack++;
       if (result?.success) {
         setGpuDownloaded(true);
-        setGpuFailed(false);
         setGpuNeedsUpdate(false);
-        // Main reloads the server with the new backend only when one is loaded;
-        // otherwise the pack simply engages on the next dictation.
-        setGpuActivating(!!result.willRestart);
+        if (fallback === gpuRequests.current.fallback) {
+          setGpuFailed(false);
+          // Main reloads only when a server is loaded; otherwise the pack is ready.
+          setGpuActivating(!!result.willRestart);
+        }
       } else if (result && !gpuDownloadCancelledRef.current) {
         setGpuDownloadError(result.error ?? "");
       }
     } finally {
-      setGpuDownloading(false);
+      if (action === gpuRequests.current.action) setGpuDownloading(false);
     }
   };
 
   const handleGpuRetry = async () => {
+    const action = ++gpuRequests.current.action;
+    const fallback = gpuRequests.current.fallback;
+    gpuRequests.current.status++;
+    gpuRequests.current.pack++;
     setGpuFailed(false);
     const result = await window.electronAPI?.whisperGpuRetry?.();
+    if (action !== gpuRequests.current.action || fallback !== gpuRequests.current.fallback) return;
+    gpuRequests.current.status++;
     setGpuActivating(!!result?.willRestart);
   };
 
   const handleGpuDelete = async () => {
+    const action = ++gpuRequests.current.action;
+    gpuRequests.current.status++;
+    gpuRequests.current.pack++;
     const result =
       gpuBackend === "cuda"
         ? await window.electronAPI?.deleteCudaWhisperBinary?.()
         : await window.electronAPI?.deleteVulkanWhisperBinary?.();
+    if (action !== gpuRequests.current.action) return;
+    gpuRequests.current.status++;
+    gpuRequests.current.pack++;
     if (result?.success) {
       setGpuDownloaded(false);
       setGpuFailed(false);
@@ -918,10 +1040,13 @@ export default function TranscriptionModelPicker({
   };
 
   const handleGpuCancel = async () => {
+    const action = gpuRequests.current.action;
+    gpuRequests.current.pack++;
     gpuDownloadCancelledRef.current = true;
+    setGpuResumedDownload(false);
     if (gpuBackend === "cuda") await window.electronAPI?.cancelCudaWhisperDownload?.();
     else await window.electronAPI?.cancelVulkanWhisperDownload?.();
-    setGpuDownloading(false);
+    if (action === gpuRequests.current.action) setGpuDownloading(false);
   };
 
   const {
@@ -1044,18 +1169,12 @@ export default function TranscriptionModelPicker({
         title: t("transcription.deleteModel.title"),
         description: t("transcription.deleteModel.description"),
         onConfirm: async () => {
-          await deleteModel(modelId, async () => {
-            const result = await window.electronAPI?.listWhisperModels();
-            if (result?.success) {
-              setLocalModels(result.models);
-              validateAndSelectModel(result.models);
-            }
-          });
+          await deleteModel(modelId, loadLocalModels);
         },
         variant: "destructive",
       });
     },
-    [showConfirmDialog, deleteModel, validateAndSelectModel, t]
+    [showConfirmDialog, deleteModel, loadLocalModels, t]
   );
 
   const currentCloudProvider = useMemo<TranscriptionProviderData | undefined>(
@@ -1202,17 +1321,12 @@ export default function TranscriptionModelPicker({
         title: t("transcription.deleteModel.title"),
         description: t("transcription.deleteModel.description"),
         onConfirm: async () => {
-          await deleteParakeetModel(modelId, async () => {
-            const result = await window.electronAPI?.listParakeetModels();
-            if (result?.success) {
-              setParakeetModels(result.models);
-            }
-          });
+          await deleteParakeetModel(modelId, loadParakeetModels);
         },
         variant: "destructive",
       });
     },
-    [showConfirmDialog, deleteParakeetModel, t]
+    [showConfirmDialog, deleteParakeetModel, loadParakeetModels, t]
   );
 
   // Organization tabs share the sherpa-onnx inventory and installation backend.
@@ -1300,6 +1414,7 @@ export default function TranscriptionModelPicker({
                       {t("transcription.endpointUrl")}
                     </label>
                     <Input
+                      aria-label={t("transcription.endpointUrl")}
                       dir="ltr"
                       value={cloudTranscriptionBaseUrl}
                       onChange={(e) => setCloudTranscriptionBaseUrl?.(e.target.value)}
@@ -1321,6 +1436,7 @@ export default function TranscriptionModelPicker({
                       {t("common.model")}
                     </label>
                     <Input
+                      aria-label={t("common.model")}
                       dir="ltr"
                       value={
                         selectedCloudProvider === displayedCloudProvider ? displayedCloudModel : ""
@@ -1353,6 +1469,7 @@ export default function TranscriptionModelPicker({
                       </div>
                       {field.input === "secret" ? (
                         <ApiKeyInput
+                          ariaLabel={field.labelKey ? t(field.labelKey) : t("common.apiKey")}
                           apiKey={credentialValues[field.key]}
                           setApiKey={credentialSetters[field.key]}
                           label=""
@@ -1363,7 +1480,10 @@ export default function TranscriptionModelPicker({
                           value={credentialValues[field.key]}
                           onValueChange={credentialSetters[field.key]}
                         >
-                          <SelectTrigger className="h-8 text-sm">
+                          <SelectTrigger
+                            aria-label={field.labelKey ? t(field.labelKey) : t("common.apiKey")}
+                            className="h-8 text-sm"
+                          >
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -1376,6 +1496,7 @@ export default function TranscriptionModelPicker({
                         </Select>
                       ) : (
                         <Input
+                          aria-label={field.labelKey ? t(field.labelKey) : t("common.apiKey")}
                           dir="ltr"
                           value={credentialValues[field.key]}
                           onChange={(e) => credentialSetters[field.key](e.target.value)}

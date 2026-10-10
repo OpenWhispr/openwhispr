@@ -7,11 +7,12 @@ import { useToast } from "../ui/useToast";
 import { useDialogs } from "../../hooks/useDialogs";
 import { useAuth } from "../../hooks/useAuth";
 import { useDelayedFlag } from "../../hooks/useDelayedFlag";
+import { useDialogSession } from "../../hooks/useDialogSession";
 import { cn } from "../lib/utils";
 import InviteTeammateDialog from "../InviteTeammateDialog";
 import TeamRosterSection from "../TeamRosterSection";
 import { leaveTeam } from "../../services/spaceActions";
-import { useWorkspaceStore } from "../../stores/workspaceStore";
+import { useWorkspaceStore, EMPTY_WORKSPACE_MEMBERS } from "../../stores/workspaceStore";
 import { canManageTeamRoster, canManageWorkspace } from "../../lib/spacePermissions";
 import type { Team, TeamMember, Workspace } from "../../types/electron";
 
@@ -33,13 +34,37 @@ export default function TeamMembersDialog({
   const { user } = useAuth();
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
   const { members: roster, refreshMembers } = useWorkspaceStore(
-    useShallow((s) => ({ members: s.members, refreshMembers: s.refreshMembers }))
+    useShallow((s) => ({
+      members: s.membersByWorkspace[workspace.id] ?? EMPTY_WORKSPACE_MEMBERS,
+      refreshMembers: s.refreshMembers,
+    }))
   );
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const { sessionKey, capture, invalidate, bindSession } = useDialogSession(
+    open,
+    JSON.stringify([workspace.id, team.id])
+  );
+  const [loadedRoster, setLoadedRoster] = useState<{ owner: string; members: TeamMember[] } | null>(
+    null
+  );
+  const teamMembers = loadedRoster?.owner === sessionKey ? loadedRoster.members : [];
+  const publishRoster = useCallback(
+    (members: TeamMember[]) => {
+      setLoadedRoster({ owner: sessionKey, members });
+    },
+    [sessionKey]
+  );
   const [isLeaving, setIsLeaving] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState<string | undefined>(undefined);
   const showLeaveSpinner = useDelayedFlag(isLeaving);
+  const [formOwner, setFormOwner] = useState(sessionKey);
+  if (formOwner !== sessionKey) {
+    setFormOwner(sessionKey);
+    setLoadedRoster(null);
+    setIsLeaving(false);
+    setInviteOpen(false);
+    setInviteEmail(undefined);
+  }
 
   const isWorkspaceAdmin = canManageWorkspace(workspace.role);
   const myTeamRole = teamMembers.find((m) => m.user_id === user?.id)?.role ?? null;
@@ -52,46 +77,47 @@ export default function TeamMembersDialog({
     if (open) void refreshMembers(workspace.id).catch(() => {});
   }, [open, workspace.id, refreshMembers]);
 
-  const confirmRemoveMember = useCallback(
-    (member: TeamMember, onConfirm: () => void) => {
-      showConfirmDialog({
-        title: t("settingsPage.workspace.teams.members.removeConfirm", {
-          name: member.name || member.email,
-          team: team.name,
-        }),
-        description: t("notes.spaces.members.removeConfirmDescription"),
-        confirmText: t("notes.spaces.members.remove"),
-        variant: "destructive",
-        onConfirm,
-      });
-    },
-    [showConfirmDialog, t, team.name]
-  );
+  const confirmRemoveMember = (member: TeamMember, onConfirm: () => void) => {
+    showConfirmDialog({
+      title: t("settingsPage.workspace.teams.members.removeConfirm", {
+        name: member.name || member.email,
+        team: team.name,
+      }),
+      description: t("notes.spaces.members.removeConfirmDescription"),
+      confirmText: t("notes.spaces.members.remove"),
+      variant: "destructive",
+      onConfirm,
+    });
+  };
 
   const confirmLeave = () => {
     if (!canLeave || !user?.id) return;
     const userId = user.id;
+    const completion = capture();
     showConfirmDialog({
       title: t("settingsPage.workspace.teams.members.leaveConfirm", { team: team.name }),
       description: t("settingsPage.workspace.teams.members.leaveConfirmDescription"),
       confirmText: t("settingsPage.workspace.teams.members.leave"),
       variant: "destructive",
       onConfirm: async () => {
+        if (!completion.isCurrent()) return;
         setIsLeaving(true);
         try {
           await leaveTeam(team.id, userId);
+          if (!completion.isCurrent()) return;
           toast({
             title: t("settingsPage.workspace.teams.members.leftTeam", { team: team.name }),
           });
           onOpenChange(false);
         } catch (err) {
+          if (!completion.isCurrent()) return;
           toast({
             title: t("common.error"),
             description: err instanceof Error ? err.message : t("common.unknownError"),
             variant: "destructive",
           });
         } finally {
-          setIsLeaving(false);
+          if (completion.isCurrent()) setIsLeaving(false);
         }
       },
     });
@@ -99,8 +125,14 @@ export default function TeamMembersDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-md">
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!next) invalidate();
+          onOpenChange(next);
+        }}
+      >
+        <DialogContent ref={bindSession} className="max-w-md">
           <DialogHeader>
             <DialogTitle>
               {t("settingsPage.workspace.teams.members.title", { team: team.name })}
@@ -121,7 +153,7 @@ export default function TeamMembersDialog({
                   }
                 : undefined
             }
-            onRosterChange={setTeamMembers}
+            onRosterChange={publishRoster}
             removeConfirm={confirmRemoveMember}
           />
 

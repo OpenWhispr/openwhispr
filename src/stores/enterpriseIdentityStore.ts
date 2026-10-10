@@ -14,7 +14,11 @@ import {
   resolveManagedEnterpriseScope,
   managedScopesForConfig,
 } from "../helpers/enterpriseManagedConfig.mjs";
-import { isLlmSelectionAllowed, isTranscriptionSelectionAllowed } from "./policyRules";
+import {
+  isLlmSelectionAllowed,
+  isTranscriptionSelectionAllowed,
+  type PolicyDecisionSnapshot,
+} from "./policyRules";
 import { usePolicyStore } from "./policyStore";
 
 interface EnterpriseIdentityState {
@@ -211,6 +215,45 @@ function refreshCurrentManagedIdentity(): void {
 function ensureLifecycleListeners(): void {
   if (lifecycleListenersReady || typeof window === "undefined") return;
   lifecycleListenersReady = true;
+  // Diagnostics follow accepted identity/policy transitions, never resolver reads.
+  let conflicts = new Set<string>();
+  const reportConflicts = () => {
+    const state = useEnterpriseIdentityStore.getState();
+    const next = new Set<string>();
+    for (const scope of summarize(state.config).managed) {
+      const resolution = resolveManagedEnterpriseScope(
+        state.config,
+        scope,
+        "auto"
+      ) as ManagedEnterpriseScopeResolution;
+      if (
+        resolution.kind !== "managed" ||
+        isManagedSelectionAllowedByPolicy(scope, resolution.provider, usePolicyStore.getState())
+      )
+        continue;
+      const required = resolution.mode === "managed_required" || !resolution.allowManualSetup;
+      const key = JSON.stringify([
+        state.accountId,
+        state.workspaceId,
+        state.authGeneration,
+        scope,
+        resolution.provider,
+        required,
+      ]);
+      next.add(key);
+      if (!conflicts.has(key)) {
+        logger.warn("Managed enterprise provider is blocked by workspace policy", {
+          provider: resolution.provider,
+          scope,
+          required,
+        });
+      }
+    }
+    conflicts = next;
+  };
+  useEnterpriseIdentityStore.subscribe(reportConflicts);
+  usePolicyStore.subscribe(reportConflicts);
+  reportConflicts();
   window.addEventListener("focus", refreshCurrentManagedIdentity);
   window.setInterval(refreshCurrentManagedIdentity, 5 * 60 * 1000);
   window.electronAPI?.onManagedEnterpriseConfigChanged?.((snapshot) => {
@@ -264,9 +307,9 @@ const MANAGED_SCOPE_ALIASES: Partial<Record<ManagedEnterpriseScope, ManagedEnter
 
 function isManagedSelectionAllowedByPolicy(
   scope: ManagedEnterpriseScope,
-  provider: string
+  provider: string,
+  policy: PolicyDecisionSnapshot
 ): boolean {
-  const policy = usePolicyStore.getState();
   const selection = { mode: "enterprise" as const, provider };
   return scope === "transcription"
     ? isTranscriptionSelectionAllowed(policy, selection)
@@ -277,7 +320,8 @@ function resolveScope(
   config: ManagedEnterpriseConfig | null,
   requestedScope: ManagedEnterpriseScope,
   setupMode: EnterpriseSetupMode,
-  scopeHold: false | "unavailable" | "loading"
+  scopeHold: false | "unavailable" | "loading",
+  policy: PolicyDecisionSnapshot
 ): ManagedEnterpriseScopeResolution {
   const scope = MANAGED_SCOPE_ALIASES[requestedScope] ?? requestedScope;
   if (!config && scopeHold) {
@@ -303,14 +347,9 @@ function resolveScope(
   ) as ManagedEnterpriseScopeResolution;
   if (
     resolution.kind === "managed" &&
-    !isManagedSelectionAllowedByPolicy(scope, resolution.provider)
+    !isManagedSelectionAllowedByPolicy(scope, resolution.provider, policy)
   ) {
     const required = resolution.mode === "managed_required" || !resolution.allowManualSetup;
-    logger.warn("Managed enterprise provider is blocked by workspace policy", {
-      provider: resolution.provider,
-      scope,
-      required,
-    });
     return required
       ? {
           kind: "error",
@@ -368,7 +407,13 @@ export function getManagedScopeResolution(
   setupMode: EnterpriseSetupMode
 ): ManagedEnterpriseScopeResolution {
   const state = useEnterpriseIdentityStore.getState();
-  return resolveScope(state.config, scope, setupMode, scopeFailsClosed(state, scope, setupMode));
+  return resolveScope(
+    state.config,
+    scope,
+    setupMode,
+    scopeFailsClosed(state, scope, setupMode),
+    usePolicyStore.getState()
+  );
 }
 
 /** Subscribes to the managed config so the UI re-renders when an administrator changes it. */
@@ -380,5 +425,6 @@ export function useManagedScopeResolution(
   const scopeHold = useEnterpriseIdentityStore((state) =>
     scopeFailsClosed(state, scope, setupMode)
   );
-  return resolveScope(config, scope, setupMode, scopeHold);
+  const policy = usePolicyStore((state) => state);
+  return resolveScope(config, scope, setupMode, scopeHold, policy);
 }

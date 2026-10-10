@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type {
   LlamaServerStatus,
@@ -33,6 +33,11 @@ import {
   reconcileProviderSelection,
 } from "../stores/policyRules";
 import { usePolicySnapshot } from "../hooks/usePolicy";
+import {
+  useSettingsModelVisible,
+  type SettingsNavigationStore,
+} from "../stores/settingsNavigationStore";
+import type { InferenceScope } from "../config/inferenceScopes";
 
 type CloudModelOption = {
   value: string;
@@ -69,9 +74,18 @@ interface ReasoningModelSelectorProps {
   setCustomReasoningApiKey?: (key: string) => void;
   setReasoningMode?: (mode: InferenceMode) => void;
   mode?: "cloud" | "local";
+  /** Omitted by non-Settings callers, which keep their own polling lifetime. */
+  settingsScope?: InferenceScope;
+  settingsNavigation?: SettingsNavigationStore;
 }
 
-function GpuStatusBadge() {
+function GpuStatusBadge({
+  settingsScope,
+  navigation,
+}: {
+  settingsScope?: InferenceScope;
+  navigation?: SettingsNavigationStore;
+}) {
   const { t } = useTranslation();
   const [serverStatus, setServerStatus] = useState<LlamaServerStatus | null>(null);
   const [vulkanStatus, setVulkanStatus] = useState<LlamaVulkanStatus | null>(null);
@@ -85,39 +99,68 @@ function GpuStatusBadge() {
     () => localStorage.getItem("llamaVulkanBannerDismissed") === "true"
   );
   const platform = getCachedPlatform();
+  const visible = useSettingsModelVisible(
+    navigation,
+    "llms",
+    settingsScope === "dictationAgentVision"
+      ? "dictationAgent"
+      : (settingsScope ?? "dictationCleanup")
+  );
+  const requests = useRef({ status: 0, action: 0 });
 
   useEffect(() => {
+    if ((!visible && !activating) || downloading) return;
+    let cancelled = false;
     const poll = () => {
+      const request = ++requests.current.status;
+      const isCurrent = () => !cancelled && request === requests.current.status;
       window.electronAPI
         ?.llamaServerStatus?.()
-        .then(setServerStatus)
+        .then((status) => {
+          if (isCurrent()) setServerStatus(status);
+        })
         .catch(() => {});
       if (platform !== "darwin") {
         window.electronAPI
           ?.getLlamaVulkanStatus?.()
-          .then(setVulkanStatus)
+          .then((status) => {
+            if (isCurrent()) setVulkanStatus(status);
+          })
           .catch(() => {});
       }
     };
     poll();
-    const id = setInterval(poll, 5000);
-    return () => clearInterval(id);
-  }, [platform]);
+    const id = setInterval(poll, activating ? 1000 : 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [platform, visible, activating, downloading]);
 
   useEffect(() => {
+    let cancelled = false;
     if (platform !== "darwin") {
       window.electronAPI
         ?.detectVulkanGpu?.()
-        .then(setGpuResult)
+        .then((result) => {
+          if (!cancelled) setGpuResult(result);
+        })
         .catch(() => {});
     }
+    return () => {
+      cancelled = true;
+    };
   }, [platform]);
 
   useEffect(() => {
+    const owner = requests.current;
     const cleanup = window.electronAPI?.onLlamaVulkanDownloadProgress?.((data) => {
       setProgress(data);
     });
-    return () => cleanup?.();
+    return () => {
+      owner.action++;
+      cleanup?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -131,49 +174,52 @@ function GpuStatusBadge() {
       setActivating(false);
       setActivationFailed(true);
     }, 10000);
-    const fastPoll = setInterval(() => {
-      window.electronAPI
-        ?.llamaServerStatus?.()
-        .then(setServerStatus)
-        .catch(() => {});
-      window.electronAPI
-        ?.getLlamaVulkanStatus?.()
-        .then(setVulkanStatus)
-        .catch(() => {});
-    }, 1000);
-    return () => {
-      clearTimeout(timeout);
-      clearInterval(fastPoll);
-    };
+    return () => clearTimeout(timeout);
   }, [activating, serverStatus?.gpuAccelerated, vulkanStatus?.downloaded]);
 
   const handleDownload = async () => {
+    const action = ++requests.current.action;
+    requests.current.status++;
+    const isCurrent = () => action === requests.current.action;
     setDownloading(true);
     setError(null);
     try {
       const result = await window.electronAPI?.downloadLlamaVulkanBinary?.();
       if (result?.success) {
-        setVulkanStatus((prev) => (prev ? { ...prev, downloaded: true } : prev));
+        if (isCurrent()) {
+          requests.current.status++;
+          setVulkanStatus((prev) => (prev ? { ...prev, downloaded: true } : prev));
+        }
+        // The pack is installed: finish the native reset even if Settings closed.
         await window.electronAPI?.llamaGpuReset?.();
+        if (!isCurrent()) return;
+        requests.current.status++;
         setActivating(true);
         setActivationFailed(false);
-      } else if (result && !result.cancelled) {
+      } else if (isCurrent() && result && !result.cancelled) {
         setError(result.error || t("gpu.activationFailed"));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("gpu.activationFailed"));
+      if (isCurrent()) setError(err instanceof Error ? err.message : t("gpu.activationFailed"));
     } finally {
-      setDownloading(false);
-      setProgress(null);
+      if (isCurrent()) {
+        setDownloading(false);
+        setProgress(null);
+      }
     }
   };
 
   const handleDelete = async () => {
+    const action = ++requests.current.action;
+    requests.current.status++;
     await window.electronAPI?.deleteLlamaVulkanBinary?.();
+    if (action !== requests.current.action) return;
+    requests.current.status++;
     setVulkanStatus((prev) => (prev ? { ...prev, downloaded: false } : prev));
   };
 
   const handleRetry = async () => {
+    requests.current.status++;
     setActivationFailed(false);
     setActivating(true);
     await window.electronAPI?.llamaGpuReset?.();
@@ -343,6 +389,8 @@ export default function ReasoningModelSelector({
   setCustomReasoningApiKey,
   setReasoningMode: setReasoningModeProp,
   mode,
+  settingsScope,
+  settingsNavigation,
 }: ReasoningModelSelectorProps) {
   const { t } = useTranslation();
   const openaiApiKey = useSettingsStore((s) => s.openaiApiKey);
@@ -363,10 +411,8 @@ export default function ReasoningModelSelector({
   const [selectedCloudProvider, setSelectedCloudProvider] = useState("openai");
   const [selectedLocalProvider, setSelectedLocalProvider] = useState("qwen");
   const policyState = usePolicySnapshot();
-  const providerAllowed = useCallback(
-    (providerId: string) => isProviderAllowedByPolicy(policyState, "llm", providerId),
-    [policyState]
-  );
+  const providerAllowed = (providerId: string) =>
+    isProviderAllowedByPolicy(policyState, "llm", providerId);
 
   const cloudProviderTabs = useMemo(
     () =>
@@ -721,9 +767,10 @@ export default function ReasoningModelSelector({
             onModelSelect={handleModelSelect}
             onProviderSelect={handleLocalProviderChange}
             modelType="llm"
+            selectionScope={settingsScope}
             colorScheme="purple"
           />
-          <GpuStatusBadge />
+          <GpuStatusBadge settingsScope={settingsScope} navigation={settingsNavigation} />
         </>
       )}
     </div>

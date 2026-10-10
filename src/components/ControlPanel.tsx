@@ -1,11 +1,12 @@
 import React, { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { useShallow } from "zustand/react/shallow";
+import { useStore } from "zustand";
+import type { SettingsNavigationStore } from "../stores/settingsNavigationStore";
 import { Button } from "./ui/button";
 import { PAGE_CONTENT_WIDTH_CLASS } from "./ui/pageWidth";
 import { cn } from "./lib/utils";
 import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
-import { Download, RefreshCw, Loader2, AlertTriangle, Zap } from "./icons";
+import { Download, RefreshCw, Loader2, AlertTriangle } from "./icons";
 import UpgradePrompt from "./UpgradePrompt";
 import PostMigrationOnboarding from "./PostMigrationOnboarding";
 import { RequiredModelsBanner } from "./RequiredModelsBanner";
@@ -14,7 +15,6 @@ import { useDialogs } from "../hooks/useDialogs";
 import { useHotkey } from "../hooks/useHotkey";
 import { useToast } from "./ui/useToast";
 import { useUpdater } from "../hooks/useUpdater";
-import { useSettings } from "../hooks/useSettings";
 import { useAuth } from "../hooks/useAuth";
 import { useJoinableWorkspaces } from "../hooks/useJoinableWorkspaces";
 import { useWorkspace } from "../hooks/useWorkspace";
@@ -30,13 +30,8 @@ import {
   updateTranscription as updateInStore,
   clearTranscriptions as clearStore,
 } from "../stores/transcriptionStore";
-import {
-  getSettings,
-  selectPolicyEffectiveSettings,
-  useSettingsStore,
-} from "../stores/settingsStore";
+import { getSettings, useSettingsStore } from "../stores/settingsStore";
 import { usePolicyStore } from "../stores/policyStore";
-import { usePolicySnapshot } from "../hooks/usePolicy";
 import {
   isAgentAllowed,
   isControlPanelViewAllowed,
@@ -64,7 +59,6 @@ import NewNoteMenu from "./notes/NewNoteMenu";
 
 import { getCachedPlatform } from "../utils/platform";
 import { isAccessibilitySkipped } from "../utils/permissions";
-import { useGpuBannerAvailability } from "../hooks/useGpuBannerAvailability";
 import { startRecordingForNote, useCreateNote } from "../hooks/useCreateNote";
 import { useSignInCloudNudge } from "../hooks/useSignInCloudNudge";
 import {
@@ -92,6 +86,7 @@ import { syncService } from "../services/SyncService.js";
 import logger from "../utils/logger";
 import AcceptInvitationModal from "./AcceptInvitationModal";
 import JoinYourTeamModal from "./JoinYourTeamModal";
+import { GpuAccelerationBanner } from "./GpuAccelerationBanner";
 import {
   consumePendingInvitationToken,
   clearPendingInvitationToken,
@@ -101,7 +96,6 @@ const platform = getCachedPlatform();
 
 const SIDEBAR_WIDTH_PX = 192;
 
-const SettingsModal = React.lazy(() => import("./SettingsModal"));
 const ReferralModal = React.lazy(() => import("./ReferralModal"));
 const InviteTeammateDialog = React.lazy(() => import("./InviteTeammateDialog"));
 const PersonalNotesView = React.lazy(() => import("./notes/PersonalNotesView"));
@@ -112,27 +106,20 @@ const IntegrationsView = React.lazy(() => import("./IntegrationsView"));
 const ChatView = React.lazy(() => import("./chat/ChatView"));
 const CommandSearch = React.lazy(() => import("./CommandSearch"));
 
-interface ControlPanelProps {
-  /** Open the settings modal at this section on mount (e.g. after onboarding). */
-  initialSettingsSection?: string;
-}
-
-export default function ControlPanel({ initialSettingsSection }: ControlPanelProps = {}) {
+export default function ControlPanel({
+  settingsNavigation,
+}: {
+  settingsNavigation: SettingsNavigationStore;
+}) {
   const { t } = useTranslation();
   useEffect(subscribeMeetingNotificationFolders, []);
   const history = useTranscriptions();
   const [isLoading, setIsLoading] = useState(true);
-  const [showSettings, setShowSettings] = useState(!!initialSettingsSection);
+  const openSettings = useStore(settingsNavigation, (state) => state.openSettings);
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const [showPostMigration, setShowPostMigration] = useState(false);
   const [limitData, setLimitData] = useState<{ wordsUsed: number; limit: number } | null>(null);
   const hasShownUpgradePrompt = useRef(false);
-  const [settingsSection, setSettingsSection] = useState<string | undefined>(
-    initialSettingsSection
-  );
-  // Counts named show-settings requests, so asking again for the section the
-  // modal was opened at still lands there after the user moved elsewhere in it.
-  const [settingsRequest, setSettingsRequest] = useState(0);
   const [aiCTADismissed, setAiCTADismissed] = useState(
     () => localStorage.getItem("aiCTADismissed") === "true"
   );
@@ -150,6 +137,10 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const [integrationsSection, setIntegrationsSection] = useState<IntegrationsSection>(
     DEFAULT_INTEGRATIONS_SECTION
   );
+  const openCalendarIntegrations = useCallback(() => {
+    setIntegrationsSection("calendars");
+    setActiveView("integrations");
+  }, []);
   const navItems = useControlPanelNavItems();
   const {
     collapsed: sidebarCollapsed,
@@ -171,13 +162,10 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     folderId: number | null;
     event: any;
   } | null>(null);
-  const [gpuBannerDismissed, setGpuBannerDismissed] = useState(
-    () => localStorage.getItem("gpuBannerDismissedUnified") === "true"
-  );
   const updateReadyToastShown = useRef(false);
   const { hotkey } = useHotkey();
   const { toast } = useToast();
-  const { useCleanupModel } = useSettings();
+  const useCleanupModel = useSettingsStore((settings) => settings.useCleanupModel);
   const { isSignedIn, isLoaded: authLoaded, user } = useAuth();
   // Suppressed while a deep-linked invitation is open so the two never stack.
   const {
@@ -210,10 +198,10 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     installUpdate,
   } = useUpdater();
 
-  const openTranscriptionSettings = useCallback(() => {
-    setSettingsSection("transcription");
-    setShowSettings(true);
-  }, []);
+  const openTranscriptionSettings = useCallback(
+    () => openSettings("transcription"),
+    [openSettings]
+  );
   useSignInCloudNudge(isSignedIn, openTranscriptionSettings);
 
   const agentAllowedByPolicy = usePolicyStore(isAgentAllowed);
@@ -231,30 +219,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   }, [activeView, agentAllowedByPolicy, policyActionsAllowed]);
   const updateRequiredByOrg = usePolicyStore(isUpdateRequiredByOrg);
   const policyMinAppVersion = usePolicyStore((s) => s.policy?.minAppVersion ?? null);
-
-  // Policy-effective, because the settings pane the GPU banner links to renders
-  // the clamped mode — see eligibleGpuOffers.
-  const policySnapshot = usePolicySnapshot();
-  const gpuBannerSettings = useSettingsStore(
-    useShallow((settings) => {
-      const effective = selectPolicyEffectiveSettings(settings, policySnapshot);
-      return {
-        useLocalWhisper: effective.useLocalWhisper,
-        localTranscriptionProvider: effective.localTranscriptionProvider,
-        useCleanupModel: effective.useCleanupModel,
-        cleanupMode: effective.cleanupMode,
-        useDictationAgent: effective.useDictationAgent,
-        dictationAgentMode: effective.dictationAgentMode,
-      };
-    })
-  );
-  const gpuAccelAvailable = useGpuBannerAvailability({
-    settings: gpuBannerSettings,
-    agentAllowedByPolicy,
-    dismissed: gpuBannerDismissed,
-    settingsOpen: showSettings,
-    platform,
-  });
 
   const {
     confirmDialog,
@@ -312,9 +276,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       if (mod && e.key === "k") {
         e.preventDefault();
         setShowSearch(true);
-      } else if (mod && e.key === ",") {
-        e.preventDefault();
-        setShowSettings(true);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -474,30 +435,13 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     return () => cleanup?.();
   }, []);
 
-  useEffect(() => {
-    // A named section waits in main (it can outrace this listener on a cold
-    // start); a bare request (app-menu Cmd+,) keeps an open modal where it is.
-    const drain = async (showAnyway: boolean) => {
-      const section = await window.electronAPI?.getPendingSettingsSection?.();
-      if (section) {
-        setSettingsSection(section);
-        setSettingsRequest((count) => count + 1);
-      }
-      if (section || showAnyway) setShowSettings(true);
-    };
-    drain(false);
-    const cleanup = window.electronAPI?.onShowSettings?.(() => drain(true));
-    return () => cleanup?.();
-  }, []);
-
   // When accessibility is missing on macOS, open the permissions settings page
   useEffect(() => {
     const cleanup = window.electronAPI?.onAccessibilityMissing?.(async () => {
       if (isAccessibilitySkipped()) return;
       const migration = await window.electronAPI?.getPostMigrationState?.();
       if (migration?.justMigrated) return;
-      setSettingsSection("privacyData");
-      setShowSettings(true);
+      openSettings("privacyData");
       toast({
         title: t("controlPanel.accessibilityMissing.title"),
         description: t("controlPanel.accessibilityMissing.description"),
@@ -505,7 +449,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       });
     });
     return () => cleanup?.();
-  }, [toast, t]);
+  }, [openSettings, toast, t]);
 
   useEffect(() => {
     fetchStreamingProviders();
@@ -962,21 +906,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         onDone={dismissPostMigrationPermanently}
       />
 
-      {showSettings && (
-        <Suspense fallback={null}>
-          <SettingsModal
-            // SettingsModal reads initialSection only on open, so a named request remounts it.
-            key={`${settingsSection ?? "default"}-${settingsRequest}`}
-            open={showSettings}
-            onOpenChange={(open) => {
-              setShowSettings(open);
-              if (!open) setSettingsSection(undefined);
-            }}
-            initialSection={settingsSection}
-          />
-        </Suspense>
-      )}
-
       {showReferrals && (
         <Suspense fallback={null}>
           <ReferralModal open={showReferrals} onOpenChange={setShowReferrals} />
@@ -1054,16 +983,10 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           <ControlPanelSidebar
             activeView={activeView}
             onViewChange={setActiveView}
-            onOpenSettings={() => {
-              setSettingsSection(undefined);
-              setShowSettings(true);
-            }}
+            onOpenSettings={() => openSettings()}
             onOpenReferrals={() => setShowReferrals(true)}
             onInviteTeam={inviteWorkspace ? () => setShowInviteTeam(true) : undefined}
-            onUpgrade={() => {
-              setSettingsSection("plansBilling");
-              setShowSettings(true);
-            }}
+            onUpgrade={() => openSettings("plansBilling")}
             isOverLimit={usage?.isOverLimit ?? false}
             userName={user?.name}
             userEmail={user?.email}
@@ -1154,10 +1077,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                           variant="default"
                           size="sm"
                           className="h-7 text-xs"
-                          onClick={() => {
-                            setSettingsSection("account");
-                            setShowSettings(true);
-                          }}
+                          onClick={() => openSettings("account")}
                         >
                           {t("controlPanel.billing.updatePayment")}
                         </Button>
@@ -1166,55 +1086,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   </div>
                 </div>
               )}
-              {(gpuAccelAvailable.transcription || gpuAccelAvailable.intelligence) &&
-                activeView === "home" &&
-                !gpuBannerDismissed && (
-                  <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 mb-3")}>
-                    <div className="rounded-lg border border-primary/20 dark:border-primary/15 bg-primary/5 p-3">
-                      <div className="flex items-start gap-3">
-                        <div className="shrink-0 w-8 h-8 rounded-md bg-primary/10 dark:bg-primary/15 flex items-center justify-center">
-                          <Zap size={16} className="text-primary" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-foreground mb-0.5">
-                            {t("controlPanel.gpu.bannerTitle")}
-                          </p>
-                          <p className="text-xs text-muted-foreground mb-2">
-                            {t("controlPanel.gpu.bannerDescription")}
-                          </p>
-                          <div className="flex items-center gap-3">
-                            <Button
-                              variant="default"
-                              size="sm"
-                              className="h-7 text-xs"
-                              onClick={() => {
-                                setSettingsSection(
-                                  gpuAccelAvailable.transcription
-                                    ? "transcription"
-                                    : gpuAccelAvailable.intelligence === "dictationAgent"
-                                      ? "dictationAgent"
-                                      : "intelligence"
-                                );
-                                setShowSettings(true);
-                              }}
-                            >
-                              {t("controlPanel.gpu.enableButton")}
-                            </Button>
-                            <button
-                              onClick={() => {
-                                setGpuBannerDismissed(true);
-                                localStorage.setItem("gpuBannerDismissedUnified", "true");
-                              }}
-                              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                            >
-                              {t("controlPanel.gpu.dismissButton")}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
+              {activeView === "home" && <GpuAccelerationBanner navigation={settingsNavigation} />}
               {activeView === "home" && (
                 <HistoryView
                   history={history}
@@ -1231,24 +1103,13 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   showDiscarded={showDiscarded}
                   onToggleDiscarded={toggleShowDiscarded}
                   userName={user?.name}
-                  onOpenSettings={(section) => {
-                    setSettingsSection(section);
-                    setShowSettings(true);
-                  }}
-                  onOpenIntegrations={() => {
-                    setIntegrationsSection("calendars");
-                    setActiveView("integrations");
-                  }}
+                  onOpenSettings={openSettings}
+                  onOpenIntegrations={openCalendarIntegrations}
                 />
               )}
               {activeView === "insights" && (
                 <Suspense fallback={null}>
-                  <InsightsView
-                    onSignIn={() => {
-                      setSettingsSection("account");
-                      setShowSettings(true);
-                    }}
-                  />
+                  <InsightsView onSignIn={() => openSettings("account")} />
                 </Suspense>
               )}
               {activeView === "chat" && agentAllowedByPolicy && (
@@ -1259,10 +1120,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               {activeView === "personal-notes" && (
                 <Suspense fallback={null}>
                   <PersonalNotesView
-                    onOpenSettings={(section) => {
-                      setSettingsSection(section);
-                      setShowSettings(true);
-                    }}
+                    onOpenSettings={openSettings}
                     meetingRecordingRequest={meetingRecordingRequest}
                     onMeetingRecordingRequestHandled={handleMeetingRecordingRequestHandled}
                     invitationEntry={invitationNotesEntry}
@@ -1283,10 +1141,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                       if (folderId) setActiveFolderId(folderId);
                       setActiveView("personal-notes");
                     }}
-                    onOpenSettings={(section) => {
-                      setSettingsSection(section);
-                      setShowSettings(true);
-                    }}
+                    onOpenSettings={openSettings}
                   />
                 </Suspense>
               )}
@@ -1294,10 +1149,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 <Suspense fallback={null}>
                   <IntegrationsView
                     isPaid={usage?.hasPaidAccessOptimistic ?? false}
-                    onUpgrade={() => {
-                      setSettingsSection("plansBilling");
-                      setShowSettings(true);
-                    }}
+                    onUpgrade={() => openSettings("plansBilling")}
                     section={integrationsSection}
                     onSectionChange={setIntegrationsSection}
                   />

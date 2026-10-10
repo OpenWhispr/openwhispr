@@ -6,6 +6,7 @@ import MeetingNotificationOverlay from "./components/MeetingNotificationOverlay.
 import { PermissionGuideOverlay } from "./components/onboarding/PermissionGuideOverlay";
 import ReauthenticationScreen from "./components/ReauthenticationScreen.tsx";
 import BackgroundModelDownloadTray from "./components/onboarding/BackgroundModelDownloadTray.tsx";
+import { SettingsHost } from "./components/SettingsHost.tsx";
 import { LEGACY_ONBOARDING_STEP_KEY, ONBOARDING_SESSION_KEY } from "./components/onboarding/flow";
 import { useAuth } from "./hooks/useAuth";
 import { useControlPanelWindowDrag } from "./hooks/useControlPanelWindowDrag";
@@ -226,7 +227,9 @@ function MainApp() {
 
   return isControlPanel ? (
     <Suspense fallback={<LoadingFallback />}>
-      <ControlPanel initialSettingsSection={postOnboardingSettingsSection} />
+      <SettingsHost initialSection={postOnboardingSettingsSection}>
+        {(settingsNavigation) => <ControlPanel settingsNavigation={settingsNavigation} />}
+      </SettingsHost>
       <BackgroundModelDownloadTray />
     </Suspense>
   ) : (

@@ -40,7 +40,6 @@ import {
 } from "./shared";
 import { useAuth } from "../../hooks/useAuth";
 import { useUsage } from "../../hooks/useUsage";
-import { useSettings } from "../../hooks/useSettings";
 import { requestSignIn } from "../../utils/requestSignIn";
 import { describeProviderError } from "../../utils/describeProviderError";
 import {
@@ -271,7 +270,19 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   // entitlement should not block a payer's upload.
   const isProUser = usage?.hasPaidAccessOptimistic ?? false;
 
-  const apiKeys = useSettings();
+  const apiKeys = useSettingsStore(
+    useShallow((settings) => ({
+      openaiApiKey: settings.openaiApiKey,
+      groqApiKey: settings.groqApiKey,
+      xaiApiKey: settings.xaiApiKey,
+      mistralApiKey: settings.mistralApiKey,
+      geminiApiKey: settings.geminiApiKey,
+      tinfoilApiKey: settings.tinfoilApiKey,
+      deepgramApiKey: settings.deepgramApiKey,
+      assemblyaiApiKey: settings.assemblyaiApiKey,
+      customTranscriptionApiKey: settings.customTranscriptionApiKey,
+    }))
+  );
   const {
     openaiApiKey,
     groqApiKey,

@@ -16,6 +16,7 @@ export default function CustomModelInput({ value, onChange, placeholder }: Custo
         {t("reasoning.enterprise.customModelId", { defaultValue: "Custom Model ID" })}
       </label>
       <Input
+        aria-label={t("reasoning.enterprise.customModelId")}
         dir="ltr"
         value={value}
         onChange={(e) => onChange(e.target.value)}

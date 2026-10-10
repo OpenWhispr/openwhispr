@@ -109,7 +109,11 @@ function CalendarAccountRows({
           label={t(`${i18nKey}.primaryOnly`)}
           description={t(`${i18nKey}.primaryOnlyDescription`)}
         >
-          <Toggle checked={primaryOnly} onChange={onPrimaryOnlyChange} />
+          <Toggle
+            ariaLabel={t(`${i18nKey}.primaryOnly`)}
+            checked={primaryOnly}
+            onChange={onPrimaryOnlyChange}
+          />
         </SettingsRow>
       </SettingsPanelRow>
 

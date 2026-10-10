@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ExternalLink, Loader2, Plus } from "../icons";
 import { Button } from "../ui/button";
@@ -15,7 +15,10 @@ import {
 import { useToast } from "../ui/useToast";
 import { WorkspacesService, type SeatPreview } from "../../services/WorkspacesService";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
-import { hasActiveWorkspaceSubscription } from "../../lib/workspaceBilling";
+import {
+  hasActiveWorkspaceSubscription,
+  workspaceBillingSnapshot,
+} from "../../lib/workspaceBilling";
 import { formatAmount } from "../../utils/formatAmount";
 import type { Workspace } from "../../types/electron";
 
@@ -29,7 +32,31 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
   const { toast } = useToast();
   const refresh = useWorkspaceStore((s) => s.refresh);
   const [busy, setBusy] = useState<"checkout" | "portal" | "preview" | "seats" | null>(null);
-  const [seatPreview, setSeatPreview] = useState<SeatPreview | null>(null);
+  const [seatPreviewResult, setSeatPreviewResult] = useState<{
+    snapshot: string;
+    request: number;
+    preview: SeatPreview;
+  } | null>(null);
+  const seatRequest = useRef(0);
+  // Ignore metadata-only refreshes, but never reuse a quote after billing or occupancy changes.
+  const seatSnapshot = workspaceBillingSnapshot(workspace);
+  const seatPreview =
+    seatPreviewResult?.snapshot === seatSnapshot ? seatPreviewResult.preview : null;
+
+  useEffect(() => {
+    setSeatPreviewResult(null);
+    setBusy((current) => (current === "preview" ? null : current));
+    const requests = seatRequest;
+    return () => {
+      requests.current++;
+    };
+  }, [seatSnapshot]);
+
+  function dismissSeatPreview() {
+    seatRequest.current++;
+    setSeatPreviewResult(null);
+    setBusy((current) => (current === "preview" ? null : current));
+  }
   const refreshOnReturn = useBillingRefreshOnReturn(() => {
     void refresh();
     void onRefreshEntitlement?.();
@@ -60,26 +87,46 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
   }
 
   async function previewSeatIncrease() {
+    if (!isOwner || !canAddSeats || busy !== null) return;
+    const request = ++seatRequest.current;
     setBusy("preview");
     try {
-      setSeatPreview(await WorkspacesService.previewSeats(workspace.id, 1));
+      const preview = await WorkspacesService.previewSeats(workspace.id, 1);
+      if (request !== seatRequest.current) return;
+      if (
+        preview.current_quantity !== workspace.seats ||
+        (workspace.seats_used != null && preview.seats_used !== workspace.seats_used)
+      ) {
+        // The server already knows a newer capacity: refresh before offering another quote.
+        await refresh();
+        return;
+      }
+      setSeatPreviewResult({ snapshot: seatSnapshot, request, preview });
     } catch (error) {
+      if (request !== seatRequest.current) return;
       toast({
         title: t("settingsPage.unifiedBilling.seatUpdateFailed"),
         description: error instanceof Error ? error.message : t("common.unknownError"),
         variant: "destructive",
       });
     } finally {
-      setBusy(null);
+      if (request === seatRequest.current) setBusy(null);
     }
   }
 
   async function confirmSeatIncrease() {
-    if (!seatPreview) return;
+    if (
+      !seatPreview ||
+      seatPreviewResult?.request !== seatRequest.current ||
+      !isOwner ||
+      !canAddSeats ||
+      busy !== null
+    )
+      return;
     setBusy("seats");
     try {
       await WorkspacesService.updateSeats(workspace.id, seatPreview.next_quantity);
-      setSeatPreview(null);
+      dismissSeatPreview();
       await refresh();
       toast({
         title: t("settingsPage.unifiedBilling.seatUpdated", {
@@ -224,7 +271,10 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
 
       <EnterpriseConsoleRow workspace={workspace} />
 
-      <Dialog open={seatPreview !== null} onOpenChange={(open) => !open && setSeatPreview(null)}>
+      <Dialog
+        open={isOwner && canAddSeats && seatPreview !== null}
+        onOpenChange={(open) => !open && dismissSeatPreview()}
+      >
         <DialogContent className="sm:max-w-90">
           <DialogHeader>
             <DialogTitle>{t("settingsPage.unifiedBilling.confirmSeats.title")}</DialogTitle>
@@ -255,7 +305,7 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setSeatPreview(null)}>
+            <Button variant="outline" size="sm" onClick={dismissSeatPreview}>
               {t("common.cancel")}
             </Button>
             <Button

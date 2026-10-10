@@ -27,6 +27,7 @@ async function loadSettings(t, overrides = {}) {
   const keys = new Map(bindings.map(({ storeKey }) => [storeKey, `old-${storeKey}`]));
   const events = new EventTarget();
   let update;
+  let version = 0;
   const api = Object.fromEntries(
     bindings.map(({ storeKey, get }) => [get, async () => keys.get(storeKey)])
   );
@@ -41,7 +42,7 @@ async function loadSettings(t, overrides = {}) {
       electronAPI: {
         ...api,
         setDictionary: async () => {},
-        onApiKeyUpdated: (callback) => {
+        onSecretKeyChanged: (callback) => {
           update = callback;
         },
         ...overrides,
@@ -61,7 +62,12 @@ async function loadSettings(t, overrides = {}) {
   });
   await vite.ssrLoadModule("/services/ReasoningService");
   const settings = await vite.ssrLoadModule("/stores/settingsStore.ts");
-  return { ...settings, keys, storage, window, vite, update: (key) => update(key) };
+  // The store refreshes after a microtask chain, so wait until it has settled.
+  const notify = async (key) => {
+    update({ key, version: ++version });
+    await new Promise(setImmediate);
+  };
+  return { ...settings, keys, storage, window, vite, update: notify };
 }
 
 test("all registered secrets refresh in memory without persistence or save loops", async (t) => {
@@ -90,9 +96,9 @@ test("all registered secrets refresh in memory without persistence or save loops
   assert.equal(saves, 0);
   assert.equal(persists, 0);
   assert.equal(changes.length, bindings.length * 2);
+  // ReasoningService reads keys on every request; only the Tinfoil client caches one.
   await context.vite.ssrLoadModule("/services/ReasoningService");
-  assert.equal(context.window.cacheClears.length, bindings.length * 2);
-  assert.ok(context.window.cacheClears.every(([provider]) => provider === undefined));
+  assert.deepEqual(context.window.cacheClears, [[], []]);
 });
 
 test("the next batch dictation reads the changed key, not its populated cache", async (t) => {

@@ -19,6 +19,7 @@ export const Toggle = ({ checked, onChange, disabled = false, ariaLabel }: Toggl
 
   return (
     <button
+      type="button"
       role="switch"
       aria-checked={checked}
       aria-label={ariaLabel}

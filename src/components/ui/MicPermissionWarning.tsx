@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./button";
 import { AlertCircle } from "../icons";
@@ -32,32 +31,19 @@ export default function MicPermissionWarning({
   onOpenPrivacySettings,
 }: MicPermissionWarningProps) {
   const { t } = useTranslation();
-  const config = useMemo(() => {
-    const platformConfig: Record<
-      Platform,
-      { message: string; soundLabel: string; privacyLabel: string; showPrivacyButton: boolean }
-    > = {
-      darwin: {
-        message: t("hooks.permissions.warning.messages.macos"),
-        soundLabel: t("hooks.permissions.warning.soundLabel"),
-        privacyLabel: t("hooks.permissions.warning.privacyLabel"),
-        showPrivacyButton: true,
-      },
-      win32: {
-        message: t("hooks.permissions.warning.messages.windows"),
-        soundLabel: t("hooks.permissions.warning.soundLabel"),
-        privacyLabel: t("hooks.permissions.warning.privacyLabel"),
-        showPrivacyButton: true,
-      },
-      linux: {
-        message: t("hooks.permissions.warning.messages.linux"),
-        soundLabel: t("hooks.permissions.warning.soundLabel"),
-        privacyLabel: "",
-        showPrivacyButton: false,
-      },
-    };
-    return platformConfig[getPlatform()];
-  }, [t]);
+  const platform = getPlatform();
+  const config = {
+    message: t(
+      {
+        darwin: "hooks.permissions.warning.messages.macos",
+        win32: "hooks.permissions.warning.messages.windows",
+        linux: "hooks.permissions.warning.messages.linux",
+      }[platform]
+    ),
+    soundLabel: t("hooks.permissions.warning.soundLabel"),
+    privacyLabel: t("hooks.permissions.warning.privacyLabel"),
+    showPrivacyButton: platform !== "linux",
+  };
 
   return (
     <div

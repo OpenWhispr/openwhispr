@@ -16,7 +16,7 @@ import { CARD_SURFACE_CLASS } from "./ui/surfaces";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
-import { useSettings } from "../hooks/useSettings";
+import { useSettingsStore } from "../stores/settingsStore";
 import { getCachedPlatform } from "../utils/platform";
 import type { Snippet } from "../utils/snippets";
 import DictionaryEmptyIllustration from "./DictionaryEmptyIllustration";
@@ -109,7 +109,8 @@ function EditSnippetDialog({
 
 export default function SnippetsView() {
   const { t } = useTranslation();
-  const { snippets, setSnippets } = useSettings();
+  const snippets = useSettingsStore((settings) => settings.snippets);
+  const setSnippets = useSettingsStore((settings) => settings.setSnippets);
   const [trigger, setTrigger] = useState("");
   const [expansion, setExpansion] = useState("");
   const [showEmptyInput, setShowEmptyInput] = useState(false);

@@ -104,12 +104,19 @@ export function ModelCard({
 
   return (
     <div
-      onClick={handleCardClick}
       className={`relative w-full p-2 rounded-md border text-start transition-colors duration-200 group overflow-hidden ${
         isSelected ? styles.selected : styles.default
       } ${!isLocalMode || (isDownloaded && !isSelected) ? "cursor-pointer" : ""}`}
     >
-      <div className="flex items-center gap-1.5">
+      <button
+        type="button"
+        aria-label={model.label}
+        aria-pressed={isSelected}
+        disabled={isLocalMode && !isDownloaded}
+        onClick={handleCardClick}
+        className="absolute inset-0 w-full rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+      />
+      <div className="flex items-center gap-1.5 pointer-events-none">
         <div
           className={`w-1.5 h-1.5 rounded-full shrink-0 ${getStatusDotClass()} ${
             isSelected && isDownloaded
@@ -155,7 +162,7 @@ export function ModelCard({
           <a
             href={specHref}
             onClick={createExternalLinkHandler(specHref)}
-            className="inline-flex items-center gap-0.5 text-xs text-primary/60 hover:text-primary transition-colors shrink-0"
+            className="relative z-10 pointer-events-auto inline-flex items-center gap-0.5 text-xs text-primary/60 hover:text-primary transition-colors shrink-0"
           >
             {t("models.learnMore")}
             <ExternalLink size={9} />
@@ -168,7 +175,7 @@ export function ModelCard({
           </span>
         )}
 
-        <div className="ms-auto flex items-center gap-1.5 shrink-0">
+        <div className="relative z-10 pointer-events-none ms-auto flex items-center gap-1.5 shrink-0">
           {isSelected && (
             <span className="text-xs font-medium text-primary px-2 py-0.5 bg-primary/10 rounded-sm">
               {t("common.active")}
@@ -185,7 +192,7 @@ export function ModelCard({
                   }}
                   size="icon"
                   variant="ghost"
-                  className="size-6 text-muted-foreground/70 hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,opacity,transform] active:scale-95"
+                  className="pointer-events-auto size-6 text-muted-foreground/70 hover:text-destructive opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-[color,opacity,transform] active:scale-95"
                 >
                   <Trash2 size={12} />
                 </Button>
@@ -198,7 +205,7 @@ export function ModelCard({
                   disabled={modelIsCancelling}
                   size="sm"
                   variant="outline"
-                  className="h-6 px-2.5 text-xs text-destructive border-destructive/25 hover:bg-destructive/8"
+                  className="pointer-events-auto h-6 px-2.5 text-xs text-destructive border-destructive/25 hover:bg-destructive/8"
                 >
                   <X size={11} className="me-0.5" />
                   {modelIsCancelling ? "..." : t("common.cancel")}
@@ -211,7 +218,7 @@ export function ModelCard({
                   }}
                   size="sm"
                   variant="default"
-                  className="h-6 px-2.5 text-xs"
+                  className="pointer-events-auto h-6 px-2.5 text-xs"
                 >
                   <Download size={11} className="me-1" />
                   {t("common.download")}

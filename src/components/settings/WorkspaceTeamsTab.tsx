@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, Users, Trash2, Loader2 } from "../icons";
 import { deleteTeam } from "../../services/spaceActions";
@@ -30,14 +30,17 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const canManage = canManageWorkspace(workspace.role);
 
+  const teamsRequest = useRef(0);
   const loadTeams = useCallback(async () => {
+    const request = ++teamsRequest.current;
     setLoadFailed(false);
     try {
-      setTeams(await TeamsService.list(workspace.id));
+      const list = await TeamsService.list(workspace.id);
+      if (request === teamsRequest.current) setTeams(list);
     } catch {
-      setLoadFailed(true);
+      if (request === teamsRequest.current) setLoadFailed(true);
     } finally {
-      setTeamsLoaded(true);
+      if (request === teamsRequest.current) setTeamsLoaded(true);
     }
   }, [workspace.id]);
 
@@ -46,6 +49,10 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
   useEffect(() => {
     void loadTeams();
     void loadSpaces();
+    const requests = teamsRequest;
+    return () => {
+      ++requests.current;
+    };
   }, [loadTeams]);
 
   const backedSpacesByTeam = useMemo(() => {
@@ -189,9 +196,9 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
         workspaceId={workspace.id}
         open={createOpen}
         onOpenChange={setCreateOpen}
+        onReconciled={() => loadTeams()}
         onCreated={(team) => {
           toast({ title: t("settingsPage.workspace.teams.created", { team: team.name }) });
-          return loadTeams();
         }}
       />
 

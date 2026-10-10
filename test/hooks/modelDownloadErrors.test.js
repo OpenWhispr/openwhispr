@@ -124,6 +124,36 @@ test("required models with identical errors wait for explicit retry independentl
   assert.equal(findRetryButtons(tree).length, 2);
 });
 
+for (const modelType of ["whisper", "parakeet"]) {
+  test(`${modelType} delete failure keeps inventory and selection intact`, async (t) => {
+    const events = [];
+    let result = { success: false, error: "disk busy" };
+    const renderer = await createDownloadRenderer(t, {
+      modelGetActiveDownloads: async () => [],
+      onWhisperDownloadProgress: () => () => {},
+      onParakeetDownloadProgress: () => () => {},
+      deleteWhisperModel: async () => result,
+      deleteParakeetModel: async () => result,
+    });
+    globalThis.window.dispatchEvent = (event) => events.push(event.type);
+    const { useModelDownload } = await renderer.vite.ssrLoadModule("/hooks/useModelDownload.ts");
+    let download;
+    let refreshes = 0;
+    function Harness() {
+      download = useModelDownload({ modelType });
+      return null;
+    }
+    await renderer.render(Harness);
+    await React.act(async () => download.deleteModel("base", () => refreshes++));
+    assert.equal(refreshes, 0, "failed deletion must not report new inventory");
+    assert.deepEqual(events, [], "failed deletion must not broadcast changed disk state");
+    result = { success: true, freed_mb: 20 };
+    await React.act(async () => download.deleteModel("base", () => refreshes++));
+    assert.equal(refreshes, 1);
+    assert.deepEqual(events, ["openwhispr-local-models-changed"]);
+  });
+}
+
 test("remount restores concurrent LLM downloads and cancellation settles only its model", async (t) => {
   let activeDownloads = [
     {

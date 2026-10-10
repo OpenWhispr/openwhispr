@@ -7,12 +7,11 @@ import {
   type EnterpriseProvider,
 } from "../models/ModelRegistry";
 import { BaseReasoningService, ReasoningConfig } from "./BaseReasoningService";
-import { SecureCache } from "../utils/SecureCache";
 import { withRetry, createApiRetryStrategy, httpError } from "../utils/retry";
 import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl, ensureV1Suffix } from "../config/constants";
 import logger from "../utils/logger";
 import { assertValidCleanupOutput } from "../utils/cleanupOutput";
-import { getSettings, isCloudCleanupMode } from "../stores/settingsStore";
+import { getSettings, isCloudCleanupMode, waitForSecretPublication } from "../stores/settingsStore";
 import { wrapCleanupTranscript } from "../config/prompts";
 import { stripThinkingTags } from "../helpers/stripThinking.js";
 import {
@@ -117,9 +116,7 @@ function logParamFallback(logEvent: string) {
 }
 
 class ReasoningService extends BaseReasoningService {
-  private apiKeyCache: SecureCache<string>;
   private static readonly MAX_TOOL_STEPS = 20;
-  private cacheCleanupStop: (() => void) | undefined;
   private streamAbortController: AbortController | null = null;
   private activeRequestControllers = new Set<AbortController>();
   private activeCloudStream: { requestId: string; cancel: () => void } | null = null;
@@ -130,8 +127,6 @@ class ReasoningService extends BaseReasoningService {
 
   constructor() {
     super();
-    this.apiKeyCache = new SecureCache();
-    this.cacheCleanupStop = this.apiKeyCache.startAutoCleanup();
     this.providerContext = {
       getApiKey: (provider: string) =>
         this.getApiKey(provider as Parameters<ReasoningService["getApiKey"]>[0]),
@@ -192,14 +187,13 @@ class ReasoningService extends BaseReasoningService {
       "openai" | "anthropic" | "gemini" | "groq" | "tinfoil" | "custom" | "openrouter" | "corti"
   ): Promise<string> {
     if (provider === "custom") {
-      let customKey = "";
+      await waitForSecretPublication("cleanupCustomApiKey");
+      let customKey = getSettings().cleanupCustomApiKey || "";
       try {
-        customKey = (await window.electronAPI?.getCleanupCustomKey?.()) || "";
+        const published = await window.electronAPI?.getCleanupCustomKey?.();
+        if (typeof published === "string") customKey = published;
       } catch (err) {
         logger.logReasoning("CUSTOM_KEY_IPC_FALLBACK", { error: (err as Error)?.message });
-      }
-      if (!customKey || !customKey.trim()) {
-        customKey = getSettings().cleanupCustomApiKey || "";
       }
       const trimmedKey = customKey.trim();
 
@@ -212,43 +206,30 @@ class ReasoningService extends BaseReasoningService {
       return trimmedKey;
     }
 
-    let apiKey = this.apiKeyCache.get(provider);
-
-    logger.logReasoning(`${provider.toUpperCase()}_KEY_RETRIEVAL`, {
-      provider,
-      fromCache: !!apiKey,
-      cacheSize: this.apiKeyCache.size || 0,
-    });
-
-    if (!apiKey) {
-      try {
-        const keyGetters = {
-          openai: () => window.electronAPI.getOpenAIKey(),
-          anthropic: () => window.electronAPI.getAnthropicKey(),
-          gemini: () => window.electronAPI.getGeminiKey(),
-          groq: () => window.electronAPI.getGroqKey(),
-          openrouter: () => window.electronAPI.getOpenrouterKey(),
-          tinfoil: () => window.electronAPI.getTinfoilKey?.(),
-          corti: () => window.electronAPI.getCortiKey?.(),
-        };
-        apiKey = (await keyGetters[provider]()) ?? undefined;
-
-        logger.logReasoning(`${provider.toUpperCase()}_KEY_FETCHED`, {
-          provider,
-          hasKey: !!apiKey,
-          keyLength: apiKey?.length || 0,
-        });
-
-        if (apiKey) {
-          this.apiKeyCache.set(provider, apiKey);
-        }
-      } catch (error) {
-        logger.logReasoning(`${provider.toUpperCase()}_KEY_FETCH_ERROR`, {
-          provider,
-          error: (error as Error).message,
-          stack: (error as Error).stack,
-        });
-      }
+    await waitForSecretPublication(`${provider}ApiKey`);
+    let apiKey: string | undefined;
+    try {
+      const keyGetters = {
+        openai: () => window.electronAPI.getOpenAIKey(),
+        anthropic: () => window.electronAPI.getAnthropicKey(),
+        gemini: () => window.electronAPI.getGeminiKey(),
+        groq: () => window.electronAPI.getGroqKey(),
+        openrouter: () => window.electronAPI.getOpenrouterKey(),
+        tinfoil: () => window.electronAPI.getTinfoilKey?.(),
+        corti: () => window.electronAPI.getCortiKey?.(),
+      };
+      apiKey = (await keyGetters[provider]()) ?? undefined;
+      logger.logReasoning(`${provider.toUpperCase()}_KEY_FETCHED`, {
+        provider,
+        hasKey: !!apiKey,
+        keyLength: apiKey?.length || 0,
+      });
+    } catch (error) {
+      logger.logReasoning(`${provider.toUpperCase()}_KEY_FETCH_ERROR`, {
+        provider,
+        error: (error as Error).message,
+        stack: (error as Error).stack,
+      });
     }
 
     if (!apiKey) {
@@ -300,7 +281,8 @@ class ReasoningService extends BaseReasoningService {
     // No systemPrompt override means the default cleanup path: a deterministic
     // transform, so zero temperature and a delimited transcript.
     const isCleanup = !config.systemPrompt;
-    const systemPrompt = config.systemPrompt || this.getSystemPrompt(agentName);
+    const systemPrompt =
+      config.systemPrompt || this.getSystemPrompt(agentName, config.cleanupPrompt);
     const userPrompt = isCleanup ? wrapCleanupTranscript(text) : text;
 
     const messages = [
@@ -488,7 +470,7 @@ class ReasoningService extends BaseReasoningService {
       config.inferenceScope === "dictationCleanup" &&
       !config.systemPrompt &&
       !config.requiresAgent &&
-      !settings.customPrompts.cleanup;
+      !(config.cleanupPrompt ?? settings.customPrompts.cleanup);
     const isImplicitCleanup =
       config.provider === undefined && config.baseUrl === undefined && config.lanUrl === undefined;
     const implicitProvider =
@@ -543,7 +525,14 @@ class ReasoningService extends BaseReasoningService {
         model: trimmedModel,
         agentName,
         config: dispatchConfig,
-        ctx: this.providerContext,
+        // Keep overrides on this request, never on the singleton or shared settings.
+        ctx:
+          dispatchConfig.cleanupPrompt === undefined
+            ? this.providerContext
+            : {
+                ...this.providerContext,
+                getSystemPrompt: (name) => this.getSystemPrompt(name, dispatchConfig.cleanupPrompt),
+              },
       });
 
       if (validateCleanup) assertValidCleanupOutput(text, result);
@@ -1414,38 +1403,13 @@ class ReasoningService extends BaseReasoningService {
     }
   }
 
-  clearApiKeyCache(
-    provider?:
-      | "openai"
-      | "anthropic"
-      | "gemini"
-      | "groq"
-      | "mistral"
-      | "tinfoil"
-      | "custom"
-      | "openrouter"
-      | "corti"
-  ): void {
-    if (provider) {
-      if (provider !== "custom") {
-        this.apiKeyCache.delete(provider);
-      }
-      if (provider === "tinfoil") {
-        clearTinfoilClientCache();
-      }
-      logger.logReasoning("API_KEY_CACHE_CLEARED", { provider });
-    } else {
-      this.apiKeyCache.clear();
-      clearTinfoilClientCache();
-      logger.logReasoning("API_KEY_CACHE_CLEARED", { provider: "all" });
-    }
+  clearApiKeyCache(): void {
+    clearTinfoilClientCache();
+    logger.logReasoning("API_KEY_CACHE_CLEARED", { provider: "tinfoil" });
   }
 
   destroy(): void {
     this.cancelAllRequests();
-    if (this.cacheCleanupStop) {
-      this.cacheCleanupStop();
-    }
   }
 }
 

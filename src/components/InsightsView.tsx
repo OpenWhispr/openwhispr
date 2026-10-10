@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "../hooks/useAuth";
 import { useHotkey } from "../hooks/useHotkey";
 import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
-import { useSettings } from "../hooks/useSettings";
+import { useSettingsStore } from "../stores/settingsStore";
 import { hasValidatedAuthContext } from "../lib/authRequestContext";
 import {
   getAccountAnalyticsSummary,
@@ -467,7 +467,10 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
   const { t } = useTranslation();
   const { isLoaded, isSignedIn, user } = useAuth();
   const authValidated = hasValidatedAuthContext();
-  const { dataRetentionEnabled: personalDataRetentionEnabled, insightsSyncEnabled } = useSettings();
+  const personalDataRetentionEnabled = useSettingsStore(
+    (settings) => settings.dataRetentionEnabled
+  );
+  const insightsSyncEnabled = useSettingsStore((settings) => settings.insightsSyncEnabled);
   const dataRetentionEnabled = usePolicyStore((policyState) =>
     effectiveLocalHistoryEnabled(policyState, personalDataRetentionEnabled)
   );

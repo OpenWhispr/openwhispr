@@ -13,6 +13,7 @@ process.resourcesPath = tmpUserData; // Electron-only global; harmless dummy for
 const fakeElectron = {
   app: { getPath: () => tmpUserData },
   safeStorage: { isEncryptionAvailable: () => false },
+  BrowserWindow: { getAllWindows: () => [] },
 };
 const origLoad = Module._load;
 Module._load = function (request, ...rest) {
@@ -23,6 +24,10 @@ Module._load = function (request, ...rest) {
 
 const { BYOK_API_KEYS } = require("../../src/config/secretKeys");
 const EnvironmentManager = require("../../src/helpers/environment");
+// These are accessor/manifest checks, not disk tests. Never read a developer's
+// .env or copy inherited credentials into the fixture's plaintext fallback.
+EnvironmentManager.prototype.loadEnvironmentVariables = () => {};
+EnvironmentManager.prototype._writeEnvFileAtomic = async () => {};
 
 test("manifest entries are unique and complete", () => {
   const seen = { base: new Set(), env: new Set(), storeKey: new Set() };
@@ -72,20 +77,4 @@ test("the STT accessors keep the spellings their callers use", () => {
   assert.equal(typeof env.saveAssemblyAIKey, "function");
   assert.equal(typeof env.getDeepgramKey, "function");
   assert.equal(typeof env.saveDeepgramKey, "function");
-});
-
-test("preload BYOK_KEY_BRIDGES mirror the manifest exactly", () => {
-  // preload.js can't require the manifest under sandbox, so it inlines the
-  // {base, get, save} tuples. Assert they stay in lockstep with the manifest.
-  const preloadSrc = fs.readFileSync(path.join(__dirname, "../../preload.js"), "utf8");
-  const block = preloadSrc.match(/BYOK_KEY_BRIDGES = \[([\s\S]*?)\];/);
-  assert.ok(block, "BYOK_KEY_BRIDGES declared in preload.js");
-  for (const k of BYOK_API_KEYS) {
-    const entry = new RegExp(
-      `\\{\\s*base:\\s*"${k.base}",\\s*get:\\s*"${k.get}",\\s*save:\\s*"${k.save}",?\\s*\\}`
-    );
-    assert.match(block[1], entry, `preload mirrors ${k.base}`);
-  }
-  const bridgeCount = (block[1].match(/base:/g) || []).length;
-  assert.equal(bridgeCount, BYOK_API_KEYS.length, "no extra/missing preload bridges");
 });

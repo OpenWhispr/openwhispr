@@ -11,17 +11,20 @@ import MemberPickList from "./MemberPickList";
 import { TeamsService } from "../services/TeamsService";
 import { addTeamMembers } from "../services/spaceActions";
 import { orderMemberCandidates } from "../lib/memberCandidates";
-import { useWorkspaceStore } from "../stores/workspaceStore";
+import { useWorkspaceStore, EMPTY_WORKSPACE_MEMBERS } from "../stores/workspaceStore";
 import { useAuth } from "../hooks/useAuth";
 import { useDelayedFlag } from "../hooks/useDelayedFlag";
+import { useDialogSession, type DialogCompletion } from "../hooks/useDialogSession";
 import type { Team, WorkspaceMember } from "../types/electron";
 
 interface CreateTeamDialogProps {
   workspaceId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Fires after the team (and any picked members) exist on the server. */
+  /** Current-session UI (e.g. success feedback). */
   onCreated?: (team: Team) => void | Promise<void>;
+  /** Completed-action reconciliation, even after dismissal for the same account. */
+  onReconciled?: (team: Team, completion: DialogCompletion) => void | Promise<void>;
 }
 
 /** One-step team creation: name it and pick its members in the same modal. */
@@ -30,42 +33,29 @@ export default function CreateTeamDialog({
   open,
   onOpenChange,
   onCreated,
+  onReconciled,
 }: CreateTeamDialogProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { user } = useAuth();
-  const { members: roster, refreshMembers } = useWorkspaceStore(
-    useShallow((s) => ({ members: s.members, refreshMembers: s.refreshMembers }))
-  );
   const [name, setName] = useState("");
   const [memberSearch, setMemberSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [membersError, setMembersError] = useState(false);
-  const [rosterLoaded, setRosterLoaded] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const showSpinner = useDelayedFlag(isCreating);
+  const { sessionKey, capture, invalidate, bindSession } = useDialogSession(open, workspaceId);
 
-  const loadMembers = useCallback(async () => {
-    setMembersError(false);
-    setRosterLoaded(false);
-    try {
-      await refreshMembers(workspaceId);
-      setRosterLoaded(true);
-    } catch {
-      setMembersError(true);
-    }
-  }, [refreshMembers, workspaceId]);
+  const [previousSession, setPreviousSession] = useState(sessionKey);
+  if (previousSession !== sessionKey) {
+    setPreviousSession(sessionKey);
+    setName("");
+    setMemberSearch("");
+    setSelectedIds(new Set());
+    setIsCreating(false);
+  }
 
-  useEffect(() => {
-    if (!open) return;
-    void loadMembers();
-  }, [open, loadMembers]);
-
-  const candidates = useMemo(
-    () => (rosterLoaded ? orderMemberCandidates(roster, user?.id) : []),
-    [roster, rosterLoaded, user?.id]
-  );
   const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) invalidate();
     onOpenChange(nextOpen);
     if (!nextOpen) {
       setName("");
@@ -85,9 +75,11 @@ export default function CreateTeamDialog({
   const handleCreate = async () => {
     const trimmed = name.trim();
     if (!trimmed || isCreating) return;
+    const completion = capture();
     setIsCreating(true);
     try {
       const team = await TeamsService.create(workspaceId, { name: trimmed });
+      if (!completion.isAccountCurrent()) return;
       // The server adds the creator to a new team as admin; re-adding them
       // here would upsert that role back down to member.
       const memberIds = [...selectedIds].filter((id) => id !== user?.id);
@@ -95,7 +87,7 @@ export default function CreateTeamDialog({
       if (memberIds.length > 0) {
         const { failures } = await addTeamMembers(team.id, memberIds);
         added = memberIds.length - failures.length;
-        if (failures.length > 0) {
+        if (failures.length > 0 && completion.isCurrent()) {
           toast({
             title: t("notes.spaces.members.addFailed", {
               failed: failures.length,
@@ -106,16 +98,20 @@ export default function CreateTeamDialog({
         }
       }
       // +1: the creator's server-added admin row.
-      await onCreated?.({ ...team, member_count: added + 1 });
-      handleOpenChange(false);
+      const created = { ...team, member_count: added + 1 };
+      if (completion.isAccountCurrent()) await onReconciled?.(created, completion);
+      if (!completion.isCurrent()) return;
+      await onCreated?.(created);
+      if (completion.isCurrent()) handleOpenChange(false);
     } catch (err) {
+      if (!completion.isCurrent()) return;
       toast({
         title: t("settingsPage.workspace.teams.couldNotCreate"),
         description: err instanceof Error ? err.message : t("common.unknownError"),
         variant: "destructive",
       });
     } finally {
-      setIsCreating(false);
+      if (completion.isCurrent()) setIsCreating(false);
     }
   };
 
@@ -126,7 +122,7 @@ export default function CreateTeamDialog({
           <DialogTitle>{t("settingsPage.workspace.teams.createTitle")}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-3">
+        <div ref={bindSession} className="space-y-3">
           <div className="space-y-1.5">
             <Label htmlFor="create-team-name" className="text-xs font-medium">
               {t("settingsPage.workspace.teams.nameLabel")}
@@ -148,32 +144,17 @@ export default function CreateTeamDialog({
             <label className="text-xs font-medium text-foreground/50">
               {t("settingsPage.workspace.teams.addMembersLabel")}
             </label>
-            {membersError ? (
-              <div className="rounded border border-border/70 dark:border-border-subtle/60 px-3 py-2.5 flex items-center justify-between gap-2">
-                <p className="text-xs text-muted-foreground">
-                  {t("settingsPage.workspace.members.loadError")}
-                </p>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => void loadMembers()}
-                  className="h-6 px-2 text-xs shrink-0"
-                >
-                  {t("settingsPage.workspace.loadError.retry")}
-                </Button>
-              </div>
-            ) : !rosterLoaded ? (
-              <div className="h-24 rounded bg-foreground/5 dark:bg-white/5 animate-pulse" />
-            ) : (
-              <MemberPickList
-                members={candidates}
-                search={memberSearch}
-                onSearchChange={setMemberSearch}
-                onSelect={toggleMember}
-                selectedIds={selectedIds}
-                currentUserId={user?.id}
-              />
-            )}
+            <TeamMemberPicker
+              key={sessionKey}
+              open={open}
+              workspaceId={workspaceId}
+              currentUserId={user?.id}
+              capture={capture}
+              search={memberSearch}
+              onSearchChange={setMemberSearch}
+              onSelect={toggleMember}
+              selectedIds={selectedIds}
+            />
           </div>
         </div>
 
@@ -188,5 +169,83 @@ export default function CreateTeamDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// This reader mounts inside the Portal, after its form's session ref attaches.
+// A parent Effect can run while Radix is still deferring the Portal children.
+function TeamMemberPicker({
+  open,
+  workspaceId,
+  currentUserId,
+  capture,
+  search,
+  onSearchChange,
+  onSelect,
+  selectedIds,
+}: {
+  open: boolean;
+  workspaceId: string;
+  currentUserId?: string;
+  capture: () => DialogCompletion;
+  search: string;
+  onSearchChange: (value: string) => void;
+  onSelect: (member: WorkspaceMember) => void;
+  selectedIds: Set<string>;
+}) {
+  const { t } = useTranslation();
+  const { members: roster, refreshMembers } = useWorkspaceStore(
+    useShallow((s) => ({
+      members: s.membersByWorkspace[workspaceId] ?? EMPTY_WORKSPACE_MEMBERS,
+      refreshMembers: s.refreshMembers,
+    }))
+  );
+  const [membersError, setMembersError] = useState(false);
+  const [rosterLoaded, setRosterLoaded] = useState(false);
+  const loadMembers = useCallback(async () => {
+    const completion = capture();
+    setMembersError(false);
+    setRosterLoaded(false);
+    try {
+      await refreshMembers(workspaceId);
+      if (completion.isCurrent()) setRosterLoaded(true);
+    } catch {
+      if (completion.isCurrent()) setMembersError(true);
+    }
+  }, [refreshMembers, workspaceId, capture]);
+  useEffect(() => {
+    if (open) void loadMembers();
+  }, [open, loadMembers]);
+  const candidates = useMemo(
+    () => (rosterLoaded ? orderMemberCandidates(roster, currentUserId) : []),
+    [roster, rosterLoaded, currentUserId]
+  );
+  if (membersError)
+    return (
+      <div className="rounded border border-border/70 dark:border-border-subtle/60 px-3 py-2.5 flex items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">
+          {t("settingsPage.workspace.members.loadError")}
+        </p>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => void loadMembers()}
+          className="h-6 px-2 text-xs shrink-0"
+        >
+          {t("settingsPage.workspace.loadError.retry")}
+        </Button>
+      </div>
+    );
+  if (!rosterLoaded)
+    return <div className="h-24 rounded bg-foreground/5 dark:bg-white/5 animate-pulse" />;
+  return (
+    <MemberPickList
+      members={candidates}
+      search={search}
+      onSearchChange={onSearchChange}
+      onSelect={onSelect}
+      selectedIds={selectedIds}
+      currentUserId={currentUserId}
+    />
   );
 }
