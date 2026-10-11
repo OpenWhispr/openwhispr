@@ -61,7 +61,7 @@
     "expo-file-system": "~55.0.26",
     "expo-font": "~55.0.4",
     "expo-glass-effect": "~55.0.11",
-    "expo-haptics": "~55.0.18",
+    "expo-haptics": "~57.0.3",
     "expo-image": "~55.0.11",
     "expo-linear-gradient": "~55.0.18",
     "expo-linking": "~55.0.17",
