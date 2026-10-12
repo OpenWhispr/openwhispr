@@ -272,8 +272,6 @@ class HotkeyManager extends EventEmitter {
         };
       }
 
-      this.unregisterSlot(slotName);
-
       if (slotName === "meeting") {
         this.gnomeManager.setMeetingCallback(callback);
       } else if (slotName === "voiceAgent") {

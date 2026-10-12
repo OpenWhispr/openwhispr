@@ -121,7 +121,7 @@
       "mouseButtonOnlyMac": "滑鼠按鍵快捷鍵目前僅在 macOS 上受支援。",
       "alreadyRegistered": "\"{{hotkey}}\" 已被其他應用程式註冊。",
       "osReserved": "\"{{hotkey}}\" 可能被你的作業系統保留。",
-      "keyNotInKeymap": "GNOME 無法在目前的鍵盤配置下使用 \"{{hotkey}}\"。請選擇其他按鍵，或開啟鍵盤選項「將 F13-F24 用作一般功能鍵」。",
+      "keyNotInKeymap": "GNOME 無法在目前的鍵盤配置下使用 \"{{hotkey}}\"。請選擇其他按鍵。",
       "rightModifierNeedsListener": "\"{{hotkey}}\" 無法在此桌面上使用，其快捷鍵需要包含一個一般按鍵。請加入一個按鍵，例如 Control+Alt+Space。",
       "holdNeedsReleaseKey": "按住說話需要 macOS 能偵測到放開的按鍵：Globe、右側 Option 之類的右側按鍵，或帶修飾鍵的快速鍵。點按可用於任何按鍵。",
       "holdNeedsRegularKey": "要使用按住模式，請在快捷鍵中加入一個一般按鍵，例如 Control+Alt+Space。桌面環境無法偵測僅按住修飾鍵的操作。",

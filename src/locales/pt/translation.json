@@ -121,7 +121,7 @@
       "mouseButtonOnlyMac": "Atalhos com botões do mouse atualmente são compatíveis apenas no macOS.",
       "alreadyRegistered": "\"{{hotkey}}\" já está registrada por outro aplicativo.",
       "osReserved": "\"{{hotkey}}\" pode estar reservada pelo seu ambiente de desktop.",
-      "keyNotInKeymap": "O GNOME não consegue usar \"{{hotkey}}\" com o seu layout de teclado. Escolha outra tecla ou ative a opção de teclado \"Usar F13-F24 como teclas de função normais\".",
+      "keyNotInKeymap": "O GNOME não consegue usar \"{{hotkey}}\" com o seu layout de teclado. Escolha outra tecla.",
       "rightModifierNeedsListener": "\"{{hotkey}}\" não pode ser usada neste ambiente de trabalho, cujos atalhos precisam de uma tecla normal. Adicione uma tecla, como Control+Alt+Space.",
       "holdNeedsReleaseKey": "Segurar para falar precisa de uma tecla cuja soltura o macOS detecte: Globo, uma tecla direita como Option direita ou um atalho com modificador. Tocar funciona com qualquer tecla.",
       "holdNeedsRegularKey": "Para usar Segurar, adicione uma tecla normal ao atalho, como Control+Alt+Space. O ambiente de desktop não consegue detectar quando você segura apenas teclas modificadoras.",

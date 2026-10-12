@@ -121,7 +121,7 @@
       "mouseButtonOnlyMac": "Les raccourcis avec les boutons de la souris ne sont actuellement pris en charge que sur macOS.",
       "alreadyRegistered": "\"{{hotkey}}\" est déjà enregistré par une autre application.",
       "osReserved": "\"{{hotkey}}\" peut être réservé par votre environnement de bureau.",
-      "keyNotInKeymap": "GNOME ne peut pas utiliser « {{hotkey}} » avec votre disposition de clavier. Choisissez une autre touche ou activez l'option de clavier « Utiliser F13-F24 comme touches de fonction normales ».",
+      "keyNotInKeymap": "GNOME ne peut pas utiliser « {{hotkey}} » avec votre disposition de clavier. Choisissez une autre touche.",
       "rightModifierNeedsListener": "« {{hotkey}} » ne peut pas être utilisé sur ce bureau, dont les raccourcis exigent une touche normale. Ajoutez une touche, par exemple Control+Alt+Space.",
       "holdNeedsReleaseKey": "Maintenir pour parler nécessite une touche dont macOS détecte le relâchement : Globe, une touche droite comme Option droite, ou un raccourci avec modificateur. Appuyer fonctionne avec n’importe quelle touche.",
       "holdNeedsRegularKey": "Pour utiliser le mode Maintenir, ajoutez une touche normale au raccourci, par exemple Control+Alt+Space. Votre bureau ne peut pas signaler le maintien de touches de modification seules.",

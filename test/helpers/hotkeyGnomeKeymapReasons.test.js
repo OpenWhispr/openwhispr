@@ -39,26 +39,38 @@ function gnomeManager(reason) {
   return { mgr, failures };
 }
 
-test("a dictation hotkey GNOME can't grab is refused with the keymap reason", async () => {
-  const { mgr } = gnomeManager("keysym_missing");
-  mgr.currentHotkey = "F8";
+test("a dictation hotkey GNOME can't grab is refused with the keymap reason, in Tap and Hold", async () => {
+  for (const mode of ["tap", "push"]) {
+    const { mgr } = gnomeManager("keysym_missing");
+    mgr.activationMode = mode;
+    mgr.currentHotkey = "F8";
 
-  const result = await mgr.updateHotkey("F19", noop);
+    const result = await mgr.updateHotkey("F19", noop);
 
-  assert.equal(result.success, false);
-  assert.match(result.message, /keyboard layout/);
-  assert.match(result.message, /"F19"/);
-  assert.equal(mgr.currentHotkey, "F8");
+    assert.equal(result.success, false, mode);
+    assert.match(result.message, /keyboard layout/);
+    assert.match(result.message, /"F19"/);
+    assert.equal(mgr.currentHotkey, "F8");
+  }
 });
 
-test("another slot's hotkey GNOME already uses is refused as reserved", async () => {
+test("another slot's hotkey GNOME already uses is refused as reserved and keeps the slot's key", async () => {
   const { mgr } = gnomeManager("keysym_reserved");
+  const unregistered = [];
+  mgr.gnomeManager.registerKeybinding = async (shortcut) =>
+    shortcut === "F9" ? true : "keysym_reserved";
+  mgr.gnomeManager.unregisterKeybinding = async (slot) => {
+    unregistered.push(slot);
+    return true;
+  };
+  await mgr.registerSlot("meeting", "F9", noop);
 
-  const result = await mgr.registerSlot("meeting", "F13", noop);
+  const result = await mgr.registerSlot("meeting", "F13", noop, { atomic: true });
 
   assert.equal(result.success, false);
   assert.match(result.error, /reserved by your desktop environment/);
-  assert.deepEqual(mgr.getSlotHotkeys("meeting"), []);
+  assert.deepEqual(mgr.getSlotHotkeys("meeting"), ["F9"]);
+  assert.deepEqual(unregistered, []);
 });
 
 test("switching to Hold on a key GNOME can't grab keeps Tap and says why", async () => {
@@ -71,4 +83,22 @@ test("switching to Hold on a key GNOME can't grab keeps Tap and says why", async
   assert.equal(mgr.activationMode, "tap");
   assert.equal(failures.length, 1);
   assert.match(failures[0].error, /reserved by your desktop environment/);
+});
+
+test("switching back to Tap on a key GNOME can't grab keeps Hold and says why", async () => {
+  const { mgr, failures } = gnomeManager("keysym_missing");
+  const holds = [];
+  mgr.gnomeManager.registerPushToTalk = async (hotkey) => {
+    holds.push(hotkey);
+    return true;
+  };
+  mgr.activationMode = "push";
+  mgr.currentHotkey = "F19";
+  mgr.hotkeyCallback = noop;
+
+  assert.equal(await mgr.setActivationMode("tap"), false);
+  assert.equal(mgr.activationMode, "push");
+  assert.deepEqual(holds, ["F19"]);
+  assert.equal(failures.length, 1);
+  assert.match(failures[0].error, /keyboard layout/);
 });

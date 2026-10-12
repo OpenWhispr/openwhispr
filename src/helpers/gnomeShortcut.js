@@ -112,29 +112,29 @@ const SHIFTED_PUNCTUATION_TO_GNOME_KEY_MAP = {
 
 // F13-F24 at the end of a GNOME accelerator ("<Control>F16") or a portal trigger ("CTRL+F16").
 const EXTENDED_FUNCTION_KEY = /(?<=^|[>+])F(1[3-9]|2[0-4])$/;
-// X keycodes are evdev codes plus 8, so KEY_F13 (183) is X keycode 191.
-const F13_X_KEYCODE = 191;
 const KEYMAP_QUERY_TIMEOUT_MS = 3000;
 
-// The keysym the active keymap gives an X keycode, null when the key has none, or
-// undefined when the keymap can't be read.
-function readKeymapKeysym(keycode) {
+// The keysym the active keymap gives an xkb key name ("FK16"), null when the key has none,
+// or undefined when the keymap can't be read. xkbcomp ships with XWayland (x11-xkb-utils).
+function readKeymapKeysym(keyName) {
   let keymap;
   try {
-    keymap = execFileSync("xmodmap", ["-pke"], {
+    keymap = execFileSync("xkbcomp", ["-xkb", process.env.DISPLAY ?? "", "-"], {
       encoding: "utf-8",
       stdio: "pipe",
       timeout: KEYMAP_QUERY_TIMEOUT_MS,
     });
   } catch (err) {
-    debugLogger.log("[GnomeShortcut] Could not read the keymap with xmodmap:", err.message);
+    debugLogger.log("[GnomeShortcut] Could not read the keymap with xkbcomp:", err.message);
     return undefined;
   }
-  // "keycode 194 = XF86Launch7 NoSymbol XF86Launch7", or "keycode 197 =" for a key with none
-  const line = new RegExp(`^keycode\\s+${keycode}\\s*=(.*)$`, "m").exec(keymap);
-  if (!line) return undefined;
-  const [keysym] = line[1].trim().split(/\s+/);
-  return keysym && keysym !== "NoSymbol" ? keysym : null;
+  if (!keymap.includes("xkb_symbols")) return undefined;
+  // "key <FK16> { [ XF86Launch7 ] };" or "symbols[Group1]= [ XF86TouchpadOff, ... ]" inside a
+  // multi-line entry; a key with no keysym has no entry at all.
+  const entry = new RegExp(`key <${keyName}>\\s*\\{(?:[^}]*?=)?\\s*\\[\\s*([^\\s,\\]]+)`).exec(
+    keymap
+  );
+  return entry && entry[1] !== "NoSymbol" ? entry[1] : null;
 }
 
 // For comparison: <Primary> and <Ctrl> mean <Control>, modifier order and case don't matter.
@@ -502,7 +502,7 @@ class GnomeShortcutManager {
   resolveFunctionKey(accelerator) {
     const match = EXTENDED_FUNCTION_KEY.exec(accelerator);
     if (!match) return {};
-    const keysym = readKeymapKeysym(F13_X_KEYCODE + Number(match[1]) - 13);
+    const keysym = readKeymapKeysym(`FK${match[1]}`);
     if (keysym === undefined || keysym === match[0]) return {};
     if (keysym === null) return { reason: "keysym_missing" };
     if (this.isMediaKeyBinding(accelerator.replace(EXTENDED_FUNCTION_KEY, keysym))) {

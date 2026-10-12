@@ -6,29 +6,32 @@ const Module = require("node:module");
 const modulePath = require.resolve("../../src/helpers/gnomeShortcut");
 const originalLoad = Module._load;
 
-// `xmodmap -pke` for X keycodes 191-202 (F13-F24) on Ubuntu 26.04's stock keymap
-// (xkb-data 2.46): the keys carry XF86 keysyms, F19 and F24 none at all.
+// `xkbcomp -xkb :0 -` on Ubuntu 26.04's stock keymap (xkb-data 2.46), trimmed to the
+// F13-F24 keys: they carry XF86 keysyms, and F19 and F24 have no entry at all.
 const STOCK_KEYMAP = [
-  "keycode  74 = F8 F8 F8 F8 F8 F8 XF86Switch_VT_8",
-  "keycode 191 = XF86Tools NoSymbol XF86Tools",
-  "keycode 192 = XF86Launch5 NoSymbol XF86Launch5",
-  "keycode 193 = XF86Launch6 NoSymbol XF86Launch6",
-  "keycode 194 = XF86Launch7 NoSymbol XF86Launch7",
-  "keycode 195 = XF86Launch8 NoSymbol XF86Launch8",
-  "keycode 196 = XF86Launch9 NoSymbol XF86Launch9",
-  "keycode 197 =",
-  "keycode 198 = XF86AudioMicMute NoSymbol XF86AudioMicMute",
-  "keycode 199 = XF86TouchpadToggle NoSymbol XF86TouchpadToggle",
-  "keycode 200 = XF86TouchpadOn NoSymbol XF86TouchpadOn",
-  "keycode 201 = XF86TouchpadOff XF86Assistant XF86TouchpadOff XF86Assistant",
-  "keycode 202 =",
+  'xkb_symbols "pc+us+inet(evdev)" {',
+  "    key <FK13> {         [       XF86Tools ] };",
+  "    key <FK14> {         [     XF86Launch5 ] };",
+  "    key <FK15> {         [     XF86Launch6 ] };",
+  "    key <FK16> {         [     XF86Launch7 ] };",
+  "    key <FK17> {         [     XF86Launch8 ] };",
+  "    key <FK18> {         [     XF86Launch9 ] };",
+  "    key <FK20> {         [ XF86AudioMicMute ] };",
+  "    key <FK21> {         [ XF86TouchpadToggle ] };",
+  "    key <FK22> {         [  XF86TouchpadOn ] };",
+  "    key <FK23> {",
+  '        type= "PC_SHIFT_SUPER_LEVEL2",',
+  "        symbols[Group1]= [ XF86TouchpadOff,   XF86Assistant ]",
+  "    };",
+  "};",
 ].join("\n");
 
 // The same keys with the "Use F13-F24 as usual function keys" option (fkeys:basic_13-24).
-const FKEYS_KEYMAP = Array.from(
-  { length: 12 },
-  (_, i) => `keycode ${191 + i} = F${13 + i} NoSymbol F${13 + i}`
-).join("\n");
+const FKEYS_KEYMAP = [
+  'xkb_symbols "pc+us+inet(evdev)+fkeys(basic_13-24)" {',
+  ...Array.from({ length: 12 }, (_, i) => `    key <FK${13 + i}> {         [ F${13 + i} ] };`),
+  "};",
+].join("\n");
 
 // `gsettings list-recursively` on the same machine, trimmed to the bindings that matter.
 const MEDIA_KEYS = [
@@ -45,7 +48,7 @@ function loadManager({ keymap = STOCK_KEYMAP } = {}) {
   const calls = [];
   const execFileSync = (command, args) => {
     calls.push([command, ...args]);
-    if (command === "xmodmap") {
+    if (command === "xkbcomp") {
       if (keymap instanceof Error) throw keymap;
       return keymap;
     }
@@ -70,7 +73,7 @@ const writtenBinding = (calls) =>
   calls.find(
     ([command, verb, , key]) => command === "gsettings" && verb === "set" && key === "binding"
   )?.[4];
-const ranXmodmap = (calls) => calls.some(([command]) => command === "xmodmap");
+const readKeymap = (calls) => calls.some(([command]) => command === "xkbcomp");
 
 const originalDesktop = process.env.XDG_CURRENT_DESKTOP;
 test.before(() => {
@@ -117,6 +120,8 @@ test("a keysym GNOME's media keys already grab is refused", async () => {
   // F13 sends XF86Tools, which opens Settings; F20 sends XF86AudioMicMute.
   assert.equal(await manager.registerKeybinding("F13", "dictation"), "keysym_reserved");
   assert.equal(await manager.registerKeybinding("F20", "dictation"), "keysym_reserved");
+  // F23's multi-line entry sends XF86TouchpadOff first.
+  assert.equal(await manager.registerKeybinding("F23", "dictation"), "keysym_reserved");
   // <Ctrl> in a gsd binding is <Control>, so this exact accelerator is taken too.
   assert.equal(
     await manager.registerKeybinding("<Control><Super>F21", "dictation"),
@@ -133,7 +138,7 @@ test("the same keysym with other modifiers is free", async () => {
 });
 
 test("an unreadable keymap keeps the F-key name", async () => {
-  for (const keymap of [new Error("spawn xmodmap ENOENT"), "xmodmap: unable to open display"]) {
+  for (const keymap of [new Error("spawn xkbcomp ENOENT"), ""]) {
     const { manager, calls } = loadManager({ keymap });
 
     assert.equal(await manager.registerKeybinding("F16", "dictation"), true);
@@ -146,7 +151,7 @@ test("keys outside F13-F24 never read the keymap", async () => {
 
   assert.equal(await manager.registerKeybinding("F8", "dictation"), true);
   assert.equal(await manager.registerKeybinding("<Alt>F1", "meeting"), true);
-  assert.equal(ranXmodmap(calls), false);
+  assert.equal(readKeymap(calls), false);
 });
 
 test("Hold hands the portal the keysym", async () => {
