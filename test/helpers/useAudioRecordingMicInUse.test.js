@@ -35,6 +35,7 @@ async function micInUsePill(t, platform) {
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
     delete globalThis.__micInUseManager;
+    delete globalThis.__micInUsePlatform;
   });
   const toasts = [];
   let settingsOpened = 0;
@@ -59,12 +60,13 @@ async function micInUsePill(t, platform) {
     },
   });
   const container = installHookDom(t);
+  globalThis.__micInUsePlatform = platform;
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-mic-in-use-pill-",
     noExternal: ["react-i18next"],
     mockModules: {
       "/helpers/audioManager": FAKE_AUDIO_MANAGER_SOURCE,
-      "/utils/platform": `export const getCachedPlatform = () => ${JSON.stringify(platform)};`,
+      "/utils/platform": "export const getCachedPlatform = () => globalThis.__micInUsePlatform;",
       "/stores/settingsStore":
         "export const getSettings = () => ({ pauseMediaOnDictation: false });",
       "/utils/logger":
