@@ -37,10 +37,11 @@ function getValidModelNames() {
 }
 
 // whisper-server reads its arguments in the Windows ANSI code page and crashes
-// on a non-ASCII --vad-model path, as it did on the model paths #1514 moved
-// (#1208). A per-user install under such a profile bundles the VAD model there,
-// so it is copied into the ASCII-safe cache root. That root can be the shared
-// ProgramData folder, so an existing copy is reused only when its bytes match.
+// on a --vad-model path with spaces or non-ASCII, as it did on the model paths
+// #1514 moved (#1208). An install under such a folder bundles the VAD model
+// there, so it is copied into the ASCII-safe cache root. That root can be the
+// shared ProgramData folder, so an existing copy is reused only when its bytes
+// match.
 function asciiSafeVadModelPath(bundledPath) {
   if (process.platform !== "win32" || !pathHasProblematicChars(bundledPath)) return bundledPath;
 
@@ -469,7 +470,7 @@ class WhisperManager {
     const vadEnabled = options.vadEnabled === true;
     const vadModelPath = vadEnabled ? this.getVadModelPath() : null;
     if (vadEnabled && !vadModelPath) {
-      debugLogger.warn("VAD requested but ggml-silero model not found; running without VAD");
+      debugLogger.warn("VAD requested but ggml-silero model unavailable; running without VAD");
     }
 
     await this.serverManager.start(modelPath, {

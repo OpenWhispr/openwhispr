@@ -5,9 +5,9 @@ const path = require("path");
 const Module = require("node:module");
 const { describe, it, beforeEach, afterEach } = require("node:test");
 
-// On Windows, whisper-server crashes on a non-ASCII --vad-model path (#1208), so a
-// VAD model bundled under such an install folder is handed over as a copy in the
-// ASCII-safe cache root.
+// On Windows, whisper-server crashes on a --vad-model path with spaces or
+// non-ASCII (#1208), so a VAD model bundled under such an install folder is
+// handed over as a copy in the ASCII-safe cache root.
 describe("WhisperManager.getVadModelPath (#1208)", () => {
   const VAD_FILE = "ggml-silero-v5.1.2.bin";
   const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
@@ -79,7 +79,7 @@ describe("WhisperManager.getVadModelPath (#1208)", () => {
   });
 
   it("replaces a copy whose bytes differ from the bundled model", () => {
-    installBundledVad(path.join(tempRoot, "Users", "Rémi", "Programs", "OpenWhispr"));
+    installBundledVad(path.join(tempRoot, "Program Files", "OpenWhispr"));
     const copyPath = path.join(cacheRoot, "whisper-vad", VAD_FILE);
     fs.mkdirSync(path.dirname(copyPath), { recursive: true });
     fs.writeFileSync(copyPath, "planted-weight");
