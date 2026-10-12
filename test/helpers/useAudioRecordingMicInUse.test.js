@@ -108,6 +108,7 @@ test("on Windows the pill opens the Recording tab from a Sound settings button",
   );
   const soundSettings = pill.actions.find((action) => action.label === SOUND_SETTINGS);
   assert.equal(soundSettings.dismissOnClick, false, "opening the dialog leaves the pill up");
+  assert.equal(pill.duration, 15000, "the steps stay readable while the user follows them");
   await soundSettings.onClick();
   assert.equal(settingsOpened(), 1);
 });
@@ -120,6 +121,7 @@ test("on macOS and Linux the pill keeps Retry alone", async (t) => {
         pill.actions.map((action) => action.label),
         ["common.retry"]
       );
+      assert.equal(pill.duration, undefined, "the usual timer");
     });
   }
 });

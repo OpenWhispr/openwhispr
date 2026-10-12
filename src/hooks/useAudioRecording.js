@@ -37,6 +37,7 @@ const SELECTION_EDIT_DETAIL_KEY_BY_CODE = {
   paste_failed: "pasteFailed",
 };
 const COMPANION_AUDIO_LEVEL_INTERVAL_MS = 80;
+const EXCLUSIVE_MODE_STEPS_DURATION_MS = 15000;
 
 export const useAudioRecording = (toast, options = {}) => {
   const { t } = useTranslation();
@@ -480,7 +481,8 @@ export const useAudioRecording = (toast, options = {}) => {
       actions.push(...providerErrorActions({ settingsTarget, technicalDetails }, t, isCurrent));
 
       // The Recording tab is where a mic's exclusive-mode checkbox lives (#1138).
-      if (code === "MIC_IN_USE" && getCachedPlatform() === "win32") {
+      const showsExclusiveModeSteps = code === "MIC_IN_USE" && getCachedPlatform() === "win32";
+      if (showsExclusiveModeSteps) {
         actions.push({
           label: t("hooks.audioRecording.errorActions.openSoundSettings"),
           icon: "settings",
@@ -505,7 +507,8 @@ export const useAudioRecording = (toast, options = {}) => {
         description,
         variant: "destructive",
         presentation: "dictation-error",
-        duration,
+        // Long enough to follow the steps into the Sound dialog, still timed.
+        duration: showsExclusiveModeSteps ? EXCLUSIVE_MODE_STEPS_DURATION_MS : duration,
         actions,
       });
     };

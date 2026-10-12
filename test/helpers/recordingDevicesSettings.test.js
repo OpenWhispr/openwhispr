@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
+const path = require("node:path");
 const { openRecordingDevicesSettings } = require("../../src/helpers/recordingDevicesSettings");
 
 // The "Microphone In Use" pill's Sound settings button opens the Sound dialog's
@@ -20,14 +21,20 @@ function fakeSpawn(outcome) {
   return { spawnProcess, calls };
 }
 
-test("Windows opens the Recording tab detached from the app", async () => {
+const CONTROL_EXE = path.win32.join(
+  process.env.SystemRoot || "C:\\Windows",
+  "System32",
+  "control.exe"
+);
+
+test("Windows opens the Recording tab detached from the app, by its System32 path", async () => {
   const { spawnProcess, calls } = fakeSpawn("spawn");
 
   const result = await openRecordingDevicesSettings({ platform: "win32", spawnProcess });
 
   assert.deepEqual(result, { success: true });
   assert.deepEqual(calls, [
-    { file: "control.exe", args: ["mmsys.cpl,,1"], options: { detached: true, stdio: "ignore" } },
+    { file: CONTROL_EXE, args: ["mmsys.cpl,,1"], options: { detached: true, stdio: "ignore" } },
     "unref",
   ]);
 });

@@ -6,12 +6,14 @@ const { loadAudioManager } = require("./harness/audioManager");
 // it can translate, from the batch and the streaming start alike. On Windows,
 // another app holding the mic in exclusive mode surfaces as NotReadableError (#1138).
 async function managerWhoseMicFails(t, error) {
-  const { createManager } = await loadAudioManager(t, {
+  const { createManager, vite } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-mic-start-errors-test-",
     settingsKey: "__micStartErrorsSettings",
     mockModules: { "/utils/platform": 'export const getCachedPlatform = () => "win32";' },
   });
+  const { getRecordingErrorTitle } = await vite.ssrLoadModule("/utils/recordingErrors.ts");
   const errors = [];
+  const cleanups = [];
   const manager = createManager({
     isRecording: false,
     isProcessing: false,
@@ -26,14 +28,18 @@ async function managerWhoseMicFails(t, error) {
     },
     _settleStreamingStart() {},
     getStreamingProviderName: () => "openai-realtime",
-    cleanupStreaming: async () => {},
+    cleanupStreaming: async () => cleanups.push("cleanupStreaming"),
     onStateChange() {},
-    onError: (report) => errors.push(report),
+    // Like the pill, which titles every report; a numeric `code` made this throw.
+    onError: (report) => {
+      getRecordingErrorTitle(report, (key) => key);
+      errors.push(report);
+    },
   });
-  return { manager, errors };
+  return { manager, errors, cleanups };
 }
 
-// Chromium's rejection, whose legacy numeric \`code\` (0) must not reach the pill.
+// Chromium's rejection, whose legacy numeric `code` (0) must not reach the pill.
 const deviceInUse = () => new DOMException("Device in use", "NotReadableError");
 
 test("a batch start on a microphone another app holds reports MIC_IN_USE", async (t) => {
@@ -51,9 +57,12 @@ test("a batch start on a microphone another app holds reports MIC_IN_USE", async
 });
 
 test("a streaming start on a microphone another app holds reports MIC_IN_USE too", async (t) => {
-  const { manager, errors } = await managerWhoseMicFails(t, deviceInUse());
+  const { manager, errors, cleanups } = await managerWhoseMicFails(t, deviceInUse());
 
   assert.equal(await manager.startStreamingRecording(), false);
+
+  assert.deepEqual(cleanups, ["cleanupStreaming"], "the failed start still cleans up");
+  assert.equal(manager.isRecording, false);
 
   assert.deepEqual(errors, [
     {

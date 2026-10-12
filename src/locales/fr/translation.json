@@ -955,7 +955,7 @@
         "micPermissionDenied": "Autorisez l'accès au microphone dans les réglages de votre système, puis réessayez.",
         "micNotFound": "Aucun microphone n'a été détecté. Branchez un microphone et réessayez.",
         "micInUse": "Le microphone est utilisé par une autre application. Fermez les autres applications et réessayez.",
-        "micInUseWindows": "Une autre application utilise le microphone et en a peut-être pris le contrôle exclusif. Fermez cette application, ou ouvrez Paramètres de son → Enregistrement → votre microphone → Propriétés → Avancé et désactivez l'option qui autorise les applications à prendre le contrôle exclusif du périphérique.",
+        "micInUseWindows": "Une autre application utilise le microphone et en a peut-être pris le contrôle exclusif. Fermez cette application et réessayez. Pour empêcher les applications de s'en emparer, ouvrez Paramètres de son → Enregistrement → votre microphone → Propriétés → Avancé et désactivez l'option qui autorise les applications à prendre le contrôle exclusif du périphérique.",
         "micMuted": "Vos microphones sont restés coupés et n'ont capté aucun son. Vérifiez vos réglages d'entrée audio et réessayez."
       },
       "translationFallback": {

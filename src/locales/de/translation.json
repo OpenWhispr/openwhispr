@@ -955,7 +955,7 @@
         "micPermissionDenied": "Bitte erlauben Sie den Mikrofonzugriff in Ihren Systemeinstellungen und versuchen Sie es erneut.",
         "micNotFound": "Es wurde kein Mikrofon erkannt. Bitte schließen Sie ein Mikrofon an und versuchen Sie es erneut.",
         "micInUse": "Das Mikrofon wird von einer anderen Anwendung verwendet. Bitte schließen Sie andere Apps und versuchen Sie es erneut.",
-        "micInUseWindows": "Eine andere App verwendet das Mikrofon und hat es möglicherweise exklusiv übernommen. Schließen Sie diese App oder öffnen Sie Soundeinstellungen → Aufnahme → Ihr Mikrofon → Eigenschaften → Erweitert und deaktivieren Sie die Option, mit der Anwendungen die alleinige Kontrolle über das Gerät übernehmen dürfen.",
+        "micInUseWindows": "Eine andere App verwendet das Mikrofon und hat es möglicherweise exklusiv übernommen. Schließen Sie diese App und versuchen Sie es erneut. Damit Apps das Mikrofon nicht mehr übernehmen, öffnen Sie Soundeinstellungen → Aufnahme → Ihr Mikrofon → Eigenschaften → Erweitert und deaktivieren Sie die Option, mit der Anwendungen die alleinige Kontrolle über das Gerät übernehmen dürfen.",
         "micMuted": "Ihre Mikrofone blieben stummgeschaltet und haben keinen Ton geliefert. Bitte überprüfen Sie Ihre Soundeingabe-Einstellungen und versuchen Sie es erneut."
       },
       "translationFallback": {

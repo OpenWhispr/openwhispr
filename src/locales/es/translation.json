@@ -955,7 +955,7 @@
         "micPermissionDenied": "Concede permiso de micrófono en la configuración del sistema e inténtalo de nuevo.",
         "micNotFound": "No se detectó ningún micrófono. Conecta un micrófono e inténtalo de nuevo.",
         "micInUse": "Otra aplicación está usando el micrófono. Cierra las demás aplicaciones e inténtalo de nuevo.",
-        "micInUseWindows": "Otra aplicación está usando el micrófono y puede que haya tomado su control exclusivo. Cierra esa aplicación o abre Configuración de sonido → Grabar → tu micrófono → Propiedades → Opciones avanzadas y desactiva la opción que permite a las aplicaciones tomar el control exclusivo del dispositivo.",
+        "micInUseWindows": "Otra aplicación está usando el micrófono y puede que haya tomado su control exclusivo. Cierra esa aplicación e inténtalo de nuevo. Para que las aplicaciones no vuelvan a tomarlo, abre Configuración de sonido → Grabar → tu micrófono → Propiedades → Opciones avanzadas y desactiva la opción que permite a las aplicaciones tomar el control exclusivo del dispositivo.",
         "micMuted": "Tus micrófonos siguieron silenciados y no captaron audio. Revisa la configuración de entrada de sonido e inténtalo de nuevo."
       },
       "translationFallback": {
