@@ -34,6 +34,7 @@ const {
 } = require("./policyResponseError");
 const { classifyAndLog } = require("./networkErrors");
 const { resolveSystemDefaultMicrophone } = require("./systemDefaultMicrophone");
+const { openRecordingDevicesSettings } = require("./recordingDevicesSettings");
 const { ipcErrorFields } = require("./ipcErrorFields");
 const {
   PROVIDER_ERROR_CODES,
@@ -5967,24 +5968,12 @@ class IPCHandlers {
     ipcMain.handle("open-system-audio-settings", () => openSystemSettings("systemAudio"));
     ipcMain.handle("open-screen-recording-settings", () => openSystemSettings("screenRecording"));
     ipcMain.handle("open-login-items-settings", () => openSystemSettings("loginItems"));
-    // The Sound dialog's Recording tab, where a mic's Advanced tab holds the exclusive-mode
-    // checkbox (#1138). No ms-settings: URI reaches it.
-    ipcMain.handle("open-recording-devices-settings", () => {
-      if (process.platform !== "win32") return { success: false };
-      return new Promise((resolve) => {
-        const child = require("child_process").spawn("control.exe", ["mmsys.cpl,,1"], {
-          detached: true,
-          stdio: "ignore",
-        });
-        child.once("error", (error) => {
-          debugLogger.error("Failed to open recording devices settings:", error);
-          resolve({ success: false, error: error.message });
-        });
-        child.once("spawn", () => {
-          child.unref();
-          resolve({ success: true });
-        });
-      });
+    ipcMain.handle("open-recording-devices-settings", async () => {
+      const result = await openRecordingDevicesSettings();
+      if (result.error) {
+        debugLogger.error("Failed to open recording devices settings:", result.error);
+      }
+      return result;
     });
 
     ipcMain.handle("capture-screen-context", async (event) => {

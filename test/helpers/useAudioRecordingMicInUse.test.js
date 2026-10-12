@@ -86,7 +86,10 @@ async function micInUsePill(t, platform) {
     globalThis.__micInUseManager.callbacks.onError({
       code: "MIC_IN_USE",
       title: "Microphone In Use",
-      messageKey: "hooks.audioRecording.errorDescriptions.micInUse",
+      messageKey:
+        platform === "win32"
+          ? "hooks.audioRecording.errorDescriptions.micInUseWindows"
+          : "hooks.audioRecording.errorDescriptions.micInUse",
     })
   );
   const pill = toasts.find((entry) => entry.presentation === "dictation-error");
@@ -98,11 +101,14 @@ test("on Windows the pill opens the Recording tab from a Sound settings button",
   const { pill, settingsOpened } = await micInUsePill(t, "win32");
 
   assert.equal(pill.title, "hooks.audioRecording.errorTitles.micInUse");
+  assert.equal(pill.description, "hooks.audioRecording.errorDescriptions.micInUseWindows");
   assert.deepEqual(
     pill.actions.map((action) => action.label),
     ["common.retry", SOUND_SETTINGS]
   );
-  await pill.actions.find((action) => action.label === SOUND_SETTINGS).onClick();
+  const soundSettings = pill.actions.find((action) => action.label === SOUND_SETTINGS);
+  assert.equal(soundSettings.dismissOnClick, false, "opening the dialog leaves the pill up");
+  await soundSettings.onClick();
   assert.equal(settingsOpened(), 1);
 });
 

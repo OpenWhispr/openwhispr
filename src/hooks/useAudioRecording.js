@@ -484,6 +484,8 @@ export const useAudioRecording = (toast, options = {}) => {
         actions.push({
           label: t("hooks.audioRecording.errorActions.openSoundSettings"),
           icon: "settings",
+          // Opening the dialog leaves the pill and its steps up.
+          dismissOnClick: false,
           onClick: () => window.electronAPI?.openRecordingDevicesSettings?.(),
         });
       }

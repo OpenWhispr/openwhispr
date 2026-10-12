@@ -518,7 +518,7 @@ The app can open OS-level settings for microphone permissions, sound input selec
 - `open-sound-input-settings`: Opens sound/audio input device settings
 - `open-accessibility-settings`: Opens accessibility privacy settings (macOS only)
 - `open-login-items-settings`: Opens the login/startup items pane (macOS Login Items, Windows Startup Apps)
-- `open-recording-devices-settings`: Opens the Sound dialog's Recording tab (`control mmsys.cpl,,1`, Windows only), where a mic's Properties → Advanced holds the exclusive-mode checkbox; the "Microphone In Use" pill's Sound settings button
+- `open-recording-devices-settings`: Opens the Sound dialog's Recording tab (`control mmsys.cpl,,1`, Windows only), where a mic's Properties → Advanced holds the exclusive-mode checkbox; the "Microphone In Use" pill's Sound Settings button
 
 **Platform-specific URLs**:
 

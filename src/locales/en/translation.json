@@ -916,7 +916,7 @@
       },
       "errorActions": {
         "viewTranscript": "View Transcript",
-        "openSoundSettings": "Sound settings"
+        "openSoundSettings": "Sound Settings"
       },
       "noAudio": {
         "title": "We didn’t catch that",

@@ -33,7 +33,8 @@ async function managerWhoseMicFails(t, error) {
   return { manager, errors };
 }
 
-const deviceInUse = () => Object.assign(new Error("Device in use"), { name: "NotReadableError" });
+// Chromium's rejection, whose legacy numeric \`code\` (0) must not reach the pill.
+const deviceInUse = () => new DOMException("Device in use", "NotReadableError");
 
 test("a batch start on a microphone another app holds reports MIC_IN_USE", async (t) => {
   const { manager, errors } = await managerWhoseMicFails(t, deviceInUse());
@@ -60,6 +61,16 @@ test("a streaming start on a microphone another app holds reports MIC_IN_USE too
       title: "Microphone In Use",
       messageKey: "hooks.audioRecording.errorDescriptions.micInUseWindows",
     },
+  ]);
+});
+
+test("a batch start that fails for another reason keeps the generic report", async (t) => {
+  const { manager, errors } = await managerWhoseMicFails(t, new Error("graph failed"));
+
+  await manager.startRecording();
+
+  assert.deepEqual(errors, [
+    { title: "Recording Error", description: "Failed to access microphone: graph failed" },
   ]);
 });
 
