@@ -903,11 +903,14 @@ export const useAudioRecording = (toast, options = {}) => {
             // visible somewhere.
             if (pasteSucceeded) {
               window.electronAPI?.hideDictationPreview?.();
-              if (result.cleanupFailure) recordCleanupFailure(result.cleanupFailure);
             }
           } else if (keepTranscriptionInClipboard && !result.assistantConversation) {
             await keepInClipboard("clipboard-only");
           }
+
+          // Cleanup can be missing or can fail whether or not the paste landed.
+          // Gating the toast on a successful paste hid both (#2631, #1003).
+          if (result.cleanupFailure) recordCleanupFailure(result.cleanupFailure);
 
           if (result.source === "openai" && getSettings().useLocalWhisper) {
             toast({

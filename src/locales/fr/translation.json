@@ -898,6 +898,7 @@
   },
   "hooks": {
     "audioRecording": {
+      "cleanupUnconfigured": "Le nettoyage IA est activé, mais aucun modèle de nettoyage n'est configuré.",
       "errorTitles": {
         "sessionExpired": "Session expirée",
         "offline": "Vous êtes hors ligne",

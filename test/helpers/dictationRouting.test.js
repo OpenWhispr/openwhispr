@@ -790,3 +790,31 @@ test("lifecycle input kind prefers assistant, then translation, then dictation",
   );
   assert.equal(resolveLifecycleInputKind({}), "dictation");
 });
+
+test("an unconfigured cleanup warns once until the setup changes", async () => {
+  const { cleanupSetupKey, cleanupUnconfiguredNotice } = await load();
+  const broken = {
+    useCleanupModel: true,
+    reachable: false,
+    setupKey: cleanupSetupKey({
+      cleanupMode: "providers",
+      cleanupProvider: "",
+      cleanupModel: "",
+      isCloud: false,
+    }),
+  };
+
+  const first = cleanupUnconfiguredNotice(null, broken);
+  assert.equal(first.notice.messageKey, "hooks.audioRecording.cleanupUnconfigured");
+  assert.equal(first.notice.settingsTarget, "llms");
+  assert.equal(cleanupUnconfiguredNotice(first.key, broken).notice, null);
+
+  const fixed = cleanupUnconfiguredNotice(first.key, { ...broken, reachable: true });
+  assert.equal(fixed.key, null);
+  assert.equal(fixed.notice, null);
+
+  const again = cleanupUnconfiguredNotice(fixed.key, broken);
+  assert.equal(again.notice.messageKey, "hooks.audioRecording.cleanupUnconfigured");
+
+  assert.equal(cleanupUnconfiguredNotice(null, { ...broken, useCleanupModel: false }).notice, null);
+});

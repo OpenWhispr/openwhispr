@@ -107,6 +107,8 @@ import {
   stripAgentAddressPreservingFormatting,
 } from "../config/agentDetection";
 import {
+  cleanupSetupKey,
+  cleanupUnconfiguredNotice,
   resolveDictationRouteKind,
   resolveAgentImageTarget,
   resolveWakeWordLanguage,
@@ -3152,6 +3154,27 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
+  // The raw transcript is about to be pasted while cleanup is switched on and
+  // has nowhere to run. One warning per setup, including when the paste fails.
+  _noteUnconfiguredCleanup(settings = getSettings()) {
+    const cleanupModel = getEffectiveCleanupModel();
+    const isCloud = isCloudCleanupMode();
+    const decision = cleanupUnconfiguredNotice(this._cleanupUnconfiguredKey, {
+      useCleanupModel: !!settings.useCleanupModel,
+      reachable: !!settings.useCleanupModel && (!!cleanupModel || isCloud),
+      setupKey: cleanupSetupKey({
+        cleanupMode: settings.cleanupMode,
+        cleanupProvider: settings.cleanupProvider,
+        cleanupModel,
+        isCloud,
+      }),
+    });
+    this._cleanupUnconfiguredKey = decision.key;
+    if (decision.notice && !this.pendingCleanupFailure) {
+      this.pendingCleanupFailure = decision.notice;
+    }
+  }
+
   async processTranscription(text, source, wasCancelled = neverCancelled) {
     const result = await this.processTranscriptionCore(text, source, wasCancelled);
     if (wasCancelled()) return result;
@@ -3196,6 +3219,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       logger.logReasoning("REASONING_SKIPPED", {
         reason: "No cleanup or dictation-agent model available",
       });
+      this._noteUnconfiguredCleanup(settings);
       return normalizedText;
     }
 
@@ -3224,7 +3248,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         if (this.translationRequested && route.kind !== "translation") {
           this.notifyTranslationFallback("unreachable");
         }
-        if (route.kind === "skip") return normalizedText;
+        if (route.kind === "skip") {
+          this._noteUnconfiguredCleanup(settings);
+          return normalizedText;
+        }
 
         if (route.kind === "translation") {
           const { text: translatedText } = await this.runTranslationChain({
@@ -3643,6 +3670,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                   },
           });
           processedText = resolveTranslatedText(processedText, chainResult);
+        } else if (route.kind === "skip") {
+          this._noteUnconfiguredCleanup(settings);
         }
       } catch (reasonError) {
         if (reasonError.selectionEditFatal) throw reasonError;
@@ -5732,6 +5761,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           });
           finalText = resolveTranslatedText(finalText, chainResult);
           usedCloudReasoning = chainResult.usedCloudReasoning || usedCloudReasoning;
+        } else if (route.kind === "skip") {
+          this._noteUnconfiguredCleanup(stSettings);
         }
       } catch (reasonError) {
         if (wasCancelled()) return true;

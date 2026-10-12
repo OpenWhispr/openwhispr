@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useToast } from "./ui/useToast";
 import { consumeCleanupFailures, useCleanupFailureStore } from "../stores/cleanupFailureStore";
 import { isDictationPanelWindow } from "../utils/windowContext";
-import { providerErrorToastProps } from "../utils/describeProviderError";
+import { providerErrorActions, providerErrorToastProps } from "../utils/describeProviderError";
 
 /** Tells the user their dictation was pasted raw because AI cleanup failed. */
 export default function CleanupFailureToastListener() {
@@ -42,10 +42,12 @@ export default function CleanupFailureToastListener() {
       ? t(failure.messageKey, failure.messageParams)
       : failure.message || t("app.toasts.cleanupFailed.title");
     const description = failure.actionKey ? t(failure.actionKey) : failure.action;
+    const actions = providerErrorActions(failure, t);
     toast({
       title,
       ...(description ? { description } : {}),
       secondaryDescription: t("app.toasts.cleanupFailed.description"),
+      ...(actions.length ? { actions } : {}),
       ...(failure.copyCommand ? { copyCommand: failure.copyCommand } : {}),
       technicalDetails: failure.technicalDetails,
       variant: "destructive",

@@ -898,6 +898,7 @@
   },
   "hooks": {
     "audioRecording": {
+      "cleanupUnconfigured": "已開啟 AI 整理，但尚未設定整理模型。",
       "errorTitles": {
         "sessionExpired": "工作階段已過期",
         "offline": "你目前離線",

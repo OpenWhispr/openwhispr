@@ -1,6 +1,7 @@
 {
   "hooks": {
     "audioRecording": {
+      "cleanupUnconfigured": "تنظيف الذكاء الاصطناعي مفعّل، ولكن لم يُضبط نموذج للتنظيف.",
       "errorTitles": {
         "sessionExpired": "انتهت الجلسة",
         "offline": "أنت غير متصل بالإنترنت",

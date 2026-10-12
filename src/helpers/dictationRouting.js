@@ -203,3 +203,31 @@ export function resolveDictationRouteKind({
   }
   return "skip";
 }
+
+// Identifies one cleanup setup. A different model, provider, or cloud/local
+// choice is a new setup and may warn again.
+export function cleanupSetupKey({ cleanupMode, cleanupProvider, cleanupModel, isCloud }) {
+  return [
+    cleanupMode || "",
+    cleanupProvider || "",
+    cleanupModel || "",
+    isCloud ? "cloud" : "local",
+  ].join("\0");
+}
+
+// Cleanup is on, but nothing can run it, so the raw transcript would look like
+// a cleanup that did nothing. The same broken setup warns once. Turning cleanup
+// off, or making a model reachable, forgets that warning.
+export function cleanupUnconfiguredNotice(previousKey, { useCleanupModel, reachable, setupKey }) {
+  if (!useCleanupModel || reachable) return { key: null, notice: null };
+  const key = setupKey || "";
+  if (key === previousKey) return { key, notice: null };
+  return {
+    key,
+    notice: {
+      message: "AI cleanup is on, but no cleanup model is set up.",
+      messageKey: "hooks.audioRecording.cleanupUnconfigured",
+      settingsTarget: "llms",
+    },
+  };
+}
