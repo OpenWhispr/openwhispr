@@ -110,6 +110,45 @@ const SHIFTED_PUNCTUATION_TO_GNOME_KEY_MAP = {
   "/": "question",
 };
 
+// F13-F24 at the end of a GNOME accelerator ("<Control>F16") or a portal trigger ("CTRL+F16").
+const EXTENDED_FUNCTION_KEY = /(?<=^|[>+])F(1[3-9]|2[0-4])$/;
+// X keycodes are evdev codes plus 8, so KEY_F13 (183) is X keycode 191.
+const F13_X_KEYCODE = 191;
+const KEYMAP_QUERY_TIMEOUT_MS = 3000;
+
+// The keysym the active keymap gives an X keycode, null when the key has none, or
+// undefined when the keymap can't be read.
+function readKeymapKeysym(keycode) {
+  let keymap;
+  try {
+    keymap = execFileSync("xmodmap", ["-pke"], {
+      encoding: "utf-8",
+      stdio: "pipe",
+      timeout: KEYMAP_QUERY_TIMEOUT_MS,
+    });
+  } catch (err) {
+    debugLogger.log("[GnomeShortcut] Could not read the keymap with xmodmap:", err.message);
+    return undefined;
+  }
+  // "keycode 194 = XF86Launch7 NoSymbol XF86Launch7", or "keycode 197 =" for a key with none
+  const line = new RegExp(`^keycode\\s+${keycode}\\s*=(.*)$`, "m").exec(keymap);
+  if (!line) return undefined;
+  const [keysym] = line[1].trim().split(/\s+/);
+  return keysym && keysym !== "NoSymbol" ? keysym : null;
+}
+
+// For comparison: <Primary> and <Ctrl> mean <Control>, modifier order and case don't matter.
+function normalizeAccelerator(accelerator) {
+  const mods = [];
+  const key = accelerator.replace(/<(\w+)>/gi, (_, mod) => {
+    const name = mod.toLowerCase();
+    mods.push(name === "primary" || name === "ctrl" ? "control" : name);
+    return "";
+  });
+  mods.sort();
+  return mods.map((m) => `<${m}>`).join("") + key.toLowerCase();
+}
+
 let dbus = null;
 
 function getDBus() {
@@ -275,14 +314,16 @@ class GnomeShortcutManager {
   async registerPushToTalk(hotkey, callback) {
     const preferredTrigger = GnomeShortcutManager.convertToPortalFormat(hotkey);
     if (!preferredTrigger) return false;
+    const tapShortcut = GnomeShortcutManager.convertToGnomeFormat(hotkey);
+    const { keysym, reason } = this.resolveFunctionKey(tapShortcut);
+    if (reason) return reason;
 
     await this.unregisterKeybinding("dictation");
     const registered = await this.globalShortcutsPortal.registerKeybinding(
-      preferredTrigger,
+      keysym ? preferredTrigger.replace(EXTENDED_FUNCTION_KEY, keysym) : preferredTrigger,
       callback
     );
     if (!registered) {
-      const tapShortcut = GnomeShortcutManager.convertToGnomeFormat(hotkey);
       await this.registerKeybinding(tapShortcut, "dictation");
     }
     return registered;
@@ -312,6 +353,15 @@ class GnomeShortcutManager {
       return false;
     }
 
+    const { keysym, reason } = this.resolveFunctionKey(shortcut);
+    if (reason) {
+      debugLogger.log(
+        `[GnomeShortcut] GNOME can't grab "${shortcut}" for slot "${slotName}" with this keymap: ${reason}`
+      );
+      return reason;
+    }
+    const binding = keysym ? shortcut.replace(EXTENDED_FUNCTION_KEY, keysym) : shortcut;
+
     const { path: keybindingPath, name: keybindingName } = getSlotConfig(slotName);
 
     const SLOT_DBUS_METHOD = {
@@ -329,14 +379,14 @@ class GnomeShortcutManager {
 
       // Check if another custom shortcut already uses this binding
       debugLogger.log("[GnomeShortcut] Checking for conflicts", {
-        shortcut,
+        shortcut: binding,
         existingPaths: existing,
         ownPath: keybindingPath,
       });
-      const conflict = this.findConflictingBinding(shortcut, existing, keybindingPath);
+      const conflict = this.findConflictingBinding(binding, existing, keybindingPath);
       if (conflict) {
         debugLogger.log(
-          `[GnomeShortcut] Shortcut conflict — "${shortcut}" already used by "${conflict}"`,
+          `[GnomeShortcut] Shortcut conflict — "${binding}" already used by "${conflict}"`,
           {
             slot: slotName,
             conflictPath: conflict,
@@ -352,7 +402,7 @@ class GnomeShortcutManager {
       );
       execFileSync(
         "gsettings",
-        ["set", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "binding", shortcut],
+        ["set", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "binding", binding],
         { stdio: "pipe" }
       );
       execFileSync(
@@ -378,7 +428,7 @@ class GnomeShortcutManager {
 
       this.registeredSlots.add(slotName);
       debugLogger.log(
-        `[GnomeShortcut] Keybinding "${shortcut}" registered for slot "${slotName}" successfully`
+        `[GnomeShortcut] Keybinding "${binding}" registered for slot "${slotName}" successfully`
       );
       return true;
     } catch (err) {
@@ -441,18 +491,43 @@ class GnomeShortcutManager {
     }
   }
 
+  // Stock xkeyboard-config gives the F13-F24 keys XF86 keysyms (F16 sends XF86Launch7) and
+  // no F13-F24 keysym at all, and GNOME can only grab a keysym the keymap carries. Returns
+  // the keysym to bind instead, the reason GNOME can't grab the key, or {} to keep it.
+  resolveFunctionKey(accelerator) {
+    const match = EXTENDED_FUNCTION_KEY.exec(accelerator);
+    if (!match) return {};
+    const keysym = readKeymapKeysym(F13_X_KEYCODE + Number(match[1]) - 13);
+    if (keysym === undefined || keysym === match[0]) return {};
+    if (keysym === null) return { reason: "keysym_missing" };
+    if (this.isMediaKeyBinding(accelerator.replace(EXTENDED_FUNCTION_KEY, keysym))) {
+      return { reason: "keysym_reserved" };
+    }
+    return { keysym };
+  }
+
+  // gsd-media-keys already grabs the hardware keys GNOME handles itself (XF86Tools opens
+  // Settings, XF86AudioMicMute mutes the mic), so a custom shortcut on one never fires.
+  isMediaKeyBinding(accelerator) {
+    let settings;
+    try {
+      settings = execFileSync(
+        "gsettings",
+        ["list-recursively", "org.gnome.settings-daemon.plugins.media-keys"],
+        { encoding: "utf-8" }
+      );
+    } catch (err) {
+      debugLogger.log("[GnomeShortcut] Failed to read GNOME media key bindings:", err.message);
+      return false;
+    }
+    const target = normalizeAccelerator(accelerator);
+    return [...settings.matchAll(/'([^']*)'/g)].some(
+      ([, binding]) => normalizeAccelerator(binding) === target
+    );
+  }
+
   findConflictingBinding(shortcut, existingPaths, ownPath) {
-    // Normalize for comparison: <Primary> = <Control>, sort modifiers, case-insensitive
-    const normalize = (s) => {
-      const mods = [];
-      const stripped = s.replace(/<(\w+)>/gi, (_, m) => {
-        mods.push(m.toLowerCase() === "primary" ? "control" : m.toLowerCase());
-        return "";
-      });
-      mods.sort();
-      return mods.map((m) => `<${m}>`).join("") + stripped.toLowerCase();
-    };
-    const normalizedShortcut = normalize(shortcut);
+    const normalizedShortcut = normalizeAccelerator(shortcut);
 
     for (const path of existingPaths) {
       if (path === ownPath) continue;
@@ -464,7 +539,7 @@ class GnomeShortcutManager {
         )
           .trim()
           .replace(/^'|'$/g, "");
-        if (normalize(binding) === normalizedShortcut) return path;
+        if (normalizeAccelerator(binding) === normalizedShortcut) return path;
       } catch {}
     }
     return null;
