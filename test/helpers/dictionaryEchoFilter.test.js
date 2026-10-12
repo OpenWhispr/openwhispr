@@ -386,11 +386,7 @@ test("stripTrailingDictionaryEcho removes a whole recited list, case and punctua
     "All right. Appreciate the time. Thanks, you."
   );
   assert.equal(
-    stripTrailingDictionaryEcho(
-      "Ship it today! traefik, tailscale, claude code,",
-      prompt,
-      dictionary
-    ),
+    stripTrailingDictionaryEcho("Ship it today! openwhispr, n8n, traefik,", prompt, dictionary),
     "Ship it today!"
   );
   assert.equal(
@@ -403,23 +399,38 @@ test("stripTrailingDictionaryEcho removes a whole recited list, case and punctua
   );
 });
 
-test("stripTrailingDictionaryEcho counts two entries only when they open the list", async () => {
+test("stripTrailingDictionaryEcho strips a mid-list run only when it closes a long prompt", async () => {
   const { stripTrailingDictionaryEcho } = await import("../../src/utils/dictionaryEchoFilter.js");
-  const prompt = "OpenWhispr, n8n, Traefik, Tailscale, Claude Code, kubectl";
+  const prompt = "OpenWhispr, n8n, Traefik, Tailscale, Claude Code, kubectl, Qwen, Ollama";
   const dictionary = entries(prompt);
 
-  // Three or more consecutive entries are a recital from anywhere in the list.
+  // A Whisper decoder keeps only the tail of a long prompt and recites it to the end.
   assert.equal(
     stripTrailingDictionaryEcho(
-      "We shipped it. Tailscale, Claude Code, kubectl.",
+      "We shipped it. Tailscale, Claude Code, kubectl, Qwen, Ollama.",
       prompt,
       dictionary
     ),
     "We shipped it."
   );
-  // Two consecutive entries from mid-list are a short list the user said.
-  const said = "Here are the tools I use. Traefik, Tailscale.";
-  assert.equal(stripTrailingDictionaryEcho(said, prompt, dictionary), said);
+  for (const said of [
+    // A short list the user said, even when it reaches the end of the prompt.
+    "Here are the tools I use. Traefik, Tailscale.",
+    "We shipped it. kubectl, Qwen, Ollama.",
+    // A long run that stops before the end is not a continuation of the prompt.
+    "We shipped it. n8n, Traefik, Tailscale, Claude Code, kubectl.",
+    // Out of the prompt's order, or with an entry skipped.
+    "Which ones did you pick? Tailscale, Traefik, n8n.",
+    "Tools. OpenWhispr, Traefik, Tailscale.",
+  ]) {
+    assert.equal(stripTrailingDictionaryEcho(said, prompt, dictionary), said);
+  }
+
+  // The dictionary stores entries oldest first, and auto-learn appends names in
+  // the order they were corrected, so saying them back is dictation.
+  const names = "OpenWhispr, Kubernetes, Jonathan, Sarah, Michael";
+  const reviewers = "Who reviewed it? Jonathan, Sarah, Michael.";
+  assert.equal(stripTrailingDictionaryEcho(reviewers, names, entries(names)), reviewers);
 });
 
 test("stripTrailingDictionaryEcho keeps a sentence that ends on one dictionary word", async () => {
@@ -466,6 +477,13 @@ test("stripTrailingDictionaryEcho does not treat an abbreviation as a sentence b
     "Ask Mr. OpenWhispr, n8n",
     "Step 1. OpenWhispr, n8n",
     "So... OpenWhispr, n8n",
+    "Signed, A. OpenWhispr, n8n.",
+    "Wir nutzen Tools, z.B. OpenWhispr, n8n.",
+    "Das heißt, d.h. OpenWhispr, n8n.",
+    "Our stack, a.k.a. OpenWhispr, n8n.",
+    "We use tools incl. OpenWhispr, n8n.",
+    "Ask Prof. OpenWhispr, n8n.",
+    "Des outils, p. ex. OpenWhispr, n8n.",
   ]) {
     assert.equal(stripTrailingDictionaryEcho(text, prompt, entries(prompt)), text);
   }
@@ -499,6 +517,15 @@ test("stripTrailingDictionaryEcho never strips a snippet trigger or the script b
   for (const text of ["Text him. On my way, see you.", "Text him. n8n, on my way, see you."]) {
     assert.equal(stripTrailingDictionaryEcho(text, withTrigger, dictionary), text);
   }
+  // A recital of the whole prompt runs on into the triggers after the dictionary.
+  assert.equal(
+    stripTrailingDictionaryEcho(
+      "Thanks, you. OpenWhispr, n8n, on my way, see you.",
+      withTrigger,
+      dictionary
+    ),
+    "Thanks, you."
+  );
 
   // The Chinese script bias's generic words are not dictionary entries.
   const biased = "以下是简体中文。语言、学习、软件、网络。 OpenWhispr, n8n";

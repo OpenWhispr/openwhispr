@@ -77,12 +77,16 @@ test("OpenAI-compatible transcription drops a dictionary list recited after the 
       { length: 100 },
       (_, i) => `SpecializedTerm${String(i).padStart(3, "0")}`
     );
-    const prompts = respondWith(t, "We shipped it. SpecializedTerm098, SpecializedTerm099.");
+    // Recited from the first entry on, past where the cap cut the prompt: against
+    // the full list this would be stripped.
+    const recital = `We shipped it. ${terms.slice(0, 60).join(", ")}.`;
+    const prompts = respondWith(t, recital);
 
     const result = await makeManager(terms).processWithOpenAIAPI(audioBlob, {});
 
-    assert.ok(!prompts[0].includes("SpecializedTerm098"), "fixture must cap the prompt");
-    assert.equal(result.rawText, "We shipped it. SpecializedTerm098, SpecializedTerm099.");
+    assert.ok(prompts[0].startsWith("SpecializedTerm000"), "the prompt opens the list");
+    assert.ok(!prompts[0].includes("SpecializedTerm059"), "fixture must cap the prompt");
+    assert.equal(result.rawText, recital);
   });
 
   await t.test("a snippet trigger said as its own sentence is kept", async () => {
@@ -118,5 +122,102 @@ test("OpenAI-compatible transcription drops a dictionary list recited after the 
 
     assert.equal(prompts[0], null);
     assert.equal(result.rawText, "Thanks, you. OpenWhispr, n8n.");
+  });
+});
+
+test("OpenWhispr Cloud transcription drops a dictionary list recited after the speech", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-trailing-dictionary-echo-cloud-test-",
+    settingsKey: "__trailingDictionaryEchoCloudSettings",
+  });
+  const originalNavigator = globalThis.navigator;
+  Object.defineProperty(globalThis, "navigator", {
+    value: { ...originalNavigator, onLine: true },
+    configurable: true,
+  });
+  t.after(() => {
+    Object.defineProperty(globalThis, "navigator", {
+      value: originalNavigator,
+      configurable: true,
+    });
+  });
+  setSettings({
+    preferredLanguage: "auto",
+    useCleanupModel: false,
+    customDictionary: ["OpenWhispr", "n8n", "Traefik", "Tailscale", "Claude Code", "kubectl"],
+    snippets: [],
+  });
+  const audioBlob = { type: "audio/webm", size: 8, arrayBuffer: async () => new ArrayBuffer(8) };
+  const respondWith = (text) => {
+    const prompts = [];
+    window.electronAPI.cloudTranscribe = async (_audio, options) => {
+      prompts.push(options.prompt);
+      return { success: true, text };
+    };
+    return prompts;
+  };
+  const manager = createManager({
+    getEffectiveSttLanguage: () => "auto",
+    finalizeChineseScript: async (text) => text,
+  });
+
+  await t.test("the recited tail is removed from text and rawText", async () => {
+    const prompts = respondWith("Appreciate the time. Thanks, you. OpenWhispr, n8n, Traefik.");
+
+    const result = await manager.processWithOpenWhisprCloud(audioBlob);
+
+    assert.equal(prompts[0], "OpenWhispr, n8n, Traefik, Tailscale, Claude Code, kubectl");
+    assert.equal(result.rawText, "Appreciate the time. Thanks, you.");
+    assert.equal(result.text, "Appreciate the time. Thanks, you.");
+  });
+
+  await t.test("a whole-response echo is judged before its tail is stripped", async () => {
+    // Stripped first, this would leave "OpenWhispr." and pass as speech.
+    respondWith("OpenWhispr. n8n, Traefik, Tailscale, Claude Code, kubectl.");
+
+    await assert.rejects(manager.processWithOpenWhisprCloud(audioBlob), {
+      code: "DICTIONARY_ECHO",
+    });
+  });
+});
+
+test("proxied transcription strips a recital only when the payload carried the dictionary", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-trailing-dictionary-echo-proxy-test-",
+    settingsKey: "__trailingDictionaryEchoProxySettings",
+  });
+  const recital = "Appreciate the time. Thanks, you. OpenWhispr, n8n.";
+  window.electronAPI.proxyTinfoilTranscription = async () => ({ text: recital });
+  window.electronAPI.proxyCortiTranscription = async () => ({ text: recital });
+  const audioBlob = new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" });
+  const transcribeWith = (provider) => {
+    setSettings({
+      allowLocalFallback: false,
+      cloudTranscriptionProvider: provider,
+      transcriptionMode: "providers",
+      useLocalWhisper: false,
+      customDictionary: ["OpenWhispr", "n8n"],
+      snippets: [],
+    });
+    return createManager({
+      getEffectiveSttLanguage: () => "auto",
+      getTranscriptionModel: () => "whisper-large-v3-turbo",
+      getAPIKey: async () => "key",
+      processTranscription: async (text) => text,
+      isReasoningAvailable: async () => false,
+    }).processWithOpenAIAPI(audioBlob);
+  };
+
+  await t.test("Tinfoil, sent the dictionary as its prompt, loses the recited tail", async () => {
+    const result = await transcribeWith("tinfoil");
+
+    assert.equal(result.rawText, "Appreciate the time. Thanks, you.");
+    assert.equal(result.text, "Appreciate the time. Thanks, you.");
+  });
+
+  await t.test("Corti, sent no dictionary, keeps its whole transcript", async () => {
+    const result = await transcribeWith("corti");
+
+    assert.equal(result.rawText, recital);
   });
 });

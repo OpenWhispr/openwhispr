@@ -854,7 +854,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   // Drops a hint list the model recited after the speech (#2581). Pass the
   // prompt the request actually carried: a capped prompt can only echo itself.
-  // Only custom-dictionary entries count, never the snippet triggers beside them.
+  // Snippet triggers beside the dictionary never start or count toward a recital.
   stripTrailingDictionaryEcho(text, sentPrompt) {
     const stripped = stripTrailingDictionaryEcho(text, sentPrompt, this.getCustomDictionaryArray());
     if (stripped !== text) {
