@@ -12,7 +12,11 @@ const {
 } = require("./downloadUtils");
 const WhisperServerManager = require("./whisperServer");
 const { createAbortError } = require("./abortError");
-const { getModelsDirForService } = require("./modelDirUtils");
+const {
+  getCacheRoot,
+  getModelsDirForService,
+  pathHasProblematicChars,
+} = require("./modelDirUtils");
 
 const modelRegistryData = require("../models/modelRegistryData.json");
 
@@ -30,6 +34,30 @@ function getWhisperModelConfig(modelName) {
 
 function getValidModelNames() {
   return Object.keys(modelRegistryData.whisperModels);
+}
+
+// whisper-server reads its arguments in the Windows ANSI code page and crashes
+// on a non-ASCII --vad-model path, as it did on the model paths #1514 moved
+// (#1208). A per-user install under such a profile bundles the VAD model there,
+// so it is copied into the ASCII-safe cache root. That root can be the shared
+// ProgramData folder, so an existing copy is reused only when its bytes match.
+function asciiSafeVadModelPath(bundledPath) {
+  if (process.platform !== "win32" || !pathHasProblematicChars(bundledPath)) return bundledPath;
+
+  const copyPath = path.join(getCacheRoot(), "whisper-vad", path.basename(bundledPath));
+  try {
+    const model = fs.readFileSync(bundledPath);
+    if (!fs.existsSync(copyPath) || !fs.readFileSync(copyPath).equals(model)) {
+      fs.mkdirSync(path.dirname(copyPath), { recursive: true });
+      fs.writeFileSync(copyPath, model);
+    }
+    return copyPath;
+  } catch (error) {
+    debugLogger.warn("Could not copy the VAD model to an ASCII-safe path", {
+      error: error.message,
+    });
+    return null;
+  }
 }
 
 // WHISPER_GPU_FAILED holds a comma-separated list of backends that fell back
@@ -166,8 +194,8 @@ class WhisperManager {
     candidates.push(path.join(__dirname, "..", "..", "resources", "bin", "whisper-vad", fileName));
 
     const resolved = candidates.find((p) => fs.existsSync(p)) || null;
-    this.cachedVadModelPath = resolved;
-    return resolved;
+    this.cachedVadModelPath = resolved && asciiSafeVadModelPath(resolved);
+    return this.cachedVadModelPath;
   }
 
   async initializeAtStartup(settings = {}) {
