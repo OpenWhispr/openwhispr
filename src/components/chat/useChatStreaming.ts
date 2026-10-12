@@ -31,8 +31,11 @@ import {
   appendPlainTextResponseSuffix,
   appendScreenContextSuffix,
   getAgentSystemPrompt,
+  getDefaultPromptText,
+  resolvePrompt,
 } from "../../config/prompts";
 import { resolveUnavailableCapabilities } from "../../config/agentCapabilities";
+import { getAgentName } from "../../utils/agentName";
 import { getDictionaryHintWords } from "../../utils/snippets";
 import { noteAttendeesContext, withoutAttendeesFence } from "../../utils/noteAttendees";
 import { FULL_TRANSCRIPT_MAX_TOKENS } from "../../utils/transcriptEvidence";
@@ -519,6 +522,14 @@ export function useChatStreaming({
         // jargon — same suffix the dictation prompts carry.
         let systemPrompt = appendDictionarySuffix(
           getAgentSystemPrompt(registry?.getAll(), libraryContext || undefined, {
+            // The standalone panel keeps its conversational default; the
+            // dictation default is for editing text and forbids clarification.
+            basePrompt:
+              inferenceScope === "dictationAgent"
+                ? settings.customPrompts.dictationAgent
+                  ? resolvePrompt("dictationAgent", { agentName: getAgentName() })
+                  : getDefaultPromptText("chatAgent")
+                : undefined,
             unavailable: nameUnavailableCapabilities ? unavailable : [],
             toolTrace: registry !== null,
             openNote: openNoteContext || undefined,
