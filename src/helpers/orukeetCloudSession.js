@@ -196,6 +196,9 @@ async function connectManagedOrukeet({
     }
     const data = await fence.awaitBound(() => response.json());
     assertActive();
+    // When only the Gemma side fails, the API answers a pipeline request with a
+    // plain ASR session; cleanup then runs through /api/reason as usual.
+    if (options && data?.protocol === ORUKEET_PCM_PROTOCOL) options = undefined;
     if (options) {
       streaming.cleanupOptions = options;
       streaming.onUsageReceipt = (receipt) => {

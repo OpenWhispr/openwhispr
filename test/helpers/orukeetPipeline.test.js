@@ -278,6 +278,45 @@ test(
 );
 
 test(
+  "a plain session answering a pipeline request connects as plain ASR",
+  { timeout: 2500 },
+  async () => {
+    const deps = managedFixture();
+    const calls = [];
+    await connectManagedOrukeet({
+      ...deps,
+      pipelineOptions: { customPrompt: "Keep it short." },
+      proxyFetch: async (url) => {
+        calls.push(url);
+        return Response.json(plainSession);
+      },
+    });
+    assert.deepEqual(
+      calls.map((url) => url.split("/").pop()),
+      ["pipeline-session"]
+    );
+    assert.equal(deps.streaming.cleanupOptions, undefined);
+    assert.equal(deps.streaming.onUsageReceipt, undefined);
+    assert.deepEqual(deps.streaming.connected, {
+      baseUrl: plainSession.baseUrl,
+      clientToken: plainSession.clientToken,
+    });
+
+    const lookalike = managedFixture();
+    await assert.rejects(
+      connectManagedOrukeet({
+        ...lookalike,
+        pipelineOptions: {},
+        proxyFetch: async () =>
+          Response.json({ ...plainSession, baseUrl: "https://orukeet.gizmovoice.ai.test" }),
+      }),
+      /Invalid Orukeet cloud session/
+    );
+    assert.equal(lookalike.streaming.connected, undefined);
+  }
+);
+
+test(
   "plain retry still honors transcription policy and account quota refusals",
   { timeout: 2500 },
   async () => {
