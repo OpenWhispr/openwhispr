@@ -93,14 +93,12 @@ describe("WhisperManager.getVadModelPath (#1208)", () => {
     const copyPath = path.join(cacheRoot, "whisper-vad", VAD_FILE);
     fs.mkdirSync(path.dirname(copyPath), { recursive: true });
     fs.writeFileSync(copyPath, "silero-weights");
-    const { writeFileSync } = fs;
-    fs.writeFileSync = () => {
-      throw new Error("EPERM: the copy belongs to another account");
-    };
+    // Read-only, like a copy another account owns: any rewrite would fail.
+    fs.chmodSync(copyPath, 0o444);
     try {
       assert.equal(vadModelPathOn("win32"), copyPath);
     } finally {
-      fs.writeFileSync = writeFileSync;
+      fs.chmodSync(copyPath, 0o644);
     }
   });
 
