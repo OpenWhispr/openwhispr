@@ -1,0 +1,12 @@
+diff --git a/node_modules/@react-native-menu/menu/ios/MenuViewManager.mm b/node_modules/@react-native-menu/menu/ios/MenuViewManager.mm
+index 3d149b3..6816e94 100644
+--- a/node_modules/@react-native-menu/menu/ios/MenuViewManager.mm
++++ b/node_modules/@react-native-menu/menu/ios/MenuViewManager.mm
+@@ -1,6 +1,6 @@
+ #import <React/RCTViewManager.h>
+ #import <React/RCTUIManager.h>
+-#import "RCTBridge.h"
++#import <React/RCTBridge.h>
+ 
+ #ifdef RCT_NEW_ARCH_ENABLED
+ // NEW ARCH

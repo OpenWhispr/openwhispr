@@ -10,9 +10,11 @@ import type {
   ChineseScriptPreference,
   LocalTranscriptionProvider,
   InferenceMode,
+  LocalServerPrefs,
   SelfHostedType,
 } from "../types/electron";
-import type { CalendarAccount } from "../types/calendar";
+import type { CalendarAccount, MicrosoftCalendarAccount } from "../types/calendar";
+import { normalizeEmailDraftTarget, type EmailDraftTargetSetting } from "../utils/emailDraftTarget";
 import { PROMPT_KIND_LIST, type PromptKind } from "../config/prompts/registry";
 import { sweepRetiredPromptOverrides } from "../config/retiredPrompts";
 import { sweepRetiredCloudModelSelections } from "../config/retiredCloudModels";
@@ -232,6 +234,9 @@ function readStringArray(key: string, fallback: string[]): string[] {
 
 type MicrophoneSelectionMode = "system" | "built-in" | "specific";
 
+// `message` is main's translated reason, when it gave one.
+export type HotkeyRegistrationResult = { success: boolean; message?: string };
+
 function migrateMicrophoneSelectionMode() {
   if (!isBrowser) return;
   const current = localStorage.getItem("microphoneSelectionMode");
@@ -271,6 +276,7 @@ const BOOLEAN_SETTINGS = new Set([
   "autoGenerateNoteTitle",
   "useCleanupModel",
   "useDictationAgent",
+  "keepLocalModelLoaded",
   "voiceAgentScreenContext",
   "useDictationAgentVisionModel",
   "useDictationTranslation",
@@ -288,6 +294,7 @@ const BOOLEAN_SETTINGS = new Set([
   "dictationSileroEnabled",
   "noteRecordingSileroEnabled",
   "meetingSileroEnabled",
+  "meetingAecEnabled",
   "isSignedIn",
   "autoPasteEnabled",
   "keepTranscriptionInClipboard",
@@ -509,6 +516,29 @@ function migrateUploadTranscription() {
 }
 
 migrateUploadTranscription();
+
+// One-time seed of the upload self-hosted server. These keys arrived after
+// migrateUploadTranscription() had latched (1.7.3), and until then the Upload
+// tab edited dictation's server (#2049), so copy the values a profile has been
+// uploading with; the tab then shows the server it actually uses. Fresh installs
+// have nothing to copy, and an upload key the user already set is kept.
+const UPLOAD_SELF_HOSTED_PAIRS: ReadonlyArray<[string, string]> = [
+  ["remoteTranscriptionUrl", "uploadRemoteTranscriptionUrl"],
+  ["remoteTranscriptionModel", "uploadRemoteTranscriptionModel"],
+];
+
+function migrateUploadSelfHosted() {
+  if (!isBrowser) return;
+  if (localStorage.getItem("uploadSelfHostedMigrated") === "true") return;
+  for (const [src, dst] of UPLOAD_SELF_HOSTED_PAIRS) {
+    if (localStorage.getItem(dst) !== null) continue;
+    const v = localStorage.getItem(src);
+    if (v !== null) localStorage.setItem(dst, v);
+  }
+  localStorage.setItem("uploadSelfHostedMigrated", "true");
+}
+
+migrateUploadSelfHosted();
 
 // Dictation and upload render `*TranscriptionMode` in their picker but route on
 // `*UseLocalWhisper` (audioManager, fileTranscription) and `*CloudTranscriptionMode`
@@ -865,7 +895,7 @@ export interface SettingsState
   gcalAccounts: CalendarAccount[];
   gcalConnected: boolean;
   gcalEmail: string;
-  mcalAccounts: CalendarAccount[];
+  mcalAccounts: MicrosoftCalendarAccount[];
   mcalConnected: boolean;
   notificationsEnabled: boolean;
   notifyMeetingDetection: boolean;
@@ -879,6 +909,7 @@ export interface SettingsState
   dictationSileroEnabled: boolean;
   noteRecordingSileroEnabled: boolean;
   meetingSileroEnabled: boolean;
+  meetingAecEnabled: boolean;
   whisperVadThreshold: number;
   whisperVadMinSpeechDurationMs: number;
   whisperVadMinSilenceDurationMs: number;
@@ -898,6 +929,7 @@ export interface SettingsState
   remoteTranscriptionModel: string;
   cleanupMode: InferenceMode;
   cleanupRemoteUrl: string;
+  keepLocalModelLoaded: boolean;
 
   meetingTranscriptionMode: InferenceMode;
   meetingUseLocalWhisper: boolean;
@@ -922,6 +954,8 @@ export interface SettingsState
   uploadCloudTranscriptionModel: string;
   uploadCloudTranscriptionBaseUrl: string;
   uploadCloudTranscriptionMode: string;
+  uploadRemoteTranscriptionUrl: string;
+  uploadRemoteTranscriptionModel: string;
 
   /** Last model used per scope+provider (`"<context>:<providerId>"`), so switching providers restores it. */
   transcriptionModelByProvider: Record<string, string>;
@@ -961,6 +995,7 @@ export interface SettingsState
   // Voice-agent screen context: opt-in screenshot capture, plus an optional
   // dedicated model used only when a screenshot is attached.
   voiceAgentScreenContext: boolean;
+  emailDraftTarget: EmailDraftTargetSetting;
   useDictationAgentVisionModel: boolean;
   dictationAgentVisionMode: InferenceMode;
   dictationAgentVisionProvider: string;
@@ -989,6 +1024,7 @@ export interface SettingsState
   setDictationAgentCustomApiKey: (key: string) => void;
 
   setVoiceAgentScreenContext: (value: boolean) => void;
+  setEmailDraftTarget: (value: EmailDraftTargetSetting) => void;
   setUseDictationAgentVisionModel: (value: boolean) => void;
   setDictationAgentVisionProvider: (value: string) => void;
   setDictationAgentVisionModel: (value: string) => void;
@@ -1003,6 +1039,7 @@ export interface SettingsState
   setRemoteTranscriptionModel: (model: string) => void;
   setCleanupMode: (mode: InferenceMode) => void;
   setCleanupRemoteUrl: (url: string) => void;
+  setKeepLocalModelLoaded: (value: boolean) => void;
 
   setMeetingTranscriptionMode: (mode: InferenceMode) => void;
   setMeetingUseLocalWhisper: (value: boolean) => void;
@@ -1027,6 +1064,8 @@ export interface SettingsState
   setUploadCloudTranscriptionModel: (value: string) => void;
   setUploadCloudTranscriptionBaseUrl: (value: string) => void;
   setUploadCloudTranscriptionMode: (value: string) => void;
+  setUploadRemoteTranscriptionUrl: (value: string) => void;
+  setUploadRemoteTranscriptionModel: (value: string) => void;
 
   setNoteFormattingMode: (mode: InferenceMode) => void;
   setNoteFormattingProvider: (value: string) => void;
@@ -1150,9 +1189,9 @@ export interface SettingsState
 
   setDictationKey: (key: string) => void;
   setMeetingKey: (key: string) => void;
-  setVoiceAgentKey: (key: string) => Promise<boolean>;
+  setVoiceAgentKey: (key: string) => Promise<HotkeyRegistrationResult>;
   translationKey: string;
-  setTranslationKey: (key: string) => Promise<boolean>;
+  setTranslationKey: (key: string) => Promise<HotkeyRegistrationResult>;
   setMeetingHotkeyLayoutMode: (mode: "side-panel" | "full-width") => void;
   setOnboardingUseCases: (useCases: string[]) => void;
   setOnboardingUseCaseNote: (note: string) => void;
@@ -1177,7 +1216,7 @@ export interface SettingsState
   setFloatingIconAutoHide: (enabled: boolean) => void;
   setStartMinimized: (enabled: boolean) => void;
   setGcalAccounts: (accounts: CalendarAccount[]) => void;
-  setMcalAccounts: (accounts: CalendarAccount[]) => void;
+  setMcalAccounts: (accounts: MicrosoftCalendarAccount[]) => void;
   setNotificationsEnabled: (value: boolean) => void;
   setNotifyMeetingDetection: (value: boolean) => void;
   setNotifyCalendarReminders: (value: boolean) => void;
@@ -1190,6 +1229,7 @@ export interface SettingsState
   setDictationSileroEnabled: (value: boolean) => void;
   setNoteRecordingSileroEnabled: (value: boolean) => void;
   setMeetingSileroEnabled: (value: boolean) => void;
+  setMeetingAecEnabled: (value: boolean) => void;
   setWhisperVadThreshold: (value: number) => void;
   setWhisperVadMinSpeechDurationMs: (value: number) => void;
   setWhisperVadMinSilenceDurationMs: (value: number) => void;
@@ -1275,14 +1315,13 @@ function createNumberSetter(key: string) {
 function createRegisteredHotkeySetter(
   key: "voiceAgentKey" | "translationKey",
   label: string,
-  getRegisterFn: () =>
-    ((hotkey: string) => Promise<{ success: boolean; message: string }>) | undefined,
+  getRegisterFn: () => ((hotkey: string) => Promise<HotkeyRegistrationResult>) | undefined,
   fallbackSave?: (hotkey: string) => void
 ) {
-  return async (hotkey: string): Promise<boolean> => {
+  return async (hotkey: string): Promise<HotkeyRegistrationResult> => {
     if (!isBrowser) {
       useSettingsStore.setState({ [key]: hotkey });
-      return true;
+      return { success: true };
     }
 
     const registerFn = getRegisterFn();
@@ -1290,7 +1329,7 @@ function createRegisteredHotkeySetter(
       localStorage.setItem(key, hotkey);
       useSettingsStore.setState({ [key]: hotkey });
       fallbackSave?.(hotkey);
-      return true;
+      return { success: true };
     }
 
     const previousKey = useSettingsStore.getState()[key];
@@ -1301,19 +1340,19 @@ function createRegisteredHotkeySetter(
         localStorage.setItem(key, previousKey);
         useSettingsStore.setState({ [key]: previousKey });
         logger.warn(`Failed to update ${label}`, { hotkey, message: result?.message }, "settings");
-        return false;
+        return { success: false, message: result?.message };
       }
 
       localStorage.setItem(key, hotkey);
       useSettingsStore.setState({ [key]: hotkey });
-      return true;
+      return { success: true };
     } catch (error) {
       logger.warn(
         `Failed to update ${label}`,
         { hotkey, error: error instanceof Error ? error.message : String(error) },
         "settings"
       );
-      return false;
+      return { success: false };
     }
   };
 }
@@ -1366,6 +1405,7 @@ type SecretProvider = keyof typeof SECRET_IPC_SAVERS;
 const secretSaveTimers: Partial<Record<SecretProvider, ReturnType<typeof setTimeout>>> = {};
 function debouncedSaveSecret(provider: SecretProvider, key: string) {
   if (!isBrowser) return;
+  debouncedPersistToEnv();
   const timer = secretSaveTimers[provider];
   if (timer) clearTimeout(timer);
   secretSaveTimers[provider] = setTimeout(() => {
@@ -1423,25 +1463,21 @@ function invalidateApiKeyCaches(
     | "openrouter"
     | "corti"
 ) {
-  if (provider) {
-    if (_ReasoningService) {
-      _ReasoningService.clearApiKeyCache(provider);
-    } else {
-      import("../services/ReasoningService")
-        .then((mod) => {
-          _ReasoningService = mod.default;
-          _ReasoningService.clearApiKeyCache(provider);
-        })
-        .catch(() => {});
-    }
+  if (_ReasoningService) {
+    _ReasoningService.clearApiKeyCache(provider);
+  } else {
+    import("../services/ReasoningService")
+      .then((mod) => {
+        _ReasoningService = mod.default;
+        _ReasoningService.clearApiKeyCache(provider);
+      })
+      .catch(() => {});
   }
   if (isBrowser) window.dispatchEvent(new Event("api-key-changed"));
-  debouncedPersistToEnv();
 }
 
 // Uniform BYOK key setter: persist to the secure store (debounced) and clear
-// the provider's cached key. cacheProvider is omitted where there is no scoped
-// cache to clear (xai), preserving prior behavior.
+// the provider's cached key, or all caches when no scoped provider is given.
 function createSecretSetter(
   storeKey: string,
   saver: SecretProvider,
@@ -1617,7 +1653,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     };
   })(),
   ...(() => {
-    let accounts: CalendarAccount[] = [];
+    let accounts: MicrosoftCalendarAccount[] = [];
     try {
       const parsed = JSON.parse(readString("mcalAccounts", "[]"));
       if (Array.isArray(parsed)) accounts = parsed;
@@ -1639,6 +1675,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   dictationSileroEnabled: readBoolean("dictationSileroEnabled", false),
   noteRecordingSileroEnabled: readBoolean("noteRecordingSileroEnabled", true),
   meetingSileroEnabled: readBoolean("meetingSileroEnabled", true),
+  // Acoustic echo cancellation for meetings is opt-in: on headsets there's no
+  // echo to cancel and it can suppress the mic entirely. See ipcHandlers AEC gate.
+  meetingAecEnabled: readBoolean("meetingAecEnabled", false),
   whisperVadThreshold: clampVadValue("threshold", readString("whisperVadThreshold", "0.5")),
   whisperVadMinSpeechDurationMs: clampVadValue(
     "minSpeechDurationMs",
@@ -1693,6 +1732,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     return "openwhispr" as InferenceMode;
   })(),
   cleanupRemoteUrl: readString("cleanupRemoteUrl", ""),
+  keepLocalModelLoaded: readBoolean("keepLocalModelLoaded", false),
 
   meetingTranscriptionMode: (() => {
     const v = readString("meetingTranscriptionMode", "openwhispr");
@@ -1728,6 +1768,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   uploadCloudTranscriptionModel: readString("uploadCloudTranscriptionModel", ""),
   uploadCloudTranscriptionBaseUrl: readString("uploadCloudTranscriptionBaseUrl", ""),
   uploadCloudTranscriptionMode: readString("uploadCloudTranscriptionMode", ""),
+  uploadRemoteTranscriptionUrl: readString("uploadRemoteTranscriptionUrl", ""),
+  uploadRemoteTranscriptionModel: readString("uploadRemoteTranscriptionModel", ""),
 
   noteFormattingMode: (() => {
     const v = readString("noteFormattingMode", "openwhispr");
@@ -1786,6 +1828,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setRemoteTranscriptionModel: createStringSetter("remoteTranscriptionModel"),
   setCleanupMode: createStringSetter("cleanupMode") as (mode: InferenceMode) => void,
   setCleanupRemoteUrl: createStringSetter("cleanupRemoteUrl"),
+  setKeepLocalModelLoaded: createBooleanSetter("keepLocalModelLoaded"),
 
   setMeetingTranscriptionMode: createStringSetter("meetingTranscriptionMode") as (
     mode: InferenceMode
@@ -1822,6 +1865,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setUploadCloudTranscriptionModel: createStringSetter("uploadCloudTranscriptionModel"),
   setUploadCloudTranscriptionBaseUrl: createStringSetter("uploadCloudTranscriptionBaseUrl"),
   setUploadCloudTranscriptionMode: createStringSetter("uploadCloudTranscriptionMode"),
+  setUploadRemoteTranscriptionUrl: createStringSetter("uploadRemoteTranscriptionUrl"),
+  setUploadRemoteTranscriptionModel: createStringSetter("uploadRemoteTranscriptionModel"),
 
   setNoteFormattingMode: createStringSetter("noteFormattingMode") as (mode: InferenceMode) => void,
   setNoteFormattingProvider: createStringSetter("noteFormattingProvider"),
@@ -1897,6 +1942,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   dictationAgentCustomApiKey: readString("dictationAgentCustomApiKey", ""),
 
   voiceAgentScreenContext: readBoolean("voiceAgentScreenContext", false),
+  emailDraftTarget: normalizeEmailDraftTarget(readString("emailDraftTarget", "auto")),
   useDictationAgentVisionModel: readBoolean("useDictationAgentVisionModel", false),
   // Cloud already vision-routes screenshot commands, so the override is BYOK-only.
   dictationAgentVisionMode: "providers" as InferenceMode,
@@ -1948,6 +1994,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   ),
 
   setVoiceAgentScreenContext: createBooleanSetter("voiceAgentScreenContext"),
+  setEmailDraftTarget: createStringSetter("emailDraftTarget"),
   setUseDictationAgentVisionModel: createBooleanSetter("useDictationAgentVisionModel"),
   setDictationAgentVisionProvider: createStringSetter("dictationAgentVisionProvider"),
   setDictationAgentVisionModel: createStringSetter("dictationAgentVisionModel"),
@@ -2214,17 +2261,14 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setBedrockAccessKeyId: (key: string) => {
     set({ bedrockAccessKeyId: key });
     debouncedSaveSecret("bedrockAccessKeyId", key);
-    debouncedPersistToEnv();
   },
   setBedrockSecretAccessKey: (key: string) => {
     set({ bedrockSecretAccessKey: key });
     debouncedSaveSecret("bedrockSecretAccessKey", key);
-    debouncedPersistToEnv();
   },
   setBedrockSessionToken: (key: string) => {
     set({ bedrockSessionToken: key });
     debouncedSaveSecret("bedrockSessionToken", key);
-    debouncedPersistToEnv();
   },
   setAzureEndpoint: (value: string) => {
     if (isBrowser) localStorage.setItem("azureEndpoint", value);
@@ -2235,7 +2279,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setAzureApiKey: (key: string) => {
     set({ azureApiKey: key });
     debouncedSaveSecret("azureApiKey", key);
-    debouncedPersistToEnv();
   },
   setAzureDeploymentName: (value: string) => {
     if (isBrowser) localStorage.setItem("azureDeploymentName", value);
@@ -2268,7 +2311,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setVertexApiKey: (key: string) => {
     set({ vertexApiKey: key });
     debouncedSaveSecret("vertexApiKey", key);
-    debouncedPersistToEnv();
   },
 
   setDictationKey: (key: string) => {
@@ -2401,7 +2443,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       gcalEmail: accounts[0]?.email ?? "",
     });
   },
-  setMcalAccounts: (accounts: CalendarAccount[]) => {
+  setMcalAccounts: (accounts: MicrosoftCalendarAccount[]) => {
     if (isBrowser) localStorage.setItem("mcalAccounts", JSON.stringify(accounts));
     useSettingsStore.setState({
       mcalAccounts: accounts,
@@ -2456,6 +2498,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       window.electronAPI?.setWhisperVadConfig?.({ meetingSileroEnabled: value });
     }
   },
+  setMeetingAecEnabled: createBooleanSetter("meetingAecEnabled"),
   setWhisperVadThreshold: (value: number) => {
     const next = clampVadValue("threshold", value);
     if (isBrowser) localStorage.setItem("whisperVadThreshold", String(next));
@@ -2768,6 +2811,8 @@ export interface ResolvedUploadTranscription {
   cloudTranscriptionBaseUrl: string;
   cloudTranscriptionMode: string;
   transcriptionMode: InferenceMode;
+  remoteTranscriptionUrl: string;
+  remoteTranscriptionModel: string;
 }
 
 // Audio upload is batch (not streaming), so unset values fall back to the base
@@ -2775,6 +2820,9 @@ export interface ResolvedUploadTranscription {
 // A realtime-only dictation provider is the exception: it has no batch route, so
 // inheriting it would fail every upload closed. Uploads take the default provider
 // instead, and the dictation model stays behind with the provider it belongs to.
+// The self-hosted server is the exception the other way: it never inherits, so
+// uploads go only to the server the Upload tab shows (#2049).
+// migrateUploadSelfHosted() seeds it once for profiles from before the tab had its own.
 export const selectResolvedUploadTranscription = (
   state: SettingsState
 ): ResolvedUploadTranscription => {
@@ -2797,6 +2845,8 @@ export const selectResolvedUploadTranscription = (
       state.uploadCloudTranscriptionBaseUrl || state.cloudTranscriptionBaseUrl || "",
     cloudTranscriptionMode: state.uploadCloudTranscriptionMode || state.cloudTranscriptionMode,
     transcriptionMode: state.uploadTranscriptionMode,
+    remoteTranscriptionUrl: state.uploadRemoteTranscriptionUrl,
+    remoteTranscriptionModel: state.uploadRemoteTranscriptionModel,
   };
 };
 
@@ -2932,6 +2982,36 @@ export function setResolvedLLMConfig(
 
 export function isCloudChatAgentMode() {
   return selectIsCloudChatAgentMode(getSettings());
+}
+
+// What resolveLocalServerNeeds (main process) decides the shared llama-server
+// from. The policy-effective resolved configs carry fallback inheritance,
+// enterprise overrides and policy clamps, so they match what requests run on.
+export function selectLocalServerPrefs(
+  rawState: SettingsState,
+  policyState: PolicyDecisionSnapshot
+): LocalServerPrefs {
+  const state = selectPolicyEffectiveSettings(rawState, policyState);
+  const cleanup = selectResolvedLLMConfig(state, "dictationCleanup");
+  const dictationAgent = selectResolvedLLMConfig(state, "dictationAgent");
+  const noteFormatting = selectResolvedLLMConfig(state, "noteFormatting");
+  const chat = selectResolvedLLMConfig(state, "chatIntelligence");
+  const translation = selectResolvedLLMConfig(state, "dictationTranslation");
+  return {
+    useCleanupModel: state.useCleanupModel,
+    cleanupMode: cleanup.mode,
+    cleanupModel: cleanup.model,
+    useDictationAgent: state.useDictationAgent,
+    dictationAgentMode: dictationAgent.mode,
+    dictationAgentModel: dictationAgent.model,
+    noteFormattingMode: noteFormatting.mode,
+    noteFormattingModel: noteFormatting.model,
+    chatAgentMode: chat.mode,
+    chatAgentModel: chat.model,
+    useDictationTranslation: state.useDictationTranslation,
+    translationMode: translation.mode,
+    translationModel: translation.model,
+  };
 }
 
 // --- Convenience getters for non-React code ---
@@ -3219,8 +3299,52 @@ export async function initializeSettings(): Promise<void> {
   if (!isBrowser) return;
 
   const state = useSettingsStore.getState();
+  let hydratingSecrets = true;
+  const pendingSecretUpdates = new Set<string>();
+
+  // Queue updates until hydration can no longer overwrite them.
+  const refreshApiKey = async (storeKey: string) => {
+    if (!STALE_SECRET_LOCALSTORAGE_KEYS.some((key) => key === storeKey)) return;
+    if (hydratingSecrets) {
+      pendingSecretUpdates.add(storeKey);
+      return;
+    }
+    const saver =
+      SECRET_IPC_SAVERS[storeKey as SecretProvider] ||
+      SECRET_IPC_SAVERS[storeKey.replace(/ApiKey$/, "") as SecretProvider];
+    if (!saver) return;
+    const getter = window.electronAPI?.[
+      saver.replace(/^save/, "get") as keyof typeof window.electronAPI
+    ] as (() => Promise<string | null>) | undefined;
+    if (!getter) return;
+    try {
+      const key = await getter();
+      if (key !== null && typeof key !== "string") return;
+      useSettingsStore.setState({ [storeKey]: key || "" });
+      invalidateApiKeyCaches();
+    } catch {
+      logger.warn("Failed to refresh API key", { storeKey }, "settings");
+    }
+  };
+  window.electronAPI?.onApiKeyUpdated?.(refreshApiKey);
 
   if (window.electronAPI) {
+    // Preferences are already in localStorage; do not wait for secret or provider hydration.
+    try {
+      await window.electronAPI.syncNotificationPreferences?.({
+        notificationsEnabled: state.notificationsEnabled,
+        notifyMeetingDetection: state.notifyMeetingDetection,
+        notifyCalendarReminders: state.notifyCalendarReminders,
+        meetingProcessDetection: state.meetingProcessDetection,
+      });
+    } catch (err) {
+      logger.warn(
+        "Failed to sync notification preferences on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
     try {
       const [
         openai,
@@ -3339,6 +3463,8 @@ export async function initializeSettings(): Promise<void> {
       for (const key of STALE_SECRET_LOCALSTORAGE_KEYS) {
         localStorage.removeItem(key);
       }
+      // Latch for the one-time semantic reindex that no longer exists (#2143).
+      localStorage.removeItem("semanticReindexVersion");
 
       // Users who configured OpenRouter through the Custom tab keep their key
       // in the shared custom slot — seed the dedicated slot from it once.
@@ -3360,6 +3486,10 @@ export async function initializeSettings(): Promise<void> {
         { error: (err as Error).message },
         "settings"
       );
+    } finally {
+      hydratingSecrets = false;
+      await Promise.all([...pendingSecretUpdates].map(refreshApiKey));
+      pendingSecretUpdates.clear();
     }
 
     // Sync dictation key from main process.
@@ -3510,36 +3640,6 @@ export async function initializeSettings(): Promise<void> {
       );
     }
 
-    // Audio detection is derived from the meeting-notification toggle in
-    // sync-notification-preferences, so it is not sent here.
-    try {
-      const currentState = useSettingsStore.getState();
-      await window.electronAPI.meetingDetectionSetPreferences?.({
-        processDetection: currentState.meetingProcessDetection,
-      });
-    } catch (err) {
-      logger.warn(
-        "Failed to sync meeting detection preferences on startup",
-        { error: (err as Error).message },
-        "settings"
-      );
-    }
-
-    try {
-      const currentState = useSettingsStore.getState();
-      await window.electronAPI.syncNotificationPreferences?.({
-        notificationsEnabled: currentState.notificationsEnabled,
-        notifyMeetingDetection: currentState.notifyMeetingDetection,
-        notifyCalendarReminders: currentState.notifyCalendarReminders,
-      });
-    } catch (err) {
-      logger.warn(
-        "Failed to sync notification preferences on startup",
-        { error: (err as Error).message },
-        "settings"
-      );
-    }
-
     try {
       await window.electronAPI.setAutoUpdatesEnabled?.(
         useSettingsStore.getState().autoUpdatesEnabled
@@ -3561,6 +3661,21 @@ export async function initializeSettings(): Promise<void> {
     } catch (err) {
       logger.warn(
         "Failed to hydrate Apple Calendar connection status",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
+    // Picks up tenant ids stored after the accounts were first saved here; an
+    // empty answer (including a failed read) leaves the saved list alone.
+    try {
+      const status = await window.electronAPI.mcalGetConnectionStatus?.();
+      if (status?.accounts.length) {
+        useSettingsStore.getState().setMcalAccounts(status.accounts);
+      }
+    } catch (err) {
+      logger.warn(
+        "Failed to hydrate Microsoft Calendar accounts",
         { error: (err as Error).message },
         "settings"
       );
@@ -3684,6 +3799,8 @@ export async function initializeSettings(): Promise<void> {
       } else {
         value = parsed;
       }
+    } else if (key === "emailDraftTarget") {
+      value = normalizeEmailDraftTarget(newValue);
     } else {
       value = newValue;
     }

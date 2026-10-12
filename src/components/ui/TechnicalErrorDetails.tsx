@@ -1,29 +1,10 @@
 import { Check, Copy } from "../icons";
-import type { TFunction } from "i18next";
 import type { JSX } from "react";
 import { useTranslation } from "react-i18next";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
+import { formatProviderErrorDetails } from "../../utils/describeProviderError";
 import { cn } from "../lib/utils";
 import type { TechnicalErrorDetailsData } from "./useToast";
-
-function formatTechnicalErrorDetails(details: TechnicalErrorDetailsData, t: TFunction): string {
-  return [
-    details.status !== undefined
-      ? `${t("reasoning.enterprise.technicalDetails.httpStatus")}: ${details.status}`
-      : "",
-    details.exceptionType
-      ? `${t("reasoning.enterprise.technicalDetails.awsException")}: ${details.exceptionType}`
-      : "",
-    details.requestId
-      ? `${t("reasoning.enterprise.technicalDetails.awsRequestId")}: ${details.requestId}`
-      : "",
-    details.underlyingError
-      ? `${t("reasoning.enterprise.technicalDetails.underlyingError")}: ${details.underlyingError}`
-      : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
 
 export function TechnicalErrorDetails({
   details,
@@ -33,7 +14,7 @@ export function TechnicalErrorDetails({
   onDark?: boolean;
 }): JSX.Element | null {
   const { t } = useTranslation();
-  const text = details ? formatTechnicalErrorDetails(details, t) : "";
+  const text = details ? formatProviderErrorDetails(details, t) : "";
   const { copied, copy } = useCopyFeedback(text, { resetMs: 2000 });
   if (!text) return null;
 

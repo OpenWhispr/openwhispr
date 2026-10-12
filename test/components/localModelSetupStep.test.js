@@ -141,6 +141,7 @@ async function createSetupHarness(
   let trayTree;
   let ready = false;
   let proceeded = false;
+  let skipped = false;
   const resumeDrafts = [];
   const props = {
     stepId: assistant ? "local-assistant" : "local-dictation",
@@ -150,7 +151,9 @@ async function createSetupHarness(
     onProceed() {
       proceeded = true;
     },
-    onSkip() {},
+    onSkip() {
+      skipped = true;
+    },
     resumeState,
     onResumeStateChange: (draft) => resumeDrafts.push(draft),
   };
@@ -266,6 +269,7 @@ async function createSetupHarness(
       await React.act(async () => button.props.onClick());
     },
     proceeded: () => proceeded,
+    skipped: () => skipped,
     ready: () => ready,
     resumeDrafts: () => resumeDrafts,
     canProceed: () => !actionButton("onboarding.rehaul.provider.proceed").props.disabled,
@@ -361,7 +365,7 @@ test("a refused concurrent Whisper download preserves the original pending selec
   assert.equal(setup.ready(), true);
 });
 
-test("cancelling the newest assistant download blocks both ways to continue until a model is chosen", async (t) => {
+test("cancelling the newest assistant download permits Skip without activating an older model", async (t) => {
   const setup = await createSetupHarness(t, { assistant: true });
   await setup.click(FIRST_LLM, "onboarding.rehaul.local.download");
   await setup.click(SECOND_LLM, "onboarding.rehaul.local.download");
@@ -372,8 +376,10 @@ test("cancelling the newest assistant download blocks both ways to continue unti
   assert.equal(setup.pending.hasPendingLocalModels(), false);
   assert.deepEqual(
     { proceed: setup.canProceed(), skip: setup.canSkip() },
-    { proceed: false, skip: false }
+    { proceed: false, skip: true }
   );
+  await setup.skip();
+  assert.equal(setup.skipped(), true);
   await setup.complete(FIRST_LLM);
   assert.equal(setup.store.getState().chatAgentModel, "");
   assert.equal(setup.canProceed(), false);
@@ -434,6 +440,13 @@ test("Skip marks a pending model for background activation", async (t) => {
   assert.equal(setup.canSkip(), true);
   await setup.skip();
   assert.equal(localStorage.getItem("localSetupPending"), "true");
+});
+
+test("the assistant step can be skipped with no model selected or downloading", async (t) => {
+  const setup = await createSetupHarness(t, { assistant: true });
+  assert.equal(setup.canProceed(), false);
+  await setup.skip();
+  assert.equal(setup.skipped(), true);
 });
 
 test("choosing a local model records it in the resume draft", async (t) => {

@@ -10,6 +10,10 @@ import { calendarTool } from "./calendarTool";
 import { calendarAvailabilityTool } from "./calendarAvailabilityTool";
 import { createSnippetTool, createUpdateSnippetsTool, type SnippetActions } from "./snippetTool";
 import { createUpdateDictionaryTool, type DictionaryActions } from "./dictionaryTool";
+import {
+  registerConnectorTools,
+  type ConnectorToolSettings,
+} from "./connectors/connectorToolModules";
 import type { ContainerScope } from "../../types/chat";
 
 export { ToolRegistry } from "./ToolRegistry";
@@ -24,6 +28,10 @@ interface ToolRegistrySettings {
   webSearchEnabled: boolean;
   /** Live dictionary and snippet access; enables the vocabulary tools. */
   vocabulary?: DictionaryActions & SnippetActions;
+  /** Present only when connectors are available (signed in, paid, policy allows). */
+  connectors?: ConnectorToolSettings;
+  /** Leaves out update_note, for a turn that must not change any note. */
+  keepNotesUnchanged?: boolean;
 }
 
 export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry {
@@ -33,7 +41,7 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
   registry.register(createSearchNotesTool({ useCloudSearch, fixedScope: settings.searchScope }));
   registry.register(getNoteTool);
   registry.register(createNoteTool);
-  registry.register(updateNoteTool);
+  if (!settings.keepNotesUnchanged) registry.register(updateNoteTool);
   registry.register(listFoldersTool);
   registry.register(clipboardTool);
 
@@ -52,6 +60,8 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
     registry.register(calendarTool);
     registry.register(calendarAvailabilityTool);
   }
+
+  if (settings.connectors) registerConnectorTools(registry, settings.connectors);
 
   return registry;
 }

@@ -16,6 +16,7 @@ function createHarness() {
     refCursor: 0,
     values: {},
     refs: {},
+    socialSignIns: [],
     effects: [],
     cleanups: [],
     debouncedCalls: 0,
@@ -74,7 +75,7 @@ async function settleAsyncHandler() {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
-test("email authentication discovers accounts, restores drafts, and persists them once per pause", async (t) => {
+async function createAuthenticationRenderer(t) {
   installBrowserGlobals(t, { window: { electronAPI: {} } });
   // The compact Back control is portalled to body (it has to out-stack the
   // onboarding shell's drag band), so rendering reads document.body.
@@ -153,7 +154,10 @@ test("email authentication discovers accounts, restores drafts, and persists the
           },
           signIn: { async email() { return {}; } },
         };
-        export async function signInWithSocial() { return {}; }
+        export async function signInWithSocial(provider) {
+          globalThis.__authenticationStepHarness.socialSignIns.push(provider);
+          return {};
+        }
         export async function signInWithSSO(email) {
           const harness = globalThis.__authenticationStepHarness;
           harness.ssoCalls.push(email);
@@ -178,6 +182,8 @@ test("email authentication discovers accounts, restores drafts, and persists the
         return children;
       }`,
       "/utils/logger": `export default { error() {} };`,
+      // Off-macOS on purpose: a platform gate around a provider fails the
+      // Apple sign-in test instead of passing on the Node default.
       "/utils/platform": `export function getCachedPlatform() { return "linux"; }`,
       "/ForgotPasswordView": `export default function ForgotPasswordView() { return null; }`,
       "/OnboardingShell": `
@@ -225,6 +231,12 @@ test("email authentication discovers accounts, restores drafts, and persists the
     await settleAsyncHandler();
     return render(harness, overrides);
   };
+
+  return { render, typeEmail, submitEmail };
+}
+
+test("email authentication discovers accounts, restores drafts, and persists them once per pause", async (t) => {
+  const { render, typeEmail, submitEmail } = await createAuthenticationRenderer(t);
 
   const existingAccount = createHarness();
   existingAccount.discoveryResult = { exists: true };
@@ -399,4 +411,22 @@ test("email authentication discovers accounts, restores drafts, and persists the
   assert.deepEqual(flushedWrites, [
     { authMode: null, email: "gone@example.com", fullName: "", ssoDiscovery: null },
   ]);
+});
+
+test("Apple sign-in is offered off macOS and shares the browser sign-in gate", async (t) => {
+  const { render } = await createAuthenticationRenderer(t);
+
+  const harness = createHarness();
+  const appleTile = providerTile(render(harness), "Apple");
+  assert.ok(appleTile, "Apple sign-in should render on Linux");
+  await appleTile.props.onClick();
+  assert.deepEqual(harness.socialSignIns, ["apple"]);
+
+  globalThis.window.electronAPI.getOAuthProtocolRegistered = async () => false;
+  const unregistered = createHarness();
+  render(unregistered);
+  await settleAsyncHandler();
+  const blockedTile = providerTile(render(unregistered), "Apple");
+  assert.equal(blockedTile.props.disabled, true);
+  assert.equal(blockedTile.props.title, "auth.social.protocolUnavailable");
 });

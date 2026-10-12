@@ -87,7 +87,23 @@ import { createIcon } from "./createIcon";
 import * as Nucleo from "./nucleo";
 
 export type { IconComponent, IconProps } from "./createIcon";
-export { Circle, Square } from "./primitives";
+export {
+  Bold,
+  Circle,
+  CopyRounded,
+  FolderRounded,
+  Heading,
+  Italic,
+  List,
+  ListChecks,
+  ListEnd,
+  ListOrdered,
+  Quote,
+  Square,
+  SquareSlash,
+  Strikethrough,
+  Table,
+} from "./primitives";
 
 ${exportLines.join("\n")}
 `;

@@ -59,28 +59,21 @@ test("a silent Windows capture hands the live session to renderer loopback", () 
   // capture_silent warning is the only trigger back to the Chromium fallback.
   assert.match(
     source,
-    /if \(code === "capture_silent"\) \{\s*void degradeMeetingSystemAudioToLoopback\(event\);/
+    /if \(code === "capture_silent"\) \{\s*degradeMeetingSystemAudioToLoopback\(event\);/
   );
-
-  const degradeStart = source.indexOf("const degradeMeetingSystemAudioToLoopback");
-  assert.ok(degradeStart >= 0);
-  const degradeSection = source.slice(
-    degradeStart,
-    source.indexOf("const startManagedMeetingSystemAudio")
-  );
-  // One-shot, and never fires once the helper has proven it can hear audio.
   assert.match(
-    degradeSection,
-    /if \(meetingSystemAudioDegraded \|\| meetingSystemAudioHeard\) return;/
+    source,
+    /onChunk: \(chunk\) => \{\s*if \(!meetingSystemAudioHandover\.acceptNativeChunk\(chunk\)\) return;/
   );
-  assert.match(degradeSection, /windowsLoopbackAudioManager\?\.stop\(\)/);
-  assert.match(degradeSection, /send\("meeting-system-audio-degraded"\)/);
 
   // Leaking the latch across sessions would pin the fallback off for the rest
   // of the app's life, so it resets everywhere the heard-audio latch does.
   assert.equal(
-    (source.match(/meetingSystemAudioHeard = false;\s*\n\s*meetingSystemAudioDegraded = false;/g) ?? [])
-      .length,
+    (
+      source.match(
+        /meetingSystemAudioHeard = false;\s*\n\s*meetingSystemAudioHandover\.reset\(\);/g
+      ) ?? []
+    ).length,
     2
   );
 });
@@ -108,7 +101,10 @@ test("the system-audio watchdog is armed beside the silence timer and torn down 
   // that reported stalls it could not recover from.
   const armStart = source.indexOf("const startMeetingSystemAudioWatchdog");
   assert.ok(armStart >= 0);
-  const armSection = source.slice(armStart, source.indexOf("const rollbackMeetingTranscriptionStart"));
+  const armSection = source.slice(
+    armStart,
+    source.indexOf("const rollbackMeetingTranscriptionStart")
+  );
   assert.match(armSection, /clearMeetingSystemAudioTicker\(\);/);
   assert.doesNotMatch(armSection, /stopMeetingSystemAudioWatchdog\(\);/);
   assert.doesNotMatch(armSection, /detachCapture\(\)/);
@@ -116,11 +112,7 @@ test("the system-audio watchdog is armed beside the silence timer and torn down 
   // Every path that clears the one-shot timer also stops the watchdog, plus the
   // mic-only fallback, which strands the restart hook on a dead manager.
   for (const [label, from, to] of [
-    [
-      "rollback",
-      "const rollbackMeetingTranscriptionStart",
-      "const setupDictationCallbacks",
-    ],
+    ["rollback", "const rollbackMeetingTranscriptionStart", "const setupDictationCallbacks"],
     ["stop", "const stopMeetingTranscription", "const meetingTranscriptionLifecycle"],
     ["mic-only fallback", "const fallBackToMicOnly", "const startMeetingSystemAudio = async"],
   ]) {
@@ -170,4 +162,17 @@ test("meeting connects forward the credential mode", () => {
     // Anchored: an unanchored match also accepts the key commented out.
     assert.match(block, /^\s*mode: options\.mode,$/m);
   }
+});
+
+test("a mid-meeting renewal refused for the session reports the sign-in sentinel", () => {
+  // The 55-minute renewal and reconnects mint new tokens; a stale session used to
+  // reach the toast as the API's bare "Invalid session" (#2427).
+  const reconnectCatch = source.slice(
+    source.indexOf('debugLogger.error("Meeting stream reconnect failed"'),
+    source.indexOf("return canRestoreOld;")
+  );
+  assert.match(
+    reconnectCatch,
+    /"meeting-transcription-error",\s*isSignInRefusal\(error\) \? "signInExpired" : error\.message/
+  );
 });

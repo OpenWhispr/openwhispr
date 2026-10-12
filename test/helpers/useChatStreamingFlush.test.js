@@ -5,6 +5,7 @@ const path = require("node:path");
 const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 const {
+  SIGNED_OUT_AUTH_MOCK,
   createRendererServer,
   installBrowserGlobals,
   installHookDom,
@@ -73,6 +74,7 @@ async function renderChatStreaming(
   const container = live ? installHookDom(t) : null;
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-chat-streaming-flush-test-",
+    mockModules: SIGNED_OUT_AUTH_MOCK,
   });
   const [{ default: viteI18next }, { initReactI18next }] = await Promise.all([
     vite.ssrLoadModule("i18next"),
@@ -443,3 +445,26 @@ for (const withContent of [true, false]) {
     await assertNoLateWrites(harness);
   });
 }
+
+test("plainTextResponse appends the plain-text instruction to the system prompt", async (t) => {
+  const requestBodies = [];
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  globalThis.fetch = async (_url, init) => {
+    requestBodies.push(String(init?.body));
+    return new Response(sseEvent({ content: "ok" }, "stop") + "data: [DONE]\n\n", {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    });
+  };
+  const harness = await renderChatStreaming(t);
+
+  await harness.captured.sendToAI("draft a reply", [], { plainTextResponse: true });
+  await harness.captured.sendToAI("draft a reply", []);
+
+  assert.equal(requestBodies.length, 2);
+  assert.match(requestBodies[0], /OUTPUT FORMAT:/);
+  assert.doesNotMatch(requestBodies[1], /OUTPUT FORMAT:/);
+});

@@ -22,7 +22,12 @@ const getMeetingStreamingClient = (provider) => {
   return StreamingClient;
 };
 
-const getMeetingConnectionKey = (options = {}) =>
+// These authenticate with saved credentials whatever the mode says.
+const SAVED_KEY_PROVIDERS = new Set(["corti-realtime", "tinfoil-realtime"]);
+
+// A connection that authenticates with a saved key also records the count of key
+// saves it opened under, so a start never reuses one opened before a save.
+const getMeetingConnectionKey = (options = {}, credentialGeneration = null) =>
   JSON.stringify({
     provider: options.provider,
     model: options.model,
@@ -31,6 +36,10 @@ const getMeetingConnectionKey = (options = {}) =>
     environment: options.environment,
     tenant: options.tenant,
     keyterms: options.keyterms,
+    credentialGeneration:
+      options.mode === "byok" || SAVED_KEY_PROVIDERS.has(options.provider)
+        ? credentialGeneration
+        : null,
   });
 
 module.exports = {

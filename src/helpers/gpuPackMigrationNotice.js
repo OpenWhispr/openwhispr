@@ -43,17 +43,23 @@ function read() {
   }
 }
 
-function recordOnce(packNames) {
+// `occasion` scopes the "once": a pack an update made unusable is noticed once
+// per occasion (e.g. per app version), apart from its one orphan notice.
+function recordOnce(packNames, occasion = "") {
   let flagged = [];
   try {
     const { packs } = JSON.parse(fs.readFileSync(getFlaggedPath(), "utf8"));
     if (Array.isArray(packs)) flagged = packs;
   } catch {}
-  const unseen = (packNames || []).filter((name) => !flagged.includes(name));
+  const flagOf = (name) => (occasion ? `${name}@${occasion}` : name);
+  const unseen = (packNames || []).filter((name) => !flagged.includes(flagOf(name)));
   if (unseen.length === 0) return;
   record(unseen);
   try {
-    fs.writeFileSync(getFlaggedPath(), JSON.stringify({ packs: [...flagged, ...unseen] }));
+    fs.writeFileSync(
+      getFlaggedPath(),
+      JSON.stringify({ packs: [...flagged, ...unseen.map(flagOf)] })
+    );
   } catch {
     // Best-effort: the user may be notified again next launch.
   }

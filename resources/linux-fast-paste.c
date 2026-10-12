@@ -1,4 +1,5 @@
 #define _GNU_SOURCE
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,21 +7,33 @@
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 #include <X11/Xutil.h>
+#include <X11/XKBlib.h>
 #include <X11/extensions/XTest.h>
 #include <X11/extensions/shape.h>
 #include <X11/keysym.h>
+#include <dirent.h>
+#include <fcntl.h>
+#include <linux/input.h>
 #include <math.h>
+#include <sys/ioctl.h>
+#include <time.h>
 #include <unistd.h>
 
 #ifdef HAVE_UINPUT
 #include <linux/uinput.h>
-#include <linux/input.h>
-#include <fcntl.h>
 #include <errno.h>
 #endif
 
 #ifdef HAVE_ATSPI
 #include <atspi/atspi.h>
+
+/* libatspi gives every application it hasn't seen yet 15s to answer, and every
+ * application is new to this short-lived process. One peer that stops
+ * answering (xdg-desktop-portal-gtk stuck at its fd limit, #1944) then stalls
+ * the whole walk past the caller's kill. Bound every call instead, so the walk
+ * skips that peer, still reaches the focused window, and stays inside the
+ * app's 1.2s selection and 2s target budgets. */
+#define ATSPI_CALL_TIMEOUT_MS 500
 #endif
 
 /* Paste key sequence. SHIFT_INSERT is the universal Linux paste shortcut —
@@ -355,13 +368,25 @@ static const char *terminal_classes[] = {
     "terminator", "xterm", "urxvt", "rxvt", "tilix", "terminology",
     "wezterm", "foot", "st", "yakuake", "ghostty", "guake", "tilda",
     "hyper", "tabby", "sakura", "warp", "termius", "waveterm",
-    "ptyxis", "kgx", "org.gnome.console", NULL
+    "ptyxis", "kgx", "org.gnome.console", "cosmicterm", "xst", "stterm", NULL
 };
+
+/* A short name like "st" would match inside unrelated names
+ * ("com.system76.CosmicEdit"), so it must be a whole word. */
+static int contains_terminal_name(const char *wm_class, const char *name) {
+    size_t len = strlen(name);
+    if (len > 2) return strcasestr(wm_class, name) != NULL;
+    for (const char *p = wm_class; (p = strcasestr(p, name)); p++) {
+        if ((p == wm_class || !isalnum((unsigned char)p[-1])) && !isalnum((unsigned char)p[len]))
+            return 1;
+    }
+    return 0;
+}
 
 static int is_terminal(const char *wm_class) {
     if (!wm_class) return 0;
     for (int i = 0; terminal_classes[i]; i++) {
-        if (strcasestr(wm_class, terminal_classes[i]))
+        if (contains_terminal_name(wm_class, terminal_classes[i]))
             return 1;
     }
     return 0;
@@ -398,8 +423,14 @@ static int check_parent_terminal(Display *dpy, Window win) {
 }
 
 #ifdef HAVE_ATSPI
+static int init_atspi(void) {
+    int status = atspi_init();
+    atspi_set_timeout(ATSPI_CALL_TIMEOUT_MS, -1);
+    return status;
+}
+
 static int detect_terminal_atspi(void) {
-    atspi_init();
+    if (init_atspi() != 0) return -1;
     AtspiAccessible *desktop = atspi_get_desktop(0);
     if (!desktop) return -1;
 
@@ -490,6 +521,7 @@ static int atspi_active_pid(AtspiAccessible *app) {
 }
 
 static int print_atspi_target(void) {
+    if (init_atspi() != 0) return 1;
     AtspiAccessible *app = NULL;
     AtspiAccessible *win = find_active_atspi_window(&app);
     int pid = app ? atspi_active_pid(app) : 0;
@@ -501,6 +533,7 @@ static int print_atspi_target(void) {
 }
 
 static int print_atspi_selection(void) {
+    if (init_atspi() != 0) return 1;
     AtspiAccessible *app = NULL;
     AtspiAccessible *win = find_active_atspi_window(&app);
     int pid = app ? atspi_active_pid(app) : 0;
@@ -843,6 +876,128 @@ static int serve_input_region(Window window)
     return 0;
 }
 
+/* A paste or copy chord injected while the user still physically holds a
+ * modifier (the rest of a push-to-talk chord, or a tap hotkey still down when a
+ * fast transcript lands) reaches the target as a different shortcut, and the
+ * text is lost (#2113). Releasing the key on the user's behalf is not possible:
+ * the kernel drops a key-up from a virtual device that never pressed that key.
+ * So wait for the user to let go instead. */
+#define MODIFIER_POLL_MS 10
+/* Lets the compositor process the physical release before the chord arrives. */
+#define MODIFIER_SETTLE_MS 30
+#define MAX_KEYBOARDS 64
+#define KEY_BITS_SIZE (KEY_MAX / 8 + 1)
+
+typedef enum {
+    MODIFIERS_RELEASED = 0,
+    MODIFIERS_HELD     = 1,
+    MODIFIERS_UNKNOWN  = 2,
+} modifier_state_t;
+
+static const int modifier_keys[] = {
+    KEY_LEFTCTRL, KEY_RIGHTCTRL, KEY_LEFTSHIFT, KEY_RIGHTSHIFT,
+    KEY_LEFTALT,  KEY_RIGHTALT,  KEY_LEFTMETA,  KEY_RIGHTMETA,
+};
+
+static int test_key_bit(const unsigned char *bits, int code) {
+    return (bits[code / 8] >> (code % 8)) & 1;
+}
+
+/* ydotoold's virtual keyboard can keep a modifier down after an interrupted
+ * chord. That is not the user's hand, so it must not hold every paste back.
+ * The name is the same in ydotool 0.1.x and 1.0.x. */
+#define YDOTOOLD_DEVICE_NAME "ydotoold virtual device"
+
+/* The KEY_A test from linux-key-listener.c: EV_KEY devices with a KEY_A bit. */
+static int open_keyboards(int *fds) {
+    DIR *dir = opendir("/dev/input");
+    if (!dir) return 0;
+
+    int count = 0;
+    struct dirent *ent;
+    while ((ent = readdir(dir)) && count < MAX_KEYBOARDS) {
+        if (strncmp(ent->d_name, "event", 5) != 0) continue;
+
+        char path[512];
+        snprintf(path, sizeof(path), "/dev/input/%s", ent->d_name);
+        int fd = open(path, O_RDONLY | O_NONBLOCK);
+        if (fd < 0) continue;
+
+        unsigned char key_bits[KEY_BITS_SIZE] = { 0 };
+        char name[128] = "";
+        ioctl(fd, EVIOCGNAME(sizeof(name) - 1), name);
+        if (ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(key_bits)), key_bits) < 0 ||
+            !test_key_bit(key_bits, KEY_A) || strcmp(name, YDOTOOLD_DEVICE_NAME) == 0) {
+            close(fd);
+            continue;
+        }
+        fds[count++] = fd;
+    }
+    closedir(dir);
+    return count;
+}
+
+static modifier_state_t evdev_modifier_state(const int *fds, int count) {
+    for (int i = 0; i < count; i++) {
+        unsigned char keys[KEY_BITS_SIZE] = { 0 };
+        if (ioctl(fds[i], EVIOCGKEY(sizeof(keys)), keys) < 0) continue;
+        for (size_t k = 0; k < sizeof(modifier_keys) / sizeof(modifier_keys[0]); k++) {
+            if (test_key_bit(keys, modifier_keys[k])) return MODIFIERS_HELD;
+        }
+    }
+    return MODIFIERS_RELEASED;
+}
+
+/* base_mods only counts keys that are down, so a locked Caps Lock or Num Lock
+ * never reads as held. A server whose state cannot be read is unknown, not
+ * released: the caller must know the wait was blind. */
+static modifier_state_t x11_modifier_state(Display *display) {
+    XkbStateRec state;
+    if (XkbGetState(display, XkbUseCoreKbd, &state) != Success) return MODIFIERS_UNKNOWN;
+    return state.base_mods != 0 ? MODIFIERS_HELD : MODIFIERS_RELEASED;
+}
+
+/* Mirrors getLinuxSessionInfo() in src/helpers/linuxSession.js. XWayland only
+ * tracks keys while one of its own windows has focus, so the X server is trusted
+ * on an X11 session only; Wayland reads the kernel's key state, which needs the
+ * same /dev/input access as push-to-talk. */
+static int is_wayland_session(void) {
+    const char *session_type = getenv("XDG_SESSION_TYPE");
+    return (session_type && strcasecmp(session_type, "wayland") == 0) ||
+           getenv("WAYLAND_DISPLAY") != NULL;
+}
+
+static long monotonic_ms(void) {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return now.tv_sec * 1000L + now.tv_nsec / 1000000L;
+}
+
+static modifier_state_t await_modifier_release(int timeout_ms, int *waited_ms) {
+    Display *display = is_wayland_session() ? NULL : XOpenDisplay(NULL);
+    int fds[MAX_KEYBOARDS];
+    int count = display ? 0 : open_keyboards(fds);
+    *waited_ms = 0;
+    if (!display && count == 0) return MODIFIERS_UNKNOWN;
+
+    /* Measured on the clock, not by counting sleeps: usleep overshoots under
+     * load, and the caller kills a helper that runs past timeout + 1s. */
+    long started_at = monotonic_ms();
+    modifier_state_t state;
+    while ((state = display ? x11_modifier_state(display) : evdev_modifier_state(fds, count)) ==
+               MODIFIERS_HELD &&
+           *waited_ms < timeout_ms) {
+        usleep(MODIFIER_POLL_MS * 1000);
+        *waited_ms = (int)(monotonic_ms() - started_at);
+    }
+
+    if (display) XCloseDisplay(display);
+    for (int i = 0; i < count; i++) close(fds[i]);
+
+    if (state == MODIFIERS_RELEASED && *waited_ms > 0) usleep(MODIFIER_SETTLE_MS * 1000);
+    return state;
+}
+
 int main(int argc, char *argv[]) {
     int force_terminal = 0;
     int force_shift_insert = 0;
@@ -854,6 +1009,7 @@ int main(int argc, char *argv[]) {
     int input_region_server = 0;
     int atspi_target_only = 0;
     int atspi_selection = 0;
+    int modifier_wait_ms = -1;
     const char *restore_token = NULL;
     Window target_window = None;
 
@@ -882,15 +1038,25 @@ int main(int argc, char *argv[]) {
             restore_token = argv[++i];
         } else if (strcmp(argv[i], "--window") == 0 && i + 1 < argc) {
             target_window = (Window)strtoul(argv[++i], NULL, 0);
+        } else if (strcmp(argv[i], "--await-modifier-release") == 0 && i + 1 < argc) {
+            modifier_wait_ms = atoi(argv[++i]);
         }
     }
 
-    /* --capabilities makes older binaries exit harmlessly instead of pasting
-     * when they encounter the new server flag. */
+    /* Callers pair these flags with --capabilities, so an older binary that
+     * ignores them prints its capabilities and exits instead of pasting. */
     if (input_region_server) return serve_input_region(target_window);
 
+    if (modifier_wait_ms >= 0) {
+        static const char *state_names[] = { "released", "held", "unknown" };
+        int waited_ms;
+        modifier_state_t state = await_modifier_release(modifier_wait_ms, &waited_ms);
+        printf("MODIFIERS %s %d\n", state_names[state], waited_ms);
+        return 0;
+    }
+
     if (capabilities_only) {
-        printf("paste-v1 selection-copy-v1 target-window-v1");
+        printf("paste-v1 selection-copy-v1 target-window-v1 modifier-wait-v1");
 #ifdef HAVE_GIO
         printf(" portal-keysym-v1");
 #endif

@@ -98,3 +98,16 @@ test("a reply cut off at the token cap gets the cleanup truncation message", () 
   assert.equal(error.messageKey, "hooks.audioRecording.errorDescriptions.cleanupTruncated");
   assert.equal(error.messageParams, undefined);
 });
+
+test("a model busy with another request gets a translatable message, not the raw guard text", () => {
+  // The bridge serves one request at a time; a note summarised in parts holds
+  // it for minutes, so a second caller must get copy the UI can translate.
+  const error = errors.buildLocalInferenceError({
+    error: "Already processing a request",
+    code: "LOCAL_MODEL_BUSY",
+  });
+
+  assert.equal(error.code, "LOCAL_MODEL_BUSY");
+  assert.equal(error.messageKey, "models.errors.localModelBusy");
+  assert.equal(error.messageParams, undefined);
+});

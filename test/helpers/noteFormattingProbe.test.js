@@ -26,9 +26,17 @@ test("the probe transcript is meeting-sized, deterministic and in the editor's l
 
 test("the probe sends the Detailed Notes prompt exactly as the note store assembles it", async () => {
   const { buildNoteProbeSystemPrompt } = await load();
-  const { BUILTIN_ACTIONS, DETAILED_NOTES_KEY, MEETING_INPUT_PREAMBLE } =
+  const { BUILTIN_ACTIONS, DETAILED_NOTES_KEY } =
     await import("../../src/helpers/builtinActions.js");
+  const { compileTemplatePrompt } = await import("../../src/helpers/templatePrompts.js");
   const detailed = BUILTIN_ACTIONS.find((action) => action.translationKey === DETAILED_NOTES_KEY);
+  // The row the database seeds from the built-in, as the note store reads it.
+  const row = {
+    prompt: detailed.prompt,
+    sections: detailed.sections,
+    translation_key: detailed.translationKey,
+  };
 
-  assert.equal(buildNoteProbeSystemPrompt(), MEETING_INPUT_PREAMBLE + detailed.prompt);
+  assert.equal(buildNoteProbeSystemPrompt(), compileTemplatePrompt(row, { isMeetingNote: true }));
+  assert.match(buildNoteProbeSystemPrompt(), /\n## Action Items\n/);
 });

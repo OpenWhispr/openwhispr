@@ -265,14 +265,25 @@ function createFakeCloud(config = {}) {
   function handle(method, pathname, query, body) {
     const route = `${method} ${pathname}`;
     switch (route) {
-      case "POST /api/notes/create":
-        return upsertRow(noteCollection, body ?? {});
+      case "POST /api/notes/create": {
+        const rowCreated = ![...notes.values()].some(
+          (row) => row.client_note_id === body?.client_note_id
+        );
+        return {
+          ...upsertRow(noteCollection, body ?? {}),
+          row_created: rowCreated,
+          write_applied: true,
+        };
+      }
       case "POST /api/notes/batch-create": {
         const inputs = Array.isArray(body?.notes) ? body.notes : [];
         return {
           created: inputs.map((input) => {
+            const rowCreated = ![...notes.values()].some(
+              (row) => row.client_note_id === input.client_note_id
+            );
             const row = upsertRow(noteCollection, input);
-            return { client_note_id: row.client_note_id, id: row.id };
+            return { ...row, row_created: rowCreated, write_applied: true };
           }),
         };
       }

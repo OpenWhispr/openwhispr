@@ -75,8 +75,12 @@ export function useStickToBottom<T extends HTMLElement>(
     const ro = new ResizeObserver(() => {
       if (followerRef.current?.isFollowing()) pinToBottom(node);
     });
-    ro.observe(node);
-    if (content) ro.observe(content);
+    // The scroller's own border box: a resized viewport re-pins, but padding the scroller
+    // makes for an overlay over the page (the note chat over a transcript) doesn't move it.
+    ro.observe(node, { box: "border-box" });
+    // The content's border box, so bottom padding that makes room for the chat's own
+    // composer re-pins, keeping the last lines above it.
+    if (content) ro.observe(content, { box: "border-box" });
     return () => ro.disconnect();
   }, [dep, resetToTop]);
 

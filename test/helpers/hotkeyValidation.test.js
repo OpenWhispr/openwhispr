@@ -64,7 +64,7 @@ test("mixing left and right versions of the same modifier is rejected", async ()
   assert.equal(result.errorCode, "LEFT_RIGHT_MIX");
 });
 
-test("a single left-side modifier cannot be a hotkey, but a right-side one can (except on Linux)", async () => {
+test("a single left-side modifier cannot be a hotkey, but a right-side one can", async () => {
   const { validateHotkey } = await load();
 
   const left = validateHotkey("Control", "win32");
@@ -74,10 +74,10 @@ test("a single left-side modifier cannot be a hotkey, but a right-side one can (
   assert.equal(validateHotkey("RightOption", "darwin").valid, true);
   assert.equal(validateHotkey("RightAlt", "win32").valid, true);
 
-  // Right-side single modifiers need native listeners, which don't exist on Linux.
-  const linux = validateHotkey("RightAlt", "linux");
-  assert.equal(linux.valid, false);
-  assert.equal(linux.errorCode, "LEFT_MODIFIER_ONLY");
+  // Linux included: linux-key-listener watches right-side modifiers, and
+  // getNativeListenerKeys() routes them to it.
+  assert.equal(validateHotkey("RightAlt", "linux").valid, true);
+  assert.equal(validateHotkey("RightControl", "linux").valid, true);
 });
 
 test("two-modifier combos without a base key are valid", async () => {

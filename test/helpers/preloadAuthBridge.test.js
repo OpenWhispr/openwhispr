@@ -60,11 +60,12 @@ test("account ownership operations forward the account and credential generation
   const { api, invocations } = loadPreloadApi();
 
   await api.setActiveAccountScope("account-a", 7);
-  await api.deleteAccountData("account-a", 7);
+  await api.deleteAccountData("account-a", 7, { erasingDevice: true });
 
   assert.deepEqual(invocations, [
     ["set-active-account-scope", "account-a", 7],
-    ["delete-account-data", "account-a", 7],
+    // Erasing the device also revokes a Gmail grant shared with a calendar.
+    ["delete-account-data", "account-a", 7, { erasingDevice: true }],
   ]);
 });
 

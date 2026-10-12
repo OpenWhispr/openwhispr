@@ -46,6 +46,10 @@ export async function executeTranslationChain({
       // returned empty text.
       if (cleanupIsCloud) usedCloudReasoning = true;
     } catch (cleanupError) {
+      // Rejected output still came from a successful cloud call.
+      if (cleanupIsCloud && cleanupError?.code === "CLEANUP_OUTPUT_INVALID") {
+        usedCloudReasoning = true;
+      }
       if (onCleanupError) onCleanupError(cleanupError);
     }
   }

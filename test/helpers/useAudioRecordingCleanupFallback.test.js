@@ -22,7 +22,7 @@ export default class FakeAudioManager {
   shouldUseStreaming() { return false; }
   async safePaste() {
     this.pasteCalls += 1;
-    return globalThis.__cleanupFallbackPasteOutcome?.pasted === true;
+    return { pasted: globalThis.__cleanupFallbackPasteOutcome?.pasted === true };
   }
   async saveTranscription() { return true; }
   cleanup() {}

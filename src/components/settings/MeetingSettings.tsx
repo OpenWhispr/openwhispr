@@ -4,12 +4,13 @@ import { Cloud, Key, Cpu, Network } from "../icons";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { usePolicyModeOptions, usePolicySnapshot } from "../../hooks/usePolicy";
 import { isModeAllowedByPolicy } from "../../stores/policyRules";
+import { requestSignIn } from "../../utils/requestSignIn";
+import { Button } from "../ui/button";
 import { InferenceModeSelector, SettingsRow } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
 import { Toggle } from "../ui/toggle";
 import TranscriptionModelPicker from "../TranscriptionModelPicker";
 import type { InferenceMode } from "../../types/electron";
-import { useStartOnboarding } from "../../hooks/useStartOnboarding";
 import { getMeetingStreamingTranscriptionProviders } from "../../models/ModelRegistry";
 
 const MEETING_BYOK_PROVIDER_IDS = getMeetingStreamingTranscriptionProviders().map(
@@ -31,11 +32,25 @@ export function MeetingSpeakerDetectionRow() {
   );
 }
 
+function MeetingEchoCancellationRow() {
+  const { t } = useTranslation();
+  const meetingAecEnabled = useSettingsStore((s) => s.meetingAecEnabled);
+  const setMeetingAecEnabled = useSettingsStore((s) => s.setMeetingAecEnabled);
+
+  return (
+    <SettingsRow
+      label={t("settingsPage.transcription.aec.toggle.title")}
+      description={t("settingsPage.transcription.aec.toggle.description")}
+    >
+      <Toggle checked={meetingAecEnabled} onChange={setMeetingAecEnabled} />
+    </SettingsRow>
+  );
+}
+
 const noop = () => {};
 
 export function MeetingTranscriptionPanel() {
   const { t } = useTranslation();
-  const startOnboarding = useStartOnboarding();
   const policySnapshot = usePolicySnapshot();
 
   const {
@@ -71,7 +86,7 @@ export function MeetingTranscriptionPanel() {
         description: t("settingsPage.transcription.modes.openwhisprDesc"),
         icon: <Cloud className="w-4 h-4" />,
         disabled: !isSignedIn,
-        badge: !isSignedIn ? t("common.freeAccountRequired") : undefined,
+        signInRequired: !isSignedIn,
       },
       {
         id: "providers",
@@ -102,7 +117,7 @@ export function MeetingTranscriptionPanel() {
     if (!isModeAllowed(mode)) return;
     if (mode === "self-hosted") return;
     if (mode === "openwhispr" && !isSignedIn) {
-      startOnboarding();
+      requestSignIn();
       return;
     }
     if (mode === effectiveTranscriptionMode) return;
@@ -177,9 +192,18 @@ export function MeetingTranscriptionPanel() {
         onSelect={handleTranscriptionModeSelect}
       />
 
+      {effectiveTranscriptionMode === "openwhispr" && !isSignedIn && (
+        <p className="text-sm text-muted-foreground">
+          {t("settingsPage.transcription.meetingCloudSignedOut")}{" "}
+          <Button variant="link" className="h-auto p-0" onClick={requestSignIn}>
+            {t("common.signIn")}
+          </Button>
+        </p>
+      )}
       {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
       {effectiveTranscriptionMode === "local" && renderTranscriptionPicker("local")}
       <MeetingSpeakerDetectionRow />
+      <MeetingEchoCancellationRow />
     </div>
   );
 }

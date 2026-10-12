@@ -286,6 +286,7 @@ test("an explicit restart clears every persisted route choice and returns to aut
     ["skipAuth", "true"],
     ["localSetupPending", "true"],
     ["pendingLocalModelSelectionsV1", '{"assistant":{"provider":"qwen","modelId":"qwen-9b"}}'],
+    ["signInPromptedAt", "1700000000000"],
   ]);
   const storage = {
     setItem: (key, value) => values.set(key, value),
@@ -301,6 +302,7 @@ test("an explicit restart clears every persisted route choice and returns to aut
   assert.equal(values.has("skipAuth"), false);
   assert.equal(values.has("localSetupPending"), false);
   assert.equal(values.has("pendingLocalModelSelectionsV1"), false);
+  assert.equal(values.has("signInPromptedAt"), false, "a restart is not a sign-in");
 });
 
 test("legacy numeric steps migrate conservatively", async () => {

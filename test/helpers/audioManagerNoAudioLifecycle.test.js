@@ -2,17 +2,19 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { loadAudioManager } = require("./harness/audioManager");
 
-async function loadManagerClass(t) {
+const LOCAL_WHISPER_SETTINGS = {
+  useLocalWhisper: true,
+  localTranscriptionProvider: "whisper",
+  whisperModel: "base",
+  cloudTranscriptionMode: "byok",
+  isSignedIn: false,
+};
+
+async function loadManagerClass(t, settings = LOCAL_WHISPER_SETTINGS) {
   const { AudioManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-no-audio-lifecycle-test-",
     settingsKey: "__noAudioLifecycleSettings",
-    settings: {
-      useLocalWhisper: true,
-      localTranscriptionProvider: "whisper",
-      whisperModel: "base",
-      cloudTranscriptionMode: "byok",
-      isSignedIn: false,
-    },
+    settings,
   });
   return AudioManager;
 }
@@ -27,6 +29,9 @@ function createManager(AudioManager, failure) {
     pendingSelectionEdit: null,
     lastAudioBlob: {},
     processWithLocalWhisper: async () => {
+      throw failure;
+    },
+    processWithOpenWhisprCloud: async () => {
       throw failure;
     },
     onStateChange: (state) => order.push(state.isProcessing ? "processing" : "idle"),
@@ -59,4 +64,22 @@ test("dictionary-echo silence keeps the recording but shares the settled outcome
 
   assert.deepEqual(order, ["idle", "no-audio"]);
   assert.deepEqual(saved, [{ message: "No audio detected", code: DICTIONARY_ECHO_CODE }]);
+});
+
+test("Cloud finding no speech is the no-audio outcome and keeps the recording", async (t) => {
+  const AudioManager = await loadManagerClass(t, {
+    useLocalWhisper: false,
+    cloudTranscriptionMode: "openwhispr",
+    isSignedIn: true,
+  });
+  // cloud-transcribe's shape for the API's 422 (ipcHandlers.js).
+  const failure = Object.assign(new Error("No speech detected in audio"), {
+    code: "NO_SPEECH_DETECTED",
+  });
+  const { manager, order, saved } = createManager(AudioManager, failure);
+
+  await manager.processAudio({ size: 256, type: "audio/webm" });
+
+  assert.deepEqual(order, ["idle", "no-audio"]);
+  assert.deepEqual(saved, [{ message: "No speech detected in audio", code: "NO_SPEECH_DETECTED" }]);
 });

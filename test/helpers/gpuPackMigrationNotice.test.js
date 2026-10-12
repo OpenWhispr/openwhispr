@@ -62,6 +62,30 @@ test("recordOnce does not re-record a pack already noticed via record", () => {
   assert.equal(notice.read(), null);
 });
 
+test("recordOnce with an occasion notices again per occasion, apart from the orphan notice", () => {
+  // Already told once as an orphan (e.g. by the 1.8.3 migration)
+  notice.recordOnce(["CUDA whisper"]);
+  notice.clear();
+
+  // An update makes the pack unusable: that still gets its notice
+  notice.recordOnce(["CUDA whisper"], "outdated-1.10.0");
+  assert.deepEqual(notice.read(), { packs: ["CUDA whisper"] });
+
+  // Once per occasion, surviving a dismissal
+  notice.clear();
+  notice.recordOnce(["CUDA whisper"], "outdated-1.10.0");
+  assert.equal(notice.read(), null);
+
+  // The next version tells the user again while the pack is still unusable
+  notice.recordOnce(["CUDA whisper"], "outdated-1.10.1");
+  assert.deepEqual(notice.read(), { packs: ["CUDA whisper"] });
+
+  // The plain orphan notice keeps its own once
+  notice.clear();
+  notice.recordOnce(["CUDA whisper"]);
+  assert.equal(notice.read(), null);
+});
+
 test("empty recordings and corrupt sentinels read as no notice", () => {
   notice.record([]);
   assert.equal(notice.read(), null);

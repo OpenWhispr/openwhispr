@@ -4,11 +4,13 @@ import {
   type ScrollMetrics,
 } from "../../utils/scrollFollowState";
 
-export const FLOATING_CHAT_INSET_EXTRA_PX = 32;
-export const FLOATING_CHAT_MIN_VISIBLE_CONTENT_PX = 80;
-export const FLOATING_CHAT_MAX_HEIGHT_CSS = "calc(100% - 7rem)";
+// The bar's 28px below the panel, the open card's 8px overhang and a 4px gap.
+const FLOATING_CHAT_INSET_EXTRA_PX = 40;
+const FLOATING_CHAT_MIN_VISIBLE_CONTENT_PX = 80;
 
 const SCROLL_BOTTOM_THRESHOLD_PX = 80;
+const FLOATING_CHAT_TOP_CLEARANCE_PX =
+  FLOATING_CHAT_MIN_VISIBLE_CONTENT_PX + FLOATING_CHAT_INSET_EXTRA_PX;
 
 export type { ScrollMetrics };
 
@@ -30,6 +32,29 @@ interface FloatingChatLayoutDependencies {
   cancelFrame?: (frameId: number) => void;
 }
 
+interface FloatingChatSizeOptions {
+  panel: HTMLElement;
+  container: HTMLElement;
+}
+
+/** The open chat grows to fit its content, up to three-quarters of the note view: room for the default / menu. */
+export function observeFloatingChatMaxHeight(
+  { panel, container }: FloatingChatSizeOptions,
+  createResizeObserver: (callback: () => void) => ResizeObserverHandle = (callback) =>
+    new ResizeObserver(callback)
+): () => void {
+  const updateHeight = (): void => {
+    const availableHeight = Math.max(0, container.clientHeight - FLOATING_CHAT_TOP_CLEARANCE_PX);
+    panel.style.maxHeight = `${Math.min((container.clientHeight * 3) / 4, availableHeight)}px`;
+  };
+
+  updateHeight();
+  const observer = createResizeObserver(updateHeight);
+  observer.observe(container);
+
+  return (): void => observer.disconnect();
+}
+
 export function isNearScrollBottom(metrics: ScrollMetrics): boolean {
   return getScrollBottomDistance(metrics) <= SCROLL_BOTTOM_THRESHOLD_PX;
 }
@@ -48,8 +73,10 @@ export function observeFloatingChatLayout(
   const follower = createScrollFollowController({
     nearBottomThreshold: SCROLL_BOTTOM_THRESHOLD_PX,
   });
+  // The chat opens over the note without scrolling it; the inset only makes room to
+  // scroll the end into view, and a reader who does is followed from then on.
+  follower.leaveBottom();
   let frameId: number | null = null;
-  let forcePinPending = false;
   let touchY: number | null = null;
 
   const pinActiveScroller = (): void => {
@@ -59,24 +86,21 @@ export function observeFloatingChatLayout(
     follower.follow();
   };
 
-  const schedulePin = (force: boolean): void => {
-    forcePinPending ||= force;
-    if (!forcePinPending && !follower.isFollowing()) return;
+  const schedulePin = (): void => {
+    if (!follower.isFollowing()) return;
     if (frameId !== null) cancelFrame(frameId);
     frameId = requestFrame((): void => {
       frameId = null;
-      const shouldForce = forcePinPending;
-      forcePinPending = false;
-      if (shouldForce || follower.isFollowing()) pinActiveScroller();
+      if (follower.isFollowing()) pinActiveScroller();
     });
   };
 
-  const applyInset = (force = false): void => {
+  const applyInset = (): void => {
     container.style.setProperty(
       "--floating-inset",
       `${panel.offsetHeight + FLOATING_CHAT_INSET_EXTRA_PX}px`
     );
-    schedulePin(force);
+    schedulePin();
   };
 
   const updateFollowState = (): void => {
@@ -85,7 +109,7 @@ export function observeFloatingChatLayout(
   };
 
   // The capture listeners on the content root also see gestures over chrome
-  // that never scrolls the active scroller (consent strip, recording header).
+  // that never scrolls the active scroller (recording header).
   // A wheel there moves nothing, so no scroll event could ever rejoin follow
   // mode — only a gesture aimed at the scroller itself counts as leaving.
   const stopFollowing = (target: EventTarget | null): void => {
@@ -95,7 +119,6 @@ export function observeFloatingChatLayout(
     // no DOM globals; wheel/touch targets are always nodes in the renderer.
     if (target == null || !scroller.contains(target as Node)) return;
     follower.leaveBottom();
-    forcePinPending = false;
     if (frameId !== null) {
       cancelFrame(frameId);
       frameId = null;
@@ -126,7 +149,7 @@ export function observeFloatingChatLayout(
   contentRoot.addEventListener("touchstart", handleTouchStart, { capture: true, passive: true });
   contentRoot.addEventListener("touchmove", handleTouchMove, { capture: true, passive: true });
   contentRoot.addEventListener("touchend", handleTouchEnd, { capture: true, passive: true });
-  applyInset(true);
+  applyInset();
 
   const observer = createResizeObserver((): void => applyInset());
   observer.observe(panel);

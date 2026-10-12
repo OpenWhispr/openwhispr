@@ -10,11 +10,14 @@ import {
   useSettingsStore,
 } from "../../stores/settingsStore";
 import { useNotesOnboarding } from "../../hooks/useNotesOnboarding";
+import { NOTE_ACTION_LIMITS } from "../../helpers/builtinActions";
+import { useToast } from "../ui/useToast";
 import {
-  useActions,
+  useActionsOfKind,
   initializeActions,
   getActionName,
   getActionDescription,
+  resolveTemplate,
 } from "../../stores/actionStore";
 import { notesInputClass, notesTextareaClass } from "./shared";
 import { useDialogs } from "../../hooks/useDialogs";
@@ -23,6 +26,12 @@ import ReasoningModelSelector from "../ReasoningModelSelector";
 import { useSystemAudioPermission } from "../../hooks/useSystemAudioPermission";
 import { canManageSystemAudioInApp } from "../../utils/systemAudioAccess";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
+import { PAGE_CONTENT_WIDTH_CLASS } from "../ui/pageWidth";
+import { PAGE_HERO_ICON_TILE_CLASS } from "../ui/surfaces";
+
+const CARD_CLASS = "rounded-2xl border transition-colors duration-200";
+const CARD_IDLE_CLASS = "border-border/70 bg-card/50 dark:border-white/10 dark:bg-surface-2/60";
+const CARD_DONE_CLASS = "border-success/20 bg-success/[0.03]";
 
 interface NotesOnboardingProps {
   onComplete: () => void;
@@ -30,8 +39,9 @@ interface NotesOnboardingProps {
 
 export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const { isProUser, isProLoading, isLLMConfigured, complete } = useNotesOnboarding();
-  const actions = useActions();
+  const templates = useActionsOfKind("template");
   const [llmExpanded, setLlmExpanded] = useState(!isLLMConfigured && !isProUser);
   const [createExpanded, setCreateExpanded] = useState(false);
   const [actionName, setActionName] = useState("");
@@ -83,11 +93,15 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
     if (!actionName.trim() || !actionPrompt.trim()) return;
     setIsSaving(true);
     try {
-      await window.electronAPI.createAction(
+      const result = await window.electronAPI.createAction(
         actionName.trim(),
         actionDescription.trim(),
         actionPrompt.trim()
       );
+      if (!result.success) {
+        toast({ title: t("notes.actions.errors.saveFailed"), variant: "destructive" });
+        return;
+      }
       setActionName("");
       setActionDescription("");
       setActionPrompt("");
@@ -103,59 +117,53 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
     onComplete();
   };
 
-  const builtInAction = actions.find((a) => a.is_builtin === 1);
-  const customActions = actions.filter((a) => a.is_builtin !== 1);
+  // The template the summary button writes with, and the ones the user made.
+  const builtInAction = resolveTemplate(templates, null);
+  const customActions = templates.filter((a) => a.is_builtin !== 1);
 
   return (
-    <div className="flex flex-col items-center h-full overflow-y-auto px-6 py-6">
+    <div className="h-full overflow-y-auto">
       <div
-        className="w-full max-w-[420px] space-y-5 my-auto"
+        className={cn(PAGE_CONTENT_WIDTH_CLASS, "flex flex-col gap-5 px-6 py-8")}
         style={{ animation: "float-up 0.4s ease-out" }}
       >
-        <div className="flex flex-col items-center text-center">
-          <div className="w-10 h-10 rounded-[10px] bg-gradient-to-b from-accent/10 to-accent/[0.03] dark:from-accent/15 dark:to-accent/5 border border-accent/15 dark:border-accent/20 flex items-center justify-center mb-3">
-            <Sparkles size={17} strokeWidth={1.5} className="text-accent/60" />
+        <div className="flex flex-col items-center gap-2 pt-4 text-center">
+          <div className={cn(PAGE_HERO_ICON_TILE_CLASS, "mb-1")}>
+            <Sparkles size={20} className="text-foreground/60" />
           </div>
-          <h2 className="text-sm font-semibold text-foreground mb-1">
-            {t("notes.onboarding.actions.title")}
+          <h2 className="text-xl font-semibold tracking-tight text-foreground">
+            {t("notes.onboarding.templates.title")}
           </h2>
-          <p className="text-xs text-foreground/45 leading-relaxed max-w-[320px]">
-            {t("notes.onboarding.actions.description")}
+          <p className="max-w-xl text-[13px] leading-relaxed text-foreground/50 dark:text-foreground/45">
+            {t("notes.onboarding.templates.description")}
           </p>
         </div>
 
         {/* LLM Configuration — non-Pro only, deferred until pro status is known */}
         {!isProLoading && !isProUser && (
-          <div
-            className={cn(
-              "rounded-lg border transition-colors duration-200",
-              isLLMConfigured
-                ? "border-success/20 bg-success/[0.03]"
-                : "border-foreground/8 dark:border-white/10 bg-surface-1/30 dark:bg-white/[0.02]"
-            )}
-          >
+          <div className={cn(CARD_CLASS, isLLMConfigured ? CARD_DONE_CLASS : CARD_IDLE_CLASS)}>
             <button
               type="button"
               onClick={() => setLlmExpanded(!llmExpanded)}
               aria-expanded={llmExpanded}
-              className="flex items-center justify-between w-full px-4 py-3 text-start"
+              className="flex w-full items-center justify-between px-5 py-4 text-start"
             >
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-3">
                 <Zap
-                  size={13}
-                  className={cn(isLLMConfigured ? "text-success/60" : "text-foreground/45")}
+                  size={16}
+                  className={cn(isLLMConfigured ? "text-success/70" : "text-foreground/45")}
                 />
-                <span className="text-xs font-medium text-foreground/70">
+                <span className="text-sm font-medium text-foreground">
                   {t("notes.onboarding.llm.title")}
                 </span>
                 {isLLMConfigured && (
-                  <span className="text-xs text-success/60 font-medium">
+                  <span className="text-xs font-medium text-success/70">
                     {t("notes.onboarding.llm.configured")}
                   </span>
                 )}
               </div>
               <ChevronRight
-                size={12}
+                size={14}
                 className={cn(
                   "text-foreground/45 transition-transform duration-200",
                   llmExpanded ? "rotate-90" : "rtl:rotate-180"
@@ -164,8 +172,8 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
             </button>
 
             {llmExpanded && (
-              <div className="px-4 pb-4 space-y-3" style={{ animation: "float-up 0.2s ease-out" }}>
-                <p className="text-xs text-foreground/45 leading-relaxed">
+              <div className="space-y-4 px-5 pb-5" style={{ animation: "float-up 0.2s ease-out" }}>
+                <p className="text-sm leading-relaxed text-muted-foreground">
                   {t("notes.onboarding.llm.description")}
                 </p>
 
@@ -187,31 +195,27 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
 
         {/* System Audio Permission */}
         {shouldShowSystemAudioPermission && (
-          <div
-            className={cn(
-              "rounded-lg border transition-colors duration-200",
-              systemAudioGranted
-                ? "border-success/20 bg-success/[0.03]"
-                : "border-foreground/8 dark:border-white/10 bg-surface-1/30 dark:bg-white/[0.02]"
-            )}
-          >
-            <div className="flex items-center justify-between w-full px-4 py-3">
-              <div className="flex items-center gap-2.5">
+          <div className={cn(CARD_CLASS, systemAudioGranted ? CARD_DONE_CLASS : CARD_IDLE_CLASS)}>
+            <div className="flex w-full items-center justify-between gap-4 px-5 py-4">
+              <div className="flex items-center gap-3">
                 <Monitor
-                  size={13}
-                  className={cn(systemAudioGranted ? "text-success/60" : "text-foreground/45")}
+                  size={16}
+                  className={cn(
+                    "shrink-0",
+                    systemAudioGranted ? "text-success/70" : "text-foreground/45"
+                  )}
                 />
                 <div>
-                  <span className="text-xs font-medium text-foreground/70">
+                  <span className="text-sm font-medium text-foreground">
                     {t("notes.onboarding.systemAudio.title")}
                   </span>
-                  <p className="text-xs text-foreground/45 leading-relaxed mt-0.5">
+                  <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">
                     {t("notes.onboarding.systemAudio.description")}
                   </p>
                 </div>
               </div>
               {systemAudioGranted ? (
-                <span className="text-xs font-medium text-success/60 shrink-0">
+                <span className="shrink-0 text-xs font-medium text-success/70">
                   {t("notes.onboarding.systemAudio.enabled")}
                 </span>
               ) : (
@@ -220,10 +224,10 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
                   size="sm"
                   onClick={handleGrantSystemAudio}
                   disabled={isRequestingSystemAudio}
-                  className="h-7 text-xs shrink-0"
+                  className="shrink-0"
                 >
                   {isRequestingSystemAudio ? (
-                    <Loader2 size={12} className="animate-spin" />
+                    <Loader2 size={14} className="animate-spin" />
                   ) : (
                     t("notes.onboarding.systemAudio.grant")
                   )}
@@ -233,47 +237,46 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
           </div>
         )}
 
-        {/* Built-in action */}
+        {/* Built-in action, plus any custom actions the user just created */}
         <div>
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs font-medium text-foreground/50">
-              {t("notes.onboarding.actions.builtInLabel")}
-            </span>
-          </div>
-          {builtInAction && (
-            <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-foreground/6 dark:border-white/10 bg-surface-1/20 dark:bg-white/[0.02]">
-              <div className="w-7 h-7 rounded-md bg-accent/8 dark:bg-accent/12 border border-accent/10 dark:border-accent/15 flex items-center justify-center shrink-0">
-                <Sparkles size={12} className="text-accent/60" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-foreground/70 truncate">
-                  {getActionName(builtInAction, t)}
-                </p>
-                <p className="text-xs text-foreground/45 truncate">
-                  {getActionDescription(builtInAction, t)}
-                </p>
-              </div>
-              <span className="text-xs text-foreground/45 font-medium shrink-0">
-                {t("notes.actions.builtIn")}
-              </span>
-            </div>
-          )}
-
-          {/* Show any custom actions the user just created */}
-          {customActions.length > 0 && (
-            <div className="mt-1.5 space-y-1.5">
-              {customActions.map((action) => (
-                <div
-                  key={action.id}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-success/20 bg-success/[0.03]"
-                >
-                  <div className="w-7 h-7 rounded-md bg-success/8 border border-success/15 dark:border-success/20 flex items-center justify-center shrink-0">
-                    <Check size={12} className="text-success/60" />
+          <p className="pb-2.5 text-sm text-muted-foreground">
+            {t("notes.onboarding.templates.builtInLabel")}
+          </p>
+          {(builtInAction || customActions.length > 0) && (
+            <div
+              className={cn(
+                CARD_CLASS,
+                CARD_IDLE_CLASS,
+                "divide-y divide-border/60 overflow-clip dark:divide-white/10"
+              )}
+            >
+              {builtInAction && (
+                <div className="flex items-center gap-3 px-5 py-3.5">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-accent/10 bg-accent/8 dark:border-accent/15 dark:bg-accent/12">
+                    <Sparkles size={14} className="text-accent/60" />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-foreground/70 truncate">{action.name}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {getActionName(builtInAction, t)}
+                    </p>
+                    <p className="truncate text-sm text-muted-foreground">
+                      {getActionDescription(builtInAction, t)}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                    {t("notes.actions.builtIn")}
+                  </span>
+                </div>
+              )}
+              {customActions.map((action) => (
+                <div key={action.id} className="flex items-center gap-3 px-5 py-3.5">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-success/15 bg-success/8 dark:border-success/20">
+                    <Check size={14} className="text-success/70" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-foreground">{action.name}</p>
                     {action.description && (
-                      <p className="text-xs text-foreground/45 truncate">{action.description}</p>
+                      <p className="truncate text-sm text-muted-foreground">{action.description}</p>
                     )}
                   </div>
                 </div>
@@ -283,31 +286,26 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
         </div>
 
         {/* Create custom action */}
-        <div
-          className={cn(
-            "rounded-lg border transition-colors duration-200",
-            "border-foreground/8 dark:border-white/10 bg-surface-1/30 dark:bg-white/[0.02]"
-          )}
-        >
+        <div className={cn(CARD_CLASS, CARD_IDLE_CLASS)}>
           <button
             type="button"
             onClick={() => setCreateExpanded(!createExpanded)}
             aria-expanded={createExpanded}
-            className="flex items-center justify-between w-full px-4 py-3 text-start"
+            className="flex w-full items-center justify-between px-5 py-4 text-start"
           >
-            <div className="flex items-center gap-2.5">
-              <Plus size={13} className="text-foreground/45" />
-              <span className="text-xs font-medium text-foreground/70">
-                {t("notes.onboarding.actions.createTitle")}
+            <div className="flex items-center gap-3">
+              <Plus size={16} className="text-foreground/45" />
+              <span className="text-sm font-medium text-foreground">
+                {t("notes.onboarding.templates.createTitle")}
               </span>
               {justCreated && (
-                <span className="text-xs text-success/60 font-medium">
-                  {t("notes.onboarding.actions.created")}
+                <span className="text-xs font-medium text-success/70">
+                  {t("notes.onboarding.templates.created")}
                 </span>
               )}
             </div>
             <ChevronRight
-              size={12}
+              size={14}
               className={cn(
                 "text-foreground/45 transition-transform duration-200",
                 createExpanded ? "rotate-90" : "rtl:rotate-180"
@@ -316,39 +314,42 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
           </button>
 
           {createExpanded && (
-            <div className="px-4 pb-4 space-y-2" style={{ animation: "float-up 0.2s ease-out" }}>
-              <p className="text-xs text-foreground/45 leading-relaxed">
-                {t("notes.onboarding.actions.createDescription")}
+            <div className="space-y-2.5 px-5 pb-5" style={{ animation: "float-up 0.2s ease-out" }}>
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                {t("notes.onboarding.templates.createDescription")}
               </p>
               <input
                 dir="auto"
                 type="text"
                 value={actionName}
                 onChange={(e) => setActionName(e.target.value)}
-                placeholder={t("notes.actions.namePlaceholder")}
-                aria-label={t("notes.actions.namePlaceholder")}
+                maxLength={NOTE_ACTION_LIMITS.name}
+                placeholder={t("notes.templates.namePlaceholder")}
+                aria-label={t("notes.templates.namePlaceholder")}
                 disabled={isSaving}
-                className={cn(notesInputClass, "disabled:opacity-40")}
+                className={cn(notesInputClass, "h-9 text-sm disabled:opacity-40")}
               />
               <input
                 dir="auto"
                 type="text"
                 value={actionDescription}
                 onChange={(e) => setActionDescription(e.target.value)}
+                maxLength={NOTE_ACTION_LIMITS.description}
                 placeholder={t("notes.actions.descriptionPlaceholder")}
                 aria-label={t("notes.actions.descriptionPlaceholder")}
                 disabled={isSaving}
-                className={cn(notesInputClass, "disabled:opacity-40")}
+                className={cn(notesInputClass, "h-9 text-sm disabled:opacity-40")}
               />
               <textarea
                 dir="auto"
                 value={actionPrompt}
                 onChange={(e) => setActionPrompt(e.target.value)}
-                placeholder={t("notes.actions.promptPlaceholder")}
-                aria-label={t("notes.actions.promptPlaceholder")}
+                maxLength={NOTE_ACTION_LIMITS.prompt}
+                placeholder={t("notes.templates.contextPlaceholder")}
+                aria-label={t("notes.templates.contextPlaceholder")}
                 rows={3}
                 disabled={isSaving}
-                className={cn(notesTextareaClass, "disabled:opacity-40")}
+                className={cn(notesTextareaClass, "text-sm disabled:opacity-40")}
               />
               <div className="flex justify-end">
                 <Button
@@ -356,10 +357,9 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
                   size="sm"
                   onClick={handleCreateAction}
                   disabled={isSaving || !actionName.trim() || !actionPrompt.trim()}
-                  className="h-7 text-xs"
                 >
                   {isSaving ? (
-                    <Loader2 size={12} className="animate-spin" />
+                    <Loader2 size={14} className="animate-spin" />
                   ) : (
                     t("notes.actions.save")
                   )}
@@ -369,8 +369,8 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
           )}
         </div>
 
-        <div className="flex justify-center pt-1 pb-4">
-          <Button variant="default" size="sm" onClick={handleComplete} className="h-8 text-xs px-8">
+        <div className="flex justify-center pt-2 pb-4">
+          <Button onClick={handleComplete} className="rounded-full px-6 font-medium">
             {t("notes.onboarding.getStarted")}
           </Button>
         </div>
