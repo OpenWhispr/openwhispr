@@ -316,7 +316,12 @@ class GnomeShortcutManager {
     if (!preferredTrigger) return false;
     const tapShortcut = GnomeShortcutManager.convertToGnomeFormat(hotkey);
     const { keysym, reason } = this.resolveFunctionKey(tapShortcut);
-    if (reason) return reason;
+    if (reason) {
+      debugLogger.log(
+        `[GnomeShortcut] GNOME can't grab "${tapShortcut}" for Hold with this keymap: ${reason}`
+      );
+      return reason;
+    }
 
     await this.unregisterKeybinding("dictation");
     const registered = await this.globalShortcutsPortal.registerKeybinding(

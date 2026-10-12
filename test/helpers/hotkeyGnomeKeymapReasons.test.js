@@ -15,7 +15,9 @@ const HotkeyManager = require("../../src/helpers/hotkeyManager.js");
 
 const noop = () => {};
 const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
-test.before(() => Object.defineProperty(process, "platform", { value: "linux", configurable: true }));
+test.before(() =>
+  Object.defineProperty(process, "platform", { value: "linux", configurable: true })
+);
 test.after(() => Object.defineProperty(process, "platform", originalPlatform));
 
 function gnomeManager(reason) {

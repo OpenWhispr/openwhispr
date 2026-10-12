@@ -36,6 +36,8 @@ const MEDIA_KEYS = [
   "org.gnome.settings-daemon.plugins.media-keys custom-keybindings @as []",
   "org.gnome.settings-daemon.plugins.media-keys mic-mute-static ['XF86AudioMicMute']",
   "org.gnome.settings-daemon.plugins.media-keys screensaver ['<Super>l']",
+  "org.gnome.settings-daemon.plugins.media-keys touchpad-off-static ['XF86TouchpadOff']",
+  "org.gnome.settings-daemon.plugins.media-keys touchpad-on-static ['XF86TouchpadOn']",
   "org.gnome.settings-daemon.plugins.media-keys touchpad-toggle-static ['XF86TouchpadToggle', '<Ctrl><Super>XF86TouchpadToggle']",
 ].join("\n");
 
@@ -65,7 +67,9 @@ function loadManager({ keymap = STOCK_KEYMAP } = {}) {
 }
 
 const writtenBinding = (calls) =>
-  calls.find(([command, verb, , key]) => command === "gsettings" && verb === "set" && key === "binding")?.[4];
+  calls.find(
+    ([command, verb, , key]) => command === "gsettings" && verb === "set" && key === "binding"
+  )?.[4];
 const ranXmodmap = (calls) => calls.some(([command]) => command === "xmodmap");
 
 const originalDesktop = process.env.XDG_CURRENT_DESKTOP;
@@ -129,10 +133,12 @@ test("the same keysym with other modifiers is free", async () => {
 });
 
 test("an unreadable keymap keeps the F-key name", async () => {
-  const { manager, calls } = loadManager({ keymap: new Error("spawn xmodmap ENOENT") });
+  for (const keymap of [new Error("spawn xmodmap ENOENT"), "xmodmap: unable to open display"]) {
+    const { manager, calls } = loadManager({ keymap });
 
-  assert.equal(await manager.registerKeybinding("F16", "dictation"), true);
-  assert.equal(writtenBinding(calls), "F16");
+    assert.equal(await manager.registerKeybinding("F16", "dictation"), true);
+    assert.equal(writtenBinding(calls), "F16");
+  }
 });
 
 test("keys outside F13-F24 never read the keymap", async () => {
@@ -143,7 +149,7 @@ test("keys outside F13-F24 never read the keymap", async () => {
   assert.equal(ranXmodmap(calls), false);
 });
 
-test("Hold hands the portal the keysym, and refuses a key GNOME can't grab", async () => {
+test("Hold hands the portal the keysym", async () => {
   const { manager } = loadManager();
   const triggers = [];
   manager.globalShortcutsPortal = {
@@ -155,7 +161,20 @@ test("Hold hands the portal the keysym, and refuses a key GNOME can't grab", asy
   };
 
   assert.equal(await manager.registerPushToTalk("Control+F16", () => {}), true);
+  assert.deepEqual(triggers, ["CTRL+XF86Launch7"]);
+});
+
+test("Hold refuses a key GNOME can't grab and keeps the Tap binding", async () => {
+  const { manager, calls } = loadManager();
+  manager.globalShortcutsPortal = {
+    registerKeybinding: async () => assert.fail("the portal is never asked"),
+    unregisterKeybinding: async () => {},
+  };
+
   assert.equal(await manager.registerPushToTalk("F19", () => {}), "keysym_missing");
   assert.equal(await manager.registerPushToTalk("F13", () => {}), "keysym_reserved");
-  assert.deepEqual(triggers, ["CTRL+XF86Launch7"]);
+  const gsettingsWrites = calls.filter(
+    ([command, verb]) => command === "gsettings" && (verb === "set" || verb === "reset")
+  );
+  assert.deepEqual(gsettingsWrites, []);
 });
