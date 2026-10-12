@@ -128,27 +128,34 @@ test("corrections apply once Plasma answers, and only to displays that kept thei
   assert.equal(workAreas.resolve(resized), resized);
 });
 
-test("display events refresh, and a failed snapshot keeps the last good corrections", async () => {
+test("display events refresh, and a failed or mismatched snapshot keeps the last good corrections", async () => {
   const screen = fakeScreen(ELECTRON_DISPLAYS);
   let snapshots = 0;
-  let fail = false;
+  let changes = 0;
+  let answer = PLASMA_SNAPSHOT;
   const workAreas = createPlasmaWorkAreas({
     screen,
     fetchSnapshot: async () => {
       snapshots += 1;
-      if (fail) throw new Error("plasmashell did not answer");
-      return PLASMA_SNAPSHOT;
+      if (answer instanceof Error) throw answer;
+      return answer;
     },
     isActive: () => true,
   });
-  await workAreas.start(() => undefined);
+  await workAreas.start(() => (changes += 1));
   assert.equal(snapshots, 1);
 
-  fail = true;
+  answer = new Error("plasmashell did not answer");
   screen.emit("display-metrics-changed");
   await workAreas.refresh();
   assert.equal(snapshots, 3, "the event's snapshot plus one rerun for the overlapping refresh");
   assert.equal(workAreas.resolve(ELECTRON_DISPLAYS[0]).workArea.height, 1033);
+
+  // plasmashell answering a display change with its previous layout.
+  answer = { screens: PLASMA_SNAPSHOT.screens.slice(0, 1), panels: [] };
+  await workAreas.refresh();
+  assert.equal(workAreas.resolve(ELECTRON_DISPLAYS[0]).workArea.height, 1033);
+  assert.equal(changes, 1, "the pill isn't moved off the corrected work area");
 });
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));

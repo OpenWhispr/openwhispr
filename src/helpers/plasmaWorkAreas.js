@@ -134,12 +134,13 @@ function createPlasmaWorkAreas({ screen, fetchSnapshot, isActive }) {
       apply(new Map());
       return;
     }
+    // A failed or mismatched snapshot keeps the last good corrections:
+    // plasmashell restarting, busy or answering with its previous layout says
+    // nothing about the panels having changed.
     let snapshot;
     try {
       snapshot = await fetchSnapshot();
     } catch (error) {
-      // Keep the last good corrections: plasmashell restarting or busy says
-      // nothing about the panels having changed.
       debugLogger.debug(
         "[PlasmaWorkAreas] plasmashell unavailable",
         { error: error?.message || String(error) },
@@ -150,8 +151,16 @@ function createPlasmaWorkAreas({ screen, fetchSnapshot, isActive }) {
     }
     const displays = screen.getAllDisplays();
     const workAreas = computeWorkAreas(snapshot, displays);
-    if (workAreas.size) retries = 0;
-    else retryLater();
+    if (!workAreas.size) {
+      debugLogger.debug(
+        "[PlasmaWorkAreas] Plasma's answer doesn't fit the displays",
+        { screens: snapshot?.screens, displays: displays.map((display) => display.bounds) },
+        "window"
+      );
+      retryLater();
+      return;
+    }
+    retries = 0;
     apply(
       new Map(
         displays
