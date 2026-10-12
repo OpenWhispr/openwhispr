@@ -44,8 +44,10 @@ const MEDIA_KEYS = [
   "org.gnome.settings-daemon.plugins.media-keys touchpad-toggle-static ['XF86TouchpadToggle', '<Ctrl><Super>XF86TouchpadToggle']",
 ].join("\n");
 
-function loadManager({ keymap = STOCK_KEYMAP } = {}) {
+// customBindings: other custom shortcuts already in gsettings, by path.
+function loadManager({ keymap = STOCK_KEYMAP, customBindings = {} } = {}) {
   const calls = [];
+  const paths = Object.keys(customBindings);
   const execFileSync = (command, args) => {
     calls.push([command, ...args]);
     if (command === "xkbcomp") {
@@ -53,7 +55,12 @@ function loadManager({ keymap = STOCK_KEYMAP } = {}) {
       return keymap;
     }
     if (args[0] === "list-recursively") return MEDIA_KEYS;
-    if (args[0] === "get" && args[2] === "custom-keybindings") return "@as []";
+    if (args[0] === "get" && args[2] === "custom-keybindings") {
+      return paths.length ? `['${paths.join("', '")}']` : "@as []";
+    }
+    if (args[0] === "get" && args[2] === "binding") {
+      return `'${customBindings[args[1].slice(args[1].indexOf(":") + 1)]}'`;
+    }
     return "";
   };
   delete require.cache[modulePath];
@@ -135,6 +142,24 @@ test("the same keysym with other modifiers is free", async () => {
 
   assert.equal(await manager.registerKeybinding("<Control>F13", "dictation"), true);
   assert.equal(writtenBinding(calls), "<Control>XF86Tools");
+});
+
+test("a custom shortcut on the keysym the key sends is a conflict", async () => {
+  const other = "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/";
+  const { manager, calls } = loadManager({
+    customBindings: { [other]: "XF86Launch7" },
+  });
+
+  assert.equal(await manager.registerKeybinding("F16", "dictation"), false);
+  assert.equal(writtenBinding(calls), undefined);
+});
+
+test("a custom shortcut written with <Ctrl> conflicts with <Control>", async () => {
+  const other = "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/";
+  const { manager, calls } = loadManager({ customBindings: { [other]: "<Ctrl>r" } });
+
+  assert.equal(await manager.registerKeybinding("<Control>r", "dictation"), false);
+  assert.equal(writtenBinding(calls), undefined);
 });
 
 test("an unreadable keymap keeps the F-key name", async () => {
