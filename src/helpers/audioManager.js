@@ -35,6 +35,7 @@ import { ActiveMicRecoveryController } from "./activeMicRecovery";
 import { followsSystemDefaultMic } from "./micSelectionRecovery";
 import { isCacheableMicrophoneResolution, resolvePreferredMicrophone } from "./microphoneSelection";
 import { isStaleDeviceError } from "./staleMicDevice";
+import { describeMicStartError } from "./micStartError";
 import { shouldSaveDiscardedRecording } from "./discardedRecording";
 import {
   ANALYTICS_COUNTER_VERSION,
@@ -1596,30 +1597,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         return this.startRecording(true);
       }
 
-      let errorTitle = "Recording Error";
-      let errorDescription = `Failed to access microphone: ${error.message}`;
-
-      if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
-        errorTitle = "Microphone Access Denied";
-        errorDescription =
-          "Please grant microphone permission in your system settings and try again.";
-      } else if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
-        errorTitle = "No Microphone Found";
-        errorDescription = "No microphone was detected. Please connect a microphone and try again.";
-      } else if (error.name === "NotReadableError" || error.name === "TrackStartError") {
-        errorTitle = "Microphone In Use";
-        errorDescription =
-          "The microphone is being used by another application. Please close other apps and try again.";
-      } else if (error.name === "MicUnusableError") {
-        errorTitle = "Microphone Muted";
-        errorDescription =
-          "Your microphones stayed muted and produced no audio. Please check your sound input settings and try again.";
-      }
-
-      this.onError?.({
-        title: errorTitle,
-        description: errorDescription,
-      });
+      this.onError?.(
+        describeMicStartError(error) ?? {
+          title: "Recording Error",
+          description: `Failed to access microphone: ${error.message}`,
+        }
+      );
       return false;
     } finally {
       this._startInProgress = false;
@@ -5129,11 +5112,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       let errorTitle = "Streaming Error";
       let errorDescription = `Failed to start streaming: ${error.message}`;
 
-      if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
-        errorTitle = "Microphone Access Denied";
-        errorDescription =
-          "Please grant microphone permission in your system settings and try again.";
-      } else if (error.code === "AUTH_EXPIRED" || error.code === "AUTH_REQUIRED") {
+      if (error.code === "AUTH_EXPIRED" || error.code === "AUTH_REQUIRED") {
         errorTitle = "Sign-in Required";
         errorDescription =
           "Your OpenWhispr Cloud session is unavailable. Please sign in again from Settings.";
@@ -5143,18 +5122,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       } else if (error.code === "LIMIT_REACHED") {
         // Titled by getRecordingErrorTitle, like the batch upload's limit error.
         errorDescription = error.message;
-      } else if (error.name === "MicUnusableError") {
-        errorTitle = "Microphone Muted";
-        errorDescription =
-          "Your microphones stayed muted and produced no audio. Please check your sound input settings and try again.";
       }
 
-      this.onError?.({
-        code: error.code,
-        messageKey: error.messageKey,
-        title: errorTitle,
-        description: errorDescription,
-      });
+      this.onError?.(
+        describeMicStartError(error) ?? {
+          code: error.code,
+          messageKey: error.messageKey,
+          title: errorTitle,
+          description: errorDescription,
+        }
+      );
 
       await this.cleanupStreaming();
       if (this._activeStreamingSessionId === sessionId) {

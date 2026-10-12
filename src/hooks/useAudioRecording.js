@@ -8,6 +8,7 @@ import { expandSnippets } from "../utils/snippets";
 import { getRecordingErrorTitle, getRecordingErrorDescription } from "../utils/recordingErrors";
 import { providerErrorActions } from "../utils/describeProviderError";
 import { isAccessibilitySkipped } from "../utils/permissions";
+import { getCachedPlatform } from "../utils/platform";
 import { needsSttConfigBeforeStart } from "../helpers/sttConfigPolicy";
 import {
   isAgentAllowed,
@@ -477,6 +478,15 @@ export const useAudioRecording = (toast, options = {}) => {
       ];
 
       actions.push(...providerErrorActions({ settingsTarget, technicalDetails }, t, isCurrent));
+
+      // The Recording tab is where a mic's exclusive-mode checkbox lives (#1138).
+      if (code === "MIC_IN_USE" && getCachedPlatform() === "win32") {
+        actions.push({
+          label: t("hooks.audioRecording.errorActions.openSoundSettings"),
+          icon: "settings",
+          onClick: () => window.electronAPI?.openRecordingDevicesSettings?.(),
+        });
+      }
 
       if (recoverableTranscript) {
         actions.push({

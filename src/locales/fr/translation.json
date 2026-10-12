@@ -904,14 +904,19 @@
         "agentUnavailable": "Assistant indisponible",
         "screenContextSkipped": "Contexte d'écran ignoré",
         "dailyLimitReached": "Limite quotidienne atteinte",
-        "providerRateLimited": "Limite de débit du fournisseur"
+        "providerRateLimited": "Limite de débit du fournisseur",
+        "micPermissionDenied": "Accès au microphone refusé",
+        "micNotFound": "Aucun microphone trouvé",
+        "micInUse": "Microphone déjà utilisé",
+        "micMuted": "Microphone coupé"
       },
       "fallback": {
         "title": "Mode de secours",
         "description": "Whisper local a échoué. L'API OpenAI a pris le relais."
       },
       "errorActions": {
-        "viewTranscript": "Voir la transcription"
+        "viewTranscript": "Voir la transcription",
+        "openSoundSettings": "Paramètres de son"
       },
       "noAudio": {
         "title": "Nous n’avons pas compris",
@@ -946,7 +951,12 @@
         "providerKeyMissing": "Aucune clé API n'est définie pour votre fournisseur de transcription. Ajoutez-la dans Réglages → Parole en texte.",
         "cleanupTruncated": "Le modèle d'IA a manqué de place avant de terminer le nettoyage de votre dictée.",
         "cleanupDuplicated": "Le nettoyage par IA a répété la transcription. Le texte original a été conservé.",
-        "cleanupEmptyReply": "Le modèle d'IA a renvoyé une réponse vide au lieu de la dictée nettoyée."
+        "cleanupEmptyReply": "Le modèle d'IA a renvoyé une réponse vide au lieu de la dictée nettoyée.",
+        "micPermissionDenied": "Autorisez l'accès au microphone dans les réglages de votre système, puis réessayez.",
+        "micNotFound": "Aucun microphone n'a été détecté. Branchez un microphone et réessayez.",
+        "micInUse": "Le microphone est utilisé par une autre application. Fermez les autres applications et réessayez.",
+        "micInUseWindows": "Une autre application utilise le microphone et en a peut-être pris le contrôle exclusif. Fermez cette application, ou ouvrez Paramètres de son → Enregistrement → votre microphone → Propriétés → Avancé et désactivez l'option qui autorise les applications à prendre le contrôle exclusif du périphérique.",
+        "micMuted": "Vos microphones sont restés coupés et n'ont capté aucun son. Vérifiez vos réglages d'entrée audio et réessayez."
       },
       "translationFallback": {
         "unreachableTitle": "Traduction indisponible",

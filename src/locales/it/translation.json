@@ -904,14 +904,19 @@
         "agentUnavailable": "Assistente non disponibile",
         "screenContextSkipped": "Contesto dello schermo ignorato",
         "dailyLimitReached": "Limite giornaliero raggiunto",
-        "providerRateLimited": "Limite di velocità del provider"
+        "providerRateLimited": "Limite di velocità del provider",
+        "micPermissionDenied": "Accesso al microfono negato",
+        "micNotFound": "Nessun microfono trovato",
+        "micInUse": "Microfono in uso",
+        "micMuted": "Microfono disattivato"
       },
       "fallback": {
         "title": "Modalità fallback",
         "description": "Whisper locale non riuscito. Utilizzata l'API OpenAI."
       },
       "errorActions": {
-        "viewTranscript": "Visualizza trascrizione"
+        "viewTranscript": "Visualizza trascrizione",
+        "openSoundSettings": "Impostazioni audio"
       },
       "noAudio": {
         "title": "Non abbiamo capito",
@@ -946,7 +951,12 @@
         "providerKeyMissing": "Nessuna chiave API impostata per il tuo provider di trascrizione. Aggiungila in Impostazioni → Da voce a testo.",
         "cleanupTruncated": "Il modello IA ha esaurito lo spazio prima di finire la pulizia della dettatura.",
         "cleanupDuplicated": "La pulizia con IA ha ripetuto la trascrizione. Il testo originale è stato conservato.",
-        "cleanupEmptyReply": "Il modello IA ha restituito una risposta vuota invece della dettatura pulita."
+        "cleanupEmptyReply": "Il modello IA ha restituito una risposta vuota invece della dettatura pulita.",
+        "micPermissionDenied": "Concedi l'autorizzazione al microfono nelle impostazioni di sistema e riprova.",
+        "micNotFound": "Nessun microfono rilevato. Collega un microfono e riprova.",
+        "micInUse": "Il microfono è in uso da parte di un'altra applicazione. Chiudi le altre app e riprova.",
+        "micInUseWindows": "Un'altra app sta usando il microfono e potrebbe averne preso il controllo esclusivo. Chiudi quell'app, oppure apri Impostazioni audio → Registrazione → il tuo microfono → Proprietà → Avanzate e disattiva l'opzione che consente alle applicazioni di assumere il controllo esclusivo del dispositivo.",
+        "micMuted": "I tuoi microfoni sono rimasti disattivati e non hanno registrato audio. Controlla le impostazioni di ingresso audio e riprova."
       },
       "translationFallback": {
         "unreachableTitle": "Traduzione non disponibile",

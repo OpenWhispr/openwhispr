@@ -883,14 +883,19 @@
         "agentUnavailable": "Assistente indisponível",
         "screenContextSkipped": "Contexto de tela ignorado",
         "dailyLimitReached": "Limite diário atingido",
-        "providerRateLimited": "Limite de taxa do provedor"
+        "providerRateLimited": "Limite de taxa do provedor",
+        "micPermissionDenied": "Acesso ao microfone negado",
+        "micNotFound": "Nenhum microfone encontrado",
+        "micInUse": "Microfone em uso",
+        "micMuted": "Microfone silenciado"
       },
       "fallback": {
         "title": "Modo de fallback",
         "description": "O Whisper local falhou. A API da OpenAI foi usada no lugar."
       },
       "errorActions": {
-        "viewTranscript": "Ver transcrição"
+        "viewTranscript": "Ver transcrição",
+        "openSoundSettings": "Configurações de som"
       },
       "noAudio": {
         "title": "Não conseguimos entender",
@@ -925,7 +930,12 @@
         "providerKeyMissing": "Nenhuma chave de API definida para seu provedor de transcrição. Adicione-a em Configurações → Fala para texto.",
         "cleanupTruncated": "O modelo de IA ficou sem espaço antes de terminar a limpeza do seu ditado.",
         "cleanupDuplicated": "A limpeza por IA repetiu a transcrição. O texto original foi mantido.",
-        "cleanupEmptyReply": "O modelo de IA devolveu uma resposta vazia em vez do ditado limpo."
+        "cleanupEmptyReply": "O modelo de IA devolveu uma resposta vazia em vez do ditado limpo.",
+        "micPermissionDenied": "Conceda permissão de microfone nas configurações do sistema e tente novamente.",
+        "micNotFound": "Nenhum microfone foi detectado. Conecte um microfone e tente novamente.",
+        "micInUse": "O microfone está sendo usado por outro aplicativo. Feche os outros aplicativos e tente novamente.",
+        "micInUseWindows": "Outro aplicativo está usando o microfone e pode ter assumido o controle exclusivo dele. Feche esse aplicativo ou abra Configurações de som → Gravação → seu microfone → Propriedades → Avançado e desative a opção que permite que aplicativos assumam o controle exclusivo do dispositivo.",
+        "micMuted": "Seus microfones continuaram silenciados e não captaram áudio. Verifique as configurações de entrada de som e tente novamente."
       },
       "translationFallback": {
         "unreachableTitle": "Tradução indisponível",

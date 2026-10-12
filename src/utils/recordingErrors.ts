@@ -13,7 +13,16 @@ type RecordingError = {
   variant?: "default" | "destructive";
 };
 
+// Codes from describeMicStartError.
+const MIC_ERROR_TITLE_KEYS: Record<string, string> = {
+  MIC_PERMISSION_DENIED: "hooks.audioRecording.errorTitles.micPermissionDenied",
+  MIC_NOT_FOUND: "hooks.audioRecording.errorTitles.micNotFound",
+  MIC_IN_USE: "hooks.audioRecording.errorTitles.micInUse",
+  MIC_MUTED: "hooks.audioRecording.errorTitles.micMuted",
+};
+
 export function getRecordingErrorTitle(error: RecordingError, t: TFunction): string {
+  if (error.code && MIC_ERROR_TITLE_KEYS[error.code]) return t(MIC_ERROR_TITLE_KEYS[error.code]);
   if (error.code === "ACCESSIBILITY_PERMISSION_REQUIRED") {
     return t("hooks.audioRecording.pastePermission.title");
   }
