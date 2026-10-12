@@ -19,6 +19,8 @@ interface ActionProcessingOverlayProps {
   actionName: string | null;
   /** Set while a long note is summarised in parts. */
   progress?: NoteActionProgress | null;
+  /** Queued behind another local request. The run has not failed. */
+  waitingForModel?: boolean;
   /** Offered while processing: a run in parts takes minutes, and only quitting stopped it before. */
   onCancel?: () => void;
 }
@@ -27,6 +29,7 @@ export default function ActionProcessingOverlay({
   state,
   actionName,
   progress = null,
+  waitingForModel = false,
   onCancel,
 }: ActionProcessingOverlayProps) {
   const { t } = useTranslation();
@@ -117,7 +120,11 @@ export default function ActionProcessingOverlay({
         ) : (
           <>
             <span className="text-xs font-medium text-accent/70 tracking-tight">{actionName}</span>
-            {progress ? (
+            {waitingForModel ? (
+              <span className="text-[11px] text-accent/50 tracking-tight">
+                {t("notes.actions.waitingForModel")}
+              </span>
+            ) : progress ? (
               <span className="text-[11px] text-accent/50 tracking-tight">
                 {t("notes.actions.chunkProgress", { step: progress.step, total: progress.total })}
               </span>

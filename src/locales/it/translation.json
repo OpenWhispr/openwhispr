@@ -3199,6 +3199,7 @@
       "emptyEditorDescription": "Scegli un'azione dall'elenco o creane una nuova",
       "done": "Fatto",
       "chunkProgress": "Parte {{step}} di {{total}}",
+      "waitingForModel": "In attesa del modello locale",
       "emptyReply": "Il modello ha restituito una risposta vuota. Riprova o scegli un altro modello.",
       "builtin": {
         "generateNotes": {

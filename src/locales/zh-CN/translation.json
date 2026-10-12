@@ -3199,6 +3199,7 @@
       "emptyEditorDescription": "从列表中选择一个操作或创建新操作",
       "done": "完成",
       "chunkProgress": "第 {{step}} 部分，共 {{total}} 部分",
+      "waitingForModel": "正在等待本地模型",
       "emptyReply": "模型返回了空回复。请重试，或选择其他模型。",
       "builtin": {
         "generateNotes": {

@@ -2328,6 +2328,7 @@
     "actions": {
       "done": "تم",
       "chunkProgress": "الجزء {{step}} من {{total}}",
+      "waitingForModel": "بانتظار النموذج المحلي",
       "emptyReply": "أعاد النموذج ردًا فارغًا. حاول مرة أخرى، أو اختر نموذجًا آخر.",
       "allActions": "كل الإجراءات",
       "selectAction": "تحديد إجراء",

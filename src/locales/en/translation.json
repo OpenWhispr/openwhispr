@@ -3550,6 +3550,7 @@
     "actions": {
       "done": "Done",
       "chunkProgress": "Part {{step}} of {{total}}",
+      "waitingForModel": "Waiting for the local model",
       "emptyReply": "The model returned an empty reply. Try again, or pick a different model.",
       "allActions": "All actions",
       "selectAction": "Select action",
