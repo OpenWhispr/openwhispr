@@ -270,3 +270,21 @@ test("gpt-live-transcribe is never offered for Note Recording", async () => {
     );
   }
 });
+
+test("a running local meeting pushes the language its next chunk should use", async () => {
+  const { liveLocalMeetingLanguage, resolveMeetingTranscriptionOptions } = await load();
+  const local = resolveMeetingTranscriptionOptions({
+    ...baseOptions,
+    transcriptionMode: "local",
+    localProvider: "cohere",
+    language: "pl",
+  });
+
+  assert.equal(liveLocalMeetingLanguage(true, local), "pl");
+  assert.equal(liveLocalMeetingLanguage(true, { ...local, language: undefined }), null);
+  assert.equal(liveLocalMeetingLanguage(false, local), undefined);
+  assert.equal(
+    liveLocalMeetingLanguage(true, { ...local, provider: "openai-realtime" }),
+    undefined
+  );
+});

@@ -7,6 +7,8 @@
       "uiDescription": "Scegli la lingua usata nell'interfaccia di OpenWhispr",
       "transcriptionLabel": "Lingua di trascrizione",
       "transcriptionDescription": "Scegli la lingua che parli per una trascrizione più accurata",
+      "cohereAutoTitle": "Cohere Transcribe userà {{language}}",
+      "cohereAutoDescription": "Questo modello non rileva la lingua parlata. Con Auto, trascrive in {{language}} finché non scegli una lingua.",
       "chineseScriptLabel": "Scrittura cinese (dettatura)",
       "chineseScriptDescription": "Quando viene rilevato il cinese, converte le trascrizioni dettate in caratteri semplificati o tradizionali. Il cinese parlato suona uguale; Whisper restituisce una sola scrittura.",
       "chineseScriptAsTranscribed": "Mantieni come trascritto",

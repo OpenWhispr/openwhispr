@@ -7,6 +7,8 @@
       "uiDescription": "選擇 OpenWhispr 介面使用的語言",
       "transcriptionLabel": "轉錄語言",
       "transcriptionDescription": "選擇你說話的語言，以提高轉錄準確度",
+      "cohereAutoTitle": "Cohere Transcribe 將使用{{language}}",
+      "cohereAutoDescription": "此模型無法偵測口語語言。選擇「自動」時，在你指定語言之前都會以{{language}}轉寫。",
       "chineseScriptLabel": "中文書寫（語音輸入）",
       "chineseScriptDescription": "偵測到中文時，將語音輸入的轉錄結果轉換為簡體或繁體。口語聽起來一樣；Whisper 只會輸出一種字形。",
       "chineseScriptAsTranscribed": "保持轉錄原樣",
