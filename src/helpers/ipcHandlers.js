@@ -209,9 +209,6 @@ const AUTO_LEARN_DEBOUNCE_MS = 1500;
 // the message reports the cap that actually applied.
 const byokSizeCapError = (sizeCapBytes) =>
   `File too large. Maximum size for bring-your-own-key is ${Math.floor(sizeCapBytes / (1024 * 1024))} MB.`;
-// OpenRouter's piece-by-piece upload; single requests classify through providerHttpError.
-const BYOK_INVALID_KEY_ERROR = "Invalid API key. Check your key in Settings.";
-const BYOK_RATE_LIMITED_ERROR = "Rate limit exceeded. Please try again later.";
 
 const CLOUD_INLINE_LIMIT = 4 * 1024 * 1024;
 // The enterprise "Test Connection" probe only needs one word back, but the
@@ -10516,12 +10513,24 @@ class IPCHandlers {
             };
           }
 
+          // Every branch but the managed one calls a BYOK provider or the user's own server.
+          const byokErrorContext = {
+            provider: transcriptionProviderName(route.provider),
+            selfHosted: route.provider === "self-hosted" || route.provider === "custom",
+            model: route.model,
+            surface: "transcription",
+          };
+
           // OpenRouter's upstream providers stop after ~60 s of work per request,
           // so its uploads go out in 4-minute pieces, cut straight from the source
           // with any video dropped. The whole-file cap below never applies.
           if (uploadsInChunks(route)) {
+            providerErrorContext = byokErrorContext;
             if (!apiKey && route.provider !== "custom") {
-              throw new Error("No API key configured. Add your key in Settings.");
+              throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+                provider: byokErrorContext.provider,
+                surface: "transcription",
+              });
             }
             const url = new URL(route.endpoint);
             const headers = apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined;
@@ -10545,17 +10554,14 @@ class IPCHandlers {
                       piece: path.basename(chunkPath),
                       status: data.statusCode,
                     });
+                    // The handler's catch classifies it (asProviderError) by status and body.
                     throw Object.assign(
                       new Error(
-                        data.statusCode === 401
-                          ? BYOK_INVALID_KEY_ERROR
-                          : data.statusCode === 429
-                            ? BYOK_RATE_LIMITED_ERROR
-                            : data.data?.error?.message ||
-                              data.data?.error ||
-                              `API error: ${data.statusCode}`
+                        data.data?.error?.message ||
+                          data.data?.error ||
+                          `API error: ${data.statusCode}`
                       ),
-                      { statusCode: data.statusCode },
+                      { statusCode: data.statusCode, responseBody: data.data },
                       batchTranscriptionHttpError(data.statusCode, route.endpoint)
                     );
                   },
@@ -10594,13 +10600,7 @@ class IPCHandlers {
             return { success: true, text };
           }
 
-          // Every branch below calls a BYOK provider or the user's own server.
-          providerErrorContext = {
-            provider: transcriptionProviderName(route.provider),
-            selfHosted: route.provider === "self-hosted" || route.provider === "custom",
-            model: route.model,
-            surface: "transcription",
-          };
+          providerErrorContext = byokErrorContext;
 
           if (route.transport === "http-batch" && route.provider === "self-hosted") {
             // User's own server, so the 25 MB third-party cap does not apply.

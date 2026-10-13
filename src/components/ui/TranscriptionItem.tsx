@@ -109,7 +109,7 @@ export default function TranscriptionItem({
     errorCode === "CUSTOM_ENDPOINT_INVALID";
   const isLimitError = errorCode === "LIMIT_REACHED";
   const isOfflineError = errorCode === "OFFLINE";
-  // The saved message is English (OpenRouter's raw JSON on older rows); show the translated one.
+  // The saved message is English; show the translated one.
   const errorText =
     errorCode === "OPENROUTER_OUT_OF_CREDITS"
       ? t("hooks.audioRecording.errorDescriptions.openRouterOutOfCredits")

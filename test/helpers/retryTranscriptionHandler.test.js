@@ -852,6 +852,37 @@ test("upload: a Custom endpoint on OpenRouter is sent in pieces with its own key
   });
 });
 
+// Pieces fail through the same translated provider errors as a single request.
+test("upload: an OpenRouter piece failure is a classified provider error", async () => {
+  const unauthorized = () => {
+    const body = { error: { message: "No auth credentials found", code: 401 } };
+    return { ok: false, status: 401, json: async () => body, text: async () => JSON.stringify(body) };
+  };
+  await withReplies(unauthorized, 3, async () => {
+    const tab = await invokeUpload(OPENROUTER_UPLOAD);
+    assert.equal(tab.code, "PROVIDER_AUTH_FAILED");
+    assert.equal(tab.messageKey, "providerErrors.authFailed");
+    assert.deepEqual(tab.messageParams, { provider: "OpenRouter" });
+    assert.equal(tab.error, "OpenRouter rejected your API key.");
+
+    const custom = await invokeUpload({
+      ...OPENROUTER_UPLOAD,
+      apiKey: "ck-custom",
+      baseUrl: "https://openrouter.ai/api/v1",
+      provider: "custom",
+    });
+    assert.equal(custom.code, "PROVIDER_AUTH_FAILED");
+    assert.equal(custom.messageKey, "providerErrors.selfHosted.authFailed");
+  });
+
+  await withReplies(() => okReply("piece"), 1, async () => {
+    const result = await invokeUpload({ ...OPENROUTER_UPLOAD, apiKey: "" });
+    assert.equal(result.code, "API_KEY_MISSING");
+    assert.deepEqual(result.messageParams, { provider: "OpenRouter" });
+    assert.equal(fetches.length, 0, "a missing key must fail before any piece is sent");
+  });
+});
+
 test("upload: running out of OpenRouter credits mid-upload sends no further pieces", async () => {
   let n = 0;
   const reply = () => (++n === 2 ? outOfCreditsResponse() : okReply(`part ${n}`));
