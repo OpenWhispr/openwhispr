@@ -930,6 +930,30 @@ test("niri with wl-copy pastes through uinput", async () => {
   ]);
 });
 
+// The command cache keeps an answer for 30 s; a wl-copy installed after a held-back
+// paste must count at once, or the next paste and the card's Re-check still fail.
+test("a wl-copy installed after a held-back paste counts at once", async (t) => {
+  const platform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "linux" });
+  t.after(() => Object.defineProperty(process, "platform", platform));
+  let installed = false;
+  const TestClipboardManager = loadClipboardManager({
+    spawnSync: (command, args = []) => ({
+      status: command === "sh" && args[1] === "command -v wl-copy" && installed ? 0 : 1,
+      stdout: Buffer.from(""),
+    }),
+  });
+  const manager = new TestClipboardManager();
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._canAccessUinput = () => true;
+
+  await withWaylandEnvironment("niri", () => {
+    assert.equal(manager.checkPasteTools().wlCopyMissing, true);
+    installed = true;
+    assert.equal(manager.checkPasteTools().wlCopyMissing, false);
+  });
+});
+
 test("the paste tools report a missing wl-copy only where it is required", async (t) => {
   const platform = Object.getOwnPropertyDescriptor(process, "platform");
   Object.defineProperty(process, "platform", { value: "linux" });

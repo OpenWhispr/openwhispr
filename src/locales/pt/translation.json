@@ -955,7 +955,8 @@
         "reasoningFailed": "A IA não conseguiu concluir a edição. O texto original não foi alterado.",
         "invalidResponse": "A IA retornou uma resposta de edição inválida. Nada foi substituído. Selecione o texto e tente novamente.",
         "emptyResponse": "A IA retornou uma edição vazia. Nada foi substituído. Tente uma instrução mais específica.",
-        "truncatedResponse": "A IA parou antes de concluir a edição. Nada foi substituído. Tente selecionar menos texto."
+        "truncatedResponse": "A IA parou antes de concluir a edição. Nada foi substituído. Tente selecionar menos texto.",
+        "wlCopyMissing": "O OpenWhispr gerou a edição, mas nesta área de trabalho os apps Wayland só conseguem ler o texto colado através do wl-copy. Instale o wl-clipboard para aplicar edições."
       },
       "pastePermission": {
         "title": "Permitir colagem automática",
@@ -972,7 +973,7 @@
       "interruptedRecordingRecovered": "Recuperado após o OpenWhispr fechar antes de terminar este ditado.",
       "wlCopyMissing": {
         "title": "Transcrição não colada",
-        "description": "Nesta área de trabalho, os apps Wayland só conseguem ler o texto colado através do wl-copy. Instale o wl-clipboard e clique em Tentar novamente."
+        "description": "Nesta área de trabalho, os apps Wayland só conseguem ler o texto colado através do wl-copy. Instale o wl-clipboard para colar seus ditados."
       }
     },
     "clipboard": {

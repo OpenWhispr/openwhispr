@@ -976,7 +976,8 @@
         "reasoningFailed": "L’IA non ha potuto completare la modifica. Il testo originale non è stato cambiato.",
         "invalidResponse": "L’IA ha restituito una risposta di modifica non valida. Non è stato sostituito nulla. Seleziona il testo e riprova.",
         "emptyResponse": "L’IA ha restituito una modifica vuota. Non è stato sostituito nulla. Prova con un’istruzione più specifica.",
-        "truncatedResponse": "L’IA si è fermata prima di completare la modifica. Non è stato sostituito nulla. Prova a selezionare meno testo."
+        "truncatedResponse": "L’IA si è fermata prima di completare la modifica. Non è stato sostituito nulla. Prova a selezionare meno testo.",
+        "wlCopyMissing": "OpenWhispr ha generato la modifica, ma su questo desktop le app Wayland possono leggere il testo incollato solo tramite wl-copy. Installa wl-clipboard per applicare le modifiche."
       },
       "pastePermission": {
         "title": "Consenti di incollare automaticamente",
@@ -993,7 +994,7 @@
       "interruptedRecordingRecovered": "Recuperata dopo la chiusura di OpenWhispr prima della fine di questa dettatura.",
       "wlCopyMissing": {
         "title": "Trascrizione non incollata",
-        "description": "Su questo desktop, le app Wayland possono leggere il testo incollato solo tramite wl-copy. Installa wl-clipboard, poi premi Riprova."
+        "description": "Su questo desktop, le app Wayland possono leggere il testo incollato solo tramite wl-copy. Installa wl-clipboard per incollare le tue dettature."
       }
     },
     "clipboard": {

@@ -34,6 +34,7 @@ const SELECTION_EDIT_DETAIL_KEY_BY_CODE = {
   selection_changed: "changed",
   session_expired: "expired",
   paste_failed: "pasteFailed",
+  wl_copy_missing: "wlCopyMissing",
 };
 const COMPANION_AUDIO_LEVEL_INTERVAL_MS = 80;
 
@@ -829,7 +830,7 @@ export const useAudioRecording = (toast, options = {}) => {
               );
             } else if (pasteOutcome.reason === "wl-copy-missing") {
               // Wayland apps can't read the clipboard copy here either, so the text
-              // never claims to be on it. Retry pastes once wl-clipboard is installed.
+              // never claims to be on it. Retry pastes the kept text, not a new recording.
               const description = t("hooks.audioRecording.wlCopyMissing.description");
               await reportHeldBackPaste(
                 "wl-copy-missing",

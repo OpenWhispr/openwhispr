@@ -92,10 +92,12 @@ function runSpawn(command, args, options = {}) {
   });
 }
 
-// Keys still held past the modifier wait (#2113) get their own code, so the
-// renderer can say so instead of blaming permissions or a changed target.
+// Keys still held past the modifier wait (#2113) and a missing wl-copy (#2621) get
+// their own code, so the renderer can say so instead of blaming permissions or a
+// changed target.
 function heldBackCode(fallback, { code, reason } = {}) {
-  return code === "modifiers_held" || reason === "modifiers-held" ? "modifiers_held" : fallback;
+  if (code === "modifiers_held" || reason === "modifiers-held") return "modifiers_held";
+  return reason === "wl-copy-missing" ? "wl_copy_missing" : fallback;
 }
 
 class SelectionManager {

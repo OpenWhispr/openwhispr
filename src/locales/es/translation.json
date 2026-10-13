@@ -976,7 +976,8 @@
         "reasoningFailed": "La IA no pudo completar la edición. El texto original no se modificó.",
         "invalidResponse": "La IA devolvió una respuesta de edición no válida. No se reemplazó nada. Selecciona el texto e inténtalo de nuevo.",
         "emptyResponse": "La IA devolvió una edición vacía. No se reemplazó nada. Prueba con una instrucción más específica.",
-        "truncatedResponse": "La IA se detuvo antes de completar la edición. No se reemplazó nada. Prueba seleccionando menos texto."
+        "truncatedResponse": "La IA se detuvo antes de completar la edición. No se reemplazó nada. Prueba seleccionando menos texto.",
+        "wlCopyMissing": "OpenWhispr generó la edición, pero en este escritorio las apps de Wayland solo pueden leer el texto pegado a través de wl-copy. Instala wl-clipboard para aplicar las ediciones."
       },
       "pastePermission": {
         "title": "Permitir el pegado automático",
@@ -993,7 +994,7 @@
       "interruptedRecordingRecovered": "Recuperado después de que OpenWhispr se cerrara antes de terminar este dictado.",
       "wlCopyMissing": {
         "title": "Transcripción no pegada",
-        "description": "En este escritorio, las apps de Wayland solo pueden leer el texto pegado a través de wl-copy. Instala wl-clipboard y pulsa Reintentar."
+        "description": "En este escritorio, las apps de Wayland solo pueden leer el texto pegado a través de wl-copy. Instala wl-clipboard para pegar tus dictados."
       }
     },
     "clipboard": {

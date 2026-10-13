@@ -102,6 +102,16 @@ test("requires wl-copy only where XWayland's clipboard needs X11 focus", () => {
       false,
     ],
     [
+      "Cinnamon with a stale SWAYSOCK and Hyprland signature",
+      {
+        XDG_CURRENT_DESKTOP: "X-Cinnamon",
+        SWAYSOCK: "/run/user/1000/stale-sway.sock",
+        HYPRLAND_INSTANCE_SIGNATURE: "stale",
+      },
+      false,
+    ],
+    ["a bare sway socket", { SWAYSOCK: "/run/user/1000/sway-ipc.sock" }, true],
+    [
       "X11",
       { XDG_SESSION_TYPE: "x11", WAYLAND_DISPLAY: undefined, XDG_CURRENT_DESKTOP: "i3" },
       false,

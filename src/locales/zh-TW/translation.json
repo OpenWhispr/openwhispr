@@ -976,7 +976,8 @@
         "reasoningFailed": "AI 無法完成選取文字編輯。原始文字未被變更。",
         "invalidResponse": "AI 傳回的編輯回應格式無效。未取代任何內容。請選取文字後重試。",
         "emptyResponse": "AI 傳回了空白的編輯結果。未取代任何內容。請嘗試更具體的指示。",
-        "truncatedResponse": "AI 在完成編輯之前停止了。未取代任何內容。請嘗試選取較少的文字。"
+        "truncatedResponse": "AI 在完成編輯之前停止了。未取代任何內容。請嘗試選取較少的文字。",
+        "wlCopyMissing": "OpenWhispr 已產生編輯，但在此桌面上，Wayland 應用程式只能透過 wl-copy 讀取貼上的文字。請安裝 wl-clipboard 以套用編輯。"
       },
       "pastePermission": {
         "title": "允許自動貼上",
@@ -993,7 +994,7 @@
       "interruptedRecordingRecovered": "OpenWhispr 在本次語音輸入完成前關閉，已復原此錄音。",
       "wlCopyMissing": {
         "title": "轉錄內容未貼上",
-        "description": "在此桌面上，Wayland 應用程式只能透過 wl-copy 讀取貼上的文字。請安裝 wl-clipboard，然後點按「重試」。"
+        "description": "在此桌面上，Wayland 應用程式只能透過 wl-copy 讀取貼上的文字。請安裝 wl-clipboard 以貼上聽寫內容。"
       }
     },
     "clipboard": {

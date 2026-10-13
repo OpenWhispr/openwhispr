@@ -123,6 +123,16 @@ class ClipboardManager {
     return isWayland;
   }
 
+  // Where wl-copy is required, a missing one holds back every paste, so its
+  // absence is probed again instead of read from the cache: a wl-copy installed
+  // after a held-back paste is used by the next one.
+  _wlCopyExists() {
+    if (this.commandAvailabilityCache.get("wl-copy")?.exists === false) {
+      this.commandAvailabilityCache.delete("wl-copy");
+    }
+    return this.commandExists("wl-copy");
+  }
+
   _writeClipboardWayland(text, webContents) {
     const { isKde } = getLinuxSessionInfo();
 
@@ -158,7 +168,7 @@ class ClipboardManager {
       return;
     }
 
-    if (this.commandExists("wl-copy")) {
+    if (this._wlCopyExists()) {
       try {
         const result = spawnSync("wl-copy", ["--", text], { timeout: 50 });
         if (result.status === 0) {
@@ -1620,6 +1630,7 @@ class ClipboardManager {
 
     // Without wl-copy the text is only on XWayland's clipboard, which these
     // compositors keep from a focused Wayland app: any chord would paste stale text.
+    // The clipboard write just probed wl-copy, so this reads the answer it used.
     if (requiresWlCopy && !this.commandExists("wl-copy")) {
       debugLogger.warn(
         "wl-copy is required to paste on this compositor, leaving the text on the clipboard",
@@ -2482,7 +2493,7 @@ Would you like to open System Settings now?`;
       hasWtype,
       isWlroots,
       isCosmic,
-      wlCopyMissing: requiresWlCopy && !this.commandExists("wl-copy"),
+      wlCopyMissing: requiresWlCopy && !this._wlCopyExists(),
       tools,
       recommendedInstall,
     };

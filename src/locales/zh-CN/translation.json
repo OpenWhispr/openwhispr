@@ -976,7 +976,8 @@
         "reasoningFailed": "AI 无法完成选中文本编辑。原始文本未被更改。",
         "invalidResponse": "AI 返回的编辑响应格式无效。未替换任何内容。请选中文本后重试。",
         "emptyResponse": "AI 返回了空的编辑结果。未替换任何内容。请尝试更具体的指令。",
-        "truncatedResponse": "AI 在完成编辑之前停止了。未替换任何内容。请尝试选择更少的文本。"
+        "truncatedResponse": "AI 在完成编辑之前停止了。未替换任何内容。请尝试选择更少的文本。",
+        "wlCopyMissing": "OpenWhispr 已生成编辑，但在此桌面上，Wayland 应用只能通过 wl-copy 读取粘贴的文本。请安装 wl-clipboard 以应用编辑。"
       },
       "pastePermission": {
         "title": "允许自动粘贴",
@@ -993,7 +994,7 @@
       "interruptedRecordingRecovered": "OpenWhispr 在本次听写完成前关闭，已恢复此录音。",
       "wlCopyMissing": {
         "title": "转录内容未粘贴",
-        "description": "在此桌面上，Wayland 应用只能通过 wl-copy 读取粘贴的文本。请安装 wl-clipboard，然后点击“重试”。"
+        "description": "在此桌面上，Wayland 应用只能通过 wl-copy 读取粘贴的文本。请安装 wl-clipboard 以粘贴听写内容。"
       }
     },
     "clipboard": {
