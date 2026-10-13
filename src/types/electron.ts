@@ -1329,7 +1329,11 @@ declare global {
           allowClipboardFallback?: boolean;
         }
       ) => Promise<
-        | { success: true; pasted: boolean; reason?: "modifiers-held" | "wl-copy-missing" }
+        | {
+            success: true;
+            pasted: boolean;
+            reason?: "modifiers-held" | "wl-copy-missing" | "wl-copy-failed";
+          }
         | {
             success: false;
             pasted: false;

@@ -35,6 +35,12 @@ const SELECTION_EDIT_DETAIL_KEY_BY_CODE = {
   session_expired: "expired",
   paste_failed: "pasteFailed",
   wl_copy_missing: "wlCopyMissing",
+  wl_copy_failed: "wlCopyFailed",
+};
+// Pastes held back because Wayland apps can't read the text yet (#2621).
+const WAYLAND_CLIPBOARD_REASON_KEYS = {
+  "wl-copy-missing": "wlCopyMissing",
+  "wl-copy-failed": "wlCopyFailed",
 };
 const COMPANION_AUDIO_LEVEL_INTERVAL_MS = 80;
 
@@ -828,14 +834,16 @@ export const useAudioRecording = (toast, options = {}) => {
                 },
                 generation
               );
-            } else if (pasteOutcome.reason === "wl-copy-missing") {
+            } else if (WAYLAND_CLIPBOARD_REASON_KEYS[pasteOutcome.reason]) {
               // Wayland apps can't read the clipboard copy here either, so the text
-              // never claims to be on it. Retry pastes the kept text, not a new recording.
-              const description = t("hooks.audioRecording.wlCopyMissing.description");
+              // never claims to be on it. Retry writes and pastes the kept text again.
+              const description = t(
+                `hooks.audioRecording.waylandClipboard.${WAYLAND_CLIPBOARD_REASON_KEYS[pasteOutcome.reason]}`
+              );
               await reportHeldBackPaste(
-                "wl-copy-missing",
+                pasteOutcome.reason,
                 {
-                  title: t("hooks.audioRecording.wlCopyMissing.title"),
+                  title: t("hooks.audioRecording.waylandClipboard.title"),
                   description,
                   descriptionClipboardFailed: description,
                   onRetry: pasteTranscript,

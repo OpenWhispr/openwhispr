@@ -977,7 +977,8 @@
         "invalidResponse": "AI が無効な編集応答を返しました。テキストは置き換えられていません。テキストを選択して、もう一度お試しください。",
         "emptyResponse": "AI が空の編集結果を返しました。テキストは置き換えられていません。より具体的な指示をお試しください。",
         "truncatedResponse": "AI が編集の完了前に停止しました。テキストは置き換えられていません。選択するテキストを減らしてお試しください。",
-        "wlCopyMissing": "OpenWhispr は編集を生成しましたが、このデスクトップでは Wayland アプリは wl-copy を通してしか貼り付けたテキストを読み取れません。編集を適用するには wl-clipboard をインストールしてください。"
+        "wlCopyMissing": "OpenWhispr は編集を生成しましたが、このデスクトップでは Wayland アプリは wl-copy を通してしか貼り付けたテキストを読み取れません。編集を適用するには wl-clipboard をインストールしてください。",
+        "wlCopyFailed": "OpenWhispr は編集を生成しましたが、wl-copy が時間内に Wayland のクリップボードに入れられなかったため、適用されませんでした。"
       },
       "pastePermission": {
         "title": "自動貼り付けを許可",
@@ -992,9 +993,10 @@
         "title": "自動貼り付けに失敗しました"
       },
       "interruptedRecordingRecovered": "このディクテーションの完了前に OpenWhispr が終了したため、録音を復元しました。",
-      "wlCopyMissing": {
+      "waylandClipboard": {
         "title": "文字起こしは貼り付けられませんでした",
-        "description": "このデスクトップでは、Wayland アプリは wl-copy を通してしか貼り付けたテキストを読み取れません。音声入力を貼り付けるには wl-clipboard をインストールしてください。"
+        "wlCopyMissing": "このデスクトップでは、Wayland アプリは wl-copy を通してしか貼り付けたテキストを読み取れません。音声入力を貼り付けるには wl-clipboard をインストールしてください。",
+        "wlCopyFailed": "wl-copy がテキストを時間内に Wayland のクリップボードに入れられなかったため、貼り付けられませんでした。「再試行」を押すと貼り付けます。"
       }
     },
     "clipboard": {

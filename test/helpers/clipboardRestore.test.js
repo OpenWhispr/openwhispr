@@ -313,7 +313,7 @@ test("Hyprland paste uses the current symbolic shortcut dispatcher", async () =>
     spawn: createSpawn(spawnCalls, [0], { stdout: ["ok\n"] }),
   });
   const manager = new TestClipboardManager();
-  manager.commandExists = (command) => command === "hyprctl" || command === "wl-copy";
+  manager.commandExists = (command) => command === "hyprctl";
   manager.resolveLinuxFastPasteBinary = () => null;
   manager._detectHyprlandWindowClass = () => "kitty";
 
@@ -338,7 +338,7 @@ test("Hyprland paste falls back to the legacy symbolic shortcut dispatcher", asy
     }),
   });
   const manager = new TestClipboardManager();
-  manager.commandExists = (command) => command === "hyprctl" || command === "wl-copy";
+  manager.commandExists = (command) => command === "hyprctl";
   manager.resolveLinuxFastPasteBinary = () => null;
   manager._detectHyprlandWindowClass = () => null;
 
@@ -362,8 +362,7 @@ test("Hyprland prefers wtype over sendshortcut when installed", async () => {
     spawn: createSpawn(spawnCalls, [0]),
   });
   const manager = new TestClipboardManager();
-  manager.commandExists = (command) =>
-    command === "hyprctl" || command === "wtype" || command === "wl-copy";
+  manager.commandExists = (command) => command === "hyprctl" || command === "wtype";
   manager.resolveLinuxFastPasteBinary = () => null;
   manager._detectHyprlandWindowClass = () => null;
 
@@ -381,8 +380,7 @@ test("failed wtype on Hyprland continues to sendshortcut", async () => {
     spawn: createSpawn(spawnCalls, [1, 0], { stdout: ["", "ok\n"] }),
   });
   const manager = new TestClipboardManager();
-  manager.commandExists = (command) =>
-    command === "hyprctl" || command === "wtype" || command === "wl-copy";
+  manager.commandExists = (command) => command === "hyprctl" || command === "wtype";
   manager.resolveLinuxFastPasteBinary = () => null;
   manager._detectHyprlandWindowClass = () => null;
 
@@ -400,7 +398,7 @@ test("wlroots tries wtype before native uinput", async () => {
     spawn: createSuccessfulSpawn(spawnCalls),
   });
   const manager = new TestClipboardManager();
-  manager.commandExists = (command) => command === "wtype" || command === "wl-copy";
+  manager.commandExists = (command) => command === "wtype";
   manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
 
   await withWaylandEnvironment("Sway", () => manager.pasteLinux(null));
@@ -416,7 +414,7 @@ test("failed wtype continues to native Shift+Insert uinput", async () => {
     spawn: createSpawn(spawnCalls, [1, 0]),
   });
   const manager = new TestClipboardManager();
-  manager.commandExists = (command) => command === "wtype" || command === "wl-copy";
+  manager.commandExists = (command) => command === "wtype";
   manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
 
   await withWaylandEnvironment("Sway", () => manager.pasteLinux(null));
@@ -792,7 +790,7 @@ test("Wayland ydotool uses raw Shift+Insert keycodes", async () => {
 test("successful Wayland dispatch starts clipboard restoration", async () => {
   const manager = new ClipboardManager();
   let restoreCalled = false;
-  manager.commandExists = (command) => command === "hyprctl" || command === "wl-copy";
+  manager.commandExists = (command) => command === "hyprctl";
   manager.resolveLinuxFastPasteBinary = () => null;
   manager._detectHyprlandWindowClass = () => null;
   manager._runLinuxPasteCommand = async () => {};
@@ -837,7 +835,7 @@ const MODIFIER_WAIT_CALL = {
 // A chord injected into still-held modifiers reaches the target as a different
 // shortcut (#2113), so every paste tool — not only the fast-paste binary — waits.
 for (const [desktop, commandExists, injector] of [
-  ["Sway", (command) => command === "wtype" || command === "wl-copy", "wtype"],
+  ["Sway", (command) => command === "wtype", "wtype"],
   ["GNOME", () => false, "/tmp/linux-fast-paste"],
 ]) {
   test(`${desktop} waits for held modifiers before ${injector} injects the paste`, async () => {
@@ -870,7 +868,7 @@ test("modifiers still held leave the text on the clipboard without injecting", a
   });
   const manager = new TestClipboardManager();
   let restoreScheduled = false;
-  manager.commandExists = (command) => command === "wtype" || command === "wl-copy";
+  manager.commandExists = (command) => command === "wtype";
   manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
   manager._restoreClipboardAfterDelay = async () => {
     restoreScheduled = true;
@@ -886,72 +884,93 @@ test("modifiers still held leave the text on the clipboard without injecting", a
   assert.equal(restoreScheduled, false, "the transcript stays on the clipboard");
 });
 
-// These compositors refuse an X11 clipboard write while a Wayland app has focus
-// (#2621): every chord would paste the clipboard from before the dictation.
-for (const desktop of ["niri", "Sway", "Hyprland"]) {
-  test(`${desktop} without wl-copy injects nothing and keeps the text on the clipboard`, async () => {
+// Stands in for `command -v` (only `installed` commands exist) and for wl-copy, whose
+// status null is a write killed by its timeout.
+function linuxClipboardToolsSpawnSync(installed, { wlCopyStatus = 0 } = {}) {
+  return (command, args = []) => {
+    if (command === "sh") {
+      return { status: installed.has(args[1].replace("command -v ", "")) ? 0 : 1 };
+    }
+    if (command === "wl-copy") return { status: wlCopyStatus };
+    return { status: 1, stdout: Buffer.from("") };
+  };
+}
+
+function loadLinuxPasteManager(t, spawnCalls, spawnSync) {
+  const platform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "linux" });
+  t.after(() => Object.defineProperty(process, "platform", platform));
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+    spawnSync,
+  });
+  const manager = new TestClipboardManager();
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._restoreClipboardAfterDelay = async () => {};
+  return manager;
+}
+
+// These compositors hand an X11 clipboard write to Wayland apps only while an X11
+// window has focus (#2621): with no Wayland clipboard written, every chord would
+// paste the clipboard from before the dictation.
+for (const [desktop, installed, wlCopyStatus, reason] of [
+  ["niri", [], 0, "wl-copy-missing"],
+  ["Sway", ["wtype"], 0, "wl-copy-missing"],
+  ["Hyprland", ["hyprctl"], 0, "wl-copy-missing"],
+  ["niri", ["wl-copy"], null, "wl-copy-failed"],
+]) {
+  test(`${desktop} with ${reason} injects nothing and says why`, async (t) => {
     const spawnCalls = [];
-    const TestClipboardManager = loadClipboardManager({
-      spawn: createSuccessfulSpawn(spawnCalls),
-      realModifierWait: true,
-    });
-    const manager = new TestClipboardManager();
-    let restoreScheduled = false;
-    manager.commandExists = (command) => command === "wtype" || command === "hyprctl";
-    manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
-    manager._restoreClipboardAfterDelay = async () => {
-      restoreScheduled = true;
-    };
-
-    const result = await withWaylandEnvironment(desktop, () =>
-      manager.pasteLinux({ type: "text", data: "previous clipboard" })
+    const manager = loadLinuxPasteManager(
+      t,
+      spawnCalls,
+      linuxClipboardToolsSpawnSync(new Set(installed), { wlCopyStatus })
     );
+    resetClipboard({ text: "previous" });
 
-    assert.deepEqual(spawnCalls, [], "no modifier wait and no chord");
+    const result = await withWaylandEnvironment(desktop, () => manager._pasteText("transcript"));
+
     assert.equal(result.pasted, false);
-    assert.equal(result.reason, "wl-copy-missing");
-    assert.equal(restoreScheduled, false, "the transcript stays on the clipboard");
+    assert.equal(result.reason, reason);
+    assert.deepEqual(spawnCalls, [], "no modifier wait and no chord");
+    assert.equal(fakeClipboard.text, "transcript", "the text stays on the clipboard");
   });
 }
 
-test("niri with wl-copy pastes through uinput", async () => {
+test("niri pastes once wl-copy wrote the Wayland clipboard", async (t) => {
   const spawnCalls = [];
-  const TestClipboardManager = loadClipboardManager({
-    spawn: createSuccessfulSpawn(spawnCalls),
-  });
-  const manager = new TestClipboardManager();
-  manager.commandExists = (command) => command === "wl-copy";
-  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  const manager = loadLinuxPasteManager(
+    t,
+    spawnCalls,
+    linuxClipboardToolsSpawnSync(new Set(["wl-copy"]))
+  );
 
-  await withWaylandEnvironment("niri", () => manager.pasteLinux(null));
+  const result = await withWaylandEnvironment("niri", () => manager._pasteText("transcript"));
 
+  assert.notEqual(result.pasted, false);
   assert.deepEqual(spawnCalls, [
     { command: "/tmp/linux-fast-paste", args: ["--uinput", "--shift-insert"] },
   ]);
 });
 
 // The command cache keeps an answer for 30 s; a wl-copy installed after a held-back
-// paste must count at once, or the next paste and the card's Re-check still fail.
+// paste must count for the next paste and the card's Re-check at once.
 test("a wl-copy installed after a held-back paste counts at once", async (t) => {
-  const platform = Object.getOwnPropertyDescriptor(process, "platform");
-  Object.defineProperty(process, "platform", { value: "linux" });
-  t.after(() => Object.defineProperty(process, "platform", platform));
-  let installed = false;
-  const TestClipboardManager = loadClipboardManager({
-    spawnSync: (command, args = []) => ({
-      status: command === "sh" && args[1] === "command -v wl-copy" && installed ? 0 : 1,
-      stdout: Buffer.from(""),
-    }),
-  });
-  const manager = new TestClipboardManager();
-  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  const spawnCalls = [];
+  const installed = new Set();
+  const manager = loadLinuxPasteManager(t, spawnCalls, linuxClipboardToolsSpawnSync(installed));
   manager._canAccessUinput = () => true;
 
-  await withWaylandEnvironment("niri", () => {
+  await withWaylandEnvironment("niri", async () => {
+    assert.equal((await manager._pasteText("first")).reason, "wl-copy-missing");
     assert.equal(manager.checkPasteTools().wlCopyMissing, true);
-    installed = true;
+
+    installed.add("wl-copy");
+
     assert.equal(manager.checkPasteTools().wlCopyMissing, false);
+    assert.notEqual((await manager._pasteText("second")).pasted, false);
   });
+  assert.equal(spawnCalls.length, 1, "only the second paste injects");
 });
 
 test("the paste tools report a missing wl-copy only where it is required", async (t) => {
@@ -987,7 +1006,7 @@ test("the paste target is detected after the modifier wait", async () => {
   });
   const manager = new TestClipboardManager();
   const dispatched = [];
-  manager.commandExists = (command) => command === "hyprctl" || command === "wl-copy";
+  manager.commandExists = (command) => command === "hyprctl";
   manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
   manager._detectHyprlandWindowClass = () => (spawnCalls.length > 0 ? "kitty" : "gedit");
   manager._runLinuxPasteCommand = async (command, args) => dispatched.push(args.at(-1));
@@ -1013,7 +1032,7 @@ for (const [label, output] of [
       realModifierWait: true,
     });
     const manager = new TestClipboardManager();
-    manager.commandExists = (command) => command === "wtype" || command === "wl-copy";
+    manager.commandExists = (command) => command === "wtype";
     manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
 
     await withWaylandEnvironment("Sway", () => manager.pasteLinux(null));
@@ -1082,7 +1101,7 @@ test("an unreadable modifier state is logged once per session", async (t) => {
     realModifierWait: true,
   });
   const manager = new TestClipboardManager();
-  manager.commandExists = (command) => command === "wtype" || command === "wl-copy";
+  manager.commandExists = (command) => command === "wtype";
   manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
 
   await withWaylandEnvironment("Sway", async () => {
@@ -1131,7 +1150,7 @@ test("without the fast-paste binary the paste chain is unchanged", async () => {
     realModifierWait: true,
   });
   const manager = new TestClipboardManager();
-  manager.commandExists = (command) => command === "wtype" || command === "wl-copy";
+  manager.commandExists = (command) => command === "wtype";
   manager.resolveLinuxFastPasteBinary = () => null;
 
   await withWaylandEnvironment("Sway", () => manager.pasteLinux(null));

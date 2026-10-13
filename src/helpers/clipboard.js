@@ -133,6 +133,8 @@ class ClipboardManager {
     return this.commandExists("wl-copy");
   }
 
+  // True when wl-copy wrote the Wayland clipboard; every other path only reaches
+  // XWayland's.
   _writeClipboardWayland(text, webContents) {
     const { isKde } = getLinuxSessionInfo();
 
@@ -147,7 +149,7 @@ class ClipboardManager {
           });
           if (result.status === 0) {
             clipboard.writeText(text);
-            return;
+            return false;
           }
         } catch {}
       }
@@ -159,13 +161,13 @@ class ClipboardManager {
           });
           if (result.status === 0) {
             clipboard.writeText(text);
-            return;
+            return false;
           }
         } catch {}
       }
       // Last resort: Electron's clipboard.writeText should work on XWayland
       clipboard.writeText(text);
-      return;
+      return false;
     }
 
     if (this._wlCopyExists()) {
@@ -173,7 +175,7 @@ class ClipboardManager {
         const result = spawnSync("wl-copy", ["--", text], { timeout: 50 });
         if (result.status === 0) {
           clipboard.writeText(text);
-          return;
+          return true;
         }
       } catch {}
     }
@@ -183,6 +185,7 @@ class ClipboardManager {
     }
 
     clipboard.writeText(text);
+    return false;
   }
 
   // PRIMARY selection (X11's "highlight to copy") is what terminals like alacritty,
@@ -973,9 +976,10 @@ class ClipboardManager {
         this.safeLog("💾 Saved original clipboard:", originalClipboard.type);
       }
 
+      let waylandClipboardWritten = false;
       if (platform === "linux") {
         if (this._isWayland()) {
-          this._writeClipboardWayland(text, webContents);
+          waylandClipboardWritten = this._writeClipboardWayland(text, webContents);
         } else {
           clipboard.writeText(text);
         }
@@ -1035,6 +1039,16 @@ class ClipboardManager {
           expectedClipboardText: text,
           targetWindow: options.targetWindow,
         });
+      } else if (getLinuxSessionInfo().requiresWlCopy && !waylandClipboardWritten) {
+        // Wayland apps here read only what wl-copy wrote: with the text on XWayland's
+        // clipboard alone, any chord would paste stale text. It stays there, unrestored.
+        const reason = this.commandExists("wl-copy") ? "wl-copy-failed" : "wl-copy-missing";
+        debugLogger.warn(
+          "Wayland clipboard not written, leaving the text unpasted",
+          { reason },
+          "clipboard"
+        );
+        pasteResult = { pasted: false, reason, restoreComplete: Promise.resolve() };
       } else {
         pasteResult = await this.pasteLinux(originalClipboard, {
           ...options,
@@ -1486,16 +1500,8 @@ class ClipboardManager {
   }
 
   async pasteLinux(originalClipboard, options = {}) {
-    const {
-      isWayland,
-      xwaylandAvailable,
-      isGnome,
-      isKde,
-      isWlroots,
-      isHyprland,
-      isCosmic,
-      requiresWlCopy,
-    } = getLinuxSessionInfo();
+    const { isWayland, xwaylandAvailable, isGnome, isKde, isWlroots, isHyprland, isCosmic } =
+      getLinuxSessionInfo();
     const webContents = options.webContents;
     const originalPrimary = options.originalPrimary ?? null;
     const expectedText = options.expectedClipboardText;
@@ -1627,18 +1633,6 @@ class ClipboardManager {
         return false;
       }
     };
-
-    // Without wl-copy the text is only on XWayland's clipboard, which these
-    // compositors keep from a focused Wayland app: any chord would paste stale text.
-    // The clipboard write just probed wl-copy, so this reads the answer it used.
-    if (requiresWlCopy && !this.commandExists("wl-copy")) {
-      debugLogger.warn(
-        "wl-copy is required to paste on this compositor, leaving the text on the clipboard",
-        { xdgCurrentDesktop: process.env.XDG_CURRENT_DESKTOP },
-        "clipboard"
-      );
-      return { pasted: false, reason: "wl-copy-missing", restoreComplete: Promise.resolve() };
-    }
 
     // Every tool below injects a chord, so wait here once for held modifiers. The
     // text is already on the clipboard; returning before a restore is scheduled

@@ -977,7 +977,8 @@
         "invalidResponse": "The AI returned an invalid edit response. Nothing was replaced. Select the text and try again.",
         "emptyResponse": "The AI returned an empty edit. Nothing was replaced. Try a more specific instruction.",
         "truncatedResponse": "The AI stopped before completing the edit. Nothing was replaced. Try selecting less text.",
-        "wlCopyMissing": "OpenWhispr generated the edit, but on this desktop Wayland apps can only read pasted text through wl-copy. Install wl-clipboard to apply edits."
+        "wlCopyMissing": "OpenWhispr generated the edit, but on this desktop Wayland apps can only read pasted text through wl-copy. Install wl-clipboard to apply edits.",
+        "wlCopyFailed": "OpenWhispr generated the edit, but wl-copy didn't put it on the Wayland clipboard in time, so it wasn't applied."
       },
       "pastePermission": {
         "title": "Allow automatic pasting",
@@ -992,9 +993,10 @@
         "title": "Couldn't paste automatically"
       },
       "interruptedRecordingRecovered": "Recovered after OpenWhispr closed before this dictation finished.",
-      "wlCopyMissing": {
+      "waylandClipboard": {
         "title": "Transcription not pasted",
-        "description": "On this desktop, Wayland apps can only read pasted text through wl-copy. Install wl-clipboard to paste your dictations."
+        "wlCopyMissing": "On this desktop, Wayland apps can only read pasted text through wl-copy. Install wl-clipboard to paste your dictations.",
+        "wlCopyFailed": "wl-copy didn't put the text on the Wayland clipboard in time, so it wasn't pasted. Press Retry to paste it."
       }
     },
     "clipboard": {

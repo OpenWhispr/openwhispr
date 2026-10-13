@@ -977,7 +977,8 @@
         "invalidResponse": "AI 傳回的編輯回應格式無效。未取代任何內容。請選取文字後重試。",
         "emptyResponse": "AI 傳回了空白的編輯結果。未取代任何內容。請嘗試更具體的指示。",
         "truncatedResponse": "AI 在完成編輯之前停止了。未取代任何內容。請嘗試選取較少的文字。",
-        "wlCopyMissing": "OpenWhispr 已產生編輯，但在此桌面上，Wayland 應用程式只能透過 wl-copy 讀取貼上的文字。請安裝 wl-clipboard 以套用編輯。"
+        "wlCopyMissing": "OpenWhispr 已產生編輯，但在此桌面上，Wayland 應用程式只能透過 wl-copy 讀取貼上的文字。請安裝 wl-clipboard 以套用編輯。",
+        "wlCopyFailed": "OpenWhispr 已產生編輯，但 wl-copy 未能及時將其放入 Wayland 剪貼簿，因此未套用。"
       },
       "pastePermission": {
         "title": "允許自動貼上",
@@ -992,9 +993,10 @@
         "title": "無法自動貼上"
       },
       "interruptedRecordingRecovered": "OpenWhispr 在本次語音輸入完成前關閉，已復原此錄音。",
-      "wlCopyMissing": {
+      "waylandClipboard": {
         "title": "轉錄內容未貼上",
-        "description": "在此桌面上，Wayland 應用程式只能透過 wl-copy 讀取貼上的文字。請安裝 wl-clipboard 以貼上聽寫內容。"
+        "wlCopyMissing": "在此桌面上，Wayland 應用程式只能透過 wl-copy 讀取貼上的文字。請安裝 wl-clipboard 以貼上聽寫內容。",
+        "wlCopyFailed": "wl-copy 未能及時將文字放入 Wayland 剪貼簿，因此未貼上。點按「重試」即可貼上。"
       }
     },
     "clipboard": {

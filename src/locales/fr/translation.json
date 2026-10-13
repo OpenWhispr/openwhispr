@@ -977,7 +977,8 @@
         "invalidResponse": "L’IA a renvoyé une réponse de modification invalide. Rien n’a été remplacé. Sélectionnez le texte et réessayez.",
         "emptyResponse": "L’IA a renvoyé une modification vide. Rien n’a été remplacé. Essayez une instruction plus précise.",
         "truncatedResponse": "L’IA s’est arrêtée avant de terminer la modification. Rien n’a été remplacé. Essayez de sélectionner moins de texte.",
-        "wlCopyMissing": "OpenWhispr a généré la modification, mais sur ce bureau les applications Wayland ne peuvent lire le texte collé que via wl-copy. Installez wl-clipboard pour appliquer les modifications."
+        "wlCopyMissing": "OpenWhispr a généré la modification, mais sur ce bureau les applications Wayland ne peuvent lire le texte collé que via wl-copy. Installez wl-clipboard pour appliquer les modifications.",
+        "wlCopyFailed": "OpenWhispr a généré la modification, mais wl-copy ne l'a pas mise dans le presse-papiers Wayland à temps, elle n'a donc pas été appliquée."
       },
       "pastePermission": {
         "title": "Autoriser le collage automatique",
@@ -992,9 +993,10 @@
         "title": "Collage automatique impossible"
       },
       "interruptedRecordingRecovered": "Récupérée après la fermeture d'OpenWhispr avant la fin de cette dictée.",
-      "wlCopyMissing": {
+      "waylandClipboard": {
         "title": "Transcription non collée",
-        "description": "Sur ce bureau, les applications Wayland ne peuvent lire le texte collé que via wl-copy. Installez wl-clipboard pour coller vos dictées."
+        "wlCopyMissing": "Sur ce bureau, les applications Wayland ne peuvent lire le texte collé que via wl-copy. Installez wl-clipboard pour coller vos dictées.",
+        "wlCopyFailed": "wl-copy n'a pas mis le texte dans le presse-papiers Wayland à temps, il n'a donc pas été collé. Appuyez sur Réessayer pour le coller."
       }
     },
     "clipboard": {

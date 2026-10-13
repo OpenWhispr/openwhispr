@@ -977,7 +977,8 @@
         "invalidResponse": "Die KI hat eine ungültige Bearbeitungsantwort zurückgegeben. Es wurde nichts ersetzt. Wähle den Text aus und versuche es erneut.",
         "emptyResponse": "Die KI hat eine leere Bearbeitung zurückgegeben. Es wurde nichts ersetzt. Versuche eine genauere Anweisung.",
         "truncatedResponse": "Die KI hat die Bearbeitung vorzeitig beendet. Es wurde nichts ersetzt. Versuche, weniger Text auszuwählen.",
-        "wlCopyMissing": "OpenWhispr hat die Änderung erstellt, aber auf diesem Desktop können Wayland-Apps eingefügten Text nur über wl-copy lesen. Installiere wl-clipboard, um Änderungen anzuwenden."
+        "wlCopyMissing": "OpenWhispr hat die Änderung erstellt, aber auf diesem Desktop können Wayland-Apps eingefügten Text nur über wl-copy lesen. Installiere wl-clipboard, um Änderungen anzuwenden.",
+        "wlCopyFailed": "OpenWhispr hat die Änderung erstellt, aber wl-copy hat sie nicht rechtzeitig in die Wayland-Zwischenablage gelegt, daher wurde sie nicht angewendet."
       },
       "pastePermission": {
         "title": "Automatisches Einfügen erlauben",
@@ -992,9 +993,10 @@
         "title": "Automatisches Einfügen fehlgeschlagen"
       },
       "interruptedRecordingRecovered": "Wiederhergestellt, nachdem OpenWhispr vor dem Ende dieses Diktats beendet wurde.",
-      "wlCopyMissing": {
+      "waylandClipboard": {
         "title": "Transkription nicht eingefügt",
-        "description": "Auf diesem Desktop können Wayland-Apps eingefügten Text nur über wl-copy lesen. Installiere wl-clipboard, um deine Diktate einzufügen."
+        "wlCopyMissing": "Auf diesem Desktop können Wayland-Apps eingefügten Text nur über wl-copy lesen. Installiere wl-clipboard, um deine Diktate einzufügen.",
+        "wlCopyFailed": "wl-copy hat den Text nicht rechtzeitig in die Wayland-Zwischenablage gelegt, daher wurde er nicht eingefügt. Klicke auf „Erneut versuchen“, um ihn einzufügen."
       }
     },
     "clipboard": {
