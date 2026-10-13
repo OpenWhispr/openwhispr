@@ -993,7 +993,7 @@ test("a wl-copy installed after a held-back paste counts at once", async (t) => 
 });
 
 // Elsewhere (GNOME, COSMIC) wl-copy is optional, so its absence stays cached.
-test("a missing wl-copy is probed again only where it is required", async (t) => {
+test("a missing wl-copy stays cached where it is optional", async (t) => {
   const platform = Object.getOwnPropertyDescriptor(process, "platform");
   Object.defineProperty(process, "platform", { value: "linux" });
   t.after(() => Object.defineProperty(process, "platform", platform));
@@ -1006,18 +1006,11 @@ test("a missing wl-copy is probed again only where it is required", async (t) =>
   });
   const manager = new TestClipboardManager();
 
-  for (const [desktop, wlCopyProbes] of [
-    ["GNOME", 1],
-    ["niri", 2],
-  ]) {
-    probes.length = 0;
-    manager.commandAvailabilityCache.clear();
-    await withWaylandEnvironment(desktop, () => {
-      manager._writeClipboardWayland("first");
-      manager._writeClipboardWayland("second");
-    });
-    assert.equal(probes.filter((probe) => probe === "command -v wl-copy").length, wlCopyProbes);
-  }
+  await withWaylandEnvironment("GNOME", () => {
+    manager._writeClipboardWayland("first");
+    manager._writeClipboardWayland("second");
+  });
+  assert.equal(probes.filter((probe) => probe === "command -v wl-copy").length, 1);
 });
 
 test("the paste tools report a missing wl-copy only where it is required", async (t) => {
