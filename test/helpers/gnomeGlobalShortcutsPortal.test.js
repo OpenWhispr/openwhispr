@@ -163,3 +163,138 @@ test("portal registration uses the current UI language for its description", asy
   const description = bindBody[1][0][1].find(([key]) => key === "description");
   assert.equal(description[1][1], "Mantener mientras hablas");
 });
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+const sessionReply = (handle) => [["session_handle", ["o", [handle]]]];
+const shortcutsReply = (id) => [["shortcuts", ["a(sa{sv})", [[[id, []]]]]]];
+
+test("a portal for another shortcut binds and reports only that shortcut", async () => {
+  const bus = createBus();
+  const GnomeGlobalShortcutsPortal = loadPortal(
+    () => bus,
+    (key) => (key === "app.buttons.cancelRecording" ? "Cancel recording" : key)
+  );
+  const portal = new GnomeGlobalShortcutsPortal({
+    shortcutId: "cancel",
+    descriptionKey: "app.buttons.cancelRecording",
+  });
+  const session = "/org/freedesktop/portal/desktop/session/1";
+  let bindBody;
+  portal._request = async (member, _signature, body) => {
+    if (member === "CreateSession") return sessionReply(session);
+    bindBody = body;
+    return shortcutsReply("cancel");
+  };
+  const phases = [];
+
+  assert.equal(await portal.registerKeybinding("Escape", (_e, phase) => phases.push(phase)), true);
+  const [id, options] = bindBody[1][0];
+  assert.equal(id, "cancel");
+  assert.deepEqual(options.find(([key]) => key === "description")[1], ["s", "Cancel recording"]);
+
+  const activated = bus.mangle(
+    "/org/freedesktop/portal/desktop",
+    "org.freedesktop.portal.GlobalShortcuts",
+    "Activated"
+  );
+  bus.signals.emit(activated, [session, "dictation"]);
+  bus.signals.emit(activated, [session, "cancel"]);
+  assert.deepEqual(phases, ["down"]);
+});
+
+test("an unregister during CreateSession closes the new session and binds nothing", async () => {
+  const bus = createBus();
+  const GnomeGlobalShortcutsPortal = loadPortal(() => bus);
+  const portal = new GnomeGlobalShortcutsPortal({ shortcutId: "cancel" });
+  const session = "/org/freedesktop/portal/desktop/session/1";
+  const created = deferred();
+  const requests = [];
+  portal._request = (member) => {
+    requests.push(member);
+    return member === "CreateSession" ? created.promise : Promise.resolve(shortcutsReply("cancel"));
+  };
+
+  const registration = portal.registerKeybinding("Escape", () => undefined);
+  await new Promise(setImmediate);
+  await portal.unregisterKeybinding();
+  created.resolve(sessionReply(session));
+
+  assert.equal(await registration, false);
+  assert.deepEqual(requests, ["CreateSession"]);
+  assert.equal(portal.sessionHandle, null);
+  assert.ok(bus.calls.invoke.some(({ member, path }) => member === "Close" && path === session));
+});
+
+test("an unregister during the first connection keeps the portal unbound", async () => {
+  const GnomeGlobalShortcutsPortal = loadPortal(() => createBus());
+  const portal = new GnomeGlobalShortcutsPortal({ shortcutId: "cancel" });
+  const connected = deferred();
+  const requests = [];
+  portal.init = () => connected.promise;
+  portal._request = async (member) => {
+    requests.push(member);
+    return member === "CreateSession"
+      ? sessionReply("/org/freedesktop/portal/desktop/session/1")
+      : shortcutsReply("cancel");
+  };
+
+  const registration = portal.registerKeybinding("Escape", () => undefined);
+  await new Promise(setImmediate);
+  await portal.unregisterKeybinding();
+  connected.resolve(true);
+
+  assert.equal(await registration, false);
+  assert.deepEqual(requests, []);
+});
+
+test("an unregister during BindShortcuts leaves nothing bound", async () => {
+  const bus = createBus();
+  const GnomeGlobalShortcutsPortal = loadPortal(() => bus);
+  const portal = new GnomeGlobalShortcutsPortal();
+  const session = "/org/freedesktop/portal/desktop/session/1";
+  const bound = deferred();
+  portal._request = (member) =>
+    member === "CreateSession" ? Promise.resolve(sessionReply(session)) : bound.promise;
+
+  const registration = portal.registerKeybinding("Escape", () => undefined);
+  await new Promise(setImmediate);
+  await portal.unregisterKeybinding();
+  bound.resolve(shortcutsReply("dictation"));
+
+  assert.equal(await registration, false);
+  assert.equal(portal.sessionHandle, null);
+  assert.equal(portal.activationListener, null);
+  assert.ok(bus.calls.invoke.some(({ member, path }) => member === "Close" && path === session));
+});
+
+test("a superseded registration that fails leaves the newer one bound", async () => {
+  const bus = createBus();
+  const GnomeGlobalShortcutsPortal = loadPortal(() => bus);
+  const portal = new GnomeGlobalShortcutsPortal();
+  const firstBind = deferred();
+  let sessions = 0;
+  portal._request = (member) => {
+    if (member === "CreateSession") {
+      sessions += 1;
+      return Promise.resolve(sessionReply(`/org/freedesktop/portal/desktop/session/${sessions}`));
+    }
+    return sessions === 1 ? firstBind.promise : Promise.resolve(shortcutsReply("dictation"));
+  };
+
+  const first = portal.registerKeybinding("Escape", () => undefined);
+  await new Promise(setImmediate);
+  assert.equal(await portal.registerKeybinding("Escape", () => undefined), true);
+  firstBind.reject(new Error("Portal request was rejected (2)"));
+
+  assert.equal(await first, false);
+  assert.equal(portal.sessionHandle, "/org/freedesktop/portal/desktop/session/2");
+});

@@ -39,6 +39,8 @@ function readDict(value) {
 
 class GnomeGlobalShortcutsPortal {
   constructor({
+    shortcutId = "dictation",
+    descriptionKey = "onboarding.activation.holdDescription",
     callTimeoutMs = DBUS_CALL_TIMEOUT_MS,
     requestTimeoutMs = PORTAL_REQUEST_TIMEOUT_MS,
   } = {}) {
@@ -48,6 +50,11 @@ class GnomeGlobalShortcutsPortal {
     this.available = false;
     this.activationListener = null;
     this.deactivationListener = null;
+    this.shortcutId = shortcutId;
+    this.descriptionKey = descriptionKey;
+    // Bumped by every unregister, so a registration still waiting on the portal
+    // knows it was superseded and must not leave its session bound.
+    this.generation = 0;
     this.callTimeoutMs = callTimeoutMs;
     this.requestTimeoutMs = requestTimeoutMs;
   }
@@ -100,9 +107,9 @@ class GnomeGlobalShortcutsPortal {
   }
 
   async registerKeybinding(preferredTrigger, callback) {
-    if (!(await this.init())) return false;
-
     await this.unregisterKeybinding();
+    const generation = this.generation;
+    if (!(await this.init()) || generation !== this.generation) return false;
     this.callback = callback;
 
     try {
@@ -119,8 +126,13 @@ class GnomeGlobalShortcutsPortal {
         ],
         createRequestToken
       );
-      this.sessionHandle = readDict(session).get("session_handle");
-      if (!this.sessionHandle) throw new Error("Portal did not return a session handle");
+      const sessionHandle = readDict(session).get("session_handle");
+      if (!sessionHandle) throw new Error("Portal did not return a session handle");
+      if (generation !== this.generation) {
+        await this._closeSession(sessionHandle);
+        return false;
+      }
+      this.sessionHandle = sessionHandle;
 
       await this._listenForShortcutEvents();
       const bindRequestToken = this._newToken();
@@ -128,12 +140,12 @@ class GnomeGlobalShortcutsPortal {
         "BindShortcuts",
         "oa(sa{sv})sa{sv}",
         [
-          this.sessionHandle,
+          sessionHandle,
           [
             [
-              "dictation",
+              this.shortcutId,
               vardict([
-                ["description", "s", i18nMain.t("onboarding.activation.holdDescription")],
+                ["description", "s", i18nMain.t(this.descriptionKey)],
                 ["preferred_trigger", "s", preferredTrigger],
               ]),
             ],
@@ -143,30 +155,37 @@ class GnomeGlobalShortcutsPortal {
         ],
         bindRequestToken
       );
+      // The unregister that superseded this registration already closed its session.
+      if (generation !== this.generation) return false;
       const shortcuts = readDict(result).get("shortcuts") || [];
-      if (!shortcuts.some(([id]) => id === "dictation")) {
-        throw new Error("Portal did not bind the dictation shortcut");
+      if (!shortcuts.some(([id]) => id === this.shortcutId)) {
+        throw new Error(`Portal did not bind the ${this.shortcutId} shortcut`);
       }
 
-      debugLogger.log("[GnomeGlobalShortcutsPortal] Dictation shortcut registered");
+      debugLogger.log(`[GnomeGlobalShortcutsPortal] ${this.shortcutId} shortcut registered`);
       return true;
     } catch (err) {
       debugLogger.log(
-        "[GnomeGlobalShortcutsPortal] Failed to register dictation shortcut:",
+        `[GnomeGlobalShortcutsPortal] Failed to register ${this.shortcutId} shortcut:`,
         err.message
       );
-      await this.unregisterKeybinding();
+      if (generation === this.generation) await this.unregisterKeybinding();
       return false;
     }
   }
 
   async unregisterKeybinding() {
+    this.generation += 1;
     this._removeShortcutListeners();
     this.callback = null;
     if (!this.sessionHandle || !this.bus) return;
 
     const sessionHandle = this.sessionHandle;
     this.sessionHandle = null;
+    await this._closeSession(sessionHandle);
+  }
+
+  async _closeSession(sessionHandle) {
     try {
       await this._invoke({
         destination: PORTAL_SERVICE,
@@ -196,12 +215,12 @@ class GnomeGlobalShortcutsPortal {
       "Deactivated"
     );
     this.activationListener = ([sessionHandle, shortcutId]) => {
-      if (sessionHandle === this.sessionHandle && shortcutId === "dictation") {
+      if (sessionHandle === this.sessionHandle && shortcutId === this.shortcutId) {
         this.callback?.(undefined, "down");
       }
     };
     this.deactivationListener = ([sessionHandle, shortcutId]) => {
-      if (sessionHandle === this.sessionHandle && shortcutId === "dictation") {
+      if (sessionHandle === this.sessionHandle && shortcutId === this.shortcutId) {
         this.callback?.(undefined, "up");
       }
     };

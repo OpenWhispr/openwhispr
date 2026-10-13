@@ -139,6 +139,13 @@ class GnomeShortcutManager {
     this.voiceAgentCallback = null;
     this.translationCallback = null;
     this.globalShortcutsPortal = new GnomeGlobalShortcutsPortal();
+    // Escape is bound only while a recording runs, in its own portal session.
+    this.cancelShortcutsPortal = new GnomeGlobalShortcutsPortal({
+      shortcutId: "cancel",
+      descriptionKey: "app.buttons.cancelRecording",
+    });
+    this.cancelShortcutAttempt = 0;
+    this.cancelShortcutUnavailable = false;
     // Track which slots have been registered in gsettings
     this.registeredSlots = new Set();
   }
@@ -290,6 +297,39 @@ class GnomeShortcutManager {
 
   async unregisterPushToTalk() {
     await this.globalShortcutsPortal.unregisterKeybinding();
+  }
+
+  async registerCancelShortcut(hotkey, onCancel) {
+    // Startup probes the portal through the dictation instance; without it, skip
+    // rather than reconnect on every recording.
+    if (
+      this.cancelShortcutUnavailable ||
+      !GnomeShortcutManager.isWayland() ||
+      !this.globalShortcutsPortal.isAvailable()
+    ) {
+      return false;
+    }
+    const preferredTrigger = GnomeShortcutManager.convertToPortalFormat(hotkey);
+    if (!preferredTrigger) return false;
+
+    const attempt = ++this.cancelShortcutAttempt;
+    const registered = await this.cancelShortcutsPortal.registerKeybinding(
+      preferredTrigger,
+      (_event, phase) => {
+        if (phase === "down") onCancel();
+      }
+    );
+    // A declined approval dialog would otherwise come back with every dictation.
+    if (!registered && attempt === this.cancelShortcutAttempt) {
+      this.cancelShortcutUnavailable = true;
+      debugLogger.log("[GnomeShortcut] Cancel shortcut unavailable until restart");
+    }
+    return registered;
+  }
+
+  async unregisterCancelShortcut() {
+    this.cancelShortcutAttempt += 1;
+    await this.cancelShortcutsPortal.unregisterKeybinding();
   }
 
   static isValidShortcut(shortcut) {
@@ -589,6 +629,7 @@ class GnomeShortcutManager {
 
   async close() {
     await this.globalShortcutsPortal.close();
+    await this.cancelShortcutsPortal.close();
     if (this.bus) {
       this.bus.connection.end();
       this.bus = null;
