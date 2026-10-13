@@ -184,6 +184,7 @@ const target = {
   _dictationIdleTimer: null,
   _meetingMicStreaming: null,
   _meetingSystemStreaming: null,
+  managedMeetingPolicy: { isMeetingRecordingDisabled: () => false },
   // A system audio tap on every platform, so each meeting opens two streams.
   audioTapManager: { isSupported: () => true, start: async () => {}, stop: async () => {} },
   _mintStoredCortiToken: async () => ({

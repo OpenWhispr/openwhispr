@@ -3215,6 +3215,7 @@ declare global {
           oneOnOneAttendee?: { displayName: string; email: string | null } | null;
         } & PolicyFailureMetadata
       >;
+      isMeetingRecordingDisabled?: () => Promise<boolean>;
       meetingTranscriptionSend?: (buffer: ArrayBuffer, source: "mic" | "system") => void;
       meetingTranscriptionSetSystemAudioAvailable?: (
         sessionId: string,

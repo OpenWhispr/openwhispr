@@ -920,6 +920,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("meeting-transcription-prepare", options),
   meetingTranscriptionStart: (options) =>
     ipcRenderer.invoke("meeting-transcription-start", options),
+  isMeetingRecordingDisabled: () => ipcRenderer.invoke("is-meeting-recording-disabled"),
   meetingTranscriptionSend: (buffer, source) =>
     ipcRenderer.send("meeting-transcription-send", buffer, source),
   meetingTranscriptionSetSystemAudioAvailable: (sessionId, available) =>
