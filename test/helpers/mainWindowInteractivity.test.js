@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const Module = require("node:module");
 const { EventEmitter } = require("node:events");
 let applyInputRegion;
+let focusInputRegion;
 
 // Load the real WindowManager with the module surface it touches at require
 // time. setMainWindowInteractivity only reads `this.mainWindow`, so the tests
@@ -30,6 +31,7 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
     return {
       createLinuxWindowInputRegion: () => ({
         set: (region) => applyInputRegion(region),
+        focus: () => focusInputRegion(),
         stop: () => undefined,
       }),
     };
@@ -154,7 +156,9 @@ test("Linux native visibility reports hide, show, minimize and restore to the re
   const notifications = [];
   win.isVisible = () => visible;
   win.isMinimized = () => minimized;
-  win.webContents = { send: (...args) => notifications.push(args) };
+  win.webContents = Object.assign(new EventEmitter(), {
+    send: (...args) => notifications.push(args),
+  });
   try {
     WindowManager.prototype.registerMainWindowEvents.call({
       mainWindow: win,
@@ -175,6 +179,57 @@ test("Linux native visibility reports hide, show, minimize and restore to the re
       ["main-window-visibility-changed", false],
       ["main-window-visibility-changed", true],
     ]);
+  } finally {
+    Object.defineProperty(process, "platform", original);
+  }
+});
+
+test("a failed Linux keyboard focus request settles quietly", async () => {
+  const win = { ...fakeWindow(), isVisible: () => true, isMinimized: () => false };
+  const manager = Object.assign(Object.create(WindowManager.prototype), { mainWindow: win });
+  let rejectFocus;
+  focusInputRegion = () =>
+    new Promise((_, reject) => {
+      rejectFocus = reject;
+    });
+  manager._focusLinuxMainWindow();
+  // The writer logs its own failure; an unhandled rejection would crash main.
+  rejectFocus(new Error("helper closed"));
+  await new Promise((resolve) => setImmediate(resolve));
+});
+
+test("Linux takes keyboard focus again when an unfocused open assistant panel is clicked", () => {
+  const original = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "linux", configurable: true });
+  const win = new EventEmitter();
+  let focused = false;
+  win.isFocused = () => focused;
+  win.isVisible = () => true;
+  win.isMinimized = () => false;
+  win.webContents = Object.assign(new EventEmitter(), { send: () => undefined });
+  const focusRequests = [];
+  const manager = {
+    mainWindow: win,
+    _assistantPanelOpen: false,
+    enforceMainWindowOnTop: () => {},
+    _focusLinuxMainWindow: () => focusRequests.push("focus"),
+  };
+  const mouseDown = () => win.webContents.emit("input-event", {}, { type: "mouseDown" });
+  try {
+    WindowManager.prototype.registerMainWindowEvents.call(manager);
+    win.emit("ready-to-show");
+    mouseDown();
+    assert.deepEqual(focusRequests, [], "a pill click must leave the user's app focused");
+    manager._assistantPanelOpen = true;
+    win.webContents.emit("input-event", {}, { type: "mouseMove" });
+    focused = true;
+    mouseDown();
+    assert.deepEqual(focusRequests, [], "the panel already has the keyboard");
+    // Back from another app: the window manager never refocuses the
+    // override-redirect pill on a click.
+    focused = false;
+    mouseDown();
+    assert.deepEqual(focusRequests, ["focus"]);
   } finally {
     Object.defineProperty(process, "platform", original);
   }

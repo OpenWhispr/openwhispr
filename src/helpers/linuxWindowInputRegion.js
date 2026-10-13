@@ -74,35 +74,13 @@ function createLinuxWindowInputRegion(win) {
     });
   };
 
-  const set = (region) => {
-    if (failure)
-      return stopped.then(() => {
-        throw failure;
-      });
-    let line = "full\n";
-    if (region !== null) {
-      const values = [
-        region?.viewportWidth,
-        region?.viewportHeight,
-        region?.x,
-        region?.y,
-        region?.width,
-        region?.height,
-      ];
-      if (
-        !values.every(Number.isFinite) ||
-        values[0] <= 0 ||
-        values[1] <= 0 ||
-        values[4] < 0 ||
-        values[5] < 0
-      ) {
-        fail(new Error("Invalid input region"));
-        return stopped.then(() => {
-          throw failure;
-        });
-      }
-      line = `${values.join(" ")}\n`;
-    }
+  const rejectWithFailure = () =>
+    stopped.then(() => {
+      throw failure;
+    });
+
+  const send = (line) => {
+    if (failure) return rejectWithFailure();
     return new Promise((resolve, reject) => {
       pending.push({
         resolve,
@@ -121,9 +99,37 @@ function createLinuxWindowInputRegion(win) {
     });
   };
 
+  const set = (region) => {
+    let line = "full\n";
+    if (region !== null) {
+      const values = [
+        region?.viewportWidth,
+        region?.viewportHeight,
+        region?.x,
+        region?.y,
+        region?.width,
+        region?.height,
+      ];
+      if (
+        !values.every(Number.isFinite) ||
+        values[0] <= 0 ||
+        values[1] <= 0 ||
+        values[4] < 0 ||
+        values[5] < 0
+      ) {
+        fail(new Error("Invalid input region"));
+        return rejectWithFailure();
+      }
+      line = `${values.join(" ")}\n`;
+    }
+    return send(line);
+  };
+
+  const focus = () => send("focus\n");
+
   app.once("before-quit", onClose);
   win.once("closed", onClose);
-  return { set, stop };
+  return { set, focus, stop };
 }
 
 module.exports = { createLinuxWindowInputRegion };
