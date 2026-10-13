@@ -93,7 +93,11 @@
       "pasteFailed": {
         "title": "تعذّر اللصق تلقائيًا"
       },
-      "interruptedRecordingRecovered": "تمت استعادته بعد إغلاق OpenWhispr قبل انتهاء هذا الإملاء."
+      "interruptedRecordingRecovered": "تمت استعادته بعد إغلاق OpenWhispr قبل انتهاء هذا الإملاء.",
+      "wlCopyMissing": {
+        "title": "لم يتم لصق النص المفرَّغ",
+        "description": "على سطح المكتب هذا، لا تستطيع تطبيقات Wayland قراءة النص الملصوق إلا عبر wl-copy. ثبّت wl-clipboard، ثم اضغط على إعادة المحاولة."
+      }
     },
     "clipboard": {
       "pasteFailed": {
@@ -3712,6 +3716,10 @@
           },
           "xclip": {
             "step1Title": "تثبيت xclip"
+          },
+          "wlCopy": {
+            "step1Title": "تثبيت wl-clipboard",
+            "step2Title": "التحقق من التثبيت"
           }
         },
         "xclipDesc": "أداة الحافظة للصق في KDE Wayland (xclip أو xsel)",
@@ -3723,7 +3731,8 @@
           "flakeTitle": "التثبيت عبر flake الخاص بنا؟",
           "flakeDesc": "إذا قمت بتثبيت OpenWhispr من flake، فسيقوم programs.openwhispr.enable بتفعيل ydotool ووحدة uinput وعضويات المجموعة نيابة عنك.",
           "rebuildNote": "قم بتشغيل sudo nixos-rebuild switch، ثم قم بتسجيل الخروج وتسجيل الدخول مرة أخرى حتى يسري تغيير المجموعة وقاعدة /dev/uinput. استبدل <you> باسم المستخدم الخاص بك."
-        }
+        },
+        "wlCopyDesc": "أداة الحافظة التي تقرأ منها تطبيقات Wayland النص الملصوق على سطح المكتب هذا"
       },
       "updates": {
         "automaticUpdates": "التحديثات التلقائية",
@@ -4477,7 +4486,9 @@
     "withoutToolPrefix": "بدون هذه الأداة، سيقوم OpenWhispr بنسخ النص إلى الحافظة الخاصة بك. يمكنك بعد ذلك اللصق يدويًا باستخدام Ctrl+V.",
     "wtypeCosmicTerminalsDescription": "على COSMIC، لا تستقبل الطرفيات مثل Warp النص الملصق إلا عبر wtype. أما التطبيقات الأخرى فيعمل فيها اللصق بدونه.",
     "wtypeFallbackDescription": "يُعد wtype الطريقة المفضلة للصق التلقائي في مركب wlroots هذا. يتوفر بديل آخر، ولكنه قد يكون أقل موثوقية.",
-    "xwaylandAppsOnly": "اللصق التلقائي يعمل مع تطبيقات XWayland فقط"
+    "xwaylandAppsOnly": "اللصق التلقائي يعمل مع تطبيقات XWayland فقط",
+    "wlClipboardTitle": "ثبّت wl-clipboard للصق في تطبيقات Wayland",
+    "wlClipboardDescription": "على سطح المكتب هذا، لا تستطيع تطبيقات Wayland قراءة النص الذي ينسخه OpenWhispr إلا عبر wl-copy. للصق الإملاء فيها، ثبّت wl-clipboard:"
   },
   "settingsModal": {
     "managedByOrg": "تتم إدارة بعض الإعدادات بواسطة مؤسستك.",

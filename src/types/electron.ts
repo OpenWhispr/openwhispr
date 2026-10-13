@@ -1156,6 +1156,7 @@ export interface PasteToolsResult {
   hasWtype?: boolean;
   isWlroots?: boolean;
   isCosmic?: boolean;
+  wlCopyMissing?: boolean;
   tools?: string[];
   recommendedInstall?: string;
 }
@@ -1328,7 +1329,7 @@ declare global {
           allowClipboardFallback?: boolean;
         }
       ) => Promise<
-        | { success: true; pasted: boolean; reason?: "modifiers-held" }
+        | { success: true; pasted: boolean; reason?: "modifiers-held" | "wl-copy-missing" }
         | {
             success: false;
             pasted: false;
@@ -2270,6 +2271,7 @@ declare global {
         hasYdotool: boolean;
         hasYdotoold: boolean;
         hasWtype: boolean;
+        hasWlCopy: boolean;
         daemonRunning: boolean;
         hasService: boolean;
         hasUinput: boolean;
@@ -2279,6 +2281,7 @@ declare global {
         isKde: boolean;
         isWlroots: boolean;
         isCosmic: boolean;
+        requiresWlCopy: boolean;
         hasXclip: boolean;
         hasXsel: boolean;
       }>;

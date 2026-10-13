@@ -100,15 +100,18 @@ export default function PasteToolsInfo({
 
   if (needsLinuxPasteToolGuidance(pasteToolsInfo)) {
     const isWayland = pasteToolsInfo.isWayland;
+    const wlCopyMissing = !!pasteToolsInfo.wlCopyMissing;
     const wtypeMissing = needsWtype(pasteToolsInfo);
     const cosmicTerminalsOnly = wtypeMissing && !!pasteToolsInfo.isCosmic;
-    const recommendedTool = wtypeMissing
-      ? "wtype"
-      : pasteToolsInfo.recommendedInstall === "wtype"
+    const recommendedTool = wlCopyMissing
+      ? "wl-clipboard"
+      : wtypeMissing
         ? "wtype"
-        : pasteToolsInfo.recommendedInstall === "xdotool"
-          ? "xdotool"
-          : null;
+        : pasteToolsInfo.recommendedInstall === "wtype"
+          ? "wtype"
+          : pasteToolsInfo.recommendedInstall === "xdotool"
+            ? "xdotool"
+            : null;
     const showInstall = recommendedTool !== null;
 
     return (
@@ -117,15 +120,19 @@ export default function PasteToolsInfo({
           <Info className="w-6 h-6 text-warning dark:text-warning flex-shrink-0 mt-0.5" />
           <div className="flex-1">
             <h3 className="font-semibold text-warning dark:text-warning">
-              {showInstall
-                ? t("pasteToolsInfo.optionalEnableTitle")
-                : t("pasteToolsInfo.waylandClipboardTitle")}
+              {wlCopyMissing
+                ? t("pasteToolsInfo.wlClipboardTitle")
+                : showInstall
+                  ? t("pasteToolsInfo.optionalEnableTitle")
+                  : t("pasteToolsInfo.waylandClipboardTitle")}
             </h3>
 
             {showInstall ? (
               <>
                 <p className="text-sm text-warning dark:text-warning mt-1">
-                  {cosmicTerminalsOnly ? (
+                  {wlCopyMissing ? (
+                    t("pasteToolsInfo.wlClipboardDescription")
+                  ) : cosmicTerminalsOnly ? (
                     t("pasteToolsInfo.wtypeCosmicTerminalsDescription")
                   ) : wtypeMissing ? (
                     t("pasteToolsInfo.wtypeFallbackDescription")
@@ -173,7 +180,7 @@ export default function PasteToolsInfo({
               </p>
             )}
 
-            {showInstall && !cosmicTerminalsOnly && (
+            {showInstall && !cosmicTerminalsOnly && !wlCopyMissing && (
               <p className="text-sm text-warning dark:text-warning mt-3">
                 {t("pasteToolsInfo.withoutToolPrefix")}{" "}
                 <kbd dir="ltr" className="bg-warning/20 px-1 rounded text-xs">

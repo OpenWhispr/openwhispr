@@ -990,7 +990,11 @@
       "pasteFailed": {
         "title": "無法自動貼上"
       },
-      "interruptedRecordingRecovered": "OpenWhispr 在本次語音輸入完成前關閉，已復原此錄音。"
+      "interruptedRecordingRecovered": "OpenWhispr 在本次語音輸入完成前關閉，已復原此錄音。",
+      "wlCopyMissing": {
+        "title": "轉錄內容未貼上",
+        "description": "在此桌面上，Wayland 應用程式只能透過 wl-copy 讀取貼上的文字。請安裝 wl-clipboard，然後點按「重試」。"
+      }
     },
     "clipboard": {
       "pasteFailed": {
@@ -1423,7 +1427,9 @@
     "withoutToolPrefix": "若未安裝此工具，OpenWhispr 會將文字複製到剪貼簿。你可以使用 Ctrl+V 手動貼上。",
     "wtypeCosmicTerminalsDescription": "在 COSMIC 上，Warp 等終端機只能透過 wtype 接收貼上的文字。其他應用程式不需要 wtype 即可貼上。",
     "wtypeFallbackDescription": "wtype 是此 wlroots 合成器上的首選自動貼上方式。有備用方案可用，但可能較不可靠。",
-    "xwaylandAppsOnly": "自動貼上僅適用於 XWayland 應用程式"
+    "xwaylandAppsOnly": "自動貼上僅適用於 XWayland 應用程式",
+    "wlClipboardTitle": "安裝 wl-clipboard 以貼上到 Wayland 應用程式",
+    "wlClipboardDescription": "在此桌面上，Wayland 應用程式只能透過 wl-copy 讀取 OpenWhispr 複製的文字。若要將聽寫內容貼上到這些應用程式，請安裝 wl-clipboard："
   },
   "promptStudio": {
     "common": {
@@ -2070,6 +2076,10 @@
           },
           "xclip": {
             "step1Title": "安裝 xclip"
+          },
+          "wlCopy": {
+            "step1Title": "安裝 wl-clipboard",
+            "step2Title": "驗證安裝"
           }
         },
         "xclipDesc": "KDE Wayland 貼上用的剪貼簿工具（xclip 或 xsel）",
@@ -2081,7 +2091,8 @@
           "flakeTitle": "透過我們的 flake 安裝？",
           "flakeDesc": "若你從 flake 安裝 OpenWhispr，programs.openwhispr.enable 會自動啟用 ydotool、uinput 模組及所需的群組成員資格。",
           "rebuildNote": "執行 sudo nixos-rebuild switch，然後登出並重新登入，使群組變更與 /dev/uinput 規則生效。將 <you> 替換為你的使用者名稱。"
-        }
+        },
+        "wlCopyDesc": "此桌面上 Wayland 應用程式讀取貼上文字所用的剪貼簿工具"
       },
       "updates": {
         "automaticUpdates": "自動更新",

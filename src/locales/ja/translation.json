@@ -990,7 +990,11 @@
       "pasteFailed": {
         "title": "自動貼り付けに失敗しました"
       },
-      "interruptedRecordingRecovered": "このディクテーションの完了前に OpenWhispr が終了したため、録音を復元しました。"
+      "interruptedRecordingRecovered": "このディクテーションの完了前に OpenWhispr が終了したため、録音を復元しました。",
+      "wlCopyMissing": {
+        "title": "文字起こしは貼り付けられませんでした",
+        "description": "このデスクトップでは、Wayland アプリは wl-copy を通してしか貼り付けたテキストを読み取れません。wl-clipboard をインストールしてから「再試行」を押してください。"
+      }
     },
     "clipboard": {
       "pasteFailed": {
@@ -1423,7 +1427,9 @@
     "withoutToolPrefix": "このツールがない場合、OpenWhispr はテキストをクリップボードにコピーします。Ctrl+V で手動で貼り付けてください。",
     "wtypeCosmicTerminalsDescription": "COSMIC では、Warp などのターミナルは wtype 経由でのみ貼り付けを受け取ります。その他のアプリには wtype なしで貼り付けられます。",
     "wtypeFallbackDescription": "この wlroots 系コンポジターでは wtype が推奨される自動貼り付け方法です。代替手段も利用できますが、信頼性が低い場合があります。",
-    "xwaylandAppsOnly": "自動貼り付けは XWayland アプリのみで動作します"
+    "xwaylandAppsOnly": "自動貼り付けは XWayland アプリのみで動作します",
+    "wlClipboardTitle": "Wayland アプリに貼り付けるには wl-clipboard をインストールしてください",
+    "wlClipboardDescription": "このデスクトップでは、Wayland アプリは OpenWhispr がコピーしたテキストを wl-copy を通してしか読み取れません。音声入力を貼り付けるには、wl-clipboard をインストールしてください："
   },
   "promptStudio": {
     "common": {
@@ -2070,6 +2076,10 @@
           },
           "xclip": {
             "step1Title": "xclipをインストール"
+          },
+          "wlCopy": {
+            "step1Title": "wl-clipboard をインストール",
+            "step2Title": "インストールの確認"
           }
         },
         "xclipDesc": "KDE Waylandの貼り付け用クリップボードツール（xclipまたはxsel）",
@@ -2081,7 +2091,8 @@
           "flakeTitle": "flakeからインストールする場合",
           "flakeDesc": "flakeからOpenWhisprをインストールする場合、programs.openwhispr.enableを有効にするとydotool、uinputモジュール、グループのメンバーシップが自動で設定されます。",
           "rebuildNote": "sudo nixos-rebuild switchを実行し、グループの変更と/dev/uinputのルールを反映させるためにログアウト後に再ログインしてください。<you>はあなたのユーザー名に置き換えてください。"
-        }
+        },
+        "wlCopyDesc": "このデスクトップで Wayland アプリが貼り付けるテキストを読み取るクリップボードツール"
       },
       "updates": {
         "automaticUpdates": "自動アップデート",

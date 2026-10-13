@@ -827,6 +827,20 @@ export const useAudioRecording = (toast, options = {}) => {
                 },
                 generation
               );
+            } else if (pasteOutcome.reason === "wl-copy-missing") {
+              // Wayland apps can't read the clipboard copy here either, so the text
+              // never claims to be on it. Retry pastes once wl-clipboard is installed.
+              const description = t("hooks.audioRecording.wlCopyMissing.description");
+              await reportHeldBackPaste(
+                "wl-copy-missing",
+                {
+                  title: t("hooks.audioRecording.wlCopyMissing.title"),
+                  description,
+                  descriptionClipboardFailed: description,
+                  onRetry: pasteTranscript,
+                },
+                generation
+              );
             }
             return pasteOutcome.pasted;
           };

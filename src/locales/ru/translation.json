@@ -990,7 +990,11 @@
       "pasteFailed": {
         "title": "Не удалось вставить автоматически"
       },
-      "interruptedRecordingRecovered": "Восстановлено: OpenWhispr закрылся до завершения этой диктовки."
+      "interruptedRecordingRecovered": "Восстановлено: OpenWhispr закрылся до завершения этой диктовки.",
+      "wlCopyMissing": {
+        "title": "Расшифровка не вставлена",
+        "description": "На этом рабочем столе приложения Wayland читают вставленный текст только через wl-copy. Установите wl-clipboard и нажмите «Повторить»."
+      }
     },
     "clipboard": {
       "pasteFailed": {
@@ -1423,7 +1427,9 @@
     "withoutToolPrefix": "Без этого инструмента OpenWhispr скопирует текст в буфер обмена. Вы сможете вставить его вручную с помощью Ctrl+V.",
     "wtypeCosmicTerminalsDescription": "В COSMIC терминалы, такие как Warp, получают вставляемый текст только через wtype. В остальные приложения вставка уже работает без него.",
     "wtypeFallbackDescription": "wtype — предпочтительный способ автоматической вставки для этого композитора wlroots. Доступен резервный вариант, но он может быть менее надёжным.",
-    "xwaylandAppsOnly": "автоматическая вставка работает только для приложений XWayland"
+    "xwaylandAppsOnly": "автоматическая вставка работает только для приложений XWayland",
+    "wlClipboardTitle": "Установите wl-clipboard, чтобы вставлять текст в приложения Wayland",
+    "wlClipboardDescription": "На этом рабочем столе приложения Wayland читают текст, скопированный OpenWhispr, только через wl-copy. Чтобы вставлять в них диктовку, установите wl-clipboard:"
   },
   "promptStudio": {
     "common": {
@@ -2074,6 +2080,10 @@
           },
           "xclip": {
             "step1Title": "Установить xclip"
+          },
+          "wlCopy": {
+            "step1Title": "Установить wl-clipboard",
+            "step2Title": "Проверить установку"
           }
         },
         "xclipDesc": "Инструмент буфера обмена для вставки в KDE Wayland (xclip или xsel)",
@@ -2085,7 +2095,8 @@
           "flakeTitle": "Устанавливаете через наш flake?",
           "flakeDesc": "Если вы устанавливаете OpenWhispr из flake, programs.openwhispr.enable автоматически включает ydotool, модуль uinput и нужные группы пользователей.",
           "rebuildNote": "Выполните sudo nixos-rebuild switch, затем выйдите из системы и войдите снова, чтобы изменение группы и правило /dev/uinput вступили в силу. Замените <you> на ваше имя пользователя."
-        }
+        },
+        "wlCopyDesc": "Инструмент буфера обмена, из которого приложения Wayland на этом рабочем столе читают вставленный текст"
       },
       "updates": {
         "automaticUpdates": "Автоматические обновления",

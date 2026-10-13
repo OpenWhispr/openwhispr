@@ -969,7 +969,11 @@
       "pasteFailed": {
         "title": "Não foi possível colar automaticamente"
       },
-      "interruptedRecordingRecovered": "Recuperado após o OpenWhispr fechar antes de terminar este ditado."
+      "interruptedRecordingRecovered": "Recuperado após o OpenWhispr fechar antes de terminar este ditado.",
+      "wlCopyMissing": {
+        "title": "Transcrição não colada",
+        "description": "Nesta área de trabalho, os apps Wayland só conseguem ler o texto colado através do wl-copy. Instale o wl-clipboard e clique em Tentar novamente."
+      }
     },
     "clipboard": {
       "pasteFailed": {
@@ -1402,7 +1406,9 @@
     "withoutToolPrefix": "Sem essa ferramenta, o OpenWhispr copiará o texto para a área de transferência. Você poderá colar manualmente com Ctrl+V.",
     "wtypeCosmicTerminalsDescription": "No COSMIC, terminais como o Warp só recebem texto colado pelo wtype. Nos outros apps, a colagem já funciona sem ele.",
     "wtypeFallbackDescription": "O wtype é o método de colagem automática preferido para este compositor wlroots. Há uma alternativa disponível, mas ela pode ser menos confiável.",
-    "xwaylandAppsOnly": "a colagem automática funciona apenas para apps XWayland"
+    "xwaylandAppsOnly": "a colagem automática funciona apenas para apps XWayland",
+    "wlClipboardTitle": "Instale o wl-clipboard para colar em apps Wayland",
+    "wlClipboardDescription": "Nesta área de trabalho, os apps Wayland só conseguem ler o texto que o OpenWhispr copia através do wl-copy. Para colar o ditado neles, instale o wl-clipboard:"
   },
   "promptStudio": {
     "common": {
@@ -2049,6 +2055,10 @@
           },
           "xclip": {
             "step1Title": "Instalar xclip"
+          },
+          "wlCopy": {
+            "step1Title": "Instalar o wl-clipboard",
+            "step2Title": "Verificar a instalação"
           }
         },
         "xclipDesc": "Ferramenta de área de transferência para colar no KDE Wayland (xclip ou xsel)",
@@ -2060,7 +2070,8 @@
           "flakeTitle": "A instalar pelo nosso flake?",
           "flakeDesc": "Se instalar o OpenWhispr pelo flake, programs.openwhispr.enable ativa o ydotool, o módulo uinput e as associações de grupo por si.",
           "rebuildNote": "Execute sudo nixos-rebuild switch, depois termine a sessão e volte a entrar para que a alteração de grupo e a regra /dev/uinput entrem em vigor. Substitua <you> pelo seu nome de utilizador."
-        }
+        },
+        "wlCopyDesc": "Ferramenta de área de transferência da qual os apps Wayland leem o texto colado nesta área de trabalho"
       },
       "updates": {
         "automaticUpdates": "Atualizações automáticas",

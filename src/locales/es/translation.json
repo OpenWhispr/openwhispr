@@ -990,7 +990,11 @@
       "pasteFailed": {
         "title": "No se pudo pegar automáticamente"
       },
-      "interruptedRecordingRecovered": "Recuperado después de que OpenWhispr se cerrara antes de terminar este dictado."
+      "interruptedRecordingRecovered": "Recuperado después de que OpenWhispr se cerrara antes de terminar este dictado.",
+      "wlCopyMissing": {
+        "title": "Transcripción no pegada",
+        "description": "En este escritorio, las apps de Wayland solo pueden leer el texto pegado a través de wl-copy. Instala wl-clipboard y pulsa Reintentar."
+      }
     },
     "clipboard": {
       "pasteFailed": {
@@ -1475,7 +1479,9 @@
     "withoutToolPrefix": "Sin esta herramienta, OpenWhispr copiará el texto al portapapeles. Luego puedes pegarlo manualmente con Ctrl+V.",
     "wtypeCosmicTerminalsDescription": "En COSMIC, las terminales como Warp solo reciben el texto pegado mediante wtype. En las demás aplicaciones ya se pega sin él.",
     "wtypeFallbackDescription": "wtype es el método de pegado automático preferido para este compositor wlroots. Hay una alternativa disponible, pero puede ser menos fiable.",
-    "xwaylandAppsOnly": "el pegado automático funciona solo en apps XWayland"
+    "xwaylandAppsOnly": "el pegado automático funciona solo en apps XWayland",
+    "wlClipboardTitle": "Instala wl-clipboard para pegar en apps de Wayland",
+    "wlClipboardDescription": "En este escritorio, las apps de Wayland solo pueden leer el texto que OpenWhispr copia a través de wl-copy. Para pegar el dictado en ellas, instala wl-clipboard:"
   },
   "promptStudio": {
     "common": {
@@ -2122,6 +2128,10 @@
           },
           "xclip": {
             "step1Title": "Instalar xclip"
+          },
+          "wlCopy": {
+            "step1Title": "Instalar wl-clipboard",
+            "step2Title": "Verificar la instalación"
           }
         },
         "xclipDesc": "Herramienta de portapapeles para pegado en KDE Wayland (xclip o xsel)",
@@ -2133,7 +2143,8 @@
           "flakeTitle": "¿Instalando mediante nuestro flake?",
           "flakeDesc": "Si instalas OpenWhispr desde el flake, programs.openwhispr.enable activa ydotool, el módulo uinput y las pertenencias de grupo por ti.",
           "rebuildNote": "Ejecuta sudo nixos-rebuild switch, luego cierra sesión y vuelve a abrirla para que el cambio de grupo y la regla de /dev/uinput surtan efecto. Sustituye <you> por tu nombre de usuario."
-        }
+        },
+        "wlCopyDesc": "Herramienta de portapapeles de la que las apps de Wayland leen el texto pegado en este escritorio"
       },
       "updates": {
         "automaticUpdates": "Actualizaciones automáticas",

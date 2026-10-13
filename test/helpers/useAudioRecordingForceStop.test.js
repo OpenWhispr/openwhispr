@@ -281,6 +281,27 @@ test("a paste held back for still-held modifiers keeps the transcript", async (t
   );
 });
 
+// Without wl-copy on wlroots, Hyprland or niri (#2621), Wayland apps can't read
+// the clipboard copy either, so the pill says why and Retry pastes again.
+test("a paste held back for a missing wl-copy keeps the transcript and retries the paste", async (t) => {
+  const harness = await mountHarness(t, {
+    pasteOutcome: { pasted: false, reason: "wl-copy-missing" },
+  });
+
+  await harness.complete();
+
+  const [toast] = errorToasts(harness);
+  assert.ok(toast, "the transcript is surfaced, not dropped");
+  assert.equal(toast.title, "hooks.audioRecording.wlCopyMissing.title");
+  assert.equal(toast.description, "hooks.audioRecording.wlCopyMissing.description");
+
+  globalThis.__forceStopPasteOutcome = { pasted: true };
+  await React.act(async () => retryAction(toast).onClick());
+
+  assert.equal(harness.pastes.length, 2);
+  assert.equal(harness.recordingStarts(), 0);
+});
+
 // A macOS clipboard-only fallback (accessibility skipped) is also "not pasted",
 // but it is expected and carries no reason, so it must stay silent.
 test("a clipboard-only fallback without a reason raises no error", async (t) => {

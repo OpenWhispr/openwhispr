@@ -1476,8 +1476,16 @@ class ClipboardManager {
   }
 
   async pasteLinux(originalClipboard, options = {}) {
-    const { isWayland, xwaylandAvailable, isGnome, isKde, isWlroots, isHyprland, isCosmic } =
-      getLinuxSessionInfo();
+    const {
+      isWayland,
+      xwaylandAvailable,
+      isGnome,
+      isKde,
+      isWlroots,
+      isHyprland,
+      isCosmic,
+      requiresWlCopy,
+    } = getLinuxSessionInfo();
     const webContents = options.webContents;
     const originalPrimary = options.originalPrimary ?? null;
     const expectedText = options.expectedClipboardText;
@@ -1609,6 +1617,17 @@ class ClipboardManager {
         return false;
       }
     };
+
+    // Without wl-copy the text is only on XWayland's clipboard, which these
+    // compositors keep from a focused Wayland app: any chord would paste stale text.
+    if (requiresWlCopy && !this.commandExists("wl-copy")) {
+      debugLogger.warn(
+        "wl-copy is required to paste on this compositor, leaving the text on the clipboard",
+        { xdgCurrentDesktop: process.env.XDG_CURRENT_DESKTOP },
+        "clipboard"
+      );
+      return { pasted: false, reason: "wl-copy-missing", restoreComplete: Promise.resolve() };
+    }
 
     // Every tool below injects a chord, so wait here once for held modifiers. The
     // text is already on the clipboard; returning before a restore is scheduled
@@ -2373,8 +2392,16 @@ Would you like to open System Settings now?`;
       };
     }
 
-    const { isWayland, xwaylandAvailable, isGnome, isKde, isWlroots, isHyprland, isCosmic } =
-      getLinuxSessionInfo();
+    const {
+      isWayland,
+      xwaylandAvailable,
+      isGnome,
+      isKde,
+      isWlroots,
+      isHyprland,
+      isCosmic,
+      requiresWlCopy,
+    } = getLinuxSessionInfo();
     const linuxFastPaste = this.resolveLinuxFastPasteBinary();
     const hasNativeBinary = !!linuxFastPaste;
     let portalKeysymAvailable = false;
@@ -2455,6 +2482,7 @@ Would you like to open System Settings now?`;
       hasWtype,
       isWlroots,
       isCosmic,
+      wlCopyMissing: requiresWlCopy && !this.commandExists("wl-copy"),
       tools,
       recommendedInstall,
     };
