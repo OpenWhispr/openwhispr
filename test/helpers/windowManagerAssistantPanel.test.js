@@ -624,6 +624,16 @@ test("a panel reopened before the closing click's focus request lands keeps the 
   }
 });
 
+test("a focus request that already landed leaves a later close alone", async () => {
+  const { manager, calls } = makeManager({ visible: true, focused: false });
+  withPlatform("linux", () => manager.setAssistantPanelOpen(true));
+  await new Promise((resolve) => setImmediate(resolve));
+  // The user has since moved to another app, so the pill must not remap.
+  withPlatform("linux", () => manager.setAssistantPanelOpen(false));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(!calls.includes("hide"));
+});
+
 test("showDictationPanel still surfaces a hidden window while the panel is open", () => {
   const { manager, calls } = makeManager({ visible: false });
   // Panel open but the window got hidden afterwards (tray Hide raced the open).
