@@ -94,6 +94,23 @@ class GpuBinaryManager {
     return this.getBinaryPath() !== null;
   }
 
+  // The binary is on disk but a library this version requires is missing: a
+  // pack installed by an older release (1.10.0 started requiring the MSVC
+  // runtime in Windows whisper packs), not a pack that was never downloaded.
+  // See #2424.
+  needsUpdate() {
+    const assetConfig = this._getAssetConfig();
+    if (!assetConfig) return false;
+    try {
+      return (
+        fs.existsSync(path.join(this.binDir, assetConfig.outputName)) &&
+        getMissingRequiredLibraries(this.binDir, assetConfig).length > 0
+      );
+    } catch {
+      return false;
+    }
+  }
+
   isDownloading() {
     return this._downloading;
   }
@@ -340,7 +357,26 @@ function detectOrphanedGpuPacks(packs) {
   return packs
     .filter(
       ({ manager, enabledEnvVar }) =>
-        process.env[enabledEnvVar] === "true" && manager.isSupported() && !manager.isDownloaded()
+        process.env[enabledEnvVar] === "true" &&
+        manager.isSupported() &&
+        !manager.isDownloaded() &&
+        !manager.needsUpdate()
+    )
+    .map(({ manager }) => manager.config.name);
+}
+
+// Packs an older release installed that this version can't use (needsUpdate).
+// A pack on disk implies the user wants it, unless its flag says "false".
+// Packs sharing a `group` are alternatives for one engine (whisper CUDA and
+// Vulkan): while one of them works, the other is never used and Settings
+// shows only the working one, so an outdated sibling isn't worth a notice.
+function detectOutdatedGpuPacks(packs) {
+  return packs
+    .filter(
+      ({ manager, enabledEnvVar, group }) =>
+        (process.env[enabledEnvVar] || "").toLowerCase() !== "false" &&
+        manager.needsUpdate() &&
+        !packs.some((other) => group && other.group === group && other.manager.isDownloaded())
     )
     .map(({ manager }) => manager.config.name);
 }
@@ -348,3 +384,4 @@ function detectOrphanedGpuPacks(packs) {
 module.exports = GpuBinaryManager;
 module.exports.migrateLegacyBinDir = migrateLegacyBinDir;
 module.exports.detectOrphanedGpuPacks = detectOrphanedGpuPacks;
+module.exports.detectOutdatedGpuPacks = detectOutdatedGpuPacks;

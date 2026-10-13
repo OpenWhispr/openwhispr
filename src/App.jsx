@@ -26,6 +26,7 @@ import { VoiceModePanelCore } from "./components/dictation/VoiceModePanelCore";
 import { PillTooltip } from "./components/dictation/PillTooltip";
 import { PillCommandMenu } from "./components/dictation/PillCommandMenu";
 import { LiquidCancelButton } from "./components/dictation/LiquidCancelButton";
+import AssistantNoteUndoListener from "./components/notes/AssistantNoteUndoListener";
 import { createMainWindowResizeCoordinator } from "./utils/mainWindowResizeCoordinator";
 import {
   ASSISTANT_FOOTER_TRANSITION_TIMING,
@@ -597,6 +598,8 @@ export default function App() {
     panelStartPosition,
     horizontalDirection: voiceHorizontalDirection,
   });
+  const voicePillPopoverAlign =
+    panelStartPosition === "center" ? "center" : voiceHorizontalDirection;
   const voicePillTravelDuration =
     liveTranscript.open && liveTranscript.entrancePhase === "encapsulate"
       ? LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateMs
@@ -672,7 +675,7 @@ export default function App() {
           <PillTooltip
             content={canReopenLiveTranscript ? t("transcriptionPreview.label") : micTooltip}
             disabled={anyPanelMounted}
-            align={panelStartPosition === "center" ? "center" : voiceHorizontalDirection}
+            align={voicePillPopoverAlign}
           >
             <VoicePill
               ref={buttonRef}
@@ -767,6 +770,7 @@ export default function App() {
           {!anyPanelMounted && isCommandMenuOpen && (
             <PillCommandMenu
               buttonRef={buttonRef}
+              align={voicePillPopoverAlign}
               isRecording={isRecording}
               agentAllowed={agentAllowed}
               meetingAllowed={meetingAllowed}
@@ -844,6 +848,8 @@ export default function App() {
           />
         )}
       </VoiceModePanelCore>
+      {/* The assistant panel edits notes here; its Undo shows once the panel has focus. */}
+      <AssistantNoteUndoListener />
     </div>
   );
 }

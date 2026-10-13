@@ -40,6 +40,12 @@ OpenWhispr turns your voice into text, notes, and actions from your desktop. Pre
 
 \* On Intel Macs, live speaker identification and voice fingerprinting are unavailable: they depend on ONNX Runtime, which [stopped shipping macOS x86_64 binaries in 1.24](https://github.com/microsoft/onnxruntime/releases/tag/v1.24.1). Meetings still record and transcribe normally, and notes search falls back to keyword matching instead of semantic search.
 
+On macOS or x86_64 Linux, you can also install the community-maintained [Homebrew cask](https://formulae.brew.sh/cask/openwhispr):
+
+```bash
+brew install --cask openwhispr
+```
+
 ## Features
 
 - **Voice dictation** — global hotkey to dictate into any app with automatic pasting
@@ -65,6 +71,8 @@ npm run dev
 ```
 
 Requires Node.js 24+. See the [full documentation](https://docs.openwhispr.com/quickstart) for setup guides, platform-specific instructions, and build details.
+
+The commands above run the desktop application, which remains at the repository root. The Expo mobile application lives in [`openwhispr-mobile`](openwhispr-mobile/) with its own dependencies, lockfile, build configuration, and release process. See the [mobile README](openwhispr-mobile/README.md) for its setup instructions.
 
 ## Documentation
 

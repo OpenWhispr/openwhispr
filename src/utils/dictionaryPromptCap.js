@@ -1,3 +1,5 @@
+import { usesTranscriptionKeywords } from "./dictionaryKeywords.js";
+
 // Per-provider budgets for the custom-dictionary STT prompt on the direct-API
 // path, plus the decoder window the dictionary UI warns against. One place, so
 // the request bound and the warning cannot drift apart.
@@ -20,6 +22,11 @@ export const WHISPER_PROMPT_CHARS = 900;
 // budget is tokens, and no character count is right for every language.
 export const WHISPER_DECODER_PROMPT_CHARS = 550;
 
+// gpt-transcribe's prompt carries only the dictionary terms past its keyword cap
+// (see dictionaryKeywords). OpenAI accepts exactly 65,536 characters there
+// (65,537 is a 400), and neither channel adds measurable latency.
+export const TRANSCRIPTION_OVERFLOW_PROMPT_CHARS = 65536;
+
 // gpt-4o-transcribe / gpt-4o-mini-transcribe are LLMs, not Whisper decoders: no
 // 223-token prompt window, and verified live to 40k chars. The only hard limit
 // is the 16k-token context shared with the audio, so this is a guard against an
@@ -27,13 +34,15 @@ export const WHISPER_DECODER_PROMPT_CHARS = 550;
 export const TRANSCRIBE_PROMPT_CHARS = 8000;
 
 // Only the 4o transcribe family is known to read past a Whisper decoder's
-// prompt window, so it alone earns the generous budget. Everything else falls
-// back to the Whisper budget on purpose: custom and self-hosted endpoints take
-// whatever model name the user typed, and most of those servers are
-// Whisper-family under a name that never says "whisper".
+// prompt window, so it earns the generous budget, as does gpt-transcribe's
+// keyword overflow. Everything else falls back to the Whisper budget on
+// purpose: custom and self-hosted endpoints take whatever model name the user
+// typed, and most of those servers are Whisper-family under a name that never
+// says "whisper".
 export function dictionaryPromptLimit({ provider = "", endpoint = "", model = "" } = {}) {
   if (provider === "groq" || endpoint.includes("api.groq.com")) return GROQ_PROMPT_CHARS;
   if (model.toLowerCase().startsWith("gpt-4o")) return TRANSCRIBE_PROMPT_CHARS;
+  if (usesTranscriptionKeywords(model)) return TRANSCRIPTION_OVERFLOW_PROMPT_CHARS;
   return WHISPER_PROMPT_CHARS;
 }
 

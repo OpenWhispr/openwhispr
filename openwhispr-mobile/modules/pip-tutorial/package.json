@@ -1,0 +1,20 @@
+{
+  "name": "pip-tutorial",
+  "version": "1.0.0",
+  "description": "Expo local module for iOS Picture-in-Picture tutorial overlays during onboarding handoffs",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "scripts": {
+    "build": "expo-module build",
+    "clean": "expo-module clean",
+    "lint": "expo-module lint",
+    "test": "expo-module test"
+  },
+  "devDependencies": {
+    "expo-module-scripts": "^3.0.0"
+  },
+  "peerDependencies": {
+    "expo": "*"
+  },
+  "private": true
+}

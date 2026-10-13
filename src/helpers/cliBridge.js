@@ -6,6 +6,7 @@ const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
 const { isPortAvailable } = require("../utils/serverUtils");
 const { broadcastToWindows } = require("./windowBroadcast");
+const { NOTE_TEXT_FIELDS } = require("./noteFieldSync");
 
 const PORT_RANGE_START = 8200;
 const PORT_RANGE_END = 8219;
@@ -101,6 +102,20 @@ function unwrapMutationResult(result, label) {
     throw new Error(result?.error || `Failed to write ${label}`);
   }
   return result[label];
+}
+
+// The public v1 contract: a provided blank content or enhanced_content clears
+// that field. updateNote treats a bare blank as unconfirmed (never synced as a
+// clear), so the bridge states the intent; updateNote still validates it.
+function withProvidedBlanksCleared(body) {
+  const blanks = NOTE_TEXT_FIELDS.filter(
+    (field) =>
+      field in body &&
+      (body[field] == null || (typeof body[field] === "string" && !body[field].trim()))
+  );
+  if (blanks.length === 0 || (body.clear_fields !== undefined && !Array.isArray(body.clear_fields)))
+    return body;
+  return { ...body, clear_fields: [...new Set([...(body.clear_fields ?? []), ...blanks])] };
 }
 
 class CliBridge {
@@ -424,7 +439,7 @@ class CliBridge {
           );
           const note = unwrapMutationResult(result, "note");
           setImmediate(() => broadcastToWindows("note-added", note));
-          ipc._asyncVectorUpsert(note);
+          ipc.notifyVectorChanges();
           ipc._asyncMirrorWrite(note);
           return { data: note };
         },
@@ -432,10 +447,22 @@ class CliBridge {
       ),
       param("PATCH", "/v1/notes/", "", "id", ({ params, body }) => {
         const id = requireId(params, "note");
-        const result = db.updateNote(id, body || {});
+        const existing = db.getNote(id);
+        if (!existing || existing.deleted_at) {
+          const err = new Error(`Note ${id} not found`);
+          err.code = "NOT_FOUND";
+          throw err;
+        }
+        const result = db.updateNote(id, withProvidedBlanksCleared(body || {}));
+        // The note exists, so a remaining error names a folder or space that doesn't.
+        if (result.error) {
+          const err = new Error(result.error);
+          err.code = "VALIDATION";
+          throw err;
+        }
         const note = unwrapMutationResult(result, "note");
         setImmediate(() => broadcastToWindows("note-updated", note));
-        ipc._asyncVectorUpsert(note);
+        ipc.notifyVectorChanges();
         ipc._asyncMirrorWrite(note);
         return { data: note };
       }),

@@ -95,6 +95,118 @@ function installHookDom(t) {
   return container;
 }
 
+// installHookDom plus host elements, for mounting components that render real
+// markup (divs, buttons, text) — e.g. a whole view that must unmount and
+// remount. Still no layout and no events: React DOM only needs a node tree it
+// can insert into, update and remove from. Returns the root container.
+function installHostDom(t) {
+  installHookDom(t);
+  const document = globalThis.document;
+  const HTML_NS = "http://www.w3.org/1999/xhtml";
+  const createStyle = () => {
+    const style = {};
+    Object.defineProperties(style, {
+      setProperty: { value: (name, value) => (style[name] = value) },
+      removeProperty: { value: (name) => delete style[name] },
+    });
+    return style;
+  };
+
+  class HostNode {
+    constructor(nodeType, name, namespaceURI = null) {
+      this.nodeType = nodeType;
+      this.nodeName = name.toUpperCase();
+      this.tagName = this.nodeName;
+      this.localName = name.toLowerCase();
+      this.namespaceURI = namespaceURI;
+      this.ownerDocument = document;
+      this.childNodes = [];
+      this.parentNode = null;
+      this.attributes = {};
+      this.style = createStyle();
+      this.nodeValue = null;
+    }
+
+    get firstChild() {
+      return this.childNodes[0] ?? null;
+    }
+
+    get lastChild() {
+      return this.childNodes.at(-1) ?? null;
+    }
+
+    get nextSibling() {
+      if (!this.parentNode) return null;
+      const siblings = this.parentNode.childNodes;
+      return siblings[siblings.indexOf(this) + 1] ?? null;
+    }
+
+    appendChild(child) {
+      return this.insertBefore(child, null);
+    }
+
+    insertBefore(child, before) {
+      child.parentNode?.removeChild(child);
+      const index = before ? this.childNodes.indexOf(before) : -1;
+      if (index < 0) this.childNodes.push(child);
+      else this.childNodes.splice(index, 0, child);
+      child.parentNode = this;
+      return child;
+    }
+
+    removeChild(child) {
+      const index = this.childNodes.indexOf(child);
+      if (index >= 0) this.childNodes.splice(index, 1);
+      child.parentNode = null;
+      return child;
+    }
+
+    setAttribute(name, value) {
+      this.attributes[name] = String(value);
+    }
+
+    removeAttribute(name) {
+      delete this.attributes[name];
+    }
+
+    getAttribute(name) {
+      return this.attributes[name] ?? null;
+    }
+
+    hasAttribute(name) {
+      return name in this.attributes;
+    }
+
+    addEventListener() {}
+    removeEventListener() {}
+    focus() {}
+    blur() {}
+
+    get textContent() {
+      if (this.nodeType === 3) return this.nodeValue;
+      return this.childNodes.map((child) => child.textContent).join("");
+    }
+
+    set textContent(value) {
+      for (const child of this.childNodes) child.parentNode = null;
+      this.childNodes = [];
+      if (value !== "" && value != null) this.appendChild(document.createTextNode(value));
+    }
+  }
+
+  document.createElement = (tagName) => new HostNode(1, tagName, HTML_NS);
+  document.createElementNS = (namespaceURI, tagName) => new HostNode(1, tagName, namespaceURI);
+  document.createTextNode = (text) => {
+    const node = new HostNode(3, "#text");
+    node.nodeValue = String(text);
+    return node;
+  };
+  document.body = document.createElement("body");
+  const container = document.createElement("div");
+  document.documentElement = container;
+  return container;
+}
+
 // mockModules maps an import-path suffix (e.g. "/utils/logger") to the ESM
 // source served in its place.
 async function createRendererServer(
@@ -210,9 +322,17 @@ function installMicCaptureGlobals(t) {
   });
 }
 
+// The real useAuth loads the auth client, whose session work outlives a test's
+// browser globals; hooks that only read the user get a signed-out stand-in.
+const SIGNED_OUT_AUTH_MOCK = {
+  "/hooks/useAuth": `export const useAuth = () => ({ isLoaded: true, isSignedIn: false, user: null });`,
+};
+
 module.exports = {
+  SIGNED_OUT_AUTH_MOCK,
   createRendererServer,
   installBrowserGlobals,
   installHookDom,
+  installHostDom,
   installMicCaptureGlobals,
 };

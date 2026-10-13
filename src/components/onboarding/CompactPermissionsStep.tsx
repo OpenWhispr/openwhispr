@@ -11,6 +11,7 @@ import accessibilityIcon from "@/assets/onboarding-permission-accessibility.webp
 import systemAudioIcon from "@/assets/onboarding-permission-system-audio.webp";
 import type { UsePermissionsReturn } from "../../hooks/usePermissions";
 import type { SystemAudioAccessResult } from "../../types/electron";
+import type { PermissionGuideId } from "../../types/permissionGuide";
 import { canManageSystemAudioInApp } from "../../utils/systemAudioAccess";
 import { getPlatform } from "../../utils/platform";
 import { areRequiredPermissionsMet } from "../../utils/permissions";
@@ -20,6 +21,11 @@ import PasteToolsInfo from "../ui/PasteToolsInfo";
 import { CompactOnboardingFrame } from "./OnboardingShell";
 
 interface CompactPermissionsStepProps {
+  guide?: {
+    start: (permission: PermissionGuideId) => Promise<void>;
+    ready: boolean;
+    error: boolean;
+  };
   permissions: UsePermissionsReturn;
   systemAudio: Pick<SystemAudioAccessResult, "granted" | "mode" | "supportsOnboardingGrant"> & {
     request: () => Promise<boolean>;
@@ -34,8 +40,6 @@ interface CompactPermissionsStepProps {
   onBack?: () => void;
   onContinue: () => void;
 }
-
-type PermissionRowId = "microphone" | "accessibility" | "system-audio" | "screen-context";
 
 interface PermissionRowProps {
   title: string;
@@ -118,6 +122,7 @@ function PermissionRow({
 }
 
 export default function CompactPermissionsStep({
+  guide,
   permissions,
   systemAudio,
   screenContext,
@@ -125,7 +130,7 @@ export default function CompactPermissionsStep({
   onContinue,
 }: CompactPermissionsStepProps) {
   const { t } = useTranslation();
-  const [busyPermission, setBusyPermission] = useState<PermissionRowId | null>(null);
+  const [busyPermission, setBusyPermission] = useState<PermissionGuideId | null>(null);
   const platform = getPlatform();
   const canRequestSystemAudio = canManageSystemAudioInApp(systemAudio);
   const requiredGranted = areRequiredPermissionsMet(permissions.micPermissionGranted);
@@ -143,10 +148,11 @@ export default function CompactPermissionsStep({
     permissions.pasteToolsInfo !== null &&
     needsLinuxPasteToolGuidance(permissions.pasteToolsInfo);
 
-  const request = async (id: PermissionRowId, action: () => Promise<unknown>) => {
+  const request = async (id: PermissionGuideId, action: () => Promise<unknown>) => {
     setBusyPermission(id);
     try {
-      await action();
+      if (guide?.ready && !guide.error) await guide.start(id);
+      else await action();
     } finally {
       setBusyPermission(null);
     }

@@ -15,6 +15,7 @@ import {
 } from "./icons";
 import { cn } from "./lib/utils";
 import { useDismissGuard } from "./ui/useDismissGuard";
+import { blurBehindOverlays } from "./ui/overlayBlur";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -59,12 +60,17 @@ type FlatItem =
   | { kind: "conversation"; conversation: ConversationResult };
 
 function stripMarkdownPreview(text: string): string {
-  return text
-    .replace(/#{1,6}\s+/g, "")
-    .replace(/[*_~`]+/g, "")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/\n+/g, " ")
-    .trim();
+  return (
+    text
+      .replace(/#{1,6}\s+/g, "")
+      .replace(/[*_~`]+/g, "")
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      // Table delimiter rows, then the pipes between cells.
+      .replace(/^[ \t|:-]+$/gm, "")
+      .replace(/\\?\|/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
 }
 
 export default function CommandSearch({
@@ -323,7 +329,12 @@ export default function CommandSearch({
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Overlay
+          className={cn(
+            "fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+            blurBehindOverlays && "backdrop-blur-sm"
+          )}
+        />
         <DialogPrimitive.Content
           ref={registerContent}
           onInteractOutside={(e) => {

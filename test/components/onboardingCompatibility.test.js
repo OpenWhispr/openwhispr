@@ -162,6 +162,49 @@ test("Linux onboarding shows paste-tool installation and recheck guidance", asyn
   assertGuidancePrecedesActions(markup, "sudo apt install xdotool");
 });
 
+// COSMIC pastes into other apps without wtype, but terminals like Warp only take
+// the Ctrl+Shift+V that wtype sends there.
+test("COSMIC onboarding recommends wtype for terminals until it is installed", async (t) => {
+  const vite = await createOnboardingRenderer(t);
+  const { default: CompactPermissionsStep } = await vite.ssrLoadModule(
+    "/components/onboarding/CompactPermissionsStep.tsx"
+  );
+
+  const render = (hasWtype, available = true) =>
+    renderToStaticMarkup(
+      React.createElement(CompactPermissionsStep, {
+        permissions: permissions({
+          pasteToolsInfo: {
+            platform: "linux",
+            available,
+            method: available ? "uinput" : null,
+            requiresPermission: false,
+            isWayland: true,
+            isWlroots: false,
+            isCosmic: true,
+            hasWtype,
+            recommendedInstall: available ? undefined : "xdotool",
+          },
+        }),
+        systemAudio,
+        onContinue: noop,
+      })
+    );
+
+  const missing = render(false);
+  assert.match(missing, /pasteToolsInfo\.wtypeCosmicTerminalsDescription/);
+  assert.match(missing, /sudo apt install wtype/);
+  assert.doesNotMatch(missing, /pasteToolsInfo\.withoutToolPrefix/);
+  assertGuidancePrecedesActions(missing, "sudo apt install wtype");
+
+  assert.doesNotMatch(render(true), /sudo apt install wtype/);
+
+  // With nothing pasting at all, wtype alone would only fix terminals.
+  const unavailable = render(false, false);
+  assert.match(unavailable, /sudo apt install xdotool/);
+  assert.doesNotMatch(unavailable, /wtypeCosmicTerminalsDescription/);
+});
+
 test("permissions offers Back ahead of Continue and gates Continue on microphone access", async (t) => {
   const vite = await createOnboardingRenderer(t, "darwin");
   const { default: CompactPermissionsStep } = await vite.ssrLoadModule(

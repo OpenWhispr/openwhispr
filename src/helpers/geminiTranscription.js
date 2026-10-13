@@ -1,5 +1,11 @@
 const { net } = require("electron");
 const debugLogger = require("./debugLogger");
+const {
+  PROVIDER_ERROR_CODES,
+  providerHttpError,
+  providerError,
+  redactProviderBody,
+} = require("./providerHttpErrors");
 
 // gemini-3.5-transcribe is only served by the Interactions API; there is no
 // generateContent or OpenAI-compatible endpoint for it.
@@ -31,9 +37,10 @@ async function transcribeWithGemini(
   fetchImpl
 ) {
   if (!apiKey?.trim()) {
-    const error = new Error("Gemini API key not configured. Add your key in Settings.");
-    error.code = "API_KEY_MISSING";
-    throw error;
+    throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+      provider: "Gemini",
+      surface: "transcription",
+    });
   }
 
   const resolvedModel = model || "gemini-3.5-transcribe";
@@ -75,25 +82,19 @@ async function transcribeWithGemini(
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
-    // Google rejects a bad key with 400 + reason API_KEY_INVALID rather than 401,
-    // so status alone would surface the raw JSON instead of a fixable message.
-    if (
-      response.status === 401 ||
-      response.status === 403 ||
-      errorText.includes("API_KEY_INVALID")
-    ) {
-      const error = new Error("Invalid Gemini API key. Check your key in Settings.");
-      error.code = "INVALID_KEY";
-      throw error;
-    }
-    const error = new Error(`Gemini API Error: ${response.status} ${errorText}`.trim());
-    if (response.status === 429) {
-      error.code = "PROVIDER_RATE_LIMITED";
-      error.messageKey = "hooks.audioRecording.errorDescriptions.providerRateLimited";
-    } else if (response.status >= 500) {
-      error.code = "SERVER_ERROR";
-    }
-    throw error;
+    debugLogger.warn("Gemini transcription failed", {
+      status: response.status,
+      body: redactProviderBody(errorText),
+    });
+    // Google rejects a bad key with 400 + API_KEY_INVALID; the classifier reads that signal.
+    throw providerHttpError({
+      provider: "Gemini",
+      model: resolvedModel,
+      status: response.status,
+      body: errorText,
+      headers: response.headers,
+      surface: "transcription",
+    });
   }
 
   const data = await response.json();

@@ -142,6 +142,30 @@ test("cloud->local fallback under org policy", async (t) => {
     assert.equal(result.source, "local-fallback");
     assert.equal(localWhisperCalls, 1);
   });
+
+  await t.test("a failed fallback keeps the cloud failure's classified fields", async () => {
+    setManagedPolicy(["providers", "local"]);
+    captureFetch(t, () => {
+      throw new TypeError("Failed to fetch");
+    });
+    window.electronAPI.transcribeLocalWhisper = async () => ({
+      success: false,
+      error: "model missing",
+    });
+
+    // A real Blob: the direct fetch builds FormData, which rejects the stub above.
+    const recording = new Blob(["recording"], { type: "audio/webm" });
+    await assert.rejects(createManager().processWithOpenAIAPI(recording, {}), (error) => {
+      assert.equal(error.code, "PROVIDER_NO_RESPONSE");
+      assert.equal(error.messageKey, "providerErrors.noResponse");
+      // Without params the toast would render the literal "{{provider}}".
+      assert.deepEqual(error.messageParams, { provider: "OpenAI" });
+      assert.equal(error.surface, "transcription");
+      assert.equal(error.technicalDetails?.provider, "OpenAI");
+      assert.match(error.message, /Local fallback also failed/);
+      return true;
+    });
+  });
 });
 
 test("managed custom transcription never falls through to OpenAI", async (t) => {
@@ -459,16 +483,25 @@ test("proxied providers dispatch through the registry", async (t) => {
     assert.equal(fetched.length, 0);
   });
 
-  await t.test("structured proxy errors are rebuilt with code and messageKey", async () => {
+  await t.test("structured proxy errors are rebuilt with every classified field", async () => {
     setSettings(settingsFor("mistral"));
     window.electronAPI.proxyMistralTranscription = async () => ({
-      error: "Mistral API Error: 401 unauthorized",
-      code: "INVALID_KEY",
-      messageKey: "some.key",
+      error: "Mistral rejected your API key.",
+      code: "PROVIDER_AUTH_FAILED",
+      messageKey: "providerErrors.authFailed",
+      messageParams: { provider: "Mistral" },
+      settingsTarget: "speechToText",
+      technicalDetails: { provider: "Mistral", status: 401 },
+      status: 401,
+      surface: "transcription",
     });
     await assert.rejects(manager.processWithOpenAIAPI(audioBlob), (error) => {
-      assert.equal(error.code, "INVALID_KEY");
-      assert.equal(error.messageKey, "some.key");
+      assert.equal(error.code, "PROVIDER_AUTH_FAILED");
+      assert.equal(error.messageKey, "providerErrors.authFailed");
+      assert.deepEqual(error.messageParams, { provider: "Mistral" });
+      assert.equal(error.settingsTarget, "speechToText");
+      assert.equal(error.status, 401);
+      assert.deepEqual(error.technicalDetails, { provider: "Mistral", status: 401 });
       return true;
     });
   });

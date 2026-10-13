@@ -65,6 +65,7 @@ function seedEditedMeetingNote(db) {
     content: "REAL MEETING NOTES",
     enhanced_content: "ENHANCED NOTES",
     enhancement_prompt: "summarize the meeting",
+    enhancement_template_id: "notes.actions.builtin.detailedNotes",
     enhanced_at_content_hash: "hash-of-real-notes",
     transcript: TRANSCRIPT,
     cloud_id: "cloud-test-1",
@@ -149,6 +150,11 @@ test("upsertNoteFromCloud: empty cloud values never destroy non-empty local cont
     "enhancement_prompt must travel with the preserved enhanced_content"
   );
   assert.equal(
+    after.enhancement_template_id,
+    "notes.actions.builtin.detailedNotes",
+    "the template id must travel with the preserved enhanced_content"
+  );
+  assert.equal(
     after.enhanced_at_content_hash,
     "hash-of-real-notes",
     "enhanced_at_content_hash must travel with the preserved enhanced_content (staleness detection breaks without it)"
@@ -214,4 +220,28 @@ test("upsertNoteFromCloud: a brand-new empty cloud note still inserts as-is", (t
   assert.equal(row.title, "Fresh from cloud");
   assert.equal(row.content, "");
   assert.equal(row.sync_status, "synced");
+});
+
+test("upsertNoteFromCloud: a cloud copy from an API without template ids keeps the local one", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  const before = seedEditedMeetingNote(db);
+  const cloudNote = { ...emptyCloudShell(before), enhanced_content: "CLOUD ENHANCED" };
+  assert.equal("enhancement_template_id" in cloudNote, false, "premise: an older API omits it");
+  db.upsertNoteFromCloud(cloudNote, null);
+  assert.equal(
+    db.getNote(before.id).enhancement_template_id,
+    "notes.actions.builtin.detailedNotes"
+  );
+
+  db.upsertNoteFromCloud(
+    { ...cloudNote, enhancement_template_id: "c0ffee00-0000-4000-8000-000000000001" },
+    null
+  );
+  assert.equal(
+    db.getNote(before.id).enhancement_template_id,
+    "c0ffee00-0000-4000-8000-000000000001",
+    "a cloud copy that carries a template id brings its own"
+  );
 });
