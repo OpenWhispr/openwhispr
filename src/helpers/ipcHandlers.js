@@ -10553,6 +10553,7 @@ class IPCHandlers {
                     debugLogger.warn("OpenRouter upload piece failed", {
                       piece: path.basename(chunkPath),
                       status: data.statusCode,
+                      body: redactProviderBody(data.data),
                     });
                     // The handler's catch classifies it (asProviderError) by status and body.
                     throw Object.assign(
