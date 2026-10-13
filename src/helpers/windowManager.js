@@ -2182,6 +2182,12 @@ class WindowManager {
 
     this.mainWindow.on("move", () => this.positionAgentDictationPill());
 
+    // The renderer releases cancel when its recording ends; a dead one never
+    // will, which would leave Escape taken from every app.
+    this.mainWindow.webContents.on("render-process-gone", () => {
+      this.hotkeyManager.unregisterSlot("cancel");
+    });
+
     this.mainWindow.on("closed", () => {
       this.dragManager.cleanup();
       const pillWindow = this.agentDictationPillWindow;
