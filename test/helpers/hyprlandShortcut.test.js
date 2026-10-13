@@ -72,7 +72,7 @@ function successfulHyprctl(provider) {
 const DBUS_COMMAND =
   "dbus-send --session --type=method_call --dest=com.openwhispr.App /com/openwhispr/App com.openwhispr.App.Toggle";
 
-test("exports every Hyprland D-Bus toggle", async () => {
+test("exports every Hyprland D-Bus dictation command and toggle", async () => {
   let exported;
   const dbusModule = {
     sessionBus() {
@@ -92,7 +92,12 @@ test("exports every Hyprland D-Bus toggle", async () => {
     const calls = [];
     const manager = new HyprlandShortcutManager();
 
-    assert.equal(await manager.initDBusService(() => calls.push("dictation")), true);
+    assert.equal(
+      await manager.initDBusService((hotkey, phase) =>
+        calls.push(phase ? `dictation:${phase}` : "dictation")
+      ),
+      true
+    );
     manager.callbacks.meeting = () => calls.push("meeting");
     manager.callbacks.voiceAgent = () => calls.push("voiceAgent");
     manager.callbacks.translation = () => calls.push("translation");
@@ -100,6 +105,8 @@ test("exports every Hyprland D-Bus toggle", async () => {
     assert.deepEqual(Object.keys(exported.iface.methods).sort(), [
       "PttDown",
       "PttUp",
+      "Start",
+      "Stop",
       "Toggle",
       "ToggleMeeting",
       "ToggleTranslation",
@@ -109,7 +116,20 @@ test("exports every Hyprland D-Bus toggle", async () => {
     exported.methods.ToggleMeeting();
     exported.methods.ToggleVoiceAgent();
     exported.methods.ToggleTranslation();
-    assert.deepEqual(calls, ["dictation", "meeting", "voiceAgent", "translation"]);
+    exported.methods.PttDown();
+    exported.methods.PttUp();
+    exported.methods.Start();
+    exported.methods.Stop();
+    assert.deepEqual(calls, [
+      "dictation",
+      "meeting",
+      "voiceAgent",
+      "translation",
+      "dictation:down",
+      "dictation:up",
+      "dictation:start",
+      "dictation:stop",
+    ]);
   });
 });
 

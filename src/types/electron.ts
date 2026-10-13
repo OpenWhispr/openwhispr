@@ -1396,7 +1396,7 @@ declare global {
       onToggleVoiceAgent?: (callback: () => void) => () => void;
       onToggleTranslation?: (callback: () => void) => () => void;
       onOpenAssistantPanel?: (callback: () => void) => () => void;
-      onStartDictation?: (callback: () => void) => () => void;
+      onStartDictation?: (callback: (requestId?: number) => void) => () => void;
       onStopDictation?: (callback: () => void) => () => void;
       onPrepareDictation?: (
         callback: (options?: { inputKind?: "dictation" | "assistant" | "translation" }) => void
@@ -1411,6 +1411,7 @@ declare global {
         state: "idle" | "preparing" | "recording" | "processing",
         inputKind?: "dictation" | "assistant" | "translation"
       ) => void;
+      dictationStartRequestSettled?: (requestId: number) => void;
       dictationAudioLevelChanged?: (level: number) => void;
       toggleAgentPanelDictation?: () => Promise<{ success: boolean }>;
       cancelAgentPanelDictation?: () => Promise<{ success: boolean }>;

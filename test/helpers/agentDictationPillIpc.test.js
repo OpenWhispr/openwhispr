@@ -106,7 +106,7 @@ function installWindowManager(stub) {
 }
 
 function makeWindowManagerStub() {
-  const calls = { toggle: 0, cancel: 0, lifecycle: [], levels: [] };
+  const calls = { toggle: 0, cancel: 0, lifecycle: [], settledStarts: [], levels: [] };
   const mainContents = {};
   const pillContents = {};
   const stub = {
@@ -125,6 +125,9 @@ function makeWindowManagerStub() {
     },
     setDictationLifecycleState: (state, kind) => {
       calls.lifecycle.push([state, kind]);
+    },
+    settleExplicitDictationStart: (requestId) => {
+      calls.settledStarts.push(requestId);
     },
     setDictationAudioLevel: (level) => {
       calls.levels.push(level);
@@ -163,6 +166,10 @@ test.before(() => {
   assert.ok(
     onHandlers.get("dictation-lifecycle-state-changed"),
     "dictation-lifecycle-state-changed must be registered"
+  );
+  assert.ok(
+    onHandlers.get("dictation-start-request-settled"),
+    "dictation-start-request-settled must be registered"
   );
   assert.ok(
     onHandlers.get("dictation-audio-level-changed"),
@@ -273,6 +280,17 @@ test("lifecycle reports are accepted only from the dictation renderer", () => {
   assert.deepEqual(calls.lifecycle, []);
   lifecycleHandler({ sender: mainContents }, "recording", "dictation");
   assert.deepEqual(calls.lifecycle, [["recording", "dictation"]]);
+});
+
+test("start request acknowledgments are accepted only from the dictation renderer", () => {
+  const { stub, calls, mainContents } = makeWindowManagerStub();
+  installWindowManager(stub);
+  const settledHandler = onHandlers.get("dictation-start-request-settled");
+
+  settledHandler({ sender: {} }, 7);
+  assert.deepEqual(calls.settledStarts, []);
+  settledHandler({ sender: mainContents }, 7);
+  assert.deepEqual(calls.settledStarts, [7]);
 });
 
 // Bonus: the third `ipcMain.on` handler added alongside the two above shares
