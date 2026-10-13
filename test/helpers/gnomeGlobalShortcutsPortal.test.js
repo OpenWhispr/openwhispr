@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
 const Module = require("node:module");
+const { deferred } = require("./harness/deferred");
 
 const modulePath = require.resolve("../../src/helpers/gnomeGlobalShortcutsPortal");
 const originalLoad = Module._load;
@@ -163,16 +164,6 @@ test("portal registration uses the current UI language for its description", asy
   const description = bindBody[1][0][1].find(([key]) => key === "description");
   assert.equal(description[1][1], "Mantener mientras hablas");
 });
-
-function deferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
 
 const sessionReply = (handle) => [["session_handle", ["o", [handle]]]];
 const shortcutsReply = (id) => [["shortcuts", ["a(sa{sv})", [[[id, []]]]]]];

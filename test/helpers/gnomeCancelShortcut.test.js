@@ -140,7 +140,7 @@ function hotkeyManagerOnGnome(activationMode) {
   return { manager, calls };
 }
 
-test("in Tap mode on GNOME, cancel keeps its X11 grab and also binds the portal", async () => {
+test("in Tap mode on GNOME, cancel keeps its X11 grab and also tries the portal", async () => {
   const { manager, calls } = hotkeyManagerOnGnome("tap");
   const callback = () => {};
 
