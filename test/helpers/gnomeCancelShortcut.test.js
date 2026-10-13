@@ -123,6 +123,18 @@ test(
   })
 );
 
+test("the GNOME cancel portal binds its own shortcut and closes with the manager", async () => {
+  const manager = new GnomeShortcutManager();
+  assert.equal(manager.cancelShortcutsPortal.shortcutId, "cancel");
+  assert.equal(manager.cancelShortcutsPortal.descriptionKey, "app.buttons.cancelRecording");
+
+  const closed = [];
+  manager.globalShortcutsPortal.close = async () => closed.push("dictation");
+  manager.cancelShortcutsPortal.close = async () => closed.push("cancel");
+  await manager.close();
+  assert.deepEqual(closed, ["dictation", "cancel"]);
+});
+
 function hotkeyManagerOnGnome(activationMode) {
   const calls = [];
   const manager = new HotkeyManager();
