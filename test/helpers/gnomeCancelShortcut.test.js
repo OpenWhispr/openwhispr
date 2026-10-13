@@ -131,7 +131,7 @@ function hotkeyManagerOnGnome(activationMode) {
   manager.gnomeManager = {
     async registerCancelShortcut(hotkey, callback) {
       calls.push(["register", hotkey, callback]);
-      return true;
+      return false;
     },
     async unregisterCancelShortcut() {
       calls.push(["unregister"]);

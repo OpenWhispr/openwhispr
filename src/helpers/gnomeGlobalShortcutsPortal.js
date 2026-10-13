@@ -107,8 +107,9 @@ class GnomeGlobalShortcutsPortal {
   }
 
   async registerKeybinding(preferredTrigger, callback) {
-    await this.unregisterKeybinding();
+    const unregistering = this.unregisterKeybinding();
     const generation = this.generation;
+    await unregistering;
     if (!(await this.init()) || generation !== this.generation) return false;
     this.callback = callback;
 
