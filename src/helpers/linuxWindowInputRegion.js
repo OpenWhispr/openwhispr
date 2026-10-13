@@ -33,7 +33,7 @@ function createLinuxWindowInputRegion(win) {
   const onClose = () => stop();
   const fail = (error) => {
     if (failure) return;
-    debugLogger.warn("Linux input region unavailable", { error: error.message });
+    debugLogger.warn("Linux input region helper unavailable", { error: error.message });
     stop(error);
   };
 
@@ -86,7 +86,7 @@ function createLinuxWindowInputRegion(win) {
         resolve,
         reject,
         timer: setTimeout(
-          () => fail(new Error("Linux input region update timed out")),
+          () => fail(new Error("Linux input region helper timed out")),
           APPLY_TIMEOUT_MS
         ),
       });

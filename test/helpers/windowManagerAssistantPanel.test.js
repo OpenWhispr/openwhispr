@@ -618,7 +618,11 @@ test("a panel reopened before the closing click's focus request lands keeps the 
     });
     for (const land of lands) land();
     await new Promise((resolve) => setImmediate(resolve));
-    assert.ok(!calls.includes("hide"), "the reopened panel must keep the keyboard");
+    assert.deepEqual(
+      calls,
+      ["blur", "focusable:false", "focusable:true", "focus"],
+      "the reopened panel must keep the keyboard"
+    );
   } finally {
     focusInputRegion = requestFocus;
   }

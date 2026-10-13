@@ -180,8 +180,8 @@ test("timeout blocks pending and later callers until the old native writer close
   );
   assert.equal(writes.length, 2, "failed writers must not receive subsequent region commands");
   child.emit("close", null, "SIGKILL");
-  await Promise.all(applied.map((promise) => assert.rejects(promise, /update timed out/)));
-  await assert.rejects(writer.set(null), /update timed out/);
+  await Promise.all(applied.map((promise) => assert.rejects(promise, /helper timed out/)));
+  await assert.rejects(writer.set(null), /helper timed out/);
   assert.equal(spawns.length, 1);
   assert.equal(warnings.length, 1);
 });

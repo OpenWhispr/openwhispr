@@ -193,7 +193,8 @@ test("a failed Linux keyboard focus request settles quietly", async () => {
       rejectFocus = reject;
     });
   manager._focusLinuxMainWindow();
-  // The writer logs its own failure; an unhandled rejection would crash main.
+  // The writer logs its own failure; a rejected request would skip a closing
+  // panel's deferred hand-back.
   rejectFocus(new Error("helper closed"));
   await new Promise((resolve) => setImmediate(resolve));
 });

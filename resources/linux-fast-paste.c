@@ -832,8 +832,8 @@ static void round_trip_window_manager(Display *display, Window requestor)
     snprintf(selection, sizeof(selection), "WM_S%d", DefaultScreen(display));
     Atom property = XInternAtom(display, "_OPENWHISPR_WM_ROUND_TRIP", False);
     XEvent event;
-    /* A reply that came after an earlier round trip gave up must not stand in
-     * for this one. */
+    /* Drop replies that came after an earlier round trip gave up, so they can't
+     * stand in for this one (a reply later than this drain still can). */
     while (XCheckTypedWindowEvent(display, requestor, SelectionNotify, &event)) {}
     XConvertSelection(display, XInternAtom(display, selection, False),
                       XInternAtom(display, "TARGETS", False), property, requestor,
