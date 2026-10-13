@@ -111,6 +111,59 @@ test("the OpenRouter transcription test passes a valid key and rejects a bad one
   });
 });
 
+test("a transcription test of a Custom endpoint on OpenRouter asks for its STT catalog", () => {
+  const custom = (scope, baseUrl = "https://openrouter.ai/api/v1") =>
+    resolveProviderRequest({ provider: "custom", scope, baseUrl, apiKey: "" }).endpoints;
+
+  assert.deepEqual(custom("transcription"), [
+    "https://openrouter.ai/api/v1/models?output_modalities=transcription",
+    "https://openrouter.ai/v1/models?output_modalities=transcription",
+  ]);
+  // Chat models are in the default catalog, and no other host splits its list.
+  assert.deepEqual(custom("reasoning"), [
+    "https://openrouter.ai/api/v1/models",
+    "https://openrouter.ai/v1/models",
+  ]);
+  assert.deepEqual(custom("transcription", "https://api.groq.com/openai/v1"), [
+    "https://api.groq.com/openai/v1/models",
+  ]);
+  assert.deepEqual(custom("transcription", "https://notopenrouter.ai/v1"), [
+    "https://notopenrouter.ai/v1/models",
+  ]);
+});
+
+test("a Custom OpenRouter endpoint passes a speech-to-text model it lists", async () => {
+  // Mirrors OpenRouter: STT ids appear only under the output-modality filter.
+  const openRouter = async (url) => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      data: url.endsWith("?output_modalities=transcription")
+        ? [{ id: "openai/gpt-4o-transcribe" }]
+        : [{ id: "openai/gpt-4o" }],
+    }),
+  });
+  const config = {
+    provider: "custom",
+    scope: "transcription",
+    baseUrl: "https://openrouter.ai/api/v1",
+    apiKey: "sk-or-key",
+  };
+
+  assert.deepEqual(
+    await testProviderConnection({ ...config, model: "openai/gpt-4o-transcribe" }, openRouter),
+    { success: true }
+  );
+  assert.deepEqual(
+    await testProviderConnection({ ...config, model: "openai/gpt-4o-transcribe-typo" }, openRouter),
+    {
+      success: false,
+      errorCode: "modelNotFound",
+      error: "The selected model is not available from this provider.",
+    }
+  );
+});
+
 test("normalizes custom compatible endpoints", () => {
   assert.equal(
     resolveProviderRequest({ provider: "custom", baseUrl: "localhost:11434/v1", apiKey: "" })

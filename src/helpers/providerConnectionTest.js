@@ -194,6 +194,19 @@ function resolveProviderRequest(config) {
       );
     }
     endpoints = buildModelEndpoints(parsed.toString());
+    // OpenRouter lists speech-to-text models only when asked for that output
+    // modality, so its default catalog reads every STT id as missing (#1764).
+    const host = parsed.hostname;
+    if (
+      scope === "transcription" &&
+      (host === "openrouter.ai" || host.endsWith(".openrouter.ai"))
+    ) {
+      endpoints = endpoints.map((endpoint) => {
+        const url = new URL(endpoint);
+        url.searchParams.set("output_modalities", "transcription");
+        return url.toString();
+      });
+    }
   }
 
   if (endpoints.length === 0) {
