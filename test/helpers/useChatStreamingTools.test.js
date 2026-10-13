@@ -1067,3 +1067,25 @@ test("with no account name the prompt asks for no signature rather than a placeh
   assert.doesNotMatch(prompts[0], /The user's name is/);
   assert.match(prompts[0], /You don't know the user's name/);
 });
+
+test("Tone & Style gives every send the user's writing style, and a pasted answer its app", async (t) => {
+  const tones = { personal: "very_casual", work: "casual", email: "formal", other: "excited" };
+  const { captured, sentMessages } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
+    settings: { toneStyleEnabled: true, toneStyles: tones },
+  });
+  await captured.sendToAI("Email Josh that I'm in", []);
+  await captured.sendToAI("Tell them it's shipped", [], { destinationAppCategory: "work" });
+
+  const [typed, pasted] = sentMessages.map((messages) => messages[0].content);
+  assert.match(typed, /WRITING STYLE: When you write something the user will send/);
+  assert.match(pasted, /typed at the user's cursor in a work chat app/);
+  assert.match(pasted, /Work messages style: casual and friendly/);
+});
+
+test("without Tone & Style no send carries a writing style", async (t) => {
+  const { captured, sentMessages } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
+    settings: { toneStyleEnabled: false },
+  });
+  await captured.sendToAI("Tell them it's shipped", [], { destinationAppCategory: "work" });
+  assert.doesNotMatch(sentMessages[0][0].content, /WRITING STYLE/);
+});

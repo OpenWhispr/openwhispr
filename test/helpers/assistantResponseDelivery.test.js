@@ -148,3 +148,14 @@ test("a clipboard-only delivery keeps the response verbatim", async () => {
   await deliverAssistantResponse({ mode: "clipboard" }, MARKDOWN_RESPONSE, dependencies);
   assert.deepEqual(writes, [MARKDOWN_RESPONSE]);
 });
+
+test("a paste delivery keeps the kind of app the caret is in", async () => {
+  const { createAssistantResponseDelivery } = await deliveryModule;
+  const delivery = createAssistantResponseDelivery({
+    autoPasteEnabled: true,
+    deliverySessionId: "caret-session",
+    appCategory: "work",
+    ...PASTE_OPTIONS,
+  });
+  assert.equal(delivery.appCategory, "work");
+});

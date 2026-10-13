@@ -38,6 +38,30 @@ test("the cleanup prompt ends with the app's medium, the tone and its priority",
   assert.doesNotMatch(other, /The text is/);
 });
 
+// openwhispr-api's lib/prompts.ts TONE_INSTRUCTIONS, which Cloud cleanup
+// appends for the same tone: BYOK and local cleanup must send the same words.
+const SERVER_TONE_SENTENCES = {
+  formal:
+    "Apply this tone: formal and polished. Use complete sentences with standard capitalization and full punctuation, spell out contractions (I will, do not), and leave out slang, filler, texting shorthand, emoji and em dashes. Restyle only; do not add or remove information.",
+  casual:
+    "Apply this tone: casual and friendly, like a quick note to a colleague. Use contractions (I'll, it's, don't) and everyday wording, standard capitalization and light punctuation with no semicolons or em dashes; a final period can be dropped. Restyle only; do not add or remove information.",
+  very_casual:
+    'Apply this tone: very casual, like texting a friend. Write in all lowercase and keep punctuation light: a question still ends with a question mark, but drop the final period and never use em dashes. Use texting shorthand only where it stands for the exact words, such as "u" for you or "lmk" for let me know. Restyle only; do not add or remove information.',
+  excited:
+    "Apply this tone: upbeat and enthusiastic. Use standard capitalization and warm, energetic wording, and end positive or friendly sentences with an exclamation mark, without overdoing it. Use commas or periods, never semicolons or em dashes, and no emoji. Restyle only; do not add or remove information.",
+};
+
+test("local cleanup sends the server's exact tone sentences", async (t) => {
+  const { prompts } = await loadModules(t);
+  for (const [tone, sentence] of Object.entries(SERVER_TONE_SENTENCES)) {
+    const prompt = prompts.getCleanupSystemPrompt(null, [], "en", "en", {
+      appCategory: "other",
+      tone,
+    });
+    assert.ok(prompt.includes(`\n\n${sentence} This tone overrides`), tone);
+  }
+});
+
 test("Cloud cleanup sends the tone and category only for a toned dictation", async (t) => {
   const { window, openwhispr } = await loadModules(t);
   const requests = [];

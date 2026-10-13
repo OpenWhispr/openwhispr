@@ -119,6 +119,7 @@ import { providerSupportsImages } from "../services/ai/inferenceProviders";
 import { resolveDictationTranslationInference } from "./dictationTranslationInference";
 import { resolvePrompt, appendScreenContextSuffix } from "../config/prompts";
 import { resolveDictationToneStyle } from "../config/toneStyle";
+import { selectionEditToneSentence } from "../config/prompts/toneStyle";
 import { syncService } from "../services/SyncService.js";
 import { evaluateFinishedRecording, withSalvageWarning } from "./recordingValidation";
 import { isEmptyRecording } from "./recordingGuard";
@@ -1030,8 +1031,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.toneStylePromise?.catch(() => {});
   }
 
-  // Consumed by the cleanup route only; the agent and translation routes
-  // write in their own voice.
+  // Consumed by the cleanup route, and by an agent command for an answer
+  // typed at the caret or a rewrite of the selection. Translation keeps its
+  // source's tone.
   async consumeToneStyle() {
     const pending = this.toneStylePromise;
     this.toneStylePromise = null;
@@ -2801,7 +2803,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // and previews stay truthful.
   _bankAssistantDirective(transcript, config, options = {}) {
     if (!this.isProcessing) return;
-    const { selectedContext, deliverySessionId, deliveryAcceptsMarkdown } = options || {};
+    const { selectedContext, deliverySessionId, deliveryAcceptsMarkdown, deliveryAppCategory } =
+      options || {};
     this.pendingAssistantConversation = {
       transcript,
       // resolveReasoningRoute mirrors an attached screenContext into
@@ -2811,6 +2814,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       screenContext: config?.rawScreenContext ?? null,
       ...(selectedContext ? { selectedContext } : {}),
       ...(deliverySessionId ? { deliverySessionId, deliveryAcceptsMarkdown } : {}),
+      ...(deliveryAppCategory ? { deliveryAppCategory } : {}),
     };
   }
 
@@ -2836,7 +2840,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     text,
     agentName,
     config,
-    { selectedContext, selectedText, deliverySessionId, deliveryAcceptsMarkdown } = {}
+    {
+      selectedContext,
+      selectedText,
+      deliverySessionId,
+      deliveryAcceptsMarkdown,
+      deliveryAppCategory,
+    } = {}
   ) {
     this.assertAgentAllowedByPolicy();
     const settings = getSettings();
@@ -2853,6 +2863,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       selectedContext,
       deliverySessionId,
       deliveryAcceptsMarkdown,
+      deliveryAppCategory,
     });
     return text;
   }
@@ -2891,6 +2902,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         ? capture.sessionId
         : undefined;
     const deliveryAcceptsMarkdown = capture?.acceptsMarkdown === true;
+    const toneStyle = await this.consumeToneStyle();
+    const deliveryAppCategory = deliverySessionId ? toneStyle?.appCategory : undefined;
 
     if (!config?.selectionEditReachable) {
       // No in-place editor: the panel never types, so only a readable
@@ -2902,6 +2915,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             : undefined,
         deliverySessionId,
         deliveryAcceptsMarkdown,
+        deliveryAppCategory,
       });
     }
 
@@ -2922,6 +2936,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return this._bankPanelAgentCommand(text, agentName, config, {
         deliverySessionId,
         deliveryAcceptsMarkdown,
+        deliveryAppCategory,
       });
     }
 
@@ -2951,6 +2966,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       requireCompleteOutput: true,
     };
     const isLocalSelection = config?.provider === "local";
+    const toneSentence = toneStyle ? selectionEditToneSentence(toneStyle) : "";
+    const withToneSentence = (prompt) =>
+      toneSentence ? `${String(prompt ?? "").trim()}\n\n${toneSentence}` : prompt;
     let userPrompt;
     let completionMarker;
     if (isLocalSelection) {
@@ -2961,6 +2979,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           agentName?.trim() || "Assistant"
         ),
         dictionary: getDictionaryHintWords(settings),
+        toneSentence,
       });
       selectionConfig.responseFormat = SELECTION_EDIT_RESPONSE_FORMAT;
       selectionConfig.disableThinking = true;
@@ -2976,14 +2995,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     } else {
       completionMarker = `__OPENWHISPR_SELECTION_COMPLETE_${crypto.randomUUID()}__`;
       selectionConfig.systemPrompt = buildSelectionEditSystemPrompt(
-        config?.systemPrompt,
+        withToneSentence(config?.systemPrompt),
         completionMarker
       );
       if (selectionConfig.textOnlySystemPrompt) {
         // The text-only retry prompt must carry the same selection-edit
         // instructions and marker, or a rejected screenshot loses the command.
         selectionConfig.textOnlySystemPrompt = buildSelectionEditSystemPrompt(
-          selectionConfig.textOnlySystemPrompt,
+          withToneSentence(selectionConfig.textOnlySystemPrompt),
           completionMarker
         );
       }

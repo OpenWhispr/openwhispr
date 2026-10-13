@@ -1,4 +1,5 @@
 import { markdownToPlainText } from "./markdownToPlainText";
+import type { ToneAppCategory } from "../config/toneStyle";
 
 export type AssistantResponseDelivery =
   | {
@@ -8,6 +9,8 @@ export type AssistantResponseDelivery =
       allowClipboardFallback: boolean;
       /** Ask for prose and strip markdown before pasting. False for a markdown-friendly target. */
       plainText: boolean;
+      /** Tone & Style: the kind of app the answer is pasted into, when known. */
+      appCategory?: ToneAppCategory;
     }
   | { mode: "clipboard" };
 
@@ -33,12 +36,14 @@ export function createAssistantResponseDelivery({
   autoPasteEnabled,
   deliverySessionId,
   acceptsMarkdown,
+  appCategory,
   restoreClipboard,
   allowClipboardFallback,
 }: {
   autoPasteEnabled: boolean;
   deliverySessionId?: string;
   acceptsMarkdown?: boolean;
+  appCategory?: ToneAppCategory;
   restoreClipboard: boolean;
   allowClipboardFallback: boolean;
 }): AssistantResponseDelivery | null {
@@ -51,6 +56,7 @@ export function createAssistantResponseDelivery({
     restoreClipboard,
     allowClipboardFallback,
     plainText: !acceptsMarkdown,
+    ...(appCategory ? { appCategory } : {}),
   };
 }
 
