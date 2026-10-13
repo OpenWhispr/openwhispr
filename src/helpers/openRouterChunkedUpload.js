@@ -119,7 +119,7 @@ async function transcribeOpenRouterChunks({
 
     // Pieces never sent after a stop count as lost. The stop's own error says
     // why (out of credits, bad key, no answer), so it wins whenever too little
-    // was transcribed to keep.
+    // was transcribed to keep; without a stop, the first rejected piece says why.
     const { responses, failedChunks, silentChunks } = summarizeChunkResults(results);
     if (responses.length === 0) {
       if (stoppedBy) throw stoppedBy;
@@ -130,12 +130,7 @@ async function transcribeOpenRouterChunks({
       }
       throw firstLoss;
     }
-    if (failedChunks / totalChunks > CLOUD_CHUNK_MAX_LOSS_RATIO) {
-      if (stoppedBy) throw stoppedBy;
-      throw Object.assign(new Error(`${failedChunks} of ${totalChunks} audio segments were lost`), {
-        code: "CHUNK_LOSS_EXCEEDED",
-      });
-    }
+    if (failedChunks / totalChunks > CLOUD_CHUNK_MAX_LOSS_RATIO) throw stoppedBy ?? firstLoss;
     return {
       text: assembleChunkTranscript(results, segmentSeconds, knownDuration),
       ...(failedChunks > 0

@@ -251,7 +251,7 @@ test("losing more than half the audio fails the upload", async () => {
         return { text: "only this" };
       },
     }),
-    { code: "CHUNK_LOSS_EXCEEDED" }
+    { statusCode: 502 }
   );
 });
 

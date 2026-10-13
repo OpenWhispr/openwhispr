@@ -162,6 +162,19 @@ test("a Custom OpenRouter endpoint passes a speech-to-text model it lists", asyn
       error: "The selected model is not available from this provider.",
     }
   );
+
+  // The catalog answers any caller, so a blank or made-up key must fail on its own.
+  const model = "openai/gpt-4o-transcribe";
+  const rejectsKey = async (url) =>
+    url === "https://openrouter.ai/api/v1/key" ? { ok: false, status: 401 } : openRouter(url);
+  assert.equal(
+    (await testProviderConnection({ ...config, apiKey: "", model }, rejectsKey)).errorCode,
+    "apiKeyRequired"
+  );
+  assert.equal(
+    (await testProviderConnection({ ...config, apiKey: "made-up", model }, rejectsKey)).errorCode,
+    "credentialsRejected"
+  );
 });
 
 test("normalizes custom compatible endpoints", () => {

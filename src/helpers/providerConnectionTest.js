@@ -165,6 +165,7 @@ function resolveProviderRequest(config) {
     scope === "transcription" ? TRANSCRIPTION_ENDPOINTS[provider] : undefined;
   const probe = transcriptionEndpoint ?? ENDPOINTS[provider];
   let endpoints = probe ? [probe] : [];
+  let checksOpenRouterKey = false;
 
   if (provider === "openai") {
     const override = normalizeBaseUrl(
@@ -196,11 +197,13 @@ function resolveProviderRequest(config) {
     endpoints = buildModelEndpoints(parsed.toString());
     // OpenRouter lists speech-to-text models only when asked for that output
     // modality, so its default catalog reads every STT id as missing (#1764).
+    // The catalog answers any caller, so the key is checked on its own first.
     const host = parsed.hostname;
     if (
       scope === "transcription" &&
       (host === "openrouter.ai" || host.endsWith(".openrouter.ai"))
     ) {
+      checksOpenRouterKey = true;
       endpoints = endpoints.map((endpoint) => {
         const url = new URL(endpoint);
         url.searchParams.set("output_modalities", "transcription");
@@ -240,6 +243,7 @@ function resolveProviderRequest(config) {
     endpoints,
     headers,
     credentialOnly: MODEL_LIST_UNVERIFIABLE.has(provider) || Boolean(transcriptionEndpoint),
+    checksOpenRouterKey,
   };
 }
 
@@ -317,6 +321,14 @@ async function testProviderConnection(config, fetchImpl = fetch) {
       errorCode: error.errorCode || "invalidUrl",
       error: error.message,
     };
+  }
+
+  if (request.checksOpenRouterKey) {
+    const keyCheck = await testProviderConnection(
+      { provider: "openrouter", scope: "transcription", apiKey: config.apiKey },
+      fetchImpl
+    );
+    if (!keyCheck.success) return keyCheck;
   }
 
   const provider = String(config?.provider || "").toLowerCase();
