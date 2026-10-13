@@ -83,7 +83,9 @@ test.before(() => {
       isUsingHyprlandHotkeys: () => hotkeyManager.isUsingHyprland(),
       isUsingKDEHotkeys: () => hotkeyManager.isUsingKDE(),
       isUsingNativeShortcutHotkeys: () => hotkeyManager.isUsingNativeShortcut(),
+      getActivationMode: () => "tap",
     },
+    environmentManager: { getActivationMode: () => "push" },
   };
   IPCHandlers.prototype.setupHandlers.call(
     new Proxy(target, {
@@ -98,16 +100,16 @@ test.after(() => {
 
 // The handler decides everything before its first await, so the patched
 // platform covers the whole answer.
-function hotkeyModeInfo(backend) {
+function hotkeyModeInfo(backend, platform = "linux", hotkey = "F8") {
   hotkeyManager = Object.assign(new HotkeyManager(), {
     isInitialized: true,
     nativeListenerProbe: inputDenied,
     ...backend,
   });
   const original = Object.getOwnPropertyDescriptor(process, "platform");
-  Object.defineProperty(process, "platform", { value: "linux", configurable: true });
+  Object.defineProperty(process, "platform", { value: platform, configurable: true });
   try {
-    return handlers.get("get-hotkey-mode-info")({}, "F8");
+    return handlers.get("get-hotkey-mode-info")({}, hotkey);
   } finally {
     Object.defineProperty(process, "platform", original);
   }
@@ -131,10 +133,72 @@ for (const [desktop, backend] of Object.entries(DESKTOP_BACKENDS)) {
   });
 }
 
+// Desktop backends can't hold a modifier-only chord, so the reason must ask for
+// a regular key rather than blame a conflict (#1977).
+for (const [desktop, backend] of Object.entries(DESKTOP_BACKENDS)) {
+  test(`${desktop} says Hold needs a regular key for a modifier-only hotkey`, async () => {
+    const info = await hotkeyModeInfo(backend, "linux", "Control+Super");
+
+    assert.equal(info.supportsPushToTalk, false);
+    assert.match(info.pushToTalkUnavailableReason, /regular key/);
+    assert.doesNotMatch(info.pushToTalkUnavailableReason, /reserved/);
+  });
+}
+
+// GNOME holds only through its GlobalShortcuts portal, which has nothing to do
+// with OpenWhispr's own key listener.
+test("GNOME without the shortcuts portal names the portal, not the key listener", async () => {
+  const info = await hotkeyModeInfo({
+    useGnome: true,
+    gnomeManager: { supportsPushToTalk: () => false },
+  });
+
+  assert.equal(info.supportsPushToTalk, false);
+  assert.match(info.pushToTalkUnavailableReason, /GNOME 48/);
+  assert.doesNotMatch(info.pushToTalkUnavailableReason, /listener/);
+});
+
+test("GNOME without the portal names the portal even for a modifier-only hotkey", async () => {
+  const info = await hotkeyModeInfo(
+    { useGnome: true, gnomeManager: { supportsPushToTalk: () => false } },
+    "linux",
+    "Control+Super"
+  );
+
+  assert.match(info.pushToTalkUnavailableReason, /GNOME 48/);
+  assert.doesNotMatch(info.pushToTalkUnavailableReason, /regular key/);
+});
+
 test("without a desktop backend, denied input access reaches the renderer", async () => {
   const info = await hotkeyModeInfo({});
 
   assert.equal(info.supportsPushToTalk, false);
   assert.equal(info.linuxInputAccessDenied, true);
   assert.match(info.pushToTalkUnavailableReason, /usermod/);
+});
+
+// Windows holds only through windows-key-listener.exe, which a build can lack
+// (#2005). The Linux input-access setup box never applies there.
+test("Windows without its key listener reports Hold unavailable", async () => {
+  const info = await hotkeyModeInfo(
+    { nativeListenerProbe: () => ({ available: false, reason: "binary_missing" }) },
+    "win32"
+  );
+
+  assert.equal(info.supportsPushToTalk, false);
+  assert.equal(info.pushToTalkUnavailableReason, "OpenWhispr's key listener isn't available.");
+  assert.equal(info.linuxInputAccessDenied, false);
+});
+
+test("Windows with its key listener still offers Hold", async () => {
+  const info = await hotkeyModeInfo({ nativeListenerProbe: () => ({ available: true }) }, "win32");
+
+  assert.equal(info.supportsPushToTalk, true);
+  assert.equal(info.pushToTalkUnavailableReason, null);
+});
+
+// Startup may fall back to Tap for the session while keeping a saved Hold for
+// the next launch. A window that syncs afterwards must show the mode in effect.
+test("renderers read the activation mode in effect, not the saved preference", async () => {
+  assert.equal(await handlers.get("get-activation-mode")({}), "tap");
 });

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert } from 'react-native';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 
 let mockRouteParams: { proCompletion?: string } = {};
 const mockRouterSetParams = jest.fn();
@@ -143,11 +143,13 @@ jest.mock('@/components/features/ParakeetNudgeBanner', () => ({ ParakeetNudgeBan
 jest.mock('@/components/features/KeyboardFullAccessBanner', () => ({
   KeyboardFullAccessBanner: () => null,
 }));
+jest.mock('@/components/features/HardwareKeyboardNudgeBanner', () => ({
+  HardwareKeyboardNudgeBanner: () => null,
+}));
 jest.mock('@/components/ui/SwipeableCard', () => ({
   SwipeableCard: ({ children }: { children: React.ReactNode }) => children,
 }));
 jest.mock('@/components/ui/Glass', () => ({ Glass: () => null }));
-jest.mock('@/components/ui/CloudIcon', () => ({ CloudIcon: () => null }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/components/ui/DictationModeControl', () => ({ DictationModeControl: () => null }));
 jest.mock('@/components/ui/UsageMeter', () => ({ UsageLimitBanner: () => null }));
@@ -167,7 +169,7 @@ describe('HomeScreen Pro completion', () => {
     ['restored', 'OpenWhispr Pro Restored'],
   ] as const)('clears a valid %s completion once without showing it again', (completion, title) => {
     mockRouteParams = { proCompletion: completion };
-    const screen = render(<HomeScreen />);
+    const view = render(<HomeScreen />);
 
     expect(mockRouterSetParams).toHaveBeenCalledWith({ proCompletion: undefined });
     expect(Alert.alert).toHaveBeenCalledWith(title, expect.any(String), [
@@ -175,7 +177,7 @@ describe('HomeScreen Pro completion', () => {
     ]);
 
     mockRouteParams = {};
-    screen.rerender(<HomeScreen />);
+    view.rerender(<HomeScreen />);
 
     expect(mockRouterSetParams).toHaveBeenCalledTimes(1);
     expect(Alert.alert).toHaveBeenCalledTimes(1);
@@ -187,5 +189,29 @@ describe('HomeScreen Pro completion', () => {
 
     expect(mockRouterSetParams).not.toHaveBeenCalled();
     expect(Alert.alert).not.toHaveBeenCalled();
+  });
+});
+
+// Private mode is set in AI Models; Home only shows that it's on.
+describe('HomeScreen Private mode badge', () => {
+  afterEach(() => {
+    mockProcessingModeStoreState.activeMode = 'cloud';
+  });
+
+  it('opens AI Models from the badge while Private mode is on', () => {
+    mockProcessingModeStoreState.activeMode = 'private';
+    render(<HomeScreen />);
+    const badge = screen.getByLabelText('Private mode is on');
+    expect(badge.props.accessibilityRole).toBe('button');
+    fireEvent.press(badge);
+    expect(require('expo-router').router.push).toHaveBeenCalledWith('/(account)/ai-models');
+  });
+
+  it.each(['cloud', 'providers'])('shows no mode switch or badge in %s mode', (mode) => {
+    mockProcessingModeStoreState.activeMode = mode;
+    render(<HomeScreen />);
+    expect(screen.queryByLabelText('Private mode is on')).toBeNull();
+    expect(screen.queryByLabelText('Cloud transcription')).toBeNull();
+    expect(screen.queryByLabelText('Transcription: Bring Your Own Key')).toBeNull();
   });
 });

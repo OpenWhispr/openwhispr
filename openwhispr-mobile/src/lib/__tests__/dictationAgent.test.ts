@@ -1,6 +1,8 @@
 import {
   getDictationAgentName,
   isDictationAgentApplicable,
+  isNoteChatEnabled,
+  voiceAssistantToggleConfig,
   detectAgentMention,
 } from '@/lib/dictationAgent';
 import type { UserConfig } from '@/types';
@@ -55,6 +57,33 @@ describe('isDictationAgentApplicable', () => {
   });
 });
 
+// Note chat once shared the voice assistant's switch, so an existing choice carries over.
+describe('note chat', () => {
+  it('is on by default', () => {
+    expect(isNoteChatEnabled(baseConfig)).toBe(true);
+  });
+
+  it('follows the old shared switch until set on its own', () => {
+    expect(isNoteChatEnabled({ ...baseConfig, dictationAgentEnabled: false })).toBe(false);
+    expect(
+      isNoteChatEnabled({ ...baseConfig, dictationAgentEnabled: false, noteChatEnabled: true }),
+    ).toBe(true);
+  });
+
+  it('keeps its state when only the voice assistant is switched', () => {
+    expect(voiceAssistantToggleConfig(baseConfig, false)).toEqual({
+      dictationAgentEnabled: false,
+      noteChatEnabled: true,
+    });
+    expect(
+      voiceAssistantToggleConfig({ ...baseConfig, dictationAgentEnabled: false }, true),
+    ).toEqual({ dictationAgentEnabled: true, noteChatEnabled: false });
+    expect(voiceAssistantToggleConfig({ ...baseConfig, noteChatEnabled: false }, true)).toEqual({
+      dictationAgentEnabled: true,
+    });
+  });
+});
+
 describe('detectAgentMention — Layer 1: word-boundary exact match', () => {
   it('detects the name at word boundaries', () => {
     expect(detectAgentMention('Hey OpenWhispr write a follow-up email', 'OpenWhispr')).toBe(true);
@@ -75,6 +104,22 @@ describe('detectAgentMention — Layer 1: word-boundary exact match', () => {
 
   it('detects name with punctuation adjacent (word boundary)', () => {
     expect(detectAgentMention('okay, OpenWhispr, please help', 'OpenWhispr')).toBe(true);
+  });
+});
+
+describe('detectAgentMention — the name must address the agent', () => {
+  it('treats a mere mention mid-sentence as dictated content', () => {
+    expect(
+      detectAgentMention('What time does the OpenWhispr meeting start tomorrow?', 'OpenWhispr'),
+    ).toBe(false);
+    expect(detectAgentMention('I showed Open Whispr to a friend', 'OpenWhispr')).toBe(false);
+  });
+
+  it('detects the name at the start or after a sentence ends', () => {
+    expect(detectAgentMention('OpenWhispr, write an email to Bob', 'OpenWhispr')).toBe(true);
+    expect(detectAgentMention('Thanks for that. OpenWhispr draft a reply', 'OpenWhispr')).toBe(
+      true,
+    );
   });
 });
 
@@ -130,4 +175,8 @@ describe('detectAgentMention — edge cases', () => {
   it('returns false when name is blank/empty', () => {
     expect(detectAgentMention('hey do this', '')).toBe(false);
   });
+});
+
+it('supports Providers mode', () => {
+  expect(isDictationAgentApplicable('providers', { defaultMode: 'providers' })).toBe(true);
 });

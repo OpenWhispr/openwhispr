@@ -227,3 +227,90 @@ test("markNoteSynced and markNoteSyncedIfUnchanged persist the returned owner", 
 
   db.db.close();
 });
+
+// Join & transcribe resumes the user's note for a calendar event. Google gives
+// every invitee's copy of an event the same id, so a teammate's synced note for
+// the same meeting must never be resumed: both apps would record into one note.
+test("getOwnNoteByCalendarEventId never resumes a teammate's note for the same event", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const space = createTestTeamSpace(db, "Eng");
+
+  db.upsertNoteFromCloud(
+    cloudNote({ id: "cloud-teammate", calendar_event_id: "event-1", user_id: "teammate" }),
+    null,
+    space.id
+  );
+  assert.equal(db.getOwnNoteByCalendarEventId("event-1"), null);
+
+  const own = db.saveNote("Weekly sync", "", "meeting").note;
+  db.updateNote(own.id, { calendar_event_id: "event-1" });
+  assert.equal(db.getOwnNoteByCalendarEventId("event-1").id, own.id);
+
+  db.db.close();
+});
+
+test("getOwnNoteByCalendarEventId resumes notes the user owns, newest first", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const space = createTestTeamSpace(db, "Eng");
+  const insert = db.db.prepare(
+    `INSERT INTO notes (title, content, client_note_id, space_id, cloud_id, owner_user_id, calendar_event_id, created_at)
+     VALUES (?, '', ?, ?, ?, ?, ?, ?)`
+  );
+  const lookup = (eventId) => db.getOwnNoteByCalendarEventId(eventId)?.title ?? null;
+
+  insert.run("own team", "c-1", space.id, "cloud-1", "test-account", "event-team", "2026-07-01");
+  // Synced before ownership was recorded; only the user's notes live in Personal.
+  insert.run(
+    "legacy",
+    "c-2",
+    db.getPrivateSpaceId(),
+    "cloud-2",
+    null,
+    "event-legacy",
+    "2026-07-01"
+  );
+  // A team note whose owner the pull hasn't backfilled yet could be anyone's.
+  insert.run("unknown", "c-3", space.id, "cloud-3", null, "event-unknown", "2026-07-01");
+  insert.run("unsynced team", "c-4", space.id, null, null, "event-unsynced-team", "2026-07-01");
+  insert.run(
+    "teammate personal",
+    "c-5",
+    db.getPrivateSpaceId(),
+    "cloud-5",
+    "teammate",
+    "event-teammate-personal",
+    "2026-07-01"
+  );
+  // Local rows keep SQLite's "YYYY-MM-DD HH:MM:SS"; pulled rows keep the API's ISO
+  // string. The newer note has the lower id and would lose a plain text comparison.
+  insert.run(
+    "newer",
+    "c-6",
+    db.getPrivateSpaceId(),
+    null,
+    null,
+    "event-many",
+    "2026-07-01 10:05:00"
+  );
+  insert.run(
+    "older",
+    "c-7",
+    db.getPrivateSpaceId(),
+    "cloud-7",
+    "test-account",
+    "event-many",
+    "2026-07-01T10:00:00.000Z"
+  );
+  insert.run("teammate newest", "c-8", space.id, "cloud-8", "teammate", "event-many", "2026-07-03");
+
+  assert.equal(lookup("event-team"), "own team");
+  assert.equal(lookup("event-legacy"), "legacy");
+  assert.equal(lookup("event-unknown"), null);
+  assert.equal(lookup("event-unsynced-team"), "unsynced team");
+  assert.equal(lookup("event-teammate-personal"), null);
+  assert.equal(lookup("event-many"), "newer");
+
+  db.db.close();
+});

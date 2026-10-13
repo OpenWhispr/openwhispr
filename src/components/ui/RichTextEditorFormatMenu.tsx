@@ -118,10 +118,14 @@ const canFormat = (editor: Editor, state: EditorState): boolean =>
 const shouldShowOnSelection: BubbleMenuProps["shouldShow"] = ({ editor, state }) =>
   canFormat(editor, state) && !state.selection.empty && !(state.selection instanceof NodeSelection);
 
-// On an empty top-level line, where a list, heading or table can start. The
-// menu sits on the line itself, beside the caret, so it covers no text.
+// On an empty top-level line, where a list, heading or table can start.
 const shouldShowOnEmptyLine: FloatingMenuProps["shouldShow"] = ({ editor, state }) =>
   canFormat(editor, state) && isOnEmptyLine(state.selection);
+
+// Below the caret, so it covers neither the line being typed on (Tiptap's
+// default puts it beside the caret) nor the text written above it. It flips
+// above only when there's no room below.
+const LINE_MENU_OPTIONS: FloatingMenuProps["options"] = { placement: "bottom-start" };
 
 /** A toggle when `active` is set, a plain button otherwise. */
 function ToolbarButton({
@@ -256,7 +260,7 @@ function FormatToolbar({
 /** Marks, text style, lists and tables for selected text or an empty line. */
 export function RichTextEditorFormatMenu({ editor }: { editor: Editor }) {
   const onSelection = useMenuDropdown();
-  const onEmptyLine = useMenuDropdown();
+  const onEmptyLine = useMenuDropdown(LINE_MENU_OPTIONS);
   useHideOnFocusLeave(editor, MENU_KEYS);
   return (
     <>

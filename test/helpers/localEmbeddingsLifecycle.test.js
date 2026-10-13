@@ -8,13 +8,16 @@ const vm = require("node:vm");
 const WORKER_SOURCE = fs.readFileSync(path.resolve("src/workers/onnxWorker.js"), "utf8");
 const CLIENT_SOURCE = fs.readFileSync(path.resolve("src/helpers/onnxWorkerClient.js"), "utf8");
 const EMBEDDINGS_SOURCE = fs.readFileSync(path.resolve("src/helpers/localEmbeddings.js"), "utf8");
+const SPEAKER_SOURCE = fs.readFileSync(path.resolve("src/helpers/speakerEmbeddings.js"), "utf8");
+const SPEAKER_SAMPLES = new Float32Array(16000 * 2).fill(0.1);
 
 function fakeOrt(events, nativeSession) {
   return {
     InferenceSession: {
       create: async (file) => {
-        events.push(`${file === "speaker" ? "speaker" : "text"}.create`);
-        return nativeSession(file === "speaker" ? "speaker" : "text");
+        const name = path.basename(file) === "model.onnx" ? "text" : "speaker";
+        events.push(`${name}.create`);
+        return nativeSession(name);
       },
     },
     Tensor: class {},
@@ -35,6 +38,30 @@ function loadEmbeddings(client) {
   });
   vm.runInContext(EMBEDDINGS_SOURCE, localContext);
   return localContext.module.exports;
+}
+
+function loadSpeakerEmbeddings(client, idleTimers) {
+  const context = vm.createContext({
+    module: { exports: {} },
+    process: {},
+    setTimeout(callback) {
+      const timer = { callback, cleared: false, unref() {} };
+      idleTimers.push(timer);
+      return timer;
+    },
+    clearTimeout(timer) {
+      if (timer) timer.cleared = true;
+    },
+    require(name) {
+      if (name === "fs") return { existsSync: () => true };
+      if (name === "./debugLogger") return { debug() {}, warn() {} };
+      if (name === "./modelDirUtils") return { getModelsDirForService: () => "/models" };
+      if (name === "./onnxWorkerClient") return client;
+      return require(name);
+    },
+  });
+  vm.runInContext(SPEAKER_SOURCE, context);
+  return context.module.exports;
 }
 
 function createHarness() {
@@ -171,38 +198,6 @@ test("reloads after the shared worker restarts", async () => {
   assert.equal(events.filter((event) => event === "text.load").length, 2);
 });
 
-test("speaker embeddings reload after the shared worker restarts", async () => {
-  const methods = [];
-  const client = {
-    generation: 0,
-    async request(method) {
-      methods.push(method);
-      return method === "speaker.extract" ? { embeddingBuffer: new ArrayBuffer(4) } : { ok: true };
-    },
-  };
-  const context = vm.createContext({
-    module: { exports: {} },
-    process: {},
-    require(name) {
-      if (name === "fs") return { existsSync: () => true };
-      if (name === "./debugLogger") return { debug() {} };
-      if (name === "./modelDirUtils") return { getModelsDirForService: () => "/models" };
-      if (name === "./onnxWorkerClient") return client;
-      return require(name);
-    },
-  });
-  vm.runInContext(
-    fs.readFileSync(path.resolve("src/helpers/speakerEmbeddings.js"), "utf8"),
-    context
-  );
-  const speakerEmbeddings = context.module.exports;
-  const samples = new Float32Array(16000 * 2);
-  await speakerEmbeddings.extractEmbeddingFromSamples(samples);
-  client.generation += 1;
-  await speakerEmbeddings.extractEmbeddingFromSamples(samples);
-  assert.equal(methods.filter((method) => method === "speaker.load").length, 2);
-});
-
 test("a failed load does not block unloading or the next load attempt", async () => {
   const { embeddings, client, events } = createHarness();
   const request = client.request.bind(client);
@@ -264,9 +259,10 @@ class FakePort extends EventEmitter {
 }
 
 // The real client driving the real worker source: each fork boots a fresh worker context.
-function createIntegratedHarness() {
+function createIntegratedHarness({ failRelease = null } = {}) {
   const events = [];
   const workers = [];
+  const idleTimers = [];
   const nativeSession = (name) => ({
     inputNames: ["input"],
     async run() {
@@ -274,6 +270,7 @@ function createIntegratedHarness() {
     },
     async release() {
       events.push(`${name}.release`);
+      if (name === failRelease) throw new Error("release failed");
     },
   });
   const fork = () => {
@@ -339,7 +336,17 @@ function createIntegratedHarness() {
   });
   vm.runInContext(CLIENT_SOURCE, clientContext);
   const client = clientContext.module.exports;
-  return { client, embeddings: loadEmbeddings(client), events, workers };
+  return {
+    client,
+    embeddings: loadEmbeddings(client),
+    speaker: loadSpeakerEmbeddings(client, idleTimers),
+    events,
+    workers,
+    async fireSpeakerIdleUnload() {
+      idleTimers.findLast((timer) => !timer.cleared).callback();
+      for (let i = 0; i < 10; i++) await nextTurn();
+    },
+  };
 }
 
 test("unloading the last session exits the worker and a later embedding respawns and reloads it", async () => {
@@ -368,3 +375,42 @@ test("unloading text keeps the worker alive while diarization holds a speaker se
   assert.equal(sessions.speaker, true);
   assert.equal(sessions.text, false);
 });
+
+test("the speaker idle unload exits the worker once the text session is gone", async () => {
+  const h = createIntegratedHarness();
+  await h.speaker.extractEmbeddingFromSamples(SPEAKER_SAMPLES);
+  await h.embeddings.embedText("");
+  await h.embeddings.unload();
+  assert.equal(h.workers[0].child.killed, false);
+  await h.fireSpeakerIdleUnload();
+  assert.equal(h.workers[0].child.killed, true);
+  assert.deepEqual(h.events, ["speaker.create", "text.create", "text.release", "speaker.release"]);
+  assert.ok(await h.speaker.extractEmbeddingFromSamples(SPEAKER_SAMPLES));
+  assert.equal(h.workers.length, 2);
+});
+
+test("the speaker idle unload keeps the worker for a loaded text session", async () => {
+  const h = createIntegratedHarness();
+  await h.embeddings.embedText("");
+  await h.speaker.extractEmbeddingFromSamples(SPEAKER_SAMPLES);
+  await h.fireSpeakerIdleUnload();
+  assert.equal(h.workers[0].child.killed, false);
+  await h.embeddings.unload();
+  assert.equal(h.workers[0].child.killed, true);
+  assert.equal(h.workers.length, 1);
+});
+
+for (const session of ["speaker", "text"]) {
+  test(`a ${session} release that throws still lets the worker exit`, async () => {
+    const h = createIntegratedHarness({ failRelease: session });
+    if (session === "speaker") {
+      await h.speaker.extractEmbeddingFromSamples(SPEAKER_SAMPLES);
+      await assert.rejects(h.speaker.unload(), /release failed/);
+    } else {
+      await h.embeddings.embedText("");
+      await assert.rejects(h.embeddings.unload(), /release failed/);
+    }
+    assert.equal(h.workers[0].child.killed, true);
+    assert.equal(h.client.child, null);
+  });
+}

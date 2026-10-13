@@ -10,10 +10,11 @@ let mockError: string | null = null;
 let mockUser: { id: string; isAnonymous: boolean } | null = null;
 let mockGuest = false;
 let mockCurrentStep = 'privacy-mode';
+let mockConfig: Record<string, unknown> = { defaultMode: 'private' };
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: {
     getState: () => ({
-      config: { defaultMode: 'private' },
+      config: mockConfig,
       updateConfig: mockUpdateConfig,
       error: mockError,
     }),
@@ -26,6 +27,10 @@ jest.mock('@/store/useOnboardingStore', () => ({
   useOnboardingStore: {
     getState: () => ({ currentStep: mockCurrentStep, chooseMode: mockChooseMode }),
   },
+}));
+let mockAccountHistory = false;
+jest.mock('@/sync/syncIdentity', () => ({
+  hasRealAccountHistory: () => mockAccountHistory,
 }));
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: {
@@ -42,7 +47,9 @@ beforeEach(() => {
   mockError = null;
   mockUser = null;
   mockGuest = false;
+  mockAccountHistory = false;
   mockCurrentStep = 'privacy-mode';
+  mockConfig = { defaultMode: 'private' };
   mockUpdateConfig.mockResolvedValue(undefined);
   mockChooseMode.mockResolvedValue(undefined);
   mockEnsureSession.mockResolvedValue(undefined);
@@ -53,7 +60,10 @@ it('retries anonymous authentication before allowing Cloud', async () => {
   });
   await chooseOnboardingMode('cloud', 'privacy-mode');
   expect(mockChooseMode).toHaveBeenCalledWith('cloud', 'privacy-mode');
-  expect(mockUpdateConfig).toHaveBeenCalledWith({ defaultMode: 'cloud' });
+  expect(mockUpdateConfig).toHaveBeenCalledWith({
+    defaultMode: 'cloud',
+    inference: { dictation: { mode: 'openwhispr' } },
+  });
 });
 it('rejects Cloud without a session from download fallbacks too', async () => {
   mockCurrentStep = 'private-download';
@@ -103,6 +113,52 @@ it('lets a guest leave a stuck download for Cloud', async () => {
   mockCurrentStep = 'private-download';
   await chooseOnboardingMode('cloud', 'private-download');
   expect(mockEnsureSession).not.toHaveBeenCalled();
-  expect(mockUpdateConfig).toHaveBeenCalledWith({ defaultMode: 'cloud' });
+  expect(mockUpdateConfig).toHaveBeenCalledWith({
+    defaultMode: 'cloud',
+    inference: { dictation: { mode: 'openwhispr' } },
+  });
   expect(mockChooseMode).toHaveBeenCalledWith('cloud', 'private-download');
+});
+
+// A replayed onboarding pick must also move a Providers dictation route, or the
+// screens would show the new mode while dictation kept using the provider.
+it('moves the dictation route with the chosen mode and restores both on failure', async () => {
+  const providerRoute = { mode: 'providers', providerId: 'groq', modelId: 'whisper-large-v3' };
+  const inference = { dictation: providerRoute, upload: { mode: 'openwhispr' } };
+  mockConfig = { defaultMode: 'providers', inference, pinnedInference: ['upload'] };
+  mockChooseMode.mockRejectedValueOnce(new Error('Keychain unavailable'));
+  await expect(chooseOnboardingMode('private', 'privacy-mode')).rejects.toThrow(
+    'Keychain unavailable',
+  );
+  expect(mockUpdateConfig).toHaveBeenNthCalledWith(1, {
+    defaultMode: 'private',
+    inference: { dictation: { mode: 'local' } },
+    pinnedInference: undefined,
+  });
+  expect(mockUpdateConfig).toHaveBeenLastCalledWith({
+    defaultMode: 'providers',
+    inference,
+    pinnedInference: ['upload'],
+  });
+});
+
+// A new identity there would read as an account switch and wipe the synced account's notes.
+describe('on a device that synced an account, signed out', () => {
+  beforeEach(() => {
+    mockAccountHistory = true;
+  });
+
+  it('refuses Cloud at the mode choice without opening a session', async () => {
+    const attempt = chooseOnboardingMode('cloud', 'privacy-mode');
+    await expect(attempt).rejects.toThrow('Cloud needs you signed in');
+    expect(mockEnsureSession).not.toHaveBeenCalled();
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
+  });
+
+  it('saves Cloud for after sign-in when leaving a stuck download', async () => {
+    mockCurrentStep = 'private-download';
+    await chooseOnboardingMode('cloud', 'private-download');
+    expect(mockEnsureSession).not.toHaveBeenCalled();
+    expect(mockChooseMode).toHaveBeenCalledWith('cloud', 'private-download');
+  });
 });

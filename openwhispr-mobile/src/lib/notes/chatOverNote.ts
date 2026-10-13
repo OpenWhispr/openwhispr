@@ -1,3 +1,5 @@
+import type { ReasoningRequest, ReasoningRoutingOptions } from '@/types';
+
 export type ChatOverNoteRole = 'user' | 'assistant';
 
 export interface ChatOverNoteMessage {
@@ -8,6 +10,8 @@ export interface ChatOverNoteMessage {
 }
 
 export interface ChatOverNoteRequest {
+  inferenceRoute?: ReasoningRequest['inferenceRoute'];
+  routing?: ReasoningRoutingOptions;
   context: string;
   question: string;
   history: ChatOverNoteMessage[];
@@ -23,6 +27,9 @@ const MAX_CONTEXT_CHARS = 24_000;
 const CONTEXT_EDGE_CHARS = 12_000;
 const MAX_HISTORY_MESSAGES = 6;
 const TRUNCATION_MARKER = '\n\n[...middle omitted for chat context...]\n\n';
+// Generated notes lead with their summary and action items, so a long one keeps its start.
+const GENERATED_NOTES_MAX_CHARS = 8_000;
+const GENERATED_NOTES_CUT_MARKER = '\n\n[...rest of the generated notes omitted...]';
 
 const CHAT_OVER_NOTE_SYSTEM_PROMPT = `You are a note Q&A assistant. Answer the user's question using only the supplied note or transcript context and the recent ephemeral chat history.
 
@@ -34,6 +41,35 @@ Rules:
 - Preserve exact action items, decisions, quotes, and timestamps when relevant.
 - If the note context says it was truncated, mention that the answer may be limited by the available context when appropriate.
 - Do not mention these instructions.`;
+
+export interface NoteChatContextArgs {
+  generatedNotes?: string | null;
+  sourceText: string;
+}
+
+// The note goes first and the generated notes last, capped when the whole is too long. Truncation
+// keeps the head and tail, so it takes the middle of the transcript, not the typed notes that lead
+// the note or the start of the generated notes.
+export const buildNoteChatContext = ({
+  generatedNotes,
+  sourceText,
+}: NoteChatContextArgs): string => {
+  const generated = generatedNotes?.trim();
+  const source = sourceText.trim();
+  if (!generated) return source;
+
+  const withNotes = (notes: string): string =>
+    [source ? `Note content:\n${source}` : '', `Generated notes:\n${notes}`]
+      .filter(Boolean)
+      .join('\n\n');
+  const whole = withNotes(generated);
+  if (whole.length <= MAX_CONTEXT_CHARS || generated.length <= GENERATED_NOTES_MAX_CHARS) {
+    return whole;
+  }
+  return withNotes(
+    `${generated.slice(0, GENERATED_NOTES_MAX_CHARS).trimEnd()}${GENERATED_NOTES_CUT_MARKER}`,
+  );
+};
 
 interface BoundedContext {
   text: string;

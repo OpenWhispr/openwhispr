@@ -10,7 +10,11 @@ const mockAuthState: { user: { id: string; email: string; emailVerified: boolean
   user: null,
 };
 const mockConfigState: {
-  config: { autoGenerateNoteTitle: boolean; appleLocalIntelligenceEnabled?: boolean };
+  config: {
+    autoGenerateNoteTitle: boolean;
+    appleLocalIntelligenceEnabled?: boolean;
+    inference?: { notes?: { mode: 'local' } };
+  };
 } = {
   config: { autoGenerateNoteTitle: false },
 };
@@ -35,6 +39,7 @@ jest.mock('@/data', () => ({
       { id: 2, name: 'Meetings', isDefault: 1, sortOrder: 1, deletedAt: null },
       { id: 1, name: 'Personal', isDefault: 1, sortOrder: 0, deletedAt: null },
     ]),
+    getFolders: jest.fn(() => []),
     createNote: jest.fn(() => ({ id: 7, title: 'Untitled meeting', noteType: 'meeting' })),
     getNoteById: jest.fn(() => null),
     updateNote: jest.fn(),
@@ -57,9 +62,17 @@ jest.mock('@/data', () => ({
     getSpeakerProfiles: jest.fn(() => []),
     getSpeakerProfileById: jest.fn(() => null),
     createSpeakerProfile: jest.fn(),
+    createOwnerProfileForSpeaker: jest.fn(),
     updateSpeakerProfile: jest.fn(),
     deleteSpeakerProfile: jest.fn(),
     deleteAllSpeakerProfiles: jest.fn(),
+  },
+  spacesRepository: {
+    getPrivateSpace: jest.fn(() => ({ id: 1, kind: 'private' })),
+    listSpaces: jest.fn(() => [
+      { id: 1, kind: 'private' },
+      { id: 3, kind: 'team' },
+    ]),
   },
 }));
 jest.mock('@/store/useProcessingModeStore', () => ({
@@ -86,6 +99,9 @@ jest.mock('@/services/reasoning/ReasoningService', () => ({
     processText: jest.fn(),
   },
 }));
+jest.mock('@/lib/notes/localMeetingNotes', () => ({
+  generateLocalMeetingNotes: jest.fn(),
+}));
 jest.mock('@/services/diarization/DiarizationService', () => ({
   processMeeting: mockProcessMeeting,
 }));
@@ -101,9 +117,13 @@ jest.mock('@/services/transcription/LocalTranscriptionService', () => ({
 }));
 
 import { useNotesStore } from '../useNotesStore';
-import { notesRepository } from '@/data';
+import { notesRepository, spacesRepository } from '@/data';
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
+import { generateLocalMeetingNotes } from '@/lib/notes/localMeetingNotes';
+import * as localReasoning from '@/lib/localReasoning';
 import type { Speaker } from '@/data/types';
+import { SpeakerProfileOwnerAlreadyExistsError } from '@/data/local/notesRepository';
+import * as Sentry from '@sentry/react-native';
 
 const speaker = (overrides: Partial<Speaker>): Speaker =>
   ({
@@ -157,6 +177,7 @@ beforeEach(() => {
   mockAuthState.user = null;
   mockConfigState.config.autoGenerateNoteTitle = false;
   delete mockConfigState.config.appleLocalIntelligenceEnabled;
+  delete mockConfigState.config.inference;
   mockProcessingModeState.activeMode = 'cloud';
   mockProcessMeeting.mockResolvedValue({ speakerEmbeddingsByLabel: { speaker_0: [1, 0] } });
   mockGenerateNoteTitle.mockResolvedValue('Generated meeting title');
@@ -224,6 +245,80 @@ describe('createMeetingNote', () => {
     useNotesStore.getState().createMeetingNote();
 
     expect(notesRepository.createNote).toHaveBeenCalledWith('Untitled meeting', '', 1);
+  });
+
+  describe('started from a folder or space', () => {
+    const PERSONAL_FOLDER = { id: 5, name: 'Clients', spaceId: 1, deletedAt: null };
+    const TEAM_FOLDER = { id: 9, name: 'Team', spaceId: 3, deletedAt: null };
+    const getFolders = notesRepository.getFolders as jest.Mock;
+    const getPrivateFolders = notesRepository.getPrivateFolders as jest.Mock;
+    const defaultGetFolders = getFolders.getMockImplementation();
+    const defaultGetPrivateFolders = getPrivateFolders.getMockImplementation();
+
+    beforeEach(() => {
+      getFolders.mockReturnValue([PERSONAL_FOLDER, TEAM_FOLDER]);
+      getPrivateFolders.mockReturnValue([
+        { id: 2, name: 'Meetings', isDefault: 1, sortOrder: 1, spaceId: 1, deletedAt: null },
+        PERSONAL_FOLDER,
+      ]);
+    });
+
+    // clearAllMocks keeps implementations, so the folders above would leak into later tests.
+    afterEach(() => {
+      getFolders.mockImplementation(defaultGetFolders);
+      getPrivateFolders.mockImplementation(defaultGetPrivateFolders);
+    });
+
+    it('files the meeting in the folder it was started from', () => {
+      useNotesStore.getState().createMeetingNote({ folderId: 5 });
+      expect(notesRepository.createNote).toHaveBeenCalledWith('Untitled meeting', '', 5);
+    });
+
+    it("files it in a team space's folder, or in the space itself with no folder open", () => {
+      useNotesStore.getState().createMeetingNote({ folderId: 9 });
+      expect(notesRepository.createNote).toHaveBeenLastCalledWith('Untitled meeting', '', 9);
+
+      useNotesStore.getState().createMeetingNote({ spaceId: 3 });
+      expect(notesRepository.createNote).toHaveBeenLastCalledWith(
+        'Untitled meeting',
+        '',
+        undefined,
+        3,
+      );
+    });
+
+    it('keeps a Private-mode meeting out of team spaces, in Meetings', () => {
+      mockProcessingModeState.activeMode = 'private';
+
+      useNotesStore.getState().createMeetingNote({ folderId: 9 });
+      expect(notesRepository.createNote).toHaveBeenLastCalledWith('Untitled meeting', '', 2);
+      useNotesStore.getState().createMeetingNote({ spaceId: 3 });
+      expect(notesRepository.createNote).toHaveBeenLastCalledWith('Untitled meeting', '', 2);
+      useNotesStore.getState().createMeetingNote({ folderId: 5 });
+      expect(notesRepository.createNote).toHaveBeenLastCalledWith('Untitled meeting', '', 5);
+    });
+
+    it('uses Meetings when the team space is unknown, gone, or not a number', () => {
+      useNotesStore.getState().createMeetingNote({ spaceId: 404 });
+      expect(notesRepository.createNote).toHaveBeenLastCalledWith('Untitled meeting', '', 2);
+      useNotesStore.getState().createMeetingNote({ spaceId: Number('abc') });
+      expect(notesRepository.createNote).toHaveBeenLastCalledWith('Untitled meeting', '', 2);
+
+      // Access to space 3 was removed while its screen was still open.
+      (spacesRepository.listSpaces as jest.Mock).mockReturnValueOnce([{ id: 1, kind: 'private' }]);
+      useNotesStore.getState().createMeetingNote({ spaceId: 3 });
+      expect(notesRepository.createNote).toHaveBeenLastCalledWith('Untitled meeting', '', 2);
+      (spacesRepository.listSpaces as jest.Mock).mockReturnValueOnce([{ id: 1, kind: 'private' }]);
+      useNotesStore.getState().createMeetingNote({ folderId: 9 });
+      expect(notesRepository.createNote).toHaveBeenLastCalledWith('Untitled meeting', '', 2);
+    });
+
+    it('uses Meetings when the folder is gone, or the space is the personal one', () => {
+      useNotesStore.getState().createMeetingNote({ folderId: 404 });
+      expect(notesRepository.createNote).toHaveBeenLastCalledWith('Untitled meeting', '', 2);
+      useNotesStore.getState().createMeetingNote({ spaceId: 1 });
+      expect(notesRepository.createNote).toHaveBeenLastCalledWith('Untitled meeting', '', 2);
+    });
   });
 
   it('persists selected calendar context locally', () => {
@@ -662,6 +757,118 @@ describe('runMeetingPipeline', () => {
     );
   });
 
+  describe('with generated notes already on the note', () => {
+    const meetingNote = (enhancedContent: string | null) => ({
+      id: 7,
+      title: 'Planning Sync',
+      content: 'Prioritize onboarding.',
+      noteType: 'meeting',
+      isPrivate: 0,
+      deletedAt: null,
+      enhancedContent,
+      enhancedAtContentHash: null,
+    });
+
+    beforeEach(() => {
+      mockAuthState.user = signedInUser;
+      (notesRepository.getActions as jest.Mock).mockReturnValue([
+        { id: 1, name: 'Generate Notes', prompt: 'Transform this meeting.', isDefault: 1 },
+      ]);
+      (notesRepository.getSegments as jest.Mock).mockReturnValue([segment('Ship the fix.')]);
+      (ReasoningService.processText as jest.Mock).mockResolvedValue({
+        text: 'Fresh notes',
+        model: 'test',
+      });
+    });
+
+    const wroteGeneratedNotes = (): boolean =>
+      (notesRepository.updateNote as jest.Mock).mock.calls.some(
+        ([, updates]) => updates.enhancedContent !== undefined,
+      );
+
+    it('keeps notes the user already has instead of generating over them', async () => {
+      (notesRepository.getNoteById as jest.Mock).mockReturnValue(meetingNote('## My edited notes'));
+
+      await useNotesStore.getState().runMeetingPipeline(7, 'file://meeting.wav', 2);
+
+      expect(ReasoningService.processText).not.toHaveBeenCalledWith(
+        expect.objectContaining({ temperature: 0.3 }),
+      );
+      expect(wroteGeneratedNotes()).toBe(false);
+    });
+
+    it('drops the generated notes when the user wrote some while they were being made', async () => {
+      let current = meetingNote(null);
+      (notesRepository.getNoteById as jest.Mock).mockImplementation(() => current);
+      (ReasoningService.processText as jest.Mock).mockImplementation(async () => {
+        current = meetingNote('## Written meanwhile');
+        return { text: 'Fresh notes', model: 'test' };
+      });
+
+      await useNotesStore.getState().runMeetingPipeline(7, 'file://meeting.wav', 2);
+
+      expect(ReasoningService.processText).toHaveBeenCalled();
+      expect(wroteGeneratedNotes()).toBe(false);
+    });
+  });
+
+  it('writes On-Device meeting notes through the chunked local path when signed in', async () => {
+    mockAuthState.user = signedInUser;
+    mockConfigState.config.inference = { notes: { mode: 'local' } };
+    (notesRepository.getNoteById as jest.Mock).mockReturnValue({
+      id: 7,
+      title: 'Planning Sync',
+      content: '',
+      noteType: 'meeting',
+      isPrivate: 0,
+      deletedAt: null,
+      enhancedAtContentHash: null,
+    });
+    (notesRepository.getActions as jest.Mock).mockReturnValue([
+      { id: 1, name: 'Generate Notes', prompt: 'Transform this meeting.', isDefault: 1 },
+    ]);
+    (notesRepository.getSegments as jest.Mock).mockReturnValue([segment('Ship the fix.')]);
+    (generateLocalMeetingNotes as jest.Mock).mockResolvedValue('Local notes');
+    jest
+      .spyOn(localReasoning, 'getLocalReasoningReadiness')
+      .mockResolvedValueOnce({ status: 'ready', tokenCounting: false });
+
+    await useNotesStore.getState().runMeetingPipeline(7, 'file://meeting.wav', 2);
+
+    expect(generateLocalMeetingNotes).toHaveBeenCalledWith(7, {
+      actionPrompt: 'Transform this meeting.',
+    });
+    expect(ReasoningService.processText).not.toHaveBeenCalled();
+    expect(notesRepository.updateNote).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ enhancedContent: 'Local notes' }),
+    );
+  });
+
+  it('still offers to enable local AI when On-Device notes cannot run yet', async () => {
+    mockConfigState.config.inference = { notes: { mode: 'local' } };
+    mockConfigState.config.appleLocalIntelligenceEnabled = false;
+    mockProcessingModeState.activeMode = 'private';
+    (notesRepository.getNoteById as jest.Mock).mockReturnValue({
+      id: 7,
+      title: 'Planning Sync',
+      content: '',
+      noteType: 'meeting',
+      isPrivate: 0,
+      deletedAt: null,
+      enhancedAtContentHash: null,
+    });
+    (notesRepository.getActions as jest.Mock).mockReturnValue([
+      { id: 1, name: 'Generate Notes', prompt: 'Transform this meeting.', isDefault: 1 },
+    ]);
+    (notesRepository.getSegments as jest.Mock).mockReturnValue([segment('Ship the fix.')]);
+
+    await useNotesStore.getState().runMeetingPipeline(7, 'file://meeting.wav', 2);
+
+    expect(generateLocalMeetingNotes).not.toHaveBeenCalled();
+    expect(mockPromptLocalReasoningFallback).toHaveBeenCalled();
+  });
+
   it('prompts before using cloud fallback when local auto meeting notes are unavailable', async () => {
     mockAuthState.user = signedInUser;
     mockConfigState.config.appleLocalIntelligenceEnabled = false;
@@ -845,6 +1052,56 @@ describe('voice profile enrollment', () => {
     expect(downloadModel).toHaveBeenCalledTimes(1);
   });
 
+  it('shares one model download between callers and is not ready until it finishes', async () => {
+    let finish: () => void = () => {};
+    const downloadModel = jest.fn(() => new Promise<void>((resolve) => (finish = resolve)));
+    mockGetDiarizer.mockReturnValue({
+      diarize: jest.fn(),
+      isModelDownloaded: jest.fn(async () => true),
+      downloadModel,
+    });
+
+    const first = useNotesStore.getState().downloadDiarizerModel();
+    const second = useNotesStore.getState().downloadDiarizerModel();
+    await expect(useNotesStore.getState().isDiarizerModelReady()).resolves.toBe(false);
+    finish();
+    await Promise.all([first, second]);
+
+    expect(downloadModel).toHaveBeenCalledTimes(1);
+    await expect(useNotesStore.getState().isDiarizerModelReady()).resolves.toBe(true);
+  });
+
+  it('waits for a speaker-model download already running before diarizing a meeting', async () => {
+    let finish: () => void = () => {};
+    const diarize = jest.fn(async (_wavUri: string, _count?: number) => ({
+      segments: [],
+      embeddings: {},
+    }));
+    mockGetDiarizer.mockReturnValue({
+      diarize,
+      isModelDownloaded: jest.fn(async () => false),
+      downloadModel: jest.fn(() => new Promise<void>((resolve) => (finish = resolve))),
+    });
+    mockProcessMeeting.mockImplementation(
+      async (_input: unknown, deps: { diarizer: { diarize: typeof diarize } }) => {
+        await deps.diarizer.diarize('file://meeting.wav', 2);
+        return { speakerEmbeddingsByLabel: {} };
+      },
+    );
+
+    const download = useNotesStore.getState().downloadDiarizerModel();
+    expect(useNotesStore.getState().isDiarizerModelDownloading()).toBe(true);
+    const pipeline = useNotesStore.getState().runMeetingPipeline(7, 'file://meeting.wav', 2);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(diarize).not.toHaveBeenCalled();
+
+    finish();
+    await download;
+    await pipeline;
+    expect(diarize).toHaveBeenCalledWith('file://meeting.wav', 2);
+    expect(useNotesStore.getState().isDiarizerModelDownloading()).toBe(false);
+  });
+
   it('deletes the diarizer model through the explicit delete action', async () => {
     const deleteModel = jest.fn(async () => undefined);
     mockGetDiarizer.mockReturnValueOnce({
@@ -1002,6 +1259,219 @@ describe('speaker mutations', () => {
     useNotesStore.getState().rejectSpeakerSuggestion(7, 11);
 
     expect(notesRepository.updateSpeaker).not.toHaveBeenCalled();
+  });
+
+  describe('claimSpeakerAsMe', () => {
+    let profiles: Array<Record<string, unknown>>;
+    let rows: Speaker[];
+    const ownerProfile = {
+      id: 3,
+      displayName: 'Me',
+      isOwner: 1,
+      email: null,
+      embedding: [0.6, 0.8],
+      sampleCount: 1,
+    };
+
+    beforeEach(() => {
+      profiles = [];
+      useNotesStore.setState({
+        meetingSpeakerEmbeddingsByNoteId: { 7: { SPEAKER_01: [3, 4] } },
+      });
+      (notesRepository.getTranscriptionStatus as jest.Mock).mockReturnValue('done');
+      (notesRepository.getSpeakerProfiles as jest.Mock).mockImplementation(() => profiles);
+      rows = [speaker({ id: 10, speakerLabel: 'SPEAKER_01' })];
+      (notesRepository.getSpeakers as jest.Mock).mockImplementation(() => rows);
+      // Like the repository: the claimed speaker comes back locked to the new profile.
+      (notesRepository.createOwnerProfileForSpeaker as jest.Mock).mockImplementation(
+        (speakerId: number, _input: unknown, patch: Partial<Speaker>) => {
+          profiles = [ownerProfile];
+          rows = rows.map((row) =>
+            row.id === speakerId ? { ...row, ...patch, profileId: ownerProfile.id } : row,
+          );
+          return ownerProfile;
+        },
+      );
+    });
+
+    it('creates your profile and links the speaker in a single atomic write', () => {
+      useNotesStore.getState().claimSpeakerAsMe(7, 10);
+
+      expect(notesRepository.createOwnerProfileForSpeaker).toHaveBeenCalledWith(
+        10,
+        {
+          displayName: 'Me',
+          // Stored normalized, like a guided-read sample.
+          embedding: [0.6, 0.8],
+          sampleCount: 1,
+          consentAt: expect.any(String),
+        },
+        {
+          displayName: 'Me',
+          speakerStatus: 'locked',
+          speakerLocked: 1,
+          speakerLockSource: 'user',
+        },
+      );
+      expect(notesRepository.updateSpeaker).not.toHaveBeenCalled();
+      expect(useNotesStore.getState().voiceProfiles).toEqual([ownerProfile]);
+      expect(useNotesStore.getState().transcriptRevision).toBe(1);
+    });
+
+    it('labels another speaker in the same meeting who has your voice', () => {
+      useNotesStore.setState({
+        meetingSpeakerEmbeddingsByNoteId: { 7: { SPEAKER_01: [3, 4], SPEAKER_02: [3, 4] } },
+      });
+      rows = [
+        speaker({ id: 10, speakerLabel: 'SPEAKER_01' }),
+        speaker({ id: 11, speakerLabel: 'SPEAKER_02', sortOrder: 1 }),
+      ];
+
+      useNotesStore.getState().claimSpeakerAsMe(7, 10);
+
+      expect(notesRepository.updateSpeaker).toHaveBeenCalledTimes(1);
+      expect(notesRepository.updateSpeaker).toHaveBeenCalledWith(
+        11,
+        expect.objectContaining({ displayName: 'Me', profileId: 3 }),
+      );
+    });
+
+    it("leaves a speaker linked to someone else's profile, or a rejected suggestion, alone", () => {
+      const bob = { id: 4, displayName: 'Bob', isOwner: 0, email: null, embedding: [0, 1] };
+      profiles = [bob];
+      useNotesStore.setState({
+        meetingSpeakerEmbeddingsByNoteId: {
+          7: { SPEAKER_01: [3, 4], SPEAKER_02: [3, 4], SPEAKER_03: [0, 1] },
+        },
+      });
+      rows = [
+        speaker({ id: 10, speakerLabel: 'SPEAKER_01' }),
+        // Auto-labelled Bob, though the voice matches yours.
+        speaker({
+          id: 11,
+          speakerLabel: 'SPEAKER_02',
+          sortOrder: 1,
+          displayName: 'Bob',
+          profileId: 4,
+          speakerStatus: 'confirmed',
+        }),
+        // You rejected "Bob?" here; claiming must not suggest Bob again.
+        speaker({ id: 12, speakerLabel: 'SPEAKER_03', sortOrder: 2 }),
+      ];
+      (notesRepository.createOwnerProfileForSpeaker as jest.Mock).mockImplementation(
+        (speakerId: number, _input: unknown, patch: Partial<Speaker>) => {
+          profiles = [bob, ownerProfile];
+          rows = rows.map((row) =>
+            row.id === speakerId ? { ...row, ...patch, profileId: ownerProfile.id } : row,
+          );
+          return ownerProfile;
+        },
+      );
+
+      useNotesStore.getState().claimSpeakerAsMe(7, 10);
+
+      expect(notesRepository.updateSpeaker).not.toHaveBeenCalled();
+    });
+
+    it('keeps the claim when labelling the rest of the meeting fails', () => {
+      const failure = new Error('disk full');
+      (notesRepository.updateSpeaker as jest.Mock).mockImplementationOnce(() => {
+        throw failure;
+      });
+      useNotesStore.setState({
+        meetingSpeakerEmbeddingsByNoteId: { 7: { SPEAKER_01: [3, 4], SPEAKER_02: [3, 4] } },
+      });
+      rows = [
+        speaker({ id: 10, speakerLabel: 'SPEAKER_01' }),
+        speaker({ id: 11, speakerLabel: 'SPEAKER_02', sortOrder: 1 }),
+      ];
+
+      expect(() => useNotesStore.getState().claimSpeakerAsMe(7, 10)).not.toThrow();
+
+      expect(useNotesStore.getState().voiceProfiles).toEqual([ownerProfile]);
+      expect(Sentry.captureException).toHaveBeenCalledWith(failure, expect.anything());
+    });
+
+    it('refuses without writing when you already have a profile', () => {
+      profiles = [{ id: 1, isOwner: 1 }];
+
+      expect(() => useNotesStore.getState().claimSpeakerAsMe(7, 10)).toThrow(
+        SpeakerProfileOwnerAlreadyExistsError,
+      );
+      expect(notesRepository.createOwnerProfileForSpeaker).not.toHaveBeenCalled();
+    });
+
+    it('refuses without writing while the meeting is being processed again', () => {
+      (notesRepository.getTranscriptionStatus as jest.Mock).mockReturnValue('diarizing');
+
+      expect(() => useNotesStore.getState().claimSpeakerAsMe(7, 10)).toThrow();
+      expect(notesRepository.createOwnerProfileForSpeaker).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['gone', {}],
+      ['unusable', { 7: { SPEAKER_01: [0, 0] } }],
+    ])('refuses without writing when the meeting sample is %s', (_label, embeddings) => {
+      useNotesStore.setState({ meetingSpeakerEmbeddingsByNoteId: embeddings });
+
+      expect(() => useNotesStore.getState().claimSpeakerAsMe(7, 10)).toThrow();
+      expect(notesRepository.createOwnerProfileForSpeaker).not.toHaveBeenCalled();
+    });
+
+    it('refuses when the speaker is not on the note', () => {
+      expect(() => useNotesStore.getState().claimSpeakerAsMe(7, 99)).toThrow();
+      expect(notesRepository.createOwnerProfileForSpeaker).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('relabelMeetingSpeakers', () => {
+    beforeEach(() => {
+      (notesRepository.getSpeakerProfiles as jest.Mock).mockReturnValue([
+        { id: 3, displayName: 'Me', isOwner: 1, email: null, embedding: [0.6, 0.8] },
+      ]);
+      (notesRepository.getSpeakers as jest.Mock).mockReturnValue([
+        speaker({ id: 10, speakerLabel: 'SPEAKER_01' }),
+      ]);
+    });
+
+    it('labels a meeting still held in memory with a newly added voice', () => {
+      useNotesStore.setState({ meetingSpeakerEmbeddingsByNoteId: { 7: { SPEAKER_01: [3, 4] } } });
+
+      useNotesStore.getState().relabelMeetingSpeakers(7, 3);
+
+      expect(notesRepository.updateSpeaker).toHaveBeenCalledWith(
+        10,
+        expect.objectContaining({ displayName: 'Me', profileId: 3 }),
+      );
+      expect(useNotesStore.getState().transcriptRevision).toBe(1);
+    });
+
+    it('does nothing for a meeting whose samples are gone', () => {
+      useNotesStore.setState({ meetingSpeakerEmbeddingsByNoteId: {} });
+
+      useNotesStore.getState().relabelMeetingSpeakers(7, 3);
+
+      expect(notesRepository.updateSpeaker).not.toHaveBeenCalled();
+      expect(useNotesStore.getState().transcriptRevision).toBe(0);
+    });
+
+    it('writes nothing when the speaker already has the new label', () => {
+      useNotesStore.setState({ meetingSpeakerEmbeddingsByNoteId: { 7: { SPEAKER_01: [3, 4] } } });
+      (notesRepository.getSpeakers as jest.Mock).mockReturnValue([
+        speaker({
+          id: 10,
+          speakerLabel: 'SPEAKER_01',
+          displayName: 'Me',
+          profileId: 3,
+          speakerStatus: 'confirmed',
+        }),
+      ]);
+
+      useNotesStore.getState().relabelMeetingSpeakers(7, 3);
+
+      expect(notesRepository.updateSpeaker).not.toHaveBeenCalled();
+      expect(useNotesStore.getState().transcriptRevision).toBe(0);
+    });
   });
 });
 

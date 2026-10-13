@@ -2,6 +2,7 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { ToneStep } from '../ToneStep';
 
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
+jest.mock('@/sync/syncIdentity', () => ({ hasRealAccountHistory: () => false }));
 jest.mock('react-native-safe-area-context', () => ({ SafeAreaView: require('react-native').View }));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
@@ -112,9 +113,7 @@ it('keeps the intro to the comparison and what live tones need', () => {
   const screen = render(<ToneStep />);
   expect(screen.getByText('Compare the tones')).toBeTruthy();
   expect(screen.getByText('The same lunch invitation, written five different ways.')).toBeTruthy();
-  expect(
-    screen.getByText('Live tones need Cloud, Dictation Cleanup, and an account.'),
-  ).toBeTruthy();
+  expect(screen.getByText('Live tones need Cloud, Text Cleanup, and an account.')).toBeTruthy();
   expect(screen.queryByText(/illustrative/)).toBeNull();
   expect(screen.queryByText(/choose Local/)).toBeNull();
 });

@@ -1,7 +1,7 @@
 import { memo, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Check, Loader2, ShieldCheck, Sparkles, Users, X } from "../icons";
+import { Check, Loader2, Sparkles, Users, X } from "../icons";
 import { useStickToBottom } from "../../hooks/useStickToBottom";
 import { Popover, PopoverTrigger, PopoverContent } from "../ui/popover";
 import { Toggle } from "../ui/toggle";
@@ -847,17 +847,9 @@ export function MeetingTranscriptChat({
     return map;
   }, [speakerProfiles]);
 
-  const consentNotice = (
-    <div className="shrink-0 flex items-center justify-center gap-1 px-4 pt-2 pb-1 text-[10px] text-muted-foreground/70 select-none">
-      <ShieldCheck size={10} className="shrink-0" />
-      <span>{t("notes.speaker.consentNotice")}</span>
-    </div>
-  );
-
   if (!hasContent) {
     return (
       <div className="h-full flex flex-col">
-        {consentNotice}
         <div className="flex-1 flex items-center justify-center px-5">
           <p className="text-xs text-muted-foreground/70 select-none">
             {t("notes.editor.conversationWillAppear")}
@@ -884,9 +876,8 @@ export function MeetingTranscriptChat({
 
   return (
     <div className="h-full flex flex-col">
-      {consentNotice}
       {(isRecording || isDiarizing) && (
-        <div className={cn("shrink-0 px-4 mb-1.5", contentClassName)}>
+        <div className={cn("shrink-0 px-4 pt-2 mb-1.5", contentClassName)}>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 rounded-lg border border-border/70 bg-surface-2/40 text-xs text-foreground">
             <div className="flex items-center gap-1.5 min-w-0">
               {isDiarizing ? (

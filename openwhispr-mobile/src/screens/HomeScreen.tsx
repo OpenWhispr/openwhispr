@@ -1,3 +1,4 @@
+import { getTranscriptionProvider } from '@/lib/inferenceRouting';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Pressable, ScrollView, ActivityIndicator, Alert, StyleSheet } from 'react-native';
 import { Text } from '@/components/ui/Text';
@@ -23,22 +24,13 @@ import { useTranscriptStore } from '@/store/useTranscriptStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { useModelDownloadStore } from '@/store/useModelDownloadStore';
 import { useUsageStore } from '@/store/useUsageStore';
-import { useConfigStore } from '@/store/useConfigStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useHandoffStore } from '@/store/useHandoffStore';
 import { useAppInit } from '@/hooks/useAppInit';
 import { TranscriptionService } from '@/services/transcription/TranscriptionService';
-import {
-  getPrivateModeReadiness,
-  getPrivateModeUnavailableMessage,
-  promptLocalModelFallback,
-} from '@/lib/privateMode';
+import { getPrivateModeReadiness, promptLocalModelFallback } from '@/lib/privateMode';
 import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
-import {
-  accountRequiredForCloud,
-  cloudModeRequiresAccount,
-  showAccountRequiredAlert,
-} from '@/lib/accountAccess';
+import { accountRequiredForCloud, showAccountRequiredAlert } from '@/lib/accountAccess';
 import { isMicPermissionError, isNoSpeechError, showMicPermissionAlert } from '@/lib/permissions';
 import { formatRelativeTime, safeHaptics } from '@/lib/utils';
 import { BRAND, iosColor } from '@/config/colors';
@@ -48,9 +40,11 @@ import { TranscriptModal } from '@/components/features/TranscriptModal';
 import { RecordingOverlay } from '@/components/features/RecordingOverlay';
 import { ParakeetNudgeBanner } from '@/components/features/ParakeetNudgeBanner';
 import { KeyboardFullAccessBanner } from '@/components/features/KeyboardFullAccessBanner';
+import { KeyboardHandoffReturnView } from '@/components/features/KeyboardHandoffReturnView';
+import { returnToHost, selectHandoffView } from '@/lib/handoffReturn';
+import { HardwareKeyboardNudgeBanner } from '@/components/features/HardwareKeyboardNudgeBanner';
 import { SwipeableCard } from '@/components/ui/SwipeableCard';
 import { Glass } from '@/components/ui/Glass';
-import { CloudIcon } from '@/components/ui/CloudIcon';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { DictationModeControl } from '@/components/ui/DictationModeControl';
 import { UsageLimitBanner } from '@/components/ui/UsageMeter';
@@ -127,14 +121,14 @@ export default function HomeScreen() {
   const isCheckingInitialUrl = useHandoffStore((s) => s.isCheckingInitialUrl);
   const handoffNoSpeech = useHandoffStore((s) => s.noSpeechDetected);
   const handoffTranscribing = useHandoffStore((s) => s.isTranscribing);
+  const handoffReturnState = useHandoffStore((s) => s.returnState);
+  const handoffReturnHostName = useHandoffStore((s) => s.returnHostName);
   const [showNoSpeechToast, setShowNoSpeechToast] = useState(false);
   const { register: registerSuperwallGate } = useSuperwallGate();
   const transcripts = useTranscriptStore((state) => state.transcripts);
   const deleteTranscript = useTranscriptStore((state) => state.deleteTranscript);
   const retryTranscript = useTranscriptStore((state) => state.retryTranscript);
   const activeMode = useProcessingModeStore((state) => state.activeMode);
-  const setActiveMode = useProcessingModeStore((state) => state.setActiveMode);
-  const updateConfig = useConfigStore((state) => state.updateConfig);
   const downloadCompletedCount = useModelDownloadStore((state) => state.completedCount);
   const user = useAuthStore((state) => state.user);
   const usage = useUsageStore((state) => state.usage);
@@ -216,15 +210,6 @@ export default function HomeScreen() {
     onUsageLimitReached: handleUsageLimitReached,
   });
 
-  const requireAccountForCloudProcessing = useCallback(
-    (feature: string) => {
-      if (!cloudModeRequiresAccount(activeMode, user)) return false;
-      showAccountRequiredAlert(feature);
-      return true;
-    },
-    [activeMode, user],
-  );
-
   useEffect(() => {
     if (isRecording) {
       setRecordingDuration(0);
@@ -280,8 +265,17 @@ export default function HomeScreen() {
     AppGroupStorage.stopNativeRecording();
   };
 
+  const handleBackToHost = () => {
+    safeHaptics('light');
+    void returnToHost(() => AppGroupStorage.openHostApp());
+  };
+
   const handleRecordPress = async () => {
-    if (!isRecording && requireAccountForCloudProcessing('recording')) return;
+    const recordingProvider = getTranscriptionProvider('dictation');
+    if (!isRecording && recordingProvider === 'cloud' && accountRequiredForCloud(user)) {
+      showAccountRequiredAlert('recording');
+      return;
+    }
 
     if (!isSupported) {
       Alert.alert(
@@ -300,7 +294,7 @@ export default function HomeScreen() {
           await startRecording();
         };
 
-        if (activeMode === 'cloud' && user) {
+        if (recordingProvider === 'cloud' && user) {
           await registerSuperwallGate({
             placement: SUPERWALL_PLACEMENTS.cloudTranscriptionStart,
             params: usage ? buildUsageGateParams(usage) : undefined,
@@ -320,13 +314,17 @@ export default function HomeScreen() {
   };
 
   const handleFileUpload = async () => {
-    if (requireAccountForCloudProcessing('audio uploads')) return;
+    const uploadProvider = getTranscriptionProvider('upload');
+    if (uploadProvider === 'cloud' && accountRequiredForCloud(user)) {
+      showAccountRequiredAlert('audio uploads');
+      return;
+    }
     const beginUpload = async () => {
       await pickAndTranscribeFile();
     };
 
     try {
-      if (activeMode === 'cloud' && user) {
+      if (uploadProvider === 'cloud' && user) {
         await registerSuperwallGate({
           placement: SUPERWALL_PLACEMENTS.audioUploadStart,
           params: usage ? buildUsageGateParams(usage) : undefined,
@@ -342,48 +340,6 @@ export default function HomeScreen() {
     } catch (error) {
       console.error('File upload error:', error);
     }
-  };
-
-  const handleTogglePrivateMode = () => {
-    safeHaptics('light');
-
-    if (isPrivateMode) {
-      if (accountRequiredForCloud(user)) {
-        showAccountRequiredAlert('cloud transcription');
-        return;
-      }
-      setActiveMode('cloud', true);
-      updateConfig({ defaultMode: 'cloud' });
-      showModeToast({
-        name: 'cloud.fill',
-        mdName: 'Cloud',
-        color: 'brand',
-        text: 'Cloud on · higher-quality transcription on our servers',
-      });
-      return;
-    }
-
-    if (localModelStatus === 'unavailable') {
-      Alert.alert('Private Mode Unavailable', getPrivateModeUnavailableMessage());
-      return;
-    }
-
-    if (localModelStatus !== 'ready') {
-      // Model not downloaded yet — send the user to the download screen.
-      // We deliberately do NOT start the download automatically, and we leave
-      // the mode on Cloud until they've downloaded and toggle again.
-      router.push('/(account)/model-download');
-      return;
-    }
-
-    setActiveMode('private', true);
-    updateConfig({ defaultMode: 'private' });
-    showModeToast({
-      name: 'cloud.slash.fill',
-      mdName: 'CloudOff',
-      color: 'tertiaryLabel',
-      text: 'Cloud off · transcribing privately on your device',
-    });
   };
 
   const handleDictationModeChange = (enabled: boolean) => {
@@ -430,7 +386,13 @@ export default function HomeScreen() {
 
   const handleRetryTranscript = async (id: string) => {
     if (retryingTranscriptIds[id]) return;
-    if (requireAccountForCloudProcessing('retrying transcription')) return;
+    if (
+      transcripts.find((transcript) => transcript.id === id)?.provider === 'cloud' &&
+      accountRequiredForCloud(user)
+    ) {
+      showAccountRequiredAlert('retrying transcription');
+      return;
+    }
 
     setRetryingTranscriptIds((current) => ({ ...current, [id]: true }));
     try {
@@ -457,11 +419,32 @@ export default function HomeScreen() {
   }
 
   if (isKeyboardHandoffSession) {
-    if (handoffNoSpeech) {
+    const handoffView = selectHandoffView({
+      noSpeech: handoffNoSpeech,
+      transcribing: handoffTranscribing,
+      returnState: handoffReturnState,
+      returnHostName: handoffReturnHostName,
+    });
+
+    if (handoffView === 'returning' || handoffView === 'back_to_host') {
+      return (
+        <KeyboardHandoffReturnView
+          mode={handoffView}
+          hostName={handoffReturnHostName}
+          onCancel={handleCancelHandoffRecording}
+          onBackToHost={handleBackToHost}
+        />
+      );
+    }
+
+    if (handoffView === 'no_speech') {
       return (
         <View className="flex-1 bg-systemBackground items-center justify-center px-10">
           <SystemIcon name="mic.slash.fill" mdName="MicOff" size={48} color="tertiaryLabel" />
-          <Text className="mt-5 text-2xl font-semibold text-label text-center">
+          <Text
+            accessibilityRole="header"
+            className="mt-5 text-2xl font-semibold text-label text-center"
+          >
             We didn&apos;t catch that
           </Text>
           <Text className="mt-2 text-base text-secondaryLabel text-center">
@@ -488,7 +471,10 @@ export default function HomeScreen() {
         </View>
 
         <View className="items-center px-8 mt-4">
-          <Text className="text-[32px] font-bold text-label leading-[38px] text-center">
+          <Text
+            accessibilityRole="header"
+            className="text-[32px] font-bold text-label leading-[38px] text-center"
+          >
             {transcribing ? 'Almost done…' : 'Swipe back to your app'}
           </Text>
           <Text className="mt-2 text-[15px] text-secondaryLabel leading-6 text-center">
@@ -532,29 +518,26 @@ export default function HomeScreen() {
 
       <View className="px-4" style={{ paddingTop: insets.top + 8 }}>
         <View className="min-h-[44px] flex-row items-center justify-between">
-          <Pressable
-            onPress={handleTogglePrivateMode}
-            accessibilityRole="switch"
-            accessibilityState={{ checked: !isPrivateMode }}
-            accessibilityLabel="Cloud transcription"
-            className="h-9 flex-row items-center rounded-full px-1 active:opacity-80"
-            style={{
-              backgroundColor: isPrivateMode ? '#E3E0DE' : BRAND,
-              boxShadow: '0px 1px 3px rgba(0,0,0,0.18)',
-            }}
-          >
-            {!isPrivateMode && <Text className="ml-2 mr-1 text-xs font-bold text-white">On</Text>}
-            <View className="h-7 w-7 items-center justify-center rounded-full bg-white">
-              <CloudIcon size={16} color={isPrivateMode ? '#8E8E93' : BRAND} off={isPrivateMode} />
-            </View>
-            {isPrivateMode && (
-              <Text className="ml-1 mr-2 text-xs font-bold text-secondaryLabel">Off</Text>
-            )}
-          </Pressable>
+          {/* Private mode is a setting, not a quick switch: Home only shows it's on. */}
+          {isPrivateMode ? (
+            <Pressable
+              onPress={() => router.push('/(account)/ai-models')}
+              accessibilityRole="button"
+              accessibilityLabel="Private mode is on"
+              accessibilityHint="Opens AI Models."
+              className="h-9 flex-row items-center gap-1.5 rounded-full bg-tertiarySystemFill px-3 active:opacity-70"
+            >
+              <SystemIcon name="lock.fill" mdName="Lock" size={13} color="secondaryLabel" />
+              <Text className="text-xs font-bold text-secondaryLabel">Private</Text>
+            </Pressable>
+          ) : (
+            <View />
+          )}
           <DictationModeControl onModeChange={handleDictationModeChange} />
         </View>
         <KeyboardFullAccessBanner />
-        {!isPrivateMode ? (
+        <HardwareKeyboardNudgeBanner />
+        {activeMode === 'cloud' ? (
           <UsageLimitBanner usage={usage} onPress={handleUsageWarningPress} />
         ) : null}
         {isPrivateMode ? (

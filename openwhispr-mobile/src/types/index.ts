@@ -1,12 +1,25 @@
-export type ProcessingMode = 'cloud' | 'private';
-export type TranscriptionProvider = 'local' | 'cloud';
+import type {
+  InferenceScope,
+  InferenceSelection,
+  InferenceRoute,
+  MobileInferenceScope,
+} from '@/lib/mobileProviders';
+
+export type ProcessingMode = 'cloud' | 'private' | 'providers';
+export type TranscriptionProvider = 'local' | 'cloud' | 'byok';
 export type KeyboardTone = 'default' | 'formal' | 'casual' | 'very_casual' | 'excited';
-// Currently only the two wired modes are exposed. When SOON modes (providers,
-// self-hosted, enterprise) get wired in, widen this union and add matching
-// entries to `BASE` + `SCOPE_MODES` in lib/inferenceModes.ts.
-export type InferenceMode = 'openwhispr' | 'local';
+export type InferenceMode = 'openwhispr' | 'local' | 'providers';
 
 export interface UserConfig {
+  inference?: Partial<Record<InferenceScope, InferenceSelection>>;
+  rememberedInference?: Partial<Record<InferenceScope, Record<string, InferenceSelection>>>;
+  // Workflows held on the previous mode when dictation moved to Bring Your Own Key,
+  // as opposed to ones the user chose; only these are released when dictation leaves it.
+  pinnedInference?: MobileInferenceScope[];
+  // Set while Private mode is on after being turned on from Bring Your Own Key, so turning it
+  // off goes back to the last provider rather than to Cloud, with the workflows it held
+  // (pinnedInference) held on the same selections again.
+  privateModeReturn?: { pinned: Partial<Record<MobileInferenceScope, InferenceSelection>> };
   defaultMode: ProcessingMode;
   cleanupEnabled?: boolean;
   autoGenerateNoteTitle?: boolean;
@@ -15,30 +28,45 @@ export interface UserConfig {
   languages?: string[];
   cloudBackupEnabled?: boolean;
   usageAnalyticsEnabled?: boolean;
-  voiceProfilePromptDismissedAt?: string;
+  // Its own key, so dismissing the old notes-list voice card doesn't also hide this.
+  voiceSetupBannerDismissedAt?: string;
   // One-time Parakeet nudges on the Home banner: pick a language to unlock the
   // faster on-device model / download the faster model for a qualifying language.
   parakeetAutoLanguageNudgeDismissedAt?: string;
   parakeetUpgradeNudgeDismissedAt?: string;
+  // One-time Home nudge toward the hardware-keyboard dictation shortcut, shown
+  // the first time a hardware keyboard is attached.
+  hardwareKeyboardNudgeDismissedAt?: string;
   keyboardTone?: KeyboardTone;
   // Apple Foundation Models local generation for notes. Default on; users can
   // disable it from AI Models.
   appleLocalIntelligenceEnabled?: boolean;
   // Dictation agent (cloud-only, default on)
   dictationAgentEnabled?: boolean;
+  // Note chat, which once shared dictationAgentEnabled's switch and follows it until set.
+  noteChatEnabled?: boolean;
   dictationAgentName?: string;
   dictationAgentShareContext?: boolean;
 }
 
 export function inferenceToProcessingMode(mode: InferenceMode): ProcessingMode {
-  return mode === 'local' ? 'private' : 'cloud';
+  return mode === 'local' ? 'private' : mode === 'providers' ? 'providers' : 'cloud';
 }
 
 export function processingToInferenceMode(mode: ProcessingMode): InferenceMode {
-  return mode === 'private' ? 'local' : 'openwhispr';
+  return mode === 'private' ? 'local' : mode === 'providers' ? 'providers' : 'openwhispr';
 }
 
-export interface Transcript {
+export interface TextInferenceSnapshot {
+  cleanupRoute?: InferenceRoute;
+  agentRoute?: InferenceRoute;
+  cleanupUnavailable?: string;
+  agentUnavailable?: string;
+}
+
+export interface Transcript extends TextInferenceSnapshot {
+  cleanupWarning?: string;
+  inferenceRoute?: Extract<InferenceRoute, { mode: 'providers' }>;
   id: string;
   text: string;
   originalText?: string;
@@ -59,6 +87,8 @@ export interface Transcript {
 }
 
 export interface ReasoningRequest {
+  inferenceScope?: InferenceScope;
+  inferenceRoute?: InferenceRoute;
   text: string;
   model?: string;
   systemPrompt?: string;
@@ -98,12 +128,18 @@ export interface ReasoningResponse {
 export interface ReasoningRoutingOptions {
   isPrivateNote?: boolean;
   allowCloudFallback?: boolean;
+  // The provider route is the one the user saved for this workflow, which is their
+  // consent to send it this content, even in On-Device mode.
+  sendToChosenProvider?: boolean;
 }
 
 export type LocalReasoningStatus =
   | 'ready'
   | 'disabled'
   | 'unavailable'
+  // This iPhone can never run Apple Intelligence, or not on its iOS version.
+  | 'unsupportedDevice'
+  | 'unsupportedOS'
   | 'appleIntelligenceOff'
   | 'modelNotReady';
 
@@ -135,7 +171,8 @@ export interface StructuredMeetingNotes {
   followUps: string[];
 }
 
-export interface TranscriptionRequest {
+export interface TranscriptionRequest extends TextInferenceSnapshot {
+  inferenceRoute?: Extract<InferenceRoute, { mode: 'providers' }>;
   audioUri: string;
   provider: TranscriptionProvider;
   language?: string;
@@ -150,7 +187,9 @@ export interface TranscriptionRequest {
   timeoutSeconds?: number;
 }
 
-export interface TranscriptionResponse {
+export interface TranscriptionResponse extends TextInferenceSnapshot {
+  cleanupWarning?: string;
+  inferenceRoute?: Extract<InferenceRoute, { mode: 'providers' }>;
   text: string;
   originalText?: string;
   duration: number;

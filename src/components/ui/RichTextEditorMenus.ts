@@ -22,6 +22,10 @@ export const editorHasFocus = (view: EditorView) =>
  */
 export function useHideOnFocusLeave(editor: Editor, pluginKeys: readonly string[]) {
   useEffect(() => {
+    // useEditor can hand over an editor it already destroyed: one it created while
+    // rendering, whose effect didn't run within 1 ms (a note opened by an IPC
+    // event). It re-renders with a new one, and this effect runs again for that.
+    if (editor.isDestroyed) return;
     const scroller = editor.view.dom.parentElement;
     if (!scroller) return;
     const onFocusOut = (event: FocusEvent) => {

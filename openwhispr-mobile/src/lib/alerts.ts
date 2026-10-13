@@ -30,7 +30,7 @@ export function confirmDestructive(
 export function confirmAccountDeletion(deleteAccount: () => Promise<void>): void {
   confirmDestructive(
     'Delete Account',
-    'This permanently deletes your OpenWhispr account and personal cloud data. Notes in shared spaces stay with your team. Local notes on this device stay here unless you delete the app.',
+    'This permanently deletes your OpenWhispr account and personal cloud data, and removes provider keys saved on this device. Notes in shared spaces stay with your team. Local notes on this device stay here unless you delete the app.',
     async () => {
       try {
         await deleteAccount();

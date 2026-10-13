@@ -11,7 +11,6 @@ import type { ProcessingMode } from '@/types';
 
 export type OnboardingStepId =
   | 'get-started'
-  | 'security-first'
   | 'welcome'
   | 'microphone'
   | 'keyboard-intro'
@@ -30,7 +29,6 @@ export type OnboardingStepId =
 
 export const STEP_ORDER: readonly OnboardingStepId[] = [
   'get-started',
-  'security-first',
   'welcome',
   'microphone',
   'keyboard-intro',
@@ -50,7 +48,6 @@ export const STEP_ORDER: readonly OnboardingStepId[] = [
 
 const UNCOUNTED_STEPS = new Set<OnboardingStepId>([
   'get-started',
-  'security-first',
   'welcome',
   'paywall',
   'create-account',
@@ -129,6 +126,8 @@ interface OnboardingStore {
   paywallHandled: boolean;
   paywallNextStep: PaywallNextStep;
   tutorialCompleted: boolean;
+  // Set by Reset onboarding: steps that skip themselves when setup is already done show instead.
+  replaying: boolean;
   keyboardInstalled: boolean;
   trackingAuthorizationRequestAttempted: boolean;
   permissionsGranted: { microphone: boolean; notifications: boolean };
@@ -155,6 +154,7 @@ function snapshot(state: OnboardingStore): OnboardingProgress {
     paywallHandled: state.paywallHandled,
     paywallNextStep: state.paywallNextStep,
     tutorialCompleted: state.tutorialCompleted,
+    replaying: state.replaying,
     keyboardInstalled: state.keyboardInstalled,
     permissionsGranted: state.permissionsGranted,
   };
@@ -186,6 +186,7 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => {
     paywallHandled: false,
     paywallNextStep: 'language',
     tutorialCompleted: false,
+    replaying: false,
     keyboardInstalled: false,
     trackingAuthorizationRequestAttempted: false,
     permissionsGranted: { microphone: false, notifications: false },
@@ -200,8 +201,10 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => {
         return;
       }
       const progress = await OnboardingService.getProgress();
-      let step = STEP_ORDER.includes(progress.step as OnboardingStepId)
-        ? (progress.step as OnboardingStepId)
+      // The security screen was folded into welcome; resume there rather than restarting setup.
+      const savedStep = progress.step === 'security-first' ? 'welcome' : progress.step;
+      let step = STEP_ORDER.includes(savedStep as OnboardingStepId)
+        ? (savedStep as OnboardingStepId)
         : FIRST_ONBOARDING_STEP;
       const legacy = (progress.version ?? 1) < 2;
       // Version 2 used this identifier for the combined agent/tone preview.
@@ -216,6 +219,7 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => {
           ? progress.paywallNextStep
           : 'language',
         tutorialCompleted: progress.tutorialCompleted === true,
+        replaying: progress.replaying === true,
         keyboardInstalled: progress.keyboardInstalled,
         trackingAuthorizationRequestAttempted,
         permissionsGranted: progress.permissionsGranted,
@@ -308,10 +312,13 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => {
         paywallHandled: false,
         paywallNextStep: 'language',
         tutorialCompleted: false,
+        replaying: true,
         keyboardInstalled: false,
         trackingAuthorizationRequestAttempted: attempted,
         permissionsGranted: { microphone: false, notifications: false },
       });
+      // The replay has to outlive the relaunch Reset asks for.
+      await OnboardingService.setProgress(snapshot(get()));
     },
   };
 });

@@ -1,3 +1,5 @@
+import { withActiveProviderJob } from './providerJobActivity';
+import { snapshotTextInference } from './inferenceRouting';
 import {
   TranscriptionService,
   isLocalModelMissingError,
@@ -9,6 +11,7 @@ import { getActiveCustomCleanupPrompt } from '@/store/useCustomPromptsStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { useSnippetsStore } from '@/store/useSnippetsStore';
 import { requiresRealAccount } from './accountAccess';
+import { cleanupSavedOnDevice } from './aiWorkflows';
 import { cleanupTranscript, AGENT_ACTION_TIMEOUT_MS } from './cleanupTranscript';
 import {
   getDictationAgentName,
@@ -30,7 +33,7 @@ export interface DictationProcessingLifecycle {
   onCleanupDone?: (result: TranscriptionResponse) => void;
   onRawTranscript?: (text: string, result: TranscriptionResponse) => void;
   onFusedCleanupFallback?: (error: unknown) => void;
-  // Polled after transcription completes, before the (cloud-only) cleanup pass.
+  // Polled after transcription completes, before the cleanup pass.
   // When it returns true the cleanup call is skipped and the raw transcript is
   // returned — the caller discards it. Lets a keyboard cancel avoid paying for
   // cleanup of a result the user already abandoned.
@@ -46,7 +49,7 @@ export interface DictationProcessingResult {
 }
 
 // The transcript before any cleanup pass: returned for local/private transcripts
-// (cleanup is cloud-only) and when a cancel short-circuits cleanup.
+// that no chosen cleanup will clean, and when a cancel short-circuits cleanup.
 function rawTranscriptResult(transcription: TranscriptionResponse): DictationProcessingResult {
   const originalText = transcription.originalText || transcription.text;
   return {
@@ -56,6 +59,16 @@ function rawTranscriptResult(transcription: TranscriptionResponse): DictationPro
     cleanupApplied: false,
     fusedCleanup: false,
   };
+}
+
+// The pinned route decides where cleanup runs. A local job pins a local one unless the
+// user saved a cleanup provider, which is only pinned from that saved choice; whether
+// On-Device cleanup runs is read live, like cleanupEnabled.
+function cleansLocalTranscript(request: TranscriptionRequest): boolean {
+  if (request.cleanupRoute?.mode === 'providers') return true;
+  return (
+    request.cleanupRoute?.mode === 'local' && cleanupSavedOnDevice(useConfigStore.getState().config)
+  );
 }
 
 function cleanupToneForRequest(request: TranscriptionRequest): KeyboardTone | undefined {
@@ -77,11 +90,17 @@ function cleanupContextForRequest(
 // oversized audio, rate limits (4xx), a missing on-device model, no speech, or
 // the fused-cleanup-unavailable signal (which must fall back, not retry) — won't
 // recover from a retry and have to surface immediately.
-function isRetryableTranscriptionError(error: unknown): boolean {
+export function isRetryableTranscriptionError(error: unknown): boolean {
+  if (error instanceof Error && error.name === 'AbortError') return false;
   if (TranscriptionService.isFusedCleanupUnavailableError(error)) return false;
   if (isLocalModelMissingError(error)) return false;
   if (isNoSpeechError(error)) return false;
   if (isUsageLimitError(error)) return false;
+
+  if (typeof error === 'object' && error !== null && 'retryable' in error) {
+    const retryable = (error as { retryable?: unknown }).retryable;
+    if (typeof retryable === 'boolean') return retryable;
+  }
 
   const status =
     typeof error === 'object' && error !== null && 'status' in error
@@ -110,7 +129,11 @@ function transcriptionRetry(lifecycle: DictationProcessingLifecycle): RetryOptio
 }
 
 async function shouldAttemptFusedCloudCleanup(request: TranscriptionRequest): Promise<boolean> {
-  if (request.provider !== 'cloud') {
+  if (
+    request.provider !== 'cloud' ||
+    request.cleanupRoute?.mode !== 'openwhispr' ||
+    request.cleanupUnavailable
+  ) {
     return false;
   }
   // A non-default keyboard tone must use the serial path: tone is injected via
@@ -164,24 +187,31 @@ async function runSerialTranscribeAndCleanup(
   const originalText = transcription.text;
   lifecycle.onRawTranscript?.(originalText, transcription);
 
-  // Cleanup runs only when the transcription itself went to the cloud.
-  // Local/private transcripts must never leave the device — not even for the
-  // cleanup pass. (transcription.provider, not request.provider, so the
-  // local-model-missing → cloud fallback still gets cleaned.)
-  if (transcription.provider !== 'cloud') {
+  // Local/private transcripts leave the device only for the cleanup provider the
+  // user saved; otherwise they are cleaned by On-Device cleanup or not at all.
+  if (transcription.provider === 'local' && !cleansLocalTranscript(request)) {
     return rawTranscriptResult(transcription);
   }
 
-  // Cancelled while transcribing: skip the cloud cleanup call entirely. The
-  // caller discards this result, so cleaning it would only waste cloud spend.
+  // Cancelled while transcribing: skip the cleanup call entirely. The
+  // caller discards this result, so cleaning it would only waste the work.
   if (lifecycle.shouldCancel?.()) {
     return rawTranscriptResult(transcription);
   }
 
+  let cleanupWarning: string | undefined;
   lifecycle.onStage?.('cleaning', { fusedCleanup: false });
   // Tone applies only to keyboard dictation; snippet triggers to dictation
   // contexts (recording/keyboard) — never to file uploads.
   const finalText = await cleanupTranscript(originalText, {
+    inferenceRoute: request.cleanupRoute,
+    agentRoute: request.agentRoute,
+    cleanupUnavailable: request.cleanupUnavailable,
+    agentUnavailable: request.agentUnavailable,
+    requireProvider: transcription.provider === 'byok',
+    onSkipped: (message) => {
+      cleanupWarning = message;
+    },
     tone: cleanupToneForRequest(request),
     includeSnippetTriggers: isDictationContext(request.requestContext),
     context: cleanupContextForRequest(request.requestContext),
@@ -189,6 +219,7 @@ async function runSerialTranscribeAndCleanup(
   const cleanupApplied = finalText !== originalText;
   const cleanedTranscription: TranscriptionResponse = {
     ...transcription,
+    cleanupWarning,
     text: finalText,
     originalText,
     cleanupApplied,
@@ -211,9 +242,10 @@ async function runSerialTranscribeAndCleanup(
 // so Action Mode fires. Returns the action text, or undefined on no-op/failure.
 async function maybeRunAgentActionOnFusedResult(
   rawText: string,
-  requestContext: TranscriptionRequest['requestContext'],
+  request: TranscriptionRequest,
+  onSkipped: (reason: string) => void,
 ): Promise<string | undefined> {
-  if (!isDictationContext(requestContext)) return undefined;
+  if (!isDictationContext(request.requestContext)) return undefined;
 
   const cfg = useConfigStore.getState().config;
   const activeMode = useProcessingModeStore.getState().activeMode;
@@ -223,15 +255,33 @@ async function maybeRunAgentActionOnFusedResult(
   if (!detectAgentMention(rawText, agentName)) return undefined;
 
   try {
+    if (request.agentUnavailable) {
+      onSkipped(request.agentUnavailable);
+      return undefined;
+    }
+    // Same rule as cleanupTranscript: a Cloud agent route never takes the
+    // privacy hint, which would make ReasoningService demand local reasoning.
+    const agentMode = request.agentRoute?.mode;
+    const routing =
+      agentMode === 'providers' || agentMode === 'local'
+        ? { isPrivateNote: useProcessingModeStore.getState().activeMode === 'private' }
+        : undefined;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), AGENT_ACTION_TIMEOUT_MS);
     try {
       const response = await ReasoningService.processText({
         text: rawText,
+        inferenceScope: 'agent',
+        ...(routing ? { routing } : {}),
+        inferenceRoute: request.agentRoute,
         agentName,
         timeoutMs: AGENT_ACTION_TIMEOUT_MS,
         signal: controller.signal,
       });
+      if (!response.text.trim()) {
+        onSkipped('The voice assistant returned no text. Your transcript is saved.');
+        return undefined;
+      }
       return response.text;
     } finally {
       clearTimeout(timeout);
@@ -239,7 +289,9 @@ async function maybeRunAgentActionOnFusedResult(
   } catch (err) {
     // On failure, the fused text (already cleaned) is used — same failure
     // semantics as desktop: raw/pre-existing text inserts on agent error.
-    console.warn('[transcribeAndCleanup] agent action call failed, using fused text:', err);
+    onSkipped('The voice assistant failed. Your raw transcript is saved.');
+    if (request.agentRoute?.mode !== 'providers')
+      console.warn('[transcribeAndCleanup] agent action call failed, using fused text:', err);
     return undefined;
   }
 }
@@ -260,13 +312,19 @@ async function runTranscribeAndCleanup(
       const originalText = transcription.originalText || transcription.text;
       lifecycle.onRawTranscript?.(originalText, transcription);
       if (transcription.cleanupApplied) {
+        if (lifecycle.shouldCancel?.()) return rawTranscriptResult(transcription);
+        let cleanupWarning: string | undefined;
         const fusedText = await maybeRunAgentActionOnFusedResult(
           originalText,
-          request.requestContext,
+          request,
+          (reason) => {
+            cleanupWarning = reason;
+          },
         );
         const finalFusedText = fusedText ?? transcription.text;
         const fusedTranscription: TranscriptionResponse = {
           ...transcription,
+          cleanupWarning,
           text: finalFusedText,
         };
         const result: DictationProcessingResult = {
@@ -287,13 +345,21 @@ async function runTranscribeAndCleanup(
       }
 
       lifecycle.onStage?.('cleaning', { fusedCleanup: false });
+      let cleanupWarning: string | undefined;
       const finalText = await cleanupTranscript(originalText, {
+        onSkipped: (reason): void => {
+          cleanupWarning = reason;
+        },
+        inferenceRoute: request.cleanupRoute,
+        agentRoute: request.agentRoute,
+        agentUnavailable: request.agentUnavailable,
         tone: cleanupToneForRequest(request),
         includeSnippetTriggers: isDictationContext(request.requestContext),
         context: cleanupContextForRequest(request.requestContext),
       });
       const cleanedTranscription: TranscriptionResponse = {
         ...transcription,
+        cleanupWarning,
         text: finalText,
         originalText,
         cleanupApplied: finalText !== originalText,
@@ -323,11 +389,32 @@ async function runTranscribeAndCleanup(
 // mirrored transcription.text — for dictation contexts only (`recording` /
 // `keyboard`); `file` uploads are left untouched, matching desktop. `originalText`
 // stays the raw, unexpanded transcript.
-export async function transcribeAndCleanup(
+async function processTranscriptionJob(
   request: TranscriptionRequest,
   lifecycle: DictationProcessingLifecycle = {},
 ): Promise<DictationProcessingResult> {
-  const result = await runTranscribeAndCleanup(request, lifecycle);
+  const captured = snapshotTextInference(request.provider);
+  const pinnedRequest: TranscriptionRequest = {
+    ...request,
+    cleanupRoute: request.cleanupRoute ?? captured.cleanupRoute,
+    agentRoute: request.agentRoute ?? captured.agentRoute,
+    cleanupUnavailable:
+      request.cleanupUnavailable ??
+      (request.cleanupRoute ? undefined : captured.cleanupUnavailable),
+    agentUnavailable:
+      request.agentUnavailable ?? (request.agentRoute ? undefined : captured.agentUnavailable),
+  };
+  if (request.provider === 'byok' && !request.inferenceRoute) {
+    throw new Error('The original provider route is unavailable. Start a new transcription.');
+  }
+  const result = await runTranscribeAndCleanup(pinnedRequest, lifecycle);
+  result.transcription = {
+    ...result.transcription,
+    cleanupRoute: pinnedRequest.cleanupRoute,
+    agentRoute: pinnedRequest.agentRoute,
+    cleanupUnavailable: pinnedRequest.cleanupUnavailable,
+    agentUnavailable: pinnedRequest.agentUnavailable,
+  };
   if (!isDictationContext(request.requestContext)) return result;
 
   const snippetState = useSnippetsStore.getState();
@@ -341,4 +428,14 @@ export async function transcribeAndCleanup(
     text: expanded,
     transcription: { ...result.transcription, text: expanded },
   };
+}
+
+export async function transcribeAndCleanup(
+  request: TranscriptionRequest,
+  lifecycle: DictationProcessingLifecycle = {},
+): Promise<DictationProcessingResult> {
+  return withActiveProviderJob(
+    request.provider === 'byok' ? (request.jobId ?? request.clientTranscriptionId) : undefined,
+    () => processTranscriptionJob(request, lifecycle),
+  );
 }

@@ -605,8 +605,12 @@ class ModelManager {
     // exact prompt. The MIN_OUTPUT_TOKENS floor below already keeps the prompt
     // clear of the edge by the same margin, so charging it twice would only
     // shorten the answer.
+    // A caller that refuses window clips still gets no partial answer: a reply
+    // that fills the trimmed allowance is refused after inference.
+    const acceptsShorterOutput =
+      !options.requireCompleteOutput || options.refuseClippedByWindow === true;
     const affordableOutput = nowUsable - exactTokens;
-    if (!options.requireCompleteOutput && affordableOutput >= MIN_OUTPUT_TOKENS) {
+    if (acceptsShorterOutput && affordableOutput >= MIN_OUTPUT_TOKENS) {
       debugLogger.info("Trimming the output allowance to fit the context window", {
         model: modelInfo.model.id,
         requested: maxTokens,
@@ -833,6 +837,7 @@ class ModelManager {
         max_tokens: grantedMaxTokens,
         disableThinking: options.disableThinking,
         requireCompleteOutput: options.requireCompleteOutput || refuseWindowClip,
+        responseFormat: options.responseFormat,
       });
 
       const totalTime = Date.now() - startTime;
@@ -858,7 +863,11 @@ class ModelManager {
       }
       // A typed failure (a context overflow, say) must keep its identity, or
       // the renderer cannot translate it and the user sees raw server text.
-      if (error.code === "CONTEXT_TOO_LARGE" || error.code === "OUTPUT_TRUNCATED") {
+      if (
+        ["CONTEXT_TOO_LARGE", "OUTPUT_TRUNCATED", "OUTPUT_COMPLETION_UNVERIFIED"].includes(
+          error.code
+        )
+      ) {
         throw new ModelError(error.message, error.code, {
           modelId,
           modelName: modelInfo.model.name,

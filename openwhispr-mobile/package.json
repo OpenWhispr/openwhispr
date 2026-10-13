@@ -12,6 +12,7 @@
     "prebuild:production": "OPENWHISPR_APP_ENV=production expo prebuild",
     "web": "expo start --web",
     "build:ios-return-map": "node scripts/build-ios-return-map.mjs",
+    "download:brand-fonts": "node ../scripts/download-brand-fonts.js --output-dir assets/fonts/yowza",
     "format": "prettier --check \"**/*.{js,jsx,ts,tsx,json,md}\"",
     "format:write": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\"",
     "lint": "eslint \"**/*.{js,jsx,ts,tsx}\"",
@@ -21,8 +22,9 @@
     "clean": "npm run format && npm run lint && npm run typecheck",
     "pretest": "npm rebuild better-sqlite3",
     "test": "jest",
+    "test:security": "node --test scripts/__tests__/node-forge.test.js",
     "test:watch": "jest --watch",
-    "postinstall": "patch-package",
+    "postinstall": "patch-package --error-on-fail && npm run test:security && npm run download:brand-fonts",
     "eas-build-pre-install": "bundle install"
   },
   "engines": {
@@ -74,7 +76,7 @@
     "expo-superwall": "1.2.0",
     "expo-symbols": "~55.0.9",
     "expo-tracking-transparency": "~55.0.18",
-    "expo-updates": "~55.0.31",
+    "expo-updates": "~55.0.33",
     "expo-video": "~55.0.21",
     "expo-web-browser": "~55.0.20",
     "lucide-react-native": "^0.545.0",
@@ -86,7 +88,7 @@
     "react-native-appsflyer": "^7.0.2",
     "react-native-css-interop": "^0.2.1",
     "react-native-gesture-handler": "~2.30.0",
-    "react-native-purchases": "^10.4.1",
+    "react-native-purchases": "^10.10.0",
     "react-native-reanimated": "4.2.1",
     "react-native-safe-area-context": "~5.6.2",
     "react-native-screens": "~4.23.0",
@@ -129,11 +131,14 @@
     },
     "@typescript-eslint/typescript-estree": {
       "minimatch": {
-        "brace-expansion": "2.1.4"
+        "brace-expansion": "2.1.7"
       }
     },
     "postcss": "8.5.28",
-    "@better-auth/core": "1.6.22"
+    "@better-auth/core": "1.6.22",
+    "xcode": {
+      "uuid": "11.1.1"
+    }
   },
   "private": true
 }

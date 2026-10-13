@@ -1,6 +1,7 @@
 import ExpoModulesCore
 import UIKit
 import AVFoundation
+import GameController
 
 public class AppGroupStorageModule: Module {
   private var appBundleId: String {
@@ -11,6 +12,7 @@ public class AppGroupStorageModule: Module {
   }
   private let stopRequestedKey = "keyboard_stop_requested"
   private let stopRequestedAtMsKey = "keyboard_stop_requested_at_ms"
+  private let hotkeyJsReadyAtMsKey = "hotkey_js_ready_at_ms"
   private let transcriptionStatusKey = "keyboard_transcription_status"
   private let transcriptionErrorKey = "keyboard_transcription_error"
   private let transcriptionStatusUpdatedAtMsKey = "keyboard_transcription_status_updated_at_ms"
@@ -45,49 +47,6 @@ public class AppGroupStorageModule: Module {
   private static var darwinAgentActionNotificationName: String {
     "\(notificationPrefix).agentAction"
   }
-  private static let hostBundleFallbackUrls: [String: String] = [
-    "com.whatsapp.WhatsApp": "whatsapp://send",
-    "net.whatsapp.WhatsApp": "whatsapp://send",
-    "net.whatsapp.WhatsAppSMB": "whatsapp-business://",
-    "com.burbn.instagram": "instagram://",
-    "com.atebits.Tweetie2": "twitter://",
-    "com.facebook.Facebook": "fb://",
-    "com.facebook.Messenger": "fb-messenger://",
-    "com.tinyspeck.chatlyio": "slack://",
-    "com.skype.skype": "skype://",
-    "ph.telegra.Telegraph": "tg://",
-    "org.whispersystems.signal": "sgnl://",
-    "com.viber": "viber://",
-    "jp.naver.line": "line://",
-    "com.google.Gmail": "googlegmail://",
-    "com.google.Docs": "googledocs://",
-    "com.microsoft.Office.Outlook": "ms-outlook://",
-    "com.microsoft.skype.teams": "msteams://",
-    "com.apple.mobilemail": "message://",
-    "com.apple.MobileSMS": "sms://",
-    "com.apple.mobilenotes": "mobilenotes://",
-    "com.microsoft.teams": "msteams://",
-    "notion.id": "notion://",
-    "com.discord.Discord": "discord://",
-    "com.linkedin.LinkedIn": "linkedin://",
-    "com.reddit.Reddit": "reddit://",
-    "com.hammerandchisel.discord": "discord://",
-    "us.zoom.videomeetings": "zoomus://",
-    "com.openai.chat": "chatgpt://",
-    "com.google.chrome.ios": "googlechrome://",
-    "com.apple.mobilesafari": "x-web-search://",
-    "com.zhiliaoapp.musically": "snssdk1128://",
-    "com.snapchat.snapchat": "snapchat://",
-    "com.toyopagroup.picaboo": "snapchat://"
-  ]
-  private static let normalizedHostBundleFallbackUrls: [String: String] = {
-    var normalized: [String: String] = [:]
-    for (bundle, url) in hostBundleFallbackUrls {
-      normalized[bundle.lowercased()] = url
-    }
-    return normalized
-  }()
-
   private let audioStateLock = NSLock()
   // Serializes session/engine lifecycle (start/stop/arm/release/rebuild).
   // startNativeRecording runs on the JS thread while the foreground re-arm and
@@ -122,6 +81,7 @@ public class AppGroupStorageModule: Module {
   private let warmMicIdleTimeoutSeconds: TimeInterval = 10 * 60  // 10 min, tunable (spec §3)
   private let dictationModeEnabledKey = "dictation_mode_enabled"
   private var backgroundTaskId: UIBackgroundTaskIdentifier = .invalid
+  private var hardwareKeyboardObserverTokens: [NSObjectProtocol] = []
 
   private var isObservingStopNotification: Bool = false
   private var isObservingStartNotification: Bool = false
@@ -137,9 +97,10 @@ public class AppGroupStorageModule: Module {
   private var foregroundHeartbeatTimer: Timer?
   private let containingAppForegroundKey = "containing_app_foreground_at_ms"
 
-  private var returnNavigationInFlight: Bool = false
-  private var lastReturnAttemptUrl: String?
-  private var lastReturnAttemptAt: Date?
+  private let returnAttemptGate = ReturnAttemptGate()
+  // The host the last return resolved, kept for the "Back to <App>" button:
+  // the extension keys are cleared on read and the observed host goes stale.
+  private var lastReturnTarget: ReturnTarget?
 
   public func definition() -> ModuleDefinition {
     Name("AppGroupStorage")
@@ -149,7 +110,8 @@ public class AppGroupStorageModule: Module {
       "onRecordingError",
       "onBackgroundRecordingStarted",
       "onKeyboardStatusChanged",
-      "onAgentAction"
+      "onAgentAction",
+      "onHardwareKeyboardChanged"
     )
 
     OnCreate {
@@ -161,6 +123,7 @@ public class AppGroupStorageModule: Module {
       self.addForegroundObserver()
       self.addBackgroundObserver()
       self.addAudioSessionObservers()
+      self.addHardwareKeyboardObservers()
       DispatchQueue.main.async {
         if UIApplication.shared.applicationState == .active {
           self.startForegroundHeartbeat()
@@ -228,6 +191,23 @@ public class AppGroupStorageModule: Module {
       }
     }
 
+    // Called by useKeyboardHandoff once its recording listeners are subscribed.
+    // The hotkey's cold start (plugins/hotkey-dictation) waits for this stamp, and
+    // only trusts one carrying this process's pid: a crash skips the hook's
+    // cleanup, and the next launch's intent can read before OnCreate clears it.
+    Function("markHotkeyJsReady") { () -> Void in
+      guard let defaults = UserDefaults(suiteName: self.appGroupId) else { return }
+      let nowMs = Int(Date().timeIntervalSince1970 * 1000)
+      defaults.set("\(getpid()):\(nowMs)", forKey: self.hotkeyJsReadyAtMsKey)
+      defaults.synchronize()
+    }
+
+    // Drives the one-time "Using a keyboard?" nudge toward the hardware-keyboard
+    // dictation shortcut (plugins/hotkey-dictation).
+    Function("isHardwareKeyboardConnected") { () -> Bool in
+      return GCKeyboard.coalesced != nil
+    }
+
     Function("getActiveInputModes") { () -> [String] in
       // Reads the user's currently installed iOS keyboards. Each returned
       // tag looks like "en-US", "he-IL", "emoji", etc. Used by the
@@ -237,13 +217,21 @@ public class AppGroupStorageModule: Module {
       return modes.compactMap { $0.primaryLanguage }
     }
 
-    Function("returnToPreviousApp") { () -> Void in
+    AsyncFunction("returnToPreviousApp") { (promise: Promise) in
       self.logMarker("returnToPreviousApp.invoked")
+      let invokedAt = Date()
       DispatchQueue.main.async {
-        // On a cold launch UIApplication.open can fail while the app is still
-        // transitioning to active; a couple of short retries covers that
-        // window. Retrying a failed open is safe — nothing happened.
-        self.navigateBackToPreviousApp(maxRetries: 2)
+        self.returnToHost(invokedAt: invokedAt) { outcome in
+          promise.resolve(outcome.payload)
+        }
+      }
+    }
+
+    AsyncFunction("openHostApp") { (promise: Promise) in
+      DispatchQueue.main.async {
+        self.openLastHost { outcome in
+          promise.resolve(outcome.payload)
+        }
       }
     }
 
@@ -284,6 +272,7 @@ public class AppGroupStorageModule: Module {
         self.removeForegroundObserver()
         self.removeBackgroundObserver()
         self.removeAudioSessionObservers()
+        self.removeHardwareKeyboardObservers()
         self.stopForegroundHeartbeat()
         self.stopWarmMicIdleTimer()
         self.stopKeepAliveHeartbeat()
@@ -313,6 +302,9 @@ public class AppGroupStorageModule: Module {
     defaults.set("idle", forKey: transcriptionStatusKey)
     defaults.removeObject(forKey: transcriptionErrorKey)
     defaults.removeObject(forKey: transcriptionStatusUpdatedAtMsKey)
+    // Hotkey dictation (plugins/hotkey-dictation): a fresh process has no JS
+    // listeners yet, so a ready stamp from a previous process must not survive.
+    defaults.removeObject(forKey: hotkeyJsReadyAtMsKey)
     // Agent one-shot / per-job keys: cleared on every launch so stale requests
     // from a previous session are never replayed. Config-mirror keys
     // (keyboard_agent_enabled / applicable / name / share_context) are NOT
@@ -1653,6 +1645,24 @@ public class AppGroupStorageModule: Module {
     logMarker("foregroundObserver.added")
   }
 
+  private func addHardwareKeyboardObservers() {
+    guard hardwareKeyboardObserverTokens.isEmpty else { return }
+    let center = NotificationCenter.default
+    for name in [NSNotification.Name.GCKeyboardDidConnect, .GCKeyboardDidDisconnect] {
+      let token = center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+        self?.sendEvent("onHardwareKeyboardChanged", ["connected": GCKeyboard.coalesced != nil])
+      }
+      hardwareKeyboardObserverTokens.append(token)
+    }
+  }
+
+  private func removeHardwareKeyboardObservers() {
+    for token in hardwareKeyboardObserverTokens {
+      NotificationCenter.default.removeObserver(token)
+    }
+    hardwareKeyboardObserverTokens = []
+  }
+
   private func removeForegroundObserver() {
     guard let token = foregroundObserverToken else { return }
     NotificationCenter.default.removeObserver(token)
@@ -1969,127 +1979,134 @@ public class AppGroupStorageModule: Module {
 
   // MARK: - Return to Previous App
 
-  private func navigateBackToPreviousApp(maxRetries: Int = 0, delay: TimeInterval = 0.2) {
-    guard let defaults = UserDefaults(suiteName: appGroupId) else {
-      #if DEBUG
-      NSLog("[AppGroupStorage] navigateBack: no app group defaults")
-      #endif
-      return
-    }
-    defaults.synchronize()
+  private func returnToHost(invokedAt: Date, completion: @escaping (ReturnOutcome) -> Void) {
+    guard let attempt = beginReturnAttempt(
+      timeoutOutcome: {
+        // Resolved but never heard back from `open`: offer the button for that host.
+        guard let target = self.lastReturnTarget else {
+          return ReturnOutcome(status: .noTarget, hostName: nil)
+        }
+        return ReturnOutcome(status: .failed, hostName: target.hostName)
+      },
+      completion: completion
+    ) else { return }
+    lastReturnTarget = nil
 
-    guard let url = resolveReturnUrl(defaults: defaults) else {
-      #if DEBUG
-      NSLog("[AppGroupStorage] navigateBack: no return URL found in UserDefaults")
-      #endif
-      logMarker("navigateBack.missingUrl")
-      return
-    }
+    let defaults = UserDefaults(suiteName: appGroupId)
+    defaults?.synchronize()
+    let extensionUrl = defaults?.string(forKey: "keyboard_return_url")
+    let extensionBundle = defaults?.string(forKey: "keyboard_return_bundle")
+    // One handoff, one read. A key left behind after a failed return would
+    // send a later handoff (whose host the extension can't see) to this app.
+    defaults?.removeObject(forKey: "keyboard_return_url")
+    defaults?.removeObject(forKey: "keyboard_return_bundle")
+    defaults?.synchronize()
 
-    let urlString = url.absoluteString
-    if returnNavigationInFlight {
-      #if DEBUG
-      NSLog("[AppGroupStorage] navigateBack: open already in flight, skipping duplicate")
-      #endif
-      logMarker("navigateBack.skippedInFlight", extra: "url=\(urlString)")
-      return
-    }
-
-    let now = Date()
-    if let lastUrl = lastReturnAttemptUrl,
-      let lastAttemptAt = lastReturnAttemptAt,
-      lastUrl == urlString,
-      now.timeIntervalSince(lastAttemptAt) < 1.2
-    {
-      #if DEBUG
-      NSLog("[AppGroupStorage] navigateBack: skipping rapid duplicate for %@", urlString)
-      #endif
-      logMarker("navigateBack.skippedRapidDuplicate", extra: "url=\(urlString)")
-      return
+    let openResolved: (ReturnTarget?) -> Void = { target in
+      guard let target else {
+        self.logMarker("navigateBack.missingUrl")
+        attempt.finish(ReturnOutcome(status: .noTarget, hostName: nil))
+        return
+      }
+      self.lastReturnTarget = target
+      self.logMarker("navigateBack.resolved", extra: "source=\(target.source.rawValue)")
+      self.open(target, retriesLeft: 2, delay: 0.2, attempt: attempt)
     }
 
-    returnNavigationInFlight = true
-    lastReturnAttemptUrl = urlString
-    lastReturnAttemptAt = now
+    let observer = HostAppObserver.shared
+    let since = invokedAt.addingTimeInterval(-ReturnTargetResolver.observerLookBack)
+    if let target = ReturnTargetResolver.resolve(
+      extensionUrl: extensionUrl,
+      extensionBundle: extensionBundle,
+      observedBundle: observer.latest(since: since)
+    ) {
+      openResolved(target)
+    } else if ReturnTargetResolver.extensionSawHost(extensionBundle) {
+      openResolved(nil)
+    } else {
+      // JS usually asks before the observer has seen the host. Wait for a new
+      // observation: the observer also reports every other app that shows a
+      // keyboard (Spotlight, say), and an unresolvable one inside the look-back
+      // window would otherwise end the wait at once.
+      observer.waitForHost(since: Date(), timeout: ReturnTargetResolver.observerWaitTimeout) { observed in
+        openResolved(ReturnTargetResolver.resolve(
+          extensionUrl: extensionUrl,
+          extensionBundle: extensionBundle,
+          observedBundle: observed
+        ))
+      }
+    }
+  }
 
-    #if DEBUG
-    NSLog("[AppGroupStorage] navigateBack: attempting open %@", urlString)
-    #endif
+  private func openLastHost(completion: @escaping (ReturnOutcome) -> Void) {
+    guard let target = lastReturnTarget else {
+      completion(ReturnOutcome(status: .noTarget, hostName: nil))
+      return
+    }
+    guard let attempt = beginReturnAttempt(
+      timeoutOutcome: { ReturnOutcome(status: .failed, hostName: target.hostName) },
+      completion: completion
+    ) else { return }
+    // A button tap is user-initiated and the app is active: one attempt, no retries.
+    open(target, retriesLeft: 0, delay: 0, attempt: attempt)
+  }
+
+  /// Nil (after resolving `skipped`) while another return is in flight.
+  private func beginReturnAttempt(
+    timeoutOutcome: @escaping () -> ReturnOutcome,
+    completion: @escaping (ReturnOutcome) -> Void
+  ) -> ReturnAttempt? {
+    let attempt = returnAttemptGate.begin(
+      deadline: ReturnTargetResolver.returnDeadline,
+      schedule: { delay, work in DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work) },
+      timeoutOutcome: {
+        self.logMarker("navigateBack.deadline")
+        return timeoutOutcome()
+      },
+      completion: completion
+    )
+    if attempt == nil {
+      logMarker("navigateBack.skippedInFlight")
+      completion(ReturnOutcome(status: .skipped, hostName: nil))
+    }
+    return attempt
+  }
+
+  private func open(
+    _ target: ReturnTarget,
+    retriesLeft: Int,
+    delay: TimeInterval,
+    attempt: ReturnAttempt
+  ) {
+    let urlString = target.url.absoluteString
+    // The deadline already settled this return (JS may show the button or a
+    // newer handoff may be under way), so a retry must not switch apps now.
+    guard !attempt.isFinished else {
+      logMarker("navigateBack.abandoned", extra: "url=\(urlString)")
+      return
+    }
     logMarker("navigateBack.attemptOpen", extra: "url=\(urlString)")
-    UIApplication.shared.open(url, options: [:]) { [weak self] success in
-      guard let self else { return }
-      self.returnNavigationInFlight = false
-      #if DEBUG
-      NSLog("[AppGroupStorage] navigateBack: open result=%@", success ? "success" : "failed")
-      #endif
+    let appWasActive = UIApplication.shared.applicationState == .active
+    UIApplication.shared.open(target.url, options: [:]) { success in
       self.logMarker(
         success ? "navigateBack.openSuccess" : "navigateBack.openFailed",
         extra: "url=\(urlString)"
       )
       if success {
-        defaults.removeObject(forKey: "keyboard_return_url")
-        defaults.removeObject(forKey: "keyboard_return_bundle")
-        defaults.synchronize()
-        self.lastReturnAttemptUrl = nil
-        self.lastReturnAttemptAt = nil
+        attempt.finish(ReturnOutcome(status: .opened, hostName: target.hostName))
         return
       }
-
-      guard maxRetries > 0 else {
-        #if DEBUG
-        NSLog("[AppGroupStorage] navigateBack: exhausted retries for %@", urlString)
-        #endif
-        self.logMarker("navigateBack.retryExhausted", extra: "url=\(urlString)")
+      guard ReturnTargetResolver.shouldRetry(
+        openSucceeded: false, appWasActive: appWasActive, retriesLeft: retriesLeft
+      ) else {
+        self.logMarker("navigateBack.openFinalFailure", extra: "wasActive=\(appWasActive)")
+        attempt.finish(ReturnOutcome(status: .failed, hostName: target.hostName))
         return
       }
-
       DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-        self.navigateBackToPreviousApp(
-          maxRetries: maxRetries - 1,
-          delay: min(delay * 1.6, 1.0)
-        )
+        self.open(target, retriesLeft: retriesLeft - 1, delay: min(delay * 1.6, 1.0), attempt: attempt)
       }
     }
-  }
-
-  private func resolveReturnUrl(defaults: UserDefaults) -> URL? {
-    if let rawUrl = defaults.string(forKey: "keyboard_return_url"),
-       let normalizedUrl = normalizeReturnUrl(rawUrl) {
-      defaults.set(normalizedUrl.absoluteString, forKey: "keyboard_return_url")
-      defaults.synchronize()
-      return normalizedUrl
-    }
-
-    guard let hostBundle = defaults.string(forKey: "keyboard_return_bundle") else {
-      return nil
-    }
-
-    let trimmedBundle = hostBundle.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmedBundle.isEmpty else {
-      return nil
-    }
-
-    guard let fallbackUrlString =
-      Self.hostBundleFallbackUrls[trimmedBundle]
-      ?? Self.normalizedHostBundleFallbackUrls[trimmedBundle.lowercased()],
-      let fallbackUrl = URL(string: fallbackUrlString) else {
-      return nil
-    }
-
-    defaults.set(fallbackUrlString, forKey: "keyboard_return_url")
-    defaults.synchronize()
-    return fallbackUrl
-  }
-
-  private func normalizeReturnUrl(_ rawUrl: String) -> URL? {
-    let trimmed = rawUrl.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmed.isEmpty else {
-      return nil
-    }
-
-    let normalized =
-      trimmed.caseInsensitiveCompare("whatsapp://") == .orderedSame ? "whatsapp://send" : trimmed
-    return URL(string: normalized)
   }
 
   // MARK: - Background Task

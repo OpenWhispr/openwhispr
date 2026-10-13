@@ -10,13 +10,13 @@ export const KEYBOARD_TONES: { value: KeyboardTone; label: string; description: 
 
 export const DEFAULT_KEYBOARD_TONE: KeyboardTone = 'default';
 
-// Tone is only meaningful when the cloud cleanup step runs. Private mode never
+// Tone applies when remote cleanup runs. Private mode never
 // sends text to an LLM, and cleanup-off skips the rewrite entirely.
 export function isToneApplicable(
   mode: ProcessingMode,
   cleanupEnabled: boolean | undefined,
 ): boolean {
-  return mode === 'cloud' && (cleanupEnabled ?? true);
+  return (mode === 'cloud' || mode === 'providers') && (cleanupEnabled ?? true);
 }
 
 export function toneLabel(value: KeyboardTone): string {

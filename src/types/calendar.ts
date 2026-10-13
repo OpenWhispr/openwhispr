@@ -63,6 +63,11 @@ export interface CalendarAccount {
   email: string;
 }
 
+export interface MicrosoftCalendarAccount extends CalendarAccount {
+  /** Entra tenant id; null or absent for accounts connected by older builds. */
+  tenantId?: string | null;
+}
+
 export interface CalendarConnectionStatus {
   connected: boolean;
   email: string | null;
@@ -73,6 +78,7 @@ export interface CalendarAttendee {
   displayName: string | null;
   responseStatus: CalendarResponseStatus | null;
   self: boolean;
+  resource?: boolean;
 }
 
 export interface Contact {

@@ -1,5 +1,5 @@
 import type { InferenceProvider } from "./types";
-import { withRetry, createApiRetryStrategy, httpError } from "../../../utils/retry";
+import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
 import { API_ENDPOINTS } from "../../../config/constants";
 import {
   getLlmRequestTimeoutSeconds,
@@ -7,9 +7,13 @@ import {
 } from "../../../helpers/llmRequestTimeout.js";
 import { extractGeminiText } from "../../../helpers/geminiResponse.js";
 import { wrapCleanupTranscript } from "../../../config/prompts";
-import { extractApiErrorMessage } from "../apiErrorMessage";
 import { emptyOutputError, truncatedOutputError } from "../chatRequestBody";
 import logger from "../../../utils/logger";
+import {
+  asProviderError,
+  providerHttpError,
+  redactProviderBody,
+} from "../../../helpers/providerHttpErrors.js";
 
 interface GeminiResponse {
   candidates?: Array<{
@@ -115,24 +119,20 @@ export const geminiProvider: InferenceProvider = {
 
         if (!res.ok) {
           const errorText = await res.text();
-          let errorData: { error?: { message?: string } | string; message?: string } = {
-            error: res.statusText,
-          };
-          try {
-            errorData = JSON.parse(errorText);
-          } catch {
-            errorData = { error: errorText || res.statusText };
-          }
-
           logger.logReasoning("GEMINI_API_ERROR_DETAIL", {
             status: res.status,
             statusText: res.statusText,
-            error: errorData,
-            fullResponse: errorText.substring(0, 500),
+            fullResponse: redactProviderBody(errorText),
           });
 
-          const errMsg = extractApiErrorMessage(errorData, `Gemini API error: ${res.status}`);
-          throw httpError(errMsg, res.status);
+          throw providerHttpError({
+            provider: "Gemini",
+            model,
+            status: res.status,
+            body: errorText,
+            headers: res.headers,
+            surface: "llm",
+          });
         }
 
         const jsonResponse = (await res.json()) as GeminiResponse;
@@ -152,7 +152,11 @@ export const geminiProvider: InferenceProvider = {
       } finally {
         clearTimeout(timeoutId);
       }
-    }, createApiRetryStrategy());
+    }, createApiRetryStrategy()).catch((error) => {
+      // Classified only once it has left withRetry, so the deadline is still
+      // attempted exactly once.
+      throw asProviderError(error, { provider: "Gemini", model, surface: "llm" });
+    });
 
     const candidate = response.candidates?.[0];
     // Outside withRetry: don't repeat cutoffs/blocks; cleanup falls back to the original.

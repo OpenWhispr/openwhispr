@@ -5,13 +5,14 @@ const { EventEmitter } = require("node:events");
 
 const enginePath = require.resolve("../../src/helpers/meetingDetectionEngine");
 const originalLoad = Module._load;
+const openedUrls = [];
 
 function loadEngine() {
   delete require.cache[enginePath];
 
   Module._load = function loadWithMocks(request, parent, isMain) {
     if (request === "electron") {
-      return { shell: { openExternal: async () => {} } };
+      return { shell: { openExternal: async (url) => openedUrls.push(url) } };
     }
     if (request === "./debugLogger") {
       return { info() {}, warn() {}, debug() {}, error() {} };
@@ -113,7 +114,8 @@ test("explicitly dismissing an audio prompt still starts the mic cooldown", asyn
 
   engine.setPreferences({ audioDetection: true, processDetection: true });
   audioDetector.emit("sustained-audio-detected", { durationMs: 2000, detectedAt: 0 });
-  await engine.handleNotificationResponse(shown[0].detectionId, "dismiss");
+  const owner = { prompt: shown[0], detection: engine.activeDetections.get(shown[0].detectionId) };
+  await engine.handleNotificationResponse(shown[0].detectionId, "dismiss", {}, owner);
 
   assert.equal(audioDetector.dismissals, 1, "an explicit decline must keep its cooldown");
 });
@@ -160,6 +162,81 @@ test("a live recording with no note id still blocks a second manual meeting", as
   await engine.startManualMeeting();
 
   assert.deepEqual(noteNavigations, []);
+});
+
+// Join & transcribe resumes only a note the user owns for the event: a
+// teammate's synced note for the same invite never comes back from the lookup,
+// so the join must create the user's own note rather than record into theirs.
+function createJoinDatabase(ownNote) {
+  const lookups = [];
+  const saved = [];
+  const databaseManager = {
+    getCalendarEventById: (id) => ({ id, summary: "Weekly sync" }),
+    getOwnNoteByCalendarEventId: (id) => {
+      lookups.push(id);
+      return ownNote;
+    },
+    getMeetingsFolder: () => ({ id: 7 }),
+    saveNote: (title) => {
+      saved.push(title);
+      return { note: { id: 99, title } };
+    },
+    updateNote: (id, updates) => ({ note: { id, ...updates } }),
+  };
+  return { databaseManager, lookups, saved };
+}
+
+test("joining a calendar meeting resumes the user's own note for the event", async () => {
+  const { engine, meetingNavigations } = createEngine();
+  const db = createJoinDatabase({ id: 5, folder_id: 3 });
+  engine.databaseManager = db.databaseManager;
+
+  await engine.joinCalendarMeeting("event-1");
+
+  assert.deepEqual(db.lookups, ["event-1"]);
+  assert.deepEqual(db.saved, []);
+  assert.equal(meetingNavigations.length, 1);
+  assert.equal(meetingNavigations[0].noteId, 5);
+  assert.equal(meetingNavigations[0].folderId, 3);
+});
+
+test("joining a calendar meeting with no note of the user's own creates one", async () => {
+  const { engine, meetingNavigations } = createEngine();
+  const db = createJoinDatabase(null);
+  engine.databaseManager = db.databaseManager;
+
+  await engine.joinCalendarMeeting("event-1");
+
+  assert.deepEqual(db.saved, ["Weekly sync"]);
+  assert.equal(meetingNavigations.length, 1);
+  assert.equal(meetingNavigations[0].noteId, 99);
+  assert.equal(meetingNavigations[0].folderId, 7);
+});
+
+test("a manual meeting passes its options to whichever note it opens", async () => {
+  // The meeting hotkey asks for an open panel to stay behind the call.
+  const { engine, windowManager } = createEngine();
+  const options = { activate: false };
+  const received = [];
+  windowManager.queueNoteNavigation = async (_payload, opts) => received.push(opts);
+  windowManager.queueMeetingNoteNavigation = async (_payload, opts) => received.push(opts);
+
+  engine._recordingSession = { sessionId: "s1", noteId: 42 };
+  await engine.startManualMeeting(options);
+  engine._recordingSession = null;
+
+  const db = createJoinDatabase({ id: 5, folder_id: 3 });
+  engine.databaseManager = { ...db.databaseManager, getActiveEvents: () => [{ id: "event-1" }] };
+  await engine.startManualMeeting(options);
+  engine.databaseManager = createJoinDatabase(null).databaseManager;
+  await engine.joinCalendarMeeting("event-1", "hotkey", options);
+  engine.databaseManager = {
+    ...createJoinDatabase(null).databaseManager,
+    getActiveEvents: () => [],
+  };
+  await engine.startManualMeeting(options);
+
+  assert.deepEqual(received, [options, options, options, options]);
 });
 
 // The IPC adapter derives detector preferences through this policy; the engine
@@ -233,4 +310,169 @@ test("disabling notifications preserves active auto-end and releases both detect
   assert.equal(engine.endRecordingSession("active-meeting"), true);
   assert.equal(audioDetector.running, false);
   assert.equal(processDetector.running, false);
+});
+
+function ownedNotification(t) {
+  const ctx = createEngine();
+  const { createDb } = require("./harness/db");
+  const db = createDb(t);
+  if (!db) return null;
+  ctx.engine.databaseManager = db;
+  const detection = {
+    source: "calendar",
+    key: "event",
+    event: { id: "event", calendar_id: "test-calendar", summary: "Weekly" },
+  };
+  ctx.engine.activeDetections.set("calendar:event", detection);
+  const owner = {
+    prompt: { detectionId: "calendar:event" },
+    detection,
+    selectedDestination: null,
+  };
+  let current = true;
+  Object.assign(ctx.windowManager, {
+    meetingRecentDestinations: [],
+    isMeetingNotificationOwner: (o) => current && o === owner,
+    updateMeetingNotificationPause() {},
+    dismissMeetingNotification() {
+      current = false;
+    },
+    queueMeetingNoteNavigation: async (payload) => {
+      ctx.meetingNavigations.push(payload);
+      return { success: true, value: db.getNote(payload.noteId) };
+    },
+  });
+  return {
+    ...ctx,
+    db,
+    owner,
+    respond: (options) =>
+      ctx.engine.handleNotificationResponse("calendar:event", "start", options, owner),
+  };
+}
+
+test("notification Start saves directly in selected folder and duplicate clicks share navigation", async (t) => {
+  const c = ownedNotification(t);
+  if (!c) return;
+  const folder = c.db.createFolder("Chosen").folder;
+  c.owner.selectedDestination = { folderId: folder.id, spaceId: folder.space_id };
+  let finish;
+  let navigationOptions;
+  c.windowManager.queueMeetingNoteNavigation = (payload, options) => {
+    c.meetingNavigations.push(payload);
+    navigationOptions = options;
+    return new Promise((r) => (finish = r));
+  };
+  const one = c.respond();
+  const two = c.respond();
+  await new Promise(setImmediate);
+  assert.equal(c.meetingNavigations.length, 1);
+  assert.equal(navigationOptions.activate, true, "Start brings the panel forward");
+  const note = c.db.getNote(c.meetingNavigations[0].noteId);
+  assert.equal(note.folder_id, folder.id);
+  assert.equal(note.space_id, folder.space_id);
+  finish({ success: true, value: note });
+  assert.equal((await one).success, true);
+  assert.equal((await two).success, true);
+  assert.equal(c.db.getNotes().length, 1);
+});
+
+test("a linked root note requires current acknowledgment and is never moved or copied", async (t) => {
+  const c = ownedNotification(t);
+  if (!c) return;
+  const note = c.db.saveNote("Linked", "", "meeting").note;
+  c.db.updateNote(note.id, { calendar_event_id: "event", folder_id: null });
+  const first = await c.respond();
+  assert.equal(first.code, "LINKED_NOTE_CHANGED");
+  assert.equal(first.context.existingNote.folderId, null);
+  assert.equal(c.meetingNavigations.length, 0);
+  assert.equal(c.db.getNotes().length, 1);
+  const second = await c.respond({
+    existingNote: { noteId: note.id, spaceId: note.space_id, folderId: null },
+  });
+  assert.equal(second.success, true);
+  assert.equal(c.meetingNavigations[0].folderId, null);
+  assert.equal(c.db.getNotes().length, 1);
+});
+
+test("unavailable explicit destination never falls back to Meetings", async (t) => {
+  const c = ownedNotification(t);
+  if (!c) return;
+  c.owner.selectedDestination = { folderId: 999, spaceId: c.db.getPrivateSpaceId() };
+  assert.equal((await c.respond()).code, "FOLDER_UNAVAILABLE");
+  assert.equal(c.db.getNotes().length, 0);
+  assert.equal(c.meetingNavigations.length, 0);
+});
+
+test("strict lookup failure and vanished acknowledged note never create a replacement", async (t) => {
+  const c = ownedNotification(t);
+  if (!c) return;
+  const lookup = c.db.getOwnNoteByCalendarEventId;
+  c.db.getOwnNoteByCalendarEventId = () => {
+    throw Error("database busy");
+  };
+  assert.equal((await c.respond()).success, false);
+  assert.equal(c.db.getNotes().length, 0);
+  c.db.getOwnNoteByCalendarEventId = lookup;
+  assert.equal(
+    (await c.respond({ existingNote: { noteId: 999, spaceId: 1, folderId: null } })).code,
+    "NOTE_UNAVAILABLE"
+  );
+  assert.equal(c.db.getNotes().length, 0);
+});
+
+test("navigation failure retains committed note and retries without duplicate writes", async (t) => {
+  const c = ownedNotification(t);
+  if (!c) return;
+  let calls = 0;
+  c.windowManager.queueMeetingNoteNavigation = async (payload) => {
+    calls++;
+    return calls === 1
+      ? { success: false, code: "START_FAILED" }
+      : { success: true, value: c.db.getNote(payload.noteId) };
+  };
+  assert.equal((await c.respond()).code, "START_FAILED");
+  c.engine.handleCalendarReminder({ id: "next" });
+  assert.equal(c.shown.length, 1, "a failed Start must not leave prompts suppressed");
+  assert.equal(c.db.getNotes().length, 1);
+  assert.equal((await c.respond()).success, true);
+  assert.equal(c.db.getNotes().length, 1);
+  assert.equal(calls, 2);
+});
+
+test("Join opens the link and suppresses new prompts while navigation is pending", async (t) => {
+  const c = ownedNotification(t);
+  if (!c) return;
+  openedUrls.length = 0;
+  c.owner.detection.event.hangout_link = "https://meet.example/join?pwd=1";
+  let finish;
+  let navigationOptions;
+  c.windowManager.queueMeetingNoteNavigation = (_payload, options) => {
+    navigationOptions = options;
+    return new Promise((r) => (finish = r));
+  };
+  const joining = c.engine.handleNotificationResponse("calendar:event", "join", {}, c.owner);
+  await new Promise(setImmediate);
+  assert.deepEqual(openedUrls, ["https://meet.example/join?pwd=1"]);
+  assert.equal(navigationOptions.activate, false, "the meeting just opened stays in front");
+  c.engine.handleCalendarReminder({ id: "next" });
+  assert.equal(c.shown.length, 0);
+  finish({ success: true });
+  assert.equal((await joining).success, true);
+});
+
+test("coalesced audio detections cannot suppress the next meeting after a queued calendar prompt", () => {
+  const { engine, shown } = createEngine();
+  engine.setPreferences({ audioDetection: true, processDetection: true });
+  engine._userRecording = true;
+  engine._handleDetection("calendar", "event", { event: { summary: "Queued calendar" } });
+  engine._handleDetection("audio", "sustained-audio", {});
+  assert.equal(engine.activeDetections.size, 2);
+  engine._userRecording = false;
+  engine._flushNotificationQueue();
+  assert.equal(shown.length, 1);
+  assert.equal(engine.activeDetections.has("audio:sustained-audio"), false);
+  engine.handleDetectionNotificationClosed("calendar:event");
+  engine._handleDetection("audio", "sustained-audio", {});
+  assert.equal(shown.length, 2);
 });

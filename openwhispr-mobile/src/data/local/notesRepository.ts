@@ -16,6 +16,7 @@ import {
 import * as FileSystem from 'expo-file-system/legacy';
 import { parseRemoteTranscript, serializeSegmentsForSync } from '@/lib/notes/remoteTranscript';
 import { randomUUID } from '@/lib/uuid';
+import { isFolderAwaitingUpload } from '@/lib/notes/folderUpload';
 import {
   folderDeleteJournal,
   folders,
@@ -132,6 +133,8 @@ const NOTE_PUSH_ACK_FIELDS: ReadonlyArray<keyof Note> = [
   'calendarEventId',
   'deletedAt',
 ];
+
+const pushRejectedKey = (localId: number): string => `note.pushRejected.${localId}`;
 
 export class LocalNotesRepository implements NotesRepository {
   private readonly database: NotesDb;
@@ -829,6 +832,7 @@ export class LocalNotesRepository implements NotesRepository {
           // space, the team pass passes the space it resolved.
           spaceId: options.spaceId ?? this.getPrivateSpaceId(),
           ...this.remoteOwnershipValues(remote, options.applyOwnership),
+          ...(remote.created_at ? { createdAt: remote.created_at } : {}),
           cloudUpdatedAt: remote.updated_at,
           updatedAt: remote.updated_at,
         })
@@ -844,8 +848,7 @@ export class LocalNotesRepository implements NotesRepository {
     if (local.pendingSync === 1) return;
 
     if (remote.deleted_at) {
-      this.deleteNoteChildrenAndAudio(local.id);
-      this.database.delete(notes).where(eq(notes.id, local.id)).run();
+      this.hardDeleteNote(local.id);
       return;
     }
 
@@ -862,14 +865,28 @@ export class LocalNotesRepository implements NotesRepository {
     localFolderId: number | null,
     options: ApplyRemoteNoteOptions & { forceTranscript?: boolean } = {},
   ): void {
+    // A note filed in a folder the server has never seen reaches it unfiled, so a null
+    // coming back keeps the note in that folder. While the folder is still on its way up,
+    // the note is queued again, and pushNotes sends it once the folder has a cloud id.
+    // A team pass that moves the note to another space is followed: the folder stays behind.
+    const folderUnknownToServer =
+      remote.folder_id == null ? this.getFolderUnknownToServer(local.folderId) : null;
+    const unsyncedFolder =
+      options.spaceId === undefined || folderUnknownToServer?.spaceId === options.spaceId
+        ? folderUnknownToServer
+        : null;
     this.database
       .update(notes)
       .set({
         title: remote.title ?? 'Untitled',
         content: remote.content,
-        folderId: localFolderId,
+        folderId: unsyncedFolder ? unsyncedFolder.id : localFolderId,
         noteType: remote.note_type,
-        sourceFile: remote.source_file,
+        // Device-local recordings push as null, so a null coming back must not erase the
+        // path this device still plays and reprocesses from.
+        sourceFile:
+          remote.source_file ??
+          (isManagedMeetingAudioUri(local.id, local.sourceFile) ? local.sourceFile : null),
         audioDurationSeconds: remote.audio_duration_seconds,
         calendarEventId: remote.calendar_event_id ?? null,
         participants: remote.participants ?? null,
@@ -878,17 +895,21 @@ export class LocalNotesRepository implements NotesRepository {
         clientNoteId: remote.client_note_id ?? local.clientNoteId,
         remoteId: remote.id,
         deletedAt: null,
-        pendingSync: 0,
+        pendingSync: isFolderAwaitingUpload(unsyncedFolder) ? 1 : 0,
         conflictServerNote: null,
         // Only the team pass relocates an existing note; without an explicit
         // space the row keeps whatever space it already sits in.
         ...(options.spaceId !== undefined ? { spaceId: options.spaceId } : {}),
         ...this.remoteOwnershipValues(remote, options.applyOwnership),
+        // Also repairs rows pulled before created_at synced, which carry their pull time.
+        ...(remote.created_at ? { createdAt: remote.created_at } : {}),
         cloudUpdatedAt: remote.updated_at,
         updatedAt: remote.updated_at,
       })
       .where(eq(notes.id, local.id))
       .run();
+
+    this.clearSyncState(pushRejectedKey(local.id));
 
     // Rebuild the transcript when the server sent a different one. Normally
     // gated on !hasDirtyTranscript (un-pushed local edits are authoritative
@@ -938,6 +959,16 @@ export class LocalNotesRepository implements NotesRepository {
 
   getFolderByRemoteId(remoteId: string): Folder | null {
     return this.database.select().from(folders).where(eq(folders.remoteId, remoteId)).get() ?? null;
+  }
+
+  private getFolderUnknownToServer(folderId: number | null): Folder | null {
+    if (folderId == null) return null;
+    const folder = this.database
+      .select()
+      .from(folders)
+      .where(and(eq(folders.id, folderId), isNull(folders.deletedAt)))
+      .get();
+    return folder && !folder.remoteId ? folder : null;
   }
 
   private resolveFolderByRemoteId(serverFolderId: string | null): number | null {
@@ -1009,6 +1040,7 @@ export class LocalNotesRepository implements NotesRepository {
     remoteId: string,
     serverUpdatedAt: string,
     cloudUpdatedAt: string | null = serverUpdatedAt,
+    serverCreatedAt?: string,
   ): void {
     const current = this.getNoteById(pushed.id);
     // Forked or re-identified while the request was in flight: the ack names
@@ -1021,22 +1053,30 @@ export class LocalNotesRepository implements NotesRepository {
     // record the server revision so the follow-up push PATCHes the right base
     // instead of re-creating the note.
     const unchanged = NOTE_PUSH_ACK_FIELDS.every((field) => current[field] === pushed[field]);
+    const createdAt = serverCreatedAt ? { createdAt: serverCreatedAt } : {};
     this.database
       .update(notes)
       .set(
         unchanged
-          ? { remoteId, pendingSync: 0, updatedAt: serverUpdatedAt, cloudUpdatedAt }
-          : { remoteId, cloudUpdatedAt },
+          ? { remoteId, pendingSync: 0, updatedAt: serverUpdatedAt, cloudUpdatedAt, ...createdAt }
+          : { remoteId, cloudUpdatedAt, ...createdAt },
       )
       .where(eq(notes.id, pushed.id))
       .run();
+    if (unchanged) this.clearSyncState(pushRejectedKey(pushed.id));
   }
 
   markNoteTerminal(localId: number): void {
     // Clear pendingSync so the row stops re-attempting; preserve the local state
     // so the user still sees their attempted change. They can edit it to fix and
     // retry — that will re-flag pending.
-    this.database.update(notes).set({ pendingSync: 0 }).where(eq(notes.id, localId)).run();
+    this.database.transaction((tx) => {
+      tx.insert(syncState)
+        .values({ key: pushRejectedKey(localId), value: '1' })
+        .onConflictDoUpdate({ target: syncState.key, set: { value: '1' } })
+        .run();
+      tx.update(notes).set({ pendingSync: 0 }).where(eq(notes.id, localId)).run();
+    });
   }
 
   dropNotePushAttempt(localId: number): void {
@@ -1044,11 +1084,17 @@ export class LocalNotesRepository implements NotesRepository {
     // whatever it was before — the next pull carries the truth. Clearing
     // cloud_updated_at alongside pendingSync means that pull re-seeds the sync
     // base instead of leaving a base this device can no longer trust.
-    this.database
-      .update(notes)
-      .set({ pendingSync: 0, cloudUpdatedAt: null })
-      .where(eq(notes.id, localId))
-      .run();
+    this.database.transaction((tx) => {
+      // A cleared queue flag alone must never be mistaken for uploaded content.
+      tx.insert(syncState)
+        .values({ key: pushRejectedKey(localId), value: '1' })
+        .onConflictDoUpdate({ target: syncState.key, set: { value: '1' } })
+        .run();
+      tx.update(notes)
+        .set({ pendingSync: 0, cloudUpdatedAt: null })
+        .where(eq(notes.id, localId))
+        .run();
+    });
   }
 
   parkNoteConflict(localId: number, serverNote: RemoteNote): void {
@@ -1125,10 +1171,8 @@ export class LocalNotesRepository implements NotesRepository {
       // "Use server's copy" must mean accepting that, not resurrecting a
       // zombie local row that still points remoteId at a gone server note —
       // the delta-cursor pull may never re-deliver that tombstone once our
-      // watermark has moved past it. Mirrors applyRemoteNote's own tombstone
-      // path (deleteNoteChildrenAndAudio + hard delete).
-      this.deleteNoteChildrenAndAudio(local.id);
-      this.database.delete(notes).where(eq(notes.id, local.id)).run();
+      // watermark has moved past it. Mirrors applyRemoteNote's tombstone path.
+      this.hardDeleteNote(local.id);
       return;
     }
     // Bypasses applyRemoteNote's pendingSync/conflict guards on purpose — the
@@ -1144,7 +1188,12 @@ export class LocalNotesRepository implements NotesRepository {
     this.database.delete(folders).where(eq(folders.id, localId)).run();
   }
 
+  isNotePushRejected(localId: number): boolean {
+    return this.getSyncState(pushRejectedKey(localId)) !== null;
+  }
+
   hardDeleteNote(localId: number): void {
+    this.clearSyncState(pushRejectedKey(localId));
     this.deleteNoteChildrenAndAudio(localId);
     this.database.delete(notes).where(eq(notes.id, localId)).run();
   }
@@ -1436,9 +1485,22 @@ export class LocalNotesRepository implements NotesRepository {
 
   upsertSpeakers(noteId: number, rows: NewSpeaker[]): void {
     this.database.transaction((tx) => {
+      // Numbered after the note's existing speakers, so a re-diarization that adds one
+      // never shows a second "Speaker 1".
+      const nextSortOrder = tx
+        .select({ sortOrder: speakers.sortOrder })
+        .from(speakers)
+        .where(and(eq(speakers.noteId, noteId), isNull(speakers.deletedAt)))
+        .all()
+        .reduce((next, row) => Math.max(next, row.sortOrder + 1), 0);
       rows.forEach((row, index) => {
         tx.insert(speakers)
-          .values({ ...row, noteId, sortOrder: row.sortOrder ?? index, pendingSync: 1 })
+          .values({
+            ...row,
+            noteId,
+            sortOrder: row.sortOrder ?? nextSortOrder + index,
+            pendingSync: 1,
+          })
           .run();
       });
     });
@@ -1566,6 +1628,49 @@ export class LocalNotesRepository implements NotesRepository {
     }
   }
 
+  createOwnerProfileForSpeaker(
+    speakerId: number,
+    profileInput: Omit<NewSpeakerProfile, 'isOwner'>,
+    speakerPatch: Partial<Speaker>,
+  ): SpeakerProfile {
+    this.validateSpeakerProfileEmbedding(profileInput.embedding);
+
+    let result: { profile: SpeakerProfile; noteId: number };
+    try {
+      result = this.database.transaction((tx) => {
+        const row = tx
+          .insert(speakerProfiles)
+          .values({
+            ...profileInput,
+            isOwner: 1,
+            embedding: encodeSpeakerProfileEmbedding(profileInput.embedding),
+          })
+          .returning()
+          .get();
+        const profile = this.mapSpeakerProfile(row);
+        const [linked] = tx
+          .update(speakers)
+          .set({
+            ...speakerPatch,
+            profileId: profile.id,
+            pendingSync: 1,
+            updatedAt: sql`datetime('now')`,
+          })
+          .where(and(eq(speakers.id, speakerId), isNull(speakers.deletedAt)))
+          .returning({ noteId: speakers.noteId })
+          .all();
+        // Throwing rolls back the insert, so no owner profile is saved without its speaker.
+        if (!linked) throw new Error(`Speaker ${speakerId} not found`);
+        return { profile, noteId: linked.noteId };
+      });
+    } catch (error) {
+      mapSpeakerProfileOwnerConstraint(error);
+    }
+
+    this.markNoteTranscriptDirty(result.noteId);
+    return result.profile;
+  }
+
   updateSpeakerProfile(id: number, updates: Partial<SpeakerProfile>): void {
     const { embedding, ...rest } = updates;
     delete rest.id;
@@ -1653,6 +1758,14 @@ export class LocalNotesRepository implements NotesRepository {
       .update(notes)
       .set({ ...updates, updatedAt: sql`datetime('now')` })
       .where(eq(notes.id, noteId))
+      .run();
+  }
+
+  restoreMeetingRecordingPath(noteId: number, sourceFile: string): void {
+    this.database
+      .update(notes)
+      .set({ sourceFile })
+      .where(and(eq(notes.id, noteId), isNull(notes.sourceFile)))
       .run();
   }
 

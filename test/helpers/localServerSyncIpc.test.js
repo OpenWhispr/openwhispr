@@ -14,6 +14,12 @@ const modelManager = {
   stopServer: async () => {
     modelManager.stops += 1;
   },
+  serverManager: {
+    keepResident: null,
+    setKeepResident: (keepResident) => {
+      modelManager.serverManager.keepResident = keepResident;
+    },
+  },
 };
 
 const electronStub = {
@@ -140,4 +146,12 @@ test("a signed-in window waits for its workspace policy before touching the serv
 test("signed out, the policy never loads, so an unresolved policy does not block the stop", async () => {
   await sync({ loaded: MODEL, signedIn: false, policySettled: false });
   assert.equal(modelManager.stops, 1);
+});
+
+test("Keep model loaded applies before the workspace policy settles", async () => {
+  await sync({ loaded: MODEL, signedIn: true, policySettled: false, keepLocalModelLoaded: true });
+  assert.equal(modelManager.serverManager.keepResident, true);
+
+  await sync({ loaded: MODEL, signedIn: true, policySettled: false });
+  assert.equal(modelManager.serverManager.keepResident, false, "missing means off");
 });

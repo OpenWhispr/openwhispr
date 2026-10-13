@@ -10,19 +10,30 @@ const noop = () => {};
 
 const { installInteractiveDom, findElement } = require("../lib/interactiveDom");
 
-async function renderAssistantPanel(
+// Loads the real AssistantPanel with its heavier dependencies mocked, and real
+// i18n so translated text (not keys) renders.
+async function setupAssistantPanel(
   t,
   messages,
-  { initialConversationId = null, agentState = "idle", activeToolName = null, locale = "en" } = {}
+  {
+    initialConversationId = null,
+    agentState = "idle",
+    activeToolName = null,
+    locale = "en",
+    approvals = {},
+  } = {}
 ) {
   installBrowserGlobals(t);
   globalThis.__assistantPanelMessages = messages;
   globalThis.__assistantPanelAgentState = agentState;
   globalThis.__assistantPanelActiveToolName = activeToolName;
+  globalThis.__assistantPanelApprovals = approvals;
   t.after(() => {
     delete globalThis.__assistantPanelMessages;
     delete globalThis.__assistantPanelAgentState;
     delete globalThis.__assistantPanelActiveToolName;
+    delete globalThis.__assistantPanelApprovals;
+    delete globalThis.__assistantPanelStreamingOptions;
   });
 
   const vite = await createRendererServer(t, {
@@ -43,7 +54,8 @@ async function renderAssistantPanel(
         }
       `,
       "/chat/useChatStreaming": `
-        export function useChatStreaming() {
+        export function useChatStreaming(options) {
+          globalThis.__assistantPanelStreamingOptions = options;
           return {
             agentState: globalThis.__assistantPanelAgentState,
             activeToolName: globalThis.__assistantPanelActiveToolName,
@@ -65,7 +77,7 @@ async function renderAssistantPanel(
       `,
       "/hooks/useCopyFeedback": `
         export function useCopyFeedback() {
-          return { copied: false, async copy() {}, confirmCopied() {} };
+          return { copied: false, async copy() {}, async copyText() { return true; }, confirmCopied() {} };
         }
       `,
       "/stores/settingsStore": `
@@ -84,6 +96,20 @@ async function renderAssistantPanel(
       "/ui/useToast": `
         export function useToast() { return { toast() {} }; }
       `,
+      "/stores/connectorApprovalStore": `
+        export function useConnectorApprovalStore(selector) {
+          return selector({ entries: globalThis.__assistantPanelApprovals || {} });
+        }
+        export function approvalKey(messageId, toolCallId) {
+          return messageId + "::" + toolCallId;
+        }
+      `,
+      "/chat/ApprovalCard": `
+        import React from "react";
+        export function ApprovalCard({ entry }) {
+          return React.createElement("div", { "data-approval-card": entry.toolCallId, "data-state": entry.state });
+        }
+      `,
     },
   });
   const [{ default: viteI18next }, { initReactI18next }] = await Promise.all([
@@ -99,32 +125,36 @@ async function renderAssistantPanel(
     interpolation: { escapeValue: false },
   });
   const { AssistantPanel } = await vite.ssrLoadModule("/components/dictation/AssistantPanel.tsx");
-  return renderToStaticMarkup(
-    React.createElement(AssistantPanel, {
-      pendingCommand: null,
-      onCommandConsumed: noop,
-      onCommandDiscarded: noop,
-      initialConversationId,
-      onConversationIdChange: noop,
-      voiceState: "idle",
-      thinking: false,
-      open: true,
-      footerPhase: "pill",
-      horizontalDirection: "right",
-      onClose: noop,
-      onBusyChange: noop,
-      onResponseReadyChange: noop,
-      onResponseContent: noop,
-      onConversationReset: noop,
-      onSelectionContextChange: noop,
-    })
-  );
+  const props = {
+    pendingCommand: null,
+    onCommandConsumed: noop,
+    onCommandDiscarded: noop,
+    initialConversationId,
+    onConversationIdChange: noop,
+    voiceState: "idle",
+    thinking: false,
+    open: true,
+    footerPhase: "pill",
+    horizontalDirection: "right",
+    onClose: noop,
+    onBusyChange: noop,
+    onResponseReadyChange: noop,
+    onResponseContent: noop,
+    onConversationReset: noop,
+    onSelectionContextChange: noop,
+  };
+  return { AssistantPanel, props };
+}
+
+async function renderAssistantPanel(t, messages, options) {
+  const { AssistantPanel, props } = await setupAssistantPanel(t, messages, options);
+  return renderToStaticMarkup(React.createElement(AssistantPanel, props));
 }
 
 test("an empty idle Assistant shows typed input and generic suggestions", async (t) => {
   const markup = await renderAssistantPanel(t, []);
 
-  assert.match(markup, /<input/);
+  assert.match(markup, /<textarea\b[^>]*dir="auto"/);
   assert.match(markup, /Summarize my recent notes/);
   assert.match(markup, /What is on my calendar\?/);
   assert.match(markup, /Help me draft something/);
@@ -136,7 +166,7 @@ test("a populated Assistant keeps typed input without empty-state suggestions", 
   ]);
 
   assert.match(markup, /Existing answer/);
-  assert.match(markup, /<input/);
+  assert.match(markup, /<textarea\b[^>]*dir="auto"/);
   assert.doesNotMatch(markup, /Summarize my recent notes/);
 });
 
@@ -355,7 +385,7 @@ test("the Assistant exposes an accessible new-conversation control only after me
 test("a reopened Assistant blocks typed actions until retained history finishes loading", async (t) => {
   const markup = await renderAssistantPanel(t, [], { initialConversationId: 42 });
 
-  assert.match(markup, /<input[^>]*disabled=""/);
+  assert.match(markup, /<textarea\b[^>]*readOnly=""/);
   assert.doesNotMatch(markup, /Summarize my recent notes/);
 });
 
@@ -524,6 +554,64 @@ test("Assistant selection must stay entirely inside the response root", async (t
   assert.equal(getSelectionInside(responseRoot), null);
 });
 
+// The Open Settings link and technical details must never ride along in a
+// drag-select + copy over the response, or the clipboard would pick up UI
+// chrome instead of just the answer.
+test("Cmd+C copies a selection in a classified error's answer, but not one running into its Open Settings or details", async (t) => {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  t.mock.method(globalThis.document, "addEventListener");
+
+  const { AssistantPanel, props } = await setupAssistantPanel(t, [
+    {
+      id: "assistant-1",
+      role: "assistant",
+      content: "Error: OpenAI rejected your API key.",
+      isStreaming: false,
+      error: { settingsTarget: "llms", technicalDetails: { provider: "OpenAI", status: 401 } },
+    },
+  ]);
+  const { createRoot } = require("react-dom/client");
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(AssistantPanel, props)));
+
+  const answer = findElement(
+    container,
+    (element) => element.textContent === "Error: OpenAI rejected your API key."
+  );
+  const settingsButton = findElement(
+    container,
+    (element) => element.tagName === "BUTTON" && element.textContent.includes("Open Settings")
+  );
+  const details = findElement(container, (element) => element.tagName === "DETAILS");
+  assert.ok(answer && settingsButton && details, "shows the answer, Open Settings and details");
+
+  let selectionEnd = null;
+  globalThis.window.getSelection = () => ({
+    isCollapsed: false,
+    rangeCount: 1,
+    getRangeAt: () => ({ startContainer: answer, endContainer: selectionEnd }),
+    toString: () => "selected text",
+  });
+  const onKeyDown = globalThis.document.addEventListener.mock.calls.findLast(
+    (call) => call.arguments[0] === "keydown"
+  ).arguments[1];
+  const copiesSelectionEndingIn = (node) => {
+    selectionEnd = node;
+    const preventDefault = t.mock.fn();
+    onKeyDown({ key: "c", metaKey: true, ctrlKey: false, altKey: false, preventDefault });
+    return preventDefault.mock.callCount() === 1;
+  };
+
+  assert.equal(copiesSelectionEndingIn(answer), true, "a selection inside the answer is copied");
+  assert.equal(copiesSelectionEndingIn(settingsButton), false, "Open Settings is never copied");
+  assert.equal(copiesSelectionEndingIn(details), false, "technical details are never copied");
+});
+
 test("a failed Assistant resize releases its open claim so opening can retry", async (t) => {
   installBrowserGlobals(t);
   const vite = await createRendererServer(t, {
@@ -690,6 +778,104 @@ test("a follow-up into an open panel strips caret delivery and stays panel-first
     });
   });
   assert.deepEqual(assistant.pendingCommand.delivery, delivery);
+});
+
+test("spoken commands answer on the Voice Assistant scope with connector tools offered", async (t) => {
+  await renderAssistantPanel(t, []);
+
+  const options = globalThis.__assistantPanelStreamingOptions;
+  assert.equal(options.inferenceScope, "dictationAgent");
+  assert.equal(options.allowConnectors, true);
+});
+
+test("a pending approval shows in the panel and replaces the tool overlay", async (t) => {
+  const markup = await renderAssistantPanel(
+    t,
+    [
+      { id: "user-1", role: "user", content: "post the summary to eng", isStreaming: false },
+      {
+        id: "assistant-1",
+        role: "assistant",
+        content: "",
+        isStreaming: true,
+        toolCalls: [
+          { id: "call-1", name: "slack_send_message", arguments: "{}", status: "executing" },
+        ],
+      },
+    ],
+    {
+      agentState: "tool-executing",
+      activeToolName: "slack_send_message",
+      approvals: {
+        "assistant-1::call-1": {
+          key: "assistant-1::call-1",
+          messageId: "assistant-1",
+          toolCallId: "call-1",
+          actionId: "a1",
+          connectorId: "slack",
+          state: "pending",
+          preview: {
+            verbKey: "default",
+            destinationLabel: "#eng",
+            accountLabel: "chad",
+            body: "x",
+          },
+        },
+      },
+    }
+  );
+
+  assert.match(markup, /data-approval-card="call-1"/);
+  assert.doesNotMatch(markup, /data-tool-invocation=/);
+});
+
+test("an approval request opens the hidden panel of a caret-delivered command", async (t) => {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-assistant-approval-open-test-",
+  });
+  const { useAssistantPanel } = await vite.ssrLoadModule("/hooks/useAssistantPanel.js");
+  const { createRoot } = require("react-dom/client");
+  let assistant;
+
+  function Harness() {
+    assistant = useAssistantPanel({
+      requestMainWindowSize: async () => ({ success: true }),
+      dictationErrorActionCount: 0,
+      recordingControlsRef: { current: null },
+    });
+    return null;
+  }
+
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(Harness)));
+  await React.act(async () => {
+    assistant.handleCommand({
+      text: "post the summary to eng",
+      attachment: null,
+      selectedContext: null,
+      delivery: {
+        mode: "paste",
+        sessionId: "caret-session",
+        restoreClipboard: true,
+        allowClipboardFallback: false,
+      },
+    });
+  });
+  assert.equal(assistant.open, false);
+
+  // onApprovalRequested routes to the panel's onResponseContent handler.
+  await React.act(async () => {
+    assistant.handleResponseContent();
+  });
+
+  assert.equal(assistant.openRef.current, true);
+  assert.equal(assistant.thinking, false);
 });
 
 test("only a plain-text caret delivery asks the model for plain prose", async (t) => {

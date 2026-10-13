@@ -102,7 +102,7 @@
 4. Clear model cache: `rm -rf ~/.cache/openwhispr/whisper-models`
 5. Try cloud transcription as fallback
 
-**GPU acceleration (CUDA / Vulkan):** If the GPU-accelerated whisper-server crashes at startup (unsupported GPU, out of VRAM), OpenWhispr automatically restarts it on CPU, retries the same request, and shows a "using CPU instead" notice — the dictation still completes. GPU acceleration can be toggled off from the GPU card in the transcription model picker.
+**GPU acceleration (CUDA / Vulkan):** If the GPU-accelerated whisper-server crashes at startup (unsupported GPU, out of VRAM), OpenWhispr automatically restarts it on CPU, retries the same request, and shows a "using CPU instead" notice — the dictation still completes. GPU acceleration can be toggled off from the GPU card in the transcription model picker. That card also shows the error line that caused the fallback (for example `vk::PhysicalDevice::createDevice: ErrorDeviceLost`); include it, or a screenshot of the card, when you report a GPU problem.
 
 ### Wayland Clipboard Issues (Linux)
 
@@ -126,6 +126,26 @@
 OpenWhispr tries clipboard methods in order: `wl-copy` (most reliable) → renderer `navigator.clipboard` → X11 fallback.
 
 On GNOME and KDE, the first automatic paste can show a remote-interaction permission dialog. Approval is remembered in `~/.cache/openwhispr/portal-paste-token`; revoking permission or invalidating that token makes the prompt return. If automatic paste fails, the transcription remains in the clipboard for manual paste.
+
+### Linux Window Flicker
+
+**Symptoms:** The dictation pill or other transparent windows flicker
+
+**Cause:** OpenWhispr composites on the GPU, except whenever an NVIDIA driver is loaded, where it already composites on the CPU. Some other drivers can flicker transparent windows too.
+
+**Fix:**
+
+1. With the official AppImage, deb, rpm or tar.gz build, add this line to `~/.config/open-whispr-flags.conf` (`$XDG_CONFIG_HOME/open-whispr-flags.conf` if you set `XDG_CONFIG_HOME`; create the file if it doesn't exist, and save it with Unix (LF) line endings):
+
+   ```text
+   --disable-gpu-compositing
+   ```
+
+2. Quit OpenWhispr and start it again. Closing the window only hides it, so quit from the tray icon, or, if your desktop shows no tray icon (GNOME without the AppIndicator extension), run `pkill -x open-whispr-app`.
+
+The interface then composites on the CPU, so hover effects and scrolling can feel slower. Delete the line to undo it.
+
+When you report the flicker, add `--log-level=debug` on its own line in the same file, restart, and attach the newest `~/.config/OpenWhispr/logs/debug-*.log`. Its "Linux GPU compositing" line shows which mode OpenWhispr started in.
 
 ### Linux System Audio PipeWire Issues
 
@@ -156,7 +176,7 @@ On GNOME and KDE, the first automatic paste can show a remote-interaction permis
 
 1. System audio is captured by `windows-system-audio-helper.exe` (WASAPI process loopback), which hears every app on every output device — no permission prompt is needed
 2. If the helper is missing or fails (requires Windows 10 2004+), OpenWhispr automatically falls back to Chromium loopback, which only hears the _default_ output device — make sure your meeting app plays through the default device in that case
-3. On some machines the helper starts successfully but captures only digital silence. OpenWhispr detects this a few seconds in (its capture is silent while an output device is still metering audio) and switches that recording to Chromium loopback; the debug log shows `Windows system audio helper captured only silence, switching to renderer loopback`
+3. On some machines the helper starts successfully but captures only digital silence — and Microsoft Teams call audio appears to be hidden from it regardless of configuration. OpenWhispr detects this a few seconds in (its capture is silent while an output device is still metering audio), starts Chromium loopback alongside, and switches the recording to it once it hears audio the helper is missing; the debug log shows `Windows system audio helper captured only silence, starting renderer loopback beside it`, then `Renderer loopback took over system audio capture`. The check runs for the whole meeting, so a call that goes missing after some other sound was captured still switches over — though audio playing continuously alongside the meeting (music in a browser tab, say) can mask it, since our capture never falls silent
 4. If transcription shows "Continuing with microphone only", system audio capture failed entirely; check debug logs for `windows-system-audio-helper` entries
 
 **All Platforms:**

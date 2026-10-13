@@ -667,6 +667,22 @@ function assignProvisionalSpeaker(segment: TranscriptSegment): TranscriptSegment
   });
 }
 
+async function releaseSystemAudioCapture(): Promise<void> {
+  await flushAndDisconnectProcessor(systemProcessor);
+  systemProcessor = null;
+
+  systemSource?.disconnect();
+  systemSource = null;
+
+  stopMediaStream(systemStream);
+  systemStream = null;
+
+  try {
+    await systemContext?.close();
+  } catch {}
+  systemContext = null;
+}
+
 async function cleanup(): Promise<void> {
   micRecovery?.stop();
   micRecovery = null;
@@ -689,19 +705,7 @@ async function cleanup(): Promise<void> {
   } catch {}
   micContext = null;
 
-  await flushAndDisconnectProcessor(systemProcessor);
-  systemProcessor = null;
-
-  systemSource?.disconnect();
-  systemSource = null;
-
-  stopMediaStream(systemStream);
-  systemStream = null;
-
-  try {
-    await systemContext?.close();
-  } catch {}
-  systemContext = null;
+  await releaseSystemAudioCapture();
 
   ipcCleanups.forEach((fn) => fn());
   ipcCleanups = [];
@@ -938,6 +942,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         noteId: args.noteId ?? null,
         sessionId,
         autoEndEligible: args.autoEndEligible,
+        aecEnabled: getSettings().meetingAecEnabled,
       });
       const micCapturePromise = getMeetingMicConstraints().then(async (constraints) => {
         if (!isCurrentStart()) return null;
@@ -1005,13 +1010,17 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       if (!startResult?.success) {
         logger.error(
           "Meeting transcription IPC start failed",
-          { error: startResult?.error },
+          { error: startResult?.error, code: startResult?.code },
           "meeting"
         );
-        reportMeetingError(startResult?.error || "Failed to start meeting transcription", {
-          isRecording: false,
-          isTranscribing: false,
-        });
+        const needsSignIn =
+          startResult?.code === "AUTH_EXPIRED" || startResult?.code === "AUTH_REQUIRED";
+        reportMeetingError(
+          needsSignIn
+            ? "signInRequired"
+            : startResult?.error || "Failed to start meeting transcription",
+          { isRecording: false, isTranscribing: false }
+        );
         stopMediaStream(micResult);
         stopMediaStream(systemCaptureResult.stream);
         setupMicResult = null;
@@ -1430,29 +1439,49 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
 
       // Main sends this when a native helper reports it is capturing silence
       // while audio is really playing, which activation success cannot detect.
-      // Take the channel over with Chromium loopback for the rest of the call.
+      // Main keeps the helper until this loopback hears audio the helper misses.
       if (systemAudioHandledInMain) {
         const degradedCleanup = window.electronAPI?.onMeetingSystemAudioDegraded?.(() => {
           if (activeRecordingSessionId !== sessionId || !isRecordingFlag) return;
           if (systemStream) return;
           void (async () => {
+            const reportTakeoverFailure = (error: Error | null) => {
+              logger.warn(
+                "Renderer loopback takeover failed after native system audio went silent",
+                { error: error?.message },
+                "meeting"
+              );
+              publishSystemAudioInterruption({
+                systemAudioStrategy: "loopback",
+                reason: "loopback_takeover_failed",
+                recovering: false,
+              });
+              sessionSystemAudioActive = false;
+              void window.electronAPI
+                ?.meetingTranscriptionSetSystemAudioAvailable?.(sessionId, false)
+                .catch(() => undefined);
+            };
             const takeover = await requestSystemAudioDisplayStream(
               getDisplayCaptureModeForStrategy("loopback")
             );
-            if (!takeover.stream) {
-              logger.warn(
-                "Renderer loopback takeover failed after native system audio went silent",
-                { error: takeover.error?.message },
-                "meeting"
-              );
-              return;
-            }
             if (activeRecordingSessionId !== sessionId || !isRecordingFlag || systemStream) {
               stopMediaStream(takeover.stream);
               return;
             }
-            await attachRendererSystemAudio(takeover.stream);
-            logger.info("Renderer loopback took over system audio capture", {}, "meeting");
+            if (!takeover.stream) {
+              reportTakeoverFailure(takeover.error);
+              return;
+            }
+            try {
+              await attachRendererSystemAudio(takeover.stream);
+              logger.info("Renderer loopback started beside native system audio", {}, "meeting");
+            } catch (error) {
+              // A stop mid-attach also lands here, and its cleanup owns the graph.
+              if (activeRecordingSessionId === sessionId && isRecordingFlag) {
+                reportTakeoverFailure(error as Error);
+                await releaseSystemAudioCapture();
+              }
+            }
           })();
         });
         if (degradedCleanup) ipcCleanups.push(degradedCleanup);

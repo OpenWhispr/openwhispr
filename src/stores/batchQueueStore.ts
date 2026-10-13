@@ -8,6 +8,7 @@ import { getSettings } from "./settingsStore";
 import { isTranscriptionContextAllowed } from "./policyRules";
 import { usePolicyStore } from "./policyStore";
 import { isManagedTranscriptionActive } from "../services/managedTranscription";
+import { describeProviderError } from "../utils/describeProviderError";
 
 export type QueueItemStatus = "queued" | "downloading" | "transcribing" | "done" | "error";
 
@@ -219,7 +220,12 @@ export function processBatchQueue(
           status: "error",
           error:
             transcriptionErrorKey(transcriptionResult) ||
-            (transcriptionResult.messageKey ? i18n.t(transcriptionResult.messageKey) : undefined) ||
+            (transcriptionResult.messageKey
+              ? describeProviderError(
+                  { ...transcriptionResult, message: transcriptionResult.error },
+                  i18n.t
+                ).description
+              : undefined) ||
             transcriptionResult.error ||
             "batchTranscriptionFailed",
         });

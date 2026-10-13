@@ -248,7 +248,8 @@ test("reopening a pre-v2 database clears microsoft sync tokens once", (t) => {
     .get();
   assert.equal(calendar.sync_token, null);
   assert.equal(calendar.sync_token_expires_at, null);
-  assert.equal(reopened.db.pragma("user_version", { simple: true }), 2);
+  // Reopening runs every later migration too.
+  assert.equal(reopened.db.pragma("user_version", { simple: true }), 4);
   reopened.db.close();
 });
 
@@ -264,4 +265,127 @@ test("google sync token persists alongside its expiry", (t) => {
   assert.equal(calendar.sync_token, "sync-token");
   assert.equal(calendar.sync_token_expires_at, expiresAt);
   db.db.close();
+});
+
+test("Google shared RSVP repair is scoped, preserves notes, and runs once", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  t.after(() => db.db.open && db.db.close());
+  for (const id of ["primary", "shared", "me@example.com"]) {
+    db.db
+      .prepare(
+        `INSERT INTO google_calendars
+      (id, summary, is_primary, account_email, sync_token, sync_token_expires_at)
+      VALUES (?, ?, ?, 'me@example.com', 'old-google', 9999999999999)`
+      )
+      .run(id, id, id === "primary" ? 1 : 0);
+  }
+  insertCalendar(db, "microsoft", "ms");
+  db.updateMicrosoftCalendarSyncToken("ms", "old-ms", 9999999999999);
+  db.upsertCalendarEvents([
+    ...["primary", "shared", "me@example.com", "orphan"].map((id) =>
+      restEvent("google", id, id, { self_response_status: "declined" })
+    ),
+    restEvent("microsoft", "ms", "ms-event", { self_response_status: "declined" }),
+    appleEvent("apple-event", { self_response_status: "declined" }),
+  ]);
+  const note = db.saveNote("Linked meeting", "Keep this note", "meeting").note;
+  db.updateNote(note.id, { calendar_event_id: "shared" });
+  const before = db.getCalendarEventById("shared");
+  db.db.pragma("user_version = 3");
+  db.db.close();
+  const repaired = new DatabaseManager();
+  t.after(() => repaired.db.open && repaired.db.close());
+  assert.deepEqual(repaired.getCalendarEventById("shared"), {
+    ...before,
+    self_response_status: "unknown",
+  });
+  assert.equal(repaired.getCalendarEventById("orphan").self_response_status, "unknown");
+  for (const id of ["primary", "me@example.com", "ms-event", "apple-event"]) {
+    assert.equal(repaired.getCalendarEventById(id).self_response_status, "declined");
+  }
+  assert.equal(repaired.db.pragma("user_version", { simple: true }), 4);
+  const calendars = repaired.getGoogleCalendars();
+  assert.equal(calendars.find((c) => c.id === "shared").sync_token, null);
+  assert.equal(calendars.find((c) => c.id === "shared").sync_token_expires_at, null);
+  assert.equal(calendars.find((c) => c.id === "primary").sync_token, "old-google");
+  assert.equal(calendars.find((c) => c.id === "me@example.com").sync_token, "old-google");
+  assert.equal(
+    repaired.db.prepare("SELECT sync_token FROM microsoft_calendars WHERE id='ms'").get()
+      .sync_token,
+    "old-ms"
+  );
+  assert.equal(
+    repaired.db.prepare("SELECT calendar_event_id FROM notes WHERE id=?").get(note.id)
+      .calendar_event_id,
+    "shared"
+  );
+  repaired.upsertCalendarEvents([{ ...before, self_response_status: "accepted" }]);
+  repaired.updateCalendarSyncToken("shared", "fresh", 9999999999999);
+  repaired.db.close();
+  const reopened = new DatabaseManager();
+  t.after(() => reopened.db.close());
+  assert.equal(reopened.getCalendarEventById("shared").self_response_status, "accepted");
+  assert.equal(reopened.getGoogleCalendars().find((c) => c.id === "shared").sync_token, "fresh");
+});
+
+test("google: only self-declined schedule rows are hidden, and reacceptance restores them", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  t.after(() => db.db.close());
+  const now = Date.now();
+  const make = (id, response, overrides = {}) =>
+    restEvent("google", "cal", id, {
+      start_time: new Date(now - 5 * 60_000).toISOString(),
+      end_time: new Date(now + 30 * 60_000).toISOString(),
+      self_response_status: response,
+      attendees_count: 2,
+      attendees: '[{"self":true,"responseStatus":"accepted"},{"responseStatus":"declined"}]',
+      ...overrides,
+    });
+  const declined = make("declined", "declined", {
+    hangout_link: "https://meet.google.com/abc-defg-hij",
+  });
+  const rows = [
+    declined,
+    ...["accepted", "tentative", "needsAction", "unknown"].map((response) =>
+      make(response, response)
+    ),
+  ];
+  db.upsertCalendarEvents(rows);
+  const note = db.saveNote("Declined meeting notes", "Keep", "meeting").note;
+  db.updateNote(note.id, { calendar_event_id: "declined" });
+  const expected = ["accepted", "needsAction", "tentative", "unknown"];
+  for (const events of [db.getUpcomingEvents(60), db.getActiveEvents()]) {
+    assert.deepEqual(events.map((e) => e.id).sort(), expected);
+  }
+  assert.equal(db.getCalendarEventById("declined").hangout_link, declined.hangout_link);
+  assert.equal(
+    db.db.prepare("SELECT calendar_event_id FROM notes WHERE id=?").get(note.id).calendar_event_id,
+    "declined"
+  );
+  db.upsertCalendarEvents([{ ...declined, self_response_status: "accepted" }]);
+  assert.ok(db.getUpcomingEvents(60).some((e) => e.id === "declined"));
+  assert.ok(db.getActiveEvents().some((e) => e.id === "declined"));
+});
+
+test("declined REST suppresses its stale Apple mirror", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  t.after(() => db.db.close());
+  const now = Date.now();
+  const common = {
+    summary: "Weekly planning",
+    start_time: new Date(now - 5 * 60_000).toISOString(),
+    end_time: new Date(now + 30 * 60_000).toISOString(),
+  };
+  db.upsertCalendarEvents([
+    restEvent("google", "cal", "rest-instance", {
+      ...common,
+      self_response_status: "declined",
+    }),
+    appleEvent("apple-instance", { ...common, self_response_status: "accepted" }),
+  ]);
+  assert.deepEqual(db.getUpcomingEvents(120), []);
+  assert.deepEqual(db.getActiveEvents(), []);
 });

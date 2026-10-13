@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {
   isAllowedAppNavigation,
   isExternalBrowserUrl,
+  isExternalOpenUrl,
 } = require("../../src/helpers/navigationGuard.js");
 
 const PACKAGED_APP_URL =
@@ -57,4 +58,15 @@ test("only http(s) targets are handed to the external browser", () => {
   assert.equal(isExternalBrowserUrl("file:///etc/passwd"), false);
   assert.equal(isExternalBrowserUrl("about:blank"), false);
   assert.equal(isExternalBrowserUrl("devtools://devtools/bundled/inspector.html"), false);
+});
+
+test("window.open hands the OS only web and mail links, never a local path", () => {
+  assert.equal(isExternalOpenUrl("https://example.com/docs"), true);
+  assert.equal(isExternalOpenUrl("http://example.com/"), true);
+  assert.equal(isExternalOpenUrl("mailto:someone@example.com"), true);
+  // A relative Markdown link resolves against the packaged file:// page.
+  assert.equal(isExternalOpenUrl("file:///C:/Windows/System32/cmd.exe"), false);
+  assert.equal(isExternalOpenUrl("file://attacker.example/share/run.exe"), false);
+  assert.equal(isExternalOpenUrl("javascript:alert(1)"), false);
+  assert.equal(isExternalOpenUrl("about:blank"), false);
 });

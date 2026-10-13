@@ -5,6 +5,7 @@ import { SystemIcon } from '@/components/ui/SystemIcon';
 import type { GoogleCalendarAccount, GoogleCalendarEvent } from '@/data/calendarTypes';
 import { buildCalendarMeetingContext } from '@/lib/calendar/meetingContext';
 import { DEFAULT_MEETING_TITLE } from '@/lib/notes/meetingConstants';
+import { isSameDay } from '@/lib/notes/noteMeta';
 import { cn } from '@/lib/utils';
 
 type CalendarEventPickerProps = {
@@ -18,11 +19,6 @@ const parseEventDate = (value: string): Date | null => {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
 };
-
-const isSameDay = (left: Date, right: Date): boolean =>
-  left.getFullYear() === right.getFullYear() &&
-  left.getMonth() === right.getMonth() &&
-  left.getDate() === right.getDate();
 
 const formatEventTime = (event: GoogleCalendarEvent, now = new Date()): string => {
   if (event.allDay === 1) return 'All day';

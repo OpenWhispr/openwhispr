@@ -3,6 +3,7 @@ import * as React from "react";
 export type ToastPresentation = "standard" | "dictation-error";
 
 export interface TechnicalErrorDetailsData {
+  provider?: string;
   status?: number;
   exceptionType?: string;
   requestId?: string;
@@ -15,6 +16,8 @@ export interface ToastActionConfig {
   onClick: () => void | boolean | Promise<void | boolean>;
   feedback?: { successLabel: string; failureLabel: string };
   dismissOnClick?: boolean;
+  /** Shown as its icon alone, after the labelled actions; the label becomes its accessible name. */
+  iconOnly?: boolean;
 }
 
 export interface ToastProps {
@@ -27,6 +30,8 @@ export interface ToastProps {
   technicalDetails?: TechnicalErrorDetailsData;
   action?: React.ReactNode;
   actions?: ToastActionConfig[];
+  /** Which side of a standard toast its `actions` row sits on; start by default. */
+  actionsAlign?: "start" | "end";
   presentation?: ToastPresentation;
   variant?: "default" | "destructive" | "success";
   duration?: number;

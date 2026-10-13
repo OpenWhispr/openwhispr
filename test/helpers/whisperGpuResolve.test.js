@@ -128,3 +128,39 @@ test("resolveFailedGpuBackends tolerates empty and messy values", () => {
   assert.deepEqual(resolveFailedGpuBackends("cuda"), ["cuda"]);
   assert.deepEqual(resolveFailedGpuBackends(" cuda , vulkan ,"), ["cuda", "vulkan"]);
 });
+
+// The pack the settings card describes (#1736): the pack every server start
+// picks, else the installed pack that failed, CUDA first, else none
+const ONLY_CUDA = { cuda: true };
+const ONLY_VULKAN = { vulkan: true };
+const BOTH = { cuda: true, vulkan: true };
+for (const [name, packs, failed, optedOut, expected] of [
+  ["only CUDA", ONLY_CUDA, "", "", "cuda"],
+  ["only CUDA, failed", ONLY_CUDA, "cuda", "", "cuda"],
+  ["only CUDA, opted out", ONLY_CUDA, "", "CUDA", null],
+  ["only Vulkan", ONLY_VULKAN, "", "", "vulkan"],
+  ["only Vulkan, failed", ONLY_VULKAN, "vulkan", "", "vulkan"],
+  ["only Vulkan, opted out", ONLY_VULKAN, "", "VULKAN", null],
+  ["no pack", {}, "cuda,vulkan", "", null],
+  ["both packs", BOTH, "", "", "cuda"],
+  ["both packs, CUDA failed", BOTH, "cuda", "", "vulkan"],
+  ["both packs, CUDA opted out", BOTH, "", "CUDA", "vulkan"],
+  ["both packs, CUDA failed, Vulkan opted out", BOTH, "cuda", "VULKAN", "cuda"],
+  ["both packs, Vulkan failed", BOTH, "vulkan", "", "cuda"],
+  ["both packs, both failed", BOTH, "cuda,vulkan", "", "cuda"],
+  ["both packs, CUDA opted out, Vulkan failed", BOTH, "vulkan", "CUDA", "vulkan"],
+]) {
+  test(`the pack in use with ${name}: ${expected}`, () => {
+    process.env.WHISPER_GPU_FAILED = failed;
+    if (optedOut) process.env[`WHISPER_${optedOut}_ENABLED`] = "false";
+    const { cuda = false, vulkan = false } = packs;
+    const manager = managerWith({ cudaDownloaded: cuda, vulkanDownloaded: vulkan });
+
+    assert.equal(manager.resolveGpuPackInUse(), expected);
+  });
+}
+
+test("without injected binary managers (macOS) no pack is in use", () => {
+  process.env.WHISPER_GPU_FAILED = "cuda,vulkan";
+  assert.equal(new WhisperManager().resolveGpuPackInUse(), null);
+});

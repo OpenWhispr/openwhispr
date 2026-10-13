@@ -164,6 +164,13 @@ class WindowsKeyManager extends EventEmitter {
     return this.resolveListenerBinary() !== null;
   }
 
+  // Same shape as LinuxKeyManager.checkAvailability, for HotkeyManager's probe.
+  checkAvailability() {
+    return this.isAvailable()
+      ? { available: true }
+      : { available: false, reason: "binary_missing" };
+  }
+
   /**
    * Report an error (only once per session to avoid log spam)
    */

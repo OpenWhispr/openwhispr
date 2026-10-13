@@ -277,7 +277,8 @@ function parseWavFormat(wavBuffer) {
       };
     }
 
-    offset += 8 + chunkSize;
+    // RIFF chunks are word-aligned; chunkSize excludes the padding byte.
+    offset += 8 + chunkSize + (chunkSize % 2);
   }
 
   return null;
@@ -317,7 +318,8 @@ function wavToFloat32Samples(wavBuffer) {
       break;
     }
 
-    offset += 8 + chunkSize;
+    // RIFF chunks are word-aligned; chunkSize excludes the padding byte.
+    offset += 8 + chunkSize + (chunkSize % 2);
   }
 
   if (dataOffset < 0) {

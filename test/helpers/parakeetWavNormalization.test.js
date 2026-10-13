@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { getRequiredModelFiles } = require("../../src/helpers/parakeetModelInfo");
+const { insertWavChunk } = require("./harness/wavFixtures");
 
 const MODEL_NAME = "parakeet-tdt-0.6b-v3";
 
@@ -58,10 +59,11 @@ function createPcm16Wav(sampleValue, sampleCount = 160) {
   return wav;
 }
 
-test("transcribes audible mono 16 kHz float32 WAV input", async () => {
+test("transcribes audible mono 16 kHz WAV input", async (t) => {
   const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-parakeet-wav-test-"));
   const originalLoad = Module._load;
   let ffmpegUtils;
+  let conversions = 0;
   Module._load = function loadWithElectronStub(request, parent, isMain) {
     if (request === "electron") {
       return {
@@ -76,6 +78,7 @@ test("transcribes audible mono 16 kHz float32 WAV input", async () => {
         ...ffmpegUtils,
         getFFmpegPath: () => "/mock/ffmpeg",
         convertToWav: async (_inputPath, outputPath) => {
+          conversions += 1;
           fs.writeFileSync(outputPath, createPcm16Wav(0.5));
         },
       };
@@ -107,12 +110,35 @@ test("transcribes audible mono 16 kHz float32 WAV input", async () => {
         return { text: "audible", elapsed: 0 };
       },
     };
+    // Subtests share the manager, so each starts from a clean slate.
+    t.beforeEach(() => {
+      conversions = 0;
+      receivedSamples = undefined;
+    });
 
-    const result = await manager.transcribe(createFloat32Wav(0.5), { modelName: MODEL_NAME });
+    await t.test("float32 input still uses normalization", async () => {
+      const result = await manager.transcribe(createFloat32Wav(0.5), { modelName: MODEL_NAME });
+      assert.equal(result.text, "audible");
+      assert.equal(conversions, 1);
+      assert.ok(receivedSamples);
+      assert.ok(Math.abs(receivedSamples.readFloatLE(0) - 0.5) < 0.001);
+    });
 
-    assert.equal(result.text, "audible");
-    assert.ok(receivedSamples);
-    assert.ok(Math.abs(receivedSamples.readFloatLE(0) - 0.5) < 0.001);
+    for (const [name, offset] of [
+      ["fmt", 12],
+      ["data", 36],
+    ]) {
+      await t.test(`PCM16 input with odd metadata before ${name} skips conversion`, async () => {
+        const input = insertWavChunk(createPcm16Wav(0.5), "JUNK", Buffer.from([42]), offset);
+        const result = await manager.transcribe(input, { modelName: MODEL_NAME });
+        assert.equal(result.text, "audible");
+        assert.equal(conversions, 0);
+        assert.equal(receivedSamples.length, 160 * 4);
+        for (let index = 0; index < 160; index += 1) {
+          assert.equal(receivedSamples.readFloatLE(index * 4), Math.round(0.5 * 32767) / 32768);
+        }
+      });
+    }
   } finally {
     fs.rmSync(tempHome, { recursive: true, force: true });
   }

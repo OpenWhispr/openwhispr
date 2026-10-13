@@ -57,7 +57,7 @@ export function ToneStep(): ReactElement {
             The same lunch invitation, written five different ways.
           </Text>
           <Text className="mt-1.5 text-[12px] leading-[17px] text-secondaryLabel">
-            Live tones need Cloud, Dictation Cleanup, and an account.
+            Live tones need Cloud, Text Cleanup, and an account.
           </Text>
         </View>
         {KEYBOARD_TONES.map((tone) => (

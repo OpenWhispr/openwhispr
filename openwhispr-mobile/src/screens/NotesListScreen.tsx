@@ -15,14 +15,11 @@ import { NewFolderSheet } from '@/components/notes/NewFolderSheet';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { Fab, FAB_BOTTOM_PADDING, type FabAction } from '@/components/ui/Fab';
 import { groupNotesByDate } from '@/lib/groupNotesByDate';
-import { canMoveBetweenSpaces } from '@/lib/spacePermissions';
 import { safeHaptics } from '@/lib/utils';
 import { confirmDestructive } from '@/lib/alerts';
 import { SyncStatusLabel } from '@/components/notes/SyncStatusLabel';
-import { VoiceProfilePromptCard } from '@/components/notes/VoiceProfilePromptCard';
-import { useSyncStore } from '@/sync/useSyncStore';
-import { requestSync } from '@/sync/syncEngine';
-import { useConfigStore } from '@/store/useConfigStore';
+import { useManualSyncRefresh } from '@/hooks/useManualSyncRefresh';
+import { useMoveNote } from '@/hooks/useMoveNote';
 
 export default function NotesListScreen() {
   const params = useLocalSearchParams<{ folderId?: string; spaceId?: string }>();
@@ -45,18 +42,13 @@ export default function NotesListScreen() {
     searchQuery,
     createNote,
     deleteNote,
-    moveNoteToFolder,
-    moveNoteToSpace,
     createFolder,
     renameFolder,
     deleteFolderSafe,
     voiceProfiles,
     loadVoiceProfiles,
   } = useNotesStore();
-  const config = useConfigStore((s) => s.config);
-  const updateConfig = useConfigStore((s) => s.updateConfig);
 
-  const [movingNoteId, setMovingNoteId] = useState<number | null>(null);
   const [newFolderVisible, setNewFolderVisible] = useState(false);
 
   useEffect(() => {
@@ -97,20 +89,11 @@ export default function NotesListScreen() {
     [spaceId, folderId, spaceFolders],
   );
   const moveTargetFolders = contentSpaceId != null ? spaceFolders : folders;
-
-  // Where this note is allowed to go, by desktop's rule: personal content may
-  // move to any team space, while team content stays inside its own workspace —
-  // never back to the private space, and never across workspaces.
-  const moveTargetSpaces = useMemo(() => {
-    const from =
-      contentSpaceId != null
-        ? spaces.find((s) => s.id === contentSpaceId)
-        : spaces.find((s) => s.kind === 'private');
-    if (!from) return [];
-    return spaces.filter(
-      (space) => space.kind === 'team' && space.id !== from.id && canMoveBetweenSpaces(from, space),
-    );
-  }, [spaces, contentSpaceId]);
+  const move = useMoveNote({
+    scopeSpaceId: contentSpaceId,
+    targetFolders: moveTargetFolders,
+    excludeFolderId: activeFolderId,
+  });
 
   const buckets = useMemo(() => groupNotesByDate(notes), [notes]);
   const totalCount = useMemo(() => {
@@ -124,10 +107,7 @@ export default function NotesListScreen() {
   // still be able to report "no results".
   const showSpaceFolders = spaceId != null && spaceFolders.length > 0 && !searchQuery;
 
-  const syncStatus = useSyncStore((s) => s.status);
-  const onRefresh = useCallback(() => {
-    requestSync('manual');
-  }, []);
+  const { refreshing, onRefresh } = useManualSyncRefresh();
 
   const handleNotePress = useCallback(
     (id: number) => {
@@ -146,46 +126,6 @@ export default function NotesListScreen() {
       });
     },
     [deleteNote],
-  );
-
-  const openMoveSheet = useCallback((noteId: number) => {
-    safeHaptics('medium');
-    setMovingNoteId(noteId);
-  }, []);
-
-  const closeMoveSheet = useCallback(() => setMovingNoteId(null), []);
-
-  const handlePickFolder = useCallback(
-    (targetFolderId: number) => {
-      if (movingNoteId != null) {
-        moveNoteToFolder(movingNoteId, targetFolderId);
-        safeHaptics('success');
-      }
-      setMovingNoteId(null);
-    },
-    [movingNoteId, moveNoteToFolder],
-  );
-
-  const handleCreateAndPick = useCallback(
-    (name: string) => {
-      const folder = createFolder(name, contentSpaceId ?? undefined);
-      if (movingNoteId != null) {
-        moveNoteToFolder(movingNoteId, folder.id);
-      }
-      setMovingNoteId(null);
-    },
-    [movingNoteId, createFolder, moveNoteToFolder, contentSpaceId],
-  );
-
-  const handlePickSpace = useCallback(
-    (targetSpaceId: number) => {
-      if (movingNoteId != null) {
-        moveNoteToSpace(movingNoteId, targetSpaceId);
-        safeHaptics('success');
-      }
-      setMovingNoteId(null);
-    },
-    [movingNoteId, moveNoteToSpace],
   );
 
   const handleCompose = useCallback(() => {
@@ -271,32 +211,23 @@ export default function NotesListScreen() {
       if (id === 'note') {
         handleCompose();
       } else if (id === 'meeting') {
-        router.push('/(tabs)/(notes)/meeting-record');
+        // The meeting is filed where it was started: this folder, or this space.
+        const startedIn: { folderId?: string; spaceId?: string } = {};
+        if (params.folderId) startedIn.folderId = params.folderId;
+        else if (params.spaceId) startedIn.spaceId = params.spaceId;
+        router.push({ pathname: '/(tabs)/(notes)/meeting-record', params: startedIn });
       } else if (id === 'folder') {
         safeHaptics('light');
         setNewFolderVisible(true);
       }
     },
-    [handleCompose],
+    [handleCompose, params.folderId, params.spaceId],
   );
-
-  const hasOwnerProfile = voiceProfiles.some((profile) => profile.isOwner === 1);
-  const showVoiceProfilePrompt = !hasOwnerProfile && !config?.voiceProfilePromptDismissedAt;
 
   const openVoiceProfiles = useCallback(() => {
     safeHaptics('selection');
     router.push('/(tabs)/(notes)/voice-profiles');
   }, []);
-
-  const openOwnerEnrollment = useCallback(() => {
-    safeHaptics('selection');
-    router.push('/(tabs)/(notes)/voice-enrollment?owner=1');
-  }, []);
-
-  const dismissVoiceProfilePrompt = useCallback(() => {
-    safeHaptics('light');
-    updateConfig({ voiceProfilePromptDismissedAt: new Date().toISOString() });
-  }, [updateConfig]);
 
   return (
     <View className="flex-1 bg-systemBackground">
@@ -313,17 +244,10 @@ export default function NotesListScreen() {
         }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
-        refreshControl={
-          <RefreshControl refreshing={syncStatus === 'running'} onRefresh={onRefresh} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <Text className="mb-2 text-[15px] text-tertiaryLabel">{`${totalCount} ${totalCount === 1 ? 'Note' : 'Notes'}`}</Text>
         <SyncStatusLabel />
-        <VoiceProfilePromptCard
-          visible={showVoiceProfilePrompt && !searchQuery}
-          onEnroll={openOwnerEnrollment}
-          onDismiss={dismissVoiceProfilePrompt}
-        />
 
         <View className="mb-2">
           <GroupedList>
@@ -340,8 +264,8 @@ export default function NotesListScreen() {
                   <Text className="text-[16px] font-medium text-label">Voice Profiles</Text>
                   <Text className="mt-0.5 text-[13px] text-secondaryLabel">
                     {voiceProfiles.length === 0
-                      ? 'Enroll voices for meeting labels'
-                      : `${voiceProfiles.length} enrolled`}
+                      ? 'Teach OpenWhispr your voice'
+                      : `${voiceProfiles.length} ${voiceProfiles.length === 1 ? 'voice' : 'voices'}`}
                   </Text>
                 </View>
                 <SystemIcon
@@ -436,9 +360,9 @@ export default function NotesListScreen() {
                     note={note}
                     bucket={bucket.key}
                     onPress={() => handleNotePress(note.id)}
-                    onLongPress={() => openMoveSheet(note.id)}
+                    onLongPress={() => move.open(note.id)}
                     onDelete={() => handleDeleteNote(note.id)}
-                    onMove={() => openMoveSheet(note.id)}
+                    onMove={() => move.open(note.id)}
                   />
                 ))}
               </GroupedList>
@@ -461,18 +385,7 @@ export default function NotesListScreen() {
         onCreate={handleCreateFolderInSpace}
       />
 
-      <MoveToFolderSheet
-        visible={movingNoteId != null}
-        folders={moveTargetFolders}
-        folderCounts={folderCounts}
-        excludeFolderId={activeFolderId}
-        onClose={closeMoveSheet}
-        onPickFolder={handlePickFolder}
-        onCreateAndPick={handleCreateAndPick}
-        spaces={moveTargetSpaces}
-        activeSpaceId={contentSpaceId}
-        onPickSpace={handlePickSpace}
-      />
+      <MoveToFolderSheet {...move.sheetProps} />
     </View>
   );
 }

@@ -1035,6 +1035,7 @@ export function LocalModelSetupStep({
     pendingSelection && pendingDownload.isDownloadingModel(pendingSelection.modelId)
   );
   const canProceed = selectedReady || hasPendingDownload;
+  const showSkip = anyDownloadActive || (assistant && !selectedReady);
 
   const proceed = () => {
     // Leaving mid-download is the same situation as "download in background":
@@ -1046,8 +1047,6 @@ export function LocalModelSetupStep({
     onProceed();
   };
 
-  // Only reachable while a download runs (see the action row), so the transfer
-  // always needs the tray to apply its pending selection once it lands.
   const skip = () => {
     localStorage.setItem("localSetupPending", "true");
     onSkip();
@@ -1184,12 +1183,15 @@ export function LocalModelSetupStep({
         })}
       </div>
 
-      <div className={`mt-5 grid gap-2 ${anyDownloadActive ? "grid-cols-2" : "grid-cols-1"}`}>
-        {/* Skip means "don't wait for this download", never "set up local with no
-            model": leaving with nothing on disk still commits useLocalWhisper,
-            and whisper.js then refuses to load the selected model. */}
-        {anyDownloadActive && (
-          <StepSecondaryAction onClick={skip} disabled={!canProceed} className="h-10!">
+      <div className={`mt-5 grid gap-2 ${showSkip ? "grid-cols-2" : "grid-cols-1"}`}>
+        {/* On the assistant step, Skip also lets local-dictation users finish
+            without configuring a cleanup model. */}
+        {showSkip && (
+          <StepSecondaryAction
+            onClick={skip}
+            disabled={!assistant && !canProceed}
+            className="h-10!"
+          >
             {t("common.skip")}
           </StepSecondaryAction>
         )}

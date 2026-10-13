@@ -26,6 +26,8 @@ jest.mock('@/store/useConfigStore', () => ({
 import {
   clearLocalReasoningReadinessCache,
   getLocalReasoningReadiness,
+  getLocalReasoningUnavailableMessage,
+  isLocalReasoningUnsupported,
   shouldUseLocalReasoning,
 } from '../localReasoning';
 import { AppleLLM } from '@/lib/appleLLM';
@@ -91,4 +93,45 @@ describe('local reasoning readiness policy', () => {
     mockProcessingState.activeMode = 'private';
     await expect(shouldUseLocalReasoning()).resolves.toBe(false);
   });
+});
+
+it('explains Apple Intelligence being off without assuming the request is a note', () => {
+  const message = getLocalReasoningUnavailableMessage({
+    status: 'appleIntelligenceOff',
+    tokenCounting: false,
+  });
+  expect(message).toContain('Apple Intelligence is turned off');
+  expect(message).not.toMatch(/note/i);
+});
+
+it.each([
+  ['deviceNotEligible', 'unsupportedDevice'],
+  ['unsupportedOS', 'unsupportedOS'],
+])(
+  'reports an iPhone that cannot run Apple Intelligence (%s) as unsupported',
+  async (native, status) => {
+    mockAppleAvailability.mockResolvedValue({ status: native, tokenCounting: false });
+
+    const readiness = await getLocalReasoningReadiness();
+
+    expect(readiness.status).toBe(status);
+    expect(isLocalReasoningUnsupported(readiness)).toBe(true);
+  },
+);
+
+it.each(['ready', 'disabled', 'appleIntelligenceOff', 'modelNotReady', 'unavailable'] as const)(
+  'does not treat %s as an unsupported iPhone, since it can change',
+  (status) => {
+    expect(isLocalReasoningUnsupported({ status, tokenCounting: false })).toBe(false);
+  },
+);
+
+it.each([
+  [
+    'unsupportedDevice',
+    'On-Device AI needs an iPhone with Apple Intelligence (iPhone 15 Pro or later).',
+  ],
+  ['unsupportedOS', 'On-Device AI needs iOS 26 or later on an iPhone with Apple Intelligence.'],
+] as const)('says what an unsupported iPhone needs (%s)', (status, message) => {
+  expect(getLocalReasoningUnavailableMessage({ status, tokenCounting: false })).toBe(message);
 });

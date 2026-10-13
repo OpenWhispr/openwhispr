@@ -6,6 +6,7 @@ const fs = require("fs");
 const os = require("os");
 const debugLogger = require("./debugLogger");
 const { getLinuxSessionInfo } = require("./linuxSession");
+const { getCosmicActiveAppId } = require("./cosmicToplevel");
 
 const CACHE_TTL_MS = 30000;
 
@@ -20,6 +21,12 @@ const PASTE_DELAYS = {
   win32_pwsh: 40,
   linux: 50,
 };
+
+// How long a Linux paste or copy waits for the user to let go of held modifiers
+// before giving up and leaving the text on the clipboard. Covers someone still
+// resting on the rest of a push-to-talk chord; a key held on purpose past this
+// surfaces as an unpasted transcript instead of an indefinite wait.
+const MODIFIER_RELEASE_WAIT_MS = 1500;
 
 const RESTORE_DELAYS = {
   darwin: 450,
@@ -60,6 +67,9 @@ const LINUX_TERMINAL_CLASSES = [
   "ptyxis",
   "kgx",
   "org.gnome.console",
+  "cosmicterm",
+  "xst",
+  "stterm",
 ];
 
 // macOS reports localized app names rather than window classes, and iTerm2 has
@@ -239,11 +249,15 @@ class ClipboardManager {
     return null;
   }
 
-  // Accepts a Linux window class or a macOS app name.
+  // Accepts a Linux window class or a macOS app name. A short name like "st" would
+  // match inside unrelated names ("com.system76.CosmicEdit"), so it must be a whole word.
   isTerminalSignature(signature) {
     if (!signature) return false;
     const normalized = String(signature).toLowerCase();
-    return TERMINAL_SIGNATURES.some((term) => normalized.includes(term));
+    const words = normalized.split(/[^a-z0-9]+/);
+    return TERMINAL_SIGNATURES.some((term) =>
+      term.length > 2 ? normalized.includes(term) : words.includes(term)
+    );
   }
 
   isLinuxTerminalWindowClass(windowClass) {
@@ -681,6 +695,65 @@ class ClipboardManager {
       debugLogger.warn("hyprctl window detection failed", { error: err?.message }, "clipboard");
       return null;
     }
+  }
+
+  // A paste or copy chord injected while the user still holds a modifier reaches
+  // the target as a different shortcut (Super+Ctrl+V), and the text is lost.
+  // Resolves { state, waitedMs }: "released" (waitedMs > 0 when it had to wait),
+  // "held" once the wait runs out, or "unknown" when the key state can't be read,
+  // in which case the caller proceeds as it always has.
+  _awaitModifierRelease() {
+    const unknown = { state: "unknown", waitedMs: 0 };
+    const binary = this.resolveLinuxFastPasteBinary();
+    if (!binary) return Promise.resolve(unknown);
+
+    return new Promise((resolve) => {
+      // --capabilities comes first so an older binary that doesn't know the wait
+      // flag prints its capabilities and exits instead of falling through to a paste.
+      const proc = spawn(binary, [
+        "--capabilities",
+        "--await-modifier-release",
+        String(MODIFIER_RELEASE_WAIT_MS),
+      ]);
+      let stdout = "";
+      let timedOut = false;
+      const timeoutId = setTimeout(() => {
+        timedOut = true;
+        killProcess(proc, "SIGKILL");
+        resolve(unknown);
+      }, MODIFIER_RELEASE_WAIT_MS + 1000);
+
+      proc.stdout?.on("data", (data) => {
+        stdout += data.toString();
+      });
+
+      proc.on("close", () => {
+        if (timedOut) return;
+        clearTimeout(timeoutId);
+        const [, state = "unknown", waitedMs = "0"] =
+          stdout.match(/^MODIFIERS (released|held|unknown) (\d+)$/m) || [];
+        if (state === "held" || Number(waitedMs) > 0) {
+          debugLogger.info("Waited for held modifier keys", { state, waitedMs }, "clipboard");
+        }
+        // "unknown" (no /dev/input access on Wayland, or a helper too old for the
+        // flag) means the wait is inert; say so once so support can tell it apart
+        // from a genuine "released".
+        if (state === "unknown" && !this._modifierStateUnreadableLogged) {
+          this._modifierStateUnreadableLogged = true;
+          debugLogger.info(
+            "Modifier key state unreadable, pasting without waiting",
+            { isWayland: getLinuxSessionInfo().isWayland, helperOutput: stdout.trim() },
+            "clipboard"
+          );
+        }
+        resolve({ state, waitedMs: Number(waitedMs) });
+      });
+
+      proc.on("error", () => {
+        clearTimeout(timeoutId);
+        resolve(unknown);
+      });
+    });
   }
 
   _runLinuxPasteCommand(command, args, label, { expectedOutput } = {}) {
@@ -1403,7 +1476,7 @@ class ClipboardManager {
   }
 
   async pasteLinux(originalClipboard, options = {}) {
-    const { isWayland, xwaylandAvailable, isGnome, isKde, isWlroots, isHyprland } =
+    const { isWayland, xwaylandAvailable, isGnome, isKde, isWlroots, isHyprland, isCosmic } =
       getLinuxSessionInfo();
     const webContents = options.webContents;
     const originalPrimary = options.originalPrimary ?? null;
@@ -1469,8 +1542,11 @@ class ClipboardManager {
 
     // Pre-detect the target window BEFORE our window takes focus or blurs,
     // so the fast-paste binary and fallback tools know where to send keystrokes.
+    // COSMIC's XWayland keeps naming the last X11 window while a native Wayland
+    // window has focus, so xdotool would name the wrong target there.
+    const xdotoolSeesTarget = xdotoolExists && !(isWayland && (!xwaylandAvailable || isCosmic));
     const preDetectTargetWindow = () => {
-      if (!xdotoolExists || (isWayland && !xwaylandAvailable)) return null;
+      if (!xdotoolSeesTarget) return null;
       try {
         const result = spawnSync("xdotool", ["getactivewindow"]);
         return result.status === 0 ? result.stdout.toString().trim() || null : null;
@@ -1480,7 +1556,7 @@ class ClipboardManager {
     };
 
     const preDetectWindowClass = (windowId) => {
-      if (!xdotoolExists || (isWayland && !xwaylandAvailable)) return null;
+      if (!xdotoolSeesTarget) return null;
       try {
         const args = windowId
           ? ["getwindowclassname", windowId]
@@ -1496,7 +1572,7 @@ class ClipboardManager {
     // xdotool, leaving WM_CLASS detection blind. Fall back to the owning process
     // name from /proc/<pid>/comm so terminal-aware paste keys still get chosen.
     const preDetectWindowPid = (windowId) => {
-      if (!xdotoolExists || (isWayland && !xwaylandAvailable)) return null;
+      if (!xdotoolSeesTarget) return null;
       try {
         const args = windowId ? ["getwindowpid", windowId] : ["getactivewindow", "getwindowpid"];
         const result = spawnSync("xdotool", args, { timeout: 1000 });
@@ -1534,6 +1610,16 @@ class ClipboardManager {
       }
     };
 
+    // Every tool below injects a chord, so wait here once for held modifiers. The
+    // text is already on the clipboard; returning before a restore is scheduled
+    // keeps it there for a manual paste. The wait comes before target detection:
+    // focus can move while a key is held, and the chord must suit the window the
+    // paste will actually reach.
+    if ((await this._awaitModifierRelease()).state === "held") {
+      this.safeLog("⌨️ Modifier keys still held, leaving the text on the clipboard");
+      return { pasted: false, reason: "modifiers-held", restoreComplete: Promise.resolve() };
+    }
+
     const targetWindowId = preDetectTargetWindow();
     let detectedWindowClass = preDetectWindowClass(targetWindowId);
 
@@ -1551,6 +1637,13 @@ class ClipboardManager {
       }
     }
 
+    if (!detectedWindowClass && isCosmic) {
+      detectedWindowClass = await getCosmicActiveAppId();
+      if (detectedWindowClass) {
+        debugLogger.debug("COSMIC window class detected", { detectedWindowClass }, "clipboard");
+      }
+    }
+
     const detectedWindowPid = preDetectWindowPid(targetWindowId);
     const detectedWindowComm = preDetectWindowComm(detectedWindowPid);
     const detectedIsElectron = preDetectIsElectron(detectedWindowPid);
@@ -1563,6 +1656,9 @@ class ClipboardManager {
     const windowSignals = [detectedWindowClass, detectedWindowComm].filter(Boolean);
     const signalsMatch = (needle) => windowSignals.some((signal) => signal.includes(needle));
     const detectedIsKonsole = signalsMatch("konsole");
+    const isTerminalTarget = windowSignals.some((signal) =>
+      this.isLinuxTerminalWindowClass(signal)
+    );
 
     // Shift+Insert is the universal Linux paste shortcut — works in terminals and
     // GUI apps, and (unlike Ctrl+V) is not intercepted by TUI agents like Codex,
@@ -1570,10 +1666,12 @@ class ClipboardManager {
     // can't be classified, or for Konsole which silently drops simulated Ctrl+Shift+V.
     // Electron apps (VS Code, Cursor) host TUI terminals too, so route them to
     // Shift+Insert on any desktop environment, even when their class is detected.
+    // COSMIC names the focused app but not its process, so Electron apps look like any
+    // other window there: only a known terminal leaves Shift+Insert.
     const useShiftInsert =
-      detectedIsKonsole || detectedIsElectron || (isWayland && windowSignals.length === 0);
-    const isTerminalTarget =
-      windowSignals.length > 0 && LINUX_TERMINAL_CLASSES.some((term) => signalsMatch(term));
+      detectedIsKonsole ||
+      detectedIsElectron ||
+      (isWayland && (windowSignals.length === 0 || (isCosmic && !isTerminalTarget)));
     const hyprlandShortcut = useShiftInsert
       ? { modifiers: "SHIFT", key: "Insert" }
       : isTerminalTarget
@@ -1612,7 +1710,9 @@ class ClipboardManager {
       else if (isTerminalTarget) args.push("--terminal");
     };
 
-    if (isWayland && isWlroots && wtypeExists) {
+    // cosmic-comp has the virtual keyboard too, and wtype is the only way to give a
+    // terminal there its Ctrl+Shift+V: the uinput fallback below is always Shift+Insert.
+    if (isWayland && wtypeExists && (isWlroots || (isCosmic && isTerminalTarget))) {
       try {
         await this._runLinuxPasteCommand("wtype", wtypeArgs, "wtype");
         this.safeLog("✅ Paste successful using wtype");
@@ -2273,7 +2373,7 @@ Would you like to open System Settings now?`;
       };
     }
 
-    const { isWayland, xwaylandAvailable, isGnome, isKde, isWlroots, isHyprland } =
+    const { isWayland, xwaylandAvailable, isGnome, isKde, isWlroots, isHyprland, isCosmic } =
       getLinuxSessionInfo();
     const linuxFastPaste = this.resolveLinuxFastPasteBinary();
     const hasNativeBinary = !!linuxFastPaste;
@@ -2294,7 +2394,9 @@ Would you like to open System Settings now?`;
 
     const tools = [];
     const hasHyprlandShortcut = isWayland && isHyprland && this.commandExists("hyprctl");
-    const hasWtype = isWayland && isWlroots && this.commandExists("wtype");
+    // On COSMIC wtype only pastes into terminals, so it is reported for the setup
+    // guidance but never listed as a paste tool or method there.
+    const hasWtype = isWayland && (isWlroots || isCosmic) && this.commandExists("wtype");
     const canUseYdotool = this.commandExists("ydotool") && this._isYdotoolDaemonRunning();
     const canUseXdotool = !isWayland || xwaylandAvailable;
 
@@ -2329,7 +2431,7 @@ Would you like to open System Settings now?`;
     let method = null;
     if (!isWayland) {
       method = nativeBinaryUsable ? "xtest" : tools[0] || null;
-    } else if (hasWtype) {
+    } else if (hasWtype && isWlroots) {
       method = "wtype";
     } else if (hasHyprlandShortcut) {
       method = "hyprland-sendshortcut";
@@ -2352,6 +2454,7 @@ Would you like to open System Settings now?`;
       hasUinput,
       hasWtype,
       isWlroots,
+      isCosmic,
       tools,
       recommendedInstall,
     };

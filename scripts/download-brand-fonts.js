@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 // Fetches the licensed Yowza font files from the private OpenWhispr/brand-assets
 // release into src/assets/fonts/yowza/, where src/brandFonts.ts picks them up
-// at build time. Blaze Type's EULA forbids redistributing the files, so they
+// at build time. The mobile app passes `--output-dir` to fetch into its own
+// assets instead. Blaze Type's EULA forbids redistributing the files, so they
 // are never committed; a build without access skips this step and the UI falls
-// back to Noto Sans. Set BRAND_FONTS_REQUIRED=1 (release CI) to fail instead.
+// back to its bundled font. Set BRAND_FONTS_REQUIRED=1 (release builds) to fail
+// instead.
 
 const fs = require("fs");
 const path = require("path");
@@ -19,7 +21,11 @@ const FILES = [
   "yowza-soft-std-regular.otf",
   "yowza-soft-std-medium.otf",
 ];
-const FONT_DIR = path.join(__dirname, "..", "src", "assets", "fonts", "yowza");
+const OUTPUT_DIR_INDEX = process.argv.indexOf("--output-dir");
+const FONT_DIR =
+  OUTPUT_DIR_INDEX !== -1 && process.argv[OUTPUT_DIR_INDEX + 1]
+    ? path.resolve(process.argv[OUTPUT_DIR_INDEX + 1])
+    : path.join(__dirname, "..", "src", "assets", "fonts", "yowza");
 const REQUIRED = process.env.BRAND_FONTS_REQUIRED === "1";
 
 function resolveToken() {
@@ -39,7 +45,7 @@ function skip(reason) {
     console.error(`  [brand-fonts] ${reason}`);
     process.exit(1);
   }
-  console.log(`  [brand-fonts] ${reason}; the app will fall back to Noto Sans.`);
+  console.log(`  [brand-fonts] ${reason}; the app will fall back to its bundled font.`);
 }
 
 function apiHeaders(token) {

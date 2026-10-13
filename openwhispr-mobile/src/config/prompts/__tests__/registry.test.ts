@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import {
   AGENT_NAME_PLACEHOLDER,
+  DEFAULT_ACTION_PROMPT,
   DEFAULT_CLEANUP_PROMPT,
   PROMPT_KIND_LIST,
   hasAgentNamePlaceholder,
@@ -15,11 +16,21 @@ import {
 const SHIPPED_CLEANUP_PROMPT_SHA256 =
   '58ed65fbc679a7bac1483ef850c51ac7932a02d17fab9ca688f4d11f6aa9b7e6';
 
+// SHA-256 of the agent prompt as copied from desktop's src/locales/en/prompts.json
+// ("fullPrompt"). The pin fails when this copy changes, as a reminder to make the
+// same change on desktop; it cannot see edits made on desktop.
+const SHIPPED_ACTION_PROMPT_SHA256 =
+  '9312644f8de56d874e0de9e18d610a3ed6afd0ca1b31411f02d021e012fee601';
+
 const sha256 = (text: string): string => createHash('sha256').update(text, 'utf8').digest('hex');
 
 describe('prompt registry', () => {
   it('ships the same default cleanup prompt as desktop and the API, byte for byte', () => {
     expect(sha256(DEFAULT_CLEANUP_PROMPT)).toBe(SHIPPED_CLEANUP_PROMPT_SHA256);
+  });
+
+  it('pins the agent prompt copied from desktop', () => {
+    expect(sha256(DEFAULT_ACTION_PROMPT)).toBe(SHIPPED_ACTION_PROMPT_SHA256);
   });
 
   it('keeps exactly one agent-name placeholder in the default cleanup prompt', () => {

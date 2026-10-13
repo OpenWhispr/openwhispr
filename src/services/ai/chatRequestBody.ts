@@ -77,7 +77,7 @@ export function isTruncatedFinishReason(reason: unknown): boolean {
  */
 export const TRUNCATED_OUTPUT_MESSAGE_KEY =
   "hooks.audioRecording.errorDescriptions.cleanupTruncated";
-const EMPTY_OUTPUT_MESSAGE_KEY = "hooks.audioRecording.errorDescriptions.cleanupEmptyReply";
+export const EMPTY_OUTPUT_MESSAGE_KEY = "hooks.audioRecording.errorDescriptions.cleanupEmptyReply";
 
 /** Output cut off at the token cap; providers may pass their own wording for the logs. */
 export function truncatedOutputError(

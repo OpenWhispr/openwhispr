@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { Check, Copy, Plus, X } from "../icons";
 import { BrandMarkIcon } from "./BrandMarkIcon";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
+import { TechnicalErrorDetails } from "../ui/TechnicalErrorDetails";
+import { openProviderSettings } from "../../utils/describeProviderError";
 import { Button } from "../ui/button";
 import { useChatPersistence } from "../chat/useChatPersistence";
 import { useChatStreaming } from "../chat/useChatStreaming";
@@ -42,6 +44,9 @@ import {
   deliverAssistantResponse,
   type AssistantResponseDelivery,
 } from "../../helpers/assistantResponseDelivery";
+import { buildAssistantCommandSendOptions } from "./assistantCommandOptions";
+import { ApprovalCard } from "../chat/ApprovalCard";
+import { approvalKey, useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
 
 export interface AssistantCommand {
   id: number;
@@ -117,6 +122,7 @@ export function AssistantPanel({
     setMessages,
     // Spoken commands answer on the Voice Assistant scope, not the Chat one.
     inferenceScope: "dictationAgent",
+    allowConnectors: true,
     onStreamComplete: (_assistantId, content, toolCalls) => {
       void persistence.saveAssistantMessage(content, toolCalls);
     },
@@ -195,28 +201,19 @@ export function AssistantPanel({
     }
     consumedCommandIdRef.current = pendingCommand.id;
     const commandId = pendingCommand.id;
-    const delivery = pendingCommand.delivery;
-    const targetsCapturedInput = delivery?.mode === "paste";
-    // A caret in a markdown-friendly app still keeps the compact pill.
-    const plainTextResponse = delivery?.mode === "paste" && delivery.plainText;
-    let responseDelivered = false;
+    const { options: sendOptions, wasDelivered } = buildAssistantCommandSendOptions(
+      pendingCommand,
+      {
+        onResponseContent,
+        deliver: deliverAssistantResponse,
+        confirmCopied: (content) => confirmCopied(content, AUTO_COPY_FEEDBACK_MS),
+      }
+    );
     if (pendingCommand.selectedContext) {
       setSelectedContext(null);
       onSelectionContextChange(null);
     }
-    void sendMessage(pendingCommand.text, {
-      attachment: pendingCommand.attachment ?? undefined,
-      selectedContext: pendingCommand.selectedContext ?? undefined,
-      suppressResponseContent: targetsCapturedInput,
-      plainTextResponse,
-      onComplete: delivery
-        ? async ({ content }) => {
-            const result = await deliverAssistantResponse(delivery, content);
-            responseDelivered = result.pasted;
-            if (result.copied) confirmCopied(content, AUTO_COPY_FEEDBACK_MS);
-          }
-        : undefined,
-    })
+    void sendMessage(pendingCommand.text, sendOptions)
       .then((sent) => {
         if (sent) {
           onCommandConsumed(commandId);
@@ -244,7 +241,7 @@ export function AssistantPanel({
           },
         ]);
       })
-      .finally(() => onCommandSettled(commandId, { showPanel: !responseDelivered }));
+      .finally(() => onCommandSettled(commandId, { showPanel: !wasDelivered() }));
   }, [
     historyReady,
     submissionInFlight,
@@ -253,13 +250,23 @@ export function AssistantPanel({
     onCommandDiscarded,
     onCommandSettled,
     onSelectionContextChange,
+    onResponseContent,
     confirmCopied,
     sendMessage,
     setMessages,
     t,
   ]);
 
-  const isToolExecuting = Boolean(streaming.activeToolName);
+  const approvalEntries = useConnectorApprovalStore((state) => state.entries);
+  const panelApprovals = latestAssistantMessage
+    ? (latestAssistantMessage.toolCalls ?? [])
+        .map((toolCall) => approvalEntries[approvalKey(latestAssistantMessage.id, toolCall.id)])
+        .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+    : [];
+  const approvalAwaitingUser = panelApprovals.some(
+    (entry) => entry.state === "pending" || entry.state === "committing"
+  );
+  const isToolExecuting = Boolean(streaming.activeToolName) && !approvalAwaitingUser;
   const isBusy = resolveAssistantPanelBusy({
     agentState: streaming.agentState,
     activeToolName: streaming.activeToolName,
@@ -503,22 +510,43 @@ export function AssistantPanel({
             }`}
           >
             {displayedResponse ? (
-              <div
-                ref={responseSelectionRootRef}
-                style={{ animation: "agent-message-in 160ms ease-out both" }}
-              >
-                <StableAssistantMarkdown
-                  content={displayedResponse}
-                  className="text-[15px] leading-relaxed text-foreground selection:bg-agent-brand/35 selection:text-foreground [&_p]:text-[15px] [&_li]:text-[15px]"
-                />
-                {latestAssistantMessage?.isStreaming && (
-                  <span
-                    className="ms-0.5 inline-block h-4 w-0.5 align-middle bg-foreground/70"
-                    style={{ animation: "agent-cursor-blink 1s ease-in-out infinite" }}
+              <>
+                <div
+                  ref={responseSelectionRootRef}
+                  style={{ animation: "agent-message-in 160ms ease-out both" }}
+                >
+                  <StableAssistantMarkdown
+                    content={displayedResponse}
+                    className="text-[15px] leading-relaxed text-foreground selection:bg-agent-brand/35 selection:text-foreground [&_p]:text-[15px] [&_li]:text-[15px]"
                   />
+                  {latestAssistantMessage?.isStreaming && (
+                    <span
+                      className="ms-0.5 inline-block h-4 w-0.5 align-middle bg-foreground/70"
+                      style={{ animation: "agent-cursor-blink 1s ease-in-out infinite" }}
+                    />
+                  )}
+                </div>
+                {/* Outside responseSelectionRootRef: a drag-select + copy over the
+                    response must never pick up these affordances. */}
+                {latestAssistantMessage?.error?.settingsTarget && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      openProviderSettings(latestAssistantMessage.error!.settingsTarget!)
+                    }
+                    className="mt-2 text-[13px] font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded-sm"
+                  >
+                    {t("providerErrors.openSettings")}
+                  </button>
                 )}
-              </div>
+                {latestAssistantMessage?.error?.technicalDetails && (
+                  <TechnicalErrorDetails details={latestAssistantMessage.error.technicalDetails} />
+                )}
+              </>
             ) : null}
+            {panelApprovals.map((entry) => (
+              <ApprovalCard key={entry.key} entry={entry} />
+            ))}
             {thinking && (
               <div role="status">
                 <span className="sr-only">{t("agentMode.input.thinking")}</span>

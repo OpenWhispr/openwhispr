@@ -27,7 +27,8 @@ const cloudSession = {
 };
 const { once, EventEmitter } = require("node:events");
 const { WebSocket, WebSocketServer } = require("ws");
-const { OrukeetStreaming } = require("../../src/helpers/orukeetStreaming");
+const orukeetStreamingModule = require("../../src/helpers/orukeetStreaming");
+const { OrukeetStreaming, MANAGED_STREAM_OPTIONS } = orukeetStreamingModule;
 const AgentStreamRequestRegistry = require("../../src/helpers/agentStreamRequestRegistry");
 let server,
   target,
@@ -103,6 +104,7 @@ Module._load = function loadWithMocks(request, parent, isMain) {
   if (parent?.filename === handlersModulePath) {
     if (request === "./orukeetStreaming")
       return {
+        ...orukeetStreamingModule,
         OrukeetStreaming: class extends OrukeetStreaming {
           constructor(options) {
             super({
@@ -253,6 +255,8 @@ test(
       true
     );
     const streaming = target._dictationStreaming;
+    assert.equal(streaming.livenessMs, MANAGED_STREAM_OPTIONS.livenessMs);
+    assert.equal(streaming.finalTimeoutMs, MANAGED_STREAM_OPTIONS.finalTimeoutMs);
     const closed = once(streaming.ws, "close");
     handlers.get("dictation-realtime-send")(event, Buffer.alloc(640));
     const final = await handlers.get("dictation-realtime-finalize")();
@@ -285,6 +289,7 @@ test("self-hosted IPC still retries a capacity-refused commit without re-uploadi
     baseUrl: cloudSession.baseUrl,
   });
   assert.equal(start.success, true);
+  assert.equal(target._dictationStreaming.livenessMs, null, "self-hosted servers are never pinged");
   handlers.get("dictation-realtime-send")(event, Buffer.alloc(640));
   const final = await handlers.get("dictation-realtime-finalize")();
 
@@ -455,6 +460,25 @@ test("warmups landing together mint one session and share its unused socket", as
   assert.equal(mints, 1);
   handlers.get("dictation-realtime-send")(event, Buffer.alloc(640));
   assert.equal((await handlers.get("dictation-realtime-finalize")()).success, true);
+  await handlers.get("dictation-realtime-stop")();
+});
+
+test("a start in another language still rides the warm socket", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  let mints = 0;
+  backendResponse = async () => {
+    mints += 1;
+    return Response.json(cloudSession);
+  };
+
+  // Orukeet detects the language itself, so a translation dictation or an
+  // Auto setting must not spend a second single-use GPU token.
+  await handlers.get("dictation-realtime-warmup")(event, { ...managedOptions, language: "en" });
+  const warm = target._dictationStreaming;
+  await handlers.get("dictation-realtime-start")(event, { ...managedOptions, language: "de" });
+
+  assert.equal(mints, 1);
+  assert.equal(target._dictationStreaming, warm);
   await handlers.get("dictation-realtime-stop")();
 });
 

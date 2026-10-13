@@ -27,7 +27,7 @@ function showUsageLimitFallback(): void {
 
   Alert.alert(
     'Weekly Limit Reached',
-    `You've used ${words} for this week.${resetLabel ? ` ${resetLabel}.` : ''} Switch to Private Mode for unlimited on-device dictation, or upgrade to Pro for unlimited cloud transcription.`,
+    `You've used ${words} for this week.${resetLabel ? ` ${resetLabel}.` : ''} Turn on Private Mode in Account → AI Models for unlimited on-device dictation, or upgrade to Pro for unlimited cloud transcription.`,
     [
       { text: 'OK', style: 'cancel' },
       { text: 'View Usage', onPress: () => router.push('/(account)') },

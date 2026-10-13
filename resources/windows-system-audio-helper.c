@@ -352,7 +352,9 @@ static HRESULT activate_process_loopback(
  * Activation succeeding proves only that the OS exposes process loopback; on
  * some machines it then delivers nothing but digital silence. Silence alone
  * is ambiguous — an idle machine looks identical — so it only counts as a
- * failure while a render endpoint is metering real output.
+ * failure while a render endpoint is metering real output. It stays armed
+ * after audible samples: Windows hides some apps' streams from process
+ * loopback (Teams call audio, openwhispr#1265) while passing others through.
  * ======================================================================== */
 
 static BOOL any_render_endpoint_audible(IMMDeviceEnumerator *enumerator)
@@ -444,9 +446,9 @@ static int run_capture(DWORD excludePid, UINT32 sampleRate)
     LARGE_INTEGER lastSilenceCheck;
     UINT64 emittedFrames = 0;
     IMMDeviceEnumerator *deviceEnumerator = NULL;
-    /* Disarmed for good once real audio proves capture works, or once the
-     * warning has been emitted — either way there is nothing left to watch. */
+    /* Disarmed once the warning is emitted or when no meter is available. */
     BOOL silenceDetectionArmed = TRUE;
+    BOOL capturedAudibleThisTick = FALSE;
     int endpointAudibleTicks = 0;
     const char *errorCode = NULL;
     HRESULT hr;
@@ -548,8 +550,9 @@ static int run_capture(DWORD excludePid, UINT32 sampleRate)
                     }
                 }
 
-                if (silenceDetectionArmed && samples_are_audible(monoBuffer, frames)) {
-                    silenceDetectionArmed = FALSE;
+                if (silenceDetectionArmed && !capturedAudibleThisTick &&
+                    samples_are_audible(monoBuffer, frames)) {
+                    capturedAudibleThisTick = TRUE;
                 }
 
                 if (!write_pcm(monoBuffer, frames)) {
@@ -615,13 +618,14 @@ static int run_capture(DWORD excludePid, UINT32 sampleRate)
         if (silenceDetectionArmed &&
             now.QuadPart - lastSilenceCheck.QuadPart >= qpcFrequency.QuadPart) {
             lastSilenceCheck = now;
-            if (!any_render_endpoint_audible(deviceEnumerator)) {
+            if (capturedAudibleThisTick || !any_render_endpoint_audible(deviceEnumerator)) {
                 endpointAudibleTicks = 0;
             } else if (++endpointAudibleTicks >= CAPTURE_SILENT_CONFIRM_TICKS) {
                 silenceDetectionArmed = FALSE;
                 emit_event("warning", "capture_silent",
                            "Process loopback captured silence while a render endpoint was playing");
             }
+            capturedAudibleThisTick = FALSE;
         }
 
         fflush(stdout);

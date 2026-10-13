@@ -5,6 +5,7 @@ import { notesRepository, spacesRepository } from '@/data';
 import type { Note, Folder, NoteUpdate, Space } from '@/data';
 import type { ConflictedNote, Segment, Speaker, SpeakerProfile } from '@/data/types';
 import type { CalendarParticipant } from '@/data/calendarTypes';
+import type { Diarizer } from '@/lib/diarization/diarizer';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { useConfigStore } from '@/store/useConfigStore';
@@ -19,8 +20,11 @@ import { buildMergeTargetPatch, buildRenameSpeakerPatch } from '@/lib/diarizatio
 import {
   buildConfirmedSpeakerPatch,
   buildRejectedSuggestionPatch,
+  hasFiniteNonZeroNorm,
+  l2Normalize,
   runningMeanEmbedding,
 } from '@/lib/diarization/voiceprints';
+import { SpeakerProfileOwnerAlreadyExistsError } from '@/data/local/notesRepository';
 import {
   buildActionSystemPrompt,
   isDefaultGenerateNotesAction,
@@ -113,6 +117,37 @@ const reloadVoiceProfiles = (): Pick<NotesStore, 'voiceProfiles'> => ({
   voiceProfiles: notesRepository.getSpeakerProfiles(),
 });
 
+/** Labels a meeting's speakers from the saved voice profiles; true when any speaker changed. */
+const identifyMeetingSpeakers = (
+  noteId: number,
+  speakerEmbeddingsByLabel: Record<string, number[]>,
+  onlyProfileId?: number,
+): boolean => {
+  const note = notesRepository.getNoteById(noteId);
+  const preferredProfileEmails = getCalendarParticipantEmails(
+    parseCalendarParticipants(note?.participants ?? null) ?? [],
+  );
+  const identification = identifyNoteSpeakers(
+    noteId,
+    speakerEmbeddingsByLabel,
+    { repo: notesRepository },
+    { preferredProfileEmails, onlyProfileId },
+  );
+  return identification.updatedSpeakerIds.length > 0;
+};
+
+let diarizerModelDownload: Promise<void> | null = null;
+
+// Diarizing with the model missing downloads it natively, into the folder a download
+// already running is writing, so it waits for that download first.
+const diarizerAfterModelDownload = (diarizer: Diarizer): Diarizer => ({
+  ...diarizer,
+  diarize: async (wavUri, numberOfSpeakers) => {
+    await diarizerModelDownload?.catch(() => undefined);
+    return diarizer.diarize(wavUri, numberOfSpeakers);
+  },
+});
+
 const DEFAULT_FOLDER_ID = 1;
 const MEETINGS_FOLDER_NAME = 'meetings';
 
@@ -123,6 +158,10 @@ export type CreateMeetingNoteContext = {
   participants?: CalendarParticipant[] | null;
   /** Defaults to true (on-device path). Cloud realtime meetings have no diarization. */
   diarizationEnabled?: boolean;
+  /** The folder the meeting was started from. */
+  folderId?: number;
+  /** The team space the meeting was started from, when no folder was open. */
+  spaceId?: number;
 };
 
 const resolveMeetingFolderId = (folders: Folder[]): number => {
@@ -132,6 +171,34 @@ const resolveMeetingFolderId = (folders: Folder[]): number => {
   const fallbackFolder = folders.find((folder) => folder.isDefault) ?? folders[0];
 
   return meetingsFolder?.id ?? fallbackFolder?.id ?? DEFAULT_FOLDER_ID;
+};
+
+/**
+ * A meeting goes where it was started: that folder, or that team space. Anywhere else it
+ * goes to the personal Meetings folder. So does a meeting started in a team space this
+ * device no longer has, and a Private-mode one, since a private note can't be shared.
+ */
+const createMeetingNoteRow = (title: string, context: CreateMeetingNoteContext): Note => {
+  const canFileInTeamSpace = (spaceId: number | null): boolean =>
+    useProcessingModeStore.getState().activeMode !== 'private' &&
+    spacesRepository.listSpaces().some(({ id, kind }) => id === spaceId && kind === 'team');
+  if (context.folderId != null) {
+    const folder = notesRepository.getFolders().find(({ id }) => id === context.folderId);
+    if (
+      folder &&
+      (folder.spaceId === spacesRepository.getPrivateSpace().id ||
+        canFileInTeamSpace(folder.spaceId))
+    ) {
+      return notesRepository.createNote(title, '', folder.id);
+    }
+  } else if (context.spaceId != null && canFileInTeamSpace(context.spaceId)) {
+    return notesRepository.createNote(title, '', undefined, context.spaceId);
+  }
+  return notesRepository.createNote(
+    title,
+    '',
+    resolveMeetingFolderId(notesRepository.getPrivateFolders()),
+  );
 };
 
 const assertDiarizerModelReadyForEnrollment = async (
@@ -146,7 +213,11 @@ const assertDiarizerModelReadyForEnrollment = async (
 };
 
 const canUseCloudForMeetingNote = (note: Note | null | undefined): note is Note => {
-  if (!useAuthStore.getState().user) return false;
+  if (
+    !useAuthStore.getState().user &&
+    useConfigStore.getState().config?.inference?.notes?.mode !== 'providers'
+  )
+    return false;
   if (useProcessingModeStore.getState().activeMode === 'private') return false;
   return !!note && !note.deletedAt && note.noteType === 'meeting' && note.isPrivate !== 1;
 };
@@ -154,6 +225,9 @@ const canUseCloudForMeetingNote = (note: Note | null | undefined): note is Note 
 const autoGenerateMeetingNotes = async (noteId: number): Promise<void> => {
   const note = notesRepository.getNoteById(noteId);
   if (!note || note.deletedAt || note.noteType !== 'meeting') return;
+  // Generated notes the user already has (edited, or from an action they ran) are never replaced
+  // automatically, e.g. by retrying a transcript; the Enhanced tab marks them stale instead.
+  if (note.enhancedContent?.trim()) return;
 
   const action = notesRepository.getActions().find(isDefaultGenerateNotesAction);
   if (!action) return;
@@ -182,7 +256,13 @@ const autoGenerateMeetingNotes = async (noteId: number): Promise<void> => {
 
   const routing = { isPrivateNote: note.isPrivate === 1 };
   const canUseCloud = canUseCloudForMeetingNote(note);
-  const canUseLocal = await shouldUseLocalReasoning(routing);
+  const notesMode = useConfigStore.getState().config?.inference?.notes?.mode;
+  // On-Device notes take the chunked local path: a whole meeting rarely fits
+  // the on-device context in one request.
+  const canUseLocal =
+    notesMode === 'local'
+      ? (await getLocalReasoningReadiness()).status === 'ready'
+      : (notesMode !== 'providers' || !canUseCloud) && (await shouldUseLocalReasoning(routing));
   const systemPrompt = buildActionSystemPrompt({
     actionPrompt: action.prompt,
     inputKind: 'meeting-transcript',
@@ -190,7 +270,10 @@ const autoGenerateMeetingNotes = async (noteId: number): Promise<void> => {
   });
 
   const writeGeneratedText = (generatedText: string) => {
-    if (!generatedText.trim()) return;
+    // The user may have run an action or written notes while these were generated.
+    if (!generatedText.trim() || notesRepository.getNoteById(noteId)?.enhancedContent?.trim()) {
+      return;
+    }
     notesRepository.updateNote(noteId, {
       enhancedContent: generatedText,
       enhancementPrompt: action.prompt,
@@ -200,6 +283,7 @@ const autoGenerateMeetingNotes = async (noteId: number): Promise<void> => {
 
   const generateCloudOnce = async () => {
     const result = await ReasoningService.processText({
+      inferenceScope: 'notes',
       text: generationInput,
       systemPrompt,
       temperature: 0.3,
@@ -247,6 +331,7 @@ const autoGenerateMeetingNotes = async (noteId: number): Promise<void> => {
     ? await generateLocalMeetingNotes(noteId, { actionPrompt: action.prompt })
     : (
         await ReasoningService.processText({
+          inferenceScope: 'notes',
           text: generationInput,
           systemPrompt,
           temperature: 0.3,
@@ -347,6 +432,8 @@ interface NotesStore {
   deleteFolderSafe: (id: number) => void;
   /** Creates in the private space unless `spaceId` names a team space to create it inside. */
   createFolder: (name: string, spaceId?: number) => Folder;
+  /** Folders of any space, read from the repository. `spaceFolders` only caches the browsed space's. */
+  getSpaceFolders: (spaceId: number) => Folder[];
   renameFolder: (id: number, name: string) => void;
   setNotePrivacy: (id: number, isPrivate: boolean) => Promise<void>;
   /** Data source for the conflict banner (see NoteEditorScreen) — the parked 409 row for this note, if any. */
@@ -373,6 +460,7 @@ interface NotesStore {
   isDiarizerModelReady: () => Promise<boolean>;
   isLocalAsrModelReady: () => Promise<boolean>;
   downloadDiarizerModel: () => Promise<void>;
+  isDiarizerModelDownloading: () => boolean;
   deleteDiarizerModel: () => Promise<void>;
   getNoteSegments: (noteId: number) => Segment[];
   getNoteSpeakers: (noteId: number) => Speaker[];
@@ -392,6 +480,13 @@ interface NotesStore {
   ) => void;
   rejectSpeakerSuggestion: (noteId: number, speakerId: number) => void;
   renameSpeaker: (noteId: number, speakerId: number, displayName: string) => void;
+  /** Makes a speaker from a meeting just processed on this device your voice profile. */
+  claimSpeakerAsMe: (noteId: number, speakerId: number) => void;
+  /**
+   * Labels a meeting processed since launch with a newly added or retrained voice profile,
+   * leaving speakers already linked to another profile alone.
+   */
+  relabelMeetingSpeakers: (noteId: number, profileId: number) => void;
   mergeSpeakers: (noteId: number, sourceSpeakerId: number, targetSpeakerId: number) => void;
 }
 
@@ -548,6 +643,8 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     get().loadFolders();
   },
 
+  getSpaceFolders: (spaceId) => notesRepository.getFoldersBySpace(spaceId),
+
   moveNoteToFolder: (noteId, folderId) => {
     notesRepository.moveNoteToFolder(noteId, folderId);
     get().loadNotes();
@@ -636,11 +733,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       context.participants === undefined || context.participants === null
         ? null
         : JSON.stringify(context.participants);
-    const note = notesRepository.createNote(
-      title,
-      '',
-      resolveMeetingFolderId(notesRepository.getPrivateFolders()),
-    );
+    const note = createMeetingNoteRow(title, context);
     notesRepository.updateNoteMeta(note.id, {
       noteType: 'meeting',
       diarizationEnabled: context.diarizationEnabled === false ? 0 : 1,
@@ -682,7 +775,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
               language: opts.language,
               wordTimestamps: opts.wordTimestamps,
             }),
-          diarizer: getDiarizer(),
+          diarizer: diarizerAfterModelDownload(getDiarizer()),
           repo: notesRepository,
         },
       );
@@ -695,21 +788,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
           [noteId]: result.speakerEmbeddingsByLabel,
         },
       }));
-      const note = notesRepository.getNoteById(noteId);
-      const preferredProfileEmails = getCalendarParticipantEmails(
-        parseCalendarParticipants(note?.participants ?? null) ?? [],
-      );
-      const identification = identifyNoteSpeakers(
-        noteId,
-        result.speakerEmbeddingsByLabel,
-        {
-          repo: notesRepository,
-        },
-        {
-          preferredProfileEmails,
-        },
-      );
-      if (identification.updatedSpeakerIds.length > 0) {
+      if (identifyMeetingSpeakers(noteId, result.speakerEmbeddingsByLabel)) {
         set((state) => ({ transcriptRevision: state.transcriptRevision + 1 }));
       }
       await finalizeMeetingNoteContent(noteId);
@@ -749,7 +828,9 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
 
   isDiarizerAvailable: async () => loadDiarizer().isAvailable(),
 
-  isDiarizerModelReady: async () => loadDiarizer().isModelDownloaded(),
+  // A download in flight has created some model files, which reads as downloaded.
+  isDiarizerModelReady: async () =>
+    diarizerModelDownload === null && loadDiarizer().isModelDownloaded(),
 
   // True only if the local ASR model the meeting path would route to is actually downloaded.
   isLocalAsrModelReady: async () => {
@@ -758,9 +839,16 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     return LocalTranscriptionService.isReadyForLanguage();
   },
 
-  downloadDiarizerModel: async () => {
-    await loadDiarizer().downloadModel();
+  // Shared, so a second caller can't start another download into the same model folder.
+  downloadDiarizerModel: () => {
+    diarizerModelDownload ??= loadDiarizer()
+      .downloadModel()
+      .finally(() => {
+        diarizerModelDownload = null;
+      });
+    return diarizerModelDownload;
   },
+  isDiarizerModelDownloading: () => diarizerModelDownload !== null,
 
   deleteDiarizerModel: async () => {
     await loadDiarizer().deleteModel();
@@ -875,6 +963,49 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     const patch = buildRenameSpeakerPatch(speaker, displayName);
     if (Object.keys(patch).length === 0) return;
     notesRepository.updateSpeaker(speaker.id, patch);
+    set((state) => ({ transcriptRevision: state.transcriptRevision + 1 }));
+  },
+  claimSpeakerAsMe: (noteId, speakerId) => {
+    if (notesRepository.getSpeakerProfiles().some((profile) => profile.isOwner === 1)) {
+      throw new SpeakerProfileOwnerAlreadyExistsError();
+    }
+    // A retry rewrites the speakers under new labels before it replaces the samples.
+    if (notesRepository.getTranscriptionStatus(noteId) !== 'done') {
+      throw new Error('This meeting is still being processed.');
+    }
+    const speaker = notesRepository.getSpeakers(noteId).find((row) => row.id === speakerId);
+    if (!speaker) throw new Error('Speaker not found');
+    // Only held in memory for meetings processed since the app started.
+    const embeddings = get().meetingSpeakerEmbeddingsByNoteId[noteId] ?? {};
+    const embedding = embeddings[speaker.speakerLabel];
+    if (!hasFiniteNonZeroNorm(embedding)) {
+      throw new Error("This meeting's voice sample is no longer available.");
+    }
+
+    const profile = notesRepository.createOwnerProfileForSpeaker(
+      speaker.id,
+      {
+        displayName: 'Me',
+        embedding: l2Normalize(embedding),
+        sampleCount: 1,
+        consentAt: new Date().toISOString(),
+      },
+      buildRenameSpeakerPatch(speaker, 'Me'),
+    );
+    set((state) => ({
+      ...reloadVoiceProfiles(),
+      transcriptRevision: state.transcriptRevision + 1,
+    }));
+    // The claim is saved; labelling the rest of the meeting is a bonus that must not undo it.
+    try {
+      get().relabelMeetingSpeakers(noteId, profile.id);
+    } catch (error) {
+      Sentry.captureException(error, { tags: { feature: 'voice-setup' } });
+    }
+  },
+  relabelMeetingSpeakers: (noteId, profileId) => {
+    const embeddings = get().meetingSpeakerEmbeddingsByNoteId[noteId];
+    if (!embeddings || !identifyMeetingSpeakers(noteId, embeddings, profileId)) return;
     set((state) => ({ transcriptRevision: state.transcriptRevision + 1 }));
   },
   mergeSpeakers: (noteId, sourceSpeakerId, targetSpeakerId) => {

@@ -1,8 +1,12 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { createTranscriptId, useTranscriptStore } from '../store/useTranscriptStore';
-import { useProcessingModeStore } from '../store/useProcessingModeStore';
+import {
+  snapshotTextInference,
+  snapshotTranscriptionJob,
+  type TranscriptionJobRoute,
+} from '../lib/inferenceRouting';
 import { transcribeAndCleanup } from '../lib/transcribeAndCleanup';
 import { isLocalModelMissingError } from '../services/transcription/TranscriptionService';
 import { analyzeSpeechActivity, createNoSpeechError } from '../lib/speechActivity';
@@ -67,8 +71,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   const expoAudio = getExpoAudioModule();
   const addTranscript = useTranscriptStore((state) => state.addTranscript);
   const addFailedTranscript = useTranscriptStore((state) => state.addFailedTranscript);
-  const activeMode = useProcessingModeStore((state) => state.activeMode);
-  const transcriptionProvider = activeMode === 'private' ? 'local' : 'cloud';
+  const jobRouteRef = useRef<TranscriptionJobRoute>({ provider: 'cloud' });
 
   const recorderOptions = getDefaultRecorderOptions();
   const audioRecorder = useAudioRecorder(recorderOptions);
@@ -138,6 +141,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
         } catch {}
       }
 
+      jobRouteRef.current = snapshotTranscriptionJob('dictation');
       await recorder.prepareToRecordAsync(recorderOptions);
       await recorder.record();
 
@@ -200,6 +204,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
       const clientTranscriptionId = `recording-${randomUUID()}`;
 
       const retained = await retainRecording(uri);
+      const transcriptionProvider = jobRouteRef.current.provider;
       try {
         await finalizeRecording(retained, transcriptionProvider, clientTranscriptionId);
       } catch (transcribeError) {
@@ -265,7 +270,13 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
         audioFileName: retained.audioFileName,
         audioMimeType: retained.audioMimeType,
         provider,
+        inferenceRoute: provider === 'byok' ? jobRouteRef.current.inferenceRoute : undefined,
+        cleanupRoute: jobRouteRef.current.cleanupRoute,
+        agentRoute: jobRouteRef.current.agentRoute,
+        cleanupUnavailable: jobRouteRef.current.cleanupUnavailable,
+        agentUnavailable: jobRouteRef.current.agentUnavailable,
         requestContext: 'recording',
+        jobId: retained.id,
         errorMessage: toFriendlyTranscriptionErrorMessage(error),
       });
     } catch (failedRowError) {
@@ -282,12 +293,19 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   ) => {
     const processedResult = await transcribeAndCleanup(
       {
+        ...jobRouteRef.current,
         audioUri: retained.audioUrl,
         provider,
+        inferenceRoute: provider === 'byok' ? jobRouteRef.current.inferenceRoute : undefined,
+        cleanupRoute: jobRouteRef.current.cleanupRoute,
+        agentRoute: jobRouteRef.current.agentRoute,
+        cleanupUnavailable: jobRouteRef.current.cleanupUnavailable,
+        agentUnavailable: jobRouteRef.current.agentUnavailable,
         language: getPreferredTranscriptionLanguage(),
         fileName: retained.audioFileName,
         mimeType: retained.audioMimeType,
         requestContext: 'recording',
+        jobId: retained.id,
         clientTranscriptionId,
       },
       {
@@ -301,7 +319,8 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
 
     const finalText = processedResult.text;
 
-    await addTranscript({
+    // The transcript is already paid for, so a history write failure must not lose it.
+    const saved = await addTranscript({
       id: retained.id,
       text: finalText,
       originalText: processedResult.originalText,
@@ -310,11 +329,22 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
       audioMimeType: retained.audioMimeType,
       duration: processedResult.transcription.duration,
       provider: processedResult.transcription.provider,
+      inferenceRoute: processedResult.transcription.inferenceRoute,
+      cleanupRoute: processedResult.transcription.cleanupRoute,
+      agentRoute: processedResult.transcription.agentRoute,
+      cleanupUnavailable: processedResult.transcription.cleanupUnavailable,
+      agentUnavailable: processedResult.transcription.agentUnavailable,
+      cleanupWarning: processedResult.transcription.cleanupWarning,
       requestContext: 'recording',
-    });
+      jobId: retained.id,
+    }).then(
+      () => true,
+      () => false,
+    );
 
     setCurrentText(finalText);
     options.onComplete?.(finalText);
+    if (!saved) options.onError?.(new Error('Your transcript could not be saved to history.'));
   };
 
   // Consented cloud transcription of an already-captured private-mode recording.
@@ -324,6 +354,9 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   ) => {
     setIsProcessing(true);
     try {
+      // The private-mode snapshot pinned local text stages; a consented Cloud
+      // upload should clean the way a Cloud recording would.
+      jobRouteRef.current = { provider: 'cloud', ...snapshotTextInference('cloud') };
       await finalizeRecording(retained, 'cloud', clientTranscriptionId);
     } catch (error) {
       if (isUsageLimitError(error) && options.onUsageLimitReached) {

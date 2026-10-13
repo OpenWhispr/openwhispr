@@ -76,6 +76,42 @@ function createFinalizingManager(AudioManager) {
   return { manager, states, getProviderStopCalls: () => providerStopCalls };
 }
 
+test("streamed selection failures keep local error parameters and recovery details without publishing text", async (t) => {
+  const AudioManager = await loadManagerClass(t, {
+    "/config/prompts": "export const resolvePrompt = () => 'agent prompt';",
+  });
+  Object.assign(globalThis.__streamingFinalizationSettings, {
+    useDictationAgent: true,
+    dictationAgentMode: "local",
+    dictationAgentModel: "local-model",
+  });
+  const { manager } = createFinalizingManager(AudioManager);
+  const errors = [];
+  const published = [];
+  manager.streamingFinalText = "replace this";
+  manager.voiceAgentRequested = true;
+  manager.consumeScreenContext = async () => null;
+  const fields = {
+    code: "CONTEXT_TOO_LARGE",
+    messageKey: "models.errors.contextTooLarge",
+    messageParams: { model: "Qwen 3.5 2B", needed: 18000, max: 16384 },
+    surface: "llm",
+    settingsTarget: "dictationAgent",
+    technicalDetails: { model: "local-model" },
+  };
+  manager.processAgentCommand = async () => {
+    throw Object.assign(new Error("too long"), fields, { selectionEditFatal: true });
+  };
+  manager.onError = (error) => errors.push(error);
+  manager.onTranscriptionComplete = (result) => published.push(result);
+  assert.equal(await manager.stopStreamingRecording(), false);
+  assert.equal(errors.length, 1);
+  for (const [key, value] of Object.entries(fields)) assert.deepEqual(errors[0][key], value);
+  assert.equal(errors[0].selectionEditFatal, true);
+  assert.deepEqual(published, []);
+  assert.equal(manager.pendingSelectionEdit, null);
+});
+
 test("streaming finalization is immediately processing and cannot start another session", async (t) => {
   const AudioManager = await loadManagerClass(t);
   const { manager, states, getProviderStopCalls } = createFinalizingManager(AudioManager);
@@ -137,6 +173,35 @@ test("streaming completion keeps the recording occurrence time", async (t) => {
   await manager.stopStreamingRecording();
 
   assert.equal(completion.analyticsOccurredAt, new Date(recordingStartedAt).toISOString());
+});
+
+test("only a provider that prefers its stop transcript pastes it over the streamed finals", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  globalThis.window.dispatchEvent = () => true;
+
+  for (const [preferStopTranscript, expected] of [
+    [true, "Turn one. Turn two is still open"],
+    [false, "Turn one."],
+  ]) {
+    const { manager } = createFinalizingManager(AudioManager);
+    let completion;
+    manager.streamingFinalText = "Turn one.";
+    manager.streamingPartialText = "Turn two is still open";
+    manager.getStreamingProvider = () => ({
+      awaitsFinalTranscript: true,
+      preferStopTranscript,
+      finalize() {},
+      stop: async () => ({ success: true, text: "Turn one. Turn two is still open" }),
+    });
+    manager.finalizeChineseScript = async (text) => text;
+    manager.onTranscriptionComplete = (result) => {
+      completion = result;
+    };
+
+    await manager.stopStreamingRecording();
+
+    assert.equal(completion.text, expected);
+  }
 });
 
 test("cancelling an active streaming recording discards it without publishing text", async (t) => {
@@ -1219,6 +1284,7 @@ test("a failed-over selection edit that fails is reported as a selection edit fa
     {
       title: "Selection Edit Failed",
       description: "Selection edit could not safely read the selection: gone",
+      selectionEditFatal: true,
       code: "SELECTION_EDIT_CAPTURE_FAILED",
       messageKey: "hooks.audioRecording.selectionEditing.unavailable",
     },

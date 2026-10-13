@@ -37,6 +37,11 @@ export interface OrgPolicy {
     /** Absent on servers that predate the field; absent means allowed. */
     screenContextEnabled?: boolean;
     /**
+     * Agent connectors (email drafts, Slack, Linear, GitHub). Absent on
+     * servers that predate the field; absent means allowed.
+     */
+    connectorsEnabled?: boolean;
+    /**
      * Server-only Mem0 agent-memory gate, enforced by the API on
      * `/api/agent/stream`; the app never reads it. Absent on older servers.
      */

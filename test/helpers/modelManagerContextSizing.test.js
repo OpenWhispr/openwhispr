@@ -326,6 +326,37 @@ test("a selection edit is refused rather than given a clipped answer", async (t)
   assert.equal(calls.completions, 0);
 });
 
+test("a summary rewrite gets a smaller answer, but never a clipped one", async (t) => {
+  // A rewrite replaces the whole summary, so it refuses any cut-off reply, but
+  // a shorter allowance is fine: most edits (Shorten, TL;DR) need far less
+  // room than they ask for.
+  const rewrite = {
+    systemPrompt: "Revise the summary.",
+    maxTokens: 8192,
+    requireCompleteOutput: true,
+    refuseClippedByWindow: true,
+  };
+  const fits = await setup(t, { tokenCount: 13000, totalMemoryBytes: 8 * GIB });
+  assert.equal(await fits.modelManager.runInference(fits.modelId, LONG_PROMPT, rewrite), "done");
+  assert.equal(fits.completionBody().max_tokens, 16384 - 13000);
+
+  const clipped = await setup(t, {
+    tokenCount: 13000,
+    totalMemoryBytes: 8 * GIB,
+    finishReason: "length",
+  });
+  await assert.rejects(
+    () => clipped.modelManager.runInference(clipped.modelId, LONG_PROMPT, rewrite),
+    (error) => error.code === "CONTEXT_TOO_LARGE"
+  );
+
+  const cappedWithRoom = await setup(t, { tokenCount: 40, finishReason: "length" });
+  await assert.rejects(
+    () => cappedWithRoom.modelManager.runInference(cappedWithRoom.modelId, SHORT_PROMPT, rewrite),
+    (error) => error.code === "OUTPUT_TRUNCATED"
+  );
+});
+
 test("a reply the window clipped is refused when the caller asks, so it can be split", async (t) => {
   // A long note trades output room for prompt room. A summary that then fills
   // the smaller allowance was cut short by the window, and a note action would

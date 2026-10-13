@@ -13,6 +13,22 @@ private struct UploadRequest: Record {
   @Field var timeoutSeconds: Double?
 }
 
+private struct ProviderRequest: Record {
+  @Field var requestId: String = ""
+  @Field var routeSnapshot: String?
+  @Field var recoveryAudioUri: String?
+  @Field var url: String = ""
+  @Field var method: String = "POST"
+  @Field var headers: [String: String] = [:]
+  @Field var body: String?
+  @Field var fileUri: String?
+  @Field var fileFieldName: String = "file"
+  @Field var fileMimeType: String = "application/octet-stream"
+  @Field var fileName: String?
+  @Field var parameters: [String: String] = [:]
+  @Field var timeoutSeconds: Double = 60
+}
+
 private enum BackgroundUploaderConstants {
   static let sessionIdentifier = "com.openwhispr.background-uploader"
   static let pendingTranscriptKey = "keyboard_pending_transcript"
@@ -270,6 +286,7 @@ public class BackgroundUploaderAppDelegate: ExpoAppDelegateSubscriber {
 
 public class BackgroundUploaderModule: Module {
   private var session: URLSession!
+  private let providerTransport = ProviderRequestTransport()
 
   public func definition() -> ModuleDefinition {
     Name("BackgroundUploader")
@@ -293,6 +310,100 @@ public class BackgroundUploaderModule: Module {
 
     AsyncFunction("upload") { (request: UploadRequest, promise: Promise) in
       self.startUpload(request: request, promise: promise)
+    }
+
+    AsyncFunction("requestProvider") { (request: ProviderRequest, promise: Promise) in
+      self.startProviderRequest(request: request, promise: promise)
+    }
+
+    Function("listProviderRecoveryJobIds") { () throws -> [String] in
+      try ProviderRecoveryStore.listPendingJobIds()
+    }
+
+    Function("clearProviderRecovery") { (jobId: String) throws in
+      try ProviderRecoveryStore.clear(jobId: jobId)
+    }
+
+    Function("cancelProviderRequest") { (requestId: String) in
+      self.providerTransport.cancel(requestId: requestId)
+    }
+  }
+
+  private func startProviderRequest(request: ProviderRequest, promise: Promise) {
+    guard let url = URL(string: request.url), ProviderRequestTransport.isAllowedURL(url) else {
+      promise.reject(ProviderTransportError.invalidURL.code, ProviderTransportError.invalidURL.message)
+      return
+    }
+    let snapshotJSON = request.routeSnapshot
+    let metadata = ProviderJobMetadata.decode(snapshotJSON)
+    if let snapshotJSON {
+      let audioUri = request.recoveryAudioUri ?? request.fileUri ?? ""
+      if let error = ProviderRequestTransport.recoveryError(snapshotJSON: snapshotJSON, destination: url, audioUri: audioUri) {
+        promise.reject(error.code, error.message)
+        return
+      }
+      do { try ProviderRecoveryStore.savePending(snapshotJSON: snapshotJSON, audioUri: audioUri) }
+      catch {
+        promise.reject("PROVIDER_RECOVERY_UNAVAILABLE", "Unable to preserve the original recording for recovery.")
+        return
+      }
+    }
+    var headers = request.headers
+    var bodyFileURL: URL?
+    if let fileUri = request.fileUri {
+      guard request.body == nil, let fileURL = ProviderRequestTransport.fileURL(from: fileUri) else {
+        promise.reject(ProviderTransportError.audioUnavailable.code, ProviderTransportError.audioUnavailable.message)
+        return
+      }
+      if let error = ProviderRequestTransport.audioFileError(fileURL) {
+        promise.reject(error.code, error.message)
+        return
+      }
+      let fileName = request.fileName ?? fileURL.lastPathComponent
+      let headerValues = [request.fileFieldName, request.fileMimeType, fileName] + Array(request.parameters.keys)
+      guard headerValues.allSatisfy({ !$0.contains("\r") && !$0.contains("\n") && !$0.contains("\"") && !$0.contains("\\") }) else {
+        promise.reject(ProviderTransportError.invalidRequest.code, ProviderTransportError.invalidRequest.message)
+        return
+      }
+      let boundary = "----OpenWhisprProviderBoundary\(UUID().uuidString)"
+      do {
+        bodyFileURL = try buildMultipartBodyFile(boundary: boundary, parameters: request.parameters, fileFieldName: request.fileFieldName, fileName: fileName, fileMimeType: request.fileMimeType, fileUrl: fileURL)
+      } catch {
+        promise.reject("PROVIDER_AUDIO_UNAVAILABLE", "Unable to prepare the recorded audio for upload.")
+        return
+      }
+      headers = headers.filter { $0.key.lowercased() != "content-type" }
+      headers["Content-Type"] = "multipart/form-data; boundary=\(boundary)"
+    }
+    DispatchQueue.main.async {
+      var backgroundTask: UIBackgroundTaskIdentifier = .invalid
+      backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Provider request") {
+        // iOS terminates the app unless the task ends inside this handler.
+        self.providerTransport.expire(requestId: request.requestId)
+        UIApplication.shared.endBackgroundTask(backgroundTask)
+        backgroundTask = .invalid
+      }
+      self.providerTransport.request(requestId: request.requestId, url: url, method: request.method, headers: headers, body: request.body.map { Data($0.utf8) }, bodyFileURL: bodyFileURL, timeout: request.timeoutSeconds) { result in
+        DispatchQueue.main.async {
+          if backgroundTask != .invalid {
+            UIApplication.shared.endBackgroundTask(backgroundTask)
+            backgroundTask = .invalid
+          }
+        }
+        switch result {
+        case .success(let response):
+          if (200..<300).contains(response.status), let snapshotJSON, let metadata, let text = metadata.transcript(from: response.body) {
+            do { try ProviderRecoveryStore.saveResult(snapshotJSON: snapshotJSON, text: text) }
+            catch {
+              promise.reject("PROVIDER_RECOVERY_UNAVAILABLE", "The transcript could not be saved for recovery. The original audio is retained.")
+              return
+            }
+          }
+          promise.resolve(["status": response.status, "body": response.body, "url": response.url, "headers": response.headers])
+        case .failure(let error):
+          promise.reject(error.code, error.message)
+        }
+      }
     }
   }
 
@@ -374,6 +485,8 @@ public class BackgroundUploaderModule: Module {
     let tmpUrl = FileManager.default.temporaryDirectory
       .appendingPathComponent("bg-upload-\(UUID().uuidString).tmp")
     FileManager.default.createFile(atPath: tmpUrl.path, contents: nil)
+    var completed = false
+    defer { if !completed { try? FileManager.default.removeItem(at: tmpUrl) } }
 
     let handle = try FileHandle(forWritingTo: tmpUrl)
     defer { try? handle.close() }
@@ -403,6 +516,7 @@ public class BackgroundUploaderModule: Module {
     let trailer = "\(crlf)--\(boundary)--\(crlf)"
     handle.write(Data(trailer.utf8))
 
+    completed = true
     return tmpUrl
   }
 }

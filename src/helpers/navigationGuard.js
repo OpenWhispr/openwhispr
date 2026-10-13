@@ -23,4 +23,11 @@ function isExternalBrowserUrl(url) {
   return url.startsWith("http://") || url.startsWith("https://");
 }
 
-module.exports = { isAllowedAppNavigation, isExternalBrowserUrl };
+// Same allowlist as the open-external IPC. shell.openExternal launches whatever
+// it is given, and a relative link resolves against the file:// page, so
+// `/C:/Windows/System32/cmd.exe` would otherwise run a local program.
+function isExternalOpenUrl(url) {
+  return isExternalBrowserUrl(url) || url.startsWith("mailto:");
+}
+
+module.exports = { isAllowedAppNavigation, isExternalBrowserUrl, isExternalOpenUrl };

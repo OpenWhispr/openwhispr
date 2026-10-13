@@ -24,13 +24,15 @@ async function renderOverview(t, { lng, folder }) {
   const vite = await createRendererServer(t, {
     cachePrefix: `openwhispr-container-overview-${lng}-`,
     mockModules: {
-      "/stores/workspaceStore": "export const useWorkspaceStore = (selector) => selector({ workspaces: [] });",
+      "/stores/workspaceStore":
+        "export const useWorkspaceStore = (selector) => selector({ workspaces: [] });",
       "/stores/noteStore": `
         export const useNotes = () => [];
-        export const useNotesByContainer = () => ({});
+        export const useNotesByContainer = () => ({ "f:7": [], "f:8": [] });
         export const useFolders = () => [];
         export const useFolderCounts = () => ({});
         export const useSpaceRootCounts = () => ({});
+        export const folderContainerKey = (id) => "f:" + id;
       `,
       "/hooks/useContainerChat": "export const useContainerChat = () => ({});",
       "/lib/spacePermissions": "export const canManageSpace = () => false;",

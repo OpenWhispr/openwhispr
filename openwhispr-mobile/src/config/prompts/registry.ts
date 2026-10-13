@@ -22,6 +22,9 @@ export function customPromptStorageKey(kind: PromptKind): string {
 // fails until both are done.
 export const DEFAULT_CLEANUP_PROMPT: string = defaultPrompts.cleanupPrompt;
 
+// The server's instructions for a dictation that addresses the agent by name.
+export const DEFAULT_ACTION_PROMPT: string = defaultPrompts.actionPrompt;
+
 export function hasAgentNamePlaceholder(text: string): boolean {
   return text.includes(AGENT_NAME_PLACEHOLDER);
 }

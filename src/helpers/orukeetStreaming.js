@@ -1,6 +1,22 @@
 const WebSocket = require("ws");
 
 const MAX_PENDING_BYTES = 2 * 1024 * 1024;
+// Mono 16 kHz PCM16.
+const BYTES_PER_SECOND = 32000;
+const MAX_FINAL_WAIT_MS = 30000;
+
+// Managed Cloud keeps the capture for a batch upload, so a stalled or
+// unreachable GPU host should fail over within seconds rather than hold the
+// user for the full 30 s budget. BYOK servers keep the defaults: they have no
+// fallback, and a busy self-hosted CPU may legitimately answer slowly.
+const MANAGED_STREAM_OPTIONS = {
+  // A refused commit must close this attempt instead of retrying for 30 s.
+  retryCapacity: false,
+  timeoutMs: 10000,
+  // Long enough to ride out a Wi-Fi roam or cellular hand-off.
+  livenessMs: 8000,
+  finalTimeoutMs: (audioSeconds) => 5000 + audioSeconds * 100,
+};
 
 function languageMetadata(message) {
   const language = message.language;
@@ -59,10 +75,14 @@ class OrukeetStreaming {
     createSocket = (url, options, protocols) => new WebSocket(url, protocols, options),
     timeoutMs = 30000,
     retryCapacity = true,
+    livenessMs = null,
+    finalTimeoutMs = () => timeoutMs,
   } = {}) {
     this.createSocket = createSocket;
     this.timeoutMs = timeoutMs;
     this.retryCapacity = retryCapacity;
+    this.livenessMs = livenessMs;
+    this.finalTimeoutMs = finalTimeoutMs;
     this.ws = null;
     this.isConnected = false;
     this.pendingAudio = [];
@@ -143,7 +163,7 @@ class OrukeetStreaming {
       ) {
         throw new Error("Orukeet server does not support mono 16 kHz PCM");
       }
-      this.maxAudioBytes = message.max_seconds * 32000;
+      this.maxAudioBytes = message.max_seconds * BYTES_PER_SECOND;
       this.isConnected = true;
       this.connecting = false;
       for (const data of this.pendingAudio) this.writeAudio(data);
@@ -155,6 +175,7 @@ class OrukeetStreaming {
         if (this.isConnected) this.sendControl({ type: "ping" });
       }, 15000);
       this.keepAlive.unref?.();
+      this.startLivenessCheck();
     } else if (message.type === "language") {
       // Advisory audio-language metadata never commits a transcript or triggers a paste.
       // The final message remains authoritative for this recording.
@@ -191,6 +212,44 @@ class OrukeetStreaming {
     }
   }
 
+  // A wedged server can keep its TCP connection open, so a stall only shows up
+  // as missing pongs. The check arms on the first pong: a server that never
+  // answers pings keeps today's behaviour instead of failing every recording.
+  // A pending commit is bounded by the final deadline instead, since inference
+  // may hold the server's event loop.
+  startLivenessCheck() {
+    if (!this.livenessMs) return;
+    const intervalMs = this.livenessMs / 2;
+    let lastHeardAt = null;
+    let lastCheckAt = performance.now();
+    this.ws.on("pong", () => {
+      lastHeardAt = performance.now();
+    });
+    this.ws.on("message", () => {
+      if (lastHeardAt !== null) lastHeardAt = performance.now();
+    });
+    const check = () => {
+      if (this.intentionalClose || this.failure || this.finalPromise) return;
+      const now = performance.now();
+      const late = now - lastCheckAt >= intervalMs * 1.5;
+      lastCheckAt = now;
+      if (lastHeardAt !== null) {
+        // A late tick means this process was held up (a blocked main thread or
+        // App Nap), not the server, so the next ping gets a full window.
+        if (late) lastHeardAt = now;
+        else if (now - lastHeardAt > this.livenessMs) {
+          return this.fail(new Error("Orukeet server stopped responding"));
+        }
+      }
+      this.ws.ping();
+    };
+    check();
+    // After a blocked main thread, timers run before pending socket reads;
+    // setImmediate lets a pong that already arrived count first.
+    this.livenessTimer = setInterval(() => setImmediate(check), intervalMs);
+    this.livenessTimer.unref?.();
+  }
+
   sendAudio(data) {
     if (this.intentionalClose || this.failure || this.finalPromise) return;
     const buffer = Buffer.from(data);
@@ -219,12 +278,12 @@ class OrukeetStreaming {
     this.audioBytesSent += buffer.length;
   }
 
-  sendControl(message) {
+  sendControl(message, onSent) {
     try {
       if (!this.isConnected || this.ws.readyState !== WebSocket.OPEN) {
         throw new Error("Orukeet connection closed before completion");
       }
-      this.ws.send(JSON.stringify(message));
+      this.ws.send(JSON.stringify(message), onSent);
     } catch (error) {
       this.fail(error);
     }
@@ -240,16 +299,21 @@ class OrukeetStreaming {
     this.finalPromise = new Promise((resolve, reject) => {
       this.finalResolve = resolve;
       this.finalReject = reject;
-      this.finalTimer = setTimeout(
-        () => this.fail(new Error("Orukeet final transcript timed out")),
-        this.timeoutMs
-      );
-      this.sendControl({ type: "commit" });
+      const timedOut = () => this.fail(new Error("Orukeet final transcript timed out"));
+      const audioSeconds = this.audioBytesSent / BYTES_PER_SECOND;
+      // The commit queues behind audio still uploading, so the scaled deadline
+      // starts once it is written; the cap bounds a slow upload.
+      this.finalCapTimer = setTimeout(timedOut, MAX_FINAL_WAIT_MS);
+      this.sendControl({ type: "commit" }, (error) => {
+        if (error || !this.finalResolve) return;
+        this.finalTimer = setTimeout(timedOut, this.finalTimeoutMs(audioSeconds));
+      });
     });
     return this.finalPromise;
   }
 
   clearFinal() {
+    clearTimeout(this.finalCapTimer);
     clearTimeout(this.finalTimer);
     clearTimeout(this.retryTimer);
     this.finalResolve = this.finalReject = null;
@@ -279,11 +343,15 @@ class OrukeetStreaming {
     if (this.intentionalClose) return;
     this.intentionalClose = true;
     clearInterval(this.keepAlive);
+    clearInterval(this.livenessTimer);
     this.isConnected = false;
     this.connecting = false;
     this.pendingAudio = [];
     this.pendingBytes = 0;
-    this.ws?.close();
+    // A failed socket has nothing left to say, and a graceful close would wait
+    // behind unsent audio for up to 30 s while the account's socket slot stays taken.
+    if (this.failure) this.ws?.terminate();
+    else this.ws?.close();
     this.onClose?.();
   }
 
@@ -304,4 +372,4 @@ class OrukeetStreaming {
   }
 }
 
-module.exports = { OrukeetStreaming, streamingUrl };
+module.exports = { OrukeetStreaming, streamingUrl, MANAGED_STREAM_OPTIONS };

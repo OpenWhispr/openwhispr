@@ -151,13 +151,16 @@ export const resolveOnboardingAssistantHotkey = (savedHotkey: string): string =>
  * effective default alone by choice, not by capability: a modifier-only default
  * like Control+Super runs through the same native listener, so input-device
  * access is a shared prerequisite there rather than the price of a lone right
- * modifier.
+ * modifier. Right Ctrl needs the same Windows key listener as the Control+Super
+ * default, so when main reports another default the listener is missing.
  */
 export const getRecommendedDictationHotkeys = (
   platform: Platform,
   effectiveDefault: string
 ): string[] => {
   if (platform === "darwin") return [MACOS_DEFAULT_ONBOARDING_HOTKEY, "GLOBE", "Control+R"];
-  if (platform === "win32") return ["RightControl", effectiveDefault];
+  if (platform === "win32" && effectiveDefault === "Control+Super") {
+    return ["RightControl", effectiveDefault];
+  }
   return [effectiveDefault];
 };

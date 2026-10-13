@@ -20,6 +20,9 @@ import {
   Users,
 } from "../icons";
 import { Button } from "../ui/button";
+import ThemedEmptyIllustration from "../ui/ThemedEmptyIllustration";
+import sharedSpaceEmptyLight from "../../assets/empty-states/notes-shared-space-light.svg";
+import sharedSpaceEmptyDark from "../../assets/empty-states/notes-shared-space-dark.svg";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -2052,27 +2055,33 @@ export default function SpacesTree({
                     ))
                   : teamSpaces.map(renderSpace)}
                 {showWorkspaceGroups && ungroupedTeamSpaces.map(renderSpace)}
-                {teamSpaces.length === 0 &&
-                  (canCreateTeamSpace ? (
-                    // Grouped view already offers a + on each manageable workspace row.
-                    !showWorkspaceGroups && (
-                      <div className="ps-[18px] pe-2 py-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openCreateSpace()}
-                          className="h-6 px-2 text-xs gap-1 text-primary/70 hover:text-primary hover:bg-primary/8"
-                        >
-                          <Plus size={11} />
-                          {t("notes.spaces.newSpace")}
-                        </Button>
-                      </div>
-                    )
-                  ) : (
-                    <p className="ps-[18px] pe-2 py-1 text-xs text-foreground/60 leading-relaxed">
+                {teamSpaces.length === 0 && (
+                  <div role="none" className="flex flex-col items-center px-3 py-6 text-center">
+                    <ThemedEmptyIllustration
+                      light={sharedSpaceEmptyLight}
+                      dark={sharedSpaceEmptyDark}
+                      width={134}
+                      height={139}
+                    />
+                    <p className="mt-1 text-sm font-semibold text-foreground">
+                      {t("notes.spaces.emptyTeamTitle")}
+                    </p>
+                    <p className="mt-2 text-xs text-muted-foreground">
                       {t("notes.spaces.emptyTeamHint")}
                     </p>
-                  ))}
+                    {canCreateTeamSpace && !showWorkspaceGroups && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openCreateSpace()}
+                        className="mt-3 h-7 gap-1 text-xs text-primary"
+                      >
+                        <Plus size={11} />
+                        {t("notes.spaces.newSpace")}
+                      </Button>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>

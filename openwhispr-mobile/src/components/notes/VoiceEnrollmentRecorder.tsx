@@ -1,311 +1,622 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import type React from 'react';
+import { ActivityIndicator, Pressable, TextInput, View } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
-import { GradientGlassSurface } from '@/components/ui/GradientGlassSurface';
+import { SystemIcon } from '@/components/ui/SystemIcon';
 import { WaveformVisualizer } from '@/components/features/WaveformVisualizer';
 import { useAudioRecording } from '@/hooks/useAudioRecording';
 import { useAudioWaveform } from '@/hooks/useAudioWaveform';
-import { BRAND } from '@/config/colors';
-import type {
-  EnrollVoiceProfileInput,
-  ReenrollVoiceProfileInput,
-} from '@/services/diarization/VoiceprintService';
+import { BRAND, iosColor } from '@/config/colors';
 import { SpeakerProfileOwnerAlreadyExistsError } from '@/data/local/notesRepository';
+import {
+  VOICE_ENROLLMENT_DIARIZER_MODEL_REQUIRED,
+  VoiceEnrollmentError,
+  type EnrollVoiceProfileInput,
+  type ReenrollVoiceProfileInput,
+} from '@/services/diarization/VoiceprintService';
+import {
+  VOICE_ENROLLMENT_UNEXPLAINED_FAILURE,
+  voiceEnrollmentFailureMessage,
+} from '@/lib/voiceEnrollmentMessages';
+import { isMicPermissionError, showMicPermissionAlert } from '@/lib/permissions';
+import { Sentry } from '@/lib/sentry';
 
-type VoiceEnrollmentSubmitInput = EnrollVoiceProfileInput | ReenrollVoiceProfileInput;
+type Phase =
+  | 'checking-model'
+  | 'needs-model'
+  | 'ready'
+  | 'recording'
+  | 'checking'
+  | 'download-failed'
+  | 'failed'
+  | 'done';
 
 interface VoiceEnrollmentRecorderProps {
   isOwner: boolean;
   defaultDisplayName?: string;
   profileId?: number;
-  onSubmit: (input: VoiceEnrollmentSubmitInput) => Promise<void>;
-  onCancel?: () => void;
+  isModelReady: () => Promise<boolean>;
+  isModelDownloading: () => boolean;
+  downloadModel: () => Promise<void>;
+  onSubmit: (input: EnrollVoiceProfileInput | ReenrollVoiceProfileInput) => Promise<void>;
+  onDone: () => void;
+  onCancel: () => void;
   now?: () => Date;
 }
 
-const MAX_TAKES = 2;
-const TARGET_SECONDS = 30;
+// Reading the script aloud is the consent, so it names what the profile is for.
+export const VOICE_ENROLLMENT_SCRIPT =
+  "I'm teaching OpenWhispr my voice so it can label me in my meeting notes. This voice profile stays on my device, is only used to recognize me in recordings I choose to process, and I can delete it at any time.";
 
-const formatError = (error: unknown): string => {
-  if (error instanceof Error && error.message.trim()) return error.message;
-  if (typeof error === 'object' && error && 'code' in error) return String(error.code);
-  return 'Voice enrollment failed. Try another take.';
+const MIC_PERMISSION_FAILURE =
+  "Couldn't start the microphone. Check that OpenWhispr can use it in Settings, then try again.";
+const MIC_START_FAILURE = "Couldn't start the microphone. Try again.";
+const STOP_FAILURE = "Couldn't finish the recording. Try again.";
+
+// A call or Siri pauses the recorder, and the pause only shows as it no longer recording.
+const RECORDING_INTERRUPTED =
+  'Your recording was interrupted, maybe by a call. Start again when you are ready.';
+
+// The check needs 10 s of speech, and normal reading has pauses between words, so Done
+// unlocks, and the ring fills, once there is room for them.
+const MIN_SECONDS = 15;
+const MAX_SECONDS = 30;
+// A stalled model request can hang for 30 minutes before it fails. Stop waiting long before
+// that; the download carries on, and Retry waits on the same one.
+const DOWNLOAD_WAIT_MS = 3 * 60 * 1000;
+const RING_SIZE = 88;
+const RING_STROKE = 4;
+const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
+const deleteRecording = (uri: string): void => {
+  FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
 };
 
-const formatTime = (seconds: number): string =>
-  `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+// Rejects when the wait times out or `signal` aborts (the recorder left).
+const waitForDownload = async (
+  download: Promise<void> | null,
+  signal: AbortSignal,
+): Promise<void> => {
+  if (!download) return;
+  if (signal.aborted) throw new Error('Left while waiting for the model download');
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let onAbort: (() => void) | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error('Model download timed out')), DOWNLOAD_WAIT_MS);
+    onAbort = () => reject(new Error('Left while waiting for the model download'));
+    signal.addEventListener('abort', onAbort);
+  });
+  try {
+    await Promise.race([download, timeout]);
+  } finally {
+    clearTimeout(timer);
+    if (onAbort) signal.removeEventListener('abort', onAbort);
+  }
+};
 
-const cleanupUris = async (uris: string[]): Promise<void> => {
-  await Promise.all(
-    uris.map((uri) => FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined)),
-  );
+const reportFailure = (error: unknown, stage: string): void => {
+  Sentry.captureException(error, { tags: { feature: 'voice-enrollment', stage } });
+};
+
+// Also reports failures the message can't explain, so they can be diagnosed.
+const checkFailureMessage = (error: unknown): string => {
+  const message = voiceEnrollmentFailureMessage(error);
+  if (message === VOICE_ENROLLMENT_UNEXPLAINED_FAILURE) reportFailure(error, 'check');
+  return message;
+};
+
+type RecorderLike = { uri?: string | null; isRecording?: boolean } | null | undefined;
+
+// Reading a released native recorder throws, so a failed read means there is no file to track.
+const readRecorderUri = (recorder: RecorderLike): string | null => {
+  try {
+    return recorder?.uri || null;
+  } catch {
+    return null;
+  }
+};
+
+const readRecorderIsRecording = (recorder: RecorderLike): boolean => {
+  try {
+    return !!recorder?.isRecording;
+  } catch {
+    return false;
+  }
 };
 
 export function VoiceEnrollmentRecorder({
   isOwner,
   defaultDisplayName,
   profileId,
+  isModelReady,
+  isModelDownloading,
+  downloadModel,
   onSubmit,
+  onDone,
   onCancel,
   now = () => new Date(),
-}: VoiceEnrollmentRecorderProps) {
+}: VoiceEnrollmentRecorderProps): React.JSX.Element {
   const recording = useAudioRecording();
   const { currentAmplitude, waveformData } = useAudioWaveform(
     recording.audioRecorder,
     recording.isRecording,
   );
+  const [phase, setPhase] = useState<Phase>('checking-model');
+  const [downloadStatus, setDownloadStatus] = useState<'idle' | 'downloading' | 'failed'>('idle');
   const [displayName, setDisplayName] = useState(defaultDisplayName ?? (isOwner ? 'Me' : ''));
-  // Consent is given by reading the on-screen script aloud, so it is stamped when
-  // the first take starts rather than gated behind a separate checkbox.
-  const [consentAcceptedAt, setConsentAcceptedAt] = useState<string | null>(null);
-  const [recordingActive, setRecordingActive] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [takes, setTakes] = useState<Array<{ uri: string; mimeType: string }>>([]);
-  const takesRef = useRef(takes);
-  const cancelRecordingRef = useRef(recording.cancelRecording);
-  const [error, setError] = useState<string | null>(null);
-  const [showRetry, setShowRetry] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const consentAtRef = useRef<string | null>(null);
+  const downloadRef = useRef<Promise<void> | null>(null);
+  // The file the recorder is writing, captured while it starts. On unmount the recorder
+  // hook releases the native recorder before this component's cleanup runs, and a
+  // released recorder can't be asked for its uri any more.
+  const activeUriRef = useRef<string | null>(null);
+  // A finished recording not yet handed to onSubmit; deleted if you leave.
+  const pendingUriRef = useRef<string | null>(null);
+  const startingRef = useRef(false);
+  const stoppingRef = useRef(false);
+  const submittingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const leftRef = useRef(new AbortController());
+  // The hook returns a new object each render; reading it through a ref keeps the
+  // callbacks below stable.
+  const recordingRef = useRef(recording);
+  recordingRef.current = recording;
 
-  takesRef.current = takes;
-  cancelRecordingRef.current = recording.cancelRecording;
+  const fail = useCallback((message: string): void => {
+    if (!mountedRef.current) return;
+    setFailure(message);
+    setPhase('failed');
+  }, []);
+
+  // Stops the recorder, then deletes the sample it was writing.
+  const discardActiveRecording = useCallback((): void => {
+    const uri = activeUriRef.current;
+    activeUriRef.current = null;
+    // The executor runs now, and turns a throw from a released recorder into a rejection.
+    new Promise((resolve) => resolve(recordingRef.current.cancelRecording()))
+      .catch(() => undefined)
+      .then(() => {
+        if (uri) deleteRecording(uri);
+      });
+  }, []);
 
   useEffect(() => {
-    setDisplayName(defaultDisplayName ?? (isOwner ? 'Me' : ''));
-  }, [defaultDisplayName, isOwner]);
+    // Set here too, since Fast Refresh reruns effects on the same refs.
+    mountedRef.current = true;
+    leftRef.current = new AbortController();
+    return () => {
+      mountedRef.current = false;
+      leftRef.current.abort();
+      if (pendingUriRef.current) deleteRecording(pendingUriRef.current);
+      pendingUriRef.current = null;
+      // Releasing the recorder has already stopped it. A stop still in flight that
+      // resolves later finds the component gone and deletes the same file again.
+      discardActiveRecording();
+    };
+  }, [discardActiveRecording]);
 
-  useEffect(
-    () => () => {
-      cleanupUris(takesRef.current.map((take) => take.uri)).catch(() => undefined);
-      Promise.resolve(cancelRecordingRef.current()).catch(() => undefined);
+  const startDownload = useCallback((): void => {
+    setDownloadStatus('downloading');
+    const download = downloadModel();
+    downloadRef.current = download;
+    download.then(
+      () => {
+        if (downloadRef.current === download) downloadRef.current = null;
+        if (mountedRef.current) setDownloadStatus('idle');
+      },
+      () => {
+        if (mountedRef.current) setDownloadStatus('failed');
+      },
+    );
+  }, [downloadModel]);
+
+  useEffect(() => {
+    // Opened again while an earlier visit's download runs: you already said yes, so join it.
+    if (isModelDownloading()) {
+      startDownload();
+      setPhase('ready');
+      return;
+    }
+    let active = true;
+    isModelReady().then(
+      (ready) => active && setPhase(ready ? 'ready' : 'needs-model'),
+      () => active && setPhase('needs-model'),
+    );
+    return () => {
+      active = false;
+    };
+  }, [isModelDownloading, isModelReady, startDownload]);
+
+  const trimmedName = displayName.trim();
+  const asksForName = !isOwner && profileId === undefined;
+
+  const discardPending = (uri: string): void => {
+    pendingUriRef.current = null;
+    deleteRecording(uri);
+  };
+
+  const submit = useCallback(
+    async (uri: string): Promise<void> => {
+      submittingRef.current = true;
+      setPhase('checking');
+      // Held here while the model downloads so leaving deletes it.
+      pendingUriRef.current = uri;
+      try {
+        await waitForDownload(downloadRef.current, leftRef.current.signal);
+      } catch {
+        submittingRef.current = false;
+        // Kept so a retried download can check it without reading again.
+        if (mountedRef.current) setPhase('download-failed');
+        // Unless leaving has already deleted it.
+        else if (pendingUriRef.current === uri) discardPending(uri);
+        return;
+      }
+      // Left while stopping or waiting: nothing will check this recording.
+      if (!mountedRef.current) {
+        submittingRef.current = false;
+        discardPending(uri);
+        return;
+      }
+      // From here the enrollment service owns the file until the finally below.
+      pendingUriRef.current = null;
+      const consent = {
+        recordings: [{ uri, mimeType: 'audio/wav' }],
+        consentAccepted: true as const,
+        consentAcceptedAt: consentAtRef.current ?? now().toISOString(),
+      };
+      let keepRecording = false;
+      try {
+        // A retrain keeps the profile's current name, even one changed during the read.
+        await onSubmit(
+          profileId === undefined
+            ? { ...consent, displayName: trimmedName, isOwner }
+            : { ...consent, profileId },
+        );
+        if (mountedRef.current) setPhase('done');
+      } catch (caught) {
+        if (caught instanceof SpeakerProfileOwnerAlreadyExistsError) {
+          // onSubmit has already explained this one and left the screen.
+          return;
+        }
+        if (
+          caught instanceof VoiceEnrollmentError &&
+          caught.code === VOICE_ENROLLMENT_DIARIZER_MODEL_REQUIRED
+        ) {
+          // Kept so the read can be checked once the model is downloaded.
+          keepRecording = mountedRef.current;
+          if (keepRecording) {
+            pendingUriRef.current = uri;
+            setPhase('needs-model');
+          }
+          return;
+        }
+        fail(checkFailureMessage(caught));
+      } finally {
+        submittingRef.current = false;
+        if (!keepRecording) deleteRecording(uri);
+      }
     },
-    [],
+    [fail, isOwner, now, onSubmit, profileId, trimmedName],
   );
 
+  const stop = useCallback(async (): Promise<void> => {
+    // Done and the 30 s auto-stop can land together; only the first one stops.
+    if (stoppingRef.current) return;
+    stoppingRef.current = true;
+    try {
+      const uri = await recordingRef.current.stopRecordingRaw();
+      if (!uri) {
+        discardActiveRecording();
+        fail(RECORDING_INTERRUPTED);
+        return;
+      }
+      // submit owns the file from here, so leaving no longer deletes it as the active one.
+      activeUriRef.current = null;
+      await submit(uri);
+    } catch (caught) {
+      discardActiveRecording();
+      reportFailure(caught, 'stop');
+      fail(STOP_FAILURE);
+    } finally {
+      stoppingRef.current = false;
+    }
+  }, [discardActiveRecording, fail, submit]);
+
+  // Paused by a call or Siri: say so now, not after reading on into a paused recorder.
+  const handleInterruption = useCallback((): void => {
+    const uri = activeUriRef.current;
+    activeUriRef.current = null;
+    // A paused recorder ignores cancel; stopping it finishes the file so it can be deleted.
+    Promise.resolve()
+      .then(() => recordingRef.current.audioRecorder.stop())
+      .catch(() => undefined)
+      .then(() => recordingRef.current.cancelRecording())
+      .catch(() => undefined)
+      .then(() => {
+        if (uri) deleteRecording(uri);
+      });
+    fail(RECORDING_INTERRUPTED);
+  }, [fail]);
+
   useEffect(() => {
-    if (!recordingActive) {
+    if (phase !== 'recording') {
       setElapsedSeconds(0);
       return;
     }
-    const interval = setInterval(() => setElapsedSeconds((seconds) => seconds + 1), 1000);
-    return () => clearInterval(interval);
-  }, [recordingActive]);
-
-  const stopAndAcceptTake = useCallback(async () => {
-    const uri = await recording.stopRecordingRaw();
-    setRecordingActive(false);
-    if (!uri) {
-      setError('Recording did not produce an audio file.');
-      return;
-    }
-    setError(null);
-    setShowRetry(false);
-    setTakes((current) => [...current, { uri, mimeType: 'audio/wav' }].slice(0, MAX_TAKES));
-  }, [recording]);
-
-  const handleRecordPress = useCallback(async () => {
-    if (saving || takes.length >= MAX_TAKES) return;
-    try {
-      if (recordingActive) {
-        await stopAndAcceptTake();
+    const interval = setInterval(() => {
+      if (!stoppingRef.current && !readRecorderIsRecording(recordingRef.current.audioRecorder)) {
+        clearInterval(interval);
+        handleInterruption();
         return;
       }
-      setError(null);
-      setShowRetry(false);
-      if (!consentAcceptedAt) setConsentAcceptedAt(now().toISOString());
-      await recording.startRecording();
-      setRecordingActive(true);
-    } catch (caught) {
-      setRecordingActive(false);
-      setError(formatError(caught));
-    }
-  }, [consentAcceptedAt, now, recording, recordingActive, saving, stopAndAcceptTake, takes.length]);
+      setElapsedSeconds((seconds) => seconds + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [handleInterruption, phase]);
 
-  const handleRemoveTakes = useCallback(() => {
-    const uris = takes.map((take) => take.uri);
-    setTakes([]);
-    setError(null);
-    setShowRetry(false);
-    cleanupUris(uris).catch(() => undefined);
-  }, [takes]);
+  useEffect(() => {
+    if (phase === 'recording' && elapsedSeconds >= MAX_SECONDS) stop().catch(() => undefined);
+  }, [elapsedSeconds, phase, stop]);
 
-  const handleSubmit = useCallback(async () => {
-    const trimmedName = displayName.trim();
-    if (!consentAcceptedAt || takes.length === 0) return;
-    if (!isOwner && !trimmedName) return;
-
-    setSaving(true);
-    setError(null);
-    const submittedTakes = takes;
-    const submittedUris = submittedTakes.map((take) => take.uri);
-    const baseInput = {
-      recordings: submittedTakes,
-      displayName: trimmedName || 'Me',
-      isOwner,
-      consentAccepted: true,
-      consentAcceptedAt,
-    };
-
+  const start = useCallback(async (): Promise<void> => {
+    // The phase stays ready while the microphone opens; a second tap would prepare a
+    // second file that nothing deletes.
+    if (startingRef.current || activeUriRef.current) return;
+    startingRef.current = true;
+    setFailure(null);
+    consentAtRef.current ??= now().toISOString();
     try {
-      if (profileId === undefined) {
-        await onSubmit(baseInput);
-      } else {
-        await onSubmit({ ...baseInput, profileId });
+      await recordingRef.current.startRecording();
+      activeUriRef.current = readRecorderUri(recordingRef.current.audioRecorder);
+      // Left before the microphone opened: stop it and drop what it started writing.
+      if (!mountedRef.current) {
+        discardActiveRecording();
+        return;
       }
-      await cleanupUris(submittedUris);
-      setTakes([]);
-      setShowRetry(false);
+      setPhase('recording');
     } catch (caught) {
-      await cleanupUris(submittedUris);
-      setTakes([]);
-      setShowRetry(true);
-      if (caught instanceof SpeakerProfileOwnerAlreadyExistsError) throw caught;
-      setError(formatError(caught));
+      if (isMicPermissionError(caught)) {
+        // Same rule as dictation: only point at Settings when iOS couldn't ask itself.
+        if (!caught.nativePromptShown) showMicPermissionAlert();
+        fail(MIC_PERMISSION_FAILURE);
+      } else {
+        reportFailure(caught, 'start');
+        fail(MIC_START_FAILURE);
+      }
     } finally {
-      setSaving(false);
+      startingRef.current = false;
     }
-  }, [consentAcceptedAt, displayName, isOwner, onSubmit, profileId, takes]);
+  }, [discardActiveRecording, fail, now]);
 
-  const handleCancel = useCallback(() => {
-    cleanupUris(takes.map((take) => take.uri)).catch(() => undefined);
-    onCancel?.();
-  }, [onCancel, takes]);
+  // Downloads the model, then checks a recording that was waiting for it.
+  const downloadAndCheck = useCallback(async (): Promise<void> => {
+    // A second tap before the re-render would check, and delete, the same file twice.
+    if (submittingRef.current) return;
+    startDownload();
+    const uri = pendingUriRef.current;
+    if (uri) await submit(uri);
+    else setPhase('ready');
+  }, [startDownload, submit]);
 
-  const trimmedName = displayName.trim();
-  const avatarInitial = trimmedName ? trimmedName[0].toUpperCase() : '?';
-  const canSave = takes.length > 0 && (isOwner || !!trimmedName) && !saving;
-  const canRecordMore = takes.length < MAX_TAKES;
-  const countLabel = recordingActive
-    ? `Recording ${takes.length + 1} of ${MAX_TAKES}`
-    : `${takes.length} of ${MAX_TAKES} recorded`;
+  if (phase === 'checking-model') {
+    return <ActivityIndicator className="mt-10" />;
+  }
+
+  if (phase === 'needs-model') {
+    return (
+      <View className="gap-4">
+        <Text accessibilityRole="header" className="text-[20px] font-semibold text-label">
+          Download the speaker model
+        </Text>
+        <Text className="text-[15px] leading-5 text-secondaryLabel">
+          OpenWhispr needs a one-time download of about 100 MB to recognize voices. It runs entirely
+          on your device after that.
+        </Text>
+        <Button
+          testID="voice-enrollment-download"
+          onPress={() => {
+            downloadAndCheck().catch(() => undefined);
+          }}
+        >
+          Download
+        </Button>
+        <Button testID="voice-enrollment-not-now" variant="secondary" onPress={onCancel}>
+          Not Now
+        </Button>
+      </View>
+    );
+  }
+
+  if (phase === 'done') {
+    const labelled = isOwner ? `you as ${trimmedName}` : trimmedName;
+    return (
+      <View className="items-center gap-3 pt-6">
+        <SystemIcon
+          name="checkmark.circle.fill"
+          mdName="CircleCheck"
+          size={44}
+          color="systemGreen"
+        />
+        <Text className="text-[22px] font-semibold text-label">All set</Text>
+        <Text className="text-center text-[15px] leading-5 text-secondaryLabel">
+          {`Future on-device meetings will label ${labelled}.`}
+        </Text>
+        <Button testID="voice-enrollment-done" className="mt-2 self-stretch" onPress={onDone}>
+          Done
+        </Button>
+      </View>
+    );
+  }
+
+  const needsName = asksForName && !trimmedName;
+  const canStop = elapsedSeconds >= MIN_SECONDS;
+  const ringProgress = Math.min(elapsedSeconds / MIN_SECONDS, 1);
 
   return (
     <View className="gap-5">
-      <View className="gap-2">
-        <Text className="text-[13px] uppercase tracking-wider text-secondaryLabel">Profile</Text>
-        <View
-          className="flex-row items-center gap-3 rounded-xl border border-separator bg-secondarySystemGroupedBackground p-2"
+      {asksForName ? (
+        <TextInput
+          value={displayName}
+          onChangeText={setDisplayName}
+          placeholder="Their name"
+          placeholderTextColor={iosColor('tertiaryLabel')}
+          editable={phase === 'ready' || phase === 'failed'}
+          testID="voice-enrollment-name"
+          className="rounded-xl border border-separator bg-secondarySystemGroupedBackground px-4 py-3 text-[17px] text-label"
           style={{ borderCurve: 'continuous' }}
-        >
-          <View className="h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-primary">
-            <GradientGlassSurface shape="circle" />
-            <Text className="text-[17px] font-semibold text-white">{avatarInitial}</Text>
-          </View>
-          <TextInput
-            value={displayName}
-            onChangeText={setDisplayName}
-            placeholder={isOwner ? 'Me' : 'Speaker name'}
-            placeholderTextColor="rgba(60,60,67,0.3)"
-            testID="voice-enrollment-name"
-            className="flex-1 text-[17px] font-semibold text-label"
-          />
-        </View>
-      </View>
-
-      <View className="gap-2">
-        <Text className="text-[13px] uppercase tracking-wider text-secondaryLabel">Read aloud</Text>
-        <View
-          className="rounded-xl border border-separator bg-secondarySystemGroupedBackground p-4"
-          style={{ borderCurve: 'continuous' }}
-        >
-          <Text className="text-[15px] leading-6 text-label">
-            Today I am creating a voice profile for meeting notes. This 10 second voiceprint stays
-            on my device and helps label future transcripts. It is used only to recognize my voice
-            in recordings I choose to process, and it is not shared with other people or services. I
-            can delete them whenever I choose.
-          </Text>
-        </View>
-      </View>
-
-      <View className="items-center gap-2">
-        <WaveformVisualizer
-          isRecording={recordingActive}
-          height={120}
-          color={BRAND}
-          amplitude={currentAmplitude}
-          waveformData={waveformData}
         />
-        {recordingActive ? (
-          <View className="flex-row items-center gap-2">
-            <View className="h-2 w-2 rounded-full bg-systemRed" />
-            <Text className="text-[14px] font-medium text-secondaryLabel">
-              {`Recording · ${formatTime(elapsedSeconds)} / ${formatTime(TARGET_SECONDS)}`}
-            </Text>
-          </View>
-        ) : null}
+      ) : null}
+
+      <Text className="text-[15px] leading-5 text-secondaryLabel">
+        Read this aloud in your normal voice. It takes about 20 seconds.
+      </Text>
+      <View
+        className="rounded-xl border border-separator bg-secondarySystemGroupedBackground p-4"
+        style={{ borderCurve: 'continuous' }}
+      >
+        <Text className="text-[19px] leading-7 text-label">{VOICE_ENROLLMENT_SCRIPT}</Text>
       </View>
 
-      <View className="gap-3">
-        <Text className="text-center text-[14px] font-semibold text-label">{countLabel}</Text>
-        {canRecordMore ? (
-          recordingActive ? (
-            <Pressable
-              onPress={handleRecordPress}
-              accessibilityRole="button"
-              testID="voice-enrollment-record"
-              className="h-14 flex-row items-center justify-center gap-2 rounded-full border border-separator bg-secondarySystemGroupedBackground active:opacity-80"
-              style={{ borderCurve: 'continuous' }}
-            >
-              <View className="h-2.5 w-2.5 rounded-full bg-systemRed" />
-              <Text className="text-base font-medium text-systemRed">Stop</Text>
-            </Pressable>
-          ) : (
-            <Button
-              onPress={handleRecordPress}
-              disabled={saving}
-              testID="voice-enrollment-record"
-              accessibilityState={{ disabled: saving }}
-            >
-              {takes.length === 0 ? 'Record Take' : 'Record Another'}
-            </Button>
-          )
-        ) : null}
-        {canRecordMore ? (
-          <Text className="text-center text-[13px] leading-5 text-tertiaryLabel">
-            One recording is enough. Record another if you want better reliability.
+      {downloadStatus === 'downloading' ? (
+        <View className="flex-row items-center gap-2" testID="voice-enrollment-downloading">
+          <ActivityIndicator size="small" />
+          <Text className="text-[13px] text-secondaryLabel">Downloading speaker model…</Text>
+        </View>
+      ) : null}
+      {downloadStatus === 'failed' && phase !== 'download-failed' ? (
+        <View className="flex-row items-center justify-between">
+          <Text className="text-[13px] text-systemRed">
+            The speaker model didn&apos;t download.
           </Text>
-        ) : null}
-        {takes.length > 0 || showRetry ? (
           <Pressable
-            onPress={handleRemoveTakes}
+            onPress={startDownload}
             accessibilityRole="button"
-            accessibilityLabel="Retry recording"
-            testID="voice-enrollment-retry"
-            className="items-center py-1"
+            testID="voice-enrollment-download-retry-inline"
+            className="min-h-11 justify-center px-2"
           >
-            <Text className="text-[14px] font-medium text-brand">Retry recording</Text>
+            <Text className="text-[14px] font-medium text-brand">Retry</Text>
           </Pressable>
-        ) : null}
-      </View>
-
-      {error ? (
-        <View
-          className="rounded-xl border border-systemRed/30 bg-systemRed/10 p-3"
-          testID="voice-enrollment-error"
-        >
-          <Text className="text-[14px] leading-5 text-systemRed">{error}</Text>
         </View>
       ) : null}
 
-      <View className="flex-row gap-3">
-        {onCancel ? (
-          <Button variant="secondary" className="flex-1" onPress={handleCancel}>
-            Cancel
-          </Button>
-        ) : null}
-        <Button
-          className="flex-1"
-          onPress={handleSubmit}
-          disabled={!canSave}
-          loading={saving}
-          testID="voice-enrollment-save"
-          accessibilityState={{ disabled: !canSave }}
+      {phase === 'failed' && failure ? (
+        <View
+          className="gap-2 rounded-xl border border-systemRed/30 bg-systemRed/10 p-3"
+          testID="voice-enrollment-error"
         >
-          Save
+          <Text className="text-[14px] leading-5 text-systemRed">{failure}</Text>
+        </View>
+      ) : null}
+
+      {phase === 'checking' ? (
+        <View className="items-center gap-2 py-6" testID="voice-enrollment-checking">
+          <ActivityIndicator />
+          <Text className="text-[15px] text-secondaryLabel">
+            {downloadStatus === 'downloading'
+              ? 'Waiting for the speaker model to finish downloading…'
+              : 'Checking your voice…'}
+          </Text>
+        </View>
+      ) : phase === 'download-failed' ? (
+        <View className="gap-3 py-2">
+          <Text className="text-[15px] leading-5 text-secondaryLabel">
+            The speaker model hasn&apos;t finished downloading, so your recording couldn&apos;t be
+            checked yet.
+          </Text>
+          <Button
+            testID="voice-enrollment-download-retry"
+            onPress={() => {
+              downloadAndCheck().catch(() => undefined);
+            }}
+          >
+            Retry
+          </Button>
+        </View>
+      ) : phase === 'failed' ? (
+        <Button
+          testID="voice-enrollment-try-again"
+          onPress={() => {
+            setFailure(null);
+            setPhase('ready');
+          }}
+        >
+          Try Again
         </Button>
-      </View>
+      ) : (
+        <View className="items-center gap-4">
+          {phase === 'recording' ? (
+            <WaveformVisualizer
+              isRecording
+              height={80}
+              color={BRAND}
+              amplitude={currentAmplitude}
+              waveformData={waveformData}
+            />
+          ) : null}
+          <Pressable
+            onPress={phase === 'ready' ? () => start().catch(() => undefined) : undefined}
+            disabled={phase !== 'ready' || needsName}
+            accessibilityRole="button"
+            accessibilityLabel={phase === 'recording' ? 'Recording' : 'Start recording'}
+            accessibilityState={{ disabled: phase !== 'ready' || needsName }}
+            testID="voice-enrollment-record"
+            style={{ width: RING_SIZE, height: RING_SIZE, opacity: needsName ? 0.4 : 1 }}
+            className="items-center justify-center"
+          >
+            <Svg width={RING_SIZE} height={RING_SIZE} style={{ position: 'absolute' }}>
+              <Circle
+                cx={RING_SIZE / 2}
+                cy={RING_SIZE / 2}
+                r={RING_RADIUS}
+                stroke={BRAND}
+                strokeOpacity={0.15}
+                strokeWidth={RING_STROKE}
+                fill="none"
+              />
+              <Circle
+                cx={RING_SIZE / 2}
+                cy={RING_SIZE / 2}
+                r={RING_RADIUS}
+                stroke={BRAND}
+                strokeWidth={RING_STROKE}
+                strokeDasharray={RING_CIRCUMFERENCE}
+                strokeDashoffset={RING_CIRCUMFERENCE * (1 - ringProgress)}
+                strokeLinecap="round"
+                fill="none"
+                transform={`rotate(-90 ${RING_SIZE / 2} ${RING_SIZE / 2})`}
+              />
+            </Svg>
+            <View className="h-16 w-16 items-center justify-center rounded-full bg-brand">
+              <SystemIcon name="mic.fill" mdName="Mic" size={26} color="#FFFFFF" />
+            </View>
+          </Pressable>
+          {phase === 'recording' ? (
+            <View className="items-center gap-2 self-stretch">
+              <Button
+                testID="voice-enrollment-stop"
+                className="self-stretch"
+                disabled={!canStop}
+                onPress={() => {
+                  stop().catch(() => undefined);
+                }}
+              >
+                Done
+              </Button>
+              {canStop ? null : (
+                <Text className="text-[13px] text-tertiaryLabel">Keep reading</Text>
+              )}
+            </View>
+          ) : (
+            <Text className="text-[13px] text-tertiaryLabel">Tap to start reading</Text>
+          )}
+        </View>
+      )}
     </View>
   );
 }
