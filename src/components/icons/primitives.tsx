@@ -176,6 +176,16 @@ const TableMark = glyph(
   </>
 );
 
+// Settings > Tone & Style, as drawn in the design: a square with a plus and a
+// sparkle at its corner.
+const SquareSparkleMark = glyph(
+  <>
+    <path d="M14 4H7a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-7" />
+    <path d="M12 9.5v5M9.5 12h5" />
+    <path d="M19 2.5v5M16.5 5h5" />
+  </>
+);
+
 export const Circle = createIcon("circle", CircleMark);
 export const Square = createIcon("square", SquareMark);
 export const SquareSlash = createIcon("square-slash", SquareSlashMark);
@@ -191,3 +201,4 @@ export const ListOrdered = createIcon("list-ordered", ListOrderedMark);
 export const Quote = createIcon("quote", QuoteMark);
 export const Strikethrough = createIcon("strikethrough", StrikethroughMark);
 export const Table = createIcon("table", TableMark);
+export const SquareSparkle = createIcon("square-sparkle", SquareSparkleMark);

@@ -1516,6 +1516,10 @@
         "description": "聽寫快捷鍵與啟用模式",
         "label": "快捷鍵"
       },
+      "toneStyle": {
+        "label": "語氣與風格",
+        "description": "整理在各個應用程式中的寫法"
+      },
       "speechToText": {
         "description": "聽寫與筆記錄音引擎",
         "label": "語音轉文字"
@@ -4875,6 +4879,91 @@
     "details": {
       "provider": "服務商",
       "requestId": "請求 ID"
+    }
+  },
+  "toneStyle": {
+    "title": "語氣與風格",
+    "description": "為不同的應用程式設定你的語氣和風格。",
+    "turnOnAndSetUp": "開啟並設定",
+    "categories": {
+      "personal": {
+        "title": "私人訊息",
+        "inline": "私人訊息",
+        "question": "{{category}}\n你會怎麼寫？"
+      },
+      "work": {
+        "title": "工作訊息",
+        "inline": "工作訊息",
+        "question": "{{category}}\n你會怎麼寫？"
+      },
+      "email": {
+        "title": "電子郵件",
+        "inline": "電子郵件",
+        "question": "{{category}}\n你會怎麼寫？"
+      },
+      "other": {
+        "title": "其他應用程式",
+        "inline": "其他應用程式中的文字",
+        "question": "{{category}}\n你會怎麼寫？"
+      }
+    },
+    "tones": {
+      "formal": "正式",
+      "casual": "隨性",
+      "very_casual": "非常隨性",
+      "excited": "熱情！"
+    },
+    "samples": {
+      "personal": {
+        "formal": "你好，今晚有空嗎？我在想我們可以六點左右一起喝杯咖啡。請告訴我。",
+        "casual": "今晚有空嗎？想六點左右去喝咖啡，跟我說一聲",
+        "very_casual": "今晚有空嗎 6點喝咖啡？回我"
+      },
+      "work": {
+        "sender": "吉米",
+        "time": "18:20",
+        "formal": "你好，可以在通話前把簡報寄給我嗎？第 3 頁的數字似乎已經過時了。不急。",
+        "casual": "通話前可以把簡報傳給我嗎？第 3 頁的數字好像舊了，不急。",
+        "excited": "嗨！通話前可以把簡報傳給我嗎？第 3 頁的數字應該是舊的，不急喔！"
+      },
+      "email": {
+        "to": "收件者：莎拉",
+        "formal": "莎拉您好：\n\n感謝您今天撥冗。我會在週四前寄出更新後的提案。在那之前若有任何需要，請隨時告訴我。\n\n敬祝 順心",
+        "casual": "莎拉你好：\n\n今天謝啦。週四前我把更新後的提案寄給你，之前有需要再跟我說。\n\n謝謝",
+        "excited": "莎拉你好：\n\n非常感謝你今天抽空！週四前我會寄出更新後的提案。之前有任何需要都可以跟我說！\n\n謝謝"
+      },
+      "other": {
+        "formal": "通話紀錄：他們很喜歡定價頁面，希望縮短新手引導流程。下週追蹤。",
+        "casual": "通話紀錄：定價頁反應不錯，想要更短的引導。下週追蹤",
+        "excited": "通話紀錄：他們超喜歡定價頁面！想要更短的引導。下週追蹤！"
+      }
+    },
+    "setup": {
+      "introTitle": "讓 OpenWhispr\n照你說話的方式寫",
+      "introDescription": "為不同的應用程式設定你的語氣和風格。",
+      "personalize": "開始個人化",
+      "cleanupOffTitle": "讓 OpenWhispr\n學會你的風格",
+      "cleanupOffDescription": "開啟文字整理，再為不同的應用程式設定你的語氣和風格。",
+      "stepDescription": "選出最像你的範例。",
+      "progress": "第 {{current}} 步，共 {{total}} 步",
+      "finish": "完成"
+    },
+    "banner": {
+      "title": "教 OpenWhispr 學會你的寫法",
+      "description": "四個簡單選擇，決定你在訊息、郵件和其他地方的語氣。",
+      "start": "立即開始",
+      "cleanupOffTitle": "讓 OpenWhispr 學會你的風格",
+      "cleanupOffDescription": "開啟文字整理，為訊息、郵件和其他地方選一種語氣。",
+      "notNow": "暫時不要",
+      "decoration": "剛看完最新的設計稿，整體都很好，謝謝你這麼快就做好"
+    },
+    "settings": {
+      "saveChanges": "儲存變更",
+      "saved": "語氣與風格已儲存",
+      "enable": "依應用程式調整我的語氣",
+      "enableDescription": "整理後的文字會使用你為目前聽寫的應用程式選擇的語氣。",
+      "cleanupOff": "語氣與風格需要開啟文字整理。",
+      "turnOnCleanup": "開啟"
     }
   }
 }

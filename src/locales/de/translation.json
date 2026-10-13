@@ -1614,6 +1614,10 @@
         "description": "Diktat-Hotkey & Aktivierung",
         "label": "Hotkeys"
       },
+      "toneStyle": {
+        "label": "Ton & Stil",
+        "description": "Wie die Bereinigung in jeder App schreibt"
+      },
       "speechToText": {
         "description": "Engines für Diktat & Notizaufnahme",
         "label": "Spracherkennung"
@@ -4875,6 +4879,91 @@
     "details": {
       "provider": "Anbieter",
       "requestId": "Anfrage-ID"
+    }
+  },
+  "toneStyle": {
+    "title": "Ton & Stil",
+    "description": "Legen Sie Ton und Stil für verschiedene Apps fest.",
+    "turnOnAndSetUp": "Aktivieren und einrichten",
+    "categories": {
+      "personal": {
+        "title": "Persönliche Nachrichten",
+        "inline": "Ihre persönlichen Nachrichten",
+        "question": "Wie schreiben Sie\n{{category}}?"
+      },
+      "work": {
+        "title": "Arbeitsnachrichten",
+        "inline": "Ihre Arbeitsnachrichten",
+        "question": "Wie schreiben Sie\n{{category}}?"
+      },
+      "email": {
+        "title": "E-Mails",
+        "inline": "Ihre E-Mails",
+        "question": "Wie schreiben Sie\n{{category}}?"
+      },
+      "other": {
+        "title": "Andere Apps",
+        "inline": "in anderen Apps",
+        "question": "Wie schreiben Sie\n{{category}}?"
+      }
+    },
+    "tones": {
+      "formal": "Formell",
+      "casual": "Locker",
+      "very_casual": "Sehr locker",
+      "excited": "Begeistert!"
+    },
+    "samples": {
+      "personal": {
+        "formal": "Hallo, hast du heute Abend Zeit? Ich dachte, wir könnten gegen 18 Uhr einen Kaffee trinken gehen. Gib mir Bescheid.",
+        "casual": "Hey, hast du heute Abend Zeit? Dachte an Kaffee so gegen 6, sag Bescheid",
+        "very_casual": "hey heut abend zeit? kaffee so um 6 rum? sag bescheid"
+      },
+      "work": {
+        "sender": "Jimmy",
+        "time": "18:20",
+        "formal": "Hallo, könntest du mir die Präsentation vor dem Call schicken? Die Zahlen auf Folie 3 sind wohl nicht mehr aktuell. Keine Eile.",
+        "casual": "Hey, kannst du mir die Präsi vor dem Call schicken? Glaube, die Zahlen auf Folie 3 sind alt, keine Eile.",
+        "excited": "Hey! Kannst du mir die Präsentation vor dem Call schicken? Die Zahlen auf Folie 3 sind bestimmt alt, keine Eile!"
+      },
+      "email": {
+        "to": "An Sarah",
+        "formal": "Hallo Sarah,\n\nvielen Dank für Ihre Zeit heute. Das neue Angebot sende ich Ihnen bis Donnerstag. Melden Sie sich gern bei Fragen.\n\nMit freundlichen Grüßen",
+        "casual": "Hallo Sarah,\n\ndanke für heute. Ich schicke dir das überarbeitete Angebot bis Donnerstag, sag Bescheid, wenn du vorher noch was brauchst.\n\nDanke",
+        "excited": "Hallo Sarah,\n\nvielen Dank für deine Zeit heute! Das neue Angebot schicke ich dir bis Donnerstag. Sag Bescheid, wenn du vorher noch was brauchst!\n\nDanke"
+      },
+      "other": {
+        "formal": "Notizen zum Gespräch: Die Preisseite kam gut an, und sie wünschen sich ein kürzeres Onboarding. Nächste Woche nachfassen.",
+        "casual": "Call-Notizen: Preisseite kam gut an, Onboarding soll kürzer. Nächste Woche nachfassen",
+        "excited": "Call-Notizen: Sie lieben die Preisseite! Onboarding soll kürzer werden. Nächste Woche nachfassen!"
+      }
+    },
+    "setup": {
+      "introTitle": "Lassen Sie OpenWhispr\nso schreiben, wie Sie sprechen",
+      "introDescription": "Legen Sie Ton und Stil für verschiedene Apps fest.",
+      "personalize": "Jetzt anpassen",
+      "cleanupOffTitle": "Bringen Sie OpenWhispr\nIhren Stil bei",
+      "cleanupOffDescription": "Aktivieren Sie die Textbereinigung und legen Sie dann Ton und Stil für verschiedene Apps fest.",
+      "stepDescription": "Wählen Sie das Beispiel, das am meisten nach Ihnen klingt.",
+      "progress": "Schritt {{current}} von {{total}}",
+      "finish": "Fertig"
+    },
+    "banner": {
+      "title": "Bringen Sie OpenWhispr bei, wie Sie schreiben",
+      "description": "Vier kurze Auswahlen legen Ihren Ton für Nachrichten, E-Mails und alles andere fest.",
+      "start": "Jetzt starten",
+      "cleanupOffTitle": "Bringen Sie OpenWhispr Ihren Stil bei",
+      "cleanupOffDescription": "Aktivieren Sie die Textbereinigung und wählen Sie einen Ton für Nachrichten, E-Mails und alles andere.",
+      "notNow": "Nicht jetzt",
+      "decoration": "habe mir gerade die neuen Entwürfe angesehen, und insgesamt sieht alles gut aus, danke, dass das so schnell ging"
+    },
+    "settings": {
+      "saveChanges": "Änderungen speichern",
+      "saved": "Ton & Stil gespeichert",
+      "enable": "Ton an jede App anpassen",
+      "enableDescription": "Die Bereinigung schreibt im Ton, den Sie für die App gewählt haben, in die Sie diktieren.",
+      "cleanupOff": "Ton & Stil benötigt die Textbereinigung.",
+      "turnOnCleanup": "Aktivieren"
     }
   }
 }

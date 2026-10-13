@@ -159,6 +159,7 @@ import WorkspaceBillingOverview from "./settings/WorkspaceBillingOverview";
 import EnterpriseCheckoutDialog from "./settings/EnterpriseCheckoutDialog";
 import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
 import ProfileSection from "./settings/ProfileSection";
+import ToneStyleSection from "./settings/ToneStyleSection";
 import { formatAmount } from "../utils/formatAmount";
 import { enterpriseProviderName, getTranscriptionProvider } from "../models/ModelRegistry";
 import { useManagedScopeResolution } from "../stores/enterpriseIdentityStore";
@@ -170,6 +171,7 @@ export type SettingsSectionType =
   | "workspace"
   | "general"
   | "hotkeys"
+  | "toneStyle"
   | "speechToText"
   | "llms"
   | "privacyData"
@@ -3050,6 +3052,9 @@ export default function SettingsPage({
 
       case "workspace":
         return <WorkspaceSection initialSubTab={initialSubTab} />;
+
+      case "toneStyle":
+        return <ToneStyleSection onSetUpCleanup={() => onNavigateToSection?.("llms")} />;
 
       case "general":
         return (

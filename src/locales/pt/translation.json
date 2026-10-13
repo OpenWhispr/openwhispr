@@ -1495,6 +1495,10 @@
         "description": "Atalho de ditado e ativação",
         "label": "Atalhos"
       },
+      "toneStyle": {
+        "label": "Tom e estilo",
+        "description": "Como a limpeza escreve em cada app"
+      },
       "speechToText": {
         "description": "Motores para ditado e gravação de notas",
         "label": "Voz para texto"
@@ -4875,6 +4879,91 @@
     "details": {
       "provider": "Provedor",
       "requestId": "ID da solicitação"
+    }
+  },
+  "toneStyle": {
+    "title": "Tom e estilo",
+    "description": "Defina seu tom e estilo em diferentes apps.",
+    "turnOnAndSetUp": "Ativar e configurar",
+    "categories": {
+      "personal": {
+        "title": "Mensagens pessoais",
+        "inline": "suas mensagens pessoais",
+        "question": "Como você escreve\n{{category}}?"
+      },
+      "work": {
+        "title": "Mensagens de trabalho",
+        "inline": "suas mensagens de trabalho",
+        "question": "Como você escreve\n{{category}}?"
+      },
+      "email": {
+        "title": "E-mails",
+        "inline": "seus e-mails",
+        "question": "Como você escreve\n{{category}}?"
+      },
+      "other": {
+        "title": "Outros apps",
+        "inline": "em outros apps",
+        "question": "Como você escreve\n{{category}}?"
+      }
+    },
+    "tones": {
+      "formal": "Formal",
+      "casual": "Casual",
+      "very_casual": "Muito casual",
+      "excited": "Animado!"
+    },
+    "samples": {
+      "personal": {
+        "formal": "Oi, você está livre hoje à noite? Pensei que poderíamos tomar um café por volta das 18h. Me avise.",
+        "casual": "Oi, tá livre hoje à noite? Pensei num café lá pelas 6, me avisa",
+        "very_casual": "oi vc ta livre hj a noite? cafe la pelas 6? me avisa"
+      },
+      "work": {
+        "sender": "Jimmy",
+        "time": "18:20",
+        "formal": "Oi, você poderia me enviar a apresentação antes da call? Os números do slide 3 parecem desatualizados. Sem pressa.",
+        "casual": "Oi, consegue me mandar a apresentação antes da call? Acho que os números do slide 3 tão velhos, sem pressa.",
+        "excited": "Oi! Consegue me mandar a apresentação antes da call? Tenho quase certeza que os números do slide 3 estão velhos, sem pressa!"
+      },
+      "email": {
+        "to": "Para Sarah",
+        "formal": "Olá, Sarah,\n\nObrigado pelo seu tempo hoje. Enviarei a proposta atualizada até quinta-feira. Por favor, me avise se precisar de algo antes disso.\n\nAtenciosamente",
+        "casual": "Oi, Sarah,\n\nValeu por hoje. Mando a proposta atualizada até quinta, me avisa se precisar de algo antes.\n\nValeu",
+        "excited": "Oi, Sarah,\n\nMuito obrigado pelo seu tempo hoje! Mando a proposta atualizada até quinta. Me avise se precisar de algo antes!\n\nObrigado"
+      },
+      "other": {
+        "formal": "Notas da call: gostaram da página de preços e gostariam de um onboarding mais curto. Retomar o contato na próxima semana.",
+        "casual": "Notas da call: curtiram a página de preços, querem onboarding mais curto. Retomar semana que vem",
+        "excited": "Notas da call: amaram a página de preços! Querem um onboarding mais curto. Retomar semana que vem!"
+      }
+    },
+    "setup": {
+      "introTitle": "Faça o OpenWhispr\nescrever como você fala",
+      "introDescription": "Defina seu tom e estilo em diferentes apps.",
+      "personalize": "Personalizar",
+      "cleanupOffTitle": "Ensine ao OpenWhispr\no seu estilo",
+      "cleanupOffDescription": "Ative a limpeza de texto e defina seu tom e estilo em diferentes apps.",
+      "stepDescription": "Escolha o exemplo que mais se parece com você.",
+      "progress": "Etapa {{current}} de {{total}}",
+      "finish": "Concluir"
+    },
+    "banner": {
+      "title": "Ensine ao OpenWhispr como você escreve",
+      "description": "Quatro escolhas rápidas definem seu tom para mensagens, e-mails e todo o resto.",
+      "start": "Começar",
+      "cleanupOffTitle": "Ensine ao OpenWhispr o seu estilo",
+      "cleanupOffDescription": "Ative a limpeza de texto e escolha um tom para mensagens, e-mails e todo o resto.",
+      "notNow": "Agora não",
+      "decoration": "acabei de ver os últimos designs e no geral tudo parece ótimo, valeu pela rapidez"
+    },
+    "settings": {
+      "saveChanges": "Salvar alterações",
+      "saved": "Tom e estilo salvos",
+      "enable": "Ajustar meu tom a cada app",
+      "enableDescription": "A limpeza escreve no tom que você escolheu para o app em que está ditando.",
+      "cleanupOff": "Tom e estilo precisa da limpeza de texto.",
+      "turnOnCleanup": "Ativar"
     }
   }
 }
