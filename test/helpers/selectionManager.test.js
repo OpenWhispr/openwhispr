@@ -21,7 +21,7 @@ const declines = () =>
 
 const originalLoad = Module._load;
 
-function loadSelectionManager({ spawn } = {}) {
+function loadSelectionManager({ spawn, execFile } = {}) {
   delete require.cache[selectionManagerPath];
   Module._load = function loadWithElectronMock(request, parent, isMain) {
     if (request === "electron") {
@@ -30,8 +30,8 @@ function loadSelectionManager({ spawn } = {}) {
     if (request === "./debugLogger") {
       return debugLoggerStub;
     }
-    if (request === "child_process" && spawn) {
-      return { ...childProcess, spawn };
+    if (request === "child_process" && (spawn || execFile)) {
+      return { ...childProcess, ...(spawn && { spawn }), ...(execFile && { execFile }) };
     }
     return originalLoad.call(this, request, parent, isMain);
   };
@@ -752,6 +752,106 @@ test("getWinTarget returns the hex HWND a win32 probe captured (#859)", async ()
     { command: "/tmp/windows-fast-paste.exe", args: ["--detect-only"] },
   ]);
   assert.equal((await manager.getWinTarget())?.id, "00001A2B");
+});
+
+test("the app context of a win32 target carries its exe, class and window title", async () => {
+  const SpawningSelectionManager = loadSelectionManager({
+    spawn: () => {
+      const probe = new EventEmitter();
+      probe.stdout = new EventEmitter();
+      probe.stderr = new EventEmitter();
+      process.nextTick(() => {
+        probe.stdout.emit(
+          "data",
+          "TARGET 00001A2B\nWINDOW_CLASS Chrome_WidgetWin_1\nEXE_NAME chrome.exe\n" +
+            "WINDOW_TITLE Inbox - Gmail - Google Chrome\nIS_TERMINAL false\n"
+        );
+        probe.emit("close", 0);
+      });
+      return probe;
+    },
+  });
+  const manager = new SpawningSelectionManager({
+    clipboardManager: { resolveWindowsFastPasteBinary: () => "/tmp/windows-fast-paste.exe" },
+    textEditMonitor: {},
+    platform: "win32",
+    now: () => 1000,
+  });
+
+  const capture = manager.captureTarget();
+  const context = manager.getTargetAppContext();
+  await capture;
+
+  assert.deepEqual(await context, {
+    appSignature: "chrome.exe Chrome_WidgetWin_1",
+    windowTitle: "Inbox - Gmail - Google Chrome",
+  });
+  // The title stays in the main process: the target itself never carries it.
+  assert.equal(JSON.stringify(manager.lastTarget).includes("Inbox"), false);
+});
+
+test("the app context of a macOS target names the app from its pid", async () => {
+  const manager = new SelectionManager({
+    clipboardManager: {},
+    textEditMonitor: {
+      lastTargetPid: 42,
+      getAppContext: async (pid) =>
+        pid === 42
+          ? { appName: "Google Chrome", bundleId: "com.google.Chrome", urlHost: "mail.google.com" }
+          : null,
+    },
+    platform: "darwin",
+    now: () => 1000,
+  });
+
+  assert.deepEqual(await manager.getTargetAppContext(), {
+    appSignature: "Google Chrome com.google.Chrome",
+    windowTitle: undefined,
+    urlHost: "mail.google.com",
+  });
+});
+
+test("an X11 target's window title is read only when the app context is asked for", async () => {
+  const calls = [];
+  const ExecSelectionManager = loadSelectionManager({
+    execFile: (command, args, _options, callback) => {
+      calls.push([command, ...args]);
+      callback(null, "Inbox - Gmail - Mozilla Firefox\n", "");
+    },
+  });
+  const manager = new ExecSelectionManager({
+    clipboardManager: {},
+    textEditMonitor: {},
+    platform: "linux",
+    now: () => 1000,
+  });
+  manager.lastTarget = { kind: "x11-window", id: "7", windowClass: "firefox" };
+
+  assert.deepEqual(await manager.getTargetAppContext(), {
+    appSignature: "firefox",
+    windowTitle: "Inbox - Gmail - Mozilla Firefox",
+  });
+  assert.deepEqual(calls, [["xdotool", "getwindowname", "7"]]);
+});
+
+test("an AT-SPI target is named from its pid and has no title", async () => {
+  const manager = new SelectionManager({
+    clipboardManager: {},
+    textEditMonitor: {},
+    platform: "linux",
+    now: () => 1000,
+  });
+  manager.lastTarget = { kind: "atspi-pid", id: "42" };
+  manager._readTargetNames = async (pid) => (pid === "42" ? "telegram-desktop" : "");
+
+  assert.deepEqual(await manager.getTargetAppContext(), {
+    appSignature: "telegram-desktop",
+    windowTitle: null,
+  });
+  assert.equal(
+    await new SelectionManager({ platform: "linux", textEditMonitor: {} }).getTargetAppContext(),
+    null
+  );
 });
 
 // captureTarget() nulls lastTarget while its probe runs; a paste racing the

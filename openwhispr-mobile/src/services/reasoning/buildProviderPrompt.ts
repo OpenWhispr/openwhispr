@@ -1,7 +1,7 @@
 import { DEFAULT_ACTION_PROMPT, DEFAULT_CLEANUP_PROMPT } from '@/config/prompts/registry';
 import languageRegistry from '@/config/languageRegistry.json';
 import { detectAgentMention } from '@/lib/dictationAgent';
-import { TONE_INSTRUCTIONS } from '@/services/agent/composerPrompt';
+import { TONE_INSTRUCTIONS, TONE_PRIORITY_INSTRUCTION } from '@/services/agent/composerPrompt';
 import type { ReasoningRequest } from '@/types';
 
 export interface ProviderPrompt {
@@ -41,7 +41,7 @@ export function buildProviderPrompt(request: ReasoningRequest): ProviderPrompt {
   const words = request.customDictionary?.map((word) => word.trim()).filter(Boolean) ?? [];
   if (words.length) parts.push(DICTIONARY_PREFIX + words.join(', '));
   const tone = !actionMode && request.tone ? TONE_INSTRUCTIONS[request.tone] : undefined;
-  if (tone) parts.push(tone);
+  if (tone) parts.push(`${tone} ${TONE_PRIORITY_INSTRUCTION}`);
   return {
     systemPrompt: parts.join('\n\n'),
     text: actionMode

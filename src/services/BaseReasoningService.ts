@@ -3,6 +3,7 @@ import { getSettings } from "../stores/settingsStore";
 import { resolveCleanupLanguage } from "../utils/chineseScript";
 import { getDictionaryHintWords } from "../utils/snippets";
 import type { InferenceScope } from "../config/inferenceScopes";
+import type { DictationToneStyle } from "../config/toneStyle";
 import type { ScreenContextImage } from "../types/electron";
 
 export interface ReasoningConfig {
@@ -17,6 +18,8 @@ export interface ReasoningConfig {
   disableThinking?: boolean;
   /** Screenshot attached to voice-agent requests when screen context is on. */
   screenContext?: ScreenContextImage;
+  /** Dictation cleanup only: the Tone & Style tone for the app being dictated into. */
+  toneStyle?: DictationToneStyle | null;
   /** Suffix-free prompt used when a screenshot-carrying request is retried text-only. */
   textOnlySystemPrompt?: string;
   language?: string;
@@ -54,12 +57,16 @@ export abstract class BaseReasoningService {
     return getSettings().uiLanguage || "en";
   }
 
-  protected getSystemPrompt(agentName: string | null): string {
+  protected getSystemPrompt(
+    agentName: string | null,
+    toneStyle?: DictationToneStyle | null
+  ): string {
     return getCleanupSystemPrompt(
       agentName,
       this.getCustomDictionary(),
       this.getPreferredLanguage(),
-      this.getUiLanguage()
+      this.getUiLanguage(),
+      toneStyle
     );
   }
 

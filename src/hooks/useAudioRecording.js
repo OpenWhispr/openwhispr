@@ -213,6 +213,13 @@ export const useAudioRecording = (toast, options = {}) => {
           audioManagerRef.current.beginSelectionCapture();
         }
 
+        // Tone & Style names the app being dictated into while the user speaks;
+        // only plain dictation cleanup uses it.
+        const { toneStyleEnabled, useCleanupModel } = getSettings();
+        if (toneStyleEnabled && useCleanupModel && !voiceAgentRequested && !translationRequested) {
+          audioManagerRef.current.beginToneStyleCapture();
+        }
+
         // Retry STT config fetch if it wasn't loaded on mount (e.g. auth wasn't ready),
         // and refresh a copy older than its TTL so a server-side rollout change
         // reaches a long-running app. Await it only when it can change the start

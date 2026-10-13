@@ -118,6 +118,7 @@ import {
 import { providerSupportsImages } from "../services/ai/inferenceProviders";
 import { resolveDictationTranslationInference } from "./dictationTranslationInference";
 import { resolvePrompt, appendScreenContextSuffix } from "../config/prompts";
+import { resolveDictationToneStyle } from "../config/toneStyle";
 import { syncService } from "../services/SyncService.js";
 import { evaluateFinishedRecording, withSalvageWarning } from "./recordingValidation";
 import { isEmptyRecording } from "./recordingGuard";
@@ -685,6 +686,7 @@ class AudioManager {
     this._activeProcessingPipeline = null;
     this.assistantSelectionContext = null;
     this.screenContextPromise = null;
+    this.toneStylePromise = null;
     this.selectionCapturePromise = null;
     this.sttConfig = null;
     this.sttConfigFetchedAt = null;
@@ -939,6 +941,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // cancelled voice-agent recording, even after the setting was turned
     // off). A live voice-agent start re-captures right after this call.
     this.screenContextPromise = null;
+    this.toneStylePromise = null;
     // Same for a prefetched selection: bounded to one recording, so a read taken
     // in an earlier app can never be edited in place by this command.
     this.selectionCapturePromise = null;
@@ -1017,6 +1020,35 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     } catch {
       return null;
     }
+  }
+
+  // Kicked off at dictation start while Tone & Style is on, so the target app
+  // is classified while the user speaks. Only a dictation that captured its
+  // app gets a tone: a retried or re-run transcription has no target.
+  beginToneStyleCapture() {
+    this.toneStylePromise = window.electronAPI?.captureDictationAppCategory?.() ?? null;
+    this.toneStylePromise?.catch(() => {});
+  }
+
+  // Consumed by the cleanup route only; the agent and translation routes
+  // write in their own voice.
+  async consumeToneStyle() {
+    const pending = this.toneStylePromise;
+    this.toneStylePromise = null;
+    const settings = getSettings();
+    if (!pending || !settings.toneStyleEnabled) return null;
+    let appCategory = null;
+    try {
+      // Classification resolves in well under a second; the race only guards
+      // the paste path if the IPC ever hangs, and an unknown app reads as other.
+      appCategory = await Promise.race([
+        pending,
+        new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
+      ]);
+    } catch {}
+    const toneStyle = resolveDictationToneStyle(settings.toneStyles, appCategory);
+    logger.logReasoning("TONE_STYLE", toneStyle);
+    return toneStyle;
   }
 
   // An agent-route failure pastes the spoken command verbatim into the focused
@@ -3250,7 +3282,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
 
         const targetModel = route.kind === "agent" ? route.model : cleanupModel;
-        const reasoningConfig = route.config;
+        const reasoningConfig =
+          route.kind === "cleanup"
+            ? { ...route.config, toneStyle: await this.consumeToneStyle() }
+            : route.config;
 
         logger.logReasoning("SENDING_TO_REASONING", {
           preparedTextLength: normalizedText.length,
@@ -3552,6 +3587,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.notifyTranslationFallback("unreachable");
       }
       const cleanupCloudMode = settings.cleanupCloudMode || "openwhispr";
+      const toneStyle = route.kind === "cleanup" ? await this.consumeToneStyle() : null;
 
       try {
         if (route.kind === "agent") {
@@ -3575,6 +3611,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               purpose: "cleanup",
               customDictionary: getDictionaryHintWords(settings),
               customPrompt,
+              ...toneStyle,
               language: this.getCleanupLanguage(settings),
               locale: settings.uiLanguage || "en",
               streamingFallbackReason,
@@ -3608,7 +3645,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               processedText,
               effectiveModel,
               agentName,
-              route.config
+              { ...route.config, toneStyle }
             );
             if (hasTextContent(reasoned)) processedText = reasoned;
           }
@@ -5246,6 +5283,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.pendingCleanupFailure = null;
     this.assistantSelectionContext = null;
     this.screenContextPromise = null;
+    this.toneStylePromise = null;
     this.selectionCapturePromise = null;
   }
 
@@ -5621,6 +5659,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.notifyTranslationFallback("unreachable");
       }
       const cleanupCloudMode = stSettings.cleanupCloudMode || "openwhispr";
+      const toneStyle = route.kind === "cleanup" ? await this.consumeToneStyle() : null;
 
       try {
         if (route.kind === "agent") {
@@ -5649,6 +5688,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               purpose: "cleanup",
               customDictionary: getDictionaryHintWords(stSettings),
               customPrompt,
+              ...toneStyle,
               language: this.getCleanupLanguage(stSettings),
               locale: stSettings.uiLanguage || "en",
               sttProvider: this.getStreamingProviderName(),
@@ -5690,7 +5730,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               finalText,
               effectiveModel,
               agentName,
-              route.config
+              { ...route.config, toneStyle }
             );
             if (hasTextContent(reasoned)) finalText = reasoned;
             logger.info(
