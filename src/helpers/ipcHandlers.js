@@ -3320,7 +3320,7 @@ class IPCHandlers {
       // callers need to know whether text was pasted, but not the delayed
       // clipboard restoration promise. Successful platform paths predate the
       // explicit `pasted` outcome; only the clipboard-only fallback and a held-back
-      // paste (still-held modifiers or no wl-copy, which carries a `reason`) set false.
+      // paste (held modifiers or a missing or failed wl-copy, which carries a `reason`) set false.
       return {
         success: true,
         pasted,

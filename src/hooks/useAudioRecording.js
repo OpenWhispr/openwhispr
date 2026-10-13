@@ -781,8 +781,8 @@ export const useAudioRecording = (toast, options = {}) => {
             }
           };
 
-          // A paste held back because keys were still down keeps the transcript
-          // and says why it did not land. `onRetry`, when given, replaces the
+          // A paste held back (keys still down, or no Wayland clipboard written) keeps
+          // the transcript and says why it did not land. `onRetry`, when given, replaces the
           // pill's record-again Retry. `generation` is the pill
           // generation when the attempt began: if the next dictation started while
           // it waited, that recording owns the pill (and would dismiss this one at
@@ -835,7 +835,7 @@ export const useAudioRecording = (toast, options = {}) => {
                 generation
               );
             } else if (WAYLAND_CLIPBOARD_REASON_KEYS[pasteOutcome.reason]) {
-              // Wayland apps can't read the clipboard copy here either, so the text
+              // Wayland apps may not read the clipboard copy here either, so the text
               // never claims to be on it. Retry writes and pastes the kept text again.
               const description = t(
                 `hooks.audioRecording.waylandClipboard.${WAYLAND_CLIPBOARD_REASON_KEYS[pasteOutcome.reason]}`
