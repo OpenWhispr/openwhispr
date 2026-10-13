@@ -124,10 +124,13 @@ class ClipboardManager {
   }
 
   // Where wl-copy is required, a missing one holds back every paste, so its
-  // absence is probed again instead of read from the cache: a wl-copy installed
-  // after a held-back paste is used by the next one.
+  // absence is probed again there instead of read from the cache: a wl-copy
+  // installed after a held-back paste is used by the next one.
   _wlCopyExists() {
-    if (this.commandAvailabilityCache.get("wl-copy")?.exists === false) {
+    if (
+      this.commandAvailabilityCache.get("wl-copy")?.exists === false &&
+      getLinuxSessionInfo().requiresWlCopy
+    ) {
       this.commandAvailabilityCache.delete("wl-copy");
     }
     return this.commandExists("wl-copy");
@@ -192,16 +195,17 @@ class ClipboardManager {
   // foot, konsole, xterm, and st bind Shift+Insert to. Mirror the transcription
   // there so Shift+Insert pastes reliably regardless of which selection the
   // terminal uses. Falls through wl-copy → xclip → xsel → Electron's selection
-  // target so we cover Wayland, X11, and XWayland setups.
+  // target so we cover Wayland, X11, and XWayland setups. True when wl-copy wrote
+  // the Wayland primary selection.
   _writePrimarySelection(text) {
-    if (process.platform !== "linux") return;
+    if (process.platform !== "linux") return false;
 
     const { isWayland } = getLinuxSessionInfo();
 
     if (isWayland && this.commandExists("wl-copy")) {
       try {
         const result = spawnSync("wl-copy", ["--primary", "--", text], { timeout: 50 });
-        if (result.status === 0) return;
+        if (result.status === 0) return true;
       } catch {}
     }
 
@@ -211,7 +215,7 @@ class ClipboardManager {
           input: text,
           timeout: 200,
         });
-        if (result.status === 0) return;
+        if (result.status === 0) return false;
       } catch {}
     }
 
@@ -221,13 +225,14 @@ class ClipboardManager {
           input: text,
           timeout: 200,
         });
-        if (result.status === 0) return;
+        if (result.status === 0) return false;
       } catch {}
     }
 
     try {
       clipboard.writeText(text, "selection");
     } catch {}
+    return false;
   }
 
   _readPrimarySelection() {
@@ -976,14 +981,16 @@ class ClipboardManager {
         this.safeLog("💾 Saved original clipboard:", originalClipboard.type);
       }
 
-      let waylandClipboardWritten = false;
+      // Apps paste the clipboard; terminals given Shift+Insert (niri always sends it)
+      // paste the primary selection.
+      const waylandWrites = { clipboard: false, primary: false };
       if (platform === "linux") {
         if (this._isWayland()) {
-          waylandClipboardWritten = this._writeClipboardWayland(text, webContents);
+          waylandWrites.clipboard = this._writeClipboardWayland(text, webContents);
         } else {
           clipboard.writeText(text);
         }
-        this._writePrimarySelection(text);
+        waylandWrites.primary = this._writePrimarySelection(text);
       } else {
         clipboard.writeText(text);
       }
@@ -1039,13 +1046,16 @@ class ClipboardManager {
           expectedClipboardText: text,
           targetWindow: options.targetWindow,
         });
-      } else if (getLinuxSessionInfo().requiresWlCopy && !waylandClipboardWritten) {
-        // Wayland apps here read only what wl-copy wrote: with the text on XWayland's
-        // clipboard alone, any chord would paste stale text. It stays there, unrestored.
+      } else if (
+        getLinuxSessionInfo().requiresWlCopy &&
+        !(waylandWrites.clipboard && waylandWrites.primary)
+      ) {
+        // Wayland apps here read only what wl-copy wrote: a selection it didn't write
+        // is stale, and a chord could paste it. The text stays unrestored.
         const reason = this.commandExists("wl-copy") ? "wl-copy-failed" : "wl-copy-missing";
         debugLogger.warn(
-          "Wayland clipboard not written, leaving the text unpasted",
-          { reason },
+          "Wayland selections not written, leaving the text unpasted",
+          { reason, written: waylandWrites },
           "clipboard"
         );
         pasteResult = { pasted: false, reason, restoreComplete: Promise.resolve() };

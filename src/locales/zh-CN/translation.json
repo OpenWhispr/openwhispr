@@ -978,7 +978,7 @@
         "emptyResponse": "AI 返回了空的编辑结果。未替换任何内容。请尝试更具体的指令。",
         "truncatedResponse": "AI 在完成编辑之前停止了。未替换任何内容。请尝试选择更少的文本。",
         "wlCopyMissing": "OpenWhispr 已生成编辑，但在此桌面上，Wayland 应用只能通过 wl-copy 读取粘贴的文本。请安装 wl-clipboard 以应用编辑。",
-        "wlCopyFailed": "OpenWhispr 已生成编辑，但 wl-copy 未能及时将其放入 Wayland 剪贴板，因此未应用。"
+        "wlCopyFailed": "OpenWhispr 已生成编辑，但 wl-copy 无法为 Wayland 应用复制它，因此未应用。"
       },
       "pastePermission": {
         "title": "允许自动粘贴",
@@ -996,7 +996,7 @@
       "waylandClipboard": {
         "title": "转录内容未粘贴",
         "wlCopyMissing": "在此桌面上，Wayland 应用只能通过 wl-copy 读取粘贴的文本。请安装 wl-clipboard 以粘贴听写内容。",
-        "wlCopyFailed": "wl-copy 未能及时将文本放入 Wayland 剪贴板，因此未粘贴。点击“重试”即可粘贴。"
+        "wlCopyFailed": "wl-copy 无法为 Wayland 应用复制文本，因此未粘贴。点击“重试”再试一次。"
       }
     },
     "clipboard": {

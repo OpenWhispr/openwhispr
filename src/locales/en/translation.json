@@ -978,7 +978,7 @@
         "emptyResponse": "The AI returned an empty edit. Nothing was replaced. Try a more specific instruction.",
         "truncatedResponse": "The AI stopped before completing the edit. Nothing was replaced. Try selecting less text.",
         "wlCopyMissing": "OpenWhispr generated the edit, but on this desktop Wayland apps can only read pasted text through wl-copy. Install wl-clipboard to apply edits.",
-        "wlCopyFailed": "OpenWhispr generated the edit, but wl-copy didn't put it on the Wayland clipboard in time, so it wasn't applied."
+        "wlCopyFailed": "OpenWhispr generated the edit, but wl-copy couldn't copy it for Wayland apps, so it wasn't applied."
       },
       "pastePermission": {
         "title": "Allow automatic pasting",
@@ -996,7 +996,7 @@
       "waylandClipboard": {
         "title": "Transcription not pasted",
         "wlCopyMissing": "On this desktop, Wayland apps can only read pasted text through wl-copy. Install wl-clipboard to paste your dictations.",
-        "wlCopyFailed": "wl-copy didn't put the text on the Wayland clipboard in time, so it wasn't pasted. Press Retry to paste it."
+        "wlCopyFailed": "wl-copy couldn't copy the text for Wayland apps, so it wasn't pasted. Press Retry to try again."
       }
     },
     "clipboard": {

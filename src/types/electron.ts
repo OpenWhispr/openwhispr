@@ -1375,6 +1375,8 @@ declare global {
           | "selection_changed"
           | "paste_failed"
           | "modifiers_held"
+          | "wl_copy_missing"
+          | "wl_copy_failed"
           | "selection_manager_unavailable";
         error?: string;
       }>;
@@ -1390,6 +1392,8 @@ declare global {
           | "target_changed"
           | "paste_failed"
           | "modifiers_held"
+          | "wl_copy_missing"
+          | "wl_copy_failed"
           | "selection_manager_unavailable";
         error?: string;
       }>;

@@ -978,7 +978,7 @@
         "emptyResponse": "AI が空の編集結果を返しました。テキストは置き換えられていません。より具体的な指示をお試しください。",
         "truncatedResponse": "AI が編集の完了前に停止しました。テキストは置き換えられていません。選択するテキストを減らしてお試しください。",
         "wlCopyMissing": "OpenWhispr は編集を生成しましたが、このデスクトップでは Wayland アプリは wl-copy を通してしか貼り付けたテキストを読み取れません。編集を適用するには wl-clipboard をインストールしてください。",
-        "wlCopyFailed": "OpenWhispr は編集を生成しましたが、wl-copy が時間内に Wayland のクリップボードに入れられなかったため、適用されませんでした。"
+        "wlCopyFailed": "OpenWhispr は編集を生成しましたが、wl-copy が Wayland アプリ向けにコピーできなかったため、適用されませんでした。"
       },
       "pastePermission": {
         "title": "自動貼り付けを許可",
@@ -996,7 +996,7 @@
       "waylandClipboard": {
         "title": "文字起こしは貼り付けられませんでした",
         "wlCopyMissing": "このデスクトップでは、Wayland アプリは wl-copy を通してしか貼り付けたテキストを読み取れません。音声入力を貼り付けるには wl-clipboard をインストールしてください。",
-        "wlCopyFailed": "wl-copy がテキストを時間内に Wayland のクリップボードに入れられなかったため、貼り付けられませんでした。「再試行」を押すと貼り付けます。"
+        "wlCopyFailed": "wl-copy が Wayland アプリ向けにテキストをコピーできなかったため、貼り付けられませんでした。「再試行」を押してもう一度お試しください。"
       }
     },
     "clipboard": {

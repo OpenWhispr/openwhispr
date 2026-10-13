@@ -886,12 +886,17 @@ test("modifiers still held leave the text on the clipboard without injecting", a
 
 // Stands in for `command -v` (only `installed` commands exist) and for wl-copy, whose
 // status null is a write killed by its timeout.
-function linuxClipboardToolsSpawnSync(installed, { wlCopyStatus = 0 } = {}) {
+function linuxClipboardToolsSpawnSync(
+  installed,
+  { wlCopyStatus = 0, primaryStatus = wlCopyStatus } = {}
+) {
   return (command, args = []) => {
     if (command === "sh") {
       return { status: installed.has(args[1].replace("command -v ", "")) ? 0 : 1 };
     }
-    if (command === "wl-copy") return { status: wlCopyStatus };
+    if (command === "wl-copy") {
+      return { status: args[0] === "--primary" ? primaryStatus : wlCopyStatus };
+    }
     return { status: 1, stdout: Buffer.from("") };
   };
 }
@@ -901,8 +906,9 @@ function loadLinuxPasteManager(t, spawnCalls, spawnSync) {
   Object.defineProperty(process, "platform", { value: "linux" });
   t.after(() => Object.defineProperty(process, "platform", platform));
   const TestClipboardManager = loadClipboardManager({
-    spawn: createSuccessfulSpawn(spawnCalls),
+    spawn: createSpawn(spawnCalls, [0, 0], { stdout: ["MODIFIERS released 0\n"] }),
     spawnSync,
+    realModifierWait: true,
   });
   const manager = new TestClipboardManager();
   manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
@@ -913,18 +919,26 @@ function loadLinuxPasteManager(t, spawnCalls, spawnSync) {
 // These compositors hand an X11 clipboard write to Wayland apps only while an X11
 // window has focus (#2621): with no Wayland clipboard written, every chord would
 // paste the clipboard from before the dictation.
-for (const [desktop, installed, wlCopyStatus, reason] of [
-  ["niri", [], 0, "wl-copy-missing"],
-  ["Sway", ["wtype"], 0, "wl-copy-missing"],
-  ["Hyprland", ["hyprctl"], 0, "wl-copy-missing"],
-  ["niri", ["wl-copy"], null, "wl-copy-failed"],
+for (const [label, desktop, installed, statuses, reason] of [
+  ["niri without wl-copy", "niri", [], {}, "wl-copy-missing"],
+  ["Sway without wl-copy", "Sway", ["wtype"], {}, "wl-copy-missing"],
+  ["Hyprland without wl-copy", "Hyprland", ["hyprctl"], {}, "wl-copy-missing"],
+  ["niri with a timed-out wl-copy", "niri", ["wl-copy"], { wlCopyStatus: null }, "wl-copy-failed"],
+  // Terminals paste the primary selection on Shift+Insert.
+  [
+    "niri with a timed-out primary write",
+    "niri",
+    ["wl-copy"],
+    { primaryStatus: null },
+    "wl-copy-failed",
+  ],
 ]) {
-  test(`${desktop} with ${reason} injects nothing and says why`, async (t) => {
+  test(`${label} injects nothing and says why`, async (t) => {
     const spawnCalls = [];
     const manager = loadLinuxPasteManager(
       t,
       spawnCalls,
-      linuxClipboardToolsSpawnSync(new Set(installed), { wlCopyStatus })
+      linuxClipboardToolsSpawnSync(new Set(installed), statuses)
     );
     resetClipboard({ text: "previous" });
 
@@ -949,6 +963,7 @@ test("niri pastes once wl-copy wrote the Wayland clipboard", async (t) => {
 
   assert.notEqual(result.pasted, false);
   assert.deepEqual(spawnCalls, [
+    MODIFIER_WAIT_CALL,
     { command: "/tmp/linux-fast-paste", args: ["--uinput", "--shift-insert"] },
   ]);
 });
@@ -970,7 +985,39 @@ test("a wl-copy installed after a held-back paste counts at once", async (t) => 
     assert.equal(manager.checkPasteTools().wlCopyMissing, false);
     assert.notEqual((await manager._pasteText("second")).pasted, false);
   });
-  assert.equal(spawnCalls.length, 1, "only the second paste injects");
+  assert.deepEqual(
+    spawnCalls.map((call) => call.args[0]),
+    ["--capabilities", "--uinput"],
+    "only the second paste waits and injects"
+  );
+});
+
+// Elsewhere (GNOME, COSMIC) wl-copy is optional, so its absence stays cached.
+test("a missing wl-copy is probed again only where it is required", async (t) => {
+  const platform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "linux" });
+  t.after(() => Object.defineProperty(process, "platform", platform));
+  const probes = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawnSync: (command, args = []) => {
+      if (command === "sh") probes.push(args[1]);
+      return { status: 1, stdout: Buffer.from("") };
+    },
+  });
+  const manager = new TestClipboardManager();
+
+  for (const [desktop, wlCopyProbes] of [
+    ["GNOME", 1],
+    ["niri", 2],
+  ]) {
+    probes.length = 0;
+    manager.commandAvailabilityCache.clear();
+    await withWaylandEnvironment(desktop, () => {
+      manager._writeClipboardWayland("first");
+      manager._writeClipboardWayland("second");
+    });
+    assert.equal(probes.filter((probe) => probe === "command -v wl-copy").length, wlCopyProbes);
+  }
 });
 
 test("the paste tools report a missing wl-copy only where it is required", async (t) => {
