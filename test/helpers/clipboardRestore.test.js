@@ -1199,6 +1199,7 @@ test("intentional macOS clipboard fallback stays silent and does not throw", asy
   resetClipboard();
   const result = await manager._pasteText("manual text", { allowClipboardFallback: true });
   assert.equal(result.pasted, false);
+  assert.equal(result.reason, "accessibility-missing");
   assert.equal(fakeClipboard.text, "manual text");
 });
 

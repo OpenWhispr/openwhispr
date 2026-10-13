@@ -284,3 +284,62 @@ test("a standard toast with structured actions shows its description as text and
   await React.act(() => new Promise((resolve) => setTimeout(resolve, 250)));
   assert.equal(context.toastCount, 0, "Open Settings dismisses the toast");
 });
+
+test("the real clipboard fallback card keeps Settings open and dismisses on Don't show again", async (t) => {
+  const h = await setup(t);
+  const previousObserver = globalThis.ResizeObserver;
+  globalThis.window.screen = { availWidth: 1000, availHeight: 1000 };
+  globalThis.window.HTMLElement.prototype.getBoundingClientRect = () => ({ width: 0 });
+  globalThis.ResizeObserver = class {
+    observe() {}
+    disconnect() {}
+  };
+  t.after(() => {
+    if (previousObserver) globalThis.ResizeObserver = previousObserver;
+    else delete globalThis.ResizeObserver;
+  });
+  const { ToastProvider } = await h.vite.ssrLoadModule("/components/ui/Toast.tsx");
+  const { useToast } = await h.vite.ssrLoadModule("/components/ui/useToast.ts");
+  const { dismissPastePermissionNotice, isPastePermissionNoticeDismissed } =
+    await h.vite.ssrLoadModule("/utils/permissions.ts");
+  let context,
+    settings = 0;
+  function Probe() {
+    context = useToast();
+    return null;
+  }
+  await h.render(React.createElement(ToastProvider, null, React.createElement(Probe)));
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const copy = translations.hooks.audioRecording.pastePermission;
+  await React.act(async () =>
+    context.toast({
+      title: copy.copiedTitle,
+      description: copy.copiedDescription.replace("{{shortcut}}", "Cmd+V"),
+      descriptionHotkey: "Cmd+V",
+      presentation: "dictation-error",
+      duration: 0,
+      dismissible: true,
+      actions: [
+        {
+          label: copy.openSettings,
+          dismissOnClick: false,
+          onClick: () => {
+            settings += 1;
+          },
+        },
+        { label: copy.dontShowAgain, onClick: dismissPastePermissionNotice },
+      ],
+    })
+  );
+  const button = (label) =>
+    findElement(h.container, (e) => e.tagName === "BUTTON" && e.textContent.trim() === label);
+  assert.ok(h.container.textContent.includes("Copied, not pasted"));
+  assert.ok(button(copy.openSettings));
+  await React.act(async () => click(button(copy.openSettings)));
+  assert.equal(settings, 1);
+  assert.equal(context.toastCount, 1);
+  await React.act(async () => click(button(copy.dontShowAgain)));
+  await React.act(async () => t.mock.timers.tick(201));
+  assert.equal(context.toastCount, 0);
+  assert.equal(isPastePermissionNoticeDismissed(), true);
+});

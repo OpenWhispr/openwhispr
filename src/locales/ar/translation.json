@@ -88,7 +88,10 @@
         "manualPaste": "انسخ النص أدناه، ثم اضغط على {{shortcut}} للصقه.",
         "openSettings": "فتح الإعدادات",
         "copyToClipboard": "نسخ إلى الحافظة",
-        "copyFailed": "تعذّر النسخ"
+        "copyFailed": "تعذّر النسخ",
+        "copiedTitle": "تم النسخ، ولم يتم اللصق",
+        "copiedDescription": "النص موجود في الحافظة. يتطلب اللصق التلقائي إذن تسهيلات الاستخدام. اضغط على {{shortcut}} للصق يدويًا.",
+        "dontShowAgain": "عدم الإظهار مجددًا"
       },
       "pasteFailed": {
         "title": "تعذّر اللصق تلقائيًا"

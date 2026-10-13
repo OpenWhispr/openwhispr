@@ -985,7 +985,10 @@
         "manualPaste": "Copiez votre texte ci-dessous, puis appuyez sur {{shortcut}} pour le coller.",
         "openSettings": "Ouvrir les réglages",
         "copyToClipboard": "Copier le texte",
-        "copyFailed": "Échec de la copie"
+        "copyFailed": "Échec de la copie",
+        "copiedTitle": "Copié, pas collé",
+        "copiedDescription": "Votre texte est dans le presse-papiers. Le collage automatique nécessite l’autorisation Accessibilité. Appuyez sur {{shortcut}} pour le coller manuellement.",
+        "dontShowAgain": "Ne plus afficher"
       },
       "pasteFailed": {
         "title": "Collage automatique impossible"

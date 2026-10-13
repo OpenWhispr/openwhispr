@@ -1328,7 +1328,7 @@ declare global {
           allowClipboardFallback?: boolean;
         }
       ) => Promise<
-        | { success: true; pasted: boolean; reason?: "modifiers-held" }
+        | { success: true; pasted: boolean; reason?: "modifiers-held" | "accessibility-missing" }
         | {
             success: false;
             pasted: false;

@@ -985,7 +985,10 @@
         "manualPaste": "点击下方按钮复制文本，然后按 {{shortcut}} 粘贴。",
         "openSettings": "打开设置",
         "copyToClipboard": "复制到剪贴板",
-        "copyFailed": "复制失败"
+        "copyFailed": "复制失败",
+        "copiedTitle": "已复制，未粘贴",
+        "copiedDescription": "文本已复制到剪贴板。自动粘贴需要辅助功能权限。按 {{shortcut}} 可手动粘贴。",
+        "dontShowAgain": "不再提示"
       },
       "pasteFailed": {
         "title": "无法自动粘贴"

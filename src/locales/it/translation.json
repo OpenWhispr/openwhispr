@@ -985,7 +985,10 @@
         "manualPaste": "Copia il testo qui sotto, poi premi {{shortcut}} per incollarlo.",
         "openSettings": "Apri impostazioni",
         "copyToClipboard": "Copia negli appunti",
-        "copyFailed": "Copia non riuscita"
+        "copyFailed": "Copia non riuscita",
+        "copiedTitle": "Copiato, non incollato",
+        "copiedDescription": "Il testo è negli appunti. Per incollare automaticamente serve il permesso di Accessibilità. Premi {{shortcut}} per incollarlo manualmente.",
+        "dontShowAgain": "Non mostrare più"
       },
       "pasteFailed": {
         "title": "Impossibile incollare automaticamente"
