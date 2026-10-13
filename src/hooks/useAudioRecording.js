@@ -454,7 +454,6 @@ export const useAudioRecording = (toast, options = {}) => {
             .filter(Boolean)
             .join(" "),
           descriptionHotkey: transcript.trim() ? "Cmd+V" : undefined,
-          variant: clipboardFallback ? "default" : "destructive",
           presentation: "dictation-error",
           duration: 0,
           dismissible: true,

@@ -333,6 +333,10 @@ test("the real clipboard fallback card keeps Settings open and dismisses on Don'
   );
   const button = (label) =>
     findElement(h.container, (e) => e.tagName === "BUTTON" && e.textContent.trim() === label);
+  const card = findElement(h.container, (e) => e.tagName === "SECTION");
+  assert.equal(card.getAttribute("role"), "alert");
+  assert.equal(card.getAttribute("aria-live"), "assertive");
+  assert.match(card.getAttribute("class"), /\bbg-surface-0\b/);
   assert.ok(h.container.textContent.includes("Copied, not pasted"));
   assert.ok(button(copy.openSettings));
   await React.act(async () => click(button(copy.openSettings)));
