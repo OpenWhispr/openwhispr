@@ -446,8 +446,8 @@ export function getStreamingTranscriptionProviders(): TranscriptionProviderData[
     .filter((p) => p.models.length > 0);
 }
 
-// Dictation's list (also onboarding's, Retry's and chat voice drafts'): Upload
-// is the only screen that offers uploadOnly models.
+// Dictation's list (the Settings picker's and onboarding's): Upload is the
+// only screen that offers uploadOnly models.
 export function getDictationTranscriptionProviders(): TranscriptionProviderData[] {
   return modelRegistry
     .getTranscriptionProviders()
