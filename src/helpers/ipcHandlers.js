@@ -209,7 +209,7 @@ const AUTO_LEARN_DEBOUNCE_MS = 1500;
 // the message reports the cap that actually applied.
 const byokSizeCapError = (sizeCapBytes) =>
   `File too large. Maximum size for bring-your-own-key is ${Math.floor(sizeCapBytes / (1024 * 1024))} MB.`;
-// Shared by the single-request upload and OpenRouter's piece-by-piece upload.
+// OpenRouter's piece-by-piece upload; single requests classify through providerHttpError.
 const BYOK_INVALID_KEY_ERROR = "Invalid API key. Check your key in Settings.";
 const BYOK_RATE_LIMITED_ERROR = "Rate limit exceeded. Please try again later.";
 

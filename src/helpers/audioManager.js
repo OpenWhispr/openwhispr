@@ -3955,7 +3955,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // dictation keeps that setting (usually "openai") while posting to the
       // user's own server.
       const providerErrorContext = {
-        provider: route.provider === "groq" ? "Groq" : "OpenAI",
+        provider: getTranscriptionProvider(route.provider)?.name ?? route.provider,
         selfHosted: route.provider === "self-hosted" || route.provider === "custom",
         model: route.model ?? model,
         surface: "transcription",

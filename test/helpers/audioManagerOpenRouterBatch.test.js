@@ -140,3 +140,50 @@ test("an OpenRouter 402 shows a translated out-of-credits card, not its JSON", a
     );
   }
 });
+
+// Classified provider errors name the route; an OpenRouter key failure that
+// said "OpenAI rejected your API key" would send the user to the wrong key.
+test("an OpenRouter dictation failure names OpenRouter, not OpenAI", async (t) => {
+  const { createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-openrouter-error-name-test-",
+    settingsKey: "__openRouterErrorNameSettings",
+    settings: {
+      useLocalWhisper: false,
+      transcriptionMode: "providers",
+      remoteTranscriptionUrl: "",
+      cloudTranscriptionMode: "byok",
+      cloudTranscriptionProvider: "openrouter",
+      cloudTranscriptionModel: "openai/gpt-transcribe",
+      openrouterApiKey: "sk-or-openrouter",
+      allowLocalFallback: false,
+      preferredLanguage: "en",
+      customDictionary: [],
+    },
+  });
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ error: { message: "No auth credentials found", code: 401 } }), {
+      status: 401,
+      headers: { "content-type": "application/json" },
+    });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const manager = createManager({
+    processTranscription: async (text) => text,
+    isReasoningAvailable: async () => false,
+  });
+  const error = await manager
+    .processWithOpenAIAPI(new Blob([new Uint8Array(1600)], { type: "audio/webm" }), {
+      durationSeconds: 1,
+    })
+    .then(
+      () => assert.fail("a 401 must not succeed"),
+      (err) => err
+    );
+
+  assert.equal(error.code, "PROVIDER_AUTH_FAILED");
+  assert.deepEqual(error.messageParams, { provider: "OpenRouter" });
+});
