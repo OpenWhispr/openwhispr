@@ -1,8 +1,9 @@
 {
-  "$description": "Colors collection from the OpenWhispr Dictation 2 Figma file. Values are the variable's Light and Dark mode values; {name} is an alias to another token. Regenerate src/styles/theme-tokens.css with `node scripts/generate-theme-tokens.js` after editing.",
+  "$description": "Colors collection from the OpenWhispr UI Kit Figma library (the source of truth; the product files consume it as a library). Values are the variable's Light and Dark mode values; {name} is an alias to another token. Regenerate src/styles/theme-tokens.css with `node scripts/generate-theme-tokens.js` after editing.",
   "source": {
-    "fileKey": "1sg7UAECI28U0Y1GWamRhU",
-    "collectionId": "VariableCollectionId:4062:14875",
+    "fileKey": "Xka1lcxnlbvq9ne8k0gZd0",
+    "fileName": "OpenWhispr UI Kit",
+    "collectionId": "VariableCollectionId:73:2",
     "readAt": "2026-10-14"
   },
   "tokens": {
