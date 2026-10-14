@@ -7,6 +7,7 @@ import { getSettings, selectResolvedNoteFormatting } from "./settingsStore";
 import { appendDictionarySuffix } from "../config/prompts";
 import { generateNoteTitle } from "../utils/generateTitle";
 import { buildNoteFormattingOverrides } from "../helpers/noteFormattingOverrides";
+import { PROVIDER_ERROR_CODES } from "../helpers/providerHttpErrors.js";
 import { tagActionItemOwners, type MentionPerson } from "../utils/mentionMarkdown";
 import type { ActionItem, NoteItem } from "../types/electron";
 import { estimateNoteTokens, planNoteChunks, splitChunkInHalf } from "../helpers/noteChunking";
@@ -15,6 +16,8 @@ import type { TechnicalErrorDetailsData } from "../components/ui/useToast";
 import type { ReasoningConfig } from "../services/BaseReasoningService";
 import {
   EMPTY_OUTPUT_MESSAGE_KEY,
+  OUTPUT_LIMIT_BEFORE_ANSWER_CODE,
+  REASONING_MODEL_MIN_OUTPUT_TOKENS,
   TRUNCATED_OUTPUT_MESSAGE_KEY,
 } from "../services/ai/chatRequestBody";
 
@@ -181,6 +184,9 @@ interface LocalContextBudget {
 const isContextTooLarge = (error: unknown): boolean =>
   (error as { code?: string } | null)?.code === "CONTEXT_TOO_LARGE";
 
+const ranOutBeforeAnswer = (error: unknown): boolean =>
+  (error as { code?: string } | null)?.code === OUTPUT_LIMIT_BEFORE_ANSWER_CODE;
+
 const hasTranscript = (material: NoteMaterial | undefined): material is NoteMaterial =>
   (material?.transcript.trim().length ?? 0) > 0;
 
@@ -246,6 +252,23 @@ async function runEnhancement(run: EnhancementRun): Promise<string> {
       run.requestConfig
     );
   } catch (error) {
+    // A reasoning model spent the whole budget thinking before writing a word
+    // (#2008): one more try with room for its reasoning plus the notes.
+    if (ranOutBeforeAnswer(error)) {
+      if (run.isCancelled()) throw new Error("cancelled");
+      return await reasoningService
+        .processText(run.noteContent, run.modelId, null, {
+          ...run.requestConfig,
+          maxTokens: REASONING_MODEL_MIN_OUTPUT_TOKENS,
+        })
+        .catch((retryError) => {
+          // A server that refuses the bigger cap keeps this failure, whose advice
+          // still applies; a key, quota or network problem shows as itself.
+          const refused =
+            (retryError as { code?: string } | null)?.code === PROVIDER_ERROR_CODES.BAD_REQUEST;
+          throw refused ? error : retryError;
+        });
+    }
     if (!isContextTooLarge(error)) throw error;
     refusal = error;
   }
@@ -600,13 +623,19 @@ export function runBackgroundAction(
         settingsTarget?: string;
         technicalDetails?: TechnicalErrorDetailsData;
       };
+      // Still thinking past the retry's budget: point at the setting that stops it.
+      const thinkingSpentOutput = ranOutBeforeAnswer(err);
       pushErrorEvent({
         noteId,
         message,
-        messageKey: (messageKey && NOTE_ERROR_KEYS[messageKey]) || messageKey,
+        messageKey: thinkingSpentOutput
+          ? settings.noteFormattingDisableThinking
+            ? "notes.actions.errors.outputSpentThinkingDisabled"
+            : "notes.actions.errors.outputSpentThinking"
+          : (messageKey && NOTE_ERROR_KEYS[messageKey]) || messageKey,
         messageParams,
         notice,
-        settingsTarget,
+        settingsTarget: thinkingSpentOutput ? "llms" : settingsTarget,
         technicalDetails,
       });
     } finally {

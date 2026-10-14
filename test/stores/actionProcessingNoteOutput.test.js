@@ -44,6 +44,8 @@ async function loadStore(t, storedNote = STORED_NOTE) {
         export default {
           processText: async (text, model, agentName, config) => {
             globalThis.__processTextCalls.push({ text, model, config });
+            const queued = globalThis.__processTextErrors?.shift();
+            if (queued) throw queued;
             if (globalThis.__processTextError) throw globalThis.__processTextError;
             return globalThis.__processTextResult ?? "# Notes\\n- decided things";
           },
@@ -63,13 +65,14 @@ async function loadStore(t, storedNote = STORED_NOTE) {
     delete globalThis.__processTextCalls;
     delete globalThis.__processTextResult;
     delete globalThis.__processTextError;
+    delete globalThis.__processTextErrors;
     delete globalThis.__generatedTitle;
     delete globalThis.__titleRequests;
     delete globalThis.__updateNoteFails;
   });
 
   const store = await vite.ssrLoadModule("/stores/actionProcessingStore.ts");
-  return { store, calls, updates };
+  return { store, calls, updates, vite };
 }
 
 async function waitFor(predicate, label) {
@@ -299,6 +302,143 @@ test("a cut-off or empty rewrite reports a notes error, not the dictation one pr
     assert.equal(events[0].messageKey, noteKey);
   }
   assert.equal(updates.length, 0);
+});
+
+// A reasoning model at its default effort can spend the whole notes budget
+// thinking before it writes a word: GLM-5.3 on Ollama Cloud returned no notes on
+// every real meeting at 4096 tokens, and wrote them with a bigger cap (#2008).
+const ranOutThinking = async () => {
+  const { emptyResponseError } = await import("../../src/services/ai/chatRequestBody.ts");
+  return emptyResponseError("OpenAI", { systemPrompt: "Summarize" }, true);
+};
+
+test("a notes reply cut off before any answer is retried once with room for reasoning, and only that one", async (t) => {
+  const { store, calls, updates } = await loadStore(t);
+  const { REASONING_MODEL_MIN_OUTPUT_TOKENS, truncatedOutputError } =
+    await import("../../src/services/ai/chatRequestBody.ts");
+  const transcript = "## Meeting Transcript\nAlice: we agreed to ship on Friday.";
+  globalThis.__processTextErrors = [await ranOutThinking()];
+
+  store.runBackgroundAction(
+    21,
+    transcript,
+    "hash",
+    ACTION,
+    { modelId: "glm-5.3", isCloudMode: true, isMeetingNote: true },
+    LABELS
+  );
+  await waitFor(() => updates.length > 0, "the notes from the retry");
+
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].config.maxTokens, 4096);
+  assert.equal(calls[1].config.maxTokens, REASONING_MODEL_MIN_OUTPUT_TOKENS);
+  assert.equal(calls[1].text, transcript);
+  assert.equal(calls[1].config.systemPrompt, calls[0].config.systemPrompt);
+  assert.equal(updates[0].payload.enhanced_content, "# Notes\n- decided things");
+
+  // A reply clipped after it started answering keeps today's error, with no retry.
+  globalThis.__processTextErrors = [truncatedOutputError()];
+  store.runBackgroundAction(
+    22,
+    transcript,
+    "hash",
+    ACTION,
+    { modelId: "glm-5.3", isCloudMode: true, isMeetingNote: true },
+    LABELS
+  );
+  let events = [];
+  await waitFor(() => (events = store.consumeErrorEvents()).length > 0, "the clipped error");
+  assert.equal(calls.length, 3);
+  assert.equal(events[0].messageKey, "notes.actions.errors.outputTruncated");
+});
+
+test("a retry that still thinks past its budget points at Disable thinking output, or at another model when it is on", async (t) => {
+  const { store, calls, vite } = await loadStore(t);
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  globalThis.__processTextError = await ranOutThinking();
+
+  for (const [noteId, disableThinking, messageKey] of [
+    [23, false, "notes.actions.errors.outputSpentThinking"],
+    [24, true, "notes.actions.errors.outputSpentThinkingDisabled"],
+  ]) {
+    useSettingsStore.getState().setNoteFormattingDisableThinking(disableThinking);
+    const before = calls.length;
+    store.runBackgroundAction(
+      noteId,
+      "## Meeting Transcript\nAlice: we agreed to ship on Friday.",
+      "hash",
+      ACTION,
+      { modelId: "glm-5.3", isCloudMode: true, isMeetingNote: true },
+      LABELS
+    );
+
+    let events = [];
+    await waitFor(() => (events = store.consumeErrorEvents()).length > 0, "the error");
+    assert.equal(calls.length - before, 2, "one retry, never a loop");
+    assert.equal(calls.at(-2).config.disableThinking, disableThinking);
+    assert.equal(events[0].messageKey, messageKey);
+    // The toast's Open Settings goes to Language Models, where the toggle lives.
+    assert.equal(events[0].settingsTarget, "llms");
+  }
+});
+
+test("a retry the server refuses keeps the first failure's advice; any other retry failure shows as itself", async (t) => {
+  const { store, calls } = await loadStore(t);
+  const { providerHttpError } = await import("../../src/helpers/providerHttpErrors.js");
+  const refusal = (status, body) =>
+    providerHttpError({ provider: "Ollama", status, body, model: "glm-5.3", surface: "llm" });
+
+  for (const [noteId, retryError, messageKey] of [
+    // Say a self-hosted server with a 32k window: the bigger cap no longer fits.
+    [
+      25,
+      refusal(400, "max_tokens exceeds the maximum context length"),
+      "notes.actions.errors.outputSpentThinkingDisabled",
+    ],
+    // Out of credit between the two requests: that is what the user can fix.
+    [27, refusal(402, "insufficient credits"), "providerErrors.quotaExhausted"],
+  ]) {
+    globalThis.__processTextErrors = [await ranOutThinking(), retryError];
+    const before = calls.length;
+    store.runBackgroundAction(
+      noteId,
+      "## Meeting Transcript\nAlice: we agreed to ship on Friday.",
+      "hash",
+      ACTION,
+      { modelId: "glm-5.3", isCloudMode: true, isMeetingNote: true },
+      LABELS
+    );
+
+    let events = [];
+    await waitFor(() => (events = store.consumeErrorEvents()).length > 0, "the error");
+    assert.equal(calls.length - before, 2);
+    assert.equal(events[0].messageKey, messageKey);
+  }
+});
+
+test("a run cancelled while its first reply comes back is not retried", async (t) => {
+  const { store, calls, updates } = await loadStore(t);
+  let fail;
+  globalThis.__processTextResult = new Promise((resolve, reject) => {
+    fail = reject;
+  });
+
+  store.runBackgroundAction(
+    26,
+    "## Meeting Transcript\nAlice: we agreed to ship on Friday.",
+    "hash",
+    ACTION,
+    { modelId: "glm-5.3", isCloudMode: true, isMeetingNote: true },
+    LABELS
+  );
+  await waitFor(() => calls.length === 1, "provider start");
+  store.cancelAction(26);
+  fail(await ranOutThinking());
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  assert.equal(calls.length, 1, "no paid 25k request for a cancelled run");
+  assert.deepEqual(updates, []);
+  assert.deepEqual(store.consumeErrorEvents(), []);
 });
 
 test("a summary action on a note without a summary writes one from the transcript, and tracks it for staleness", async (t) => {

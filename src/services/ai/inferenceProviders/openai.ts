@@ -10,6 +10,7 @@ import {
   emptyResponseError,
   fetchWithParamFallback,
   isTruncatedFinishReason,
+  REASONING_MODEL_MIN_OUTPUT_TOKENS,
   truncatedOutputError,
 } from "../chatRequestBody";
 import { detectEndpointDialect } from "../thinkingSuppressionDialects";
@@ -28,10 +29,6 @@ import {
 
 const OPENAI_ENDPOINT_PREF_STORAGE_KEY = "openAiEndpointPreference";
 const PROBE_TIMEOUT_MS = 2_000;
-// OpenAI counts a reasoning model's hidden reasoning against the output cap and
-// recommends reserving at least 25k tokens for reasoning plus output. A cap,
-// not a spend: an unused allowance costs nothing.
-const REASONING_MODEL_MIN_OUTPUT_TOKENS = 25_000;
 
 const endpointPreferenceCache = new Map<string, "responses" | "chat">();
 const probedBases = new Set<string>();
@@ -452,7 +449,11 @@ export const openaiProvider: InferenceProvider = {
       if (refusal) {
         throw new Error(`Model declined the request: ${refusal}`);
       }
-      const error = emptyResponseError("OpenAI", config, !!responseIncomplete);
+      // A content filter also ends a Responses reply "incomplete"; only the
+      // token limit is a cut-off.
+      const cutOff =
+        responseIncomplete && response?.incomplete_details?.reason !== "content_filter";
+      const error = emptyResponseError("OpenAI", config, !!cutOff);
       if (error) throw error;
       logger.logReasoning("OPENAI_EMPTY_RESPONSE_FALLBACK", {
         model,

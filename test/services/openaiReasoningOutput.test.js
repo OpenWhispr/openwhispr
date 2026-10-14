@@ -151,8 +151,36 @@ test("a Responses result that ran out of tokens before any text is an error, not
       config: { provider: "openai", systemPrompt: "Summarize", maxTokens: 4096 },
       ctx: makeCtx(),
     }),
-    /ran out of output tokens/
+    // The code is what note formatting retries with more room (#2008).
+    { message: /ran out of output tokens/, code: "OUTPUT_LIMIT_BEFORE_ANSWER" }
   );
+});
+
+test("a Responses result stopped by a content filter is not reported as running out of tokens", async (t) => {
+  installFetch(t, () =>
+    jsonResponse({
+      status: "incomplete",
+      incomplete_details: { reason: "content_filter" },
+      output: [],
+    })
+  );
+  const { openaiProvider } = await load();
+
+  const error = await openaiProvider
+    .call({
+      text: TRANSCRIPT,
+      model: "gpt-5.6-terra",
+      agentName: null,
+      config: { provider: "openai", systemPrompt: "Summarize", maxTokens: 4096 },
+      ctx: makeCtx(),
+    })
+    .then(
+      () => null,
+      (rejection) => rejection
+    );
+
+  assert.match(error?.message ?? "", /empty response/);
+  assert.equal(error.code, undefined, "note formatting must not retry a filtered reply");
 });
 
 test("a Chat Completions result cut off before any text is an error, not the input echoed back", async (t) => {
@@ -175,7 +203,7 @@ test("a Chat Completions result cut off before any text is an error, not the inp
       },
       ctx: makeCtx(),
     }),
-    /ran out of output tokens/
+    { message: /ran out of output tokens/, code: "OUTPUT_LIMIT_BEFORE_ANSWER" }
   );
 });
 

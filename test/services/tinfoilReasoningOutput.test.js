@@ -47,7 +47,7 @@ test("a Tinfoil result cut off before any text is an error, not the input echoed
       config: { systemPrompt: "Summarize", maxTokens: 4096 },
       ctx,
     }),
-    /ran out of output tokens/
+    { message: /ran out of output tokens/, code: "OUTPUT_LIMIT_BEFORE_ANSWER" }
   );
 });
 
