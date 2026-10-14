@@ -433,6 +433,8 @@ test("a retry the server refuses or that times out keeps the first failure's adv
       asProviderError(llmRequestTimeoutError(600), context),
       "notes.actions.errors.outputSpentThinkingDisabled",
     ],
+    // Tinfoil rejects with the deadline error as it is, unclassified.
+    [31, llmRequestTimeoutError(600), "notes.actions.errors.outputSpentThinkingDisabled"],
     // Out of credit between the two requests: that is what the user can fix.
     [27, refusal(402, "insufficient credits"), "providerErrors.quotaExhausted"],
   ]) {

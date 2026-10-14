@@ -8,6 +8,7 @@ import { appendDictionarySuffix } from "../config/prompts";
 import { generateNoteTitle } from "../utils/generateTitle";
 import { buildNoteFormattingOverrides } from "../helpers/noteFormattingOverrides";
 import { PROVIDER_ERROR_CODES } from "../helpers/providerHttpErrors.js";
+import { LLM_REQUEST_TIMEOUT_CODE } from "../helpers/llmRequestTimeout.js";
 import { tagActionItemOwners, type MentionPerson } from "../utils/mentionMarkdown";
 import type { ActionItem, NoteItem } from "../types/electron";
 import { estimateNoteTokens, planNoteChunks, splitChunkInHalf } from "../helpers/noteChunking";
@@ -270,7 +271,8 @@ async function runEnhancement(run: EnhancementRun): Promise<string> {
           const keepsAdvice =
             code === PROVIDER_ERROR_CODES.BAD_REQUEST ||
             code === PROVIDER_ERROR_CODES.PAYLOAD_TOO_LARGE ||
-            code === PROVIDER_ERROR_CODES.TIMEOUT;
+            code === PROVIDER_ERROR_CODES.TIMEOUT ||
+            code === LLM_REQUEST_TIMEOUT_CODE;
           throw keepsAdvice ? error : retryError;
         });
     }
