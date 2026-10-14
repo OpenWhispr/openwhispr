@@ -430,10 +430,13 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
   - **Anthropic** (Via IPC bridge to avoid CORS):
     - Claude Fable 5.1 (`claude-fable-5-1`) - Most capable Claude model, Mythos-class, 1M context
     - Claude Fable 5 (`claude-fable-5`) - Previous Mythos-class flagship, 1M context
+    - Claude Sonnet 5.5 (`claude-sonnet-5-5`) - Fast, capable model for everyday work, 1M context
     - Claude Sonnet 5 (`claude-sonnet-5`) - Fast, capable agentic model at lower cost
     - Claude Sonnet 4.6 (`claude-sonnet-4-6`) - Balanced performance
+    - Claude Haiku 5.5 (`claude-haiku-5-5`) - Fastest, lowest-cost Claude model, 1M context
     - Claude Haiku 4.5 (`claude-haiku-4-5`) - Fast with near-frontier intelligence
-    - Claude Opus 5 (`claude-opus-5`) - Most capable Opus model, 1M context
+    - Claude Opus 5.5 (`claude-opus-5-5`) - Most capable Opus model, 1M context
+    - Claude Opus 5 (`claude-opus-5`) - Previous Opus flagship, 1M context
     - Claude Opus 4.8 (`claude-opus-4-8`) - Powerful Opus model tuned for honesty and reliability, 1M context
     - Claude Opus 4.7 (`claude-opus-4-7`) - Powerful Opus model, 1M context
     - Claude Opus 4.6 (`claude-opus-4-6`) - Previous Opus generation, 1M context
