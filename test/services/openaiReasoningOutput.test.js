@@ -142,23 +142,26 @@ test("a Responses result that ran out of tokens before any text is an error, not
     })
   );
   const { openaiProvider } = await load();
+  const { TRUNCATED_OUTPUT_MESSAGE_KEY } = await import("../../src/services/ai/chatRequestBody.ts");
 
-  await assert.rejects(
-    openaiProvider.call({
+  const error = await openaiProvider
+    .call({
       text: TRANSCRIPT,
       model: "gpt-5.6-terra",
       agentName: null,
       config: { provider: "openai", systemPrompt: "Summarize", maxTokens: 4096 },
       ctx: makeCtx(),
-    }),
-    // The code is what note formatting retries with more room (#2008), unless
-    // the request already had it, as this model's did.
-    {
-      message: /ran out of output tokens/,
-      code: "OUTPUT_LIMIT_BEFORE_ANSWER",
-      hadReasoningRoom: true,
-    }
-  );
+    })
+    .then(
+      () => null,
+      (rejection) => rejection
+    );
+
+  assert.match(error?.message ?? "", /ran out of output tokens/);
+  assert.equal(error.messageKey, TRUNCATED_OUTPUT_MESSAGE_KEY);
+  // The code is what note formatting retries with more room (#2008); this
+  // model's request already had it.
+  assert.equal(error.code, undefined, "note formatting must not send the same cap again");
 });
 
 test("a Responses result stopped by a content filter is not reported as running out of tokens", async (t) => {

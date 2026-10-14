@@ -456,8 +456,8 @@ export const openaiProvider: InferenceProvider = {
       const cutOff =
         responseIncomplete && response?.incomplete_details?.reason !== "content_filter";
       const error = emptyResponseError("OpenAI", config, !!cutOff);
-      // That request already had a retry's room, so note formatting won't repeat it.
-      if (error) throw hasReasoningRoom ? Object.assign(error, { hadReasoningRoom: true }) : error;
+      // No retry code: that request already had a retry's room.
+      if (error) throw cutOff && hasReasoningRoom ? truncatedOutputError(error.message) : error;
       logger.logReasoning("OPENAI_EMPTY_RESPONSE_FALLBACK", {
         model,
         originalTextLength: text.length,

@@ -256,7 +256,7 @@ async function runEnhancement(run: EnhancementRun): Promise<string> {
     // A reasoning model spent the whole budget thinking before writing a word
     // (#2008): one more try with room for its reasoning plus the notes, unless
     // the request already had that room.
-    if (ranOutBeforeAnswer(error) && !(error as { hadReasoningRoom?: boolean }).hadReasoningRoom) {
+    if (ranOutBeforeAnswer(error)) {
       if (run.isCancelled()) throw new Error("cancelled");
       return await reasoningService
         .processText(run.noteContent, run.modelId, null, {
@@ -622,23 +622,16 @@ export function runBackgroundAction(
       processingFlags.set(noteId, false);
       clearNoteState(noteId);
       const message = err instanceof Error ? err.message : labels.actionFailed;
-      const {
-        messageKey,
-        messageParams,
-        notice,
-        settingsTarget,
-        technicalDetails,
-        hadReasoningRoom,
-      } = (err ?? {}) as {
+      const { messageKey, messageParams, notice, settingsTarget, technicalDetails } = (err ??
+        {}) as {
         messageKey?: string;
         messageParams?: Record<string, string | number>;
         notice?: boolean;
         settingsTarget?: string;
         technicalDetails?: TechnicalErrorDetailsData;
-        hadReasoningRoom?: boolean;
       };
       // Still thinking past the retry's budget: point at the setting that stops it.
-      const thinkingSpentOutput = ranOutBeforeAnswer(err) && !hadReasoningRoom;
+      const thinkingSpentOutput = ranOutBeforeAnswer(err);
       pushErrorEvent({
         noteId,
         message,

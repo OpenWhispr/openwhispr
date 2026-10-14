@@ -384,10 +384,12 @@ test("a retry that still thinks past its budget points at Disable thinking outpu
 
 test("a reply cut off when its request already had room for reasoning is not sent again, and shows the cut-off error", async (t) => {
   const { store, calls } = await loadStore(t);
-  // OpenAI's own reasoning models get that room on the first request.
-  globalThis.__processTextError = Object.assign(await ranOutThinking(), {
-    hadReasoningRoom: true,
-  });
+  const { truncatedOutputError } = await import("../../src/services/ai/chatRequestBody.ts");
+  // OpenAI's own reasoning models get that room on the first request, so their
+  // cut-off carries no retry code.
+  globalThis.__processTextError = truncatedOutputError(
+    "Model ran out of output tokens before producing a response"
+  );
 
   store.runBackgroundAction(
     29,
