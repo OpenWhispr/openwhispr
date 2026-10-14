@@ -291,7 +291,7 @@ class DiarizationManager {
   }
 
   async diarize(wavPath, options = {}) {
-    const { numSpeakers = -1, threshold = DEFAULT_CLUSTER_THRESHOLD, signal = null } = options;
+    const { threshold = DEFAULT_CLUSTER_THRESHOLD, signal = null } = options;
 
     if (signal?.aborted) return [];
 
@@ -317,7 +317,9 @@ class DiarizationManager {
     const args = [
       `--segmentation.pyannote-model=${segPath}`,
       `--embedding.model=${embPath}`,
-      `--clustering.num-clusters=${numSpeakers}`,
+      // Clustering always picks the count: a forced one splits short utterances
+      // from long ones instead of one voice from another (#2021).
+      "--clustering.num-clusters=-1",
       `--clustering.cluster-threshold=${threshold}`,
       "--min-duration-on=0.2",
       "--min-duration-off=0.5",
@@ -326,7 +328,6 @@ class DiarizationManager {
 
     debugLogger.info("Starting diarization", {
       binaryPath,
-      numSpeakers,
       threshold,
       wavPath,
     });
@@ -434,20 +435,6 @@ class DiarizationManager {
     }
 
     return segments;
-  }
-
-  capSpeakerClusters(segments, cap) {
-    if (!cap || !segments?.length) return segments;
-    const totals = new Map();
-    for (const s of segments) {
-      totals.set(s.speaker, (totals.get(s.speaker) || 0) + (s.end - s.start));
-    }
-    if (totals.size <= cap) return segments;
-
-    const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]);
-    const keep = new Set(ranked.slice(0, cap).map(([sp]) => sp));
-    const primary = ranked[0][0];
-    return segments.map((s) => (keep.has(s.speaker) ? s : { ...s, speaker: primary }));
   }
 
   mergeWithTranscript(transcriptSegments, diarizationSegments, { diarizedSource = "system" } = {}) {

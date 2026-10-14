@@ -136,18 +136,6 @@ class SpeakerEmbeddings {
     return this._extractEmbeddingFromSamples(capped);
   }
 
-  async extractEmbedding(wavPath, startSec, endSec) {
-    if (endSec - startSec < MIN_SEGMENT_SECONDS) return null;
-
-    const buf = fs.readFileSync(wavPath);
-    const { byteOffset, numSamples } = this._embeddingWindow(
-      this._parseWavHeader(buf),
-      startSec,
-      endSec
-    );
-    return this._extractEmbeddingFromSamples(this._decodePcm16(buf, byteOffset, numSamples));
-  }
-
   // One voice per diarized cluster, from its longest segments. Reads only the
   // audio each embedding uses: an upload's WAV runs about 115 MB an hour. A
   // cluster whose extraction fails goes without a voice; the others keep theirs.
