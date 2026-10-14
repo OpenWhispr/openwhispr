@@ -4959,11 +4959,7 @@
     },
     "settings": {
       "saveChanges": "Salva modifiche",
-      "saved": "Tono e stile salvati",
-      "enable": "Adatta il mio tono a ogni app",
-      "enableDescription": "La correzione scrive con il tono che hai scelto per l'app in cui stai dettando.",
-      "cleanupOff": "Tono e stile richiede la correzione testo.",
-      "turnOnCleanup": "Attiva"
+      "saved": "Tono e stile salvati"
     }
   }
 }

@@ -4959,11 +4959,7 @@
     },
     "settings": {
       "saveChanges": "Salvar alterações",
-      "saved": "Tom e estilo salvos",
-      "enable": "Ajustar meu tom a cada app",
-      "enableDescription": "A limpeza escreve no tom que você escolheu para o app em que está ditando.",
-      "cleanupOff": "Tom e estilo precisa da limpeza de texto.",
-      "turnOnCleanup": "Ativar"
+      "saved": "Tom e estilo salvos"
     }
   }
 }

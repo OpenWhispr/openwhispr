@@ -4959,11 +4959,7 @@
     },
     "settings": {
       "saveChanges": "Änderungen speichern",
-      "saved": "Ton & Stil gespeichert",
-      "enable": "Ton an jede App anpassen",
-      "enableDescription": "Die Bereinigung schreibt im Ton, den Sie für die App gewählt haben, in die Sie diktieren.",
-      "cleanupOff": "Ton & Stil benötigt die Textbereinigung.",
-      "turnOnCleanup": "Aktivieren"
+      "saved": "Ton & Stil gespeichert"
     }
   }
 }

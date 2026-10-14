@@ -42,7 +42,7 @@ export function useToneStylePrompt() {
     setBannerDismissed(true);
   }, []);
 
-  // Once Tone & Style has been on, Home stops offering it, even after it's turned off.
+  // Once Tone & Style is set up, Home stops offering it.
   useEffect(() => {
     if (toneStyleEnabled) dismissBanner();
   }, [toneStyleEnabled, dismissBanner]);

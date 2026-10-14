@@ -3054,7 +3054,7 @@ export default function SettingsPage({
         return <WorkspaceSection initialSubTab={initialSubTab} />;
 
       case "toneStyle":
-        return <ToneStyleSection onSetUpCleanup={() => onNavigateToSection?.("llms")} />;
+        return <ToneStyleSection />;
 
       case "general":
         return (

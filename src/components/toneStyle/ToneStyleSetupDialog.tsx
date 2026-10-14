@@ -15,9 +15,9 @@ import { AppMarkStack, ToneSample } from "./toneStyleVisuals";
 import { CATEGORY_APP_MARKS } from "./appMarks";
 import { dictationCleanupHasModel, turnOnDictationCleanup } from "./dictationCleanup";
 import logo from "../../assets/logo.svg";
-import notion from "../../assets/icons/apps/notion.svg";
+import notion from "../../assets/icons/apps/notion-glyph.svg";
 import slack from "../../assets/icons/slack.svg";
-import chatgpt from "../../assets/icons/apps/chatgpt.svg";
+import openai from "../../assets/icons/providers/openai.svg";
 
 interface ToneStyleSetupDialogProps {
   open: boolean;
@@ -26,10 +26,30 @@ interface ToneStyleSetupDialogProps {
   onOpenSettings: (section: string) => void;
 }
 
+// The global h1–h6 rule (Yowza Soft 600, tight tracking) outranks utilities, so
+// these titles force the design's medium weight, spacing and line height.
+const TITLE_TYPE = "whitespace-pre-line font-medium! leading-[31px]! tracking-normal!";
+
 // The intro art: OpenWhispr among the apps it writes into, fading out at the
-// edges. Badges drawn on a white disc invert on dark tiles.
-const INTRO_TILES: (string | null)[] = [notion, null, slack, null, logo, null, null, chatgpt, null];
-const WHITE_DISC_BADGES = new Set([notion, chatgpt]);
+// edges. Notion is its own gray app tile with the mark in white, as designed.
+type IntroTile = { src: string; size: number; className: string; tileClassName?: string };
+const INTRO_TILES: (IntroTile | "logo" | null)[] = [
+  {
+    src: notion,
+    size: 36,
+    className: "opacity-95",
+    tileClassName:
+      "border-transparent bg-gradient-to-br from-[#d4d4d4] to-[#a8a8a8] dark:from-[#4a4a4a] dark:to-[#2e2e2e]",
+  },
+  null,
+  { src: slack, size: 40, className: "opacity-45 grayscale-[40%]" },
+  null,
+  "logo",
+  null,
+  null,
+  { src: openai, size: 50, className: "opacity-25 dark:invert dark:opacity-30" },
+  null,
+];
 
 function IntroArt() {
   return (
@@ -37,11 +57,11 @@ function IntroArt() {
       aria-hidden="true"
       className="grid grid-cols-3 gap-2.5 [mask-image:radial-gradient(circle_at_50%_42%,black_38%,transparent_74%)]"
     >
-      {INTRO_TILES.map((src, index) =>
-        src === logo ? (
+      {INTRO_TILES.map((tile, index) =>
+        tile === "logo" ? (
           <img
             key={index}
-            src={src}
+            src={logo}
             alt=""
             width={68}
             height={68}
@@ -52,20 +72,20 @@ function IntroArt() {
         ) : (
           <div
             key={index}
-            className="flex size-[68px] items-center justify-center rounded-[18px] border border-primary/15 bg-card dark:bg-surface-2"
+            className={cn(
+              "flex size-[68px] items-center justify-center rounded-[18px] border border-primary/15 bg-card dark:bg-surface-2",
+              tile?.tileClassName
+            )}
           >
-            {src && (
+            {tile && (
               <img
-                src={src}
+                src={tile.src}
                 alt=""
-                width={40}
-                height={40}
+                width={tile.size}
+                height={tile.size}
                 decoding="async"
                 draggable={false}
-                className={cn(
-                  "opacity-45 grayscale-[40%]",
-                  WHITE_DISC_BADGES.has(src) && "dark:invert"
-                )}
+                className={tile.className}
               />
             )}
           </div>
@@ -135,7 +155,7 @@ export default function ToneStyleSetupDialog({
         {category === null ? (
           <div className="flex flex-col items-center text-center">
             <IntroArt />
-            <DialogTitle className="mt-[86px] whitespace-pre-line text-[25px] font-medium leading-[31px]">
+            <DialogTitle className={cn("mt-[86px] text-[25px]", TITLE_TYPE)}>
               {useCleanupModel
                 ? t("toneStyle.setup.introTitle")
                 : t("toneStyle.setup.cleanupOffTitle")}
@@ -152,7 +172,7 @@ export default function ToneStyleSetupDialog({
         ) : (
           <div className="flex flex-col items-center">
             <AppMarkStack marks={CATEGORY_APP_MARKS[category].dialog} size={40} />
-            <DialogTitle className="mt-4 whitespace-pre-line text-center text-2xl font-medium leading-[31px]">
+            <DialogTitle className={cn("mt-4 text-center text-2xl", TITLE_TYPE)}>
               <BidiInterpolatedText
                 text={t(`toneStyle.categories.${category}.question`, {
                   category: BIDI_VALUE_TOKEN,

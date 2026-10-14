@@ -28,11 +28,21 @@ function Bubble({ text, selected }: { text: string; selected: boolean }) {
     <div
       className={cn(
         "relative max-w-[92%] rounded-2xl px-2.5 py-2 text-[15px] leading-[21px] text-white",
-        "after:absolute after:-end-1 after:bottom-1 after:size-2.5 after:rotate-45 after:rounded-[2px] after:bg-inherit",
         selected ? "bg-primary" : "bg-[#2f8cf7]"
       )}
     >
       {text}
+      {/* The tail flares out of the bubble's side just above its rounded corner. */}
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 13 9"
+        className={cn(
+          "absolute -end-[9px] bottom-[5px] h-[9px] w-[13px] rtl:-scale-x-100",
+          selected ? "fill-primary" : "fill-[#2f8cf7]"
+        )}
+      >
+        <path d="M0 0H4C4 4 7 7 13 8C9 8.6 4 8.4 0 7.8Z" />
+      </svg>
     </div>
   );
 }

@@ -51,7 +51,7 @@ export default function ToneStyleBanner({
     <div className="relative mb-3 flex items-center gap-4 overflow-hidden rounded-2xl border border-border/70 bg-card px-6 py-5 dark:border-white/10 dark:bg-surface-2">
       <BannerDecoration />
       <div className="relative min-w-0 flex-1">
-        <p className="brand-heading text-[17px] font-medium text-foreground">
+        <p className="brand-heading text-[17px] font-medium! tracking-normal! text-foreground">
           {cleanupEnabled ? t("toneStyle.banner.title") : t("toneStyle.banner.cleanupOffTitle")}
         </p>
         <p className="mt-1.5 text-sm text-muted-foreground">

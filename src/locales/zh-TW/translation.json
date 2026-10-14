@@ -4959,11 +4959,7 @@
     },
     "settings": {
       "saveChanges": "儲存變更",
-      "saved": "語氣與風格已儲存",
-      "enable": "依應用程式調整我的語氣",
-      "enableDescription": "整理後的文字會使用你為目前聽寫的應用程式選擇的語氣。",
-      "cleanupOff": "語氣與風格需要開啟文字整理。",
-      "turnOnCleanup": "開啟"
+      "saved": "語氣與風格已儲存"
     }
   }
 }

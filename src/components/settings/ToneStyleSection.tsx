@@ -1,89 +1,50 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
-import { SettingsPanel, SettingsPanelRow, SettingsRow } from "../ui/SettingsSection";
-import { Toggle } from "../ui/toggle";
 import { useToast } from "../ui/useToast";
 import { cn } from "../lib/utils";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { TONE_APP_CATEGORIES, TONE_OPTIONS, type ToneStyles } from "../../config/toneStyle";
 import { AppMarkStack } from "../toneStyle/toneStyleVisuals";
 import { CATEGORY_APP_MARKS } from "../toneStyle/appMarks";
-import { dictationCleanupHasModel, turnOnDictationCleanup } from "../toneStyle/dictationCleanup";
 
-interface ToneStyleSectionProps {
-  /** Opens the cleanup model settings when cleanup was turned on without one. */
-  onSetUpCleanup: () => void;
-}
-
-export default function ToneStyleSection({ onSetUpCleanup }: ToneStyleSectionProps) {
+export default function ToneStyleSection() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const savedStyles = useSettingsStore((s) => s.toneStyles);
   const toneStyleEnabled = useSettingsStore((s) => s.toneStyleEnabled);
-  const useCleanupModel = useSettingsStore((s) => s.useCleanupModel);
   const [draft, setDraft] = useState<ToneStyles>(savedStyles);
-  const dirty = TONE_APP_CATEGORIES.some((category) => draft[category] !== savedStyles[category]);
+  // Saving here also turns Tone & Style on, so it can be saved unchanged until then.
+  const canSave =
+    !toneStyleEnabled ||
+    TONE_APP_CATEGORIES.some((category) => draft[category] !== savedStyles[category]);
 
   const save = () => {
-    useSettingsStore.getState().setToneStyles(draft);
+    const { setToneStyles, setToneStyleEnabled } = useSettingsStore.getState();
+    setToneStyles(draft);
+    setToneStyleEnabled(true);
     toast({ title: t("toneStyle.settings.saved") });
-  };
-
-  const turnOnCleanup = () => {
-    turnOnDictationCleanup();
-    if (!dictationCleanupHasModel()) onSetUpCleanup();
   };
 
   return (
     <div>
       <div className="mb-5 flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h3 className="brand-heading text-base font-semibold text-foreground">
+          <h3 className="text-base font-normal! tracking-normal! text-foreground">
             {t("toneStyle.title")}
           </h3>
           <p className="mt-1 text-[13px] text-muted-foreground">{t("toneStyle.description")}</p>
         </div>
         {/* Clear of the modal's close button in the corner. */}
         <Button
-          variant={dirty ? "default" : "secondary"}
+          variant={canSave ? "default" : "secondary"}
           className="me-8 h-8 shrink-0 border-transparent px-4 text-[13px] disabled:opacity-100 disabled:text-muted-foreground/60"
-          disabled={!dirty}
+          disabled={!canSave}
           onClick={save}
         >
           {t("toneStyle.settings.saveChanges")}
         </Button>
       </div>
-
-      <SettingsPanel className="mb-6">
-        <SettingsPanelRow>
-          <SettingsRow
-            label={t("toneStyle.settings.enable")}
-            description={
-              useCleanupModel ? (
-                t("toneStyle.settings.enableDescription")
-              ) : (
-                <>
-                  {t("toneStyle.settings.cleanupOff")}{" "}
-                  <button
-                    type="button"
-                    onClick={turnOnCleanup}
-                    className="font-medium text-primary hover:underline"
-                  >
-                    {t("toneStyle.settings.turnOnCleanup")}
-                  </button>
-                </>
-              )
-            }
-          >
-            <Toggle
-              checked={toneStyleEnabled}
-              onChange={(value) => useSettingsStore.getState().setToneStyleEnabled(value)}
-              ariaLabel={t("toneStyle.settings.enable")}
-            />
-          </SettingsRow>
-        </SettingsPanelRow>
-      </SettingsPanel>
 
       <div className="space-y-6">
         {TONE_APP_CATEGORIES.map((category) => {
@@ -92,7 +53,9 @@ export default function ToneStyleSection({ onSetUpCleanup }: ToneStyleSectionPro
             <section key={category}>
               <div className="mb-4 flex items-center gap-3">
                 <AppMarkStack marks={CATEGORY_APP_MARKS[category].settings} size={22} />
-                <h4 className="text-[15px] font-medium text-foreground">{title}</h4>
+                <h4 className="text-[15px] font-normal! tracking-normal! text-foreground">
+                  {title}
+                </h4>
               </div>
               <div role="group" aria-label={title} className="grid grid-cols-3 gap-4">
                 {TONE_OPTIONS[category].map((tone) => {

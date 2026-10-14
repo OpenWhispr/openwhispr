@@ -4959,11 +4959,7 @@
     },
     "settings": {
       "saveChanges": "Save Changes",
-      "saved": "Tone & Style saved",
-      "enable": "Match my tone in each app",
-      "enableDescription": "Cleanup writes in the tone you picked for the app you're dictating into.",
-      "cleanupOff": "Tone & Style needs AI cleanup.",
-      "turnOnCleanup": "Turn on"
+      "saved": "Tone & Style saved"
     }
   }
 }
