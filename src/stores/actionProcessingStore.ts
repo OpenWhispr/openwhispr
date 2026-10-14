@@ -268,7 +268,9 @@ async function runEnhancement(run: EnhancementRun): Promise<string> {
           // or network problem shows as itself.
           const code = (retryError as { code?: string } | null)?.code;
           const keepsAdvice =
-            code === PROVIDER_ERROR_CODES.BAD_REQUEST || code === PROVIDER_ERROR_CODES.TIMEOUT;
+            code === PROVIDER_ERROR_CODES.BAD_REQUEST ||
+            code === PROVIDER_ERROR_CODES.PAYLOAD_TOO_LARGE ||
+            code === PROVIDER_ERROR_CODES.TIMEOUT;
           throw keepsAdvice ? error : retryError;
         });
     }
@@ -618,16 +620,23 @@ export function runBackgroundAction(
       processingFlags.set(noteId, false);
       clearNoteState(noteId);
       const message = err instanceof Error ? err.message : labels.actionFailed;
-      const { messageKey, messageParams, notice, settingsTarget, technicalDetails } = (err ??
-        {}) as {
+      const {
+        messageKey,
+        messageParams,
+        notice,
+        settingsTarget,
+        technicalDetails,
+        hadReasoningRoom,
+      } = (err ?? {}) as {
         messageKey?: string;
         messageParams?: Record<string, string | number>;
         notice?: boolean;
         settingsTarget?: string;
         technicalDetails?: TechnicalErrorDetailsData;
+        hadReasoningRoom?: boolean;
       };
       // Still thinking past the retry's budget: point at the setting that stops it.
-      const thinkingSpentOutput = ranOutBeforeAnswer(err);
+      const thinkingSpentOutput = ranOutBeforeAnswer(err) && !hadReasoningRoom;
       pushErrorEvent({
         noteId,
         message,

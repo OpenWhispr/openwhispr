@@ -382,7 +382,7 @@ test("a retry that still thinks past its budget points at Disable thinking outpu
   }
 });
 
-test("a reply cut off when its request already had room for reasoning is not sent again, and keeps the advice", async (t) => {
+test("a reply cut off when its request already had room for reasoning is not sent again, and shows the cut-off error", async (t) => {
   const { store, calls } = await loadStore(t);
   // OpenAI's own reasoning models get that room on the first request.
   globalThis.__processTextError = Object.assign(await ranOutThinking(), {
@@ -401,8 +401,9 @@ test("a reply cut off when its request already had room for reasoning is not sen
   let events = [];
   await waitFor(() => (events = store.consumeErrorEvents()).length > 0, "the error");
   assert.equal(calls.length, 1, "no second request with the same cap");
-  assert.equal(events[0].messageKey, "notes.actions.errors.outputSpentThinkingDisabled");
-  assert.equal(events[0].settingsTarget, "llms");
+  // Settings hides Disable thinking output for these models; their request never sends it.
+  assert.equal(events[0].messageKey, "notes.actions.errors.outputTruncated");
+  assert.equal(events[0].settingsTarget, undefined);
 });
 
 test("a retry the server refuses or that times out keeps the first failure's advice; any other retry failure shows as itself", async (t) => {
@@ -418,6 +419,12 @@ test("a retry the server refuses or that times out keeps the first failure's adv
     [
       25,
       refusal(400, "max_tokens exceeds the maximum context length"),
+      "notes.actions.errors.outputSpentThinkingDisabled",
+    ],
+    // Groq counts the cap against a free tier's tokens per minute and answers 413.
+    [
+      30,
+      refusal(413, "Request too large for model on tokens per minute (TPM)"),
       "notes.actions.errors.outputSpentThinkingDisabled",
     ],
     // Still thinking at the note deadline.
