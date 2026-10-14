@@ -28,22 +28,11 @@ export default function ToneStyleSection() {
 
   return (
     <div>
-      <div className="mb-5 flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h3 className="text-base font-normal! tracking-normal! text-foreground">
-            {t("toneStyle.title")}
-          </h3>
-          <p className="mt-1 text-[13px] text-muted-foreground">{t("toneStyle.description")}</p>
-        </div>
-        {/* Clear of the modal's close button in the corner. */}
-        <Button
-          variant={canSave ? "default" : "secondary"}
-          className="me-8 h-8 shrink-0 border-transparent px-4 text-[13px] disabled:opacity-100 disabled:text-muted-foreground/60"
-          disabled={!canSave}
-          onClick={save}
-        >
-          {t("toneStyle.settings.saveChanges")}
-        </Button>
+      <div className="mb-5">
+        <h3 className="text-base font-normal! tracking-normal! text-foreground">
+          {t("toneStyle.title")}
+        </h3>
+        <p className="mt-1 text-[13px] text-muted-foreground">{t("toneStyle.description")}</p>
       </div>
 
       <div className="space-y-6">
@@ -95,6 +84,17 @@ export default function ToneStyleSection() {
             </section>
           );
         })}
+      </div>
+
+      <div className="mt-6 flex justify-end">
+        <Button
+          variant={canSave ? "default" : "secondary"}
+          className="h-8 border-transparent px-4 text-[13px] disabled:opacity-100 disabled:text-muted-foreground/60"
+          disabled={!canSave}
+          onClick={save}
+        >
+          {t("toneStyle.settings.saveChanges")}
+        </Button>
       </div>
     </div>
   );
