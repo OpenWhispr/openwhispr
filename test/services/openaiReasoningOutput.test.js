@@ -229,7 +229,7 @@ test("a cut-off on a task that needs complete output carries no retry code", asy
   const error = await openaiProvider
     .call({
       text: TRANSCRIPT,
-      model: "gpt-5.6-terra",
+      model: "gpt-4.1",
       agentName: null,
       config: {
         provider: "openai",
