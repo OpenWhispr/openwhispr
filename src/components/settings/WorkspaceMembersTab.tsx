@@ -1,12 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
 import { Trash2, MoreVertical, Mail, X, Loader2 } from "../icons";
-import { useWorkspaceStore } from "../../stores/workspaceStore";
+import { useWorkspaceStore, EMPTY_WORKSPACE_MEMBERS } from "../../stores/workspaceStore";
 import { WorkspacesService } from "../../services/WorkspacesService";
 import { InvitationsService } from "../../services/InvitationsService";
 import { useDialogs } from "../../hooks/useDialogs";
 import { Button } from "../ui/button";
+import { cn } from "../lib/utils";
 import { ConfirmDialog } from "../ui/dialog";
 import { useToast } from "../ui/useToast";
 import type {
@@ -24,7 +25,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "../ui/dropdown-menu";
-import { cn } from "../lib/utils";
 import { canManageWorkspace } from "../../lib/spacePermissions";
 
 interface Props {
@@ -41,7 +41,7 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
   const { members, refreshMembers, refresh } = useWorkspaceStore(
     useShallow((s) => ({
-      members: s.members,
+      members: s.membersByWorkspace[workspace.id] ?? EMPTY_WORKSPACE_MEMBERS,
       refreshMembers: s.refreshMembers,
       refresh: s.refresh,
     }))
@@ -55,24 +55,29 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
   const [membersError, setMembersError] = useState(false);
   const [invitationsError, setInvitationsError] = useState(false);
   const canManage = canManageWorkspace(workspace.role);
+  const membersRequest = useRef(0);
+  const invitationsRequest = useRef(0);
+  const joinRequestsRequest = useRef(0);
   async function loadMembers() {
+    const request = ++membersRequest.current;
     setMembersLoading(true);
     setMembersError(false);
     try {
       await refreshMembers(workspace.id);
     } catch {
-      setMembersError(true);
+      if (request === membersRequest.current) setMembersError(true);
     } finally {
-      setMembersLoading(false);
+      if (request === membersRequest.current) setMembersLoading(false);
     }
   }
 
   async function refreshJoinRequests() {
+    const request = ++joinRequestsRequest.current;
     try {
-      setJoinRequests(await WorkspacesService.listJoinRequests(workspace.id));
+      const list = await WorkspacesService.listJoinRequests(workspace.id);
+      if (request === joinRequestsRequest.current) setJoinRequests(list);
     } catch {
-      // Requests are additive context; a failure here must not break the tab.
-      setJoinRequests([]);
+      // Retain confirmed context when this optional refresh is unavailable.
     }
   }
 
@@ -102,13 +107,13 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
   }
 
   async function refreshInvitations() {
+    const request = ++invitationsRequest.current;
     setInvitationsError(false);
     try {
       const list = await InvitationsService.list(workspace.id);
-      setInvitations(list);
+      if (request === invitationsRequest.current) setInvitations(list);
     } catch {
-      setInvitations([]);
-      setInvitationsError(true);
+      if (request === invitationsRequest.current) setInvitationsError(true);
     }
   }
 
@@ -118,6 +123,14 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
       void refreshInvitations();
       void refreshJoinRequests();
     }
+    const members = membersRequest;
+    const invitations = invitationsRequest;
+    const requests = joinRequestsRequest;
+    return () => {
+      ++members.current;
+      ++invitations.current;
+      ++requests.current;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace.id]);
 
@@ -126,7 +139,7 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
       await WorkspacesService.updateMemberRole(workspace.id, userId, role);
       await refreshMembers(workspace.id);
       // Ownership transfer demotes the caller — refresh so workspace.role updates everywhere.
-      if (role === "owner") await refresh();
+      if (role === "owner") await refresh(true);
       toast({
         title: t("settingsPage.workspace.members.roleUpdated"),
       });
@@ -451,7 +464,7 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
         onOpenChange={setInviteOpen}
         workspaceId={workspace.id}
         workspaceName={workspace.name}
-        onInvited={refreshInvitations}
+        onReconciled={refreshInvitations}
       />
 
       <ConfirmDialog

@@ -769,13 +769,15 @@ class WhisperManager {
       };
     }
 
-    return { model: modelName, deleted: false, error: "Model not found", success: false };
+    // Already absent counts as deleted, so the renderer refreshes its stale list.
+    return { model: modelName, deleted: false, freed_bytes: 0, freed_mb: 0, success: true };
   }
 
   async deleteAllWhisperModels() {
     const modelsDir = this.getModelsDir();
     let totalFreed = 0;
     let deletedCount = 0;
+    let failed = false;
 
     try {
       if (!fs.existsSync(modelsDir)) {
@@ -792,13 +794,14 @@ class WhisperManager {
             totalFreed += stats.size;
             deletedCount++;
           } catch {
+            failed = true;
             // Continue with other files if one fails
           }
         }
       }
 
       return {
-        success: true,
+        success: !failed,
         deleted_count: deletedCount,
         freed_bytes: totalFreed,
         freed_mb: Math.round(totalFreed / (1024 * 1024)),

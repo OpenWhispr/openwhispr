@@ -18,7 +18,7 @@ import MemberPickList from "../MemberPickList";
 import { createSpace } from "../../services/spaceActions";
 import { TeamsService } from "../../services/TeamsService";
 import { useWorkspace } from "../../hooks/useWorkspace";
-import { useWorkspaceStore } from "../../stores/workspaceStore";
+import { useWorkspaceStore, EMPTY_WORKSPACE_MEMBERS } from "../../stores/workspaceStore";
 import { useAuth } from "../../hooks/useAuth";
 import { useDelayedFlag } from "../../hooks/useDelayedFlag";
 import SpaceNameField from "./SpaceNameField";
@@ -50,13 +50,11 @@ export default function CreateSpaceDialog({
   const {
     error: workspacesError,
     loading: workspacesLoading,
-    members: roster,
     refreshMembers,
   } = useWorkspaceStore(
     useShallow((s) => ({
       error: s.error,
       loading: s.loading,
-      members: s.members,
       refreshMembers: s.refreshMembers,
     }))
   );
@@ -81,6 +79,9 @@ export default function CreateSpaceDialog({
     manageableWorkspaces,
     active,
     selectedWorkspaceId
+  );
+  const roster = useWorkspaceStore(
+    (s) => s.membersByWorkspace[workspace?.id ?? ""] ?? EMPTY_WORKSPACE_MEMBERS
   );
   // A failed workspace fetch gets a retry state, never the create funnel.
   const needsWorkspace = open && loaded && !workspace && !workspacesError;

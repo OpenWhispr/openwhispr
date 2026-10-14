@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "../hooks/useAuth";
 import { useLeaderboardParticipation } from "../hooks/useLeaderboardParticipation";
 import type { EnableInsightsSyncOptions } from "../hooks/useInsightsSyncOptIn";
-import { useSettings } from "../hooks/useSettings";
+import { useSettingsStore } from "../stores/settingsStore";
 import { signInWithSSO } from "../lib/auth";
 import { getValidatedAuthGeneration } from "../lib/authRequestContext";
 import { effectiveLocalHistoryEnabled } from "../stores/policyRules";
@@ -29,7 +29,9 @@ export default function LeaderboardView({
   const [oauthProtocolRegistered, setOauthProtocolRegistered] = useState<boolean | null>(null);
   const [ssoStarting, setSsoStarting] = useState(false);
   const [ssoError, setSsoError] = useState<string | null>(null);
-  const { dataRetentionEnabled: personalDataRetentionEnabled } = useSettings();
+  const personalDataRetentionEnabled = useSettingsStore(
+    (settings) => settings.dataRetentionEnabled
+  );
   const {
     enabled: participationEnabled,
     error: participationError,

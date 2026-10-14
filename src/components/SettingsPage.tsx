@@ -1,12 +1,11 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState, useCallback, useEffect, useRef, useId, useMemo } from "react";
+import { useStore } from "zustand";
+import type { SettingsNavigationStore } from "../stores/settingsNavigationStore";
 import { useTranslation } from "react-i18next";
+import { useShallow } from "zustand/react/shallow";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
 import { Badge } from "./ui/badge";
 import {
-  RefreshCw,
-  Download,
   Mic,
   Shield,
   FolderOpen,
@@ -31,18 +30,12 @@ import {
   BookOpen,
   Copy,
   Trash2,
-  Info,
-  MessageSquare,
-  FileAudio,
-  Wand2,
-  Upload,
-  Languages,
 } from "./icons";
 import { useAuth } from "../hooks/useAuth";
 import { AUTH_URL, signOut } from "../lib/auth";
 import { deleteAccount } from "../lib/accountDeletionRequest";
 import { executeAccountDeletion } from "../lib/accountDeletionFlow";
-import { getValidatedAuthGeneration } from "../lib/authRequestContext";
+import { getValidatedAuthGeneration, getBoundSessionGeneration } from "../lib/authRequestContext";
 import { useBillingPortal } from "../hooks/useBillingPortal";
 import MicPermissionWarning from "./ui/MicPermissionWarning";
 import MicrophoneSettings from "./ui/MicrophoneSettings";
@@ -62,38 +55,26 @@ import {
   DialogFooter,
 } from "./ui/dialog";
 import { Alert, AlertTitle, AlertDescription } from "./ui/alert";
-import { useSettings } from "../hooks/useSettings";
+import { useAutoLearnCorrections } from "../hooks/useSettings";
 import { useDialogs } from "../hooks/useDialogs";
 import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
 import { useLeaderboardParticipation } from "../hooks/useLeaderboardParticipation";
-import { useWhisper } from "../hooks/useWhisper";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
-import { useClipboard } from "../hooks/useClipboard";
-import { useUpdater } from "../hooks/useUpdater";
+import SystemUpdates from "./settings/SystemUpdates";
 
-import PromptStudio from "./ui/PromptStudio";
-import { ProviderTabs } from "./ui/ProviderTabs";
-import { HotkeyListInput } from "./ui/HotkeyListInput";
-import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
-import { useHotkeyModeInfo } from "../hooks/useHotkeyModeInfo";
-import { useLocalStorage } from "../hooks/useLocalStorage";
-import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
-import { getPlatform, getCachedPlatform } from "../utils/platform";
-import { formatHotkeyLabel } from "../utils/hotkeys";
+import HotkeysSection from "./settings/HotkeysSection";
+import { getCachedPlatform } from "../utils/platform";
 import {
   getLinuxPasteInstallCommands,
   needsLinuxPasteToolGuidance,
 } from "../utils/linuxPasteTools";
-import { ActivationModeSelector } from "./ui/ActivationModeSelector";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import LinuxPttSetupInfo from "./ui/LinuxPttSetupInfo";
 import { Toggle } from "./ui/toggle";
 import DeveloperSection from "./DeveloperSection";
-import ChatAgentSettings from "./settings/ChatAgentSettings";
-import DictationAgentSettings from "./settings/DictationAgentSettings";
-import DictationTranslationSettings from "./settings/DictationTranslationSettings";
-import InferenceConfigEditor from "./settings/InferenceConfigEditor";
+import GpuDeviceSelector from "./settings/GpuDeviceSelector";
+import LlmsKeepAlive from "./settings/LlmsSection";
+import SpeechToTextTabs from "./settings/SpeechToTextTabs";
+import { KeepAlive } from "./settings/KeepAlive";
 import { MeetingTranscriptionPanel } from "./settings/MeetingSettings";
 import { UploadTranscriptionPanel } from "./settings/UploadSettings";
 import LanguageSelector from "./ui/LanguageSelector";
@@ -101,17 +82,13 @@ import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
 import { useToast } from "./ui/useToast";
 import { useTheme } from "../hooks/useTheme";
-import type {
-  ChineseScriptPreference,
-  GpuDevice,
-  LocalTranscriptionProvider,
-  InferenceMode,
-} from "../types/electron";
+import type { ChineseScriptPreference, InferenceMode } from "../types/electron";
 import logger from "../utils/logger";
 import {
-  SettingsRow,
   SettingsPanel,
   SettingsPanelRow,
+  SettingsRow,
+  SectionHeader,
   InferenceModeSelector,
 } from "./ui/SettingsSection";
 import type { InferenceModeOption } from "./ui/SettingsSection";
@@ -119,7 +96,7 @@ import { useSettingsLayout } from "./ui/useSettingsLayout";
 import { useUsage } from "../hooks/useUsage";
 import { cn } from "./lib/utils";
 import { GRADIENT_CIRCLE } from "./ui/gradientCircle";
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import WhisperVadSettings from "./settings/WhisperVadSettings";
 import {
   startMigration,
   useMigration,
@@ -130,10 +107,10 @@ import { syncService } from "../services/SyncService.js";
 import { formatBytes } from "../utils/formatBytes";
 import {
   clearMissingLocalModelSelections,
+  reconcileLocalModelSelections,
   TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
   TRANSCRIPTION_POLICY_PROVIDER_IDS,
   useSettingsStore,
-  type HotkeyRegistrationResult,
 } from "../stores/settingsStore";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { highestPlan } from "../lib/usageStore";
@@ -142,14 +119,12 @@ import {
   canChangeCloudBackupPreference,
   effectiveAudioRetentionDays,
   effectiveLocalHistoryEnabled,
-  isAgentAllowed,
   isCloudBackupAllowed,
   isEnterpriseTranscriptionOfferable,
   lockedLocalHistoryValue,
   maxAudioRetentionDays,
 } from "../stores/policyRules";
 import { usePolicyModeOptions, usePolicySnapshot } from "../hooks/usePolicy";
-import { usePolicyStore } from "../stores/policyStore";
 import { stopRecording } from "../stores/meetingRecordingStore";
 import { requestSignIn } from "../utils/requestSignIn";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
@@ -164,22 +139,8 @@ import { enterpriseProviderName, getTranscriptionProvider } from "../models/Mode
 import { useManagedScopeResolution } from "../stores/enterpriseIdentityStore";
 import { supportsLiveTranscriptionPreview } from "../utils/transcriptionPreview";
 
-export type SettingsSectionType =
-  | "account"
-  | "plansBilling"
-  | "workspace"
-  | "general"
-  | "hotkeys"
-  | "speechToText"
-  | "llms"
-  | "privacyData"
-  | "system";
-
 interface SettingsPageProps {
-  activeSection?: SettingsSectionType;
-  onNavigateToSection?: (section: SettingsSectionType) => void;
-  /** When a legacy section ID was used (e.g. `meetings`), land on the matching sub-tab. */
-  initialSubTab?: string;
+  navigation: SettingsNavigationStore;
 }
 
 const UI_LANGUAGE_OPTIONS: import("./ui/LanguageSelector").LanguageOption[] = [
@@ -202,26 +163,6 @@ const RETENTION_SELECT_CLASS =
   "h-7 rounded border border-border/70 bg-surface-1/80 px-2.5 text-xs font-medium text-foreground shadow-sm hover:border-border-hover hover:bg-surface-2/70 focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-200";
 
 const noop = () => {};
-
-function SectionHeader({
-  title,
-  description,
-  note,
-}: {
-  title: string;
-  description?: string;
-  note?: string;
-}) {
-  return (
-    <div className="mb-3">
-      <h3 className="text-xs font-semibold text-foreground tracking-tight">{title}</h3>
-      {description && (
-        <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">{description}</p>
-      )}
-      {note && <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">{note}</p>}
-    </div>
-  );
-}
 
 interface GranolaImportPreview {
   total: number;
@@ -460,75 +401,72 @@ function GranolaImportSection({
   );
 }
 
-interface TranscriptionSectionProps {
-  isSignedIn: boolean;
-  cloudTranscriptionMode: string;
-  setCloudTranscriptionMode: (mode: string) => void;
-  useLocalWhisper: boolean;
-  setUseLocalWhisper: (value: boolean) => void;
-  updateTranscriptionSettings: (settings: { useLocalWhisper: boolean }) => void;
-  cloudTranscriptionProvider: string;
-  setCloudTranscriptionProvider: (provider: string) => void;
-  cloudTranscriptionModel: string;
-  setCloudTranscriptionModel: (model: string) => void;
-  localTranscriptionProvider: string;
-  setLocalTranscriptionProvider: (provider: LocalTranscriptionProvider) => void;
-  whisperModel: string;
-  setWhisperModel: (model: string) => void;
-  parakeetModel: string;
-  setParakeetModel: (model: string) => void;
-  cohereModel: string;
-  setCohereModel: (model: string) => void;
-  cloudTranscriptionBaseUrl?: string;
-  setCloudTranscriptionBaseUrl: (url: string) => void;
-  transcriptionMode: InferenceMode;
-  setTranscriptionMode: (mode: InferenceMode) => void;
-  remoteTranscriptionUrl: string;
-  setRemoteTranscriptionUrl: (url: string) => void;
-  remoteTranscriptionModel: string;
-  setRemoteTranscriptionModel: (model: string) => void;
-  showTranscriptionPreview: boolean;
-  setShowTranscriptionPreview: (value: boolean) => void;
-  toast: (opts: {
-    title: string;
-    description: string;
-    variant?: "default" | "destructive" | "success";
-    duration?: number;
-  }) => void;
-}
-
 function TranscriptionSection({
   isSignedIn,
-  cloudTranscriptionMode,
-  setCloudTranscriptionMode,
-  useLocalWhisper,
-  setUseLocalWhisper,
-  updateTranscriptionSettings,
-  cloudTranscriptionProvider,
-  setCloudTranscriptionProvider,
-  cloudTranscriptionModel,
-  setCloudTranscriptionModel,
-  localTranscriptionProvider,
-  setLocalTranscriptionProvider,
-  whisperModel,
-  setWhisperModel,
-  parakeetModel,
-  setParakeetModel,
-  cohereModel,
-  setCohereModel,
-  cloudTranscriptionBaseUrl,
-  setCloudTranscriptionBaseUrl,
-  transcriptionMode,
-  setTranscriptionMode,
-  remoteTranscriptionUrl,
-  setRemoteTranscriptionUrl,
-  remoteTranscriptionModel,
-  setRemoteTranscriptionModel,
-  showTranscriptionPreview,
-  setShowTranscriptionPreview,
-  toast,
-}: TranscriptionSectionProps) {
+  navigation,
+}: {
+  isSignedIn: boolean;
+  navigation: SettingsNavigationStore;
+}) {
   const { t } = useTranslation();
+  const { toast } = useToast();
+  const {
+    setCloudTranscriptionMode,
+    useLocalWhisper,
+    setUseLocalWhisper,
+    updateTranscriptionSettings,
+    cloudTranscriptionProvider,
+    setCloudTranscriptionProvider,
+    cloudTranscriptionModel,
+    setCloudTranscriptionModel,
+    localTranscriptionProvider,
+    setLocalTranscriptionProvider,
+    whisperModel,
+    setWhisperModel,
+    parakeetModel,
+    setParakeetModel,
+    cohereModel,
+    setCohereModel,
+    cloudTranscriptionBaseUrl,
+    setCloudTranscriptionBaseUrl,
+    transcriptionMode,
+    setTranscriptionMode,
+    remoteTranscriptionUrl,
+    setRemoteTranscriptionUrl,
+    remoteTranscriptionModel,
+    setRemoteTranscriptionModel,
+    showTranscriptionPreview,
+    setShowTranscriptionPreview,
+  } = useSettingsStore(
+    useShallow((s) => ({
+      setCloudTranscriptionMode: s.setCloudTranscriptionMode,
+      useLocalWhisper: s.useLocalWhisper,
+      setUseLocalWhisper: s.setUseLocalWhisper,
+      updateTranscriptionSettings: s.updateTranscriptionSettings,
+      cloudTranscriptionProvider: s.cloudTranscriptionProvider,
+      setCloudTranscriptionProvider: s.setCloudTranscriptionProvider,
+      cloudTranscriptionModel: s.cloudTranscriptionModel,
+      setCloudTranscriptionModel: s.setCloudTranscriptionModel,
+      localTranscriptionProvider: s.localTranscriptionProvider,
+      setLocalTranscriptionProvider: s.setLocalTranscriptionProvider,
+      whisperModel: s.whisperModel,
+      setWhisperModel: s.setWhisperModel,
+      parakeetModel: s.parakeetModel,
+      setParakeetModel: s.setParakeetModel,
+      cohereModel: s.cohereModel,
+      setCohereModel: s.setCohereModel,
+      cloudTranscriptionBaseUrl: s.cloudTranscriptionBaseUrl,
+      setCloudTranscriptionBaseUrl: s.setCloudTranscriptionBaseUrl,
+      transcriptionMode: s.transcriptionMode,
+      setTranscriptionMode: s.setTranscriptionMode,
+      remoteTranscriptionUrl: s.remoteTranscriptionUrl,
+      setRemoteTranscriptionUrl: s.setRemoteTranscriptionUrl,
+      remoteTranscriptionModel: s.remoteTranscriptionModel,
+      setRemoteTranscriptionModel: s.setRemoteTranscriptionModel,
+      showTranscriptionPreview: s.showTranscriptionPreview,
+      setShowTranscriptionPreview: s.setShowTranscriptionPreview,
+    }))
+  );
   const policySnapshot = usePolicySnapshot();
   const enterpriseTranscriptionSetupMode = useSettingsStore(
     (s) => s.enterpriseTranscriptionSetupMode
@@ -647,7 +585,11 @@ function TranscriptionSection({
           label={t("settingsPage.transcription.transcriptionPreview")}
           description={t("settingsPage.transcription.transcriptionPreviewDescription")}
         >
-          <Toggle checked={showTranscriptionPreview} onChange={setShowTranscriptionPreview} />
+          <Toggle
+            ariaLabel={t("settingsPage.transcription.transcriptionPreview")}
+            checked={showTranscriptionPreview}
+            onChange={setShowTranscriptionPreview}
+          />
         </SettingsRow>
       </SettingsPanelRow>
     </SettingsPanel>
@@ -655,6 +597,7 @@ function TranscriptionSection({
 
   const renderTranscriptionPicker = (mode?: "cloud" | "local") => (
     <TranscriptionModelPicker
+      settingsNavigation={navigation}
       selectedCloudProvider={cloudTranscriptionProvider}
       onCloudProviderSelect={setCloudTranscriptionProvider}
       selectedCloudModel={cloudTranscriptionModel}
@@ -798,137 +741,22 @@ function TranscriptionSection({
   );
 }
 
-interface AiModelsSectionProps {
-  useCleanupModel: boolean;
-  setUseCleanupModel: (value: boolean) => void;
-  toast: (opts: {
-    title: string;
-    description: string;
-    variant?: "default" | "destructive" | "success";
-    duration?: number;
-  }) => void;
-}
-
-const CLEANUP_MODE_TOAST_KEY: Record<InferenceMode, string> = {
-  openwhispr: "switchedCloud",
-  providers: "switchedProviders",
-  local: "switchedLocal",
-  "self-hosted": "switchedSelfHosted",
-  enterprise: "switchedEnterprise",
-};
-
-function NoteFormattingSettings() {
-  const { t } = useTranslation();
-  const autoGenerateNoteTitle = useSettingsStore((s) => s.autoGenerateNoteTitle);
-  const setAutoGenerateNoteTitle = useSettingsStore((s) => s.setAutoGenerateNoteTitle);
-
+// Only validated auth comes from SettingsPage; settings/policy/locale updates
+// belong to the retained children. Avoid mounting a second auth sync owner.
+const DictationPanel = React.memo(function DictationPanel({
+  isSignedIn,
+  navigation,
+}: {
+  isSignedIn: boolean;
+  navigation: SettingsNavigationStore;
+}) {
   return (
-    <div className="space-y-4">
-      <SettingsPanel>
-        <SettingsPanelRow>
-          <SettingsRow
-            label={t("settingsPage.noteFormatting.autoGenerateTitle")}
-            description={t("settingsPage.noteFormatting.autoGenerateTitleDescription")}
-          >
-            <Toggle checked={autoGenerateNoteTitle} onChange={setAutoGenerateNoteTitle} />
-          </SettingsRow>
-        </SettingsPanelRow>
-      </SettingsPanel>
-      <InferenceConfigEditor scope="noteFormatting" />
+    <div className="space-y-6">
+      <TranscriptionSection isSignedIn={isSignedIn} navigation={navigation} />
+      <WhisperVadSettings context="dictation" />
     </div>
   );
-}
-
-function AiModelsSection({ useCleanupModel, setUseCleanupModel, toast }: AiModelsSectionProps) {
-  const { t } = useTranslation();
-
-  const handleCleanupModeChange = (mode: InferenceMode) => {
-    const toastKey = CLEANUP_MODE_TOAST_KEY[mode];
-    toast({
-      title: t(`settingsPage.aiModels.toasts.${toastKey}.title`),
-      description: t(`settingsPage.aiModels.toasts.${toastKey}.description`),
-      variant: "success",
-      duration: 3000,
-    });
-  };
-
-  return (
-    <div className="space-y-4">
-      <SettingsPanel>
-        <SettingsPanelRow>
-          <SettingsRow
-            label={t("settingsPage.aiModels.enableTextCleanup")}
-            description={t("settingsPage.aiModels.enableTextCleanupDescription")}
-          >
-            <Toggle checked={useCleanupModel} onChange={setUseCleanupModel} />
-          </SettingsRow>
-        </SettingsPanelRow>
-      </SettingsPanel>
-
-      {useCleanupModel && (
-        <>
-          <InferenceConfigEditor scope="dictationCleanup" onModeChange={handleCleanupModeChange} />
-          <GpuDeviceSelector purpose="intelligence" />
-        </>
-      )}
-    </div>
-  );
-}
-
-type SpeechTab = "dictation" | "noteRecording" | "upload";
-type LlmTab =
-  | "dictationCleanup"
-  | "dictationAgent"
-  | "dictationTranslation"
-  | "noteFormatting"
-  | "chatIntelligence";
-
-const SPEECH_TABS: SpeechTab[] = ["dictation", "noteRecording", "upload"];
-const LLM_TABS: LlmTab[] = [
-  "dictationCleanup",
-  "dictationAgent",
-  "dictationTranslation",
-  "noteFormatting",
-  "chatIntelligence",
-];
-const AGENT_LLM_TABS = new Set<LlmTab>(["dictationAgent", "chatIntelligence"]);
-
-function useSubTab<T extends string>(storageKey: string, options: readonly T[], initial?: T) {
-  const [tab, setTab] = useLocalStorage<T>(storageKey, initial ?? options[0]);
-  useEffect(() => {
-    if (initial && initial !== tab) setTab(initial);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initial]);
-  const safeTab = options.includes(tab) ? tab : options[0];
-  return [safeTab, setTab] as const;
-}
-
-function VADLabelWithInfo({ label, description }: { label: string; description: string }) {
-  return (
-    <div className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground">
-      <span>{label}</span>
-      <Popover>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            className="inline-flex items-center justify-center rounded-sm text-muted-foreground hover:text-foreground transition-colors"
-            aria-label={label}
-          >
-            <Info className="h-3.5 w-3.5" />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent side="top" align="start" className="max-w-sm p-3">
-          <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
-        </PopoverContent>
-      </Popover>
-    </div>
-  );
-}
-
-function TabPanel({ active, children }: { active: boolean; children: React.ReactNode }) {
-  return <div className={active ? undefined : "hidden"}>{children}</div>;
-}
-
+});
 // "Gabriel Stein" → "GS"; single names fall back to their first letter.
 function nameInitials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -967,183 +795,26 @@ export function AccountAvatar({ image, name }: { image?: string | null; name: st
   );
 }
 
-function SpeechToTextTabs({
-  initialTab,
-  renderDictation,
-  renderNoteRecording,
-  renderUpload,
-}: {
-  initialTab?: SpeechTab;
-  renderDictation: () => React.ReactNode;
-  renderNoteRecording: () => React.ReactNode;
-  renderUpload: () => React.ReactNode;
-}) {
-  const { t } = useTranslation();
-  const [tab, setTab] = useSubTab<SpeechTab>("settings.speechToTextTab", SPEECH_TABS, initialTab);
-
-  const subTabs = [
-    { id: "dictation", name: t("settingsPage.speechToText.tabs.dictation") },
-    { id: "noteRecording", name: t("settingsPage.speechToText.tabs.noteRecording") },
-    { id: "upload", name: t("settingsPage.speechToText.tabs.upload") },
-  ];
-
-  return (
-    <div className="space-y-4">
-      <SectionHeader
-        title={t("settingsPage.speechToText.title")}
-        description={t("settingsPage.speechToText.description")}
-      />
-      <ProviderTabs
-        providers={subTabs}
-        selectedId={tab}
-        onSelect={(id) => setTab(id as SpeechTab)}
-        renderIcon={(id) =>
-          id === "dictation" ? (
-            <Mic className="w-3.5 h-3.5" />
-          ) : id === "upload" ? (
-            <Upload className="w-3.5 h-3.5" />
-          ) : (
-            <FileAudio className="w-3.5 h-3.5" />
-          )
-        }
-      />
-      <TabPanel active={tab === "dictation"}>{renderDictation()}</TabPanel>
-      <TabPanel active={tab === "noteRecording"}>{renderNoteRecording()}</TabPanel>
-      <TabPanel active={tab === "upload"}>{renderUpload()}</TabPanel>
-    </div>
+export default function SettingsPage({ navigation }: SettingsPageProps) {
+  const activeSection = useStore(navigation, (state) => state.section ?? "general");
+  // Stable children still isolate hidden panels from unrelated page renders.
+  const speechPanels = useMemo(
+    () => ({
+      noteRecording: (
+        <div className="space-y-6">
+          <MeetingTranscriptionPanel navigation={navigation} />
+          <WhisperVadSettings context="meeting" />
+        </div>
+      ),
+      upload: (
+        <div className="space-y-6">
+          <UploadTranscriptionPanel navigation={navigation} />
+        </div>
+      ),
+    }),
+    [navigation]
   );
-}
-
-function LlmsTabs({
-  initialTab,
-  renderDictationCleanup,
-  renderDictationAgent,
-  renderDictationTranslation,
-  renderNoteFormatting,
-  renderChatIntelligence,
-}: {
-  initialTab?: LlmTab;
-  renderDictationCleanup: () => React.ReactNode;
-  renderDictationAgent: () => React.ReactNode;
-  renderDictationTranslation: () => React.ReactNode;
-  renderNoteFormatting: () => React.ReactNode;
-  renderChatIntelligence: () => React.ReactNode;
-}) {
-  const { t } = useTranslation();
-  const agentAllowed = usePolicyStore(isAgentAllowed);
-  const visibleTabIds = agentAllowed
-    ? LLM_TABS
-    : LLM_TABS.filter((tabId) => !AGENT_LLM_TABS.has(tabId));
-  const [tab, setTab] = useSubTab<LlmTab>("settings.llmsTab", visibleTabIds, initialTab);
-
-  const subTabs = [
-    { id: "dictationCleanup", name: t("settingsPage.llms.tabs.dictationCleanup") },
-    { id: "dictationAgent", name: t("settingsPage.llms.tabs.dictationAgent") },
-    { id: "dictationTranslation", name: t("settingsPage.llms.tabs.dictationTranslation") },
-    { id: "noteFormatting", name: t("settingsPage.llms.tabs.noteFormatting") },
-    { id: "chatIntelligence", name: t("settingsPage.llms.tabs.chatIntelligence") },
-  ].filter((item) => visibleTabIds.includes(item.id as LlmTab));
-
-  return (
-    <div className="space-y-4">
-      <SectionHeader
-        title={t("settingsPage.llms.title")}
-        description={t("settingsPage.llms.description")}
-      />
-      <ProviderTabs
-        providers={subTabs}
-        selectedId={tab}
-        onSelect={(id) => setTab(id as LlmTab)}
-        renderIcon={(id) => {
-          if (id === "dictationCleanup") return <Wand2 className="w-3.5 h-3.5" />;
-          if (id === "dictationAgent") return <Sparkles className="w-3.5 h-3.5" />;
-          if (id === "dictationTranslation") return <Languages className="w-3.5 h-3.5" />;
-          if (id === "noteFormatting") return <BookOpen className="w-3.5 h-3.5" />;
-          return <MessageSquare className="w-3.5 h-3.5" />;
-        }}
-      />
-      <TabPanel active={tab === "dictationCleanup"}>{renderDictationCleanup()}</TabPanel>
-      {agentAllowed && (
-        <TabPanel active={tab === "dictationAgent"}>{renderDictationAgent()}</TabPanel>
-      )}
-      <TabPanel active={tab === "dictationTranslation"}>{renderDictationTranslation()}</TabPanel>
-      <TabPanel active={tab === "noteFormatting"}>{renderNoteFormatting()}</TabPanel>
-      {agentAllowed && (
-        <TabPanel active={tab === "chatIntelligence"}>{renderChatIntelligence()}</TabPanel>
-      )}
-    </div>
-  );
-}
-
-function GpuDeviceSelector({ purpose }: { purpose: "transcription" | "intelligence" }) {
-  const { t } = useTranslation();
-  const [gpus, setGpus] = useState<GpuDevice[]>([]);
-  const [selectedUuid, setSelectedUuid] = useState("");
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    Promise.all([
-      window.electronAPI?.listGpus?.() ?? Promise.resolve([]),
-      window.electronAPI?.getGpuDeviceIndex?.(purpose) ?? Promise.resolve(""),
-    ])
-      .then(([gpuList, savedUuid]) => {
-        setGpus(gpuList);
-        setSelectedUuid(savedUuid || gpuList[0]?.uuid || "");
-        setLoaded(true);
-      })
-      .catch(() => setLoaded(true));
-  }, [purpose]);
-
-  if (!loaded || gpus.length < 2) return null;
-
-  return (
-    <div className="border-t border-border/70 pt-4 mt-4">
-      <SectionHeader
-        title={t(`settingsPage.${purpose}.gpuDevice.title`)}
-        description={t(`settingsPage.${purpose}.gpuDevice.description`)}
-      />
-      <SettingsPanel>
-        <SettingsPanelRow>
-          <div className="relative w-full">
-            <select
-              value={selectedUuid}
-              onChange={async (e) => {
-                const uuid = e.target.value;
-                setSelectedUuid(uuid);
-                await window.electronAPI?.setGpuDeviceIndex?.(purpose, uuid);
-              }}
-              className="w-full appearance-none rounded-md border border-border bg-background px-3 pe-10 py-2 text-sm"
-            >
-              {gpus.map((gpu) => (
-                <option key={gpu.uuid} value={gpu.uuid}>
-                  GPU {gpu.index}: {gpu.name} ({Math.round(gpu.vramMb / 1024)}GB)
-                </option>
-              ))}
-            </select>
-            <svg
-              className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="m6 9 6 6 6-6" />
-            </svg>
-          </div>
-        </SettingsPanelRow>
-      </SettingsPanel>
-    </div>
-  );
-}
-
-export default function SettingsPage({
-  activeSection = "general",
-  onNavigateToSection,
-  initialSubTab,
-}: SettingsPageProps) {
+  const settingsId = useId();
   const { isCompact } = useSettingsLayout();
   const {
     confirmDialog,
@@ -1154,22 +825,11 @@ export default function SettingsPage({
     hideAlertDialog,
   } = useDialogs();
 
+  const { autoLearnCorrections, setAutoLearnCorrections } = useAutoLearnCorrections();
   const {
-    useLocalWhisper,
-    whisperModel,
-    localTranscriptionProvider,
-    parakeetModel,
-    cohereModel,
     uiLanguage,
     preferredLanguage,
     chineseScriptPreference,
-    cloudTranscriptionProvider,
-    cloudTranscriptionModel,
-    cloudTranscriptionBaseUrl,
-    useCleanupModel,
-    dictationKey,
-    activationMode,
-    setActivationMode,
     microphoneSelectionMode,
     selectedMicDeviceId,
     selectedMicDeviceLabel,
@@ -1177,47 +837,18 @@ export default function SettingsPage({
     setMicrophoneSelectionMode,
     setSelectedMicDevice,
     setMicWarmHoldSeconds,
-    setUseLocalWhisper,
     setUiLanguage,
-    setWhisperModel,
-    setLocalTranscriptionProvider,
-    setParakeetModel,
-    setCohereModel,
-    setCloudTranscriptionProvider,
-    setCloudTranscriptionModel,
-    setCloudTranscriptionBaseUrl,
-    setUseCleanupModel,
-    setDictationKey,
-    meetingKey,
-    setMeetingKey,
-    meetingHotkeyLayoutMode,
-    setMeetingHotkeyLayoutMode,
-    autoLearnCorrections,
-    setAutoLearnCorrections,
     updateTranscriptionSettings,
-    updateCleanupSettings,
-    cloudTranscriptionMode,
-    setCloudTranscriptionMode,
-    transcriptionMode,
-    setTranscriptionMode,
-    remoteTranscriptionUrl,
-    setRemoteTranscriptionUrl,
-    remoteTranscriptionModel,
-    setRemoteTranscriptionModel,
     notificationsEnabled,
     setNotificationsEnabled,
     notifyMeetingDetection,
     setNotifyMeetingDetection,
     notifyCalendarReminders,
     setNotifyCalendarReminders,
-    autoUpdatesEnabled,
-    setAutoUpdatesEnabled,
     audioCuesEnabled,
     setAudioCuesEnabled,
     pauseMediaOnDictation,
     setPauseMediaOnDictation,
-    showTranscriptionPreview,
-    setShowTranscriptionPreview,
     autoPasteEnabled,
     setAutoPasteEnabled,
     keepTranscriptionInClipboard,
@@ -1241,39 +872,68 @@ export default function SettingsPage({
     setDataRetentionEnabled,
     saveDiscardedTranscriptions,
     setSaveDiscardedTranscriptions,
-    customDictionary,
     noteFilesEnabled,
     setNoteFilesEnabled,
     noteFilesPath,
     setNoteFilesPath,
-    dictationSileroEnabled,
-    setDictationSileroEnabled,
-    noteRecordingSileroEnabled,
-    setNoteRecordingSileroEnabled,
-    meetingSileroEnabled,
-    setMeetingSileroEnabled,
-    whisperVadThreshold,
-    setWhisperVadThreshold,
-    whisperVadMinSpeechDurationMs,
-    setWhisperVadMinSpeechDurationMs,
-    whisperVadMinSilenceDurationMs,
-    setWhisperVadMinSilenceDurationMs,
-    whisperVadMaxSpeechDurationS,
-    setWhisperVadMaxSpeechDurationS,
-    whisperVadSpeechPadMs,
-    setWhisperVadSpeechPadMs,
-    whisperVadSamplesOverlap,
-    setWhisperVadSamplesOverlap,
-  } = useSettings();
+  } = useSettingsStore(
+    useShallow((settings) => ({
+      uiLanguage: settings.uiLanguage,
+      preferredLanguage: settings.preferredLanguage,
+      chineseScriptPreference: settings.chineseScriptPreference,
+      microphoneSelectionMode: settings.microphoneSelectionMode,
+      selectedMicDeviceId: settings.selectedMicDeviceId,
+      selectedMicDeviceLabel: settings.selectedMicDeviceLabel,
+      micWarmHoldSeconds: settings.micWarmHoldSeconds,
+      setMicrophoneSelectionMode: settings.setMicrophoneSelectionMode,
+      setSelectedMicDevice: settings.setSelectedMicDevice,
+      setMicWarmHoldSeconds: settings.setMicWarmHoldSeconds,
+      setUiLanguage: settings.setUiLanguage,
+      updateTranscriptionSettings: settings.updateTranscriptionSettings,
+      notificationsEnabled: settings.notificationsEnabled,
+      setNotificationsEnabled: settings.setNotificationsEnabled,
+      notifyMeetingDetection: settings.notifyMeetingDetection,
+      setNotifyMeetingDetection: settings.setNotifyMeetingDetection,
+      notifyCalendarReminders: settings.notifyCalendarReminders,
+      setNotifyCalendarReminders: settings.setNotifyCalendarReminders,
+      audioCuesEnabled: settings.audioCuesEnabled,
+      setAudioCuesEnabled: settings.setAudioCuesEnabled,
+      pauseMediaOnDictation: settings.pauseMediaOnDictation,
+      setPauseMediaOnDictation: settings.setPauseMediaOnDictation,
+      autoPasteEnabled: settings.autoPasteEnabled,
+      setAutoPasteEnabled: settings.setAutoPasteEnabled,
+      keepTranscriptionInClipboard: settings.keepTranscriptionInClipboard,
+      setKeepTranscriptionInClipboard: settings.setKeepTranscriptionInClipboard,
+      floatingIconAutoHide: settings.floatingIconAutoHide,
+      setFloatingIconAutoHide: settings.setFloatingIconAutoHide,
+      startMinimized: settings.startMinimized,
+      setStartMinimized: settings.setStartMinimized,
+      panelStartPosition: settings.panelStartPosition,
+      setPanelStartPosition: settings.setPanelStartPosition,
+      cloudBackupEnabled: settings.cloudBackupEnabled,
+      setCloudBackupEnabled: settings.setCloudBackupEnabled,
+      insightsSyncEnabled: settings.insightsSyncEnabled,
+      telemetryEnabled: settings.telemetryEnabled,
+      setTelemetryEnabled: settings.setTelemetryEnabled,
+      audioRetentionDays: settings.audioRetentionDays,
+      setAudioRetentionDays: settings.setAudioRetentionDays,
+      transcriptRetentionDays: settings.transcriptRetentionDays,
+      setTranscriptRetentionDays: settings.setTranscriptRetentionDays,
+      dataRetentionEnabled: settings.dataRetentionEnabled,
+      setDataRetentionEnabled: settings.setDataRetentionEnabled,
+      saveDiscardedTranscriptions: settings.saveDiscardedTranscriptions,
+      setSaveDiscardedTranscriptions: settings.setSaveDiscardedTranscriptions,
+      noteFilesEnabled: settings.noteFilesEnabled,
+      setNoteFilesEnabled: settings.setNoteFilesEnabled,
+      noteFilesPath: settings.noteFilesPath,
+      setNoteFilesPath: settings.setNoteFilesPath,
+    }))
+  );
 
-  const meetingProcessDetection = useSettingsStore((state) => state.meetingProcessDetection);
-  const voiceAgentKey = useSettingsStore((s) => s.voiceAgentKey);
-  const setVoiceAgentKey = useSettingsStore((s) => s.setVoiceAgentKey);
-  const translationKey = useSettingsStore((s) => s.translationKey);
-  const setTranslationKey = useSettingsStore((s) => s.setTranslationKey);
+  // The Settings-wide Linux denial listener must work before Hotkeys is visited.
+  const setActivationMode = useSettingsStore((s) => s.setActivationMode);
 
   const settingsPolicyState = usePolicySnapshot();
-  const agentAllowedByPolicy = isAgentAllowed(settingsPolicyState);
   const historyLockedByPolicy = lockedLocalHistoryValue(settingsPolicyState) !== null;
   const effectiveDataRetentionEnabled = effectiveLocalHistoryEnabled(
     settingsPolicyState,
@@ -1289,7 +949,6 @@ export default function SettingsPage({
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
 
-  const [currentVersion, setCurrentVersion] = useState<string>("");
   const [isRemovingModels, setIsRemovingModels] = useState(false);
   const [cachePathHint, setCachePathHint] = useState(
     typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent)
@@ -1297,74 +956,57 @@ export default function SettingsPage({
       : "~/.cache/openwhispr"
   );
   useEffect(() => {
+    if (activeSection !== "system") return;
+    let active = true;
     window.electronAPI
       ?.getModelCacheRoot?.()
       .then((root) => {
-        if (root) setCachePathHint(root);
+        if (active && root) setCachePathHint(root);
       })
       .catch(() => {});
-  }, []);
-
-  const {
-    status: updateStatus,
-    info: updateInfo,
-    downloadProgress: updateDownloadProgress,
-    isChecking: checkingForUpdates,
-    isDownloading: downloadingUpdate,
-    isInstalling: installInitiated,
-    checkForUpdates,
-    downloadUpdate,
-    installUpdate: installUpdateAction,
-    getAppVersion,
-  } = useUpdater();
-
-  const isUpdateAvailable =
-    !updateStatus.isDevelopment && (updateStatus.updateAvailable || updateStatus.updateDownloaded);
+    return () => {
+      active = false;
+    };
+  }, [activeSection]);
 
   const migration = useMigration();
 
-  const { checkWhisperInstallation } = useWhisper();
   const permissionsHook = usePermissions(showAlertDialog);
   const systemAudio = useSystemAudioPermission();
-  useClipboard(showAlertDialog);
   const [audioStorageUsage, setAudioStorageUsage] = useState<{
     fileCount: number;
     totalBytes: number;
   }>({ fileCount: 0, totalBytes: 0 });
+  const audioUsageRequest = useRef(0);
 
   useEffect(() => {
     if (activeSection !== "privacyData") return;
+    const request = ++audioUsageRequest.current;
+    let active = true;
     window.electronAPI
       ?.getAudioStorageUsage?.()
       .then((usage: { fileCount: number; totalBytes: number }) => {
-        if (usage) setAudioStorageUsage(usage);
+        if (active && usage && request === audioUsageRequest.current) setAudioStorageUsage(usage);
       })
       .catch(() => {});
+    return () => {
+      active = false;
+    };
   }, [activeSection]);
-
-  // Lazy keep-alive: mount AI sections only after the user has visited them once,
-  // then keep them mounted so model-download progress and IPC listeners survive
-  // section switches. The setState-during-render pattern flips the flag in the
-  // same commit as the section change, so there's no blank frame on first visit.
-  const [hasMountedSpeechToText, setHasMountedSpeechToText] = useState(
-    activeSection === "speechToText"
-  );
-  const [hasMountedLlms, setHasMountedLlms] = useState(activeSection === "llms");
-  if (activeSection === "speechToText" && !hasMountedSpeechToText) {
-    setHasMountedSpeechToText(true);
-  }
-  if (activeSection === "llms" && !hasMountedLlms) {
-    setHasMountedLlms(true);
-  }
 
   const handleClearAllAudio = async () => {
     if (!window.electronAPI?.deleteAllAudio) return;
     try {
-      await window.electronAPI.deleteAllAudio();
-      setAudioStorageUsage({ fileCount: 0, totalBytes: 0 });
-      toast({ title: t("settingsPage.privacy.clearAllAudio"), variant: "default" });
+      ++audioUsageRequest.current;
+      const result = await window.electronAPI.deleteAllAudio();
+      const usage = await window.electronAPI.getAudioStorageUsage();
+      setAudioStorageUsage(usage);
+      toast({
+        title: t(result.failed ? "common.error" : "settingsPage.privacy.clearAllAudio"),
+        variant: result.failed ? "destructive" : "default",
+      });
     } catch {
-      // silent fail
+      toast({ title: t("common.error"), variant: "destructive" });
     }
   };
 
@@ -1389,16 +1031,24 @@ export default function SettingsPage({
   } | null>(null);
   const [ydotoolGuideKey, setYdotoolGuideKey] = useState<string | null>(null);
 
+  const ydotoolRequest = useRef(0);
   const refreshYdotoolStatus = useCallback(async () => {
+    const request = ++ydotoolRequest.current;
     try {
       const status = await window.electronAPI?.getYdotoolStatus?.();
-      if (status) setYdotoolStatus(status);
+      if (status && request === ydotoolRequest.current) setYdotoolStatus(status);
     } catch {}
   }, []);
 
   useEffect(() => {
-    refreshYdotoolStatus();
-  }, [refreshYdotoolStatus]);
+    if (activeSection === "general" && getCachedPlatform() === "linux") {
+      void refreshYdotoolStatus();
+    }
+    const requests = ydotoolRequest;
+    return () => {
+      ++requests.current;
+    };
+  }, [activeSection, refreshYdotoolStatus]);
 
   const { theme, setTheme } = useTheme();
   const usage = useUsage();
@@ -1445,122 +1095,6 @@ export default function SettingsPage({
     }
   }, [usage?.isApproachingLimit, usage?.wordsUsed, usage?.limit, toast, t, i18n.language]);
 
-  const installTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const { registerHotkey, isRegistering: isHotkeyRegistering } = useHotkeyRegistration({
-    onSuccess: (registeredHotkey) => {
-      setDictationKey(registeredHotkey);
-    },
-    showSuccessToast: false,
-    showErrorToast: true,
-    showAlert: showAlertDialog,
-  });
-
-  const meetingRegisterFn = useCallback(async (hotkey: string) => {
-    const result = await window.electronAPI?.registerMeetingHotkey?.(hotkey);
-    // No `message`: useHotkeyRegistration falls back to the translated
-    // hooks.hotkeyRegistration.errors.couldNotRegister, and that string is what
-    // gets shown in a toast. An English literal here would surface untranslated.
-    return result ?? { success: false };
-  }, []);
-
-  const { registerHotkey: registerMeetingHotkey, isRegistering: isMeetingHotkeyRegistering } =
-    useHotkeyRegistration({
-      onSuccess: (registeredHotkey) => {
-        setMeetingKey(registeredHotkey);
-      },
-      showSuccessToast: false,
-      showErrorToast: true,
-      showAlert: showAlertDialog,
-      registerFn: meetingRegisterFn,
-    });
-
-  // Agent hotkey setters resolve to false when main-process registration fails;
-  // surface it and return the result so HotkeyListInput rolls the row back.
-  const [isAgentHotkeyCommitting, setIsAgentHotkeyCommitting] = useState(false);
-  const commitAgentHotkey = useCallback(
-    async (setter: (key: string) => Promise<HotkeyRegistrationResult>, key: string) => {
-      setIsAgentHotkeyCommitting(true);
-      try {
-        const result = await setter(key);
-        if (!result.success) {
-          showAlertDialog({
-            title: t("hooks.hotkeyRegistration.titles.notRegistered"),
-            description: result.message || t("hooks.hotkeyRegistration.errors.failedToRegister"),
-          });
-        }
-        return result.success;
-      } finally {
-        setIsAgentHotkeyCommitting(false);
-      }
-    },
-    [showAlertDialog, t]
-  );
-
-  const validateDictationHotkey = useCallback(
-    (hotkey: string) =>
-      validateHotkeyForSlot(
-        hotkey,
-        {
-          "settingsPage.general.meetingHotkey.title": meetingKey,
-          "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
-          "settingsPage.general.translationHotkey.title": translationKey,
-        },
-        t
-      ),
-    [meetingKey, voiceAgentKey, translationKey, t]
-  );
-
-  const validateMeetingHotkey = useCallback(
-    (hotkey: string) =>
-      validateHotkeyForSlot(
-        hotkey,
-        {
-          "settingsPage.general.hotkey.title": dictationKey,
-          "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
-          "settingsPage.general.translationHotkey.title": translationKey,
-        },
-        t
-      ),
-    [dictationKey, voiceAgentKey, translationKey, t]
-  );
-
-  const validateVoiceAgentHotkey = useCallback(
-    (hotkey: string) =>
-      validateHotkeyForSlot(
-        hotkey,
-        {
-          "settingsPage.general.hotkey.title": dictationKey,
-          "settingsPage.general.meetingHotkey.title": meetingKey,
-          "settingsPage.general.translationHotkey.title": translationKey,
-        },
-        t
-      ),
-    [dictationKey, meetingKey, translationKey, t]
-  );
-
-  const validateTranslationHotkey = useCallback(
-    (hotkey: string) =>
-      validateHotkeyForSlot(
-        hotkey,
-        {
-          "settingsPage.general.hotkey.title": dictationKey,
-          "settingsPage.general.meetingHotkey.title": meetingKey,
-          "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
-        },
-        t
-      ),
-    [dictationKey, meetingKey, voiceAgentKey, t]
-  );
-
-  const {
-    isUsingNativeShortcut,
-    isUsingHyprland,
-    hyprlandConfigStatus,
-    pushToTalkUnavailableReason,
-    linuxInputAccessDenied,
-  } = useHotkeyModeInfo("settings", dictationKey);
-  const [effectiveDefaultHotkey, setEffectiveDefaultHotkey] = useState<string | null>(null);
   const [linuxPttAvailable, setLinuxPttAvailable] = useState(true);
 
   const platform = getCachedPlatform();
@@ -1569,47 +1103,61 @@ export default function SettingsPage({
   const [autoStartNeedsApproval, setAutoStartNeedsApproval] = useState(false);
   const [autoStartLoading, setAutoStartLoading] = useState(true);
 
+  const autoStartRequest = useRef(0);
+  const autoStartAction = useRef(0);
   const readAutoStartState = useCallback(async () => {
-    if (!window.electronAPI?.getAutoStartEnabled) return;
+    const request = ++autoStartRequest.current;
+    if (!window.electronAPI?.getAutoStartEnabled) {
+      setAutoStartLoading(false);
+      return;
+    }
+    setAutoStartLoading(true);
     try {
       const state = await window.electronAPI.getAutoStartEnabled();
+      if (request !== autoStartRequest.current) return;
       setAutoStartEnabled(state.enabled);
       setAutoStartNeedsApproval(state.requiresApproval);
     } catch (error) {
-      logger.error("Failed to get auto-start status", error, "settings");
+      if (request === autoStartRequest.current)
+        logger.error("Failed to get auto-start status", error, "settings");
+    } finally {
+      if (request === autoStartRequest.current) setAutoStartLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    readAutoStartState().finally(() => setAutoStartLoading(false));
-  }, [readAutoStartState]);
+    if (activeSection !== "general") return;
+    void readAutoStartState();
+    const requests = autoStartRequest;
+    return () => {
+      ++requests.current;
+    };
+  }, [activeSection, readAutoStartState]);
 
-  useEffect(() => {
-    window.electronAPI?.syncNotificationPreferences?.({
-      notificationsEnabled,
-      notifyMeetingDetection,
-      notifyCalendarReminders,
-      meetingProcessDetection,
-    });
-  }, [
-    notificationsEnabled,
-    notifyMeetingDetection,
-    notifyCalendarReminders,
-    meetingProcessDetection,
-  ]);
+  useEffect(
+    () => () => {
+      ++autoStartAction.current;
+      ++autoStartRequest.current;
+    },
+    []
+  );
 
   const handleAutoStartChange = async (enabled: boolean) => {
     if (!window.electronAPI?.setAutoStartEnabled) return;
+    const action = ++autoStartAction.current;
+    const request = ++autoStartRequest.current;
     try {
       setAutoStartLoading(true);
       const result = await window.electronAPI.setAutoStartEnabled(enabled);
-      // Read the state back rather than assuming: on Windows the OS can have the
-      // item disabled out from under us, and on macOS it can need approval first.
-      if (result.success) await readAutoStartState();
+      // A completed OS write still needs read-back while Settings is mounted,
+      // even if General was hidden meanwhile. Closing Settings ends this owner.
+      if (result.success && action === autoStartAction.current) await readAutoStartState();
     } catch (error) {
-      logger.error("Failed to set auto-start", error, "settings");
+      if (action === autoStartAction.current)
+        logger.error("Failed to set auto-start", error, "settings");
     } finally {
-      setAutoStartLoading(false);
+      if (action === autoStartAction.current && request === autoStartRequest.current)
+        setAutoStartLoading(false);
     }
   };
 
@@ -1617,28 +1165,32 @@ export default function SettingsPage({
   const [noteFilesRebuilding, setNoteFilesRebuilding] = useState(false);
 
   useEffect(() => {
-    if (!noteFilesEnabled) return;
-    window.electronAPI?.noteFilesGetDefaultPath?.().then((p) => {
-      if (p) setNoteFilesDefaultPath(p);
-    });
-  }, [noteFilesEnabled]);
+    if (activeSection !== "general" || !noteFilesEnabled) return;
+    let active = true;
+    window.electronAPI
+      ?.noteFilesGetDefaultPath?.()
+      .then((p) => {
+        if (active && p) setNoteFilesDefaultPath(p);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [activeSection, noteFilesEnabled]);
 
-  const handleNoteFilesToggle = useCallback(
-    async (enabled: boolean) => {
-      setNoteFilesEnabled(enabled);
-      await window.electronAPI?.noteFilesSetEnabled?.(enabled, noteFilesPath || undefined);
-    },
-    [setNoteFilesEnabled, noteFilesPath]
-  );
+  const handleNoteFilesToggle = async (enabled: boolean) => {
+    setNoteFilesEnabled(enabled);
+    await window.electronAPI?.noteFilesSetEnabled?.(enabled, noteFilesPath || undefined);
+  };
 
-  const handleNoteFilesChangePath = useCallback(async () => {
+  const handleNoteFilesChangePath = async () => {
     const result = await window.electronAPI?.noteFilesPickFolder?.();
     if (result?.canceled || !result?.path) return;
     setNoteFilesPath(result.path);
     await window.electronAPI?.noteFilesSetPath?.(result.path);
-  }, [setNoteFilesPath]);
+  };
 
-  const handleNoteFilesRebuild = useCallback(async () => {
+  const handleNoteFilesRebuild = async () => {
     setNoteFilesRebuilding(true);
     try {
       const result = await window.electronAPI?.noteFilesRebuild?.();
@@ -1652,39 +1204,7 @@ export default function SettingsPage({
     } finally {
       setNoteFilesRebuilding(false);
     }
-  }, [toast, t]);
-
-  useEffect(() => {
-    let mounted = true;
-
-    const timer = setTimeout(async () => {
-      if (!mounted) return;
-
-      const version = await getAppVersion();
-      if (version && mounted) setCurrentVersion(version);
-
-      if (mounted) {
-        checkWhisperInstallation();
-      }
-    }, 100);
-
-    return () => {
-      mounted = false;
-      clearTimeout(timer);
-    };
-  }, [checkWhisperInstallation, getAppVersion]);
-
-  useEffect(() => {
-    const loadEffectiveDefaultHotkey = async () => {
-      try {
-        const key = await window.electronAPI?.getEffectiveDefaultHotkey?.();
-        if (key) setEffectiveDefaultHotkey(key);
-      } catch (error) {
-        logger.error("Failed to get effective default hotkey", error, "settings");
-      }
-    };
-    loadEffectiveDefaultHotkey();
-  }, []);
+  };
 
   useEffect(() => {
     const cleanup = window.electronAPI?.onLinuxPttPermissionDenied?.(() => {
@@ -1700,30 +1220,6 @@ export default function SettingsPage({
     return () => cleanup?.();
   }, [toast, t, setActivationMode]);
 
-  useEffect(() => {
-    if (installInitiated) {
-      if (installTimeoutRef.current) {
-        clearTimeout(installTimeoutRef.current);
-      }
-      installTimeoutRef.current = setTimeout(() => {
-        showAlertDialog({
-          title: t("settingsPage.general.updates.dialogs.almostThere.title"),
-          description: t("settingsPage.general.updates.dialogs.almostThere.description"),
-        });
-      }, 10000);
-    } else if (installTimeoutRef.current) {
-      clearTimeout(installTimeoutRef.current);
-      installTimeoutRef.current = null;
-    }
-
-    return () => {
-      if (installTimeoutRef.current) {
-        clearTimeout(installTimeoutRef.current);
-        installTimeoutRef.current = null;
-      }
-    };
-  }, [installInitiated, showAlertDialog, t]);
-
   const resetAccessibilityPermissions = () => {
     const message = t("settingsPage.permissions.resetAccessibility.description");
 
@@ -1736,7 +1232,7 @@ export default function SettingsPage({
     });
   };
 
-  const handleRemoveModels = useCallback(() => {
+  const handleRemoveModels = () => {
     if (isRemovingModels) return;
 
     showConfirmDialog({
@@ -1754,11 +1250,13 @@ export default function SettingsPage({
           ]);
 
           const anyFailed = results.some(
-            (r) =>
-              r.status === "rejected" || (r.status === "fulfilled" && r.value && !r.value.success)
+            (r) => r.status === "rejected" || r.value?.success !== true
           );
 
           if (anyFailed) {
+            // A partial deletion must refresh inventory without declaring every model gone.
+            window.dispatchEvent(new Event("openwhispr-models-cleared"));
+            await reconcileLocalModelSelections();
             showAlertDialog({
               title: t("settingsPage.developer.removeModels.failedTitle"),
               description: t("settingsPage.developer.removeModels.failedDescription"),
@@ -1782,7 +1280,7 @@ export default function SettingsPage({
         }
       },
     });
-  }, [isRemovingModels, cachePathHint, showConfirmDialog, showAlertDialog, t]);
+  };
 
   const { isSignedIn, isLoaded, user, refetch } = useAuth();
   const {
@@ -1802,48 +1300,33 @@ export default function SettingsPage({
     updating: leaderboardParticipationUpdating,
   } = useLeaderboardParticipation();
   const [leaderboardPreferencePending, setLeaderboardPreferencePending] = useState(false);
-  const updateLeaderboardParticipation = useCallback(
-    async (enabled: boolean) => {
-      if (!isSignedIn || !leaderboardParticipationReady || leaderboardPreferencePending) return;
-      setLeaderboardPreferencePending(true);
-      try {
-        if (enabled) {
-          if (
-            !effectiveDataRetentionEnabled ||
-            !insightsSyncAllowedByPolicy ||
-            (!insightsSyncEnabled && !(await enableInsightsSync({ confirmWhenEmpty: true })))
-          )
-            return;
-          if (!(await joinLeaderboard())) {
-            toast({
-              title: t("insights.leaderboard.activationError"),
-              variant: "destructive",
-            });
-          }
+  const updateLeaderboardParticipation = async (enabled: boolean) => {
+    if (!isSignedIn || !leaderboardParticipationReady || leaderboardPreferencePending) return;
+    setLeaderboardPreferencePending(true);
+    try {
+      if (enabled) {
+        if (
+          !effectiveDataRetentionEnabled ||
+          !insightsSyncAllowedByPolicy ||
+          (!insightsSyncEnabled && !(await enableInsightsSync({ confirmWhenEmpty: true })))
+        )
           return;
+        if (!(await joinLeaderboard())) {
+          toast({
+            title: t("insights.leaderboard.activationError"),
+            variant: "destructive",
+          });
         }
-
-        if (!(await leaveLeaderboard())) {
-          toast({ title: t("insights.leaderboard.leavePending") });
-        }
-      } finally {
-        setLeaderboardPreferencePending(false);
+        return;
       }
-    },
-    [
-      effectiveDataRetentionEnabled,
-      enableInsightsSync,
-      insightsSyncAllowedByPolicy,
-      insightsSyncEnabled,
-      isSignedIn,
-      joinLeaderboard,
-      leaderboardParticipationReady,
-      leaderboardPreferencePending,
-      leaveLeaderboard,
-      t,
-      toast,
-    ]
-  );
+
+      if (!(await leaveLeaderboard())) {
+        toast({ title: t("insights.leaderboard.leavePending") });
+      }
+    } finally {
+      setLeaderboardPreferencePending(false);
+    }
+  };
   // Signed out there is nothing to load and the plan grid is purely
   // promotional; signed in, no card may claim a plan until usage confirms one.
   const planStateKnown = !isSignedIn || usage?.status === "success";
@@ -1876,15 +1359,37 @@ export default function SettingsPage({
     : null;
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
-  const [isDeleteAccountDialogOpen, setIsDeleteAccountDialogOpen] = useState(false);
+  const [deleteAccountTarget, setDeleteAccountTarget] = useState<{
+    accountId: string;
+    authGeneration: number;
+  } | null>(null);
   const [eraseDeviceData, setEraseDeviceData] = useState(false);
+  const currentAuthGeneration = getValidatedAuthGeneration();
+  const isDeleteAccountDialogOpen = Boolean(
+    deleteAccountTarget &&
+    isSignedIn &&
+    deleteAccountTarget.accountId === user?.id &&
+    deleteAccountTarget.authGeneration === currentAuthGeneration &&
+    getBoundSessionGeneration(deleteAccountTarget.accountId) === currentAuthGeneration
+  );
+  if (deleteAccountTarget && !isDeleteAccountDialogOpen) {
+    setDeleteAccountTarget(null);
+    setEraseDeviceData(false);
+  }
   const { openBillingPortal, isOpening: isOpeningBilling } = useBillingPortal(usage);
   const [billingState, setBillingState] = useState<Record<string, boolean>>({
     pro: true,
     business: true,
   });
-  const [checkoutTier, setCheckoutTier] = useState<string | null>(null);
+  const [checkoutProgress, setCheckoutProgress] = useState<{
+    tier: string;
+    generation: number;
+  } | null>(null);
+  const checkoutTier =
+    checkoutProgress?.generation === currentAuthGeneration ? checkoutProgress.tier : null;
   const [switchPreview, setSwitchPreview] = useState<{
+    accountId: string;
+    authGeneration: number;
     plan: "monthly" | "annual";
     tier: "pro" | "business";
     immediateAmount: number;
@@ -1895,44 +1400,63 @@ export default function SettingsPage({
   } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
-  const handleSwitchPlan = useCallback(
-    async (plan: "monthly" | "annual", tier: "pro" | "business") => {
-      setPreviewLoading(true);
-      try {
-        const preview = await usage.previewSwitchPlan({ plan, tier });
-        if (!preview.success) {
-          toast({
-            title: t("settingsPage.account.checkout.couldNotOpenTitle"),
-            description:
-              preview.error || t("settingsPage.account.checkout.couldNotOpenDescription"),
-          });
-          return;
-        }
-        if (preview.alreadyOnPlan) {
-          toast({ title: t("settingsPage.account.pricing.planSwitched") });
-          return;
-        }
-        setSwitchPreview({
-          plan,
-          tier,
-          immediateAmount: preview.immediateAmount ?? 0,
-          currency: preview.currency ?? "usd",
-          newPriceAmount: preview.newPriceAmount ?? 0,
-          newInterval: preview.newInterval ?? "month",
-          nextBillingDate: preview.nextBillingDate ?? null,
+  const handleSwitchPlan = async (plan: "monthly" | "annual", tier: "pro" | "business") => {
+    const accountId = user?.id;
+    const authGeneration = getValidatedAuthGeneration();
+    if (!accountId || usage?.status !== "success") return;
+    if (authGeneration == null) {
+      toast({
+        title: t("settingsPage.account.checkout.couldNotOpenTitle"),
+        description: t("settingsPage.account.checkout.couldNotOpenDescription"),
+      });
+      return;
+    }
+    setPreviewLoading(true);
+    try {
+      const preview = await usage.previewSwitchPlan({ plan, tier });
+      if (authGeneration !== getValidatedAuthGeneration()) return;
+      if (!preview.success) {
+        toast({
+          title: t("settingsPage.account.checkout.couldNotOpenTitle"),
+          description: preview.error || t("settingsPage.account.checkout.couldNotOpenDescription"),
         });
-      } finally {
-        setPreviewLoading(false);
+        return;
       }
-    },
-    [usage, toast, t]
-  );
+      if (preview.alreadyOnPlan) {
+        toast({ title: t("settingsPage.account.pricing.planSwitched") });
+        return;
+      }
+      setSwitchPreview({
+        accountId,
+        authGeneration,
+        plan,
+        tier,
+        immediateAmount: preview.immediateAmount ?? 0,
+        currency: preview.currency ?? "usd",
+        newPriceAmount: preview.newPriceAmount ?? 0,
+        newInterval: preview.newInterval ?? "month",
+        nextBillingDate: preview.nextBillingDate ?? null,
+      });
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
 
-  const confirmSwitchPlan = useCallback(async () => {
+  const confirmSwitchPlan = async () => {
     if (!switchPreview) return;
-    const { plan, tier } = switchPreview;
+    if (
+      !isSignedIn ||
+      usage?.status !== "success" ||
+      switchPreview.accountId !== user?.id ||
+      switchPreview.authGeneration !== getValidatedAuthGeneration()
+    ) {
+      setSwitchPreview(null);
+      return;
+    }
+    const { plan, tier, authGeneration } = switchPreview;
     setSwitchPreview(null);
     const result = await usage.switchPlan({ plan, tier });
+    if (authGeneration !== getValidatedAuthGeneration()) return;
     if (result.success) {
       toast({ title: t("settingsPage.account.pricing.planSwitched") });
     } else {
@@ -1941,24 +1465,35 @@ export default function SettingsPage({
         description: result.error || t("settingsPage.account.checkout.couldNotOpenDescription"),
       });
     }
-  }, [switchPreview, usage, toast, t]);
+  };
 
-  const handleCheckout = useCallback(
-    async (plan: "monthly" | "annual", tier: "pro" | "business") => {
-      setCheckoutTier(tier);
-      const result = await usage.openCheckout({ plan, tier });
-      setCheckoutTier(null);
-      if (!result.success) {
-        toast({
-          title: t("settingsPage.account.checkout.couldNotOpenTitle"),
-          description: t("settingsPage.account.checkout.couldNotOpenDescription"),
-        });
-      }
-    },
-    [usage, toast, t]
-  );
+  const handleCheckout = async (plan: "monthly" | "annual", tier: "pro" | "business") => {
+    const generation = getValidatedAuthGeneration();
+    if (!usage) return;
+    if (generation == null) {
+      toast({
+        title: t("settingsPage.account.checkout.couldNotOpenTitle"),
+        description: t("settingsPage.account.checkout.couldNotOpenDescription"),
+      });
+      return;
+    }
+    setCheckoutProgress({ tier, generation });
+    const result = await usage.openCheckout({ plan, tier });
+    if (generation !== getValidatedAuthGeneration()) return;
+    setCheckoutProgress(null);
+    if (
+      !result.success &&
+      result.code !== "AUTH_CONTEXT_CHANGED" &&
+      result.code !== "AUTH_CONTEXT_UNVALIDATED"
+    ) {
+      toast({
+        title: t("settingsPage.account.checkout.couldNotOpenTitle"),
+        description: t("settingsPage.account.checkout.couldNotOpenDescription"),
+      });
+    }
+  };
 
-  const handleSignOut = useCallback(async () => {
+  const handleSignOut = async () => {
     setIsSigningOut(true);
     try {
       // End a live meeting while its note is still in scope: signing out clears
@@ -1978,17 +1513,34 @@ export default function SettingsPage({
     } finally {
       setIsSigningOut(false);
     }
-  }, [showAlertDialog, t]);
+  };
 
-  const handleDeleteAccount = useCallback(() => {
-    setEraseDeviceData(false);
-    setIsDeleteAccountDialogOpen(true);
-  }, []);
-
-  const confirmDeleteAccount = useCallback(async () => {
-    const accountId = user?.id;
+  const handleDeleteAccount = () => {
     const authGeneration = getValidatedAuthGeneration();
-    if (!accountId || authGeneration == null) {
+    if (
+      !isSignedIn ||
+      !user?.id ||
+      authGeneration == null ||
+      getBoundSessionGeneration(user.id) !== authGeneration
+    )
+      return;
+    setEraseDeviceData(false);
+    setDeleteAccountTarget({ accountId: user.id, authGeneration });
+  };
+
+  const confirmDeleteAccount = async () => {
+    if (isDeletingAccount) return;
+    const accountId = deleteAccountTarget?.accountId;
+    const authGeneration = deleteAccountTarget?.authGeneration;
+    if (
+      !isSignedIn ||
+      !accountId ||
+      accountId !== user?.id ||
+      authGeneration == null ||
+      authGeneration !== getValidatedAuthGeneration() ||
+      getBoundSessionGeneration(accountId) !== authGeneration
+    ) {
+      setDeleteAccountTarget(null);
       showAlertDialog({
         title: t("settingsPage.account.deleteAccount.failedTitle"),
         description: t("settingsPage.account.deleteAccount.failedDescription"),
@@ -2001,7 +1553,7 @@ export default function SettingsPage({
       const result = await executeAccountDeletion({
         eraseDeviceData,
         dependencies: {
-          deleteRemoteAccount: deleteAccount,
+          deleteRemoteAccount: () => deleteAccount(authGeneration),
           deleteLocalAccountData: async () => {
             const cleanup = await window.electronAPI?.deleteAccountData?.(
               accountId,
@@ -2047,136 +1599,7 @@ export default function SettingsPage({
     } finally {
       setIsDeletingAccount(false);
     }
-  }, [eraseDeviceData, showAlertDialog, t, user?.id]);
-
-  const renderWhisperVadSettings = () => (
-    <div>
-      <SectionHeader
-        title={t("settingsPage.transcription.vad.title")}
-        description={t("settingsPage.transcription.vad.description")}
-      />
-      <SettingsPanel>
-        <SettingsPanelRow>
-          <SettingsRow
-            label={t("settingsPage.transcription.vad.toggles.dictation.title")}
-            description={t("settingsPage.transcription.vad.toggles.dictation.description")}
-          >
-            <Toggle checked={dictationSileroEnabled} onChange={setDictationSileroEnabled} />
-          </SettingsRow>
-        </SettingsPanelRow>
-        <SettingsPanelRow>
-          <SettingsRow
-            label={t("settingsPage.transcription.vad.toggles.noteRecording.title")}
-            description={t("settingsPage.transcription.vad.toggles.noteRecording.description")}
-          >
-            <Toggle checked={noteRecordingSileroEnabled} onChange={setNoteRecordingSileroEnabled} />
-          </SettingsRow>
-        </SettingsPanelRow>
-        <SettingsPanelRow>
-          <SettingsRow
-            label={t("settingsPage.transcription.vad.toggles.meeting.title")}
-            description={t("settingsPage.transcription.vad.toggles.meeting.description")}
-          >
-            <Toggle checked={meetingSileroEnabled} onChange={setMeetingSileroEnabled} />
-          </SettingsRow>
-        </SettingsPanelRow>
-        <SettingsPanelRow>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
-            <div className="space-y-1.5">
-              <VADLabelWithInfo
-                label={t("settingsPage.transcription.vad.fields.threshold.label")}
-                description={t("settingsPage.transcription.vad.fields.threshold.info")}
-              />
-              <Input
-                dir="ltr"
-                type="number"
-                step="0.01"
-                min="0.1"
-                max="0.95"
-                value={whisperVadThreshold}
-                onChange={(e) => setWhisperVadThreshold(Number(e.target.value))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <VADLabelWithInfo
-                label={t("settingsPage.transcription.vad.fields.minSpeechDurationMs.label")}
-                description={t("settingsPage.transcription.vad.fields.minSpeechDurationMs.info")}
-              />
-              <Input
-                dir="ltr"
-                type="number"
-                step="10"
-                min="50"
-                max="2000"
-                value={whisperVadMinSpeechDurationMs}
-                onChange={(e) => setWhisperVadMinSpeechDurationMs(Number(e.target.value))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <VADLabelWithInfo
-                label={t("settingsPage.transcription.vad.fields.minSilenceDurationMs.label")}
-                description={t("settingsPage.transcription.vad.fields.minSilenceDurationMs.info")}
-              />
-              <Input
-                dir="ltr"
-                type="number"
-                step="10"
-                min="50"
-                max="2000"
-                value={whisperVadMinSilenceDurationMs}
-                onChange={(e) => setWhisperVadMinSilenceDurationMs(Number(e.target.value))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <VADLabelWithInfo
-                label={t("settingsPage.transcription.vad.fields.maxSpeechDurationS.label")}
-                description={t("settingsPage.transcription.vad.fields.maxSpeechDurationS.info")}
-              />
-              <Input
-                dir="ltr"
-                type="number"
-                step="1"
-                min="5"
-                max="120"
-                value={whisperVadMaxSpeechDurationS}
-                onChange={(e) => setWhisperVadMaxSpeechDurationS(Number(e.target.value))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <VADLabelWithInfo
-                label={t("settingsPage.transcription.vad.fields.speechPadMs.label")}
-                description={t("settingsPage.transcription.vad.fields.speechPadMs.info")}
-              />
-              <Input
-                dir="ltr"
-                type="number"
-                step="10"
-                min="0"
-                max="1000"
-                value={whisperVadSpeechPadMs}
-                onChange={(e) => setWhisperVadSpeechPadMs(Number(e.target.value))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <VADLabelWithInfo
-                label={t("settingsPage.transcription.vad.fields.samplesOverlap.label")}
-                description={t("settingsPage.transcription.vad.fields.samplesOverlap.info")}
-              />
-              <Input
-                dir="ltr"
-                type="number"
-                step="0.01"
-                min="0"
-                max="0.95"
-                value={whisperVadSamplesOverlap}
-                onChange={(e) => setWhisperVadSamplesOverlap(Number(e.target.value))}
-              />
-            </div>
-          </div>
-        </SettingsPanelRow>
-      </SettingsPanel>
-    </div>
-  );
+  };
 
   const renderSectionContent = () => {
     switch (activeSection) {
@@ -2204,6 +1627,7 @@ export default function SettingsPage({
               <>
                 <SectionHeader title={t("settingsPage.account.title")} />
                 <ProfileSection
+                  key={user.id}
                   name={user.name || ""}
                   onSessionRefresh={() => {
                     void refetch();
@@ -2234,7 +1658,7 @@ export default function SettingsPage({
                       <Button
                         onClick={handleDeleteAccount}
                         variant="outline"
-                        disabled={isDeletingAccount}
+                        disabled={isDeletingAccount || currentAuthGeneration == null}
                         size="sm"
                         className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive"
                       >
@@ -2536,13 +1960,29 @@ export default function SettingsPage({
                           ) : accountPlan.action === "none" ? null : (
                             <Button
                               onClick={async () => {
-                                setCheckoutTier("plan-upgrade");
+                                const generation = getValidatedAuthGeneration();
+                                if (generation == null) {
+                                  toast({
+                                    title: t("settingsPage.account.checkout.couldNotOpenTitle"),
+                                    description: t(
+                                      "settingsPage.account.checkout.couldNotOpenDescription"
+                                    ),
+                                    variant: "destructive",
+                                  });
+                                  return;
+                                }
+                                setCheckoutProgress({ tier: "plan-upgrade", generation });
                                 const result = await usage.openCheckout({
                                   plan: billingState.pro ? "annual" : "monthly",
                                   tier: "pro",
                                 });
-                                setCheckoutTier(null);
-                                if (!result.success) {
+                                if (generation !== getValidatedAuthGeneration()) return;
+                                setCheckoutProgress(null);
+                                if (
+                                  !result.success &&
+                                  result.code !== "AUTH_CONTEXT_CHANGED" &&
+                                  result.code !== "AUTH_CONTEXT_UNVALIDATED"
+                                ) {
                                   toast({
                                     title: t("settingsPage.account.checkout.couldNotOpenTitle"),
                                     description: t(
@@ -3049,7 +2489,7 @@ export default function SettingsPage({
         );
 
       case "workspace":
-        return <WorkspaceSection initialSubTab={initialSubTab} />;
+        return <WorkspaceSection />;
 
       case "general":
         return (
@@ -3122,7 +2562,11 @@ export default function SettingsPage({
                     label={t("settingsPage.general.soundEffects.dictationSounds")}
                     description={t("settingsPage.general.soundEffects.dictationSoundsDescription")}
                   >
-                    <Toggle checked={audioCuesEnabled} onChange={setAudioCuesEnabled} />
+                    <Toggle
+                      ariaLabel={t("settingsPage.general.soundEffects.dictationSounds")}
+                      checked={audioCuesEnabled}
+                      onChange={setAudioCuesEnabled}
+                    />
                   </SettingsRow>
                 </SettingsPanelRow>
                 <SettingsPanelRow>
@@ -3130,7 +2574,11 @@ export default function SettingsPage({
                     label={t("settingsPage.general.soundEffects.pauseMedia")}
                     description={t("settingsPage.general.soundEffects.pauseMediaDescription")}
                   >
-                    <Toggle checked={pauseMediaOnDictation} onChange={setPauseMediaOnDictation} />
+                    <Toggle
+                      ariaLabel={t("settingsPage.general.soundEffects.pauseMedia")}
+                      checked={pauseMediaOnDictation}
+                      onChange={setPauseMediaOnDictation}
+                    />
                   </SettingsRow>
                 </SettingsPanelRow>
               </SettingsPanel>
@@ -3149,6 +2597,7 @@ export default function SettingsPage({
                     description={t("settingsPage.general.notifications.disableAllDescription")}
                   >
                     <Toggle
+                      ariaLabel={t("settingsPage.general.notifications.disableAll")}
                       checked={!notificationsEnabled}
                       onChange={(v) => setNotificationsEnabled(!v)}
                     />
@@ -3162,6 +2611,7 @@ export default function SettingsPage({
                     )}
                   >
                     <Toggle
+                      ariaLabel={t("settingsPage.general.notifications.meetingDetection")}
                       checked={notifyMeetingDetection}
                       onChange={setNotifyMeetingDetection}
                       disabled={!notificationsEnabled}
@@ -3176,6 +2626,7 @@ export default function SettingsPage({
                     )}
                   >
                     <Toggle
+                      ariaLabel={t("settingsPage.general.notifications.calendarReminders")}
                       checked={notifyCalendarReminders}
                       onChange={setNotifyCalendarReminders}
                       disabled={!notificationsEnabled}
@@ -3194,7 +2645,11 @@ export default function SettingsPage({
                     label={t("settingsPage.general.clipboard.autoPaste")}
                     description={t("settingsPage.general.clipboard.autoPasteDescription")}
                   >
-                    <Toggle checked={autoPasteEnabled} onChange={setAutoPasteEnabled} />
+                    <Toggle
+                      ariaLabel={t("settingsPage.general.clipboard.autoPaste")}
+                      checked={autoPasteEnabled}
+                      onChange={setAutoPasteEnabled}
+                    />
                   </SettingsRow>
                 </SettingsPanelRow>
                 <SettingsPanelRow>
@@ -3203,6 +2658,7 @@ export default function SettingsPage({
                     description={t("settingsPage.general.clipboard.keepInClipboardDescription")}
                   >
                     <Toggle
+                      ariaLabel={t("settingsPage.general.clipboard.keepInClipboard")}
                       checked={keepTranscriptionInClipboard}
                       onChange={setKeepTranscriptionInClipboard}
                     />
@@ -3220,7 +2676,11 @@ export default function SettingsPage({
                     label={t("settings.noteFiles.title")}
                     description={t("settings.noteFiles.description")}
                   >
-                    <Toggle checked={noteFilesEnabled} onChange={handleNoteFilesToggle} />
+                    <Toggle
+                      ariaLabel={t("settings.noteFiles.title")}
+                      checked={noteFilesEnabled}
+                      onChange={handleNoteFilesToggle}
+                    />
                   </SettingsRow>
                 </SettingsPanelRow>
                 {noteFilesEnabled && (
@@ -3284,15 +2744,21 @@ export default function SettingsPage({
                     label={t("settingsPage.general.floatingIcon.autoHide")}
                     description={t("settingsPage.general.floatingIcon.autoHideDescription")}
                   >
-                    <Toggle checked={floatingIconAutoHide} onChange={setFloatingIconAutoHide} />
+                    <Toggle
+                      ariaLabel={t("settingsPage.general.floatingIcon.autoHide")}
+                      checked={floatingIconAutoHide}
+                      onChange={setFloatingIconAutoHide}
+                    />
                   </SettingsRow>
                 </SettingsPanelRow>
                 <SettingsPanelRow>
                   <SettingsRow
                     label={t("settingsPage.general.floatingIcon.startPosition")}
+                    htmlFor={`${settingsId}-start-position`}
                     description={t("settingsPage.general.floatingIcon.startPositionDescription")}
                   >
                     <select
+                      id={`${settingsId}-start-position`}
                       value={panelStartPosition}
                       onChange={(e) =>
                         setPanelStartPosition(
@@ -3329,6 +2795,7 @@ export default function SettingsPage({
                     description={t("settings.language.uiDescription")}
                   >
                     <LanguageSelector
+                      ariaLabel={t("settings.language.uiLabel")}
                       value={uiLanguage}
                       onChange={setUiLanguage}
                       options={UI_LANGUAGE_OPTIONS}
@@ -3342,6 +2809,7 @@ export default function SettingsPage({
                     description={t("settings.language.transcriptionDescription")}
                   >
                     <LanguageSelector
+                      ariaLabel={t("settings.language.transcriptionLabel")}
                       value={preferredLanguage}
                       onChange={(value) =>
                         updateTranscriptionSettings({ preferredLanguage: value })
@@ -3355,27 +2823,26 @@ export default function SettingsPage({
                       label={t("settings.language.chineseScriptLabel")}
                       description={t("settings.language.chineseScriptDescription")}
                     >
-                      <Select
+                      <select
+                        className={`${RETENTION_SELECT_CLASS} w-44`}
+                        aria-label={t("settings.language.chineseScriptLabel")}
                         value={chineseScriptPreference}
-                        onValueChange={(value: ChineseScriptPreference) =>
-                          updateTranscriptionSettings({ chineseScriptPreference: value })
+                        onChange={(event) =>
+                          updateTranscriptionSettings({
+                            chineseScriptPreference: event.target.value as ChineseScriptPreference,
+                          })
                         }
                       >
-                        <SelectTrigger className="h-7 w-44 text-xs rounded-lg px-2.5 [&>svg]:h-3 [&>svg]:w-3">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="as-transcribed">
-                            {t("settings.language.chineseScriptAsTranscribed")}
-                          </SelectItem>
-                          <SelectItem value="simplified">
-                            {t("settings.language.chineseScriptSimplified")}
-                          </SelectItem>
-                          <SelectItem value="traditional">
-                            {t("settings.language.chineseScriptTraditional")}
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
+                        <option value="as-transcribed">
+                          {t("settings.language.chineseScriptAsTranscribed")}
+                        </option>
+                        <option value="simplified">
+                          {t("settings.language.chineseScriptSimplified")}
+                        </option>
+                        <option value="traditional">
+                          {t("settings.language.chineseScriptTraditional")}
+                        </option>
+                      </select>
                     </SettingsRow>
                   </SettingsPanelRow>
                 )}
@@ -3395,6 +2862,7 @@ export default function SettingsPage({
                     description={t("settingsPage.general.startup.launchAtLoginDescription")}
                   >
                     <Toggle
+                      ariaLabel={t("settingsPage.general.startup.launchAtLogin")}
                       checked={autoStartEnabled}
                       onChange={(checked: boolean) => handleAutoStartChange(checked)}
                       disabled={autoStartLoading}
@@ -3429,7 +2897,11 @@ export default function SettingsPage({
                     label={t("settingsPage.general.startup.startMinimized")}
                     description={t("settingsPage.general.startup.startMinimizedDescription")}
                   >
-                    <Toggle checked={startMinimized} onChange={setStartMinimized} />
+                    <Toggle
+                      ariaLabel={t("settingsPage.general.startup.startMinimized")}
+                      checked={startMinimized}
+                      onChange={setStartMinimized}
+                    />
                   </SettingsRow>
                 </SettingsPanelRow>
               </SettingsPanel>
@@ -3474,7 +2946,11 @@ export default function SettingsPage({
                         "When you correct a transcription in the target app, the corrected word is automatically added to your dictionary.",
                     })}
                   >
-                    <Toggle checked={autoLearnCorrections} onChange={setAutoLearnCorrections} />
+                    <Toggle
+                      ariaLabel={t("settingsPage.dictionary.autoLearnTitle")}
+                      checked={autoLearnCorrections}
+                      onChange={setAutoLearnCorrections}
+                    />
                   </SettingsRow>
                 </SettingsPanelRow>
               </SettingsPanel>
@@ -3843,6 +3319,7 @@ EOF`,
                               </div>
                               <button
                                 onClick={refreshYdotoolStatus}
+                                aria-label={t("settingsPage.general.waylandPaste.recheck")}
                                 className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
                               >
                                 <RotateCw className="w-3.5 h-3.5" />
@@ -3981,196 +3458,6 @@ EOF`,
         );
 
       case "hotkeys":
-        return (
-          <div className="space-y-6">
-            {isUsingHyprland && hyprlandConfigStatus && !hyprlandConfigStatus.canWrite && (
-              <Alert>
-                <Info className="h-4 w-4" />
-                <AlertTitle>
-                  {t("settingsPage.general.hotkey.hyprlandConfigWriteWarningTitle")}
-                </AlertTitle>
-                <AlertDescription>
-                  <BidiInterpolatedText
-                    text={t("settingsPage.general.hotkey.hyprlandConfigWriteWarningDescription", {
-                      path: BIDI_VALUE_TOKEN,
-                    })}
-                    value={hyprlandConfigStatus.path}
-                  />
-                </AlertDescription>
-              </Alert>
-            )}
-            {/* Dictation Hotkey */}
-            <div>
-              <SectionHeader
-                title={t("settingsPage.general.hotkey.title")}
-                description={t("settingsPage.general.hotkey.description")}
-                note={isUsingHyprland && t("settingsPage.general.hotkey.hyprlandUnbindDescription")}
-              />
-              <SettingsPanel>
-                <SettingsPanelRow>
-                  <HotkeyListInput
-                    value={dictationKey}
-                    onChange={(list) => registerHotkey(list)}
-                    validate={validateDictationHotkey}
-                    disabled={isHotkeyRegistering}
-                    maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
-                    required
-                    footerEnd={
-                      effectiveDefaultHotkey &&
-                      dictationKey &&
-                      dictationKey !== effectiveDefaultHotkey ? (
-                        <button
-                          onClick={() => registerHotkey(effectiveDefaultHotkey)}
-                          disabled={isHotkeyRegistering}
-                          className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors disabled:opacity-50"
-                        >
-                          <BidiInterpolatedText
-                            text={t("settingsPage.general.hotkey.resetToDefault", {
-                              hotkey: BIDI_VALUE_TOKEN,
-                            })}
-                            value={formatHotkeyLabel(effectiveDefaultHotkey)}
-                          />
-                        </button>
-                      ) : null
-                    }
-                  />
-                </SettingsPanelRow>
-
-                {(!isUsingNativeShortcut || getCachedPlatform() === "linux") && (
-                  <SettingsPanelRow>
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-xs text-muted-foreground/80">
-                        {t("settingsPage.general.hotkey.activationMode")}
-                      </span>
-                      <ActivationModeSelector
-                        value={activationMode}
-                        onChange={setActivationMode}
-                        pushDisabledReason={pushToTalkUnavailableReason ?? undefined}
-                      />
-                    </div>
-                    {/* Denied input access gets the setup box below instead. */}
-                    {pushToTalkUnavailableReason && !linuxInputAccessDenied && (
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        {pushToTalkUnavailableReason}
-                      </p>
-                    )}
-                    {getCachedPlatform() === "linux" &&
-                      (activationMode === "push" || linuxInputAccessDenied) && (
-                        <LinuxPttSetupInfo
-                          isAvailable={!linuxInputAccessDenied && linuxPttAvailable}
-                        />
-                      )}
-                  </SettingsPanelRow>
-                )}
-              </SettingsPanel>
-            </div>
-
-            {/* Voice Agent Hotkey */}
-            {agentAllowedByPolicy && (
-              <div>
-                <SectionHeader
-                  title={t("settingsPage.general.voiceAgentHotkey.title")}
-                  description={t("settingsPage.general.voiceAgentHotkey.description")}
-                />
-                <SettingsPanel>
-                  <SettingsPanelRow>
-                    <HotkeyListInput
-                      value={voiceAgentKey}
-                      onChange={(list) => commitAgentHotkey(setVoiceAgentKey, list)}
-                      onClear={() => commitAgentHotkey(setVoiceAgentKey, "")}
-                      validate={validateVoiceAgentHotkey}
-                      disabled={isAgentHotkeyCommitting}
-                      maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
-                    />
-                  </SettingsPanelRow>
-                </SettingsPanel>
-              </div>
-            )}
-
-            {/* Translation Hotkey */}
-            <div>
-              <SectionHeader
-                title={t("settingsPage.general.translationHotkey.title")}
-                description={t("settingsPage.general.translationHotkey.description")}
-              />
-              <SettingsPanel>
-                <SettingsPanelRow>
-                  <HotkeyListInput
-                    value={translationKey}
-                    onChange={(list) => commitAgentHotkey(setTranslationKey, list)}
-                    onClear={() => commitAgentHotkey(setTranslationKey, "")}
-                    validate={validateTranslationHotkey}
-                    disabled={isAgentHotkeyCommitting}
-                    maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
-                  />
-                </SettingsPanelRow>
-              </SettingsPanel>
-            </div>
-
-            {/* Meeting Mode Hotkey */}
-            <div>
-              <SectionHeader
-                title={t("settingsPage.general.meetingHotkey.title")}
-                description={t("settingsPage.general.meetingHotkey.description")}
-              />
-              <SettingsPanel>
-                <SettingsPanelRow>
-                  <HotkeyListInput
-                    value={meetingKey}
-                    onChange={(list) => registerMeetingHotkey(list)}
-                    onClear={async (): Promise<boolean> => {
-                      const result = await window.electronAPI?.registerMeetingHotkey?.("");
-                      if (!result?.success) {
-                        showAlertDialog({
-                          title: t("hooks.hotkeyRegistration.titles.notRegistered"),
-                          description:
-                            result?.message ||
-                            t("hooks.hotkeyRegistration.errors.couldNotRegister"),
-                        });
-                        return false;
-                      }
-                      setMeetingKey("");
-                      return true;
-                    }}
-                    validate={validateMeetingHotkey}
-                    disabled={isMeetingHotkeyRegistering}
-                    maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
-                  />
-                </SettingsPanelRow>
-                <SettingsPanelRow className="flex items-center justify-between gap-3 border-t border-border/70 dark:border-white/10">
-                  <span className="text-xs text-muted-foreground/80">
-                    {t("settingsPage.general.meetingHotkey.layoutLabel")}
-                  </span>
-                  <Select
-                    value={meetingHotkeyLayoutMode}
-                    onValueChange={(value) =>
-                      setMeetingHotkeyLayoutMode(value as "side-panel" | "full-width")
-                    }
-                  >
-                    <SelectTrigger className="h-7 w-36 text-xs rounded-lg px-2.5 [&>svg]:h-3 [&>svg]:w-3">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem
-                        value="full-width"
-                        className="text-xs py-1.5 ps-2.5 pe-7 rounded-md"
-                      >
-                        {t("settingsPage.general.meetingHotkey.layoutFullWidth")}
-                      </SelectItem>
-                      <SelectItem
-                        value="side-panel"
-                        className="text-xs py-1.5 ps-2.5 pe-7 rounded-md"
-                      >
-                        {t("settingsPage.general.meetingHotkey.layoutSidePanel")}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </SettingsPanelRow>
-              </SettingsPanel>
-            </div>
-          </div>
-        );
-
       case "speechToText":
       case "llms":
         return null;
@@ -4198,6 +3485,7 @@ EOF`,
                         }
                       >
                         <Toggle
+                          ariaLabel={t("settingsPage.privacy.cloudBackup")}
                           checked={cloudBackupEnabled}
                           disabled={
                             !canChangeCloudBackupPreference(
@@ -4297,6 +3585,7 @@ EOF`,
                         could therefore only promise a sync that never happens —
                         but an already-on toggle must stay switchable off. */}
                     <Toggle
+                      ariaLabel={t("settingsPage.privacy.insightsSync")}
                       checked={insightsSyncEnabled}
                       disabled={
                         !isSignedIn ||
@@ -4328,6 +3617,7 @@ EOF`,
                     }
                   >
                     <Toggle
+                      ariaLabel={t("insights.leaderboard.title")}
                       checked={isSignedIn && leaderboardParticipationEnabled}
                       disabled={
                         !isSignedIn ||
@@ -4349,7 +3639,11 @@ EOF`,
                     label={t("settingsPage.privacy.usageAnalytics")}
                     description={t("settingsPage.privacy.usageAnalyticsDescription")}
                   >
-                    <Toggle checked={telemetryEnabled} onChange={setTelemetryEnabled} />
+                    <Toggle
+                      ariaLabel={t("settingsPage.privacy.usageAnalytics")}
+                      checked={telemetryEnabled}
+                      onChange={setTelemetryEnabled}
+                    />
                   </SettingsRow>
                 </SettingsPanelRow>
               </SettingsPanel>
@@ -4366,9 +3660,11 @@ EOF`,
                 <SettingsPanelRow>
                   <SettingsRow
                     label={t("settingsPage.privacy.audioRetention")}
+                    htmlFor={`${settingsId}-audio-retention`}
                     description={t("settingsPage.privacy.audioRetentionDescription")}
                   >
                     <select
+                      id={`${settingsId}-audio-retention`}
                       value={enforcedAudioRetentionDays}
                       onChange={(e) => {
                         const days = parseInt(e.target.value, 10);
@@ -4437,6 +3733,7 @@ EOF`,
                     }
                   >
                     <Toggle
+                      ariaLabel={t("settingsPage.privacy.dataRetention")}
                       checked={effectiveDataRetentionEnabled}
                       disabled={historyLockedByPolicy}
                       onChange={setDataRetentionEnabled}
@@ -4446,9 +3743,11 @@ EOF`,
                 <SettingsPanelRow>
                   <SettingsRow
                     label={t("settingsPage.privacy.transcriptRetention")}
+                    htmlFor={`${settingsId}-transcript-retention`}
                     description={t("settingsPage.privacy.transcriptRetentionDescription")}
                   >
                     <select
+                      id={`${settingsId}-transcript-retention`}
                       value={transcriptRetentionDays}
                       disabled={!effectiveDataRetentionEnabled}
                       onChange={(e) => setTranscriptRetentionDays(parseInt(e.target.value, 10))}
@@ -4471,6 +3770,7 @@ EOF`,
                     description={t("settingsPage.privacy.saveDiscardedDescription")}
                   >
                     <Toggle
+                      ariaLabel={t("settingsPage.privacy.saveDiscarded")}
                       checked={saveDiscardedTranscriptions}
                       disabled={!effectiveDataRetentionEnabled || enforcedAudioRetentionDays === 0}
                       onChange={setSaveDiscardedTranscriptions}
@@ -4575,214 +3875,8 @@ EOF`,
       case "system":
         return (
           <div className="space-y-6">
-            {/* Software Updates */}
-            <div>
-              <SectionHeader title={t("settingsPage.general.updates.title")} />
-              <SettingsPanel>
-                <SettingsPanelRow>
-                  <SettingsRow
-                    label={t("settingsPage.general.updates.currentVersion")}
-                    description={
-                      updateStatus.isDevelopment
-                        ? t("settingsPage.general.updates.devMode")
-                        : !updateStatus.isSupported
-                          ? t("settingsPage.general.updates.managedByPackageManager")
-                          : isUpdateAvailable
-                            ? t("settingsPage.general.updates.newVersionAvailable")
-                            : t("settingsPage.general.updates.latestVersion")
-                    }
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <span
-                        dir="ltr"
-                        className="text-xs tabular-nums text-muted-foreground font-mono"
-                      >
-                        {currentVersion || t("settingsPage.general.updates.versionPlaceholder")}
-                      </span>
-                      {updateStatus.isDevelopment ? (
-                        <Badge variant="warning">
-                          {t("settingsPage.general.updates.badges.dev")}
-                        </Badge>
-                      ) : isUpdateAvailable ? (
-                        <Badge variant="success">
-                          {t("settingsPage.general.updates.badges.update")}
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline">
-                          {t("settingsPage.general.updates.badges.latest")}
-                        </Badge>
-                      )}
-                    </div>
-                  </SettingsRow>
-                </SettingsPanelRow>
-
-                {updateStatus.isSupported && (
-                  <SettingsPanelRow>
-                    <SettingsRow
-                      label={t("settingsPage.general.updates.automaticUpdates")}
-                      description={t("settingsPage.general.updates.automaticUpdatesDescription")}
-                    >
-                      <Toggle checked={autoUpdatesEnabled} onChange={setAutoUpdatesEnabled} />
-                    </SettingsRow>
-                  </SettingsPanelRow>
-                )}
-
-                {(isUpdateAvailable ||
-                  updateStatus.updateDownloaded ||
-                  updateInfo?.releaseNotes) && (
-                  <SettingsPanelRow>
-                    <div className="space-y-2.5">
-                      {isUpdateAvailable && !updateStatus.updateDownloaded && (
-                        <div className="space-y-2">
-                          <Button
-                            onClick={async () => {
-                              try {
-                                await downloadUpdate();
-                              } catch {
-                                showAlertDialog({
-                                  title: t(
-                                    "settingsPage.general.updates.dialogs.downloadFailed.title"
-                                  ),
-                                  description: t(
-                                    "settingsPage.general.updates.dialogs.downloadFailed.description"
-                                  ),
-                                });
-                              }
-                            }}
-                            disabled={downloadingUpdate}
-                            variant="success"
-                            className="w-full"
-                            size="sm"
-                          >
-                            <Download
-                              size={13}
-                              className={`me-1.5 ${downloadingUpdate ? "animate-pulse" : ""}`}
-                            />
-                            {downloadingUpdate
-                              ? t("settingsPage.general.updates.downloading", {
-                                  progress: Math.round(updateDownloadProgress),
-                                })
-                              : t("settingsPage.general.updates.downloadUpdate", {
-                                  version: updateInfo?.version || "",
-                                })}
-                          </Button>
-
-                          {downloadingUpdate && (
-                            <div className="h-1 w-full overflow-hidden rounded-full bg-muted/50">
-                              <div
-                                className="h-full bg-success transition-[width] duration-200 rounded-full"
-                                style={{
-                                  width: `${Math.min(100, Math.max(0, updateDownloadProgress))}%`,
-                                }}
-                              />
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {updateStatus.updateDownloaded && (
-                        <Button
-                          onClick={() => {
-                            showConfirmDialog({
-                              title: t("settingsPage.general.updates.dialogs.installUpdate.title"),
-                              description: t(
-                                "settingsPage.general.updates.dialogs.installUpdate.description",
-                                { version: updateInfo?.version || "" }
-                              ),
-                              confirmText: t(
-                                "settingsPage.general.updates.dialogs.installUpdate.confirmText"
-                              ),
-                              onConfirm: async () => {
-                                try {
-                                  await installUpdateAction();
-                                } catch {
-                                  showAlertDialog({
-                                    title: t(
-                                      "settingsPage.general.updates.dialogs.installFailed.title"
-                                    ),
-                                    description: t(
-                                      "settingsPage.general.updates.dialogs.installFailed.description"
-                                    ),
-                                  });
-                                }
-                              },
-                            });
-                          }}
-                          disabled={installInitiated}
-                          className="w-full"
-                          size="sm"
-                        >
-                          <RefreshCw
-                            size={14}
-                            className={`me-2 ${installInitiated ? "animate-spin" : ""}`}
-                          />
-                          {installInitiated
-                            ? t("settingsPage.general.updates.restarting")
-                            : t("settingsPage.general.updates.installAndRestart")}
-                        </Button>
-                      )}
-                    </div>
-
-                    {updateInfo?.releaseNotes && (
-                      <div className="mt-4 pt-4 border-t border-border/70">
-                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-                          <BidiInterpolatedText
-                            text={t("settingsPage.general.updates.whatsNew", {
-                              version: BIDI_VALUE_TOKEN,
-                            })}
-                            value={updateInfo.version}
-                          />
-                        </p>
-                        <div
-                          className="text-xs text-muted-foreground [&_ul]:list-disc [&_ul]:ps-4 [&_ul]:space-y-1 [&_ol]:list-decimal [&_ol]:ps-4 [&_ol]:space-y-1 [&_li]:ps-1 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_a]:text-link [&_a]:underline"
-                          dangerouslySetInnerHTML={{ __html: updateInfo.releaseNotes }}
-                        />
-                      </div>
-                    )}
-                  </SettingsPanelRow>
-                )}
-              </SettingsPanel>
-              <div className="mt-5 flex justify-end">
-                <Button
-                  onClick={async () => {
-                    try {
-                      const result = await checkForUpdates();
-                      if (result && !result.updateAvailable) {
-                        toast({
-                          title: t("settingsPage.general.updates.dialogs.noUpdates.title"),
-                          description: t(
-                            "settingsPage.general.updates.dialogs.noUpdates.description"
-                          ),
-                        });
-                      }
-                    } catch {
-                      showAlertDialog({
-                        title: t("settingsPage.general.updates.dialogs.checkFailed.title"),
-                        description: t(
-                          "settingsPage.general.updates.dialogs.checkFailed.description"
-                        ),
-                      });
-                    }
-                  }}
-                  disabled={
-                    checkingForUpdates || updateStatus.isDevelopment || !updateStatus.isSupported
-                  }
-                  variant="outline"
-                  size="sm"
-                >
-                  <RefreshCw
-                    size={13}
-                    className={`me-1.5 ${checkingForUpdates ? "animate-spin" : ""}`}
-                  />
-                  {checkingForUpdates
-                    ? t("settingsPage.general.updates.checking")
-                    : t("settingsPage.general.updates.checkForUpdates")}
-                </Button>
-              </div>
-            </div>
-
             {/* Developer Tools */}
-            <div className="border-t border-border/70 pt-6">
+            <div className="mt-6 border-t border-border/70 pt-6">
               <DeveloperSection />
             </div>
 
@@ -4844,13 +3938,20 @@ EOF`,
                                 try {
                                   await signOut();
                                 } catch {}
-                                await window.electronAPI?.cleanupApp();
+                                const result = await window.electronAPI?.cleanupApp();
                                 showAlertDialog({
-                                  title: t("settingsPage.developer.resetAll.successTitle"),
+                                  title: t(
+                                    result?.success
+                                      ? "settingsPage.developer.resetAll.successTitle"
+                                      : "settingsPage.developer.resetAll.failedTitle"
+                                  ),
                                   description: t(
-                                    "settingsPage.developer.resetAll.successDescription"
+                                    result?.success
+                                      ? "settingsPage.developer.resetAll.successDescription"
+                                      : "settingsPage.developer.resetAll.failedDescription"
                                   ),
                                 });
+                                // Cleanup closes the database even when a later step fails.
                                 setTimeout(() => window.electronAPI?.relaunchApp(), 1000);
                               } catch {
                                 showAlertDialog({
@@ -4902,8 +4003,10 @@ EOF`,
       <ConfirmDialog
         open={isDeleteAccountDialogOpen}
         onOpenChange={(open) => {
-          setIsDeleteAccountDialogOpen(open);
-          if (!open) setEraseDeviceData(false);
+          if (!open) {
+            setDeleteAccountTarget(null);
+            setEraseDeviceData(false);
+          }
         }}
         title={t("settingsPage.account.deleteAccount.title")}
         description={t("settingsPage.account.deleteAccount.description")}
@@ -4944,99 +4047,25 @@ EOF`,
       />
 
       {/* Mounted on first visit and kept alive so model-download progress and IPC listeners survive section switches. */}
-      {hasMountedSpeechToText && (
-        <TabPanel active={activeSection === "speechToText"}>
-          <SpeechToTextTabs
-            initialTab={
-              activeSection === "speechToText"
-                ? (initialSubTab as SpeechTab | undefined)
-                : undefined
-            }
-            renderDictation={() => (
-              <div className="space-y-6">
-                <TranscriptionSection
-                  isSignedIn={isSignedIn ?? false}
-                  cloudTranscriptionMode={cloudTranscriptionMode}
-                  setCloudTranscriptionMode={setCloudTranscriptionMode}
-                  useLocalWhisper={useLocalWhisper}
-                  setUseLocalWhisper={setUseLocalWhisper}
-                  updateTranscriptionSettings={updateTranscriptionSettings}
-                  cloudTranscriptionProvider={cloudTranscriptionProvider}
-                  setCloudTranscriptionProvider={setCloudTranscriptionProvider}
-                  cloudTranscriptionModel={cloudTranscriptionModel}
-                  setCloudTranscriptionModel={setCloudTranscriptionModel}
-                  localTranscriptionProvider={localTranscriptionProvider}
-                  setLocalTranscriptionProvider={setLocalTranscriptionProvider}
-                  whisperModel={whisperModel}
-                  setWhisperModel={setWhisperModel}
-                  parakeetModel={parakeetModel}
-                  setParakeetModel={setParakeetModel}
-                  cohereModel={cohereModel}
-                  setCohereModel={setCohereModel}
-                  cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
-                  setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
-                  transcriptionMode={transcriptionMode}
-                  setTranscriptionMode={setTranscriptionMode}
-                  remoteTranscriptionUrl={remoteTranscriptionUrl}
-                  setRemoteTranscriptionUrl={setRemoteTranscriptionUrl}
-                  remoteTranscriptionModel={remoteTranscriptionModel}
-                  setRemoteTranscriptionModel={setRemoteTranscriptionModel}
-                  showTranscriptionPreview={showTranscriptionPreview}
-                  setShowTranscriptionPreview={setShowTranscriptionPreview}
-                  toast={toast}
-                />
-                {transcriptionMode === "local" &&
-                  localTranscriptionProvider === "whisper" &&
-                  renderWhisperVadSettings()}
-              </div>
-            )}
-            renderNoteRecording={() => (
-              <div className="space-y-6">
-                <MeetingTranscriptionPanel />
-                {transcriptionMode === "local" &&
-                  localTranscriptionProvider === "whisper" &&
-                  renderWhisperVadSettings()}
-              </div>
-            )}
-            renderUpload={() => (
-              <div className="space-y-6">
-                <UploadTranscriptionPanel />
-              </div>
-            )}
-          />
-        </TabPanel>
-      )}
-      {hasMountedLlms && (
-        <TabPanel active={activeSection === "llms"}>
-          <LlmsTabs
-            initialTab={
-              activeSection === "llms" ? (initialSubTab as LlmTab | undefined) : undefined
-            }
-            renderChatIntelligence={() => <ChatAgentSettings />}
-            renderDictationCleanup={() => (
-              <div className="space-y-6">
-                <AiModelsSection
-                  useCleanupModel={useCleanupModel}
-                  setUseCleanupModel={(value) => {
-                    updateCleanupSettings({ useCleanupModel: value });
-                  }}
-                  toast={toast}
-                />
-                <div className="border-t border-border/70 pt-6">
-                  <SectionHeader
-                    title={t("settingsPage.prompts.title")}
-                    description={t("settingsPage.prompts.description")}
-                  />
-                  <PromptStudio />
-                </div>
-              </div>
-            )}
-            renderDictationAgent={() => <DictationAgentSettings />}
-            renderDictationTranslation={() => <DictationTranslationSettings />}
-            renderNoteFormatting={() => <NoteFormattingSettings />}
-          />
-        </TabPanel>
-      )}
+      <KeepAlive active={activeSection === "speechToText"}>
+        <SpeechToTextTabs
+          navigation={navigation}
+          dictation={<DictationPanel isSignedIn={isSignedIn ?? false} navigation={navigation} />}
+          noteRecording={speechPanels.noteRecording}
+          upload={speechPanels.upload}
+        />
+      </KeepAlive>
+      <HotkeysSection
+        active={activeSection === "hotkeys"}
+        linuxPttAvailable={linuxPttAvailable}
+        showAlertDialog={showAlertDialog}
+      />
+      <LlmsKeepAlive navigation={navigation} />
+      <SystemUpdates
+        active={activeSection === "system"}
+        showAlertDialog={showAlertDialog}
+        showConfirmDialog={showConfirmDialog}
+      />
       {renderSectionContent()}
     </>
   );

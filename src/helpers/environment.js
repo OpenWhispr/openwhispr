@@ -5,20 +5,10 @@ const { app } = require("electron");
 const debugLogger = require("./debugLogger");
 const { normalizeUiLanguage } = require("./i18nMain");
 const secretCrypto = require("./secretCrypto");
-const { BYOK_API_KEYS } = require("../config/secretKeys");
+const { BYOK_API_KEYS, SECRET_STORE_KEYS_BY_ENV } = require("../config/secretKeys");
+const { broadcastToWindows } = require("./windowBroadcast");
 
-const SECRET_KEYS = [
-  ...BYOK_API_KEYS.map((k) => k.env),
-  "CORTI_CLIENT_ID",
-  "CORTI_CLIENT_SECRET",
-  "CUSTOM_TRANSCRIPTION_API_KEY",
-  "CUSTOM_CLEANUP_API_KEY",
-  "BEDROCK_ACCESS_KEY_ID",
-  "BEDROCK_SECRET_ACCESS_KEY",
-  "BEDROCK_SESSION_TOKEN",
-  "AZURE_OPENAI_API_KEY",
-  "VERTEX_API_KEY",
-];
+const SECRET_KEYS = Object.keys(SECRET_STORE_KEYS_BY_ENV);
 
 const SECRET_KEY_SET = new Set(SECRET_KEYS);
 
@@ -64,6 +54,8 @@ const PERSISTED_KEYS = [
 // Module-level so writes are serialized across all instances — hotkeyManager
 // creates its own EnvironmentManager alongside the main.js singleton.
 let envWriteQueue = Promise.resolve();
+const secretWriteQueues = new Map();
+const secretVersions = new Map();
 
 class EnvironmentManager {
   constructor() {
@@ -154,8 +146,6 @@ class EnvironmentManager {
       return;
     }
 
-    process.env[envVarName] = value;
-
     const dir = this._getSecureKeysDir();
     await fsPromises.mkdir(dir, { recursive: true });
 
@@ -168,7 +158,6 @@ class EnvironmentManager {
   }
 
   async _deleteSecretKey(envVarName) {
-    delete process.env[envVarName];
     try {
       await fsPromises.unlink(this._getSecretFilePath(envVarName));
     } catch (error) {
@@ -249,20 +238,41 @@ class EnvironmentManager {
   }
 
   _saveKey(envVarName, key) {
-    if (SECRET_KEY_SET.has(envVarName) && this._encryptionAvailable()) {
-      this._saveSecretKey(envVarName, key).catch((error) => {
+    if (typeof key !== "string") return { success: false, code: "INVALID_SECRET" };
+    // Publish in-memory truth synchronously; queued disk writes must never restore old values.
+    if (key) process.env[envVarName] = key;
+    else delete process.env[envVarName];
+    if (!SECRET_KEY_SET.has(envVarName)) return { success: true };
+
+    const version = (secretVersions.get(envVarName) ?? 0) + 1;
+    secretVersions.set(envVarName, version);
+    try {
+      broadcastToWindows("secret-key-changed", {
+        key: SECRET_STORE_KEYS_BY_ENV[envVarName],
+        version,
+      });
+    } catch {
+      debugLogger.warn("Failed to publish credential metadata", { key: envVarName }, "environment");
+    }
+    const persist = (secretWriteQueues.get(envVarName) ?? Promise.resolve())
+      .catch(() => {})
+      .then(() =>
+        this._encryptionAvailable()
+          ? this._saveSecretKey(envVarName, key)
+          : this._writeEnvFileAtomic(path.join(app.getPath("userData"), ".env"))
+      );
+    secretWriteQueues.set(envVarName, persist);
+    return persist.then(
+      () => ({ success: true }),
+      (error) => {
         debugLogger.error(
-          "Failed to persist encrypted secret",
+          "Failed to persist secret",
           { key: envVarName, error: error.message },
           "environment"
         );
-      });
-    } else if (key) {
-      process.env[envVarName] = key;
-    } else {
-      delete process.env[envVarName];
-    }
-    return { success: true };
+        return { success: false, code: "SECRET_PERSIST_FAILED" };
+      }
+    );
   }
 
   getCortiClientId() {
@@ -489,6 +499,7 @@ class EnvironmentManager {
   }
 
   async clearAllPersistedData() {
+    await Promise.allSettled([...secretWriteQueues.values()]);
     for (const envVarName of PERSISTED_KEYS) {
       delete process.env[envVarName];
     }

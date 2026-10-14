@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "./button";
@@ -64,45 +64,74 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
   const [testResult, setTestResult] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
+  const testRequest = useRef(0);
+  const bindStudio = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return;
+    return () => {
+      ++testRequest.current;
+    };
+  }, []);
 
   const { alertDialog, showAlertDialog, hideAlertDialog } = useDialogs();
   const { agentName } = useAgentName();
   const policyState = usePolicySnapshot();
-  const effectiveSettings = useSettingsStore(
-    useShallow((settings) => selectPolicyEffectiveSettings(settings, policyState))
-  );
-  const uiLanguage = effectiveSettings.uiLanguage;
-
-  const isCloudMode = selectIsCloudCleanupMode(effectiveSettings);
-  const useCleanupModel = effectiveSettings.useCleanupModel;
-  const cleanupModel = effectiveSettings.cleanupModel;
-
-  const isCloudDictationAgent = selectIsCloudDictationAgentMode(effectiveSettings);
-  const useDictationAgent = effectiveSettings.useDictationAgent;
-  const dictationAgentMode = effectiveSettings.dictationAgentMode;
-  const dictationAgentProvider = effectiveSettings.dictationAgentProvider;
-  const dictationAgentModel = effectiveSettings.dictationAgentModel;
-
-  const isCloudTranslation = selectIsCloudTranslationMode(effectiveSettings);
-  const useDictationTranslation = effectiveSettings.useDictationTranslation;
-  const translationMode = effectiveSettings.translationMode;
-  const translationProvider = effectiveSettings.translationProvider;
-  const translationModel = effectiveSettings.translationModel;
-  const translationRemoteUrl = effectiveSettings.translationRemoteUrl;
-  const translationTargetLanguage = effectiveSettings.translationTargetLanguage;
-
   const isTranslate = kind === "translate";
   const isAgent = kind === "dictationAgent";
+  const {
+    uiLanguage,
+    testIsCloud,
+    testModel,
+    configuredMode,
+    configuredProvider,
+    useCleanupModel,
+    useDictationAgent,
+    translationTargetLanguage,
+  } = useSettingsStore(
+    useShallow((settings) => {
+      const effective = selectPolicyEffectiveSettings(settings, policyState);
+      return {
+        uiLanguage: effective.uiLanguage,
+        testIsCloud: isTranslate
+          ? selectIsCloudTranslationMode(effective)
+          : isAgent
+            ? selectIsCloudDictationAgentMode(effective)
+            : selectIsCloudCleanupMode(effective),
+        testModel: isTranslate
+          ? effective.translationModel
+          : isAgent
+            ? effective.dictationAgentModel
+            : effective.cleanupModel,
+        configuredMode: isTranslate
+          ? effective.translationMode
+          : isAgent
+            ? effective.dictationAgentMode
+            : "",
+        configuredProvider: isTranslate
+          ? effective.translationProvider
+          : isAgent
+            ? effective.dictationAgentProvider
+            : "",
+        useCleanupModel: !isTranslate && !isAgent && effective.useCleanupModel,
+        useDictationAgent: isAgent && effective.useDictationAgent,
+        translationTargetLanguage: isTranslate ? effective.translationTargetLanguage : "",
+      };
+    })
+  );
 
   const customPrompt = useSettingsStore((s) => s.customPrompts[kind]);
   const setCustomPrompt = useSettingsStore((s) => s.setCustomPrompt);
   const defaultPrompt = getDefaultPromptText(kind, uiLanguage);
-  const [editedPrompt, setEditedPrompt] = useState(customPrompt || defaultPrompt);
+  const currentPrompt = customPrompt || defaultPrompt;
+  // Untouched text is derived, not an old snapshot of a default or saved prompt.
+  // Only actual edits survive external changes and hidden retained mounting.
+  const [draft, setDraft] = useState<{ kind: PromptKind; text: string } | null>(null);
+  const editedPrompt = draft?.kind === kind ? draft.text : currentPrompt;
 
   const savePrompt = () => {
     // Saving the unedited default is not a customization; keep resolving the
     // shipped default so future prompt updates still reach this install.
     setCustomPrompt(kind, editedPrompt === defaultPrompt ? "" : editedPrompt);
+    setDraft(null);
     showAlertDialog({
       title: t("promptStudio.dialogs.saved.title"),
       description: t("promptStudio.dialogs.saved.description"),
@@ -110,8 +139,8 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
   };
 
   const resetToDefault = () => {
-    setEditedPrompt(defaultPrompt);
     setCustomPrompt(kind, "");
+    setDraft(null);
     showAlertDialog({
       title: t("promptStudio.dialogs.reset.title"),
       description: t("promptStudio.dialogs.reset.description"),
@@ -125,19 +154,43 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
   };
 
   const testPrompt = async () => {
-    if (!testText.trim()) return;
+    if (!testText.trim() || isLoading) return;
+    const request = ++testRequest.current;
+    const publishResult = (result: string) => {
+      if (request === testRequest.current) setTestResult(result);
+    };
 
     setIsLoading(true);
     setTestResult("");
 
     try {
+      // Test-only credentials, endpoints, dictionary and sampling settings are
+      // read on the action, not subscribed to by every retained prompt editor.
+      const effectiveSettings = selectPolicyEffectiveSettings(
+        useSettingsStore.getState(),
+        policyState
+      );
+      const {
+        uiLanguage,
+        useCleanupModel,
+        cleanupModel,
+        useDictationAgent,
+        useDictationTranslation,
+        translationMode,
+        translationRemoteUrl,
+        translationTargetLanguage,
+      } = effectiveSettings;
+      const isCloudMode = selectIsCloudCleanupMode(effectiveSettings);
+      const isCloudDictationAgent = selectIsCloudDictationAgentMode(effectiveSettings);
+      const isCloudTranslation = selectIsCloudTranslationMode(effectiveSettings);
+
       if (isTranslate) {
         if (!useDictationTranslation) {
-          setTestResult(t("promptStudio.test.translationDisabled"));
+          publishResult(t("promptStudio.test.translationDisabled"));
           return;
         }
         if (!translationTargetLanguage.trim()) {
-          setTestResult(t("promptStudio.test.noTargetLanguage"));
+          publishResult(t("promptStudio.test.noTargetLanguage"));
           return;
         }
 
@@ -146,34 +199,24 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
         });
         if (!translation.reachable) {
           if (translationMode === "self-hosted" && !translationRemoteUrl.trim()) {
-            setTestResult(t("notes.actions.errors.noEndpoint"));
+            publishResult(t("notes.actions.errors.noEndpoint"));
             return;
           }
-          setTestResult(t("promptStudio.test.noModelSelected"));
+          publishResult(t("promptStudio.test.noModelSelected"));
           return;
         }
 
-        const previous = customPrompt;
-        setCustomPrompt(kind, editedPrompt);
-        try {
-          const result = await ReasoningService.processText(
-            testText,
-            translation.model,
+        const result = await ReasoningService.processText(testText, translation.model, agentName, {
+          ...translation.config,
+          systemPrompt: resolvePrompt("translate", {
             agentName,
-            {
-              ...translation.config,
-              systemPrompt: resolvePrompt("translate", {
-                agentName,
-                targetLanguageLabel: getLanguageLabel(translationTargetLanguage),
-                customDictionary: getDictionaryHintWords(effectiveSettings),
-                uiLanguage,
-              }),
-            }
-          );
-          setTestResult(result);
-        } finally {
-          setCustomPrompt(kind, previous);
-        }
+            targetLanguageLabel: getLanguageLabel(translationTargetLanguage),
+            customDictionary: getDictionaryHintWords(effectiveSettings),
+            uiLanguage,
+            promptTemplate: editedPrompt,
+          }),
+        });
+        publishResult(result);
         return;
       }
 
@@ -181,7 +224,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
       // branch would test the cleanup provider with the cleanup prompt.
       if (isAgent) {
         if (!useDictationAgent) {
-          setTestResult(t("promptStudio.test.agentDisabled"));
+          publishResult(t("promptStudio.test.agentDisabled"));
           return;
         }
 
@@ -191,28 +234,23 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
         });
 
         if (!agent.reachable) {
-          setTestResult(t("promptStudio.test.noModelSelected"));
+          publishResult(t("promptStudio.test.noModelSelected"));
           return;
         }
 
-        const previous = customPrompt;
-        setCustomPrompt(kind, editedPrompt);
-        try {
-          const result = await ReasoningService.processText(testText, agent.model, agentName, {
-            ...agent.config,
-            inferenceScope: "dictationAgent",
-            requiresAgent: true,
-            systemPrompt: resolvePrompt("dictationAgent", {
-              agentName,
-              language: settings.preferredLanguage,
-              customDictionary: getDictionaryHintWords(settings),
-              uiLanguage,
-            }),
-          });
-          setTestResult(result);
-        } finally {
-          setCustomPrompt(kind, previous);
-        }
+        const result = await ReasoningService.processText(testText, agent.model, agentName, {
+          ...agent.config,
+          inferenceScope: "dictationAgent",
+          requiresAgent: true,
+          systemPrompt: resolvePrompt("dictationAgent", {
+            agentName,
+            language: settings.preferredLanguage,
+            customDictionary: getDictionaryHintWords(settings),
+            uiLanguage,
+            promptTemplate: editedPrompt,
+          }),
+        });
+        publishResult(result);
         return;
       }
 
@@ -234,12 +272,12 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
       );
 
       if (!useCleanupModel) {
-        setTestResult(t("promptStudio.test.disabledReasoning"));
+        publishResult(t("promptStudio.test.disabledReasoning"));
         return;
       }
 
       if (!isCloudMode && !cleanupModel) {
-        setTestResult(t("promptStudio.test.noModelSelected"));
+        publishResult(t("promptStudio.test.noModelSelected"));
         return;
       }
 
@@ -251,7 +289,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
         if (providerConfig.baseStorageKey) {
           const baseUrl = (effectiveSettings.cleanupCloudBaseUrl || "").trim();
           if (!baseUrl) {
-            setTestResult(
+            publishResult(
               t("promptStudio.test.baseUrlMissing", {
                 provider:
                   cleanupProvider === "custom"
@@ -266,34 +304,28 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
 
       const modelToUse = isCloudMode ? cleanupModel || "auto" : cleanupModel;
 
-      const previous = customPrompt;
-      setCustomPrompt(kind, editedPrompt);
-      try {
-        const result = await ReasoningService.processText(testText, modelToUse, agentName, {
-          inferenceScope: "dictationCleanup",
-          disableThinking: effectiveSettings.cleanupDisableThinking,
-        });
-        setTestResult(result);
-      } finally {
-        setCustomPrompt(kind, previous);
-      }
+      const result = await ReasoningService.processText(testText, modelToUse, agentName, {
+        inferenceScope: "dictationCleanup",
+        disableThinking: effectiveSettings.cleanupDisableThinking,
+        cleanupPrompt: editedPrompt,
+      });
+      publishResult(result);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger.error("PromptStudio test failed", { error: errorMessage }, "prompt-studio");
       const typed = error as { code?: string; provider?: string };
-      setTestResult(
+      publishResult(
         typed?.code === "API_KEY_MISSING"
           ? t("promptStudio.test.apiKeyMissing", { provider: typed.provider })
           : t("promptStudio.test.failed", { error: errorMessage })
       );
     } finally {
-      setIsLoading(false);
+      if (request === testRequest.current) setIsLoading(false);
     }
   };
 
   const isAgentAddressed = testText.toLowerCase().includes(agentName.toLowerCase());
   const isCustomPrompt = customPrompt.length > 0;
-  const currentPrompt = customPrompt || defaultPrompt;
 
   const tabs = [
     { id: "current" as const, label: t("promptStudio.tabs.view"), icon: Eye },
@@ -302,7 +334,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
   ];
 
   return (
-    <div className={className}>
+    <div ref={bindStudio} className={className}>
       <AlertDialog
         open={alertDialog.open}
         onOpenChange={(open) => !open && hideAlertDialog()}
@@ -399,9 +431,12 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
 
             <div className="px-5 py-4">
               <Textarea
+                aria-label={t("promptStudio.view.customPrompt")}
                 dir="auto"
                 value={editedPrompt}
-                onChange={(e) => setEditedPrompt(e.target.value)}
+                onChange={(e) =>
+                  setDraft(e.target.value === currentPrompt ? null : { kind, text: e.target.value })
+                }
                 rows={16}
                 className="font-mono text-xs leading-relaxed"
                 placeholder={t("promptStudio.edit.placeholder")}
@@ -433,34 +468,24 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
         {activeTab === "test" &&
           (() => {
             // Each kind reports the scope that actually runs it.
-            const testIsCloud = isTranslate
-              ? isCloudTranslation
-              : isAgent
-                ? isCloudDictationAgent
-                : isCloudMode;
-            const testModel = isTranslate
-              ? translationModel
-              : isAgent
-                ? dictationAgentModel
-                : cleanupModel;
             const agentDisplayProvider = isAgent
               ? resolveDictationAgentInference(
                   {
                     useDictationAgent,
-                    dictationAgentMode,
-                    dictationAgentProvider,
-                    dictationAgentModel,
+                    dictationAgentMode: configuredMode,
+                    dictationAgentProvider: configuredProvider,
+                    dictationAgentModel: testModel,
                   },
-                  { isCloudAgent: isCloudDictationAgent }
+                  { isCloudAgent: testIsCloud }
                 ).displayProvider
               : "";
             const translationDisplayProvider = isTranslate
               ? resolveDictationTranslationInference(
                   {
-                    translationMode,
-                    translationProvider,
+                    translationMode: configuredMode,
+                    translationProvider: configuredProvider,
                   },
-                  { isCloudTranslation }
+                  { isCloudTranslation: testIsCloud }
                 ).displayProvider
               : "";
             const scopeProvider = isTranslate
@@ -549,6 +574,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                     )}
                   </div>
                   <Textarea
+                    aria-label={t("promptStudio.test.inputLabel")}
                     dir="auto"
                     value={testText}
                     onChange={(e) => setTestText(e.target.value)}

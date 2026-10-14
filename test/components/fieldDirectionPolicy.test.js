@@ -61,13 +61,12 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/CreateTeamDialog.tsx": ["auto"],
   "src/components/CreateWorkspaceDialog.tsx": ["auto"],
   "src/components/DictionaryView.tsx": ["auto", "auto", "auto"],
-  "src/components/EnterpriseProviderConfig.tsx": ["ltr", "ltr", "ltr", "ltr", "ltr", "ltr"],
+  "src/components/EnterpriseProviderConfig.tsx": ["ltr", "ltr", "ltr", "ltr", "ltr"],
   "src/components/ForgotPasswordView.tsx": ["ltr"],
   "src/components/InviteTeammateDialog.tsx": ["ltr"],
   "src/components/LeaderboardSection.tsx": ["ltr"],
   "src/components/OpenAICompatiblePanel.tsx": ["ltr"],
   "src/components/SelfHostedPanel.tsx": ["ltr", "ltr"],
-  "src/components/SettingsPage.tsx": ["ltr", "ltr", "ltr", "ltr", "ltr", "ltr"],
   "src/components/SnippetsView.tsx": ["auto", "auto", "auto", "auto"],
   "src/components/TranscriptionModelPicker.tsx": ["ltr", "ltr", "ltr"],
   "src/components/notes/ActionManagerDialog.tsx": ["auto", "auto", "auto"],
@@ -77,6 +76,7 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/settings/DictationAgentSettings.tsx": ["auto"],
   "src/components/settings/EnterpriseCheckoutDialog.tsx": ["inherit"],
   "src/components/settings/ProfileSection.tsx": ["auto", "ltr", "ltr", "ltr"],
+  "src/components/settings/WhisperVadSettings.tsx": ["ltr", "ltr", "ltr", "ltr", "ltr", "ltr"],
   "src/components/settings/WorkspaceDeveloperTab.tsx": ["auto"],
   "src/components/settings/WorkspaceSection.tsx": ["auto"],
   "src/components/ui/ApiKeyInput.tsx": ["ltr"],
@@ -188,10 +188,11 @@ test("representative prose, identity, secret, and rich-editor surfaces keep thei
     source("src/components/ui/ApiKeyInput.tsx"),
     /<span\s+dir="ltr"[\s\S]*?\{maskKey\(apiKey\)\}/
   );
-  assert.match(
-    source("src/components/ui/ApiKeyInput.tsx"),
-    /<Input\s+dir="ltr"[\s\S]*?value=\{draft\}/
-  );
+  const draftInput = source("src/components/ui/ApiKeyInput.tsx")
+    .match(/<Input\b[\s\S]*?\/>/g)
+    ?.find((tag) => /\bvalue=\{draft\}/.test(tag));
+  assert.ok(draftInput, "the API-key draft must have an Input control");
+  assert.match(draftInput, /\bdir="ltr"/);
   assert.match(source("src/components/ui/CopyableCommand.tsx"), /<div\s+dir="ltr"/);
   assert.match(source("src/components/ui/HotkeyInput.tsx"), /<div\s+dir="ltr"/);
   assert.match(

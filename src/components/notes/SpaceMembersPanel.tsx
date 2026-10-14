@@ -18,7 +18,7 @@ import {
   setSpaceMemberRole,
 } from "../../services/spaceActions";
 import { useToast } from "../ui/useToast";
-import { useWorkspaceStore } from "../../stores/workspaceStore";
+import { useWorkspaceStore, EMPTY_WORKSPACE_MEMBERS } from "../../stores/workspaceStore";
 import { formatList } from "../../lib/formatList";
 import { orderMemberCandidates } from "../../lib/memberCandidates";
 import { canManageSpace, canManageWorkspace } from "../../lib/spacePermissions";
@@ -43,7 +43,7 @@ export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps) {
   } = useWorkspaceStore(
     useShallow((s) => ({
       workspace: s.workspaces.find((w) => w.id === space.workspace_id),
-      members: s.members,
+      members: s.membersByWorkspace[space.workspace_id ?? ""] ?? EMPTY_WORKSPACE_MEMBERS,
       refreshMembers: s.refreshMembers,
     }))
   );
@@ -63,7 +63,10 @@ export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps) {
     () => (spaceId ? SpacesService.listMembers(spaceId) : Promise.resolve<SpaceMemberEntry[]>([])),
     [spaceId]
   );
-  const { members, loading, loadFailed, reload, busyIds, mutate } = useMemberRoster(load);
+  const { members, loading, loadFailed, reload, busyIds, mutate, bindRoster } = useMemberRoster(
+    `space:${spaceId}`,
+    load
+  );
 
   useEffect(() => {
     if (space.workspace_id) void refreshMembers(space.workspace_id).catch(() => {});
@@ -92,23 +95,28 @@ export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps) {
   );
 
   const handleRoleChange = (member: SpaceMemberEntry, role: TeamRole) => {
-    void mutate(member.user_id, async () => {
-      await setSpaceMemberRole(space, member.user_id, role);
-      toast({ title: t("notes.spaces.members.roleUpdated") });
-    });
+    void mutate(
+      member.user_id,
+      () => setSpaceMemberRole(space, member.user_id, role),
+      () => toast({ title: t("notes.spaces.members.roleUpdated") })
+    );
   };
 
   const handleAdd = (member: WorkspaceMember) => {
-    void mutate(member.user_id, async () => {
-      const { failures } = await addSpaceMembers(space, [member.user_id]);
-      if (failures.length > 0) throw failures[0];
-      toast({
-        title: t("notes.spaces.members.addedToTeam", {
-          name: member.name || member.email,
-          team: space.name,
-        }),
-      });
-    });
+    void mutate(
+      member.user_id,
+      async () => {
+        const { failures } = await addSpaceMembers(space, [member.user_id]);
+        if (failures.length > 0) throw failures[0];
+      },
+      () =>
+        toast({
+          title: t("notes.spaces.members.addedToTeam", {
+            name: member.name || member.email,
+            team: space.name,
+          }),
+        })
+    );
   };
 
   // Removing drops the direct grant only; access through a group stays and
@@ -131,18 +139,20 @@ export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps) {
       confirmText: t("notes.spaces.members.remove"),
       variant: "destructive",
       onConfirm: () =>
-        void mutate(member.user_id, async () => {
-          const { still_via_teams } = await removeSpaceMember(space, member.user_id);
-          toast({
-            title:
-              still_via_teams.length > 0
-                ? t("notes.spaces.members.stillViaGroups", {
-                    name,
-                    groups: groupNames(still_via_teams),
-                  })
-                : t("notes.spaces.members.removedFromTeam", { name, team: space.name }),
-          });
-        }),
+        void mutate(
+          member.user_id,
+          () => removeSpaceMember(space, member.user_id),
+          ({ still_via_teams }) =>
+            toast({
+              title:
+                still_via_teams.length > 0
+                  ? t("notes.spaces.members.stillViaGroups", {
+                      name,
+                      groups: groupNames(still_via_teams),
+                    })
+                  : t("notes.spaces.members.removedFromTeam", { name, team: space.name }),
+            })
+        ),
     });
   };
 
@@ -150,7 +160,7 @@ export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps) {
 
   return (
     <>
-      <div className="space-y-4">
+      <div ref={bindRoster} className="space-y-4">
         <MemberRoster
           members={rows}
           loading={loading}
@@ -211,7 +221,7 @@ export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps) {
               </span>
             </button>
           </div>
-          {groupsOpen && <SpaceGroupsSection space={space} onChanged={() => void reload()} />}
+          {groupsOpen && <SpaceGroupsSection space={space} />}
         </div>
       </div>
 

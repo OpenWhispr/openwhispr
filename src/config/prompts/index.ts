@@ -12,10 +12,12 @@ export interface ResolvePromptOptions {
   language?: string;
   customDictionary?: string[];
   targetLanguageLabel?: string;
+  /** Request-local template; an empty string selects the shipped default. */
+  promptTemplate?: string;
 }
 
 export function resolvePrompt(kind: PromptKind, opts: ResolvePromptOptions): string {
-  const custom = useSettingsStore.getState().customPrompts[kind];
+  const custom = opts.promptTemplate ?? useSettingsStore.getState().customPrompts[kind];
   const template = custom || getDefaultPromptText(kind, opts.uiLanguage);
   return applySubstitutions(template, opts);
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -48,31 +48,45 @@ export default function OpenAICompatiblePanel({
   getKeyUrl,
 }: OpenAICompatiblePanelProps) {
   const { t } = useTranslation();
-  const [draftBase, setDraftBase] = useState(baseUrl);
-  const [modelOptions, setModelOptions] = useState<ModelOption[]>([]);
-  const [modelsLoading, setModelsLoading] = useState(false);
-  const [modelsError, setModelsError] = useState<string | null>(null);
-  const isMountedRef = useRef(true);
-  const lastLoadedBaseRef = useRef<string | null>(null);
-  const pendingBaseRef = useRef<string | null>(null);
-  const latestBaseRef = useRef<string>(normalizeBaseUrl(baseUrl));
-
+  const [draft, setDraft] = useState<string | null>(null);
+  const draftBase = draft ?? baseUrl;
+  const [catalog, setCatalog] = useState<{
+    owner: string;
+    options: ModelOption[];
+    loading: boolean;
+    error: { key: string } | { message: string } | null;
+  }>({ owner: "", options: [], loading: false, error: null });
+  const [searchable, setSearchable] = useState(false);
+  const requestRef = useRef(0);
+  const activeRequestRef = useRef<{ owner: string; controller: AbortController } | null>(null);
+  const liveRef = useRef(false);
   useEffect(() => {
-    isMountedRef.current = true;
+    liveRef.current = true;
+    const requests = requestRef;
     return () => {
-      isMountedRef.current = false;
+      liveRef.current = false;
+      activeRequestRef.current?.controller.abort();
+      activeRequestRef.current = null;
+      requests.current++;
     };
   }, []);
-
+  const adoptedOwnerRef = useRef<string | null>(null);
+  const setBaseUrlRef = useRef(setBaseUrl);
   useEffect(() => {
-    setDraftBase(baseUrl);
-  }, [baseUrl]);
-
-  const normalizedBase = useMemo(() => normalizeBaseUrl(baseUrl), [baseUrl]);
-
-  useEffect(() => {
-    latestBaseRef.current = normalizedBase;
-  }, [normalizedBase]);
+    setBaseUrlRef.current = setBaseUrl;
+  }, [setBaseUrl]);
+  const normalizedBase = normalizeBaseUrl(baseUrl);
+  const effectiveKey = apiKey.trim();
+  // Memory-only ownership; never persisted, logged or used as an allowlist.
+  const owner = JSON.stringify([normalizedBase, effectiveKey, lockedBaseUrl]);
+  const modelOptions = catalog.owner === owner ? catalog.options : [];
+  const modelsLoading = catalog.owner === owner && catalog.loading;
+  const modelsError =
+    catalog.owner === owner && catalog.error
+      ? "key" in catalog.error
+        ? t(catalog.error.key)
+        : catalog.error.message
+      : null;
 
   const hasBase = normalizedBase !== "";
   const trimmedDraft = draftBase.trim();
@@ -80,63 +94,44 @@ export default function OpenAICompatiblePanel({
   const isDraftDirty = trimmedDraft !== (baseUrl || "").trim();
 
   const loadRemoteModels = useCallback(
-    async (baseOverride?: string, force = false) => {
-      const rawBase = (baseOverride ?? baseUrl) || "";
-      const normalized = normalizeBaseUrl(rawBase);
-
-      if (!normalized) {
-        if (isMountedRef.current) {
-          setModelsLoading(false);
-          setModelsError(null);
-          setModelOptions([]);
-        }
+    async (baseOverride = normalizedBase) => {
+      if (!liveRef.current) return;
+      const normalized = normalizeBaseUrl(baseOverride);
+      const owner = JSON.stringify([normalized, effectiveKey, lockedBaseUrl]);
+      activeRequestRef.current?.controller.abort();
+      adoptedOwnerRef.current = null;
+      const request = ++requestRef.current;
+      const isCurrent = () => liveRef.current && request === requestRef.current;
+      const controller = new AbortController();
+      activeRequestRef.current = { owner, controller };
+      setCatalog((previous) => ({
+        owner,
+        options: previous.owner === owner ? previous.options : [],
+        loading: !!normalized,
+        error: null,
+      }));
+      if (!normalized) return;
+      const invalidKey = !normalized.includes("://")
+        ? "reasoning.custom.endpointWithProtocol"
+        : !isSecureHttpEndpoint(normalized)
+          ? "reasoning.custom.httpsRequired"
+          : null;
+      if (invalidKey) {
+        setCatalog({ owner, options: [], loading: false, error: { key: invalidKey } });
         return;
       }
-
-      if (!force && lastLoadedBaseRef.current === normalized) return;
-      if (!force && pendingBaseRef.current === normalized) return;
-
-      if (baseOverride !== undefined) {
-        latestBaseRef.current = normalized;
-      }
-
-      pendingBaseRef.current = normalized;
-
-      // Keep the previous list visible while refreshing so the searchable list
-      // (and its query state) isn't unmounted mid-fetch.
-      if (isMountedRef.current) {
-        setModelsLoading(true);
-        setModelsError(null);
-      }
-
-      const trimmedKey = apiKey?.trim();
-      const effectiveKey = trimmedKey && trimmedKey.length > 0 ? trimmedKey : undefined;
-      let activeBase = normalized;
-
       try {
-        if (!normalized.includes("://")) {
-          if (isMountedRef.current && latestBaseRef.current === normalized) {
-            setModelsError(t("reasoning.custom.endpointWithProtocol"));
-            setModelsLoading(false);
-          }
-          return;
-        }
-
-        if (!isSecureHttpEndpoint(normalized)) {
-          if (isMountedRef.current && latestBaseRef.current === normalized) {
-            setModelsError(t("reasoning.custom.httpsRequired"));
-            setModelsLoading(false);
-          }
-          return;
-        }
-
         const headers: Record<string, string> = {};
         if (effectiveKey) {
           headers.Authorization = `Bearer ${effectiveKey}`;
         }
 
         const fetchModelOptions = async (base: string): Promise<ModelOption[]> => {
-          const response = await fetch(buildApiUrl(base, "/models"), { method: "GET", headers });
+          const response = await fetch(buildApiUrl(base, "/models"), {
+            method: "GET",
+            headers,
+            signal: controller.signal,
+          });
 
           if (!response.ok) {
             const errorText = await response.text().catch(() => "");
@@ -162,11 +157,7 @@ export default function OpenAICompatiblePanel({
               const value = String(rawValue);
               const ownedBy = typeof item?.owned_by === "string" ? item.owned_by : undefined;
               const description =
-                typeof item?.description === "string" && item.description
-                  ? item.description
-                  : ownedBy
-                    ? t("reasoning.custom.ownerLabel", { owner: ownedBy })
-                    : undefined;
+                typeof item?.description === "string" ? item.description : undefined;
               return { value, label: value, description, ownedBy } as ModelOption;
             })
             .filter(Boolean) as ModelOption[];
@@ -180,6 +171,7 @@ export default function OpenAICompatiblePanel({
         let primaryError: Error | null = null;
 
         for (const candidate of candidates) {
+          if (!isCurrent()) return;
           try {
             const options = await fetchModelOptions(candidate);
             if (options.length > 0) {
@@ -194,91 +186,91 @@ export default function OpenAICompatiblePanel({
 
         if (mapped.length === 0 && primaryError) throw primaryError;
 
-        if (isMountedRef.current && latestBaseRef.current === normalized) {
-          if (resolvedBase !== normalized) {
-            activeBase = resolvedBase;
-            latestBaseRef.current = resolvedBase;
-            setDraftBase(resolvedBase);
-            setBaseUrl(resolvedBase);
-          }
-          setModelOptions(mapped);
-          // `/models` is a discovery aid, not an allowlist — keep the user's
-          // chosen id even if it's absent (it may still be valid, or belong to
-          // a provider they're switching away from). Invalid ids surface a
-          // clear API error at request time instead of being silently wiped.
-          setModelsError(null);
-          lastLoadedBaseRef.current = resolvedBase;
+        if (!isCurrent()) return;
+        const resolvedOwner = JSON.stringify([resolvedBase, effectiveKey, lockedBaseUrl]);
+        setCatalog({ owner: resolvedOwner, options: mapped, loading: false, error: null });
+        if (mapped.length > MODEL_SEARCH_THRESHOLD) setSearchable(true);
+        // Discovery never clears a manually entered model ID or endpoint draft.
+        if (resolvedBase !== normalized) {
+          adoptedOwnerRef.current = resolvedOwner;
+          activeRequestRef.current = { owner: resolvedOwner, controller };
+          setBaseUrlRef.current(resolvedBase);
         }
       } catch (error) {
-        if (isMountedRef.current && latestBaseRef.current === normalized) {
-          const message = (error as Error).message || t("reasoning.custom.unableToLoadModels");
-          const unauthorized = /\b(401|403)\b/.test(message);
-          if (unauthorized && !effectiveKey) {
-            setModelsError(t("reasoning.custom.endpointUnauthorized"));
-          } else {
-            setModelsError(message);
-          }
-          setModelOptions([]);
-        }
-      } finally {
-        if (pendingBaseRef.current === normalized) {
-          pendingBaseRef.current = null;
-        }
-        if (isMountedRef.current && latestBaseRef.current === activeBase) {
-          setModelsLoading(false);
-        }
+        if (!isCurrent()) return;
+        const message = error instanceof Error ? error.message : "";
+        setCatalog({
+          owner,
+          options: [],
+          loading: false,
+          error:
+            /\b(401|403)\b/.test(message) && !effectiveKey
+              ? { key: "reasoning.custom.endpointUnauthorized" }
+              : message
+                ? { message }
+                : { key: "reasoning.custom.unableToLoadModels" },
+        });
       }
     },
-    [baseUrl, apiKey, lockedBaseUrl, setBaseUrl, t]
+    [normalizedBase, effectiveKey, lockedBaseUrl]
   );
 
+  // Automatic discovery synchronizes the committed configuration with a
+  // remote catalog. Explicit Apply/Reset/Refresh requests stay in their events.
   useEffect(() => {
-    if (!hasBase) {
-      setModelsError(null);
-      setModelOptions([]);
-      setModelsLoading(false);
-      lastLoadedBaseRef.current = null;
-      return;
-    }
-    if (!normalizedBase) return;
-    if (pendingBaseRef.current === normalizedBase) return;
-    if (lastLoadedBaseRef.current === normalizedBase) return;
-    loadRemoteModels();
-  }, [hasBase, normalizedBase, loadRemoteModels]);
+    if (adoptedOwnerRef.current === owner) adoptedOwnerRef.current = null;
+    else if (activeRequestRef.current?.owner !== owner) void loadRemoteModels();
+    const requests = requestRef;
+    return () => {
+      const active = activeRequestRef.current;
+      if (active?.owner === owner) {
+        active.controller.abort();
+        activeRequestRef.current = null;
+        requests.current++;
+      }
+    };
+  }, [owner, loadRemoteModels]);
 
-  const applyBase = useCallback(() => {
+  const applyBase = () => {
     const normalized = trimmedDraft ? normalizeBaseUrl(trimmedDraft) : trimmedDraft;
-    setDraftBase(normalized);
+    setDraft(null);
     setBaseUrl(normalized);
-    lastLoadedBaseRef.current = null;
-    loadRemoteModels(normalized, true);
-  }, [trimmedDraft, setBaseUrl, loadRemoteModels]);
+    void loadRemoteModels(normalized);
+  };
 
-  const handleBlur = useCallback(() => {
+  const handleBlur = () => {
     if (!trimmedDraft) return;
     if (trimmedDraft !== (baseUrl || "").trim()) {
       applyBase();
     }
-  }, [trimmedDraft, baseUrl, applyBase]);
+  };
 
-  const handleReset = useCallback(() => {
+  const handleReset = () => {
     const target = defaultBaseUrl ?? "";
-    setDraftBase(target);
+    setDraft(null);
     setBaseUrl(target);
-    lastLoadedBaseRef.current = null;
-    loadRemoteModels(target, true);
-  }, [defaultBaseUrl, setBaseUrl, loadRemoteModels]);
+    void loadRemoteModels(target);
+  };
 
-  const handleRefresh = useCallback(() => {
+  const handleRefresh = () => {
     if (isDraftDirty) {
       applyBase();
       return;
     }
     if (!trimmedDraft) return;
-    loadRemoteModels(undefined, true);
-  }, [applyBase, isDraftDirty, trimmedDraft, loadRemoteModels]);
+    void loadRemoteModels();
+  };
 
-  const displayedModels = isDraftDirty ? [] : modelOptions;
+  const displayedModels = isDraftDirty
+    ? []
+    : modelOptions.map((option) => ({
+        ...option,
+        description:
+          option.description ||
+          (option.ownedBy
+            ? t("reasoning.custom.ownerLabel", { owner: option.ownedBy })
+            : undefined),
+      }));
   const queryUrl = buildApiUrl(hasBase ? normalizedBase : baseUrlPlaceholder, "/models");
 
   return (
@@ -287,9 +279,12 @@ export default function OpenAICompatiblePanel({
         <div className="space-y-2">
           <h4 className="font-medium text-foreground">{t("reasoning.custom.endpointTitle")}</h4>
           <Input
+            aria-label={t("reasoning.custom.endpointTitle")}
             dir="ltr"
             value={draftBase}
-            onChange={(event) => setDraftBase(event.target.value)}
+            onChange={(event) =>
+              setDraft(event.target.value.trim() === baseUrl.trim() ? null : event.target.value)
+            }
             onBlur={handleBlur}
             placeholder={baseUrlPlaceholder}
             className="text-sm"
@@ -384,7 +379,7 @@ export default function OpenAICompatiblePanel({
             )}
           </>
         )}
-        {displayedModels.length > MODEL_SEARCH_THRESHOLD ? (
+        {searchable ? (
           <SearchableModelList
             models={displayedModels}
             selectedModel={model}

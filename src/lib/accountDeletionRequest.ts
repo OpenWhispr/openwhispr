@@ -1,5 +1,11 @@
-import { cloudDelete } from "../services/cloudApi";
+import { cloudDeleteForAuthGeneration } from "../services/cloudApi";
+import { getValidatedAuthGeneration } from "./authRequestContext";
 
-export async function deleteAccount(): Promise<void> {
-  await cloudDelete("/api/auth/delete-account");
+export async function deleteAccount(authGeneration = getValidatedAuthGeneration()): Promise<void> {
+  if (authGeneration == null || authGeneration !== getValidatedAuthGeneration()) {
+    throw Object.assign(new Error("Account deletion consent is no longer current"), {
+      code: "AUTH_CONTEXT_CHANGED",
+    });
+  }
+  await cloudDeleteForAuthGeneration("/api/auth/delete-account", undefined, authGeneration);
 }

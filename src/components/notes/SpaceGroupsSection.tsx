@@ -6,6 +6,7 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from ".
 import { Button } from "../ui/button";
 import { useDialogs } from "../../hooks/useDialogs";
 import { useDelayedFlag } from "../../hooks/useDelayedFlag";
+import type { DialogCompletion } from "../../hooks/useDialogSession";
 import CreateTeamDialog from "../CreateTeamDialog";
 import { TeamsService } from "../../services/TeamsService";
 import {
@@ -20,14 +21,12 @@ import type { SpaceItem, SpaceTeamRef, Team } from "../../types/electron";
 
 interface SpaceGroupsSectionProps {
   space: SpaceItem;
-  /** Fires after any assignment change so the people list can refetch. */
-  onChanged: () => void;
 }
 
 // Groups (teams) assigned to a space and the controls to change them:
 // assign, per-assignment access cap, unassign, new group. The people the
 // groups bring in are shown in the flat roster above this section.
-export default function SpaceGroupsSection({ space, onChanged }: SpaceGroupsSectionProps) {
+export default function SpaceGroupsSection({ space }: SpaceGroupsSectionProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
@@ -101,7 +100,6 @@ export default function SpaceGroupsSection({ space, onChanged }: SpaceGroupsSect
               space: space.name,
             }),
           });
-          onChanged();
         } catch (err) {
           reportError(err);
         }
@@ -109,12 +107,13 @@ export default function SpaceGroupsSection({ space, onChanged }: SpaceGroupsSect
     });
   };
 
-  const assignTeam = async (team: Team) => {
+  const assignTeam = async (team: Team, completion?: DialogCompletion) => {
     await assignTeamToSpace(space, team.id);
-    toast({
-      title: t("notes.spaces.teamsMembers.teamAdded", { team: team.name, space: space.name }),
-    });
-    onChanged();
+    if (!completion || completion.isCurrent()) {
+      toast({
+        title: t("notes.spaces.teamsMembers.teamAdded", { team: team.name, space: space.name }),
+      });
+    }
   };
 
   const handleAssignTeam = async () => {
@@ -142,7 +141,6 @@ export default function SpaceGroupsSection({ space, onChanged }: SpaceGroupsSect
       toast({
         title: t("notes.spaces.teamsMembers.accessChanged", { team: teamRef.name }),
       });
-      onChanged();
     } catch (err) {
       reportError(err);
     } finally {
@@ -152,12 +150,12 @@ export default function SpaceGroupsSection({ space, onChanged }: SpaceGroupsSect
 
   // Registered in workspaceTeams before assignment: if assigning fails, the
   // new team still surfaces in the unassigned select for a retry.
-  const handleTeamCreated = async (team: Team) => {
+  const handleTeamCreated = async (team: Team, completion: DialogCompletion) => {
     setWorkspaceTeams((prev) => [...prev, team]);
     try {
-      await assignTeam(team);
+      await assignTeam(team, completion);
     } catch (err) {
-      reportError(err);
+      if (completion.isCurrent()) reportError(err);
     }
   };
 
@@ -307,7 +305,7 @@ export default function SpaceGroupsSection({ space, onChanged }: SpaceGroupsSect
           workspaceId={space.workspace_id}
           open={newTeamOpen}
           onOpenChange={setNewTeamOpen}
-          onCreated={handleTeamCreated}
+          onReconciled={handleTeamCreated}
         />
       )}
 

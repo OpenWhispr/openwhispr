@@ -946,6 +946,7 @@ export function MeetingTranscriptChat({
                 </button>
                 <div className="scale-75 -my-1">
                   <Toggle
+                    ariaLabel={t("notes.speaker.pill.labelToggle")}
                     checked={sessionDiarizationEnabled}
                     onChange={(next) => onSetSessionDiarizationEnabled?.(next)}
                   />

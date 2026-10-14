@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useShallow } from "zustand/react/shallow";
 import { AlertCircle } from "./icons";
 import { CompactAuthenticationFlow } from "./CompactAuthenticationFlow";
 import UseCaseStep from "./onboarding/UseCaseStep";
@@ -20,7 +21,6 @@ import { usePermissions } from "../hooks/usePermissions";
 import { useClipboard } from "../hooks/useClipboard";
 import { useScreenRecordingPermission } from "../hooks/useScreenRecordingPermission";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
-import { useSettings } from "../hooks/useSettings";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
 import { useHotkeyModeInfo } from "../hooks/useHotkeyModeInfo";
@@ -101,8 +101,32 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const { isSignedIn } = useAuth();
   const agentAllowed = usePolicyStore(isAgentAllowed);
   const screenContextAllowed = usePolicyStore(isScreenContextAllowed);
-  const settings = useSettings();
-  const settingsStore = useSettingsStore();
+  const settings = useSettingsStore(
+    useShallow((state) => ({
+      dictationKey: state.dictationKey,
+      voiceAgentKey: state.voiceAgentKey,
+      activationMode: state.activationMode,
+      onboardingUseCases: state.onboardingUseCases,
+      onboardingUseCaseNote: state.onboardingUseCaseNote,
+      spokenLanguages: state.spokenLanguages,
+      gcalAccounts: state.gcalAccounts,
+      mcalAccounts: state.mcalAccounts,
+      appleCalendarConnected: state.appleCalendarConnected,
+      voiceAgentScreenContext: state.voiceAgentScreenContext,
+      setDictationKey: state.setDictationKey,
+      setVoiceAgentKey: state.setVoiceAgentKey,
+      setActivationMode: state.setActivationMode,
+      setOnboardingUseCases: state.setOnboardingUseCases,
+      setOnboardingUseCaseNote: state.setOnboardingUseCaseNote,
+      setSpokenLanguages: state.setSpokenLanguages,
+      setPreferredLanguage: state.setPreferredLanguage,
+      setVoiceAgentScreenContext: state.setVoiceAgentScreenContext,
+      setCloudReasoningForAllScopes: state.setCloudReasoningForAllScopes,
+      setCloudTranscriptionForAllScopes: state.setCloudTranscriptionForAllScopes,
+      updateCleanupSettings: state.updateCleanupSettings,
+    }))
+  );
+  const settingsStore = settings;
   const {
     session,
     setSession,

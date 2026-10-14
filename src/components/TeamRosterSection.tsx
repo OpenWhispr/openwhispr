@@ -37,46 +37,53 @@ export default function TeamRosterSection({
   const { t } = useTranslation();
   const { toast } = useToast();
 
-  const load = useCallback(async () => {
-    const list = await TeamsService.listMembers(teamId);
-    onRosterChange?.(list);
-    return list;
-  }, [teamId, onRosterChange]);
-  const { members, loading, loadFailed, reload, busyIds, mutate } = useMemberRoster(load);
+  const load = useCallback(() => TeamsService.listMembers(teamId), [teamId]);
+  const { members, loading, loadFailed, reload, busyIds, mutate, bindRoster } = useMemberRoster(
+    `team:${teamId}`,
+    load,
+    onRosterChange
+  );
 
   const handleRoleChange = (member: TeamMember, role: TeamRole) => {
-    void mutate(member.user_id, async () => {
-      await setTeamMemberRole(teamId, member.user_id, role);
-      toast({ title: t("notes.spaces.members.roleUpdated") });
-    });
+    void mutate(
+      member.user_id,
+      () => setTeamMemberRole(teamId, member.user_id, role),
+      () => toast({ title: t("notes.spaces.members.roleUpdated") })
+    );
   };
 
   const handleAdd = (member: WorkspaceMember) => {
-    void mutate(member.user_id, async () => {
-      const { failures } = await addTeamMembers(teamId, [member.user_id]);
-      if (failures.length > 0) throw failures[0];
-      toast({
-        title: t("notes.spaces.members.addedToTeam", {
-          name: member.name || member.email,
-          team: teamName,
-        }),
-      });
-    });
+    void mutate(
+      member.user_id,
+      async () => {
+        const { failures } = await addTeamMembers(teamId, [member.user_id]);
+        if (failures.length > 0) throw failures[0];
+      },
+      () =>
+        toast({
+          title: t("notes.spaces.members.addedToTeam", {
+            name: member.name || member.email,
+            team: teamName,
+          }),
+        })
+    );
   };
 
   const handleRemove = (member: TeamMember) => {
     removeConfirm(
       member,
       () =>
-        void mutate(member.user_id, async () => {
-          await removeTeamMember(teamId, member.user_id);
-          toast({
-            title: t("notes.spaces.members.removedFromTeam", {
-              name: member.name || member.email,
-              team: teamName,
-            }),
-          });
-        })
+        void mutate(
+          member.user_id,
+          () => removeTeamMember(teamId, member.user_id),
+          () =>
+            toast({
+              title: t("notes.spaces.members.removedFromTeam", {
+                name: member.name || member.email,
+                team: teamName,
+              }),
+            })
+        )
     );
   };
 
@@ -91,19 +98,21 @@ export default function TeamRosterSection({
   );
 
   return (
-    <MemberRoster
-      members={members}
-      loading={loading}
-      loadFailed={loadFailed}
-      onRetry={() => void reload()}
-      currentUserId={currentUserId}
-      canManage={canManage}
-      busyIds={busyIds}
-      onRoleChange={handleRoleChange}
-      onRemove={handleRemove}
-      addCandidates={addCandidates}
-      onAdd={handleAdd}
-      onInvite={onInvite}
-    />
+    <div ref={bindRoster}>
+      <MemberRoster
+        members={members}
+        loading={loading}
+        loadFailed={loadFailed}
+        onRetry={() => void reload()}
+        currentUserId={currentUserId}
+        canManage={canManage}
+        busyIds={busyIds}
+        onRoleChange={handleRoleChange}
+        onRemove={handleRemove}
+        addCandidates={addCandidates}
+        onAdd={handleAdd}
+        onInvite={onInvite}
+      />
+    </div>
   );
 }
