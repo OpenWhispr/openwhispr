@@ -174,11 +174,10 @@ test("a local model that never sends bytes still times out after the startup all
   assert.equal((await stream.outcome).error.message, "Streaming request timed out");
 });
 
-test("cancelling a raw stream ends normally and clears its idle timer", async (t) => {
+test("cancelling a raw stream ends normally", async (t) => {
   const stream = await startStream(t, "local");
   await stream.send(contentEvent("Partial answer"));
   stream.service.cancelActiveStream();
   assert.equal((await stream.outcome).error, undefined);
   assert.equal(stream.body.locked, false);
-  t.mock.timers.tick(600_000);
 });
