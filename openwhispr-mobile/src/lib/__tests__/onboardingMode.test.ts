@@ -28,6 +28,10 @@ jest.mock('@/store/useOnboardingStore', () => ({
     getState: () => ({ currentStep: mockCurrentStep, chooseMode: mockChooseMode }),
   },
 }));
+let mockAccountHistory = false;
+jest.mock('@/sync/syncIdentity', () => ({
+  hasRealAccountHistory: () => mockAccountHistory,
+}));
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: {
     getState: () => ({
@@ -43,6 +47,7 @@ beforeEach(() => {
   mockError = null;
   mockUser = null;
   mockGuest = false;
+  mockAccountHistory = false;
   mockCurrentStep = 'privacy-mode';
   mockConfig = { defaultMode: 'private' };
   mockUpdateConfig.mockResolvedValue(undefined);
@@ -134,5 +139,26 @@ it('moves the dictation route with the chosen mode and restores both on failure'
     defaultMode: 'providers',
     inference,
     pinnedInference: ['upload'],
+  });
+});
+
+// A new identity there would read as an account switch and wipe the synced account's notes.
+describe('on a device that synced an account, signed out', () => {
+  beforeEach(() => {
+    mockAccountHistory = true;
+  });
+
+  it('refuses Cloud at the mode choice without opening a session', async () => {
+    const attempt = chooseOnboardingMode('cloud', 'privacy-mode');
+    await expect(attempt).rejects.toThrow('Cloud needs you signed in');
+    expect(mockEnsureSession).not.toHaveBeenCalled();
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
+  });
+
+  it('saves Cloud for after sign-in when leaving a stuck download', async () => {
+    mockCurrentStep = 'private-download';
+    await chooseOnboardingMode('cloud', 'private-download');
+    expect(mockEnsureSession).not.toHaveBeenCalled();
+    expect(mockChooseMode).toHaveBeenCalledWith('cloud', 'private-download');
   });
 });

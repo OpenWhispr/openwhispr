@@ -59,7 +59,7 @@ async function collectAllChunks(stream) {
   return chunks;
 }
 
-async function runToolMetadataScenario(t, cachePrefix, toolExecute) {
+async function runToolMetadataScenario(t, cachePrefix, toolExecute, calledTool = "test_tool") {
   const { reasoningService, vite } = await loadReasoningService(t, cachePrefix);
   const { ToolRegistry } = await vite.ssrLoadModule("/services/tools/ToolRegistry.ts");
   const registry = new ToolRegistry();
@@ -81,7 +81,7 @@ async function runToolMetadataScenario(t, cachePrefix, toolExecute) {
     if (fetchCalls === 1) {
       return createOpenAiSseResponse([], {
         finishReason: "tool_calls",
-        toolCall: { id: "call-test", name: "test_tool", arguments: "{}" },
+        toolCall: { id: "call-test", name: calledTool, arguments: "{}" },
       });
     }
     return createOpenAiSseResponse(["Answer"]);
@@ -152,6 +152,19 @@ test("a failed tool output yields no metadata and keeps the error as displayText
   assert.equal(toolResult.displayText, "Something failed");
 });
 
+test("a connector's failed result is still metadata, so its outcome reaches later turns", async (t) => {
+  // Connector results always succeed and carry their own `error` beside the status;
+  // only the registry's bare { error } wrapper means the tool itself failed.
+  const failed = { status: "failed", errorCode: "network", error: "Couldn't reach Slack" };
+  const toolResult = await runToolMetadataScenario(
+    t,
+    "openwhispr-tool-metadata-connector-failed-test-",
+    async () => ({ success: true, data: failed, displayText: "That didn't work." })
+  );
+
+  assert.deepEqual(toolResult.metadata, failed);
+});
+
 test("a successful string tool output yields no metadata", async (t) => {
   const toolResult = await runToolMetadataScenario(
     t,
@@ -165,4 +178,23 @@ test("a successful string tool output yields no metadata", async (t) => {
 
   assert.equal(toolResult.metadata, undefined);
   assert.equal(toolResult.displayText, "plain string result");
+});
+
+test("a call the SDK rejects still settles, with its error as displayText", async (t) => {
+  let executed = false;
+  const toolResult = await runToolMetadataScenario(
+    t,
+    "openwhispr-tool-metadata-rejected-test-",
+    async () => {
+      executed = true;
+      return { success: true, data: "unreachable", displayText: "Done" };
+    },
+    "ghost_tool"
+  );
+
+  assert.equal(executed, false);
+  assert.equal(toolResult.callId, "call-test");
+  assert.equal(toolResult.toolName, "ghost_tool");
+  assert.match(toolResult.displayText, /^Error: .*ghost_tool/);
+  assert.equal(toolResult.metadata, undefined);
 });

@@ -6,6 +6,7 @@ import { playStartCue, playStopCue } from "../utils/dictationCues";
 import { getSettings } from "../stores/settingsStore";
 import { expandSnippets } from "../utils/snippets";
 import { getRecordingErrorTitle, getRecordingErrorDescription } from "../utils/recordingErrors";
+import { providerErrorActions } from "../utils/describeProviderError";
 import { isAccessibilitySkipped } from "../utils/permissions";
 import { needsSttConfigBeforeStart } from "../helpers/sttConfigPolicy";
 import {
@@ -342,6 +343,11 @@ export const useAudioRecording = (toast, options = {}) => {
     // would otherwise wait on the device lookup before the mic can open.
     void audioManagerRef.current.cacheMicrophoneDeviceId?.();
 
+    // Keep this at mount: it opens the recording spool, which a hung main process would block.
+    void audioManagerRef.current.recoverInterruptedRecordings?.(
+      t("hooks.audioRecording.interruptedRecordingRecovered")
+    );
+
     // Reset stale main-process state after a renderer reload or crash recovery.
     reportLifecycle("idle");
 
@@ -361,6 +367,8 @@ export const useAudioRecording = (toast, options = {}) => {
       code,
       settingsLaunchFailed = false,
       onRetry,
+      settingsTarget,
+      technicalDetails,
     }) => {
       const errorGeneration = ++dictationErrorGenerationRef.current;
       const isCurrent = () => errorGeneration === dictationErrorGenerationRef.current;
@@ -468,6 +476,8 @@ export const useAudioRecording = (toast, options = {}) => {
         },
       ];
 
+      actions.push(...providerErrorActions({ settingsTarget, technicalDetails }, t, isCurrent));
+
       if (recoverableTranscript) {
         actions.push({
           label: t("hooks.audioRecording.errorActions.viewTranscript"),
@@ -563,6 +573,8 @@ export const useAudioRecording = (toast, options = {}) => {
             duration: error?.code === "AUTH_EXPIRED" ? 8000 : undefined,
             code: error?.code,
             transcript: error?.transcript,
+            settingsTarget: error?.settingsTarget,
+            technicalDetails: error?.technicalDetails,
           });
         }
         if (getSettings().pauseMediaOnDictation) {

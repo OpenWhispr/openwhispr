@@ -17,6 +17,7 @@ global.window = {
 const {
   getUsageState,
   isPastDueUsage,
+  storeBillingOf,
   loadUsage,
   normalizeUsage,
   retryUsage,
@@ -45,7 +46,12 @@ const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 test("an old response shape still resolves a personal entitlement", () => {
   const legacy = normalizeUsage({ plan: "business", status: "active", isSubscribed: true });
-  assert.deepEqual(legacy.entitlementSources, { personal: true, workspaceIds: [] });
+  assert.deepEqual(legacy.entitlementSources, {
+    personal: true,
+    provider: false,
+    providerStore: null,
+    workspaceIds: [],
+  });
   assert.equal(legacy.isSubscribed, true);
 
   const trial = normalizeUsage({ plan: "free", status: "active", isTrial: true });
@@ -70,7 +76,76 @@ test("an explicit entitlementSources block wins over the inferred one", () => {
     isSubscribed: true,
     entitlementSources: { personal: false, workspaceIds: ["ws-1"] },
   });
-  assert.deepEqual(migrated.entitlementSources, { personal: false, workspaceIds: ["ws-1"] });
+  assert.deepEqual(migrated.entitlementSources, {
+    personal: false,
+    provider: false,
+    providerStore: null,
+    workspaceIds: ["ws-1"],
+  });
+});
+
+const appStoreUsage = (overrides = {}) =>
+  normalizeUsage({
+    plan: "pro",
+    status: "active",
+    isSubscribed: true,
+    entitlementSources: {
+      personal: false,
+      provider: true,
+      providerStore: "app_store",
+      workspaceIds: [],
+    },
+    ...overrides,
+  });
+
+test("a plan bought in the mobile app is store-billed, not free (#2535)", () => {
+  assert.deepEqual(storeBillingOf(appStoreUsage()), { store: "app_store", status: "active" });
+  assert.deepEqual(storeBillingOf(appStoreUsage({ status: "canceled" })), {
+    store: "app_store",
+    status: "canceled",
+  });
+});
+
+test("an API without providerStore still reports store billing, with the store unknown", () => {
+  const usage = normalizeUsage({
+    plan: "pro",
+    status: "active",
+    isSubscribed: true,
+    entitlementSources: { personal: false, provider: true, workspaceIds: [] },
+  });
+  assert.deepEqual(storeBillingOf(usage), { store: null, status: "active" });
+  // An unrecognised store is not linked to either store's page.
+  const other = appStoreUsage({
+    entitlementSources: {
+      personal: false,
+      provider: true,
+      providerStore: "superwall",
+      workspaceIds: [],
+    },
+  });
+  assert.equal(storeBillingOf(other).store, null);
+});
+
+test("a Stripe subscription outranks a store one, matching the plan the API reports", () => {
+  const both = normalizeUsage({
+    plan: "pro",
+    status: "active",
+    isSubscribed: true,
+    entitlementSources: {
+      personal: true,
+      provider: true,
+      providerStore: "app_store",
+      workspaceIds: [],
+    },
+  });
+  assert.equal(storeBillingOf(both), null);
+  assert.equal(storeBillingOf(normalizeUsage({ plan: "pro", status: "active" })), null);
+});
+
+test("a store billing retry is not a Stripe past due", () => {
+  // The store runs its own retry; the Stripe recovery banner would open a
+  // portal with no subscription in it.
+  assert.equal(isPastDueUsage(appStoreUsage({ status: "past_due" })), false);
 });
 
 test("past due is only derived from a paid plan", () => {

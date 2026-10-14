@@ -1,4 +1,5 @@
 #define _GNU_SOURCE
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,6 +26,14 @@
 
 #ifdef HAVE_ATSPI
 #include <atspi/atspi.h>
+
+/* libatspi gives every application it hasn't seen yet 15s to answer, and every
+ * application is new to this short-lived process. One peer that stops
+ * answering (xdg-desktop-portal-gtk stuck at its fd limit, #1944) then stalls
+ * the whole walk past the caller's kill. Bound every call instead, so the walk
+ * skips that peer, still reaches the focused window, and stays inside the
+ * app's 1.2s selection and 2s target budgets. */
+#define ATSPI_CALL_TIMEOUT_MS 500
 #endif
 
 /* Paste key sequence. SHIFT_INSERT is the universal Linux paste shortcut —
@@ -359,13 +368,25 @@ static const char *terminal_classes[] = {
     "terminator", "xterm", "urxvt", "rxvt", "tilix", "terminology",
     "wezterm", "foot", "st", "yakuake", "ghostty", "guake", "tilda",
     "hyper", "tabby", "sakura", "warp", "termius", "waveterm",
-    "ptyxis", "kgx", "org.gnome.console", NULL
+    "ptyxis", "kgx", "org.gnome.console", "cosmicterm", "xst", "stterm", NULL
 };
+
+/* A short name like "st" would match inside unrelated names
+ * ("com.system76.CosmicEdit"), so it must be a whole word. */
+static int contains_terminal_name(const char *wm_class, const char *name) {
+    size_t len = strlen(name);
+    if (len > 2) return strcasestr(wm_class, name) != NULL;
+    for (const char *p = wm_class; (p = strcasestr(p, name)); p++) {
+        if ((p == wm_class || !isalnum((unsigned char)p[-1])) && !isalnum((unsigned char)p[len]))
+            return 1;
+    }
+    return 0;
+}
 
 static int is_terminal(const char *wm_class) {
     if (!wm_class) return 0;
     for (int i = 0; terminal_classes[i]; i++) {
-        if (strcasestr(wm_class, terminal_classes[i]))
+        if (contains_terminal_name(wm_class, terminal_classes[i]))
             return 1;
     }
     return 0;
@@ -402,8 +423,14 @@ static int check_parent_terminal(Display *dpy, Window win) {
 }
 
 #ifdef HAVE_ATSPI
+static int init_atspi(void) {
+    int status = atspi_init();
+    atspi_set_timeout(ATSPI_CALL_TIMEOUT_MS, -1);
+    return status;
+}
+
 static int detect_terminal_atspi(void) {
-    atspi_init();
+    if (init_atspi() != 0) return -1;
     AtspiAccessible *desktop = atspi_get_desktop(0);
     if (!desktop) return -1;
 
@@ -494,6 +521,7 @@ static int atspi_active_pid(AtspiAccessible *app) {
 }
 
 static int print_atspi_target(void) {
+    if (init_atspi() != 0) return 1;
     AtspiAccessible *app = NULL;
     AtspiAccessible *win = find_active_atspi_window(&app);
     int pid = app ? atspi_active_pid(app) : 0;
@@ -505,6 +533,7 @@ static int print_atspi_target(void) {
 }
 
 static int print_atspi_selection(void) {
+    if (init_atspi() != 0) return 1;
     AtspiAccessible *app = NULL;
     AtspiAccessible *win = find_active_atspi_window(&app);
     int pid = app ? atspi_active_pid(app) : 0;

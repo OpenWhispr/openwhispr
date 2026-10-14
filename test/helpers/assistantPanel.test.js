@@ -10,7 +10,9 @@ const noop = () => {};
 
 const { installInteractiveDom, findElement } = require("../lib/interactiveDom");
 
-async function renderAssistantPanel(
+// Loads the real AssistantPanel with its heavier dependencies mocked, and real
+// i18n so translated text (not keys) renders.
+async function setupAssistantPanel(
   t,
   messages,
   {
@@ -75,7 +77,7 @@ async function renderAssistantPanel(
       `,
       "/hooks/useCopyFeedback": `
         export function useCopyFeedback() {
-          return { copied: false, async copy() {}, confirmCopied() {} };
+          return { copied: false, async copy() {}, async copyText() { return true; }, confirmCopied() {} };
         }
       `,
       "/stores/settingsStore": `
@@ -123,26 +125,30 @@ async function renderAssistantPanel(
     interpolation: { escapeValue: false },
   });
   const { AssistantPanel } = await vite.ssrLoadModule("/components/dictation/AssistantPanel.tsx");
-  return renderToStaticMarkup(
-    React.createElement(AssistantPanel, {
-      pendingCommand: null,
-      onCommandConsumed: noop,
-      onCommandDiscarded: noop,
-      initialConversationId,
-      onConversationIdChange: noop,
-      voiceState: "idle",
-      thinking: false,
-      open: true,
-      footerPhase: "pill",
-      horizontalDirection: "right",
-      onClose: noop,
-      onBusyChange: noop,
-      onResponseReadyChange: noop,
-      onResponseContent: noop,
-      onConversationReset: noop,
-      onSelectionContextChange: noop,
-    })
-  );
+  const props = {
+    pendingCommand: null,
+    onCommandConsumed: noop,
+    onCommandDiscarded: noop,
+    initialConversationId,
+    onConversationIdChange: noop,
+    voiceState: "idle",
+    thinking: false,
+    open: true,
+    footerPhase: "pill",
+    horizontalDirection: "right",
+    onClose: noop,
+    onBusyChange: noop,
+    onResponseReadyChange: noop,
+    onResponseContent: noop,
+    onConversationReset: noop,
+    onSelectionContextChange: noop,
+  };
+  return { AssistantPanel, props };
+}
+
+async function renderAssistantPanel(t, messages, options) {
+  const { AssistantPanel, props } = await setupAssistantPanel(t, messages, options);
+  return renderToStaticMarkup(React.createElement(AssistantPanel, props));
 }
 
 test("an empty idle Assistant shows typed input and generic suggestions", async (t) => {
@@ -546,6 +552,64 @@ test("Assistant selection must stay entirely inside the response root", async (t
     toString: () => "mixed selection",
   });
   assert.equal(getSelectionInside(responseRoot), null);
+});
+
+// The Open Settings link and technical details must never ride along in a
+// drag-select + copy over the response, or the clipboard would pick up UI
+// chrome instead of just the answer.
+test("Cmd+C copies a selection in a classified error's answer, but not one running into its Open Settings or details", async (t) => {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  t.mock.method(globalThis.document, "addEventListener");
+
+  const { AssistantPanel, props } = await setupAssistantPanel(t, [
+    {
+      id: "assistant-1",
+      role: "assistant",
+      content: "Error: OpenAI rejected your API key.",
+      isStreaming: false,
+      error: { settingsTarget: "llms", technicalDetails: { provider: "OpenAI", status: 401 } },
+    },
+  ]);
+  const { createRoot } = require("react-dom/client");
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(AssistantPanel, props)));
+
+  const answer = findElement(
+    container,
+    (element) => element.textContent === "Error: OpenAI rejected your API key."
+  );
+  const settingsButton = findElement(
+    container,
+    (element) => element.tagName === "BUTTON" && element.textContent.includes("Open Settings")
+  );
+  const details = findElement(container, (element) => element.tagName === "DETAILS");
+  assert.ok(answer && settingsButton && details, "shows the answer, Open Settings and details");
+
+  let selectionEnd = null;
+  globalThis.window.getSelection = () => ({
+    isCollapsed: false,
+    rangeCount: 1,
+    getRangeAt: () => ({ startContainer: answer, endContainer: selectionEnd }),
+    toString: () => "selected text",
+  });
+  const onKeyDown = globalThis.document.addEventListener.mock.calls.findLast(
+    (call) => call.arguments[0] === "keydown"
+  ).arguments[1];
+  const copiesSelectionEndingIn = (node) => {
+    selectionEnd = node;
+    const preventDefault = t.mock.fn();
+    onKeyDown({ key: "c", metaKey: true, ctrlKey: false, altKey: false, preventDefault });
+    return preventDefault.mock.callCount() === 1;
+  };
+
+  assert.equal(copiesSelectionEndingIn(answer), true, "a selection inside the answer is copied");
+  assert.equal(copiesSelectionEndingIn(settingsButton), false, "Open Settings is never copied");
+  assert.equal(copiesSelectionEndingIn(details), false, "technical details are never copied");
 });
 
 test("a failed Assistant resize releases its open claim so opening can retry", async (t) => {

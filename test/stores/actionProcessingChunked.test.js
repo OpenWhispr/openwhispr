@@ -180,11 +180,11 @@ test("a summary action writing a first summary splits a refused recording like a
   const { store, calls, updates } = await loadStore(t, { failFirst: true });
   const tldr = {
     id: 2,
-    client_id: "tldr",
+    client_id: "notes.actions.builtin.lengthen",
     kind: "action",
     output: "summary",
     name: "Add TL;DR",
-    prompt: "Add a TL;DR.",
+    prompt: "Add supported detail.",
   };
   run(store, 30, longMaterial(400), { fromSummary: false }, tldr);
   await waitFor(() => updates.length > 0, "save");
@@ -200,7 +200,7 @@ test("a summary action writing a first summary splits a refused recording like a
     assert.equal(part.config.refuseClippedByWindow, false);
   }
   assert.equal(calls.at(-1).config.requireCompleteOutput, undefined);
-  assert.match(calls.at(-1).config.systemPrompt, /no AI summary yet[\s\S]*Add a TL;DR\./);
+  assert.match(calls.at(-1).config.systemPrompt, /no AI summary yet[\s\S]*Add supported detail\./);
   assert.deepEqual(Object.keys(updates[0].payload), [
     "enhanced_content",
     "enhanced_at_content_hash",
@@ -506,7 +506,8 @@ test("a shorter consolidation is usable even when its section count stays the sa
     },
   });
   const material = {
-    notes: "manual note ".repeat(2325),
+    // Leave room for the shared fidelity instructions while still forcing two reductions.
+    notes: "manual note ".repeat(2250),
     meetingContext: "",
     transcript: LINE.repeat(1400),
   };

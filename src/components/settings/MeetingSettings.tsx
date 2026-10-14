@@ -5,6 +5,7 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { usePolicyModeOptions, usePolicySnapshot } from "../../hooks/usePolicy";
 import { isModeAllowedByPolicy } from "../../stores/policyRules";
 import { requestSignIn } from "../../utils/requestSignIn";
+import { Button } from "../ui/button";
 import { InferenceModeSelector, SettingsRow } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
 import { Toggle } from "../ui/toggle";
@@ -27,6 +28,21 @@ export function MeetingSpeakerDetectionRow() {
       description={t("settings.meeting.speakerDetection.description")}
     >
       <Toggle checked={speakerDiarizationEnabled} onChange={setSpeakerDiarizationEnabled} />
+    </SettingsRow>
+  );
+}
+
+function MeetingEchoCancellationRow() {
+  const { t } = useTranslation();
+  const meetingAecEnabled = useSettingsStore((s) => s.meetingAecEnabled);
+  const setMeetingAecEnabled = useSettingsStore((s) => s.setMeetingAecEnabled);
+
+  return (
+    <SettingsRow
+      label={t("settingsPage.transcription.aec.toggle.title")}
+      description={t("settingsPage.transcription.aec.toggle.description")}
+    >
+      <Toggle checked={meetingAecEnabled} onChange={setMeetingAecEnabled} />
     </SettingsRow>
   );
 }
@@ -70,7 +86,7 @@ export function MeetingTranscriptionPanel() {
         description: t("settingsPage.transcription.modes.openwhisprDesc"),
         icon: <Cloud className="w-4 h-4" />,
         disabled: !isSignedIn,
-        badge: !isSignedIn ? t("common.freeAccountRequired") : undefined,
+        signInRequired: !isSignedIn,
       },
       {
         id: "providers",
@@ -176,9 +192,18 @@ export function MeetingTranscriptionPanel() {
         onSelect={handleTranscriptionModeSelect}
       />
 
+      {effectiveTranscriptionMode === "openwhispr" && !isSignedIn && (
+        <p className="text-sm text-muted-foreground">
+          {t("settingsPage.transcription.meetingCloudSignedOut")}{" "}
+          <Button variant="link" className="h-auto p-0" onClick={requestSignIn}>
+            {t("common.signIn")}
+          </Button>
+        </p>
+      )}
       {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
       {effectiveTranscriptionMode === "local" && renderTranscriptionPicker("local")}
       <MeetingSpeakerDetectionRow />
+      <MeetingEchoCancellationRow />
     </div>
   );
 }

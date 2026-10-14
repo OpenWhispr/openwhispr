@@ -10,6 +10,7 @@ import {
   type ActionAppliedEvent,
 } from "../../stores/actionProcessingStore";
 import { getActionName } from "../../stores/actionStore";
+import { providerErrorToastProps } from "../../utils/describeProviderError";
 
 const UNDO_WINDOW_MS = 6000;
 
@@ -29,7 +30,7 @@ export default function BackgroundActionToastListener() {
     for (const event of consumeErrorEvents()) {
       toast({
         title: event.notice ? undefined : t("notes.enhance.title"),
-        description: event.messageKey ? t(event.messageKey, event.messageParams) : event.message,
+        ...providerErrorToastProps(event, t),
         variant: event.notice ? undefined : "destructive",
       });
     }

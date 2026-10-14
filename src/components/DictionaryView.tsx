@@ -202,12 +202,12 @@ export default function DictionaryView() {
       />
 
       <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 pt-6")}>
-        <TabsList className="h-10 rounded-full p-1">
-          <TabsTrigger value="dictionary" className="h-8 gap-2 rounded-full px-4 text-sm">
+        <TabsList variant="pill">
+          <TabsTrigger value="dictionary" variant="pill">
             <NotebookPen size={17} />
             {t("dictionary.tabDictionary")}
           </TabsTrigger>
-          <TabsTrigger value="snippets" className="h-8 gap-2 rounded-full px-4 text-sm">
+          <TabsTrigger value="snippets" variant="pill">
             <PanelRight size={17} />
             {t("dictionary.tabSnippets")}
           </TabsTrigger>

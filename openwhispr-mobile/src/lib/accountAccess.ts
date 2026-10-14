@@ -2,6 +2,7 @@ import { Alert } from 'react-native';
 import { router } from 'expo-router';
 import { isAccountRequiredError } from '@/lib/accountRequiredError';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import type { AuthUser } from '@/lib/authClient';
 import type { ProcessingMode } from '@/types';
 
@@ -34,7 +35,11 @@ export function canRunCloudMeeting(user: AuthUser | null, mode: ProcessingMode):
 }
 
 export function getCloudAccountRequiredMessage(feature: string, anonymous = false): string {
-  return `${anonymous ? 'Create an account' : 'Sign in'} to use ${feature} with cloud processing, or switch to Private Mode after downloading the local model.`;
+  const action = `${anonymous ? 'Create an account' : 'Sign in'} to use ${feature} with cloud processing`;
+  // Already in Private Mode, which is what turning it off asks Cloud for, so don't offer it back.
+  return useProcessingModeStore.getState().activeMode === 'private'
+    ? `${action}.`
+    : `${action}, or turn on Private Mode in Account → AI Models.`;
 }
 
 // For features with no local model (AI actions, AI chat): Private Mode is not

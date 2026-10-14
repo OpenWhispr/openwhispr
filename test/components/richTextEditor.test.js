@@ -100,6 +100,21 @@ function markdownOf(editor) {
   return markdown.trim();
 }
 
+test("plain text conversion removes bold applied across an editor hard break", async (t) => {
+  const { markdownToPlainText } = await import("../../src/helpers/markdownToPlainText.ts");
+  const editor = createEditor("");
+  t.after(() => editor.destroy());
+  editor
+    .chain()
+    .insertContent("first")
+    .setHardBreak()
+    .insertContent("second")
+    .selectAll()
+    .toggleBold()
+    .run();
+  assert.equal(markdownToPlainText(markdownOf(editor)), "first\\\nsecond");
+});
+
 /** Asserts the output and that loading it back gives the same Markdown. */
 function assertSaves(editor, expected) {
   const markdown = markdownOf(editor);
@@ -654,16 +669,18 @@ async function mountNotes(t, markdown = `Intro\n\n${TABLE}\n\nAfter`) {
   const editorRef = { current: null };
   let showOtherNote;
   let setDisabled;
-  let saved;
+  let setNoteValue;
+  const changes = [];
   function Note({ initial }) {
     const [value, setValue] = React.useState(initial);
     const [disabled, updateDisabled] = React.useState(false);
     setDisabled = updateDisabled;
+    setNoteValue = setValue;
     return React.createElement(RichTextEditor, {
       value,
       disabled,
       onChange: (markdown) => {
-        saved = markdown;
+        changes.push(markdown);
         setValue(markdown);
       },
       editorRef,
@@ -708,9 +725,13 @@ async function mountNotes(t, markdown = `Intro\n\n${TABLE}\n\nAfter`) {
     editor: () => editorRef.current,
     errors,
     host,
+    /** Every Markdown the note saved through onChange, in order. */
+    changes,
     /** The Markdown the note last saved through onChange. */
-    saved: () => saved,
+    saved: () => changes.at(-1),
     setDisabled: (disabled) => setDisabled(disabled),
+    /** Replaces the note's value from outside the editor, as a summary arriving does. */
+    setValue: (markdown) => setNoteValue(markdown),
     showOtherNote: () => showOtherNote(),
   };
 }
@@ -748,6 +769,16 @@ async function openTableMenu(notes, caretCell = "Ana") {
   await notes.act(() => pointerDown(byLabel("notes.editor.table.actions")));
 }
 
+test("clicking into a note that ends in a list saves nothing until the user edits", async (t) => {
+  // The trailing-node plugin appends a paragraph on the first selection change;
+  // saving that would also retire the assistant's Undo for the note.
+  const notes = await mountNotes(t, "## Action items\n\n- Ana: draft the brief\n- Raj: book it");
+  await notes.act(() => notes.editor().commands.setTextSelection(5));
+  assert.equal(notes.saved(), undefined);
+  await notes.act(() => notes.editor().commands.insertContent("ZZ"));
+  assert.match(notes.saved(), /ZZ/);
+});
+
 test("Delete table from the menu works in a note that re-renders on every change", async (t) => {
   const notes = await mountNotes(t);
   await openTableMenu(notes);
@@ -755,6 +786,91 @@ test("Delete table from the menu works in a note that re-renders on every change
   assert.deepEqual(notes.errors, []);
   assert.equal(markdownOf(notes.editor()), "Intro\n\nAfter");
   assert.equal(notes.saved().trim(), "Intro\n\nAfter");
+});
+
+test("undo never reverts a value set from outside the editor", async (t) => {
+  // A sync pull or an assistant edit replaces the note: undoing that would save
+  // the text it replaced, often empty, over it.
+  const notes = await mountNotes(t, "Transcript tab");
+  await notes.act(() => notes.setValue("Summary tab"));
+  await notes.act(() => notes.editor().commands.undo());
+  assert.equal(markdownOf(notes.editor()), "Summary tab");
+  assert.deepEqual(notes.changes, [], "nothing saved over the summary");
+});
+
+test("undo still reverts typing after a value set from outside the editor", async (t) => {
+  const notes = await mountNotes(t, "Transcript tab");
+  await notes.act(() => notes.setValue("Summary tab"));
+  await notes.act(() => {
+    notes.editor().commands.setTextSelection(notes.editor().state.doc.content.size - 1);
+    type(notes.editor(), " edited");
+  });
+  assert.equal(notes.saved().trim(), "Summary tab edited");
+  await notes.act(() => notes.editor().commands.undo());
+  assert.equal(markdownOf(notes.editor()), "Summary tab");
+  assert.equal(notes.saved().trim(), "Summary tab");
+});
+
+// Undo maps earlier steps onto a value set from outside, and a step that
+// spanned the whole document maps onto the whole new value.
+for (const [when, wait] of [
+  ["at once", 30],
+  ["after the undo group closed", 600],
+]) {
+  test(`undo of a select-all delete never brings its text back over a value set from outside, ${when}`, async (t) => {
+    // The cleared summary's text would be saved over the notes, or the notes'
+    // over the summary, and sync to every device.
+    const notes = await mountNotes(t, "Summary paragraph one\n\nSummary two");
+    await notes.act(() => {
+      notes.editor().commands.selectAll();
+      pressKey(notes.editor(), "Backspace");
+    }, wait);
+    assert.equal(notes.saved(), "");
+    await notes.act(() => notes.setValue("Personal notes body\n\nMore notes"));
+    notes.changes.length = 0;
+    await notes.act(() => notes.editor().commands.undo());
+    assert.equal(markdownOf(notes.editor()), "Personal notes body\n\nMore notes");
+    assert.deepEqual(notes.changes, [], "nothing saved over the new value");
+  });
+}
+
+test("undo of typing over a select-all never replaces a value set from outside", async (t) => {
+  const notes = await mountNotes(t, "Summary paragraph one\n\nSummary two");
+  await notes.act(() => {
+    notes.editor().commands.selectAll();
+    type(notes.editor(), "x");
+  });
+  assert.equal(notes.saved(), "x");
+  await notes.act(() => notes.setValue("Pulled from another device"));
+  notes.changes.length = 0;
+  await notes.act(() => notes.editor().commands.undo());
+  assert.equal(markdownOf(notes.editor()), "Pulled from another device");
+  assert.deepEqual(notes.changes, []);
+});
+
+test("the echo of the user's own save keeps typing undoable", async (t) => {
+  const notes = await mountNotes(t, "Notes body");
+  await notes.act(() => {
+    notes.editor().commands.setTextSelection(notes.editor().state.doc.content.size - 1);
+    type(notes.editor(), " typed");
+  });
+  await notes.act(() => notes.setValue(notes.saved()));
+  await notes.act(() => notes.editor().commands.undo());
+  assert.equal(markdownOf(notes.editor()), "Notes body");
+  assert.equal(notes.saved().trim(), "Notes body");
+});
+
+test("a whitespace-only note saved empty keeps its caret and its undo", async (t) => {
+  const notes = await mountNotes(t, "");
+  await notes.act(() => type(notes.editor(), "   "));
+  assert.equal(notes.saved(), "   ");
+  const caret = notes.editor().state.selection.from;
+  // The store saves a blank note as empty and echoes that back.
+  await notes.act(() => notes.setValue(""));
+  assert.equal(notes.editor().state.selection.from, caret);
+  assert.equal(notes.editor().state.doc.textContent, "   ");
+  await notes.act(() => notes.editor().commands.undo());
+  assert.equal(notes.editor().state.doc.textContent, "");
 });
 
 test("the table menu disables actions that would break or empty the table", async (t) => {
@@ -797,6 +913,50 @@ test("the formatting toolbar shows on selected text and empty lines only", async
     notes.editor().commands.setTextSelection({ from: 1, to: 6 });
   }, 300);
   assert.equal(isShown(TOOLBAR), false, "over a selection the editor doesn't hold focus for");
+  assert.deepEqual(notes.errors, []);
+});
+
+test("the empty-line toolbar sits below the caret, and above it with no room below", async (t) => {
+  const notes = await mountNotes(t, "Intro text");
+  // happy-dom has no layout: give the page and the toolbar a size, and the caret a
+  // spot on the page. Without a toolbar size, start, centre and end alignment all
+  // land on the caret, and the toolbar never needs to flip.
+  const page = happyWindow.document.documentElement;
+  const proto = happyWindow.HTMLElement.prototype;
+  const pageSize = { clientWidth: 1024, clientHeight: 768 };
+  const menuSize = { offsetWidth: 320, offsetHeight: 40 };
+  for (const [key, value] of Object.entries(pageSize)) {
+    Object.defineProperty(page, key, { value, configurable: true });
+  }
+  const originals = {};
+  for (const [key, value] of Object.entries(menuSize)) {
+    originals[key] = Object.getOwnPropertyDescriptor(proto, key);
+    Object.defineProperty(proto, key, {
+      configurable: true,
+      get() {
+        return this.classList.contains("rich-text-editor-line-menu")
+          ? value
+          : originals[key].get.call(this);
+      },
+    });
+  }
+  t.after(() => {
+    for (const key of Object.keys(pageSize)) delete page[key];
+    for (const [key, descriptor] of Object.entries(originals)) {
+      Object.defineProperty(proto, key, descriptor);
+    }
+  });
+  let caret = { left: 500, right: 500, top: 300, bottom: 320 };
+  notes.editor().view.coordsAtPos = () => caret;
+  await notes.act(() => addEmptyLastLine(notes.editor()));
+  const menu = happyWindow.document.querySelector(".rich-text-editor-line-menu");
+  const top = () => parseFloat(menu.style.top);
+  assert.equal(parseFloat(menu.style.left), caret.left, "starts at the caret");
+  assert.ok(top() > caret.bottom, `below the line (top ${top()})`);
+
+  caret = { left: 500, right: 500, top: 740, bottom: 760 };
+  await notes.act(() => addEmptyLastLine(notes.editor()));
+  assert.ok(top() + menuSize.offsetHeight < caret.top, `above the line (top ${top()})`);
   assert.deepEqual(notes.errors, []);
 });
 

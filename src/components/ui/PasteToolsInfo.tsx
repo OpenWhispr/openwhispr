@@ -6,6 +6,7 @@ import type { PasteToolsResult } from "../../types/electron";
 import {
   getLinuxPasteInstallCommands,
   needsLinuxPasteToolGuidance,
+  needsWtype,
 } from "../../utils/linuxPasteTools";
 
 interface PasteToolsInfoProps {
@@ -99,8 +100,9 @@ export default function PasteToolsInfo({
 
   if (needsLinuxPasteToolGuidance(pasteToolsInfo)) {
     const isWayland = pasteToolsInfo.isWayland;
-    const needsWtype = pasteToolsInfo.isWlroots && !pasteToolsInfo.hasWtype;
-    const recommendedTool = needsWtype
+    const wtypeMissing = needsWtype(pasteToolsInfo);
+    const cosmicTerminalsOnly = wtypeMissing && !!pasteToolsInfo.isCosmic;
+    const recommendedTool = wtypeMissing
       ? "wtype"
       : pasteToolsInfo.recommendedInstall === "wtype"
         ? "wtype"
@@ -123,7 +125,9 @@ export default function PasteToolsInfo({
             {showInstall ? (
               <>
                 <p className="text-sm text-warning dark:text-warning mt-1">
-                  {needsWtype ? (
+                  {cosmicTerminalsOnly ? (
+                    t("pasteToolsInfo.wtypeCosmicTerminalsDescription")
+                  ) : wtypeMissing ? (
                     t("pasteToolsInfo.wtypeFallbackDescription")
                   ) : (
                     <>
@@ -169,7 +173,7 @@ export default function PasteToolsInfo({
               </p>
             )}
 
-            {showInstall && (
+            {showInstall && !cosmicTerminalsOnly && (
               <p className="text-sm text-warning dark:text-warning mt-3">
                 {t("pasteToolsInfo.withoutToolPrefix")}{" "}
                 <kbd dir="ltr" className="bg-warning/20 px-1 rounded text-xs">

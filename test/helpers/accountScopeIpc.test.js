@@ -206,3 +206,23 @@ test("a sign-out in main stops connects without waiting for the renderer", async
     ["auth-token-state-changed", { generation: 8, hasToken: false }],
   ]);
 });
+
+test("meeting prompt retirement precedes scope mutation and skips a true no-op", async () => {
+  tokenState = { token: "meeting-test-token", generation: 20 };
+  const originalManager = fakeThis.windowManager;
+  const calls = [];
+  fakeThis.windowManager = {
+    retireMeetingNotificationScope: () => calls.push(databaseManager.activeAccountId),
+  };
+  databaseManager.activeAccountId = "old-account";
+  await setScope("meeting-account", 20);
+  assert.deepEqual(calls, ["old-account"]);
+  databaseManager.activeAccountId = "meeting-account";
+  await setScope("meeting-account", 20);
+  assert.deepEqual(calls, ["old-account"]);
+  handleAuthTokenChange({ token: "rotated", generation: 21 });
+  assert.deepEqual(calls, ["old-account", "meeting-account"]);
+  handleAuthTokenChange({ token: null, generation: 22 });
+  assert.deepEqual(calls, ["old-account", "meeting-account", "meeting-account"]);
+  fakeThis.windowManager = originalManager;
+});

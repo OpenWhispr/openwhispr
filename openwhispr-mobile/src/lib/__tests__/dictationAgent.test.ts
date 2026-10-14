@@ -1,6 +1,8 @@
 import {
   getDictationAgentName,
   isDictationAgentApplicable,
+  isNoteChatEnabled,
+  voiceAssistantToggleConfig,
   detectAgentMention,
 } from '@/lib/dictationAgent';
 import type { UserConfig } from '@/types';
@@ -52,6 +54,33 @@ describe('isDictationAgentApplicable', () => {
     expect(
       isDictationAgentApplicable('private', { ...baseConfig, dictationAgentEnabled: true }),
     ).toBe(false);
+  });
+});
+
+// Note chat once shared the voice assistant's switch, so an existing choice carries over.
+describe('note chat', () => {
+  it('is on by default', () => {
+    expect(isNoteChatEnabled(baseConfig)).toBe(true);
+  });
+
+  it('follows the old shared switch until set on its own', () => {
+    expect(isNoteChatEnabled({ ...baseConfig, dictationAgentEnabled: false })).toBe(false);
+    expect(
+      isNoteChatEnabled({ ...baseConfig, dictationAgentEnabled: false, noteChatEnabled: true }),
+    ).toBe(true);
+  });
+
+  it('keeps its state when only the voice assistant is switched', () => {
+    expect(voiceAssistantToggleConfig(baseConfig, false)).toEqual({
+      dictationAgentEnabled: false,
+      noteChatEnabled: true,
+    });
+    expect(
+      voiceAssistantToggleConfig({ ...baseConfig, dictationAgentEnabled: false }, true),
+    ).toEqual({ dictationAgentEnabled: true, noteChatEnabled: false });
+    expect(voiceAssistantToggleConfig({ ...baseConfig, noteChatEnabled: false }, true)).toEqual({
+      dictationAgentEnabled: true,
+    });
   });
 });
 

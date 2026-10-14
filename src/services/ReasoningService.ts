@@ -20,6 +20,7 @@ import {
   llmRequestTimeoutError,
 } from "../helpers/llmRequestTimeout.js";
 import { streamText, stepCountIs } from "ai";
+import { compactTranscriptHistory } from "./ai/transcriptHistory";
 import { getAIModel } from "./ai/providers";
 import { createEnterpriseChatModel } from "./ai/enterpriseChatModel";
 import { getManagedScopeResolution } from "../stores/enterpriseIdentityStore";
@@ -42,6 +43,13 @@ import { detectEndpointDialect } from "./ai/thinkingSuppressionDialects";
 import { openCodeSessionHeaders } from "./ai/openCodeSession";
 import { createStreamingThinkFilter } from "./ai/streamingThinkFilter";
 import { extractApiErrorMessage } from "./ai/apiErrorMessage";
+import {
+  PROVIDER_ERROR_CODES,
+  asProviderError,
+  providerError,
+  providerHttpError,
+  redactProviderBody,
+} from "../helpers/providerHttpErrors.js";
 import { clearTinfoilClientCache } from "./ai/tinfoilClient";
 import { resolveChatRoute } from "../helpers/chatRouting";
 import { assertAgentAllowedByPolicy, assertReasoningAllowedByPolicy } from "./reasoningPolicy";
@@ -250,10 +258,10 @@ class ReasoningService extends BaseReasoningService {
         provider,
         error: errorMsg,
       });
-      const error = new Error(errorMsg) as Error & { code: string; provider: string };
-      error.code = "API_KEY_MISSING";
-      error.provider = displayName;
-      throw error;
+      throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+        provider: displayName,
+        surface: "llm",
+      });
     }
 
     return apiKey;
@@ -329,6 +337,13 @@ class ReasoningService extends BaseReasoningService {
     // Minted before the retry loop so every attempt of this call is one conversation.
     const openCodeHeaders = openCodeSessionHeaders(endpoint);
 
+    const errorContext = {
+      provider: providerName,
+      selfHosted: providerName === "LAN",
+      model,
+      surface: "llm",
+    };
+
     const requestGeneration = this.requestCancellationGeneration;
     const response = await withRetry(async () => {
       if (requestGeneration !== this.requestCancellationGeneration) {
@@ -369,19 +384,22 @@ class ReasoningService extends BaseReasoningService {
             errorData = { error: errorText || res.statusText };
           }
 
-          const errorMessage = extractApiErrorMessage(
-            errorData,
-            `${providerName} API error: ${res.status}`
-          );
-
+          // Providers echo the rejected key back, so every logged field is redacted.
           logger.logReasoning(`${providerName.toUpperCase()}_API_ERROR_DETAIL`, {
             status: res.status,
             statusText: res.statusText,
-            error: errorData,
-            errorMessage,
-            fullResponse: errorText.substring(0, 500),
+            error: redactProviderBody(errorData),
+            errorMessage: redactProviderBody(
+              extractApiErrorMessage(errorData, `${providerName} API error: ${res.status}`)
+            ),
+            fullResponse: redactProviderBody(errorText),
           });
-          throw httpError(errorMessage, res.status);
+          throw providerHttpError({
+            ...errorContext,
+            status: res.status,
+            body: errorText,
+            headers: res.headers,
+          });
         }
 
         const jsonResponse = await res.json();
@@ -407,7 +425,11 @@ class ReasoningService extends BaseReasoningService {
         clearTimeout(timeoutId);
         this.activeRequestControllers.delete(controller);
       }
-    }, createApiRetryStrategy());
+    }, createApiRetryStrategy()).catch((error) => {
+      // Classified only once it has left withRetry, so the deadline is still
+      // attempted exactly once.
+      throw asProviderError(error, errorContext);
+    });
 
     if (!response.choices || !response.choices[0]) {
       logger.logReasoning(`${providerName.toUpperCase()}_RESPONSE_ERROR`, {
@@ -656,6 +678,11 @@ class ReasoningService extends BaseReasoningService {
       abortController.abort();
     }, timeoutSeconds * 1000);
 
+    const selfHostedErrorContext = {
+      selfHosted: true,
+      model,
+      surface: "llm",
+    };
     let response: Response;
     try {
       response = await fetchWithParamFallback(
@@ -673,22 +700,38 @@ class ReasoningService extends BaseReasoningService {
       clearTimeout(timeoutId);
       if ((error as Error).name === "AbortError" && abortController.signal.aborted) {
         if (!timeoutTriggered) return;
-        throw new Error("Streaming request timed out");
+        throw route.kind === "self-hosted"
+          ? providerError(PROVIDER_ERROR_CODES.TIMEOUT, selfHostedErrorContext)
+          : new Error("Streaming request timed out");
       }
-      throw error;
+      // A stopped LAN server rejects the fetch before any response.
+      throw route.kind === "self-hosted" ? asProviderError(error, selfHostedErrorContext) : error;
     }
 
     if (!response.ok) {
       clearTimeout(timeoutId);
       const errorText = await response.text();
+      logger.logReasoning("AGENT_STREAM_ERROR", {
+        status: response.status,
+        body: redactProviderBody(errorText),
+      });
+      if (route.kind === "self-hosted") {
+        throw providerHttpError({
+          ...selfHostedErrorContext,
+          status: response.status,
+          body: errorText,
+          headers: response.headers,
+        });
+      }
       let errorMessage: string;
       try {
-        const errorData = JSON.parse(errorText);
-        errorMessage = extractApiErrorMessage(errorData, `API error: ${response.status}`);
+        errorMessage = extractApiErrorMessage(
+          JSON.parse(errorText),
+          `API error: ${response.status}`
+        );
       } catch {
         errorMessage = errorText || `API error: ${response.status}`;
       }
-      logger.logReasoning("AGENT_STREAM_ERROR", { status: response.status, errorMessage });
       throw new Error(errorMessage);
     }
 
@@ -745,7 +788,9 @@ class ReasoningService extends BaseReasoningService {
     } catch (error) {
       if ((error as Error).name === "AbortError" && abortController.signal.aborted) {
         if (!timeoutTriggered) return;
-        throw new Error("Streaming request timed out");
+        throw route.kind === "self-hosted"
+          ? providerError(PROVIDER_ERROR_CODES.TIMEOUT, selfHostedErrorContext)
+          : new Error("Streaming request timed out");
       }
       throw error;
     } finally {
@@ -895,6 +940,7 @@ class ReasoningService extends BaseReasoningService {
       })) as import("ai").ModelMessage[],
       tools: tools || undefined,
       stopWhen: stepCountIs(tools ? ReasoningService.MAX_TOOL_STEPS : 1),
+      prepareStep: ({ messages }) => ({ messages: compactTranscriptHistory(messages) }),
       abortSignal: abortController.signal,
       ...(useTemperature ? { temperature: config.temperature ?? 0.3 } : {}),
       maxOutputTokens: config.maxTokens || 4096,
@@ -931,9 +977,14 @@ class ReasoningService extends BaseReasoningService {
           const displayText =
             typeof output === "string" ? output : output?.error ? String(output.error) : "Done";
           // Mirror the cloud path: successful object outputs become metadata so
-          // tool-result cards (note cards) render on BYOK/local too.
+          // tool-result cards (note cards) render on BYOK/local too. Only the
+          // registry's bare { error } wrapper is a failure: a connector's own
+          // "failed" result carries `error` beside its status, and the history
+          // reads that status.
+          const isToolFailure =
+            output && typeof output === "object" && "error" in output && !("status" in output);
           const metadata =
-            output && typeof output === "object" && !("error" in output)
+            output && typeof output === "object" && !isToolFailure
               ? (output as ToolMetadata)
               : undefined;
           yield {
@@ -942,6 +993,16 @@ class ReasoningService extends BaseReasoningService {
             toolName: chunk.toolName,
             displayText,
             ...(metadata ? { metadata } : {}),
+          };
+        } else if (chunk.type === "tool-error") {
+          // A call the SDK rejected (unknown tool, invalid input) never ran; without
+          // a result it would read as cut off mid-send in the chat and its history.
+          const cause = chunk.error;
+          yield {
+            type: "tool_result",
+            callId: chunk.toolCallId,
+            toolName: chunk.toolName,
+            displayText: `Error: ${cause instanceof Error ? cause.message : String(cause)}`,
           };
         } else if (chunk.type === "abort") {
           canFlushFilteredText = false;
@@ -968,6 +1029,28 @@ class ReasoningService extends BaseReasoningService {
       if (abortController.signal.aborted) {
         yield { type: "done", finishReason: "stop" };
         return;
+      }
+      // BYOK and LAN-with-tools failures arrive as AI SDK errors; enterprise
+      // providers have their own mappers and local errors their own keys.
+      if (mode === "providers" || mode === "self-hosted") {
+        // A "custom" BYOK provider (config.baseUrl) counts as self-hosted
+        // alongside LAN (config.lanUrl) — both are the user's own server.
+        // OpenRouter is a cloud provider and keeps its own display name.
+        const isSelfHosted = mode === "self-hosted" || provider === "custom";
+        const classified = asProviderError(error, {
+          provider: getProviderDisplayName(provider),
+          selfHosted: isSelfHosted,
+          model,
+          surface: "llm",
+        });
+        // The classified details already hold the status and the redacted body.
+        const details = classified.technicalDetails;
+        logger.warn(
+          "BYOK chat stream failed",
+          { provider, status: details?.status, body: details?.underlyingError },
+          "reasoning"
+        );
+        throw classified;
       }
       throw error;
     } finally {
@@ -1011,6 +1094,7 @@ class ReasoningService extends BaseReasoningService {
       tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
       // Press-time screenshot; the server routes to its vision chain when present.
       screenContext?: { data: string; mediaType: string };
+      noteChat?: boolean;
     }
   ): {
     stream: AsyncGenerator<
@@ -1117,6 +1201,7 @@ class ReasoningService extends BaseReasoningService {
         toolCallId: string
       ) => Promise<ToolExecutionResult>;
       screenContext?: { data: string; mediaType: string };
+      noteChat?: boolean;
     }
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
     // Capture synchronously so a cancel before the first next() is observed.
@@ -1135,6 +1220,7 @@ class ReasoningService extends BaseReasoningService {
         toolCallId: string
       ) => Promise<ToolExecutionResult>;
       screenContext?: { data: string; mediaType: string };
+      noteChat?: boolean;
     },
     operationGeneration: number
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
@@ -1142,16 +1228,25 @@ class ReasoningService extends BaseReasoningService {
     const operationWasCancelled = (): boolean =>
       operationGeneration !== this.cloudOperationGeneration;
     const maxSteps = config.tools?.length ? ReasoningService.MAX_TOOL_STEPS : 1;
-    let currentMessages = [...messages];
+    // The Cloud API prepends systemPrompt itself. Keep any distinct system instructions.
+    let currentMessages =
+      messages[0]?.role === "system" && messages[0].content === config.systemPrompt
+        ? messages.slice(1)
+        : [...messages];
+    // Each call gets its own assistant/tool pair, so the results the model
+    // hasn't seen yet start where the last step's pairs do.
+    let latestStepStart = currentMessages.length;
 
     for (let step = 0; step < maxSteps; step++) {
       if (operationWasCancelled()) return;
+      currentMessages = compactTranscriptHistory(currentMessages, latestStepStart);
       // The screenshot rides every step of the tool loop so the model keeps
       // its vision after tool results come back.
       const ipcStream = this.streamFromIPC(currentMessages, {
         systemPrompt: config.systemPrompt,
         tools: config.tools,
         screenContext: config.screenContext,
+        noteChat: config.noteChat,
       });
 
       const pendingToolCalls: Array<{ id: string; name: string; arguments: string }> = [];
@@ -1177,6 +1272,7 @@ class ReasoningService extends BaseReasoningService {
         return;
       }
 
+      latestStepStart = currentMessages.length;
       for (const call of pendingToolCalls) {
         if (operationWasCancelled()) return;
         let toolResult: ToolExecutionResult;

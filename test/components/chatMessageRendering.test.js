@@ -73,3 +73,42 @@ test("a question typed on several lines keeps its line breaks", async (t) => {
   assert.ok(text);
   assert.match(text.getAttribute("class") ?? "", /(^|\s)whitespace-pre-wrap(\s|$)/);
 });
+
+// A classified provider failure (Task 3's describeProviderError) rides along on the
+// message as `error`; the reply shows an Open Settings link and a details disclosure.
+test("a reply with a classified error shows an Open Settings link and technical details", async (t) => {
+  const { container, render } = await mountChatMessages(t);
+
+  await render({
+    messages: [
+      {
+        id: "a",
+        role: "assistant",
+        content: "Error: OpenAI rejected your API key.",
+        isStreaming: false,
+        error: { settingsTarget: "llms", technicalDetails: { provider: "OpenAI", status: 401 } },
+      },
+    ],
+  });
+
+  assert.match(container.textContent, /OpenAI rejected your API key\./);
+  const settingsButton = findElement(
+    container,
+    (element) => element.tagName === "BUTTON" && /providerErrors\.openSettings/.test(element.textContent)
+  );
+  assert.ok(settingsButton, "shows the Open Settings affordance");
+  assert.match(container.textContent, /reasoning\.enterprise\.technicalDetails\.title/);
+  assert.match(container.textContent, /OpenAI/);
+  assert.match(container.textContent, /401/);
+});
+
+test("a reply with no error shows neither the settings link nor technical details", async (t) => {
+  const { container, render } = await mountChatMessages(t);
+
+  await render({
+    messages: [{ id: "a", role: "assistant", content: "All good.", isStreaming: false }],
+  });
+
+  assert.doesNotMatch(container.textContent, /providerErrors\.openSettings/);
+  assert.doesNotMatch(container.textContent, /reasoning\.enterprise\.technicalDetails\.title/);
+});

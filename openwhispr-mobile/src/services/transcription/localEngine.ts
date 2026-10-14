@@ -105,10 +105,24 @@ function isInstalled(model: LocalModelKey, availability: LocalEngineAvailability
     : availability.parakeetV3Downloaded;
 }
 
+// Automatic takes the first downloaded model here that covers every selected language. Each
+// Parakeet is the most accurate for what it covers (v2 for English, v3 for its 25 languages), and
+// Whisper base covers the rest.
+const AUTOMATIC_ORDER: readonly LocalModelKey[] = ['parakeet-v2', 'parakeet-v3', 'whisper-base'];
+// With nothing downloaded that covers the languages, a model that misses some still beats no
+// transcription; v3 covers more of them than v2. Whisper base never gets here, it covers all.
+const UNCOVERED_FALLBACK_ORDER: readonly LocalModelKey[] = ['parakeet-v3', 'parakeet-v2'];
+
+function choiceFor(model: LocalModelKey): Exclude<LocalEngineChoice, { engine: 'none' }> {
+  return model === 'whisper-base'
+    ? { engine: 'whisper' }
+    : { engine: 'parakeet', version: model === 'parakeet-v2' ? 'v2' : 'v3' };
+}
+
 /**
- * Resolve the preferred engine against what's actually installed. Fallback order: preferred
- * Parakeet → Whisper if downloaded → 'none' (caller surfaces a download prompt). Whisper-bound
- * selections never fall "up" to Parakeet — it can't cover them.
+ * Resolve the engine against what's actually installed: the picked model, else the first entry
+ * of AUTOMATIC_ORDER that is downloaded and covers the languages, else any downloaded model.
+ * 'none' (caller surfaces a download prompt) only when nothing is downloaded.
  */
 export function selectLocalEngine(
   languages: readonly string[],
@@ -117,32 +131,20 @@ export function selectLocalEngine(
   // automatic choice, so a deleted model or a language change never breaks transcription.
   picked?: LocalModelKey,
 ): LocalEngineChoice {
-  if (picked && isInstalled(picked, availability) && localModelCoversLanguages(picked, languages)) {
-    return picked === 'whisper-base'
-      ? { engine: 'whisper' }
-      : { engine: 'parakeet', version: picked === 'parakeet-v2' ? 'v2' : 'v3' };
-  }
+  const installed = (model: LocalModelKey): boolean => isInstalled(model, availability);
+  const usable = (model: LocalModelKey): boolean =>
+    installed(model) && localModelCoversLanguages(model, languages);
+
+  if (picked && usable(picked)) return choiceFor(picked);
+  const model = AUTOMATIC_ORDER.find(usable) ?? UNCOVERED_FALLBACK_ORDER.find(installed);
+  if (model) return choiceFor(model);
+
   const preferred = preferredEngineForLanguages(languages);
-
-  if (preferred.engine === 'parakeet' && availability.parakeetSupported) {
-    const downloaded =
-      preferred.version === 'v2'
-        ? availability.parakeetV2Downloaded
-        : availability.parakeetV3Downloaded;
-    if (downloaded) {
-      return preferred;
-    }
-    if (availability.whisperDownloaded) {
-      return { engine: 'whisper' };
-    }
-    return {
-      engine: 'none',
-      preferred: preferred.version === 'v2' ? 'parakeet-v2' : 'parakeet-v3',
-    };
-  }
-
-  if (availability.whisperDownloaded) {
-    return { engine: 'whisper' };
-  }
-  return { engine: 'none', preferred: 'whisper' };
+  return {
+    engine: 'none',
+    preferred:
+      preferred.engine === 'parakeet' && availability.parakeetSupported
+        ? `parakeet-${preferred.version}`
+        : 'whisper',
+  };
 }

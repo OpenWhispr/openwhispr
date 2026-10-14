@@ -160,11 +160,13 @@ function buildFakeThis() {
 }
 
 let retryHandler;
+let fakeThis;
 test.before(() => {
   delete require.cache[handlersModulePath];
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
-  Ctor.prototype.setupHandlers.call(buildFakeThis());
+  fakeThis = buildFakeThis();
+  Ctor.prototype.setupHandlers.call(fakeThis);
   retryHandler = handlers.get("retry-transcription");
   assert.ok(retryHandler, "retry-transcription must be registered");
 });
@@ -373,6 +375,74 @@ test("retry: mistral goes to Mistral with x-api-key", async () => {
   assert.equal(result.success, true);
   assert.match(fetches[0].url, /api\.mistral\.ai/);
   assert.equal(fetches[0].init.headers["x-api-key"], "mk-mistral");
+});
+
+test("retry: a missing BYOK key on the generic provider branch is a classified error", async () => {
+  fetches.length = 0;
+  const originalGetMistralKey = fakeThis.environmentManager.getMistralKey;
+  fakeThis.environmentManager.getMistralKey = () => "";
+  try {
+    const result = await invoke({
+      cloudTranscriptionProvider: "mistral",
+      cloudTranscriptionMode: "byok",
+      transcriptionMode: "providers",
+    });
+    assert.equal(result.success, false);
+    assert.equal(result.code, "API_KEY_MISSING");
+    assert.equal(result.messageKey, "hooks.audioRecording.errorDescriptions.providerKeyMissing");
+    assert.deepEqual(result.messageParams, { provider: "Mistral" });
+    assert.equal(fetches.length, 0, "a missing key must fail before any request is sent");
+  } finally {
+    fakeThis.environmentManager.getMistralKey = originalGetMistralKey;
+  }
+});
+
+test("retry: missing Corti credentials are a classified error", async () => {
+  fetches.length = 0;
+  const cortiCallsBefore = cortiCalls.length;
+  const originalGetCortiClientId = fakeThis.environmentManager.getCortiClientId;
+  fakeThis.environmentManager.getCortiClientId = () => "";
+  try {
+    const result = await invoke({
+      cloudTranscriptionProvider: "corti",
+      cloudTranscriptionMode: "byok",
+      transcriptionMode: "providers",
+      cortiEnvironment: "eu",
+      cortiTenant: "acme",
+    });
+    assert.equal(result.success, false);
+    assert.equal(result.code, "API_KEY_MISSING");
+    assert.equal(result.messageKey, "hooks.audioRecording.errorDescriptions.providerKeyMissing");
+    assert.deepEqual(result.messageParams, { provider: "Corti" });
+    assert.equal(
+      cortiCalls.length,
+      cortiCallsBefore,
+      "a missing credential must fail before calling Corti"
+    );
+  } finally {
+    fakeThis.environmentManager.getCortiClientId = originalGetCortiClientId;
+  }
+});
+
+test("proxy-corti-transcription: missing credentials are a classified error", async () => {
+  const fn = handlers.get("proxy-corti-transcription");
+  assert.ok(fn, "proxy-corti-transcription must be registered");
+  const cortiCallsBefore = cortiCalls.length;
+  const originalGetCortiClientId = fakeThis.environmentManager.getCortiClientId;
+  fakeThis.environmentManager.getCortiClientId = () => "";
+  try {
+    const result = await fn({ sender: {} }, { audioBuffer: new ArrayBuffer(4) });
+    assert.equal(result.code, "API_KEY_MISSING");
+    assert.equal(result.messageKey, "hooks.audioRecording.errorDescriptions.providerKeyMissing");
+    assert.deepEqual(result.messageParams, { provider: "Corti" });
+    assert.equal(
+      cortiCalls.length,
+      cortiCallsBefore,
+      "a missing credential must fail before calling Corti"
+    );
+  } finally {
+    fakeThis.environmentManager.getCortiClientId = originalGetCortiClientId;
+  }
 });
 
 test("proxy transcription handlers resolve to structured errors instead of rejecting", async () => {
@@ -601,4 +671,111 @@ test("upload: a self-hosted Azure endpoint keeps its deployment URL", async () =
     fetches[0].url,
     "https://myorg.openai.azure.com/openai/deployments/my-deployment/audio/transcriptions?api-version=2025-03-01-preview"
   );
+});
+
+// Electron's net.fetch rejects with a plain Error whose message is the Chromium
+// net error and no code; both BYOK handlers must classify it before replying.
+async function withFetchRejecting(message, run) {
+  const originalFetchResponse = fetchResponse;
+  fetchResponse = () => {
+    throw new Error(message);
+  };
+  try {
+    return await run();
+  } finally {
+    fetchResponse = originalFetchResponse;
+  }
+}
+
+test("retry: a net::ERR_* failure from a BYOK provider is classified as unreachable", async () => {
+  const result = await withFetchRejecting("net::ERR_INTERNET_DISCONNECTED", () =>
+    invoke({
+      cloudTranscriptionProvider: "mistral",
+      cloudTranscriptionMode: "byok",
+      transcriptionMode: "providers",
+    })
+  );
+  assert.equal(result.success, false);
+  assert.equal(result.code, "PROVIDER_UNREACHABLE");
+  assert.equal(result.messageKey, "providerErrors.unreachable");
+  assert.equal(result.messageParams.provider, "Mistral");
+  assert.equal(result.surface, "transcription");
+});
+
+test("retry: a self-hosted timeout names the user's server", async () => {
+  const result = await withFetchRejecting("net::ERR_CONNECTION_TIMED_OUT", () =>
+    invoke({
+      transcriptionMode: "self-hosted",
+      remoteTranscriptionUrl: "https://stt.example.com/v1",
+      cloudTranscriptionProvider: "openai",
+      cloudTranscriptionMode: "byok",
+    })
+  );
+  assert.equal(result.code, "PROVIDER_TIMEOUT");
+  assert.equal(result.messageKey, "providerErrors.selfHosted.timeout");
+});
+
+test("retry: a cancelled request (net::ERR_ABORTED) is not classified", async () => {
+  const result = await withFetchRejecting("net::ERR_ABORTED", () =>
+    invoke({
+      cloudTranscriptionProvider: "mistral",
+      cloudTranscriptionMode: "byok",
+      transcriptionMode: "providers",
+    })
+  );
+  assert.equal(result.success, false);
+  assert.equal(result.messageKey, undefined);
+  assert.equal(result.error, "net::ERR_ABORTED");
+});
+
+test("upload: a net::ERR_* failure from a BYOK provider is classified as unreachable", async () => {
+  const result = await withFetchRejecting("net::ERR_NAME_NOT_RESOLVED", () =>
+    invokeUpload({
+      apiKey: "sk-openai",
+      baseUrl: "https://api.openai.com/v1",
+      model: "gpt-4o-mini-transcribe",
+      provider: "openai",
+      language: "",
+      transcriptionMode: "providers",
+    })
+  );
+  assert.equal(result.success, false);
+  assert.equal(result.code, "PROVIDER_UNREACHABLE");
+  assert.equal(result.messageParams.provider, "OpenAI");
+  assert.equal(result.surface, "transcription");
+  assert.equal(result.error, "Couldn't reach OpenAI. Check your connection.");
+});
+
+test("upload: an HTTP failure logs its status and a redacted body", async (t) => {
+  const debugLogger = require("../../src/helpers/debugLogger");
+  const warnings = [];
+  t.mock.method(debugLogger, "warn", (message, meta) => warnings.push({ message, meta }));
+  const originalFetchResponse = fetchResponse;
+  t.after(() => {
+    fetchResponse = originalFetchResponse;
+  });
+  const body = '{"error":{"message":"Incorrect API key provided: sk-proj-leakedKey12345"}}';
+  fetchResponse = () => ({
+    ok: false,
+    status: 401,
+    headers: new Headers(),
+    text: async () => body,
+    json: async () => JSON.parse(body),
+  });
+
+  const result = await invokeUpload({
+    apiKey: "sk-openai",
+    baseUrl: "https://api.openai.com/v1",
+    model: "gpt-4o-mini-transcribe",
+    provider: "openai",
+    language: "",
+    transcriptionMode: "providers",
+  });
+
+  assert.equal(result.code, "PROVIDER_AUTH_FAILED");
+  const failure = warnings.find(({ message }) => message === "BYOK file transcription failed");
+  assert.ok(failure, "the failure must be logged");
+  assert.equal(failure.meta.status, 401);
+  assert.match(failure.meta.body, /Incorrect API key provided/);
+  assert.equal(failure.meta.body.includes("sk-proj-leakedKey12345"), false);
 });

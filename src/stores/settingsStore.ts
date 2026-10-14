@@ -275,6 +275,7 @@ const BOOLEAN_SETTINGS = new Set([
   "autoGenerateNoteTitle",
   "useCleanupModel",
   "useDictationAgent",
+  "keepLocalModelLoaded",
   "voiceAgentScreenContext",
   "useDictationAgentVisionModel",
   "useDictationTranslation",
@@ -292,6 +293,7 @@ const BOOLEAN_SETTINGS = new Set([
   "dictationSileroEnabled",
   "noteRecordingSileroEnabled",
   "meetingSileroEnabled",
+  "meetingAecEnabled",
   "isSignedIn",
   "autoPasteEnabled",
   "keepTranscriptionInClipboard",
@@ -906,6 +908,7 @@ export interface SettingsState
   dictationSileroEnabled: boolean;
   noteRecordingSileroEnabled: boolean;
   meetingSileroEnabled: boolean;
+  meetingAecEnabled: boolean;
   whisperVadThreshold: number;
   whisperVadMinSpeechDurationMs: number;
   whisperVadMinSilenceDurationMs: number;
@@ -925,6 +928,7 @@ export interface SettingsState
   remoteTranscriptionModel: string;
   cleanupMode: InferenceMode;
   cleanupRemoteUrl: string;
+  keepLocalModelLoaded: boolean;
 
   meetingTranscriptionMode: InferenceMode;
   meetingUseLocalWhisper: boolean;
@@ -1032,6 +1036,7 @@ export interface SettingsState
   setRemoteTranscriptionModel: (model: string) => void;
   setCleanupMode: (mode: InferenceMode) => void;
   setCleanupRemoteUrl: (url: string) => void;
+  setKeepLocalModelLoaded: (value: boolean) => void;
 
   setMeetingTranscriptionMode: (mode: InferenceMode) => void;
   setMeetingUseLocalWhisper: (value: boolean) => void;
@@ -1221,6 +1226,7 @@ export interface SettingsState
   setDictationSileroEnabled: (value: boolean) => void;
   setNoteRecordingSileroEnabled: (value: boolean) => void;
   setMeetingSileroEnabled: (value: boolean) => void;
+  setMeetingAecEnabled: (value: boolean) => void;
   setWhisperVadThreshold: (value: number) => void;
   setWhisperVadMinSpeechDurationMs: (value: number) => void;
   setWhisperVadMinSilenceDurationMs: (value: number) => void;
@@ -1396,6 +1402,7 @@ type SecretProvider = keyof typeof SECRET_IPC_SAVERS;
 const secretSaveTimers: Partial<Record<SecretProvider, ReturnType<typeof setTimeout>>> = {};
 function debouncedSaveSecret(provider: SecretProvider, key: string) {
   if (!isBrowser) return;
+  debouncedPersistToEnv();
   const timer = secretSaveTimers[provider];
   if (timer) clearTimeout(timer);
   secretSaveTimers[provider] = setTimeout(() => {
@@ -1453,25 +1460,21 @@ function invalidateApiKeyCaches(
     | "openrouter"
     | "corti"
 ) {
-  if (provider) {
-    if (_ReasoningService) {
-      _ReasoningService.clearApiKeyCache(provider);
-    } else {
-      import("../services/ReasoningService")
-        .then((mod) => {
-          _ReasoningService = mod.default;
-          _ReasoningService.clearApiKeyCache(provider);
-        })
-        .catch(() => {});
-    }
+  if (_ReasoningService) {
+    _ReasoningService.clearApiKeyCache(provider);
+  } else {
+    import("../services/ReasoningService")
+      .then((mod) => {
+        _ReasoningService = mod.default;
+        _ReasoningService.clearApiKeyCache(provider);
+      })
+      .catch(() => {});
   }
   if (isBrowser) window.dispatchEvent(new Event("api-key-changed"));
-  debouncedPersistToEnv();
 }
 
 // Uniform BYOK key setter: persist to the secure store (debounced) and clear
-// the provider's cached key. cacheProvider is omitted where there is no scoped
-// cache to clear (xai), preserving prior behavior.
+// the provider's cached key, or all caches when no scoped provider is given.
 function createSecretSetter(
   storeKey: string,
   saver: SecretProvider,
@@ -1669,6 +1672,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   dictationSileroEnabled: readBoolean("dictationSileroEnabled", false),
   noteRecordingSileroEnabled: readBoolean("noteRecordingSileroEnabled", true),
   meetingSileroEnabled: readBoolean("meetingSileroEnabled", true),
+  // Acoustic echo cancellation for meetings is opt-in: on headsets there's no
+  // echo to cancel and it can suppress the mic entirely. See ipcHandlers AEC gate.
+  meetingAecEnabled: readBoolean("meetingAecEnabled", false),
   whisperVadThreshold: clampVadValue("threshold", readString("whisperVadThreshold", "0.5")),
   whisperVadMinSpeechDurationMs: clampVadValue(
     "minSpeechDurationMs",
@@ -1723,6 +1729,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     return "openwhispr" as InferenceMode;
   })(),
   cleanupRemoteUrl: readString("cleanupRemoteUrl", ""),
+  keepLocalModelLoaded: readBoolean("keepLocalModelLoaded", false),
 
   meetingTranscriptionMode: (() => {
     const v = readString("meetingTranscriptionMode", "openwhispr");
@@ -1818,6 +1825,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setRemoteTranscriptionModel: createStringSetter("remoteTranscriptionModel"),
   setCleanupMode: createStringSetter("cleanupMode") as (mode: InferenceMode) => void,
   setCleanupRemoteUrl: createStringSetter("cleanupRemoteUrl"),
+  setKeepLocalModelLoaded: createBooleanSetter("keepLocalModelLoaded"),
 
   setMeetingTranscriptionMode: createStringSetter("meetingTranscriptionMode") as (
     mode: InferenceMode
@@ -2238,17 +2246,14 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setBedrockAccessKeyId: (key: string) => {
     set({ bedrockAccessKeyId: key });
     debouncedSaveSecret("bedrockAccessKeyId", key);
-    debouncedPersistToEnv();
   },
   setBedrockSecretAccessKey: (key: string) => {
     set({ bedrockSecretAccessKey: key });
     debouncedSaveSecret("bedrockSecretAccessKey", key);
-    debouncedPersistToEnv();
   },
   setBedrockSessionToken: (key: string) => {
     set({ bedrockSessionToken: key });
     debouncedSaveSecret("bedrockSessionToken", key);
-    debouncedPersistToEnv();
   },
   setAzureEndpoint: (value: string) => {
     if (isBrowser) localStorage.setItem("azureEndpoint", value);
@@ -2259,7 +2264,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setAzureApiKey: (key: string) => {
     set({ azureApiKey: key });
     debouncedSaveSecret("azureApiKey", key);
-    debouncedPersistToEnv();
   },
   setAzureDeploymentName: (value: string) => {
     if (isBrowser) localStorage.setItem("azureDeploymentName", value);
@@ -2292,7 +2296,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setVertexApiKey: (key: string) => {
     set({ vertexApiKey: key });
     debouncedSaveSecret("vertexApiKey", key);
-    debouncedPersistToEnv();
   },
 
   setDictationKey: (key: string) => {
@@ -2480,6 +2483,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       window.electronAPI?.setWhisperVadConfig?.({ meetingSileroEnabled: value });
     }
   },
+  setMeetingAecEnabled: createBooleanSetter("meetingAecEnabled"),
   setWhisperVadThreshold: (value: number) => {
     const next = clampVadValue("threshold", value);
     if (isBrowser) localStorage.setItem("whisperVadThreshold", String(next));
@@ -3280,6 +3284,34 @@ export async function initializeSettings(): Promise<void> {
   if (!isBrowser) return;
 
   const state = useSettingsStore.getState();
+  let hydratingSecrets = true;
+  const pendingSecretUpdates = new Set<string>();
+
+  // Queue updates until hydration can no longer overwrite them.
+  const refreshApiKey = async (storeKey: string) => {
+    if (!STALE_SECRET_LOCALSTORAGE_KEYS.some((key) => key === storeKey)) return;
+    if (hydratingSecrets) {
+      pendingSecretUpdates.add(storeKey);
+      return;
+    }
+    const saver =
+      SECRET_IPC_SAVERS[storeKey as SecretProvider] ||
+      SECRET_IPC_SAVERS[storeKey.replace(/ApiKey$/, "") as SecretProvider];
+    if (!saver) return;
+    const getter = window.electronAPI?.[
+      saver.replace(/^save/, "get") as keyof typeof window.electronAPI
+    ] as (() => Promise<string | null>) | undefined;
+    if (!getter) return;
+    try {
+      const key = await getter();
+      if (key !== null && typeof key !== "string") return;
+      useSettingsStore.setState({ [storeKey]: key || "" });
+      invalidateApiKeyCaches();
+    } catch {
+      logger.warn("Failed to refresh API key", { storeKey }, "settings");
+    }
+  };
+  window.electronAPI?.onApiKeyUpdated?.(refreshApiKey);
 
   if (window.electronAPI) {
     // Preferences are already in localStorage; do not wait for secret or provider hydration.
@@ -3439,6 +3471,10 @@ export async function initializeSettings(): Promise<void> {
         { error: (err as Error).message },
         "settings"
       );
+    } finally {
+      hydratingSecrets = false;
+      await Promise.all([...pendingSecretUpdates].map(refreshApiKey));
+      pendingSecretUpdates.clear();
     }
 
     // Sync dictation key from main process.

@@ -31,7 +31,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: openwhispr-mobile/.nvmrc
       # Validate before installing packages from the contributor's lockfile.
@@ -39,7 +39,7 @@ jobs:
         run: npx --yes --ignore-scripts --package=lockfile-lint@5.0.1 lockfile-lint --path openwhispr-mobile/package-lock.json --type npm --validate-https --allowed-hosts npm --validate-integrity
       - name: Reject high and critical dependency advisories
         working-directory: openwhispr-mobile
-        run: npm audit --package-lock-only --ignore-scripts --audit-level=high
+        run: npx --yes --ignore-scripts --package=audit-ci@7.1.0 audit-ci --config audit-ci.json
 
   checks:
     name: Mobile ${{ matrix.check }}
@@ -58,7 +58,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: openwhispr-mobile/.nvmrc
           cache: npm
@@ -67,6 +67,8 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Apply reviewed dependency patches
         run: node_modules/.bin/patch-package --error-on-fail
+      - name: Verify patched signing dependency
+        run: npm run test:security
       - name: Check formatting
         if: matrix.check == 'static'
         run: npm run format
@@ -100,7 +102,7 @@ jobs:
     name: Mobile native Swift tests
     needs: changes
     if: needs.changes.outputs.mobile == 'true'
-    # Compiles the Foundation-only Swift sources and their tests, which need Xcode's toolchain.
+    # Compiles native Swift sources and their tests, which need Xcode's toolchain (the keyboard's UIKit tests build for Mac Catalyst).
     runs-on: macos-latest
     timeout-minutes: 15
     steps:
@@ -115,6 +117,8 @@ jobs:
         run: python3 openwhispr-mobile/plugins/hotkey-dictation/tests/run-hotkey-logic-tests.py
       - name: Run Live Activity resolver tests
         run: sh openwhispr-mobile/modules/live-activity/tests/run-resolver-tests.sh
+      - name: Run keyboard touch routing tests
+        run: python3 openwhispr-mobile/plugins/keyboard-extension/tests/run-keyboard-touch-tests.py
 
   mobile-status:
     name: Mobile CI

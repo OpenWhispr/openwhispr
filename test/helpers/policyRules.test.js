@@ -837,6 +837,40 @@ test("screen context is allowed unless a managed policy turns it off", async () 
   );
 });
 
+test("only a resolved managed policy reports web search as turned off by the org", async () => {
+  const { isWebSearchBlockedByOrg } = await load();
+  const managed = (features) => ({
+    status: "managed",
+    policy: { ...policy, features: { ...policy.features, ...features } },
+    appVersion: "1.8.1",
+  });
+
+  assert.equal(isWebSearchBlockedByOrg(managed({ webSearchEnabled: false })), true);
+  assert.equal(isWebSearchBlockedByOrg(managed({})), false);
+  // Still loading, or the fetch failed: web search fails closed, but nothing
+  // says an organization turned it off.
+  for (const status of ["idle", "loading", "error", "unmanaged"]) {
+    assert.equal(
+      isWebSearchBlockedByOrg({ status, policy: null, appVersion: "1.8.1" }),
+      false,
+      status
+    );
+  }
+  // An org that only requires a newer build hasn't turned web search off.
+  assert.equal(
+    isWebSearchBlockedByOrg({
+      status: "managed",
+      policy: {
+        ...policy,
+        minAppVersion: "9.9.9",
+        features: { ...policy.features, webSearchEnabled: false },
+      },
+      appVersion: "1.8.1",
+    }),
+    false
+  );
+});
+
 test("cloud-backup resume fires only on a denial-to-grant transition", async () => {
   const { cloudBackupResumed } = await load();
   const unmanaged = { status: "unmanaged", policy: null, appVersion: null };

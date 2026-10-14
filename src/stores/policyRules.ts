@@ -203,6 +203,11 @@ export function isWebSearchAllowed(state: PolicyDecisionSnapshot): boolean {
   return managedPolicyDecision(state, (policy) => policy.features.webSearchEnabled);
 }
 
+/** Whether a resolved org policy turned web search off (not one still loading). */
+export function isWebSearchBlockedByOrg(state: PolicyDecisionSnapshot): boolean {
+  return state.status === "managed" && isPolicyActionAllowed(state) && !isWebSearchAllowed(state);
+}
+
 /**
  * Whether the voice agent may attach screen context. Servers that predate the
  * field send none; absent means allowed.
