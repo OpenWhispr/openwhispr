@@ -4953,7 +4953,7 @@
       "description": "Quatre choix rapides définissent votre ton pour les messages, les e-mails et tout le reste.",
       "start": "Commencer",
       "cleanupOffTitle": "Apprenez votre style à OpenWhispr",
-      "cleanupOffDescription": "Activez la correction de texte et choisissez un ton pour les messages, les e-mails et tout le reste.",
+      "cleanupOffDescription": "Activez la correction de texte et choisissez un ton pour chaque app.",
       "notNow": "Pas maintenant",
       "decoration": "je viens de regarder les dernières maquettes, et dans l'ensemble tout est très bien, merci pour ta rapidité"
     },

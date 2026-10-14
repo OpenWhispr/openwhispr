@@ -4953,7 +4953,7 @@
       "description": "Vier kurze Auswahlen legen Ihren Ton für Nachrichten, E-Mails und alles andere fest.",
       "start": "Jetzt starten",
       "cleanupOffTitle": "Bringen Sie OpenWhispr Ihren Stil bei",
-      "cleanupOffDescription": "Aktivieren Sie die Textbereinigung und wählen Sie einen Ton für Nachrichten, E-Mails und alles andere.",
+      "cleanupOffDescription": "Aktivieren Sie die Textbereinigung und wählen Sie Ihren Ton für jede App.",
       "notNow": "Nicht jetzt",
       "decoration": "habe mir gerade die neuen Entwürfe angesehen, und insgesamt sieht alles gut aus, danke, dass das so schnell ging"
     },
