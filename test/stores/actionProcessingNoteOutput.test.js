@@ -382,17 +382,48 @@ test("a retry that still thinks past its budget points at Disable thinking outpu
   }
 });
 
-test("a retry the server refuses keeps the first failure's advice; any other retry failure shows as itself", async (t) => {
+test("a reply cut off when its request already had room for reasoning is not sent again, and keeps the advice", async (t) => {
   const { store, calls } = await loadStore(t);
-  const { providerHttpError } = await import("../../src/helpers/providerHttpErrors.js");
-  const refusal = (status, body) =>
-    providerHttpError({ provider: "Ollama", status, body, model: "glm-5.3", surface: "llm" });
+  // OpenAI's own reasoning models get that room on the first request.
+  globalThis.__processTextError = Object.assign(await ranOutThinking(), {
+    hadReasoningRoom: true,
+  });
+
+  store.runBackgroundAction(
+    29,
+    "## Meeting Transcript\nAlice: we agreed to ship on Friday.",
+    "hash",
+    ACTION,
+    { modelId: "gpt-5.6-terra", isCloudMode: true, isMeetingNote: true },
+    LABELS
+  );
+
+  let events = [];
+  await waitFor(() => (events = store.consumeErrorEvents()).length > 0, "the error");
+  assert.equal(calls.length, 1, "no second request with the same cap");
+  assert.equal(events[0].messageKey, "notes.actions.errors.outputSpentThinkingDisabled");
+  assert.equal(events[0].settingsTarget, "llms");
+});
+
+test("a retry the server refuses or that times out keeps the first failure's advice; any other retry failure shows as itself", async (t) => {
+  const { store, calls } = await loadStore(t);
+  const { asProviderError, providerHttpError } =
+    await import("../../src/helpers/providerHttpErrors.js");
+  const { llmRequestTimeoutError } = await import("../../src/helpers/llmRequestTimeout.js");
+  const context = { provider: "Ollama", model: "glm-5.3", surface: "llm" };
+  const refusal = (status, body) => providerHttpError({ ...context, status, body });
 
   for (const [noteId, retryError, messageKey] of [
     // Say a self-hosted server with a 32k window: the bigger cap no longer fits.
     [
       25,
       refusal(400, "max_tokens exceeds the maximum context length"),
+      "notes.actions.errors.outputSpentThinkingDisabled",
+    ],
+    // Still thinking at the note deadline.
+    [
+      28,
+      asProviderError(llmRequestTimeoutError(600), context),
       "notes.actions.errors.outputSpentThinkingDisabled",
     ],
     // Out of credit between the two requests: that is what the user can fix.

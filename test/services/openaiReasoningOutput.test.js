@@ -151,8 +151,13 @@ test("a Responses result that ran out of tokens before any text is an error, not
       config: { provider: "openai", systemPrompt: "Summarize", maxTokens: 4096 },
       ctx: makeCtx(),
     }),
-    // The code is what note formatting retries with more room (#2008).
-    { message: /ran out of output tokens/, code: "OUTPUT_LIMIT_BEFORE_ANSWER" }
+    // The code is what note formatting retries with more room (#2008), unless
+    // the request already had it, as this model's did.
+    {
+      message: /ran out of output tokens/,
+      code: "OUTPUT_LIMIT_BEFORE_ANSWER",
+      hadReasoningRoom: true,
+    }
   );
 });
 
@@ -205,6 +210,39 @@ test("a Chat Completions result cut off before any text is an error, not the inp
     }),
     { message: /ran out of output tokens/, code: "OUTPUT_LIMIT_BEFORE_ANSWER" }
   );
+});
+
+test("a cut-off on a task that needs complete output carries no retry code", async (t) => {
+  installFetch(t, () =>
+    jsonResponse({
+      status: "incomplete",
+      incomplete_details: { reason: "max_output_tokens" },
+      output: [{ type: "reasoning", summary: [] }],
+    })
+  );
+  const { openaiProvider } = await load();
+  const { TRUNCATED_OUTPUT_MESSAGE_KEY } = await import("../../src/services/ai/chatRequestBody.ts");
+
+  const error = await openaiProvider
+    .call({
+      text: TRANSCRIPT,
+      model: "gpt-5.6-terra",
+      agentName: null,
+      config: {
+        provider: "openai",
+        systemPrompt: "Summarize",
+        maxTokens: 8192,
+        requireCompleteOutput: true,
+      },
+      ctx: makeCtx(),
+    })
+    .then(
+      () => null,
+      (rejection) => rejection
+    );
+
+  assert.equal(error?.messageKey, TRUNCATED_OUTPUT_MESSAGE_KEY);
+  assert.equal(error.code, undefined, "note formatting must not retry a summary rewrite");
 });
 
 test("an empty but complete response on a task with its own prompt is an error, not the input echoed back", async (t) => {

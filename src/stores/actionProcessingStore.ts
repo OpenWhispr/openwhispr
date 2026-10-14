@@ -253,8 +253,9 @@ async function runEnhancement(run: EnhancementRun): Promise<string> {
     );
   } catch (error) {
     // A reasoning model spent the whole budget thinking before writing a word
-    // (#2008): one more try with room for its reasoning plus the notes.
-    if (ranOutBeforeAnswer(error)) {
+    // (#2008): one more try with room for its reasoning plus the notes, unless
+    // the request already had that room.
+    if (ranOutBeforeAnswer(error) && !(error as { hadReasoningRoom?: boolean }).hadReasoningRoom) {
       if (run.isCancelled()) throw new Error("cancelled");
       return await reasoningService
         .processText(run.noteContent, run.modelId, null, {
@@ -262,11 +263,13 @@ async function runEnhancement(run: EnhancementRun): Promise<string> {
           maxTokens: REASONING_MODEL_MIN_OUTPUT_TOKENS,
         })
         .catch((retryError) => {
-          // A server that refuses the bigger cap keeps this failure, whose advice
-          // still applies; a key, quota or network problem shows as itself.
-          const refused =
-            (retryError as { code?: string } | null)?.code === PROVIDER_ERROR_CODES.BAD_REQUEST;
-          throw refused ? error : retryError;
+          // A server that refuses the bigger cap, or a model still thinking at the
+          // deadline, keeps this failure, whose advice still applies; a key, quota
+          // or network problem shows as itself.
+          const code = (retryError as { code?: string } | null)?.code;
+          const keepsAdvice =
+            code === PROVIDER_ERROR_CODES.BAD_REQUEST || code === PROVIDER_ERROR_CODES.TIMEOUT;
+          throw keepsAdvice ? error : retryError;
         });
     }
     if (!isContextTooLarge(error)) throw error;

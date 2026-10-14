@@ -232,6 +232,11 @@ export const openaiProvider: InferenceProvider = {
       });
     }
 
+    // Only registry-known OpenAI reasoning models on OpenAI's own host: an
+    // unknown id (fine-tune, proxy) may reject a cap above its output limit.
+    const hasReasoningRoom =
+      !isCustomEndpoint && getCloudModel(model)?.supportsTemperature === false;
+
     const retryStrategy = createApiRetryStrategy();
     const response = await withRetry(async () => {
       let lastError: Error | null = null;
@@ -255,12 +260,9 @@ export const openaiProvider: InferenceProvider = {
             );
           // A known endpoint host knows its own request shape better than the model id does.
           const apiConfig = dialect ?? getOpenAiApiConfig(model, resolvedProvider);
-          // Only registry-known OpenAI reasoning models on OpenAI's own host: an
-          // unknown id (fine-tune, proxy) may reject a cap above its output limit.
-          const maxTokens =
-            !isCustomEndpoint && getCloudModel(model)?.supportsTemperature === false
-              ? Math.max(requestedMaxTokens, REASONING_MODEL_MIN_OUTPUT_TOKENS)
-              : requestedMaxTokens;
+          const maxTokens = hasReasoningRoom
+            ? Math.max(requestedMaxTokens, REASONING_MODEL_MIN_OUTPUT_TOKENS)
+            : requestedMaxTokens;
 
           const requestBody: Record<string, unknown> = { model };
 
@@ -454,7 +456,8 @@ export const openaiProvider: InferenceProvider = {
       const cutOff =
         responseIncomplete && response?.incomplete_details?.reason !== "content_filter";
       const error = emptyResponseError("OpenAI", config, !!cutOff);
-      if (error) throw error;
+      // That request already had a retry's room, so note formatting won't repeat it.
+      if (error) throw hasReasoningRoom ? Object.assign(error, { hadReasoningRoom: true }) : error;
       logger.logReasoning("OPENAI_EMPTY_RESPONSE_FALLBACK", {
         model,
         originalTextLength: text.length,
