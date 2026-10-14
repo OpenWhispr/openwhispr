@@ -219,11 +219,11 @@
     "rehaul": {
       "permissions": {
         "title": "Set up OpenWhispr in 3 minutes",
-        "microphoneDescription": "Turns what you say into text. Only on while you’re recording.",
-        "accessibilityDescription": "Pastes the text into the app you’re using.",
+        "microphoneDescription": "Listens only while you record.",
+        "accessibilityDescription": "Pastes text into any app.",
         "systemAudioTitle": "System Audio",
-        "systemAudioDescription": "Records the other people on your calls for meeting notes. Only on while you’re recording.",
-        "screenContextDescription": "Lets your voice assistant see your screen when you ask it something. Never stored.",
+        "systemAudioDescription": "Captures the other side of calls.",
+        "screenContextDescription": "Lets the assistant see your screen.",
         "enable": "Enable",
         "enabled": "Enabled"
       },
@@ -1172,6 +1172,7 @@
     },
     "signedIn": {
       "welcomeBack": "Welcome back",
+      "welcomeBackNamed": "Welcome back, {{name}}",
       "notYou": "Not you? Log out"
     },
     "sso": {

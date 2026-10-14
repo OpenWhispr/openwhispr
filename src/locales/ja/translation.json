@@ -219,11 +219,11 @@
     "rehaul": {
       "permissions": {
         "title": "3 分で OpenWhispr を設定",
-        "microphoneDescription": "話した内容をテキストにします。録音中のみ有効です。",
-        "accessibilityDescription": "テキストを、いま使っているアプリに貼り付けます。",
+        "microphoneDescription": "録音中だけ音声を聞き取ります。",
+        "accessibilityDescription": "どのアプリにもテキストを貼り付けます。",
         "systemAudioTitle": "システムオーディオ",
-        "systemAudioDescription": "会議メモのために、通話相手の音声を録音します。録音中のみ有効です。",
-        "screenContextDescription": "音声アシスタントに何かを頼んだとき、画面の内容を見られるようにします。保存は一切されません。",
+        "systemAudioDescription": "通話相手の音声を録音します。",
+        "screenContextDescription": "アシスタントが画面を見られるようにします。",
         "enable": "有効にする",
         "enabled": "有効"
       },
@@ -1173,6 +1173,7 @@
     },
     "signedIn": {
       "welcomeBack": "おかえりなさい",
+      "welcomeBackNamed": "おかえりなさい、{{name}}さん",
       "notYou": "別のアカウントですか？ログアウト"
     },
     "sso": {

@@ -741,26 +741,6 @@ body.dark:has(.onboarding-canvas) {
   background-image: none;
 }
 
-/* Compact-frame hero: a brand-blue band that dithers into the page surface.
-   Drawn from --color-primary so it follows the theme; the dot layer fades in
-   as the solid fades out. */
-.onboarding-compact-hero {
-  background: linear-gradient(
-    color-mix(in srgb, var(--color-primary) 88%, white),
-    var(--color-primary) 70%,
-    transparent
-  );
-}
-
-.onboarding-compact-hero::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 2px 2px, var(--color-primary) 1.3px, transparent 1.5px) 0
-    0 / 4px 4px;
-  mask-image: linear-gradient(transparent 55%, #000 72%, #000 84%, transparent);
-}
-
 /* Primary Buttons in onboarding disable into the quiet capsule (sunken fill,
    tertiary text) instead of fading the glass. */
 .onboarding-canvas [data-slot="button"][data-variant="default"]:disabled {

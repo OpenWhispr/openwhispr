@@ -685,7 +685,7 @@ Detects meetings via three independent sources, orchestrated by `MeetingDetectio
 
 - macOS: `macos-mic-listener` binary — CoreAudio process-object input monitoring, excluding the background `com.apple.CoreSpeech` service (it runs input during ordinary playback). `CAPABILITY PID` transitions prompt on their own. `CAPABILITY AGGREGATE` device activity (no process objects — roughly macOS < 14.2 — or a transient snapshot failure) includes playback on combined input/output devices, so it prompts only while a known meeting app is running; the helper retries PID monitoring every 30s from its heartbeat and the detector accepts the later `CAPABILITY PID`. Capability is logged at info level; `sustained-audio-detected` carries `attributed`
 - Windows: `windows-mic-listener.exe` — WASAPI `IAudioSessionManager2` session monitoring; self-mic exclusion happens in JavaScript using current OpenWhispr and capture-helper PIDs
-- Linux: `pactl subscribe` — PulseAudio source-output events
+- Linux: `pactl subscribe` — PulseAudio source-output events. Production captures (`media.role=production`, e.g. OBS) and sink-monitor captures (`stream.capture.sink=true`) still hold the mic for auto-end but don't prompt; the unfiltered fallbacks (a failed or JSON-less `pactl` listing, a failed excluded-pid lookup while polling, `pw-cli`) can't tell them apart
 - Windows/Linux: Fall back to polling if the native binary/command is unavailable. macOS has no safe polling signal: a missing binary pauses audio prompts, a crashed listener is respawned with exponential backoff (5s → 60s), and meanwhile only calendar reminders prompt while auto-end uses its existing silence fallback
 
 **Calendar Reminders** (scheduled meetings):
