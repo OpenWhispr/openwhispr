@@ -277,20 +277,16 @@ test("a Responses result stopped by a content filter is not reported as running 
   );
   const { openaiProvider } = await load();
 
-  const error = await openaiProvider
-    .call({
+  await assert.rejects(
+    openaiProvider.call({
       text: TRANSCRIPT,
       model: "gpt-5.6-terra",
       agentName: null,
       config: { provider: "openai", systemPrompt: "Summarize", maxTokens: 4096 },
       ctx: makeCtx(),
-    })
-    .then(
-      () => null,
-      (rejection) => rejection
-    );
-
-  assert.match(error?.message ?? "", /empty response/);
+    }),
+    /empty response/
+  );
 });
 
 test("a Chat Completions result cut off before any text is an error, not the input echoed back", async (t) => {
