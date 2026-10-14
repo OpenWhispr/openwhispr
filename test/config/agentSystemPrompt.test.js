@@ -177,3 +177,24 @@ test("the name joins the prompt as one plain line", async () => {
   const long = getAgentSystemPrompt([], undefined, { userName: "A".repeat(500) });
   assert.match(long, /The user's name is A{100}\./);
 });
+
+test("a base prompt takes the Chat prompt's place, ahead of the tool rules", async () => {
+  const { getAgentSystemPrompt } = await load();
+  const chat = getAgentSystemPrompt(["search_notes"]);
+  const based = getAgentSystemPrompt(["search_notes"], undefined, { basePrompt: "BASE_SENTINEL" });
+  assert.match(chat, /^You are a helpful voice assistant/);
+  assert.match(based, /^BASE_SENTINEL\n\nYou can use these tools/);
+  assert.equal(based.slice("BASE_SENTINEL".length), chat.slice(chat.indexOf("\n\nYou can use")));
+});
+
+test("a saved prompt that is empty or only spaces resolves to the built-in default", async () => {
+  const { resolveSavedPrompt } = await load();
+  const opts = { agentName: "Jarvis" };
+  assert.equal(resolveSavedPrompt("dictationAgent", "MINE {{agentName}}", opts), "MINE Jarvis");
+  for (const saved of [undefined, "", "  \n\t "]) {
+    assert.match(
+      resolveSavedPrompt("dictationAgent", saved, opts),
+      /^You are "Jarvis", an AI integrated into a speech-to-text dictation app/
+    );
+  }
+});

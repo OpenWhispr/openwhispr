@@ -9,6 +9,7 @@ import { NOTE_TAKER_LABEL } from "../utils/transcriptEvidence";
 
 export {
   resolvePrompt,
+  resolveSavedPrompt,
   getDefaultPromptText,
   appendDictionarySuffix,
   appendScreenContextSuffix,

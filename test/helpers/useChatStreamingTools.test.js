@@ -1068,7 +1068,15 @@ test("with no account name the prompt asks for no signature rather than a placeh
   assert.match(prompts[0], /You don't know the user's name/);
 });
 
-test("Voice Assistant sends its custom prompt instead of the Chat prompt", async (t) => {
+const VOICE_ASSISTANT_PROMPTS = {
+  cleanup: "",
+  translate: "",
+  dictationAgent: "VOICE_SCOPE_SENTINEL {{agentName}}",
+  chatAgent: "CHAT_SCOPE_SENTINEL",
+};
+const BUILT_IN_VOICE_PROMPT = /^You are "OpenWhispr", an AI integrated into a speech-to-text/;
+
+test("the voice assistant sends its custom prompt instead of the Chat prompt", async (t) => {
   const { captured, sentMessages } = await renderChatStreaming(
     t,
     { inferenceScope: "dictationAgent" },
@@ -1077,12 +1085,7 @@ test("Voice Assistant sends its custom prompt instead of the Chat prompt", async
         useDictationAgent: true,
         dictationAgentMode: "openwhispr",
         dictationAgentCloudMode: "openwhispr",
-        customPrompts: {
-          cleanup: "",
-          translate: "",
-          dictationAgent: "VOICE_SCOPE_SENTINEL {{agentName}}",
-          chatAgent: "CHAT_SCOPE_SENTINEL",
-        },
+        customPrompts: VOICE_ASSISTANT_PROMPTS,
       },
     }
   );
@@ -1092,60 +1095,64 @@ test("Voice Assistant sends its custom prompt instead of the Chat prompt", async
   assert.doesNotMatch(systemPromptOf(sentMessages[0]), /CHAT_SCOPE_SENTINEL/);
 });
 
-test("typed Chat keeps its own custom prompt", async (t) => {
+test("the voice assistant on its own API key sends its custom prompt", async (t) => {
+  const { captured, sentMessages, reasoningService } = await renderChatStreaming(
+    t,
+    { inferenceScope: "dictationAgent" },
+    {
+      settings: {
+        useDictationAgent: true,
+        dictationAgentMode: "providers",
+        dictationAgentProvider: "openai",
+        dictationAgentModel: "gpt-5-mini",
+        customPrompts: VOICE_ASSISTANT_PROMPTS,
+      },
+    }
+  );
+  await captured.sendToAI("Hello", []);
+  assert.equal(reasoningService.processTextStreamingAI.mock.callCount(), 1);
+  assert.equal(reasoningService.processTextStreamingCloud.mock.callCount(), 0);
+  assert.match(systemPromptOf(sentMessages[0]), /^VOICE_SCOPE_SENTINEL OpenWhispr/);
+  assert.doesNotMatch(systemPromptOf(sentMessages[0]), /CHAT_SCOPE_SENTINEL/);
+});
+
+test("typed chat keeps its own custom prompt", async (t) => {
   const { captured, sentMessages } = await renderChatStreaming(
     t,
     {},
-    {
-      settings: {
-        customPrompts: {
-          cleanup: "",
-          translate: "",
-          dictationAgent: "VOICE_SCOPE_SENTINEL {{agentName}}",
-          chatAgent: "CHAT_SCOPE_SENTINEL",
-        },
-      },
-    }
+    { settings: { customPrompts: VOICE_ASSISTANT_PROMPTS } }
   );
   await captured.sendToAI("Hello", []);
   assert.match(systemPromptOf(sentMessages[0]), /CHAT_SCOPE_SENTINEL/);
   assert.doesNotMatch(systemPromptOf(sentMessages[0]), /VOICE_SCOPE_SENTINEL/);
 });
 
-test("Voice Assistant without a custom prompt keeps its conversational default", async (t) => {
-  const { captured, sentMessages } = await renderChatStreaming(
-    t,
-    { inferenceScope: "dictationAgent" },
-    {
-      settings: {
-        customPrompts: {
-          cleanup: "",
-          translate: "",
-          dictationAgent: "",
-          chatAgent: "CHAT_SCOPE_SENTINEL",
-        },
-      },
-    }
-  );
-  await captured.sendToAI("Hello", []);
-  const prompt = systemPromptOf(sentMessages[0]);
-  assert.match(prompt, /Respond concisely and conversationally/);
-  assert.doesNotMatch(prompt, /CHAT_SCOPE_SENTINEL|NEVER ask clarifying questions/);
-});
+for (const [saved, label] of [
+  ["", "nothing saved"],
+  ["   \n\t ", "only spaces saved"],
+]) {
+  test(`the voice assistant with ${label} sends the built-in Voice Assistant prompt`, async (t) => {
+    const { captured, sentMessages } = await renderChatStreaming(
+      t,
+      { inferenceScope: "dictationAgent" },
+      { settings: { customPrompts: { ...VOICE_ASSISTANT_PROMPTS, dictationAgent: saved } } }
+    );
+    await captured.sendToAI("Hello", []);
+    const prompt = systemPromptOf(sentMessages[0]);
+    assert.match(prompt, BUILT_IN_VOICE_PROMPT);
+    assert.match(prompt, /You can use these tools/);
+    assert.doesNotMatch(prompt, /CHAT_SCOPE_SENTINEL|Respond concisely and conversationally/);
+  });
+}
 
-test("Voice Assistant keeps its custom prompt when its model falls back to Chat", async (t) => {
+test("the voice assistant keeps its custom prompt when its model falls back to Chat", async (t) => {
   const { captured, sentMessages } = await renderChatStreaming(
     t,
     { inferenceScope: "dictationAgent" },
     {
       settings: {
         useDictationAgent: false,
-        customPrompts: {
-          cleanup: "",
-          translate: "",
-          dictationAgent: "VOICE_FALLBACK_SENTINEL",
-          chatAgent: "CHAT_SCOPE_SENTINEL",
-        },
+        customPrompts: { ...VOICE_ASSISTANT_PROMPTS, dictationAgent: "VOICE_FALLBACK_SENTINEL" },
       },
     }
   );

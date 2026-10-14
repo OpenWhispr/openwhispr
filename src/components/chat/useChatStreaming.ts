@@ -31,8 +31,7 @@ import {
   appendPlainTextResponseSuffix,
   appendScreenContextSuffix,
   getAgentSystemPrompt,
-  getDefaultPromptText,
-  resolvePrompt,
+  resolveSavedPrompt,
 } from "../../config/prompts";
 import { resolveUnavailableCapabilities } from "../../config/agentCapabilities";
 import { getAgentName } from "../../utils/agentName";
@@ -522,13 +521,14 @@ export function useChatStreaming({
         // jargon — same suffix the dictation prompts carry.
         let systemPrompt = appendDictionarySuffix(
           getAgentSystemPrompt(registry?.getAll(), libraryContext || undefined, {
-            // The standalone panel keeps its conversational default; the
-            // dictation default is for editing text and forbids clarification.
+            // The Voice Assistant answers from its own Assistant prompt, or the
+            // built-in Voice Assistant prompt when none is saved, never Chat's.
             basePrompt:
               inferenceScope === "dictationAgent"
-                ? settings.customPrompts.dictationAgent
-                  ? resolvePrompt("dictationAgent", { agentName: getAgentName() })
-                  : getDefaultPromptText("chatAgent")
+                ? resolveSavedPrompt("dictationAgent", settings.customPrompts.dictationAgent, {
+                    agentName: getAgentName(),
+                    uiLanguage: settings.uiLanguage,
+                  })
                 : undefined,
             unavailable: nameUnavailableCapabilities ? unavailable : [],
             toolTrace: registry !== null,

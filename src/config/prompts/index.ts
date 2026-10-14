@@ -20,6 +20,17 @@ export function resolvePrompt(kind: PromptKind, opts: ResolvePromptOptions): str
   return applySubstitutions(template, opts);
 }
 
+// For a caller holding its own settings snapshot. Text that is only spaces
+// counts as unsaved and gets the built-in default.
+export function resolveSavedPrompt(
+  kind: PromptKind,
+  saved: string | undefined,
+  opts: ResolvePromptOptions
+): string {
+  const template = saved?.trim() ? saved : getDefaultPromptText(kind, opts.uiLanguage);
+  return applySubstitutions(template, opts);
+}
+
 export function getDefaultPromptText(kind: PromptKind, uiLanguage?: string): string {
   const def = PROMPT_KINDS[kind];
   if (!def.i18nKey) return def.fallback;
