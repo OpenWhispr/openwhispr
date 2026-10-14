@@ -2,7 +2,7 @@ import type { InferenceSelection } from '@/lib/mobileProviders';
 import { MODE_LABELS } from '@/lib/inferenceModes';
 import { isLocalModelKey, LOCAL_MODEL_TITLES } from '@/lib/localModelCatalog';
 import { providerDisplayName, type MobileInferenceScope } from '@/lib/mobileProviders';
-import type { ProcessingMode, UserConfig } from '@/types';
+import type { InferenceMode, ProcessingMode, UserConfig } from '@/types';
 
 export const WORKFLOW_LABELS: Record<MobileInferenceScope, string> = {
   dictation: 'Dictation',
@@ -21,26 +21,47 @@ export const UNSET_PROVIDER_NOTES: Partial<Record<MobileInferenceScope, string>>
     'Not saved yet. The voice assistant is skipped until you save a selection; note chat uses OpenWhispr Cloud.',
 };
 
-// On-Device mode skips cleanup until On-Device is saved for it, so the unset page picks nothing.
+// Private mode skips cleanup until On-Device or a provider is saved for it, so the unset
+// page picks nothing.
 export const UNSET_ON_DEVICE_CLEANUP_NOTE =
-  'Not saved yet. On-Device mode skips cleanup until you choose On-Device.';
+  'Not saved yet. Private mode skips cleanup until you choose On-Device or Bring Your Own Key.';
 
-// What On-Device mode means for each workflow other than dictation.
+// The same, on an iPhone that can never run On-Device cleanup.
+export const UNSET_UNSUPPORTED_CLEANUP_NOTE =
+  "Not saved yet. This iPhone can't run On-Device cleanup, so Private mode skips it until you choose Bring Your Own Key.";
+
+// What Private mode means for each workflow other than dictation.
 export const ON_DEVICE_MODE_NOTES: Partial<Record<MobileInferenceScope, string>> = {
-  upload:
-    'On-Device mode keeps this on your iPhone. Your choice applies when dictation leaves On-Device.',
+  upload: 'Private mode keeps uploads on this iPhone.',
   notes:
-    'On-Device mode formats notes on this iPhone and asks before sending one to your choice here.',
+    'Private mode formats notes on this iPhone and asks before sending one to your choice here.',
   cleanup:
-    'On-Device cleanup runs on this iPhone. Any other choice is skipped until dictation leaves On-Device, so the transcript never leaves this phone.',
+    'In Private mode, cleanup runs on this iPhone, or sends only the transcript text to your provider with Bring Your Own Key. OpenWhispr Cloud cleanup is skipped until Private mode is off.',
   agent:
-    'In On-Device mode the voice assistant is off, and note chat asks before sending a note off this iPhone.',
+    'In Private mode the voice assistant is off, and note chat asks before sending a note off this iPhone.',
 };
 
-// A local transcript is cleaned only when cleanup is saved as On-Device; unset or any
-// other choice would take it off the phone, so it stays raw.
+// Modes Private mode never runs for a workflow, so its page can't offer them as if they would.
+// Dictation keeps Bring Your Own Key, since saving it leaves Private mode (no account needed).
+// Notes and chat keep every mode: Private mode asks before sending a note to the one chosen.
+export const PRIVATE_MODE_LOCKED: Partial<Record<MobileInferenceScope, InferenceMode[]>> = {
+  dictation: ['openwhispr'],
+  upload: ['openwhispr', 'providers'],
+  cleanup: ['openwhispr'],
+};
+
+export const PRIVATE_MODE_LOCKED_REASON = 'Off while Private mode is on. Turn it off in AI Models.';
+
+// A local transcript is cleaned on the phone when cleanup is saved as On-Device.
 export function cleanupSavedOnDevice(config: UserConfig | null): boolean {
   return config?.inference?.cleanup?.mode === 'local';
+}
+
+// A local transcript is also cleaned by a provider saved for cleanup, which is the user's
+// consent to send it the text; unset or Cloud would take it off the phone unasked.
+export function cleansLocalTranscripts(config: UserConfig | null): boolean {
+  const mode = config?.inference?.cleanup?.mode;
+  return mode === 'local' || mode === 'providers';
 }
 
 export function parseWorkflow(value: unknown): MobileInferenceScope | null {
@@ -80,17 +101,18 @@ export function workflowSummary(
       return `${MODE_LABELS.local} · ${onDeviceUnavailable}`;
   }
   // On-Device mode runs everything on this phone first, whatever is saved. Cleanup runs
-  // only when set to On-Device, and only note chat set to OpenWhispr, or not set, goes
-  // straight to Cloud.
+  // only when set to On-Device or a provider, and only note chat set to OpenWhispr, or
+  // not set, goes straight to Cloud.
   if (activeMode === 'private') {
-    if (scope === 'cleanup' && !cleanupSavedOnDevice(config)) return 'Skipped';
+    if (scope === 'cleanup' && !cleansLocalTranscripts(config)) return 'Skipped';
     const chatOnCloud = (config?.inference?.agent?.mode ?? 'openwhispr') === 'openwhispr';
     if (scope === 'agent' && chatOnCloud) return MODE_LABELS.openwhispr;
   }
   const selection = config?.inference?.[scope] ?? unsetSelection(scope, activeMode);
   if (selection.mode === 'local' && isLocalModelKey(selection.modelId))
     return LOCAL_MODEL_TITLES[selection.modelId];
-  if (activeMode === 'private') return MODE_LABELS.local;
+  if (activeMode === 'private' && !(scope === 'cleanup' && selection.mode === 'providers'))
+    return MODE_LABELS.local;
   if (selection.mode !== 'providers') return MODE_LABELS[selection.mode];
   if (!selection.providerId) return 'Not set';
   const name = providerDisplayName(selection.providerId);

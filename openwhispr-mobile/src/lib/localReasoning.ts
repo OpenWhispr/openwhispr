@@ -65,6 +65,10 @@ export async function getLocalReasoningReadiness(options?: {
             contextSize: availability.contextSize,
             tokenCounting: availability.tokenCounting === true,
           };
+        case 'deviceNotEligible':
+          return { status: 'unsupportedDevice', tokenCounting: false };
+        case 'unsupportedOS':
+          return { status: 'unsupportedOS', tokenCounting: false };
         default:
           return {
             status: 'unavailable',
@@ -171,8 +175,17 @@ export async function fitsLocalReasoningBudget(input: {
   return count < budget;
 }
 
+// Unlike Apple Intelligence being off or still downloading, nothing in Settings fixes these.
+export function isLocalReasoningUnsupported(readiness?: LocalReasoningReadiness | null): boolean {
+  return readiness?.status === 'unsupportedDevice' || readiness?.status === 'unsupportedOS';
+}
+
 export function getLocalReasoningUnavailableMessage(readiness?: LocalReasoningReadiness): string {
   switch (readiness?.status) {
+    case 'unsupportedDevice':
+      return 'On-Device AI needs an iPhone with Apple Intelligence (iPhone 15 Pro or later).';
+    case 'unsupportedOS':
+      return 'On-Device AI needs iOS 26 or later on an iPhone with Apple Intelligence.';
     case 'disabled':
       return 'Local Apple Intelligence is turned off in AI Models.';
     case 'appleIntelligenceOff':

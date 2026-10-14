@@ -57,6 +57,7 @@ import {
   DEFAULT_INTEGRATIONS_SECTION,
   type IntegrationsSection,
 } from "./integrations/integrationsSections";
+import { navigateMeetingNotification } from "./meetingNotificationNavigation";
 import MeetingRecordingMount from "./MeetingRecordingMount";
 import MeetingRecordingPill from "./notes/MeetingRecordingPill";
 import NewNoteMenu from "./notes/NewNoteMenu";
@@ -64,7 +65,7 @@ import NewNoteMenu from "./notes/NewNoteMenu";
 import { getCachedPlatform } from "../utils/platform";
 import { isAccessibilitySkipped } from "../utils/permissions";
 import { useGpuBannerAvailability } from "../hooks/useGpuBannerAvailability";
-import { useCreateNote } from "../hooks/useCreateNote";
+import { startRecordingForNote, useCreateNote } from "../hooks/useCreateNote";
 import { useSignInCloudNudge } from "../hooks/useSignInCloudNudge";
 import {
   setActiveNoteId,
@@ -72,6 +73,7 @@ import {
   navigateToContainer,
   useActiveNoteId,
   initializeNotes,
+  subscribeMeetingNotificationFolders,
 } from "../stores/noteStore";
 import { fetchProviders as fetchStreamingProviders } from "../stores/streamingProvidersStore";
 import {
@@ -83,6 +85,7 @@ import { applyChineseScript, resolveChineseScriptTarget } from "../utils/chinese
 import { getAgentName } from "../utils/agentName";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
+import AssistantNoteUndoListener from "./notes/AssistantNoteUndoListener";
 import { providerErrorToastProps } from "../utils/describeProviderError";
 import SpaceSyncToastListener from "./notes/SpaceSyncToastListener";
 import { syncService } from "../services/SyncService.js";
@@ -116,6 +119,7 @@ interface ControlPanelProps {
 
 export default function ControlPanel({ initialSettingsSection }: ControlPanelProps = {}) {
   const { t } = useTranslation();
+  useEffect(subscribeMeetingNotificationFolders, []);
   const history = useTranscriptions();
   const [isLoading, setIsLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(!!initialSettingsSection);
@@ -164,7 +168,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const recordingFolderId = useMeetingRecordingStore((s) => s.recordingFolderId);
   const [meetingRecordingRequest, setMeetingRecordingRequest] = useState<{
     noteId: number;
-    folderId: number;
+    folderId: number | null;
     event: any;
   } | null>(null);
   const [gpuBannerDismissed, setGpuBannerDismissed] = useState(
@@ -390,10 +394,41 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     }
   }, [authLoaded, isSignedIn]);
 
+  // A ref, not a per-run flag: StrictMode's remount must not cancel the first drain.
+  const meetingNavigationMounted = useRef(false);
   useEffect(() => {
+    meetingNavigationMounted.current = true;
+    const isCurrent = () => meetingNavigationMounted.current;
     const drain = async () => {
       const data = await window.electronAPI?.getPendingMeetingNoteNavigation?.();
       if (!data) return;
+      if (data.navigationId) {
+        if (!isCurrent() || data.spaceId == null) {
+          await window.electronAPI.confirmMeetingNoteNavigation(data.navigationId, "cancel");
+          return;
+        }
+        setActiveView("personal-notes");
+        await navigateMeetingNotification(
+          { ...data, navigationId: data.navigationId, spaceId: data.spaceId },
+          isCurrent,
+          () => import("./notes/PersonalNotesView"),
+          (note) => {
+            void startRecordingForNote(note)
+              .then((accepted) => {
+                if (!accepted) void window.electronAPI?.restoreFromMeetingMode?.();
+              })
+              .catch((error) =>
+                logger.warn(
+                  "Failed to start notification recording",
+                  { error: String(error) },
+                  "meeting"
+                )
+              );
+          }
+        );
+        return;
+      }
+      if (!isCurrent()) return;
       setActiveFolderId(data.folderId);
       setActiveNoteId(data.noteId);
       setActiveView("personal-notes");
@@ -402,7 +437,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         folderId: data.folderId,
         event: data.event,
       });
-      initializeNotes(null, 50, data.folderId);
+      void initializeNotes(null, 50, data.folderId);
       if (
         data.trigger === "hotkey" &&
         useSettingsStore.getState().meetingHotkeyLayoutMode === "side-panel"
@@ -410,9 +445,17 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         window.electronAPI?.snapToMeetingMode?.();
       }
     };
-    drain();
-    const cleanup = window.electronAPI?.onMeetingNoteNavigationPending?.(drain);
-    return () => cleanup?.();
+    const safeDrain = () => {
+      void drain().catch((error) =>
+        logger.warn("Failed to open meeting note", { error: String(error) }, "meeting")
+      );
+    };
+    safeDrain();
+    const cleanup = window.electronAPI?.onMeetingNoteNavigationPending?.(safeDrain);
+    return () => {
+      meetingNavigationMounted.current = false;
+      cleanup?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -1265,6 +1308,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         </main>
       </div>
       <BackgroundActionToastListener />
+      <AssistantNoteUndoListener />
       <SpaceSyncToastListener />
     </div>
   );

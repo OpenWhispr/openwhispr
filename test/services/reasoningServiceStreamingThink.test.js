@@ -634,6 +634,84 @@ test("chat cancellation leaves single-shot reasoning alive until all requests ar
   assert.equal(fetchCalls, 1);
 });
 
+test("cloud action requests supply source fidelity once through every tool step", async (t) => {
+  const bridge = createAgentStreamBridge();
+  const { reasoningService, vite } = await loadReasoningService(t, "openwhispr-cloud-fidelity-", {
+    window: { electronAPI: bridge.electronAPI },
+  });
+  const { getAgentSystemPrompt } = await vite.ssrLoadModule("/config/prompts.ts");
+  const { compileChatActionPrompt } = await vite.ssrLoadModule("/helpers/templatePrompts.js");
+  const { SOURCE_FIDELITY_RULE } = await vite.ssrLoadModule("/helpers/sourceFidelity.js");
+  const systemPrompt = getAgentSystemPrompt(["get_note"]);
+  const action = compileChatActionPrompt({ prompt: "Write a TL;DR." }, { fromSummary: false });
+  const messages = [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: action },
+  ];
+  const original = structuredClone(messages);
+  const output = collectAgentText(
+    reasoningService.processTextStreamingCloud(messages, {
+      systemPrompt,
+      tools: [{ name: "get_note", description: "Read a note", parameters: {} }],
+      executeToolCall: async () => ({ data: "Not yet approved.", displayText: "Read note" }),
+      noteChat: true,
+    })
+  );
+  await waitForMicrotasks();
+  const [requestId] = bridge.startCalls[0];
+  bridge.emitChunk({
+    requestId,
+    chunk: { type: "tool_call", id: "read-1", name: "get_note", arguments: '{"id":7}' },
+  });
+  bridge.emitEnd({ requestId });
+  await waitForMicrotasks();
+  assert.equal(bridge.startCalls.length, 2);
+  const [nextRequestId] = bridge.startCalls[1];
+  bridge.emitChunk({ requestId: nextRequestId, chunk: { type: "content", text: "Not approved." } });
+  bridge.emitEnd({ requestId: nextRequestId });
+  assert.equal(await output, "Not approved.");
+
+  for (const [, sent, config] of bridge.startCalls) {
+    // /api/agent/stream prepends systemPrompt before these messages.
+    const effective = [{ role: "system", content: config.systemPrompt }, ...sent];
+    assert.equal(JSON.stringify(effective).split(SOURCE_FIDELITY_RULE).length - 1, 1);
+    assert.equal(config.systemPrompt, systemPrompt);
+    assert.equal(config.noteChat, true);
+    assert.equal(sent[0].content, action);
+  }
+  assert.deepEqual(
+    bridge.startCalls[1][1].map((message) => message.role),
+    ["user", "assistant", "tool"]
+  );
+  assert.deepEqual(messages, original, "the caller's history is unchanged");
+});
+
+test("cloud requests preserve distinct system instructions and instruction-looking history", async (t) => {
+  const bridge = createAgentStreamBridge();
+  const { reasoningService } = await loadReasoningService(t, "openwhispr-cloud-system-history-", {
+    window: { electronAPI: bridge.electronAPI },
+  });
+  const systemPrompt = "Preserve the source's meaning.";
+  for (const messages of [
+    [{ role: "user", content: systemPrompt }],
+    [
+      { role: "system", content: "Separate system instruction." },
+      { role: "user", content: systemPrompt },
+      { role: "assistant", content: systemPrompt },
+    ],
+  ]) {
+    const output = collectAgentText(
+      reasoningService.processTextStreamingCloud(messages, { systemPrompt })
+    );
+    await waitForMicrotasks();
+    const [requestId, sent, config] = bridge.startCalls.at(-1);
+    bridge.emitEnd({ requestId });
+    await output;
+    assert.deepEqual(sent, messages);
+    assert.equal(config.systemPrompt, systemPrompt);
+  }
+});
+
 test("cloud agent streaming correlates events to the initiating request", async (t) => {
   const bridge = createAgentStreamBridge();
   const { reasoningService } = await loadReasoningService(
@@ -674,6 +752,23 @@ test("cloud agent streaming correlates events to the initiating request", async 
   });
   assert.equal((await stream.next()).done, true);
   assert.deepEqual(bridge.cleanupCounts, { chunk: 1, error: 1, end: 1 });
+});
+
+test("a note chat's cloud stream tells main it is a note chat", async (t) => {
+  const bridge = createAgentStreamBridge();
+  const { reasoningService } = await loadReasoningService(t, "openwhispr-cloud-agent-note-chat-", {
+    window: { electronAPI: bridge.electronAPI },
+  });
+  const stream = reasoningService.processTextStreamingCloud([{ role: "user", content: "hello" }], {
+    systemPrompt: "Answer the user.",
+    noteChat: true,
+  });
+  const pending = stream.next();
+  await waitForMicrotasks();
+
+  assert.equal(bridge.startCalls[0][2].noteChat, true);
+  reasoningService.cancelActiveStream();
+  await pending;
 });
 
 test("cancelling a cloud agent stream aborts main and ends the local generator", async (t) => {
@@ -815,7 +910,9 @@ test("a provider error part rejects the agent stream instead of ending it silent
   // closes the stream. The generator must surface that as a rejection.
   globalThis.fetch = async () =>
     new Response(
-      JSON.stringify({ error: { message: "Incorrect API key provided", type: "invalid_request_error" } }),
+      JSON.stringify({
+        error: { message: "Incorrect API key provided", type: "invalid_request_error" },
+      }),
       { status: 401, headers: { "content-type": "application/json" } }
     );
 
@@ -823,7 +920,11 @@ test("a provider error part rejects the agent stream instead of ending it silent
     [{ role: "user", content: "hello" }],
     "qwen3-4b-q4_k_m",
     "lan",
-    { systemPrompt: "Answer the user.", lanUrl: "http://127.0.0.1:11434/v1", disableThinking: true },
+    {
+      systemPrompt: "Answer the user.",
+      lanUrl: "http://127.0.0.1:11434/v1",
+      disableThinking: true,
+    },
     registry.toAISDKFormat()
   );
 
@@ -852,7 +953,9 @@ test("a custom BYOK endpoint's provider error part is classified self-hosted, no
   });
   globalThis.fetch = async () =>
     new Response(
-      JSON.stringify({ error: { message: "Incorrect API key provided", type: "invalid_request_error" } }),
+      JSON.stringify({
+        error: { message: "Incorrect API key provided", type: "invalid_request_error" },
+      }),
       { status: 401, headers: { "content-type": "application/json" } }
     );
 

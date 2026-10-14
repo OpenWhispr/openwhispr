@@ -88,6 +88,8 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
 const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/ApiKeysSection.tsx": ["inherit"],
   "src/components/CommandSearch.tsx": ["auto"],
+  // Folder names and search accept user text in any script.
+  "src/components/MeetingNotificationFolderPicker.tsx": ["auto", "auto"],
   "src/components/MemberPickList.tsx": ["auto"],
   "src/components/ReferralDashboard.tsx": ["ltr"],
   "src/components/SettingsPage.tsx": ["inherit"],

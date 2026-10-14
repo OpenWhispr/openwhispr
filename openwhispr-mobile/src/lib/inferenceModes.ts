@@ -60,7 +60,10 @@ export const MODE_LABELS: Record<InferenceMode, string> = {
   local: 'On-Device',
 };
 
-type DictationModeConfig = Pick<UserConfig, 'defaultMode' | 'inference' | 'pinnedInference'>;
+type DictationModeConfig = Pick<
+  UserConfig,
+  'defaultMode' | 'inference' | 'pinnedInference' | 'privateModeReturn'
+>;
 
 // These workflows follow the dictation mode until they have a selection of their own, so they
 // would silently change destination when dictation moves to Bring Your Own Key. Cleanup is left
@@ -70,7 +73,7 @@ function scopesToPin(leavingMode: ProcessingMode): MobileInferenceScope[] {
   return leavingMode === 'private' ? ['upload', 'notes', 'agent'] : ['upload', 'notes'];
 }
 
-// The Home toggle and the Dictation page both own the dictation mode;
+// The Private Mode switch and the Dictation page both own the dictation mode;
 // writing the scope selection alongside defaultMode keeps routing and UI in step.
 export function dictationModeConfig(
   config: UserConfig | null,
@@ -95,6 +98,8 @@ export function dictationModeConfig(
           : { mode: 'openwhispr' },
     },
     ...(config?.pinnedInference ? { pinnedInference: undefined } : {}),
+    // Only a switch from Bring Your Own Key sets where Private mode returns to (workflowSaveConfig).
+    ...(config?.privateModeReturn ? { privateModeReturn: undefined } : {}),
   };
 }
 
@@ -105,18 +110,42 @@ function providerDictationConfig(
 ): DictationModeConfig {
   const inference = { ...config?.inference, dictation };
   const pinnedInference = [...(config?.pinnedInference ?? [])];
-  if (leavingMode !== 'providers') {
-    for (const scope of scopesToPin(leavingMode)) {
-      if (inference[scope]) continue;
-      inference[scope] = { mode: processingToInferenceMode(leavingMode) };
-      pinnedInference.push(scope);
-    }
+  // Leaving Private mode for the provider it was turned on from holds what that provider held,
+  // so the round trip ends where it started.
+  const pins: [MobileInferenceScope, InferenceSelection][] =
+    leavingMode === 'providers'
+      ? []
+      : leavingMode === 'private' && config?.privateModeReturn
+        ? (Object.entries(config.privateModeReturn.pinned) as [
+            MobileInferenceScope,
+            InferenceSelection,
+          ][])
+        : scopesToPin(leavingMode).map((scope) => [
+            scope,
+            { mode: processingToInferenceMode(leavingMode) },
+          ]);
+  for (const [scope, selection] of pins) {
+    if (inference[scope]) continue;
+    inference[scope] = selection;
+    pinnedInference.push(scope);
   }
   return {
     defaultMode: 'providers',
     inference,
     ...(pinnedInference.length ? { pinnedInference } : {}),
   };
+}
+
+// What Bring Your Own Key holds on the mode dictation came from, kept while Private mode is on.
+function pinnedSelections(
+  config: UserConfig | null,
+): Partial<Record<MobileInferenceScope, InferenceSelection>> {
+  return Object.fromEntries(
+    (config?.pinnedInference ?? []).flatMap((scope) => {
+      const selection = config?.inference?.[scope];
+      return selection ? [[scope, selection]] : [];
+    }),
+  );
 }
 
 // The config a workflow page writes when the user saves `selection` for `scope`.
@@ -141,11 +170,21 @@ export function workflowSaveConfig(
     : {};
   if (scope === 'dictation') {
     const mode = inferenceToProcessingMode(selection.mode);
+    // Picking another on-device model keeps where Private mode returns to; leaving it clears it.
+    const privateModeReturn =
+      mode !== 'private'
+        ? undefined
+        : activeMode === 'private'
+          ? config?.privateModeReturn
+          : activeMode === 'providers'
+            ? { pinned: pinnedSelections(config) }
+            : undefined;
     return {
       ...rememberedInference,
       ...(mode === 'providers'
         ? providerDictationConfig(config, selection, activeMode)
         : dictationModeConfig(config, mode)),
+      ...(privateModeReturn || config?.privateModeReturn ? { privateModeReturn } : {}),
     };
   }
   return {

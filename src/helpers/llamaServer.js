@@ -750,6 +750,7 @@ class LlamaServerManager {
       max_tokens: options.max_tokens ?? 512,
       stream: false,
     };
+    if (options.responseFormat) requestBody.response_format = options.responseFormat;
 
     // Without this, Qwen chat templates think into `reasoning_content` first
     // and can spend the whole budget there. Non-Qwen templates ignore it.
@@ -811,6 +812,18 @@ class LlamaServerManager {
                 debugLogger.warn("llama-server reply was cut off at max_tokens", {
                   maxTokens: requestBody.max_tokens,
                 });
+              }
+              if (options.responseFormat) {
+                if (choice?.finish_reason !== "stop") {
+                  reject(
+                    Object.assign(new Error("Model completion could not be verified"), {
+                      code: "OUTPUT_COMPLETION_UNVERIFIED",
+                    })
+                  );
+                  return;
+                }
+                resolve(typeof message?.content === "string" ? message.content : "");
+                return;
               }
               // Some builds still route a suppressed-thinking answer into
               // `reasoning_content` (#809). With thinking on, that field is the

@@ -86,3 +86,28 @@ test("PATCH /v1/notes/:id returns the updated note", (t) => {
   assert.equal(result.data.title, "Updated Title");
   assert.equal(result.data.content, "Existing content");
 });
+
+test("PATCH /v1/notes/:id clears a provided blank text field so the clear syncs", (t) => {
+  const ctx = createBridge(t);
+  if (!ctx) return;
+
+  const { id } = ctx.db.saveNote("Original", "Existing content").note;
+  ctx.db.updateNote(id, { enhanced_content: "Summary", transcript: "Spoken words" });
+
+  const result = call(ctx.bridge, "PATCH", `/v1/notes/${id}`, {
+    content: "",
+    enhanced_content: null,
+    transcript: "",
+  });
+
+  assert.equal(result.data.content, "");
+  assert.equal(result.data.content_sync_operation, "clear");
+  assert.equal(result.data.enhanced_content, null);
+  assert.equal(result.data.enhanced_content_sync_operation, "clear");
+  // Transcript is never a clear target; the bridge stores it as before.
+  assert.equal(result.data.transcript, "");
+  assert.throws(
+    () => call(ctx.bridge, "PATCH", `/v1/notes/${id}`, { content: "", clear_fields: "content" }),
+    { code: "VALIDATION" }
+  );
+});

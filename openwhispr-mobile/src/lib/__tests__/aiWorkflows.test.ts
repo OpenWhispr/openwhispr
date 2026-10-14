@@ -9,10 +9,19 @@ describe('workflowSummary for Text Cleanup', () => {
   it.each([
     ['nothing saved', undefined],
     ['OpenWhispr Cloud', { mode: 'openwhispr' as const }],
-    ['a provider', { mode: 'providers' as const, providerId: 'openai', modelId: 'gpt-5-mini' }],
   ])('is skipped in On-Device mode with %s saved', (_label, cleanup) => {
     const saved = config({ inference: cleanup ? { cleanup } : {} });
     expect(workflowSummary(saved, 'cleanup', 'private')).toBe('Skipped');
+  });
+
+  it('names the provider saved for cleanup in On-Device mode, which cleans there', () => {
+    const saved = config({
+      inference: { cleanup: { mode: 'providers', providerId: 'openai', modelId: 'gpt-5-mini' } },
+    });
+    expect(workflowSummary(saved, 'cleanup', 'private')).toBe('OpenAI');
+    expect(workflowSummary(saved, 'cleanup', 'private', { keyMissing: true })).toBe(
+      'OpenAI · Key missing',
+    );
   });
 
   it('runs On-Device in On-Device mode when saved as On-Device', () => {

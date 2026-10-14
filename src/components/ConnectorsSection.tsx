@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { Lock, Mail } from "./icons";
 import { SettingsPanel, SettingsPanelRow } from "./ui/SettingsSection";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { RecentActions } from "./connectors/RecentActions";
 import { ConnectorLoginRow } from "./connectors/ConnectorLoginRow";
 import { BetaBadge } from "./connectors/BetaBadge";
 import { CONNECTOR_ROWS } from "./connectors/connectorRows";
@@ -33,12 +32,6 @@ export function ConnectorsSection({ onUpgrade }: ConnectorsSectionProps): ReactE
   const gmailStatus = gmailSendStatus(gmail);
   const showActions = isPaid && connectorsAllowed;
 
-  const automaticTarget = resolveEmailDraftTarget({
-    emailDraftTarget: "auto",
-    gcalConnected,
-    mcalAccounts,
-    gmailStatus,
-  });
   // Sending from chat needs a working Gmail login; a build without a Google
   // client never offers it.
   const targetOptions = EMAIL_DRAFT_TARGET_SETTINGS.filter(
@@ -58,11 +51,6 @@ export function ConnectorsSection({ onUpgrade }: ConnectorsSectionProps): ReactE
   // Send from chat needs a connected Gmail; until then it says where to connect.
   const gmailSendUnavailable = gmailStatus !== "connected";
   const optionLabel = (option: EmailDraftTargetSetting): string => {
-    if (option === "auto") {
-      return t("connectors.email.autoResolved", {
-        target: t(`connectors.email.targets.${automaticTarget}`),
-      });
-    }
     if (option === "gmailSend" && gmailSendUnavailable) {
       return t("connectors.email.targets.gmailSendConnectFirst");
     }
@@ -84,11 +72,11 @@ export function ConnectorsSection({ onUpgrade }: ConnectorsSectionProps): ReactE
       {locked && <UpsellBar message={t("connectors.upsell")} onUpgrade={onUpgrade} />}
       <SettingsPanel>
         <SettingsPanelRow>
-          <div className={`flex items-center gap-3 ${locked ? "opacity-60" : ""}`}>
+          <div className={`flex flex-wrap items-center gap-3 ${locked ? "opacity-60" : ""}`}>
             <div className="w-9 h-9 rounded-lg bg-primary/5 dark:bg-primary/10 flex items-center justify-center shrink-0">
               <Mail className="h-4 w-4 text-primary/80" strokeWidth={2} aria-hidden="true" />
             </div>
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 basis-52 min-w-0">
               <div className="flex items-center gap-1.5">
                 <p className="text-xs font-semibold text-foreground">
                   {t("connectors.email.title")}
@@ -98,6 +86,15 @@ export function ConnectorsSection({ onUpgrade }: ConnectorsSectionProps): ReactE
               <p className="text-xs text-muted-foreground/70 mt-0.5 leading-relaxed">
                 {description}
               </p>
+              {showActions && (shownTarget === "auto" || shownTarget === "mailto") && (
+                <p className="text-xs text-muted-foreground/70 mt-1 leading-relaxed">
+                  {shownTarget === "auto"
+                    ? t("connectors.email.automaticHint", {
+                        target: t(`connectors.email.targets.${currentTarget}`),
+                      })
+                    : t("connectors.email.systemMailHint")}
+                </p>
+              )}
             </div>
             {showActions && (
               <Select
@@ -132,8 +129,6 @@ export function ConnectorsSection({ onUpgrade }: ConnectorsSectionProps): ReactE
               />
             )}
           </div>
-
-          {showActions && <RecentActions connectorId="email" />}
         </SettingsPanelRow>
         {CONNECTOR_ROWS.map((row) => (
           <ConnectorLoginRow key={row.id} row={row} isPaid={isPaid} blockedByOrg={blockedByOrg} />

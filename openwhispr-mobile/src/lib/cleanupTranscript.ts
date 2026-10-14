@@ -155,11 +155,15 @@ export async function cleanupTranscript(
   // either the user's choice or a Cloud fallback they just consented to while
   // still in private mode; hinting it would make ReasoningService demand local
   // reasoning and fail the cleanup. ReasoningService re-checks private mode for
-  // provider and local routes on its own.
+  // provider and local routes on its own. A cleanup provider route only ever
+  // comes from the provider the user saved for cleanup, so it is sent there even
+  // in On-Device mode.
   const routing =
-    inferenceRoute.mode === 'providers' || inferenceRoute.mode === 'local'
-      ? { isPrivateNote: useProcessingModeStore.getState().activeMode === 'private' }
-      : undefined;
+    inferenceRoute.mode === 'providers' && scope === 'cleanup'
+      ? { sendToChosenProvider: true }
+      : inferenceRoute.mode === 'providers' || inferenceRoute.mode === 'local'
+        ? { isPrivateNote: useProcessingModeStore.getState().activeMode === 'private' }
+        : undefined;
 
   // A custom prompt goes out with promptMode "cleanup", which turns off the
   // server's agent-name detection that the dictation agent relies on. When our

@@ -1010,13 +1010,17 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       if (!startResult?.success) {
         logger.error(
           "Meeting transcription IPC start failed",
-          { error: startResult?.error },
+          { error: startResult?.error, code: startResult?.code },
           "meeting"
         );
-        reportMeetingError(startResult?.error || "Failed to start meeting transcription", {
-          isRecording: false,
-          isTranscribing: false,
-        });
+        const needsSignIn =
+          startResult?.code === "AUTH_EXPIRED" || startResult?.code === "AUTH_REQUIRED";
+        reportMeetingError(
+          needsSignIn
+            ? "signInRequired"
+            : startResult?.error || "Failed to start meeting transcription",
+          { isRecording: false, isTranscribing: false }
+        );
         stopMediaStream(micResult);
         stopMediaStream(systemCaptureResult.stream);
         setupMicResult = null;

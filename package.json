@@ -1,6 +1,6 @@
 {
   "name": "open-whispr",
-  "version": "1.10.2",
+  "version": "1.10.3",
   "description": "A desktop dictation application using whisper.cpp for speech-to-text transcription",
   "main": "main.js",
   "private": true,
@@ -229,6 +229,7 @@
     "fast-xml-parser": "5.7.2",
     "ip-address": "10.2.0",
     "markdown-it": "14.3.2",
+    "shell-quote": "1.12.0",
     "tmp": "0.2.7"
   }
 }

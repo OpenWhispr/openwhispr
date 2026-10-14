@@ -35,10 +35,16 @@ export function getLinuxPasteInstallCommands(
       ];
 }
 
-export function needsLinuxPasteToolGuidance(pasteTools: PasteToolsResult) {
+// wtype is the paste tool on wlroots. On COSMIC other apps paste without it, but
+// terminals only receive Ctrl+Shift+V through wtype.
+export function needsWtype(pasteTools: PasteToolsResult) {
   return (
-    pasteTools.platform === "linux" &&
-    (!pasteTools.available || (pasteTools.isWlroots && !pasteTools.hasWtype))
+    !pasteTools.hasWtype &&
+    (!!pasteTools.isWlroots || (!!pasteTools.isCosmic && pasteTools.available))
   );
+}
+
+export function needsLinuxPasteToolGuidance(pasteTools: PasteToolsResult) {
+  return pasteTools.platform === "linux" && (!pasteTools.available || needsWtype(pasteTools));
 }
 import type { PasteToolsResult } from "../types/electron";

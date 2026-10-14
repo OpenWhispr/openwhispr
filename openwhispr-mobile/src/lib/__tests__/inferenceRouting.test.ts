@@ -200,3 +200,44 @@ it('marks text stages unavailable, never Cloud, for BYOK dictation with no text 
     'Choose a voice assistant provider in AI Models. Your raw transcript is saved.',
   );
 });
+
+it('keeps a saved provider cleanup for an On-Device recording; everything else stays local', () => {
+  mockProcessing.activeMode = 'private';
+  mockState.config.inference = {
+    dictation: { mode: 'local' },
+    cleanup: {
+      mode: 'providers',
+      providerId: 'openai',
+      modelId: 'gpt-5-mini',
+      credentialRef: 'provider.openai',
+    },
+    agent: {
+      mode: 'providers',
+      providerId: 'openai',
+      modelId: 'gpt-5-mini',
+      credentialRef: 'provider.openai',
+    },
+  };
+  const snapshot = snapshotTranscriptionJob('dictation');
+  expect(snapshot.provider).toBe('local');
+  expect(snapshot.cleanupRoute).toMatchObject({
+    mode: 'providers',
+    scope: 'cleanup',
+    providerId: 'openai',
+    modelId: 'gpt-5-mini',
+  });
+  expect(snapshot.agentRoute).toEqual({ mode: 'local', scope: 'agent' });
+  expect(snapshot.cleanupUnavailable).toBeUndefined();
+});
+
+it.each([
+  ['OpenWhispr Cloud', { mode: 'openwhispr' }],
+  ['nothing', undefined],
+])('keeps cleanup On-Device for an On-Device recording with %s saved', (_label, cleanup) => {
+  mockProcessing.activeMode = 'private';
+  mockState.config.inference = { dictation: { mode: 'local' }, ...(cleanup ? { cleanup } : {}) };
+  expect(snapshotTranscriptionJob('dictation').cleanupRoute).toEqual({
+    mode: 'local',
+    scope: 'cleanup',
+  });
+});

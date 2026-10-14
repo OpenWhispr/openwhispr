@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { Plus, Sparkles } from "../icons";
 import { useToast } from "../ui/useToast";
+import { PanelResizeHandle } from "../ui/PanelResizeHandle";
 import NoteEditor from "./NoteEditor";
 import SpacesTree from "./SpacesTree";
 import { ContainerOverview } from "./overview/ContainerOverview";
@@ -10,10 +11,10 @@ import NotesStructureIntroDialog from "./NotesStructureIntroDialog";
 import ActionManagerDialog from "./ActionManagerDialog";
 import AddNotesToFolderDialog from "./AddNotesToFolderDialog";
 import { useActionProcessing } from "../../hooks/useActionProcessing";
+import { useResizableWidth } from "../../hooks/useResizableWidth";
 import type { NoteMoveTarget } from "../../hooks/useNoteDragAndDrop";
 import type { ActionItem, ActionKind, NoteItem } from "../../types/electron";
 import { buildNoteRunInput } from "../../helpers/templatePrompts";
-import { inferActionOutput } from "../../utils/inferActionOutput";
 import {
   useSettingsStore,
   selectIsCloudNoteFormattingMode,
@@ -74,6 +75,8 @@ import { markIntroSeen, NOTES_STRUCTURE_INTRO, shouldShowIntro } from "../../lib
 import {
   applyNoteDraftMutation,
   collectPendingNoteWrites,
+  documentSaveUpdates,
+  enhancedSaveUpdates,
   planNoteTransition,
   shouldCancelPendingSavesForDelete,
   type NoteEditorDraft,
@@ -119,12 +122,18 @@ interface PersonalNotesViewProps {
   onOpenSettings?: (section: string) => void;
   meetingRecordingRequest?: {
     noteId: number;
-    folderId: number;
+    folderId: number | null;
     event: any;
   } | null;
   onMeetingRecordingRequestHandled?: () => void;
   invitationEntry?: { workspaceId: string; teamIds: string[]; spaceIds: string[] } | null;
   onInvitationEntryHandled?: () => void;
+}
+
+// The list's CSS cap: 30% of the view it shares with the note.
+function notesListMaxWidth(panel: HTMLElement): number {
+  const view = panel.parentElement?.parentElement;
+  return Math.floor((view?.clientWidth ?? Infinity) * 0.3);
 }
 
 export default function PersonalNotesView({
@@ -140,6 +149,14 @@ export default function PersonalNotesView({
   const notes = useNotes();
   const activeNoteId = useActiveNoteId();
   const isSidePanelLayout = isMeetingMode || (isNarrowWindow && activeNoteId != null);
+  const notesListResize = useResizableWidth<HTMLDivElement>({
+    storageKey: "notesSidebarWidth",
+    edge: "end",
+    min: 180,
+    max: 420,
+    getDragMax: notesListMaxWidth,
+  });
+  const notesListWidth = notesListResize.width ?? 208;
   const activeFolderId = useActiveFolderId();
   const [isSaving, setIsSaving] = useState(false);
   const [draft, setDraftState] = useState<NoteEditorDraft | null>(null);
@@ -165,6 +182,29 @@ export default function PersonalNotesView({
     }
     const enhanced = pendingEnhancedRef.current;
     if (enhanced?.noteId === noteId) {
+      clearTimeout(enhanced.timer);
+      pendingEnhancedRef.current = null;
+    }
+  }, []);
+
+  // Conflict-banner Keep saves the note's pending edits before advancing the
+  // base. They stay pending until written, so a failed save is retried by its
+  // own timer and the draft is never replaced by the store copy meanwhile.
+  const savePendingNow = useCallback(async (noteId: number) => {
+    const document =
+      pendingDocumentRef.current?.noteId === noteId ? pendingDocumentRef.current : null;
+    const enhanced =
+      pendingEnhancedRef.current?.noteId === noteId ? pendingEnhancedRef.current : null;
+    for (const write of collectPendingNoteWrites(document, enhanced)) {
+      const result = await window.electronAPI.updateNote(write.noteId, write.updates);
+      if (!result?.success) throw new Error(result?.error ?? "Note save failed");
+    }
+    // Retire only the saves just written; an edit made meanwhile stays pending.
+    if (document && pendingDocumentRef.current === document) {
+      clearTimeout(document.timer);
+      pendingDocumentRef.current = null;
+    }
+    if (enhanced && pendingEnhancedRef.current === enhanced) {
       clearTimeout(enhanced.timer);
       pendingEnhancedRef.current = null;
     }
@@ -391,61 +431,94 @@ export default function PersonalNotesView({
     }
   }, [activeNote, commitDraft, transitionToNote]);
 
-  const scheduleDocumentSave = useCallback((snapshot: NoteEditorDraft) => {
-    const current = pendingDocumentRef.current;
-    if (current) clearTimeout(current.timer);
+  // A save leaves the draft behind any store update it held off (see the
+  // effect above). Once nothing is pending for the note, the draft takes the
+  // saved row: fields the save did not write carry what a pull or ack applied.
+  const resyncDraftAfterSave = useCallback(
+    (noteId: number, saved: NoteItem | undefined) => {
+      if (
+        !saved ||
+        saved.id !== noteId ||
+        draftRef.current?.noteId !== noteId ||
+        pendingDocumentRef.current?.noteId === noteId ||
+        pendingEnhancedRef.current?.noteId === noteId
+      )
+        return;
+      commitDraft(draftFromNote(saved));
+    },
+    [commitDraft]
+  );
 
-    const pending: PendingDocumentSave = {
-      noteId: snapshot.noteId,
-      title: snapshot.title,
-      content: snapshot.content,
-      timer: setTimeout(async () => {
-        if (pendingDocumentRef.current !== pending) return;
-        pendingDocumentRef.current = null;
-        setIsSaving(true);
-        try {
-          await window.electronAPI.updateNote(pending.noteId, {
-            title: pending.title,
-            content: pending.content,
-          });
-        } catch (err) {
-          logger.warn("Failed to save note", { error: (err as Error).message }, "notes");
-        } finally {
-          setIsSaving(false);
-        }
-      }, 1000),
-    };
-    pendingDocumentRef.current = pending;
-  }, []);
+  const scheduleDocumentSave = useCallback(
+    (
+      snapshot: NoteEditorDraft,
+      edits: Pick<PendingDocumentSnapshot, "contentEdited" | "clearContent">
+    ) => {
+      void window.electronAPI.discardNoteUndo?.(snapshot.noteId);
+      const current = pendingDocumentRef.current;
+      if (current) clearTimeout(current.timer);
 
-  const scheduleEnhancedSave = useCallback((snapshot: NoteEditorDraft) => {
-    const current = pendingEnhancedRef.current;
-    if (current) clearTimeout(current.timer);
+      const pending: PendingDocumentSave = {
+        noteId: snapshot.noteId,
+        title: snapshot.title,
+        content: snapshot.content,
+        ...edits,
+        timer: setTimeout(async () => {
+          if (pendingDocumentRef.current !== pending) return;
+          pendingDocumentRef.current = null;
+          setIsSaving(true);
+          try {
+            const result = await window.electronAPI.updateNote(
+              pending.noteId,
+              documentSaveUpdates(pending)
+            );
+            if (result?.success) resyncDraftAfterSave(pending.noteId, result.note);
+          } catch (err) {
+            logger.warn("Failed to save note", { error: (err as Error).message }, "notes");
+          } finally {
+            setIsSaving(false);
+          }
+        }, 1000),
+      };
+      pendingDocumentRef.current = pending;
+    },
+    [resyncDraftAfterSave]
+  );
 
-    const pending: PendingEnhancedSave = {
-      noteId: snapshot.noteId,
-      enhancedContent: snapshot.enhancedContent,
-      timer: setTimeout(async () => {
-        if (pendingEnhancedRef.current !== pending) return;
-        pendingEnhancedRef.current = null;
-        setIsSaving(true);
-        try {
-          await window.electronAPI.updateNote(pending.noteId, {
-            enhanced_content: pending.enhancedContent,
-          });
-        } catch (err) {
-          logger.warn(
-            "Failed to save enhanced note content",
-            { error: (err as Error).message },
-            "notes"
-          );
-        } finally {
-          setIsSaving(false);
-        }
-      }, 1000),
-    };
-    pendingEnhancedRef.current = pending;
-  }, []);
+  const scheduleEnhancedSave = useCallback(
+    (snapshot: NoteEditorDraft) => {
+      void window.electronAPI.discardNoteUndo?.(snapshot.noteId);
+      const current = pendingEnhancedRef.current;
+      if (current) clearTimeout(current.timer);
+
+      const pending: PendingEnhancedSave = {
+        noteId: snapshot.noteId,
+        enhancedContent: snapshot.enhancedContent,
+        timer: setTimeout(async () => {
+          if (pendingEnhancedRef.current !== pending) return;
+          pendingEnhancedRef.current = null;
+          setIsSaving(true);
+          try {
+            const result = await window.electronAPI.updateNote(
+              pending.noteId,
+              enhancedSaveUpdates(pending)
+            );
+            if (result?.success) resyncDraftAfterSave(pending.noteId, result.note);
+          } catch (err) {
+            logger.warn(
+              "Failed to save enhanced note content",
+              { error: (err as Error).message },
+              "notes"
+            );
+          } finally {
+            setIsSaving(false);
+          }
+        }, 1000),
+      };
+      pendingEnhancedRef.current = pending;
+    },
+    [resyncDraftAfterSave]
+  );
 
   const handleTitleChange = useCallback(
     (sourceNoteId: number, title: string) => {
@@ -456,7 +529,14 @@ export default function PersonalNotesView({
       });
       if (!next) return;
       commitDraft(next);
-      scheduleDocumentSave(next);
+      // A title edit before the save fires shares that save, so it keeps an
+      // edit or a clear of the notes; on its own it writes only the title.
+      const pending =
+        pendingDocumentRef.current?.noteId === next.noteId ? pendingDocumentRef.current : null;
+      scheduleDocumentSave(next, {
+        contentEdited: pending?.contentEdited ?? false,
+        clearContent: pending?.clearContent ?? false,
+      });
     },
     [commitDraft, scheduleDocumentSave]
   );
@@ -470,7 +550,7 @@ export default function PersonalNotesView({
       });
       if (!next) return;
       commitDraft(next);
-      scheduleDocumentSave(next);
+      scheduleDocumentSave(next, { contentEdited: true, clearContent: !content.trim() });
     },
     [commitDraft, scheduleDocumentSave]
   );
@@ -615,7 +695,7 @@ export default function PersonalNotesView({
       args: {
         noteId: meetingRecordingRequest.noteId,
         noteTitle: note?.title ?? null,
-        folderId: note?.folder_id ?? meetingRecordingRequest.folderId ?? null,
+        folderId: note ? note.folder_id : (meetingRecordingRequest.folderId ?? null),
         seedSegments,
         diarizationEnabled:
           note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
@@ -717,10 +797,24 @@ export default function PersonalNotesView({
   return (
     <div className="flex h-full">
       <div
-        className="shrink-0 overflow-hidden transition-[width] duration-300 ease-out"
-        style={{ width: isSidePanelLayout ? 0 : "13rem" }}
+        className={cn(
+          // A wide list never takes more than 30% of the window, so the note and its chat keep room.
+          "max-w-[30%] shrink-0 overflow-hidden transition-[width] duration-300 ease-out",
+          // Follows the pointer while it's dragged; the transition is for collapsing.
+          notesListResize.isResizing && "transition-none"
+        )}
+        style={{ width: isSidePanelLayout ? 0 : notesListWidth }}
       >
-        <div className="w-52 shrink-0 border-e border-border dark:border-white/10 flex flex-col h-full">
+        <div
+          ref={notesListResize.panelRef}
+          className="relative max-w-full shrink-0 border-e border-border dark:border-white/10 flex flex-col h-full"
+          style={{ width: notesListWidth }}
+        >
+          <PanelResizeHandle
+            edge="end"
+            isResizing={notesListResize.isResizing}
+            onPointerDown={notesListResize.startResize}
+          />
           <div className="px-2 pt-2 pb-1 shrink-0 space-y-0.5">
             <button
               onClick={() => setManagerKind("template")}
@@ -784,6 +878,7 @@ export default function PersonalNotesView({
               onMoveToFolder={handleMoveToFolder}
               onCreateFolderAndMove={handleCreateFolderAndMove}
               onCancelPendingSaves={cancelPendingSaves}
+              onFlushPendingSaves={savePendingNow}
               actionProcessingState={actionProcessingState}
               actionName={actionName}
               actionProgress={actionProgress}
@@ -795,7 +890,6 @@ export default function PersonalNotesView({
               open={managerKind !== null}
               onOpenChange={(open) => !open && setManagerKind(null)}
               initialKind={managerKind ?? "template"}
-              onInferOutput={(prompt) => inferActionOutput(prompt, effectiveModelId, isCloudMode)}
             />
           </>
         ) : activeContext && overviewSpace ? (
