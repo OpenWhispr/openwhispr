@@ -35,8 +35,8 @@ export default function ActionMenuItems({
           >
             <Icon size={14} className="shrink-0 text-primary" />
             <div className="flex-1 min-w-0">
-              <div dir="auto" className="font-medium truncate">
-                {getActionName(action, t)}
+              <div className="font-medium truncate">
+                <span dir="auto">{getActionName(action, t)}</span>
               </div>
               <div className="text-xs text-muted-foreground/70 truncate">
                 {getActionDescription(action, t)}
