@@ -98,14 +98,15 @@ async function startStream(t, provider, { holdHeaders = false } = {}) {
 for (const provider of ["local", "lan"]) {
   test(`${provider} chat keeps streaming beyond 60 seconds while bytes arrive`, async (t) => {
     const stream = await startStream(t, provider);
-    for (let i = 0; i < 5; i++) {
+    // 14 × 45 s outlasts the 600 s startup allowance, so only the idle reset keeps it alive.
+    for (let i = 0; i < 14; i++) {
       t.mock.timers.tick(45_000);
       assert.equal(stream.signal.aborted, false);
       await stream.send(contentEvent(`Part ${i}. `));
     }
     const result = await stream.finish();
     assert.equal(result.error, undefined);
-    assert.equal(result.chunks.filter((chunk) => chunk.type === "content").length, 5);
+    assert.equal(result.chunks.filter((chunk) => chunk.type === "content").length, 14);
     assert.deepEqual(result.chunks.at(-1), { type: "done", finishReason: "stop" });
     t.mock.timers.tick(600_000);
     assert.equal(stream.signal.aborted, false, "completion must clear the idle timer");
@@ -145,6 +146,8 @@ for (const provider of ["local", "lan"]) {
 
 test("stream activity includes split SSE lines, keepalives and filtered thinking", async (t) => {
   const stream = await startStream(t, "local");
+  // The first bytes arrive at 595 s, so each later gap only survives through the idle reset.
+  t.mock.timers.tick(550_000);
   for (const data of [
     ": keepalive\n\n",
     "data: ",
