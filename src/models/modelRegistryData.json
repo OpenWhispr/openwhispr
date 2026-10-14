@@ -384,7 +384,7 @@
         {
           "id": "google/chirp-3",
           "name": "Chirp 3",
-          "description": "Google's speech-to-text across 100+ languages",
+          "description": "Google's speech-to-text in 100+ languages",
           "descriptionKey": "models.descriptions.transcription.openrouter_google_chirp_3"
         },
         {

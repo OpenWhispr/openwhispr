@@ -50,8 +50,8 @@ export function dictionaryPromptLimit({ provider = "", endpoint = "", model = ""
 // OpenRouter's multipart /audio/transcriptions accepts `prompt` and drops it,
 // and vocabulary hints reach its models only through provider.options on its
 // JSON body, which dictation does not use. So no dictionary reaches the model
-// there: dictation leaves it out of the request, nothing can echo it back, and
-// the Dictionary view says so.
+// there: dictation leaves the whole prompt, Chinese script bias included, out of
+// the request, nothing can echo it back, and the Dictionary view says so.
 export function dictionaryReachesTranscriptionModel(endpoint) {
   return !isOpenRouterEndpoint(endpoint);
 }
