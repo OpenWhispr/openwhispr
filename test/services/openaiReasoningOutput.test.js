@@ -164,6 +164,36 @@ test("a Responses result that ran out of tokens before any text is an error, not
   assert.equal(error.code, undefined, "note formatting must not send the same cap again");
 });
 
+test("a Custom endpoint's Responses result that only reasoned carries the retry code", async (t) => {
+  // Ollama answers the app's notes request on /v1/responses: GLM-5.3 at its
+  // default effort spends the whole 4,096 tokens reasoning (#2008).
+  installFetch(t, () =>
+    jsonResponse({
+      status: "incomplete",
+      incomplete_details: { reason: "max_output_tokens" },
+      output: [{ type: "reasoning", summary: [] }],
+    })
+  );
+  const { openaiProvider } = await load();
+
+  await assert.rejects(
+    openaiProvider.call({
+      text: TRANSCRIPT,
+      model: "glm-5.3",
+      agentName: null,
+      config: {
+        provider: "custom",
+        baseUrl: "https://ollama.example/v1",
+        customApiKey: "test-key",
+        systemPrompt: "Summarize",
+        maxTokens: 4096,
+      },
+      ctx: makeCtx(),
+    }),
+    { message: /ran out of output tokens/, code: "OUTPUT_LIMIT_BEFORE_ANSWER" }
+  );
+});
+
 test("a Responses result stopped by a content filter is not reported as running out of tokens", async (t) => {
   installFetch(t, () =>
     jsonResponse({
