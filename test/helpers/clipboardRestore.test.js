@@ -806,6 +806,26 @@ for (const windowClass of ["chromium", "kitty"]) {
   });
 }
 
+// Warp binds paste to Ctrl+Shift+V only, so it keeps that chord on KDE.
+test("KDE portal sends Ctrl+Shift+V to a detected Warp window", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSpawn(spawnCalls, [0]),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = () => false;
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._readPortalToken = () => null;
+  manager._detectKdeWindowClass = () => "dev.warp.warp";
+
+  await withWaylandEnvironment("KDE", () => manager.pasteLinux(null));
+
+  assert.deepEqual(
+    spawnCalls.map((call) => call.args),
+    [["--portal", "--terminal"]]
+  );
+});
+
 // The Shift+Insert switch for #2055 is KWin-specific: a detected GNOME window
 // keeps Ctrl+V through the portal.
 test("GNOME portal sends Ctrl+V to a detected window", async () => {

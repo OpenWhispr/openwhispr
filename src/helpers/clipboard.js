@@ -1818,8 +1818,9 @@ class ClipboardManager {
             await this._runPortalPaste(linuxFastPaste, {
               // KWin resolves portal keysyms in the active layout only: on a
               // non-Latin layout there is no XK_v, so Ctrl+V arrives as Ctrl alone
-              // while the helper still exits 0 (#2055). Insert is in every layout.
-              shiftInsert: useShiftInsert || isKde,
+              // while the helper still exits 0 (#2055). Insert is in every layout,
+              // but Warp binds paste to Ctrl+Shift+V only.
+              shiftInsert: useShiftInsert || (isKde && !signalsMatch("warp")),
               terminal: isTerminalTarget,
             });
             this.safeLog("✅ Paste successful using linux-fast-paste --portal (RemoteDesktop)");
