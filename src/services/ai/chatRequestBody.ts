@@ -2,7 +2,7 @@ import type { ReasoningConfig } from "../BaseReasoningService";
 import { getOpenAiApiConfig } from "../../models/ModelRegistry";
 import { detectEndpointDialect } from "./thinkingSuppressionDialects";
 import { getModelFamilyConstraints } from "./modelFamilyConstraints";
-import { applyThinkingSuppression } from "./thinkingSuppression";
+import { applyThinkingSuppression, isThinkingSuppressed } from "./thinkingSuppression";
 
 /**
  * Providers whose OpenAI-compat chat endpoints speak the legacy shape: always
@@ -19,7 +19,8 @@ const LEGACY_CHAT_COMPLETIONS_PROVIDERS = new Set(["local", "lan", "groq", "tinf
  * param, temperature, family reasoning effort, and thinking suppression.
  * Callers own `model`/`messages`/`stream`; this owns every tunable param, so
  * a family or provider fact changed in the data tables reaches all transports
- * at once instead of one call site at a time (#1611).
+ * at once instead of one call site at a time (#1611). Responses bodies get the
+ * same family effort from familyResponsesEffort; keep the two in step.
  */
 export function applyChatCompletionsParams(
   requestBody: Record<string, unknown>,
@@ -58,11 +59,41 @@ export function applyChatCompletionsParams(
   // preferred effort — see modelFamilyConstraints for the gpt-oss rationale.
   // applyThinkingSuppression still wins when thinking is disabled by the user.
   const familyEffort = getModelFamilyConstraints(model)?.reasoningEffort;
-  if (familyEffort?.cleanupValue && (!config.systemPrompt || config.requireCompleteOutput)) {
+  if (familyEffort?.cleanupValue && isDeterministicTransform(config)) {
     requestBody.reasoning_effort = familyEffort.cleanupValue;
   }
 
-  applyThinkingSuppression(requestBody, model, provider, config, endpoint ?? undefined);
+  const suppressed = applyThinkingSuppression(
+    requestBody,
+    model,
+    provider,
+    config,
+    endpoint ?? undefined
+  );
+  // Some dialects suppress through other fields, so a default effort beside
+  // them would contradict the suppression.
+  if (!suppressed && familyEffort?.defaultValue) {
+    requestBody.reasoning_effort ??= familyEffort.defaultValue;
+  }
+}
+
+/**
+ * The family's effort for a Responses API body (`reasoning: { effort }`), by
+ * the same rules as the chat body above. A model outside the family table
+ * sends no effort, leaving the server's default.
+ */
+export function familyResponsesEffort(model: string, config: ReasoningConfig): string | undefined {
+  const familyEffort = getModelFamilyConstraints(model)?.reasoningEffort;
+  if (!familyEffort) return undefined;
+  if (isThinkingSuppressed(model, config)) return familyEffort.suppressValue;
+  if (familyEffort.cleanupValue && isDeterministicTransform(config)) {
+    return familyEffort.cleanupValue;
+  }
+  return familyEffort.defaultValue;
+}
+
+function isDeterministicTransform(config: ReasoningConfig): boolean {
+  return !config.systemPrompt || !!config.requireCompleteOutput;
 }
 
 /** Finish reasons that mean the output hit the token cap, across providers. */

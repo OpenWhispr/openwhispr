@@ -8,6 +8,7 @@ import { canBorrowCleanupCustomKey, resolveConfiguredOpenAIBase } from "../opena
 import {
   applyChatCompletionsParams,
   emptyResponseError,
+  familyResponsesEffort,
   fetchWithParamFallback,
   isTruncatedFinishReason,
   REASONING_MODEL_MIN_OUTPUT_TOKENS,
@@ -273,6 +274,8 @@ export const openaiProvider: InferenceProvider = {
             if (apiConfig.supportsTemperature) {
               requestBody.temperature = config.temperature ?? (config.systemPrompt ? 0.3 : 0);
             }
+            const effort = familyResponsesEffort(model, config);
+            if (effort) requestBody.reasoning = { effort };
           } else {
             requestBody.messages = buildMessages(type);
             applyChatCompletionsParams(requestBody, {
