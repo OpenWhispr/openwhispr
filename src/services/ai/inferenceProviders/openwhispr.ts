@@ -46,10 +46,11 @@ export const openwhisprProvider: InferenceProvider = {
       });
 
       if (!res?.success) {
-        const err: Error & { code?: string } = new Error(
+        const err: Error & { code?: string; status?: number } = new Error(
           res?.error || "OpenWhispr cloud reasoning failed"
         );
         err.code = res?.code;
+        err.status = res?.status;
         throw err;
       }
 
