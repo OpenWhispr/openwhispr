@@ -740,6 +740,7 @@ A dedicated global hotkey that starts a dictation whose transcript is sent strai
 
 - Esc collapses the panel; a Copy button copies the answer; a follow-up input takes typed questions. Esc while the command is still thinking cancels it; a command whose stream ends without content settles as `agentMode.chat.emptyResponse`
 - Pressing the hotkey again while the panel is open records a follow-up into the same conversation
+- A command that reaches the panel (hotkey or wake word) is stored only as its conversation: `useAudioRecording` skips the dictation history row and the Insights event for a result carrying `assistantConversation`, and drops the captured audio (`audioManager.discardCapturedAudio()`), so the next dictation can't attach it. In-place selection edits still save, since their pasted text has no other record
 
 **UI**:
 
