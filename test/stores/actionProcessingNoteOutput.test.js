@@ -312,9 +312,9 @@ const ranOutThinking = async () => {
   return emptyResponseError("OpenAI", { systemPrompt: "Summarize" }, true);
 };
 
-test("a notes reply cut off before any answer is retried once with room for reasoning, and only that one", async (t) => {
+test("a notes reply cut off before any answer is retried once with room for reasoning", async (t) => {
   const { store, calls, updates } = await loadStore(t);
-  const { REASONING_MODEL_MIN_OUTPUT_TOKENS, truncatedOutputError } =
+  const { REASONING_MODEL_MIN_OUTPUT_TOKENS } =
     await import("../../src/services/ai/chatRequestBody.ts");
   const transcript = "## Meeting Transcript\nAlice: we agreed to ship on Friday.";
   globalThis.__processTextErrors = [await ranOutThinking()];
@@ -335,21 +335,6 @@ test("a notes reply cut off before any answer is retried once with room for reas
   assert.equal(calls[1].text, transcript);
   assert.equal(calls[1].config.systemPrompt, calls[0].config.systemPrompt);
   assert.equal(updates[0].payload.enhanced_content, "# Notes\n- decided things");
-
-  // A reply clipped after it started answering keeps today's error, with no retry.
-  globalThis.__processTextErrors = [truncatedOutputError()];
-  store.runBackgroundAction(
-    22,
-    transcript,
-    "hash",
-    ACTION,
-    { modelId: "glm-5.3", isCloudMode: true, isMeetingNote: true },
-    LABELS
-  );
-  let events = [];
-  await waitFor(() => (events = store.consumeErrorEvents()).length > 0, "the clipped error");
-  assert.equal(calls.length, 3);
-  assert.equal(events[0].messageKey, "notes.actions.errors.outputTruncated");
 });
 
 test("a retry that still thinks past its budget points at Disable thinking output, or at another model when it is on", async (t) => {

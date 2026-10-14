@@ -630,7 +630,8 @@ export function runBackgroundAction(
         settingsTarget?: string;
         technicalDetails?: TechnicalErrorDetailsData;
       };
-      // Still thinking past the retry's budget: point at the setting that stops it.
+      // A retry that still thought past its budget, or was refused or timed out:
+      // point at the setting that stops the thinking.
       const thinkingSpentOutput = ranOutBeforeAnswer(err);
       pushErrorEvent({
         noteId,

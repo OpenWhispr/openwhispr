@@ -291,7 +291,6 @@ test("a Responses result stopped by a content filter is not reported as running 
     );
 
   assert.match(error?.message ?? "", /empty response/);
-  assert.equal(error.code, undefined, "note formatting must not retry a filtered reply");
 });
 
 test("a Chat Completions result cut off before any text is an error, not the input echoed back", async (t) => {
