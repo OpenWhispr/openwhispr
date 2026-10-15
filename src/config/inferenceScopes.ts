@@ -10,6 +10,7 @@ export interface InferenceScopeStoreKeys {
   remoteUrl?: keyof SettingsState;
   customApiKey?: keyof SettingsState;
   disableThinking?: keyof SettingsState;
+  reasoningEffort?: keyof SettingsState;
 }
 
 export interface InferenceScopeDefinition {
@@ -40,6 +41,7 @@ export const INFERENCE_SCOPES = {
       remoteUrl: "cleanupRemoteUrl",
       customApiKey: "cleanupCustomApiKey",
       disableThinking: "cleanupDisableThinking",
+      reasoningEffort: "cleanupReasoningEffort",
     },
   },
   dictationAgent: {
@@ -53,6 +55,7 @@ export const INFERENCE_SCOPES = {
       remoteUrl: "dictationAgentRemoteUrl",
       customApiKey: "dictationAgentCustomApiKey",
       disableThinking: "dictationAgentDisableThinking",
+      reasoningEffort: "dictationAgentReasoningEffort",
     },
   },
   // Optional override used only when a voice-agent request carries a screen
@@ -68,6 +71,7 @@ export const INFERENCE_SCOPES = {
       cloudBaseUrl: "dictationAgentVisionCloudBaseUrl",
       customApiKey: "dictationAgentVisionCustomApiKey",
       disableThinking: "dictationAgentVisionDisableThinking",
+      reasoningEffort: "dictationAgentVisionReasoningEffort",
     },
     fallbackScope: "dictationAgent",
     optional: true,
@@ -83,6 +87,7 @@ export const INFERENCE_SCOPES = {
       remoteUrl: "noteFormattingRemoteUrl",
       customApiKey: "noteFormattingCustomApiKey",
       disableThinking: "noteFormattingDisableThinking",
+      reasoningEffort: "noteFormattingReasoningEffort",
     },
     fallbackScope: "dictationCleanup",
   },
@@ -100,6 +105,7 @@ export const INFERENCE_SCOPES = {
       remoteUrl: "chatAgentRemoteUrl",
       customApiKey: "chatAgentCustomApiKey",
       disableThinking: "chatAgentDisableThinking",
+      reasoningEffort: "chatAgentReasoningEffort",
     },
   },
   dictationTranslation: {
@@ -113,6 +119,7 @@ export const INFERENCE_SCOPES = {
       remoteUrl: "translationRemoteUrl",
       customApiKey: "translationCustomApiKey",
       disableThinking: "translationDisableThinking",
+      reasoningEffort: "translationReasoningEffort",
     },
   },
 } as const satisfies Record<string, InferenceScopeDefinition>;

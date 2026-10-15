@@ -768,6 +768,21 @@
       "selectModelHint": "Nessun modello selezionato — scegline uno dall'elenco qui sotto.",
       "keyRequiredHint": "Per l'inferenza è richiesta una chiave API — aggiungine una per usare questo provider."
     },
+    "effort": {
+      "title": "Livello di ragionamento",
+      "description": "Quanto ragiona il modello prima di rispondere. Auto usa l'impostazione predefinita del provider.",
+      "descriptionWithDefault": "Quanto ragiona il modello prima di rispondere. Auto usa l'impostazione predefinita del provider ({{value}}).",
+      "auto": "Auto (predefinito del provider)",
+      "options": {
+        "none": "Nessuno",
+        "minimal": "Minimo",
+        "low": "Basso",
+        "medium": "Medio",
+        "high": "Alto",
+        "xhigh": "Molto alto",
+        "max": "Massimo"
+      }
+    },
     "getApiKey": "Ottieni la chiave API ->",
     "selectModel": "Seleziona modello",
     "availableModels": "Modelli disponibili",

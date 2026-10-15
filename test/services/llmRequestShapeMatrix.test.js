@@ -89,6 +89,20 @@ const MATRIX = [
   ["corti keeps the legacy chat-completions shape", "Corti", "corti-s1", null, AGENT,
     { max_tokens: MAX_TOKENS, temperature: 0.3 }],
 
+  // --- Chosen reasoning effort (the per-scope picker) ---
+  ["groq gpt-oss: a chosen effort replaces the cleanup pin", "Groq", "openai/gpt-oss-120b", null, { disableThinking: false, reasoningEffort: "high" },
+    { max_tokens: MAX_TOKENS, temperature: 0, reasoning_effort: "high" }],
+  ["groq gpt-oss: suppression beats a chosen effort", "Groq", "openai/gpt-oss-120b", null, { disableThinking: true, reasoningEffort: "high" },
+    { max_tokens: MAX_TOKENS, temperature: 0, reasoning_effort: "low" }],
+  ["groq gpt-oss: a level the model doesn't offer is ignored", "Groq", "openai/gpt-oss-120b", null, { ...AGENT, disableThinking: false, reasoningEffort: "none" },
+    { max_tokens: MAX_TOKENS, temperature: 0.3 }],
+  ["custom endpoint sends a chosen effort as reasoning_effort (#791)", "custom", "grok-4.3", "https://api.x.ai/v1", { ...AGENT, disableThinking: false, reasoningEffort: "none" },
+    { max_completion_tokens: MAX_TOKENS, reasoning_effort: "none" }],
+  ["openrouter puts a chosen effort in its reasoning object", "openrouter", "openai/gpt-4o", null, { ...AGENT, disableThinking: false, reasoningEffort: "high" },
+    { max_tokens: MAX_TOKENS, temperature: 0.3, reasoning: { effort: "high" } }],
+  ["openrouter glm-5.3: a chosen effort sends no family default beside it", "openrouter", "z-ai/glm-5.3", null, { ...AGENT, disableThinking: false, reasoningEffort: "medium" },
+    { max_tokens: MAX_TOKENS, temperature: 0.3, reasoning: { effort: "medium" } }],
+
   // --- Gemini through its OpenAI-compat endpoint (agent streaming route) ---
   ["gemini openai-compat: fallback config, no temperature param", "gemini", "gemini-3-flash-preview", null, AGENT,
     { max_completion_tokens: MAX_TOKENS }],

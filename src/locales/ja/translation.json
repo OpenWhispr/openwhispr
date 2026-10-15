@@ -768,6 +768,21 @@
       "selectModelHint": "モデルが未選択です — 下のリストから選択してください。",
       "keyRequiredHint": "推論には API キーが必要です — このプロバイダーを使用するには追加してください。"
     },
+    "effort": {
+      "title": "推論の深さ",
+      "description": "モデルが回答する前にどれだけ考えるかを設定します。自動ではプロバイダーの既定値を使用します。",
+      "descriptionWithDefault": "モデルが回答する前にどれだけ考えるかを設定します。自動ではプロバイダーの既定値（{{value}}）を使用します。",
+      "auto": "自動（プロバイダーの既定値）",
+      "options": {
+        "none": "なし",
+        "minimal": "最小",
+        "low": "低",
+        "medium": "中",
+        "high": "高",
+        "xhigh": "非常に高い",
+        "max": "最大"
+      }
+    },
     "getApiKey": "API キーを取得 ->",
     "selectModel": "モデルを選択",
     "availableModels": "利用可能なモデル",

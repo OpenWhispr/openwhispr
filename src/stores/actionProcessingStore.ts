@@ -499,6 +499,7 @@ export function runBackgroundAction(
         maxTokens: rewritesSummary ? 2 * NOTE_OUTPUT_MAX_TOKENS : NOTE_OUTPUT_MAX_TOKENS,
         temperature: 0.3,
         disableThinking: settings.noteFormattingDisableThinking,
+        reasoningEffort: settings.noteFormattingReasoningEffort,
         // A local model that shrinks the reply to fit the prompt refuses a reply
         // that fills the shrunken allowance, so a recording is summarised in
         // parts rather than saved clipped. A plain note has no parts route, so

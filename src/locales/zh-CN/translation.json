@@ -768,6 +768,21 @@
       "selectModelHint": "尚未选择模型 — 请从下方列表中选择一个。",
       "keyRequiredHint": "推理需要 API 密钥 — 请添加密钥以使用此提供商。"
     },
+    "effort": {
+      "title": "推理强度",
+      "description": "模型在回答前思考的程度。“自动”使用服务商的默认设置。",
+      "descriptionWithDefault": "模型在回答前思考的程度。“自动”使用服务商的默认设置（{{value}}）。",
+      "auto": "自动（服务商默认）",
+      "options": {
+        "none": "无",
+        "minimal": "极低",
+        "low": "低",
+        "medium": "中",
+        "high": "高",
+        "xhigh": "极高",
+        "max": "最大"
+      }
+    },
     "getApiKey": "获取你的 API Key ->",
     "selectModel": "选择模型",
     "availableModels": "可用模型",
