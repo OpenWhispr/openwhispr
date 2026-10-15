@@ -142,7 +142,7 @@
   },
   "upgradePrompt": {
     "paymentFailed": "Non siamo riusciti a elaborare il pagamento",
-    "weeklyLimit": "Hai raggiunto il limite settimanale",
+    "weeklyLimit": "Hai raggiunto il limite cloud settimanale",
     "pastDueDescription": "Sei nel piano gratuito per ora — nessun problema, hai ancora {{limit}} parole a settimana.\nAggiorna il metodo di pagamento per tornare a Pro illimitato.",
     "limitDescription": "{{used}} di {{limit}} parole utilizzate.\nLa trascrizione è stata salvata e incollata.",
     "updatePayment": "Aggiorna metodo di pagamento",
@@ -630,7 +630,7 @@
       "availableButton": "Aggiornamento disponibile"
     },
     "limit": {
-      "weeklyTitle": "Limite settimanale raggiunto",
+      "weeklyTitle": "Limite cloud settimanale raggiunto",
       "weeklyDescription": "Il limite si rinnova in modo progressivo. Passa a Pro o usa la tua chiave API per un uso illimitato."
     },
     "accessibilityMissing": {
@@ -902,7 +902,7 @@
         "offline": "Sei offline",
         "agentUnavailable": "Assistente non disponibile",
         "screenContextSkipped": "Contesto dello schermo ignorato",
-        "dailyLimitReached": "Limite giornaliero raggiunto",
+        "cloudLimitReached": "Limite cloud settimanale raggiunto",
         "providerRateLimited": "Limite di velocità del provider"
       },
       "fallback": {
@@ -1598,7 +1598,7 @@
         "freeUsage": "{{used}} / {{limit}} parole di OpenWhispr Cloud questa settimana",
         "byokUnlimited": "Le tue chiavi API e i modelli locali restano utilizzabili senza limiti.",
         "nextBilling": "Prossima fatturazione: {{date}}",
-        "pastDue": "{{used}} / {{limit}} parole gratuite questa settimana — aggiorna il pagamento per ripristinare Pro",
+        "pastDue": "{{used}} / {{limit}} parole di OpenWhispr Cloud questa settimana — aggiorna il pagamento per ripristinare Pro",
         "trial": "{{days}} giorni rimanenti — trascrizioni illimitate",
         "unlimited": "Illimitato",
         "accessUntil": "Accesso fino al {{date}}",
@@ -1620,7 +1620,7 @@
       "title": "Account",
       "toasts": {
         "approachingLimit": {
-          "description": "Hai usato {{used}} di {{limit}} parole di OpenWhispr Cloud questa settimana. Le tue chiavi API e i modelli locali restano utilizzabili senza limiti.",
+          "description": "Hai usato {{used}} di {{limit}} parole di OpenWhispr Cloud questa settimana. Passa a Pro o usa la tua chiave API per un uso illimitato.",
           "title": "Limite di parole cloud quasi raggiunto"
         }
       },
@@ -3601,8 +3601,8 @@
     "inviteTeam": "Invita il tuo team",
     "settings": "Impostazioni",
     "support": "Assistenza",
-    "limitReached": "Limite cloud raggiunto",
-    "limitReachedDescription": "Le tue chiavi API e i modelli locali restano utilizzabili senza limiti.",
+    "limitReached": "Limite cloud settimanale raggiunto",
+    "limitReachedDescription": "Passa a Pro o usa la tua chiave API per un uso illimitato.",
     "viewPlans": "Vedi i piani",
     "upgradeTitle": "Passa a Pro",
     "upgradeDescription": "Trascrizione illimitata, più precisa e più veloce.",

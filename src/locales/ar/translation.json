@@ -6,7 +6,7 @@
         "offline": "أنت غير متصل بالإنترنت",
         "agentUnavailable": "المساعد غير متاح",
         "screenContextSkipped": "تم تخطي سياق الشاشة",
-        "dailyLimitReached": "تم الوصول إلى الحد اليومي",
+        "cloudLimitReached": "تم بلوغ الحد السحابي الأسبوعي",
         "providerRateLimited": "تم تقييد المعدل من قبل المزود"
       },
       "fallback": {
@@ -510,7 +510,7 @@
       "availableButton": "التحديث متاح"
     },
     "limit": {
-      "weeklyTitle": "تم الوصول إلى الحد الأسبوعي",
+      "weeklyTitle": "تم بلوغ الحد السحابي الأسبوعي",
       "weeklyDescription": "تتم إعادة تعيين الحد الخاص بك على أساس متجدد. قم بالترقية إلى Pro أو استخدم مفتاح API الخاص بك للاستخدام غير المحدود."
     },
     "accessibilityMissing": {
@@ -3228,7 +3228,7 @@
         "freeUsage": "{{used}} من {{limit}} كلمة في OpenWhispr Cloud هذا الأسبوع",
         "byokUnlimited": "يبقى استخدام مفاتيح API الخاصة بك والنماذج المحلية غير محدود.",
         "nextBilling": "الفوترة القادمة: {{date}}",
-        "pastDue": "{{used}} من {{limit}} كلمة مجانية هذا الأسبوع - قم بتحديث الدفع لاستعادة Pro",
+        "pastDue": "{{used}} من {{limit}} كلمة في OpenWhispr Cloud هذا الأسبوع - قم بتحديث الدفع لاستعادة Pro",
         "trial": "عدد الأيام المتبقية: {{days}} - تفريغ غير محدود",
         "unlimited": "غير محدود",
         "accessUntil": "الوصول حتى {{date}}",
@@ -3346,7 +3346,7 @@
       "title": "الحساب",
       "toasts": {
         "approachingLimit": {
-          "description": "استخدمت {{used}} من {{limit}} كلمة في OpenWhispr Cloud هذا الأسبوع. يبقى استخدام مفاتيح API الخاصة بك والنماذج المحلية غير محدود.",
+          "description": "استخدمت {{used}} من {{limit}} كلمة في OpenWhispr Cloud هذا الأسبوع. قم بالترقية إلى Pro أو استخدم مفتاح API الخاص بك للاستخدام غير المحدود.",
           "title": "الاقتراب من الحد السحابي للكلمات"
         }
       },
@@ -4178,7 +4178,7 @@
   },
   "upgradePrompt": {
     "paymentFailed": "لم نتمكن من معالجة دفعتك",
-    "weeklyLimit": "لقد وصلت إلى حدك الأسبوعي",
+    "weeklyLimit": "لقد وصلت إلى حدك السحابي الأسبوعي",
     "pastDueDescription": "أنت الآن على الخطة المجانية — لا تقلق، ما زلت تحصل على {{limit}} كلمة في الأسبوع.\nقم بتحديث طريقة الدفع للعودة إلى خطة Pro غير المحدودة.",
     "limitDescription": "تم استخدام {{used}} من {{limit}} كلمة.\nتم حفظ نصك المفرَّغ ولصقه.",
     "updatePayment": "تحديث طريقة الدفع",
@@ -4518,8 +4518,8 @@
     "inviteTeam": "ادعُ فريقك",
     "settings": "الإعدادات",
     "support": "الدعم",
-    "limitReached": "تم بلوغ الحد السحابي",
-    "limitReachedDescription": "يبقى استخدام مفاتيح API الخاصة بك والنماذج المحلية غير محدود.",
+    "limitReached": "تم بلوغ الحد السحابي الأسبوعي",
+    "limitReachedDescription": "قم بالترقية إلى Pro أو استخدم مفتاح API الخاص بك للاستخدام غير المحدود.",
     "viewPlans": "عرض الخطط",
     "upgradeTitle": "الترقية إلى Pro",
     "upgradeDescription": "تفريغ صوتي غير محدود، أكثر دقة، وأسرع.",

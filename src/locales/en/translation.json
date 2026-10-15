@@ -142,7 +142,7 @@
   },
   "upgradePrompt": {
     "paymentFailed": "We couldn't process your payment",
-    "weeklyLimit": "You've reached your weekly limit",
+    "weeklyLimit": "You've reached your weekly Cloud limit",
     "pastDueDescription": "You're on the free plan for now — don't worry, you still get {{limit}} words per week.\nUpdate your payment method to get back to unlimited Pro.",
     "limitDescription": "{{used}} of {{limit}} words used.\nYour transcription was saved and pasted.",
     "updatePayment": "Update payment method",
@@ -630,7 +630,7 @@
       "availableButton": "Update Available"
     },
     "limit": {
-      "weeklyTitle": "Weekly limit reached",
+      "weeklyTitle": "Weekly Cloud limit reached",
       "weeklyDescription": "Your limit resets on a rolling basis. Upgrade to Pro or use your own API key for unlimited use."
     },
     "accessibilityMissing": {
@@ -902,7 +902,7 @@
         "offline": "You're Offline",
         "agentUnavailable": "Assistant Unavailable",
         "screenContextSkipped": "Screen Context Skipped",
-        "dailyLimitReached": "Daily Limit Reached",
+        "cloudLimitReached": "Weekly Cloud Limit Reached",
         "providerRateLimited": "Provider Rate Limited"
       },
       "fallback": {
@@ -1893,7 +1893,7 @@
         "freeUsage": "{{used}} / {{limit}} OpenWhispr Cloud words this week",
         "byokUnlimited": "Your own API keys and local models remain unlimited.",
         "nextBilling": "Next billing: {{date}}",
-        "pastDue": "{{used}} / {{limit}} free words this week - update payment to restore Pro",
+        "pastDue": "{{used}} / {{limit}} OpenWhispr Cloud words this week - update payment to restore Pro",
         "trial": "{{days}} days remaining - unlimited transcriptions",
         "unlimited": "Unlimited",
         "accessUntil": "Access until {{date}}",
@@ -2011,7 +2011,7 @@
       "title": "Account",
       "toasts": {
         "approachingLimit": {
-          "description": "You've used {{used}} of {{limit}} OpenWhispr Cloud words this week. Your own API keys and local models remain unlimited.",
+          "description": "You've used {{used}} of {{limit}} OpenWhispr Cloud words this week. Upgrade to Pro or use your own API key for unlimited use.",
           "title": "Approaching Cloud word limit"
         }
       },
@@ -2828,8 +2828,8 @@
     "inviteTeam": "Invite your team",
     "settings": "Settings",
     "support": "Support",
-    "limitReached": "Cloud limit reached",
-    "limitReachedDescription": "Your own API keys and local models remain unlimited.",
+    "limitReached": "Weekly Cloud limit reached",
+    "limitReachedDescription": "Upgrade to Pro or use your own API key for unlimited use.",
     "viewPlans": "View Plans",
     "upgradeTitle": "Upgrade to Pro",
     "upgradeDescription": "Unlimited, more accurate, faster transcription.",

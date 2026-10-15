@@ -609,7 +609,7 @@
       "availableButton": "Atualização disponível"
     },
     "limit": {
-      "weeklyTitle": "Limite semanal atingido",
+      "weeklyTitle": "Limite semanal da nuvem atingido",
       "weeklyDescription": "Seu limite é redefinido continuamente. Faça upgrade para Pro ou use sua própria chave API para uso ilimitado."
     },
     "accessibilityMissing": {
@@ -881,7 +881,7 @@
         "offline": "Sem conexão",
         "agentUnavailable": "Assistente indisponível",
         "screenContextSkipped": "Contexto de tela ignorado",
-        "dailyLimitReached": "Limite diário atingido",
+        "cloudLimitReached": "Limite semanal da nuvem atingido",
         "providerRateLimited": "Limite de taxa do provedor"
       },
       "fallback": {
@@ -1577,7 +1577,7 @@
         "freeUsage": "{{used}} / {{limit}} palavras do OpenWhispr Cloud esta semana",
         "byokUnlimited": "Suas próprias chaves de API e os modelos locais continuam sem limite.",
         "nextBilling": "Próxima cobrança: {{date}}",
-        "pastDue": "{{used}} / {{limit}} palavras gratuitas esta semana — atualize o pagamento para restaurar o Pro",
+        "pastDue": "{{used}} / {{limit}} palavras do OpenWhispr Cloud esta semana — atualize o pagamento para restaurar o Pro",
         "trial": "{{days}} dias restantes — transcrições ilimitadas",
         "unlimited": "Ilimitado",
         "accessUntil": "Acesso até {{date}}",
@@ -1599,7 +1599,7 @@
       "title": "Conta",
       "toasts": {
         "approachingLimit": {
-          "description": "Você usou {{used}} de {{limit}} palavras do OpenWhispr Cloud esta semana. Suas próprias chaves de API e os modelos locais continuam sem limite.",
+          "description": "Você usou {{used}} de {{limit}} palavras do OpenWhispr Cloud esta semana. Faça upgrade para Pro ou use sua própria chave API para uso ilimitado.",
           "title": "Aproximando-se do limite de palavras da nuvem"
         }
       },
@@ -2704,7 +2704,7 @@
   },
   "upgradePrompt": {
     "paymentFailed": "Não foi possível processar seu pagamento",
-    "weeklyLimit": "Você atingiu seu limite semanal",
+    "weeklyLimit": "Você atingiu seu limite semanal da nuvem",
     "pastDueDescription": "Você está no plano gratuito por enquanto — sem problemas, você ainda tem {{limit}} palavras por semana.\nAtualize sua forma de pagamento para voltar ao Pro ilimitado.",
     "limitDescription": "{{used}} de {{limit}} palavras usadas.\nSua transcrição foi salva e colada.",
     "updatePayment": "Atualizar forma de pagamento",
@@ -3601,8 +3601,8 @@
     "inviteTeam": "Convide sua equipe",
     "settings": "Configurações",
     "support": "Suporte",
-    "limitReached": "Limite da nuvem atingido",
-    "limitReachedDescription": "Suas próprias chaves de API e os modelos locais continuam sem limite.",
+    "limitReached": "Limite semanal da nuvem atingido",
+    "limitReachedDescription": "Faça upgrade para Pro ou use sua própria chave API para uso ilimitado.",
     "viewPlans": "Ver planos",
     "upgradeTitle": "Fazer upgrade para Pro",
     "upgradeDescription": "Transcrição ilimitada, mais precisa e mais rápida.",
