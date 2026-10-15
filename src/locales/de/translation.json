@@ -3952,7 +3952,7 @@
     },
     "prompt": {
       "title": "Assistent-Prompt",
-      "description": "Der System-Prompt, der bei Erkennung des Aktivierungsworts verwendet wird. Fällt auf die integrierte Standardvorgabe zurück."
+      "description": "Der System-Prompt, den der Sprachassistent verwendet, ob per Hotkey oder Aktivierungswort. Fällt auf die integrierte Standardvorgabe zurück."
     }
   },
   "agentMode": {

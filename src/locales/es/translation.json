@@ -3834,7 +3834,7 @@
     },
     "prompt": {
       "title": "Prompt del asistente",
-      "description": "El prompt de sistema usado cuando se detecta la palabra de activación. Recurre al valor predeterminado integrado."
+      "description": "El prompt de sistema que usa el asistente de voz, desde su atajo o la palabra de activación. Recurre al valor predeterminado integrado."
     }
   },
   "agentMode": {

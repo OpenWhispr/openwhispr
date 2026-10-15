@@ -3782,7 +3782,7 @@
     },
     "prompt": {
       "title": "Prompt do assistente",
-      "description": "O prompt de sistema usado quando a palavra de ativação é detectada. Recorre ao padrão integrado."
+      "description": "O prompt de sistema usado pelo assistente de voz, pelo atalho ou pela palavra de ativação. Recorre ao padrão integrado."
     }
   },
   "agentMode": {
