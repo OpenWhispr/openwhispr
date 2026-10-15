@@ -313,6 +313,21 @@ test("live names stay when the voices can't be read to place them", async () => 
   assert.deepEqual([...new Set(lines.map((line) => line.speakerName))], ["Bob"]);
 });
 
+// Without live identification (macOS loopback), the renderer still names a 1:1
+// call's remote lines after the attendee. With one voice there is nothing to
+// place, so that name stays.
+test("a single remote voice keeps its name when live identification didn't run", async () => {
+  embeddingModelAvailable = true;
+  voices = new Map([["speaker_00", [1, 0]]]);
+
+  const { lines } = await diarizeMeeting(turns(["speaker_00"], 30, 8), {
+    sessionConfig: { enabled: true, expectedCount: 2, explicit: true },
+    liveLabel: { speaker: "speaker_0", speakerName: "Alice" },
+  });
+
+  assert.deepEqual([...new Set(lines.map((line) => line.speakerName))], ["Alice"]);
+});
+
 // The renderer names lines from live identifications that main never stored a
 // name for, and keeps a line's old value for an undefined field. Every line of
 // a voice that matches no live speaker must carry an explicit null.

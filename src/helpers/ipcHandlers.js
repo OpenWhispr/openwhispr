@@ -12976,14 +12976,15 @@ class IPCHandlers {
 
         // Live identification names its speaker on every line it labels (here
         // and in the renderer), and with no count its one speaker covers every
-        // remote voice. When the call holds more voices than live speakers, every
-        // line's name is cleared, and reconciliation and profile matching below
-        // name each voice; the renderer keeps the names of lines the user locked.
-        // Without voices to match, the names stay. null, not undefined: the
-        // renderer keeps a line's old value for an undefined field.
+        // remote voice. When the call holds more than one voice and more voices
+        // than live speakers, every line's name is cleared, and reconciliation
+        // and profile matching below name each voice; the renderer keeps the
+        // names of lines the user locked. Without voices to match, the names
+        // stay. null, not undefined: the renderer keeps a line's old value for
+        // an undefined field.
         if (
           Object.keys(speakerEmbeddingsMap || {}).length > 0 &&
-          Object.keys(liveSpeakerState || {}).length < speakerSet.size
+          speakerSet.size > Math.max(1, Object.keys(liveSpeakerState || {}).length)
         ) {
           for (const segment of enrichedSegments) {
             if (segment.source === diarizedSource) {
