@@ -124,7 +124,7 @@ test("Gemini native: a chosen level becomes thinkingLevel; the toggle still wins
   });
 });
 
-async function streamRequestBody(t, { provider, model, config, keys = {} }) {
+async function streamRequestBody(t, { provider, model, config, tools, keys = {} }) {
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
@@ -159,7 +159,7 @@ async function streamRequestBody(t, { provider, model, config, keys = {} }) {
     model,
     provider,
     { systemPrompt: "Answer the user.", ...config },
-    undefined
+    tools
   );
   await assert.rejects(async () => {
     for await (const _chunk of stream);
@@ -174,6 +174,16 @@ test("streaming: a Custom endpoint gets reasoning_effort", async (t) => {
     config: CHOSEN("low", { baseUrl: "https://api.x.ai/v1", customApiKey: "test-key" }),
   });
   assert.equal(body.reasoning_effort, "low");
+});
+
+test("streaming: a self-hosted turn never sends the level saved for the scope's provider", async (t) => {
+  const body = await streamRequestBody(t, {
+    provider: "custom",
+    model: "grok-4.3",
+    config: CHOSEN("low", { lanUrl: "http://127.0.0.1:11434/v1" }),
+    tools: {},
+  });
+  assert.equal(body.reasoning_effort, undefined);
 });
 
 test("streaming: native OpenAI sends the effort even for ids the SDK doesn't know", async (t) => {

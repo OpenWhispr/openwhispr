@@ -903,7 +903,7 @@ class ReasoningService extends BaseReasoningService {
     // exemption below can't apply — honor the toggle directly.
     const openrouterDisableThinking = provider === "openrouter" && config.disableThinking === true;
     // No Tinfoil model offers a level, so this needn't wait for the registry refresh below.
-    const reasoningEffort = chosenReasoningEffort(provider, model, config);
+    const reasoningEffort = chosenReasoningEffort(aiProvider, model, config);
     // Resolving a Tinfoil model refreshes the registry, so read model config after it.
     const aiModel = isEnterprise
       ? createEnterpriseChatModel(provider as EnterpriseProvider, model, config.inferenceScope)
