@@ -628,6 +628,53 @@ test("a panel reopened before the closing click's focus request lands keeps the 
   }
 });
 
+test("a pill hidden before the closing click's focus request lands stays hidden", async () => {
+  let land;
+  focusInputRegion = () =>
+    new Promise((resolve) => {
+      land = resolve;
+    });
+  try {
+    const { manager, calls } = makeManager({ visible: true, focused: false });
+    withPlatform("linux", () => {
+      manager._assistantPanelOpen = true;
+      manager._focusLinuxMainWindow();
+      manager.setAssistantPanelOpen(false);
+    });
+    // Tray Hide, a push-to-talk cancel or onboarding hides the pill meanwhile.
+    manager.mainWindow.hide();
+    land();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(calls, ["blur", "focusable:false", "hide"]);
+    assert.equal(manager.mainWindow.isVisible(), false);
+  } finally {
+    focusInputRegion = requestFocus;
+  }
+});
+
+test("a close waits for the latest focus request, not one an earlier request settled", async () => {
+  const lands = [];
+  focusInputRegion = () => new Promise((resolve) => lands.push(resolve));
+  try {
+    const { manager, calls } = makeManager({ visible: true, focused: false });
+    withPlatform("linux", () => {
+      // Opening asks for focus, then a click on Close asks again before the
+      // first request has landed.
+      manager.setAssistantPanelOpen(true);
+      manager._focusLinuxMainWindow();
+    });
+    lands[0]();
+    await new Promise((resolve) => setImmediate(resolve));
+    withPlatform("linux", () => manager.setAssistantPanelOpen(false));
+    assert.ok(!calls.includes("hide"), "the click's request is still pending");
+    lands[1]();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(calls.slice(-2), ["hide", "showInactive"]);
+  } finally {
+    focusInputRegion = requestFocus;
+  }
+});
+
 test("a focus request that already landed leaves a later close alone", async () => {
   const { manager, calls } = makeManager({ visible: true, focused: false });
   withPlatform("linux", () => manager.setAssistantPanelOpen(true));

@@ -268,10 +268,11 @@ class WindowManager {
   }
 
   // blur() leaves X focus on the Linux pill, and GNOME hands focus back to the
-  // previous app only when the focused override-redirect window unmaps.
+  // previous app only when the focused override-redirect window unmaps. A hidden
+  // pill holds no focus, and remapping it would undo whatever hid it.
   returnLinuxKeyboardFocus() {
     const win = this.mainWindow;
-    if (!win || win.isDestroyed()) return;
+    if (!win || win.isDestroyed() || !win.isVisible()) return;
     win.hide();
     win.showInactive();
   }

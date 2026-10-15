@@ -197,6 +197,32 @@ test("a failed Linux keyboard focus request settles quietly", async () => {
   // panel's deferred hand-back.
   rejectFocus(new Error("helper closed"));
   await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(manager._linuxFocusRequest, null);
+});
+
+test("only Linux listens for clicks that re-take keyboard focus", () => {
+  const original = Object.getOwnPropertyDescriptor(process, "platform");
+  try {
+    for (const [platform, expected] of [
+      ["linux", 1],
+      ["win32", 0],
+      ["darwin", 0],
+    ]) {
+      Object.defineProperty(process, "platform", { value: platform, configurable: true });
+      const win = new EventEmitter();
+      win.isVisible = () => true;
+      win.isMinimized = () => false;
+      win.webContents = Object.assign(new EventEmitter(), { send: () => undefined });
+      WindowManager.prototype.registerMainWindowEvents.call({
+        mainWindow: win,
+        enforceMainWindowOnTop: () => {},
+      });
+      win.emit("ready-to-show");
+      assert.equal(win.webContents.listenerCount("input-event"), expected, platform);
+    }
+  } finally {
+    Object.defineProperty(process, "platform", original);
+  }
 });
 
 test("Linux takes keyboard focus again when an unfocused open assistant panel is clicked", () => {
