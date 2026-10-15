@@ -2017,7 +2017,7 @@
       "title": "Compte",
       "toasts": {
         "approachingLimit": {
-          "description": "Vous avez utilisé {{used}} mots sur {{limit}} dans OpenWhispr Cloud cette semaine. Passez à Pro ou utilisez votre propre clé API pour un usage illimité.",
+          "description": "Vous avez utilisé {{used}} mots sur {{limit}} dans OpenWhispr Cloud cette semaine. Passez à Pro pour une utilisation illimitée.",
           "title": "Limite de mots cloud bientôt atteinte"
         }
       },

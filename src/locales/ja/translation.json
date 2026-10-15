@@ -1726,7 +1726,7 @@
       "title": "アカウント",
       "toasts": {
         "approachingLimit": {
-          "description": "今週、OpenWhispr Cloud で {{limit}} ワード中 {{used}} ワードを使用しました。Pro にアップグレードするか、自分の API キーを使用して無制限にご利用ください。",
+          "description": "今週、OpenWhispr Cloud で {{limit}} ワード中 {{used}} ワードを使用しました。Pro にアップグレードして無制限にご利用ください。",
           "title": "クラウドのワード上限に近づいています"
         }
       },

@@ -1627,7 +1627,7 @@
       "title": "Account",
       "toasts": {
         "approachingLimit": {
-          "description": "Hai usato {{used}} di {{limit}} parole di OpenWhispr Cloud questa settimana. Passa a Pro o usa la tua chiave API per un uso illimitato.",
+          "description": "Hai usato {{used}} di {{limit}} parole di OpenWhispr Cloud questa settimana. Passa a Pro per un uso illimitato.",
           "title": "Limite di parole cloud quasi raggiunto"
         }
       },

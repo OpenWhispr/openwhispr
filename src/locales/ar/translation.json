@@ -3365,7 +3365,7 @@
       "title": "الحساب",
       "toasts": {
         "approachingLimit": {
-          "description": "استخدمت {{used}} من {{limit}} كلمة في OpenWhispr Cloud هذا الأسبوع. قم بالترقية إلى Pro أو استخدم مفتاح API الخاص بك للاستخدام غير المحدود.",
+          "description": "استخدمت {{used}} من {{limit}} كلمة في OpenWhispr Cloud هذا الأسبوع. قم بالترقية إلى Pro للاستخدام غير المحدود.",
           "title": "الاقتراب من الحد السحابي للكلمات"
         }
       },

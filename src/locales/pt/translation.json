@@ -1606,7 +1606,7 @@
       "title": "Conta",
       "toasts": {
         "approachingLimit": {
-          "description": "Você usou {{used}} de {{limit}} palavras do OpenWhispr Cloud esta semana. Faça upgrade para Pro ou use sua própria chave API para uso ilimitado.",
+          "description": "Você usou {{used}} de {{limit}} palavras do OpenWhispr Cloud esta semana. Faça upgrade para Pro para uso ilimitado.",
           "title": "Aproximando-se do limite de palavras da nuvem"
         }
       },

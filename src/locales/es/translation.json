@@ -1778,7 +1778,7 @@
       "title": "Cuenta",
       "toasts": {
         "approachingLimit": {
-          "description": "Has usado {{used}} de {{limit}} palabras de OpenWhispr Cloud esta semana. Mejora a Pro o usa tu propia clave API para uso ilimitado.",
+          "description": "Has usado {{used}} de {{limit}} palabras de OpenWhispr Cloud esta semana. Mejora a Pro para uso ilimitado.",
           "title": "Cerca del límite de palabras de la nube"
         }
       },

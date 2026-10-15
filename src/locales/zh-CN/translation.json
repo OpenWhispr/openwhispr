@@ -1627,7 +1627,7 @@
       "title": "账户",
       "toasts": {
         "approachingLimit": {
-          "description": "本周已使用 {{used}} / {{limit}} 个 OpenWhispr Cloud 词。升级到 Pro 或使用自己的 API Key 可不受限制。",
+          "description": "本周已使用 {{used}} / {{limit}} 个 OpenWhispr Cloud 词。升级到 Pro 可享受无限使用。",
           "title": "即将达到云端字数上限"
         }
       },
