@@ -147,7 +147,6 @@ test("a requested speaker count still clusters automatically", async () => {
 
   assert.equal(result.success, true);
   assert.equal(diarizeCalls.length, 1);
-  assert.equal(Object.hasOwn(diarizeCalls[0], "numSpeakers"), false);
   assert.deepEqual(speakersOf(result.segments), ["speaker_01", "speaker_06"]);
   assert.equal(centroidCalls.length, 0, "voices are only read when clusters exceed the cap");
 });

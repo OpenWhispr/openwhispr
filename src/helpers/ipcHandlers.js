@@ -12905,16 +12905,18 @@ class IPCHandlers {
         // short slivers is a one-on-one call: the slivers are the same voice. (An
         // upload that collapses like this loses its labels instead, since it
         // expects several voices.) A cluster without a voice can't be told from
-        // sherpa's split of one voice, so only voiced clusters count, and with
-        // none the cap stays at one.
-        const voicedSpeakers = new Set(
-          diarizationSegments.map((s) => s.speaker).filter((speaker) => centroids.has(speaker))
-        );
-        const cap =
-          this._resolveSpeakerCap({ sessionConfig, noteId, diarizedSource }) ??
-          (isCollapsedDiarization(diarizationSegments)
-            ? 1
-            : Math.min(Math.max(1, voicedSpeakers.size), MAX_SPEAKER_COUNT - 1));
+        // sherpa's split of one voice, so it's dropped and its lines go to the
+        // nearest voice. With no voice at all, the cap stays at one.
+        let cap = this._resolveSpeakerCap({ sessionConfig, noteId, diarizedSource });
+        if (cap == null) {
+          const voiced = diarizationSegments.filter((s) => centroids.has(s.speaker));
+          if (voiced.length === 0 || isCollapsedDiarization(diarizationSegments)) {
+            cap = 1;
+          } else {
+            diarizationSegments = voiced;
+            cap = MAX_SPEAKER_COUNT - 1;
+          }
+        }
         diarizationSegments = capSpeakerClustersByVoice(
           diarizationSegments,
           cap,

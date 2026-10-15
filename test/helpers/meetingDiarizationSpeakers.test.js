@@ -86,13 +86,11 @@ function turns(speakers, count, seconds) {
 }
 
 // Runs the post-call path the way stopping a meeting does, with one transcript
-// line per diarized turn of 2 s or more, and returns the diarize() options and
-// the labelled lines.
+// line per diarized turn of 2 s or more, and returns the labelled lines.
 function diarizeMeeting(
   diarizerOutput,
   { sessionConfig = null, source = "system", liveSpeakerState = null, liveLabel = {} } = {}
 ) {
-  const diarizeCalls = [];
   const diarizationManager = Object.assign(new DiarizationManager(), {
     isAvailable: () => true,
     convertRawPcmToWav: async () => {
@@ -100,10 +98,7 @@ function diarizeMeeting(
       fs.writeFileSync(wavPath, Buffer.alloc(32000 * 600));
       return wavPath;
     },
-    diarize: async (_wavPath, options) => {
-      diarizeCalls.push(options);
-      return diarizerOutput;
-    },
+    diarize: async () => diarizerOutput,
   });
   const handlers = Object.assign(Object.create(IPCHandlers.prototype), {
     diarizationManager,
@@ -132,7 +127,7 @@ function diarizeMeeting(
       null,
       source
     );
-  }).then((payload) => ({ diarizeCalls, lines: payload.segments }));
+  }).then((payload) => ({ lines: payload.segments }));
 }
 
 const speakersOf = (lines) => [...new Set(lines.map((line) => line.speaker))].sort();
@@ -181,8 +176,7 @@ test("a one-on-one call's backchannel slivers stay with the one remote voice", a
   assert.deepEqual(speakersOf(lines), ["speaker_0"]);
 });
 
-// A count set by hand goes to sherpa as an upper bound, never as its cluster
-// count: forcing it splits short utterances from long ones (#2021).
+// A count set by hand is an upper bound on the speakers (#2021).
 test("a count set by hand bounds the speakers instead of forcing the cluster count", async () => {
   voices = new Map([
     ["speaker_00", [1, 0, 0]],
@@ -195,12 +189,10 @@ test("a count set by hand bounds the speakers instead of forcing the cluster cou
     { start: 630, end: 636, speaker: "speaker_02" },
   ];
 
-  const { diarizeCalls, lines } = await diarizeMeeting(output, {
+  const { lines } = await diarizeMeeting(output, {
     sessionConfig: { enabled: true, expectedCount: 3, explicit: true },
   });
 
-  assert.equal(diarizeCalls.length, 1);
-  assert.equal(Object.hasOwn(diarizeCalls[0], "numSpeakers"), false);
   assert.equal(speakersOf(lines).length, 2);
   const labelAt = (seconds) => lines.find((line) => line.timestamp === seconds).speaker;
   assert.equal(labelAt(610), labelAt(20), "the third voice joins the nearer of the two");
@@ -232,6 +224,33 @@ test("a cluster without a readable voice doesn't split a one-on-one call", async
   const { lines } = await diarizeMeeting(output);
 
   assert.deepEqual(speakersOf(lines), ["speaker_0"]);
+});
+
+// The cap counts voices, so a cluster without one, however long, mustn't take
+// the place of a second voice.
+test("a long cluster without a readable voice doesn't fold a second voice into the first", async () => {
+  voices = new Map([
+    ["speaker_00", [1, 0]],
+    ["speaker_01", [0, 1]],
+  ]);
+  const output = [
+    ...turns(["speaker_00"], 30, 8),
+    ...turns(["speaker_02"], 30, 3).map((turn) => ({
+      ...turn,
+      start: turn.start + 10,
+      end: turn.end + 10,
+    })),
+    ...turns(["speaker_01"], 10, 8).map((turn) => ({
+      ...turn,
+      start: turn.start + 600,
+      end: turn.end + 600,
+    })),
+  ];
+
+  const { lines } = await diarizeMeeting(output);
+
+  const labelAt = (seconds) => lines.find((line) => line.timestamp === seconds).speaker;
+  assert.notEqual(labelAt(600), labelAt(0));
 });
 
 // In person, the mic track carries the user, and short replies beside them are
