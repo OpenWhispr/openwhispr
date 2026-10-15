@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const Module = require("node:module");
 const { EventEmitter } = require("node:events");
 const childProcess = require("node:child_process");
+const fs = require("node:fs");
 
 const fakeClipboard = {
   text: "",
@@ -69,6 +70,7 @@ const originalLoad = Module._load;
 function loadClipboardManager({
   spawn,
   spawnSync,
+  fsOverrides,
   cosmicAppId,
   accessibility = true,
   realModifierWait = false,
@@ -89,6 +91,9 @@ function loadClipboardManager({
     }
     if (request === "child_process" && (spawn || spawnSync)) {
       return { ...childProcess, ...(spawn && { spawn }), ...(spawnSync && { spawnSync }) };
+    }
+    if (request === "fs" && fsOverrides) {
+      return { ...fs, ...fsOverrides };
     }
     return originalLoad.call(this, request, parent, isMain);
   };
@@ -149,6 +154,9 @@ async function withWaylandEnvironment(desktop, callback) {
   const previous = {
     XDG_SESSION_TYPE: process.env.XDG_SESSION_TYPE,
     XDG_CURRENT_DESKTOP: process.env.XDG_CURRENT_DESKTOP,
+    XDG_SESSION_DESKTOP: process.env.XDG_SESSION_DESKTOP,
+    DESKTOP_SESSION: process.env.DESKTOP_SESSION,
+    SWAYSOCK: process.env.SWAYSOCK,
     WAYLAND_DISPLAY: process.env.WAYLAND_DISPLAY,
     HYPRLAND_INSTANCE_SIGNATURE: process.env.HYPRLAND_INSTANCE_SIGNATURE,
     DISPLAY: process.env.DISPLAY,
@@ -156,6 +164,9 @@ async function withWaylandEnvironment(desktop, callback) {
   process.env.XDG_SESSION_TYPE = "wayland";
   process.env.XDG_CURRENT_DESKTOP = desktop;
   process.env.WAYLAND_DISPLAY = "wayland-1";
+  delete process.env.XDG_SESSION_DESKTOP;
+  delete process.env.DESKTOP_SESSION;
+  delete process.env.SWAYSOCK;
   delete process.env.DISPLAY;
   if (desktop === "Hyprland") process.env.HYPRLAND_INSTANCE_SIGNATURE = "test";
   else delete process.env.HYPRLAND_INSTANCE_SIGNATURE;
@@ -697,6 +708,118 @@ test("KDE tries portal before uinput", async () => {
   );
 });
 
+test("KDE portal paste does not probe xdotool on XWayland", async () => {
+  const spawnCalls = [];
+  const spawnSyncCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+    spawnSync(command, args) {
+      spawnSyncCalls.push({ command, args });
+      return { status: 1, stdout: Buffer.from("") };
+    },
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (command) => command === "xdotool";
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+
+  await withWaylandEnvironment("KDE", async () => {
+    process.env.DISPLAY = ":0";
+    await manager.pasteLinux(null);
+  });
+
+  assert.deepEqual(spawnCalls, [
+    { command: "/tmp/linux-fast-paste", args: ["--portal", "--shift-insert"] },
+  ]);
+  assert.deepEqual(spawnSyncCalls, []);
+});
+
+test("KDE detects Cursor as Electron and uses Shift+Insert for portal paste", async () => {
+  const spawnCalls = [];
+  const spawnSyncCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+    spawnSync(command, args) {
+      spawnSyncCalls.push({ command, args });
+      if (args[0] === "getactivewindow") return { status: 0, stdout: Buffer.from("cursor-id\n") };
+      if (args[0] === "getwindowclassname") return { status: 0, stdout: Buffer.from("cursor\n") };
+      if (args[0] === "getwindowpid") return { status: 0, stdout: Buffer.from("4242\n") };
+      return { status: 1, stdout: Buffer.from("") };
+    },
+    fsOverrides: {
+      readlinkSync: () => "/opt/Cursor/cursor",
+      existsSync: (filePath) => filePath === "/opt/Cursor/resources/app",
+    },
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (command) => command === "kdotool";
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+
+  await withWaylandEnvironment("KDE", () => manager.pasteLinux(null));
+
+  assert.deepEqual(spawnCalls, [
+    { command: "/tmp/linux-fast-paste", args: ["--portal", "--shift-insert"] },
+  ]);
+  assert.deepEqual(spawnSyncCalls, [
+    { command: "kdotool", args: ["getactivewindow"] },
+    { command: "kdotool", args: ["getwindowclassname", "cursor-id"] },
+    { command: "kdotool", args: ["getwindowpid", "cursor-id"] },
+  ]);
+});
+
+for (const qdbus of ["qdbus6", "qdbus"]) {
+  test(`KDE detects Cursor through ${qdbus} when kdotool is unavailable and uses Shift+Insert`, async () => {
+    const spawnCalls = [];
+    const spawnSyncCalls = [];
+    const executableReads = [];
+    let kwinScript;
+    const TestClipboardManager = loadClipboardManager({
+      spawn: createSuccessfulSpawn(spawnCalls),
+      spawnSync(command, args) {
+        spawnSyncCalls.push({ command, args });
+        if (command === qdbus && args[2] === "loadScript") {
+          return { status: 0, stdout: Buffer.from("7\n") };
+        }
+        if (command === "journalctl") {
+          const info = JSON.stringify({ windowClass: "Cursor", pid: 4242 });
+          return { status: 0, stdout: Buffer.from(`OW_CLASS_${process.pid}:${info}\n`) };
+        }
+        return { status: 0, stdout: Buffer.from("") };
+      },
+      fsOverrides: {
+        writeFileSync: (_filePath, script) => {
+          kwinScript = script;
+        },
+        readlinkSync: (filePath) => {
+          executableReads.push(filePath);
+          return "/opt/Cursor/cursor";
+        },
+        existsSync: (filePath) => filePath === "/opt/Cursor/resources/app.asar",
+      },
+    });
+    const manager = new TestClipboardManager();
+    manager.commandExists = (command) => command === qdbus || command === "xdotool";
+    manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+    manager._readPortalToken = () => null;
+
+    await withWaylandEnvironment("KDE", async () => {
+      process.env.DISPLAY = ":0";
+      await manager.pasteLinux(null);
+    });
+
+    assert.deepEqual(spawnCalls, [
+      { command: "/tmp/linux-fast-paste", args: ["--portal", "--shift-insert"] },
+    ]);
+    assert.deepEqual(executableReads, ["/proc/4242/exe"]);
+    assert.match(kwinScript, /windowClass: w \? w\.resourceClass/);
+    assert.match(kwinScript, /pid: w \? w\.pid/);
+    assert.deepEqual(
+      spawnSyncCalls.map((call) => call.command),
+      [qdbus, qdbus, "sleep", "journalctl", qdbus]
+    );
+    assert.deepEqual(spawnSyncCalls.at(-1).args, ["org.kde.KWin", "/Scripting/Script7", "stop"]);
+  });
+}
+
 test("portal exit zero succeeds with or without a restore token", async () => {
   const calls = [];
   const TestClipboardManager = loadClipboardManager({
@@ -809,11 +932,16 @@ test("successful Wayland dispatch starts clipboard restoration", async () => {
 
 test("XWayland fallback remains reachable after native Wayland failure", async () => {
   const spawnCalls = [];
+  const spawnSyncCalls = [];
   const TestClipboardManager = loadClipboardManager({
     spawn: createSpawn(spawnCalls, [1, 0]),
+    spawnSync(command, args) {
+      spawnSyncCalls.push({ command, args });
+      return { status: 0, stdout: Buffer.from("42\n") };
+    },
   });
   const manager = new TestClipboardManager();
-  manager.commandExists = () => false;
+  manager.commandExists = (command) => command === "xdotool";
   manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
 
   await withWaylandEnvironment("Unknown", async () => {
@@ -823,8 +951,12 @@ test("XWayland fallback remains reachable after native Wayland failure", async (
 
   assert.deepEqual(
     spawnCalls.map((call) => call.args),
-    [["--uinput", "--shift-insert"], ["--shift-insert"]]
+    [
+      ["--uinput", "--shift-insert"],
+      ["--window", "42", "--shift-insert"],
+    ]
   );
+  assert.deepEqual(spawnSyncCalls, [{ command: "xdotool", args: ["getactivewindow"] }]);
 });
 
 const MODIFIER_WAIT_CALL = {
