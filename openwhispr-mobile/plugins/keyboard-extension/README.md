@@ -55,6 +55,12 @@ python3 openwhispr-mobile/plugins/keyboard-extension/tests/run-keyboard-touch-te
 
 Run it from the repository root after changing the keyboard layout, its padding or key targets; mobile CI runs it too. The runner compiles the production keyboard Swift source for Mac Catalyst, so it needs no simulator, signing credentials or Expo build. It tests UIKit hit routing across row gaps, overlapping key targets, unequal key widths, nested stacks, hidden layouts, disabled keys and keyboard boundaries, then lays out the real keyboard at several widths in letters and numbers mode, with and without the globe key, and checks that no tap below the dictation strip is dropped, the keyboard's padding included.
 
+The keyboard opens on numbers and punctuation unless **Settings → Keyboard →
+Letter keys** is on (App Group key `keyboard_letters_enabled` = `"1"`, read each
+time the keyboard appears; a keyboard without Full Access can't read it, so it
+opens on numbers too). With letters off, `#+=` is hidden and ABC switches to the
+next keyboard, usually Apple's. Turn Letter keys on before the typing check below.
+
 Keys follow the system keyboard's touch rules. Each key forwards its raw touches
 to `KeyTouchCoordinator`, which tracks every finger on its own. A key types on
 lift, and as soon as another finger lands (rollover), so overlapping two-thumb

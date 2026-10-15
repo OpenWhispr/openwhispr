@@ -12,6 +12,10 @@ jest.mock('@/hooks/useConfigToggle', () => ({ useConfigToggle: () => jest.fn() }
 jest.mock('../../../modules/live-activity/src', () => ({
   LiveActivity: { isDictationModeEnabled: () => false, setDictationMode: jest.fn() },
 }));
+jest.mock('../../../modules/app-group-storage/src', () => ({
+  AppGroupStorage: { getItem: () => null, setItem: () => true },
+  APP_GROUP_KEYS: { KEYBOARD_LETTERS_ENABLED: 'keyboard_letters_enabled' },
+}));
 // Private mode, so the "needs Cloud" notice renders too.
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: (selector: (state: unknown) => unknown) =>

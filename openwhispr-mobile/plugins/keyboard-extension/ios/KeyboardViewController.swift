@@ -960,6 +960,15 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private var didRequestCancelForCurrentSession = false
 
   private var layoutMode: KeyboardLayoutMode = .letters
+  /// Mirrors the app's Letter keys setting, off by default. Without letters the
+  /// keyboard is numbers and punctuation only, and ABC hands off to the next
+  /// keyboard (usually Apple's) for typing words.
+  private var lettersEnabled = false
+  private var readLettersEnabled: () -> Bool = { KeyboardHandoffProvider.shared.areLettersEnabled() }
+  private lazy var advanceToNextKeyboard: () -> Void = { [weak self] in
+    self?.advanceToNextInputMode()
+  }
+  private var symbolToggleButton: KeyButton?
   private var isShiftEnabled = true
   private var isCapsLocked = false
   private var lastShiftTapDate: Date?
@@ -1059,6 +1068,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     setupLayout()
     refreshRecordButton()
     buildKeyboardIfNeeded()
+  }
+
+  override func viewWillAppear(_ animated: Bool) {
+    super.viewWillAppear(animated)
+    applyLettersSetting(readLettersEnabled())
   }
 
   override func viewDidLayoutSubviews() {
@@ -1244,11 +1258,33 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   private func handleLayoutModeSwitchTapped() {
     playKeyClick()
-    layoutMode = layoutMode == .letters ? .numbers : .letters
+    guard lettersEnabled else {
+      advanceToNextKeyboard()
+      return
+    }
+    showLayout(layoutMode == .letters ? .numbers : .letters)
+  }
+
+  private func showLayout(_ mode: KeyboardLayoutMode) {
+    layoutMode = mode
     isCapsLocked = false
-    isShiftEnabled = layoutMode == .letters ? shouldAutoCapitalize() : false
+    isShiftEnabled = mode == .letters ? shouldAutoCapitalize() : false
     refreshVisibleKeyboardMode()
     refreshShiftState()
+  }
+
+  /// Letters off always opens on numbers; turning letters back on opens on letters
+  /// once, then the keyboard keeps whichever layout the user last chose.
+  private func applyLettersSetting(_ enabled: Bool) {
+    let wasEnabled = lettersEnabled
+    lettersEnabled = enabled
+    // #+= only flips back to letters, so it has nothing to do without them.
+    symbolToggleButton?.isHidden = !enabled
+    if !enabled {
+      showLayout(.numbers)
+    } else if !wasEnabled {
+      showLayout(.letters)
+    }
   }
 
   private func handleSpaceTapped() {
@@ -2287,6 +2323,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     fieldShortcutGapConstraint = nil
     shiftButton = nil
     modeButton = nil
+    symbolToggleButton = nil
     returnButton = nil
     appliedFieldTraits = nil
     rowHeightConstraints.removeAll(keepingCapacity: true)
@@ -2560,6 +2597,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
     let symbolToggleButton = makeKeyButton(title: "#+=", role: .utility, action: .layoutMode)
     symbolToggleButton.widthAnchor.constraint(equalToConstant: 56).isActive = true
+    symbolToggleButton.isHidden = !lettersEnabled
+    self.symbolToggleButton = symbolToggleButton
 
     let symbolsStack = UIStackView()
     symbolsStack.axis = .horizontal
@@ -4423,6 +4462,7 @@ private struct KeyboardHandoffProvider {
   // Dictation-agent mirror keys (app-written, persist across launches) and the
   // one-shot request / result channels shared with the main app.
   private let agentEnabledKey = "keyboard_agent_enabled"
+  private let lettersEnabledKey = "keyboard_letters_enabled"
   private let agentApplicableKey = "keyboard_agent_applicable"
   private let agentShareContextKey = "keyboard_agent_share_context"
   private let agentNameKey = "keyboard_agent_name"
@@ -4542,6 +4582,12 @@ private struct KeyboardHandoffProvider {
   }
 
   // MARK: Dictation agent
+
+  /// The app's Letter keys setting: off unless the app wrote "1", so a keyboard
+  /// without Full Access (which can't read the App Group) opens on numbers.
+  func areLettersEnabled() -> Bool {
+    sharedDefaults?.string(forKey: lettersEnabledKey) == "1"
+  }
 
   /// The dictation agent is off entirely unless the app has mirrored enabled=1.
   func isAgentEnabled() -> Bool {

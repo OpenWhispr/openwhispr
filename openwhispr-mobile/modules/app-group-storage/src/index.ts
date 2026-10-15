@@ -290,6 +290,10 @@ export const APP_GROUP_KEYS = {
   KEYBOARD_RECORDING_TONE: 'keyboard_recording_tone',
   KEYBOARD_RECORDING_TONE_JOB_ID: 'keyboard_recording_tone_job_id',
   KEYBOARD_TONE_APPLICABLE: 'keyboard_tone_applicable',
+  // Settings > Keyboard > Letter keys (app → keyboard). "1" shows the letter
+  // layout; anything else opens on numbers and punctuation, with ABC switching
+  // to the next keyboard.
+  KEYBOARD_LETTERS_ENABLED: 'keyboard_letters_enabled',
   BACKGROUND_SESSION_READY: 'background_session_ready',
   // Hotkey dictation: "<pid>:<ms>", stamped by markHotkeyJsReady once
   // useKeyboardHandoff's recording listeners are subscribed; the hotkey's cold

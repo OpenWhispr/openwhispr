@@ -7,7 +7,13 @@ private extension KeyboardViewController {
 
   /// The production keyboard laid out at `width` and its content height. `globe`
   /// stands in for needsInputModeSwitchKey: true on iPhones with a Home button.
-  static func makeLaidOutKeyboard(width: CGFloat, numbers: Bool, globe: Bool) -> KeyboardViewController {
+  /// `letters` stands in for the app's Letter keys setting.
+  static func makeLaidOutKeyboard(
+    width: CGFloat,
+    numbers: Bool,
+    globe: Bool,
+    letters: Bool = true
+  ) -> KeyboardViewController {
     let getter = class_getInstanceMethod(
       UIInputViewController.self,
       #selector(getter: UIInputViewController.needsInputModeSwitchKey)
@@ -17,7 +23,9 @@ private extension KeyboardViewController {
     defer { method_setImplementation(getter, original) }
 
     let controller = KeyboardViewController()
+    controller.readLettersEnabled = { letters }
     controller.loadViewIfNeeded()
+    controller.viewWillAppear(false)
     if numbers {
       controller.handleLayoutModeSwitchTapped()
     }
@@ -56,6 +64,11 @@ private extension KeyboardViewController {
   var touchTestDeleteRepeating: Bool { deleteRepeatTimer != nil }
   func touchTestRebuild() { rebuildKeyboard() }
   func touchTestWillDisappear() { viewWillDisappear(false) }
+  func touchTestAppear(letters: Bool) {
+    readLettersEnabled = { letters }
+    viewWillAppear(false)
+  }
+  func touchTestOnNextKeyboard(_ handler: @escaping () -> Void) { advanceToNextKeyboard = handler }
 }
 
 private struct TouchChecks {
@@ -95,7 +108,12 @@ private enum KeyboardTouchTests {
       checkKeyWiring(width: width, numbers: true, globe: false, &checks)
       checkProductionLayout(width: width, numbers: false, globe: true, &checks)
       checkKeyWiring(width: width, numbers: false, globe: true, &checks)
+      checkProductionLayout(width: width, numbers: false, globe: false, letters: false, &checks)
+      checkKeyWiring(width: width, numbers: false, globe: false, letters: false, &checks)
+      checkProductionLayout(width: width, numbers: false, globe: true, letters: false, &checks)
+      checkKeyWiring(width: width, numbers: false, globe: true, letters: false, &checks)
     }
+    checkLettersSetting(&checks)
     checkKeyDispatch(&checks)
     checkMidTouchTeardown(&checks)
 
@@ -256,11 +274,14 @@ private enum KeyboardTouchTests {
     width: CGFloat,
     numbers: Bool,
     globe: Bool,
+    letters: Bool = true,
     _ checks: inout TouchChecks
   ) {
-    let controller = KeyboardViewController.makeLaidOutKeyboard(width: width, numbers: numbers, globe: globe)
+    let controller = KeyboardViewController.makeLaidOutKeyboard(
+      width: width, numbers: numbers, globe: globe, letters: letters
+    )
     let rows = controller.touchTestRows
-    let layout = "\(Int(width)) pt \(numbers ? "numbers" : "letters")\(globe ? " with globe" : "")"
+    let layout = layoutLabel(width: width, numbers: numbers, globe: globe, letters: letters)
 
     let keys = visibleKeys(in: rows)
     let rects = keys.map { $0.convert($0.bounds, to: rows) }
@@ -610,9 +631,17 @@ private enum KeyboardTouchTests {
   /// Every typing key goes through the coordinator and nothing else; the globe
   /// stays a UIControl for the system input-mode menu.
   @MainActor
-  static func checkKeyWiring(width: CGFloat, numbers: Bool, globe: Bool, _ checks: inout TouchChecks) {
-    let controller = KeyboardViewController.makeLaidOutKeyboard(width: width, numbers: numbers, globe: globe)
-    let layout = "\(Int(width)) pt \(numbers ? "numbers" : "letters")\(globe ? " with globe" : "")"
+  static func checkKeyWiring(
+    width: CGFloat,
+    numbers: Bool,
+    globe: Bool,
+    letters: Bool = true,
+    _ checks: inout TouchChecks
+  ) {
+    let controller = KeyboardViewController.makeLaidOutKeyboard(
+      width: width, numbers: numbers, globe: globe, letters: letters
+    )
+    let layout = layoutLabel(width: width, numbers: numbers, globe: globe, letters: letters)
     let keys = visibleKeys(in: controller.touchTestRows)
     let typing = keys.filter { $0.accessibilityLabel != "Next keyboard" }
     checks.check(
@@ -688,5 +717,49 @@ private enum KeyboardTouchTests {
       checks.check("\(label) mid-touch stops a held delete", !controller.touchTestDeleteRepeating)
       checks.check("\(label) mid-touch leaves delete unlit", !delete.isHighlighted)
     }
+  }
+
+  static func layoutLabel(width: CGFloat, numbers: Bool, globe: Bool, letters: Bool) -> String {
+    let mode = letters ? (numbers ? "numbers" : "letters") : "letters off"
+    return "\(Int(width)) pt \(mode)\(globe ? " with globe" : "")"
+  }
+
+  /// The app's Letter keys setting: off opens on numbers and punctuation, hides
+  /// #+= and makes ABC hand off to the next keyboard; on restores letters.
+  @MainActor
+  static func checkLettersSetting(_ checks: inout TouchChecks) {
+    let controller = KeyboardViewController.makeLaidOutKeyboard(
+      width: 393, numbers: false, globe: false, letters: false
+    )
+    var nextKeyboard = 0
+    controller.touchTestOnNextKeyboard { nextKeyboard += 1 }
+    let keys = visibleKeys(in: controller.touchTestRows)
+    checks.check("letters off: opens on numbers and punctuation", controller.touchTestIsNumbers)
+    checks.check("letters off: #+= is hidden", !keys.contains { $0.title(for: .normal) == "#+=" })
+    guard let abc = keys.first(where: { $0.keyAction == .layoutMode }) else {
+      checks.check("letters off: ABC key exists", false)
+      return
+    }
+    checks.check("letters off: the mode key reads ABC", abc.title(for: .normal) == "ABC")
+    let finger = NSObject()
+    controller.touchTestCoordinator.began(ObjectIdentifier(finger), on: abc)
+    controller.touchTestCoordinator.ended(ObjectIdentifier(finger), on: abc)
+    checks.check("letters off: ABC switches to the next keyboard", nextKeyboard == 1)
+    checks.check("letters off: ABC never shows letters", controller.touchTestIsNumbers)
+
+    controller.touchTestAppear(letters: true)
+    checks.check("letters turned on: the keyboard opens on letters", !controller.touchTestIsNumbers)
+    _ = abc.accessibilityActivate()
+    checks.check(
+      "letters on: 123 shows numbers instead of switching keyboards",
+      controller.touchTestIsNumbers && nextKeyboard == 1
+    )
+    checks.check(
+      "letters on: #+= shows on the numbers layout",
+      visibleKeys(in: controller.touchTestRows).contains { $0.title(for: .normal) == "#+=" }
+    )
+
+    controller.touchTestAppear(letters: false)
+    checks.check("letters turned off again: back on numbers", controller.touchTestIsNumbers)
   }
 }

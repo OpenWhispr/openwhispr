@@ -10,6 +10,7 @@ import { useConfigToggle } from '@/hooks/useConfigToggle';
 import { DEFAULT_LANGUAGE, getLanguage } from '@/lib/languages';
 import { toneLabel, DEFAULT_KEYBOARD_TONE } from '@/lib/keyboardTone';
 import { getDictationAgentName } from '@/lib/dictationAgent';
+import { areKeyboardLettersEnabled, setKeyboardLettersEnabled } from '@/lib/keyboardLetters';
 import { LiveActivity } from '../../modules/live-activity/src';
 
 export default function PreferencesScreen() {
@@ -20,6 +21,7 @@ export default function PreferencesScreen() {
   const agentName = config ? getDictationAgentName(config) : 'OpenWhispr';
   const handleToggleAutoLearn = useConfigToggle('autoLearnCorrections');
   const [dictationMode, setDictationMode] = useState(() => LiveActivity.isDictationModeEnabled());
+  const [letterKeys, setLetterKeys] = useState(areKeyboardLettersEnabled);
 
   return (
     <SettingsScreen>
@@ -63,6 +65,24 @@ export default function PreferencesScreen() {
           title="Full Access"
           description="Required for keyboard dictation. Tap for setup steps."
           onPress={() => router.push('/keyboard-full-access')}
+        />
+        <SettingsRow
+          iconStyle="line"
+          icon="textformat.abc"
+          mdIcon="CaseSensitive"
+          title="Letter keys"
+          description="Off: the keyboard opens on numbers and punctuation, and ABC switches to your next keyboard."
+          rightElement={
+            <SettingsSwitch
+              accessibilityLabel="Letter keys"
+              value={letterKeys}
+              onValueChange={(next) => {
+                setKeyboardLettersEnabled(next);
+                setLetterKeys(next);
+              }}
+            />
+          }
+          showChevron={false}
         />
         <SettingsRow
           iconStyle="line"
