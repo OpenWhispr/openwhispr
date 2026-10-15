@@ -58,6 +58,9 @@ class TinfoilRealtimeStreaming extends OpenAIRealtimeStreaming {
     const model = options.model || TINFOIL_REALTIME_MODEL;
     return super.connect({
       ...options,
+      // voxtral's support for a pinned language is unverified, so meetings keep
+      // auto-detection like dictation does.
+      language: undefined,
       model,
       createSocket: () => this._createSocketImpl({ model, apiKey }),
     });

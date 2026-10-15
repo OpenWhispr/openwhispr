@@ -18,6 +18,7 @@ const { BYOK_API_KEYS } = require("../config/secretKeys");
 const tokenStore = require("./tokenStore");
 const accountScopeBinding = require("./accountScopeBinding");
 const { createCloudApiRequestHandler } = require("./cloudApiRequest");
+const { MetaActivation } = require("./metaActivation");
 const { decodeLeaderboardPngDataUrl, leaderboardImageFilename } = require("./leaderboardImage");
 const { withPolicyRequestHeaders } = require("./policyRequestHeaders");
 const {
@@ -2239,8 +2240,25 @@ class IPCHandlers {
       return this.databaseManager.getNotesForSpace(spaceId, limit);
     });
 
-    ipcMain.handle("db-update-note", async (event, id, updates) => {
-      const result = this.databaseManager.updateNote(id, updates);
+    ipcMain.handle("db-get-note-undos", () => this.databaseManager.getNoteUndos());
+    ipcMain.handle("db-claim-note-undo", (_event, token) =>
+      this.databaseManager.claimNoteUndo(token)
+    );
+    ipcMain.handle("db-discard-note-undo", (_event, id, token) =>
+      this.databaseManager.discardNoteUndo(id, token)
+    );
+    ipcMain.handle("db-undo-note-update", (_event, token) => {
+      const result = this.databaseManager.undoNoteUpdate(token);
+      if (result?.success && result?.note) {
+        setImmediate(() => broadcastToWindows("note-updated", result.note));
+        this.notifyVectorChanges();
+        this._asyncMirrorWrite(result.note);
+      }
+      return result;
+    });
+
+    ipcMain.handle("db-update-note", async (event, id, updates, options) => {
+      const result = this.databaseManager.updateNote(id, updates, options);
       if (result?.success && result?.note) {
         setImmediate(() => broadcastToWindows("note-updated", result.note));
         this.notifyVectorChanges();
@@ -2434,6 +2452,7 @@ class IPCHandlers {
       );
       this.connectorManager?.accountChanged();
       void this.connectorManager?.notifyStatusChanged();
+      void this.metaActivation?.flush();
       return { success: true };
     });
 
@@ -2469,6 +2488,7 @@ class IPCHandlers {
             erasingDevice: options?.erasingDevice === true,
           });
           const result = this.databaseManager.deleteAccountData(accountId);
+          this.metaActivation?.purge(accountId);
           this.notifyVectorChanges();
           for (const noteId of result.deletedNoteIds) {
             this._asyncMirrorDelete(noteId);
@@ -2694,32 +2714,50 @@ class IPCHandlers {
     });
     ipcMain.handle(
       "db-acknowledge-note-create",
-      (_, id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, settleIfUnchanged) =>
-        this.databaseManager.acknowledgeNoteCreate(
+      (_, id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) => {
+        const result = this.databaseManager.acknowledgeNoteCreate(
           id,
           snapshot,
           cloudId,
           cloudUpdatedAt,
           ownerUserId,
-          settleIfUnchanged
-        )
+          options
+        );
+        if (result.note) {
+          setImmediate(() => broadcastToWindows("note-synced", result.note));
+          this.notifyVectorChanges();
+        }
+        return result;
+      }
     );
     ipcMain.handle(
       "db-mark-note-synced-if-unchanged",
-      (_, id, snapshot, expectedCloudId, cloudUpdatedAt, ownerUserId) =>
-        this.databaseManager.markNoteSyncedIfUnchanged(
+      (_, id, snapshot, expectedCloudId, cloudUpdatedAt, ownerUserId, cloudRevision, cloudNote) => {
+        const result = this.databaseManager.markNoteSyncedIfUnchanged(
           id,
           snapshot,
           expectedCloudId,
           cloudUpdatedAt,
-          ownerUserId
-        )
+          ownerUserId,
+          cloudRevision,
+          cloudNote
+        );
+        // The ack took the server's copy of a field: refresh open editors.
+        if (result.note) {
+          setImmediate(() => broadcastToWindows("note-synced", result.note));
+          this.notifyVectorChanges();
+        }
+        return result;
+      }
     );
-    ipcMain.handle("db-set-note-cloud-base", (_, id, cloudUpdatedAt) =>
-      this.databaseManager.setNoteCloudBase(id, cloudUpdatedAt)
+    ipcMain.handle("db-set-note-cloud-base", (_, id, cloudUpdatedAt, cloudRevision, options) =>
+      this.databaseManager.setNoteCloudBase(id, cloudUpdatedAt, cloudRevision, options)
     );
     ipcMain.handle("db-set-note-owner-from-cloud", (_, id, ownerUserId) =>
       this.databaseManager.setNoteOwnerFromCloud(id, ownerUserId)
+    );
+    ipcMain.handle("db-count-notes-missing-revision", (_, spaceKind) =>
+      this.databaseManager.countNotesMissingRevision(spaceKind)
     );
     ipcMain.handle("db-count-team-notes-missing-owner", () =>
       this.databaseManager.countTeamNotesMissingOwner()
@@ -4205,6 +4243,16 @@ class IPCHandlers {
         const { describeError } = require("./connectors/errorSummary");
         const { errorName, errorCode } = describeError(e);
         errors.push(`Connector revoke: ${errorCode ?? errorName}`);
+      }
+
+      try {
+        this.metaActivation?.dispose();
+        this.metaActivation = null;
+        const activationPath = path.join(app.getPath("userData"), "meta-activation.db");
+        for (const suffix of ["", "-wal", "-shm"])
+          fs.rmSync(activationPath + suffix, { force: true });
+      } catch (e) {
+        errors.push(`Activation data cleanup: ${e.message}`);
       }
 
       // Close DB connection before deleting the file
@@ -6260,6 +6308,10 @@ class IPCHandlers {
 
     ipcMain.handle("auth-clear-session", async (event) => {
       try {
+        await Promise.race([
+          this.metaActivation?.close(),
+          new Promise((resolve) => setTimeout(resolve, 1500)),
+        ]).catch(() => {});
         const tokenState = tokenStore.clear();
         const win = BrowserWindow.fromWebContents(event.sender);
         if (win) {
@@ -6395,6 +6447,46 @@ class IPCHandlers {
       tokenStore,
       logger: debugLogger,
     });
+    try {
+      const ActivationDatabase = require("better-sqlite3");
+      const activationDb = new ActivationDatabase(
+        path.join(app.getPath("userData"), "meta-activation.db")
+      );
+      activationDb.pragma("foreign_keys = ON");
+      this.metaActivation = new MetaActivation({
+        db: activationDb,
+        getScope: () =>
+          accountScopeBinding.resolveActiveAccountScope({
+            ...tokenStore.getState(),
+            binding: accountScopeBinding.read(),
+          }),
+        request: createCloudApiRequestHandler({
+          getApiUrl,
+          getAppVersion: () => app.getVersion(),
+          tokenStore,
+          proxyFetch: (url, init) =>
+            proxyFetch(url, { ...init, signal: AbortSignal.timeout(10_000) }),
+        }),
+      });
+      this.metaActivation.start();
+    } catch {
+      // Marketing bookkeeping must never prevent ordinary dictation/startup.
+      debugLogger.warn("Activation storage unavailable");
+    }
+    ipcMain.handle("activation-close", async () => {
+      await Promise.race([
+        this.metaActivation?.close(),
+        new Promise((resolve) => setTimeout(resolve, 1500)),
+      ]).catch(() => {});
+    });
+    ipcMain.handle("activation-begin", () => this.metaActivation?.begin() ?? null);
+    ipcMain.handle("activation-stop", (_event, id) => {
+      if (typeof id === "string") this.metaActivation?.stopCapture(id);
+    });
+    ipcMain.handle("activation-finish", (_event, id, words) =>
+      this.metaActivation?.finish(id, words)
+    );
+    ipcMain.handle("activation-cancel", (_event, id) => this.metaActivation?.cancel(id));
     const workspacePolicyManager = createWorkspacePolicyManager({
       cachePath: path.join(app.getPath("userData"), "workspace-policy.json"),
       getApiUrl,
@@ -8759,6 +8851,16 @@ class IPCHandlers {
       };
     };
 
+    // A session being replaced must go quiet: a late final or socket error from
+    // it would land in the renderer as if it came from the live session.
+    const retireDictationStreaming = (streaming) => {
+      streaming.onPartialTranscript = null;
+      streaming.onFinalTranscript = null;
+      streaming.onError = null;
+      streaming.onSessionEnd = null;
+      streaming.disconnect({ commit: false }).catch(() => {});
+    };
+
     const DICTATION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
     const ORUKEET_IDLE_TIMEOUT_MS = 60 * 1000;
 
@@ -8786,7 +8888,9 @@ class IPCHandlers {
 
     // What a dictation connection was opened for; a start or warmup reuses one
     // only when nothing about the route changed and, for a connection that reads
-    // a saved key, no key was saved since.
+    // a saved key, no key was saved since. OpenAI pins the language when the
+    // session is configured (BYOK session.update, or the cloud token request), so
+    // it is part of that route; the other providers never send it at connect.
     const dictationConnectionKey = (options) => {
       const provider = options.provider || "openai-realtime";
       const readsSavedKey = options.mode === "byok" || provider === "tinfoil-realtime";
@@ -8797,6 +8901,9 @@ class IPCHandlers {
         options.baseUrl,
         options.pipelineOptions,
         readsSavedKey ? credentialGeneration : null,
+        provider === "openai-realtime"
+          ? OpenAIRealtimeStreaming.normalizeLanguage(options.language)
+          : null,
       ]);
     };
 
@@ -8816,8 +8923,13 @@ class IPCHandlers {
       clearDictationIdleTimer();
       this._dictationPreviewEnabled = !!options.preview;
 
+      // The renderer is already streaming frames when a start redials (it wires
+      // the worklet before calling start), so the old session is retired without
+      // a wait, and without a commit where the client supports skipping it: a
+      // commit would only surface its head as a final from the wrong session.
+      // Frames that reached the old session before the start are dropped with it.
       if (this._dictationStreaming) {
-        await this._dictationStreaming.disconnect().catch(() => {});
+        retireDictationStreaming(this._dictationStreaming);
         this._dictationStreaming = null;
       }
 
@@ -8863,6 +8975,9 @@ class IPCHandlers {
           const apiKey = await fetchRealtimeToken(event, {
             mode: options.mode,
             provider,
+            // Cloud sessions are configured server-side when the secret is minted;
+            // the server also owns the managed model, so only the language is sent.
+            language: OpenAIRealtimeStreaming.normalizeLanguage(options.language) ?? undefined,
           });
           if (provider === "tinfoil-realtime") {
             const model = options.model || TINFOIL_REALTIME_MODEL;
@@ -8877,6 +8992,7 @@ class IPCHandlers {
             await streaming.connect({
               apiKey,
               model: options.model || "gpt-4o-mini-transcribe",
+              language: options.language,
               // OpenAI rejects rates below 24kHz; the 16kHz capture is upsampled instead.
               captureRate: 16000,
               preconfigured: isCloud,

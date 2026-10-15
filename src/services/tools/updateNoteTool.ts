@@ -2,6 +2,36 @@ import type { ToolDefinition, ToolExecutionContext, ToolResult } from "./ToolReg
 import { resolveFolderId } from "./utils";
 import { syncService } from "../SyncService.js";
 
+// The AI SDK runs a step's tool calls concurrently. Edits of one note take
+// turns, so the second reads the first's write instead of failing main's check
+// that the note is unchanged since this call read it.
+const noteLocks = new Map<number, Promise<void>>();
+
+async function lockNote(id: number): Promise<() => void> {
+  const previous = noteLocks.get(id) ?? Promise.resolve();
+  let release = (): void => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  const tail = previous.then(() => held);
+  noteLocks.set(id, tail);
+  await previous;
+  return () => {
+    release();
+    if (noteLocks.get(id) === tail) noteLocks.delete(id);
+  };
+}
+
+// For the model only (the tool step shows displayText): a blank sent the old way
+// to clear a field succeeds without clearing it, so say so plainly.
+function ignoredFieldsGuidance(ignoredFields: string[]): string {
+  const clearHint = ignoredFields.some((field) => field === "content" || field === "summary")
+    ? " To empty content or summary, call update_note again with clear_fields; until then, don't tell the user a field was cleared."
+    : "";
+  return `Ignored blank ${ignoredFields.join(", ")}: nothing was cleared.${clearHint}`;
+}
+
+const isClearFields = (value: unknown): value is Array<"content" | "summary"> =>
+  Array.isArray(value) && value.every((field) => field === "content" || field === "summary");
+
 export const updateNoteTool: ToolDefinition = {
   name: "update_note",
   description:
@@ -20,12 +50,18 @@ export const updateNoteTool: ToolDefinition = {
       content: {
         type: "string",
         description:
-          "Complete replacement of the user's personal notes only, not the AI summary or transcript. Omit unless editing this field; an empty string clears it.",
+          "Complete replacement of the user's personal notes only, not the AI summary or transcript. Omit unless editing this field. Blank strings are ignored; use clear_fields only when the user explicitly asks to clear the entire field.",
       },
       summary: {
         type: "string",
         description:
-          "Complete replacement of the saved AI Summary only. Preserve unrelated sections exactly. Omit unless editing this field; an empty string clears it.",
+          "Complete replacement of the saved AI Summary only. Preserve unrelated sections exactly. Omit unless editing this field. Blank strings are ignored; use clear_fields only when the user explicitly asks to clear the entire field.",
+      },
+      clear_fields: {
+        type: "array",
+        items: { type: "string", enum: ["content", "summary"] },
+        description:
+          "Fields to empty, only when the user asks to clear the field or to remove text that is all of it. For any other section removal, supply the remaining text instead. Never infer clear intent from an empty optional field.",
       },
       folder: {
         type: "string",
@@ -41,31 +77,65 @@ export const updateNoteTool: ToolDefinition = {
     args: Record<string, unknown>,
     context?: ToolExecutionContext
   ): Promise<ToolResult> {
-    const id = args.id as number;
-    const title = args.title as string | undefined;
-    const content = args.content as string | undefined;
-    const summary = args.summary as string | undefined;
-    const folderName = args.folder as string | undefined;
-
-    if (!title && typeof content !== "string" && typeof summary !== "string" && !folderName) {
+    // Models sometimes send the ID as a numeric string, which get_note accepts.
+    const id = typeof args.id === "string" && /^\d+$/.test(args.id) ? Number(args.id) : args.id;
+    const clearFields: unknown = args.clear_fields ?? [];
+    const invalid = (argument: string): ToolResult => ({
+      success: false,
+      data: null,
+      displayText: `Invalid note update argument: ${argument}`,
+    });
+    if (typeof id !== "number" || !Number.isSafeInteger(id) || id <= 0) return invalid("id");
+    const invalidField = ["title", "content", "summary", "folder"].find(
+      (key) => args[key] != null && typeof args[key] !== "string"
+    );
+    if (invalidField) return invalid(invalidField);
+    if (!isClearFields(clearFields)) {
+      return invalid('clear_fields (an array of "content" and/or "summary")');
+    }
+    const isBlank = (value: unknown): value is string => typeof value === "string" && !value.trim();
+    const title = typeof args.title === "string" && args.title.trim() ? args.title : undefined;
+    const folderName =
+      typeof args.folder === "string" && args.folder.trim() ? args.folder : undefined;
+    const updates: Parameters<typeof window.electronAPI.updateNote>[1] = {};
+    const ignoredFields: string[] = [];
+    if (title) updates.title = title;
+    else if (isBlank(args.title)) ignoredFields.push("title");
+    if (!folderName && isBlank(args.folder)) ignoredFields.push("folder");
+    for (const field of ["content", "summary"] as const) {
+      const value = args[field];
+      const clear = clearFields.includes(field);
+      if (clear && typeof value === "string" && value.trim()) {
+        return {
+          success: false,
+          data: null,
+          displayText: `Cannot replace and clear ${field} together`,
+        };
+      }
+      if (clear) updates[field === "summary" ? "enhanced_content" : field] = "";
+      else if (typeof value === "string" && value.trim())
+        updates[field === "summary" ? "enhanced_content" : field] = value;
+      else if (isBlank(value)) ignoredFields.push(field);
+    }
+    if (!Object.keys(updates).length && !folderName) {
       return {
         success: false,
         data: null,
-        displayText: "At least one of title, content, summary, or folder must be provided",
+        displayText:
+          "No changes supplied. Blank fields are ignored; to empty content or summary (a requested clear, or a removal that leaves nothing), use clear_fields.",
       };
     }
 
+    const unlock = await lockNote(id);
     try {
       const note = await window.electronAPI.getNote(id);
       if (context?.signal.aborted) return { success: false, data: null, displayText: "" };
       if (!note) {
         return { success: false, data: null, displayText: `Note with ID ${id} not found` };
       }
-
-      const updates: Record<string, string | number | null> = {};
-      if (title) updates.title = title;
-      if (typeof content === "string") updates.content = content;
-      if (typeof summary === "string") updates.enhanced_content = summary;
+      if (note.deleted_at) {
+        return { success: false, data: null, displayText: `Note with ID ${id} is in the trash` };
+      }
 
       let folderCreated = false;
       if (folderName) {
@@ -84,10 +154,29 @@ export const updateNoteTool: ToolDefinition = {
       }
 
       if (context?.signal.aborted) return { success: false, data: null, displayText: "" };
-      const result = await window.electronAPI.updateNote(id, updates);
+      const result = await window.electronAPI.updateNote(
+        id,
+        {
+          ...updates,
+          ...(clearFields.length && {
+            clear_fields: clearFields.map((field) =>
+              field === "summary" ? "enhanced_content" : "content"
+            ),
+          }),
+        },
+        {
+          undoable: true,
+          expected: note,
+          turn: context?.messageId,
+        }
+      );
 
       if (!result.success) {
-        return { success: false, data: null, displayText: "Failed to update note" };
+        return {
+          success: false,
+          data: null,
+          displayText: `Failed to update note${result.error ? `: ${result.error}` : ""}`,
+        };
       }
 
       syncService.debouncedPush("note", id);
@@ -98,9 +187,11 @@ export const updateNoteTool: ToolDefinition = {
         data: {
           id,
           title: title || note.title,
+          ignoredFields,
           updatedFields: Object.keys(updates).map((field) =>
             field === "enhanced_content" ? "summary" : field
           ),
+          ...(ignoredFields.length > 0 && { guidance: ignoredFieldsGuidance(ignoredFields) }),
         },
         displayText: `Updated note: "${title || note.title}"${suffix}`,
       };
@@ -110,6 +201,8 @@ export const updateNoteTool: ToolDefinition = {
         data: null,
         displayText: `Failed to update note: ${(error as Error).message}`,
       };
+    } finally {
+      unlock();
     }
   },
 };

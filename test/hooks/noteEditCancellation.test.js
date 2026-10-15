@@ -82,7 +82,11 @@ for (const boundary of ["note read", "conversation creation", "conversation load
     t.mock.method(reasoning, "processTextStreamingCloud", (_messages, config) =>
       (async function* () {
         requests += 1;
-        await config.executeToolCall("update_note", JSON.stringify({ id: 7, summary: "" }), "edit");
+        await config.executeToolCall(
+          "update_note",
+          JSON.stringify({ id: 7, clear_fields: ["summary"] }),
+          "edit"
+        );
         yield { type: "content", text: "Removed it." };
         yield { type: "done", finishReason: "stop" };
       })()

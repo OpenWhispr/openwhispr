@@ -93,6 +93,8 @@ class FakeStreaming {
     return { text: "" };
   }
 }
+FakeStreaming.normalizeLanguage =
+  require("../../src/helpers/openaiRealtimeStreaming").normalizeLanguage;
 class FakeOrukeet extends FakeStreaming {}
 
 const modulePath = require.resolve("../../src/helpers/ipcHandlers");

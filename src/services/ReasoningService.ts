@@ -17,9 +17,11 @@ import { wrapCleanupTranscript } from "../config/prompts";
 import { stripThinkingTags } from "../helpers/stripThinking.js";
 import {
   getLlmRequestTimeoutSeconds,
+  getLlmStreamingFirstByteTimeoutSeconds,
   llmRequestTimeoutError,
 } from "../helpers/llmRequestTimeout.js";
 import { streamText, stepCountIs } from "ai";
+import { compactTranscriptHistory } from "./ai/transcriptHistory";
 import { getAIModel } from "./ai/providers";
 import { createEnterpriseChatModel } from "./ai/enterpriseChatModel";
 import { getManagedScopeResolution } from "../stores/enterpriseIdentityStore";
@@ -671,11 +673,19 @@ class ReasoningService extends BaseReasoningService {
 
     const timeoutSeconds = getLlmRequestTimeoutSeconds({ streaming: true });
     let timeoutTriggered = false;
-    const timeoutId = setTimeout(() => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const resetTimeout = (seconds: number) => {
+      clearTimeout(timeoutId);
       if (abortController.signal.aborted) return;
-      timeoutTriggered = true;
-      abortController.abort();
-    }, timeoutSeconds * 1000);
+      timeoutId = setTimeout(() => {
+        if (abortController.signal.aborted) return;
+        timeoutTriggered = true;
+        abortController.abort();
+      }, seconds * 1000);
+    };
+    resetTimeout(
+      getLlmStreamingFirstByteTimeoutSeconds({ selfHosted: isLocalProvider || isLanChat })
+    );
 
     const selfHostedErrorContext = {
       selfHosted: true,
@@ -749,6 +759,10 @@ class ReasoningService extends BaseReasoningService {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+
+        // Reset on bytes, including keepalives, partial SSE frames and hidden
+        // reasoning. A reply may stream for much longer than the idle timeout.
+        if (value.byteLength > 0) resetTimeout(timeoutSeconds);
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
@@ -939,6 +953,7 @@ class ReasoningService extends BaseReasoningService {
       })) as import("ai").ModelMessage[],
       tools: tools || undefined,
       stopWhen: stepCountIs(tools ? ReasoningService.MAX_TOOL_STEPS : 1),
+      prepareStep: ({ messages }) => ({ messages: compactTranscriptHistory(messages) }),
       abortSignal: abortController.signal,
       ...(useTemperature ? { temperature: config.temperature ?? 0.3 } : {}),
       maxOutputTokens: config.maxTokens || 4096,
@@ -1231,9 +1246,13 @@ class ReasoningService extends BaseReasoningService {
       messages[0]?.role === "system" && messages[0].content === config.systemPrompt
         ? messages.slice(1)
         : [...messages];
+    // Each call gets its own assistant/tool pair, so the results the model
+    // hasn't seen yet start where the last step's pairs do.
+    let latestStepStart = currentMessages.length;
 
     for (let step = 0; step < maxSteps; step++) {
       if (operationWasCancelled()) return;
+      currentMessages = compactTranscriptHistory(currentMessages, latestStepStart);
       // The screenshot rides every step of the tool loop so the model keeps
       // its vision after tool results come back.
       const ipcStream = this.streamFromIPC(currentMessages, {
@@ -1266,6 +1285,7 @@ class ReasoningService extends BaseReasoningService {
         return;
       }
 
+      latestStepStart = currentMessages.length;
       for (const call of pendingToolCalls) {
         if (operationWasCancelled()) return;
         let toolResult: ToolExecutionResult;

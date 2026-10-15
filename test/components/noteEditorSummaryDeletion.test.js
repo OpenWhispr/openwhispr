@@ -252,7 +252,7 @@ async function loadNoteEditor(t, permission) {
     });
   const latest = () => renders.at(-1);
   const unmount = () => React.act(async () => root.unmount());
-  return { render, click, latest, unmount, resizeCallbacks };
+  return { render, click, latest, unmount, resizeCallbacks, vite };
 }
 
 test("deleting the AI summary moves the selection to Your notes", async (t) => {
@@ -435,7 +435,7 @@ test("the note's chat learns who is viewing the note and its calendar event", as
   await unmount();
 });
 
-test("the note's chat names the user's own speakers and leaves attendees to the attendee block", async (t) => {
+test("the note's chat labels speakers as get_note does and leaves attendees to the attendee block", async (t) => {
   t.after(() => {
     delete globalThis.__embeddedChatOptions;
     delete globalThis.__noteEditorAuth;
@@ -451,15 +451,22 @@ test("the note's chat names the user's own speakers and leaves attendees to the 
   ]);
   const chatTranscript = () => globalThis.__embeddedChatOptions.noteTranscript;
 
+  const lines = "Note taker: I'll send the deck.\nOthers: Thanks.";
   await render(ENHANCEMENT, { note: { ...NOTE, transcript } });
-  assert.match(chatTranscript(), /Chad: I'll send the deck\./);
+  assert.equal(
+    chatTranscript(),
+    `## Meeting Context\nThe user taking these notes ("Note taker" in the transcript) is Chad <chad@example.com>.\n\n${lines}`
+  );
   assert.doesNotMatch(chatTranscript(), /Dana Wu|Invited participants/);
 
-  // A teammate's recording: its mic lines are theirs, so the chat keeps it as stored.
+  // A teammate's recording: its note taker is the teammate, so the user isn't named.
   await render(ENHANCEMENT, {
     note: { ...NOTE, transcript, cloud_id: "cloud-1", owner_user_id: "user-alice" },
   });
-  assert.equal(chatTranscript(), transcript);
+  assert.equal(
+    chatTranscript(),
+    `## Meeting Context\nSomeone other than the user took these notes ("Note taker" in the transcript).\n\n${lines}`
+  );
   await unmount();
 });
 
@@ -746,3 +753,117 @@ test("a read-only shared note offers no action picker, chips, slash menu or summ
     await unmount();
   }
 });
+
+// The body editor (RichTextEditor, mocked) in the tree the component returned.
+function bodyEditor(tree) {
+  let editor = null;
+  walk(tree, (node) => {
+    if (!editor && node.type?.name === "RichTextEditor") editor = node;
+  });
+  return editor;
+}
+
+test("each tab has its own body editor, so undo never carries over between tabs", async (t) => {
+  // An undo step from one tab, replayed over the other, would save there.
+  const { render, click, latest, unmount } = await loadNoteEditor(t);
+  await render(ENHANCEMENT, { note: { ...NOTE, transcript: "Plain transcript" } });
+  const keys = [bodyEditor(latest()).key];
+  for (const tab of ["raw", "transcript"]) {
+    await click(tab);
+    assert.equal(bodyEditor(latest()).props.disabled === true, tab === "transcript");
+    keys.push(bodyEditor(latest()).key);
+  }
+  assert.ok(keys.every((key) => key != null));
+  assert.equal(new Set(keys).size, 3, `distinct keys, got ${keys}`);
+  await unmount();
+});
+
+test("the body editor sits under the bottom bar's parent, which the bar publishes its height on", async (t) => {
+  // The editor keeps the caret clear of the bar by inheriting --bottom-overlay-height.
+  const { render, latest, unmount } = await loadNoteEditor(t);
+  await render(ENHANCEMENT);
+  let barParent = null;
+  walk(latest(), (node) => {
+    const children = React.Children.toArray(node.props.children);
+    if (!barParent && children.some((child) => child.props?.onAskSubmit)) barParent = node;
+  });
+  assert.ok(barParent, "the note renders its bottom bar");
+  assert.ok(bodyEditor(barParent), "the body editor is inside the bar's parent");
+  await unmount();
+});
+
+const CONFLICT = {
+  id: "cloud-1",
+  client_note_id: NOTE.client_note_id,
+  title: "Kickoff",
+  content: "",
+  content_state: "clear",
+  enhanced_content: NOTE.enhanced_content,
+  updated_at: "2026-09-02T00:00:00.000Z",
+  revision: 4,
+  updated_by_user_id: null,
+};
+
+async function loadWithConflict(t, overrides) {
+  const loaded = await loadNoteEditor(t);
+  const store = await loaded.vite.ssrLoadModule("/stores/noteStore.ts");
+  t.after(() => store.clearNoteConflict(NOTE.client_note_id));
+  await loaded.render(ENHANCEMENT, overrides);
+  await React.act(async () => store.setNoteConflict(NOTE.client_note_id, CONFLICT));
+  const keepButton = () => {
+    let button = null;
+    walk(loaded.latest(), (node) => {
+      if (!button && node.props.children === "notes.spaces.conflictKeep") button = node;
+    });
+    return button;
+  };
+  return { ...loaded, keepButton };
+}
+
+test("Keep saves the pending edits before it advances the base", async (t) => {
+  // A debounced save landing after Keep would write the draft's old notes back
+  // over the clear Keep accepted from the other device.
+  const calls = [];
+  const { keepButton, unmount } = await loadWithConflict(t, {
+    onFlushPendingSaves: async (noteId) => calls.push(["flush", noteId]),
+  });
+  globalThis.window.electronAPI.setNoteCloudBase = async (...args) => {
+    calls.push(["base", ...args]);
+    return { success: true, note: { ...NOTE, content: "" } };
+  };
+  await React.act(async () => keepButton().props.onClick());
+  assert.deepEqual(calls, [
+    ["flush", NOTE.id],
+    [
+      "base",
+      NOTE.id,
+      CONFLICT.updated_at,
+      CONFLICT.revision,
+      { keepLocal: true, cloudNote: CONFLICT },
+    ],
+  ]);
+  assert.equal(keepButton(), null, "the banner is gone");
+  await unmount();
+});
+
+for (const failing of ["flush", "base"]) {
+  test(`Keep leaves the banner up for a retry when the ${failing} step fails`, async (t) => {
+    const errors = t.mock.method(console, "error", () => {});
+    const calls = [];
+    const { keepButton, unmount } = await loadWithConflict(t, {
+      onFlushPendingSaves: async () => {
+        calls.push("flush");
+        if (failing === "flush") throw new Error("disk full");
+      },
+    });
+    globalThis.window.electronAPI.setNoteCloudBase = async () => {
+      calls.push("base");
+      throw new Error("database locked");
+    };
+    await React.act(async () => keepButton().props.onClick());
+    assert.deepEqual(calls, failing === "flush" ? ["flush"] : ["flush", "base"]);
+    assert.ok(keepButton(), "the banner stays");
+    assert.equal(errors.mock.callCount(), 1);
+    await unmount();
+  });
+}

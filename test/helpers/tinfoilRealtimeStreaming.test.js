@@ -207,6 +207,27 @@ test("meeting sessions declare the 24kHz PCM input format", async () => {
   streaming.cleanup();
 });
 
+test("meeting sessions never pin a language (voxtral support is unverified)", async () => {
+  const { TinfoilRealtimeStreaming } = await load();
+  const socket = makeFakeSocket(WS.CONNECTING);
+  const { factory } = makeRecordingFactory(socket);
+  const streaming = new TinfoilRealtimeStreaming(factory);
+
+  const connected = streaming.connect({ apiKey: "tk-secret", language: "de" });
+  await new Promise((resolve) => setImmediate(resolve));
+  socket.readyState = WS.OPEN;
+  socket.emit("message", JSON.stringify({ type: "session.created" }));
+
+  const [update] = sentEvents(socket, "session.update");
+  assert.deepEqual(update.session.audio.input.transcription, {
+    model: "voxtral-mini-4b-realtime",
+  });
+
+  socket.emit("message", JSON.stringify({ type: "session.updated" }));
+  await connected;
+  streaming.cleanup();
+});
+
 test("meeting session.update honors streamLabel + vadThreshold overrides through the subclass", async () => {
   const { TinfoilRealtimeStreaming } = await load();
   const socket = makeFakeSocket(WS.CONNECTING);

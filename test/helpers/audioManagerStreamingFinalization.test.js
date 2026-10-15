@@ -374,139 +374,100 @@ test("cancelling while the streaming microphone opens never enters recording", a
   );
 });
 
-const managedOrukeetConfig = { dictation: { mode: "streaming" }, streamingProvider: "orukeet" };
-const managedDeepgramConfig = { dictation: { mode: "streaming" }, streamingProvider: "deepgram" };
-
 // A managed Orukeet recording that resolves its provider through the real
 // sttConfig routing, with every provider channel recording what reached it.
 async function startManagedOrukeetRecording(t, AudioManager) {
-  globalThis.__streamingFinalizationSettings = {
-    ...globalThis.__streamingFinalizationSettings,
-    cloudTranscriptionMode: "openwhispr",
-    isSignedIn: true,
-    preferredLanguage: "auto",
-  };
-  const previousAudioWorkletNode = globalThis.AudioWorkletNode;
-  globalThis.AudioWorkletNode = class {
-    constructor() {
-      this.port = {
-        postMessage: (message) => {
-          if (message === "stop") queueMicrotask(() => this.port.onmessage?.({ data: "flushed" }));
-        },
-      };
-    }
-
-    disconnect() {}
-  };
-  t.after(() => {
-    if (previousAudioWorkletNode === undefined) delete globalThis.AudioWorkletNode;
-    else globalThis.AudioWorkletNode = previousAudioWorkletNode;
-  });
-
+  useManagedOrukeetSettings();
+  installCapture(t);
   const calls = [];
   const record = (name, result) => async () => {
     calls.push(name);
     return result;
   };
   const listen = () => () => {};
+  let raiseStreamError;
   Object.assign(globalThis.window.electronAPI, {
     dictationRealtimeStart: async (options) => {
-      calls.push(`${options.provider}:start`);
+      calls.push(`${options.provider}:start:${options.model}`);
       return { success: true };
     },
-    dictationRealtimeFinalize: record("realtime:finalize", { success: true, text: "Bonjour" }),
+    dictationRealtimeFinalize: record("realtime:finalize", {
+      success: true,
+      text: "Bonjour",
+      language: "fr",
+    }),
     dictationRealtimeStop: record("realtime:stop", { success: true }),
     onDictationRealtimePartial: listen,
     onDictationRealtimeFinal: listen,
-    onDictationRealtimeError: listen,
+    onDictationRealtimeError: (listener) => {
+      raiseStreamError = listener;
+      return () => {};
+    },
     onDictationRealtimeSessionEnd: listen,
     deepgramStreamingFinalize: record("deepgram:finalize", { success: true }),
     deepgramStreamingStop: record("deepgram:stop", { success: true }),
-    cloudStreamingUsage: async () => ({ success: true }),
+    cloudStreamingUsage: async (_text, _durationSeconds, usage) => {
+      calls.push(`usage:${usage.sttProvider}:${usage.sttDetectedLanguage}`);
+      return { success: true };
+    },
   });
   globalThis.window.dispatchEvent = () => true;
 
-  const completions = [];
-  const stream = {
-    getAudioTracks: () => [{ getSettings: () => ({}) }],
-    getTracks: () => [{ stop() {} }],
+  const { manager, errors, completions } = createStartingManager(AudioManager, {});
+  delete manager.getStreamingProvider;
+  delete manager.getStreamingProviderName;
+  manager.setSttConfig({ dictation: { mode: "streaming" }, streamingProvider: "orukeet" });
+  // The hook's background TTL refresh lands while the mic opens and would now
+  // route a new recording elsewhere.
+  const openMic = manager._acquireCaptureStream;
+  manager._acquireCaptureStream = async (constraints) => {
+    manager.setSttConfig({ dictation: { mode: "streaming" }, streamingProvider: "deepgram" });
+    return openMic(constraints);
   };
-  const source = { connect() {}, disconnect() {} };
-  const manager = Object.assign(Object.create(AudioManager.prototype), {
-    isRecording: false,
-    isProcessing: false,
-    isStreaming: false,
-    streamingStartInProgress: false,
-    _streamingStartSettlementWaiters: [],
-    stopRequestedDuringStreamingStart: false,
-    _streamingStopPromise: null,
-    _streamingStopMode: null,
-    _streamingCancellationGeneration: 0,
-    _activeTranscriptionAbortController: null,
-    _streamingSessionGeneration: 0,
-    _activeStreamingSessionId: null,
-    _streamingMicSwapPromise: null,
-    streamingCleanupFns: [],
-    streamingFallbackRecorder: null,
-    streamingFallbackChunks: [],
-    _streamingFallbackSegments: [],
-    streamingTextDebounce: null,
-    pendingAssistantConversation: null,
-    pendingSelectionEdit: null,
-    preparedMicCapture: { take: async () => null },
-    micRecovery: { stop() {} },
-    isRecordingAllowedByPolicy: () => true,
-    getAudioConstraints: async () => ({}),
-    _acquireCaptureStream: async () => stream,
-    startStreamingFallbackRecorder() {},
-    getOrCreateAudioContext: async () => ({
-      createMediaStreamSource: () => source,
-      createAnalyser: () => ({}),
-      audioWorklet: { addModule: async () => {} },
-    }),
-    getWorkletBlobUrl: () => "",
-    getKeyterms: () => [],
-    beginMicRecovery: async () => {},
-    mergeRecordedSegments: async () => null,
-    finalizeChineseScript: async (text) => text,
-    cleanupPreview: async () => null,
-    _markCaptureStreamReleased() {},
-    onStateChange() {},
-    onTranscriptionComplete: (result) => completions.push(result),
-  });
-  manager.setSttConfig(managedOrukeetConfig);
 
   assert.equal(await manager.startStreamingRecording(), true);
-  // The hook's background TTL refresh lands mid-recording and would now route
-  // a new recording elsewhere.
-  manager.setSttConfig(managedDeepgramConfig);
   assert.equal(manager.getStreamingProviderName(), "deepgram");
 
-  return { manager, calls, completions };
+  return { manager, calls, completions, errors, raiseStreamError };
 }
 
-test("stop finalizes the Orukeet stream after an STT config refresh reroutes mid-recording", async (t) => {
+test("stop finalizes the Orukeet stream after an STT config refresh reroutes while the mic opens", async (t) => {
   const AudioManager = await loadManagerClass(t);
   const { manager, calls, completions } = await startManagedOrukeetRecording(t, AudioManager);
 
   assert.equal(await manager.stopStreamingRecording(), true);
 
-  assert.deepEqual(calls, ["orukeet:start", "realtime:finalize", "realtime:stop"]);
+  assert.deepEqual(calls, [
+    "orukeet:start:orukeet-v0.1.0",
+    "realtime:finalize",
+    "realtime:stop",
+    "usage:orukeet:fr",
+  ]);
   assert.equal(completions.length, 1);
   assert.equal(completions[0].text, "Bonjour");
   assert.equal(completions[0].source, "orukeet-streaming");
   assert.equal(manager._activeStreamingProviderName, null);
 });
 
-test("cancel disconnects the Orukeet stream after an STT config refresh reroutes mid-recording", async (t) => {
+test("cancel and cleanup disconnect the Orukeet stream after an STT config refresh reroutes while the mic opens", async (t) => {
   const AudioManager = await loadManagerClass(t);
-  const { manager, calls, completions } = await startManagedOrukeetRecording(t, AudioManager);
+  for (const teardown of ["cancelStreamingRecording", "cleanup"]) {
+    await t.test(teardown, async (t) => {
+      const { manager, calls, completions, errors, raiseStreamError } =
+        await startManagedOrukeetRecording(t, AudioManager);
+      manager.preparedMicCapture.cancel = () => {};
+      manager.micStreamHold = { drop() {} };
+      // The managed Orukeet session fails over, so the error never surfaces.
+      raiseStreamError("Orukeet connection closed");
 
-  assert.equal(await manager.cancelStreamingRecording(), true);
+      await manager[teardown]();
 
-  assert.deepEqual(calls, ["orukeet:start", "realtime:stop"]);
-  assert.deepEqual(completions, []);
-  assert.equal(manager._activeStreamingProviderName, null);
+      assert.deepEqual(calls, ["orukeet:start:orukeet-v0.1.0", "realtime:stop"]);
+      assert.deepEqual(completions, []);
+      assert.deepEqual(errors, []);
+      assert.equal(manager._activeStreamingProviderName, null);
+    });
+  }
 });
 
 test("cancel overrides a normal streaming stop before it can publish text", async (t) => {

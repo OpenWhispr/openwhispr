@@ -89,12 +89,8 @@ import {
 import { compileChatActionPrompt } from "../../helpers/templatePrompts";
 import type { SlashCommand } from "../chat/slashCommands";
 import { formatNoteDate, formatRelativeTime, formatShortDate } from "../../utils/dateFormatting";
-import {
-  buildLlmTranscript,
-  buildMeetingContext,
-  collectKnownPeople,
-  type MeetingIdentity,
-} from "../../utils/llmTranscript";
+import { collectKnownPeople, type MeetingIdentity } from "../../utils/llmTranscript";
+import { noteChatTranscript } from "../../utils/transcriptEvidence";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
 import {
   applyTranscriptSpeakerPatch,
@@ -237,6 +233,8 @@ interface NoteEditorProps {
   onCreateFolderAndMove?: (noteId: number, folderName: string) => void;
   /** Cancels the owner's debounced autosaves before an external copy is applied. */
   onCancelPendingSaves?: (noteId: number) => void;
+  /** Saves the owner's debounced autosaves now; rejects when a save fails. */
+  onFlushPendingSaves?: (noteId: number) => Promise<void>;
 }
 
 export default function NoteEditor({
@@ -271,6 +269,7 @@ export default function NoteEditor({
   onMoveToFolder,
   onCreateFolderAndMove,
   onCancelPendingSaves,
+  onFlushPendingSaves,
 }: NoteEditorProps) {
   const { t } = useTranslation();
   const locale = useUiLocale();
@@ -506,20 +505,15 @@ export default function NoteEditor({
     [meetingIdentity, speakerMappings, displaySegments]
   );
 
-  // The chat reads the user's own meeting the way note formatting does: who the
-  // user is and named speakers, not the stored segment JSON. Invitees are left to
-  // the filtered attendee block that comes with connector tools (a chat without
-  // them names only speakers), and a teammate's mic lines aren't the user's.
-  const chatTranscript = useMemo(() => {
-    if (displaySegments.length === 0 || !ownedByUser) return note.transcript ?? undefined;
-    const selfLabel = meetingIdentity.selfName || t("notes.speaker.you");
-    return [
-      buildMeetingContext({ ...meetingIdentity, participants: [] }, selfLabel),
-      buildLlmTranscript(displaySegments, speakerMappings, selfLabel, t),
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-  }, [displaySegments, meetingIdentity, note.transcript, ownedByUser, speakerMappings, t]);
+  // The chat labels speakers as get_note does, so a name it sees can be searched
+  // for, and says whether the note taker is the user.
+  const chatTranscript = useMemo(
+    () =>
+      noteChatTranscript(displaySegments, speakerMappings, ownedByUser ? meetingIdentity : null) ??
+      note.transcript ??
+      undefined,
+    [displaySegments, meetingIdentity, note.transcript, ownedByUser, speakerMappings]
+  );
 
   const embeddedChat = useEmbeddedChat({
     noteId: note.id,
@@ -968,11 +962,30 @@ export default function NoteEditor({
 
   // Keep the local edits, overwriting the cloud revision the user just saw.
   // Advancing the base first is what lets the next push succeed instead of
-  // 409ing against the same conflict and re-raising the banner.
-  const handleConflictKeep = useCallback(() => {
-    if (conflict) void window.electronAPI.setNoteCloudBase?.(note.id, conflict.updated_at);
-    clearNoteConflict(note.client_note_id);
-  }, [conflict, note.id, note.client_note_id]);
+  // 409ing against the same conflict and re-raising the banner. A field this
+  // device never edited takes the cloud copy's value, a clear included, rather
+  // than resurrecting the old text.
+  const handleConflictKeep = useCallback(async () => {
+    try {
+      if (conflict) {
+        // Unsaved edits are part of what the user keeps. Saving them first also
+        // means no debounced save lands after Keep, writing the draft back over
+        // a clear Keep took; with none pending, the store copy resyncs the editor.
+        await onFlushPendingSaves?.(note.id);
+        const result = await window.electronAPI.setNoteCloudBase?.(
+          note.id,
+          conflict.updated_at,
+          conflict.revision,
+          { keepLocal: true, cloudNote: conflict }
+        );
+        if (result?.note) updateNoteInStore(result.note);
+      }
+      clearNoteConflict(note.client_note_id);
+    } catch (err) {
+      // The banner stays, so Keep can be retried.
+      console.error("Failed to keep local note edits:", err);
+    }
+  }, [conflict, note.id, note.client_note_id, onFlushPendingSaves]);
 
   const noteDate = formatNoteDate(note.created_at, locale);
   const shortDate = formatShortDate(note.created_at, locale);
@@ -1391,7 +1404,9 @@ export default function NoteEditor({
                 />
               )
             ) : viewMode === "transcript" && hasMeetingTranscript ? (
-              <RichTextEditor value={note.transcript || ""} disabled />
+              // Each tab keys its own editor, so undo never crosses tabs: an
+              // undo step from one tab would replay over the other and save it.
+              <RichTextEditor key="transcript" value={note.transcript || ""} disabled />
             ) : viewMode === "transcript" ? (
               <div
                 className={cn(
@@ -1423,6 +1438,7 @@ export default function NoteEditor({
               </div>
             ) : viewMode === "enhanced" && enhancement ? (
               <RichTextEditor
+                key="enhanced"
                 value={enhancement.content}
                 onChange={handleEnhancedChange}
                 disabled={!canEditNote}
@@ -1430,6 +1446,7 @@ export default function NoteEditor({
               />
             ) : (
               <RichTextEditor
+                key="raw"
                 value={note.content}
                 onChange={handleContentChange}
                 editorRef={editorRef}
