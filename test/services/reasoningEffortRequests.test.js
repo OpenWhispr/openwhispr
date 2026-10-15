@@ -13,6 +13,52 @@ const CHOSEN = (reasoningEffort, extra = {}) => ({
   ...extra,
 });
 
+test("picker: offered for a registry model even with the toggle at its default", async () => {
+  const { selectableReasoningEffort } = await import("../../src/services/ai/chatRequestBody.ts");
+
+  assert.deepEqual(selectableReasoningEffort("openai", "gpt-5.5", { disableThinking: true }), {
+    options: ["none", "low", "medium", "high", "xhigh"],
+    defaultValue: "medium",
+  });
+  assert.equal(selectableReasoningEffort("openai", "gpt-4.1", {}), null);
+});
+
+test("picker: hidden for a Custom model while thinking is disabled", async () => {
+  const { selectableReasoningEffort } = await import("../../src/services/ai/chatRequestBody.ts");
+
+  assert.equal(selectableReasoningEffort("custom", "grok-4.3", { disableThinking: true }), null);
+  assert.deepEqual(selectableReasoningEffort("custom", "grok-4.3", { disableThinking: false }), {
+    options: ["none", "minimal", "low", "medium", "high", "xhigh"],
+  });
+});
+
+test("picker: Custom and OpenRouter offer only what the model family accepts", async () => {
+  const { selectableReasoningEffort } = await import("../../src/services/ai/chatRequestBody.ts");
+  const on = { disableThinking: false };
+
+  assert.deepEqual(selectableReasoningEffort("custom", "gpt-oss-20b", on).options, [
+    "low",
+    "medium",
+    "high",
+  ]);
+  assert.deepEqual(selectableReasoningEffort("openrouter", "z-ai/glm-5.3", on).options, [
+    "low",
+    "high",
+  ]);
+  assert.equal(selectableReasoningEffort("custom", "qwen3:32b", on), null);
+  assert.equal(selectableReasoningEffort("custom", "magistral-small-latest", on), null);
+});
+
+test("a level saved for a cloud provider never reaches a self-hosted server", async () => {
+  const { chosenReasoningEffort, selectableReasoningEffort } =
+    await import("../../src/services/ai/chatRequestBody.ts");
+  const config = { disableThinking: false, reasoningEffort: "high" };
+
+  assert.equal(chosenReasoningEffort("groq", "openai/gpt-oss-120b", config), "high");
+  assert.equal(selectableReasoningEffort("lan", "openai/gpt-oss-120b", config), null);
+  assert.equal(chosenReasoningEffort("lan", "openai/gpt-oss-120b", config), undefined);
+});
+
 test("Responses effort: OpenAI sends the chosen level the model offers", async () => {
   const { responsesReasoningEffort } = await import("../../src/services/ai/chatRequestBody.ts");
 

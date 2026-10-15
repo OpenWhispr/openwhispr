@@ -770,9 +770,9 @@
     },
     "effort": {
       "title": "Livello di ragionamento",
-      "description": "Quanto ragiona il modello prima di rispondere. Auto usa l'impostazione predefinita del provider.",
+      "description": "Quanto ragiona il modello prima di rispondere.",
       "descriptionWithDefault": "Quanto ragiona il modello prima di rispondere. Auto usa l'impostazione predefinita del provider ({{value}}).",
-      "auto": "Auto (predefinito del provider)",
+      "auto": "Auto",
       "options": {
         "none": "Nessuno",
         "minimal": "Minimo",

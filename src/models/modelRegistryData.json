@@ -743,8 +743,7 @@
           "supportsThinking": true,
           "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_120b",
           "reasoningEffort": {
-            "options": ["low", "medium", "high"],
-            "defaultValue": "medium"
+            "options": ["low", "medium", "high"]
           }
         },
         {
@@ -754,8 +753,7 @@
           "supportsThinking": true,
           "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_20b",
           "reasoningEffort": {
-            "options": ["low", "medium", "high"],
-            "defaultValue": "medium"
+            "options": ["low", "medium", "high"]
           }
         },
         {

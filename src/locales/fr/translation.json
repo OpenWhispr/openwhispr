@@ -770,9 +770,9 @@
     },
     "effort": {
       "title": "Effort de raisonnement",
-      "description": "Le temps de réflexion du modèle avant de répondre. Auto utilise la valeur par défaut du fournisseur.",
+      "description": "Le temps de réflexion du modèle avant de répondre.",
       "descriptionWithDefault": "Le temps de réflexion du modèle avant de répondre. Auto utilise la valeur par défaut du fournisseur ({{value}}).",
-      "auto": "Auto (par défaut du fournisseur)",
+      "auto": "Auto",
       "options": {
         "none": "Aucun",
         "minimal": "Minimal",

@@ -1,7 +1,8 @@
 import type { ReasoningConfig } from "../BaseReasoningService";
-import { getOpenAiApiConfig } from "../../models/ModelRegistry";
+import { getOpenAiApiConfig, type ReasoningEffortCapability } from "../../models/ModelRegistry";
 import {
   getReasoningEffortCapability,
+  hasSelectableReasoningEffort,
   isReasoningEffortSupported,
 } from "../../models/reasoningEffort";
 import { detectEndpointDialect } from "./thinkingSuppressionDialects";
@@ -109,9 +110,23 @@ export function responsesReasoningEffort(
 }
 
 /**
- * The effort the user picked for this scope, when thinking isn't suppressed
- * and the model offers that level. A stored level the current model lacks
- * (the model changed since) is ignored, leaving the server's default.
+ * The levels Settings offers for this provider and model, or null when it
+ * shows no picker: thinking is suppressed, or the model has fewer than two.
+ */
+export function selectableReasoningEffort(
+  provider: string,
+  model: string,
+  config: ReasoningConfig
+): ReasoningEffortCapability | null {
+  if (!model || isThinkingSuppressed(model, config)) return null;
+  const capability = getReasoningEffortCapability(provider.toLowerCase(), model);
+  return hasSelectableReasoningEffort(capability) ? capability : null;
+}
+
+/**
+ * The effort the user picked for this scope, when Settings offers it for this
+ * provider and model. A stored level it doesn't offer (the model, provider or
+ * toggle changed since) is ignored.
  */
 export function chosenReasoningEffort(
   provider: string,
@@ -119,9 +134,9 @@ export function chosenReasoningEffort(
   config: ReasoningConfig
 ): string | undefined {
   const effort = config.reasoningEffort;
-  if (!effort || isThinkingSuppressed(model, config)) return undefined;
-  const capability = getReasoningEffortCapability(provider.toLowerCase(), model);
-  return isReasoningEffortSupported(capability, effort) ? effort : undefined;
+  return isReasoningEffortSupported(selectableReasoningEffort(provider, model, config), effort)
+    ? effort
+    : undefined;
 }
 
 function isDeterministicTransform(config: ReasoningConfig): boolean {

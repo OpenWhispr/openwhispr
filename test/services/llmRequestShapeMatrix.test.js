@@ -100,8 +100,12 @@ const MATRIX = [
     { max_completion_tokens: MAX_TOKENS, reasoning_effort: "none" }],
   ["openrouter puts a chosen effort in its reasoning object", "openrouter", "openai/gpt-4o", null, { ...AGENT, disableThinking: false, reasoningEffort: "high" },
     { max_tokens: MAX_TOKENS, temperature: 0.3, reasoning: { effort: "high" } }],
-  ["openrouter glm-5.3: a chosen effort sends no family default beside it", "openrouter", "z-ai/glm-5.3", null, { ...AGENT, disableThinking: false, reasoningEffort: "medium" },
-    { max_tokens: MAX_TOKENS, temperature: 0.3, reasoning: { effort: "medium" } }],
+  ["openrouter glm-5.3: a chosen effort sends no family default beside it", "openrouter", "z-ai/glm-5.3", null, { ...AGENT, disableThinking: false, reasoningEffort: "low" },
+    { max_tokens: MAX_TOKENS, temperature: 0.3, reasoning: { effort: "low" } }],
+  ["custom gpt-oss: a level its family rejects is never sent (#1611)", "custom", "gpt-oss-120b", "https://custom.example/v1", { ...AGENT, disableThinking: false, reasoningEffort: "none" },
+    { max_tokens: MAX_TOKENS, temperature: 0.3 }],
+  ["self-hosted never sends a level saved for a cloud provider", "lan", "openai/gpt-oss-120b", null, { disableThinking: false, reasoningEffort: "high" },
+    { max_tokens: MAX_TOKENS, temperature: 0, reasoning_effort: "low" }],
 
   // --- Gemini through its OpenAI-compat endpoint (agent streaming route) ---
   ["gemini openai-compat: fallback config, no temperature param", "gemini", "gemini-3-flash-preview", null, AGENT,

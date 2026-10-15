@@ -749,9 +749,9 @@
     },
     "effort": {
       "title": "Esforço de raciocínio",
-      "description": "Quanto o modelo pensa antes de responder. Auto usa o padrão do provedor.",
+      "description": "Quanto o modelo pensa antes de responder.",
       "descriptionWithDefault": "Quanto o modelo pensa antes de responder. Auto usa o padrão do provedor ({{value}}).",
-      "auto": "Auto (padrão do provedor)",
+      "auto": "Auto",
       "options": {
         "none": "Nenhum",
         "minimal": "Mínimo",

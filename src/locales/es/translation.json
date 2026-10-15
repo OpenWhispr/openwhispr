@@ -770,9 +770,9 @@
     },
     "effort": {
       "title": "Esfuerzo de razonamiento",
-      "description": "Cuánto piensa el modelo antes de responder. Auto usa el valor predeterminado del proveedor.",
+      "description": "Cuánto piensa el modelo antes de responder.",
       "descriptionWithDefault": "Cuánto piensa el modelo antes de responder. Auto usa el valor predeterminado del proveedor ({{value}}).",
-      "auto": "Auto (predeterminado del proveedor)",
+      "auto": "Auto",
       "options": {
         "none": "Ninguno",
         "minimal": "Mínimo",

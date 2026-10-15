@@ -31,13 +31,8 @@ import {
   getLocalModel,
   enterpriseProviderName,
 } from "../../models/ModelRegistry";
-import {
-  AUTO_REASONING_EFFORT,
-  getReasoningEffortCapability,
-  hasSelectableReasoningEffort,
-  isReasoningEffortSupported,
-} from "../../models/reasoningEffort";
-import { isThinkingSuppressed } from "../../services/ai/thinkingSuppression";
+import { AUTO_REASONING_EFFORT, isReasoningEffortSupported } from "../../models/reasoningEffort";
+import { selectableReasoningEffort } from "../../services/ai/chatRequestBody";
 import { useManagedScopeResolution } from "../../stores/enterpriseIdentityStore";
 import { requestSignIn } from "../../utils/requestSignIn";
 import TestConnectionButton from "../TestConnectionButton";
@@ -194,11 +189,9 @@ export default function InferenceConfigEditor({
     (effectiveMode === "local" && !!getLocalModel(config.model)?.supportsThinking);
 
   const effortCapability =
-    effectiveMode === "providers" && config.model
-      ? getReasoningEffortCapability(config.provider, config.model)
+    effectiveMode === "providers"
+      ? selectableReasoningEffort(config.provider, config.model, config)
       : null;
-  const showEffortPicker =
-    hasSelectableReasoningEffort(effortCapability) && !isThinkingSuppressed(config.model, config);
 
   if (managed.kind === "error") {
     return (
@@ -326,7 +319,7 @@ export default function InferenceConfigEditor({
         </div>
       )}
 
-      {showEffortPicker && (
+      {effortCapability && (
         <div className="flex items-start justify-between gap-3 pt-1">
           <div className="flex-1 min-w-0">
             <h4 className="text-sm font-medium text-foreground">{t("reasoning.effort.title")}</h4>

@@ -770,9 +770,9 @@
     },
     "effort": {
       "title": "推理强度",
-      "description": "模型在回答前思考的程度。“自动”使用服务商的默认设置。",
+      "description": "模型在回答前思考的程度。",
       "descriptionWithDefault": "模型在回答前思考的程度。“自动”使用服务商的默认设置（{{value}}）。",
-      "auto": "自动（服务商默认）",
+      "auto": "自动",
       "options": {
         "none": "无",
         "minimal": "极低",

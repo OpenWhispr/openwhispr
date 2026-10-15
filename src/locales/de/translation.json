@@ -770,9 +770,9 @@
     },
     "effort": {
       "title": "Denkaufwand",
-      "description": "Wie viel das Modell nachdenkt, bevor es antwortet. Auto verwendet die Standardeinstellung des Anbieters.",
+      "description": "Wie viel das Modell nachdenkt, bevor es antwortet.",
       "descriptionWithDefault": "Wie viel das Modell nachdenkt, bevor es antwortet. Auto verwendet die Standardeinstellung des Anbieters ({{value}}).",
-      "auto": "Auto (Anbieterstandard)",
+      "auto": "Auto",
       "options": {
         "none": "Keiner",
         "minimal": "Minimal",

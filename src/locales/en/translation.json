@@ -770,9 +770,9 @@
     },
     "effort": {
       "title": "Reasoning effort",
-      "description": "How much the model thinks before it answers. Auto uses the provider's default.",
+      "description": "How much the model thinks before it answers.",
       "descriptionWithDefault": "How much the model thinks before it answers. Auto uses the provider's default ({{value}}).",
-      "auto": "Auto (provider default)",
+      "auto": "Auto",
       "options": {
         "none": "None",
         "minimal": "Minimal",
