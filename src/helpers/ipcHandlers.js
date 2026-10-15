@@ -12482,7 +12482,12 @@ class IPCHandlers {
       async (_event, noteId, speakerId, displayName, email, profileId) => {
         const embeddings = this.databaseManager.getNoteSpeakerEmbeddings(noteId);
         const noteSpeakerEmbedding = embeddings.find((e) => e.speaker_id === speakerId);
-        const liveSpeakerEmbedding = liveSpeakerIdentifier.getSpeakerEmbedding(speakerId);
+        // Live speaker ids restart with every meeting, so only the note being
+        // recorded may borrow the live voice.
+        const liveSpeakerEmbedding =
+          noteId === this._activeMeetingNoteId
+            ? liveSpeakerIdentifier.getSpeakerEmbedding(speakerId)
+            : null;
         const speakerEmbeddingBuffer =
           noteSpeakerEmbedding?.embedding ||
           (liveSpeakerEmbedding ? Buffer.from(liveSpeakerEmbedding.buffer) : null);
@@ -12899,13 +12904,17 @@ class IPCHandlers {
         // With no count, one remote voice holding nearly all the speech beside
         // short slivers is a one-on-one call: the slivers are the same voice. (An
         // upload that collapses like this loses its labels instead, since it
-        // expects several voices.) Without voices to merge, sherpa's split of one
-        // voice can't be told from several people, so the cap stays at one.
+        // expects several voices.) A cluster without a voice can't be told from
+        // sherpa's split of one voice, so only voiced clusters count, and with
+        // none the cap stays at one.
+        const voicedSpeakers = new Set(
+          diarizationSegments.map((s) => s.speaker).filter((speaker) => centroids.has(speaker))
+        );
         const cap =
           this._resolveSpeakerCap({ sessionConfig, noteId, diarizedSource }) ??
-          (centroids.size === 0 || isCollapsedDiarization(diarizationSegments)
+          (isCollapsedDiarization(diarizationSegments)
             ? 1
-            : MAX_SPEAKER_COUNT - 1);
+            : Math.min(Math.max(1, voicedSpeakers.size), MAX_SPEAKER_COUNT - 1));
         diarizationSegments = capSpeakerClustersByVoice(
           diarizationSegments,
           cap,

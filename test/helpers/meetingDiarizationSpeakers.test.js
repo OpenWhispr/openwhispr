@@ -216,6 +216,24 @@ test("when voices can't be read, a call with no count keeps one remote speaker",
   assert.equal(speakersOf(lines).length, 1);
 });
 
+// A cluster whose voice can't be read (only sub-1.5 s turns, or a failed
+// extraction) can't be told from a split of the one voice that was read.
+test("a cluster without a readable voice doesn't split a one-on-one call", async () => {
+  voices = new Map([["speaker_00", [1, 0]]]);
+  const output = [
+    ...turns(["speaker_00"], 30, 8),
+    ...turns(["speaker_01"], 10, 3).map((turn) => ({
+      ...turn,
+      start: turn.start + 10,
+      end: turn.end + 10,
+    })),
+  ];
+
+  const { lines } = await diarizeMeeting(output);
+
+  assert.deepEqual(speakersOf(lines), ["speaker_0"]);
+});
+
 // In person, the mic track carries the user, and short replies beside them are
 // someone else, not slivers of one voice.
 test("an in-person session keeps a brief second voice beside the user", async () => {
