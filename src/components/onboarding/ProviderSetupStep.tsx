@@ -9,12 +9,13 @@ import {
 } from "react";
 import { AudioLines, Check, CircleCheck, Download, MousePointer2 } from "../icons";
 import { useTranslation } from "react-i18next";
-import { FieldLabel, ProviderCheckField } from "./ProviderCheckField";
+import { FieldLabel, ProviderCheckField } from "../ui/ProviderCheckField";
+import { ConnectionCheckAnnouncer } from "../ui/ConnectionCheckAnnouncer";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
 import { ProviderIcon } from "../ui/ProviderIcon";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { useConnectionAutoCheck } from "../../hooks/useConnectionAutoCheck";
+import { isWindowSwitchBlur } from "../../hooks/useFocusHold";
 import { useModelDownload } from "../../hooks/useModelDownload";
 import type { ParakeetCheckResult } from "../../types/electron";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -522,16 +523,8 @@ export function ByokProviderStep({
   // Switching to another app blurs the field but leaves it focused in the page, and the
   // address there may still be half typed.
   const releaseEndpoint = (event: FocusEvent<HTMLInputElement>) => {
-    if (event.currentTarget.ownerDocument.activeElement !== event.currentTarget) {
-      setEndpointFocused(false);
-    }
+    if (!isWindowSwitchBlur(event)) setEndpointFocused(false);
   };
-  const announcement =
-    check.announcement === "connected"
-      ? t("onboarding.rehaul.provider.connected")
-      : check.announcement === "testing"
-        ? t("onboarding.rehaul.provider.testing")
-        : "";
 
   const commitAndProceed = () => {
     if (selfHosted) {
@@ -580,9 +573,6 @@ export function ByokProviderStep({
     onProceed();
   };
 
-  const inputClass =
-    "onboarding-provider-input h-9 rounded-xl! border px-3 text-xs shadow-none! focus:ring-2 focus:ring-[color-mix(in_srgb,var(--onboarding-accent)_15%,transparent)]";
-
   return (
     <section className={`mt-5 ${SETUP_CARD_CLASS}`}>
       <SetupStageStepper stepId={stepId} />
@@ -616,31 +606,23 @@ export function ByokProviderStep({
 
         {selfHosted ? (
           <>
-            <label className="block">
-              <FieldLabel>{t("onboarding.rehaul.provider.endpointUrl")}</FieldLabel>
-              <Input
-                dir="ltr"
-                value={draftBaseUrl}
-                onChange={(event) => setDraftBaseUrl(event.target.value)}
-                onFocus={() => setEndpointFocused(true)}
-                onBlur={releaseEndpoint}
-                placeholder={t("onboarding.rehaul.provider.endpointPlaceholder")}
-                className={inputClass}
-              />
-            </label>
-            <label className="block">
-              <FieldLabel>{t("onboarding.rehaul.provider.apiKey")}</FieldLabel>
-              <Input
-                dir="ltr"
-                type="password"
-                value={draftApiKey}
-                onChange={(event) => setDraftApiKey(event.target.value)}
-                placeholder={t("onboarding.rehaul.provider.optional")}
-                autoComplete="off"
-                spellCheck={false}
-                className={inputClass}
-              />
-            </label>
+            <ProviderCheckField
+              label={t("onboarding.rehaul.provider.endpointUrl")}
+              value={draftBaseUrl}
+              onChange={(event) => setDraftBaseUrl(event.target.value)}
+              onFocus={() => setEndpointFocused(true)}
+              onBlur={releaseEndpoint}
+              placeholder={t("onboarding.rehaul.provider.endpointPlaceholder")}
+            />
+            <ProviderCheckField
+              label={t("onboarding.rehaul.provider.apiKey")}
+              type="password"
+              value={draftApiKey}
+              onChange={(event) => setDraftApiKey(event.target.value)}
+              placeholder={t("onboarding.rehaul.provider.optional")}
+              autoComplete="off"
+              spellCheck={false}
+            />
             <ProviderCheckField
               label={t("onboarding.rehaul.provider.modelId")}
               check={check}
@@ -648,7 +630,6 @@ export function ByokProviderStep({
               value={draftCustomModel}
               onChange={(event) => setDraftCustomModel(event.target.value)}
               placeholder={t("onboarding.rehaul.provider.modelIdPlaceholder")}
-              className={inputClass}
             />
           </>
         ) : (
@@ -720,16 +701,12 @@ export function ByokProviderStep({
 
             {isCortiTranscription ? (
               <div className="grid grid-cols-2 gap-2">
-                <label className="block">
-                  <FieldLabel>{t("onboarding.rehaul.provider.clientId")}</FieldLabel>
-                  <Input
-                    dir="ltr"
-                    value={draftCortiClientId}
-                    onChange={(event) => setDraftCortiClientId(event.target.value)}
-                    className={inputClass}
-                    autoComplete="off"
-                  />
-                </label>
+                <ProviderCheckField
+                  label={t("onboarding.rehaul.provider.clientId")}
+                  value={draftCortiClientId}
+                  onChange={(event) => setDraftCortiClientId(event.target.value)}
+                  autoComplete="off"
+                />
                 <ProviderCheckField
                   label={t("onboarding.rehaul.provider.clientSecret")}
                   check={check}
@@ -737,7 +714,6 @@ export function ByokProviderStep({
                   type="password"
                   value={draftCortiClientSecret}
                   onChange={(event) => setDraftCortiClientSecret(event.target.value)}
-                  className={inputClass}
                   autoComplete="off"
                 />
               </div>
@@ -753,7 +729,6 @@ export function ByokProviderStep({
                 disabled={!selectedProvider}
                 autoComplete="off"
                 spellCheck={false}
-                className={inputClass}
               />
             )}
           </>
@@ -768,10 +743,7 @@ export function ByokProviderStep({
         </StepPrimaryAction>
       </div>
 
-      {/* Present from the start: a region that appears together with its text is missed. */}
-      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-        {announcement}
-      </div>
+      <ConnectionCheckAnnouncer announcement={check.announcement} />
     </section>
   );
 }

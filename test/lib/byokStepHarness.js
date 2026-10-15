@@ -155,12 +155,15 @@ async function mountByokStep(
     },
     checkField,
     retryCheck: (label) => act(() => checkField(label).props.check.retry()),
-    liveRegion: () => find((node) => node.props?.role === "status")[0],
+    liveRegion: () => {
+      const [announcer] = find((node) => node.type?.name === "ConnectionCheckAnnouncer");
+      return announcer.type(announcer.props);
+    },
     focusEndpoint: () => act(() => endpoint().props.onFocus()),
     // windowSwitch: the window lost focus but the field is still the page's focus.
     blurEndpoint: ({ windowSwitch = false } = {}) =>
       act(() => {
-        const field = {};
+        const field = { contains: (node) => node === field };
         field.ownerDocument = { activeElement: windowSwitch ? field : null };
         endpoint().props.onBlur({ currentTarget: field });
       }),

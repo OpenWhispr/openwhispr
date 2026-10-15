@@ -116,6 +116,7 @@ import {
 } from "./ui/SettingsSection";
 import type { InferenceModeOption } from "./ui/SettingsSection";
 import { useSettingsLayout } from "./ui/useSettingsLayout";
+import { TabPanel } from "./ui/TabPanel";
 import { useUsage } from "../hooks/useUsage";
 import { cn } from "./lib/utils";
 import { GRADIENT_CIRCLE } from "./ui/gradientCircle";
@@ -923,10 +924,6 @@ function VADLabelWithInfo({ label, description }: { label: string; description: 
       </Popover>
     </div>
   );
-}
-
-function TabPanel({ active, children }: { active: boolean; children: React.ReactNode }) {
-  return <div className={active ? undefined : "hidden"}>{children}</div>;
 }
 
 // "Gabriel Stein" → "GS"; single names fall back to their first letter.

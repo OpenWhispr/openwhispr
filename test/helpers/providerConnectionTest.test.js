@@ -607,3 +607,171 @@ test("a custom server can still redirect within itself", async (t) => {
   const config = { provider: "custom", baseUrl: `${base}/v1`, model: "local-model" };
   assert.deepEqual(await testProviderConnection(config), { success: true });
 });
+
+test("OpenRouter is checked at its key route, which a made-up key cannot pass", async () => {
+  const request = resolveProviderRequest({ provider: "openrouter", apiKey: "sk-or-made-up" });
+  assert.equal(request.endpoint, "https://openrouter.ai/api/v1/key");
+  assert.equal(request.headers.Authorization, "Bearer sk-or-made-up");
+  assert.equal(request.redirect, "error");
+  for (const status of [401, 403]) {
+    const fetchImpl = async () => jsonResponse(status, { error: { message: "User not found." } });
+    const config = { provider: "openrouter", apiKey: "sk-or-made-up" };
+    const result = await testProviderConnection(config, fetchImpl);
+    assert.equal(result.errorCode, "credentialsRejected", String(status));
+  }
+});
+
+test("an OpenRouter management key is refused, since it cannot run requests", async () => {
+  for (const flag of ["is_management_key", "is_provisioning_key"]) {
+    const fetchImpl = async () => jsonResponse(200, { data: { label: "admin", [flag]: true } });
+    const config = { provider: "openrouter", apiKey: "k" };
+    const result = await testProviderConnection(config, fetchImpl);
+    assert.equal(result.errorCode, "credentialsRejected", flag);
+  }
+});
+
+const ORDINARY_KEY = { data: { label: "laptop", is_free_tier: true, limit_remaining: null } };
+
+test("any other OpenRouter key passes, with no model check", async () => {
+  const { calls, fetchImpl } = recordingFetch(() => jsonResponse(200, ORDINARY_KEY));
+  const config = { provider: "openrouter", apiKey: "sk-or-key", model: "anthropic/claude-test" };
+  assert.deepEqual(await testProviderConnection(config, fetchImpl), { success: true });
+  assert.deepEqual(
+    calls.map((call) => call.url),
+    ["https://openrouter.ai/api/v1/key"]
+  );
+  const unreadable = async () => jsonResponse(200, "not json");
+  assert.deepEqual(await testProviderConnection(config, unreadable), { success: true });
+  const outage = await testProviderConnection(config, async () => jsonResponse(503));
+  assert.equal(outage.errorCode, "providerStatus");
+});
+
+// The key route answers 200 with the key's description. Any other 2xx carries no key to
+// read, so an empty 204 must not pass as an ordinary key.
+test("only a 200 from the OpenRouter key route can pass", async () => {
+  const config = { provider: "openrouter", apiKey: "sk-or-key" };
+  for (const status of [204, 202]) {
+    const result = await testProviderConnection(config, async () => jsonResponse(status));
+    assert.deepEqual(
+      result,
+      {
+        success: false,
+        errorCode: "providerStatus",
+        error: `The provider returned status ${status}.`,
+        status,
+      },
+      String(status)
+    );
+  }
+});
+
+// A stand-in speech server with no model list. Its transcription address answers `status`,
+// and every request it gets is recorded with its body.
+async function speechServer(t, status) {
+  const received = [];
+  const base = await listen(t, (request, response) => {
+    let body = "";
+    request.on("data", (chunk) => (body += chunk));
+    request.on("end", () => {
+      received.push({ method: request.method, url: request.url, headers: request.headers, body });
+      response.writeHead(request.method === "POST" ? status : 404).end("{}");
+    });
+  });
+  return { base, received };
+}
+
+const speech = (baseUrl, extra = {}) => ({
+  scope: "transcription",
+  provider: "custom",
+  baseUrl,
+  model: "whisper-large-v3",
+  ...extra,
+});
+
+test("a speech server with no model list is checked at its transcription address", async (t) => {
+  for (const status of [400, 422]) {
+    const { base, received } = await speechServer(t, status);
+    const result = await testProviderConnection(speech(base, { apiKey: "sk-local" }));
+    assert.deepEqual(result, { success: true }, String(status));
+    assert.deepEqual(
+      received.map((entry) => `${entry.method} ${entry.url}`),
+      ["GET /models", "GET /v1/models", "POST /audio/transcriptions"]
+    );
+    const post = received[2];
+    assert.match(post.headers["content-type"], /^multipart\/form-data; boundary=/);
+    assert.equal(post.headers.authorization, "Bearer sk-local");
+    assert.match(post.body, /name="model"\r\n\r\nwhisper-large-v3\r\n/);
+    assert.doesNotMatch(post.body, /filename=/, "no audio is sent");
+  }
+});
+
+test("the transcription address is the one the app sends audio to", async (t) => {
+  const { base, received } = await speechServer(t, 422);
+  assert.deepEqual(await testProviderConnection(speech(`${base}/v1`)), { success: true });
+  assert.deepEqual(
+    received.map((entry) => `${entry.method} ${entry.url}`),
+    ["GET /v1/models", "POST /v1/audio/transcriptions"]
+  );
+  assert.equal(received[1].headers.authorization, undefined, "no key, no header");
+
+  // The full address with a trailing slash: the slash hides the suffix from one pass of
+  // normalizeBaseUrl, and the app's second pass is what strips it.
+  const typedInFull = await speechServer(t, 422);
+  const fullAddress = `${typedInFull.base}/v1/audio/transcriptions/`;
+  assert.deepEqual(await testProviderConnection(speech(fullAddress)), { success: true });
+  assert.deepEqual(
+    typedInFull.received
+      .filter((entry) => entry.method === "POST")
+      .map((entry) => `${entry.method} ${entry.url}`),
+    ["POST /v1/audio/transcriptions"]
+  );
+});
+
+test("the transcription address's answers keep their meaning", async (t) => {
+  const nothingHere = "Nothing takes transcriptions at this address.";
+  for (const [status, errorCode, error] of [
+    [401, "credentialsRejected", "The provider rejected these credentials."],
+    [403, "credentialsRejected", "The provider rejected these credentials."],
+    [404, "transcriptionEndpointNotFound", nothingHere],
+    [405, "transcriptionEndpointNotFound", nothingHere],
+    [500, "providerStatus", "The provider returned status 500."],
+    [200, "providerStatus", "The provider returned status 200."],
+  ]) {
+    const { base } = await speechServer(t, status);
+    const result = await testProviderConnection(speech(base));
+    assert.equal(result.errorCode, errorCode, String(status));
+    assert.equal(result.status, status);
+    assert.equal(result.error, error, String(status));
+  }
+  const flaky = recordingFetch((url, init) => {
+    if (init.method === "POST") throw new TypeError("fetch failed");
+    return jsonResponse(404);
+  });
+  const offline = await testProviderConnection(speech("http://127.0.0.1:9"), flaky.fetchImpl);
+  assert.equal(offline.errorCode, "network");
+  assert.deepEqual([flaky.calls[2].init.method, flaky.calls[2].init.redirect], ["POST", "follow"]);
+});
+
+test("only a speech check with every model list missing asks that address", async (t) => {
+  const { base, received } = await speechServer(t, 422);
+  // A language-model server keeps today's answer.
+  const reasoning = await testProviderConnection({ ...speech(base), scope: "reasoning" });
+  assert.equal(reasoning.errorCode, "endpointNotFound");
+  assert.equal(
+    received.some((entry) => entry.method === "POST"),
+    false
+  );
+
+  const keyed = recordingFetch((url) => jsonResponse(url.endsWith("/v1/models") ? 401 : 404));
+  const config = speech("http://127.0.0.1:9", { apiKey: "k" });
+  const rejected = await testProviderConnection(config, keyed.fetchImpl);
+  assert.equal(rejected.errorCode, "credentialsRejected");
+  assert.equal(keyed.calls.length, 2, "a list that answered anything but 404 already said why");
+
+  const down = recordingFetch(() => {
+    throw new TypeError("fetch failed");
+  });
+  const unreachable = await testProviderConnection(speech("http://127.0.0.1:9"), down.fetchImpl);
+  assert.equal(unreachable.errorCode, "network");
+  assert.equal(down.calls.length, 2);
+});

@@ -2777,6 +2777,7 @@
           "apiKeyRequired": "أضف مفتاح API قبل الاختبار.",
           "credentialsRejected": "رفض المزود بيانات الاعتماد هذه.",
           "endpointNotFound": "لا توفر نقطة النهاية قائمة نماذج متوافقة مع OpenAI.",
+          "transcriptionEndpointNotFound": "لا يستقبل هذا العنوان طلبات التفريغ الصوتي.",
           "modelNotFound": "النموذج المحدد غير متوفر من هذا المزود.",
           "providerStatus": "أعاد المزود رمز الحالة {{status}}.",
           "timeout": "انتهت مهلة اختبار الاتصال.",
