@@ -1976,10 +1976,15 @@ test("combined cleanup is reused once, while changed options or failed cleanup u
       calls ? "please send invoice 128。" : "Please send invoice 128."
     );
     assert.equal(usage.length, 1);
-    assert.equal(usage[0].text, "please send invoice 128");
+    // Raw words are billed only when the combined cleanup is the pasted text.
+    assert.equal(usage[0].text, calls ? published[0].text : "please send invoice 128");
     assert.equal(usage[0].sendLogs, calls === 0);
     assert.equal(usage[0].sttProcessingMs, 103);
-    assert.equal(usage[0].orukeetCleanup.processingMs, 220);
+    // A completed Gemma cleanup that wasn't used is never reported as this request's.
+    const reported = cleanupStatus === "fallback" || calls === 0;
+    assert.equal(usage[0].orukeetCleanup?.processingMs, reported ? 220 : undefined);
+    if (calls)
+      assert.equal(reasonCalls[0][1].orukeetCleanup?.status, reported ? "fallback" : undefined);
   }
 });
 
@@ -1991,11 +1996,13 @@ test("combined text never replaces an unsupported-language fallback", async (t) 
       cleanupStatus: "complete",
       cleanupText: "Wrong cleanup.",
       cleanupOptions: {},
+      cleanup: { status: "complete", model: "gemma-4-12b" },
     },
     upload: async () => ({ text: "明日の会議", rawText: "明日の会議" }),
     overrides: { getPipelineCleanupOptions: () => ({}) },
   });
   assert.equal(uploads.length, 1);
+  assert.equal(uploads[0].orukeetCleanup, undefined);
   assert.equal(reasonCalls.length, 0);
   assert.equal(published[0].text, "明日の会議");
 });

@@ -5687,6 +5687,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       : undefined;
     const orukeetCleanup = orukeetFinal?.cleanup;
     const orukeetTelemetry = { orukeetLanguageRouting, orukeetCleanup };
+    // A request whose text isn't the combined cleanup (a language fallback, a
+    // cleanup redone through /api/reason, an agent command) must not report a
+    // completed Gemma cleanup as its own.
+    const uncombinedTelemetry = {
+      orukeetLanguageRouting,
+      orukeetCleanup: orukeetCleanup?.status === "complete" ? undefined : orukeetCleanup,
+    };
     if (isOrukeetStream && languageRouting.comparison) {
       logger.info(
         "Orukeet language routing comparison",
@@ -5743,7 +5750,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                 ? "language_supported_score_low"
                 : "language_detected_unsupported",
             detectedLanguageFields,
-            ...orukeetTelemetry,
+            ...uncombinedTelemetry,
           },
           wasCancelled
         );
@@ -5765,6 +5772,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     let usedCloudReasoning = false;
+    let combinedCleanup = false;
     // The Cloud batch path already ran its own cleanup, agent or translation.
     if (finalText && !usedBatchFallback) {
       const reasoningStart = performance.now();
@@ -5805,13 +5813,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           );
         } else if (route.kind === "cleanup" && cleanupCloudMode === "openwhispr") {
           const customPrompt = this.getCustomPrompt();
-          const combined =
+          combinedCleanup =
             orukeetFinal?.cleanupStatus === "complete" &&
             JSON.stringify(orukeetFinal.cleanupOptions) ===
               JSON.stringify(this._activePipelineOptions) &&
             typeof orukeetFinal.cleanupText === "string" &&
             hasTextContent(orukeetFinal.cleanupText);
-          const reasonResult = combined
+          const reasonResult = combinedCleanup
             ? { success: true, text: orukeetFinal.cleanupText, model: orukeetCleanup?.model }
             : await withSessionRefresh(async () => {
                 const res = await window.electronAPI.cloudReason(finalText, {
@@ -5828,7 +5836,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                   sttWordCount: streamingSttWordCount,
                   sttLanguage: streamingSttLanguage,
                   ...detectedLanguageFields,
-                  ...orukeetTelemetry,
+                  ...uncombinedTelemetry,
                   audioDurationMs: durationSeconds ? Math.round(durationSeconds * 1000) : undefined,
                   audioSizeBytes: streamingAudioBytesSent || undefined,
                   audioFormat: "linear16",
@@ -5841,7 +5849,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                 return res;
               });
 
-          usedCloudReasoning = !combined;
+          usedCloudReasoning = !combinedCleanup;
           if (reasonResult.success && hasTextContent(reasonResult.text)) {
             if (!customPrompt) assertValidCleanupOutput(finalText, reasonResult.text);
             finalText = reasonResult.text;
@@ -5888,7 +5896,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                       sttWordCount: streamingSttWordCount,
                       sttLanguage: streamingSttLanguage,
                       ...detectedLanguageFields,
-                      ...orukeetTelemetry,
+                      ...uncombinedTelemetry,
                       audioDurationMs: durationSeconds
                         ? Math.round(durationSeconds * 1000)
                         : undefined,
@@ -6062,7 +6070,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           try {
             await withSessionRefresh(async () => {
               const res = await window.electronAPI.cloudStreamingUsage(
-                orukeetFinal?.cleanupStatus ? rawStreamingText : finalText,
+                combinedCleanup ? rawStreamingText : finalText,
                 durationSeconds ?? 0,
                 {
                   sendLogs: !usedCloudReasoning,
@@ -6071,7 +6079,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                   sttProcessingMs: streamingSttProcessingMs,
                   sttLanguage: streamingSttLanguage,
                   ...detectedLanguageFields,
-                  ...orukeetTelemetry,
+                  ...(combinedCleanup ? orukeetTelemetry : uncombinedTelemetry),
                   audioSizeBytes: streamingAudioBytesSent || undefined,
                   audioFormat: "linear16",
                   clientTotalMs,

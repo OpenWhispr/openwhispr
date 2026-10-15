@@ -78,10 +78,11 @@ Completed GPU cleanup includes a signed, account-bound token-usage receipt.
 The main process relays it to `/api/stt/orukeet/pipeline-usage`, making at most three attempts (two retries) for transient
 failures without holding up paste. The backend verifies the signature
 and deduplicates its UUID. This is token telemetry, not an extra word charge or a
-durable offline billing channel; pipeline raw ASR words go through the existing
-idempotent `/api/streaming-usage` request.
+durable offline billing channel; when the combined cleanup is the pasted text,
+its raw ASR words go through the existing idempotent `/api/streaming-usage`
+request. A dictation cleaned any other way meters its processed text.
 
-Ordinary non-pipeline streaming continues metering its processed text. Pipeline logs carry `orukeetCleanup` status, model, token counts and timings, with ASR latency measured separately when the raw transcript arrives.
+Ordinary non-pipeline streaming continues metering its processed text. Pipeline logs carry `orukeetCleanup` status, model, token counts and timings, with ASR latency measured separately when the raw transcript arrives. A request whose text isn't the combined cleanup (a language fallback, a cleanup redone through `/api/reason`, an agent command) omits a completed status, so Gemma is never credited with cleanup it didn't deliver.
 
 The final deadline allows the ASR budget plus 15 seconds for cleanup/queueing and a 2-second margin, capped at 30 seconds. A pipeline-only policy refusal or invalid cleanup options retries the authorized plain-ASR session; transcription policy and quota refusals still stop the request. When only the Gemma side fails, the backend answers the pipeline request with a plain `orukeet.pcm.v1` session itself, and the desktop connects to it as ordinary streaming with the normal cleanup route, reporting the cleanup as `fallback` so `/api/reason` doesn't retry Gemma. Warmup may send the eligible cleanup prompt and dictionary before a recording begins; this enables prompt-cache reuse and respects the same local policy guard as recording.
 
