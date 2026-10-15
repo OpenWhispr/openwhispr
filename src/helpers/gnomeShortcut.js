@@ -2,6 +2,8 @@ const { execFileSync } = require("child_process");
 const debugLogger = require("./debugLogger");
 const GnomeGlobalShortcutsPortal = require("./gnomeGlobalShortcutsPortal");
 
+const { REGISTRATION } = GnomeGlobalShortcutsPortal;
+
 const DBUS_SERVICE_NAME = "com.openwhispr.App";
 const DBUS_OBJECT_PATH = "/com/openwhispr/App";
 const DBUS_INTERFACE = "com.openwhispr.App";
@@ -144,7 +146,6 @@ class GnomeShortcutManager {
       shortcutId: "cancel",
       descriptionKey: "app.buttons.cancelRecording",
     });
-    this.cancelShortcutAttempt = 0;
     this.cancelShortcutUnavailable = false;
     // Track which slots have been registered in gsettings
     this.registeredSlots = new Set();
@@ -284,15 +285,15 @@ class GnomeShortcutManager {
     if (!preferredTrigger) return false;
 
     await this.unregisterKeybinding("dictation");
-    const registered = await this.globalShortcutsPortal.registerKeybinding(
-      preferredTrigger,
-      callback
-    );
-    if (!registered) {
+    const outcome = await this.globalShortcutsPortal.registerKeybinding(preferredTrigger, callback);
+    if (outcome === REGISTRATION.BOUND) return true;
+    // Whatever superseded this registration owns the binding now; a tap
+    // fallback would leave this hotkey toggling dictation beside it.
+    if (outcome !== REGISTRATION.SUPERSEDED) {
       const tapShortcut = GnomeShortcutManager.convertToGnomeFormat(hotkey);
       await this.registerKeybinding(tapShortcut, "dictation");
     }
-    return registered;
+    return false;
   }
 
   async unregisterPushToTalk() {
@@ -312,23 +313,21 @@ class GnomeShortcutManager {
     const preferredTrigger = GnomeShortcutManager.convertToPortalFormat(hotkey);
     if (!preferredTrigger) return false;
 
-    const attempt = ++this.cancelShortcutAttempt;
-    const registered = await this.cancelShortcutsPortal.registerKeybinding(
+    const outcome = await this.cancelShortcutsPortal.registerKeybinding(
       preferredTrigger,
       (_event, phase) => {
         if (phase === "down") onCancel();
       }
     );
     // A declined approval dialog would otherwise come back with every dictation.
-    if (!registered && attempt === this.cancelShortcutAttempt) {
+    if (outcome === REGISTRATION.DECLINED || outcome === REGISTRATION.FAILED) {
       this.cancelShortcutUnavailable = true;
       debugLogger.log("[GnomeShortcut] Cancel shortcut unavailable until restart");
     }
-    return registered;
+    return outcome === REGISTRATION.BOUND;
   }
 
   async unregisterCancelShortcut() {
-    this.cancelShortcutAttempt += 1;
     await this.cancelShortcutsPortal.unregisterKeybinding();
   }
 

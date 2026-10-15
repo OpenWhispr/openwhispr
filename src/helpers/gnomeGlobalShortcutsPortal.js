@@ -11,6 +11,16 @@ const REGISTRY_INTERFACE = "org.freedesktop.host.portal.Registry";
 const APP_ID = "open-whispr";
 const DBUS_CALL_TIMEOUT_MS = 5000;
 const PORTAL_REQUEST_TIMEOUT_MS = 120000;
+// The Request.Response code for a dialog the user dismissed or denied.
+const USER_CANCELLED_RESPONSE = 1;
+
+const REGISTRATION = Object.freeze({
+  BOUND: "bound",
+  DECLINED: "declined",
+  // An unregister, or a newer registration, took over before this one finished.
+  SUPERSEDED: "superseded",
+  FAILED: "failed",
+});
 
 let dbus = null;
 
@@ -45,6 +55,7 @@ class GnomeGlobalShortcutsPortal {
     requestTimeoutMs = PORTAL_REQUEST_TIMEOUT_MS,
   } = {}) {
     this.bus = null;
+    this.connecting = null;
     this.sessionHandle = null;
     this.callback = null;
     this.available = false;
@@ -59,7 +70,16 @@ class GnomeGlobalShortcutsPortal {
     this.requestTimeoutMs = requestTimeoutMs;
   }
 
-  async init() {
+  // One connection attempt at a time: a caller arriving mid-connect would
+  // otherwise find the bus half open and report the portal unavailable.
+  init() {
+    this.connecting ??= this._connect().finally(() => {
+      this.connecting = null;
+    });
+    return this.connecting;
+  }
+
+  async _connect() {
     if (this.bus) return this.available;
 
     const dbusModule = getDBus();
@@ -110,7 +130,9 @@ class GnomeGlobalShortcutsPortal {
     const unregistering = this.unregisterKeybinding();
     const generation = this.generation;
     await unregistering;
-    if (!(await this.init()) || generation !== this.generation) return false;
+    if (generation !== this.generation) return REGISTRATION.SUPERSEDED;
+    if (!(await this.init())) return REGISTRATION.FAILED;
+    if (generation !== this.generation) return REGISTRATION.SUPERSEDED;
     this.callback = callback;
 
     try {
@@ -131,11 +153,13 @@ class GnomeGlobalShortcutsPortal {
       if (!sessionHandle) throw new Error("Portal did not return a session handle");
       if (generation !== this.generation) {
         await this._closeSession(sessionHandle);
-        return false;
+        return REGISTRATION.SUPERSEDED;
       }
       this.sessionHandle = sessionHandle;
 
-      await this._listenForShortcutEvents();
+      await this._listenForShortcutEvents(generation);
+      // The unregister that superseded this registration already closed its session.
+      if (generation !== this.generation) return REGISTRATION.SUPERSEDED;
       const bindRequestToken = this._newToken();
       const result = await this._request(
         "BindShortcuts",
@@ -156,22 +180,24 @@ class GnomeGlobalShortcutsPortal {
         ],
         bindRequestToken
       );
-      // The unregister that superseded this registration already closed its session.
-      if (generation !== this.generation) return false;
+      if (generation !== this.generation) return REGISTRATION.SUPERSEDED;
       const shortcuts = readDict(result).get("shortcuts") || [];
       if (!shortcuts.some(([id]) => id === this.shortcutId)) {
         throw new Error(`Portal did not bind the ${this.shortcutId} shortcut`);
       }
 
       debugLogger.log(`[GnomeGlobalShortcutsPortal] ${this.shortcutId} shortcut registered`);
-      return true;
+      return REGISTRATION.BOUND;
     } catch (err) {
       debugLogger.log(
         `[GnomeGlobalShortcutsPortal] Failed to register ${this.shortcutId} shortcut:`,
         err.message
       );
-      if (generation === this.generation) await this.unregisterKeybinding();
-      return false;
+      if (generation !== this.generation) return REGISTRATION.SUPERSEDED;
+      await this.unregisterKeybinding();
+      return err.portalResponse === USER_CANCELLED_RESPONSE
+        ? REGISTRATION.DECLINED
+        : REGISTRATION.FAILED;
     }
   }
 
@@ -207,7 +233,7 @@ class GnomeGlobalShortcutsPortal {
     bus?.connection.end();
   }
 
-  async _listenForShortcutEvents() {
+  async _listenForShortcutEvents(generation) {
     const bus = this.bus;
     const activationSignal = this.bus.mangle(PORTAL_PATH, GLOBAL_SHORTCUTS_INTERFACE, "Activated");
     const deactivationSignal = this.bus.mangle(
@@ -233,7 +259,8 @@ class GnomeGlobalShortcutsPortal {
         this._addMatch(this._shortcutMatch("Deactivated")),
       ]);
     } catch (err) {
-      this._removeShortcutListeners();
+      // Once superseded, these listeners are gone and any left belong to the newer registration.
+      if (generation === this.generation) this._removeShortcutListeners();
       throw err;
     }
   }
@@ -283,8 +310,13 @@ class GnomeGlobalShortcutsPortal {
         else resolve(result);
       };
       const onResponse = ([response, results]) => {
-        if (response === 0) finish(null, results);
-        else finish(new Error(`Portal request was rejected (${response})`));
+        if (response === 0) {
+          finish(null, results);
+          return;
+        }
+        const err = new Error(`Portal request was rejected (${response})`);
+        err.portalResponse = response;
+        finish(err);
       };
       bus.signals.once(signal, onResponse);
       timeoutId = setTimeout(
@@ -359,5 +391,7 @@ class GnomeGlobalShortcutsPortal {
     return `type='signal',sender='${PORTAL_SERVICE}',interface='${GLOBAL_SHORTCUTS_INTERFACE}',member='${member}'`;
   }
 }
+
+GnomeGlobalShortcutsPortal.REGISTRATION = REGISTRATION;
 
 module.exports = GnomeGlobalShortcutsPortal;

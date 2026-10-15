@@ -26,6 +26,7 @@ require.cache[require.resolve("electron")] = {
 
 const GnomeShortcutManager = require("../../src/helpers/gnomeShortcut");
 const HotkeyManager = require("../../src/helpers/hotkeyManager.js");
+const { REGISTRATION } = require("../../src/helpers/gnomeGlobalShortcutsPortal");
 
 const noop = () => {};
 
@@ -66,7 +67,7 @@ test(
     const { manager, triggers } = gnomeManagerWithPortal(async (_trigger, callback) => {
       callback(undefined, "down");
       callback(undefined, "up");
-      return true;
+      return REGISTRATION.BOUND;
     });
     let cancels = 0;
 
@@ -79,7 +80,7 @@ test(
 test(
   "a failed cancel binding is not retried until restart",
   withSessionType("wayland", async () => {
-    const { manager, triggers } = gnomeManagerWithPortal(async () => false);
+    const { manager, triggers } = gnomeManagerWithPortal(async () => REGISTRATION.FAILED);
 
     assert.equal(await manager.registerCancelShortcut("Escape", noop), false);
     assert.equal(await manager.registerCancelShortcut("Escape", noop), false);
@@ -96,12 +97,12 @@ test(
         ? new Promise((resolve) => {
             finishFirst = resolve;
           })
-        : Promise.resolve(true)
+        : Promise.resolve(REGISTRATION.BOUND)
     );
 
     const first = manager.registerCancelShortcut("Escape", noop);
     await manager.unregisterCancelShortcut();
-    finishFirst(false);
+    finishFirst(REGISTRATION.SUPERSEDED);
     assert.equal(await first, false);
 
     assert.equal(await manager.registerCancelShortcut("Escape", noop), true);
@@ -112,12 +113,14 @@ test(
 test(
   "the GNOME cancel shortcut is never bound on X11 or without the portal",
   withSessionType("x11", async () => {
-    const onX11 = gnomeManagerWithPortal(async () => true);
+    const onX11 = gnomeManagerWithPortal(async () => REGISTRATION.BOUND);
     assert.equal(await onX11.manager.registerCancelShortcut("Escape", noop), false);
     assert.deepEqual(onX11.triggers, []);
 
     process.env.XDG_SESSION_TYPE = "wayland";
-    const noPortal = gnomeManagerWithPortal(async () => true, { portalAvailable: false });
+    const noPortal = gnomeManagerWithPortal(async () => REGISTRATION.BOUND, {
+      portalAvailable: false,
+    });
     assert.equal(await noPortal.manager.registerCancelShortcut("Escape", noop), false);
     assert.deepEqual(noPortal.triggers, []);
   })
@@ -133,6 +136,20 @@ test("the GNOME cancel portal binds its own shortcut and closes with the manager
   manager.cancelShortcutsPortal.close = async () => closed.push("cancel");
   await manager.close();
   assert.deepEqual(closed, ["dictation", "cancel"]);
+});
+
+test("a superseded Hold binding leaves no tap fallback behind", async () => {
+  const manager = new GnomeShortcutManager();
+  const tapBindings = [];
+  manager.unregisterKeybinding = async () => true;
+  manager.registerKeybinding = async (shortcut) => {
+    tapBindings.push(shortcut);
+    return true;
+  };
+  manager.globalShortcutsPortal.registerKeybinding = async () => REGISTRATION.SUPERSEDED;
+
+  assert.equal(await manager.registerPushToTalk("Alt+R", noop), false);
+  assert.deepEqual(tapBindings, []);
 });
 
 function hotkeyManagerOnGnome(activationMode) {
@@ -172,4 +189,12 @@ test("in Hold mode on GNOME, cancel stays on the X11 grab alone", async () => {
   assert.ok(registered.has("Escape"));
   assert.deepEqual(calls, []);
   manager.unregisterSlot("cancel");
+});
+
+test("cancel skips the portal when its X11 grab fails, so nothing is left to release", async () => {
+  const { manager, calls } = hotkeyManagerOnGnome("tap");
+  registered.set("Escape", noop);
+
+  assert.equal((await manager.registerSlot("cancel", "Escape", noop)).success, false);
+  assert.deepEqual(calls, []);
 });
