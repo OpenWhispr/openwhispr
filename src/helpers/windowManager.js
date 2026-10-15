@@ -1255,6 +1255,7 @@ class WindowManager {
     const success = await this.hotkeyManager.setActivationMode(nextMode);
     if (!success) return false;
     this._cachedActivationMode = nextMode;
+    if (nextMode === "tap") this.requestCancelShortcutApproval();
     return true;
   }
 
@@ -1740,6 +1741,7 @@ class WindowManager {
     this.hideDictationPanel();
     this._onboardingActive = false;
     if (!this._floatingIconAutoHide) this.showDictationPanel();
+    this.requestCancelShortcutApproval();
     return true;
   }
 
@@ -1816,6 +1818,27 @@ class WindowManager {
     if (win.isMinimized()) win.restore();
     if (activate || !win.isVisible()) win.show();
     win.focus();
+    // An opener that leaves the user in another app must not raise a dialog over it.
+    if (activate) this.requestCancelShortcutApproval();
+  }
+
+  // GNOME asks once before Escape can cancel from any app. Ask while the user is
+  // in the control panel, never during onboarding or mid-dictation, where the
+  // dialog would take focus from what they are dictating into.
+  requestCancelShortcutApproval() {
+    const win = this.controlPanelWindow;
+    if (
+      this._onboardingActive ||
+      this._dictationLifecycleState !== DICTATION_LIFECYCLE.IDLE ||
+      !win ||
+      win.isDestroyed() ||
+      !win.isVisible()
+    ) {
+      return;
+    }
+    this.hotkeyManager.requestGnomeCancelShortcutApproval().catch((err) => {
+      debugLogger.warn("[WindowManager] GNOME cancel shortcut approval failed:", err.message);
+    });
   }
 
   // Compact onboarding starts at smaller bounds, but both modes expose the
@@ -2182,11 +2205,12 @@ class WindowManager {
 
     this.mainWindow.on("move", () => this.positionAgentDictationPill());
 
-    // The renderer releases cancel when its recording ends; a dead one never
-    // will, which would leave Escape taken from every app.
-    this.mainWindow.webContents.on("render-process-gone", () => {
-      this.hotkeyManager.unregisterSlot("cancel");
-    });
+    // The renderer releases cancel when its recording ends; one that dies or
+    // reloads mid-recording never will, which would leave Escape taken from every
+    // app. Unlike did-start-navigation, did-navigate skips blocked navigations.
+    const releaseCancelHotkey = () => this.hotkeyManager.unregisterSlot("cancel");
+    this.mainWindow.webContents.on("render-process-gone", releaseCancelHotkey);
+    this.mainWindow.webContents.on("did-navigate", releaseCancelHotkey);
 
     this.mainWindow.on("closed", () => {
       this.dragManager.cleanup();

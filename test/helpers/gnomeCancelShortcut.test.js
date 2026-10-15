@@ -25,8 +25,8 @@ require.cache[require.resolve("electron")] = {
 };
 
 const GnomeShortcutManager = require("../../src/helpers/gnomeShortcut");
+const { deferred } = require("./harness/deferred");
 const HotkeyManager = require("../../src/helpers/hotkeyManager.js");
-const { REGISTRATION } = require("../../src/helpers/gnomeGlobalShortcutsPortal");
 
 const noop = () => {};
 
@@ -47,44 +47,140 @@ function withSessionType(type, fn) {
   };
 }
 
-function gnomeManagerWithPortal(registerKeybinding, { portalAvailable = true } = {}) {
+const { REGISTRATION } = require("../../src/helpers/gnomeGlobalShortcutsPortal");
+
+function approvalStore(state = null) {
+  return {
+    state,
+    read() {
+      return this.state;
+    },
+    write(next) {
+      this.state = next;
+    },
+  };
+}
+
+// `outcomes` answers each portal bind in turn, as a value or a function of the
+// bind's trigger and callback.
+function gnomeManagerWithPortal(
+  outcomes,
+  { approval = approvalStore("approved"), portalAvailable = true } = {}
+) {
   const manager = new GnomeShortcutManager();
-  const triggers = [];
+  const portal = { triggers: [], unregisters: 0 };
   manager.globalShortcutsPortal.isAvailable = () => portalAvailable;
+  manager.cancelShortcutApproval = approval;
   manager.cancelShortcutsPortal = {
     registerKeybinding(trigger, callback) {
-      triggers.push(trigger);
-      return registerKeybinding(trigger, callback);
+      portal.triggers.push(trigger);
+      const outcome = outcomes[portal.triggers.length - 1] ?? REGISTRATION.BOUND;
+      return Promise.resolve(typeof outcome === "function" ? outcome(trigger, callback) : outcome);
     },
-    unregisterKeybinding: async () => undefined,
+    async unregisterKeybinding() {
+      portal.unregisters += 1;
+    },
   };
-  return { manager, triggers };
+  return { manager, portal, approval };
 }
 
 test(
-  "the GNOME cancel shortcut binds Escape through the portal and fires on press only",
+  "a recording binds Escape through the portal only once GNOME approved it",
   withSessionType("wayland", async () => {
-    const { manager, triggers } = gnomeManagerWithPortal(async (_trigger, callback) => {
-      callback(undefined, "down");
-      callback(undefined, "up");
-      return REGISTRATION.BOUND;
-    });
-    let cancels = 0;
+    for (const state of [null, "declined"]) {
+      const { manager, portal } = gnomeManagerWithPortal([], { approval: approvalStore(state) });
+      assert.equal(await manager.registerCancelShortcut("Escape", noop), false);
+      assert.deepEqual(portal.triggers, []);
+    }
 
+    let cancels = 0;
+    const { manager, portal } = gnomeManagerWithPortal([
+      (_trigger, callback) => {
+        callback(undefined, "down");
+        callback(undefined, "up");
+        return REGISTRATION.BOUND;
+      },
+    ]);
     assert.equal(await manager.registerCancelShortcut("Escape", () => cancels++), true);
-    assert.deepEqual(triggers, ["Escape"]);
+    assert.deepEqual(portal.triggers, ["Escape"]);
     assert.equal(cancels, 1);
+
+    await manager.unregisterCancelShortcut();
+    assert.equal(portal.unregisters, 1);
   })
 );
 
 test(
-  "a failed cancel binding is not retried until restart",
+  "the approval request binds once, records the approval and closes the session",
   withSessionType("wayland", async () => {
-    const { manager, triggers } = gnomeManagerWithPortal(async () => REGISTRATION.FAILED);
+    const { manager, portal, approval } = gnomeManagerWithPortal([], {
+      approval: approvalStore(null),
+    });
+
+    assert.equal(await manager.requestCancelShortcutApproval("Escape"), true);
+    assert.equal(approval.state, "approved");
+    assert.equal(portal.unregisters, 1);
+
+    assert.equal(await manager.requestCancelShortcutApproval("Escape"), false);
+    assert.deepEqual(portal.triggers, ["Escape"]);
+  })
+);
+
+test(
+  "a declined approval is remembered across restarts",
+  withSessionType("wayland", async () => {
+    const approval = approvalStore(null);
+    const { manager, portal } = gnomeManagerWithPortal([REGISTRATION.DECLINED], { approval });
+
+    assert.equal(await manager.requestCancelShortcutApproval("Escape"), false);
+    assert.equal(approval.state, "declined");
+
+    const restarted = gnomeManagerWithPortal([], { approval });
+    assert.equal(await restarted.manager.requestCancelShortcutApproval("Escape"), false);
+    assert.equal(await restarted.manager.registerCancelShortcut("Escape", noop), false);
+    assert.deepEqual([...portal.triggers, ...restarted.portal.triggers], ["Escape"]);
+  })
+);
+
+test(
+  "an approval request cut short by quitting is neither kept nor latched",
+  withSessionType("wayland", async () => {
+    const { manager, portal, approval } = gnomeManagerWithPortal([REGISTRATION.SUPERSEDED], {
+      approval: approvalStore(null),
+    });
+
+    assert.equal(await manager.requestCancelShortcutApproval("Escape"), false);
+    assert.equal(approval.state, null);
+    assert.equal(await manager.requestCancelShortcutApproval("Escape"), true);
+    assert.deepEqual(portal.triggers, ["Escape", "Escape"]);
+  })
+);
+
+test(
+  "a portal failure stops cancel binding until restart without being saved",
+  withSessionType("wayland", async () => {
+    const approval = approvalStore("approved");
+    const { manager, portal } = gnomeManagerWithPortal([REGISTRATION.FAILED], { approval });
 
     assert.equal(await manager.registerCancelShortcut("Escape", noop), false);
     assert.equal(await manager.registerCancelShortcut("Escape", noop), false);
-    assert.deepEqual(triggers, ["Escape"]);
+    assert.deepEqual(portal.triggers, ["Escape"]);
+    assert.equal(approval.state, "approved");
+
+    const restarted = gnomeManagerWithPortal([], { approval });
+    assert.equal(await restarted.manager.registerCancelShortcut("Escape", noop), true);
+  })
+);
+
+test(
+  "a recording declined after GNOME forgot the approval is not asked again",
+  withSessionType("wayland", async () => {
+    const { manager, portal, approval } = gnomeManagerWithPortal([REGISTRATION.DECLINED]);
+
+    assert.equal(await manager.registerCancelShortcut("Escape", noop), false);
+    assert.equal(approval.state, "declined");
+    assert.equal(await manager.registerCancelShortcut("Escape", noop), false);
+    assert.deepEqual(portal.triggers, ["Escape"]);
   })
 );
 
@@ -92,13 +188,12 @@ test(
   "a cancel binding superseded by its recording ending is tried again next time",
   withSessionType("wayland", async () => {
     let finishFirst;
-    const { manager, triggers } = gnomeManagerWithPortal((_trigger) =>
-      triggers.length === 1
-        ? new Promise((resolve) => {
-            finishFirst = resolve;
-          })
-        : Promise.resolve(REGISTRATION.BOUND)
-    );
+    const { manager, portal, approval } = gnomeManagerWithPortal([
+      () =>
+        new Promise((resolve) => {
+          finishFirst = resolve;
+        }),
+    ]);
 
     const first = manager.registerCancelShortcut("Escape", noop);
     await manager.unregisterCancelShortcut();
@@ -106,23 +201,113 @@ test(
     assert.equal(await first, false);
 
     assert.equal(await manager.registerCancelShortcut("Escape", noop), true);
-    assert.deepEqual(triggers, ["Escape", "Escape"]);
+    assert.deepEqual(portal.triggers, ["Escape", "Escape"]);
+    assert.equal(approval.state, "approved");
+  })
+);
+
+test(
+  "a recording while the approval dialog is open neither binds nor closes the dialog",
+  withSessionType("wayland", async () => {
+    let answer;
+    const { manager, portal, approval } = gnomeManagerWithPortal(
+      [
+        () =>
+          new Promise((resolve) => {
+            answer = resolve;
+          }),
+      ],
+      { approval: approvalStore(null) }
+    );
+
+    const request = manager.requestCancelShortcutApproval("Escape");
+    assert.equal(await manager.registerCancelShortcut("Escape", noop), false);
+    await manager.unregisterCancelShortcut();
+    assert.equal(portal.unregisters, 0);
+
+    answer(REGISTRATION.BOUND);
+    assert.equal(await request, true);
+    assert.equal(approval.state, "approved");
+    assert.equal(await manager.registerCancelShortcut("Escape", noop), true);
+    assert.deepEqual(portal.triggers, ["Escape", "Escape"]);
+  })
+);
+
+test(
+  "a second approval request while the dialog is open leaves it alone",
+  withSessionType("wayland", async () => {
+    let answer;
+    const { manager, portal } = gnomeManagerWithPortal(
+      [
+        () =>
+          new Promise((resolve) => {
+            answer = resolve;
+          }),
+      ],
+      { approval: approvalStore(null) }
+    );
+
+    const first = manager.requestCancelShortcutApproval("Escape");
+    assert.equal(await manager.requestCancelShortcutApproval("Escape"), false);
+    assert.deepEqual(portal.triggers, ["Escape"]);
+
+    answer(REGISTRATION.BOUND);
+    assert.equal(await first, true);
+  })
+);
+
+test(
+  "a recording while the approved session is still closing does not bind",
+  withSessionType("wayland", async () => {
+    const { manager, portal, approval } = gnomeManagerWithPortal([], {
+      approval: approvalStore(null),
+    });
+    const closing = deferred();
+    manager.cancelShortcutsPortal.unregisterKeybinding = () => closing.promise;
+
+    const request = manager.requestCancelShortcutApproval("Escape");
+    await new Promise(setImmediate);
+    assert.equal(approval.state, "approved");
+    assert.equal(await manager.registerCancelShortcut("Escape", noop), false);
+
+    closing.resolve();
+    assert.equal(await request, true);
+    assert.deepEqual(portal.triggers, ["Escape"]);
+  })
+);
+
+test(
+  "a finished recording does not block asking again after Hold cleared the approval",
+  withSessionType("wayland", async () => {
+    const { manager, portal, approval } = gnomeManagerWithPortal([]);
+
+    assert.equal(await manager.registerCancelShortcut("Escape", noop), true);
+    await manager.unregisterCancelShortcut();
+    approval.write(null);
+
+    assert.equal(await manager.requestCancelShortcutApproval("Escape"), true);
+    assert.deepEqual(portal.triggers, ["Escape", "Escape"]);
   })
 );
 
 test(
   "the GNOME cancel shortcut is never bound on X11 or without the portal",
   withSessionType("x11", async () => {
-    const onX11 = gnomeManagerWithPortal(async () => REGISTRATION.BOUND);
+    const onX11 = gnomeManagerWithPortal([], { approval: approvalStore(null) });
+    assert.equal(await onX11.manager.requestCancelShortcutApproval("Escape"), false);
+    onX11.manager.cancelShortcutApproval.state = "approved";
     assert.equal(await onX11.manager.registerCancelShortcut("Escape", noop), false);
-    assert.deepEqual(onX11.triggers, []);
+    assert.deepEqual(onX11.portal.triggers, []);
 
     process.env.XDG_SESSION_TYPE = "wayland";
-    const noPortal = gnomeManagerWithPortal(async () => REGISTRATION.BOUND, {
+    const noPortal = gnomeManagerWithPortal([], {
+      approval: approvalStore(null),
       portalAvailable: false,
     });
+    assert.equal(await noPortal.manager.requestCancelShortcutApproval("Escape"), false);
+    noPortal.manager.cancelShortcutApproval.state = "approved";
     assert.equal(await noPortal.manager.registerCancelShortcut("Escape", noop), false);
-    assert.deepEqual(noPortal.triggers, []);
+    assert.deepEqual(noPortal.portal.triggers, []);
   })
 );
 
@@ -138,18 +323,37 @@ test("the GNOME cancel portal binds its own shortcut and closes with the manager
   assert.deepEqual(closed, ["dictation", "cancel"]);
 });
 
-test("a superseded Hold binding leaves no tap fallback behind", async () => {
+function holdManager(outcome, approval) {
   const manager = new GnomeShortcutManager();
   const tapBindings = [];
+  manager.cancelShortcutApproval = approval;
   manager.unregisterKeybinding = async () => true;
   manager.registerKeybinding = async (shortcut) => {
     tapBindings.push(shortcut);
     return true;
   };
-  manager.globalShortcutsPortal.registerKeybinding = async () => REGISTRATION.SUPERSEDED;
+  manager.globalShortcutsPortal.registerKeybinding = async () => outcome;
+  return { manager, tapBindings };
+}
+
+test("a Hold binding makes the cancel shortcut need approval again", async () => {
+  for (const state of ["approved", "declined"]) {
+    const approval = approvalStore(state);
+    const { manager, tapBindings } = holdManager(REGISTRATION.BOUND, approval);
+
+    assert.equal(await manager.registerPushToTalk("Alt+R", noop), true);
+    assert.equal(approval.state, null);
+    assert.deepEqual(tapBindings, []);
+  }
+});
+
+test("a superseded Hold binding leaves no tap fallback behind", async () => {
+  const approval = approvalStore("approved");
+  const { manager, tapBindings } = holdManager(REGISTRATION.SUPERSEDED, approval);
 
   assert.equal(await manager.registerPushToTalk("Alt+R", noop), false);
   assert.deepEqual(tapBindings, []);
+  assert.equal(approval.state, "approved");
 });
 
 function hotkeyManagerOnGnome(activationMode) {
@@ -164,6 +368,10 @@ function hotkeyManagerOnGnome(activationMode) {
     },
     async unregisterCancelShortcut() {
       calls.push(["unregister"]);
+    },
+    async requestCancelShortcutApproval(hotkey) {
+      calls.push(["approval", hotkey]);
+      return true;
     },
   };
   return { manager, calls };
@@ -197,4 +405,19 @@ test("cancel skips the portal when its X11 grab fails, so nothing is left to rel
 
   assert.equal((await manager.registerSlot("cancel", "Escape", noop)).success, false);
   assert.deepEqual(calls, []);
+});
+
+test("the GNOME cancel approval is requested for Escape in Tap mode only", async () => {
+  const tap = hotkeyManagerOnGnome("tap");
+  assert.equal(await tap.manager.requestGnomeCancelShortcutApproval(), true);
+  assert.deepEqual(tap.calls, [["approval", "Escape"]]);
+
+  const hold = hotkeyManagerOnGnome("push");
+  assert.equal(await hold.manager.requestGnomeCancelShortcutApproval(), false);
+  assert.deepEqual(hold.calls, []);
+
+  const offGnome = hotkeyManagerOnGnome("tap");
+  offGnome.manager.useGnome = false;
+  assert.equal(await offGnome.manager.requestGnomeCancelShortcutApproval(), false);
+  assert.deepEqual(offGnome.calls, []);
 });

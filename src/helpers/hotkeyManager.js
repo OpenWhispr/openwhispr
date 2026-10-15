@@ -996,6 +996,13 @@ class HotkeyManager extends EventEmitter {
     return this.gnomeManager.registerKeybinding(gnomeHotkey);
   }
 
+  // Tap only, for the same reason registerSlot keeps cancel off the portal in
+  // Hold. Escape is the key useAudioRecording binds to the cancel slot.
+  async requestGnomeCancelShortcutApproval() {
+    if (!this.useGnome || !this.gnomeManager || this.activationMode === "push") return false;
+    return this.gnomeManager.requestCancelShortcutApproval("Escape");
+  }
+
   async initializeKDEShortcuts(callback) {
     if (process.platform !== "linux" || !KDEShortcutManager.isKDE()) {
       return false;
