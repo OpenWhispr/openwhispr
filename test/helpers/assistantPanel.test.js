@@ -982,4 +982,8 @@ test("only a plain-text caret delivery asks the model for plain prose", async (t
     sentOptions.map((options) => options.plainTextResponse),
     [true, false, false]
   );
+  assert.deepEqual(
+    sentOptions.map((options) => options.pasteResponse),
+    [true, true, false]
+  );
 });

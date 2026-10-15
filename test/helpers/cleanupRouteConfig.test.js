@@ -39,7 +39,10 @@ async function loadRouteResolver(t, provider = "test", mode = "providers") {
         });
       `,
       "/config/prompts": `
-        export const resolvePrompt = () => "route prompt";
+        export const resolvePrompt = (kind, opts) => {
+          globalThis.__routePromptCalls?.push({ kind, opts });
+          return "route prompt";
+        };
         export const appendScreenContextSuffix = (prompt) => prompt;
         export const wrapCleanupTranscript = (text) => text;
         export const getCleanupSystemPrompt = () => "cleanup prompt";
@@ -102,4 +105,15 @@ test("the agent route keeps its provider defaults", async (t) => {
   assert.equal(route.kind, "agent");
   assert.equal(route.config.temperature, undefined);
   assert.equal(route.config.requireCompleteOutput, undefined);
+});
+
+test("the agent route's selection edits keep the editing prompt when nothing is saved", async (t) => {
+  globalThis.__routePromptCalls = [];
+  t.after(() => delete globalThis.__routePromptCalls);
+  const resolveRoute = await loadRouteResolver(t);
+
+  resolveRoute("Jarvis, make this more formal", { voiceAgentRequested: true });
+
+  const call = globalThis.__routePromptCalls.find((c) => c.kind === "dictationAgent");
+  assert.match(call.opts.builtInPrompt, /NEVER ask clarifying questions/);
 });

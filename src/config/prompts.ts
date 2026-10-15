@@ -12,6 +12,7 @@ export {
   getDefaultPromptText,
   appendDictionarySuffix,
   appendScreenContextSuffix,
+  appendPasteResponseSuffix,
   appendPlainTextResponseSuffix,
   wrapCleanupTranscript,
 } from "./prompts/index";

@@ -118,6 +118,7 @@ import {
 import { providerSupportsImages } from "../services/ai/inferenceProviders";
 import { resolveDictationTranslationInference } from "./dictationTranslationInference";
 import { resolvePrompt, appendScreenContextSuffix } from "../config/prompts";
+import { SELECTION_EDIT_DEFAULT_PROMPT } from "../config/prompts/registry";
 import { syncService } from "../services/SyncService.js";
 import { evaluateFinishedRecording, withSalvageWarning } from "./recordingValidation";
 import { isEmptyRecording } from "./recordingGuard";
@@ -218,9 +219,11 @@ function analyticsSyncEnabled(settings = getSettings()) {
 }
 
 // Shared by the agent route and its text-only retry, which needs the prompt
-// without the screen-context suffix.
+// without the screen-context suffix. The route's prompt only reaches selection
+// edits (standalone commands build their own in the panel).
 function dictationAgentPrompt(settings, agentName) {
   return resolvePrompt("dictationAgent", {
+    builtInPrompt: SELECTION_EDIT_DEFAULT_PROMPT,
     agentName,
     language: settings.preferredLanguage,
     customDictionary: getDictionaryHintWords(settings),

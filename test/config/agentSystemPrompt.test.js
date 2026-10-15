@@ -178,6 +178,23 @@ test("the name joins the prompt as one plain line", async () => {
   assert.match(long, /The user's name is A{100}\./);
 });
 
+test("a caller's built-in prompt applies only while nothing is saved", async () => {
+  const { resolvePrompt } = await load();
+  const { useSettingsStore } = await import("../../src/stores/settingsStore.ts");
+  const opts = { agentName: "Jarvis", builtInPrompt: "EDITING {{agentName}}" };
+
+  useSettingsStore.getState().setCustomPrompt("dictationAgent", "");
+  assert.equal(resolvePrompt("dictationAgent", opts), "EDITING Jarvis");
+  assert.match(
+    resolvePrompt("dictationAgent", { agentName: "Jarvis" }),
+    /^You are "Jarvis", a voice/
+  );
+
+  useSettingsStore.getState().setCustomPrompt("dictationAgent", "MINE {{agentName}}");
+  assert.equal(resolvePrompt("dictationAgent", opts), "MINE Jarvis");
+  useSettingsStore.getState().setCustomPrompt("dictationAgent", "");
+});
+
 test("a base prompt takes the Chat prompt's place, ahead of the tool rules", async () => {
   const { getAgentSystemPrompt } = await load();
   const chat = getAgentSystemPrompt(["search_notes"]);

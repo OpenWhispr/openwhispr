@@ -1074,7 +1074,7 @@ const VOICE_ASSISTANT_PROMPTS = {
   dictationAgent: "VOICE_SCOPE_SENTINEL {{agentName}}",
   chatAgent: "CHAT_SCOPE_SENTINEL",
 };
-const BUILT_IN_VOICE_PROMPT = /^You are "OpenWhispr", an AI integrated into a speech-to-text/;
+const BUILT_IN_VOICE_PROMPT = /^You are "OpenWhispr", a voice assistant built into a speech-to-text/;
 
 test("the voice assistant sends its custom prompt instead of the Chat prompt", async (t) => {
   const { captured, sentMessages } = await renderChatStreaming(
@@ -1144,7 +1144,7 @@ for (const [saved, label] of [
     const prompt = systemPromptOf(sentMessages[0]);
     assert.match(prompt, BUILT_IN_VOICE_PROMPT);
     assert.match(prompt, /You can use these tools/);
-    assert.doesNotMatch(prompt, /CHAT_SCOPE_SENTINEL|Respond concisely and conversationally/);
+    assert.doesNotMatch(prompt, /CHAT_SCOPE_SENTINEL|You are a helpful voice assistant/);
   });
 }
 

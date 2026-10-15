@@ -47,6 +47,11 @@ test("flags the retired English two-mode fullPrompt that shadows hardened defaul
   assert.equal(await isRetiredDefaultPrompt(fixtures.enTwoModeFullPrompt), true);
 });
 
+test("flags the retired editing-only fullPrompt the assistant panel used to answer with", async () => {
+  const { isRetiredDefaultPrompt } = await load();
+  assert.equal(await isRetiredDefaultPrompt(fixtures.enEditingOnlyFullPrompt), true);
+});
+
 test("flags the retired pre-hardening English cleanup prompt", async () => {
   const { isRetiredDefaultPrompt } = await load();
   assert.equal(await isRetiredDefaultPrompt(fixtures.enPreHardeningCleanupPrompt), true);

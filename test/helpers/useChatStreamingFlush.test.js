@@ -468,3 +468,31 @@ test("plainTextResponse appends the plain-text instruction to the system prompt"
   assert.match(requestBodies[0], /OUTPUT FORMAT:/);
   assert.doesNotMatch(requestBodies[1], /OUTPUT FORMAT:/);
 });
+
+test("an answer bound for the cursor asks for only the text to insert", async (t) => {
+  const requestBodies = [];
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  globalThis.fetch = async (_url, init) => {
+    requestBodies.push(String(init?.body));
+    return new Response(sseEvent({ content: "ok" }, "stop") + "data: [DONE]\n\n", {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    });
+  };
+  const harness = await renderChatStreaming(t);
+
+  await harness.captured.sendToAI("draft a reply", [], {
+    pasteResponse: true,
+    plainTextResponse: true,
+  });
+  // The compact pill alone (the onboarding demo) isn't a paste.
+  await harness.captured.sendToAI("draft a reply", [], { suppressResponseContent: true });
+
+  assert.equal(requestBodies.length, 2);
+  // The plain-text format rule stays last.
+  assert.match(requestBodies[0], /Write only the text to insert[^"]*OUTPUT FORMAT:/);
+  assert.doesNotMatch(requestBodies[1], /Write only the text to insert/);
+});
