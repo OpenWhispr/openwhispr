@@ -158,6 +158,46 @@ test("managed OpenWhispr Cloud still respects its batch configuration", async (t
   assert.equal(manager.shouldUseStreaming(), false);
 });
 
+test("new BYOK streaming models never override managed cloud routing", async (t) => {
+  const { createManager, vite } = await loadAudioManager(t, {
+    cachePrefix: "registry-streaming-boundary-",
+    settingsKey: "__streamingRoutingSettings",
+  });
+  const manager = createManager();
+  manager.sttConfig = { dictation: { mode: "batch" }, streamingProvider: "openai-realtime" };
+  const store = await vite.ssrLoadModule("/models/registryData.js");
+  const data = structuredClone(store.getRegistryData());
+  for (const provider of ["openai", "gemini"]) {
+    data.transcriptionProviders
+      .find((p) => p.id === provider)
+      .models.push({
+        id: `${provider}-future-live`,
+        name: "Future",
+        description: "Fixture",
+        streaming: true,
+      });
+  }
+  store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
+  for (const provider of ["openai", "gemini"]) {
+    setSettings({
+      cloudTranscriptionProvider: provider,
+      cloudTranscriptionModel: `${provider}-future-live`,
+      geminiApiKey: "test",
+    });
+    assert.equal(manager.shouldUseStreaming(), true, `${provider} BYOK`);
+    assert.equal(
+      manager.getStreamingProviderName(),
+      provider === "openai" ? "openai-realtime" : "gemini"
+    );
+    setSettings({
+      cloudTranscriptionMode: "openwhispr",
+      cloudTranscriptionProvider: provider,
+      cloudTranscriptionModel: `${provider}-future-live`,
+    });
+    assert.equal(manager.shouldUseStreaming(), false, `${provider} managed batch`);
+  }
+});
+
 test("explicit Orukeet custom endpoint uses PCM streaming without cloud login", async (t) => {
   const manager = await loadManager(t);
   setSettings({
@@ -613,3 +653,36 @@ for (const translationRequested of [false, true]) {
     }
   });
 }
+
+test("missing published dictation model starts no streaming, network, or local fallback", async (t) => {
+  const manager = await loadManager(t);
+  const model = "registry-deepgram-missing";
+  globalThis.localStorage.setItem(
+    "publishedModelIds",
+    JSON.stringify([JSON.stringify(["transcriptionProviders", "deepgram", model])])
+  );
+  setSettings({
+    cloudTranscriptionProvider: "deepgram",
+    cloudTranscriptionModel: model,
+    deepgramApiKey: "dg-test",
+    allowLocalFallback: true,
+  });
+  manager.getEffectiveSttLanguage = () => "en";
+  manager.getTranscriptionModel = () => "nova-3";
+  let requests = 0;
+  manager.getAPIKey = async () => {
+    requests++;
+    return "key";
+  };
+  globalThis.window.electronAPI.transcribeLocalWhisper = async () => {
+    requests++;
+    return { success: true, text: "fallback" };
+  };
+  assert.equal(manager.shouldUseStreaming(), false);
+  assert.equal(await manager.warmupStreamingConnection(), false);
+  await assert.rejects(manager.processWithOpenAIAPI(new Blob(["audio"])), {
+    code: "MODEL_CATALOG_UNAVAILABLE",
+    messageKey: "onboarding.rehaul.provider.errors.modelNotFound",
+  });
+  assert.equal(requests, 0);
+});

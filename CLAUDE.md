@@ -452,7 +452,9 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
 
 ### 8. Model Registry Architecture
 
-All desktop AI model definitions are centralized in `src/models/modelRegistryData.json` as the single source of truth. The mobile app keeps its own hand-updated copies (see below):
+Desktop model definitions are authored in the public [model-registry repository](https://github.com/OpenWhispr/model-registry). Merging a compatible catalog edit publishes a signed update that the desktop checks after startup and every 15 minutes. `src/models/modelRegistryData.json` is a generated offline snapshot, not an editing source. API routing, admin policy catalogs, and mobile catalogs remain separate contracts (see below).
+
+To update the offline snapshot, run `npm run model-registry:sync -- --revision <exact published-branch commit>`, then commit the generated files together. `npm run model-registry:verify` checks their signature, source digests and parity without network access; normal builds never fetch the latest registry. New providers or native engines still require code and a release. Operational details and regression boundaries are in `docs/superpowers/specs/2026-10-14-dynamic-model-registry.md`.
 
 ```json
 {
@@ -463,7 +465,11 @@ All desktop AI model definitions are centralized in `src/models/modelRegistryDat
 
 **Key files:**
 
-- `src/models/modelRegistryData.json` - Single source of truth for all desktop models
+- `src/models/modelRegistryData.json`, `registryBundle.json`, `registryMetadata.json` - Generated offline catalog, signed envelope and exact source/publication provenance
+- `src/models/registryData.js` - Live process-local store; use this instead of importing the snapshot in runtime readers
+- `src/helpers/registryLoader.js` - Main-only signature/schema/compatibility validation, bounded cache and background refresh; `OPENWHISPR_MODEL_REGISTRY_MODE=bundled` disables cache and network activation
+- `src/models/registryBootstrap.js`, `registrySync.js` - Verified preload snapshot before settings migrations, then IPC updates; React catalog consumers subscribe through `useRegistryVersion`
+- `src/models/cloudModelCatalog.ts` - Shared Tinfoil live overlay for pickers and settings; never mutates canonical signed data
 - `openwhispr-mobile/src/config/providerCatalog.json` - Mobile's trimmed copy of the OpenAI and Groq entries. It, mobile's endpoint rules and its agent prompt (`openwhispr-mobile/src/config/prompts/defaultPrompts.json`) are copies, not shared code, so update them by hand when desktop's change (the catalog is covered in `openwhispr-mobile/CONTRIBUTING.md`)
 - `src/models/ModelRegistry.ts` - TypeScript wrapper with helper methods; also derives
   `REASONING_PROVIDERS` (`buildReasoningProviders()`), consumed by the model pickers

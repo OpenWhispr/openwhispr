@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useRegistryVersion } from "../../hooks/useRegistryVersion";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { AudioLines, Check, CircleCheck, Download, MousePointer2 } from "../icons";
 import { useTranslation } from "react-i18next";
 import ProviderConnectionTest from "./ProviderConnectionTest";
@@ -325,6 +326,7 @@ export function ByokProviderStep({
   resumeState?: OnboardingByokDraft;
   onResumeStateChange?: (state: OnboardingByokDraft) => void;
 }) {
+  const registryVersion = useRegistryVersion();
   const { t } = useTranslation();
   const store = useSettingsStore();
   const policy = usePolicySnapshot();
@@ -333,15 +335,12 @@ export function ByokProviderStep({
   const selfHostedAllowed =
     isModeAllowedByPolicy(policy, scope, "self-hosted") &&
     isProviderAllowedByPolicy(policy, scope, "custom");
-  const providers = useMemo(
-    () =>
-      filterByokProviderOptionsByPolicy<HostedProvider>(
-        assistant ? modelRegistry.getCloudProviders() : getTranscriptionProviders(),
-        scope,
-        policy
-      ),
-    [assistant, policy, scope]
-  );
+  const providers = (() =>
+    filterByokProviderOptionsByPolicy<HostedProvider>(
+      assistant ? modelRegistry.getCloudProviders() : getTranscriptionProviders(),
+      scope,
+      policy
+    ))();
   // The session's draft wins; without one (onboarding was restarted, or an older build
   // left it blank) the step reopens on what the user already saved, the same order
   // LocalModelSetupStep uses. The draft never records keys, so the stored custom key is
@@ -792,6 +791,7 @@ export function LocalModelSetupStep({
   resumeState?: OnboardingLocalModelDraft;
   onResumeStateChange?: (state: OnboardingLocalModelDraft) => void;
 }) {
+  const registryVersion = useRegistryVersion();
   const { t } = useTranslation();
   const store = useSettingsStore();
   const assistant = stepId === "local-assistant";
@@ -863,9 +863,9 @@ export function LocalModelSetupStep({
 
   useEffect(() => {
     void refreshDownloadedModels();
-  }, [refreshDownloadedModels]);
+  }, [refreshDownloadedModels, registryVersion]);
 
-  const providerOptions = useMemo(() => {
+  const providerOptions = (() => {
     if (assistant) {
       return modelRegistry.getAllProviders().map((provider) => ({
         id: provider.id,
@@ -879,9 +879,9 @@ export function LocalModelSetupStep({
         icon: organization.id === "whisper" ? "openai" : organization.id,
       })
     );
-  }, [assistant]);
+  })();
 
-  const models = useMemo(() => {
+  const models = (() => {
     if (assistant) {
       return (modelRegistry.getProvider(selectedProvider)?.models ?? []).map((model) => ({
         id: model.id,
@@ -909,7 +909,7 @@ export function LocalModelSetupStep({
       recommended: model.recommended,
       icon: "openai",
     }));
-  }, [assistant, selectedProvider]);
+  })();
 
   useEffect(() => {
     if (selectedModel && !models.some((model) => model.id === selectedModel)) {

@@ -20,6 +20,7 @@ const EMA_NEXT = 0.5;
 // A sentinel may carry one argument after a colon, e.g. `unsupportedProvider:groq`.
 // Anything that is not a sentinel reaches the toast unchanged.
 const MEETING_ERROR_KEYS: Record<string, string> = {
+  publishedModelUnavailable: "onboarding.rehaul.provider.errors.modelNotFound",
   policyRestricted: "notes.meeting.restrictedByOrg",
   unsupportedSelfHosted: "notes.meeting.unsupportedSelfHosted",
   unsupportedProvider: "notes.meeting.unsupportedProvider",

@@ -2,10 +2,9 @@ import type { InferenceMode, ShareVisibility } from "../types/electron";
 import type { OrgPolicy, PolicyScope } from "../types/policy";
 import type { SettingsState } from "./settingsStore";
 import { compareAppVersions } from "../utils/version.ts";
-// The registry JSON directly (like policyValidation.js), NOT ModelRegistry:
-// that module pulls the settings/identity stores, whose module scope needs
-// real browser globals, and this file is imported by node-run sync tests.
-import modelRegistryData from "../models/modelRegistryData.json" with { type: "json" };
+// The pure registry store keeps this policy module usable without browser globals.
+// Provider membership is code-pinned by catalog compatibility validation.
+import { registryData as modelRegistryData } from "../models/registryData.js";
 
 export type PolicyStatus = "idle" | "loading" | "managed" | "unmanaged" | "error";
 

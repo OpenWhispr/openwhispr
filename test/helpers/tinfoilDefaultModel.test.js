@@ -102,6 +102,62 @@ test("a cached catalog does not displace the named Tinfoil default", async (t) =
   assert.equal(effective.cleanupModel, "glm-5-3");
 });
 
+test("policy fallback and provider memory follow Tinfoil's live catalog when its seed default retires", async (t) => {
+  const live = [{ id: "live-new-model", name: "Live model", description: "Fixture" }];
+  installBrowserGlobals(t, {
+    initialStorage: {
+      _llmScopeKeysMigrated: "1",
+      tinfoilModels: JSON.stringify({ models: live, fetchedAt: Date.now() }),
+      cleanupMode: "providers",
+      cleanupProvider: "openai",
+      cleanupModel: "gpt-5-mini",
+    },
+  });
+  const vite = await createRendererServer(t, { cachePrefix: "registry-tinfoil-overlay-" });
+  const registry = await vite.ssrLoadModule("/models/ModelRegistry.ts");
+  const { useSettingsStore, selectPolicyEffectiveSettings } = await vite.ssrLoadModule(
+    "/stores/settingsStore.ts"
+  );
+  const snapshot = {
+    status: "managed",
+    appVersion: "1.10.3",
+    policy: {
+      version: 1,
+      transcription: { allowedModes: ["local"], allowedByokProviders: [] },
+      llm: {
+        allowedModes: ["providers"],
+        allowedByokProviders: ["tinfoil"],
+        allowedEnterpriseProviders: [],
+      },
+      features: { agentEnabled: true, webSearchEnabled: true },
+      sharing: { externalLinkSharing: "allowed" },
+      dataRetention: {
+        audioRetentionMaxDays: null,
+        localHistoryMode: "user_choice",
+        cloudBackupAllowed: true,
+      },
+      minAppVersion: null,
+    },
+  };
+  assert.equal(
+    selectPolicyEffectiveSettings(useSettingsStore.getState(), snapshot).cleanupModel,
+    "live-new-model"
+  );
+  registry.applyTinfoilModels([{ id: "live-next-model", name: "Next", description: "Fixture" }]);
+  assert.equal(
+    selectPolicyEffectiveSettings(useSettingsStore.getState(), snapshot).cleanupModel,
+    "live-next-model"
+  );
+  useSettingsStore
+    .getState()
+    .switchReasoningProvider("dictationCleanup", "tinfoil", "live-next-model");
+  useSettingsStore.getState().switchReasoningProvider("dictationCleanup", "openai", "gpt-5-mini");
+  useSettingsStore
+    .getState()
+    .switchReasoningProvider("dictationCleanup", "tinfoil", "wrong-fallback");
+  assert.equal(useSettingsStore.getState().cleanupModel, "live-next-model");
+});
+
 test("a persisted glm-5-2 selection is repointed before any request", async (t) => {
   installBrowserGlobals(t, {
     initialStorage: {
@@ -213,7 +269,10 @@ test("a provider's named default beats its list position", async (t) => {
     // The seed leads with its own default, so only a list that doesn't can
     // tell the two rules apart.
     assert.equal(
-      pickDefaultModelId({ models: [{ id: "listed-first" }, { id: "named" }], defaultModel: "named" }),
+      pickDefaultModelId({
+        models: [{ id: "listed-first" }, { id: "named" }],
+        defaultModel: "named",
+      }),
       "named"
     );
     assert.equal(pickDefaultModelId(byId.tinfoil), "glm-5-3");

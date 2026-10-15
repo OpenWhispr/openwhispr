@@ -1,3 +1,5 @@
+import { isPublishedTranscriptionModelUnavailable } from "../models/registryModelAvailability.ts";
+
 // Note recording only offers providers the main process will actually run:
 // meeting prepare/start check ALLOWED_MEETING_PROVIDERS (derived from the
 // streaming client table in meetingStreamingProviders.js) and reject anything
@@ -83,6 +85,10 @@ export function resolveMeetingTranscriptionOptions({
     throw new Error(
       selectedProvider ? `unsupportedProvider:${selectedProvider}` : "noProviderSelected"
     );
+  }
+
+  if (isPublishedTranscriptionModelUnavailable(provider.id, selectedModel)) {
+    throw new Error("publishedModelUnavailable");
   }
 
   const options = {

@@ -28,6 +28,13 @@ import {
   type TranscriptionProviderBaseUrl,
 } from "../services/transcriptionBaseUrl.ts";
 import type { ManagedEnterpriseRequestContext } from "../types/enterpriseIdentity.ts";
+import { getRegistryData } from "../models/registryData.js";
+
+import {
+  isPublishedTranscriptionModelUnavailable,
+  MODEL_CATALOG_UNAVAILABLE,
+  MODEL_CATALOG_UNAVAILABLE_MESSAGE_KEY,
+} from "../models/registryModelAvailability.ts";
 
 const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
 
@@ -66,6 +73,7 @@ export interface TranscriptionRouteSettings {
   remoteTranscriptionUrl?: string;
   remoteTranscriptionModel?: string;
   cloudTranscriptionProvider?: string;
+  cloudTranscriptionMode?: string;
   cloudTranscriptionModel?: string;
   cloudTranscriptionBaseUrl?: string;
   cortiEnvironment?: string;
@@ -172,15 +180,14 @@ export const XAI_STT_LANGUAGES = new Set([
   "vi",
 ]);
 
-// Prefix-matched rather than registry-checked on purpose: this module loads in
-// the packaged main process without the registry, and strict validation would
-// reset the model of anyone still on a retired id. The registry-backed picker
-// rules live in settingsStore; transcriptionRouteModelAgreement.test.js pins the
-// two together for every shipping model.
+// Honor the live provider catalog first. Retain the legacy prefix fallback for
+// saved retired IDs, which may no longer appear in the bundled picker.
 export function resolveByokModel(provider: string, configuredModel?: string): string {
   const trimmed = (configuredModel || "").trim();
   if (provider === "custom") return trimmed || "whisper-1";
   if (trimmed) {
+    const catalogProvider = getRegistryData().transcriptionProviders.find((p) => p.id === provider);
+    if (catalogProvider?.models.some((model) => model.id === trimmed)) return trimmed;
     const matchesProvider =
       (provider === "groq" && trimmed.startsWith("whisper-large-v3")) ||
       (provider === "openai" &&
@@ -331,6 +338,16 @@ export function resolveTranscriptionRoute({
   }
 
   const provider = s.cloudTranscriptionProvider || "openai";
+  if (
+    s.cloudTranscriptionMode !== "openwhispr" &&
+    isPublishedTranscriptionModelUnavailable(provider, s.cloudTranscriptionModel)
+  ) {
+    return error(
+      "The selected model is not available from this provider.",
+      MODEL_CATALOG_UNAVAILABLE,
+      MODEL_CATALOG_UNAVAILABLE_MESSAGE_KEY
+    );
+  }
   const model = resolveByokModel(provider, request?.model ?? s.cloudTranscriptionModel);
 
   if (provider === "tinfoil" || provider === "mistral" || provider === "xai") {

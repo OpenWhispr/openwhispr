@@ -46,6 +46,10 @@ import {
 } from "../stores/policyRules";
 import { getManagedTranscriptionResolution } from "../services/managedTranscription";
 import {
+  isPublishedTranscriptionModelUnavailable,
+  MODEL_CATALOG_UNAVAILABLE_MESSAGE_KEY,
+} from "../models/registryModelAvailability";
+import {
   useIsMeetingMode,
   useIsNarrowWindow,
   useMeetingRecordingStore,
@@ -644,6 +648,19 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         }
         if (!managed && !isTranscriptionContextAllowed(usePolicyStore.getState(), s, "dictation")) {
           toast({ title: t("common.managedByOrg"), variant: "default" });
+          return;
+        }
+        if (
+          !managed &&
+          !s.useLocalWhisper &&
+          s.transcriptionMode === "providers" &&
+          s.cloudTranscriptionMode === "byok" &&
+          isPublishedTranscriptionModelUnavailable(
+            s.cloudTranscriptionProvider || "openai",
+            s.cloudTranscriptionModel
+          )
+        ) {
+          toast({ title: t(MODEL_CATALOG_UNAVAILABLE_MESSAGE_KEY), variant: "destructive" });
           return;
         }
         const result = await window.electronAPI.retryTranscription(id, {

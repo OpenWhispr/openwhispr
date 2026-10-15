@@ -63,6 +63,12 @@ const registerListener = (channel, handlerFactory) => {
 };
 
 contextBridge.exposeInMainWorld("electronAPI", {
+  initialModelRegistrySnapshot: ipcRenderer.sendSync?.("model-registry-initial"),
+  getModelRegistry: () => ipcRenderer.invoke("get-model-registry"),
+  onModelRegistryUpdated: registerListener(
+    "model-registry-updated",
+    (callback) => (_event, snapshot) => callback(snapshot)
+  ),
   setOnboardingWindowMode: (mode) => ipcRenderer.invoke("onboarding-set-window-mode", mode),
   setOnboardingActive: (active) => ipcRenderer.invoke("onboarding-set-active", active),
   openPermissionGuide: (state) => ipcRenderer.invoke("permission-guide-open", state),

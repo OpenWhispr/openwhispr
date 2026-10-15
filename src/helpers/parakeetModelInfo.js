@@ -1,4 +1,4 @@
-const modelRegistryData = require("../models/modelRegistryData.json");
+const { registryData: modelRegistryData } = require("../models/registryData.js");
 
 const TRANSDUCER_MODEL_FILES = [
   "encoder.int8.onnx",

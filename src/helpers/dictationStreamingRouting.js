@@ -6,7 +6,7 @@
 // allowlist rejected undefined). Pure module, mirrors meetingTranscriptionRouting.
 import { isOrukeetStreaming } from "./selfHostedTranscription.js";
 import { STREAMING_ONLY_PROVIDERS } from "./transcriptionRoute.ts";
-import modelRegistryData from "../models/modelRegistryData.json" with { type: "json" };
+import { registryData as modelRegistryData, subscribeRegistry } from "../models/registryData.js";
 
 export const ORUKEET_MODEL = "orukeet-v0.1.0";
 const ORUKEET_LANGUAGES = new Set(
@@ -58,12 +58,45 @@ export function orukeetDetectedLanguageFields(final) {
   };
 }
 
-export const REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
+export function isRegistryStreamingModel(providerId, modelId) {
+  return (
+    modelRegistryData.transcriptionProviders
+      .find((provider) => provider.id === providerId)
+      ?.models.some((model) => model.id === modelId && model.streaming) ?? false
+  );
+}
+const MANAGED_REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
+export const REALTIME_MODELS = new Set();
+export function isOpenAiRealtimeSelection(settings) {
+  return settings.cloudTranscriptionMode === "byok"
+    ? (settings.cloudTranscriptionProvider || "openai") === "openai" &&
+        REALTIME_MODELS.has(settings.cloudTranscriptionModel)
+    : MANAGED_REALTIME_MODELS.has(settings.cloudTranscriptionModel);
+}
+function refreshRealtimeModels() {
+  REALTIME_MODELS.clear();
+  for (const model of modelRegistryData.transcriptionProviders.find(
+    (provider) => provider.id === "openai"
+  )?.models || []) {
+    if (model.streaming) REALTIME_MODELS.add(model.id);
+  }
+}
+refreshRealtimeModels();
+subscribeRegistry(refreshRealtimeModels);
 
 // REALTIME_MODELS is the OpenAI-only shortcut (it forces "openai-realtime"), so
 // Gemini's live model routes on its own. Keying on the model id and not the
 // provider is required: the batch model on the same provider is HTTP-only.
 export const GEMINI_LIVE_MODEL = "gemini-3.5-transcribe-live";
+
+export function isGeminiLiveSelection(settings) {
+  return (
+    settings.cloudTranscriptionProvider === "gemini" &&
+    (settings.cloudTranscriptionMode === "byok"
+      ? isRegistryStreamingModel("gemini", settings.cloudTranscriptionModel)
+      : settings.cloudTranscriptionModel === GEMINI_LIVE_MODEL)
+  );
+}
 
 export function defaultStreamingProviderName(context) {
   return context === "notes" ? "deepgram" : "openai-realtime";
@@ -104,10 +137,7 @@ export function resolveStreamingProviderName({ settings, context, sttConfig, lan
   ) {
     return "corti";
   }
-  if (
-    settings.cloudTranscriptionProvider === "gemini" &&
-    settings.cloudTranscriptionModel === GEMINI_LIVE_MODEL
-  ) {
+  if (isGeminiLiveSelection(settings)) {
     return "gemini";
   }
   // Realtime-only providers have no batch endpoint, so BYOK selection alone
@@ -120,7 +150,7 @@ export function resolveStreamingProviderName({ settings, context, sttConfig, lan
   ) {
     return settings.cloudTranscriptionProvider;
   }
-  if (REALTIME_MODELS.has(settings.cloudTranscriptionModel)) {
+  if (isOpenAiRealtimeSelection(settings)) {
     return "openai-realtime";
   }
   return sttConfig?.streamingProvider || defaultStreamingProviderName(context);
