@@ -1,3 +1,4 @@
+import { useRegistryVersion } from "../hooks/useRegistryVersion";
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
@@ -439,6 +440,7 @@ export default function TranscriptionModelPicker({
   mode,
   streamingOnly = false,
 }: TranscriptionModelPickerProps) {
+  const registryVersion = useRegistryVersion();
   const { t } = useTranslation();
   const switchCloudTranscriptionProvider = useSettingsStore(
     (s) => s.switchCloudTranscriptionProvider
@@ -561,17 +563,17 @@ export default function TranscriptionModelPicker({
   // providers note recording can actually run — not every streaming provider.
   // Upload is always http-batch, and the realtime-only providers have no batch
   // route at all (transcriptionRoute fails them closed), so they are hidden there.
-  const availableCloudProviders = useMemo(() => {
+  const availableCloudProviders = (() => {
     if (streamingOnly) return getMeetingStreamingTranscriptionProviders();
     const providers = getTranscriptionProviders();
     if (transcriptionContext !== "upload") return providers;
     return providers.filter((provider) => !STREAMING_ONLY_PROVIDERS.has(provider.id));
-  }, [streamingOnly, transcriptionContext]);
+  })();
   const cloudProviders = useMemo(
     () => filterByokProviderOptionsByPolicy(availableCloudProviders, "transcription", policyState),
     [availableCloudProviders, policyState]
   );
-  const cloudProviderTabs = useMemo(() => {
+  const cloudProviderTabs = (() => {
     const availableIds = new Set(availableCloudProviders.map((p) => p.id));
     if (!streamingOnly) availableIds.add("custom");
     const tabs = CLOUD_PROVIDER_TABS.filter((provider) => availableIds.has(provider.id)).map(
@@ -581,7 +583,7 @@ export default function TranscriptionModelPicker({
           : provider
     );
     return filterByokProviderOptionsByPolicy(tabs, "transcription", policyState);
-  }, [availableCloudProviders, policyState, streamingOnly, t]);
+  })();
   const localProviderTabs = useMemo(
     () =>
       LOCAL_PROVIDER_TABS.map((provider) =>
@@ -734,6 +736,11 @@ export default function TranscriptionModelPicker({
     loadParakeetModelsRef.current = loadParakeetModels;
   }, [loadParakeetModels]);
   useEffect(() => {
+    hasLoadedRef.current = false;
+    hasLoadedParakeetRef.current = false;
+  }, [registryVersion]);
+
+  useEffect(() => {
     if (!effectiveLocal) return;
 
     if (internalLocalProvider === "whisper" && !hasLoadedRef.current) {
@@ -743,7 +750,7 @@ export default function TranscriptionModelPicker({
       hasLoadedParakeetRef.current = true;
       loadParakeetModelsRef.current?.();
     }
-  }, [effectiveLocal, internalLocalProvider]);
+  }, [effectiveLocal, internalLocalProvider, registryVersion]);
 
   useEffect(() => {
     if (effectiveLocal) return;
@@ -1108,7 +1115,7 @@ export default function TranscriptionModelPicker({
     }));
   }, [currentCloudProvider, displayedCloudProvider, t]);
 
-  const progressDisplay = useMemo(() => {
+  const progressDisplay = (() => {
     if (!effectiveLocal) return null;
 
     const activeDownloads = [
@@ -1139,7 +1146,7 @@ export default function TranscriptionModelPicker({
         })}
       </div>
     );
-  }, [effectiveLocal, whisperDownloads, parakeetDownloads]);
+  })();
 
   const renderLocalModels = () => {
     const modelsToRender =

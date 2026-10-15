@@ -1,3 +1,4 @@
+import { useRegistryVersion } from "../../hooks/useRegistryVersion";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
@@ -52,6 +53,7 @@ const PROVIDER_CONFIG: Record<string, ProviderConfig> = {
 };
 
 export default function PromptStudio({ className = "", kind = "cleanup" }: PromptStudioProps) {
+  useRegistryVersion();
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<"current" | "edit" | "test">("current");
   const [testText, setTestText] = useState(() =>

@@ -28,6 +28,7 @@ import {
   type TranscriptionProviderBaseUrl,
 } from "../services/transcriptionBaseUrl.ts";
 import type { ManagedEnterpriseRequestContext } from "../types/enterpriseIdentity.ts";
+import { getRegistryData } from "../models/registryData.js";
 
 const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
 
@@ -172,15 +173,14 @@ export const XAI_STT_LANGUAGES = new Set([
   "vi",
 ]);
 
-// Prefix-matched rather than registry-checked on purpose: this module loads in
-// the packaged main process without the registry, and strict validation would
-// reset the model of anyone still on a retired id. The registry-backed picker
-// rules live in settingsStore; transcriptionRouteModelAgreement.test.js pins the
-// two together for every shipping model.
+// Honor the live provider catalog first. Retain the legacy prefix fallback for
+// saved retired IDs, which may no longer appear in the bundled picker.
 export function resolveByokModel(provider: string, configuredModel?: string): string {
   const trimmed = (configuredModel || "").trim();
   if (provider === "custom") return trimmed || "whisper-1";
   if (trimmed) {
+    const catalogProvider = getRegistryData().transcriptionProviders.find((p) => p.id === provider);
+    if (catalogProvider?.models.some((model) => model.id === trimmed)) return trimmed;
     const matchesProvider =
       (provider === "groq" && trimmed.startsWith("whisper-large-v3")) ||
       (provider === "openai" &&

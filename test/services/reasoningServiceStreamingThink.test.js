@@ -445,6 +445,8 @@ test("a timeout-owned abort during raw response reading remains a timeout error"
   globalThis.fetch = async (_input, init) => {
     const body = new ReadableStream({
       start(controller) {
+        // The first bytes switch from the startup allowance to the idle timeout.
+        controller.enqueue(new TextEncoder().encode(": keepalive\n\n"));
         init?.signal?.addEventListener(
           "abort",
           () => controller.error(new DOMException("aborted", "AbortError")),

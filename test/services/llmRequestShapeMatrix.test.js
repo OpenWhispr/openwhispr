@@ -36,17 +36,27 @@ const MATRIX = [
     { max_tokens: MAX_TOKENS, temperature: 0.3, reasoning_effort: "low" }],
   ["tinfoil model outside the registry keeps the legacy shape", "tinfoil", "deepseek-v4-1-flash", null, CLEANUP,
     { max_tokens: MAX_TOKENS, temperature: 0 }],
+  ["tinfoil glm-5.3 notes pin high, below its max default (#2008)", "tinfoil", "glm-5-3", null, AGENT,
+    { max_tokens: MAX_TOKENS, temperature: 0.3, reasoning_effort: "high" }],
+  ["tinfoil glm-5.3 suppression floors at low", "tinfoil", "glm-5-3", null, AGENT_NO_THINK,
+    { max_tokens: MAX_TOKENS, temperature: 0.3, reasoning_effort: "low", chat_template_kwargs: { enable_thinking: false } }],
 
   // --- OpenAI / custom / OpenRouter (registry-driven shape) ---
   ["openai legacy model keeps max_tokens and temperature", "openai", "gpt-4o", null, CLEANUP,
     { max_tokens: MAX_TOKENS, temperature: 0 }],
   ["openai gpt-5 family uses max_completion_tokens and omits temperature", "openai", "gpt-5-mini", null, CLEANUP,
     { max_completion_tokens: MAX_TOKENS }],
+  ["custom glm-5.3 (Ollama Cloud) pins high below its max default (#2008)", "custom", "glm-5.3", "https://ollama.com/v1", AGENT,
+    { max_completion_tokens: MAX_TOKENS, reasoning_effort: "high" }],
+  ["custom glm-5.3 suppression floors at low", "custom", "glm-5.3", "https://ollama.com/v1", AGENT_NO_THINK,
+    { max_completion_tokens: MAX_TOKENS, reasoning_effort: "low", chat_template_kwargs: { enable_thinking: false } }],
   ["openrouter vendor-prefixed id speaks plain chat completions", "openrouter", "openai/gpt-4o", null, AGENT,
     { max_tokens: MAX_TOKENS, temperature: 0.3 }],
   ["openrouter forwards sampling upstream: temperature-rejecting Claude omits it (#1417)", "openrouter", "anthropic/claude-sonnet-5", null, AGENT,
     { max_tokens: MAX_TOKENS }],
   ["openrouter suppression uses its native reasoning toggle", "openrouter", "openai/gpt-4o", null, AGENT_NO_THINK,
+    { max_tokens: MAX_TOKENS, temperature: 0.3, reasoning: { enabled: false } }],
+  ["openrouter glm-5.3 suppression sends its toggle alone, never the high default beside it", "openrouter", "z-ai/glm-5.3", null, AGENT_NO_THINK,
     { max_tokens: MAX_TOKENS, temperature: 0.3, reasoning: { enabled: false } }],
 
   // --- Endpoint dialects (host beats provider and model id) ---
@@ -68,6 +78,10 @@ const MATRIX = [
     { max_tokens: MAX_TOKENS, temperature: 0, reasoning_effort: "low", reasoning: { effort: "low" }, chat_template_kwargs: { enable_thinking: false } }],
   ["lan gpt-oss suppression sends the family floor, never the off value the family lacks", "lan", "gpt-oss-20b-mxfp4", null, AGENT_NO_THINK,
     { max_tokens: MAX_TOKENS, temperature: 0.3, reasoning: { effort: "low" }, chat_template_kwargs: { enable_thinking: false } }],
+  ["lan glm-5.3 pins high: its max default thinks past the output cap (#2008)", "lan", "glm-5.3-flash", null, CLEANUP,
+    { max_tokens: MAX_TOKENS, temperature: 0, reasoning_effort: "high" }],
+  ["lan glm-5.3 suppression floors at low, never the unsupported none", "lan", "glm-5.3-flash", null, CLEANUP_NO_THINK,
+    { max_tokens: MAX_TOKENS, temperature: 0, reasoning: { effort: "low" }, chat_template_kwargs: { enable_thinking: false } }],
   ["local llama.cpp gets think false plus chat_template_kwargs (#783)", "local", "qwen3.5-4b-gguf", null, CLEANUP_NO_THINK,
     { max_tokens: MAX_TOKENS, temperature: 0, think: false, chat_template_kwargs: { enable_thinking: false } }],
 

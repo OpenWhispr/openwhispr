@@ -74,6 +74,59 @@ function dialLoopback(streaming, url) {
     buildRealUrl(options).replace("wss://api.deepgram.com/v1/listen", url);
 }
 
+test("live BYOK models keep their selection across warm sockets and reconnects", async (t) => {
+  const store = require("../../src/models/registryData.js");
+  const old = store.getRegistrySnapshot();
+  const next = structuredClone(old.data);
+  next.transcriptionProviders
+    .find((p) => p.id === "deepgram")
+    .models.push({
+      id: "registry-deepgram-new",
+      name: "New compatible model",
+      description: "Fixture",
+      streaming: true,
+    });
+  t.after(() =>
+    store.replaceRegistryData({ data: old.data, manifestVersion: old.manifestVersion + 2 })
+  );
+  store.replaceRegistryData({ data: next, manifestVersion: old.manifestVersion + 1 });
+  await withMetadataServer(async (url, connections) => {
+    const streaming = new DeepgramStreaming();
+    dialLoopback(streaming, url);
+    try {
+      await streaming.warmup({ token: "byok-key", mode: "byok", model: "nova-3", language: "en" });
+      await streaming.connect({
+        token: "byok-key",
+        mode: "byok",
+        model: "registry-deepgram-new",
+        language: "en",
+      });
+      assert.equal(connections.length, 2, "a different model cannot reuse the warm socket");
+      assert.match(connections[1], /model=registry-deepgram-new/);
+      assert.equal(streaming.currentModel, "registry-deepgram-new");
+      assert.equal(streaming.connectionOptions.model, "registry-deepgram-new");
+    } finally {
+      streaming.cleanupAll();
+    }
+  });
+  const streaming = new DeepgramStreaming();
+  const modelFor = (options) =>
+    new URL(streaming.buildWebSocketUrl(options)).searchParams.get("model");
+  assert.equal(modelFor({ mode: "byok", model: "nova-3", language: "zh" }), "nova-2");
+  assert.equal(
+    modelFor({ mode: "byok", model: "registry-deepgram-new", language: "zh" }),
+    "registry-deepgram-new"
+  );
+  assert.equal(
+    modelFor({ mode: "openwhispr", model: "registry-deepgram-new", language: "en" }),
+    "nova-3"
+  );
+  assert.equal(
+    modelFor({ mode: "byok", model: "another-provider-model", language: "en" }),
+    "nova-3"
+  );
+});
+
 test("a warm connection opened for another language is not reused", async () => {
   await withMetadataServer(async (url, connections) => {
     const streaming = new DeepgramStreaming();

@@ -52,10 +52,10 @@ const { createNoteAttendeesLookup, searchContacts } = require("./connectors/cont
 // The renderer's ModelRegistry is not main-loadable; the raw registry data is
 // packaged, and the route resolver only needs {id, baseUrl} per provider.
 const transcriptionProviderBaseUrls = () =>
-  require("../models/modelRegistryData.json").transcriptionProviders;
+  require("../models/registryData.js").registryData.transcriptionProviders;
 // Classified errors show the provider's display name; routes only carry its id.
 const transcriptionProviderName = (id) =>
-  require("../models/modelRegistryData.json").transcriptionProviders.find((p) => p.id === id)
+  require("../models/registryData.js").registryData.transcriptionProviders.find((p) => p.id === id)
     ?.name || id;
 // ipcMain.handle keeps only the message when a promise rejects, dropping custom
 // props — proxy handlers return the classified fields so the renderer can
@@ -107,7 +107,11 @@ const HyprlandShortcutManager = require("./hyprlandShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
 const { i18nMain, changeLanguage } = require("./i18nMain");
 const DeepgramStreaming = require("./deepgramStreaming");
-const { GeminiLiveStreaming, GEMINI_LIVE_MODEL } = require("./geminiLiveStreaming");
+const {
+  GeminiLiveStreaming,
+  GEMINI_LIVE_MODEL,
+  resolveGeminiLiveModel,
+} = require("./geminiLiveStreaming");
 const CortiStreaming = require("./cortiStreaming");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
 const { getCortiToken } = require("./cortiAuth");
@@ -9618,7 +9622,18 @@ class IPCHandlers {
       return warmup;
     });
 
+    let dictationStartInProgress = false;
+    let dictationBufferStartAudio = false;
+    let dictationStartAudio = [];
+    let dictationStartAudioBytes = 0;
+    const DICTATION_START_AUDIO_MAX = 3 * 16000 * 2;
+
     ipcMain.handle("dictation-realtime-start", async (event, options = {}) => {
+      if (dictationStartInProgress) return { success: false, error: "Operation in progress" };
+      dictationStartInProgress = true;
+      // OpenAI and Tinfoil finish setup without audio. Keep the first frames
+      // away from an older warmup while a different model is being selected.
+      dictationBufferStartAudio = options.provider !== "orukeet";
       try {
         clearDictationIdleTimer();
         this._dictationPreviewEnabled = !!options.preview;
@@ -9628,13 +9643,27 @@ class IPCHandlers {
         ) {
           await connectDictationStreaming(event, options);
         }
+        for (const buffer of dictationStartAudio) this._dictationStreaming?.sendAudio(buffer);
         return { success: true };
       } catch (err) {
         return streamingStartFailure(err);
+      } finally {
+        dictationStartInProgress = false;
+        dictationBufferStartAudio = false;
+        dictationStartAudio = [];
+        dictationStartAudioBytes = 0;
       }
     });
 
     ipcMain.on("dictation-realtime-send", (_event, buffer) => {
+      if (dictationBufferStartAudio) {
+        const bytes = Buffer.from(buffer);
+        if (dictationStartAudioBytes + bytes.length <= DICTATION_START_AUDIO_MAX) {
+          dictationStartAudio.push(bytes);
+          dictationStartAudioBytes += bytes.length;
+        }
+        return;
+      }
       this._dictationStreaming?.sendAudio(Buffer.from(buffer));
     });
 
@@ -11555,6 +11584,11 @@ class IPCHandlers {
 
     let geminiStreamingStartInProgress = false;
     let geminiSendDropCount = 0;
+    let geminiStartAudio = [];
+    let geminiStartAudioBytes = 0;
+    // Match the client's three-second cold-start bound. A model-changing start
+    // owns these frames, even while a previous warm handshake is finishing.
+    const GEMINI_START_AUDIO_MAX = 3 * 16000 * 2;
     // One handshake at a time. A start that raced an in-flight warmup used to
     // clear the cold-start buffer, spend a second single-use managed token and
     // report success while the warmup's handshake (and its failure) were still
@@ -11579,10 +11613,15 @@ class IPCHandlers {
       return streaming;
     };
 
-    // What a Gemini connection authenticated with: a managed one never serves a
-    // BYOK start or the reverse, and a BYOK one is not reused after a key save.
+    // Managed tokens are constrained to the server's existing model. BYOK can
+    // select newly published compatible models, each requiring its own socket.
+    const geminiConnectionModel = resolveGeminiLiveModel;
+    // A warm socket cannot cross credentials, modes, or selected models.
     const geminiConnectionKey = (options) =>
-      options.mode === "byok" ? `byok:${credentialGeneration}` : "managed";
+      JSON.stringify([
+        options.mode === "byok" ? `byok:${credentialGeneration}` : "managed",
+        geminiConnectionModel(options),
+      ]);
 
     const connectGeminiStreaming = (event, options) => {
       if (geminiConnectInFlight) return geminiConnectInFlight;
@@ -11598,6 +11637,7 @@ class IPCHandlers {
         const token = await fetchRealtimeToken(event, tokenOptions);
         await streaming.connect({
           ...options,
+          model: geminiConnectionModel(options),
           token,
           refreshToken: () => fetchRealtimeToken(event, tokenOptions),
         });
@@ -11629,6 +11669,8 @@ class IPCHandlers {
       }
 
       geminiStreamingStartInProgress = true;
+      geminiStartAudio = [];
+      geminiStartAudioBytes = 0;
       try {
         const streaming = ensureGeminiStreaming(event);
         if (geminiConnectInFlight) await geminiConnectInFlight;
@@ -11640,6 +11682,7 @@ class IPCHandlers {
           if (streaming.isConnected) await streaming.disconnect(false);
           await connectGeminiStreaming(event, options);
         }
+        for (const buffer of geminiStartAudio) streaming.sendAudio(buffer);
         geminiSendDropCount = 0;
         debugLogger.debug("Gemini streaming started", { usedWarmConnection }, "streaming");
         return { success: true, usedWarmConnection };
@@ -11651,11 +11694,21 @@ class IPCHandlers {
         return streamingStartFailure(error);
       } finally {
         geminiStreamingStartInProgress = false;
+        geminiStartAudio = [];
+        geminiStartAudioBytes = 0;
       }
     });
 
     ipcMain.on("gemini-streaming-send", (_event, audioBuffer) => {
       try {
+        if (geminiStreamingStartInProgress) {
+          const buffer = Buffer.from(audioBuffer);
+          if (geminiStartAudioBytes + buffer.length <= GEMINI_START_AUDIO_MAX) {
+            geminiStartAudio.push(buffer);
+            geminiStartAudioBytes += buffer.length;
+          }
+          return;
+        }
         if (!this.geminiStreaming) return;
         const sent = this.geminiStreaming.sendAudio(Buffer.from(audioBuffer));
         if (!sent) {

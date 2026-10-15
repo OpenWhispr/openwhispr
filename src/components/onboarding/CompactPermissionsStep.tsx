@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { CircleCheck, Laptop, Undo2 } from "../icons";
+import { ArrowLeft, CircleCheck, Laptop } from "../icons";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
 // Imported (not referenced by path) so Vite fingerprints them and they resolve
@@ -165,14 +165,11 @@ export default function CompactPermissionsStep({
             minutes") instead of leaving one word stranded. Preferred over a
             hardcoded <br> because the break point stays correct in all 9
             locales, where the string length differs. */}
-        <h1 className="onboarding-display-title mx-auto max-w-72 text-balance text-3xl!">
+        <h1 className="onboarding-display-title mx-auto max-w-96 text-balance text-3xl!">
           {t("onboarding.rehaul.permissions.title")}
         </h1>
-        <p className="mt-2 text-sm text-[var(--onboarding-text-secondary)]">
-          {t("auth.welcomeSubtitle")}
-        </p>
 
-        <div className="mt-3 rounded-[1.35rem] bg-[var(--onboarding-surface-secondary)] px-3 py-1">
+        <div className="mt-5 rounded-[1.35rem] bg-[var(--onboarding-surface-secondary)] px-3 py-1">
           <PermissionRow
             title={t("onboarding.permissions.microphoneTitle")}
             description={t("onboarding.rehaul.permissions.microphoneDescription")}
@@ -271,7 +268,7 @@ export default function CompactPermissionsStep({
               onClick={onBack}
               className="onboarding-pressable inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-5 text-sm font-medium text-[var(--onboarding-text-primary)] transition-colors hover:bg-[var(--onboarding-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)]"
             >
-              <Undo2 className="size-4" aria-hidden="true" />
+              <ArrowLeft className="size-4 rtl:rotate-180" aria-hidden="true" />
               {t("common.back")}
             </button>
           )}

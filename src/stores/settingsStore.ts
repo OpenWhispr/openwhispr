@@ -1,3 +1,4 @@
+import "../models/registryBootstrap.js";
 import { create } from "zustand";
 import { API_ENDPOINTS } from "../config/constants";
 import i18n, { normalizeUiLanguage } from "../i18n";
@@ -31,7 +32,8 @@ import {
 } from "../config/inferenceScopes";
 import { normalizeChineseScriptPreference } from "../utils/chineseScript";
 import { adjustBedrockModelForRegion } from "../utils/bedrockRegions";
-import modelRegistryData from "../models/modelRegistryData.json";
+import { registryData as modelRegistryData } from "../models/registryData.js";
+import { getCloudModelProviders } from "../models/cloudModelCatalog";
 import { pickDefaultModelId } from "../models/providerDefaultModel";
 // Both are leaves: tinfoilModelCache imports only a type from ModelRegistry and
 // the switch store only zustand, so neither reopens the ModelRegistry cycle.
@@ -152,10 +154,10 @@ function canonicalTranscriptionBaseUrl(providerId: string): string | null {
 function reasoningModelBelongsToProvider(providerId: string, modelId: string): boolean {
   if (!modelId) return false;
   // Custom and OpenRouter ids are free-form; any remembered id is valid.
-  // Tinfoil's registry entry is refreshed in place from its live catalog.
+  // Tinfoil's separate live overlay is shared with the picker and policy defaults.
   if (providerId === "custom" || providerId === "openrouter") return true;
   return (
-    modelRegistryData.cloudProviders
+    getCloudModelProviders()
       .find((provider) => provider.id === providerId)
       ?.models.some((model) => model.id === modelId) ?? false
   );
@@ -167,7 +169,7 @@ function defaultLlmModel(mode: InferenceMode, providerId: string, bedrockRegion:
       ? modelRegistryData.localProviders
       : mode === "enterprise"
         ? modelRegistryData.enterpriseProviders
-        : modelRegistryData.cloudProviders;
+        : getCloudModelProviders();
   const defaultModel = pickDefaultModelId(providers.find(({ id }) => id === providerId));
   return mode === "enterprise" && providerId === "bedrock"
     ? adjustBedrockModelForRegion(defaultModel, bedrockRegion)

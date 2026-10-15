@@ -24,6 +24,7 @@ const bindings = [
   })),
 ];
 const handlers = new Map();
+const eventHandlers = new Map();
 const keys = new Map();
 const notifications = [];
 const editor = { id: 1 };
@@ -115,7 +116,11 @@ const electron = {
     on() {},
     isPackaged: false,
   },
-  ipcMain: { handle: (name, fn) => handlers.set(name, fn), on() {}, removeHandler() {} },
+  ipcMain: {
+    handle: (name, fn) => handlers.set(name, fn),
+    on: (name, fn) => eventHandlers.set(name, fn),
+    removeHandler() {},
+  },
   BrowserWindow: {
     getAllWindows: () => windows,
     fromWebContents: () => windows[1],
@@ -148,7 +153,10 @@ Module._load = function (request, parent, isMain) {
     if (request === "./orukeetStreaming")
       return { OrukeetStreaming: FakeOrukeet, MANAGED_STREAM_OPTIONS: {} };
     if (request === "./geminiLiveStreaming")
-      return { GeminiLiveStreaming: FakeStreaming, GEMINI_LIVE_MODEL: "gemini-live" };
+      return {
+        ...originalLoad.call(this, request, parent, isMain),
+        GeminiLiveStreaming: FakeStreaming,
+      };
     if (request === "./debugLogger") return new Proxy({}, { get: () => () => {} });
     if (request === "./tokenStore")
       return {
@@ -390,6 +398,39 @@ test("assemblyai: a socket opened on the old key loses to the save, even when it
   assert.equal(target.assemblyAiStreaming.token, "token-B");
 });
 
+test("gemini: live registry IDs reach the selected connection without a prefix requirement", async (t) => {
+  const store = require("../../src/models/registryData.js");
+  const old = store.getRegistrySnapshot();
+  const next = structuredClone(old.data);
+  next.transcriptionProviders
+    .find((p) => p.id === "gemini")
+    .models.push({
+      id: "registry-google-live",
+      name: "New Google model",
+      description: "Fixture",
+      streaming: true,
+    });
+  store.replaceRegistryData({ data: next, manifestVersion: old.manifestVersion + 1 });
+  const originalConnect = FakeStreaming.prototype.connect;
+  t.after(() => {
+    store.replaceRegistryData({ data: old.data, manifestVersion: old.manifestVersion + 2 });
+    FakeStreaming.prototype.connect = originalConnect;
+  });
+  FakeStreaming.prototype.connect = async function (options) {
+    this.currentModel = options.model;
+    return originalConnect.call(this, options);
+  };
+  target.geminiStreaming = null;
+  invoke("save-gemini-key", "A");
+  const result = await invoke("gemini-streaming-start", {
+    mode: "byok",
+    model: "registry-google-live",
+  });
+  assert.equal(result.success, true);
+  assert.equal(target.geminiStreaming.currentModel, "registry-google-live");
+  await invoke("gemini-streaming-stop");
+});
+
 test("gemini: a warm socket never crosses between managed and BYOK", async (t) => {
   withManagedApi(t);
   target.geminiStreaming = null;
@@ -404,6 +445,121 @@ test("gemini: a warm socket never crosses between managed and BYOK", async (t) =
   assert.equal(result.usedWarmConnection, false);
   assert.equal(target.geminiStreaming.token, "token-Bearer account");
 });
+
+for (const inFlight of [false, true]) {
+  test(`gemini: changing the live model replaces a ${inFlight ? "connecting" : "ready"} warm socket`, async (t) => {
+    target.geminiStreaming = null;
+    invoke("save-gemini-key", "A");
+    const originalConnect = FakeStreaming.prototype.connect;
+    const entered = deferred();
+    const gate = deferred();
+    t.after(() => {
+      FakeStreaming.prototype.connect = originalConnect;
+      gate.resolve();
+    });
+    FakeStreaming.prototype.connect = async function (options) {
+      this.currentModel = options.model;
+      if (options.model === "gemini-old-live") {
+        entered.resolve();
+        if (inFlight) await gate.promise;
+      }
+      return originalConnect.call(this, options);
+    };
+    const warmup = invoke("gemini-streaming-warmup", { mode: "byok", model: "gemini-old-live" });
+    await entered.promise;
+    if (!inFlight) await warmup;
+    const start = invoke("gemini-streaming-start", { mode: "byok", model: "gemini-next-live" });
+    gate.resolve();
+    await warmup;
+    const result = await start;
+    assert.equal(result.success, true);
+    assert.equal(result.usedWarmConnection, false);
+    assert.equal(target.geminiStreaming.currentModel, "gemini-next-live");
+    await invoke("gemini-streaming-stop");
+  });
+}
+
+test("gemini: microphone frames during a model switch reach only the requested model", async (t) => {
+  target.geminiStreaming = null;
+  invoke("save-gemini-key", "A");
+  const originalConnect = FakeStreaming.prototype.connect;
+  const entered = deferred();
+  const gate = deferred();
+  const received = new Map();
+  t.after(() => {
+    FakeStreaming.prototype.connect = originalConnect;
+    gate.resolve();
+  });
+  FakeStreaming.prototype.connect = async function (options) {
+    this.currentModel = options.model;
+    received.set(options.model, []);
+    this.sendAudio = (bytes) => {
+      received.get(this.currentModel).push(Buffer.from(bytes));
+      return true;
+    };
+    if (options.model === "gemini-old-live") {
+      entered.resolve();
+      await gate.promise;
+    }
+    return originalConnect.call(this, options);
+  };
+  const warmup = invoke("gemini-streaming-warmup", { mode: "byok", model: "gemini-old-live" });
+  await entered.promise;
+  const starting = invoke("gemini-streaming-start", { mode: "byok", model: "gemini-next-live" });
+  const send = (bytes) => eventHandlers.get("gemini-streaming-send")({ sender: editor }, bytes);
+  send(Buffer.from([1, 2]));
+  gate.resolve();
+  await warmup;
+  assert.equal((await starting).success, true);
+  send(Buffer.from([3, 4]));
+  assert.deepEqual(received.get("gemini-old-live"), []);
+  assert.deepEqual(Buffer.concat(received.get("gemini-next-live")), Buffer.from([1, 2, 3, 4]));
+  await invoke("gemini-streaming-stop");
+});
+
+for (const [provider, saveChannel] of [
+  ["openai-realtime", "save-openai-key"],
+  ["tinfoil-realtime", "save-tinfoil-key"],
+]) {
+  test(`${provider}: microphone frames during a model switch reach only the requested model`, async (t) => {
+    target._dictationStreaming = null;
+    invoke(saveChannel, "A");
+    const originalConnect = FakeStreaming.prototype.connect;
+    const entered = deferred();
+    const gate = deferred();
+    const received = new Map();
+    t.after(async () => {
+      FakeStreaming.prototype.connect = originalConnect;
+      gate.resolve();
+      await invoke("dictation-realtime-stop");
+    });
+    FakeStreaming.prototype.connect = async function (options) {
+      this.currentModel = options.model;
+      received.set(options.model, []);
+      this.sendAudio = (bytes) => {
+        received.get(this.currentModel).push(Buffer.from(bytes));
+        return true;
+      };
+      if (options.model === "old-live") {
+        entered.resolve();
+        await gate.promise;
+      }
+      return originalConnect.call(this, options);
+    };
+    const options = { mode: "byok", provider };
+    const warmup = invoke("dictation-realtime-warmup", { ...options, model: "old-live" });
+    await entered.promise;
+    const starting = invoke("dictation-realtime-start", { ...options, model: "new-live" });
+    const send = (bytes) => eventHandlers.get("dictation-realtime-send")({ sender: editor }, bytes);
+    send(Buffer.from([1, 2]));
+    gate.resolve();
+    await warmup;
+    assert.equal((await starting).success, true);
+    send(Buffer.from([3, 4]));
+    assert.deepEqual(received.get("old-live"), []);
+    assert.deepEqual(Buffer.concat(received.get("new-live")), Buffer.from([1, 2, 3, 4]));
+  });
+}
 
 // Tinfoil reads the saved key whatever the transcription mode says.
 for (const [provider, saveChannel, mode] of [
