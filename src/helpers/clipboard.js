@@ -85,6 +85,11 @@ function writeClipboardInRenderer(webContents, text) {
   return webContents.executeJavaScript(`navigator.clipboard.writeText(${escaped})`);
 }
 
+// wl-copy exits only once the compositor has taken the selection, a round trip a
+// loaded or cold system can stretch past 50 ms. Where wl-copy is required (#2621), a
+// write killed early holds the paste back, so it gets the other clipboard tools' 200 ms.
+const WL_COPY_TIMEOUT_MS = 200;
+
 // Linux refuses a single argument of 128 KiB or more (MAX_ARG_STRLEN). Reading stdin
 // costs wl-copy a temp file and a `cat`, so only text that long goes that way, typed so
 // wl-copy doesn't run xdg-mime to sniff it.
@@ -92,9 +97,12 @@ const MAX_ARG_BYTES = 128 * 1024;
 
 function spawnWlCopy(flags, text) {
   if (Buffer.byteLength(text) < MAX_ARG_BYTES) {
-    return spawnSync("wl-copy", [...flags, "--", text], { timeout: 50 });
+    return spawnSync("wl-copy", [...flags, "--", text], { timeout: WL_COPY_TIMEOUT_MS });
   }
-  return spawnSync("wl-copy", [...flags, "--type", "text/plain"], { input: text, timeout: 50 });
+  return spawnSync("wl-copy", [...flags, "--type", "text/plain"], {
+    input: text,
+    timeout: WL_COPY_TIMEOUT_MS,
+  });
 }
 
 class ClipboardManager {

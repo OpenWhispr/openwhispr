@@ -1169,6 +1169,21 @@ test("wl-copy takes text too long for an argument on stdin", async (t) => {
   ]);
 });
 
+// A write killed early holds the paste back where wl-copy is required, and 50 ms is
+// shorter than a loaded system's round trip to the compositor.
+test("both wl-copy writes get 200 ms", async (t) => {
+  const timeouts = [];
+  const spawnSync = linuxClipboardToolsSpawnSync(new Set(["wl-copy"]));
+  const manager = loadLinuxPasteManager(t, [], (command, args = [], options = {}) => {
+    if (command === "wl-copy") timeouts.push(options.timeout);
+    return spawnSync(command, args);
+  });
+
+  await withWaylandEnvironment("niri", () => manager._pasteText("transcript"));
+
+  assert.deepEqual(timeouts, [200, 200]);
+});
+
 // The command cache keeps an answer for 30 s; a wl-copy installed after a held-back
 // paste must count for the next paste and the card's Re-check at once.
 test("a wl-copy installed after a held-back paste counts at once", async (t) => {
