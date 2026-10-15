@@ -2982,7 +2982,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           );
       userPrompt = buildLocalSelectionEditUserPrompt(instruction, capture.text);
     } else {
-      completionMarker = `__OPENWHISPR_SELECTION_COMPLETE_${crypto.randomUUID()}__`;
+      // End on the full nonce: models can drop decorative closing underscores.
+      // The response parser still requires this exact marker at the end.
+      completionMarker = `__OPENWHISPR_SELECTION_COMPLETE_${crypto.randomUUID()}`;
       selectionConfig.systemPrompt = buildSelectionEditSystemPrompt(
         config?.systemPrompt,
         completionMarker
