@@ -12906,7 +12906,7 @@ class IPCHandlers {
         // upload that collapses like this loses its labels instead, since it
         // expects several voices.) A cluster without a voice can't be told from
         // sherpa's split of one voice, so it's dropped and its lines go to the
-        // nearest voice. With no voice at all, the cap stays at one.
+        // speaker nearest in time. With no voice at all, the cap stays at one.
         let cap = this._resolveSpeakerCap({ sessionConfig, noteId, diarizedSource });
         if (cap == null) {
           const voiced = diarizationSegments.filter((s) => centroids.has(s.speaker));
