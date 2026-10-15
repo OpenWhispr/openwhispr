@@ -12717,7 +12717,7 @@ class IPCHandlers {
 
   _reconcileLiveSpeakerState(liveSpeakerState, speakerEmbeddingsMap, enrichedSegments) {
     if (!liveSpeakerState || !speakerEmbeddingsMap) {
-      return new Set();
+      return;
     }
 
     const speakerEmbeddings = require("./speakerEmbeddings");
@@ -12796,8 +12796,6 @@ class IPCHandlers {
 
       this._applySpeakerName(enrichedSegments, mappedId, displayName);
     }
-
-    return reconciledSpeakers;
   }
 
   // The most speakers post-call diarization may keep, from the count the user or
@@ -12993,11 +12991,7 @@ class IPCHandlers {
           }
         }
 
-        const reconciledSpeakers = this._reconcileLiveSpeakerState(
-          liveSpeakerState,
-          speakerEmbeddingsMap,
-          enrichedSegments
-        );
+        this._reconcileLiveSpeakerState(liveSpeakerState, speakerEmbeddingsMap, enrichedSegments);
 
         if (speakerEmbeddingsMap) {
           try {
@@ -13008,7 +13002,7 @@ class IPCHandlers {
                 const alreadyMapped = enrichedSegments.some(
                   (segment) => segment.speaker === mappedId && segment.speakerName
                 );
-                if (reconciledSpeakers.has(mappedId) || alreadyMapped) {
+                if (alreadyMapped) {
                   continue;
                 }
 

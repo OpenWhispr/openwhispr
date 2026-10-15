@@ -41,6 +41,7 @@ const electronStub = {
 let voices = new Map();
 let voicesUnreadable = false;
 let embeddingModelAvailable = false;
+let profiles = [];
 const speakerEmbeddingsStub = {
   isAvailable: () => embeddingModelAvailable,
   extractClusterCentroids: async () => {
@@ -103,7 +104,7 @@ function diarizeMeeting(
   const handlers = Object.assign(Object.create(IPCHandlers.prototype), {
     diarizationManager,
     speakerDiarizationEnabled: true,
-    databaseManager: { getNote: () => null, getSpeakerProfiles: () => [] },
+    databaseManager: { getNote: () => null, getSpeakerProfiles: () => profiles },
   });
   const transcript = diarizerOutput
     .filter((turn) => turn.end - turn.start >= 2)
@@ -136,6 +137,7 @@ test.beforeEach(() => {
   voices = new Map();
   voicesUnreadable = false;
   embeddingModelAvailable = false;
+  profiles = [];
 });
 
 // #2641: with the count left at its default, every remote voice ended up as
@@ -398,4 +400,27 @@ test("a live name goes to the voice it sounds most like, not the first one close
   ];
   assert.deepEqual(namesOf("speaker_1"), ["Bob"]);
   assert.deepEqual(namesOf("speaker_0"), [null]);
+});
+
+// With no count, the live speaker is the first remote voice heard. When live
+// identification left it unnamed, that voice still gets a stored profile's name.
+test("a voice matched to an unnamed live speaker still takes its profile's name", async () => {
+  embeddingModelAvailable = true;
+  voices = new Map([
+    ["speaker_00", [1, 0]],
+    ["speaker_01", [0, 1]],
+  ]);
+  profiles = [
+    { id: 7, display_name: "Alice", embedding: Buffer.from(new Float32Array([1, 0]).buffer) },
+  ];
+
+  const { lines } = await diarizeMeeting(turns(["speaker_00", "speaker_01"], 30, 8), {
+    liveSpeakerState: { speaker_0: { displayName: null, embedding: [0.9, 0.1] } },
+    liveLabel: { speaker: "speaker_0" },
+  });
+
+  const namesOf = (speaker) => [
+    ...new Set(lines.filter((line) => line.speaker === speaker).map((line) => line.speakerName)),
+  ];
+  assert.deepEqual(namesOf("speaker_0"), ["Alice"]);
 });
