@@ -186,15 +186,3 @@ test("a base prompt takes the Chat prompt's place, ahead of the tool rules", asy
   assert.match(based, /^BASE_SENTINEL\n\nYou can use these tools/);
   assert.equal(based.slice("BASE_SENTINEL".length), chat.slice(chat.indexOf("\n\nYou can use")));
 });
-
-test("a saved prompt that is empty or only spaces resolves to the built-in default", async () => {
-  const { resolveSavedPrompt } = await load();
-  const opts = { agentName: "Jarvis" };
-  assert.equal(resolveSavedPrompt("dictationAgent", "MINE {{agentName}}", opts), "MINE Jarvis");
-  for (const saved of [undefined, "", "  \n\t "]) {
-    assert.match(
-      resolveSavedPrompt("dictationAgent", saved, opts),
-      /^You are "Jarvis", an AI integrated into a speech-to-text dictation app/
-    );
-  }
-});

@@ -1132,11 +1132,13 @@ for (const [saved, label] of [
   ["   \n\t ", "only spaces saved"],
 ]) {
   test(`the voice assistant with ${label} sends the built-in Voice Assistant prompt`, async (t) => {
-    const { captured, sentMessages } = await renderChatStreaming(
+    const { captured, sentMessages, vite } = await renderChatStreaming(
       t,
       { inferenceScope: "dictationAgent" },
-      { settings: { customPrompts: { ...VOICE_ASSISTANT_PROMPTS, dictationAgent: saved } } }
+      { settings: { customPrompts: VOICE_ASSISTANT_PROMPTS } }
     );
+    const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+    useSettingsStore.getState().setCustomPrompt("dictationAgent", saved);
     await captured.sendToAI("Hello", []);
     const prompt = systemPromptOf(sentMessages[0]);
     assert.match(prompt, BUILT_IN_VOICE_PROMPT);

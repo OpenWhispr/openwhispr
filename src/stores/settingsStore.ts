@@ -1955,14 +1955,19 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   noteFormattingDisableThinking: readBoolean("noteFormattingDisableThinking", true),
   chatAgentDisableThinking: readBoolean("chatAgentDisableThinking", true),
 
+  // A saved prompt of only whitespace counts as nothing saved.
   customPrompts: PROMPT_KIND_LIST.reduce(
-    (acc, kind) => ({ ...acc, [kind]: readString(`customPrompt.${kind}`, "") }),
+    (acc, kind) => {
+      const saved = readString(`customPrompt.${kind}`, "");
+      return { ...acc, [kind]: saved.trim() ? saved : "" };
+    },
     {} as Record<PromptKind, string>
   ),
   setCustomPrompt: (kind, value) => {
-    if (isBrowser) localStorage.setItem(`customPrompt.${kind}`, value);
+    const saved = value.trim() ? value : "";
+    if (isBrowser) localStorage.setItem(`customPrompt.${kind}`, saved);
     useSettingsStore.setState((s) => ({
-      customPrompts: { ...s.customPrompts, [kind]: value },
+      customPrompts: { ...s.customPrompts, [kind]: saved },
     }));
   },
 

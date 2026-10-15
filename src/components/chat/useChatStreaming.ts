@@ -31,7 +31,7 @@ import {
   appendPlainTextResponseSuffix,
   appendScreenContextSuffix,
   getAgentSystemPrompt,
-  resolveSavedPrompt,
+  resolvePrompt,
 } from "../../config/prompts";
 import { resolveUnavailableCapabilities } from "../../config/agentCapabilities";
 import { getAgentName } from "../../utils/agentName";
@@ -525,7 +525,7 @@ export function useChatStreaming({
             // built-in Voice Assistant prompt when none is saved, never Chat's.
             basePrompt:
               inferenceScope === "dictationAgent"
-                ? resolveSavedPrompt("dictationAgent", settings.customPrompts.dictationAgent, {
+                ? resolvePrompt("dictationAgent", {
                     agentName: getAgentName(),
                     uiLanguage: settings.uiLanguage,
                   })
