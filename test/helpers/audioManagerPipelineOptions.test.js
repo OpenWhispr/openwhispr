@@ -103,10 +103,16 @@ test("combined cleanup options honor every eligibility guard and use the actual 
   };
   manager.getOrCreateAudioContext = async () => ({ audioWorklet: { addModule: async () => {} } });
   manager.getWorkletBlobUrl = () => "test";
+  // Warmup prepares the next ordinary dictation, whatever the last one was,
+  // and leaves the last recording's input kind alone.
+  manager.voiceAgentRequested = true;
   await manager.warmupStreamingConnection({ warmMic: false });
   assert.equal(calls.length, 1);
+  assert.equal(manager.voiceAgentRequested, true);
+  assert.equal(manager.getPipelineCleanupOptions(useSettingsStore.getState()), undefined);
   assert.deepEqual(
     calls[0].pipelineOptions,
-    manager.getPipelineCleanupOptions(useSettingsStore.getState())
+    manager.getPipelineCleanupOptions(useSettingsStore.getState(), { voiceAgentRequested: false })
   );
+  assert.ok(calls[0].pipelineOptions);
 });

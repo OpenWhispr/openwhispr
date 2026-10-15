@@ -4651,7 +4651,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return this.sttConfig.dictation?.mode === "streaming";
   }
 
-  getPipelineCleanupOptions(settings) {
+  getPipelineCleanupOptions(
+    settings,
+    {
+      voiceAgentRequested = this.voiceAgentRequested,
+      translationRequested = this.translationRequested,
+    } = {}
+  ) {
     if (
       this.sttConfig?.orukeetPipeline !== "gemma12" ||
       settings.useLocalWhisper ||
@@ -4660,8 +4666,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       !isCloudCleanupMode() ||
       !isLlmSelectionAllowed(usePolicyStore.getState(), { mode: "openwhispr" }) ||
       (settings.cleanupCloudMode || "openwhispr") !== "openwhispr" ||
-      this.voiceAgentRequested ||
-      this.translationRequested
+      voiceAgentRequested ||
+      translationRequested
     )
       return undefined;
     return {
@@ -4697,7 +4703,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               language: settings.preferredLanguage,
               keyterms: this.getKeyterms(),
               voiceAgentRequested: this.voiceAgentRequested,
-              pipelineOptions: this.getPipelineCleanupOptions(settings),
+              // Warmup runs while idle, so the socket is for an ordinary dictation.
+              pipelineOptions: this.getPipelineCleanupOptions(settings, {
+                voiceAgentRequested: false,
+                translationRequested: false,
+              }),
             })
           );
           // Throw error to trigger retry if AUTH_EXPIRED
@@ -6126,8 +6136,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.onTranscriptionComplete?.({ success: true, text: "" });
     }
 
-    this.voiceAgentRequested = false;
-    this.translationRequested = false;
     if (this.shouldUseStreaming()) {
       this.warmupStreamingConnection().catch((e) => {
         logger.debug("Background re-warm failed", { error: e.message }, "streaming");
