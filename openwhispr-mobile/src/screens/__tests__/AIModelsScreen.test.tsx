@@ -259,8 +259,8 @@ describe('Private Mode switch', () => {
   });
 
   it.each([
-    [true, 'Private mode on.'],
-    [false, 'Private mode off.'],
+    [true, 'Private Mode on.'],
+    [false, 'Private Mode off.'],
   ])('switches Private mode to %s', async (enabled, message) => {
     mockActiveMode = enabled ? 'cloud' : 'private';
     render(<AIModelsScreen />);

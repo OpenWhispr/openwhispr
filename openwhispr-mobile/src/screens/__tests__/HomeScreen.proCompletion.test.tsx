@@ -201,7 +201,7 @@ describe('HomeScreen Private mode badge', () => {
   it('opens AI Models from the badge while Private mode is on', () => {
     mockProcessingModeStoreState.activeMode = 'private';
     render(<HomeScreen />);
-    const badge = screen.getByLabelText('Private mode is on');
+    const badge = screen.getByLabelText('Private Mode is on');
     expect(badge.props.accessibilityRole).toBe('button');
     fireEvent.press(badge);
     expect(require('expo-router').router.push).toHaveBeenCalledWith('/(account)/ai-models');
@@ -210,7 +210,7 @@ describe('HomeScreen Private mode badge', () => {
   it.each(['cloud', 'providers'])('shows no mode switch or badge in %s mode', (mode) => {
     mockProcessingModeStoreState.activeMode = mode;
     render(<HomeScreen />);
-    expect(screen.queryByLabelText('Private mode is on')).toBeNull();
+    expect(screen.queryByLabelText('Private Mode is on')).toBeNull();
     expect(screen.queryByLabelText('Cloud transcription')).toBeNull();
     expect(screen.queryByLabelText('Transcription: Bring Your Own Key')).toBeNull();
   });

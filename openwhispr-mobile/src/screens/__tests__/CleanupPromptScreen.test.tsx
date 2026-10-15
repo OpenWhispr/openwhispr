@@ -97,7 +97,7 @@ describe('CleanupPromptScreen — guidance', () => {
     render(<CleanupPromptScreen />);
     expect(
       screen.getByText(
-        /Private mode skips cleanup unless it is set to On-Device or Bring Your Own Key/,
+        /Private Mode skips cleanup unless it is set to On-Device or Bring Your Own Key/,
       ),
     ).toBeTruthy();
   });

@@ -50,7 +50,7 @@ it('shows the voice assistant off in Private mode and says where to turn it back
   render(<DictationAgentScreen />);
   expect(
     screen.getByText(
-      'Off while Private mode is on. Turn it off in AI Models. Your settings are saved and apply once Private mode is off.',
+      'Off while Private Mode is on. Turn it off in AI Models. Your settings are saved and apply once Private Mode is off.',
     ),
   ).toBeTruthy();
   const [enable] = screen.UNSAFE_getAllByType(Switch);

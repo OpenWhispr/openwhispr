@@ -13,22 +13,26 @@ import { useOnboardingPracticeMode } from '@/hooks/useOnboardingPracticeMode';
 import { useOnboardingStep } from '@/hooks/useOnboardingStep';
 import { BRAND } from '@/config/colors';
 import { AppFont } from '@/lib/fonts';
+import { readKeyboardAgentDraft } from '@/lib/keyboardAgentSync';
 import { safeHaptics } from '@/lib/utils';
 import { useAuthStore } from '@/store/useAuthStore';
 import { hasRealAccountHistory } from '@/sync/syncIdentity';
 import { addKeyboardStatusChangedListener } from '../../../../modules/app-group-storage/src';
+import { DEFAULT_FOLLOW_UP, draftPlaceholders, fillInInstruction } from './voiceAgentFollowUp';
 
 type Phase = 'start' | 'asking' | 'first-draft' | 'refined' | 'done';
 
 // What users say in the live try, and what the example shows when the live try can't run. The agent
-// brackets every fact it isn't given, so the request leaves just one (the new meeting time) for the
-// follow-up to fill in.
-const REQUEST = 'Tell Sam I’m running late and ask if we can push our meeting.';
-const EXAMPLE_DRAFT = 'Hey Sam, I’m running late. Could we push our meeting a bit?';
+// brackets every fact it isn't given (the landlord's name, the user's), and the follow-up names the
+// ones the draft actually has.
+const REQUEST = 'Write a message to my landlord asking if I can pay rent two days late.';
+const EXAMPLE_DRAFT =
+  'Hi, would it be okay if I paid this month’s rent two days late? Thanks for understanding.';
+const INSERT = 'Tap ✓ to insert it.';
 
 // The field is focused on arrival, so the first instruction points straight at the keyboard's agent
 // button, drawn with the same glyph the keyboard uses.
-const INSTRUCTIONS: Record<Phase, ReactNode> = {
+const INSTRUCTIONS: Record<Exclude<Phase, 'first-draft' | 'refined'>, ReactNode> = {
   start: (
     <>
       Tap the <SystemIcon name="wand.and.stars" mdName="WandSparkles" size={17} color="label" />{' '}
@@ -36,10 +40,14 @@ const INSTRUCTIONS: Record<Phase, ReactNode> = {
     </>
   ),
   asking: `Say: “${REQUEST}”`,
-  'first-draft': 'Now tap Ask for changes and add a time. Say: “Make it 3 PM.”',
-  refined: 'Tap ✓ to insert it.',
   done: 'That’s your voice assistant.',
 };
+
+// After a draft, the instruction names the placeholders it still has.
+function draftInstruction(refined: boolean, placeholders: string[]): string {
+  if (placeholders.length) return fillInInstruction(placeholders, refined);
+  return refined ? INSERT : DEFAULT_FOLLOW_UP;
+}
 
 // Errors a retry can't clear: the server wants an account (the free tries are used up, the guest
 // word quota is spent, or the server has no live try yet; only an account clears it) or the weekly
@@ -65,6 +73,7 @@ export function VoiceAgentStep(): ReactElement {
   const inserted = useRef(false);
   const [phase, setPhase] = useState<Phase>('start');
   const [value, setValue] = useState('');
+  const [placeholders, setPlaceholders] = useState<string[]>([]);
   const [agentError, setAgentError] = useState<string | null>(null);
   // A failed refinement leaves the earlier draft on the keyboard's card, so the field stays up for
   // inserting it.
@@ -75,13 +84,15 @@ export function VoiceAgentStep(): ReactElement {
   const pulseStyle = useAnimatedStyle(() => ({ transform: [{ scale: 1 + pulse.value * 0.04 }] }));
   const flashStyle = useAnimatedStyle(() => ({ opacity: pulse.value * 0.18 }));
 
+  const draftText = hasDraft ? draftInstruction(phase === 'refined', placeholders) : null;
+
   // Eyes are on the keyboard during the try, so each new instruction pulses the card and taps the
-  // phone to draw them back up.
+  // phone to draw them back up. A new draft can change it without changing the phase.
   useEffect(() => {
     if (phase === 'start') return;
     pulse.value = withSequence(withTiming(1, { duration: 160 }), withTiming(0, { duration: 700 }));
     safeHaptics(phase === 'done' ? 'success' : 'light');
-  }, [phase, pulse]);
+  }, [phase, draftText, pulse]);
 
   useEffect(() => {
     const subscription = addKeyboardStatusChangedListener((event) => {
@@ -93,6 +104,7 @@ export function VoiceAgentStep(): ReactElement {
         if (event.updatedAtMs && event.updatedAtMs === lastDraftAt.current) return;
         lastDraftAt.current = event.updatedAtMs;
         draftsReady.current += 1;
+        setPlaceholders(draftPlaceholders(readKeyboardAgentDraft() ?? ''));
         const next: Phase = draftsReady.current >= 2 ? 'refined' : 'first-draft';
         setPhase((current) => (current === 'done' ? current : next));
         setAgentError(null);
@@ -170,7 +182,8 @@ export function VoiceAgentStep(): ReactElement {
                 }
                 className="flex-1 text-[16px] leading-[22px] text-label"
               >
-                {INSTRUCTIONS[agentError ? 'refined' : phase]}
+                {/* A failed change leaves the earlier draft on the keyboard's card, ready to insert. */}
+                {agentError ? INSERT : hasDraft ? draftText : INSTRUCTIONS[phase]}
               </Text>
             </Animated.View>
             {errorNote ? (
@@ -185,7 +198,7 @@ export function VoiceAgentStep(): ReactElement {
             ) : null}
             <View className="rounded-2xl border border-separator bg-secondarySystemGroupedBackground px-4 pb-4 pt-3">
               <Text className="mb-2 text-[11px] font-bold uppercase tracking-wider text-tertiaryLabel">
-                To: Sam
+                To: Landlord
               </Text>
               <TextInput
                 ref={input}

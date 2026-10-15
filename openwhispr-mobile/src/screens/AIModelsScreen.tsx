@@ -149,7 +149,7 @@ export default function AIModelsScreen(): React.JSX.Element {
     setRequestedPrivateMode(enabled);
     try {
       if ((await setPrivateMode(enabled)) === 'switched') {
-        showToast(enabled ? 'Private mode on.' : 'Private mode off.', 'success');
+        showToast(enabled ? 'Private Mode on.' : 'Private Mode off.', 'success');
       }
     } finally {
       setRequestedPrivateMode(null);

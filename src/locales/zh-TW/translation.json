@@ -219,11 +219,11 @@
     "rehaul": {
       "permissions": {
         "title": "3 分鐘完成 OpenWhispr 設定",
-        "microphoneDescription": "把你說的話變成文字。僅在錄音時開啟。",
-        "accessibilityDescription": "把文字貼到你正在使用的 App 裡。",
+        "microphoneDescription": "僅在錄音時收音。",
+        "accessibilityDescription": "把文字貼到任何 App。",
         "systemAudioTitle": "系統音訊",
-        "systemAudioDescription": "為會議筆記錄下通話中的其他人。僅在錄音時開啟。",
-        "screenContextDescription": "當你向語音助理提問時，讓它看到你螢幕上的內容。絕不儲存。",
+        "systemAudioDescription": "錄下通話中的其他人。",
+        "screenContextDescription": "讓助理看到你的螢幕。",
         "enable": "啟用",
         "enabled": "已啟用"
       },
@@ -1172,6 +1172,7 @@
     },
     "signedIn": {
       "welcomeBack": "歡迎回來",
+      "welcomeBackNamed": "歡迎回來，{{name}}",
       "notYou": "不是你？登出"
     },
     "sso": {

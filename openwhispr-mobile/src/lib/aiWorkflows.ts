@@ -24,21 +24,21 @@ export const UNSET_PROVIDER_NOTES: Partial<Record<MobileInferenceScope, string>>
 // Private mode skips cleanup until On-Device or a provider is saved for it, so the unset
 // page picks nothing.
 export const UNSET_ON_DEVICE_CLEANUP_NOTE =
-  'Not saved yet. Private mode skips cleanup until you choose On-Device or Bring Your Own Key.';
+  'Not saved yet. Private Mode skips cleanup until you choose On-Device or Bring Your Own Key.';
 
 // The same, on an iPhone that can never run On-Device cleanup.
 export const UNSET_UNSUPPORTED_CLEANUP_NOTE =
-  "Not saved yet. This iPhone can't run On-Device cleanup, so Private mode skips it until you choose Bring Your Own Key.";
+  "Not saved yet. This iPhone can't run On-Device cleanup, so Private Mode skips it until you choose Bring Your Own Key.";
 
 // What Private mode means for each workflow other than dictation.
 export const ON_DEVICE_MODE_NOTES: Partial<Record<MobileInferenceScope, string>> = {
-  upload: 'Private mode keeps uploads on this iPhone.',
+  upload: 'Private Mode keeps uploads on this iPhone.',
   notes:
-    'Private mode formats notes on this iPhone and asks before sending one to your choice here.',
+    'Private Mode formats notes on this iPhone and asks before sending one to your choice here.',
   cleanup:
-    'In Private mode, cleanup runs on this iPhone, or sends only the transcript text to your provider with Bring Your Own Key. OpenWhispr Cloud cleanup is skipped until Private mode is off.',
+    'In Private Mode, cleanup runs on this iPhone, or sends only the transcript text to your provider with Bring Your Own Key. OpenWhispr Cloud cleanup is skipped until Private Mode is off.',
   agent:
-    'In Private mode the voice assistant is off, and note chat asks before sending a note off this iPhone.',
+    'In Private Mode the voice assistant is off, and note chat asks before sending a note off this iPhone.',
 };
 
 // Modes Private mode never runs for a workflow, so its page can't offer them as if they would.
@@ -50,7 +50,7 @@ export const PRIVATE_MODE_LOCKED: Partial<Record<MobileInferenceScope, Inference
   cleanup: ['openwhispr'],
 };
 
-export const PRIVATE_MODE_LOCKED_REASON = 'Off while Private mode is on. Turn it off in AI Models.';
+export const PRIVATE_MODE_LOCKED_REASON = 'Off while Private Mode is on. Turn it off in AI Models.';
 
 // A local transcript is cleaned on the phone when cleanup is saved as On-Device.
 export function cleanupSavedOnDevice(config: UserConfig | null): boolean {

@@ -102,6 +102,26 @@ describe('ReasoningService local routing', () => {
     expect(mockPost).toHaveBeenCalledTimes(1);
   });
 
+  it('does not fall back to cloud once the request was cancelled', async () => {
+    const controller = new AbortController();
+    const cancelled = new Error('cancelled');
+    mockLocalProcessText.mockImplementation(async () => {
+      controller.abort();
+      throw cancelled;
+    });
+
+    await expect(
+      ReasoningService.processText({
+        text: 'private note',
+        systemPrompt: 'format this',
+        signal: controller.signal,
+        routing: { isPrivateNote: true, allowCloudFallback: true },
+      }),
+    ).rejects.toBe(cancelled);
+
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
   it('keeps public signed-in requests on the cloud path', async () => {
     mockIsLocalRequired.mockReturnValue(false);
 
