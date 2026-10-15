@@ -138,16 +138,6 @@ async function renderSection(t, plan, electronAPI = {}) {
   return container;
 }
 
-function listItems(container) {
-  const items = [];
-  const walk = (node) => {
-    if (node.tagName === "LI") items.push(node.textContent);
-    for (const child of node.childNodes ?? []) walk(child);
-  };
-  walk(container);
-  return items;
-}
-
 const receipt = (id, destinationLabel, state = "sent") => ({
   id,
   connector: "email",
@@ -172,7 +162,7 @@ test("automatic names the app it resolved to", async (t) => {
   const { textContent } = await renderSection(t, { usageState: usage(true) });
   assert.match(
     textContent,
-    /connectors\.email\.autoResolved\{"target":"connectors\.email\.targets\.outlookWork"\}/
+    /connectors\.email\.automaticHint\{"target":"connectors\.email\.targets\.outlookWork"\}/
   );
 });
 
@@ -233,60 +223,21 @@ test("an unresolved policy doesn't hide the upsell from a free user", async (t) 
   assert.match(textContent, /integrations\.api\.viewPlans/);
 });
 
-test("a change of main's account scope clears and refetches the receipts", async (t) => {
-  // The login rows listen too, as main's preload allows.
-  const scopeListeners = new Set();
-  let answerSecondFetch = null;
-  const answers = [
-    Promise.resolve([receipt("a", "first@example.com")]),
-    new Promise((resolve) => {
-      answerSecondFetch = resolve;
-    }),
-  ];
+test("Connectors shows no recent actions or receipt content and never fetches history", async (t) => {
   let fetches = 0;
   const container = await renderSection(
     t,
-    { usageState: usage(true) },
+    { isPaid: true, statuses: { slack: SLACK, gmail: { ...SLACK, id: "gmail" } } },
     {
-      onActiveAccountScopeChanged: (callback) => {
-        scopeListeners.add(callback);
-        return () => scopeListeners.delete(callback);
+      connectorRecentActions: async () => {
+        fetches++;
+        return [receipt("a", "hidden@example.test")];
       },
-      connectorRecentActions: () => answers[fetches++],
     }
   );
-  assert.match(listItems(container).join(), /first@example\.com/);
-
-  assert.ok(scopeListeners.size > 0);
-  await React.act(async () => {
-    for (const listener of [...scopeListeners])
-      listener({ accountId: "acct-b", authGeneration: 2 });
-  });
-  assert.equal(fetches, 2);
-  assert.deepEqual(listItems(container), []);
-
-  await React.act(async () => answerSecondFetch([receipt("b", "second@example.com")]));
-  const items = listItems(container);
-  assert.equal(items.length, 1);
-  assert.match(items[0], /second@example\.com/);
-});
-
-test("recent receipts name the recipient, or the action when a quit cut it short", async (t) => {
-  const container = await renderSection(
-    t,
-    { usageState: usage(true) },
-    {
-      connectorRecentActions: async () => [
-        receipt("a", "gabe@example.com", "failed"),
-        receipt("b", null, "unknown"),
-      ],
-    }
-  );
-
-  const items = listItems(container);
-  assert.equal(items.length, 2);
-  assert.match(items[0], /^connectors\.recent\.actions\.email_draft/);
-  assert.match(items[1], /^connectors\.recent\.unlabeledActions\.email_draft/);
+  assert.equal(fetches, 0);
+  assert.doesNotMatch(container.textContent, /connectors\.recent|hidden@example\.test/);
+  assert.ok(buttonWithText(container, "connectors.slack.disconnect"));
 });
 
 test("a connected Slack shows the account and Disconnect", async (t) => {
@@ -383,7 +334,7 @@ test("Send from chat can be picked only while Gmail is connected", async (t) => 
   // Automatic sends from chat once Gmail is connected.
   assert.match(
     container.textContent,
-    /connectors\.email\.autoResolved\{"target":"connectors\.email\.targets\.gmailSend"\}/
+    /connectors\.email\.automaticHint\{"target":"connectors\.email\.targets\.gmailSend"\}/
   );
 });
 
@@ -394,7 +345,7 @@ test("without a Gmail login, Send from chat is listed but can't be picked, and s
   assert.equal(option.textContent, "connectors.email.targets.gmailSendConnectFirst");
   assert.match(
     container.textContent,
-    /connectors\.email\.autoResolved\{"target":"connectors\.email\.targets\.outlookWork"\}/
+    /connectors\.email\.automaticHint\{"target":"connectors\.email\.targets\.outlookWork"\}/
   );
 });
 
@@ -408,7 +359,7 @@ test("a Gmail login that needs reconnecting can't be picked, but Automatic still
   assert.equal(option.textContent, "connectors.email.targets.gmailSendConnectFirst");
   assert.match(
     container.textContent,
-    /connectors\.email\.autoResolved\{"target":"connectors\.email\.targets\.gmailSend"\}/
+    /connectors\.email\.automaticHint\{"target":"connectors\.email\.targets\.gmailSend"\}/
   );
   assert.match(container.textContent, /connectors\.gmail\.needsReconnect/);
 });
@@ -525,4 +476,10 @@ test("a free user whose org turned connectors off sees why, not an upsell", asyn
   assert.match(textContent, /connectors\.policyOff/);
   assert.doesNotMatch(textContent, /connectors\.upsell/);
   assert.doesNotMatch(textContent, /integrations\.api\.viewPlans/);
+});
+
+test("Automatic is initially selected and has a short label separate from its current target", async (t) => {
+  const container = await renderSection(t, { isPaid: true });
+  assert.equal(shownTarget(container), "auto");
+  assert.equal(pickerOption(container, "auto").textContent, "connectors.email.targets.auto");
 });

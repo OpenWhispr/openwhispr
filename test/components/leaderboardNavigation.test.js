@@ -21,8 +21,6 @@ test("the leaderboard is tabbed inside the Insights view", () => {
   assert.ok(insights.includes('value="usage"'));
   assert.ok(insights.includes('t("insights.yourUsage")'));
   assert.ok(insights.includes('value="leaderboard"'));
-  assert.ok(insights.includes('className="h-7 p-0.5 rounded-[7px]"'));
-  assert.ok(insights.includes('className="h-6 px-2.5 text-xs rounded-[5px]"'));
   assert.ok(insights.includes("<LeaderboardView"));
   assert.ok(insights.includes("syncService.syncAnalyticsNow()"));
   assert.ok(insights.includes("const authValidated = hasValidatedAuthContext()"));

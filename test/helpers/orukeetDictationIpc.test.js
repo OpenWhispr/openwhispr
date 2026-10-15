@@ -463,6 +463,25 @@ test("warmups landing together mint one session and share its unused socket", as
   await handlers.get("dictation-realtime-stop")();
 });
 
+test("a start in another language still rides the warm socket", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  let mints = 0;
+  backendResponse = async () => {
+    mints += 1;
+    return Response.json(cloudSession);
+  };
+
+  // Orukeet detects the language itself, so a translation dictation or an
+  // Auto setting must not spend a second single-use GPU token.
+  await handlers.get("dictation-realtime-warmup")(event, { ...managedOptions, language: "en" });
+  const warm = target._dictationStreaming;
+  await handlers.get("dictation-realtime-start")(event, { ...managedOptions, language: "de" });
+
+  assert.equal(mints, 1);
+  assert.equal(target._dictationStreaming, warm);
+  await handlers.get("dictation-realtime-stop")();
+});
+
 test("a warmup never reuses a socket that has already carried audio", async () => {
   await handlers.get("dictation-realtime-stop")();
   let mints = 0;

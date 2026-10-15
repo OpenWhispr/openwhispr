@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert, Platform } from 'react-native';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
 const mockClearCredentials = jest.fn().mockResolvedValue(undefined);
@@ -42,6 +42,11 @@ jest.mock('@/services/providers/ProviderCredentials', () => ({
   },
 }));
 
+const mockSetPrivateMode = jest.fn();
+jest.mock('@/lib/workflowModeSwitch', () => ({
+  setPrivateMode: (...args: unknown[]) => mockSetPrivateMode(...args),
+}));
+
 import AIModelsScreen from '../AIModelsScreen';
 
 const originalPlatform = Platform.OS;
@@ -53,6 +58,7 @@ beforeEach(() => {
   Platform.OS = 'ios';
   mockCredentialStatus.mockResolvedValue({ isConfigured: true });
   mockReadiness.mockResolvedValue({ status: 'ready', tokenCounting: false });
+  mockSetPrivateMode.mockResolvedValue('switched');
 });
 
 afterAll(() => {
@@ -227,4 +233,67 @@ it.each([
   mockReadiness.mockResolvedValue({ status, tokenCounting: false });
   render(<AIModelsScreen />);
   expect(await screen.findByText(new RegExp(`Status: ${label}\\.`))).toBeTruthy();
+});
+
+// AI Models is the one place Private mode is switched; Home only shows that it's on.
+describe('Private Mode switch', () => {
+  it('shows Private mode off, with what turning it on does', async () => {
+    render(<AIModelsScreen />);
+    expect(screen.getByLabelText('Private Mode').props.value).toBe(false);
+    expect(
+      screen.getByText('Keep audio on this iPhone and ask before notes leave it.'),
+    ).toBeTruthy();
+    await screen.findByText(/Status: Ready/);
+  });
+
+  it('shows Private mode on, and how to choose per workflow again', async () => {
+    mockActiveMode = 'private';
+    render(<AIModelsScreen />);
+    expect(screen.getByLabelText('Private Mode').props.value).toBe(true);
+    expect(
+      screen.getByText(
+        'Audio stays on this iPhone, notes ask before leaving it, and the voice assistant is off.',
+      ),
+    ).toBeTruthy();
+    await screen.findByText(/Status: Ready/);
+  });
+
+  it.each([
+    [true, 'Private mode on.'],
+    [false, 'Private mode off.'],
+  ])('switches Private mode to %s', async (enabled, message) => {
+    mockActiveMode = enabled ? 'cloud' : 'private';
+    render(<AIModelsScreen />);
+    fireEvent(screen.getByLabelText('Private Mode'), 'valueChange', enabled);
+    expect(await screen.findByTestId('toast-success')).toHaveTextContent(message);
+    expect(mockSetPrivateMode).toHaveBeenCalledWith(enabled);
+  });
+
+  // The model list opened, or sign-in was asked for; nothing changed yet.
+  it.each(['needs-model', 'refused'])('says nothing when the switch is %s', async (result) => {
+    mockSetPrivateMode.mockResolvedValue(result);
+    render(<AIModelsScreen />);
+    fireEvent(screen.getByLabelText('Private Mode'), 'valueChange', true);
+    await waitFor(() => expect(mockSetPrivateMode).toHaveBeenCalledWith(true));
+    expect(screen.queryByTestId('toast-success')).toBeNull();
+    await screen.findByText(/Status: Ready/);
+  });
+
+  // Turning on waits for the model check; the switch must not bounce back off meanwhile, nor take a
+  // second tap.
+  it('holds the requested state while switching, then settles on the real mode', async () => {
+    let finish: (result: string) => void = () => undefined;
+    mockSetPrivateMode.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    render(<AIModelsScreen />);
+    fireEvent(screen.getByLabelText('Private Mode'), 'valueChange', true);
+    await waitFor(() => expect(screen.getByLabelText('Private Mode').props.disabled).toBe(true));
+    expect(screen.getByLabelText('Private Mode').props.value).toBe(true);
+    fireEvent(screen.getByLabelText('Private Mode'), 'valueChange', false);
+    expect(mockSetPrivateMode).toHaveBeenCalledTimes(1);
+
+    await act(async () => finish('refused'));
+    expect(screen.getByLabelText('Private Mode').props.value).toBe(false);
+    expect(screen.getByLabelText('Private Mode').props.disabled).toBe(false);
+    await screen.findByText(/Status: Ready/);
+  });
 });

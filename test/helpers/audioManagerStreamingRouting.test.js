@@ -45,7 +45,7 @@ test("OpenAI dictation realtime requests identify the token provider", async (t)
     return { success: true };
   };
 
-  const provider = manager.getStreamingProvider();
+  const provider = manager.getStreamingProvider(manager.getStreamingProviderName());
   const options = {
     model: "gpt-4o-mini-transcribe",
     mode: "byok",
@@ -77,7 +77,7 @@ test("Gemini's live model routes onto the gemini-streaming-* channels", async (t
   };
 
   assert.equal(manager.getStreamingProviderName(), "gemini");
-  const provider = manager.getStreamingProvider();
+  const provider = manager.getStreamingProvider("gemini");
   assert.equal(provider.awaitsFinalTranscript, true);
   // Pinned to geminiLiveStreaming.js's DISCONNECT_TIMEOUT_MS: both sides
   // measure the same 3s from audioStreamEnd.
@@ -170,7 +170,7 @@ test("explicit Orukeet custom endpoint uses PCM streaming without cloud login", 
   });
   assert.equal(manager.shouldUseStreaming(), true);
   assert.equal(manager.getStreamingProviderName(), "orukeet");
-  assert.equal(manager.getStreamingProvider().finalizeAcknowledged, true);
+  assert.equal(manager.getStreamingProvider("orukeet").finalizeAcknowledged, true);
   setSettings({
     transcriptionMode: "self-hosted",
     cloudTranscriptionProvider: "custom",

@@ -76,7 +76,7 @@ export interface NoteMaterial {
 export type NoteSummarySnapshot = Pick<
   NoteItem,
   "enhanced_content" | "enhancement_prompt" | "enhancement_template_id" | "enhanced_at_content_hash"
-> & { title?: string };
+> & { title?: string; clear_fields?: Array<"enhanced_content"> };
 
 export interface ActionAppliedEvent {
   noteId: number;
@@ -563,16 +563,19 @@ export function runBackgroundAction(
       if (title) updates.title = title;
       const result = await window.electronAPI.updateNote(noteId, updates);
       if (!result?.success) throw new Error(labels.actionFailed);
+      const previousSummary = before?.enhanced_content ?? null;
       pushAppliedEvent({
         noteId,
         action,
         previous: {
-          // "" as deleting a summary does: sync keeps the cloud copy over a null.
-          enhanced_content: before?.enhanced_content ?? "",
+          enhanced_content: previousSummary,
           enhancement_prompt: before?.enhancement_prompt ?? null,
           enhancement_template_id: before?.enhancement_template_id ?? null,
           enhanced_at_content_hash: before?.enhanced_at_content_hash ?? null,
           ...(title && before && { title: before.title }),
+          // Undoing a first summary is a deliberate clear, so it syncs to every
+          // device; a bare blank stays local and the summary would come back.
+          ...(!previousSummary?.trim() && { clear_fields: ["enhanced_content"] }),
         },
       });
 

@@ -212,17 +212,18 @@
     "policyUnresolved": "Les paramètres de votre organisation ne sont pas encore chargés. Réessayez dans un instant.",
     "managedConfigLoading": "Vérification de la configuration gérée de votre organisation en cours. Réessayez dans un instant.",
     "managedConfigUnavailable": "L'accès d'entreprise géré est indisponible. Reconnectez-vous ou contactez votre administrateur.",
-    "managedPolicyConflict": "L'accès géré est bloqué par la politique de votre espace de travail. Contactez votre administrateur."
+    "managedPolicyConflict": "L'accès géré est bloqué par la politique de votre espace de travail. Contactez votre administrateur.",
+    "resizePanel": "Redimensionner le panneau"
   },
   "onboarding": {
     "rehaul": {
       "permissions": {
         "title": "Configurez OpenWhispr en 3 minutes",
-        "microphoneDescription": "Transforme ce que vous dites en texte. Actif seulement pendant l’enregistrement.",
-        "accessibilityDescription": "Colle le texte dans l’application que vous utilisez.",
+        "microphoneDescription": "N’écoute que pendant l’enregistrement.",
+        "accessibilityDescription": "Colle le texte dans vos apps.",
         "systemAudioTitle": "Audio Système",
-        "systemAudioDescription": "Enregistre vos interlocuteurs pour les notes de réunion. Actif seulement pendant l’enregistrement.",
-        "screenContextDescription": "Laisse votre assistant vocal voir votre écran quand vous le sollicitez. Jamais enregistré.",
+        "systemAudioDescription": "Enregistre vos interlocuteurs en appel.",
+        "screenContextDescription": "Montre votre écran à l’assistant.",
         "enable": "Activer",
         "enabled": "Activé"
       },
@@ -972,7 +973,10 @@
         "modifiersHeldClipboardFailed": "OpenWhispr a généré la modification, mais une touche de modification (comme Ctrl ou Maj) était encore enfoncée, elle n'a donc pas été appliquée, et elle n'a pas pu être copiée dans le presse-papiers non plus.",
         "unavailable": "OpenWhispr n’a pas pu lire la sélection en toute sécurité. Vérifiez les autorisations d’accessibilité ou d’automatisation.",
         "tooLarge": "La sélection est trop grande. Sélectionnez au maximum 6 000 caractères.",
-        "reasoningFailed": "L’IA n’a pas pu terminer la modification. Le texte d’origine n’a pas été modifié."
+        "reasoningFailed": "L’IA n’a pas pu terminer la modification. Le texte d’origine n’a pas été modifié.",
+        "invalidResponse": "L’IA a renvoyé une réponse de modification invalide. Rien n’a été remplacé. Sélectionnez le texte et réessayez.",
+        "emptyResponse": "L’IA a renvoyé une modification vide. Rien n’a été remplacé. Essayez une instruction plus précise.",
+        "truncatedResponse": "L’IA s’est arrêtée avant de terminer la modification. Rien n’a été remplacé. Essayez de sélectionner moins de texte."
       },
       "pastePermission": {
         "title": "Autoriser le collage automatique",
@@ -985,7 +989,8 @@
       },
       "pasteFailed": {
         "title": "Collage automatique impossible"
-      }
+      },
+      "interruptedRecordingRecovered": "Récupérée après la fermeture d'OpenWhispr avant la fin de cette dictée."
     },
     "clipboard": {
       "pasteFailed": {
@@ -1167,6 +1172,7 @@
     },
     "signedIn": {
       "welcomeBack": "Bon retour",
+      "welcomeBackNamed": "Bon retour, {{name}}",
       "notYou": "Ce n’est pas vous ? Se déconnecter"
     },
     "sso": {
@@ -1302,7 +1308,6 @@
   "apiKeysSection": {
     "title": "Clés API",
     "description": "Créez des clés pour accéder à l'API OpenWhispr de manière programmatique.",
-    "docsLink": "Docs de l'API",
     "empty": "Aucune clé API pour le moment",
     "createButton": "Créer une clé API",
     "create": {
@@ -1582,6 +1587,7 @@
   },
   "settingsModal": {
     "managedByOrg": "Certains paramètres sont gérés par votre organisation.",
+    "managedAccount": "Compte géré",
     "groups": {
       "account": "Compte",
       "app": "Application",
@@ -3548,6 +3554,7 @@
       "chunkProgress": "Partie {{step}} sur {{total}}",
       "emptyReply": "Le modèle a renvoyé une réponse vide. Réessayez ou choisissez un autre modèle.",
       "allActions": "Toutes les actions",
+      "selectAction": "Sélectionner l'action",
       "manage": "Gérer les actions...",
       "addAction": "Nouvelle action",
       "editAction": "Modifier l'action",
@@ -3564,7 +3571,7 @@
       "emptyEditorDescription": "Choisissez une action dans la liste ou créez-en une nouvelle",
       "builtin": {
         "generateNotes": {
-          "name": "Générer des notes",
+          "name": "Résumé IA",
           "description": "Nettoyer, structurer et améliorer vos notes"
         },
         "followUpEmail": {
@@ -3573,7 +3580,7 @@
           "cta": "Rédiger un e-mail de suivi"
         },
         "detailedNotes": {
-          "name": "Résumé IA",
+          "name": "Notes détaillées",
           "description": "Des notes de réunion précises et complètes avec décisions et actions"
         },
         "makeTodos": {
@@ -3601,19 +3608,24 @@
           "description": "Méthode de travail, difficultés, réactions et citations d'un participant"
         },
         "shorten": {
-          "name": "Raccourcir",
-          "description": "Réduire le résumé de moitié environ",
-          "cta": "Raccourcir le résumé"
+          "name": "Raccourcir les notes",
+          "description": "Raccourcir le résumé IA enregistré en conservant les faits essentiels",
+          "cta": "Raccourcir les notes"
         },
         "addTldr": {
-          "name": "Ajouter un TL;DR",
-          "description": "Placer un TL;DR de deux ou trois phrases en tête du résumé",
-          "cta": "Ajouter un TL;DR"
+          "name": "Rédiger un résumé bref",
+          "description": "Rédiger un résumé de deux ou trois phrases dans le chat",
+          "cta": "Rédiger un résumé bref"
         },
         "slackUpdate": {
           "name": "Point Slack",
           "description": "Rédiger un court point d'équipe à publier sur Slack",
           "cta": "Rédiger un point Slack"
+        },
+        "lengthen": {
+          "name": "Développer les notes",
+          "description": "Enrichir le résumé IA enregistré avec des détails étayés par le contenu",
+          "cta": "Développer les notes"
         }
       },
       "errors": {
@@ -3626,12 +3638,10 @@
       },
       "tab": "Actions",
       "output": {
-        "auto": "Auto",
         "chat": "Chat",
         "summary": "Résumé IA",
-        "chatHint": "Répond dans le chat de la note et laisse le résumé IA tel quel.",
-        "summaryHint": "Modifie le résumé IA de la note, ou le rédige à partir de la transcription s'il n'y en a pas encore.",
-        "autoHint": "Lit le prompt à l'enregistrement et choisit le chat ou le résumé IA."
+        "chatHint": "Cette action répond dans le chat. Votre résumé IA enregistré reste inchangé.",
+        "summaryHint": "Cette action intégrée met à jour votre résumé IA enregistré. Vous pouvez annuler la modification."
       },
       "applied": "Résumé IA mis à jour avec {{name}}"
     },
@@ -3640,6 +3650,7 @@
       "managerTitle": "Modèles et actions",
       "manage": "Gérer les modèles...",
       "select": "Choisir un modèle",
+      "regenerate": "Régénérer",
       "addTemplate": "Nouveau modèle",
       "editTemplate": "Modifier le modèle",
       "namePlaceholder": "Nom du modèle",
@@ -3655,7 +3666,8 @@
       "noSectionsHint": "Sans sections, le contexte constitue toute la consigne du résumé.",
       "noTemplates": "Aucun modèle pour l'instant",
       "emptyEditorTitle": "Sélectionner un modèle",
-      "emptyEditorDescription": "Choisissez un modèle dans la liste ou créez-en un nouveau"
+      "emptyEditorDescription": "Choisissez un modèle dans la liste ou créez-en un nouveau",
+      "outputHint": "Appliquer un modèle crée ou remplace le résumé IA à partir de vos notes et de la transcription."
     },
     "onboarding": {
       "llm": {
@@ -3757,13 +3769,18 @@
         "chips": {
           "catchUp": "Résume-moi les nouveautés",
           "keyDecisions": "Liste les décisions clés",
-          "inFlight": "Montre les projets en cours"
+          "openActionItems": "Liste les actions à mener"
         }
       },
       "invite": "Inviter",
       "author": {
         "you": "Vous"
       }
+    },
+    "assistantUndo": {
+      "applied": "L’assistant a modifié « {{title}} »",
+      "changed": "Cette note a changé après la modification de l’assistant. Il n’est plus possible de l’annuler.",
+      "failed": "Impossible d’annuler la modification. Réessayez."
     }
   },
   "dictionary": {
@@ -3969,7 +3986,10 @@
       "typeMessage": "Écrivez un message...",
       "send": "Envoyer",
       "voiceDraftStreamingOnly": "La saisie vocale n'est pas disponible avec votre fournisseur de transcription : il ne prend en charge que la dictée en direct. Choisissez un autre fournisseur dans Réglages → Parole en texte.",
-      "commands": "Commandes"
+      "commands": "Commandes",
+      "slashNavigate": "pour naviguer",
+      "slashSelect": "pour sélectionner",
+      "slashClose": "pour fermer"
     },
     "tools": {
       "search_notesName": "Rechercher des notes",
@@ -4098,20 +4118,18 @@
     "mcp": {
       "description": "Discutez, recherchez et travaillez avec vos notes dans Claude, ChatGPT et Cursor.",
       "step1": "Dans votre outil d'IA, ajoutez OpenWhispr MCP avec l'URL publique",
-      "step2": "Créez une clé API avec les permissions dont vous avez besoin.",
-      "step3": "Collez la clé comme en-tête Authorization pour vous connecter.",
-      "learnMore": "En savoir plus",
       "proRequired": "Passez à un plan payant pour connecter OpenWhispr à Claude, ChatGPT et Cursor.",
       "worksWith": "Fonctionne avec",
       "copyUrl": "Copier l'URL MCP",
-      "copied": "Copié"
+      "copied": "Copié",
+      "oauthTitle": "Se connecter avec OAuth",
+      "oauthDescription": "Dans un client compatible OAuth, ajoutez l’URL du serveur, puis connectez-vous à OpenWhispr et autorisez l’accès. Aucune clé API requise.",
+      "apiKeyTitle": "Utiliser une clé API",
+      "apiKeyDescription": "Pour les clients acceptant les en-têtes de requête, créez une clé API personnelle avec les autorisations nécessaires et utilisez l’en-tête ci-dessous."
     },
     "cli": {
       "description": "Donnez à votre assistant l'accès à vos notes depuis le terminal.",
       "installLabel": "Installer",
-      "learnMore": "Lire la documentation",
-      "copyDocsLink": "Copier le lien de la documentation",
-      "docsLinkCopied": "Lien de la documentation copié",
       "viewPlans": "Voir les forfaits",
       "local": {
         "label": "Local",
@@ -4156,7 +4174,8 @@
     },
     "connectors": {
       "description": "Laissez l'assistant utiliser vos outils. Vous approuvez chaque e-mail, message et ticket avant son envoi."
-    }
+    },
+    "readDocs": "Lire la documentation"
   },
   "connectors": {
     "approval": {
@@ -4323,15 +4342,17 @@
       "descriptionSend": "L'assistant affiche une carte d'e-mail dans le chat. L'e-mail n'est envoyé depuis votre Gmail que lorsque vous appuyez sur Envoyer.",
       "unavailable": "Les brouillons d'e-mails ne sont pas disponibles pour le moment.",
       "targetLabel": "Rédiger les e-mails dans",
-      "autoResolved": "Automatique · {{target}}",
       "targets": {
         "gmail": "Gmail",
         "outlookWork": "Outlook (professionnel ou scolaire)",
         "outlookPersonal": "Outlook.com",
-        "mailto": "Application de messagerie par défaut",
+        "mailto": "Application mail du système",
         "gmailSend": "Envoyer depuis le chat (Gmail)",
-        "gmailSendConnectFirst": "Envoyer depuis le chat (Gmail) · connectez Gmail ci-dessous"
-      }
+        "gmailSendConnectFirst": "Envoyer depuis le chat (Gmail) · connectez Gmail ci-dessous",
+        "auto": "Automatique"
+      },
+      "automaticHint": "Actuellement : {{target}}. Suit vos comptes connectés.",
+      "systemMailHint": "Utilise le gestionnaire de courrier configuré sur votre ordinateur."
     },
     "slack": {
       "title": "Slack",
@@ -4726,16 +4747,10 @@
   },
   "embeddedChat": {
     "askPlaceholder": "Posez une question sur votre note",
-    "title": "Chat",
-    "emptyState": "Posez une question sur cette note",
-    "dock": "Ancrer dans la barre latérale",
-    "undock": "Détacher de la barre latérale",
     "close": "Fermer le chat",
     "newChat": "Nouvelle discussion",
     "conversationSelector": "Changer de conversation",
-    "history": "Historique",
-    "quickActions": "Actions rapides",
-    "generateSummary": "Générer un résumé"
+    "history": "Historique"
   },
   "transcriptionPreview": {
     "label": "Aperçu",

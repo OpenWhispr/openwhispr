@@ -212,17 +212,18 @@
     "policyUnresolved": "貴組織的設定尚未載入完成。請稍後再試。",
     "managedConfigLoading": "正在檢查您組織的託管設定。請稍候再試。",
     "managedConfigUnavailable": "託管企業存取無法使用。請重新登入或聯絡管理員。",
-    "managedPolicyConflict": "託管存取已被您工作區的政策封鎖。請聯絡管理員。"
+    "managedPolicyConflict": "託管存取已被您工作區的政策封鎖。請聯絡管理員。",
+    "resizePanel": "調整面板大小"
   },
   "onboarding": {
     "rehaul": {
       "permissions": {
         "title": "3 分鐘完成 OpenWhispr 設定",
-        "microphoneDescription": "把你說的話變成文字。僅在錄音時開啟。",
-        "accessibilityDescription": "把文字貼到你正在使用的 App 裡。",
+        "microphoneDescription": "僅在錄音時收音。",
+        "accessibilityDescription": "把文字貼到任何 App。",
         "systemAudioTitle": "系統音訊",
-        "systemAudioDescription": "為會議筆記錄下通話中的其他人。僅在錄音時開啟。",
-        "screenContextDescription": "當你向語音助理提問時，讓它看到你螢幕上的內容。絕不儲存。",
+        "systemAudioDescription": "錄下通話中的其他人。",
+        "screenContextDescription": "讓助理看到你的螢幕。",
         "enable": "啟用",
         "enabled": "已啟用"
       },
@@ -972,7 +973,10 @@
         "modifiersHeldClipboardFailed": "OpenWhispr 已產生編輯結果，但修飾鍵（如 Ctrl 或 Shift）仍處於按住狀態，因此未套用，也無法複製到剪貼簿。",
         "unavailable": "OpenWhispr 無法安全讀取選取的文字。請檢查輔助使用或輸入自動化權限。",
         "tooLarge": "選取內容過長。請選取不超過 6,000 個字元。",
-        "reasoningFailed": "AI 無法完成選取文字編輯。原始文字未被變更。"
+        "reasoningFailed": "AI 無法完成選取文字編輯。原始文字未被變更。",
+        "invalidResponse": "AI 傳回的編輯回應格式無效。未取代任何內容。請選取文字後重試。",
+        "emptyResponse": "AI 傳回了空白的編輯結果。未取代任何內容。請嘗試更具體的指示。",
+        "truncatedResponse": "AI 在完成編輯之前停止了。未取代任何內容。請嘗試選取較少的文字。"
       },
       "pastePermission": {
         "title": "允許自動貼上",
@@ -985,7 +989,8 @@
       },
       "pasteFailed": {
         "title": "無法自動貼上"
-      }
+      },
+      "interruptedRecordingRecovered": "OpenWhispr 在本次語音輸入完成前關閉，已復原此錄音。"
     },
     "clipboard": {
       "pasteFailed": {
@@ -1167,6 +1172,7 @@
     },
     "signedIn": {
       "welcomeBack": "歡迎回來",
+      "welcomeBackNamed": "歡迎回來，{{name}}",
       "notYou": "不是你？登出"
     },
     "sso": {
@@ -1487,6 +1493,7 @@
   },
   "settingsModal": {
     "managedByOrg": "部分設定由您的組織管理。",
+    "managedAccount": "受管理的帳戶",
     "groups": {
       "account": "帳戶",
       "app": "應用程式",
@@ -3177,6 +3184,7 @@
     },
     "actions": {
       "allActions": "全部動作",
+      "selectAction": "選擇動作",
       "manage": "管理動作...",
       "addAction": "新增動作",
       "editAction": "編輯動作",
@@ -3196,7 +3204,7 @@
       "emptyReply": "模型傳回了空白回覆。請再試一次，或選擇其他模型。",
       "builtin": {
         "generateNotes": {
-          "name": "生成筆記",
+          "name": "AI 摘要",
           "description": "清理、結構化和增強您的筆記"
         },
         "followUpEmail": {
@@ -3205,7 +3213,7 @@
           "cta": "草擬跟進郵件"
         },
         "detailedNotes": {
-          "name": "AI 摘要",
+          "name": "詳細筆記",
           "description": "準確、完整的會議筆記，包含決策和行動項目"
         },
         "makeTodos": {
@@ -3233,19 +3241,24 @@
           "description": "參與者的工作流程、痛點、反應和原話"
         },
         "shorten": {
-          "name": "精簡",
-          "description": "把摘要縮短到大約一半",
-          "cta": "精簡摘要"
+          "name": "縮短筆記",
+          "description": "縮短已儲存的 AI 摘要，同時保留關鍵事實",
+          "cta": "縮短筆記"
         },
         "addTldr": {
-          "name": "新增 TL;DR",
-          "description": "在摘要開頭加上兩三句話的 TL;DR",
-          "cta": "新增 TL;DR"
+          "name": "撰寫簡短摘要",
+          "description": "在聊天中撰寫兩到三句話的簡短摘要",
+          "cta": "撰寫簡短摘要"
         },
         "slackUpdate": {
           "name": "Slack 更新",
           "description": "寫一則發到 Slack 的簡短團隊更新",
           "cta": "寫一則 Slack 更新"
+        },
+        "lengthen": {
+          "name": "擴充筆記",
+          "description": "用有依據的細節擴充已儲存的 AI 摘要",
+          "cta": "擴充筆記"
         }
       },
       "errors": {
@@ -3258,12 +3271,10 @@
       },
       "tab": "動作",
       "output": {
-        "auto": "自動",
         "chat": "聊天",
         "summary": "AI 摘要",
-        "chatHint": "在筆記的聊天中回覆，AI 摘要維持不變。",
-        "summaryHint": "編輯筆記的 AI 摘要；如果還沒有摘要，就根據轉錄內容產生一份。",
-        "autoHint": "儲存時讀取提示詞，並選擇聊天或 AI 摘要。"
+        "chatHint": "此動作會在聊天中回覆，不會變更已儲存的 AI 摘要。",
+        "summaryHint": "此內建動作會更新已儲存的 AI 摘要。你可以復原變更。"
       },
       "applied": "已使用 {{name}} 更新 AI 摘要"
     },
@@ -3272,6 +3283,7 @@
       "managerTitle": "範本與動作",
       "manage": "管理範本...",
       "select": "選擇範本",
+      "regenerate": "重新產生",
       "addTemplate": "新增範本",
       "editTemplate": "編輯範本",
       "namePlaceholder": "範本名稱",
@@ -3287,7 +3299,8 @@
       "noSectionsHint": "沒有段落時，背景就是摘要的完整指示。",
       "noTemplates": "尚無範本",
       "emptyEditorTitle": "選擇範本",
-      "emptyEditorDescription": "從列表中選擇一個範本或建立新範本"
+      "emptyEditorDescription": "從列表中選擇一個範本或建立新範本",
+      "outputHint": "套用範本會根據你的筆記和轉錄內容建立或取代 AI 摘要。"
     },
     "empty": {
       "title": "這裡還沒有筆記",
@@ -3405,13 +3418,18 @@
         "chips": {
           "catchUp": "幫我補上進度",
           "keyDecisions": "列出關鍵決策",
-          "inFlight": "顯示進行中的專案"
+          "openActionItems": "列出待辦事項"
         }
       },
       "invite": "邀請",
       "author": {
         "you": "你"
       }
+    },
+    "assistantUndo": {
+      "applied": "助理已更新「{{title}}」",
+      "changed": "助理編輯後，這篇筆記又有變更，無法復原。",
+      "failed": "無法復原編輯，請再試一次。"
     }
   },
   "dictionary": {
@@ -3798,7 +3816,10 @@
       "typeMessage": "輸入訊息...",
       "send": "傳送",
       "voiceDraftStreamingOnly": "目前的轉錄服務商僅支援即時聽寫，因此無法使用語音輸入。請在「設定 → 語音轉文字」中選擇其他服務商。",
-      "commands": "指令"
+      "commands": "指令",
+      "slashNavigate": "瀏覽",
+      "slashSelect": "選擇",
+      "slashClose": "關閉"
     },
     "tools": {
       "search_notesName": "搜尋筆記",
@@ -3927,20 +3948,18 @@
     "mcp": {
       "description": "在 Claude、ChatGPT 和 Cursor 中與你的筆記一起聊天、搜尋和工作。",
       "step1": "在你的 AI 工具中，使用公開 URL 新增 OpenWhispr MCP",
-      "step2": "建立具有所需權限的 API 金鑰。",
-      "step3": "將金鑰貼上為 Authorization 標頭以連線。",
-      "learnMore": "瞭解更多",
       "proRequired": "升級到付費方案，以將 OpenWhispr 連接到 Claude、ChatGPT 和 Cursor。",
       "worksWith": "支援",
       "copyUrl": "複製 MCP URL",
-      "copied": "已複製"
+      "copied": "已複製",
+      "oauthTitle": "透過 OAuth 登入",
+      "oauthDescription": "在支援 OAuth 的用戶端中新增伺服器 URL，然後登入 OpenWhispr 並授權存取。不需要 API 金鑰。",
+      "apiKeyTitle": "使用 API 金鑰",
+      "apiKeyDescription": "對於支援請求標頭的用戶端，請建立具有所需權限的個人 API 金鑰，並使用以下標頭。"
     },
     "cli": {
       "description": "讓你的助理透過終端機存取你的筆記。",
       "installLabel": "安裝",
-      "learnMore": "查看文件",
-      "copyDocsLink": "複製文件連結",
-      "docsLinkCopied": "已複製文件連結",
       "viewPlans": "查看方案",
       "local": {
         "label": "本機",
@@ -3985,7 +4004,8 @@
     },
     "connectors": {
       "description": "讓助理使用您的工具。每封郵件、每則訊息和每個議題送出前都需要您核准。"
-    }
+    },
+    "readDocs": "閱讀文件"
   },
   "connectors": {
     "approval": {
@@ -4152,15 +4172,17 @@
       "descriptionSend": "助理會在聊天中顯示一張郵件卡片，只有在您按下傳送後才會透過您的 Gmail 寄出。",
       "unavailable": "郵件草稿暫時無法使用。",
       "targetLabel": "在此撰寫郵件",
-      "autoResolved": "自動 · {{target}}",
       "targets": {
         "gmail": "Gmail",
         "outlookWork": "Outlook（公司或學校）",
         "outlookPersonal": "Outlook.com",
-        "mailto": "預設郵件應用程式",
+        "mailto": "系統郵件應用程式",
         "gmailSend": "在聊天中傳送（Gmail）",
-        "gmailSendConnectFirst": "在聊天中傳送（Gmail）· 請在下方連接 Gmail"
-      }
+        "gmailSendConnectFirst": "在聊天中傳送（Gmail）· 請在下方連接 Gmail",
+        "auto": "自動"
+      },
+      "automaticHint": "目前：{{target}}。依已連線的帳戶選擇。",
+      "systemMailHint": "使用電腦上設定的郵件處理程式。"
     },
     "slack": {
       "title": "Slack",
@@ -4598,7 +4620,6 @@
   "apiKeysSection": {
     "title": "API 金鑰",
     "description": "建立金鑰以程式化方式存取 OpenWhispr API。",
-    "docsLink": "API 文件",
     "empty": "尚無 API 金鑰",
     "createButton": "建立 API 金鑰",
     "create": {
@@ -4650,16 +4671,10 @@
   },
   "embeddedChat": {
     "askPlaceholder": "詢問關於筆記的任何問題",
-    "title": "聊天",
-    "emptyState": "就這條筆記提個問題",
-    "dock": "固定到側邊欄",
-    "undock": "從側邊欄取消固定",
     "close": "關閉聊天",
     "newChat": "新對話",
     "conversationSelector": "切換對話",
-    "history": "歷史記錄",
-    "quickActions": "快速操作",
-    "generateSummary": "產生摘要"
+    "history": "歷史記錄"
   },
   "transcriptionPreview": {
     "label": "預覽",

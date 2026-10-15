@@ -43,7 +43,7 @@ import { shouldOfferVoiceSetup, voiceSetupCandidates } from '@/lib/notes/voiceSe
 import { SpeakerProfileOwnerAlreadyExistsError } from '@/data/local/notesRepository';
 import { VOICE_ALREADY_TAUGHT_ALERT } from '@/lib/voiceEnrollmentMessages';
 import { NoteChatSheet } from '@/components/notes/NoteChatSheet';
-import { isDictationAgentEnabled } from '@/lib/dictationAgent';
+import { isNoteChatEnabled } from '@/lib/dictationAgent';
 import { SpeakerTranscript } from '@/components/notes/SpeakerTranscript';
 import { TranscriptSheet } from '@/components/notes/TranscriptSheet';
 import { NoteMetaRow } from '@/components/notes/NoteMetaRow';
@@ -176,8 +176,7 @@ export default function NoteEditorScreen() {
   const notesMode = useConfigStore((s) => s.config?.inference?.notes?.mode);
   const notesProviderId = useConfigStore((s) => s.config?.inference?.notes?.providerId);
   const chatMode = useConfigStore((s) => s.config?.inference?.agent?.mode);
-  // Note chat shares the Chat & Voice Assistant switch with the voice assistant.
-  const chatEnabled = useConfigStore((s) => (s.config ? isDictationAgentEnabled(s.config) : true));
+  const chatEnabled = useConfigStore((s) => (s.config ? isNoteChatEnabled(s.config) : true));
   const providerNotes = notesMode === 'providers';
   // Only an unset or OpenWhispr chat route reaches Cloud, so only it needs an account and the paywall.
   const cloudChat = chatMode !== 'providers' && chatMode !== 'local';

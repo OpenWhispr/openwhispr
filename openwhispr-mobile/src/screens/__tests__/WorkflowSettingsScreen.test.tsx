@@ -45,11 +45,24 @@ jest.mock('@/lib/workflowModeSwitch', () => ({
   switchWorkflowMode: (...args: unknown[]) => mockSwitchMode(...args),
 }));
 jest.mock('@/components/settings/OnDeviceModelSection', () => ({
-  OnDeviceModelSection: ({ scope, picked }: { scope: string; picked?: string }) => (
-    <MockText>{`On-device models for ${scope}, picked ${picked ?? 'Automatic'}`}</MockText>
+  OnDeviceModelSection: ({
+    scope,
+    picked,
+    lockedChoice,
+  }: {
+    scope: string;
+    picked?: string;
+    lockedChoice?: boolean;
+  }) => (
+    <MockText>
+      {`On-device models for ${scope}, picked ${picked ?? 'Automatic'}${lockedChoice ? ', choice locked' : ''}`}
+    </MockText>
   ),
 }));
-jest.mock('@/hooks/useConfigToggle', () => ({ useConfigToggle: () => jest.fn() }));
+const mockToggle = jest.fn();
+jest.mock('@/hooks/useConfigToggle', () => ({
+  useConfigToggle: (key: string) => (value: unknown) => mockToggle(key, value),
+}));
 jest.mock('@/store/useCustomPromptsStore', () => ({
   useCustomPromptsStore: (selector: (state: unknown) => unknown) =>
     selector({ customPrompts: { cleanup: mockStoredPrompt } }),
@@ -108,6 +121,7 @@ jest.mock('@/services/providers/ProviderCredentials', () => ({
 }));
 
 import { WorkflowSettingsScreen } from '../WorkflowSettingsScreen';
+import { PRIVATE_MODE_LOCKED_REASON } from '@/lib/aiWorkflows';
 
 function chooseProvider(provider: string): void {
   fireEvent.press(screen.getByText('Provider'));
@@ -387,8 +401,9 @@ it('closes the keyboard when a key is pasted, but not while typing', () => {
   expect(dismiss).toHaveBeenCalledTimes(1);
 });
 
-it('checks a provider from On-Device mode, since a check sends no user content', async () => {
+it('checks a provider from Private mode, since a check sends no user content', async () => {
   mockActiveMode = 'private';
+  mockScope = 'cleanup';
   render(<WorkflowSettingsScreen />);
   enableProviders();
   fireEvent.changeText(screen.getByLabelText('API key'), 'test-key');
@@ -450,7 +465,7 @@ it('shows no cleanup mode for a private-mode user who has not saved one, since c
   expect(selectedMode()).toBeUndefined();
   expect(
     screen.getByText(
-      'Not saved yet. On-Device mode skips cleanup until you choose On-Device or Bring Your Own Key.',
+      'Not saved yet. Private mode skips cleanup until you choose On-Device or Bring Your Own Key.',
     ),
   ).toBeTruthy();
   expect(screen.queryByText('Runs on Apple Intelligence on this iPhone.')).toBeNull();
@@ -477,12 +492,16 @@ it('keeps On-Device cleanup selected once a private-mode user has saved it', () 
   expect(mockSwitchMode).not.toHaveBeenCalled();
 });
 
-it('keeps uploads on the previous mode when dictation switches to Bring Your Own Key', async () => {
+// Needs no account, so it is also how a guest, who is kept in Private mode, uses their own key.
+it('keeps uploads on this phone when dictation leaves Private mode for Bring Your Own Key', async () => {
   mockConfig = { defaultMode: 'private' };
   mockActiveMode = 'private';
   mockCredentialStatus.mockResolvedValue({ isConfigured: true });
   render(<WorkflowSettingsScreen />);
   enableProviders();
+  expect(
+    screen.getByText('Save to switch to Bring Your Own Key. This turns Private mode off.'),
+  ).toBeTruthy();
   fireEvent.press(screen.getByText('Save'));
   await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalled());
   const saved = mockUpdateConfig.mock.calls[0][0] as {
@@ -490,9 +509,10 @@ it('keeps uploads on the previous mode when dictation switches to Bring Your Own
   };
   expect(saved.inference.dictation.mode).toBe('providers');
   expect(saved.inference.upload).toEqual({ mode: 'local' });
+  expect(mockSetActiveMode).toHaveBeenCalledWith('providers', true);
 });
 
-it('keeps notes and chat on this phone when dictation leaves On-Device for a provider', async () => {
+it('keeps notes and chat on this phone when dictation leaves Private mode for a provider', async () => {
   mockConfig = { defaultMode: 'private' };
   mockActiveMode = 'private';
   mockCredentialStatus.mockResolvedValue({ isConfigured: true });
@@ -719,20 +739,56 @@ it('asks for a key when none is saved', async () => {
   await waitFor(() => expect(mockCredentialStatus).toHaveBeenCalled());
 });
 
-it('turns Chat & Voice Assistant on and off from the top of its page', () => {
-  mockScope = 'agent';
-  const view = render(<WorkflowSettingsScreen />);
-  const page = JSON.stringify(view.toJSON());
-  expect(page.indexOf('Enable Chat & Voice Assistant')).toBeLessThan(
-    page.indexOf('OpenWhispr Cloud'),
-  );
-  fireEvent.press(screen.getByText('Voice Assistant'));
-  expect(mockPush).toHaveBeenCalledWith('/(account)/dictation-agent');
-  mockConfig = { defaultMode: 'cloud', dictationAgentEnabled: false };
-  view.rerender(<WorkflowSettingsScreen />);
-  expect(screen.queryByText('OpenWhispr Cloud')).toBeNull();
-  expect(screen.queryByText('Voice Assistant')).toBeNull();
-  expect(screen.getByText('Note chat and the voice assistant are off.')).toBeTruthy();
+describe('note chat and the voice assistant', () => {
+  beforeEach(() => {
+    mockScope = 'agent';
+  });
+
+  it('switch apart at the top of their page', () => {
+    const view = render(<WorkflowSettingsScreen />);
+    const page = JSON.stringify(view.toJSON());
+    expect(page.indexOf('Note Chat')).toBeLessThan(page.indexOf('OpenWhispr Cloud'));
+    fireEvent(screen.getByLabelText('Note Chat'), 'valueChange', false);
+    expect(mockToggle).toHaveBeenCalledWith('noteChatEnabled', false);
+    // Note chat stops following the voice assistant's switch once that is changed.
+    fireEvent(screen.getByLabelText('Voice Assistant'), 'valueChange', false);
+    expect(mockUpdateConfig).toHaveBeenCalledWith({
+      dictationAgentEnabled: false,
+      noteChatEnabled: true,
+    });
+    fireEvent.press(screen.getByText('Voice Assistant Settings'));
+    expect(mockPush).toHaveBeenCalledWith('/(account)/dictation-agent');
+  });
+
+  it('keep the model choice while note chat is on and the voice assistant off', () => {
+    mockConfig = { defaultMode: 'cloud', dictationAgentEnabled: false, noteChatEnabled: true };
+    render(<WorkflowSettingsScreen />);
+    expect(screen.getByLabelText('Note Chat').props.value).toBe(true);
+    expect(screen.getByLabelText('Voice Assistant').props.value).toBe(false);
+    expect(screen.getByText('OpenWhispr Cloud')).toBeTruthy();
+    expect(screen.queryByText('Voice Assistant Settings')).toBeNull();
+    expect(screen.queryByText('Note chat and the voice assistant are off.')).toBeNull();
+  });
+
+  // The one switch both shared before is still what an existing user's choice is saved in.
+  it('are both off, with no model choice, when the old shared switch was turned off', () => {
+    mockConfig = { defaultMode: 'cloud', dictationAgentEnabled: false };
+    render(<WorkflowSettingsScreen />);
+    expect(screen.getByLabelText('Note Chat').props.value).toBe(false);
+    expect(screen.queryByText('OpenWhispr Cloud')).toBeNull();
+    expect(screen.getByText('Note chat and the voice assistant are off.')).toBeTruthy();
+  });
+
+  it('show the voice assistant off in Private mode, while note chat stays on', () => {
+    mockActiveMode = 'private';
+    mockConfig = { defaultMode: 'private', dictationAgentEnabled: true };
+    render(<WorkflowSettingsScreen />);
+    expect(screen.getByLabelText('Note Chat').props.value).toBe(true);
+    expect(screen.getByLabelText('Voice Assistant').props.value).toBe(false);
+    expect(screen.getByLabelText('Voice Assistant').props.disabled).toBe(true);
+    expect(screen.getAllByText(PRIVATE_MODE_LOCKED_REASON).length).toBeGreaterThan(0);
+    expect(screen.queryByText('Voice Assistant Settings')).toBeNull();
+  });
 });
 
 it('shows a default cleanup prompt as Default', () => {
@@ -789,7 +845,7 @@ it('adds no pins when an existing user re-saves dictation with their own key', a
   expect(saved.inference.notes).toBeUndefined();
 });
 
-it('explains that On-Device mode skips a saved Cloud cleanup choice', () => {
+it('explains that Private mode skips a saved Cloud cleanup choice', () => {
   mockConfig = { defaultMode: 'private', inference: { cleanup: { mode: 'openwhispr' } } };
   mockActiveMode = 'private';
   mockScope = 'cleanup';
@@ -797,7 +853,7 @@ it('explains that On-Device mode skips a saved Cloud cleanup choice', () => {
   expect(selectedMode()).toBe('OpenWhispr Cloud');
   expect(
     screen.getByText(
-      'In On-Device mode, cleanup runs on this iPhone, or sends only the transcript text to your provider with Bring Your Own Key. OpenWhispr Cloud cleanup is skipped until dictation leaves On-Device.',
+      'In Private mode, cleanup runs on this iPhone, or sends only the transcript text to your provider with Bring Your Own Key. OpenWhispr Cloud cleanup is skipped until Private mode is off.',
     ),
   ).toBeTruthy();
 });
@@ -805,13 +861,13 @@ it('explains that On-Device mode skips a saved Cloud cleanup choice', () => {
 it.each([
   [
     'agent',
-    'In On-Device mode the voice assistant is off, and note chat asks before sending a note off this iPhone.',
+    'In Private mode the voice assistant is off, and note chat asks before sending a note off this iPhone.',
   ],
   [
     'notes',
-    'On-Device mode formats notes on this iPhone and asks before sending one to your choice here.',
+    'Private mode formats notes on this iPhone and asks before sending one to your choice here.',
   ],
-])('explains what On-Device mode means for %s', (scope, note) => {
+])('explains what Private mode means for %s', (scope, note) => {
   mockConfig = { defaultMode: 'private' };
   mockActiveMode = 'private';
   mockScope = scope;
@@ -819,33 +875,101 @@ it.each([
   expect(screen.getByText(note)).toBeTruthy();
 });
 
-it('explains that On-Device mode keeps a workflow on this phone, and still saves a change', async () => {
+// Private mode runs uploads on this phone, so a saved choice it locks isn't shown as picked, or
+// offered for editing, but stays saved for when Private mode is off.
+it('shows On-Device for an upload choice Private mode locks, and keeps that choice', () => {
   mockConfig = {
     defaultMode: 'private',
     inference: { upload: { mode: 'providers', providerId: 'openai', modelId: 'whisper-1' } },
   };
   mockActiveMode = 'private';
   mockScope = 'upload';
-  mockCredentialStatus.mockResolvedValue({ isConfigured: true });
   render(<WorkflowSettingsScreen />);
+  expect(selectedMode()).toBe('On-Device');
   expect(
     screen.getByText(
-      'On-Device mode keeps this on your iPhone. Your choice applies when dictation leaves On-Device.',
+      'Private mode keeps uploads on this iPhone. Your Bring Your Own Key choice applies again when Private mode is off.',
     ),
   ).toBeTruthy();
-  fireEvent.changeText(screen.getByLabelText('API key'), 'replacement-key');
-  fireEvent.press(screen.getByText('Save'));
-  await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalled());
-  expect(mockUpdateConfig.mock.calls[0][0].inference.upload).toMatchObject({
-    providerId: 'openai',
-  });
+  expect(screen.queryByLabelText('API key')).toBeNull();
+  // Tapping the Automatic row it shows must not replace the saved choice either.
+  expect(
+    screen.getByText('On-device models for upload, picked Automatic, choice locked'),
+  ).toBeTruthy();
+  fireEvent.press(screen.getByText('On-Device'));
+  expect(mockSwitchMode).not.toHaveBeenCalled();
+  expect(mockUpdateConfig).not.toHaveBeenCalled();
 });
 
-it('does not show the On-Device note on the Dictation page', () => {
+it('names a locked Cloud upload choice in the note', () => {
+  mockConfig = { defaultMode: 'private', inference: { upload: { mode: 'openwhispr' } } };
+  mockActiveMode = 'private';
+  mockScope = 'upload';
+  render(<WorkflowSettingsScreen />);
+  expect(selectedMode()).toBe('On-Device');
+  expect(
+    screen.getByText(
+      'Private mode keeps uploads on this iPhone. Your OpenWhispr Cloud choice applies again when Private mode is off.',
+    ),
+  ).toBeTruthy();
+});
+
+it('shows On-Device for a guest whose saved Cloud dictation Private mode overrides', () => {
+  mockConfig = { defaultMode: 'cloud', inference: { dictation: { mode: 'openwhispr' } } };
+  mockActiveMode = 'private';
+  render(<WorkflowSettingsScreen />);
+  expect(selectedMode()).toBe('On-Device');
+  fireEvent.press(screen.getByText('On-Device'));
+  expect(mockSwitchMode).not.toHaveBeenCalled();
+  expect(mockUpdateConfig).not.toHaveBeenCalled();
+});
+
+it('keeps the plain upload note when uploads already run on this phone', () => {
+  mockConfig = { defaultMode: 'private' };
+  mockActiveMode = 'private';
+  mockScope = 'upload';
+  render(<WorkflowSettingsScreen />);
+  expect(screen.getByText('Private mode keeps uploads on this iPhone.')).toBeTruthy();
+});
+
+function modeDisabled(title: string): boolean {
+  let row = screen.getByText(title).parent;
+  while (row && !row.props.accessibilityState) row = row.parent;
+  return !!row?.props.accessibilityState.disabled;
+}
+
+// Private mode is switched in AI Models, so a page can't offer a mode it would ignore. Dictation
+// keeps Bring Your Own Key: saving it leaves Private mode, with no account needed.
+it.each([
+  ['dictation', ['OpenWhispr Cloud'], ['On-Device', 'Bring Your Own Key']],
+  ['upload', ['OpenWhispr Cloud', 'Bring Your Own Key'], ['On-Device']],
+  ['cleanup', ['OpenWhispr Cloud'], ['On-Device', 'Bring Your Own Key']],
+  ['notes', [], ['OpenWhispr Cloud', 'On-Device', 'Bring Your Own Key']],
+  ['agent', [], ['OpenWhispr Cloud', 'On-Device', 'Bring Your Own Key']],
+])('locks the modes Private mode never runs for %s', (scope, locked, open) => {
+  mockConfig = { defaultMode: 'private' };
+  mockActiveMode = 'private';
+  mockScope = scope;
+  render(<WorkflowSettingsScreen />);
+  for (const title of locked) expect(modeDisabled(title)).toBe(true);
+  for (const title of open) expect(modeDisabled(title)).toBe(false);
+  // The agent page's Voice Assistant switch is off for the same reason.
+  expect(
+    screen.queryAllByText('Off while Private mode is on. Turn it off in AI Models.'),
+  ).toHaveLength(locked.length + (scope === 'agent' ? 1 : 0));
+});
+
+it('locks no mode outside Private mode', () => {
+  render(<WorkflowSettingsScreen />);
+  for (const title of ['OpenWhispr Cloud', 'On-Device', 'Bring Your Own Key'])
+    expect(modeDisabled(title)).toBe(false);
+});
+
+it('does not show the Private mode note on the Dictation page', () => {
   mockConfig = { defaultMode: 'private' };
   mockActiveMode = 'private';
   render(<WorkflowSettingsScreen />);
-  expect(screen.queryByText(/On-Device mode keeps this/)).not.toBeOnTheScreen();
+  expect(screen.queryByText(/Private mode keeps/)).not.toBeOnTheScreen();
 });
 
 it('does not edit dictation settings from an unknown workflow link', () => {
@@ -1098,7 +1222,7 @@ describe('an iPhone that cannot run Apple Intelligence', () => {
 
     expect(
       await screen.findByText(
-        "Not saved yet. This iPhone can't run On-Device cleanup, so On-Device mode skips it until you choose Bring Your Own Key.",
+        "Not saved yet. This iPhone can't run On-Device cleanup, so Private mode skips it until you choose Bring Your Own Key.",
       ),
     ).toBeTruthy();
   });

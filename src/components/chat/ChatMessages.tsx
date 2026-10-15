@@ -10,6 +10,8 @@ interface ChatMessagesProps {
   /** Extra classes for the message column (e.g. a page-width cap); the scroll container stays full width. */
   contentClassName?: string;
   scrollClassName?: string;
+  /** Replies as plain text and the user's messages in a soft pill (the note chat, floating or docked). */
+  plainBubbles?: boolean;
 }
 
 export function ChatMessages({
@@ -18,6 +20,7 @@ export function ChatMessages({
   onOpenNote,
   contentClassName,
   scrollClassName,
+  plainBubbles = false,
 }: ChatMessagesProps) {
   // Follow the stream only while the user is at the bottom; scrolling up to
   // re-read must not be yanked back down by the next token.
@@ -67,6 +70,7 @@ export function ChatMessages({
                 toolCalls={msg.toolCalls}
                 error={msg.error}
                 onOpenNote={onOpenNote}
+                plain={plainBubbles}
               />
             ))}
         </div>

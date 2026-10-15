@@ -2,7 +2,11 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
-const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const {
+  SIGNED_OUT_AUTH_MOCK,
+  createRendererServer,
+  installBrowserGlobals,
+} = require("../lib/rendererTestHarness");
 
 // Plan 1's final review asked for this once a real approval tool existed: a
 // send whose stream throws while a Slack card waits must withdraw the card
@@ -45,6 +49,7 @@ test("a send that throws withdraws a pending approval", async (t) => {
   });
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-chat-streaming-connectors-test-",
+    mockModules: SIGNED_OUT_AUTH_MOCK,
   });
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
   const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");

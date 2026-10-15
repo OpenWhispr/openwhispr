@@ -1,5 +1,6 @@
 import { cloudGet, cloudPost, cloudPatch, cloudDelete } from "./cloudApi.js";
 import { buildNotesListPath } from "./noteListQuery";
+import type { CloudNoteCreateResult } from "./noteCreateAck";
 
 interface NoteInput {
   client_note_id?: string;
@@ -26,9 +27,16 @@ interface NoteInput {
   // last acked. The server 409s (note_version_conflict) when a newer write
   // landed; omitted = legacy last-write-wins.
   base_updated_at?: string;
+  base_revision?: number;
+  field_updates?: { content?: "set" | "clear"; enhanced_content?: "set" | "clear" };
 }
 
 export interface CloudNote {
+  revision?: number;
+  content_state?: "set" | "clear" | null;
+  enhanced_content_state?: "set" | "clear" | null;
+  write_applied?: boolean;
+  row_created?: boolean;
   id: string;
   client_note_id: string | null;
   title: string | null;
@@ -73,13 +81,12 @@ async function create(note: NoteInput): Promise<CloudNote> {
   return cloudPost<CloudNote>("/api/notes/create", note);
 }
 
-async function batchCreate(
-  notes: NoteInput[]
-): Promise<{ created: { client_note_id: string; id: string; updated_at?: string }[] }> {
-  return cloudPost<{ created: { client_note_id: string; id: string; updated_at?: string }[] }>(
-    "/api/notes/batch-create",
-    { notes }
-  );
+interface NoteBatchCreateResult {
+  created: CloudNoteCreateResult[];
+}
+
+async function batchCreate(notes: NoteInput[]): Promise<NoteBatchCreateResult> {
+  return cloudPost<NoteBatchCreateResult>("/api/notes/batch-create", { notes });
 }
 
 async function update(id: string, updates: Partial<NoteInput>): Promise<CloudNote> {

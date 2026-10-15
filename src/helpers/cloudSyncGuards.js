@@ -1,3 +1,5 @@
+import { hasNoteRevision, noteFieldUpdates } from "./noteFieldSync.js";
+
 // Sync guards shared by SyncService and the node --test suite (#1290).
 
 // SQLite `datetime('now')` yields "YYYY-MM-DD HH:MM:SS" (no T, no millis, no Z);
@@ -25,14 +27,28 @@ export function isCloudEntryNewer(cloudUpdatedAt, localUpdatedAt) {
 // every push would fork duplicate notes; only the one-shot migration branch
 // sends it. `cloudFolderId` is the note's folder already mapped to its cloud
 // id (null when folderless or unmapped).
+//
+// A revision-aware write sends a text field only with its operation. Text
+// without one must be unchanged since the last ack, and locally it need not
+// be: a pull keeps local text over a blank the cloud never marked as a clear,
+// and resending that text would overwrite newer text written elsewhere. So it
+// stays out, and the summary metadata with the summary.
 export function buildNoteUpdatePayload(note, cloudFolderId) {
+  const revisioned = hasNoteRevision(note.cloud_revision);
+  const fieldUpdates = noteFieldUpdates(note);
+  const sends = (field) => !revisioned || field in fieldUpdates;
   return {
+    ...(revisioned ? { base_revision: note.cloud_revision, field_updates: fieldUpdates } : {}),
     title: note.title,
-    content: note.content,
-    enhanced_content: note.enhanced_content,
-    enhancement_prompt: note.enhancement_prompt,
-    enhancement_template_id: note.enhancement_template_id,
-    enhanced_at_content_hash: note.enhanced_at_content_hash,
+    content: sends("content") ? pushedText(note, "content") : undefined,
+    enhanced_content: sends("enhanced_content") ? pushedText(note, "enhanced_content") : undefined,
+    ...(sends("enhanced_content")
+      ? {
+          enhancement_prompt: note.enhancement_prompt,
+          enhancement_template_id: note.enhancement_template_id,
+          enhanced_at_content_hash: note.enhanced_at_content_hash,
+        }
+      : {}),
     note_type: note.note_type,
     source_file: note.source_file,
     audio_duration_seconds: note.audio_duration_seconds,
@@ -50,6 +66,15 @@ export function buildNoteUpdatePayload(note, cloudFolderId) {
   };
 }
 
+// A blank is sent only as a deliberate clear, as "" (the server reads a null
+// summary as omitted). The server also reads a blank that carries a timestamp
+// base as a clear, so an unconfirmed local blank is omitted (undefined drops
+// out of the JSON body) and the stored text stays.
+function pushedText(note, field) {
+  if (note[field]?.trim()) return note[field];
+  return note[`${field}_sync_operation`] === "clear" ? "" : undefined;
+}
+
 // POST creates a new cloud identity and therefore has no prior server
 // revision to compare. Forks from older databases can retain a stale base, so
 // derive create payloads explicitly rather than forwarding base_updated_at.
@@ -59,8 +84,32 @@ export function buildNoteUpdatePayload(note, cloudFolderId) {
 // the server stores it as-is — mobile's delta cursor (the newest updated_at
 // it has seen) would then skip the row forever. PATCHes are server-stamped.
 export function buildNoteCreatePayload(note, cloudFolderId) {
-  const payload = buildNoteUpdatePayload(note, cloudFolderId);
+  const payload = {
+    ...buildNoteUpdatePayload(
+      {
+        ...note,
+        cloud_revision: null,
+        content_sync_operation: null,
+        enhanced_content_sync_operation: null,
+      },
+      cloudFolderId
+    ),
+    // Create requires content, and a blank there never clears existing text.
+    content: note.content ?? "",
+    enhanced_content: note.enhanced_content,
+  };
   delete payload.base_updated_at;
+  delete payload.base_revision;
+  delete payload.field_updates;
   delete payload.updated_at;
   return payload;
+}
+
+// A server revision orders same-millisecond edits and survives local clock
+// skew. A copy without one (an API that predates revisions) compares timestamps.
+export function isCloudNoteNewer(cloud, local) {
+  if (hasNoteRevision(cloud.revision) && hasNoteRevision(local.cloud_revision)) {
+    return cloud.revision > local.cloud_revision;
+  }
+  return isCloudEntryNewer(cloud.updated_at, local.updated_at);
 }

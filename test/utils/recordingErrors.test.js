@@ -15,7 +15,10 @@ test("a classified provider failure gets the surface title and translated descri
     messageParams: { provider: "Mistral" },
   };
   assert.equal(getRecordingErrorTitle(report, t), "providerErrors.titles.transcription");
-  assert.equal(getRecordingErrorDescription(report, t), 'providerErrors.authFailed|{"provider":"Mistral"}');
+  assert.equal(
+    getRecordingErrorDescription(report, t),
+    'providerErrors.authFailed|{"provider":"Mistral"}'
+  );
 });
 
 test("the rate-limit title is unchanged", async () => {
@@ -31,4 +34,15 @@ test("unclassified reports keep their own title and description", async () => {
   const report = { title: "Transcription Error", description: "Transcription failed: boom" };
   assert.equal(getRecordingErrorTitle(report, t), "Transcription Error");
   assert.equal(getRecordingErrorDescription(report, t), "Transcription failed: boom");
+});
+
+test("a selection failure retains its localized title alongside a local model error code", async () => {
+  const { getRecordingErrorTitle } = await load();
+  assert.equal(
+    getRecordingErrorTitle(
+      { title: "Selection Edit Failed", code: "CONTEXT_TOO_LARGE", selectionEditFatal: true },
+      t
+    ),
+    "hooks.audioRecording.selectionEditing.notAppliedTitle"
+  );
 });

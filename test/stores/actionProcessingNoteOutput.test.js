@@ -80,6 +80,38 @@ async function waitFor(predicate, label) {
   throw new Error(`timed out waiting for ${label}`);
 }
 
+test("templates and summary actions carry source fidelity once, apart from the material and the saved summary", async (t) => {
+  const { SOURCE_FIDELITY_RULE } = await import("../../src/helpers/sourceFidelity.js");
+  const { BUILTIN_ACTIONS } = await import("../../src/helpers/builtinActions.js");
+  const { store, calls, updates } = await loadStore(t);
+  const material = "## Meeting Transcript\nAlice: Not approved; Bob will check this weekend.";
+  const summary = "## Current Summary\n- Bob will check this weekend; not approved yet.";
+  const reply = "- Not approved yet. Bob will check this weekend.";
+  globalThis.__processTextResult = reply;
+
+  for (const key of ["generateNotes", "shorten", "lengthen"]) {
+    const builtin = BUILTIN_ACTIONS.find((action) => action.translationKey.endsWith(`.${key}`));
+    for (const fromSummary of [false, true]) {
+      const noteId = 100 + updates.length;
+      const input = builtin.kind === "action" && fromSummary ? summary : material;
+      store.runBackgroundAction(
+        noteId,
+        input,
+        `hash-${noteId}`,
+        { ...builtin, id: noteId, translation_key: builtin.translationKey },
+        { modelId: "gpt-4.1", isCloudMode: true, isMeetingNote: true, fromSummary },
+        LABELS
+      );
+      await waitFor(() => updates.some((update) => update.noteId === noteId), "the summary save");
+
+      assert.equal(calls.at(-1).config.systemPrompt.split(SOURCE_FIDELITY_RULE).length - 1, 1);
+      assert.equal(calls.at(-1).text, input, "the instructions stay separate from source material");
+      assert.equal(updates.at(-1).payload.enhanced_content, reply, "only model output is saved");
+      assert.equal(updates.at(-1).payload.content, undefined, "personal notes are unchanged");
+    }
+  }
+});
+
 test("note formatting asks for enough output tokens to hold a long meeting summary", async (t) => {
   const { store, calls, updates } = await loadStore(t);
 
@@ -273,11 +305,11 @@ test("a summary action on a note without a summary writes one from the transcrip
   const { store, calls, updates } = await loadStore(t);
   const action = {
     id: 6,
-    client_id: "tldr",
+    client_id: "notes.actions.builtin.lengthen",
     kind: "action",
     output: "summary",
-    name: "TL;DR",
-    prompt: "Add a TL;DR.",
+    name: "Make notes longer",
+    prompt: "Add supported detail.",
   };
 
   store.runBackgroundAction(
@@ -290,7 +322,7 @@ test("a summary action on a note without a summary writes one from the transcrip
   );
 
   await waitFor(() => updates.length > 0, "the note to be written");
-  assert.match(calls[0].config.systemPrompt, /no AI summary yet[\s\S]*Add a TL;DR\.$/);
+  assert.match(calls[0].config.systemPrompt, /no AI summary yet[\s\S]*Add supported detail\.$/);
   assert.equal(calls[0].text, "## Meeting Transcript\nAlice: we ship Friday.");
   assert.equal(calls[0].config.requireCompleteOutput, undefined, "nothing to lose yet");
   assert.deepEqual(Object.keys(updates[0].payload), [
@@ -327,6 +359,7 @@ test("a run hands Undo the summary fields it overwrote, and the title when it re
     LABELS
   );
   await waitFor(() => updates.length === 1, "the rewrite to be written");
+  // A summary to put back is a plain set, never a clear.
   assert.deepEqual(store.consumeAppliedEvents(), [
     { noteId: 15, action: shorten, previous: summaryFields },
   ]);
@@ -346,9 +379,9 @@ test("a run hands Undo the summary fields it overwrote, and the title when it re
   assert.deepEqual(previous, { ...summaryFields, title: STORED_NOTE.title });
 });
 
-test("Undo of a first summary clears it with an empty string, which sync can't ignore", async (t) => {
-  // The API keeps its copy when a push sends null (COALESCE), so a null here
-  // would bring the undone summary back on the next pull.
+test("Undo of a first summary is an explicit clear, which syncs to every device", async (t) => {
+  // A blank without clear_fields stays local, so the undone summary would come
+  // back on the next pull and stay on teammates' devices.
   const { store, updates } = await loadStore(t, {
     title: "Untitled Note",
     enhanced_content: null,
@@ -366,11 +399,12 @@ test("Undo of a first summary clears it with an empty string, which sync can't i
   );
   await waitFor(() => updates.length === 1, "the first summary to be written");
   const [{ previous }] = store.consumeAppliedEvents();
-  assert.equal(previous.enhanced_content, "");
+  assert.equal(previous.enhanced_content, null);
+  assert.deepEqual(previous.clear_fields, ["enhanced_content"]);
 });
 
 test("a write the database refused offers no Undo and reports the failure", async (t) => {
-  const { store, updates } = await loadStore(t);
+  const { store } = await loadStore(t);
   globalThis.__updateNoteFails = true;
   store.runBackgroundAction(
     17,
@@ -459,4 +493,26 @@ test("a summary that merely contains the marker is still saved", async (t) => {
     assert.equal(updates[index].payload.enhanced_content, reply);
   }
   assert.deepEqual(store.consumeErrorEvents(), []);
+});
+
+test("cancelling a summary action before a provider returns keeps the saved summary and Undo queue unchanged", async (t) => {
+  const { store, calls, updates } = await loadStore(t);
+  let finish;
+  globalThis.__processTextResult = new Promise((resolve) => {
+    finish = resolve;
+  });
+  store.runBackgroundAction(
+    120,
+    "## Current Summary\nOriginal",
+    "hash",
+    { kind: "action", name: "Shorten", prompt: "Revise" },
+    { isCloudMode: true, fromSummary: true },
+    LABELS
+  );
+  await waitFor(() => calls.length === 1, "provider start");
+  store.cancelAction(120);
+  finish("A late reply");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(updates, []);
+  assert.deepEqual(store.consumeAppliedEvents(), []);
 });

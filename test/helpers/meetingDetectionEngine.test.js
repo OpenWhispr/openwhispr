@@ -213,6 +213,32 @@ test("joining a calendar meeting with no note of the user's own creates one", as
   assert.equal(meetingNavigations[0].folderId, 7);
 });
 
+test("a manual meeting passes its options to whichever note it opens", async () => {
+  // The meeting hotkey asks for an open panel to stay behind the call.
+  const { engine, windowManager } = createEngine();
+  const options = { activate: false };
+  const received = [];
+  windowManager.queueNoteNavigation = async (_payload, opts) => received.push(opts);
+  windowManager.queueMeetingNoteNavigation = async (_payload, opts) => received.push(opts);
+
+  engine._recordingSession = { sessionId: "s1", noteId: 42 };
+  await engine.startManualMeeting(options);
+  engine._recordingSession = null;
+
+  const db = createJoinDatabase({ id: 5, folder_id: 3 });
+  engine.databaseManager = { ...db.databaseManager, getActiveEvents: () => [{ id: "event-1" }] };
+  await engine.startManualMeeting(options);
+  engine.databaseManager = createJoinDatabase(null).databaseManager;
+  await engine.joinCalendarMeeting("event-1", "hotkey", options);
+  engine.databaseManager = {
+    ...createJoinDatabase(null).databaseManager,
+    getActiveEvents: () => [],
+  };
+  await engine.startManualMeeting(options);
+
+  assert.deepEqual(received, [options, options, options, options]);
+});
+
 // The IPC adapter derives detector preferences through this policy; the engine
 // only has to honour whatever it is handed (adapter coverage lives in
 // meetingDetectionPreferencesIpc.test.js).
@@ -331,14 +357,17 @@ test("notification Start saves directly in selected folder and duplicate clicks 
   const folder = c.db.createFolder("Chosen").folder;
   c.owner.selectedDestination = { folderId: folder.id, spaceId: folder.space_id };
   let finish;
-  c.windowManager.queueMeetingNoteNavigation = (payload) => {
+  let navigationOptions;
+  c.windowManager.queueMeetingNoteNavigation = (payload, options) => {
     c.meetingNavigations.push(payload);
+    navigationOptions = options;
     return new Promise((r) => (finish = r));
   };
   const one = c.respond();
   const two = c.respond();
   await new Promise(setImmediate);
   assert.equal(c.meetingNavigations.length, 1);
+  assert.equal(navigationOptions.activate, true, "Start brings the panel forward");
   const note = c.db.getNote(c.meetingNavigations[0].noteId);
   assert.equal(note.folder_id, folder.id);
   assert.equal(note.space_id, folder.space_id);
@@ -417,10 +446,15 @@ test("Join opens the link and suppresses new prompts while navigation is pending
   openedUrls.length = 0;
   c.owner.detection.event.hangout_link = "https://meet.example/join?pwd=1";
   let finish;
-  c.windowManager.queueMeetingNoteNavigation = () => new Promise((r) => (finish = r));
+  let navigationOptions;
+  c.windowManager.queueMeetingNoteNavigation = (_payload, options) => {
+    navigationOptions = options;
+    return new Promise((r) => (finish = r));
+  };
   const joining = c.engine.handleNotificationResponse("calendar:event", "join", {}, c.owner);
   await new Promise(setImmediate);
   assert.deepEqual(openedUrls, ["https://meet.example/join?pwd=1"]);
+  assert.equal(navigationOptions.activate, false, "the meeting just opened stays in front");
   c.engine.handleCalendarReminder({ id: "next" });
   assert.equal(c.shown.length, 0);
   finish({ success: true });

@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const load = async () => ({
   ...(await import("../../src/helpers/builtinActions.js")),
   ...(await import("../../src/helpers/templatePrompts.js")),
+  ...(await import("../../src/helpers/sourceFidelity.js")),
 });
 
 // The row the database seeds from a built-in, as the note store reads it.
@@ -17,6 +18,7 @@ test("Detailed Notes compiled from its sections is the prompt it replaced, but f
   const {
     BUILTIN_ACTIONS,
     DETAILED_NOTES_KEY,
+    SOURCE_FIDELITY_RULE,
     MEETING_INPUT_PREAMBLE,
     NOTE_INPUT_PREAMBLE,
     compileTemplatePrompt,
@@ -31,7 +33,9 @@ test("Detailed Notes compiled from its sections is the prompt it replaced, but f
     [true, MEETING_INPUT_PREAMBLE],
     [false, NOTE_INPUT_PREAMBLE],
   ]) {
-    const compiled = compileTemplatePrompt(seededRow(detailed), { isMeetingNote });
+    const compiled = compileTemplatePrompt(seededRow(detailed), { isMeetingNote }).slice(
+      (SOURCE_FIDELITY_RULE + "\n\n").length
+    );
     assert.ok(compiled.startsWith(preamble + body), "everything before the rule is unchanged");
     assert.match(
       compiled.slice((preamble + body).length),
@@ -40,11 +44,12 @@ test("Detailed Notes compiled from its sections is the prompt it replaced, but f
   }
 });
 
-test("a template without sections is sent exactly as before templates had sections", async () => {
+test("a template without sections retains its instructions after the shared fidelity rule", async () => {
   const {
     BUILTIN_ACTIONS,
     DETAILED_NOTES_KEY,
     GENERATE_NOTES_KEY,
+    SOURCE_FIDELITY_RULE,
     MEETING_INPUT_PREAMBLE,
     MEETING_SYSTEM_PROMPT,
     BASE_SYSTEM_PROMPT,
@@ -53,17 +58,20 @@ test("a template without sections is sent exactly as before templates had sectio
   const generate = BUILTIN_ACTIONS.find((action) => action.translationKey === GENERATE_NOTES_KEY);
   assert.equal(
     compileTemplatePrompt(seededRow(generate), { isMeetingNote: true }),
-    MEETING_SYSTEM_PROMPT + generate.prompt
+    SOURCE_FIDELITY_RULE + "\n\n" + MEETING_SYSTEM_PROMPT + generate.prompt
   );
 
   const editedDetailed = { prompt: "My own notes rules.", translation_key: DETAILED_NOTES_KEY };
   assert.equal(
     compileTemplatePrompt(editedDetailed, { isMeetingNote: true }),
-    MEETING_INPUT_PREAMBLE + editedDetailed.prompt
+    SOURCE_FIDELITY_RULE + "\n\n" + MEETING_INPUT_PREAMBLE + editedDetailed.prompt
   );
 
   const custom = { prompt: "Summarize for the board.", sections: null, translation_key: null };
-  assert.equal(compileTemplatePrompt(custom), BASE_SYSTEM_PROMPT + custom.prompt);
+  assert.equal(
+    compileTemplatePrompt(custom),
+    SOURCE_FIDELITY_RULE + "\n\n" + BASE_SYSTEM_PROMPT + custom.prompt
+  );
 });
 
 test("a sectioned template puts its context before the format rules and keeps section order", async () => {
@@ -152,16 +160,16 @@ test("an action reads the summary when there is one, and the transcript when the
 });
 
 test("a summary action revises the summary, or writes one from the material first", async () => {
-  const { compileSummaryActionPrompt, MEETING_INPUT_PREAMBLE } = await load();
+  const { compileSummaryActionPrompt, MEETING_INPUT_PREAMBLE, SOURCE_FIDELITY_RULE } = await load();
   assert.match(
     compileSummaryActionPrompt(ACTION, { fromSummary: true }),
-    /^You revise an existing AI summary[\s\S]*Instructions: Translate it to Spanish\.$/
+    /You revise an existing AI summary[\s\S]*Instructions: Translate it to Spanish\.$/
   );
   const fromMaterial = compileSummaryActionPrompt(ACTION, {
     fromSummary: false,
     isMeetingNote: true,
   });
-  assert.ok(fromMaterial.startsWith(MEETING_INPUT_PREAMBLE));
+  assert.ok(fromMaterial.startsWith(SOURCE_FIDELITY_RULE + "\n\n" + MEETING_INPUT_PREAMBLE));
   assert.match(fromMaterial, /no AI summary yet[\s\S]*Instructions: Translate it to Spanish\.$/);
   assert.match(
     fromMaterial,
@@ -175,7 +183,7 @@ test("a chat action works from the summary when there is one, and the transcript
   const action = { prompt: "List the to-dos." };
   assert.match(
     compileChatActionPrompt(action, { fromSummary: true }),
-    /^Work from the AI summary[\s\S]*\n\nList the to-dos\.$/
+    /Work from the AI summary[\s\S]*\n\nList the to-dos\.$/
   );
   assert.match(
     compileChatActionPrompt(action, { fromSummary: false }),
@@ -189,8 +197,27 @@ test("a chat action works from the summary when there is one, and the transcript
     );
     assert.match(
       compileChatActionPrompt(action, { fromSummary }),
+      /Leave the note, its AI summary and its title unchanged: when the instructions ask for an edit, write the edited text here instead\./,
+      "an edit-style action shows its result instead of saving it"
+    );
+    assert.match(
+      compileChatActionPrompt(action, { fromSummary }),
       /in the language the note is written in, not the language of these instructions/,
       "the English action prompt doesn't turn a German note's answer into English"
     );
   }
+});
+
+test("TL;DR is a standalone chat reply and lengthening keeps supported facts", async () => {
+  const { BUILTIN_ACTIONS, compileChatActionPrompt } = await load();
+  const tldr = BUILTIN_ACTIONS.find((a) => a.translationKey.endsWith(".addTldr"));
+  assert.equal(tldr.output, "chat");
+  const request = compileChatActionPrompt(tldr, { fromSummary: true });
+  assert.match(request, /two- or three-sentence TL;DR/);
+  assert.match(request, /Return only the TL;DR in chat/);
+  assert.doesNotMatch(request, /Leave the rest|at the very top|complete revised summary/);
+  const longer = BUILTIN_ACTIONS.find((a) => a.translationKey.endsWith(".lengthen"));
+  assert.match(longer.prompt, /Never invent facts/);
+  assert.match(longer.prompt, /do not pad with repetition/);
+  assert.match(longer.prompt, /keep every name, number, date, decision, and action item/);
 });

@@ -338,3 +338,80 @@ test("a selection with the dictation agent reachable keeps the in-place edit pat
   assert.ok(!("selectionEditReachable" in selectionConfig));
   assert.ok(!("rawScreenContext" in selectionConfig));
 });
+
+// "Explain this" over highlighted text asks for an answer, not an edit: the
+// editor's question verdict must open the panel with the selection quoted and
+// never arm the replacement that would paste the answer over the selection.
+test("a question about a selection goes to the panel instead of replacing it", async (t) => {
+  const { createManager } = await loadAudioManagerHarness(t, {
+    cachePrefix: "openwhispr-assistant-sel-question-",
+    settingsKey: "__assistantSelQuestionSettings",
+    // The local edit prompt reads these.
+    settings: { customPrompts: {}, snippets: [] },
+    mockModules: {
+      "/services/ReasoningService": 'export default { processText: async () => "" };',
+    },
+  });
+  const { SELECTION_QUESTION_MARKER } = await import("../../src/helpers/selectionEditing.js");
+  const capture = { status: "selected", text: "the selected paragraph", sessionId: "s1" };
+  const screenshot = { mediaType: "image/jpeg", data: "raw" };
+  for (const [provider, reply] of [
+    ["openai", (marker) => `${SELECTION_QUESTION_MARKER}${marker}`],
+    ["local", () => JSON.stringify({ replacement: SELECTION_QUESTION_MARKER })],
+  ]) {
+    const modelCalls = [];
+    const manager = createManager({
+      isProcessing: true,
+      pendingAssistantConversation: null,
+      voiceAgentRequested: false,
+      consumeSelectionCapture: async () => capture,
+      processWithReasoningModel: async (...args) => {
+        modelCalls.push(args);
+        const marker = args[3].systemPrompt?.match(/__OPENWHISPR_SELECTION_COMPLETE_[^\s]+__/);
+        return reply(marker?.[0] ?? "");
+      },
+    });
+
+    const result = await manager.processAgentCommand("Hey Aria, explain this", "gpt", "Aria", {
+      provider,
+      selectionEditReachable: true,
+      rawScreenContext: screenshot,
+      systemPrompt: "base prompt",
+    });
+
+    assert.equal(result, "Hey Aria, explain this", provider);
+    assert.equal(modelCalls.length, 1, provider);
+    assert.ok(!manager.pendingSelectionEdit, `${provider}: no replacement may be armed`);
+    assert.deepEqual(manager.pendingAssistantConversation, {
+      transcript: 'explain this\n\n"the selected paragraph"',
+      screenContext: screenshot,
+    });
+  }
+});
+
+test("a question verdict arriving after cancellation banks nothing", async (t) => {
+  const { createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-assistant-sel-question-cancel-",
+    settingsKey: "__assistantSelQuestionCancelSettings",
+  });
+  const { SELECTION_QUESTION_MARKER } = await import("../../src/helpers/selectionEditing.js");
+  let cancelled = false;
+  const manager = createManager({
+    isProcessing: true,
+    pendingAssistantConversation: null,
+    consumeSelectionCapture: async () => ({ status: "selected", text: "x", sessionId: "s1" }),
+    processWithReasoningModel: async () => {
+      cancelled = true;
+      return SELECTION_QUESTION_MARKER;
+    },
+  });
+  await manager.processAgentCommand(
+    "explain this",
+    "gpt",
+    "Aria",
+    { provider: "openai", selectionEditReachable: true, systemPrompt: "base" },
+    () => cancelled
+  );
+  assert.equal(manager.pendingAssistantConversation, null);
+  assert.ok(!manager.pendingSelectionEdit);
+});

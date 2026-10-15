@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { Lock } from "../icons";
 import { Button } from "../ui/button";
 import { SettingsPanelRow } from "../ui/SettingsSection";
-import { RecentActions } from "./RecentActions";
 import { BetaBadge } from "./BetaBadge";
 import { ensureConnectorStatus, useConnectorStatusStore } from "../../stores/connectorStatusStore";
 import type { ConnectorRowSpec } from "./connectorRows";
@@ -46,7 +45,7 @@ export interface ConnectorLoginRowProps {
 
 /**
  * One connector's login in Settings → Connectors: Connect, Reconnect,
- * Disconnect, the locked state on a free plan and its recent actions. Copy
+ * Disconnect and the locked state on a free plan. Copy
  * lives under `connectors.<connectorId>.*`.
  */
 export function ConnectorLoginRow({
@@ -285,12 +284,6 @@ export function ConnectorLoginRow({
           )}
         </div>
       </div>
-      {connected && (
-        <RecentActions
-          connectorId={connectorId}
-          refreshKey={`${status?.accountLabel ?? ""}:${status?.workspaceLabel ?? ""}`}
-        />
-      )}
     </SettingsPanelRow>
   );
 }

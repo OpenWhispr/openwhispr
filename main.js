@@ -779,11 +779,7 @@ app.on("open-url", (event, url) => {
 
   void handleOAuthDeepLink(url);
 
-  if (windowManager && isLiveWindow(windowManager.controlPanelWindow)) {
-    windowManager.controlPanelWindow.show();
-    windowManager.controlPanelWindow.focus();
-    dockManager.setControlPanelVisible(true);
-  }
+  windowManager?.showControlPanel();
 });
 
 function isInvitationDeepLink(url) {
@@ -883,9 +879,7 @@ function handleInvitationDeepLink(deepLinkUrl) {
     pendingInvitationDeepLinkToken = token;
     if (!windowManager) return;
     if (isLiveWindow(windowManager.controlPanelWindow)) {
-      windowManager.controlPanelWindow.show();
-      windowManager.controlPanelWindow.focus();
-      dockManager.setControlPanelVisible(true);
+      windowManager.showControlPanel();
       // Best-effort fast path — the get-pending-invitation-token pull is the reliable path.
       windowManager.controlPanelWindow.webContents.send("workspace-invitation-token", token);
     } else {
@@ -994,9 +988,7 @@ async function applySessionTokenAndRefresh(token) {
       oauthProtocol: OAUTH_PROTOCOL,
     });
   }
-  windowManager.controlPanelWindow.show();
-  windowManager.controlPanelWindow.focus();
-  dockManager.setControlPanelVisible(true);
+  windowManager.showControlPanel();
 }
 
 async function handleOAuthDeepLink(deepLinkUrl) {
@@ -1021,9 +1013,7 @@ function handleUpgradeDeepLink() {
     windowManager.controlPanelWindow.webContents.executeJavaScript(
       'window.dispatchEvent(new Event("upgrade-success"))'
     );
-    windowManager.controlPanelWindow.show();
-    windowManager.controlPanelWindow.focus();
-    dockManager.setControlPanelVisible(true);
+    windowManager.showControlPanel();
   }
 }
 
@@ -1116,6 +1106,47 @@ function startAuthBridgeServer() {
   });
 }
 
+// Startup restores the saved activation mode before any hotkey registers. Desktop
+// backends (GNOME, KDE, Hyprland) register the saved hotkey a moment later, in
+// this mode, so check that hotkey rather than the provisional default it
+// replaces: a supported Hold is kept and an unsupported one becomes Tap before
+// registration. Elsewhere, check the hotkey that registered. This is a runtime
+// fallback, not a change to the user's saved preference: the next launch retries it.
+async function dropUnsupportedStartupHold() {
+  if (windowManager.getActivationMode() !== "push") return;
+  const manager = windowManager.hotkeyManager;
+  const hotkey = manager.isUsingNativeShortcut()
+    ? await manager.getSavedDictationHotkey()
+    : manager.getCurrentHotkey();
+  if (!manager.supportsPushToTalk(hotkey)) {
+    const changed = await windowManager.setActivationModeCache("tap");
+    if (changed) {
+      for (const browserWindow of BrowserWindow.getAllWindows()) {
+        if (!browserWindow.isDestroyed()) {
+          browserWindow.webContents.send("setting-updated", {
+            key: "activationMode",
+            value: "tap",
+          });
+        }
+      }
+    }
+  }
+}
+
+// A desktop backend that cannot register falls back to globalShortcut after the
+// first check, and globalShortcut may still be reading the saved hotkey, so
+// check again once that registration settles.
+async function checkStartupHold() {
+  windowManager.hotkeyManager.once("hotkey-loaded", () => {
+    dropUnsupportedStartupHold().catch((err) => {
+      debugLogger.warn("[HotkeyManager] Startup activation mode recheck failed", {
+        error: err.message,
+      });
+    });
+  });
+  await dropUnsupportedStartupHold();
+}
+
 // Main application startup
 async function startApp() {
   // Await so a stale sidecar is confirmed dead before new ones can spawn and
@@ -1204,20 +1235,7 @@ async function startApp() {
   const startMinimized = environmentManager.getStartMinimized() || launchedHidden;
   if (debugLogger) debugLogger.info("Start minimized", { enabled: startMinimized, launchedHidden });
   await windowManager.createMainWindow();
-  // The activation mode was cached before the hotkey was registered, so a saved
-  // Hold could not be checked against its key until now.
-  if (
-    windowManager.getActivationMode() === "push" &&
-    !windowManager.hotkeyManager.supportsPushToTalk()
-  ) {
-    await windowManager.setActivationModeCache("tap");
-    environmentManager.saveActivationMode("tap");
-    for (const browserWindow of BrowserWindow.getAllWindows()) {
-      if (!browserWindow.isDestroyed()) {
-        browserWindow.webContents.send("setting-updated", { key: "activationMode", value: "tap" });
-      }
-    }
-  }
+  await checkStartupHold();
   if (!startMinimized) {
     await windowManager.createControlPanelWindow();
   }
@@ -1300,7 +1318,8 @@ async function startApp() {
   const meetingHotkeyCallback = () => {
     if (!isMeetingPress()) return;
     debugLogger.info("Meeting hotkey triggered", {}, "meeting");
-    windowManager.startManualMeeting();
+    // Usually pressed mid-call: an open panel updates behind the meeting app.
+    windowManager.startManualMeeting({ activate: false });
   };
 
   const savedMeetingKey = environmentManager.getMeetingKey?.() || "";
@@ -1841,7 +1860,7 @@ async function startApp() {
       } else if (hotkeyManager.slotHasHotkey("translation", key)) {
         windowManager.sendToggleTranslation();
       } else if (hotkeyManager.slotHasHotkey("meeting", key)) {
-        windowManager.startManualMeeting();
+        windowManager.startManualMeeting({ activate: false });
       }
     };
 
@@ -1948,12 +1967,7 @@ if (gotSingleInstanceLock) {
     }
 
     if (isLiveWindow(windowManager.controlPanelWindow)) {
-      if (windowManager.controlPanelWindow.isMinimized()) {
-        windowManager.controlPanelWindow.restore();
-      }
-      windowManager.controlPanelWindow.show();
-      windowManager.controlPanelWindow.focus();
-      dockManager.setControlPanelVisible(true);
+      windowManager.showControlPanel();
       if (windowManager.controlPanelWindow.webContents.isCrashed()) {
         windowManager.loadControlPanel();
       }
@@ -2054,12 +2068,7 @@ if (gotSingleInstanceLock) {
     } else {
       // Show control panel when dock icon is clicked (most common user action)
       if (windowManager && isLiveWindow(windowManager.controlPanelWindow)) {
-        if (windowManager.controlPanelWindow.isMinimized()) {
-          windowManager.controlPanelWindow.restore();
-        }
-        windowManager.controlPanelWindow.show();
-        windowManager.controlPanelWindow.focus();
-        dockManager.setControlPanelVisible(true);
+        windowManager.showControlPanel();
       } else if (windowManager) {
         // If control panel doesn't exist, create it
         windowManager.createControlPanelWindow();
@@ -2085,7 +2094,13 @@ if (gotSingleInstanceLock) {
     }
     event.preventDefault();
     performSyncTeardown();
-    sidecarRegistry.shutdownAll().finally(() => app.exit(0));
+    Promise.allSettled([
+      sidecarRegistry.shutdownAll(),
+      Promise.race([
+        ipcHandlers?.metaActivation?.shutdown(),
+        new Promise((resolve) => setTimeout(resolve, 1500)),
+      ]),
+    ]).finally(() => app.exit(0));
   });
 }
 

@@ -212,17 +212,18 @@
     "policyUnresolved": "Your organization's settings haven't loaded yet. Try again in a moment.",
     "managedConfigLoading": "Checking your organization's managed setup. Try again in a moment.",
     "managedConfigUnavailable": "Managed enterprise access is unavailable. Sign in again or contact your administrator.",
-    "managedPolicyConflict": "Managed access is blocked by your workspace policy. Contact your administrator."
+    "managedPolicyConflict": "Managed access is blocked by your workspace policy. Contact your administrator.",
+    "resizePanel": "Resize panel"
   },
   "onboarding": {
     "rehaul": {
       "permissions": {
         "title": "Set up OpenWhispr in 3 minutes",
-        "microphoneDescription": "Turns what you say into text. Only on while you’re recording.",
-        "accessibilityDescription": "Pastes the text into the app you’re using.",
+        "microphoneDescription": "Listens only while you record.",
+        "accessibilityDescription": "Pastes text into any app.",
         "systemAudioTitle": "System Audio",
-        "systemAudioDescription": "Records the other people on your calls for meeting notes. Only on while you’re recording.",
-        "screenContextDescription": "Lets your voice assistant see your screen when you ask it something. Never stored.",
+        "systemAudioDescription": "Captures the other side of calls.",
+        "screenContextDescription": "Lets the assistant see your screen.",
         "enable": "Enable",
         "enabled": "Enabled"
       },
@@ -972,7 +973,10 @@
         "modifiersHeldClipboardFailed": "OpenWhispr generated the edit, but a modifier key (like Ctrl or Shift) was still held down, so it was not applied, and it could not be copied to the clipboard either.",
         "unavailable": "OpenWhispr could not safely read the selected text. Check accessibility or input automation permissions and try again.",
         "tooLarge": "The selection is too large to edit safely. Select 6,000 characters or fewer.",
-        "reasoningFailed": "The AI could not complete the selection edit. Your original text was not changed."
+        "reasoningFailed": "The AI could not complete the selection edit. Your original text was not changed.",
+        "invalidResponse": "The AI returned an invalid edit response. Nothing was replaced. Select the text and try again.",
+        "emptyResponse": "The AI returned an empty edit. Nothing was replaced. Try a more specific instruction.",
+        "truncatedResponse": "The AI stopped before completing the edit. Nothing was replaced. Try selecting less text."
       },
       "pastePermission": {
         "title": "Allow automatic pasting",
@@ -985,7 +989,8 @@
       },
       "pasteFailed": {
         "title": "Couldn't paste automatically"
-      }
+      },
+      "interruptedRecordingRecovered": "Recovered after OpenWhispr closed before this dictation finished."
     },
     "clipboard": {
       "pasteFailed": {
@@ -1167,6 +1172,7 @@
     },
     "signedIn": {
       "welcomeBack": "Welcome back",
+      "welcomeBackNamed": "Welcome back, {{name}}",
       "notYou": "Not you? Log out"
     },
     "sso": {
@@ -1302,7 +1308,6 @@
   "apiKeysSection": {
     "title": "API Keys",
     "description": "Create keys to access the OpenWhispr API programmatically.",
-    "docsLink": "API Docs",
     "empty": "No API keys yet",
     "createButton": "Create API Key",
     "create": {
@@ -1582,6 +1587,7 @@
   },
   "settingsModal": {
     "managedByOrg": "Some settings are managed by your organization.",
+    "managedAccount": "Managed account",
     "groups": {
       "account": "Account",
       "app": "App",
@@ -3548,6 +3554,7 @@
       "chunkProgress": "Part {{step}} of {{total}}",
       "emptyReply": "The model returned an empty reply. Try again, or pick a different model.",
       "allActions": "All actions",
+      "selectAction": "Select action",
       "manage": "Manage Actions...",
       "addAction": "New Action",
       "editAction": "Edit Action",
@@ -3564,7 +3571,7 @@
       "emptyEditorDescription": "Choose an action from the list or create a new one",
       "builtin": {
         "generateNotes": {
-          "name": "Generate Notes",
+          "name": "AI Summary",
           "description": "Clean up, structure, and enhance your notes"
         },
         "followUpEmail": {
@@ -3573,11 +3580,11 @@
           "cta": "Draft a follow-up email"
         },
         "detailedNotes": {
-          "name": "AI Summary",
+          "name": "Detailed Notes",
           "description": "Accurate, comprehensive meeting notes with decisions and action items"
         },
         "makeTodos": {
-          "name": "Make to-dos",
+          "name": "Create to-dos",
           "description": "List every to-do and its owner in the chat"
         },
         "createOutline": {
@@ -3601,19 +3608,24 @@
           "description": "Workflow, pain points, reactions, and quotes from a participant"
         },
         "shorten": {
-          "name": "Shorten",
-          "description": "Make the summary about half as long",
-          "cta": "Shorten the summary"
+          "name": "Make notes shorter",
+          "description": "Shorten the saved AI summary while keeping key facts",
+          "cta": "Make notes shorter"
         },
         "addTldr": {
-          "name": "Add TL;DR",
-          "description": "Put a two- or three-sentence TL;DR at the top of the summary",
-          "cta": "Add a TL;DR"
+          "name": "Write TL;DR",
+          "description": "Write a two- or three-sentence TL;DR in chat",
+          "cta": "Write TL;DR"
         },
         "slackUpdate": {
           "name": "Slack update",
           "description": "Write a short team update to post in Slack",
           "cta": "Write a Slack update"
+        },
+        "lengthen": {
+          "name": "Make notes longer",
+          "description": "Expand the saved AI summary with supported detail",
+          "cta": "Make notes longer"
         }
       },
       "errors": {
@@ -3626,12 +3638,10 @@
       },
       "tab": "Actions",
       "output": {
-        "auto": "Auto",
         "chat": "Chat",
         "summary": "AI summary",
-        "chatHint": "Answers in the note's chat and leaves the AI summary as it is.",
-        "summaryHint": "Edits the note's AI summary, or writes one from the transcript if there isn't one yet.",
-        "autoHint": "Reads the prompt when you save and picks the chat or the AI summary."
+        "chatHint": "This action replies in chat. Your saved AI summary stays unchanged.",
+        "summaryHint": "This built-in action updates your saved AI summary. You can undo the change."
       },
       "applied": "AI summary updated with {{name}}"
     },
@@ -3640,6 +3650,7 @@
       "managerTitle": "Templates & Actions",
       "manage": "Manage Templates...",
       "select": "Choose template",
+      "regenerate": "Regenerate",
       "addTemplate": "New Template",
       "editTemplate": "Edit Template",
       "namePlaceholder": "Template name",
@@ -3655,7 +3666,8 @@
       "noSectionsHint": "Without sections, the context is the whole instruction for the summary.",
       "noTemplates": "No templates yet",
       "emptyEditorTitle": "Select a template",
-      "emptyEditorDescription": "Choose a template from the list or create a new one"
+      "emptyEditorDescription": "Choose a template from the list or create a new one",
+      "outputHint": "Applying a template creates or replaces the AI summary using your notes and transcript."
     },
     "onboarding": {
       "llm": {
@@ -3757,13 +3769,18 @@
         "chips": {
           "catchUp": "Catch me up",
           "keyDecisions": "List key decisions",
-          "inFlight": "Show in flight projects"
+          "openActionItems": "List open action items"
         }
       },
       "invite": "Invite",
       "author": {
         "you": "You"
       }
+    },
+    "assistantUndo": {
+      "applied": "Assistant updated “{{title}}”",
+      "changed": "This note changed after the assistant edit. Undo is no longer available.",
+      "failed": "Could not undo the edit. Please try again."
     }
   },
   "dictionary": {
@@ -3969,7 +3986,10 @@
       "typeMessage": "Type a message...",
       "send": "Send",
       "voiceDraftStreamingOnly": "Voice input isn't available with your transcription provider: it only supports live dictation. Choose another provider in Settings → Speech to Text.",
-      "commands": "Commands"
+      "commands": "Commands",
+      "slashNavigate": "to navigate",
+      "slashSelect": "to select",
+      "slashClose": "to close"
     },
     "tools": {
       "search_notesName": "Search notes",
@@ -4098,20 +4118,18 @@
     "mcp": {
       "description": "Chat, search, and work with your notes inside Claude, ChatGPT, and Cursor.",
       "step1": "In your AI tool, add OpenWhispr MCP using the public URL",
-      "step2": "Create an API key with the scopes you need.",
-      "step3": "Paste the key as the Authorization header to connect.",
-      "learnMore": "Learn more",
       "proRequired": "Upgrade to a paid plan to connect OpenWhispr to Claude, ChatGPT, and Cursor.",
       "worksWith": "Works with",
       "copyUrl": "Copy MCP URL",
-      "copied": "Copied"
+      "copied": "Copied",
+      "oauthTitle": "Sign in with OAuth",
+      "oauthDescription": "In a client that supports OAuth, add the server URL, then sign in to OpenWhispr and approve access. No API key needed.",
+      "apiKeyTitle": "Use an API key",
+      "apiKeyDescription": "For clients that accept request headers, create a personal API key with the permissions you need and use the header below."
     },
     "cli": {
       "description": "Give your assistant access to your notes from the terminal.",
       "installLabel": "Install",
-      "learnMore": "Read the docs",
-      "copyDocsLink": "Copy docs link",
-      "docsLinkCopied": "Docs link copied",
       "viewPlans": "View Plans",
       "local": {
         "label": "Local",
@@ -4156,7 +4174,8 @@
     },
     "connectors": {
       "description": "Let the assistant use your tools. You approve every email, message and issue before it goes out."
-    }
+    },
+    "readDocs": "Read the docs"
   },
   "connectors": {
     "approval": {
@@ -4323,15 +4342,17 @@
       "descriptionSend": "The assistant shows an email card in the chat. It's sent from your Gmail only when you press Send.",
       "unavailable": "Email drafts aren't available right now.",
       "targetLabel": "Draft emails in",
-      "autoResolved": "Automatic · {{target}}",
       "targets": {
         "gmail": "Gmail",
         "outlookWork": "Outlook (work or school)",
         "outlookPersonal": "Outlook.com",
-        "mailto": "Default mail app",
+        "mailto": "System mail app",
         "gmailSend": "Send from chat (Gmail)",
-        "gmailSendConnectFirst": "Send from chat (Gmail) · connect Gmail below"
-      }
+        "gmailSendConnectFirst": "Send from chat (Gmail) · connect Gmail below",
+        "auto": "Automatic"
+      },
+      "automaticHint": "Currently: {{target}}. Follows your connected accounts.",
+      "systemMailHint": "Uses the email handler set up on your computer."
     },
     "slack": {
       "title": "Slack",
@@ -4726,16 +4747,10 @@
   },
   "embeddedChat": {
     "askPlaceholder": "Ask anything about your note",
-    "title": "Chat",
-    "emptyState": "Ask a question about this note",
-    "dock": "Dock to sidebar",
-    "undock": "Undock from sidebar",
     "close": "Close chat",
     "newChat": "New chat",
     "conversationSelector": "Switch conversation",
-    "history": "History",
-    "quickActions": "Quick actions",
-    "generateSummary": "Generate summary"
+    "history": "History"
   },
   "transcriptionPreview": {
     "label": "Preview",

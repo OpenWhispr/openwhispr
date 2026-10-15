@@ -1796,7 +1796,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // when locked. The header costs one row of the height-capped menu, so on
     // shorter keyboards the last tone ("Excited") can fall into the scroll
     // region instead of showing inline.
-    let menuTitle = applicable ? "Dictation Tone" : "Turn on Cloud to use tones"
+    let menuTitle = applicable ? "Dictation Tone" : "Turn off Private mode to use tones"
     toneButton.menu = UIMenu(title: menuTitle, children: actions)
     toneButton.isUserInteractionEnabled = true
     toneButton.alpha = applicable ? 1.0 : 0.4
@@ -3059,11 +3059,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     let provider = KeyboardHandoffProvider.shared
     guard provider.isAgentEnabled() else { return }
 
-    // Not applicable ⇒ locked behind Cloud. Point at the app, swallow the tap.
+    // Not applicable ⇒ Private mode is on. Point at it, swallow the tap.
     guard provider.isAgentApplicable() else {
       playKeyClick()
       showTransientRecordState(
-        title: "Turn on Cloud in app",
+        title: "Turn off Private mode",
         systemImage: "lock.fill",
         background: Palette.issue,
         duration: 1.6

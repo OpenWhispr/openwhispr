@@ -76,6 +76,42 @@ function createFinalizingManager(AudioManager) {
   return { manager, states, getProviderStopCalls: () => providerStopCalls };
 }
 
+test("streamed selection failures keep local error parameters and recovery details without publishing text", async (t) => {
+  const AudioManager = await loadManagerClass(t, {
+    "/config/prompts": "export const resolvePrompt = () => 'agent prompt';",
+  });
+  Object.assign(globalThis.__streamingFinalizationSettings, {
+    useDictationAgent: true,
+    dictationAgentMode: "local",
+    dictationAgentModel: "local-model",
+  });
+  const { manager } = createFinalizingManager(AudioManager);
+  const errors = [];
+  const published = [];
+  manager.streamingFinalText = "replace this";
+  manager.voiceAgentRequested = true;
+  manager.consumeScreenContext = async () => null;
+  const fields = {
+    code: "CONTEXT_TOO_LARGE",
+    messageKey: "models.errors.contextTooLarge",
+    messageParams: { model: "Qwen 3.5 2B", needed: 18000, max: 16384 },
+    surface: "llm",
+    settingsTarget: "dictationAgent",
+    technicalDetails: { model: "local-model" },
+  };
+  manager.processAgentCommand = async () => {
+    throw Object.assign(new Error("too long"), fields, { selectionEditFatal: true });
+  };
+  manager.onError = (error) => errors.push(error);
+  manager.onTranscriptionComplete = (result) => published.push(result);
+  assert.equal(await manager.stopStreamingRecording(), false);
+  assert.equal(errors.length, 1);
+  for (const [key, value] of Object.entries(fields)) assert.deepEqual(errors[0][key], value);
+  assert.equal(errors[0].selectionEditFatal, true);
+  assert.deepEqual(published, []);
+  assert.equal(manager.pendingSelectionEdit, null);
+});
+
 test("streaming finalization is immediately processing and cannot start another session", async (t) => {
   const AudioManager = await loadManagerClass(t);
   const { manager, states, getProviderStopCalls } = createFinalizingManager(AudioManager);
@@ -414,6 +450,102 @@ test("cancelling while the streaming microphone opens never enters recording", a
     false,
     "a cancelled start must not publish a recording state"
   );
+});
+
+// A managed Orukeet recording that resolves its provider through the real
+// sttConfig routing, with every provider channel recording what reached it.
+async function startManagedOrukeetRecording(t, AudioManager) {
+  useManagedOrukeetSettings();
+  installCapture(t);
+  const calls = [];
+  const record = (name, result) => async () => {
+    calls.push(name);
+    return result;
+  };
+  const listen = () => () => {};
+  let raiseStreamError;
+  Object.assign(globalThis.window.electronAPI, {
+    dictationRealtimeStart: async (options) => {
+      calls.push(`${options.provider}:start:${options.model}`);
+      return { success: true };
+    },
+    dictationRealtimeFinalize: record("realtime:finalize", {
+      success: true,
+      text: "Bonjour",
+      language: "fr",
+    }),
+    dictationRealtimeStop: record("realtime:stop", { success: true }),
+    onDictationRealtimePartial: listen,
+    onDictationRealtimeFinal: listen,
+    onDictationRealtimeError: (listener) => {
+      raiseStreamError = listener;
+      return () => {};
+    },
+    onDictationRealtimeSessionEnd: listen,
+    deepgramStreamingFinalize: record("deepgram:finalize", { success: true }),
+    deepgramStreamingStop: record("deepgram:stop", { success: true }),
+    cloudStreamingUsage: async (_text, _durationSeconds, usage) => {
+      calls.push(`usage:${usage.sttProvider}:${usage.sttDetectedLanguage}`);
+      return { success: true };
+    },
+  });
+  globalThis.window.dispatchEvent = () => true;
+
+  const { manager, errors, completions } = createStartingManager(AudioManager, {});
+  delete manager.getStreamingProvider;
+  delete manager.getStreamingProviderName;
+  manager.setSttConfig({ dictation: { mode: "streaming" }, streamingProvider: "orukeet" });
+  // The hook's background TTL refresh lands while the mic opens and would now
+  // route a new recording elsewhere.
+  const openMic = manager._acquireCaptureStream;
+  manager._acquireCaptureStream = async (constraints) => {
+    manager.setSttConfig({ dictation: { mode: "streaming" }, streamingProvider: "deepgram" });
+    return openMic(constraints);
+  };
+
+  assert.equal(await manager.startStreamingRecording(), true);
+  assert.equal(manager.getStreamingProviderName(), "deepgram");
+
+  return { manager, calls, completions, errors, raiseStreamError };
+}
+
+test("stop finalizes the Orukeet stream after an STT config refresh reroutes while the mic opens", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const { manager, calls, completions } = await startManagedOrukeetRecording(t, AudioManager);
+
+  assert.equal(await manager.stopStreamingRecording(), true);
+
+  assert.deepEqual(calls, [
+    "orukeet:start:orukeet-v0.1.0",
+    "realtime:finalize",
+    "realtime:stop",
+    "usage:orukeet:fr",
+  ]);
+  assert.equal(completions.length, 1);
+  assert.equal(completions[0].text, "Bonjour");
+  assert.equal(completions[0].source, "orukeet-streaming");
+  assert.equal(manager._activeStreamingProviderName, null);
+});
+
+test("cancel and cleanup disconnect the Orukeet stream after an STT config refresh reroutes while the mic opens", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  for (const teardown of ["cancelStreamingRecording", "cleanup"]) {
+    await t.test(teardown, async (t) => {
+      const { manager, calls, completions, errors, raiseStreamError } =
+        await startManagedOrukeetRecording(t, AudioManager);
+      manager.preparedMicCapture.cancel = () => {};
+      manager.micStreamHold = { drop() {} };
+      // The managed Orukeet session fails over, so the error never surfaces.
+      raiseStreamError("Orukeet connection closed");
+
+      await manager[teardown]();
+
+      assert.deepEqual(calls, ["orukeet:start:orukeet-v0.1.0", "realtime:stop"]);
+      assert.deepEqual(completions, []);
+      assert.deepEqual(errors, []);
+      assert.equal(manager._activeStreamingProviderName, null);
+    });
+  }
 });
 
 test("cancel overrides a normal streaming stop before it can publish text", async (t) => {
@@ -1320,6 +1452,7 @@ test("a failed-over selection edit that fails is reported as a selection edit fa
     {
       title: "Selection Edit Failed",
       description: "Selection edit could not safely read the selection: gone",
+      selectionEditFatal: true,
       code: "SELECTION_EDIT_CAPTURE_FAILED",
       messageKey: "hooks.audioRecording.selectionEditing.unavailable",
     },
