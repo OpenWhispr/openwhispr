@@ -1,10 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const load = async () => {
-  const mod = await import("../../src/services/ai/inferenceProviders/openai.ts");
-  return mod.default || mod;
-};
+const load = () => import("../../src/services/ai/inferenceProviders/openai.ts");
 
 test("Responses retries when a permanent Chat fallback follows a transient failure", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });

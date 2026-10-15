@@ -1,5 +1,5 @@
 import type { InferenceProvider } from "./types";
-import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl, normalizeBaseUrl } from "../../../config/constants";
+import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl } from "../../../config/constants";
 import { getCloudModel, getOpenAiApiConfig } from "../../../models/ModelRegistry";
 import { getSettings } from "../../../stores/settingsStore";
 import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
@@ -37,24 +37,20 @@ const REASONING_MODEL_MIN_OUTPUT_TOKENS = 25_000;
 const endpointPreferenceCache = new Map<string, "responses" | "chat">();
 const probedBases = new Set<string>();
 
-function getPreferenceStorageKey(base: string, model?: string): string {
-  const normalizedBase = normalizeBaseUrl(base) || base.trim().replace(/\/+$/, "");
-  const trimmedModel = model?.trim();
-  return trimmedModel ? `${normalizedBase}#${trimmedModel}` : normalizedBase;
+// Preferences are keyed per model so one base can serve models on different
+// endpoints; a base-only key (legacy, or written by server detection) is the
+// fallback for models without their own entry.
+function getPreferenceKey(base: string, model?: string): string {
+  return model ? `${base}#${model}` : base;
 }
 
 function readStoredPreference(base: string, model?: string): "responses" | "chat" | undefined {
-  const normalizedBase = normalizeBaseUrl(base) || base.trim().replace(/\/+$/, "");
-  const modelKey = model ? getPreferenceStorageKey(base, model) : undefined;
+  const keys = model ? [getPreferenceKey(base, model), base] : [base];
 
-  if (modelKey && endpointPreferenceCache.has(modelKey)) {
-    return endpointPreferenceCache.get(modelKey);
-  }
-  if (endpointPreferenceCache.has(normalizedBase)) {
-    return endpointPreferenceCache.get(normalizedBase);
-  }
-  if (endpointPreferenceCache.has(base)) {
-    return endpointPreferenceCache.get(base);
+  for (const key of keys) {
+    if (endpointPreferenceCache.has(key)) {
+      return endpointPreferenceCache.get(key);
+    }
   }
 
   if (typeof window === "undefined" || !window.localStorage) {
@@ -67,15 +63,12 @@ function readStoredPreference(base: string, model?: string): "responses" | "chat
     const parsed = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null) return undefined;
 
-    if (modelKey && (parsed[modelKey] === "responses" || parsed[modelKey] === "chat")) {
-      endpointPreferenceCache.set(modelKey, parsed[modelKey]);
-      return parsed[modelKey];
-    }
-
-    const baseValue = parsed[normalizedBase] ?? parsed[base];
-    if (baseValue === "responses" || baseValue === "chat") {
-      endpointPreferenceCache.set(normalizedBase, baseValue);
-      return baseValue;
+    for (const key of keys) {
+      const value = parsed[key];
+      if (value === "responses" || value === "chat") {
+        endpointPreferenceCache.set(key, value);
+        return value;
+      }
     }
   } catch {
     return undefined;
@@ -85,9 +78,7 @@ function readStoredPreference(base: string, model?: string): "responses" | "chat
 }
 
 function rememberPreference(base: string, preference: "responses" | "chat", model?: string): void {
-  const normalizedBase = normalizeBaseUrl(base) || base.trim().replace(/\/+$/, "");
-  const key = getPreferenceStorageKey(base, model);
-
+  const key = getPreferenceKey(base, model);
   endpointPreferenceCache.set(key, preference);
 
   if (typeof window === "undefined" || !window.localStorage) {
@@ -99,16 +90,8 @@ function rememberPreference(base: string, preference: "responses" | "chat", mode
     const parsed = raw ? JSON.parse(raw) : {};
     const data = typeof parsed === "object" && parsed !== null ? parsed : {};
     data[key] = preference;
-    if (!model) {
-      data[normalizedBase] = preference;
-    }
     window.localStorage.setItem(OPENAI_ENDPOINT_PREF_STORAGE_KEY, JSON.stringify(data));
   } catch {}
-}
-
-function clearEndpointPreferenceCache(): void {
-  endpointPreferenceCache.clear();
-  probedBases.clear();
 }
 
 function getEndpointCandidates(
@@ -137,6 +120,11 @@ function getEndpointCandidates(
 }
 
 /** Probe `/v1/models` to detect llama.cpp and prefer `/chat/completions`. */
+function isEndpointNotFound(error: Error): boolean {
+  const status = (error as Error & { status?: unknown }).status;
+  return status === 404 || status === 405;
+}
+
 async function detectServerType(base: string): Promise<void> {
   if (probedBases.has(base) || readStoredPreference(base) !== undefined) {
     return;
@@ -278,6 +266,9 @@ export const openaiProvider: InferenceProvider = {
     const response = await withRetry(async () => {
       let lastError: Error | null = null;
       let lastRetryableError: Error | null = null;
+      // A failure of the first candidate that isn't "endpoint not found" is the
+      // real error; an alternate candidate's 404/405 must not mask it.
+      let firstCandidateError: Error | null = null;
 
       for (let i = 0; i < endpointCandidates.length; i++) {
         const { url: endpoint, type } = endpointCandidates[i];
@@ -361,8 +352,6 @@ export const openaiProvider: InferenceProvider = {
                 body: errorData,
                 headers: res.headers,
               });
-              const fallbackType = type === "responses" ? "chat" : "responses";
-              rememberPreference(openAiBase, fallbackType, model);
               logger.logReasoning("OPENAI_ENDPOINT_FALLBACK", {
                 attemptedEndpoint: endpoint,
                 error: redactProviderBody(errorMessage),
@@ -379,6 +368,11 @@ export const openaiProvider: InferenceProvider = {
           }
 
           rememberPreference(openAiBase, type, model);
+          // Also seed the base key on first success, so later sessions skip the
+          // /models probe and models without their own entry start here.
+          if (model && readStoredPreference(openAiBase) === undefined) {
+            rememberPreference(openAiBase, type);
+          }
           return res.json();
         } catch (error) {
           if ((error as Error).name === "AbortError") {
@@ -388,6 +382,9 @@ export const openaiProvider: InferenceProvider = {
           if (retryStrategy.shouldRetry(lastError)) {
             lastRetryableError = lastError;
           }
+          if (i === 0) {
+            firstCandidateError = lastError;
+          }
           if (hasAlternativeCandidate) {
             logger.logReasoning("OPENAI_ENDPOINT_FALLBACK", {
               attemptedEndpoint: endpoint,
@@ -395,6 +392,14 @@ export const openaiProvider: InferenceProvider = {
               error: (error as Error).message,
             });
             continue;
+          }
+          if (
+            i > 0 &&
+            firstCandidateError &&
+            isEndpointNotFound(lastError) &&
+            !isEndpointNotFound(firstCandidateError)
+          ) {
+            throw firstCandidateError;
           }
           throw lastRetryableError || error;
         } finally {
@@ -509,11 +514,4 @@ export const openaiProvider: InferenceProvider = {
 
     return responseText;
   },
-};
-
-export {
-  getEndpointCandidates,
-  readStoredPreference,
-  rememberPreference,
-  clearEndpointPreferenceCache,
 };

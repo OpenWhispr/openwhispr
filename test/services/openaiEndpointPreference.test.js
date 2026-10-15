@@ -1,131 +1,32 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const load = async () => {
-  const mod = await import("../../src/services/ai/inferenceProviders/openai.ts");
-  return mod.default || mod;
-};
+const load = () => import("../../src/services/ai/inferenceProviders/openai.ts");
 
-test.beforeEach(async () => {
-  const { clearEndpointPreferenceCache } = await load();
-  clearEndpointPreferenceCache();
-  if (typeof globalThis.window === "undefined") {
-    globalThis.window = {};
-  }
-  const store = new Map();
-  globalThis.window.localStorage = {
-    getItem: (key) => store.get(key) || null,
-    setItem: (key, val) => store.set(key, String(val)),
-    removeItem: (key) => store.delete(key),
-    clear: () => store.clear(),
+// openai.ts caches endpoint preferences in a module-level Map, so a base shared
+// between tests would make them order-dependent. One base per test.
+const SHARED_BASE = "https://shared-base.example/v1";
+const LLAMACPP_BASE = "https://llamacpp.example/v1";
+const LEGACY_BASE = "https://legacy-pref.example/v1";
+
+function makeCtx() {
+  return {
+    getApiKey: async () => "test-key",
+    getSystemPrompt: () => "Clean the transcript",
+    getCustomDictionary: () => [],
+    getPreferredLanguage: () => "en",
+    getUiLanguage: () => "en",
+    callChatCompletionsApi: async () => {
+      throw new Error("Unexpected chat completions delegation");
+    },
+    calculateMaxTokens: () => 4096,
   };
-});
+}
 
-test("default endpoint candidates include responses first and chat second", async () => {
-  const { getEndpointCandidates } = await load();
-  const candidates = getEndpointCandidates("https://opencode.ai/zen/go/v1", "gpt-5.6-luna");
-
-  assert.deepEqual(candidates, [
-    { url: "https://opencode.ai/zen/go/v1/responses", type: "responses" },
-    { url: "https://opencode.ai/zen/go/v1/chat/completions", type: "chat" },
-  ]);
-});
-
-test("explicit URL suffixes are preserved as single candidate", async () => {
-  const { getEndpointCandidates } = await load();
-  const respCandidates = getEndpointCandidates("https://opencode.ai/zen/go/v1/responses");
-  assert.deepEqual(respCandidates, [
-    { url: "https://opencode.ai/zen/go/v1/responses", type: "responses" },
-  ]);
-
-  const chatCandidates = getEndpointCandidates("https://opencode.ai/zen/go/v1/chat/completions");
-  assert.deepEqual(chatCandidates, [
-    { url: "https://opencode.ai/zen/go/v1/chat/completions", type: "chat" },
-  ]);
-});
-
-test("preferences are isolated per model on the same base URL", async () => {
-  const { getEndpointCandidates, readStoredPreference, rememberPreference } = await load();
-  const base = "https://opencode.ai/zen/go/v1";
-
-  // Remember 'chat' for grok-4.5
-  rememberPreference(base, "chat", "grok-4.5");
-
-  assert.equal(readStoredPreference(base, "grok-4.5"), "chat");
-  assert.equal(readStoredPreference(base, "gpt-5.6-luna"), undefined);
-
-  // grok-4.5 candidates start with chat
-  const grokCandidates = getEndpointCandidates(base, "grok-4.5");
-  assert.deepEqual(grokCandidates, [
-    { url: "https://opencode.ai/zen/go/v1/chat/completions", type: "chat" },
-    { url: "https://opencode.ai/zen/go/v1/responses", type: "responses" },
-  ]);
-
-  // gpt-5.6-luna candidates still start with responses
-  const lunaCandidates = getEndpointCandidates(base, "gpt-5.6-luna");
-  assert.deepEqual(lunaCandidates, [
-    { url: "https://opencode.ai/zen/go/v1/responses", type: "responses" },
-    { url: "https://opencode.ai/zen/go/v1/chat/completions", type: "chat" },
-  ]);
-
-  // Now remember 'responses' for gpt-5.6-luna
-  rememberPreference(base, "responses", "gpt-5.6-luna");
-  assert.equal(readStoredPreference(base, "gpt-5.6-luna"), "responses");
-  assert.equal(readStoredPreference(base, "grok-4.5"), "chat");
-});
-
-test("falls back from Chat to Responses when Chat returns 404", async (t) => {
-  const originalFetch = globalThis.fetch;
-  t.after(() => {
-    globalThis.fetch = originalFetch;
-  });
-
-  const requestedEndpoints = [];
-  globalThis.fetch = async (input, init = {}) => {
-    const endpoint = String(input);
-    const method = init.method || "GET";
-    requestedEndpoints.push(`${method} ${endpoint}`);
-
-    if (method === "GET" && endpoint.endsWith("/models")) {
-      return new Response(JSON.stringify({ data: [] }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    if (endpoint.endsWith("/chat/completions")) {
-      return new Response(JSON.stringify({ error: { message: "Chat not supported for this model" } }), {
-        status: 404,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    if (endpoint.endsWith("/responses")) {
-      return new Response(
-        JSON.stringify({
-          output: [
-            {
-              type: "message",
-              content: [{ type: "output_text", text: "Responses output" }],
-            },
-          ],
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    throw new Error(`Unexpected request: ${method} ${endpoint}`);
-  };
-
-  const { openaiProvider, rememberPreference, readStoredPreference } = await load();
-  const base = "https://opencode.ai/zen/go/v1";
-
-  // Simulate a base-level preference of 'chat' from another model
-  rememberPreference(base, "chat");
-
-  const result = await openaiProvider.call({
-    text: "Clean this text",
-    model: "gpt-5.6-luna",
+function callProvider(openaiProvider, base, model) {
+  return openaiProvider.call({
+    text: "Clean this transcript",
+    model,
     agentName: null,
     config: {
       provider: "custom",
@@ -133,92 +34,116 @@ test("falls back from Chat to Responses when Chat returns 404", async (t) => {
       customApiKey: "test-key",
       systemPrompt: "Clean the transcript",
     },
-    ctx: {
-      getApiKey: async () => "test-key",
-      getSystemPrompt: () => "Clean the transcript",
-      getCustomDictionary: () => [],
-      getPreferredLanguage: () => "en",
-      getUiLanguage: () => "en",
-      callChatCompletionsApi: async () => {
-        throw new Error("Unexpected chat completions delegation");
-      },
-      calculateMaxTokens: () => 4096,
-    },
+    ctx: makeCtx(),
   });
+}
 
-  assert.equal(result, "Responses output");
-  // Verified chat was attempted first, then responses succeeded
-  assert.ok(requestedEndpoints.includes("POST https://opencode.ai/zen/go/v1/chat/completions"));
-  assert.ok(requestedEndpoints.includes("POST https://opencode.ai/zen/go/v1/responses"));
+function json(status, body) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
 
-  // Subsequent call for gpt-5.6-luna now has 'responses' remembered
-  assert.equal(readStoredPreference(base, "gpt-5.6-luna"), "responses");
-});
+const responsesOk = (text) =>
+  json(200, { output: [{ type: "message", content: [{ type: "output_text", text }] }] });
+const chatOk = (text) =>
+  json(200, { choices: [{ message: { content: text }, finish_reason: "stop" }] });
 
-test("falls back from Responses to Chat when Responses returns 404", async (t) => {
+function installFetch(t, handler) {
   const originalFetch = globalThis.fetch;
   t.after(() => {
     globalThis.fetch = originalFetch;
   });
-
-  const requestedEndpoints = [];
+  const requests = [];
   globalThis.fetch = async (input, init = {}) => {
     const endpoint = String(input);
     const method = init.method || "GET";
-    requestedEndpoints.push(`${method} ${endpoint}`);
-
-    if (method === "GET" && endpoint.endsWith("/models")) {
-      return new Response(JSON.stringify({ data: [] }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    if (endpoint.endsWith("/responses")) {
-      return new Response(JSON.stringify({ error: { message: "Responses unsupported" } }), {
-        status: 404,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    if (endpoint.endsWith("/chat/completions")) {
-      return new Response(
-        JSON.stringify({
-          choices: [{ message: { content: "Chat output" } }],
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    throw new Error(`Unexpected request: ${method} ${endpoint}`);
+    const body = init.body ? JSON.parse(init.body) : undefined;
+    requests.push(`${method} ${endpoint}${body?.model ? ` (${body.model})` : ""}`);
+    return handler({ endpoint, method, model: body?.model });
   };
+  return requests;
+}
 
-  const { openaiProvider, readStoredPreference } = await load();
-  const base = "https://opencode.ai/zen/go/v1";
-
-  const result = await openaiProvider.call({
-    text: "Clean this text",
-    model: "grok-4.5",
-    agentName: null,
-    config: {
-      provider: "custom",
-      baseUrl: base,
-      customApiKey: "test-key",
-      systemPrompt: "Clean the transcript",
-    },
-    ctx: {
-      getApiKey: async () => "test-key",
-      getSystemPrompt: () => "Clean the transcript",
-      getCustomDictionary: () => [],
-      getPreferredLanguage: () => "en",
-      getUiLanguage: () => "en",
-      callChatCompletionsApi: async () => {
-        throw new Error("Unexpected chat completions delegation");
-      },
-      calculateMaxTokens: () => 4096,
-    },
+test("a model on /responses still recovers after another model on the same base learned chat", async (t) => {
+  const requests = installFetch(t, ({ endpoint, method, model }) => {
+    if (method === "GET" && endpoint.endsWith("/models")) {
+      return json(401, { error: { message: "unauthorized" } });
+    }
+    if (model === "glm-chat-only") {
+      return endpoint.endsWith("/chat/completions")
+        ? chatOk("Chat answer")
+        : json(404, { error: { message: "not found" } });
+    }
+    if (model === "luna-responses-only") {
+      return endpoint.endsWith("/responses")
+        ? responsesOk("Responses answer")
+        : json(500, { error: { message: "upstream error" } });
+    }
+    throw new Error(`Unexpected request: ${method} ${endpoint}`);
   });
 
-  assert.equal(result, "Chat output");
-  assert.equal(readStoredPreference(base, "grok-4.5"), "chat");
+  const { openaiProvider } = await load();
+  assert.equal(await callProvider(openaiProvider, SHARED_BASE, "glm-chat-only"), "Chat answer");
+  requests.length = 0;
+
+  const result = await callProvider(openaiProvider, SHARED_BASE, "luna-responses-only");
+
+  assert.equal(result, "Responses answer");
+  assert.deepEqual(requests, [
+    `POST ${SHARED_BASE}/chat/completions (luna-responses-only)`,
+    `POST ${SHARED_BASE}/responses (luna-responses-only)`,
+  ]);
+});
+
+test("the chat endpoint's real error surfaces when the /responses fallback is not found", async (t) => {
+  installFetch(t, ({ endpoint, method }) => {
+    if (method === "GET" && endpoint.endsWith("/models")) {
+      return json(200, { data: [{ id: "local-model", owned_by: "llamacpp" }] });
+    }
+    if (endpoint.endsWith("/chat/completions")) {
+      return json(400, {
+        error: { message: "the request exceeds the available context size" },
+      });
+    }
+    if (endpoint.endsWith("/responses")) {
+      return json(404, { error: { message: "File Not Found" } });
+    }
+    throw new Error(`Unexpected request: ${method} ${endpoint}`);
+  });
+
+  const { openaiProvider } = await load();
+
+  await assert.rejects(callProvider(openaiProvider, LLAMACPP_BASE, "local-model"), (error) => {
+    assert.equal(error.status, 400);
+    return true;
+  });
+});
+
+test("a legacy base-keyed preference in localStorage is still honored", async (t) => {
+  const store = new Map([["openAiEndpointPreference", JSON.stringify({ [LEGACY_BASE]: "chat" })]]);
+  const originalWindow = global.window;
+  t.after(() => {
+    if (originalWindow === undefined) delete global.window;
+    else global.window = originalWindow;
+  });
+  global.window = {
+    localStorage: {
+      getItem: (key) => (store.has(key) ? store.get(key) : null),
+      setItem: (key, value) => store.set(key, String(value)),
+    },
+  };
+  const requests = installFetch(t, ({ endpoint, method }) => {
+    if (endpoint.endsWith("/chat/completions")) {
+      return chatOk("Legacy chat answer");
+    }
+    throw new Error(`Unexpected request: ${method} ${endpoint}`);
+  });
+
+  const { openaiProvider } = await load();
+  const result = await callProvider(openaiProvider, LEGACY_BASE, "any-model");
+
+  assert.equal(result, "Legacy chat answer");
+  assert.deepEqual(requests, [`POST ${LEGACY_BASE}/chat/completions (any-model)`]);
 });
