@@ -221,8 +221,10 @@ class OrukeetStreaming {
     } else if (message.type === "transcript") {
       if (!this.pipeline || !this.finalResolve || typeof message.text !== "string") return;
       // This is ASR completion, before cleanup starts. Never paste this provisional
-      // event; retain its timing separately from the eventual combined final.
+      // event; retain its timing separately from the eventual combined final, and
+      // its text in case cleanup never finishes.
       this.asrFinalMs ??= Math.max(0, performance.now() - this.finalStartedAt);
+      this.rawTranscript = message.text;
     } else if (message.type === "final") {
       // A duplicate or unsolicited final must never result in a second paste.
       if (this.result) return;
@@ -274,9 +276,7 @@ class OrukeetStreaming {
         ...("language" in message ? languageMetadata(message) : {}),
       };
       if (this.pipeline && message.cleanup_receipt) this.onUsageReceipt?.(message.cleanup_receipt);
-      this.onFinalTranscript?.(this.result.text);
-      this.finalResolve?.(this.result);
-      this.clearFinal();
+      this.settleFinal();
     } else if (message.type === "error") {
       if (message.code === "capacity" && this.finalResolve && this.retryCapacity) {
         clearTimeout(this.retryTimer);
@@ -400,6 +400,12 @@ class OrukeetStreaming {
     return this.finalPromise;
   }
 
+  settleFinal() {
+    this.onFinalTranscript?.(this.result.text);
+    this.finalResolve?.(this.result);
+    this.clearFinal();
+  }
+
   clearFinal() {
     clearTimeout(this.finalCapTimer);
     clearTimeout(this.finalTimer);
@@ -413,6 +419,21 @@ class OrukeetStreaming {
     // socket when the account holds another warm one, so a later close or
     // error only ends the connection.
     if (this.result) return this.close();
+    // ASR already finished when cleanup stalled or the socket dropped: keep its
+    // text, which is pasted without cleanup, instead of transcribing again.
+    if (this.pipeline && this.finalResolve && typeof this.rawTranscript === "string") {
+      this.result = {
+        text: this.rawTranscript,
+        cleanupError: error.message,
+        asrFinalMs: this.asrFinalMs,
+        cleanup: { status: "fallback" },
+        model: this.currentModel,
+        audioBytesSent: this.audioBytesSent,
+      };
+      this.settleFinal();
+      this.ws?.terminate();
+      return this.close();
+    }
     this.failure = error;
     // Before `ready` (including while main mints the session token, before
     // connect() runs), the failed start is the report and falls back on it;

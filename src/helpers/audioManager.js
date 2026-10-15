@@ -5813,6 +5813,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           );
         } else if (route.kind === "cleanup" && cleanupCloudMode === "openwhispr") {
           const customPrompt = this.getCustomPrompt();
+          // ASR finished but the combined cleanup didn't: paste the raw text, as
+          // any other failed cleanup does.
+          if (orukeetFinal?.cleanupError) {
+            throw Object.assign(
+              new Error(`Combined cleanup did not finish: ${orukeetFinal.cleanupError}`),
+              { messageKey: "app.toasts.cleanupFailed.title" }
+            );
+          }
           combinedCleanup =
             orukeetFinal?.cleanupStatus === "complete" &&
             JSON.stringify(orukeetFinal.cleanupOptions) ===

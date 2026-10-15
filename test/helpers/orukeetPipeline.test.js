@@ -138,6 +138,35 @@ test(
     await assert.rejects(streaming.finalize(), /Invalid pipeline final/);
   }
 );
+test(
+  "a cleanup that stalls, fails or drops after ASR settles with the raw transcript",
+  { timeout: 2500 },
+  async (t) => {
+    for (const interrupt of [
+      (streaming) => streaming.ws.emit("close"),
+      (streaming) => streaming.handleMessage({ type: "error", code: "cleanup", message: "Down" }),
+      (streaming) => streaming.fail(new Error("Orukeet final transcript timed out")),
+    ]) {
+      const streaming = fixture(t, { type: "transcript", text: final.raw_text });
+      let errors = 0;
+      let finals = 0;
+      streaming.onError = () => errors++;
+      streaming.onFinalTranscript = () => finals++;
+      await streaming.connect(validateSession(session, true));
+      streaming.sendAudio(Buffer.alloc(320));
+      const pending = streaming.finalize();
+      await new Promise((resolve) => setImmediate(resolve));
+      interrupt(streaming);
+      const result = await pending;
+      assert.equal(result.text, final.raw_text);
+      assert.ok(result.cleanupError);
+      assert.equal(result.cleanupStatus, undefined);
+      assert.deepEqual(result.cleanup, { status: "fallback" });
+      assert.deepEqual([errors, finals], [0, 1]);
+    }
+  }
+);
+
 test("canceled recording never commits or emits a receipt", { timeout: 2500 }, async (t) => {
   const streaming = fixture(t);
   let receipts = 0;

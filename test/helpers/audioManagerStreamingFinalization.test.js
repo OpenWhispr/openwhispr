@@ -1988,6 +1988,37 @@ test("combined cleanup is reused once, while changed options or failed cleanup u
   }
 });
 
+test("combined cleanup that never finished pastes the raw text with a cleanup notice", async (t) => {
+  const AudioManager = await loadManagerClass(t, {
+    "/stores/settingsStore": `
+      export const getSettings = () => globalThis.__streamingFinalizationSettings;
+      export const getEffectiveCleanupModel = () => null;
+      export const selectResolvedLLMConfig = () => ({ model: null, provider: null });
+      export const isCloudCleanupMode = () => true;
+      export const isCloudDictationAgentMode = () => false;
+      export const isCloudTranslationMode = () => false;
+    `,
+  });
+  const { reasonCalls, uploads, usage, published } = await stopManagedDictation(AudioManager, {
+    final: {
+      success: true,
+      text: "please send invoice 128",
+      cleanupError: "Orukeet final transcript timed out",
+      asrFinalMs: 103,
+      cleanup: { status: "fallback" },
+    },
+    upload: async () => assert.fail("The finished ASR text must not be transcribed again"),
+    settings: { useCleanupModel: true, cleanupCloudMode: "openwhispr", customPrompts: {} },
+  });
+  assert.equal(reasonCalls.length, 0);
+  assert.equal(uploads.length, 0);
+  assert.equal(published[0].text, "please send invoice 128");
+  assert.equal(published[0].cleanupFailure.messageKey, "app.toasts.cleanupFailed.title");
+  assert.equal(usage[0].text, "please send invoice 128");
+  assert.equal(usage[0].sendLogs, true);
+  assert.deepEqual(usage[0].orukeetCleanup, { status: "fallback" });
+});
+
 test("combined text never replaces an unsupported-language fallback", async (t) => {
   const AudioManager = await loadManagerClass(t);
   const { uploads, published, reasonCalls } = await stopManagedDictation(AudioManager, {
