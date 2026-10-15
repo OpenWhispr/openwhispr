@@ -5,6 +5,7 @@ const Module = require("node:module");
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const identifierModulePath = require.resolve("../../src/helpers/liveSpeakerIdentifier");
 const originalLoad = Module._load;
+const handlers = new Map();
 
 const electronStub = {
   app: {
@@ -15,7 +16,11 @@ const electronStub = {
     on: () => {},
     requestSingleInstanceLock: () => true,
   },
-  ipcMain: { handle: () => {}, on: () => {}, removeHandler: () => {} },
+  ipcMain: {
+    handle: (channel, fn) => handlers.set(channel, fn),
+    on: () => {},
+    removeHandler: () => {},
+  },
   BrowserWindow: class BrowserWindow {
     static getAllWindows() {
       return [];
@@ -131,6 +136,37 @@ test("reconciliation migrates the mapping when the offline id differs", () => {
   assert.equal(calls.set.length, 1);
   assert.equal(calls.set[0].speakerId, "speaker_0");
   assert.deepEqual(calls.remove, [{ noteId: NOTE_ID, speakerId: "speaker_3" }]);
+});
+
+// A permissive `this` for setupHandlers: registration only stores closures.
+function anything() {
+  return new Proxy(function () {}, {
+    get: (t, prop) => {
+      if (prop === Symbol.toPrimitive || prop === "toString") return () => "";
+      if (prop === "then") return undefined;
+      return anything();
+    },
+    apply: () => anything(),
+  });
+}
+
+// Live speaker ids restart with every meeting, so another note's speaker_0 is
+// not the live speaker_0.
+test("labeling another note during a recording leaves the live speaker unnamed", async () => {
+  const { IPCHandlers, liveSpeakerIdentifier } = loadHandlers();
+  liveSpeakerIdentifier._assignSpeakerId(new Float32Array(embedding));
+  const target = {
+    _activeMeetingNoteId: NOTE_ID,
+    databaseManager: { getNoteSpeakerEmbeddings: () => [], setSpeakerMapping: () => {} },
+  };
+  IPCHandlers.prototype.setupHandlers.call(
+    new Proxy(target, { get: (t, prop) => (prop in t ? t[prop] : anything()) })
+  );
+
+  await handlers.get("set-speaker-mapping")({}, NOTE_ID + 1, "speaker_0", "Alice");
+
+  const { displayName, noteId } = liveSpeakerIdentifier.getTransientState().speaker_0;
+  assert.deepEqual({ displayName, noteId }, { displayName: null, noteId: null });
 });
 
 const THREE_ATTENDEES = [

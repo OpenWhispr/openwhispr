@@ -12483,11 +12483,11 @@ class IPCHandlers {
         const embeddings = this.databaseManager.getNoteSpeakerEmbeddings(noteId);
         const noteSpeakerEmbedding = embeddings.find((e) => e.speaker_id === speakerId);
         // Live speaker ids restart with every meeting, so only the note being
-        // recorded may borrow the live voice.
-        const liveSpeakerEmbedding =
-          noteId === this._activeMeetingNoteId
-            ? liveSpeakerIdentifier.getSpeakerEmbedding(speakerId)
-            : null;
+        // recorded may borrow the live voice or name the live speaker.
+        const isRecordingNote = noteId === this._activeMeetingNoteId;
+        const liveSpeakerEmbedding = isRecordingNote
+          ? liveSpeakerIdentifier.getSpeakerEmbedding(speakerId)
+          : null;
         const speakerEmbeddingBuffer =
           noteSpeakerEmbedding?.embedding ||
           (liveSpeakerEmbedding ? Buffer.from(liveSpeakerEmbedding.buffer) : null);
@@ -12505,7 +12505,9 @@ class IPCHandlers {
         }
 
         this.databaseManager.setSpeakerMapping(noteId, speakerId, resolvedProfileId, displayName);
-        liveSpeakerIdentifier.mapSpeaker(speakerId, resolvedProfileId, displayName, noteId);
+        if (isRecordingNote) {
+          liveSpeakerIdentifier.mapSpeaker(speakerId, resolvedProfileId, displayName, noteId);
+        }
         return { success: true, profileId: resolvedProfileId };
       }
     );
