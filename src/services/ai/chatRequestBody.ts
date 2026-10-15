@@ -89,8 +89,9 @@ export function applyChatCompletionsParams(
 
 /**
  * The effort for a Responses API body (`reasoning: { effort }`), by the same
- * rules as the chat body above. With no choice, a model outside the family
- * table sends no effort, leaving the server's default.
+ * rules as the chat body above. Suppression sends the family's floor, or
+ * "none" like the generic chat dialect; with no choice, a model outside the
+ * family table sends no effort, leaving the server's default.
  */
 export function responsesReasoningEffort(
   model: string,
@@ -98,7 +99,7 @@ export function responsesReasoningEffort(
   config: ReasoningConfig
 ): string | undefined {
   const familyEffort = getModelFamilyConstraints(model)?.reasoningEffort;
-  if (isThinkingSuppressed(model, config)) return familyEffort?.suppressValue;
+  if (isThinkingSuppressed(model, config)) return familyEffort?.suppressValue ?? "none";
   const effort = chosenReasoningEffort(provider, model, config);
   if (effort) return effort;
   if (familyEffort?.cleanupValue && isDeterministicTransform(config)) {

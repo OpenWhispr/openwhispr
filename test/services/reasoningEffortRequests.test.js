@@ -36,6 +36,17 @@ test("Responses effort: a Custom endpoint sends any listed level (#791)", async 
   assert.equal(responsesReasoningEffort("grok-4.3", "custom", CHOSEN("max")), undefined);
 });
 
+test("Responses effort: the thinking toggle reaches a Custom endpoint's Responses API (#791)", async () => {
+  const { responsesReasoningEffort } = await import("../../src/services/ai/chatRequestBody.ts");
+
+  assert.equal(responsesReasoningEffort("grok-4.3", "custom", { disableThinking: true }), "none");
+  // A family without an off switch keeps its floor.
+  assert.equal(
+    responsesReasoningEffort("gpt-oss-120b", "custom", { disableThinking: true }),
+    "low"
+  );
+});
+
 test("Gemini native: a chosen level becomes thinkingLevel; the toggle still wins", async (t) => {
   const { geminiProvider } = await import("../../src/services/ai/inferenceProviders/gemini.ts");
   const requests = [];
