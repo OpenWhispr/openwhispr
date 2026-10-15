@@ -142,6 +142,7 @@ import {
   resolveManagedOrukeetRoute,
   resolveStreamingProviderName,
   buildStreamingSessionOptions,
+  isCloudMeteredStream,
   shouldRetranscribeOrukeetLanguage,
 } from "./dictationStreamingRouting";
 
@@ -648,6 +649,7 @@ class AudioManager {
     this._streamingCancellationGeneration = 0;
     this._activeTranscriptionAbortController = null;
     this._activeStreamingSessionId = null;
+    this._streamingMeteredByCloud = false;
     this.streamingFallbackRecorder = null;
     this.streamingFallbackChunks = [];
     this.voiceAgentRequested = false;
@@ -4843,15 +4845,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const result = await withSessionRefresh(async () => {
         const streamingSettings = getSettings();
         const { useLocalWhisper } = streamingSettings;
-        const res = await provider.start(
-          buildStreamingSessionOptions({
-            providerName: this.getStreamingProviderName(),
-            settings: streamingSettings,
-            language: this.getEffectiveSttLanguage(streamingSettings),
-            keyterms: this.getKeyterms(),
-            voiceAgentRequested: this.voiceAgentRequested,
-          })
-        );
+        const sessionOptions = buildStreamingSessionOptions({
+          providerName: this.getStreamingProviderName(),
+          settings: streamingSettings,
+          language: this.getEffectiveSttLanguage(streamingSettings),
+          keyterms: this.getKeyterms(),
+          voiceAgentRequested: this.voiceAgentRequested,
+        });
+        // Decided from the credentials this session opens with, so a mode
+        // switch before stop cannot move its words in or out of Cloud usage.
+        this._streamingMeteredByCloud = isCloudMeteredStream(sessionOptions);
+        const res = await provider.start(sessionOptions);
 
         return this.classifyStreamingStartResult(res, { useLocalWhisper });
       });
@@ -5335,6 +5339,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     );
 
     const stSettings = getSettings();
+    const meteredByCloud = this._streamingMeteredByCloud;
     const streamingSttModel = stopResult?.model || "nova-3";
     const streamingSttProcessingMs = Math.round(tTerminate - t0);
     const streamingAudioBytesSent = stopResult?.audioBytesSent || 0;
@@ -5697,12 +5702,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         ...(batchWarning ? { warning: batchWarning } : {}),
       });
 
-      // Only OpenWhispr Cloud streams consume the account's word allowance.
-      // BYOK/self-hosted transcripts stay out of the cloud metering endpoint;
-      // opted-in history and insights sync use their own persistence paths.
-      const usesOpenWhisprCloud =
-        !stSettings.useLocalWhisper && stSettings.cloudTranscriptionMode === "openwhispr";
-      if (!usedBatchFallback && usesOpenWhisprCloud) {
+      // Only a stream on OpenWhispr Cloud credentials draws on the account's
+      // word allowance; opted-in history and insights sync push the local row
+      // of every other stream themselves.
+      if (!usedBatchFallback && meteredByCloud) {
         (async () => {
           try {
             await withSessionRefresh(async () => {
@@ -5745,7 +5748,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           }
           window.dispatchEvent(new Event("usage-changed"));
         })();
-      } else if (usedBatchFallback || usedCloudReasoning) {
+      } else if (batchFallbackResult?.source === "openwhispr") {
+        // /api/transcribe recorded the Cloud upload's words.
         window.dispatchEvent(new Event("usage-changed"));
       }
 

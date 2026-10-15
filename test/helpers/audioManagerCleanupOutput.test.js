@@ -70,10 +70,8 @@ test("invalid completed cleanup keeps raw text across dictation routes", async (
             result = { ...result, ...manager._takePendingResultExtras() };
             assert.equal(result.rawText, RAW);
           } else if (route === "streaming" || route === "byok-streaming") {
-            useSettingsStore.setState({
-              cloudTranscriptionMode: route === "byok-streaming" ? "byok" : "openwhispr",
-            });
             Object.assign(manager, {
+              _streamingMeteredByCloud: route === "streaming",
               streamingFinalText: RAW,
               streamingCleanupFns: [],
               micRecovery: { stop() {} },
@@ -92,19 +90,29 @@ test("invalid completed cleanup keeps raw text across dictation routes", async (
             });
             let usageOptions;
             const usageEvents = [];
-            window.dispatchEvent = (event) => usageEvents.push(event.type);
             window.electronAPI.cloudStreamingUsage = async (text, seconds, options) => {
               usageOptions = options;
               return { success: true };
             };
-            await manager._finalizeStreamingRecording(null);
+            const dispatchEvent = window.dispatchEvent;
+            window.dispatchEvent = (event) => usageEvents.push(event.type);
+            try {
+              await manager._finalizeStreamingRecording(null);
+              await new Promise(setImmediate);
+            } finally {
+              window.dispatchEvent = dispatchEvent;
+            }
             assert.equal(result.rawText, RAW);
-            await new Promise(setImmediate);
-            // Cloud cleanup refreshes billing even with BYOK transcription,
-            // but only a Cloud stream needs the streaming metering request.
-            assert.equal(usageEvents.includes("usage-changed"), true);
-            if (route === "byok-streaming") assert.equal(usageOptions, undefined);
-            else assert.equal(usageOptions?.sendLogs, false);
+            if (route === "streaming") {
+              // The successful /api/reason call already logged this dictation.
+              assert.equal(usageOptions?.sendLogs, false);
+              assert.deepEqual(usageEvents, ["usage-changed"]);
+            } else {
+              // Cloud cleanup records no words, so an own-key stream has no
+              // usage to report or refresh.
+              assert.equal(usageOptions, undefined);
+              assert.deepEqual(usageEvents, []);
+            }
           } else {
             let translationInput;
             manager.processWithReasoningModel = async (text) => {

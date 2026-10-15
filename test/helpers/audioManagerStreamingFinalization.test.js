@@ -139,55 +139,22 @@ test("streaming completion keeps the recording occurrence time", async (t) => {
   assert.equal(completion.analyticsOccurredAt, new Date(recordingStartedAt).toISOString());
 });
 
-test("BYOK streams complete without sending transcripts to Cloud usage metering", async (t) => {
-  const AudioManager = await loadManagerClass(t);
-  for (const provider of ["gemini", "openai-realtime", "tinfoil-realtime", "corti", "orukeet"]) {
-    await t.test(provider, async () => {
-      globalThis.__streamingFinalizationSettings = {
-        useLocalWhisper: false,
-        cloudTranscriptionMode: "byok",
-        isSignedIn: true,
-        insightsSyncEnabled: true,
-      };
-      const { manager } = createFinalizingManager(AudioManager);
-      manager.streamingFinalText = "My own key still works.";
-      manager.getStreamingProviderName = () => provider;
-      manager.finalizeChineseScript = async (text) => text;
-      let completion;
-      manager.onTranscriptionComplete = (result) => {
-        completion = result;
-      };
-      const usageCalls = [];
-      globalThis.window.electronAPI.cloudStreamingUsage = async (...args) => {
-        usageCalls.push(args);
-        return { success: true };
-      };
-      const events = [];
-      globalThis.window.dispatchEvent = (event) => events.push(event.type);
-
-      await manager.stopStreamingRecording();
-      await new Promise(setImmediate);
-
-      assert.equal(completion.text, "My own key still works.");
-      assert.equal(completion.source, `${provider}-streaming`);
-      assert.ok(completion.clientTranscriptionId);
-      assert.ok(completion.analyticsOccurredAt);
-      assert.deepEqual(usageCalls, []);
-      assert.equal(events.includes("usage-changed"), false);
-    });
-  }
-});
-
-test("OpenWhispr Cloud streams still report usage even when the provider is Gemini", async (t) => {
-  const AudioManager = await loadManagerClass(t);
+// Starts a stream on `providerName` under `startMode`, switches the saved mode to
+// `stopMode` mid-recording, and stops with a streamed transcript.
+async function streamAcrossModeSwitch(t, AudioManager, { providerName, startMode, stopMode }) {
   globalThis.__streamingFinalizationSettings = {
-    useLocalWhisper: false,
-    cloudTranscriptionMode: "openwhispr",
+    ...globalThis.__streamingFinalizationSettings,
+    cloudTranscriptionMode: startMode,
     isSignedIn: true,
+    insightsSyncEnabled: true,
   };
-  const { manager } = createFinalizingManager(AudioManager);
-  manager.streamingFinalText = "Cloud words count.";
-  manager.getStreamingProviderName = () => "gemini";
+  installCapture(t);
+  const provider = startingOrukeetProvider({
+    finalizeAcknowledged: false,
+    awaitsFinalTranscript: false,
+    finalize() {},
+  });
+  const { manager, completions } = createStartingManager(AudioManager, { providerName, provider });
   manager.finalizeChineseScript = async (text) => text;
   const usageCalls = [];
   globalThis.window.electronAPI.cloudStreamingUsage = async (...args) => {
@@ -197,13 +164,57 @@ test("OpenWhispr Cloud streams still report usage even when the provider is Gemi
   const events = [];
   globalThis.window.dispatchEvent = (event) => events.push(event.type);
 
+  assert.equal(await manager.startStreamingRecording(), true);
+  globalThis.__streamingFinalizationSettings = {
+    ...globalThis.__streamingFinalizationSettings,
+    cloudTranscriptionMode: stopMode,
+  };
+  manager.streamingFinalText = "Words from this stream.";
   await manager.stopStreamingRecording();
   await new Promise(setImmediate);
+  return { completion: completions[0], usageCalls, events };
+}
 
-  assert.equal(usageCalls.length, 1);
-  assert.equal(usageCalls[0][0], "Cloud words count.");
-  assert.equal(usageCalls[0][2].sttProvider, "gemini");
-  assert.equal(events.includes("usage-changed"), true);
+test("a stream counts toward Cloud usage by the credentials it started on", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+
+  await t.test("a Cloud stream switched to own keys mid-recording is still counted", async (t) => {
+    const { usageCalls, events } = await streamAcrossModeSwitch(t, AudioManager, {
+      providerName: "gemini",
+      startMode: "openwhispr",
+      stopMode: "byok",
+    });
+    assert.equal(usageCalls.length, 1);
+    assert.equal(usageCalls[0][0], "Words from this stream.");
+    assert.equal(usageCalls[0][2].sttProvider, "gemini");
+    assert.equal(usageCalls[0][2].sendLogs, true);
+    assert.deepEqual(events, ["usage-changed"]);
+  });
+
+  // #2558: a Free user's own Gemini key filled the Cloud word allowance.
+  await t.test("an own-key stream switched to Cloud mid-recording is not counted", async (t) => {
+    const { completion, usageCalls, events } = await streamAcrossModeSwitch(t, AudioManager, {
+      providerName: "gemini",
+      startMode: "byok",
+      stopMode: "openwhispr",
+    });
+    assert.equal(completion.text, "Words from this stream.");
+    // The opted-in insights sync pushes the local row under these.
+    assert.ok(completion.clientTranscriptionId);
+    assert.ok(completion.analyticsOccurredAt);
+    assert.deepEqual(usageCalls, []);
+    assert.deepEqual(events, []);
+  });
+
+  await t.test("tinfoil in Cloud mode streams on the user's key and is not counted", async (t) => {
+    const { usageCalls, events } = await streamAcrossModeSwitch(t, AudioManager, {
+      providerName: "tinfoil-realtime",
+      startMode: "openwhispr",
+      stopMode: "openwhispr",
+    });
+    assert.deepEqual(usageCalls, []);
+    assert.deepEqual(events, []);
+  });
 });
 
 test("only a provider that prefers its stop transcript pastes it over the streamed finals", async (t) => {
@@ -617,7 +628,6 @@ test("a no-final stream whose Cloud upload finds no speech keeps the recording q
 
 test("Orukeet uses the acknowledged final even if the transcript event is delayed", async (t) => {
   const AudioManager = await loadManagerClass(t);
-  useManagedOrukeetSettings();
   const { manager } = createFinalizingManager(AudioManager);
   manager.getStreamingProviderName = () => "orukeet";
   manager.getStreamingProvider = () => ({
@@ -625,16 +635,9 @@ test("Orukeet uses the acknowledged final even if the transcript event is delaye
     finalize: async () => ({ success: true, text: "Acknowledged final" }),
     stop: async () => ({ success: true, text: "" }),
   });
-  let usageReported;
-  const usage = new Promise((resolve) => {
-    usageReported = resolve;
-  });
-  globalThis.window.electronAPI.cloudStreamingUsage = async () => ({ success: true });
-  globalThis.window.dispatchEvent = () => usageReported();
   const results = [];
   manager.onTranscriptionComplete = (result) => results.push(result);
   await manager.stopStreamingRecording();
-  await usage;
   assert.equal(results[0].text, "Acknowledged final");
 });
 
@@ -1389,6 +1392,8 @@ async function stopManagedDictation(
     ...settings,
   };
   const { manager } = createFinalizingManager(AudioManager);
+  manager._streamingMeteredByCloud =
+    globalThis.__streamingFinalizationSettings.cloudTranscriptionMode === "openwhispr";
   manager.recordingStartTime = Date.now() - 8000;
   manager.mergeRecordedSegments = async () => new Blob([new Uint8Array(100)]);
   manager.getStreamingProvider = () => orukeetProvider(final);
@@ -1412,23 +1417,14 @@ async function stopManagedDictation(
     usage.push(opts);
     return { success: true };
   };
-  let usageSettled;
-  const settled = new Promise((resolve) => {
-    usageSettled = resolve;
-  });
-  globalThis.window.dispatchEvent = () => usageSettled();
+  globalThis.window.dispatchEvent = () => true;
   const published = [];
   manager.onTranscriptionComplete = (result) => published.push(result);
   const errors = [];
   manager.onError = (error) => errors.push(error);
   const stopResult = await manager.stopStreamingRecording();
-  // Only Cloud streams report usage after publishing a non-empty transcript.
-  if (
-    published.some((result) => result.text) &&
-    globalThis.__streamingFinalizationSettings.cloudTranscriptionMode === "openwhispr"
-  ) {
-    await settled;
-  }
+  // Usage is reported in the background after the transcript is published.
+  await new Promise(setImmediate);
   return { manager, uploads, reasonCalls, usage, published, errors, stopResult };
 }
 
