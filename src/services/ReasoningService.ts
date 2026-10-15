@@ -39,6 +39,7 @@ import {
   fetchWithParamFallback,
   isTruncatedFinishReason,
   truncatedOutputError,
+  type ParamFallbackDetails,
 } from "./ai/chatRequestBody";
 import { getModelFamilyConstraints } from "./ai/modelFamilyConstraints";
 import { detectEndpointDialect } from "./ai/thinkingSuppressionDialects";
@@ -114,8 +115,7 @@ function assertAgentSessionAllowedByPolicy(provider: string, mode: InferenceMode
 }
 
 function logParamFallback(logEvent: string) {
-  return (details: { status: number; stripped: string[] }) =>
-    logger.logReasoning(logEvent, details);
+  return (details: ParamFallbackDetails) => logger.logReasoning(logEvent, details);
 }
 
 class ReasoningService extends BaseReasoningService {
@@ -365,6 +365,7 @@ class ReasoningService extends BaseReasoningService {
         }
 
         const res = await fetchWithParamFallback(
+          endpoint,
           () =>
             fetch(endpoint, {
               method: "POST",
@@ -696,6 +697,7 @@ class ReasoningService extends BaseReasoningService {
     let response: Response;
     try {
       response = await fetchWithParamFallback(
+        endpoint,
         () =>
           fetch(endpoint, {
             method: "POST",

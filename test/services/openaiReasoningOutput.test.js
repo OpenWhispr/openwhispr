@@ -209,6 +209,37 @@ test("a model outside the family table gets the generic off value on a Responses
   assert.equal(bodies[1].reasoning, undefined);
 });
 
+test("a Custom endpoint that rejects the off value pays the 400 once, not on every request", async (t) => {
+  // e.g. Azure OpenAI with a non-reasoning deployment, whose name we can't recognise.
+  const bodies = installFetch(t, (body) =>
+    body.reasoning
+      ? jsonResponse({ error: { message: "Unsupported parameter: 'reasoning.effort'" } }, 400)
+      : completeMessage("Cleaned.")
+  );
+  const { openaiProvider } = await load();
+  const cleanup = () =>
+    openaiProvider.call({
+      text: "raw transcript",
+      model: "gpt-4o-prod",
+      agentName: null,
+      config: {
+        provider: "custom",
+        baseUrl: "https://rejecting-host.example/v1",
+        customApiKey: "test-key",
+        disableThinking: true,
+      },
+      ctx: makeCtx(),
+    });
+
+  assert.equal(await cleanup(), "Cleaned.");
+  assert.equal(await cleanup(), "Cleaned.");
+
+  assert.deepEqual(
+    bodies.map((body) => body.reasoning),
+    [{ effort: "none" }, undefined, undefined]
+  );
+});
+
 test("a Responses result that ran out of tokens before any text is an error, not the input echoed back", async (t) => {
   installFetch(t, () =>
     jsonResponse({

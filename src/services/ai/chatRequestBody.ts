@@ -194,7 +194,7 @@ export function emptyResponseError(
  * module's shaping layer added are strippable — never messages or model — so a
  * retry degrades the request (model reasons when asked not to, default
  * sampling) instead of failing it outright. The strip is logged loudly: a
- * fallback that fires on every request is a dialect bug to fix, not a rescue.
+ * fallback that keeps firing is a dialect bug to fix, not a rescue.
  */
 const STRIPPABLE_SHAPED_PARAMS = [
   "reasoning_effort",
@@ -205,38 +205,72 @@ const STRIPPABLE_SHAPED_PARAMS = [
 ] as const;
 
 /**
+ * Values a server rejected since this window loaded, as
+ * `endpoint, model, param=value`. Keyed by value, so another effort level is
+ * still sent.
+ */
+const rejectedParams = new Set<string>();
+
+/** `remembered`: left out up front because an earlier retry proved it rejected. */
+export type ParamFallbackDetails = { status?: number; stripped: string[]; remembered?: true };
+
+/**
  * Fetch with a bounded param-stripping ladder for 400/422 rejections.
  * Rung 1 (blind): old Ollama/strict proxies reject the `reasoning` object
  * without naming it — drop it and retry once. Rung 2 (named): strip exactly
  * the shaped params the error body names and retry once. At most two retries;
  * the caller must build the body inside `doFetch` so retries re-serialize.
+ * A value the error named whose removal let the retry through is left out of
+ * later requests to the same endpoint and model until the window reloads, so
+ * each pays the rejection once rather than on every request.
  */
 export async function fetchWithParamFallback(
+  endpoint: string,
   doFetch: () => Promise<Response>,
   requestBody: Record<string, unknown>,
-  logRejection: (details: { status: number; stripped: string[] }) => void
+  logRejection: (details: ParamFallbackDetails) => void
 ): Promise<Response> {
+  const rejectionKey = (param: string) =>
+    `${endpoint}\n${requestBody.model}\n${param}=${JSON.stringify(requestBody[param])}`;
+  const remembered = ["reasoning", ...STRIPPABLE_SHAPED_PARAMS].filter(
+    (param) => param in requestBody && rejectedParams.has(rejectionKey(param))
+  );
+  if (remembered.length > 0) {
+    logRejection({ stripped: remembered, remembered: true });
+    for (const param of remembered) delete requestBody[param];
+  }
+  const readError = (response: Response) =>
+    response
+      .clone()
+      .text()
+      .catch(() => "");
+  const retryWithout = async (params: readonly string[], remember: boolean) => {
+    const keys = params.map(rejectionKey);
+    for (const param of params) delete requestBody[param];
+    const retried = await doFetch();
+    if (remember && retried.ok) for (const key of keys) rejectedParams.add(key);
+    return retried;
+  };
+
   let res = await doFetch();
   if (res.ok || (res.status !== 400 && res.status !== 422)) return res;
 
   if (requestBody.reasoning) {
+    // Remembered only when the error names it: a blind 400 may have come from
+    // one of several backends behind the same endpoint.
+    const reasoningNamed = (await readError(res)).includes("reasoning");
     logRejection({ status: res.status, stripped: ["reasoning"] });
-    delete requestBody.reasoning;
     void res.body?.cancel();
-    res = await doFetch();
+    res = await retryWithout(["reasoning"], reasoningNamed);
     if (res.ok || (res.status !== 400 && res.status !== 422)) return res;
   }
 
-  const errorText = await res
-    .clone()
-    .text()
-    .catch(() => "");
+  const errorText = await readError(res);
   const named = STRIPPABLE_SHAPED_PARAMS.filter((p) => p in requestBody && errorText.includes(p));
   if (named.length > 0) {
     logRejection({ status: res.status, stripped: named });
-    for (const param of named) delete requestBody[param];
     void res.body?.cancel();
-    res = await doFetch();
+    res = await retryWithout(named, true);
   }
   return res;
 }
