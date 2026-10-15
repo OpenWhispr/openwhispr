@@ -263,7 +263,9 @@ class OrukeetStreaming {
                 outputTokens: finiteMetric(message.cleanup_output_tokens),
               },
             }
-          : {}),
+          : this.cleanupUnavailable
+            ? { cleanup: { status: "fallback" } }
+            : {}),
         model: message.model || this.currentModel,
         audioBytesSent: this.audioBytesSent,
         inferenceMs: message.inference_ms,

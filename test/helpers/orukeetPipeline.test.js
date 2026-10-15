@@ -272,6 +272,7 @@ test(
       );
       assert.equal(calls[1][1].body, undefined);
       assert.equal(deps.streaming.cleanupOptions, undefined);
+      assert.equal(deps.streaming.cleanupUnavailable, undefined);
       assert.equal(deps.streaming.connected.baseUrl, plainSession.baseUrl);
     }
   }
@@ -296,6 +297,7 @@ test(
       ["pipeline-session"]
     );
     assert.equal(deps.streaming.cleanupOptions, undefined);
+    assert.equal(deps.streaming.cleanupUnavailable, true);
     assert.equal(deps.streaming.onUsageReceipt, undefined);
     assert.deepEqual(deps.streaming.connected, {
       baseUrl: plainSession.baseUrl,

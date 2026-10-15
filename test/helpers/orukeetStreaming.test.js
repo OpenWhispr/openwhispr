@@ -203,6 +203,19 @@ for (const metadata of [
   });
 }
 
+test("a plain stream standing in for a failed pipeline reports the cleanup fallback", async (t) => {
+  const { adapter, options } = await fixture(t, (socket, event) => {
+    if (event.type === "commit") socket.send(JSON.stringify({ type: "final", text: "Raw." }));
+  });
+  adapter.cleanupUnavailable = true;
+  await adapter.connect(options);
+  adapter.sendAudio(Buffer.alloc(640));
+  const result = await adapter.finalize();
+  assert.equal(result.text, "Raw.");
+  assert.deepEqual(result.cleanup, { status: "fallback" });
+  assert.equal(result.cleanupStatus, undefined);
+});
+
 test("cancellation closes without committing audio", async (t) => {
   const { adapter, seen, options } = await fixture(t);
   await adapter.connect(options);
