@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
 const { EventEmitter } = require("node:events");
+const vm = require("node:vm");
 const WS = require("ws");
 const { loadAudioManager } = require("./harness/audioManager");
 const { installMicCaptureGlobals } = require("../lib/rendererTestHarness");
@@ -72,6 +73,7 @@ class LoopbackRealtime extends OpenAIRealtimeStreaming {
         socket.audio.push(Buffer.from(event.audio, "base64"));
       }
       if (event.type === "input_audio_buffer.commit") {
+        socket.audioAtCommit = Buffer.concat(socket.audio);
         socket.commits++;
         setImmediate(() =>
           socket.emit(
@@ -129,6 +131,7 @@ class ControlledGeminiSocket extends EventEmitter {
       this.audio.push(Buffer.from(message.realtimeInput.audio.data, "base64"));
     }
     if (message.realtimeInput?.audioStreamEnd) {
+      this.audioAtCommit = Buffer.concat(this.audio);
       this.commits++;
       setImmediate(() =>
         this.emit(
@@ -359,6 +362,15 @@ async function rendererScenario(t, s, provider) {
     },
   });
   installMicCaptureGlobals(t);
+  const FakeAudioWorkletNode = globalThis.AudioWorkletNode;
+  globalThis.AudioWorkletNode = class extends FakeAudioWorkletNode {
+    constructor(...args) {
+      super(...args);
+      this.port.postMessage = (data) => {
+        if (data === "stop") queueMicrotask(() => this.port.onmessage?.({ data: "flushed" }));
+      };
+    }
+  };
   window.dispatchEvent = () => true;
   const calls = [];
   const listen = (channel) => (callback) => {
@@ -415,7 +427,7 @@ async function rendererScenario(t, s, provider) {
     streamingCleanupFns: [],
     streamingFallbackChunks: [],
     _streamingFallbackSegments: [],
-    preparedMicCapture: { take: async () => null },
+    preparedMicCapture: { take: async () => null, cancel() {} },
     micRecovery: { stop() {} },
     isRecordingAllowedByPolicy: () => true,
     getAudioConstraints: async () => ({}),
@@ -471,7 +483,7 @@ for (const provider of ["openai-realtime", "tinfoil-realtime"]) {
       assert.deepEqual(r.errors, []);
       assert.equal(r.manager.isProcessing, false);
       assert.equal(r.manager.streamingStartInProgress, false);
-      assert.equal(r.manager.streamingStream, null);
+      assert.equal(r.manager.streamingStream ?? null, null);
       assert.deepEqual(r.calls, ["start", "discard", "stop"]);
       // Idle discard cannot poison or disconnect the next recording.
       s.cancelPendingStart();
@@ -532,7 +544,7 @@ for (const phase of ["handshake", "token", "different warm model", "stop then ca
     assert.equal(socket.readyState, WS.CLOSED);
     assert.deepEqual(r.errors, []);
     assert.equal(r.manager.isProcessing, false);
-    assert.equal(r.manager.streamingStream, null);
+    assert.equal(r.manager.streamingStream ?? null, null);
     if (cancelled) {
       assert.deepEqual(results, [false, true, true]);
       assert.equal(Buffer.concat(socket.audio).length, 0);
@@ -610,6 +622,305 @@ for (const provider of ["openai-realtime", "tinfoil-realtime", "gemini"]) {
     assert.deepEqual(r.completions, []);
     t.mock.timers.reset();
     assert.equal(await r.manager.startStreamingRecording(), true);
+    await r.manager.cancelStreamingRecording();
+  });
+}
+
+// Run the actual embedded processor, with a controllable MessagePort queue.
+// Its process() input represents acquisition time; delayed port delivery is
+// intentionally separate so a Stop must retain queued pre-Stop PCM.
+async function installRealStreamingWorklet(t, manager) {
+  delete manager.getWorkletBlobUrl;
+  const url = manager.getWorkletBlobUrl();
+  const source = await (await fetch(url)).text();
+  t.after(() => URL.revokeObjectURL(url));
+  let Processor;
+  let node;
+  let holdMessages = true;
+  const messages = [];
+  const deliver = (data) => node.port.onmessage?.({ data });
+  vm.runInNewContext(source, {
+    Int16Array,
+    AudioWorkletProcessor: class {
+      constructor() {
+        this.port = {
+          postMessage(data) {
+            if (holdMessages) messages.push(data);
+            else queueMicrotask(() => deliver(data));
+          },
+        };
+      }
+    },
+    registerProcessor: (_name, implementation) => {
+      Processor = implementation;
+    },
+  });
+  globalThis.AudioWorkletNode = class {
+    constructor() {
+      node = this;
+      this.processor = new Processor();
+      this.port = {
+        onmessage: null,
+        postMessage: (data) => this.processor.port.onmessage({ data }),
+      };
+    }
+    connect() {}
+    disconnect() {}
+  };
+  return {
+    process: (samples, marker) =>
+      node.processor.process([[new Float32Array(samples).fill((marker * 257 + 0.5) / 32767)]]),
+    deliverQueued() {
+      while (messages.length) deliver(messages.shift());
+    },
+    releaseQueue() {
+      this.deliverQueued();
+      holdMessages = false;
+    },
+  };
+}
+
+for (const provider of ["openai-realtime", "tinfoil-realtime", "gemini"]) {
+  for (const delayMs of [5000, 10000]) {
+    test(`${provider} Stop freezes real worklet capture during ${delayMs}ms startup`, async (t) => {
+      const s = scenario(t, provider === "gemini" ? "gemini-streaming" : "dictation-realtime");
+      const gate = deferConnection();
+      const r = await rendererScenario(t, s, provider);
+      const worklet = await installRealStreamingWorklet(t, r.manager);
+      let trackStops = 0;
+      let sourceDisconnects = 0;
+      const getContext = r.manager.getOrCreateAudioContext;
+      r.manager.getOrCreateAudioContext = async () => {
+        const context = await getContext();
+        const createSource = context.createMediaStreamSource.bind(context);
+        context.createMediaStreamSource = (...args) => {
+          const source = createSource(...args);
+          source.disconnect = () => {
+            sourceDisconnects++;
+          };
+          return source;
+        };
+        return context;
+      };
+      const acquire = navigator.mediaDevices.getUserMedia;
+      navigator.mediaDevices.getUserMedia = async () => {
+        const stream = await acquire();
+        stream.getTracks()[0].stop = () => {
+          trackStops++;
+        };
+        return stream;
+      };
+      t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: Date.now() });
+      const started = r.manager.startStreamingRecording();
+      while (!r.calls.includes("start")) await new Promise(setImmediate);
+      const chunks = [];
+      for (let marker = 1; marker <= 53; marker++) {
+        worklet.process(800, marker);
+        chunks.push(Buffer.alloc(1600, marker));
+        if (marker < 53) worklet.deliverQueued();
+      }
+      // One full frame is still queued, and a partial frame is inside the
+      // processor. Both belong to this recording even though delivered later.
+      worklet.process(134, 54);
+      chunks.push(Buffer.alloc(268, 54));
+      t.mock.timers.tick(2650);
+      const stopped = r.manager.stopStreamingRecording();
+      const duplicateStop = r.manager.stopStreamingRecording();
+      await new Promise(setImmediate);
+      const trackStopsBeforeReady = trackStops;
+      const sourceDisconnectsBeforeReady = sourceDisconnects;
+      const port = r.manager.streamingProcessor?.port;
+      const acceptedAfterStop = worklet.process(1600, 99);
+      worklet.releaseQueue();
+      port?.onmessage?.({ data: Buffer.alloc(3200, 100) });
+      assert.equal(
+        await r.manager.startStreamingRecording(),
+        false,
+        "restart waits for finalization"
+      );
+      t.mock.timers.tick(delayMs - 2650);
+      t.mock.timers.reset();
+      gate.resolve();
+      await Promise.all([started, stopped, duplicateStop]);
+      const socket = provider === "gemini" ? geminiSockets.at(-1) : instances.at(-1).testSocket;
+      const expected = expectedAudio(provider === "gemini" ? "tinfoil-realtime" : provider, chunks);
+      assert.equal(socket.commits, 1);
+      assert.equal(r.completions.length, 1);
+      assert.equal(r.completions[0].text, "Opening words retained.");
+      assert.equal(socket.readyState, WS.CLOSED);
+      assert.deepEqual(r.errors, []);
+      assert.deepEqual(
+        Buffer.concat(socket.audio),
+        expected,
+        "retain queued frames and partial tail only"
+      );
+      assert.deepEqual(socket.audioAtCommit, expected, "commit follows every preserved sample");
+      assert.equal(acceptedAfterStop, false, "the real worklet cannot acquire post-Stop input");
+      assert.equal(trackStopsBeforeReady, 1, "release microphone before network readiness");
+      assert.ok(sourceDisconnectsBeforeReady > 0, "disconnect capture source before readiness");
+      assert.equal(
+        r.manager.lastAudioMetadata.durationMs,
+        2650,
+        "duration excludes readiness wait"
+      );
+      assert.equal(r.manager.streamingStream ?? null, null);
+      assert.equal(r.manager.isProcessing, false);
+      assert.equal(await r.manager.startStreamingRecording(), true, "next session may now start");
+      await r.manager.cancelStreamingRecording();
+    });
+  }
+}
+
+for (const phase of [
+  "activation",
+  "microphone",
+  "audio context",
+  "worklet module",
+  "mic recovery",
+]) {
+  test(`Stop while ${phase} setup is pending releases late capture without reconnecting`, async (t) => {
+    const s = scenario(t);
+    const r = await rendererScenario(t, s, "tinfoil-realtime");
+    const worklet = await installRealStreamingWorklet(t, r.manager);
+    const gate = Promise.withResolvers();
+    const entered = Promise.withResolvers();
+    let stopped = false;
+    let trackStops = 0;
+    let connectionsAfterStop = 0;
+    let recoveryActive = false;
+    if (phase === "activation") {
+      r.manager._beginActivationCapture = async () => {
+        entered.resolve();
+        await gate.promise;
+        return true;
+      };
+    }
+    const acquire = navigator.mediaDevices.getUserMedia;
+    r.manager._acquireCaptureStream = async () => {
+      const stream = await acquire();
+      stream.getTracks()[0].stop = () => {
+        trackStops++;
+      };
+      if (phase === "microphone") {
+        entered.resolve();
+        await gate.promise;
+      }
+      return stream;
+    };
+    r.manager.getOrCreateAudioContext = async () => {
+      if (phase === "audio context") {
+        entered.resolve();
+        await gate.promise;
+      }
+      const context = new globalThis.AudioContext();
+      const createSource = context.createMediaStreamSource.bind(context);
+      context.createMediaStreamSource = (...args) => {
+        const source = createSource(...args);
+        source.connect = () => {
+          if (stopped) connectionsAfterStop++;
+        };
+        return source;
+      };
+      if (phase === "worklet module") {
+        context.audioWorklet.addModule = async () => {
+          entered.resolve();
+          await gate.promise;
+        };
+      }
+      return context;
+    };
+    r.manager.beginMicRecovery = async () => {
+      if (phase === "mic recovery") {
+        entered.resolve();
+        await gate.promise;
+      }
+      recoveryActive = true;
+    };
+    r.manager.micRecovery.stop = () => {
+      recoveryActive = false;
+    };
+    const started = r.manager.startStreamingRecording();
+    await entered.promise;
+    stopped = true;
+    const ended = r.manager.stopStreamingRecording();
+    worklet.releaseQueue();
+    await new Promise(setImmediate);
+    const stoppedBeforeSetupSettled = trackStops;
+    gate.resolve();
+    await Promise.all([started, ended]);
+    assert.equal(connectionsAfterStop, 0, "late setup cannot open another capture window");
+    if (phase !== "activation")
+      assert.ok(trackStops > 0, "the late or existing microphone is released");
+    if (!["activation", "microphone"].includes(phase))
+      assert.ok(stoppedBeforeSetupSettled > 0, "release held track promptly");
+    assert.equal(recoveryActive, false, "late recovery initialization must also be stopped");
+    assert.equal(r.manager.streamingStream ?? null, null);
+    assert.equal(r.manager.isProcessing, false);
+    assert.equal(await r.manager.startStreamingRecording(), true, "a settled Stop permits retry");
+    await r.manager.cancelStreamingRecording();
+  });
+}
+
+for (const provider of ["openai-realtime", "tinfoil-realtime", "gemini"]) {
+  test(`${provider} Cancel after Stop discards even queued real-worklet flush audio`, async (t) => {
+    const s = scenario(t, provider === "gemini" ? "gemini-streaming" : "dictation-realtime");
+    const gate = deferConnection();
+    const r = await rendererScenario(t, s, provider);
+    const worklet = await installRealStreamingWorklet(t, r.manager);
+    const started = r.manager.startStreamingRecording();
+    while (!r.calls.includes("start")) await new Promise(setImmediate);
+    worklet.process(800, 1);
+    worklet.deliverQueued();
+    worklet.process(800, 2);
+    worklet.process(134, 3);
+    const stopped = r.manager.stopStreamingRecording();
+    const cancelled = r.manager.cancelStreamingRecording();
+    worklet.releaseQueue();
+    assert.equal(await r.manager.startStreamingRecording(), false);
+    gate.resolve();
+    await Promise.all([started, stopped, cancelled]);
+    const socket = provider === "gemini" ? geminiSockets.at(-1) : instances.at(-1).testSocket;
+    assert.equal(Buffer.concat(socket.audio).length, 0);
+    assert.equal(socket.commits, 0);
+    assert.equal(socket.readyState, WS.CLOSED);
+    assert.deepEqual(r.completions, []);
+    assert.deepEqual(r.errors, []);
+    assert.equal(r.manager.streamingStream ?? null, null);
+    assert.equal(r.manager.isProcessing, false);
+  });
+}
+
+for (const provider of ["openai-realtime", "tinfoil-realtime", "gemini"]) {
+  test(`${provider} startup rejection after Stop returns to idle and permits retry`, async (t) => {
+    const s = scenario(t, provider === "gemini" ? "gemini-streaming" : "dictation-realtime");
+    const r = await rendererScenario(t, s, provider);
+    const states = [];
+    r.manager.onStateChange = (state) => states.push(state);
+    const gate = (tokenGate = Promise.withResolvers());
+    const started = r.manager.startStreamingRecording();
+    while (!r.calls.includes("start")) await new Promise(setImmediate);
+    s.send(Buffer.alloc(3200, 1));
+    await r.manager.stopStreamingRecording();
+    gate.reject(new Error("test token unavailable"));
+    assert.equal(await started, false);
+    assert.equal(
+      r.manager.getState().isProcessing,
+      false,
+      "failed startup must release the processing guard"
+    );
+    assert.equal(r.manager.getState().isRecording, false);
+    assert.equal(r.manager.getState().isStreaming, false);
+    assert.equal(r.manager.streamingStartInProgress, false);
+    assert.deepEqual(r.completions, []);
+    assert.equal(r.errors.length, 1, "the failed request surfaces once");
+    assert.equal(states.at(-1).isProcessing, false, "reported state matches the internal state");
+    assert.equal(r.manager.streamingStream, null);
+    tokenGate = null;
+    assert.equal(
+      await r.manager.startStreamingRecording(),
+      true,
+      "the next dictation is not blocked"
+    );
     await r.manager.cancelStreamingRecording();
   });
 }

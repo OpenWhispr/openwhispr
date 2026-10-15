@@ -470,15 +470,28 @@ test("a cancelled streaming recording ends its spool", async (t) => {
   assert.equal(spool.finished, true);
 });
 
-test("a streaming start cancelled while the mic opens, then failing, ends its spool", async (t) => {
+test("a streaming start cancelled while the mic opens releases it without starting capture or a spool", async (t) => {
   const { createManager } = await load(t);
-  const spool = fakeSpool("streaming");
-  globalThis.__interruptedSpools = { start: () => spool };
+  let spoolStarts = 0;
+  let trackStops = 0;
+  let contextStarts = 0;
+  globalThis.__interruptedSpools = {
+    start: () => {
+      spoolStarts++;
+      return fakeSpool("streaming");
+    },
+  };
   const micOpen = deferred();
   let micOpenStarted = false;
   const stream = {
     getAudioTracks: () => [{ getSettings: () => ({}) }],
-    getTracks: () => [{ stop() {} }],
+    getTracks: () => [
+      {
+        stop() {
+          trackStops++;
+        },
+      },
+    ],
   };
   const manager = createManager({
     isRecording: false,
@@ -508,6 +521,7 @@ test("a streaming start cancelled while the mic opens, then failing, ends its sp
     },
     startStreamingFallbackRecorder() {},
     getOrCreateAudioContext: async () => {
+      contextStarts++;
       throw new Error("audio device unavailable");
     },
     getStreamingProvider: () => ({ stop: async () => ({ success: true }) }),
@@ -524,7 +538,9 @@ test("a streaming start cancelled while the mic opens, then failing, ends its sp
   micOpen.resolve(stream);
 
   assert.deepEqual(await Promise.all([start, cancel]), [false, true]);
-  assert.equal(spool.finished, true);
+  assert.equal(spoolStarts, 0, "cancelled setup must not create a recording spool");
+  assert.equal(contextStarts, 0, "cancelled setup must not open an audio context");
+  assert.ok(trackStops > 0, "the microphone that opened after Cancel must be released");
   assert.equal(manager._recordingSpool, null);
 });
 

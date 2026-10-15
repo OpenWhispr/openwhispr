@@ -675,6 +675,10 @@ class AudioManager {
     this.stopRequestedDuringStreamingStart = false;
     this._streamingStopPromise = null;
     this._streamingStopMode = null;
+    this._streamingCaptureStopPromise = null;
+    this._streamingCaptureFlushed = false;
+    this._streamingCaptureStoppedAt = null;
+    this._streamingFallbackStopPromise = null;
     this._streamingSessionGeneration = 0;
     this._streamingCancellationGeneration = 0;
     this._activeTranscriptionAbortController = null;
@@ -4778,25 +4782,39 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   async finishStreamingFallbackSegment() {
+    if (this._streamingFallbackStopPromise) return this._streamingFallbackStopPromise;
     const recorder = this.streamingFallbackRecorder;
     if (!recorder) return null;
+    const sessionId = this._activeStreamingSessionId;
     const chunks = this.streamingFallbackChunks;
     const collect = () => new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
-    let blob;
-    if (recorder.state === "recording") {
-      blob = await new Promise((resolve) => {
-        recorder.onstop = () => resolve(collect());
-        recorder.stop();
-      });
-    } else {
-      // The recorder auto-stops when its track dies; its chunks still hold the
-      // audio captured up to that point.
-      blob = collect();
+    const finish = (async () => {
+      let blob;
+      if (recorder.state === "recording") {
+        blob = await new Promise((resolve) => {
+          recorder.onstop = () => resolve(collect());
+          recorder.stop();
+        });
+      } else {
+        // The recorder auto-stops when its track dies; its chunks still hold the
+        // audio captured up to that point.
+        blob = collect();
+      }
+      if (this.streamingFallbackRecorder === recorder) {
+        this.streamingFallbackRecorder = null;
+        this.streamingFallbackChunks = [];
+      }
+      if (blob?.size > 0 && this._activeStreamingSessionId === sessionId) {
+        this._streamingFallbackSegments.push(blob);
+      }
+      return blob;
+    })();
+    this._streamingFallbackStopPromise = finish;
+    try {
+      return await finish;
+    } finally {
+      if (this._streamingFallbackStopPromise === finish) this._streamingFallbackStopPromise = null;
     }
-    this.streamingFallbackRecorder = null;
-    this.streamingFallbackChunks = [];
-    if (blob?.size > 0) this._streamingFallbackSegments.push(blob);
-    return blob;
   }
 
   async replaceStreamingMic(replacement, previous) {
@@ -4809,13 +4827,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.streamingSource?.disconnect();
       this.streamingSource = nextSource;
       if (this.streamingAnalyser) this.streamingSource.connect(this.streamingAnalyser);
-      await this.finishStreamingFallbackSegment();
+      const previousSegment = this.finishStreamingFallbackSegment();
+      previous?.getTracks().forEach((track) => track.stop());
+      this.streamingStream = replacement;
+      await previousSegment;
       if (!this.isStreaming || !this.isRecording) {
         throw new Error("Streaming stopped during microphone recovery");
       }
       this.startStreamingFallbackRecorder(replacement);
-      previous?.getTracks().forEach((track) => track.stop());
-      this.streamingStream = replacement;
     })();
     // Expose the swap so stopStreamingRecording can wait for it instead of
     // racing it (losing the newest fallback segment / orphaning a recorder).
@@ -4921,12 +4940,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       this.stopRequestedDuringStreamingStart = false;
+      this._streamingCaptureStopPromise = null;
+      this._streamingCaptureFlushed = false;
+      this._streamingCaptureStoppedAt = null;
       const activationGeneration = this._activationCaptureGeneration ?? 0;
       if (
         !(await this._beginActivationCapture()) ||
-        activationGeneration !== (this._activationCaptureGeneration ?? 0)
+        activationGeneration !== (this._activationCaptureGeneration ?? 0) ||
+        this.stopRequestedDuringStreamingStart
       ) {
+        this._cancelActivationCapture(this._takeActivationCapture());
         this._settleStreamingStart();
+        this.isProcessing = false;
+        this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
         return false;
       }
       sessionId = (this._streamingSessionGeneration || 0) + 1;
@@ -4940,6 +4966,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const ownsSession = () => this._activeStreamingSessionId === sessionId;
       const cancellationGeneration = this._streamingCancellationGeneration;
       startWasCancelled = () => cancellationGeneration !== this._streamingCancellationGeneration;
+      const stopBeforeCapture = () => {
+        if (!this.stopRequestedDuringStreamingStart && !startWasCancelled()) return false;
+        acquiredStream?.getTracks().forEach((track) => track.stop());
+        if (acquiredStream) this._markCaptureStreamReleased();
+        this._cancelActivationCapture(this._takeActivationCapture());
+        this._settleStreamingStart();
+        this._endStreamingSession(sessionId);
+        this.isProcessing = false;
+        this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
+        return true;
+      };
 
       const t0 = performance.now();
       const prepared = forceDefaultMic ? null : await this.preparedMicCapture.take();
@@ -4947,14 +4984,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // (the streaming transcript comes from the PCM worklet, not these chunks).
       discardPreRoll(prepared);
       usedPreparedCapture = !!prepared;
+      acquiredStream = prepared?.stream ?? null;
+      if (stopBeforeCapture()) return false;
       const constraints =
         prepared?.constraints ?? (await this.getAudioConstraints(forceDefaultMic));
+      if (stopBeforeCapture()) return false;
       const tConstraints = performance.now();
 
       // 1. Get mic stream (can take 10-15s on a cold driver — unless a prepared
       //    capture or a held master stream already opened the device).
       const stream = prepared?.stream ?? (await this._acquireCaptureStream(constraints));
       acquiredStream = stream;
+      if (stopBeforeCapture()) return false;
+      this.streamingStream = stream;
       const tMedia = performance.now();
 
       const audioTrack = stream.getAudioTracks()[0];
@@ -4978,57 +5020,60 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Start fallback recorder in case streaming produces no results.
       this._streamingFallbackSegments = [];
       this._recordingSpool = this._startRecordingSpool();
+      this.recordingStartTime = Date.now();
       this.startStreamingFallbackRecorder(stream);
 
       // 2. Set up audio pipeline so frames flow the instant WebSocket is ready.
       //    Frames sent before the connection is open are buffered (bounded) by
       //    sendAudio(), not dropped.
       const audioContext = await this.getOrCreateAudioContext();
-      this.streamingAudioContext = audioContext;
-      this.streamingSource = audioContext.createMediaStreamSource(stream);
-      this.streamingStream = stream;
-
-      // Level source for the live waveform: the batch path reads the
-      // speech-gate analyser, which never attaches to streaming recordings.
-      this.streamingAnalyser = audioContext.createAnalyser();
-      this.streamingAnalyser.fftSize = 2048;
-      this.streamingSource.connect(this.streamingAnalyser);
-
-      if (!this.workletModuleLoaded) {
+      if (
+        !this.stopRequestedDuringStreamingStart &&
+        !startWasCancelled() &&
+        !this.workletModuleLoaded
+      ) {
         await audioContext.audioWorklet.addModule(this.getWorkletBlobUrl());
         this.workletModuleLoaded = true;
       }
 
-      this.streamingProcessor = new AudioWorkletNode(audioContext, "pcm-streaming-processor");
       const provider = this.getStreamingProvider(providerName);
       // Decided once, with the provider, so a config refresh mid-recording
       // cannot change how this session's stream errors are handled. Only a
       // session whose fallback recorder started has a capture to fail over
       // to; stop finishes that recorder before a refused commit can arrive.
       const failsOver =
-        Boolean(this.streamingFallbackRecorder) &&
+        Boolean(this.streamingFallbackRecorder || this._streamingCaptureStopPromise) &&
         isManagedOrukeetStream({
           providerName,
           cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
         });
 
-      this.streamingProcessor.port.onmessage = (event) => {
-        // The worklet posts its remaining PCM followed by a "flushed" sentinel
-        // on stop; the sentinel must not be sent as audio (realtime backends
-        // reject the odd-length non-PCM bytes with "Invalid audio data").
-        if (!ownsSession() || !this.isStreaming) return;
-        if (event.data === "flushed") {
-          this._streamingFlushResolve?.();
-          return;
-        }
-        // Measured from the first chunk: a recording that fails over later
-        // still has its opening words in the gate.
-        recordPcm16SpeechWindow(this._streamingSpeechGateState, event.data);
-        if (!this._streamingFailoverReason) provider.send(event.data);
-      };
+      if (!this.stopRequestedDuringStreamingStart && !startWasCancelled()) {
+        this.streamingAudioContext = audioContext;
+        this.streamingSource = audioContext.createMediaStreamSource(stream);
+        this.streamingAnalyser = audioContext.createAnalyser();
+        this.streamingAnalyser.fftSize = 2048;
+        this.streamingSource.connect(this.streamingAnalyser);
+        this.streamingProcessor = new AudioWorkletNode(audioContext, "pcm-streaming-processor");
+        this.streamingProcessor.port.onmessage = (event) => {
+          // The worklet posts its remaining PCM followed by a "flushed" sentinel
+          // on stop; the sentinel must not be sent as audio (realtime backends
+          // reject the odd-length non-PCM bytes with "Invalid audio data").
+          if (!ownsSession() || !this.isStreaming || this._streamingCaptureFlushed) return;
+          if (event.data === "flushed") {
+            this._streamingCaptureFlushed = true;
+            this._streamingFlushResolve?.();
+            return;
+          }
+          // Measured from the first chunk: a recording that fails over later
+          // still has its opening words in the gate.
+          recordPcm16SpeechWindow(this._streamingSpeechGateState, event.data);
+          if (!this._streamingFailoverReason) provider.send(event.data);
+        };
 
+        this.streamingSource.connect(this.streamingProcessor);
+      }
       this.isStreaming = true;
-      this.streamingSource.connect(this.streamingProcessor);
 
       const tPipeline = performance.now();
 
@@ -5105,10 +5150,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
         return false;
       }
-      this.isRecording = true;
-      this.recordingStartTime = Date.now();
-      this.onStateChange?.({ isRecording: true, isProcessing: false, isStreaming: true });
+      this.isRecording = !this.stopRequestedDuringStreamingStart;
+      this.onStateChange?.({
+        isRecording: this.isRecording,
+        isProcessing: this.stopRequestedDuringStreamingStart,
+        isStreaming: this.isRecording,
+      });
       await this.beginMicRecovery(stream);
+      if (this.stopRequestedDuringStreamingStart || startWasCancelled()) this.micRecovery.stop();
 
       // 4. Connect WebSocket — audio is already flowing from the pipeline above,
       //    so Deepgram receives data immediately (no idle timeout).
@@ -5134,7 +5183,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // A managed Orukeet start failure (refused socket, account cap, outage)
       // keeps this capture: the fallback recorder has held the audio since the
       // mic opened, and reopening the mic for a batch recording would lose it.
-      if (result.needsFallback && this.streamingFallbackReason && this.streamingFallbackRecorder) {
+      if (
+        result.needsFallback &&
+        this.streamingFallbackReason &&
+        (this.streamingFallbackRecorder || this._streamingCaptureStopPromise)
+      ) {
         this._streamingFailoverReason = this.streamingFallbackReason;
         this.streamingFallbackReason = null;
         logger.info(
@@ -5150,6 +5203,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       if (result.needsFallback) {
+        if (this.stopRequestedDuringStreamingStart) {
+          this.stopRequestedDuringStreamingStart = false;
+          return this.stopStreamingRecording();
+        }
         this.isRecording = false;
         this.recordingStartTime = null;
         this.stopRequestedDuringStreamingStart = false;
@@ -5253,6 +5310,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       await this.cleanupStreaming();
       this.isRecording = false;
+      this.isProcessing = false;
       this.recordingStartTime = null;
       this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
       return false;
@@ -5284,9 +5342,77 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     });
   }
 
+  _stopStreamingCapture() {
+    if (this._streamingCaptureStopPromise) return this._streamingCaptureStopPromise;
+    this._streamingCaptureStoppedAt ??= Date.now();
+    this.micRecovery.stop();
+    const processor = this.streamingProcessor;
+    let watchdog;
+    const flushed = processor
+      ? new Promise((resolve) => {
+          this._streamingFlushResolve = (didFlush = true) => {
+            this._streamingCaptureFlushed = true;
+            resolve(didFlush);
+          };
+          watchdog = setTimeout(
+            () => this._streamingFlushResolve?.(false),
+            PREVIEW_FLUSH_WATCHDOG_MS
+          );
+        })
+      : // Stop during setup may retain fallback audio before any PCM pipeline
+        // exists. That capture needs batch transcription, not an empty commit.
+        Promise.resolve(!this.stopRequestedDuringStreamingStart);
+
+    // Keep admitting already queued PCM and the partial worklet buffer until
+    // its FIFO sentinel arrives, while cutting off new microphone input now.
+    try {
+      processor?.port.postMessage("stop");
+    } catch {
+      this._streamingFlushResolve?.(false);
+    }
+    try {
+      this.streamingSource?.disconnect();
+    } catch {
+      /* Capture may already be disconnected. */
+    }
+    this.streamingSource = null;
+    this.streamingAnalyser = null;
+    this.streamingAudioContext = null;
+    const fallback = this.finishStreamingFallbackSegment();
+    if (this.streamingStream) {
+      this.streamingStream.getTracks().forEach((track) => track.stop());
+      this.streamingStream = null;
+      this._markCaptureStreamReleased();
+    }
+
+    this._streamingCaptureStopPromise = Promise.all([flushed, fallback])
+      .then(([didFlush]) => didFlush)
+      .catch((error) => {
+        logger.warn("Failed to finish streaming capture", { error: error.message }, "streaming");
+        return false;
+      })
+      .finally(() => {
+        clearTimeout(watchdog);
+        this._streamingFlushResolve = null;
+        this._streamingCaptureFlushed = true;
+        try {
+          processor?.disconnect();
+        } catch {
+          /* Capture may already be disconnected. */
+        }
+        if (this.streamingProcessor === processor) this.streamingProcessor = null;
+      });
+    return this._streamingCaptureStopPromise;
+  }
+
   async stopStreamingRecording() {
     if (this.streamingStartInProgress) {
       this.stopRequestedDuringStreamingStart = true;
+      this.isRecording = false;
+      this.isProcessing = true;
+      this.cancelPreparedMicCapture();
+      if (this.streamingStream || this.streamingProcessor) this._stopStreamingCapture();
+      this.onStateChange?.({ isRecording: false, isProcessing: true, isStreaming: false });
       logger.debug("Streaming stop requested while start is in progress", {}, "streaming");
       return true;
     }
@@ -5374,7 +5500,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // setup to settle so late capture/socket creation cannot leak.
       this.getStreamingProvider(providerName).cancelPendingStart?.();
       const providerStop = this._waitForStreamingStartSettlement()
-        .then(() => {
+        .then(async () => {
+          await this._streamingCaptureStopPromise;
           // Startup may have attached replacement capture resources after the
           // first synchronous cleanup. Reclaim them once startup can no longer
           // mutate the session, then disconnect its provider.
@@ -5441,7 +5568,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     };
 
     const durationSeconds = this.recordingStartTime
-      ? (Date.now() - this.recordingStartTime) / 1000
+      ? ((this._streamingCaptureStoppedAt ?? Date.now()) - this.recordingStartTime) / 1000
       : null;
     const analyticsOccurredAt = new Date(this.recordingStartTime || Date.now());
 
@@ -5455,73 +5582,37 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.recordingStartTime = null;
     this.onStateChange?.({ isRecording: false, isProcessing: true, isStreaming: false });
 
-    this.micRecovery.stop();
-    // Let an in-flight mic swap settle so its fallback segment isn't lost and
-    // its replacement recorder doesn't outlive this stop.
-    if (this._streamingMicSwapPromise) await this._streamingMicSwapPromise;
-    if (wasCancelled()) return abandonFinalization();
-
     const t0 = performance.now();
-    let finalText = this.streamingFinalText || "";
+    const captureStopped = this._stopStreamingCapture();
+    // The swap shares the fallback segment stop and has already published its
+    // replacement track, so capture stops before either asynchronous completion.
+    if (this._streamingMicSwapPromise) await this._streamingMicSwapPromise;
+    const captureFlushed = await captureStopped;
+    if (wasCancelled()) return abandonFinalization();
+    const captureError = captureFlushed
+      ? null
+      : Object.assign(new Error("Streaming audio capture did not finish"), {
+          code: "AUDIO_CAPTURE_INCOMPLETE",
+          messageKey: "hooks.audioRecording.partialTranscription.description",
+        });
 
+    let finalText = this.streamingFinalText || "";
     const provider = this.getStreamingProvider(providerName);
     let acknowledgedFinal = null;
     let finalAcknowledged = false;
     let orukeetFinal = null;
-    // The worklet emits PCM followed by "flushed" on the same message port.
-    // IPC sends and the finalize invoke preserve that order in the main process.
-    if (this.streamingProcessor && provider.finalizeAcknowledged) {
-      const processor = this.streamingProcessor;
-      let watchdog;
-      const flushed = new Promise((resolve, reject) => {
-        this._streamingFlushResolve = resolve;
-        watchdog = setTimeout(
-          () => reject(new Error("Audio worklet did not flush")),
-          PREVIEW_FLUSH_WATCHDOG_MS
-        );
-      });
-      processor.port.postMessage("stop");
-      try {
-        await flushed;
-      } catch (error) {
-        // Incomplete capture must use the retained recording, never commit a
-        // truncated stream. Keep cleanup running so the microphone is released.
-        acknowledgedFinal = Promise.resolve({ success: false, error: error.message });
-      } finally {
-        clearTimeout(watchdog);
-        this._streamingFlushResolve = null;
-        processor.disconnect();
-        this.streamingProcessor = null;
-      }
-      if (wasCancelled()) return abandonFinalization();
-      acknowledgedFinal ||= provider.finalize().catch((error) => ({
+    if (!captureFlushed) {
+      // Never commit a truncated stream if the worklet failed to acknowledge.
+      this.cleanupStreamingListeners(sessionId);
+      acknowledgedFinal = Promise.resolve({ success: false, error: captureError.message });
+    } else if (provider.finalizeAcknowledged) {
+      acknowledgedFinal = provider.finalize().catch((error) => ({
         success: false,
         error: error.message,
       }));
-    } else if (this.streamingProcessor) {
-      try {
-        this.streamingProcessor.port.postMessage("stop");
-        this.streamingProcessor.disconnect();
-      } catch {
-        /* Capture is already stopped. */
-      }
-      this.streamingProcessor = null;
     }
-    if (this.streamingSource) {
-      try {
-        this.streamingSource.disconnect();
-      } catch (e) {
-        // Ignore
-      }
-      this.streamingSource = null;
-    }
-    this.streamingAnalyser = null;
-    this.streamingAudioContext = null;
 
-    // Stop fallback recorder before stopping media tracks
     let fallbackBlob = null;
-    await this.finishStreamingFallbackSegment();
-    if (wasCancelled()) return abandonFinalization();
     try {
       fallbackBlob = await this.mergeRecordedSegments(this._streamingFallbackSegments);
     } catch (error) {
@@ -5540,11 +5631,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.streamingFallbackChunks = [];
     this._streamingFallbackSegments = [];
 
-    if (this.streamingStream) {
-      this.streamingStream.getTracks().forEach((track) => track.stop());
-      this.streamingStream = null;
-      this._markCaptureStreamReleased();
-    }
     const tAudioCleanup = performance.now();
 
     // 2. Wait for flushed buffer to travel: port -> main thread -> IPC -> WebSocket -> server.
@@ -5566,10 +5652,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (!result?.success) {
         logger.warn("Streaming finalization failed", { error: result?.error }, "streaming");
       }
-    } else if (provider.awaitsFinalTranscript) {
+    } else if (captureFlushed && provider.awaitsFinalTranscript) {
       provider.finalize?.();
       await this.awaitStreamingTextSettled(provider.finalCeilingMs);
-    } else {
+    } else if (captureFlushed) {
       provider.finalize?.();
       await new Promise((resolve) => setTimeout(resolve, 300));
     }
@@ -5582,15 +5668,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     });
     const tTerminate = performance.now();
 
-    finalText =
-      (provider.preferStopTranscript && stopResult?.text) || this.streamingFinalText || "";
+    finalText = captureFlushed
+      ? (provider.preferStopTranscript && stopResult?.text) || this.streamingFinalText || ""
+      : "";
 
-    if (!finalText && this.streamingPartialText) {
+    if (captureFlushed && !finalText && this.streamingPartialText) {
       finalText = this.streamingPartialText;
       logger.debug("Using partial text as fallback", { textLength: finalText.length }, "streaming");
     }
 
-    if (!finalText && stopResult?.text) {
+    if (captureFlushed && !finalText && stopResult?.text) {
       finalText = stopResult.text;
       logger.debug(
         "Using disconnect result text as fallback",
@@ -5858,19 +5945,21 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // No stream will transcribe a failed-over recording, so it uploads at any
     // length, unless it was the silence the batch speech gate skips.
     const failoverSilent =
+      captureFlushed &&
       Boolean(failoverReason) &&
       getLocalSpeechGateDecision(this._streamingSpeechGateState).reason === "silence";
     if (failoverSilent) {
       logger.info("Speech gate skipped the failed-over upload", { failoverReason }, "streaming");
     }
-    // A failed-over recording has no other transcript, so a failure to
-    // transcribe it ends as a batch recording's would. A stream that produced
-    // no text still ends quietly on a real failure, but keeps a recording that
-    // reads as silence for a retry, as batch does.
+    // A failed-over or incomplete recording has no trustworthy transcript, so
+    // a failure to transcribe it ends as a batch recording's would. A complete
+    // stream with no text still ends quietly on a real failure, but keeps a
+    // recording that reads as silence for a retry, as batch does.
     const failBatchFallback = (error) => {
       const outcome = transcriptionFailureOutcome(error);
-      if (!failoverReason && outcome.report) return;
-      failureReport = outcome.report;
+      if (captureFlushed && !failoverReason && outcome.report) return;
+      failureReport =
+        outcome.report || (captureError ? transcriptionFailureOutcome(captureError).report : null);
       if (outcome.keepAudio) {
         delivery.resultHandled = this.saveFailedTranscription(error.message, error.code || null, {
           durationSeconds,
@@ -5878,9 +5967,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         });
       }
     };
+    if (captureError && !fallbackBlob?.size) {
+      failureReport = transcriptionFailureOutcome(captureError).report;
+    }
     if (
       !finalText &&
-      (failoverReason ? !failoverSilent : !finalAcknowledged && durationSeconds > 2) &&
+      (!captureFlushed ||
+        (failoverReason ? !failoverSilent : !finalAcknowledged && durationSeconds > 2)) &&
       fallbackBlob?.size > 0
     ) {
       const target = resolveStreamingFallbackTarget(getSettings());
@@ -5924,6 +6017,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             batchFallbackResult = batchResult;
             batchWarning = batchResult.warning || null;
             logger.info("Batch fallback succeeded", { textLength: finalText.length }, "streaming");
+          } else if (captureError) {
+            failBatchFallback(captureError);
           }
         } catch (fallbackErr) {
           // The cancelled upload's rejection is the expected outcome.
@@ -6187,6 +6282,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.micRecovery.stop();
     this._takeRecordingSpool()?.finish();
     this.cleanupStreamingAudio();
+    await this._streamingCaptureStopPromise;
     this.cleanupStreamingListeners(sessionId);
     this._endStreamingSession(sessionId);
   }
