@@ -464,7 +464,7 @@ All desktop AI model definitions are centralized in `src/models/modelRegistryDat
 **Key files:**
 
 - `src/models/modelRegistryData.json` - Single source of truth for all desktop models
-- `openwhispr-mobile/src/config/providerCatalog.json` - Mobile's trimmed copy of the OpenAI and Groq entries. It, mobile's endpoint rules and its agent prompt (`openwhispr-mobile/src/config/prompts/defaultPrompts.json`) are copies, not shared code, so update them by hand when desktop's change (the catalog is covered in `openwhispr-mobile/CONTRIBUTING.md`)
+- `openwhispr-mobile/src/config/providerCatalog.json` - Mobile's trimmed copy of the OpenAI and Groq entries. It, mobile's endpoint rules and its agent prompt (`openwhispr-mobile/src/config/prompts/defaultPrompts.json`, a copy of desktop's editing prompt `SELECTION_EDIT_DEFAULT_PROMPT`, not the conversational `fullPrompt`) are copies, not shared code, so update them by hand when desktop's change (the catalog is covered in `openwhispr-mobile/CONTRIBUTING.md`)
 - `src/models/ModelRegistry.ts` - TypeScript wrapper with helper methods; also derives
   `REASONING_PROVIDERS` (`buildReasoningProviders()`), consumed by the model pickers
 - `src/models/providerDefaultModel.ts` - `pickProviderDefaultModel()`; with no
