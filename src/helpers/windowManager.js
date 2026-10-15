@@ -2194,9 +2194,17 @@ class WindowManager {
         });
       }
       // A click never focuses the pill, so returning to an open assistant
-      // panel from another app has to take focus again.
+      // panel from another app has to take focus again. isFocused() follows X
+      // focus, so this misses a compositor that hands the keyboard to a native
+      // Wayland app without moving X focus off the pill. A request still in
+      // flight already covers the click, and repeats would queue behind it.
       win.webContents.on("input-event", (_event, input) => {
-        if (input.type === "mouseDown" && this._assistantPanelOpen && !win.isFocused()) {
+        if (
+          input.type === "mouseDown" &&
+          this._assistantPanelOpen &&
+          !win.isFocused() &&
+          !this._linuxFocusRequest
+        ) {
           this._focusLinuxMainWindow();
         }
       });

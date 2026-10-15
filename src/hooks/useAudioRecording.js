@@ -170,8 +170,9 @@ export const useAudioRecording = (toast, options = {}) => {
         // device still opens exactly once.
         void audioManagerRef.current.prepareMicCapture?.();
 
-        // The floating dictation panel is non-focusable, so the foreground app is
-        // still the user's actual editing target here. Refresh it for recordings
+        // The floating dictation panel only takes focus while the assistant panel
+        // is open, so the foreground app is otherwise still the user's actual
+        // editing target here. Refresh it for recordings
         // started from the panel itself as well as from global hotkeys; otherwise
         // paste can reactivate a stale target from the preceding dictation.
         try {

@@ -200,6 +200,41 @@ test("a failed Linux keyboard focus request settles quietly", async () => {
   assert.equal(manager._linuxFocusRequest, null);
 });
 
+test("clicks on an unfocused panel share the focus request already in flight", async () => {
+  const original = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "linux", configurable: true });
+  const win = new EventEmitter();
+  win.isFocused = () => false;
+  win.isVisible = () => true;
+  win.isMinimized = () => false;
+  win.isDestroyed = () => false;
+  win.webContents = Object.assign(new EventEmitter(), { send: () => undefined });
+  const manager = Object.assign(Object.create(WindowManager.prototype), {
+    mainWindow: win,
+    _assistantPanelOpen: true,
+    enforceMainWindowOnTop: () => {},
+  });
+  const lands = [];
+  focusInputRegion = () => new Promise((resolve) => lands.push(resolve));
+  const mouseDown = () => win.webContents.emit("input-event", {}, { type: "mouseDown" });
+  try {
+    WindowManager.prototype.registerMainWindowEvents.call(manager);
+    win.emit("ready-to-show");
+    mouseDown();
+    mouseDown();
+    // Each request can wait on the window manager, and queued repeats would
+    // run into the helper's timeout, which ends the input region with it.
+    assert.equal(lands.length, 1);
+    lands[0]();
+    await new Promise((resolve) => setImmediate(resolve));
+    mouseDown();
+    assert.equal(lands.length, 2, "a click after the request landed asks again");
+    lands[1]();
+  } finally {
+    Object.defineProperty(process, "platform", original);
+  }
+});
+
 test("only Linux listens for clicks that re-take keyboard focus", () => {
   const original = Object.getOwnPropertyDescriptor(process, "platform");
   try {
