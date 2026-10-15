@@ -1089,10 +1089,11 @@ test("the voice assistant sends its custom prompt instead of the Chat prompt", a
       },
     }
   );
+  localStorage.setItem("agentName", "Jarvis");
   await captured.sendToAI("Hello", []);
-  assert.match(systemPromptOf(sentMessages[0]), /VOICE_SCOPE_SENTINEL OpenWhispr/);
-  assert.match(systemPromptOf(sentMessages[0]), /You can use these tools/);
-  assert.doesNotMatch(systemPromptOf(sentMessages[0]), /CHAT_SCOPE_SENTINEL/);
+  const prompt = systemPromptOf(sentMessages[0]);
+  assert.match(prompt, /^VOICE_SCOPE_SENTINEL Jarvis\n\nYou can use these tools/);
+  assert.doesNotMatch(prompt, /CHAT_SCOPE_SENTINEL/);
 });
 
 test("the voice assistant on its own API key sends its custom prompt", async (t) => {
