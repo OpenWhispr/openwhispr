@@ -396,7 +396,7 @@ function interpretTranscribeResponse(data) {
     throw Object.assign(new Error("Request timed out"), { code: "SERVER_ERROR" });
   }
   if (data.statusCode === 429) {
-    throw Object.assign(new Error("Daily word limit reached"), {
+    throw Object.assign(new Error("Weekly Cloud word limit reached"), {
       code: "LIMIT_REACHED",
       ...data.data,
     });
