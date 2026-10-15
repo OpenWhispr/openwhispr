@@ -985,7 +985,10 @@
         "manualPaste": "Kopiere deinen Text unten und drücke dann {{shortcut}}, um ihn einzufügen.",
         "openSettings": "Einstellungen öffnen",
         "copyToClipboard": "Text kopieren",
-        "copyFailed": "Kopieren fehlgeschlagen"
+        "copyFailed": "Kopieren fehlgeschlagen",
+        "copiedTitle": "Kopiert, nicht eingefügt",
+        "copiedDescription": "Dein Text ist in der Zwischenablage. Automatisches Einfügen benötigt die Bedienungshilfen-Berechtigung. Drücke {{shortcut}}, um manuell einzufügen.",
+        "dontShowAgain": "Nicht mehr anzeigen"
       },
       "pasteFailed": {
         "title": "Automatisches Einfügen fehlgeschlagen"

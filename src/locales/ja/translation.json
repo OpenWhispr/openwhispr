@@ -985,7 +985,10 @@
         "manualPaste": "下のボタンでテキストをコピーし、{{shortcut}}を押して貼り付けてください。",
         "openSettings": "設定を開く",
         "copyToClipboard": "テキストをコピー",
-        "copyFailed": "コピーに失敗しました"
+        "copyFailed": "コピーに失敗しました",
+        "copiedTitle": "コピー済み・未貼り付け",
+        "copiedDescription": "テキストはクリップボードにコピーされました。自動貼り付けにはアクセシビリティ権限が必要です。{{shortcut}} で手動で貼り付けられます。",
+        "dontShowAgain": "今後表示しない"
       },
       "pasteFailed": {
         "title": "自動貼り付けに失敗しました"

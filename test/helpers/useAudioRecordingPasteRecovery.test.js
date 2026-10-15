@@ -118,6 +118,12 @@ async function mount(t) {
     changeLanguage: async (language) => React.act(async () => i18n.changeLanguage(language)),
     error: async (error = { ...permission, transcript: finalText }) =>
       React.act(async () => manager.callbacks.onError(error)),
+    remount: async () => {
+      await React.act(async () => root.unmount());
+      root = createRoot(container);
+      await React.act(async () => root.render(React.createElement(Harness)));
+      return globalThis.__pasteRecoveryManager;
+    },
     unmount: async () => {
       await React.act(async () => root.unmount());
       root = null;
@@ -343,4 +349,135 @@ test("completed batch and streaming dictations are saved when automatic paste is
     assert.equal(h.toasts.at(-1).actions[1].icon, "copy");
   }
   assert.equal(h.manager.saves, 2);
+});
+
+async function clipboardFallback(t) {
+  const h = await mount(t);
+  globalThis.window.localStorage.setItem("accessibilitySkipped", "true");
+  h.settings.setState({ autoPasteEnabled: true });
+  h.manager.safePaste = async (_text, options) => {
+    assert.equal(options.allowClipboardFallback, true);
+    return { pasted: false, reason: "accessibility-missing" };
+  };
+  h.complete = (source = "local") =>
+    React.act(async () =>
+      h.manager.callbacks.onTranscriptionComplete({ success: true, text: finalText, source })
+    );
+  return h;
+}
+
+test("skipped Accessibility reports copied, not pasted after batch and streaming dictation", async (t) => {
+  const h = await clipboardFallback(t);
+  for (const source of ["local", "streaming"]) {
+    await h.complete(source);
+    const card = h.toasts.at(-1);
+    assert.ok(card, "clipboard fallback must be visible");
+    assert.equal(card.title, "Copied, not pasted");
+    assert.match(card.description, /Accessibility/);
+    assert.match(card.description, /Cmd\+V/);
+    assert.doesNotMatch(card.description, /Copy your text below/);
+    assert.equal(card.duration, 0);
+    assert.equal(card.dismissible, true);
+    assert.deepEqual(
+      card.actions.map((a) => a.label),
+      ["Open Settings", "Don't show again"]
+    );
+    await card.actions[0].onClick();
+  }
+  assert.equal(h.settingsCalls(), 2);
+  assert.equal(h.manager.saves, 2);
+  assert.deepEqual(h.writes, []);
+});
+
+test("Don't show again persists across hook remounts without changing clipboard fallback", async (t) => {
+  const h = await clipboardFallback(t);
+  await h.complete();
+  assert.ok(h.toasts.at(-1));
+  await h.toasts.at(-1).actions[1].onClick();
+  h.toasts.at(-1).onClose();
+  await h.complete();
+  assert.equal(h.toasts.length, 1);
+  assert.equal(globalThis.window.localStorage.getItem("accessibilitySkipped"), "true");
+  h.manager = await h.remount();
+  h.manager.safePaste = async () => ({ pasted: false, reason: "accessibility-missing" });
+  await h.complete();
+  assert.equal(h.toasts.length, 1);
+  assert.equal(h.manager.saves, 1);
+});
+
+test("successful paste, auto-paste off, and unclassified no-ops never warn", async (t) => {
+  const h = await clipboardFallback(t);
+  for (const outcome of [{ pasted: true }, { pasted: false }]) {
+    h.manager.safePaste = async () => outcome;
+    await h.complete();
+    assert.equal(h.toasts.length, 0);
+  }
+  h.manager.safePaste = async () => assert.fail("auto-paste is disabled");
+  h.settings.setState({ autoPasteEnabled: false, keepTranscriptionInClipboard: true });
+  await h.complete();
+  assert.equal(h.toasts.length, 0);
+  assert.deepEqual(h.writes, [finalText]);
+});
+
+test("fallback Settings failure keeps the copied wording and opt-out action", async (t) => {
+  const h = await clipboardFallback(t);
+  h.api.openAccessibilitySettings = async () => ({ success: false });
+  await h.complete();
+  assert.ok(h.toasts.at(-1));
+  await h.toasts.at(-1).actions[0].onClick();
+  const card = h.toasts.at(-1);
+  assert.equal(card.title, "Copied, not pasted");
+  assert.match(card.description, /Couldn't open Settings/);
+  assert.doesNotMatch(card.description, /Copy your text below/);
+  assert.equal(card.actions[1].label, "Don't show again");
+});
+
+test("a delayed clipboard fallback cannot interrupt a newer dictation", async (t) => {
+  const h = await clipboardFallback(t);
+  const paste = deferred();
+  h.manager.safePaste = () => paste.promise;
+  let complete;
+  await React.act(async () => {
+    complete = h.manager.callbacks.onTranscriptionComplete({
+      success: true,
+      text: finalText,
+      source: "local",
+    });
+  });
+  await React.act(async () => h.recording().startRecording());
+  await React.act(async () => {
+    paste.resolve({ pasted: false, reason: "accessibility-missing" });
+    await complete;
+  });
+  assert.equal(h.toasts.length, 0);
+});
+
+test("a delayed clipboard fallback cannot interrupt a recording that is still preparing", async (t) => {
+  const h = await clipboardFallback(t);
+  const paste = deferred(),
+    start = deferred();
+  h.manager.safePaste = () => paste.promise;
+  h.manager.startRecording = () => start.promise;
+  let complete, starting;
+  await React.act(async () => {
+    complete = h.manager.callbacks.onTranscriptionComplete({
+      success: true,
+      text: finalText,
+      source: "local",
+    });
+  });
+  await React.act(async () => {
+    starting = h.recording().startRecording();
+  });
+  const hidden = h.hidden.length;
+  await React.act(async () => {
+    paste.resolve({ pasted: false, reason: "accessibility-missing" });
+    await complete;
+  });
+  assert.equal(h.toasts.length, 0);
+  assert.equal(h.hidden.length, hidden);
+  await React.act(async () => {
+    start.resolve(true);
+    await starting;
+  });
 });

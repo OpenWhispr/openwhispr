@@ -14,3 +14,14 @@ export function isAccessibilitySkipped(): boolean {
   if (typeof window === "undefined") return false;
   return window.localStorage.getItem(ACCESSIBILITY_SKIPPED_KEY) === "true";
 }
+
+const PASTE_PERMISSION_NOTICE_DISMISSED_KEY = "pastePermissionNoticeDismissed";
+
+export function isPastePermissionNoticeDismissed(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(PASTE_PERMISSION_NOTICE_DISMISSED_KEY) === "true";
+}
+
+export function dismissPastePermissionNotice(): void {
+  window.localStorage.setItem(PASTE_PERMISSION_NOTICE_DISMISSED_KEY, "true");
+}

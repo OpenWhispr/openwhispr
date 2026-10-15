@@ -985,7 +985,10 @@
         "manualPaste": "Copia tu texto abajo y pulsa {{shortcut}} para pegarlo.",
         "openSettings": "Abrir ajustes",
         "copyToClipboard": "Copiar al portapapeles",
-        "copyFailed": "Error al copiar"
+        "copyFailed": "Error al copiar",
+        "copiedTitle": "Copiado, sin pegar",
+        "copiedDescription": "Tu texto está en el portapapeles. El pegado automático necesita permiso de Accesibilidad. Pulsa {{shortcut}} para pegarlo manualmente.",
+        "dontShowAgain": "No volver a mostrar"
       },
       "pasteFailed": {
         "title": "No se pudo pegar automáticamente"

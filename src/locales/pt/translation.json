@@ -964,7 +964,10 @@
         "manualPaste": "Copie o texto abaixo e pressione {{shortcut}} para colá-lo.",
         "openSettings": "Abrir ajustes",
         "copyToClipboard": "Copiar texto",
-        "copyFailed": "Falha ao copiar"
+        "copyFailed": "Falha ao copiar",
+        "copiedTitle": "Copiado, não colado",
+        "copiedDescription": "Seu texto está na área de transferência. A colagem automática precisa da permissão de Acessibilidade. Pressione {{shortcut}} para colar manualmente.",
+        "dontShowAgain": "Não mostrar novamente"
       },
       "pasteFailed": {
         "title": "Não foi possível colar automaticamente"
