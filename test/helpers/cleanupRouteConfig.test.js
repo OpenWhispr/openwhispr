@@ -39,7 +39,7 @@ async function loadRouteResolver(t, provider = "test", mode = "providers") {
         });
       `,
       "/config/prompts": `
-        export const resolvePrompt = (_kind, opts) => opts.builtInPrompt ?? "route prompt";
+        export const resolvePrompt = (_kind, opts) => opts.editingPrompt ?? "route prompt";
         export const appendScreenContextSuffix = (prompt) => prompt;
         export const wrapCleanupTranscript = (text) => text;
         export const getCleanupSystemPrompt = () => "cleanup prompt";
@@ -104,7 +104,7 @@ test("the agent route keeps its provider defaults", async (t) => {
   assert.equal(route.config.requireCompleteOutput, undefined);
 });
 
-test("the agent route's selection edits keep the editing prompt when nothing is saved", async (t) => {
+test("the agent route's selection edits keep the editing prompt", async (t) => {
   const resolveRoute = await loadRouteResolver(t);
 
   const route = resolveRoute("Jarvis, make this more formal", { voiceAgentRequested: true });

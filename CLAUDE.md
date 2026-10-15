@@ -464,7 +464,7 @@ All desktop AI model definitions are centralized in `src/models/modelRegistryDat
 **Key files:**
 
 - `src/models/modelRegistryData.json` - Single source of truth for all desktop models
-- `openwhispr-mobile/src/config/providerCatalog.json` - Mobile's trimmed copy of the OpenAI and Groq entries. It, mobile's endpoint rules and its agent prompt (`openwhispr-mobile/src/config/prompts/defaultPrompts.json`, a copy of desktop's editing prompt `SELECTION_EDIT_DEFAULT_PROMPT`, not the conversational `fullPrompt`) are copies, not shared code, so update them by hand when desktop's change (the catalog is covered in `openwhispr-mobile/CONTRIBUTING.md`)
+- `openwhispr-mobile/src/config/providerCatalog.json` - Mobile's trimmed copy of the OpenAI and Groq entries. It, mobile's endpoint rules and its agent prompt (`openwhispr-mobile/src/config/prompts/defaultPrompts.json`, a copy of desktop's editing prompt `SELECTION_EDIT_PROMPT`, not the conversational `fullPrompt`) are copies, not shared code, so update them by hand when desktop's change (the catalog is covered in `openwhispr-mobile/CONTRIBUTING.md`)
 - `src/models/ModelRegistry.ts` - TypeScript wrapper with helper methods; also derives
   `REASONING_PROVIDERS` (`buildReasoningProviders()`), consumed by the model pickers
 - `src/models/providerDefaultModel.ts` - `pickProviderDefaultModel()`; with no
@@ -746,7 +746,7 @@ A dedicated global hotkey that starts a dictation whose transcript is sent strai
 - Settings → Hotkeys → "Voice Assistant Hotkey" (with cross-slot conflict validation)
 - Onboarding: optional pair of steps (hotkey, then demo) after the Notes step, so the demo can suggest meeting times from a calendar connected there. The demo card is a mail thread; the reply is answered headlessly in the dictation window by `useOnboardingAssistantDemo` (the panel's streaming pipeline, tools and screenshot included) and streamed back over `onboarding-demo-event` as `processing` (transcript) → `replying` (partial reply, `tool` while one runs) → `success`
 - Panel conversations and in-place selection edits both run on the Voice Assistant scope (Settings → AI Models → Voice Assistant; `dictationAgent`/`dictationAgentVision`), resolved by `resolveChatStreamingInference`; the panel falls back to the `chatIntelligence` scope while the Voice Assistant scope is unreachable. Typed chat (Control Panel, note and container chat) stays on `chatIntelligence`
-- With nothing saved, panel conversations answer from the built-in `fullPrompt`, which is written for conversation, and non-local selection edits (cloud, own API key, self-hosted, enterprise) from the editing prompt (`SELECTION_EDIT_DEFAULT_PROMPT`, the old `fullPrompt`): an edit replaces the user's text. A saved Voice Assistant prompt replaces both. Local-model edits build their own prompt. An answer pasted at the cursor gets `PASTE_RESPONSE_SUFFIX` (only the text to insert, no preamble)
+- Panel conversations answer from the saved Voice Assistant prompt, or with nothing saved from the built-in `fullPrompt`, which is written for conversation. Non-local selection edits (cloud, own API key, self-hosted, enterprise) always start from the editing prompt (`SELECTION_EDIT_PROMPT`, the old `fullPrompt`) and add a saved prompt as style preferences, as local-model edits (which build their own prompt) do: an edit replaces the user's text. An answer pasted at the cursor gets `PASTE_RESPONSE_SUFFIX` (only the text to insert, no preamble)
 
 **Screen Context (opt-in)**:
 

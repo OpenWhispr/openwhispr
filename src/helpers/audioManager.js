@@ -118,7 +118,7 @@ import {
 import { providerSupportsImages } from "../services/ai/inferenceProviders";
 import { resolveDictationTranslationInference } from "./dictationTranslationInference";
 import { resolvePrompt, appendScreenContextSuffix } from "../config/prompts";
-import { SELECTION_EDIT_DEFAULT_PROMPT } from "../config/prompts/registry";
+import { SELECTION_EDIT_PROMPT } from "../config/prompts/registry";
 import { syncService } from "../services/SyncService.js";
 import { evaluateFinishedRecording, withSalvageWarning } from "./recordingValidation";
 import { isEmptyRecording } from "./recordingGuard";
@@ -223,7 +223,7 @@ function analyticsSyncEnabled(settings = getSettings()) {
 // selection edits (local edits build their own, as do standalone commands in the panel).
 function dictationAgentPrompt(settings, agentName) {
   return resolvePrompt("dictationAgent", {
-    builtInPrompt: SELECTION_EDIT_DEFAULT_PROMPT,
+    editingPrompt: SELECTION_EDIT_PROMPT,
     agentName,
     language: settings.preferredLanguage,
     customDictionary: getDictionaryHintWords(settings),

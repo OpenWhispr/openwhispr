@@ -178,11 +178,11 @@ test("the name joins the prompt as one plain line", async () => {
   assert.match(long, /The user's name is A{100}\./);
 });
 
-test("a caller's built-in prompt applies only while nothing is saved", async (t) => {
+test("an editing prompt always applies, with a saved prompt as style preferences", async (t) => {
   const { resolvePrompt } = await load();
   const { useSettingsStore } = await import("../../src/stores/settingsStore.ts");
   t.after(() => useSettingsStore.getState().setCustomPrompt("dictationAgent", ""));
-  const opts = { agentName: "Jarvis", builtInPrompt: "EDITING {{agentName}}" };
+  const opts = { agentName: "Jarvis", editingPrompt: "EDITING {{agentName}}" };
 
   useSettingsStore.getState().setCustomPrompt("dictationAgent", "");
   assert.equal(resolvePrompt("dictationAgent", opts), "EDITING Jarvis");
@@ -192,7 +192,11 @@ test("a caller's built-in prompt applies only while nothing is saved", async (t)
   );
 
   useSettingsStore.getState().setCustomPrompt("dictationAgent", "MINE {{agentName}}");
-  assert.equal(resolvePrompt("dictationAgent", opts), "MINE Jarvis");
+  assert.match(
+    resolvePrompt("dictationAgent", opts),
+    /^EDITING Jarvis\n\nAssistant style preferences \([^)]*\):\nMINE Jarvis$/
+  );
+  assert.equal(resolvePrompt("dictationAgent", { agentName: "Jarvis" }), "MINE Jarvis");
 });
 
 test("a base prompt takes the Chat prompt's place, ahead of the tool rules", async () => {

@@ -20,11 +20,12 @@ export const PLAIN_TEXT_RESPONSE_SUFFIX =
 export const PASTE_RESPONSE_SUFFIX =
   "\n\nOUTPUT: Write only the text to insert at the user's cursor, with no preamble or commentary.";
 
-// With nothing saved, non-local selection edits keep the editing prompt the Voice
-// Assistant used before its built-in default was written for conversation: an
-// edit replaces the user's text, and a statement-like instruction ("it moved to
-// Wednesday") must change it rather than get a reply.
-export const SELECTION_EDIT_DEFAULT_PROMPT = `You are "{{agentName}}", an AI integrated into a speech-to-text dictation app. The user has addressed you by name with a command — execute it.
+// Non-local selection edits always start from the editing prompt the Voice
+// Assistant used before its built-in default was written for conversation (a
+// saved prompt joins it as style preferences): an edit replaces the user's text,
+// and a statement-like instruction ("it moved to Wednesday") must change it
+// rather than get a reply.
+export const SELECTION_EDIT_PROMPT = `You are "{{agentName}}", an AI integrated into a speech-to-text dictation app. The user has addressed you by name with a command — execute it.
 
 The input is transcribed speech. Handle disfluencies (filler words, false starts, stutters, repetitions) and convert spoken punctuation, numbers, and dates to standard written forms (January 15, 2026 / $300 / 5:30 PM).
 

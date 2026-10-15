@@ -17,7 +17,7 @@ const SHIPPED_CLEANUP_PROMPT_SHA256 =
   '58ed65fbc679a7bac1483ef850c51ac7932a02d17fab9ca688f4d11f6aa9b7e6';
 
 // SHA-256 of the agent prompt as copied from desktop's src/config/prompts/registry.ts
-// (SELECTION_EDIT_DEFAULT_PROMPT, the editing prompt, not the conversational
+// (SELECTION_EDIT_PROMPT, the editing prompt, not the conversational
 // "fullPrompt"). The pin fails when this copy changes, as a reminder to make the
 // same change on desktop; it cannot see edits made on desktop.
 const SHIPPED_ACTION_PROMPT_SHA256 =

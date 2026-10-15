@@ -2,6 +2,7 @@ import i18n, { normalizeUiLanguage } from "../../i18n";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { en as enPrompts } from "../../locales/prompts";
 import { getLanguageInstruction } from "../../utils/languageSupport";
+import { STYLE_PREFERENCES_HEADING } from "../../helpers/selectionEditing.js";
 import {
   PROMPT_KINDS,
   PASTE_RESPONSE_SUFFIX,
@@ -17,13 +18,17 @@ export interface ResolvePromptOptions {
   language?: string;
   customDictionary?: string[];
   targetLanguageLabel?: string;
-  /** Used instead of the kind's built-in default when nothing is saved. */
-  builtInPrompt?: string;
+  /** Always used as the prompt; a saved one joins it as style preferences (selection edits). */
+  editingPrompt?: string;
 }
 
 export function resolvePrompt(kind: PromptKind, opts: ResolvePromptOptions): string {
   const custom = useSettingsStore.getState().customPrompts[kind];
-  const template = custom || opts.builtInPrompt || getDefaultPromptText(kind, opts.uiLanguage);
+  const template = opts.editingPrompt
+    ? [opts.editingPrompt, custom && `${STYLE_PREFERENCES_HEADING}\n${custom}`]
+        .filter(Boolean)
+        .join("\n\n")
+    : custom || getDefaultPromptText(kind, opts.uiLanguage);
   return applySubstitutions(template, opts);
 }
 
