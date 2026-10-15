@@ -878,7 +878,7 @@ test("an approval request opens the hidden panel of a caret-delivered command", 
   assert.equal(assistant.thinking, false);
 });
 
-test("only a plain-text caret delivery asks the model for plain prose", async (t) => {
+test("only a caret delivery asks for text to insert, and only a plain-text one for plain prose", async (t) => {
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());

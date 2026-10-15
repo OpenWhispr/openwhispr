@@ -219,8 +219,8 @@ function analyticsSyncEnabled(settings = getSettings()) {
 }
 
 // Shared by the agent route and its text-only retry, which needs the prompt
-// without the screen-context suffix. The route's prompt only reaches selection
-// edits (standalone commands build their own in the panel).
+// without the screen-context suffix. The route's prompt only reaches non-local
+// selection edits (local edits build their own, as do standalone commands in the panel).
 function dictationAgentPrompt(settings, agentName) {
   return resolvePrompt("dictationAgent", {
     builtInPrompt: SELECTION_EDIT_DEFAULT_PROMPT,

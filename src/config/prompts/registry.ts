@@ -20,9 +20,9 @@ export const PLAIN_TEXT_RESPONSE_SUFFIX =
 export const PASTE_RESPONSE_SUFFIX =
   "\n\nOUTPUT: Write only the text to insert at the user's cursor, with no preamble or commentary.";
 
-// With nothing saved, selection edits keep the editing prompt the Voice Assistant
-// used before its built-in default was written for conversation: an edit
-// replaces the user's text, and a statement-like instruction ("it moved to
+// With nothing saved, non-local selection edits keep the editing prompt the Voice
+// Assistant used before its built-in default was written for conversation: an
+// edit replaces the user's text, and a statement-like instruction ("it moved to
 // Wednesday") must change it rather than get a reply.
 export const SELECTION_EDIT_DEFAULT_PROMPT = `You are "{{agentName}}", an AI integrated into a speech-to-text dictation app. The user has addressed you by name with a command — execute it.
 
