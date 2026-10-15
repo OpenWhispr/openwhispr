@@ -47,7 +47,7 @@ test("flags the retired English two-mode fullPrompt that shadows hardened defaul
   assert.equal(await isRetiredDefaultPrompt(fixtures.enTwoModeFullPrompt), true);
 });
 
-test("flags the retired editing-only fullPrompt the assistant panel used to answer with", async () => {
+test("flags the retired editing-only fullPrompt that shipped as the Voice Assistant default", async () => {
   const { isRetiredDefaultPrompt } = await load();
   assert.equal(await isRetiredDefaultPrompt(fixtures.enEditingOnlyFullPrompt), true);
 });
