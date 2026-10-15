@@ -19,6 +19,7 @@ import {
   detectAgentMention,
 } from './dictationAgent';
 import { isDictationContext } from './dictationHints';
+import { isToneApplicable } from './keyboardTone';
 import { isNoSpeechError } from './permissions';
 import { withRetry, type RetryOptions } from './retry';
 import { expandSnippets } from './snippets';
@@ -71,9 +72,16 @@ function cleansLocalTranscript(request: TranscriptionRequest): boolean {
   );
 }
 
+// Tones are a Cloud cleanup option: On-Device cleanup never takes one, and in Private mode the
+// keyboard offers none (isToneApplicable), so a tone picked earlier can't rewrite its dictations.
 function cleanupToneForRequest(request: TranscriptionRequest): KeyboardTone | undefined {
   if (request.requestContext !== 'keyboard') return undefined;
   if (!request.keyboardTone || request.keyboardTone === 'default') return undefined;
+  if (request.cleanupRoute?.mode === 'local') return undefined;
+  const { activeMode } = useProcessingModeStore.getState();
+  if (!isToneApplicable(activeMode, useConfigStore.getState().config?.cleanupEnabled)) {
+    return undefined;
+  }
   return request.keyboardTone;
 }
 

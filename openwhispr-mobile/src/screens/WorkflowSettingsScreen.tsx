@@ -360,7 +360,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
         : UNSET_ON_DEVICE_CLEANUP_NOTE
       : undefined) ??
     (lockedByPrivateMode && ON_DEVICE_MODE_NOTES[scope]
-      ? `${ON_DEVICE_MODE_NOTES[scope]} Your ${MODE_LABELS[storedSelection.mode]} choice applies again when Private mode is off.`
+      ? `${ON_DEVICE_MODE_NOTES[scope]} Your ${MODE_LABELS[storedSelection.mode]} choice applies again when Private Mode is off.`
       : undefined) ??
     (activeMode === 'private' ? ON_DEVICE_MODE_NOTES[scope] : undefined) ??
     (activeMode === 'providers' && !config?.inference?.[scope]
@@ -368,7 +368,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
       : undefined) ??
     (selection.mode === 'providers' && savedSelection.mode !== 'providers'
       ? activeMode === 'private'
-        ? 'Save to switch to Bring Your Own Key. This turns Private mode off.'
+        ? 'Save to switch to Bring Your Own Key. This turns Private Mode off.'
         : 'Save to switch to Bring Your Own Key.'
       : undefined);
   // Private mode is switched in AI Models, so a mode it never runs here can't be picked.

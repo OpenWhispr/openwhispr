@@ -9,7 +9,8 @@ jest.mock('react-native-reanimated', () => ({
   __esModule: true,
   default: { View: require('react-native').View },
   useAnimatedStyle: () => ({}),
-  useSharedValue: (value: number) => ({ value }),
+  // Stable across renders, as the real one is, so the pulse effect runs only when its inputs change.
+  useSharedValue: (value: number) => require('react').useRef({ value }).current,
   withSequence: jest.fn(),
   withTiming: jest.fn(),
 }));
@@ -27,6 +28,8 @@ jest.mock('../../../../../modules/app-group-storage/src', () => ({
     return { remove: jest.fn() };
   },
 }));
+let mockDraft: string | null = null;
+jest.mock('@/lib/keyboardAgentSync', () => ({ readKeyboardAgentDraft: () => mockDraft }));
 const mockNext = jest.fn();
 const mockBack = jest.fn();
 jest.mock('@/hooks/useOnboardingStep', () => ({
@@ -64,8 +67,11 @@ jest.mock('@/sync/syncIdentity', () => ({
 
 // The field is focused on arrival, and the glyph is the keyboard's own agent button.
 const START = 'Tap the [wand.and.stars] button on your keyboard.';
-const ASK = 'Say: “Tell Sam I’m running late and ask if we can push our meeting.”';
-const FOLLOW_UP = 'Now tap Ask for changes and add a time. Say: “Make it 3 PM.”';
+const ASK = 'Say: “Write a message to my landlord asking if I can pay rent two days late.”';
+// A first draft with nothing in brackets still gets a change to ask for.
+const FOLLOW_UP =
+  'Now tap Ask for changes and add a reason. Say: “Mention my paycheck comes in on Friday.”';
+const DRAFT = 'Hi Maria, could I pay rent two days late this month? Thanks, Alex';
 const INSERT = 'Tap ✓ to insert it.';
 const DONE = 'That’s your voice assistant.';
 const ACCOUNT_REQUIRED =
@@ -82,6 +88,7 @@ beforeEach(() => {
   mockUser = { id: 'anon' };
   mockIsGuest = false;
   mockAccountHistory = false;
+  mockDraft = null;
   mockNext.mockResolvedValue(undefined);
   mockBack.mockResolvedValue(undefined);
 });
@@ -114,27 +121,24 @@ it('nudges with a haptic each time the instruction changes', () => {
   emit('agent_ready', undefined, '1000');
   emit('agent_ready', undefined, '2000');
   expect(safeHaptics).toHaveBeenCalledTimes(3);
-  fireEvent.changeText(
-    screen.getByLabelText('Your message'),
-    'Hey Sam, I’m running late. Could we push our meeting to 3 PM?',
-  );
+  fireEvent.changeText(screen.getByLabelText('Your message'), DRAFT);
   expect(safeHaptics).toHaveBeenLastCalledWith('success');
 });
 
-it('addresses the practice message to Sam', () => {
+it('addresses the practice message to the landlord', () => {
   const screen = render(<VoiceAgentStep />);
-  expect(screen.getByText('To: Sam')).toBeTruthy();
+  expect(screen.getByText('To: Landlord')).toBeTruthy();
 });
 
 it('shows the request and a drafted message when the live try is unavailable', () => {
   mockUser = null;
   const screen = render(<VoiceAgentStep />);
   expect(
-    screen.getByText('“Tell Sam I’m running late and ask if we can push our meeting.”'),
+    screen.getByText('“Write a message to my landlord asking if I can pay rent two days late.”'),
   ).toBeTruthy();
-  expect(screen.getByText(/Could we push our meeting a bit\?/)).toBeTruthy();
-  expect(screen.queryByText(/3 PM/)).toBeNull();
-  expect(screen.queryByText(/lunch/)).toBeNull();
+  expect(screen.getByText(/^Hi, would it be okay .* Thanks for understanding\.$/)).toBeTruthy();
+  // The example is a first draft: no follow-up and nothing asked for changes.
+  expect(screen.queryByText(/Ask for changes|paycheck/)).toBeNull();
 });
 
 it('walks through a request, a spoken follow-up and inserting the result', () => {
@@ -149,10 +153,7 @@ it('walks through a request, a spoken follow-up and inserting the result', () =>
   expect(screen.getByText(FOLLOW_UP)).toBeTruthy();
   emit('agent_ready');
   expect(screen.getByText(INSERT)).toBeTruthy();
-  fireEvent.changeText(
-    screen.getByLabelText('Your message'),
-    'Hey Sam, I’m running late. Could we push our meeting to 3 PM?',
-  );
+  fireEvent.changeText(screen.getByLabelText('Your message'), DRAFT);
   expect(screen.getByText(DONE)).toBeTruthy();
 });
 
@@ -190,10 +191,7 @@ it('keeps the first draft insertable when the refinement fails', () => {
   expect(screen.getByText(INSERT)).toBeTruthy();
   expect(screen.getByText('Retry')).toBeTruthy();
   expect(screen.queryByText('Example request')).toBeNull();
-  fireEvent.changeText(
-    screen.getByLabelText('Your message'),
-    'Hey Sam, I’m running late. Could we push our meeting to 3 PM?',
-  );
+  fireEvent.changeText(screen.getByLabelText('Your message'), DRAFT);
   expect(screen.getByText(DONE)).toBeTruthy();
   expect(screen.queryByText('Retry')).toBeNull();
 });
@@ -214,14 +212,11 @@ it('keeps the finished step when an agent error arrives after inserting the draf
   const screen = render(<VoiceAgentStep />);
   emit('recording');
   emit('agent_ready', undefined, '1000');
-  fireEvent.changeText(
-    screen.getByLabelText('Your message'),
-    'Hey Sam, I’m running late. Could we push our meeting to 3 PM?',
-  );
+  fireEvent.changeText(screen.getByLabelText('Your message'), DRAFT);
   emit('agent_error', 'account_required');
   expect(screen.getByText(DONE)).toBeTruthy();
   expect(
-    screen.getByDisplayValue('Hey Sam, I’m running late. Could we push our meeting to 3 PM?'),
+    screen.getByDisplayValue('Hi Maria, could I pay rent two days late this month? Thanks, Alex'),
   ).toBeTruthy();
   expect(screen.queryByText(ACCOUNT_REQUIRED)).toBeNull();
   expect(screen.queryByText('Example request')).toBeNull();
@@ -348,4 +343,78 @@ it('can return to dictation practice', async () => {
     fireEvent.press(screen.getByLabelText('Back'));
   });
   expect(mockBack).toHaveBeenCalledTimes(1);
+});
+
+// The step reads each draft and names the placeholders it still has.
+describe('placeholders', () => {
+  const FILL_IN =
+    'Now tap Ask for changes and fill in [Landlord’s Name] and [Your Name]. Say: “My landlord is Maria, and sign it Alex.”';
+  const STILL_MISSING =
+    'Still missing [Your Name]. Tap Ask for changes again. Say: “Sign it Alex.” Or tap ✓ to insert it as is.';
+
+  it('says what to fill in for the placeholders in the first draft', () => {
+    const screen = render(<VoiceAgentStep />);
+    emit('recording');
+    mockDraft = 'Hi [Landlord’s Name], could I pay rent two days late? Thanks, [Your Name]';
+    emit('agent_ready', undefined, '1000');
+    expect(screen.getByText(FILL_IN)).toBeTruthy();
+  });
+
+  it('names what a changed draft still leaves in brackets, then offers insert once none are left', () => {
+    const screen = render(<VoiceAgentStep />);
+    emit('recording');
+    mockDraft = 'Hi [Landlord’s Name], could I pay rent two days late? Thanks, [Your Name]';
+    emit('agent_ready', undefined, '1000');
+    mockDraft = 'Hi Maria, could I pay rent two days late? Thanks, [Your Name]';
+    emit('agent_ready', undefined, '2000');
+    expect(screen.getByText(STILL_MISSING)).toBeTruthy();
+    jest.mocked(safeHaptics).mockClear();
+    mockDraft = DRAFT;
+    emit('agent_ready', undefined, '3000');
+    expect(screen.getByText(INSERT)).toBeTruthy();
+    // The phase stays the same, but the instruction changed.
+    expect(safeHaptics).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the general follow-up when the draft cannot be read', () => {
+    const screen = render(<VoiceAgentStep />);
+    emit('recording');
+    emit('agent_ready', undefined, '1000');
+    expect(screen.getByText(FOLLOW_UP)).toBeTruthy();
+  });
+
+  it('offers to insert the earlier draft when a change fails, placeholders or not', () => {
+    const screen = render(<VoiceAgentStep />);
+    emit('recording');
+    mockDraft = 'Hi [Landlord’s Name], could I pay rent two days late?';
+    emit('agent_ready', undefined, '1000');
+    emit('agent_error', 'Network request failed');
+    expect(screen.getByText(INSERT)).toBeTruthy();
+  });
+
+  it('does not nudge again for a draft that arrives after inserting', () => {
+    const screen = render(<VoiceAgentStep />);
+    emit('recording');
+    emit('agent_ready', undefined, '1000');
+    fireEvent.changeText(screen.getByLabelText('Your message'), DRAFT);
+    jest.mocked(safeHaptics).mockClear();
+    // Regenerating on the card after inserting.
+    mockDraft = 'Hi [Landlord’s Name], could I pay rent two days late?';
+    emit('agent_ready', undefined, '2000');
+    expect(screen.getByText(DONE)).toBeTruthy();
+    expect(safeHaptics).not.toHaveBeenCalled();
+  });
+
+  it('does not nudge when a new draft leaves the instruction the same', () => {
+    render(<VoiceAgentStep />);
+    emit('recording');
+    mockDraft = '[Name], [Unit], [Amount], [Your Name]';
+    emit('agent_ready', undefined, '1000');
+    mockDraft = '[Name], [Unit], [Amount], [Due Date], [Your Name]';
+    emit('agent_ready', undefined, '2000');
+    jest.mocked(safeHaptics).mockClear();
+    mockDraft = '[Name], [Unit], [Amount], [Your Name]';
+    emit('agent_ready', undefined, '3000');
+    expect(safeHaptics).not.toHaveBeenCalled();
+  });
 });

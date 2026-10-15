@@ -24,11 +24,13 @@ jest.mock('@/store/useConfigStore', () => ({
 }));
 
 import {
+  canRunLocalReasoning,
   clearLocalReasoningReadinessCache,
   getLocalReasoningReadiness,
   getLocalReasoningUnavailableMessage,
   isLocalReasoningUnsupported,
   shouldUseLocalReasoning,
+  toLocalReasoningError,
 } from '../localReasoning';
 import { AppleLLM } from '@/lib/appleLLM';
 
@@ -126,6 +128,19 @@ it.each(['ready', 'disabled', 'appleIntelligenceOff', 'modelNotReady', 'unavaila
   },
 );
 
+// Off in iOS Settings or still preparing its model, the iPhone still runs Apple Intelligence.
+it.each([
+  ['ready', true],
+  ['appleIntelligenceOff', true],
+  ['modelNotReady', true],
+  ['disabled', false],
+  ['unavailable', false],
+  ['unsupportedDevice', false],
+  ['unsupportedOS', false],
+] as const)('reports whether this iPhone runs Apple Intelligence when %s', (status, runs) => {
+  expect(canRunLocalReasoning({ status, tokenCounting: false })).toBe(runs);
+});
+
 it.each([
   [
     'unsupportedDevice',
@@ -134,4 +149,29 @@ it.each([
   ['unsupportedOS', 'On-Device AI needs iOS 26 or later on an iPhone with Apple Intelligence.'],
 ] as const)('says what an unsupported iPhone needs (%s)', (status, message) => {
   expect(getLocalReasoningUnavailableMessage({ status, tokenCounting: false })).toBe(message);
+});
+
+describe('toLocalReasoningError', () => {
+  it('reads an aborted request as cancelled', () => {
+    const aborted = Object.assign(new Error('cancelled'), { name: 'AbortError' });
+    expect(toLocalReasoningError(aborted)).toMatchObject({
+      code: 'APPLE_LLM_CANCELLED',
+      retryable: false,
+    });
+  });
+
+  it('keeps the native cancellation code', () => {
+    const cancelled = Object.assign(new Error('cancelled'), { code: 'APPLE_LLM_CANCELLED' });
+    expect(toLocalReasoningError(cancelled)).toMatchObject({ code: 'APPLE_LLM_CANCELLED' });
+  });
+
+  it.each(['APPLE_LLM_GUARDRAIL', 'APPLE_LLM_RATE_LIMITED', 'APPLE_LLM_CONTEXT_LIMIT'])(
+    'marks %s as not worth retrying',
+    (code) => {
+      expect(toLocalReasoningError(Object.assign(new Error('x'), { code }))).toMatchObject({
+        code,
+        retryable: false,
+      });
+    },
+  );
 });

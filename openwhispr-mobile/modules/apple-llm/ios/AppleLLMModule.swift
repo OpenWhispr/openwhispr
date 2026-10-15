@@ -15,6 +15,32 @@ private struct AppleLLMGenerateRequest: Record {
   @Field var prompt: String = ""
   @Field var temperature: Double?
   @Field var maxTokens: Int?
+  @Field var requestId: String?
+}
+
+// Generations JavaScript can stop by id. A timed-out cleanup must end the model
+// run too, or it keeps the on-device model busy after JavaScript gave up on it.
+private final class AppleLLMGenerations: @unchecked Sendable {
+  private let lock = NSLock()
+  private var tasks: [String: Task<Void, Never>] = [:]
+
+  func start(_ requestId: String?, operation: @escaping @Sendable () async -> Void) {
+    guard let requestId else {
+      Task { await operation() }
+      return
+    }
+    // Registered under the lock, so the task's own removal can't run before it.
+    lock.withLock {
+      tasks[requestId] = Task {
+        await operation()
+        self.lock.withLock { _ = self.tasks.removeValue(forKey: requestId) }
+      }
+    }
+  }
+
+  func cancel(_ requestId: String) {
+    lock.withLock { tasks[requestId] }?.cancel()
+  }
 }
 
 #if canImport(FoundationModels)
@@ -37,6 +63,8 @@ private struct AppleGeneratedMeetingNotes {
 #endif
 
 public class AppleLLMModule: Module {
+  private static let generations = AppleLLMGenerations()
+
   public func definition() -> ModuleDefinition {
     Name("AppleLLM")
 
@@ -83,7 +111,7 @@ public class AppleLLMModule: Module {
         return
       }
 
-      Task {
+      Self.generations.start(request.requestId) {
         do {
           try Self.ensureAvailable()
           let session = LanguageModelSession(instructions: request.instructions)
@@ -102,6 +130,10 @@ public class AppleLLMModule: Module {
       #else
       promise.reject("APPLE_LLM_UNAVAILABLE", "Apple Foundation Models are not available in this SDK.")
       #endif
+    }
+
+    Function("cancelGeneration") { (requestId: String) in
+      Self.generations.cancel(requestId)
     }
 
     AsyncFunction("generateMeetingNotes") { (request: AppleLLMGenerateRequest, promise: Promise) in
@@ -208,6 +240,11 @@ public class AppleLLMModule: Module {
   private static func reject(_ promise: Promise, error: Error) {
     if error is AppleLLMUnavailableError {
       promise.reject("APPLE_LLM_UNAVAILABLE", "Apple Foundation Models are unavailable on this device.")
+      return
+    }
+
+    if error is CancellationError {
+      promise.reject("APPLE_LLM_CANCELLED", "The Apple Foundation Models request was cancelled.")
       return
     }
 

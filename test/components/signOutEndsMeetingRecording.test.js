@@ -100,3 +100,23 @@ test("switching account from an invitation ends a live meeting before signing ou
     "signed out",
   ]);
 });
+
+test("auth sign-out closes the activation stream while its credential is still valid", async () => {
+  const calls = [];
+  const signOut = vm.runInNewContext(
+    `${extractFunction("../../src/lib/auth.ts", "signOut").replace(/^export /, "")}\nsignOut;`,
+    {
+      credentialAccountCache: {},
+      window: {
+        electronAPI: {
+          closeActivationStream: async () => calls.push("activation closed"),
+          authClearSession: async () => calls.push("local cleared"),
+        },
+      },
+      authClient: { signOut: async () => calls.push("remote revoked") },
+      markSignedOutState: () => calls.push("signed out"),
+    }
+  );
+  await signOut();
+  assert.deepEqual(calls, ["activation closed", "remote revoked", "local cleared", "signed out"]);
+});

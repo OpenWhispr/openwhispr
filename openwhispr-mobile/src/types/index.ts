@@ -22,6 +22,10 @@ export interface UserConfig {
   privateModeReturn?: { pinned: Partial<Record<MobileInferenceScope, InferenceSelection>> };
   defaultMode: ProcessingMode;
   cleanupEnabled?: boolean;
+  // Private mode was chosen in setup before this iPhone could run Apple Intelligence (an older
+  // iOS, or it was off in AI Models or unreadable), so On-Device cleanup is saved the first time a
+  // launch finds it can.
+  onDeviceCleanupPending?: boolean;
   autoGenerateNoteTitle?: boolean;
   autoLearnCorrections?: boolean;
   preferredLanguage?: string;
@@ -155,6 +159,7 @@ export type LocalReasoningErrorCode =
   | 'APPLE_LLM_RATE_LIMITED'
   | 'APPLE_LLM_UNAVAILABLE'
   | 'APPLE_LLM_FAILED'
+  | 'APPLE_LLM_CANCELLED'
   | 'LOCAL_CONTEXT_LIMIT'
   | 'LOCAL_REASONING_UNAVAILABLE';
 

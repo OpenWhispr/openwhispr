@@ -60,7 +60,7 @@ it('names the voice assistant throughout its settings screen', () => {
   render(<DictationAgentScreen />);
   expect(screen.getByText('Enable Voice Assistant')).toBeTruthy();
   expect(screen.getByText('Assistant Name')).toBeTruthy();
-  expect(screen.getByText(/Off while Private mode is on/)).toBeTruthy();
+  expect(screen.getByText(/Off while Private Mode is on/)).toBeTruthy();
   expect(screen.queryByText(/agent/i)).toBeNull();
 });
 

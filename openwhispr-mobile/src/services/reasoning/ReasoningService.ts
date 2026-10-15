@@ -181,7 +181,8 @@ export class ReasoningService {
             try {
               return await LocalReasoningService.processText(localRequest);
             } catch (error) {
-              if (!allowCloudFallback) throw error;
+              // A cancelled or timed-out request is over; it must not start again in the cloud.
+              if (!allowCloudFallback || signal?.aborted) throw error;
             }
           }
         } else if (!allowCloudFallback) {

@@ -153,6 +153,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getTranscriptions: (limit, options) =>
     ipcRenderer.invoke("db-get-transcriptions", limit, options),
   recordAnalyticsEvent: (input) => ipcRenderer.invoke("analytics-record-event", input),
+  closeActivationStream: () => ipcRenderer.invoke("activation-close"),
+  beginActivationCapture: () => ipcRenderer.invoke("activation-begin"),
+  stopActivationCapture: (id) => ipcRenderer.invoke("activation-stop", id),
+  finishActivationCapture: (id, words) => ipcRenderer.invoke("activation-finish", id, words),
+  cancelActivationCapture: (id) => ipcRenderer.invoke("activation-cancel", id),
   getAnalyticsSummary: () => ipcRenderer.invoke("analytics-get-summary"),
   getPendingAnalyticsEvents: (limit, context) =>
     ipcRenderer.invoke("analytics-get-pending", limit, context),
