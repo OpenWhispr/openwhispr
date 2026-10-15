@@ -464,10 +464,39 @@ class DiarizationManager {
     // stays "you" instead of becoming a stranger's speaker_0.
     const micSingleCluster = diarizedSource === "mic" && speakerSet.size === 1;
 
+    const intervals = diarizationSegments
+      .filter(
+        (seg) => Number.isFinite(seg.start) && Number.isFinite(seg.end) && seg.end > seg.start
+      )
+      .sort((a, b) => a.start - b.start);
+    const speechWindows = [];
+    const speakerIntervals = new Map([...speakerSet].map((speaker) => [speaker, []]));
+    const appendInterval = (ranges, interval) => {
+      const previous = ranges[ranges.length - 1];
+      if (previous && interval.start <= previous.end) {
+        previous.end = Math.max(previous.end, interval.end);
+      } else {
+        ranges.push({ start: interval.start, end: interval.end });
+      }
+    };
+    for (const interval of intervals) {
+      appendInterval(speechWindows, interval);
+      // Count a speaker's fragmented speech together, without counting the
+      // same audio twice when their diarization intervals overlap or repeat.
+      appendInterval(speakerIntervals.get(interval.speaker), interval);
+    }
+
+    const distanceToInterval = (timestamp, interval) =>
+      Math.max(interval.start - timestamp, timestamp - interval.end, 0);
+
     const nextTimestampAt = (startIndex, source) => {
       for (let i = startIndex + 1; i < deduped.length; i += 1) {
         const candidate = deduped[i];
-        if (candidate.source === source && candidate.timestamp != null) {
+        if (
+          candidate.source === source &&
+          Number.isFinite(candidate.timestamp) &&
+          candidate.timestamp > deduped[startIndex].timestamp
+        ) {
           return candidate.timestamp;
         }
       }
@@ -485,32 +514,46 @@ class DiarizationManager {
         return enriched;
       }
 
-      if (seg.source === diarizedSource && seg.timestamp != null) {
+      if (seg.source === diarizedSource && Number.isFinite(seg.timestamp)) {
         const segStart = seg.timestamp;
-        const segEnd = nextTimestampAt(index, diarizedSource) ?? segStart + 2.5;
+        let segEnd = nextTimestampAt(index, diarizedSource);
+        if (segEnd == null) {
+          // Legacy transcripts have no turn-end metadata. Retain the original
+          // 2.5s association window, then extend it to the evidenced end of any
+          // connected speech intersecting that ORIGINAL window. Never shrink
+          // the window or hop across silence beyond the original seed.
+          // Continuations beyond this seed and separated by silence still need
+          // actual turn-end metadata to be associated reliably.
+          const seedEnd = segStart + 2.5;
+          segEnd = seedEnd;
+          for (const window of speechWindows) {
+            if (window.start < seedEnd && window.end > segStart) {
+              segEnd = Math.max(segEnd, window.end);
+            }
+          }
+        }
         const midpoint = segStart + (segEnd - segStart) / 2;
         let overlapSpeaker = null;
         let nearestSpeaker = null;
         let bestOverlap = 0;
         let bestDistance = Number.POSITIVE_INFINITY;
 
-        for (const dSeg of diarizationSegments) {
-          const overlap = Math.min(segEnd, dSeg.end) - Math.max(segStart, dSeg.start);
+        for (const [speaker, ranges] of speakerIntervals) {
+          let overlap = 0;
+          for (const interval of ranges) {
+            overlap += Math.max(
+              0,
+              Math.min(segEnd, interval.end) - Math.max(segStart, interval.start)
+            );
+            const distance = distanceToInterval(midpoint, interval);
+            if (distance < bestDistance) {
+              bestDistance = distance;
+              nearestSpeaker = speaker;
+            }
+          }
           if (overlap > bestOverlap) {
             bestOverlap = overlap;
-            overlapSpeaker = dSeg.speaker;
-          }
-
-          const distance =
-            midpoint < dSeg.start
-              ? dSeg.start - midpoint
-              : midpoint > dSeg.end
-                ? midpoint - dSeg.end
-                : 0;
-
-          if (distance < bestDistance) {
-            bestDistance = distance;
-            nearestSpeaker = dSeg.speaker;
+            overlapSpeaker = speaker;
           }
         }
 
