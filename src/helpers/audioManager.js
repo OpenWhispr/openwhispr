@@ -2766,8 +2766,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   // Panel-first banking: the command streams into the assistant panel with
   // the chat's tools and memory once transcription completes; nothing types
-  // at the cursor. The transcript flows back as the result text so history
-  // and previews stay truthful.
+  // at the cursor. The transcript flows back as the result text so previews
+  // stay truthful; the conversation is its own record, so useAudioRecording
+  // keeps it out of dictation history.
   _bankAssistantDirective(transcript, config, options = {}) {
     if (!this.isProcessing) return;
     const { selectedContext, deliverySessionId, deliveryAcceptsMarkdown } = options || {};
@@ -4245,6 +4246,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
+  // The captured recording only ever attaches to the history row saved next;
+  // drop it once that row is written, skipped, or has no business existing
+  // (a voice-assistant command), so a later dictation can't inherit it.
+  discardCapturedAudio() {
+    this.lastAudioBlob = null;
+    this.lastAudioMetadata = null;
+  }
+
   async saveTranscription(
     text,
     rawText = null,
@@ -4253,8 +4262,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const { dataRetentionEnabled, audioRetentionDays } = getEffectiveRetentionPreferences();
     if (!dataRetentionEnabled) {
       logger.debug("Skipping transcription save — data retention disabled", {}, "audio");
-      this.lastAudioBlob = null;
-      this.lastAudioMetadata = null;
+      this.discardCapturedAudio();
       return true;
     }
 
@@ -4303,8 +4311,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             logger.warn("Failed to save transcription audio", { error: audioErr.message }, "audio");
           }
         }
-        this.lastAudioBlob = null;
-        this.lastAudioMetadata = null;
+        this.discardCapturedAudio();
       }
 
       return true;
@@ -4317,8 +4324,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const { dataRetentionEnabled, audioRetentionDays } = getEffectiveRetentionPreferences();
     if (!dataRetentionEnabled) {
       logger.debug("Skipping failed transcription save — data retention disabled", {}, "audio");
-      this.lastAudioBlob = null;
-      this.lastAudioMetadata = null;
+      this.discardCapturedAudio();
       return;
     }
 
@@ -4356,8 +4362,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             );
           }
         }
-        this.lastAudioBlob = null;
-        this.lastAudioMetadata = null;
+        this.discardCapturedAudio();
       }
     } catch (error) {
       logger.error(

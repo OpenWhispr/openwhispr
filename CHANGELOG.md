@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Voice assistant commands no longer appear in dictation history.** A command spoken to the assistant, by hotkey or wake word, was saved to History and counted in Insights as if it were a dictation, so the Home list filled with questions you had asked the assistant. The conversation is already kept in the chat; the command now stays out of History and its recording is discarded.
+
 ## [1.10.3] - 2026-10-12
 
 The assistant can now act in other apps: it drafts and sends email, posts to Slack, and works with Linear and GitHub issues, always behind a card you approve. Notes get templates for the AI Summary, actions that answer in a docked chat, and real tables. OpenWhispr also uses far less memory when idle, shows a plain-language error when your API key or provider fails, and fixes a long list of bugs on Linux, Windows and macOS.
