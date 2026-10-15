@@ -1046,8 +1046,8 @@ test("modifiers still held leave the text on the clipboard without injecting", a
   assert.equal(restoreScheduled, false, "the transcript stays on the clipboard");
 });
 
-// Stands in for `command -v` (only `installed` commands exist) and for wl-copy, whose
-// status null is a write killed by its timeout.
+// Stands in for `command -v` (only `installed` commands exist, and succeed) and for
+// wl-copy, whose status null is a write killed by its timeout.
 function linuxClipboardToolsSpawnSync(
   installed,
   { wlCopyStatus = 0, primaryStatus = wlCopyStatus } = {}
@@ -1059,7 +1059,7 @@ function linuxClipboardToolsSpawnSync(
     if (command === "wl-copy") {
       return { status: args[0] === "--primary" ? primaryStatus : wlCopyStatus };
     }
-    return { status: 1, stdout: Buffer.from("") };
+    return { status: installed.has(command) ? 0 : 1, stdout: Buffer.from("") };
   };
 }
 
@@ -1086,11 +1086,27 @@ for (const [label, desktop, installed, statuses, reason] of [
   ["Sway without wl-copy", "Sway", ["wtype"], {}, "wl-copy-missing"],
   ["Hyprland without wl-copy", "Hyprland", ["hyprctl"], {}, "wl-copy-missing"],
   ["niri with a timed-out wl-copy", "niri", ["wl-copy"], { wlCopyStatus: null }, "wl-copy-failed"],
+  // Apps paste the clipboard, so a written primary selection alone isn't enough.
+  [
+    "niri with a timed-out clipboard write",
+    "niri",
+    ["wl-copy"],
+    { wlCopyStatus: null, primaryStatus: 0 },
+    "wl-copy-failed",
+  ],
   // Terminals paste the primary selection on Shift+Insert.
   [
     "niri with a timed-out primary write",
     "niri",
     ["wl-copy"],
+    { primaryStatus: null },
+    "wl-copy-failed",
+  ],
+  // xclip reaches only XWayland's primary selection.
+  [
+    "niri with a timed-out primary write and xclip",
+    "niri",
+    ["wl-copy", "xclip"],
     { primaryStatus: null },
     "wl-copy-failed",
   ],
@@ -1127,6 +1143,29 @@ test("niri pastes once wl-copy wrote the Wayland clipboard", async (t) => {
   assert.deepEqual(spawnCalls, [
     MODIFIER_WAIT_CALL,
     { command: "/tmp/linux-fast-paste", args: ["--uinput", "--shift-insert"] },
+  ]);
+});
+
+// Linux refuses an argument of 128 KiB or more, which would hold back every Retry too.
+test("wl-copy takes text too long for an argument on stdin", async (t) => {
+  const wlCopyCalls = [];
+  const spawnSync = linuxClipboardToolsSpawnSync(new Set(["wl-copy"]));
+  const manager = loadLinuxPasteManager(t, [], (command, args = [], options = {}) => {
+    if (command === "wl-copy") wlCopyCalls.push({ args, input: options.input });
+    return spawnSync(command, args);
+  });
+  const longText = "x".repeat(128 * 1024);
+
+  await withWaylandEnvironment("niri", async () => {
+    await manager._pasteText("short");
+    await manager._pasteText(longText);
+  });
+
+  assert.deepEqual(wlCopyCalls, [
+    { args: ["--", "short"], input: undefined },
+    { args: ["--primary", "--", "short"], input: undefined },
+    { args: ["--type", "text/plain"], input: longText },
+    { args: ["--primary", "--type", "text/plain"], input: longText },
   ]);
 });
 
@@ -1173,6 +1212,27 @@ test("a missing wl-copy stays cached where it is optional", async (t) => {
     manager._writeClipboardWayland("second");
   });
   assert.equal(probes.filter((probe) => probe === "command -v wl-copy").length, 1);
+});
+
+test("a clipboard copy says when only XWayland apps can read it", async (t) => {
+  for (const [desktop, installed, statuses, xwaylandOnly] of [
+    ["niri", [], {}, true],
+    ["niri", ["wl-copy"], { wlCopyStatus: null }, true],
+    ["niri", ["wl-copy"], {}, false],
+    ["Sway", [], {}, true],
+    ["GNOME", [], {}, false],
+    ["KDE", [], {}, false],
+  ]) {
+    const manager = loadLinuxPasteManager(
+      t,
+      [],
+      linuxClipboardToolsSpawnSync(new Set(installed), statuses)
+    );
+
+    const result = await withWaylandEnvironment(desktop, () => manager.writeClipboard("answer"));
+
+    assert.deepEqual(result, { success: true, xwaylandOnly }, `${desktop}, ${installed}`);
+  }
 });
 
 test("the paste tools report a missing wl-copy only where it is required", async (t) => {

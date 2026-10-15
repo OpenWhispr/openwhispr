@@ -1934,7 +1934,7 @@ declare global {
       checkAccessibilityPermission: (silent?: boolean) => Promise<boolean>;
       promptAccessibilityPermission: () => Promise<boolean>;
       readClipboard: () => Promise<string>;
-      writeClipboard: (text: string) => Promise<{ success: boolean }>;
+      writeClipboard: (text: string) => Promise<{ success: boolean; xwaylandOnly?: boolean }>;
       copyLeaderboardImage: (dataUrl: string) => Promise<{ success: boolean; error?: string }>;
       saveLeaderboardImage: (
         dataUrl: string,

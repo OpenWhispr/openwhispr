@@ -17,7 +17,7 @@ interface AssistantResponseDeliveryApi {
     text: string,
     options?: { restoreClipboard?: boolean; allowClipboardFallback?: boolean }
   ) => Promise<{ success: boolean }>;
-  writeClipboard?: (text: string) => Promise<{ success: boolean }>;
+  writeClipboard?: (text: string) => Promise<{ success: boolean; xwaylandOnly?: boolean }>;
 }
 
 interface ClipboardWriter {
@@ -61,6 +61,9 @@ async function copyAssistantResponse(
 ): Promise<boolean> {
   try {
     const result = await electronAPI?.writeClipboard?.(content);
+    // The user's app still has focus, so it can't read this copy (#2621); the
+    // renderer's clipboard would land in the same place.
+    if (result?.xwaylandOnly) return false;
     if (result?.success === true) return true;
   } catch {}
 

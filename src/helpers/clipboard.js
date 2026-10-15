@@ -85,6 +85,18 @@ function writeClipboardInRenderer(webContents, text) {
   return webContents.executeJavaScript(`navigator.clipboard.writeText(${escaped})`);
 }
 
+// Linux refuses a single argument of 128 KiB or more (MAX_ARG_STRLEN). Reading stdin
+// costs wl-copy a temp file and a `cat`, so only text that long goes that way, typed so
+// wl-copy doesn't run xdg-mime to sniff it.
+const MAX_ARG_BYTES = 128 * 1024;
+
+function spawnWlCopy(flags, text) {
+  if (Buffer.byteLength(text) < MAX_ARG_BYTES) {
+    return spawnSync("wl-copy", [...flags, "--", text], { timeout: 50 });
+  }
+  return spawnSync("wl-copy", [...flags, "--type", "text/plain"], { input: text, timeout: 50 });
+}
+
 class ClipboardManager {
   constructor() {
     this.accessibilityCache = { value: null, expiresAt: 0 };
@@ -175,7 +187,7 @@ class ClipboardManager {
 
     if (this._wlCopyExists()) {
       try {
-        const result = spawnSync("wl-copy", ["--", text], { timeout: 50 });
+        const result = spawnWlCopy([], text);
         if (result.status === 0) {
           clipboard.writeText(text);
           return true;
@@ -204,7 +216,7 @@ class ClipboardManager {
 
     if (isWayland && this.commandExists("wl-copy")) {
       try {
-        const result = spawnSync("wl-copy", ["--primary", "--", text], { timeout: 50 });
+        const result = spawnWlCopy(["--primary"], text);
         if (result.status === 0) return true;
       } catch {}
     }
@@ -2389,12 +2401,17 @@ Would you like to open System Settings now?`;
     return clipboard.readText();
   }
 
+  // `xwaylandOnly`: where wl-copy is required (#2621), a write it didn't make reaches
+  // native Wayland apps only while an OpenWhispr window has focus.
   async writeClipboard(text, webContents = null) {
     if (process.platform === "linux" && this._isWayland()) {
-      this._writeClipboardWayland(text, webContents);
-    } else {
-      clipboard.writeText(text);
+      const wroteWayland = this._writeClipboardWayland(text, webContents);
+      return {
+        success: true,
+        xwaylandOnly: !wroteWayland && getLinuxSessionInfo().requiresWlCopy,
+      };
     }
+    clipboard.writeText(text);
     return { success: true };
   }
 
