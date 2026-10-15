@@ -8,9 +8,9 @@ interface ToneStyleBannerProps {
   onDismiss: () => void;
 }
 
-// The dictated line rises from the bottom edge this far before the banner's end,
-// so the description has to end before it for the line to show.
-const LINE_CLEARANCE_PX = 440;
+// The dictated line reaches the description's height about 410px before the
+// banner's end, so the description has to end this far from it for the line to show.
+const LINE_CLEARANCE_PX = 425;
 
 // The design's decoration: two soft brand glows rising from the bottom edge and
 // a dictated line curving between them, drawn from the banner's end. In RTL the
