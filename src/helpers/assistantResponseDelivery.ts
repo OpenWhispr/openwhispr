@@ -78,6 +78,18 @@ async function copyAssistantResponse(
   }
 }
 
+// An answer typed in the user's Tone & Style is their own words, which no tone
+// writes with em dashes. The prompt says so, but models still use them, so a
+// dash between words becomes a comma; one beside , . ; : ! ? or at a line's
+// edge is dropped.
+function withoutEmDashes(text: string): string {
+  return text
+    .replace(/^[^\S\r\n]*\u2014+[^\S\r\n]*/gm, "")
+    .replace(/[^\S\r\n]*\u2014+[^\S\r\n]*(?=[,.;:!?]|$)/gm, "")
+    .replace(/(?<=[,.;:!?])[^\S\r\n]*\u2014+[^\S\r\n]*/g, " ")
+    .replace(/[^\S\r\n]*\u2014+[^\S\r\n]*/g, ", ");
+}
+
 export async function deliverAssistantResponse(
   delivery: AssistantResponseDelivery,
   content: string,
@@ -87,9 +99,10 @@ export async function deliverAssistantResponse(
   const clipboard = dependencies.clipboard ?? navigator.clipboard;
 
   if (delivery.mode === "paste") {
-    // The strip also covers the clipboard fallback (the user pastes into the
-    // same field by hand); an answer it empties entirely is pasted raw.
-    const text = delivery.plainText ? markdownToPlainText(content) || content : content;
+    // Both strips also cover the clipboard fallback (the user pastes into the
+    // same field by hand); an answer the markdown strip empties is pasted raw.
+    const body = delivery.plainText ? markdownToPlainText(content) || content : content;
+    const text = delivery.appCategory ? withoutEmDashes(body) : body;
     try {
       const result = await electronAPI?.pasteAtCapturedTarget?.(delivery.sessionId, text, {
         restoreClipboard: delivery.restoreClipboard,
