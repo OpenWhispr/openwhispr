@@ -3017,6 +3017,7 @@ declare global {
       >;
       geminiStreamingSend?: (audioBuffer: ArrayBuffer) => void;
       geminiStreamingFinalize?: () => void;
+      geminiStreamingCancelPendingStart?: () => void;
       geminiStreamingStop?: () => Promise<{
         success: boolean;
         text?: string;
@@ -3391,6 +3392,7 @@ declare global {
           error?: string;
         } & Partial<DictationLanguageMetadata>
       >;
+      dictationRealtimeCancelPendingStart?: () => void;
       dictationRealtimeStop?: () => Promise<{ success: boolean; text: string }>;
       onDictationRealtimePartial?: (callback: (text: string) => void) => () => void;
       onDictationRealtimeFinal?: (callback: (text: string) => void) => () => void;

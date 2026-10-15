@@ -7,6 +7,7 @@ const {
   createDownloadSignal,
   cleanupStaleDownloads,
   checkDiskSpace,
+  verifyFileSha256,
 } = require("./downloadUtils");
 
 const { registryData: modelRegistryData } = require("../models/registryData.js");
@@ -312,10 +313,6 @@ class ModelManager {
     const { model, provider } = modelInfo;
     const modelPath = path.join(this.modelsDir, model.fileName);
 
-    if (await this.checkModelValid(modelPath)) {
-      return modelPath;
-    }
-
     if (this.activeDownloads.has(modelId)) {
       throw new ModelError("Model is already being downloaded", "DOWNLOAD_IN_PROGRESS", {
         modelId,
@@ -328,6 +325,14 @@ class ModelManager {
     this.activeRequests.set(modelId, { abort });
 
     try {
+      if (await this.checkModelValid(modelPath)) {
+        // Explicit reuse verifies the declared artifact; status polling and
+        // native loading retain their existing lightweight presence checks.
+        await verifyFileSha256(modelPath, model.sha256, signal);
+        if (signal.aborted) throw Object.assign(new Error("Download cancelled"), { isAbort: true });
+        return modelPath;
+      }
+
       await this.ensureModelsDirExists();
 
       const hasDrafter = this.modelHasDrafter(model);
@@ -429,6 +434,11 @@ class ModelManager {
     } catch (error) {
       if (error.isAbort) {
         throw new ModelError("Download cancelled by user", "DOWNLOAD_CANCELLED", { modelId });
+      }
+      if (error.code === "ERR_MODEL_INTEGRITY") {
+        throw new ModelError("Model SHA-256 verification failed", "DOWNLOAD_CORRUPTED", {
+          modelId,
+        });
       }
       if (error.isHttpError) {
         throw new ModelError(`Download failed with status ${error.statusCode}`, "DOWNLOAD_FAILED", {

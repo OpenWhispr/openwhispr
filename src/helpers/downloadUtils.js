@@ -268,10 +268,29 @@ async function fetchJson(url, options = {}) {
 async function verifyFileSha256(filePath, expectedSha256, signal) {
   if (!expectedSha256) return;
   if (!/^[a-f0-9]{64}$/.test(expectedSha256)) throw new Error("Invalid expected SHA-256");
+  if (signal?.aborted) throw Object.assign(new Error("Download cancelled"), { isAbort: true });
   const hash = createHash("sha256");
-  for await (const chunk of fs.createReadStream(filePath)) {
+  const stream = fs.createReadStream(filePath);
+  const previousAbort = signal?.onAbort;
+  const onAbort = () =>
+    stream.destroy(Object.assign(new Error("Download cancelled"), { isAbort: true }));
+  if (signal) signal.onAbort = onAbort;
+  try {
+    for await (const chunk of stream) {
+      if (signal?.aborted) throw Object.assign(new Error("Download cancelled"), { isAbort: true });
+      hash.update(chunk);
+    }
     if (signal?.aborted) throw Object.assign(new Error("Download cancelled"), { isAbort: true });
-    hash.update(chunk);
+  } finally {
+    // Keep the operation's ownership until the file descriptor is closed,
+    // including cancellation while an asynchronous open/read is pending.
+    if (!stream.closed) {
+      await new Promise((resolve) => {
+        stream.once("close", resolve);
+        stream.destroy();
+      });
+    }
+    if (signal) signal.onAbort = previousAbort;
   }
   if (hash.digest("hex") !== expectedSha256) {
     throw Object.assign(new Error("Model SHA-256 verification failed"), {

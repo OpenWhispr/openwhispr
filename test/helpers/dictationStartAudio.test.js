@@ -3,6 +3,8 @@ const assert = require("node:assert/strict");
 const Module = require("node:module");
 const { EventEmitter } = require("node:events");
 const WS = require("ws");
+const { loadAudioManager } = require("./harness/audioManager");
+const { installMicCaptureGlobals } = require("../lib/rendererTestHarness");
 
 // Exercise the registered IPC handlers and real realtime client; only token
 // minting and the provider socket are replaced. No provider requests are made.
@@ -30,8 +32,8 @@ const electronStub = {
     static getAllWindows() {
       return [];
     }
-    static fromWebContents() {
-      return null;
+    static fromWebContents(sender) {
+      return { isDestroyed: () => false, webContents: sender };
     }
   },
   shell: {},
@@ -52,6 +54,7 @@ Module._load = function loadElectron(request, parent, isMain) {
 };
 const OpenAIRealtimeStreaming = require("../../src/helpers/openaiRealtimeStreaming");
 let connectionGate = null;
+let tokenGate = null;
 const instances = [];
 class LoopbackRealtime extends OpenAIRealtimeStreaming {
   constructor() {
@@ -62,18 +65,20 @@ class LoopbackRealtime extends OpenAIRealtimeStreaming {
     const socket = new EventEmitter();
     socket.readyState = WS.CONNECTING;
     socket.audio = [];
+    socket.commits = 0;
     socket.send = (raw) => {
       const event = JSON.parse(raw);
       if (event.type === "input_audio_buffer.append") {
         socket.audio.push(Buffer.from(event.audio, "base64"));
       }
       if (event.type === "input_audio_buffer.commit") {
+        socket.commits++;
         setImmediate(() =>
           socket.emit(
             "message",
             JSON.stringify({
               type: "conversation.item.input_audio_transcription.completed",
-              transcript: "",
+              transcript: "Opening words retained.",
             })
           )
         );
@@ -99,7 +104,61 @@ class LoopbackRealtime extends OpenAIRealtimeStreaming {
     });
   }
 }
+const geminiSockets = [];
+class ControlledGeminiSocket extends EventEmitter {
+  constructor() {
+    super();
+    this.readyState = WS.CONNECTING;
+    this.audio = [];
+    this.commits = 0;
+    geminiSockets.push(this);
+    setImmediate(() => {
+      this.readyState = WS.OPEN;
+      this.emit("open");
+    });
+  }
+  send(raw) {
+    const message = JSON.parse(raw);
+    if (message.setup) {
+      Promise.resolve(connectionGate?.promise).then(
+        () => this.emit("message", JSON.stringify({ setupComplete: {} })),
+        (error) => this.emit("error", error)
+      );
+    }
+    if (message.realtimeInput?.audio) {
+      this.audio.push(Buffer.from(message.realtimeInput.audio.data, "base64"));
+    }
+    if (message.realtimeInput?.audioStreamEnd) {
+      this.commits++;
+      setImmediate(() =>
+        this.emit(
+          "message",
+          JSON.stringify({
+            serverContent: {
+              inputTranscription: { text: "Opening words retained." },
+              generationComplete: true,
+            },
+          })
+        )
+      );
+    }
+  }
+  close() {
+    this.readyState = WS.CLOSED;
+  }
+  terminate() {
+    this.close();
+  }
+}
+Object.assign(ControlledGeminiSocket, {
+  OPEN: WS.OPEN,
+  CLOSED: WS.CLOSED,
+  CONNECTING: WS.CONNECTING,
+});
 Module._load = function loadWithMocks(request, parent, isMain) {
+  if (request === "ws" && parent?.filename.endsWith("/geminiLiveStreaming.js")) {
+    return ControlledGeminiSocket;
+  }
   if (request === "electron") return electronStub;
   if (parent?.filename === handlersModulePath) {
     if (request === "./debugLogger") return new Proxy({}, { get: () => () => {} });
@@ -107,7 +166,10 @@ Module._load = function loadWithMocks(request, parent, isMain) {
     if (request === "./realtimeTokenProviders") {
       return {
         ...originalLoad.call(this, request, parent, isMain),
-        fetchRealtimeTokenForProvider: async () => "secret",
+        fetchRealtimeTokenForProvider: async () => {
+          await tokenGate?.promise;
+          return "test-token";
+        },
       };
     }
   }
@@ -127,10 +189,13 @@ function anything() {
     apply: () => anything(),
   });
 }
-function scenario(t) {
+function scenario(t, prefix = "dictation-realtime") {
   instances.length = 0;
+  geminiSockets.length = 0;
   connectionGate = null;
+  tokenGate = null;
   const target = {
+    geminiStreaming: null,
     _dictationStreaming: null,
     _dictationConnectPromise: null,
     _dictationIdleTimer: null,
@@ -142,16 +207,19 @@ function scenario(t) {
       get: (value, property) => (property in value ? value[property] : anything()),
     })
   );
-  const event = { sender: { send() {} } };
-  const invoke = (channel, options) =>
-    handlers.get(`dictation-realtime-${channel}`)(event, options);
+  const delivered = new EventEmitter();
+  const event = { sender: { send: (channel, data) => delivered.emit(channel, data) } };
+  const invoke = (channel, options) => handlers.get(`${prefix}-${channel}`)(event, options);
   t.after(() => {
     clearTimeout(target._dictationIdleTimer);
     for (const streaming of instances) streaming.cleanup();
+    target.geminiStreaming?.cleanup();
   });
   return {
     invoke,
-    send: (frame) => listeners.get("dictation-realtime-send")(event, frame),
+    delivered,
+    cancelPendingStart: () => listeners.get(`${prefix}-cancel-pending-start`)?.(event),
+    send: (frame) => listeners.get(`${prefix}-send`)(event, frame),
     target,
   };
 }
@@ -274,5 +342,274 @@ for (const provider of ["openai-realtime", "tinfoil-realtime"]) {
     assert.equal((await started).success, false);
     assert.equal(received(instances.at(-1)).length, 0);
     assert.equal(instances.at(-1).testSocket.readyState, WS.CLOSED);
+  });
+}
+
+// Run the actual renderer start/cancel/stop and provider adapter against the
+// registered handlers above; only microphone hardware and network are faked.
+async function rendererScenario(t, s, provider) {
+  const { AudioManager, window } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-start-cancellation-",
+    settingsKey: "__startCancellationSettings",
+    settings: {
+      useLocalWhisper: false,
+      transcriptionMode: "providers",
+      cloudTranscriptionMode: "byok",
+      cloudTranscriptionProvider: provider === "tinfoil-realtime" ? "tinfoil" : "openai",
+    },
+  });
+  installMicCaptureGlobals(t);
+  window.dispatchEvent = () => true;
+  const calls = [];
+  const listen = (channel) => (callback) => {
+    s.delivered.on(channel, callback);
+    return () => s.delivered.off(channel, callback);
+  };
+  Object.assign(window.electronAPI, {
+    dictationRealtimeStart: (options) => {
+      calls.push("start");
+      return s.invoke("start", options);
+    },
+    dictationRealtimeSend: s.send,
+    dictationRealtimeCancelPendingStart: () => {
+      calls.push("discard");
+      s.cancelPendingStart();
+    },
+    dictationRealtimeStop: () => {
+      calls.push("stop");
+      return s.invoke("stop");
+    },
+    onDictationRealtimePartial: listen("dictation-realtime-partial"),
+    onDictationRealtimeFinal: listen("dictation-realtime-final"),
+    onDictationRealtimeError: listen("dictation-realtime-error"),
+    onDictationRealtimeSessionEnd: listen("dictation-realtime-session-end"),
+  });
+  if (provider === "gemini") {
+    Object.assign(window.electronAPI, {
+      geminiStreamingStart: window.electronAPI.dictationRealtimeStart,
+      geminiStreamingSend: s.send,
+      geminiStreamingCancelPendingStart: window.electronAPI.dictationRealtimeCancelPendingStart,
+      geminiStreamingStop: window.electronAPI.dictationRealtimeStop,
+      geminiStreamingFinalize: () => listeners.get("gemini-streaming-finalize")(),
+      onGeminiPartialTranscript: listen("gemini-partial-transcript"),
+      onGeminiFinalTranscript: listen("gemini-final-transcript"),
+      onGeminiError: listen("gemini-error"),
+      onGeminiSessionEnd: listen("gemini-session-end"),
+    });
+  }
+  const completions = [];
+  const errors = [];
+  const manager = Object.assign(Object.create(AudioManager.prototype), {
+    isRecording: false,
+    isProcessing: false,
+    isStreaming: false,
+    streamingStartInProgress: false,
+    _streamingStartSettlementWaiters: [],
+    stopRequestedDuringStreamingStart: false,
+    _streamingStopPromise: null,
+    _streamingStopMode: null,
+    _streamingCancellationGeneration: 0,
+    _streamingSessionGeneration: 0,
+    _activeStreamingSessionId: null,
+    _streamingMicSwapPromise: null,
+    streamingCleanupFns: [],
+    streamingFallbackChunks: [],
+    _streamingFallbackSegments: [],
+    preparedMicCapture: { take: async () => null },
+    micRecovery: { stop() {} },
+    isRecordingAllowedByPolicy: () => true,
+    getAudioConstraints: async () => ({}),
+    _acquireCaptureStream: () => navigator.mediaDevices.getUserMedia(),
+    getOrCreateAudioContext: async () => new globalThis.AudioContext(),
+    getWorkletBlobUrl: () => "",
+    getStreamingProviderName: () => provider,
+    getEffectiveSttLanguage: () => "auto",
+    getKeyterms: () => [],
+    beginMicRecovery: async () => {},
+    startStreamingFallbackRecorder() {},
+    finishStreamingFallbackSegment: async () => null,
+    mergeRecordedSegments: async () => null,
+    getLargestRecordedSegment: () => null,
+    awaitStreamingTextSettled: async () => {},
+    cleanupPreview: async () => {},
+    finalizeChineseScript: async (text) => text,
+    _markCaptureStreamReleased() {},
+    onStateChange() {},
+    onError: (error) => errors.push(error),
+    onTranscriptionComplete: (result) => completions.push(result),
+  });
+  return { manager, calls, completions, errors };
+}
+
+for (const provider of ["openai-realtime", "tinfoil-realtime"]) {
+  for (const phase of ["socket factory", "token", "different warm model", "stop then cancel"]) {
+    test(`${provider} renderer Cancel discards 84800 held bytes (${phase})`, async (t) => {
+      const s = scenario(t);
+      if (phase === "different warm model") {
+        await s.invoke("warmup", { ...optionsFor(provider), model: "previous-model" });
+      }
+      const gate = phase === "token" ? (tokenGate = Promise.withResolvers()) : deferConnection();
+      const r = await rendererScenario(t, s, provider);
+      const started = r.manager.startStreamingRecording();
+      while (!r.calls.includes("start")) await new Promise(setImmediate);
+      s.send(Buffer.alloc(84800, 1));
+      if (phase === "stop then cancel") await r.manager.stopStreamingRecording();
+      const cancelled = r.manager.cancelStreamingRecording();
+      const duplicate = r.manager.cancelStreamingRecording();
+      const callsBeforeReadiness = [...r.calls];
+      assert.equal(r.manager.isProcessing, true);
+      assert.equal(await r.manager.startStreamingRecording(), false);
+      s.send(Buffer.alloc(3200, 2)); // already queued IPC after capture cleanup
+      gate.resolve();
+      assert.deepEqual(await Promise.all([started, cancelled, duplicate]), [false, true, true]);
+      const current = instances.at(-1);
+      assert.equal(received(current).length, 0, "cancelled startup must transmit zero bytes");
+      assert.deepEqual(callsBeforeReadiness, ["start", "discard"]);
+      assert.equal(current.testSocket.commits, 0);
+      assert.equal(current.testSocket.readyState, WS.CLOSED);
+      assert.deepEqual(r.completions, []);
+      assert.deepEqual(r.errors, []);
+      assert.equal(r.manager.isProcessing, false);
+      assert.equal(r.manager.streamingStartInProgress, false);
+      assert.equal(r.manager.streamingStream, null);
+      assert.deepEqual(r.calls, ["start", "discard", "stop"]);
+      // Idle discard cannot poison or disconnect the next recording.
+      s.cancelPendingStart();
+      assert.equal(await r.manager.startStreamingRecording(), true);
+      s.send(Buffer.alloc(3200, 3));
+      assert.ok(
+        received(instances.at(-1)).equals(expectedAudio(provider, [Buffer.alloc(3200, 3)]))
+      );
+      await r.manager.cancelStreamingRecording();
+    });
+  }
+
+  test(`${provider} renderer Stop preserves held bytes and delivers one transcript`, async (t) => {
+    const s = scenario(t);
+    const gate = deferConnection();
+    const r = await rendererScenario(t, s, provider);
+    const started = r.manager.startStreamingRecording();
+    while (!r.calls.includes("start")) await new Promise(setImmediate);
+    const audio = [Buffer.alloc(42400, 1), Buffer.alloc(42400, 2)];
+    audio.forEach(s.send);
+    assert.equal(await r.manager.stopStreamingRecording(), true);
+    assert.deepEqual(r.calls, ["start"]);
+    gate.resolve();
+    assert.equal(await started, true);
+    const current = instances.at(-1);
+    assert.ok(received(current).equals(expectedAudio(provider, audio)));
+    assert.equal(current.testSocket.commits, 1);
+    assert.equal(current.testSocket.readyState, WS.CLOSED);
+    assert.equal(r.completions.length, 1);
+    assert.equal(r.completions[0].text, "Opening words retained.");
+    assert.deepEqual(r.errors, []);
+    assert.deepEqual(r.calls, ["start", "stop"]);
+  });
+}
+
+for (const phase of ["handshake", "token", "different warm model", "stop then cancel", "stop"]) {
+  test(`Gemini renderer startup ${phase} preserves Stop and discards Cancel`, async (t) => {
+    const s = scenario(t, "gemini-streaming");
+    if (phase === "different warm model") {
+      await s.invoke("warmup", { mode: "byok", model: "gemini-previous-model" });
+    }
+    const gate = phase === "token" ? (tokenGate = Promise.withResolvers()) : deferConnection();
+    const r = await rendererScenario(t, s, "gemini");
+    const started = r.manager.startStreamingRecording();
+    while (!r.calls.includes("start")) await new Promise(setImmediate);
+    const audio = [Buffer.alloc(42400, 1), Buffer.alloc(42400, 2)];
+    audio.forEach(s.send);
+    if (phase === "stop" || phase === "stop then cancel") await r.manager.stopStreamingRecording();
+    const cancelled = phase === "stop" ? null : r.manager.cancelStreamingRecording();
+    const duplicate = phase === "stop" ? null : r.manager.cancelStreamingRecording();
+    if (cancelled) {
+      assert.equal(r.manager.isProcessing, true);
+      s.send(Buffer.alloc(3200, 3));
+    }
+    gate.resolve();
+    const results = await Promise.all([started, cancelled, duplicate]);
+    const socket = geminiSockets.at(-1);
+    assert.equal(socket.readyState, WS.CLOSED);
+    assert.deepEqual(r.errors, []);
+    assert.equal(r.manager.isProcessing, false);
+    assert.equal(r.manager.streamingStream, null);
+    if (cancelled) {
+      assert.deepEqual(results, [false, true, true]);
+      assert.equal(Buffer.concat(socket.audio).length, 0);
+      assert.equal(socket.commits, 0);
+      assert.deepEqual(r.completions, []);
+      assert.deepEqual(r.calls, ["start", "discard", "stop"]);
+      s.cancelPendingStart();
+      assert.equal(await r.manager.startStreamingRecording(), true);
+      s.send(Buffer.alloc(3200, 4));
+      assert.ok(Buffer.concat(geminiSockets.at(-1).audio).equals(Buffer.alloc(3200, 4)));
+      await r.manager.cancelStreamingRecording();
+    } else {
+      assert.equal(results[0], true);
+      assert.ok(Buffer.concat(socket.audio).equals(Buffer.concat(audio)));
+      assert.equal(socket.commits, 1);
+      assert.equal(r.completions.length, 1);
+      assert.equal(r.completions[0].text, "Opening words retained.");
+      assert.deepEqual(r.calls, ["start", "stop"]);
+    }
+  });
+}
+
+for (const provider of ["openai-realtime", "tinfoil-realtime", "gemini"]) {
+  test(`${provider} cancellation followed by token failure stays quiet and permits retry`, async (t) => {
+    const s = scenario(t, provider === "gemini" ? "gemini-streaming" : "dictation-realtime");
+    const r = await rendererScenario(t, s, provider);
+    const gate = (tokenGate = Promise.withResolvers());
+    const started = r.manager.startStreamingRecording();
+    while (!r.calls.includes("start")) await new Promise(setImmediate);
+    s.send(Buffer.alloc(84800, 1));
+    const cancelled = r.manager.cancelStreamingRecording();
+    gate.reject(new Error("test token unavailable"));
+    assert.deepEqual(await Promise.all([started, cancelled]), [false, true]);
+    assert.deepEqual(r.errors, []);
+    assert.deepEqual(r.completions, []);
+    assert.equal(r.manager.isProcessing, false);
+    tokenGate = null;
+    assert.equal(await r.manager.startStreamingRecording(), true);
+    s.send(Buffer.alloc(3200, 5));
+    const audio =
+      provider === "gemini"
+        ? Buffer.concat(geminiSockets.at(-1).audio)
+        : received(instances.at(-1));
+    assert.ok(
+      audio.equals(
+        expectedAudio(provider === "gemini" ? "tinfoil-realtime" : provider, [
+          Buffer.alloc(3200, 5),
+        ])
+      )
+    );
+    await r.manager.cancelStreamingRecording();
+  });
+}
+
+for (const provider of ["openai-realtime", "tinfoil-realtime", "gemini"]) {
+  test(`${provider} cancelled startup timeout closes the late socket and permits retry`, async (t) => {
+    const s = scenario(t, provider === "gemini" ? "gemini-streaming" : "dictation-realtime");
+    const r = await rendererScenario(t, s, provider);
+    const gate = deferConnection();
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const started = r.manager.startStreamingRecording();
+    while (!r.calls.includes("start")) await new Promise(setImmediate);
+    await new Promise(setImmediate);
+    s.send(Buffer.alloc(84800, 1));
+    const cancelled = r.manager.cancelStreamingRecording();
+    t.mock.timers.tick(15000);
+    assert.deepEqual(await Promise.all([started, cancelled]), [false, true]);
+    gate.resolve();
+    await new Promise(setImmediate);
+    const socket = provider === "gemini" ? geminiSockets.at(-1) : instances.at(-1).testSocket;
+    assert.equal(socket.readyState, WS.CLOSED);
+    assert.equal(Buffer.concat(socket.audio).length, 0);
+    assert.equal(socket.commits, 0);
+    assert.deepEqual(r.errors, []);
+    assert.deepEqual(r.completions, []);
+    t.mock.timers.reset();
+    assert.equal(await r.manager.startStreamingRecording(), true);
+    await r.manager.cancelStreamingRecording();
   });
 }

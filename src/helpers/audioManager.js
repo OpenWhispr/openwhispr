@@ -408,6 +408,7 @@ const makeDictationRealtimeProvider = (id) => ({
   warmup: (opts) => window.electronAPI.dictationRealtimeWarmup({ ...opts, provider: id }),
   start: (opts) => window.electronAPI.dictationRealtimeStart({ ...opts, provider: id }),
   send: (buf) => window.electronAPI.dictationRealtimeSend(buf),
+  cancelPendingStart: () => window.electronAPI.dictationRealtimeCancelPendingStart?.(),
   stop: () => window.electronAPI.dictationRealtimeStop(),
   onPartial: (cb) => window.electronAPI.onDictationRealtimePartial(cb),
   onFinal: (cb) => window.electronAPI.onDictationRealtimeFinal(cb),
@@ -460,6 +461,7 @@ const STREAMING_PROVIDERS = {
     start: (opts) => window.electronAPI.geminiStreamingStart(opts),
     send: (buf) => window.electronAPI.geminiStreamingSend(buf),
     finalize: () => window.electronAPI.geminiStreamingFinalize(),
+    cancelPendingStart: () => window.electronAPI.geminiStreamingCancelPendingStart?.(),
     stop: () => window.electronAPI.geminiStreamingStop(),
     status: () => window.electronAPI.geminiStreamingStatus(),
     onPartial: (cb) => window.electronAPI.onGeminiPartialTranscript(cb),
@@ -5368,6 +5370,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this._streamingFallbackSegments = [];
       this.onStateChange?.({ isRecording: false, isProcessing: true, isStreaming: false });
 
+      // Discard held startup audio now; resource teardown must still wait for
+      // setup to settle so late capture/socket creation cannot leak.
+      this.getStreamingProvider(providerName).cancelPendingStart?.();
       const providerStop = this._waitForStreamingStartSettlement()
         .then(() => {
           // Startup may have attached replacement capture resources after the

@@ -261,9 +261,13 @@ test("streaming discard waits for an in-progress provider start before disconnec
   const AudioManager = await loadManagerClass(t);
   const { manager } = createFinalizingManager(AudioManager);
   let providerStopCalls = 0;
+  let discardCalls = 0;
   manager.streamingStartInProgress = true;
   manager.cleanupPreview = async () => null;
   manager.getStreamingProvider = () => ({
+    cancelPendingStart: () => {
+      discardCalls += 1;
+    },
     stop: async () => {
       providerStopCalls += 1;
       return { success: true };
@@ -272,6 +276,7 @@ test("streaming discard waits for an in-progress provider start before disconnec
 
   const cancel = manager.cancelStreamingRecording();
   await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(discardCalls, 1);
   assert.equal(providerStopCalls, 0);
   assert.equal(manager.isProcessing, true);
 

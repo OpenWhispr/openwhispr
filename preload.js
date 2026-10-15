@@ -889,6 +889,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   geminiStreamingStart: (options) => ipcRenderer.invoke("gemini-streaming-start", options),
   geminiStreamingSend: (audioBuffer) => ipcRenderer.send("gemini-streaming-send", audioBuffer),
   geminiStreamingFinalize: () => ipcRenderer.send("gemini-streaming-finalize"),
+  geminiStreamingCancelPendingStart: () =>
+    ipcRenderer.send("gemini-streaming-cancel-pending-start"),
   geminiStreamingStop: () => ipcRenderer.invoke("gemini-streaming-stop"),
   geminiStreamingStatus: () => ipcRenderer.invoke("gemini-streaming-status"),
   onGeminiPartialTranscript: registerListener(
@@ -984,6 +986,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   dictationRealtimeStart: (options) => ipcRenderer.invoke("dictation-realtime-start", options),
   dictationRealtimeSend: (buffer) => ipcRenderer.send("dictation-realtime-send", buffer),
   dictationRealtimeFinalize: () => ipcRenderer.invoke("dictation-realtime-finalize"),
+  dictationRealtimeCancelPendingStart: () =>
+    ipcRenderer.send("dictation-realtime-cancel-pending-start"),
   dictationRealtimeStop: () => ipcRenderer.invoke("dictation-realtime-stop"),
   onDictationRealtimePartial: registerListener(
     "dictation-realtime-partial",

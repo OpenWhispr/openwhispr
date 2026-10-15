@@ -9726,6 +9726,13 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.on("dictation-realtime-cancel-pending-start", () => {
+      if (!dictationStartInProgress || !dictationBufferStartAudio) return;
+      dictationStartError = new Error("Dictation cancelled during startup.");
+      dictationStartAudio = [];
+      dictationStartAudioBytes = 0;
+    });
+
     ipcMain.on("dictation-realtime-send", (_event, buffer) => {
       if (dictationBufferStartAudio) {
         if (dictationStartError) return;
@@ -11667,6 +11674,7 @@ class IPCHandlers {
     let geminiSendDropCount = 0;
     let geminiStartAudio = [];
     let geminiStartAudioBytes = 0;
+    let geminiStartCancelled = false;
     // Match the client's three-second cold-start bound. A model-changing start
     // owns these frames, even while a previous warm handshake is finishing.
     const GEMINI_START_AUDIO_MAX = 3 * 16000 * 2;
@@ -11750,6 +11758,7 @@ class IPCHandlers {
       }
 
       geminiStreamingStartInProgress = true;
+      geminiStartCancelled = false;
       geminiStartAudio = [];
       geminiStartAudioBytes = 0;
       try {
@@ -11762,6 +11771,10 @@ class IPCHandlers {
         if (!usedWarmConnection) {
           if (streaming.isConnected) await streaming.disconnect(false);
           await connectGeminiStreaming(event, options);
+        }
+        if (geminiStartCancelled) {
+          await streaming.disconnect(false);
+          throw new Error("Gemini dictation cancelled during startup.");
         }
         for (const buffer of geminiStartAudio) streaming.sendAudio(buffer);
         geminiSendDropCount = 0;
@@ -11780,9 +11793,17 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.on("gemini-streaming-cancel-pending-start", () => {
+      if (!geminiStreamingStartInProgress) return;
+      geminiStartCancelled = true;
+      geminiStartAudio = [];
+      geminiStartAudioBytes = 0;
+    });
+
     ipcMain.on("gemini-streaming-send", (_event, audioBuffer) => {
       try {
         if (geminiStreamingStartInProgress) {
+          if (geminiStartCancelled) return;
           const buffer = Buffer.from(audioBuffer);
           if (geminiStartAudioBytes + buffer.length <= GEMINI_START_AUDIO_MAX) {
             geminiStartAudio.push(buffer);
