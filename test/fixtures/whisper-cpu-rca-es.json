@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "title": "DES-165 fixed Spanish benchmark fixture",
+  "text": "Hola, esta es una prueba breve de voz en español.",
+  "expectedLanguage": "es",
+  "sha256": "39f2ee4b0f50413eb0fbdfa1103ba5b290b86602fafde4c251567f51caad72d4",
+  "bytes": 83636,
+  "durationSeconds": 2.61225,
+  "audioFormat": "PCM signed 16-bit little-endian",
+  "sampleRateHz": 16000,
+  "channels": 1,
+  "bitsPerSample": 16,
+  "generator": {
+    "name": "Piper TTS",
+    "version": "1.7.0",
+    "voice": "es_ES-davefx-medium",
+    "voiceRepository": "rhasspy/piper-voices",
+    "voiceRepositoryRevision": "39ab474be869e9181350af6a65e4953eef67aaa0",
+    "voiceModelSha256": "6658b03b1a6c316ee4c265a9896abc1393353c2d9e1bca7d66c2c442e222a917",
+    "voiceConfigSha256": "0e0dda87c732f6f38771ff274a6380d9252f327dca77aa2963d5fbdf9ec54842",
+    "sourceWavSha256": "60e6fb492d281077c94d83a46619f269fc8e31f84ab6762cfe78b57bb7daaaee",
+    "sourceSampleRateHz": 22050,
+    "conversion": "Python 3.9 stdlib wave + audioop.ratecv to mono PCM s16le 16 kHz"
+  },
+  "licensing": {
+    "voiceRepository": "MIT",
+    "trainingDataset": "CC0",
+    "customerOrReporterAudio": false
+  }
+}
