@@ -3782,7 +3782,7 @@
     },
     "prompt": {
       "title": "Prompt do assistente",
-      "description": "O prompt de sistema usado pelo assistente de voz, por meio do atalho ou da palavra de ativação. Recorre ao padrão integrado."
+      "description": "O prompt de sistema usado pelo assistente de voz, por meio do atalho ou da palavra de ativação. As edições de texto selecionado mantêm as próprias regras de edição e o usam só para o estilo. Recorre ao padrão integrado."
     }
   },
   "agentMode": {
