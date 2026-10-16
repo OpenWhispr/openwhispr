@@ -48,6 +48,10 @@ class WhisperCudaManager extends GpuBinaryManager {
           binaryName: "whisper-server-linux-x64-cuda",
           outputName: "whisper-server-linux-x64-cuda",
           libPattern: /\.so(\.\d+)*$/,
+          // The CUDA 12 runtime the binary links, so hosts with another CUDA major
+          // (or no toolkit) can run it; only the driver's libcuda.so.1 comes from
+          // the system. Packs from whisper.cpp 0.0.10 and older lack them.
+          requiredLibraries: ["libcudart.so.12", "libcublas.so.12", "libcublasLt.so.12"],
         },
       },
     });

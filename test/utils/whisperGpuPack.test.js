@@ -84,3 +84,17 @@ test("the pack main reports in use wins over every other rule (#1736)", async ()
   // A Vulkan pack on a GPU detection doesn't recognize
   assert.equal(pickWhisperGpuBackend(cuda(NO_NVIDIA), vulkan(false, IN_USE)), "vulkan");
 });
+
+test("no first-time offer while the bundled whisper-server already runs on the GPU (#2168)", async () => {
+  const { pickWhisperGpuBackend } = await load();
+  const BUNDLED = { bundledGpu: true };
+  assert.equal(pickWhisperGpuBackend(cuda(NVIDIA, BUNDLED), vulkan(true, BUNDLED)), null);
+  assert.equal(pickWhisperGpuBackend(cuda(NO_NVIDIA, BUNDLED), vulkan(true, BUNDLED)), null);
+  // A pack that is installed, failed or outdated keeps its card
+  const installed = { ...BUNDLED, ...DOWNLOADED };
+  assert.equal(pickWhisperGpuBackend(cuda(NVIDIA, installed), vulkan(true, BUNDLED)), "cuda");
+  const failed = { ...BUNDLED, ...DOWNLOADED, inUse: true, gpuFailed: true };
+  assert.equal(pickWhisperGpuBackend(cuda(NVIDIA, failed), vulkan(true, BUNDLED)), "cuda");
+  const outdated = { ...BUNDLED, ...OUTDATED };
+  assert.equal(pickWhisperGpuBackend(cuda(NVIDIA, BUNDLED), vulkan(true, outdated)), "vulkan");
+});
