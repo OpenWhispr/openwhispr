@@ -16,8 +16,10 @@ export type EnterpriseCallSettings = {
   bedrockSessionToken: string;
   azureEndpoint: string;
   azureApiVersion: string;
+  azureApiKey: string;
   vertexProject: string;
   vertexLocation: string;
+  vertexApiKey: string;
   managedContext?: ManagedEnterpriseRequestContext;
 };
 
@@ -60,8 +62,10 @@ export function getEnterpriseCallSettings(
     bedrockSessionToken: s.bedrockSessionToken,
     azureEndpoint: s.azureEndpoint,
     azureApiVersion: s.azureApiVersion,
+    azureApiKey: s.azureApiKey,
     vertexProject: s.vertexProject,
     vertexLocation: s.vertexLocation,
+    vertexApiKey: s.vertexApiKey,
     managedContext,
   };
 }
