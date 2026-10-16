@@ -898,6 +898,8 @@
   },
   "hooks": {
     "audioRecording": {
+      "cleanupSignedOut": "AI cleanup uses OpenWhispr Cloud, but you're signed out.",
+      "cleanupUnconfigured": "AI cleanup is on, but no cleanup model is set up.",
       "errorTitles": {
         "sessionExpired": "Session Expired",
         "offline": "You're Offline",

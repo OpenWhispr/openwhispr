@@ -42,11 +42,11 @@ test("the cleanup prompt ends with the app's medium, the tone and its priority",
 // appends for the same tone: BYOK and local cleanup must send the same words.
 const SERVER_TONE_SENTENCES = {
   formal:
-    "Apply this tone: formal and polished. Use complete sentences with standard capitalization and full punctuation, spell out contractions (I will, do not), and leave out slang, filler, texting shorthand, emoji and em dashes. Restyle only; do not add or remove information.",
+    "Apply this tone: formal and polished. Use complete sentences with standard capitalization and full punctuation, spell out informal contractions (in English: I will, do not) but keep any the language's grammar requires, and leave out slang, filler, texting shorthand, emoji and em dashes. Restyle only; do not add or remove information.",
   casual:
-    "Apply this tone: casual and friendly, like a quick note to a colleague. Use contractions (I'll, it's, don't) and everyday wording, standard capitalization and light punctuation with no semicolons or em dashes; a final period can be dropped. Restyle only; do not add or remove information.",
+    "Apply this tone: casual and friendly, like a quick note to a colleague. Use the language's everyday contractions (in English: I'll, it's, don't) and everyday wording, standard capitalization and light punctuation with no semicolons or em dashes; a final period can be dropped. Restyle only; do not add or remove information.",
   very_casual:
-    'Apply this tone: very casual, like texting a friend. Write in all lowercase and keep punctuation light: a question still ends with a question mark, but drop the final period and never use em dashes. Use texting shorthand only where it stands for the exact words, such as "u" for you or "lmk" for let me know. Restyle only; do not add or remove information.',
+    'Apply this tone: very casual, like texting a friend. Write in all lowercase and keep punctuation light: a question still ends with a question mark, but drop the final period and never use em dashes. Use texting shorthand common in the output language only where it stands for the exact words (in English: "u" for you, "lmk" for let me know). Restyle only; do not add or remove information.',
   excited:
     "Apply this tone: upbeat and enthusiastic. Use standard capitalization and warm, energetic wording, and end positive or friendly sentences with an exclamation mark, without overdoing it. Use commas or periods, never semicolons or em dashes, and no emoji. Restyle only; do not add or remove information.",
 };

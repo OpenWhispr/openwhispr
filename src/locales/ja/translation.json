@@ -898,6 +898,8 @@
   },
   "hooks": {
     "audioRecording": {
+      "cleanupSignedOut": "AIクリーンアップはOpenWhispr Cloudを使用しますが、サインインしていません。",
+      "cleanupUnconfigured": "AIクリーンアップはオンですが、クリーンアップモデルが設定されていません。",
       "errorTitles": {
         "sessionExpired": "セッション期限切れ",
         "offline": "オフラインです",

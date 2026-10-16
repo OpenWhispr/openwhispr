@@ -80,6 +80,8 @@ class WindowManager {
     this.onOnboardingDemoTeardown = null;
     // Set by main.js so the tray's listen item rebuilds with dictation state.
     this.onDictationStateChanged = null;
+    // Set by main.js: an app started to the tray creates no control panel.
+    this.startedMinimized = false;
     this.notificationWindow = null;
     this._meetingNotificationOwner = null;
     this.meetingRecentDestinations = [];

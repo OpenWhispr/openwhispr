@@ -898,6 +898,8 @@
   },
   "hooks": {
     "audioRecording": {
+      "cleanupSignedOut": "Die KI-Bereinigung nutzt OpenWhispr Cloud, aber Sie sind abgemeldet.",
+      "cleanupUnconfigured": "Die KI-Bereinigung ist aktiv, aber es ist kein Bereinigungsmodell eingerichtet.",
       "errorTitles": {
         "sessionExpired": "Sitzung abgelaufen",
         "offline": "Sie sind offline",

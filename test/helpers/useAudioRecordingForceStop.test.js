@@ -36,6 +36,9 @@ export default class FakeAudioManager {
     globalThis.__forceStopPastes.push({ text, options });
     return globalThis.__forceStopPasteOutcome;
   }
+  markCleanupNoticeShown(failure) {
+    globalThis.__forceStopShownNotices.push(failure);
+  }
   saveTranscription() {
     return Promise.resolve(true);
   }
@@ -149,6 +152,7 @@ async function mountHarness(
   globalThis.__forceStopPastes = [];
   globalThis.__forceStopPasteOutcome = pasteOutcome;
   globalThis.__forceStopStarts = 0;
+  globalThis.__forceStopShownNotices = [];
 
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-audio-recording-force-stop-",
@@ -162,6 +166,8 @@ async function mountHarness(
     },
   });
   const { useAudioRecording } = await vite.ssrLoadModule("/hooks/useAudioRecording.js");
+  const { useCleanupFailureStore } = await vite.ssrLoadModule("/stores/cleanupFailureStore.ts");
+  useCleanupFailureStore.setState({ pending: 0, lastFailure: null });
 
   const api = {};
   // Stable like the app's ToastProvider callback: a new identity per render
@@ -188,6 +194,8 @@ async function mountHarness(
     dismissals,
     previewHides: () => previewHides,
     recordingStarts: () => globalThis.__forceStopStarts,
+    cleanupReports: () => useCleanupFailureStore.getState().pending,
+    shownNotices: () => globalThis.__forceStopShownNotices,
     setRecording: async (isRecording) => {
       await React.act(async () =>
         globalThis.__forceStopAudioManager.callbacks.onStateChange({
@@ -444,6 +452,27 @@ test("a paste held back after the next recording started keeps the transcript qu
   assert.deepEqual(errorToasts(harness), []);
   assert.equal(harness.previewHides(), hidesBefore, "the live preview is left alone");
   assert.equal(harness.lifecycle.at(-1), "recording");
+});
+
+test("a paste held back behind the next recording reports no cleanup failure", async (t) => {
+  const paste = deferredPaste();
+  const harness = await mountHarness(t, { pasteOutcome: paste.outcome });
+  localStorage.setItem("onboardingCompleted", "true");
+  const cleanupFailure = {
+    message: "AI cleanup is on, but no cleanup model is set up.",
+    messageKey: "hooks.audioRecording.cleanupUnconfigured",
+    settingsTarget: "llms",
+    setupKey: "unconfigured",
+  };
+  await harness.complete({ cleanupFailure }, { detach: true });
+
+  await harness.startRecording();
+  await harness.setRecording(true);
+  await paste.settle({ pasted: false, reason: "modifiers-held" });
+  await harness.flush();
+
+  assert.equal(harness.cleanupReports(), 0, "the new recording owns the window");
+  assert.deepEqual(harness.shownNotices(), [], "the warning stays unspent");
 });
 
 // Retry shows no progress while the paste waits on held keys, so a second click
