@@ -1,4 +1,6 @@
 import { resolvePrompt } from "./prompts/index";
+import { appendToneStyleSuffix, buildWritingStyleBlock } from "./prompts/toneStyle";
+import type { DictationToneStyle, ToneAppCategory, ToneStyles } from "./toneStyle";
 import { SOURCE_FIDELITY_RULE } from "../helpers/sourceFidelity.js";
 import {
   CONNECTOR_NAMES,
@@ -22,9 +24,13 @@ export function getCleanupSystemPrompt(
   agentName: string | null,
   customDictionary?: string[],
   language?: string,
-  uiLanguage?: string
+  uiLanguage?: string,
+  toneStyle?: DictationToneStyle | null
 ): string {
-  return resolvePrompt("cleanup", { agentName, language, customDictionary, uiLanguage });
+  return appendToneStyleSuffix(
+    resolvePrompt("cleanup", { agentName, language, customDictionary, uiLanguage }),
+    toneStyle
+  );
 }
 
 export function getWordBoost(customDictionary?: string[]): string[] {
@@ -165,6 +171,8 @@ export interface AgentSystemPromptOptions {
   openNoteTranscriptPreview?: boolean;
   /** The signed-in user's name, so drafts are signed with it instead of a placeholder. */
   userName?: string | null;
+  /** Tone & Style: the user's tones, and the kind of app a pasted answer lands in. */
+  writingStyle?: { tones: ToneStyles; destination?: ToneAppCategory | null };
 }
 
 function toolGroup(tool: PromptTool): string {
@@ -213,6 +221,10 @@ export function getAgentSystemPrompt(
   if (unavailable) prompt += "\n\n" + unavailable;
 
   prompt += "\n\n" + signOffRule(options.userName);
+  if (options.writingStyle) {
+    prompt +=
+      "\n\n" + buildWritingStyleBlock(options.writingStyle.tones, options.writingStyle.destination);
+  }
   prompt += "\n\n" + SOURCE_FIDELITY_RULE;
 
   if (options.openNote) {

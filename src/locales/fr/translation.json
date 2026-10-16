@@ -1626,6 +1626,10 @@
         "description": "Raccourci de dictée et activation",
         "label": "Raccourcis"
       },
+      "toneStyle": {
+        "label": "Ton et style",
+        "description": "Comment la correction écrit dans chaque app"
+      },
       "speechToText": {
         "description": "Moteurs pour dictée et enregistrement de notes",
         "label": "Reconnaissance vocale"
@@ -4898,6 +4902,91 @@
     "details": {
       "provider": "Fournisseur",
       "requestId": "ID de requête"
+    }
+  },
+  "toneStyle": {
+    "title": "Ton et style",
+    "description": "Définissez votre ton et votre style selon les apps.",
+    "turnOnAndSetUp": "Activer et configurer",
+    "categories": {
+      "personal": {
+        "title": "Messages personnels",
+        "inline": "vos messages personnels",
+        "question": "Comment écrivez-vous\n{{category}} ?"
+      },
+      "work": {
+        "title": "Messages pro",
+        "inline": "vos messages pro",
+        "question": "Comment écrivez-vous\n{{category}} ?"
+      },
+      "email": {
+        "title": "E-mails",
+        "inline": "vos e-mails",
+        "question": "Comment écrivez-vous\n{{category}} ?"
+      },
+      "other": {
+        "title": "Autres apps",
+        "inline": "dans les autres apps",
+        "question": "Comment écrivez-vous\n{{category}} ?"
+      }
+    },
+    "tones": {
+      "formal": "Formel",
+      "casual": "Décontracté",
+      "very_casual": "Très décontracté",
+      "excited": "Enthousiaste !"
+    },
+    "samples": {
+      "personal": {
+        "formal": "Bonsoir, es-tu disponible ce soir ? Je pensais que nous pourrions prendre un café vers 18 h. Tiens-moi au courant.",
+        "casual": "Salut, t'es dispo ce soir ? Je pensais à un café vers 18 h, dis-moi",
+        "very_casual": "slt t dispo ce soir ? café vers 18h ? dis moi"
+      },
+      "work": {
+        "sender": "Jimmy",
+        "time": "18:20",
+        "formal": "Bonjour, pourrais-tu m'envoyer la présentation avant l'appel ? Les chiffres de la diapo 3 semblent obsolètes. Rien d'urgent.",
+        "casual": "Hello, tu peux m'envoyer la présentation avant l'appel ? Je crois que les chiffres de la diapo 3 sont vieux, rien d'urgent.",
+        "excited": "Hello ! Tu peux m'envoyer la présentation avant l'appel ? Les chiffres de la diapo 3 sont sûrement anciens, rien d'urgent !"
+      },
+      "email": {
+        "to": "À Sarah",
+        "formal": "Bonjour Sarah,\n\nMerci pour votre temps aujourd'hui. Je vous enverrai la proposition révisée d'ici jeudi. N'hésitez pas à me solliciter d'ici là.\n\nBien cordialement",
+        "casual": "Bonjour Sarah,\n\nMerci pour aujourd'hui. Je t'envoie la proposition mise à jour d'ici jeudi, dis-moi si tu as besoin de quelque chose avant.\n\nMerci",
+        "excited": "Bonjour Sarah,\n\nMerci beaucoup pour aujourd'hui ! Je t'envoie la proposition révisée d'ici jeudi. Dis-moi si tu as besoin de quelque chose !\n\nMerci"
+      },
+      "other": {
+        "formal": "Notes de l'appel : ils ont apprécié la page des tarifs et souhaitent un onboarding plus court. Les relancer la semaine prochaine.",
+        "casual": "Notes d'appel : page des tarifs appréciée, onboarding à raccourcir. Relancer la semaine pro",
+        "excited": "Notes d'appel : ils ont adoré la page des tarifs ! Onboarding à raccourcir. Relancer la semaine prochaine !"
+      }
+    },
+    "setup": {
+      "introTitle": "Faites écrire OpenWhispr\ncomme vous parlez",
+      "introDescription": "Définissez votre ton et votre style selon les apps.",
+      "personalize": "Personnaliser",
+      "cleanupOffTitle": "Apprenez votre style\nà OpenWhispr",
+      "cleanupOffDescription": "Activez la correction de texte, puis définissez votre ton et votre style selon les apps.",
+      "stepDescription": "Choisissez l'exemple qui vous ressemble le plus.",
+      "progress": "Étape {{current}} sur {{total}}",
+      "finish": "Terminer"
+    },
+    "banner": {
+      "title": "Apprenez à OpenWhispr comment vous écrivez",
+      "description": "Choisissez votre ton préféré pour le travail, les amis et tout ce qu'il y a entre les deux.",
+      "start": "Commencer",
+      "cleanupOffTitle": "Apprenez votre style à OpenWhispr",
+      "cleanupOffDescription": "Activez la correction de texte et choisissez un ton pour chaque app.",
+      "notNow": "Pas maintenant",
+      "decoration": "Vos mots devraient vous ressembler. Quoi que vous écriviez, pour qui que ce soit."
+    },
+    "settings": {
+      "saveChanges": "Enregistrer les modifications",
+      "saved": "Ton et style enregistrés",
+      "cleanupOff": "La correction de texte est désactivée, donc ces tons ne s'appliquent pas à votre dictée.",
+      "turnOnCleanup": "Activer la correction de texte",
+      "enabled": "Tons et voix activés",
+      "enabledDescription": "La correction de texte utilise votre ton pour chaque type d'app. Si c'est désactivé, le ton standard s'applique."
     }
   },
   "productHelp": {

@@ -182,3 +182,43 @@ test("the name joins the prompt as one plain line", async () => {
   const long = getAgentSystemPrompt([], undefined, { userName: "A".repeat(500) });
   assert.match(long, /The user's name is A{100}\./);
 });
+
+const TONES = { personal: "very_casual", work: "casual", email: "formal", other: "excited" };
+
+test("Tone & Style lists the user's style for each kind of writing, after the sign-off rule", async () => {
+  const { getAgentSystemPrompt } = await load();
+  const prompt = getAgentSystemPrompt([], undefined, {
+    userName: "Alex",
+    writingStyle: { tones: TONES },
+  });
+
+  assert.match(prompt, /WRITING STYLE: When you write something the user will send/);
+  assert.match(prompt, /^- Personal messages \([^)]*\): very casual, like texting a friend\./m);
+  assert.match(prompt, /^- Work messages \([^)]*\): casual and friendly/m);
+  assert.match(prompt, /^- Emails \([^)]*email_draft[^)]*\): formal and polished\./m);
+  assert.match(prompt, /^- Everything else \([^)]*\): upbeat and enthusiastic\./m);
+  assert.match(prompt, /Your own answers, explanations and summaries keep your usual voice\./);
+  assert.match(
+    prompt,
+    /Names, acronyms and dictionary terms keep their exact spelling and capitalization\./
+  );
+  assert.ok(prompt.indexOf("sign it with their name") < prompt.indexOf("WRITING STYLE"));
+});
+
+test("an answer typed at the cursor gets only that app's style", async () => {
+  const { getAgentSystemPrompt } = await load();
+  const prompt = getAgentSystemPrompt([], undefined, {
+    writingStyle: { tones: TONES, destination: "email" },
+  });
+
+  assert.match(
+    prompt,
+    /WRITING STYLE: Your reply will be typed at the user's cursor in an email app, as their own words\. Write only the text that goes there \(no subject line or label\), in the user's Emails style: formal and polished\./
+  );
+  assert.doesNotMatch(prompt, /very casual/);
+});
+
+test("without Tone & Style the prompt has no writing style", async () => {
+  const { getAgentSystemPrompt } = await load();
+  assert.doesNotMatch(getAgentSystemPrompt([], undefined, {}), /WRITING STYLE/);
+});

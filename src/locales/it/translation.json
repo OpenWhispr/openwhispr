@@ -1528,6 +1528,10 @@
         "description": "Scorciatoia di dettatura e attivazione",
         "label": "Scorciatoie"
       },
+      "toneStyle": {
+        "label": "Tono e stile",
+        "description": "Come scrive la correzione in ogni app"
+      },
       "speechToText": {
         "description": "Motori per dettatura e registrazione di note",
         "label": "Riconoscimento vocale"
@@ -4898,6 +4902,91 @@
     "details": {
       "provider": "Provider",
       "requestId": "ID richiesta"
+    }
+  },
+  "toneStyle": {
+    "title": "Tono e stile",
+    "description": "Imposta tono e stile per app diverse.",
+    "turnOnAndSetUp": "Attiva e configura",
+    "categories": {
+      "personal": {
+        "title": "Messaggi personali",
+        "inline": "i tuoi messaggi personali",
+        "question": "Come scrivi\n{{category}}?"
+      },
+      "work": {
+        "title": "Messaggi di lavoro",
+        "inline": "i tuoi messaggi di lavoro",
+        "question": "Come scrivi\n{{category}}?"
+      },
+      "email": {
+        "title": "Email",
+        "inline": "le tue email",
+        "question": "Come scrivi\n{{category}}?"
+      },
+      "other": {
+        "title": "Altre app",
+        "inline": "nelle altre app",
+        "question": "Come scrivi\n{{category}}?"
+      }
+    },
+    "tones": {
+      "formal": "Formale",
+      "casual": "Informale",
+      "very_casual": "Molto informale",
+      "excited": "Entusiasta!"
+    },
+    "samples": {
+      "personal": {
+        "formal": "Ciao, sei disponibile stasera? Pensavo potessimo prendere un caffè verso le 18. Fammi sapere.",
+        "casual": "Ciao, ci sei stasera? Pensavo a un caffè verso le 6, fammi sapere",
+        "very_casual": "ehi ci sei stasera? caffè verso le 6? fammi sapere"
+      },
+      "work": {
+        "sender": "Jimmy",
+        "time": "18:20",
+        "formal": "Ciao, potresti mandarmi la presentazione prima della call? I numeri della slide 3 sembrano superati. Nessuna fretta.",
+        "casual": "Ciao, mi mandi la presentazione prima della call? Mi sa che i numeri della slide 3 sono vecchi, nessuna fretta.",
+        "excited": "Ciao! Mi mandi la presentazione prima della call? Sono quasi sicuro che i numeri della slide 3 siano vecchi, nessuna fretta!"
+      },
+      "email": {
+        "to": "A Sarah",
+        "formal": "Ciao Sarah,\n\ngrazie per il tempo dedicatomi oggi. Ti invierò la proposta aggiornata entro giovedì. Fammi sapere se ti serve altro.\n\nCordiali saluti",
+        "casual": "Ciao Sarah,\n\ngrazie per oggi. Ti mando la proposta aggiornata entro giovedì, dimmi se ti serve qualcosa prima.\n\nGrazie",
+        "excited": "Ciao Sarah,\n\ngrazie mille per il tuo tempo oggi! Ti mando la proposta aggiornata entro giovedì. Fammi sapere se ti serve qualcosa prima!\n\nGrazie"
+      },
+      "other": {
+        "formal": "Note della call: hanno apprezzato la pagina dei prezzi e vorrebbero un onboarding più breve. Ricontattarli la prossima settimana.",
+        "casual": "Note call: piaciuta la pagina prezzi, vogliono onboarding più corto. Ricontattare settimana prossima",
+        "excited": "Note call: hanno adorato la pagina prezzi! Vogliono un onboarding più corto. Ricontattare la settimana prossima!"
+      }
+    },
+    "setup": {
+      "introTitle": "Fai scrivere OpenWhispr\ncome parli tu",
+      "introDescription": "Imposta tono e stile per app diverse.",
+      "personalize": "Personalizza",
+      "cleanupOffTitle": "Insegna a OpenWhispr\nil tuo stile",
+      "cleanupOffDescription": "Attiva la correzione testo, poi imposta tono e stile per app diverse.",
+      "stepDescription": "Scegli l'esempio che ti somiglia di più.",
+      "progress": "Passo {{current}} di {{total}}",
+      "finish": "Fine"
+    },
+    "banner": {
+      "title": "Insegna a OpenWhispr come scrivi",
+      "description": "Imposta il tuo tono preferito per lavoro, amici e tutto ciò che sta in mezzo.",
+      "start": "Inizia ora",
+      "cleanupOffTitle": "Insegna a OpenWhispr il tuo stile",
+      "cleanupOffDescription": "Attiva la correzione testo e scegli un tono per messaggi, email e altro.",
+      "notNow": "Non ora",
+      "decoration": "Le tue parole dovrebbero somigliarti. Qualunque cosa tu scriva, per chiunque sia."
+    },
+    "settings": {
+      "saveChanges": "Salva modifiche",
+      "saved": "Tono e stile salvati",
+      "cleanupOff": "La correzione testo è disattivata, quindi questi toni non vengono applicati alla dettatura.",
+      "turnOnCleanup": "Attiva correzione testo",
+      "enabled": "Toni e voci attivi",
+      "enabledDescription": "La correzione testo usa il tuo tono per ogni tipo di app. Se disattivato, usa il tono standard."
     }
   },
   "productHelp": {

@@ -172,3 +172,56 @@ test("a clipboard-only delivery keeps the response verbatim", async () => {
   await deliverAssistantResponse({ mode: "clipboard" }, MARKDOWN_RESPONSE, dependencies);
   assert.deepEqual(writes, [MARKDOWN_RESPONSE]);
 });
+
+test("a paste delivery keeps the kind of app the caret is in", async () => {
+  const { createAssistantResponseDelivery } = await deliveryModule;
+  const delivery = createAssistantResponseDelivery({
+    autoPasteEnabled: true,
+    deliverySessionId: "caret-session",
+    appCategory: "work",
+    ...PASTE_OPTIONS,
+  });
+  assert.equal(delivery.appCategory, "work");
+});
+
+const DASHED_RESPONSE = [
+  "hey, how's the figma config\u2014\u2014going ok?",
+  "ask your issuer\u00a0\u2014 they know",
+  "want lunch? \u2014i'm free",
+  "yes, \u2014 really",
+  "so \u2014, yeah",
+  "wait\u2014",
+  "",
+  " \u2014\u2014 one more",
+].join("\n");
+
+test("an answer typed in the user's Tone & Style, and its clipboard fallback, lose their em dashes", async () => {
+  const { deliverAssistantResponse } = await deliveryModule;
+  const toneDelivery = { ...PASTE_DELIVERY, appCategory: "personal" };
+  const expected = [
+    "hey, how's the figma config, going ok?",
+    "ask your issuer, they know",
+    "want lunch? i'm free",
+    "yes, really",
+    "so, yeah",
+    "wait",
+    "",
+    "one more",
+  ].join("\n");
+
+  const pasted = createDeliveryHarness(true);
+  await deliverAssistantResponse(toneDelivery, DASHED_RESPONSE, pasted.dependencies);
+  assert.equal(pasted.pastes[0].text, expected);
+
+  const refused = createDeliveryHarness(false);
+  await deliverAssistantResponse(toneDelivery, DASHED_RESPONSE, refused.dependencies);
+  assert.deepEqual(refused.writes, [expected]);
+});
+
+test("without Tone & Style an answer keeps its em dashes", async () => {
+  const { deliverAssistantResponse } = await deliveryModule;
+  const { dependencies, pastes } = createDeliveryHarness(true);
+
+  await deliverAssistantResponse(PASTE_DELIVERY, DASHED_RESPONSE, dependencies);
+  assert.equal(pastes[0].text, DASHED_RESPONSE);
+});
