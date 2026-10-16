@@ -96,6 +96,13 @@ export interface NoteRecordingProvider {
 // main process defaults a missing value to "openai-realtime" for pre-1.8.4
 // renderers (#1624).
 export interface DictationRealtimeSessionOptions {
+  pipelineOptions?: {
+    agentName?: string;
+    customDictionary?: string[];
+    customPrompt?: string;
+    language?: string;
+    locale?: string;
+  };
   provider: string;
   baseUrl?: string;
   model?: string;
@@ -111,6 +118,8 @@ export interface DictationRealtimeSessionOptions {
 export interface DictationLanguageMetadata {
   language: string | null;
   languageConfidence: number | null;
+  // Sum of detector scores for Orukeet's 25 languages, not a calibrated probability.
+  languageSupportedScore?: number;
   languageAudioSeconds?: number;
 }
 
@@ -1007,6 +1016,36 @@ export interface ScreenRecordingAccessResult {
 export type CloudReasonPurpose = "cleanup" | "assistant" | "translation" | "noteFormatting";
 
 // Orukeet's audio language estimate, reported for the backend's per-user gate.
+export interface OrukeetLanguageRoutingTelemetry {
+  version: 1;
+  mode: "shadow" | "supported-0.30" | "supported-0.10";
+  auto: boolean;
+  eligible: boolean;
+  analyzedSeconds: number | null;
+  topLanguage: string | null;
+  topScore: number | null;
+  supportedScore: number | null;
+  legacyFallback: boolean;
+  top05Fallback: boolean;
+  candidate030: boolean | null;
+  candidate010: boolean | null;
+  selectedFallback: boolean;
+  fallbackAvailable: boolean;
+}
+export interface OrukeetCleanupTelemetry {
+  status: "complete" | "fallback" | "skipped";
+  model?: "gemma-4-12b";
+  processingMs?: number;
+  queueMs?: number;
+  firstTextMs?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+}
+export interface OrukeetTelemetry {
+  orukeetLanguageRouting?: OrukeetLanguageRoutingTelemetry;
+  orukeetCleanup?: OrukeetCleanupTelemetry;
+}
+
 export interface SttDetectedLanguageFields {
   sttDetectedLanguage?: string;
   sttDetectedLanguageConfidence?: number;
@@ -1156,6 +1195,7 @@ export interface PasteToolsResult {
   hasWtype?: boolean;
   isWlroots?: boolean;
   isCosmic?: boolean;
+  wlCopyMissing?: boolean;
   tools?: string[];
   recommendedInstall?: string;
 }
@@ -1328,7 +1368,11 @@ declare global {
           allowClipboardFallback?: boolean;
         }
       ) => Promise<
-        | { success: true; pasted: boolean; reason?: "modifiers-held" }
+        | {
+            success: true;
+            pasted: boolean;
+            reason?: "modifiers-held" | "wl-copy-missing" | "wl-copy-failed";
+          }
         | {
             success: false;
             pasted: false;
@@ -1370,6 +1414,8 @@ declare global {
           | "selection_changed"
           | "paste_failed"
           | "modifiers_held"
+          | "wl_copy_missing"
+          | "wl_copy_failed"
           | "selection_manager_unavailable";
         error?: string;
       }>;
@@ -1385,6 +1431,8 @@ declare global {
           | "target_changed"
           | "paste_failed"
           | "modifiers_held"
+          | "wl_copy_missing"
+          | "wl_copy_failed"
           | "selection_manager_unavailable";
         error?: string;
       }>;
@@ -1444,6 +1492,8 @@ declare global {
             dictation?: { mode: string };
             notes?: { mode: string };
             streamingProvider?: string;
+            orukeetPipeline?: "gemma12";
+            orukeetLanguageRouting?: "off" | "shadow" | "supported-0.30" | "supported-0.10";
           } & PolicyFailureMetadata)
         | null
       >;
@@ -1733,6 +1783,11 @@ declare global {
         accountId: string | null,
         expectedAuthGeneration?: number
       ) => Promise<{ success: boolean; code?: string; error?: string }>;
+      closeActivationStream?: () => Promise<void>;
+      beginActivationCapture?: () => Promise<string | null>;
+      stopActivationCapture?: (id: string) => Promise<void>;
+      finishActivationCapture?: (id: string, words: number) => Promise<void>;
+      cancelActivationCapture?: (id: string) => Promise<void>;
       getActiveAccountScope?: () => Promise<ActiveAccountScope | null>;
       onActiveAccountScopeChanged?: (
         callback: (scope: ActiveAccountScope | null) => void
@@ -1925,7 +1980,7 @@ declare global {
       checkAccessibilityPermission: (silent?: boolean) => Promise<boolean>;
       promptAccessibilityPermission: () => Promise<boolean>;
       readClipboard: () => Promise<string>;
-      writeClipboard: (text: string) => Promise<{ success: boolean }>;
+      writeClipboard: (text: string) => Promise<{ success: boolean; xwaylandOnly?: boolean }>;
       copyLeaderboardImage: (dataUrl: string) => Promise<{ success: boolean; error?: string }>;
       saveLeaderboardImage: (
         dataUrl: string,
@@ -2270,6 +2325,7 @@ declare global {
         hasYdotool: boolean;
         hasYdotoold: boolean;
         hasWtype: boolean;
+        hasWlCopy: boolean;
         daemonRunning: boolean;
         hasService: boolean;
         hasUinput: boolean;
@@ -2279,6 +2335,7 @@ declare global {
         isKde: boolean;
         isWlroots: boolean;
         isCosmic: boolean;
+        requiresWlCopy: boolean;
         hasXclip: boolean;
         hasXsel: boolean;
       }>;
@@ -2582,7 +2639,8 @@ declare global {
           analyticsOccurredAt?: string;
           // Why a managed-streaming user's dictation went batch (rollout metric).
           streamingFallbackReason?: string;
-        } & SttDetectedLanguageFields
+        } & SttDetectedLanguageFields &
+          OrukeetTelemetry
       ) => Promise<
         {
           success: boolean;
@@ -2610,7 +2668,8 @@ declare global {
           language?: string;
           locale?: string;
           streamingFallbackReason?: string;
-        } & SttDetectedLanguageFields
+        } & SttDetectedLanguageFields &
+          OrukeetTelemetry
       ) => Promise<{
         success: boolean;
         text?: string;
@@ -2640,7 +2699,8 @@ declare global {
           analyticsOccurredAt?: string;
           analyticsWordCount?: number;
           analyticsCounterVersion?: number;
-        } & SttDetectedLanguageFields
+        } & SttDetectedLanguageFields &
+          OrukeetTelemetry
       ) => Promise<{
         success: boolean;
         wordsUsed?: number;
@@ -3077,6 +3137,13 @@ declare global {
         callback: (payload: PolicyFailureMetadata & { requestId: string; error: string }) => void
       ) => () => void;
       onAgentStreamEnd?: (callback: (payload: { requestId: string }) => void) => () => void;
+
+      productHelp: (
+        id: string,
+        input: { topic: string; page?: string }
+      ) => Promise<import("../services/help/productHelp").HelpResult>;
+      cancelProductHelp: (id: string) => void;
+      productHelpBasics: () => Promise<import("../services/help/productHelp").HelpBasics>;
 
       // Agent cloud tools
       agentOpenNote?: (noteId: number) => Promise<{ success: boolean; error?: string }>;

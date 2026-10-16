@@ -1,10 +1,14 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 const Module = require("node:module");
 
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
 const handlers = new Map();
+const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "local-server-sync-ipc-"));
 
 const MODEL = "qwen3.5-4b-q4_k_m";
 const modelManager = {
@@ -24,7 +28,7 @@ const modelManager = {
 
 const electronStub = {
   app: {
-    getPath: () => "",
+    getPath: () => userDataDirectory,
     getName: () => "test",
     getVersion: () => "0.0.0",
     isPackaged: false,
@@ -99,7 +103,9 @@ test.before(() => {
 });
 
 test.after(() => {
+  target.metaActivation?.dispose();
   Module._load = originalLoad;
+  fs.rmSync(userDataDirectory, { recursive: true, force: true });
 });
 
 function sync({ loaded, signedIn = false, policySettled = true, ...scopes }) {

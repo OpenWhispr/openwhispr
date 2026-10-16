@@ -1,3 +1,5 @@
+import { getChineseScriptPromptBias } from "./chineseScript.js";
+
 const normalize = (s) =>
   s
     .toLowerCase()
@@ -26,6 +28,10 @@ const MIN_CONSECUTIVE_TERM_RUN = 3;
 const PROMPT_DELIMITER_RE = /[,、，]/;
 const TRAILING_DELIMITER_RE = /[,、，]\s*$/;
 
+// The hint list's entries, normalized, in the order the prompt carries them.
+const promptTerms = (dictionaryPrompt) =>
+  dictionaryPrompt.split(PROMPT_DELIMITER_RE).map(normalize).filter(Boolean);
+
 const hasLoopedWord = (textWords) => {
   const counts = new Map();
   for (const word of textWords) {
@@ -40,15 +46,11 @@ const hasLoopedWord = (textWords) => {
 // the prompt's own order — a literal continuation of the hint list, however long.
 const matchesConsecutiveTermRun = (textWords, dictionaryPrompt) => {
   const promptSequence = [];
-  let termIndex = 0;
-  for (const term of dictionaryPrompt.split(PROMPT_DELIMITER_RE)) {
-    const normalizedTerm = normalize(term);
-    if (!normalizedTerm) continue;
-    for (const word of normalizedTerm.split(" ")) {
+  promptTerms(dictionaryPrompt).forEach((term, termIndex) => {
+    for (const word of term.split(" ")) {
       promptSequence.push({ word, termIndex });
     }
-    termIndex++;
-  }
+  });
   for (let start = 0; start + textWords.length <= promptSequence.length; start++) {
     let offset = 0;
     while (offset < textWords.length && promptSequence[start + offset].word === textWords[offset]) {
@@ -124,6 +126,78 @@ export function matchesDictionaryPrompt(text, dictionaryPrompt) {
 
 export function isLikelyDictionaryPromptFragment(text, dictionaryPrompt) {
   return analyzeDictionaryPromptFragment(text, dictionaryPrompt).isPromptFragment;
+}
+
+// Prompt-conditioned models can recite the hint list after the speech ends
+// ("... Thanks, you. OpenWhispr, n8n."). matchesDictionaryPrompt cannot see
+// that: the real speech dilutes its word ratios (#2581). The recited tail is a
+// sentence of its own that copies the prompt in its own consecutive order,
+// starting on a custom-dictionary entry, with at least two of them. It must
+// open the prompt, which is where observed recitals start, or, when it is
+// MIN_PROMPT_END_ECHO_TERMS+ long, close it: a Whisper decoder keeps only the
+// tail of a long prompt (dictionaryPromptCap). A shorter run from mid-list is
+// kept, since the dictionary stores entries oldest first and auto-learn and
+// imports add names in the order people say them. Snippet triggers ride in
+// the same prompt after the dictionary (getDictionaryHintWords), so a recital
+// may run on into them, but they are phrases people say and never start or
+// count toward one (#1889). A whole-text echo is left to matchesDictionaryPrompt.
+const MIN_TRAILING_ECHO_TERMS = 2;
+const MIN_PROMPT_END_ECHO_TERMS = 5;
+// ASCII terminators need trailing whitespace so "Node.js" stays one term.
+const SENTENCE_BREAK_RE = /[.!?]\s+|[。！？]\s*/g;
+// An abbreviation ("etc.", "Prof.", "incl.", "z.B.", "т.е."), an initial, a list
+// marker ("1.") or an ellipsis ends in a period without ending the sentence, so
+// the text after it is not a tail.
+const NON_TERMINAL_PERIOD_RE =
+  /(?:(?:^|[\s(])(?:etc|vs|mrs?|ms|dr|st|jr|sra?|prof|incl|esp|approx|ca|cf|al|no|nr|ex|ej|vgl|bzw|usw|\p{L}|\d{1,2})|\p{L}\.\p{L})$|\.$/iu;
+// mergeWhisperPrompt sends `${bias} ${dictionary}`; the bias is not a term list.
+const SCRIPT_PROMPT_BIASES = ["simplified", "traditional"].map(getChineseScriptPromptBias);
+
+const withoutScriptBias = (prompt) => {
+  const bias = SCRIPT_PROMPT_BIASES.find((candidate) => prompt.startsWith(candidate));
+  return bias ? prompt.slice(bias.length) : prompt;
+};
+
+export function stripTrailingDictionaryEcho(text, sentPrompt, dictionary) {
+  if (typeof text !== "string" || typeof sentPrompt !== "string" || !Array.isArray(dictionary)) {
+    return text;
+  }
+
+  const dictionaryTerms = new Set(
+    dictionary.filter((term) => typeof term === "string").flatMap(promptTerms)
+  );
+  const sentTerms = promptTerms(withoutScriptBias(sentPrompt));
+  const countDictionaryTerms = (terms) => terms.filter((term) => dictionaryTerms.has(term)).length;
+  if (countDictionaryTerms(sentTerms) < MIN_TRAILING_ECHO_TERMS) return text;
+  const termIndexes = new Map();
+  sentTerms.forEach((term, index) => {
+    if (!termIndexes.has(term)) termIndexes.set(term, index);
+  });
+
+  const body = text.trimEnd();
+  let tailStart = -1;
+  for (const match of body.matchAll(SENTENCE_BREAK_RE)) {
+    const end = match.index + match[0].length;
+    if (end >= body.length) continue;
+    if (match[0][0] === "." && NON_TERMINAL_PERIOD_RE.test(body.slice(0, match.index))) continue;
+    tailStart = end;
+  }
+  if (tailStart <= 0) return text;
+
+  const tail = promptTerms(body.slice(tailStart));
+  if (!dictionaryTerms.has(tail[0]) || countDictionaryTerms(tail) < MIN_TRAILING_ECHO_TERMS) {
+    return text;
+  }
+  const tailIndexes = tail.map((term) => termIndexes.get(term));
+  for (let i = 1; i < tailIndexes.length; i++) {
+    if (tailIndexes[i] !== tailIndexes[i - 1] + 1) return text;
+  }
+  const opensPrompt = tailIndexes[0] === 0;
+  const closesPrompt =
+    tailIndexes.length >= MIN_PROMPT_END_ECHO_TERMS && tailIndexes.at(-1) === sentTerms.length - 1;
+  if (!opensPrompt && !closesPrompt) return text;
+
+  return body.slice(0, tailStart).trimEnd();
 }
 
 // A provider that never received the dictionary can't echo it back: the echo

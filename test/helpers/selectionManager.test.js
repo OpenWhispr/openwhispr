@@ -289,6 +289,27 @@ test("a replacement whose paste was held back for modifiers reports modifiers_he
   assert.equal(pastes.length, 1);
 });
 
+// No Wayland clipboard written on wlroots, Hyprland or niri (#2621): the edit says
+// why rather than "could not replace".
+for (const [reason, code] of [
+  ["wl-copy-missing", "wl_copy_missing"],
+  ["wl-copy-failed", "wl_copy_failed"],
+]) {
+  test(`a replacement held back for ${reason} reports ${code}`, async () => {
+    const { manager, pastes } = makeHarness({
+      selections: ["original", "original"],
+      pasteResult: { restoreComplete: Promise.resolve(), pasted: false, reason },
+    });
+    const capture = await manager.captureSelectedText();
+
+    assert.deepEqual(await manager.replaceSelectedText(capture.sessionId, "improved"), {
+      success: false,
+      code,
+    });
+    assert.equal(pastes.length, 1);
+  });
+}
+
 // The assistant's caret paste is blocked the same two ways. The renderer only
 // reads `success`, so this code is for logs and support rather than UI.
 test("an assistant caret paste held back by modifier keys reports modifiers_held", async () => {

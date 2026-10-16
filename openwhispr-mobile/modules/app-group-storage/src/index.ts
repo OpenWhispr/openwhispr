@@ -300,6 +300,9 @@ export const APP_GROUP_KEYS = {
   KEYBOARD_AGENT_APPLICABLE: 'keyboard_agent_applicable',
   KEYBOARD_AGENT_NAME: 'keyboard_agent_name',
   KEYBOARD_AGENT_SHARE_CONTEXT: 'keyboard_agent_share_context',
+  // App → keyboard: hide the example instructions until this time (ms), while onboarding's
+  // voice assistant step says what to dictate.
+  KEYBOARD_AGENT_HINTS_HIDDEN_UNTIL_MS: 'keyboard_agent_hints_hidden_until_ms',
   // Agent mode — one-shot / per-job keys (cleared on app launch)
   KEYBOARD_AGENT_REQUEST: 'keyboard_agent_request',
   KEYBOARD_AGENT_JOB: 'keyboard_agent_job',

@@ -219,11 +219,11 @@
     "rehaul": {
       "permissions": {
         "title": "OpenWhispr in 3 Minuten einrichten",
-        "microphoneDescription": "Macht aus dem, was Sie sagen, Text. Nur während der Aufnahme aktiv.",
-        "accessibilityDescription": "Fügt den Text in die App ein, die Sie gerade nutzen.",
+        "microphoneDescription": "Hört nur während der Aufnahme zu.",
+        "accessibilityDescription": "Fügt Text in jede App ein.",
         "systemAudioTitle": "Systemaudio",
-        "systemAudioDescription": "Nimmt die anderen in Ihren Gesprächen für Besprechungsnotizen auf. Nur während der Aufnahme aktiv.",
-        "screenContextDescription": "Lässt Ihren Sprachassistenten Ihren Bildschirm sehen, wenn Sie fragen. Nie gespeichert.",
+        "systemAudioDescription": "Nimmt Ihre Gesprächspartner auf.",
+        "screenContextDescription": "Zeigt dem Assistenten Ihren Bildschirm.",
         "enable": "Aktivieren",
         "enabled": "Aktiviert"
       },
@@ -977,7 +977,9 @@
         "reasoningFailed": "Die KI konnte die Auswahlbearbeitung nicht abschließen. Dein ursprünglicher Text wurde nicht geändert.",
         "invalidResponse": "Die KI hat eine ungültige Bearbeitungsantwort zurückgegeben. Es wurde nichts ersetzt. Wähle den Text aus und versuche es erneut.",
         "emptyResponse": "Die KI hat eine leere Bearbeitung zurückgegeben. Es wurde nichts ersetzt. Versuche eine genauere Anweisung.",
-        "truncatedResponse": "Die KI hat die Bearbeitung vorzeitig beendet. Es wurde nichts ersetzt. Versuche, weniger Text auszuwählen."
+        "truncatedResponse": "Die KI hat die Bearbeitung vorzeitig beendet. Es wurde nichts ersetzt. Versuche, weniger Text auszuwählen.",
+        "wlCopyMissing": "OpenWhispr hat die Änderung erstellt, aber auf diesem Desktop können Wayland-Apps eingefügten Text nur über wl-copy lesen. Installiere wl-clipboard, um Änderungen anzuwenden.",
+        "wlCopyFailed": "OpenWhispr hat die Änderung erstellt, aber wl-copy konnte sie nicht für Wayland-Apps kopieren, daher wurde sie nicht angewendet."
       },
       "pastePermission": {
         "title": "Automatisches Einfügen erlauben",
@@ -991,7 +993,12 @@
       "pasteFailed": {
         "title": "Automatisches Einfügen fehlgeschlagen"
       },
-      "interruptedRecordingRecovered": "Wiederhergestellt, nachdem OpenWhispr vor dem Ende dieses Diktats beendet wurde."
+      "interruptedRecordingRecovered": "Wiederhergestellt, nachdem OpenWhispr vor dem Ende dieses Diktats beendet wurde.",
+      "waylandClipboard": {
+        "title": "Transkription nicht eingefügt",
+        "wlCopyMissing": "Auf diesem Desktop können Wayland-Apps eingefügten Text nur über wl-copy lesen. Installiere wl-clipboard, um deine Diktate einzufügen.",
+        "wlCopyFailed": "wl-copy konnte den Text nicht für Wayland-Apps kopieren, daher wurde er nicht eingefügt. Klicke auf „Erneut versuchen“, um es noch einmal zu versuchen."
+      }
     },
     "clipboard": {
       "pasteFailed": {
@@ -1173,6 +1180,7 @@
     },
     "signedIn": {
       "welcomeBack": "Willkommen zurück",
+      "welcomeBackNamed": "Willkommen zurück, {{name}}",
       "notYou": "Nicht Sie? Abmelden"
     },
     "sso": {
@@ -1518,7 +1526,9 @@
     "withoutToolPrefix": "Ohne dieses Tool kopiert OpenWhispr den Text in Ihre Zwischenablage. Sie können ihn dann manuell mit Ctrl+V einfügen.",
     "wtypeCosmicTerminalsDescription": "Unter COSMIC empfangen Terminals wie Warp eingefügten Text nur über wtype. In andere Apps wird bereits ohne wtype eingefügt.",
     "wtypeFallbackDescription": "wtype ist die bevorzugte Methode für automatisches Einfügen auf diesem wlroots-Compositor. Eine Alternative ist verfügbar, kann aber weniger zuverlässig sein.",
-    "xwaylandAppsOnly": "Automatisches Einfügen funktioniert nur für XWayland-Apps"
+    "xwaylandAppsOnly": "Automatisches Einfügen funktioniert nur für XWayland-Apps",
+    "wlClipboardTitle": "Installieren Sie wl-clipboard, um in Wayland-Apps einzufügen",
+    "wlClipboardDescription": "Auf diesem Desktop können Wayland-Apps von OpenWhispr kopierten Text nur über wl-copy lesen. Um Diktate dort einzufügen, installieren Sie wl-clipboard:"
   },
   "promptStudio": {
     "common": {
@@ -2365,6 +2375,10 @@
           },
           "xclip": {
             "step1Title": "xclip installieren"
+          },
+          "wlCopy": {
+            "step1Title": "wl-clipboard installieren",
+            "step2Title": "Installation überprüfen"
           }
         },
         "xclipDesc": "Zwischenablage-Tool für KDE-Wayland-Einfügen (xclip oder xsel)",
@@ -2376,7 +2390,8 @@
           "flakeTitle": "Installation über unser flake?",
           "flakeDesc": "Wenn Sie OpenWhispr über das flake installieren, aktiviert programs.openwhispr.enable automatisch ydotool, das uinput-Modul und die erforderlichen Gruppenmitgliedschaften.",
           "rebuildNote": "Führen Sie sudo nixos-rebuild switch aus, dann ab- und wieder anmelden, damit die Gruppenänderung und die /dev/uinput-Regel wirksam werden. Ersetzen Sie <you> durch Ihren Benutzernamen."
-        }
+        },
+        "wlCopyDesc": "Zwischenablage-Tool, aus dem Wayland-Apps auf diesem Desktop eingefügten Text lesen"
       },
       "updates": {
         "automaticUpdates": "Automatische Updates",
@@ -4035,7 +4050,13 @@
       "copiedToClipboard": "In die Zwischenablage kopiert",
       "openNote": "Notiz öffnen",
       "unknownTool": "Unbekanntes Werkzeug: {{name}}",
-      "invalidArgs": "Ungültige Tool-Argumente für {{name}}"
+      "invalidArgs": "Ungültige Tool-Argumente für {{name}}",
+      "search_openwhispr_helpName": "OpenWhispr-Hilfe suchen",
+      "read_openwhispr_helpName": "OpenWhispr-Hilfe lesen",
+      "get_openwhispr_contextName": "OpenWhispr-Einstellungen lesen",
+      "search_openwhispr_helpStatus": "OpenWhispr-Hilfe wird durchsucht...",
+      "read_openwhispr_helpStatus": "OpenWhispr-Hilfe wird gelesen...",
+      "get_openwhispr_contextStatus": "OpenWhispr-Einstellungen werden gelesen..."
     }
   },
   "assistant": {
@@ -4877,5 +4898,55 @@
       "provider": "Anbieter",
       "requestId": "Anfrage-ID"
     }
+  },
+  "productHelp": {
+    "sources": "Offizielle Dokumentation",
+    "settings": "Aktuelle Einstellungen",
+    "guidance": "Informationen für diese Antwort.",
+    "settingsNote": "Schreibgeschützte Einstellungen und bekannte Berechtigungen für diese Antwort; Ihre Geräte werden nicht getestet.",
+    "readAt": "Gelesen am {{time}}",
+    "sourceStatus": {
+      "live": "Artikel abgerufen",
+      "bundled": "Integrierte Ersatzhilfe"
+    },
+    "reason": {
+      "policy": "Die Richtlinie Ihrer Organisation beschränkt den Onlineabruf der Dokumentation.",
+      "rateLimit": "Das Abruflimit der Onlinedokumentation wurde erreicht. Die integrierte Hilfe wird angezeigt.",
+      "unavailable": "Die aktuelle Dokumentation konnte nicht geprüft werden. Die integrierte Hilfe wird angezeigt.",
+      "privacy": "Der Onlineabruf der Dokumentation ist deaktiviert, solange Sie abgemeldet sind oder ausschließlich lokale Verarbeitung nutzen. Die integrierte Hilfe wird angezeigt."
+    },
+    "openFailed": "Der Artikel konnte nicht geöffnet werden. Kopieren Sie den Link und öffnen Sie ihn im Browser.",
+    "topicsList": {
+      "hotkeys": "Tastenkürzel",
+      "microphone": "Mikrofon",
+      "models": "Modelle",
+      "meetings": "Besprechungen",
+      "calendar": "Kalender",
+      "language": "Sprachen",
+      "backup": "Sicherung",
+      "assistant": "Assistent",
+      "hold-or-tap": "Halten oder Tippen",
+      "choose-your-microphone": "Mikrofon auswählen",
+      "microphone-not-working": "Mikrofon funktioniert nicht",
+      "local-models": "Lokale Modelle",
+      "chat-agent": "Chat-Agent",
+      "record-a-meeting": "Besprechung aufnehmen",
+      "connect-google-calendar": "Google Calendar verbinden",
+      "languages": "In anderen Sprachen diktieren",
+      "sync-across-devices": "Notizen geräteübergreifend synchronisieren"
+    },
+    "appVersion": "App-Version",
+    "platform": "Plattform",
+    "processing": "Verarbeitung",
+    "engine": "Engine",
+    "policy": "Assistent laut Richtlinie erlaubt",
+    "on": "Ein",
+    "off": "Aus",
+    "microphonePermission": "Mikrofonberechtigung",
+    "specificMicrophone": "Bestimmtes Mikrofon",
+    "permissionGranted": "Erlaubt",
+    "permissionDenied": "Verweigert",
+    "permissionRestricted": "Eingeschränkt",
+    "permissionNotDetermined": "Nicht angefragt"
   }
 }

@@ -45,7 +45,7 @@ test("OpenAI dictation realtime requests identify the token provider", async (t)
     return { success: true };
   };
 
-  const provider = manager.getStreamingProvider();
+  const provider = manager.getStreamingProvider(manager.getStreamingProviderName());
   const options = {
     model: "gpt-4o-mini-transcribe",
     mode: "byok",
@@ -77,7 +77,7 @@ test("Gemini's live model routes onto the gemini-streaming-* channels", async (t
   };
 
   assert.equal(manager.getStreamingProviderName(), "gemini");
-  const provider = manager.getStreamingProvider();
+  const provider = manager.getStreamingProvider("gemini");
   assert.equal(provider.awaitsFinalTranscript, true);
   // Pinned to geminiLiveStreaming.js's DISCONNECT_TIMEOUT_MS: both sides
   // measure the same 3s from audioStreamEnd.
@@ -170,7 +170,7 @@ test("explicit Orukeet custom endpoint uses PCM streaming without cloud login", 
   });
   assert.equal(manager.shouldUseStreaming(), true);
   assert.equal(manager.getStreamingProviderName(), "orukeet");
-  assert.equal(manager.getStreamingProvider().finalizeAcknowledged, true);
+  assert.equal(manager.getStreamingProvider("orukeet").finalizeAcknowledged, true);
   setSettings({
     transcriptionMode: "self-hosted",
     cloudTranscriptionProvider: "custom",
@@ -613,3 +613,27 @@ for (const translationRequested of [false, true]) {
     }
   });
 }
+
+test("opt-in language routing refreshes within 30 seconds for rollback without changing normal cache TTL", async (t) => {
+  const manager = await loadManager(t);
+  for (const mode of ["shadow", "supported-0.30", "supported-0.10"]) {
+    manager.setSttConfig({ orukeetLanguageRouting: mode });
+    const at = manager.sttConfigFetchedAt;
+    assert.equal(manager.isSttConfigStale(at + 30000), false);
+    assert.equal(manager.isSttConfigStale(at + 30001), true);
+  }
+  for (const mode of [undefined, "off", "invalid"]) {
+    manager.setSttConfig({ orukeetLanguageRouting: mode });
+    const at = manager.sttConfigFetchedAt;
+    assert.equal(manager.isSttConfigStale(at + 30001), false);
+    assert.equal(manager.isSttConfigStale(at + 900001), true);
+  }
+});
+
+test("combined-pipeline config expires after 30 seconds even when language routing is off", async (t) => {
+  const manager = await loadManager(t);
+  manager.setSttConfig({ orukeetLanguageRouting: "off", orukeetPipeline: "gemma12" });
+  const at = manager.sttConfigFetchedAt;
+  assert.equal(manager.isSttConfigStale(at + 30000), false);
+  assert.equal(manager.isSttConfigStale(at + 30001), true);
+});

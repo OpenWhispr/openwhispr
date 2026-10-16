@@ -219,11 +219,11 @@
     "rehaul": {
       "permissions": {
         "title": "3 分鐘完成 OpenWhispr 設定",
-        "microphoneDescription": "把你說的話變成文字。僅在錄音時開啟。",
-        "accessibilityDescription": "把文字貼到你正在使用的 App 裡。",
+        "microphoneDescription": "僅在錄音時收音。",
+        "accessibilityDescription": "把文字貼到任何 App。",
         "systemAudioTitle": "系統音訊",
-        "systemAudioDescription": "為會議筆記錄下通話中的其他人。僅在錄音時開啟。",
-        "screenContextDescription": "當你向語音助理提問時，讓它看到你螢幕上的內容。絕不儲存。",
+        "systemAudioDescription": "錄下通話中的其他人。",
+        "screenContextDescription": "讓助理看到你的螢幕。",
         "enable": "啟用",
         "enabled": "已啟用"
       },
@@ -977,7 +977,9 @@
         "reasoningFailed": "AI 無法完成選取文字編輯。原始文字未被變更。",
         "invalidResponse": "AI 傳回的編輯回應格式無效。未取代任何內容。請選取文字後重試。",
         "emptyResponse": "AI 傳回了空白的編輯結果。未取代任何內容。請嘗試更具體的指示。",
-        "truncatedResponse": "AI 在完成編輯之前停止了。未取代任何內容。請嘗試選取較少的文字。"
+        "truncatedResponse": "AI 在完成編輯之前停止了。未取代任何內容。請嘗試選取較少的文字。",
+        "wlCopyMissing": "OpenWhispr 已產生編輯，但在此桌面上，Wayland 應用程式只能透過 wl-copy 讀取貼上的文字。請安裝 wl-clipboard 以套用編輯。",
+        "wlCopyFailed": "OpenWhispr 已產生編輯，但 wl-copy 無法為 Wayland 應用程式複製它，因此未套用。"
       },
       "pastePermission": {
         "title": "允許自動貼上",
@@ -991,7 +993,12 @@
       "pasteFailed": {
         "title": "無法自動貼上"
       },
-      "interruptedRecordingRecovered": "OpenWhispr 在本次語音輸入完成前關閉，已復原此錄音。"
+      "interruptedRecordingRecovered": "OpenWhispr 在本次語音輸入完成前關閉，已復原此錄音。",
+      "waylandClipboard": {
+        "title": "轉錄內容未貼上",
+        "wlCopyMissing": "在此桌面上，Wayland 應用程式只能透過 wl-copy 讀取貼上的文字。請安裝 wl-clipboard 以貼上聽寫內容。",
+        "wlCopyFailed": "wl-copy 無法為 Wayland 應用程式複製文字，因此未貼上。點按「重試」再試一次。"
+      }
     },
     "clipboard": {
       "pasteFailed": {
@@ -1173,6 +1180,7 @@
     },
     "signedIn": {
       "welcomeBack": "歡迎回來",
+      "welcomeBackNamed": "歡迎回來，{{name}}",
       "notYou": "不是你？登出"
     },
     "sso": {
@@ -1424,7 +1432,9 @@
     "withoutToolPrefix": "若未安裝此工具，OpenWhispr 會將文字複製到剪貼簿。你可以使用 Ctrl+V 手動貼上。",
     "wtypeCosmicTerminalsDescription": "在 COSMIC 上，Warp 等終端機只能透過 wtype 接收貼上的文字。其他應用程式不需要 wtype 即可貼上。",
     "wtypeFallbackDescription": "wtype 是此 wlroots 合成器上的首選自動貼上方式。有備用方案可用，但可能較不可靠。",
-    "xwaylandAppsOnly": "自動貼上僅適用於 XWayland 應用程式"
+    "xwaylandAppsOnly": "自動貼上僅適用於 XWayland 應用程式",
+    "wlClipboardTitle": "安裝 wl-clipboard 以貼上到 Wayland 應用程式",
+    "wlClipboardDescription": "在此桌面上，Wayland 應用程式只能透過 wl-copy 讀取 OpenWhispr 複製的文字。若要將聽寫內容貼上到這些應用程式，請安裝 wl-clipboard："
   },
   "promptStudio": {
     "common": {
@@ -2071,6 +2081,10 @@
           },
           "xclip": {
             "step1Title": "安裝 xclip"
+          },
+          "wlCopy": {
+            "step1Title": "安裝 wl-clipboard",
+            "step2Title": "驗證安裝"
           }
         },
         "xclipDesc": "KDE Wayland 貼上用的剪貼簿工具（xclip 或 xsel）",
@@ -2082,7 +2096,8 @@
           "flakeTitle": "透過我們的 flake 安裝？",
           "flakeDesc": "若你從 flake 安裝 OpenWhispr，programs.openwhispr.enable 會自動啟用 ydotool、uinput 模組及所需的群組成員資格。",
           "rebuildNote": "執行 sudo nixos-rebuild switch，然後登出並重新登入，使群組變更與 /dev/uinput 規則生效。將 <you> 替換為你的使用者名稱。"
-        }
+        },
+        "wlCopyDesc": "此桌面上 Wayland 應用程式讀取貼上文字所用的剪貼簿工具"
       },
       "updates": {
         "automaticUpdates": "自動更新",
@@ -3865,7 +3880,13 @@
       "copiedToClipboard": "已複製到剪貼簿",
       "openNote": "開啟筆記",
       "unknownTool": "未知工具：{{name}}",
-      "invalidArgs": "{{name}} 的工具參數無效"
+      "invalidArgs": "{{name}} 的工具參數無效",
+      "search_openwhispr_helpName": "搜尋 OpenWhispr 說明",
+      "read_openwhispr_helpName": "閱讀 OpenWhispr 說明",
+      "get_openwhispr_contextName": "讀取 OpenWhispr 設定",
+      "search_openwhispr_helpStatus": "正在搜尋 OpenWhispr 說明...",
+      "read_openwhispr_helpStatus": "正在閱讀 OpenWhispr 說明...",
+      "get_openwhispr_contextStatus": "正在讀取 OpenWhispr 設定..."
     }
   },
   "assistant": {
@@ -4877,5 +4898,55 @@
       "provider": "服務商",
       "requestId": "請求 ID"
     }
+  },
+  "productHelp": {
+    "sources": "官方文件",
+    "settings": "目前應用程式設定",
+    "guidance": "此回覆使用的資訊。",
+    "settingsNote": "為本次回覆讀取的設定和已知權限；不會變更設定或測試裝置。",
+    "readAt": "讀取時間：{{time}}",
+    "sourceStatus": {
+      "live": "已取得文章",
+      "bundled": "內建備用指南"
+    },
+    "reason": {
+      "policy": "您組織的政策限制了線上文件查詢。",
+      "rateLimit": "線上文件查詢已達上限。目前顯示內建指南。",
+      "unavailable": "無法核實目前的文件。目前顯示內建指南。",
+      "privacy": "未登入或僅使用本機處理時，線上文件查詢會關閉。目前顯示內建指南。"
+    },
+    "openFailed": "無法開啟文章。您可以複製連結並在瀏覽器中開啟。",
+    "topicsList": {
+      "hotkeys": "快捷鍵",
+      "microphone": "麥克風",
+      "models": "模型",
+      "meetings": "會議",
+      "calendar": "行事曆",
+      "language": "語言",
+      "backup": "備份",
+      "assistant": "助理",
+      "hold-or-tap": "按住或點按",
+      "choose-your-microphone": "選擇麥克風",
+      "microphone-not-working": "麥克風無法使用",
+      "local-models": "本機模型",
+      "chat-agent": "聊天助理",
+      "record-a-meeting": "錄製會議",
+      "connect-google-calendar": "連接 Google 日曆",
+      "languages": "用其他語言聽寫",
+      "sync-across-devices": "在裝置間同步筆記"
+    },
+    "appVersion": "應用程式版本",
+    "platform": "平台",
+    "processing": "處理方式",
+    "engine": "引擎",
+    "policy": "政策允許使用助理",
+    "on": "開啟",
+    "off": "關閉",
+    "microphonePermission": "麥克風權限",
+    "specificMicrophone": "指定麥克風",
+    "permissionGranted": "已允許",
+    "permissionDenied": "已拒絕",
+    "permissionRestricted": "受限",
+    "permissionNotDetermined": "尚未請求"
   }
 }

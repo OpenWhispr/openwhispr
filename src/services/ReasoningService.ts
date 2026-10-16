@@ -17,6 +17,7 @@ import { wrapCleanupTranscript } from "../config/prompts";
 import { stripThinkingTags } from "../helpers/stripThinking.js";
 import {
   getLlmRequestTimeoutSeconds,
+  getLlmStreamingFirstByteTimeoutSeconds,
   llmRequestTimeoutError,
 } from "../helpers/llmRequestTimeout.js";
 import { streamText, stepCountIs } from "ai";
@@ -672,11 +673,19 @@ class ReasoningService extends BaseReasoningService {
 
     const timeoutSeconds = getLlmRequestTimeoutSeconds({ streaming: true });
     let timeoutTriggered = false;
-    const timeoutId = setTimeout(() => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const resetTimeout = (seconds: number) => {
+      clearTimeout(timeoutId);
       if (abortController.signal.aborted) return;
-      timeoutTriggered = true;
-      abortController.abort();
-    }, timeoutSeconds * 1000);
+      timeoutId = setTimeout(() => {
+        if (abortController.signal.aborted) return;
+        timeoutTriggered = true;
+        abortController.abort();
+      }, seconds * 1000);
+    };
+    resetTimeout(
+      getLlmStreamingFirstByteTimeoutSeconds({ selfHosted: isLocalProvider || isLanChat })
+    );
 
     const selfHostedErrorContext = {
       selfHosted: true,
@@ -750,6 +759,10 @@ class ReasoningService extends BaseReasoningService {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+
+        // Reset on bytes, including keepalives, partial SSE frames and hidden
+        // reasoning. A reply may stream for much longer than the idle timeout.
+        if (value.byteLength > 0) resetTimeout(timeoutSeconds);
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");

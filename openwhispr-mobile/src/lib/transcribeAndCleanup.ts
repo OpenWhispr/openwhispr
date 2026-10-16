@@ -11,7 +11,7 @@ import { getActiveCustomCleanupPrompt } from '@/store/useCustomPromptsStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { useSnippetsStore } from '@/store/useSnippetsStore';
 import { requiresRealAccount } from './accountAccess';
-import { cleanupSavedOnDevice } from './aiWorkflows';
+import { cleanupRunsOnDevice } from './aiWorkflows';
 import { cleanupTranscript, AGENT_ACTION_TIMEOUT_MS } from './cleanupTranscript';
 import {
   getDictationAgentName,
@@ -19,6 +19,8 @@ import {
   detectAgentMention,
 } from './dictationAgent';
 import { isDictationContext } from './dictationHints';
+import { isToneApplicable } from './keyboardTone';
+import { getLocalReasoningReadiness } from './localReasoning';
 import { isNoSpeechError } from './permissions';
 import { withRetry, type RetryOptions } from './retry';
 import { expandSnippets } from './snippets';
@@ -61,19 +63,42 @@ function rawTranscriptResult(transcription: TranscriptionResponse): DictationPro
   };
 }
 
-// The pinned route decides where cleanup runs. A local job pins a local one unless the
-// user saved a cleanup provider, which is only pinned from that saved choice; whether
-// On-Device cleanup runs is read live, like cleanupEnabled.
+// The pinned route decides where cleanup runs: a local job pins a local one unless the mode saved
+// for cleanup, or Local Mode's Cloud default, sends it off this iPhone (snapshotTextInference).
+// Whether a pinned On-Device cleanup still runs is read live, like cleanupEnabled.
 function cleansLocalTranscript(request: TranscriptionRequest): boolean {
-  if (request.cleanupRoute?.mode === 'providers') return true;
-  return (
-    request.cleanupRoute?.mode === 'local' && cleanupSavedOnDevice(useConfigStore.getState().config)
+  if (!request.cleanupRoute) return false;
+  if (request.cleanupRoute.mode !== 'local') return true;
+  return cleanupRunsOnDevice(
+    useConfigStore.getState().config,
+    useProcessingModeStore.getState().activeMode,
   );
 }
 
+// Local Mode cleans On-Device with nothing of its own saved for cleanup: unset, or held there
+// automatically (pinnedInference). When Apple Intelligence can't run, AI Models already says that
+// cleanup is skipped, so it is skipped quietly rather than warning on every transcript the user
+// never asked to clean. The cached readiness outlives a fix in iOS Settings, so it is checked again
+// before skipping.
+async function skipsLocalModeCleanup(request: TranscriptionRequest): Promise<boolean> {
+  if (request.cleanupRoute?.mode !== 'local') return false;
+  const config = useConfigStore.getState().config;
+  if (config?.inference?.cleanup?.mode === 'local' && !config.pinnedInference?.includes('cleanup'))
+    return false;
+  if ((await getLocalReasoningReadiness()).status === 'ready') return false;
+  return (await getLocalReasoningReadiness({ refresh: true })).status !== 'ready';
+}
+
+// Tones are a Cloud cleanup option: On-Device cleanup never takes one, and in Private mode the
+// keyboard offers none (isToneApplicable), so a tone picked earlier can't rewrite its dictations.
 function cleanupToneForRequest(request: TranscriptionRequest): KeyboardTone | undefined {
   if (request.requestContext !== 'keyboard') return undefined;
   if (!request.keyboardTone || request.keyboardTone === 'default') return undefined;
+  if (request.cleanupRoute?.mode === 'local') return undefined;
+  const { activeMode } = useProcessingModeStore.getState();
+  if (!isToneApplicable(activeMode, useConfigStore.getState().config?.cleanupEnabled)) {
+    return undefined;
+  }
   return request.keyboardTone;
 }
 
@@ -187,8 +212,8 @@ async function runSerialTranscribeAndCleanup(
   const originalText = transcription.text;
   lifecycle.onRawTranscript?.(originalText, transcription);
 
-  // Local/private transcripts leave the device only for the cleanup provider the
-  // user saved; otherwise they are cleaned by On-Device cleanup or not at all.
+  // A transcript made on this iPhone leaves it only for the cleanup route pinned for it;
+  // otherwise it is cleaned by On-Device cleanup or not at all.
   if (transcription.provider === 'local' && !cleansLocalTranscript(request)) {
     return rawTranscriptResult(transcription);
   }
@@ -198,6 +223,7 @@ async function runSerialTranscribeAndCleanup(
   if (lifecycle.shouldCancel?.()) {
     return rawTranscriptResult(transcription);
   }
+  if (await skipsLocalModeCleanup(request)) return rawTranscriptResult(transcription);
 
   let cleanupWarning: string | undefined;
   lifecycle.onStage?.('cleaning', { fusedCleanup: false });
