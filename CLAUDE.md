@@ -631,6 +631,7 @@ On GNOME Wayland, Electron's `globalShortcut` API doesn't work due to Wayland's 
 - Electron format: `F8`, `CommandOrControl+Shift+Space`
 - GNOME format: `F8`, `<Control><Shift>space`
 - Backtick (`) → `grave` in GNOME keysym format
+- F13-F24 bind the keysym the active keymap gives that key (`xkbcomp -xkb $DISPLAY -`, xkb keys `<FK13>`-`<FK24>`), for gsettings and the Hold portal alike: stock xkeyboard-config sends `XF86Launch7` for F16 and has no `F16` keysym, so GNOME can't grab `F16` (#1716). A key with no keysym (`keysym_missing`, e.g. stock F19/F24) or one gsd-media-keys already binds (`keysym_reserved`, e.g. F13 → `XF86Tools` opens Settings) is refused with a message. An unreadable keymap keeps the F-key name
 
 ### 15. Hyprland Wayland Global Hotkeys
 
