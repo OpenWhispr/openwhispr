@@ -3567,6 +3567,7 @@
     "actions": {
       "done": "Terminé",
       "chunkProgress": "Partie {{step}} sur {{total}}",
+      "waitingForModel": "En attente du modèle local",
       "emptyReply": "Le modèle a renvoyé une réponse vide. Réessayez ou choisissez un autre modèle.",
       "allActions": "Toutes les actions",
       "selectAction": "Sélectionner l'action",

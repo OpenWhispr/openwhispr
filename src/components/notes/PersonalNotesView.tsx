@@ -642,6 +642,7 @@ export default function PersonalNotesView({
     state: actionProcessingState,
     actionName,
     progress: actionProgress,
+    waitingForModel: actionWaitingForModel,
     runAction,
     cancel: cancelAction,
   } = useActionProcessing(activeNoteId ?? null);
@@ -882,6 +883,7 @@ export default function PersonalNotesView({
               actionProcessingState={actionProcessingState}
               actionName={actionName}
               actionProgress={actionProgress}
+              actionWaitingForModel={actionWaitingForModel}
               onCancelAction={cancelAction}
               onRunNoteAction={runNoteAction}
               onManageActions={setManagerKind}

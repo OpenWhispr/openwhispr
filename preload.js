@@ -694,6 +694,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   checkLocalReasoningAvailable: () => ipcRenderer.invoke("check-local-reasoning-available"),
   getLocalContextBudget: (modelId) => ipcRenderer.invoke("get-local-context-budget", modelId),
   cancelLocalReasoning: (requestId) => ipcRenderer.invoke("cancel-local-reasoning", requestId),
+  onLocalReasoningQueue: registerListener(
+    "local-reasoning-queue",
+    (callback) => (_event, update) => callback(update)
+  ),
 
   // Anthropic reasoning
   processAnthropicReasoning: (text, modelId, agentName, config) =>

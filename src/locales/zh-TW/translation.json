@@ -3216,6 +3216,7 @@
       "emptyEditorDescription": "從列表中選擇一個動作或建立新動作",
       "done": "完成",
       "chunkProgress": "第 {{step}} 部分，共 {{total}} 部分",
+      "waitingForModel": "正在等待本機模型",
       "emptyReply": "模型傳回了空白回覆。請再試一次，或選擇其他模型。",
       "builtin": {
         "generateNotes": {

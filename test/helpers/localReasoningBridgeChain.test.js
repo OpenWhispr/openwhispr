@@ -239,26 +239,102 @@ test("refuseClippedByWindow reaches runInference (the bridge rebuilds the config
   assert.equal(forwarded[0].refuseClippedByWindow, true);
 });
 
-test("a second request while one is in flight is refused with a typed code", async (t) => {
-  // A note summarised in parts holds the bridge for minutes; whatever arrives
-  // meanwhile (another note's action, dictation cleanup) must fail with a code
-  // the renderer can translate rather than the raw guard text.
+test("a second summary waits, then runs when the first finishes", async (t) => {
+  // A note summarised in parts holds the bridge for minutes. Another note's
+  // summary used to fail immediately with LOCAL_MODEL_BUSY.
   const { bridge, modelManager, modelId } = await setupChain(t, () => completion("stop", "ok"));
-  let release;
+  const releases = [];
+  const states = [];
   modelManager.runInference = () =>
     new Promise((resolve) => {
-      release = () => resolve("first reply");
+      releases.push(resolve);
     });
 
-  const first = bridge.processText("first", modelId, {});
+  const first = bridge.processText("first", modelId, { requestId: "a" });
+  const second = bridge.processText("second", modelId, {
+    requestId: "b",
+    onQueueState: (state) => states.push(state),
+  });
   await new Promise((resolve) => setImmediate(resolve));
-  await assert.rejects(bridge.processText("second", modelId, {}), (error) => {
-    assert.equal(error.code, "LOCAL_MODEL_BUSY");
+  assert.equal(releases.length, 1);
+  assert.deepEqual(states, ["queued"]);
+
+  releases[0]("first reply");
+  assert.equal(await first, "first reply");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(releases.length, 2);
+  assert.deepEqual(states, ["queued", "running"]);
+  releases[1]("second reply");
+  assert.equal(await second, "second reply");
+});
+
+test("cancelling a summary that has not started never runs it", async (t) => {
+  const { bridge, modelManager, modelId } = await setupChain(t, () => completion("stop", "ok"));
+  let release;
+  let calls = 0;
+  modelManager.runInference = () => {
+    calls += 1;
+    return new Promise((resolve) => {
+      release = () => resolve("first reply");
+    });
+  };
+
+  const first = bridge.processText("first", modelId, { requestId: "run-1" });
+  const waiting = bridge.processText("second", modelId, { requestId: "run-2" });
+  await new Promise((resolve) => setImmediate(resolve));
+  bridge.cancel("run-2");
+  await assert.rejects(waiting, (error) => {
+    assert.equal(error.code, "CANCELLED");
     return true;
   });
 
   release();
   assert.equal(await first, "first reply");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(calls, 1);
+});
+
+test("dictation cleanup preempts a running summary and the summary resumes after", async (t) => {
+  const { bridge, modelManager, modelId } = await setupChain(t, () => completion("stop", "ok"));
+  const calls = [];
+  let current;
+  const summaryStates = [];
+  modelManager.runInference = (_id, text) => {
+    calls.push(text);
+    return new Promise((resolve, reject) => {
+      current = { resolve, reject };
+    });
+  };
+  modelManager.cancelInference = () => {
+    current?.reject(Object.assign(new Error("cancelled"), { code: "CANCELLED" }));
+  };
+
+  const summary = bridge.processText("summary", modelId, {
+    requestId: "sum",
+    onQueueState: (state) => summaryStates.push(state),
+  });
+  const laterSummary = bridge.processText("summary-2", modelId, { requestId: "sum-2" });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const cleanup = bridge.processText("cleanup", modelId, {
+    requestId: "clean",
+    inferenceScope: "dictationCleanup",
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(calls, ["summary", "cleanup"]);
+  assert.ok(summaryStates.includes("queued"));
+
+  current.resolve(" cleaned ");
+  assert.equal(await cleanup, "cleaned");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(calls, ["summary", "cleanup", "summary"]);
+
+  current.resolve("summarised");
+  assert.equal(await summary, "summarised");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(calls, ["summary", "cleanup", "summary", "summary-2"]);
+  current.resolve("second");
+  assert.equal(await laterSummary, "second");
 });
 
 test("cancel aborts only the in-flight request carrying that id, and frees the slot", async (t) => {

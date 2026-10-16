@@ -63,6 +63,8 @@ export interface NoteActionState {
   actionName: string | null;
   /** Set while a long note is summarised in parts: "Part 2 of 5". */
   progress?: NoteActionProgress | null;
+  /** The local model is still on another request. This run has not failed. */
+  waitingForModel?: boolean;
 }
 
 /** The pieces a note action is built from, so a long one can be split along the transcript. */
@@ -116,6 +118,19 @@ function setNoteState(noteId: number, patch: Partial<NoteActionState>) {
   const prev = noteStates[noteId] ?? IDLE_STATE;
   useActionProcessingStore.setState({
     noteStates: { ...noteStates, [noteId]: { ...prev, ...patch } },
+  });
+}
+
+if (typeof window !== "undefined") {
+  window.electronAPI?.onLocalReasoningQueue?.(({ requestId, state }) => {
+    if (!requestId) return;
+    for (const [noteId, runId] of activeRuns) {
+      if (runId !== requestId) continue;
+      const current = useActionProcessingStore.getState().noteStates[noteId];
+      if (!current || current.status !== "processing") return;
+      setNoteState(noteId, { waitingForModel: state === "queued" });
+      return;
+    }
   });
 }
 
@@ -473,7 +488,12 @@ export function runBackgroundAction(
   activeRuns.set(noteId, runId);
   const isCancelled = () => activeRuns.get(noteId) !== runId;
   processingFlags.set(noteId, true);
-  setNoteState(noteId, { status: "processing", actionName: action.name, progress: null });
+  setNoteState(noteId, {
+    status: "processing",
+    actionName: action.name,
+    progress: null,
+    waitingForModel: false,
+  });
 
   (async () => {
     try {

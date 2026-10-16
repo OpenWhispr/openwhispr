@@ -2148,8 +2148,11 @@ declare global {
         modelName?: string;
         error?: string;
       }>;
-      /** Aborts the local request tagged with this `requestId`, if it is still in flight. */
+      /** Aborts the local request tagged with this `requestId`, if it is still in flight or waiting. */
       cancelLocalReasoning: (requestId: string) => Promise<void>;
+      onLocalReasoningQueue?: (
+        callback: (update: { requestId: string | null; state: "queued" | "running" }) => void
+      ) => () => void;
 
       // Anthropic reasoning
       processAnthropicReasoning: (

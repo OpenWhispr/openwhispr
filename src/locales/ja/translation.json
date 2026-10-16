@@ -2996,6 +2996,7 @@
       "emptyEditorDescription": "リストからアクションを選択するか、新しく作成してください",
       "done": "完了",
       "chunkProgress": "パート {{step}} / {{total}}",
+      "waitingForModel": "ローカルモデルを待っています",
       "emptyReply": "モデルから空の応答が返されました。もう一度お試しいただくか、別のモデルを選択してください。",
       "builtin": {
         "generateNotes": {
