@@ -5079,29 +5079,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.workletModuleLoaded = true;
       }
 
-      // A combined cleanup's prompt is fixed when its session is minted, so with
-      // Tone & Style on it waits briefly for the app being dictated into before
-      // audio can reach a socket warmed for another app. An app not known by
-      // then (a Wayland AT-SPI target takes about a second) gets no combined
-      // cleanup: /api/reason cleans up in its tone at stop.
-      const pipelineSettings = getSettings();
-      if (
-        providerName === "orukeet" &&
-        pipelineSettings.toneStyleEnabled &&
-        this.getPipelineCleanupOptions(pipelineSettings)
-      ) {
-        this.lastToneAppCategory = await Promise.race([
-          this.toneStylePromise,
-          new Promise((resolve) => setTimeout(() => resolve(null), 250)),
-        ]);
-      }
-      this._activePipelineOptions =
-        pipelineSettings.toneStyleEnabled && !this.lastToneAppCategory
-          ? undefined
-          : this.getPipelineCleanupOptions(pipelineSettings, {
-              appCategory: this.lastToneAppCategory,
-            });
-
       this.streamingProcessor = new AudioWorkletNode(audioContext, "pcm-streaming-processor");
       const provider = this.getStreamingProvider(providerName);
       // Decided once, with the provider, so a config refresh mid-recording
@@ -5212,6 +5189,30 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.recordingStartTime = Date.now();
       this.onStateChange?.({ isRecording: true, isProcessing: false, isStreaming: true });
       await this.beginMicRecovery(stream);
+
+      // A combined cleanup's prompt is fixed when its session is minted, so with
+      // Tone & Style on the start waits briefly for the app being dictated into
+      // before minting. Audio that reached a warm socket minted for another app
+      // is dropped when the start replaces it, as with any other mismatch. An
+      // app not known by then (a Wayland AT-SPI target takes about a second)
+      // gets no combined cleanup: /api/reason cleans up in its tone at stop.
+      const pipelineSettings = getSettings();
+      if (
+        providerName === "orukeet" &&
+        pipelineSettings.toneStyleEnabled &&
+        this.getPipelineCleanupOptions(pipelineSettings)
+      ) {
+        this.lastToneAppCategory = await Promise.race([
+          this.toneStylePromise,
+          new Promise((resolve) => setTimeout(() => resolve(null), 250)),
+        ]);
+      }
+      this._activePipelineOptions =
+        pipelineSettings.toneStyleEnabled && !this.lastToneAppCategory
+          ? undefined
+          : this.getPipelineCleanupOptions(pipelineSettings, {
+              appCategory: this.lastToneAppCategory,
+            });
 
       // 4. Connect WebSocket — audio is already flowing from the pipeline above,
       //    so Deepgram receives data immediately (no idle timeout).

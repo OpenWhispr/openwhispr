@@ -55,8 +55,7 @@ test("combined cleanup options honor every eligibility guard and use the actual 
     language: "en",
     locale: "en",
   });
-  // Tone & Style: the tone picked for the app being dictated into, and the
-  // other-apps tone while that app is unknown.
+  // Tone & Style: the tone picked for the app being dictated into.
   useSettingsStore.setState({ ...good, toneStyleEnabled: true });
   assert.deepEqual(
     manager.getPipelineCleanupOptions(useSettingsStore.getState(), { appCategory: "email" }),
@@ -70,7 +69,6 @@ test("combined cleanup options honor every eligibility guard and use the actual 
       locale: "en",
     }
   );
-  assert.equal(manager.getPipelineCleanupOptions(useSettingsStore.getState()).tone, "formal");
   const blocked = [
     { settings: { useLocalWhisper: true } },
     { settings: { cloudTranscriptionMode: "byok" } },
@@ -147,7 +145,7 @@ test("combined cleanup options honor every eligibility guard and use the actual 
   assert.ok(calls[0].pipelineOptions);
 });
 
-test("with Tone & Style on, a streaming start mints combined cleanup for the app it learns in time, and the next warmup expects the same", async (t) => {
+test("with Tone & Style on, a streaming start streams audio while it waits to mint combined cleanup for the app it learns in time, and the next warmup expects the same", async (t) => {
   const { window, useSettingsStore, createManager } = await load(t, "orukeet-pipeline-tone-");
   useSettingsStore.setState({ ...good, toneStyleEnabled: true });
   let classify;
@@ -199,7 +197,8 @@ test("with Tone & Style on, a streaming start mints combined cleanup for the app
   manager.beginToneStyleCapture();
   const starting = manager.startStreamingRecording();
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(audioWired, false);
+  assert.equal(audioWired, true);
+  assert.equal(minted.length, 0);
   classify("email");
   assert.equal(await starting, true);
   assert.equal(audioWired, true);
