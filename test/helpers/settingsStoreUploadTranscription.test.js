@@ -2,8 +2,13 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const React = require("react");
+const { createRoot } = require("react-dom/client");
 const { renderToStaticMarkup } = require("react-dom/server");
-const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const {
+  createRendererServer,
+  installBrowserGlobals,
+  installHookDom,
+} = require("../lib/rendererTestHarness");
 
 // Upload inherits unset values from dictation, but a realtime-only dictation
 // provider has no batch route — inheriting it would fail every upload closed
@@ -20,9 +25,10 @@ test("upload transcription never inherits a realtime-only dictation provider", a
   );
   const { STREAMING_ONLY_PROVIDERS } = await vite.ssrLoadModule("/helpers/transcriptionRoute.ts");
   const base = useSettingsStore.getState();
+  const resolveWithoutPolicy = (settings) => selectResolvedUploadTranscription(settings, settings);
 
   for (const provider of STREAMING_ONLY_PROVIDERS) {
-    const resolved = selectResolvedUploadTranscription({
+    const resolved = resolveWithoutPolicy({
       ...base,
       cloudTranscriptionProvider: provider,
       cloudTranscriptionModel: "nova-3",
@@ -35,7 +41,7 @@ test("upload transcription never inherits a realtime-only dictation provider", a
 
   // An explicit upload choice always wins, even a realtime-only one — the
   // route guard then reports it truthfully instead of silently rerouting.
-  const explicit = selectResolvedUploadTranscription({
+  const explicit = resolveWithoutPolicy({
     ...base,
     cloudTranscriptionProvider: "deepgram",
     uploadCloudTranscriptionProvider: "groq",
@@ -45,7 +51,7 @@ test("upload transcription never inherits a realtime-only dictation provider", a
   assert.equal(explicit.cloudTranscriptionModel, "whisper-large-v3");
 
   // Batch-capable dictation providers keep inheriting provider and model.
-  const inherited = selectResolvedUploadTranscription({
+  const inherited = resolveWithoutPolicy({
     ...base,
     cloudTranscriptionProvider: "groq",
     cloudTranscriptionModel: "whisper-large-v3-turbo",
@@ -87,7 +93,8 @@ test("audio upload has its own self-hosted server", async (t) => {
     const mod = await vite.ssrLoadModule("/stores/settingsStore.ts");
     return { mod, store: mod.useSettingsStore };
   };
-  const resolved = (mod, store) => mod.selectResolvedUploadTranscription(store.getState());
+  const resolved = (mod, store) =>
+    mod.selectResolvedUploadTranscription(store.getState(), store.getState());
 
   await t.test(
     "uploads use only the Upload tab's URL and model, and never write dictation's",
@@ -158,4 +165,143 @@ test("audio upload has its own self-hosted server", async (t) => {
       "dictation's server hidden"
     );
   });
+});
+
+function findElement(node, predicate) {
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const match = findElement(child, predicate);
+      if (match) return match;
+    }
+    return null;
+  }
+  if (!node || typeof node !== "object") return null;
+  return predicate(node) ? node : findElement(node.props?.children, predicate);
+}
+
+// The Upload tab must offer only modes an upload can run. When a managed
+// policy's only allowed providers are live-only, bring-your-own-key is not one
+// of them, and the tab shows the same fallback uploads actually use.
+test("the Upload tab never offers bring-your-own-key through live-only providers", async (t) => {
+  installBrowserGlobals(t, {
+    initialStorage: {
+      _providerSettingsMigrated: "1",
+      uploadTranscriptionMigrated: "true",
+      uploadSelfHostedMigrated: "true",
+      isSignedIn: "true",
+      transcriptionMode: "providers",
+      cloudTranscriptionProvider: "openai",
+      uploadTranscriptionMode: "providers",
+    },
+  });
+  const container = installHookDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-upload-tab-policy-test-",
+    resolveAlias: { "@": path.resolve(__dirname, "../../src") },
+  });
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const { UploadTranscriptionPanel } = await vite.ssrLoadModule(
+    "/components/settings/UploadSettings.tsx"
+  );
+  const offered = async (allowedByokProviders) => {
+    usePolicyStore.setState({
+      status: "managed",
+      managed: true,
+      appVersion: "1.10.2",
+      policy: {
+        version: 1,
+        transcription: {
+          allowedModes: ["openwhispr", "providers", "local"],
+          allowedByokProviders,
+          allowedEnterpriseProviders: [],
+        },
+        llm: {
+          allowedModes: ["openwhispr"],
+          allowedByokProviders: [],
+          allowedEnterpriseProviders: [],
+        },
+        features: { agentEnabled: true, webSearchEnabled: true },
+        sharing: { externalLinkSharing: "allowed" },
+        dataRetention: {
+          audioRetentionMaxDays: null,
+          localHistoryMode: "user_choice",
+          cloudBackupAllowed: true,
+        },
+        minAppVersion: null,
+      },
+    });
+    let tree = null;
+    function Harness() {
+      tree = UploadTranscriptionPanel();
+      return null;
+    }
+    const root = createRoot(container);
+    await React.act(async () => root.render(React.createElement(Harness)));
+    await React.act(async () => root.unmount());
+    const selector = findElement(tree, (node) => Array.isArray(node.props?.modes));
+    return {
+      modes: selector.props.modes.map((mode) => mode.id),
+      active: selector.props.activeMode,
+    };
+  };
+
+  assert.deepEqual(await offered(["deepgram"]), {
+    modes: ["openwhispr", "local"],
+    active: "openwhispr",
+  });
+  assert.deepEqual(await offered(["openai", "deepgram"]), {
+    modes: ["openwhispr", "providers", "local"],
+    active: "providers",
+  });
+});
+
+// Upload inherits dictation's endpoint from the member's saved settings, and only
+// while it stays on the provider they chose. The policy view carries built-in
+// providers' URLs the overlay wrote, and a policy fallback to Custom must stay
+// unconfigured rather than post the Custom key anywhere.
+test("a Custom upload inherits only the endpoint its member saved for it", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-upload-endpoint-inheritance-test-",
+  });
+  const { useSettingsStore, selectResolvedUploadTranscription } = await vite.ssrLoadModule(
+    "/stores/settingsStore.ts"
+  );
+  const saved = {
+    ...useSettingsStore.getState(),
+    cloudTranscriptionProvider: "openai",
+    cloudTranscriptionBaseUrl: "https://stt.example.com/v1",
+    uploadCloudTranscriptionProvider: "custom",
+    uploadCloudTranscriptionBaseUrl: "",
+  };
+  const url = (...args) => selectResolvedUploadTranscription(...args).cloudTranscriptionBaseUrl;
+
+  // Without a policy the view is the saved settings: the Custom tab's endpoint
+  // survives dictation moving to another provider (onboarding sets Custom everywhere).
+  assert.equal(url(saved, saved), "https://stt.example.com/v1");
+  const policyView = {
+    ...saved,
+    cloudTranscriptionProvider: "deepgram",
+    cloudTranscriptionBaseUrl: "https://api.deepgram.com/v1",
+  };
+  assert.equal(url(policyView, saved), "https://stt.example.com/v1", "the member chose Custom");
+  // The policy moved an inheriting upload to Custom: no endpoint, even a saved one.
+  const inheriting = {
+    ...saved,
+    cloudTranscriptionProvider: "deepgram",
+    uploadCloudTranscriptionProvider: "",
+  };
+  assert.equal(url(policyView, inheriting), "", "a policy fallback to Custom stays unconfigured");
+  // A Custom-only policy keeps dictation on the member's own endpoint, so an upload
+  // the policy moves to Custom uses that same endpoint.
+  const dictatingOnCustom = {
+    ...saved,
+    cloudTranscriptionProvider: "custom",
+    uploadCloudTranscriptionProvider: "openai",
+  };
+  assert.equal(
+    url({ ...dictatingOnCustom, uploadCloudTranscriptionProvider: "custom" }, dictatingOnCustom),
+    "https://stt.example.com/v1",
+    "dictation still uses that endpoint"
+  );
 });
