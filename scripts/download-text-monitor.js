@@ -67,6 +67,7 @@ async function main() {
   if (!release) {
     console.error(`[${label}] Could not find a release matching prefix:`, tagPrefix);
     console.log(`[${label}] Auto-learn correction monitoring will be disabled`);
+    process.exitCode = 1;
     return;
   }
 
@@ -74,6 +75,7 @@ async function main() {
   if (!asset) {
     console.error(`[${label}] Release ${release.tag} does not contain ${archiveName}`);
     console.log(`[${label}] Available assets:`, release.assets.map((a) => a.name).join(", "));
+    process.exitCode = 1;
     return;
   }
 
@@ -120,9 +122,11 @@ async function main() {
 
     console.log(`[${label}] Auto-learn correction monitoring will be disabled`);
     console.log(`[${label}] To compile locally, ${compileHint}`);
+    process.exitCode = 1;
   }
 }
 
 main().catch((error) => {
   console.error("[text-monitor] Unexpected error:", error);
+  process.exitCode = 1;
 });

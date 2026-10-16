@@ -21,7 +21,7 @@ const declines = () =>
 
 const originalLoad = Module._load;
 
-function loadSelectionManager({ spawn } = {}) {
+function loadSelectionManager({ spawn, execFile } = {}) {
   delete require.cache[selectionManagerPath];
   Module._load = function loadWithElectronMock(request, parent, isMain) {
     if (request === "electron") {
@@ -30,8 +30,8 @@ function loadSelectionManager({ spawn } = {}) {
     if (request === "./debugLogger") {
       return debugLoggerStub;
     }
-    if (request === "child_process" && spawn) {
-      return { ...childProcess, spawn };
+    if (request === "child_process" && (spawn || execFile)) {
+      return { ...childProcess, ...(spawn && { spawn }), ...(execFile && { execFile }) };
     }
     return originalLoad.call(this, request, parent, isMain);
   };
@@ -219,6 +219,91 @@ test("a Linux AT-SPI terminal pid never becomes a caret delivery target", async 
     "editable"
   );
   assert.equal(probes.length, 1);
+});
+
+test("a Linux caret probe is bound to the target's process", async () => {
+  const probes = [];
+  const manager = new SelectionManager({
+    clipboardManager: {},
+    textEditMonitor: {
+      isFocusedEditable: async (target) => {
+        probes.push(target);
+        return target.pid ? "editable" : "not_editable";
+      },
+    },
+    platform: "linux",
+    now: () => 1000,
+  });
+  const windowPids = { "xdotool 7": "111", "kdotool {kde}": "222" };
+  manager._readWindowPid = async (tool, id) => windowPids[`${tool} ${id}`] ?? null;
+  const mark = (target) => manager._markEditableCaret({ status: "none", target }, target, true);
+
+  const cases = [
+    [{ kind: "atspi-pid", id: "333" }, "333"],
+    [{ kind: "x11-window", id: "7", windowClass: "gedit" }, "111"],
+    [{ kind: "kde-window", id: "{kde}", windowClass: "kate" }, "222"],
+    [{ kind: "hyprland-window", id: "0xabc", windowClass: "gedit", pid: 444 }, 444],
+  ];
+  for (const [target, pid] of cases) {
+    const result = await mark(target);
+    assert.equal(result.status, "editable", target.kind);
+    assert.deepEqual(result.target, target, "the stored target is unchanged");
+    assert.equal(probes.at(-1).pid, pid, target.kind);
+  }
+
+  // A window whose process can't be read is never a caret.
+  for (const target of [
+    { kind: "x11-window", id: "8", windowClass: "gedit" },
+    { kind: "hyprland-window", id: "0xdef", windowClass: "gedit", pid: null },
+  ]) {
+    assert.equal((await mark(target)).status, "none", target.kind);
+    assert.ok(!probes.at(-1).pid, target.kind);
+  }
+});
+
+// Answers keyed by the command line; anything else fails like a missing tool.
+function loadWithExecFile(outputs) {
+  return loadSelectionManager({
+    execFile: (command, args, options, callback) => {
+      const stdout = outputs[[command, ...args].join(" ")];
+      callback(stdout === undefined ? new Error("failed") : null, stdout ?? "", "");
+    },
+  });
+}
+
+test("a Linux window's pid is read by its window id", async () => {
+  const Manager = loadWithExecFile({
+    "xdotool getwindowpid 7": "111\n",
+    "kdotool getwindowpid {kde}": "222\n",
+    "xdotool getwindowpid 9": "0\n",
+  });
+  const manager = new Manager({ clipboardManager: {}, platform: "linux", now: () => 1000 });
+
+  assert.equal(await manager._readWindowPid("xdotool", "7"), "111");
+  assert.equal(await manager._readWindowPid("kdotool", "{kde}"), "222");
+  assert.equal(await manager._readWindowPid("xdotool", "9"), null);
+  assert.equal(await manager._readWindowPid("xdotool", "8"), null);
+});
+
+test("a Hyprland target carries the pid hyprctl reports", async () => {
+  const activeWindow = (fields) => ({
+    "hyprctl activewindow -j": JSON.stringify({ address: "0xabc", class: "Gedit", ...fields }),
+  });
+  const read = (outputs) =>
+    new (loadWithExecFile(outputs))({
+      clipboardManager: { commandExists: (command) => command === "hyprctl" },
+      platform: "linux",
+      now: () => 1000,
+    })._getLinuxTarget();
+
+  assert.deepEqual(await read(activeWindow({ pid: 444 })), {
+    kind: "hyprland-window",
+    id: "0xabc",
+    windowClass: "gedit",
+    pid: 444,
+  });
+  assert.equal((await read(activeWindow({}))).pid, null);
+  assert.equal((await read(activeWindow({ pid: -1 }))).pid, null);
 });
 
 test("treats a clipboard-only fallback as a failed targeted paste", async () => {
