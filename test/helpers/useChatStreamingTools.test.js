@@ -723,8 +723,8 @@ test("a note's chat answers from its note and adds no other notes up front", asy
   await captured.sendToAI("What price are we testing?", []);
 
   assert.deepEqual(searches, []);
-  // So the server marks its memories as past conversations.
-  assert.equal(configs[0].noteChat, true);
+  // The API no longer keeps memories, so a note chat's request is an ordinary one.
+  assert.equal("noteChat" in configs[0], false);
   assert.match(prompts[0], /inside the note below\.[^\n]*\n\nNote ID: 7\nTitle: Kickoff/);
   assert.doesNotMatch(prompts[0], /notes from the user's library/);
 });
@@ -739,7 +739,7 @@ test("a chat that isn't about a note still lists the library notes a question fi
   await captured.sendToAI("What price are we testing?", []);
 
   assert.deepEqual(searches, ["What price are we testing?"]);
-  assert.equal(configs[0].noteChat, undefined);
+  assert.equal("noteChat" in configs[0], false);
   assert.match(
     prompts[0],
     /notes from the user's library[^]*<note id="3" title="Pricing sync Sep 29">\nTesting \$15 against \$12/

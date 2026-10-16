@@ -92,9 +92,9 @@ test("rejects a malformed requiredLocalModels", () => {
   }
 });
 
-test("tolerates the server-only memoryEnabled flag", () => {
-  // The API gates Mem0 agent memory itself and the app never reads the field,
-  // so its presence must not invalidate an otherwise valid policy.
+test("tolerates the retired memoryEnabled flag", () => {
+  // Older API versions still send it after memory was removed
+  // (openwhispr-api#243); the app ignores it, so it must not invalidate a policy.
   for (const value of [true, false]) {
     const policy = validPolicy();
     policy.features.memoryEnabled = value;

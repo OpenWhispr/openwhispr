@@ -663,8 +663,6 @@ export function useChatStreaming({
               })),
               executeToolCall,
               ...(cloudScreenContext ? { screenContext: cloudScreenContext } : {}),
-              // So the server marks its memories as past conversations, not facts about the note.
-              ...(openNoteRef.current ? { noteChat: true } : {}),
             });
           } else {
             const aiTools = registry?.toAISDKFormat(
