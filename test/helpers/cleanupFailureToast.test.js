@@ -187,25 +187,30 @@ test("a classified failure whose paste was held back leaves the pill alone and c
   assert.equal(toastProps.presentation, undefined, "the held-back paste keeps its pill");
 });
 
+// The shape cleanupUnconfiguredNotice returns (pinned in dictationRouting.test.js).
 const UNCONFIGURED_NOTICE = {
   message: "AI cleanup is on, but no cleanup model is set up.",
   messageKey: "hooks.audioRecording.cleanupUnconfigured",
+  surface: "llm",
   settingsTarget: "llms",
   setupKey: "unconfigured\0providers\0",
 };
 
-test("an unconfigured-cleanup notice links to AI Models and says the dictation was pasted raw", async (t) => {
+test("an unconfigured-cleanup notice takes the pill's error card with Open Settings", async (t) => {
   const toastProps = await recordCleanupFailureToast(t, {
     dictationWindow: true,
     failure: { ...UNCONFIGURED_NOTICE, pasted: true },
   });
-  assert.equal(toastProps.title, "AI cleanup is on, but no cleanup model is set up.");
-  assert.equal(toastProps.secondaryDescription, "Original dictation pasted without AI cleanup.");
+  assert.equal(toastProps.title, "Cleanup failed");
+  assert.equal(
+    toastProps.description,
+    "AI cleanup is on, but no cleanup model is set up.\nOriginal dictation pasted without AI cleanup."
+  );
   assert.deepEqual(
     toastProps.actions.map(({ label }) => label),
     ["Open Settings"]
   );
-  assert.equal(toastProps.presentation, undefined);
+  assert.equal(toastProps.presentation, "dictation-error");
 });
 
 test("an unconfigured-cleanup notice for a dictation that was not pasted claims no paste", async (t) => {
@@ -213,12 +218,12 @@ test("an unconfigured-cleanup notice for a dictation that was not pasted claims 
     dictationWindow: true,
     failure: { ...UNCONFIGURED_NOTICE, pasted: false },
   });
-  assert.equal(toastProps.title, "AI cleanup is on, but no cleanup model is set up.");
-  assert.equal(toastProps.secondaryDescription, undefined);
+  assert.equal(toastProps.description, "AI cleanup is on, but no cleanup model is set up.");
   assert.deepEqual(
     toastProps.actions.map(({ label }) => label),
     ["Open Settings"]
   );
+  assert.equal(toastProps.presentation, undefined, "the held-back paste keeps its pill");
 });
 
 test("a signed-out Cloud cleanup notice says the fix is signing in", async (t) => {
@@ -227,12 +232,17 @@ test("a signed-out Cloud cleanup notice says the fix is signing in", async (t) =
     failure: {
       message: "AI cleanup uses OpenWhispr Cloud, but you're signed out.",
       messageKey: "hooks.audioRecording.cleanupSignedOut",
+      surface: "llm",
       settingsTarget: "llms",
       setupKey: "signedOut\0openwhispr\0",
       pasted: true,
     },
   });
-  assert.equal(toastProps.title, "AI cleanup uses OpenWhispr Cloud, but you're signed out.");
+  assert.equal(toastProps.title, "Cleanup failed");
+  assert.equal(
+    toastProps.description,
+    "AI cleanup uses OpenWhispr Cloud, but you're signed out.\nOriginal dictation pasted without AI cleanup."
+  );
   assert.deepEqual(
     toastProps.actions.map(({ label }) => label),
     ["Open Settings"]

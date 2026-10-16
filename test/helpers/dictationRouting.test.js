@@ -805,6 +805,7 @@ test("an unconfigured cleanup warns once per broken setup, and again once it was
   assert.equal(first.forget, false);
   assert.equal(first.notice.messageKey, "hooks.audioRecording.cleanupUnconfigured");
   assert.equal(first.notice.settingsTarget, "llms");
+  assert.equal(first.notice.surface, "llm", "it gets the friendly cleanup toast");
 
   const shownKey = first.notice.setupKey;
   assert.equal(cleanupUnconfiguredNotice(shownKey, skipped).notice, null);
@@ -843,6 +844,7 @@ test("signed out of OpenWhispr Cloud, the cleanup notice says so", async () => {
   });
   assert.equal(notice.messageKey, "hooks.audioRecording.cleanupSignedOut");
   assert.equal(notice.settingsTarget, "llms");
+  assert.equal(notice.surface, "llm");
 
   const byok = cleanupUnconfiguredNotice(null, {
     skipped: true,
