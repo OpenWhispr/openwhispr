@@ -72,7 +72,14 @@ const DEFAULTS = { personal: "casual", work: "formal", email: "formal", other: "
 const hasText = (root, text) => !!findElement(root, (element) => element.textContent === text);
 const enabledToggle = (root) =>
   findElement(root, (element) => element.getAttribute?.("role") === "switch");
-const showsPicks = (root) => hasText(root, "toneStyle.settings.saveChanges");
+// Off, the picks stay on screen but can't be changed.
+const picksEnabled = (root) =>
+  !isDisabled(
+    button(
+      findElement(root, (e) => e.getAttribute?.("role") === "group"),
+      "toneStyle.tones.formal"
+    )
+  );
 
 test("Tones & voices stays off until it is turned on, which applies the saved picks", async (t) => {
   const { container, store } = await renderSection(t, {
@@ -81,7 +88,8 @@ test("Tones & voices stays off until it is turned on, which applies the saved pi
     toneStyles: DEFAULTS,
   });
   assert.equal(enabledToggle(container).getAttribute("aria-checked"), "false");
-  assert.equal(showsPicks(container), false);
+  assert.equal(picksEnabled(container), false);
+  assert.equal(isDisabled(button(container, "toneStyle.settings.saveChanges")), true);
 
   await React.act(async () => click(enabledToggle(container)));
   assert.equal(store.getState().toneStyleEnabled, true);
@@ -89,11 +97,12 @@ test("Tones & voices stays off until it is turned on, which applies the saved pi
   // Home stops offering it, even after a switch back.
   assert.equal(localStorage.getItem("toneStyleBannerDismissed"), "true");
   assert.equal(enabledToggle(container).getAttribute("aria-checked"), "true");
+  assert.equal(picksEnabled(container), true);
   assert.equal(isDisabled(button(container, "toneStyle.settings.saveChanges")), true);
 
   await React.act(async () => click(enabledToggle(container)));
   assert.equal(store.getState().toneStyleEnabled, false);
-  assert.equal(showsPicks(container), false);
+  assert.equal(picksEnabled(container), false);
 });
 
 test("once set up, Save waits for a changed pick and saves it", async (t) => {
