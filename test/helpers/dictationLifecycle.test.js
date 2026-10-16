@@ -3,8 +3,10 @@ const assert = require("node:assert/strict");
 
 const {
   DICTATION_LIFECYCLE,
+  DICTATION_TOGGLE_DEBOUNCE_MS,
   normalizeDictationLifecycle,
   shouldIgnoreDictationHotkey,
+  shouldDebounceDictationToggle,
   isDictationRecording,
   resolveAgentDictationPillState,
   shouldBlockDictationWhilePanelOpen,
@@ -14,6 +16,13 @@ test("processing is the only lifecycle that suppresses a dictation hotkey", () =
   assert.equal(shouldIgnoreDictationHotkey(DICTATION_LIFECYCLE.IDLE), false);
   assert.equal(shouldIgnoreDictationHotkey(DICTATION_LIFECYCLE.RECORDING), false);
   assert.equal(shouldIgnoreDictationHotkey(DICTATION_LIFECYCLE.PROCESSING), true);
+});
+
+test("a dictation toggle bounce within the debounce window is ignored", () => {
+  assert.equal(shouldDebounceDictationToggle(1000, 0), false);
+  assert.equal(shouldDebounceDictationToggle(1000, 900), true);
+  assert.equal(shouldDebounceDictationToggle(1000, 1000 - DICTATION_TOGGLE_DEBOUNCE_MS), false);
+  assert.equal(shouldDebounceDictationToggle(1000, 1000 - DICTATION_TOGGLE_DEBOUNCE_MS + 1), true);
 });
 
 test("main-process recording state follows confirmed renderer lifecycle", () => {
