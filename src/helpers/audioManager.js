@@ -108,7 +108,6 @@ import {
   stripAgentAddressPreservingFormatting,
 } from "../config/agentDetection";
 import {
-  cleanupSetupKey,
   cleanupUnconfiguredNotice,
   resolveDictationRouteKind,
   resolveAgentImageTarget,
@@ -354,6 +353,7 @@ function resolveReasoningRoute(
 
     return {
       kind: "agent",
+      cleanupReachable,
       model: target.model,
       config: {
         ...target.config,
@@ -376,9 +376,9 @@ function resolveReasoningRoute(
     };
   }
   if (kind === "cleanup") {
-    return { kind: "cleanup", config: cleanupConfig };
+    return { kind: "cleanup", cleanupReachable, config: cleanupConfig };
   }
-  return { kind: "skip" };
+  return { kind: "skip", cleanupReachable };
 }
 
 const PLACEHOLDER_KEYS = {
@@ -690,6 +690,7 @@ class AudioManager {
     this.pendingSelectionEdit = null;
     this.pendingAssistantConversation = null;
     this.pendingCleanupFailure = null;
+    this._shownCleanupSetupKey = null;
     this._processingCancellationGeneration = 0;
     this._activeProcessingPipeline = null;
     this.assistantSelectionContext = null;
@@ -3210,25 +3211,22 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  // The raw transcript is about to be pasted while cleanup is switched on and
-  // has nowhere to run. One warning per setup, including when the paste fails.
-  _noteUnconfiguredCleanup(settings = getSettings()) {
-    const cleanupModel = getEffectiveCleanupModel();
-    const isCloud = isCloudCleanupMode();
-    const decision = cleanupUnconfiguredNotice(this._cleanupUnconfiguredKey, {
-      useCleanupModel: !!settings.useCleanupModel,
-      reachable: !!settings.useCleanupModel && (!!cleanupModel || isCloud),
-      setupKey: cleanupSetupKey({
-        cleanupMode: settings.cleanupMode,
-        cleanupProvider: settings.cleanupProvider,
-        cleanupModel,
-        isCloud,
-      }),
+  // Runs wherever a dictation's route is decided, with the reachability that
+  // decision used. The notice reaches the user through the result extras.
+  _noteCleanupRoute(settings, { kind, cleanupReachable }) {
+    const { forget, notice } = cleanupUnconfiguredNotice(this._shownCleanupSetupKey, {
+      skipped: kind === "skip",
+      cleanupReachable,
+      settings,
     });
-    this._cleanupUnconfiguredKey = decision.key;
-    if (decision.notice && !this.pendingCleanupFailure) {
-      this.pendingCleanupFailure = decision.notice;
-    }
+    if (forget) this._shownCleanupSetupKey = null;
+    if (notice && !this.pendingCleanupFailure) this.pendingCleanupFailure = notice;
+  }
+
+  // The renderer confirms an unconfigured-cleanup notice once it is on screen, so
+  // a dictation cancelled or discarded before then never uses up the warning.
+  markCleanupNoticeShown(failure) {
+    if (failure?.setupKey) this._shownCleanupSetupKey = failure.setupKey;
   }
 
   async processTranscription(text, source, wasCancelled = neverCancelled) {
@@ -3275,7 +3273,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       logger.logReasoning("REASONING_SKIPPED", {
         reason: "No cleanup or dictation-agent model available",
       });
-      this._noteUnconfiguredCleanup(settings);
+      this._noteCleanupRoute(settings, { kind: "skip", cleanupReachable });
       return normalizedText;
     }
 
@@ -3288,6 +3286,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       cleanupProvider,
       agentName,
     });
+    // Nothing can run cleanup although the assistant could, so no route is decided.
+    if (!useReasoning) this._noteCleanupRoute(settings, { kind: "skip", cleanupReachable });
 
     if (useReasoning) {
       let route;
@@ -3304,10 +3304,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         if (this.translationRequested && route.kind !== "translation") {
           this.notifyTranslationFallback("unreachable");
         }
-        if (route.kind === "skip") {
-          this._noteUnconfiguredCleanup(settings);
-          return normalizedText;
-        }
+        this._noteCleanupRoute(settings, route);
+        if (route.kind === "skip") return normalizedText;
 
         if (route.kind === "translation") {
           const { text: translatedText } = await this.runTranslationChain({
@@ -3637,6 +3635,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (this.translationRequested && route.kind !== "translation") {
         this.notifyTranslationFallback("unreachable");
       }
+      this._noteCleanupRoute(settings, route);
       const cleanupCloudMode = settings.cleanupCloudMode || "openwhispr";
 
       try {
@@ -3733,8 +3732,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                   },
           });
           processedText = resolveTranslatedText(processedText, chainResult);
-        } else if (route.kind === "skip") {
-          this._noteUnconfiguredCleanup(settings);
         }
       } catch (reasonError) {
         if (reasonError.selectionEditFatal) throw reasonError;
@@ -5852,6 +5849,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (this.translationRequested && route.kind !== "translation") {
         this.notifyTranslationFallback("unreachable");
       }
+      this._noteCleanupRoute(stSettings, route);
       const cleanupCloudMode = stSettings.cleanupCloudMode || "openwhispr";
 
       try {
@@ -5982,8 +5980,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           });
           finalText = resolveTranslatedText(finalText, chainResult);
           usedCloudReasoning = chainResult.usedCloudReasoning || usedCloudReasoning;
-        } else if (route.kind === "skip") {
-          this._noteUnconfiguredCleanup(stSettings);
         }
       } catch (reasonError) {
         if (wasCancelled()) return true;

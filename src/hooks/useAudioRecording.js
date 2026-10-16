@@ -855,6 +855,7 @@ export const useAudioRecording = (toast, options = {}) => {
             return pasteOutcome.pasted;
           };
 
+          let pasted = false;
           if (pushForceStoppedRef.current && autoPasteEnabled && !result.assistantConversation) {
             // The push hit its safety ceiling while the trigger keys were still
             // down. Injecting the paste shortcut into those held modifiers is
@@ -928,13 +929,18 @@ export const useAudioRecording = (toast, options = {}) => {
             if (pasteSucceeded) {
               window.electronAPI?.hideDictationPreview?.();
             }
+            pasted = pasteSucceeded;
           } else if (keepTranscriptionInClipboard && !result.assistantConversation) {
             await keepInClipboard("clipboard-only");
           }
 
-          // Cleanup can be missing or can fail whether or not the paste landed.
-          // Gating the toast on a successful paste hid both (#2631, #1003).
-          if (result.cleanupFailure) recordCleanupFailure(result.cleanupFailure);
+          // Cleanup can be missing or can fail whether or not the paste landed
+          // (#2631, #1003), so the toast is told which. The onboarding demo's
+          // paste is a no-op into its own text box, so it reports nothing there.
+          if (result.cleanupFailure && localStorage.getItem("onboardingCompleted") === "true") {
+            recordCleanupFailure({ ...result.cleanupFailure, pasted });
+            audioManagerRef.current.markCleanupNoticeShown(result.cleanupFailure);
+          }
 
           if (result.source === "openai" && getSettings().useLocalWhisper) {
             toast({

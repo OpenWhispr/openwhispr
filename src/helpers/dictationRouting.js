@@ -204,30 +204,39 @@ export function resolveDictationRouteKind({
   return "skip";
 }
 
-// Identifies one cleanup setup. A different model, provider, or cloud/local
-// choice is a new setup and may warn again.
-export function cleanupSetupKey({ cleanupMode, cleanupProvider, cleanupModel, isCloud }) {
-  return [
-    cleanupMode || "",
-    cleanupProvider || "",
-    cleanupModel || "",
-    isCloud ? "cloud" : "local",
+// A dictation skipped while cleanup is switched on goes out raw, which looks like
+// a cleanup that changed nothing, so it carries a notice. `shownKey` names the
+// broken setup the user was last warned about: the same one warns once, while a
+// different mode or provider, or signing out, warns again. Once cleanup is off or
+// reachable the warning is forgotten (`forget`), so the next broken setup warns.
+// Signed out of OpenWhispr Cloud gets its own message, since the fix is signing in.
+export function cleanupUnconfiguredNotice(shownKey, { skipped, cleanupReachable, settings }) {
+  if (!settings.useCleanupModel || cleanupReachable) return { forget: true, notice: null };
+  if (!skipped) return { forget: false, notice: null };
+  const signedOut =
+    settings.cleanupMode === "openwhispr" &&
+    settings.cleanupCloudMode === "openwhispr" &&
+    !settings.isSignedIn;
+  const setupKey = [
+    signedOut ? "signedOut" : "unconfigured",
+    settings.cleanupMode || "",
+    settings.cleanupProvider || "",
   ].join("\0");
-}
-
-// Cleanup is on, but nothing can run it, so the raw transcript would look like
-// a cleanup that did nothing. The same broken setup warns once. Turning cleanup
-// off, or making a model reachable, forgets that warning.
-export function cleanupUnconfiguredNotice(previousKey, { useCleanupModel, reachable, setupKey }) {
-  if (!useCleanupModel || reachable) return { key: null, notice: null };
-  const key = setupKey || "";
-  if (key === previousKey) return { key, notice: null };
+  if (setupKey === shownKey) return { forget: false, notice: null };
   return {
-    key,
-    notice: {
-      message: "AI cleanup is on, but no cleanup model is set up.",
-      messageKey: "hooks.audioRecording.cleanupUnconfigured",
-      settingsTarget: "llms",
-    },
+    forget: false,
+    notice: signedOut
+      ? {
+          message: "AI cleanup uses OpenWhispr Cloud, but you're signed out.",
+          messageKey: "hooks.audioRecording.cleanupSignedOut",
+          settingsTarget: "llms",
+          setupKey,
+        }
+      : {
+          message: "AI cleanup is on, but no cleanup model is set up.",
+          messageKey: "hooks.audioRecording.cleanupUnconfigured",
+          settingsTarget: "llms",
+          setupKey,
+        },
   };
 }
