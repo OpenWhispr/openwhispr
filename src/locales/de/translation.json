@@ -4983,8 +4983,8 @@
       "saved": "Ton & Stil gespeichert",
       "cleanupOff": "Die Textbereinigung ist deaktiviert, daher werden diese Einstellungen nicht auf Ihre Diktate angewendet.",
       "turnOnCleanup": "Textbereinigung aktivieren",
-      "standard": "Standardton",
-      "standardDescription": "Die Textbereinigung behält Ihren eigenen Ton in jeder App bei. Deaktivieren Sie dies, um für jede Art von App einen Ton auszuwählen."
+      "enabled": "Ton & Stimme aktiviert",
+      "enabledDescription": "Die Textbereinigung verwendet Ihren Ton für jede Art von App. Wenn deaktiviert, gilt der Standardton."
     }
   },
   "productHelp": {

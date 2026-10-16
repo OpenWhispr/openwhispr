@@ -4983,8 +4983,8 @@
       "saved": "Tono e stile salvati",
       "cleanupOff": "La correzione testo è disattivata, quindi questi toni non vengono applicati alla dettatura.",
       "turnOnCleanup": "Attiva correzione testo",
-      "standard": "Tono standard",
-      "standardDescription": "La correzione testo mantiene il tuo tono in ogni app. Disattivalo per scegliere un tono per ogni tipo di app."
+      "enabled": "Toni e voci attivi",
+      "enabledDescription": "La correzione testo usa il tuo tono per ogni tipo di app. Se disattivato, usa il tono standard."
     }
   },
   "productHelp": {

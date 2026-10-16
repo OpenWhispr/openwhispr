@@ -70,28 +70,28 @@ async function renderSection(t, settings, props = {}) {
 const DEFAULTS = { personal: "casual", work: "formal", email: "formal", other: "formal" };
 
 const hasText = (root, text) => !!findElement(root, (element) => element.textContent === text);
-const standardToggle = (root) =>
+const enabledToggle = (root) =>
   findElement(root, (element) => element.getAttribute?.("role") === "switch");
 const showsPicks = (root) => hasText(root, "toneStyle.settings.saveChanges");
 
-test("Standard tone stays on until it is turned off, which applies the saved picks", async (t) => {
+test("Tones & voices stays off until it is turned on, which applies the saved picks", async (t) => {
   const { container, store } = await renderSection(t, {
     useCleanupModel: true,
     toneStyleEnabled: false,
     toneStyles: DEFAULTS,
   });
-  assert.equal(standardToggle(container).getAttribute("aria-checked"), "true");
+  assert.equal(enabledToggle(container).getAttribute("aria-checked"), "false");
   assert.equal(showsPicks(container), false);
 
-  await React.act(async () => click(standardToggle(container)));
+  await React.act(async () => click(enabledToggle(container)));
   assert.equal(store.getState().toneStyleEnabled, true);
   assert.deepEqual(store.getState().toneStyles, DEFAULTS);
   // Home stops offering it, even after a switch back.
   assert.equal(localStorage.getItem("toneStyleBannerDismissed"), "true");
-  assert.equal(standardToggle(container).getAttribute("aria-checked"), "false");
+  assert.equal(enabledToggle(container).getAttribute("aria-checked"), "true");
   assert.equal(isDisabled(button(container, "toneStyle.settings.saveChanges")), true);
 
-  await React.act(async () => click(standardToggle(container)));
+  await React.act(async () => click(enabledToggle(container)));
   assert.equal(store.getState().toneStyleEnabled, false);
   assert.equal(showsPicks(container), false);
 });

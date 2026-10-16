@@ -46,20 +46,20 @@ export default function ToneStyleSection({ onOpenCleanupSettings }: ToneStyleSec
         <p className="mt-1 text-[13px] text-muted-foreground">{t("toneStyle.description")}</p>
       </div>
 
-      {/* Standard tone is Tone & Style off: cleanup keeps the speaker's own tone. */}
+      {/* Off, cleanup keeps the speaker's own tone (the standard tone). */}
       <SettingsPanel className="mb-6">
         <SettingsPanelRow>
           <SettingsRow
-            label={t("toneStyle.settings.standard")}
-            description={t("toneStyle.settings.standardDescription")}
+            label={t("toneStyle.settings.enabled")}
+            description={t("toneStyle.settings.enabledDescription")}
           >
             <Toggle
-              checked={!toneStyleEnabled}
-              onChange={(standard) => {
-                useSettingsStore.getState().setToneStyleEnabled(!standard);
-                if (!standard) dismissToneStyleBanner();
+              checked={toneStyleEnabled}
+              onChange={(enabled) => {
+                useSettingsStore.getState().setToneStyleEnabled(enabled);
+                if (enabled) dismissToneStyleBanner();
               }}
-              ariaLabel={t("toneStyle.settings.standard")}
+              ariaLabel={t("toneStyle.settings.enabled")}
             />
           </SettingsRow>
         </SettingsPanelRow>
