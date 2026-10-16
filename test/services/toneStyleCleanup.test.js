@@ -28,7 +28,7 @@ test("the cleanup prompt ends with the app's medium, the tone and its priority",
   const suffix = email.slice(base.length);
   assert.match(suffix, /^\n\nThe text is an email\. /);
   assert.match(suffix, /Apply this tone: upbeat and enthusiastic\./);
-  assert.match(suffix, /overrides any instruction to keep the speaker's formality/);
+  assert.match(suffix, /overrides any instruction to keep the speaker's tone, voice, style/);
 
   const other = prompts.getCleanupSystemPrompt(null, [], "en", "en", {
     appCategory: "other",

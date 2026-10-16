@@ -23,7 +23,7 @@ const APP_CATEGORY_INSTRUCTIONS: Partial<Record<ToneAppCategory, string>> = {
 };
 
 const TONE_PRIORITY_INSTRUCTION =
-  "This tone overrides any instruction to keep the speaker's formality. Every other cleanup rule still applies: fix transcription errors, and end one sentence and start the next wherever the speaker started a new thought.";
+  "This tone overrides any instruction to keep the speaker's tone, voice, style, wording or formality; it never changes meaning or intent. Every other cleanup rule still applies.";
 
 // Appended last, after the language and dictionary suffixes, as the server does.
 export function appendToneStyleSuffix(prompt: string, toneStyle?: DictationToneStyle | null) {
