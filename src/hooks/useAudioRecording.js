@@ -1050,8 +1050,12 @@ export const useAudioRecording = (toast, options = {}) => {
       onToggle?.();
     });
 
-    const disposeStart = window.electronAPI.onStartDictation?.(() => {
-      handleStart();
+    const disposeStart = window.electronAPI.onStartDictation?.((requestId) => {
+      void handleStart().finally(() => {
+        if (requestId !== undefined) {
+          window.electronAPI.dictationStartRequestSettled?.(requestId);
+        }
+      });
       onToggle?.();
     });
 

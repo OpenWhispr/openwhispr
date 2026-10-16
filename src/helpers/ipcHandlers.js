@@ -2046,6 +2046,18 @@ class IPCHandlers {
       this.windowManager.setDictationLifecycleState(state, inputKind);
     });
 
+    ipcMain.on("dictation-start-request-settled", (event, requestId) => {
+      const dictationWindow = this.windowManager.mainWindow;
+      if (
+        !dictationWindow ||
+        dictationWindow.isDestroyed() ||
+        event.sender !== dictationWindow.webContents
+      ) {
+        return;
+      }
+      this.windowManager.settleExplicitDictationStart(requestId);
+    });
+
     ipcMain.on("show-agent-dictation-final-transcript", (event, text) => {
       const dictationWindow = this.windowManager.mainWindow;
       if (

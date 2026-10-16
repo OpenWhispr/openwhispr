@@ -221,6 +221,97 @@ test.beforeEach(() => {
   workArea = { x: 0, y: 0, width: 1200, height: 900 };
 });
 
+test("explicit dictation controls bypass tap and push-mode toggle behavior", async () => {
+  const manager = createNormalWindowManager();
+  const calls = [];
+  manager.sendExplicitStartDictation = () => calls.push("start");
+  manager.sendStopDictation = () => calls.push("stop");
+  manager.sendToggleDictation = () => calls.push("toggle");
+  manager.startWindowsPushToTalk = () => calls.push("down");
+  manager.handleWindowsPushKeyUp = () => calls.push("up");
+
+  const callback = manager.createHotkeyCallback();
+  await callback(undefined, "start");
+  await callback(undefined, "stop");
+  await callback();
+
+  manager._cachedActivationMode = "push";
+  await callback(undefined, "start");
+  await callback(undefined, "stop");
+  await callback("F8", "down");
+  await callback("F8", "up");
+
+  assert.deepEqual(calls, ["start", "stop", "toggle", "start", "stop", "down", "up"]);
+});
+
+test("an explicit start blocks duplicate side effects until the renderer reports lifecycle", async () => {
+  const manager = createNormalWindowManager();
+  let targetCaptures = 0;
+  let selectionCaptures = 0;
+  let panelShows = 0;
+  const messages = [];
+  manager.textEditMonitor = {
+    captureTargetPid: () => {
+      targetCaptures += 1;
+      return Promise.resolve(42);
+    },
+  };
+  manager.selectionManager = {
+    captureTarget: () => {
+      selectionCaptures += 1;
+    },
+  };
+  manager.showDictationPanel = () => {
+    panelShows += 1;
+  };
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    webContents: { send: (channel) => messages.push(channel) },
+  };
+
+  const callback = manager.createHotkeyCallback();
+  await callback(undefined, "start");
+  await callback(undefined, "start");
+
+  assert.equal(targetCaptures, 1);
+  assert.equal(selectionCaptures, 1);
+  assert.equal(panelShows, 1);
+  assert.deepEqual(messages, ["start-dictation"]);
+
+  manager.setDictationLifecycleState("preparing");
+  manager.setDictationLifecycleState("idle");
+  await callback(undefined, "start");
+
+  assert.equal(targetCaptures, 2);
+  assert.equal(selectionCaptures, 2);
+  assert.equal(panelShows, 2);
+  assert.deepEqual(messages, ["start-dictation", "start-dictation"]);
+});
+
+test("a rejected or settled explicit start does not leave the dispatch guard stuck", () => {
+  const manager = createNormalWindowManager();
+  const messages = [];
+  manager.showDictationPanel = () => undefined;
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    webContents: { send: (channel) => messages.push(channel) },
+  };
+
+  manager._onboardingActive = true;
+  assert.equal(manager.sendExplicitStartDictation(), false);
+  manager._onboardingActive = false;
+  assert.equal(manager.sendExplicitStartDictation(), true);
+  assert.equal(manager.sendExplicitStartDictation(), false);
+
+  manager.settleExplicitDictationStart(2);
+  assert.equal(manager.sendExplicitStartDictation(), true);
+  manager.settleExplicitDictationStart(2);
+  assert.equal(manager.sendExplicitStartDictation(), false);
+  manager.settleExplicitDictationStart(3);
+  assert.equal(manager.sendExplicitStartDictation(), true);
+  assert.deepEqual(messages, ["start-dictation", "start-dictation", "start-dictation"]);
+});
+
 test("native push-to-talk force-stops after the safety timeout", () => {
   const timers = installFakeTimers();
   const manager = createNormalWindowManager();
