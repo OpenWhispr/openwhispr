@@ -70,22 +70,30 @@ async function renderSection(t, settings, props = {}) {
 const DEFAULTS = { personal: "casual", work: "formal", email: "formal", other: "formal" };
 
 const hasText = (root, text) => !!findElement(root, (element) => element.textContent === text);
+const standardToggle = (root) =>
+  findElement(root, (element) => element.getAttribute?.("role") === "switch");
+const showsPicks = (root) => hasText(root, "toneStyle.settings.saveChanges");
 
-test("before Tone & Style is set up, saving the picks as they are turns it on", async (t) => {
+test("Standard tone stays on until it is turned off, which applies the saved picks", async (t) => {
   const { container, store } = await renderSection(t, {
     useCleanupModel: true,
     toneStyleEnabled: false,
     toneStyles: DEFAULTS,
   });
-  assert.ok(hasText(container, "toneStyle.settings.notOnYet"));
-  const save = button(container, "toneStyle.settings.saveChanges");
-  assert.equal(isDisabled(save), false);
+  assert.equal(standardToggle(container).getAttribute("aria-checked"), "true");
+  assert.equal(showsPicks(container), false);
 
-  await React.act(async () => click(save));
-  assert.equal(hasText(container, "toneStyle.settings.notOnYet"), false);
+  await React.act(async () => click(standardToggle(container)));
   assert.equal(store.getState().toneStyleEnabled, true);
   assert.deepEqual(store.getState().toneStyles, DEFAULTS);
-  assert.equal(isDisabled(save), true);
+  // Home stops offering it, even after a switch back.
+  assert.equal(localStorage.getItem("toneStyleBannerDismissed"), "true");
+  assert.equal(standardToggle(container).getAttribute("aria-checked"), "false");
+  assert.equal(isDisabled(button(container, "toneStyle.settings.saveChanges")), true);
+
+  await React.act(async () => click(standardToggle(container)));
+  assert.equal(store.getState().toneStyleEnabled, false);
+  assert.equal(showsPicks(container), false);
 });
 
 test("once set up, Save waits for a changed pick and saves it", async (t) => {
@@ -94,7 +102,6 @@ test("once set up, Save waits for a changed pick and saves it", async (t) => {
     toneStyleEnabled: true,
     toneStyles: DEFAULTS,
   });
-  assert.equal(hasText(container, "toneStyle.settings.notOnYet"), false);
   const save = button(container, "toneStyle.settings.saveChanges");
   assert.equal(isDisabled(save), true);
 
@@ -139,7 +146,7 @@ test("turning cleanup on without a usable model opens its settings", async (t) =
     t,
     {
       useCleanupModel: false,
-      toneStyleEnabled: false,
+      toneStyleEnabled: true,
       toneStyles: DEFAULTS,
       isSignedIn: false,
       cleanupMode: "providers",
@@ -152,5 +159,4 @@ test("turning cleanup on without a usable model opens its settings", async (t) =
   await React.act(async () => click(button(container, "toneStyle.settings.turnOnCleanup")));
   assert.equal(store.getState().useCleanupModel, true);
   assert.equal(opened, 1);
-  assert.ok(hasText(container, "toneStyle.settings.notOnYet"));
 });
