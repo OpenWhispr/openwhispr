@@ -16,9 +16,11 @@ export const PLAIN_TEXT_RESPONSE_SUFFIX =
   "own line with no marker.";
 
 // Appended per request when the answer will be pasted at the cursor, where a
-// preamble ("Sure, here's…") would land in the user's document.
+// preamble ("Sure, here's…") or a question back would land in the user's document.
 export const PASTE_RESPONSE_SUFFIX =
-  "\n\nOUTPUT: Write only the text to insert at the user's cursor, with no preamble or commentary.";
+  "\n\nOUTPUT: Write only the text to insert at the user's cursor, with no preamble or commentary. " +
+  "If the text you're asked to write is missing details, write your best version with a " +
+  "placeholder such as [date] for each one instead of asking.";
 
 // Non-local selection edits always start from the editing prompt the Voice
 // Assistant used before its built-in default was written for conversation (a
