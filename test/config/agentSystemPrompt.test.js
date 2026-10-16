@@ -198,6 +198,10 @@ test("Tone & Style lists the user's style for each kind of writing, after the si
   assert.match(prompt, /^- Emails \([^)]*email_draft[^)]*\): formal and polished\./m);
   assert.match(prompt, /^- Everything else \([^)]*\): upbeat and enthusiastic\./m);
   assert.match(prompt, /Your own answers, explanations and summaries keep your usual voice\./);
+  assert.match(
+    prompt,
+    /Names, acronyms and dictionary terms keep their exact spelling and capitalization\./
+  );
   assert.ok(prompt.indexOf("sign it with their name") < prompt.indexOf("WRITING STYLE"));
 });
 

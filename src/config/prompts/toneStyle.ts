@@ -69,8 +69,12 @@ const DESTINATIONS: Record<ToneAppCategory, string> = {
   other: "an app",
 };
 
-const WRITING_STYLE_RULES =
-  "Never sign or add a name to a personal or work message. Never use em dashes in text written as the user's own words. A tone the user asks for always wins.";
+// Cleanup's priority sentence keeps these exact under any tone; the chat and
+// selection edits use the rules without it, so they say it themselves.
+const KEEP_NAMES =
+  "Names, acronyms and dictionary terms keep their exact spelling and capitalization.";
+
+const WRITING_STYLE_RULES = `${KEEP_NAMES} Never sign or add a name to a personal or work message. Never use em dashes in text written as the user's own words. A tone the user asks for always wins.`;
 
 /**
  * The chat's guide to writing in the user's own tone. With `destination`, the
@@ -103,5 +107,5 @@ export function buildWritingStyleBlock(
 // For an in-place edit of selected text: only a rewrite the user asked for
 // without a tone takes the style of the app the selection is in.
 export function selectionEditToneSentence(toneStyle: DictationToneStyle): string {
-  return `If the instruction asks you to rewrite, reword or draft the text and names no tone, write it in the user's ${WRITING_KINDS[toneStyle.appCategory].label} style: ${TONE_RULES[toneStyle.tone]}`;
+  return `If the instruction asks you to rewrite, reword or draft the text and names no tone, write it in the user's ${WRITING_KINDS[toneStyle.appCategory].label} style: ${TONE_RULES[toneStyle.tone]} ${KEEP_NAMES}`;
 }
