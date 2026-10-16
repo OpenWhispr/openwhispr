@@ -4861,6 +4861,7 @@
     }
   },
   "providerErrors": {
+    "contentFiltered": "{{provider}} 出于内容安全原因过滤了此请求。请重新表述请求后重试。",
     "authFailed": "{{provider}} 拒绝了你的 API 密钥。",
     "accessDenied": "{{provider}} 拒绝了访问。你的密钥可能不包含此模型。",
     "quotaExhausted": "你的 {{provider}} 账户额度已用尽。",
@@ -4899,6 +4900,7 @@
       "llm": "AI 请求失败"
     },
     "details": {
+      "exceptionType": "错误代码",
       "provider": "服务商",
       "requestId": "请求 ID"
     }

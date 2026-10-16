@@ -500,6 +500,176 @@ function mapEnterpriseError(provider, error, config = {}) {
   }
 }
 
+// The stream boundary accepts SDK errors, not SDK response objects. Classify
+// messages locally: providers can echo prompts or credentials even in message.
+function mapEnterpriseStreamError(provider, error, config = {}) {
+  const {
+    providerHttpError,
+    providerError,
+    asProviderError,
+    PROVIDER_ERROR_CODES,
+    redactProviderBody,
+  } = require("./providerHttpErrors");
+  const chain = [];
+  const seen = new Set();
+  let current = error;
+  while (current && !seen.has(current) && chain.length < 8) {
+    seen.add(current);
+    chain.push(current);
+    current = current.error || current.lastError || current.cause;
+  }
+  const identifier = (value) =>
+    typeof value === "string" &&
+    /^[a-zA-Z0-9_.:-]{1,128}$/.test(value) &&
+    redactProviderBody(value) === value
+      ? value
+      : undefined;
+  const status = chain
+    .map((item) => item?.status ?? item?.statusCode ?? item?.$metadata?.httpStatusCode)
+    .find((value) => Number.isInteger(value) && value >= 400 && value <= 599);
+  const code = chain.map((item) => identifier(item?.code)).find(Boolean);
+  const exceptionType =
+    code ||
+    chain
+      .map((item) => identifier(item?.name || item?.type))
+      .find((value) => value && value !== "error");
+  const requestId = chain
+    .map((item) =>
+      identifier(
+        item?.requestId ||
+          item?.request_id ||
+          item?.$metadata?.requestId ||
+          getHeaderCaseInsensitive(item?.responseHeaders, "x-request-id") ||
+          getHeaderCaseInsensitive(item?.responseHeaders, "apim-request-id") ||
+          getHeaderCaseInsensitive(item?.responseHeaders, "x-amzn-requestid")
+      )
+    )
+    .find(Boolean);
+  const message = chain
+    .map((item) => (typeof item === "string" ? item : item?.message))
+    .find((value) => typeof value === "string" && value.trim());
+  const normalized = {
+    message: message || code || "Unknown provider error",
+    code,
+    name: exceptionType,
+    status,
+  };
+  const mapped = mapEnterpriseError(provider, normalized, {
+    bedrockRegion: identifier(config.bedrockRegion),
+    managedContext: !!config.managedContext,
+  });
+  const providerName =
+    provider === "azure"
+      ? "Azure OpenAI"
+      : provider === "bedrock"
+        ? "AWS Bedrock"
+        : provider === "vertex"
+          ? "Vertex AI"
+          : "Enterprise AI";
+  const codeClassifications = {
+    deploymentnotfound: PROVIDER_ERROR_CODES.MODEL_NOT_FOUND,
+    model_not_found: PROVIDER_ERROR_CODES.MODEL_NOT_FOUND,
+    rate_limit_exceeded: PROVIDER_ERROR_CODES.RATE_LIMITED,
+    toomanyrequests: PROVIDER_ERROR_CODES.RATE_LIMITED,
+    insufficient_quota: PROVIDER_ERROR_CODES.QUOTA_EXHAUSTED,
+    content_filter: PROVIDER_ERROR_CODES.BAD_REQUEST,
+    invalid_request_error: PROVIDER_ERROR_CODES.BAD_REQUEST,
+    invalid_api_key: PROVIDER_ERROR_CODES.AUTH_FAILED,
+  };
+  const codeClassification = Object.hasOwn(codeClassifications, code?.toLowerCase())
+    ? codeClassifications[code.toLowerCase()]
+    : undefined;
+  const signature = `${code || ""} ${normalized.message}`;
+  const knownMessages =
+    provider === "azure"
+      ? [
+          [/Unauthorized|invalid API key/i, PROVIDER_ERROR_CODES.AUTH_FAILED],
+          [/DeploymentNotFound|\bnot found\b/i, PROVIDER_ERROR_CODES.MODEL_NOT_FOUND],
+          [/TooManyRequests|\brate[ _-]?limit/i, PROVIDER_ERROR_CODES.RATE_LIMITED],
+          [/content_filter|ContentFilter/, PROVIDER_ERROR_CODES.BAD_REQUEST],
+        ]
+      : provider === "vertex"
+        ? [
+            [
+              /UNAUTHENTICATED|Could not load the default credentials/,
+              PROVIDER_ERROR_CODES.AUTH_FAILED,
+            ],
+            [/PERMISSION_DENIED|\b403\b/, PROVIDER_ERROR_CODES.ACCESS_DENIED],
+            [/NOT_FOUND/, PROVIDER_ERROR_CODES.MODEL_NOT_FOUND],
+            [/RESOURCE_EXHAUSTED|\bquota\b/, PROVIDER_ERROR_CODES.RATE_LIMITED],
+            [/INVALID_ARGUMENT/, PROVIDER_ERROR_CODES.BAD_REQUEST],
+          ]
+        : [];
+  const messageClassification = knownMessages.find(([pattern]) => pattern.test(signature))?.[1];
+  const ErrorType =
+    chain.some((item) => item instanceof TypeError) ||
+    (provider === "azure" && normalized.message.includes("fetch failed"))
+      ? TypeError
+      : Error;
+  const networkError = asProviderError(
+    Object.assign(new ErrorType(normalized.message), {
+      code,
+      ...(exceptionType ? { name: exceptionType } : {}),
+    }),
+    { provider: providerName, surface: "llm" }
+  );
+  const fallback = status
+    ? providerHttpError({
+        provider: providerName,
+        status,
+        body: normalized.message,
+        surface: "llm",
+      })
+    : networkError.messageKey
+      ? networkError
+      : providerError(codeClassification || messageClassification || PROVIDER_ERROR_CODES.ERROR, {
+          provider: providerName,
+          surface: "llm",
+        });
+  // Known enterprise translations contain only app-owned copy. Unknown mappings
+  // interpolate the provider message, which must stay out of IPC and logs.
+  let safe = mapped.messageKey && !mapped.messageParams?.error ? mapped : fallback;
+  if (
+    provider === "azure" &&
+    /content_filter|ContentFilter|content safety filtering/i.test(signature)
+  ) {
+    safe = {
+      message: `${providerName} filtered this request for content safety. Rephrase your request and try again.`,
+      messageKey: "providerErrors.contentFiltered",
+      messageParams: { provider: providerName },
+      code: "PROVIDER_CONTENT_FILTERED",
+    };
+  }
+  if (mapManagedIdentityError(normalized, provider) || code === "MANAGED_CONFIG_CHANGED") {
+    safe =
+      code === "PROVIDER_NOT_ALLOWED"
+        ? {
+            message:
+              "Managed access is blocked by your workspace policy. Contact your administrator.",
+            messageKey: "common.managedPolicyConflict",
+          }
+        : {
+            message:
+              "Managed enterprise access is unavailable. Sign in again or contact your administrator.",
+            messageKey: "common.managedConfigUnavailable",
+          };
+  }
+  return {
+    error: safe.message,
+    code: safe.code || fallback.code,
+    messageKey: safe.messageKey,
+    messageParams: safe.messageParams,
+    ...(safe.actionKey ? { actionKey: safe.actionKey, action: safe.action } : {}),
+    ...(safe.retryable !== undefined ? { retryable: safe.retryable } : {}),
+    technicalDetails: {
+      provider: providerName,
+      ...(status ? { status } : {}),
+      ...(exceptionType ? { exceptionType } : {}),
+      ...(requestId ? { requestId } : {}),
+    },
+  };
+}
+
 const ENTERPRISE_PROVIDERS = ["bedrock", "azure", "vertex"];
 
 function isEnterpriseProvider(value) {
@@ -590,6 +760,7 @@ module.exports = {
   ENTERPRISE_PROVIDERS,
   isEnterpriseProvider,
   mapEnterpriseError,
+  mapEnterpriseStreamError,
   pickEnterpriseConfig,
   runAbortableOperation,
   runBedrockRequest,
