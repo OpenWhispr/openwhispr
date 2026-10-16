@@ -3264,6 +3264,9 @@ declare global {
         model?: string;
         language?: string;
       }) => Promise<{ success: boolean; alreadyPrepared?: boolean } & PolicyFailureMetadata>;
+      meetingTranscriptionUpdateLanguage?: (
+        language: string | null
+      ) => Promise<{ success: boolean; language?: string | null; reason?: string }>;
       meetingTranscriptionStart?: (options: {
         provider?: string;
         model?: string;

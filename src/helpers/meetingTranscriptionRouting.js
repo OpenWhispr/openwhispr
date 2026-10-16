@@ -103,3 +103,13 @@ export function resolveMeetingTranscriptionOptions({
 
   return options;
 }
+
+// A running local meeting keeps transcribing after Settings changes. Undefined
+// means "do not push" (not recording, or not a local meeting). Null is Auto:
+// Cohere then uses its English fallback, and Whisper keeps detecting.
+export function liveLocalMeetingLanguage(isRecording, options) {
+  if (!isRecording || !options || options.provider !== "local") return undefined;
+  return typeof options.language === "string" && options.language.trim()
+    ? options.language.trim()
+    : null;
+}
