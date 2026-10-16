@@ -2,7 +2,7 @@ import i18n, { normalizeUiLanguage } from "../../i18n";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { en as enPrompts } from "../../locales/prompts";
 import { getLanguageInstruction } from "../../utils/languageSupport";
-import { STYLE_PREFERENCES_HEADING } from "../../helpers/selectionEditing.js";
+import { buildStylePreferences } from "../../helpers/selectionEditing.js";
 import {
   PROMPT_KINDS,
   PASTE_RESPONSE_SUFFIX,
@@ -25,9 +25,7 @@ export interface ResolvePromptOptions {
 export function resolvePrompt(kind: PromptKind, opts: ResolvePromptOptions): string {
   const custom = useSettingsStore.getState().customPrompts[kind];
   const template = opts.editingPrompt
-    ? [opts.editingPrompt, custom && `${STYLE_PREFERENCES_HEADING}\n${custom}`]
-        .filter(Boolean)
-        .join("\n\n")
+    ? [opts.editingPrompt, custom && buildStylePreferences(custom)].filter(Boolean).join("\n\n")
     : custom || getDefaultPromptText(kind, opts.uiLanguage);
   return applySubstitutions(template, opts);
 }

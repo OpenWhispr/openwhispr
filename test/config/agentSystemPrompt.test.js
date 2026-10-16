@@ -192,9 +192,10 @@ test("an editing prompt always applies, with a saved prompt as style preferences
   );
 
   useSettingsStore.getState().setCustomPrompt("dictationAgent", "MINE {{agentName}}");
+  // The precedence comes after the saved prompt, so the saved prompt can't have the last word.
   assert.match(
     resolvePrompt("dictationAgent", opts),
-    /^EDITING Jarvis\n\nAssistant style preferences \([^)]*\):\nMINE Jarvis$/
+    /^EDITING Jarvis\n\nAssistant style preferences \([^)]*\):\nMINE Jarvis\n\nThe editing rules [^\n]*take precedence over these style preferences\.$/
   );
   assert.equal(resolvePrompt("dictationAgent", { agentName: "Jarvis" }), "MINE Jarvis");
 });
