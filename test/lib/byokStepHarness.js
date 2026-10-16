@@ -1,3 +1,4 @@
+const assert = require("node:assert/strict");
 const React = require("react");
 const { createRoot } = require("react-dom/client");
 const {
@@ -7,6 +8,7 @@ const {
 } = require("./rendererTestHarness");
 
 const MIGRATED = { _providerSettingsMigrated: "1", uploadTranscriptionMigrated: "true" };
+const ENDPOINT_PLACEHOLDER = "onboarding.rehaul.provider.endpointPlaceholder";
 
 function findAll(node, predicate, found = []) {
   if (Array.isArray(node)) {
@@ -33,32 +35,25 @@ async function mountByokStep(
     secrets = {},
   } = {}
 ) {
-  // Registered first so it runs first: after hooks run in order, and unmounting once
-  // the globals are gone would run the step's cleanup without a window.
   let unmount = async () => {};
-  t.after(() => unmount());
-  // Saving a key schedules its secret write and a .env persist; those would run
-  // against a window that is already gone, so whatever is still pending is dropped
-  // rather than waited out.
-  const pendingTimers = new Set();
-  const { setTimeout: realSetTimeout, clearTimeout: realClearTimeout } = globalThis;
-  globalThis.setTimeout = (...args) => {
-    const id = realSetTimeout(...args);
-    pendingTimers.add(id);
-    return id;
-  };
-  globalThis.clearTimeout = (id) => {
-    pendingTimers.delete(id);
-    realClearTimeout(id);
-  };
-  t.after(() => {
-    for (const id of pendingTimers) realClearTimeout(id);
-    globalThis.setTimeout = realSetTimeout;
-    globalThis.clearTimeout = realClearTimeout;
+  // After hooks run in order: unmount while the window still exists, then stop the mock
+  // clock before the renderer server closes.
+  t.after(async () => {
+    await unmount();
+    t.mock.timers.reset();
   });
+  const connections = [];
   installBrowserGlobals(t, {
     initialStorage: { ...MIGRATED, ...settings },
-    window: { electronAPI: { getPlatform: () => "linux" }, dispatchEvent: () => true },
+    window: {
+      electronAPI: {
+        getPlatform: () => "linux",
+        // Each automatic check waits here until the test answers it.
+        testProviderConnection: (config) =>
+          new Promise((resolve) => connections.push({ config, resolve })),
+      },
+      dispatchEvent: () => true,
+    },
   });
   const container = installHookDom(t);
   const vite = await createRendererServer(t, {
@@ -70,7 +65,6 @@ async function mountByokStep(
         export function useTranslation() { return { t }; }
         export const initReactI18next = { type: "3rdParty", init() {} };
       `,
-      "/ProviderConnectionTest": `export default function ProviderConnectionTest() { return null; }`,
       "/OnboardingShell": `export function BrandMark() { return null; }`,
       "/ui/ProviderIcon": `export function ProviderIcon() { return null; }`,
       // Saving a key clears ReasoningService's key cache through a lazy import.
@@ -82,6 +76,15 @@ async function mountByokStep(
   const { ByokProviderStep } = await vite.ssrLoadModule(
     "/components/onboarding/ProviderSetupStep.tsx"
   );
+  const { CONNECTION_CHECK_DELAY_MS } = await vite.ssrLoadModule(
+    "/hooks/useConnectionAutoCheck.ts"
+  );
+  // The step's timers run on a mock clock. Anything still pending when the test ends (a
+  // key's secret write, a draft flush) is dropped rather than waited out. One mount per
+  // test context: the clock can be enabled only once.
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+
+  let proceeded = 0;
 
   let tree;
   const drafts = [];
@@ -93,7 +96,9 @@ async function mountByokStep(
       resumeState,
       onSelfHostedChange: (requested) => selfHostedChanges.push(requested),
       onConnectionChange() {},
-      onProceed() {},
+      onProceed: () => {
+        proceeded += 1;
+      },
       onResumeStateChange: (draft) => drafts.push(draft),
     });
     return null;
@@ -112,6 +117,11 @@ async function mountByokStep(
   const act = (fn) => React.act(async () => fn());
   const proceedButton = () =>
     find((node) => node.props?.children === "onboarding.rehaul.provider.proceed")[0];
+  const wait = (ms) => act(() => t.mock.timers.tick(ms));
+  const answerConnection = (result, index = connections.length - 1) =>
+    act(() => connections[index].resolve(result));
+  const checkField = (label) => find((node) => node.props?.check && node.props.label === label)[0];
+  const endpoint = () => input(ENDPOINT_PLACEHOLDER);
   return {
     vite,
     selfHostedChanges,
@@ -133,14 +143,30 @@ async function mountByokStep(
           providerId
         )
       ),
-    passConnectionTest: () =>
-      act(() =>
-        find((node) => typeof node.props?.onSuccessChange === "function")[0].props.onSuccessChange(
-          true
-        )
-      ),
+    connectionRequests: () => connections.map((connection) => connection.config),
+    wait,
+    answerConnection,
+    // The step checks by itself: wait out the pause, then answer the request it sent.
+    passConnectionTest: async () => {
+      const sent = connections.length;
+      await wait(CONNECTION_CHECK_DELAY_MS);
+      assert.equal(connections.length, sent + 1, "the step sends one check after the pause");
+      await answerConnection({ success: true });
+    },
+    checkField,
+    retryCheck: (label) => act(() => checkField(label).props.check.retry()),
+    liveRegion: () => find((node) => node.props?.role === "status")[0],
+    focusEndpoint: () => act(() => endpoint().props.onFocus()),
+    // windowSwitch: the window lost focus but the field is still the page's focus.
+    blurEndpoint: ({ windowSwitch = false } = {}) =>
+      act(() => {
+        const field = {};
+        field.ownerDocument = { activeElement: windowSwitch ? field : null };
+        endpoint().props.onBlur({ currentTarget: field });
+      }),
     proceedDisabled: () => proceedButton().props.disabled,
     proceed: () => act(() => proceedButton().props.onClick()),
+    proceeded: () => proceeded,
     // Unmounting flushes the debounced draft write, as advancing past the step does.
     unmountForDrafts: async () => {
       await unmount();

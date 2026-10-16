@@ -1,11 +1,20 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FocusEvent,
+  type ReactNode,
+} from "react";
 import { AudioLines, Check, CircleCheck, Download, MousePointer2 } from "../icons";
 import { useTranslation } from "react-i18next";
-import ProviderConnectionTest from "./ProviderConnectionTest";
+import { FieldLabel, ProviderCheckField } from "./ProviderCheckField";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { ProviderIcon } from "../ui/ProviderIcon";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { useConnectionAutoCheck } from "../../hooks/useConnectionAutoCheck";
 import { useModelDownload } from "../../hooks/useModelDownload";
 import type { ParakeetCheckResult } from "../../types/electron";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -115,7 +124,7 @@ function StepPrimaryAction({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="h-9 rounded-[38px] px-5 text-sm"
+      className={`h-9 rounded-[38px] px-5 text-sm ${className}`}
     >
       {children}
     </Button>
@@ -301,12 +310,6 @@ function resolveInitialLocalSelection(
 
 type HostedProvider = CloudProviderData | TranscriptionProviderData;
 
-function FieldLabel({ children }: { children: ReactNode }) {
-  return (
-    <span className="mb-1.5 block text-xs text-[var(--onboarding-text-tertiary)]">{children}</span>
-  );
-}
-
 export function ByokProviderStep({
   stepId,
   selfHostedRequested = false,
@@ -394,11 +397,7 @@ export function ByokProviderStep({
   const [draftCortiClientSecret, setDraftCortiClientSecret] = useState(
     seed.provider === "corti" ? store.cortiClientSecret : ""
   );
-  const [connected, setConnected] = useState(false);
-
-  useEffect(() => {
-    onConnectionChange(false);
-  }, [onConnectionChange]);
+  const [endpointFocused, setEndpointFocused] = useState(false);
 
   // The card the saved setup picked goes on the session once, at mount (both deps are
   // stable), so the draft this visit writes reopens on it; later switches report
@@ -435,9 +434,7 @@ export function ByokProviderStep({
     setSelfHosted(false);
     onSelfHostedChange(false);
     setDraftApiKey(providerCredential(selectedProvider, useSettingsStore.getState()).value);
-    setConnected(false);
-    onConnectionChange(false);
-  }, [onConnectionChange, onSelfHostedChange, selectedProvider, selfHosted, selfHostedAllowed]);
+  }, [onSelfHostedChange, selectedProvider, selfHosted, selfHostedAllowed]);
 
   // Saved keys load asynchronously (initializeSettings), so an empty field takes its key
   // when it arrives; anything already in the field is kept.
@@ -472,8 +469,7 @@ export function ByokProviderStep({
     setSelfHosted(next);
     onSelfHostedChange(next);
     setDraftApiKey(credentialFor(next, selectedProvider, draftBaseUrl));
-    setConnected(false);
-    onConnectionChange(false);
+    setEndpointFocused(false); // the address field leaves with its card, sometimes without a blur
   };
 
   const chooseProvider = (providerId: string) => {
@@ -483,23 +479,7 @@ export function ByokProviderStep({
     setDraftApiKey(providerCredential(providerId, store).value);
     setDraftCortiClientId(providerId === "corti" ? store.cortiClientId : "");
     setDraftCortiClientSecret(providerId === "corti" ? store.cortiClientSecret : "");
-    setConnected(false);
-    onConnectionChange(false);
   };
-
-  const chooseModel = (modelId: string) => {
-    setSelectedModel(modelId);
-    setConnected(false);
-    onConnectionChange(false);
-  };
-
-  const handleConnected = useCallback(
-    (success: boolean) => {
-      setConnected(success);
-      onConnectionChange(success);
-    },
-    [onConnectionChange]
-  );
 
   const testingProvider = selfHosted ? "custom" : selectedProvider;
   const testingKey = draftApiKey;
@@ -517,6 +497,41 @@ export function ByokProviderStep({
           selectedModel
         )
       : Boolean(currentProvider && selectedModel && testingKey.trim());
+
+  const check = useConnectionAutoCheck({
+    config: {
+      scope: assistant ? "reasoning" : "transcription",
+      provider: testingProvider,
+      apiKey: testingKey,
+      baseUrl: testingBaseUrl,
+      model: selfHosted ? draftCustomModel : selectedModel,
+      clientId: isCortiTranscription ? draftCortiClientId : undefined,
+      clientSecret: isCortiTranscription ? draftCortiClientSecret : undefined,
+      environment: store.cortiEnvironment,
+      tenant: store.cortiTenant,
+    },
+    ready: fieldsReady,
+    // A half-typed address may belong to someone else: nothing is sent while it is edited.
+    hold: selfHosted && endpointFocused,
+  });
+  const connected = check.phase === "connected";
+  useEffect(() => {
+    onConnectionChange(connected);
+  }, [connected, onConnectionChange]);
+
+  // Switching to another app blurs the field but leaves it focused in the page, and the
+  // address there may still be half typed.
+  const releaseEndpoint = (event: FocusEvent<HTMLInputElement>) => {
+    if (event.currentTarget.ownerDocument.activeElement !== event.currentTarget) {
+      setEndpointFocused(false);
+    }
+  };
+  const announcement =
+    check.announcement === "connected"
+      ? t("onboarding.rehaul.provider.connected")
+      : check.announcement === "testing"
+        ? t("onboarding.rehaul.provider.testing")
+        : "";
 
   const commitAndProceed = () => {
     if (selfHosted) {
@@ -607,6 +622,8 @@ export function ByokProviderStep({
                 dir="ltr"
                 value={draftBaseUrl}
                 onChange={(event) => setDraftBaseUrl(event.target.value)}
+                onFocus={() => setEndpointFocused(true)}
+                onBlur={releaseEndpoint}
                 placeholder={t("onboarding.rehaul.provider.endpointPlaceholder")}
                 className={inputClass}
               />
@@ -624,16 +641,15 @@ export function ByokProviderStep({
                 className={inputClass}
               />
             </label>
-            <label className="block">
-              <FieldLabel>{t("onboarding.rehaul.provider.modelId")}</FieldLabel>
-              <Input
-                dir="ltr"
-                value={draftCustomModel}
-                onChange={(event) => setDraftCustomModel(event.target.value)}
-                placeholder={t("onboarding.rehaul.provider.modelIdPlaceholder")}
-                className={inputClass}
-              />
-            </label>
+            <ProviderCheckField
+              label={t("onboarding.rehaul.provider.modelId")}
+              check={check}
+              invalidOn="modelNotFound"
+              value={draftCustomModel}
+              onChange={(event) => setDraftCustomModel(event.target.value)}
+              placeholder={t("onboarding.rehaul.provider.modelIdPlaceholder")}
+              className={inputClass}
+            />
           </>
         ) : (
           <>
@@ -676,7 +692,7 @@ export function ByokProviderStep({
               <FieldLabel>{t("onboarding.rehaul.provider.modelLabel")}</FieldLabel>
               <Select
                 value={selectedModel || undefined}
-                onValueChange={chooseModel}
+                onValueChange={setSelectedModel}
                 disabled={!selectedProvider}
               >
                 <SelectTrigger
@@ -714,64 +730,47 @@ export function ByokProviderStep({
                     autoComplete="off"
                   />
                 </label>
-                <label className="block">
-                  <FieldLabel>{t("onboarding.rehaul.provider.clientSecret")}</FieldLabel>
-                  <Input
-                    dir="ltr"
-                    type="password"
-                    value={draftCortiClientSecret}
-                    onChange={(event) => setDraftCortiClientSecret(event.target.value)}
-                    className={inputClass}
-                    autoComplete="off"
-                  />
-                </label>
+                <ProviderCheckField
+                  label={t("onboarding.rehaul.provider.clientSecret")}
+                  check={check}
+                  invalidOn="credentialsRejected"
+                  type="password"
+                  value={draftCortiClientSecret}
+                  onChange={(event) => setDraftCortiClientSecret(event.target.value)}
+                  className={inputClass}
+                  autoComplete="off"
+                />
               </div>
             ) : (
-              <label className="block">
-                <FieldLabel>{t("onboarding.rehaul.provider.apiKey")}</FieldLabel>
-                <Input
-                  dir="ltr"
-                  type="password"
-                  value={draftApiKey}
-                  onChange={(event) => setDraftApiKey(event.target.value)}
-                  placeholder={t("onboarding.rehaul.provider.apiKeyPlaceholder")}
-                  disabled={!selectedProvider}
-                  autoComplete="off"
-                  spellCheck={false}
-                  className={inputClass}
-                />
-              </label>
+              <ProviderCheckField
+                label={t("onboarding.rehaul.provider.apiKey")}
+                check={check}
+                invalidOn="credentialsRejected"
+                type="password"
+                value={draftApiKey}
+                onChange={(event) => setDraftApiKey(event.target.value)}
+                placeholder={t("onboarding.rehaul.provider.apiKeyPlaceholder")}
+                disabled={!selectedProvider}
+                autoComplete="off"
+                spellCheck={false}
+                className={inputClass}
+              />
             )}
           </>
         )}
 
-        {/* Keyed per step+provider only; baseUrl/model changes reset through the
-            component's config effect instead of a remount, which used to run on
-            every keystroke in the self-hosted URL and model inputs. */}
-        <ProviderConnectionTest
-          key={`${stepId}:${testingProvider}`}
-          config={{
-            scope: assistant ? "reasoning" : "transcription",
-            provider: testingProvider,
-            apiKey: testingKey,
-            baseUrl: testingBaseUrl,
-            model: selfHosted ? draftCustomModel : selectedModel,
-            clientId: isCortiTranscription ? draftCortiClientId : undefined,
-            clientSecret: isCortiTranscription ? draftCortiClientSecret : undefined,
-            environment: store.cortiEnvironment,
-            tenant: store.cortiTenant,
-          }}
-          onSuccessChange={handleConnected}
-          variant="inline"
-        />
-
         <StepPrimaryAction
           onClick={commitAndProceed}
-          disabled={!connected || !fieldsReady}
-          className="mt-4! w-full focus-visible:ring-0 focus-visible:ring-offset-0"
+          disabled={!connected}
+          className="mt-4! w-full"
         >
           {t("onboarding.rehaul.provider.proceed")}
         </StepPrimaryAction>
+      </div>
+
+      {/* Present from the start: a region that appears together with its text is missed. */}
+      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+        {announcement}
       </div>
     </section>
   );
