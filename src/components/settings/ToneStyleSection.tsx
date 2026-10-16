@@ -65,81 +65,81 @@ export default function ToneStyleSection({ onOpenCleanupSettings }: ToneStyleSec
         </SettingsPanelRow>
       </SettingsPanel>
 
-      {toneStyleEnabled && (
-        <>
-          {/* Tones only shape what cleanup writes. */}
-          {!useCleanupModel && (
-            <InfoBox variant="warning" className="mb-6 flex items-center justify-between gap-4 p-3">
-              <p className="text-[13px] text-foreground">{t("toneStyle.settings.cleanupOff")}</p>
-              <Button variant="outline" size="sm" className="shrink-0" onClick={turnOnCleanup}>
-                {t("toneStyle.settings.turnOnCleanup")}
-              </Button>
-            </InfoBox>
-          )}
+      {/* Tones only shape what cleanup writes. */}
+      {toneStyleEnabled && !useCleanupModel && (
+        <InfoBox variant="warning" className="mb-6 flex items-center justify-between gap-4 p-3">
+          <p className="text-[13px] text-foreground">{t("toneStyle.settings.cleanupOff")}</p>
+          <Button variant="outline" size="sm" className="shrink-0" onClick={turnOnCleanup}>
+            {t("toneStyle.settings.turnOnCleanup")}
+          </Button>
+        </InfoBox>
+      )}
 
-          <div className="space-y-6">
-            {TONE_APP_CATEGORIES.map((category) => {
-              const title = t(`toneStyle.categories.${category}.title`);
-              return (
-                <section key={category}>
-                  <div className="mb-4 flex items-center gap-3">
-                    <AppMarkStack marks={CATEGORY_APP_MARKS[category].settings} size={22} />
-                    <h4 className="text-[15px] font-normal! tracking-normal! text-foreground">
-                      {title}
-                    </h4>
-                  </div>
-                  <div role="group" aria-label={title} className="grid grid-cols-3 gap-4">
-                    {TONE_OPTIONS[category].map((tone) => {
-                      const selected = draft[category] === tone;
-                      return (
-                        <button
-                          key={tone}
-                          type="button"
-                          aria-pressed={selected}
-                          onClick={() => setDraft((current) => ({ ...current, [category]: tone }))}
+      {/* Off, the picks stay visible but grayed out. */}
+      <div className={cn(!toneStyleEnabled && "pointer-events-none opacity-50")}>
+        <div className="space-y-6">
+          {TONE_APP_CATEGORIES.map((category) => {
+            const title = t(`toneStyle.categories.${category}.title`);
+            return (
+              <section key={category}>
+                <div className="mb-4 flex items-center gap-3">
+                  <AppMarkStack marks={CATEGORY_APP_MARKS[category].settings} size={22} />
+                  <h4 className="text-[15px] font-normal! tracking-normal! text-foreground">
+                    {title}
+                  </h4>
+                </div>
+                <div role="group" aria-label={title} className="grid grid-cols-3 gap-4">
+                  {TONE_OPTIONS[category].map((tone) => {
+                    const selected = draft[category] === tone;
+                    return (
+                      <button
+                        key={tone}
+                        type="button"
+                        aria-pressed={selected}
+                        disabled={!toneStyleEnabled}
+                        onClick={() => setDraft((current) => ({ ...current, [category]: tone }))}
+                        className={cn(
+                          "flex h-[34px] items-center gap-2.5 rounded-[9px] border px-3 text-start text-[13px] text-foreground transition-colors",
+                          "outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+                          selected
+                            ? "border-transparent bg-primary/12 dark:bg-primary/15"
+                            : "border-border hover:bg-muted/50 dark:border-white/10 dark:hover:bg-white/5"
+                        )}
+                      >
+                        <span
+                          aria-hidden="true"
                           className={cn(
-                            "flex h-[34px] items-center gap-2.5 rounded-[9px] border px-3 text-start text-[13px] text-foreground transition-colors",
-                            "outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+                            "flex size-3.5 shrink-0 items-center justify-center rounded-full border",
                             selected
-                              ? "border-transparent bg-primary/12 dark:bg-primary/15"
-                              : "border-border hover:bg-muted/50 dark:border-white/10 dark:hover:bg-white/5"
+                              ? "border-primary bg-primary"
+                              : "border-border-hover dark:border-white/25"
                           )}
                         >
-                          <span
-                            aria-hidden="true"
-                            className={cn(
-                              "flex size-3.5 shrink-0 items-center justify-center rounded-full border",
-                              selected
-                                ? "border-primary bg-primary"
-                                : "border-border-hover dark:border-white/25"
-                            )}
-                          >
-                            {selected && (
-                              <span className="size-1.5 rounded-full bg-primary-foreground" />
-                            )}
-                          </span>
-                          {t(`toneStyle.tones.${tone}`)}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </section>
-              );
-            })}
-          </div>
+                          {selected && (
+                            <span className="size-1.5 rounded-full bg-primary-foreground" />
+                          )}
+                        </span>
+                        {t(`toneStyle.tones.${tone}`)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
+        </div>
 
-          <div className="mt-6 flex justify-end">
-            <Button
-              variant={canSave ? "default" : "secondary"}
-              className="h-8 border-transparent px-4 text-[13px] disabled:opacity-100 disabled:text-muted-foreground/60"
-              disabled={!canSave}
-              onClick={save}
-            >
-              {t("toneStyle.settings.saveChanges")}
-            </Button>
-          </div>
-        </>
-      )}
+        <div className="mt-6 flex justify-end">
+          <Button
+            variant={canSave ? "default" : "secondary"}
+            className="h-8 border-transparent px-4 text-[13px] disabled:opacity-100 disabled:text-muted-foreground/60"
+            disabled={!toneStyleEnabled || !canSave}
+            onClick={save}
+          >
+            {t("toneStyle.settings.saveChanges")}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
