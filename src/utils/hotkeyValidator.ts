@@ -591,10 +591,10 @@ export function validateHotkey(
   }
 
   if (isMouseButtonHotkey(hotkey)) {
-    if (platform !== "darwin") {
+    if (platform !== "darwin" && platform !== "win32") {
       return {
         valid: false,
-        error: "Mouse button hotkeys are currently supported on macOS only.",
+        error: "Mouse button hotkeys are currently supported on macOS and Windows only.",
       };
     }
     return { valid: true };
@@ -602,7 +602,7 @@ export function validateHotkey(
 
   // Mouse buttons cannot be combined with keyboard modifiers — they're handled
   // by a separate native event tap, not Electron's globalShortcut.
-  if (/mousebutton[45]/i.test(hotkey)) {
+  if (/mousebutton[345]/i.test(hotkey)) {
     return {
       valid: false,
       error: "Mouse button hotkeys cannot be combined with other keys.",

@@ -16,6 +16,7 @@
 #include <string.h>
 
 static HHOOK g_hook = NULL;
+static HHOOK g_mouseHook = NULL;
 static DWORD g_targetVk = 0;
 static BOOL g_isKeyDown = FALSE;
 
@@ -149,6 +150,13 @@ DWORD ParseKeyCode(const char* keyName) {
     if (_stricmp(keyName, "CapsLock") == 0) return VK_CAPITAL;
     if (_stricmp(keyName, "NumLock") == 0) return VK_NUMLOCK;
 
+    // Mouse buttons
+    if (_stricmp(keyName, "MouseButton4") == 0 || _stricmp(keyName, "Mouse4") == 0 || _stricmp(keyName, "XButton1") == 0) return VK_XBUTTON1;
+    if (_stricmp(keyName, "MouseButton5") == 0 || _stricmp(keyName, "Mouse5") == 0 || _stricmp(keyName, "XButton2") == 0) return VK_XBUTTON2;
+    if (_stricmp(keyName, "MouseButton3") == 0 || _stricmp(keyName, "Mouse3") == 0 || _stricmp(keyName, "MiddleButton") == 0) return VK_MBUTTON;
+    if (_stricmp(keyName, "MouseButton1") == 0 || _stricmp(keyName, "Mouse1") == 0 || _stricmp(keyName, "LeftButton") == 0) return VK_LBUTTON;
+    if (_stricmp(keyName, "MouseButton2") == 0 || _stricmp(keyName, "Mouse2") == 0 || _stricmp(keyName, "RightButton") == 0) return VK_RBUTTON;
+
     // Right-side modifier keys (used as single-key hotkeys)
     if (_stricmp(keyName, "RightAlt") == 0 || _stricmp(keyName, "RightOption") == 0) return VK_RMENU;
     if (_stricmp(keyName, "RightControl") == 0 || _stricmp(keyName, "RightCtrl") == 0) return VK_RCONTROL;
@@ -257,11 +265,71 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     return CallNextHookEx(g_hook, nCode, wParam, lParam);
 }
 
+LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
+    if (nCode == HC_ACTION) {
+        MSLLHOOKSTRUCT* mouse = (MSLLHOOKSTRUCT*)lParam;
+        DWORD vkCode = 0;
+        BOOL isKeyDown = FALSE;
+        BOOL isKeyUp = FALSE;
+
+        if (wParam == WM_XBUTTONDOWN || wParam == WM_NCXBUTTONDOWN) {
+            WORD xButton = HIWORD(mouse->mouseData);
+            if (xButton == XBUTTON1) vkCode = VK_XBUTTON1;
+            else if (xButton == XBUTTON2) vkCode = VK_XBUTTON2;
+            isKeyDown = TRUE;
+        } else if (wParam == WM_XBUTTONUP || wParam == WM_NCXBUTTONUP) {
+            WORD xButton = HIWORD(mouse->mouseData);
+            if (xButton == XBUTTON1) vkCode = VK_XBUTTON1;
+            else if (xButton == XBUTTON2) vkCode = VK_XBUTTON2;
+            isKeyUp = TRUE;
+        } else if (wParam == WM_MBUTTONDOWN || wParam == WM_NCMBUTTONDOWN) {
+            vkCode = VK_MBUTTON;
+            isKeyDown = TRUE;
+        } else if (wParam == WM_MBUTTONUP || wParam == WM_NCMBUTTONUP) {
+            vkCode = VK_MBUTTON;
+            isKeyUp = TRUE;
+        } else if (wParam == WM_LBUTTONDOWN || wParam == WM_NCLBUTTONDOWN) {
+            vkCode = VK_LBUTTON;
+            isKeyDown = TRUE;
+        } else if (wParam == WM_LBUTTONUP || wParam == WM_NCLBUTTONUP) {
+            vkCode = VK_LBUTTON;
+            isKeyUp = TRUE;
+        } else if (wParam == WM_RBUTTONDOWN || wParam == WM_NCRBUTTONDOWN) {
+            vkCode = VK_RBUTTON;
+            isKeyDown = TRUE;
+        } else if (wParam == WM_RBUTTONUP || wParam == WM_NCRBUTTONUP) {
+            vkCode = VK_RBUTTON;
+            isKeyUp = TRUE;
+        }
+
+        if (vkCode != 0 && vkCode == g_targetVk) {
+            if (isKeyDown) {
+                if (!g_isKeyDown && AreRequiredModifiersPressed()) {
+                    g_isKeyDown = TRUE;
+                    printf("KEY_DOWN\n");
+                    fflush(stdout);
+                }
+            } else if (isKeyUp) {
+                if (g_isKeyDown) {
+                    g_isKeyDown = FALSE;
+                    printf("KEY_UP\n");
+                    fflush(stdout);
+                }
+            }
+        }
+    }
+    return CallNextHookEx(g_mouseHook, nCode, wParam, lParam);
+}
+
 BOOL WINAPI ConsoleHandler(DWORD signal) {
     if (signal == CTRL_C_EVENT || signal == CTRL_BREAK_EVENT || signal == CTRL_CLOSE_EVENT) {
         if (g_hook) {
             UnhookWindowsHookEx(g_hook);
             g_hook = NULL;
+        }
+        if (g_mouseHook) {
+            UnhookWindowsHookEx(g_mouseHook);
+            g_mouseHook = NULL;
         }
         ExitProcess(0);
     }
@@ -327,6 +395,8 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "  %s `                        (backtick)\n", argv[0]);
         fprintf(stderr, "  %s F8                       (function key F1-F12)\n", argv[0]);
         fprintf(stderr, "  %s F13                      (extended function key F13-F24)\n", argv[0]);
+        fprintf(stderr, "  %s MouseButton4             (mouse button 4 / side back)\n", argv[0]);
+        fprintf(stderr, "  %s MouseButton5             (mouse button 5 / side forward)\n", argv[0]);
         fprintf(stderr, "  %s CommandOrControl+F11     (with modifier)\n", argv[0]);
         fprintf(stderr, "  %s Ctrl+Shift+Space         (multiple modifiers)\n", argv[0]);
         return 1;
@@ -356,6 +426,12 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // Install low-level mouse hook as well
+    g_mouseHook = SetWindowsHookEx(WH_MOUSE_LL, LowLevelMouseProc, NULL, 0);
+    if (!g_mouseHook) {
+        fprintf(stderr, "Warning: Failed to install mouse hook (error %lu)\n", GetLastError());
+    }
+
     // Signal that we're ready
     printf("READY\n");
     fflush(stdout);
@@ -368,5 +444,6 @@ int main(int argc, char* argv[]) {
     }
 
     UnhookWindowsHookEx(g_hook);
+    if (g_mouseHook) UnhookWindowsHookEx(g_mouseHook);
     return 0;
 }
