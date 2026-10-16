@@ -5091,6 +5091,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           providerName,
           cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
         });
+      let heldFrames = null;
 
       this.streamingProcessor.port.onmessage = (event) => {
         // The worklet posts its remaining PCM followed by a "flushed" sentinel
@@ -5104,7 +5105,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         // Measured from the first chunk: a recording that fails over later
         // still has its opening words in the gate.
         recordPcm16SpeechWindow(this._streamingSpeechGateState, event.data);
-        if (!this._streamingFailoverReason) provider.send(event.data);
+        if (this._streamingFailoverReason) return;
+        if (heldFrames) heldFrames.push(event.data);
+        else provider.send(event.data);
       };
 
       this.isStreaming = true;
@@ -5192,16 +5195,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       // A combined cleanup's prompt is fixed when its session is minted, so with
       // Tone & Style on the start waits briefly for the app being dictated into
-      // before minting. Audio that reached a warm socket minted for another app
-      // is dropped when the start replaces it, as with any other mismatch. An
-      // app not known by then (a Wayland AT-SPI target takes about a second)
-      // gets no combined cleanup: /api/reason cleans up in its tone at stop.
+      // before minting. Audio from the wait is held until the session has
+      // started: with no warm socket main has nowhere to buffer it, and a warm
+      // one minted for another app is replaced. An app not known by then (a
+      // Wayland AT-SPI target takes about a second) gets no combined cleanup:
+      // /api/reason cleans up in its tone at stop.
       const pipelineSettings = getSettings();
       if (
         providerName === "orukeet" &&
         pipelineSettings.toneStyleEnabled &&
         this.getPipelineCleanupOptions(pipelineSettings)
       ) {
+        heldFrames = [];
         this.lastToneAppCategory = await Promise.race([
           this.toneStylePromise,
           new Promise((resolve) => setTimeout(() => resolve(null), 250)),
@@ -5263,6 +5268,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         logger.debug("Streaming unavailable, falling back to regular recording", {}, "streaming");
         return this.startRecording();
       }
+
+      if (!this._streamingFailoverReason) heldFrames?.forEach((frame) => provider.send(frame));
+      heldFrames = null;
 
       logger.info(
         "Streaming start timing",

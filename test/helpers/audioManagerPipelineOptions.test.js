@@ -152,15 +152,17 @@ test("with Tone & Style on, a streaming start streams audio while it waits to mi
   window.electronAPI.captureDictationAppCategory = () =>
     new Promise((resolve) => (classify = resolve));
   let audioWired = false;
+  const workletPort = {};
   globalThis.AudioWorkletNode = class {
     constructor() {
       audioWired = true;
-      this.port = {};
+      this.port = workletPort;
     }
   };
   t.after(() => delete globalThis.AudioWorkletNode);
   const audioNode = { connect() {} };
   const minted = [];
+  const sent = [];
   const unsubscribe = () => () => {};
   const manager = createManager({
     _streamingCancellationGeneration: 0,
@@ -183,6 +185,7 @@ test("with Tone & Style on, a streaming start streams audio while it waits to mi
       onFinal: unsubscribe,
       onError: unsubscribe,
       onSessionEnd: unsubscribe,
+      send: (frame) => sent.push(frame),
       start: async (options) => {
         minted.push(options.pipelineOptions);
         return { success: true };
@@ -199,9 +202,15 @@ test("with Tone & Style on, a streaming start streams audio while it waits to mi
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(audioWired, true);
   assert.equal(minted.length, 0);
+  // Audio from the wait reaches the session only once it has started: with no
+  // warm socket, main has nowhere to buffer it before then.
+  const frame = new Int16Array(160).buffer;
+  workletPort.onmessage({ data: frame });
+  assert.equal(sent.length, 0);
   classify("email");
   assert.equal(await starting, true);
   assert.equal(audioWired, true);
+  assert.deepEqual(sent, [frame]);
   assert.equal(minted[0].tone, "excited");
   assert.equal(minted[0].appCategory, "email");
   // A fallback cleanup at stop gets the same tone.
