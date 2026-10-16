@@ -89,6 +89,7 @@ class TextEditMonitor extends EventEmitter {
     this._pollInterval = null;
     this._lastValue = null;
     this._stdoutBuffer = "";
+    this._monitorGeneration = 0;
     this.lastTargetPid = null;
     this._captureTargetPromise = null;
     this._lastCaptureAt = 0;
@@ -407,14 +408,15 @@ class TextEditMonitor extends EventEmitter {
   startMonitoring(originalText, timeoutMs = 30000, options = {}) {
     this.stopMonitoring();
     this.currentOriginalText = originalText;
+    const generation = this._monitorGeneration;
 
     if (process.platform === "darwin") {
       const resolved = this.resolveBinary();
       if (resolved) {
-        this._startMacOSNative(originalText, timeoutMs, options.targetPid, resolved);
+        this._startMacOSNative(originalText, timeoutMs, options.targetPid, resolved, generation);
         return;
       }
-      this._startMacOSPolling(originalText, timeoutMs, options.targetPid);
+      this._startMacOSPolling(originalText, timeoutMs, options.targetPid, generation);
       return;
     }
 
@@ -457,6 +459,7 @@ class TextEditMonitor extends EventEmitter {
     this._stdoutBuffer = "";
     this.process.stdout.setEncoding("utf8");
     this.process.stdout.on("data", (chunk) => {
+      if (generation !== this._monitorGeneration) return;
       debugLogger.debug("[TextEditMonitor] stdout", { data: chunk.trim() });
       this._handleProcessStdoutChunk(chunk);
     });
@@ -467,11 +470,13 @@ class TextEditMonitor extends EventEmitter {
     });
 
     this.process.on("error", (err) => {
+      if (generation !== this._monitorGeneration) return;
       debugLogger.debug("[TextEditMonitor] Process error", { error: err.message });
       this.process = null;
     });
 
     this.process.on("exit", (code, signal) => {
+      if (generation !== this._monitorGeneration) return;
       debugLogger.debug("[TextEditMonitor] Process exited", { code, signal });
       this.process = null;
     });
@@ -481,6 +486,8 @@ class TextEditMonitor extends EventEmitter {
   }
 
   stopMonitoring() {
+    // Killing a child does not cancel buffered output, exit events or AX queries.
+    this._monitorGeneration++;
     if (this.timeout) {
       clearTimeout(this.timeout);
       this.timeout = null;
@@ -562,7 +569,7 @@ class TextEditMonitor extends EventEmitter {
    * macOS: use the native Swift AXObserver binary for event-based text monitoring.
    * Falls back to osascript polling if the binary fails to start.
    */
-  async _startMacOSNative(originalText, timeoutMs, targetPid, resolved) {
+  async _startMacOSNative(originalText, timeoutMs, targetPid, resolved, generation) {
     if (!targetPid) {
       debugLogger.debug("[TextEditMonitor] macOS native: no target PID");
       this.stopMonitoring();
@@ -586,7 +593,7 @@ class TextEditMonitor extends EventEmitter {
     });
 
     await new Promise((r) => setTimeout(r, INITIAL_QUERY_DELAY_MS));
-    if (this.currentOriginalText === null) return;
+    if (generation !== this._monitorGeneration) return;
 
     const { command, args } = resolved;
 
@@ -597,7 +604,7 @@ class TextEditMonitor extends EventEmitter {
         "[TextEditMonitor] macOS native: binary not executable, falling back to polling",
         { command }
       );
-      this._startMacOSPolling(originalText, timeoutMs, targetPid);
+      this._startMacOSPolling(originalText, timeoutMs, targetPid, generation);
       return;
     }
 
@@ -615,6 +622,7 @@ class TextEditMonitor extends EventEmitter {
     this._stdoutBuffer = "";
     this.process.stdout.setEncoding("utf8");
     this.process.stdout.on("data", (chunk) => {
+      if (generation !== this._monitorGeneration) return;
       debugLogger.debug("[TextEditMonitor] stdout", { data: chunk.trim() });
       if (chunk.includes("NO_ELEMENT")) axRun.noElement = true;
       this._handleProcessStdoutChunk(chunk);
@@ -627,15 +635,17 @@ class TextEditMonitor extends EventEmitter {
     });
 
     this.process.on("error", (err) => {
+      if (generation !== this._monitorGeneration) return;
       debugLogger.debug("[TextEditMonitor] macOS native: process error, falling back to polling", {
         error: err.message,
       });
       this.process = null;
       if (this.currentOriginalText === null) return;
-      this._startMacOSPolling(originalText, timeoutMs, targetPid);
+      this._startMacOSPolling(originalText, timeoutMs, targetPid, generation);
     });
 
     this.process.on("exit", (code, signal) => {
+      if (generation !== this._monitorGeneration) return;
       debugLogger.debug("[TextEditMonitor] Process exited", { code, signal });
       this.process = null;
     });
@@ -677,7 +687,7 @@ class TextEditMonitor extends EventEmitter {
    * @param {number} timeoutMs - Monitoring timeout
    * @param {number|null} targetPid - PID of the app that received the paste
    */
-  _startMacOSPolling(originalText, timeoutMs, targetPid) {
+  _startMacOSPolling(originalText, timeoutMs, targetPid, generation) {
     if (!targetPid) {
       debugLogger.debug("[TextEditMonitor] macOS: no target PID");
       this.stopMonitoring();
@@ -691,7 +701,7 @@ class TextEditMonitor extends EventEmitter {
 
     // Delay before querying to let the paste keystroke be processed.
     setTimeout(
-      () => this._queryInitialValue(targetPid, originalText, timeoutMs),
+      () => this._queryInitialValue(targetPid, originalText, timeoutMs, generation),
       INITIAL_QUERY_DELAY_MS
     );
   }
@@ -700,12 +710,11 @@ class TextEditMonitor extends EventEmitter {
    * Query the initial AXValue with retries. The target app may not have processed
    * the pasted text yet, so an empty value is retried a few times before giving up.
    */
-  async _queryInitialValue(targetPid, originalText, timeoutMs, attempt = 1) {
-    // Guard against stopMonitoring() being called while we waited
-    if (this.currentOriginalText === null) return;
+  async _queryInitialValue(targetPid, originalText, timeoutMs, generation, attempt = 1) {
+    if (generation !== this._monitorGeneration) return;
 
     const initialValue = await this._queryMacOSValue(targetPid);
-    if (this.currentOriginalText === null) return;
+    if (generation !== this._monitorGeneration) return;
 
     if (initialValue === null) {
       debugLogger.debug("[TextEditMonitor] macOS: no focused element");
@@ -720,7 +729,8 @@ class TextEditMonitor extends EventEmitter {
           maxRetries: INITIAL_QUERY_RETRIES,
         });
         setTimeout(
-          () => this._queryInitialValue(targetPid, originalText, timeoutMs, attempt + 1),
+          () =>
+            this._queryInitialValue(targetPid, originalText, timeoutMs, generation, attempt + 1),
           INITIAL_QUERY_RETRY_DELAY_MS
         );
         return;
@@ -738,8 +748,7 @@ class TextEditMonitor extends EventEmitter {
 
     this._pollInterval = setInterval(async () => {
       const currentValue = await this._queryMacOSValue(targetPid);
-      // Guard against stopMonitoring() being called during the query
-      if (this.currentOriginalText === null) return;
+      if (generation !== this._monitorGeneration) return;
 
       if (currentValue === null) {
         debugLogger.debug("[TextEditMonitor] macOS: lost focused element");
