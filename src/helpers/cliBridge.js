@@ -372,14 +372,14 @@ class CliBridge {
         const err = new Error(
           requested
             ? `Unknown model '${requested}'. Available: ${models.map((m) => m.model).join(", ")}`
-            : "No local transcription model is selected. Choose one in OpenWhispr under Settings → Transcription, or pass 'model'."
+            : "No local transcription model is selected. Choose one in Dyktownik under Settings → Transcription, or pass 'model'."
         );
         err.code = "VALIDATION";
         throw err;
       }
       if (!match.downloaded) {
         const err = new Error(
-          `Model '${match.model}' is not downloaded. Open OpenWhispr and download it under Settings → Transcription.`
+          `Model '${match.model}' is not downloaded. Open Dyktownik and download it under Settings → Transcription.`
         );
         err.code = "VALIDATION";
         throw err;

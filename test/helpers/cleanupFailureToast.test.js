@@ -46,7 +46,7 @@ test("cleanup toast localizes AWS recovery guidance and keeps fallback status qu
 
   const failure = {
     message:
-      "AWS Bedrock is temporarily unavailable due to high demand. This is an AWS service issue, not an OpenWhispr outage. Please try again in a few minutes.",
+      "AWS Bedrock is temporarily unavailable due to high demand. This is an AWS service issue, not an Dyktownik outage. Please try again in a few minutes.",
     messageKey: "reasoning.enterprise.errors.bedrock.serviceUnavailable",
     action: "Run the command below in your terminal to re-authenticate:",
     actionKey: "reasoning.enterprise.errors.bedrock.actions.reauthenticate",
@@ -63,7 +63,7 @@ test("cleanup toast localizes AWS recovery guidance and keeps fallback status qu
   assert.equal(globalThis.__cleanupFailureToasts.length, 1);
   assert.deepEqual(globalThis.__cleanupFailureToasts[0], {
     title:
-      "AWS Bedrock no está disponible temporalmente debido a una alta demanda. Este es un problema del servicio de AWS, no una interrupción de OpenWhispr. Vuelve a intentarlo en unos minutos.",
+      "AWS Bedrock no está disponible temporalmente debido a una alta demanda. Este es un problema del servicio de AWS, no una interrupción de Dyktownik. Vuelve a intentarlo en unos minutos.",
     description: "Ejecuta el siguiente comando en tu terminal para volver a autenticarte:",
     secondaryDescription: "Tu dictado se pegó sin limpieza con IA.",
     copyCommand: "aws sso login --profile company-sso",
@@ -230,7 +230,7 @@ test("a signed-out Cloud cleanup notice says the fix is signing in", async (t) =
   const toastProps = await recordCleanupFailureToast(t, {
     dictationWindow: false,
     failure: {
-      message: "AI cleanup uses OpenWhispr Cloud, but you're signed out.",
+      message: "AI cleanup uses Dyktownik Cloud, but you're signed out.",
       messageKey: "hooks.audioRecording.cleanupSignedOut",
       surface: "llm",
       settingsTarget: "llms",
@@ -241,7 +241,7 @@ test("a signed-out Cloud cleanup notice says the fix is signing in", async (t) =
   assert.equal(toastProps.title, "Cleanup failed");
   assert.equal(
     toastProps.description,
-    "AI cleanup uses OpenWhispr Cloud, but you're signed out.\nOriginal dictation pasted without AI cleanup."
+    "AI cleanup uses Dyktownik Cloud, but you're signed out.\nOriginal dictation pasted without AI cleanup."
   );
   assert.deepEqual(
     toastProps.actions.map(({ label }) => label),

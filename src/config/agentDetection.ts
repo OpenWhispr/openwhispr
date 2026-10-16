@@ -43,6 +43,7 @@ const LOCALIZED_VOCATIVE_CUES: Record<string, readonly string[]> = {
   fr: ["hé", "salut"],
   it: ["ehi", "ei", "ciao", "scusa"],
   ja: ["ねぇ", "ねえ", "ヘイ"],
+  pl: ["hej", "cześć", "słuchaj"],
   pt: ["ei", "olá"],
   ru: ["привет", "эй", "слушай"],
   zh: ["嘿", "你好", "喂"],

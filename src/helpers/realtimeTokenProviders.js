@@ -135,7 +135,7 @@ function createServerTokenPoster({
   return async (path, body = {}) => {
     const apiUrl = getApiUrl();
     if (!apiUrl) {
-      const err = new Error("OpenWhispr API URL not configured");
+      const err = new Error("Dyktownik API URL not configured");
       err.code = "NO_API";
       throw err;
     }

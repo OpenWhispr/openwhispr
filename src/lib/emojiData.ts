@@ -16,6 +16,7 @@ const LOADERS: Record<string, Loader> = {
   fr: () => import("../data/emoji/fr.json"),
   it: () => import("../data/emoji/it.json"),
   ja: () => import("../data/emoji/ja.json"),
+  pl: () => import("../data/emoji/pl.json"),
   pt: () => import("../data/emoji/pt.json"),
   ru: () => import("../data/emoji/ru.json"),
   "zh-CN": () => import("../data/emoji/zh-CN.json"),

@@ -182,7 +182,7 @@ test("the description tells the model to explain how to enable each one", async 
   assert.match(text, /tell them how to enable it instead of attempting it/);
   assert.match(
     text,
-    /^- Web search: needs the user to sign in to OpenWhispr in Settings → Profile\.$/m
+    /^- Web search: needs the user to sign in to Dyktownik in Settings → Profile\.$/m
   );
   assert.match(
     text,
@@ -229,5 +229,5 @@ test("models without tools point to the existing documentation site", async () =
     { name: "Tools", reason: "modelTooSmall", where: LOCATIONS.models },
   ]);
   assert.match(text, /https:\/\/docs\.openwhispr\.com/);
-  assert.doesNotMatch(text, /Support → OpenWhispr Help/);
+  assert.doesNotMatch(text, /Support → Dyktownik Help/);
 });

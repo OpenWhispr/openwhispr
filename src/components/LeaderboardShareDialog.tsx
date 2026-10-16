@@ -55,7 +55,7 @@ function createLeaderboardCard(
   context.fillText(`${metricLabel} · ${periodLabel}`, 72, 410);
   context.fillStyle = "#94a3b8";
   context.font = "600 18px Inter, system-ui, sans-serif";
-  context.fillText("OpenWhispr", 72, 600);
+  context.fillText("Dyktownik", 72, 600);
   return canvas.toDataURL("image/png");
 }
 

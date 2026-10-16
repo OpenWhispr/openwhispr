@@ -80,7 +80,7 @@ function createWorkspacePolicyManager({
       throw new AuthContextError("Authentication context changed before policy request");
     }
     const apiUrl = getApiUrl();
-    if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
+    if (!apiUrl) throw new Error("Dyktownik API URL not configured");
     const authHeaders = normalizeAuthHeaders(request.authHeaders, tokenState?.token);
     if (!Object.keys(authHeaders).length) {
       throw new AuthContextError(

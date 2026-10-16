@@ -272,7 +272,7 @@ class KDEShortcutManager {
     }
 
     // actionId: [componentUnique, actionUnique, componentFriendly, actionFriendly]
-    const actionId = [COMPONENT_NAME, slotName, "OpenWhispr", `OpenWhispr ${slotName}`];
+    const actionId = [COMPONENT_NAME, slotName, "Dyktownik", `OpenWhispr ${slotName}`];
 
     try {
       // Pre-registration conflict check via low-level D-Bus call
@@ -396,7 +396,7 @@ class KDEShortcutManager {
   async unregisterKeybinding(slotName = "dictation") {
     if (!this.kglobalaccel) return;
 
-    const actionId = [COMPONENT_NAME, slotName, "OpenWhispr", `OpenWhispr ${slotName}`];
+    const actionId = [COMPONENT_NAME, slotName, "Dyktownik", `OpenWhispr ${slotName}`];
 
     try {
       await new Promise((resolve, reject) => {
@@ -423,7 +423,7 @@ class KDEShortcutManager {
     // clean up stale registrations from dead processes anyway.
     const promises = [];
     for (const slotName of this.registeredSlots) {
-      const actionId = [COMPONENT_NAME, slotName, "OpenWhispr", `OpenWhispr ${slotName}`];
+      const actionId = [COMPONENT_NAME, slotName, "Dyktownik", `OpenWhispr ${slotName}`];
       try {
         promises.push(
           new Promise((resolve, reject) => {

@@ -81,7 +81,7 @@ export function PermissionGuideCard({ state, onAction, onDrag }: CardProps): Rea
                 className="size-7"
               />
             )}
-            <span className="text-sm font-medium">OpenWhispr</span>
+            <span className="text-sm font-medium">Dyktownik</span>
             <span className="ms-auto text-[11px] text-[var(--onboarding-text-secondary)]">
               {t("onboarding.permissionGuide.missingApp")}
             </span>

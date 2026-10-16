@@ -74,7 +74,7 @@ export default function SupportDropdown({ className, trigger }: SupportDropdownP
           {t("support.contactSupport")}
         </DropdownMenuItem>
         <DropdownMenuItem
-          onClick={() => openExternal("https://github.com/OpenWhispr/openwhispr/issues")}
+          onClick={() => openExternal("https://github.com/onlinekot/dyktownik/issues")}
         >
           <Bug className="me-2 h-4 w-4" />
           {t("support.submitBug")}

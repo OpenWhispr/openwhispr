@@ -35,7 +35,7 @@ test("combined cleanup options honor every eligibility guard and use the actual 
   usePolicyStore.setState({ status: "unmanaged", policy: null });
   useSettingsStore.setState(good);
   assert.deepEqual(manager.getPipelineCleanupOptions(useSettingsStore.getState()), {
-    agentName: "OpenWhispr",
+    agentName: "Dyktownik",
     customDictionary: ["Orukeet"],
     customPrompt: good.customPrompts.cleanup,
     language: "en",

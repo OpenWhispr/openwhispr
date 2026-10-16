@@ -4,6 +4,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
 import { Badge } from "./ui/badge";
+import { VersionEasterEgg } from "./ui/VersionEasterEgg";
 import {
   RefreshCw,
   Download,
@@ -183,6 +184,7 @@ interface SettingsPageProps {
 }
 
 const UI_LANGUAGE_OPTIONS: import("./ui/LanguageSelector").LanguageOption[] = [
+  { value: "pl", label: "Polski", flag: "🇵🇱" },
   { value: "en", label: "English", flag: "🇺🇸" },
   { value: "ar", label: "العربية", flag: "🇦🇪" },
   { value: "es", label: "Español", flag: "🇪🇸" },
@@ -3698,7 +3700,7 @@ export default function SettingsPage({
                           }),
                           desc: t("settingsPage.general.waylandPaste.guide.group.step2Desc", {
                             defaultValue:
-                              "Group changes only take effect after a new login session. Log out of your desktop and log back in, then reopen OpenWhispr.",
+                              "Group changes only take effect after a new login session. Log out of your desktop and log back in, then reopen Dyktownik.",
                           }),
                         },
                       ],
@@ -4615,12 +4617,14 @@ EOF`,
                     }
                   >
                     <div className="flex items-center gap-2.5">
-                      <span
-                        dir="ltr"
-                        className="text-xs tabular-nums text-muted-foreground font-mono"
-                      >
-                        {currentVersion || t("settingsPage.general.updates.versionPlaceholder")}
-                      </span>
+                      <VersionEasterEgg>
+                        <span
+                          dir="ltr"
+                          className="text-xs tabular-nums text-muted-foreground font-mono"
+                        >
+                          {currentVersion || t("settingsPage.general.updates.versionPlaceholder")}
+                        </span>
+                      </VersionEasterEgg>
                       {updateStatus.isDevelopment ? (
                         <Badge variant="warning">
                           {t("settingsPage.general.updates.badges.dev")}

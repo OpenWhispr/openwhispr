@@ -10,7 +10,7 @@ test("startup syncs the full saved notification snapshot once", async (t) => {
       notifyMeetingDetection: "true",
       notifyCalendarReminders: "false",
       meetingProcessDetection: "false",
-      customDictionary: '["OpenWhispr"]',
+      customDictionary: '["Dyktownik"]',
     },
     window: {
       electronAPI: {

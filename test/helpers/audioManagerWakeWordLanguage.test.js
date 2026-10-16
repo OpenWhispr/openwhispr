@@ -325,7 +325,7 @@ test("streaming auto-language routing detects and strips Arabic with an English 
 
   const manager = createStreamingManager(
     (result) => completions.push(result),
-    "يا OpenWhispr، لخّص هذه الملاحظة"
+    "يا Dyktownik، لخّص هذه الملاحظة"
   );
   await manager.stopStreamingRecording();
 

@@ -186,7 +186,7 @@ function failureMessage(errorCode) {
     case "credential_save_failed":
       return "Couldn't save the refreshed Linear login. Nothing was sent.";
     case "linear_unavailable":
-      return "Linear isn't available in this build of OpenWhispr right now.";
+      return "Linear isn't available in this build of Dyktownik right now.";
     case "network":
       return "Couldn't reach Linear. Nothing was sent.";
     case "rate_limited":

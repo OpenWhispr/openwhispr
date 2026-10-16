@@ -134,19 +134,19 @@ function describeOne({ name, reason, where }: UnavailableCapability): string {
   const at = where ? ` in ${where}` : "";
   switch (reason) {
     case "signedOut":
-      return `${name}: needs the user to sign in to OpenWhispr${at}.`;
+      return `${name}: needs the user to sign in to Dyktownik${at}.`;
     case "policyOff":
       return `${name}: turned off by the user's organization; only their admin can turn it back on.`;
     case "policyLoading":
       return `${name}: not available right now; the user can try again in a moment.`;
     case "planRequired":
-      return `${name}: needs a paid OpenWhispr plan${at}.`;
+      return `${name}: needs a paid Dyktownik plan${at}.`;
     case "notConnected":
       return `${name}: not connected; the user can connect it${at}.`;
     case "needsReconnect":
       return `${name}: the connection has expired; the user can reconnect it${at}.`;
     case "modelTooSmall":
-      return `${name}: the selected model runs without tools (small or unrecognized local models do); the user can choose a larger model or a cloud provider${at}. For OpenWhispr product questions, the user can open ${DOCS_ORIGIN} or inspect their current settings in Settings. You can still use anything already in this prompt, such as note text, and write any text the user asks for.`;
+      return `${name}: the selected model runs without tools (small or unrecognized local models do); the user can choose a larger model or a cloud provider${at}. For Dyktownik product questions, the user can open ${DOCS_ORIGIN} or inspect their current settings in Settings. You can still use anything already in this prompt, such as note text, and write any text the user asks for.`;
   }
 }
 

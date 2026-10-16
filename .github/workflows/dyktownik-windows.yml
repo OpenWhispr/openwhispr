@@ -1,0 +1,146 @@
+name: Dyktownik - instalator Windows
+
+# Buduje niepodpisany instalator Windows i publikuje go jako wydanie v1.11.N
+# (razem z latest.yml, z którego korzysta wbudowany updater). Stały link:
+# https://github.com/OnlineKot/Dyktownik/releases/latest/download/Dyktownik-Setup.exe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/dyktownik-windows.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dyktownik-windows
+  cancel-in-progress: true
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install platform-specific native binaries
+        run: npm install @rollup/rollup-win32-x64-msvc lightningcss-win32-x64-msvc @tailwindcss/oxide-win32-x64-msvc --no-save
+
+      # Wersja "lekka": bez rzeczy, które aplikacja pobiera sama, gdy ich potrzebuje
+      # (modele rozpoznawania mówców, model wyszukiwania semantycznego) albo które
+      # służą tylko opcjonalnym funkcjom (Qdrant do wyszukiwania po znaczeniu,
+      # yt-dlp do importu audio z linku). Dyktowanie, lokalne modele, notatki,
+      # spotkania i asystent działają tak samo.
+      - name: Compile native helpers (key listener)
+        run: npm run compile:native
+
+      - name: Download whisper.cpp binaries
+        run: node scripts/download-whisper-cpp.js --current
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Download llama-server binaries
+        run: node scripts/download-llama-server.js --current
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Download sherpa-onnx binaries
+        run: node scripts/download-sherpa-onnx.js --current
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Download meeting AEC helper
+        run: node scripts/download-meeting-aec-helper.js --current
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Download whisper VAD model
+        run: node scripts/download-whisper-vad-model.js
+
+      - name: Download nircmd.exe
+        run: node scripts/download-nircmd.js
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Download windows-fast-paste.exe
+        run: node scripts/download-windows-fast-paste.js
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Compile windows-mic-listener.exe
+        shell: cmd
+        run: |
+          if not exist resources\bin mkdir resources\bin
+          cl /O2 /nologo resources\windows-mic-listener.c /Fe:resources\bin\windows-mic-listener.exe ole32.lib oleaut32.lib
+
+      - name: Download windows-system-audio-helper.exe
+        run: node scripts/download-windows-system-audio-helper.js
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      # electron-builder pakuje .env jako zasób; puste wystarcza (bez kluczy chmurowych).
+      - name: Create empty runtime env
+        shell: bash
+        run: touch .env
+
+      # Każda budowa dostaje wyższy numer wersji, bo updater porównuje wersje
+      # i pobiera tylko nowsze. Zmiana działa tylko w tej budowie, nie w repo.
+      - name: Set build version
+        shell: bash
+        run: |
+          npm version "1.11.${{ github.run_number }}" --no-git-tag-version --allow-same-version
+          node -p "'Wersja budowy: ' + require('./package.json').version"
+
+      - name: Build installer (unsigned)
+        shell: bash
+        # Bez "npm run build:win": jego hook prebuild pobierałby też to, co pominięto wyżej.
+        run: |
+          npm run build:renderer
+          npx electron-builder --win --publish never --config electron-builder.unsigned-win.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          VITE_AUTH_URL: ${{ vars.VITE_AUTH_URL || 'https://auth.openwhispr.com' }}
+          VITE_OPENWHISPR_API_URL: ${{ vars.VITE_OPENWHISPR_API_URL }}
+          VITE_OPENWHISPR_OAUTH_CALLBACK_URL: ${{ vars.VITE_OPENWHISPR_OAUTH_CALLBACK_URL }}
+
+      # Wydanie tworzymy sami: gh zakłada też brakujący tag v1.11.N na tym commicie.
+      # latest.yml i .blockmap są potrzebne wbudowanemu updaterowi.
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          # Nazwa instalatora ma spacje, więc wszystko idzie w tablicy i w cudzysłowach.
+          exe=$(find dist -maxdepth 1 -name '*.exe' ! -iname '*uninstall*' | head -n 1)
+          test -n "$exe"
+          cp "$exe" dist/Dyktownik-Setup.exe
+          files=("$exe" "dist/Dyktownik-Setup.exe" "dist/latest.yml")
+          for f in dist/*.exe.blockmap; do [ -f "$f" ] && files+=("$f"); done
+          ls -la dist
+          gh release create "v$version" "${files[@]}" --target "${{ github.sha }}" \
+            --title "Dyktownik $version" \
+            --notes "Niepodpisany instalator Windows. SmartScreen może pokazać ostrzeżenie: Więcej informacji, a potem Uruchom mimo to."
+          echo "Link: https://github.com/OnlineKot/Dyktownik/releases/latest/download/Dyktownik-Setup.exe"
+
+      - name: Upload build as artifact too
+        uses: actions/upload-artifact@v7
+        with:
+          name: dyktownik-windows
+          path: dist/Dyktownik-Setup.exe
+          retention-days: 14

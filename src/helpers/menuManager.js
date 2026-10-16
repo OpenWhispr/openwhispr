@@ -106,7 +106,7 @@ class MenuManager {
               label: i18nMain.t("menu.learnMore"),
               click: async () => {
                 const { openExternalUrl } = require("./externalUrlOpener");
-                await openExternalUrl("https://github.com/OpenWhispr/openwhispr");
+                await openExternalUrl("https://github.com/onlinekot/dyktownik");
               },
             },
           ],

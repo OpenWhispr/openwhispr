@@ -236,7 +236,7 @@ function failureMessage(errorCode) {
     case "rate_limited":
       return "GitHub is limiting requests right now. Try again later.";
     case "no_repositories":
-      return "The OpenWhispr GitHub App isn't installed on any repository yet. Tell the user to choose repositories for it in Settings → Integrations → Connectors.";
+      return "The Dyktownik GitHub App isn't installed on any repository yet. Tell the user to choose repositories for it in Settings → Integrations → Connectors.";
     case "forbidden":
       return "GitHub refused: the user may not have permission for that in this repository.";
     case "not_found":
@@ -254,7 +254,7 @@ function failureMessage(errorCode) {
     case "credential_save_failed":
       return "Couldn't save the refreshed GitHub login.";
     case "not_configured":
-      return "GitHub isn't available in this build of OpenWhispr.";
+      return "GitHub isn't available in this build of Dyktownik.";
     case "network":
       return "Couldn't reach GitHub.";
     default:
@@ -360,11 +360,11 @@ function createGithubConnector({
     if (truncated) {
       return {
         errorCode: "repo_unlisted",
-        message: `The OpenWhispr GitHub App isn't installed on ${fullName}, as far as OpenWhispr can tell: it reads the first 1,000 repositories of each installation. Ask the user to check the name.`,
+        message: `The Dyktownik GitHub App isn't installed on ${fullName}, as far as Dyktownik can tell: it reads the first 1,000 repositories of each installation. Ask the user to check the name.`,
       };
     }
     const installUrl = manageUrl();
-    const message = `The OpenWhispr GitHub App isn't installed on ${fullName}.`;
+    const message = `The Dyktownik GitHub App isn't installed on ${fullName}.`;
     return {
       errorCode: "not_installed",
       message: installUrl

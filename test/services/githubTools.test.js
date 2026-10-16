@@ -285,7 +285,7 @@ test("a repository the App isn't on names the fix; without an App slug there's n
         connectorPrepare: async () => ({
           status: "failed",
           errorCode: "not_installed",
-          message: "Install the OpenWhispr GitHub App on acme/secret.",
+          message: "Install the Dyktownik GitHub App on acme/secret.",
         }),
       },
     },
@@ -301,7 +301,7 @@ test("a repository the App isn't on names the fix; without an App slug there's n
 
   assert.equal(result.data.errorCode, "not_installed");
   assert.match(result.data.error, /acme\/secret/);
-  assert.match(result.data.guidance, /install the OpenWhispr GitHub App/);
+  assert.match(result.data.guidance, /install the Dyktownik GitHub App/);
   assert.equal("installUrl" in result.data, false);
 });
 
@@ -338,9 +338,9 @@ test("a repository main may not have seen all of is a name to check, not an inst
   assert.equal("installUrl" in unlisted.data, false);
   assert.equal(
     unlisted.displayText,
-    "Couldn't confirm the OpenWhispr GitHub App is installed there."
+    "Couldn't confirm the Dyktownik GitHub App is installed there."
   );
-  assert.match(missing.data.guidance, /install the OpenWhispr GitHub App/);
+  assert.match(missing.data.guidance, /install the Dyktownik GitHub App/);
   assert.equal(missing.data.installUrl, GITHUB.manageUrl);
 });
 

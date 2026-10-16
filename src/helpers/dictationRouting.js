@@ -228,7 +228,7 @@ export function cleanupUnconfiguredNotice(shownKey, { skipped, cleanupReachable,
     forget: false,
     notice: signedOut
       ? {
-          message: "AI cleanup uses OpenWhispr Cloud, but you're signed out.",
+          message: "AI cleanup uses Dyktownik Cloud, but you're signed out.",
           messageKey: "hooks.audioRecording.cleanupSignedOut",
           surface: "llm",
           settingsTarget: "llms",

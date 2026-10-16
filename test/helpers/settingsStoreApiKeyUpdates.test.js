@@ -31,7 +31,7 @@ async function loadSettings(t, overrides = {}) {
     bindings.map(({ storeKey, get }) => [get, async () => keys.get(storeKey)])
   );
   const { window, storage } = installBrowserGlobals(t, {
-    initialStorage: { _dictationAgentSeeded: "1", customDictionary: '["OpenWhispr"]' },
+    initialStorage: { _dictationAgentSeeded: "1", customDictionary: '["Dyktownik"]' },
     window: {
       addEventListener: events.addEventListener.bind(events),
       removeEventListener: events.removeEventListener.bind(events),

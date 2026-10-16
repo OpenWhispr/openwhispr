@@ -102,7 +102,7 @@ export async function getHelpContext(topic: HelpTopic): Promise<HelpContext> {
     readAt: new Date().toISOString(),
     policyStatus: policy.status,
     values,
-    note: "Read-only current saved configuration and known permission state, not a device test. appVersion is the OpenWhispr app version, not the OS version. For activationMode, push means Hold and tap means Tap. Activation mode does not determine local or cloud processing. Missing values are unknown. Processing selections may be constrained by organization policy.",
+    note: "Read-only current saved configuration and known permission state, not a device test. appVersion is the Dyktownik app version, not the OS version. For activationMode, push means Hold and tap means Tap. Activation mode does not determine local or cloud processing. Missing values are unknown. Processing selections may be constrained by organization policy.",
   };
 }
 

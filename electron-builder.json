@@ -4,9 +4,9 @@
   "extraMetadata": {
     "windowsTrayIdentity": true
   },
-  "productName": "OpenWhispr",
+  "productName": "Dyktownik",
   "protocols": {
-    "name": "OpenWhispr Protocol",
+    "name": "Dyktownik Protocol",
     "schemes": ["openwhispr"]
   },
   "directories": {
@@ -170,11 +170,11 @@
     "extendInfo": {
       "LSUIElement": false,
       "CFBundleIconName": "openwhispr",
-      "NSMicrophoneUsageDescription": "OpenWhispr uses the microphone to capture your voice for transcription.",
-      "NSAudioCaptureUsageDescription": "OpenWhispr uses system audio to capture other participants' audio from calls and meetings.",
-      "NSAccessibilityUsageDescription": "OpenWhispr needs accessibility permissions to paste transcribed text into other applications.",
-      "NSCalendarsUsageDescription": "OpenWhispr reads your calendar to detect upcoming meetings and link meeting notes to events.",
-      "NSCalendarsFullAccessUsageDescription": "OpenWhispr reads your calendar to detect upcoming meetings and link meeting notes to events."
+      "NSMicrophoneUsageDescription": "Dyktownik używa mikrofonu, aby zamieniać Twój głos na tekst.",
+      "NSAudioCaptureUsageDescription": "Dyktownik używa dźwięku systemowego, aby nagrywać głosy pozostałych uczestników rozmów i spotkań.",
+      "NSAccessibilityUsageDescription": "Dyktownik potrzebuje uprawnień dostępności, aby wklejać podyktowany tekst do innych aplikacji.",
+      "NSCalendarsUsageDescription": "Dyktownik czyta Twój kalendarz, aby wykrywać nadchodzące spotkania i łączyć z nimi notatki.",
+      "NSCalendarsFullAccessUsageDescription": "Dyktownik czyta Twój kalendarz, aby wykrywać nadchodzące spotkania i łączyć z nimi notatki."
     }
   },
   "win": {
@@ -265,10 +265,11 @@
     "allowToChangeInstallationDirectory": true,
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
+    "artifactName": "Dyktownik-Setup-${version}.${ext}",
     "include": "resources/nsis/installer.nsh"
   },
   "dmg": {
-    "title": "OpenWhispr",
+    "title": "Dyktownik",
     "icon": "src/assets/icon.icns",
     "window": {
       "width": 540,
@@ -277,9 +278,9 @@
   },
   "publish": {
     "provider": "github",
-    "owner": "OpenWhispr",
-    "repo": "openwhispr",
+    "owner": "OnlineKot",
+    "repo": "Dyktownik",
     "private": false,
-    "releaseType": "draft"
+    "releaseType": "release"
   }
 }

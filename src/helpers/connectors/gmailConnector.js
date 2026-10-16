@@ -76,7 +76,7 @@ function failureMessage(errorCode) {
     case "header_injection":
       return "A subject or address contained a line break.";
     case "gmail_unavailable":
-      return "Sending with Gmail isn't available in this build of OpenWhispr right now.";
+      return "Sending with Gmail isn't available in this build of Dyktownik right now.";
     case "credential_save_failed":
       return "Couldn't save the refreshed Gmail login.";
     case "network":

@@ -10,7 +10,7 @@ async function startSettings(t, { mcalGetConnectionStatus, storageListeners = []
       mcalAccounts: JSON.stringify(SAVED_ACCOUNTS),
       // Already holds the agent name, so startup writes no dictionary and
       // starts no cloud sync that would outlive the test's module server.
-      customDictionary: '["OpenWhispr"]',
+      customDictionary: '["Dyktownik"]',
     },
     window: {
       addEventListener(type, listener) {

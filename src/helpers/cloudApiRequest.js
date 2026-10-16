@@ -75,7 +75,7 @@ function createCloudApiRequestHandler({
   return async function handleCloudApiRequest(opts) {
     try {
       const apiUrl = getApiUrl();
-      if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
+      if (!apiUrl) throw new Error("Dyktownik API URL not configured");
 
       if (typeof opts?.path !== "string" || !opts.path.startsWith("/")) {
         return { success: false, error: "Invalid API path" };

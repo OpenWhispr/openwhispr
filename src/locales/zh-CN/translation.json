@@ -4,7 +4,7 @@
       "sectionTitle": "语言",
       "sectionDescription": "分别设置界面语言和转录语言",
       "uiLabel": "界面语言",
-      "uiDescription": "选择 OpenWhispr 界面使用的语言",
+      "uiDescription": "选择 Dyktownik 界面使用的语言",
       "transcriptionLabel": "转录语言",
       "transcriptionDescription": "选择你说话的语言，以提高转录准确率",
       "chineseScriptLabel": "中文书写（听写）",
@@ -64,12 +64,12 @@
     },
     "openControlPanel": "打开控制面板",
     "hideControlPanel": "隐藏控制面板",
-    "quit": "退出 OpenWhispr",
-    "tooltip": "OpenWhispr - 语音听写"
+    "quit": "退出 Dyktownik",
+    "tooltip": "Dyktownik - 语音听写"
   },
   "menu": {
-    "appLabel": "OpenWhispr",
-    "quit": "退出 OpenWhispr",
+    "appLabel": "Dyktownik",
+    "quit": "退出 Dyktownik",
     "speech": "语音",
     "settings": "设置...",
     "help": "帮助",
@@ -87,8 +87,8 @@
       "message": "无法在浏览器中打开该链接：\n{{url}}\n\n错误：{{error}}"
     },
     "loadFailure": {
-      "title": "OpenWhispr 加载失败",
-      "message": "OpenWhispr 无法加载其界面。",
+      "title": "Dyktownik 加载失败",
+      "message": "Dyktownik 无法加载其界面。",
       "detail": {
         "window": "窗口：{{windowName}}",
         "error": "错误 {{errorCode}}：{{errorDescription}}",
@@ -99,17 +99,17 @@
   },
   "startup": {
     "error": {
-      "title": "OpenWhispr 启动错误",
+      "title": "Dyktownik 启动错误",
       "message": "应用启动失败：\n\n{{error}}\n\n请反馈此问题。"
     },
     "globeHotkey": {
       "title": "Globe 快捷键不可用",
-      "message": "OpenWhispr 无法激活 Globe 键快捷键。",
+      "message": "Dyktownik 无法激活 Globe 键快捷键。",
       "details": {
         "unknown": "启动 Globe 监听器时发生未知错误。",
         "fallback": "Globe 键快捷键将保持禁用状态；现有的键盘快捷键仍可正常使用。",
         "devHint": "运行 `npm run compile:globe` 并重新构建应用以重新生成监听器。",
-        "reinstallHint": "请尝试重新安装 OpenWhispr，如果问题仍然存在请联系技术支持。"
+        "reinstallHint": "请尝试重新安装 Dyktownik，如果问题仍然存在请联系技术支持。"
       }
     }
   },
@@ -162,7 +162,7 @@
     "close": "关闭"
   },
   "windows": {
-    "pttUnavailable": "OpenWhispr 按键监听器不可用。"
+    "pttUnavailable": "Dyktownik 按键监听器不可用。"
   },
   "common": {
     "continue": "继续",
@@ -218,7 +218,7 @@
   "onboarding": {
     "rehaul": {
       "permissions": {
-        "title": "3 分钟完成 OpenWhispr 设置",
+        "title": "3 分钟完成 Dyktownik 设置",
         "microphoneDescription": "仅在录音时收音。",
         "accessibilityDescription": "把文字粘贴到任意应用。",
         "systemAudioTitle": "系统音频",
@@ -231,7 +231,7 @@
         "title": "你会说哪些语言？",
         "titleLineOne": "你会说",
         "titleLineTwo": "哪些语言？",
-        "description": "选择所有适用的语言。这有助于 OpenWhispr 更准确地识别语言切换。"
+        "description": "选择所有适用的语言。这有助于 Dyktownik 更准确地识别语言切换。"
       },
       "dictationHotkey": {
         "title": "选择你的听写快捷键",
@@ -241,10 +241,10 @@
         "activation": "点按还是按住？"
       },
       "assistantHotkey": {
-        "title": "设置 OpenWhispr Assistant",
+        "title": "设置 Dyktownik Assistant",
         "titleLineOne": "设置",
-        "titleLineTwo": "OpenWhispr Assistant",
-        "description": "说出你的请求，OpenWhispr Assistant 会为你写好结果。"
+        "titleLineTwo": "Dyktownik Assistant",
+        "description": "说出你的请求，Dyktownik Assistant 会为你写好结果。"
       },
       "hotkey": {
         "capture": "请按下你想使用的按键",
@@ -256,15 +256,15 @@
         "title": "试试第一次听写",
         "titleLineOne": "试试你的",
         "titleLineTwo": "第一次听写",
-        "description": "按 {{hotkey}} 开始说话，OpenWhispr 会把你的语音转成文字。",
-        "founder": "你好，我是创始人 Gabe。感谢你试用 OpenWhispr！",
-        "prompt": "点击下面的输入框，按下快捷键，然后告诉我：你希望 OpenWhispr 为你做些什么？",
-        "placeholder": "点击这里，然后按下快捷键。OpenWhispr 可以在任何文本框中输入。"
+        "description": "按 {{hotkey}} 开始说话，Dyktownik 会把你的语音转成文字。",
+        "founder": "你好，我是创始人 Gabe。感谢你试用 Dyktownik！",
+        "prompt": "点击下面的输入框，按下快捷键，然后告诉我：你希望 Dyktownik 为你做些什么？",
+        "placeholder": "点击这里，然后按下快捷键。Dyktownik 可以在任何文本框中输入。"
       },
       "assistantDemo": {
-        "title": "认识 OpenWhispr Assistant",
+        "title": "认识 Dyktownik Assistant",
         "titleLineOne": "认识一下",
-        "titleLineTwo": "OpenWhispr Assistant",
+        "titleLineTwo": "Dyktownik Assistant",
         "email": {
           "subject": "下周喝杯咖啡？",
           "senderName": "Maria Alvarez",
@@ -298,13 +298,13 @@
         "typing": "正在输入…"
       },
       "notes": {
-        "title": "用 OpenWhispr Notes 录制会议，无需机器人加入",
+        "title": "用 Dyktownik Notes 录制会议，无需机器人加入",
         "titleLineOne": "无需机器人即可录制会议",
-        "titleLineTwoPrefix": "使用 OpenWhispr",
+        "titleLineTwoPrefix": "使用 Dyktownik",
         "titleLineTwoBrand": "Notes",
-        "description": "OpenWhispr 把你的对话变成清晰的笔记。不会有会议机器人加入你的通话。",
+        "description": "Dyktownik 把你的对话变成清晰的笔记。不会有会议机器人加入你的通话。",
         "hero": {
-          "description": "录制会议，让 OpenWhispr 把对话整理成清晰有条理的笔记。",
+          "description": "录制会议，让 Dyktownik 把对话整理成清晰有条理的笔记。",
           "chat": "与会议笔记对话",
           "transcript": "查看完整转录",
           "speakers": "查看谁说了什么"
@@ -320,16 +320,16 @@
         }
       },
       "setupChoice": {
-        "title": "选择你的 OpenWhispr 设置",
+        "title": "选择你的 Dyktownik 设置",
         "titleLineOne": "选择你的",
-        "titleLineTwo": "OpenWhispr 设置",
+        "titleLineTwo": "Dyktownik 设置",
         "description": "选择最适合你工作方式的方案。",
         "unavailable": {
           "title": "没有可用的设置选项",
           "description": "你的工作区策略不允许完整配置转录和 AI。请联系管理员。"
         },
         "cloud": {
-          "title": "OpenWhispr Cloud",
+          "title": "Dyktownik Cloud",
           "description": "每周获得 2,000 个免费字数。你的设置会在各设备间保持同步。",
           "continue": "免费继续",
           "signIn": "登录以使用云端",
@@ -477,14 +477,14 @@
       "accessibilityTitle": "辅助功能",
       "accessibilityDescription": "将完成的文字直接输入到你正在使用的应用中 — 文档、邮件、聊天。",
       "testAndGrant": "测试并授权",
-      "requiredForApp": "OpenWhispr 运行所必需的权限",
+      "requiredForApp": "Dyktownik 运行所必需的权限",
       "microphoneRequired": "需要麦克风访问权限",
       "openSystemSettings": "打开系统设置",
       "systemAudioTitle": "系统音频",
       "systemAudioDescription": "让会议录音机听到通话另一方的声音 — 会议、讲座、播客。你可以稍后在“设置”中开启。",
       "optional": "可选",
       "recommended": "推荐",
-      "accessibilityTroubleshooting": "在系统设置 → 辅助功能中，将 OpenWhispr 的开关关闭再重新打开。如果列表中根本没有 OpenWhispr，请点按 + 并从“应用程序”文件夹中添加。还是不行？请发邮件至 support@openwhispr.com。"
+      "accessibilityTroubleshooting": "在系统设置 → 辅助功能中，将 Dyktownik 的开关关闭再重新打开。如果列表中根本没有 Dyktownik，请点按 + 并从“应用程序”文件夹中添加。还是不行？请发邮件至 support@openwhispr.com。"
     },
     "transcription": {
       "title": "转录设置",
@@ -504,18 +504,18 @@
       "textareaPlaceholder": "点击此处，然后使用快捷键进行听写..."
     },
     "connectivity": {
-      "title": "无法从该网络连接到 OpenWhispr Cloud",
+      "title": "无法从该网络连接到 Dyktownik Cloud",
       "body": "{{cause}} 你可以切换到本地引擎，或继续并稍后重试。",
       "useLocal": "使用本地引擎",
       "continue": "仍然继续"
     },
     "useCase": {
-      "title": "你会如何使用 OpenWhispr？",
+      "title": "你会如何使用 Dyktownik？",
       "titleLineOne": "你会如何使用",
-      "titleLineTwo": "OpenWhispr？",
+      "titleLineTwo": "Dyktownik？",
       "description": "选择所有适用项，我们会据此为你定制设置。",
       "noteLabel": "还有什么想告诉我们的吗？",
-      "notePlaceholder": "告诉我们你打算如何使用 OpenWhispr（可选）",
+      "notePlaceholder": "告诉我们你打算如何使用 Dyktownik（可选）",
       "proceedToSetup": "继续设置",
       "options": {
         "dictation": {
@@ -548,13 +548,13 @@
     "meeting": {
       "title": "会议笔记",
       "description": "捕捉并总结你的会议",
-      "autoDetect": "OpenWhispr 会自动检测你是否在开会，并提议开始记录 — 未经你确认不会录制任何内容。",
+      "autoDetect": "Dyktownik 会自动检测你是否在开会，并提议开始记录 — 未经你确认不会录制任何内容。",
       "hotkeyLabel": "会议快捷键",
       "hotkeyHint": "可选 — 在任何会议中按下即可立即开始记录。"
     },
     "finish": {
       "title": "一切就绪",
-      "cloudDescription": "你正在使用 OpenWhispr Cloud — 快速、准确、零数据保留，每周免费 2,000 词。希望一切都在本地？可在“设置”中切换到本地处理。",
+      "cloudDescription": "你正在使用 Dyktownik Cloud — 快速、准确、零数据保留，每周免费 2,000 词。希望一切都在本地？可在“设置”中切换到本地处理。",
       "localDescription": "你已配置本地处理或自带密钥。可随时在“设置”中调整音频处理方式。",
       "cleanupNote": "AI 文本清理使用合理的默认设置，可随时在“设置”中调整。",
       "openSettings": "打开设置",
@@ -589,20 +589,20 @@
       "return": "返回初始设置",
       "missingApp": "或通过 + 选择应用",
       "failed": "无法检查访问权限。",
-      "microphone": "在“麦克风”中打开 OpenWhispr。",
-      "accessibility": "将 OpenWhispr 拖入“辅助功能”，然后打开开关。",
-      "systemAudio": "在“仅系统音频录制”中打开 OpenWhispr。",
-      "screenContext": "将 OpenWhispr 拖入“屏幕与系统音频录制”，然后打开开关。",
+      "microphone": "在“麦克风”中打开 Dyktownik。",
+      "accessibility": "将 Dyktownik 拖入“辅助功能”，然后打开开关。",
+      "systemAudio": "在“仅系统音频录制”中打开 Dyktownik。",
+      "screenContext": "将 Dyktownik 拖入“屏幕与系统音频录制”，然后打开开关。",
       "settings": "打开设置",
       "check": "重新检查",
-      "restart": "重启 OpenWhispr",
-      "restartRequired": "重新启动 OpenWhispr 以应用屏幕访问权限。"
+      "restart": "重启 Dyktownik",
+      "restartRequired": "重新启动 Dyktownik 以应用屏幕访问权限。"
     }
   },
   "streaming": {
     "errors": {
       "cloudUnreachable": {
-        "title": "无法连接到 OpenWhispr Cloud",
+        "title": "无法连接到 Dyktownik Cloud",
         "generic": "网络请求失败，请检查你的连接。",
         "dnsBlocked": "DNS 无法解析 openwhispr.com — 广告拦截器或过滤器可能阻止了它。",
         "refused": "连接被拒绝 — 可能是防火墙或 VPN。",
@@ -615,13 +615,13 @@
   "controlPanel": {
     "updateRequiredByOrg": {
       "title": "需要更新",
-      "description": "您的组织要求使用 OpenWhispr {{version}} 或更高版本。请更新应用。"
+      "description": "您的组织要求使用 Dyktownik {{version}} 或更高版本。请更新应用。"
     },
     "update": {
       "readyTitle": "更新已准备就绪",
       "readyDescription": "点击“安装更新”以重启并安装最新版本。",
       "installTitle": "安装更新",
-      "installDescription": "OpenWhispr 将重启以应用更新。当前进行中的工作将被保存。",
+      "installDescription": "Dyktownik 将重启以应用更新。当前进行中的工作将被保存。",
       "couldNotInstallTitle": "无法安装更新",
       "couldNotInstallDescription": "出了点问题，请重试。",
       "couldNotDownloadTitle": "无法下载更新",
@@ -636,7 +636,7 @@
     },
     "accessibilityMissing": {
       "title": "需要辅助功能权限",
-      "description": "我们检测到 OpenWhispr 需要辅助功能权限才能正常工作。请在下方启用。"
+      "description": "我们检测到 Dyktownik 需要辅助功能权限才能正常工作。请在下方启用。"
     },
     "billing": {
       "pastDueTitle": "我们无法处理你的付款",
@@ -727,7 +727,7 @@
     },
     "cloudNudge": {
       "title": "你已登录",
-      "description": "听写仍在使用你自己的配置。你可以随时切换到 OpenWhispr Cloud。",
+      "description": "听写仍在使用你自己的配置。你可以随时切换到 Dyktownik Cloud。",
       "action": "打开设置"
     }
   },
@@ -824,7 +824,7 @@
           "modelNotFound": "AWS Bedrock 在区域 {{region}} 中找不到所选模型。请检查模型 ID 以及该模型是否在此区域可用。",
           "configurationRejected": "AWS Bedrock 拒绝了区域 {{region}} 的模型配置。请检查模型 ID、推理配置文件和区域。",
           "notConfigured": "AWS Bedrock 配置不正确。请检查区域和 AWS 凭证。",
-          "serviceUnavailable": "由于需求过高，AWS Bedrock 暂时不可用。这是 AWS 服务问题，并非 OpenWhispr 中断。请几分钟后重试。",
+          "serviceUnavailable": "由于需求过高，AWS Bedrock 暂时不可用。这是 AWS 服务问题，并非 Dyktownik 中断。请几分钟后重试。",
           "throttled": "由于收到的请求过多，AWS Bedrock 正在暂时限制请求。请稍候再试。如果问题持续，请让 AWS 管理员检查 Bedrock 使用量和配额。",
           "timeout": "AWS Bedrock 未及时响应。请重试。如果问题持续，请检查互联网连接和 AWS Bedrock 服务状态。",
           "network": "无法连接到 AWS Bedrock。请检查互联网连接并重试。",
@@ -898,7 +898,7 @@
   },
   "hooks": {
     "audioRecording": {
-      "cleanupSignedOut": "AI 清理使用 OpenWhispr Cloud，但你尚未登录。",
+      "cleanupSignedOut": "AI 清理使用 Dyktownik Cloud，但你尚未登录。",
       "cleanupUnconfigured": "已开启 AI 清理，但尚未设置清理模型。",
       "errorTitles": {
         "sessionExpired": "会话已过期",
@@ -933,7 +933,7 @@
         "description": "部分录音内容无法转录。"
       },
       "errorDescriptions": {
-        "sessionExpired": "OpenWhispr Cloud 会话不可用。请到「设置」中重新登录。",
+        "sessionExpired": "Dyktownik Cloud 会话不可用。请到「设置」中重新登录。",
         "offline": "你目前离线。云端转录需要互联网连接。",
         "dailyLimitReached": "已达今日转录上限。请明天再试或升级你的套餐。",
         "providerRateLimited": "你的转录服务商限制了请求频率。请稍候再试。",
@@ -970,22 +970,22 @@
         "notAppliedTitle": "未应用选中文本编辑",
         "changed": "处理期间，选中的文本或目标应用已发生变化。未替换任何内容。",
         "expired": "选中文本编辑已过期。请重新选择文本后再试。",
-        "pasteFailed": "OpenWhispr 已生成编辑结果，但无法替换选中的文本。",
-        "modifiersHeld": "OpenWhispr 已生成编辑结果，但修饰键（如 Ctrl 或 Shift）仍处于按下状态，因此未应用。编辑结果已复制到剪贴板。",
-        "modifiersHeldClipboardFailed": "OpenWhispr 已生成编辑结果，但修饰键（如 Ctrl 或 Shift）仍处于按下状态，因此未应用，也无法复制到剪贴板。",
-        "unavailable": "OpenWhispr 无法安全读取选中的文本。请检查辅助功能或输入自动化权限。",
+        "pasteFailed": "Dyktownik 已生成编辑结果，但无法替换选中的文本。",
+        "modifiersHeld": "Dyktownik 已生成编辑结果，但修饰键（如 Ctrl 或 Shift）仍处于按下状态，因此未应用。编辑结果已复制到剪贴板。",
+        "modifiersHeldClipboardFailed": "Dyktownik 已生成编辑结果，但修饰键（如 Ctrl 或 Shift）仍处于按下状态，因此未应用，也无法复制到剪贴板。",
+        "unavailable": "Dyktownik 无法安全读取选中的文本。请检查辅助功能或输入自动化权限。",
         "tooLarge": "选中的内容过长。请选择不超过 6,000 个字符。",
         "reasoningFailed": "AI 无法完成选中文本编辑。原始文本未被更改。",
         "invalidResponse": "AI 返回的编辑响应格式无效。未替换任何内容。请选中文本后重试。",
         "emptyResponse": "AI 返回了空的编辑结果。未替换任何内容。请尝试更具体的指令。",
         "truncatedResponse": "AI 在完成编辑之前停止了。未替换任何内容。请尝试选择更少的文本。",
-        "wlCopyMissing": "OpenWhispr 已生成编辑，但在此桌面上，Wayland 应用只能通过 wl-copy 读取粘贴的文本。请安装 wl-clipboard 以应用编辑。",
-        "wlCopyFailed": "OpenWhispr 已生成编辑，但 wl-copy 无法为 Wayland 应用复制它，因此未应用。"
+        "wlCopyMissing": "Dyktownik 已生成编辑，但在此桌面上，Wayland 应用只能通过 wl-copy 读取粘贴的文本。请安装 wl-clipboard 以应用编辑。",
+        "wlCopyFailed": "Dyktownik 已生成编辑，但 wl-copy 无法为 Wayland 应用复制它，因此未应用。"
       },
       "pastePermission": {
         "title": "允许自动粘贴",
-        "description": "请在系统设置 → 隐私与安全性 → 辅助功能中启用 OpenWhispr。",
-        "settingsFailed": "无法打开设置。请打开系统设置 → 隐私与安全性 → 辅助功能，并启用 OpenWhispr。",
+        "description": "请在系统设置 → 隐私与安全性 → 辅助功能中启用 Dyktownik。",
+        "settingsFailed": "无法打开设置。请打开系统设置 → 隐私与安全性 → 辅助功能，并启用 Dyktownik。",
         "manualPaste": "点击下方按钮复制文本，然后按 {{shortcut}} 粘贴。",
         "openSettings": "打开设置",
         "copyToClipboard": "复制到剪贴板",
@@ -994,7 +994,7 @@
       "pasteFailed": {
         "title": "无法自动粘贴"
       },
-      "interruptedRecordingRecovered": "OpenWhispr 在本次听写完成前关闭，已恢复此录音。",
+      "interruptedRecordingRecovered": "Dyktownik 在本次听写完成前关闭，已恢复此录音。",
       "waylandClipboard": {
         "title": "转录内容未粘贴",
         "wlCopyMissing": "在此桌面上，Wayland 应用只能通过 wl-copy 读取粘贴的文本。请安装 wl-clipboard 以粘贴听写内容。",
@@ -1071,7 +1071,7 @@
       "micErrors": {
         "accessFailed": "麦克风访问失败，请重试。",
         "noMicrophones": "未检测到麦克风。请在 {{settingsPath}} 中连接或选择麦克风。",
-        "permissionDenied": "权限被拒绝。请打开 {{privacyPath}} 并允许 OpenWhispr。",
+        "permissionDenied": "权限被拒绝。请打开 {{privacyPath}} 并允许 Dyktownik。",
         "couldNotStart": "无法启动所选麦克风。请在 {{settingsPath}} 中选择输入设备，然后重新测试。",
         "noActiveInput": "未找到活跃的音频输入。请在 {{settingsPath}} 中选择麦克风。",
         "unknown": "麦克风访问失败：{{error}}。请选择其他输入设备后重试。",
@@ -1100,8 +1100,8 @@
         "accessibilityNeeded": "请在系统设置中授予辅助功能权限，以启用自动粘贴。",
         "windowsReady": "Windows 无需特殊权限即可自动粘贴，一切就绪！",
         "linuxReadyWithMethod": "可使用 {{method}} 进行自动粘贴，一切就绪！",
-        "waylandClipboardMode": "此 Wayland 会话不支持自动粘贴。OpenWhispr 会将文本复制到剪贴板，你可以使用 Ctrl+V 粘贴。",
-        "optionalPasteTool": "如需自动粘贴功能，请安装 {{tool}}：\n\n{{installCmd}}{{waylandNote}}\n\n即使不安装，你仍然可以使用 OpenWhispr——文本会被复制到剪贴板，你可以使用 Ctrl+V 粘贴。"
+        "waylandClipboardMode": "此 Wayland 会话不支持自动粘贴。Dyktownik 会将文本复制到剪贴板，你可以使用 Ctrl+V 粘贴。",
+        "optionalPasteTool": "如需自动粘贴功能，请安装 {{tool}}：\n\n{{installCmd}}{{waylandNote}}\n\n即使不安装，你仍然可以使用 Dyktownik——文本会被复制到剪贴板，你可以使用 Ctrl+V 粘贴。"
       },
       "alerts": {
         "accessibilityNeeded": "需要辅助功能权限！请在系统设置中授权。"
@@ -1114,7 +1114,7 @@
         "defaultPasteTool": "xdotool",
         "xdotoolXwayland": "xdotool（XWayland 应用）"
       },
-      "accessibilityTestText": "OpenWhispr 辅助功能测试",
+      "accessibilityTestText": "Dyktownik 辅助功能测试",
       "warning": {
         "messages": {
           "macos": "请检查声音设置以选择输入设备",
@@ -1191,7 +1191,7 @@
       "emailRequired": "输入您的工作邮箱以使用 SSO。",
       "failed": "单点登录失败，请重试。",
       "companySignInTitle": "使用公司登录",
-      "requiredDescription": "{{domain}} 要求通过 SSO 登录 OpenWhispr。",
+      "requiredDescription": "{{domain}} 要求通过 SSO 登录 Dyktownik。",
       "availableDescription": "您的 {{domain}} 账户已可使用公司 SSO。",
       "useEmailInstead": "改用邮箱和密码"
     },
@@ -1203,7 +1203,7 @@
       "protocolUnavailable": "无法通过浏览器登录 — 请在系统的“默认应用”设置中重新注册 openwhispr:// 协议。"
     },
     "welcomeSubtitle": "你的声音，由你掌控。",
-    "welcomeTitle": "欢迎使用 OpenWhispr",
+    "welcomeTitle": "欢迎使用 Dyktownik",
     "sessionExpired": "会话已过期，请重新登录。"
   },
   "cleanupPrompt": "文本整理",
@@ -1427,15 +1427,15 @@
     "recheckChecking": "检查中...",
     "title": "自动粘贴",
     "usingMethodPrefix": "使用",
-    "waylandClipboardDescription": "此 Wayland 会话不支持自动粘贴。OpenWhispr 会将文本复制到剪贴板，你可以使用 Ctrl+V 手动粘贴。",
+    "waylandClipboardDescription": "此 Wayland 会话不支持自动粘贴。Dyktownik 会将文本复制到剪贴板，你可以使用 Ctrl+V 手动粘贴。",
     "waylandClipboardTitle": "Wayland 上的剪贴板模式",
     "windowsReady": "Windows 原生支持自动粘贴，无需额外设置！",
-    "withoutToolPrefix": "如果不安装此工具，OpenWhispr 会将文本复制到剪贴板，你可以使用 Ctrl+V 手动粘贴。",
+    "withoutToolPrefix": "如果不安装此工具，Dyktownik 会将文本复制到剪贴板，你可以使用 Ctrl+V 手动粘贴。",
     "wtypeCosmicTerminalsDescription": "在 COSMIC 上，Warp 等终端只能通过 wtype 接收粘贴的文本。其他应用无需 wtype 即可粘贴。",
     "wtypeFallbackDescription": "wtype 是此 wlroots 合成器上的首选自动粘贴方式。有备用方案可用，但可能不太可靠。",
     "xwaylandAppsOnly": "自动粘贴仅适用于 XWayland 应用",
     "wlClipboardTitle": "安装 wl-clipboard 以粘贴到 Wayland 应用",
-    "wlClipboardDescription": "在此桌面上，Wayland 应用只能通过 wl-copy 读取 OpenWhispr 复制的文本。要将听写内容粘贴到这些应用中，请安装 wl-clipboard："
+    "wlClipboardDescription": "在此桌面上，Wayland 应用只能通过 wl-copy 读取 Dyktownik 复制的文本。要将听写内容粘贴到这些应用中，请安装 wl-clipboard："
   },
   "promptStudio": {
     "common": {
@@ -1484,7 +1484,7 @@
       "none": "无",
       "outputLabel": "输出",
       "processing": "处理中...",
-      "openwhisprCloud": "OpenWhispr Cloud",
+      "openwhisprCloud": "Dyktownik Cloud",
       "providerLabel": "服务商",
       "run": "运行测试",
       "customEndpoint": "自定义端点",
@@ -1654,7 +1654,7 @@
           "price": "$0",
           "period": "永久",
           "features": [
-            "## OpenWhispr Cloud",
+            "## Dyktownik Cloud",
             "每周 2,000 字转录",
             "每月 5 小时会议录制",
             "## 永久免费",
@@ -1753,7 +1753,7 @@
         "button": "删除我的账户",
         "deleting": "正在删除...",
         "title": "删除您的账户？",
-        "description": "这将永久删除您的 OpenWhispr 账户和个人数据。工作区所有的内容及其他本地用户的数据会保留在此设备上。",
+        "description": "这将永久删除您的 Dyktownik 账户和个人数据。工作区所有的内容及其他本地用户的数据会保留在此设备上。",
         "confirmText": "删除账户",
         "eraseDeviceLabel": "同时清除此设备上的所有数据",
         "eraseDeviceDescription": "删除所有本地用户的笔记和工作区缓存、已下载模型、设置、日历连接、凭据和录音。",
@@ -1831,7 +1831,7 @@
       "enableTextCleanup": "启用文本整理",
       "enableTextCleanupDescription": "AI 去除语气词，修正语法和标点",
       "modes": {
-        "openwhispr": "OpenWhispr Cloud",
+        "openwhispr": "Dyktownik Cloud",
         "providers": "云服务商",
         "local": "本地",
         "selfHosted": "自托管",
@@ -1842,13 +1842,13 @@
         "enterprise": "企业级",
         "enterpriseDesc": "使用你组织的云账号（AWS、Azure、GCP）。"
       },
-      "openwhisprCloud": "OpenWhispr Cloud",
+      "openwhisprCloud": "Dyktownik Cloud",
       "openwhisprCloudDescription": "准确可靠，无需设置。",
       "title": "AI 文本增强",
       "toasts": {
         "switchedCloud": {
-          "description": "文本增强将使用 OpenWhispr 云端服务。",
-          "title": "已切换到 OpenWhispr 云端"
+          "description": "文本增强将使用 Dyktownik 云端服务。",
+          "title": "已切换到 Dyktownik 云端"
         },
         "switchedCustom": {
           "description": "请配置你的服务商和 API Key。",
@@ -1936,7 +1936,7 @@
       "appearance": {
         "auto": "自动",
         "dark": "深色",
-        "description": "控制 OpenWhispr 的外观",
+        "description": "控制 Dyktownik 的外观",
         "light": "浅色",
         "theme": "主题",
         "themeDescription": "选择浅色、深色或跟随系统",
@@ -1964,8 +1964,8 @@
         "linuxPttSetupDescription": "您的用户需要访问键盘输入设备的权限。",
         "linuxPttSetupNote": "运行命令后，请注销并重新登录。",
         "hyprlandConfigWriteWarningTitle": "Hyprland 键绑定不会持久保存",
-        "hyprlandConfigWriteWarningDescription": "OpenWhispr 无法写入 {{path}}，因此键绑定不会在 Hyprland 配置重新加载后保留。请确保该文件存在且可写。",
-        "hyprlandUnbindDescription": "在 Hyprland 上，OpenWhispr 会占用所选快捷键。OpenWhispr 注册快捷键时，任何使用相同组合键的现有 Hyprland 绑定都会被解除。"
+        "hyprlandConfigWriteWarningDescription": "Dyktownik 无法写入 {{path}}，因此键绑定不会在 Hyprland 配置重新加载后保留。请确保该文件存在且可写。",
+        "hyprlandUnbindDescription": "在 Hyprland 上，Dyktownik 会占用所选快捷键。Dyktownik 注册快捷键时，任何使用相同组合键的现有 Hyprland 绑定都会被解除。"
       },
       "meetingHotkey": {
         "title": "会议模式快捷键",
@@ -1991,7 +1991,7 @@
       },
       "notifications": {
         "title": "通知",
-        "description": "设置 OpenWhispr 可以显示哪些通知",
+        "description": "设置 Dyktownik 可以显示哪些通知",
         "disableAll": "禁用所有通知",
         "disableAllDescription": "静音除错误消息外的所有内容",
         "meetingDetection": "会议检测",
@@ -2008,14 +2008,14 @@
       },
       "startup": {
         "launchAtLogin": "登录时启动",
-        "launchAtLoginDescription": "登录时在后台启动 OpenWhispr",
+        "launchAtLoginDescription": "登录时在后台启动 Dyktownik",
         "title": "启动",
-        "description": "控制 OpenWhispr 启动时的行为",
+        "description": "控制 Dyktownik 启动时的行为",
         "startMinimized": "启动时最小化",
         "startMinimizedDescription": "启动时不显示控制面板窗口",
         "needsApproval": {
           "title": "需要在系统设置中批准",
-          "description": "macOS 已将 OpenWhispr 注册为登录项，但仍在等待你在“登录项”中允许它。",
+          "description": "macOS 已将 Dyktownik 注册为登录项，但仍在等待你在“登录项”中允许它。",
           "action": "打开登录项"
         }
       },
@@ -2067,7 +2067,7 @@
           "group": {
             "step1Title": "将你的用户添加到 input 组",
             "step2Title": "注销并重新登录",
-            "step2Desc": "组更改仅在新会话后生效。从桌面注销，重新登录，然后重新打开 OpenWhispr。"
+            "step2Desc": "组更改仅在新会话后生效。从桌面注销，重新登录，然后重新打开 Dyktownik。"
           },
           "service": {
             "step1Title": "创建服务目录",
@@ -2095,7 +2095,7 @@
           "manualTitle": "将以下内容添加到您的配置中",
           "manualDesc": "自行配置后重新构建。",
           "flakeTitle": "通过我们的 flake 安装？",
-          "flakeDesc": "如果您通过 flake 安装 OpenWhispr，programs.openwhispr.enable 会自动为您启用 ydotool、uinput 模块以及相应的用户组权限。",
+          "flakeDesc": "如果您通过 flake 安装 Dyktownik，programs.openwhispr.enable 会自动为您启用 ydotool、uinput 模块以及相应的用户组权限。",
           "rebuildNote": "运行 sudo nixos-rebuild switch，然后注销并重新登录，使组变更和 /dev/uinput 规则生效。将 <you> 替换为您的用户名。"
         },
         "wlCopyDesc": "此桌面上 Wayland 应用读取粘贴文本所用的剪贴板工具"
@@ -2131,7 +2131,7 @@
           },
           "installUpdate": {
             "confirmText": "安装并重启",
-            "description": "OpenWhispr 将重启以应用更新。",
+            "description": "Dyktownik 将重启以应用更新。",
             "title": "安装更新"
           },
           "noUpdates": {
@@ -2163,13 +2163,13 @@
     "permissions": {
       "accessibilityDescription": "转录后自动粘贴需要此权限",
       "accessibilityTitle": "辅助功能",
-      "description": "测试和管理 OpenWhispr 正常运行所需的系统权限",
+      "description": "测试和管理 Dyktownik 正常运行所需的系统权限",
       "microphoneDescription": "录制您的声音用于听写和转录",
       "microphoneTitle": "麦克风",
       "resetAccessibility": {
-        "description": "这将从辅助功能权限中移除 OpenWhispr。你需要在系统设置 > 隐私与安全 > 辅助功能中重新授权。",
+        "description": "这将从辅助功能权限中移除 Dyktownik。你需要在系统设置 > 隐私与安全 > 辅助功能中重新授权。",
         "label": "重置辅助功能权限",
-        "rowDescription": "重新安装或重新构建应用后，通过在系统设置中移除并重新添加 OpenWhispr 来解决问题",
+        "rowDescription": "重新安装或重新构建应用后，通过在系统设置中移除并重新添加 Dyktownik 来解决问题",
         "title": "重置辅助功能权限"
       },
       "optional": "可选",
@@ -2198,7 +2198,7 @@
       "leaderboardRequiresAccount": "登录后即可管理排行榜参与状态。",
       "leaderboardRequiresHistory": "加入排行榜前，请先开启数据保留。",
       "usageAnalytics": "使用分析",
-      "usageAnalyticsDescription": "通过分享匿名性能数据帮助我们改进 OpenWhispr。我们绝不发送转录内容——仅发送计时和错误数据。",
+      "usageAnalyticsDescription": "通过分享匿名性能数据帮助我们改进 Dyktownik。我们绝不发送转录内容——仅发送计时和错误数据。",
       "dataRetention": "数据保留",
       "dataRetentionDescription": "将转录和音频本地保存到历史记录中。禁用后，转录内容会被粘贴但不会被保存。",
       "transcriptRetention": "转录保留",
@@ -2254,9 +2254,9 @@
     "transcription": {
       "customSetup": "自定义设置",
       "customSetupDescription": "使用你自己的服务商和 API Key。",
-      "description": "选择 OpenWhispr 转录语音的方式",
+      "description": "选择 Dyktownik 转录语音的方式",
       "modes": {
-        "openwhispr": "OpenWhispr Cloud",
+        "openwhispr": "Dyktownik Cloud",
         "providers": "云服务商",
         "local": "本地",
         "selfHosted": "自托管",
@@ -2267,13 +2267,13 @@
         "enterprise": "企业云",
         "enterpriseDesc": "音频将发送到贵组织自己的云。"
       },
-      "openwhisprCloud": "OpenWhispr Cloud",
+      "openwhisprCloud": "Dyktownik Cloud",
       "openwhisprCloudDescription": "准确可靠，无需设置。",
       "title": "语音转文字",
       "toasts": {
         "switchedCloud": {
-          "description": "转录将使用 OpenWhispr 云端服务。",
-          "title": "已切换到 OpenWhispr 云端"
+          "description": "转录将使用 Dyktownik 云端服务。",
+          "title": "已切换到 Dyktownik 云端"
         },
         "switchedCustom": {
           "description": "请配置你的服务商和 API Key。",
@@ -2359,7 +2359,7 @@
         }
       },
       "meetingEnterpriseOnly": "贵组织仅允许企业云转录，暂不支持会议录音。",
-      "meetingCloudSignedOut": "未登录时，无法使用 OpenWhispr Cloud 开始笔记录音。请在上方选择其他引擎。"
+      "meetingCloudSignedOut": "未登录时，无法使用 Dyktownik Cloud 开始笔记录音。请在上方选择其他引擎。"
     },
     "intelligence": {
       "gpuDevice": {
@@ -2805,7 +2805,7 @@
     },
     "tryAgain": "重试",
     "card": {
-      "brand": "OpenWhispr",
+      "brand": "Dyktownik",
       "signalId": "Signal ID",
       "audioSignature": "你的声纹签名",
       "stop": "停止",
@@ -2957,7 +2957,7 @@
     },
     "structureIntro": {
       "title": "笔记存放在哪里",
-      "description": "OpenWhispr 将个人想法与协作内容分开，让合适的人看到合适的笔记。",
+      "description": "Dyktownik 将个人想法与协作内容分开，让合适的人看到合适的笔记。",
       "personal": {
         "title": "个人空间",
         "description": "只有你能看到这里的文件夹和笔记。"
@@ -3098,7 +3098,7 @@
       "newFolder": "新建文件夹",
       "folderName": "文件夹名称",
       "create": "创建",
-      "openwhisprCloud": "OpenWhispr Cloud",
+      "openwhisprCloud": "Dyktownik Cloud",
       "custom": "自定义",
       "selectFolder": "选择文件夹",
       "transcriptionFailed": "转录失败",
@@ -3110,15 +3110,15 @@
       "fileTooLarge": "此文件超过了 500 MB 的大小限制。",
       "largeFileNote": "大文件将被分割并平行转录。",
       "chunkProgress": "正在转录第 {{completed}} 部分，共 {{total}} 部分...",
-      "paidPlanRequired": "超过 25 MB 的文件需要付费计划才能使用云端转录。大文件通过 OpenWhispr Cloud 处理，确保可靠、高质量的结果。",
+      "paidPlanRequired": "超过 25 MB 的文件需要付费计划才能使用云端转录。大文件通过 Dyktownik Cloud 处理，确保可靠、高质量的结果。",
       "byokTooLarge": "第三方 API 密钥仅支持 {{size}} MB 以内的文件。",
-      "byokTooLargeDetail": "超过 {{size}} MB 的文件由 OpenWhispr Cloud 负责分割、并行处理和重组——无需依赖第三方服务限制，即可获得可靠的结果。",
-      "byokTooLargeNeedsAccount": "创建账户并升级到付费计划，即可使用 OpenWhispr Cloud 转录更大的文件。",
-      "byokTooLargeNeedsUpgrade": "升级到付费计划，即可使用 OpenWhispr Cloud 转录更大的文件。",
-      "switchToCloudForLargeFiles": "切换到 OpenWhispr Cloud 来转录此文件。",
+      "byokTooLargeDetail": "超过 {{size}} MB 的文件由 Dyktownik Cloud 负责分割、并行处理和重组——无需依赖第三方服务限制，即可获得可靠的结果。",
+      "byokTooLargeNeedsAccount": "创建账户并升级到付费计划，即可使用 Dyktownik Cloud 转录更大的文件。",
+      "byokTooLargeNeedsUpgrade": "升级到付费计划，即可使用 Dyktownik Cloud 转录更大的文件。",
+      "switchToCloudForLargeFiles": "切换到 Dyktownik Cloud 来转录此文件。",
       "createAccount": "创建账户",
       "upgrade": "升级",
-      "switchToCloud": "OpenWhispr Cloud",
+      "switchToCloud": "Dyktownik Cloud",
       "orDivider": "或",
       "urlPlaceholder": "粘贴 YouTube 或音频 URL",
       "urlDownloading": "正在下载音频...",
@@ -3177,7 +3177,7 @@
       },
       "systemAudioStopped": {
         "title": "会议音频已停止",
-        "description": "OpenWhispr 已无法采集其他参会者的声音。请停止录制后重新开始，或检查您的音频输出设备。"
+        "description": "Dyktownik 已无法采集其他参会者的声音。请停止录制后重新开始，或检查您的音频输出设备。"
       },
       "systemAudioQuiet": {
         "title": "会议音频已静默",
@@ -3453,7 +3453,7 @@
     "clearAll": "全部清除",
     "clearTitle": "清空词典？",
     "clearDescription": "这将删除自定义词典中的所有词汇，此操作无法撤销。",
-    "addPlaceholder": "用逗号分隔添加多个词——OpenWhispr、Supabase、ARR",
+    "addPlaceholder": "用逗号分隔添加多个词——Dyktownik、Supabase、ARR",
     "add": "添加",
     "importWords": "导入词语",
     "importPlaceholder": "粘贴以逗号或换行分隔的词语...",
@@ -3483,7 +3483,7 @@
       "duplicate": "已存在使用此触发词的片段",
       "emptyTitle": "同样的话，只说",
       "emptyTitleAccent": "一遍",
-      "emptyDescription": "说出触发词，OpenWhispr 会把它替换为你保存的内容：链接、开场白、签名、提示词。",
+      "emptyDescription": "说出触发词，Dyktownik 会把它替换为你保存的内容：链接、开场白、签名、提示词。",
       "new": "新建片段",
       "examples": {
         "linkedinTrigger": "我的 LinkedIn",
@@ -3575,7 +3575,7 @@
       "emptyStrip_one": "还有 {{count}} 位队友未加入排行榜。加入后即可开始排名。",
       "emptyStrip_other": "还有 {{count}} 位队友未加入排行榜。加入后即可开始排名。",
       "copyNudge": "复制提醒",
-      "nudgeText": "请在 OpenWhispr → Insights 中加入排行榜，这样我们就能查看团队排行榜。",
+      "nudgeText": "请在 Dyktownik → Insights 中加入排行榜，这样我们就能查看团队排行榜。",
       "nudgeCopied": "提醒已复制",
       "nudgeCopyError": "无法复制提醒",
       "joinTitle": "查看你在 {{scope}} 中的排名",
@@ -3611,7 +3611,7 @@
         "desktop_words": "桌面端字数",
         "mobile_words": "移动端字数"
       },
-      "shareText": "看看我在 OpenWhispr 上的排名。",
+      "shareText": "看看我在 Dyktownik 上的排名。",
       "shareTitle": "分享排行榜",
       "shareDescription": "复制或下载此卡片，也可以在打开社交平台发帖页面前先复制。",
       "copyImage": "复制图片",
@@ -3686,7 +3686,7 @@
     "submitBug": "提交 Bug"
   },
   "postMigration": {
-    "title": "欢迎回到 OpenWhispr",
+    "title": "欢迎回到 Dyktownik",
     "description": "您的笔记和设置已从此前的版本中保留下来。不过 macOS 会将其视为一款全新的应用，因此需要您重新授予一些权限。",
     "done": "完成",
     "remindLater": "稍后提醒我"
@@ -3709,11 +3709,11 @@
     "ready": "GPU 加速已就绪",
     "activating": "正在激活 GPU...",
     "activationFailed": "GPU 加速不可用",
-    "activationFailedDescription": "OpenWhispr 已切换为 CPU 转录。",
-    "reasoningActivationFailedDescription": "OpenWhispr 已切换为 CPU 处理。",
+    "activationFailedDescription": "Dyktownik 已切换为 CPU 转录。",
+    "reasoningActivationFailedDescription": "Dyktownik 已切换为 CPU 处理。",
     "retryActivation": "重试 GPU 加速",
     "redownloadNeeded": "需要重新下载 GPU 加速包",
-    "redownloadNeededDescription": "此版本的 OpenWhispr 无法使用已安装的 GPU 加速包。请重新下载以重新启用 GPU 加速。",
+    "redownloadNeededDescription": "此版本的 Dyktownik 无法使用已安装的 GPU 加速包。请重新下载以重新启用 GPU 加速。",
     "redownloadButton": "重新下载 GPU 加速包",
     "downloadFailed": "无法下载 GPU 加速包。",
     "remove": "移除",
@@ -3734,11 +3734,11 @@
       "undo": "撤消",
       "accessibilityMissing": {
         "title": "需要辅助功能权限",
-        "description": "OpenWhispr 需要辅助功能权限来检测快捷键和粘贴文本。请在控制面板中启用。"
+        "description": "Dyktownik 需要辅助功能权限来检测快捷键和粘贴文本。请在控制面板中启用。"
       },
       "gpuFallback": {
         "title": "GPU 加速不可用",
-        "description": "OpenWhispr 已切换为 CPU 转录。",
+        "description": "Dyktownik 已切换为 CPU 转录。",
         "retry": "重试 GPU"
       },
       "gpuPackMigration": {
@@ -3783,11 +3783,11 @@
       "visionModelDescription": "将带截图的命令转发给另一个支持图像的模型。",
       "permissionTitle": "屏幕录制",
       "permissionDescription": "macOS 需要屏幕录制权限才能截取屏幕。",
-      "relaunchHint": "屏幕录制权限是在 OpenWhispr 运行期间授予的。请退出并重新打开 OpenWhispr 以开始捕获屏幕截图。"
+      "relaunchHint": "屏幕录制权限是在 Dyktownik 运行期间授予的。请退出并重新打开 Dyktownik 以开始捕获屏幕截图。"
     },
     "modes": {
-      "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "使用 OpenWhispr 托管的助手，无需 API Key。",
+      "openwhispr": "Dyktownik Cloud",
+      "openwhisprDesc": "使用 Dyktownik 托管的助手，无需 API Key。",
       "providers": "使用自己的 API Key",
       "providersDesc": "用你自己的 API Key 连接 OpenAI、Anthropic、Gemini 或 Groq。",
       "local": "本地",
@@ -3808,7 +3808,7 @@
       "systemPromptDescription": "助手的自定义指令",
       "systemPromptPlaceholder": "输入自定义系统提示词...",
       "modes": {
-        "openwhispr": "OpenWhispr Cloud",
+        "openwhispr": "Dyktownik Cloud",
         "providers": "云服务商",
         "local": "本地",
         "selfHosted": "自托管",
@@ -3882,12 +3882,12 @@
       "openNote": "打开笔记",
       "unknownTool": "未知工具：{{name}}",
       "invalidArgs": "{{name}} 的工具参数无效",
-      "search_openwhispr_helpName": "搜索 OpenWhispr 帮助",
-      "read_openwhispr_helpName": "阅读 OpenWhispr 帮助",
-      "get_openwhispr_contextName": "读取 OpenWhispr 设置",
-      "search_openwhispr_helpStatus": "正在搜索 OpenWhispr 帮助...",
-      "read_openwhispr_helpStatus": "正在阅读 OpenWhispr 帮助...",
-      "get_openwhispr_contextStatus": "正在读取 OpenWhispr 设置..."
+      "search_openwhispr_helpName": "搜索 Dyktownik 帮助",
+      "read_openwhispr_helpName": "阅读 Dyktownik 帮助",
+      "get_openwhispr_contextName": "读取 Dyktownik 设置",
+      "search_openwhispr_helpStatus": "正在搜索 Dyktownik 帮助...",
+      "read_openwhispr_helpStatus": "正在阅读 Dyktownik 帮助...",
+      "get_openwhispr_contextStatus": "正在读取 Dyktownik 设置..."
     }
   },
   "assistant": {
@@ -3927,7 +3927,7 @@
       "disconnectConfirm": "断开 {{email}}？",
       "disconnectDescription": "将不再从此日历记录会议笔记。",
       "systemAudioRequired": "需要系统音频权限",
-      "systemAudioDescription": "要转录会议，OpenWhispr 需要系统音频权限来录制其他参与者的音频。我们绝不会录制您的屏幕。您将被引导至系统设置以启用此权限。",
+      "systemAudioDescription": "要转录会议，Dyktownik 需要系统音频权限来录制其他参与者的音频。我们绝不会录制您的屏幕。您将被引导至系统设置以启用此权限。",
       "openSettings": "打开系统设置",
       "connectFailed": "连接失败",
       "connectFailedDescription": "连接 Google Calendar 时出错。请重试。"
@@ -3955,10 +3955,10 @@
       "disconnectConfirm": "断开 Apple 日历？",
       "disconnectDescription": "将不再从 Apple 日历记录会议笔记。",
       "permissionDenied": "需要日历访问权限",
-      "permissionDeniedDescription": "OpenWhispr 需要日历访问权限来检测会议。请在系统设置的「隐私与安全性」→「日历」中启用 OpenWhispr。",
+      "permissionDeniedDescription": "Dyktownik 需要日历访问权限来检测会议。请在系统设置的「隐私与安全性」→「日历」中启用 Dyktownik。",
       "openSettings": "打开系统设置",
       "connectFailed": "连接失败",
-      "connectFailedDescription": "连接 Calendar.app 时出错。请重启 OpenWhispr 后重试。"
+      "connectFailedDescription": "连接 Calendar.app 时出错。请重启 Dyktownik 后重试。"
     },
     "api": {
       "description": "管理用于程序访问的 API 密钥",
@@ -3968,13 +3968,13 @@
     },
     "mcp": {
       "description": "在 Claude、ChatGPT 和 Cursor 中与你的笔记一起聊天、搜索和工作。",
-      "step1": "在你的 AI 工具中，使用公开 URL 添加 OpenWhispr MCP",
-      "proRequired": "升级到付费计划，以将 OpenWhispr 连接到 Claude、ChatGPT 和 Cursor。",
+      "step1": "在你的 AI 工具中，使用公开 URL 添加 Dyktownik MCP",
+      "proRequired": "升级到付费计划，以将 Dyktownik 连接到 Claude、ChatGPT 和 Cursor。",
       "worksWith": "支持",
       "copyUrl": "复制 MCP URL",
       "copied": "已复制",
       "oauthTitle": "通过 OAuth 登录",
-      "oauthDescription": "在支持 OAuth 的客户端中添加服务器 URL，然后登录 OpenWhispr 并授权访问。无需 API 密钥。",
+      "oauthDescription": "在支持 OAuth 的客户端中添加服务器 URL，然后登录 Dyktownik 并授权访问。无需 API 密钥。",
       "apiKeyTitle": "使用 API 密钥",
       "apiKeyDescription": "对于支持请求标头的客户端，请创建具有所需权限的个人 API 密钥，并使用以下标头。"
     },
@@ -3985,7 +3985,7 @@
       "local": {
         "label": "本地",
         "freeBadge": "免费",
-        "description": "直接读取你的本地笔记。无需登录或 API 密钥 — 在 OpenWhispr 运行时即可使用。"
+        "description": "直接读取你的本地笔记。无需登录或 API 密钥 — 在 Dyktownik 运行时即可使用。"
       },
       "cloud": {
         "label": "云端",
@@ -4005,7 +4005,7 @@
       "upgrade": "升级"
     },
     "notABot": {
-      "description": "OpenWhispr 直接从您的系统捕获音频 — 它不会以参与者身份加入您的会议。只需连接日历，正常记录笔记即可。"
+      "description": "Dyktownik 直接从您的系统捕获音频 — 它不会以参与者身份加入您的会议。只需连接日历，正常记录笔记即可。"
     },
     "nav": {
       "label": "集成分区",
@@ -4060,7 +4060,7 @@
         "reconnect_needed": "需要在设置中重新连接 Slack。",
         "connection_changed": "发送前 Slack 连接发生了变化，因此未发送任何内容。",
         "rate_limited": "Slack 正忙，请稍后重试。",
-        "missing_scope": "OpenWhispr 没有权限在那里发布。请在设置中重新连接 Slack。",
+        "missing_scope": "Dyktownik 没有权限在那里发布。请在设置中重新连接 Slack。",
         "msg_too_long": "消息对 Slack 来说太长了（格式化后最多 12,000 个字符）。",
         "no_text": "消息为空。",
         "network": "无法连接到 Slack，未发送任何内容。",
@@ -4075,9 +4075,9 @@
           "connection_changed": "发布前 GitHub 连接发生了变化，因此未发布任何内容。",
           "credential_save_failed": "无法在此电脑上保存 GitHub 登录信息，未发布任何内容。请重试。",
           "generic": "出了点问题，未向 GitHub 发布任何内容。",
-          "not_installed": "此仓库未安装 OpenWhispr GitHub App。请在设置中添加。未发布任何内容。",
-          "repo_unlisted": "无法确认此仓库是否已安装 OpenWhispr GitHub App。请检查仓库名称。未发布任何内容。",
-          "no_repositories": "尚未为 OpenWhispr GitHub App 选择仓库。请在设置中选择。未发布任何内容。",
+          "not_installed": "此仓库未安装 Dyktownik GitHub App。请在设置中添加。未发布任何内容。",
+          "repo_unlisted": "无法确认此仓库是否已安装 Dyktownik GitHub App。请检查仓库名称。未发布任何内容。",
+          "no_repositories": "尚未为 Dyktownik GitHub App 选择仓库。请在设置中选择。未发布任何内容。",
           "forbidden": "您没有在此仓库中执行此操作的权限，未发布任何内容。",
           "not_found": "找不到该 Issue 或拉取请求，未发布任何内容。",
           "issues_disabled": "此仓库已关闭 Issue，未发布任何内容。",
@@ -4122,7 +4122,7 @@
           "wrong_workspace": "该议题位于另一个 Linear 工作区，未发送任何内容。",
           "invalid_reference": "这不是 Linear 议题，未发送任何内容。",
           "refused": "Linear 拒绝了请求，未发送任何内容。",
-          "unknown_action": "OpenWhispr 无法在 Linear 中执行此操作，未发送任何内容。",
+          "unknown_action": "Dyktownik 无法在 Linear 中执行此操作，未发送任何内容。",
           "generic": "出了点问题，未向 Linear 发送任何内容。"
         }
       },
@@ -4220,19 +4220,19 @@
         "oauth_denied": "由于未获得授权，Slack 未连接。",
         "oauth_timeout": "连接耗时过长，请重试。",
         "oauth_state_mismatch": "该登录链接已过期，请重试。",
-        "ports_busy": "另一个应用正在使用 OpenWhispr 连接所需的端口。请关闭它后重试。",
+        "ports_busy": "另一个应用正在使用 Dyktownik 连接所需的端口。请关闭它后重试。",
         "token_exchange_failed": "Slack 未完成连接，请重试。",
         "not_configured": "此版本中 Slack 不可用。",
         "connection_changed": "连接过程中您的账户或 Slack 连接发生了变化，请重试。",
-        "signed_out": "请登录 OpenWhispr 以连接 Slack。",
+        "signed_out": "请登录 Dyktownik 以连接 Slack。",
         "policy_blocked": "您的组织已关闭连接器。",
         "policy_unavailable": "无法检查您的组织设置，请重试。"
       },
       "browser": {
         "connectedTitle": "Slack 已连接",
-        "connectedBody": "您可以关闭此标签页并返回 OpenWhispr。",
+        "connectedBody": "您可以关闭此标签页并返回 Dyktownik。",
         "failedTitle": "Slack 未连接",
-        "failedBody": "请返回 OpenWhispr 重试。"
+        "failedBody": "请返回 Dyktownik 重试。"
       }
     },
     "github": {
@@ -4247,7 +4247,7 @@
       "connectedAs_unknown": "已以 {{account}} 身份连接",
       "needsReconnect": "需要重新连接 GitHub。",
       "reviewOnGithub": "在 GitHub 上查看",
-      "disconnectedHint": "已在此电脑上断开连接。在您于 GitHub 上移除之前，GitHub 会保留 OpenWhispr 的授权。",
+      "disconnectedHint": "已在此电脑上断开连接。在您于 GitHub 上移除之前，GitHub 会保留 Dyktownik 的授权。",
       "errors": {
         "connect_failed": "无法连接 GitHub，请重试。",
         "disconnect_failed": "无法断开 GitHub 连接，请重试。",
@@ -4255,7 +4255,7 @@
         "token_exchange_failed": "GitHub 未完成连接，请重试。",
         "not_configured": "此版本中 GitHub 不可用。",
         "connection_changed": "连接过程中您的账户或 GitHub 连接发生了变化，请重试。",
-        "signed_out": "请登录 OpenWhispr 以连接 GitHub。",
+        "signed_out": "请登录 Dyktownik 以连接 GitHub。",
         "policy_blocked": "您的组织已关闭连接器。",
         "policy_unavailable": "无法检查您的组织设置，请重试。",
         "code_expired": "代码已过期，请重试。",
@@ -4281,32 +4281,32 @@
       "connect": "连接",
       "reconnect": "重新连接",
       "disconnect": "断开连接",
-      "connecting": "请在浏览器中完成连接… 如果 Google 显示访问已被阻止，需要您所在组织的 Google 管理员允许 OpenWhispr。",
+      "connecting": "请在浏览器中完成连接… 如果 Google 显示访问已被阻止，需要您所在组织的 Google 管理员允许 Dyktownik。",
       "connectedAs": "已以 {{account}} 身份连接",
       "needsReconnect": "需要重新连接 Gmail。",
-      "grantKept": "已断开连接。Google 日历使用相同的 Google 权限，因此在您也断开 Google 日历之前，OpenWhispr 仍会显示在您的 Google 帐号中。",
+      "grantKept": "已断开连接。Google 日历使用相同的 Google 权限，因此在您也断开 Google 日历之前，Dyktownik 仍会显示在您的 Google 帐号中。",
       "errors": {
         "connect_failed": "无法连接 Gmail，请重试。",
         "disconnect_failed": "无法断开 Gmail 连接，请重试。",
         "oauth_denied": "由于未获得授权，Gmail 未连接。",
-        "oauth_timeout": "连接耗时过长。如果 Google 显示访问已被阻止，请让您所在组织的 Google 管理员允许 OpenWhispr；否则请重试。",
+        "oauth_timeout": "连接耗时过长。如果 Google 显示访问已被阻止，请让您所在组织的 Google 管理员允许 Dyktownik；否则请重试。",
         "oauth_state_mismatch": "该登录链接已过期，请重试。",
-        "ports_busy": "另一个应用正在使用 OpenWhispr 连接所需的端口。请关闭它后重试。",
+        "ports_busy": "另一个应用正在使用 Dyktownik 连接所需的端口。请关闭它后重试。",
         "token_exchange_failed": "Google 未完成连接，请重试。",
         "not_configured": "此版本中 Gmail 不可用。",
         "connection_changed": "连接过程中您的账户或 Gmail 连接发生了变化，请重试。",
-        "signed_out": "请登录 OpenWhispr 以连接 Gmail。",
+        "signed_out": "请登录 Dyktownik 以连接 Gmail。",
         "policy_blocked": "您的组织已关闭连接器。",
         "policy_unavailable": "无法检查您的组织设置，请重试。",
         "permission_not_granted": "由于未授予发送邮件的权限，Gmail 未连接。请重新连接并保持勾选该权限。",
         "email_not_verified": "Google 尚未验证此账户的邮箱地址，因此 Gmail 未连接。",
-        "domain_policy": "您所在组织的 Google 管理员已阻止此应用。请他们允许 OpenWhispr。"
+        "domain_policy": "您所在组织的 Google 管理员已阻止此应用。请他们允许 Dyktownik。"
       },
       "browser": {
         "connectedTitle": "Gmail 已连接",
-        "connectedBody": "您可以关闭此标签页并返回 OpenWhispr。",
+        "connectedBody": "您可以关闭此标签页并返回 Dyktownik。",
         "failedTitle": "Gmail 未连接",
-        "failedBody": "请返回 OpenWhispr 重试。"
+        "failedBody": "请返回 Dyktownik 重试。"
       }
     },
     "linear": {
@@ -4324,20 +4324,20 @@
         "oauth_denied": "由于未获得授权，Linear 未连接。",
         "oauth_timeout": "连接耗时过长，请重试。",
         "oauth_state_mismatch": "该登录链接已过期，请重试。",
-        "ports_busy": "另一个应用正在使用 OpenWhispr 连接所需的端口。请关闭它后重试。",
+        "ports_busy": "另一个应用正在使用 Dyktownik 连接所需的端口。请关闭它后重试。",
         "token_exchange_failed": "Linear 未完成连接，请重试。",
         "not_configured": "此版本中 Linear 不可用。",
         "connection_changed": "连接过程中您的账户或 Linear 连接发生了变化，请重试。",
-        "signed_out": "请登录 OpenWhispr 以连接 Linear。",
+        "signed_out": "请登录 Dyktownik 以连接 Linear。",
         "policy_blocked": "您的组织已关闭连接器。",
         "policy_unavailable": "无法检查您的组织设置，请重试。",
         "permission_not_granted": "由于未授予全部权限，Linear 未连接。请重新连接并允许所有权限。"
       },
       "browser": {
         "connectedTitle": "Linear 已连接",
-        "connectedBody": "您可以关闭此标签页并返回 OpenWhispr。",
+        "connectedBody": "您可以关闭此标签页并返回 Dyktownik。",
         "failedTitle": "Linear 未连接",
-        "failedBody": "请返回 OpenWhispr 重试。"
+        "failedBody": "请返回 Dyktownik 重试。"
       },
       "notes": {
         "priority": {
@@ -4417,8 +4417,8 @@
           "connection_changed": "GitHub 连接已更改。",
           "credential_save_failed": "无法在此电脑上保存 GitHub 登录信息。",
           "generic": "在 GitHub 上操作未成功。",
-          "not_installed": "那里未安装 OpenWhispr GitHub App。",
-          "repo_unlisted": "无法确认那里是否已安装 OpenWhispr GitHub App。",
+          "not_installed": "那里未安装 Dyktownik GitHub App。",
+          "repo_unlisted": "无法确认那里是否已安装 Dyktownik GitHub App。",
           "no_repositories": "尚未选择 GitHub 仓库。",
           "forbidden": "在该仓库中没有权限。",
           "not_found": "找不到该 Issue 或拉取请求。",
@@ -4518,7 +4518,7 @@
     "systemAudioRequired": "需要系统音频权限来录制其他参与者的音频。",
     "openSettings": "打开系统设置",
     "connectCalendar": "连接您的日历",
-    "connectCalendarDescription": "无需离开 OpenWhispr 即可查看并加入您的会议。",
+    "connectCalendarDescription": "无需离开 Dyktownik 即可查看并加入您的会议。",
     "connectCalendarButton": "连接日历"
   },
   "notesView": {
@@ -4573,7 +4573,7 @@
         "invitationActions": "邀请操作",
         "resendSent": "邀请已发送",
         "resendThrottled": "邀请刚刚发送过，请一分钟后再试。",
-        "syncPrompt": "分享会在你的 OpenWhispr 云端保留此笔记的副本。在你选择分享对象之前，只有你能看到它。",
+        "syncPrompt": "分享会在你的 Dyktownik 云端保留此笔记的副本。在你选择分享对象之前，只有你能看到它。",
         "syncAndShare": "同步笔记",
         "visibility": {
           "label": "可见性",
@@ -4635,12 +4635,12 @@
   },
   "permissionsGate": {
     "title": "需要权限",
-    "description": "OpenWhispr 需要一些权限才能在此电脑上正常运行。",
+    "description": "Dyktownik 需要一些权限才能在此电脑上正常运行。",
     "continue": "继续"
   },
   "apiKeysSection": {
     "title": "API 密钥",
-    "description": "创建密钥以编程方式访问 OpenWhispr API。",
+    "description": "创建密钥以编程方式访问 Dyktownik API。",
     "empty": "暂无 API 密钥",
     "createButton": "创建 API 密钥",
     "create": {
@@ -4758,7 +4758,7 @@
     },
     "join": {
       "title": "加入你的团队",
-      "domainTitle": "你的团队已在 OpenWhispr",
+      "domainTitle": "你的团队已在 Dyktownik",
       "description": "这些工作区中有与你相同邮箱域名的成员。",
       "invitedDescription": "有人邀请你加入一个工作区。",
       "invitedBy": "{{inviter}} 邀请你担任{{role}}",
@@ -4949,5 +4949,18 @@
     "permissionDenied": "已拒绝",
     "permissionRestricted": "受限",
     "permissionNotDetermined": "尚未请求"
+  },
+  "easterEgg": {
+    "title": "You found the hidden mode",
+    "intro": "Dyktownik likes it when people talk instead of type. Warm up by saying this out loud (it is a Polish tongue twister):",
+    "hint": "Hold your dictation shortcut and see if Dyktownik trips up.",
+    "another": "Another one",
+    "twisters": {
+      "0": "W Szczebrzeszynie chrząszcz brzmi w trzcinie.",
+      "1": "Król Karol kupił królowej Karolinie korale koloru koralowego.",
+      "2": "Stół z powyłamywanymi nogami.",
+      "3": "Strzeż się, szczeżui, szczupaka.",
+      "4": "Nie pieprz, Pietrze, wieprza pieprzem, bo mu zaszkodzisz."
+    }
   }
 }

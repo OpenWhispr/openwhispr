@@ -94,7 +94,7 @@ test(
       [
         "[Desktop Entry]",
         "Type=Application",
-        "Name=OpenWhispr",
+        "Name=Dyktownik",
         "Exec=/home/user/Apps/OpenWhispr.AppImage %U",
         "Terminal=false",
         "NoDisplay=true",

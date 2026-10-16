@@ -368,7 +368,7 @@ class GlobeKeyManager extends EventEmitter {
         this.reportError(
           new Error(
             `Globe key listener keeps exiting unexpectedly (${MAX_RESTART_ATTEMPTS} restarts failed). ` +
-              "Try restarting OpenWhispr."
+              "Try restarting Dyktownik."
           )
         );
       }

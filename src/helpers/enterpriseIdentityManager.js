@@ -181,7 +181,7 @@ function createEnterpriseIdentityManager({
       );
     }
     const apiUrl = getApiUrl()?.replace(/\/+$/, "");
-    if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
+    if (!apiUrl) throw new Error("Dyktownik API URL not configured");
     const authHeaders = normalizeAuthHeaders(request.authHeaders, tokenState.token);
     if (!Object.keys(authHeaders).length) {
       throw new AuthContextError("Not authenticated", "AUTH_CONTEXT_UNVALIDATED");

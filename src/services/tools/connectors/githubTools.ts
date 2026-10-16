@@ -80,13 +80,13 @@ function githubReconnectResult(): ToolResult {
 // 1,000 each), so this one may be there after all: an install link would
 // send the user to fix what may not be broken.
 const REPO_UNLISTED_GUIDANCE =
-  "OpenWhispr couldn't read every repository the GitHub App is on, so it may be installed there after all. Ask the user to check the repository name.";
+  "Dyktownik couldn't read every repository the GitHub App is on, so it may be installed there after all. Ask the user to check the repository name.";
 
 const REPOSITORY_GUIDANCE: Readonly<Record<string, string>> = {
   no_repositories:
-    "Tell the user to choose repositories for the OpenWhispr GitHub App in Settings → Integrations → Connectors, then ask again.",
+    "Tell the user to choose repositories for the Dyktownik GitHub App in Settings → Integrations → Connectors, then ask again.",
   not_installed:
-    "Tell the user to install the OpenWhispr GitHub App on that repository, from Settings → Integrations → Connectors or the installUrl when there is one.",
+    "Tell the user to install the Dyktownik GitHub App on that repository, from Settings → Integrations → Connectors or the installUrl when there is one.",
 };
 
 // The model gets GitHub's next step: reconnect, or pick repositories, with

@@ -4,6 +4,7 @@ import { PROMPTS_BY_LOCALE } from "./locales/prompts";
 import { TRANSLATIONS_BY_LOCALE } from "./locales/translations";
 
 export const SUPPORTED_UI_LANGUAGES = [
+  "pl",
   "en",
   "ar",
   "es",
@@ -49,6 +50,10 @@ export function normalizeUiLanguage(language: string | null | undefined): UiLang
 }
 
 const resources = {
+  pl: {
+    translation: TRANSLATIONS_BY_LOCALE.pl,
+    prompts: PROMPTS_BY_LOCALE.pl,
+  },
   en: {
     translation: TRANSLATIONS_BY_LOCALE.en,
     prompts: PROMPTS_BY_LOCALE.en,

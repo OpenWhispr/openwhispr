@@ -109,7 +109,7 @@ function buildDesktopFileContents(execPath, iconName) {
   return [
     DESKTOP_ENTRY_GROUP,
     "Type=Application",
-    "Name=OpenWhispr",
+    "Name=Dyktownik",
     "Comment=Voice dictation and AI agent",
     `Exec=${buildExecValue(execPath)}`,
     iconName ? `Icon=${iconName}` : null,

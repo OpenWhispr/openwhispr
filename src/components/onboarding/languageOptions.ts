@@ -10,6 +10,7 @@ const NATIVE_LABELS: Record<string, string> = {
   hi: "हिन्दी",
   it: "Italiano",
   ja: "日本語",
+  pl: "Polski",
   ko: "한국어",
   pt: "Português",
   ru: "Русский",

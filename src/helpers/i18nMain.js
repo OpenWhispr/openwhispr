@@ -1,5 +1,6 @@
 const i18next = require("i18next");
 
+const plTranslation = require("../locales/pl/translation.json");
 const enTranslation = require("../locales/en/translation.json");
 const arTranslation = require("../locales/ar/translation.json");
 const esTranslation = require("../locales/es/translation.json");
@@ -12,6 +13,7 @@ const jaTranslation = require("../locales/ja/translation.json");
 const zhCNTranslation = require("../locales/zh-CN/translation.json");
 const zhTWTranslation = require("../locales/zh-TW/translation.json");
 
+const plPrompts = require("../locales/pl/prompts.json");
 const enPrompts = require("../locales/en/prompts.json");
 const arPrompts = require("../locales/ar/prompts.json");
 const esPrompts = require("../locales/es/prompts.json");
@@ -25,6 +27,7 @@ const zhCNPrompts = require("../locales/zh-CN/prompts.json");
 const zhTWPrompts = require("../locales/zh-TW/prompts.json");
 
 const SUPPORTED_UI_LANGUAGES = [
+  "pl",
   "en",
   "ar",
   "es",
@@ -70,6 +73,10 @@ const i18nMain = i18next.createInstance();
 void i18nMain.init({
   initAsync: false,
   resources: {
+    pl: {
+      translation: plTranslation,
+      prompts: plPrompts,
+    },
     en: {
       translation: enTranslation,
       prompts: enPrompts,

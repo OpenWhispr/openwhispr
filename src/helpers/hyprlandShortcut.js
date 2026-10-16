@@ -70,7 +70,7 @@ const BINDS_FILENAMES = {
   lua: "openwhispr-binds.lua",
 };
 const MANAGED_HEADER_TEXT = [
-  "OpenWhispr keybinds (managed automatically)",
+  "Dyktownik keybinds (managed automatically)",
   "If you delete this file, also remove the matching load line from your Hyprland config.",
 ];
 const MANAGED_HEADER_VARIANTS = new Set([

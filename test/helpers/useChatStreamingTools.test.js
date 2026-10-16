@@ -870,7 +870,7 @@ test("signed out, the model is told to point the user at signing in", async (t) 
   const prompt = systemPromptOf(sentMessages[0]);
   assert.match(
     prompt,
-    /- Web search: needs the user to sign in to OpenWhispr in Settings → Profile\./
+    /- Web search: needs the user to sign in to Dyktownik in Settings → Profile\./
   );
   assert.match(
     prompt,
@@ -886,7 +886,7 @@ test("on a free plan, the model still writes the email and then says a paid plan
   const prompt = systemPromptOf(sentMessages[0]);
   assert.match(
     prompt,
-    /still write it in full in your reply, then end with one short sentence on how they can have you send it for them[^\n]*\n- Integrations \(Email, Slack, Linear, GitHub\): needs a paid OpenWhispr plan in Settings → Plans & Billing\./
+    /still write it in full in your reply, then end with one short sentence on how they can have you send it for them[^\n]*\n- Integrations \(Email, Slack, Linear, GitHub\): needs a paid Dyktownik plan in Settings → Plans & Billing\./
   );
   assert.doesNotMatch(prompt, /- Web search: (needs|turned|not)/);
 });
@@ -936,7 +936,7 @@ test("a surface without connectors (container chat) never names them", async (t)
   const { captured, sentMessages } = await renderChatStreaming(t, {}, { subscribed: false });
   await captured.sendToAI("Summarize this folder", []);
   const prompt = systemPromptOf(sentMessages[0]);
-  assert.doesNotMatch(prompt, /Integrations \(Email|Slack:|paid OpenWhispr plan/);
+  assert.doesNotMatch(prompt, /Integrations \(Email|Slack:|paid Dyktownik plan/);
   assert.match(
     prompt,
     /- Calendar: not connected; the user can connect it in Integrations → Calendars\./
@@ -1045,7 +1045,7 @@ test("official help is offered to the model on Cloud Free without automatic look
     subscribed: false,
     electronAPI: { productHelp: async (...args) => calls.push(args) },
   });
-  await captured.sendToAI("How do I change an OpenWhispr shortcut?", []);
+  await captured.sendToAI("How do I change an Dyktownik shortcut?", []);
   for (const name of ["search_openwhispr_help", "read_openwhispr_help", "get_openwhispr_context"])
     assert.ok(offeredTools[0].includes(name), name);
   assert.equal(calls.length, 0, "only an explicit model tool call fetches documentation");
@@ -1098,14 +1098,14 @@ for (const [surface, hookOptions] of [
       ],
     };
     for (const prompt of [
-      "Hey OpenWhispr, what is the weather today?",
-      "What did I say about OpenWhispr in my notes?",
+      "Hey Dyktownik, what is the weather today?",
+      "What did I say about Dyktownik in my notes?",
       "What is activation energy in chemistry?",
       "How do I record a meeting in Zoom?",
       "Would you like to connect over coffee?",
-      "Wie ändere ich die Tastenkombination in OpenWhispr?",
+      "Wie ändere ich die Tastenkombination in Dyktownik?",
       "Und wie ändere ich das?",
-      "How do I use OpenWhispr Hold mode and then write an email to my boss?",
+      "How do I use Dyktownik Hold mode and then write an email to my boss?",
       "What about it now?",
     ]) {
       await captured.sendToAI(
@@ -1131,7 +1131,7 @@ test("product questions retain note, scoped search, selected text and screenshot
   const { captured, sentMessages } = await renderChatStreaming(
     t,
     {
-      noteContext: "The note says OpenWhispr should be discussed next Tuesday.",
+      noteContext: "The note says Dyktownik should be discussed next Tuesday.",
       searchScope: { spaceId: 12, folderId: 34 },
     },
     {
@@ -1145,9 +1145,9 @@ test("product questions retain note, scoped search, selected text and screenshot
       },
     }
   );
-  const prompt = "What does this say about OpenWhispr?";
+  const prompt = "What does this say about Dyktownik?";
   await captured.sendToAI(prompt, [{ id: "question", role: "user", content: prompt }], {
-    selectedContext: { text: "Selected OpenWhispr passage", sourceMessageId: "earlier" },
+    selectedContext: { text: "Selected Dyktownik passage", sourceMessageId: "earlier" },
     attachment: { image: "data:image/png;base64,c3ludGhldGlj", mediaType: "image/png" },
   });
   assert.deepEqual(searchCalls, [[prompt, 5, 12, 34]]);
@@ -1155,7 +1155,7 @@ test("product questions retain note, scoped search, selected text and screenshot
   assert.match(systemPromptOf(sentMessages[0]), /Follow up with Alex/);
   const content = sentMessages[0].at(-1).content;
   assert.ok(Array.isArray(content), "image-capable provider receives multimodal request");
-  assert.match(content[0].text, /Selected OpenWhispr passage/);
+  assert.match(content[0].text, /Selected Dyktownik passage/);
   assert.equal(content[1].type, "image");
   assert.equal(content[1].image, "data:image/png;base64,c3ludGhldGlj");
 });
@@ -1236,7 +1236,7 @@ for (const provider of ["Cloud", "BYOK"]) {
           })
       );
     }
-    await captured.sendToAI("What is my OpenWhispr shortcut?", []);
+    await captured.sendToAI("What is my Dyktownik shortcut?", []);
     assert.match(JSON.stringify(modelOutputs), /ARTICLE_BODY_SENTINEL/);
     assert.match(JSON.stringify(modelOutputs), /Control\+Alt\+Q/);
     const saved = getMessages().find((message) => message.role === "assistant").toolCalls;

@@ -18,6 +18,7 @@ const LOCALES = {
   fr: "fr",
   it: "it",
   ja: "ja",
+  pl: "pl",
   pt: "pt",
   ru: "ru",
   "zh-CN": "zh",

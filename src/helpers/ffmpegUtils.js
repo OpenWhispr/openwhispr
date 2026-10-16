@@ -123,7 +123,7 @@ function runFFmpegConversion(args, outputPath, { signal } = {}) {
     if (!ffmpegPath) {
       reject(
         new Error(
-          "FFmpeg not found - the bundled FFmpeg is missing from this install and no system FFmpeg was found on PATH; reinstalling OpenWhispr should fix this"
+          "FFmpeg not found - the bundled FFmpeg is missing from this install and no system FFmpeg was found on PATH; reinstalling Dyktownik should fix this"
         )
       );
       return;

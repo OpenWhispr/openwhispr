@@ -266,23 +266,45 @@ if (!gotSingleInstanceLock) {
 const isLiveWindow = (window) => window && !window.isDestroyed();
 
 // Ensure macOS menus use the proper casing for the app name
-if (process.platform === "darwin" && app.getName() !== "OpenWhispr") {
-  app.setName("OpenWhispr");
+if (process.platform === "darwin" && app.getName() !== "Dyktownik") {
+  app.setName("Dyktownik");
 }
 
-// Add global error handling for uncaught exceptions
+// Global error handling. Nothing here may throw, or one bad error would turn
+// into a second one inside the handler itself.
+const CRASH_LOG_LIMIT = 20;
+const CRASH_LOG_WINDOW_MS = 60_000;
+let crashLogWindowStart = 0;
+let crashLogCount = 0;
+
+function persistProcessError(kind, reason) {
+  try {
+    const now = Date.now();
+    if (now - crashLogWindowStart > CRASH_LOG_WINDOW_MS) {
+      crashLogWindowStart = now;
+      crashLogCount = 0;
+    }
+    // A runaway loop of failures must not fill the disk with the same stack.
+    if (++crashLogCount > CRASH_LOG_LIMIT) return;
+    const detail = reason instanceof Error ? reason.stack || reason.message : String(reason);
+    require("./src/helpers/debugLogger").error(`${kind}: ${detail}`);
+  } catch {
+    // Logging is best effort.
+  }
+}
+
 process.on("uncaughtException", (error) => {
   console.error("Uncaught Exception:", error);
-  // Don't exit the process for EPIPE errors as they're harmless
-  if (error.code === "EPIPE") {
+  // EPIPE shows up when a child process closes its pipe early, and is harmless.
+  if (error?.code === "EPIPE") {
     return;
   }
-  // For other errors, log and continue
-  console.error("Error stack:", error.stack);
+  persistProcessError("Uncaught exception", error);
 });
 
 process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
+  persistProcessError("Unhandled rejection", reason);
 });
 
 // Import helper module classes (but don't instantiate yet - wait for app.whenReady())
@@ -1087,7 +1109,7 @@ function startAuthBridgeServer() {
 
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     res.end(
-      "<html><body><h3>OpenWhispr sign-in complete.</h3><p>You can close this tab.</p></body></html>"
+      "<html><body><h3>Dyktownik sign-in complete.</h3><p>You can close this tab.</p></body></html>"
     );
   });
 

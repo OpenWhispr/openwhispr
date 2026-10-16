@@ -715,7 +715,7 @@ test("a repo the App isn't installed on is named, with the install link, and not
   assert.deepEqual(result, {
     status: "failed",
     errorCode: "not_installed",
-    message: `The OpenWhispr GitHub App isn't installed on evil/secret. Tell the user to install it on that repository: ${INSTALL_URL}`,
+    message: `The Dyktownik GitHub App isn't installed on evil/secret. Tell the user to install it on that repository: ${INSTALL_URL}`,
   });
   assert.equal(hits(github, SEARCH).length, 0);
 
@@ -861,7 +861,7 @@ test("a 401 on a token another request already replaced retries with the replace
   assert.equal(slot(credentials).needsReconnect, false);
 });
 
-test("installations listing more repos than OpenWhispr reads mark a search cut, and a missing repo as maybe installed", async () => {
+test("installations listing more repos than Dyktownik reads mark a search cut, and a missing repo as maybe installed", async () => {
   const PAGED = {
     [INSTALLATIONS]: [json({ total_count: 1, installations: [{ id: 7 }] })],
     // Every page links to another, so restAll stops at its page cap.

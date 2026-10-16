@@ -105,7 +105,7 @@ export default function NixOsPasteInfo({ status, onRecheck }: NixOsPasteInfoProp
         <p className="text-xs text-muted-foreground">
           {t("settingsPage.general.waylandPaste.nixos.flakeDesc", {
             defaultValue:
-              "If you install OpenWhispr from the flake, programs.openwhispr.enable turns on ydotool, the uinput module and the group memberships for you.",
+              "If you install Dyktownik from the flake, programs.openwhispr.enable turns on ydotool, the uinput module and the group memberships for you.",
           })}
         </p>
         <CodeBlock code={FLAKE_CONFIG} copyLabel={copyLabel} />

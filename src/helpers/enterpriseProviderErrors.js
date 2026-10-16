@@ -257,7 +257,7 @@ function mapManagedIdentityError(error, provider) {
   if (!code) return null;
   if (["AUTH_CONTEXT_CHANGED", "AUTH_CONTEXT_UNVALIDATED", "AUTH_EXPIRED"].includes(code)) {
     return {
-      message: "Your OpenWhispr session changed or expired.",
+      message: "Your Dyktownik session changed or expired.",
       action: "Sign in again, then retry.",
       retryable: true,
     };
@@ -373,7 +373,7 @@ function mapBedrockError(error, config = {}) {
   if (kind === "unavailable") {
     return withDetails({
       message:
-        "AWS Bedrock is temporarily unavailable due to high demand. This is an AWS service issue, not an OpenWhispr outage. Please try again in a few minutes.",
+        "AWS Bedrock is temporarily unavailable due to high demand. This is an AWS service issue, not an Dyktownik outage. Please try again in a few minutes.",
       messageKey: "reasoning.enterprise.errors.bedrock.serviceUnavailable",
       retryable: true,
     });

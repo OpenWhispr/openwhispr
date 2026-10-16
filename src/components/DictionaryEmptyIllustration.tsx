@@ -75,7 +75,7 @@ export default function DictionaryEmptyIllustration({ variant }: DictionaryEmpty
             <span className="italic text-foreground/50 line-through dark:text-foreground/65">
               open whisper
             </span>
-            <span className="font-medium text-primary">OpenWhispr</span>
+            <span className="font-medium text-primary">Dyktownik</span>
           </span>
           <span
             dir="ltr"
