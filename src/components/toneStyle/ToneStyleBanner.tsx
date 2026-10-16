@@ -8,12 +8,12 @@ interface ToneStyleBannerProps {
   onDismiss: () => void;
 }
 
-// The dictated line reaches the description's height about 410px before the
+// The curved line reaches the description's height about 410px before the
 // banner's end, so the description has to end this far from it for the line to show.
 const LINE_CLEARANCE_PX = 425;
 
 // The design's decoration: two soft brand glows rising from the bottom edge and
-// a dictated line curving between them, drawn from the banner's end. In RTL the
+// a line of text curving between them, drawn from the banner's end. In RTL the
 // glows mirror; the line keeps reading left to right.
 function BannerDecoration({ showLine }: { showLine: boolean }) {
   const { t } = useTranslation();

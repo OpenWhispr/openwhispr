@@ -4986,7 +4986,7 @@
       "cleanupOff": "AI cleanup is off, so these tones aren't applied to your dictation.",
       "turnOnCleanup": "Turn on AI cleanup",
       "enabled": "Tones & voices enabled",
-      "enabledDescription": "AI cleanup uses your tone for each kind of app. When off, it uses the standard tone."
+      "enabledDescription": "AI cleanup uses your tone for each kind of app. When this is off, it uses the standard tone."
     }
   },
   "productHelp": {
