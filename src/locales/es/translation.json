@@ -4983,8 +4983,8 @@
       "saved": "Tono y estilo guardados",
       "cleanupOff": "La corrección de texto está desactivada, así que estos tonos no se aplican a tu dictado.",
       "turnOnCleanup": "Activar corrección de texto",
-      "standard": "Tono estándar",
-      "standardDescription": "La corrección de texto mantiene tu propio tono en todas las apps. Desactívalo para elegir un tono para cada tipo de app."
+      "enabled": "Tonos y voces activados",
+      "enabledDescription": "La corrección de texto usa tu tono para cada tipo de app. Si está desactivado, usa el tono estándar."
     }
   },
   "productHelp": {
