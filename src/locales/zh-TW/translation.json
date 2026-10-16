@@ -898,6 +898,8 @@
   },
   "hooks": {
     "audioRecording": {
+      "cleanupSignedOut": "AI 清理使用 OpenWhispr Cloud，但你尚未登入。",
+      "cleanupUnconfigured": "已開啟 AI 清理，但尚未設定清理模型。",
       "errorTitles": {
         "sessionExpired": "工作階段已過期",
         "offline": "你目前離線",

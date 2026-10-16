@@ -1,6 +1,8 @@
 {
   "hooks": {
     "audioRecording": {
+      "cleanupSignedOut": "يستخدم تنظيف الذكاء الاصطناعي OpenWhispr Cloud، لكنك لم تسجّل الدخول.",
+      "cleanupUnconfigured": "تنظيف الذكاء الاصطناعي مفعّل، ولكن لم يُضبط نموذج للتنظيف.",
       "errorTitles": {
         "sessionExpired": "انتهت الجلسة",
         "offline": "أنت غير متصل بالإنترنت",

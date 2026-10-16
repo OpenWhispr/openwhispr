@@ -2,6 +2,7 @@ const fs = require("fs");
 const fsPromises = require("fs").promises;
 const path = require("path");
 const debugLogger = require("./debugLogger");
+const { warnGpuFallback } = require("./gpuFallbackLog");
 const {
   downloadFile,
   createDownloadSignal,
@@ -101,6 +102,50 @@ class WhisperManager {
     return { useCuda, useVulkan };
   }
 
+  // Why a backend the user wants can't be used, or null when it isn't wanted.
+  // Like resolveGpuStartOptions, an unset flag still wants a pack on disk.
+  _gpuFallbackReason(envVar, manager, backend) {
+    const flag = (process.env[envVar] || "").toLowerCase();
+    if (flag === "false") return null;
+    const needsUpdate = !!manager?.needsUpdate?.();
+    const downloaded = !!manager?.isDownloaded?.();
+    if (flag !== "true" && !needsUpdate && !downloaded) return null;
+    if (needsUpdate) return "pack needs update";
+    if (!downloaded) return "pack not installed or missing required libraries";
+    // A wanted, downloaded pack is skipped only after it failed on this machine.
+    return resolveFailedGpuBackends(process.env.WHISPER_GPU_FAILED).includes(backend)
+      ? "previous failure recorded"
+      : null;
+  }
+
+  _warnIfGpuFallback() {
+    const { useCuda, useVulkan } = this.resolveGpuStartOptions();
+    if (useCuda) return;
+    const runningOn = useVulkan ? "Vulkan" : "CPU";
+    const cudaReason = this._gpuFallbackReason(
+      "WHISPER_CUDA_ENABLED",
+      this._cudaBinaryManager,
+      "cuda"
+    );
+    const vulkanReason = this._gpuFallbackReason(
+      "WHISPER_VULKAN_ENABLED",
+      this._vulkanBinaryManager,
+      "vulkan"
+    );
+    const [label, pack, reason] = cudaReason
+      ? ["CUDA", "CUDA whisper", cudaReason]
+      : ["Vulkan", "Vulkan whisper", vulkanReason];
+    if (!reason) return;
+
+    const key = `${pack}:${reason}:${runningOn}`;
+    if (this._lastGpuFallbackWarning === key) return;
+    this._lastGpuFallbackWarning = key;
+    warnGpuFallback(`Whisper ${label} enabled but cannot be used, falling back to ${runningOn}`, {
+      pack,
+      reason,
+    });
+  }
+
   // The pack the settings card describes, so the card never disagrees with the
   // server (#1736): the pack every server start picks now (a GPU server always
   // runs on it; while a pack change restarts the server, it names the target),
@@ -190,6 +235,7 @@ class WhisperManager {
         const modelPath = this.getModelPath(whisperModel);
 
         if (fs.existsSync(modelPath)) {
+          this._warnIfGpuFallback();
           debugLogger.info("Pre-warming whisper-server", {
             model: whisperModel,
             modelPath,
@@ -444,6 +490,7 @@ class WhisperManager {
       debugLogger.warn("VAD requested but ggml-silero model not found; running without VAD");
     }
 
+    this._warnIfGpuFallback();
     await this.serverManager.start(modelPath, {
       ...this.resolveGpuStartOptions(),
       vadEnabled,

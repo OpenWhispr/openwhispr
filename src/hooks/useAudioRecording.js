@@ -796,6 +796,7 @@ export const useAudioRecording = (toast, options = {}) => {
           // generation when the attempt began: if the next dictation started while
           // it waited, that recording owns the pill (and would dismiss this one at
           // once) and its live preview, so the transcript only stays on the clipboard.
+          let heldBehindNewerDictation = false;
           const reportHeldBackPaste = async (
             delivery,
             { title, description, descriptionClipboardFailed, onRetry },
@@ -808,6 +809,7 @@ export const useAudioRecording = (toast, options = {}) => {
                 { delivery, keptInClipboard },
                 "clipboard"
               );
+              heldBehindNewerDictation = true;
               return;
             }
             window.electronAPI?.hideDictationPreview?.();
@@ -863,6 +865,7 @@ export const useAudioRecording = (toast, options = {}) => {
             return pasteOutcome.pasted;
           };
 
+          let pasted = false;
           if (pushForceStoppedRef.current && autoPasteEnabled && !result.assistantConversation) {
             // The push hit its safety ceiling while the trigger keys were still
             // down. Injecting the paste shortcut into those held modifiers is
@@ -935,10 +938,24 @@ export const useAudioRecording = (toast, options = {}) => {
             // visible somewhere.
             if (pasteSucceeded) {
               window.electronAPI?.hideDictationPreview?.();
-              if (result.cleanupFailure) recordCleanupFailure(result.cleanupFailure);
             }
+            pasted = pasteSucceeded;
           } else if (keepTranscriptionInClipboard && !result.assistantConversation) {
             await keepInClipboard("clipboard-only");
+          }
+
+          // Cleanup can be missing or can fail whether or not the paste landed
+          // (#2631, #1003), so the toast is told which. The onboarding demo's
+          // paste is a no-op into its own text box, so it reports nothing there.
+          // A paste held back behind a newer dictation stays quiet too: that
+          // recording owns the pill, and an unconfigured warning stays unspent.
+          if (
+            result.cleanupFailure &&
+            !heldBehindNewerDictation &&
+            localStorage.getItem("onboardingCompleted") === "true"
+          ) {
+            recordCleanupFailure({ ...result.cleanupFailure, pasted });
+            audioManagerRef.current.markCleanupNoticeShown(result.cleanupFailure);
           }
 
           if (result.source === "openai" && getSettings().useLocalWhisper) {

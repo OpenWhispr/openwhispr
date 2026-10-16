@@ -65,6 +65,7 @@ import { usePolicyStore } from "../stores/policyStore";
 import {
   getBatchTranscriptionModel,
   getCloudModel,
+  getProviderDisplayName,
   getTranscriptionProvider,
   getTranscriptionProviders,
   isOnlineParakeetModel,
@@ -95,7 +96,13 @@ import {
 } from "./transcriptionFallback";
 import { transcriptionFailureOutcome } from "./transcriptionFailureOutcome";
 import { IPC_ERROR_FIELDS, errorFromIpcResult } from "./ipcErrorFields";
-import { asProviderError, providerHttpError, redactProviderBody } from "./providerHttpErrors";
+import {
+  PROVIDER_ERROR_CODES,
+  asProviderError,
+  providerError,
+  providerHttpError,
+  redactProviderBody,
+} from "./providerHttpErrors";
 import {
   executeTranslationChain,
   hasTextContent,
@@ -108,6 +115,7 @@ import {
   stripAgentAddressPreservingFormatting,
 } from "../config/agentDetection";
 import {
+  cleanupUnconfiguredNotice,
   resolveDictationRouteKind,
   resolveAgentImageTarget,
   resolveWakeWordLanguage,
@@ -353,6 +361,7 @@ function resolveReasoningRoute(
 
     return {
       kind: "agent",
+      cleanupReachable,
       model: target.model,
       config: {
         ...target.config,
@@ -375,9 +384,9 @@ function resolveReasoningRoute(
     };
   }
   if (kind === "cleanup") {
-    return { kind: "cleanup", config: cleanupConfig };
+    return { kind: "cleanup", cleanupReachable, config: cleanupConfig };
   }
-  return { kind: "skip" };
+  return { kind: "skip", cleanupReachable };
 }
 
 const PLACEHOLDER_KEYS = {
@@ -689,6 +698,7 @@ class AudioManager {
     this.pendingSelectionEdit = null;
     this.pendingAssistantConversation = null;
     this.pendingCleanupFailure = null;
+    this._shownCleanupSetupKey = null;
     this._processingCancellationGeneration = 0;
     this._activeProcessingPipeline = null;
     this.assistantSelectionContext = null;
@@ -3239,6 +3249,38 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
+  // Runs wherever a dictation's route is decided, with the reachability that
+  // decision used. The notice reaches the user through the result extras.
+  _noteCleanupRoute(settings, { kind, cleanupReachable }) {
+    const { forget, notice } = cleanupUnconfiguredNotice(this._shownCleanupSetupKey, {
+      skipped: kind === "skip",
+      cleanupReachable,
+      settings,
+    });
+    if (forget) this._shownCleanupSetupKey = null;
+    if (notice && !this.pendingCleanupFailure) this.pendingCleanupFailure = notice;
+  }
+
+  // A BYOK cleanup model is selected, but the availability check found no API key
+  // for any provider, so this one has none either. Reports the failure the cleanup
+  // route raises when it runs, as the Cloud and streaming paths already do.
+  _noteMissingCleanupKey(settings) {
+    const cleanup = selectResolvedLLMConfig(settings, "dictationCleanup");
+    if (cleanup.mode !== "providers" || cleanup.provider === "custom") return;
+    this.pendingCleanupFailure = cleanupFailureFromError(
+      providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+        provider: getProviderDisplayName(cleanup.provider),
+        surface: "llm",
+      })
+    );
+  }
+
+  // The renderer confirms an unconfigured-cleanup notice once it is on screen, so
+  // a dictation cancelled or discarded before then never uses up the warning.
+  markCleanupNoticeShown(failure) {
+    if (failure?.setupKey) this._shownCleanupSetupKey = failure.setupKey;
+  }
+
   async processTranscription(text, source, wasCancelled = neverCancelled) {
     const result = await this.processTranscriptionCore(text, source, wasCancelled);
     if (wasCancelled()) return result;
@@ -3283,6 +3325,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       logger.logReasoning("REASONING_SKIPPED", {
         reason: "No cleanup or dictation-agent model available",
       });
+      this._noteCleanupRoute(settings, { kind: "skip", cleanupReachable });
       return normalizedText;
     }
 
@@ -3295,6 +3338,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       cleanupProvider,
       agentName,
     });
+    // Nothing can run cleanup although the assistant could, so no route is decided.
+    if (!useReasoning) {
+      this._noteCleanupRoute(settings, { kind: "skip", cleanupReachable });
+      if (cleanupReachable) this._noteMissingCleanupKey(settings);
+    }
 
     if (useReasoning) {
       let route;
@@ -3311,6 +3359,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         if (this.translationRequested && route.kind !== "translation") {
           this.notifyTranslationFallback("unreachable");
         }
+        this._noteCleanupRoute(settings, route);
         if (route.kind === "skip") return normalizedText;
 
         if (route.kind === "translation") {
@@ -3640,6 +3689,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (this.translationRequested && route.kind !== "translation") {
         this.notifyTranslationFallback("unreachable");
       }
+      this._noteCleanupRoute(settings, route);
       const toneStyle = route.kind === "cleanup" ? await this.consumeToneStyle() : null;
 
       try {
@@ -5894,6 +5944,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (this.translationRequested && route.kind !== "translation") {
         this.notifyTranslationFallback("unreachable");
       }
+      this._noteCleanupRoute(stSettings, route);
       const isCloudCleanup = isCloudCleanupMode();
       const toneStyle = route.kind === "cleanup" ? await this.consumeToneStyle() : null;
 

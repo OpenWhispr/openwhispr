@@ -4,9 +4,9 @@ const { app } = require("electron");
 
 // The legacy-layout migration (migrateLegacyBinDir) runs before any window
 // exists and can clear a GPU pack the user relied on. This sentinel carries
-// the "re-download your GPU pack" notice across launches until a control
-// panel window has actually shown it — a broadcast at window creation would
-// be lost if the user quit first. See #1606.
+// the "re-download your GPU pack" notice across launches until a window has
+// actually taken it — a broadcast at window creation would be lost if the user
+// quit first. See #1606.
 const SENTINEL_FILENAME = ".gpu-pack-migration-notice";
 
 // Launch-time orphan detection (detectOrphanedGpuPacks) finds the same
@@ -71,4 +71,11 @@ function clear() {
   } catch {}
 }
 
-module.exports = { record, recordOnce, read, clear };
+// Read and clear in one step, so two windows can never both show it.
+function take() {
+  const notice = read();
+  if (notice) clear();
+  return notice;
+}
+
+module.exports = { record, recordOnce, read, clear, take };

@@ -1430,6 +1430,15 @@ class IPCHandlers {
     }
   }
 
+  // The control panel shows the GPU pack notice. An app started to the tray
+  // creates none, so there the dictation panel shows it instead (#2554).
+  _gpuPackNoticeWindow() {
+    const { controlPanelWindow, mainWindow, startedMinimized } = this.windowManager;
+    if (controlPanelWindow && !controlPanelWindow.isDestroyed()) return controlPanelWindow;
+    if (startedMinimized && mainWindow && !mainWindow.isDestroyed()) return mainWindow;
+    return null;
+  }
+
   _whisperGpuFailureStatus(backend) {
     const gpuFailed = this._whisperGpuFailedBackends().includes(backend);
     const reason = gpuFailed ? process.env[WHISPER_GPU_FAILURE_REASON_KEYS[backend]] : null;
@@ -1538,7 +1547,14 @@ class IPCHandlers {
 
     ipcMain.handle("onboarding-set-active", (_event, active) => {
       if (typeof active !== "boolean") return false;
-      return this.windowManager.setOnboardingActive(active);
+      const result = this.windowManager.setOnboardingActive(active);
+      // The dictation panel can show the GPU pack notice only once the normal
+      // app is up: until then it stays hidden.
+      const noticeWindow = this._gpuPackNoticeWindow();
+      if (!active && noticeWindow && noticeWindow === this.windowManager.mainWindow) {
+        noticeWindow.webContents.send("gpu-pack-migration-notice-ready");
+      }
+      return result;
     });
 
     ipcMain.handle("onboarding-demo-begin", (_event, session) => {
@@ -3803,15 +3819,11 @@ class IPCHandlers {
       return { success: true, deletedCount };
     });
 
-    // One-time "GPU pack needs re-downloading" notice recorded by the
-    // legacy-layout migration before any window existed. See #1606.
-    ipcMain.handle("get-gpu-pack-migration-notice", () => {
-      return require("./gpuPackMigrationNotice").read();
-    });
-
-    ipcMain.handle("dismiss-gpu-pack-migration-notice", () => {
-      require("./gpuPackMigrationNotice").clear();
-      return { success: true };
+    // One-time "GPU pack needs re-downloading" notice recorded before any
+    // window existed (#1606). Only the window that shows it can take it.
+    ipcMain.handle("take-gpu-pack-migration-notice", (event) => {
+      if (event.sender !== this._gpuPackNoticeWindow()?.webContents) return null;
+      return require("./gpuPackMigrationNotice").take();
     });
 
     // Clears the remembered GPU failure and reloads the server with the GPU
