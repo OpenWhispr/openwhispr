@@ -1,3 +1,4 @@
+import { removeLocalModels } from "../utils/localModelRemoval";
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
@@ -1749,18 +1750,9 @@ export default function SettingsPage({
       onConfirm: async () => {
         setIsRemovingModels(true);
         try {
-          const results = await Promise.allSettled([
-            window.electronAPI?.deleteAllWhisperModels?.(),
-            window.electronAPI?.deleteAllParakeetModels?.(),
-            window.electronAPI?.modelDeleteAll?.(),
-          ]);
+          const allDeleted = await removeLocalModels();
 
-          const anyFailed = results.some(
-            (r) =>
-              r.status === "rejected" || (r.status === "fulfilled" && r.value && !r.value.success)
-          );
-
-          if (anyFailed) {
+          if (!allDeleted) {
             showAlertDialog({
               title: t("settingsPage.developer.removeModels.failedTitle"),
               description: t("settingsPage.developer.removeModels.failedDescription"),
