@@ -2725,6 +2725,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
 // --- Selectors (derived state, not stored) ---
 
+// Route cleanup to Cloud on this, never on cleanupCloudMode alone: picking a local
+// model or the notes onboarding mode toggle sets cleanupMode and leaves that field stale.
 export const selectIsCloudCleanupMode = (state: SettingsState) =>
   state.isSignedIn && state.cleanupMode === "openwhispr" && state.cleanupCloudMode === "openwhispr";
 

@@ -3582,6 +3582,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     const timings = {};
     const settings = getSettings();
+    const isCloudCleanup = isCloudCleanupMode();
     const language = getBaseLanguageCode(this.getEffectiveSttLanguage(settings));
 
     const arrayBuffer = await audioBlob.arrayBuffer();
@@ -3606,14 +3607,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       opts.analyticsOccurredAt = analyticsOccurredAt.toISOString();
       opts.localDate = localDateKey(analyticsOccurredAt);
     }
-    const cleanupCloudMode = settings.cleanupCloudMode || "openwhispr";
     // Only cloud cleanup writes a combined STT log; translation alone does not.
     // A voice assistant recording never runs cleanup, so this upload is its log.
-    if (
-      settings.useCleanupModel &&
-      cleanupCloudMode === "openwhispr" &&
-      !this.voiceAgentRequested
-    ) {
+    if (settings.useCleanupModel && isCloudCleanup && !this.voiceAgentRequested) {
       opts.sendLogs = "false";
     }
 
@@ -3660,8 +3656,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.notifyTranslationFallback("unreachable");
       }
       this._noteCleanupRoute(settings, route);
-      const cleanupCloudMode = settings.cleanupCloudMode || "openwhispr";
-
       try {
         if (route.kind === "agent") {
           const reasoned = await this.processAgentCommand(
@@ -3675,7 +3669,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             wasCancelled
           );
           if (hasTextContent(reasoned)) processedText = reasoned;
-        } else if (route.kind === "cleanup" && cleanupCloudMode === "openwhispr") {
+        } else if (route.kind === "cleanup" && isCloudCleanup) {
           const customPrompt = this.getCustomPrompt();
           const reasonResult = await withSessionRefresh(async () => {
             const res = await window.electronAPI.cloudReason(processedText, {
@@ -3729,31 +3723,30 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             settings,
             agentName,
             route,
-            cleanup:
-              cleanupCloudMode === "openwhispr"
-                ? {
-                    mode: "cloudReason",
-                    meta: {
-                      streamingFallbackReason,
-                      orukeetLanguageRouting: metadata.orukeetLanguageRouting,
-                      orukeetCleanup: metadata.orukeetCleanup,
-                      ...detectedLanguageFields,
-                      sttProvider: result.sttProvider,
-                      sttModel: result.sttModel,
-                      sttProcessingMs: result.sttProcessingMs,
-                      sttWordCount: result.sttWordCount,
-                      sttLanguage: result.sttLanguage,
-                      audioDurationMs: result.audioDurationMs,
-                      audioSizeBytes,
-                      audioFormat,
-                    },
-                    log: { level: "error", channel: "transcription" },
-                  }
-                : {
-                    mode: "model",
-                    model: getEffectiveCleanupModel(),
-                    log: { level: "error", channel: "transcription" },
+            cleanup: isCloudCleanup
+              ? {
+                  mode: "cloudReason",
+                  meta: {
+                    streamingFallbackReason,
+                    orukeetLanguageRouting: metadata.orukeetLanguageRouting,
+                    orukeetCleanup: metadata.orukeetCleanup,
+                    ...detectedLanguageFields,
+                    sttProvider: result.sttProvider,
+                    sttModel: result.sttModel,
+                    sttProcessingMs: result.sttProcessingMs,
+                    sttWordCount: result.sttWordCount,
+                    sttLanguage: result.sttLanguage,
+                    audioDurationMs: result.audioDurationMs,
+                    audioSizeBytes,
+                    audioFormat,
                   },
+                  log: { level: "error", channel: "transcription" },
+                }
+              : {
+                  mode: "model",
+                  model: getEffectiveCleanupModel(),
+                  log: { level: "error", channel: "transcription" },
+                },
           });
           processedText = resolveTranslatedText(processedText, chainResult);
         }
@@ -4747,7 +4740,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       !settings.useCleanupModel ||
       !isCloudCleanupMode() ||
       !isLlmSelectionAllowed(usePolicyStore.getState(), { mode: "openwhispr" }) ||
-      (settings.cleanupCloudMode || "openwhispr") !== "openwhispr" ||
       voiceAgentRequested ||
       translationRequested
     )
@@ -5874,7 +5866,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.notifyTranslationFallback("unreachable");
       }
       this._noteCleanupRoute(stSettings, route);
-      const cleanupCloudMode = stSettings.cleanupCloudMode || "openwhispr";
+      const isCloudCleanup = isCloudCleanupMode();
 
       try {
         if (route.kind === "agent") {
@@ -5894,7 +5886,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             { reasoningDurationMs: Math.round(performance.now() - reasoningStart) },
             "streaming"
           );
-        } else if (route.kind === "cleanup" && cleanupCloudMode === "openwhispr") {
+        } else if (route.kind === "cleanup" && isCloudCleanup) {
           const customPrompt = this.getCustomPrompt();
           // ASR finished but the combined cleanup didn't: paste the raw text, as
           // any other failed cleanup does.
@@ -5976,31 +5968,30 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             settings: stSettings,
             agentName,
             route,
-            cleanup:
-              cleanupCloudMode === "openwhispr"
-                ? {
-                    mode: "cloudReason",
-                    meta: {
-                      sttProvider: providerName,
-                      sttModel: streamingSttModel,
-                      sttProcessingMs: streamingSttProcessingMs,
-                      sttWordCount: streamingSttWordCount,
-                      sttLanguage: streamingSttLanguage,
-                      ...detectedLanguageFields,
-                      ...uncombinedTelemetry,
-                      audioDurationMs: durationSeconds
-                        ? Math.round(durationSeconds * 1000)
-                        : undefined,
-                      audioSizeBytes: streamingAudioBytesSent || undefined,
-                      audioFormat: "linear16",
-                    },
-                    log: { level: "error", channel: "streaming" },
-                  }
-                : {
-                    mode: "model",
-                    model: getEffectiveCleanupModel(),
-                    log: { level: "error", channel: "streaming" },
+            cleanup: isCloudCleanup
+              ? {
+                  mode: "cloudReason",
+                  meta: {
+                    sttProvider: providerName,
+                    sttModel: streamingSttModel,
+                    sttProcessingMs: streamingSttProcessingMs,
+                    sttWordCount: streamingSttWordCount,
+                    sttLanguage: streamingSttLanguage,
+                    ...detectedLanguageFields,
+                    ...uncombinedTelemetry,
+                    audioDurationMs: durationSeconds
+                      ? Math.round(durationSeconds * 1000)
+                      : undefined,
+                    audioSizeBytes: streamingAudioBytesSent || undefined,
+                    audioFormat: "linear16",
                   },
+                  log: { level: "error", channel: "streaming" },
+                }
+              : {
+                  mode: "model",
+                  model: getEffectiveCleanupModel(),
+                  log: { level: "error", channel: "streaming" },
+                },
           });
           finalText = resolveTranslatedText(finalText, chainResult);
           usedCloudReasoning = chainResult.usedCloudReasoning || usedCloudReasoning;

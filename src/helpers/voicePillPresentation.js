@@ -423,3 +423,16 @@ export function resolveAssistantThinkingTransition(panelOpen) {
     thinking: true,
   };
 }
+
+/**
+ * A streaming cancel reports processing while it tears the stream down, but
+ * nothing will answer it, so it must not start the open panel's thinking.
+ */
+export function shouldBeginAssistantFollowUpThinking({
+  isAssistantVoice,
+  isProcessing,
+  isCancelling,
+  panelOpen,
+}) {
+  return Boolean(isAssistantVoice && isProcessing && !isCancelling && panelOpen);
+}

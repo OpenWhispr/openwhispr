@@ -70,6 +70,7 @@ export const useAudioRecording = (toast, options = {}) => {
   const dictationErrorGenerationRef = useRef(0);
   const wasRecordingRef = useRef(false);
   const pastesInFlightRef = useRef(0);
+  const cancellingRef = useRef(false);
   const wasMicUnavailableRef = useRef(false);
   const demoKindRef = useRef("dictation");
   const onDemoEventRef = useRef(options.onDemoEvent);
@@ -1130,7 +1131,16 @@ export const useAudioRecording = (toast, options = {}) => {
       // A streaming start in its mic-open phase is not yet `isStreaming`;
       // only the streaming cancel knows how to abandon it.
       if (state.isStreaming || state.isStreamingStartInProgress) {
-        return await audioManagerRef.current.cancelStreamingRecording();
+        // The streaming cancel reports processing while it tears the stream
+        // down; flagged first so the follow-up thinking effect doesn't read
+        // that as a command. A ref, so clearing it can't re-run that effect
+        // while a pending paste still reports processing.
+        cancellingRef.current = true;
+        try {
+          return await audioManagerRef.current.cancelStreamingRecording();
+        } finally {
+          cancellingRef.current = false;
+        }
       }
       return audioManagerRef.current.cancelRecording();
     }
@@ -1188,6 +1198,7 @@ export const useAudioRecording = (toast, options = {}) => {
     isProcessing: isProcessing || (isPasting && !isRecording),
     isStreaming,
     isAssistantVoice,
+    cancellingRef,
     isPreparing,
     isStopping,
     micCaptureStatus,
