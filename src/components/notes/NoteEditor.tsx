@@ -199,6 +199,25 @@ function LiveMeetingTranscriptChat({
   );
 }
 
+// Same leaf subscription as LiveMeetingTranscriptChat, for the same reason: the
+// people offered while recording come from the live segments, and reading them
+// in the editor would re-render it on every segment.
+function LiveSelectionBar({
+  speakerProfiles,
+  speakerMappings,
+  ...props
+}: Omit<ComponentProps<typeof SelectionBar>, "speakerProfiles"> & {
+  speakerProfiles?: SpeakerProfileOption[];
+  speakerMappings?: Record<string, string>;
+}) {
+  const segments = useMeetingRecordingStore((s) => s.segments);
+  const knownSpeakers = useMemo(
+    () => buildKnownSpeakers(speakerProfiles ?? [], segments, speakerMappings ?? {}),
+    [segments, speakerMappings, speakerProfiles]
+  );
+  return <SelectionBar {...props} speakerProfiles={knownSpeakers} />;
+}
+
 interface NoteEditorProps {
   note: NoteItem;
   onTitleChange: (sourceNoteId: number, title: string) => void;
@@ -221,6 +240,11 @@ interface NoteEditorProps {
   onCancelAction?: () => void;
   diarizationSessionId?: string | null;
   onLiveSpeakerLock?: (speakerId: string, displayName: string) => void;
+  onLiveSegmentSpeakerLock?: (
+    segmentIds: Set<string>,
+    displayName: string,
+    profileId?: number
+  ) => void;
   sessionDiarizationEnabled?: boolean;
   sessionExpectedCount?: number;
   userTouchedStepper?: boolean;
@@ -258,6 +282,7 @@ export default function NoteEditor({
   onCancelAction,
   diarizationSessionId,
   onLiveSpeakerLock,
+  onLiveSegmentSpeakerLock,
   sessionDiarizationEnabled,
   sessionExpectedCount,
   userTouchedStepper,
@@ -782,6 +807,13 @@ export default function NoteEditor({
   const handleBulkAssignName = useCallback(
     async (displayName: string, _email?: string | null, profileId?: number) => {
       if (!selectedSegmentIds.size) return;
+      // While recording, the live store owns the segments; displaySegments is
+      // the persisted transcript, which the recording has not written yet.
+      if (isRecording) {
+        onLiveSegmentSpeakerLock?.(selectedSegmentIds, displayName, profileId);
+        handleClearSelection();
+        return;
+      }
       const nextSegments = displaySegments.map((segment) =>
         selectedSegmentIds.has(segment.id)
           ? lockTranscriptSpeaker(segment, {
@@ -795,7 +827,14 @@ export default function NoteEditor({
       await persistDisplaySegments(nextSegments);
       handleClearSelection();
     },
-    [displaySegments, selectedSegmentIds, persistDisplaySegments, handleClearSelection]
+    [
+      displaySegments,
+      selectedSegmentIds,
+      persistDisplaySegments,
+      handleClearSelection,
+      isRecording,
+      onLiveSegmentSpeakerLock,
+    ]
   );
 
   const handleTitleInput = useCallback(() => {
@@ -1381,6 +1420,8 @@ export default function NoteEditor({
                   onConfirmSuggestion={handleConfirmSuggestion}
                   onDismissSuggestion={handleDismissSuggestion}
                   onAttachSpeakerEmail={handleAttachSpeakerEmail}
+                  selectedSegmentIds={selectedSegmentIds}
+                  onToggleSelect={handleToggleSelect}
                 />
               ) : (
                 <MeetingTranscriptChat
@@ -1468,16 +1509,28 @@ export default function NoteEditor({
               background: "linear-gradient(to bottom, transparent, var(--color-background))",
             }}
           />
-          {!isRecording && selectedSegmentIds.size > 0 && (
+          {selectedSegmentIds.size > 0 && (
             <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
-              <SelectionBar
-                count={selectedSegmentIds.size}
-                onClear={handleClearSelection}
-                speakerProfiles={knownSpeakers}
-                participants={parsedParticipants}
-                onAssignName={handleBulkAssignName}
-                t={t}
-              />
+              {isRecording ? (
+                <LiveSelectionBar
+                  count={selectedSegmentIds.size}
+                  onClear={handleClearSelection}
+                  speakerProfiles={speakerProfiles}
+                  speakerMappings={speakerMappings}
+                  participants={parsedParticipants}
+                  onAssignName={handleBulkAssignName}
+                  t={t}
+                />
+              ) : (
+                <SelectionBar
+                  count={selectedSegmentIds.size}
+                  onClear={handleClearSelection}
+                  speakerProfiles={knownSpeakers}
+                  participants={parsedParticipants}
+                  onAssignName={handleBulkAssignName}
+                  t={t}
+                />
+              )}
             </div>
           )}
           <NoteBottomBar
