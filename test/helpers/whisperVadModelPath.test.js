@@ -3,7 +3,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const Module = require("node:module");
-const { describe, it, beforeEach, afterEach } = require("node:test");
+const { describe, it, beforeEach, afterEach, mock } = require("node:test");
 
 // On Windows, whisper-server crashes on a non-ASCII --vad-model path (#1208), so
 // a VAD model bundled under an install folder that fails pathHasProblematicChars
@@ -21,7 +21,7 @@ describe("WhisperManager.getVadModelPath (#1208)", () => {
 
   // A fresh modelDirUtils with a temp home, so getCacheRoot's one-time migration
   // never moves the real ~/.cache/openwhispr.
-  function vadModelPathOn(platform) {
+  function managerOn(platform) {
     Module._load = function loadWithElectronStub(request, parent, isMain) {
       if (request === "electron" && parent?.filename === modelDirUtilsPath) {
         return { app: { getPath: () => path.join(tempRoot, "home") } };
@@ -33,7 +33,11 @@ describe("WhisperManager.getVadModelPath (#1208)", () => {
     const WhisperManager = require(whisperPath);
     const manager = new WhisperManager();
     Object.defineProperty(process, "platform", { value: platform });
-    return manager.getVadModelPath();
+    return manager;
+  }
+
+  function vadModelPathOn(platform) {
+    return managerOn(platform).getVadModelPath();
   }
 
   function installBundledVad(installDir) {
@@ -51,6 +55,7 @@ describe("WhisperManager.getVadModelPath (#1208)", () => {
   });
 
   afterEach(() => {
+    mock.restoreAll();
     Module._load = originalLoad;
     Object.defineProperty(process, "platform", originalPlatform);
     if (originalResourcesPath === undefined) delete process.resourcesPath;
@@ -76,6 +81,36 @@ describe("WhisperManager.getVadModelPath (#1208)", () => {
     fs.writeFileSync(path.join(cacheRoot, "whisper-vad"), "not a directory");
 
     assert.equal(vadModelPathOn("win32"), null);
+  });
+
+  it("keeps the bundled model when a path whose only problem is a space can't be copied", () => {
+    const bundled = installBundledVad(path.join(tempRoot, "Program Files", "OpenWhispr"));
+    fs.mkdirSync(cacheRoot, { recursive: true });
+    fs.writeFileSync(path.join(cacheRoot, "whisper-vad"), "not a directory");
+
+    assert.equal(vadModelPathOn("win32"), bundled);
+  });
+
+  it("retries a failed copy on the next request", () => {
+    installBundledVad(path.join(tempRoot, "Users", "Rémi", "Programs", "OpenWhispr"));
+    const blocker = path.join(cacheRoot, "whisper-vad");
+    fs.mkdirSync(cacheRoot, { recursive: true });
+    fs.writeFileSync(blocker, "not a directory");
+    const manager = managerOn("win32");
+
+    assert.equal(manager.getVadModelPath(), null);
+    fs.rmSync(blocker);
+    assert.equal(manager.getVadModelPath(), path.join(blocker, VAD_FILE));
+  });
+
+  it("never leaves a partial copy under the final name", () => {
+    installBundledVad(path.join(tempRoot, "Users", "Rémi", "Programs", "OpenWhispr"));
+    mock.method(fs, "renameSync", () => {
+      throw new Error("EBUSY");
+    });
+
+    assert.equal(vadModelPathOn("win32"), null);
+    assert.deepEqual(fs.readdirSync(path.join(cacheRoot, "whisper-vad")), []);
   });
 
   it("replaces a copy whose bytes differ from the bundled model", () => {

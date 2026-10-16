@@ -42,23 +42,30 @@ function getValidModelNames() {
 // into the ASCII-safe cache root. The copy follows pathHasProblematicChars, the
 // rule #1514 uses for the cache root, so a path with spaces is copied too. That
 // root can be the shared ProgramData folder, so an existing copy is reused only
-// when its bytes match.
+// when its bytes match, and a new one is renamed into place: a write cut short
+// there would leave a file other accounts can neither use nor replace.
 function asciiSafeVadModelPath(bundledPath) {
   if (process.platform !== "win32" || !pathHasProblematicChars(bundledPath)) return bundledPath;
 
   const copyPath = path.join(getCacheRoot(), "whisper-vad", path.basename(bundledPath));
+  const tempPath = `${copyPath}.${process.pid}.tmp`;
   try {
     const model = fs.readFileSync(bundledPath);
     if (!fs.existsSync(copyPath) || !fs.readFileSync(copyPath).equals(model)) {
       fs.mkdirSync(path.dirname(copyPath), { recursive: true });
-      fs.writeFileSync(copyPath, model);
+      fs.writeFileSync(tempPath, model);
+      fs.renameSync(tempPath, copyPath);
     }
     return copyPath;
   } catch (error) {
+    try {
+      fs.rmSync(tempPath, { force: true });
+    } catch {}
     debugLogger.warn("Could not copy the VAD model to an ASCII-safe path", {
       error: error.message,
     });
-    return null;
+    // Spaces alone don't crash whisper-server, so such a path keeps VAD working.
+    return /^[\x20-\x7E]*$/.test(bundledPath) ? bundledPath : null;
   }
 }
 
@@ -196,8 +203,10 @@ class WhisperManager {
     candidates.push(path.join(__dirname, "..", "..", "resources", "bin", "whisper-vad", fileName));
 
     const resolved = candidates.find((p) => fs.existsSync(p)) || null;
-    this.cachedVadModelPath = resolved && asciiSafeVadModelPath(resolved);
-    return this.cachedVadModelPath;
+    const vadModelPath = resolved && asciiSafeVadModelPath(resolved);
+    // A failed copy is retried on the next request rather than kept for the session.
+    if (vadModelPath || !resolved) this.cachedVadModelPath = vadModelPath;
+    return vadModelPath;
   }
 
   async initializeAtStartup(settings = {}) {
