@@ -8,8 +8,6 @@ const SETUP_PROMPTED_KEY = "toneStyleSetupPrompted";
 
 const readFlag = (key: string) => localStorage.getItem(key) === "true";
 
-// Once Tone & Style has been on, Home stops offering it, even after a switch
-// back to Standard tone.
 export const dismissToneStyleBanner = () => localStorage.setItem(BANNER_DISMISSED_KEY, "true");
 
 /**

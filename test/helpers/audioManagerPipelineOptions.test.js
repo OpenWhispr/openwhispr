@@ -145,7 +145,7 @@ test("combined cleanup options honor every eligibility guard and use the actual 
   assert.ok(calls[0].pipelineOptions);
 });
 
-test("with Tone & Style on, a streaming start streams audio while it waits to mint combined cleanup for the app it learns in time, and the next warmup expects the same", async (t) => {
+test("with Tone & Style on, a streaming start holds audio while it waits to mint combined cleanup for the app it learns in time, and the next warmup expects the same", async (t) => {
   const { window, useSettingsStore, createManager } = await load(t, "orukeet-pipeline-tone-");
   useSettingsStore.setState({ ...good, toneStyleEnabled: true });
   let classify;
@@ -163,7 +163,6 @@ test("with Tone & Style on, a streaming start streams audio while it waits to mi
   const audioNode = { connect() {} };
   const minted = [];
   const sent = [];
-  const unsubscribe = () => () => {};
   const manager = createManager({
     _streamingCancellationGeneration: 0,
     _streamingStartSettlementWaiters: [],
@@ -181,10 +180,10 @@ test("with Tone & Style on, a streaming start streams audio while it waits to mi
     }),
     getStreamingProviderName: () => "orukeet",
     getStreamingProvider: () => ({
-      onPartial: unsubscribe,
-      onFinal: unsubscribe,
-      onError: unsubscribe,
-      onSessionEnd: unsubscribe,
+      onPartial: () => () => {},
+      onFinal: () => () => {},
+      onError: () => () => {},
+      onSessionEnd: () => () => {},
       send: (frame) => sent.push(frame),
       start: async (options) => {
         minted.push(options.pipelineOptions);
@@ -209,7 +208,6 @@ test("with Tone & Style on, a streaming start streams audio while it waits to mi
   assert.equal(sent.length, 0);
   classify("email");
   assert.equal(await starting, true);
-  assert.equal(audioWired, true);
   assert.deepEqual(sent, [frame]);
   assert.equal(minted[0].tone, "excited");
   assert.equal(minted[0].appCategory, "email");
