@@ -39,6 +39,23 @@ private extension KeyboardViewController {
   var touchTestPadding: (side: CGFloat, bottom: CGFloat) {
     (metrics.rootHorizontalPadding, metrics.rootBottomPadding)
   }
+
+  static func touchTestRemoveTouchDelays(from recognizers: [UIGestureRecognizer]?) {
+    removeTouchDelays(from: recognizers)
+  }
+
+  static func touchTestShouldPoll(tick: Int, isLive: Bool) -> Bool {
+    shouldPollSharedState(tick: tick, isLive: isLive)
+  }
+
+  func touchTestRefreshFieldKeys() { refreshFieldAwareKeys() }
+  var touchTestReturnKey: KeyButton? { returnButton }
+  var touchTestCoordinator: KeyTouchCoordinator { keyTouches }
+  var touchTestIsNumbers: Bool { layoutMode == .numbers }
+  var touchTestShiftEnabled: Bool { isShiftEnabled }
+  var touchTestDeleteRepeating: Bool { deleteRepeatTimer != nil }
+  func touchTestRebuild() { rebuildKeyboard() }
+  func touchTestWillDisappear() { viewWillDisappear(false) }
 }
 
 private struct TouchChecks {
@@ -66,11 +83,21 @@ private enum KeyboardTouchTests {
     checkSyntheticRows(&checks)
     checkEdgeTies(&checks)
     checkOtherControls(&checks)
+    checkWindowTouchDelays(&checks)
+    checkPollCadence(&checks)
+    checkFieldKeysRefreshOnlyOnChange(&checks)
+    checkTouchTracker(&checks)
+    checkTouchCoordinator(&checks)
     for width: CGFloat in [360, 393, 430, 852] {
       checkProductionLayout(width: width, numbers: false, globe: false, &checks)
+      checkKeyWiring(width: width, numbers: false, globe: false, &checks)
       checkProductionLayout(width: width, numbers: true, globe: false, &checks)
+      checkKeyWiring(width: width, numbers: true, globe: false, &checks)
       checkProductionLayout(width: width, numbers: false, globe: true, &checks)
+      checkKeyWiring(width: width, numbers: false, globe: true, &checks)
     }
+    checkKeyDispatch(&checks)
+    checkMidTouchTeardown(&checks)
 
     print("Keyboard touch routing: \(checks.count - checks.failures.count)/\(checks.count) passed")
     if !checks.failures.isEmpty {
@@ -235,16 +262,7 @@ private enum KeyboardTouchTests {
     let rows = controller.touchTestRows
     let layout = "\(Int(width)) pt \(numbers ? "numbers" : "letters")\(globe ? " with globe" : "")"
 
-    var keys = [KeyButton]()
-    func collect(_ view: UIView) {
-      guard !view.isHidden else { return }
-      if let key = view as? KeyButton {
-        keys.append(key)
-        return
-      }
-      view.subviews.forEach(collect)
-    }
-    collect(rows)
+    let keys = visibleKeys(in: rows)
     let rects = keys.map { $0.convert($0.bounds, to: rows) }
     checks.check(
       "\(layout): keys laid out at row height",
@@ -313,5 +331,362 @@ private enum KeyboardTouchTests {
 
     let stripHalf = CGPoint(x: root.bounds.midX, y: top - 0.5)
     checks.check("\(layout): the strip's half of the gap takes no key taps", !(root.hitTest(stripHalf, with: nil) is KeyButton))
+  }
+
+  /// The system holds back touches near the screen edges; the keyboard turns
+  /// that delay off without stopping a real system swipe from cancelling.
+  @MainActor
+  static func checkWindowTouchDelays(_ checks: inout TouchChecks) {
+    let edge = UIScreenEdgePanGestureRecognizer()
+    let tap = UITapGestureRecognizer()
+    for recognizer in [edge, tap] {
+      recognizer.delaysTouchesBegan = true
+      recognizer.delaysTouchesEnded = true
+    }
+    KeyboardViewController.touchTestRemoveTouchDelays(from: [edge, tap])
+    checks.check("window recognizers no longer delay touch-down", !edge.delaysTouchesBegan && !tap.delaysTouchesBegan)
+    checks.check("window recognizers no longer delay lift", !edge.delaysTouchesEnded && !tap.delaysTouchesEnded)
+    checks.check("a system swipe can still cancel key touches", edge.cancelsTouchesInView && tap.cancelsTouchesInView)
+    KeyboardViewController.touchTestRemoveTouchDelays(from: nil)
+  }
+
+  /// The shared-state poll reads every tick while a recording starts or runs,
+  /// and every fourth tick otherwise.
+  @MainActor
+  static func checkPollCadence(_ checks: inout TouchChecks) {
+    let ticks = Array(1...8)
+    checks.check(
+      "a live recording reads shared state every tick",
+      ticks.allSatisfy { KeyboardViewController.touchTestShouldPoll(tick: $0, isLive: true) }
+    )
+    checks.check(
+      "an idle keyboard reads shared state every fourth tick",
+      ticks.filter { KeyboardViewController.touchTestShouldPoll(tick: $0, isLive: false) } == [4, 8]
+    )
+  }
+
+  /// textDidChange runs on every keystroke; an unchanged field must not touch the
+  /// return key. The test clears the key's image between refreshes: a skipped
+  /// refresh leaves it cleared, a repeated one puts it back.
+  @MainActor
+  static func checkFieldKeysRefreshOnlyOnChange(_ checks: inout TouchChecks) {
+    let controller = KeyboardViewController.makeLaidOutKeyboard(width: 393, numbers: false, globe: false)
+    controller.touchTestRefreshFieldKeys()
+    guard let returnKey = controller.touchTestReturnKey else {
+      checks.check("return key exists", false)
+      return
+    }
+    checks.check("return key shows its icon", returnKey.image(for: .normal) != nil)
+    returnKey.setImage(nil, for: .normal)
+    controller.touchTestRefreshFieldKeys()
+    checks.check("an unchanged field leaves the return key alone", returnKey.image(for: .normal) == nil)
+  }
+
+  /// Apple-keyboard touch rules, without UIKit: rollover keeps press order and two
+  /// fingers on one key type it twice.
+  @MainActor
+  static func checkTouchTracker(_ checks: inout TouchChecks) {
+    typealias Tracker = KeyTouchTracker<Int, String>
+    func makeTracker() -> Tracker { Tracker(activatesOnTouchDown: { $0 == "⌫" || $0 == "⇧" }) }
+    func typed(_ effects: [Tracker.Effect]) -> [String] {
+      effects.compactMap { effect in
+        if case .activate(let key) = effect { return key }
+        return nil
+      }
+    }
+    func lit(_ effects: [Tracker.Effect]) -> [String: Bool] {
+      var state = [String: Bool]()
+      for case .highlight(let key, let on) in effects { state[key] = on }
+      return state
+    }
+
+    var tracker = makeTracker()
+    checks.check("tracker: a tap lights its key as the finger lands", tracker.began(1, on: "a") == [.highlight("a", true)])
+    checks.check("tracker: a tap types on lift", tracker.ended(1) == [.activate("a"), .highlight("a", false)])
+    checks.check("tracker: an unknown lift does nothing", tracker.ended(9).isEmpty)
+
+    tracker = makeTracker()
+    var effects = tracker.began(1, on: "a") + tracker.began(2, on: "b") + tracker.ended(2) + tracker.ended(1)
+    checks.check("tracker: overlapping keys type in press order", typed(effects) == ["a", "b"])
+
+    tracker = makeTracker()
+    effects = tracker.began(1, on: "a") + tracker.began(2, on: "b") + tracker.ended(1) + tracker.ended(2)
+    checks.check("tracker: overlapping keys lifted in order type once each", typed(effects) == ["a", "b"])
+
+    tracker = makeTracker()
+    effects = tracker.began(1, on: "a") + tracker.began(2, on: "b") + tracker.began(3, on: "c")
+      + tracker.ended(3) + tracker.ended(2) + tracker.ended(1)
+    checks.check("tracker: three fingers lifted in reverse keep press order", typed(effects) == ["a", "b", "c"])
+
+    tracker = makeTracker()
+    effects = tracker.began(1, on: "l") + tracker.began(2, on: "l") + tracker.ended(1)
+    checks.check("tracker: a key stays lit while a second finger holds it", lit(effects)["l"] == true)
+    effects += tracker.ended(2)
+    checks.check("tracker: two fingers on one key type it twice", typed(effects) == ["l", "l"])
+    checks.check("tracker: the key dims when the last finger lifts", lit(effects)["l"] == false)
+
+    tracker = makeTracker()
+    checks.check(
+      "tracker: delete acts as the finger lands",
+      tracker.began(1, on: "⌫") == [.highlight("⌫", true), .activate("⌫")]
+    )
+    checks.check("tracker: delete does not act again on lift", tracker.ended(1) == [.highlight("⌫", false)])
+
+    tracker = makeTracker()
+    effects = tracker.began(1, on: "a") + tracker.began(2, on: "⌫")
+    checks.check("tracker: a pending letter types before delete removes it", typed(effects) == ["a", "⌫"])
+
+    tracker = makeTracker()
+    effects = tracker.began(1, on: "a") + tracker.cancelled(1)
+    checks.check("tracker: a cancelled touch types nothing", typed(effects).isEmpty && lit(effects)["a"] == false)
+
+    tracker = makeTracker()
+    _ = tracker.began(1, on: "a")
+    checks.check(
+      "tracker: sliding moves the highlight",
+      tracker.moved(1, to: "s") == [.highlight("a", false), .highlight("s", true)]
+    )
+    checks.check("tracker: the key under the lift types", typed(tracker.ended(1)) == ["s"])
+
+    tracker = makeTracker()
+    _ = tracker.began(1, on: "a")
+    checks.check("tracker: sliding onto shift is ignored", tracker.moved(1, to: "⇧").isEmpty)
+    checks.check("tracker: the original key still types", typed(tracker.ended(1)) == ["a"])
+
+    tracker = makeTracker()
+    _ = tracker.began(1, on: "a")
+    _ = tracker.began(2, on: "b")
+    checks.check("tracker: a rolled-over key no longer slides", tracker.moved(1, to: "c").isEmpty)
+    checks.check("tracker: a rolled-over key types nothing more on lift", typed(tracker.ended(1)).isEmpty)
+
+    tracker = makeTracker()
+    effects = tracker.began(1, on: "a") + tracker.began(2, on: "b")
+    effects += tracker.cancelAll()
+    checks.check("tracker: cancelling all touches dims every key", lit(effects) == ["a": false, "b": false])
+    checks.check("tracker: cancelling all touches forgets them", tracker.activeTouchCount == 0 && tracker.ended(2).isEmpty)
+
+    tracker = makeTracker()
+    _ = tracker.began(1, on: "a")
+    effects = tracker.began(1, on: "b")
+    checks.check("tracker: a reused touch never types its stale key", typed(effects).isEmpty)
+    checks.check("tracker: a reused touch types its new key", typed(tracker.ended(1)) == ["b"])
+
+    tracker = makeTracker()
+    _ = tracker.began(1, on: "a")
+    checks.check("tracker: sliding off every key dims it", tracker.moved(1, to: nil) == [.highlight("a", false)])
+    checks.check("tracker: lifting outside every key types nothing", typed(tracker.ended(1)).isEmpty)
+
+    tracker = makeTracker()
+    effects = tracker.began(1, on: "a") + tracker.moved(1, to: nil) + tracker.moved(1, to: "b") + tracker.ended(1)
+    checks.check("tracker: sliding back onto a key types that key", typed(effects) == ["b"])
+
+    tracker = makeTracker()
+    effects = tracker.began(1, on: "a") + tracker.moved(1, to: nil) + tracker.began(2, on: "b")
+      + tracker.moved(1, to: "c") + tracker.ended(1) + tracker.ended(2)
+    checks.check("tracker: rollover passes over a finger outside the keys", typed(effects) == ["b"])
+  }
+
+  /// The coordinator drives real keys: highlight, rollover, where a finger lifts,
+  /// delete repeat, the cancel-everything path and VoiceOver activation.
+  @MainActor
+  static func checkTouchCoordinator(_ checks: inout TouchChecks) {
+    let coordinator = KeyTouchCoordinator()
+    var typed = [String]()
+    var repeating = false
+    var repeatStarts = 0
+    coordinator.onActivate = { typed.append($0.title(for: .normal) ?? "?") }
+    coordinator.onRepeatBegan = {
+      repeating = true
+      repeatStarts += 1
+    }
+    coordinator.onRepeatEnded = { repeating = false }
+    coordinator.repeatDelay = 0.05
+
+    func makeKey(_ title: String, _ action: KeyAction) -> KeyButton {
+      let key = KeyButton(type: .custom)
+      key.setTitle(title, for: .normal)
+      key.keyAction = action
+      key.touchCoordinator = coordinator
+      return key
+    }
+    func wait() { RunLoop.main.run(until: Date().addingTimeInterval(0.2)) }
+
+    let a = makeKey("a", .character)
+    let b = makeKey("b", .character)
+    let delete = makeKey("⌫", .backspace)
+    // Kept alive so their identifiers stay distinct.
+    let fingers = (0..<3).map { _ in NSObject() }
+    let ids = fingers.map(ObjectIdentifier.init)
+
+    checks.check("coordinated keys accept a second finger", a.isMultipleTouchEnabled)
+    coordinator.began(ids[0], on: a)
+    checks.check("coordinator lights a pressed key", a.isHighlighted)
+    coordinator.began(ids[1], on: b)
+    coordinator.ended(ids[1], on: b)
+    coordinator.ended(ids[0], on: a)
+    checks.check("coordinator types overlapping keys in press order", typed == ["a", "b"])
+    checks.check("coordinator dims keys after lift", !a.isHighlighted && !b.isHighlighted)
+
+    typed.removeAll()
+    coordinator.began(ids[0], on: a)
+    coordinator.ended(ids[0], on: b)
+    checks.check("the key under a lift types even with no move before it", typed == ["b"])
+
+    typed.removeAll()
+    coordinator.began(ids[0], on: a)
+    coordinator.ended(ids[0], on: nil)
+    checks.check("lifting outside every key types nothing", typed.isEmpty && !a.isHighlighted)
+
+    typed.removeAll()
+    coordinator.began(ids[2], on: delete)
+    checks.check("delete acts as the finger lands", typed == ["⌫"])
+    wait()
+    checks.check("holding delete starts repeating", repeating)
+    coordinator.ended(ids[2], on: delete)
+    checks.check("lifting delete stops repeating", !repeating)
+
+    coordinator.began(ids[2], on: delete)
+    coordinator.ended(ids[2], on: delete)
+    wait()
+    checks.check("a quick delete tap never starts repeating", !repeating)
+
+    typed.removeAll()
+    coordinator.began(ids[2], on: delete)
+    coordinator.moved(ids[2], to: a)
+    wait()
+    checks.check("sliding off delete before the hold cancels the repeat", !repeating)
+    coordinator.ended(ids[2], on: a)
+    checks.check("a slide off delete types nothing more on lift", typed == ["⌫"])
+
+    coordinator.began(ids[2], on: delete)
+    wait()
+    coordinator.moved(ids[2], to: a)
+    checks.check("once repeating, sliding off delete keeps deleting", repeating)
+    coordinator.ended(ids[2], on: a)
+    checks.check("lifting the slid finger stops repeating", !repeating)
+
+    repeatStarts = 0
+    coordinator.began(ids[0], on: delete)
+    wait()
+    coordinator.began(ids[1], on: delete)
+    wait()
+    coordinator.ended(ids[1], on: delete)
+    checks.check("delete keeps repeating while another finger holds it", repeating)
+    coordinator.ended(ids[0], on: delete)
+    checks.check("delete stops repeating when the last finger lifts", !repeating)
+    checks.check("two fingers on delete start one repeat", repeatStarts == 1)
+
+    coordinator.began(ids[0], on: a)
+    coordinator.began(ids[2], on: delete)
+    wait()
+    typed.removeAll()
+    coordinator.cancelAll()
+    checks.check("cancelling all touches stops a held delete", !repeating)
+    checks.check("cancelling all touches dims every key", !a.isHighlighted && !delete.isHighlighted)
+    coordinator.ended(ids[2], on: delete)
+    coordinator.ended(ids[0], on: a)
+    checks.check("cancelled touches type nothing when they lift", typed.isEmpty)
+
+    checks.check("VoiceOver types a coordinated key", b.accessibilityActivate() && typed == ["b"])
+    let plain = KeyButton(type: .custom)
+    checks.check("an uncoordinated key keeps single-touch UIControl behaviour", !plain.isMultipleTouchEnabled)
+  }
+
+  /// Every visible key under `root`, in layout order.
+  static func visibleKeys(in root: UIView) -> [KeyButton] {
+    var keys = [KeyButton]()
+    func collect(_ view: UIView) {
+      guard !view.isHidden else { return }
+      if let key = view as? KeyButton {
+        keys.append(key)
+        return
+      }
+      view.subviews.forEach(collect)
+    }
+    collect(root)
+    return keys
+  }
+
+  /// Every typing key goes through the coordinator and nothing else; the globe
+  /// stays a UIControl for the system input-mode menu.
+  @MainActor
+  static func checkKeyWiring(width: CGFloat, numbers: Bool, globe: Bool, _ checks: inout TouchChecks) {
+    let controller = KeyboardViewController.makeLaidOutKeyboard(width: width, numbers: numbers, globe: globe)
+    let layout = "\(Int(width)) pt \(numbers ? "numbers" : "letters")\(globe ? " with globe" : "")"
+    let keys = visibleKeys(in: controller.touchTestRows)
+    let typing = keys.filter { $0.accessibilityLabel != "Next keyboard" }
+    checks.check(
+      "\(layout): every typing key goes through the touch coordinator",
+      typing.allSatisfy { $0.keyAction != nil && $0.touchCoordinator === controller.touchTestCoordinator }
+    )
+    checks.check("\(layout): no typing key still fires UIControl actions", typing.allSatisfy { $0.allTargets.isEmpty })
+    // UIKit adds press-only focus recognizers to every button; only one that
+    // takes touches (like the old delete long press) would compete with the keys.
+    checks.check(
+      "\(layout): no typing key keeps a touch gesture recognizer",
+      typing.allSatisfy { key in
+        (key.gestureRecognizers ?? []).allSatisfy { $0.allowedTouchTypes.isEmpty }
+      }
+    )
+    if globe {
+      let globeKey = keys.first { $0.accessibilityLabel == "Next keyboard" }
+      checks.check(
+        "\(layout): the globe key keeps the system input-mode menu",
+        globeKey?.keyAction == nil && !(globeKey?.allTargets.isEmpty ?? true)
+      )
+    }
+  }
+
+  /// Coordinator activations reach the controller's handlers: shift as the
+  /// finger lands, 123 on lift, and VoiceOver through accessibilityActivate.
+  @MainActor
+  static func checkKeyDispatch(_ checks: inout TouchChecks) {
+    let controller = KeyboardViewController.makeLaidOutKeyboard(width: 393, numbers: false, globe: false)
+    let keys = visibleKeys(in: controller.touchTestRows)
+    guard let shift = keys.first(where: { $0.keyAction == .shift }),
+          let mode = keys.first(where: { $0.keyAction == .layoutMode }) else {
+      checks.check("shift and 123 keys exist", false)
+      return
+    }
+    let finger = NSObject()
+    let id = ObjectIdentifier(finger)
+    let coordinator = controller.touchTestCoordinator
+
+    let shiftBefore = controller.touchTestShiftEnabled
+    coordinator.began(id, on: shift)
+    checks.check("shift acts as the finger lands", controller.touchTestShiftEnabled != shiftBefore)
+    coordinator.ended(id, on: shift)
+
+    coordinator.began(id, on: mode)
+    checks.check("123 waits for the lift", !controller.touchTestIsNumbers)
+    coordinator.ended(id, on: mode)
+    checks.check("123 switches to numbers on lift", controller.touchTestIsNumbers)
+    checks.check("VoiceOver switches back to letters", mode.accessibilityActivate() && !controller.touchTestIsNumbers)
+  }
+
+  /// A keyboard rebuilt (rotation, width change) or hidden mid-touch must stop a
+  /// held delete and leave no key lit: those touches may never end.
+  @MainActor
+  static func checkMidTouchTeardown(_ checks: inout TouchChecks) {
+    let teardowns: [(String, (KeyboardViewController) -> Void)] = [
+      ("rebuild", { $0.touchTestRebuild() }),
+      ("dismiss", { $0.touchTestWillDisappear() }),
+    ]
+    for (label, teardown) in teardowns {
+      let controller = KeyboardViewController.makeLaidOutKeyboard(width: 393, numbers: false, globe: false)
+      guard let delete = visibleKeys(in: controller.touchTestRows).first(where: { $0.keyAction == .backspace }) else {
+        checks.check("\(label): delete key exists", false)
+        continue
+      }
+      let finger = NSObject()
+      let coordinator = controller.touchTestCoordinator
+      coordinator.repeatDelay = 0.05
+      coordinator.began(ObjectIdentifier(finger), on: delete)
+      RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+      checks.check("\(label): a held delete repeats before teardown", controller.touchTestDeleteRepeating)
+      teardown(controller)
+      checks.check("\(label) mid-touch stops a held delete", !controller.touchTestDeleteRepeating)
+      checks.check("\(label) mid-touch leaves delete unlit", !delete.isHighlighted)
+    }
   }
 }

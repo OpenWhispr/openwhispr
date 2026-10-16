@@ -9,6 +9,12 @@ private enum KeyboardLog {
     category: "Transcription"
   )
   static let storage = Logger(subsystem: "com.gizmolabs.openwhispr.keyboard", category: "Storage")
+  /// Points of Interest in Instruments: key presses, text changes and shared-state
+  /// polls, to see on a device what delays or drops a keystroke.
+  static let signposter = OSSignposter(
+    subsystem: "com.gizmolabs.openwhispr.keyboard",
+    category: .pointsOfInterest
+  )
 
   static func echo(_ message: String) {
     #if DEBUG
@@ -17,8 +23,32 @@ private enum KeyboardLog {
   }
 }
 
+/// What a key does. Keys with an action route their touches through
+/// KeyTouchCoordinator; keys without one (the globe) stay plain UIControls.
+private enum KeyAction: Equatable {
+  case character
+  case space
+  case returnKey
+  case fieldShortcut
+  case backspace
+  case shift
+  case layoutMode
+
+  /// The system keyboard acts on these as the finger lands rather than on lift.
+  var activatesOnTouchDown: Bool { self == .backspace || self == .shift }
+  var repeatsWhileHeld: Bool { self == .backspace }
+}
+
 private final class KeyButton: UIButton {
   var hitTestOutsets = UIEdgeInsets(top: 6, left: 3, bottom: 6, right: 3)
+  var keyAction: KeyAction? {
+    didSet { isMultipleTouchEnabled = keyAction != nil }
+  }
+  weak var touchCoordinator: KeyTouchCoordinator?
+
+  private var coordinator: KeyTouchCoordinator? {
+    keyAction == nil ? nil : touchCoordinator
+  }
 
   var normalBackground: UIColor = .clear {
     didSet { if !isHighlighted { backgroundColor = normalBackground } }
@@ -86,6 +116,43 @@ private final class KeyButton: UIButton {
     }
   }
 
+  override func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
+    KeyboardLog.signposter.emitEvent("keyDown")
+    return super.beginTracking(touch, with: event)
+  }
+
+  override func cancelTracking(with event: UIEvent?) {
+    KeyboardLog.signposter.emitEvent("keyCancel")
+    super.cancelTracking(with: event)
+  }
+
+  override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+    guard let coordinator else { return super.touchesBegan(touches, with: event) }
+    coordinator.began(touches, on: self)
+  }
+
+  override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+    guard let coordinator else { return super.touchesMoved(touches, with: event) }
+    coordinator.moved(touches)
+  }
+
+  override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+    guard let coordinator else { return super.touchesEnded(touches, with: event) }
+    coordinator.ended(touches)
+  }
+
+  override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+    guard let coordinator else { return super.touchesCancelled(touches, with: event) }
+    coordinator.cancelled(touches)
+  }
+
+  // VoiceOver's double-tap has no touch to track and no target to fire.
+  override func accessibilityActivate() -> Bool {
+    guard let coordinator else { return super.accessibilityActivate() }
+    coordinator.activate(self)
+    return true
+  }
+
   override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
     let expanded = bounds.inset(
       by: UIEdgeInsets(
@@ -120,9 +187,9 @@ private final class KeyboardRowsStack: UIStackView {
     return expanded.contains(point)
   }
 
-  override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-    guard let defaultTarget = super.hitTest(point, with: event) else { return nil }
-
+  /// The key a touch at `point` belongs to: the visible key under it, else the key
+  /// whose enlarged target edge is nearest. Nil when no enabled key claims it.
+  func key(at point: CGPoint, with event: UIEvent?) -> KeyButton? {
     var nearest: KeyButton?
     var nearestDistance = CGFloat.infinity
     var nearestCenterDistance = CGFloat.infinity
@@ -155,7 +222,254 @@ private final class KeyboardRowsStack: UIStackView {
     }
 
     subviews.forEach(visit)
-    return nearest ?? defaultTarget
+    return nearest
+  }
+
+  override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+    guard let defaultTarget = super.hitTest(point, with: event) else { return nil }
+    return key(at: point, with: event) ?? defaultTarget
+  }
+}
+
+/// The system keyboard's touch rules, free of UIKit so they can be tested. Every
+/// finger is tracked on its own, and a key that types on lift types as soon as
+/// another finger lands (rollover), so fast overlapping typing keeps press order
+/// and two fingers on one key type it twice.
+private struct KeyTouchTracker<TouchID: Hashable, Key: Hashable> {
+  enum Effect: Equatable {
+    case activate(Key)
+    case highlight(Key, Bool)
+  }
+
+  private struct ActiveTouch {
+    /// Nil while the finger is outside every key.
+    var key: Key?
+    var committed = false
+    var highlighted = false
+  }
+
+  /// Keys that act as the finger lands rather than on lift (shift, delete).
+  private let activatesOnTouchDown: (Key) -> Bool
+  private var touches: [TouchID: ActiveTouch] = [:]
+  private var pressOrder: [TouchID] = []
+  private var highlightCounts: [Key: Int] = [:]
+
+  init(activatesOnTouchDown: @escaping (Key) -> Bool) {
+    self.activatesOnTouchDown = activatesOnTouchDown
+  }
+
+  var activeTouchCount: Int { touches.count }
+
+  mutating func began(_ id: TouchID, on key: Key) -> [Effect] {
+    // UIKit can reuse a touch whose end never arrived; drop it untyped.
+    var effects = cancelled(id)
+    effects += rollOver()
+    var touch = ActiveTouch(key: key)
+    effects += setHighlighted(&touch, true)
+    if activatesOnTouchDown(key) {
+      touch.committed = true
+      effects.append(.activate(key))
+    }
+    touches[id] = touch
+    pressOrder.append(id)
+    return effects
+  }
+
+  /// `key` is nil when the finger is outside every key.
+  mutating func moved(_ id: TouchID, to key: Key?) -> [Effect] {
+    guard var touch = touches[id], !touch.committed, touch.key != key else { return [] }
+    if let key, activatesOnTouchDown(key) { return [] }
+    var effects = setHighlighted(&touch, false)
+    touch.key = key
+    effects += setHighlighted(&touch, true)
+    touches[id] = touch
+    return effects
+  }
+
+  mutating func ended(_ id: TouchID) -> [Effect] {
+    guard var touch = remove(id) else { return [] }
+    var effects: [Effect] = []
+    if !touch.committed, let key = touch.key {
+      effects.append(.activate(key))
+    }
+    effects += setHighlighted(&touch, false)
+    return effects
+  }
+
+  mutating func cancelled(_ id: TouchID) -> [Effect] {
+    guard var touch = remove(id) else { return [] }
+    return setHighlighted(&touch, false)
+  }
+
+  mutating func cancelAll() -> [Effect] {
+    var effects: [Effect] = []
+    for id in pressOrder {
+      effects += cancelled(id)
+    }
+    return effects
+  }
+
+  /// Types every key still waiting for its lift, oldest finger first. A finger
+  /// outside every key is passed over and stays keyless.
+  private mutating func rollOver() -> [Effect] {
+    var effects: [Effect] = []
+    for id in pressOrder {
+      guard var touch = touches[id], !touch.committed else { continue }
+      touch.committed = true
+      if let key = touch.key {
+        effects.append(.activate(key))
+      }
+      effects += setHighlighted(&touch, false)
+      touches[id] = touch
+    }
+    return effects
+  }
+
+  private mutating func remove(_ id: TouchID) -> ActiveTouch? {
+    pressOrder.removeAll { $0 == id }
+    return touches.removeValue(forKey: id)
+  }
+
+  /// A key lights with its first finger and dims with its last. A keyless
+  /// finger is never lit.
+  private mutating func setHighlighted(_ touch: inout ActiveTouch, _ highlighted: Bool) -> [Effect] {
+    guard touch.highlighted != highlighted, let key = touch.key else { return [] }
+    touch.highlighted = highlighted
+    let count = (highlightCounts[key] ?? 0) + (highlighted ? 1 : -1)
+    highlightCounts[key] = count > 0 ? count : nil
+    let changed = highlighted ? count == 1 : count == 0
+    return changed ? [.highlight(key, highlighted)] : []
+  }
+}
+
+/// Runs every key touch through one KeyTouchTracker, so the keyboard sees all
+/// fingers at once the way the system keyboard does. Keys forward their raw
+/// touches here instead of acting as UIControls.
+private final class KeyTouchCoordinator {
+  weak var rows: KeyboardRowsStack?
+  var onActivate: (KeyButton) -> Void = { _ in }
+  var onRepeatBegan: () -> Void = {}
+  var onRepeatEnded: () -> Void = {}
+  /// Hold time before delete repeats; matches the long press it replaces.
+  var repeatDelay: TimeInterval = 0.35
+
+  private var tracker = KeyTouchTracker<ObjectIdentifier, KeyButton>(
+    activatesOnTouchDown: { $0.keyAction?.activatesOnTouchDown == true }
+  )
+  /// Delete touches still inside their hold delay, with the key each landed on.
+  private var pendingRepeats: [ObjectIdentifier: (key: KeyButton, timer: Timer)] = [:]
+  /// Delete touches past the hold delay. Delete repeats while any is down.
+  private var repeatingTouches: Set<ObjectIdentifier> = []
+
+  func began(_ touches: Set<UITouch>, on key: KeyButton) {
+    touches.forEach { began(ObjectIdentifier($0), on: key) }
+  }
+
+  /// A sliding finger takes the key now under it, like the system keyboard.
+  func moved(_ touches: Set<UITouch>) {
+    touches.forEach { moved(ObjectIdentifier($0), to: typingKey(under: $0)) }
+  }
+
+  /// UIKit does not always send a move before the lift, so the key under the
+  /// lift is resolved again here.
+  func ended(_ touches: Set<UITouch>) {
+    touches.forEach { ended(ObjectIdentifier($0), on: typingKey(under: $0)) }
+  }
+
+  func cancelled(_ touches: Set<UITouch>) {
+    touches.forEach { cancelled(ObjectIdentifier($0)) }
+  }
+
+  func began(_ id: ObjectIdentifier, on key: KeyButton) {
+    KeyboardLog.signposter.emitEvent("keyDown")
+    stopRepeat(id)
+    apply(tracker.began(id, on: key))
+    if key.keyAction?.repeatsWhileHeld == true {
+      scheduleRepeat(id, on: key)
+    }
+  }
+
+  /// `key` is nil when the finger is outside every typing key.
+  func moved(_ id: ObjectIdentifier, to key: KeyButton?) {
+    // Sliding off delete before the hold delay cancels the repeat, as the long
+    // press it replaces failed on movement. Once repeating, it runs until lift.
+    if let pending = pendingRepeats[id], pending.key !== key {
+      cancelPendingRepeat(id)
+    }
+    apply(tracker.moved(id, to: key))
+  }
+
+  /// `key` is the typing key under the lift, nil outside every typing key.
+  func ended(_ id: ObjectIdentifier, on key: KeyButton?) {
+    moved(id, to: key)
+    stopRepeat(id)
+    apply(tracker.ended(id))
+  }
+
+  func cancelled(_ id: ObjectIdentifier) {
+    KeyboardLog.signposter.emitEvent("keyCancel")
+    stopRepeat(id)
+    apply(tracker.cancelled(id))
+  }
+
+  /// For a keyboard that hides or rebuilds mid-touch: those touches may never end.
+  func cancelAll() {
+    pendingRepeats.values.forEach { $0.timer.invalidate() }
+    pendingRepeats.removeAll()
+    if !repeatingTouches.isEmpty {
+      repeatingTouches.removeAll()
+      onRepeatEnded()
+    }
+    apply(tracker.cancelAll())
+  }
+
+  /// Assistive activation (VoiceOver), which has no touch to track.
+  func activate(_ key: KeyButton) {
+    onActivate(key)
+  }
+
+  /// The typing key under a touch; nil outside every key or over the globe.
+  private func typingKey(under touch: UITouch) -> KeyButton? {
+    guard let rows,
+          let key = rows.key(at: touch.location(in: rows), with: nil),
+          key.keyAction != nil else { return nil }
+    return key
+  }
+
+  private func apply(_ effects: [KeyTouchTracker<ObjectIdentifier, KeyButton>.Effect]) {
+    for effect in effects {
+      switch effect {
+      case .activate(let key):
+        onActivate(key)
+      case .highlight(let key, let highlighted):
+        key.isHighlighted = highlighted
+      }
+    }
+  }
+
+  private func scheduleRepeat(_ id: ObjectIdentifier, on key: KeyButton) {
+    let timer = Timer(timeInterval: repeatDelay, repeats: false) { [weak self] _ in
+      guard let self else { return }
+      self.pendingRepeats[id] = nil
+      let wasRepeating = !self.repeatingTouches.isEmpty
+      self.repeatingTouches.insert(id)
+      if !wasRepeating {
+        self.onRepeatBegan()
+      }
+    }
+    RunLoop.main.add(timer, forMode: .common)
+    pendingRepeats[id] = (key, timer)
+  }
+
+  private func cancelPendingRepeat(_ id: ObjectIdentifier) {
+    pendingRepeats.removeValue(forKey: id)?.timer.invalidate()
+  }
+
+  /// Repeating ends only when the last finger holding delete lifts.
+  private func stopRepeat(_ id: ObjectIdentifier) {
+    cancelPendingRepeat(id)
+    guard repeatingTouches.remove(id) != nil, repeatingTouches.isEmpty else { return }
+    onRepeatEnded()
   }
 }
 
@@ -578,6 +892,14 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private let processingCancelButton = UIButton(type: .system)
   private let toneButton = KeyButton(type: .system)
   private let keyboardRowsStack = KeyboardRowsStack()
+  private lazy var keyTouches: KeyTouchCoordinator = {
+    let coordinator = KeyTouchCoordinator()
+    coordinator.rows = keyboardRowsStack
+    coordinator.onActivate = { [weak self] key in self?.activateKey(key) }
+    coordinator.onRepeatBegan = { [weak self] in self?.startDeleteRepeating() }
+    coordinator.onRepeatEnded = { [weak self] in self?.stopDeleteRepeating() }
+    return coordinator
+  }()
   private let lettersRowsStack = UIStackView()
   private let numbersRowsStack = UIStackView()
 
@@ -646,6 +968,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private var deleteRepeatCount = 0
   private var issueResetTimer: Timer?
   private var recordingPollTimer: Timer?
+  private var recordingPollTick = 0
   private var waitForTranscriptTimer: Timer?
   private var isObservingHandoffNotifications = false
   private var didBuildKeyboard = false
@@ -766,14 +1089,37 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   override func textDidChange(_ textInput: UITextInput?) {
+    let signpost = KeyboardLog.signposter.beginInterval("textDidChange")
+    defer { KeyboardLog.signposter.endInterval("textDidChange", signpost) }
     super.textDidChange(textInput)
     syncShiftWithContextIfNeeded()
     refreshFieldAwareKeys()
     _ = consumePendingTranscriptIfAvailable(trigger: "textDidChange")
   }
 
+  /// The system holds back touches near the screen edges while it checks for its
+  /// own swipes, which delays q, a, z, p, l, shift and delete. Only the delay is
+  /// removed: those recognizers can still cancel a touch for a real system swipe.
+  private static func removeTouchDelays(from recognizers: [UIGestureRecognizer]?) {
+    recognizers?.forEach { recognizer in
+      recognizer.delaysTouchesBegan = false
+      recognizer.delaysTouchesEnded = false
+    }
+  }
+
+  /// Poll ticks (0.12 s each) between shared-state reads while nothing is starting
+  /// or recording; a recording started elsewhere still shows within 0.48 s.
+  private static let idlePollStride = 4
+
+  private static func shouldPollSharedState(tick: Int, isLive: Bool) -> Bool {
+    isLive || tick % idlePollStride == 0
+  }
+
   override func viewDidAppear(_ animated: Bool) {
     super.viewDidAppear(animated)
+    let windowRecognizers = view.window?.gestureRecognizers
+    Self.removeTouchDelays(from: windowRecognizers)
+    KeyboardLog.ui.debug("Removed touch delays from \(windowRecognizers?.count ?? 0, privacy: .public) window recognizers")
     // Without Full Access every write below is a no-op and every resume gate
     // reads a dead App Group. Today this method reaches refreshRecordButton()
     // anyway, but only because four separate resume gates each happen to fail
@@ -815,6 +1161,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   override func viewWillDisappear(_ animated: Bool) {
     super.viewWillDisappear(animated)
     logRecordMarker("viewWillDisappear")
+    keyTouches.cancelAll()
     stopDeleteRepeating()
     issueResetTimer?.invalidate()
     waitForTranscriptTimer?.invalidate()
@@ -834,7 +1181,20 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     stopHandoffObservers()
   }
 
-  @objc private func handleCharacterKeyTapped(_ sender: UIButton) {
+  private func activateKey(_ key: KeyButton) {
+    switch key.keyAction {
+    case .character: handleCharacterKeyTapped(key)
+    case .space: handleSpaceTapped()
+    case .returnKey: handleReturnTapped()
+    case .fieldShortcut: handleShortcutTapped(key)
+    case .backspace: handleBackspaceTapped()
+    case .shift: handleShiftTapped()
+    case .layoutMode: handleLayoutModeSwitchTapped()
+    case nil: break
+    }
+  }
+
+  private func handleCharacterKeyTapped(_ sender: UIButton) {
     guard let title = sender.title(for: .normal), !title.isEmpty else { return }
     playKeyClick()
 
@@ -855,7 +1215,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
   }
 
-  @objc private func handleShiftTapped() {
+  private func handleShiftTapped() {
     playKeyClick()
     let now = Date()
 
@@ -882,23 +1242,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     refreshShiftState()
   }
 
-  @objc private func handleBackspaceTapped() {
+  private func handleBackspaceTapped() {
     playKeyClick()
     textDocumentProxy.deleteBackward()
   }
 
-  @objc private func handleBackspaceLongPress(_ gesture: UILongPressGestureRecognizer) {
-    switch gesture.state {
-    case .began:
-      startDeleteRepeating()
-    case .ended, .cancelled, .failed:
-      stopDeleteRepeating()
-    default:
-      break
-    }
-  }
-
-  @objc private func handleLayoutModeSwitchTapped() {
+  private func handleLayoutModeSwitchTapped() {
     playKeyClick()
     layoutMode = layoutMode == .letters ? .numbers : .letters
     isCapsLocked = false
@@ -907,7 +1256,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     refreshShiftState()
   }
 
-  @objc private func handleSpaceTapped() {
+  private func handleSpaceTapped() {
     playKeyClick()
     if !applyDoubleSpacePeriod() {
       textDocumentProxy.insertText(" ")
@@ -915,7 +1264,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     syncShiftWithContextIfNeeded()
   }
 
-  @objc private func handleShortcutTapped(_ sender: UIButton) {
+  private func handleShortcutTapped(_ sender: UIButton) {
     guard let title = sender.title(for: .normal), !title.isEmpty else { return }
     playKeyClick()
     textDocumentProxy.insertText(title)
@@ -961,7 +1310,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     return false
   }
 
-  @objc private func handleReturnTapped() {
+  private func handleReturnTapped() {
     playKeyClick()
     textDocumentProxy.insertText("\n")
     syncShiftWithContextIfNeeded()
@@ -1931,6 +2280,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private func rebuildKeyboard() {
+    keyTouches.cancelAll()
     keyboardRowsStack.arrangedSubviews.forEach { view in
       keyboardRowsStack.removeArrangedSubview(view)
       view.removeFromSuperview()
@@ -1943,6 +2293,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     shiftButton = nil
     modeButton = nil
     returnButton = nil
+    appliedFieldTraits = nil
     rowHeightConstraints.removeAll(keepingCapacity: true)
 
     lettersRowsStack.arrangedSubviews.forEach { view in
@@ -2029,7 +2380,22 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     refreshFieldAwareKeys()
   }
 
+  private struct FieldTraits: Equatable {
+    let returnKeyType: UIReturnKeyType
+    let keyboardType: UIKeyboardType
+  }
+
+  // textDidChange fires on every keystroke; re-applying the return key's image
+  // and the shortcut's constraints each time costs a layout pass for nothing.
+  private var appliedFieldTraits: FieldTraits?
+
   private func refreshFieldAwareKeys() {
+    let traits = FieldTraits(
+      returnKeyType: textDocumentProxy.returnKeyType ?? .default,
+      keyboardType: textDocumentProxy.keyboardType ?? .default
+    )
+    guard traits != appliedFieldTraits else { return }
+    appliedFieldTraits = traits
     refreshReturnKey()
     refreshFieldShortcuts()
   }
@@ -2091,6 +2457,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private func playKeyClick() {
+    KeyboardLog.signposter.emitEvent("keyClick")
     UIDevice.current.playInputClick()
   }
 
@@ -2118,8 +2485,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     ])
 
     for key in keys {
-      let button = makeKeyButton(title: key, role: .character)
-      button.addTarget(self, action: #selector(handleCharacterKeyTapped), for: .touchUpInside)
+      let button = makeKeyButton(title: key, role: .character, action: .character)
       if registersLetters {
         characterButtons.append(button)
       }
@@ -2154,8 +2520,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       rowStack.bottomAnchor.constraint(equalTo: rowContainer.bottomAnchor),
     ])
 
-    let shift = makeKeyButton(title: nil, imageSystemName: "shift", role: .utility)
-    shift.addTarget(self, action: #selector(handleShiftTapped), for: .touchUpInside)
+    let shift = makeKeyButton(title: nil, imageSystemName: "shift", role: .utility, action: .shift)
     shift.widthAnchor.constraint(equalToConstant: 52).isActive = true
     shiftButton = shift
 
@@ -2165,20 +2530,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     lettersStack.distribution = .fillEqually
 
     for key in ["z", "x", "c", "v", "b", "n", "m"] {
-      let button = makeKeyButton(title: key, role: .character)
-      button.addTarget(self, action: #selector(handleCharacterKeyTapped), for: .touchUpInside)
+      let button = makeKeyButton(title: key, role: .character, action: .character)
       characterButtons.append(button)
       lettersStack.addArrangedSubview(button)
     }
 
-    let backspace = makeKeyButton(title: nil, imageSystemName: "delete.left", role: .utility)
-    backspace.addTarget(self, action: #selector(handleBackspaceTapped), for: .touchUpInside)
-    let longPress = UILongPressGestureRecognizer(
-      target: self,
-      action: #selector(handleBackspaceLongPress(_:))
-    )
-    longPress.minimumPressDuration = 0.35
-    backspace.addGestureRecognizer(longPress)
+    let backspace = makeKeyButton(title: nil, imageSystemName: "delete.left", role: .utility, action: .backspace)
     backspace.widthAnchor.constraint(equalToConstant: 58).isActive = true
 
     rowStack.addArrangedSubview(shift)
@@ -2206,8 +2563,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       rowStack.bottomAnchor.constraint(equalTo: rowContainer.bottomAnchor),
     ])
 
-    let symbolToggleButton = makeKeyButton(title: "#+=", role: .utility)
-    symbolToggleButton.addTarget(self, action: #selector(handleLayoutModeSwitchTapped), for: .touchUpInside)
+    let symbolToggleButton = makeKeyButton(title: "#+=", role: .utility, action: .layoutMode)
     symbolToggleButton.widthAnchor.constraint(equalToConstant: 56).isActive = true
 
     let symbolsStack = UIStackView()
@@ -2216,19 +2572,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     symbolsStack.distribution = .fillEqually
 
     for key in [".", ",", "?", "!", "'"] {
-      let button = makeKeyButton(title: key, role: .character)
-      button.addTarget(self, action: #selector(handleCharacterKeyTapped), for: .touchUpInside)
+      let button = makeKeyButton(title: key, role: .character, action: .character)
       symbolsStack.addArrangedSubview(button)
     }
 
-    let backspace = makeKeyButton(title: nil, imageSystemName: "delete.left", role: .utility)
-    backspace.addTarget(self, action: #selector(handleBackspaceTapped), for: .touchUpInside)
-    let longPress = UILongPressGestureRecognizer(
-      target: self,
-      action: #selector(handleBackspaceLongPress(_:))
-    )
-    longPress.minimumPressDuration = 0.35
-    backspace.addGestureRecognizer(longPress)
+    let backspace = makeKeyButton(title: nil, imageSystemName: "delete.left", role: .utility, action: .backspace)
     backspace.widthAnchor.constraint(equalToConstant: 58).isActive = true
 
     rowStack.addArrangedSubview(symbolToggleButton)
@@ -2245,9 +2593,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
     let modeButton = makeKeyButton(
       title: layoutMode == .letters ? "123" : "ABC",
-      role: .utility
+      role: .utility,
+      action: .layoutMode
     )
-    modeButton.addTarget(self, action: #selector(handleLayoutModeSwitchTapped), for: .touchUpInside)
     modeButton.translatesAutoresizingMaskIntoConstraints = false
     modeButton.widthAnchor.constraint(equalToConstant: 56).isActive = true
     self.modeButton = modeButton
@@ -2256,19 +2604,16 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     nextKeyboardButton.translatesAutoresizingMaskIntoConstraints = false
     nextKeyboardButton.widthAnchor.constraint(equalToConstant: needsInputModeSwitchKey ? 42 : 0).isActive = true
 
-    let spaceButton = makeKeyButton(title: nil, role: .space)
-    spaceButton.addTarget(self, action: #selector(handleSpaceTapped), for: .touchUpInside)
+    let spaceButton = makeKeyButton(title: nil, role: .space, action: .space)
     spaceButton.translatesAutoresizingMaskIntoConstraints = false
     addSpaceBranding(to: spaceButton)
 
-    let returnButton = makeKeyButton(title: nil, imageSystemName: "return.left", role: .utility)
-    returnButton.addTarget(self, action: #selector(handleReturnTapped), for: .touchUpInside)
+    let returnButton = makeKeyButton(title: nil, imageSystemName: "return.left", role: .utility, action: .returnKey)
     returnButton.translatesAutoresizingMaskIntoConstraints = false
     returnButton.widthAnchor.constraint(equalToConstant: 62).isActive = true
     self.returnButton = returnButton
 
-    let shortcutButton = makeKeyButton(title: nil, role: .utility)
-    shortcutButton.addTarget(self, action: #selector(handleShortcutTapped(_:)), for: .touchUpInside)
+    let shortcutButton = makeKeyButton(title: nil, role: .utility, action: .fieldShortcut)
     shortcutButton.translatesAutoresizingMaskIntoConstraints = false
     shortcutButton.isHidden = true
     let shortcutWidth = shortcutButton.widthAnchor.constraint(equalToConstant: 0)
@@ -2360,9 +2705,14 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private func makeKeyButton(
     title: String?,
     imageSystemName: String? = nil,
-    role: KeyRole
+    role: KeyRole,
+    action: KeyAction? = nil
   ) -> KeyButton {
     let button = KeyButton(type: .custom)
+    if let action {
+      button.keyAction = action
+      button.touchCoordinator = keyTouches
+    }
     // Each key's target reaches its neighbours and the keyboard's padding, so no
     // gap or pixel-rounding sliver is dead; KeyboardRowsStack resolves overlaps.
     button.hitTestOutsets = UIEdgeInsets(
@@ -3210,7 +3560,14 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private func pollRecordingState() {
+    let signpost = KeyboardLog.signposter.beginInterval("recordingPoll")
+    defer { KeyboardLog.signposter.endInterval("recordingPoll", signpost) }
     if isAgentReviewShown { return }
+    recordingPollTick &+= 1
+    guard Self.shouldPollSharedState(
+      tick: recordingPollTick,
+      isLive: isDarwinStartPending || isRemoteRecordingActive
+    ) else { return }
     let provider = KeyboardHandoffProvider.shared
 
     if isDarwinStartPending {
@@ -4042,9 +4399,11 @@ private struct KeyboardHandoffProvider {
     return "\(short)+\(build)"
   }()
 
-  private var appGroupId: String {
-    "group.\(Self.resolvedContainingAppBundleID)"
-  }
+  // One instance for the extension's lifetime. Every read used to resolve the
+  // group from Info.plist and open the suite again, several times per keystroke.
+  private let sharedDefaults = UserDefaults(
+    suiteName: "group.\(KeyboardHandoffProvider.resolvedContainingAppBundleID)"
+  )
   private let pendingTranscriptKey = "keyboard_pending_transcript"
   private let pendingTranscriptJobIdKey = "keyboard_pending_transcript_job_id"
   private let orphanedRawTranscriptKey = "keyboard_orphaned_raw_transcript"
@@ -4134,7 +4493,7 @@ private struct KeyboardHandoffProvider {
   }()
 
   func consumePendingTranscript() -> String? {
-    guard let sharedDefaults = UserDefaults(suiteName: appGroupId) else {
+    guard let sharedDefaults = sharedDefaults else {
       KeyboardLog.storage.error("Unable to open app-group defaults for keyboard handoff.")
       KeyboardLog.echo("Unable to open app-group defaults for keyboard handoff.")
       return nil
@@ -4168,7 +4527,7 @@ private struct KeyboardHandoffProvider {
   }
 
   func currentTone() -> String {
-    guard let defaults = UserDefaults(suiteName: appGroupId),
+    guard let defaults = sharedDefaults,
           let raw = defaults.string(forKey: dictationToneKey),
           Self.toneValues.contains(raw) else {
       return "default"
@@ -4178,13 +4537,13 @@ private struct KeyboardHandoffProvider {
 
   func setTone(_ tone: String) {
     guard Self.toneValues.contains(tone),
-          let defaults = UserDefaults(suiteName: appGroupId) else { return }
+          let defaults = sharedDefaults else { return }
     defaults.set(tone, forKey: dictationToneKey)
     defaults.synchronize()
   }
 
   func isToneApplicable() -> Bool {
-    guard let defaults = UserDefaults(suiteName: appGroupId) else { return false }
+    guard let defaults = sharedDefaults else { return false }
     return defaults.string(forKey: toneApplicableKey) != "0"
   }
 
@@ -4192,23 +4551,23 @@ private struct KeyboardHandoffProvider {
 
   /// The dictation agent is off entirely unless the app has mirrored enabled=1.
   func isAgentEnabled() -> Bool {
-    UserDefaults(suiteName: appGroupId)?.string(forKey: agentEnabledKey) == "1"
+    sharedDefaults?.string(forKey: agentEnabledKey) == "1"
   }
 
   /// Applicable = usable in the current mode (Cloud on). Not applicable ⇒ the
   /// entry button is dimmed and points the user at the app, mirroring tone.
   func isAgentApplicable() -> Bool {
-    UserDefaults(suiteName: appGroupId)?.string(forKey: agentApplicableKey) == "1"
+    sharedDefaults?.string(forKey: agentApplicableKey) == "1"
   }
 
   /// Only when the user has opted in do we share the surrounding field text.
   func agentSharesContext() -> Bool {
-    UserDefaults(suiteName: appGroupId)?.string(forKey: agentShareContextKey) == "1"
+    sharedDefaults?.string(forKey: agentShareContextKey) == "1"
   }
 
   /// Display name shown in the recording/review headers ("Tell {name}…").
   func agentName() -> String {
-    guard let raw = UserDefaults(suiteName: appGroupId)?.string(forKey: agentNameKey) else {
+    guard let raw = sharedDefaults?.string(forKey: agentNameKey) else {
       return "your agent"
     }
     let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -4228,7 +4587,7 @@ private struct KeyboardHandoffProvider {
   /// used for recording-active). While the agent is generating, a stale/missing
   /// heartbeat means the app process died mid-job and no result is coming.
   func isAppHeartbeatFresh() -> Bool {
-    guard let defaults = UserDefaults(suiteName: appGroupId),
+    guard let defaults = sharedDefaults,
           let raw = defaults.string(forKey: backgroundSessionHeartbeatKey),
           let heartbeatMs = Double(raw) else { return false }
     return Date().timeIntervalSince1970 * 1000 - heartbeatMs <= 5_000
@@ -4242,7 +4601,7 @@ private struct KeyboardHandoffProvider {
     contextBefore: String?,
     contextAfter: String?
   ) {
-    guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
+    guard let defaults = sharedDefaults else { return }
     var payload: [String: Any] = [
       "kind": "compose",
       "requestedAtMs": Int(Date().timeIntervalSince1970 * 1000),
@@ -4258,7 +4617,7 @@ private struct KeyboardHandoffProvider {
   }
 
   func clearAgentRequest() {
-    guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
+    guard let defaults = sharedDefaults else { return }
     defaults.removeObject(forKey: agentRequestKey)
     defaults.synchronize()
   }
@@ -4267,7 +4626,7 @@ private struct KeyboardHandoffProvider {
   /// the app reuses `sessionId` so the reply threads onto the same session. No
   /// selectedText/context is re-captured — the follow-up refines the last reply.
   func writeAgentFollowUpRequest(sessionId: String) {
-    guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
+    guard let defaults = sharedDefaults else { return }
     let payload: [String: Any] = [
       "kind": "follow_up",
       "sessionId": sessionId,
@@ -4287,7 +4646,7 @@ private struct KeyboardHandoffProvider {
   @discardableResult
   func writeAgentRegenerateAction(sessionId: String) -> Int64 {
     let atMs = Int64(Date().timeIntervalSince1970 * 1000)
-    guard let defaults = UserDefaults(suiteName: appGroupId) else { return atMs }
+    guard let defaults = sharedDefaults else { return atMs }
     let requestId = "\(atMs)-\(UUID().uuidString)"
     let payload: [String: Any] = [
       "type": "regenerate",
@@ -4309,7 +4668,7 @@ private struct KeyboardHandoffProvider {
   /// recording. Lets the keyboard recover "this recording is an agent one" after
   /// it was rebuilt mid-recording (a common jetsam case on the handoff path).
   func hasAgentJobForCurrentRecording() -> Bool {
-    guard let defaults = UserDefaults(suiteName: appGroupId),
+    guard let defaults = sharedDefaults,
           let activeJobId = defaults.string(forKey: recordingJobIdKey),
           !activeJobId.isEmpty,
           let raw = defaults.string(forKey: agentJobKey),
@@ -4325,7 +4684,7 @@ private struct KeyboardHandoffProvider {
   /// JSON, or when the result's job is superseded by a newer recording — reusing
   /// the same timestamp-prefix staleness rule as pending transcripts.
   func readAgentResult() -> AgentResult? {
-    guard let defaults = UserDefaults(suiteName: appGroupId),
+    guard let defaults = sharedDefaults,
           let raw = defaults.string(forKey: agentResultKey),
           let data = raw.data(using: .utf8),
           let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -4358,7 +4717,7 @@ private struct KeyboardHandoffProvider {
   }
 
   func clearAgentResult() {
-    guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
+    guard let defaults = sharedDefaults else { return }
     defaults.removeObject(forKey: agentResultKey)
     defaults.synchronize()
   }
@@ -4384,14 +4743,14 @@ private struct KeyboardHandoffProvider {
   /// Stamps the App Group with the moment the keyboard came on screen so the
   /// main app can detect a successful keyboard switch during onboarding.
   func markShown() {
-    guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
+    guard let defaults = sharedDefaults else { return }
     defaults.set(String(Int(Date().timeIntervalSince1970 * 1000)), forKey: shownAtMsKey)
     defaults.set(Self.bundleVersionIdentity, forKey: shownAtVersionKey)
     defaults.synchronize()
   }
 
   func isRecordingActive() -> Bool {
-    guard let defaults = UserDefaults(suiteName: appGroupId) else { return false }
+    guard let defaults = sharedDefaults else { return false }
     guard defaults.string(forKey: recordingActiveKey) == "1" else { return false }
 
     // The host app writes a heartbeat every 1s while alive. If it's missing
@@ -4413,25 +4772,25 @@ private struct KeyboardHandoffProvider {
   }
 
   func forceClearActiveFlag() {
-    guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
+    guard let defaults = sharedDefaults else { return }
     defaults.set("0", forKey: recordingActiveKey)
   }
 
   func clearBackgroundSessionReady() {
-    guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
+    guard let defaults = sharedDefaults else { return }
     defaults.set("0", forKey: backgroundSessionReadyKey)
     defaults.synchronize()
   }
 
   func currentAudioLevel() -> Float {
-    guard let defaults = UserDefaults(suiteName: appGroupId),
+    guard let defaults = sharedDefaults,
           let raw = defaults.string(forKey: audioLevelKey),
           let value = Float(raw) else { return 0 }
     return min(max(value, 0), 1)
   }
 
   func requestStop() {
-    guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
+    guard let defaults = sharedDefaults else { return }
     defaults.set("1", forKey: stopRequestedKey)
     defaults.set(String(Int(Date().timeIntervalSince1970 * 1000)), forKey: stopRequestedAtMsKey)
     defaults.set("transcribing", forKey: transcriptionStatusKey)
@@ -4447,21 +4806,21 @@ private struct KeyboardHandoffProvider {
   }
 
   func requestCancel() {
-    guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
+    guard let defaults = sharedDefaults else { return }
     defaults.set("1", forKey: cancelRequestedKey)
     requestStop()
     KeyboardLog.echo("MARKER provider.requestCancel")
   }
 
   func currentRecordingJobId() -> String? {
-    UserDefaults(suiteName: appGroupId)?.string(forKey: recordingJobIdKey)
+    sharedDefaults?.string(forKey: recordingJobIdKey)
   }
 
   /// Cancel during the transcription phase (recording already stopped). Raises
   /// the cancel flag the app polls at its checkpoints and clears any transcript
   /// already written for this job, leaving the status idle.
   func cancelProcessingJob() {
-    guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
+    guard let defaults = sharedDefaults else { return }
     defaults.set("1", forKey: cancelRequestedKey)
     defaults.removeObject(forKey: pendingTranscriptKey)
     defaults.removeObject(forKey: pendingTranscriptJobIdKey)
@@ -4476,7 +4835,7 @@ private struct KeyboardHandoffProvider {
   /// Drops a pending transcript that belongs to a cancelled job. Returns true
   /// when it discarded one, so the caller knows not to insert anything.
   func discardPendingTranscriptIfMatches(jobId: String) -> Bool {
-    guard let defaults = UserDefaults(suiteName: appGroupId),
+    guard let defaults = sharedDefaults,
           defaults.string(forKey: pendingTranscriptKey) != nil,
           defaults.string(forKey: pendingTranscriptJobIdKey) == jobId else { return false }
     defaults.removeObject(forKey: pendingTranscriptKey)
@@ -4545,7 +4904,7 @@ private struct KeyboardHandoffProvider {
   }
 
   func storeHostReturnInfo(from controller: UIInputViewController) {
-    guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
+    guard let defaults = sharedDefaults else { return }
     if let scheme = hostUrlScheme(from: controller) {
       defaults.set(scheme, forKey: "keyboard_return_url")
       KeyboardLog.echo("Stored return URL: \(scheme)")
@@ -4559,7 +4918,7 @@ private struct KeyboardHandoffProvider {
   }
 
   func isBackgroundSessionReady() -> Bool {
-    guard let defaults = UserDefaults(suiteName: appGroupId) else { return false }
+    guard let defaults = sharedDefaults else { return false }
     guard defaults.string(forKey: backgroundSessionReadyKey) == "1" else { return false }
 
     guard let rawHeartbeat = defaults.string(forKey: backgroundSessionHeartbeatKey),
@@ -4583,7 +4942,7 @@ private struct KeyboardHandoffProvider {
   /// fails the freshness check, so another host app never reads a false positive.
   /// Private-API host bundle-id detection is unreliable, so this is the signal.
   func isContainingAppForeground() -> Bool {
-    guard let defaults = UserDefaults(suiteName: appGroupId) else { return false }
+    guard let defaults = sharedDefaults else { return false }
     guard let raw = defaults.string(forKey: "containing_app_foreground_at_ms"),
           let atMs = Double(raw) else { return false }
     let ageMs = Date().timeIntervalSince1970 * 1000 - atMs
@@ -4591,7 +4950,7 @@ private struct KeyboardHandoffProvider {
   }
 
   func requestStart() {
-    if let defaults = UserDefaults(suiteName: appGroupId) {
+    if let defaults = sharedDefaults {
       let jobId = "\(Int(Date().timeIntervalSince1970 * 1000))-\(UUID().uuidString)"
       defaults.set("0", forKey: stopRequestedKey)
       defaults.removeObject(forKey: stopRequestedAtMsKey)
@@ -4627,7 +4986,7 @@ private struct KeyboardHandoffProvider {
   }
 
   func recordingStateSnapshot() -> (active: String, ready: String, stopRequested: String, warmMic: String) {
-    guard let defaults = UserDefaults(suiteName: appGroupId) else {
+    guard let defaults = sharedDefaults else {
       return ("?", "?", "?", "?")
     }
     return (
@@ -4639,27 +4998,27 @@ private struct KeyboardHandoffProvider {
   }
 
   func transcriptionStatus() -> String? {
-    guard let defaults = UserDefaults(suiteName: appGroupId) else { return nil }
+    guard let defaults = sharedDefaults else { return nil }
     return defaults.string(forKey: transcriptionStatusKey)
   }
 
   /// The error detail riding alongside an error status: `usage_limit`,
   /// `session_expired`, or a free-form message.
   func transcriptionError() -> String? {
-    UserDefaults(suiteName: appGroupId)?.string(forKey: transcriptionErrorKey)
+    sharedDefaults?.string(forKey: transcriptionErrorKey)
   }
 
   /// Milliseconds since the shared transcription status last changed, or nil
   /// when no writer has stamped it (e.g. right after the app reset state).
   func transcriptionStatusAgeMs() -> Int? {
-    guard let defaults = UserDefaults(suiteName: appGroupId),
+    guard let defaults = sharedDefaults,
           let raw = defaults.string(forKey: transcriptionStatusUpdatedAtMsKey),
           let updatedAtMs = Double(raw) else { return nil }
     return Int(Date().timeIntervalSince1970 * 1000 - updatedAtMs)
   }
 
   func clearTranscriptionStatus() {
-    guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
+    guard let defaults = sharedDefaults else { return }
     defaults.set("idle", forKey: transcriptionStatusKey)
     defaults.removeObject(forKey: transcriptionErrorKey)
   }
@@ -4667,7 +5026,7 @@ private struct KeyboardHandoffProvider {
   /// Stamped on every Activate tap so the main app can recover the handoff if
   /// the deep link itself never arrives (cold-launch getInitialURL race).
   func markHandoffIntent() {
-    guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
+    guard let defaults = sharedDefaults else { return }
     defaults.set(String(Int(Date().timeIntervalSince1970 * 1000)), forKey: handoffIntentAtMsKey)
     defaults.synchronize()
     KeyboardLog.echo("MARKER provider.markHandoffIntent")
