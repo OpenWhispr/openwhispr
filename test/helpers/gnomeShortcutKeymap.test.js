@@ -82,13 +82,19 @@ const writtenBinding = (calls) =>
   )?.[4];
 const readKeymap = (calls) => calls.some(([command]) => command === "xkbcomp");
 
-const originalDesktop = process.env.XDG_CURRENT_DESKTOP;
+const originalEnv = {
+  XDG_CURRENT_DESKTOP: process.env.XDG_CURRENT_DESKTOP,
+  DISPLAY: process.env.DISPLAY,
+};
 test.before(() => {
   process.env.XDG_CURRENT_DESKTOP = "ubuntu:GNOME";
+  process.env.DISPLAY = ":0";
 });
 test.after(() => {
-  if (originalDesktop === undefined) delete process.env.XDG_CURRENT_DESKTOP;
-  else process.env.XDG_CURRENT_DESKTOP = originalDesktop;
+  for (const [name, value] of Object.entries(originalEnv)) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
   delete require.cache[modulePath];
 });
 
@@ -162,6 +168,34 @@ test("a custom shortcut written with <Ctrl> conflicts with <Control>", async () 
   assert.equal(writtenBinding(calls), undefined);
 });
 
+test("only a key's symbols list is read, never another field's list", async () => {
+  const keymap = [
+    "xkb_symbols {",
+    "    key <FK16> {",
+    "        actions[Group1]= [ SetMods(modifiers=Shift) ],",
+    "        symbols[Group1]= [ XF86Launch7 ]",
+    "    };",
+    "};",
+  ].join("\n");
+  const { manager, calls } = loadManager({ keymap });
+
+  assert.equal(await manager.registerKeybinding("F16", "dictation"), true);
+  assert.equal(writtenBinding(calls), "XF86Launch7");
+});
+
+test("without a DISPLAY the keymap isn't read and the F-key name is kept", async () => {
+  process.env.DISPLAY = "";
+  try {
+    const { manager, calls } = loadManager();
+
+    assert.equal(await manager.registerKeybinding("F16", "dictation"), true);
+    assert.equal(writtenBinding(calls), "F16");
+    assert.equal(readKeymap(calls), false);
+  } finally {
+    process.env.DISPLAY = ":0";
+  }
+});
+
 test("an unreadable keymap keeps the F-key name", async () => {
   for (const keymap of [new Error("spawn xkbcomp ENOENT"), ""]) {
     const { manager, calls } = loadManager({ keymap });
@@ -192,6 +226,18 @@ test("Hold hands the portal the keysym", async () => {
 
   assert.equal(await manager.registerPushToTalk("Control+F16", () => {}), true);
   assert.deepEqual(triggers, ["CTRL+XF86Launch7"]);
+});
+
+test("Hold falling back to Tap binds the keysym and reads the keymap once", async () => {
+  const { manager, calls } = loadManager();
+  manager.globalShortcutsPortal = {
+    registerKeybinding: async () => false,
+    unregisterKeybinding: async () => {},
+  };
+
+  assert.equal(await manager.registerPushToTalk("F16", () => {}), false);
+  assert.equal(writtenBinding(calls), "XF86Launch7");
+  assert.equal(calls.filter(([command]) => command === "xkbcomp").length, 1);
 });
 
 test("Hold refuses a key GNOME can't grab and keeps the Tap binding", async () => {

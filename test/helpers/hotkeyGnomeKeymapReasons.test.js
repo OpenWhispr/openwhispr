@@ -68,7 +68,7 @@ test("another slot's hotkey GNOME already uses is refused as reserved and keeps 
   const result = await mgr.registerSlot("meeting", "F13", noop, { atomic: true });
 
   assert.equal(result.success, false);
-  assert.match(result.error, /reserved by your desktop environment/);
+  assert.match(result.error, /GNOME already uses/);
   assert.deepEqual(mgr.getSlotHotkeys("meeting"), ["F9"]);
   assert.deepEqual(unregistered, []);
 });
@@ -82,7 +82,7 @@ test("switching to Hold on a key GNOME can't grab keeps Tap and says why", async
   assert.equal(await mgr.setActivationMode("push"), false);
   assert.equal(mgr.activationMode, "tap");
   assert.equal(failures.length, 1);
-  assert.match(failures[0].error, /reserved by your desktop environment/);
+  assert.match(failures[0].error, /GNOME already uses/);
 });
 
 test("switching back to Tap on a key GNOME can't grab keeps Hold and says why", async () => {

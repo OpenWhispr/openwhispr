@@ -117,9 +117,11 @@ const KEYMAP_QUERY_TIMEOUT_MS = 3000;
 // The keysym the active keymap gives an xkb key name ("FK16"), null when the key has none,
 // or undefined when the keymap can't be read. xkbcomp ships with XWayland (x11-xkb-utils).
 function readKeymapKeysym(keyName) {
+  const display = process.env.DISPLAY;
+  if (!display) return undefined;
   let keymap;
   try {
-    keymap = execFileSync("xkbcomp", ["-xkb", process.env.DISPLAY ?? "", "-"], {
+    keymap = execFileSync("xkbcomp", ["-xkb", display, "-"], {
       encoding: "utf-8",
       stdio: "pipe",
       timeout: KEYMAP_QUERY_TIMEOUT_MS,
@@ -130,10 +132,11 @@ function readKeymapKeysym(keyName) {
   }
   if (!keymap.includes("xkb_symbols")) return undefined;
   // "key <FK16> { [ XF86Launch7 ] };" or "symbols[Group1]= [ XF86TouchpadOff, ... ]" inside a
-  // multi-line entry; a key with no keysym has no entry at all.
-  const entry = new RegExp(`key <${keyName}>\\s*\\{(?:[^}]*?=)?\\s*\\[\\s*([^\\s,\\]]+)`).exec(
-    keymap
-  );
+  // multi-line entry, never another field's list such as actions[Group1]; a key with no
+  // keysym has no entry at all.
+  const entry = new RegExp(
+    `key <${keyName}>\\s*\\{(?:[^}]*?symbols\\[[^\\]]*\\]\\s*=)?\\s*\\[\\s*([^\\s,\\]]+)`
+  ).exec(keymap);
   return entry && entry[1] !== "NoSymbol" ? entry[1] : null;
 }
 
@@ -315,7 +318,8 @@ class GnomeShortcutManager {
     const preferredTrigger = GnomeShortcutManager.convertToPortalFormat(hotkey);
     if (!preferredTrigger) return false;
     const tapShortcut = GnomeShortcutManager.convertToGnomeFormat(hotkey);
-    const { keysym, reason } = this.resolveFunctionKey(tapShortcut);
+    const resolved = this.resolveFunctionKey(tapShortcut);
+    const { keysym, reason } = resolved;
     if (reason) {
       debugLogger.log(
         `[GnomeShortcut] GNOME can't grab "${tapShortcut}" for Hold with this keymap: ${reason}`
@@ -329,7 +333,7 @@ class GnomeShortcutManager {
       callback
     );
     if (!registered) {
-      await this.registerKeybinding(tapShortcut, "dictation");
+      await this.registerKeybinding(tapShortcut, "dictation", resolved);
     }
     return registered;
   }
@@ -345,7 +349,8 @@ class GnomeShortcutManager {
     return VALID_SHORTCUT_PATTERN.test(shortcut);
   }
 
-  async registerKeybinding(shortcut = "<Alt>r", slotName = "dictation") {
+  // resolved: resolveFunctionKey(shortcut) when the caller already has it.
+  async registerKeybinding(shortcut = "<Alt>r", slotName = "dictation", resolved) {
     if (!GnomeShortcutManager.isGnome()) {
       debugLogger.log("[GnomeShortcut] Not running on GNOME, skipping registration");
       return false;
@@ -358,7 +363,7 @@ class GnomeShortcutManager {
       return false;
     }
 
-    const { keysym, reason } = this.resolveFunctionKey(shortcut);
+    const { keysym, reason } = resolved ?? this.resolveFunctionKey(shortcut);
     if (reason) {
       debugLogger.log(
         `[GnomeShortcut] GNOME can't grab "${shortcut}" for slot "${slotName}" with this keymap: ${reason}`

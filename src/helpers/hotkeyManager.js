@@ -36,7 +36,7 @@ const KDE_FAILURE_REASONS = {
 // Why GNOME can't grab a key the active keymap maps elsewhere (see gnomeShortcut.js)
 const GNOME_FAILURE_REASONS = {
   keysym_missing: (hotkey) => i18nMain.t("hotkey.errors.keyNotInKeymap", { hotkey }),
-  keysym_reserved: (hotkey) => i18nMain.t("hotkey.errors.osReserved", { hotkey }),
+  keysym_reserved: (hotkey) => i18nMain.t("hotkey.errors.keyReservedByGnome", { hotkey }),
 };
 
 // Right-side single modifiers are handled by native listeners, not globalShortcut
