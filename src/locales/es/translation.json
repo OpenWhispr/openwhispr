@@ -4960,7 +4960,11 @@
     },
     "settings": {
       "saveChanges": "Guardar cambios",
-      "saved": "Tono y estilo guardados"
+      "saved": "Tono y estilo guardados",
+      "cleanupOff": "La corrección de texto está desactivada, así que estos tonos no se aplican a tu dictado.",
+      "turnOnCleanup": "Activar corrección de texto",
+      "standard": "Tono estándar",
+      "standardDescription": "La corrección de texto mantiene tu propio tono en todas las apps. Desactívalo para elegir un tono para cada tipo de app."
     }
   }
 }

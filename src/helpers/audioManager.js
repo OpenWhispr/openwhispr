@@ -694,6 +694,7 @@ class AudioManager {
     this.assistantSelectionContext = null;
     this.screenContextPromise = null;
     this.toneStylePromise = null;
+    this.lastToneAppCategory = null;
     this.selectionCapturePromise = null;
     this.sttConfig = null;
     this.sttConfigFetchedAt = null;
@@ -1033,8 +1034,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // is classified while the user speaks. Only a dictation that captured its
   // app gets a tone: a retried or re-run transcription has no target.
   beginToneStyleCapture() {
-    this.toneStylePromise = window.electronAPI?.captureDictationAppCategory?.() ?? null;
-    this.toneStylePromise?.catch(() => {});
+    const capture = window.electronAPI?.captureDictationAppCategory?.();
+    // Classification resolves in well under a second; the race only guards the
+    // recording start and paste paths if the IPC ever hangs, and an unknown app
+    // reads as other.
+    this.toneStylePromise = capture
+      ? Promise.race([
+          capture,
+          new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
+        ]).catch(() => null)
+      : null;
   }
 
   // Consumed by the cleanup route, and by an agent command for an answer
@@ -1045,16 +1054,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.toneStylePromise = null;
     const settings = getSettings();
     if (!pending || !settings.toneStyleEnabled) return null;
-    let appCategory = null;
-    try {
-      // Classification resolves in well under a second; the race only guards
-      // the paste path if the IPC ever hangs, and an unknown app reads as other.
-      appCategory = await Promise.race([
-        pending,
-        new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
-      ]);
-    } catch {}
-    const toneStyle = resolveDictationToneStyle(settings.toneStyles, appCategory);
+    const toneStyle = resolveDictationToneStyle(settings.toneStyles, await pending);
     logger.logReasoning("TONE_STYLE", toneStyle);
     return toneStyle;
   }
@@ -4712,6 +4712,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     {
       voiceAgentRequested = this.voiceAgentRequested,
       translationRequested = this.translationRequested,
+      appCategory = null,
     } = {}
   ) {
     if (
@@ -4723,16 +4724,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       !isLlmSelectionAllowed(usePolicyStore.getState(), { mode: "openwhispr" }) ||
       (settings.cleanupCloudMode || "openwhispr") !== "openwhispr" ||
       voiceAgentRequested ||
-      translationRequested ||
-      // Tone & Style picks the tone from the app being dictated into, which a
-      // session minted at start or warmup can't know yet: /api/reason cleans up.
-      settings.toneStyleEnabled
+      translationRequested
     )
       return undefined;
     return {
       agentName: getAgentName() || "",
       customDictionary: getDictionaryHintWords(settings),
       customPrompt: this.getCustomPrompt(),
+      ...(settings.toneStyleEnabled
+        ? resolveDictationToneStyle(settings.toneStyles, appCategory)
+        : {}),
       language: this.getCleanupLanguage(settings) || undefined,
       locale: settings.uiLanguage || "en",
     };
@@ -4762,10 +4763,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               language: settings.preferredLanguage,
               keyterms: this.getKeyterms(),
               voiceAgentRequested: this.voiceAgentRequested,
-              // Warmup runs while idle, so the socket is for an ordinary dictation.
+              // Warmup runs while idle, so the socket is for an ordinary
+              // dictation, into the app last dictated into (Tone & Style).
               pipelineOptions: this.getPipelineCleanupOptions(settings, {
                 voiceAgentRequested: false,
                 translationRequested: false,
+                appCategory: this.lastToneAppCategory,
               }),
             })
           );
@@ -5029,7 +5032,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       providerName = this.getStreamingProviderName();
       this._activeStreamingProviderName = providerName;
       this._activeStreamingConfig = { ...this.sttConfig };
-      this._activePipelineOptions = this.getPipelineCleanupOptions(getSettings());
       const ownsSession = () => this._activeStreamingSessionId === sessionId;
       const cancellationGeneration = this._streamingCancellationGeneration;
       startWasCancelled = () => cancellationGeneration !== this._streamingCancellationGeneration;
@@ -5091,6 +5093,21 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         await audioContext.audioWorklet.addModule(this.getWorkletBlobUrl());
         this.workletModuleLoaded = true;
       }
+
+      // A combined cleanup's prompt is fixed when its session is minted, so with
+      // Tone & Style on it waits for the app being dictated into (classified by
+      // now in practice) before audio can reach a socket warmed for another app.
+      const pipelineSettings = getSettings();
+      if (
+        providerName === "orukeet" &&
+        pipelineSettings.toneStyleEnabled &&
+        this.getPipelineCleanupOptions(pipelineSettings)
+      ) {
+        this.lastToneAppCategory = await this.toneStylePromise;
+      }
+      this._activePipelineOptions = this.getPipelineCleanupOptions(pipelineSettings, {
+        appCategory: this.lastToneAppCategory,
+      });
 
       this.streamingProcessor = new AudioWorkletNode(audioContext, "pcm-streaming-processor");
       const provider = this.getStreamingProvider(providerName);

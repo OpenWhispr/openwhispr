@@ -43,7 +43,7 @@ function button(root, label) {
 
 const isDisabled = (element) => element.getAttribute("disabled") !== null;
 
-async function renderSection(t, settings) {
+async function renderSection(t, settings, props = {}) {
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
@@ -61,28 +61,44 @@ async function renderSection(t, settings) {
     "/components/settings/ToneStyleSection.tsx"
   );
   root = createRoot(container);
-  await React.act(async () => root.render(React.createElement(ToneStyleSection)));
+  await React.act(async () =>
+    root.render(React.createElement(ToneStyleSection, { onOpenCleanupSettings() {}, ...props }))
+  );
   return { container, store: useSettingsStore };
 }
 
 const DEFAULTS = { personal: "casual", work: "formal", email: "formal", other: "formal" };
 
-test("before Tone & Style is set up, saving the picks as they are turns it on", async (t) => {
+const hasText = (root, text) => !!findElement(root, (element) => element.textContent === text);
+const standardToggle = (root) =>
+  findElement(root, (element) => element.getAttribute?.("role") === "switch");
+const showsPicks = (root) => hasText(root, "toneStyle.settings.saveChanges");
+
+test("Standard tone stays on until it is turned off, which applies the saved picks", async (t) => {
   const { container, store } = await renderSection(t, {
+    useCleanupModel: true,
     toneStyleEnabled: false,
     toneStyles: DEFAULTS,
   });
-  const save = button(container, "toneStyle.settings.saveChanges");
-  assert.equal(isDisabled(save), false);
+  assert.equal(standardToggle(container).getAttribute("aria-checked"), "true");
+  assert.equal(showsPicks(container), false);
 
-  await React.act(async () => click(save));
+  await React.act(async () => click(standardToggle(container)));
   assert.equal(store.getState().toneStyleEnabled, true);
   assert.deepEqual(store.getState().toneStyles, DEFAULTS);
-  assert.equal(isDisabled(save), true);
+  // Home stops offering it, even after a switch back.
+  assert.equal(localStorage.getItem("toneStyleBannerDismissed"), "true");
+  assert.equal(standardToggle(container).getAttribute("aria-checked"), "false");
+  assert.equal(isDisabled(button(container, "toneStyle.settings.saveChanges")), true);
+
+  await React.act(async () => click(standardToggle(container)));
+  assert.equal(store.getState().toneStyleEnabled, false);
+  assert.equal(showsPicks(container), false);
 });
 
 test("once set up, Save waits for a changed pick and saves it", async (t) => {
   const { container, store } = await renderSection(t, {
+    useCleanupModel: true,
     toneStyleEnabled: true,
     toneStyles: DEFAULTS,
   });
@@ -99,4 +115,48 @@ test("once set up, Save waits for a changed pick and saves it", async (t) => {
   await React.act(async () => click(save));
   assert.equal(store.getState().toneStyles.work, "casual");
   assert.equal(store.getState().toneStyleEnabled, true);
+});
+
+test("with cleanup off, the section says so and turns it on", async (t) => {
+  let opened = 0;
+  const { container, store } = await renderSection(
+    t,
+    {
+      useCleanupModel: false,
+      toneStyleEnabled: true,
+      toneStyles: DEFAULTS,
+      isSignedIn: true,
+      cleanupMode: "openwhispr",
+      cleanupCloudMode: "openwhispr",
+    },
+    { onOpenCleanupSettings: () => opened++ }
+  );
+  assert.ok(hasText(container, "toneStyle.settings.cleanupOff"));
+
+  await React.act(async () => click(button(container, "toneStyle.settings.turnOnCleanup")));
+  assert.equal(store.getState().useCleanupModel, true);
+  assert.equal(hasText(container, "toneStyle.settings.cleanupOff"), false);
+  // Cloud cleanup needs no model, so the user stays here.
+  assert.equal(opened, 0);
+});
+
+test("turning cleanup on without a usable model opens its settings", async (t) => {
+  let opened = 0;
+  const { container, store } = await renderSection(
+    t,
+    {
+      useCleanupModel: false,
+      toneStyleEnabled: true,
+      toneStyles: DEFAULTS,
+      isSignedIn: false,
+      cleanupMode: "providers",
+      cleanupProvider: "openai",
+      cleanupModel: "",
+    },
+    { onOpenCleanupSettings: () => opened++ }
+  );
+
+  await React.act(async () => click(button(container, "toneStyle.settings.turnOnCleanup")));
+  assert.equal(store.getState().useCleanupModel, true);
+  assert.equal(opened, 1);
 });

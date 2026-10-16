@@ -4,7 +4,9 @@
 //
 // App identities match by whole token or phrase, never bare substring, as in
 // markdownTargets.js. The identity per platform:
-//   macOS:   the app's name + bundle id ("Mail com.apple.mail")
+//   macOS:   the app's name + bundle id ("Mail com.apple.mail"); the name is
+//            localized (WeChat is 微信 on a Chinese system), so apps that
+//            translate it are listed by their bundle id's token too
 //   Windows: the exe name + window class ("OUTLOOK.EXE rctrl_renwnd32")
 //   Linux:   the WM_CLASS or app id ("org.telegram.desktop")
 // A browser is judged by its page instead: the host when macOS accessibility
@@ -26,10 +28,12 @@ const APP_SIGNATURES = {
     "facebook",
     "wechat",
     "weixin",
+    "xinwechat",
     "naver.line",
     "line.exe",
     "viber",
     "kakaotalk",
+    "kakaotalkmac",
     "discord",
     "beeper",
     "threema",
@@ -52,8 +56,10 @@ const APP_SIGNATURES = {
     "lark",
     "feishu",
     "dingtalk",
+    "dingtalkmac",
     "wxwork",
     "wecom",
+    "weworkmac",
     "chanty",
     "flock",
     "pumble",
@@ -202,9 +208,10 @@ const TITLE_JUDGED_PATTERNS = [...BROWSER_SIGNATURES, "applicationframehost"].ma
 // inside it says nothing about the app.
 const CHROMIUM_WINDOW_CLASS = /chrome_widgetwin_\d+/g;
 
-// The browser's own name, and the profile Chrome on macOS appends after it.
-const BROWSER_TITLE_SUFFIX =
-  /\s[-\u2013\u2014|]\s(?:google chrome|chromium|microsoft edge|mozilla firefox|firefox|librewolf|waterfox|floorp|zen browser|brave|opera|vivaldi|thorium|yandex)(?:\s.*)?$/;
+// A title segment that is the browser's own name, as a whole segment, so a
+// page such as "gmail - Brave Search" keeps its words.
+const BROWSER_TITLE_NAME =
+  /^(?:google chrome|chromium|microsoft edge|mozilla firefox|firefox|librewolf|waterfox|floorp|zen browser|brave|opera|vivaldi|thorium|yandex)(?: private browsing| \(.*\))?$/;
 const TITLE_SEPARATOR = /\s[-\u2013\u2014|\u00b7\u2022/]\s/;
 const ZERO_WIDTH = /[\u200b-\u200d\ufeff]/g;
 
@@ -220,6 +227,15 @@ function matchApp(signature) {
   );
 }
 
+// The browser's name ends the title, or comes just before the profile Chrome
+// on macOS appends after it.
+function withoutBrowserName(segments) {
+  const last = segments.length - 1;
+  if (BROWSER_TITLE_NAME.test(segments[last])) return segments.slice(0, last);
+  if (last > 0 && BROWSER_TITLE_NAME.test(segments[last - 1])) return segments.slice(0, last - 1);
+  return segments;
+}
+
 function matchHost(urlHost) {
   const host = urlHost.toLowerCase().replace(/^www\./, "");
   return CATEGORIES.find((category) =>
@@ -232,9 +248,9 @@ function matchHost(urlHost) {
 // equality keeps a page that merely mentions a site name out.
 function matchTitle(windowTitle) {
   const title = windowTitle.toLowerCase().replace(ZERO_WIDTH, "");
-  const candidates = title
-    .replace(BROWSER_TITLE_SUFFIX, "")
-    .split(TITLE_SEPARATOR)
+  const candidates = withoutBrowserName(
+    title.split(TITLE_SEPARATOR).map((segment) => segment.trim())
+  )
     .slice(title.endsWith("microsoft edge") ? -2 : -1)
     .map((segment) =>
       segment

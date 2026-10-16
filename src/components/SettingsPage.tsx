@@ -179,7 +179,7 @@ export type SettingsSectionType =
 
 interface SettingsPageProps {
   activeSection?: SettingsSectionType;
-  onNavigateToSection?: (section: SettingsSectionType) => void;
+  onNavigateToSection?: (section: SettingsSectionType, subTab?: string) => void;
   /** When a legacy section ID was used (e.g. `meetings`), land on the matching sub-tab. */
   initialSubTab?: string;
 }
@@ -3054,7 +3054,11 @@ export default function SettingsPage({
         return <WorkspaceSection initialSubTab={initialSubTab} />;
 
       case "toneStyle":
-        return <ToneStyleSection />;
+        return (
+          <ToneStyleSection
+            onOpenCleanupSettings={() => onNavigateToSection?.("llms", "dictationCleanup")}
+          />
+        );
 
       case "general":
         return (

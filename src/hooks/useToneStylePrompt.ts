@@ -8,6 +8,10 @@ const SETUP_PROMPTED_KEY = "toneStyleSetupPrompted";
 
 const readFlag = (key: string) => localStorage.getItem(key) === "true";
 
+// Once Tone & Style has been on, Home stops offering it, even after a switch
+// back to Standard tone.
+export const dismissToneStyleBanner = () => localStorage.setItem(BANNER_DISMISSED_KEY, "true");
+
 /**
  * Tone & Style's Home entry points, offered once the user has dictated
  * TONE_STYLE_PROMPT_MIN_WORDS words: the banner until it is set up or
@@ -38,7 +42,7 @@ export function useToneStylePrompt() {
   }, [eligible]);
 
   const dismissBanner = useCallback(() => {
-    localStorage.setItem(BANNER_DISMISSED_KEY, "true");
+    dismissToneStyleBanner();
     setBannerDismissed(true);
   }, []);
 

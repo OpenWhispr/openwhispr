@@ -160,9 +160,9 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
     if (!open) setInitialSubTab(undefined);
   }
 
-  const handleSectionChange = (section: SettingsSectionType) => {
+  const handleSectionChange = (section: SettingsSectionType, subTab?: string) => {
     setActiveSection(section);
-    setInitialSubTab(undefined);
+    setInitialSubTab(subTab);
   };
 
   return (

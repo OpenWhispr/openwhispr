@@ -4960,7 +4960,11 @@
     },
     "settings": {
       "saveChanges": "儲存變更",
-      "saved": "語氣與風格已儲存"
+      "saved": "語氣與風格已儲存",
+      "cleanupOff": "文字整理已關閉，因此這些語氣不會套用到你的聽寫。",
+      "turnOnCleanup": "開啟文字整理",
+      "standard": "標準語氣",
+      "standardDescription": "文字整理在所有應用程式中都保留你自己的語氣。關閉後可為每類應用程式選擇語氣。"
     }
   }
 }

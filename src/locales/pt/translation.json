@@ -4960,7 +4960,11 @@
     },
     "settings": {
       "saveChanges": "Salvar alterações",
-      "saved": "Tom e estilo salvos"
+      "saved": "Tom e estilo salvos",
+      "cleanupOff": "A limpeza de texto está desativada, então esses tons não são aplicados ao seu ditado.",
+      "turnOnCleanup": "Ativar limpeza de texto",
+      "standard": "Tom padrão",
+      "standardDescription": "A limpeza de texto mantém seu próprio tom em todos os apps. Desative para escolher um tom para cada tipo de app."
     }
   }
 }

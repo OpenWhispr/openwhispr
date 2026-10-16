@@ -101,6 +101,8 @@ export interface DictationRealtimeSessionOptions {
     agentName?: string;
     customDictionary?: string[];
     customPrompt?: string;
+    tone?: DictationTone;
+    appCategory?: ToneAppCategory;
     language?: string;
     locale?: string;
   };
