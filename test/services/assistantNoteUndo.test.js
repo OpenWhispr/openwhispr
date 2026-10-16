@@ -256,6 +256,20 @@ test("safe assistant edits and atomic Undo", async (t) => {
     assert.equal(database.getNote(note.id).enhanced_content, note.enhanced_content);
   });
 
+  await t.test("a live meeting's transcript and attendee saves keep Undo", async () => {
+    const note = fresh();
+    await edit(note, { content: "Assistant replacement" });
+    const token = tokenFor(note.id);
+    // The 30-second crash-safety save while recording.
+    database.updateNote(note.id, { transcript: "Source\nSaid since the edit" });
+    assert.equal(tokenFor(note.id), token);
+    database.updateNote(note.id, { participants: JSON.stringify([{ email: "ana@example.com" }]) });
+    assert.equal(tokenFor(note.id), token);
+    assert.equal(database.undoNoteUpdate(token).success, true);
+    assert.equal(database.getNote(note.id).content, note.content);
+    assert.equal(database.getNote(note.id).transcript, "Source\nSaid since the edit");
+  });
+
   await t.test("each recovery is offered once", async () => {
     const note = fresh();
     await edit(note, { title: "Offered" });
