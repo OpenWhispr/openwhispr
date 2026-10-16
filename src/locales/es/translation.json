@@ -3331,6 +3331,9 @@
         "actionFailed": "La acción falló",
         "noEndpoint": "No hay URL del servidor autoalojado configurada. Configura una en Ajustes.",
         "outputTruncated": "El modelo de IA se quedó sin espacio antes de terminar, así que la nota quedó como estaba.",
+        "outputSpentThinking": "El modelo de IA gastó todo su límite de salida pensando y no escribió notas, así que la nota quedó como estaba. Activa \"Desactivar salida de razonamiento\" o elige un modelo que razone menos en Ajustes → Modelos de lenguaje → Formato de notas y vuelve a intentarlo.",
+        "outputSpentThinkingDisabled": "El modelo de IA gastó todo su límite de salida pensando y no escribió notas, aunque \"Desactivar salida de razonamiento\" está activado, así que la nota quedó como estaba. Elige otro modelo en Ajustes → Modelos de lenguaje → Formato de notas.",
+        "outputSpentThinkingOtherModel": "El modelo de IA gastó todo su límite de salida pensando y no escribió notas, así que la nota quedó como estaba. Elige un modelo que razone menos en Ajustes → Modelos de lenguaje → Formato de notas.",
         "nothingToSummarize": "Esta nota aún no tiene nada que resumir, así que el resumen con IA se quedó como estaba.",
         "saveFailed": "No se pudo guardar. Comprueba que nada sea demasiado largo e inténtalo de nuevo."
       },

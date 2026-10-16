@@ -30,7 +30,10 @@ export interface ReasoningConfig {
    * it still lets the allowance shrink to fit, where that flag alone refuses.
    */
   refuseClippedByWindow?: boolean;
-  /** Local models only: tags the request so `cancelLocalReasoning` can abort it. */
+  /**
+   * Tags the request so a cancel can abort it: `cancelLocalReasoning` for local
+   * models, `cancelRequest` (ai/requestCancellation) for the renderer's HTTP routes.
+   */
   requestId?: string;
   requiresAgent?: boolean;
   inferenceScope?: InferenceScope;

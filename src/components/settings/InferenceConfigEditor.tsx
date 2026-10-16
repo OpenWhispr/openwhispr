@@ -24,12 +24,8 @@ import {
   type InferenceScope,
   type InferenceScopeDefinition,
 } from "../../config/inferenceScopes";
-import {
-  isProviderValidForMode,
-  getCloudModel,
-  getLocalModel,
-  enterpriseProviderName,
-} from "../../models/ModelRegistry";
+import { isProviderValidForMode, enterpriseProviderName } from "../../models/ModelRegistry";
+import { offersThinkingToggle } from "../../services/ai/thinkingSuppression";
 import { useManagedScopeResolution } from "../../stores/enterpriseIdentityStore";
 import { requestSignIn } from "../../utils/requestSignIn";
 import TestConnectionButton from "../TestConnectionButton";
@@ -174,13 +170,7 @@ export default function InferenceConfigEditor({
     />
   );
 
-  const showThinkingToggle =
-    effectiveMode === "self-hosted" ||
-    (effectiveMode === "providers" &&
-      (config.provider === "custom" ||
-        config.provider === "openrouter" ||
-        !!getCloudModel(config.model)?.supportsThinking)) ||
-    (effectiveMode === "local" && !!getLocalModel(config.model)?.supportsThinking);
+  const showThinkingToggle = offersThinkingToggle(effectiveMode, config.provider, config.model);
 
   if (managed.kind === "error") {
     return (

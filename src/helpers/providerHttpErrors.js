@@ -22,7 +22,8 @@ export const PROVIDER_ERROR_CODES = Object.freeze({
 
 const C = PROVIDER_ERROR_CODES;
 
-const PROVIDER_SETTINGS_TARGETS = Object.freeze(["speechToText", "llms"]);
+// "noteFormatting" opens Language Models on its Note Formatting tab.
+const PROVIDER_SETTINGS_TARGETS = Object.freeze(["speechToText", "llms", "noteFormatting"]);
 
 export const isProviderSettingsTarget = (value) => PROVIDER_SETTINGS_TARGETS.includes(value);
 
