@@ -1,8 +1,9 @@
 const { randomUUID } = require("crypto");
 const { NOTE_TEXT_FIELDS, SUMMARY_CLEARED_METADATA } = require("./noteFieldSync");
 
-// Sync acknowledgements are not edits. All semantic changes (including SQL
-// writers outside updateNote) retire the previous assistant's recovery token.
+// Sync acknowledgements and changes to UNRESTORED_FIELDS are not edits. Every
+// other change (including SQL writers outside updateNote) retires the previous
+// assistant's recovery token.
 const GUARDED_FIELDS = [
   "title",
   "content",
@@ -22,6 +23,10 @@ const GUARDED_FIELDS = [
   "note_type",
   "created_at",
 ];
+// Undo never restores these, and a live meeting rewrites them (the 30-second
+// transcript save, a renamed speaker, an added attendee), so a change to them
+// does not retire a recovery. They stay guarded: the model may have read them.
+const UNRESTORED_FIELDS = ["transcript", "participants"];
 const EDITABLE_FIELDS = ["title", "content", "enhanced_content", "folder_id"];
 // A cloud pull stores an empty field as NULL, so here and in the trigger ''
 // and NULL are equal: the echo of a cleared summary is not a later edit.
@@ -60,7 +65,9 @@ function setUpJournal(db) {
     );
     DROP TRIGGER IF EXISTS assistant_note_undo_update;
     CREATE TRIGGER assistant_note_undo_update AFTER UPDATE ON notes
-    WHEN ${GUARDED_FIELDS.filter((field) => field !== "owner_user_id")
+    WHEN ${GUARDED_FIELDS.filter(
+      (field) => field !== "owner_user_id" && !UNRESTORED_FIELDS.includes(field)
+    )
       .map((field) => `IFNULL(OLD.${field}, '') IS NOT IFNULL(NEW.${field}, '')`)
       .join(" OR ")}
       OR (OLD.owner_user_id IS NOT NULL AND OLD.owner_user_id IS NOT NEW.owner_user_id)
