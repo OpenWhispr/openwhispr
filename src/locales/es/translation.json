@@ -1905,7 +1905,7 @@
           "title": "Cambiado a configuración personalizada"
         },
         "switchedProviders": {
-          "title": "Proveedores en la nube",
+          "title": "Trae tu propia clave",
           "description": "Usando tus propias claves API."
         },
         "switchedLocal": {

@@ -1853,7 +1853,7 @@
           "title": "Passato a configurazione personalizzata"
         },
         "switchedProviders": {
-          "title": "Provider cloud",
+          "title": "Porta la tua chiave",
           "description": "Utilizzo delle tue chiavi API."
         },
         "switchedLocal": {

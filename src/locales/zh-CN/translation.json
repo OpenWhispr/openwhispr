@@ -1853,7 +1853,7 @@
           "title": "已切换到自定义设置"
         },
         "switchedProviders": {
-          "title": "云服务商",
+          "title": "自带密钥",
           "description": "使用你自己的 API Key。"
         },
         "switchedLocal": {

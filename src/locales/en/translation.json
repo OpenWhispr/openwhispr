@@ -2147,7 +2147,7 @@
           "title": "Switched to Custom Setup"
         },
         "switchedProviders": {
-          "title": "Cloud Providers",
+          "title": "Bring your own key",
           "description": "Using your own API keys."
         },
         "switchedLocal": {

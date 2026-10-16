@@ -2147,7 +2147,7 @@
           "title": "Zu benutzerdefinierter Einrichtung gewechselt"
         },
         "switchedProviders": {
-          "title": "Cloud-Anbieter",
+          "title": "Eigenen Schlüssel nutzen",
           "description": "Verwendung Ihrer eigenen API-Schlüssel."
         },
         "switchedLocal": {

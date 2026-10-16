@@ -2147,7 +2147,7 @@
           "title": "Basculé vers la configuration personnalisée"
         },
         "switchedProviders": {
-          "title": "Fournisseurs cloud",
+          "title": "Apportez votre propre clé",
           "description": "Utilisation de vos propres clés API."
         },
         "switchedLocal": {

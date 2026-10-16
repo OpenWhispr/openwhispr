@@ -1853,7 +1853,7 @@
           "title": "已切換至自訂設定"
         },
         "switchedProviders": {
-          "title": "雲端供應商",
+          "title": "自備金鑰",
           "description": "使用你自己的 API Key。"
         },
         "switchedLocal": {

@@ -341,7 +341,7 @@
           }
         },
         "byok": {
-          "title": "自分のキーを使用",
+          "title": "自前のキー",
           "description": "自分の API キーを使用します。"
         },
         "local": {
@@ -1830,7 +1830,7 @@
       "enableTextCleanupDescription": "AI がフィラーワードを除去し、文法と句読点を整える",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
-        "providers": "自分のキーを使用",
+        "providers": "自前のキー",
         "local": "ローカル",
         "selfHosted": "セルフホスト",
         "openwhisprDesc": "信頼できる精度。設定不要。",
@@ -1853,7 +1853,7 @@
           "title": "カスタム設定に切り替えました"
         },
         "switchedProviders": {
-          "title": "クラウドプロバイダー",
+          "title": "自前のキー",
           "description": "独自の API キーを使用します。"
         },
         "switchedLocal": {
