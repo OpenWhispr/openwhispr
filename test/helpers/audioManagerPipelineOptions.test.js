@@ -147,7 +147,7 @@ test("combined cleanup options honor every eligibility guard and use the actual 
   assert.ok(calls[0].pipelineOptions);
 });
 
-test("with Tone & Style on, a streaming start mints combined cleanup for the captured app before audio flows, and the next warmup expects that app", async (t) => {
+test("with Tone & Style on, a streaming start mints combined cleanup for the app it learns in time, and the next warmup expects the same", async (t) => {
   const { window, useSettingsStore, createManager } = await load(t, "orukeet-pipeline-tone-");
   useSettingsStore.setState({ ...good, toneStyleEnabled: true });
   let classify;
@@ -219,4 +219,16 @@ test("with Tone & Style on, a streaming start mints combined cleanup for the cap
   });
   await manager.warmupStreamingConnection({ warmMic: false });
   assert.deepEqual(warmed, minted);
+
+  // An app still unknown after the start's short wait (a Wayland AT-SPI target
+  // takes about a second) gets no combined cleanup, and neither does the next
+  // warmup.
+  Object.assign(manager, { isRecording: false, isStreaming: false });
+  manager.beginToneStyleCapture();
+  assert.equal(await manager.startStreamingRecording(), true);
+  assert.equal(minted.length, 2);
+  assert.equal(minted[1], undefined);
+  await manager.warmupStreamingConnection({ warmMic: false });
+  assert.equal(warmed.length, 2);
+  assert.equal(warmed[1], undefined);
 });

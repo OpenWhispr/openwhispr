@@ -1033,16 +1033,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // is classified while the user speaks. Only a dictation that captured its
   // app gets a tone: a retried or re-run transcription has no target.
   beginToneStyleCapture() {
-    const capture = window.electronAPI?.captureDictationAppCategory?.();
-    // Classification resolves in well under a second; the race only guards the
-    // recording start and paste paths if the IPC ever hangs, and an unknown app
-    // reads as other.
-    this.toneStylePromise = capture
-      ? Promise.race([
-          capture,
-          new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
-        ]).catch(() => null)
-      : null;
+    this.toneStylePromise =
+      window.electronAPI?.captureDictationAppCategory?.()?.catch(() => null) ?? null;
   }
 
   // Consumed by the cleanup route only; the agent and translation routes
@@ -1052,7 +1044,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.toneStylePromise = null;
     const settings = getSettings();
     if (!pending || !settings.toneStyleEnabled) return null;
-    const toneStyle = resolveDictationToneStyle(settings.toneStyles, await pending);
+    // Classification lands while the user speaks (a Wayland AT-SPI target takes
+    // about a second); the race only guards the paste path if the IPC ever
+    // hangs, and an unknown app reads as other.
+    const appCategory = await Promise.race([
+      pending,
+      new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
+    ]);
+    const toneStyle = resolveDictationToneStyle(settings.toneStyles, appCategory);
     logger.logReasoning("TONE_STYLE", toneStyle);
     return toneStyle;
   }
@@ -4745,12 +4744,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               keyterms: this.getKeyterms(),
               voiceAgentRequested: this.voiceAgentRequested,
               // Warmup runs while idle, so the socket is for an ordinary
-              // dictation, into the app last dictated into (Tone & Style).
-              pipelineOptions: this.getPipelineCleanupOptions(settings, {
-                voiceAgentRequested: false,
-                translationRequested: false,
-                appCategory: this.lastToneAppCategory,
-              }),
+              // dictation into the app the last start learned in time (Tone &
+              // Style). With no app known, a start mints no combined cleanup,
+              // so neither does warmup.
+              pipelineOptions:
+                settings.toneStyleEnabled && !this.lastToneAppCategory
+                  ? undefined
+                  : this.getPipelineCleanupOptions(settings, {
+                      voiceAgentRequested: false,
+                      translationRequested: false,
+                      appCategory: this.lastToneAppCategory,
+                    }),
             })
           );
           // Throw error to trigger retry if AUTH_EXPIRED
@@ -5076,19 +5080,27 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       // A combined cleanup's prompt is fixed when its session is minted, so with
-      // Tone & Style on it waits for the app being dictated into (classified by
-      // now in practice) before audio can reach a socket warmed for another app.
+      // Tone & Style on it waits briefly for the app being dictated into before
+      // audio can reach a socket warmed for another app. An app not known by
+      // then (a Wayland AT-SPI target takes about a second) gets no combined
+      // cleanup: /api/reason cleans up in its tone at stop.
       const pipelineSettings = getSettings();
       if (
         providerName === "orukeet" &&
         pipelineSettings.toneStyleEnabled &&
         this.getPipelineCleanupOptions(pipelineSettings)
       ) {
-        this.lastToneAppCategory = await this.toneStylePromise;
+        this.lastToneAppCategory = await Promise.race([
+          this.toneStylePromise,
+          new Promise((resolve) => setTimeout(() => resolve(null), 250)),
+        ]);
       }
-      this._activePipelineOptions = this.getPipelineCleanupOptions(pipelineSettings, {
-        appCategory: this.lastToneAppCategory,
-      });
+      this._activePipelineOptions =
+        pipelineSettings.toneStyleEnabled && !this.lastToneAppCategory
+          ? undefined
+          : this.getPipelineCleanupOptions(pipelineSettings, {
+              appCategory: this.lastToneAppCategory,
+            });
 
       this.streamingProcessor = new AudioWorkletNode(audioContext, "pcm-streaming-processor");
       const provider = this.getStreamingProvider(providerName);
