@@ -1034,16 +1034,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // is classified while the user speaks. Only a dictation that captured its
   // app gets a tone: a retried or re-run transcription has no target.
   beginToneStyleCapture() {
-    const capture = window.electronAPI?.captureDictationAppCategory?.();
-    // Classification resolves in well under a second; the race only guards the
-    // recording start and paste paths if the IPC ever hangs, and an unknown app
-    // reads as other.
-    this.toneStylePromise = capture
-      ? Promise.race([
-          capture,
-          new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
-        ]).catch(() => null)
-      : null;
+    this.toneStylePromise =
+      window.electronAPI?.captureDictationAppCategory?.()?.catch(() => null) ?? null;
   }
 
   // Consumed by the cleanup route, and by an agent command for an answer
@@ -1054,7 +1046,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.toneStylePromise = null;
     const settings = getSettings();
     if (!pending || !settings.toneStyleEnabled) return null;
-    const toneStyle = resolveDictationToneStyle(settings.toneStyles, await pending);
+    // Classification lands while the user speaks (a Wayland AT-SPI target takes
+    // about a second); the race only guards the paste path if the IPC ever
+    // hangs, and an unknown app reads as other.
+    const appCategory = await Promise.race([
+      pending,
+      new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
+    ]);
+    const toneStyle = resolveDictationToneStyle(settings.toneStyles, appCategory);
     logger.logReasoning("TONE_STYLE", toneStyle);
     return toneStyle;
   }
@@ -4764,12 +4763,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               keyterms: this.getKeyterms(),
               voiceAgentRequested: this.voiceAgentRequested,
               // Warmup runs while idle, so the socket is for an ordinary
-              // dictation, into the app last dictated into (Tone & Style).
-              pipelineOptions: this.getPipelineCleanupOptions(settings, {
-                voiceAgentRequested: false,
-                translationRequested: false,
-                appCategory: this.lastToneAppCategory,
-              }),
+              // dictation into the app the last start learned in time (Tone &
+              // Style). With no app known, a start mints no combined cleanup,
+              // so neither does warmup.
+              pipelineOptions:
+                settings.toneStyleEnabled && !this.lastToneAppCategory
+                  ? undefined
+                  : this.getPipelineCleanupOptions(settings, {
+                      voiceAgentRequested: false,
+                      translationRequested: false,
+                      appCategory: this.lastToneAppCategory,
+                    }),
             })
           );
           // Throw error to trigger retry if AUTH_EXPIRED
@@ -5094,21 +5098,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.workletModuleLoaded = true;
       }
 
-      // A combined cleanup's prompt is fixed when its session is minted, so with
-      // Tone & Style on it waits for the app being dictated into (classified by
-      // now in practice) before audio can reach a socket warmed for another app.
-      const pipelineSettings = getSettings();
-      if (
-        providerName === "orukeet" &&
-        pipelineSettings.toneStyleEnabled &&
-        this.getPipelineCleanupOptions(pipelineSettings)
-      ) {
-        this.lastToneAppCategory = await this.toneStylePromise;
-      }
-      this._activePipelineOptions = this.getPipelineCleanupOptions(pipelineSettings, {
-        appCategory: this.lastToneAppCategory,
-      });
-
       this.streamingProcessor = new AudioWorkletNode(audioContext, "pcm-streaming-processor");
       const provider = this.getStreamingProvider(providerName);
       // Decided once, with the provider, so a config refresh mid-recording
@@ -5121,6 +5110,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           providerName,
           cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
         });
+      let heldFrames = null;
 
       this.streamingProcessor.port.onmessage = (event) => {
         // The worklet posts its remaining PCM followed by a "flushed" sentinel
@@ -5134,7 +5124,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         // Measured from the first chunk: a recording that fails over later
         // still has its opening words in the gate.
         recordPcm16SpeechWindow(this._streamingSpeechGateState, event.data);
-        if (!this._streamingFailoverReason) provider.send(event.data);
+        if (this._streamingFailoverReason) return;
+        if (heldFrames) heldFrames.push(event.data);
+        else provider.send(event.data);
       };
 
       this.isStreaming = true;
@@ -5220,6 +5212,32 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.onStateChange?.({ isRecording: true, isProcessing: false, isStreaming: true });
       await this.beginMicRecovery(stream);
 
+      // A combined cleanup's prompt is fixed when its session is minted, so with
+      // Tone & Style on the start waits briefly for the app being dictated into
+      // before minting. Audio from the wait is held until the session has
+      // started: with no warm socket main has nowhere to buffer it, and a warm
+      // one minted for another app is replaced. An app not known by then (a
+      // Wayland AT-SPI target takes about a second) gets no combined cleanup:
+      // /api/reason cleans up in its tone at stop.
+      const pipelineSettings = getSettings();
+      if (
+        providerName === "orukeet" &&
+        pipelineSettings.toneStyleEnabled &&
+        this.getPipelineCleanupOptions(pipelineSettings)
+      ) {
+        heldFrames = [];
+        this.lastToneAppCategory = await Promise.race([
+          this.toneStylePromise,
+          new Promise((resolve) => setTimeout(() => resolve(null), 250)),
+        ]);
+      }
+      this._activePipelineOptions =
+        pipelineSettings.toneStyleEnabled && !this.lastToneAppCategory
+          ? undefined
+          : this.getPipelineCleanupOptions(pipelineSettings, {
+              appCategory: this.lastToneAppCategory,
+            });
+
       // 4. Connect WebSocket — audio is already flowing from the pipeline above,
       //    so Deepgram receives data immediately (no idle timeout).
       const result = await withSessionRefresh(async () => {
@@ -5269,6 +5287,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         logger.debug("Streaming unavailable, falling back to regular recording", {}, "streaming");
         return this.startRecording();
       }
+
+      if (!this._streamingFailoverReason) heldFrames?.forEach((frame) => provider.send(frame));
+      heldFrames = null;
 
       logger.info(
         "Streaming start timing",

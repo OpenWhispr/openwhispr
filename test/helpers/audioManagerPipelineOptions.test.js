@@ -55,8 +55,7 @@ test("combined cleanup options honor every eligibility guard and use the actual 
     language: "en",
     locale: "en",
   });
-  // Tone & Style: the tone picked for the app being dictated into, and the
-  // other-apps tone while that app is unknown.
+  // Tone & Style: the tone picked for the app being dictated into.
   useSettingsStore.setState({ ...good, toneStyleEnabled: true });
   assert.deepEqual(
     manager.getPipelineCleanupOptions(useSettingsStore.getState(), { appCategory: "email" }),
@@ -70,7 +69,6 @@ test("combined cleanup options honor every eligibility guard and use the actual 
       locale: "en",
     }
   );
-  assert.equal(manager.getPipelineCleanupOptions(useSettingsStore.getState()).tone, "formal");
   const blocked = [
     { settings: { useLocalWhisper: true } },
     { settings: { cloudTranscriptionMode: "byok" } },
@@ -147,23 +145,24 @@ test("combined cleanup options honor every eligibility guard and use the actual 
   assert.ok(calls[0].pipelineOptions);
 });
 
-test("with Tone & Style on, a streaming start mints combined cleanup for the captured app before audio flows, and the next warmup expects that app", async (t) => {
+test("with Tone & Style on, a streaming start holds audio while it waits to mint combined cleanup for the app it learns in time, and the next warmup expects the same", async (t) => {
   const { window, useSettingsStore, createManager } = await load(t, "orukeet-pipeline-tone-");
   useSettingsStore.setState({ ...good, toneStyleEnabled: true });
   let classify;
   window.electronAPI.captureDictationAppCategory = () =>
     new Promise((resolve) => (classify = resolve));
   let audioWired = false;
+  const workletPort = {};
   globalThis.AudioWorkletNode = class {
     constructor() {
       audioWired = true;
-      this.port = {};
+      this.port = workletPort;
     }
   };
   t.after(() => delete globalThis.AudioWorkletNode);
   const audioNode = { connect() {} };
   const minted = [];
-  const unsubscribe = () => () => {};
+  const sent = [];
   const manager = createManager({
     _streamingCancellationGeneration: 0,
     _streamingStartSettlementWaiters: [],
@@ -181,10 +180,11 @@ test("with Tone & Style on, a streaming start mints combined cleanup for the cap
     }),
     getStreamingProviderName: () => "orukeet",
     getStreamingProvider: () => ({
-      onPartial: unsubscribe,
-      onFinal: unsubscribe,
-      onError: unsubscribe,
-      onSessionEnd: unsubscribe,
+      onPartial: () => () => {},
+      onFinal: () => () => {},
+      onError: () => () => {},
+      onSessionEnd: () => () => {},
+      send: (frame) => sent.push(frame),
       start: async (options) => {
         minted.push(options.pipelineOptions);
         return { success: true };
@@ -199,10 +199,16 @@ test("with Tone & Style on, a streaming start mints combined cleanup for the cap
   manager.beginToneStyleCapture();
   const starting = manager.startStreamingRecording();
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(audioWired, false);
+  assert.equal(audioWired, true);
+  assert.equal(minted.length, 0);
+  // Audio from the wait reaches the session only once it has started: with no
+  // warm socket, main has nowhere to buffer it before then.
+  const frame = new Int16Array(160).buffer;
+  workletPort.onmessage({ data: frame });
+  assert.equal(sent.length, 0);
   classify("email");
   assert.equal(await starting, true);
-  assert.equal(audioWired, true);
+  assert.deepEqual(sent, [frame]);
   assert.equal(minted[0].tone, "excited");
   assert.equal(minted[0].appCategory, "email");
   // A fallback cleanup at stop gets the same tone.
@@ -219,4 +225,16 @@ test("with Tone & Style on, a streaming start mints combined cleanup for the cap
   });
   await manager.warmupStreamingConnection({ warmMic: false });
   assert.deepEqual(warmed, minted);
+
+  // An app still unknown after the start's short wait (a Wayland AT-SPI target
+  // takes about a second) gets no combined cleanup, and neither does the next
+  // warmup.
+  Object.assign(manager, { isRecording: false, isStreaming: false });
+  manager.beginToneStyleCapture();
+  assert.equal(await manager.startStreamingRecording(), true);
+  assert.equal(minted.length, 2);
+  assert.equal(minted[1], undefined);
+  await manager.warmupStreamingConnection({ warmMic: false });
+  assert.equal(warmed.length, 2);
+  assert.equal(warmed[1], undefined);
 });

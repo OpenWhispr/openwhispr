@@ -111,6 +111,17 @@ test("dictation cleanup carries the tone for the app it was captured in", async 
     assert.equal("tone" in lastRequest(), false);
   });
 
+  await t.test("an app classified after 1.5 s of speech still gets its tone", async (st) => {
+    st.mock.timers.enable({ apis: ["setTimeout"] });
+    let classify;
+    capturedCategory = new Promise((resolve) => (classify = resolve));
+    const manager = createManager();
+    manager.beginToneStyleCapture();
+    st.mock.timers.tick(1600);
+    classify("email");
+    assert.deepEqual(await manager.consumeToneStyle(), { appCategory: "email", tone: "excited" });
+  });
+
   await t.test("a new recording drops the previous recording's capture", async () => {
     capturedCategory = "work";
     const manager = createManager();
