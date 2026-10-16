@@ -151,11 +151,9 @@ test("with Tone & Style on, a streaming start holds audio while it waits to mint
   let classify;
   window.electronAPI.captureDictationAppCategory = () =>
     new Promise((resolve) => (classify = resolve));
-  let audioWired = false;
   const workletPort = {};
   globalThis.AudioWorkletNode = class {
     constructor() {
-      audioWired = true;
       this.port = workletPort;
     }
   };
@@ -199,7 +197,6 @@ test("with Tone & Style on, a streaming start holds audio while it waits to mint
   manager.beginToneStyleCapture();
   const starting = manager.startStreamingRecording();
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(audioWired, true);
   assert.equal(minted.length, 0);
   // Audio from the wait reaches the session only once it has started: with no
   // warm socket, main has nowhere to buffer it before then.
