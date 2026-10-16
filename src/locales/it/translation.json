@@ -4971,12 +4971,12 @@
     },
     "banner": {
       "title": "Insegna a OpenWhispr come scrivi",
-      "description": "Quattro scelte veloci impostano il tuo tono per messaggi, email e tutto il resto.",
+      "description": "Imposta il tuo tono preferito per lavoro, amici e tutto ciò che sta in mezzo.",
       "start": "Inizia ora",
       "cleanupOffTitle": "Insegna a OpenWhispr il tuo stile",
       "cleanupOffDescription": "Attiva la correzione testo e scegli un tono per messaggi, email e altro.",
       "notNow": "Non ora",
-      "decoration": "ho appena guardato le nuove bozze e nel complesso va tutto bene, grazie per la velocità"
+      "decoration": "Le tue parole dovrebbero somigliarti. Qualunque cosa tu scriva, per chiunque sia."
     },
     "settings": {
       "saveChanges": "Salva modifiche",

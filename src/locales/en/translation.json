@@ -4971,12 +4971,12 @@
     },
     "banner": {
       "title": "Teach OpenWhispr how you write",
-      "description": "Four quick picks set your tone for messages, email, and everything else.",
+      "description": "Set your preferred tone for work, friends, and everything in between.",
       "start": "Start Now",
       "cleanupOffTitle": "Teach OpenWhispr your voice",
       "cleanupOffDescription": "Turn on AI cleanup and pick a tone for messages, email, and more.",
       "notNow": "Not now",
-      "decoration": "just went through the latest designs, and everything looks good overall. thanks for how fast you make these"
+      "decoration": "Your words should sound like you. Whatever you're writing, whoever it's for."
     },
     "settings": {
       "saveChanges": "Save Changes",

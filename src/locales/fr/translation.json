@@ -4971,12 +4971,12 @@
     },
     "banner": {
       "title": "Apprenez à OpenWhispr comment vous écrivez",
-      "description": "Quatre choix rapides définissent votre ton pour les messages, les e-mails et tout le reste.",
+      "description": "Choisissez votre ton préféré pour le travail, les amis et tout ce qu'il y a entre les deux.",
       "start": "Commencer",
       "cleanupOffTitle": "Apprenez votre style à OpenWhispr",
       "cleanupOffDescription": "Activez la correction de texte et choisissez un ton pour chaque app.",
       "notNow": "Pas maintenant",
-      "decoration": "je viens de regarder les dernières maquettes, et dans l'ensemble tout est très bien, merci pour ta rapidité"
+      "decoration": "Vos mots devraient vous ressembler. Quoi que vous écriviez, pour qui que ce soit."
     },
     "settings": {
       "saveChanges": "Enregistrer les modifications",
