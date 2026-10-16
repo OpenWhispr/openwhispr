@@ -115,7 +115,7 @@ export default function ToneStyleSection({ onOpenCleanupSettings }: ToneStyleSec
                             )}
                           >
                             {selected && (
-                              <span className="size-1.25 rounded-full bg-primary-foreground" />
+                              <span className="size-1.5 rounded-full bg-primary-foreground" />
                             )}
                           </span>
                           {t(`toneStyle.tones.${tone}`)}
