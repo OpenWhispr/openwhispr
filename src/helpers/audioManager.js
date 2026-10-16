@@ -5673,7 +5673,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     );
 
     const stSettings = getSettings();
-    const streamingSttModel = stopResult?.model || "nova-3";
+    // Attribution belongs to the completed session, not current settings or
+    // another provider's default model.
+    const streamingSttModel = stopResult?.model || null;
     const streamingSttProcessingMs = Number.isFinite(orukeetFinal?.asrFinalMs)
       ? Math.round(orukeetFinal.asrFinalMs)
       : Math.round(tTerminate - t0);

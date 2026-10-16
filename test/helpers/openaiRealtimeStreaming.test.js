@@ -1179,11 +1179,67 @@ test("preconfigured sessions adopt the model the server minted (session.created 
   const line = logs.find((entry) => entry.message.includes("session created (preconfigured)"));
   assert.equal(line.meta.model, "gpt-live-transcribe");
   assert.equal(line.meta.turnDetection, null);
-  streaming.cleanup();
+  assert.deepEqual(await streaming.disconnect(), {
+    text: "",
+    model: "gpt-live-transcribe",
+    audioBytesSent: 0,
+  });
 
   // No echo (older servers, bare mocks): the caller's model stands.
   const bare = new OpenAIRealtimeStreaming();
   await connectPreconfigured(bare, makeFakeSocket(WS.CONNECTING));
   assert.equal(bare.model, "gpt-4o-mini-transcribe");
   bare.cleanup();
+});
+
+for (const exit of ["open", "closed", "connecting", "no socket"]) {
+  test(`disconnect retains the session model and sent bytes with ${exit}`, async (t) => {
+    const OpenAIRealtimeStreaming = (await load()).default;
+    const streaming = new OpenAIRealtimeStreaming();
+    t.after(() => streaming.cleanup());
+    const socket = makeFakeSocket(WS.CONNECTING);
+    await connectByok(streaming, socket, { model: "gpt-4o-mini-transcribe-2025-12-15" });
+    streaming.sendAudio(Buffer.alloc(1600));
+    socket.emit(
+      "message",
+      JSON.stringify({
+        type: "conversation.item.input_audio_transcription.completed",
+        transcript: "recorded words",
+      })
+    );
+
+    if (exit === "closed") socket.readyState = WS.CLOSED;
+    if (exit === "connecting") socket.readyState = WS.CONNECTING;
+    if (exit === "no socket") streaming.cleanup();
+    const result = await streaming.disconnect({ commit: false });
+
+    assert.deepEqual(result, {
+      text: "recorded words",
+      model: "gpt-4o-mini-transcribe-2025-12-15",
+      audioBytesSent: 1600,
+    });
+  });
+}
+
+test("disconnect includes the final commit transcript with session metadata", async (t) => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  t.after(() => streaming.cleanup());
+  const socket = makeFakeSocket(WS.CONNECTING);
+  await connectByok(streaming, socket, { model: "gpt-4o-mini-transcribe-2025-12-15" });
+  streaming.sendAudio(Buffer.alloc(1600));
+  const disconnecting = streaming.disconnect();
+  socket.emit(
+    "message",
+    JSON.stringify({
+      type: "conversation.item.input_audio_transcription.completed",
+      transcript: "committed words",
+    })
+  );
+
+  assert.deepEqual(await disconnecting, {
+    text: "committed words",
+    model: "gpt-4o-mini-transcribe-2025-12-15",
+    audioBytesSent: 1600,
+  });
 });
