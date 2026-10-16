@@ -17,6 +17,9 @@ test("desktop apps map to their category on every platform", () => {
       "Signal org.whispersystems.signal-desktop",
       "Discord com.hnc.Discord",
       "LINE jp.naver.line.mac",
+      // macOS names translate; the bundle id still names the app.
+      "微信 com.tencent.xinWeChat",
+      "카카오톡 com.kakao.KakaoTalkMac",
       "WhatsApp.exe ApplicationFrameWindow",
       "Telegram.exe Qt51517QWindowIcon",
       "LINE.exe",
@@ -33,6 +36,8 @@ test("desktop apps map to their category on every platform", () => {
       "Zoom.exe ZPContentViewWndClass",
       "teams-for-linux",
       "mattermost",
+      "钉钉 com.alibaba.DingTalkMac",
+      "企业微信 com.tencent.WeWorkMac",
     ],
     email: [
       "Mail com.apple.mail",
@@ -136,6 +141,12 @@ test("without a host, a browser is judged by the site name its title ends with",
     ["Google Chrome com.google.Chrome", "Slack - Google Docs - Google Chrome", "other"],
     ["Safari com.apple.Safari", "Pixies - Hey - YouTube", "other"],
     ["firefox", "Zoom - YouTube \u2014 Mozilla Firefox", "other"],
+    // A browser's name inside the page title is part of the page, not its suffix.
+    ["Google Chrome com.google.Chrome", "gmail - Brave Search - Google Chrome", "other"],
+    ["brave.exe Chrome_WidgetWin_1", "slack - Brave Search - Brave", "other"],
+    ["Safari com.apple.Safari", "slack - Brave Search", "other"],
+    ["Google Chrome com.google.Chrome", "Discord - Opera forums - Google Chrome", "other"],
+    ["firefox", "Inbox - Gmail \u2014 Mozilla Firefox Private Browsing", "email"],
   ];
   for (const [appSignature, windowTitle, category] of cases) {
     assert.equal(classifyToneAppCategory({ appSignature, windowTitle }), category, windowTitle);
