@@ -36,6 +36,7 @@ const {
 } = require("./policyResponseError");
 const { classifyAndLog } = require("./networkErrors");
 const { resolveSystemDefaultMicrophone } = require("./systemDefaultMicrophone");
+const { openRecordingDevicesSettings } = require("./recordingDevicesSettings");
 const { ipcErrorFields } = require("./ipcErrorFields");
 const {
   PROVIDER_ERROR_CODES,
@@ -6014,6 +6015,13 @@ class IPCHandlers {
     ipcMain.handle("open-system-audio-settings", () => openSystemSettings("systemAudio"));
     ipcMain.handle("open-screen-recording-settings", () => openSystemSettings("screenRecording"));
     ipcMain.handle("open-login-items-settings", () => openSystemSettings("loginItems"));
+    ipcMain.handle("open-recording-devices-settings", async () => {
+      const result = await openRecordingDevicesSettings();
+      if (result.error) {
+        debugLogger.error("Failed to open recording devices settings:", result.error);
+      }
+      return result;
+    });
 
     ipcMain.handle("capture-screen-context", async (event) => {
       // Capture immediately so the screenshot reflects the invocation moment;

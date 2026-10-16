@@ -906,14 +906,19 @@
         "agentUnavailable": "アシスタントを利用できません",
         "screenContextSkipped": "画面コンテキストをスキップしました",
         "dailyLimitReached": "1 日の上限に達しました",
-        "providerRateLimited": "プロバイダーのレート制限"
+        "providerRateLimited": "プロバイダーのレート制限",
+        "micPermissionDenied": "マイクへのアクセスが拒否されました",
+        "micNotFound": "マイクが見つかりません",
+        "micInUse": "マイクが使用中です",
+        "micMuted": "マイクがミュートされています"
       },
       "fallback": {
         "title": "フォールバックモード",
         "description": "ローカル Whisper が失敗しました。代わりに OpenAI API を使用しました。"
       },
       "errorActions": {
-        "viewTranscript": "文字起こしを表示"
+        "viewTranscript": "文字起こしを表示",
+        "openSoundSettings": "サウンド設定"
       },
       "noAudio": {
         "title": "聞き取れませんでした",
@@ -948,7 +953,12 @@
         "providerKeyMissing": "文字起こしプロバイダーのAPIキーが設定されていません。設定 → 音声テキスト変換 から追加してください。",
         "cleanupTruncated": "AI モデルの出力が上限に達し、ディクテーションのクリーンアップが完了しませんでした。",
         "cleanupDuplicated": "AI クリーンアップが文字起こしを繰り返しました。元のテキストを保持しました。",
-        "cleanupEmptyReply": "AI モデルが空の応答を返したため、クリーンアップされたテキストがありません。"
+        "cleanupEmptyReply": "AI モデルが空の応答を返したため、クリーンアップされたテキストがありません。",
+        "micPermissionDenied": "システム設定でマイクへのアクセスを許可してから、もう一度お試しください。",
+        "micNotFound": "マイクが検出されませんでした。マイクを接続してから、もう一度お試しください。",
+        "micInUse": "マイクは別のアプリケーションで使用されています。ほかのアプリを閉じてから、もう一度お試しください。",
+        "micInUseWindows": "別のアプリがマイクを使用中で、排他的に制御している可能性があります。そのアプリを閉じてから、もう一度お試しください。アプリにマイクを占有させないようにするには、サウンド設定 → 録音 → お使いのマイク → プロパティ → 詳細 を開き、アプリケーションによるこのデバイスの排他的な制御を許可するオプションをオフにしてください。",
+        "micMuted": "マイクがミュートされたままで、音声を取得できませんでした。サウンド入力の設定を確認してから、もう一度お試しください。"
       },
       "translationFallback": {
         "unreachableTitle": "翻訳を利用できません",

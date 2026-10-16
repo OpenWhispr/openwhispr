@@ -906,14 +906,19 @@
         "agentUnavailable": "Assistant Unavailable",
         "screenContextSkipped": "Screen Context Skipped",
         "dailyLimitReached": "Daily Limit Reached",
-        "providerRateLimited": "Provider Rate Limited"
+        "providerRateLimited": "Provider Rate Limited",
+        "micPermissionDenied": "Microphone Access Denied",
+        "micNotFound": "No Microphone Found",
+        "micInUse": "Microphone In Use",
+        "micMuted": "Microphone Muted"
       },
       "fallback": {
         "title": "Fallback Mode",
         "description": "Local Whisper failed. Used OpenAI API instead."
       },
       "errorActions": {
-        "viewTranscript": "View Transcript"
+        "viewTranscript": "View Transcript",
+        "openSoundSettings": "Sound Settings"
       },
       "noAudio": {
         "title": "We didn’t catch that",
@@ -948,7 +953,12 @@
         "providerKeyMissing": "No API key is set for your transcription provider. Add it in Settings → Speech to Text.",
         "cleanupTruncated": "The AI model ran out of room before it finished cleaning up your dictation.",
         "cleanupDuplicated": "AI cleanup repeated the transcript. The original text was kept.",
-        "cleanupEmptyReply": "The AI model returned an empty reply instead of the cleaned-up dictation."
+        "cleanupEmptyReply": "The AI model returned an empty reply instead of the cleaned-up dictation.",
+        "micPermissionDenied": "Please grant microphone permission in your system settings and try again.",
+        "micNotFound": "No microphone was detected. Please connect a microphone and try again.",
+        "micInUse": "The microphone is being used by another application. Please close other apps and try again.",
+        "micInUseWindows": "Another app is using the microphone and may have taken exclusive control of it. Close that app and try again. To stop apps from taking it over, open Sound settings → Recording → your microphone → Properties → Advanced and turn off “Allow applications to take exclusive control of this device”.",
+        "micMuted": "Your microphones stayed muted and produced no audio. Please check your sound input settings and try again."
       },
       "translationFallback": {
         "unreachableTitle": "Translation unavailable",

@@ -46,3 +46,33 @@ test("a selection failure retains its localized title alongside a local model er
     "hooks.audioRecording.selectionEditing.notAppliedTitle"
   );
 });
+
+test("each microphone error code has its own translated title", async () => {
+  const { getRecordingErrorTitle } = await load();
+  const titles = {
+    MIC_PERMISSION_DENIED: "micPermissionDenied",
+    MIC_NOT_FOUND: "micNotFound",
+    MIC_IN_USE: "micInUse",
+    MIC_MUTED: "micMuted",
+  };
+  for (const [code, key] of Object.entries(titles)) {
+    assert.equal(
+      getRecordingErrorTitle({ title: "English", code }, t),
+      `hooks.audioRecording.errorTitles.${key}`
+    );
+  }
+});
+
+test("a microphone error is translated by its code and message key", async () => {
+  const { getRecordingErrorTitle, getRecordingErrorDescription } = await load();
+  const report = {
+    title: "Microphone In Use",
+    code: "MIC_IN_USE",
+    messageKey: "hooks.audioRecording.errorDescriptions.micInUseWindows",
+  };
+  assert.equal(getRecordingErrorTitle(report, t), "hooks.audioRecording.errorTitles.micInUse");
+  assert.equal(
+    getRecordingErrorDescription(report, t),
+    "hooks.audioRecording.errorDescriptions.micInUseWindows"
+  );
+});

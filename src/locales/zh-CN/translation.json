@@ -906,14 +906,19 @@
         "agentUnavailable": "助手不可用",
         "screenContextSkipped": "已跳过屏幕上下文",
         "dailyLimitReached": "已达到每日上限",
-        "providerRateLimited": "服务商速率限制"
+        "providerRateLimited": "服务商速率限制",
+        "micPermissionDenied": "麦克风访问被拒绝",
+        "micNotFound": "未找到麦克风",
+        "micInUse": "麦克风正被占用",
+        "micMuted": "麦克风已静音"
       },
       "fallback": {
         "title": "回退模式",
         "description": "本地 Whisper 失败，已改用 OpenAI API。"
       },
       "errorActions": {
-        "viewTranscript": "查看转录"
+        "viewTranscript": "查看转录",
+        "openSoundSettings": "声音设置"
       },
       "noAudio": {
         "title": "我们没听清",
@@ -948,7 +953,12 @@
         "providerKeyMissing": "尚未为您的转录服务商设置 API 密钥。请在“设置 → 语音转文字”中添加。",
         "cleanupTruncated": "AI 模型的输出长度达到上限，未能完成听写清理。",
         "cleanupDuplicated": "AI 清理重复了转录内容。已保留原始文本。",
-        "cleanupEmptyReply": "AI 模型返回了空响应，没有生成清理后的文本。"
+        "cleanupEmptyReply": "AI 模型返回了空响应，没有生成清理后的文本。",
+        "micPermissionDenied": "请在系统设置中授予麦克风权限，然后重试。",
+        "micNotFound": "未检测到麦克风。请连接麦克风后重试。",
+        "micInUse": "麦克风正被其他应用程序使用。请关闭其他应用后重试。",
+        "micInUseWindows": "其他应用正在使用麦克风，并可能已独占控制它。请关闭该应用后重试。若要防止应用再次独占麦克风，请打开“声音设置 → 录制 → 您的麦克风 → 属性 → 高级”，关闭允许应用程序独占控制该设备的选项。",
+        "micMuted": "您的麦克风一直处于静音状态，未采集到音频。请检查声音输入设置后重试。"
       },
       "translationFallback": {
         "unreachableTitle": "翻译不可用",
