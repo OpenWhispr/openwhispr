@@ -4971,12 +4971,12 @@
     },
     "banner": {
       "title": "Ensine ao OpenWhispr como você escreve",
-      "description": "Quatro escolhas rápidas definem seu tom para mensagens, e-mails e todo o resto.",
+      "description": "Defina seu tom preferido para o trabalho, os amigos e tudo o que fica no meio.",
       "start": "Começar",
       "cleanupOffTitle": "Ensine ao OpenWhispr o seu estilo",
       "cleanupOffDescription": "Ative a limpeza de texto e escolha um tom para mensagens, e-mails e mais.",
       "notNow": "Agora não",
-      "decoration": "acabei de ver os últimos designs e no geral tudo parece ótimo, valeu pela rapidez"
+      "decoration": "Suas palavras devem soar como você. Não importa o que você escreva, nem para quem."
     },
     "settings": {
       "saveChanges": "Salvar alterações",

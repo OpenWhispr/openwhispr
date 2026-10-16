@@ -4971,12 +4971,12 @@
     },
     "banner": {
       "title": "教 OpenWhispr 學會你的寫法",
-      "description": "四個簡單選擇，決定你在訊息、郵件和其他地方的語氣。",
+      "description": "為工作、朋友以及兩者之間的一切設定你偏好的語氣。",
       "start": "立即開始",
       "cleanupOffTitle": "讓 OpenWhispr 學會你的風格",
       "cleanupOffDescription": "開啟文字整理，為訊息、郵件和其他地方選一種語氣。",
       "notNow": "暫時不要",
-      "decoration": "剛看完最新的設計稿，整體都很好，謝謝你這麼快就做好"
+      "decoration": "你的文字應該聽起來就像你。無論你寫什麼，寫給誰。"
     },
     "settings": {
       "saveChanges": "儲存變更",

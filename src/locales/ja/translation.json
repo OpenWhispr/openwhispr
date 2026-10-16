@@ -4971,12 +4971,12 @@
     },
     "banner": {
       "title": "あなたの書き方を OpenWhispr に教えましょう",
-      "description": "4つ選ぶだけで、メッセージやメールなどのトーンが決まります。",
+      "description": "仕事にも、友だちにも、その間のすべてにも、好みのトーンを設定できます。",
       "start": "始める",
       "cleanupOffTitle": "あなたの書き方を OpenWhispr に",
       "cleanupOffDescription": "テキスト補正をオンにして、メッセージやメールなどのトーンを選びましょう。",
       "notNow": "後で",
-      "decoration": "新しいデザイン見ました、全体的にいい感じです、対応早くて助かります"
+      "decoration": "言葉は、あなたらしく。何を書くときも、誰に書くときも。"
     },
     "settings": {
       "saveChanges": "変更を保存",
