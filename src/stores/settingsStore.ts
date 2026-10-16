@@ -3748,18 +3748,22 @@ export async function initializeSettings(): Promise<void> {
 
   // Sync Zustand store when another window writes to localStorage
   window.addEventListener("storage", (event) => {
-    if (!event.key || event.storageArea !== localStorage || event.newValue === null) return;
+    if (!event.key || event.storageArea !== localStorage) return;
 
     const { key, newValue } = event;
 
+    // A removed prompt counts as unsaved: another window's retired-prompt sweep
+    // removes the key, and this window's own sweep may already have found it gone.
     if (key.startsWith("customPrompt.")) {
       const kind = key.slice("customPrompt.".length) as PromptKind;
       if (!PROMPT_KIND_LIST.includes(kind)) return;
       useSettingsStore.setState((s) => ({
-        customPrompts: { ...s.customPrompts, [kind]: newValue },
+        customPrompts: { ...s.customPrompts, [kind]: newValue ?? "" },
       }));
       return;
     }
+
+    if (newValue === null) return;
 
     const state = useSettingsStore.getState();
     if (!(key in state) || typeof (state as unknown as Record<string, unknown>)[key] === "function")
