@@ -5238,8 +5238,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               appCategory: this.lastToneAppCategory,
             });
 
-      // 4. Connect WebSocket — audio is already flowing from the pipeline above,
-      //    so Deepgram receives data immediately (no idle timeout).
+      // 4. Connect WebSocket.
       const result = await withSessionRefresh(async () => {
         const streamingSettings = getSettings();
         const { useLocalWhisper } = streamingSettings;
