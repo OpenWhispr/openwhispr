@@ -38,7 +38,10 @@ function get() {
   if (cached !== null) return cached || null;
   try {
     const file = tokenFile();
-    if (!fs.existsSync(file)) return (cached = "");
+    if (!fs.existsSync(file)) {
+      cached = "";
+      return null;
+    }
     const buf = fs.readFileSync(file);
     if (!secretCrypto.isAvailable()) {
       cached = buf.toString("utf8");
