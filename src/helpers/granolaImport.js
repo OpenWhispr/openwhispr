@@ -143,6 +143,19 @@ const ISO_DATE_RE =
 const US_DATE_RE =
   /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:,?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?$/i;
 
+const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+// Date.UTC silently rolls an out-of-range day into the next month ("2026-02-30"
+// becomes Mar 2), so a malformed cell would import with a wrong creation date
+// and sort into the wrong place in history. Reject impossible dates instead,
+// completing the month/day guards the slash-date branch already applies.
+function isRealCalendarDate(year, month, day) {
+  if (!Number.isInteger(month) || month < 1 || month > 12 || day < 1) return false;
+  const isLeap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const maxDay = month === 2 && isLeap ? 29 : DAYS_IN_MONTH[month - 1];
+  return day <= maxDay;
+}
+
 /**
  * Normalize a CSV date cell to SQLite's `"YYYY-MM-DD HH:MM:SS"` UTC format
  * (matching CURRENT_TIMESTAMP rows so imported notes sort correctly), or null
@@ -165,6 +178,7 @@ export function normalizeDate(value) {
   let match = raw.match(ISO_DATE_RE);
   if (match) {
     const [, year, month, day, hour = "00", minute = "00", second = "00", tz] = match;
+    if (!isRealCalendarDate(+year, +month, +day)) return null;
     if (tz && tz !== "Z") {
       const date = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}${tz}`);
       return Number.isNaN(date.getTime()) ? null : formatSqliteUtc(date);
@@ -178,7 +192,7 @@ export function normalizeDate(value) {
     let month = +monthRaw;
     let day = +dayRaw;
     if (month > 12 && day <= 12) [month, day] = [day, month];
-    if (month > 12 || day > 31) return null;
+    if (!isRealCalendarDate(+year, month, day)) return null;
     let hour = +hourRaw;
     if (ampm?.toUpperCase() === "PM" && hour < 12) hour += 12;
     if (ampm?.toUpperCase() === "AM" && hour === 12) hour = 0;
