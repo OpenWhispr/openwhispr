@@ -15,8 +15,11 @@ it('builds cleanup prompts locally with language, dictionary, tone and agent-nam
   expect(prompt.systemPrompt).toContain(
     'Custom Dictionary (use these exact spellings when they appear in the text): OpenWhispr',
   );
-  expect(prompt.systemPrompt).toContain('formal, professional tone');
+  expect(prompt.systemPrompt).toContain('Apply this tone: formal and polished.');
   expect(prompt.systemPrompt).toContain('Restyle only; do not add or remove information.');
+  expect(prompt.systemPrompt).toContain(
+    "This tone overrides any instruction to keep the speaker's tone, voice, style, wording or formality, and it sets capitalization and punctuation;",
+  );
   expect(prompt.text).toBe(
     '<transcript>\num hello\n</transcript>\n\nOutput only the cleaned transcript.',
   );
@@ -32,7 +35,7 @@ it('keeps custom cleanup prompts as cleanup transforms with contextual instructi
   });
   expect(prompt.systemPrompt).toContain('Be concise, Aria.');
   expect(prompt.systemPrompt).toContain('You MUST write your entire output in German');
-  expect(prompt.systemPrompt).toContain('casual, conversational tone');
+  expect(prompt.systemPrompt).toContain('Apply this tone: casual and friendly');
   expect(prompt.text).toContain('<transcript>');
 });
 

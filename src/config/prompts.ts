@@ -1,4 +1,6 @@
 import { resolvePrompt } from "./prompts/index";
+import { appendToneStyleSuffix } from "./prompts/toneStyle";
+import type { DictationToneStyle } from "./toneStyle";
 import { SOURCE_FIDELITY_RULE } from "../helpers/sourceFidelity.js";
 import {
   CONNECTOR_NAMES,
@@ -22,9 +24,13 @@ export function getCleanupSystemPrompt(
   agentName: string | null,
   customDictionary?: string[],
   language?: string,
-  uiLanguage?: string
+  uiLanguage?: string,
+  toneStyle?: DictationToneStyle | null
 ): string {
-  return resolvePrompt("cleanup", { agentName, language, customDictionary, uiLanguage });
+  return appendToneStyleSuffix(
+    resolvePrompt("cleanup", { agentName, language, customDictionary, uiLanguage }),
+    toneStyle
+  );
 }
 
 export function getWordBoost(customDictionary?: string[]): string[] {
