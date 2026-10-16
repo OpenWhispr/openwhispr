@@ -1,6 +1,9 @@
 const { execFileSync } = require("child_process");
 const debugLogger = require("./debugLogger");
 const GnomeGlobalShortcutsPortal = require("./gnomeGlobalShortcutsPortal");
+const cancelShortcutApproval = require("./gnomeCancelShortcutApproval");
+
+const { REGISTRATION } = GnomeGlobalShortcutsPortal;
 
 const DBUS_SERVICE_NAME = "com.openwhispr.App";
 const DBUS_OBJECT_PATH = "/com/openwhispr/App";
@@ -139,6 +142,15 @@ class GnomeShortcutManager {
     this.voiceAgentCallback = null;
     this.translationCallback = null;
     this.globalShortcutsPortal = new GnomeGlobalShortcutsPortal();
+    // Escape is bound only while a recording runs, in its own portal session.
+    this.cancelShortcutsPortal = new GnomeGlobalShortcutsPortal({
+      shortcutId: "cancel",
+      descriptionKey: "app.buttons.cancelRecording",
+    });
+    this.cancelShortcutApproval = cancelShortcutApproval;
+    // "approval" while GNOME's dialog is up, "recording" while a recording holds it.
+    this.cancelPortalUse = null;
+    this.cancelShortcutUnavailable = false;
     // Track which slots have been registered in gsettings
     this.registeredSlots = new Set();
   }
@@ -277,19 +289,103 @@ class GnomeShortcutManager {
     if (!preferredTrigger) return false;
 
     await this.unregisterKeybinding("dictation");
-    const registered = await this.globalShortcutsPortal.registerKeybinding(
-      preferredTrigger,
-      callback
-    );
-    if (!registered) {
+    const outcome = await this.globalShortcutsPortal.registerKeybinding(preferredTrigger, callback);
+    if (outcome === REGISTRATION.BOUND) {
+      // GNOME keeps one approved shortcut list per app, and this bind replaced
+      // it, so the cancel shortcut has to be approved again back in Tap.
+      if (this.cancelShortcutApproval.read() !== null) this.cancelShortcutApproval.write(null);
+      return true;
+    }
+    // Whatever superseded this registration owns the binding now; a tap
+    // fallback would leave this hotkey toggling dictation beside it.
+    if (outcome !== REGISTRATION.SUPERSEDED) {
       const tapShortcut = GnomeShortcutManager.convertToGnomeFormat(hotkey);
       await this.registerKeybinding(tapShortcut, "dictation");
     }
-    return registered;
+    return false;
   }
 
   async unregisterPushToTalk() {
     await this.globalShortcutsPortal.unregisterKeybinding();
+  }
+
+  canUseCancelShortcut() {
+    // Startup probes the portal through the dictation instance; without it, skip
+    // rather than reconnect on every recording.
+    return (
+      !this.cancelShortcutUnavailable &&
+      GnomeShortcutManager.isWayland() &&
+      this.globalShortcutsPortal.isAvailable()
+    );
+  }
+
+  // Asked from the control panel, so GNOME's dialog never takes focus mid-dictation.
+  async requestCancelShortcutApproval(hotkey) {
+    if (
+      !this.canUseCancelShortcut() ||
+      this.cancelPortalUse ||
+      this.cancelShortcutApproval.read() !== null
+    ) {
+      return false;
+    }
+    const preferredTrigger = GnomeShortcutManager.convertToPortalFormat(hotkey);
+    if (!preferredTrigger) return false;
+
+    this.cancelPortalUse = "approval";
+    try {
+      const outcome = await this.cancelShortcutsPortal.registerKeybinding(
+        preferredTrigger,
+        () => {}
+      );
+      if (outcome !== REGISTRATION.BOUND) {
+        this._recordCancelShortcutFailure(outcome);
+        return false;
+      }
+      this.cancelShortcutApproval.write("approved");
+      await this.cancelShortcutsPortal.unregisterKeybinding();
+      return true;
+    } finally {
+      this.cancelPortalUse = null;
+    }
+  }
+
+  async registerCancelShortcut(hotkey, onCancel) {
+    if (
+      !this.canUseCancelShortcut() ||
+      this.cancelPortalUse === "approval" ||
+      this.cancelShortcutApproval.read() !== "approved"
+    ) {
+      return false;
+    }
+    const preferredTrigger = GnomeShortcutManager.convertToPortalFormat(hotkey);
+    if (!preferredTrigger) return false;
+
+    this.cancelPortalUse = "recording";
+    const outcome = await this.cancelShortcutsPortal.registerKeybinding(
+      preferredTrigger,
+      (_event, phase) => {
+        if (phase === "down") onCancel();
+      }
+    );
+    this._recordCancelShortcutFailure(outcome);
+    return outcome === REGISTRATION.BOUND;
+  }
+
+  async unregisterCancelShortcut() {
+    // Never close the approval request's session: its dialog may still be open.
+    if (this.cancelPortalUse !== "recording") return;
+    this.cancelPortalUse = null;
+    await this.cancelShortcutsPortal.unregisterKeybinding();
+  }
+
+  _recordCancelShortcutFailure(outcome) {
+    if (outcome === REGISTRATION.DECLINED) {
+      this.cancelShortcutApproval.write("declined");
+      debugLogger.log("[GnomeShortcut] Cancel shortcut declined");
+    } else if (outcome === REGISTRATION.FAILED) {
+      this.cancelShortcutUnavailable = true;
+      debugLogger.log("[GnomeShortcut] Cancel shortcut unavailable until restart");
+    }
   }
 
   static isValidShortcut(shortcut) {
@@ -589,6 +685,7 @@ class GnomeShortcutManager {
 
   async close() {
     await this.globalShortcutsPortal.close();
+    await this.cancelShortcutsPortal.close();
     if (this.bus) {
       this.bus.connection.end();
       this.bus = null;

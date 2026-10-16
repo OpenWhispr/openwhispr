@@ -154,7 +154,7 @@ test("Linux native visibility reports hide, show, minimize and restore to the re
   const notifications = [];
   win.isVisible = () => visible;
   win.isMinimized = () => minimized;
-  win.webContents = { send: (...args) => notifications.push(args) };
+  win.webContents = { send: (...args) => notifications.push(args), on: () => {} };
   try {
     WindowManager.prototype.registerMainWindowEvents.call({
       mainWindow: win,
@@ -178,4 +178,26 @@ test("Linux native visibility reports hide, show, minimize and restore to the re
   } finally {
     Object.defineProperty(process, "platform", original);
   }
+});
+
+test("a dead or reloading dictation renderer releases the cancel hotkey", () => {
+  const win = new EventEmitter();
+  win.isVisible = () => true;
+  win.webContents = new EventEmitter();
+  const unregistered = [];
+  WindowManager.prototype.registerMainWindowEvents.call({
+    mainWindow: win,
+    enforceMainWindowOnTop: () => {},
+    hotkeyManager: { unregisterSlot: (slotName) => unregistered.push(slotName) },
+  });
+  win.emit("ready-to-show");
+
+  win.webContents.emit("render-process-gone", {}, { reason: "crashed" });
+  assert.deepEqual(unregistered, ["cancel"]);
+
+  // A navigation the window blocks starts but never replaces the document.
+  win.webContents.emit("did-start-navigation", { isMainFrame: true, isSameDocument: false });
+  assert.deepEqual(unregistered, ["cancel"]);
+  win.webContents.emit("did-navigate", {}, "file:///app/index.html");
+  assert.deepEqual(unregistered, ["cancel", "cancel"]);
 });

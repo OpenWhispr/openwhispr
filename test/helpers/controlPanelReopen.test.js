@@ -217,3 +217,49 @@ test("showing the control panel cancels the visibility backstop", () => {
 
   assert.equal(windowManager._controlPanelVisibilityTimer, null);
 });
+
+test("GNOME's cancel approval is asked only from a visible control panel after onboarding", async () => {
+  const { windowManager } = createManagers();
+  let approvals = 0;
+  windowManager.hotkeyManager.requestGnomeCancelShortcutApproval = async () => {
+    approvals += 1;
+  };
+  windowManager.hotkeyManager.setActivationMode = async () => true;
+  windowManager.hotkeyManager.isInListeningMode = () => false;
+  windowManager.controlPanelWindow = createControlPanel();
+
+  windowManager.showControlPanel();
+  assert.equal(approvals, 0, "not during onboarding");
+
+  windowManager.setOnboardingActive(false);
+  assert.equal(approvals, 1, "when onboarding ends with the panel open");
+
+  windowManager.showControlPanel();
+  assert.equal(approvals, 2, "when the panel is opened");
+
+  await windowManager.setActivationModeCache("push");
+  assert.equal(approvals, 2, "not when switching to Hold");
+  await windowManager.setActivationModeCache("tap");
+  assert.equal(approvals, 3, "when switching back to Tap");
+
+  windowManager.showControlPanel({ activate: false });
+  assert.equal(approvals, 3, "not for an opener that leaves the user in another app");
+
+  for (const state of ["preparing", "recording", "processing"]) {
+    windowManager._dictationLifecycleState = state;
+    windowManager.showControlPanel();
+    assert.equal(approvals, 3, `not while dictation is ${state}`);
+  }
+  windowManager._dictationLifecycleState = "idle";
+
+  windowManager.controlPanelWindow = createControlPanel();
+  await windowManager.setActivationModeCache("tap");
+  assert.equal(approvals, 3, "not while the panel is hidden");
+
+  windowManager.controlPanelWindow = createControlPanel({ destroyed: true });
+  windowManager.controlPanelWindow.isVisible = () => {
+    throw new Error("Object has been destroyed");
+  };
+  assert.equal(await windowManager.setActivationModeCache("tap"), true);
+  assert.equal(approvals, 3, "not once the panel is destroyed");
+});

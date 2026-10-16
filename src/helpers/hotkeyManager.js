@@ -366,6 +366,18 @@ class HotkeyManager extends EventEmitter {
       slot.callback = callback;
       this.slots.set(slotName, slot);
     }
+    // On GNOME Wayland the X11 grab misses Escape while a Wayland app has focus,
+    // so cancel is also bound through the portal. Not in Hold: GNOME keeps one
+    // approved shortcut list per app, so binding cancel would re-ask for Hold's.
+    if (
+      result.success &&
+      slotName === "cancel" &&
+      this.useGnome &&
+      this.gnomeManager &&
+      this.activationMode !== "push"
+    ) {
+      await this.gnomeManager.registerCancelShortcut(hotkey, callback);
+    }
     return result;
   }
 
@@ -415,6 +427,12 @@ class HotkeyManager extends EventEmitter {
           );
           return false;
         });
+    }
+
+    if (slotName === "cancel" && this.useGnome && this.gnomeManager) {
+      this.gnomeManager.unregisterCancelShortcut().catch((err) => {
+        debugLogger.warn("[HotkeyManager] Error unregistering GNOME cancel shortcut:", err.message);
+      });
     }
 
     // Release what was actually registered; native-listener entries are null.
@@ -976,6 +994,13 @@ class HotkeyManager extends EventEmitter {
     await this.gnomeManager.unregisterPushToTalk();
     const gnomeHotkey = GnomeShortcutManager.convertToGnomeFormat(hotkey);
     return this.gnomeManager.registerKeybinding(gnomeHotkey);
+  }
+
+  // Tap only, for the same reason registerSlot keeps cancel off the portal in
+  // Hold. Escape is the key useAudioRecording binds to the cancel slot.
+  async requestGnomeCancelShortcutApproval() {
+    if (!this.useGnome || !this.gnomeManager || this.activationMode === "push") return false;
+    return this.gnomeManager.requestCancelShortcutApproval("Escape");
   }
 
   async initializeKDEShortcuts(callback) {

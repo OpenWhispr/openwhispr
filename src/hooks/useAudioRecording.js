@@ -1063,6 +1063,9 @@ export const useAudioRecording = (toast, options = {}) => {
       if (audioManagerRef.current) {
         audioManagerRef.current.cleanup();
       }
+      // cleanup() ends a recording without reporting it, so nothing else would
+      // release Escape.
+      window.electronAPI?.unregisterCancelHotkey?.();
     };
   }, [
     toast,
