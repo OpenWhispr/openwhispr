@@ -3,6 +3,7 @@ const AssemblyAiStreaming = require("./assemblyAiStreaming");
 const DeepgramStreaming = require("./deepgramStreaming");
 const CortiStreaming = require("./cortiStreaming");
 const { TinfoilRealtimeStreaming } = require("./tinfoilRealtimeStreaming");
+const XaiStreaming = require("./xaiStreaming");
 
 const STREAMING_CLIENT_BY_PROVIDER = {
   "openai-realtime": OpenAIRealtimeStreaming,
@@ -10,6 +11,7 @@ const STREAMING_CLIENT_BY_PROVIDER = {
   "deepgram-realtime": DeepgramStreaming,
   "corti-realtime": CortiStreaming,
   "tinfoil-realtime": TinfoilRealtimeStreaming,
+  "xai-realtime": XaiStreaming,
 };
 
 // Derived from the registry so an allowed provider can never lack a client
