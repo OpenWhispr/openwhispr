@@ -29,7 +29,13 @@ function loadHelper(name, mocks) {
   return module.exports;
 }
 
-async function startupArgs(modelName, runtime = "offline", language = null, registry = modelData) {
+async function startupArgs(
+  modelName,
+  runtime = "offline",
+  language = null,
+  registry = modelData,
+  availableParallelism = 8
+) {
   const calls = [];
   const modelInfo = loadHelper("parakeetModelInfo", {
     "../models/modelRegistryData.json": registry,
@@ -50,7 +56,7 @@ async function startupArgs(modelName, runtime = "offline", language = null, regi
     "./safeTempDir": { getSafeTempDir: () => os.tmpdir() },
     "../utils/serverUtils": {
       findAvailablePort: async () => 6006,
-      getAvailableParallelism: () => 8,
+      getAvailableParallelism: () => availableParallelism,
     },
   });
   const server = new Server();
@@ -74,7 +80,7 @@ for (const modelName of ["parakeet-tdt-0.6b-v3", "orukeet-v0.1.0"]) {
       `--joiner=${path.join(os.tmpdir(), "joiner.int8.onnx")}`,
       "--model-type=nemo_transducer",
       "--port=6006",
-      "--num-threads=4",
+      "--num-threads=6",
       "--num-work-threads=3",
     ]);
   });
@@ -94,7 +100,7 @@ test("Cohere keeps its language-specific startup arguments", async () => {
     `--cohere-transcribe-decoder=${path.join(os.tmpdir(), "decoder.int8.onnx")}`,
     "--cohere-transcribe-language=fr",
     "--port=6006",
-    "--num-threads=4",
+    "--num-threads=6",
     "--num-work-threads=3",
   ]);
 });
@@ -105,12 +111,30 @@ test("online startup preserves its scheduling flags and omits offline decoder hi
     assert.equal(binary, "sherpa-online");
     assert.ok(!args.some((arg) => arg.startsWith("--model-type=")));
     assert.deepEqual(args.slice(-5), [
-      "--num-threads=4",
+      "--num-threads=6",
       "--num-work-threads=2",
       "--loop-interval-ms=2",
       "--end-tail-padding=0.6",
       "--warm-up=0",
     ]);
+  }
+});
+
+test("Parakeet intra-op threads scale with the CPU parallelism available to the app", async () => {
+  for (const [availableParallelism, expectedThreads] of [
+    [1, 1],
+    [4, 3],
+    [8, 6],
+    [14, 10],
+  ]) {
+    const { args } = await startupArgs(
+      "parakeet-tdt-0.6b-v3",
+      "offline",
+      null,
+      modelData,
+      availableParallelism
+    );
+    assert.ok(args.includes(`--num-threads=${expectedThreads}`));
   }
 });
 
