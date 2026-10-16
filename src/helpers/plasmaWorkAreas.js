@@ -1,6 +1,7 @@
 const { screen } = require("electron");
 const debugLogger = require("./debugLogger");
 const KDEShortcutManager = require("./kdeShortcut");
+const { getLinuxSessionInfo } = require("./linuxSession");
 
 // On X11, and on XWayland where the app runs in a KDE Wayland session, Chromium
 // builds every display's workArea from the single root _NET_WORKAREA: only the
@@ -44,12 +45,23 @@ function withinTolerance(value, expected, size) {
 // XWayland scales every output alike and Chromium uses one scale on X11. Each
 // display is matched to the Plasma screen at the same scaled place and size;
 // anything that doesn't match one-to-one yields no corrections at all.
-function computeWorkAreas(snapshot, displays) {
+function computeWorkAreas(snapshot, displays, { x11 = false } = {}) {
   const workAreas = new Map();
-  const screens = snapshot?.screens;
-  if (!Array.isArray(screens) || !screens.length || screens.length !== displays.length) {
+  if (
+    !Array.isArray(snapshot?.screens) ||
+    !snapshot.screens.length ||
+    snapshot.screens.length !== displays.length
+  ) {
     return workAreas;
   }
+  // On X11, Qt keeps each screen's origin in device pixels and scales only its
+  // size (QHighDpi::fromNativeScreenGeometry), while Chromium scales both.
+  const originScale = x11 ? displays[0].scaleFactor : 1;
+  const screens = snapshot.screens.map((rect) => ({
+    ...rect,
+    x: rect.x / originScale,
+    y: rect.y / originScale,
+  }));
 
   const insets = screens.map(() => ({ top: 0, right: 0, bottom: 0, left: 0 }));
   for (const panel of Array.isArray(snapshot.panels) ? snapshot.panels : []) {
@@ -98,7 +110,7 @@ function sameBounds(a, b) {
   return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
 }
 
-function createPlasmaWorkAreas({ screen, fetchSnapshot, isActive }) {
+function createPlasmaWorkAreas({ screen, fetchSnapshot, isActive, isX11 = () => false }) {
   let corrections = new Map();
   let onChange = null;
   let started = false;
@@ -106,6 +118,12 @@ function createPlasmaWorkAreas({ screen, fetchSnapshot, isActive }) {
   let rerun = false;
   let retryTimer = null;
   let retries = 0;
+
+  function resetRetries() {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+    retries = 0;
+  }
 
   function retryLater() {
     if (retryTimer || retries >= RETRY_DELAYS_MS.length) return;
@@ -150,7 +168,7 @@ function createPlasmaWorkAreas({ screen, fetchSnapshot, isActive }) {
       return;
     }
     const displays = screen.getAllDisplays();
-    const workAreas = computeWorkAreas(snapshot, displays);
+    const workAreas = computeWorkAreas(snapshot, displays, { x11: isX11() });
     if (!workAreas.size) {
       debugLogger.debug(
         "[PlasmaWorkAreas] Plasma's answer doesn't fit the displays",
@@ -160,7 +178,7 @@ function createPlasmaWorkAreas({ screen, fetchSnapshot, isActive }) {
       retryLater();
       return;
     }
-    retries = 0;
+    resetRetries();
     apply(
       new Map(
         displays
@@ -195,8 +213,14 @@ function createPlasmaWorkAreas({ screen, fetchSnapshot, isActive }) {
     if (started || !isActive()) return Promise.resolve();
     started = true;
     onChange = handleChange;
+    // A display change is a new layout to retry for, even after an earlier
+    // layout used up its retries. Shows don't reset them, so a plasmashell
+    // that never answers isn't asked three more times per dictation.
     for (const event of ["display-added", "display-removed", "display-metrics-changed"]) {
-      screen.on(event, () => void refresh());
+      screen.on(event, () => {
+        resetRetries();
+        void refresh();
+      });
     }
     return refresh();
   }
@@ -253,6 +277,7 @@ const plasmaWorkAreas = createPlasmaWorkAreas({
   screen,
   fetchSnapshot: fetchPlasmaSnapshot,
   isActive: () => process.platform === "linux" && KDEShortcutManager.isKDE(),
+  isX11: () => !getLinuxSessionInfo().isWayland,
 });
 
 module.exports = { computeWorkAreas, createPlasmaWorkAreas, fetchPlasmaSnapshot, plasmaWorkAreas };

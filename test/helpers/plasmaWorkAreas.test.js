@@ -79,6 +79,29 @@ test("only always-visible panels reserve space, and panels sharing an edge take 
   });
 });
 
+// A Plasma X11 session at 200% with two 4K monitors: Qt keeps each screen's
+// origin in device pixels and scales only its size, while Chromium scales both.
+const X11_DISPLAYS = [
+  { id: 1, scaleFactor: 2, bounds: { x: 0, y: 0, width: 1920, height: 1080 } },
+  { id: 2, scaleFactor: 2, bounds: { x: 1920, y: 0, width: 1920, height: 1080 } },
+];
+const X11_SNAPSHOT = {
+  screens: [
+    { x: 0, y: 0, width: 1920, height: 1080 },
+    { x: 3840, y: 0, width: 1920, height: 1080 },
+  ],
+  panels: [{ screen: 1, location: "bottom", thickness: 44, hiding: "none" }],
+};
+
+test("on X11, Plasma's pixel origins are scaled like Chromium's before matching", () => {
+  assert.equal(computeWorkAreas(X11_SNAPSHOT, X11_DISPLAYS).size, 0, "read as logical");
+
+  const workAreas = computeWorkAreas(X11_SNAPSHOT, X11_DISPLAYS, { x11: true });
+
+  assert.deepEqual(workAreas.get(1), { x: 0, y: 0, width: 1920, height: 1080 });
+  assert.deepEqual(workAreas.get(2), { x: 1920, y: 0, width: 1920, height: 1036 });
+});
+
 test("layouts that don't line up yield no corrections", () => {
   const { snapshot, displays } = singleScreen([]);
   const cases = {
@@ -126,6 +149,19 @@ test("corrections apply once Plasma answers, and only to displays that kept thei
 
   const resized = { ...ELECTRON_DISPLAYS[1], bounds: { x: 1916, y: 0, width: 1920, height: 1080 } };
   assert.equal(workAreas.resolve(resized), resized);
+});
+
+test("an X11 session matches Plasma's screens by their pixel origins", async () => {
+  const workAreas = createPlasmaWorkAreas({
+    screen: fakeScreen(X11_DISPLAYS),
+    fetchSnapshot: async () => X11_SNAPSHOT,
+    isActive: () => true,
+    isX11: () => true,
+  });
+
+  await workAreas.start(() => undefined);
+
+  assert.equal(workAreas.resolve(X11_DISPLAYS[1]).workArea.height, 1036);
 });
 
 test("display events refresh, and a failed or mismatched snapshot keeps the last good corrections", async () => {
@@ -203,6 +239,56 @@ test("retries stop after three attempts", async (t) => {
   }
 
   assert.equal(snapshots, 4);
+});
+
+// plasmashell can still be starting long after login, then answer a later
+// hotplug with its previous layout.
+test("a display event restarts retries that ran out", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const screen = fakeScreen(ELECTRON_DISPLAYS);
+  let snapshots = 0;
+  const workAreas = createPlasmaWorkAreas({
+    screen,
+    fetchSnapshot: async () => {
+      snapshots += 1;
+      throw new Error("plasmashell did not answer");
+    },
+    isActive: () => true,
+  });
+  await workAreas.start(() => undefined);
+  for (const delay of [1000, 5000, 15000]) {
+    t.mock.timers.tick(delay);
+    await settle();
+  }
+  assert.equal(snapshots, 4);
+
+  screen.emit("display-added");
+  await settle();
+  t.mock.timers.tick(1000);
+  await settle();
+
+  assert.equal(snapshots, 6, "the event's snapshot and its first retry");
+});
+
+test("a snapshot that succeeds cancels the pending retry", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let snapshots = 0;
+  const workAreas = createPlasmaWorkAreas({
+    screen: fakeScreen(ELECTRON_DISPLAYS),
+    fetchSnapshot: async () => {
+      if (snapshots++ === 0) throw new Error("plasmashell did not answer");
+      return PLASMA_SNAPSHOT;
+    },
+    isActive: () => true,
+  });
+  await workAreas.start(() => undefined);
+  await workAreas.refresh();
+  assert.equal(snapshots, 2);
+
+  t.mock.timers.tick(1000);
+  await settle();
+
+  assert.equal(snapshots, 2);
 });
 
 test("a single display keeps Chromium's work area and asks Plasma nothing", async () => {
