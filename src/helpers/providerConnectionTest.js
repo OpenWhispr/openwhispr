@@ -279,7 +279,47 @@ async function responseOffersModel(response, model) {
   }
 }
 
+function usableXaiConsoleKey(value) {
+  const key = typeof value === "string" ? value.trim() : "";
+  if (!key || key === "xai-oauth") return "";
+  return key;
+}
+
+async function resolveXaiProviderTestConfig(config, oauth = {}) {
+  const oauthConnected = Boolean(config?.oauthConnected);
+  const existingKey = oauthConnected ? "" : usableXaiConsoleKey(config?.apiKey);
+  if (existingKey) {
+    return { ...config, apiKey: existingKey };
+  }
+
+  if (typeof oauth.getValidAccessToken === "function") {
+    try {
+      const token = await oauth.getValidAccessToken();
+      if (token) {
+        return { ...config, apiKey: token, oauthSessionValid: true };
+      }
+    } catch (error) {
+      if (error?.name === "AbortError") throw error;
+    }
+  }
+
+  let connected = oauthConnected;
+  if (!connected && typeof oauth.status === "function") {
+    const status = await oauth.status();
+    connected = Boolean(status?.connected);
+  }
+  if (connected) {
+    return { ...config, oauthSessionValid: true };
+  }
+  return null;
+}
+
 async function testProviderConnection(config, fetchImpl = fetch) {
+  const provider = String(config?.provider || "").toLowerCase();
+  if (provider === "xai" && config?.oauthSessionValid) {
+    return { success: true };
+  }
+
   let request;
   try {
     request = resolveProviderRequest(config);
@@ -291,8 +331,11 @@ async function testProviderConnection(config, fetchImpl = fetch) {
     };
   }
 
-  const provider = String(config?.provider || "").toLowerCase();
-  const model = String(config?.model || "").trim();
+  // Grok STT is a dedicated /v1/stt model, not a chat id on /v1/models.
+  let model = String(config?.model || "").trim();
+  if (provider === "xai" && normalizeModelId(model) === "grok-stt") {
+    model = "";
+  }
   let failure = null;
   for (const endpoint of request.endpoints) {
     const controller = new AbortController();
@@ -332,4 +375,8 @@ async function testProviderConnection(config, fetchImpl = fetch) {
   return { success: false, ...failure };
 }
 
-module.exports = { resolveProviderRequest, testProviderConnection };
+module.exports = {
+  resolveProviderRequest,
+  resolveXaiProviderTestConfig,
+  testProviderConnection,
+};

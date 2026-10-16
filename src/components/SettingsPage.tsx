@@ -50,6 +50,7 @@ import PermissionCard from "./ui/PermissionCard";
 import PasteToolsInfo from "./ui/PasteToolsInfo";
 import NixOsPasteInfo from "./ui/NixOsPasteInfo";
 import TranscriptionModelPicker from "./TranscriptionModelPicker";
+import XaiTtsProviderSettings from "./XaiTtsProviderSettings";
 import SelfHostedPanel from "./SelfHostedPanel";
 import {
   ConfirmDialog,
@@ -171,6 +172,7 @@ export type SettingsSectionType =
   | "general"
   | "hotkeys"
   | "speechToText"
+  | "textToSpeech"
   | "llms"
   | "privacyData"
   | "system";
@@ -1349,9 +1351,15 @@ export default function SettingsPage({
   const [hasMountedSpeechToText, setHasMountedSpeechToText] = useState(
     activeSection === "speechToText"
   );
+  const [hasMountedTextToSpeech, setHasMountedTextToSpeech] = useState(
+    activeSection === "textToSpeech"
+  );
   const [hasMountedLlms, setHasMountedLlms] = useState(activeSection === "llms");
   if (activeSection === "speechToText" && !hasMountedSpeechToText) {
     setHasMountedSpeechToText(true);
+  }
+  if (activeSection === "textToSpeech" && !hasMountedTextToSpeech) {
+    setHasMountedTextToSpeech(true);
   }
   if (activeSection === "llms" && !hasMountedLlms) {
     setHasMountedLlms(true);
@@ -4194,6 +4202,7 @@ EOF`,
         );
 
       case "speechToText":
+      case "textToSpeech":
       case "llms":
         return null;
 
@@ -5026,6 +5035,17 @@ EOF`,
               </div>
             )}
           />
+        </TabPanel>
+      )}
+      {hasMountedTextToSpeech && (
+        <TabPanel active={activeSection === "textToSpeech"}>
+          <div className="space-y-4">
+            <SectionHeader
+              title={t("settingsPage.textToSpeech.title")}
+              description={t("settingsPage.textToSpeech.description")}
+            />
+            <XaiTtsProviderSettings />
+          </div>
         </TabPanel>
       )}
       {hasMountedLlms && (

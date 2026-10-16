@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { AudioLines, Check, CircleCheck, Download, MousePointer2 } from "../icons";
+import { AudioLines, Check, CircleCheck, Download, Loader2, MousePointer2 } from "../icons";
 import { useTranslation } from "react-i18next";
 import ProviderConnectionTest from "./ProviderConnectionTest";
 import { Button } from "../ui/button";
@@ -310,6 +310,7 @@ function FieldLabel({ children }: { children: ReactNode }) {
 export function ByokProviderStep({
   stepId,
   selfHostedRequested = false,
+  xaiOAuthRequested = false,
   onSelfHostedChange,
   onConnectionChange,
   onProceed,
@@ -319,6 +320,8 @@ export function ByokProviderStep({
   stepId: "byok-dictation" | "byok-assistant";
   /** Set when the user picked "Self-hosted" on setup-choice rather than BYOK. */
   selfHostedRequested?: boolean;
+  /** Set when the user picked SuperGrok OAuth on setup-choice. */
+  xaiOAuthRequested?: boolean;
   onSelfHostedChange: (requested: boolean) => void;
   onConnectionChange: (connected: boolean) => void;
   onProceed: () => void;
@@ -350,13 +353,29 @@ export function ByokProviderStep({
   const [seed] = useState(() => {
     const saved = resolveSavedByokConfig(stepId, store);
     const hasDraft = Boolean(resumeState && !isBlankByokDraft(resumeState));
-    const draft = hasDraft ? resumeState : saved?.draft;
+    const xaiProvider = providers.find((provider) => provider.id === "xai");
+    // An explicit SuperGrok choice starts with xAI instead of a prior saved provider;
+    // once this step wrote a draft, resuming it must restore that draft instead.
+    const selectedByXaiOAuth = xaiOAuthRequested && !hasDraft;
+    const draft = selectedByXaiOAuth
+      ? {
+          selectedProvider: xaiProvider?.id ?? "",
+          selectedModel: "",
+          baseUrl: "",
+          customModel: "",
+        }
+      : hasDraft
+        ? resumeState
+        : saved?.draft;
     const providerData = providers.find((provider) => provider.id === draft?.selectedProvider);
-    // After a restart the session only knows which setup-choice tile was clicked, so a
-    // saved endpoint opens its own card whichever tile that was; a draft carries the
-    // card the session recorded for it.
+    // A saved endpoint opens its own card after a restart, unless the user explicitly
+    // chose SuperGrok for this run; a session draft carries the card it recorded for it.
     const selfHostedWanted =
-      hasDraft || !saved ? selfHostedRequested : Boolean(saved.draft.baseUrl);
+      hasDraft || !saved
+        ? selfHostedRequested
+        : selectedByXaiOAuth
+          ? false
+          : Boolean(saved.draft.baseUrl);
     const selfHosted = selfHostedWanted && selfHostedAllowed;
     return {
       provider: providerData?.id ?? "",
@@ -395,6 +414,7 @@ export function ByokProviderStep({
     seed.provider === "corti" ? store.cortiClientSecret : ""
   );
   const [connected, setConnected] = useState(false);
+  const [xaiOauthBusy, setXaiOauthBusy] = useState(false);
 
   useEffect(() => {
     onConnectionChange(false);
@@ -502,9 +522,13 @@ export function ByokProviderStep({
   );
 
   const testingProvider = selfHosted ? "custom" : selectedProvider;
-  const testingKey = draftApiKey;
-  const testingBaseUrl = selfHosted ? draftBaseUrl : undefined;
   const isCortiTranscription = !assistant && !selfHosted && selectedProvider === "corti";
+  const isXaiCloud = !selfHosted && selectedProvider === "xai";
+  const xaiOAuthConnected = store.xaiOAuthConnected;
+  // OAuth credentials are resolved in the main process; never use the renderer
+  // sentinel or a stale console key as a Bearer token in the connection test.
+  const testingKey = isXaiCloud && xaiOAuthConnected ? "" : draftApiKey;
+  const testingBaseUrl = selfHosted ? draftBaseUrl : undefined;
   // A provider counts only while policy still lists it: a policy that loads after mount
   // can remove the one this card opened on.
   const fieldsReady = selfHosted
@@ -516,7 +540,10 @@ export function ByokProviderStep({
           draftCortiClientSecret.trim() &&
           selectedModel
         )
-      : Boolean(currentProvider && selectedModel && testingKey.trim());
+      : isXaiCloud
+        ? Boolean(currentProvider && selectedModel && (testingKey.trim() || xaiOAuthConnected))
+        : Boolean(currentProvider && selectedModel && testingKey.trim());
+  const canProceed = fieldsReady && (connected || (isXaiCloud && xaiOAuthConnected));
 
   const commitAndProceed = () => {
     if (selfHosted) {
@@ -555,7 +582,7 @@ export function ByokProviderStep({
       if (isCortiTranscription) {
         store.setCortiClientId(draftCortiClientId);
         store.setCortiClientSecret(draftCortiClientSecret);
-      } else {
+      } else if (draftApiKey.trim()) {
         knownCredential.set(draftApiKey);
       }
       store.setCloudTranscriptionMode("byok");
@@ -726,6 +753,90 @@ export function ByokProviderStep({
                   />
                 </label>
               </div>
+            ) : isXaiCloud ? (
+              <div className="space-y-2">
+                {!xaiOAuthConnected ? (
+                  <p className="text-xs text-[var(--onboarding-text-tertiary)]">
+                    {t("settings.speech.xaiOauth.hint")}
+                  </p>
+                ) : null}
+                <div className="flex items-center justify-between gap-2">
+                  {xaiOAuthConnected ? (
+                    <>
+                      <p className="text-xs font-medium text-[var(--onboarding-text-primary)]">
+                        {t("settings.speech.xaiOauth.connected")}
+                      </p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={xaiOauthBusy}
+                        onClick={() => {
+                          void (async () => {
+                            setXaiOauthBusy(true);
+                            try {
+                              const result = await window.electronAPI.xaiOAuthLogout?.();
+                              store.setXaiOAuthConnected(
+                                Boolean(result?.connected) && !result?.error
+                              );
+                              setConnected(false);
+                              onConnectionChange(false);
+                            } catch {
+                              store.setXaiOAuthConnected(false);
+                              setConnected(false);
+                              onConnectionChange(false);
+                            } finally {
+                              setXaiOauthBusy(false);
+                            }
+                          })();
+                        }}
+                      >
+                        {xaiOauthBusy ? <Loader2 className="size-3 animate-spin" /> : null}
+                        {t("settings.speech.xaiOauth.disconnect")}
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={xaiOauthBusy}
+                      onClick={() => {
+                        void (async () => {
+                          setXaiOauthBusy(true);
+                          try {
+                            const result = await window.electronAPI.xaiOAuthLogin?.();
+                            const ok = Boolean(result?.connected) && !result?.error;
+                            store.setXaiOAuthConnected(ok);
+                            setConnected(ok);
+                            onConnectionChange(ok);
+                          } catch {
+                            store.setXaiOAuthConnected(false);
+                          } finally {
+                            setXaiOauthBusy(false);
+                          }
+                        })();
+                      }}
+                    >
+                      {xaiOauthBusy ? <Loader2 className="size-3 animate-spin" /> : null}
+                      {t("settings.speech.xaiOauth.connect")}
+                    </Button>
+                  )}
+                </div>
+                {!xaiOAuthConnected ? (
+                  <label className="block">
+                    <FieldLabel>{t("settings.speech.xaiOauth.orApiKey")}</FieldLabel>
+                    <Input
+                      type="password"
+                      value={draftApiKey}
+                      onChange={(event) => setDraftApiKey(event.target.value)}
+                      placeholder={t("onboarding.rehaul.provider.apiKeyPlaceholder")}
+                      autoComplete="off"
+                      spellCheck={false}
+                      className={inputClass}
+                    />
+                  </label>
+                ) : null}
+              </div>
             ) : (
               <label className="block">
                 <FieldLabel>{t("onboarding.rehaul.provider.apiKey")}</FieldLabel>
@@ -754,8 +865,10 @@ export function ByokProviderStep({
             scope: assistant ? "reasoning" : "transcription",
             provider: testingProvider,
             apiKey: testingKey,
+            oauthConnected: isXaiCloud && xaiOAuthConnected,
             baseUrl: testingBaseUrl,
-            model: selfHosted ? draftCustomModel : selectedModel,
+            model:
+              isXaiCloud && !assistant ? undefined : selfHosted ? draftCustomModel : selectedModel,
             clientId: isCortiTranscription ? draftCortiClientId : undefined,
             clientSecret: isCortiTranscription ? draftCortiClientSecret : undefined,
             environment: store.cortiEnvironment,
@@ -767,7 +880,7 @@ export function ByokProviderStep({
 
         <StepPrimaryAction
           onClick={commitAndProceed}
-          disabled={!connected || !fieldsReady}
+          disabled={!canProceed}
           className="mt-4! w-full focus-visible:ring-0 focus-visible:ring-offset-0"
         >
           {t("onboarding.rehaul.provider.proceed")}

@@ -148,6 +148,7 @@ function buildFakeThis() {
       getGroqKey: () => "gk-groq",
       getMistralKey: () => "mk-mistral",
       getXaiKey: () => "xk-xai",
+      getXaiBearer: async () => "xk-xai",
       getTinfoilKey: () => "tk-tinfoil",
       getCustomTranscriptionKey: () => "ck-custom",
       getCortiClientId: () => "corti-id",

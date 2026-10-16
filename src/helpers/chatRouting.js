@@ -1,6 +1,7 @@
 const CLOUD_CHAT_PROVIDERS = new Set([
   "openai",
   "groq",
+  "xai",
   "gemini",
   "anthropic",
   "tinfoil",

@@ -75,6 +75,10 @@ export function useOnboardingSession() {
     setSession((current) => ({ ...current, selfHostedRequested }));
   }, []);
 
+  const setXaiOAuthRequested = useCallback((xaiOAuthRequested: boolean) => {
+    setSession((current) => ({ ...current, xaiOAuthRequested }));
+  }, []);
+
   const setScreenContextRequested = useCallback((screenContextRequested: boolean) => {
     setSession((current) => ({ ...current, screenContextRequested }));
   }, []);
@@ -96,6 +100,7 @@ export function useOnboardingSession() {
     setAuthPath,
     setSetupMode,
     setSelfHostedRequested,
+    setXaiOAuthRequested,
     setScreenContextRequested,
     setPermissionGuide,
     clearSession,

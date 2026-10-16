@@ -83,6 +83,7 @@ export interface OnboardingSession {
   authPath: OnboardingAuthPath;
   setupMode: OnboardingSetupMode;
   selfHostedRequested: boolean;
+  xaiOAuthRequested: boolean;
   /**
    * The permissions step's screen-context Enable was clicked and the grant has
    * not landed yet. Persisted so the opt-in completes across the quit-and-reopen
@@ -206,6 +207,7 @@ export function createOnboardingSession(): OnboardingSession {
     authPath: null,
     setupMode: null,
     selfHostedRequested: false,
+    xaiOAuthRequested: false,
     screenContextRequested: false,
     permissionGuide: null,
     resume: createOnboardingResumeState(),
@@ -435,6 +437,9 @@ export function parseOnboardingSession(value: string | null): OnboardingSession 
     ) {
       return null;
     }
+    if (parsed.xaiOAuthRequested !== undefined && typeof parsed.xaiOAuthRequested !== "boolean") {
+      return null;
+    }
     if (
       parsed.screenContextRequested !== undefined &&
       typeof parsed.screenContextRequested !== "boolean"
@@ -443,12 +448,13 @@ export function parseOnboardingSession(value: string | null): OnboardingSession 
     }
 
     return {
-      version: ONBOARDING_FLOW_VERSION,
+      version: parsed.version,
       currentStepId: parsed.currentStepId,
       history: parsed.history.filter(isOnboardingStepId),
       authPath,
       setupMode,
       selfHostedRequested: parsed.selfHostedRequested ?? false,
+      xaiOAuthRequested: parsed.xaiOAuthRequested ?? false,
       screenContextRequested: parsed.screenContextRequested ?? false,
       permissionGuide: isPermissionGuideId(parsed.permissionGuide) ? parsed.permissionGuide : null,
       resume: parseOnboardingResumeState(parsed.resume, parsed.currentStepId),
