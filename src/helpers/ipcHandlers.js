@@ -13038,16 +13038,16 @@ class IPCHandlers {
           });
         }
 
-        const { numSpeakers, cap } = this._resolveSpeakerExpectation({
+        const { cap } = this._resolveSpeakerExpectation({
           sessionConfig,
           noteId,
           observedSpeakerIds,
           diarizedSource,
         });
-        let diarizationSegments = await this.diarizationManager.diarize(
-          tmpWav,
-          numSpeakers > 0 ? { numSpeakers } : {}
-        );
+        // As with uploads, auto-cluster before applying the speaker-count cap.
+        // Forcing the native count can merge distinct voices into one cluster
+        // before temporal voting, suppressing the other cluster's output.
+        let diarizationSegments = await this.diarizationManager.diarize(tmpWav);
         if (cap != null) {
           diarizationSegments = this.diarizationManager.capSpeakerClusters(
             diarizationSegments,
