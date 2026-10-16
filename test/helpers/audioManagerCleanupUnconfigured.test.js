@@ -93,6 +93,23 @@ test("cleanup with nothing to run on warns even when the assistant is reachable"
   assert.equal((await dictate(manager, "local words")).messageKey, UNCONFIGURED);
 });
 
+test("a BYOK cleanup model with no API key reports the missing key", async (t) => {
+  const { manager, setSettings } = await loadRealAudioManager(t);
+  // A model is selected, but no provider has a key, so the availability check fails.
+  setSettings({ cleanupModel: "gpt-5-mini" });
+  manager.isReasoningAvailable = async () => false;
+
+  const failure = await dictate(manager, "no key words");
+  assert.equal(failure.messageKey, "providerErrors.keyMissing");
+  assert.deepEqual(failure.messageParams, { provider: "OpenAI" });
+  assert.equal(failure.surface, "llm");
+  assert.equal(failure.settingsTarget, "llms");
+
+  // A local model needs no key, so it is never reported as one missing.
+  setSettings({ cleanupMode: "local", cleanupProvider: "local", cleanupModel: "test-model" });
+  assert.equal(await dictate(manager, "local model words"), undefined);
+});
+
 test("the Cloud batch and streaming paths warn when they skip an unreachable cleanup", async (t) => {
   const { window, manager, setSettings } = await loadRealAudioManager(t);
   // Signed in for Cloud transcription, with cleanup set to providers and no model.

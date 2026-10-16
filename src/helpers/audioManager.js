@@ -65,6 +65,7 @@ import { usePolicyStore } from "../stores/policyStore";
 import {
   getBatchTranscriptionModel,
   getCloudModel,
+  getProviderDisplayName,
   getTranscriptionProvider,
   getTranscriptionProviders,
   isOnlineParakeetModel,
@@ -95,7 +96,13 @@ import {
 } from "./transcriptionFallback";
 import { transcriptionFailureOutcome } from "./transcriptionFailureOutcome";
 import { IPC_ERROR_FIELDS, errorFromIpcResult } from "./ipcErrorFields";
-import { asProviderError, providerHttpError, redactProviderBody } from "./providerHttpErrors";
+import {
+  PROVIDER_ERROR_CODES,
+  asProviderError,
+  providerError,
+  providerHttpError,
+  redactProviderBody,
+} from "./providerHttpErrors";
 import {
   executeTranslationChain,
   hasTextContent,
@@ -3223,6 +3230,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (notice && !this.pendingCleanupFailure) this.pendingCleanupFailure = notice;
   }
 
+  // A BYOK cleanup model is selected, but the availability check found no API key
+  // for any provider, so this one has none either. Reports the failure the cleanup
+  // route raises when it runs, as the Cloud and streaming paths already do.
+  _noteMissingCleanupKey(settings) {
+    const cleanup = selectResolvedLLMConfig(settings, "dictationCleanup");
+    if (cleanup.mode !== "providers" || cleanup.provider === "custom") return;
+    this.pendingCleanupFailure = cleanupFailureFromError(
+      providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+        provider: getProviderDisplayName(cleanup.provider),
+        surface: "llm",
+      })
+    );
+  }
+
   // The renderer confirms an unconfigured-cleanup notice once it is on screen, so
   // a dictation cancelled or discarded before then never uses up the warning.
   markCleanupNoticeShown(failure) {
@@ -3287,7 +3308,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       agentName,
     });
     // Nothing can run cleanup although the assistant could, so no route is decided.
-    if (!useReasoning) this._noteCleanupRoute(settings, { kind: "skip", cleanupReachable });
+    if (!useReasoning) {
+      this._noteCleanupRoute(settings, { kind: "skip", cleanupReachable });
+      if (cleanupReachable) this._noteMissingCleanupKey(settings);
+    }
 
     if (useReasoning) {
       let route;
