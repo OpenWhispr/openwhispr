@@ -95,6 +95,8 @@ export default function TranscriptionItem({
       : null;
   const rawText = item.raw_text;
   const hasAudio = item.has_audio === 1;
+  // A failed row keeps the transcript when only a later step failed.
+  const hasKeptText = isFailed && item.text.trim() !== "";
 
   const errorCode = item.error_code as TranscriptionErrorCode;
   const isConfigError =
@@ -174,7 +176,7 @@ export default function TranscriptionItem({
               "opacity-0 group-hover/row:opacity-100 has-[:focus-visible]:opacity-100 has-[[data-state=open]]:opacity-100"
           )}
         >
-          {isTranscribed && (
+          {(isTranscribed || hasKeptText) && (
             <Tooltip content={t("controlPanel.history.copyText")}>
               <Button
                 size="icon"
@@ -232,6 +234,14 @@ export default function TranscriptionItem({
               {item.error_message && (
                 <p className="mt-0.5 text-xs leading-relaxed wrap-break-word text-muted-foreground">
                   {item.error_message}
+                </p>
+              )}
+              {hasKeptText && (
+                <p
+                  dir="auto"
+                  className="mt-1.5 text-base leading-normal wrap-break-word whitespace-pre-wrap text-foreground"
+                >
+                  {item.text}
                 </p>
               )}
               {isConfigError && (
