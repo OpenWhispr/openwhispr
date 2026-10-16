@@ -104,10 +104,11 @@ test("the agent route keeps its provider defaults", async (t) => {
   assert.equal(route.config.requireCompleteOutput, undefined);
 });
 
-test("the agent route's selection edits keep the editing prompt", async (t) => {
+test("the agent route resolves its prompt from the editing prompt", async (t) => {
+  const { SELECTION_EDIT_PROMPT } = await import("../../src/config/prompts/registry.ts");
   const resolveRoute = await loadRouteResolver(t);
 
   const route = resolveRoute("Jarvis, make this more formal", { voiceAgentRequested: true });
 
-  assert.match(route.config.systemPrompt, /NEVER ask clarifying questions/);
+  assert.equal(route.config.systemPrompt, SELECTION_EDIT_PROMPT);
 });
