@@ -19,6 +19,9 @@ const RESTART_RESET_MS = 10000;
 // Crash recovery is best-effort and must never hold the rest of app startup.
 const PREFERENCE_RECOVERY_TIMEOUT_MS = 2000;
 const PREFERENCE_RECOVERY_TERMINATION_TIMEOUT_MS = 1000;
+// Canonical modifier-only chord as the listener names it ("option+command").
+const MODIFIER_CHORD_PATTERN =
+  /^(control|option|command|shift)(\+(control|option|command|shift))+$/;
 
 class GlobeKeyManager extends EventEmitter {
   constructor({ preferenceStatePath = null } = {}) {
@@ -31,16 +34,19 @@ class GlobeKeyManager extends EventEmitter {
     this._restartResetTimer = null;
     this._preferenceRecoveryBlocked = false;
     this.preferenceStatePath = preferenceStatePath;
-    this.config = { mouseButtons: [], suppressGlobeAction: false };
+    this.config = { mouseButtons: [], suppressGlobeAction: false, modifierChords: [] };
   }
 
   // Replaces the listener's whole state, so every call has to pass all of it.
-  setConfiguration({ mouseButtons = [], suppressGlobeAction = false } = {}) {
+  setConfiguration({ mouseButtons = [], suppressGlobeAction = false, modifierChords = [] } = {}) {
     const next = {
       mouseButtons: [
         ...new Set(mouseButtons.filter((button) => /^MouseButton[45]$/i.test(button))),
       ].sort(),
       suppressGlobeAction: Boolean(suppressGlobeAction),
+      modifierChords: [
+        ...new Set(modifierChords.filter((chord) => MODIFIER_CHORD_PATTERN.test(chord))),
+      ].sort(),
     };
 
     if (JSON.stringify(next) === JSON.stringify(this.config)) {
@@ -86,6 +92,9 @@ class GlobeKeyManager extends EventEmitter {
     }
     if (this.config.suppressGlobeAction) {
       args.push("--suppress-system-globe-action");
+    }
+    if (this.config.modifierChords.length > 0) {
+      args.push("--modifier-chords", this.config.modifierChords.join(","));
     }
     return args;
   }
@@ -288,6 +297,21 @@ class GlobeKeyManager extends EventEmitter {
             const modifier = line.replace("MODIFIER_UP:", "").trim().toLowerCase();
             if (modifier) {
               this.emit("modifier-up", modifier);
+            }
+          } else if (line.startsWith("MOD_CHORD_DOWN:")) {
+            const chord = line.replace("MOD_CHORD_DOWN:", "").trim();
+            if (chord) {
+              this.emit("modifier-chord-down", chord);
+            }
+          } else if (line.startsWith("MOD_CHORD_INTERRUPTED:")) {
+            const chord = line.replace("MOD_CHORD_INTERRUPTED:", "").trim();
+            if (chord) {
+              this.emit("modifier-chord-interrupted", chord);
+            }
+          } else if (line.startsWith("MOD_CHORD_UP:")) {
+            const chord = line.replace("MOD_CHORD_UP:", "").trim();
+            if (chord) {
+              this.emit("modifier-chord-up", chord);
             }
           } else if (line.startsWith("MOUSE_BUTTON_DOWN:")) {
             const button = line.replace("MOUSE_BUTTON_DOWN:", "").trim();

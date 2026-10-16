@@ -1687,6 +1687,114 @@ async function startApp() {
       }
     });
 
+    // Modifier-only chords (e.g. Command+Alt). Hold starts on the chord like the
+    // other native keys. Tap fires on release, and only when no other key joined
+    // the chord: Option+Command prefixes system shortcuts (Option+Command+Esc,
+    // Option+Command+D), and firing on press would start dictation under every
+    // one of them. The listener reports the interruption; it is remembered here
+    // until the chord is released.
+    let chordDownTime = 0;
+    let chordIsRecording = false;
+    let chordLastStopTime = 0;
+    let chordActive = null;
+    let chordInterrupted = false;
+
+    const cancelChordPush = () => {
+      const wasRecording = chordIsRecording;
+      chordActive = null;
+      chordDownTime = 0;
+      chordIsRecording = false;
+      chordLastStopTime = Date.now();
+      if (wasRecording) {
+        windowManager.sendCancelDictation();
+      } else {
+        windowManager.sendCancelDictationPreparation();
+        windowManager.hideDictationPanel();
+      }
+    };
+
+    globeKeyManager.on("modifier-chord-down", (chord) => {
+      chordInterrupted = false;
+      if (hotkeyManager.isInListeningMode && hotkeyManager.isInListeningMode()) return;
+      if (!hotkeyManager.slotHasMacModifierChord("dictation", chord)) return;
+      if (!isLiveWindow(windowManager.mainWindow)) return;
+      // Tap toggles on release (see above).
+      if (windowManager.getActivationMode() !== "push") return;
+      if (windowManager.isDictationProcessing()) return;
+      if (chordActive && chordActive !== chord) return;
+      const now = Date.now();
+      if (now - chordLastStopTime < POST_STOP_COOLDOWN_MS) return;
+
+      if (textEditMonitor) textEditMonitor.captureTargetPid();
+      windowManager.showDictationPanel();
+      windowManager.sendPrepareDictation();
+      const pressTime = now;
+      chordActive = chord;
+      chordDownTime = pressTime;
+      chordIsRecording = false;
+      setTimeout(() => {
+        if (chordDownTime === pressTime && !chordIsRecording) {
+          chordIsRecording = true;
+          windowManager.sendStartDictation();
+        }
+      }, MIN_HOLD_DURATION_MS);
+    });
+
+    // Another key or modifier joined the chord: the user is typing a shortcut
+    // the chord prefixes. Drop a Hold in progress instead of transcribing noise,
+    // and keep a Tap from firing on the release that follows.
+    globeKeyManager.on("modifier-chord-interrupted", (chord) => {
+      chordInterrupted = true;
+      if (chordActive !== chord) return;
+      debugLogger?.debug("[ModifierChord] Chord interrupted by another key", {
+        wasRecording: chordIsRecording,
+      });
+      cancelChordPush();
+    });
+
+    globeKeyManager.on("modifier-chord-up", (chord) => {
+      const wasInterrupted = chordInterrupted;
+      chordInterrupted = false;
+      if (hotkeyManager.isInListeningMode && hotkeyManager.isInListeningMode()) return;
+      if (wasInterrupted) return;
+
+      if (hotkeyManager.slotHasMacModifierChord("voiceAgent", chord)) {
+        windowManager.sendToggleVoiceAgent();
+      }
+      if (hotkeyManager.slotHasMacModifierChord("translation", chord)) {
+        windowManager.sendToggleTranslation();
+      }
+
+      if (!hotkeyManager.slotHasMacModifierChord("dictation", chord)) return;
+      if (!isLiveWindow(windowManager.mainWindow)) return;
+
+      const activationMode = windowManager.getActivationMode();
+      if (activationMode !== "push") {
+        if (windowManager.isDictationProcessing()) return;
+        if (textEditMonitor) textEditMonitor.captureTargetPid();
+        windowManager.sendToggleDictation();
+        return;
+      }
+
+      if (chordActive && chordActive !== chord) return;
+      if (chordDownTime === 0 && !chordIsRecording) {
+        // The press was ignored (dictation was processing); releasing it
+        // must not cancel preparation or hide the thinking pill.
+        debugLogger?.debug("[ModifierChord] Release without a registered press — ignored");
+        return;
+      }
+      chordActive = null;
+      chordDownTime = 0;
+      chordLastStopTime = Date.now();
+      if (chordIsRecording) {
+        chordIsRecording = false;
+        windowManager.sendStopDictation();
+      } else {
+        windowManager.sendCancelDictationPreparation();
+        windowManager.hideDictationPanel();
+      }
+    });
+
     const MAC_NATIVE_HOTKEY_SLOTS = ["dictation", "voiceAgent", "translation"];
     const syncMacNativeHotkeyConfiguration = () => {
       globeKeyManager.setConfiguration(
@@ -1830,6 +1938,11 @@ async function startApp() {
       mouseButtonDownTime = 0;
       mouseButtonIsRecording = false;
       mouseButtonLastStopTime = 0;
+      chordDownTime = 0;
+      chordIsRecording = false;
+      chordLastStopTime = 0;
+      chordActive = null;
+      chordInterrupted = false;
       syncMacNativeHotkeyConfiguration();
     });
   }
