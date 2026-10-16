@@ -725,10 +725,14 @@ export default function PersonalNotesView({
 
   const runNoteAction = async (action: ActionItem) => {
     if (!editorNote) return;
-    const { recordingNoteId: liveNoteId, transcript: liveTranscript } =
-      useMeetingRecordingStore.getState();
+    const {
+      recordingNoteId: liveNoteId,
+      transcript: liveTranscript,
+      isTranscribing: liveIsTranscribing,
+    } = useMeetingRecordingStore.getState();
     const rawTranscript =
-      (liveNoteId === activeNote?.id ? liveTranscript : "") || activeNoteRawTranscript;
+      (liveIsTranscribing && liveNoteId === activeNote?.id ? liveTranscript : "") ||
+      activeNoteRawTranscript;
     const noteContent = editorNote.content;
     const hasNotes = !!noteContent.trim();
     if (!hasNotes && !rawTranscript) return;
