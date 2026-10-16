@@ -1,6 +1,6 @@
 # keyboard-extension (Expo config plugin + iOS extension target)
 
-A custom iOS keyboard extension that lets the user dictate from any text field system-wide. Tap the mic in the keyboard, the OpenWhispr app opens via the `keyboard-dictation` URL scheme, records, and the transcript is auto-pasted when the user returns to the host app.
+A custom iOS keyboard extension that lets the user dictate from any text field system-wide. Its keys look and type like Apple's keyboard; the toolbar above them holds the tone menu, the dictation pill and the agent button, with no suggestions or autocorrect. Tapping **Tap to speak** records in place through the OpenWhispr app's background session; only when that session has gone stale does the pill read **Activate** and hand off to the app.
 
 ## What's here
 
@@ -8,16 +8,18 @@ A custom iOS keyboard extension that lets the user dictate from any text field s
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `withKeyboardExtension.js`            | Expo config plugin. Runs at `expo prebuild` time and adds the keyboard target to the generated Xcode project, links the entitlements, and configures the App Group capability. |
 | `ios/KeyboardViewController.swift`    | The keyboard UI and lifecycle. Reads/writes shared state through the App Group `UserDefaults` suite (see [`modules/app-group-storage`](../../modules/app-group-storage/)).     |
+| `ios/KeyboardCapitalization.swift`    | When shift turns on by itself, following the field's autocapitalization type. Foundation-only, so it is unit-tested on macOS.                                                  |
 | `ios/Info.plist`                      | Extension Info.plist (display name, RequestsOpenAccess, etc.)                                                                                                                  |
 | `ios/OpenWhisprKeyboard.entitlements` | App Group capability entitlement                                                                                                                                               |
+| `tests/`                              | Swift tests: the capitalization rule, and UIKit touch routing across the real keyboard layout.                                                                                 |
+| `__tests__/`                          | Jest tests for the config plugin's Xcode project wiring.                                                                                                                       |
 
 ## How it works
 
-1. User installs the keyboard from iOS Settings → General → Keyboard → Keyboards → Add New.
-2. User opens any app, switches to the OpenWhispr keyboard, taps the mic.
-3. Extension writes a flag to the App Group, then opens the configured app scheme at `/keyboard-dictation` (handled by [src/hooks/useKeyboardHandoff.ts](../../src/hooks/useKeyboardHandoff.ts)).
-4. The main app starts a native recording, then sends the user back to the host app (`returnToHost` in [src/lib/handoffReturn.ts](../../src/lib/handoffReturn.ts)). iOS 26.4+ hides the host from the extension, so the containing app learns it from UIKit ([`HostAppObserver.swift`](../../modules/app-group-storage/ios/HostAppObserver.swift)). When no host is found, the app shows the "Swipe back to your app" screen instead.
-5. Recording continues in the background. When stopped, the main app writes the transcript to `keyboard_pending_transcript` and the extension pastes it on next focus.
+1. User installs the keyboard from iOS Settings → General → Keyboard → Keyboards → Add New, and turns on Allow Full Access.
+2. User opens any app, switches to the OpenWhispr keyboard and taps the pill.
+3. **In place.** When the app's background session is ready (`isBackgroundSessionReady()`), or when the keyboard is inside OpenWhispr itself, the pill reads **Tap to speak**. A tap writes a start request to the App Group and posts a Darwin notification. The app records without leaving the host app, the keyboard shows a recording canvas, and it inserts the transcript when `transcriptReady` arrives.
+4. **Handoff.** Only when that session has gone stale does the pill read **Activate**. Its link opens `<scheme>://keyboard-dictation` (handled by [src/hooks/useKeyboardHandoff.ts](../../src/hooks/useKeyboardHandoff.ts)). The app starts a native recording, then sends the user back to the host app (`returnToHost` in [src/lib/handoffReturn.ts](../../src/lib/handoffReturn.ts)). iOS 26.4+ hides the host from the extension, so the containing app learns it from UIKit ([`HostAppObserver.swift`](../../modules/app-group-storage/ios/HostAppObserver.swift)). When no host is found, the app shows the "Swipe back to your app" screen instead. The transcript is pasted on the keyboard's next focus.
 
 ## Apple capabilities required
 
@@ -41,9 +43,18 @@ OPENWHISPR_APP_ENV=development npx expo config --json
 After changes, regenerate the native project:
 
 ```bash
-npx expo prebuild --clean
+OPENWHISPR_APP_ENV=development npx expo prebuild --clean
 npm run ios
 ```
+
+## Tests
+
+```bash
+npm run test:keyboard-capitalization # capitalization rule (macOS, needs Xcode's swiftc)
+npx jest plugins/keyboard-extension # config plugin
+```
+
+Mobile CI runs both, and the touch regression tests below, on every pull request.
 
 ## Keyboard touch regression tests
 

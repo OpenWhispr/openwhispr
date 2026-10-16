@@ -19,7 +19,7 @@ private extension KeyboardViewController {
     let controller = KeyboardViewController()
     controller.loadViewIfNeeded()
     if numbers {
-      controller.handleLayoutModeSwitchTapped()
+      controller.handleModeKeyTapped()
     }
     // The first pass picks the metrics for `width`; the second sizes the view to its rows.
     controller.view.frame = CGRect(x: 0, y: 0, width: width, height: 400)
@@ -35,9 +35,9 @@ private extension KeyboardViewController {
   }
 
   var touchTestRows: KeyboardRowsStack { keyboardRowsStack }
-  var touchTestRowHeight: CGFloat { metrics.rowHeight }
+  var touchTestRowHeight: CGFloat { metrics.keyHeight }
   var touchTestPadding: (side: CGFloat, bottom: CGFloat) {
-    (metrics.rootHorizontalPadding, metrics.rootBottomPadding)
+    (metrics.sideMargin, metrics.bottomPadding)
   }
 }
 
@@ -288,10 +288,13 @@ private enum KeyboardTouchTests {
     let root = controller.view!
     let strip = (rows.superview as! UIStackView).arrangedSubviews[0]
     let padding = controller.touchTestPadding
+    // Layout rounds a half-point margin (6.5pt) to the pixel grid, so allow under a pixel.
+    let pixel = 1 / max(root.contentScaleFactor, 1)
     checks.check(
       "\(layout): rows keep the keyboard's padding",
-      rows.frame.minX == padding.side && root.bounds.maxX - rows.frame.maxX == padding.side
-        && root.bounds.maxY - rows.frame.maxY == padding.bottom
+      abs(rows.frame.minX - padding.side) <= pixel
+        && abs(root.bounds.maxX - rows.frame.maxX - padding.side) <= pixel
+        && abs(root.bounds.maxY - rows.frame.maxY - padding.bottom) <= pixel
     )
     let top = (strip.frame.maxY + rows.frame.minY) / 2
     let visibleKeys = Set(keys.map(ObjectIdentifier.init))

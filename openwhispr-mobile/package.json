@@ -24,6 +24,7 @@
     "test": "jest",
     "test:security": "node --test scripts/__tests__/node-forge.test.js",
     "test:watch": "jest --watch",
+    "test:keyboard-capitalization": "sh scripts/test-keyboard-capitalization.sh",
     "postinstall": "patch-package --error-on-fail && npm run test:security && npm run download:brand-fonts",
     "eas-build-pre-install": "bundle install"
   },

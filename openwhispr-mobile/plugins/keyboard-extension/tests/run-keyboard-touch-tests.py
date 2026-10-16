@@ -21,9 +21,11 @@ def main():
     ).strip()
     with tempfile.TemporaryDirectory(prefix="keyboard-touch-") as directory:
         source = Path(directory) / "keyboard-with-touch-tests.swift"
-        # #sourceLocation keeps compiler errors and traps pointing at the test file.
+        # Every keyboard source, as the extension target builds them. #sourceLocation keeps
+        # compiler errors and traps pointing at the test file.
+        sources = sorted((plugin / "ios").glob("*.swift"))
         source.write_text(
-            (plugin / "ios/KeyboardViewController.swift").read_text()
+            "\n".join(path.read_text() for path in sources)
             + f"\n#sourceLocation(file: {json.dumps(str(tests), ensure_ascii=False)}, line: 1)\n"
             + tests.read_text()
         )
