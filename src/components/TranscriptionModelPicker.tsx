@@ -453,6 +453,8 @@ export default function TranscriptionModelPicker({
   const setMistralApiKey = useSettingsStore((s) => s.setMistralApiKey);
   const geminiApiKey = useSettingsStore((s) => s.geminiApiKey);
   const setGeminiApiKey = useSettingsStore((s) => s.setGeminiApiKey);
+  const geminiDictationMode = useSettingsStore((s) => s.geminiDictationMode);
+  const setGeminiDictationMode = useSettingsStore((s) => s.setGeminiDictationMode);
   const cortiClientId = useSettingsStore((s) => s.cortiClientId);
   const setCortiClientId = useSettingsStore((s) => s.setCortiClientId);
   const cortiClientSecret = useSettingsStore((s) => s.cortiClientSecret);
@@ -1398,6 +1400,41 @@ export default function TranscriptionModelPicker({
                       onModelSelect={handleCloudModelSelect}
                       colorScheme="purple"
                     />
+                    {displayedCloudProvider === "gemini" &&
+                      selectedCloudProvider === "gemini" &&
+                      selectedCloudModel === "gemini-3.5-transcribe" &&
+                      transcriptionContext === "dictation" &&
+                      !streamingOnly && (
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-foreground">
+                            {t("transcription.geminiDictationMode.label")}
+                          </label>
+                          <Select
+                            value={geminiDictationMode}
+                            onValueChange={(value) =>
+                              setGeminiDictationMode(value === "smart" ? "smart" : "verbatim")
+                            }
+                          >
+                            <SelectTrigger
+                              className="h-8 text-sm"
+                              aria-label={t("transcription.geminiDictationMode.label")}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="verbatim">
+                                {t("transcription.geminiDictationMode.verbatim")}
+                              </SelectItem>
+                              <SelectItem value="smart">
+                                {t("transcription.geminiDictationMode.smart")}
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            {t("transcription.geminiDictationMode.description")}
+                          </p>
+                        </div>
+                      )}
                     {displayedCloudProvider === "tinfoil" && (
                       <p className="text-xs text-muted-foreground/70">
                         {t("transcription.tinfoil.transportNote")}{" "}
