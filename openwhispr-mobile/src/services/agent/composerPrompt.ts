@@ -15,7 +15,7 @@ export const TONE_INSTRUCTIONS: Partial<Record<KeyboardTone, string>> = {
 
 // The server's TONE_PRIORITY_INSTRUCTION, which cleanup appends after the tone.
 export const TONE_PRIORITY_INSTRUCTION =
-  "This tone overrides any instruction to keep the speaker's formality. Every other cleanup rule still applies: fix transcription errors, and end one sentence and start the next wherever the speaker started a new thought.";
+  "This tone overrides any instruction to keep the speaker's tone, voice, style, wording or formality; it never changes meaning or intent. Every other cleanup rule still applies.";
 
 const BASE_PROMPT = `You are a text composition assistant embedded in a keyboard. The user's message is always an INSTRUCTION describing what to write — never text to transcribe and never a question for you to answer.
 

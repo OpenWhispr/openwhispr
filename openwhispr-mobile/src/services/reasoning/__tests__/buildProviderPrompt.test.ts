@@ -18,7 +18,7 @@ it('builds cleanup prompts locally with language, dictionary, tone and agent-nam
   expect(prompt.systemPrompt).toContain('Apply this tone: formal and polished.');
   expect(prompt.systemPrompt).toContain('Restyle only; do not add or remove information.');
   expect(prompt.systemPrompt).toContain(
-    "This tone overrides any instruction to keep the speaker's formality.",
+    "This tone overrides any instruction to keep the speaker's tone, voice, style, wording or formality;",
   );
   expect(prompt.text).toBe(
     '<transcript>\num hello\n</transcript>\n\nOutput only the cleaned transcript.',
