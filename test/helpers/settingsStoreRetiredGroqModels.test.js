@@ -4,17 +4,17 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 
 const modelRegistryData = require("../../src/models/modelRegistryData.json");
 
-// Groq retired qwen3-32b and both Llamas on 2026-08-16. The registry entries
+// Groq retired qwen3-32b and both Llamas on 2026-08-16, and shut down both
+// Compound systems on 2026-09-21. The registry entries
 // are gone, so a persisted scope selection would 404 on every request until
 // the user re-picked — the migration remaps it to a model Groq still serves.
 test("retired groq model selections migrate to served replacements", async (t) => {
   const groqIds = modelRegistryData.cloudProviders
     .find((provider) => provider.id === "groq")
     .models.map((model) => model.id);
-  assert.ok(
-    !groqIds.includes("llama-3.3-70b-versatile"),
-    "retired ids must be out of the registry"
-  );
+  for (const retired of ["llama-3.3-70b-versatile", "groq/compound", "groq/compound-mini"]) {
+    assert.ok(!groqIds.includes(retired), `retired id ${retired} must be out of the registry`);
+  }
 
   const { storage } = installBrowserGlobals(t);
   const vite = await createRendererServer(t, {
@@ -45,7 +45,7 @@ test("retired groq model selections migrate to served replacements", async (t) =
 
   await t.test("migration is one-shot", async () => {
     storage.clear();
-    storage.setItem("_retiredGroqModelsMigrated", "1");
+    storage.setItem("_retiredGroqModelsMigrated2", "1");
     storage.setItem("cleanupProvider", "groq");
     storage.setItem("cleanupModel", "llama-3.3-70b-versatile");
 

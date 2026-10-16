@@ -24,14 +24,18 @@ export interface RetiredProviderModels {
 }
 
 export const RETIRED_CLOUD_MODELS: Record<string, RetiredProviderModels> = {
-  // Retired 2026-08-16. The key predates this table and is already set on
-  // installed apps, so it stays exactly as it shipped.
+  // qwen3-32b and both Llamas retired 2026-08-16 under the original key, which
+  // predates this table. Groq shut down both Compound systems on 2026-09-21
+  // with no named successor, and they had shipped in the picker, so adding
+  // them rotated the key.
   groq: {
-    migratedKey: "_retiredGroqModelsMigrated",
+    migratedKey: "_retiredGroqModelsMigrated2",
     models: {
       "qwen/qwen3-32b": "openai/gpt-oss-120b",
       "llama-3.3-70b-versatile": "openai/gpt-oss-120b",
       "llama-3.1-8b-instant": "openai/gpt-oss-20b",
+      "groq/compound": "openai/gpt-oss-120b",
+      "groq/compound-mini": "openai/gpt-oss-20b",
     },
   },
   // All three shipped as seed entries — deepseek-v4-pro in v1.7.4, kimi-k2-6

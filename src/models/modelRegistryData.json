@@ -702,18 +702,6 @@
           "description": "Fast open-source model, 1000 T/sec",
           "supportsThinking": true,
           "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_20b"
-        },
-        {
-          "id": "groq/compound",
-          "name": "Compound",
-          "description": "Groq's compound system, 450 T/sec",
-          "descriptionKey": "models.descriptions.cloud.groq_compound"
-        },
-        {
-          "id": "groq/compound-mini",
-          "name": "Compound Mini",
-          "description": "Fast compound system, 3x lower latency",
-          "descriptionKey": "models.descriptions.cloud.groq_compound_mini"
         }
       ]
     },
