@@ -505,7 +505,11 @@ class WhisperServerManager extends EventEmitter {
   }
 
   async start(modelPath, options = {}) {
-    if (this.startupPromise) return this.startupPromise;
+    // A prewarm may be loading another model or configuration. Wait for it,
+    // then apply this request's signatures instead of inheriting its options.
+    while (this.startupPromise) {
+      await this.startupPromise.catch(() => {});
+    }
 
     // Remember the options so a wake re-warm can reload with the same VAD/thread
     // signature and survive start()'s no-op guard on the next dictation. See #766.
@@ -532,15 +536,18 @@ class WhisperServerManager extends EventEmitter {
       return;
     }
 
-    if (this.process || this.isRemote) {
-      await this.stop();
-    }
+    // Own teardown as well as startup, so waiters cannot start competing replacements.
+    this.startupPromise = (async () => {
+      if (this.process || this.isRemote) {
+        await this.stop();
+      }
 
-    this.isRemote = false;
-    this.hostname = "127.0.0.1";
-    this.vadSignature = nextVadSignature;
-    this.threadSignature = nextThreadSignature;
-    this.startupPromise = this._doStart(modelPath, { ...options, threadResolution });
+      this.isRemote = false;
+      this.hostname = "127.0.0.1";
+      this.vadSignature = nextVadSignature;
+      this.threadSignature = nextThreadSignature;
+      await this._doStart(modelPath, { ...options, threadResolution });
+    })();
     try {
       await this.startupPromise;
     } finally {
