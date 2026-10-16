@@ -9,6 +9,7 @@ const TOKEN_EXPIRY_MS = 300000;
 const REWARM_DELAY_MS = 2000;
 const MAX_REWARM_ATTEMPTS = 10;
 const KEEPALIVE_INTERVAL_MS = 15000;
+const WARM_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const COLD_START_BUFFER_MAX = 3 * SAMPLE_RATE * 2; // 3 seconds of 16-bit PCM
 const MIN_FRAME_MS = 50;
 // AssemblyAI hard-closes the session outside 50-1000 ms but documents 50-250 ms
@@ -22,7 +23,7 @@ const minFrameBytes = (sampleRate) => Math.ceil((sampleRate * 2 * MIN_FRAME_MS) 
 const maxFrameBytes = (sampleRate) => Math.floor((sampleRate * 2 * MAX_FRAME_MS) / 1000);
 
 class AssemblyAiStreaming {
-  constructor() {
+  constructor(options = {}) {
     this.ws = null;
     this.sessionId = null;
     this.isConnected = false;
@@ -51,6 +52,9 @@ class AssemblyAiStreaming {
     this.rewarmAttempts = 0;
     this.rewarmTimer = null;
     this.keepAliveInterval = null;
+    this.warmIdleTimer = null;
+    this.warmIdleTimeoutMs = options?.warmIdleTimeoutMs ?? WARM_IDLE_TIMEOUT_MS;
+    this.warmIdleExpiresAt = null;
     this.isDisconnecting = false;
     this.pendingAudio = [];
     this.pendingAudioBytes = 0;
@@ -140,6 +144,36 @@ class AssemblyAiStreaming {
     }
   }
 
+  startWarmIdleTimer(timeoutMs = this.warmIdleTimeoutMs) {
+    this.stopWarmIdleTimer();
+    const effectiveTimeout = timeoutMs !== undefined ? timeoutMs : WARM_IDLE_TIMEOUT_MS;
+    if (effectiveTimeout === null || effectiveTimeout <= 0) {
+      return;
+    }
+    this.warmIdleTimeoutMs = effectiveTimeout;
+    this.warmIdleExpiresAt = Date.now() + effectiveTimeout;
+    this.warmIdleTimer = setTimeout(() => {
+      this.warmIdleTimer = null;
+      this.warmIdleExpiresAt = null;
+      debugLogger.debug("AssemblyAI warm connection idle timeout reached, closing connection");
+      this.cleanupWarmConnection();
+    }, effectiveTimeout);
+  }
+
+  stopWarmIdleTimer() {
+    if (this.warmIdleTimer) {
+      clearTimeout(this.warmIdleTimer);
+      this.warmIdleTimer = null;
+    }
+    this.warmIdleExpiresAt = null;
+  }
+
+  resetWarmIdleTimer(timeoutMs = this.warmIdleTimeoutMs) {
+    if (this.hasWarmConnection()) {
+      this.startWarmIdleTimer(timeoutMs);
+    }
+  }
+
   async warmup(options = {}) {
     const { token } = options;
     if (!token) {
@@ -148,6 +182,9 @@ class AssemblyAiStreaming {
 
     this.adoptMode(options);
     if (this.warmConnection) {
+      if (this.warmConnectionReady) {
+        this.resetWarmIdleTimer(options.idleTimeoutMs);
+      }
       debugLogger.debug(
         this.warmConnectionReady
           ? "AssemblyAI connection already warm"
@@ -191,6 +228,7 @@ class AssemblyAiStreaming {
             this.warmConnectionReady = true;
             this.warmSessionId = message.id || null;
             this.startKeepAlive();
+            this.startWarmIdleTimer(options.idleTimeoutMs);
             debugLogger.debug("AssemblyAI connection warmed up", { sessionId: message.id });
             resolve();
           }
@@ -220,8 +258,10 @@ class AssemblyAiStreaming {
           return;
         }
         this.stopKeepAlive();
+        this.stopWarmIdleTimer();
         const wasReady = this.warmConnectionReady;
         const savedOptions = this.warmConnectionOptions ? { ...this.warmConnectionOptions } : null;
+        const isIdleExpired = this.warmIdleExpiresAt && Date.now() >= this.warmIdleExpiresAt;
         debugLogger.debug("AssemblyAI warm connection closed", {
           wasReady,
           code,
@@ -233,7 +273,7 @@ class AssemblyAiStreaming {
           reject(new Error(`AssemblyAI warmup connection closed before ready (code: ${code})`));
           return;
         }
-        if (wasReady && savedOptions) {
+        if (wasReady && savedOptions && !isIdleExpired) {
           this.warmConnectionOptions = savedOptions;
           this.scheduleRewarm();
         }
@@ -248,6 +288,10 @@ class AssemblyAiStreaming {
     }
     if (this.isConnected) {
       // Active session in progress, don't re-warm
+      return;
+    }
+    if (this.warmIdleExpiresAt && Date.now() >= this.warmIdleExpiresAt) {
+      debugLogger.debug("AssemblyAI warm connection idle window expired, skipping re-warm");
       return;
     }
     const token = this.getCachedToken();
@@ -266,9 +310,15 @@ class AssemblyAiStreaming {
     this.rewarmTimer = setTimeout(() => {
       this.rewarmTimer = null;
       if (this.hasWarmConnection() || this.isConnected) return;
-      this.warmup({ ...this.warmConnectionOptions, token }).catch((err) => {
-        debugLogger.debug("AssemblyAI auto re-warm failed", { error: err.message });
-      });
+      if (this.warmIdleExpiresAt && Date.now() >= this.warmIdleExpiresAt) return;
+      const remainingTimeout = this.warmIdleExpiresAt
+        ? Math.max(1, this.warmIdleExpiresAt - Date.now())
+        : undefined;
+      this.warmup({ ...this.warmConnectionOptions, token, idleTimeoutMs: remainingTimeout }).catch(
+        (err) => {
+          debugLogger.debug("AssemblyAI auto re-warm failed", { error: err.message });
+        }
+      );
     }, delay);
   }
 
@@ -286,6 +336,10 @@ class AssemblyAiStreaming {
     }
 
     this.stopKeepAlive();
+    this.stopWarmIdleTimer();
+    clearTimeout(this.rewarmTimer);
+    this.rewarmTimer = null;
+    this.rewarmAttempts = 0;
 
     this.ws = this.warmConnection;
     this.isConnected = true;
@@ -328,13 +382,17 @@ class AssemblyAiStreaming {
 
   cleanupWarmConnection() {
     this.stopKeepAlive();
+    this.stopWarmIdleTimer();
+    clearTimeout(this.rewarmTimer);
+    this.rewarmTimer = null;
     if (this.warmConnection) {
+      const socket = this.warmConnection;
+      this.warmConnection = null;
       try {
-        this.warmConnection.close();
+        socket.close();
       } catch (err) {
         // Ignore
       }
-      this.warmConnection = null;
     }
     this.warmConnectionReady = false;
     this.warmConnectionOptions = null;
