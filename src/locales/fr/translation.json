@@ -237,8 +237,7 @@
         "title": "Choisissez votre raccourci de dictée",
         "titleLineOne": "Choisissez votre",
         "titleLineTwo": "raccourci de dictée",
-        "description": "Appuyez dessus quand vous voulez parler plutôt que taper. Fonctionne dans toutes les applications.",
-        "activation": "Appuyer ou maintenir ?"
+        "description": "Appuyez dessus quand vous voulez parler plutôt que taper. Fonctionne dans toutes les applications."
       },
       "assistantHotkey": {
         "title": "Configurer OpenWhispr Assistant",
@@ -496,7 +495,6 @@
       "description": "Configurez la façon de déclencher la dictée",
       "hotkey": "Raccourci",
       "mode": "Mode",
-      "tapDescription": "Appuyer pour démarrer/arrêter",
       "holdDescription": "Maintenir pendant que vous parlez",
       "test": "Test",
       "hotkeyToStartStop": "{{hotkey}} pour démarrer/arrêter",

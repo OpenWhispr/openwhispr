@@ -237,8 +237,7 @@
         "title": "Scegli la tua scorciatoia per dettare",
         "titleLineOne": "Scegli la tua",
         "titleLineTwo": "scorciatoia per dettare",
-        "description": "Premila quando vuoi parlare invece di scrivere. Funziona in qualsiasi app.",
-        "activation": "Toccare o tenere premuto?"
+        "description": "Premila quando vuoi parlare invece di scrivere. Funziona in qualsiasi app."
       },
       "assistantHotkey": {
         "title": "Configura OpenWhispr Assistant",
@@ -496,7 +495,6 @@
       "description": "Configura come avviare la dettatura",
       "hotkey": "Scorciatoia",
       "mode": "Modalità",
-      "tapDescription": "Premi per avviare/fermare",
       "holdDescription": "Tieni premuto mentre parli",
       "test": "Test",
       "hotkeyToStartStop": "{{hotkey}} per avviare/fermare",

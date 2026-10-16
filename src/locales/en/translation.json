@@ -237,8 +237,7 @@
         "title": "Choose your dictation shortcut",
         "titleLineOne": "Choose your",
         "titleLineTwo": "dictation shortcut",
-        "description": "Press it whenever you want to talk instead of type. Works in any app.",
-        "activation": "Tap or hold?"
+        "description": "Press it whenever you want to talk instead of type. Works in any app."
       },
       "assistantHotkey": {
         "title": "Set up OpenWhispr Assistant",
@@ -496,7 +495,6 @@
       "description": "Configure how you trigger dictation",
       "hotkey": "Hotkey",
       "mode": "Mode",
-      "tapDescription": "Press to start/stop",
       "holdDescription": "Hold while speaking",
       "test": "Test",
       "hotkeyToStartStop": "{{hotkey}} to start/stop",

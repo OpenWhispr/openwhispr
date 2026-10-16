@@ -216,8 +216,7 @@
         "title": "Escolha seu atalho de ditado",
         "titleLineOne": "Escolha seu",
         "titleLineTwo": "atalho de ditado",
-        "description": "Pressione-o sempre que quiser falar em vez de digitar. Funciona em qualquer app.",
-        "activation": "Tocar ou segurar?"
+        "description": "Pressione-o sempre que quiser falar em vez de digitar. Funciona em qualquer app."
       },
       "assistantHotkey": {
         "title": "Configure o OpenWhispr Assistant",
@@ -475,7 +474,6 @@
       "description": "Configure como acionar o ditado",
       "hotkey": "Atalho",
       "mode": "Modo",
-      "tapDescription": "Pressione para iniciar/parar",
       "holdDescription": "Segure enquanto fala",
       "test": "Teste",
       "hotkeyToStartStop": "{{hotkey}} para iniciar/parar",

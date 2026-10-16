@@ -237,8 +237,7 @@
         "title": "ディクテーション用のショートカットを選びましょう",
         "titleLineOne": "ディクテーション用の",
         "titleLineTwo": "ショートカットを選びましょう",
-        "description": "入力の代わりに話したいときに押します。どのアプリでも使えます。",
-        "activation": "タップかホールド？"
+        "description": "入力の代わりに話したいときに押します。どのアプリでも使えます。"
       },
       "assistantHotkey": {
         "title": "OpenWhispr Assistant を設定",
@@ -496,7 +495,6 @@
       "description": "ディクテーションの起動方法を設定",
       "hotkey": "ホットキー",
       "mode": "モード",
-      "tapDescription": "押して開始/停止",
       "holdDescription": "押しながら話す",
       "test": "テスト",
       "hotkeyToStartStop": "{{hotkey}} で開始/停止",
