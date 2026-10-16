@@ -260,3 +260,30 @@ test("the authorization scheme is exported for the canary to reuse", () => {
   assert.equal(DeepgramStreaming.authorizationHeader("byok", "k"), "Token k");
   assert.equal(DeepgramStreaming.authorizationHeader("openwhispr", "k"), "Bearer k");
 });
+
+test("a cold socket is ready on open and sends KeepAlive before any server frame", async () => {
+  const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+  await new Promise((resolve) => server.once("listening", resolve));
+  const received = [];
+  server.on("connection", (socket) => {
+    socket.on("message", (data) => received.push(data.toString()));
+  });
+
+  const streaming = new DeepgramStreaming();
+  streaming.buildWebSocketUrl = () => `ws://127.0.0.1:${server.address().port}`;
+  try {
+    await streaming.connect({ token: "byok-key", mode: "byok" });
+    assert.equal(streaming.isConnected, true);
+    const deadline = Date.now() + 500;
+    while (!received.some((frame) => frame.includes('"KeepAlive"')) && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.ok(
+      received.some((frame) => frame.includes('"KeepAlive"')),
+      "the idle socket must be kept alive before audio exists"
+    );
+  } finally {
+    streaming.cleanupAll();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
