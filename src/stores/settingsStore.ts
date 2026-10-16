@@ -40,6 +40,8 @@ import { recordTinfoilModelSwitch } from "./tinfoilModelSwitchStore";
 import { MEETING_STREAMING_PROVIDER_IDS } from "../helpers/meetingTranscriptionRouting";
 import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
 import {
+  acceptsUnlistedTranscriptionModel,
+  isUploadOnlyTranscriptionModel,
   getTranscriptionSelection,
   isScreenContextAllowed,
   resolveEffectivePolicySelection,
@@ -119,11 +121,13 @@ const localLlmProviderIds = new Set(
 function transcriptionProviderModels(
   providerId: string,
   context: TranscriptionPolicyContext
-): Array<{ id: string; streaming?: boolean }> {
-  const models =
+): Array<{ id: string; streaming?: boolean; uploadOnly?: boolean }> {
+  const models: Array<{ id: string; streaming?: boolean; uploadOnly?: boolean }> =
     modelRegistryData.transcriptionProviders.find((provider) => provider.id === providerId)
       ?.models ?? [];
-  return context === "meeting" ? models.filter((model) => model.streaming) : models;
+  if (context === "meeting") return models.filter((model) => model.streaming);
+  if (context === "dictation") return models.filter((model) => !model.uploadOnly);
+  return models;
 }
 
 function defaultTranscriptionModel(
@@ -139,6 +143,10 @@ function transcriptionModelBelongsToProvider(
   context: TranscriptionPolicyContext
 ): boolean {
   if (providerId === "custom") return Boolean(modelId);
+  if (context !== "upload" && isUploadOnlyTranscriptionModel(providerId, modelId)) return false;
+  // A stored vendor-prefixed OpenRouter id outlives its registry entry rather
+  // than being reset on the next tab switch.
+  if (acceptsUnlistedTranscriptionModel(providerId, modelId)) return true;
   return transcriptionProviderModels(providerId, context).some((model) => model.id === modelId);
 }
 

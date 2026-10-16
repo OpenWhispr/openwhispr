@@ -72,6 +72,7 @@ import {
 } from "../models/ModelRegistry";
 import { TINFOIL_PROXY_REQUIRED_ERROR } from "../services/transcriptionBaseUrl";
 import {
+  batchTranscriptionHttpError,
   byokFileSizeLimit,
   resolveByokModel,
   resolveTranscriptionRoute,
@@ -129,7 +130,11 @@ import {
   matchesDictionaryPrompt,
   payloadSendsDictionaryBias,
 } from "../utils/dictionaryEchoFilter.js";
-import { dictionaryPromptLimit, trimDictionaryPrompt } from "../utils/dictionaryPromptCap.js";
+import {
+  dictionaryPromptLimit,
+  dictionaryReachesTranscriptionModel,
+  trimDictionaryPrompt,
+} from "../utils/dictionaryPromptCap.js";
 import {
   dictionaryKeywordOverflow,
   dictionaryKeywords,
@@ -2721,6 +2726,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         err.code = "API_KEY_MISSING";
         throw err;
       }
+    } else if (provider === "openrouter") {
+      apiKey = s.openrouterApiKey;
+      if (!apiKey?.trim()) {
+        apiKey = await window.electronAPI.getOpenrouterKey?.();
+      }
+      if (!apiKey?.trim()) {
+        const err = new Error(
+          "OpenRouter API key not found. Please set your API key in the Control Panel."
+        );
+        err.code = "API_KEY_MISSING";
+        throw err;
+      }
     } else {
       // Default to OpenAI
       // Prefer store value (user-entered via UI) over main process (.env)
@@ -3896,6 +3913,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       const endpoint = this.getTranscriptionEndpoint(route);
+      // OpenRouter drops `prompt` on this path (see dictionaryPromptCap), so the
+      // dictionary stays on the device there and nothing can echo it back.
+      const sendsDictionary = dictionaryReachesTranscriptionModel(endpoint);
 
       // gpt-transcribe takes the dictionary on its own keywords[] channel (see
       // dictionaryKeywords), so its prompt carries only the Chinese script bias and
@@ -3917,7 +3937,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         MAX_PROMPT_CHARS
       );
       const dictionaryPrompt = trimmedPrompt.prompt;
-      if (dictionaryPrompt && model !== "orukeet-v0.1.0") {
+      if (dictionaryPrompt && sendsDictionary && model !== "orukeet-v0.1.0") {
         if (trimmedPrompt.truncated) {
           logger.debug(
             "Custom dictionary prompt truncated",
@@ -3931,7 +3951,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
         formData.append("prompt", dictionaryPrompt);
       }
-      if (usesKeywords) {
+      if (usesKeywords && sendsDictionary) {
         for (const keyword of dictionaryKeywords(dictionary)) {
           formData.append("keywords[]", keyword);
         }
@@ -3982,7 +4002,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // dictation keeps that setting (usually "openai") while posting to the
       // user's own server.
       const providerErrorContext = {
-        provider: route.provider === "groq" ? "Groq" : "OpenAI",
+        provider: getTranscriptionProvider(route.provider)?.name ?? route.provider,
         selfHosted: route.provider === "self-hosted" || route.provider === "custom",
         model: route.model ?? model,
         surface: "transcription",
@@ -4025,12 +4045,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           },
           "transcription"
         );
-        throw providerHttpError({
-          ...providerErrorContext,
-          status: response.status,
-          body: errorText,
-          headers: response.headers,
-        });
+        throw Object.assign(
+          providerHttpError({
+            ...providerErrorContext,
+            status: response.status,
+            body: errorText,
+            headers: response.headers,
+          }),
+          batchTranscriptionHttpError(response.status, endpoint)
+        );
       }
 
       let result;
@@ -4087,7 +4110,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       // Check for text - handle both empty string and missing field
       if (result.text && result.text.trim().length > 0) {
-        if (this.isDictionaryEcho(result.text)) {
+        if (sendsDictionary && this.isDictionaryEcho(result.text)) {
           throw dictionaryEchoError();
         }
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
