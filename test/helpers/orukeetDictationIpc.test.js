@@ -156,6 +156,8 @@ function anything() {
   });
 }
 
+const tick = () => new Promise((resolve) => setImmediate(resolve));
+
 function buildFakeThis() {
   const target = {
     sessionId: "test-session",
@@ -507,7 +509,7 @@ test("a warmup never reuses a socket that has already carried audio", async () =
     return Response.json(cloudSession);
   };
 
-  await handlers.get("dictation-realtime-start")(event, managedOptions);
+  await handlers.get("dictation-realtime-warmup")(event, managedOptions);
   handlers.get("dictation-realtime-send")(event, Buffer.alloc(640));
   const used = target._dictationStreaming;
   const warmup = await handlers.get("dictation-realtime-warmup")(event, managedOptions);
@@ -517,6 +519,83 @@ test("a warmup never reuses a socket that has already carried audio", async () =
   assert.equal(mints, 2);
   assert.notEqual(target._dictationStreaming, used);
   await handlers.get("dictation-realtime-stop")();
+});
+
+test("a re-warm queued before the next start leaves that recording's socket alone", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  const pending = [];
+  let mints = 0;
+  backendResponse = () => {
+    mints += 1;
+    return new Promise((resolve) => pending.push(resolve));
+  };
+  const warmups = [
+    handlers.get("dictation-realtime-warmup")(event, managedOptions),
+    handlers.get("dictation-realtime-warmup")(event, managedOptions),
+  ];
+  while (pending.length < 1) await tick();
+
+  handlers.get("dictation-realtime-start")(event, managedOptions);
+  const bytesTo = new Map();
+  for (let i = 0; i < 120; i++) {
+    if (pending.length) pending.shift()(Response.json(cloudSession));
+    const streaming = target._dictationStreaming;
+    handlers.get("dictation-realtime-send")(event, Buffer.alloc(640));
+    bytesTo.set(streaming, (bytesTo.get(streaming) || 0) + 640);
+    await tick();
+  }
+  await Promise.all(warmups);
+  const final = await handlers.get("dictation-realtime-finalize")();
+  await handlers.get("dictation-realtime-stop")();
+
+  const [droppedWithWarmSocket, ...afterStart] = bytesTo.values();
+  assert.equal(droppedWithWarmSocket > 0, true);
+  assert.equal(final.text, `Recorded ${afterStart.reduce((sum, bytes) => sum + bytes, 0)} bytes`);
+  assert.equal(mints, 2);
+});
+
+test("a re-warm requested during a recording leaves its socket alone", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  let mints = 0;
+  backendResponse = async () => {
+    mints += 1;
+    return Response.json(cloudSession);
+  };
+
+  await handlers.get("dictation-realtime-start")(event, managedOptions);
+  handlers.get("dictation-realtime-send")(event, Buffer.alloc(640));
+  const recording = target._dictationStreaming;
+  const warmup = await handlers.get("dictation-realtime-warmup")(event, managedOptions);
+  handlers.get("dictation-realtime-send")(event, Buffer.alloc(640));
+
+  assert.equal(warmup.success, true);
+  assert.equal(mints, 1);
+  assert.equal(target._dictationStreaming, recording);
+  assert.equal(target._dictationIdleTimer, null);
+  assert.equal((await handlers.get("dictation-realtime-finalize")()).text, "Recorded 1280 bytes");
+  await handlers.get("dictation-realtime-stop")();
+});
+
+test("a re-warm that finishes after start never arms idle expiry on the recording", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  const pending = [];
+  backendResponse = () => new Promise((resolve) => pending.push(resolve));
+  const warmups = [
+    handlers.get("dictation-realtime-warmup")(event, managedOptions),
+    handlers.get("dictation-realtime-warmup")(event, managedOptions),
+  ];
+  while (pending.length < 1) await tick();
+  const start = handlers.get("dictation-realtime-start")(event, managedOptions);
+  backendResponse = async () => Response.json(cloudSession);
+  pending.shift()(Response.json(cloudSession));
+  await start;
+  await Promise.all(warmups);
+  handlers.get("dictation-realtime-send")(event, Buffer.alloc(640));
+
+  assert.equal(target._dictationIdleTimer, null);
+  const final = await handlers.get("dictation-realtime-finalize")();
+  await handlers.get("dictation-realtime-stop")();
+  assert.equal(final.text, "Recorded 640 bytes");
 });
 
 test("an idle Orukeet warm socket closes after 60 seconds and start cancels expiry", async () => {
