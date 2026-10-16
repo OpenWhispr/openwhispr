@@ -7,6 +7,7 @@ import {
   writeKeyboardAgentResult,
   consumeKeyboardAgentAction,
   isKeyboardAgentCancelled,
+  hideKeyboardAgentHints,
 } from '@/lib/keyboardAgentSync';
 import type { KeyboardAgentJob, KeyboardAgentResult } from '@/lib/keyboardAgentSync';
 import { useConfigStore } from '@/store/useConfigStore';
@@ -36,12 +37,23 @@ jest.mock('../../../modules/app-group-storage/src', () => ({
     KEYBOARD_AGENT_RESULT: 'keyboard_agent_result',
     KEYBOARD_AGENT_ACTION: 'keyboard_agent_action',
     KEYBOARD_AGENT_ACTION_AT_MS: 'keyboard_agent_action_at_ms',
+    KEYBOARD_AGENT_HINTS_HIDDEN_UNTIL_MS: 'keyboard_agent_hints_hidden_until_ms',
     KEYBOARD_CANCEL_REQUESTED: 'keyboard_cancel_requested',
   },
 }));
 
+let mockAppStateListener: ((state: string) => void) | undefined;
 jest.mock('react-native', () => ({
-  AppState: { addEventListener: () => ({ remove: () => {} }) },
+  AppState: {
+    addEventListener: (_type: string, listener: (state: string) => void) => {
+      mockAppStateListener = listener;
+      return {
+        remove: () => {
+          if (mockAppStateListener === listener) mockAppStateListener = undefined;
+        },
+      };
+    },
+  },
 }));
 
 jest.mock('@/services/storage/StorageService', () => ({
@@ -562,5 +574,40 @@ describe('isKeyboardAgentCancelled', () => {
     store.keyboard_cancel_requested = '0';
     expect(isKeyboardAgentCancelled()).toBe(false);
     expect(store.keyboard_cancel_requested).toBe('0');
+  });
+});
+
+// ─── Example instructions ─────────────────────────────────────────────────────
+
+// Onboarding's voice assistant step says what to dictate, so the keyboard hides its own examples.
+describe('hideKeyboardAgentHints', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('hides them for 15 minutes, so a step the app never left stops on its own', () => {
+    jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    hideKeyboardAgentHints();
+    expect(store.keyboard_agent_hints_hidden_until_ms).toBe(String(1_000_000 + 15 * 60_000));
+  });
+
+  it('renews the deadline when the app comes back to the foreground', () => {
+    const now = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    const show = hideKeyboardAgentHints();
+    now.mockReturnValue(2_000_000);
+    mockAppStateListener?.('background');
+    expect(store.keyboard_agent_hints_hidden_until_ms).toBe(String(1_000_000 + 15 * 60_000));
+    mockAppStateListener?.('active');
+    expect(store.keyboard_agent_hints_hidden_until_ms).toBe(String(2_000_000 + 15 * 60_000));
+    show();
+  });
+
+  it('shows them again when the step is left, and stops renewing', () => {
+    const show = hideKeyboardAgentHints();
+    expect(store.keyboard_agent_hints_hidden_until_ms).toBeDefined();
+    show();
+    expect(store.keyboard_agent_hints_hidden_until_ms).toBeUndefined();
+    mockAppStateListener?.('active');
+    expect(store.keyboard_agent_hints_hidden_until_ms).toBeUndefined();
   });
 });

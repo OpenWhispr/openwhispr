@@ -69,7 +69,9 @@
         "reasoningFailed": "لم يتمكن الذكاء الاصطناعي من إكمال تعديل التحديد. لم يتم تغيير نصك الأصلي.",
         "invalidResponse": "أعاد الذكاء الاصطناعي استجابة تحرير غير صالحة. لم يتم استبدال أي نص. حدد النص وحاول مرة أخرى.",
         "emptyResponse": "أعاد الذكاء الاصطناعي تعديلاً فارغاً. لم يتم استبدال أي نص. جرّب تعليمة أكثر تحديداً.",
-        "truncatedResponse": "توقف الذكاء الاصطناعي قبل إكمال التعديل. لم يتم استبدال أي نص. جرّب تحديد نص أقل."
+        "truncatedResponse": "توقف الذكاء الاصطناعي قبل إكمال التعديل. لم يتم استبدال أي نص. جرّب تحديد نص أقل.",
+        "wlCopyMissing": "أنشأ OpenWhispr التعديل، لكن على سطح المكتب هذا لا تستطيع تطبيقات Wayland قراءة النص الملصوق إلا عبر wl-copy. ثبّت wl-clipboard لتطبيق التعديلات.",
+        "wlCopyFailed": "أنشأ OpenWhispr التعديل، لكن تعذّر على wl-copy نسخه لتطبيقات Wayland، لذا لم يتم تطبيقه."
       },
       "pushForceStopped": {
         "title": "لم يتم لصق النص المفرَّغ",
@@ -93,7 +95,12 @@
       "pasteFailed": {
         "title": "تعذّر اللصق تلقائيًا"
       },
-      "interruptedRecordingRecovered": "تمت استعادته بعد إغلاق OpenWhispr قبل انتهاء هذا الإملاء."
+      "interruptedRecordingRecovered": "تمت استعادته بعد إغلاق OpenWhispr قبل انتهاء هذا الإملاء.",
+      "waylandClipboard": {
+        "title": "لم يتم لصق النص المفرَّغ",
+        "wlCopyMissing": "على سطح المكتب هذا، لا تستطيع تطبيقات Wayland قراءة النص الملصوق إلا عبر wl-copy. ثبّت wl-clipboard للصق الإملاء.",
+        "wlCopyFailed": "تعذّر على wl-copy نسخ النص لتطبيقات Wayland، لذا لم يتم لصقه. اضغط على إعادة المحاولة للمحاولة مرة أخرى."
+      }
     },
     "clipboard": {
       "pasteFailed": {
@@ -1761,7 +1768,13 @@
       "copiedToClipboard": "تم النسخ إلى حافظتك",
       "openNote": "فتح الملاحظة",
       "unknownTool": "أداة غير معروفة: {{name}}",
-      "invalidArgs": "وسيطات غير صالحة للأداة {{name}}"
+      "invalidArgs": "وسيطات غير صالحة للأداة {{name}}",
+      "search_openwhispr_helpName": "البحث في مساعدة OpenWhispr",
+      "read_openwhispr_helpName": "قراءة مساعدة OpenWhispr",
+      "get_openwhispr_contextName": "قراءة إعدادات OpenWhispr",
+      "search_openwhispr_helpStatus": "جاري البحث في مساعدة OpenWhispr...",
+      "read_openwhispr_helpStatus": "جاري قراءة مساعدة OpenWhispr...",
+      "get_openwhispr_contextStatus": "جاري قراءة إعدادات OpenWhispr..."
     }
   },
   "noteEditor": {
@@ -3713,6 +3726,10 @@
           },
           "xclip": {
             "step1Title": "تثبيت xclip"
+          },
+          "wlCopy": {
+            "step1Title": "تثبيت wl-clipboard",
+            "step2Title": "التحقق من التثبيت"
           }
         },
         "xclipDesc": "أداة الحافظة للصق في KDE Wayland (xclip أو xsel)",
@@ -3724,7 +3741,8 @@
           "flakeTitle": "التثبيت عبر flake الخاص بنا؟",
           "flakeDesc": "إذا قمت بتثبيت OpenWhispr من flake، فسيقوم programs.openwhispr.enable بتفعيل ydotool ووحدة uinput وعضويات المجموعة نيابة عنك.",
           "rebuildNote": "قم بتشغيل sudo nixos-rebuild switch، ثم قم بتسجيل الخروج وتسجيل الدخول مرة أخرى حتى يسري تغيير المجموعة وقاعدة /dev/uinput. استبدل <you> باسم المستخدم الخاص بك."
-        }
+        },
+        "wlCopyDesc": "أداة الحافظة التي تقرأ منها تطبيقات Wayland النص الملصوق على سطح المكتب هذا"
       },
       "updates": {
         "automaticUpdates": "التحديثات التلقائية",
@@ -4478,7 +4496,9 @@
     "withoutToolPrefix": "بدون هذه الأداة، سيقوم OpenWhispr بنسخ النص إلى الحافظة الخاصة بك. يمكنك بعد ذلك اللصق يدويًا باستخدام Ctrl+V.",
     "wtypeCosmicTerminalsDescription": "على COSMIC، لا تستقبل الطرفيات مثل Warp النص الملصق إلا عبر wtype. أما التطبيقات الأخرى فيعمل فيها اللصق بدونه.",
     "wtypeFallbackDescription": "يُعد wtype الطريقة المفضلة للصق التلقائي في مركب wlroots هذا. يتوفر بديل آخر، ولكنه قد يكون أقل موثوقية.",
-    "xwaylandAppsOnly": "اللصق التلقائي يعمل مع تطبيقات XWayland فقط"
+    "xwaylandAppsOnly": "اللصق التلقائي يعمل مع تطبيقات XWayland فقط",
+    "wlClipboardTitle": "ثبّت wl-clipboard للصق في تطبيقات Wayland",
+    "wlClipboardDescription": "على سطح المكتب هذا، لا تستطيع تطبيقات Wayland قراءة النص الذي ينسخه OpenWhispr إلا عبر wl-copy. للصق الإملاء فيها، ثبّت wl-clipboard:"
   },
   "settingsModal": {
     "managedByOrg": "تتم إدارة بعض الإعدادات بواسطة مؤسستك.",
@@ -5088,5 +5108,55 @@
       "standard": "النبرة القياسية",
       "standardDescription": "يحافظ تنظيف النص على نبرتك في كل التطبيقات. أوقف هذا الخيار لاختيار نبرة لكل نوع من التطبيقات."
     }
+  },
+  "productHelp": {
+    "sources": "الوثائق الرسمية",
+    "settings": "إعدادات التطبيق الحالية",
+    "guidance": "المعلومات المستخدمة في هذا الرد.",
+    "settingsNote": "خيارات وأذونات معروفة تمت قراءتها لهذا الرد دون تعديلها؛ لا يتم اختبار أجهزتك.",
+    "readAt": "تمت القراءة في {{time}}",
+    "sourceStatus": {
+      "live": "تم جلب المقال",
+      "bundled": "إرشادات مدمجة بديلة"
+    },
+    "reason": {
+      "policy": "تحدّ سياسة مؤسستك من البحث في الوثائق عبر الإنترنت.",
+      "rateLimit": "تم بلوغ حد البحث في الوثائق عبر الإنترنت. تُعرض الإرشادات المدمجة.",
+      "unavailable": "تعذّر التحقق من الوثائق الحالية. تُعرض الإرشادات المدمجة.",
+      "privacy": "البحث في الوثائق عبر الإنترنت متوقف أثناء تسجيل الخروج أو عند استخدام المعالجة المحلية فقط. تُعرض الإرشادات المدمجة."
+    },
+    "openFailed": "تعذّر فتح المقال. يمكنك نسخ الرابط وفتحه في المتصفح.",
+    "topicsList": {
+      "hotkeys": "الاختصارات",
+      "microphone": "الميكروفون",
+      "models": "النماذج",
+      "meetings": "الاجتماعات",
+      "calendar": "التقويمات",
+      "language": "اللغات",
+      "backup": "النسخ الاحتياطي",
+      "assistant": "المساعد",
+      "hold-or-tap": "استمرار الضغط أو النقر",
+      "choose-your-microphone": "اختيار الميكروفون",
+      "microphone-not-working": "الميكروفون لا يعمل",
+      "local-models": "النماذج المحلية",
+      "chat-agent": "وكيل الدردشة",
+      "record-a-meeting": "تسجيل اجتماع",
+      "connect-google-calendar": "ربط تقويم Google",
+      "languages": "الإملاء بلغات أخرى",
+      "sync-across-devices": "مزامنة الملاحظات عبر الأجهزة"
+    },
+    "appVersion": "إصدار التطبيق",
+    "platform": "المنصة",
+    "processing": "المعالجة",
+    "engine": "المحرك",
+    "policy": "تسمح السياسة باستخدام المساعد",
+    "on": "مفعّل",
+    "off": "معطّل",
+    "microphonePermission": "إذن الميكروفون",
+    "specificMicrophone": "ميكروفون محدد",
+    "permissionGranted": "مسموح",
+    "permissionDenied": "مرفوض",
+    "permissionRestricted": "مقيّد",
+    "permissionNotDetermined": "لم يُطلب"
   }
 }

@@ -17,14 +17,14 @@ type ModeChoice = 'cloud' | 'private';
 
 type CleanupLine = { included: boolean; text: string; hint?: string };
 
-// What Private Mode's cleanup does on this phone, matching what choosing it saves
-// (chooseOnboardingMode): a cleanup provider saved earlier keeps cleaning, and otherwise it's
-// Apple Intelligence or nothing. On an iPhone nothing is shown until the check answers.
+// What cleanup does once Local Mode is chosen here: a provider saved for it keeps cleaning, and
+// otherwise it runs on Apple Intelligence or not at all (holdOnDeviceConfig). On an iPhone the
+// On-Device line waits for the readiness check.
 function privateCleanupLine(
   readiness: LocalReasoningReadiness | null,
-  savedCleanup: InferenceMode | undefined,
+  cleanup: InferenceMode | undefined,
 ): CleanupLine | null {
-  if (savedCleanup === 'providers') {
+  if (cleanup === 'providers') {
     return {
       included: true,
       text: 'Cleanup with your saved provider',
@@ -124,15 +124,15 @@ export function PrivacyModeStep(): ReactElement {
           <Bullet text="Automatic cleanup & formatting" />
         </ModeCard>
         <ModeCard
-          title="Private Mode"
+          title="Local Mode"
           icon={<SystemIcon name="lock.fill" mdName="Lock" size={18} color="brand" />}
           selected={choice === 'private'}
           onSelect={() => setChoice('private')}
         >
           <Text className="mt-1 text-[14px] leading-[19px] text-secondaryLabel">
-            Everything runs on your device. Nothing is ever uploaded.
+            Dictation runs on your device and never leaves it.
           </Text>
-          <Bullet text="Works fully offline" />
+          <Bullet text="Dictation works offline" />
           {cleanupLine ? <Bullet {...cleanupLine} /> : null}
           <Text className="mt-2 text-[12px] text-tertiaryLabel">
             One-time ~140–461 MB download, depending on language

@@ -7,7 +7,7 @@ import { formatHotkeyListLabel } from "./utils/hotkeys";
 import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useLinuxPillInteractivity } from "./hooks/useLinuxPillInteractivity";
 import { useAudioRecording } from "./hooks/useAudioRecording";
-import { useAssistantPanel } from "./hooks/useAssistantPanel";
+import { useAssistantFollowUpThinking, useAssistantPanel } from "./hooks/useAssistantPanel";
 import { useOnboardingAssistantDemo } from "./hooks/useOnboardingAssistantDemo";
 import { useLiveTranscriptPanel } from "./hooks/useLiveTranscriptPanel";
 import { useMainWindowSizeOwner } from "./hooks/useMainWindowSizeOwner";
@@ -207,18 +207,7 @@ export default function App() {
     }
   }, [assistantOpenRef, setWindowInteractivity]);
 
-  const {
-    isRecording,
-    isProcessing,
-    isAssistantVoice,
-    isPreparing,
-    isStopping,
-    micCaptureStatus,
-    toggleListening,
-    cancelRecording,
-    cancelProcessing,
-    getAudioLevel,
-  } = useAudioRecording(toast, {
+  const recording = useAudioRecording(toast, {
     onToggle: handleDictationToggle,
     onDemoEvent: publishOnboardingDemoEvent,
     onAssistantCommand: assistant.handleCommand,
@@ -237,6 +226,18 @@ export default function App() {
     },
     assistantOpenRef,
   });
+  const {
+    isRecording,
+    isProcessing,
+    isAssistantVoice,
+    isPreparing,
+    isStopping,
+    micCaptureStatus,
+    toggleListening,
+    cancelRecording,
+    cancelProcessing,
+    getAudioLevel,
+  } = recording;
   const isVisuallyProcessing = isProcessing || isPreparing || isStopping;
 
   useLayoutEffect(() => {
@@ -281,12 +282,7 @@ export default function App() {
     );
   }, [mainWindowHorizontalDirection, panelStartPosition, voiceDirectionLocked]);
 
-  const { beginThinking: beginAssistantThinking } = assistant;
-  useEffect(() => {
-    if (isAssistantVoice && isProcessing && assistantOpenRef.current) {
-      beginAssistantThinking();
-    }
-  }, [isAssistantVoice, isProcessing, assistantOpenRef, beginAssistantThinking]);
+  useAssistantFollowUpThinking(recording, assistant);
 
   // While the Agent panel is open, plain dictation renders on the
   // opposite-edge companion pill — neither its recording nor its processing

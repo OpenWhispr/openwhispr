@@ -13,7 +13,7 @@ import { useOnboardingPracticeMode } from '@/hooks/useOnboardingPracticeMode';
 import { useOnboardingStep } from '@/hooks/useOnboardingStep';
 import { BRAND } from '@/config/colors';
 import { AppFont } from '@/lib/fonts';
-import { readKeyboardAgentDraft } from '@/lib/keyboardAgentSync';
+import { hideKeyboardAgentHints, readKeyboardAgentDraft } from '@/lib/keyboardAgentSync';
 import { safeHaptics } from '@/lib/utils';
 import { useAuthStore } from '@/store/useAuthStore';
 import { hasRealAccountHistory } from '@/sync/syncIdentity';
@@ -93,6 +93,9 @@ export function VoiceAgentStep(): ReactElement {
     pulse.value = withSequence(withTiming(1, { duration: 160 }), withTiming(0, { duration: 700 }));
     safeHaptics(phase === 'done' ? 'success' : 'light');
   }, [phase, draftText, pulse]);
+
+  // The card says what to dictate, so the keyboard's own example instruction would contradict it.
+  useEffect(() => hideKeyboardAgentHints(), []);
 
   useEffect(() => {
     const subscription = addKeyboardStatusChangedListener((event) => {

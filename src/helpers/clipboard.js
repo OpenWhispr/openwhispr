@@ -85,6 +85,26 @@ function writeClipboardInRenderer(webContents, text) {
   return webContents.executeJavaScript(`navigator.clipboard.writeText(${escaped})`);
 }
 
+// wl-copy exits only once the compositor has taken the selection, a round trip a
+// loaded or cold system can stretch past 50 ms. Where wl-copy is required (#2621), a
+// write killed early holds the paste back, so it gets the other clipboard tools' 200 ms.
+const WL_COPY_TIMEOUT_MS = 200;
+
+// Linux refuses a single argument of 128 KiB or more (MAX_ARG_STRLEN). Reading stdin
+// costs wl-copy a temp file and a `cat`, so only text that long goes that way, typed so
+// wl-copy doesn't run xdg-mime to sniff it.
+const MAX_ARG_BYTES = 128 * 1024;
+
+function spawnWlCopy(flags, text) {
+  if (Buffer.byteLength(text) < MAX_ARG_BYTES) {
+    return spawnSync("wl-copy", [...flags, "--", text], { timeout: WL_COPY_TIMEOUT_MS });
+  }
+  return spawnSync("wl-copy", [...flags, "--type", "text/plain"], {
+    input: text,
+    timeout: WL_COPY_TIMEOUT_MS,
+  });
+}
+
 class ClipboardManager {
   constructor() {
     this.accessibilityCache = { value: null, expiresAt: 0 };
@@ -123,6 +143,21 @@ class ClipboardManager {
     return isWayland;
   }
 
+  // Where wl-copy is required, a missing one holds back every paste, so its
+  // absence is probed again there instead of read from the cache: a wl-copy
+  // installed after a held-back paste is used by the next one.
+  _wlCopyExists() {
+    if (
+      this.commandAvailabilityCache.get("wl-copy")?.exists === false &&
+      getLinuxSessionInfo().requiresWlCopy
+    ) {
+      this.commandAvailabilityCache.delete("wl-copy");
+    }
+    return this.commandExists("wl-copy");
+  }
+
+  // True when wl-copy wrote the Wayland clipboard; every other path only reaches
+  // XWayland's.
   _writeClipboardWayland(text, webContents) {
     const { isKde } = getLinuxSessionInfo();
 
@@ -137,7 +172,7 @@ class ClipboardManager {
           });
           if (result.status === 0) {
             clipboard.writeText(text);
-            return;
+            return false;
           }
         } catch {}
       }
@@ -149,21 +184,21 @@ class ClipboardManager {
           });
           if (result.status === 0) {
             clipboard.writeText(text);
-            return;
+            return false;
           }
         } catch {}
       }
       // Last resort: Electron's clipboard.writeText should work on XWayland
       clipboard.writeText(text);
-      return;
+      return false;
     }
 
-    if (this.commandExists("wl-copy")) {
+    if (this._wlCopyExists()) {
       try {
-        const result = spawnSync("wl-copy", ["--", text], { timeout: 50 });
+        const result = spawnWlCopy([], text);
         if (result.status === 0) {
           clipboard.writeText(text);
-          return;
+          return true;
         }
       } catch {}
     }
@@ -173,22 +208,24 @@ class ClipboardManager {
     }
 
     clipboard.writeText(text);
+    return false;
   }
 
   // PRIMARY selection (X11's "highlight to copy") is what terminals like alacritty,
   // foot, konsole, xterm, and st bind Shift+Insert to. Mirror the transcription
   // there so Shift+Insert pastes reliably regardless of which selection the
   // terminal uses. Falls through wl-copy → xclip → xsel → Electron's selection
-  // target so we cover Wayland, X11, and XWayland setups.
+  // target so we cover Wayland, X11, and XWayland setups. True when wl-copy wrote
+  // the Wayland primary selection.
   _writePrimarySelection(text) {
-    if (process.platform !== "linux") return;
+    if (process.platform !== "linux") return false;
 
     const { isWayland } = getLinuxSessionInfo();
 
     if (isWayland && this.commandExists("wl-copy")) {
       try {
-        const result = spawnSync("wl-copy", ["--primary", "--", text], { timeout: 50 });
-        if (result.status === 0) return;
+        const result = spawnWlCopy(["--primary"], text);
+        if (result.status === 0) return true;
       } catch {}
     }
 
@@ -198,7 +235,7 @@ class ClipboardManager {
           input: text,
           timeout: 200,
         });
-        if (result.status === 0) return;
+        if (result.status === 0) return false;
       } catch {}
     }
 
@@ -208,13 +245,14 @@ class ClipboardManager {
           input: text,
           timeout: 200,
         });
-        if (result.status === 0) return;
+        if (result.status === 0) return false;
       } catch {}
     }
 
     try {
       clipboard.writeText(text, "selection");
     } catch {}
+    return false;
   }
 
   _readPrimarySelection() {
@@ -976,13 +1014,16 @@ class ClipboardManager {
         this.safeLog("💾 Saved original clipboard:", originalClipboard.type);
       }
 
+      // Apps paste the clipboard; terminals given Shift+Insert (niri always sends it)
+      // paste the primary selection.
+      const waylandWrites = { clipboard: false, primary: false };
       if (platform === "linux") {
         if (this._isWayland()) {
-          this._writeClipboardWayland(text, webContents);
+          waylandWrites.clipboard = this._writeClipboardWayland(text, webContents);
         } else {
           clipboard.writeText(text);
         }
-        this._writePrimarySelection(text);
+        waylandWrites.primary = this._writePrimarySelection(text);
       } else {
         clipboard.writeText(text);
       }
@@ -1038,6 +1079,19 @@ class ClipboardManager {
           expectedClipboardText: text,
           targetWindow: options.targetWindow,
         });
+      } else if (
+        getLinuxSessionInfo().requiresWlCopy &&
+        !(waylandWrites.clipboard && waylandWrites.primary)
+      ) {
+        // Wayland apps here read only what wl-copy wrote: a selection it didn't write
+        // is stale, and a chord could paste it. The text stays unrestored.
+        const reason = this.commandExists("wl-copy") ? "wl-copy-failed" : "wl-copy-missing";
+        debugLogger.warn(
+          "Wayland selections not written, leaving the text unpasted",
+          { reason, written: waylandWrites },
+          "clipboard"
+        );
+        pasteResult = { pasted: false, reason, restoreComplete: Promise.resolve() };
       } else {
         pasteResult = await this.pasteLinux(originalClipboard, {
           ...options,
@@ -2355,12 +2409,17 @@ Would you like to open System Settings now?`;
     return clipboard.readText();
   }
 
+  // `xwaylandOnly`: where wl-copy is required (#2621), a write it didn't make reaches
+  // native Wayland apps only while an OpenWhispr window has focus.
   async writeClipboard(text, webContents = null) {
     if (process.platform === "linux" && this._isWayland()) {
-      this._writeClipboardWayland(text, webContents);
-    } else {
-      clipboard.writeText(text);
+      const wroteWayland = this._writeClipboardWayland(text, webContents);
+      return {
+        success: true,
+        xwaylandOnly: !wroteWayland && getLinuxSessionInfo().requiresWlCopy,
+      };
     }
+    clipboard.writeText(text);
     return { success: true };
   }
 
@@ -2390,8 +2449,16 @@ Would you like to open System Settings now?`;
       };
     }
 
-    const { isWayland, xwaylandAvailable, isGnome, isKde, isWlroots, isHyprland, isCosmic } =
-      getLinuxSessionInfo();
+    const {
+      isWayland,
+      xwaylandAvailable,
+      isGnome,
+      isKde,
+      isWlroots,
+      isHyprland,
+      isCosmic,
+      requiresWlCopy,
+    } = getLinuxSessionInfo();
     const linuxFastPaste = this.resolveLinuxFastPasteBinary();
     const hasNativeBinary = !!linuxFastPaste;
     let portalKeysymAvailable = false;
@@ -2472,6 +2539,7 @@ Would you like to open System Settings now?`;
       hasWtype,
       isWlroots,
       isCosmic,
+      wlCopyMissing: requiresWlCopy && !this._wlCopyExists(),
       tools,
       recommendedInstall,
     };

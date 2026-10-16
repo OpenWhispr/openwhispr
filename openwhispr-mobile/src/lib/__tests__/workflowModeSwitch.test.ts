@@ -8,8 +8,6 @@ const mockLocalReasoningReadiness = jest.fn();
 let mockConfig: Record<string, unknown> | null = null;
 let mockUser: Record<string, unknown> | null = { id: 'user-1' };
 let mockActiveMode = 'cloud';
-const mockPolicy = jest.fn();
-const mockKeyStatus = jest.fn();
 
 jest.mock('expo-router', () => ({ router: { push: (...args: unknown[]) => mockPush(...args) } }));
 jest.mock('@/store/useConfigStore', () => ({
@@ -33,14 +31,8 @@ jest.mock('@/lib/localReasoning', () => ({
   getLocalReasoningReadiness: () => mockLocalReasoningReadiness(),
   getLocalReasoningUnavailableMessage: () => 'Apple Intelligence is turned off.',
 }));
-jest.mock('@/services/providers/ProviderPolicy', () => ({
-  getProviderPolicy: () => mockPolicy(),
-}));
-jest.mock('@/services/providers/ProviderCredentials', () => ({
-  getProviderCredentialStatus: (reference: string) => mockKeyStatus(reference),
-}));
 
-import { pickLocalModel, setPrivateMode, switchWorkflowMode } from '../workflowModeSwitch';
+import { pickLocalModel, switchWorkflowMode } from '../workflowModeSwitch';
 
 let alert: jest.SpyInstance;
 
@@ -52,25 +44,7 @@ beforeEach(() => {
   mockPrivateReadiness.mockResolvedValue({ status: 'ready', modelName: 'Parakeet v2' });
   mockLocalReasoningReadiness.mockResolvedValue({ status: 'ready', tokenCounting: false });
   alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-  mockPolicy.mockResolvedValue({ status: 'unmanaged' });
-  mockKeyStatus.mockImplementation(async (reference: string) => ({
-    reference,
-    isConfigured: true,
-  }));
 });
-
-const OPENAI = {
-  mode: 'providers',
-  providerId: 'openai',
-  modelId: 'gpt-4o-transcribe',
-  credentialRef: 'provider.openai',
-} as const;
-const GROQ = {
-  mode: 'providers',
-  providerId: 'groq',
-  modelId: 'whisper-large-v3',
-  credentialRef: 'provider.groq',
-} as const;
 
 it('asks a signed-out user to sign in before switching to Cloud', async () => {
   mockUser = null;
@@ -78,10 +52,30 @@ it('asks a signed-out user to sign in before switching to Cloud', async () => {
   await expect(switchWorkflowMode('cleanup', 'openwhispr')).resolves.toBe('refused');
   expect(alert).toHaveBeenCalledWith(
     'Sign in required',
-    'Sign in to use cloud AI with cloud processing, or turn on Private Mode in Account → AI Models.',
+    'Sign in to use cloud AI with cloud processing, or set Dictation to On-Device in Account → AI Models.',
     expect.any(Array),
   );
   expect(mockUpdateConfig).not.toHaveBeenCalled();
+});
+
+// Local Mode dictates on this phone, so Cloud cleanup is a separate pass that needs an account.
+it('asks an anonymous user to create an account before Cloud cleanup in Local Mode', async () => {
+  mockUser = { id: 'a', isAnonymous: true };
+  mockActiveMode = 'private';
+  mockConfig = { defaultMode: 'private', inference: { dictation: { mode: 'local' } } };
+  await expect(switchWorkflowMode('cleanup', 'openwhispr')).resolves.toBe('refused');
+  expect(alert).toHaveBeenCalledWith(
+    'Create an account',
+    'Create an account to use cloud cleanup with cloud processing.',
+    expect.any(Array),
+  );
+  expect(mockUpdateConfig).not.toHaveBeenCalled();
+});
+
+it('lets an anonymous user pick Cloud cleanup outside Local Mode, where Cloud dictates', async () => {
+  mockUser = { id: 'a', isAnonymous: true };
+  await expect(switchWorkflowMode('cleanup', 'openwhispr')).resolves.toBe('switched');
+  expect(alert).not.toHaveBeenCalled();
 });
 
 it('switches dictation to On-Device along with the app mode', async () => {
@@ -185,9 +179,10 @@ describe('a workflow held on its old mode when dictation moved to your own key',
   });
 });
 
-describe('setPrivateMode', () => {
-  it('turns on by switching dictation, and with it the app, to On-Device', async () => {
-    await expect(setPrivateMode(true)).resolves.toBe('switched');
+// Dictation owns the app mode: On-Device turns Local Mode on, OpenWhispr Cloud turns it off.
+describe('switching dictation', () => {
+  it('to On-Device turns Local Mode on', async () => {
+    await expect(switchWorkflowMode('dictation', 'local')).resolves.toBe('switched');
     expect(mockSetActiveMode).toHaveBeenCalledWith('private', true);
     expect(mockUpdateConfig).toHaveBeenCalledWith({
       defaultMode: 'private',
@@ -195,16 +190,10 @@ describe('setPrivateMode', () => {
     });
   });
 
-  it('opens the model list instead of turning on when no model is downloaded', async () => {
-    mockPrivateReadiness.mockResolvedValue({ status: 'missing', modelName: 'Parakeet v2' });
-    await expect(setPrivateMode(true)).resolves.toBe('needs-model');
-    expect(mockPush).toHaveBeenCalledWith('/(account)/model-download');
-    expect(mockSetActiveMode).not.toHaveBeenCalled();
-  });
-
-  it('turns off by switching dictation back to Cloud', async () => {
+  it('to OpenWhispr Cloud turns Local Mode off', async () => {
+    mockActiveMode = 'private';
     mockConfig = { defaultMode: 'private', inference: { dictation: { mode: 'local' } } };
-    await expect(setPrivateMode(false)).resolves.toBe('switched');
+    await expect(switchWorkflowMode('dictation', 'openwhispr')).resolves.toBe('switched');
     expect(mockSetActiveMode).toHaveBeenCalledWith('cloud', true);
     expect(mockUpdateConfig).toHaveBeenCalledWith({
       defaultMode: 'cloud',
@@ -212,160 +201,22 @@ describe('setPrivateMode', () => {
     });
   });
 
-  it('remembers Bring Your Own Key, and what it held, when turned on from it', async () => {
-    mockActiveMode = 'providers';
-    mockConfig = {
-      defaultMode: 'providers',
-      inference: { dictation: OPENAI, upload: { mode: 'openwhispr' } },
-      pinnedInference: ['upload'],
-    };
-    await expect(setPrivateMode(true)).resolves.toBe('switched');
-    expect(mockUpdateConfig).toHaveBeenCalledWith(
-      expect.objectContaining({
-        defaultMode: 'private',
-        privateModeReturn: { pinned: { upload: { mode: 'openwhispr' } } },
-      }),
-    );
-  });
-
-  // Turning it off must not send audio to Cloud for someone who was using their own key.
-  it('turns off into the last provider used when it was turned on from Bring Your Own Key', async () => {
-    mockActiveMode = 'private';
-    mockConfig = {
-      defaultMode: 'private',
-      privateModeReturn: {
-        pinned: { upload: { mode: 'openwhispr' }, notes: { mode: 'openwhispr' } },
-      },
-      inference: { dictation: { mode: 'local' } },
-      rememberedInference: {
-        dictation: {
-          local: { mode: 'local', modelId: 'whisper-base' },
-          groq: GROQ,
-          openai: OPENAI,
-        },
-      },
-    };
-    await expect(setPrivateMode(false)).resolves.toBe('switched');
-    expect(mockSetActiveMode).toHaveBeenCalledWith('providers', true);
-    const update = mockUpdateConfig.mock.calls[0][0];
-    expect(update).toMatchObject({
-      defaultMode: 'providers',
-      // The provider held these on Cloud before Private mode was turned on, and does again.
-      inference: { dictation: GROQ, upload: { mode: 'openwhispr' }, notes: { mode: 'openwhispr' } },
-      pinnedInference: ['upload', 'notes'],
-    });
-    expect(update.inference).not.toHaveProperty('agent');
-    expect(update).toHaveProperty('privateModeReturn', undefined);
-  });
-
-  it('ends a round trip from Bring Your Own Key where it started', async () => {
-    const start = {
-      defaultMode: 'providers',
-      inference: {
-        dictation: OPENAI,
-        upload: { mode: 'openwhispr' },
-        notes: { mode: 'openwhispr' },
-      },
-      rememberedInference: { dictation: { openai: OPENAI } },
-      pinnedInference: ['upload', 'notes'],
-    };
-    mockActiveMode = 'providers';
-    mockConfig = start;
-    await setPrivateMode(true);
-    const on = { ...start, ...mockUpdateConfig.mock.calls[0][0] };
-    expect(on.inference).toEqual({ dictation: { mode: 'local' } });
-
-    mockActiveMode = 'private';
-    mockConfig = on;
-    await setPrivateMode(false);
-    const off = { ...on, ...mockUpdateConfig.mock.calls[1][0] };
-    expect(off).toMatchObject({
-      defaultMode: 'providers',
-      inference: start.inference,
-      pinnedInference: start.pinnedInference,
-    });
-    expect(off.privateModeReturn).toBeUndefined();
-  });
-
+  // Local Mode cleans On-Device whatever is saved for cleanup, so switching leaves the user's
+  // cleanup choice as it is.
   it.each([
-    ['its key was removed', () => mockKeyStatus.mockResolvedValue({ isConfigured: false })],
-    [
-      'the organization no longer allows it',
-      () =>
-        mockPolicy.mockResolvedValue({
-          status: 'managed',
-          transcription: { allowedModes: ['openwhispr', 'local'], allowedByokProviders: [] },
-          llm: { allowedModes: ['openwhispr', 'local'], allowedByokProviders: [] },
-        }),
-    ],
-  ])('turns off into Cloud when the provider can no longer run because %s', async (_, setUp) => {
-    setUp();
-    mockActiveMode = 'private';
+    ['local', { mode: 'local' }],
+    ['local', { mode: 'openwhispr' }],
+    ['local', { mode: 'providers', providerId: 'openai', modelId: 'gpt-5-mini' }],
+    ['openwhispr', { mode: 'local' }],
+    ['openwhispr', { mode: 'openwhispr' }],
+  ] as const)('to %s keeps a saved %j cleanup', async (mode, cleanup) => {
+    const from = mode === 'local' ? 'cloud' : 'private';
+    mockActiveMode = from;
     mockConfig = {
-      defaultMode: 'private',
-      privateModeReturn: { pinned: {} },
-      inference: { dictation: { mode: 'local' } },
-      rememberedInference: { dictation: { openai: OPENAI } },
+      defaultMode: from,
+      inference: { dictation: { mode: mode === 'local' ? 'openwhispr' : 'local' }, cleanup },
     };
-    await expect(setPrivateMode(false)).resolves.toBe('switched');
-    expect(mockSetActiveMode).toHaveBeenCalledWith('cloud', true);
-    expect(mockUpdateConfig.mock.calls[0][0]).toMatchObject({
-      defaultMode: 'cloud',
-      inference: { dictation: { mode: 'openwhispr' } },
-    });
-  });
-
-  it('still returns to the provider while the organization policy is loading', async () => {
-    mockPolicy.mockResolvedValue({ status: 'pending' });
-    mockActiveMode = 'private';
-    mockConfig = {
-      defaultMode: 'private',
-      privateModeReturn: { pinned: {} },
-      inference: { dictation: { mode: 'local' } },
-      rememberedInference: { dictation: { openai: OPENAI } },
-    };
-    await expect(setPrivateMode(false)).resolves.toBe('switched');
-    expect(mockSetActiveMode).toHaveBeenCalledWith('providers', true);
-  });
-
-  // Needs no account, so a guest kept in Private mode can still leave it this way.
-  it('turns off into the provider dictation is saved to without signing in', async () => {
-    mockUser = null;
-    mockActiveMode = 'private';
-    mockConfig = { defaultMode: 'providers', inference: { dictation: OPENAI } };
-    await expect(setPrivateMode(false)).resolves.toBe('switched');
-    expect(mockSetActiveMode).toHaveBeenCalledWith('providers', true);
-    expect(mockUpdateConfig).toHaveBeenCalledWith(
-      expect.objectContaining({
-        defaultMode: 'providers',
-        inference: expect.objectContaining({ dictation: OPENAI }),
-      }),
-    );
-    expect(alert).not.toHaveBeenCalled();
-  });
-
-  it('turns off into Cloud, not an old provider, when it was turned on from Cloud', async () => {
-    mockActiveMode = 'private';
-    mockConfig = {
-      defaultMode: 'private',
-      inference: { dictation: { mode: 'local' } },
-      rememberedInference: { dictation: { openai: OPENAI } },
-    };
-    await expect(setPrivateMode(false)).resolves.toBe('switched');
-    expect(mockSetActiveMode).toHaveBeenCalledWith('cloud', true);
-  });
-
-  it('stays on when a signed-out user would need Cloud', async () => {
-    mockUser = null;
-    mockActiveMode = 'private';
-    mockConfig = { defaultMode: 'private', inference: { dictation: { mode: 'local' } } };
-    await expect(setPrivateMode(false)).resolves.toBe('refused');
-    // Private mode is already on, so the sign-in prompt doesn't offer it as the alternative.
-    expect(alert).toHaveBeenCalledWith(
-      'Sign in required',
-      'Sign in to use cloud transcription with cloud processing.',
-      expect.any(Array),
-    );
-    expect(mockSetActiveMode).not.toHaveBeenCalled();
+    await expect(switchWorkflowMode('dictation', mode)).resolves.toBe('switched');
+    expect(mockUpdateConfig.mock.calls[0][0].inference.cleanup).toEqual(cleanup);
   });
 });

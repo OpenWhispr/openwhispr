@@ -976,7 +976,9 @@
         "reasoningFailed": "AI 无法完成选中文本编辑。原始文本未被更改。",
         "invalidResponse": "AI 返回的编辑响应格式无效。未替换任何内容。请选中文本后重试。",
         "emptyResponse": "AI 返回了空的编辑结果。未替换任何内容。请尝试更具体的指令。",
-        "truncatedResponse": "AI 在完成编辑之前停止了。未替换任何内容。请尝试选择更少的文本。"
+        "truncatedResponse": "AI 在完成编辑之前停止了。未替换任何内容。请尝试选择更少的文本。",
+        "wlCopyMissing": "OpenWhispr 已生成编辑，但在此桌面上，Wayland 应用只能通过 wl-copy 读取粘贴的文本。请安装 wl-clipboard 以应用编辑。",
+        "wlCopyFailed": "OpenWhispr 已生成编辑，但 wl-copy 无法为 Wayland 应用复制它，因此未应用。"
       },
       "pastePermission": {
         "title": "允许自动粘贴",
@@ -990,7 +992,12 @@
       "pasteFailed": {
         "title": "无法自动粘贴"
       },
-      "interruptedRecordingRecovered": "OpenWhispr 在本次听写完成前关闭，已恢复此录音。"
+      "interruptedRecordingRecovered": "OpenWhispr 在本次听写完成前关闭，已恢复此录音。",
+      "waylandClipboard": {
+        "title": "转录内容未粘贴",
+        "wlCopyMissing": "在此桌面上，Wayland 应用只能通过 wl-copy 读取粘贴的文本。请安装 wl-clipboard 以粘贴听写内容。",
+        "wlCopyFailed": "wl-copy 无法为 Wayland 应用复制文本，因此未粘贴。点击“重试”再试一次。"
+      }
     },
     "clipboard": {
       "pasteFailed": {
@@ -1424,7 +1431,9 @@
     "withoutToolPrefix": "如果不安装此工具，OpenWhispr 会将文本复制到剪贴板，你可以使用 Ctrl+V 手动粘贴。",
     "wtypeCosmicTerminalsDescription": "在 COSMIC 上，Warp 等终端只能通过 wtype 接收粘贴的文本。其他应用无需 wtype 即可粘贴。",
     "wtypeFallbackDescription": "wtype 是此 wlroots 合成器上的首选自动粘贴方式。有备用方案可用，但可能不太可靠。",
-    "xwaylandAppsOnly": "自动粘贴仅适用于 XWayland 应用"
+    "xwaylandAppsOnly": "自动粘贴仅适用于 XWayland 应用",
+    "wlClipboardTitle": "安装 wl-clipboard 以粘贴到 Wayland 应用",
+    "wlClipboardDescription": "在此桌面上，Wayland 应用只能通过 wl-copy 读取 OpenWhispr 复制的文本。要将听写内容粘贴到这些应用中，请安装 wl-clipboard："
   },
   "promptStudio": {
     "common": {
@@ -2075,6 +2084,10 @@
           },
           "xclip": {
             "step1Title": "安装 xclip"
+          },
+          "wlCopy": {
+            "step1Title": "安装 wl-clipboard",
+            "step2Title": "验证安装"
           }
         },
         "xclipDesc": "KDE Wayland 粘贴用的剪贴板工具（xclip 或 xsel）",
@@ -2086,7 +2099,8 @@
           "flakeTitle": "通过我们的 flake 安装？",
           "flakeDesc": "如果您通过 flake 安装 OpenWhispr，programs.openwhispr.enable 会自动为您启用 ydotool、uinput 模块以及相应的用户组权限。",
           "rebuildNote": "运行 sudo nixos-rebuild switch，然后注销并重新登录，使组变更和 /dev/uinput 规则生效。将 <you> 替换为您的用户名。"
-        }
+        },
+        "wlCopyDesc": "此桌面上 Wayland 应用读取粘贴文本所用的剪贴板工具"
       },
       "updates": {
         "automaticUpdates": "自动更新",
@@ -3869,7 +3883,13 @@
       "copiedToClipboard": "已复制到剪贴板",
       "openNote": "打开笔记",
       "unknownTool": "未知工具：{{name}}",
-      "invalidArgs": "{{name}} 的工具参数无效"
+      "invalidArgs": "{{name}} 的工具参数无效",
+      "search_openwhispr_helpName": "搜索 OpenWhispr 帮助",
+      "read_openwhispr_helpName": "阅读 OpenWhispr 帮助",
+      "get_openwhispr_contextName": "读取 OpenWhispr 设置",
+      "search_openwhispr_helpStatus": "正在搜索 OpenWhispr 帮助...",
+      "read_openwhispr_helpStatus": "正在阅读 OpenWhispr 帮助...",
+      "get_openwhispr_contextStatus": "正在读取 OpenWhispr 设置..."
     }
   },
   "assistant": {
@@ -4966,5 +4986,55 @@
       "standard": "标准语气",
       "standardDescription": "文本整理在所有应用中都保留你自己的语气。关闭后可为每类应用选择语气。"
     }
+  },
+  "productHelp": {
+    "sources": "官方文档",
+    "settings": "当前应用设置",
+    "guidance": "此回复使用的信息。",
+    "settingsNote": "为本次回复读取的设置和已知权限；不会更改设置或测试设备。",
+    "readAt": "读取时间：{{time}}",
+    "sourceStatus": {
+      "live": "已获取文章",
+      "bundled": "内置备用指南"
+    },
+    "reason": {
+      "policy": "您组织的策略限制了在线文档查询。",
+      "rateLimit": "在线文档查询已达到上限。现显示内置指南。",
+      "unavailable": "无法核实当前文档。现显示内置指南。",
+      "privacy": "未登录或仅使用本地处理时，在线文档查询处于关闭状态。现显示内置指南。"
+    },
+    "openFailed": "无法打开文章。您可以复制链接并在浏览器中打开。",
+    "topicsList": {
+      "hotkeys": "快捷键",
+      "microphone": "麦克风",
+      "models": "模型",
+      "meetings": "会议",
+      "calendar": "日历",
+      "language": "语言",
+      "backup": "备份",
+      "assistant": "助手",
+      "hold-or-tap": "按住或点按",
+      "choose-your-microphone": "选择麦克风",
+      "microphone-not-working": "麦克风无法使用",
+      "local-models": "本地模型",
+      "chat-agent": "聊天助手",
+      "record-a-meeting": "录制会议",
+      "connect-google-calendar": "连接 Google 日历",
+      "languages": "用其他语言听写",
+      "sync-across-devices": "在设备间同步笔记"
+    },
+    "appVersion": "应用版本",
+    "platform": "平台",
+    "processing": "处理方式",
+    "engine": "引擎",
+    "policy": "策略允许使用助手",
+    "on": "开启",
+    "off": "关闭",
+    "microphonePermission": "麦克风权限",
+    "specificMicrophone": "指定麦克风",
+    "permissionGranted": "已允许",
+    "permissionDenied": "已拒绝",
+    "permissionRestricted": "受限",
+    "permissionNotDetermined": "尚未请求"
   }
 }

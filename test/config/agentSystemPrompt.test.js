@@ -51,6 +51,11 @@ test("web search is for anything that may have changed, and when in doubt the mo
   );
   assert.match(prompt, /whenever the user asks you to look something up/);
   assert.match(prompt, /search rather than decline/);
+  assert.match(
+    prompt,
+    /OpenWhispr topics outside the offered help catalog, search official OpenWhispr documentation/
+  );
+  assert.doesNotMatch(prompt, /documentation for products other than OpenWhispr/);
 });
 
 test("web search stays on public information the context doesn't already answer", async () => {
