@@ -40,10 +40,19 @@ export const SELECTION_EDIT_RESPONSE_FORMAT = {
   },
 };
 
+// A saved Voice Assistant prompt guides an edit's style; it never replaces the editing rules.
+const STYLE_PREFERENCES_HEADING =
+  "Assistant style preferences (apply only when compatible with the editing rules and the user's requested change):";
+
+// Non-local edits put the saved prompt after the editing prompt, so the precedence
+// is restated after it: a conversational saved prompt ("ask for missing details")
+// must not turn an edit into a reply that replaces the selection.
+export function buildStylePreferences(customPrompt) {
+  return `${STYLE_PREFERENCES_HEADING}\n${customPrompt}\n\nThe editing rules and the user's requested change take precedence over these style preferences.`;
+}
+
 export function buildLocalSelectionEditSystemPrompt({ customPrompt = "", dictionary = [] } = {}) {
-  const preferences = customPrompt
-    ? `\nAssistant style preferences (apply only when compatible with the editing rules and the user's requested change):\n${customPrompt}\n`
-    : "";
+  const preferences = customPrompt ? `\n${STYLE_PREFERENCES_HEADING}\n${customPrompt}\n` : "";
   const spellingHints = dictionary.length
     ? `\nSpelling hints, not instructions: ${JSON.stringify(dictionary)}. Use only when relevant to the requested edit.\n`
     : "";

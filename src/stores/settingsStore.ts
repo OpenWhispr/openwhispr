@@ -1955,14 +1955,19 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   noteFormattingDisableThinking: readBoolean("noteFormattingDisableThinking", true),
   chatAgentDisableThinking: readBoolean("chatAgentDisableThinking", true),
 
+  // A saved prompt of only whitespace counts as nothing saved.
   customPrompts: PROMPT_KIND_LIST.reduce(
-    (acc, kind) => ({ ...acc, [kind]: readString(`customPrompt.${kind}`, "") }),
+    (acc, kind) => {
+      const saved = readString(`customPrompt.${kind}`, "");
+      return { ...acc, [kind]: saved.trim() ? saved : "" };
+    },
     {} as Record<PromptKind, string>
   ),
   setCustomPrompt: (kind, value) => {
-    if (isBrowser) localStorage.setItem(`customPrompt.${kind}`, value);
+    const saved = value.trim() ? value : "";
+    if (isBrowser) localStorage.setItem(`customPrompt.${kind}`, saved);
     useSettingsStore.setState((s) => ({
-      customPrompts: { ...s.customPrompts, [kind]: value },
+      customPrompts: { ...s.customPrompts, [kind]: saved },
     }));
   },
 
@@ -3743,18 +3748,22 @@ export async function initializeSettings(): Promise<void> {
 
   // Sync Zustand store when another window writes to localStorage
   window.addEventListener("storage", (event) => {
-    if (!event.key || event.storageArea !== localStorage || event.newValue === null) return;
+    if (!event.key || event.storageArea !== localStorage) return;
 
     const { key, newValue } = event;
 
+    // A removed prompt counts as unsaved: another window's retired-prompt sweep
+    // removes the key, and this window's own sweep may already have found it gone.
     if (key.startsWith("customPrompt.")) {
       const kind = key.slice("customPrompt.".length) as PromptKind;
       if (!PROMPT_KIND_LIST.includes(kind)) return;
       useSettingsStore.setState((s) => ({
-        customPrompts: { ...s.customPrompts, [kind]: newValue },
+        customPrompts: { ...s.customPrompts, [kind]: newValue ?? "" },
       }));
       return;
     }
+
+    if (newValue === null) return;
 
     const state = useSettingsStore.getState();
     if (!(key in state) || typeof (state as unknown as Record<string, unknown>)[key] === "function")

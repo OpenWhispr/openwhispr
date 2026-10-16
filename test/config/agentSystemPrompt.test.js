@@ -182,3 +182,34 @@ test("the name joins the prompt as one plain line", async () => {
   const long = getAgentSystemPrompt([], undefined, { userName: "A".repeat(500) });
   assert.match(long, /The user's name is A{100}\./);
 });
+
+test("an editing prompt always applies, with a saved prompt as style preferences", async (t) => {
+  const { resolvePrompt } = await load();
+  const { useSettingsStore } = await import("../../src/stores/settingsStore.ts");
+  t.after(() => useSettingsStore.getState().setCustomPrompt("dictationAgent", ""));
+  const opts = { agentName: "Jarvis", editingPrompt: "EDITING {{agentName}}" };
+
+  useSettingsStore.getState().setCustomPrompt("dictationAgent", "");
+  assert.equal(resolvePrompt("dictationAgent", opts), "EDITING Jarvis");
+  assert.match(
+    resolvePrompt("dictationAgent", { agentName: "Jarvis" }),
+    /^You are "Jarvis", a voice/
+  );
+
+  useSettingsStore.getState().setCustomPrompt("dictationAgent", "MINE {{agentName}}");
+  // The precedence comes after the saved prompt, so the saved prompt can't have the last word.
+  assert.match(
+    resolvePrompt("dictationAgent", opts),
+    /^EDITING Jarvis\n\nAssistant style preferences \([^)]*\):\nMINE Jarvis\n\nThe editing rules [^\n]*take precedence over these style preferences\.$/
+  );
+  assert.equal(resolvePrompt("dictationAgent", { agentName: "Jarvis" }), "MINE Jarvis");
+});
+
+test("a base prompt takes the Chat prompt's place, ahead of the tool rules", async () => {
+  const { getAgentSystemPrompt } = await load();
+  const chat = getAgentSystemPrompt(["search_notes"]);
+  const based = getAgentSystemPrompt(["search_notes"], undefined, { basePrompt: "BASE_SENTINEL" });
+  assert.match(chat, /^You are a helpful voice assistant/);
+  assert.match(based, /^BASE_SENTINEL\n\nYou can use these tools/);
+  assert.equal(based.slice("BASE_SENTINEL".length), chat.slice(chat.indexOf("\n\nYou can use")));
+});

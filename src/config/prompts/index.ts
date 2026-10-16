@@ -2,7 +2,13 @@ import i18n, { normalizeUiLanguage } from "../../i18n";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { en as enPrompts } from "../../locales/prompts";
 import { getLanguageInstruction } from "../../utils/languageSupport";
-import { PROMPT_KINDS, PLAIN_TEXT_RESPONSE_SUFFIX, type PromptKind } from "./registry";
+import { buildStylePreferences } from "../../helpers/selectionEditing.js";
+import {
+  PROMPT_KINDS,
+  PASTE_RESPONSE_SUFFIX,
+  PLAIN_TEXT_RESPONSE_SUFFIX,
+  type PromptKind,
+} from "./registry";
 
 export { PROMPT_KINDS, PROMPT_KIND_LIST, type PromptKind } from "./registry";
 
@@ -12,11 +18,15 @@ export interface ResolvePromptOptions {
   language?: string;
   customDictionary?: string[];
   targetLanguageLabel?: string;
+  /** Always used as the prompt; a saved one joins it as style preferences (selection edits). */
+  editingPrompt?: string;
 }
 
 export function resolvePrompt(kind: PromptKind, opts: ResolvePromptOptions): string {
   const custom = useSettingsStore.getState().customPrompts[kind];
-  const template = custom || getDefaultPromptText(kind, opts.uiLanguage);
+  const template = opts.editingPrompt
+    ? [opts.editingPrompt, custom && buildStylePreferences(custom)].filter(Boolean).join("\n\n")
+    : custom || getDefaultPromptText(kind, opts.uiLanguage);
   return applySubstitutions(template, opts);
 }
 
@@ -56,6 +66,10 @@ export function appendDictionarySuffix(
     defaultValue: enPrompts.dictionarySuffix,
   });
   return prompt + suffix + customDictionary.join(", ");
+}
+
+export function appendPasteResponseSuffix(prompt: string): string {
+  return prompt + PASTE_RESPONSE_SUFFIX;
 }
 
 // Append after every other suffix: trailing instructions are the ones models weight most.

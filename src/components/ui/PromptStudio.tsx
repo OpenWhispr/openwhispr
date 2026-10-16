@@ -10,7 +10,13 @@ import { useAgentName } from "../../utils/agentName";
 import ReasoningService from "../../services/ReasoningService";
 import { getModelProvider } from "../../models/ModelRegistry";
 import logger from "../../utils/logger";
-import { getDefaultPromptText, resolvePrompt, type PromptKind } from "../../config/prompts";
+import {
+  appendDictionarySuffix,
+  getAgentSystemPrompt,
+  getDefaultPromptText,
+  resolvePrompt,
+  type PromptKind,
+} from "../../config/prompts";
 import {
   useSettingsStore,
   selectPolicyEffectiveSettings,
@@ -202,12 +208,15 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
             ...agent.config,
             inferenceScope: "dictationAgent",
             requiresAgent: true,
-            systemPrompt: resolvePrompt("dictationAgent", {
-              agentName,
-              language: settings.preferredLanguage,
-              customDictionary: getDictionaryHintWords(settings),
-              uiLanguage,
-            }),
+            // The assistant panel's system prompt without its tools, as useChatStreaming
+            // builds it: selection edits only take this prompt as style preferences.
+            systemPrompt: appendDictionarySuffix(
+              getAgentSystemPrompt(undefined, undefined, {
+                basePrompt: resolvePrompt("dictationAgent", { agentName, uiLanguage }),
+              }),
+              getDictionaryHintWords(settings),
+              uiLanguage
+            ),
           });
           setTestResult(result);
         } finally {

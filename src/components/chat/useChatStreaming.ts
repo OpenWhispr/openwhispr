@@ -29,11 +29,14 @@ import {
 } from "../../stores/connectorStatusStore";
 import {
   appendDictionarySuffix,
+  appendPasteResponseSuffix,
   appendPlainTextResponseSuffix,
   appendScreenContextSuffix,
   getAgentSystemPrompt,
+  resolvePrompt,
 } from "../../config/prompts";
 import { resolveUnavailableCapabilities } from "../../config/agentCapabilities";
+import { getAgentName } from "../../utils/agentName";
 import { getDictionaryHintWords } from "../../utils/snippets";
 import { noteAttendeesContext, withoutAttendeesFence } from "../../utils/noteAttendees";
 import { FULL_TRANSCRIPT_MAX_TOKENS } from "../../utils/transcriptEvidence";
@@ -173,6 +176,8 @@ export interface SendToAIOptions {
   keepNotesUnchanged?: boolean;
   /** Keeps a caret-destined voice response in the compact pill while it streams. */
   suppressResponseContent?: boolean;
+  /** Asks the model for only the text to insert, because the answer will be pasted at the cursor. */
+  pasteResponse?: boolean;
   /** Asks the model for plain prose because the answer will be pasted into a plain-text app. */
   plainTextResponse?: boolean;
   /** Per-request completion hook used to deliver a finished voice response. */
@@ -524,6 +529,15 @@ export function useChatStreaming({
         // jargon — same suffix the dictation prompts carry.
         let systemPrompt = appendDictionarySuffix(
           getAgentSystemPrompt(registry?.getAll(), libraryContext || undefined, {
+            // The Voice Assistant answers from its own Assistant prompt, or the
+            // built-in Voice Assistant prompt when none is saved, never Chat's.
+            basePrompt:
+              inferenceScope === "dictationAgent"
+                ? resolvePrompt("dictationAgent", {
+                    agentName: getAgentName(),
+                    uiLanguage: settings.uiLanguage,
+                  })
+                : undefined,
             unavailable: nameUnavailableCapabilities ? unavailable : [],
             toolTrace: registry !== null,
             openNote: openNoteContext || undefined,
@@ -567,6 +581,9 @@ export function useChatStreaming({
           // dictation path pairs the suffix with an attached image. Restore it
           // for cloud context once openwhispr-api#157 vision-routes that field.
           systemPrompt = appendScreenContextSuffix(systemPrompt, settings.uiLanguage);
+        }
+        if (options?.pasteResponse) {
+          systemPrompt = appendPasteResponseSuffix(systemPrompt);
         }
         if (options?.plainTextResponse) {
           systemPrompt = appendPlainTextResponseSuffix(systemPrompt);

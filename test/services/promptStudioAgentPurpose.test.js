@@ -148,6 +148,10 @@ test("Prompt Studio labels dictation-agent runs for policy enforcement", async (
             return `
               export function getDefaultPromptText() { return "default prompt"; }
               export function resolvePrompt() { return "resolved agent prompt"; }
+              export function getAgentSystemPrompt(_tools, _context, { basePrompt }) {
+                return "panel: " + basePrompt;
+              }
+              export function appendDictionarySuffix(prompt) { return prompt; }
             `;
           }
           if (id === "\0prompt-studio-settings") {
@@ -234,4 +238,6 @@ test("Prompt Studio labels dictation-agent runs for policy enforcement", async (
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0][3].requiresAgent, true);
+  // The test runs the panel's prompt, not the bare saved prompt.
+  assert.equal(calls[0][3].systemPrompt, "panel: resolved agent prompt");
 });

@@ -3967,7 +3967,7 @@
     },
     "prompt": {
       "title": "Invite de l'assistant",
-      "description": "L'invite système utilisée lorsque le mot de réveil est détecté. Revient à l'invite par défaut intégrée."
+      "description": "L'invite système utilisée par l'assistant vocal, via son raccourci ou le mot de réveil. Les modifications du texte sélectionné gardent leurs propres règles d'édition et ne s'en servent que pour le style. Revient à l'invite par défaut intégrée."
     }
   },
   "agentMode": {
