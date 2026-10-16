@@ -3634,6 +3634,7 @@
         "outputTruncated": "Le modèle d'IA a manqué de place avant d'avoir fini, la note reste donc inchangée.",
         "outputSpentThinking": "Le modèle d'IA a consacré toute sa limite de sortie à la réflexion sans écrire de notes, la note reste donc inchangée. Activez « Désactiver la sortie de raisonnement » ou choisissez un modèle qui réfléchit moins dans Réglages → Modèles de langage → Mise en forme des notes, puis réessayez.",
         "outputSpentThinkingDisabled": "Le modèle d'IA a consacré toute sa limite de sortie à la réflexion sans écrire de notes, même avec « Désactiver la sortie de raisonnement » activé, la note reste donc inchangée. Choisissez un autre modèle dans Réglages → Modèles de langage → Mise en forme des notes.",
+        "outputSpentThinkingOtherModel": "Le modèle d'IA a consacré toute sa limite de sortie à la réflexion sans écrire de notes, la note reste donc inchangée. Choisissez un modèle qui réfléchit moins dans Réglages → Modèles de langage → Mise en forme des notes.",
         "nothingToSummarize": "Cette note n'a encore rien à résumer, donc le résumé IA est resté tel quel.",
         "saveFailed": "Enregistrement impossible. Vérifiez que rien n'est trop long, puis réessayez."
       },

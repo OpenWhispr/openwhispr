@@ -22,7 +22,8 @@ export type { SettingsSectionType };
 // The old AI Models sidebar had four items (transcription, meetings,
 // intelligence, agentMode) — they now collapse into two: speechToText + llms.
 // Legacy deep-links land on the matching sub-tab via LEGACY_SUB_TAB.
-// "dictationAgent" is a live deep-link (the Home GPU banner), not a legacy alias.
+// "dictationAgent" (the Home GPU banner) and "noteFormatting" (a note action's
+// error toast) are live deep-links, not legacy aliases.
 const SECTION_ALIASES: Record<string, SettingsSectionType> = {
   aiModels: "llms",
   agentConfig: "llms",
@@ -30,6 +31,7 @@ const SECTION_ALIASES: Record<string, SettingsSectionType> = {
   dictationAgent: "llms",
   intelligence: "llms",
   meetings: "llms",
+  noteFormatting: "llms",
   prompts: "llms",
   transcription: "speechToText",
   uploadTranscription: "speechToText",
@@ -44,6 +46,7 @@ const LEGACY_SUB_TAB: Record<string, string> = {
   uploadTranscription: "upload",
   dictationAgent: "dictationAgent",
   meetings: "noteFormatting",
+  noteFormatting: "noteFormatting",
   intelligence: "dictationCleanup",
   agentMode: "chatIntelligence",
   agentConfig: "chatIntelligence",

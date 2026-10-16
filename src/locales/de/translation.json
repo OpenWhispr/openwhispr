@@ -3634,6 +3634,7 @@
         "outputTruncated": "Dem KI-Modell ging der Platz aus, bevor es fertig war. Die Notiz bleibt daher unverändert.",
         "outputSpentThinking": "Das KI-Modell hat sein gesamtes Ausgabelimit mit Nachdenken verbraucht und keine Notizen geschrieben. Die Notiz bleibt daher unverändert. Aktivieren Sie unter Einstellungen → Sprachmodelle → Notizformatierung „Denkausgabe deaktivieren“ oder wählen Sie ein Modell, das weniger nachdenkt, und versuchen Sie es erneut.",
         "outputSpentThinkingDisabled": "Das KI-Modell hat sein gesamtes Ausgabelimit mit Nachdenken verbraucht und keine Notizen geschrieben, obwohl „Denkausgabe deaktivieren“ aktiv ist. Die Notiz bleibt daher unverändert. Wählen Sie unter Einstellungen → Sprachmodelle → Notizformatierung ein anderes Modell.",
+        "outputSpentThinkingOtherModel": "Das KI-Modell hat sein gesamtes Ausgabelimit mit Nachdenken verbraucht und keine Notizen geschrieben. Die Notiz bleibt daher unverändert. Wählen Sie unter Einstellungen → Sprachmodelle → Notizformatierung ein Modell, das weniger nachdenkt.",
         "nothingToSummarize": "Diese Notiz enthält noch nichts zum Zusammenfassen, daher bleibt die KI-Zusammenfassung unverändert.",
         "saveFailed": "Speichern nicht möglich. Prüfen Sie, dass nichts zu lang ist, und versuchen Sie es erneut."
       },

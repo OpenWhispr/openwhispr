@@ -7,6 +7,7 @@ import logger from "../../../utils/logger";
 import { canBorrowCleanupCustomKey, resolveConfiguredOpenAIBase } from "../openaiBase";
 import {
   applyChatCompletionsParams,
+  emptyOutputError,
   emptyResponseError,
   familyResponsesEffort,
   fetchWithParamFallback,
@@ -15,6 +16,7 @@ import {
   truncatedOutputError,
 } from "../chatRequestBody";
 import { detectEndpointDialect } from "../thinkingSuppressionDialects";
+import { abortOnCancel, isRequestCancelled, requestCancelledError } from "../requestCancellation";
 import {
   getLlmRequestTimeoutSeconds,
   llmRequestTimeoutError,
@@ -247,6 +249,7 @@ export const openaiProvider: InferenceProvider = {
         const controller = new AbortController();
         const timeoutSeconds = getLlmRequestTimeoutSeconds({ scope: config.inferenceScope });
         const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
+        const unlinkCancel = abortOnCancel(config.requestId, controller);
         try {
           const requestedMaxTokens =
             config.maxTokens ||
@@ -340,6 +343,7 @@ export const openaiProvider: InferenceProvider = {
           return res.json();
         } catch (error) {
           if ((error as Error).name === "AbortError") {
+            if (isRequestCancelled(config.requestId)) throw requestCancelledError();
             throw llmRequestTimeoutError(timeoutSeconds);
           }
           lastError = error as Error;
@@ -356,6 +360,7 @@ export const openaiProvider: InferenceProvider = {
           throw lastRetryableError || error;
         } finally {
           clearTimeout(timeoutId);
+          unlinkCancel();
         }
       }
 
@@ -373,6 +378,9 @@ export const openaiProvider: InferenceProvider = {
       response?.status === "incomplete" ||
       !!response?.incomplete_details ||
       response?.choices?.some((choice: any) => isTruncatedFinishReason(choice?.finish_reason));
+    const contentFiltered =
+      response?.incomplete_details?.reason === "content_filter" ||
+      response?.choices?.some((choice: any) => choice?.finish_reason === "content_filter");
     if (config.requireCompleteOutput && responseIncomplete) {
       throw truncatedOutputError();
     }
@@ -454,13 +462,14 @@ export const openaiProvider: InferenceProvider = {
       if (refusal) {
         throw new Error(`Model declined the request: ${refusal}`);
       }
-      // A content filter also ends a Responses reply "incomplete"; only the
-      // token limit is a cut-off.
-      const cutOff =
-        responseIncomplete && response?.incomplete_details?.reason !== "content_filter";
-      const error = emptyResponseError("OpenAI", config, !!cutOff);
+      // A content filter also marks a Responses reply "incomplete", but no output
+      // budget ran out: an empty reply, never retried and never echoed back.
+      if (contentFiltered) throw emptyOutputError("Model output was stopped by a content filter");
+      const error = emptyResponseError("OpenAI", config, !!responseIncomplete);
       // No retry code: that request already had a retry's room.
-      if (error) throw cutOff && hasReasoningRoom ? truncatedOutputError(error.message) : error;
+      if (error) {
+        throw responseIncomplete && hasReasoningRoom ? truncatedOutputError(error.message) : error;
+      }
       logger.logReasoning("OPENAI_EMPTY_RESPONSE_FALLBACK", {
         model,
         originalTextLength: text.length,

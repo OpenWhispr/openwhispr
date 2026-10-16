@@ -3,7 +3,11 @@ import { NOTE_OUTPUT_MAX_TOKENS, NOTHING_TO_SUMMARIZE } from "../helpers/builtin
 import { stripThinkingTags } from "../helpers/stripThinking";
 import { compileSummaryActionPrompt, compileTemplatePrompt } from "../helpers/templatePrompts";
 import reasoningService from "../services/ReasoningService";
-import { getSettings, selectResolvedNoteFormatting } from "./settingsStore";
+import {
+  getSettings,
+  selectResolvedNoteFormatting,
+  type ResolvedNoteFormatting,
+} from "./settingsStore";
 import { appendDictionarySuffix } from "../config/prompts";
 import { generateNoteTitle } from "../utils/generateTitle";
 import { buildNoteFormattingOverrides } from "../helpers/noteFormattingOverrides";
@@ -21,6 +25,8 @@ import {
   REASONING_MODEL_MIN_OUTPUT_TOKENS,
   TRUNCATED_OUTPUT_MESSAGE_KEY,
 } from "../services/ai/chatRequestBody";
+import { cancelRequest, trackRequest } from "../services/ai/requestCancellation";
+import { offersThinkingToggle } from "../services/ai/thinkingSuppression";
 
 // The providers' error keys describe dictation cleanup; a note run shows its own.
 const NOTE_ERROR_KEYS: Record<string, string> = {
@@ -108,7 +114,7 @@ interface ActionProcessingStoreState {
 
 // The run a note's in-flight action belongs to. A per-note flag would be reset
 // by a new run on the same note and revive the run the user just cancelled.
-// The id also tags the run's local requests so a cancel can abort them.
+// The id also tags the run's requests so a cancel can abort them.
 const activeRuns = new Map<number, string>();
 const processingFlags = new Map<number, boolean>();
 const successTimers = new Map<number, NodeJS.Timeout>();
@@ -188,6 +194,20 @@ const isContextTooLarge = (error: unknown): boolean =>
 const ranOutBeforeAnswer = (error: unknown): boolean =>
   (error as { code?: string } | null)?.code === OUTPUT_LIMIT_BEFORE_ANSWER_CODE;
 
+/** Names "Disable thinking output" only where Settings shows it for this model. */
+function outputSpentThinkingKey(
+  noteFormatting: ResolvedNoteFormatting,
+  model: string,
+  disableThinking: boolean
+): string {
+  if (!offersThinkingToggle(noteFormatting.mode, noteFormatting.provider, model)) {
+    return "notes.actions.errors.outputSpentThinkingOtherModel";
+  }
+  return disableThinking
+    ? "notes.actions.errors.outputSpentThinkingDisabled"
+    : "notes.actions.errors.outputSpentThinking";
+}
+
 const hasTranscript = (material: NoteMaterial | undefined): material is NoteMaterial =>
   (material?.transcript.trim().length ?? 0) > 0;
 
@@ -265,15 +285,18 @@ async function runEnhancement(run: EnhancementRun): Promise<string> {
         })
         .catch((retryError) => {
           // A server that refuses the bigger cap, or a model still thinking at the
-          // deadline, keeps this failure, whose advice still applies; a key, quota
-          // or network problem shows as itself.
-          const code = (retryError as { code?: string } | null)?.code;
+          // deadline, keeps this failure, whose advice still applies, with the
+          // retry's details to copy; a key, quota or network problem shows as itself.
+          const { code, technicalDetails } = (retryError ?? {}) as {
+            code?: string;
+            technicalDetails?: TechnicalErrorDetailsData;
+          };
           const keepsAdvice =
             code === PROVIDER_ERROR_CODES.BAD_REQUEST ||
             code === PROVIDER_ERROR_CODES.PAYLOAD_TOO_LARGE ||
             code === PROVIDER_ERROR_CODES.TIMEOUT ||
             code === LLM_REQUEST_TIMEOUT_CODE;
-          throw keepsAdvice ? error : retryError;
+          throw keepsAdvice ? Object.assign(error as Error, { technicalDetails }) : retryError;
         });
     }
     if (!isContextTooLarge(error)) throw error;
@@ -501,6 +524,7 @@ export function runBackgroundAction(
 
   const runId = crypto.randomUUID();
   activeRuns.set(noteId, runId);
+  const releaseRequests = trackRequest(runId);
   const isCancelled = () => activeRuns.get(noteId) !== runId;
   processingFlags.set(noteId, true);
   setNoteState(noteId, { status: "processing", actionName: action.name, progress: null });
@@ -637,28 +661,30 @@ export function runBackgroundAction(
         noteId,
         message,
         messageKey: thinkingSpentOutput
-          ? settings.noteFormattingDisableThinking
-            ? "notes.actions.errors.outputSpentThinkingDisabled"
-            : "notes.actions.errors.outputSpentThinking"
+          ? outputSpentThinkingKey(noteFormatting, modelId, settings.noteFormattingDisableThinking)
           : (messageKey && NOTE_ERROR_KEYS[messageKey]) || messageKey,
         messageParams,
         notice,
-        settingsTarget: thinkingSpentOutput ? "llms" : settingsTarget,
+        settingsTarget: thinkingSpentOutput ? "noteFormatting" : settingsTarget,
         technicalDetails,
       });
     } finally {
+      releaseRequests();
       if (activeRuns.get(noteId) === runId) activeRuns.delete(noteId);
     }
   })();
 }
 
 /**
- * Aborts the run's local request in flight, which would otherwise hold the one
- * local model slot for minutes. Other routes finish and are discarded.
+ * Aborts the run's request in flight: a local one would otherwise hold the one
+ * local model slot for minutes, and a cloud one bill a reply nobody reads.
  */
 export function cancelAction(noteId: number): void {
   const runId = activeRuns.get(noteId);
-  if (runId) void window.electronAPI?.cancelLocalReasoning?.(runId);
+  if (runId) {
+    cancelRequest(runId);
+    void window.electronAPI?.cancelLocalReasoning?.(runId);
+  }
   activeRuns.delete(noteId);
   processingFlags.set(noteId, false);
   const timer = successTimers.get(noteId);

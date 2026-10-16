@@ -312,6 +312,14 @@ const ranOutThinking = async () => {
   return emptyResponseError("OpenAI", { systemPrompt: "Summarize" }, true);
 };
 
+// The reporter's route: GLM-5.3 on Ollama Cloud through a Custom endpoint, where
+// Settings shows "Disable thinking output".
+const CUSTOM_ROUTE_RUN = { modelId: "glm-5.3", isCloudMode: false, isMeetingNote: true };
+async function useNoteFormattingRoute(vite, provider = "custom", model = "glm-5.3") {
+  const { setResolvedLLMConfig } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  setResolvedLLMConfig("noteFormatting", { mode: "providers", provider, model });
+}
+
 test("a notes reply cut off before any answer is retried once with room for reasoning", async (t) => {
   const { store, calls, updates } = await loadStore(t);
   const { REASONING_MODEL_MIN_OUTPUT_TOKENS } =
@@ -337,15 +345,20 @@ test("a notes reply cut off before any answer is retried once with room for reas
   assert.equal(updates[0].payload.enhanced_content, "# Notes\n- decided things");
 });
 
-test("a retry that still thinks past its budget points at Disable thinking output, or at another model when it is on", async (t) => {
+test("a retry that still thinks past its budget points at Disable thinking output, or at another model when it is on or not offered", async (t) => {
   const { store, calls, vite } = await loadStore(t);
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
   globalThis.__processTextError = await ranOutThinking();
 
-  for (const [noteId, disableThinking, messageKey] of [
-    [23, false, "notes.actions.errors.outputSpentThinking"],
-    [24, true, "notes.actions.errors.outputSpentThinkingDisabled"],
+  for (const [noteId, provider, model, disableThinking, messageKey] of [
+    [23, "custom", "glm-5.3", false, "notes.actions.errors.outputSpentThinking"],
+    [24, "custom", "glm-5.3", true, "notes.actions.errors.outputSpentThinkingDisabled"],
+    // Settings hides the toggle for Corti S1, which thinks but can't be told not
+    // to, so the toast must not name it whatever the shared setting says.
+    [32, "corti", "corti-s1", false, "notes.actions.errors.outputSpentThinkingOtherModel"],
+    [33, "corti", "corti-s1", true, "notes.actions.errors.outputSpentThinkingOtherModel"],
   ]) {
+    await useNoteFormattingRoute(vite, provider, model);
     useSettingsStore.getState().setNoteFormattingDisableThinking(disableThinking);
     const before = calls.length;
     store.runBackgroundAction(
@@ -353,7 +366,7 @@ test("a retry that still thinks past its budget points at Disable thinking outpu
       "## Meeting Transcript\nAlice: we agreed to ship on Friday.",
       "hash",
       ACTION,
-      { modelId: "glm-5.3", isCloudMode: true, isMeetingNote: true },
+      { ...CUSTOM_ROUTE_RUN, modelId: model },
       LABELS
     );
 
@@ -362,8 +375,8 @@ test("a retry that still thinks past its budget points at Disable thinking outpu
     assert.equal(calls.length - before, 2, "one retry, never a loop");
     assert.equal(calls.at(-2).config.disableThinking, disableThinking);
     assert.equal(events[0].messageKey, messageKey);
-    // The toast's Open Settings goes to Language Models, where the toggle lives.
-    assert.equal(events[0].settingsTarget, "llms");
+    // Open Settings lands on Language Models → Note Formatting, which the toast names.
+    assert.equal(events[0].settingsTarget, "noteFormatting");
   }
 });
 
@@ -394,7 +407,8 @@ test("a reply cut off when its request already had room for reasoning is not sen
 });
 
 test("a retry the server refuses or that times out keeps the first failure's advice; any other retry failure shows as itself", async (t) => {
-  const { store, calls } = await loadStore(t);
+  const { store, calls, vite } = await loadStore(t);
+  await useNoteFormattingRoute(vite);
   const { asProviderError, providerHttpError } =
     await import("../../src/helpers/providerHttpErrors.js");
   const { llmRequestTimeoutError } = await import("../../src/helpers/llmRequestTimeout.js");
@@ -432,7 +446,7 @@ test("a retry the server refuses or that times out keeps the first failure's adv
       "## Meeting Transcript\nAlice: we agreed to ship on Friday.",
       "hash",
       ACTION,
-      { modelId: "glm-5.3", isCloudMode: true, isMeetingNote: true },
+      CUSTOM_ROUTE_RUN,
       LABELS
     );
 
@@ -440,7 +454,40 @@ test("a retry the server refuses or that times out keeps the first failure's adv
     await waitFor(() => (events = store.consumeErrorEvents()).length > 0, "the error");
     assert.equal(calls.length - before, 2);
     assert.equal(events[0].messageKey, messageKey);
+    // The refusal's own details stay copyable, e.g. the server's context limit.
+    assert.deepEqual(events[0].technicalDetails, retryError.technicalDetails);
   }
+});
+
+test("a run cancelled during its retry aborts the retry's request", async (t) => {
+  const { store, calls, updates, vite } = await loadStore(t);
+  const { isRequestCancelled } = await vite.ssrLoadModule("/services/ai/requestCancellation.ts");
+  let finishRetry;
+  globalThis.__processTextErrors = [await ranOutThinking()];
+  globalThis.__processTextResult = new Promise((resolve) => {
+    finishRetry = resolve;
+  });
+
+  store.runBackgroundAction(
+    34,
+    "## Meeting Transcript\nAlice: we agreed to ship on Friday.",
+    "hash",
+    ACTION,
+    CUSTOM_ROUTE_RUN,
+    LABELS
+  );
+  await waitFor(() => calls.length === 2, "the retry");
+  const { requestId } = calls[1].config;
+  assert.equal(isRequestCancelled(requestId), false);
+
+  store.cancelAction(34);
+  // The provider aborts its 25k request on this signal rather than paying for it.
+  assert.equal(isRequestCancelled(requestId), true);
+  finishRetry("# Notes\n- too late");
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  assert.deepEqual(updates, []);
+  assert.deepEqual(store.consumeErrorEvents(), []);
 });
 
 test("a run cancelled while its first reply comes back is not retried", async (t) => {

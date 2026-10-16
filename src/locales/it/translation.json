@@ -3267,6 +3267,7 @@
         "outputTruncated": "Il modello AI ha esaurito lo spazio prima di finire, quindi la nota è rimasta com'era.",
         "outputSpentThinking": "Il modello AI ha usato tutto il suo limite di output per ragionare e non ha scritto note, quindi la nota è rimasta com'era. Attiva \"Disattiva output di ragionamento\" o scegli un modello che ragiona meno in Impostazioni → Modelli linguistici → Formattazione note e riprova.",
         "outputSpentThinkingDisabled": "Il modello AI ha usato tutto il suo limite di output per ragionare e non ha scritto note, anche con \"Disattiva output di ragionamento\" attivo, quindi la nota è rimasta com'era. Scegli un altro modello in Impostazioni → Modelli linguistici → Formattazione note.",
+        "outputSpentThinkingOtherModel": "Il modello AI ha usato tutto il suo limite di output per ragionare e non ha scritto note, quindi la nota è rimasta com'era. Scegli un modello che ragiona meno in Impostazioni → Modelli linguistici → Formattazione note.",
         "nothingToSummarize": "Questa nota non ha ancora nulla da riassumere, quindi il riepilogo AI è rimasto invariato.",
         "saveFailed": "Impossibile salvare. Controlla che nulla sia troppo lungo e riprova."
       },

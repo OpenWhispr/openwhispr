@@ -336,10 +336,11 @@ test("asProviderError leaves classified, cancelled and unrelated errors untouche
   assert.equal(asProviderError(null, ctx), null);
 });
 
-test("isProviderSettingsTarget whitelists only the two sections", async () => {
+test("isProviderSettingsTarget whitelists only the model settings targets", async () => {
   const { isProviderSettingsTarget } = await load();
   assert.equal(isProviderSettingsTarget("speechToText"), true);
   assert.equal(isProviderSettingsTarget("llms"), true);
+  assert.equal(isProviderSettingsTarget("noteFormatting"), true);
   assert.equal(isProviderSettingsTarget("account"), false);
   assert.equal(isProviderSettingsTarget(undefined), false);
 });

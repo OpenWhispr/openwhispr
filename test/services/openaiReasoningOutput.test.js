@@ -276,17 +276,81 @@ test("a Responses result stopped by a content filter is not reported as running 
     })
   );
   const { openaiProvider } = await load();
+  const { EMPTY_OUTPUT_MESSAGE_KEY } = await import("../../src/services/ai/chatRequestBody.ts");
 
-  await assert.rejects(
-    openaiProvider.call({
-      text: TRANSCRIPT,
-      model: "gpt-5.6-terra",
-      agentName: null,
-      config: { provider: "openai", systemPrompt: "Summarize", maxTokens: 4096 },
-      ctx: makeCtx(),
-    }),
-    /empty response/
+  // Notes show it as their translated empty reply, and Prompt Studio's cleanup
+  // test (no system prompt) as an error rather than its own input echoed back.
+  for (const config of [
+    { provider: "openai", systemPrompt: "Summarize", maxTokens: 4096 },
+    { provider: "openai" },
+  ]) {
+    await assert.rejects(
+      openaiProvider.call({
+        text: TRANSCRIPT,
+        model: "gpt-5.6-terra",
+        agentName: null,
+        config,
+        ctx: makeCtx(),
+      }),
+      (error) =>
+        /content filter/.test(error.message) &&
+        error.messageKey === EMPTY_OUTPUT_MESSAGE_KEY &&
+        error.code === undefined
+    );
+  }
+});
+
+test("a cancelled run aborts its request in flight and is not retried", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  let requests = 0;
+  globalThis.fetch = (_input, init = {}) => {
+    if ((init.method || "GET") === "GET") {
+      return Promise.resolve(jsonResponse({ error: { message: "unauthorized" } }, 401));
+    }
+    requests += 1;
+    // A model still thinking: no reply until the request is aborted.
+    return new Promise((_resolve, reject) => {
+      const abort = () => reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+      if (init.signal.aborted) abort();
+      else init.signal.addEventListener("abort", abort);
+    });
+  };
+  const { openaiProvider } = await load();
+  const { cancelRequest, trackRequest } =
+    await import("../../src/services/ai/requestCancellation.ts");
+  t.after(trackRequest("run-1"));
+
+  const call = openaiProvider.call({
+    text: TRANSCRIPT,
+    model: "glm-5.3",
+    agentName: null,
+    config: {
+      provider: "custom",
+      baseUrl: "https://ollama.example/v1",
+      customApiKey: "test-key",
+      systemPrompt: "Summarize",
+      maxTokens: 25_000,
+      requestId: "run-1",
+    },
+    ctx: makeCtx(),
+  });
+  for (let attempt = 0; requests === 0 && attempt < 400; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  cancelRequest("run-1");
+
+  // Promptly, not at the request deadline.
+  const deadline = new Promise((_resolve, reject) =>
+    setTimeout(() => reject(new Error("still waiting on the request")), 2_000).unref()
   );
+  await assert.rejects(Promise.race([call, deadline]), {
+    message: "Request cancelled",
+    status: 499,
+  });
+  assert.equal(requests, 1, "neither retried nor sent to another endpoint");
 });
 
 test("a Chat Completions result cut off before any text is an error, not the input echoed back", async (t) => {

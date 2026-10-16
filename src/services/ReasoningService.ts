@@ -40,6 +40,7 @@ import {
 } from "./ai/chatRequestBody";
 import { getModelFamilyConstraints } from "./ai/modelFamilyConstraints";
 import { detectEndpointDialect } from "./ai/thinkingSuppressionDialects";
+import { abortOnCancel, isRequestCancelled, requestCancelledError } from "./ai/requestCancellation";
 import { openCodeSessionHeaders } from "./ai/openCodeSession";
 import { createStreamingThinkFilter } from "./ai/streamingThinkFilter";
 import { extractApiErrorMessage } from "./ai/apiErrorMessage";
@@ -353,6 +354,7 @@ class ReasoningService extends BaseReasoningService {
       this.activeRequestControllers.add(controller);
       const timeoutSeconds = getLlmRequestTimeoutSeconds({ scope: config.inferenceScope });
       const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
+      const unlinkCancel = abortOnCancel(config.requestId, controller);
       try {
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
@@ -418,11 +420,13 @@ class ReasoningService extends BaseReasoningService {
           if (requestGeneration !== this.requestCancellationGeneration) {
             throw httpError("Request cancelled", 499);
           }
+          if (isRequestCancelled(config.requestId)) throw requestCancelledError();
           throw llmRequestTimeoutError(timeoutSeconds);
         }
         throw error;
       } finally {
         clearTimeout(timeoutId);
+        unlinkCancel();
         this.activeRequestControllers.delete(controller);
       }
     }, createApiRetryStrategy()).catch((error) => {
