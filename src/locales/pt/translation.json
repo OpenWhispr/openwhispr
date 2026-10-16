@@ -4960,7 +4960,10 @@
     },
     "settings": {
       "saveChanges": "Salvar alterações",
-      "saved": "Tom e estilo salvos"
+      "saved": "Tom e estilo salvos",
+      "cleanupOff": "A limpeza de texto está desativada, então esses tons não são aplicados ao seu ditado.",
+      "turnOnCleanup": "Ativar limpeza de texto",
+      "notOnYet": "Tom e estilo ainda não está ativado. Salve as alterações para começar a escrever nesses tons."
     }
   }
 }

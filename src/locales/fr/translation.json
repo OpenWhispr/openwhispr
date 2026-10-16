@@ -4960,7 +4960,10 @@
     },
     "settings": {
       "saveChanges": "Enregistrer les modifications",
-      "saved": "Ton et style enregistrés"
+      "saved": "Ton et style enregistrés",
+      "cleanupOff": "La correction de texte est désactivée, donc ces tons ne s'appliquent pas à votre dictée.",
+      "turnOnCleanup": "Activer la correction de texte",
+      "notOnYet": "Ton et style n'est pas encore activé. Enregistrez les modifications pour commencer à écrire avec ces tons."
     }
   }
 }

@@ -1,18 +1,25 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
+import { InfoBox } from "../ui/InfoBox";
 import { useToast } from "../ui/useToast";
 import { cn } from "../lib/utils";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { TONE_APP_CATEGORIES, TONE_OPTIONS, type ToneStyles } from "../../config/toneStyle";
 import { AppMarkStack } from "../toneStyle/toneStyleVisuals";
 import { CATEGORY_APP_MARKS } from "../toneStyle/appMarks";
+import { dictationCleanupHasModel, turnOnDictationCleanup } from "../toneStyle/dictationCleanup";
 
-export default function ToneStyleSection() {
+interface ToneStyleSectionProps {
+  onOpenCleanupSettings: () => void;
+}
+
+export default function ToneStyleSection({ onOpenCleanupSettings }: ToneStyleSectionProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const savedStyles = useSettingsStore((s) => s.toneStyles);
   const toneStyleEnabled = useSettingsStore((s) => s.toneStyleEnabled);
+  const useCleanupModel = useSettingsStore((s) => s.useCleanupModel);
   const [draft, setDraft] = useState<ToneStyles>(savedStyles);
   // Saving here also turns Tone & Style on, so it can be saved unchanged until then.
   const canSave =
@@ -26,6 +33,12 @@ export default function ToneStyleSection() {
     toast({ title: t("toneStyle.settings.saved") });
   };
 
+  // As in the setup dialog: cleanup without a usable model goes on to pick one.
+  const turnOnCleanup = () => {
+    turnOnDictationCleanup();
+    if (!dictationCleanupHasModel()) onOpenCleanupSettings();
+  };
+
   return (
     <div>
       <div className="mb-5">
@@ -34,6 +47,22 @@ export default function ToneStyleSection() {
         </h3>
         <p className="mt-1 text-[13px] text-muted-foreground">{t("toneStyle.description")}</p>
       </div>
+
+      {/* Tones only shape what cleanup writes, and only once Tone & Style is on. */}
+      {!useCleanupModel ? (
+        <InfoBox variant="warning" className="mb-6 flex items-center justify-between gap-4 p-3">
+          <p className="text-[13px] text-foreground">{t("toneStyle.settings.cleanupOff")}</p>
+          <Button variant="outline" size="sm" className="shrink-0" onClick={turnOnCleanup}>
+            {t("toneStyle.settings.turnOnCleanup")}
+          </Button>
+        </InfoBox>
+      ) : (
+        !toneStyleEnabled && (
+          <InfoBox variant="muted" className="mb-6 p-3">
+            <p className="text-[13px] text-muted-foreground">{t("toneStyle.settings.notOnYet")}</p>
+          </InfoBox>
+        )
+      )}
 
       <div className="space-y-6">
         {TONE_APP_CATEGORIES.map((category) => {

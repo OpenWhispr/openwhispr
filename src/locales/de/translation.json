@@ -4960,7 +4960,10 @@
     },
     "settings": {
       "saveChanges": "Änderungen speichern",
-      "saved": "Ton & Stil gespeichert"
+      "saved": "Ton & Stil gespeichert",
+      "cleanupOff": "Die Textbereinigung ist deaktiviert, daher werden diese Einstellungen nicht auf Ihre Diktate angewendet.",
+      "turnOnCleanup": "Textbereinigung aktivieren",
+      "notOnYet": "Ton & Stil ist noch nicht aktiviert. Speichern Sie die Änderungen, um diese Einstellungen zu verwenden."
     }
   }
 }

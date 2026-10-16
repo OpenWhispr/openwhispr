@@ -4960,7 +4960,10 @@
     },
     "settings": {
       "saveChanges": "Guardar cambios",
-      "saved": "Tono y estilo guardados"
+      "saved": "Tono y estilo guardados",
+      "cleanupOff": "La corrección de texto está desactivada, así que estos tonos no se aplican a tu dictado.",
+      "turnOnCleanup": "Activar corrección de texto",
+      "notOnYet": "Tono y estilo aún no está activado. Guarda los cambios para empezar a escribir con estos tonos."
     }
   }
 }

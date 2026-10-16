@@ -4960,7 +4960,10 @@
     },
     "settings": {
       "saveChanges": "Save Changes",
-      "saved": "Tone & Style saved"
+      "saved": "Tone & Style saved",
+      "cleanupOff": "AI cleanup is off, so these tones aren't applied to your dictation.",
+      "turnOnCleanup": "Turn on AI cleanup",
+      "notOnYet": "Tone & Style isn't on yet. Save Changes to start writing in these tones."
     }
   }
 }
