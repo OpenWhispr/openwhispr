@@ -147,9 +147,6 @@ test("a requested speaker count still clusters automatically", async () => {
 
   assert.equal(result.success, true);
   assert.equal(diarizeCalls.length, 1);
-  // diarize() maps a missing count to --clustering.num-clusters=-1 (auto); its
-  // default doesn't replace null, which would reach sherpa as "null".
-  assert.equal(Object.hasOwn(diarizeCalls[0], "numSpeakers"), false);
   assert.deepEqual(speakersOf(result.segments), ["speaker_01", "speaker_06"]);
   assert.equal(centroidCalls.length, 0, "voices are only read when clusters exceed the cap");
 });

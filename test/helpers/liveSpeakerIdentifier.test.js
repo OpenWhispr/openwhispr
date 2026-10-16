@@ -70,9 +70,10 @@ const unit = (values) => {
 
 const voiceA = unit([1, 0, 0]);
 const voiceB = unit([0, 1, 0]);
-// ~0.7 similar to both A and B: fails the match margin, so it mints a cluster
-// that the next recluster pass merges back into A.
-const ambiguousVoice = unit([0.7, 0.7, 0.14]);
+// ~0.706 similar to both A and B (0.707 is the most a vector can be to two
+// orthogonal ones): fails the match margin, so it mints a cluster that the next
+// recluster pass (threshold 0.70) merges back into A.
+const ambiguousVoice = unit([1, 1, 0.05]);
 const voiceC = unit([0.05, 0.05, 0.99]);
 
 function seedMergedSession(identifier) {
@@ -162,7 +163,7 @@ test("mapSpeaker stays quiet when no session is running", () => {
   assert.deepEqual(warnings, []);
 });
 
-// Plants exactly two clusters ~0.70 similar (above the 0.65 recluster
+// Plants exactly two clusters ~0.706 similar (above the 0.70 recluster
 // threshold) — creating them via resolution would just match them together.
 function seedSimilarIdentifiedPair(identifier) {
   identifier.setMaxSpeakers(3);

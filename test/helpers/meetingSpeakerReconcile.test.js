@@ -5,6 +5,7 @@ const Module = require("node:module");
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const identifierModulePath = require.resolve("../../src/helpers/liveSpeakerIdentifier");
 const originalLoad = Module._load;
+const handlers = new Map();
 
 const electronStub = {
   app: {
@@ -15,7 +16,11 @@ const electronStub = {
     on: () => {},
     requestSingleInstanceLock: () => true,
   },
-  ipcMain: { handle: () => {}, on: () => {}, removeHandler: () => {} },
+  ipcMain: {
+    handle: (channel, fn) => handlers.set(channel, fn),
+    on: () => {},
+    removeHandler: () => {},
+  },
   BrowserWindow: class BrowserWindow {
     static getAllWindows() {
       return [];
@@ -133,6 +138,37 @@ test("reconciliation migrates the mapping when the offline id differs", () => {
   assert.deepEqual(calls.remove, [{ noteId: NOTE_ID, speakerId: "speaker_3" }]);
 });
 
+// A permissive `this` for setupHandlers: registration only stores closures.
+function anything() {
+  return new Proxy(function () {}, {
+    get: (t, prop) => {
+      if (prop === Symbol.toPrimitive || prop === "toString") return () => "";
+      if (prop === "then") return undefined;
+      return anything();
+    },
+    apply: () => anything(),
+  });
+}
+
+// Live speaker ids restart with every meeting, so another note's speaker_0 is
+// not the live speaker_0.
+test("labeling another note during a recording leaves the live speaker unnamed", async () => {
+  const { IPCHandlers, liveSpeakerIdentifier } = loadHandlers();
+  liveSpeakerIdentifier._assignSpeakerId(new Float32Array(embedding));
+  const target = {
+    _activeMeetingNoteId: NOTE_ID,
+    databaseManager: { getNoteSpeakerEmbeddings: () => [], setSpeakerMapping: () => {} },
+  };
+  IPCHandlers.prototype.setupHandlers.call(
+    new Proxy(target, { get: (t, prop) => (prop in t ? t[prop] : anything()) })
+  );
+
+  await handlers.get("set-speaker-mapping")({}, NOTE_ID + 1, "speaker_0", "Alice");
+
+  const { displayName, noteId } = liveSpeakerIdentifier.getTransientState().speaker_0;
+  assert.deepEqual({ displayName, noteId }, { displayName: null, noteId: null });
+});
+
 const THREE_ATTENDEES = [
   { email: "one@example.com" },
   { email: "two@example.com" },
@@ -187,64 +223,60 @@ test("a shrinking roster leaves the speaker cap untouched", () => {
   assert.deepEqual(emptied.broadcasts, []);
 });
 
-function makeExpectationResolver() {
+function makeCapResolver() {
   const { IPCHandlers } = loadHandlers();
   return (args) =>
-    IPCHandlers.prototype._resolveSpeakerExpectation.call(
+    IPCHandlers.prototype._resolveSpeakerCap.call(
       Object.assign(Object.create(IPCHandlers.prototype), {
         databaseManager: { getNote: () => args.note ?? null },
       }),
       {
         sessionConfig: args.sessionConfig ?? null,
         noteId: args.noteId ?? null,
-        observedSpeakerIds: args.observedSpeakerIds ?? new Set(),
         diarizedSource: args.diarizedSource,
       }
     );
 }
 
 // System mode: only system audio reaches the diarizer (the mic track is "you"),
-// so every branch must report `cap` as a count of other speakers (total - 1).
-// The no-signal fallback used to return the total itself, which let one remote
-// voice split across two labels.
-test("speaker expectation reports cap as other-speaker count in every system-mode branch", () => {
-  const resolve = makeExpectationResolver();
+// so the cap counts other speakers (total - 1).
+test("the speaker cap counts other speakers in system mode", () => {
+  const resolve = makeCapResolver();
 
-  assert.deepEqual(
+  assert.equal(
     resolve({ sessionConfig: { expectedCount: 3, explicit: true } }),
-    { numSpeakers: 2, cap: 2 },
+    2,
     "an explicit count of 3 means 2 other speakers"
   );
-  assert.deepEqual(
+  assert.equal(
     resolve({ noteId: NOTE_ID, note: { expected_speaker_count: 4 } }),
-    { numSpeakers: 3, cap: 3 },
+    3,
     "a note count outranks a non-explicit session config"
   );
-  assert.deepEqual(
-    resolve({ observedSpeakerIds: new Set(["speaker_0", "speaker_1"]) }),
-    { numSpeakers: 2, cap: 2 },
-    "observed ids are already other-speaker ids"
-  );
-  assert.deepEqual(
-    resolve({}),
-    { numSpeakers: -1, cap: 1 },
-    "the default total of 2 means a single other speaker, not 2"
-  );
+});
+
+// With no count, the stepper's default of 2 is a guess: it must not cap a
+// group call's remote voices at one (#2641).
+test("with no count, the remote side gets no count-derived cap", () => {
+  const resolve = makeCapResolver();
+
+  assert.equal(resolve({}), null);
+  assert.equal(resolve({ sessionConfig: { expectedCount: 2, explicit: false } }), null);
 });
 
 // Mic mode (in-person session): the user is one of the diarized voices, so the
 // expected total applies without the -1 the system-mode branches use.
 test("mic mode counts the user among the expected speakers", () => {
-  const resolve = makeExpectationResolver();
+  const resolve = makeCapResolver();
 
-  assert.deepEqual(
+  assert.equal(
     resolve({ sessionConfig: { expectedCount: 3, explicit: true }, diarizedSource: "mic" }),
-    { numSpeakers: 3, cap: 3 },
+    3,
     "an explicit total of 3 stays 3, not total - 1"
   );
-  assert.deepEqual(
+  assert.equal(
     resolve({ diarizedSource: "mic" }),
-    { numSpeakers: -1, cap: 2 },
+    2,
     "the no-signal fallback caps at the default expected total, user included"
   );
 });
