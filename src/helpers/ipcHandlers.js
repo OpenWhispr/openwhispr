@@ -9748,6 +9748,12 @@ class IPCHandlers {
     ipcMain.handle("dictation-realtime-start", async (event, options = {}) => {
       recordingOwnsDictationSocket = true;
       try {
+        // A warmup still connecting already holds the frames sent before this
+        // start, so wait and ride it. A cold start must not yield here, or the
+        // frames sent right after the invoke find no session to buffer into.
+        if (this._dictationConnectPromise) {
+          await this._dictationConnectPromise.catch(() => {});
+        }
         clearDictationIdleTimer();
         this._dictationPreviewEnabled = !!options.preview;
         if (

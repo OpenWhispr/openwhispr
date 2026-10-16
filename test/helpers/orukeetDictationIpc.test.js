@@ -548,10 +548,9 @@ test("a re-warm queued before the next start leaves that recording's socket alon
   const final = await handlers.get("dictation-realtime-finalize")();
   await handlers.get("dictation-realtime-stop")();
 
-  const [droppedWithWarmSocket, ...afterStart] = bytesTo.values();
-  assert.equal(droppedWithWarmSocket > 0, true);
-  assert.equal(final.text, `Recorded ${afterStart.reduce((sum, bytes) => sum + bytes, 0)} bytes`);
-  assert.equal(mints, 2);
+  assert.deepEqual([...bytesTo.values()], [120 * 640]);
+  assert.equal(final.text, `Recorded ${120 * 640} bytes`);
+  assert.equal(mints, 1);
 });
 
 test("a re-warm requested during a recording leaves its socket alone", async () => {
