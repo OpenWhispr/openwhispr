@@ -821,3 +821,24 @@ test("activity handed back at close intent stays visible through the content fad
     true
   );
 });
+
+test("an open panel starts thinking only for a voice-assistant command being processed, never a cancel", async () => {
+  const { shouldBeginAssistantFollowUpThinking } = await load();
+  const followUp = {
+    isAssistantVoice: true,
+    isProcessing: true,
+    isCancelling: false,
+    panelOpen: true,
+  };
+
+  assert.equal(shouldBeginAssistantFollowUpThinking(followUp), true);
+  // A streaming cancel reports processing while it tears the stream down;
+  // nothing will ever answer it, so the panel must not start thinking.
+  assert.equal(shouldBeginAssistantFollowUpThinking({ ...followUp, isCancelling: true }), false);
+  assert.equal(shouldBeginAssistantFollowUpThinking({ ...followUp, isProcessing: false }), false);
+  assert.equal(
+    shouldBeginAssistantFollowUpThinking({ ...followUp, isAssistantVoice: false }),
+    false
+  );
+  assert.equal(shouldBeginAssistantFollowUpThinking({ ...followUp, panelOpen: false }), false);
+});

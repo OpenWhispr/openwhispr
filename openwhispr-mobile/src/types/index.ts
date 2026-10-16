@@ -20,12 +20,11 @@ export interface UserConfig {
   // off goes back to the last provider rather than to Cloud, with the workflows it held
   // (pinnedInference) held on the same selections again.
   privateModeReturn?: { pinned: Partial<Record<MobileInferenceScope, InferenceSelection>> };
+  // Set once a config follows Local Mode's OpenWhispr Cloud defaults for uploads and cleanup. New
+  // installs start with it; older configs get it from localModeUpgradeConfig at launch.
+  localModeUpgraded?: boolean;
   defaultMode: ProcessingMode;
   cleanupEnabled?: boolean;
-  // Private mode was chosen in setup before this iPhone could run Apple Intelligence (an older
-  // iOS, or it was off in AI Models or unreadable), so On-Device cleanup is saved the first time a
-  // launch finds it can.
-  onDeviceCleanupPending?: boolean;
   autoGenerateNoteTitle?: boolean;
   autoLearnCorrections?: boolean;
   preferredLanguage?: string;

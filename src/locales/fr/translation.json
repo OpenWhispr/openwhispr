@@ -976,7 +976,9 @@
         "reasoningFailed": "L’IA n’a pas pu terminer la modification. Le texte d’origine n’a pas été modifié.",
         "invalidResponse": "L’IA a renvoyé une réponse de modification invalide. Rien n’a été remplacé. Sélectionnez le texte et réessayez.",
         "emptyResponse": "L’IA a renvoyé une modification vide. Rien n’a été remplacé. Essayez une instruction plus précise.",
-        "truncatedResponse": "L’IA s’est arrêtée avant de terminer la modification. Rien n’a été remplacé. Essayez de sélectionner moins de texte."
+        "truncatedResponse": "L’IA s’est arrêtée avant de terminer la modification. Rien n’a été remplacé. Essayez de sélectionner moins de texte.",
+        "wlCopyMissing": "OpenWhispr a généré la modification, mais sur ce bureau les applications Wayland ne peuvent lire le texte collé que via wl-copy. Installez wl-clipboard pour appliquer les modifications.",
+        "wlCopyFailed": "OpenWhispr a généré la modification, mais wl-copy n'a pas pu la copier pour les applications Wayland, elle n'a donc pas été appliquée."
       },
       "pastePermission": {
         "title": "Autoriser le collage automatique",
@@ -990,7 +992,12 @@
       "pasteFailed": {
         "title": "Collage automatique impossible"
       },
-      "interruptedRecordingRecovered": "Récupérée après la fermeture d'OpenWhispr avant la fin de cette dictée."
+      "interruptedRecordingRecovered": "Récupérée après la fermeture d'OpenWhispr avant la fin de cette dictée.",
+      "waylandClipboard": {
+        "title": "Transcription non collée",
+        "wlCopyMissing": "Sur ce bureau, les applications Wayland ne peuvent lire le texte collé que via wl-copy. Installez wl-clipboard pour coller vos dictées.",
+        "wlCopyFailed": "wl-copy n'a pas pu copier le texte pour les applications Wayland, il n'a donc pas été collé. Appuyez sur Réessayer pour recommencer."
+      }
     },
     "clipboard": {
       "pasteFailed": {
@@ -1518,7 +1525,9 @@
     "withoutToolPrefix": "Sans cet outil, OpenWhispr copiera le texte dans le presse-papiers. Vous pourrez ensuite coller manuellement avec Ctrl+V.",
     "wtypeCosmicTerminalsDescription": "Sous COSMIC, les terminaux comme Warp ne reçoivent le texte collé que via wtype. Les autres applications collent déjà sans lui.",
     "wtypeFallbackDescription": "wtype est la méthode de collage automatique recommandée pour ce compositeur wlroots. Une solution de repli est disponible, mais elle peut être moins fiable.",
-    "xwaylandAppsOnly": "le collage automatique fonctionne uniquement pour les apps XWayland"
+    "xwaylandAppsOnly": "le collage automatique fonctionne uniquement pour les apps XWayland",
+    "wlClipboardTitle": "Installez wl-clipboard pour coller dans les applications Wayland",
+    "wlClipboardDescription": "Sur ce bureau, les applications Wayland ne peuvent lire le texte copié par OpenWhispr que via wl-copy. Pour y coller votre dictée, installez wl-clipboard :"
   },
   "promptStudio": {
     "common": {
@@ -2369,6 +2378,10 @@
           },
           "xclip": {
             "step1Title": "Installer xclip"
+          },
+          "wlCopy": {
+            "step1Title": "Installer wl-clipboard",
+            "step2Title": "Vérifier l'installation"
           }
         },
         "xclipDesc": "Outil de presse-papiers pour le collage KDE Wayland (xclip ou xsel)",
@@ -2380,7 +2393,8 @@
           "flakeTitle": "Vous installez via notre flake ?",
           "flakeDesc": "Si vous installez OpenWhispr depuis le flake, programs.openwhispr.enable active ydotool, le module uinput et les appartenances aux groupes pour vous.",
           "rebuildNote": "Exécutez sudo nixos-rebuild switch, puis déconnectez-vous et reconnectez-vous pour que le changement de groupe et la règle /dev/uinput prennent effet. Remplacez <you> par votre nom d'utilisateur."
-        }
+        },
+        "wlCopyDesc": "Outil de presse-papiers dans lequel les applications Wayland lisent le texte collé sur ce bureau"
       },
       "updates": {
         "automaticUpdates": "Mises à jour automatiques",
@@ -4039,7 +4053,13 @@
       "copiedToClipboard": "Copié dans le presse-papiers",
       "openNote": "Ouvrir la note",
       "unknownTool": "Outil inconnu : {{name}}",
-      "invalidArgs": "Arguments d'outil invalides pour {{name}}"
+      "invalidArgs": "Arguments d'outil invalides pour {{name}}",
+      "search_openwhispr_helpName": "Rechercher dans l’aide OpenWhispr",
+      "read_openwhispr_helpName": "Lire l’aide OpenWhispr",
+      "get_openwhispr_contextName": "Lire les paramètres OpenWhispr",
+      "search_openwhispr_helpStatus": "Recherche dans l’aide OpenWhispr...",
+      "read_openwhispr_helpStatus": "Lecture de l’aide OpenWhispr...",
+      "get_openwhispr_contextStatus": "Lecture des paramètres OpenWhispr..."
     }
   },
   "assistant": {
@@ -4966,5 +4986,55 @@
       "standard": "Ton standard",
       "standardDescription": "La correction de texte conserve votre propre ton dans toutes les apps. Désactivez-le pour choisir un ton par type d'app."
     }
+  },
+  "productHelp": {
+    "sources": "Documentation officielle",
+    "settings": "Réglages actuels",
+    "guidance": "Informations utilisées pour cette réponse.",
+    "settingsNote": "Choix et autorisations connus relevés pour cette réponse, en lecture seule ; vos appareils ne sont pas testés.",
+    "readAt": "Consulté le {{time}}",
+    "sourceStatus": {
+      "live": "Article récupéré",
+      "bundled": "Guide intégré de secours"
+    },
+    "reason": {
+      "policy": "La politique de votre organisation limite la consultation de la documentation en ligne.",
+      "rateLimit": "La limite de consultation de la documentation en ligne est atteinte. Le guide intégré est affiché.",
+      "unavailable": "La documentation actuelle n’a pas pu être vérifiée. Le guide intégré est affiché.",
+      "privacy": "La consultation de la documentation en ligne est désactivée tant que vous n’êtes pas connecté ou que vous utilisez uniquement le traitement local. Le guide intégré est affiché."
+    },
+    "openFailed": "Impossible d’ouvrir l’article. Vous pouvez copier son lien et l’ouvrir dans votre navigateur.",
+    "topicsList": {
+      "hotkeys": "Raccourcis",
+      "microphone": "Microphone",
+      "models": "Modèles",
+      "meetings": "Réunions",
+      "calendar": "Calendriers",
+      "language": "Langues",
+      "backup": "Sauvegarde",
+      "assistant": "Assistant",
+      "hold-or-tap": "Maintenir ou appuyer",
+      "choose-your-microphone": "Choisir votre microphone",
+      "microphone-not-working": "Le microphone ne fonctionne pas",
+      "local-models": "Modèles locaux",
+      "chat-agent": "Agent de chat",
+      "record-a-meeting": "Enregistrer une réunion",
+      "connect-google-calendar": "Connecter Google Calendar",
+      "languages": "Dicter dans d’autres langues",
+      "sync-across-devices": "Synchroniser les notes entre appareils"
+    },
+    "appVersion": "Version de l’application",
+    "platform": "Plateforme",
+    "processing": "Traitement",
+    "engine": "Moteur",
+    "policy": "Assistant autorisé par la politique",
+    "on": "Activé",
+    "off": "Désactivé",
+    "microphonePermission": "Autorisation du microphone",
+    "specificMicrophone": "Microphone spécifique",
+    "permissionGranted": "Autorisé",
+    "permissionDenied": "Refusé",
+    "permissionRestricted": "Restreint",
+    "permissionNotDetermined": "Non demandé"
   }
 }

@@ -35,7 +35,6 @@ import { PermissionAlertMount } from '@/components/ui/PermissionAlert';
 import { startKeyboardToneSync } from '@/lib/keyboardToneSync';
 import { startKeyboardAgentSync } from '@/lib/keyboardAgentSync';
 import { startKeyboardFullAccessProbe } from '@/lib/keyboardFullAccessProbe';
-import { applyPendingOnDeviceCleanup } from '@/lib/onboardingMode';
 import { OpenWhisprSuperwallProvider } from '@/components/superwall/OpenWhisprSuperwallProvider';
 import { eraseProviderCredentialsFromPreviousInstall } from '@/services/providers/ProviderCredentials';
 
@@ -104,8 +103,6 @@ function RootLayout() {
         stopTone = startKeyboardToneSync();
         stopAgent = startKeyboardAgentSync();
         stopFullAccessProbe = startKeyboardFullAccessProbe();
-        // Launch is where an iOS update shows up, so cleanup setup couldn't save is saved here.
-        applyPendingOnDeviceCleanup().catch(() => undefined);
       }
     };
 

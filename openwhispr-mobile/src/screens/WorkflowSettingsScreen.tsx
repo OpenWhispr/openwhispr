@@ -18,6 +18,7 @@ import { OnDeviceModelSection } from '@/components/settings/OnDeviceModelSection
 import { useConfigToggle } from '@/hooks/useConfigToggle';
 import { useCustomPromptsStore } from '@/store/useCustomPromptsStore';
 import { resolveCustomPrompt } from '@/config/prompts/registry';
+import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import type { UserConfig } from '@/types';
@@ -29,17 +30,19 @@ import {
   removeProviderCredential,
   setProviderCredential,
 } from '@/services/providers/ProviderCredentials';
-import { MODE_LABELS, workflowSaveConfig } from '@/lib/inferenceModes';
+import { workflowSaveConfig } from '@/lib/inferenceModes';
 import { InferenceModePicker } from '@/components/settings/InferenceModePicker';
 import {
+  CLOUD_CLEANUP_NEEDS_ACCOUNT_NOTE,
+  LOCAL_MODE_DICTATION_NOTES,
   ON_DEVICE_MODE_NOTES,
-  PRIVATE_MODE_LOCKED,
   PRIVATE_MODE_LOCKED_REASON,
-  UNSET_ON_DEVICE_CLEANUP_NOTE,
-  UNSET_UNSUPPORTED_CLEANUP_NOTE,
+  ON_DEVICE_CLEANUP_UNSUPPORTED_NOTE,
   UNSET_PROVIDER_NOTES,
   WORKFLOW_LABELS,
   WORKFLOWS,
+  cloudAccessFor,
+  cloudCleanupNeedsAccount,
   parseWorkflow,
   unsetSelection,
 } from '@/lib/aiWorkflows';
@@ -291,19 +294,16 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   const updateConfig = useConfigStore((state) => state.updateConfig);
   const setActiveMode = useProcessingModeStore((state) => state.setActiveMode);
   const activeMode = useProcessingModeStore((state) => state.activeMode);
-  const storedSelection = config?.inference?.[scope] ?? unsetSelection(scope, activeMode);
-  // Private mode runs dictation and uploads on this phone whatever is saved, so a saved mode it
-  // locks shows as On-Device (Automatic), which is what runs, and stays saved for later.
+  const cloudAccess = useAuthStore((state) => cloudAccessFor(state.user));
+  const storedSelection =
+    config?.inference?.[scope] ?? unsetSelection(scope, activeMode, cloudAccess);
+  // Local Mode runs dictation on this phone whatever is saved, so a saved Cloud dictation (a guest
+  // held in Local Mode) shows as On-Device (Automatic), which is what runs.
   const lockedByPrivateMode =
-    activeMode === 'private' &&
-    (scope === 'dictation' || scope === 'upload') &&
-    !!PRIVATE_MODE_LOCKED[scope]?.includes(storedSelection.mode);
+    activeMode === 'private' && scope === 'dictation' && storedSelection.mode === 'openwhispr';
   const savedSelection: InferenceSelection = lockedByPrivateMode
     ? { mode: 'local' }
     : storedSelection;
-  // Private mode skips an unsaved cleanup, so the On-Device default must not look picked.
-  const cleanupUnsaved =
-    scope === 'cleanup' && activeMode === 'private' && !config?.inference?.cleanup;
   // Tracks the saved selection, except while a Bring Your Own Key draft is being set up.
   const [selection, setSelection] = useState<InferenceSelection>(savedSelection);
   const remembered = useRef<Record<string, InferenceSelection>>({});
@@ -331,8 +331,6 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   const modelId = selection.modelId ?? defaultModelId(provider);
   const providerId = provider?.id;
   const models = provider?.models.length ? provider.models : discoveredModels;
-  const shownMode =
-    cleanupUnsaved && selection.mode === savedSelection.mode ? null : selection.mode;
   const speechScope = scope === 'dictation' || scope === 'upload' ? scope : null;
   // On-Device text workflows run on Apple Intelligence, which some iPhones can never run.
   const [onDeviceUnsupported, setOnDeviceUnsupported] = useState<string | null>(null);
@@ -353,34 +351,33 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
       cancelled = true;
     };
   }, [speechScope]);
+  // Nothing is shown as picked when the On-Device text workflow can never run on this iPhone.
+  const pickedMode =
+    !speechScope && onDeviceUnsupported && selection.mode === 'local' ? null : selection.mode;
   const modeNote =
-    (shownMode === null
-      ? onDeviceUnsupported
-        ? UNSET_UNSUPPORTED_CLEANUP_NOTE
-        : UNSET_ON_DEVICE_CLEANUP_NOTE
+    (scope === 'cleanup' && selection.mode === 'local' && onDeviceUnsupported
+      ? ON_DEVICE_CLEANUP_UNSUPPORTED_NOTE
       : undefined) ??
-    (lockedByPrivateMode && ON_DEVICE_MODE_NOTES[scope]
-      ? `${ON_DEVICE_MODE_NOTES[scope]} Your ${MODE_LABELS[storedSelection.mode]} choice applies again when Private Mode is off.`
+    (scope === 'cleanup' &&
+    selection.mode === 'openwhispr' &&
+    cloudCleanupNeedsAccount(config, activeMode, cloudAccess)
+      ? CLOUD_CLEANUP_NEEDS_ACCOUNT_NOTE
       : undefined) ??
     (activeMode === 'private' ? ON_DEVICE_MODE_NOTES[scope] : undefined) ??
     (activeMode === 'providers' && !config?.inference?.[scope]
       ? UNSET_PROVIDER_NOTES[scope]
       : undefined) ??
     (selection.mode === 'providers' && savedSelection.mode !== 'providers'
-      ? activeMode === 'private'
-        ? 'Save to switch to Bring Your Own Key. This turns Private Mode off.'
+      ? activeMode === 'private' && scope === 'dictation'
+        ? 'Save to switch to Bring Your Own Key. This turns Local Mode off.'
         : 'Save to switch to Bring Your Own Key.'
+      : undefined) ??
+    (scope === 'dictation'
+      ? LOCAL_MODE_DICTATION_NOTES[activeMode === 'private' ? 'on' : 'off']
       : undefined);
-  // Private mode is switched in AI Models, so a mode it never runs here can't be picked.
-  const modeUnavailable: Partial<Record<InferenceMode, string>> = {
-    ...Object.fromEntries(
-      (activeMode === 'private' ? (PRIVATE_MODE_LOCKED[scope] ?? []) : []).map((mode) => [
-        mode,
-        PRIVATE_MODE_LOCKED_REASON,
-      ]),
-    ),
-    ...(onDeviceUnsupported ? { local: onDeviceUnsupported } : {}),
-  };
+  const modeUnavailable: Partial<Record<InferenceMode, string>> = onDeviceUnsupported
+    ? { local: onDeviceUnsupported }
+    : {};
   // Keys are stored per provider (per server for Custom), so every workflow on it shares one.
   const keyOwner =
     provider?.id === 'custom' ? 'this server' : providerDisplayName(provider?.id ?? '');
@@ -490,7 +487,10 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
       );
       return;
     }
-    if (mode === savedSelection.mode && !cleanupUnsaved) {
+    // Tapping the shown mode saves it when nothing of the user's own is saved, since an unsaved
+    // default follows the mode and the account (unsetSelection), and a pin is released with them.
+    const ownChoice = !!config?.inference?.[scope] && !config.pinnedInference?.includes(scope);
+    if (mode === savedSelection.mode && ownChoice) {
       setSelection(savedSelection);
       return;
     }
@@ -604,7 +604,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
       const saved = await prepareSelection();
       if (!saved) return;
       await updateConfig(
-        workflowSaveConfig(useConfigStore.getState().config, scope, saved, activeMode),
+        workflowSaveConfig(useConfigStore.getState().config, scope, saved, activeMode, cloudAccess),
       );
       if (useConfigStore.getState().error) {
         showError('Unable to save your selection. Please try again.');
@@ -763,7 +763,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
           <>
             <InferenceModePicker
               scope={speechScope ? 'speech' : 'text'}
-              selectedMode={shownMode}
+              selectedMode={pickedMode}
               onSelect={chooseMode}
               unavailable={modeUnavailable}
             />
@@ -777,7 +777,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
                 lockedChoice={lockedByPrivateMode}
               />
             ) : null}
-            {shownMode === 'local' && !speechScope ? (
+            {selection.mode === 'local' && !speechScope && !onDeviceUnsupported ? (
               <SectionFooter>Runs on Apple Intelligence on this iPhone.</SectionFooter>
             ) : null}
             {selection.mode === 'providers' && provider ? (

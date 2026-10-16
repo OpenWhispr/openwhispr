@@ -1198,6 +1198,7 @@ export interface PasteToolsResult {
   hasWtype?: boolean;
   isWlroots?: boolean;
   isCosmic?: boolean;
+  wlCopyMissing?: boolean;
   tools?: string[];
   recommendedInstall?: string;
 }
@@ -1370,7 +1371,11 @@ declare global {
           allowClipboardFallback?: boolean;
         }
       ) => Promise<
-        | { success: true; pasted: boolean; reason?: "modifiers-held" }
+        | {
+            success: true;
+            pasted: boolean;
+            reason?: "modifiers-held" | "wl-copy-missing" | "wl-copy-failed";
+          }
         | {
             success: false;
             pasted: false;
@@ -1412,6 +1417,8 @@ declare global {
           | "selection_changed"
           | "paste_failed"
           | "modifiers_held"
+          | "wl_copy_missing"
+          | "wl_copy_failed"
           | "selection_manager_unavailable";
         error?: string;
       }>;
@@ -1427,6 +1434,8 @@ declare global {
           | "target_changed"
           | "paste_failed"
           | "modifiers_held"
+          | "wl_copy_missing"
+          | "wl_copy_failed"
           | "selection_manager_unavailable";
         error?: string;
       }>;
@@ -1975,7 +1984,7 @@ declare global {
       checkAccessibilityPermission: (silent?: boolean) => Promise<boolean>;
       promptAccessibilityPermission: () => Promise<boolean>;
       readClipboard: () => Promise<string>;
-      writeClipboard: (text: string) => Promise<{ success: boolean }>;
+      writeClipboard: (text: string) => Promise<{ success: boolean; xwaylandOnly?: boolean }>;
       copyLeaderboardImage: (dataUrl: string) => Promise<{ success: boolean; error?: string }>;
       saveLeaderboardImage: (
         dataUrl: string,
@@ -2320,6 +2329,7 @@ declare global {
         hasYdotool: boolean;
         hasYdotoold: boolean;
         hasWtype: boolean;
+        hasWlCopy: boolean;
         daemonRunning: boolean;
         hasService: boolean;
         hasUinput: boolean;
@@ -2329,6 +2339,7 @@ declare global {
         isKde: boolean;
         isWlroots: boolean;
         isCosmic: boolean;
+        requiresWlCopy: boolean;
         hasXclip: boolean;
         hasXsel: boolean;
       }>;
@@ -3132,6 +3143,13 @@ declare global {
         callback: (payload: PolicyFailureMetadata & { requestId: string; error: string }) => void
       ) => () => void;
       onAgentStreamEnd?: (callback: (payload: { requestId: string }) => void) => () => void;
+
+      productHelp: (
+        id: string,
+        input: { topic: string; page?: string }
+      ) => Promise<import("../services/help/productHelp").HelpResult>;
+      cancelProductHelp: (id: string) => void;
+      productHelpBasics: () => Promise<import("../services/help/productHelp").HelpBasics>;
 
       // Agent cloud tools
       agentOpenNote?: (noteId: number) => Promise<{ success: boolean; error?: string }>;

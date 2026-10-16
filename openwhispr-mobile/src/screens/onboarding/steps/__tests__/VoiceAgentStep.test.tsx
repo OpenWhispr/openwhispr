@@ -29,7 +29,12 @@ jest.mock('../../../../../modules/app-group-storage/src', () => ({
   },
 }));
 let mockDraft: string | null = null;
-jest.mock('@/lib/keyboardAgentSync', () => ({ readKeyboardAgentDraft: () => mockDraft }));
+const mockShowAgentHints = jest.fn();
+const mockHideAgentHints = jest.fn(() => mockShowAgentHints);
+jest.mock('@/lib/keyboardAgentSync', () => ({
+  readKeyboardAgentDraft: () => mockDraft,
+  hideKeyboardAgentHints: () => mockHideAgentHints(),
+}));
 const mockNext = jest.fn();
 const mockBack = jest.fn();
 jest.mock('@/hooks/useOnboardingStep', () => ({
@@ -99,6 +104,15 @@ it('starts by pointing to the agent button on the keyboard', () => {
   expect(screen.getByText(START)).toBeTruthy();
   expect(screen.getByLabelText('Your message')).toBeTruthy();
   expect(screen.queryByText('Example request')).toBeNull();
+});
+
+// The card says what to dictate, so the keyboard's example instruction would contradict it.
+it("hides the keyboard's example instructions while the step is open", () => {
+  const screen = render(<VoiceAgentStep />);
+  expect(mockHideAgentHints).toHaveBeenCalledTimes(1);
+  expect(mockShowAgentHints).not.toHaveBeenCalled();
+  screen.unmount();
+  expect(mockShowAgentHints).toHaveBeenCalledTimes(1);
 });
 
 it('says what the agent does in one line', () => {

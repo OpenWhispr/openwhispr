@@ -130,6 +130,7 @@ import {
   dictionaryEchoError,
   matchesDictionaryPrompt,
   payloadSendsDictionaryBias,
+  stripTrailingDictionaryEcho,
 } from "../utils/dictionaryEchoFilter.js";
 import { dictionaryPromptLimit, trimDictionaryPrompt } from "../utils/dictionaryPromptCap.js";
 import {
@@ -859,6 +860,21 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       matchesDictionaryPrompt(text, this.getCustomDictionaryPrompt()) ||
       matchesDictionaryPrompt(text, this.getWhisperPrompt())
     );
+  }
+
+  // Drops a hint list the model recited after the speech (#2581). Pass the
+  // prompt the request actually carried: a capped prompt can only echo itself.
+  // Snippet triggers beside the dictionary never start or count toward a recital.
+  stripTrailingDictionaryEcho(text, sentPrompt) {
+    const stripped = stripTrailingDictionaryEcho(text, sentPrompt, this.getCustomDictionaryArray());
+    if (stripped !== text) {
+      logger.debug(
+        "Stripped trailing dictionary echo",
+        { originalLength: text.length, strippedLength: stripped.length },
+        "transcription"
+      );
+    }
+    return stripped;
   }
 
   setCallbacks({
@@ -3570,6 +3586,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     const timings = {};
     const settings = getSettings();
+    const isCloudCleanup = isCloudCleanupMode();
     const language = getBaseLanguageCode(this.getEffectiveSttLanguage(settings));
 
     const arrayBuffer = await audioBlob.arrayBuffer();
@@ -3594,14 +3611,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       opts.analyticsOccurredAt = analyticsOccurredAt.toISOString();
       opts.localDate = localDateKey(analyticsOccurredAt);
     }
-    const cleanupCloudMode = settings.cleanupCloudMode || "openwhispr";
     // Only cloud cleanup writes a combined STT log; translation alone does not.
     // A voice assistant recording never runs cleanup, so this upload is its log.
-    if (
-      settings.useCleanupModel &&
-      cleanupCloudMode === "openwhispr" &&
-      !this.voiceAgentRequested
-    ) {
+    if (settings.useCleanupModel && isCloudCleanup && !this.voiceAgentRequested) {
       opts.sendLogs = "false";
     }
 
@@ -3626,11 +3638,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     });
     timings.transcriptionProcessingDurationMs = Math.round(performance.now() - transcriptionStart);
 
-    const rawText = result.text;
-    if (this.isDictionaryEcho(rawText)) {
+    if (this.isDictionaryEcho(result.text)) {
       throw dictionaryEchoError();
     }
-    let processedText = result.text;
+    const rawText = this.stripTrailingDictionaryEcho(result.text, dictionaryPrompt);
+    let processedText = rawText;
     if (processedText) {
       const reasoningStart = performance.now();
       const agentName = getAgentName();
@@ -3647,7 +3659,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (this.translationRequested && route.kind !== "translation") {
         this.notifyTranslationFallback("unreachable");
       }
-      const cleanupCloudMode = settings.cleanupCloudMode || "openwhispr";
       const toneStyle = route.kind === "cleanup" ? await this.consumeToneStyle() : null;
 
       try {
@@ -3663,7 +3674,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             wasCancelled
           );
           if (hasTextContent(reasoned)) processedText = reasoned;
-        } else if (route.kind === "cleanup" && cleanupCloudMode === "openwhispr") {
+        } else if (route.kind === "cleanup" && isCloudCleanup) {
           const customPrompt = this.getCustomPrompt();
           const reasonResult = await withSessionRefresh(async () => {
             const res = await window.electronAPI.cloudReason(processedText, {
@@ -3718,31 +3729,30 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             settings,
             agentName,
             route,
-            cleanup:
-              cleanupCloudMode === "openwhispr"
-                ? {
-                    mode: "cloudReason",
-                    meta: {
-                      streamingFallbackReason,
-                      orukeetLanguageRouting: metadata.orukeetLanguageRouting,
-                      orukeetCleanup: metadata.orukeetCleanup,
-                      ...detectedLanguageFields,
-                      sttProvider: result.sttProvider,
-                      sttModel: result.sttModel,
-                      sttProcessingMs: result.sttProcessingMs,
-                      sttWordCount: result.sttWordCount,
-                      sttLanguage: result.sttLanguage,
-                      audioDurationMs: result.audioDurationMs,
-                      audioSizeBytes,
-                      audioFormat,
-                    },
-                    log: { level: "error", channel: "transcription" },
-                  }
-                : {
-                    mode: "model",
-                    model: getEffectiveCleanupModel(),
-                    log: { level: "error", channel: "transcription" },
+            cleanup: isCloudCleanup
+              ? {
+                  mode: "cloudReason",
+                  meta: {
+                    streamingFallbackReason,
+                    orukeetLanguageRouting: metadata.orukeetLanguageRouting,
+                    orukeetCleanup: metadata.orukeetCleanup,
+                    ...detectedLanguageFields,
+                    sttProvider: result.sttProvider,
+                    sttModel: result.sttModel,
+                    sttProcessingMs: result.sttProcessingMs,
+                    sttWordCount: result.sttWordCount,
+                    sttLanguage: result.sttLanguage,
+                    audioDurationMs: result.audioDurationMs,
+                    audioSizeBytes,
+                    audioFormat,
                   },
+                  log: { level: "error", channel: "transcription" },
+                }
+              : {
+                  mode: "model",
+                  model: getEffectiveCleanupModel(),
+                  log: { level: "error", channel: "transcription" },
+                },
           });
           processedText = resolveTranslatedText(processedText, chainResult);
         }
@@ -3844,6 +3854,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           throw new Error(`${proxySpec.displayName} transcription is unavailable in this window`);
         }
         const apiCallStart = performance.now();
+        const proxyDictionaryPrompt = this.getWhisperPrompt(apiSettings);
         const proxyPayload = proxySpec.buildPayload({
           audioBuffer: await optimizedAudio.arrayBuffer(),
           model,
@@ -3851,7 +3862,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           apiSettings,
           managedResolution,
           mimeType: optimizedAudio.type || "audio/webm",
-          dictionaryPrompt: this.getWhisperPrompt(apiSettings),
+          dictionaryPrompt: proxyDictionaryPrompt,
           keyterms: this.getKeyterms()
             .map((t) => t.trim().slice(0, 50))
             .filter(Boolean)
@@ -3873,11 +3884,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           // message (net::ERR_*), so classify the rebuilt error here.
           throw classifyProxyFailure(errorFromIpcResult(result));
         }
-        const proxyText = result?.text;
+        const sendsDictionaryBias = payloadSendsDictionaryBias(proxyPayload);
+        const proxyText = this.stripTrailingDictionaryEcho(
+          result?.text,
+          sendsDictionaryBias ? proxyDictionaryPrompt : null
+        );
         if (!proxyText?.trim()) {
           throw new Error(`No text transcribed - ${proxySpec.displayName} response was empty`);
         }
-        if (payloadSendsDictionaryBias(proxyPayload) && this.isDictionaryEcho(proxyText)) {
+        if (sendsDictionaryBias && this.isDictionaryEcho(result.text)) {
           throw dictionaryEchoError();
         }
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
@@ -3991,6 +4006,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           formData.append("keywords[]", keyword);
         }
       }
+      // The terms the model could recite. gpt-transcribe got them as keywords[]
+      // plus the prompt's overflow; when the overflow was capped, count only the
+      // keywords.
+      const sentDictionaryPrompt = usesKeywords
+        ? trimmedPrompt.truncated
+          ? dictionaryKeywords(dictionary).join(", ")
+          : dictionary
+        : dictionaryPrompt;
 
       const shouldStream = this.shouldStreamTranscription(model, provider);
       if (shouldStream) {
@@ -4146,10 +4169,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           throw dictionaryEchoError();
         }
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
-        const rawText = result.text;
+        const rawText = this.stripTrailingDictionaryEcho(
+          result.text,
+          model === "orukeet-v0.1.0" ? null : sentDictionaryPrompt
+        );
 
         const reasoningStart = performance.now();
-        const text = await this.processTranscription(result.text, "openai", wasCancelled);
+        const text = await this.processTranscription(rawText, "openai", wasCancelled);
         timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
 
         const source = (await this.isReasoningAvailable()) ? "openai-reasoned" : "openai";
@@ -4721,7 +4747,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       !settings.useCleanupModel ||
       !isCloudCleanupMode() ||
       !isLlmSelectionAllowed(usePolicyStore.getState(), { mode: "openwhispr" }) ||
-      (settings.cleanupCloudMode || "openwhispr") !== "openwhispr" ||
       voiceAgentRequested ||
       translationRequested
     )
@@ -5888,7 +5913,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (this.translationRequested && route.kind !== "translation") {
         this.notifyTranslationFallback("unreachable");
       }
-      const cleanupCloudMode = stSettings.cleanupCloudMode || "openwhispr";
+      const isCloudCleanup = isCloudCleanupMode();
       const toneStyle = route.kind === "cleanup" ? await this.consumeToneStyle() : null;
 
       try {
@@ -5909,7 +5934,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             { reasoningDurationMs: Math.round(performance.now() - reasoningStart) },
             "streaming"
           );
-        } else if (route.kind === "cleanup" && cleanupCloudMode === "openwhispr") {
+        } else if (route.kind === "cleanup" && isCloudCleanup) {
           const customPrompt = this.getCustomPrompt();
           // ASR finished but the combined cleanup didn't: paste the raw text, as
           // any other failed cleanup does.
@@ -5992,31 +6017,30 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             settings: stSettings,
             agentName,
             route,
-            cleanup:
-              cleanupCloudMode === "openwhispr"
-                ? {
-                    mode: "cloudReason",
-                    meta: {
-                      sttProvider: providerName,
-                      sttModel: streamingSttModel,
-                      sttProcessingMs: streamingSttProcessingMs,
-                      sttWordCount: streamingSttWordCount,
-                      sttLanguage: streamingSttLanguage,
-                      ...detectedLanguageFields,
-                      ...uncombinedTelemetry,
-                      audioDurationMs: durationSeconds
-                        ? Math.round(durationSeconds * 1000)
-                        : undefined,
-                      audioSizeBytes: streamingAudioBytesSent || undefined,
-                      audioFormat: "linear16",
-                    },
-                    log: { level: "error", channel: "streaming" },
-                  }
-                : {
-                    mode: "model",
-                    model: getEffectiveCleanupModel(),
-                    log: { level: "error", channel: "streaming" },
+            cleanup: isCloudCleanup
+              ? {
+                  mode: "cloudReason",
+                  meta: {
+                    sttProvider: providerName,
+                    sttModel: streamingSttModel,
+                    sttProcessingMs: streamingSttProcessingMs,
+                    sttWordCount: streamingSttWordCount,
+                    sttLanguage: streamingSttLanguage,
+                    ...detectedLanguageFields,
+                    ...uncombinedTelemetry,
+                    audioDurationMs: durationSeconds
+                      ? Math.round(durationSeconds * 1000)
+                      : undefined,
+                    audioSizeBytes: streamingAudioBytesSent || undefined,
+                    audioFormat: "linear16",
                   },
+                  log: { level: "error", channel: "streaming" },
+                }
+              : {
+                  mode: "model",
+                  model: getEffectiveCleanupModel(),
+                  log: { level: "error", channel: "streaming" },
+                },
           });
           finalText = resolveTranslatedText(finalText, chainResult);
           usedCloudReasoning = chainResult.usedCloudReasoning || usedCloudReasoning;
