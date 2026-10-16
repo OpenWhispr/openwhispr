@@ -692,6 +692,7 @@ export function useChatStreaming({
                 customApiKey:
                   isCustomAgent || isLanAgent ? llmConfig.customApiKey || undefined : undefined,
                 disableThinking: llmConfig.disableThinking,
+                reasoningEffort: llmConfig.reasoningEffort,
               },
               aiTools
             );

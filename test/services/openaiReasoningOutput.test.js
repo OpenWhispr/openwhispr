@@ -197,13 +197,47 @@ test("Responses requests carry the other families' effort facts too", async (t) 
   assert.deepEqual(bodies[1].reasoning, { effort: "none" });
 });
 
-test("a model outside the family table gets no reasoning param on a Responses endpoint", async (t) => {
+test("a model outside the family table gets the generic off value on a Responses endpoint", async (t) => {
   const bodies = installFetch(t, () => completeMessage("# Notes"));
   const { openaiProvider } = await load();
 
   await openaiProvider.call({ ...glmNotesCall({ disableThinking: true }), model: "glm-5.2" });
+  await openaiProvider.call({ ...glmNotesCall({ disableThinking: false }), model: "glm-5.2" });
 
-  assert.equal(bodies[0].reasoning, undefined);
+  // "none", as the chat body's generic dialect sends (#791); thinking on leaves the default.
+  assert.deepEqual(bodies[0].reasoning, { effort: "none" });
+  assert.equal(bodies[1].reasoning, undefined);
+});
+
+test("a Custom endpoint that rejects the off value pays the 400 once, not on every request", async (t) => {
+  // e.g. Azure OpenAI with a non-reasoning deployment, whose name we can't recognise.
+  const bodies = installFetch(t, (body) =>
+    body.reasoning
+      ? jsonResponse({ error: { message: "Unsupported parameter: 'reasoning.effort'" } }, 400)
+      : completeMessage("Cleaned.")
+  );
+  const { openaiProvider } = await load();
+  const cleanup = () =>
+    openaiProvider.call({
+      text: "raw transcript",
+      model: "gpt-4o-prod",
+      agentName: null,
+      config: {
+        provider: "custom",
+        baseUrl: "https://rejecting-host.example/v1",
+        customApiKey: "test-key",
+        disableThinking: true,
+      },
+      ctx: makeCtx(),
+    });
+
+  assert.equal(await cleanup(), "Cleaned.");
+  assert.equal(await cleanup(), "Cleaned.");
+
+  assert.deepEqual(
+    bodies.map((body) => body.reasoning),
+    [{ effort: "none" }, undefined, undefined]
+  );
 });
 
 test("a Responses result that ran out of tokens before any text is an error, not the input echoed back", async (t) => {

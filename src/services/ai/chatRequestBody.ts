@@ -1,5 +1,10 @@
 import type { ReasoningConfig } from "../BaseReasoningService";
-import { getOpenAiApiConfig } from "../../models/ModelRegistry";
+import { getOpenAiApiConfig, type ReasoningEffortCapability } from "../../models/ModelRegistry";
+import {
+  getReasoningEffortCapability,
+  hasSelectableReasoningEffort,
+  isReasoningEffortSupported,
+} from "../../models/reasoningEffort";
 import { detectEndpointDialect } from "./thinkingSuppressionDialects";
 import { getModelFamilyConstraints } from "./modelFamilyConstraints";
 import { applyThinkingSuppression, isThinkingSuppressed } from "./thinkingSuppression";
@@ -16,11 +21,11 @@ const LEGACY_CHAT_COMPLETIONS_PROVIDERS = new Set(["local", "lan", "groq", "tinf
 /**
  * Single place that turns (model, provider, endpoint, config) into the
  * parameter set of an OpenAI-compatible chat-completions body: token-limit
- * param, temperature, family reasoning effort, and thinking suppression.
+ * param, temperature, reasoning effort, and thinking suppression.
  * Callers own `model`/`messages`/`stream`; this owns every tunable param, so
  * a family or provider fact changed in the data tables reaches all transports
  * at once instead of one call site at a time (#1611). Responses bodies get the
- * same family effort from familyResponsesEffort; keep the two in step.
+ * same effort from responsesReasoningEffort; keep the two in step.
  */
 export function applyChatCompletionsParams(
   requestBody: Record<string, unknown>,
@@ -55,11 +60,17 @@ export function applyChatCompletionsParams(
     }
   }
 
-  // Deterministic transforms (cleanup, selection edits) pin the family's
-  // preferred effort — see modelFamilyConstraints for the gpt-oss rationale.
-  // applyThinkingSuppression still wins when thinking is disabled by the user.
+  // The user's chosen effort wins; otherwise deterministic transforms
+  // (cleanup, selection edits) pin the family's preferred effort — see
+  // modelFamilyConstraints for the gpt-oss rationale. A suppressed request has
+  // no chosen effort, so applyThinkingSuppression still decides it.
   const familyEffort = getModelFamilyConstraints(model)?.reasoningEffort;
-  if (familyEffort?.cleanupValue && isDeterministicTransform(config)) {
+  const effort = chosenReasoningEffort(providerKey, model, config);
+  if (effort) {
+    // OpenRouter takes effort only inside its reasoning object.
+    if (providerKey === "openrouter") requestBody.reasoning = { effort };
+    else requestBody.reasoning_effort = effort;
+  } else if (familyEffort?.cleanupValue && isDeterministicTransform(config)) {
     requestBody.reasoning_effort = familyEffort.cleanupValue;
   }
 
@@ -72,24 +83,60 @@ export function applyChatCompletionsParams(
   );
   // Some dialects suppress through other fields, so a default effort beside
   // them would contradict the suppression.
-  if (!suppressed && familyEffort?.defaultValue) {
+  if (!suppressed && !effort && familyEffort?.defaultValue) {
     requestBody.reasoning_effort ??= familyEffort.defaultValue;
   }
 }
 
 /**
- * The family's effort for a Responses API body (`reasoning: { effort }`), by
- * the same rules as the chat body above. A model outside the family table
- * sends no effort, leaving the server's default.
+ * The effort for a Responses API body (`reasoning: { effort }`), by the same
+ * rules as the chat body above. Suppression sends the family's floor, or
+ * "none" like the generic chat dialect; with no choice, a model outside the
+ * family table sends no effort, leaving the server's default.
  */
-export function familyResponsesEffort(model: string, config: ReasoningConfig): string | undefined {
+export function responsesReasoningEffort(
+  model: string,
+  provider: string,
+  config: ReasoningConfig
+): string | undefined {
   const familyEffort = getModelFamilyConstraints(model)?.reasoningEffort;
-  if (!familyEffort) return undefined;
-  if (isThinkingSuppressed(model, config)) return familyEffort.suppressValue;
-  if (familyEffort.cleanupValue && isDeterministicTransform(config)) {
+  if (isThinkingSuppressed(model, config)) return familyEffort?.suppressValue ?? "none";
+  const effort = chosenReasoningEffort(provider, model, config);
+  if (effort) return effort;
+  if (familyEffort?.cleanupValue && isDeterministicTransform(config)) {
     return familyEffort.cleanupValue;
   }
-  return familyEffort.defaultValue;
+  return familyEffort?.defaultValue;
+}
+
+/**
+ * The levels Settings offers for this provider and model, or null when it
+ * shows no picker: thinking is suppressed, or the model has fewer than two.
+ */
+export function selectableReasoningEffort(
+  provider: string,
+  model: string,
+  config: ReasoningConfig
+): ReasoningEffortCapability | null {
+  if (!model || isThinkingSuppressed(model, config)) return null;
+  const capability = getReasoningEffortCapability(provider.toLowerCase(), model);
+  return hasSelectableReasoningEffort(capability) ? capability : null;
+}
+
+/**
+ * The effort the user picked for this scope, when Settings offers it for this
+ * provider and model. A stored level it doesn't offer (the model, provider or
+ * toggle changed since) is ignored.
+ */
+export function chosenReasoningEffort(
+  provider: string,
+  model: string,
+  config: ReasoningConfig
+): string | undefined {
+  const effort = config.reasoningEffort;
+  return isReasoningEffortSupported(selectableReasoningEffort(provider, model, config), effort)
+    ? effort
+    : undefined;
 }
 
 function isDeterministicTransform(config: ReasoningConfig): boolean {
@@ -147,7 +194,7 @@ export function emptyResponseError(
  * module's shaping layer added are strippable — never messages or model — so a
  * retry degrades the request (model reasons when asked not to, default
  * sampling) instead of failing it outright. The strip is logged loudly: a
- * fallback that fires on every request is a dialect bug to fix, not a rescue.
+ * fallback that keeps firing is a dialect bug to fix, not a rescue.
  */
 const STRIPPABLE_SHAPED_PARAMS = [
   "reasoning_effort",
@@ -158,38 +205,72 @@ const STRIPPABLE_SHAPED_PARAMS = [
 ] as const;
 
 /**
+ * Values a server rejected since this window loaded, as
+ * `endpoint, model, param=value`. Keyed by value, so another effort level is
+ * still sent.
+ */
+const rejectedParams = new Set<string>();
+
+/** `remembered`: left out up front because an earlier retry proved it rejected. */
+export type ParamFallbackDetails = { status?: number; stripped: string[]; remembered?: true };
+
+/**
  * Fetch with a bounded param-stripping ladder for 400/422 rejections.
  * Rung 1 (blind): old Ollama/strict proxies reject the `reasoning` object
  * without naming it — drop it and retry once. Rung 2 (named): strip exactly
  * the shaped params the error body names and retry once. At most two retries;
  * the caller must build the body inside `doFetch` so retries re-serialize.
+ * A value the error named whose removal let the retry through is left out of
+ * later requests to the same endpoint and model until the window reloads, so
+ * each pays the rejection once rather than on every request.
  */
 export async function fetchWithParamFallback(
+  endpoint: string,
   doFetch: () => Promise<Response>,
   requestBody: Record<string, unknown>,
-  logRejection: (details: { status: number; stripped: string[] }) => void
+  logRejection: (details: ParamFallbackDetails) => void
 ): Promise<Response> {
+  const rejectionKey = (param: string) =>
+    `${endpoint}\n${requestBody.model}\n${param}=${JSON.stringify(requestBody[param])}`;
+  const remembered = ["reasoning", ...STRIPPABLE_SHAPED_PARAMS].filter(
+    (param) => param in requestBody && rejectedParams.has(rejectionKey(param))
+  );
+  if (remembered.length > 0) {
+    logRejection({ stripped: remembered, remembered: true });
+    for (const param of remembered) delete requestBody[param];
+  }
+  const readError = (response: Response) =>
+    response
+      .clone()
+      .text()
+      .catch(() => "");
+  const retryWithout = async (params: readonly string[], remember: boolean) => {
+    const keys = params.map(rejectionKey);
+    for (const param of params) delete requestBody[param];
+    const retried = await doFetch();
+    if (remember && retried.ok) for (const key of keys) rejectedParams.add(key);
+    return retried;
+  };
+
   let res = await doFetch();
   if (res.ok || (res.status !== 400 && res.status !== 422)) return res;
 
   if (requestBody.reasoning) {
+    // Remembered only when the error names it: a blind 400 may have come from
+    // one of several backends behind the same endpoint.
+    const reasoningNamed = (await readError(res)).includes("reasoning");
     logRejection({ status: res.status, stripped: ["reasoning"] });
-    delete requestBody.reasoning;
     void res.body?.cancel();
-    res = await doFetch();
+    res = await retryWithout(["reasoning"], reasoningNamed);
     if (res.ok || (res.status !== 400 && res.status !== 422)) return res;
   }
 
-  const errorText = await res
-    .clone()
-    .text()
-    .catch(() => "");
+  const errorText = await readError(res);
   const named = STRIPPABLE_SHAPED_PARAMS.filter((p) => p in requestBody && errorText.includes(p));
   if (named.length > 0) {
     logRejection({ status: res.status, stripped: named });
-    for (const param of named) delete requestBody[param];
     void res.body?.cancel();
-    res = await doFetch();
+    res = await retryWithout(named, true);
   }
   return res;
 }

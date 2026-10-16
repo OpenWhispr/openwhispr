@@ -747,6 +747,21 @@
       "selectModelHint": "Nenhum modelo selecionado ainda — escolha um na lista abaixo.",
       "keyRequiredHint": "Uma chave API é necessária para a inferência — adicione uma para usar este provedor."
     },
+    "effort": {
+      "title": "Esforço de raciocínio",
+      "description": "Quanto o modelo pensa antes de responder.",
+      "descriptionWithDefault": "Quanto o modelo pensa antes de responder. Auto usa o padrão do provedor ({{value}}).",
+      "auto": "Auto",
+      "options": {
+        "none": "Nenhum",
+        "minimal": "Mínimo",
+        "low": "Baixo",
+        "medium": "Médio",
+        "high": "Alto",
+        "xhigh": "Muito alto",
+        "max": "Máximo"
+      }
+    },
     "getApiKey": "Obter chave API ->",
     "selectModel": "Selecionar modelo",
     "availableModels": "Modelos disponíveis",

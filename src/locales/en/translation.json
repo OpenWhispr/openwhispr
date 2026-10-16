@@ -768,6 +768,21 @@
       "selectModelHint": "No model selected yet — choose one from the list below.",
       "keyRequiredHint": "An API key is required for inference — add one to use this provider."
     },
+    "effort": {
+      "title": "Reasoning effort",
+      "description": "How much the model thinks before it answers.",
+      "descriptionWithDefault": "How much the model thinks before it answers. Auto uses the provider's default ({{value}}).",
+      "auto": "Auto",
+      "options": {
+        "none": "None",
+        "minimal": "Minimal",
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "xhigh": "Extra high",
+        "max": "Max"
+      }
+    },
     "getApiKey": "Get your API key ->",
     "selectModel": "Select Model",
     "availableModels": "Available Models",

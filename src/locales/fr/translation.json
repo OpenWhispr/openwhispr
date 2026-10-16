@@ -768,6 +768,21 @@
       "selectModelHint": "Aucun modèle sélectionné — choisissez-en un dans la liste ci-dessous.",
       "keyRequiredHint": "Une clé API est requise pour l'inférence — ajoutez-en une pour utiliser ce fournisseur."
     },
+    "effort": {
+      "title": "Effort de raisonnement",
+      "description": "Le temps de réflexion du modèle avant de répondre.",
+      "descriptionWithDefault": "Le temps de réflexion du modèle avant de répondre. Auto utilise la valeur par défaut du fournisseur ({{value}}).",
+      "auto": "Auto",
+      "options": {
+        "none": "Aucun",
+        "minimal": "Minimal",
+        "low": "Faible",
+        "medium": "Moyen",
+        "high": "Élevé",
+        "xhigh": "Très élevé",
+        "max": "Maximum"
+      }
+    },
     "getApiKey": "Obtenir la clé API ->",
     "selectModel": "Sélectionner un modèle",
     "availableModels": "Modèles disponibles",

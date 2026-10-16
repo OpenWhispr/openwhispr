@@ -7,7 +7,7 @@ import {
 } from "../../../helpers/llmRequestTimeout.js";
 import { extractGeminiText } from "../../../helpers/geminiResponse.js";
 import { wrapCleanupTranscript } from "../../../config/prompts";
-import { emptyOutputError, truncatedOutputError } from "../chatRequestBody";
+import { chosenReasoningEffort, emptyOutputError, truncatedOutputError } from "../chatRequestBody";
 import logger from "../../../utils/logger";
 import {
   asProviderError,
@@ -31,7 +31,7 @@ interface GeminiResponse {
 interface GeminiGenerationConfig {
   temperature: number;
   thinkingConfig?: {
-    thinkingLevel?: "minimal" | "low";
+    thinkingLevel?: string;
     thinkingBudget?: number;
     includeThoughts: boolean;
   };
@@ -73,8 +73,11 @@ export const geminiProvider: InferenceProvider = {
       // limit and the request timeout bound the reply.
     };
 
+    const thinkingLevel = chosenReasoningEffort("gemini", model, config);
     if (config.disableThinking === true && minimalThinking[model]) {
       generationConfig.thinkingConfig = minimalThinking[model];
+    } else if (thinkingLevel) {
+      generationConfig.thinkingConfig = { thinkingLevel, includeThoughts: false };
     }
 
     const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [

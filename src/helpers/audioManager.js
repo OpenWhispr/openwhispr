@@ -308,6 +308,7 @@ function resolveReasoningRoute(
   const cleanupConfig = {
     inferenceScope: /** @type {const} */ ("dictationCleanup"),
     disableThinking: settings.cleanupDisableThinking,
+    reasoningEffort: settings.cleanupReasoningEffort,
     temperature: cleanupTemperature,
     requireCompleteOutput: true,
   };
