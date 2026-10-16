@@ -34,7 +34,7 @@ function loadEngine() {
   }
 }
 
-function createEngine() {
+function createEngine(engineOptions) {
   const MeetingDetectionEngine = loadEngine();
 
   const reminderScheduler = {
@@ -82,7 +82,8 @@ function createEngine() {
     processDetector,
     audioDetector,
     windowManager,
-    {}
+    {},
+    engineOptions
   );
 
   return {
@@ -253,6 +254,33 @@ const ENABLED_SNAPSHOT = {
 function applySnapshot(engine, snapshot) {
   engine.setPreferences(deriveDetectorPreferences(snapshot));
 }
+
+// The bare {} databaseManager is the assertion that nothing reaches the note path.
+test("an administrator-disabled build never runs detectors, prompts, or starts a meeting", async () => {
+  let disabled = true;
+  const { engine, audioDetector, processDetector, shown, meetingNavigations, noteNavigations } =
+    createEngine({ isMeetingRecordingDisabled: () => disabled });
+
+  engine.start();
+  applySnapshot(engine, ENABLED_SNAPSHOT);
+  assert.equal(audioDetector.running, false);
+  assert.equal(processDetector.running, false);
+
+  audioDetector.emit("sustained-audio-detected", { durationMs: 2000, detectedAt: 0 });
+  engine.handleCalendarReminder({ id: "event-1" });
+  assert.deepEqual(shown, []);
+
+  await engine.startManualMeeting();
+  await engine.joinCalendarMeeting("event-1");
+  assert.deepEqual(meetingNavigations, []);
+  assert.deepEqual(noteNavigations, []);
+
+  // Removing the profile takes effect on the next preference sync.
+  disabled = false;
+  applySnapshot(engine, ENABLED_SNAPSHOT);
+  assert.equal(audioDetector.running, true);
+  assert.equal(processDetector.running, true);
+});
 
 test("startup waits for saved notification preferences before starting prompt detectors", () => {
   const { engine, audioDetector, processDetector } = createEngine();
