@@ -24,7 +24,9 @@ export default function ToneStyleSection({ onOpenCleanupSettings }: ToneStyleSec
   const toneStyleEnabled = useSettingsStore((s) => s.toneStyleEnabled);
   const useCleanupModel = useSettingsStore((s) => s.useCleanupModel);
   const [draft, setDraft] = useState<ToneStyles>(savedStyles);
-  const canSave = TONE_APP_CATEGORIES.some((category) => draft[category] !== savedStyles[category]);
+  const canSave =
+    toneStyleEnabled &&
+    TONE_APP_CATEGORIES.some((category) => draft[category] !== savedStyles[category]);
 
   const save = () => {
     useSettingsStore.getState().setToneStyles(draft);
@@ -75,7 +77,6 @@ export default function ToneStyleSection({ onOpenCleanupSettings }: ToneStyleSec
         </InfoBox>
       )}
 
-      {/* Off, the picks stay visible but grayed out. */}
       <div className={cn(!toneStyleEnabled && "pointer-events-none opacity-50")}>
         <div className="space-y-6">
           {TONE_APP_CATEGORIES.map((category) => {
@@ -133,7 +134,7 @@ export default function ToneStyleSection({ onOpenCleanupSettings }: ToneStyleSec
           <Button
             variant={canSave ? "default" : "secondary"}
             className="h-8 border-transparent px-4 text-[13px] disabled:opacity-100 disabled:text-muted-foreground/60"
-            disabled={!toneStyleEnabled || !canSave}
+            disabled={!canSave}
             onClick={save}
           >
             {t("toneStyle.settings.saveChanges")}
