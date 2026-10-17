@@ -2682,6 +2682,7 @@
         "gemini_gemma_4_31b_it": "Крупнейшая Gemma 4 от Google, 31B плотная, контекст 256K",
         "gemini_gemma_4_26b_a4b_it": "Gemma 4 MoE от Google, 4B активных параметров, контекст 256K",
         "groq_openai_gpt_oss_120b": "Открытая флагманская модель OpenAI, 500 т/с",
+        "groq_qwen_qwen3_8_27b": "Мощная модель с рассуждением, контекст 131K",
         "groq_openai_gpt_oss_20b": "Быстрая открытая модель, 1000 т/с",
         "groq_compound": "Система Compound от Groq, 450 т/с",
         "groq_compound_mini": "Быстрая система Compound, 3x ниже задержка",

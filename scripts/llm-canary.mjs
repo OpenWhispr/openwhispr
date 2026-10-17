@@ -49,7 +49,7 @@ const PROVIDERS = [
     id: "groq",
     keyEnv: "LLM_CANARY_GROQ_KEY",
     base: "https://api.groq.com/openai/v1",
-    models: ["openai/gpt-oss-120b", "openai/gpt-oss-20b"],
+    models: ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"],
   },
   {
     id: "tinfoil",
