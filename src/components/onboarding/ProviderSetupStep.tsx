@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AudioLines, Check, CircleCheck, Download, MousePointer2 } from "../icons";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import ProviderConnectionTest from "./ProviderConnectionTest";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -23,6 +24,7 @@ import {
   getWhisperModels,
   modelRegistry,
   type CloudProviderData,
+  type ModelSpeed,
   type TranscriptionProviderData,
 } from "../../models/ModelRegistry";
 import {
@@ -199,6 +201,17 @@ const SELECT_PANEL_CLASS =
  */
 const SELECT_ITEM_CLASS =
   "onboarding-select-item gap-2.5 rounded-none py-2.5 ps-1.5 pe-8 text-sm font-normal leading-[1.4] hover:bg-transparent focus:bg-transparent data-highlighted:bg-transparent dark:hover:bg-transparent dark:focus:bg-transparent dark:data-highlighted:bg-transparent [&>span:nth-child(2)]:w-full";
+
+/** Speed tier, then "Real-time" for models that transcribe while the user speaks. */
+function modelPerformanceLabels(
+  t: TFunction,
+  speed: ModelSpeed | undefined,
+  realtime: boolean
+): string[] {
+  const labels = speed ? [t(`models.speed.${speed}`)] : [];
+  if (realtime) labels.push(t("models.speed.realtime"));
+  return labels;
+}
 
 function providerCredential(provider: string, store: ReturnType<typeof useSettingsStore.getState>) {
   switch (provider) {
@@ -693,11 +706,25 @@ export function ByokProviderStep({
                   )}
                 </SelectTrigger>
                 <SelectContent className={`max-h-[14.625rem] ${SELECT_PANEL_CLASS}`}>
-                  {models.map((model) => (
-                    <SelectItem key={model.id} value={model.id} className={SELECT_ITEM_CLASS}>
-                      {model.name}
-                    </SelectItem>
-                  ))}
+                  {models.map((model) => {
+                    const performance = modelPerformanceLabels(
+                      t,
+                      model.speed,
+                      !assistant && "streaming" in model && Boolean(model.streaming)
+                    );
+                    return (
+                      <SelectItem key={model.id} value={model.id} className={SELECT_ITEM_CLASS}>
+                        <span className="flex items-center gap-2.5">
+                          <span>{model.name}</span>
+                          {performance.length > 0 && (
+                            <span className="ms-auto shrink-0 text-xs text-[var(--onboarding-text-secondary)]">
+                              {performance.join(" · ")}
+                            </span>
+                          )}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </label>
@@ -888,6 +915,8 @@ export function LocalModelSetupStep({
         name: model.name,
         size: model.size,
         recommended: model.recommended,
+        speed: model.speed,
+        realtime: false,
         icon: selectedProvider,
       }));
     }
@@ -899,6 +928,8 @@ export function LocalModelSetupStep({
           name: model.name,
           size: model.size.replace(/(?<=\d)(?=[A-Za-z])/, " "),
           recommended: model.recommended,
+          speed: model.speed,
+          realtime: model.runtime === "online",
           icon: selectedProvider,
         }));
     }
@@ -907,6 +938,8 @@ export function LocalModelSetupStep({
       name: model.name,
       size: model.size.replace(/(?<=\d)(?=[A-Za-z])/, " "),
       recommended: model.recommended,
+      speed: model.speed,
+      realtime: false,
       icon: "openai",
     }));
   }, [assistant, selectedProvider]);
@@ -1124,8 +1157,11 @@ export function LocalModelSetupStep({
                   {model.name}
                 </span>
                 <span className="mt-1 block truncate text-sm text-[var(--onboarding-text-secondary)]">
-                  {model.size}
-                  {!assistant && model.recommended && ` - ${t("common.recommended")}`}
+                  {[
+                    model.size,
+                    ...modelPerformanceLabels(t, model.speed, model.realtime),
+                    ...(!assistant && model.recommended ? [t("common.recommended")] : []),
+                  ].join(" · ")}
                 </span>
               </button>
 
