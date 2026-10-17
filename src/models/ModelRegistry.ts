@@ -4,6 +4,9 @@ import { readCachedTinfoilModels } from "./tinfoilModelCache";
 import { filterMeetingStreamingProviders } from "../helpers/meetingTranscriptionRouting";
 import type { InferenceMode } from "../types/electron";
 
+/** Relative response time, shown beside each model during setup. */
+export type ModelSpeed = "fast" | "medium" | "slow";
+
 export interface ModelDefinition {
   id: string;
   name: string;
@@ -16,6 +19,7 @@ export interface ModelDefinition {
   contextLength: number;
   hfRepo: string;
   recommended?: boolean;
+  speed?: ModelSpeed;
   supportsThinking?: boolean;
   // Optional MTP speculative-decoding drafter downloaded alongside the main GGUF.
   draftHfRepo?: string;
@@ -44,6 +48,7 @@ export interface CloudModelDefinition {
   description: string;
   descriptionKey?: string;
   disableThinking?: boolean;
+  speed?: ModelSpeed;
   supportsThinking?: boolean;
   supportsVision?: boolean;
   tokenParam?: "max_tokens" | "max_completion_tokens";
@@ -68,6 +73,7 @@ export interface TranscriptionModelDefinition {
   description: string;
   descriptionKey?: string;
   streaming?: boolean;
+  speed?: ModelSpeed;
 }
 
 export interface TranscriptionProviderData {
@@ -88,6 +94,7 @@ export interface WhisperModelInfo {
   fileName: string;
   downloadUrl: string;
   recommended?: boolean;
+  speed?: ModelSpeed;
 }
 
 export interface WhisperModelConfig {
@@ -116,6 +123,7 @@ export interface ParakeetModelInfo {
   license?: string;
   modelCardUrl?: string;
   recommended?: boolean;
+  speed?: ModelSpeed;
   downloadUrl: string;
   extractDir: string;
 }
