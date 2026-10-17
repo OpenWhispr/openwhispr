@@ -14,9 +14,9 @@ const {
 const NOTE_ID = 11;
 const START_ARGS = { noteId: NOTE_ID, noteTitle: "Standup", folderId: null, autoEndEligible: true };
 
-function createElectronAPI() {
+function createElectronAPI({ stopDiarizationSessionId = null } = {}) {
   const noopListener = () => () => {};
-  const state = { diarizationCallback: null, updatedTranscripts: [] };
+  const state = { diarizationCallback: null, segmentCallback: null, updatedTranscripts: [] };
   const notes = new Map([[NOTE_ID, { id: NOTE_ID, transcript: "", deleted_at: null }]]);
   const api = {
     checkSystemAudioAccess: async () => ({
@@ -31,7 +31,10 @@ function createElectronAPI() {
       systemAudioStrategy: "native",
     }),
     meetingTranscriptionSetSystemAudioAvailable: async () => ({ success: true }),
-    meetingTranscriptionStop: async () => ({ success: true, diarizationSessionId: null }),
+    meetingTranscriptionStop: async () => ({
+      success: true,
+      diarizationSessionId: stopDiarizationSessionId,
+    }),
     meetingTranscriptionSend: () => {},
     getNote: async (id) => notes.get(id) ?? null,
     updateNote: async (id, patch) => {
@@ -47,7 +50,12 @@ function createElectronAPI() {
         state.diarizationCallback = null;
       };
     },
-    onMeetingTranscriptionSegment: noopListener,
+    onMeetingTranscriptionSegment: (callback) => {
+      state.segmentCallback = callback;
+      return () => {
+        state.segmentCallback = null;
+      };
+    },
     onMeetingSpeakerIdentified: noopListener,
     onMeetingSpeakersMerged: noopListener,
     onMeetingSessionSpeakerConfigUpdated: noopListener,
@@ -139,4 +147,70 @@ test("a live recording on another note does not suppress the publish", async (t)
 
   assert.equal(store.useMeetingRecordingStore.getState().completedDiarization?.noteId, NOTE_ID);
   await store.stopRecording();
+});
+
+// A resumed note seeds the recording with its earlier transcript, but the
+// diarization result covers only the resumed session's audio. A repeated line
+// must enrich the resumed session's row, never the earlier session's twin.
+test("a resumed note's diarization labels the resumed session's row, not an earlier one with the same text", async (t) => {
+  const { api, state } = createElectronAPI({ stopDiarizationSessionId: "diar-resumed" });
+  const store = await loadStore(t, api);
+
+  const earlierSession = [
+    {
+      id: "stored-0",
+      text: "Can everyone hear me?",
+      source: "system",
+      timestamp: 1.0,
+      speaker: "speaker_0",
+      speakerName: "Bob",
+      speakerIsPlaceholder: false,
+      speakerStatus: "confirmed",
+    },
+    {
+      id: "stored-1",
+      text: "Yeah.",
+      source: "system",
+      timestamp: 4.2,
+      speaker: "speaker_1",
+      speakerName: "Carol",
+      speakerIsPlaceholder: false,
+      speakerStatus: "confirmed",
+    },
+  ];
+  assert.equal(await store.startRecording({ ...START_ARGS, seedSegments: earlierSession }), true);
+  state.segmentCallback({
+    type: "final",
+    source: "system",
+    text: "Yeah.",
+    timestamp: 1760000003000,
+  });
+  await store.stopRecording();
+
+  state.diarizationCallback({
+    noteId: NOTE_ID,
+    sessionId: "diar-resumed",
+    segments: [
+      {
+        text: "Yeah.",
+        source: "system",
+        timestamp: 3.0,
+        speaker: "speaker_0",
+        speakerName: "Dave",
+        speakerIsPlaceholder: false,
+        speakerStatus: "confirmed",
+      },
+    ],
+  });
+  await settle();
+
+  const rows = JSON.parse(state.updatedTranscripts.at(-1).transcript);
+  assert.deepEqual(
+    rows.map((row) => [row.text, row.timestamp, row.speakerName]),
+    [
+      ["Can everyone hear me?", 1.0, "Bob"],
+      ["Yeah.", 4.2, "Carol"],
+      ["Yeah.", 3.0, "Dave"],
+    ]
+  );
 });
