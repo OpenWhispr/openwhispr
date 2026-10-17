@@ -14,6 +14,7 @@ function loadManager(execFileSync) {
   delete require.cache[modulePath];
   Module._load = function loadWithMocks(request, parent, isMain) {
     if (request === "child_process") return { ...childProcess, execFileSync };
+    if (request === "./debugLogger") return { log() {} };
     return originalLoad.call(this, request, parent, isMain);
   };
   try {
@@ -531,7 +532,7 @@ test(
 );
 
 test(
-  "replaces an old dofile loader before a trailing top-level return",
+  "keeps an existing dofile loader before a trailing top-level return",
   withTempHyprConfig(async (configDir) => {
     const luaPath = path.join(configDir, "hyprland.lua");
     const bindsPath = path.join(configDir, "openwhispr-binds.lua");
@@ -549,10 +550,10 @@ test(
     );
 
     const content = fs.readFileSync(luaPath, "utf8");
-    const protectedLoader = `pcall(require, "${bindsPath}")`;
-    assert.doesNotMatch(content, /dofile\(/);
+    const existingLoader = `dofile("${bindsPath}")`;
+    assert.match(content, /dofile\(/);
     assert.equal((content.match(/openwhispr-binds\.lua/g) || []).length, 1);
-    assert.ok(content.indexOf(protectedLoader) < content.indexOf("return {}"));
+    assert.ok(content.indexOf(existingLoader) < content.indexOf("return {}"));
   })
 );
 
