@@ -47,6 +47,8 @@ const electronStub = {
 
 const calls = { connects: [], disconnects: [], tokens: [], audio: [], sent: [], instances: [] };
 let nextInstance = 0;
+let connectGate = null;
+const tick = () => new Promise((resolve) => setImmediate(resolve));
 
 class FakeRealtimeStreaming {
   constructor() {
@@ -57,6 +59,7 @@ class FakeRealtimeStreaming {
   }
   beginConnecting() {}
   async connect(options) {
+    await connectGate;
     this.options = options;
     this.isConnected = true;
     calls.connects.push({ id: this.id, options });
@@ -210,6 +213,27 @@ test("frames sent once a mismatch redial starts buffer into the new session, not
   const [warm, fresh] = calls.instances;
   assert.deepEqual(calls.audio, [fresh.id]);
   assert.deepEqual(calls.disconnects, [{ id: warm.id, commit: false }]);
+});
+
+test("a start landing while a same-route warmup still connects rides that session", async (t) => {
+  const s = scenario(t);
+  let openConnection;
+  connectGate = new Promise((resolve) => (openConnection = resolve));
+  const warmup = s.invoke("dictation-realtime-warmup", byok());
+  await tick();
+  s.sendAudio();
+  const started = s.invoke("dictation-realtime-start", byok());
+  s.sendAudio();
+  connectGate = null;
+  openConnection();
+  await warmup;
+  assert.deepEqual(await started, { success: true });
+  s.sendAudio();
+
+  const [warm] = calls.instances;
+  assert.equal(calls.connects.length, 1);
+  assert.deepEqual(calls.audio, [warm.id, warm.id, warm.id]);
+  assert.deepEqual(calls.disconnects, []);
 });
 
 test("a retiring warm session's late events never reach the renderer", async (t) => {

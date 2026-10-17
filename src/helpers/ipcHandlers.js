@@ -8902,7 +8902,10 @@ class IPCHandlers {
       if (isOrukeet) {
         const ownerGone = () => {
           streaming.disconnect().catch(() => {});
-          if (this._dictationStreaming === streaming) this._dictationStreaming = null;
+          if (this._dictationStreaming === streaming) {
+            this._dictationStreaming = null;
+            recordingOwnsDictationSocket = false;
+          }
         };
         event.sender.once?.("destroyed", ownerGone);
         streaming.onClose = () => event.sender.removeListener?.("destroyed", ownerGone);
@@ -8940,6 +8943,11 @@ class IPCHandlers {
       streaming.disconnect({ commit: false }).catch(() => {});
     };
 
+    // Set from dictation-realtime-start until stop. Re-warms from the previous
+    // dictation can still be queued or connecting when the next one starts,
+    // and must not replace or expire the socket carrying the user's audio.
+    let recordingOwnsDictationSocket = false;
+
     const DICTATION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
     const ORUKEET_IDLE_TIMEOUT_MS = 60 * 1000;
 
@@ -8952,6 +8960,7 @@ class IPCHandlers {
 
     const startDictationIdleTimer = () => {
       clearDictationIdleTimer();
+      if (recordingOwnsDictationSocket) return;
       const idleTimeoutMs =
         this._dictationStreaming instanceof OrukeetStreaming
           ? ORUKEET_IDLE_TIMEOUT_MS
@@ -9745,6 +9754,7 @@ class IPCHandlers {
 
     const warmupDictationStreaming = async (event, options) => {
       await this._dictationConnectPromise?.catch(() => {});
+      if (recordingOwnsDictationSocket) return { success: true };
       if (!isUnusedOrukeetConnection(this._dictationStreaming, options)) {
         await connectDictationStreaming(event, options);
         startDictationIdleTimer();
@@ -9764,7 +9774,14 @@ class IPCHandlers {
     });
 
     ipcMain.handle("dictation-realtime-start", async (event, options = {}) => {
+      recordingOwnsDictationSocket = true;
       try {
+        // A warmup still connecting already holds the frames sent before this
+        // start, so wait and ride it. A cold start must not yield here, or the
+        // frames sent right after the invoke find no session to buffer into.
+        if (this._dictationConnectPromise) {
+          await this._dictationConnectPromise.catch(() => {});
+        }
         clearDictationIdleTimer();
         this._dictationPreviewEnabled = !!options.preview;
         if (
@@ -9775,6 +9792,7 @@ class IPCHandlers {
         }
         return { success: true };
       } catch (err) {
+        recordingOwnsDictationSocket = false;
         return streamingStartFailure(err);
       }
     });
@@ -9795,6 +9813,7 @@ class IPCHandlers {
     });
 
     ipcMain.handle("dictation-realtime-stop", async () => {
+      recordingOwnsDictationSocket = false;
       clearDictationIdleTimer();
       if (!this._dictationStreaming) {
         return { success: true, text: "" };
