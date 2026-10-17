@@ -693,6 +693,9 @@
       "retrying": "再文字起こし中…",
       "retrySuccess": "文字起こしが更新されました",
       "retryError": "再文字起こしに失敗しました",
+      "retryErrors": {
+        "invalidResponse": "文字起こしエンジンから予期しない応答が返されました。もう一度お試しください。"
+      },
       "audioNotFound": "音声ファイルが見つからないか有効期限切れです",
       "noAiProcessing": "この文字起こしにはAI処理が適用されていません",
       "rawTranscript": "生の文字起こし",

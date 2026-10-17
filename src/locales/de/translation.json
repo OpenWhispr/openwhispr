@@ -680,6 +680,9 @@
       "retrying": "Wird erneut transkribiert…",
       "retrySuccess": "Transkription aktualisiert",
       "retryError": "Erneute Transkription fehlgeschlagen",
+      "retryErrors": {
+        "invalidResponse": "Die Transkriptions-Engine hat eine unerwartete Antwort zurückgegeben. Bitte versuchen Sie es erneut."
+      },
       "audioNotFound": "Audiodatei nicht gefunden oder abgelaufen",
       "noAiProcessing": "Auf diese Transkription wurde keine KI-Verarbeitung angewendet",
       "transcriptionFailed": "Transkription fehlgeschlagen",

@@ -693,6 +693,9 @@
       "retrying": "Ritrascrizione in corso…",
       "retrySuccess": "Trascrizione aggiornata",
       "retryError": "Ritrascrizione non riuscita",
+      "retryErrors": {
+        "invalidResponse": "Il motore di trascrizione ha restituito una risposta inattesa. Riprova."
+      },
       "audioNotFound": "File audio non trovato o scaduto",
       "noAiProcessing": "Nessuna elaborazione IA applicata a questa trascrizione",
       "rawTranscript": "Trascrizione grezza",

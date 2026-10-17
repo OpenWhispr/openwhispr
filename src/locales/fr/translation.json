@@ -680,6 +680,9 @@
       "retrying": "Retranscription en cours…",
       "retrySuccess": "Transcription mise à jour",
       "retryError": "Échec de la retranscription",
+      "retryErrors": {
+        "invalidResponse": "Le moteur de transcription a renvoyé une réponse inattendue. Réessayez."
+      },
       "audioNotFound": "Fichier audio introuvable ou expiré",
       "noAiProcessing": "Aucun traitement IA n'a été appliqué à cette transcription",
       "transcriptionFailed": "La transcription a échoué",

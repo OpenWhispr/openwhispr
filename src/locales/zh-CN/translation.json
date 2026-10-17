@@ -693,6 +693,9 @@
       "retrying": "正在重新转录…",
       "retrySuccess": "转录已更新",
       "retryError": "重新转录失败",
+      "retryErrors": {
+        "invalidResponse": "转录引擎返回了意外的响应。请重试。"
+      },
       "audioNotFound": "音频文件未找到或已过期",
       "noAiProcessing": "此转录未应用 AI 处理",
       "rawTranscript": "原始转录",

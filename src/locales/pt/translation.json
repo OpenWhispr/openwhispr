@@ -672,6 +672,9 @@
       "retrying": "Retranscrevendo…",
       "retrySuccess": "Transcrição atualizada",
       "retryError": "Falha ao retranscrever",
+      "retryErrors": {
+        "invalidResponse": "O mecanismo de transcrição retornou uma resposta inesperada. Tente novamente."
+      },
       "audioNotFound": "Arquivo de áudio não encontrado ou expirado",
       "noAiProcessing": "Nenhum processamento de IA foi aplicado a esta transcrição",
       "rawTranscript": "Transcrição bruta",

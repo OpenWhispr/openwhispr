@@ -702,6 +702,9 @@
       "retrying": "Transcribiendo de nuevo…",
       "retrySuccess": "Transcripción actualizada",
       "retryError": "Error al volver a transcribir",
+      "retryErrors": {
+        "invalidResponse": "El motor de transcripción devolvió una respuesta inesperada. Inténtalo de nuevo."
+      },
       "audioNotFound": "Archivo de audio no encontrado o expirado",
       "noAiProcessing": "No se aplicó procesamiento de IA a esta transcripción",
       "rawTranscript": "Transcripción sin procesar",

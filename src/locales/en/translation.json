@@ -680,6 +680,9 @@
       "retrying": "Re-transcribing...",
       "retrySuccess": "Transcription updated",
       "retryError": "Failed to re-transcribe",
+      "retryErrors": {
+        "invalidResponse": "The transcription engine returned an unexpected response. Try again."
+      },
       "audioNotFound": "Audio file not found or expired",
       "noAiProcessing": "No AI processing was applied to this transcription",
       "transcriptionFailed": "Transcription failed",

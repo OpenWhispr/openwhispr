@@ -92,6 +92,19 @@ function assertAnalyticsSyncContext(context) {
   }
   return context.accountId;
 }
+// Local engines resolve a failed decode instead of throwing. Retry turns that
+// into a coded error so the toast says what went wrong rather than blaming a
+// missing engine.
+function localTranscriptionFailure(result) {
+  const error = new Error(result.message || result.error || "Local transcription failed");
+  if (result.code === "NO_SPEECH_DETECTED" || result.message === "No audio detected") {
+    error.code = "NO_SPEECH_DETECTED";
+  } else if (result.error === "invalid_response") {
+    error.code = "INVALID_RESPONSE";
+    error.messageKey = "controlPanel.history.retryErrors.invalidResponse";
+  }
+  return error;
+}
 // Which diarization dialect a resolved endpoint speaks, for Custom endpoints
 // that front a known provider. Null when the host offers no known dialect.
 const diarizationHost = (endpoint) => {
@@ -6929,13 +6942,11 @@ class IPCHandlers {
             });
           }
           const data = await response.json();
-          if (data?.text) {
-            result = {
-              text: data.text,
-              source: "self-hosted",
-              model: route.model,
-            };
-          }
+          result = {
+            text: data?.text,
+            source: "self-hosted",
+            model: route.model,
+          };
         } else if (route.transport === "local") {
           if (isSherpaLocalProvider(settings.localTranscriptionProvider)) {
             const model =
@@ -6970,13 +6981,13 @@ class IPCHandlers {
                   sessionId: this.sessionId,
                 };
                 if (buffer.length > CLOUD_INLINE_LIMIT) {
-                  const { text } = await chunkedCloudTranscribe({
+                  const { text, warning } = await chunkedCloudTranscribe({
                     buffer,
                     apiUrl,
                     policyHeaders: withPolicyHeaders(authHeader),
                     multipartFields,
                   });
-                  result = { text, source: "openwhispr", model: "cloud" };
+                  result = { text, source: "openwhispr", model: "cloud", warning };
                 } else {
                   const { body, boundary } = buildMultipartBody(
                     buffer,
@@ -7014,7 +7025,7 @@ class IPCHandlers {
             language: route.language,
             apiKey: this.environmentManager.getTinfoilKey(),
           });
-          if (text) result = { text, source: "tinfoil", model };
+          result = { text, source: "tinfoil", model };
         } else if (route.transport === "proxied" && route.provider === "corti") {
           // Corti uses OAuth + an interaction-based REST flow, so it can't use
           // the generic fetch below.
@@ -7035,7 +7046,7 @@ class IPCHandlers {
             audioBuffer: buffer,
             language: route.language,
           });
-          if (text) result = { text, source: "corti", model: route.model };
+          result = { text, source: "corti", model: route.model };
         } else if (route.transport === "proxied" && route.provider === "gemini") {
           if (route.sizeCapBytes && buffer.byteLength > route.sizeCapBytes) {
             throw new Error(byokSizeCapError(route.sizeCapBytes));
@@ -7047,7 +7058,7 @@ class IPCHandlers {
             language: route.language,
             apiKey: this.environmentManager.getGeminiKey(),
           });
-          if (text) result = { text, source: "gemini", model: route.model };
+          result = { text, source: "gemini", model: route.model };
         } else {
           // mistral/xai have no OpenAI-compatible endpoint — main talks to them
           // directly; everything else consumes the route endpoint as-is.
@@ -7141,13 +7152,19 @@ class IPCHandlers {
             });
           }
           const data = await response.json();
-          if (data?.text) {
-            result = { text: data.text, source: provider, model: route.model };
-          }
+          result = { text: data?.text, source: provider, model: route.model };
         }
 
-        if (!result?.text) {
+        if (result?.success === false) {
+          throw localTranscriptionFailure(result);
+        }
+        if (!result) {
           return { success: false, error: "No transcription engine available" };
+        }
+        if (!result.text) {
+          throw Object.assign(new Error("No speech detected in audio"), {
+            code: "NO_SPEECH_DETECTED",
+          });
         }
 
         this.databaseManager.updateTranscriptionText(id, result.text, result.text);
@@ -7169,7 +7186,13 @@ class IPCHandlers {
             void this._ensureAnalyticsHistoryBackfilled();
           });
         }
-        return { success: true, transcription: updated };
+        // A partial result (local truncation, lost cloud chunks) still replaces the
+        // row, as dictation keeps it, but the renderer must say so.
+        return {
+          success: true,
+          transcription: updated,
+          ...(result.warning ? { warning: result.warning } : {}),
+        };
       } catch (rawError) {
         const error = providerErrorContext
           ? asProviderError(rawError, providerErrorContext)
@@ -7179,6 +7202,11 @@ class IPCHandlers {
           { id, error: error.message, code: error.code },
           "audio-storage"
         );
+        if (error.code === "NO_SPEECH_DETECTED" && !error.messageKey) {
+          // Every engine reports silence with this code, so it is translated
+          // here once rather than per route.
+          error.messageKey = "notes.upload.noSpeechDetected";
+        }
         if (error.code) {
           return { success: false, ...ipcErrorFields(error) };
         }
