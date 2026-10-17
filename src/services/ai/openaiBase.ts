@@ -36,6 +36,7 @@ export function resolveConfiguredOpenAIBase(provider: string, configuredBaseUrl?
 
   const knownNonOpenAIUrls = [
     "api.groq.com",
+    "api.x.ai",
     "api.anthropic.com",
     "generativelanguage.googleapis.com",
     // Tinfoil must go through its attested SDK client, never a plain fetch.

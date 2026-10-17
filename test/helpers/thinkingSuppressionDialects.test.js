@@ -65,6 +65,15 @@ test("gemini gets reasoning_effort minimal and nothing else", async () => {
   assert.deepEqual(body, { reasoning_effort: "minimal" });
 });
 
+test("xai gets no reasoning fields on chat completions", async () => {
+  const { suppressThinking } = await load();
+
+  const body = {};
+  suppressThinking(body, "xai", "grok-4.20-0309-reasoning");
+
+  assert.deepEqual(body, {});
+});
+
 test("openrouter gets its native reasoning toggle and nothing else", async () => {
   const { suppressThinking } = await load();
 
