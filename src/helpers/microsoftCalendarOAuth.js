@@ -117,12 +117,17 @@ class MicrosoftCalendarOAuth {
     // Microsoft rotates refresh tokens on every refresh, so concurrent
     // refreshes (focus sync racing the interval sync) would persist competing
     // rotations; share one in-flight refresh per account instead.
-    let refreshPromise = this._refreshInFlight.get(accountEmail);
+    const refreshKey = JSON.stringify([
+      tokens.microsoft_email,
+      tokens.access_token,
+      tokens.refresh_token,
+    ]);
+    let refreshPromise = this._refreshInFlight.get(refreshKey);
     if (!refreshPromise) {
       refreshPromise = this._refreshAndSaveTokens(tokens).finally(() => {
-        this._refreshInFlight.delete(accountEmail);
+        this._refreshInFlight.delete(refreshKey);
       });
-      this._refreshInFlight.set(accountEmail, refreshPromise);
+      this._refreshInFlight.set(refreshKey, refreshPromise);
     }
     return refreshPromise;
   }
@@ -131,6 +136,15 @@ class MicrosoftCalendarOAuth {
     const refreshed = await this.refreshAccessToken(tokens.refresh_token);
     if (refreshed.error) {
       throw new Error(`Token refresh failed: ${refreshed.error_description || refreshed.error}`);
+    }
+
+    const current = this.databaseManager.getMicrosoftTokensByEmail(tokens.microsoft_email);
+    if (
+      !current ||
+      current.access_token !== tokens.access_token ||
+      current.refresh_token !== tokens.refresh_token
+    ) {
+      throw new Error("Microsoft calendar account changed or disconnected during token refresh");
     }
 
     // Persist the rotated refresh token or the old one stops working within 24h.

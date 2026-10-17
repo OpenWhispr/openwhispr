@@ -9,6 +9,7 @@ const CALENDAR_SCOPE =
 class GoogleCalendarOAuth {
   constructor(databaseManager) {
     this.databaseManager = databaseManager;
+    this._refreshInFlight = new Map();
   }
 
   getClientId() {
@@ -108,25 +109,45 @@ class GoogleCalendarOAuth {
       throw new Error(`No Google tokens found${accountEmail ? ` for ${accountEmail}` : ""}`);
 
     const fiveMinutes = 5 * 60 * 1000;
-    if (tokens.expires_at - fiveMinutes < Date.now()) {
-      const refreshed = await this.refreshAccessToken(tokens.refresh_token);
-      if (refreshed.error) {
-        throw new Error(`Token refresh failed: ${refreshed.error_description || refreshed.error}`);
-      }
+    if (tokens.expires_at - fiveMinutes >= Date.now()) return tokens.access_token;
 
-      const newExpiresAt = Date.now() + refreshed.expires_in * 1000;
-      this.databaseManager.saveGoogleTokens({
-        google_email: tokens.google_email,
-        access_token: refreshed.access_token,
-        refresh_token: tokens.refresh_token,
-        expires_at: newExpiresAt,
-        scope: tokens.scope,
+    // A reconnected login must not join the previous credential's refresh.
+    const refreshKey = JSON.stringify([
+      tokens.google_email,
+      tokens.access_token,
+      tokens.refresh_token,
+    ]);
+    let pending = this._refreshInFlight.get(refreshKey);
+    if (!pending) {
+      pending = this._refreshAndSaveTokens(tokens).finally(() => {
+        this._refreshInFlight.delete(refreshKey);
       });
-
-      return refreshed.access_token;
+      this._refreshInFlight.set(refreshKey, pending);
     }
+    return pending;
+  }
 
-    return tokens.access_token;
+  async _refreshAndSaveTokens(tokens) {
+    const refreshed = await this.refreshAccessToken(tokens.refresh_token);
+    if (refreshed.error) {
+      throw new Error(`Token refresh failed: ${refreshed.error_description || refreshed.error}`);
+    }
+    const current = this.databaseManager.getGoogleTokensByEmail(tokens.google_email);
+    if (
+      !current ||
+      current.access_token !== tokens.access_token ||
+      current.refresh_token !== tokens.refresh_token
+    ) {
+      throw new Error("Google calendar account changed or disconnected during token refresh");
+    }
+    this.databaseManager.saveGoogleTokens({
+      google_email: tokens.google_email,
+      access_token: refreshed.access_token,
+      refresh_token: tokens.refresh_token,
+      expires_at: Date.now() + refreshed.expires_in * 1000,
+      scope: tokens.scope,
+    });
+    return refreshed.access_token;
   }
 
   async revokeToken(token) {
