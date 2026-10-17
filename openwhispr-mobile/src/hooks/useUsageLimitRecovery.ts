@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { useCallback, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import { router } from 'expo-router';
@@ -27,7 +28,7 @@ function showUsageLimitFallback(): void {
 
   Alert.alert(
     'Weekly Limit Reached',
-    `You've used ${words} for this week.${resetLabel ? ` ${resetLabel}.` : ''} Set Dictation to On-Device in Account → AI Models for unlimited on-device dictation, or upgrade to Pro for unlimited cloud transcription.`,
+    `You've used ${words} for this week.${resetLabel ? ` ${resetLabel}.` : ''} ${Platform.OS === 'android' ? 'Turn on Local Mode' : 'Set Dictation to On-Device'} in Account → AI Models for unlimited on-device dictation, or upgrade to Pro for unlimited cloud transcription.`,
     [
       { text: 'OK', style: 'cancel' },
       { text: 'View Usage', onPress: () => router.push('/(account)') },

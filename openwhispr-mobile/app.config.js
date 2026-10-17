@@ -122,6 +122,7 @@ module.exports = () => {
   return {
     ...expo,
     name: expo.name,
+    updates: environment.isDevelopment ? { ...expo.updates, enabled: false } : expo.updates,
     scheme: singleOrMany([environment.scheme, googleCalendar.iosRedirectScheme]),
     ios: {
       ...expo.ios,

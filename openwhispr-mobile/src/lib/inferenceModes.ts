@@ -50,7 +50,7 @@ const DESCRIPTIONS: Record<InferenceScope, Record<InferenceMode, string>> = {
 
 export function getInferenceModes(scope: InferenceScope): ModeDescriptor[] {
   return (['openwhispr', 'local', 'providers'] as const)
-    .filter((mode) => mode !== 'providers' || Platform.OS === 'ios')
+    .filter((mode) => mode !== 'providers' || Platform.OS === 'ios' || Platform.OS === 'android')
     .map((mode) => ({ ...BASE[mode], description: DESCRIPTIONS[scope][mode] }));
 }
 
@@ -71,6 +71,8 @@ export function localModeDefault(
   scope: MobileInferenceScope,
   cloudAccess: CloudAccess,
 ): InferenceMode {
+  // Android Local Mode retains its strict audio/text boundary.
+  if (Platform.OS === 'android') return scope === 'agent' ? 'openwhispr' : 'local';
   const onCloud =
     scope === 'agent' ||
     (scope === 'upload' && cloudAccess !== 'none') ||
@@ -249,6 +251,7 @@ export function holdOnDeviceConfig(
 // on this iPhone and ignored a Cloud choice saved for them, so a config from then that is in Local
 // Mode keeps them there: the upgrade sends nothing to Cloud that was never sent before.
 export function localModeUpgradeConfig(config: UserConfig): Partial<UserConfig> {
-  if (config.defaultMode !== 'private') return { localModeUpgraded: true };
+  if (Platform.OS === 'android' || config.defaultMode !== 'private')
+    return { localModeUpgraded: true };
   return { localModeUpgraded: true, ...holdOnDeviceConfig(config) };
 }

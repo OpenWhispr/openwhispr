@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import type { ReasoningRequest, ReasoningResponse } from '../../types';
 import { buildProviderPrompt, stripThinkingTags } from './buildProviderPrompt';
 import { api } from '../../lib/apiClient';
@@ -174,7 +175,9 @@ export class ReasoningService {
             if (!allowCloudFallback) {
               throw new LocalReasoningError(
                 'LOCAL_CONTEXT_LIMIT',
-                'This request is too large for local Apple Intelligence.',
+                Platform.OS === 'android'
+                  ? 'This request is too large for the selected local model.'
+                  : 'This request is too large for local Apple Intelligence.',
               );
             }
           } else {

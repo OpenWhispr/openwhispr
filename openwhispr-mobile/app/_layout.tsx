@@ -1,6 +1,6 @@
 import '../global.css';
 import { useEffect, useRef, useState } from 'react';
-import { AppState, useColorScheme } from 'react-native';
+import { AppState, useColorScheme, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Stack, router, useSegments } from 'expo-router';
@@ -233,4 +233,11 @@ function RootLayout() {
   );
 }
 
-export default Sentry.wrap(RootLayout);
+function PlatformRoot() {
+  if (Platform.OS === 'android') {
+    const AndroidRoot = require('@/android/Root').default;
+    return <AndroidRoot />;
+  }
+  return <RootLayout />;
+}
+export default Sentry.wrap(PlatformRoot);

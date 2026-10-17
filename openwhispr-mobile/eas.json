@@ -30,6 +30,23 @@
         "image": "latest",
         "resourceClass": "medium"
       }
+    },
+    "android-play-test": {
+      "distribution": "store",
+      "environment": "preview",
+      "channel": "android-play-test",
+      "credentialsSource": "remote",
+      "autoIncrement": true,
+      "node": "24.20.0",
+      "env": {
+        "OPENWHISPR_APP_ENV": "production",
+        "BRAND_FONTS_REQUIRED": "1"
+      },
+      "android": {
+        "buildType": "app-bundle",
+        "gradleCommand": ":app:bundleRelease -PreactNativeArchitectures=arm64-v8a --max-workers=2 --no-parallel",
+        "resourceClass": "large"
+      }
     }
   },
   "submit": {

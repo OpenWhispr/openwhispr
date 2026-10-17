@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 import {
   dictationModeConfig,
   getInferenceModes,
+  localModeDefault,
   localModeUpgradeConfig,
   workflowSaveConfig,
 } from '../inferenceModes';
@@ -392,9 +393,13 @@ describe('getInferenceModes', () => {
     expect(getInferenceModes('text').map((mode) => mode.mode)).toContain('providers');
   });
 
-  it('never offers Bring Your Own Key on Android', () => {
+  it('offers Bring Your Own Key on Android with its native transport', () => {
     Platform.OS = 'android';
-    expect(getInferenceModes('speech').map((mode) => mode.mode)).toEqual(['openwhispr', 'local']);
+    expect(getInferenceModes('speech').map((mode) => mode.mode)).toEqual([
+      'openwhispr',
+      'local',
+      'providers',
+    ]);
   });
 });
 
@@ -409,5 +414,30 @@ it('switches dictation back to On-Device with the model the user picked', () => 
   expect(dictationModeConfig(config, 'private').inference?.dictation).toEqual({
     mode: 'local',
     modelId: 'parakeet-v3',
+  });
+});
+
+describe('Android retains local workflow defaults', () => {
+  const originalOS = Platform.OS;
+  beforeEach(() => {
+    Platform.OS = 'android';
+  });
+  afterEach(() => {
+    Platform.OS = originalOS;
+  });
+  it.each(['none', 'session', 'account'] as const)(
+    'keeps uploads and cleanup on device with %s access',
+    (access) => {
+      expect(localModeDefault('upload', access)).toBe('local');
+      expect(localModeDefault('cleanup', access)).toBe('local');
+    },
+  );
+  it('does not migrate Android settings to the new iOS cleanup defaults', () => {
+    expect(
+      localModeUpgradeConfig({
+        defaultMode: 'private',
+        inference: { cleanup: { mode: 'openwhispr' } },
+      }),
+    ).toEqual({ localModeUpgraded: true });
   });
 });

@@ -116,6 +116,7 @@ jest.mock('@/services/transcription/LocalTranscriptionService', () => ({
   },
 }));
 
+import { Platform } from 'react-native';
 import { useNotesStore } from '../useNotesStore';
 import { notesRepository, spacesRepository } from '@/data';
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
@@ -380,11 +381,32 @@ describe('transitionStatus (guarded boundary)', () => {
 });
 
 describe('finalizeCloudMeeting', () => {
+  beforeEach(() => {
+    let status = 'recording';
+    (notesRepository.getTranscriptionStatus as jest.Mock).mockImplementation(() => status);
+    (notesRepository.setTranscriptionStatus as jest.Mock).mockImplementation((_id, next) => {
+      status = next;
+    });
+  });
+  it('persists an incomplete transcript without generating notes or claiming completion', async () => {
+    await useNotesStore
+      .getState()
+      .finalizeCloudMeeting(
+        7,
+        [{ itemId: 'kept', text: 'Keep this part.', startMs: 0, endMs: 1000 }],
+        2,
+        { incomplete: true },
+      );
+    expect(notesRepository.replaceSegments).toHaveBeenCalledWith(7, [
+      expect.objectContaining({ noteId: 7, text: 'Keep this part.' }),
+    ]);
+    expect(notesRepository.setTranscriptionStatus).toHaveBeenLastCalledWith(7, 'failed');
+    expect(ReasoningService.processText).not.toHaveBeenCalled();
+    expect(mockLogTranscriptionCompleted).not.toHaveBeenCalled();
+    expect(notesRepository.updateNoteMeta).not.toHaveBeenCalled();
+  });
   it('generates notes without exposing an unknown speaker label', async () => {
     mockAuthState.user = signedInUser;
-    (notesRepository.getTranscriptionStatus as jest.Mock)
-      .mockReturnValueOnce('recording')
-      .mockReturnValueOnce('transcribing');
     (notesRepository.getNoteById as jest.Mock).mockReturnValue({
       id: 7,
       title: 'Planning Sync',
@@ -446,18 +468,58 @@ describe('finalizeCloudMeeting', () => {
     });
   });
 
-  it('does not log an empty cloud meeting transcription', async () => {
-    (notesRepository.getTranscriptionStatus as jest.Mock)
-      .mockReturnValueOnce('recording')
-      .mockReturnValueOnce('transcribing');
+  it.each([
+    { utterances: [] },
+    { utterances: [{ itemId: 'empty', text: '   ', startMs: 0, endMs: 1000 }] },
+  ])('keeps an Android meeting without recognized words retryable', async ({ utterances }) => {
+    const originalPlatform = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });
+    try {
+      (notesRepository.getNoteById as jest.Mock).mockReturnValue({
+        id: 7,
+        noteType: 'meeting',
+        sourceFile: 'file:///app/documents/meeting-7.wav',
+        content: 'Keep my typed notes.',
+      });
+      await useNotesStore.getState().finalizeCloudMeeting(7, utterances, 30);
+      expect(notesRepository.setTranscriptionStatus).toHaveBeenLastCalledWith(7, 'failed');
+      expect(notesRepository.updateNoteMeta).not.toHaveBeenCalled();
+      expect(notesRepository.updateNote).not.toHaveBeenCalled();
+      expect(ReasoningService.processText).not.toHaveBeenCalled();
+      expect(mockLogTranscriptionCompleted).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(Platform, 'OS', { value: originalPlatform, configurable: true });
+    }
+  });
 
+  it('still completes Android meetings with recognized words', async () => {
+    const originalPlatform = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });
+    try {
+      await useNotesStore
+        .getState()
+        .finalizeCloudMeeting(
+          7,
+          [{ itemId: 'spoken', text: 'Keep these words.', startMs: 0, endMs: 1000 }],
+          2,
+        );
+      expect(notesRepository.setTranscriptionStatus).toHaveBeenLastCalledWith(7, 'done');
+      expect(mockLogTranscriptionCompleted).toHaveBeenCalledWith({
+        source: 'meeting',
+        provider: 'cloud',
+      });
+    } finally {
+      Object.defineProperty(Platform, 'OS', { value: originalPlatform, configurable: true });
+    }
+  });
+
+  it('does not log an empty cloud meeting transcription', async () => {
     await useNotesStore.getState().finalizeCloudMeeting(7, [], 0);
 
     expect(mockLogTranscriptionCompleted).not.toHaveBeenCalled();
   });
 
   it('does not log when cloud meeting persistence fails', async () => {
-    (notesRepository.getTranscriptionStatus as jest.Mock).mockReturnValueOnce('recording');
     (notesRepository.replaceSegments as jest.Mock).mockImplementationOnce(() => {
       throw new Error('database unavailable');
     });
@@ -473,6 +535,12 @@ describe('finalizeCloudMeeting', () => {
     ).rejects.toThrow('database unavailable');
 
     expect(mockLogTranscriptionCompleted).not.toHaveBeenCalled();
+  });
+  it('finishes a recovered recording that is already transcribing', async () => {
+    (notesRepository.getTranscriptionStatus as jest.Mock).mockReturnValue('transcribing');
+    await useNotesStore.getState().finalizeCloudMeeting(7, [], 0);
+    expect(notesRepository.setTranscriptionStatus).toHaveBeenCalledTimes(1);
+    expect(notesRepository.setTranscriptionStatus).toHaveBeenCalledWith(7, 'done');
   });
 });
 

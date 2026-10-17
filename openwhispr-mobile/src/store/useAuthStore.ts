@@ -1,4 +1,5 @@
 import { create, type StoreApi } from 'zustand';
+import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import {
   getStoredSession,
@@ -68,13 +69,24 @@ export const useAuthStore = create<AuthStore>((set) => ({
     set({ isLoading: true });
     await anonymousSignInInFlight?.catch(() => undefined);
     try {
-      const user = await getSession();
+      const isGuest = (await SecureStore.getItemAsync(GUEST_SESSION_KEY)) === 'true';
+      if (isGuest && !(await getStoredSession())) {
+        useUsageStore.getState().reset();
+        set({
+          user: null,
+          sessionCookie: null,
+          isGuest: true,
+          isInitialized: true,
+          isLoading: false,
+        });
+        return;
+      }
+      const user = await getSession({ allowOfflineCache: Platform.OS === 'android' });
       if (user) {
         await claimNoteShares(user);
         const sessionCookie = await getStoredSession();
         set({ user, sessionCookie, isGuest: false, isInitialized: true, isLoading: false });
       } else {
-        const isGuest = (await SecureStore.getItemAsync(GUEST_SESSION_KEY)) === 'true';
         useUsageStore.getState().reset();
         set({ user: null, sessionCookie: null, isGuest, isInitialized: true, isLoading: false });
       }
@@ -192,6 +204,15 @@ export const useAuthStore = create<AuthStore>((set) => ({
     try {
       await deleteAccountApi();
       const deletedUserId = useAuthStore.getState().user?.id;
+      if (deletedUserId && Platform.OS === 'android') {
+        await Promise.resolve()
+          .then(() => {
+            const { eraseAccountInsights } =
+              require('@/android/insights') as typeof import('@/android/insights');
+            return eraseAccountInsights(deletedUserId);
+          })
+          .catch((error) => Sentry.captureException(error));
+      }
       if (deletedUserId) await tolerateCacheFailure('clear', clearNoteShareTokens(deletedUserId));
       // Keys survive sign-out by design, but not account deletion. They are erased only
       // once the account is gone, so a failed delete keeps them. A failed erase leaves

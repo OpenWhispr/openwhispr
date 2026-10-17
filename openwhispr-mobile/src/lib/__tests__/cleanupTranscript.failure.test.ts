@@ -1,5 +1,7 @@
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
 import { cleanupTranscript } from '@/lib/cleanupTranscript';
+import { Platform } from 'react-native';
+import * as localReasoning from '@/lib/localReasoning';
 
 // accountAccess pulls in the router for its sign-in alert; stub it here.
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
@@ -109,4 +111,63 @@ it('still uses OpenWhispr Cloud by default for a user who never chose a provider
   expect(mockProcessText).toHaveBeenCalledWith(
     expect.objectContaining({ inferenceRoute: { mode: 'openwhispr', scope: 'cleanup' } }),
   );
+});
+
+describe('Android local cleanup timing', () => {
+  const originalPlatform = Platform.OS;
+  const localRoute = { mode: 'local', scope: 'cleanup' } as const;
+
+  beforeEach(() => {
+    Platform.OS = 'android';
+    jest.useFakeTimers();
+    jest.spyOn(localReasoning, 'getLocalReasoningReadiness').mockResolvedValue({
+      status: 'ready',
+      tokenCounting: false,
+    });
+  });
+
+  afterEach(() => {
+    Platform.OS = originalPlatform;
+    jest.useRealTimers();
+  });
+
+  it('allows Qwen startup beyond the iOS short-transcript timeout', async () => {
+    mockProcessText.mockImplementation(
+      ({ signal }: { signal: AbortSignal }) =>
+        new Promise((resolve, reject) => {
+          const timer = setTimeout(() => resolve({ text: 'Hello there.', model: 'qwen' }), 20_000);
+          signal.addEventListener('abort', () => {
+            clearTimeout(timer);
+            reject(new Error('cancelled'));
+          });
+        }),
+    );
+    const onSkipped = jest.fn();
+    const result = cleanupTranscript('um hello there', { inferenceRoute: localRoute, onSkipped });
+
+    await jest.advanceTimersByTimeAsync(20_000);
+
+    await expect(result).resolves.toBe('Hello there.');
+    expect(onSkipped).not.toHaveBeenCalled();
+    expect(mockProcessText).toHaveBeenCalledTimes(1);
+  });
+
+  it('still aborts a stalled Android run and retains the raw transcript', async () => {
+    mockProcessText.mockImplementation(
+      ({ signal }: { signal: AbortSignal }) =>
+        new Promise((_, reject) => {
+          signal.addEventListener('abort', () => reject(new Error('cancelled')));
+        }),
+    );
+    const onSkipped = jest.fn();
+    const result = cleanupTranscript('um hello there', { inferenceRoute: localRoute, onSkipped });
+
+    await jest.advanceTimersByTimeAsync(119_999);
+    expect(onSkipped).not.toHaveBeenCalled();
+    await jest.advanceTimersByTimeAsync(1);
+
+    await expect(result).resolves.toBe('um hello there');
+    expect(onSkipped).toHaveBeenCalledWith('Cleanup failed. Your raw transcript is saved.');
+    expect(mockProcessText).toHaveBeenCalledTimes(1);
+  });
 });

@@ -1,5 +1,8 @@
+import { useAndroidCopy } from '@/hooks/useAndroidCopy';
+import { useTranslation } from 'react-i18next';
+import { AccountButton } from '@/android/ui';
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { View, ScrollView, Alert, ActionSheetIOS, RefreshControl } from 'react-native';
+import { View, ScrollView, Alert, ActionSheetIOS, RefreshControl, Platform } from 'react-native';
 import { Text } from '@/components/ui/Text';
 
 const SCROLL_PADDING = 16;
@@ -14,7 +17,7 @@ import { SectionHeader } from '@/components/notes/SectionHeader';
 import { NewFolderSheet } from '@/components/notes/NewFolderSheet';
 import { SpacesSection } from '@/components/notes/SpacesSection';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { groupNotesByDate } from '@/lib/groupNotesByDate';
+import { useNoteBuckets } from '@/hooks/useNoteBuckets';
 import { safeHaptics } from '@/lib/utils';
 import { confirmDestructive } from '@/lib/alerts';
 import { SyncStatusLabel } from '@/components/notes/SyncStatusLabel';
@@ -28,6 +31,8 @@ const FAB_ACTIONS: FabAction[] = [
 ];
 
 export default function FoldersScreen() {
+  const { t } = useTranslation('android');
+  const { copy } = useAndroidCopy();
   const {
     folders,
     folderCounts,
@@ -45,6 +50,7 @@ export default function FoldersScreen() {
   } = useNotesStore();
   const [searchValue, setSearchValue] = useState('');
   const [newFolderVisible, setNewFolderVisible] = useState(false);
+  const [renamingFolder, setRenamingFolder] = useState<{ id: number; name: string } | null>(null);
 
   const trimmedQuery = searchValue.trim();
   const isSearching = trimmedQuery.length > 0;
@@ -57,7 +63,7 @@ export default function FoldersScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trimmedQuery, isSearching, folderCounts]);
 
-  const buckets = useMemo(() => groupNotesByDate(searchResults), [searchResults]);
+  const buckets = useNoteBuckets(searchResults);
 
   useEffect(() => {
     if (!isInitialized) initialize();
@@ -103,12 +109,17 @@ export default function FoldersScreen() {
 
   const handleDeleteNote = useCallback(
     (id: number) => {
-      confirmDestructive('Delete Note', 'This note will be deleted permanently.', () => {
-        safeHaptics('warning');
-        deleteNote(id);
-      });
+      confirmDestructive(
+        copy('library.deleteNote', 'Delete Note'),
+        copy('library.deleteNoteBody', 'This note will be deleted permanently.'),
+        () => {
+          safeHaptics('warning');
+          deleteNote(id);
+        },
+        { cancelLabel: copy('cancel', 'Cancel'), destructiveLabel: copy('deleteAction', 'Delete') },
+      );
     },
-    [deleteNote],
+    [deleteNote, copy],
   );
 
   const handleNewFolder = useCallback(() => {
@@ -130,6 +141,27 @@ export default function FoldersScreen() {
         return;
       }
       safeHaptics('medium');
+      if (Platform.OS === 'android') {
+        Alert.alert(folderName, undefined, [
+          {
+            text: t('renameFolder'),
+            onPress: () => setRenamingFolder({ id: folderId, name: folderName }),
+          },
+          {
+            text: t('deleteFolder'),
+            style: 'destructive',
+            onPress: () =>
+              confirmDestructive(
+                t('deleteFolder'),
+                t('deleteFolderBody', { name: folderName, count: folderCounts[folderId] ?? 0 }),
+                () => deleteFolderSafe(folderId),
+                { cancelLabel: t('cancel'), destructiveLabel: t('deleteAction') },
+              ),
+          },
+          { text: t('cancel'), style: 'cancel' },
+        ]);
+        return;
+      }
       ActionSheetIOS.showActionSheetWithOptions(
         {
           options: ['Rename', 'Delete', 'Cancel'],
@@ -155,7 +187,7 @@ export default function FoldersScreen() {
         },
       );
     },
-    [renameFolder, deleteFolderSafe, folderCounts],
+    [renameFolder, deleteFolderSafe, folderCounts, t],
   );
 
   const handleFabAction = useCallback(
@@ -174,7 +206,8 @@ export default function FoldersScreen() {
   return (
     <View className="flex-1 bg-systemBackground">
       <NotesTopBar
-        title={isSearching ? 'Search' : 'Folders'}
+        rightSlots={Platform.OS === 'android' ? <AccountButton /> : undefined}
+        title={isSearching ? copy('library.search', 'Search') : copy('library.folders', 'Folders')}
         searchValue={searchValue}
         onSearchChange={setSearchValue}
       />
@@ -201,7 +234,9 @@ export default function FoldersScreen() {
                     color="quaternaryLabel"
                   />
                   <Text className="text-[15px] text-tertiaryLabel">
-                    {`No results for "${trimmedQuery}"`}
+                    {copy('library.noResults', `No results for "${trimmedQuery}"`, {
+                      query: trimmedQuery,
+                    })}
                   </Text>
                 </View>
               </GroupedList.Row>
@@ -227,7 +262,7 @@ export default function FoldersScreen() {
           )
         ) : (
           <>
-            <SectionHeader label="Private Space" />
+            <SectionHeader label={copy('library.privateSpace', 'Private Space')} />
             <GroupedList>
               {folders.map((folder) => (
                 <FolderRow
@@ -252,11 +287,32 @@ export default function FoldersScreen() {
       <Fab
         icon="plus"
         mdIcon="Plus"
-        accessibilityLabel="Create"
-        actions={FAB_ACTIONS}
+        accessibilityLabel={copy('library.create', 'Create')}
+        actions={
+          Platform.OS === 'android'
+            ? FAB_ACTIONS.map((action) => ({
+                ...action,
+                label: t(
+                  action.id === 'note'
+                    ? 'newNote'
+                    : action.id === 'meeting'
+                      ? 'meetingSetupTitle'
+                      : 'newFolder',
+                ),
+              }))
+            : FAB_ACTIONS
+        }
         onActionPress={handleFabAction}
       />
 
+      <NewFolderSheet
+        visible={renamingFolder != null}
+        initialName={renamingFolder?.name}
+        onClose={() => setRenamingFolder(null)}
+        onCreate={(name) => {
+          if (renamingFolder) renameFolder(renamingFolder.id, name);
+        }}
+      />
       <NewFolderSheet
         visible={newFolderVisible}
         onClose={() => setNewFolderVisible(false)}

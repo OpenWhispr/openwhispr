@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import type { ParakeetVersion } from '../../../modules/parakeet-asr/src';
 import type { TranscriptionResponse } from '../../types';
 import type { LocalModelKey } from '../../lib/localModelCatalog';
@@ -12,7 +13,7 @@ import {
 } from './localEngine';
 
 export interface LocalEngineDescriptor {
-  engine: 'parakeet' | 'whisper';
+  engine: 'parakeet' | 'whisper' | 'moonshine';
   version?: ParakeetVersion;
   label: string;
 }
@@ -59,10 +60,20 @@ function missingModelError(choice: Extract<LocalEngineChoice, { engine: 'none' }
  */
 export class LocalTranscriptionService {
   static isAvailable(): boolean {
+    if (Platform.OS === 'android') return true;
     return LocalWhisperService.isAvailable() || LocalParakeetService.isAvailable();
   }
 
   static async getAvailability(): Promise<LocalEngineAvailability> {
+    if (Platform.OS === 'android') {
+      const { modelReady } = await import('@/android/models');
+      return {
+        parakeetSupported: true,
+        parakeetV2Downloaded: false,
+        parakeetV3Downloaded: await modelReady('parakeet-v3'),
+        whisperDownloaded: false,
+      };
+    }
     const parakeetSupported = LocalParakeetService.isAvailable();
     const [parakeetV2Downloaded, parakeetV3Downloaded] = parakeetSupported
       ? await Promise.all([
@@ -98,6 +109,10 @@ export class LocalTranscriptionService {
     audioUri: string,
     options: LocalTranscribeOptions = {},
   ): Promise<TranscriptionResponse> {
+    if (Platform.OS === 'android') {
+      const { LocalSpeechModel } = await import('@/android/LocalSpeechModel');
+      return LocalSpeechModel.transcribe(audioUri, options);
+    }
     const { languages, choice } = await this.resolveEngine(options.model);
 
     if (choice.engine === 'parakeet') {
@@ -132,6 +147,8 @@ export class LocalTranscriptionService {
    * Never downloads; a Parakeet choice that isn't installed resolves to Whisper or a no-op.
    */
   static async prepareForLanguage(language?: string, model?: LocalModelKey): Promise<void> {
+    // Android loads speech on demand and releases it before text generation to bound RAM.
+    if (Platform.OS === 'android') return;
     const { choice } = await this.resolveEngine(model);
     if (choice.engine === 'parakeet') {
       await LocalParakeetService.prepare(choice.version);
@@ -144,16 +161,43 @@ export class LocalTranscriptionService {
 
   /** True when the engine the current selection routes to has its model installed. */
   static async isReadyForLanguage(): Promise<boolean> {
+    if (Platform.OS === 'android') {
+      const { modelReady } = await import('@/android/models');
+      const { selectedSpeechModel } = await import('@/android/speechSelection');
+      const { speechModelSupportsLanguages } = await import('@/android/speechCapabilities');
+      const model = selectedSpeechModel();
+      return (
+        speechModelSupportsLanguages(model, getPreferredTranscriptionLanguages()) &&
+        modelReady(model)
+      );
+    }
     const { choice } = await this.resolveEngine();
     return choice.engine !== 'none';
   }
 
   /** Display descriptor for the engine the current selection *should* use (installed or not). */
   static preferredEngineDescriptor(): LocalEngineDescriptor {
+    if (Platform.OS === 'android') {
+      const { selectedSpeechModel } =
+        require('@/android/speechSelection') as typeof import('@/android/speechSelection');
+      const model = selectedSpeechModel();
+      if (model !== 'parakeet-v3')
+        return {
+          engine: 'moonshine',
+          label:
+            model === 'moonshine-tiny' ? 'Moonshine Tiny Streaming' : 'Moonshine Small Streaming',
+        };
+      return { engine: 'parakeet', version: 'v3', label: 'Parakeet v3' };
+    }
     return descriptorFor(preferredEngineForLanguages(getPreferredTranscriptionLanguages()));
   }
 
   static async cancelTranscription(): Promise<void> {
+    if (Platform.OS === 'android') {
+      const { LocalSpeechModel } = await import('@/android/LocalSpeechModel');
+      LocalSpeechModel.cancel();
+      return;
+    }
     await Promise.all([
       LocalWhisperService.cancelTranscription(),
       LocalParakeetService.cancelTranscription(),

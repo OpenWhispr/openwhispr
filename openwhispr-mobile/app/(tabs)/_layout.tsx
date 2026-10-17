@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { useSegments } from 'expo-router';
 import { useHandoffStore } from '@/store/useHandoffStore';
@@ -14,7 +15,7 @@ export const unstable_settings = {
   initialRouteName: '(record)',
 };
 
-export default function TabsLayout() {
+function IosTabsLayout() {
   const segments = useSegments() as string[];
   const isNoteEditor =
     segments[1] === '(notes)' && segments[2] !== undefined && !NOTES_STATIC_ROUTES.has(segments[2]);
@@ -41,10 +42,19 @@ export default function TabsLayout() {
         <NativeTabs.Trigger.Label>Dictionary</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="text.book.closed.fill" />
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="(style)" hidden />
       <NativeTabs.Trigger name="(referral)">
         <NativeTabs.Trigger.Label>Referral</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="gift.fill" />
       </NativeTabs.Trigger>
     </NativeTabs>
   );
+}
+
+export default function TabsLayout() {
+  if (Platform.OS === 'android') {
+    const AndroidTabs = require('@/android/Tabs').default;
+    return <AndroidTabs />;
+  }
+  return <IosTabsLayout />;
 }

@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+import { canRunLocalReasoning, getLocalReasoningReadiness } from './localReasoning';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
@@ -42,6 +44,8 @@ export async function chooseOnboardingMode(
       }
     }
   }
+  const androidReadiness =
+    Platform.OS === 'android' && mode === 'private' ? await getLocalReasoningReadiness() : null;
   if (useOnboardingStore.getState().currentStep !== from) return;
   const config = useConfigStore.getState().config ?? null;
   const previous = {
@@ -50,11 +54,30 @@ export async function chooseOnboardingMode(
     pinnedInference: config?.pinnedInference,
   };
   // The dictation route moves with the mode, so a replayed pick also leaves a Providers route.
-  // Choosing Local in setup also keeps uploads and cleanup on this iPhone; going back to Cloud
-  // releases them, since the mode changes.
   const next = dictationModeConfig(config, mode);
+  if (Platform.OS === 'android') {
+    const saved = config?.inference?.cleanup;
+    if (
+      mode === 'private' &&
+      (!saved || saved.mode === 'openwhispr') &&
+      canRunLocalReasoning(androidReadiness)
+    ) {
+      next.inference = { ...next.inference, cleanup: { mode: 'local' } };
+    } else if (
+      mode === 'cloud' &&
+      useOnboardingStore.getState().selectedMode === 'private' &&
+      saved?.mode === 'local' &&
+      Object.keys(saved).length === 1
+    ) {
+      // Drop only the plain cleanup choice saved by Android setup when that setup returns to Cloud.
+      next.inference = { ...next.inference };
+      delete next.inference.cleanup;
+    }
+  }
   await saveOnboardingConfig(
-    mode === 'private' ? { ...next, ...holdOnDeviceConfig({ ...config, ...next }) } : next,
+    Platform.OS !== 'android' && mode === 'private'
+      ? { ...next, ...holdOnDeviceConfig({ ...config, ...next }) }
+      : next,
   );
   useProcessingModeStore.getState().resetToDefault(mode);
   try {

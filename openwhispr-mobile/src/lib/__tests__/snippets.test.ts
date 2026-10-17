@@ -28,6 +28,25 @@ describe('expandSnippets', () => {
     );
   });
 
+  it('does not duplicate a sentence mark already supplied by the snippet', () => {
+    const snippets = [{ trigger: 'review sign off', replacement: 'Thanks for reviewing.' }];
+    expect(expandSnippets('Hello. Review sign off.', snippets)).toBe(
+      'Hello. Thanks for reviewing.',
+    );
+    expect(expandSnippets('Review sign off. Review sign off.', snippets)).toBe(
+      'Thanks for reviewing. Thanks for reviewing.',
+    );
+  });
+
+  it('preserves surrounding punctuation and literal punctuated triggers', () => {
+    expect(expandSnippets('Say c++!', [{ trigger: 'c++', replacement: 'C plus plus' }])).toBe(
+      'Say C plus plus!',
+    );
+    expect(expandSnippets('signoff?', [{ trigger: 'signoff', replacement: 'Thank you.' }])).toBe(
+      'Thank you.?',
+    );
+  });
+
   it('prefers the longest trigger when one is a substring phrase of another', () => {
     const snippets: Snippet[] = [
       { trigger: 'ask', replacement: 'ASK' },

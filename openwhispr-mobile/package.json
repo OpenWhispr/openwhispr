@@ -25,7 +25,7 @@
     "test:security": "node --test scripts/__tests__/node-forge.test.js",
     "test:watch": "jest --watch",
     "postinstall": "patch-package --error-on-fail && npm run test:security && npm run download:brand-fonts",
-    "eas-build-pre-install": "bundle install"
+    "eas-build-pre-install": "if [ \"$EAS_BUILD_PLATFORM\" = \"ios\" ]; then bundle install; elif [ \"$EAS_BUILD_PLATFORM\" = \"android\" ]; then sdkmanager \"cmake;3.22.1\"; fi"
   },
   "engines": {
     "node": "24.x"
@@ -79,14 +79,17 @@
     "expo-updates": "~55.0.33",
     "expo-video": "~55.0.21",
     "expo-web-browser": "~55.0.20",
+    "i18next": "25.6.3",
+    "llama.rn": "0.12.3",
     "lucide-react-native": "^0.545.0",
-    "nativewind": "^4.2.1",
+    "nativewind": "4.2.7",
     "react": "19.2.0",
     "react-dom": "^19.2.0",
     "react-hook-form": "^7.64.0",
+    "react-i18next": "16.3.5",
     "react-native": "0.83.10",
     "react-native-appsflyer": "^7.0.2",
-    "react-native-css-interop": "^0.2.1",
+    "react-native-css-interop": "0.2.7",
     "react-native-gesture-handler": "~2.30.0",
     "react-native-purchases": "^10.10.0",
     "react-native-reanimated": "4.2.1",

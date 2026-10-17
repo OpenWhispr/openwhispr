@@ -1,0 +1,12 @@
+<resources>
+  <string name="ow_insertion_label">OpenWhispr · テキストを挿入</string>
+  <string name="ow_insertion_description">ユーザー補助により、OpenWhispr は音声入力時に選択中の欄を読み取り、結果を挿入できます。メッセージの送信やパスワード欄の読み取りは行いません。</string>
+  <string name="ow_bubble_ready">OpenWhispr は準備完了です</string>
+  <string name="ow_bubble_recording">OpenWhispr · 聞き取り中…</string>
+  <string name="ow_bubble_notice">タップして開きます。アカウントでフローティングボタンをオフにできます。</string>
+  <string name="ow_bubble_channel">フローティングボタンを表示</string>
+  <string name="ow_audio_unreadable">この音声ファイルを読み込めませんでした。有効な WAV、MP3、M4A ファイルをお試しください。</string>
+  <string name="ow_meeting_notice">会議の音声を録音しています。</string>
+  <string name="ow_meeting_stop">停止</string>
+  <string name="ow_meeting_stopped">録音を停止しました。音声は保存されています。</string>
+</resources>

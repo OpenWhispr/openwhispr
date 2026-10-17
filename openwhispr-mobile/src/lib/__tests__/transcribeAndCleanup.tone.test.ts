@@ -1,6 +1,7 @@
 import { TranscriptionService } from '@/services/transcription/TranscriptionService';
 import { transcribeAndCleanup } from '@/lib/transcribeAndCleanup';
 import { cleanupTranscript } from '@/lib/cleanupTranscript';
+import { Platform } from 'react-native';
 
 // accountAccess pulls in the router for its sign-in alert; stub it here.
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
@@ -82,6 +83,36 @@ beforeEach(() => {
 });
 
 describe('transcribeAndCleanup tone', () => {
+  it.each(['private', 'cloud'])(
+    'keeps Android Style for local cleanup in %s mode',
+    async (mode) => {
+      const originalPlatform = Platform.OS;
+      Platform.OS = 'android';
+      try {
+        mockActiveMode = mode;
+        const cleanupRoute = { mode: 'local', scope: 'cleanup' } as const;
+        mockConfig = { cleanupEnabled: true, inference: { cleanup: { mode: 'local' } } };
+        mockTranscribe.mockResolvedValue({ text: 'hello world', provider: 'local', duration: 1 });
+
+        await transcribeAndCleanup({
+          audioUri: 'file://a.wav',
+          provider: 'local',
+          requestContext: 'keyboard',
+          keyboardTone: 'formal',
+          cleanupRoute,
+        });
+
+        expect(mockCleanup).toHaveBeenCalledWith(
+          'hello world',
+          expect.objectContaining({ tone: 'formal', inferenceRoute: cleanupRoute }),
+        );
+        expect(mockFused).not.toHaveBeenCalled();
+      } finally {
+        Platform.OS = originalPlatform;
+      }
+    },
+  );
+
   it('forces the serial path and passes tone for a non-default keyboard tone', async () => {
     const result = await transcribeAndCleanup({
       audioUri: 'file://a.wav',

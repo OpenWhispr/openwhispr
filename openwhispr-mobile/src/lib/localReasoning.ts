@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { AppleLLM } from '@/lib/appleLLM';
 import type {
   LocalReasoningErrorCode,
@@ -40,6 +41,10 @@ export function clearLocalReasoningReadinessCache(): void {
 export async function getLocalReasoningReadiness(options?: {
   refresh?: boolean;
 }): Promise<LocalReasoningReadiness> {
+  if (Platform.OS === 'android') {
+    const { androidTextReadiness } = await import('@/android/LocalTextModel');
+    return androidTextReadiness();
+  }
   if (!isAppleLocalIntelligenceEnabled()) {
     return { status: 'disabled', tokenCounting: false };
   }
@@ -154,6 +159,7 @@ export async function countLocalReasoningTokens(input: {
   instructions?: string;
   prompt: string;
 }): Promise<number | null> {
+  if (Platform.OS !== 'ios') return null;
   try {
     return await AppleLLM.countTokens(input);
   } catch {
@@ -194,6 +200,8 @@ export function isLocalReasoningUnsupported(readiness?: LocalReasoningReadiness 
 }
 
 export function getLocalReasoningUnavailableMessage(readiness?: LocalReasoningReadiness): string {
+  if (Platform.OS === 'android')
+    return 'Download a local text model in Account → Models to use on-device AI.';
   switch (readiness?.status) {
     case 'unsupportedDevice':
       return 'On-Device AI needs an iPhone with Apple Intelligence (iPhone 15 Pro or later).';
@@ -223,6 +231,8 @@ export function toLocalReasoningError(error: unknown): LocalReasoningError {
   }
 
   switch (code) {
+    case 'LOCAL_CONTEXT_LIMIT':
+    case 'LOCAL_REASONING_FAILED':
     case 'APPLE_LLM_GUARDRAIL':
     case 'APPLE_LLM_CONTEXT_LIMIT':
     case 'APPLE_LLM_RATE_LIMITED':
@@ -231,7 +241,10 @@ export function toLocalReasoningError(error: unknown): LocalReasoningError {
     case 'APPLE_LLM_CANCELLED':
       return new LocalReasoningError(code, message);
     default:
-      return new LocalReasoningError('APPLE_LLM_FAILED', message);
+      return new LocalReasoningError(
+        Platform.OS === 'android' ? 'LOCAL_REASONING_FAILED' : 'APPLE_LLM_FAILED',
+        message,
+      );
   }
 }
 
@@ -243,6 +256,8 @@ export function isLocalContextLimitError(error: unknown): boolean {
     typeof error === 'object' &&
     error !== null &&
     'code' in error &&
-    (error as { code?: unknown }).code === 'APPLE_LLM_CONTEXT_LIMIT'
+    ['APPLE_LLM_CONTEXT_LIMIT', 'LOCAL_CONTEXT_LIMIT'].includes(
+      String((error as { code?: unknown }).code),
+    )
   );
 }

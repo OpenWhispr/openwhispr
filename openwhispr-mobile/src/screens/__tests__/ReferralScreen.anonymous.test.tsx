@@ -1,9 +1,11 @@
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Alert, Share } from 'react-native';
 
 const mockSignOut = jest.fn();
 const mockPush = jest.fn();
 const mockFetchReferralStats = jest.fn();
+const mockSendInvite = jest.fn();
 
 type MockAuthState = {
   user: { id: string; email: string; isAnonymous: boolean } | null;
@@ -23,7 +25,7 @@ jest.mock('expo-router', () => ({ router: { push: (...args: unknown[]) => mockPu
 jest.mock('@/lib/referralApi', () => ({
   fetchReferralStats: (...args: unknown[]) => mockFetchReferralStats(...args),
   fetchReferralInvites: jest.fn().mockResolvedValue([]),
-  sendReferralInvite: jest.fn(),
+  sendReferralInvite: (...args: unknown[]) => mockSendInvite(...args),
 }));
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn() }));
 jest.mock('@/lib/utils', () => ({ safeHaptics: jest.fn(), isValidEmail: () => true }));
@@ -37,6 +39,7 @@ jest.mock('@/lib/accountAccess', () => ({
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/components/ui/TabScreenHeader', () => ({ TabScreenHeader: () => null }));
+jest.mock('@/components/ui/GlassBackButton', () => ({ GlassBackButton: () => null }));
 jest.mock('@/components/ui/GradientGlassSurface', () => ({ GradientGlassSurface: () => null }));
 jest.mock('@/components/ui/Button', () => {
   const { Pressable, Text } = require('react-native');
@@ -47,6 +50,49 @@ jest.mock('@/components/ui/Button', () => {
       </Pressable>
     ),
   };
+});
+
+describe('signed-in referral actions', () => {
+  beforeEach(() => {
+    mockAuthState = {
+      user: { id: 'member', email: 'member@example.com', isAnonymous: false },
+      sessionCookie: 'session=member',
+      signOut: mockSignOut,
+    };
+    mockFetchReferralStats.mockResolvedValue({
+      referralCode: 'test',
+      referralLink: 'https://openwhispr.com/r/test',
+      totalReferrals: 0,
+      completedReferrals: 0,
+      totalMonthsEarned: 0,
+      referrals: [],
+    });
+  });
+  it('unlocks a rejected invite and preserves the address for retry', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    mockSendInvite.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(false);
+    const screen = render(<ReferralScreen />);
+    const input = await screen.findByPlaceholderText('friend@example.com');
+    fireEvent.changeText(input, 'friend@example.com');
+    fireEvent.press(screen.getByText('Send'));
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('Failed', expect.any(String)));
+    expect(screen.getByPlaceholderText('friend@example.com').props.editable).toBe(true);
+    expect(screen.getByPlaceholderText('friend@example.com').props.value).toBe(
+      'friend@example.com',
+    );
+    fireEvent.press(screen.getByText('Send'));
+    await waitFor(() => expect(mockSendInvite).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByText('Send')).toBeTruthy());
+    alert.mockRestore();
+  });
+  it('shares only the server-provided referral link', async () => {
+    const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.dismissedAction });
+    const screen = render(<ReferralScreen />);
+    fireEvent.press(await screen.findByText('Share referral link'));
+    expect(share).toHaveBeenCalledWith({ message: 'https://openwhispr.com/r/test' });
+    expect(mockSendInvite).not.toHaveBeenCalled();
+    share.mockRestore();
+  });
 });
 
 import ReferralScreen from '@/screens/ReferralScreen';

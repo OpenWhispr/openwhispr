@@ -55,10 +55,15 @@ export function expandSnippets(text: string, snippets: Snippet[]): string {
   }
   if (!cachedMatcher) return text;
   const { regex, replacements } = cachedMatcher;
-  return text.replace(regex, (match, lead: string) => {
+  return text.replace(regex, (match, lead: string, offset: number, source: string) => {
     const trigger = match.slice(lead.length).toLowerCase();
     const replacement = replacements.get(trigger);
-    return replacement === undefined ? match : lead + replacement;
+    if (replacement === undefined) return match;
+    // Keep the source boundary unconsumed so adjacent triggers still match.
+    // A saved sentence and the recognizer can both supply the same final mark.
+    const last = replacement.slice(-1);
+    const duplicateMark = /[.!?。！？]/.test(last) && source[offset + match.length] === last;
+    return lead + (duplicateMark ? replacement.slice(0, -1) : replacement);
   });
 }
 

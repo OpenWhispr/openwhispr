@@ -1,5 +1,6 @@
+import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { FormSheet } from '@/components/ui/FormSheet';
 import { SystemIcon } from '@/components/ui/SystemIcon';
@@ -19,6 +20,7 @@ type Props = {
 };
 
 export function AddWordsSheet({ visible, onClose, onSubmit }: Props) {
+  const { copy } = useAndroidCopy();
   const [input, setInput] = useState('');
   const inputRef = useRef<TextInput>(null);
 
@@ -42,7 +44,10 @@ export function AddWordsSheet({ visible, onClose, onSubmit }: Props) {
 
   const wordCount = segments.length;
   const canSubmit = wordCount > 0;
-  const addLabel = wordCount <= 1 ? 'Add word' : `Add ${wordCount} words`;
+  const addLabel =
+    wordCount <= 1
+      ? copy('library.addWord', 'Add word')
+      : copy('library.addWordCount', `Add ${wordCount} words`, { count: wordCount });
 
   const handleSubmit = () => {
     if (!canSubmit) return;
@@ -65,8 +70,8 @@ export function AddWordsSheet({ visible, onClose, onSubmit }: Props) {
     <FormSheet
       visible={visible}
       onClose={onClose}
-      title="Add to dictionary"
-      subtitle="Separate multiple words with commas."
+      title={copy('library.addDictionary', 'Add to dictionary')}
+      subtitle={copy('library.commaWords', 'Separate multiple words with commas.')}
       submitLabel={addLabel}
       canSubmit={canSubmit}
       onSubmit={handleSubmit}
@@ -79,7 +84,8 @@ export function AddWordsSheet({ visible, onClose, onSubmit }: Props) {
           ref={inputRef}
           value={input}
           onChangeText={setInput}
-          placeholder="Add words, names, or terms…"
+          placeholder={copy('library.wordPlaceholder', 'Add words, names, or terms…')}
+          accessibilityLabel={copy('library.addWords', 'Add words')}
           placeholderTextColor={PLACEHOLDER_COLOR}
           returnKeyType="done"
           onSubmitEditing={handleSubmit}
@@ -98,13 +104,15 @@ export function AddWordsSheet({ visible, onClose, onSubmit }: Props) {
                 key={segment.index}
                 onPress={() => removeSegment(segment.index)}
                 accessibilityRole="button"
-                accessibilityLabel={`Remove ${segment.value}`}
+                accessibilityLabel={copy('library.removeWord', `Remove ${segment.value}`, {
+                  word: segment.value,
+                })}
                 style={({ pressed }) => ({
                   borderCurve: 'continuous',
                   backgroundColor: isContext ? CONTEXT_TINT : undefined,
                   opacity: pressed ? 0.6 : 1,
                 })}
-                className={`h-8 flex-row items-center gap-1.5 rounded-[10px] pl-3 pr-2 ${
+                className={`${Platform.OS === 'android' ? 'min-h-8 py-1' : 'h-8'} flex-row items-center gap-1.5 rounded-[10px] pl-3 pr-2 ${
                   isContext ? '' : 'bg-tertiarySystemFill'
                 }`}
               >
@@ -129,10 +137,10 @@ export function AddWordsSheet({ visible, onClose, onSubmit }: Props) {
         <SystemIcon name="info.circle" mdName="Info" size={13} color="tertiaryLabel" />
         <View className="flex-1">
           <Text className="text-[12px] text-tertiaryLabel">
-            For tricky pronunciations, try a context phrase like
+            {copy('library.contextHint', 'For tricky pronunciations, try a context phrase like')}
           </Text>
           <Text className="mt-0.5 text-[12px] italic text-secondaryLabel">
-            &ldquo;The word is Synty&rdquo;
+            {copy('library.contextExample', '“The word is Synty”')}
           </Text>
         </View>
       </View>

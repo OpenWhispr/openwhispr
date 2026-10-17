@@ -2,6 +2,8 @@ import Purchases from 'react-native-purchases';
 import {
   getAppStorefrontCountryCode,
   recordRevenueCatPurchase,
+  syncRevenueCatPurchases,
+  identifyRevenueCatUser,
   showAppStoreManageSubscriptions,
 } from '../revenuecat';
 
@@ -10,6 +12,9 @@ jest.mock('react-native-purchases', () => ({
   __esModule: true,
   default: {
     configure: jest.fn(),
+    logIn: jest.fn(async () => ({})),
+    logOut: jest.fn(async () => ({})),
+    syncPurchasesForResult: jest.fn(),
     getStorefront: jest.fn(),
     recordPurchase: jest.fn(),
     showManageSubscriptions: jest.fn(),
@@ -58,13 +63,34 @@ describe('RevenueCat StoreKit helpers', () => {
   it('records a StoreKit 2 purchase with RevenueCat', async () => {
     mockPurchases.recordPurchase.mockResolvedValue({} as never);
 
-    await expect(recordRevenueCatPurchase('pro.monthly')).resolves.toBe(true);
+    await expect(recordRevenueCatPurchase('pro.monthly', 'billing-a')).resolves.toBe(true);
     expect(mockPurchases.recordPurchase).toHaveBeenCalledWith('pro.monthly');
   });
 
   it('returns false when recording a purchase fails', async () => {
     mockPurchases.recordPurchase.mockRejectedValue(new Error('no transaction found'));
 
-    await expect(recordRevenueCatPurchase('pro.monthly')).resolves.toBe(false);
+    await expect(recordRevenueCatPurchase('pro.monthly', 'billing-a')).resolves.toBe(false);
   });
+});
+
+it('holds the billing identity through deferred receipt synchronization', async () => {
+  jest.clearAllMocks();
+  process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY = 'appl_test';
+  let finish!: () => void;
+  mockPurchases.syncPurchasesForResult.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = () => resolve({} as never);
+      }),
+  );
+  const syncing = syncRevenueCatPurchases('billing-a');
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  const switching = identifyRevenueCatUser('billing-b');
+  await Promise.resolve();
+  expect(mockPurchases.logIn).toHaveBeenCalledTimes(1);
+  finish();
+  await syncing;
+  await switching;
+  expect(mockPurchases.logIn).toHaveBeenNthCalledWith(2, 'billing-b');
 });

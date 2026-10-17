@@ -1,5 +1,6 @@
+import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import type React from 'react';
-import { Pressable, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 
@@ -22,10 +23,15 @@ export function NoteMetaRow({
   onPressAttendees,
   onPressFolder,
 }: NoteMetaRowProps): React.JSX.Element {
+  const { copy } = useAndroidCopy();
+  const chip =
+    Platform.OS === 'android'
+      ? 'min-h-12 max-w-full flex-row items-center gap-1.5 rounded-full bg-tertiarySystemFill px-3 py-2'
+      : CHIP;
   return (
     <View className="mb-4 flex-row flex-wrap items-center gap-2">
       {dateLabel || attendeeLabel ? (
-        <View className={CHIP} style={{ borderCurve: 'continuous' }}>
+        <View className={chip} style={{ borderCurve: 'continuous' }}>
           {dateLabel ? (
             <Text className="text-[14px] font-medium text-secondaryLabel">{dateLabel}</Text>
           ) : null}
@@ -33,7 +39,11 @@ export function NoteMetaRow({
             <Pressable
               testID="note-meta-attendees"
               accessibilityRole="button"
-              accessibilityLabel={`Attendees: ${attendeeLabel}`}
+              accessibilityLabel={copy(
+                'noteDetails.attendeesLabel',
+                `Attendees: ${attendeeLabel}`,
+                { name: attendeeLabel },
+              )}
               hitSlop={6}
               onPress={onPressAttendees}
               className="shrink flex-row items-center gap-1.5"
@@ -56,9 +66,15 @@ export function NoteMetaRow({
         <Pressable
           testID="note-meta-folder"
           accessibilityRole="button"
-          accessibilityLabel={folderLabel ? `Folder: ${folderLabel}. Move note` : 'Add to folder'}
+          accessibilityLabel={
+            folderLabel
+              ? copy('noteDetails.folderLabel', `Folder: ${folderLabel}. Move note`, {
+                  name: folderLabel,
+                })
+              : copy('noteDetails.addToFolder', 'Add to folder')
+          }
           onPress={onPressFolder}
-          className={CHIP}
+          className={chip}
           style={{ borderCurve: 'continuous' }}
         >
           <SystemIcon
@@ -68,7 +84,7 @@ export function NoteMetaRow({
             color="secondaryLabel"
           />
           <Text numberOfLines={1} className="shrink text-[14px] font-medium text-secondaryLabel">
-            {folderLabel ?? 'Add to folder'}
+            {folderLabel ?? copy('noteDetails.addToFolder', 'Add to folder')}
           </Text>
         </Pressable>
       ) : null}

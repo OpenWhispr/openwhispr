@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import {
@@ -36,7 +37,7 @@ export function getTranscriptionProvider(scope: InferenceScope): TranscriptionPr
   const { activeMode } = useProcessingModeStore.getState();
   // Local Mode keeps dictation on this iPhone. Uploads run what is saved for them, or with nothing
   // saved, OpenWhispr Cloud when there is a session (unsetSelection).
-  if (activeMode === 'private' && scope !== 'upload') return 'local';
+  if (activeMode === 'private' && (Platform.OS === 'android' || scope !== 'upload')) return 'local';
   const selection =
     getInferenceSelection(scope) ??
     (activeMode === 'private'
@@ -105,7 +106,8 @@ export type TranscriptionJobRoute = Pick<TranscriptionRequest, 'provider' | 'inf
 export function snapshotTextInference(provider: TranscriptionProvider): TextInferenceSnapshot {
   const result: TextInferenceSnapshot = {};
   const { activeMode } = useProcessingModeStore.getState();
-  const cloudAccess = provider === 'local' ? currentCloudAccess() : 'none';
+  const cloudAccess =
+    provider === 'local' && Platform.OS !== 'android' ? currentCloudAccess() : 'none';
   for (const scope of ['cleanup', 'agent'] as const) {
     const routeKey = scope === 'cleanup' ? 'cleanupRoute' : 'agentRoute';
     const errorKey = scope === 'cleanup' ? 'cleanupUnavailable' : 'agentUnavailable';
@@ -121,9 +123,11 @@ export function snapshotTextInference(provider: TranscriptionProvider): TextInfe
     const cleanupMode = localCleanup?.mode ?? 'local';
     if (
       provider === 'local' &&
-      (scope === 'agent' ||
-        cleanupMode === 'local' ||
-        (cleanupMode === 'openwhispr' && cloudAccess !== 'account'))
+      (Platform.OS === 'android'
+        ? !(scope === 'cleanup' && selection?.mode === 'providers')
+        : scope === 'agent' ||
+          cleanupMode === 'local' ||
+          (cleanupMode === 'openwhispr' && cloudAccess !== 'account'))
     ) {
       result[routeKey] = { mode: 'local', scope };
     } else if (!selection && provider === 'byok') {

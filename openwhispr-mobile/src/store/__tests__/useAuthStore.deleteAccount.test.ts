@@ -1,6 +1,10 @@
 const mockDeleteAccountApi = jest.fn();
 const mockSignOutApi = jest.fn();
 const mockClearProviderCredentials = jest.fn();
+const mockEraseInsights = jest.fn();
+jest.mock('@/android/insights', () => ({
+  eraseAccountInsights: (...args: unknown[]) => mockEraseInsights(...args),
+}));
 
 jest.mock('@/lib/authClient', () => ({
   getStoredSession: jest.fn(),
@@ -33,6 +37,7 @@ jest.mock('expo-secure-store', () => ({
 }));
 
 import { useAuthStore } from '@/store/useAuthStore';
+import { Platform } from 'react-native';
 
 const member = {
   id: 'member',
@@ -43,6 +48,8 @@ const member = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  Platform.OS = 'ios';
+  mockEraseInsights.mockReset().mockResolvedValue(undefined);
   mockClearProviderCredentials.mockResolvedValue(undefined);
   mockDeleteAccountApi.mockResolvedValue(undefined);
   useAuthStore.setState({
@@ -84,4 +91,18 @@ it('finishes a completed deletion even if the keys cannot be erased', async () =
 it('keeps provider keys when the user only signs out', async () => {
   await useAuthStore.getState().signOut();
   expect(mockClearProviderCredentials).not.toHaveBeenCalled();
+});
+
+it('finishes account deletion when Android Insights cleanup fails', async () => {
+  Platform.OS = 'android';
+  mockEraseInsights.mockRejectedValue(new Error('Local storage unavailable'));
+  await useAuthStore.getState().deleteAccount();
+  expect(mockEraseInsights).toHaveBeenCalledWith('member');
+  expect(mockClearProviderCredentials).toHaveBeenCalledTimes(1);
+  expect(useAuthStore.getState()).toMatchObject({ user: null, isLoading: false, error: null });
+});
+
+it('does not load Android Insights when deleting an iOS account', async () => {
+  await useAuthStore.getState().deleteAccount();
+  expect(mockEraseInsights).not.toHaveBeenCalled();
 });

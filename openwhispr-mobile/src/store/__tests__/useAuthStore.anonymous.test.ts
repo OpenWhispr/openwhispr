@@ -32,6 +32,8 @@ jest.mock('expo-secure-store', () => ({
 }));
 
 import { useAuthStore } from '@/store/useAuthStore';
+import * as SecureStore from 'expo-secure-store';
+import { getSession, getStoredSession } from '@/lib/authClient';
 
 const anonymousUser = {
   id: 'anon-user',
@@ -50,6 +52,8 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.mocked(SecureStore.getItemAsync).mockResolvedValue(null);
+  jest.mocked(getStoredSession).mockResolvedValue(null);
   useAuthStore.setState({
     user: null,
     sessionCookie: null,
@@ -64,6 +68,26 @@ beforeEach(() => {
     error: null,
     status: null,
   });
+});
+
+it('restores an explicit local guest without making a network session request', async () => {
+  jest.mocked(SecureStore.getItemAsync).mockResolvedValue('true');
+  await useAuthStore.getState().initialize();
+  expect(getSession).not.toHaveBeenCalled();
+  expect(useAuthStore.getState()).toMatchObject({
+    isGuest: true,
+    isInitialized: true,
+    isLoading: false,
+  });
+});
+
+it('validates a stored account cookie even when a stale guest flag remains', async () => {
+  jest.mocked(SecureStore.getItemAsync).mockResolvedValue('true');
+  jest.mocked(getStoredSession).mockResolvedValue('session=anon');
+  jest.mocked(getSession).mockResolvedValue(anonymousUser);
+  await useAuthStore.getState().initialize();
+  expect(getSession).toHaveBeenCalledTimes(1);
+  expect(useAuthStore.getState()).toMatchObject({ user: anonymousUser, isGuest: false });
 });
 
 describe('useAuthStore.ensureAnonymousSession', () => {

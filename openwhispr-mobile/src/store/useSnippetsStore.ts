@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
+import { asc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { create } from 'zustand';
 import { db } from '@/db';
 import { snippets } from '@/db/schema';
@@ -35,24 +35,26 @@ function readAllActiveEntries(): Snippet[] {
 // Restoring a tombstone while an active row exists would violate the partial unique
 // index `idx_snippets_trigger_lower WHERE deleted_at IS NULL`.
 function findActiveByLowerTrigger(trigger: string): Row | null {
-  const lower = trigger.toLowerCase();
-  return (
-    db
-      .select()
-      .from(snippets)
-      .where(and(sql`lower(${snippets.trigger}) = ${lower}`, isNull(snippets.deletedAt)))
-      .get() ?? null
-  );
+  return findByTrigger(trigger, false);
 }
 
 function findTombstoneByLowerTrigger(trigger: string): Row | null {
-  const lower = trigger.toLowerCase();
+  return findByTrigger(trigger, true);
+}
+
+function findByTrigger(trigger: string, deleted: boolean): Row | null {
+  const rows = db
+    .select()
+    .from(snippets)
+    .where(deleted ? isNotNull(snippets.deletedAt) : isNull(snippets.deletedAt))
+    .orderBy(asc(snippets.id))
+    .all();
+  // SQLite lower() folds ASCII only. Match the UI's Unicode normalization,
+  // preferring an exact spelling when older synced rows differ only by case.
   return (
-    db
-      .select()
-      .from(snippets)
-      .where(and(sql`lower(${snippets.trigger}) = ${lower}`, isNotNull(snippets.deletedAt)))
-      .get() ?? null
+    rows.find((row) => row.trigger === trigger) ??
+    rows.find((row) => row.trigger.toLowerCase() === trigger.toLowerCase()) ??
+    null
   );
 }
 
@@ -156,10 +158,8 @@ export const useSnippetsStore = create<SnippetsStore>((set) => ({
       if (!active) return;
       // Renaming onto a trigger another active row already holds would violate the
       // unique index — skip (the UI validates this before calling).
-      if (trigger.toLowerCase() !== oldTrigger.trim().toLowerCase()) {
-        const collision = findActiveByLowerTrigger(trigger);
-        if (collision && collision.id !== active.id) return;
-      }
+      const collision = findActiveByLowerTrigger(trigger);
+      if (collision && collision.id !== active.id) return;
       if (active.trigger === trigger && active.replacement === replacement) return;
       db.update(snippets)
         .set({ trigger, replacement, pendingSync: 1, updatedAt: sql`datetime('now')` })

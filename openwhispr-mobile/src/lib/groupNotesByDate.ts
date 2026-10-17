@@ -33,13 +33,17 @@ function daysBetween(a: Date, b: Date): number {
   return Math.round(ms / 86_400_000);
 }
 
-export function groupNotesByDate(notes: Note[], now: Date = new Date()): DateBucket[] {
+export function groupNotesByDate(
+  notes: Note[],
+  now: Date = new Date(),
+  presentation?: { language: string; labels: Record<string, string> },
+): DateBucket[] {
   const orderedKeys: DateBucketKey[] = [];
   const buckets = new Map<DateBucketKey, DateBucket>();
 
   const ensure = (key: DateBucketKey, label: string) => {
     if (!buckets.has(key)) {
-      buckets.set(key, { key, label, notes: [] });
+      buckets.set(key, { key, label: presentation?.labels[key] ?? label, notes: [] });
       orderedKeys.push(key);
     }
     return buckets.get(key)!;
@@ -71,7 +75,9 @@ export function groupNotesByDate(notes: Note[], now: Date = new Date()): DateBuc
       bucket = ensure('prev30', 'Previous 30 Days');
     } else {
       const key = `${updated.getFullYear()}-${String(updated.getMonth() + 1).padStart(2, '0')}`;
-      const label = `${MONTHS[updated.getMonth()]} ${updated.getFullYear()}`;
+      const label = presentation
+        ? updated.toLocaleDateString(presentation.language, { month: 'long', year: 'numeric' })
+        : `${MONTHS[updated.getMonth()]} ${updated.getFullYear()}`;
       bucket = ensure(key, label);
     }
     bucket.notes.push(note);

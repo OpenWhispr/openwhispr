@@ -1,24 +1,18 @@
 import { useMemo } from 'react';
-import {
-  View,
-  PlatformColor,
-  ScrollView,
-  StyleSheet,
-  type StyleProp,
-  type TextStyle,
-} from 'react-native';
+import { View, ScrollView, StyleSheet, type StyleProp, type TextStyle } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { parseMarkdownBlocks, type MarkdownBlock } from './markdownBlocks';
 import { NOTES_GROUP_RADIUS } from './tokens';
+import { iosColor } from '@/config/colors';
 
 interface MarkdownRendererProps {
   content: string;
   selectable?: boolean;
 }
 
-const labelColor = PlatformColor('label') as unknown as string;
-const secondaryColor = PlatformColor('secondaryLabel') as unknown as string;
-const tertiaryBg = PlatformColor('tertiarySystemBackground') as unknown as string;
+const labelColor = iosColor('label');
+const secondaryColor = iosColor('secondaryLabel');
+const tertiaryBg = iosColor('tertiarySystemBackground');
 
 type InlineSegment = { text: string; bold?: boolean; italic?: boolean; code?: boolean };
 
