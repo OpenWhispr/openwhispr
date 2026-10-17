@@ -2657,11 +2657,12 @@
         "anthropic_claude_sonnet_4_6": "バランスの取れた性能",
         "anthropic_claude_sonnet_4_5": "前世代の Sonnet モデル",
         "anthropic_claude_haiku_4_5": "高速でフロンティアに近い知能",
-        "gemini_gemini_3_5_flash": "最新の高速で高性能な Gemini モデル",
+        "gemini_gemini_3_8_flash": "エージェントと企業ワークフロー向けの最も高性能な Flash モデル",
+        "gemini_gemini_4_argon": "最も高性能な Gemini モデル、旗艦の推論、1M コンテキスト",
+        "gemini_gemini_3_6_flash": "前世代の Flash、バランスの取れた速度とマルチモーダル性能",
         "gemini_gemini_3_5_flash_lite": "最速かつ最も低コストの 3.5 モデル",
         "gemini_gemini_3_1_pro_preview": "複雑な推論向けの次世代フラッグシップモデル",
         "gemini_gemini_3_1_flash_lite": "フロンティア級の性能を低コストで",
-        "gemini_gemini_3_flash_preview": "超高速・高性能の次世代モデル",
         "gemini_gemini_2_5_flash_lite": "最低レイテンシーとコスト",
         "gemini_gemma_4_31b_it": "Google 最大の Gemma 4、31B デンス、256K コンテキスト",
         "gemini_gemma_4_26b_a4b_it": "Google の Gemma 4 MoE、4B アクティブパラメータ、256K コンテキスト",
@@ -2696,8 +2697,8 @@
         "bedrock_gpt_oss_120b": "OpenAI のオープンウェイトモデル。低コストで高い推論力。",
         "bedrock_deepseek_v3_2": "オープンウェイトのフロンティアモデル。アシスタントタスクに最適。",
         "bedrock_qwen3_next_80b": "スパースなオープンウェイトモデル。高速で多言語対応。",
-        "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
-        "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
+        "vertex_gemini_3_8_flash": "Most intelligent Flash model via Vertex",
+        "vertex_gemini_4_argon": "Most capable Gemini model via Vertex"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "強力なハイブリッドモデル",

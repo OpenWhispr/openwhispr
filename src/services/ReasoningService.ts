@@ -40,7 +40,10 @@ import {
   truncatedOutputError,
 } from "./ai/chatRequestBody";
 import { getModelFamilyConstraints } from "./ai/modelFamilyConstraints";
-import { detectEndpointDialect } from "./ai/thinkingSuppressionDialects";
+import {
+  detectEndpointDialect,
+  geminiThinkingSuppressionLevel,
+} from "./ai/thinkingSuppressionDialects";
 import { openCodeSessionHeaders } from "./ai/openCodeSession";
 import { createStreamingThinkFilter } from "./ai/streamingThinkFilter";
 import { extractApiErrorMessage } from "./ai/apiErrorMessage";
@@ -930,7 +933,14 @@ class ReasoningService extends BaseReasoningService {
           }
         : {}),
       ...(needsGeminiMinimalThinking
-        ? { google: { thinkingConfig: { thinkingLevel: "minimal", includeThoughts: false } } }
+        ? {
+            google: {
+              thinkingConfig: {
+                thinkingLevel: geminiThinkingSuppressionLevel(model),
+                includeThoughts: false,
+              },
+            },
+          }
         : {}),
     };
     const hasProviderOptions = Object.keys(providerOptions).length > 0;

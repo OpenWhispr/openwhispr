@@ -2709,11 +2709,12 @@
         "anthropic_claude_sonnet_4_6": "Rendimiento equilibrado",
         "anthropic_claude_sonnet_4_5": "Generación anterior de Sonnet",
         "anthropic_claude_haiku_4_5": "Rápido con inteligencia cercana a la frontera",
-        "gemini_gemini_3_5_flash": "Modelo Gemini más reciente, rápido y de alta capacidad",
+        "gemini_gemini_3_8_flash": "El modelo Flash más inteligente para agentes y flujos empresariales",
+        "gemini_gemini_4_argon": "El modelo Gemini más capaz, razonamiento insignia, contexto de 1M",
+        "gemini_gemini_3_6_flash": "Flash de generación anterior, velocidad y multimodalidad equilibradas",
         "gemini_gemini_3_5_flash_lite": "El modelo 3.5 más rápido y económico",
         "gemini_gemini_3_1_pro_preview": "Modelo insignia de nueva generación para razonamiento complejo",
         "gemini_gemini_3_1_flash_lite": "Rendimiento de primer nivel a bajo costo",
-        "gemini_gemini_3_flash_preview": "Modelo de nueva generación ultrarrápido y de alta capacidad",
         "gemini_gemini_2_5_flash_lite": "Menor latencia y costo",
         "gemini_gemma_4_31b_it": "El mayor Gemma 4 de Google, 31B denso, contexto 256K",
         "gemini_gemma_4_26b_a4b_it": "Gemma 4 MoE de Google, 4B parámetros activos, contexto 256K",
@@ -2748,8 +2749,8 @@
         "bedrock_gpt_oss_120b": "Modelo abierto de OpenAI. Gran razonamiento a bajo costo.",
         "bedrock_deepseek_v3_2": "Modelo frontera de pesos abiertos. Gran valor para las tareas de asistente.",
         "bedrock_qwen3_next_80b": "Modelo abierto disperso. Rápido y multilingüe.",
-        "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
-        "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
+        "vertex_gemini_3_8_flash": "Most intelligent Flash model via Vertex",
+        "vertex_gemini_4_argon": "Most capable Gemini model via Vertex"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "Modelo híbrido potente",
