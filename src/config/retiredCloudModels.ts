@@ -53,6 +53,20 @@ export const RETIRED_CLOUD_MODELS = {
       "kimi-k2-6": "kimi-k3",
     },
   },
+  gemini: {
+    migratedKey: "_retiredGeminiModelsMigrated",
+    models: {
+      "gemini-3.5-flash": "gemini-3.6-flash",
+      "gemini-3-flash-preview": "gemini-3.6-flash",
+    },
+  },
+  vertex: {
+    migratedKey: "_retiredVertexModelsMigrated",
+    models: {
+      "gemini-2.5-flash": "gemini-3.8-flash",
+      "gemini-2.5-pro": "gemini-4-argon",
+    },
+  },
 } satisfies Record<string, RetiredProviderModels>;
 
 export type RetiredModelProvider = keyof typeof RETIRED_CLOUD_MODELS;

@@ -29,6 +29,17 @@ export function detectEndpointDialect(baseUrl: string | null | undefined): Endpo
   return null;
 }
 
+// Gemini 4 Argon, 3.8 Flash, and 3.1 Pro reject `minimal`; their floor is `low`.
+export function geminiThinkingSuppressionLevel(
+  model: string | null | undefined
+): "low" | "minimal" {
+  const id = (model || "").toLowerCase();
+  if (id.startsWith("gemini-4") || id.startsWith("gemini-3.8") || id === "gemini-3.1-pro-preview") {
+    return "low";
+  }
+  return "minimal";
+}
+
 export function suppressThinking(
   requestBody: Record<string, unknown>,
   providerKey: string,
@@ -37,7 +48,7 @@ export function suppressThinking(
   const family = getModelFamilyConstraints(model);
 
   if (providerKey === "gemini") {
-    requestBody.reasoning_effort = "minimal";
+    requestBody.reasoning_effort = geminiThinkingSuppressionLevel(model);
     return;
   }
 

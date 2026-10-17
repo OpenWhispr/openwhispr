@@ -879,6 +879,12 @@
     "groq": {
       "modelRetired": "Groq прекратил поддержку {{from}}. Выполнен переход на {{to}}."
     },
+    "gemini": {
+      "modelRetired": "Google прекратил поддержку {{from}}. Выполнен переход на {{to}}."
+    },
+    "vertex": {
+      "modelRetired": "Vertex AI прекратил поддержку {{from}}. Выполнен переход на {{to}}."
+    },
     "tinfoil": {
       "modelRetired": "Tinfoil прекратил поддержку {{from}}. Выполнен переход на {{to}}.",
       "refreshingModels": "Обновление моделей…"
@@ -2699,11 +2705,12 @@
         "anthropic_claude_sonnet_4_6": "Сбалансированная производительность",
         "anthropic_claude_sonnet_4_5": "Предыдущее поколение Sonnet",
         "anthropic_claude_haiku_4_5": "Быстрая с почти передовым интеллектом",
-        "gemini_gemini_3_5_flash": "Новейшая быстрая высокопроизводительная модель Gemini",
+        "gemini_gemini_3_8_flash": "Самая умная модель Flash для агентов и корпоративных задач",
+        "gemini_gemini_4_argon": "Самая мощная модель Gemini, флагманские рассуждения, контекст 1M",
+        "gemini_gemini_3_6_flash": "Flash предыдущего поколения, сбалансированные скорость и мультимодальность",
         "gemini_gemini_3_5_flash_lite": "Самая быстрая и недорогая модель 3.5",
         "gemini_gemini_3_1_pro_preview": "Флагманская модель нового поколения для сложных рассуждений",
         "gemini_gemini_3_1_flash_lite": "Передовая производительность при низкой стоимости",
-        "gemini_gemini_3_flash_preview": "Сверхбыстрая высокопроизводительная модель нового поколения",
         "gemini_gemini_2_5_flash_lite": "Минимальная задержка и стоимость",
         "gemini_gemma_4_31b_it": "Крупнейшая Gemma 4 от Google, 31B плотная, контекст 256K",
         "gemini_gemma_4_26b_a4b_it": "Gemma 4 MoE от Google, 4B активных параметров, контекст 256K",
@@ -2737,8 +2744,8 @@
         "bedrock_gpt_oss_120b": "Открытая модель OpenAI. Сильные рассуждения по низкой цене.",
         "bedrock_deepseek_v3_2": "Открытая передовая модель. Отличный выбор для задач помощника.",
         "bedrock_qwen3_next_80b": "Разреженная открытая модель. Быстрая и многоязычная.",
-        "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
-        "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
+        "vertex_gemini_3_8_flash": "Самая умная модель Flash через Vertex",
+        "vertex_gemini_4_argon": "Самая мощная модель Gemini через Vertex"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "Мощная гибридная модель",
