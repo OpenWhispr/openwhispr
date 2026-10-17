@@ -35,6 +35,7 @@ import {
   lockTranscriptSpeaker,
   mergeTranscriptSegments,
   normalizeTranscriptSegment,
+  normalizeTranscriptSegments,
   serializeTranscriptSegments,
   type TranscriptSpeakerLockSource,
   type TranscriptSpeakerStatus,
@@ -421,6 +422,11 @@ const meetingRecordingStartCoordinator = createMeetingRecordingStartCoordinator(
 const meetingRecordingStopBarrier = createMeetingRecordingStopBarrier();
 let isPrepared = false;
 let segmentsRefValue: TranscriptSegment[] = [];
+// A resumed note seeds the recording with its earlier transcript, but that
+// session's diarization covers only its own audio, so its result must not be
+// matched against the seeded rows. Keyed by diarization session at stop.
+let sessionSeedLength = 0;
+const seedLengthByDiarizationSession = new Map<string, number>();
 let preparePromise: Promise<void> | null = null;
 let ipcCleanups: Array<() => void> = [];
 let speakerIdentifications: SpeakerIdentification[] = [];
@@ -814,6 +820,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
     }
 
     segmentsRefValue = seed;
+    sessionSeedLength = seed.length;
     speakerIdentifications = [];
     nextPlaceholderSpeakerIndex = maxSpeakerIndex + 1;
     recentSystemSpeaker = null;
@@ -1677,12 +1684,14 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
         await cleanup();
 
         let stoppedDiarizationSessionId: string | null = null;
+        const seedLength = sessionSeedLength;
         try {
           const result = await window.electronAPI?.meetingTranscriptionStop?.(
             sessionId ?? undefined
           );
           if (result?.diarizationSessionId) {
             stoppedDiarizationSessionId = result.diarizationSessionId;
+            seedLengthByDiarizationSession.set(stoppedDiarizationSessionId, seedLength);
             useMeetingRecordingStore.setState({
               diarizationSessionId: stoppedDiarizationSessionId,
             });
@@ -1789,6 +1798,7 @@ if (typeof window !== "undefined") {
       };
 
       if (!data?.segments?.length) {
+        if (data?.sessionId) seedLengthByDiarizationSession.delete(data.sessionId);
         publish([]);
         return;
       }
@@ -1803,6 +1813,12 @@ if (typeof window !== "undefined") {
           "meeting"
         );
       }
+      // Read after the getNote await: a skipped diarization is sent before the
+      // stop call that records this session's seed length returns.
+      const seedLength = data.sessionId
+        ? (seedLengthByDiarizationSession.get(data.sessionId) ?? 0)
+        : 0;
+      if (data.sessionId) seedLengthByDiarizationSession.delete(data.sessionId);
       // No note means no safe base to merge into, and writing to a deleted one
       // would resurrect its tombstone in the sidebar, cloud mirror, and vector
       // index.
@@ -1819,13 +1835,17 @@ if (typeof window !== "undefined") {
         recordingNoteId,
         targetNoteId,
       });
-      const enriched = mergeTranscriptSegments(
-        existing,
-        data.segments.map((segment, index) => ({
-          ...segment,
-          id: segment.id || `diarized-${index}`,
-        }))
-      );
+      const seededCount = Math.min(seedLength, existing.length);
+      const enriched = [
+        ...normalizeTranscriptSegments(existing.slice(0, seededCount)),
+        ...mergeTranscriptSegments(
+          existing.slice(seededCount),
+          data.segments.map((segment, index) => ({
+            ...segment,
+            id: segment.id || `diarized-${index}`,
+          }))
+        ),
+      ];
 
       try {
         // Awaited so the next queued completion's getNote is guaranteed to
