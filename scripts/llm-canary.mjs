@@ -66,7 +66,7 @@ const PROVIDERS = [
     id: "gemini",
     keyEnv: "LLM_CANARY_GEMINI_KEY",
     base: "https://generativelanguage.googleapis.com/v1beta/openai",
-    models: ["gemini-3-flash-preview"],
+    models: ["gemini-3.8-flash"],
   },
   {
     id: "openrouter",
@@ -161,7 +161,7 @@ const NOTE_PROBES = [
   {
     id: "gemini",
     keyEnv: "LLM_CANARY_GEMINI_KEY",
-    model: "gemini-3.5-flash",
+    model: "gemini-3.8-flash",
     provider: geminiProvider,
     config: {},
   },

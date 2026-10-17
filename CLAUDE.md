@@ -442,11 +442,12 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
     - Claude Opus 4.5 (`claude-opus-4-5`) - Earlier Opus model
     - Models from Opus 4.7 onward reject `temperature` (`supportsTemperature: false`); the Anthropic IPC bridge sends no thinking parameters, so no Anthropic entry carries `supportsThinking`
   - **Google Gemini** (Direct API integration):
-    - Gemini 3.5 Flash (`gemini-3.5-flash`) - Latest fast, high-capability Gemini model
+    - Gemini 3.8 Flash (`gemini-3.8-flash`) - Most intelligent Flash model for long-horizon agents and enterprise workflows
+    - Gemini 4 Argon (`gemini-4-argon`) - Most capable Gemini model, flagship reasoning with a unified 1M context
+    - Gemini 3.6 Flash (`gemini-3.6-flash`) - Previous-generation Flash, balanced speed and multimodal capability
     - Gemini 3.5 Flash Lite (`gemini-3.5-flash-lite`) - Fastest, most cost-effective 3.5 model
-    - Gemini 3.1 Pro (`gemini-3.1-pro-preview`) - Most capable Gemini model
+    - Gemini 3.1 Pro (`gemini-3.1-pro-preview`) - Flagship model for complex reasoning
     - Gemini 3.1 Flash Lite (`gemini-3.1-flash-lite`) - Frontier-class performance at low cost (no thinking support, so no `supportsThinking` flag)
-    - Gemini 3 Flash (`gemini-3-flash-preview`) - Ultra-fast, high-capability next-gen model
     - Gemini 2.5 Flash Lite (`gemini-2.5-flash-lite`) - Lowest latency and cost (retired for new API keys; kept for existing ones)
     - Gemma 4 (`gemma-4-31b-it`, `gemma-4-26b-a4b-it`) - Google's open Gemma 4 models served through the Gemini API
   - **Local**: GGUF models via llama.cpp (Qwen, Llama, Mistral, GPT-OSS)

@@ -66,6 +66,24 @@ test("still remaps the models Groq retired", async () => {
   assert.equal(storage.map.get("chatAgentModel"), "openai/gpt-oss-120b");
 });
 
+test("remaps Gemini selections Google superseded and Vertex selections it is retiring", async () => {
+  const { sweepRetiredCloudModelSelections } = await load();
+  const storage = makeStorage({
+    cleanupProvider: "gemini",
+    cleanupModel: "gemini-3.5-flash",
+    chatAgentProvider: "gemini",
+    chatAgentModel: "gemini-3-flash-preview",
+    noteFormattingProvider: "vertex",
+    noteFormattingModel: "gemini-2.5-pro",
+  });
+
+  sweepRetiredCloudModelSelections(storage, [CLEANUP, CHAT, NOTES]);
+
+  assert.equal(storage.map.get("cleanupModel"), "gemini-3.6-flash");
+  assert.equal(storage.map.get("chatAgentModel"), "gemini-3.6-flash");
+  assert.equal(storage.map.get("noteFormattingModel"), "gemini-4-argon");
+});
+
 test("leaves a model the provider still serves alone", async () => {
   const { sweepRetiredCloudModelSelections } = await load();
   const storage = makeStorage({ cleanupProvider: "tinfoil", cleanupModel: "gpt-oss-120b" });
@@ -180,6 +198,14 @@ test("each provider's sentinel is pinned to the exact set of ids it covers", asy
     tinfoil: {
       migratedKey: "_retiredTinfoilModelsMigrated2",
       retired: ["deepseek-v4-flash", "deepseek-v4-pro", "glm-5-2", "kimi-k2-6"],
+    },
+    gemini: {
+      migratedKey: "_retiredGeminiModelsMigrated",
+      retired: ["gemini-3-flash-preview", "gemini-3.5-flash"],
+    },
+    vertex: {
+      migratedKey: "_retiredVertexModelsMigrated",
+      retired: ["gemini-2.5-flash", "gemini-2.5-pro"],
     },
   });
 });

@@ -286,11 +286,12 @@
         "anthropic_claude_sonnet_4_6": "أداء متوازن",
         "anthropic_claude_sonnet_4_5": "جيل Sonnet السابق",
         "anthropic_claude_haiku_4_5": "سريع بذكاء يقترب من مستوى النماذج الرائدة",
-        "gemini_gemini_3_5_flash": "أحدث نموذج Gemini سريع وعالي القدرة",
+        "gemini_gemini_3_8_flash": "أذكى نموذج Flash للوكلاء وسير عمل المؤسسات",
+        "gemini_gemini_4_argon": "أقوى نموذج Gemini، استنتاج رائد، سياق 1M",
+        "gemini_gemini_3_6_flash": "نموذج Flash من الجيل السابق، سرعة وقدرات متعددة الوسائط متوازنة",
         "gemini_gemini_3_5_flash_lite": "نموذج 3.5 الأسرع والأكثر فعالية من حيث التكلفة",
         "gemini_gemini_3_1_pro_preview": "نموذج رائد من الجيل التالي للاستنتاج المعقد",
         "gemini_gemini_3_1_flash_lite": "أداء من الدرجة الأولى بتكلفة منخفضة",
-        "gemini_gemini_3_flash_preview": "نموذج من الجيل التالي فائق السرعة وعالي القدرة",
         "gemini_gemini_2_5_flash_lite": "أقل زمن انتقال وتكلفة",
         "gemini_gemma_4_31b_it": "أكبر نموذج Gemma 4 من Google، نموذج كثيف بحجم 31B، سياق 256K",
         "gemini_gemma_4_26b_a4b_it": "نموذج Gemma 4 MoE من Google، بمعلمات نشطة 4B، سياق 256K",
@@ -325,8 +326,8 @@
         "bedrock_gpt_oss_120b": "نموذج OpenAI مفتوح الوزن. استنتاج قوي بتكلفة منخفضة.",
         "bedrock_deepseek_v3_2": "نموذج رائد مفتوح الوزن. قيمة رائعة لمهام المساعد.",
         "bedrock_qwen3_next_80b": "نموذج متناثر مفتوح الوزن. سريع ومتعدد اللغات.",
-        "vertex_gemini_2_5_flash": "نموذج متعدد الوسائط سريع عبر Vertex",
-        "vertex_gemini_2_5_pro": "استنتاج متقدم عبر Vertex"
+        "vertex_gemini_3_8_flash": "أذكى نموذج Flash عبر Vertex",
+        "vertex_gemini_4_argon": "أقوى نموذج Gemini عبر Vertex"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "نموذج هجين قوي",
