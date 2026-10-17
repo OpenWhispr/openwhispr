@@ -238,3 +238,69 @@ test("stop invalidates an in-flight acquisition and stops its late stream", asyn
   assert.equal(recovered, false);
   assert.equal(replacementTrack.stopped, true);
 });
+
+test("a replacement that ends while its device list is pending is retried", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { ActiveMicRecoveryController } = await import("../../src/helpers/activeMicRecovery.js");
+  let finishEnumeration;
+  let enumerations = 0;
+  const mediaDevices = new FakeMediaDevices([mic("mic-1")]);
+  mediaDevices.enumerateDevices = () => {
+    enumerations += 1;
+    return enumerations === 2
+      ? new Promise((resolve) => (finishEnumeration = resolve))
+      : Promise.resolve([mic("mic-1")]);
+  };
+  const replacement = new FakeTrack();
+  let acquisitions = 0;
+  const controller = new ActiveMicRecoveryController({
+    mediaDevices,
+    acquire: async () => new FakeStream(++acquisitions === 1 ? replacement : new FakeTrack()),
+    onRecovered: async () => {},
+  });
+  t.after(() => controller.stop());
+  await controller.start(new FakeStream(new FakeTrack()));
+  const attempt = controller.recover("ended");
+  await new Promise((resolve) => setImmediate(resolve));
+  replacement.readyState = "ended";
+  replacement.dispatchEvent(new Event("ended"));
+  finishEnumeration([mic("mic-1")]);
+  assert.equal(await attempt, false);
+  assert.equal(controller.status, "unavailable");
+  t.mock.timers.tick(2000);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(acquisitions, 2);
+  assert.equal(controller.status, "active");
+  assert.equal(controller.track.readyState, "live");
+});
+
+for (const restart of [false, true]) {
+  test(`a recovery device snapshot cannot reactivate ${restart ? "a replaced" : "a stopped"} recording`, async (t) => {
+    const { ActiveMicRecoveryController } = await import("../../src/helpers/activeMicRecovery.js");
+    let finishEnumeration;
+    let enumerations = 0;
+    const mediaDevices = new FakeMediaDevices([]);
+    mediaDevices.enumerateDevices = () =>
+      ++enumerations === 2
+        ? new Promise((resolve) => (finishEnumeration = resolve))
+        : Promise.resolve([mic("current")]);
+    const replacement = new FakeTrack();
+    const controller = new ActiveMicRecoveryController({
+      mediaDevices,
+      acquire: async () => new FakeStream(replacement),
+      onRecovered: async () => {},
+    });
+    t.after(() => controller.stop());
+    await controller.start(new FakeStream(new FakeTrack()));
+    const attempt = controller.recover("ended");
+    await new Promise((resolve) => setImmediate(resolve));
+    controller.stop();
+    const currentTrack = new FakeTrack({ deviceId: "current" });
+    if (restart) await controller.start(new FakeStream(currentTrack));
+    finishEnumeration([mic("stale")]);
+    assert.equal(await attempt, false);
+    assert.equal(controller.status, restart ? "active" : "inactive");
+    assert.equal(controller.inputs.deviceIds.has("stale"), false);
+    if (restart) assert.equal(controller.track, currentTrack);
+  });
+}

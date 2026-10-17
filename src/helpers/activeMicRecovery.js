@@ -73,12 +73,12 @@ export class ActiveMicRecoveryController {
   async start(stream, { followDefault = true } = {}) {
     this.stop();
     this.started = true;
-    this.generation += 1;
+    const generation = ++this.generation;
     this.followDefault = followDefault;
     this.mediaDevices?.addEventListener?.("devicechange", this.onDeviceChange);
     this.attachStream(stream);
-    await this.refreshInputs();
-    if (!this.started) return;
+    await this.refreshInputs(generation);
+    if (!this.started || generation !== this.generation) return;
     // The track may have died (or come up muted) before our listeners attached;
     // those events won't replay, so evaluate the track's state directly.
     const alive = this.track && this.track.readyState !== "ended";
@@ -108,9 +108,11 @@ export class ActiveMicRecoveryController {
     this.muteTimer = null;
   }
 
-  async refreshInputs() {
+  async refreshInputs(generation = this.generation) {
     try {
-      this.inputs = describeAudioInputs(await this.mediaDevices.enumerateDevices());
+      const devices = await this.mediaDevices.enumerateDevices();
+      if (!this.started || generation !== this.generation) return null;
+      this.inputs = describeAudioInputs(devices);
       return this.inputs;
     } catch {
       return null;
@@ -125,8 +127,10 @@ export class ActiveMicRecoveryController {
 
   async evaluateDeviceChange() {
     if (!this.started) return;
+    const generation = this.generation;
     const previous = this.inputs;
-    const current = await this.refreshInputs();
+    const current = await this.refreshInputs(generation);
+    if (!this.started || generation !== this.generation) return;
     if (!this.started || !current) {
       if (this.track?.readyState === "ended") this.recover("devicechange-ended");
       return;
@@ -164,8 +168,16 @@ export class ActiveMicRecoveryController {
           return false;
         }
         this.attachStream(replacement);
-        await this.refreshInputs();
+        await this.refreshInputs(generation);
+        if (!this.started || generation !== this.generation) {
+          replacement.getTracks?.().forEach((track) => track.stop());
+          return false;
+        }
+        // An ended event during recovery deduplicates onto this very attempt.
+        // Recheck after the last await so it cannot be lost as a successful swap.
+        if (this.track?.readyState === "ended") throw new Error("Replacement microphone ended");
         this.setStatus("active");
+        if (this.track?.muted) this.onTrackMute();
         return true;
       } catch {
         if (replacement && replacement !== this.stream) {
