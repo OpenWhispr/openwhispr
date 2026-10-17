@@ -697,6 +697,14 @@
           "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_120b"
         },
         {
+          "id": "qwen/qwen3.8-27b",
+          "name": "Qwen3.8 27B",
+          "description": "Powerful reasoning model, 131K context",
+          "disableThinking": true,
+          "supportsThinking": true,
+          "descriptionKey": "models.descriptions.cloud.groq_qwen_qwen3_8_27b"
+        },
+        {
           "id": "openai/gpt-oss-20b",
           "name": "GPT-OSS 20B",
           "description": "Fast open-source model, 1000 T/sec",
