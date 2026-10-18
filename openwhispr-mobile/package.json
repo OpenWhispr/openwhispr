@@ -55,7 +55,7 @@
     "expo-build-properties": "~55.0.18",
     "expo-clipboard": "~55.0.17",
     "expo-constants": "~55.0.17",
-    "expo-crypto": "~55.0.19",
+    "expo-crypto": "~58.0.6",
     "expo-dev-client": "~55.0.40",
     "expo-document-picker": "~55.0.17",
     "expo-file-system": "~55.0.26",
