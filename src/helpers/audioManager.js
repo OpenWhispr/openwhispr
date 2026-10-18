@@ -1713,6 +1713,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     };
 
     recorder.onstop = async () => {
+      if (this._pendingBatchRecorderStop === recorder) this._pendingBatchRecorderStop = null;
       const segment = new Blob(segmentChunks, { type: recorder.mimeType || "audio/webm" });
       segmentChunks.length = 0;
       const rotating = this._rotatingBatchRecorder === recorder;
@@ -1903,9 +1904,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return true;
     }
     if (this.mediaRecorder?.state === "recording") {
+      this._pendingBatchRecorderStop = this.mediaRecorder;
       this.mediaRecorder.stop();
       return true;
     }
+    // stop() sets inactive before dataavailable/onstop deliver the final audio.
+    // Another stop must join that completion rather than finalize an empty tail.
+    if (this.mediaRecorder && this._pendingBatchRecorderStop === this.mediaRecorder) return true;
     if (this.isRecording && !this.isStreaming) {
       // The mic died mid-recovery, so no live recorder exists; finalize what
       // was captured instead of leaving the recording unstoppable.
@@ -1964,10 +1969,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this._cancelRequestedDuringMicRecovery = true;
       return true;
     }
-    if (this.mediaRecorder && this.mediaRecorder.state === "recording") {
+    if (
+      this.mediaRecorder &&
+      (this.mediaRecorder.state === "recording" ||
+        this._pendingBatchRecorderStop === this.mediaRecorder)
+    ) {
       const recorder = this.mediaRecorder;
       const discarded = this.takeDiscardedBatchSnapshot();
       this.mediaRecorder.onstop = () => {
+        if (this._pendingBatchRecorderStop === recorder) this._pendingBatchRecorderStop = null;
         recorder.stream?.getTracks().forEach((track) => track.stop());
         this.persistDiscardedBatchRecording(discarded);
       };
@@ -1977,7 +1987,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // next recording.
       this.resetDiscardedBatchRecordingState();
 
-      recorder.stop();
+      if (recorder.state === "recording") recorder.stop();
 
       if (recorder.stream) {
         recorder.stream.getTracks().forEach((track) => track.stop());
