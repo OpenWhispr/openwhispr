@@ -58,7 +58,7 @@
     "expo-crypto": "~55.0.19",
     "expo-dev-client": "~55.0.40",
     "expo-document-picker": "~55.0.17",
-    "expo-file-system": "~55.0.26",
+    "expo-file-system": "~58.0.9",
     "expo-font": "~55.0.4",
     "expo-glass-effect": "~55.0.11",
     "expo-haptics": "~55.0.18",
