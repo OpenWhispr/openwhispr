@@ -751,10 +751,12 @@ test("a final that lands during disconnect()'s commit window reaches onFinalTran
   assert.equal(commits.length, 1, "disconnect() commits the trailing buffer");
 
   socket.emit("message", JSON.stringify({ type: "input_audio_buffer.speech_started" }));
+  socket.emit("message", JSON.stringify({ type: "input_audio_buffer.committed", item_id: "tail" }));
   socket.emit(
     "message",
     JSON.stringify({
       type: "conversation.item.input_audio_transcription.completed",
+      item_id: "tail",
       transcript: "tail words",
     })
   );
@@ -1068,6 +1070,10 @@ test("gpt-live-transcribe stop outlives the legacy 3 s commit budget; legacy kee
     t.mock.timers.tick(3000);
     await settle();
     assert.equal(liveSettled, false, "a long dictation's final trails stop by more than 3 s");
+    liveSocket.emit(
+      "message",
+      JSON.stringify({ type: "input_audio_buffer.committed", item_id: "item_1" })
+    );
     liveSocket.emit("message", completedEvent("late tail"));
     assert.equal((await liveDisconnect).text, "late tail");
 
@@ -1108,6 +1114,10 @@ test("an empty or failed committed turn ends the stop wait at once instead of st
 
     const disconnecting = streaming.disconnect();
     await new Promise((resolve) => setImmediate(resolve));
+    socket.emit(
+      "message",
+      JSON.stringify({ type: "input_audio_buffer.committed", item_id: "item_1" })
+    );
     socket.emit("message", terminal);
     const result = await Promise.race([
       disconnecting,
@@ -1186,4 +1196,126 @@ test("preconfigured sessions adopt the model the server minted (session.created 
   await connectPreconfigured(bare, makeFakeSocket(WS.CONNECTING));
   assert.equal(bare.model, "gpt-4o-mini-transcribe");
   bare.cleanup();
+});
+
+test("stop keeps the socket open until every committed VAD turn settles", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  const socket = makeFakeSocket(WS.CONNECTING);
+  await connectByok(streaming, socket, { model: "gpt-4o-mini-transcribe" });
+  const emit = (event) => socket.emit("message", JSON.stringify(event));
+  streaming.sendAudio(Buffer.alloc(4800, 1));
+  emit({ type: "input_audio_buffer.committed", item_id: "first" });
+  const stopping = streaming.disconnect();
+  emit({ type: "input_audio_buffer.committed", item_id: "tail", previous_item_id: "first" });
+  emit({
+    type: "conversation.item.input_audio_transcription.completed",
+    item_id: "first",
+    transcript: "First sentence.",
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  try {
+    assert.equal(socket.readyState, WS.OPEN, "the earlier turn cannot close out the tail");
+    emit({
+      type: "conversation.item.input_audio_transcription.completed",
+      item_id: "tail",
+      transcript: "Last sentence.",
+    });
+    assert.equal((await stopping).text, "First sentence. Last sentence.");
+  } finally {
+    streaming.cleanup();
+    await stopping;
+  }
+});
+
+test("an empty stop commit still waits for an already committed VAD transcript", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  const socket = makeFakeSocket(WS.CONNECTING);
+  await connectByok(streaming, socket, { model: "gpt-4o-mini-transcribe" });
+  const emit = (event) => socket.emit("message", JSON.stringify(event));
+  streaming.sendAudio(Buffer.alloc(4800, 1));
+  emit({ type: "input_audio_buffer.committed", item_id: "vad-turn" });
+  const stopping = streaming.disconnect();
+  emit({
+    type: "error",
+    error: { code: "input_audio_buffer_commit_empty", message: "buffer too small" },
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  try {
+    assert.equal(socket.readyState, WS.OPEN, "an empty buffer says nothing about pending ASR");
+    emit({
+      type: "conversation.item.input_audio_transcription.completed",
+      item_id: "vad-turn",
+      transcript: "Already committed speech.",
+    });
+    assert.equal((await stopping).text, "Already committed speech.");
+  } finally {
+    streaming.cleanup();
+    await stopping;
+  }
+});
+
+test("a failed VAD turn settles only itself while another transcript is pending", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  const socket = makeFakeSocket(WS.CONNECTING);
+  await connectByok(streaming, socket, { model: "gpt-4o-mini-transcribe" });
+  const emit = (event) => socket.emit("message", JSON.stringify(event));
+  streaming.sendAudio(Buffer.alloc(4800, 1));
+  emit({ type: "input_audio_buffer.committed", item_id: "noisy" });
+  emit({ type: "input_audio_buffer.committed", item_id: "speech" });
+  const stopping = streaming.disconnect();
+  emit({
+    type: "error",
+    error: { code: "input_audio_buffer_commit_empty", message: "commit_empty" },
+  });
+  emit({
+    type: "conversation.item.input_audio_transcription.failed",
+    item_id: "noisy",
+    error: { code: "audio_unintelligible", message: "audio too noisy" },
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  try {
+    assert.equal(socket.readyState, WS.OPEN, "a failed turn cannot discard another turn");
+    emit({
+      type: "conversation.item.input_audio_transcription.completed",
+      item_id: "speech",
+      transcript: "Keep this speech.",
+    });
+    assert.equal((await stopping).text, "Keep this speech.");
+  } finally {
+    streaming.cleanup();
+    await stopping;
+  }
+});
+
+test("an earlier final cannot finish stop before the trailing commit is acknowledged", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  const socket = makeFakeSocket(WS.CONNECTING);
+  await connectByok(streaming, socket, { model: "gpt-4o-mini-transcribe" });
+  const emit = (event) => socket.emit("message", JSON.stringify(event));
+  streaming.sendAudio(Buffer.alloc(4800, 1));
+  emit({ type: "input_audio_buffer.committed", item_id: "earlier" });
+  const stopping = streaming.disconnect();
+  emit({
+    type: "conversation.item.input_audio_transcription.completed",
+    item_id: "earlier",
+    transcript: "Earlier speech.",
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  try {
+    assert.equal(socket.readyState, WS.OPEN, "stop must still await its own commit response");
+    emit({ type: "input_audio_buffer.committed", item_id: "tail", previous_item_id: "earlier" });
+    emit({
+      type: "conversation.item.input_audio_transcription.completed",
+      item_id: "tail",
+      transcript: "Trailing speech.",
+    });
+    assert.equal((await stopping).text, "Earlier speech. Trailing speech.");
+  } finally {
+    streaming.cleanup();
+    await stopping;
+  }
 });
