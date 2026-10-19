@@ -4120,9 +4120,14 @@
       "notNow": "Pas maintenant",
       "cancel": "Annuler",
       "questions": {
-        "recommended": "Recommandé",
+        "recommended": "{{label}} (Recommandé)",
         "submit": "Envoyer",
-        "placeholder": "Saisissez votre réponse…"
+        "placeholder": "Saisissez votre réponse…",
+        "previous": "Question précédente",
+        "next": "Question suivante",
+        "position": "{{current}}/{{total}}",
+        "continue": "Continuer",
+        "typedAnswer": "Votre réponse : {{answer}}"
       },
       "connection": {
         "title": "Connecter {{name}}",
@@ -4130,20 +4135,25 @@
         "connecting": "Terminez la connexion dans votre navigateur…",
         "failed": "Connexion impossible. Réessayez.",
         "permissionDenied": "L'accès au calendrier a été refusé. Autorisez-le dans les Réglages Système, puis réessayez.",
-        "calendarTitle": "Connecter un calendrier"
+        "calendarTitle": "Connecter un calendrier",
+        "yes": "Oui"
       },
       "access": {
         "screen": "Autoriser l'accès à votre écran ?",
-        "allow": "Autoriser"
+        "allow": "Autoriser",
+        "capturing": "Capture…"
       },
       "apiKey": {
         "title": "Ajoutez votre clé API {{provider}}",
-        "placeholder": "Clé API",
-        "save": "Enregistrer"
+        "placeholder": "Collez ou saisissez ici",
+        "save": "Enregistrer",
+        "label": "Clé API {{provider}}",
+        "saved": "Clé {{provider}} enregistrée"
       },
       "settings": {
         "done": "C'est fait",
-        "technicalDetails": "Détails techniques"
+        "technicalDetails": "Détails techniques",
+        "checking": "Vérification…"
       },
       "status": {
         "answered": "Répondu",

@@ -1803,9 +1803,14 @@
       "notNow": "ليس الآن",
       "cancel": "إلغاء",
       "questions": {
-        "recommended": "موصى به",
+        "recommended": "{{label}} (موصى به)",
         "submit": "إرسال",
-        "placeholder": "اكتب إجابتك…"
+        "placeholder": "اكتب إجابتك…",
+        "previous": "السؤال السابق",
+        "next": "السؤال التالي",
+        "position": "{{current}}/{{total}}",
+        "continue": "متابعة",
+        "typedAnswer": "إجابتك: {{answer}}"
       },
       "connection": {
         "title": "ربط {{name}}",
@@ -1813,20 +1818,25 @@
         "connecting": "أكمل الربط في متصفحك…",
         "failed": "تعذّر الربط. حاول مرة أخرى.",
         "permissionDenied": "تم رفض الوصول إلى التقويم. اسمح به في إعدادات النظام ثم حاول مرة أخرى.",
-        "calendarTitle": "ربط تقويم"
+        "calendarTitle": "ربط تقويم",
+        "yes": "نعم"
       },
       "access": {
         "screen": "هل تسمح بالوصول إلى شاشتك؟",
-        "allow": "سماح"
+        "allow": "سماح",
+        "capturing": "جارٍ الالتقاط…"
       },
       "apiKey": {
         "title": "أضف مفتاح API الخاص بـ {{provider}}",
-        "placeholder": "مفتاح API",
-        "save": "حفظ"
+        "placeholder": "الصق أو اكتب هنا",
+        "save": "حفظ",
+        "label": "مفتاح API الخاص بـ {{provider}}",
+        "saved": "تم حفظ مفتاح {{provider}}"
       },
       "settings": {
         "done": "انتهيت",
-        "technicalDetails": "التفاصيل التقنية"
+        "technicalDetails": "التفاصيل التقنية",
+        "checking": "جارٍ التحقق…"
       },
       "status": {
         "answered": "تمت الإجابة",

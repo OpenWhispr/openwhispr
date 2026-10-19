@@ -3950,9 +3950,14 @@
       "notNow": "今はしない",
       "cancel": "キャンセル",
       "questions": {
-        "recommended": "おすすめ",
+        "recommended": "{{label}}（おすすめ）",
         "submit": "送信",
-        "placeholder": "回答を入力…"
+        "placeholder": "回答を入力…",
+        "previous": "前の質問",
+        "next": "次の質問",
+        "position": "{{current}}/{{total}}",
+        "continue": "続ける",
+        "typedAnswer": "あなたの回答: {{answer}}"
       },
       "connection": {
         "title": "{{name}} を接続",
@@ -3960,20 +3965,25 @@
         "connecting": "ブラウザで接続を完了してください…",
         "failed": "接続できませんでした。もう一度お試しください。",
         "permissionDenied": "カレンダーへのアクセスが拒否されました。システム設定で許可してから、もう一度お試しください。",
-        "calendarTitle": "カレンダーを接続"
+        "calendarTitle": "カレンダーを接続",
+        "yes": "はい"
       },
       "access": {
         "screen": "画面へのアクセスを許可しますか？",
-        "allow": "許可"
+        "allow": "許可",
+        "capturing": "取得中…"
       },
       "apiKey": {
         "title": "{{provider}} の API キーを追加",
-        "placeholder": "API キー",
-        "save": "保存"
+        "placeholder": "ここに貼り付けるか入力",
+        "save": "保存",
+        "label": "{{provider}} の API キー",
+        "saved": "{{provider}} のキーを保存しました"
       },
       "settings": {
         "done": "完了しました",
-        "technicalDetails": "技術的な詳細"
+        "technicalDetails": "技術的な詳細",
+        "checking": "確認中…"
       },
       "status": {
         "answered": "回答済み",

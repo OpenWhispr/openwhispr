@@ -24,6 +24,7 @@ import { extractHelpEvidence } from "./helpEvidence";
 import { toolIcons } from "./toolIcons";
 import { ApprovalCard } from "./ApprovalCard";
 import { InteractionCard } from "./InteractionCard";
+import { ApiKeySavedRow } from "./interactions/ApiKeyCard";
 import { approvalKey, useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
 import { useAgentInteractionStore } from "../../stores/agentInteractionStore";
 
@@ -157,9 +158,13 @@ function useToolCallCard({ messageId, toolCall }: ToolCallProps): ReactElement |
   const approval = useConnectorApprovalStore((state) => state.entries[key]);
   const interaction = useAgentInteractionStore((state) => state.entries[key]);
   if (approval) return <ApprovalCard entry={approval} />;
-  if (interaction && interaction.state !== "settled")
-    return <InteractionCard entry={interaction} />;
-  return null;
+  if (interaction?.state !== "settled") {
+    return interaction ? <InteractionCard entry={interaction} /> : null;
+  }
+  // A saved key stays visible as saved; every other settled card gives way to its step.
+  return interaction.payload.kind === "apiKey" && interaction.result?.status === "saved" ? (
+    <ApiKeySavedRow payload={interaction.payload} />
+  ) : null;
 }
 
 export function ToolCallCard(props: ToolCallProps): ReactElement | null {

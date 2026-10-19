@@ -347,3 +347,127 @@ test("a restored interaction reports to its handler, and a forgotten one never d
   assert.equal(store.answerQuestions("m9::call-17"), false);
   assert.equal(settled.length, 1);
 });
+
+test("questions are answered one at a time, and moving between them keeps every answer", async () => {
+  const store = await loadStore();
+  const key = "m1::call-20";
+  const pending = store.requestInteraction(context("call-20").value, QUESTIONS);
+  const entry = () => store.useAgentInteractionStore.getState().entries[key];
+  assert.equal(entry().step, 0);
+
+  store.updateInteractionDraft(key, { goal: "balanced" });
+  store.commitQuestion(key);
+  assert.equal(entry().step, 1);
+  store.updateInteractionDraft(key, { ...entry().draft, include: ["research"] });
+  store.goToQuestion(key, 0);
+  assert.equal(entry().step, 0);
+  assert.deepEqual(entry().draft, { goal: "balanced", include: ["research"] });
+  store.goToQuestion(key, 9);
+  assert.equal(entry().step, 2, "never past the last question");
+  store.goToQuestion(key, -3);
+  assert.equal(entry().step, 0, "never before the first");
+
+  store.goToQuestion(key, 2);
+  store.updateInteractionDraft(key, { ...entry().draft, notes: "Ship it" });
+  store.commitQuestion(key);
+  assert.deepEqual(await pending, {
+    status: "answered",
+    answers: { goal: "balanced", include: ["research"], notes: "Ship it" },
+  });
+});
+
+test("the last question submits once; with one still unanswered it goes back to it", async () => {
+  const store = await loadStore();
+  const key = "m1::call-21";
+  const results = [];
+  void store.requestInteraction(context("call-21").value, QUESTIONS).then((r) => results.push(r));
+  const entry = () => store.useAgentInteractionStore.getState().entries[key];
+
+  // The first question was skipped with ›; the recommended option is no answer.
+  store.goToQuestion(key, 2);
+  store.updateInteractionDraft(key, { notes: "n" });
+  store.commitQuestion(key);
+  assert.equal(entry().state, "pending");
+  assert.equal(entry().step, 0, "back to the first unanswered question");
+
+  store.updateInteractionDraft(key, { ...entry().draft, goal: "speed" });
+  store.goToQuestion(key, 2);
+  store.commitQuestion(key);
+  store.commitQuestion(key);
+  await Promise.resolve();
+  assert.deepEqual(results, [
+    { status: "answered", answers: { goal: "speed", include: [], notes: "n" } },
+  ]);
+});
+
+test("the composer's text answers the question on screen, a choice question too", async () => {
+  const store = await loadStore();
+  const key = "m1::call-22";
+  const pending = store.requestInteraction(context("call-22").value, QUESTIONS);
+  const entry = () => store.useAgentInteractionStore.getState().entries[key];
+
+  store.answerWithText(key, "  Whatever is cheapest ");
+  assert.equal(entry().step, 1, "a typed answer moves on like a pick");
+  assert.deepEqual(entry().draft, {});
+
+  store.answerWithText(key, "   ");
+  assert.equal(entry().step, 1, "blank text answers nothing");
+
+  // A pick on the same question replaces the typed answer.
+  store.answerWithText(key, "Only the research");
+  store.goToQuestion(key, 1);
+  store.updateInteractionDraft(key, { ...entry().draft, include: ["wireframes"] });
+  store.goToQuestion(key, 2);
+  store.answerWithText(key, "Due Friday");
+  assert.deepEqual(await pending, {
+    status: "answered",
+    answers: { goal: "Whatever is cheapest", include: ["wireframes"], notes: "Due Friday" },
+  });
+});
+
+test("the card's own submit path still needs a real option for a single choice", async () => {
+  const store = await loadStore();
+  const key = "m1::call-23";
+  void store.requestInteraction(context("call-23").value, QUESTIONS);
+  store.updateInteractionDraft(key, { goal: "made-up", include: [], notes: "n" });
+  assert.equal(store.answerQuestions(key), false);
+  store.cancelInteraction(key);
+});
+
+test("Done is offered only after Settings opened, and llms checks the agent's key", async () => {
+  const opened = [];
+  const store = await loadStore({ openSettingsSection: async (section) => opened.push(section) });
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const previous = useSettingsStore.getState();
+  useSettingsStore.setState({
+    useDictationAgent: true,
+    dictationAgentMode: "providers",
+    dictationAgentProvider: "groq",
+    dictationAgentModel: "openai/gpt-oss-120b",
+    groqApiKey: "",
+  });
+  const key = "m1::call-24";
+  const ask = () =>
+    store.requestInteraction(context("call-24").value, {
+      kind: "settings",
+      target: "llms",
+      message: "Add your Groq key",
+    });
+
+  let pending = ask();
+  assert.equal(store.useAgentInteractionStore.getState().entries[key].settingsOpened, undefined);
+  store.openInteractionSettings(key);
+  assert.equal(store.useAgentInteractionStore.getState().entries[key].settingsOpened, true);
+  assert.deepEqual(opened, ["llms"]);
+  await store.confirmSettingsDone(key);
+  assert.deepEqual(await pending, { status: "done", ready: false });
+
+  useSettingsStore.setState({ groqApiKey: "gsk-fake-test-key" });
+  pending = store.requestInteraction(context("call-25").value, {
+    kind: "settings",
+    target: "llms",
+  });
+  await store.confirmSettingsDone("m1::call-25");
+  assert.deepEqual(await pending, { status: "done", ready: true });
+  useSettingsStore.setState(previous, true);
+});

@@ -3950,9 +3950,14 @@
       "notNow": "Non ora",
       "cancel": "Annulla",
       "questions": {
-        "recommended": "Consigliato",
+        "recommended": "{{label}} (Consigliato)",
         "submit": "Invia",
-        "placeholder": "Scrivi la tua risposta…"
+        "placeholder": "Scrivi la tua risposta…",
+        "previous": "Domanda precedente",
+        "next": "Domanda successiva",
+        "position": "{{current}}/{{total}}",
+        "continue": "Continua",
+        "typedAnswer": "La tua risposta: {{answer}}"
       },
       "connection": {
         "title": "Connetti {{name}}",
@@ -3960,20 +3965,25 @@
         "connecting": "Completa la connessione nel browser…",
         "failed": "Impossibile connettersi. Riprova.",
         "permissionDenied": "L'accesso al calendario è stato negato. Consentilo nelle Impostazioni di Sistema e riprova.",
-        "calendarTitle": "Connetti un calendario"
+        "calendarTitle": "Connetti un calendario",
+        "yes": "Sì"
       },
       "access": {
         "screen": "Consentire l'accesso allo schermo?",
-        "allow": "Consenti"
+        "allow": "Consenti",
+        "capturing": "Acquisizione…"
       },
       "apiKey": {
         "title": "Aggiungi la tua chiave API di {{provider}}",
-        "placeholder": "Chiave API",
-        "save": "Salva"
+        "placeholder": "Incolla o scrivi qui",
+        "save": "Salva",
+        "label": "Chiave API di {{provider}}",
+        "saved": "Chiave di {{provider}} salvata"
       },
       "settings": {
         "done": "Fatto",
-        "technicalDetails": "Dettagli tecnici"
+        "technicalDetails": "Dettagli tecnici",
+        "checking": "Verifica in corso…"
       },
       "status": {
         "answered": "Risposto",

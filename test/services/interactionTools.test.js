@@ -11,7 +11,14 @@ const cleanups = [];
 const scope = { after: (fn) => cleanups.push(fn) };
 before(async () => {
   installBrowserGlobals(scope, { window: { electronAPI: {} } });
-  vite = await createRendererServer(scope, { cachePrefix: "openwhispr-interaction-tools-test-" });
+  vite = await createRendererServer(scope, {
+    cachePrefix: "openwhispr-interaction-tools-test-",
+    // A saved key clears the reasoning service's cache; the real one would
+    // keep the test process alive.
+    mockModules: {
+      "/services/ReasoningService": "export default { clearApiKeyCache() {} };",
+    },
+  });
   await (await vite.ssrLoadModule("/i18n.ts")).default.changeLanguage("en");
 });
 after(async () => {
@@ -162,6 +169,7 @@ test("a saved key reaches the model only as saved", async () => {
   const { createInteractionTools } = await load();
   const store = await loadStore();
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const { setOpenaiApiKey } = useSettingsStore.getState();
   useSettingsStore.setState({ setOpenaiApiKey() {} });
   const apiKeyTool = createInteractionTools({ ...NOTHING, missingKeyProviders: ["openai"] }).find(
     (tool) => tool.name === "request_api_key"
@@ -169,8 +177,91 @@ test("a saved key reaches the model only as saved", async () => {
   const running = apiKeyTool.execute({ provider: "openai" }, context("k1"));
   await store.submitApiKey("m1::k1", "sk-test-secret");
   const result = await running;
+  useSettingsStore.setState({ setOpenaiApiKey });
   assert.equal(result.data.status, "saved");
   assert.equal(JSON.stringify(result).includes("sk-test-secret"), false);
+});
+
+test("a key typed on the card reaches only the secure saver: never the model, the chat, its history or a log", async () => {
+  const SECRET = "sk-qa-fake-leak-check-4242";
+  const { createInteractionTools } = await load();
+  const store = await loadStore();
+  const { toHistoryMessages } = await vite.ssrLoadModule("/components/chat/historyMessages.ts");
+  const { default: logger } = await vite.ssrLoadModule("/utils/logger.ts");
+  const saved = [];
+  const logged = [];
+  const api = globalThis.window.electronAPI;
+  Object.assign(api, {
+    saveOpenAIKey: async (key) => saved.push(key),
+    getLogLevel: async () => "trace",
+    log: async (entry) => logged.push(entry),
+  });
+  logger.refreshLogLevel();
+  // The real setter tells other windows the keys changed.
+  globalThis.window.dispatchEvent = () => true;
+  const consoleCalls = [];
+  const originals = {};
+  for (const method of ["log", "info", "warn", "error", "debug"]) {
+    originals[method] = console[method];
+    console[method] = (...args) => consoleCalls.push(args);
+  }
+  try {
+    const records = [];
+    const ctx = { ...context("k-leak"), onInteraction: (record) => records.push(record) };
+    const apiKeyTool = createInteractionTools({ ...NOTHING, missingKeyProviders: ["openai"] }).find(
+      (tool) => tool.name === "request_api_key"
+    );
+    const running = apiKeyTool.execute({ provider: "openai", reason: "Use my account" }, ctx);
+    await store.submitApiKey("m1::k-leak", `  ${SECRET} `);
+    const result = await running;
+    // Past the setter's debounced saves (250 ms for the key, 1 s for .env).
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+
+    assert.deepEqual(saved, [SECRET], "the secure saver got the key");
+    // What the chat saves with the tool call, and what a fork copies verbatim.
+    const toolCall = {
+      id: "k-leak",
+      name: "request_api_key",
+      arguments: JSON.stringify({ provider: "openai", reason: "Use my account" }),
+      status: "completed",
+      result: result.displayText,
+      interaction: records.at(-1),
+    };
+    const message = {
+      id: "a1",
+      role: "assistant",
+      content: "Saved. Running it with your key now.",
+      isStreaming: false,
+      toolCalls: [toolCall],
+    };
+    const history = toHistoryMessages(
+      [{ id: "u1", role: "user", content: "Use my key", isStreaming: false }, message],
+      {
+        includeToolTrace: true,
+      }
+    );
+    for (const [what, value] of Object.entries({
+      result,
+      records,
+      entry: store.useAgentInteractionStore.getState().entries["m1::k-leak"],
+      savedToolCall: { toolCalls: [toolCall] },
+      history,
+      logged,
+      console: consoleCalls,
+    })) {
+      assert.equal(JSON.stringify(value).includes(SECRET), false, `${what} holds no key`);
+    }
+    assert.deepEqual(records.at(-1).result, { status: "saved" });
+  } finally {
+    // A card left open would hold the process for its TTL.
+    store.cancelInteraction("m1::k-leak");
+    Object.assign(console, originals);
+    delete globalThis.window.dispatchEvent;
+    delete api.saveOpenAIKey;
+    delete api.getLogLevel;
+    delete api.log;
+    logger.refreshLogLevel();
+  }
 });
 
 test("allowed access attaches the screenshot for the next step", async () => {

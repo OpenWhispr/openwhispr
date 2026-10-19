@@ -3950,9 +3950,14 @@
       "notNow": "Agora não",
       "cancel": "Cancelar",
       "questions": {
-        "recommended": "Recomendado",
+        "recommended": "{{label}} (Recomendado)",
         "submit": "Enviar",
-        "placeholder": "Digite sua resposta…"
+        "placeholder": "Digite sua resposta…",
+        "previous": "Pergunta anterior",
+        "next": "Próxima pergunta",
+        "position": "{{current}}/{{total}}",
+        "continue": "Continuar",
+        "typedAnswer": "Sua resposta: {{answer}}"
       },
       "connection": {
         "title": "Conectar {{name}}",
@@ -3960,20 +3965,25 @@
         "connecting": "Conclua a conexão no navegador…",
         "failed": "Não foi possível conectar. Tente novamente.",
         "permissionDenied": "O acesso ao calendário foi negado. Permita-o nos Ajustes do Sistema e tente novamente.",
-        "calendarTitle": "Conectar um calendário"
+        "calendarTitle": "Conectar um calendário",
+        "yes": "Sim"
       },
       "access": {
         "screen": "Permitir acesso à sua tela?",
-        "allow": "Permitir"
+        "allow": "Permitir",
+        "capturing": "Capturando…"
       },
       "apiKey": {
         "title": "Adicione sua chave de API do {{provider}}",
-        "placeholder": "Chave de API",
-        "save": "Salvar"
+        "placeholder": "Cole ou digite aqui",
+        "save": "Salvar",
+        "label": "Chave de API do {{provider}}",
+        "saved": "Chave do {{provider}} salva"
       },
       "settings": {
         "done": "Concluído",
-        "technicalDetails": "Detalhes técnicos"
+        "technicalDetails": "Detalhes técnicos",
+        "checking": "Verificando…"
       },
       "status": {
         "answered": "Respondido",

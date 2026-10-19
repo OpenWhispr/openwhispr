@@ -4120,9 +4120,14 @@
       "notNow": "Not now",
       "cancel": "Cancel",
       "questions": {
-        "recommended": "Recommended",
+        "recommended": "{{label}} (Recommended)",
         "submit": "Submit",
-        "placeholder": "Type your answer…"
+        "placeholder": "Type your answer…",
+        "previous": "Previous question",
+        "next": "Next question",
+        "position": "{{current}}/{{total}}",
+        "continue": "Continue",
+        "typedAnswer": "Your answer: {{answer}}"
       },
       "connection": {
         "title": "Connect {{name}}",
@@ -4130,20 +4135,25 @@
         "connecting": "Finish connecting in your browser…",
         "failed": "Couldn't connect. Try again.",
         "permissionDenied": "Calendar access was denied. Allow it in System Settings, then try again.",
-        "calendarTitle": "Connect a calendar"
+        "calendarTitle": "Connect a calendar",
+        "yes": "Yes"
       },
       "access": {
         "screen": "Allow access to your screen?",
-        "allow": "Allow"
+        "allow": "Allow",
+        "capturing": "Capturing…"
       },
       "apiKey": {
         "title": "Add your {{provider}} API key",
-        "placeholder": "API key",
-        "save": "Save"
+        "placeholder": "Paste or write here",
+        "save": "Save",
+        "label": "{{provider}} API key",
+        "saved": "{{provider}} key saved"
       },
       "settings": {
         "done": "I'm done",
-        "technicalDetails": "Technical details"
+        "technicalDetails": "Technical details",
+        "checking": "Checking…"
       },
       "status": {
         "answered": "Answered",

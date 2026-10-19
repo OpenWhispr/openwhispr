@@ -3950,9 +3950,14 @@
       "notNow": "暂不",
       "cancel": "取消",
       "questions": {
-        "recommended": "推荐",
+        "recommended": "{{label}}（推荐）",
         "submit": "提交",
-        "placeholder": "输入你的回答…"
+        "placeholder": "输入你的回答…",
+        "previous": "上一个问题",
+        "next": "下一个问题",
+        "position": "{{current}}/{{total}}",
+        "continue": "继续",
+        "typedAnswer": "你的回答：{{answer}}"
       },
       "connection": {
         "title": "连接 {{name}}",
@@ -3960,20 +3965,25 @@
         "connecting": "请在浏览器中完成连接…",
         "failed": "无法连接，请重试。",
         "permissionDenied": "日历访问被拒绝。请在系统设置中允许后重试。",
-        "calendarTitle": "连接日历"
+        "calendarTitle": "连接日历",
+        "yes": "是"
       },
       "access": {
         "screen": "允许访问你的屏幕吗？",
-        "allow": "允许"
+        "allow": "允许",
+        "capturing": "正在截取…"
       },
       "apiKey": {
         "title": "添加你的 {{provider}} API 密钥",
-        "placeholder": "API 密钥",
-        "save": "保存"
+        "placeholder": "在此粘贴或输入",
+        "save": "保存",
+        "label": "{{provider}} API 密钥",
+        "saved": "{{provider}} 密钥已保存"
       },
       "settings": {
         "done": "我已完成",
-        "technicalDetails": "技术详情"
+        "technicalDetails": "技术详情",
+        "checking": "正在检查…"
       },
       "status": {
         "answered": "已回答",

@@ -49,6 +49,15 @@ export interface InteractionEntry {
   state: "pending" | "working" | "settled";
   /** The answer being put together (option ids, typed text), kept while the card remounts. */
   draft: InteractionAnswers;
+  /**
+   * A choice question answered by typing in the composer instead (D3); it
+   * stands in for a pick until the user picks.
+   */
+  typedAnswers: Record<string, string>;
+  /** The question on screen, so every layout opens the card where the user was. */
+  step: number;
+  /** The settings card's Open Settings was used; it now offers Done. */
+  settingsOpened?: true;
   result?: InteractionResult;
   /** Why the last attempt from the card failed (an error code); the card stays open to retry. */
   error?: string;
@@ -89,7 +98,10 @@ function addEntry(
 ): void {
   waiters.set(key, waiter);
   useAgentInteractionStore.setState((state) => ({
-    entries: { ...state.entries, [key]: { key, ...request, state: "pending", draft: {} } },
+    entries: {
+      ...state.entries,
+      [key]: { key, ...request, state: "pending", draft: {}, typedAnswers: {}, step: 0 },
+    },
   }));
 }
 
@@ -187,44 +199,95 @@ export function updateInteractionDraft(key: string, draft: InteractionAnswers): 
   if (entryFor(key)?.state === "pending") patchEntry(key, { draft });
 }
 
-// Every question answered: one known option, any known options, or some text.
-function completeAnswers(
-  questions: readonly InteractionQuestion[],
-  draft: InteractionAnswers
-): InteractionAnswers | null {
-  const answers: InteractionAnswers = {};
-  for (const question of questions) {
-    const value = draft[question.id];
-    const isOption = (id: unknown) => question.options?.some((option) => option.id === id);
-    if (question.kind === "text") {
-      if (typeof value !== "string" || !value.trim()) return null;
-      answers[question.id] = value.trim();
-    } else if (question.kind === "single") {
-      if (!isOption(value)) return null;
-      answers[question.id] = value;
-    } else {
-      answers[question.id] = Array.isArray(value) ? value.filter(isOption) : [];
-    }
+// One question's answer: a known option, any known options, or some text. A
+// choice question's typed answer counts only while nothing is picked.
+function answerFor(
+  question: InteractionQuestion,
+  value: string | string[] | undefined,
+  typed: string | undefined
+): string | string[] | null {
+  const isOption = (id: unknown) => question.options?.some((option) => option.id === id);
+  if (question.kind === "text") {
+    return typeof value === "string" && value.trim() ? value.trim() : null;
   }
-  return answers;
+  const typedText = typed?.trim() || null;
+  if (question.kind === "single") return isOption(value) ? (value as string) : typedText;
+  return Array.isArray(value) ? value.filter(isOption) : (typedText ?? []);
 }
 
-/** Whether a questions card's draft answers every question, so it can be submitted. */
-export function answersComplete(
-  questions: readonly InteractionQuestion[],
-  draft: InteractionAnswers
-): boolean {
-  return completeAnswers(questions, draft) !== null;
+// Every question answered, or null.
+function completeAnswers(entry: InteractionEntry): InteractionAnswers | null {
+  if (entry.payload.kind !== "questions") return null;
+  const answers: InteractionAnswers = {};
+  for (const question of entry.payload.questions) {
+    const answer = answerFor(question, entry.draft[question.id], entry.typedAnswers[question.id]);
+    if (answer === null) return null;
+    answers[question.id] = answer;
+  }
+  return answers;
 }
 
 /** Submits the card's draft once every question has an answer. */
 export function answerQuestions(key: string): boolean {
   const entry = entryFor(key);
   if (entry?.state !== "pending" || entry.payload.kind !== "questions") return false;
-  const answers = completeAnswers(entry.payload.questions, entry.draft);
+  const answers = completeAnswers(entry);
   if (!answers) return false;
   settle(key, { status: "answered", answers });
   return true;
+}
+
+function pendingQuestions(key: string) {
+  const entry = entryFor(key);
+  return entry?.state === "pending" && entry.payload.kind === "questions"
+    ? { entry, questions: entry.payload.questions }
+    : null;
+}
+
+/** Shows another question of the card; its answers so far stay. */
+export function goToQuestion(key: string, step: number): void {
+  const card = pendingQuestions(key);
+  if (!card) return;
+  patchEntry(key, { step: Math.max(0, Math.min(step, card.questions.length - 1)) });
+}
+
+/**
+ * The current question is answered: on to the next one. After the last, the
+ * card submits, or goes back to the first question still unanswered.
+ */
+export function commitQuestion(key: string): void {
+  const card = pendingQuestions(key);
+  if (!card) return;
+  const { entry, questions } = card;
+  if (entry.step < questions.length - 1) {
+    patchEntry(key, { step: entry.step + 1 });
+    return;
+  }
+  if (answerQuestions(key)) return;
+  const unanswered = questions.findIndex(
+    (question) =>
+      answerFor(question, entry.draft[question.id], entry.typedAnswers[question.id]) === null
+  );
+  patchEntry(key, { step: Math.max(0, unanswered) });
+}
+
+/**
+ * The composer's text answers the question on screen, even a choice question
+ * (D3): a choice question takes it as typed text, which a later pick replaces.
+ */
+export function answerWithText(key: string, text: string): void {
+  const card = pendingQuestions(key);
+  const answer = text.trim();
+  if (!card || !answer) return;
+  const { entry, questions } = card;
+  const question = questions[entry.step];
+  if (question.kind === "text") {
+    patchEntry(key, { draft: { ...entry.draft, [question.id]: answer } });
+  } else {
+    const { [question.id]: _picked, ...draft } = entry.draft;
+    patchEntry(key, { draft, typedAnswers: { ...entry.typedAnswers, [question.id]: answer } });
+  }
+  commitQuestion(key);
 }
 
 export function cancelInteraction(key: string): void {
@@ -234,13 +297,14 @@ export function cancelInteraction(key: string): void {
   settle(key, { status: "cancelled" });
 }
 
-type ConnectOutcome =
+export type ConnectOutcome =
   | { status: "connected" }
   | { status: "cancelled" }
   | { status: "failed"; errorCode: string }
   | { status: "unavailable"; reason: string };
 
-async function connectTarget(
+/** The real connect flow for one service; connected only once main's status says so. */
+export async function connectTarget(
   target: Exclude<ConnectionTarget, "calendar">
 ): Promise<ConnectOutcome> {
   if (target === "google" || target === "microsoft" || target === "apple") {
@@ -355,11 +419,26 @@ export async function submitApiKey(key: string, value: string): Promise<void> {
 export function openInteractionSettings(key: string): void {
   const entry = entryFor(key);
   if (entry?.state !== "pending" || entry.payload.kind !== "settings") return;
+  patchEntry(key, { settingsOpened: true });
   void window.electronAPI?.openSettingsSection?.(entry.payload.target);
 }
 
 // Readiness the app can check for itself; other targets report done without it.
 async function settingsReady(target: string): Promise<boolean | undefined> {
+  if (target === "llms") {
+    // The agent's model needs its provider's key, when that is a key the app holds.
+    const [{ getSettings }, { resolveChatStreamingInference }] = await Promise.all([
+      loadSettingsStore(),
+      import("../helpers/dictationAgentInference"),
+    ]);
+    const settings = getSettings();
+    const { provider } = resolveChatStreamingInference(settings, {
+      inferenceScope: "dictationAgent",
+    }).config;
+    return Object.hasOwn(API_KEY_SETTERS, provider)
+      ? Boolean(settings[`${provider as ApiKeyProvider}ApiKey`])
+      : undefined;
+  }
   if (target === "integrations.connectors") {
     await refreshConnectorStatus();
     return readyConnectorIds().length > 0;
