@@ -21,6 +21,8 @@ interface UseVoiceDraftOptions {
   onError: (message: string) => void;
   /** Nothing was heard; without it, an empty take is reported through onError. */
   onEmpty?: () => void;
+  /** The microphone didn't open; without it, that is reported through onError. */
+  onMicError?: (message: string) => void;
 }
 
 // The microphone picked in Settings, with dictation's constraints; the default
@@ -45,7 +47,12 @@ async function openMicrophone(): Promise<MediaStream> {
  * transcription pipeline (all providers, no LLM pass). The transcript is
  * handed back for the caller to place into the input.
  */
-export function useVoiceDraft({ onTranscript, onError, onEmpty }: UseVoiceDraftOptions) {
+export function useVoiceDraft({
+  onTranscript,
+  onError,
+  onEmpty,
+  onMicError,
+}: UseVoiceDraftOptions) {
   // The settings copy, not useAuth(): a sandboxed window (the agent window)
   // can't resolve a session, and would send Cloud users down the BYOK route.
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
@@ -80,6 +87,9 @@ export function useVoiceDraft({ onTranscript, onError, onEmpty }: UseVoiceDraftO
   const discardRef = useRef(false);
   // A start still opening the microphone: a stop or cancel meanwhile abandons it.
   const openingRef = useRef<{ abandoned: boolean } | null>(null);
+  // The transcription in flight; a cancel abandons it by moving this on.
+  const transcriptionRef = useRef(0);
+  const transcribingRef = useRef(false);
 
   const buildConfig = (): FileTranscriptionConfig => ({
     useLocalWhisper,
@@ -122,6 +132,8 @@ export function useVoiceDraft({ onTranscript, onError, onEmpty }: UseVoiceDraftO
   onErrorRef.current = onError;
   const onEmptyRef = useRef(onEmpty);
   onEmptyRef.current = onEmpty;
+  const onMicErrorRef = useRef(onMicError);
+  onMicErrorRef.current = onMicError;
 
   useEffect(() => {
     if (status !== "recording") return;
@@ -155,6 +167,9 @@ export function useVoiceDraft({ onTranscript, onError, onEmpty }: UseVoiceDraftO
       return;
     }
 
+    const transcription = ++transcriptionRef.current;
+    const current = () => transcription === transcriptionRef.current;
+    transcribingRef.current = true;
     setStatus("transcribing");
     let tempPath: string | null = null;
     try {
@@ -163,6 +178,7 @@ export function useVoiceDraft({ onTranscript, onError, onEmpty }: UseVoiceDraftO
       tempPath = saved.path;
       const result = await transcribeFile(tempPath, buildConfigRef.current(), false);
       const text = result.text?.trim();
+      if (!current()) return;
       if (!result.success) {
         onErrorRef.current(result.error || "");
       } else if (!text) {
@@ -171,16 +187,20 @@ export function useVoiceDraft({ onTranscript, onError, onEmpty }: UseVoiceDraftO
         onTranscriptRef.current(text);
       }
     } catch (error) {
-      onErrorRef.current(error instanceof Error ? error.message : String(error));
+      if (current()) onErrorRef.current(error instanceof Error ? error.message : String(error));
     } finally {
       if (tempPath) void window.electronAPI.deleteTempAudio(tempPath);
-      setStatus("idle");
+      if (current()) {
+        transcribingRef.current = false;
+        setStatus("idle");
+      }
     }
   }, [teardownCapture]);
 
   /** Resolves once the take is recording (true), or failed to start (false). */
   const start = useCallback(async (): Promise<boolean> => {
-    if (recorderRef.current || openingRef.current) return false;
+    // One take at a time: the last one may still be transcribing.
+    if (recorderRef.current || openingRef.current || transcribingRef.current) return false;
     const opening = { abandoned: false };
     openingRef.current = opening;
     try {
@@ -218,7 +238,9 @@ export function useVoiceDraft({ onTranscript, onError, onEmpty }: UseVoiceDraftO
       return true;
     } catch (error) {
       teardownCapture();
-      onErrorRef.current(error instanceof Error ? error.message : String(error));
+      (onMicErrorRef.current ?? onErrorRef.current)(
+        error instanceof Error ? error.message : String(error)
+      );
       return false;
     } finally {
       openingRef.current = null;
@@ -230,9 +252,14 @@ export function useVoiceDraft({ onTranscript, onError, onEmpty }: UseVoiceDraftO
     recorderRef.current?.stop();
   }, []);
 
+  // Discards a take that is recording, and abandons one that is transcribing.
   const cancel = useCallback(() => {
     discardRef.current = true;
     stop();
+    if (!transcribingRef.current) return;
+    transcriptionRef.current += 1;
+    transcribingRef.current = false;
+    setStatus("idle");
   }, [stop]);
 
   // Discard silently if the surface unmounts mid-take.

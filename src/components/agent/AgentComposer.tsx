@@ -14,6 +14,8 @@ interface AgentComposerProps {
   /** In the modal the composer carries Close and Mic; above the pill they are the pill's. */
   onClose?: () => void;
   onMic?: () => void;
+  /** A take is still transcribing, or a reply is running. */
+  micDisabled: boolean;
   /** Voice input is unavailable with this transcription provider. */
   micUnavailableHint?: string;
   /** Takes the keyboard once the window has it. */
@@ -36,6 +38,7 @@ export function AgentComposer({
   onStop,
   onClose,
   onMic,
+  micDisabled,
   micUnavailableHint,
   focused,
   header,
@@ -104,7 +107,7 @@ export function AgentComposer({
             <button
               type="button"
               onClick={onMic}
-              disabled={busy || Boolean(micUnavailableHint)}
+              disabled={micDisabled || Boolean(micUnavailableHint)}
               aria-label={t("agentWindow.actions.speak")}
               title={micUnavailableHint ?? t("agentWindow.actions.speak")}
               className={ICON_BUTTON}

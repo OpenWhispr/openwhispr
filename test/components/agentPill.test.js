@@ -38,3 +38,10 @@ test("Mic stays on when voice input is available", async (t) => {
 
   assert.doesNotMatch(buttonFor(markup, "agentWindow.actions.speak"), /disabled=""/);
 });
+
+test("Mic is off while a take is transcribing or a reply runs", async (t) => {
+  const markup = await renderPill(t, { micDisabled: true });
+
+  assert.match(buttonFor(markup, "agentWindow.actions.speak"), /disabled=""/);
+  assert.match(buttonFor(markup, "agentWindow.actions.speak"), /title="agentWindow.actions.speak"/);
+});

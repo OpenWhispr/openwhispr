@@ -4010,6 +4010,7 @@
     "notices": {
       "nothingHeard": "沒有聽清楚",
       "transcriptionFailed": "無法轉寫",
+      "micUnavailable": "無法開啟麥克風",
       "dictationActive": "聽寫正在使用麥克風"
     },
     "composer": {

@@ -4054,6 +4054,7 @@
     "notices": {
       "nothingHeard": "Ничего не расслышал",
       "transcriptionFailed": "Не удалось расшифровать",
+      "micUnavailable": "Не удалось открыть микрофон",
       "dictationActive": "Микрофон занят диктовкой"
     },
     "composer": {

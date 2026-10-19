@@ -4010,6 +4010,7 @@
     "notices": {
       "nothingHeard": "Não entendi",
       "transcriptionFailed": "Não foi possível transcrever",
+      "micUnavailable": "Não foi possível abrir o microfone",
       "dictationActive": "O ditado está usando o microfone"
     },
     "composer": {

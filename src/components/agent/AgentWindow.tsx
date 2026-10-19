@@ -99,7 +99,7 @@ export default function AgentWindow() {
   // Pending captures from the press (another app's selection, a screenshot).
   const pressCaptureRef = useRef<Promise<unknown> | null>(null);
   const pressRef = useRef(0);
-  // A take whose transcript must not be sent (closed, dismissed).
+  // A take whose transcript must not be sent (closed, dismissed, another chat opened).
   const dropTranscriptRef = useRef(false);
 
   const refuseIfRestricted = useCallback(() => {
@@ -147,6 +147,7 @@ export default function AgentWindow() {
     onTranscript: (text, intent) => void handleTranscript(text, intent),
     onEmpty: () => dispatch({ type: "notice", notice: "agentWindow.notices.nothingHeard" }),
     onError: () => dispatch({ type: "notice", notice: "agentWindow.notices.transcriptionFailed" }),
+    onMicError: () => dispatch({ type: "notice", notice: "agentWindow.notices.micUnavailable" }),
   });
   const listening = voice.status === "recording" || voice.opening;
 
@@ -185,6 +186,8 @@ export default function AgentWindow() {
 
   const startListening = useCallback(async () => {
     if (refuseIfRestricted()) return;
+    // One take at a time, and none over a reply.
+    if (busy || voice.status !== "idle" || voice.opening) return;
     if (voice.streamingOnlyProvider) {
       // A realtime-only provider can't transcribe a take: type instead.
       dispatch({ type: "useKeyboard" });
@@ -195,21 +198,25 @@ export default function AgentWindow() {
     if ((await voice.start()) === "refused") {
       dispatch({ type: "notice", notice: "agentWindow.notices.dictationActive" });
     }
-  }, [dispatch, refuseIfRestricted, voice]);
+  }, [busy, dispatch, refuseIfRestricted, voice]);
 
   const { cancel: cancelTake } = voice;
+  // The take belongs to the chat it was spoken in: opening another drops it.
+  const dropTake = useCallback(() => {
+    dropTranscriptRef.current = true;
+    cancelTake();
+  }, [cancelTake]);
   const { hide: hideSurface } = surface;
   const close = useCallback(async () => {
-    dropTranscriptRef.current = true;
+    dropTake();
     pressRef.current += 1;
     openedByTakeRef.current = false;
-    cancelTake();
     cancelTurn();
     stopReading();
     setRefusal(null);
     await hideSurface();
     dispatch({ type: "hide" });
-  }, [cancelTake, cancelTurn, dispatch, hideSurface, stopReading]);
+  }, [cancelTurn, dispatch, dropTake, hideSurface, stopReading]);
 
   const handleHotkey = useCallback(
     ({ external }: { external: boolean }) => {
@@ -220,8 +227,17 @@ export default function AgentWindow() {
         voice.stop("submit");
         return;
       }
-      if (voice.status === "transcribing" || busy) return;
       const current = stateRef.current;
+      // A reply is running: show it, but don't listen over it.
+      if (busy) {
+        if (!current.visible) dispatch({ type: "show", layout: "modal", input: "voice" });
+        return;
+      }
+      // The last take is about to be sent; main showed the window for nothing.
+      if (voice.status === "transcribing") {
+        if (!current.visible) void window.electronAPI?.agentWindowHide?.();
+        return;
+      }
       if (!current.visible) {
         openedByTakeRef.current = true;
         dispatch({ type: "show", layout: "pill", input: "voice" });
@@ -274,8 +290,7 @@ export default function AgentWindow() {
       });
     },
     dismiss: () => {
-      dropTranscriptRef.current = true;
-      cancelTake();
+      dropTake();
       cancelTurn();
       stopReading();
       setRefusal(null);
@@ -329,21 +344,23 @@ export default function AgentWindow() {
       const message = messagesRef.current.find((m) => m.id === messageId);
       if (!message) return;
       stopReading();
+      dropTake();
       if ((await fork(message, selectedText)) === null) {
         dispatch({ type: "notice", notice: "chat.forkFailed" });
         return;
       }
       setOpenedChat((count) => count + 1);
     },
-    [dispatch, fork, stopReading]
+    [dispatch, dropTake, fork, stopReading]
   );
 
   const regenerate = useCallback(
     (message: Message) => {
+      if (refuseIfRestricted()) return;
       stopReading();
       regenerateReply(message);
     },
-    [regenerateReply, stopReading]
+    [refuseIfRestricted, regenerateReply, stopReading]
   );
 
   const followUp = useCallback(
@@ -359,19 +376,21 @@ export default function AgentWindow() {
   const switchChat = useCallback(
     (id: number) => {
       stopReading();
+      dropTake();
       void openChat(id).then((opened) => {
         // False: another switch overtook this one and owns the list.
         if (opened !== false) setOpenedChat((count) => count + 1);
       });
     },
-    [openChat, stopReading]
+    [dropTake, openChat, stopReading]
   );
 
   const newChat = useCallback(() => {
     stopReading();
+    dropTake();
     setOpenedChat((count) => count + 1);
     startNewChat();
-  }, [startNewChat, stopReading]);
+  }, [dropTake, startNewChat, stopReading]);
 
   const readAloudState = useMemo(
     () => ({
@@ -408,13 +427,16 @@ export default function AgentWindow() {
   const latest = messages.at(-1);
   const answerStarted =
     latest?.role === "assistant" && Boolean(latest.content || latest.toolCalls?.length);
+  const transcribing = voice.status === "transcribing";
   const pillStatus: AgentPillStatus = listening
     ? "listening"
-    : voice.status === "transcribing" || (busy && !answerStarted)
-      ? "thinking"
-      : busy
-        ? "streaming"
-        : "idle";
+    : transcribing
+      ? "transcribing"
+      : busy && !answerStarted
+        ? "thinking"
+        : busy
+          ? "streaming"
+          : "idle";
   const notice = state.notice ? t(state.notice) : null;
   const micHint = voice.streamingOnlyProvider
     ? t("agentMode.input.voiceDraftStreamingOnly")
@@ -434,6 +456,7 @@ export default function AgentWindow() {
       readLevel={voice.readLevel}
       notice={placement === "typing" ? null : notice}
       micUnavailableHint={micHint}
+      micDisabled={busy || transcribing}
       onAction={handlePillAction}
     />
   );
@@ -452,6 +475,7 @@ export default function AgentWindow() {
       onStop={cancelTurn}
       onClose={inModal ? () => void close() : undefined}
       onMic={inModal ? () => void startListening() : undefined}
+      micDisabled={busy || transcribing}
       micUnavailableHint={micHint}
       focused={surface.shown && surfaceFocus}
       header={!inModal && pendingContext ? <div className="pb-2">{pendingContext}</div> : null}

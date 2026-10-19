@@ -119,7 +119,7 @@ export function agentWindowReducer(
 }
 
 export type AgentPillPlacement = "compact" | "typing" | "modal";
-export type AgentPillStatus = "idle" | "listening" | "thinking" | "streaming";
+export type AgentPillStatus = "idle" | "listening" | "transcribing" | "thinking" | "streaming";
 export type AgentPillButton = "expand" | "mic" | "keyboard" | "stop" | "close";
 
 export interface AgentPillControls {
@@ -133,6 +133,8 @@ export interface AgentPillControls {
  * The pill's controls for where it shows and what is happening. Expand only
  * exists outside the modal; the typing layout swaps Keyboard for Mic. A notice
  * (it heard nothing, say) leaves the compact pill room for Mic and Close only.
+ * "Thinking…" covers transcribing and a reply with nothing to show yet; in the
+ * modal that reply can already be stopped.
  */
 export function resolveAgentPillControls(
   placement: AgentPillPlacement,
@@ -149,8 +151,14 @@ export function resolveAgentPillControls(
   switch (status) {
     case "listening":
       return { waveform: true, thinking: false, buttons: [...expand, "keyboard", "close"] };
-    case "thinking":
+    case "transcribing":
       return { waveform: false, thinking: true, buttons: ["keyboard", "close"] };
+    case "thinking":
+      return {
+        waveform: false,
+        thinking: true,
+        buttons: placement === "modal" ? ["keyboard", "stop", "close"] : ["keyboard", "close"],
+      };
     case "streaming":
       return {
         waveform: false,

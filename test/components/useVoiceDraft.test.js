@@ -11,20 +11,29 @@ const {
 
 // The voice draft on the real hook: a take recorded with a fake MediaRecorder
 // and transcribed through a stubbed file transcription, so what reaches the
-// microphone and the transcription config can be read back.
-async function mountVoiceDraft(t, { settings, getUserMedia }) {
+// microphone and the transcription config can be read back. `gate` holds the
+// transcription open until it resolves; `agent` mounts the agent window's
+// useAgentVoice over it instead.
+async function mountVoiceDraft(t, { settings, getUserMedia, gate = null, agent = false }) {
   let root = null;
   // After hooks run in registration order: unmount while the globals exist.
   t.after(() => root && React.act(async () => root.unmount()));
   const transcribed = [];
   globalThis.__voiceDraftTranscribed = transcribed;
-  t.after(() => delete globalThis.__voiceDraftTranscribed);
+  globalThis.__voiceDraftGate = gate;
+  t.after(() => {
+    delete globalThis.__voiceDraftTranscribed;
+    delete globalThis.__voiceDraftGate;
+  });
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
         saveTempAudio: async () => ({ path: "/tmp/take.webm" }),
         deleteTempAudio: async () => undefined,
         getSystemDefaultMicrophone: async () => null,
+        agentWindowSetVoiceState: async () => true,
+        registerCancelHotkey: async () => ({ success: true }),
+        unregisterCancelHotkey: async () => ({ success: true }),
       },
     },
   });
@@ -58,23 +67,35 @@ async function mountVoiceDraft(t, { settings, getUserMedia }) {
       "/services/fileTranscription": `
         export const transcribeFile = async (_path, config) => {
           globalThis.__voiceDraftTranscribed.push(config);
-          return { success: true, text: "hello there" };
+          const text = (await globalThis.__voiceDraftGate) ?? "hello there";
+          return { success: true, text };
         };
         export const getTranscriptionApiKey = () => "";
         export const resolveFileTranscriptionRoute = () => ({ transport: "http" });`,
+      "/utils/dictationCues":
+        "export const playStartCue = async () => {}; export const playStopCue = async () => {};",
     },
   });
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
   useSettingsStore.setState(settings);
   const { useVoiceDraft } = await vite.ssrLoadModule("/components/chat/useVoiceDraft.ts");
+  const { useAgentVoice } = await vite.ssrLoadModule("/components/agent/useAgentVoice.ts");
 
   const transcripts = [];
   let voice = null;
   function Harness() {
-    voice = useVoiceDraft({
-      onTranscript: (text) => transcripts.push(text),
-      onError: (message) => transcripts.push(`error:${message}`),
-    });
+    voice = agent
+      ? useAgentVoice({
+          onTranscript: (text, intent) => transcripts.push(`${intent}:${text}`),
+          onEmpty: () => transcripts.push("empty"),
+          onError: (message) => transcripts.push(`error:${message}`),
+          onMicError: (message) => transcripts.push(`mic:${message}`),
+        })
+      : useVoiceDraft({
+          onTranscript: (text) => transcripts.push(text),
+          onError: (message) => transcripts.push(`error:${message}`),
+          onMicError: (message) => transcripts.push(`mic:${message}`),
+        });
     return null;
   }
   const { createRoot } = require("react-dom/client");
@@ -149,4 +170,102 @@ test("a chosen microphone that won't open falls back to the default one", async 
   assert.equal(harness.opened.length, 2);
   assert.equal(harness.opened[1].audio.deviceId, undefined);
   assert.deepEqual(harness.transcripts, ["hello there"]);
+});
+
+const deferred = () => {
+  let resolve;
+  const promise = new Promise((done) => (resolve = done));
+  return { promise, resolve };
+};
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+test("a take can't start while the last one is still transcribing", async (t) => {
+  const transcription = deferred();
+  const harness = await mountVoiceDraft(t, {
+    settings: SIGNED_IN_CLOUD,
+    getUserMedia: (_constraints, stream) => stream,
+    gate: transcription.promise,
+  });
+
+  assert.equal(await recordTake(harness), true);
+  assert.equal(harness.voice().status, "transcribing");
+  let second;
+  await React.act(async () => {
+    second = await harness.voice().start();
+  });
+  assert.equal(second, false);
+  assert.equal(harness.voice().status, "transcribing");
+
+  await React.act(async () => {
+    transcription.resolve("first take");
+    await settle();
+  });
+  assert.deepEqual(harness.transcripts, ["first take"]);
+  assert.equal(harness.voice().status, "idle");
+});
+
+test("cancel abandons a transcription: its text never arrives and the next take can start", async (t) => {
+  const transcription = deferred();
+  const harness = await mountVoiceDraft(t, {
+    settings: SIGNED_IN_CLOUD,
+    getUserMedia: (_constraints, stream) => stream,
+    gate: transcription.promise,
+  });
+
+  await recordTake(harness);
+  await React.act(async () => harness.voice().cancel());
+  assert.equal(harness.voice().status, "idle");
+
+  let next;
+  await React.act(async () => {
+    next = await harness.voice().start();
+  });
+  assert.equal(next, true);
+
+  await React.act(async () => {
+    transcription.resolve("abandoned take");
+    await settle();
+  });
+  assert.deepEqual(harness.transcripts, []);
+  assert.equal(harness.voice().status, "recording", "the new take keeps recording");
+});
+
+test("a microphone that won't open is reported apart from a failed transcription", async (t) => {
+  const harness = await mountVoiceDraft(t, {
+    settings: SIGNED_IN_CLOUD,
+    getUserMedia: () => {
+      throw new Error("NotAllowedError");
+    },
+  });
+
+  let started;
+  await React.act(async () => {
+    started = await harness.voice().start();
+  });
+  assert.equal(started, false);
+  assert.deepEqual(harness.transcripts, ["mic:NotAllowedError"]);
+});
+
+test("the agent's spoken requests expand snippets, like dictation", async (t) => {
+  const harness = await mountVoiceDraft(t, {
+    settings: {
+      ...SIGNED_IN_CLOUD,
+      snippets: [{ trigger: "my sig", replacement: "Best, Saket" }],
+    },
+    getUserMedia: (_constraints, stream) => stream,
+    gate: Promise.resolve("sign it with my sig"),
+    agent: true,
+  });
+
+  let started;
+  await React.act(async () => {
+    started = await harness.voice().start();
+  });
+  assert.equal(started, "started");
+  await React.act(async () => {
+    harness.voice().stop("submit");
+    await settle();
+  });
+  assert.deepEqual(harness.transcripts, ["submit:sign it with Best, Saket"]);
 });

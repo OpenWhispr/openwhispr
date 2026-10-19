@@ -4180,6 +4180,7 @@
     "notices": {
       "nothingHeard": "Je n'ai rien entendu",
       "transcriptionFailed": "Transcription impossible",
+      "micUnavailable": "Micro inaccessible",
       "dictationActive": "La dictée utilise le micro"
     },
     "composer": {

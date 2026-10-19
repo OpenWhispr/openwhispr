@@ -4062,6 +4062,7 @@
     "notices": {
       "nothingHeard": "No te he entendido",
       "transcriptionFailed": "No se pudo transcribir",
+      "micUnavailable": "No se pudo abrir el micrófono",
       "dictationActive": "El dictado está usando el micrófono"
     },
     "composer": {

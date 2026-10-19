@@ -22,6 +22,8 @@ interface AgentPillProps {
   notice?: string | null;
   /** Voice input is unavailable with this transcription provider: Mic is off. */
   micUnavailableHint?: string;
+  /** A take is still transcribing, or a reply is running. */
+  micDisabled?: boolean;
   onAction: (button: AgentPillButton) => void;
   className?: string;
 }
@@ -33,6 +35,7 @@ export function AgentPill({
   readLevel,
   notice,
   micUnavailableHint,
+  micDisabled = false,
   onAction,
   className,
 }: AgentPillProps) {
@@ -65,7 +68,7 @@ export function AgentPill({
             key={button}
             type="button"
             onClick={() => onAction(button)}
-            disabled={Boolean(unavailable)}
+            disabled={button === "mic" && (micDisabled || Boolean(unavailable))}
             aria-label={t(label)}
             title={unavailable ?? t(label)}
             className="flex size-7 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-foreground/10 hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40 disabled:opacity-40 disabled:hover:bg-transparent"

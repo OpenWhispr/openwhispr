@@ -1863,6 +1863,7 @@
     "notices": {
       "nothingHeard": "لم أسمع شيئًا",
       "transcriptionFailed": "تعذّر التفريغ النصي",
+      "micUnavailable": "تعذّر فتح الميكروفون",
       "dictationActive": "الإملاء يستخدم الميكروفون"
     },
     "composer": {

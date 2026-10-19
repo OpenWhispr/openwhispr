@@ -124,10 +124,19 @@ test("the pill's controls follow the reference states", async () => {
   });
   assert.deepEqual(controls("compact", "thinking").buttons, ["keyboard", "close"]);
   assert.equal(controls("compact", "thinking").thinking, true);
+  assert.deepEqual(controls("compact", "transcribing").buttons, ["keyboard", "close"]);
+  assert.deepEqual(controls("modal", "transcribing").buttons, ["keyboard", "close"]);
   assert.deepEqual(controls("typing", "idle").buttons, ["expand", "mic", "close"]);
   assert.deepEqual(controls("modal", "listening").buttons, ["keyboard", "close"]);
   assert.deepEqual(controls("modal", "streaming").buttons, ["keyboard", "stop", "close"]);
   assert.deepEqual(controls("modal", "idle").buttons, ["mic", "keyboard", "close"]);
   assert.deepEqual(controls("compact", "idle", true).buttons, ["mic", "close"]);
   assert.deepEqual(controls("modal", "idle", true).buttons, ["mic", "keyboard", "close"]);
+});
+
+test("in the modal a reply can be stopped before it has anything to show", async () => {
+  const { resolveAgentPillControls } = await load();
+  const thinking = resolveAgentPillControls("modal", "thinking");
+  assert.equal(thinking.thinking, true);
+  assert.deepEqual(thinking.buttons, ["keyboard", "stop", "close"]);
 });
