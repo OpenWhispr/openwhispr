@@ -35,8 +35,6 @@ export type InteractionPayload =
   | { kind: "apiKey"; provider: string; providerName: string; reason?: string }
   | { kind: "settings"; target: SettingsTarget; message?: string; technicalDetails?: string };
 
-export type InteractionKind = InteractionPayload["kind"];
-
 /** Per question: an option id, several option ids, or the typed text. */
 export type InteractionAnswers = Record<string, string | string[]>;
 

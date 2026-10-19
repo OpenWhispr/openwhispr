@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import ReasoningService, { type AgentStreamChunk } from "../../services/ReasoningService";
 import { getCloudModel, isEnterpriseProvider } from "../../models/ModelRegistry";
 import { providerSupportsImages } from "../../services/ai/inferenceProviders";
-import { getSettings, useSettingsStore } from "../../stores/settingsStore";
+import { getSettings, selectCalendarConnected, useSettingsStore } from "../../stores/settingsStore";
 import { resolveChatStreamingInference } from "../../helpers/dictationAgentInference.js";
 import { describeProviderError } from "../../utils/describeProviderError";
 import { productHelpMetadata } from "../../services/help/productHelp";
@@ -52,8 +52,6 @@ import {
   type InteractionToolOptions,
 } from "../../services/tools/interactionTools";
 import { getAgentToolActivityRemainingMs } from "../../helpers/agentToolPresentation";
-import { approvalKey } from "../../stores/connectorApprovalStore";
-import { useAgentInteractionStore } from "../../stores/agentInteractionStore";
 import { getCachedPlatform } from "../../utils/platform";
 import type { ConnectionTarget } from "../../types/agentInteractions";
 import type {
@@ -63,7 +61,12 @@ import type {
   ChatImageAttachment,
   ToolCallInfo,
 } from "./types";
-import { toHistoryMessages, withoutEchoedToolTrace, type HistoryMessage } from "./historyMessages";
+import {
+  connectsFirst,
+  toHistoryMessages,
+  withoutEchoedToolTrace,
+  type HistoryMessage,
+} from "./historyMessages";
 import type { ContainerScope } from "../../types/chat";
 import type { NoteAttendeesRequest } from "../../types/connectors";
 import {
@@ -208,8 +211,12 @@ interface UseChatStreamingOptions {
    */
   noteMeeting?: NoteAttendeesRequest;
   onStreamComplete?: TurnHandler;
-  /** A turn paused on the user's answer; saving it now keeps the question if the app closes. */
-  onTurnWaiting?: TurnHandler;
+  /**
+   * Saves a turn that is still running: when it starts or stops waiting on the
+   * user (a question survives the app closing, an answered one isn't offered
+   * again), and when a send lands after it stopped.
+   */
+  onTurnCheckpoint?: TurnHandler;
   /** Fires exactly once when displayable assistant content or tool activity becomes available. */
   onResponseContent?: () => void;
 }
@@ -294,7 +301,7 @@ export function useChatStreaming({
   productHelpEnabled = true,
   noteMeeting,
   onStreamComplete,
-  onTurnWaiting,
+  onTurnCheckpoint,
   onResponseContent,
 }: UseChatStreamingOptions): ChatStreaming {
   const { t } = useTranslation();
@@ -409,8 +416,8 @@ export function useChatStreaming({
       const toolScope = createToolExecutionScope({
         onApprovalRequested: options?.onApprovalRequested,
         onHoldDelivery: options?.onHoldDelivery,
-        onInteractionRequested: ({ toolCallId, payload }) =>
-          turnHooks.annotate?.(toolCallId, { interaction: { payload, state: "pending" } }),
+        onInteraction: ({ toolCallId, record }) =>
+          turnHooks.annotate?.(toolCallId, { interaction: record }),
         onImageAttached: (image) => stepImages.push(image),
         onActionCompleted: ({ toolCallId, actionKey }) =>
           turnHooks.annotate?.(toolCallId, { actionKey }),
@@ -494,10 +501,7 @@ export function useChatStreaming({
 
         const scope = searchScopeRef.current;
         const policy = usePolicyStore.getState();
-        // The calendar tool reads the shared provider-deduped events table,
-        // so any connected provider enables it.
-        const calendarConnected =
-          settings.gcalConnected || settings.mcalConnected || settings.appleCalendarConnected;
+        const calendarConnected = selectCalendarConnected(settings);
         const webSearchEnabled = isWebSearchAllowed(policy);
         const connectorPlan = hasConnectorPlan(getUsageState(), readIsSubscribed());
         let registry: ToolRegistry | null = null;
@@ -751,12 +755,20 @@ export function useChatStreaming({
           contentFlushTimer = setTimeout(flushContentNow, STREAM_FLUSH_INTERVAL_MS);
         };
 
-        // Saved as it waits, so the question survives the app closing.
-        const saveWaiting = () => {
-          if (!hasPendingInteraction()) return;
-          turn = { ...turn, status: "waiting" };
+        const checkpoint = () =>
+          onTurnCheckpoint?.(assistantId, fullContent, currentToolCalls(), turnDetails());
+        const updateWaiting = () => {
+          const waiting = hasPendingInteraction();
+          const saves = waiting || turn.status === "waiting";
+          if (saves) turn = { ...turn, status: waiting ? "waiting" : "running" };
           flushContentNow();
-          onTurnWaiting?.(assistantId, fullContent, currentToolCalls(), turnDetails());
+          if (saves) checkpoint();
+        };
+        // Whether the reply is saved, so a late send can be added to it.
+        let replySaved = false;
+        const saveReply = () => {
+          replySaved = true;
+          onStreamComplete?.(assistantId, fullContent, currentToolCalls(), turnDetails());
         };
         turnHooks.annotate = (toolCallId, patch) => {
           annotations.set(toolCallId, { ...annotations.get(toolCallId), ...patch });
@@ -764,18 +776,22 @@ export function useChatStreaming({
           toolCalls = toolCalls.map((call) =>
             call.id === toolCallId ? { ...call, ...patch } : call
           );
-          if (patch.interaction) saveWaiting();
+          if (patch.interaction) updateWaiting();
           else flushContentNow();
+          // A card already committing when the turn stopped still sends.
+          if (patch.actionKey && replySaved) checkpoint();
         };
 
         // A stop keeps what the reply has so far. Questions it was waiting on
         // are dismissed by Esc or Stop; an unmount leaves them to answer later.
+        // A tool still waiting for its service to connect never ran.
         const settleStoppedTurn = (explicit: boolean) => {
           const waiting = hasPendingInteraction();
           toolCalls = toolCalls.map((call) =>
             call.interaction?.state === "pending"
               ? {
                   ...call,
+                  ...(connectsFirst(call) ? { metadata: { status: "not_sent" } } : {}),
                   interaction: explicit
                     ? { ...call.interaction, state: "settled", result: { status: "cancelled" } }
                     : { ...call.interaction, state: "interrupted" },
@@ -926,11 +942,12 @@ export function useChatStreaming({
                   },
                 ];
               }
-              flushContentNow();
-              if (chunk.calls.some((call) => annotations.get(call.id)?.interaction)) saveWaiting();
+              if (chunk.calls.some((call) => annotations.get(call.id)?.interaction)) {
+                updateWaiting();
+              } else {
+                flushContentNow();
+              }
             } else if (chunk.type === "tool_result") {
-              const interaction =
-                useAgentInteractionStore.getState().entries[approvalKey(assistantId, chunk.callId)];
               toolCalls = toolCalls.map((tc) =>
                 tc.id === chunk.callId
                   ? {
@@ -944,21 +961,9 @@ export function useChatStreaming({
                               productHelpMetadata(tc.name, chunk.metadata) ?? chunk.metadata,
                           }
                         : {}),
-                      ...(interaction?.result
-                        ? {
-                            interaction: {
-                              payload: interaction.payload,
-                              state: "settled" as const,
-                              result: interaction.result,
-                            },
-                          }
-                        : {}),
                     }
                   : tc
               );
-              if (turn.status === "waiting" && !hasPendingInteraction()) {
-                turn = { ...turn, status: "running" };
-              }
               flushContentNow();
               setAgentState("streaming");
               completeToolActivity();
@@ -986,9 +991,7 @@ export function useChatStreaming({
             const keepsReply = allowInteractions
               ? fullContent.trim().length > 0 || toolCalls.length > 0
               : !explicitlyCancelled && fullContent.trim().length > 0;
-            if (keepsReply) {
-              onStreamComplete?.(assistantId, fullContent, currentToolCalls(), turnDetails());
-            }
+            if (keepsReply) saveReply();
             return;
           }
 
@@ -1012,7 +1015,7 @@ export function useChatStreaming({
             prev.map((m) => (m.id === assistantId ? { ...m, isStreaming: false } : m))
           );
 
-          onStreamComplete?.(assistantId, fullContent, currentToolCalls(), turnDetails());
+          saveReply();
           if (hasDeliverableContent) {
             await options?.onComplete?.({
               assistantId,
@@ -1069,9 +1072,7 @@ export function useChatStreaming({
             );
             // A failed reply is shown, not saved, unless its tools already
             // acted: the agent chat must remember what they did.
-            if (allowInteractions && toolCalls.length > 0) {
-              onStreamComplete?.(assistantId, fullContent, currentToolCalls(), turnDetails());
-            }
+            if (allowInteractions && toolCalls.length > 0) saveReply();
           }
         }
 
@@ -1088,7 +1089,7 @@ export function useChatStreaming({
       t,
       setMessages,
       onStreamComplete,
-      onTurnWaiting,
+      onTurnCheckpoint,
       onResponseContent,
       clearToolActivity,
       beginToolActivity,

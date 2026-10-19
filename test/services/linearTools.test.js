@@ -83,7 +83,8 @@ function linearContext(messageId, toolCallId) {
       used.set(key, count + 1);
       return true;
     },
-    isActionCompleted: () => false,
+    claimAction: () => true,
+    releaseAction() {},
     recordCompletedAction() {},
     releaseTurnSlot(key) {
       context.releases.push(key);

@@ -134,6 +134,11 @@ function interactionOutcome(
   }
 }
 
+/** A connector tool that asked to connect its service first: it runs once that's done. */
+export function connectsFirst(call: ToolCallInfo): boolean {
+  return call.interaction?.payload.kind === "connection" && call.name !== "request_connection";
+}
+
 /**
  * A short record of the tools a turn called, so the model sees its own
  * precedent. Never results: query items and web results are other people's
@@ -147,17 +152,16 @@ export function toolTrace(toolCalls: ReadonlyArray<ToolCallInfo> | undefined): s
     .filter((call) => call.name !== "grounded_product_help")
     .map((call) => {
       // A tool that asked to connect its service first is traced by what it then did.
-      const asked =
-        call.interaction &&
-        (call.interaction.payload.kind !== "connection" || call.name === "request_connection");
-      if (asked) {
-        const { arg, outcome } = interactionTrace(call.interaction!);
+      if (call.interaction && !connectsFirst(call)) {
+        const { arg, outcome } = interactionTrace(call.interaction);
         return `${call.name} ("${arg}") (${outcome})`;
       }
       const arg = traceArgument(call);
       // A call still executing was cut off before its result arrived, but its side
-      // effect may have happened (a send commits in main after Esc).
-      const outcome = call.status === "executing" ? "outcome not recorded" : traceOutcome(call);
+      // effect may have happened (a send commits in main after Esc), unless the
+      // stop recorded that it never ran.
+      const outcome =
+        traceOutcome(call) ?? (call.status === "executing" ? "outcome not recorded" : null);
       return `${call.name}${arg ? ` ("${arg}")` : ""}${outcome ? ` (${outcome})` : ""}`;
     });
   return entries.length ? `${TRACE_OPENING} ${entries.join(", ")}]` : "";

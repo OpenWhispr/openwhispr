@@ -38,11 +38,13 @@ export async function runApprovalAction(
   // in the panel: a voice turn must never paste it at the caret.
   context.onHoldDelivery();
   // A resumed or regenerated turn can ask for a send this conversation
-  // already made; it is refused before any card appears.
+  // already made, and a step can make the same call twice; either is refused
+  // before any card appears.
   const actionKey = connectorActionKey(connectorId, action, args);
-  if (context.isActionCompleted(actionKey)) return alreadySentResult();
+  if (!context.claimAction(actionKey)) return alreadySentResult();
   // Claimed before the first await, so calls running in parallel can't overshoot.
   if (!context.claimTurnSlot(CARD_SLOT, MAX_APPROVAL_CARDS_PER_TURN)) {
+    context.releaseAction(actionKey);
     return notSentResult(
       "card_limit",
       CARD_LIMIT_GUIDANCE,
@@ -57,10 +59,12 @@ export async function runApprovalAction(
   // No card appeared, so the slot goes back for another try this turn.
   if (!prepared) {
     context.releaseTurnSlot(CARD_SLOT);
+    context.releaseAction(actionKey);
     return unavailableResult("connectors_unavailable");
   }
   if (prepared.status !== "ready") {
     context.releaseTurnSlot(CARD_SLOT);
+    context.releaseAction(actionKey);
     return prepareFailureResult(prepared, connectorId);
   }
 
@@ -71,6 +75,8 @@ export async function runApprovalAction(
   });
   if (outcome.state === "sent" || outcome.state === "unknown") {
     context.recordCompletedAction(actionKey);
+  } else {
+    context.releaseAction(actionKey);
   }
   // An edited card may have gone to other recipients than the model chose.
   const destination =

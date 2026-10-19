@@ -1,10 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import {
+  forgetInteraction,
   restoreInteraction,
   takeGrantedImage,
-  useAgentInteractionStore,
 } from "../../stores/agentInteractionStore";
 import { approvalKey } from "../../stores/connectorApprovalStore";
 import { CONNECTION_TARGET_NAMES } from "../../config/agentCapabilities";
@@ -49,42 +49,81 @@ function followUpText(
 
 /**
  * Interactions whose turn ended before the user answered (the app closed, or
- * the chat went away) stay answerable. An answer is recorded on the saved
- * reply and continues the task in a new turn, which sees the question and
- * the answer; nothing the turn already did runs again.
+ * the chat went away) stay answerable while their reply is the last message.
+ * An answer is recorded on the saved reply and continues the task in a new
+ * turn, which sees the question and the answer; nothing the turn already did
+ * runs again. Once the conversation moves on or closes they are taken away
+ * unanswered, and the model sees them as never answered.
  */
 export function useInterruptedInteractions(
   persistence: ChatPersistence,
   send: (text: string, options?: SendToAIOptions) => Promise<boolean>
 ): void {
   const { t } = useTranslation();
-  const { messages, setMessages, saveAssistantMessage } = persistence;
+  const { messages, setMessages, saveAssistantMessage, conversationId } = persistence;
+  // An answer can come minutes after the restore (a connect), so it reads
+  // the conversation as it is then.
+  const latestRef = useRef({ messages, send, t });
+  latestRef.current = { messages, send, t };
+  const restoredRef = useRef(new Set<string>());
 
   useEffect(() => {
-    const { entries } = useAgentInteractionStore.getState();
-    for (const message of messages) {
-      for (const call of message.toolCalls ?? []) {
-        const record = call.interaction;
-        const key = approvalKey(message.id, call.id);
-        if (record?.state !== "interrupted" || entries[key]) continue;
-        restoreInteraction(
-          { messageId: message.id, toolCallId: call.id, payload: record.payload },
-          (result) => {
-            const toolCalls = message.toolCalls?.map((other) =>
-              other.id === call.id
-                ? { ...other, interaction: { ...record, state: "settled" as const, result } }
-                : other
-            );
-            setMessages((prev) => prev.map((m) => (m.id === message.id ? { ...m, toolCalls } : m)));
-            void saveAssistantMessage(message.id, message.content, toolCalls, {
-              turn: message.turn,
-            });
-            const text = followUpText(record.payload, result, t);
-            const image = takeGrantedImage(key);
-            if (text) void send(text, image ? { attachment: image } : undefined);
-          }
+    const continueTask = (
+      messageId: string,
+      toolCallId: string,
+      payload: InteractionPayload,
+      result: InteractionResult
+    ) => {
+      const latest = latestRef.current;
+      const message = latest.messages.find((m) => m.id === messageId);
+      if (!message) return;
+      const toolCalls = message.toolCalls?.map((call) =>
+        call.id === toolCallId
+          ? { ...call, interaction: { payload, state: "settled" as const, result } }
+          : call
+      );
+      setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, toolCalls } : m)));
+      void saveAssistantMessage(messageId, message.content, toolCalls, {
+        turn: message.turn,
+        ...(conversationId != null ? { conversationId } : {}),
+      });
+      const text = followUpText(payload, result, latest.t);
+      const image = takeGrantedImage(approvalKey(messageId, toolCallId));
+      if (text) void latest.send(text, image ? { attachment: image } : undefined);
+    };
+
+    const restored = restoredRef.current;
+    const last = messages.at(-1);
+    const current = new Set<string>();
+    if (last) {
+      for (const call of last.toolCalls ?? []) {
+        if (call.interaction?.state !== "interrupted") continue;
+        const key = approvalKey(last.id, call.id);
+        current.add(key);
+        if (restored.has(key)) continue;
+        const request = {
+          messageId: last.id,
+          toolCallId: call.id,
+          payload: call.interaction.payload,
+        };
+        const opened = restoreInteraction(request, (result) =>
+          continueTask(request.messageId, request.toolCallId, request.payload, result)
         );
+        if (opened) restored.add(key);
       }
     }
-  }, [messages, setMessages, saveAssistantMessage, send, t]);
+    for (const key of restored) {
+      if (current.has(key)) continue;
+      forgetInteraction(key);
+      restored.delete(key);
+    }
+  }, [messages, setMessages, saveAssistantMessage, conversationId]);
+
+  useEffect(() => {
+    const restored = restoredRef.current;
+    return () => {
+      for (const key of restored) forgetInteraction(key);
+      restored.clear();
+    };
+  }, []);
 }

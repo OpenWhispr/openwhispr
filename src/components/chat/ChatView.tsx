@@ -16,6 +16,7 @@ import { getCachedPlatform } from "../../utils/platform";
 import { observeChatComposerInset } from "./composerLayout";
 import { useToast } from "../ui/useToast";
 import { GitFork } from "../icons";
+import { normalizeAgentSelectionContext } from "../../utils/agentSelectionContext";
 
 const CommandSearch = lazy(() => import("../CommandSearch"));
 
@@ -44,7 +45,7 @@ export default function ChatView() {
     allowConnectors: true,
     allowInteractions: true,
     onStreamComplete: persistence.saveAssistantMessage,
-    onTurnWaiting: persistence.saveAssistantMessage,
+    onTurnCheckpoint: persistence.saveAssistantMessage,
   });
   // useChatStreaming returns a fresh object every render; cancelStream is
   // stable, so the callbacks below depend on it rather than on `streaming`.
@@ -105,12 +106,15 @@ export default function ChatView() {
   });
   // A fork made from selected text sends it with its first request.
   const { forkOrigin } = persistence;
+  const forkSelection = normalizeAgentSelectionContext({
+    text: forkOrigin?.context ?? undefined,
+  })?.text;
   const forkContext =
-    forkOrigin?.context &&
+    forkSelection &&
     !persistence.messages.some(
-      (message) => message.role === "user" && message.selectedContext === forkOrigin.context
+      (message) => message.role === "user" && message.selectedContext === forkSelection
     )
-      ? forkOrigin.context
+      ? forkSelection
       : null;
   const handleTextSubmit = useCallback(
     (text: string, options?: SendToAIOptions) =>

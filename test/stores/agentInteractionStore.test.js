@@ -36,11 +36,12 @@ function context(toolCallId, { messageId = "m1", controller = new AbortControlle
       signal: controller.signal,
       onApprovalRequested: () => (calls.requested += 1),
       onHoldDelivery: () => (calls.held += 1),
-      onInteractionRequested: (payload) => calls.interactions.push(payload),
+      onInteraction: (record) => calls.interactions.push(record),
       attachImage() {},
       claimTurnSlot: () => true,
       releaseTurnSlot() {},
-      isActionCompleted: () => false,
+      claimAction: () => true,
+      releaseAction() {},
       recordCompletedAction() {},
     },
   };
@@ -80,7 +81,11 @@ test("a question waits, keeps its draft, and resolves only once every answer is 
   const entry = store.useAgentInteractionStore.getState().entries[key];
   assert.equal(entry.state, "pending");
   assert.deepEqual(entry.draft, {}, "a recommended option is never preselected");
-  assert.deepEqual(ctx.calls, { requested: 1, held: 1, interactions: [QUESTIONS] });
+  assert.deepEqual(ctx.calls, {
+    requested: 1,
+    held: 1,
+    interactions: [{ payload: QUESTIONS, state: "pending" }],
+  });
 
   store.updateInteractionDraft(key, { goal: "speed" });
   assert.equal(store.answerQuestions(key), false, "unanswered questions keep it open");
@@ -91,10 +96,16 @@ test("a question waits, keeps its draft, and resolves only once every answer is 
   });
   assert.equal(store.answerQuestions(key), true);
 
-  assert.deepEqual(await pending, {
+  const answered = {
     status: "answered",
     answers: { goal: "speed", include: ["wireframes"], notes: "x" },
-  });
+  };
+  assert.deepEqual(await pending, answered);
+  assert.deepEqual(
+    ctx.calls.interactions[1],
+    { payload: QUESTIONS, state: "settled", result: answered },
+    "the chat hears it settle, so it can save the turn as no longer waiting"
+  );
   assert.equal(store.useAgentInteractionStore.getState().entries[key].state, "settled");
   assert.equal(store.answerQuestions(key), false, "an answered question can't be answered twice");
 });
@@ -319,24 +330,25 @@ test("settings open the destination and re-check it when the user is done", asyn
   assert.deepEqual(await pending, { status: "done", ready: false });
 });
 
-test("a restored interaction reports to its handler, and the pending selector finds it", async () => {
+test("a restored interaction reports to its handler, and a forgotten one never does", async () => {
   const store = await loadStore();
   const settled = [];
-  store.restoreInteraction(
-    { messageId: "m9", toolCallId: "call-16", payload: QUESTIONS },
-    (result) => settled.push(result)
-  );
-  const state = store.useAgentInteractionStore.getState();
-  assert.equal(store.selectPendingInteraction(state, ["m9"]).key, "m9::call-16");
-  assert.equal(store.selectPendingInteraction(state, ["other"]), undefined);
+  const restore = (toolCallId) =>
+    store.restoreInteraction({ messageId: "m9", toolCallId, payload: QUESTIONS }, (result) =>
+      settled.push(result)
+    );
+  assert.equal(restore("call-16"), true);
+  assert.equal(restore("call-16"), false, "already open");
 
   store.updateInteractionDraft("m9::call-16", { goal: "balanced", include: [], notes: "ok" });
   store.answerQuestions("m9::call-16");
   assert.deepEqual(settled, [
     { status: "answered", answers: { goal: "balanced", include: [], notes: "ok" } },
   ]);
-  assert.equal(
-    store.selectPendingInteraction(store.useAgentInteractionStore.getState(), ["m9"]),
-    undefined
-  );
+
+  restore("call-17");
+  store.forgetInteraction("m9::call-17");
+  assert.equal(store.useAgentInteractionStore.getState().entries["m9::call-17"], undefined);
+  assert.equal(store.answerQuestions("m9::call-17"), false);
+  assert.equal(settled.length, 1);
 });

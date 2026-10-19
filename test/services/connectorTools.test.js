@@ -154,7 +154,8 @@ function countingContext(signal = new AbortController().signal) {
       if (options?.preserveClipboard) context.preservesClipboard = true;
     },
     claimTurnSlot: () => true,
-    isActionCompleted: () => false,
+    claimAction: () => true,
+    releaseAction() {},
     recordCompletedAction() {},
     releaseTurnSlot() {},
   };
@@ -171,7 +172,8 @@ function toolContext(messageId, toolCallId, held = { count: 0 }) {
       held.count += 1;
     },
     claimTurnSlot: () => true,
-    isActionCompleted: () => false,
+    claimAction: () => true,
+    releaseAction() {},
     recordCompletedAction() {},
     releaseTurnSlot() {},
   };
@@ -319,9 +321,10 @@ test("email_draft opens at most three drafts per turn", async (t) => {
   const { createToolExecutionScope } = await loadScope();
   const scope = createToolExecutionScope();
   const tool = createEmailDraftTool("gmail");
+  // Four different drafts: the same one twice would be one draft.
   const draft = (id) =>
     tool.execute(
-      { to: ["a@example.com"], subject: "s", body: "b" },
+      { to: ["a@example.com"], subject: "s", body: `b${id}` },
       scope.createContext({ messageId: "m1", toolCallId: id })
     );
 
@@ -340,6 +343,39 @@ test("email_draft opens at most three drafts per turn", async (t) => {
     (await tool.execute({ to: ["a@example.com"], subject: "s", body: "b" }, next)).data.status,
     "draft_opened"
   );
+});
+
+test("the same draft asked for twice in one step opens once", async (t) => {
+  let opened = 0;
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorRunDirect: async () => {
+          opened += 1;
+          return { state: "not_sent", reason: "cancelled_by_user" };
+        },
+      },
+    },
+  });
+  const { createEmailDraftTool } = await loadEmail();
+  const { createToolExecutionScope } = await loadScope();
+  const scope = createToolExecutionScope();
+  const tool = createEmailDraftTool("gmail");
+  const draft = (id) =>
+    tool.execute(
+      { to: ["a@example.com"], subject: "s", body: "b" },
+      scope.createContext({ messageId: "m1", toolCallId: id })
+    );
+
+  const results = await Promise.all(["1", "2"].map(draft));
+  assert.equal(opened, 1);
+  assert.deepEqual(
+    results.map((result) => result.data.status),
+    ["not_sent", "already_sent"]
+  );
+  // That one never opened, so asking again opens it.
+  assert.equal((await draft("3")).data.status, "not_sent");
+  assert.equal(opened, 2);
 });
 
 test("only one draft per turn may put its text on the clipboard", async (t) => {
@@ -529,7 +565,8 @@ test("email_draft reports an uncertain direct result as unknown, and still holds
       held += 1;
     },
     claimTurnSlot: () => true,
-    isActionCompleted: () => false,
+    claimAction: () => true,
+    releaseAction() {},
     recordCompletedAction() {},
   };
 
@@ -939,7 +976,8 @@ function gmailContext(messageId, toolCallId, { slotsLeft = 3 } = {}) {
       slotsLeft -= 1;
       return true;
     },
-    isActionCompleted: () => false,
+    claimAction: () => true,
+    releaseAction() {},
     recordCompletedAction() {},
     releaseTurnSlot(key) {
       context.releases.push(key);

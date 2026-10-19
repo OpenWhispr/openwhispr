@@ -130,7 +130,7 @@ export function AssistantPanel({
     allowConnectors: true,
     allowInteractions: true,
     onStreamComplete: persistence.saveAssistantMessage,
-    onTurnWaiting: persistence.saveAssistantMessage,
+    onTurnCheckpoint: persistence.saveAssistantMessage,
     onResponseContent,
   });
 

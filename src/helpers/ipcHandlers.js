@@ -2688,7 +2688,17 @@ class IPCHandlers {
     );
 
     ipcMain.handle("db-update-agent-message", async (event, id, content, metadata) => {
-      return this.databaseManager.updateAgentMessage(id, content, metadata);
+      const result = this.databaseManager.updateAgentMessage(id, content, metadata);
+      // A reply completed in place replaces the partial text it was indexed with.
+      if (result && this.vectorIndex?.isReady?.()) {
+        const conv = this.databaseManager.getAgentConversation(result.conversation_id);
+        if (conv) {
+          this.vectorIndex
+            .upsertConversationChunks(conv.id, conv.title, conv.messages)
+            .catch(() => {});
+        }
+      }
+      return result;
     });
 
     ipcMain.handle(

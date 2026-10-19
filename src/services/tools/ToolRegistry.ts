@@ -1,6 +1,6 @@
 import { jsonSchema } from "ai";
 import type { Tool, ToolExecutionOptions } from "ai";
-import type { InteractionPayload } from "../../types/agentInteractions";
+import type { InteractionRecord } from "../../types/agentInteractions";
 import type { ChatImageAttachment } from "../../components/chat/types";
 
 export interface ToolResult {
@@ -40,13 +40,18 @@ export interface ToolExecutionContext {
   claimTurnSlot: (key: string, limit: number) => boolean;
   /** Gives back a claimed use of `key` whose action never happened. */
   releaseTurnSlot: (key: string) => void;
-  /** Tells the chat the turn is now waiting on the user's answer to this call. */
-  onInteractionRequested: (payload: InteractionPayload) => void;
+  /** Tells the chat this call now waits on the user (pending), or no longer does (settled). */
+  onInteraction: (record: InteractionRecord) => void;
   /** Shows the model an image (a screenshot the user allowed) from its next step on. */
   attachImage: (image: ChatImageAttachment) => void;
-  /** Whether this conversation already sent (or may have sent) the action with this key. */
-  isActionCompleted: (actionKey: string) => boolean;
-  /** Records a send that happened or may have, so the conversation never repeats it. */
+  /**
+   * Claims the send with this key for this call: false when the conversation
+   * already made it (or may have), or the same call is running now.
+   */
+  claimAction: (actionKey: string) => boolean;
+  /** Gives back a claim whose send didn't happen, so the same call may try again. */
+  releaseAction: (actionKey: string) => void;
+  /** Records a claimed send that happened or may have, so the conversation never repeats it. */
   recordCompletedAction: (actionKey: string) => void;
 }
 

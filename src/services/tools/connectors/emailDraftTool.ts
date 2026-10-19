@@ -222,14 +222,6 @@ function createComposeDraftTool(target: ComposeTarget): ToolDefinition {
         subject: typeof args.subject === "string" ? args.subject : "",
         body: typeof args.body === "string" ? args.body : "",
       };
-      // The same draft already opened earlier in this conversation is not opened again.
-      const actionKey = connectorActionKey("email", "draft", {
-        to,
-        cc,
-        subject: draft.subject,
-        body: draft.body,
-      });
-      if (context?.isActionCompleted(actionKey)) return alreadySentResult();
       // Main builds the same request; checking it here claims the clipboard
       // before any await, so a second overflowing draft in the turn can't
       // replace the first one's text before the user pastes it. Main refuses
@@ -245,7 +237,17 @@ function createComposeDraftTool(target: ComposeTarget): ToolDefinition {
       // keeps bare addresses so the model can reuse them in a retry.
       const destination = to.map(recipientLabel).join(", ");
 
+      // The same draft already opened earlier in this conversation, or asked
+      // for twice in one step, is not opened again.
+      const actionKey = connectorActionKey("email", "draft", {
+        to,
+        cc,
+        subject: draft.subject,
+        body: draft.body,
+      });
+      if (context && !context.claimAction(actionKey)) return alreadySentResult();
       if (context && !context.claimTurnSlot("email_draft", MAX_DRAFTS_PER_TURN)) {
+        context.releaseAction(actionKey);
         return notSentResult(
           "draft_limit",
           `Only ${MAX_DRAFTS_PER_TURN} drafts can open per request. Tell the user which drafts opened and ask them to request the rest again.`,
@@ -254,6 +256,7 @@ function createComposeDraftTool(target: ComposeTarget): ToolDefinition {
       }
       if (clipboardReserved && context && !context.claimTurnSlot("clipboard", 1)) {
         context.releaseTurnSlot("email_draft");
+        context.releaseAction(actionKey);
         return notSentResult(
           "clipboard_in_use",
           "This draft is too long for a link, and its text would replace another draft's text on the clipboard. Tell the user to paste the earlier draft's text first, then ask again for this one.",
@@ -265,6 +268,7 @@ function createComposeDraftTool(target: ComposeTarget): ToolDefinition {
       const releaseSlots = (): void => {
         context?.releaseTurnSlot("email_draft");
         if (clipboardReserved) context?.releaseTurnSlot("clipboard");
+        context?.releaseAction(actionKey);
       };
 
       // Main may still be resolving policy when the user presses Esc; the

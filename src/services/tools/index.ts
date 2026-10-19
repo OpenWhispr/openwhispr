@@ -20,7 +20,7 @@ import {
   requireConnection,
   type InteractionToolOptions,
 } from "./interactionTools";
-import { getSettings } from "../../stores/settingsStore";
+import { getSettings, selectCalendarConnected } from "../../stores/settingsStore";
 import type { ContainerScope } from "../../types/chat";
 
 export { ToolRegistry } from "./ToolRegistry";
@@ -43,11 +43,6 @@ interface ToolRegistrySettings {
   keepNotesUnchanged?: boolean;
   /** Present only on surfaces that can show interactions (questions, connect cards). */
   interactions?: InteractionToolOptions;
-}
-
-function isCalendarConnected(): boolean {
-  const settings = getSettings();
-  return settings.gcalConnected || settings.mcalConnected || settings.appleCalendarConnected;
 }
 
 export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry {
@@ -79,7 +74,9 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
     registry.register(calendarAvailabilityTool);
   } else if (settings.interactions?.connectionTargets.includes("calendar")) {
     for (const tool of [calendarTool, calendarAvailabilityTool]) {
-      registry.register(requireConnection(tool, "calendar", isCalendarConnected));
+      registry.register(
+        requireConnection(tool, "calendar", () => selectCalendarConnected(getSettings()))
+      );
     }
   }
 

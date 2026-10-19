@@ -28,11 +28,12 @@ function context(toolCallId, images = []) {
     signal: new AbortController().signal,
     onApprovalRequested() {},
     onHoldDelivery() {},
-    onInteractionRequested() {},
+    onInteraction() {},
     attachImage: (image) => images.push(image),
     claimTurnSlot: () => true,
     releaseTurnSlot() {},
-    isActionCompleted: () => false,
+    claimAction: () => true,
+    releaseAction() {},
     recordCompletedAction() {},
   };
 }
@@ -231,10 +232,17 @@ test("a tool whose service isn't connected asks to connect it, then does what it
 test("the prompt tells the model to ask only when it has to", async () => {
   const { getAgentSystemPrompt } = await vite.ssrLoadModule("/config/prompts.ts");
   const { createInteractionTools } = await load();
-  const withTools = getAgentSystemPrompt(createInteractionTools(NOTHING));
+  const asking = createInteractionTools(NOTHING);
+  const withTools = getAgentSystemPrompt([{ name: "search_notes" }, ...asking]);
   assert.match(withTools, /Ask the user something only when you really can't decide it yourself/);
   assert.match(withTools, /simple request gets a direct answer with no questions/);
-  assert.match(withTools, /Before asking, look it up/);
+  // Only the lookup tools this turn has are named.
+  assert.match(
+    withTools,
+    /Before asking, look it up: names, addresses, channels, plans and facts with search_notes\./
+  );
+  assert.doesNotMatch(withTools, /find_contact|github_search_issues/);
+  assert.doesNotMatch(getAgentSystemPrompt(asking), /Before asking, look it up/);
   assert.equal(getAgentSystemPrompt([{ name: "search_notes" }]).includes("ask_user"), false);
 });
 

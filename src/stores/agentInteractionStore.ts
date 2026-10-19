@@ -126,7 +126,10 @@ export function requestInteraction(
       key,
       { messageId, toolCallId, payload },
       {
-        settle: resolve,
+        settle: (result) => {
+          context.onInteraction({ payload, state: "settled", result });
+          resolve(result);
+        },
         detach: () => {
           clearTimeout(timer);
           signal.removeEventListener("abort", onAbort);
@@ -135,22 +138,36 @@ export function requestInteraction(
     );
     context.onHoldDelivery();
     context.onApprovalRequested();
-    context.onInteractionRequested(payload);
+    context.onInteraction({ payload, state: "pending" });
   });
 }
 
 /**
  * Reopens an interaction whose turn ended before it was answered. Nothing is
  * waiting on it any more, so its outcome goes to `onSettled`, which continues
- * the task in a new turn.
+ * the task in a new turn. False when it is already open.
  */
 export function restoreInteraction(
   request: { messageId: string; toolCallId: string; payload: InteractionPayload },
   onSettled: (result: InteractionResult) => void
-): void {
+): boolean {
   const key = approvalKey(request.messageId, request.toolCallId);
-  if (isOpen(key)) return;
+  if (isOpen(key)) return false;
   addEntry(key, request, { settle: onSettled, detach: () => {} });
+  return true;
+}
+
+/**
+ * Takes a restored interaction away unanswered (its conversation moved on or
+ * closed), so it stays saved as interrupted and nothing continues from it.
+ */
+export function forgetInteraction(key: string): void {
+  cancelRunningConnect(entryFor(key));
+  waiters.delete(key);
+  useAgentInteractionStore.setState((state) => {
+    const { [key]: _removed, ...entries } = state.entries;
+    return { entries };
+  });
 }
 
 export function updateInteractionDraft(key: string, draft: InteractionAnswers): void {
@@ -334,8 +351,8 @@ async function settingsReady(target: string): Promise<boolean | undefined> {
     return readyConnectorIds().length > 0;
   }
   if (target === "integrations.calendars") {
-    const settings = (await loadSettingsStore()).getSettings();
-    return settings.gcalConnected || settings.mcalConnected || settings.appleCalendarConnected;
+    const { getSettings, selectCalendarConnected } = await loadSettingsStore();
+    return selectCalendarConnected(getSettings());
   }
   return undefined;
 }
@@ -348,14 +365,4 @@ export async function confirmSettingsDone(key: string): Promise<void> {
   const ready = await settingsReady(entry.payload.target);
   if (!isOpen(key)) return;
   settle(key, { status: "done", ...(ready !== undefined ? { ready } : {}) });
-}
-
-/** The interaction a conversation is waiting on, if any. */
-export function selectPendingInteraction(
-  state: InteractionStoreState,
-  messageIds: readonly string[]
-): InteractionEntry | undefined {
-  return Object.values(state.entries).find(
-    (entry) => entry.state !== "settled" && messageIds.includes(entry.messageId)
-  );
 }
