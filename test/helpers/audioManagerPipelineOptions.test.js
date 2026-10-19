@@ -145,12 +145,14 @@ test("combined cleanup options honor every eligibility guard and use the actual 
   assert.ok(calls[0].pipelineOptions);
 });
 
-test("with Tone & Style on, a streaming start holds audio while it waits to mint combined cleanup for the app it learns in time, and the next warmup expects the same", async (t) => {
-  const { window, useSettingsStore, createManager } = await load(t, "orukeet-pipeline-tone-");
+// An Orukeet streaming start with Tone & Style on, its app classified only
+// when the test calls classify().
+async function loadTonedOrukeetStart(t, cachePrefix) {
+  const { window, useSettingsStore, createManager } = await load(t, cachePrefix);
   useSettingsStore.setState({ ...good, toneStyleEnabled: true });
-  let classify;
+  const classifier = {};
   window.electronAPI.captureDictationAppCategory = () =>
-    new Promise((resolve) => (classify = resolve));
+    new Promise((resolve) => (classifier.classify = resolve));
   const workletPort = {};
   globalThis.AudioWorkletNode = class {
     constructor() {
@@ -193,10 +195,20 @@ test("with Tone & Style on, a streaming start holds audio while it waits to mint
     getKeyterms: () => [],
     onStateChange() {},
   });
+  return { window, manager, minted, sent, workletPort, classify: (app) => classifier.classify(app) };
+}
+
+const tick = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+test("with Tone & Style on, a streaming start holds audio while it waits to mint combined cleanup for the app it learns in time, and the next warmup expects the same", async (t) => {
+  const { window, manager, minted, sent, workletPort, classify } = await loadTonedOrukeetStart(
+    t,
+    "orukeet-pipeline-tone-"
+  );
 
   manager.beginToneStyleCapture();
   const starting = manager.startStreamingRecording();
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await tick(20);
   assert.equal(minted.length, 0);
   // Audio from the wait reaches the session only once it has started: with no
   // warm socket, main has nowhere to buffer it before then.
@@ -234,4 +246,32 @@ test("with Tone & Style on, a streaming start holds audio while it waits to mint
   await manager.warmupStreamingConnection({ warmMic: false });
   assert.equal(warmed.length, 2);
   assert.equal(warmed[1], undefined);
+});
+
+test("the start's wait for the app counts from the capture, so it overlaps the mic opening", async (t) => {
+  const { manager, minted } = await loadTonedOrukeetStart(t, "orukeet-pipeline-tone-deadline-");
+  manager.beginToneStyleCapture();
+  // The mic took the whole 250 ms to open: the start mints at once.
+  await tick(260);
+  const starting = manager.startStreamingRecording();
+  await tick(20);
+  assert.equal(minted.length, 1);
+  assert.equal(minted[0], undefined);
+  assert.equal(await starting, true);
+});
+
+test("a start cancelled while it waits for the app mints no session", async (t) => {
+  const { manager, minted, classify } = await loadTonedOrukeetStart(
+    t,
+    "orukeet-pipeline-tone-cancel-"
+  );
+  manager.beginToneStyleCapture();
+  const starting = manager.startStreamingRecording();
+  await tick(20);
+  manager._streamingCancellationGeneration += 1;
+  classify("email");
+  assert.equal(await starting, false);
+  assert.equal(minted.length, 0);
+  // cancelStreamingRecording waits on this settlement.
+  assert.equal(manager.streamingStartInProgress, false);
 });

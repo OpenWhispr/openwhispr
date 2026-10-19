@@ -788,7 +788,11 @@ class SelectionManager {
       debugLogger.warn("AT-SPI target probe timed out", { cooldownMs: ATSPI_COOLDOWN_MS });
     }
     const match = result.stdout.match(/^TARGET\s+ATSPI\s+(\d+)$/m);
-    return result.success && match ? { kind: "atspi-pid", id: match[1] } : null;
+    if (!result.success || !match) return null;
+    const target = { kind: "atspi-pid", id: match[1] };
+    const title = result.stdout.match(/^WINDOW_TITLE_B64 ([A-Za-z0-9+/=]+)$/m)?.[1];
+    if (title) this._targetTitles.set(target, Buffer.from(title, "base64").toString("utf8"));
+    return target;
   }
 
   async _captureViaClipboard(sendCopy, expectedTarget) {

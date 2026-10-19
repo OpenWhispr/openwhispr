@@ -855,18 +855,43 @@ test("an X11 target's window title is read only when the app context is asked fo
   assert.deepEqual(calls, [["xdotool", "getwindowname", "7"]]);
 });
 
-test("an AT-SPI target is named from its pid and has no title", async () => {
-  const manager = new SelectionManager({
-    clipboardManager: {},
+test("an AT-SPI target is named from its pid and titled from its window", async () => {
+  let stdout = "";
+  const SpawningSelectionManager = loadSelectionManager({
+    spawn: () => {
+      const child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      child.kill = () => {};
+      process.nextTick(() => {
+        child.stdout.emit("data", stdout);
+        child.emit("close", 0);
+      });
+      return child;
+    },
+  });
+  const manager = new SpawningSelectionManager({
+    clipboardManager: { resolveLinuxFastPasteBinary: () => "/tmp/linux-fast-paste" },
     textEditMonitor: {},
     platform: "linux",
     now: () => 1000,
   });
-  manager.lastTarget = { kind: "atspi-pid", id: "42" };
-  manager._readTargetNames = async (pid) => (pid === "42" ? "telegram-desktop" : "");
+  manager._readTargetNames = async (pid) => (pid === "42" ? "chrome" : "");
+  const title = "Inbox - Gmail - Google Chrome";
 
+  stdout = `TARGET ATSPI 42\nWINDOW_TITLE_B64 ${Buffer.from(title).toString("base64")}\n`;
+  manager.lastTarget = await manager._getLinuxAtspiTarget();
+  assert.deepEqual(manager.lastTarget, { kind: "atspi-pid", id: "42" });
   assert.deepEqual(await manager.getTargetAppContext(), {
-    appSignature: "telegram-desktop",
+    appSignature: "chrome",
+    windowTitle: title,
+  });
+
+  // An older helper prints no title.
+  stdout = "TARGET ATSPI 42\n";
+  manager.lastTarget = await manager._getLinuxAtspiTarget();
+  assert.deepEqual(await manager.getTargetAppContext(), {
+    appSignature: "chrome",
     windowTitle: null,
   });
   assert.equal(

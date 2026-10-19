@@ -92,12 +92,23 @@ test("a browser is judged by the page's host", () => {
   assert.equal(categoryOf(chrome, { urlHost: "notslack.com" }), "other");
 });
 
-test("a host that names no app leaves it to the title", () => {
+test("a host that names no app leaves it to a site name the host carries", () => {
   const safari = "Safari com.apple.Safari";
   assert.equal(
     categoryOf(safari, { urlHost: "www.icloud.com", windowTitle: "iCloud Mail" }),
     "email"
   );
+  assert.equal(
+    categoryOf(safari, { urlHost: "mail.yahoo.co.uk", windowTitle: "Inbox - Yahoo Mail" }),
+    "email"
+  );
+  assert.equal(
+    categoryOf(safari, { urlHost: "app.slack-gov.com", windowTitle: "general - Slack" }),
+    "work"
+  );
+  // A page whose own title is a site name doesn't make its host that site.
+  assert.equal(categoryOf(safari, { urlHost: "www.notion.so", windowTitle: "Hey" }), "other");
+  assert.equal(categoryOf(safari, { urlHost: "www.notion.so", windowTitle: "Outlook" }), "other");
   assert.equal(
     categoryOf(safari, { urlHost: "mail.google.com", windowTitle: "Weekly report - Notion" }),
     "email"

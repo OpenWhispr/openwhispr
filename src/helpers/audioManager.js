@@ -705,6 +705,7 @@ class AudioManager {
     this.screenContextPromise = null;
     this.toneStylePromise = null;
     this.lastToneAppCategory = null;
+    this.toneStyleStartDeadline = 0;
     this.selectionCapturePromise = null;
     this.sttConfig = null;
     this.sttConfigFetchedAt = null;
@@ -1061,6 +1062,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   beginToneStyleCapture() {
     this.toneStylePromise =
       window.electronAPI?.captureDictationAppCategory?.()?.catch(() => null) ?? null;
+    // An Orukeet start waits at most 250 ms from here for the app, so the wait
+    // overlaps the mic opening instead of delaying the start cue after it.
+    this.toneStyleStartDeadline = performance.now() + 250;
   }
 
   // Consumed by the cleanup route only; the agent and translation routes
@@ -3690,7 +3694,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.notifyTranslationFallback("unreachable");
       }
       this._noteCleanupRoute(settings, route);
-      const toneStyle = route.kind === "cleanup" ? await this.consumeToneStyle() : null;
+      // A cancelled upload can still resolve after the next dictation started;
+      // reading the tone then would take that dictation's app.
+      const toneStyle =
+        route.kind === "cleanup" && !wasCancelled() ? await this.consumeToneStyle() : null;
 
       try {
         if (route.kind === "agent") {
@@ -5282,10 +5289,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.getPipelineCleanupOptions(pipelineSettings)
       ) {
         heldFrames = [];
+        const waitMs = Math.max(0, this.toneStyleStartDeadline - performance.now());
         this.lastToneAppCategory = await Promise.race([
           this.toneStylePromise,
-          new Promise((resolve) => setTimeout(() => resolve(null), 250)),
+          new Promise((resolve) => setTimeout(() => resolve(null), waitMs)),
         ]);
+        if (startWasCancelled()) {
+          // cancelStreamingRecording waits for this settlement before it
+          // releases the capture; minting a session now would only waste one.
+          this._settleStreamingStart();
+          return false;
+        }
       }
       this._activePipelineOptions =
         pipelineSettings.toneStyleEnabled && !this.lastToneAppCategory
