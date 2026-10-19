@@ -3863,7 +3863,6 @@
       "hotkeyToSpeak": "{{hotkey}} для записи",
       "recording": "Запись...",
       "processing": "Обработка...",
-      "clickToSpeak": "Нажмите для записи",
       "waitingForMicrophone": "Ожидание микрофона…"
     },
     "buttons": {
@@ -4100,18 +4099,6 @@
     }
   },
   "assistant": {
-    "panel": {
-      "selectionHint": "Выберите текст для редактирования с помощью",
-      "selectedContext": "Выбранный текст добавлен",
-      "removeSelectedContext": "Удалить выбранный текст",
-      "newConversation": "Новый разговор",
-      "copyToClipboard": "Копировать в буфер обмена",
-      "suggestions": {
-        "summarizeNotes": "Подведи итог моих последних заметок",
-        "calendar": "Что у меня в календаре?",
-        "draft": "Помоги мне составить текст"
-      }
-    },
     "toolActivity": {
       "verbs": {
         "invoking": "Вызов",

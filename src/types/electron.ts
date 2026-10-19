@@ -1499,23 +1499,6 @@ declare global {
           | "selection_manager_unavailable";
         error?: string;
       }>;
-      pasteAtCapturedTarget?: (
-        sessionId: string,
-        text: string,
-        options?: { restoreClipboard?: boolean; allowClipboardFallback?: boolean }
-      ) => Promise<{
-        success: boolean;
-        code?:
-          | "invalid_replacement"
-          | "session_expired"
-          | "target_changed"
-          | "paste_failed"
-          | "modifiers_held"
-          | "wl_copy_missing"
-          | "wl_copy_failed"
-          | "selection_manager_unavailable";
-        error?: string;
-      }>;
       hideWindow: () => Promise<void>;
       showDictationPanel: () => Promise<void>;
       openSettingsSection?: (
@@ -1526,14 +1509,12 @@ declare global {
       onToggleDictation: (callback: () => void) => () => void;
       onToggleVoiceAgent?: (callback: () => void) => () => void;
       onToggleTranslation?: (callback: () => void) => () => void;
-      onOpenAssistantPanel?: (callback: () => void) => () => void;
       onStartDictation?: (callback: () => void) => () => void;
       onStopDictation?: (callback: () => void) => () => void;
       onPrepareDictation?: (
         callback: (options?: { inputKind?: "dictation" | "assistant" | "translation" }) => void
       ) => () => void;
       onCancelDictationPreparation?: (callback: () => void) => () => void;
-      onCancelDictation?: (callback: () => void) => () => void;
       onDictationForceStopped?: (
         callback: (payload?: { reason?: "timeout" | "reset" | "manual" }) => void
       ) => () => void;
@@ -1542,31 +1523,6 @@ declare global {
         state: "idle" | "preparing" | "recording" | "processing",
         inputKind?: "dictation" | "assistant" | "translation"
       ) => void;
-      dictationAudioLevelChanged?: (level: number) => void;
-      toggleAgentPanelDictation?: () => Promise<{ success: boolean }>;
-      cancelAgentPanelDictation?: () => Promise<{ success: boolean }>;
-      getAgentDictationPillState?: () => Promise<{
-        lifecycle: "idle" | "preparing" | "recording" | "processing";
-        interactive: boolean;
-        horizontalDirection: "left" | "right";
-      }>;
-      resizeAgentDictationPillToContent?: (surfaceHeight: number | null) => Promise<{
-        success: boolean;
-        changed?: boolean;
-        bounds?: { x: number; y: number; width: number; height: number };
-        message?: string;
-      }>;
-      setAgentDictationPillInteractivity?: (interactive: boolean) => Promise<{ success: boolean }>;
-      onAgentDictationPillStateChanged?: (
-        callback: (state: {
-          lifecycle: "idle" | "preparing" | "recording" | "processing";
-          interactive: boolean;
-          horizontalDirection: "left" | "right";
-        }) => void
-      ) => () => void;
-      onAgentDictationPillAudioLevelChanged?: (callback: (level: number) => void) => () => void;
-      showAgentDictationFinalTranscript?: (text: string) => void;
-      onAgentDictationPillFinalTranscript?: (callback: (text: string) => void) => () => void;
 
       // STT config
       getSttConfig?: () => Promise<
@@ -2342,7 +2298,6 @@ declare global {
           | "WITH_MENU"
           | "WITH_TOAST"
           | "EXPANDED"
-          | "ASSISTANT"
       ) => Promise<{
         success: boolean;
         bounds?: Electron.Rectangle;
@@ -2358,8 +2313,6 @@ declare global {
       resizeDictationErrorWindowToContent: (
         surfaceHeight: number
       ) => Promise<{ success: boolean; bounds?: Electron.Rectangle; message?: string }>;
-      setAssistantPanelOpen: (open: boolean) => Promise<{ success: boolean }>;
-      setAssistantPanelBusy: (busy: boolean) => Promise<{ success: boolean }>;
 
       // App management
       cleanupApp: () => Promise<{ success: boolean; message: string; errors?: string[] }>;

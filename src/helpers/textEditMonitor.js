@@ -297,8 +297,8 @@ class TextEditMonitor extends EventEmitter {
         }
 
         // The AppleScript never reports an editable caret (only the native
-        // binary emits EDITABLE_NONE:), so this fallback can read selections
-        // but never produce a caret delivery target — panel-first by design.
+        // binary emits EDITABLE_NONE:), so this fallback can only read
+        // selections.
         const output = stdout.replace(/\n$/, "");
         if (output === "NONE:") {
           resolve({ state: "none" });

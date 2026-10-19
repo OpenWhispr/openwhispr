@@ -3819,7 +3819,6 @@
       "hotkeyToSpeak": "{{hotkey}} 说话",
       "recording": "录音中...",
       "processing": "处理中...",
-      "clickToSpeak": "点击开始说话",
       "waitingForMicrophone": "等待麦克风…"
     },
     "buttons": {
@@ -4052,18 +4051,6 @@
     }
   },
   "assistant": {
-    "panel": {
-      "selectionHint": "选择要编辑的文本，然后按",
-      "selectedContext": "已添加所选文本",
-      "removeSelectedContext": "移除所选文本",
-      "newConversation": "新对话",
-      "copyToClipboard": "复制到剪贴板",
-      "suggestions": {
-        "summarizeNotes": "总结我最近的笔记",
-        "calendar": "我的日历上有什么安排？",
-        "draft": "帮我起草一些内容"
-      }
-    },
     "toolActivity": {
       "verbs": {
         "invoking": "调用中",

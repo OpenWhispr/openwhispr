@@ -160,7 +160,7 @@ async function buildRAGContext(userText: string, scope?: ContainerScope): Promis
 
 /**
  * Which settings scope answers a conversation. Typed chat surfaces stay on the
- * Chat scope; the voice assistant panel runs on the Voice Assistant scope so
+ * Chat scope; the agent window runs on the Voice Assistant scope so
  * the model picked under Settings > Voice Assistant is the one that answers
  * (see resolveChatStreamingInference for its Chat fallback).
  */
@@ -1027,7 +1027,7 @@ export function useChatStreaming({
           if (!responseAnnounced && !cancelled()) {
             // The stream ended without a visible token or tool call (think-only
             // local model, empty completion). Show that as a reply so every
-            // listener — the assistant panel's thinking state included — sees a
+            // listener — the agent window's thinking state included — sees a
             // terminal outcome.
             fullContent = t("agentMode.chat.emptyResponse");
             announceResponse();

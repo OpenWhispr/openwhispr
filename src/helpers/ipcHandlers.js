@@ -2102,31 +2102,6 @@ class IPCHandlers {
       this.windowManager.setDictationLifecycleState(state, inputKind);
     });
 
-    ipcMain.on("show-agent-dictation-final-transcript", (event, text) => {
-      const dictationWindow = this.windowManager.mainWindow;
-      if (
-        !dictationWindow ||
-        dictationWindow.isDestroyed() ||
-        event.sender !== dictationWindow.webContents
-      ) {
-        return;
-      }
-      if (typeof text !== "string" || !text.trim()) return;
-      this.windowManager.showAgentDictationFinalTranscript(text);
-    });
-
-    ipcMain.on("dictation-audio-level-changed", (event, level) => {
-      const dictationWindow = this.windowManager.mainWindow;
-      if (
-        !dictationWindow ||
-        dictationWindow.isDestroyed() ||
-        event.sender !== dictationWindow.webContents
-      ) {
-        return;
-      }
-      this.windowManager.setDictationAudioLevel(level);
-    });
-
     // Dictionary handlers
     ipcMain.on("auto-learn-changed", (_event, enabled) => {
       // Both renderer windows re-sync this on mount — ignore same-value updates (#1080).
@@ -3299,17 +3274,6 @@ class IPCHandlers {
       });
     });
 
-    ipcMain.handle("paste-at-captured-target", async (event, sessionId, text, options = {}) => {
-      if (!this.selectionManager) {
-        return { success: false, code: "selection_manager_unavailable" };
-      }
-      return this.selectionManager.pasteAtCapturedTarget(sessionId, text, {
-        restoreClipboard: options.restoreClipboard !== false,
-        allowClipboardFallback: options.allowClipboardFallback === true,
-        webContents: event.sender,
-      });
-    });
-
     ipcMain.handle("paste-text", async (event, text, options) => {
       // An onboarding demo already puts the transcript in its own textarea from
       // the demo event, and that textarea is what has focus — pasting on top of
@@ -3337,8 +3301,8 @@ class IPCHandlers {
           mainWindow.showInactive();
         } else {
           mainWindow.blur();
-          // On Linux blur() leaves X focus on the pill, where the assistant panel
-          // took it, so the paste would land in the panel.
+          // On Linux blur() leaves X focus on the pill, so the paste would land
+          // in the pill.
           if (process.platform === "linux") this.windowManager.returnLinuxKeyboardFocus();
           await new Promise((resolve) => setTimeout(resolve, 80));
         }
@@ -6156,81 +6120,6 @@ class IPCHandlers {
     // temporarily disabled for screen recording.
     ipcMain.handle("screen-context-set-enabled", (event, enabled) => {
       this.windowManager?.setScreenContextProtection(enabled);
-      return { success: true };
-    });
-
-    // Panel open: window becomes focusable so follow-up keyboard input works.
-    // Only the dictation renderer may flip main-window focusability.
-    ipcMain.handle("set-assistant-panel-open", (event, open) => {
-      const dictationWindow = this.windowManager?.mainWindow;
-      if (
-        !dictationWindow ||
-        dictationWindow.isDestroyed() ||
-        event.sender !== dictationWindow.webContents
-      ) {
-        return { success: false, error: "Not the dictation window" };
-      }
-      this.windowManager.setAssistantPanelOpen(open);
-      return { success: true };
-    });
-
-    // Busy state is enforced in the main process so a hotkey cannot trigger
-    // native capture side effects before the renderer has a chance to reject it.
-    ipcMain.handle("set-assistant-panel-busy", (event, busy) => {
-      const dictationWindow = this.windowManager?.mainWindow;
-      if (
-        !dictationWindow ||
-        dictationWindow.isDestroyed() ||
-        event.sender !== dictationWindow.webContents
-      ) {
-        return { success: false, error: "Not the dictation window" };
-      }
-      this.windowManager.setAssistantPanelBusy(busy);
-      return { success: true };
-    });
-
-    const isAgentDictationPill = (event) => {
-      const pillWindow = this.windowManager?.agentDictationPillWindow;
-      return pillWindow && !pillWindow.isDestroyed() && event.sender === pillWindow.webContents;
-    };
-
-    // The pill disables its own controls when an assistant or translation
-    // capture owns the lifecycle, but that state travels by IPC — a click can
-    // race it. Re-check here so a stale pill can never toggle or cancel a
-    // recording it does not own.
-    const isAgentDictationPillInteractive = () =>
-      this.windowManager.getAgentDictationPillState().interactive;
-
-    ipcMain.handle("toggle-agent-panel-dictation", (event) => {
-      if (!isAgentDictationPill(event) || !isAgentDictationPillInteractive()) {
-        return { success: false };
-      }
-      this.windowManager.sendToggleDictation();
-      return { success: true };
-    });
-
-    ipcMain.handle("cancel-agent-panel-dictation", (event) => {
-      if (!isAgentDictationPill(event) || !isAgentDictationPillInteractive()) {
-        return { success: false };
-      }
-      this.windowManager.sendCancelActiveDictation();
-      return { success: true };
-    });
-
-    ipcMain.handle("get-agent-dictation-pill-state", (event) => {
-      return isAgentDictationPill(event)
-        ? this.windowManager.getAgentDictationPillState()
-        : { lifecycle: "idle", interactive: false, horizontalDirection: "left" };
-    });
-
-    ipcMain.handle("resize-agent-dictation-pill-to-content", (event, surfaceHeight = null) => {
-      if (!isAgentDictationPill(event)) return { success: false };
-      return this.windowManager.resizeAgentDictationPillToContent(surfaceHeight);
-    });
-
-    ipcMain.handle("set-agent-dictation-pill-interactivity", (event, interactive) => {
-      if (!isAgentDictationPill(event)) return { success: false };
-      this.windowManager.setAgentDictationPillInteractivity(Boolean(interactive));
       return { success: true };
     });
 

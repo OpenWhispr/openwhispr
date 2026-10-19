@@ -27,15 +27,13 @@ const {
 // (useChatStreaming takes it as a prop, not internal state), so its calls
 // are observed directly without needing any DOM or reconciliation. Confirmed
 // empirically that this repo's harness supports it: no jsdom, no
-// `@testing-library/react`, no `act` exist here (`assistantPanel.test.js`
-// works around the same absence by stubbing `useChatStreaming` out entirely
-// for its markup-only assertions), but this narrower technique — one
-// synchronous render, then calling the returned functions like any other
-// closures — does not need any of those. The one thing SSR genuinely cannot
-// do is run `useEffect` bodies, so the unmount-mid-stream test mounts the
-// hook for real (installHookDom + createRoot) to drive the actual unmount
-// cleanup, whose cancel must persist the partial reply rather than drop it
-// the way an explicit Esc/Stop cancel does.
+// `@testing-library/react`, no `act` exist here, but this narrower
+// technique — one synchronous render, then calling the returned functions
+// like any other closures — does not need any of those. The one thing SSR
+// genuinely cannot do is run `useEffect` bodies, so the unmount-mid-stream
+// test mounts the hook for real (installHookDom + createRoot) to drive the
+// actual unmount cleanup, whose cancel must persist the partial reply
+// rather than drop it the way an explicit Esc/Stop cancel does.
 function createOpenAiChunk(delta, finishReason = null) {
   return {
     id: "chatcmpl-cancellation-test",

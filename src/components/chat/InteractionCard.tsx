@@ -20,7 +20,7 @@ import type { CalendarProvider } from "../../utils/calendarConnect";
 
 const CARD_CLASS = "my-1.5 rounded-lg border border-border/70 bg-surface-2/60 p-3 text-[13px]";
 
-// Esc in a field must not reach the assistant panel, whose Esc cancels the
+// Esc in a field must not reach the agent window, whose Esc cancels the
 // whole turn and withdraws the card.
 const keepEscape = (event: KeyboardEvent<HTMLInputElement>): void => {
   if (event.key === "Escape") event.stopPropagation();

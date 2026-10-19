@@ -2004,7 +2004,6 @@
       "hotkeyToSpeak": "{{hotkey}} للتحدث",
       "recording": "جاري التسجيل...",
       "processing": "جاري المعالجة...",
-      "clickToSpeak": "انقر للتحدث",
       "waitingForMicrophone": "في انتظار الميكروفون…"
     },
     "buttons": {
@@ -4981,18 +4980,6 @@
     "cancel": "إلغاء"
   },
   "assistant": {
-    "panel": {
-      "selectionHint": "حدد النص لتعديله باستخدام",
-      "selectedContext": "تمت إضافة النص المحدد",
-      "removeSelectedContext": "إزالة النص المحدد",
-      "newConversation": "محادثة جديدة",
-      "copyToClipboard": "النسخ إلى الحافظة",
-      "suggestions": {
-        "summarizeNotes": "لخّص ملاحظاتي الأخيرة",
-        "calendar": "ما هي المواعيد في التقويم الخاص بي؟",
-        "draft": "ساعدني في صياغة شيء ما"
-      }
-    },
     "toolActivity": {
       "verbs": {
         "invoking": "جاري استدعاء",

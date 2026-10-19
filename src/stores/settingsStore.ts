@@ -721,7 +721,7 @@ migrateLLMScopeKeys();
 
 // The Voice Assistant scope shipped unseeded — empty provider and model, mode
 // defaulting to cloud — while the assistant panel answered on the Chat scope.
-// The panel now answers on the Voice Assistant scope, so a profile that never
+// The assistant now answers on the Voice Assistant scope, so a profile that never
 // configured it (no onboarding fan-out or Settings edit wrote its mode,
 // provider or model) copies the Chat scope over once; otherwise a signed-in
 // profile whose Chat runs local or BYOK would have its spoken commands move to

@@ -24,7 +24,6 @@ import {
 import { canStartDictation } from "../utils/dictationReadiness";
 import { waitForVisualFrames } from "../utils/visualFrame";
 import { resolveLifecycleInputKind } from "../helpers/dictationRouting";
-import { createAssistantResponseDelivery } from "../helpers/assistantResponseDelivery";
 import { recordCleanupFailure } from "../stores/cleanupFailureStore";
 
 // Maps a failed selection-replacement code to its `selectionEditing.*` toast
@@ -42,7 +41,7 @@ const WAYLAND_CLIPBOARD_REASON_KEYS = {
   "wl-copy-missing": "wlCopyMissing",
   "wl-copy-failed": "wlCopyFailed",
 };
-const COMPANION_AUDIO_LEVEL_INTERVAL_MS = 80;
+const DEMO_AUDIO_LEVEL_INTERVAL_MS = 80;
 
 export const useAudioRecording = (toast, options = {}) => {
   const { t } = useTranslation();
@@ -81,14 +80,11 @@ export const useAudioRecording = (toast, options = {}) => {
   });
   const {
     onToggle,
-    onAssistantCommand,
     onOnboardingAssistantCommand,
     dismissDictationError,
     onDictationError,
-    getAssistantSelectionContext,
     onShowTranscript,
     onDemoEvent,
-    assistantOpenRef,
   } = options;
 
   useEffect(
@@ -104,10 +100,6 @@ export const useAudioRecording = (toast, options = {}) => {
 
   // Read through a ref so a re-render never tears down the AudioManager
   // (the mount effect below must not depend on this callback).
-  const onAssistantCommandRef = useRef(onAssistantCommand);
-  useEffect(() => {
-    onAssistantCommandRef.current = onAssistantCommand;
-  });
   const onOnboardingAssistantCommandRef = useRef(onOnboardingAssistantCommand);
   useEffect(() => {
     onOnboardingAssistantCommandRef.current = onOnboardingAssistantCommand;
@@ -115,10 +107,6 @@ export const useAudioRecording = (toast, options = {}) => {
   const onShowTranscriptRef = useRef(onShowTranscript);
   useEffect(() => {
     onShowTranscriptRef.current = onShowTranscript;
-  });
-  const getAssistantSelectionContextRef = useRef(getAssistantSelectionContext);
-  useEffect(() => {
-    getAssistantSelectionContextRef.current = getAssistantSelectionContext;
   });
 
   // Reads only refs and the global electronAPI bridge, so a single stable
@@ -160,10 +148,6 @@ export const useAudioRecording = (toast, options = {}) => {
 
         if (!canStartDictation(audioManagerRef.current.getState())) return false;
 
-        const assistantSelectionContext = voiceAgentRequested
-          ? (getAssistantSelectionContextRef.current?.() ?? null)
-          : null;
-
         const preparationGeneration = ++preparationGenerationRef.current;
         setIsStopping(false);
         setIsPreparing(true);
@@ -178,11 +162,11 @@ export const useAudioRecording = (toast, options = {}) => {
         // device still opens exactly once.
         void audioManagerRef.current.prepareMicCapture?.();
 
-        // The floating dictation panel only takes focus while the assistant panel
-        // is open, so the foreground app is otherwise still the user's actual
-        // editing target here. Refresh it for recordings
-        // started from the panel itself as well as from global hotkeys; otherwise
-        // paste can reactivate a stale target from the preceding dictation.
+        // The floating dictation panel never takes focus, so the foreground app
+        // is still the user's actual editing target here. Refresh it for
+        // recordings started from the pill itself as well as from global
+        // hotkeys; otherwise paste can reactivate a stale target from the
+        // preceding dictation.
         try {
           await window.electronAPI.captureDictationTarget?.();
         } catch (error) {
@@ -191,7 +175,6 @@ export const useAudioRecording = (toast, options = {}) => {
 
         demoKindRef.current = getOnboardingDemoKind(voiceAgentRequested);
         audioManagerRef.current.setVoiceAgentRequested(voiceAgentRequested);
-        audioManagerRef.current.setAssistantSelectionContext(assistantSelectionContext);
         audioManagerRef.current.setTranslationRequested(translationRequested);
         // Covers the toggle path with freshly-set flags; the signature dedup
         // makes this a no-op when the prepare handler already reported the
@@ -218,12 +201,12 @@ export const useAudioRecording = (toast, options = {}) => {
         // The selection to edit is whatever was highlighted at press time, so
         // read it now: it resolves while the user speaks instead of adding a
         // round trip after transcription.
-        if (voiceAgentRequested && !assistantSelectionContext) {
+        if (voiceAgentRequested) {
           audioManagerRef.current.beginSelectionCapture();
         }
 
         // Tone & Style names the app being dictated into while the user speaks,
-        // for cleanup and for an assistant answer typed or edited in place there.
+        // for cleanup and for a selection the assistant edits in place there.
         if (getSettings().toneStyleEnabled && !translationRequested) {
           audioManagerRef.current.beginToneStyleCapture();
         }
@@ -299,7 +282,7 @@ export const useAudioRecording = (toast, options = {}) => {
           // Covers every exit above that never started a recording — the
           // policy-block early return, the mic-open failure, a stale
           // preparation generation, etc. Without this, a failed start leaves
-          // the main process (and the companion pill) stuck reporting
+          // the main process stuck reporting
           // "preparing" forever, since startRecording's failure path only
           // fires onError, never the onStateChange that normally reports
           // "idle". The signature dedup makes this a no-op when
@@ -661,14 +644,7 @@ export const useAudioRecording = (toast, options = {}) => {
           setTranscript(result.text);
           if (result.assistantConversation) {
             window.electronAPI?.hideDictationPreview?.();
-            const {
-              screenContext,
-              transcript,
-              selectedContext,
-              deliverySessionId,
-              deliveryAcceptsMarkdown,
-              deliveryAppCategory,
-            } = result.assistantConversation;
+            const { screenContext, transcript, selectedContext } = result.assistantConversation;
             const command = {
               text: expandSnippets(transcript, getSettings().snippets),
               attachment: screenContext
@@ -676,7 +652,7 @@ export const useAudioRecording = (toast, options = {}) => {
                 : null,
             };
             if (localStorage.getItem("onboardingCompleted") !== "true") {
-              // The assistant panel would cover the onboarding flow, so a headless
+              // The agent window would cover the onboarding flow, so a headless
               // responder answers and streams the reply back as demo events.
               onDemoEventRef.current?.({
                 kind: demoKindRef.current,
@@ -685,18 +661,12 @@ export const useAudioRecording = (toast, options = {}) => {
               });
               onOnboardingAssistantCommandRef.current?.(command);
             } else {
-              const { autoPasteEnabled, keepTranscriptionInClipboard } = getSettings();
-              onAssistantCommandRef.current?.({
+              // A conversational wake-word command is answered in the agent window.
+              void window.electronAPI?.submitAgentCommand?.({
                 ...command,
-                selectedContext: selectedContext ?? null,
-                delivery: createAssistantResponseDelivery({
-                  autoPasteEnabled,
-                  deliverySessionId,
-                  acceptsMarkdown: deliveryAcceptsMarkdown,
-                  appCategory: deliveryAppCategory,
-                  restoreClipboard: !keepTranscriptionInClipboard,
-                  allowClipboardFallback: isAccessibilitySkipped(),
-                }),
+                selectedContext: selectedContext
+                  ? { text: selectedContext.text, source: "external" }
+                  : null,
               });
             }
           } else {
@@ -1175,18 +1145,11 @@ export const useAudioRecording = (toast, options = {}) => {
       if (level === null) return;
       // The onboarding demo's pill draws its waveform from these levels.
       onDemoEventRef.current?.({ kind: demoKindRef.current, status: "level", level });
-      // The companion pill only exists while the Agent panel is open — with
-      // the panel closed there is nobody to mirror levels to, so skip the
-      // IPC. Checked per tick, not once: the panel can open mid-recording and
-      // a ref change never re-runs this effect.
-      if (!isAssistantVoice && assistantOpenRef?.current) {
-        window.electronAPI?.dictationAudioLevelChanged?.(level);
-      }
     };
     reportAudioLevel();
-    const interval = setInterval(reportAudioLevel, COMPANION_AUDIO_LEVEL_INTERVAL_MS);
+    const interval = setInterval(reportAudioLevel, DEMO_AUDIO_LEVEL_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [assistantOpenRef, getAudioLevel, isAssistantVoice, isRecording]);
+  }, [getAudioLevel, isRecording]);
 
   const toggleListening = async ({
     voiceAgentRequested = false,

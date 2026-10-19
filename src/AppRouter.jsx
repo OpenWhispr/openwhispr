@@ -1,7 +1,6 @@
 import React, { Suspense, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import App from "./App.jsx";
-import AgentDictationPillOverlay from "./components/dictation/AgentDictationPillOverlay.tsx";
 import MeetingNotificationOverlay from "./components/MeetingNotificationOverlay.tsx";
 import { PermissionGuideOverlay } from "./components/onboarding/PermissionGuideOverlay";
 import ReauthenticationScreen from "./components/ReauthenticationScreen.tsx";
@@ -34,10 +33,6 @@ export default function AppRouter() {
 
   if (params.includes("meeting-notification=true")) {
     return <MeetingNotificationOverlay />;
-  }
-
-  if (params.includes("agent-dictation-pill=true")) {
-    return <AgentDictationPillOverlay />;
   }
 
   // Before MainApp: it reports the onboarding state, which only the dictation

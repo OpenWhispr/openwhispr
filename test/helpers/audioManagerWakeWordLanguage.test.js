@@ -137,7 +137,6 @@ async function loadAudioManager(t) {
         pendingAssistantConversation: null,
         pendingSelectionEdit: null,
         pendingCleanupFailure: null,
-        assistantSelectionContext: null,
         selectionCapturePromise: null,
         micRecovery: { stop() {} },
         finishStreamingFallbackSegment: async () => null,

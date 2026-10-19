@@ -63,7 +63,9 @@ test("a prefetched selection is reused instead of read again", async (t) => {
   assert.equal(calls.length, 1, "consuming must reuse the prefetch");
 });
 
-test("the caret probe request mirrors the auto-paste setting", async (t) => {
+// Nothing is pasted at an assistant caret any more, so the read never spends a
+// helper spawn probing for one, whatever the auto-paste setting.
+test("the selection read never probes for an editable caret", async (t) => {
   const { window, createManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-sel-probe-flag-test-",
     settingsKey: "__selProbeFlagSettings",
@@ -74,11 +76,9 @@ test("the caret probe request mirrors the auto-paste setting", async (t) => {
   globalThis.__selProbeFlagSettings = { autoPasteEnabled: true };
   manager.beginSelectionCapture();
   await manager.consumeSelectionCapture();
-
-  globalThis.__selProbeFlagSettings = { autoPasteEnabled: false };
   await manager.consumeSelectionCapture();
 
-  assert.deepEqual(calls, [{ probeEditable: true }, { probeEditable: false }]);
+  assert.deepEqual(calls, [undefined, undefined]);
 });
 
 test("consuming without a prefetch falls back to reading on demand", async (t) => {

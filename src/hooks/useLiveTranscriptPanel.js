@@ -16,12 +16,10 @@ const LIVE_TRANSCRIPT_FINAL_HIDE_MS = 4000;
  * Owns the live transcript panel: its open/close/entrance choreography, the
  * buffered text scheduler, and the measure-then-reveal pipeline that keeps a
  * new transcript line from pushing the panel up before its BrowserWindow
- * catches up. The assistant panel always wins the shared surface, checked
- * through `assistantOpenRef`.
+ * catches up.
  */
 export function useLiveTranscriptPanel({
   resizeToContent,
-  assistantOpenRef,
   onWillOpen,
   isRecording,
   isProcessing,
@@ -200,7 +198,7 @@ export function useLiveTranscriptPanel({
 
   const openPanel = useCallback(() => {
     clearFinalHide();
-    if (suppressedRef.current || assistantOpenRef.current || openRef.current) {
+    if (suppressedRef.current || openRef.current) {
       return;
     }
     if (openPromiseRef.current) return;
@@ -209,18 +207,14 @@ export function useLiveTranscriptPanel({
     clearEntranceTimers();
     const generation = ++openGenerationRef.current;
     // Reserve adaptive sizing immediately. The generic size ladder must not
-    // issue a recording/assistant resize while this entrance is awaiting the
+    // issue a recording resize while this entrance is awaiting the
     // native compositor.
     openRef.current = true;
     const openPromise = (async () => {
       // Live Transcript owns an adaptive footprint. Enter at its footer-sized
-      // surface instead of flashing the full Agent window before measurement.
+      // surface instead of flashing a full-size window before measurement.
       await requestHeight(LIVE_TRANSCRIPT_SURFACE_LIMITS.minHeight);
-      if (
-        generation !== openGenerationRef.current ||
-        suppressedRef.current ||
-        assistantOpenRef.current
-      ) {
+      if (generation !== openGenerationRef.current || suppressedRef.current) {
         if (generation === openGenerationRef.current) {
           openRef.current = false;
         }
@@ -282,7 +276,6 @@ export function useLiveTranscriptPanel({
       }
     });
   }, [
-    assistantOpenRef,
     clearEntranceTimers,
     clearFinalHide,
     onWillOpen,

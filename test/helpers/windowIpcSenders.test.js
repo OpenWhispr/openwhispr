@@ -75,7 +75,7 @@ Module._load = function loadWithMocks(request, parent, isMain) {
 };
 
 // A permissive `this` for setupHandlers: registration only stores closures, so
-// any manager not exercised by these handlers can be an inert stub.
+// any manager not exercised by the pill handlers can be an inert stub.
 function anything() {
   return new Proxy(function () {}, {
     get: (t, prop) => {
@@ -115,14 +115,17 @@ function makeContents() {
 }
 
 function makeWindowManagerStub() {
-  const calls = [];
+  const calls = { lifecycle: [], agent: [] };
   const mainContents = makeContents();
   const stub = {
     mainWindow: { isDestroyed: () => false, webContents: mainContents },
-    openAgentWindow: () => calls.push(["open"]),
+    setDictationLifecycleState: (state, kind) => {
+      calls.lifecycle.push([state, kind]);
+    },
+    openAgentWindow: () => calls.agent.push(["open"]),
     agentWindow: {
       deliverCommand: (command) => {
-        calls.push(["command", command]);
+        calls.agent.push(["command", command]);
         return true;
       },
     },
@@ -133,7 +136,7 @@ function makeWindowManagerStub() {
         return { success: true };
       },
       unregisterSlot(slot) {
-        calls.push(["unregister", slot]);
+        calls.agent.push(["unregister", slot]);
         this.registered = null;
       },
     },
@@ -152,8 +155,38 @@ test.after(() => {
   Module._load = originalLoad;
 });
 
-test("only the dictation window opens the agent window or hands it a wake-word command", async () => {
+test("only the main renderer can change its window's input region", async () => {
+  const { stub, mainContents } = makeWindowManagerStub();
+  const regions = [];
+  stub.setMainWindowInputRegion = async (region) => {
+    regions.push(region);
+    return true;
+  };
+  installWindowManager(stub);
+  const handler = handlers.get("set-main-window-input-region");
+  const region = { viewportWidth: 208, viewportHeight: 120, x: 156, y: 68, width: 40, height: 40 };
+  assert.equal(await handler({ sender: mainContents }, region), true);
+  assert.equal(handler({ sender: makeContents() }, null), null);
+  assert.equal(handler({ sender: {} }, null), null);
+  stub.mainWindow = null;
+  assert.equal(handler({ sender: mainContents }, null), null);
+  assert.deepEqual(regions, [region]);
+});
+
+test("lifecycle reports are accepted only from the dictation renderer", () => {
   const { stub, calls, mainContents } = makeWindowManagerStub();
+  installWindowManager(stub);
+  const lifecycleHandler = onHandlers.get("dictation-lifecycle-state-changed");
+
+  lifecycleHandler({ sender: {} }, "recording", "dictation");
+  assert.deepEqual(calls.lifecycle, []);
+  lifecycleHandler({ sender: mainContents }, "recording", "dictation");
+  assert.deepEqual(calls.lifecycle, [["recording", "dictation"]]);
+});
+
+test("only the dictation window opens the agent window or hands it a wake-word command", async () => {
+  const { stub, calls: allCalls, mainContents } = makeWindowManagerStub();
+  const calls = allCalls.agent;
   installWindowManager(stub);
   const stranger = frameOf(makeContents());
   const subframe = { sender: mainContents, senderFrame: {} };
@@ -173,7 +206,8 @@ test("only the dictation window opens the agent window or hands it a wake-word c
 });
 
 test("Esc reaches the window that registered it, and only that window takes it back", async () => {
-  const { stub, calls, mainContents } = makeWindowManagerStub();
+  const { stub, calls: allCalls, mainContents } = makeWindowManagerStub();
+  const calls = allCalls.agent;
   installWindowManager(stub);
   const agentContents = makeContents();
 

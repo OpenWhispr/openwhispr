@@ -151,7 +151,6 @@ import {
   usesTranscriptionKeywords,
 } from "../utils/dictionaryKeywords.js";
 import { getDictionaryHintWords } from "../utils/snippets";
-import { normalizeAgentSelectionContext } from "../utils/agentSelectionContext";
 import { getAgentName } from "../utils/agentName";
 import { shouldDisplayDictationPreview } from "../utils/transcriptionPreview";
 import {
@@ -726,7 +725,6 @@ class AudioManager {
     this._shownCleanupSetupKey = null;
     this._processingCancellationGeneration = 0;
     this._activeProcessingPipeline = null;
-    this.assistantSelectionContext = null;
     this.screenContextPromise = null;
     this.toneStylePromise = null;
     this.lastToneAppCategory = null;
@@ -995,7 +993,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.pendingSelectionEdit = null;
     this.pendingAssistantConversation = null;
     this.pendingCleanupFailure = null;
-    this.assistantSelectionContext = null;
     // No recording must ever see a stale capture (e.g. left over from a
     // cancelled voice-agent recording, even after the setting was turned
     // off). A live voice-agent start re-captures right after this call.
@@ -1004,17 +1001,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // Same for a prefetched selection: bounded to one recording, so a read taken
     // in an earlier app can never be edited in place by this command.
     this.selectionCapturePromise = null;
-  }
-
-  setAssistantSelectionContext(context) {
-    this.assistantSelectionContext = normalizeAgentSelectionContext(context);
-    if (this.assistantSelectionContext) this.selectionCapturePromise = null;
-  }
-
-  consumeAssistantSelectionContext() {
-    const context = this.assistantSelectionContext;
-    this.assistantSelectionContext = null;
-    return context;
   }
 
   setTranslationRequested(requested) {
@@ -1038,14 +1024,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   // Kicked off at voice-agent recording start, alongside the screenshot, so the
-  // read resolves while the user is still speaking. The editable-caret probe
-  // only matters when auto-paste could deliver to that caret, so the flag
-  // spares the main process a binary spawn otherwise.
+  // read resolves while the user is still speaking.
   beginSelectionCapture() {
-    this.selectionCapturePromise =
-      window.electronAPI?.captureSelectedText?.({
-        probeEditable: Boolean(getSettings().autoPasteEnabled),
-      }) ?? null;
+    this.selectionCapturePromise = window.electronAPI?.captureSelectedText?.() ?? null;
     // Marks the stored promise handled without consuming it: a failure nobody is
     // awaiting yet must not surface as an unhandled rejection, and the awaiting
     // caller must still see the original error.
@@ -1055,12 +1036,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   consumeSelectionCapture() {
     const pending = this.selectionCapturePromise;
     this.selectionCapturePromise = null;
-    return (
-      pending ??
-      window.electronAPI?.captureSelectedText?.({
-        probeEditable: Boolean(getSettings().autoPasteEnabled),
-      })
-    );
+    return pending ?? window.electronAPI?.captureSelectedText?.();
   }
 
   async consumeScreenContext() {
@@ -1092,9 +1068,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.toneStyleStartDeadline = performance.now() + 250;
   }
 
-  // Consumed by the cleanup route, and by an agent command for an answer
-  // typed at the caret or a rewrite of the selection. Translation keeps its
-  // source's tone.
+  // Consumed by the cleanup route, and by an agent command's rewrite of the
+  // selection. Translation keeps its source's tone.
   async consumeToneStyle() {
     const pending = this.toneStylePromise;
     this.toneStylePromise = null;
@@ -2881,14 +2856,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  // Panel-first banking: the command streams into the assistant panel with
+  // Assistant-first banking: the command is answered in the agent window with
   // the chat's tools and memory once transcription completes; nothing types
   // at the cursor. The transcript flows back as the result text so history
   // and previews stay truthful.
-  _bankAssistantDirective(transcript, config, options = {}) {
+  _bankAssistantDirective(transcript, config, selectedContext) {
     if (!this.isProcessing) return;
-    const { selectedContext, deliverySessionId, deliveryAcceptsMarkdown, deliveryAppCategory } =
-      options || {};
     this.pendingAssistantConversation = {
       transcript,
       // resolveReasoningRoute mirrors an attached screenContext into
@@ -2897,8 +2870,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // (the panel re-decides for its own request).
       screenContext: config?.rawScreenContext ?? null,
       ...(selectedContext ? { selectedContext } : {}),
-      ...(deliverySessionId ? { deliverySessionId, deliveryAcceptsMarkdown } : {}),
-      ...(deliveryAppCategory ? { deliveryAppCategory } : {}),
     };
   }
 
@@ -2918,20 +2889,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return extras;
   }
 
-  // Panel-first commands make no LLM call here — the panel resolves the Voice
-  // Assistant scope itself — so the org policy guard must run at bank time.
-  _bankPanelAgentCommand(
-    text,
-    agentName,
-    config,
-    {
-      selectedContext,
-      selectedText,
-      deliverySessionId,
-      deliveryAcceptsMarkdown,
-      deliveryAppCategory,
-    } = {}
-  ) {
+  // Assistant-first commands make no LLM call here — the agent window resolves
+  // the Voice Assistant scope itself — so the org policy guard must run at bank time.
+  _bankPanelAgentCommand(text, agentName, config, { selectedText } = {}) {
     this.assertAgentAllowedByPolicy();
     const settings = getSettings();
     const command = this.voiceAgentRequested
@@ -2944,31 +2904,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         );
     // Text selected in another app goes with the command as its selected
     // context, the way the agent window carries one.
-    this._bankAssistantDirective(command, config, {
-      selectedContext:
-        selectedContext ??
-        (selectedText === undefined
-          ? undefined
-          : { text: selectedText, sourceMessageId: "", source: "external" }),
-      deliverySessionId,
-      deliveryAcceptsMarkdown,
-      deliveryAppCategory,
-    });
+    this._bankAssistantDirective(
+      command,
+      config,
+      selectedText === undefined
+        ? undefined
+        : { text: selectedText, sourceMessageId: "", source: "external" }
+    );
     return text;
   }
 
   async processAgentCommand(text, model, agentName, config, wasCancelled = neverCancelled) {
     if (wasCancelled()) return text;
-    const assistantSelectionContext = this.consumeAssistantSelectionContext();
-    if (assistantSelectionContext) {
-      // An in-panel selection is conversational context, not an editable OS
-      // target. Keep it on the existing panel-first route and leave the
-      // external selection replacement path completely untouched.
-      this.selectionCapturePromise = null;
-      return this._bankPanelAgentCommand(text, agentName, config, {
-        selectedContext: assistantSelectionContext,
-      });
-    }
 
     let capture;
     try {
@@ -2986,25 +2933,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (wasCancelled()) return text;
 
     const captureDisposition = getSelectionCaptureDisposition(capture);
-    const deliverySessionId =
-      captureDisposition === "caret" && getSettings().autoPasteEnabled
-        ? capture.sessionId
-        : undefined;
-    const deliveryAcceptsMarkdown = capture?.acceptsMarkdown === true;
-    const toneStyle = await this.consumeToneStyle();
-    const deliveryAppCategory = deliverySessionId ? toneStyle?.appCategory : undefined;
 
     if (!config?.selectionEditReachable) {
-      // No in-place editor: the panel never types, so only a readable
-      // selection is quoted; every other capture sends the plain command.
+      // No in-place editor: the assistant never types, so only a readable
+      // selection rides along; every other capture sends the plain command.
       return this._bankPanelAgentCommand(text, agentName, config, {
         selectedText:
           captureDisposition === "selection" && typeof capture?.text === "string"
             ? capture.text
             : undefined,
-        deliverySessionId,
-        deliveryAcceptsMarkdown,
-        deliveryAppCategory,
       });
     }
 
@@ -3022,11 +2959,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     if (captureDisposition === "standalone" || captureDisposition === "caret") {
-      return this._bankPanelAgentCommand(text, agentName, config, {
-        deliverySessionId,
-        deliveryAcceptsMarkdown,
-        deliveryAppCategory,
-      });
+      return this._bankPanelAgentCommand(text, agentName, config);
     }
 
     if (capture?.status !== "selected") {
@@ -3042,6 +2975,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       error.selectionEditFatal = true;
       throw error;
     }
+
+    const toneStyle = await this.consumeToneStyle();
 
     // These are routing directives for this method, not reasoning options —
     // strip them before the config reaches ReasoningService.
@@ -3127,7 +3062,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     // The editor judged the command a question about the selection: answer it
-    // in the panel with the selection quoted, leaving the selection untouched.
+    // in the agent window with the selection as context, leaving it untouched.
     return this._bankPanelAgentCommand(text, agentName, config, {
       selectedText: capture.text,
     });
@@ -5601,7 +5536,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.pendingSelectionEdit = null;
     this.pendingAssistantConversation = null;
     this.pendingCleanupFailure = null;
-    this.assistantSelectionContext = null;
     this.screenContextPromise = null;
     this.toneStylePromise = null;
     this.selectionCapturePromise = null;

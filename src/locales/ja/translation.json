@@ -3819,7 +3819,6 @@
       "hotkeyToSpeak": "{{hotkey}} で話す",
       "recording": "録音中...",
       "processing": "処理中...",
-      "clickToSpeak": "クリックして話す",
       "waitingForMicrophone": "マイクを待っています…"
     },
     "buttons": {
@@ -4052,18 +4051,6 @@
     }
   },
   "assistant": {
-    "panel": {
-      "selectionHint": "編集するテキストを選択",
-      "selectedContext": "選択したテキストを追加",
-      "removeSelectedContext": "選択したテキストを削除",
-      "newConversation": "新しい会話",
-      "copyToClipboard": "クリップボードにコピー",
-      "suggestions": {
-        "summarizeNotes": "最近のノートを要約して",
-        "calendar": "カレンダーの予定を教えて",
-        "draft": "文章の下書きを手伝って"
-      }
-    },
     "toolActivity": {
       "verbs": {
         "invoking": "呼び出し中",

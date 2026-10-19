@@ -3819,7 +3819,6 @@
       "hotkeyToSpeak": "{{hotkey}} per parlare",
       "recording": "Registrazione...",
       "processing": "Elaborazione...",
-      "clickToSpeak": "Clicca per parlare",
       "waitingForMicrophone": "In attesa del microfono…"
     },
     "buttons": {
@@ -4052,18 +4051,6 @@
     }
   },
   "assistant": {
-    "panel": {
-      "selectionHint": "Seleziona il testo da modificare con",
-      "selectedContext": "Testo selezionato aggiunto",
-      "removeSelectedContext": "Rimuovi testo selezionato",
-      "newConversation": "Nuova conversazione",
-      "copyToClipboard": "Copia negli appunti",
-      "suggestions": {
-        "summarizeNotes": "Riassumi le mie note recenti",
-        "calendar": "Cosa c’è nel mio calendario?",
-        "draft": "Aiutami a scrivere qualcosa"
-      }
-    },
     "toolActivity": {
       "verbs": {
         "invoking": "Invocazione",

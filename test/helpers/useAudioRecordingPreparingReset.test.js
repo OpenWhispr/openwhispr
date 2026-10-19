@@ -28,7 +28,6 @@ export default class FakeAudioManager {
   setVoiceAgentRequested(value) {
     this.voiceAgentRequested = value;
   }
-  setAssistantSelectionContext() {}
   setTranslationRequested(value) {
     this.translationRequested = value;
   }

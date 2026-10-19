@@ -7,7 +7,7 @@ import { mirrorActiveAccountScope } from "../../lib/accountScopeMirror";
 import { usePolicyStore } from "../../stores/policyStore";
 import { isAgentAllowed, isScreenContextAllowed } from "../../stores/policyRules";
 import { getSettings } from "../../stores/settingsStore";
-import { resolveAgentAccessRefusal } from "../../helpers/trayActionPolicy";
+import { resolveAgentAccessRefusal } from "../../helpers/agentAccessPolicy";
 import type { ChatImageAttachment, Message } from "../chat/types";
 import { unsentForkContext, type AgentSelectionContext } from "../../utils/agentSelectionContext";
 import type { AgentWindowCommand, AgentWindowLayout } from "../../types/electron";

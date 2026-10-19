@@ -153,7 +153,6 @@ const WINDOW_SIZES = {
   WITH_MENU: { width: 240, height: 280 },
   WITH_TOAST: { width: 400, height: 500 },
   EXPANDED: { width: 400, height: 500 },
-  ASSISTANT: ASSISTANT_WINDOW_SIZE,
 };
 
 /**
@@ -381,7 +380,7 @@ class WindowPositionUtil {
       // Re-applying the collection behavior when nothing drifted makes the
       // window server momentarily pull the window out of the active Space,
       // which blinks the entire visible window. Enforce calls land on hot
-      // paths (assistant panel open/close, window show), so Spaces membership
+      // paths (window show, resize), so Spaces membership
       // is only touched when it was actually lost.
       if (!window.isVisibleOnAllWorkspaces()) {
         window.setVisibleOnAllWorkspaces(true, {

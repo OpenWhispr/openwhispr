@@ -115,8 +115,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   captureSelectedText: (options) => ipcRenderer.invoke("capture-selected-text", options),
   replaceSelectedText: (sessionId, text, options) =>
     ipcRenderer.invoke("replace-selected-text", sessionId, text, options),
-  pasteAtCapturedTarget: (sessionId, text, options) =>
-    ipcRenderer.invoke("paste-at-captured-target", sessionId, text, options),
   hideWindow: () => ipcRenderer.invoke("hide-window"),
   showDictationPanel: () => ipcRenderer.invoke("show-dictation-panel"),
   openSettingsSection: (section) => ipcRenderer.invoke("open-settings-section", section),
@@ -125,7 +123,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onToggleDictation: registerListener("toggle-dictation", (callback) => () => callback()),
   onToggleVoiceAgent: registerListener("toggle-voice-agent", (callback) => () => callback()),
   onToggleTranslation: registerListener("toggle-translation", (callback) => () => callback()),
-  onOpenAssistantPanel: registerListener("open-assistant-panel", (callback) => () => callback()),
   onStartDictation: registerListener("start-dictation", (callback) => () => callback()),
   onStopDictation: registerListener("stop-dictation", (callback) => () => callback()),
   onPrepareDictation: registerListener(
@@ -136,7 +133,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "cancel-dictation-preparation",
     (callback) => () => callback()
   ),
-  onCancelDictation: registerListener("cancel-dictation", (callback) => () => callback()),
   onDictationForceStopped: registerListener(
     "dictation-force-stopped",
     (callback) => (_event, payload) => callback(payload)
@@ -144,28 +140,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   micWarmHoldChanged: (active) => ipcRenderer.send("mic-warm-hold-changed", active),
   dictationLifecycleStateChanged: (state, inputKind) =>
     ipcRenderer.send("dictation-lifecycle-state-changed", state, inputKind),
-  dictationAudioLevelChanged: (level) => ipcRenderer.send("dictation-audio-level-changed", level),
-  toggleAgentPanelDictation: () => ipcRenderer.invoke("toggle-agent-panel-dictation"),
-  cancelAgentPanelDictation: () => ipcRenderer.invoke("cancel-agent-panel-dictation"),
-  getAgentDictationPillState: () => ipcRenderer.invoke("get-agent-dictation-pill-state"),
-  resizeAgentDictationPillToContent: (surfaceHeight) =>
-    ipcRenderer.invoke("resize-agent-dictation-pill-to-content", surfaceHeight),
-  setAgentDictationPillInteractivity: (interactive) =>
-    ipcRenderer.invoke("set-agent-dictation-pill-interactivity", interactive),
-  onAgentDictationPillStateChanged: registerListener(
-    "agent-dictation-pill-state-changed",
-    (callback) => (_event, state) => callback(state)
-  ),
-  onAgentDictationPillAudioLevelChanged: registerListener(
-    "agent-dictation-pill-audio-level-changed",
-    (callback) => (_event, level) => callback(level)
-  ),
-  showAgentDictationFinalTranscript: (text) =>
-    ipcRenderer.send("show-agent-dictation-final-transcript", text),
-  onAgentDictationPillFinalTranscript: registerListener(
-    "agent-dictation-pill-final-transcript",
-    (callback) => (_event, text) => callback(text)
-  ),
 
   // Database functions
   saveTranscription: (text, rawText, options) =>
@@ -601,8 +575,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("resize-assistant-window-to-content", surfaceHeight),
   resizeDictationErrorWindowToContent: (surfaceHeight) =>
     ipcRenderer.invoke("resize-dictation-error-window-to-content", surfaceHeight),
-  setAssistantPanelOpen: (open) => ipcRenderer.invoke("set-assistant-panel-open", open),
-  setAssistantPanelBusy: (busy) => ipcRenderer.invoke("set-assistant-panel-busy", busy),
 
   // Update functions
   checkForUpdates: () => ipcRenderer.invoke("check-for-updates"),

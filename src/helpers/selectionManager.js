@@ -330,67 +330,6 @@ class SelectionManager {
     });
   }
 
-  async pasteAtCapturedTarget(sessionId, text, options = {}) {
-    if (typeof text !== "string" || text.length === 0) {
-      return this._declineAssistantPaste("invalid_replacement", {
-        sessionFound: this.sessions.has(sessionId),
-      });
-    }
-
-    return this.clipboardManager.runClipboardOperation(async () => {
-      this._pruneSessions();
-      const session = this.sessions.get(sessionId);
-      this.sessions.delete(sessionId);
-      if (!session || session.kind !== "caret") {
-        return this._declineAssistantPaste("session_expired", {
-          sessionFound: Boolean(session),
-          sessionKind: session?.kind ?? null,
-        });
-      }
-
-      const current = await this._readCurrentSelection(session.target, { probeEditable: true });
-      if (current.status !== "editable") {
-        return this._declineAssistantPaste(heldBackCode("target_changed", current), {
-          sessionFound: true,
-          sessionKind: "caret",
-          probeStatus: current.status,
-          probeCode: current.code ?? null,
-        });
-      }
-
-      try {
-        const pasteResult = await this.clipboardManager._pasteText(text, {
-          ...options,
-          restoreClipboard: options.restoreClipboard !== false,
-          ...(session.target?.kind === "win-hwnd" ? { targetWindow: session.target.id } : {}),
-        });
-        await pasteResult?.restoreComplete;
-        if (pasteResult?.pasted === false) {
-          return this._declineAssistantPaste(heldBackCode("paste_failed", pasteResult), {
-            sessionFound: true,
-            sessionKind: "caret",
-            probeStatus: "editable",
-          });
-        }
-        return { success: true };
-      } catch (error) {
-        debugLogger.warn("Assistant response paste failed", { error: error.message }, "clipboard");
-        return { success: false, code: "paste_failed", error: error.message };
-      }
-    });
-  }
-
-  // One line per refusal. The renderer discards the code it receives, so the
-  // debug log is the only place a declined assistant paste can be diagnosed.
-  _declineAssistantPaste(code, details = {}) {
-    debugLogger.info(
-      "Assistant response paste declined",
-      { code, platform: this.platform, ...details },
-      "clipboard"
-    );
-    return { success: false, code };
-  }
-
   _pruneSessions() {
     const now = this.now();
     for (const [id, session] of this.sessions) {
@@ -829,9 +768,7 @@ class SelectionManager {
     // A clipboard side the sentinel write didn't reach (KDE desyncs X11 from
     // Wayland) still holds pre-copy content; snapshot it so stale text can't
     // be mistaken for the copied selection. Known limitation: a clipboard that
-    // already held exactly the selected text reads as "no selection". The
-    // editable probe must independently verify an empty writable field before
-    // caret delivery; a live selection or unknown accessibility keeps the panel.
+    // already held exactly the selected text reads as "no selection".
     const baseline = new Set([...beforeWrite, ...this.clipboardManager._readClipboardTextAll()]);
 
     const copyResult = await sendCopy();

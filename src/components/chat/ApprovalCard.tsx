@@ -106,7 +106,7 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
 
   // Esc anywhere on the card while editing (a field, or the Edit button that
   // keeps focus) ends editing and keeps the draft. It must not reach the
-  // assistant panel, whose Esc cancels the whole turn and withdraws the card.
+  // agent window, whose Esc cancels the whole turn and withdraws the card.
   const onEditorKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (event.key !== "Escape") return;
     event.preventDefault();
