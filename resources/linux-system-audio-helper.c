@@ -1,9 +1,7 @@
 #define _GNU_SOURCE
 
 #include <errno.h>
-#include <fcntl.h>
 #include <glib.h>
-#include <limits.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,37 +11,61 @@
 #ifdef HAVE_PIPEWIRE
 #include <glib-unix.h>
 #include <pipewire/pipewire.h>
-#include <pipewire/extensions/metadata.h>
 #include <spa/param/audio/format-utils.h>
 #include <spa/param/props.h>
 #endif
 
 #define TARGET_SAMPLE_RATE 24000
 #define TARGET_CHANNELS 1
-#define TARGET_SAMPLE_BYTES 2
-#define AUDIO_PIPE_READ 0
-#define AUDIO_PIPE_WRITE 1
-#define AUDIO_DRAIN_BUFFER_SIZE 16384
-#define AUDIO_FRAME_BYTES (TARGET_CHANNELS * TARGET_SAMPLE_BYTES)
-#define AUDIO_PIPE_CHUNK_SIZE ((uint32_t)((PIPE_BUF / AUDIO_FRAME_BYTES) * AUDIO_FRAME_BYTES))
-#define DEFAULT_METADATA_NAME "default"
-#define DEFAULT_AUDIO_SINK_KEY "default.audio.sink"
-#define DEFAULT_SINK_RESOLVE_TIMEOUT_NS (500 * SPA_NSEC_PER_MSEC)
+#define SINK_MEDIA_CLASS "Audio/Sink"
+#define OWN_NODE_PREFIX "openwhispr"
+#define SINK_NODE_LATENCY "480/48000"
+#define MIX_TICK_MS 10
+#define MIX_CHUNK_FRAMES 2400
+#define SOURCE_RING_FRAMES TARGET_SAMPLE_RATE
+#define SOURCE_PRIME_FRAMES (TARGET_SAMPLE_RATE * 60 / 1000)
+#define SOURCE_MAX_FRAMES (TARGET_SAMPLE_RATE * 200 / 1000)
+#define SOURCE_TRIM_FRAMES (TARGET_SAMPLE_RATE * 120 / 1000)
+#define MAX_CATCHUP_FRAMES (TARGET_SAMPLE_RATE / 2)
 
+typedef struct Helper Helper;
+
+#ifdef HAVE_PIPEWIRE
 typedef struct {
+    Helper *app;
+    uint32_t node_id;
+    gchar *sink_name;
+    struct pw_stream *stream;
+    struct spa_hook stream_listener;
+    float *ring;
+    guint read_pos;
+    guint fill;
+    gboolean primed;
+    gboolean format_ok;
+} SinkSource;
+#endif
+
+struct Helper {
     GMainLoop *loop;
     int exit_code;
 #ifdef HAVE_PIPEWIRE
     struct pw_thread_loop *pw_loop;
-    struct pw_stream *pw_stream;
-    int audio_pipe_fds[2];
-    guint audio_source_id;
-    gint audio_dropped_bytes; /* atomic; RT thread increments, main loop reads */
-    gboolean drop_warning_emitted;
-    gboolean stream_format_ok;
-    gboolean start_event_emitted;
+    struct pw_context *context;
+    struct pw_core *core;
+    struct pw_registry *registry;
+    struct spa_hook core_listener;
+    struct spa_hook registry_listener;
+    GPtrArray *sources;
+    int sync_seq;
+    gint started; /* atomic; set from the PipeWire thread, read by the mix timer */
+    gboolean clock_running;
+    gint64 clock_origin_us;
+    guint64 frames_emitted;
+    guint mix_source_id;
+    float mix_buffer[MIX_CHUNK_FRAMES];
+    int16_t out_buffer[MIX_CHUNK_FRAMES];
 #endif
-} Helper;
+};
 
 static void json_print_escaped(FILE *stream, const char *value)
 {
@@ -185,27 +207,6 @@ static void finish_start(Helper *app, int exit_code)
     }
 }
 
-typedef struct {
-    struct pw_thread_loop *loop;
-    struct pw_context *context;
-    struct pw_core *core;
-    struct pw_registry *registry;
-    struct pw_metadata *metadata;
-    struct spa_hook core_listener;
-    struct spa_hook registry_listener;
-    struct spa_hook metadata_listener;
-    gchar *sink_name;
-    int sync_seq;
-    gboolean done;
-    gboolean loop_started;
-} DefaultSinkResolver;
-
-static void init_pipewire_state(Helper *app)
-{
-    app->audio_pipe_fds[AUDIO_PIPE_READ] = -1;
-    app->audio_pipe_fds[AUDIO_PIPE_WRITE] = -1;
-}
-
 static gboolean check_pipewire_available(void)
 {
     gboolean available = FALSE;
@@ -241,257 +242,6 @@ out:
     pw_deinit();
 
     return available;
-}
-
-static gchar *extract_metadata_name_value(const char *value)
-{
-    const char *cursor;
-    const char *trimmed;
-    GString *name;
-
-    if (!value || !*value) {
-        return NULL;
-    }
-
-    trimmed = value;
-    while (g_ascii_isspace(*trimmed)) {
-        trimmed++;
-    }
-
-    cursor = strstr(value, "\"name\"");
-    if (!cursor) {
-        return *trimmed && *trimmed != '{' ? g_strdup(trimmed) : NULL;
-    }
-
-    cursor = strchr(cursor, ':');
-    if (!cursor) {
-        return NULL;
-    }
-
-    cursor = strchr(cursor, '"');
-    if (!cursor) {
-        return NULL;
-    }
-    cursor++;
-
-    name = g_string_new(NULL);
-    for (; *cursor; cursor++) {
-        if (*cursor == '"') {
-            break;
-        }
-
-        if (*cursor == '\\' && cursor[1]) {
-            cursor++;
-            switch (*cursor) {
-                case '"':
-                case '\\':
-                case '/':
-                    g_string_append_c(name, *cursor);
-                    break;
-                case 'b':
-                    g_string_append_c(name, '\b');
-                    break;
-                case 'f':
-                    g_string_append_c(name, '\f');
-                    break;
-                case 'n':
-                    g_string_append_c(name, '\n');
-                    break;
-                case 'r':
-                    g_string_append_c(name, '\r');
-                    break;
-                case 't':
-                    g_string_append_c(name, '\t');
-                    break;
-                default:
-                    g_string_append_c(name, *cursor);
-                    break;
-            }
-            continue;
-        }
-
-        g_string_append_c(name, *cursor);
-    }
-
-    if (*cursor != '"' || name->len == 0) {
-        g_string_free(name, TRUE);
-        return NULL;
-    }
-
-    return g_string_free(name, FALSE);
-}
-
-static int on_default_metadata_property(void *data, uint32_t subject, const char *key,
-                                        const char *type, const char *value)
-{
-    (void)subject;
-    (void)type;
-    DefaultSinkResolver *resolver = data;
-
-    if (!key || strcmp(key, DEFAULT_AUDIO_SINK_KEY) != 0 || !value) {
-        return 0;
-    }
-
-    g_free(resolver->sink_name);
-    resolver->sink_name = extract_metadata_name_value(value);
-    if (resolver->sink_name) {
-        resolver->done = TRUE;
-        pw_thread_loop_signal(resolver->loop, FALSE);
-    }
-
-    return 0;
-}
-
-static const struct pw_metadata_events default_metadata_events = {
-    PW_VERSION_METADATA_EVENTS,
-    .property = on_default_metadata_property,
-};
-
-static void on_default_registry_global(void *data, uint32_t id, uint32_t permissions,
-                                       const char *type, uint32_t version,
-                                       const struct spa_dict *props)
-{
-    (void)permissions;
-    DefaultSinkResolver *resolver = data;
-    const char *metadata_name;
-
-    if (!type || strcmp(type, PW_TYPE_INTERFACE_Metadata) != 0 || !props ||
-        resolver->metadata) {
-        return;
-    }
-
-    metadata_name = spa_dict_lookup(props, PW_KEY_METADATA_NAME);
-    if (!metadata_name || strcmp(metadata_name, DEFAULT_METADATA_NAME) != 0) {
-        return;
-    }
-
-    uint32_t metadata_version =
-        version < (uint32_t)PW_VERSION_METADATA ? version : (uint32_t)PW_VERSION_METADATA;
-    resolver->metadata = pw_registry_bind(resolver->registry, id, PW_TYPE_INTERFACE_Metadata,
-                                          metadata_version, 0);
-    if (resolver->metadata) {
-        pw_metadata_add_listener(resolver->metadata, &resolver->metadata_listener,
-                                 &default_metadata_events, resolver);
-    }
-}
-
-static const struct pw_registry_events default_registry_events = {
-    PW_VERSION_REGISTRY_EVENTS,
-    .global = on_default_registry_global,
-};
-
-static void on_default_core_done(void *data, uint32_t id, int seq)
-{
-    (void)id;
-    DefaultSinkResolver *resolver = data;
-
-    if (seq == resolver->sync_seq) {
-        resolver->done = TRUE;
-        pw_thread_loop_signal(resolver->loop, FALSE);
-    }
-}
-
-static const struct pw_core_events default_core_events = {
-    PW_VERSION_CORE_EVENTS,
-    .done = on_default_core_done,
-};
-
-static gchar *resolve_default_audio_sink_name(void)
-{
-    DefaultSinkResolver resolver = {0};
-    struct timespec timeout;
-    gchar *sink_name = NULL;
-
-    resolver.loop = pw_thread_loop_new("ow-default-sink", NULL);
-    if (!resolver.loop) {
-        goto out;
-    }
-
-    resolver.context = pw_context_new(pw_thread_loop_get_loop(resolver.loop), NULL, 0);
-    if (!resolver.context) {
-        goto out;
-    }
-
-    resolver.core = pw_context_connect(resolver.context, NULL, 0);
-    if (!resolver.core) {
-        goto out;
-    }
-
-    pw_core_add_listener(resolver.core, &resolver.core_listener, &default_core_events, &resolver);
-    resolver.registry = pw_core_get_registry(resolver.core, PW_VERSION_REGISTRY, 0);
-    if (!resolver.registry) {
-        goto out;
-    }
-    pw_registry_add_listener(resolver.registry, &resolver.registry_listener,
-                             &default_registry_events, &resolver);
-
-    if (pw_thread_loop_start(resolver.loop) < 0) {
-        goto out;
-    }
-    resolver.loop_started = TRUE;
-
-    pw_thread_loop_lock(resolver.loop);
-    resolver.sync_seq = pw_core_sync(resolver.core, PW_ID_CORE, 0);
-    if (resolver.sync_seq >= 0 &&
-        pw_thread_loop_get_time(resolver.loop, &timeout, DEFAULT_SINK_RESOLVE_TIMEOUT_NS) == 0) {
-        while (!resolver.done && !resolver.sink_name) {
-            if (pw_thread_loop_timed_wait_full(resolver.loop, &timeout) != 0) {
-                break;
-            }
-        }
-    }
-    pw_thread_loop_unlock(resolver.loop);
-
-    if (resolver.sink_name) {
-        sink_name = g_strdup(resolver.sink_name);
-    }
-
-out:
-    if (resolver.loop && resolver.loop_started) {
-        pw_thread_loop_lock(resolver.loop);
-    }
-    if (resolver.metadata) {
-        pw_proxy_destroy((struct pw_proxy *)resolver.metadata);
-        resolver.metadata = NULL;
-    }
-    if (resolver.registry) {
-        pw_proxy_destroy((struct pw_proxy *)resolver.registry);
-        resolver.registry = NULL;
-    }
-    if (resolver.loop && resolver.loop_started) {
-        pw_thread_loop_unlock(resolver.loop);
-        pw_thread_loop_stop(resolver.loop);
-    }
-    if (resolver.core) {
-        pw_core_disconnect(resolver.core);
-    }
-    if (resolver.context) {
-        pw_context_destroy(resolver.context);
-    }
-    if (resolver.loop) {
-        pw_thread_loop_destroy(resolver.loop);
-    }
-    g_free(resolver.sink_name);
-
-    return sink_name;
-}
-
-static void close_audio_pipe(Helper *app)
-{
-    if (app->audio_source_id) {
-        g_source_remove(app->audio_source_id);
-        app->audio_source_id = 0;
-    }
-
-    if (app->audio_pipe_fds[AUDIO_PIPE_READ] >= 0) {
-        close(app->audio_pipe_fds[AUDIO_PIPE_READ]);
-        app->audio_pipe_fds[AUDIO_PIPE_READ] = -1;
-    }
-
-    if (app->audio_pipe_fds[AUDIO_PIPE_WRITE] >= 0) {
-        close(app->audio_pipe_fds[AUDIO_PIPE_WRITE]);
-        app->audio_pipe_fds[AUDIO_PIPE_WRITE] = -1;
-    }
 }
 
 static gboolean write_all_stdout(Helper *app, const uint8_t *data, size_t size)
@@ -531,141 +281,55 @@ static gboolean write_all_stdout(Helper *app, const uint8_t *data, size_t size)
     return TRUE;
 }
 
-static void enqueue_audio_bytes(Helper *app, const uint8_t *data, uint32_t size)
+static void sink_source_push(SinkSource *source, const float *samples, guint frames)
 {
-    size -= size % AUDIO_FRAME_BYTES;
+    if (frames > SOURCE_RING_FRAMES) {
+        samples += frames - SOURCE_RING_FRAMES;
+        frames = SOURCE_RING_FRAMES;
+    }
 
-    /* Nonblocking pipe writes up to PIPE_BUF are atomic, so backpressure drops
-     * whole S16 frames instead of splitting samples. */
-    while (size > 0) {
-        uint32_t chunk_size = size < AUDIO_PIPE_CHUNK_SIZE ? size : AUDIO_PIPE_CHUNK_SIZE;
-        ssize_t written = write(app->audio_pipe_fds[AUDIO_PIPE_WRITE], data, chunk_size);
-
-        if (written != (ssize_t)chunk_size) {
-            uint32_t dropped = size;
-
-            if (written > 0 && (uint32_t)written <= size) {
-                dropped -= (uint32_t)written;
-            }
-
-            g_atomic_int_add(&app->audio_dropped_bytes, (gint)dropped);
-            return;
+    for (guint i = 0; i < frames; i++) {
+        if (source->fill == SOURCE_RING_FRAMES) {
+            source->read_pos = (source->read_pos + 1) % SOURCE_RING_FRAMES;
+            source->fill--;
         }
+        source->ring[(source->read_pos + source->fill) % SOURCE_RING_FRAMES] = samples[i];
+        source->fill++;
+    }
 
-        data += chunk_size;
-        size -= chunk_size;
+    /* Each sink runs on its own device clock; trimming bounds the drift against
+     * the monotonic mix clock instead of letting latency grow. */
+    if (source->fill > SOURCE_MAX_FRAMES) {
+        guint excess = source->fill - SOURCE_TRIM_FRAMES;
+        source->read_pos = (source->read_pos + excess) % SOURCE_RING_FRAMES;
+        source->fill -= excess;
+    }
+
+    if (!source->primed && source->fill >= SOURCE_PRIME_FRAMES) {
+        source->primed = TRUE;
     }
 }
 
-static void maybe_warn_dropped_audio(Helper *app)
+static void on_source_process(void *userdata)
 {
-    if (app->drop_warning_emitted) {
-        return;
-    }
-
-    gint dropped_bytes = g_atomic_int_get(&app->audio_dropped_bytes);
-    if (dropped_bytes <= 0) {
-        return;
-    }
-
-    app->drop_warning_emitted = TRUE;
-    gchar *message = g_strdup_printf(
-        "System audio PCM frames dropped under backpressure (%d bytes so far); "
-        "expect gaps in captured audio",
-        dropped_bytes);
-
-    emit_event("warning", "audio_frames_dropped", message);
-    g_free(message);
-}
-
-static gboolean on_audio_pipe_readable(gint fd, GIOCondition condition, gpointer user_data)
-{
-    Helper *app = user_data;
-    uint8_t buffer[AUDIO_DRAIN_BUFFER_SIZE];
-
-    while (TRUE) {
-        ssize_t bytes_read = read(fd, buffer, sizeof(buffer));
-        if (bytes_read > 0) {
-            if (!write_all_stdout(app, buffer, (size_t)bytes_read)) {
-                app->audio_source_id = 0;
-                return G_SOURCE_REMOVE;
-            }
-            continue;
-        }
-
-        if (bytes_read == 0) {
-            app->audio_source_id = 0;
-            return G_SOURCE_REMOVE;
-        }
-
-        if (errno == EINTR) {
-            continue;
-        }
-
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            break;
-        }
-
-        emit_event("error", "audio_pipe_read_failed", g_strerror(errno));
-        finish_start(app, 2);
-        app->audio_source_id = 0;
-        return G_SOURCE_REMOVE;
-    }
-
-    maybe_warn_dropped_audio(app);
-
-    if (condition & (G_IO_HUP | G_IO_ERR | G_IO_NVAL)) {
-        app->audio_source_id = 0;
-        return G_SOURCE_REMOVE;
-    }
-
-    return G_SOURCE_CONTINUE;
-}
-
-static void maybe_emit_start(Helper *app)
-{
-    if (!app->stream_format_ok || app->start_event_emitted) {
-        return;
-    }
-
-    app->start_event_emitted = TRUE;
-    emit_event("start", NULL, NULL);
-}
-
-static void fail_pipewire_format(Helper *app, const char *message)
-{
-    emit_event("error", "unsupported_pipewire_format", message);
-    finish_start(app, 2);
-}
-
-static void on_pw_process(void *userdata)
-{
-    Helper *app = userdata;
-    struct pw_buffer *b = pw_stream_dequeue_buffer(app->pw_stream);
+    SinkSource *source = userdata;
+    struct pw_buffer *b = pw_stream_dequeue_buffer(source->stream);
     if (!b) return;
 
     struct spa_buffer *buf = b->buffer;
-    if (!app->stream_format_ok || buf->n_datas == 0 || !buf->datas[0].data ||
-        !buf->datas[0].chunk || app->audio_pipe_fds[AUDIO_PIPE_WRITE] < 0) {
-        pw_stream_queue_buffer(app->pw_stream, b);
-        return;
+    if (source->format_ok && buf->n_datas > 0 && buf->datas[0].data && buf->datas[0].chunk) {
+        uint32_t offs = SPA_MIN(buf->datas[0].chunk->offset, buf->datas[0].maxsize);
+        uint32_t size = SPA_MIN(buf->datas[0].chunk->size, buf->datas[0].maxsize - offs);
+        const float *samples = (const float *)((const uint8_t *)buf->datas[0].data + offs);
+        sink_source_push(source, samples, size / sizeof(float));
     }
 
-    const void *src = buf->datas[0].data;
-    uint32_t offs = SPA_MIN(buf->datas[0].chunk->offset, buf->datas[0].maxsize);
-    uint32_t size = SPA_MIN(buf->datas[0].chunk->size, buf->datas[0].maxsize - offs);
-
-    if (size > 0) {
-        const uint8_t *ptr = (const uint8_t *)src + offs;
-        enqueue_audio_bytes(app, ptr, size);
-    }
-
-    pw_stream_queue_buffer(app->pw_stream, b);
+    pw_stream_queue_buffer(source->stream, b);
 }
 
-static void on_pw_param_changed(void *userdata, uint32_t id, const struct spa_pod *param)
+static void on_source_param_changed(void *userdata, uint32_t id, const struct spa_pod *param)
 {
-    Helper *app = userdata;
+    SinkSource *source = userdata;
 
     if (id != SPA_PARAM_Format || !param) {
         return;
@@ -673,46 +337,258 @@ static void on_pw_param_changed(void *userdata, uint32_t id, const struct spa_po
 
     struct spa_audio_info_raw info;
     if (spa_format_audio_raw_parse(param, &info) < 0) {
-        app->stream_format_ok = FALSE;
-        fail_pipewire_format(app, "Failed to parse negotiated PipeWire audio format");
+        source->format_ok = FALSE;
+        emit_event("warning", "unsupported_pipewire_format", source->sink_name);
         return;
     }
 
-    app->stream_format_ok =
-        info.format == SPA_AUDIO_FORMAT_S16_LE &&
+    source->format_ok =
+        info.format == SPA_AUDIO_FORMAT_F32 &&
         info.rate == TARGET_SAMPLE_RATE &&
         info.channels == TARGET_CHANNELS;
 
-    if (!app->stream_format_ok) {
+    if (!source->format_ok) {
         gchar *message = g_strdup_printf(
-            "Unsupported PipeWire audio format: format=%u rate=%u channels=%u",
-            (unsigned int)info.format, info.rate, info.channels);
-        fail_pipewire_format(app, message);
+            "Unsupported PipeWire audio format on %s: format=%u rate=%u channels=%u",
+            source->sink_name, (unsigned int)info.format, info.rate, info.channels);
+        emit_event("warning", "unsupported_pipewire_format", message);
         g_free(message);
+    }
+}
+
+static void on_source_state_changed(void *userdata, enum pw_stream_state old,
+                                    enum pw_stream_state state, const char *error)
+{
+    (void)old;
+    SinkSource *source = userdata;
+
+    if (state == PW_STREAM_STATE_ERROR) {
+        gchar *message = g_strdup_printf("%s: %s", source->sink_name,
+                                         error ? error : "PipeWire stream error");
+        emit_event("warning", "sink_capture_error", message);
+        g_free(message);
+    }
+}
+
+static const struct pw_stream_events source_stream_events = {
+    PW_VERSION_STREAM_EVENTS,
+    .process = on_source_process,
+    .param_changed = on_source_param_changed,
+    .state_changed = on_source_state_changed,
+};
+
+static void free_sink_source(SinkSource *source)
+{
+    if (source->stream) {
+        spa_hook_remove(&source->stream_listener);
+        pw_stream_destroy(source->stream);
+    }
+    g_free(source->ring);
+    g_free(source->sink_name);
+    g_free(source);
+}
+
+static void add_sink_source(Helper *app, uint32_t node_id, const char *sink_name)
+{
+    SinkSource *source = g_new0(SinkSource, 1);
+    source->app = app;
+    source->node_id = node_id;
+    source->sink_name = g_strdup(sink_name);
+    source->ring = g_new0(float, SOURCE_RING_FRAMES);
+
+    /* WirePlumber 0.4 moves target.object streams to the new default sink unless
+     * dont-reconnect is set, which would capture one device twice. */
+    struct pw_properties *props = pw_properties_new(
+        PW_KEY_MEDIA_TYPE, "Audio",
+        PW_KEY_MEDIA_CATEGORY, "Capture",
+        PW_KEY_NODE_NAME, "openwhispr-system-audio",
+        PW_KEY_STREAM_CAPTURE_SINK, "true",
+        PW_KEY_TARGET_OBJECT, sink_name,
+        PW_KEY_NODE_DONT_RECONNECT, "true",
+        PW_KEY_NODE_PASSIVE, "true",
+        PW_KEY_NODE_LATENCY, SINK_NODE_LATENCY,
+        NULL);
+
+    source->stream = pw_stream_new(app->core, "openwhispr-system-audio", props);
+    if (!source->stream) {
+        emit_event("warning", "sink_capture_error", sink_name);
+        free_sink_source(source);
         return;
     }
 
-    maybe_emit_start(app);
+    pw_stream_add_listener(source->stream, &source->stream_listener, &source_stream_events, source);
+
+    uint8_t params_buffer[1024];
+    struct spa_pod_builder b = SPA_POD_BUILDER_INIT(params_buffer, sizeof(params_buffer));
+    const struct spa_pod *params[1];
+    params[0] = spa_format_audio_raw_build(&b, SPA_PARAM_EnumFormat,
+        &SPA_AUDIO_INFO_RAW_INIT(
+            .format = SPA_AUDIO_FORMAT_F32,
+            .channels = TARGET_CHANNELS,
+            .rate = TARGET_SAMPLE_RATE));
+
+    int res = pw_stream_connect(source->stream,
+        PW_DIRECTION_INPUT,
+        PW_ID_ANY,
+        PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS,
+        params, 1);
+
+    if (res < 0) {
+        emit_event("warning", "sink_capture_error", sink_name);
+        free_sink_source(source);
+        return;
+    }
+
+    g_ptr_array_add(app->sources, source);
 }
 
-static void on_pw_state_changed(void *userdata, enum pw_stream_state old,
-                                enum pw_stream_state state, const char *error)
+static void on_registry_global(void *data, uint32_t id, uint32_t permissions,
+                               const char *type, uint32_t version,
+                               const struct spa_dict *props)
 {
-    (void)old;
-    Helper *app = userdata;
+    (void)permissions;
+    (void)version;
+    Helper *app = data;
 
-    if (state == PW_STREAM_STATE_ERROR) {
-        emit_event("error", "pipewire_error", error ? error : "PipeWire stream error");
+    if (!type || strcmp(type, PW_TYPE_INTERFACE_Node) != 0 || !props) {
+        return;
+    }
+
+    const char *media_class = spa_dict_lookup(props, PW_KEY_MEDIA_CLASS);
+    const char *node_name = spa_dict_lookup(props, PW_KEY_NODE_NAME);
+    if (!media_class || strcmp(media_class, SINK_MEDIA_CLASS) != 0 || !node_name ||
+        g_str_has_prefix(node_name, OWN_NODE_PREFIX)) {
+        return;
+    }
+
+    add_sink_source(app, id, node_name);
+}
+
+static void on_registry_global_remove(void *data, uint32_t id)
+{
+    Helper *app = data;
+
+    for (guint i = 0; i < app->sources->len; i++) {
+        SinkSource *source = g_ptr_array_index(app->sources, i);
+        if (source->node_id == id) {
+            g_ptr_array_remove_index_fast(app->sources, i);
+            free_sink_source(source);
+            return;
+        }
+    }
+}
+
+static const struct pw_registry_events registry_events = {
+    PW_VERSION_REGISTRY_EVENTS,
+    .global = on_registry_global,
+    .global_remove = on_registry_global_remove,
+};
+
+static void on_core_done(void *data, uint32_t id, int seq)
+{
+    Helper *app = data;
+
+    if (id != PW_ID_CORE || seq != app->sync_seq || g_atomic_int_get(&app->started)) {
+        return;
+    }
+
+    g_atomic_int_set(&app->started, 1);
+    emit_event("start", NULL, NULL);
+}
+
+static void on_core_error(void *data, uint32_t id, int seq, int res, const char *message)
+{
+    (void)seq;
+    Helper *app = data;
+
+    if (id == PW_ID_CORE && res == -EPIPE) {
+        emit_event("error", "pipewire_error", message ? message : "PipeWire connection lost");
         finish_start(app, 2);
     }
 }
 
-static const struct pw_stream_events pw_stream_events = {
-    PW_VERSION_STREAM_EVENTS,
-    .process = on_pw_process,
-    .param_changed = on_pw_param_changed,
-    .state_changed = on_pw_state_changed,
+static const struct pw_core_events core_events = {
+    PW_VERSION_CORE_EVENTS,
+    .done = on_core_done,
+    .error = on_core_error,
 };
+
+static void mix_sources(Helper *app, guint frames)
+{
+    memset(app->mix_buffer, 0, frames * sizeof(float));
+
+    pw_thread_loop_lock(app->pw_loop);
+    for (guint s = 0; s < app->sources->len; s++) {
+        SinkSource *source = g_ptr_array_index(app->sources, s);
+        if (!source->primed) {
+            continue;
+        }
+
+        guint available = SPA_MIN(source->fill, frames);
+        for (guint i = 0; i < available; i++) {
+            app->mix_buffer[i] += source->ring[(source->read_pos + i) % SOURCE_RING_FRAMES];
+        }
+        source->read_pos = (source->read_pos + available) % SOURCE_RING_FRAMES;
+        source->fill -= available;
+
+        if (available < frames) {
+            source->primed = FALSE;
+        }
+    }
+    pw_thread_loop_unlock(app->pw_loop);
+}
+
+static gboolean on_mix_tick(gpointer user_data)
+{
+    Helper *app = user_data;
+
+    if (!g_atomic_int_get(&app->started)) {
+        return G_SOURCE_CONTINUE;
+    }
+
+    gint64 now = g_get_monotonic_time();
+    if (!app->clock_running) {
+        app->clock_running = TRUE;
+        app->clock_origin_us = now;
+        app->frames_emitted = 0;
+        return G_SOURCE_CONTINUE;
+    }
+
+    guint64 due_total =
+        (guint64)(now - app->clock_origin_us) * TARGET_SAMPLE_RATE / G_USEC_PER_SEC;
+    if (due_total <= app->frames_emitted) {
+        return G_SOURCE_CONTINUE;
+    }
+
+    guint64 due = due_total - app->frames_emitted;
+    if (due > MAX_CATCHUP_FRAMES) {
+        due = TARGET_SAMPLE_RATE * MIX_TICK_MS / 1000;
+        app->frames_emitted = due_total - due;
+    }
+
+    while (due > 0) {
+        guint frames = due < MIX_CHUNK_FRAMES ? (guint)due : MIX_CHUNK_FRAMES;
+        mix_sources(app, frames);
+
+        for (guint i = 0; i < frames; i++) {
+            float value = app->mix_buffer[i];
+            if (value > 1.0f) value = 1.0f;
+            if (value < -1.0f) value = -1.0f;
+            value *= 32767.0f;
+            app->out_buffer[i] = (int16_t)(value >= 0.0f ? value + 0.5f : value - 0.5f);
+        }
+
+        if (!write_all_stdout(app, (const uint8_t *)app->out_buffer, frames * sizeof(int16_t))) {
+            app->mix_source_id = 0;
+            return G_SOURCE_REMOVE;
+        }
+
+        app->frames_emitted += frames;
+        due -= frames;
+    }
+
+    return G_SOURCE_CONTINUE;
+}
 
 static gboolean on_unix_signal(gpointer user_data)
 {
@@ -723,11 +599,11 @@ static gboolean on_unix_signal(gpointer user_data)
 
 static gboolean run_pipewire_capture(Helper *app)
 {
-    init_pipewire_state(app);
-
     signal(SIGPIPE, SIG_IGN);
 
     pw_init(NULL, NULL);
+
+    app->sources = g_ptr_array_new();
 
     app->pw_loop = pw_thread_loop_new("ow-capture", NULL);
     if (!app->pw_loop) {
@@ -735,86 +611,41 @@ static gboolean run_pipewire_capture(Helper *app)
         return FALSE;
     }
 
-    if (pipe2(app->audio_pipe_fds, O_NONBLOCK | O_CLOEXEC) != 0) {
-        emit_event("error", "audio_pipe_error", "Failed to create PCM drain pipe");
-        pw_thread_loop_destroy(app->pw_loop);
-        app->pw_loop = NULL;
-        return FALSE;
-    }
-
-    app->audio_source_id = g_unix_fd_add(app->audio_pipe_fds[AUDIO_PIPE_READ],
-                                         G_IO_IN | G_IO_HUP | G_IO_ERR | G_IO_NVAL,
-                                         on_audio_pipe_readable, app);
-    if (!app->audio_source_id) {
-        emit_event("error", "audio_pipe_error", "Failed to register PCM drain source");
-        close_audio_pipe(app);
-        pw_thread_loop_destroy(app->pw_loop);
-        app->pw_loop = NULL;
-        return FALSE;
-    }
-
-    gchar *target_sink_name = resolve_default_audio_sink_name();
-    struct pw_properties *props = pw_properties_new(
-        PW_KEY_MEDIA_TYPE, "Audio",
-        PW_KEY_MEDIA_CATEGORY, "Capture",
-        PW_KEY_MEDIA_ROLE, "Communication",
-        PW_KEY_STREAM_CAPTURE_SINK, "true",
-        NULL);
-    if (props && target_sink_name) {
-        pw_properties_set(props, PW_KEY_TARGET_OBJECT, target_sink_name);
-    }
-    g_free(target_sink_name);
-
-    app->pw_stream = pw_stream_new_simple(
-        pw_thread_loop_get_loop(app->pw_loop),
-        "openwhispr-system-audio",
-        props,
-        &pw_stream_events,
-        app);
-
-    if (!app->pw_stream) {
-        emit_event("error", "pipewire_error", "Failed to create PipeWire stream");
-        pw_properties_free(props);
-        close_audio_pipe(app);
-        pw_thread_loop_destroy(app->pw_loop);
-        app->pw_loop = NULL;
-        return FALSE;
-    }
-
-    uint8_t params_buffer[1024];
-    struct spa_pod_builder b = SPA_POD_BUILDER_INIT(params_buffer, sizeof(params_buffer));
-    const struct spa_pod *params[1];
-    params[0] = spa_format_audio_raw_build(&b, SPA_PARAM_EnumFormat,
-        &SPA_AUDIO_INFO_RAW_INIT(
-            .format = SPA_AUDIO_FORMAT_S16_LE,
-            .channels = TARGET_CHANNELS,
-            .rate = TARGET_SAMPLE_RATE));
-
-    int res = pw_stream_connect(app->pw_stream,
-        PW_DIRECTION_INPUT,
-        PW_ID_ANY,
-        PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS,
-        params, 1);
-
-    if (res < 0) {
-        emit_event("error", "pipewire_error", "Failed to connect PipeWire stream");
-        pw_stream_destroy(app->pw_stream);
-        app->pw_stream = NULL;
-        close_audio_pipe(app);
-        pw_thread_loop_destroy(app->pw_loop);
-        app->pw_loop = NULL;
+    app->context = pw_context_new(pw_thread_loop_get_loop(app->pw_loop), NULL, 0);
+    if (!app->context) {
+        emit_event("error", "pipewire_error", "Failed to create PipeWire context");
         return FALSE;
     }
 
     if (pw_thread_loop_start(app->pw_loop) < 0) {
         emit_event("error", "pipewire_error", "Failed to start PipeWire loop");
-        pw_stream_destroy(app->pw_stream);
-        app->pw_stream = NULL;
-        close_audio_pipe(app);
-        pw_thread_loop_destroy(app->pw_loop);
-        app->pw_loop = NULL;
         return FALSE;
     }
+
+    pw_thread_loop_lock(app->pw_loop);
+
+    app->core = pw_context_connect(app->context, NULL, 0);
+    if (!app->core) {
+        pw_thread_loop_unlock(app->pw_loop);
+        emit_event("error", "pipewire_error", "Failed to connect to PipeWire");
+        return FALSE;
+    }
+
+    pw_core_add_listener(app->core, &app->core_listener, &core_events, app);
+
+    app->registry = pw_core_get_registry(app->core, PW_VERSION_REGISTRY, 0);
+    if (!app->registry) {
+        pw_thread_loop_unlock(app->pw_loop);
+        emit_event("error", "pipewire_error", "Failed to get PipeWire registry");
+        return FALSE;
+    }
+
+    pw_registry_add_listener(app->registry, &app->registry_listener, &registry_events, app);
+    app->sync_seq = pw_core_sync(app->core, PW_ID_CORE, 0);
+
+    pw_thread_loop_unlock(app->pw_loop);
+
+    app->mix_source_id = g_timeout_add(MIX_TICK_MS, on_mix_tick, app);
 
     g_unix_signal_add(SIGTERM, on_unix_signal, app);
     g_unix_signal_add(SIGINT, on_unix_signal, app);
@@ -824,18 +655,46 @@ static gboolean run_pipewire_capture(Helper *app)
 
 static void cleanup_pipewire(Helper *app)
 {
-    if (app->pw_stream) {
+    if (app->mix_source_id) {
+        g_source_remove(app->mix_source_id);
+        app->mix_source_id = 0;
+    }
+
+    if (app->pw_loop) {
         pw_thread_loop_lock(app->pw_loop);
-        pw_stream_destroy(app->pw_stream);
-        pw_thread_loop_unlock(app->pw_loop);
-        app->pw_stream = NULL;
+    }
+    if (app->sources) {
+        for (guint i = 0; i < app->sources->len; i++) {
+            free_sink_source(g_ptr_array_index(app->sources, i));
+        }
+        g_ptr_array_set_size(app->sources, 0);
+    }
+    if (app->registry) {
+        spa_hook_remove(&app->registry_listener);
+        pw_proxy_destroy((struct pw_proxy *)app->registry);
+        app->registry = NULL;
+    }
+    if (app->core) {
+        spa_hook_remove(&app->core_listener);
+        pw_core_disconnect(app->core);
+        app->core = NULL;
     }
     if (app->pw_loop) {
+        pw_thread_loop_unlock(app->pw_loop);
         pw_thread_loop_stop(app->pw_loop);
+    }
+    if (app->context) {
+        pw_context_destroy(app->context);
+        app->context = NULL;
+    }
+    if (app->pw_loop) {
         pw_thread_loop_destroy(app->pw_loop);
         app->pw_loop = NULL;
     }
-    close_audio_pipe(app);
+    if (app->sources) {
+        g_ptr_array_free(app->sources, TRUE);
+        app->sources = NULL;
+    }
     pw_deinit();
 }
 #endif
@@ -856,11 +715,10 @@ static gboolean run_start(void)
 #ifdef HAVE_PIPEWIRE
     Helper app = {0};
     app.loop = g_main_loop_new(NULL, FALSE);
-    init_pipewire_state(&app);
 
     if (!run_pipewire_capture(&app)) {
-        g_main_loop_unref(app.loop);
         cleanup_pipewire(&app);
+        g_main_loop_unref(app.loop);
         return FALSE;
     }
 
