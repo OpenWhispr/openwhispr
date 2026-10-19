@@ -33,7 +33,11 @@ import { MicStreamHold } from "./micStreamHold";
 import { PcmTap } from "./pcmTap";
 import { ActiveMicRecoveryController } from "./activeMicRecovery";
 import { followsSystemDefaultMic } from "./micSelectionRecovery";
-import { isCacheableMicrophoneResolution, resolvePreferredMicrophone } from "./microphoneSelection";
+import {
+  isCacheableMicrophoneResolution,
+  resolvePreferredMicrophone,
+  TRANSCRIPTION_AUDIO_CONSTRAINTS,
+} from "./microphoneSelection";
 import { isStaleDeviceError } from "./staleMicDevice";
 import { shouldSaveDiscardedRecording } from "./discardedRecording";
 import {
@@ -1204,17 +1208,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   async getAudioConstraints(forceDefaultMic = false, refreshSystemDefault = false) {
     const settings = getSettings();
-
-    // All browser audio processing disabled to avoid OS-level side-effects.
-    // AGC off: Chromium's AGC on Windows mutates the system mic volume via WASAPI (#476).
-    // Echo cancellation and noise suppression off to avoid latency and speech distortion.
-    // Stereo recording required — mono WebM breaks silence detection on Linux/PipeWire (#472).
-    const noProcessing = {
-      echoCancellation: false,
-      noiseSuppression: false,
-      autoGainControl: false,
-      channelCount: 2,
-    };
+    const noProcessing = TRANSCRIPTION_AUDIO_CONSTRAINTS;
 
     if (
       !forceDefaultMic &&
@@ -1264,7 +1258,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       );
     }
 
-    return { audio: noProcessing };
+    return { audio: { ...noProcessing } };
   }
 
   async cacheMicrophoneDeviceId() {

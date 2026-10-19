@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useAuth } from "../../hooks/useAuth";
 import { useSettings } from "../../hooks/useSettings";
-import { useSettingsStore } from "../../stores/settingsStore";
+import { getSettings, useSettingsStore } from "../../stores/settingsStore";
+import {
+  resolvePreferredMicrophone,
+  TRANSCRIPTION_AUDIO_CONSTRAINTS,
+} from "../../helpers/microphoneSelection";
 import { getBaseLanguageCode } from "../../utils/languageSupport";
 import {
   transcribeFile,
@@ -16,6 +19,25 @@ export type VoiceDraftStatus = "idle" | "recording" | "transcribing";
 interface UseVoiceDraftOptions {
   onTranscript: (text: string) => void;
   onError: (message: string) => void;
+  /** Nothing was heard; without it, an empty take is reported through onError. */
+  onEmpty?: () => void;
+}
+
+// The microphone picked in Settings, with dictation's constraints; the default
+// device when that one can't be resolved or opened.
+async function openMicrophone(): Promise<MediaStream> {
+  try {
+    const resolution = await resolvePreferredMicrophone({ settings: getSettings() });
+    const deviceId = resolution.device?.deviceId;
+    if (deviceId) {
+      return await navigator.mediaDevices.getUserMedia({
+        audio: { deviceId: { exact: deviceId }, ...TRANSCRIPTION_AUDIO_CONSTRAINTS },
+      });
+    }
+  } catch {
+    // Fall through to the default device.
+  }
+  return navigator.mediaDevices.getUserMedia({ audio: { ...TRANSCRIPTION_AUDIO_CONSTRAINTS } });
 }
 
 /**
@@ -23,8 +45,10 @@ interface UseVoiceDraftOptions {
  * transcription pipeline (all providers, no LLM pass). The transcript is
  * handed back for the caller to place into the input.
  */
-export function useVoiceDraft({ onTranscript, onError }: UseVoiceDraftOptions) {
-  const { isSignedIn } = useAuth();
+export function useVoiceDraft({ onTranscript, onError, onEmpty }: UseVoiceDraftOptions) {
+  // The settings copy, not useAuth(): a sandboxed window (the agent window)
+  // can't resolve a session, and would send Cloud users down the BYOK route.
+  const isSignedIn = useSettingsStore((s) => s.isSignedIn);
   const settings = useSettings();
   const {
     useLocalWhisper,
@@ -54,6 +78,8 @@ export function useVoiceDraft({ onTranscript, onError }: UseVoiceDraftOptions) {
   const levelBufRef = useRef<Float32Array<ArrayBuffer> | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const discardRef = useRef(false);
+  // A start still opening the microphone: a stop or cancel meanwhile abandons it.
+  const openingRef = useRef<{ abandoned: boolean } | null>(null);
 
   const buildConfig = (): FileTranscriptionConfig => ({
     useLocalWhisper,
@@ -94,6 +120,8 @@ export function useVoiceDraft({ onTranscript, onError }: UseVoiceDraftOptions) {
   onTranscriptRef.current = onTranscript;
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
+  const onEmptyRef = useRef(onEmpty);
+  onEmptyRef.current = onEmpty;
 
   useEffect(() => {
     if (status !== "recording") return;
@@ -135,8 +163,10 @@ export function useVoiceDraft({ onTranscript, onError }: UseVoiceDraftOptions) {
       tempPath = saved.path;
       const result = await transcribeFile(tempPath, buildConfigRef.current(), false);
       const text = result.text?.trim();
-      if (!result.success || !text) {
+      if (!result.success) {
         onErrorRef.current(result.error || "");
+      } else if (!text) {
+        (onEmptyRef.current ?? (() => onErrorRef.current("")))();
       } else {
         onTranscriptRef.current(text);
       }
@@ -148,10 +178,18 @@ export function useVoiceDraft({ onTranscript, onError }: UseVoiceDraftOptions) {
     }
   }, [teardownCapture]);
 
-  const start = useCallback(async () => {
-    if (recorderRef.current) return;
+  /** Resolves once the take is recording (true), or failed to start (false). */
+  const start = useCallback(async (): Promise<boolean> => {
+    if (recorderRef.current || openingRef.current) return false;
+    const opening = { abandoned: false };
+    openingRef.current = opening;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await openMicrophone();
+      streamRef.current = stream;
+      if (opening.abandoned) {
+        teardownCapture();
+        return false;
+      }
       const context = new AudioContext();
       const source = context.createMediaStreamSource(stream);
       const analyser = context.createAnalyser();
@@ -174,33 +212,31 @@ export function useVoiceDraft({ onTranscript, onError }: UseVoiceDraftOptions) {
       recorder.start(1000);
 
       recorderRef.current = recorder;
-      streamRef.current = stream;
       contextRef.current = context;
       analyserRef.current = analyser;
       setStatus("recording");
+      return true;
     } catch (error) {
       teardownCapture();
       onErrorRef.current(error instanceof Error ? error.message : String(error));
+      return false;
+    } finally {
+      openingRef.current = null;
     }
   }, [finishRecording, teardownCapture]);
 
   const stop = useCallback(() => {
+    if (openingRef.current) openingRef.current.abandoned = true;
     recorderRef.current?.stop();
   }, []);
 
   const cancel = useCallback(() => {
     discardRef.current = true;
-    recorderRef.current?.stop();
-  }, []);
+    stop();
+  }, [stop]);
 
   // Discard silently if the surface unmounts mid-take.
-  useEffect(
-    () => () => {
-      discardRef.current = true;
-      recorderRef.current?.stop();
-    },
-    []
-  );
+  useEffect(() => cancel, [cancel]);
 
   return { status, elapsed, readLevel, start, stop, cancel, streamingOnlyProvider };
 }
