@@ -182,9 +182,7 @@ export default function AgentWindow() {
   const capturePressContext = useCallback(() => {
     const press = ++pressRef.current;
     const isCurrent = () => press === pressRef.current;
-    const selection = Promise.resolve(
-      window.electronAPI?.captureSelectedText?.()
-    )
+    const selection = Promise.resolve(window.electronAPI?.captureSelectedText?.())
       .then((capture) => {
         if (isCurrent() && capture?.status === "selected") {
           dispatch({
