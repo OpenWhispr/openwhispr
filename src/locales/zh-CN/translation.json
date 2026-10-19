@@ -672,6 +672,8 @@
       "failedCtaSettings": "设置您的转录服务商",
       "failedCtaAndRetry": "然后点击重试",
       "failedCtaSettingsOnly": "在设置中配置您的转录服务商",
+      "failedCtaAiSettings": "请在设置中检查语音助手模型",
+      "editFailedTranscriptKept": "未应用编辑 · 已保留转录文本",
       "failedLimitReached": "已达每日限额",
       "failedOffline": "离线",
       "clearAll": "全部清除",

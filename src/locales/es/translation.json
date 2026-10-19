@@ -681,6 +681,8 @@
       "failedCtaSettings": "Configura tu proveedor de transcripción",
       "failedCtaAndRetry": "y luego haz clic en reintentar",
       "failedCtaSettingsOnly": "Configura tu proveedor de transcripción en Ajustes",
+      "failedCtaAiSettings": "Revisa el modelo del Asistente de voz en Configuración",
+      "editFailedTranscriptKept": "Edición no aplicada · transcripción guardada",
       "failedLimitReached": "Límite diario alcanzado",
       "failedOffline": "Sin conexión",
       "clearAll": "Borrar todo",

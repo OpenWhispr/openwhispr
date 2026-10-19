@@ -672,6 +672,8 @@
       "failedCtaSettings": "Настройте провайдер транскрипции",
       "failedCtaAndRetry": "затем нажмите повторить",
       "failedCtaSettingsOnly": "Настройте провайдер транскрипции в Настройках",
+      "failedCtaAiSettings": "Проверьте модель голосового помощника в настройках",
+      "editFailedTranscriptKept": "Правка не применена · расшифровка сохранена",
       "failedLimitReached": "Дневной лимит достигнут",
       "failedOffline": "Нет подключения",
       "clearAll": "Очистить все",

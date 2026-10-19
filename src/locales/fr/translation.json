@@ -686,6 +686,8 @@
       "failedCtaSettings": "Configurez votre fournisseur de transcription",
       "failedCtaAndRetry": "puis cliquez sur réessayer",
       "failedCtaSettingsOnly": "Configurez votre fournisseur de transcription dans les Paramètres",
+      "failedCtaAiSettings": "Vérifiez le modèle de l'Assistant vocal dans les Paramètres",
+      "editFailedTranscriptKept": "Modification non appliquée · transcription conservée",
       "failedLimitReached": "Limite quotidienne atteinte",
       "failedOffline": "Hors ligne",
       "rawTranscript": "Transcription brute",

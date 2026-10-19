@@ -170,6 +170,22 @@ const neverCancelled = () => false;
 const MIN_SPARSE_RECORDING_DURATION_SECONDS = 3;
 const MIN_UNIQUE_WORD_GAIN = 2;
 
+// A step after transcription that fails (a selection edit) leaves a transcript
+// behind; it rides out on the error so the failed history entry keeps it.
+// Non-enumerable, so an error passed to the logger never writes the text out.
+const attachTranscript = (error, transcript, clientTranscriptionId) => {
+  if (!error || typeof error !== "object" || error.transcript !== undefined) return;
+  const text = typeof transcript === "string" ? transcript.trim() : "";
+  if (!text) return;
+  Object.defineProperty(error, "transcript", { value: text, configurable: true });
+  if (clientTranscriptionId) {
+    Object.defineProperty(error, "transcriptClientId", {
+      value: clientTranscriptionId,
+      configurable: true,
+    });
+  }
+};
+
 const cleanupFailureFromError = (error) => ({
   message: error?.message || String(error),
   ...(error?.messageKey ? { messageKey: error.messageKey } : {}),
@@ -2233,7 +2249,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           error.message,
           error.code || null,
           metadata,
-          error.transcript
+          { transcript: error.transcript, clientTranscriptionId: error.transcriptClientId }
         );
       }
     } finally {
@@ -3157,14 +3173,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     try {
       const result = await this.processTranscriptionCore(text, source, wasCancelled);
       if (wasCancelled()) return result;
-      return this.finalizeChineseScript(result);
+      return await this.finalizeChineseScript(result);
     } catch (error) {
-      // The transcript exists by now. An error that escapes processing (a failed
-      // selection edit) carries it out, so the failed history entry keeps it
-      // instead of an empty text.
-      if (error && typeof text === "string" && text.trim() && error.transcript === undefined) {
-        error.transcript = text.trim();
-      }
+      attachTranscript(error, text);
       throw error;
     }
   }
@@ -3656,7 +3667,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           processedText = resolveTranslatedText(processedText, chainResult);
         }
       } catch (reasonError) {
-        if (reasonError.selectionEditFatal) throw reasonError;
+        if (reasonError.selectionEditFatal) {
+          // Cloud already recorded this transcription under its client id; the
+          // failed entry reuses it so a later retry syncs onto the same row.
+          attachTranscript(reasonError, rawText, result.clientTranscriptionId);
+          throw reasonError;
+        }
         if (!wasCancelled()) {
           logger.error(
             "Cloud reasoning failed, using raw transcription",
@@ -4321,7 +4337,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  async saveFailedTranscription(errorMessage, errorCode = null, metadata = {}, transcript = "") {
+  async saveFailedTranscription(
+    errorMessage,
+    errorCode = null,
+    metadata = {},
+    { transcript = "", clientTranscriptionId } = {}
+  ) {
     const { dataRetentionEnabled, audioRetentionDays } = getEffectiveRetentionPreferences();
     if (!dataRetentionEnabled) {
       logger.debug("Skipping failed transcription save — data retention disabled", {}, "audio");
@@ -4342,12 +4363,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           errorMessage,
           errorCode,
           routeKind: this.translationRequested ? "translation" : null,
+          ...(clientTranscriptionId ? { clientTranscriptionId } : {}),
           ...(metadata?.analyticsOccurredAt
             ? { analyticsOccurredAt: metadata.analyticsOccurredAt }
             : {}),
         }
       );
-      if (result?.id) syncService.debouncedPush("transcription", result.id);
 
       if (result?.id && this.lastAudioBlob) {
         if (audioRetentionDays > 0) {
@@ -5585,10 +5606,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const outcome = transcriptionFailureOutcome(error);
         failureReport = outcome.report;
         if (outcome.keepAudio) {
-          delivery.resultHandled = this.saveFailedTranscription(error.message, error.code || null, {
-            durationSeconds,
-            analyticsOccurredAt: analyticsOccurredAt.toISOString(),
-          });
+          // error.transcript is Cloud's re-transcription, never Orukeet's text.
+          delivery.resultHandled = this.saveFailedTranscription(
+            error.message,
+            error.code || null,
+            { durationSeconds, analyticsOccurredAt: analyticsOccurredAt.toISOString() },
+            { transcript: error.transcript, clientTranscriptionId: error.transcriptClientId }
+          );
         }
       };
       try {
@@ -5755,6 +5779,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         if (wasCancelled()) return true;
         if (reasonError.selectionEditFatal) {
           this.pendingSelectionEdit = null;
+          attachTranscript(reasonError, rawStreamingText);
+          delivery.resultHandled = this.saveFailedTranscription(
+            reasonError.message,
+            reasonError.code || null,
+            { durationSeconds, analyticsOccurredAt: analyticsOccurredAt.toISOString() },
+            { transcript: reasonError.transcript }
+          );
           this.onError?.(transcriptionFailureOutcome(reasonError).report);
           this.isProcessing = false;
           this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
@@ -5790,13 +5821,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // reads as silence for a retry, as batch does.
     const failBatchFallback = (error) => {
       const outcome = transcriptionFailureOutcome(error);
-      if (!failoverReason && outcome.report) return;
+      // A transcript the fallback produced before a later step failed is
+      // reported and kept like the batch pipeline's.
+      if (!failoverReason && outcome.report && !error.transcript) return;
       failureReport = outcome.report;
       if (outcome.keepAudio) {
-        delivery.resultHandled = this.saveFailedTranscription(error.message, error.code || null, {
-          durationSeconds,
-          analyticsOccurredAt: analyticsOccurredAt.toISOString(),
-        });
+        delivery.resultHandled = this.saveFailedTranscription(
+          error.message,
+          error.code || null,
+          { durationSeconds, analyticsOccurredAt: analyticsOccurredAt.toISOString() },
+          { transcript: error.transcript, clientTranscriptionId: error.transcriptClientId }
+        );
       }
     };
     if (

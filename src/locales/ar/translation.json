@@ -569,6 +569,8 @@
       "failedCtaSettings": "قم بإعداد مزود التفريغ الخاص بك",
       "failedCtaAndRetry": "ثم انقر فوق إعادة المحاولة",
       "failedCtaSettingsOnly": "قم بإعداد مزود التفريغ الخاص بك في الإعدادات",
+      "failedCtaAiSettings": "تحقق من نموذج المساعد الصوتي في الإعدادات",
+      "editFailedTranscriptKept": "لم يُطبَّق التعديل · تم الاحتفاظ بالنص المفرَّغ",
       "failedLimitReached": "تم الوصول إلى الحد اليومي",
       "failedOffline": "أنت غير متصل بالإنترنت",
       "rawTranscript": "النص المفرَّغ الخام",

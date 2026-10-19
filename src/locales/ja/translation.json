@@ -672,6 +672,8 @@
       "failedCtaSettings": "文字起こしプロバイダーを設定してください",
       "failedCtaAndRetry": "その後、再試行をクリックしてください",
       "failedCtaSettingsOnly": "設定で文字起こしプロバイダーを設定してください",
+      "failedCtaAiSettings": "設定で音声アシスタントのモデルを確認してください",
+      "editFailedTranscriptKept": "編集は適用されませんでした · 文字起こしは保存済み",
       "failedLimitReached": "1日の上限に達しました",
       "failedOffline": "オフラインです",
       "clearAll": "すべて削除",

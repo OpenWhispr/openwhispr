@@ -4,10 +4,14 @@ const { loadAudioManager } = require("./harness/audioManager");
 
 const TRANSCRIPT = "Nova, this is a long note about the quarterly plan.";
 
-// Only the STT HTTP response and the OS selection capture are stubbed. The real
-// processAudio -> processWithOpenAIAPI -> processTranscription -> agent route ->
+// The STT response (HTTP for BYOK, cloudTranscribe for Cloud) and the OS
+// selection capture are stubbed, along with the harness's settings, service
+// and endpoint seams. The real processAudio -> provider -> agent route ->
 // processAgentCommand -> pipeline catch -> saveFailedTranscription chain runs.
-async function runAgentDictation(t, sttResponse) {
+async function runAgentDictation(
+  t,
+  { sttResponse, settings = {}, electronAPI = {}, onManager = () => {} }
+) {
   const originalContext = globalThis.OfflineAudioContext;
   globalThis.OfflineAudioContext = class {
     decodeAudioData() {
@@ -39,6 +43,7 @@ async function runAgentDictation(t, sttResponse) {
       useDictationAgent: true,
       dictationAgentMode: "local",
       dictationAgentModel: "local-model",
+      ...settings,
     },
     mockModules: {
       "/services/SyncService.js": "export const syncService = { debouncedPush() {} };",
@@ -58,8 +63,9 @@ async function runAgentDictation(t, sttResponse) {
       saved.push(args);
       return { id: 1 };
     },
+    ...electronAPI,
   };
-  t.mock.method(globalThis, "fetch", async () => sttResponse());
+  if (sttResponse) t.mock.method(globalThis, "fetch", async () => sttResponse());
 
   const audio = new Blob(["synthetic audio"], { type: "audio/webm" });
   const manager = createManager({
@@ -79,19 +85,20 @@ async function runAgentDictation(t, sttResponse) {
     onStateChange() {},
     onError: (error) => errors.push(error),
   });
+  onManager(manager);
 
   await manager.processAudio(audio);
 
   return { saved, errors };
 }
 
+const sttOk = () => new Response(JSON.stringify({ text: TRANSCRIPT }), { status: 200 });
+
 test("a transcript that succeeded is not lost when the agent selection edit fails", async (t) => {
-  const { saved, errors } = await runAgentDictation(
-    t,
-    () => new Response(JSON.stringify({ text: TRANSCRIPT }), { status: 200 })
-  );
+  const { saved, errors } = await runAgentDictation(t, { sttResponse: sttOk });
 
   assert.equal(errors[0]?.code, "SELECTION_EDIT_CAPTURE_FAILED", "the edit failure is reported");
+  assert.equal(errors[0]?.transcript, TRANSCRIPT, "the failure pill offers the transcript");
   assert.equal(saved.length, 1, "one history entry is saved");
   const [text, rawText, options] = saved[0];
   assert.equal(text, TRANSCRIPT, "the transcribed text is kept in the saved entry");
@@ -100,16 +107,89 @@ test("a transcript that succeeded is not lost when the agent selection edit fail
   assert.equal(options.errorCode, "SELECTION_EDIT_CAPTURE_FAILED");
 });
 
-test("a failure before any transcript exists still saves empty text", async (t) => {
-  const { saved, errors } = await runAgentDictation(
-    t,
-    () => new Response(JSON.stringify({ error: { message: "boom" } }), { status: 500 })
-  );
+test("an OpenWhispr Cloud transcript is kept under Cloud's client id when the edit fails", async (t) => {
+  const onLine = Object.getOwnPropertyDescriptor(globalThis.navigator, "onLine");
+  Object.defineProperty(globalThis.navigator, "onLine", { value: true, configurable: true });
+  t.after(() => {
+    if (onLine) Object.defineProperty(globalThis.navigator, "onLine", onLine);
+    else delete globalThis.navigator.onLine;
+  });
 
-  assert.ok(errors.length > 0, "the transcription failure is reported");
+  const { saved, errors } = await runAgentDictation(t, {
+    settings: { cloudTranscriptionMode: "openwhispr", isSignedIn: true },
+    electronAPI: {
+      cloudTranscribe: async () => ({
+        success: true,
+        text: TRANSCRIPT,
+        clientTranscriptionId: "cloud-client-id",
+      }),
+    },
+  });
+
+  assert.equal(errors[0]?.code, "SELECTION_EDIT_CAPTURE_FAILED");
+  assert.equal(errors[0]?.transcript, TRANSCRIPT);
+  assert.equal(saved.length, 1);
+  const [text, rawText, options] = saved[0];
+  assert.equal(text, TRANSCRIPT);
+  assert.equal(rawText, TRANSCRIPT);
+  assert.equal(options.status, "failed");
+  // Cloud already holds this transcription's row; a later retry syncs onto it.
+  assert.equal(options.clientTranscriptionId, "cloud-client-id");
+});
+
+test("the kept transcript never serializes with the error", async (t) => {
+  let thrown;
+  await runAgentDictation(t, {
+    sttResponse: sttOk,
+    onManager(manager) {
+      const processTranscription = manager.processTranscription.bind(manager);
+      manager.processTranscription = async (...args) => {
+        try {
+          return await processTranscription(...args);
+        } catch (error) {
+          thrown = error;
+          throw error;
+        }
+      };
+    },
+  });
+
+  assert.equal(thrown?.transcript, TRANSCRIPT);
+  // The logger spreads a top-level error and JSON-encodes nested ones.
+  assert.equal(Object.keys(thrown).includes("transcript"), false);
+  assert.doesNotMatch(JSON.stringify({ ...thrown, nested: { error: thrown } }), /quarterly plan/);
+});
+
+test("a dictation cancelled during the selection edit saves nothing", async (t) => {
+  let manager;
+  const { saved, errors } = await runAgentDictation(t, {
+    sttResponse: sttOk,
+    onManager: (created) => {
+      manager = created;
+    },
+    electronAPI: {
+      captureSelectedText: async () => {
+        manager._processingCancellationGeneration += 1;
+        return { status: "error" };
+      },
+    },
+  });
+
+  assert.equal(saved.length, 0);
+  assert.equal(errors.length, 0);
+});
+
+test("a failure before any transcript exists still saves empty text", async (t) => {
+  const { saved, errors } = await runAgentDictation(t, {
+    sttResponse: () => new Response(JSON.stringify({ error: { message: "boom" } }), { status: 500 }),
+  });
+
+  assert.equal(errors[0]?.code, "PROVIDER_UNAVAILABLE", "the STT failure is what is reported");
+  assert.equal(errors[0]?.transcript, undefined);
   assert.equal(saved.length, 1, "one history entry is saved");
   const [text, rawText, options] = saved[0];
   assert.equal(text, "");
   assert.equal(rawText, null);
   assert.equal(options.status, "failed");
+  assert.equal("clientTranscriptionId" in options, false);
 });

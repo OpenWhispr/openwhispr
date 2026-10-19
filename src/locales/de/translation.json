@@ -686,6 +686,8 @@
       "failedCtaSettings": "Richten Sie Ihren Transkriptionsanbieter ein",
       "failedCtaAndRetry": "und klicken Sie dann auf Wiederholen",
       "failedCtaSettingsOnly": "Richten Sie Ihren Transkriptionsanbieter in den Einstellungen ein",
+      "failedCtaAiSettings": "Prüfen Sie das Modell des Sprachassistenten in den Einstellungen",
+      "editFailedTranscriptKept": "Bearbeitung nicht angewendet · Transkript behalten",
       "failedLimitReached": "Tageslimit erreicht",
       "failedOffline": "Offline",
       "rawTranscript": "Rohtranskript",

@@ -999,7 +999,8 @@ export class SyncService {
 
   private async pushTranscription(id: number): Promise<void> {
     const t = await window.electronAPI.getTranscriptionById?.(id);
-    if (!t || t.cloud_id) return;
+    // A failed entry stays on this device until a retry completes it.
+    if (!t || t.cloud_id || t.status === "failed") return;
 
     const cloud = await TranscriptionsService.create({
       client_transcription_id: t.client_transcription_id,
@@ -2456,7 +2457,7 @@ export class SyncService {
 
   private async pushPendingTranscriptions(): Promise<void> {
     const pending = ((await window.electronAPI.getPendingTranscriptions?.()) ?? []).filter(
-      (t) => !!t.text?.trim()
+      (t) => t.status !== "failed" && !!t.text?.trim()
     );
     if (pending.length === 0) return;
 

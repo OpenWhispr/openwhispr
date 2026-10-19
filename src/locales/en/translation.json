@@ -686,6 +686,8 @@
       "failedCtaSettings": "Set up your transcription provider",
       "failedCtaAndRetry": "then click retry",
       "failedCtaSettingsOnly": "Set up your transcription provider in Settings",
+      "failedCtaAiSettings": "Check your Voice Assistant model in Settings",
+      "editFailedTranscriptKept": "Edit not applied · transcript kept",
       "failedLimitReached": "Daily limit reached",
       "failedOffline": "You're offline",
       "rawTranscript": "Raw Transcript",

@@ -102,14 +102,23 @@ test("streamed selection failures keep local error parameters and recovery detai
   manager.processAgentCommand = async () => {
     throw Object.assign(new Error("too long"), fields, { selectionEditFatal: true });
   };
+  const saved = [];
+  manager.saveFailedTranscription = async (...args) => {
+    saved.push(args);
+  };
   manager.onError = (error) => errors.push(error);
   manager.onTranscriptionComplete = (result) => published.push(result);
   assert.equal(await manager.stopStreamingRecording(), false);
   assert.equal(errors.length, 1);
   for (const [key, value] of Object.entries(fields)) assert.deepEqual(errors[0][key], value);
   assert.equal(errors[0].selectionEditFatal, true);
+  assert.equal(errors[0].transcript, "replace this");
   assert.deepEqual(published, []);
   assert.equal(manager.pendingSelectionEdit, null);
+  // The streamed transcript is kept in a failed history entry, as batch keeps it (#2676).
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0][1], "CONTEXT_TOO_LARGE");
+  assert.deepEqual(saved[0][3], { transcript: "replace this" });
 });
 
 test("streaming finalization is immediately processing and cannot start another session", async (t) => {
@@ -582,6 +591,42 @@ test("a no-final stream whose Cloud upload finds no speech keeps the recording q
   assert.deepEqual(saved, [{ message: "No speech detected in audio", code: "NO_SPEECH_DETECTED" }]);
   assert.deepEqual(errors, []);
   assert.deepEqual(completions, [{ success: true, text: "" }]);
+});
+
+test("a no-final stream whose upload transcribed but failed its selection edit keeps the text", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  globalThis.__streamingFinalizationSettings = {
+    ...globalThis.__streamingFinalizationSettings,
+    cloudTranscriptionMode: "openwhispr",
+    isSignedIn: true,
+  };
+  const { manager } = createFinalizingManager(AudioManager);
+  manager.recordingStartTime = Date.now() - 5000;
+  manager.mergeRecordedSegments = async () => new Blob([new Uint8Array(100)]);
+  const saved = [];
+  const errors = [];
+  manager.saveFailedTranscription = (...args) => saved.push(args);
+  manager.onError = (error) => errors.push(error);
+  manager.processWithOpenWhisprCloud = async () => {
+    const error = Object.assign(new Error("Selection edit failed"), {
+      selectionEditFatal: true,
+      code: "SELECTION_EDIT_CAPTURE_FAILED",
+    });
+    Object.defineProperty(error, "transcript", { value: "Fallback text" });
+    throw error;
+  };
+
+  await manager.stopStreamingRecording();
+
+  // Unlike a real transcription failure here, it is reported and kept as batch's is.
+  assert.deepEqual(
+    errors.map(({ code, transcript }) => [code, transcript]),
+    [["SELECTION_EDIT_CAPTURE_FAILED", "Fallback text"]]
+  );
+  assert.deepEqual(
+    saved.map((args) => [args[1], args[3].transcript]),
+    [["SELECTION_EDIT_CAPTURE_FAILED", "Fallback text"]]
+  );
 });
 
 test("Orukeet uses the acknowledged final even if the transcript event is delayed", async (t) => {
@@ -1697,6 +1742,31 @@ test("an empty Orukeet final with a confident unsupported estimate still re-tran
   assert.equal(uploads.length, 1);
   assert.equal(published[0].text, "明日の会議");
   assert.equal(usage.length, 0);
+});
+
+test("a language re-transcription whose selection edit fails keeps Cloud's transcript", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const saved = [];
+  const { published, errors } = await stopManagedDictation(AudioManager, {
+    final: JA_FINAL,
+    upload: async () => {
+      const error = Object.assign(new Error("Selection edit failed"), {
+        selectionEditFatal: true,
+        code: "SELECTION_EDIT_REASONING_FAILED",
+      });
+      // What processWithOpenWhisprCloud attaches before rethrowing.
+      Object.defineProperty(error, "transcript", { value: "明日の会議" });
+      Object.defineProperty(error, "transcriptClientId", { value: "cloud-client-id" });
+      throw error;
+    },
+    overrides: { saveFailedTranscription: (...args) => saved.push(args) },
+  });
+  assert.equal(errors[0].transcript, "明日の会議");
+  assert.deepEqual(
+    saved.map((args) => args[3]),
+    [{ transcript: "明日の会議", clientTranscriptionId: "cloud-client-id" }]
+  );
+  assert.deepEqual(published, []);
 });
 
 test("a selection edit that fails during the language re-transcription surfaces its error", async (t) => {
