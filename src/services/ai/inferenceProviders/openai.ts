@@ -119,12 +119,12 @@ function getEndpointCandidates(
   ];
 }
 
-/** Probe `/v1/models` to detect llama.cpp and prefer `/chat/completions`. */
 function isEndpointNotFound(error: Error): boolean {
   const status = (error as Error & { status?: unknown }).status;
   return status === 404 || status === 405;
 }
 
+/** Probe `/v1/models` to detect llama.cpp and prefer `/chat/completions`. */
 async function detectServerType(base: string): Promise<void> {
   if (probedBases.has(base) || readStoredPreference(base) !== undefined) {
     return;
