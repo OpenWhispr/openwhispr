@@ -1035,6 +1035,36 @@ for (const [waitedMs, focusMoved, expectCopy] of [
   });
 }
 
+test("a Linux session revalidation declines when focus moved during the modifier wait", async () => {
+  let targetReads = 0;
+  let pastes = 0;
+  const manager = new SelectionManager({
+    clipboardManager: {
+      runClipboardOperation: (operation) => operation(),
+      isLinuxTerminalWindowClass: () => false,
+      resolveLinuxFastPasteBinary: () => "/tmp/linux-fast-paste",
+      _awaitModifierRelease: async () => ({ state: "released", waitedMs: 400 }),
+      _pasteText: async () => {
+        pastes += 1;
+        return { pasted: true };
+      },
+    },
+    textEditMonitor: {},
+    platform: "linux",
+    now: () => 1000,
+  });
+  const target = { kind: "kde-window", id: "7", windowClass: "kate" };
+  const other = { kind: "kde-window", id: "9", windowClass: "konsole" };
+  manager._getLinuxTarget = async () => (++targetReads % 2 === 0 ? other : target);
+  manager.sessions.set("edit", { kind: "selection", text: "old", target, expiresAt: 2000 });
+
+  assert.deepEqual(await manager.replaceSelectedText("edit", "new"), {
+    success: false,
+    code: "target_changed",
+  });
+  assert.equal(pastes, 0);
+});
+
 // macOS accessibility never resolves a focused element in Chromium browsers, so
 // a synthetic ⌘C is the only way to tell a real selection from an empty field.
 function makeMacClipboardHarness({ copyOutput = "COPY_OK 42 Dia", copied = null } = {}) {
