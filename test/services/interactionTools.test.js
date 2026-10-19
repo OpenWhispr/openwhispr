@@ -208,7 +208,8 @@ test("the prompt tells the model to ask only when it has to", async () => {
   const { createInteractionTools } = await load();
   const withTools = getAgentSystemPrompt(createInteractionTools(NOTHING));
   assert.match(withTools, /Ask the user something only when you really can't decide it yourself/);
-  assert.match(withTools, /a simple request gets a direct answer with no questions/);
+  assert.match(withTools, /simple request gets a direct answer with no questions/);
+  assert.match(withTools, /Before asking, look it up/);
   assert.equal(getAgentSystemPrompt([{ name: "search_notes" }]).includes("ask_user"), false);
 });
 

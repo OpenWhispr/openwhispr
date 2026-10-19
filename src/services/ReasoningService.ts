@@ -108,6 +108,12 @@ export type AgentStreamChunk =
     }
   | { type: "done"; finishReason?: string };
 
+// Some providers stream a failure as a plain object ({ message, code }), not an Error.
+function streamErrorMessage(cause: unknown): string {
+  const message = (cause as { message?: unknown } | null | undefined)?.message;
+  return typeof message === "string" && message ? message : String(cause ?? "Stream failed");
+}
+
 // Screenshots the user allowed during the turn, shown to every later step.
 function withStepImages(
   messages: import("ai").ModelMessage[],
@@ -1097,7 +1103,7 @@ class ReasoningService extends BaseReasoningService {
           finishFilteredText();
           if (!abortController.signal.aborted) {
             const cause = (chunk as { error?: unknown }).error;
-            throw cause instanceof Error ? cause : new Error(String(cause ?? "Stream failed"));
+            throw cause instanceof Error ? cause : new Error(streamErrorMessage(cause));
           }
         } else if (chunk.type === "finish") {
           const trailing = finishFilteredText();

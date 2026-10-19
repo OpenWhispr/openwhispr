@@ -159,7 +159,7 @@ function answerLabels(
 const askUserTool: ToolDefinition = {
   name: "ask_user",
   description:
-    "Ask the user one or more questions and wait for the answers. Only for something the request and the context can't settle, where a wrong guess would matter. Put every question you need into this one call. kind: single (pick one option), multiple (pick any options), text (type an answer). Options need ids and labels; mark at most one option recommended when one is clearly better (the user still picks).",
+    "Ask the user one or more questions and wait for the answers. Only for something the request, the context and your other tools couldn't settle, where a wrong guess would matter: look things up first. Put every question you still need into this one call. kind: single (pick one option), multiple (pick any options), text (type an answer). Options need ids and labels; mark at most one option recommended when one is clearly better (the user still picks).",
   parameters: {
     type: "object",
     properties: {
@@ -198,7 +198,7 @@ const askUserTool: ToolDefinition = {
   },
   readOnly: true,
   promptInstruction:
-    "Use ask_user only when you can't reasonably decide something yourself from the request, the conversation or your tools, and a wrong guess would matter. Never ask for something a tool can look up.",
+    "Use ask_user only when you can't reasonably decide something yourself from the request, the conversation or your tools, and a wrong guess would matter. Never ask for something a tool can look up; look it up first.",
   async execute(args, context) {
     const questions = parseQuestions(args.questions);
     if (typeof questions === "string") return invalidResult(questions);

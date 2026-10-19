@@ -246,3 +246,38 @@ test("a cloud run whose every step calls a tool ends in tool-calls", async (t) =
   const chunks = await output;
   assert.deepEqual(chunks.at(-1), { type: "done", finishReason: "tool-calls" });
 });
+
+test("a provider failure streamed as a plain object keeps its message", async (t) => {
+  const { reasoningService } = await loadReasoningService(t, {
+    electronAPI: { getGroqKey: async () => "gsk_test" },
+  });
+  stubFetch(t, [
+    () =>
+      new Response(
+        `data: ${JSON.stringify({
+          error: {
+            message: "Failed to call a function. Please adjust your prompt.",
+            type: "invalid_request_error",
+            code: "tool_use_failed",
+          },
+        })}\n\n`,
+        { status: 200, headers: { "content-type": "text/event-stream" } }
+      ),
+  ]);
+  await assert.rejects(
+    collect(
+      reasoningService.processTextStreamingAI(
+        [{ role: "user", content: "hi" }],
+        "openai/gpt-oss-120b",
+        "groq",
+        GROQ_CONFIG
+      )
+    ),
+    (error) => {
+      const text = JSON.stringify({ message: error.message, details: error.technicalDetails });
+      assert.match(text, /Failed to call a function/);
+      assert.doesNotMatch(text, /object Object/);
+      return true;
+    }
+  );
+});
