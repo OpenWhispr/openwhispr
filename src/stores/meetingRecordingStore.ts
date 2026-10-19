@@ -35,7 +35,6 @@ import {
   lockTranscriptSpeaker,
   mergeTranscriptSegments,
   normalizeTranscriptSegment,
-  normalizeTranscriptSegments,
   serializeTranscriptSegments,
   type TranscriptSpeakerLockSource,
   type TranscriptSpeakerStatus,
@@ -1785,7 +1784,10 @@ if (typeof window !== "undefined") {
         currentSessionId: diarizationSessionId,
         activeRecordingNoteId: isRecording ? recordingNoteId : null,
       });
-      if (targetNoteId == null) return;
+      if (targetNoteId == null) {
+        if (data?.sessionId) seedLengthByDiarizationSession.delete(data.sessionId);
+        return;
+      }
 
       // Publishing an empty result clears a waiting editor's spinner without
       // painting an overlay; anything non-empty is already persisted.
@@ -1837,7 +1839,7 @@ if (typeof window !== "undefined") {
       });
       const seededCount = Math.min(seedLength, existing.length);
       const enriched = [
-        ...normalizeTranscriptSegments(existing.slice(0, seededCount)),
+        ...existing.slice(0, seededCount),
         ...mergeTranscriptSegments(
           existing.slice(seededCount),
           data.segments.map((segment, index) => ({
