@@ -711,12 +711,13 @@ test("a transcript without speaker labels is packed without a prose prefix", asy
 test("parts never spend their output budget on thinking", async (t) => {
   const { store, calls, updates } = await loadStore(t, {
     failFirst: true,
-    storage: { noteFormattingDisableThinking: "false" },
+    storage: { noteFormattingDisableThinking: "false", noteFormattingReasoningEffort: "high" },
   });
   run(store, 22, longMaterial(400));
   await waitForResult(store, updates);
   assert.equal(updates.length, 1);
   assert.equal(calls[0].config.disableThinking, false);
+  assert.equal(calls[0].config.reasoningEffort, "high");
   assert.equal(calls.at(-1).config.disableThinking, false);
   for (const call of calls.slice(1, -1)) assert.equal(call.config.disableThinking, true);
 });

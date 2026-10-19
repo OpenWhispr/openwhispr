@@ -33,6 +33,8 @@ it('upgrades a Local Mode config from before the Cloud defaults before anything 
   const upgraded = {
     defaultMode: 'private',
     localModeUpgraded: true,
+    noteChatSplit: true,
+    noteChatEnabled: true,
     inference: {
       dictation: { mode: 'local' },
       upload: { mode: 'local' },
@@ -58,7 +60,7 @@ it('still upgrades the loaded config when saving it fails', async () => {
 });
 
 it('leaves an upgraded config alone', async () => {
-  const config = { defaultMode: 'private', localModeUpgraded: true };
+  const config = { defaultMode: 'private', localModeUpgraded: true, noteChatSplit: true };
   mockGetConfig.mockResolvedValue(config);
 
   await useConfigStore.getState().loadConfig();
@@ -72,6 +74,36 @@ it('starts a new install on the Cloud defaults', async () => {
 
   await useConfigStore.getState().loadConfig();
 
-  expect(useConfigStore.getState().config).toMatchObject({ localModeUpgraded: true });
+  expect(useConfigStore.getState().config).toMatchObject({
+    localModeUpgraded: true,
+    noteChatSplit: true,
+  });
   expect(mockSaveConfig).not.toHaveBeenCalled();
+});
+
+// Note chat once shared the voice assistant's setting, so it keeps that setting after updating.
+it('splits note chat from the voice assistant before anything reads the config', async () => {
+  const groq = {
+    mode: 'providers',
+    providerId: 'groq',
+    modelId: 'llama',
+    credentialRef: 'provider.groq',
+  };
+  mockGetConfig.mockResolvedValue({
+    defaultMode: 'cloud',
+    localModeUpgraded: true,
+    inference: { agent: groq },
+  });
+
+  await useConfigStore.getState().loadConfig();
+
+  const split = {
+    defaultMode: 'cloud',
+    localModeUpgraded: true,
+    noteChatSplit: true,
+    noteChatEnabled: true,
+    inference: { agent: groq, noteChat: groq },
+  };
+  expect(useConfigStore.getState().config).toEqual(split);
+  expect(mockSaveConfig).toHaveBeenCalledWith(split);
 });

@@ -1,4 +1,5 @@
 import type { AuthUser } from '@/lib/authClient';
+import { isDictationAgentEnabled, isNoteChatEnabled } from '@/lib/dictationAgent';
 import type { InferenceSelection } from '@/lib/mobileProviders';
 import { localModeDefault, MODE_LABELS, type CloudAccess } from '@/lib/inferenceModes';
 import { isLocalModelKey, LOCAL_MODEL_TITLES } from '@/lib/localModelCatalog';
@@ -10,7 +11,8 @@ export const WORKFLOW_LABELS: Record<MobileInferenceScope, string> = {
   upload: 'Uploads',
   cleanup: 'Text Cleanup',
   notes: 'Note Formatting & Titles',
-  agent: 'Chat & Voice Assistant',
+  noteChat: 'Note Chat',
+  agent: 'Voice Assistant',
 };
 
 export const WORKFLOWS = Object.keys(WORKFLOW_LABELS) as MobileInferenceScope[];
@@ -18,8 +20,7 @@ export const WORKFLOWS = Object.keys(WORKFLOW_LABELS) as MobileInferenceScope[];
 // Bring Your Own Key dictation skips these workflows until a selection is saved for them.
 export const UNSET_PROVIDER_NOTES: Partial<Record<MobileInferenceScope, string>> = {
   cleanup: 'Not saved yet. Cleanup is skipped until you save a selection.',
-  agent:
-    'Not saved yet. The voice assistant is skipped until you save a selection; note chat uses OpenWhispr Cloud.',
+  agent: 'Not saved yet. The voice assistant is skipped until you save a selection.',
 };
 
 // On-Device cleanup on an iPhone that can never run Apple Intelligence.
@@ -32,11 +33,11 @@ export const LOCAL_MODE_DICTATION_NOTES = {
   off: 'On-Device turns on Local Mode: dictation stays on this iPhone and notes ask before leaving it.',
 };
 
-// What Local Mode means for note formatting and chat, which run on this iPhone first.
+// What Local Mode means for note formatting, note chat and the voice assistant.
 export const ON_DEVICE_MODE_NOTES: Partial<Record<MobileInferenceScope, string>> = {
   notes: 'Local Mode formats notes on this iPhone and asks before sending one to your choice here.',
-  agent:
-    'In Local Mode the voice assistant is off, and note chat asks before sending a note off this iPhone.',
+  noteChat: 'In Local Mode note chat asks before sending a note off this iPhone.',
+  agent: 'In Local Mode the voice assistant is off.',
 };
 
 export const PRIVATE_MODE_LOCKED_REASON =
@@ -79,6 +80,19 @@ export function cleanupRunsOnDevice(
   );
 }
 
+// Text Cleanup, Note Chat and the Voice Assistant have switches of their own; switched off, they
+// run nothing and use no key.
+export function workflowSwitchedOff(
+  config: UserConfig | null,
+  scope: MobileInferenceScope,
+): boolean {
+  if (!config) return false;
+  if (scope === 'cleanup') return !(config.cleanupEnabled ?? true);
+  if (scope === 'noteChat') return !isNoteChatEnabled(config);
+  if (scope === 'agent') return !isDictationAgentEnabled(config);
+  return false;
+}
+
 export function parseWorkflow(value: unknown): MobileInferenceScope | null {
   return WORKFLOWS.find((scope) => scope === value) ?? null;
 }
@@ -113,8 +127,10 @@ export function workflowSummary(
     cloudAccess?: CloudAccess;
   } = {},
 ): string {
+  if (workflowSwitchedOff(config, scope)) return 'Off';
+  // Local Mode turns the voice assistant off.
+  if (activeMode === 'private' && scope === 'agent') return 'Off';
   if (scope === 'cleanup') {
-    if (!(config?.cleanupEnabled ?? true)) return 'Off';
     if (cleanupRunsOnDevice(config, activeMode, cloudAccess) && onDeviceUnavailable)
       return `Skipped · ${onDeviceUnavailable}`;
     if (cloudCleanupNeedsAccount(config, activeMode, cloudAccess)) return 'Skipped · Sign in';
@@ -123,7 +139,7 @@ export function workflowSummary(
   // Local Mode runs dictation, note formatting and provider note chat on this phone first, whatever
   // is saved; note chat set to OpenWhispr, or not set, goes straight to Cloud. Uploads and cleanup
   // run what is saved for them.
-  if (activeMode === 'private' && scope === 'agent' && selection.mode === 'openwhispr')
+  if (activeMode === 'private' && scope === 'noteChat' && selection.mode === 'openwhispr')
     return MODE_LABELS.openwhispr;
   if (selection.mode === 'local' && isLocalModelKey(selection.modelId))
     return LOCAL_MODEL_TITLES[selection.modelId];

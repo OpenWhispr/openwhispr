@@ -13,7 +13,7 @@ import {
 } from './dictationAgent';
 import { buildDictationHints } from './dictationHints';
 import {
-  LOCAL_OUTPUT_TOKEN_RESERVE,
+  LOCAL_CLEANUP_MAX_TRANSCRIPT_TOKENS,
   countLocalReasoningTokens,
   estimateLocalTokens,
   getLocalReasoningReadiness,
@@ -49,11 +49,6 @@ function createTimeoutSignal(timeoutMs: number): { signal: AbortSignal; cancel: 
   };
 }
 
-// Apple Intelligence stops at LOCAL_OUTPUT_TOKEN_RESERVE without an error, so a transcript
-// whose cleaned copy might not fit would come back cut short. The margin covers the
-// punctuation and capitals cleanup adds.
-const LOCAL_CLEANUP_MAX_TRANSCRIPT_TOKENS = Math.floor(LOCAL_OUTPUT_TOKEN_RESERVE * 0.8);
-
 // Apple Intelligence writes a cleaned copy about as long as the transcript, at roughly 30 tokens a
 // second on an iPhone 15 Pro (Apple's figure), so a long one can't finish in Cloud's 12 s. The rate
 // here is lower so a slower or busier iPhone still finishes; the [reasoning] dev log reports the
@@ -67,6 +62,8 @@ function localCleanupTimeoutMs(transcriptTokens: number): number {
     LOCAL_CLEANUP_STARTUP_MS + (transcriptTokens / LOCAL_CLEANUP_TOKENS_PER_SECOND) * 1000,
   );
 }
+
+const TOO_LONG_FOR_ON_DEVICE = 'This transcript is too long for On-Device cleanup.';
 
 // Why an on-device pass can't run, or, for cleanup, the transcript's length in tokens.
 async function prepareLocalRun(
@@ -82,16 +79,19 @@ async function prepareLocalRun(
   if (scope !== 'cleanup') return {};
   const tokens = (await countLocalReasoningTokens({ prompt: text })) ?? estimateLocalTokens(text);
   return tokens > LOCAL_CLEANUP_MAX_TRANSCRIPT_TOKENS
-    ? { skipReason: 'This transcript is too long for On-Device cleanup.' }
+    ? { skipReason: TOO_LONG_FOR_ON_DEVICE }
     : { tokens };
 }
 
-// Apple Intelligence's two common failures say what happened. The only signal a cleanup run gets
-// is its timeout, so a cancelled one took too long.
+// Apple Intelligence's common failures say what happened. The only signal a cleanup run gets is
+// its timeout, so a cancelled one took too long.
 function cleanupFailureReason(error: unknown): string {
   if (error instanceof LocalReasoningError) {
     if (error.code === 'APPLE_LLM_CANCELLED') return 'Apple Intelligence took too long.';
     if (error.code === 'APPLE_LLM_RATE_LIMITED') return 'Apple Intelligence was busy.';
+    if (error.code === 'LOCAL_CONTEXT_LIMIT' || error.code === 'APPLE_LLM_CONTEXT_LIMIT') {
+      return TOO_LONG_FOR_ON_DEVICE;
+    }
   }
   return 'Cleanup failed.';
 }

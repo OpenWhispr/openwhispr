@@ -232,10 +232,13 @@ it('keeps an On-Device transcript raw when cleanup is turned off', async () => {
 it.each([
   [
     'appleIntelligenceOff',
-    "Apple Intelligence is turned off in iOS Settings, so this can't run on-device.",
+    "Apple Intelligence is turned off, so this can't run on-device. Turn it on in Settings → Apple Intelligence & Siri.",
   ],
   ['disabled', 'Local Apple Intelligence is turned off in AI Models.'],
-  ['modelNotReady', 'Apple Intelligence is still preparing its local model. Try again later.'],
+  [
+    'modelNotReady',
+    'Apple Intelligence is still downloading its model. Check Settings → Apple Intelligence & Siri, and keep your iPhone on Wi-Fi and charging.',
+  ],
   ['unavailable', 'Local Apple Intelligence is unavailable on this device.'],
 ])('says why On-Device cleanup could not run when readiness is %s', async (status, reason) => {
   mockReadiness.mockResolvedValue({ status, tokenCounting: false });

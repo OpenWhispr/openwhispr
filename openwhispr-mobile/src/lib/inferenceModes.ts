@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import type { LucideIconName } from '@/components/ui/SystemIcon';
 import type { InferenceSelection, MobileInferenceScope } from '@/lib/mobileProviders';
+import { isDictationAgentEnabled } from '@/lib/dictationAgent';
 import {
   inferenceToProcessingMode,
   processingToInferenceMode,
@@ -73,6 +74,7 @@ export function localModeDefault(
 ): InferenceMode {
   const onCloud =
     scope === 'agent' ||
+    scope === 'noteChat' ||
     (scope === 'upload' && cloudAccess !== 'none') ||
     (scope === 'cleanup' && cloudAccess === 'account');
   return onCloud ? 'openwhispr' : 'local';
@@ -85,10 +87,11 @@ type DictationModeConfig = Pick<
 
 // These workflows follow the dictation mode until they have a selection of their own, so they
 // would silently change destination when dictation moves to Bring Your Own Key. Cleanup is left
-// out: unsaved, it is skipped in that mode, which sends nothing anywhere. The voice assistant is
-// pinned only when leaving On-Device; unsaved, it is skipped rather than sent to Cloud.
+// out: unsaved, it is skipped in that mode, which sends nothing anywhere. The voice assistant and
+// note chat are pinned only when leaving On-Device; unsaved, the voice assistant is skipped rather
+// than sent to Cloud, and note chat stays where it was before it had a setting of its own.
 function scopesToPin(leavingMode: ProcessingMode): MobileInferenceScope[] {
-  return leavingMode === 'private' ? ['upload', 'notes', 'agent'] : ['upload', 'notes'];
+  return leavingMode === 'private' ? ['upload', 'notes', 'agent', 'noteChat'] : ['upload', 'notes'];
 }
 
 // The Dictation page and onboarding own the dictation mode;
@@ -146,7 +149,9 @@ function providerDictationConfig(
             scope,
             {
               // Each holds what ran in the mode being left: uploads in Local Mode ran on
-              // OpenWhispr Cloud when there was a session.
+              // OpenWhispr Cloud when there was a session. Unset note chat ran on Cloud after
+              // asking; Bring Your Own Key would send it there without asking, so it is held
+              // On-Device, as it was before it had a setting of its own.
               mode:
                 leavingMode === 'private' && scope === 'upload'
                   ? localModeDefault(scope, cloudAccess)
@@ -251,4 +256,34 @@ export function holdOnDeviceConfig(
 export function localModeUpgradeConfig(config: UserConfig): Partial<UserConfig> {
   if (config.defaultMode !== 'private') return { localModeUpgraded: true };
   return { localModeUpgraded: true, ...holdOnDeviceConfig(config) };
+}
+
+// Note chat once used the voice assistant's selection (agent), so a config from then gives it the
+// same selection, remembered providers and hold, leaving anything saved for note chat alone.
+export function noteChatSplitConfig(config: UserConfig): Partial<UserConfig> {
+  const agent = config.inference?.agent;
+  const copied = !!agent && !config.inference?.noteChat;
+  const rememberedAgent = config.rememberedInference?.agent;
+  const heldAgent = config.privateModeReturn?.pinned.agent;
+  return {
+    noteChatSplit: true,
+    // Note chat's switch followed the voice assistant's until set; saving it keeps it put.
+    ...(config.noteChatEnabled === undefined
+      ? { noteChatEnabled: isDictationAgentEnabled(config) }
+      : {}),
+    ...(copied ? { inference: { ...config.inference, noteChat: agent } } : {}),
+    ...(rememberedAgent && !config.rememberedInference?.noteChat
+      ? { rememberedInference: { ...config.rememberedInference, noteChat: rememberedAgent } }
+      : {}),
+    ...(copied && config.pinnedInference?.includes('agent')
+      ? { pinnedInference: [...config.pinnedInference, 'noteChat'] }
+      : {}),
+    ...(heldAgent && !config.privateModeReturn?.pinned.noteChat
+      ? {
+          privateModeReturn: {
+            pinned: { ...config.privateModeReturn?.pinned, noteChat: heldAgent },
+          },
+        }
+      : {}),
+  };
 }

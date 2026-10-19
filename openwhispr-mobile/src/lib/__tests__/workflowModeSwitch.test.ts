@@ -28,6 +28,7 @@ jest.mock('@/lib/privateMode', () => ({
   getPrivateModeUnavailableMessage: () => 'Native modules are missing.',
 }));
 jest.mock('@/lib/localReasoning', () => ({
+  ...jest.requireActual('@/lib/localReasoning'),
   getLocalReasoningReadiness: () => mockLocalReasoningReadiness(),
   getLocalReasoningUnavailableMessage: () => 'Apple Intelligence is turned off.',
 }));
@@ -112,12 +113,33 @@ it('switches uploads to On-Device with the model picked for them before', async 
   expect(mockSetActiveMode).not.toHaveBeenCalled();
 });
 
-it('explains why a text workflow cannot run on-device', async () => {
-  mockLocalReasoningReadiness.mockResolvedValue({ status: 'appleIntelligenceOff' });
-  await expect(switchWorkflowMode('cleanup', 'local')).resolves.toBe('refused');
-  expect(alert).toHaveBeenCalledWith('On-Device Unavailable', 'Apple Intelligence is turned off.');
-  expect(mockUpdateConfig).not.toHaveBeenCalled();
-});
+// Settings can fix these, so the page finishes the switch once Apple Intelligence is ready.
+it.each(['appleIntelligenceOff', 'modelNotReady'])(
+  'waits for Apple Intelligence when it is %s',
+  async (status) => {
+    mockLocalReasoningReadiness.mockResolvedValue({ status });
+    await expect(switchWorkflowMode('cleanup', 'local')).resolves.toBe('not-ready');
+    expect(alert).toHaveBeenCalledWith(
+      'On-Device Unavailable',
+      'Apple Intelligence is turned off. Keep this page open and On-Device turns on once Apple Intelligence is ready.',
+    );
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
+  },
+);
+
+// Nothing in iOS Settings makes these ready, so the page must not wait for them.
+it.each(['unsupportedDevice', 'disabled', 'unavailable'])(
+  'refuses a text workflow on-device when Apple Intelligence is %s',
+  async (status) => {
+    mockLocalReasoningReadiness.mockResolvedValue({ status });
+    await expect(switchWorkflowMode('cleanup', 'local')).resolves.toBe('refused');
+    expect(alert).toHaveBeenCalledWith(
+      'On-Device Unavailable',
+      'Apple Intelligence is turned off.',
+    );
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
+  },
+);
 
 it('switches a text workflow to On-Device when Apple Intelligence is ready', async () => {
   await expect(switchWorkflowMode('notes', 'local')).resolves.toBe('switched');

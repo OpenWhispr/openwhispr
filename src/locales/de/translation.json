@@ -142,7 +142,7 @@
   },
   "upgradePrompt": {
     "paymentFailed": "Ihre Zahlung konnte nicht verarbeitet werden",
-    "weeklyLimit": "Sie haben Ihr Wochenlimit erreicht",
+    "weeklyLimit": "Sie haben Ihr wöchentliches Cloud-Limit erreicht",
     "pastDueDescription": "Sie sind vorerst im kostenlosen Tarif – keine Sorge, Sie haben weiterhin {{limit}} Wörter pro Woche.\nAktualisieren Sie Ihre Zahlungsmethode, um wieder unbegrenztes Pro zu erhalten.",
     "limitDescription": "{{used}} von {{limit}} Wörtern verwendet.\nIhre Transkription wurde gespeichert und eingefügt.",
     "updatePayment": "Zahlungsmethode aktualisieren",
@@ -631,7 +631,7 @@
       "availableButton": "Update verfügbar"
     },
     "limit": {
-      "weeklyTitle": "Wochenlimit erreicht",
+      "weeklyTitle": "Wöchentliches Cloud-Limit erreicht",
       "weeklyDescription": "Ihr Limit setzt sich rollierend zurück. Upgraden Sie auf Pro oder nutzen Sie Ihren eigenen API-Schlüssel für unbegrenzte Nutzung."
     },
     "accessibilityMissing": {
@@ -689,6 +689,8 @@
       "failedCtaSettings": "Richten Sie Ihren Transkriptionsanbieter ein",
       "failedCtaAndRetry": "und klicken Sie dann auf Wiederholen",
       "failedCtaSettingsOnly": "Richten Sie Ihren Transkriptionsanbieter in den Einstellungen ein",
+      "failedCtaAiSettings": "Prüfen Sie das Modell des Sprachassistenten in den Einstellungen",
+      "editFailedTranscriptKept": "Bearbeitung nicht angewendet · Transkript behalten",
       "failedLimitReached": "Tageslimit erreicht",
       "failedOffline": "Offline",
       "rawTranscript": "Rohtranskript",
@@ -770,6 +772,21 @@
       "noSearchResults": "Keine Modelle für „{{query}}“",
       "selectModelHint": "Noch kein Modell ausgewählt — wählen Sie eines aus der Liste unten.",
       "keyRequiredHint": "Für die Inferenz ist ein API-Schlüssel erforderlich — fügen Sie einen hinzu, um diesen Anbieter zu nutzen."
+    },
+    "effort": {
+      "title": "Denkaufwand",
+      "description": "Wie viel das Modell nachdenkt, bevor es antwortet.",
+      "descriptionWithDefault": "Wie viel das Modell nachdenkt, bevor es antwortet. Auto verwendet die Standardeinstellung des Anbieters ({{value}}).",
+      "auto": "Auto",
+      "options": {
+        "none": "Keiner",
+        "minimal": "Minimal",
+        "low": "Niedrig",
+        "medium": "Mittel",
+        "high": "Hoch",
+        "xhigh": "Sehr hoch",
+        "max": "Maximal"
+      }
     },
     "getApiKey": "API-Schlüssel holen ->",
     "selectModel": "Modell auswählen",
@@ -908,7 +925,7 @@
         "offline": "Sie sind offline",
         "agentUnavailable": "Assistent nicht verfügbar",
         "screenContextSkipped": "Bildschirmkontext übersprungen",
-        "dailyLimitReached": "Tägliches Limit erreicht",
+        "cloudLimitReached": "Wöchentliches Cloud-Limit erreicht",
         "providerRateLimited": "Anbieter-Ratenlimit erreicht"
       },
       "fallback": {
@@ -1874,7 +1891,7 @@
     "account": {
       "badges": {
         "free": "Kostenlos",
-        "limitReached": "Limit erreicht",
+        "limitReached": "Cloud-Limit erreicht",
         "pastDue": "Überfällig",
         "pro": "Pro",
         "business": "Business",
@@ -1910,9 +1927,10 @@
         "title": "Ihre Zahlung konnte nicht verarbeitet werden"
       },
       "planDescriptions": {
-        "freeUsage": "{{used}} / {{limit}} Wörter diese Woche",
+        "freeUsage": "{{used}} / {{limit}} Wörter in OpenWhispr Cloud diese Woche",
+        "byokUnlimited": "Eigene API-Schlüssel und lokale Modelle bleiben unbegrenzt nutzbar.",
         "nextBilling": "Nächste Abrechnung: {{date}}",
-        "pastDue": "{{used}} / {{limit}} kostenlose Wörter diese Woche – Zahlung aktualisieren, um Pro wiederherzustellen",
+        "pastDue": "{{used}} / {{limit}} Wörter in OpenWhispr Cloud diese Woche – Zahlung aktualisieren, um Pro wiederherzustellen",
         "trial": "Noch {{days}} Tage – unbegrenzte Transkriptionen",
         "unlimited": "Unbegrenzt",
         "accessUntil": "Zugang bis {{date}}",
@@ -2030,8 +2048,8 @@
       "title": "Konto",
       "toasts": {
         "approachingLimit": {
-          "description": "Sie haben diese Woche {{used}} von {{limit}} kostenlosen Wörtern verwendet. Upgraden Sie auf Pro für unbegrenzte Nutzung.",
-          "title": "Wochenlimit fast erreicht"
+          "description": "Sie haben diese Woche {{used}} von {{limit}} Wörtern in OpenWhispr Cloud genutzt. Upgraden Sie auf Pro für unbegrenzte Nutzung.",
+          "title": "Cloud-Wortlimit fast erreicht"
         }
       },
       "trialCta": {
@@ -2979,8 +2997,8 @@
     "inviteTeam": "Team einladen",
     "settings": "Einstellungen",
     "support": "Support",
-    "limitReached": "Wochenlimit erreicht",
-    "limitReachedDescription": "Upgraden Sie auf Pro für unbegrenzte Transkriptionen.",
+    "limitReached": "Wöchentliches Cloud-Limit erreicht",
+    "limitReachedDescription": "Upgraden Sie auf Pro oder nutzen Sie Ihren eigenen API-Schlüssel für unbegrenzte Nutzung.",
     "viewPlans": "Tarife ansehen",
     "upgradeTitle": "Auf Pro upgraden",
     "upgradeDescription": "Unbegrenzte, genauere und schnellere Transkription.",

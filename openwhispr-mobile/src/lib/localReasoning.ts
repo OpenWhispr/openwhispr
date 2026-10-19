@@ -12,6 +12,13 @@ export const LOCAL_OUTPUT_TOKEN_RESERVE = 900;
 export const LOCAL_CONTEXT_SAFETY_TOKENS = 300;
 export const LOCAL_TOKEN_CHAR_RATIO = 3.5;
 
+// Local requests pass LOCAL_OUTPUT_TOKEN_RESERVE as maximumResponseTokens, and Apple Intelligence
+// stops there without an error. A larger context (iOS 27's 8,192) grows the input budget, not this
+// reserve. Cleanup writes back about as many tokens as it reads, so a transcript whose cleaned copy
+// might not fit would come back cut short. The margin covers the punctuation and capitals cleanup
+// adds.
+export const LOCAL_CLEANUP_MAX_TRANSCRIPT_TOKENS = Math.floor(LOCAL_OUTPUT_TOKEN_RESERVE * 0.8);
+
 let cachedReadiness: Promise<LocalReasoningReadiness> | null = null;
 
 export class LocalReasoningError extends Error {
@@ -161,6 +168,16 @@ export async function countLocalReasoningTokens(input: {
   }
 }
 
+export async function countLocalInputTokens(input: {
+  instructions?: string;
+  prompt: string;
+}): Promise<number> {
+  return (
+    (await countLocalReasoningTokens(input)) ??
+    estimateLocalTokens([input.instructions, input.prompt].filter(Boolean).join('\n\n'))
+  );
+}
+
 export async function fitsLocalReasoningBudget(input: {
   instructions?: string;
   prompt: string;
@@ -168,14 +185,16 @@ export async function fitsLocalReasoningBudget(input: {
   budget?: number;
 }): Promise<boolean> {
   const budget = input.budget ?? getLocalInputTokenBudget(input.readiness);
-  const nativeCount = await countLocalReasoningTokens({
+  const count = await countLocalInputTokens({
     instructions: input.instructions,
     prompt: input.prompt,
   });
-  const count =
-    nativeCount ??
-    estimateLocalTokens([input.instructions, input.prompt].filter(Boolean).join('\n\n'));
   return count < budget;
+}
+
+export async function fitsLocalCleanupOutput(text: string): Promise<boolean> {
+  const tokens = (await countLocalReasoningTokens({ prompt: text })) ?? estimateLocalTokens(text);
+  return tokens <= LOCAL_CLEANUP_MAX_TRANSCRIPT_TOKENS;
 }
 
 // This iPhone runs Apple Intelligence, even if it is turned off in Settings or still preparing
@@ -202,9 +221,9 @@ export function getLocalReasoningUnavailableMessage(readiness?: LocalReasoningRe
     case 'disabled':
       return 'Local Apple Intelligence is turned off in AI Models.';
     case 'appleIntelligenceOff':
-      return "Apple Intelligence is turned off in iOS Settings, so this can't run on-device.";
+      return "Apple Intelligence is turned off, so this can't run on-device. Turn it on in Settings → Apple Intelligence & Siri.";
     case 'modelNotReady':
-      return 'Apple Intelligence is still preparing its local model. Try again later.';
+      return 'Apple Intelligence is still downloading its model. Check Settings → Apple Intelligence & Siri, and keep your iPhone on Wi-Fi and charging.';
     case 'unavailable':
     default:
       return 'Local Apple Intelligence is unavailable on this device.';
@@ -225,6 +244,7 @@ export function toLocalReasoningError(error: unknown): LocalReasoningError {
   switch (code) {
     case 'APPLE_LLM_GUARDRAIL':
     case 'APPLE_LLM_CONTEXT_LIMIT':
+    case 'APPLE_LLM_OUTPUT_LIMIT':
     case 'APPLE_LLM_RATE_LIMITED':
     case 'APPLE_LLM_UNAVAILABLE':
     case 'APPLE_LLM_FAILED':
@@ -244,5 +264,17 @@ export function isLocalContextLimitError(error: unknown): boolean {
     error !== null &&
     'code' in error &&
     (error as { code?: unknown }).code === 'APPLE_LLM_CONTEXT_LIMIT'
+  );
+}
+
+// FoundationModels throws decodingFailure (a ParsingError on iOS 27) when guided generation's
+// output can't be decoded. That is most often the output cap cutting it off mid-structure, but
+// malformed output reads the same; either way, less material per run is what helps.
+export function isLocalOutputLimitError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'APPLE_LLM_OUTPUT_LIMIT'
   );
 }

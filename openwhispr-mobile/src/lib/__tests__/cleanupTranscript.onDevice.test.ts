@@ -128,6 +128,7 @@ describe('a long transcript', () => {
 
 it.each([
   ['APPLE_LLM_RATE_LIMITED', 'Apple Intelligence was busy.'],
+  ['APPLE_LLM_CONTEXT_LIMIT', 'This transcript is too long for On-Device cleanup.'],
   ['APPLE_LLM_GUARDRAIL', 'Cleanup failed.'],
   ['APPLE_LLM_FAILED', 'Cleanup failed.'],
 ])('pastes the raw transcript after one %s attempt', async (code, reason) => {
@@ -140,6 +141,24 @@ it.each([
 
   await expect(result).resolves.toBe('um hello there');
   expect(onSkipped).toHaveBeenCalledWith(`${reason} Your raw transcript is saved.`);
+});
+
+// The skip before the run counts once; ReasoningService counts again for the context and the
+// output cap, and a higher second count refuses the run as too long.
+it('names a too-long transcript when ReasoningService refuses it', async () => {
+  mockNative.countTokens
+    .mockResolvedValueOnce(600)
+    .mockResolvedValueOnce(800)
+    .mockResolvedValueOnce(2_000);
+  const onSkipped = jest.fn();
+
+  await expect(
+    cleanupTranscript('um hello there', { inferenceRoute: onDeviceRoute, onSkipped }),
+  ).resolves.toBe('um hello there');
+  expect(mockNative.generateText).not.toHaveBeenCalled();
+  expect(onSkipped).toHaveBeenCalledWith(
+    'This transcript is too long for On-Device cleanup. Your raw transcript is saved.',
+  );
 });
 
 it('returns the cleaned text when the model answers in time', async () => {

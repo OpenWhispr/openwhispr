@@ -5,6 +5,7 @@ import {
   dictationModeConfig,
   getInferenceModes,
   localModeUpgradeConfig,
+  noteChatSplitConfig,
   workflowSaveConfig,
 } from '../inferenceModes';
 import type { UserConfig } from '@/types';
@@ -113,8 +114,9 @@ describe('workflowSaveConfig', () => {
       upload: { mode: 'local' },
       notes: { mode: 'local' },
       agent: { mode: 'local' },
+      noteChat: { mode: 'local' },
     });
-    expect(next.pinnedInference).toEqual(['upload', 'notes', 'agent']);
+    expect(next.pinnedInference).toEqual(['upload', 'notes', 'agent', 'noteChat']);
   });
 
   it('keeps uploads and notes on Cloud when dictation moves from Cloud to a provider', () => {
@@ -139,7 +141,7 @@ describe('workflowSaveConfig', () => {
     const next = workflowSaveConfig(config, 'dictation', groqDictation, 'private');
     expect(next.inference?.cleanup).toBeUndefined();
     expect(next.inference?.notes).toEqual({ mode: 'openwhispr' });
-    expect(next.pinnedInference).toEqual(['upload', 'agent']);
+    expect(next.pinnedInference).toEqual(['upload', 'agent', 'noteChat']);
   });
 
   it('adds no pins when a Bring Your Own Key user re-saves dictation', () => {
@@ -322,7 +324,7 @@ describe('workflowSaveConfig', () => {
         inference: { dictation: { mode: 'local' } },
       };
       const next = workflowSaveConfig(config, 'dictation', groqDictation, 'private');
-      expect(next.pinnedInference).toEqual(['upload', 'notes', 'agent']);
+      expect(next.pinnedInference).toEqual(['upload', 'notes', 'agent', 'noteChat']);
     });
 
     // Replaying onboarding writes the mode directly, and must not leave a stale return behind.
@@ -410,4 +412,87 @@ it('switches dictation back to On-Device with the model the user picked', () => 
     mode: 'local',
     modelId: 'parakeet-v3',
   });
+});
+
+// Note chat once shared the voice assistant's setting, so an existing config gives it the same one.
+describe('noteChatSplitConfig', () => {
+  const groqChat = {
+    mode: 'providers' as const,
+    providerId: 'groq',
+    modelId: 'llama-3.3-70b-versatile',
+    credentialRef: 'provider.groq',
+  };
+
+  it('copies a provider selection and its remembered providers', () => {
+    expect(
+      noteChatSplitConfig({
+        defaultMode: 'cloud',
+        noteChatEnabled: true,
+        inference: { agent: groqChat },
+        rememberedInference: { agent: { groq: groqChat } },
+      }),
+    ).toEqual({
+      noteChatSplit: true,
+      inference: { agent: groqChat, noteChat: groqChat },
+      rememberedInference: { agent: { groq: groqChat }, noteChat: { groq: groqChat } },
+    });
+  });
+
+  it('holds note chat where the voice assistant was held', () => {
+    const next = noteChatSplitConfig({
+      defaultMode: 'private',
+      inference: { agent: { mode: 'openwhispr' } },
+      pinnedInference: ['upload', 'agent'],
+      privateModeReturn: { pinned: { agent: groqChat } },
+    });
+    expect(next.pinnedInference).toEqual(['upload', 'agent', 'noteChat']);
+    expect(next.privateModeReturn).toEqual({ pinned: { agent: groqChat, noteChat: groqChat } });
+  });
+
+  it("saves note chat's switch as it stood, following the voice assistant's", () => {
+    expect(noteChatSplitConfig({ defaultMode: 'cloud' }).noteChatEnabled).toBe(true);
+    expect(
+      noteChatSplitConfig({ defaultMode: 'cloud', dictationAgentEnabled: false }).noteChatEnabled,
+    ).toBe(false);
+    expect(noteChatSplitConfig({ defaultMode: 'cloud', noteChatEnabled: true })).not.toHaveProperty(
+      'noteChatEnabled',
+    );
+  });
+
+  it('never overwrites a saved note chat', () => {
+    const next = noteChatSplitConfig({
+      defaultMode: 'cloud',
+      inference: { agent: groqChat, noteChat: { mode: 'local' } },
+      rememberedInference: { agent: { groq: groqChat }, noteChat: {} },
+      pinnedInference: ['agent'],
+      noteChatEnabled: true,
+    });
+    expect(next).toEqual({ noteChatSplit: true });
+  });
+
+  it('only marks a config with nothing saved for the voice assistant', () => {
+    expect(noteChatSplitConfig({ defaultMode: 'cloud', noteChatEnabled: true })).toEqual({
+      noteChatSplit: true,
+    });
+  });
+});
+
+// Note chat followed the voice assistant's hold before it had a setting of its own: leaving Local
+// Mode for Bring Your Own Key kept it on this iPhone, so it still does.
+it('holds note chat on this iPhone when dictation leaves Local Mode for Bring Your Own Key', () => {
+  const groq = {
+    mode: 'providers' as const,
+    providerId: 'groq',
+    modelId: 'whisper-large-v3-turbo',
+    credentialRef: 'provider.groq',
+  };
+  const next = workflowSaveConfig(
+    { defaultMode: 'private', inference: { dictation: { mode: 'local' } } },
+    'dictation',
+    groq,
+    'private',
+  );
+  expect(next.inference?.noteChat).toEqual({ mode: 'local' });
+  expect(next.inference?.agent).toEqual({ mode: 'local' });
+  expect(next.pinnedInference).toContain('noteChat');
 });

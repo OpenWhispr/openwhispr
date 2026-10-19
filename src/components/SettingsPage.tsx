@@ -2487,6 +2487,9 @@ export default function SettingsPage({
                                   <span>{t("settingsPage.account.rollingWeeklyLimit")}</span>
                                 )}
                               </div>
+                              <p className="text-xs text-muted-foreground">
+                                {t("settingsPage.account.planDescriptions.byokUnlimited")}
+                              </p>
                             </div>
                           </SettingsPanelRow>
                         )}

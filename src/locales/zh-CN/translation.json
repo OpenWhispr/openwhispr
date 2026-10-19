@@ -142,7 +142,7 @@
   },
   "upgradePrompt": {
     "paymentFailed": "我们无法处理你的付款",
-    "weeklyLimit": "你已达到本周的使用上限",
+    "weeklyLimit": "你已达到本周的云端使用上限",
     "pastDueDescription": "你目前使用的是免费版——别担心，每周仍有 {{limit}} 个词的额度。\n更新支付方式即可恢复无限制的 Pro 版。",
     "limitDescription": "已使用 {{used}} / {{limit}} 个词。\n你的转录已保存并粘贴。",
     "updatePayment": "更新支付方式",
@@ -631,7 +631,7 @@
       "availableButton": "有可用更新"
     },
     "limit": {
-      "weeklyTitle": "已达到周限额",
+      "weeklyTitle": "已达本周云端上限",
       "weeklyDescription": "你的额度按滚动方式重置。升级到 Pro 或使用自己的 API Key 可不受限制。"
     },
     "accessibilityMissing": {
@@ -672,6 +672,8 @@
       "failedCtaSettings": "设置您的转录服务商",
       "failedCtaAndRetry": "然后点击重试",
       "failedCtaSettingsOnly": "在设置中配置您的转录服务商",
+      "failedCtaAiSettings": "请在设置中检查语音助手模型",
+      "editFailedTranscriptKept": "未应用编辑 · 已保留转录文本",
       "failedLimitReached": "已达每日限额",
       "failedOffline": "离线",
       "clearAll": "全部清除",
@@ -770,6 +772,21 @@
       "noSearchResults": "没有与“{{query}}”匹配的模型",
       "selectModelHint": "尚未选择模型 — 请从下方列表中选择一个。",
       "keyRequiredHint": "推理需要 API 密钥 — 请添加密钥以使用此提供商。"
+    },
+    "effort": {
+      "title": "推理强度",
+      "description": "模型在回答前思考的程度。",
+      "descriptionWithDefault": "模型在回答前思考的程度。“自动”使用服务商的默认设置（{{value}}）。",
+      "auto": "自动",
+      "options": {
+        "none": "无",
+        "minimal": "极低",
+        "low": "低",
+        "medium": "中",
+        "high": "高",
+        "xhigh": "极高",
+        "max": "最大"
+      }
     },
     "getApiKey": "获取你的 API Key ->",
     "selectModel": "选择模型",
@@ -908,7 +925,7 @@
         "offline": "你已离线",
         "agentUnavailable": "助手不可用",
         "screenContextSkipped": "已跳过屏幕上下文",
-        "dailyLimitReached": "已达到每日上限",
+        "cloudLimitReached": "已达本周云端上限",
         "providerRateLimited": "服务商速率限制"
       },
       "fallback": {
@@ -1580,7 +1597,7 @@
     "account": {
       "badges": {
         "free": "免费版",
-        "limitReached": "已达上限",
+        "limitReached": "已达云端上限",
         "pastDue": "逾期未付",
         "pro": "Pro",
         "business": "Business",
@@ -1616,9 +1633,10 @@
         "title": "我们无法处理你的付款"
       },
       "planDescriptions": {
-        "freeUsage": "本周已使用 {{used}} / {{limit}} 个词",
+        "freeUsage": "本周 OpenWhispr Cloud 已使用 {{used}} / {{limit}} 个词",
+        "byokUnlimited": "使用自己的 API 密钥和本地模型仍不受此限制。",
         "nextBilling": "下次扣费：{{date}}",
-        "pastDue": "本周 {{used}} / {{limit}} 免费词数——更新支付方式以恢复 Pro",
+        "pastDue": "本周 OpenWhispr Cloud 已使用 {{used}} / {{limit}} 个词——更新支付方式以恢复 Pro",
         "trial": "剩余 {{days}} 天——无限转录",
         "unlimited": "无限制",
         "accessUntil": "可使用至 {{date}}",
@@ -1640,8 +1658,8 @@
       "title": "账户",
       "toasts": {
         "approachingLimit": {
-          "description": "本周已使用 {{used}} / {{limit}} 个免费词数。升级到 Pro 可享受无限使用。",
-          "title": "即将达到周限额"
+          "description": "本周已使用 {{used}} / {{limit}} 个 OpenWhispr Cloud 词。升级到 Pro 可享受无限使用。",
+          "title": "即将达到云端字数上限"
         }
       },
       "trialCta": {
@@ -3638,8 +3656,8 @@
     "inviteTeam": "邀请你的团队",
     "settings": "设置",
     "support": "支持",
-    "limitReached": "已达每周上限",
-    "limitReachedDescription": "升级到 Pro 即可无限转录。",
+    "limitReached": "已达本周云端上限",
+    "limitReachedDescription": "升级到 Pro 或使用自己的 API Key 可不受限制。",
     "viewPlans": "查看套餐",
     "upgradeTitle": "升级到 Pro",
     "upgradeDescription": "无限量、更准确、更快速的转录。",

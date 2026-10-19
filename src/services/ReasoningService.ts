@@ -34,10 +34,12 @@ import {
 } from "./ai/openaiBase";
 import {
   applyChatCompletionsParams,
+  chosenReasoningEffort,
   emptyResponseError,
   fetchWithParamFallback,
   isTruncatedFinishReason,
   truncatedOutputError,
+  type ParamFallbackDetails,
 } from "./ai/chatRequestBody";
 import { getModelFamilyConstraints } from "./ai/modelFamilyConstraints";
 import { detectEndpointDialect } from "./ai/thinkingSuppressionDialects";
@@ -113,8 +115,7 @@ function assertAgentSessionAllowedByPolicy(provider: string, mode: InferenceMode
 }
 
 function logParamFallback(logEvent: string) {
-  return (details: { status: number; stripped: string[] }) =>
-    logger.logReasoning(logEvent, details);
+  return (details: ParamFallbackDetails) => logger.logReasoning(logEvent, details);
 }
 
 class ReasoningService extends BaseReasoningService {
@@ -364,6 +365,7 @@ class ReasoningService extends BaseReasoningService {
         }
 
         const res = await fetchWithParamFallback(
+          endpoint,
           () =>
             fetch(endpoint, {
               method: "POST",
@@ -695,6 +697,7 @@ class ReasoningService extends BaseReasoningService {
     let response: Response;
     try {
       response = await fetchWithParamFallback(
+        endpoint,
         () =>
           fetch(endpoint, {
             method: "POST",
@@ -901,11 +904,14 @@ class ReasoningService extends BaseReasoningService {
     // OpenRouter ids are never in the local registry, so the supportsThinking
     // exemption below can't apply — honor the toggle directly.
     const openrouterDisableThinking = provider === "openrouter" && config.disableThinking === true;
+    // No Tinfoil model offers a level, so this needn't wait for the registry refresh below.
+    const reasoningEffort = chosenReasoningEffort(aiProvider, model, config, baseURL);
     // Resolving a Tinfoil model refreshes the registry, so read model config after it.
     const aiModel = isEnterprise
       ? createEnterpriseChatModel(provider as EnterpriseProvider, model, config.inferenceScope)
       : await getAIModel(aiProvider, model, apiKey, baseURL, {
           disableThinking: openrouterDisableThinking,
+          reasoningEffort: provider === "openrouter" ? reasoningEffort : undefined,
         });
 
     if (abortController.signal.aborted) {
@@ -932,6 +938,16 @@ class ReasoningService extends BaseReasoningService {
       ...(needsGeminiMinimalThinking
         ? { google: { thinkingConfig: { thinkingLevel: "minimal", includeThoughts: false } } }
         : {}),
+      ...(reasoningEffort && provider === "groq" ? { groq: { reasoningEffort } } : {}),
+      ...(reasoningEffort && provider === "gemini"
+        ? { google: { thinkingConfig: { thinkingLevel: reasoningEffort, includeThoughts: false } } }
+        : {}),
+      // The SDK sends a Responses effort only for model ids it knows as reasoning
+      // models; forceReasoning covers newer OpenAI ids such as gpt-6-astra.
+      ...(reasoningEffort && provider === "openai"
+        ? { openai: { reasoningEffort, forceReasoning: true } }
+        : {}),
+      ...(reasoningEffort && provider === "custom" ? { openai: { reasoningEffort } } : {}),
     };
     const hasProviderOptions = Object.keys(providerOptions).length > 0;
 

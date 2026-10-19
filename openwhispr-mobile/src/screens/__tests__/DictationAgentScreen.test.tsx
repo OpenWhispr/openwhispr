@@ -19,7 +19,7 @@ jest.mock('@/store/useProcessingModeStore', () => ({
     selector({ activeMode: mockActiveMode }),
 }));
 
-const NOTICE = /skips the voice assistant until Chat & Voice Assistant has a selection/;
+const NOTICE = /skips the voice assistant until you choose a provider for it in AI Models/;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -66,8 +66,5 @@ it('switches only the voice assistant, keeping note chat as it was', () => {
   render(<DictationAgentScreen />);
   expect(screen.queryByText(/Also turns note chat/)).toBeNull();
   fireEvent(screen.UNSAFE_getAllByType(Switch)[0], 'valueChange', false);
-  expect(mockUpdateConfig).toHaveBeenCalledWith({
-    dictationAgentEnabled: false,
-    noteChatEnabled: true,
-  });
+  expect(mockUpdateConfig).toHaveBeenCalledWith({ dictationAgentEnabled: false });
 });

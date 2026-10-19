@@ -8,7 +8,7 @@
         "offline": "أنت غير متصل بالإنترنت",
         "agentUnavailable": "المساعد غير متاح",
         "screenContextSkipped": "تم تخطي سياق الشاشة",
-        "dailyLimitReached": "تم الوصول إلى الحد اليومي",
+        "cloudLimitReached": "تم بلوغ الحد السحابي الأسبوعي",
         "providerRateLimited": "تم تقييد المعدل من قبل المزود"
       },
       "fallback": {
@@ -411,6 +411,21 @@
       "selectModelHint": "لم يتم تحديد أي نموذج بعد — اختر واحدًا من القائمة أدناه.",
       "keyRequiredHint": "مفتاح API مطلوب للاستدلال — أضف واحدًا لاستخدام هذا المزود."
     },
+    "effort": {
+      "title": "مستوى الاستدلال",
+      "description": "مقدار تفكير النموذج قبل أن يجيب.",
+      "descriptionWithDefault": "مقدار تفكير النموذج قبل أن يجيب. يستخدم الوضع التلقائي الإعداد الافتراضي للمزوّد ({{value}}).",
+      "auto": "تلقائي",
+      "options": {
+        "none": "بلا",
+        "minimal": "أدنى",
+        "low": "منخفض",
+        "medium": "متوسط",
+        "high": "مرتفع",
+        "xhigh": "مرتفع جدًا",
+        "max": "أقصى"
+      }
+    },
     "getApiKey": "احصل على مفتاح API الخاص بك ←",
     "selectModel": "تحديد النموذج",
     "availableModels": "النماذج المتاحة",
@@ -524,7 +539,7 @@
       "availableButton": "التحديث متاح"
     },
     "limit": {
-      "weeklyTitle": "تم الوصول إلى الحد الأسبوعي",
+      "weeklyTitle": "تم بلوغ الحد السحابي الأسبوعي",
       "weeklyDescription": "تتم إعادة تعيين الحد الخاص بك على أساس متجدد. قم بالترقية إلى Pro أو استخدم مفتاح API الخاص بك للاستخدام غير المحدود."
     },
     "accessibilityMissing": {
@@ -582,6 +597,8 @@
       "failedCtaSettings": "قم بإعداد مزود التفريغ الخاص بك",
       "failedCtaAndRetry": "ثم انقر فوق إعادة المحاولة",
       "failedCtaSettingsOnly": "قم بإعداد مزود التفريغ الخاص بك في الإعدادات",
+      "failedCtaAiSettings": "تحقق من نموذج المساعد الصوتي في الإعدادات",
+      "editFailedTranscriptKept": "لم يُطبَّق التعديل · تم الاحتفاظ بالنص المفرَّغ",
       "failedLimitReached": "تم الوصول إلى الحد اليومي",
       "failedOffline": "أنت غير متصل بالإنترنت",
       "rawTranscript": "النص المفرَّغ الخام",
@@ -3227,7 +3244,7 @@
     "account": {
       "badges": {
         "free": "مجاني",
-        "limitReached": "تم بلوغ الحد الأقصى",
+        "limitReached": "تم بلوغ الحد السحابي",
         "pastDue": "متأخر الدفع",
         "pro": "Pro",
         "business": "Business",
@@ -3263,9 +3280,10 @@
         "title": "لم نتمكن من معالجة دفعتك"
       },
       "planDescriptions": {
-        "freeUsage": "{{used}} من {{limit}} كلمة هذا الأسبوع",
+        "freeUsage": "{{used}} من {{limit}} كلمة في OpenWhispr Cloud هذا الأسبوع",
+        "byokUnlimited": "يبقى استخدام مفاتيح API الخاصة بك والنماذج المحلية غير محدود.",
         "nextBilling": "الفوترة القادمة: {{date}}",
-        "pastDue": "{{used}} من {{limit}} كلمة مجانية هذا الأسبوع - قم بتحديث الدفع لاستعادة Pro",
+        "pastDue": "{{used}} من {{limit}} كلمة في OpenWhispr Cloud هذا الأسبوع - قم بتحديث الدفع لاستعادة Pro",
         "trial": "عدد الأيام المتبقية: {{days}} - تفريغ غير محدود",
         "unlimited": "غير محدود",
         "accessUntil": "الوصول حتى {{date}}",
@@ -3383,8 +3401,8 @@
       "title": "الحساب",
       "toasts": {
         "approachingLimit": {
-          "description": "لقد استخدمت {{used}} من أصل {{limit}} كلمة مجانية هذا الأسبوع. قم بالترقية إلى Pro للاستخدام غير المحدود.",
-          "title": "الاقتراب من الحد الأسبوعي"
+          "description": "استخدمت {{used}} من {{limit}} كلمة في OpenWhispr Cloud هذا الأسبوع. قم بالترقية إلى Pro للاستخدام غير المحدود.",
+          "title": "الاقتراب من الحد السحابي للكلمات"
         }
       },
       "trialCta": {
@@ -4220,7 +4238,7 @@
   },
   "upgradePrompt": {
     "paymentFailed": "لم نتمكن من معالجة دفعتك",
-    "weeklyLimit": "لقد وصلت إلى حدك الأسبوعي",
+    "weeklyLimit": "لقد وصلت إلى حدك السحابي الأسبوعي",
     "pastDueDescription": "أنت الآن على الخطة المجانية — لا تقلق، ما زلت تحصل على {{limit}} كلمة في الأسبوع.\nقم بتحديث طريقة الدفع للعودة إلى خطة Pro غير المحدودة.",
     "limitDescription": "تم استخدام {{used}} من {{limit}} كلمة.\nتم حفظ نصك المفرَّغ ولصقه.",
     "updatePayment": "تحديث طريقة الدفع",
@@ -4564,8 +4582,8 @@
     "inviteTeam": "ادعُ فريقك",
     "settings": "الإعدادات",
     "support": "الدعم",
-    "limitReached": "تم الوصول إلى الحد الأسبوعي",
-    "limitReachedDescription": "قم بالترقية إلى Pro للحصول على تفريغ صوتي غير محدود.",
+    "limitReached": "تم بلوغ الحد السحابي الأسبوعي",
+    "limitReachedDescription": "قم بالترقية إلى Pro أو استخدم مفتاح API الخاص بك للاستخدام غير المحدود.",
     "viewPlans": "عرض الخطط",
     "upgradeTitle": "الترقية إلى Pro",
     "upgradeDescription": "تفريغ صوتي غير محدود، أكثر دقة، وأسرع.",

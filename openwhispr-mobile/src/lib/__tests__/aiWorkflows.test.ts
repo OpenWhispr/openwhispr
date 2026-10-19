@@ -1,9 +1,26 @@
-import { workflowSummary } from '@/lib/aiWorkflows';
+import { unsetSelection, workflowSummary } from '@/lib/aiWorkflows';
 import type { UserConfig } from '@/types';
 
 function config(overrides: Partial<UserConfig> = {}): UserConfig {
   return { defaultMode: 'private', ...overrides } as UserConfig;
 }
+
+describe('Note Chat with nothing saved', () => {
+  it.each(['cloud', 'private', 'providers'] as const)(
+    'runs on OpenWhispr Cloud in %s mode',
+    (mode) => {
+      expect(unsetSelection('noteChat', mode)).toEqual({ mode: 'openwhispr' });
+    },
+  );
+
+  it('is summarized as OpenWhispr Cloud in Local Mode', () => {
+    expect(workflowSummary(config({}), 'noteChat', 'private')).toBe('OpenWhispr Cloud');
+  });
+
+  it('leaves the voice assistant skipped under Bring Your Own Key', () => {
+    expect(workflowSummary(config({}), 'agent', 'providers')).toBe('Not set');
+  });
+});
 
 describe('workflowSummary for Text Cleanup', () => {
   // With nothing saved, Local Mode cleans on OpenWhispr Cloud for a signed-in account and on this
@@ -135,5 +152,29 @@ describe('workflowSummary for Uploads', () => {
     expect(workflowSummary(saved, 'dictation', 'private', { cloudAccess: 'account' })).toBe(
       'On-Device',
     );
+  });
+});
+
+describe('workflowSummary for switched-off workflows', () => {
+  const groq = { mode: 'providers' as const, providerId: 'groq', modelId: 'llama' };
+
+  it('says Off for Note Chat and the Voice Assistant switched off, even with a key missing', () => {
+    const saved = config({
+      defaultMode: 'cloud',
+      noteChatEnabled: false,
+      dictationAgentEnabled: false,
+      inference: { noteChat: groq, agent: groq },
+    });
+    expect(workflowSummary(saved, 'noteChat', 'cloud', { keyMissing: true })).toBe('Off');
+    expect(workflowSummary(saved, 'agent', 'cloud', { keyMissing: true })).toBe('Off');
+  });
+
+  it('keeps Note Chat on when only the Voice Assistant is switched off', () => {
+    const saved = config({ defaultMode: 'cloud', dictationAgentEnabled: false });
+    expect(workflowSummary(saved, 'noteChat', 'cloud')).toBe('OpenWhispr Cloud');
+  });
+
+  it('says the Voice Assistant is Off in Local Mode, which turns it off', () => {
+    expect(workflowSummary(config({}), 'agent', 'private')).toBe('Off');
   });
 });

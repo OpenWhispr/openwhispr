@@ -7,11 +7,7 @@ import { SettingsSwitch } from '@/components/ui/SettingsSwitch';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useConfigToggle } from '@/hooks/useConfigToggle';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
-import {
-  getDictationAgentName,
-  isDictationAgentEnabled,
-  voiceAssistantToggleConfig,
-} from '@/lib/dictationAgent';
+import { getDictationAgentName, isDictationAgentEnabled } from '@/lib/dictationAgent';
 import { PRIVATE_MODE_LOCKED_REASON } from '@/lib/aiWorkflows';
 import { safeHaptics } from '@/lib/utils';
 import { iosColor } from '@/config/colors';
@@ -30,7 +26,7 @@ export function DictationAgentScreen(): React.JSX.Element {
     activeMode === 'private'
       ? `${PRIVATE_MODE_LOCKED_REASON} Your settings are saved and apply once Local Mode is off.`
       : activeMode === 'providers' && !agentSelected
-        ? 'Bring Your Own Key skips the voice assistant until Chat & Voice Assistant has a selection. Your settings are saved and apply once it does.'
+        ? 'Bring Your Own Key skips the voice assistant until you choose a provider for it in AI Models. Your settings are saved and apply once you do.'
         : null;
   const isAvailable = !unavailableNotice;
   const enabled = config ? isDictationAgentEnabled(config) : true;
@@ -42,9 +38,9 @@ export function DictationAgentScreen(): React.JSX.Element {
   const handleToggleEnabled = useCallback(
     (value: boolean): void => {
       safeHaptics('light');
-      void updateConfig(voiceAssistantToggleConfig(config, value));
+      void updateConfig({ dictationAgentEnabled: value });
     },
-    [config, updateConfig],
+    [updateConfig],
   );
   const handleToggleShareContext = useConfigToggle('dictationAgentShareContext');
 

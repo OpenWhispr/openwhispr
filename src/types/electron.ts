@@ -3273,6 +3273,7 @@ declare global {
         sessionId: string;
         autoEndEligible: boolean;
         aecEnabled?: boolean;
+        speakerIndexBase?: number;
       }) => Promise<
         {
           success: boolean;
@@ -3281,6 +3282,7 @@ declare global {
           systemAudioMode?: SystemAudioMode;
           systemAudioStrategy?: SystemAudioStrategy;
           oneOnOneAttendee?: { displayName: string; email: string | null } | null;
+          speakerIndexBase?: number;
         } & PolicyFailureMetadata
       >;
       meetingTranscriptionSend?: (buffer: ArrayBuffer, source: "mic" | "system") => void;

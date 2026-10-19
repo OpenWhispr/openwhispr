@@ -1,5 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Keyboard, Linking, Platform, Pressable, View } from 'react-native';
+import {
+  ActivityIndicator,
+  AppState,
+  Keyboard,
+  Linking,
+  Platform,
+  Pressable,
+  View,
+} from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useNavigation, usePreventRemove } from '@react-navigation/native';
@@ -21,7 +29,7 @@ import { resolveCustomPrompt } from '@/config/prompts/registry';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
-import type { UserConfig } from '@/types';
+import type { LocalReasoningReadiness, UserConfig } from '@/types';
 import {
   type ProviderCredential,
   getProviderCredential,
@@ -45,17 +53,13 @@ import {
   cloudCleanupNeedsAccount,
   parseWorkflow,
   unsetSelection,
+  workflowSwitchedOff,
 } from '@/lib/aiWorkflows';
 import { isLocalModelKey } from '@/lib/localModelCatalog';
-import {
-  getDictationAgentName,
-  isDictationAgentEnabled,
-  isNoteChatEnabled,
-  voiceAssistantToggleConfig,
-} from '@/lib/dictationAgent';
+import { getDictationAgentName } from '@/lib/dictationAgent';
 import { safeHaptics } from '@/lib/utils';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
-import { switchWorkflowMode } from '@/lib/workflowModeSwitch';
+import { type ModeSwitchResult, switchWorkflowMode } from '@/lib/workflowModeSwitch';
 import { getPrivateModeReadiness } from '@/lib/privateMode';
 import {
   getLocalReasoningReadiness,
@@ -84,6 +88,13 @@ import {
 } from '@/lib/mobileProviders';
 
 type Picker = 'provider' | 'model';
+// How often an open page checks whether Apple Intelligence finished downloading its model.
+const APPLE_INTELLIGENCE_POLL_MS = 10_000;
+// Shown on the On-Device row while iOS Settings has Apple Intelligence to finish.
+const APPLE_INTELLIGENCE_STATUSES: Partial<Record<LocalReasoningReadiness['status'], string>> = {
+  appleIntelligenceOff: 'Apple Intelligence is turned off in iOS Settings.',
+  modelNotReady: 'Apple Intelligence is downloading its model.',
+};
 const PROVIDER_SETUP_URLS: Record<string, string> = {
   openai: 'https://platform.openai.com/api-keys',
   groq: 'https://console.groq.com/keys',
@@ -103,25 +114,29 @@ function joinNames(names: string[]): string {
 }
 
 // A workflow that can be turned off: its switch sits above Mode, with the workflow's own
-// settings row under it while it is on.
+// settings row under it while it is on. A disabled switch shows why in its description.
 function WorkflowSwitchCard({
   title,
+  label,
   description,
   icon,
   mdIcon,
   enabled,
+  disabled = false,
   onToggle,
   offNote,
   children,
 }: {
   title: string;
+  label: string;
   description: string;
   icon: string;
   mdIcon: LucideIconName;
   enabled: boolean;
+  disabled?: boolean;
   onToggle: (value: boolean) => void;
   offNote: string;
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }): React.JSX.Element {
   return (
     <>
@@ -132,12 +147,20 @@ function WorkflowSwitchCard({
           mdIcon={mdIcon}
           title={title}
           description={description}
-          rightElement={<SettingsSwitch value={enabled} onValueChange={onToggle} />}
+          disabled={disabled}
+          rightElement={
+            <SettingsSwitch
+              accessibilityLabel={label}
+              value={enabled}
+              disabled={disabled}
+              onValueChange={onToggle}
+            />
+          }
           showChevron={false}
         />
         {enabled ? children : null}
       </SettingsSection>
-      {enabled ? null : <SectionFooter>{offNote}</SectionFooter>}
+      {enabled || disabled ? null : <SectionFooter>{offNote}</SectionFooter>}
     </>
   );
 }
@@ -150,6 +173,7 @@ function CleanupSettings({ enabled }: { enabled: boolean }): React.JSX.Element {
   return (
     <WorkflowSwitchCard
       title="Enable Text Cleanup"
+      label="Text Cleanup"
       description="Use AI to remove filler words, fix grammar, and polish punctuation."
       icon="sparkles"
       mdIcon="Sparkles"
@@ -169,73 +193,57 @@ function CleanupSettings({ enabled }: { enabled: boolean }): React.JSX.Element {
   );
 }
 
-// Note chat and the voice assistant share this workflow's model but switch on and off apart, so
-// Private mode can turn the voice assistant off while note chat keeps working.
-function AssistantSettings(): React.JSX.Element {
-  const config = useConfigStore((state) => state.config);
-  const updateConfig = useConfigStore((state) => state.updateConfig);
-  const privateMode = useProcessingModeStore((state) => state.activeMode === 'private');
+function NoteChatSettings({ enabled }: { enabled: boolean }): React.JSX.Element {
   const toggleNoteChat = useConfigToggle('noteChatEnabled');
-  const chatEnabled = config ? isNoteChatEnabled(config) : true;
-  const voiceEnabled = config ? isDictationAgentEnabled(config) : true;
-  const agentName = config ? getDictationAgentName(config) : undefined;
   return (
-    <>
-      <SettingsSection>
-        <SettingsRow
-          iconStyle="line"
-          icon="bubble.left.and.bubble.right"
-          mdIcon="MessagesSquare"
-          title="Note Chat"
-          description="Ask questions about your notes and get answers from them."
-          rightElement={
-            <SettingsSwitch
-              accessibilityLabel="Note Chat"
-              value={chatEnabled}
-              onValueChange={toggleNoteChat}
-            />
-          }
-          showChevron={false}
-        />
-        <SettingsRow
-          iconStyle="line"
-          icon="person.wave.2"
-          mdIcon="UserRoundCog"
-          title="Voice Assistant"
-          description={
-            privateMode
-              ? PRIVATE_MODE_LOCKED_REASON
-              : 'Say your assistant’s name while dictating to give it commands.'
-          }
-          disabled={privateMode}
-          rightElement={
-            <SettingsSwitch
-              accessibilityLabel="Voice Assistant"
-              value={voiceEnabled && !privateMode}
-              disabled={privateMode}
-              onValueChange={(enabled) => {
-                safeHaptics('light');
-                void updateConfig(voiceAssistantToggleConfig(config, enabled));
-              }}
-            />
-          }
-          showChevron={false}
-        />
-        {voiceEnabled && !privateMode ? (
-          <SettingsRow
-            iconStyle="line"
-            icon="slider.horizontal.3"
-            mdIcon="SlidersHorizontal"
-            title="Voice Assistant Settings"
-            subtitle={agentName}
-            onPress={() => router.push('/(account)/dictation-agent')}
-          />
-        ) : null}
-      </SettingsSection>
-      {chatEnabled || voiceEnabled ? null : (
-        <SectionFooter>Note chat and the voice assistant are off.</SectionFooter>
-      )}
-    </>
+    <WorkflowSwitchCard
+      title="Enable Note Chat"
+      label="Note Chat"
+      description="Ask questions about your notes and get answers from them."
+      icon="bubble.left.and.bubble.right"
+      mdIcon="MessagesSquare"
+      enabled={enabled}
+      onToggle={toggleNoteChat}
+      offNote="Notes don’t offer Ask about this note while note chat is off."
+    />
+  );
+}
+
+// Local Mode turns the voice assistant off.
+function VoiceAssistantSettings({ enabled }: { enabled: boolean }): React.JSX.Element {
+  const updateConfig = useConfigStore((state) => state.updateConfig);
+  const agentName = useConfigStore((state) =>
+    state.config ? getDictationAgentName(state.config) : undefined,
+  );
+  const privateMode = useProcessingModeStore((state) => state.activeMode === 'private');
+  return (
+    <WorkflowSwitchCard
+      title="Enable Voice Assistant"
+      label="Voice Assistant"
+      description={
+        privateMode
+          ? PRIVATE_MODE_LOCKED_REASON
+          : 'Say your assistant’s name while dictating to give it commands.'
+      }
+      icon="person.wave.2"
+      mdIcon="UserRoundCog"
+      enabled={enabled && !privateMode}
+      disabled={privateMode}
+      onToggle={(value) => {
+        safeHaptics('light');
+        void updateConfig({ dictationAgentEnabled: value });
+      }}
+      offNote="Saying your assistant’s name gives no commands; what you dictate is inserted as usual."
+    >
+      <SettingsRow
+        iconStyle="line"
+        icon="slider.horizontal.3"
+        mdIcon="SlidersHorizontal"
+        title="Voice Assistant Settings"
+        subtitle={agentName}
+        onPress={() => router.push('/(account)/dictation-agent')}
+      />
+    </WorkflowSwitchCard>
   );
 }
 
@@ -312,7 +320,8 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   const [configured, setConfigured] = useState(false);
   const [busy, setBusy] = useState(false);
   const [checking, setChecking] = useState<'test' | 'discover' | null>(null);
-  // Set when On-Device was tapped with no model on this phone and the model list opened.
+  // Set when On-Device was tapped with no model on this phone and the model list opened, or
+  // before Apple Intelligence was ready.
   const [onDeviceWanted, setOnDeviceWanted] = useState(false);
   const [discoveredModels, setDiscoveredModels] = useState<{ id: string; name: string }[]>([]);
   const { toast, showToast } = useToast();
@@ -332,29 +341,39 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   const providerId = provider?.id;
   const models = provider?.models.length ? provider.models : discoveredModels;
   const speechScope = scope === 'dictation' || scope === 'upload' ? scope : null;
-  // On-Device text workflows run on Apple Intelligence, which some iPhones can never run.
-  const [onDeviceUnsupported, setOnDeviceUnsupported] = useState<string | null>(null);
+  // On-Device text workflows run on Apple Intelligence, which some iPhones can never run and
+  // others have to finish setting up in iOS Settings, so it's checked again on return to the app.
+  const [appleIntelligence, setAppleIntelligence] = useState<LocalReasoningReadiness | null>(null);
   useEffect(() => {
     if (speechScope) return undefined;
     let cancelled = false;
-    getLocalReasoningReadiness()
-      .then((readiness) => {
-        if (cancelled) return;
-        setOnDeviceUnsupported(
-          isLocalReasoningUnsupported(readiness)
-            ? getLocalReasoningUnavailableMessage(readiness)
-            : null,
-        );
-      })
-      .catch(() => undefined);
+    const check = (): void => {
+      getLocalReasoningReadiness({ refresh: true })
+        .then((readiness) => {
+          if (!cancelled) setAppleIntelligence(readiness);
+        })
+        .catch(() => undefined);
+    };
+    check();
+    const appStateSubscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') check();
+    });
     return (): void => {
       cancelled = true;
+      appStateSubscription.remove();
     };
   }, [speechScope]);
+  const onDeviceUnsupported = isLocalReasoningUnsupported(appleIntelligence)
+    ? getLocalReasoningUnavailableMessage(appleIntelligence ?? undefined)
+    : null;
+  const onDeviceStatus = appleIntelligence && APPLE_INTELLIGENCE_STATUSES[appleIntelligence.status];
   // Nothing is shown as picked when the On-Device text workflow can never run on this iPhone.
   const pickedMode =
     !speechScope && onDeviceUnsupported && selection.mode === 'local' ? null : selection.mode;
   const modeNote =
+    (onDeviceWanted && !speechScope
+      ? 'Switches to On-Device once Apple Intelligence is ready, while this page stays open.'
+      : undefined) ??
     (scope === 'cleanup' && selection.mode === 'local' && onDeviceUnsupported
       ? ON_DEVICE_CLEANUP_UNSUPPORTED_NOTE
       : undefined) ??
@@ -378,22 +397,21 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   const modeUnavailable: Partial<Record<InferenceMode, string>> = onDeviceUnsupported
     ? { local: onDeviceUnsupported }
     : {};
+  const modeStatuses: Partial<Record<InferenceMode, string>> = onDeviceStatus
+    ? { local: onDeviceStatus }
+    : {};
   // Keys are stored per provider (per server for Custom), so every workflow on it shares one.
   const keyOwner =
     provider?.id === 'custom' ? 'this server' : providerDisplayName(provider?.id ?? '');
-  // Text Cleanup, and note chat with the voice assistant, can be switched off; then they use no key.
-  const switchedOff = (workflow: MobileInferenceScope): boolean =>
-    (workflow === 'cleanup' && !(config?.cleanupEnabled ?? true)) ||
-    (workflow === 'agent' &&
-      !!config &&
-      !isNoteChatEnabled(config) &&
-      !isDictationAgentEnabled(config));
-  const workflowOff = switchedOff(scope);
+  const workflowOff = workflowSwitchedOff(config, scope);
+  // A switched-off workflow uses no key, nor does the voice assistant in Local Mode.
+  const usesKey = (workflow: MobileInferenceScope): boolean =>
+    !workflowSwitchedOff(config, workflow) && !(activeMode === 'private' && workflow === 'agent');
   const sharedWith = WORKFLOWS.filter((other) => {
     const saved = config?.inference?.[other];
     return (
       other !== scope &&
-      !switchedOff(other) &&
+      usesKey(other) &&
       saved?.mode === 'providers' &&
       saved.providerId === provider?.id &&
       (provider?.id !== 'custom' ||
@@ -456,23 +474,55 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   }
 
   // Coming back from the model list with a model downloaded finishes the On-Device switch.
+  // Apple Intelligence is turned on and downloads its model outside the app, so it is also
+  // checked on return to the app and while this page stays open.
   useFocusEffect(
     useCallback(() => {
       if (!onDeviceWanted) return undefined;
       let cancelled = false;
-      getPrivateModeReadiness()
-        .then(async (readiness) => {
-          if (cancelled || readiness.status !== 'ready') return;
-          setOnDeviceWanted(false);
-          if ((await switchWorkflowMode(scope, 'local')) !== 'switched') return;
-          setSelection(useConfigStore.getState().config?.inference?.[scope] ?? { mode: 'local' });
-          showToast('Switched to On-Device.', 'success');
-        })
-        .catch(() => undefined);
+      let switching = false;
+      const finishWhenReady = async (): Promise<void> => {
+        let ready: boolean;
+        if (speechScope) {
+          ready = (await getPrivateModeReadiness()).status === 'ready';
+        } else {
+          const readiness = await getLocalReasoningReadiness({ refresh: true });
+          if (!cancelled) setAppleIntelligence(readiness);
+          ready = readiness.status === 'ready';
+        }
+        if (cancelled || switching || !ready) return;
+        switching = true;
+        const result = await switchWorkflowMode(scope, 'local').catch(
+          (): ModeSwitchResult => 'refused',
+        );
+        switching = false;
+        // The switch checks Apple Intelligence again and can find it not ready after all. Its
+        // alert says the page keeps waiting, so the request stays.
+        if (result === 'not-ready') return;
+        setOnDeviceWanted(false);
+        if (result !== 'switched') return;
+        setSelection(useConfigStore.getState().config?.inference?.[scope] ?? { mode: 'local' });
+        showToast('Switched to On-Device.', 'success');
+      };
+      const check = (): void => {
+        finishWhenReady().catch(() => undefined);
+      };
+      check();
+      if (speechScope) {
+        return (): void => {
+          cancelled = true;
+        };
+      }
+      const appStateSubscription = AppState.addEventListener('change', (state) => {
+        if (state === 'active') check();
+      });
+      const poll = setInterval(check, APPLE_INTELLIGENCE_POLL_MS);
       return (): void => {
         cancelled = true;
+        appStateSubscription.remove();
+        clearInterval(poll);
       };
-    }, [onDeviceWanted, scope, showToast]),
+    }, [onDeviceWanted, scope, speechScope, showToast]),
   );
 
   async function chooseMode(mode: InferenceMode): Promise<void> {
@@ -500,7 +550,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
       if (result === 'switched') {
         setSelection(useConfigStore.getState().config?.inference?.[scope] ?? { mode });
       }
-      setOnDeviceWanted(result === 'needs-model');
+      setOnDeviceWanted(result === 'needs-model' || result === 'not-ready');
     } finally {
       setBusy(false);
     }
@@ -758,7 +808,8 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
         keyboardDismissMode="interactive"
       >
         {scope === 'cleanup' ? <CleanupSettings enabled={!workflowOff} /> : null}
-        {scope === 'agent' ? <AssistantSettings /> : null}
+        {scope === 'noteChat' ? <NoteChatSettings enabled={!workflowOff} /> : null}
+        {scope === 'agent' ? <VoiceAssistantSettings enabled={!workflowOff} /> : null}
         {workflowOff ? null : (
           <>
             <InferenceModePicker
@@ -766,6 +817,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
               selectedMode={pickedMode}
               onSelect={chooseMode}
               unavailable={modeUnavailable}
+              statuses={modeStatuses}
             />
             {modeNote ? <SectionFooter>{modeNote}</SectionFooter> : null}
             {selection.mode === 'local' && speechScope ? (

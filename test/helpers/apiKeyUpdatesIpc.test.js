@@ -163,6 +163,9 @@ test.after(() => {
   Module._load = originalLoad;
 });
 
+// Loaded after the electron stub above, and shared with ipcHandlers so tests can mock it.
+const liveSpeakerIdentifier = require("../../src/helpers/liveSpeakerIdentifier");
+
 function anything() {
   return new Proxy(function () {}, {
     get: (_target, property) => {
@@ -587,3 +590,33 @@ test("a prepare after a mid-meeting renewal leaves the live meeting alone", asyn
   });
   assertMeetingStreams(renewed);
 });
+
+// Main's base (past the note's stored ids), not the renderer's, numbers the live
+// identifier, reaches the renderer, and is what each stop path hands diarization.
+for (const options of [{ provider: "local" }, { provider: "deepgram-realtime", mode: "byok" }]) {
+  test(`${options.provider}: a meeting's speaker index base reaches live identification, the renderer and diarization`, async (t) => {
+    resetMeeting(t);
+    invoke("save-deepgram-key", "A");
+    const requestedBases = [];
+    const diarizedBases = [];
+    target._resolveMeetingSpeakerIndexBase = (_noteId, requestedBase) => {
+      requestedBases.push(requestedBase);
+      return 6;
+    };
+    target._startOrSkipDiarization = (...args) => diarizedBases.push(args[9]);
+    t.after(() => {
+      delete target._resolveMeetingSpeakerIndexBase;
+      delete target._startOrSkipDiarization;
+    });
+    t.mock.method(liveSpeakerIdentifier, "isAvailable", () => true);
+    const liveStart = t.mock.method(liveSpeakerIdentifier, "start", async () => false);
+
+    const result = await invoke("meeting-transcription-start", { ...options, speakerIndexBase: 3 });
+    assert.equal(result.success, true);
+    assert.equal((await invoke("meeting-transcription-stop")).success, true);
+    assert.deepEqual(requestedBases, [3]);
+    assert.equal(liveStart.mock.calls[0].arguments[1].speakerIndexBase, 6);
+    assert.equal(result.speakerIndexBase, 6);
+    assert.deepEqual(diarizedBases, [6]);
+  });
+}
