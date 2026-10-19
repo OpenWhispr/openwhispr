@@ -1459,6 +1459,7 @@ function invalidateApiKeyCaches(
     | "custom"
     | "openrouter"
     | "corti"
+    | "xai"
 ) {
   if (_ReasoningService) {
     _ReasoningService.clearApiKeyCache(provider);
@@ -2189,7 +2190,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setAnthropicApiKey: createSecretSetter("anthropicApiKey", "anthropic", "anthropic"),
   setGeminiApiKey: createSecretSetter("geminiApiKey", "gemini", "gemini"),
   setGroqApiKey: createSecretSetter("groqApiKey", "groq", "groq"),
-  setXaiApiKey: createSecretSetter("xaiApiKey", "xai"),
+  setXaiApiKey: createSecretSetter("xaiApiKey", "xai", "xai"),
   setMistralApiKey: createSecretSetter("mistralApiKey", "mistral", "mistral"),
   setOpenrouterApiKey: createSecretSetter("openrouterApiKey", "openrouter", "openrouter"),
   setCortiClientId: (key: string) => {
