@@ -73,11 +73,13 @@ export const geminiProvider: InferenceProvider = {
       // limit and the request timeout bound the reply.
     };
 
+    // A chosen level is only offered while thinking isn't suppressed, so it wins
+    // over the minimal floor that a model without the toggle gets by default.
     const thinkingLevel = chosenReasoningEffort("gemini", model, config);
-    if (config.disableThinking === true && minimalThinking[model]) {
-      generationConfig.thinkingConfig = minimalThinking[model];
-    } else if (thinkingLevel) {
+    if (thinkingLevel) {
       generationConfig.thinkingConfig = { thinkingLevel, includeThoughts: false };
+    } else if (config.disableThinking === true && minimalThinking[model]) {
+      generationConfig.thinkingConfig = minimalThinking[model];
     }
 
     const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [

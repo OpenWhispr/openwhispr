@@ -190,7 +190,7 @@ export default function InferenceConfigEditor({
 
   const effortCapability =
     effectiveMode === "providers"
-      ? selectableReasoningEffort(config.provider, config.model, config)
+      ? selectableReasoningEffort(config.provider, config.model, config, config.cloudBaseUrl)
       : null;
 
   if (managed.kind === "error") {

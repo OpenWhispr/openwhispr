@@ -209,6 +209,31 @@ test("a model outside the family table gets the generic off value on a Responses
   assert.equal(bodies[1].reasoning, undefined);
 });
 
+test("a chosen level on a Responses endpoint is checked against the endpoint's host", async (t) => {
+  const bodies = installFetch(t, () => completeMessage("Cleaned."));
+  const { openaiProvider } = await load();
+  const xaiCall = (reasoningEffort) => ({
+    text: "raw transcript",
+    model: "grok-4.7",
+    agentName: null,
+    config: {
+      provider: "custom",
+      baseUrl: "https://api.x.ai/v1",
+      customApiKey: "test-key",
+      disableThinking: false,
+      reasoningEffort,
+    },
+    ctx: makeCtx(),
+  });
+
+  await openaiProvider.call(xaiCall("xhigh"));
+  // x.ai takes no "minimal", so it's left at the server's default.
+  await openaiProvider.call(xaiCall("minimal"));
+
+  assert.deepEqual(bodies[0].reasoning, { effort: "xhigh" });
+  assert.equal(bodies[1].reasoning, undefined);
+});
+
 test("a Custom endpoint that rejects the off value pays the 400 once, not on every request", async (t) => {
   // e.g. Azure OpenAI with a non-reasoning deployment, whose name we can't recognise.
   const bodies = installFetch(t, (body) =>

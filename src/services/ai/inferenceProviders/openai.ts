@@ -275,7 +275,7 @@ export const openaiProvider: InferenceProvider = {
             if (apiConfig.supportsTemperature) {
               requestBody.temperature = config.temperature ?? (config.systemPrompt ? 0.3 : 0);
             }
-            const effort = responsesReasoningEffort(model, resolvedProvider, config);
+            const effort = responsesReasoningEffort(model, resolvedProvider, config, openAiBase);
             if (effort) requestBody.reasoning = { effort };
           } else {
             requestBody.messages = buildMessages(type);

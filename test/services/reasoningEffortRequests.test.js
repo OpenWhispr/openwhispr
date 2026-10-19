@@ -49,6 +49,56 @@ test("picker: Custom and OpenRouter offer only what the model family accepts", a
   assert.equal(selectableReasoningEffort("custom", "magistral-small-latest", on), null);
 });
 
+test("picker: Custom offers the levels its endpoint's host takes", async () => {
+  const { selectableReasoningEffort } = await import("../../src/services/ai/chatRequestBody.ts");
+  const on = { disableThinking: false };
+
+  assert.deepEqual(
+    selectableReasoningEffort("custom", "grok-4.7", on, "https://api.x.ai/v1").options,
+    ["low", "medium", "high", "xhigh"]
+  );
+  // DeepSeek's API rejects "none" (#1260).
+  assert.deepEqual(
+    selectableReasoningEffort("custom", "deepseek-chat", on, "https://api.deepseek.com").options,
+    ["low", "high"]
+  );
+});
+
+test("picker: Custom and OpenRouter take a registry model's own levels", async () => {
+  const { selectableReasoningEffort } = await import("../../src/services/ai/chatRequestBody.ts");
+  const on = { disableThinking: false };
+
+  // No "minimal" for gpt-5.5, and no server default named for an unknown server.
+  assert.deepEqual(selectableReasoningEffort("custom", "gpt-5.5", on), {
+    options: ["none", "low", "medium", "high", "xhigh"],
+  });
+  // A streamed Custom turn can't carry "max"; OpenRouter's reasoning object can.
+  assert.deepEqual(selectableReasoningEffort("custom", "gpt-6-astra", on).options, [
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+  ]);
+  assert.deepEqual(selectableReasoningEffort("openrouter", "openai/gpt-6-astra", on).options, [
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max",
+  ]);
+});
+
+test("picker: the toggle Custom always shows hides the picker, registry model or not", async () => {
+  const { chosenReasoningEffort, selectableReasoningEffort } =
+    await import("../../src/services/ai/chatRequestBody.ts");
+
+  assert.equal(selectableReasoningEffort("custom", "gpt-5.5", { disableThinking: true }), null);
+  assert.equal(
+    chosenReasoningEffort("custom", "gpt-5.5", { disableThinking: true, reasoningEffort: "high" }),
+    undefined
+  );
+});
+
 test("a level saved for a cloud provider never reaches a self-hosted server", async () => {
   const { chosenReasoningEffort, selectableReasoningEffort } =
     await import("../../src/services/ai/chatRequestBody.ts");
@@ -73,6 +123,10 @@ test("Responses effort: Auto leaves OpenAI at the server default, toggle or not"
 
   assert.equal(responsesReasoningEffort("gpt-5.5", "openai", {}), undefined);
   assert.equal(responsesReasoningEffort("gpt-5.5", "openai", { disableThinking: true }), undefined);
+  // An id the registry no longer lists: OpenAI hides the toggle, so its
+  // default-on value never turns into "none".
+  assert.equal(responsesReasoningEffort("gpt-5.4", "openai", { disableThinking: true }), undefined);
+  assert.equal(responsesReasoningEffort("o4-mini", "openai", { disableThinking: true }), undefined);
 });
 
 test("Responses effort: a Custom endpoint sends any listed level (#791)", async () => {
@@ -122,6 +176,38 @@ test("Gemini native: a chosen level becomes thinkingLevel; the toggle still wins
     thinkingLevel: "minimal",
     includeThoughts: false,
   });
+});
+
+test("Gemini 3.1 Flash Lite: no toggle, so a chosen level beats the minimal floor", async (t) => {
+  const { selectableReasoningEffort } = await import("../../src/services/ai/chatRequestBody.ts");
+  const { geminiProvider } = await import("../../src/services/ai/inferenceProviders/gemini.ts");
+  const requests = [];
+  t.mock.method(globalThis, "fetch", async (_url, init) => {
+    requests.push(JSON.parse(init.body));
+    return Response.json({
+      candidates: [{ finishReason: "STOP", content: { parts: [{ text: "Clean text." }] } }],
+    });
+  });
+  const call = (config) =>
+    geminiProvider.call({
+      text: "transcript",
+      model: "gemini-3.1-flash-lite",
+      agentName: null,
+      config,
+      ctx: { getApiKey: async () => "test-key", getSystemPrompt: () => "Clean." },
+    });
+
+  // The toggle is hidden for this model and stays at its default, on.
+  assert.deepEqual(
+    selectableReasoningEffort("gemini", "gemini-3.1-flash-lite", { disableThinking: true }),
+    { options: ["minimal", "low", "medium", "high"] }
+  );
+
+  await call({ disableThinking: true, reasoningEffort: "low" });
+  assert.equal(requests[0].generationConfig.thinkingConfig.thinkingLevel, "low");
+
+  await call({ disableThinking: true });
+  assert.equal(requests[1].generationConfig.thinkingConfig.thinkingLevel, "minimal");
 });
 
 async function streamRequestBody(t, { provider, model, config, tools, keys = {} }) {
@@ -174,6 +260,16 @@ test("streaming: a Custom endpoint gets reasoning_effort", async (t) => {
     config: CHOSEN("low", { baseUrl: "https://api.x.ai/v1", customApiKey: "test-key" }),
   });
   assert.equal(body.reasoning_effort, "low");
+});
+
+test("streaming: a Custom level is checked against the endpoint's host", async (t) => {
+  const body = await streamRequestBody(t, {
+    provider: "custom",
+    model: "deepseek-chat",
+    // DeepSeek's API rejects "none" (#1260), and a streamed turn has no retry.
+    config: CHOSEN("none", { baseUrl: "https://api.deepseek.com", customApiKey: "test-key" }),
+  });
+  assert.equal(body.reasoning_effort, undefined);
 });
 
 test("streaming: a self-hosted turn never sends the level saved for the scope's provider", async (t) => {

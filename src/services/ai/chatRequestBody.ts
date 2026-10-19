@@ -4,7 +4,9 @@ import {
   getReasoningEffortCapability,
   hasSelectableReasoningEffort,
   isReasoningEffortSupported,
+  OPEN_ENDPOINT_PROVIDERS,
 } from "../../models/reasoningEffort";
+import { matchesHost } from "../../utils/urlUtils";
 import { detectEndpointDialect } from "./thinkingSuppressionDialects";
 import { getModelFamilyConstraints } from "./modelFamilyConstraints";
 import { applyThinkingSuppression, isThinkingSuppressed } from "./thinkingSuppression";
@@ -65,7 +67,7 @@ export function applyChatCompletionsParams(
   // modelFamilyConstraints for the gpt-oss rationale. A suppressed request has
   // no chosen effort, so applyThinkingSuppression still decides it.
   const familyEffort = getModelFamilyConstraints(model)?.reasoningEffort;
-  const effort = chosenReasoningEffort(providerKey, model, config);
+  const effort = chosenReasoningEffort(providerKey, model, config, endpoint);
   if (effort) {
     // OpenRouter takes effort only inside its reasoning object.
     if (providerKey === "openrouter") requestBody.reasoning = { effort };
@@ -97,11 +99,18 @@ export function applyChatCompletionsParams(
 export function responsesReasoningEffort(
   model: string,
   provider: string,
-  config: ReasoningConfig
+  config: ReasoningConfig,
+  endpoint?: string | null
 ): string | undefined {
   const familyEffort = getModelFamilyConstraints(model)?.reasoningEffort;
-  if (isThinkingSuppressed(model, config)) return familyEffort?.suppressValue ?? "none";
-  const effort = chosenReasoningEffort(provider, model, config);
+  if (isThinkingSuppressed(model, config)) {
+    // Native OpenAI shows no toggle, so its default-on value is not the user's
+    // choice: a model id the registry no longer lists keeps the server's default.
+    return (
+      familyEffort?.suppressValue ?? (provider.toLowerCase() === "openai" ? undefined : "none")
+    );
+  }
+  const effort = chosenReasoningEffort(provider, model, config, endpoint);
   if (effort) return effort;
   if (familyEffort?.cleanupValue && isDeterministicTransform(config)) {
     return familyEffort.cleanupValue;
@@ -110,16 +119,20 @@ export function responsesReasoningEffort(
 }
 
 /**
- * The levels Settings offers for this provider and model, or null when it
- * shows no picker: thinking is suppressed, or the model has fewer than two.
+ * The levels Settings offers for this provider, model and endpoint, or null
+ * when it shows no picker: thinking is suppressed, the toggle Custom and
+ * OpenRouter show for every model is on, or the model has fewer than two.
  */
 export function selectableReasoningEffort(
   provider: string,
   model: string,
-  config: ReasoningConfig
+  config: ReasoningConfig,
+  endpoint?: string | null
 ): ReasoningEffortCapability | null {
+  const providerKey = provider.toLowerCase();
   if (!model || isThinkingSuppressed(model, config)) return null;
-  const capability = getReasoningEffortCapability(provider.toLowerCase(), model);
+  if (OPEN_ENDPOINT_PROVIDERS.has(providerKey) && config.disableThinking === true) return null;
+  const capability = getReasoningEffortCapability(providerKey, model, endpoint);
   return hasSelectableReasoningEffort(capability) ? capability : null;
 }
 
@@ -131,10 +144,14 @@ export function selectableReasoningEffort(
 export function chosenReasoningEffort(
   provider: string,
   model: string,
-  config: ReasoningConfig
+  config: ReasoningConfig,
+  endpoint?: string | null
 ): string | undefined {
   const effort = config.reasoningEffort;
-  return isReasoningEffortSupported(selectableReasoningEffort(provider, model, config), effort)
+  return isReasoningEffortSupported(
+    selectableReasoningEffort(provider, model, config, endpoint),
+    effort
+  )
     ? effort
     : undefined;
 }
@@ -205,11 +222,12 @@ const STRIPPABLE_SHAPED_PARAMS = [
 ] as const;
 
 /**
- * Values a server rejected since this window loaded, as
- * `endpoint, model, param=value`. Keyed by value, so another effort level is
- * still sent.
+ * Values a server rejected, as `endpoint, model, param=value` → when the
+ * memory expires. Keyed by value, so another effort level is still sent; the
+ * expiry retries a value once the model behind the endpoint may have changed.
  */
-const rejectedParams = new Set<string>();
+const rejectedParams = new Map<string, number>();
+const REJECTION_MEMORY_MS = 10 * 60 * 1000;
 
 /** `remembered`: left out up front because an earlier retry proved it rejected. */
 export type ParamFallbackDetails = { status?: number; stripped: string[]; remembered?: true };
@@ -221,8 +239,9 @@ export type ParamFallbackDetails = { status?: number; stripped: string[]; rememb
  * the shaped params the error body names and retry once. At most two retries;
  * the caller must build the body inside `doFetch` so retries re-serialize.
  * A value the error named whose removal let the retry through is left out of
- * later requests to the same endpoint and model until the window reloads, so
- * each pays the rejection once rather than on every request.
+ * later requests to the same endpoint and model for REJECTION_MEMORY_MS, so
+ * each pays the rejection once rather than on every request. OpenRouter is
+ * never remembered: it routes each request to one of several upstreams.
  */
 export async function fetchWithParamFallback(
   endpoint: string,
@@ -233,8 +252,9 @@ export async function fetchWithParamFallback(
   const rejectionKey = (param: string) =>
     `${endpoint}\n${requestBody.model}\n${param}=${JSON.stringify(requestBody[param])}`;
   const remembered = ["reasoning", ...STRIPPABLE_SHAPED_PARAMS].filter(
-    (param) => param in requestBody && rejectedParams.has(rejectionKey(param))
+    (param) => param in requestBody && (rejectedParams.get(rejectionKey(param)) ?? 0) > Date.now()
   );
+  const canRemember = !matchesHost(endpoint, "openrouter.ai");
   if (remembered.length > 0) {
     logRejection({ stripped: remembered, remembered: true });
     for (const param of remembered) delete requestBody[param];
@@ -248,7 +268,10 @@ export async function fetchWithParamFallback(
     const keys = params.map(rejectionKey);
     for (const param of params) delete requestBody[param];
     const retried = await doFetch();
-    if (remember && retried.ok) for (const key of keys) rejectedParams.add(key);
+    if (remember && canRemember && retried.ok) {
+      const expiresAt = Date.now() + REJECTION_MEMORY_MS;
+      for (const key of keys) rejectedParams.set(key, expiresAt);
+    }
     return retried;
   };
 
@@ -258,7 +281,7 @@ export async function fetchWithParamFallback(
   if (requestBody.reasoning) {
     // Remembered only when the error names it: a blind 400 may have come from
     // one of several backends behind the same endpoint.
-    const reasoningNamed = (await readError(res)).includes("reasoning");
+    const reasoningNamed = (await readError(res)).toLowerCase().includes("reasoning");
     logRejection({ status: res.status, stripped: ["reasoning"] });
     void res.body?.cancel();
     res = await retryWithout(["reasoning"], reasoningNamed);

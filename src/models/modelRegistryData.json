@@ -697,7 +697,10 @@
           "name": "Gemini 3.1 Flash Lite",
           "description": "Frontier-class performance at low cost",
           "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_1_flash_lite",
-          "supportsVision": true
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["minimal", "low", "medium", "high"]
+          }
         },
         {
           "id": "gemini-3-flash-preview",

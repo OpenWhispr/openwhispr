@@ -203,6 +203,63 @@ test("a rejection that doesn't name reasoning is not remembered", async () => {
   assert.ok("reasoning" in body);
 });
 
+test("an error naming Reasoning in any case is remembered", async () => {
+  const { fetchWithParamFallback } = await load();
+  const endpoint = nextEndpoint();
+  await fetchWithParamFallback(
+    endpoint,
+    fetcher(
+      jsonResponse(400, { error: "Reasoning is not supported for this model" }),
+      jsonResponse(200, {})
+    ),
+    { model: "m", reasoning: { effort: "none" } },
+    () => {}
+  );
+
+  const body = { model: "m", reasoning: { effort: "none" } };
+  const doFetch = fetcher(jsonResponse(200, {}));
+  await fetchWithParamFallback(endpoint, doFetch, body, () => {});
+  assert.ok(!("reasoning" in body));
+  assert.equal(doFetch.count(), 1);
+});
+
+test("OpenRouter rejections are never remembered: each request may reach another upstream", async () => {
+  const { fetchWithParamFallback } = await load();
+  const endpoint = "https://openrouter.ai/api/v1/chat/completions";
+  await fetchWithParamFallback(
+    endpoint,
+    fetcher(jsonResponse(400, REASONING_REJECTED), jsonResponse(200, {})),
+    { model: "m", reasoning: { effort: "high" } },
+    () => {}
+  );
+
+  const body = { model: "m", reasoning: { effort: "high" } };
+  await fetchWithParamFallback(endpoint, fetcher(jsonResponse(200, {})), body, () => {});
+  assert.deepEqual(body.reasoning, { effort: "high" });
+});
+
+test("a remembered rejection expires after ten minutes", async (t) => {
+  const { fetchWithParamFallback } = await load();
+  t.mock.timers.enable({ apis: ["Date"], now: 1_000_000 });
+  const endpoint = nextEndpoint();
+  await fetchWithParamFallback(
+    endpoint,
+    fetcher(jsonResponse(400, REASONING_REJECTED), jsonResponse(200, {})),
+    { model: "m", reasoning: { effort: "none" } },
+    () => {}
+  );
+
+  t.mock.timers.tick(10 * 60 * 1000 - 1);
+  const stillRemembered = { model: "m", reasoning: { effort: "none" } };
+  await fetchWithParamFallback(endpoint, fetcher(jsonResponse(200, {})), stillRemembered, () => {});
+  assert.ok(!("reasoning" in stillRemembered));
+
+  t.mock.timers.tick(1);
+  const expired = { model: "m", reasoning: { effort: "none" } };
+  await fetchWithParamFallback(endpoint, fetcher(jsonResponse(200, {})), expired, () => {});
+  assert.ok("reasoning" in expired);
+});
+
 test("nothing is remembered when the retry fails too", async () => {
   const { fetchWithParamFallback } = await load();
   const endpoint = nextEndpoint();
