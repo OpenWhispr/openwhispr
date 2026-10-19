@@ -225,6 +225,14 @@ const VolumeMark = glyph(
   </>
 );
 
+// The question card's submit arrow (Lucide's arrow-up).
+const ArrowUpMark = glyph(
+  <>
+    <path d="m5 12 7-7 7 7" />
+    <path d="M12 19V5" />
+  </>
+);
+
 const TextSelectMark = glyph(
   <>
     <path d="M21 6H3" />
@@ -237,6 +245,7 @@ const TextSelectMark = glyph(
 );
 
 export const Circle = createIcon("circle", CircleMark);
+export const ArrowUp = createIcon("arrow-up", ArrowUpMark);
 export const Square = createIcon("square", SquareMark);
 export const SquareSlash = createIcon("square-slash", SquareSlashMark);
 export const Bold = createIcon("bold", BoldMark);

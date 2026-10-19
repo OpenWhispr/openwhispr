@@ -4,6 +4,7 @@ import * as Nucleo from "./nucleo";
 
 export type { IconComponent, IconProps } from "./createIcon";
 export {
+  ArrowUp,
   Bold,
   Circle,
   CopyRounded,

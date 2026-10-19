@@ -1,32 +1,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const React = require("react");
-const { createRendererServer } = require("../lib/rendererTestHarness");
+const { createRendererServer, installHappyDom } = require("../lib/rendererTestHarness");
 
 // The interaction card mounted for real in happy-dom over the real store. The
 // settings store brings the app's i18n with it, so labels are in English.
-async function installHappyDom(t) {
-  const { Window } = await import("happy-dom");
-  const happyWindow = new Window();
-  const fromWindow = ["document", "Node", "Element", "HTMLElement", "Event", "KeyboardEvent"];
-  const names = ["window", ...fromWindow, "localStorage", "IS_REACT_ACT_ENVIRONMENT"];
-  const originals = names.map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)]);
-  const define = (name, value) =>
-    Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
-  define("window", happyWindow);
-  for (const name of fromWindow) define(name, happyWindow[name]);
-  define("localStorage", happyWindow.localStorage);
-  define("IS_REACT_ACT_ENVIRONMENT", true);
-  t.after(async () => {
-    for (const [name, descriptor] of originals) {
-      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
-      else delete globalThis[name];
-    }
-    await happyWindow.happyDOM.close();
-  });
-  return happyWindow;
-}
-
 async function mountCard(t, payload) {
   let root = null;
   // Node runs after hooks in registration order: unmount while the DOM exists.
