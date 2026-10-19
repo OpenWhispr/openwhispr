@@ -159,7 +159,7 @@ function answerLabels(
 const askUserTool: ToolDefinition = {
   name: "ask_user",
   description:
-    "Ask the user one or more questions and wait for the answers. Only for something the request, the context and your other tools couldn't settle, where a wrong guess would matter: look things up first. Put every question you still need into this one call. kind: single (pick one option), multiple (pick any options), text (type an answer). Options need ids and labels; mark at most one option recommended when one is clearly better (the user still picks).",
+    "Ask the user one or more questions and wait for the answers. Only for something the request, the context and your other tools couldn't settle, where a wrong guess would matter. Never ask for a pull request, issue, person, email address, channel or note before you have searched for it with your tools. Put every question you still need into this one call. kind: single (pick one option), multiple (pick any options), text (type an answer). Options need ids and labels; mark at most one option recommended when one is clearly better (the user still picks).",
   parameters: {
     type: "object",
     properties: {
