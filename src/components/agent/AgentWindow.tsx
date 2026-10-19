@@ -429,6 +429,8 @@ export default function AgentWindow() {
 
   const switchChat = useCallback(
     (id: number) => {
+      // The chat already open: nothing to stop or drop.
+      if (id === conversationId) return;
       stopReading();
       dropTake();
       void openChat(id).then((opened) => {
@@ -436,7 +438,7 @@ export default function AgentWindow() {
         if (opened !== false) setOpenedChat((count) => count + 1);
       });
     },
-    [dropTake, openChat, stopReading]
+    [conversationId, dropTake, openChat, stopReading]
   );
 
   const newChat = useCallback(() => {
