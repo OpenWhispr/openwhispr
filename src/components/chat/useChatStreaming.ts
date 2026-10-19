@@ -266,6 +266,11 @@ export interface SendToAIOptions {
   onApprovalRequested?: () => void;
   /** Fires when this turn's answer must not be pasted at the caret (see ToolExecutionContext). */
   onHoldDelivery?: (options?: HoldDeliveryOptions) => void;
+  /**
+   * Regenerates this reply in place (same message, same saved row) instead of
+   * adding one. The sends it made stay on it: the conversation never forgets them.
+   */
+  replaceMessage?: Message;
 }
 
 export interface ChatStreaming {
@@ -422,7 +427,9 @@ export function useChatStreaming({
         onImageAttached: (image) => stepImages.push(image),
         onActionCompleted: ({ toolCallId, actionKey }) =>
           turnHooks.annotate?.(toolCallId, { actionKey }),
-        completedActions: completedActionKeys(allMessages),
+        completedActions: completedActionKeys(
+          options?.replaceMessage ? [...allMessages, options.replaceMessage] : allMessages
+        ),
       });
       toolScopeRef.current = toolScope;
       clearToolActivity();
@@ -707,9 +714,10 @@ export function useChatStreaming({
 
         const llmMessages = [{ role: "system", content: systemPrompt }, ...history];
 
-        const assistantId = crypto.randomUUID();
+        const replaced = options?.replaceMessage;
+        const assistantId = replaced?.id ?? crypto.randomUUID();
         let turn: AssistantTurn = { startedAt: Date.now(), status: "running" };
-        let toolCalls: ToolCallInfo[] = [];
+        let toolCalls: ToolCallInfo[] = replaced?.toolCalls?.filter((call) => call.actionKey) ?? [];
         let reasoning = "";
         let rawContent = "";
         let fullContent = "";
@@ -737,16 +745,19 @@ export function useChatStreaming({
         const hasPendingInteraction = (): boolean =>
           toolCalls.some((call) => call.interaction?.state === "pending");
 
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: assistantId,
-            role: "assistant",
-            content: "",
-            isStreaming: true,
-            turn: currentTurn(),
-          },
-        ]);
+        const placeholder: Message = {
+          id: assistantId,
+          role: "assistant",
+          content: "",
+          isStreaming: true,
+          toolCalls: currentToolCalls(),
+          turn: currentTurn(),
+        };
+        setMessages((prev) =>
+          replaced
+            ? prev.map((m) => (m.id === assistantId ? { ...placeholder, dbId: m.dbId } : m))
+            : [...prev, placeholder]
+        );
         setAgentState("streaming");
 
         // Chat re-parses the whole answer through react-markdown on every

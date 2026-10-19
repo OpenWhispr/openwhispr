@@ -106,6 +106,8 @@ async function renderChatStreaming(
     checkpoints,
     setStream: (factory) => (streamFor = factory),
     assistant: () => messages.find((message) => message.role === "assistant"),
+    messages: () => messages,
+    seed: (list) => (messages = list),
   };
 }
 
@@ -347,6 +349,81 @@ test("a send an earlier request made shows its card again, saying so", async (t)
 
   // The user's Send or Cancel decides; the model is never told it was already done.
   assert.equal(output.status, "cancelled_by_user");
+});
+
+test("regenerating replaces the reply in place and keeps the sends it made", async (t) => {
+  const harness = await renderChatStreaming(
+    t,
+    { allowConnectors: true, allowInteractions: true },
+    {
+      statuses: SLACK_READY,
+      electronAPI: {
+        connectorPrepare: async () => ({
+          status: "ready",
+          actionId: "a1",
+          preview: { verbKey: "post", destinationLabel: "#eng", accountLabel: "chad", body: "hi" },
+        }),
+        connectorCancel: async () => ({ cancelled: true }),
+      },
+    }
+  );
+  const { connectorActionKey } = await harness.vite.ssrLoadModule(
+    "/services/tools/connectors/actionKey.ts"
+  );
+  const approvals = await harness.vite.ssrLoadModule("/stores/connectorApprovalStore.ts");
+  const sent = {
+    id: "s1",
+    name: "slack_send_message",
+    arguments: "{}",
+    status: "completed",
+    actionKey: connectorActionKey("slack", "send_message", { destination: "#eng", text: "hi" }),
+  };
+  const request = { id: "u1", role: "user", content: "Post hi to #eng", isStreaming: false };
+  const reply = {
+    id: "a0",
+    dbId: 9,
+    role: "assistant",
+    content: "Posted.",
+    isStreaming: false,
+    toolCalls: [{ id: "q1", name: "search_notes", arguments: "{}", status: "completed" }, sent],
+  };
+  harness.seed([request, reply]);
+  let notes;
+  harness.setStream((tools) =>
+    (async function* () {
+      const running = tools.slack_send_message.execute(
+        { destination: "#eng", text: "hi" },
+        toolOptions("s2")
+      );
+      await new Promise((resolve) => setImmediate(resolve));
+      const [entry] = Object.values(approvals.useConnectorApprovalStore.getState().entries);
+      notes = entry.preview.notes;
+      approvals.cancelApproval(entry.key);
+      await running;
+      yield { type: "content", text: "Here it is again." };
+      yield { type: "done", finishReason: "stop" };
+    })()
+  );
+  await harness.captured.sendToAI(request.content, [request], {
+    conversationId: 7,
+    replaceMessage: reply,
+  });
+
+  // The send the replaced reply made still counts as made.
+  assert.deepEqual(notes, [{ key: "connectors.approval.sentEarlier" }]);
+  const messages = harness.messages();
+  assert.deepEqual(
+    messages.map((message) => message.id),
+    ["u1", "a0"]
+  );
+  assert.equal(messages[1].dbId, 9);
+  assert.equal(messages[1].content, "Here it is again.");
+  const [[savedId, , savedCalls]] = harness.completed;
+  assert.equal(savedId, "a0");
+  assert.deepEqual(
+    savedCalls.map((call) => call.actionKey),
+    [sent.actionKey]
+  );
 });
 
 test("the same send twice in one step gets one card", async (t) => {
