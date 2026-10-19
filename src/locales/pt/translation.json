@@ -1821,7 +1821,7 @@
       },
       "examplesTitle": "Exemplos",
       "helper": "Escolha algo curto e natural de se dizer em voz alta",
-      "howItWorksDescription": "Quando você diz \"Ei {{agentName}}\" seguido de uma instrução, o texto destacado é substituído com segurança pelo resultado. Com a colagem automática ativada, a resposta é colada no cursor de um campo editável em foco; caso contrário, abre no painel flutuante do assistente.",
+      "howItWorksDescription": "Quando você diz \"Ei {{agentName}}\" seguido de uma instrução, o texto destacado é substituído com segurança pelo resultado. Os outros pedidos abrem na janela do assistente.",
       "howItWorksTitle": "Como funciona",
       "instructionMode": "Instrução",
       "placeholder": "ex.: Jarvis, Nova, Atlas...",
@@ -1985,7 +1985,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Atalho do assistente de voz",
-        "description": "Diga um comando e o assistente usa suas notas, calendário e ferramentas web. A resposta é colada em um cursor editável em foco, substitui o texto selecionado ou abre no painel flutuante."
+        "description": "Diga um pedido e o assistente responde na própria janela, usando suas notas, calendário e ferramentas web. O texto que você destacar antes vai junto como contexto."
       },
       "microphone": {
         "description": "Selecione qual dispositivo de entrada usar para ditado",

@@ -2136,7 +2136,7 @@
       },
       "examplesTitle": "Beispiele",
       "helper": "Wählen Sie etwas Kurzes und Natürliches zum Aussprechen",
-      "howItWorksDescription": "Wenn Sie 'Hey {{agentName}}' gefolgt von einer Anweisung sagen, wird markierter Text sicher durch das Ergebnis ersetzt. Bei aktiviertem automatischen Einfügen landet die Antwort am Cursor eines fokussierten beschreibbaren Textfelds; andernfalls öffnet sie sich im schwebenden Assistenten-Panel.",
+      "howItWorksDescription": "Wenn Sie 'Hey {{agentName}}' gefolgt von einer Anweisung sagen, wird markierter Text sicher durch das Ergebnis ersetzt. Andere Anfragen öffnen sich im Assistentenfenster.",
       "howItWorksTitle": "So funktioniert es",
       "instructionMode": "Anweisung",
       "placeholder": "z. B. Jarvis, Nova, Atlas...",
@@ -2300,7 +2300,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Sprachassistent-Hotkey",
-        "description": "Sprechen Sie einen Befehl und der Assistent nutzt Ihre Notizen, Ihren Kalender und Web-Tools. Die Antwort wird am fokussierten beschreibbaren Cursor eingefügt, ersetzt markierten Text oder öffnet sich im schwebenden Panel."
+        "description": "Sprechen Sie eine Anfrage und der Assistent antwortet in seinem eigenen Fenster, mit Ihren Notizen, Ihrem Kalender und Web-Tools. Vorher markierter Text geht als Kontext mit."
       },
       "microphone": {
         "description": "Wählen Sie das Eingabegerät für das Diktat",

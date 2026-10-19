@@ -1894,7 +1894,7 @@
       },
       "examplesTitle": "Ejemplos",
       "helper": "Elige algo corto y natural para decir en voz alta",
-      "howItWorksDescription": "Cuando dices \"Hey {{agentName}}\" seguido de una instrucción, el texto resaltado se reemplaza de forma segura por el resultado. Con el pegado automático activado, la respuesta se pega en el cursor de un campo editable con foco; si no, se abre en el panel flotante del asistente.",
+      "howItWorksDescription": "Cuando dices \"Hey {{agentName}}\" seguido de una instrucción, el texto resaltado se reemplaza de forma segura por el resultado. Las demás solicitudes se abren en la ventana del asistente.",
       "howItWorksTitle": "Cómo funciona",
       "instructionMode": "Instrucción",
       "placeholder": "p. ej. Jarvis, Nova, Atlas...",
@@ -2058,7 +2058,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Atajo del asistente de voz",
-        "description": "Di un comando y el asistente usa tus notas, calendario y herramientas web. La respuesta se pega en un cursor editable con foco, reemplaza el texto seleccionado o se abre en el panel flotante."
+        "description": "Di una solicitud y el asistente responde en su propia ventana, usando tus notas, calendario y herramientas web. El texto que resaltes antes se envía con ella como contexto."
       },
       "microphone": {
         "description": "Selecciona qué dispositivo de entrada usar para dictado",

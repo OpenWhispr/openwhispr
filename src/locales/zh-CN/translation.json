@@ -1842,7 +1842,7 @@
       },
       "examplesTitle": "示例",
       "helper": "选一个简短、说起来自然的名字",
-      "howItWorksDescription": "当你说“Hey {{agentName}}”并跟上指令时，选中的文本会安全地替换为结果。启用自动粘贴后，如果可编辑文本框已获得焦点，回答会粘贴到光标处；否则会在悬浮助手面板中打开。",
+      "howItWorksDescription": "当你说“Hey {{agentName}}”并跟上指令时，选中的文本会安全地替换为结果。其他请求会在助手窗口中打开。",
       "howItWorksTitle": "工作原理",
       "instructionMode": "指令",
       "placeholder": "例如 Jarvis、Nova、Atlas...",
@@ -2006,7 +2006,7 @@
       },
       "voiceAgentHotkey": {
         "title": "语音助手快捷键",
-        "description": "说出指令，助手会使用你的笔记、日历和网页工具。回答会粘贴到已聚焦的可编辑光标处、替换选中文本，或在悬浮面板中打开。"
+        "description": "说出请求，助手会在自己的窗口中回答，并使用你的笔记、日历和网页工具。事先选中的文本会作为上下文一并发送。"
       },
       "microphone": {
         "description": "选择用于听写的输入设备",

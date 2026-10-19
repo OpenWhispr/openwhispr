@@ -1842,7 +1842,7 @@
       },
       "examplesTitle": "Esempi",
       "helper": "Scegli qualcosa di breve e naturale da dire ad alta voce",
-      "howItWorksDescription": "Quando dici \"Ehi {{agentName}}\" seguito da un'istruzione, il testo evidenziato viene sostituito in sicurezza con il risultato. Con l'incolla automatico attivo, la risposta viene incollata al cursore di un campo modificabile attivo; altrimenti si apre nel pannello flottante dell'assistente.",
+      "howItWorksDescription": "Quando dici \"Ehi {{agentName}}\" seguito da un'istruzione, il testo evidenziato viene sostituito in sicurezza con il risultato. Le altre richieste si aprono nella finestra dell'assistente.",
       "howItWorksTitle": "Come funziona",
       "instructionMode": "Istruzione",
       "placeholder": "es. Jarvis, Nova, Atlas...",
@@ -2006,7 +2006,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Scorciatoia dell'assistente vocale",
-        "description": "Pronuncia un comando e l'assistente usa le tue note, il calendario e gli strumenti web. La risposta viene incollata a un cursore modificabile attivo, sostituisce il testo selezionato o si apre nel pannello flottante."
+        "description": "Pronuncia una richiesta e l'assistente risponde nella sua finestra, usando le tue note, il calendario e gli strumenti web. Il testo che evidenzi prima lo accompagna come contesto."
       },
       "microphone": {
         "description": "Seleziona il dispositivo di ingresso da usare per la dettatura",

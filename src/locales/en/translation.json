@@ -2136,7 +2136,7 @@
       },
       "examplesTitle": "Examples",
       "helper": "Pick something short and natural to say aloud",
-      "howItWorksDescription": "When you say \"Hey {{agentName}}\" followed by an instruction, highlighted text is safely replaced with the result. With auto-paste enabled, an answer pastes at a focused writable cursor; otherwise it opens in the floating assistant panel.",
+      "howItWorksDescription": "When you say \"Hey {{agentName}}\" followed by an instruction, highlighted text is safely replaced with the result. Other requests open in the assistant window.",
       "howItWorksTitle": "How it works",
       "instructionMode": "Instruction",
       "placeholder": "e.g. Jarvis, Nova, Atlas...",
@@ -2300,7 +2300,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Voice Assistant Hotkey",
-        "description": "Speak a command and the assistant uses your notes, calendar, and web tools. Its answer pastes at a focused writable cursor, replaces selected text, or opens in the floating panel."
+        "description": "Speak a request and the assistant answers in its own window, using your notes, calendar, and web tools. Text you highlight first goes with it as context."
       },
       "microphone": {
         "description": "Select which input device to use for dictation",

@@ -2136,7 +2136,7 @@
       },
       "examplesTitle": "Exemples",
       "helper": "Choisissez un nom court et naturel à prononcer",
-      "howItWorksDescription": "Lorsque vous dites « Hey {{agentName}} » suivi d'une instruction, le texte surligné est remplacé en toute sécurité par le résultat. Si le collage automatique est activé, la réponse est collée au curseur d'un champ modifiable actif ; sinon, elle s'ouvre dans le panneau flottant de l'assistant.",
+      "howItWorksDescription": "Lorsque vous dites « Hey {{agentName}} » suivi d'une instruction, le texte surligné est remplacé en toute sécurité par le résultat. Les autres demandes s'ouvrent dans la fenêtre de l'assistant.",
       "howItWorksTitle": "Comment ça marche",
       "instructionMode": "Instruction",
       "placeholder": "ex. Jarvis, Nova, Atlas...",
@@ -2300,7 +2300,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Raccourci de l'assistant vocal",
-        "description": "Dites une commande et l'assistant utilise vos notes, votre calendrier et les outils web. La réponse est collée à un curseur modifiable actif, remplace le texte sélectionné ou s'ouvre dans le panneau flottant."
+        "description": "Dites une demande et l'assistant répond dans sa propre fenêtre, en utilisant vos notes, votre calendrier et les outils web. Le texte que vous surlignez avant l'accompagne comme contexte."
       },
       "microphone": {
         "description": "Sélectionnez le périphérique d'entrée à utiliser pour la dictée",
