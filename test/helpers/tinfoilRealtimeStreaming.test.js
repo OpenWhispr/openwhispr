@@ -423,7 +423,7 @@ test("disconnect drains an in-flight commit before committing the tail", (t) => 
     assert.equal(sentEvents(socket, "input_audio_buffer.commit").length, 2);
 
     streaming.handleMessage(completed("tail"));
-    assert.deepEqual(await disconnected, { text: "first tail" });
+    assert.equal((await disconnected).text, "first tail");
   })();
 });
 
@@ -439,7 +439,7 @@ test("disconnect remains bounded when the provider never completes", (t) => {
     t.mock.timers.tick(3000);
     await new Promise((resolve) => setImmediate(resolve));
 
-    assert.deepEqual(await disconnected, { text: "" });
+    assert.equal((await disconnected).text, "");
   })();
 });
 
@@ -468,7 +468,7 @@ test("disconnect uses one drain deadline across the active turn and its tail", (
     assert.equal(finished, false);
 
     t.mock.timers.tick(1);
-    assert.deepEqual(await disconnected, { text: "first" });
+    assert.equal((await disconnected).text, "first");
   })();
 });
 
@@ -523,4 +523,25 @@ test("cleanup stops the turn timer", (t) => {
     assert.equal(streaming._commitTimer, null);
     assert.equal(sentEvents(socket, "input_audio_buffer.commit").length, 0);
   })();
+});
+
+test("disconnect inherits session model and byte attribution after draining the final turn", async (t) => {
+  const { TinfoilRealtimeStreaming } = await load();
+  const socket = makeFakeSocket(WS.CONNECTING);
+  const streaming = new TinfoilRealtimeStreaming(async () => socket);
+  t.after(() => streaming.cleanup());
+  const connected = streaming.connect({ apiKey: "tk-test" });
+  await finishConnect(streaming, socket);
+  await connected;
+  streaming.sendAudio(speechPcm());
+
+  const disconnecting = streaming.disconnect();
+  await new Promise((resolve) => setImmediate(resolve));
+  socket.emit("message", completed("private recorded words"));
+
+  assert.deepEqual(await disconnecting, {
+    text: "private recorded words",
+    model: "voxtral-mini-4b-realtime",
+    audioBytesSent: 960,
+  });
 });

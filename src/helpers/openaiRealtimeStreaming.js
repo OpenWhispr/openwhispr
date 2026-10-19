@@ -592,13 +592,23 @@ class OpenAIRealtimeStreaming {
       })
     );
 
-    if (!this.ws) return { text: this.getFullTranscript() };
+    if (!this.ws) {
+      return {
+        text: this.getFullTranscript(),
+        model: this.model,
+        audioBytesSent: this.audioBytesSent,
+      };
+    }
 
     this.isDisconnecting = true;
 
     if (this.ws.readyState === WebSocket.CONNECTING) {
       this.ws.once("open", () => this.ws?.close());
-      const result = { text: this.getFullTranscript() };
+      const result = {
+        text: this.getFullTranscript(),
+        model: this.model,
+        audioBytesSent: this.audioBytesSent,
+      };
       this.isDisconnecting = false;
       return result;
     }
@@ -652,7 +662,11 @@ class OpenAIRealtimeStreaming {
       this.ws?.close();
     }
 
-    const result = { text: this.getFullTranscript() };
+    const result = {
+      text: this.getFullTranscript(),
+      model: this.model,
+      audioBytesSent: this.audioBytesSent,
+    };
     this.cleanup();
     this.isDisconnecting = false;
     return result;
