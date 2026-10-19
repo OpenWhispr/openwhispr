@@ -909,14 +909,19 @@
         "agentUnavailable": "助理無法使用",
         "screenContextSkipped": "已略過螢幕內容",
         "dailyLimitReached": "已達每日上限",
-        "providerRateLimited": "服務商速率限制"
+        "providerRateLimited": "服務商速率限制",
+        "micPermissionDenied": "麥克風存取遭拒",
+        "micNotFound": "找不到麥克風",
+        "micInUse": "麥克風正在使用中",
+        "micMuted": "麥克風已靜音"
       },
       "fallback": {
         "title": "備援模式",
         "description": "本機 Whisper 失敗，已改用 OpenAI API。"
       },
       "errorActions": {
-        "viewTranscript": "查看轉錄"
+        "viewTranscript": "查看轉錄",
+        "openSoundSettings": "聲音設定"
       },
       "noAudio": {
         "title": "我們沒聽清楚",
@@ -951,7 +956,12 @@
         "providerKeyMissing": "尚未為您的轉錄服務商設定 API 金鑰。請在「設定 → 語音轉文字」中新增。",
         "cleanupTruncated": "AI 模型的輸出長度達到上限，未能完成聽寫清理。",
         "cleanupDuplicated": "AI 清理重複了轉錄內容。已保留原始文字。",
-        "cleanupEmptyReply": "AI 模型傳回空白回應，沒有產生清理後的文字。"
+        "cleanupEmptyReply": "AI 模型傳回空白回應，沒有產生清理後的文字。",
+        "micPermissionDenied": "請在系統設定中授予麥克風權限，然後再試一次。",
+        "micNotFound": "未偵測到麥克風。請連接麥克風後再試一次。",
+        "micInUse": "麥克風正由其他應用程式使用中。請關閉其他應用程式後再試一次。",
+        "micInUseWindows": "其他應用程式正在使用麥克風，且可能已取得獨佔控制權。請關閉該應用程式後再試一次。若要避免應用程式再次獨佔麥克風，請開啟「聲音設定 → 錄製 → 您的麥克風 → 內容 → 進階」，關閉允許應用程式取得此裝置獨佔控制權的選項。",
+        "micMuted": "您的麥克風一直處於靜音狀態，未收到任何音訊。請檢查聲音輸入設定後再試一次。"
       },
       "translationFallback": {
         "unreachableTitle": "翻譯無法使用",

@@ -909,14 +909,19 @@
         "agentUnavailable": "Assistent nicht verfügbar",
         "screenContextSkipped": "Bildschirmkontext übersprungen",
         "dailyLimitReached": "Tägliches Limit erreicht",
-        "providerRateLimited": "Anbieter-Ratenlimit erreicht"
+        "providerRateLimited": "Anbieter-Ratenlimit erreicht",
+        "micPermissionDenied": "Mikrofonzugriff verweigert",
+        "micNotFound": "Kein Mikrofon gefunden",
+        "micInUse": "Mikrofon wird verwendet",
+        "micMuted": "Mikrofon stummgeschaltet"
       },
       "fallback": {
         "title": "Fallback-Modus",
         "description": "Lokales Whisper ist fehlgeschlagen. Stattdessen wurde die OpenAI API verwendet."
       },
       "errorActions": {
-        "viewTranscript": "Transkript anzeigen"
+        "viewTranscript": "Transkript anzeigen",
+        "openSoundSettings": "Soundeinstellungen"
       },
       "noAudio": {
         "title": "Das haben wir nicht verstanden",
@@ -951,7 +956,12 @@
         "providerKeyMissing": "Für Ihren Transkriptionsanbieter ist kein API-Schlüssel hinterlegt. Fügen Sie ihn unter Einstellungen → Sprache zu Text hinzu.",
         "cleanupTruncated": "Dem KI-Modell ging der Platz aus, bevor es dein Diktat fertig bereinigt hatte.",
         "cleanupDuplicated": "Die KI-Bereinigung hat das Transkript wiederholt. Der Originaltext wurde beibehalten.",
-        "cleanupEmptyReply": "Das KI-Modell lieferte eine leere Antwort statt des bereinigten Diktats."
+        "cleanupEmptyReply": "Das KI-Modell lieferte eine leere Antwort statt des bereinigten Diktats.",
+        "micPermissionDenied": "Bitte erlauben Sie den Mikrofonzugriff in Ihren Systemeinstellungen und versuchen Sie es erneut.",
+        "micNotFound": "Es wurde kein Mikrofon erkannt. Bitte schließen Sie ein Mikrofon an und versuchen Sie es erneut.",
+        "micInUse": "Das Mikrofon wird von einer anderen Anwendung verwendet. Bitte schließen Sie andere Apps und versuchen Sie es erneut.",
+        "micInUseWindows": "Eine andere App verwendet das Mikrofon und hat es möglicherweise exklusiv übernommen. Schließen Sie diese App und versuchen Sie es erneut. Damit Apps das Mikrofon nicht mehr übernehmen, öffnen Sie Soundeinstellungen → Aufnahme → Ihr Mikrofon → Eigenschaften → Erweitert und deaktivieren Sie die Option, mit der Anwendungen die alleinige Kontrolle über das Gerät übernehmen dürfen.",
+        "micMuted": "Ihre Mikrofone blieben stummgeschaltet und haben keinen Ton geliefert. Bitte überprüfen Sie Ihre Soundeingabe-Einstellungen und versuchen Sie es erneut."
       },
       "translationFallback": {
         "unreachableTitle": "Übersetzung nicht verfügbar",
