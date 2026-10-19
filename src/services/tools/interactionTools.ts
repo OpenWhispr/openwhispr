@@ -259,7 +259,11 @@ function createConnectionTool(targets: readonly ConnectionTarget[]): ToolDefinit
         data: {
           status: "connected",
           target: result.target,
-          guidance: `${name} is connected now. Continue the user's request with its tools.`,
+          // email_draft's description still says it opens a draft, written before Gmail connected.
+          guidance:
+            result.target === "gmail"
+              ? "Gmail is connected now. Continue with email_draft: unless the user picked another app for drafts, it now sends from here once they approve the email on a card."
+              : `${name} is connected now. Continue the user's request with its tools.`,
         },
         displayText: i18n.t("agentMode.interactions.status.connected", { name }),
       };

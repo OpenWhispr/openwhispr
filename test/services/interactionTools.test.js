@@ -143,6 +143,27 @@ test("a dismissed connection tells the model not to ask again", async () => {
   );
 });
 
+test("connecting Gmail points the model at email_draft, whose description predates it", async () => {
+  const { createInteractionTools } = await load();
+  const store = await loadStore();
+  globalThis.window.electronAPI = {
+    connectorConnect: async () => ({
+      status: "connected",
+      accountLabel: "a",
+      workspaceLabel: null,
+    }),
+    connectorStatus: async () => [
+      { id: "gmail", connected: true, configured: true, accountLabel: "a", needsReconnect: false },
+    ],
+  };
+  const [, connection] = createInteractionTools({ ...NOTHING, connectionTargets: ["gmail"] });
+  const running = connection.execute({ target: "gmail" }, context("g1"));
+  await store.connectInteraction("m1::g1");
+  const result = await running;
+  assert.equal(result.data.status, "connected");
+  assert.match(result.data.guidance, /Continue with email_draft/);
+});
+
 test("a saved key reaches the model only as saved", async () => {
   const { createInteractionTools } = await load();
   const store = await loadStore();
