@@ -45,6 +45,7 @@ const {
   asProviderError,
   redactProviderBody,
 } = require("./providerHttpErrors");
+const { isSettingsTarget } = require("./settingsTargets");
 const {
   registerConnectorIpc,
   createConnectorPolicyResolver,
@@ -1719,7 +1720,9 @@ class IPCHandlers {
     });
 
     ipcMain.handle("open-settings-section", async (_event, section) => {
-      if (!isProviderSettingsTarget(section)) return { success: false };
+      if (!isSettingsTarget(section) && !isProviderSettingsTarget(section)) {
+        return { success: false };
+      }
       await this.windowManager.openSettings(section);
       return { success: true };
     });

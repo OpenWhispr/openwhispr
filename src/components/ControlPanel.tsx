@@ -100,6 +100,8 @@ import {
 const platform = getCachedPlatform();
 
 const SIDEBAR_WIDTH_PX = 192;
+// open-settings-section names an Integrations section as "integrations.<section>".
+const INTEGRATIONS_TARGET_PREFIX = "integrations.";
 
 const SettingsModal = React.lazy(() => import("./SettingsModal"));
 const ReferralModal = React.lazy(() => import("./ReferralModal"));
@@ -479,6 +481,15 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     // start); a bare request (app-menu Cmd+,) keeps an open modal where it is.
     const drain = async (showAnyway: boolean) => {
       const section = await window.electronAPI?.getPendingSettingsSection?.();
+      // Integrations is a view, not a Settings section.
+      if (section?.startsWith(INTEGRATIONS_TARGET_PREFIX)) {
+        setIntegrationsSection(
+          section.slice(INTEGRATIONS_TARGET_PREFIX.length) as IntegrationsSection
+        );
+        setActiveView("integrations");
+        setShowSettings(false);
+        return;
+      }
       if (section) {
         setSettingsSection(section);
         setSettingsRequest((count) => count + 1);

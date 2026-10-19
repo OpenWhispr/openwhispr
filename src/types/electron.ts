@@ -8,6 +8,7 @@ import type { OrgPolicy } from "./policy";
 import type { TechnicalErrorDetailsData } from "../components/ui/useToast";
 import type { ProviderSettingsTarget } from "../utils/describeProviderError";
 import type { RemovedTranscriptSegment } from "../utils/diarizationCompletion";
+import type { SettingsTarget } from "./agentInteractions";
 import type {
   ManagedEnterpriseConfig,
   ManagedEnterpriseRequestContext,
@@ -1480,7 +1481,9 @@ declare global {
       }>;
       hideWindow: () => Promise<void>;
       showDictationPanel: () => Promise<void>;
-      openSettingsSection?: (section: ProviderSettingsTarget) => Promise<{ success: boolean }>;
+      openSettingsSection?: (
+        section: SettingsTarget | ProviderSettingsTarget
+      ) => Promise<{ success: boolean }>;
       captureDictationTarget?: () => Promise<{ success: boolean; pid: number | null }>;
       captureDictationAppCategory?: () => Promise<ToneAppCategory>;
       onToggleDictation: (callback: () => void) => () => void;
