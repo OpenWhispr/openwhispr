@@ -309,6 +309,7 @@ export default function ChatView({ active = true, newChatRequest = 0 }: ChatView
               placeholder={t("chat.inputPlaceholder")}
               variant="assistant"
               expandOnFocus
+              active={active}
             />
           </div>
         </div>

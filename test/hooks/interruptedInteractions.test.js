@@ -133,3 +133,15 @@ test("leaving the chat takes its restored questions away unanswered", async (t) 
   assert.deepEqual(chat.entries(), {});
   assert.deepEqual(chat.saved, []);
 });
+
+test("calls that shared one connect card come back as one card", async (t) => {
+  const connection = (id) => ({
+    id,
+    name: "slack_send_message",
+    arguments: "{}",
+    status: "stopped",
+    interaction: { payload: { kind: "connection", target: "slack" }, state: "interrupted" },
+  });
+  const chat = await mount(t, [user("u1"), reply("a1", [connection("s1"), connection("s2")])]);
+  assert.deepEqual(Object.keys(chat.entries()), ["a1::s1"]);
+});

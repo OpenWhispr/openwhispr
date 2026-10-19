@@ -189,20 +189,15 @@ export function toHistoryMessages(
   messages: ReadonlyArray<Message>,
   { includeToolTrace }: { includeToolTrace: boolean }
 ): HistoryMessage[] {
-  return messages
-    .slice(-HISTORY_LIMIT)
-    .filter((m) => m.turn?.status !== "error" || m.content.trim() || toolTrace(m.toolCalls))
-    .map((m) => {
-      if (m.role === "user" && m.selectedContext) {
-        return {
-          role: m.role,
-          content: buildAgentRequestText(m.content, {
-            text: m.selectedContext,
-            sourceMessageId: "",
-          }),
-        };
-      }
-      const trace = includeToolTrace && m.role === "assistant" ? toolTrace(m.toolCalls) : "";
-      return { role: m.role, content: trace ? `${trace}\n\n${m.content}` : m.content };
-    });
+  return messages.slice(-HISTORY_LIMIT).flatMap((m) => {
+    if (m.role === "user" && m.selectedContext) {
+      return {
+        role: m.role,
+        content: buildAgentRequestText(m.content, { text: m.selectedContext, sourceMessageId: "" }),
+      };
+    }
+    const trace = includeToolTrace && m.role === "assistant" ? toolTrace(m.toolCalls) : "";
+    const content = trace ? `${trace}\n\n${m.content}` : m.content;
+    return m.turn?.status === "error" && !content.trim() ? [] : { role: m.role, content };
+  });
 }

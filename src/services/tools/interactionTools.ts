@@ -213,7 +213,14 @@ function requestConnection(
   payload: Extract<InteractionPayload, { kind: "connection" }>
 ): Promise<InteractionResult> {
   const open = openConnections.get(payload.target);
-  if (open) return open;
+  if (open) {
+    // A call that joins another's card waits the same way, so a stop marks it unsent too.
+    context.onInteraction({ payload, state: "pending" });
+    return open.then((result) => {
+      context.onInteraction({ payload, state: "settled", result });
+      return result;
+    });
+  }
   const request = requestInteraction(context, payload).finally(() =>
     openConnections.delete(payload.target)
   );

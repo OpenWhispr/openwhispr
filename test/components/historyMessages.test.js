@@ -457,4 +457,6 @@ test("a failed reply with nothing in it stays out of the history; one whose tool
     history.map((m) => m.content),
     ["Hi", "[Tools used: slack_send_message (sent)]\n\n"]
   );
+  // Without the trace there is nothing to send for it either.
+  assert.deepEqual(toHistoryMessages([failed, actedThenFailed], { includeToolTrace: false }), []);
 });

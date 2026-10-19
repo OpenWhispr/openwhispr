@@ -95,16 +95,19 @@ export function useInterruptedInteractions(
     const last = messages.at(-1);
     const current = new Set<string>();
     if (last) {
+      // Calls that shared one connect card come back as one card.
+      const connections = new Set<string>();
       for (const call of last.toolCalls ?? []) {
         if (call.interaction?.state !== "interrupted") continue;
+        const { payload } = call.interaction;
+        if (payload.kind === "connection") {
+          if (connections.has(payload.target)) continue;
+          connections.add(payload.target);
+        }
         const key = approvalKey(last.id, call.id);
         current.add(key);
         if (restored.has(key)) continue;
-        const request = {
-          messageId: last.id,
-          toolCallId: call.id,
-          payload: call.interaction.payload,
-        };
+        const request = { messageId: last.id, toolCallId: call.id, payload };
         const opened = restoreInteraction(request, (result) =>
           continueTask(request.messageId, request.toolCallId, request.payload, result)
         );

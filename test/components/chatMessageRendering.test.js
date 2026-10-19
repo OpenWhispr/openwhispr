@@ -145,6 +145,7 @@ test("a step still running when its turn stopped reads as stopped, never as work
         turn: { startedAt: 1, finishedAt: 2, status: "stopped" },
         toolCalls: [
           { id: "w1", name: "web_search", arguments: "{}", status: "stopped" },
+          { id: "c1", name: "copy_to_clipboard", arguments: "{}", status: "stopped" },
           {
             id: "q1",
             name: "ask_user",
@@ -161,5 +162,6 @@ test("a step still running when its turn stopped reads as stopped, never as work
     ],
   });
   assert.doesNotMatch(container.textContent, /agentMode\.tools\.(web_search|ask_user)Status/);
+  assert.doesNotMatch(container.textContent, /copiedToClipboard/, "a stopped copy never copied");
   assert.match(container.textContent, /agentMode\.interactions\.status\.cancelled/);
 });

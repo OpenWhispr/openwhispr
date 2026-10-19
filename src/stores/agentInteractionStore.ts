@@ -33,7 +33,7 @@ const API_KEY_SETTERS = {
   tinfoil: "setTinfoilApiKey",
 } as const satisfies Record<string, keyof SettingsState>;
 
-export type ApiKeyProvider = keyof typeof API_KEY_SETTERS;
+type ApiKeyProvider = keyof typeof API_KEY_SETTERS;
 export const API_KEY_PROVIDERS = Object.keys(API_KEY_SETTERS) as ApiKeyProvider[];
 
 /** Same as an approval card: a question nobody answers stops holding the turn. */

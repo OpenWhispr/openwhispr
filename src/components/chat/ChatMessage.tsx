@@ -74,7 +74,7 @@ function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
         ? interactionOutcome(toolCall.interaction, t)
         : t("agentMode.turn.stopped")
       : null;
-  const isClipboard = toolCall.name === "copy_to_clipboard" && isCompleted;
+  const isClipboard = toolCall.name === "copy_to_clipboard" && toolCall.status === "completed";
 
   const resultLines = toolCall.result?.split("\n") ?? [];
   const hasDetail = resultLines.length > 1 && !isClipboard;

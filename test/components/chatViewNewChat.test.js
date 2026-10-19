@@ -223,6 +223,7 @@ test("a fork the user left for another chat first shows no error", async (t) => 
   await renderChatView(t);
   await React.act(async () => globalThis.__chatMessages.onForkMessage("m1"));
   assert.equal(globalThis.__toasts, undefined);
+  assert.equal(globalThis.__conversationList.activeConversationId, null, "nothing opens");
 
   globalThis.__forkResult = null;
   await React.act(async () => globalThis.__chatMessages.onForkMessage("m1"));

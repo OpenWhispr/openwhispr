@@ -267,8 +267,16 @@ test("calls that need the same service at once share one connection card", async
     () => ready
   );
   const first = tool.execute({ destination: "#eng" }, context("p1"));
-  const second = tool.execute({ destination: "#design" }, context("p2"));
+  const joined = [];
+  const second = tool.execute(
+    { destination: "#design" },
+    {
+      ...context("p2"),
+      onInteraction: (record) => joined.push(record.state),
+    }
+  );
   assert.deepEqual(Object.keys(store.useAgentInteractionStore.getState().entries), ["m1::p1"]);
+  assert.deepEqual(joined, ["pending"], "the joined call waits too, so a stop marks it unsent");
 
   ready = true;
   globalThis.window.electronAPI = {
@@ -283,6 +291,7 @@ test("calls that need the same service at once share one connection card", async
     ["sent", "sent"]
   );
   assert.deepEqual(ran.sort(), ["#design", "#eng"]);
+  assert.deepEqual(joined, ["pending", "settled"]);
 });
 
 test("the prompt has the model look things up before asking, naming only this turn's tools", async () => {
