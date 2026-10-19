@@ -353,6 +353,8 @@ class LiveSpeakerIdentifier {
           keepCount,
           removeCount,
         });
+
+        if (!keepFirst) break;
       }
     }
 
