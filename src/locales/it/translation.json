@@ -4288,7 +4288,8 @@
         "notes": {
           "targetTitle": "Su «{{title}}»"
         }
-      }
+      },
+      "sentEarlier": "Hai già inviato questo in precedenza in questa chat."
     },
     "policyOff": "La tua organizzazione ha disattivato i connettori.",
     "email": {
@@ -4578,7 +4579,7 @@
       "gmailDraftLimit": "Si possono preparare solo {{max}} email per richiesta.",
       "queryResults": "Risultati trovati: {{total}}",
       "cardLimit": "Si possono preparare solo {{max}} schede per richiesta.",
-      "alreadySent": "Già fatto in precedenza in questa chat"
+      "alreadySent": "Già fatto per questa richiesta"
     },
     "beta": "Beta",
     "upsell": "I connettori sono inclusi nei piani a pagamento. Effettua l'upgrade per far lavorare l'assistente nei tuoi strumenti.",

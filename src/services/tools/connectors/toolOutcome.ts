@@ -45,7 +45,7 @@ export function alreadySentResult(): ToolResult {
     data: {
       status: "already_sent",
       guidance:
-        "This exact action already happened (or may have) earlier in this conversation, so it was not done again. Tell the user it was already done.",
+        "This exact action was already done (or may have been) earlier in this request, so it was not done again. Tell the user it was already done.",
     },
     displayText: i18n.t("connectors.toolStatus.alreadySent"),
   };

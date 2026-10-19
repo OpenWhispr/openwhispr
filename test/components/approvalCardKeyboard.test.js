@@ -144,6 +144,7 @@ async function mountPendingCard(t, options = {}) {
         claimTurnSlot: () => true,
         claimAction: () => true,
         releaseAction() {},
+        sentEarlier: () => false,
         recordCompletedAction() {},
         releaseTurnSlot() {},
       },

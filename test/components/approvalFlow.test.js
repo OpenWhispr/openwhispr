@@ -101,6 +101,7 @@ async function mountApprovalTurn(t) {
         claimTurnSlot: () => true,
         claimAction: () => true,
         releaseAction() {},
+        sentEarlier: () => false,
         recordCompletedAction() {},
         releaseTurnSlot() {},
       },

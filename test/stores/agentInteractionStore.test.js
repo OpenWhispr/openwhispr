@@ -42,6 +42,7 @@ function context(toolCallId, { messageId = "m1", controller = new AbortControlle
       releaseTurnSlot() {},
       claimAction: () => true,
       releaseAction() {},
+      sentEarlier: () => false,
       recordCompletedAction() {},
     },
   };

@@ -236,31 +236,38 @@ test("Stop while a question waits keeps the reply, marked stopped, and dismisses
   assert.deepEqual(toolCalls[0].interaction.result, { status: "cancelled" });
 });
 
-test("a send this conversation already made is refused, before any card", async (t) => {
-  const prepares = [];
+test("a send an earlier request made shows its card again, saying so", async (t) => {
   const harness = await renderChatStreaming(
     t,
     { allowConnectors: true },
     {
       statuses: SLACK_READY,
       electronAPI: {
-        connectorPrepare: async (...args) => {
-          prepares.push(args);
-          return { status: "failed", errorCode: "x", message: "x" };
-        },
+        connectorPrepare: async () => ({
+          status: "ready",
+          actionId: "a1",
+          preview: { verbKey: "post", destinationLabel: "#eng", accountLabel: "chad", body: "hi" },
+        }),
+        connectorCancel: async () => ({ cancelled: true }),
       },
     }
   );
   const { connectorActionKey } = await harness.vite.ssrLoadModule(
     "/services/tools/connectors/actionKey.ts"
   );
+  const approvals = await harness.vite.ssrLoadModule("/stores/connectorApprovalStore.ts");
   let output;
   harness.setStream((tools) =>
     (async function* () {
-      output = await tools.slack_send_message.execute(
+      const running = tools.slack_send_message.execute(
         { destination: "#eng", text: "PR  #12 merged!" },
         toolOptions("s2")
       );
+      await new Promise((resolve) => setImmediate(resolve));
+      const [entry] = Object.values(approvals.useConnectorApprovalStore.getState().entries);
+      assert.deepEqual(entry.preview.notes, [{ key: "connectors.approval.sentEarlier" }]);
+      approvals.cancelApproval(entry.key);
+      output = await running;
       yield { type: "done", finishReason: "stop" };
     })()
   );
@@ -284,8 +291,8 @@ test("a send this conversation already made is refused, before any card", async 
   };
   await harness.captured.sendToAI("Post it again", [earlier]);
 
-  assert.equal(output.status, "already_sent");
-  assert.deepEqual(prepares, []);
+  // The user's Send or Cancel decides; the model is never told it was already done.
+  assert.equal(output.status, "cancelled_by_user");
 });
 
 test("the same send twice in one step gets one card", async (t) => {
@@ -319,6 +326,7 @@ test("the same send twice in one step gets one card", async (t) => {
     outputs.map((output) => output.status),
     ["failed", "already_sent"]
   );
+  assert.match(outputs[1].guidance, /earlier in this request, so it was not done again/);
 });
 
 test("a send that went out is keyed on its tool call, for later turns", async (t) => {

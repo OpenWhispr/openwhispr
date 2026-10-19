@@ -37,9 +37,8 @@ export async function runApprovalAction(
   // Whatever happens next (a card, a question, a refusal), the answer belongs
   // in the panel: a voice turn must never paste it at the caret.
   context.onHoldDelivery();
-  // A resumed or regenerated turn can ask for a send this conversation
-  // already made, and a step can make the same call twice; either is refused
-  // before any card appears.
+  // A step can make the same call twice, and a resumed tool can repeat a send
+  // this request already made; either is refused before any card appears.
   const actionKey = connectorActionKey(connectorId, action, args);
   if (!context.claimAction(actionKey)) return alreadySentResult();
   // Claimed before the first await, so calls running in parallel can't overshoot.
@@ -68,10 +67,18 @@ export async function runApprovalAction(
     return prepareFailureResult(prepared, connectorId);
   }
 
+  // The same send in an earlier request may be wanted again; the card says so
+  // and the user's Send decides.
+  const preview = context.sentEarlier(actionKey)
+    ? {
+        ...prepared.preview,
+        notes: [...(prepared.preview.notes ?? []), { key: "connectors.approval.sentEarlier" }],
+      }
+    : prepared.preview;
   const outcome = await requestApproval(context, {
     actionId: prepared.actionId,
     connectorId,
-    preview: prepared.preview,
+    preview,
   });
   if (outcome.state === "sent" || outcome.state === "unknown") {
     context.recordCompletedAction(actionKey);

@@ -156,6 +156,7 @@ function countingContext(signal = new AbortController().signal) {
     claimTurnSlot: () => true,
     claimAction: () => true,
     releaseAction() {},
+    sentEarlier: () => false,
     recordCompletedAction() {},
     releaseTurnSlot() {},
   };
@@ -174,6 +175,7 @@ function toolContext(messageId, toolCallId, held = { count: 0 }) {
     claimTurnSlot: () => true,
     claimAction: () => true,
     releaseAction() {},
+    sentEarlier: () => false,
     recordCompletedAction() {},
     releaseTurnSlot() {},
   };
@@ -378,6 +380,38 @@ test("the same draft asked for twice in one step opens once", async (t) => {
   assert.equal(opened, 2);
 });
 
+test("a draft an earlier request opened opens again: opening one sends nothing", async (t) => {
+  let opened = 0;
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorRunDirect: async () => {
+          opened += 1;
+          return { state: "sent", destinationLabel: "a@example.com", bodyCopied: false };
+        },
+      },
+    },
+  });
+  const { createEmailDraftTool } = await loadEmail();
+  const { createToolExecutionScope } = await loadScope();
+  const tool = createEmailDraftTool("gmail");
+  const draft = { to: ["a@example.com"], subject: "s", body: "b" };
+  const keys = [];
+  const first = createToolExecutionScope({
+    onActionCompleted: ({ actionKey }) => keys.push(actionKey),
+  });
+  await tool.execute(draft, first.createContext({ messageId: "m1", toolCallId: "1" }));
+  assert.equal(keys.length, 1);
+
+  const later = createToolExecutionScope({ completedActions: keys });
+  const result = await tool.execute(
+    draft,
+    later.createContext({ messageId: "m2", toolCallId: "2" })
+  );
+  assert.equal(result.data.status, "draft_opened");
+  assert.equal(opened, 2);
+});
+
 test("only one draft per turn may put its text on the clipboard", async (t) => {
   const opened = [];
   installBrowserGlobals(t, {
@@ -567,6 +601,7 @@ test("email_draft reports an uncertain direct result as unknown, and still holds
     claimTurnSlot: () => true,
     claimAction: () => true,
     releaseAction() {},
+    sentEarlier: () => false,
     recordCompletedAction() {},
   };
 
@@ -978,6 +1013,7 @@ function gmailContext(messageId, toolCallId, { slotsLeft = 3 } = {}) {
     },
     claimAction: () => true,
     releaseAction() {},
+    sentEarlier: () => false,
     recordCompletedAction() {},
     releaseTurnSlot(key) {
       context.releases.push(key);

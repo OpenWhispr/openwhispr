@@ -4458,7 +4458,8 @@
         "notes": {
           "targetTitle": "On \"{{title}}\""
         }
-      }
+      },
+      "sentEarlier": "You already sent this earlier in this chat."
     },
     "policyOff": "Connectors are turned off by your organization.",
     "email": {
@@ -4748,7 +4749,7 @@
       "gmailDraftLimit": "Only {{max}} emails can be prepared per request.",
       "queryResults": "Results found: {{total}}",
       "cardLimit": "Only {{max}} cards can be prepared per request.",
-      "alreadySent": "Already done earlier in this chat"
+      "alreadySent": "Already done for this request"
     },
     "beta": "Beta",
     "upsell": "Connectors are included with paid plans. Upgrade to let the assistant work in your tools.",

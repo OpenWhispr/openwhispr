@@ -148,6 +148,7 @@ async function mountEmailCard(
         claimTurnSlot: () => true,
         claimAction: () => true,
         releaseAction() {},
+        sentEarlier: () => false,
         recordCompletedAction() {},
         releaseTurnSlot() {},
       },

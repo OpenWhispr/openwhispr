@@ -237,8 +237,8 @@ function createComposeDraftTool(target: ComposeTarget): ToolDefinition {
       // keeps bare addresses so the model can reuse them in a retry.
       const destination = to.map(recipientLabel).join(", ");
 
-      // The same draft already opened earlier in this conversation, or asked
-      // for twice in one step, is not opened again.
+      // The same draft asked for twice in this request is opened once; one from
+      // an earlier request opens again, since opening a draft sends nothing.
       const actionKey = connectorActionKey("email", "draft", {
         to,
         cc,

@@ -4288,7 +4288,8 @@
         "notes": {
           "targetTitle": "關於「{{title}}」"
         }
-      }
+      },
+      "sentEarlier": "你已在此對話中傳送過此內容。"
     },
     "policyOff": "您的組織已關閉連接器。",
     "email": {
@@ -4578,7 +4579,7 @@
       "gmailDraftLimit": "每次請求最多只能準備 {{max}} 封郵件。",
       "queryResults": "找到的結果：{{total}}",
       "cardLimit": "每次請求最多只能準備 {{max}} 張卡片。",
-      "alreadySent": "已在此對話中完成過"
+      "alreadySent": "已在此請求中完成"
     },
     "beta": "測試版",
     "upsell": "連接器包含在付費方案中。升級後，助理即可在您的工具中執行操作。",

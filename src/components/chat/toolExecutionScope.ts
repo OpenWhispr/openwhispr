@@ -23,7 +23,7 @@ interface ToolExecutionHandlers {
   onImageAttached?: (image: ChatImageAttachment) => void;
   /** A send happened (or may have); the key belongs on its tool call. */
   onActionCompleted?: (request: { toolCallId: string; actionKey: string }) => void;
-  /** Sends the conversation already made, from its saved tool calls. */
+  /** Sends earlier requests in the conversation made, from its saved tool calls. */
   completedActions?: Iterable<string>;
 }
 
@@ -39,8 +39,9 @@ interface ToolExecutionHandlers {
 export function createToolExecutionScope(handlers: ToolExecutionHandlers = {}): ToolExecutionScope {
   const controller = new AbortController();
   const turnSlots = new Map<string, number>();
-  // Sends the conversation made, and the ones running now.
-  const claimedActions = new Set(handlers.completedActions);
+  const earlierActions = new Set(handlers.completedActions);
+  // This request's sends: made, or running now.
+  const claimedActions = new Set<string>();
   const notify =
     <Args extends unknown[]>(handler?: (...args: Args) => void) =>
     (...args: Args): void => {
@@ -94,6 +95,7 @@ export function createToolExecutionScope(handlers: ToolExecutionHandlers = {}): 
         claimedActions.delete(actionKey);
       },
       recordCompletedAction: (actionKey) => handlers.onActionCompleted?.({ toolCallId, actionKey }),
+      sentEarlier: (actionKey) => earlierActions.has(actionKey),
     }),
     abort: () => controller.abort(),
   };

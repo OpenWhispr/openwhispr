@@ -4458,7 +4458,8 @@
         "notes": {
           "targetTitle": "Zu „{{title}}“"
         }
-      }
+      },
+      "sentEarlier": "Du hast das bereits früher in diesem Chat gesendet."
     },
     "policyOff": "Konnektoren wurden von deiner Organisation deaktiviert.",
     "email": {
@@ -4748,7 +4749,7 @@
       "gmailDraftLimit": "Pro Anfrage können nur {{max}} E-Mails vorbereitet werden.",
       "queryResults": "Gefundene Ergebnisse: {{total}}",
       "cardLimit": "Pro Anfrage können nur {{max}} Karten vorbereitet werden.",
-      "alreadySent": "Bereits früher in diesem Chat erledigt"
+      "alreadySent": "Für diese Anfrage bereits erledigt"
     },
     "beta": "Beta",
     "upsell": "Konnektoren sind in kostenpflichtigen Tarifen enthalten. Upgrade, damit der Assistent in deinen Tools arbeiten kann.",

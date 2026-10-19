@@ -45,14 +45,16 @@ export interface ToolExecutionContext {
   /** Shows the model an image (a screenshot the user allowed) from its next step on. */
   attachImage: (image: ChatImageAttachment) => void;
   /**
-   * Claims the send with this key for this call: false when the conversation
+   * Claims the send with this key for this call: false when this request
    * already made it (or may have), or the same call is running now.
    */
   claimAction: (actionKey: string) => boolean;
   /** Gives back a claim whose send didn't happen, so the same call may try again. */
   releaseAction: (actionKey: string) => void;
-  /** Records a claimed send that happened or may have, so the conversation never repeats it. */
+  /** Records a claimed send that happened or may have, on its tool call. */
   recordCompletedAction: (actionKey: string) => void;
+  /** Whether an earlier request in this conversation made this send (the user may want it again). */
+  sentEarlier: (actionKey: string) => boolean;
 }
 
 export interface ToolDefinition {

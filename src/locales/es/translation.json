@@ -4340,7 +4340,8 @@
         "notes": {
           "targetTitle": "En «{{title}}»"
         }
-      }
+      },
+      "sentEarlier": "Ya enviaste esto antes en este chat."
     },
     "policyOff": "Tu organización ha desactivado los conectores.",
     "email": {
@@ -4630,7 +4631,7 @@
       "gmailDraftLimit": "Solo se pueden preparar {{max}} correos por solicitud.",
       "queryResults": "Resultados encontrados: {{total}}",
       "cardLimit": "Solo se pueden preparar {{max}} tarjetas por solicitud.",
-      "alreadySent": "Ya se hizo antes en este chat"
+      "alreadySent": "Ya se hizo para esta solicitud"
     },
     "beta": "Beta",
     "upsell": "Los conectores se incluyen en los planes de pago. Mejora tu plan para que el asistente trabaje en tus herramientas.",

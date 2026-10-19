@@ -136,6 +136,7 @@ async function mountCard(
         claimTurnSlot: () => true,
         claimAction: () => true,
         releaseAction() {},
+        sentEarlier: () => false,
         recordCompletedAction() {},
         releaseTurnSlot() {},
       },

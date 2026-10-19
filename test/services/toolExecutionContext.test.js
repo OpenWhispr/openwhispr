@@ -156,7 +156,7 @@ test("turn slots are shared by a scope's calls and start over with each turn", a
   );
 });
 
-test("a send is claimed once: never again once made, and again only after it didn't happen", async () => {
+test("a send is claimed once per request, and an earlier request's send is only flagged", async () => {
   const { createToolExecutionScope } = await loadScope();
   const recorded = [];
   const scope = createToolExecutionScope({
@@ -166,7 +166,10 @@ test("a send is claimed once: never again once made, and again only after it did
   const first = scope.createContext({ messageId: "m1", toolCallId: "call-a" });
   const second = scope.createContext({ messageId: "m1", toolCallId: "call-b" });
 
-  assert.equal(first.claimAction("slack.send_message:earlier"), false, "made in an earlier turn");
+  // The user may want an earlier request's send again: the card says so.
+  assert.equal(first.sentEarlier("slack.send_message:earlier"), true);
+  assert.equal(first.claimAction("slack.send_message:earlier"), true);
+  assert.equal(first.sentEarlier("slack.send_message:x"), false);
   assert.equal(first.claimAction("slack.send_message:x"), true);
   assert.equal(second.claimAction("slack.send_message:x"), false, "the same call running now");
   first.releaseAction("slack.send_message:x");

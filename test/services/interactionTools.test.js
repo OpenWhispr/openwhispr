@@ -34,6 +34,7 @@ function context(toolCallId, images = []) {
     releaseTurnSlot() {},
     claimAction: () => true,
     releaseAction() {},
+    sentEarlier: () => false,
     recordCompletedAction() {},
   };
 }

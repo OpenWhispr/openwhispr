@@ -4288,7 +4288,8 @@
         "notes": {
           "targetTitle": "关于“{{title}}”"
         }
-      }
+      },
+      "sentEarlier": "你已在此对话中发送过此内容。"
     },
     "policyOff": "您的组织已关闭连接器。",
     "email": {
@@ -4578,7 +4579,7 @@
       "gmailDraftLimit": "每次请求最多只能准备 {{max}} 封邮件。",
       "queryResults": "找到的结果：{{total}}",
       "cardLimit": "每次请求最多只能准备 {{max}} 张卡片。",
-      "alreadySent": "已在此对话中完成过"
+      "alreadySent": "已在此请求中完成"
     },
     "beta": "测试版",
     "upsell": "连接器包含在付费方案中。升级后，助手即可在您的工具中执行操作。",
