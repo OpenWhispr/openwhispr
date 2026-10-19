@@ -309,9 +309,11 @@ export function AgentMessageList({
       />
     </div>
   );
-  const forkPointId = forkOrigin?.copiedMessageCount
-    ? messages[forkOrigin.copiedMessageCount - 1]?.id
-    : undefined;
+  // The last copied message the list shows (tool rows aren't); none puts the chip on top.
+  const forkPointId = messages
+    .slice(0, forkOrigin?.copiedMessageCount ?? 0)
+    .reverse()
+    .find((message) => message.role !== "tool")?.id;
   const selectionSaved =
     selection != null && messages.some((m) => m.id === selection.messageId && m.dbId != null);
 

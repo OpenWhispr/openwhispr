@@ -69,3 +69,23 @@ test("a fork that copied nothing it can place shows its chip at the top", async 
   });
   assert.ok(markup.indexOf("chat.forkedFrom") < markup.indexOf("Draft the plan"));
 });
+
+test("a fork whose copied history ends on a tool row keeps its chip after the last shown message", async (t) => {
+  const markup = await renderList(t, {
+    messages: [
+      MESSAGES[0],
+      MESSAGES[1],
+      { id: "t1", role: "tool", content: "{}", isStreaming: false },
+      MESSAGES[2],
+    ],
+    forkOrigin: {
+      parentConversationId: 1,
+      parentTitle: "Plan",
+      context: null,
+      copiedMessageCount: 3,
+    },
+  });
+  const chip = markup.indexOf("chat.forkedFrom");
+  assert.ok(chip > markup.indexOf("Here is the plan."));
+  assert.ok(chip < markup.indexOf("Shorter, please"));
+});
