@@ -181,7 +181,8 @@ test("a dictation cancelled during the selection edit saves nothing", async (t) 
 
 test("a failure before any transcript exists still saves empty text", async (t) => {
   const { saved, errors } = await runAgentDictation(t, {
-    sttResponse: () => new Response(JSON.stringify({ error: { message: "boom" } }), { status: 500 }),
+    sttResponse: () =>
+      new Response(JSON.stringify({ error: { message: "boom" } }), { status: 500 }),
   });
 
   assert.equal(errors[0]?.code, "PROVIDER_UNAVAILABLE", "the STT failure is what is reported");
@@ -192,4 +193,31 @@ test("a failure before any transcript exists still saves empty text", async (t) 
   assert.equal(rawText, null);
   assert.equal(options.status, "failed");
   assert.equal("clientTranscriptionId" in options, false);
+});
+
+test("only a selection edit failure carries the transcript out", async (t) => {
+  const { createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-failed-agent-route-test-",
+    settingsKey: "__failedAgentRouteSettings",
+    settings: {},
+    mockModules: {
+      "/services/SyncService.js": "export const syncService = { debouncedPush() {} };",
+    },
+  });
+  const manager = createManager({});
+  // A cached rejection (opencc-js failing to load) is one object shared by
+  // every later dictation, so it must never pick up the first one's text.
+  const shared = new Error("opencc-js failed to load");
+  manager.processTranscriptionCore = async () => {
+    throw shared;
+  };
+  await assert.rejects(manager.processTranscription(TRANSCRIPT, "openai"), shared);
+  assert.equal(shared.transcript, undefined);
+
+  const editFailure = Object.assign(new Error("edit failed"), { selectionEditFatal: true });
+  manager.processTranscriptionCore = async () => {
+    throw editFailure;
+  };
+  await assert.rejects(manager.processTranscription(`  ${TRANSCRIPT} `, "openai"), editFailure);
+  assert.equal(editFailure.transcript, TRANSCRIPT);
 });

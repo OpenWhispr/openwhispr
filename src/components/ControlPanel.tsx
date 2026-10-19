@@ -826,7 +826,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           }
 
           updateInStore(finalTranscription);
-          syncService.debouncedPush("transcription", id);
           toast({
             title: t(
               options?.isRecover

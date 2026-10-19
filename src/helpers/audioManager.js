@@ -170,11 +170,12 @@ const neverCancelled = () => false;
 const MIN_SPARSE_RECORDING_DURATION_SECONDS = 3;
 const MIN_UNIQUE_WORD_GAIN = 2;
 
-// A step after transcription that fails (a selection edit) leaves a transcript
-// behind; it rides out on the error so the failed history entry keeps it.
-// Non-enumerable, so an error passed to the logger never writes the text out.
+// A selection edit that fails leaves its transcript behind; it rides out on the
+// error so the failed history entry keeps it. Only those errors carry it: they
+// are created per dictation, while others can be one cached rejection shared by
+// every dictation. Non-enumerable, so a logged error never writes the text out.
 const attachTranscript = (error, transcript, clientTranscriptionId) => {
-  if (!error || typeof error !== "object" || error.transcript !== undefined) return;
+  if (!error?.selectionEditFatal || error.transcript !== undefined) return;
   const text = typeof transcript === "string" ? transcript.trim() : "";
   if (!text) return;
   Object.defineProperty(error, "transcript", { value: text, configurable: true });
@@ -3173,7 +3174,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     try {
       const result = await this.processTranscriptionCore(text, source, wasCancelled);
       if (wasCancelled()) return result;
-      return await this.finalizeChineseScript(result);
+      return this.finalizeChineseScript(result);
     } catch (error) {
       attachTranscript(error, text);
       throw error;

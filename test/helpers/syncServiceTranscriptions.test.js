@@ -2,7 +2,7 @@
 // HTTP boundary faked. A failed entry can keep the transcript a later step
 // could not process (#2676); it stays on this device until a retry completes
 // it, so other devices and the server never hold a failed copy that a retry
-// here would leave behind.
+// here would leave behind; the next sync pass pushes the completed row.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -59,19 +59,18 @@ test("a failed entry with a kept transcript syncs only once a retry completes it
   assert.deepEqual(pushedTexts(cloud), [["done", "completed"]]);
   assert.equal(db.getTranscriptionById(id).cloud_id, null);
 
-  // Retry overwrites the text and completes the row, then pushes it.
+  // Retry overwrites the text and completes the row; the next sync pushes it.
   db.updateTranscriptionText(id, "retried text", "retried text");
   db.updateTranscriptionStatus(id, "completed");
-  await service.pushEntity("transcription", id);
+  await service.syncAll(true);
 
-  const created = cloud.logFor("/api/transcriptions/create").map((call) => call.body);
+  const retried = cloud
+    .logFor("/api/transcriptions/batch-create")
+    .flatMap((call) => call.body.transcriptions)
+    .filter((row) => row.client_transcription_id === "cloud-client-id");
   assert.deepEqual(
-    created.map(({ text, status, client_transcription_id }) => [
-      text,
-      status,
-      client_transcription_id,
-    ]),
-    [["retried text", "completed", "cloud-client-id"]]
+    retried.map(({ text, status }) => [text, status]),
+    [["retried text", "completed"]]
   );
   assert.ok(db.getTranscriptionById(id).cloud_id);
 });
