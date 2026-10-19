@@ -513,3 +513,102 @@ test("a new meeting never inherits the previous meeting's partial resample group
 
   assert.equal(firstMismatch(afterReset, fresh), -1);
 });
+
+async function feedThreeConvergingSpeakers() {
+  const paddedUnit = (values) => {
+    const embedding = new Float32Array(512);
+    embedding.set(unit(values));
+    return embedding;
+  };
+  const common = paddedUnit([1, 1, 1]);
+  const embeddings = [
+    [1, 0, 0],
+    [0, 1, 0],
+    [0, 0, 1],
+  ].flatMap((axis) => [paddedUnit(axis), common]);
+  const { LiveSpeakerIdentifier } = loadIdentifier({
+    extractEmbeddingFromSamples: async () => {
+      assert.ok(embeddings.length, "unexpected embedding inference");
+      return embeddings.shift();
+    },
+  });
+  const identifier = new LiveSpeakerIdentifier();
+  identifier.running = true;
+  identifier.session = {};
+  identifier._getVadProbability = async (window) => (window[0] > 0 ? 1 : 0);
+  const identified = [];
+  identifier.onSpeakerIdentified = (event) => identified.push(event.speakerId);
+
+  // Each 768-sample PCM24k frame becomes one 512-sample VAD window.
+  // A turn has 1.792 seconds of speech followed by the required silence.
+  const speech = Buffer.alloc(56 * 768 * 2);
+  for (let offset = 0; offset < speech.length; offset += 2) {
+    speech.writeInt16LE(8192, offset);
+  }
+  const silence = Buffer.alloc(24 * 768 * 2);
+  for (let turn = 0; turn < 3; turn++) {
+    await identifier.feedAudio(speech);
+    await identifier.feedAudio(silence);
+  }
+  assert.deepEqual(identified, [
+    "speaker_0",
+    "speaker_0",
+    "speaker_1",
+    "speaker_1",
+    "speaker_2",
+    "speaker_2",
+  ]);
+  assert.equal(embeddings.length, 0);
+  return identifier;
+}
+
+for (const namedIndex of [0, 1]) {
+  test(`recluster reports every merge when named speaker ${namedIndex} survives`, async () => {
+    const identifier = await feedThreeConvergingSpeakers();
+    const keep = `speaker_${namedIndex}`;
+    assert.equal(identifier.mapSpeaker(keep, 42, "Alice", 7), true);
+
+    const merges = await identifier.recluster();
+    assert.deepEqual(
+      merges.map(({ keep, remove, displayName }) => ({ keep, remove, displayName })),
+      [0, 1, 2]
+        .filter((index) => index !== namedIndex)
+        .map((index) => ({
+          keep,
+          remove: `speaker_${index}`,
+          displayName: "Alice",
+        }))
+    );
+    assert.deepEqual([...identifier.transientEmbeddings.keys()], [keep]);
+    assert.ok(identifier.getSpeakerEmbedding(keep));
+    assert.deepEqual(await identifier.recluster(), [], "all removed IDs were already reported");
+  });
+}
+
+test("recluster reports merges when a later unnamed speaker has more observations", async () => {
+  const identifier = await feedThreeConvergingSpeakers();
+  // Keep the inferred centroids, but exercise the count-based survivor tie-break.
+  identifier.transientCounts.set("speaker_1", 3);
+  const merges = await identifier.recluster();
+  assert.deepEqual(
+    merges.map(({ keep, remove }) => ({ keep, remove })),
+    [
+      { keep: "speaker_1", remove: "speaker_0" },
+      { keep: "speaker_1", remove: "speaker_2" },
+    ]
+  );
+  assert.deepEqual([...identifier.transientEmbeddings.keys()], ["speaker_1"]);
+});
+
+test("recluster preserves distinct confirmed speakers after removing an earlier cluster", async () => {
+  const identifier = await feedThreeConvergingSpeakers();
+  identifier.mapSpeaker("speaker_1", 42, "Alice", 7);
+  identifier.mapSpeaker("speaker_2", 43, "Bob", 7);
+  const merges = await identifier.recluster();
+  assert.deepEqual(
+    merges.map(({ keep, remove }) => ({ keep, remove })),
+    [{ keep: "speaker_1", remove: "speaker_0" }]
+  );
+  assert.deepEqual([...identifier.transientEmbeddings.keys()], ["speaker_1", "speaker_2"]);
+  assert.deepEqual(await identifier.recluster(), []);
+});
