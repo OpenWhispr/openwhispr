@@ -3972,7 +3972,7 @@
     },
     "prompt": {
       "title": "Assistant prompt",
-      "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
+      "description": "The system prompt the Voice Assistant uses, from its hotkey or the wake word. Edits to selected text keep their own editing rules and use it only for style. Falls back to the built-in default."
     }
   },
   "agentMode": {

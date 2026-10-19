@@ -3802,7 +3802,7 @@
     },
     "prompt": {
       "title": "Prompt dell'assistente",
-      "description": "Il prompt di sistema usato quando viene rilevata la parola di attivazione. In assenza, usa quello predefinito integrato."
+      "description": "Il prompt di sistema usato dall'assistente vocale, tramite la sua scorciatoia o la parola di attivazione. Le modifiche al testo selezionato mantengono le proprie regole di modifica e lo usano solo per lo stile. In assenza, usa quello predefinito integrato."
     }
   },
   "agentMode": {
