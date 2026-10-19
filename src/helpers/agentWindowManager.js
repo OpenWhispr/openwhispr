@@ -169,8 +169,8 @@ class AgentWindowManager {
     win.on("closed", () => {
       if (this.window === win) this._forget();
     });
-    // A reload (development) is a new renderer: it starts hidden with no take,
-    // and says when it is ready again.
+    // A reload (development, or the error screen's Reload) is a new renderer:
+    // it starts hidden with no take, and says when it is ready again.
     win.webContents.on("did-start-loading", () => {
       if (this.window !== win) return;
       if (this.ready) {

@@ -329,10 +329,11 @@ export default function AgentWindow() {
       const message = messagesRef.current.find((m) => m.id === messageId);
       if (!message) return;
       stopReading();
-      setOpenedChat((count) => count + 1);
       if ((await fork(message, selectedText)) === null) {
         dispatch({ type: "notice", notice: "chat.forkFailed" });
+        return;
       }
+      setOpenedChat((count) => count + 1);
     },
     [dispatch, fork, stopReading]
   );
@@ -358,8 +359,10 @@ export default function AgentWindow() {
   const switchChat = useCallback(
     (id: number) => {
       stopReading();
-      setOpenedChat((count) => count + 1);
-      void openChat(id);
+      void openChat(id).then((opened) => {
+        // False: another switch overtook this one and owns the list.
+        if (opened !== false) setOpenedChat((count) => count + 1);
+      });
     },
     [openChat, stopReading]
   );

@@ -288,10 +288,24 @@ export function AgentMessageList({
   emptyState,
 }: AgentMessageListProps) {
   const { scrollRef, handleScroll, handleWheel } = useStickToBottom<HTMLDivElement>(messages);
+  // The list's height as of its last resize: a scroll event that sees another
+  // height was queued before the resize (the bottom pin), not the reader's.
   const viewportHeightRef = useRef(0);
   const [selection, setSelection] = useState<SelectionTarget | null>(null);
   const visible = messages.filter((message) => message.role !== "tool");
   const lastId = visible.at(-1)?.id;
+
+  useEffect(() => {
+    const node = scrollRef.current;
+    if (!node) return;
+    const measure = () => {
+      viewportHeightRef.current = node.clientHeight;
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [scrollRef]);
 
   useEffect(() => {
     const update = () => setSelection(readSelection());
@@ -317,12 +331,10 @@ export function AgentMessageList({
     <div
       ref={scrollRef}
       onScroll={(event) => {
-        // The scroll that pins the bottom arrives a frame late, and when the
-        // list shrank meanwhile (the selected context opening above the
-        // composer) it would read as the reader leaving the bottom.
-        const height = event.currentTarget.clientHeight;
-        if (height === viewportHeightRef.current) handleScroll();
-        viewportHeightRef.current = height;
+        // The scroll that pins the bottom arrives a frame late; when the list
+        // shrank meanwhile (the selected context opening above the composer)
+        // it would read as the reader leaving the bottom.
+        if (event.currentTarget.clientHeight === viewportHeightRef.current) handleScroll();
         setSelection(null);
       }}
       onWheel={handleWheel}
