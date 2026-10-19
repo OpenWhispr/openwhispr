@@ -641,3 +641,75 @@ test("the cloud path marks a run that ran out of steps too", async (t) => {
   await harness.captured.sendToAI("Go", []);
   assert.equal(harness.completed[0][3].turn.status, "step_limit");
 });
+
+test("a regenerate stopped or failed before its first token shows the reply it replaced", async (t) => {
+  for (const end of ["stop", "error"]) {
+    const harness = await renderChatStreaming(t, { allowInteractions: true });
+    const reasoningService = (await harness.vite.ssrLoadModule("/services/ReasoningService.ts"))
+      .default;
+    let endStream;
+    const streamEnded = new Promise((resolve) => (endStream = resolve));
+    t.mock.method(reasoningService, "cancelActiveStream", () => endStream());
+    const request = { id: "u1", role: "user", content: "Post hi to #eng", isStreaming: false };
+    const reply = {
+      id: "a0",
+      dbId: 9,
+      role: "assistant",
+      content: "Posted.",
+      isStreaming: false,
+      turn: { startedAt: 1, finishedAt: 2, status: "complete" },
+      toolCalls: [
+        { id: "q1", name: "search_notes", arguments: "{}", status: "completed" },
+        {
+          id: "s1",
+          name: "slack_send_message",
+          arguments: "{}",
+          status: "completed",
+          actionKey: "k",
+        },
+      ],
+    };
+    harness.seed([request, reply]);
+    harness.setStream(() =>
+      (async function* () {
+        yield { type: "reasoning", text: "Thinking it over." };
+        if (end === "error") throw new Error("provider down");
+        await streamEnded;
+      })()
+    );
+    const sending = harness.captured.sendToAI(request.content, [request], {
+      conversationId: 7,
+      replaceMessage: reply,
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    if (end === "stop") harness.captured.cancelStream();
+    await sending;
+
+    assert.deepEqual(harness.messages()[1], reply, end);
+    assert.deepEqual(harness.completed, [], `${end}: nothing is saved over it`);
+  }
+});
+
+test("reasoning after a tool step starts a new paragraph", async (t) => {
+  const harness = await renderChatStreaming(t, { allowInteractions: true });
+  harness.setStream(() =>
+    (async function* () {
+      yield { type: "reasoning", text: "Check the calendar." };
+      yield { type: "tool_calls", calls: [{ id: "c1", name: "search_notes", arguments: "{}" }] };
+      yield {
+        type: "tool_result",
+        callId: "c1",
+        toolName: "search_notes",
+        displayText: "Found 1 note",
+      };
+      yield { type: "reasoning", text: "Now the " };
+      yield { type: "reasoning", text: "notes." };
+      yield { type: "content", text: "Done." };
+      yield { type: "done", finishReason: "stop" };
+    })()
+  );
+  await harness.captured.sendToAI("Plan my day", []);
+
+  const [[, , , details]] = harness.completed;
+  assert.equal(details.turn.reasoning, "Check the calendar.\n\nNow the notes.");
+});

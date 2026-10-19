@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Check,
@@ -234,7 +234,8 @@ function SelectionToolbar({
   target: SelectionTarget;
   busy: boolean;
   onFollowUp: () => void;
-  onForkFrom: () => void;
+  /** Absent for a reply that isn't saved yet: there is nothing to fork from. */
+  onForkFrom?: () => void;
 }) {
   const { t } = useTranslation();
   const item =
@@ -252,11 +253,15 @@ function SelectionToolbar({
         <CornerDownLeft size={14} className="rtl:scale-x-[-1]" />
         {t("agentWindow.followUp")}
       </button>
-      <span className="h-4 w-px bg-border/70" aria-hidden="true" />
-      <button type="button" onClick={onForkFrom} disabled={busy} className={item}>
-        <GitFork size={14} />
-        {t("agentWindow.forkFromHere")}
-      </button>
+      {onForkFrom && (
+        <>
+          <span className="h-4 w-px bg-border/70" aria-hidden="true" />
+          <button type="button" onClick={onForkFrom} disabled={busy} className={item}>
+            <GitFork size={14} />
+            {t("agentWindow.forkFromHere")}
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -294,6 +299,21 @@ export function AgentMessageList({
   const [selection, setSelection] = useState<SelectionTarget | null>(null);
   const visible = messages.filter((message) => message.role !== "tool");
   const lastId = visible.at(-1)?.id;
+  // A fork opens at its newest message, so its chip sits where the copied
+  // history ends and its own turns begin, not above all of that history.
+  const forkChip = forkOrigin?.parentTitle && (
+    <div className="flex">
+      <ForkOriginChip
+        title={forkOrigin.parentTitle}
+        onOpen={() => onOpenParent(forkOrigin.parentConversationId)}
+      />
+    </div>
+  );
+  const forkPointId = forkOrigin?.copiedMessageCount
+    ? messages[forkOrigin.copiedMessageCount - 1]?.id
+    : undefined;
+  const selectionSaved =
+    selection != null && messages.some((m) => m.id === selection.messageId && m.dbId != null);
 
   useEffect(() => {
     const node = scrollRef.current;
@@ -342,34 +362,29 @@ export function AgentMessageList({
     >
       {/* One child, so following the bottom sees everything the chat grows by. */}
       <div className="flex min-h-full flex-col">
-        {forkOrigin?.parentTitle && (
-          <div className="flex pt-1 pb-3">
-            <ForkOriginChip
-              title={forkOrigin.parentTitle}
-              onOpen={() => onOpenParent(forkOrigin.parentConversationId)}
-            />
-          </div>
-        )}
+        {!forkPointId && forkChip && <div className="pt-1 pb-3">{forkChip}</div>}
         {visible.length === 0 ? (
           emptyState
         ) : (
           <div className="flex flex-col gap-4">
-            {visible.map((message) =>
-              message.role === "user" ? (
-                <UserMessage key={message.id} message={message} />
-              ) : (
-                <AssistantMessage
-                  key={message.id}
-                  message={message}
-                  latest={message.id === lastId}
-                  busy={busy}
-                  readAloud={readAloud}
-                  onRegenerate={onRegenerate}
-                  onFork={onFork}
-                  onContinue={onContinue}
-                />
-              )
-            )}
+            {visible.map((message) => (
+              <Fragment key={message.id}>
+                {message.role === "user" ? (
+                  <UserMessage message={message} />
+                ) : (
+                  <AssistantMessage
+                    message={message}
+                    latest={message.id === lastId}
+                    busy={busy}
+                    readAloud={readAloud}
+                    onRegenerate={onRegenerate}
+                    onFork={onFork}
+                    onContinue={onContinue}
+                  />
+                )}
+                {message.id === forkPointId && forkChip}
+              </Fragment>
+            ))}
           </div>
         )}
       </div>
@@ -381,10 +396,14 @@ export function AgentMessageList({
             onFollowUp(selection);
             finishSelection();
           }}
-          onForkFrom={() => {
-            onFork(selection.messageId, selection.text);
-            finishSelection();
-          }}
+          onForkFrom={
+            selectionSaved
+              ? () => {
+                  onFork(selection.messageId, selection.text);
+                  finishSelection();
+                }
+              : undefined
+          }
         />
       )}
     </div>

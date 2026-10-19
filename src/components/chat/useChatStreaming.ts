@@ -718,6 +718,7 @@ export function useChatStreaming({
         const assistantId = replaced?.id ?? crypto.randomUUID();
         let turn: AssistantTurn = { startedAt: Date.now(), status: "running" };
         let toolCalls: ToolCallInfo[] = replaced?.toolCalls?.filter((call) => call.actionKey) ?? [];
+        const carriedCallCount = toolCalls.length;
         let reasoning = "";
         let rawContent = "";
         let fullContent = "";
@@ -833,8 +834,21 @@ export function useChatStreaming({
           };
         };
 
-        // A call that ran into a step boundary starts the next text on a new paragraph.
+        // A regenerate stopped or failed before it had anything new shows (and
+        // keeps) the reply it was replacing, not an empty one.
+        const restoresReplaced = () =>
+          Boolean(replaced) && !fullContent.trim() && toolCalls.length === carriedCallCount;
+        const restoreReplaced = () => {
+          cancelContentFlush();
+          setMessages((prev) =>
+            prev.map((m) => (m.id === assistantId ? { ...m, ...replaced, isStreaming: false } : m))
+          );
+        };
+
+        // A call that ran into a step boundary starts the next text (and the
+        // next reasoning) on a new paragraph.
         let afterToolCall = false;
+        let reasoningAfterToolCall = false;
         let stepLimitReached = false;
 
         try {
@@ -944,10 +958,14 @@ export function useChatStreaming({
               if (fullContent) announceResponse();
               scheduleContentFlush();
             } else if (chunk.type === "reasoning") {
+              if (reasoningAfterToolCall && reasoning && !/\s$/.test(reasoning))
+                reasoning += "\n\n";
+              reasoningAfterToolCall = false;
               reasoning += chunk.text;
               scheduleContentFlush();
             } else if (chunk.type === "tool_calls") {
               afterToolCall = true;
+              reasoningAfterToolCall = true;
               // Text that arrived before a tool step must be on screen before the
               // step appears, not an interval after it.
               flushContentNow();
@@ -1009,6 +1027,10 @@ export function useChatStreaming({
             // cleanup cancels too, so cancelled() alone cannot tell the two
             // apart. Neither path may run the per-request delivery hook.
             const explicitlyCancelled = explicitCancelGenerationRef.current > sendGeneration;
+            if (restoresReplaced()) {
+              restoreReplaced();
+              return;
+            }
             settleStoppedTurn(explicitlyCancelled);
             flushContentNow();
             setMessages((prev) =>
@@ -1052,16 +1074,7 @@ export function useChatStreaming({
             });
           }
         } catch (error) {
-          if (cancelled()) {
-            settleStoppedTurn(explicitCancelGenerationRef.current > sendGeneration);
-            flushContentNow();
-            setMessages((prev) =>
-              prev.map((message) =>
-                message.id === assistantId ? { ...message, isStreaming: false } : message
-              )
-            );
-          } else {
-            cancelContentFlush();
+          if (!cancelled()) {
             logger.error(
               "Assistant request failed",
               {
@@ -1074,6 +1087,19 @@ export function useChatStreaming({
               },
               "reasoning"
             );
+          }
+          if (restoresReplaced()) {
+            restoreReplaced();
+          } else if (cancelled()) {
+            settleStoppedTurn(explicitCancelGenerationRef.current > sendGeneration);
+            flushContentNow();
+            setMessages((prev) =>
+              prev.map((message) =>
+                message.id === assistantId ? { ...message, isStreaming: false } : message
+              )
+            );
+          } else {
+            cancelContentFlush();
             announceResponse();
             const failure = describeProviderError(error, t);
             // Set on every failed reply: the chat then knows the failure is on screen.

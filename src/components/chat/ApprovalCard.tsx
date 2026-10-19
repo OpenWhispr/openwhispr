@@ -113,6 +113,10 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
     event.stopPropagation();
     setEditing(false);
   };
+  // Not editing, Esc on the card's buttons is kept from the window all the same.
+  const keepEscape = (event: KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key === "Escape") event.stopPropagation();
+  };
 
   const openLink = (url: string): void => {
     void window.electronAPI?.openExternal?.(url);
@@ -129,7 +133,7 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
       tabIndex={-1}
       data-approval-card={entry.key}
       data-state={entry.state}
-      onKeyDown={showEditor ? onEditorKeyDown : undefined}
+      onKeyDown={showEditor ? onEditorKeyDown : keepEscape}
       className="my-1.5 rounded-lg border border-border/70 bg-surface-2/60 p-3 text-[13px] outline-none focus-visible:ring-1 focus-visible:ring-ring"
     >
       <p className="font-medium text-foreground">

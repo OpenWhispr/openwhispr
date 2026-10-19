@@ -34,6 +34,12 @@ export type AgentWindowAction =
   | { type: "setContext"; context: AgentSelectionContext | null }
   | { type: "setAttachment"; attachment: ChatImageAttachment | null }
   | { type: "submitted"; typed: boolean }
+  | {
+      type: "held";
+      text: string;
+      context: AgentSelectionContext | null;
+      attachment: ChatImageAttachment | null;
+    }
   | { type: "notice"; notice: string | null }
   | { type: "hide" };
 
@@ -103,6 +109,20 @@ export function agentWindowReducer(
         attachment: null,
         notice: null,
       };
+    case "held": {
+      // A request that arrived while a reply runs waits in the composer, with
+      // what it brought, for the user to send.
+      const draft = state.draft.trim();
+      return {
+        ...state,
+        input: "keyboard",
+        layout: state.layout === "pill" ? "typing" : state.layout,
+        draft: draft ? `${draft} ${action.text}` : action.text,
+        selectedContext: action.context ?? state.selectedContext,
+        attachment: action.attachment ?? state.attachment,
+        notice: null,
+      };
+    }
     case "notice":
       return { ...state, notice: action.notice };
     case "hide":

@@ -21,6 +21,11 @@ function fakeDb() {
     return {
       ...conversation,
       parent_title: parent?.title ?? null,
+      fork_message_count: rows.filter(
+        (row) =>
+          row.conversation_id === conversation.parent_conversation_id &&
+          row.id <= conversation.fork_message_id
+      ).length,
       messages: rows.filter((row) => row.conversation_id === id),
     };
   };
@@ -57,6 +62,7 @@ function fakeDb() {
         id: 100 + conversations.size,
         title: source.title,
         parent_conversation_id: conversationId,
+        fork_message_id: throughId,
         fork_context: context,
       };
       conversations.set(fork.id, fork);
@@ -235,6 +241,7 @@ test("a fork opens a new chat through the chosen reply, with its origin", async 
     parentConversationId: conversation.id,
     parentTitle: "Launch plan",
     context: "Draft one.",
+    copiedMessageCount: 2,
   });
 });
 

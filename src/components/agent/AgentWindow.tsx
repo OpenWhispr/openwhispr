@@ -112,6 +112,10 @@ export default function AgentWindow() {
   // A take whose transcript must not be sent (closed, dismissed, another chat opened).
   const dropTranscriptRef = useRef(false);
 
+  // Read when a request arrives; set at once on a send, before the next render.
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
+
   const refuseIfRestricted = useCallback(() => {
     const reason = resolveAgentAccessRefusal({ agentAllowed, policyResolved });
     if (!reason) return false;
@@ -126,6 +130,18 @@ export default function AgentWindow() {
       const current = stateRef.current;
       const selectedContext = extras ? extras.selectedContext : current.selectedContext;
       const attachment = extras ? extras.attachment : current.attachment;
+      // A wake-word command can arrive while a reply runs; it waits rather
+      // than being lost or cutting the reply off.
+      if (busyRef.current) {
+        dispatch({
+          type: "held",
+          text,
+          context: selectedContext ?? null,
+          attachment: attachment ?? null,
+        });
+        return;
+      }
+      busyRef.current = true;
       stopReading();
       openedByTakeRef.current = false;
       dispatch({ type: "submitted", typed });
@@ -325,7 +341,8 @@ export default function AgentWindow() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.defaultPrevented) return;
+      // An IME uses Esc to drop its composition.
+      if (event.key !== "Escape" || event.defaultPrevented || event.isComposing) return;
       event.preventDefault();
       handlersRef.current.escape();
     };

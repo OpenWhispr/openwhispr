@@ -124,6 +124,25 @@ test("Esc in an answer field stays in the card, never cancelling the turn", asyn
   assert.equal(card.store.useAgentInteractionStore.getState().entries["m1::c1"].state, "pending");
 });
 
+test("Esc on an option or a button stays in the card as well", async (t) => {
+  const card = await mountCard(t, {
+    kind: "questions",
+    questions: [
+      { id: "tone", kind: "single", prompt: "Which tone?", options: [{ id: "a", label: "Warm" }] },
+    ],
+  });
+  let reachedWindow = 0;
+  card.happyWindow.addEventListener("keydown", () => (reachedWindow += 1));
+  for (const target of [card.host.querySelector("input"), card.button("Submit")]) {
+    await React.act(async () =>
+      target.dispatchEvent(
+        new card.happyWindow.KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+      )
+    );
+  }
+  assert.equal(reachedWindow, 0);
+});
+
 test("a card for any calendar has a translated title", async (t) => {
   const card = await mountCard(t, { kind: "connection", target: "calendar" });
   await React.act(async () => card.i18n.changeLanguage("de"));

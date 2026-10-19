@@ -198,6 +198,7 @@ test("a fork made from selected text sends it with its first request only", asyn
     parentConversationId: 3,
     parentTitle: "Plan",
     context: " Draft one. ",
+    copiedMessageCount: 0,
   };
   await renderChatView(t);
 

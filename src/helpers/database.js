@@ -4818,7 +4818,10 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       const conversation = this.db
         .prepare(
-          `SELECT c.*, p.title AS parent_title
+          `SELECT c.*, p.title AS parent_title,
+             (SELECT COUNT(*) FROM agent_messages pm
+               WHERE pm.conversation_id = c.parent_conversation_id
+                 AND pm.id <= c.fork_message_id) AS fork_message_count
            FROM agent_conversations c
            LEFT JOIN agent_conversations p
              ON p.id = c.parent_conversation_id AND p.deleted_at IS NULL

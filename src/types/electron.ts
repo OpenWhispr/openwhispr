@@ -1319,6 +1319,8 @@ export interface AgentConversationWithMessages {
   fork_context?: string | null;
   /** The parent's title, while the parent still exists. */
   parent_title?: string | null;
+  /** How many of a fork's first messages it copied from its parent. */
+  fork_message_count?: number;
   messages: AgentMessageRow[];
 }
 

@@ -166,3 +166,29 @@ test("a pending card that needs typing asks for the keyboard, even after a spoke
   assert.equal(awaitsTypedAnswer([reply({ state: "settled", payload: questions("text") })]), false);
   assert.equal(awaitsTypedAnswer([{ toolCalls: undefined }]), false);
 });
+
+test("a request that arrives while a reply runs waits in the composer with what it brought", async () => {
+  const { agentWindowReducer, INITIAL_AGENT_WINDOW_STATE } = await load();
+  const attachment = { image: "AAAA", mediaType: "image/jpeg" };
+  const held = agentWindowReducer(
+    {
+      ...INITIAL_AGENT_WINDOW_STATE,
+      visible: true,
+      layout: "modal",
+      input: "voice",
+      draft: "Also",
+    },
+    { type: "held", text: "summarize this", context, attachment }
+  );
+  assert.equal(held.input, "keyboard");
+  assert.equal(held.layout, "modal");
+  assert.equal(held.draft, "Also summarize this");
+  assert.deepEqual(held.selectedContext, context);
+  assert.deepEqual(held.attachment, attachment);
+
+  const fromPill = agentWindowReducer(
+    { ...INITIAL_AGENT_WINDOW_STATE, visible: true },
+    { type: "held", text: "hi", context: null, attachment: null }
+  );
+  assert.equal(fromPill.layout, "typing");
+});

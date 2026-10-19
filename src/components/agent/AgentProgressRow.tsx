@@ -59,7 +59,11 @@ function formatDuration(ms: number, locale: string): string {
 export function AgentProgressRow({ message }: { message: Message }) {
   const { t, i18n } = useTranslation();
   const [expanded, setExpanded] = useState(false);
-  const steps = visibleToolCalls(message.toolCalls);
+  const turnStart = message.turn?.startedAt;
+  // A regenerated reply keeps the sends its earlier turn made; they aren't its steps.
+  const steps = visibleToolCalls(message.toolCalls).filter(
+    (step) => turnStart == null || step.startedAt == null || step.startedAt >= turnStart
+  );
   const reasoning = message.turn?.reasoning;
   const running = message.isStreaming;
   const executing = steps.filter((step) => step.status === "executing");
@@ -93,10 +97,11 @@ export function AgentProgressRow({ message }: { message: Message }) {
   } else {
     if (!steps.length && !reasoning) return null;
     active = false;
-    const startedAt = message.turn?.startedAt;
+    // A turn saved while it waited, and never finished, has no length to show.
+    const finishedAt = message.turn?.finishedAt;
     const duration =
-      startedAt != null
-        ? formatDuration((message.turn?.finishedAt ?? Date.now()) - startedAt, i18n.language)
+      turnStart != null && finishedAt != null
+        ? formatDuration(finishedAt - turnStart, i18n.language)
         : null;
     const parts = [
       duration &&
@@ -106,7 +111,7 @@ export function AgentProgressRow({ message }: { message: Message }) {
       steps.length > 0 && t("agentWindow.progress.steps", { count: steps.length }),
     ].filter(Boolean);
     icon = <Brain size={14} className="shrink-0" />;
-    label = parts.join(" · ");
+    label = parts.join(" · ") || t("agentMode.turn.reasoning");
   }
 
   const expandable = steps.length > 0 || Boolean(reasoning);

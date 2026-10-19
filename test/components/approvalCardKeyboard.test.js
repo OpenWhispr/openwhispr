@@ -242,3 +242,16 @@ test("Send while editing sends the edit, leaves edit mode and keeps focus on the
   assert.ok(!textarea(container), "no editable field after Send");
   assert.equal(globalThis.document.activeElement?.getAttribute("data-approval-card"), key);
 });
+
+test("Esc on a card's button, outside editing, stays in the card too", async (t) => {
+  const { container, store, key, calls } = await mountPendingCard(t);
+
+  let event;
+  await React.act(async () => {
+    event = keyDown(button(container, "connectors.approval.send"), "Escape");
+  });
+
+  assert.equal(event.cancelBubble, true);
+  assert.equal(store.useConnectorApprovalStore.getState().entries[key].state, "pending");
+  assert.deepEqual(calls.cancel, []);
+});

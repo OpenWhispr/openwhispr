@@ -20,9 +20,9 @@ import type { CalendarProvider } from "../../utils/calendarConnect";
 
 const CARD_CLASS = "my-1.5 rounded-lg border border-border/70 bg-surface-2/60 p-3 text-[13px]";
 
-// Esc in a field must not reach the agent window, whose Esc cancels the
-// whole turn and withdraws the card.
-const keepEscape = (event: KeyboardEvent<HTMLInputElement>): void => {
+// Esc on the card (a field, an option, a button) must not reach the agent
+// window, whose Esc cancels the whole turn and withdraws the card.
+const keepEscape = (event: KeyboardEvent<HTMLElement>): void => {
   if (event.key === "Escape") event.stopPropagation();
 };
 
@@ -55,7 +55,6 @@ function Questions({ entry }: { entry: InteractionEntry }): ReactElement | null 
                   question.placeholder ?? t("agentMode.interactions.questions.placeholder")
                 }
                 onChange={(event) => set(question.id, event.target.value)}
-                onKeyDown={keepEscape}
               />
             ) : (
               question.options?.map((option) => {
@@ -228,7 +227,6 @@ function ApiKey({ entry }: { entry: InteractionEntry }): ReactElement | null {
         placeholder={t("agentMode.interactions.apiKey.placeholder")}
         aria-label={t("agentMode.interactions.apiKey.placeholder")}
         onChange={(event) => setValue(event.target.value)}
-        onKeyDown={keepEscape}
       />
       <div className="mt-2 flex gap-2">
         <Button size="sm" type="submit" disabled={!value.trim()}>
@@ -290,7 +288,12 @@ function SettingsLink({ entry }: { entry: InteractionEntry }): ReactElement | nu
 /** Minimal controls for an interaction the turn is waiting on; Phase 3 replaces the visuals. */
 export function InteractionCard({ entry }: { entry: InteractionEntry }): ReactElement {
   return (
-    <div data-interaction-card={entry.key} data-kind={entry.payload.kind} className={CARD_CLASS}>
+    <div
+      data-interaction-card={entry.key}
+      data-kind={entry.payload.kind}
+      onKeyDown={keepEscape}
+      className={CARD_CLASS}
+    >
       <Questions entry={entry} />
       <Connection entry={entry} />
       <Access entry={entry} />

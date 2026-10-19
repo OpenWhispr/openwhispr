@@ -59,6 +59,19 @@ test("the original chat is untouched and both continue independently", (t) => {
   assert.equal(db.getAgentConversation(first.id).messages.at(-1).content, "Only in the first fork");
 });
 
+test("a fork knows how much of its history came from its parent", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { conversation, rows } = seedConversation(db);
+  const fork = db.forkAgentConversation(conversation.id, rows[1].id, null);
+  db.addAgentMessage(fork.id, "user", "Only in the fork");
+  const forkOfFork = db.forkAgentConversation(fork.id, fork.messages[1].id, null);
+
+  assert.equal(db.getAgentConversation(fork.id).fork_message_count, 2);
+  assert.equal(forkOfFork.fork_message_count, 2);
+  assert.equal(db.getAgentConversation(conversation.id).fork_message_count, 0);
+});
+
 test("a fork refuses a message from another chat, and a deleted chat", (t) => {
   const db = createDb(t);
   if (!db) return;
