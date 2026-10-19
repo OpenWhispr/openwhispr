@@ -381,14 +381,6 @@ const openSettingsTool: ToolDefinition = {
   },
 };
 
-export const INTERACTION_TOOL_NAMES = [
-  "ask_user",
-  "request_connection",
-  "request_access",
-  "request_api_key",
-  "open_settings",
-] as const;
-
 export function createInteractionTools(options: InteractionToolOptions): ToolDefinition[] {
   return [
     askUserTool,

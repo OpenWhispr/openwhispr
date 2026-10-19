@@ -217,8 +217,13 @@ test("every interaction tool has its tool-step copy", async () => {
   const translation = JSON.parse(
     fs.readFileSync(path.join(__dirname, "../../src/locales/en/translation.json"), "utf8")
   );
-  const { INTERACTION_TOOL_NAMES } = await load();
-  for (const name of INTERACTION_TOOL_NAMES) {
+  const { createInteractionTools } = await load();
+  const tools = createInteractionTools({
+    connectionTargets: ["slack"],
+    missingKeyProviders: ["openai"],
+    screenAccess: true,
+  });
+  for (const { name } of tools) {
     assert.ok(translation.agentMode.tools[`${name}Status`], name);
     assert.ok(translation.agentMode.tools[`${name}Name`], name);
   }
