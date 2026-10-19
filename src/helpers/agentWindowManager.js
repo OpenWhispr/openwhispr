@@ -169,9 +169,15 @@ class AgentWindowManager {
     win.on("closed", () => {
       if (this.window === win) this._forget();
     });
-    // A reload (development) is a new renderer: it says when it is ready again.
+    // A reload (development) is a new renderer: it starts hidden with no take,
+    // and says when it is ready again.
     win.webContents.on("did-start-loading", () => {
-      if (this.window === win) this.ready = false;
+      if (this.window !== win) return;
+      if (this.ready) {
+        this._applyVoiceState("idle");
+        this._hide();
+      }
+      this.ready = false;
     });
     win.webContents.on("render-process-gone", (_event, details) => {
       if (this.window !== win || details?.reason === "clean-exit") return;

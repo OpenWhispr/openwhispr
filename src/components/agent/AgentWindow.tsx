@@ -320,11 +320,16 @@ export default function AgentWindow() {
     });
   }, [conversationId, forkOrigin, dispatch]);
 
+  // Bumped when the user opens another chat, so the list starts again at the
+  // newest message instead of wherever the previous chat was scrolled.
+  const [openedChat, setOpenedChat] = useState(0);
+
   const forkMessage = useCallback(
     async (messageId: string, selectedText?: string) => {
       const message = messagesRef.current.find((m) => m.id === messageId);
       if (!message) return;
       stopReading();
+      setOpenedChat((count) => count + 1);
       if ((await fork(message, selectedText)) === null) {
         dispatch({ type: "notice", notice: "chat.forkFailed" });
       }
@@ -353,6 +358,7 @@ export default function AgentWindow() {
   const switchChat = useCallback(
     (id: number) => {
       stopReading();
+      setOpenedChat((count) => count + 1);
       void openChat(id);
     },
     [openChat, stopReading]
@@ -360,6 +366,7 @@ export default function AgentWindow() {
 
   const newChat = useCallback(() => {
     stopReading();
+    setOpenedChat((count) => count + 1);
     startNewChat();
   }, [startNewChat, stopReading]);
 
@@ -449,12 +456,12 @@ export default function AgentWindow() {
   );
 
   const emptyState = refusal ? (
-    <div className="flex h-full flex-col items-center justify-center gap-2 px-8 text-center text-sm text-muted-foreground">
+    <div className="flex flex-1 flex-col items-center justify-center gap-2 px-8 text-center text-sm text-muted-foreground">
       <BrandMarkIcon size={22} className="text-primary" />
       <p dir="auto">{t(refusal)}</p>
     </div>
   ) : state.input === "keyboard" ? (
-    <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+    <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
       <BrandMarkIcon size={22} className="text-primary" />
       <p className="text-lg font-medium text-foreground">{t("agentWindow.empty.title")}</p>
       <p className="text-sm text-muted-foreground">{t("agentWindow.empty.description")}</p>
@@ -492,6 +499,7 @@ export default function AgentWindow() {
             }
           >
             <AgentMessageList
+              key={openedChat}
               messages={refusal ? [] : messages}
               forkOrigin={forkOrigin}
               onOpenParent={switchChat}

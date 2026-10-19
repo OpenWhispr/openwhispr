@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Check,
@@ -288,6 +288,7 @@ export function AgentMessageList({
   emptyState,
 }: AgentMessageListProps) {
   const { scrollRef, handleScroll, handleWheel } = useStickToBottom<HTMLDivElement>(messages);
+  const viewportHeightRef = useRef(0);
   const [selection, setSelection] = useState<SelectionTarget | null>(null);
   const visible = messages.filter((message) => message.role !== "tool");
   const lastId = visible.at(-1)?.id;
@@ -315,43 +316,51 @@ export function AgentMessageList({
   return (
     <div
       ref={scrollRef}
-      onScroll={() => {
-        handleScroll();
+      onScroll={(event) => {
+        // The scroll that pins the bottom arrives a frame late, and when the
+        // list shrank meanwhile (the selected context opening above the
+        // composer) it would read as the reader leaving the bottom.
+        const height = event.currentTarget.clientHeight;
+        if (height === viewportHeightRef.current) handleScroll();
+        viewportHeightRef.current = height;
         setSelection(null);
       }}
       onWheel={handleWheel}
       className="agent-chat-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-3"
     >
-      {forkOrigin?.parentTitle && (
-        <div className="flex pt-1 pb-3">
-          <ForkOriginChip
-            title={forkOrigin.parentTitle}
-            onOpen={() => onOpenParent(forkOrigin.parentConversationId)}
-          />
-        </div>
-      )}
-      {visible.length === 0 ? (
-        emptyState
-      ) : (
-        <div className="flex flex-col gap-4">
-          {visible.map((message) =>
-            message.role === "user" ? (
-              <UserMessage key={message.id} message={message} />
-            ) : (
-              <AssistantMessage
-                key={message.id}
-                message={message}
-                latest={message.id === lastId}
-                busy={busy}
-                readAloud={readAloud}
-                onRegenerate={onRegenerate}
-                onFork={onFork}
-                onContinue={onContinue}
-              />
-            )
-          )}
-        </div>
-      )}
+      {/* One child, so following the bottom sees everything the chat grows by. */}
+      <div className="flex min-h-full flex-col">
+        {forkOrigin?.parentTitle && (
+          <div className="flex pt-1 pb-3">
+            <ForkOriginChip
+              title={forkOrigin.parentTitle}
+              onOpen={() => onOpenParent(forkOrigin.parentConversationId)}
+            />
+          </div>
+        )}
+        {visible.length === 0 ? (
+          emptyState
+        ) : (
+          <div className="flex flex-col gap-4">
+            {visible.map((message) =>
+              message.role === "user" ? (
+                <UserMessage key={message.id} message={message} />
+              ) : (
+                <AssistantMessage
+                  key={message.id}
+                  message={message}
+                  latest={message.id === lastId}
+                  busy={busy}
+                  readAloud={readAloud}
+                  onRegenerate={onRegenerate}
+                  onFork={onFork}
+                  onContinue={onContinue}
+                />
+              )
+            )}
+          </div>
+        )}
+      </div>
       {selection && (
         <SelectionToolbar
           target={selection}

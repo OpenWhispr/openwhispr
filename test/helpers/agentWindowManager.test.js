@@ -322,6 +322,23 @@ test("a crashed renderer releases the mic and the next press recreates the windo
   assert.notEqual(manager.window, win);
 });
 
+test("a reloaded renderer starts hidden and without a take, like a new one", async () => {
+  const { manager, win } = await openedManager();
+  manager.setLayout(fromAgent(win), { layout: "modal", focus: false });
+  manager.setVoiceState(fromAgent(win), "recording");
+
+  win.contentsListeners.get("did-start-loading")();
+  assert.equal(win.visible, false);
+  assert.equal(manager.isRecording(), false);
+  assert.equal(win.bounds.width, AGENT_LAYOUT_SIZES.pill.width);
+
+  const sent = win.sent.length;
+  manager.handleHotkey();
+  assert.equal(win.sent.length, sent, "the new renderer is not ready yet");
+  manager.markReady(fromAgent(win));
+  assert.deepEqual(win.sent.at(-1), { channel: "agent-window-hotkey", payload: { external: true } });
+});
+
 test("closing hides instead of destroying, and the next show starts from the pill", async () => {
   const { manager, win } = await openedManager();
   manager.setLayout(fromAgent(win), { layout: "modal", focus: false });
