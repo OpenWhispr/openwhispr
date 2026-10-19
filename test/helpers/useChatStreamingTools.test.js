@@ -1298,7 +1298,7 @@ test("Tone & Style gives every send the user's writing style, and a pasted answe
   const [typed, pasted] = sentMessages.map((messages) => messages[0].content);
   assert.match(typed, /WRITING STYLE: When you write something the user will send/);
   assert.match(pasted, /typed at the user's cursor in a work chat app/);
-  assert.match(pasted, /Work messages style: casual and friendly/);
+  assert.match(pasted, /work message style: casual and friendly/);
 });
 
 test("without Tone & Style no send carries a writing style", async (t) => {

@@ -4983,10 +4983,10 @@
     "settings": {
       "saveChanges": "保存更改",
       "saved": "语气与风格已保存",
-      "cleanupOff": "文本整理已关闭，因此这些语气不会应用到你的听写中。",
+      "cleanupOff": "文本整理已关闭，因此这些语气不会应用到你的听写中。助手和聊天仍会使用它们。",
       "turnOnCleanup": "开启文本整理",
       "enabled": "启用语气与声音",
-      "enabledDescription": "文本整理会为每类应用使用你的语气。关闭时使用标准语气。"
+      "enabledDescription": "文本整理、助手和聊天会为每类应用使用你的语气。关闭时使用标准语气。"
     }
   },
   "productHelp": {

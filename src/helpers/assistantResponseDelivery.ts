@@ -81,16 +81,47 @@ async function copyAssistantResponse(
   }
 }
 
+// A run of em dashes with the spaces around it, on one line.
+const EM_DASH_RUN = /[^\S\r\n]*\u2014(?:[^\S\r\n]*\u2014)*[^\S\r\n]*/g;
+// Code and links keep their dashes.
+const LITERAL_TEXT = /```[\s\S]*?```|`[^`\n]*`|\bhttps?:\/\/\S+/g;
+const NON_LATIN_LETTER = /(?!\p{Script=Latin})\p{L}/u;
+const DIGIT = /\p{Nd}/u;
+const CLOSES_CLAUSE = /[,.;:!?)\]}\u201d\u2019\u00bb]/;
+const OPENS = /[([{\u201c\u2018\u00ab]/;
+const PUNCTUATION = /[,.;:!?]/;
+
+function replaceEmDashRun(run: string, before: string, after: string): string {
+  // Russian, Chinese and other scripts use the dash in their own grammar.
+  if (NON_LATIN_LETTER.test(before) || NON_LATIN_LETTER.test(after)) return run;
+  // A range (1990\u20142000, Q3\u2014Q4) is not a pause, so it takes an en dash.
+  const unspaced = run.trim() === run;
+  if (
+    (DIGIT.test(before) && DIGIT.test(after)) ||
+    (unspaced && (DIGIT.test(before) || DIGIT.test(after)) && /\w/.test(before + after))
+  ) {
+    return run.replace(/\u2014(?:[^\S\r\n]*\u2014)*/, "\u2013");
+  }
+  if (!after || after === "\n" || after === "\r" || CLOSES_CLAUSE.test(after)) return "";
+  if (!before || before === "\n" || before === "\r" || OPENS.test(before)) return "";
+  return PUNCTUATION.test(before) ? " " : ", ";
+}
+
 // An answer typed in the user's Tone & Style is their own words, which no tone
 // writes with em dashes. The prompt says so, but models still use them, so a
-// dash between words becomes a comma; one beside , . ; : ! ? or at a line's
-// edge is dropped.
+// dash between words becomes a comma; one at a line's edge or beside
+// punctuation or a bracket is dropped. Ranges, code, links and non-Latin
+// scripts keep theirs, since there the dash carries meaning.
 function withoutEmDashes(text: string): string {
-  return text
-    .replace(/^[^\S\r\n]*\u2014+[^\S\r\n]*/gm, "")
-    .replace(/[^\S\r\n]*\u2014+[^\S\r\n]*(?=[,.;:!?]|$)/gm, "")
-    .replace(/(?<=[,.;:!?])[^\S\r\n]*\u2014+[^\S\r\n]*/g, " ")
-    .replace(/[^\S\r\n]*\u2014+[^\S\r\n]*/g, ", ");
+  const literals = [...text.matchAll(LITERAL_TEXT)].map((match) => [
+    match.index,
+    match.index + match[0].length,
+  ]);
+  return text.replace(EM_DASH_RUN, (run: string, offset: number) =>
+    literals.some(([start, end]) => offset >= start && offset < end)
+      ? run
+      : replaceEmDashRun(run, text[offset - 1] ?? "", text[offset + run.length] ?? "")
+  );
 }
 
 export async function deliverAssistantResponse(

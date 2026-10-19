@@ -4983,10 +4983,10 @@
     "settings": {
       "saveChanges": "Guardar cambios",
       "saved": "Tono y estilo guardados",
-      "cleanupOff": "La corrección de texto está desactivada, así que estos tonos no se aplican a tu dictado.",
+      "cleanupOff": "La corrección de texto está desactivada, así que estos tonos no se aplican a tu dictado. El asistente y los chats sí los usan.",
       "turnOnCleanup": "Activar corrección de texto",
       "enabled": "Tonos y voces activados",
-      "enabledDescription": "La corrección de texto usa tu tono para cada tipo de app. Si está desactivado, usa el tono estándar."
+      "enabledDescription": "La corrección de texto, el asistente y los chats usan tu tono para cada tipo de app. Si está desactivado, usan el tono estándar."
     }
   },
   "productHelp": {

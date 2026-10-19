@@ -4983,10 +4983,10 @@
     "settings": {
       "saveChanges": "Änderungen speichern",
       "saved": "Ton & Stil gespeichert",
-      "cleanupOff": "Die Textbereinigung ist deaktiviert, daher werden diese Einstellungen nicht auf Ihre Diktate angewendet.",
+      "cleanupOff": "Die Textbereinigung ist deaktiviert, daher werden diese Einstellungen nicht auf Ihre Diktate angewendet. Der Assistent und Chats verwenden sie weiterhin.",
       "turnOnCleanup": "Textbereinigung aktivieren",
       "enabled": "Ton & Stimme aktiviert",
-      "enabledDescription": "Die Textbereinigung verwendet Ihren Ton für jede Art von App. Wenn deaktiviert, gilt der Standardton."
+      "enabledDescription": "Die Textbereinigung, der Assistent und Chats verwenden Ihren Ton für jede Art von App. Wenn deaktiviert, gilt der Standardton."
     }
   },
   "productHelp": {

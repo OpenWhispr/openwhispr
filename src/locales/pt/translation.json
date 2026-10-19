@@ -4983,10 +4983,10 @@
     "settings": {
       "saveChanges": "Salvar alterações",
       "saved": "Tom e estilo salvos",
-      "cleanupOff": "A limpeza de texto está desativada, então esses tons não são aplicados ao seu ditado.",
+      "cleanupOff": "A limpeza de texto está desativada, então esses tons não são aplicados ao seu ditado. O assistente e os chats continuam usando-os.",
       "turnOnCleanup": "Ativar limpeza de texto",
       "enabled": "Tons e vozes ativados",
-      "enabledDescription": "A limpeza de texto usa seu tom para cada tipo de app. Desativado, usa o tom padrão."
+      "enabledDescription": "A limpeza de texto, o assistente e os chats usam seu tom para cada tipo de app. Desativado, usam o tom padrão."
     }
   },
   "productHelp": {

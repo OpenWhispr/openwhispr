@@ -225,3 +225,35 @@ test("without Tone & Style an answer keeps its em dashes", async () => {
   await deliverAssistantResponse(PASTE_DELIVERY, DASHED_RESPONSE, dependencies);
   assert.equal(pastes[0].text, DASHED_RESPONSE);
 });
+
+test("em dashes that carry meaning survive the Tone & Style strip", async () => {
+  const { deliverAssistantResponse } = await deliveryModule;
+  const toneDelivery = { ...PASTE_DELIVERY, plainText: false, appCategory: "other" };
+  const cases = [
+    // Ranges take an en dash rather than turning into a list.
+    ["from 1990\u20142000", "from 1990\u20132000"],
+    ["pages 10 \u2014 20", "pages 10 \u2013 20"],
+    ["Q3\u2014Q4 plan", "Q3\u2013Q4 plan"],
+    ["call at 5 \u2014 or later", "call at 5, or later"],
+    // Scripts that use the dash in their grammar keep it.
+    ["Это \u2014 книга", "Это \u2014 книга"],
+    ["«\u2014 Да, \u2014 сказал он.»", "«\u2014 Да, \u2014 сказал он.»"],
+    ["我们\u2014\u2014就是你们", "我们\u2014\u2014就是你们"],
+    // Brackets and quotes count as punctuation.
+    ["the end \u2014)", "the end)"],
+    ["(\u2014 a note)", "(a note)"],
+    ['"done" \u2014 then', '"done", then'],
+    ["wait \u2014 \u2014 what", "wait, what"],
+    // Code and links are left as written.
+    ["run `a\u2014b` now", "run `a\u2014b` now"],
+    ["```\nx\u2014y\n```", "```\nx\u2014y\n```"],
+    ["`npm test` \u2014 then", "`npm test`, then"],
+    ["see https://example.com/a\u2014b", "see https://example.com/a\u2014b"],
+  ];
+
+  for (const [input, expected] of cases) {
+    const { dependencies, pastes } = createDeliveryHarness(true);
+    await deliverAssistantResponse(toneDelivery, input, dependencies);
+    assert.equal(pastes[0].text, expected, input);
+  }
+});

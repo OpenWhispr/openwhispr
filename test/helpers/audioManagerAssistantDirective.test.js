@@ -493,8 +493,10 @@ test("a selection edit asks for the selection's app style only on a rewrite", as
   for (const prompt of [systemPrompt, textOnlySystemPrompt]) {
     assert.match(
       prompt,
-      /^base prompt\n\nIf the instruction asks you to rewrite, reword or draft the text and names no tone, write it in the user's Emails style: formal and polished\./
+      /^base prompt\n\nIf the instruction asks you to rewrite, reword or draft the text and names no tone, write it in the user's email style: formal and polished\./
     );
+    // IDEs count as "other", so a rewrite there may be code the tone must not touch.
+    assert.match(prompt, /code and commands, with their strings and comments, are never restyled/);
     assert.ok(prompt.indexOf("If the instruction asks") < prompt.indexOf("SELECTION EDITING MODE"));
   }
 });

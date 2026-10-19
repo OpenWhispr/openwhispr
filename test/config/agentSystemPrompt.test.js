@@ -205,17 +205,36 @@ test("Tone & Style lists the user's style for each kind of writing, after the si
   assert.ok(prompt.indexOf("sign it with their name") < prompt.indexOf("WRITING STYLE"));
 });
 
-test("an answer typed at the cursor gets only that app's style", async () => {
+test("an answer typed at the cursor gets that app's style, and tool text keeps its own kind", async () => {
   const { getAgentSystemPrompt } = await load();
   const prompt = getAgentSystemPrompt([], undefined, {
-    writingStyle: { tones: TONES, destination: "email" },
+    writingStyle: { tones: TONES, destination: "work" },
   });
 
   assert.match(
     prompt,
-    /WRITING STYLE: Your reply will be typed at the user's cursor in an email app, as their own words\. Write only the text that goes there \(no subject line or label\), in the user's Emails style: formal and polished\./
+    /WRITING STYLE: Your reply will be typed at the user's cursor in a work chat app, as their own words\. Write the reply as only the text that goes there \(no subject line or label\), in the user's work message style: casual and friendly/
   );
-  assert.doesNotMatch(prompt, /very casual/);
+  // An email_draft spoken with the cursor in Slack is still written as an email.
+  const replyOnly = prompt.indexOf("That style is for the reply only.");
+  assert.ok(replyOnly > 0);
+  assert.ok(
+    prompt.indexOf("- Emails (any email, including an email_draft body): formal") > replyOnly
+  );
+});
+
+test("an answer typed at the cursor in another app reads naturally", async () => {
+  const { getAgentSystemPrompt } = await load();
+  const prompt = getAgentSystemPrompt([], undefined, {
+    writingStyle: { tones: TONES, destination: "other" },
+  });
+
+  assert.match(
+    prompt,
+    /cursor in an app other than chat or email, as their own words\. .* in the user's general writing style: upbeat and enthusiastic\./
+  );
+  assert.doesNotMatch(prompt, /Everything else style|cursor in an app,/);
+  assert.match(prompt, /code and commands, with their strings and comments, are never restyled/);
 });
 
 test("without Tone & Style the prompt has no writing style", async () => {

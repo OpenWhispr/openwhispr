@@ -49,24 +49,34 @@ export function appendToneStyleSuffix(prompt: string, toneStyle?: DictationToneS
   return `${prompt}\n\n${instruction}`;
 }
 
-const WRITING_KINDS: Record<ToneAppCategory, { label: string; examples: string }> = {
+const WRITING_KINDS: Record<
+  ToneAppCategory,
+  { label: string; examples: string; style: string; destination: string }
+> = {
   personal: {
     label: "Personal messages",
     examples: "texts, WhatsApp, iMessage, Telegram, Instagram",
+    style: "personal message",
+    destination: "a personal messaging app",
   },
-  work: { label: "Work messages", examples: "Slack, Teams, Google Chat, LinkedIn" },
-  email: { label: "Emails", examples: "any email, including an email_draft body" },
+  work: {
+    label: "Work messages",
+    examples: "Slack, Teams, Google Chat, LinkedIn",
+    style: "work message",
+    destination: "a work chat app",
+  },
+  email: {
+    label: "Emails",
+    examples: "any email, including an email_draft body",
+    style: "email",
+    destination: "an email app",
+  },
   other: {
     label: "Everything else",
     examples: "posts, notes, documents, issues and comments",
+    style: "general writing",
+    destination: "an app other than chat or email",
   },
-};
-
-const DESTINATIONS: Record<ToneAppCategory, string> = {
-  personal: "a personal messaging app",
-  work: "a work chat app",
-  email: "an email app",
-  other: "an app",
 };
 
 // Cleanup's priority sentence keeps these exact under any tone; the chat and
@@ -74,13 +84,25 @@ const DESTINATIONS: Record<ToneAppCategory, string> = {
 const KEEP_NAMES =
   "Names, acronyms and dictionary terms keep their exact spelling and capitalization.";
 
-const WRITING_STYLE_RULES = `${KEEP_NAMES} Never sign or add a name to a personal or work message. Never use em dashes in text written as the user's own words. A tone the user asks for always wins.`;
+// IDEs and terminals count as "other", so a rewrite there is often code.
+const KEEP_CODE =
+  "A tone applies to prose only: code and commands, with their strings and comments, are never restyled.";
+
+const WRITING_STYLE_RULES = `${KEEP_NAMES} ${KEEP_CODE} Never sign or add a name to a personal or work message. Never use em dashes in text written as the user's own words. A tone the user asks for always wins.`;
+
+function writingKindList(tones: ToneStyles): string[] {
+  return TONE_APP_CATEGORIES.map(
+    (category) =>
+      `- ${WRITING_KINDS[category].label} (${WRITING_KINDS[category].examples}): ${TONE_RULES[tones[category]]}`
+  );
+}
 
 /**
  * The chat's guide to writing in the user's own tone. With `destination`, the
  * kind of app the assistant will type its answer into, that app's style is the
- * one to use. Otherwise the model works out which kind of text a request is
- * for from the request, the recipient and the tool, and picks its style.
+ * one for the reply; text written through a tool still goes by its own kind.
+ * Otherwise the model works out which kind of text a request is for from the
+ * request, the recipient and the tool, and picks its style.
  */
 export function buildWritingStyleBlock(
   tones: ToneStyles,
@@ -89,17 +111,15 @@ export function buildWritingStyleBlock(
   if (destination) {
     const kind = WRITING_KINDS[destination];
     return [
-      `WRITING STYLE: Your reply will be typed at the user's cursor in ${DESTINATIONS[destination]}, as their own words. Write only the text that goes there (no subject line or label), in the user's ${kind.label} style: ${TONE_RULES[tones[destination]]}`,
+      `WRITING STYLE: Your reply will be typed at the user's cursor in ${kind.destination}, as their own words. Write the reply as only the text that goes there (no subject line or label), in the user's ${kind.style} style: ${TONE_RULES[tones[destination]]}`,
+      "That style is for the reply only. Text you write through a tool (an email_draft body, a message you send) takes the user's style for its own kind:",
+      ...writingKindList(tones),
       WRITING_STYLE_RULES,
     ].join("\n");
   }
-  const kinds = TONE_APP_CATEGORIES.map(
-    (category) =>
-      `- ${WRITING_KINDS[category].label} (${WRITING_KINDS[category].examples}): ${TONE_RULES[tones[category]]}`
-  );
   return [
     "WRITING STYLE: When you write something the user will send or keep as their own words (a message, email, reply, post, comment or note), write it the way they write that kind of text. Work out which kind it is from the request, the recipient and the tool you use, and use only that kind's style:",
-    ...kinds,
+    ...writingKindList(tones),
     `${WRITING_STYLE_RULES} Your own answers, explanations and summaries keep your usual voice.`,
   ].join("\n");
 }
@@ -107,5 +127,5 @@ export function buildWritingStyleBlock(
 // For an in-place edit of selected text: only a rewrite the user asked for
 // without a tone takes the style of the app the selection is in.
 export function selectionEditToneSentence(toneStyle: DictationToneStyle): string {
-  return `If the instruction asks you to rewrite, reword or draft the text and names no tone, write it in the user's ${WRITING_KINDS[toneStyle.appCategory].label} style: ${TONE_RULES[toneStyle.tone]} ${KEEP_NAMES}`;
+  return `If the instruction asks you to rewrite, reword or draft the text and names no tone, write it in the user's ${WRITING_KINDS[toneStyle.appCategory].style} style: ${TONE_RULES[toneStyle.tone]} ${KEEP_NAMES} ${KEEP_CODE}`;
 }
