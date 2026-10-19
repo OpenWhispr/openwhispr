@@ -1,6 +1,6 @@
 import type { AgentWindowLayout } from "../../types/electron";
 import type { AgentSelectionContext } from "../../utils/agentSelectionContext";
-import type { ChatImageAttachment } from "../chat/types";
+import type { ChatImageAttachment, Message } from "../chat/types";
 
 export type AgentInputMode = "voice" | "keyboard";
 
@@ -116,6 +116,25 @@ export function agentWindowReducer(
         notice: null,
       };
   }
+}
+
+/**
+ * A card waiting on typed input (an ask_user text answer, an API key). Windows
+ * and Linux give the window the keyboard only when it asks, so it has to ask
+ * for these even after a spoken request.
+ */
+export function awaitsTypedAnswer(messages: ReadonlyArray<Pick<Message, "toolCalls">>): boolean {
+  return messages.some((message) =>
+    message.toolCalls?.some(({ interaction }) => {
+      if (interaction?.state !== "pending") return false;
+      const { payload } = interaction;
+      return (
+        payload.kind === "apiKey" ||
+        (payload.kind === "questions" &&
+          payload.questions.some((question) => question.kind === "text"))
+      );
+    })
+  );
 }
 
 export type AgentPillPlacement = "compact" | "typing" | "modal";

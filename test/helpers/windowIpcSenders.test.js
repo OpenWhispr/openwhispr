@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
+const { EventEmitter } = require("node:events");
 
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
@@ -108,7 +109,7 @@ function installWindowManager(stub) {
 const frameOf = (contents) => ({ sender: contents, senderFrame: contents.mainFrame });
 
 function makeContents() {
-  const contents = { mainFrame: {}, sent: [], destroyed: false };
+  const contents = Object.assign(new EventEmitter(), { mainFrame: {}, sent: [], destroyed: false });
   contents.send = (channel) => contents.sent.push(channel);
   contents.isDestroyed = () => contents.destroyed;
   return contents;
@@ -233,4 +234,33 @@ test("Esc reaches the window that registered it, and only that window takes it b
   assert.deepEqual(await handlers.get("unregister-cancel-hotkey")(frameOf(mainContents)), {
     success: true,
   });
+});
+
+test("a window that reloads, crashes or closes while it holds Esc gives it back", async () => {
+  const { stub, calls: allCalls } = makeWindowManagerStub();
+  const calls = allCalls.agent;
+  installWindowManager(stub);
+
+  for (const leave of [
+    (contents) => contents.emit("did-start-navigation", {}, "http://app/", false, true),
+    (contents) => contents.emit("render-process-gone", {}, { reason: "crashed" }),
+    (contents) => contents.emit("destroyed"),
+  ]) {
+    const contents = makeContents();
+    await handlers.get("register-cancel-hotkey")(frameOf(contents), "Escape");
+    // An in-page navigation (a footnote link) keeps the renderer, and Esc.
+    contents.emit("did-start-navigation", {}, "http://app/#note", true, true);
+    assert.deepEqual(calls, []);
+    leave(contents);
+    assert.deepEqual(calls, [["unregister", "cancel"]]);
+    calls.length = 0;
+  }
+
+  // Leaving after another window took Esc leaves that window's Esc alone.
+  const first = makeContents();
+  const second = makeContents();
+  await handlers.get("register-cancel-hotkey")(frameOf(first), "Escape");
+  await handlers.get("register-cancel-hotkey")(frameOf(second), "Escape");
+  first.emit("destroyed");
+  assert.deepEqual(calls, []);
 });

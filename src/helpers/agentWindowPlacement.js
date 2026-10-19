@@ -30,7 +30,7 @@ const AGENT_LAYOUT_SIZES = Object.freeze({
 // pill where the dictation pill docks (12px up).
 const BOTTOM_MARGIN = 4;
 // A center-docked dictation pill: its 12px dock inset, its 40px idle height,
-// and the gap kept between the two pills.
+// and the gap kept between it (or its window) and the agent window.
 const DICTATION_DOCK_INSET = 12;
 const DICTATION_PILL_HEIGHT = 40;
 const DICTATION_GAP = 8;
@@ -38,15 +38,21 @@ const DICTATION_GAP = 8;
 /**
  * Where the window's bottom-center sits on a display: the bottom center of the
  * work area, lifted above the dictation pill when that pill is docked in the
- * center of the same display.
+ * center of the same display. Where the dictation window takes clicks across
+ * its whole area (Windows), it is lifted above that window instead.
  */
-function computeAgentAnchor({ workArea, dictationBounds = null }) {
+function computeAgentAnchor({
+  workArea,
+  dictationBounds = null,
+  wholeDictationWindowTakesClicks = false,
+}) {
   const centerX = workArea.x + workArea.width / 2;
   let bottom = workArea.y + workArea.height - BOTTOM_MARGIN;
   if (dictationBounds) {
-    const dictationPillTop =
-      dictationBounds.y + dictationBounds.height - DICTATION_DOCK_INSET - DICTATION_PILL_HEIGHT;
-    bottom = Math.min(bottom, dictationPillTop - DICTATION_GAP);
+    const dictationTop = wholeDictationWindowTakesClicks
+      ? dictationBounds.y
+      : dictationBounds.y + dictationBounds.height - DICTATION_DOCK_INSET - DICTATION_PILL_HEIGHT;
+    bottom = Math.min(bottom, dictationTop - DICTATION_GAP);
   }
   return { centerX, bottom };
 }

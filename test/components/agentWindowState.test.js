@@ -140,3 +140,29 @@ test("in the modal a reply can be stopped before it has anything to show", async
   assert.equal(thinking.thinking, true);
   assert.deepEqual(thinking.buttons, ["keyboard", "stop", "close"]);
 });
+
+test("a pending card that needs typing asks for the keyboard, even after a spoken request", async () => {
+  const { awaitsTypedAnswer } = await load();
+  const reply = (interaction) => ({ toolCalls: [{ id: "1", name: "ask_user", interaction }] });
+  const questions = (kind) => ({
+    kind: "questions",
+    questions: [{ id: "q", kind, prompt: "Which?", options: [{ id: "a", label: "A" }] }],
+  });
+
+  assert.equal(awaitsTypedAnswer([reply({ state: "pending", payload: questions("text") })]), true);
+  assert.equal(
+    awaitsTypedAnswer([
+      reply({
+        state: "pending",
+        payload: { kind: "apiKey", provider: "groq", providerName: "Groq" },
+      }),
+    ]),
+    true
+  );
+  assert.equal(
+    awaitsTypedAnswer([reply({ state: "pending", payload: questions("single") })]),
+    false
+  );
+  assert.equal(awaitsTypedAnswer([reply({ state: "settled", payload: questions("text") })]), false);
+  assert.equal(awaitsTypedAnswer([{ toolCalls: undefined }]), false);
+});

@@ -4672,11 +4672,31 @@ class IPCHandlers {
     });
 
     // Esc goes to the window that is recording (dictation or the agent
-    // window), and only that window may take it back.
+    // window), and only that window may take it back. A renderer that
+    // reloads, crashes or closes can't, so it gives Esc back by going.
+    const releaseCancelHotkey = () => {
+      this._cancelHotkeyOwner = null;
+      this.windowManager.hotkeyManager.unregisterSlot("cancel");
+    };
+    const watchedCancelOwners = new WeakSet();
+    const watchCancelOwner = (owner) => {
+      if (watchedCancelOwners.has(owner)) return;
+      watchedCancelOwners.add(owner);
+      const releaseIfOwner = () => {
+        if (this._cancelHotkeyOwner === owner) releaseCancelHotkey();
+      };
+      owner.on("did-start-navigation", (_event, _url, isInPlace, isMainFrame) => {
+        if (isMainFrame && !isInPlace) releaseIfOwner();
+      });
+      owner.on("render-process-gone", releaseIfOwner);
+      owner.once("destroyed", releaseIfOwner);
+    };
+
     ipcMain.handle("register-cancel-hotkey", async (event, key) => {
       const hotkeyManager = this.windowManager.hotkeyManager;
       const owner = event.sender;
       this._cancelHotkeyOwner = owner;
+      watchCancelOwner(owner);
       return hotkeyManager.registerSlot("cancel", key, () => {
         if (!owner.isDestroyed()) owner.send("cancel-hotkey-pressed");
       });
@@ -4685,8 +4705,7 @@ class IPCHandlers {
     ipcMain.handle("unregister-cancel-hotkey", async (event) => {
       const owner = this._cancelHotkeyOwner;
       if (owner && !owner.isDestroyed() && owner !== event.sender) return { success: false };
-      this._cancelHotkeyOwner = null;
-      this.windowManager.hotkeyManager.unregisterSlot("cancel");
+      releaseCancelHotkey();
       return { success: true };
     });
 

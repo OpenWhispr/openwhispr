@@ -13,6 +13,7 @@ import { unsentForkContext, type AgentSelectionContext } from "../../utils/agent
 import type { AgentWindowCommand, AgentWindowLayout } from "../../types/electron";
 import {
   agentWindowReducer,
+  awaitsTypedAnswer,
   INITIAL_AGENT_WINDOW_STATE,
   resolveAgentPillControls,
   type AgentPillButton,
@@ -86,7 +87,16 @@ export default function AgentWindow() {
   const readAloud = useReadAloud(i18n.language);
   const { stop: stopReading } = readAloud;
 
-  const surfaceFocus = state.input === "keyboard" && state.layout !== "pill";
+  // A click in the modal after a spoken request may be into a card's field.
+  const [modalClicked, setModalClicked] = useState(false);
+  const modalShown = state.visible && state.layout === "modal";
+  useEffect(() => {
+    if (!modalShown) setModalClicked(false);
+  }, [modalShown]);
+  const surfaceFocus =
+    state.layout !== "pill" &&
+    (state.input === "keyboard" ||
+      (state.layout === "modal" && (modalClicked || awaitsTypedAnswer(messages))));
   const surface = useAgentSurface({
     visible: state.visible,
     layout: state.layout,
@@ -504,6 +514,7 @@ export default function AgentWindow() {
           state.layout === "typing" && "gap-3"
         )}
         data-shown={surface.shown}
+        onPointerDown={modalShown ? () => setModalClicked(true) : undefined}
       >
         {state.layout === "modal" ? (
           <AgentModal

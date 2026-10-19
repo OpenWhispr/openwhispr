@@ -10,6 +10,9 @@ const displays = [
   { id: 2, workArea: { x: 1440, y: 0, width: 1920, height: 1080 } },
 ];
 let cursor = { x: 100, y: 100 };
+// KDE's per-monitor work areas (plasmaWorkAreas.js), by display id.
+const plasmaCorrections = new Map();
+let plasmaRefreshes = 0;
 const screenListeners = new Map();
 const created = [];
 const inputRegionCalls = [];
@@ -65,6 +68,7 @@ class FakeBrowserWindow {
   }
   hide() {
     this.visible = false;
+    this.focused = false;
     this.calls.push(["hide"]);
   }
   moveTop() {}
@@ -104,6 +108,19 @@ Module._load = function loadWithStubs(request, parent, isMain) {
     };
   }
   if (request === "./debugLogger") return { warn() {}, debug() {} };
+  if (request === "./plasmaWorkAreas") {
+    return {
+      plasmaWorkAreas: {
+        refresh: async () => {
+          plasmaRefreshes += 1;
+        },
+        resolve: (display) =>
+          plasmaCorrections.has(display.id)
+            ? { ...display, workArea: plasmaCorrections.get(display.id) }
+            : display,
+      },
+    };
+  }
   if (request === "./linuxWindowInputRegion") {
     return {
       createLinuxWindowInputRegion: () => ({
@@ -222,6 +239,32 @@ test("the pill sits above a dictation pill docked in the center of the same disp
   assert.equal(win.bounds.y + win.bounds.height, 836);
 });
 
+test("on Windows the window sits above the whole dictation window, which takes every click", async () => {
+  cursor = { x: 100, y: 100 };
+  const mainWindow = {
+    isDestroyed: () => false,
+    isVisible: () => true,
+    getBounds: () => ({ x: 616, y: 776, width: 208, height: 120 }),
+  };
+  const { win } = await openedManager({
+    platform: "win32",
+    windowManager: createWindowManager({ _panelStartPosition: "center", mainWindow }),
+  });
+  assert.equal(win.bounds.y + win.bounds.height, 768);
+});
+
+test("Ask assistant opens on the cursor's display, not the last dictation target's", async () => {
+  cursor = { x: 100, y: 100 };
+  created.length = 0;
+  const manager = new AgentWindowManager(
+    createWindowManager({ _resolveActiveDisplay: async () => displays[1] }),
+    { platform: "darwin" }
+  );
+  manager.open();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(manager.window.bounds.x < 1440);
+});
+
 test("macOS never focuses: the panel is focusable from creation and a click makes it key", async () => {
   const { manager, win } = await openedManager({ platform: "darwin" });
   assert.equal(win.options.focusable, true);
@@ -243,6 +286,39 @@ test("Windows takes focus for typing and blurs before giving it back", async () 
   assert.deepEqual(
     win.calls.filter(([name]) => ["focus", "blur", "setFocusable"].includes(name)),
     [["setFocusable", true], ["focus"], ["blur"], ["setFocusable", false]]
+  );
+});
+
+test("Windows releases the keyboard only from a focused window, and hides first", async () => {
+  const { manager, win } = await openedManager({ platform: "win32" });
+  const focusCalls = () =>
+    win.calls.filter(([name]) => ["hide", "focus", "blur", "setFocusable"].includes(name));
+
+  // The user clicked another app while typing: nothing to blur.
+  manager.setLayout(fromAgent(win), { layout: "typing", focus: true });
+  win.focused = false;
+  win.calls.length = 0;
+  manager.setLayout(fromAgent(win), { layout: "pill", focus: false });
+  assert.deepEqual(focusCalls(), [["setFocusable", false]]);
+
+  // A close while typing hides before letting go, so no blur moves the foreground.
+  manager.setLayout(fromAgent(win), { layout: "typing", focus: true });
+  win.calls.length = 0;
+  assert.equal(manager.hide(fromAgent(win)), true);
+  assert.deepEqual(focusCalls(), [["hide"], ["setFocusable", false]]);
+});
+
+test("Linux hides without remapping: unmapping alone hands focus back", async () => {
+  const { manager, win } = await openedManager({ platform: "linux" });
+  manager.setLayout(fromAgent(win), { layout: "typing", focus: true });
+  await new Promise((resolve) => setImmediate(resolve));
+  win.calls.length = 0;
+
+  manager.hide(fromAgent(win));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(
+    win.calls.filter(([name]) => ["hide", "showInactive"].includes(name)),
+    [["hide"]]
   );
 });
 
@@ -346,7 +422,12 @@ test("a reloaded renderer starts hidden and without a take, like a new one", asy
   manager.setLayout(fromAgent(win), { layout: "modal", focus: false });
   manager.setVoiceState(fromAgent(win), "recording");
 
-  win.contentsListeners.get("did-start-loading")();
+  // In-page navigation (a footnote link) keeps the renderer.
+  win.contentsListeners.get("did-start-navigation")({}, "http://app/#fn1", true, true);
+  assert.equal(win.visible, true);
+  assert.equal(manager.isRecording(), true);
+
+  win.contentsListeners.get("did-start-navigation")({}, "http://app/?agent=true", false, true);
   assert.equal(win.visible, false);
   assert.equal(manager.isRecording(), false);
   assert.equal(win.bounds.width, AGENT_LAYOUT_SIZES.pill.width);
@@ -361,13 +442,16 @@ test("a reloaded renderer starts hidden and without a take, like a new one", asy
   });
 });
 
-test("closing hides instead of destroying, and the next show starts from the pill", async () => {
+test("closing hides instead of destroying, tells the renderer, and the next show starts from the pill", async () => {
   const { manager, win } = await openedManager();
   manager.setLayout(fromAgent(win), { layout: "modal", focus: false });
+  win.sent.length = 0;
 
   let prevented = false;
   win.listeners.get("close")({ preventDefault: () => (prevented = true) });
   assert.ok(prevented);
+  // Alt+F4 or Cmd+W: the renderer drops its take and turn and resets its layout.
+  assert.deepEqual(win.sent, [{ channel: "agent-window-dismiss", payload: undefined }]);
   assert.equal(win.visible, false);
   assert.equal(win.bounds.width, AGENT_LAYOUT_SIZES.pill.width);
   assert.equal(manager.window, win);
@@ -423,5 +507,27 @@ test("when its display goes away the window moves to the cursor's", async () => 
     assert.ok(win.bounds.x < 1440);
   } finally {
     displays.splice(1, 0, ...removed);
+  }
+});
+
+test("on KDE the window stays above each monitor's own panel", async () => {
+  // Plasma's work area for the second monitor: a 44px panel along its bottom.
+  plasmaCorrections.set(2, { x: 1440, y: 0, width: 1920, height: 1036 });
+  try {
+    cursor = { x: 1500, y: 100 };
+    created.length = 0;
+    plasmaRefreshes = 0;
+    const manager = new AgentWindowManager(createWindowManager(), { platform: "darwin" });
+    manager.open();
+    await new Promise((resolve) => setImmediate(resolve));
+    const bottom = () => manager.window.bounds.y + manager.window.bounds.height;
+    assert.equal(bottom(), 1036 - 4, "Ask assistant, on the cursor's display");
+    assert.equal(plasmaRefreshes, 1, "a show asks Plasma again");
+
+    plasmaCorrections.set(2, { x: 1440, y: 0, width: 1920, height: 1020 });
+    screenListeners.get("display-metrics-changed")();
+    assert.equal(bottom(), 1020 - 4, "a display change, on the window's display");
+  } finally {
+    plasmaCorrections.clear();
   }
 });

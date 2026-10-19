@@ -2,6 +2,7 @@ const { BrowserWindow, Menu, screen } = require("electron");
 const debugLogger = require("./debugLogger");
 const { isFromWindow } = require("./ipcSender");
 const { createLinuxWindowInputRegion } = require("./linuxWindowInputRegion");
+const { plasmaWorkAreas } = require("./plasmaWorkAreas");
 const { AGENT_WINDOW_CONFIG, WindowPositionUtil } = require("./windowConfig");
 const {
   AGENT_LAYOUT_SIZES,
@@ -65,16 +66,17 @@ class AgentWindowManager {
       targetPidPromise = windowManager.textEditMonitor?.captureTargetPid?.();
       void windowManager.selectionManager?.captureTarget?.({ force: true });
     }
-    void this._show(targetPidPromise);
+    void this._show(() => windowManager._resolveActiveDisplay(targetPidPromise));
     this._send("agent-window-hotkey", { external });
   }
 
-  // The tray's and the pill menu's Ask assistant.
+  // The tray's and the pill menu's Ask assistant: no app was pressed in, so
+  // the window opens where the cursor is.
   open({ layout = "typing" } = {}) {
     const windowManager = this.windowManager;
     if (windowManager._onboardingActive || windowManager.hotkeyManager.isInListeningMode()) return;
     this._ensureWindow();
-    void this._show();
+    void this._show(async () => this._cursorDisplay());
     this._send("agent-window-open", { layout });
   }
 
@@ -91,7 +93,7 @@ class AgentWindowManager {
     const selectedText =
       typeof command.selectedContext?.text === "string" ? command.selectedContext.text : "";
     this._ensureWindow();
-    void this._show();
+    void this._show(() => this.windowManager._resolveActiveDisplay());
     this._send("agent-window-command", {
       text,
       attachment,
@@ -100,7 +102,8 @@ class AgentWindowManager {
     return true;
   }
 
-  // Onboarding took the screen: the renderer drops its take and turn.
+  // The window goes away without the renderer asking (onboarding took the
+  // screen, Alt+F4, Cmd+W): it drops its take and turn, and starts over hidden.
   dismiss() {
     if (!this.window) return;
     this._send("agent-window-dismiss");
@@ -171,15 +174,16 @@ class AgentWindowManager {
     win.on("close", (event) => {
       if (this.windowManager.isQuitting) return;
       event.preventDefault();
-      this._hide();
+      this.dismiss();
     });
     win.on("closed", () => {
       if (this.window === win) this._forget();
     });
     // A reload (development, or the error screen's Reload) is a new renderer:
-    // it starts hidden with no take, and says when it is ready again.
-    win.webContents.on("did-start-loading", () => {
-      if (this.window !== win) return;
+    // it starts hidden with no take, and says when it is ready again. In-page
+    // navigation (a footnote link) keeps the renderer.
+    win.webContents.on("did-start-navigation", (_event, _url, isInPlace, isMainFrame) => {
+      if (this.window !== win || !isMainFrame || isInPlace) return;
       if (this.ready) {
         this._applyVoiceState("idle");
         this._hide();
@@ -242,14 +246,17 @@ class AgentWindowManager {
     else this.pending = { channel, payload };
   }
 
-  async _show(targetPidPromise) {
+  async _show(resolveDisplay) {
     const win = this.window;
     if (win.isVisible()) {
       win.moveTop?.();
       return;
     }
+    // A KDE panel edit raises no display event, so Plasma is asked again on
+    // every show, as for the dictation pill; a change re-anchors the window.
+    void plasmaWorkAreas.refresh();
     const generation = this.showGeneration;
-    const display = await this.windowManager._resolveActiveDisplay(targetPidPromise);
+    const display = await resolveDisplay();
     if (this.window !== win || win.isDestroyed() || generation !== this.showGeneration) return;
     this._place(display);
     WindowPositionUtil.setupAlwaysOnTop(win);
@@ -261,8 +268,11 @@ class AgentWindowManager {
     const win = this.window;
     if (!win) return;
     this.showGeneration += 1;
-    this._setKeyboardFocus(false);
+    // Hidden before the keyboard is released: hiding hands focus back by
+    // itself, and a release first could raise another window (the dictation
+    // pill on Windows) or flash a remap on Linux.
     if (win.isVisible()) win.hide();
+    this._setKeyboardFocus(false);
     // Shrunk while hidden, so the next show never paints a stale modal frame.
     this.layout = "pill";
     if (this.anchor) this._applyBounds();
@@ -273,6 +283,9 @@ class AgentWindowManager {
     this.anchor = computeAgentAnchor({
       workArea: display.workArea || display.bounds,
       dictationBounds: this._centerDockedDictationBounds(display),
+      // Windows sends every click in the dictation window to it; elsewhere its
+      // transparent area lets clicks through.
+      wholeDictationWindowTakesClicks: this.platform === "win32",
     });
     this._applyBounds();
   }
@@ -294,12 +307,22 @@ class AgentWindowManager {
     return screen.getDisplayMatching(bounds).id === display.id ? bounds : null;
   }
 
+  // Displays as the dictation pill sees them: on KDE, each monitor's own work
+  // area (plasmaWorkAreas.js).
+  _cursorDisplay() {
+    return plasmaWorkAreas.resolve(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()));
+  }
+
+  // The window's display, or the cursor's when that one is gone.
+  _windowDisplay() {
+    const display = screen.getAllDisplays().find((candidate) => candidate.id === this.displayId);
+    return display ? plasmaWorkAreas.resolve(display) : this._cursorDisplay();
+  }
+
   _applyBounds() {
     const win = this.window;
     if (!win || !this.anchor) return;
-    const display =
-      screen.getAllDisplays().find((candidate) => candidate.id === this.displayId) ??
-      screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+    const display = this._windowDisplay();
     const bounds = computeAgentWindowBounds({
       anchor: this.anchor,
       layout: this.layout,
@@ -308,14 +331,10 @@ class AgentWindowManager {
     if (!sameBounds(win.getBounds(), bounds)) win.setBounds(bounds);
   }
 
-  // Displays changed: re-anchor on the window's display, or on the cursor's
-  // when that display is gone.
+  // Displays changed: re-anchor on the window's display.
   _refit() {
     if (!this.window || this.anchor === null) return;
-    const display =
-      screen.getAllDisplays().find((candidate) => candidate.id === this.displayId) ??
-      screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-    this._place(display);
+    this._place(this._windowDisplay());
   }
 
   // Keyboard mode asks for focus; voice mode hands it back to the app the user
@@ -340,8 +359,10 @@ class AgentWindowManager {
     if (!this.keyboardFocus) return;
     this.keyboardFocus = false;
     if (this.platform === "win32") {
-      // focus() activated OpenWhispr; blur first to hand the foreground back.
-      win.blur();
+      // focus() activated OpenWhispr; blur hands the foreground back. A window
+      // that no longer has it (hidden, or the user clicked away) must not
+      // blur: that can move the foreground while a press is copying a selection.
+      if (win.isFocused()) win.blur();
       win.setFocusable(false);
       return;
     }
