@@ -75,6 +75,8 @@ class AgentWindowManager {
   open({ layout = "typing" } = {}) {
     const windowManager = this.windowManager;
     if (windowManager._onboardingActive || windowManager.hotkeyManager.isInListeningMode()) return;
+    // The typing layout takes the keyboard, and with it a dictation's paste.
+    if (windowManager.isDictationActive()) return;
     this._ensureWindow();
     void this._show(async () => this._cursorDisplay());
     this._send("agent-window-open", { layout });

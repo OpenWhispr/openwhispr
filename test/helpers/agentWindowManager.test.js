@@ -382,6 +382,8 @@ test("the agent's take keeps dictation off the mic, and dictation keeps the agen
   assert.equal(manager.isRecording(), false);
   win.sent.length = 0;
   manager.handleHotkey();
+  // Ask assistant too: its typing layout would take the keyboard, and the paste.
+  manager.open();
   assert.deepEqual(win.sent, []);
 });
 

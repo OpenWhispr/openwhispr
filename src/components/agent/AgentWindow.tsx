@@ -309,6 +309,8 @@ export default function AgentWindow() {
     open: (layout) => {
       if (refuseIfRestricted()) return;
       setRefusal(null);
+      // Typing shows no take: what was said so far starts the draft, as Keyboard does.
+      if (listening) voice.stop("draft");
       openedByTakeRef.current = false;
       dispatch({ type: "show", layout, input: "keyboard" });
     },
