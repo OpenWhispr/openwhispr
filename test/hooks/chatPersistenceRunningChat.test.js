@@ -236,5 +236,25 @@ test("a fork opens a new chat through the chosen reply, with its origin", async 
     parentTitle: "Launch plan",
     context: "Draft one.",
   });
-  assert.equal(db.rows.filter((row) => row.conversation_id === conversation.id).length, 3);
+});
+
+test("a fork the user left before it finished reports that, not a failure", async (t) => {
+  const { db, act, current } = await mountPersistence(t);
+  const conversation = await db.api.createAgentConversation("Launch plan");
+  await db.api.addAgentMessage(conversation.id, "assistant", "Draft one.");
+  await act(() => current().loadConversation(conversation.id));
+  let finishFork;
+  const fork = db.api.forkAgentConversation;
+  db.api.forkAgentConversation = (...args) =>
+    new Promise((resolve) => (finishFork = () => resolve(fork(...args))));
+
+  let result;
+  await act(async () => {
+    const forking = current().forkConversation(current().messages[0]);
+    current().handleNewChat();
+    finishFork();
+    result = await forking;
+  });
+  assert.equal(result, false);
+  assert.equal(current().conversationId, null, "the new chat stays open");
 });

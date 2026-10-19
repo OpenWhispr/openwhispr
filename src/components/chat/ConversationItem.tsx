@@ -76,6 +76,7 @@ export default function ConversationItem({
               <GitFork
                 size={11}
                 className="shrink-0 text-muted-foreground/70"
+                role="img"
                 aria-label={t("chat.forked")}
               />
             )}

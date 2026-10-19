@@ -22,7 +22,17 @@ const CommandSearch = lazy(() => import("../CommandSearch"));
 
 const platform = getCachedPlatform();
 
-export default function ChatView() {
+interface ChatViewProps {
+  /**
+   * False while another Control Panel view shows. The chat stays mounted so a
+   * turn waiting on the user (a trip to Settings) survives.
+   */
+  active?: boolean;
+  /** Bumped to start a new chat from outside (the New chat menu). */
+  newChatRequest?: number;
+}
+
+export default function ChatView({ active = true, newChatRequest = 0 }: ChatViewProps) {
   const { t } = useTranslation();
   const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
   const [isNewChat, setIsNewChat] = useState(true);
@@ -128,12 +138,18 @@ export default function ChatView() {
   );
   useInterruptedInteractions(persistence, handleTextSubmit);
 
+  // Read through a ref, so the handler stays the same while a reply streams
+  // and every message's memo holds.
+  const messagesRef = useRef(persistence.messages);
+  messagesRef.current = persistence.messages;
+  const { forkConversation } = persistence;
   const handleForkMessage = useCallback(
     async (messageId: string) => {
-      const message = persistence.messages.find((m) => m.id === messageId);
+      const message = messagesRef.current.find((m) => m.id === messageId);
       if (!message) return;
       cancelStream();
-      const forkId = await persistence.forkConversation(message);
+      const forkId = await forkConversation(message);
+      if (forkId === false) return;
       if (forkId === null) {
         toast({ title: t("chat.forkFailed"), variant: "destructive" });
         return;
@@ -142,7 +158,7 @@ export default function ChatView() {
       setIsNewChat(false);
       setRefreshKey((k) => k + 1);
     },
-    [cancelStream, persistence, t, toast]
+    [cancelStream, forkConversation, t, toast]
   );
 
   const handleContinue = useCallback(() => {
@@ -179,6 +195,7 @@ export default function ChatView() {
   );
 
   useEffect(() => {
+    if (!active) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       const mod = platform === "darwin" ? e.metaKey : e.ctrlKey;
       if (mod && e.key === "n") {
@@ -188,7 +205,21 @@ export default function ChatView() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [startNewChat]);
+  }, [active, startNewChat]);
+
+  // Back from another view: chats may have been added meanwhile.
+  const wasActiveRef = useRef(active);
+  useEffect(() => {
+    if (active && !wasActiveRef.current) setRefreshKey((k) => k + 1);
+    wasActiveRef.current = active;
+  }, [active]);
+
+  const handledNewChatRequestRef = useRef(newChatRequest);
+  useEffect(() => {
+    if (newChatRequest === handledNewChatRequestRef.current) return;
+    handledNewChatRequestRef.current = newChatRequest;
+    startNewChat();
+  }, [newChatRequest, startNewChat]);
 
   return (
     <>

@@ -44,8 +44,14 @@ export interface ChatPersistence {
     toolCalls?: ToolCallInfo[],
     details?: Partial<TurnDetails>
   ) => Promise<void>;
-  /** A new chat with the history through a saved message; opens it and returns its id. */
-  forkConversation: (throughMessage: Message, forkContext?: string) => Promise<number | null>;
+  /**
+   * A new chat with the history through a saved message; opens it and returns
+   * its id. False when the user left for another chat first; null on failure.
+   */
+  forkConversation: (
+    throughMessage: Message,
+    forkContext?: string
+  ) => Promise<number | false | null>;
   handleNewChat: () => void;
 }
 
@@ -218,7 +224,8 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
         throughMessage.dbId,
         forkContext ?? null
       );
-      if (version !== sessionVersionRef.current || !fork) return null;
+      if (version !== sessionVersionRef.current) return false;
+      if (!fork) return null;
       showConversation(fork);
       return fork.id;
     },

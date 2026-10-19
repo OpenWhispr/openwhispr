@@ -149,6 +149,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const [showSearch, setShowSearch] = useState(false);
   const showDiscarded = useShowDiscarded();
   const [activeView, setActiveView] = useState<ControlPanelView>("home");
+  // The chat stays mounted once opened, so a turn waiting on the user survives
+  // a trip to another view (Integrations, from an open_settings card).
+  const [chatOpened, setChatOpened] = useState(false);
+  if (activeView === "chat" && !chatOpened) setChatOpened(true);
+  const [newChatRequest, setNewChatRequest] = useState(0);
   const [integrationsSection, setIntegrationsSection] = useState<IntegrationsSection>(
     DEFAULT_INTEGRATIONS_SECTION
   );
@@ -1120,7 +1125,14 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               actions={
                 <NewNoteMenu
                   onNewNote={handleNewNote}
-                  onNewChat={agentAllowedByPolicy ? () => setActiveView("chat") : undefined}
+                  onNewChat={
+                    agentAllowedByPolicy
+                      ? () => {
+                          setNewChatRequest((count) => count + 1);
+                          setActiveView("chat");
+                        }
+                      : undefined
+                  }
                 />
               }
             />
@@ -1267,10 +1279,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   />
                 </Suspense>
               )}
-              {activeView === "chat" && agentAllowedByPolicy && (
-                <Suspense fallback={null}>
-                  <ChatView />
-                </Suspense>
+              {chatOpened && agentAllowedByPolicy && (
+                <div className={activeView === "chat" ? "contents" : "hidden"}>
+                  <Suspense fallback={null}>
+                    <ChatView active={activeView === "chat"} newChatRequest={newChatRequest} />
+                  </Suspense>
+                </div>
               )}
               {activeView === "personal-notes" && (
                 <Suspense fallback={null}>
