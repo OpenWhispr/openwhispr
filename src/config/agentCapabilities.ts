@@ -1,5 +1,7 @@
 import { DOCS_ORIGIN } from "../helpers/productHelpFallback";
 import type { ConnectionTarget } from "../types/agentInteractions";
+import type { CalendarProvider } from "../utils/calendarConnect";
+import { getCachedPlatform } from "../utils/platform";
 
 /**
  * What the assistant can't do in this conversation, and why. Named in the
@@ -72,7 +74,10 @@ export const CONNECTOR_NAMES: Readonly<Record<string, string>> = {
 // the user's mail app) and the email_draft tool reports Gmail's own state.
 const CONNECTED_ONE_BY_ONE: ConnectionTarget[] = ["slack", "linear", "github"];
 
-/** What request_connection can connect, as the prompt and the cards name it. */
+/**
+ * What request_connection can connect, as the model reads it. Cards use these
+ * brand names too, but translate the generic calendar.
+ */
 export const CONNECTION_TARGET_NAMES: Readonly<Record<ConnectionTarget, string>> = {
   gmail: "Gmail",
   slack: CONNECTOR_NAMES.slack,
@@ -83,6 +88,13 @@ export const CONNECTION_TARGET_NAMES: Readonly<Record<ConnectionTarget, string>>
   apple: "Apple Calendar",
   calendar: "a calendar",
 };
+
+/** The calendar providers the chat can connect; Apple Calendar only on macOS. */
+export function calendarProviders(): CalendarProvider[] {
+  return getCachedPlatform() === "darwin"
+    ? ["google", "microsoft", "apple"]
+    : ["google", "microsoft"];
+}
 
 const CONNECTORS_NAME = `Integrations (${Object.values(CONNECTOR_NAMES).join(", ")})`;
 const GMAIL_TO_SEND =

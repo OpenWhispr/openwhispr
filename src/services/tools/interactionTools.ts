@@ -5,6 +5,7 @@ import { approvalKey } from "../../stores/connectorApprovalStore";
 import { SETTINGS_TARGETS } from "../../helpers/settingsTargets.js";
 import { CONNECTION_TARGET_NAMES } from "../../config/agentCapabilities";
 import { getProviderDisplayName } from "../../models/ModelRegistry";
+import { answerText, optionLabel } from "../../utils/interactionAnswers";
 import type {
   ConnectionTarget,
   InteractionPayload,
@@ -21,19 +22,6 @@ export interface InteractionToolOptions {
   /** A screenshot can reach the model answering this send. */
   screenAccess: boolean;
 }
-
-/**
- * The model providers whose key the agent may ask for: BYOK_API_KEYS bases
- * (config/secretKeys.js) with a `set<Provider>ApiKey` settings setter.
- */
-export const API_KEY_PROVIDERS = [
-  "openai",
-  "anthropic",
-  "gemini",
-  "groq",
-  "openrouter",
-  "tinfoil",
-] as const;
 
 const MAX_QUESTIONS = 4;
 const MAX_OPTIONS = 8;
@@ -142,15 +130,14 @@ function answerLabels(
   questions: readonly InteractionQuestion[],
   answers: Record<string, string | string[]>
 ): Record<string, string | string[]> {
-  const label = (question: InteractionQuestion, id: string) =>
-    question.options?.find((option) => option.id === id)?.label ?? id;
   return Object.fromEntries(
     questions.map((question) => {
       const answer = answers[question.id];
-      if (question.kind === "text") return [question.id, answer];
       return [
         question.id,
-        Array.isArray(answer) ? answer.map((id) => label(question, id)) : label(question, answer),
+        Array.isArray(answer)
+          ? answer.map((id) => optionLabel(question, id))
+          : optionLabel(question, answer),
       ];
     })
   );
@@ -198,26 +185,41 @@ const askUserTool: ToolDefinition = {
   },
   readOnly: true,
   promptInstruction:
-    "Use ask_user only when you can't reasonably decide something yourself from the request, the conversation or your tools, and a wrong guess would matter. Never ask for something a tool can look up; look it up first.",
+    "Use ask_user only when you can't reasonably decide something yourself from the request, the conversation or your tools, and a wrong guess would matter. Never ask for something a tool can look up; look it up first. Never ask the user to type or paste an API key, password or token into the chat.",
   async execute(args, context) {
     const questions = parseQuestions(args.questions);
     if (typeof questions === "string") return invalidResult(questions);
     if (!context) return noContextResult();
     const result = await requestInteraction(context, { kind: "questions", questions });
     if (result.status !== "answered") return unansweredResult(result);
-    const answers = answerLabels(questions, result.answers);
-    const answerLines = questions.map((question) => {
-      const answer = answers[question.id];
-      return `${question.prompt} ${Array.isArray(answer) ? answer.join(", ") : answer}`;
-    });
+    const answerLines = questions.map(
+      (question) => `${question.prompt} ${answerText(question, result.answers[question.id])}`
+    );
     return {
       success: true,
-      data: { status: "answered", answers },
+      data: { status: "answered", answers: answerLabels(questions, result.answers) },
       // The step reads "Answered" and expands to what the user chose.
       displayText: [i18n.t("agentMode.interactions.status.answered"), ...answerLines].join("\n"),
     };
   },
 };
+
+// Calls running in parallel that need the same service share one card, so one
+// connect flow runs and its answer reaches them all.
+const openConnections = new Map<ConnectionTarget, Promise<InteractionResult>>();
+
+function requestConnection(
+  context: ToolExecutionContext,
+  payload: Extract<InteractionPayload, { kind: "connection" }>
+): Promise<InteractionResult> {
+  const open = openConnections.get(payload.target);
+  if (open) return open;
+  const request = requestInteraction(context, payload).finally(() =>
+    openConnections.delete(payload.target)
+  );
+  openConnections.set(payload.target, request);
+  return request;
+}
 
 function createConnectionTool(targets: readonly ConnectionTarget[]): ToolDefinition {
   return {
@@ -247,7 +249,7 @@ function createConnectionTool(targets: readonly ConnectionTarget[]): ToolDefinit
       if (!target) return invalidResult(`target must be one of: ${targets.join(", ")}`);
       if (!context) return noContextResult();
       const reason = text(args.reason, MAX_REASON_CHARS);
-      const result = await requestInteraction(context, {
+      const result = await requestConnection(context, {
         kind: "connection",
         target,
         ...(reason ? { reason } : {}),
@@ -320,7 +322,7 @@ function createApiKeyTool(providers: readonly string[]): ToolDefinition {
     },
     readOnly: false,
     promptInstruction:
-      "Never ask the user to type or paste an API key or password into the chat; use request_api_key, which saves it without you seeing it.",
+      "When the user wants to use a model provider's API key they haven't added, use request_api_key: it saves the key without you seeing it.",
     async execute(args, context) {
       const provider = providers.find((candidate) => candidate === args.provider);
       if (!provider) return invalidResult(`provider must be one of: ${providers.join(", ")}`);
@@ -421,7 +423,7 @@ export function requireConnection(
     async execute(args, context?: ToolExecutionContext) {
       if (!isReady()) {
         const result = context
-          ? await requestInteraction(context, { kind: "connection", target })
+          ? await requestConnection(context, { kind: "connection", target })
           : ({ status: "unavailable", reason: "not_connected" } as const);
         if (result.status !== "connected") return unansweredResult(result);
       }

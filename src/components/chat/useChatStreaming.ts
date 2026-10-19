@@ -34,7 +34,7 @@ import {
   appendScreenContextSuffix,
   getAgentSystemPrompt,
 } from "../../config/prompts";
-import { resolveUnavailableCapabilities } from "../../config/agentCapabilities";
+import { calendarProviders, resolveUnavailableCapabilities } from "../../config/agentCapabilities";
 import type { ToneAppCategory } from "../../config/toneStyle";
 import { getDictionaryHintWords } from "../../utils/snippets";
 import { noteAttendeesContext, withoutAttendeesFence } from "../../utils/noteAttendees";
@@ -47,12 +47,9 @@ import {
 } from "../../services/tools/ToolRegistry";
 import { createToolExecutionScope, type ToolExecutionScope } from "./toolExecutionScope";
 import { isQueryResultData } from "../../services/tools/connectors/runQueryAction";
-import {
-  API_KEY_PROVIDERS,
-  type InteractionToolOptions,
-} from "../../services/tools/interactionTools";
+import type { InteractionToolOptions } from "../../services/tools/interactionTools";
+import { API_KEY_PROVIDERS } from "../../stores/agentInteractionStore";
 import { getAgentToolActivityRemainingMs } from "../../helpers/agentToolPresentation";
-import { getCachedPlatform } from "../../utils/platform";
 import type { ConnectionTarget } from "../../types/agentInteractions";
 import type {
   Message,
@@ -107,8 +104,7 @@ function connectionTargets(
       })
     : [];
   if (!calendarConnected) {
-    targets.push("calendar", "google", "microsoft");
-    if (getCachedPlatform() === "darwin") targets.push("apple");
+    targets.push("calendar", ...calendarProviders());
   }
   return targets;
 }

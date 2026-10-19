@@ -15,11 +15,26 @@ import {
   refreshConnectorStatus,
 } from "./connectorStatusStore";
 import type { CalendarProvider } from "../utils/calendarConnect";
+import type { SettingsState } from "./settingsStore";
 import { getCachedPlatform } from "../utils/platform";
 
 // Every surface that renders a card imports this store, and the settings
 // store brings the app's i18n setup with it, so it loads only when used.
 const loadSettingsStore = () => import("./settingsStore");
+
+// The model providers whose key the agent may ask for (BYOK_API_KEYS bases in
+// config/secretKeys.js), with the setter that saves each one securely.
+const API_KEY_SETTERS = {
+  openai: "setOpenaiApiKey",
+  anthropic: "setAnthropicApiKey",
+  gemini: "setGeminiApiKey",
+  groq: "setGroqApiKey",
+  openrouter: "setOpenrouterApiKey",
+  tinfoil: "setTinfoilApiKey",
+} as const satisfies Record<string, keyof SettingsState>;
+
+export type ApiKeyProvider = keyof typeof API_KEY_SETTERS;
+export const API_KEY_PROVIDERS = Object.keys(API_KEY_SETTERS) as ApiKeyProvider[];
 
 /** Same as an approval card: a question nobody answers stops holding the turn. */
 export const INTERACTION_TTL_MS = APPROVAL_TTL_MS;
@@ -196,6 +211,14 @@ function completeAnswers(
   return answers;
 }
 
+/** Whether a questions card's draft answers every question, so it can be submitted. */
+export function answersComplete(
+  questions: readonly InteractionQuestion[],
+  draft: InteractionAnswers
+): boolean {
+  return completeAnswers(questions, draft) !== null;
+}
+
 /** Submits the card's draft once every question has an answer. */
 export function answerQuestions(key: string): boolean {
   const entry = entryFor(key);
@@ -315,14 +338,6 @@ export function takeGrantedImage(key: string): ChatImageAttachment | undefined {
   return image;
 }
 
-// The settings setter for a BYOK key: storeKey `<provider>ApiKey`, setter `set<Provider>ApiKey`.
-async function apiKeySetter(provider: string): Promise<((key: string) => void) | undefined> {
-  const { useSettingsStore } = await loadSettingsStore();
-  const name = `set${provider.charAt(0).toUpperCase()}${provider.slice(1)}ApiKey`;
-  const setter = (useSettingsStore.getState() as unknown as Record<string, unknown>)[name];
-  return typeof setter === "function" ? (setter as (key: string) => void) : undefined;
-}
-
 /**
  * Hands a key straight to the secure settings saver. The value never enters
  * the entry, the result or the conversation: the model only learns it was saved.
@@ -331,10 +346,11 @@ export async function submitApiKey(key: string, value: string): Promise<void> {
   const entry = entryFor(key);
   if (entry?.state !== "pending" || entry.payload.kind !== "apiKey") return;
   const secret = value.trim();
-  if (!secret) return;
-  const save = await apiKeySetter(entry.payload.provider);
-  if (!save || !isOpen(key)) return;
-  save(secret);
+  const { provider } = entry.payload;
+  if (!secret || !Object.hasOwn(API_KEY_SETTERS, provider)) return;
+  const { useSettingsStore } = await loadSettingsStore();
+  if (!isOpen(key)) return;
+  useSettingsStore.getState()[API_KEY_SETTERS[provider as ApiKeyProvider]](secret);
   settle(key, { status: "saved" });
 }
 

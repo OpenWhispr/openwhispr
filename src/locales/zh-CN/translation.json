@@ -3961,7 +3961,8 @@
         "connect": "连接 {{name}}",
         "connecting": "请在浏览器中完成连接…",
         "failed": "无法连接，请重试。",
-        "permissionDenied": "日历访问被拒绝。请在系统设置中允许后重试。"
+        "permissionDenied": "日历访问被拒绝。请在系统设置中允许后重试。",
+        "calendarTitle": "连接日历"
       },
       "access": {
         "screen": "允许访问你的屏幕吗？",

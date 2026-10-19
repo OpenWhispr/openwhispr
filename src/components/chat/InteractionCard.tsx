@@ -1,10 +1,11 @@
-import { useState, type ReactElement } from "react";
+import { useState, type KeyboardEvent, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { GithubDeviceCode } from "../connectors/GithubDeviceCode";
 import {
   answerQuestions,
+  answersComplete,
   cancelInteraction,
   confirmSettingsDone,
   connectInteraction,
@@ -14,15 +15,16 @@ import {
   updateInteractionDraft,
   type InteractionEntry,
 } from "../../stores/agentInteractionStore";
-import { CONNECTION_TARGET_NAMES } from "../../config/agentCapabilities";
-import { getCachedPlatform } from "../../utils/platform";
+import { CONNECTION_TARGET_NAMES, calendarProviders } from "../../config/agentCapabilities";
 import type { CalendarProvider } from "../../utils/calendarConnect";
 
 const CARD_CLASS = "my-1.5 rounded-lg border border-border/70 bg-surface-2/60 p-3 text-[13px]";
 
-// Apple Calendar connects only on macOS.
-const calendarProviders = (): CalendarProvider[] =>
-  getCachedPlatform() === "darwin" ? ["google", "microsoft", "apple"] : ["google", "microsoft"];
+// Esc in a field must not reach the assistant panel, whose Esc cancels the
+// whole turn and withdraws the card.
+const keepEscape = (event: KeyboardEvent<HTMLInputElement>): void => {
+  if (event.key === "Escape") event.stopPropagation();
+};
 
 function Questions({ entry }: { entry: InteractionEntry }): ReactElement | null {
   const { t } = useTranslation();
@@ -53,6 +55,7 @@ function Questions({ entry }: { entry: InteractionEntry }): ReactElement | null 
                   question.placeholder ?? t("agentMode.interactions.questions.placeholder")
                 }
                 onChange={(event) => set(question.id, event.target.value)}
+                onKeyDown={keepEscape}
               />
             ) : (
               question.options?.map((option) => {
@@ -90,7 +93,7 @@ function Questions({ entry }: { entry: InteractionEntry }): ReactElement | null 
         );
       })}
       <div className="flex gap-2">
-        <Button size="sm" type="submit">
+        <Button size="sm" type="submit" disabled={!answersComplete(questions, entry.draft)}>
           {t("agentMode.interactions.questions.submit")}
         </Button>
         <Button
@@ -108,14 +111,20 @@ function Questions({ entry }: { entry: InteractionEntry }): ReactElement | null 
 
 function Connection({ entry }: { entry: InteractionEntry }): ReactElement | null {
   const { t } = useTranslation();
+  // The calendar picked on a "connect a calendar" card.
+  const [connecting, setConnecting] = useState<CalendarProvider>();
   if (entry.payload.kind !== "connection") return null;
   const { target, reason } = entry.payload;
   const working = entry.state === "working";
   const providers = target === "calendar" ? calendarProviders() : [undefined];
+  // Apple Calendar asks for macOS permission; the others finish in the browser.
+  const inBrowser = (connecting ?? target) !== "apple";
   return (
     <>
       <p className="font-medium text-foreground">
-        {t("agentMode.interactions.connection.title", { name: CONNECTION_TARGET_NAMES[target] })}
+        {target === "calendar"
+          ? t("agentMode.interactions.connection.calendarTitle")
+          : t("agentMode.interactions.connection.title", { name: CONNECTION_TARGET_NAMES[target] })}
       </p>
       {reason && (
         <p className="text-xs text-muted-foreground" dir="auto">
@@ -124,7 +133,7 @@ function Connection({ entry }: { entry: InteractionEntry }): ReactElement | null
       )}
       {working && target === "github" && <GithubDeviceCode connectorId="github" />}
       <div role="status" className="text-xs">
-        {working && (
+        {working && inBrowser && (
           <p className="mt-2 text-muted-foreground">
             {t("agentMode.interactions.connection.connecting")}
           </p>
@@ -145,7 +154,10 @@ function Connection({ entry }: { entry: InteractionEntry }): ReactElement | null
             <Button
               key={provider ?? target}
               size="sm"
-              onClick={() => void connectInteraction(entry.key, provider)}
+              onClick={() => {
+                setConnecting(provider);
+                void connectInteraction(entry.key, provider);
+              }}
             >
               {t("agentMode.interactions.connection.connect", {
                 name: CONNECTION_TARGET_NAMES[provider ?? target],
@@ -216,6 +228,7 @@ function ApiKey({ entry }: { entry: InteractionEntry }): ReactElement | null {
         placeholder={t("agentMode.interactions.apiKey.placeholder")}
         aria-label={t("agentMode.interactions.apiKey.placeholder")}
         onChange={(event) => setValue(event.target.value)}
+        onKeyDown={keepEscape}
       />
       <div className="mt-2 flex gap-2">
         <Button size="sm" type="submit" disabled={!value.trim()}>

@@ -3961,7 +3961,8 @@
         "connect": "Connetti {{name}}",
         "connecting": "Completa la connessione nel browser…",
         "failed": "Impossibile connettersi. Riprova.",
-        "permissionDenied": "L'accesso al calendario è stato negato. Consentilo nelle Impostazioni di Sistema e riprova."
+        "permissionDenied": "L'accesso al calendario è stato negato. Consentilo nelle Impostazioni di Sistema e riprova.",
+        "calendarTitle": "Connetti un calendario"
       },
       "access": {
         "screen": "Consentire l'accesso allo schermo?",

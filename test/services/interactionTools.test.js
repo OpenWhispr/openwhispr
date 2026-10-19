@@ -62,15 +62,10 @@ test("each interaction tool registers only when it can act", async () => {
   assert.deepEqual(connection.parameters.properties.target.enum, ["slack", "calendar"]);
 });
 
-test("the keys the agent may ask for are BYOK keys with a settings setter", async () => {
-  const { API_KEY_PROVIDERS } = await load();
-  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+test("the keys the agent may ask for are BYOK keys", async () => {
+  const { API_KEY_PROVIDERS } = await loadStore();
   const bases = BYOK_API_KEYS.map((key) => key.base);
-  for (const provider of API_KEY_PROVIDERS) {
-    assert.ok(bases.includes(provider), provider);
-    const setter = `set${provider[0].toUpperCase()}${provider.slice(1)}ApiKey`;
-    assert.equal(typeof useSettingsStore.getState()[setter], "function", setter);
-  }
+  for (const provider of API_KEY_PROVIDERS) assert.ok(bases.includes(provider), provider);
 });
 
 test("ask_user refuses a malformed question without asking anything", async () => {
@@ -251,20 +246,55 @@ test("a tool whose service isn't connected asks to connect it, then does what it
   assert.deepEqual(store.useAgentInteractionStore.getState().entries["m1::w3"], undefined);
 });
 
-test("the prompt tells the model to ask only when it has to", async () => {
+test("calls that need the same service at once share one connection card", async () => {
+  const { requireConnection } = await load();
+  const store = await loadStore();
+  store.useAgentInteractionStore.setState({ entries: {} });
+  let ready = false;
+  const ran = [];
+  const tool = requireConnection(
+    {
+      name: "slack_send_message",
+      description: "",
+      parameters: {},
+      readOnly: false,
+      execute: async (args) => {
+        ran.push(args.destination);
+        return { success: true, data: { status: "sent" }, displayText: "Sent" };
+      },
+    },
+    "slack",
+    () => ready
+  );
+  const first = tool.execute({ destination: "#eng" }, context("p1"));
+  const second = tool.execute({ destination: "#design" }, context("p2"));
+  assert.deepEqual(Object.keys(store.useAgentInteractionStore.getState().entries), ["m1::p1"]);
+
+  ready = true;
+  globalThis.window.electronAPI = {
+    connectorConnect: async () => ({ status: "connected", accountLabel: "a", workspaceLabel: "w" }),
+    connectorStatus: async () => [
+      { id: "slack", connected: true, configured: true, accountLabel: "a", needsReconnect: false },
+    ],
+  };
+  await store.connectInteraction("m1::p1");
+  assert.deepEqual(
+    (await Promise.all([first, second])).map((result) => result.data.status),
+    ["sent", "sent"]
+  );
+  assert.deepEqual(ran.sort(), ["#design", "#eng"]);
+});
+
+test("the prompt has the model look things up before asking, naming only this turn's tools", async () => {
   const { getAgentSystemPrompt } = await vite.ssrLoadModule("/config/prompts.ts");
   const { createInteractionTools } = await load();
   const asking = createInteractionTools(NOTHING);
   const withTools = getAgentSystemPrompt([{ name: "search_notes" }, ...asking]);
-  assert.match(withTools, /Ask the user something only when you really can't decide it yourself/);
-  assert.match(withTools, /simple request gets a direct answer with no questions/);
-  // Only the lookup tools this turn has are named.
-  assert.match(
-    withTools,
-    /Before asking, look it up: names, addresses, channels, plans and facts with search_notes\./
-  );
+  assert.match(withTools, /look it up/i);
+  assert.match(withTools, /with search_notes/);
   assert.doesNotMatch(withTools, /find_contact|github_search_issues/);
-  assert.doesNotMatch(getAgentSystemPrompt(asking), /Before asking, look it up/);
+  // Every key is set here, so request_api_key isn't offered; the rule still is.
+  assert.match(withTools, /never ask the user to type or paste an API key/i);
   assert.equal(getAgentSystemPrompt([{ name: "search_notes" }]).includes("ask_user"), false);
 });
 

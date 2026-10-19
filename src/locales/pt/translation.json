@@ -3961,7 +3961,8 @@
         "connect": "Conectar {{name}}",
         "connecting": "Conclua a conexão no navegador…",
         "failed": "Não foi possível conectar. Tente novamente.",
-        "permissionDenied": "O acesso ao calendário foi negado. Permita-o nos Ajustes do Sistema e tente novamente."
+        "permissionDenied": "O acesso ao calendário foi negado. Permita-o nos Ajustes do Sistema e tente novamente.",
+        "calendarTitle": "Conectar um calendário"
       },
       "access": {
         "screen": "Permitir acesso à sua tela?",

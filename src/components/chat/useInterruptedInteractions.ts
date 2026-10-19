@@ -11,6 +11,7 @@ import { CONNECTION_TARGET_NAMES } from "../../config/agentCapabilities";
 import type { InteractionPayload, InteractionResult } from "../../types/agentInteractions";
 import type { ChatPersistence } from "./useChatPersistence";
 import type { SendToAIOptions } from "./useChatStreaming";
+import { answerText } from "../../utils/interactionAnswers";
 
 // The request that continues the task: what the user answered, as they would
 // say it. A dismissal starts no turn.
@@ -23,12 +24,9 @@ function followUpText(
     case "answered":
       if (payload.kind !== "questions") return null;
       return payload.questions
-        .map((question) => {
-          const answer = result.answers[question.id];
-          const label = (id: string) =>
-            question.options?.find((option) => option.id === id)?.label ?? id;
-          return `${question.prompt}\n${Array.isArray(answer) ? answer.map(label).join(", ") : label(answer)}`;
-        })
+        .map(
+          (question) => `${question.prompt}\n${answerText(question, result.answers[question.id])}`
+        )
         .join("\n\n");
     case "connected":
       return t("agentMode.interactions.followUp.connected", {

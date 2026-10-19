@@ -1,6 +1,7 @@
 import type { Message, ToolCallInfo } from "./types";
 import type { InteractionRecord } from "../../types/agentInteractions";
 import { buildAgentRequestText } from "../../utils/agentSelectionContext";
+import { answerText } from "../../utils/interactionAnswers";
 
 export interface HistoryMessage {
   role: string;
@@ -109,9 +110,7 @@ function interactionTrace({ payload, state, result }: InteractionRecord): {
     };
   }
   const answered = payload.questions.map((question) => {
-    const answer = result.answers[question.id];
-    const label = (id: string) => question.options?.find((option) => option.id === id)?.label ?? id;
-    const text = Array.isArray(answer) ? answer.map(label).join(", ") : label(answer ?? "");
+    const text = answerText(question, result.answers[question.id]);
     return `${traceText(question.prompt)} → ${traceText(text) ?? "nothing chosen"}`;
   });
   return { arg: answered.join("; "), outcome: "answered" };

@@ -4131,7 +4131,8 @@
         "connect": "Connect {{name}}",
         "connecting": "Finish connecting in your browser…",
         "failed": "Couldn't connect. Try again.",
-        "permissionDenied": "Calendar access was denied. Allow it in System Settings, then try again."
+        "permissionDenied": "Calendar access was denied. Allow it in System Settings, then try again.",
+        "calendarTitle": "Connect a calendar"
       },
       "access": {
         "screen": "Allow access to your screen?",

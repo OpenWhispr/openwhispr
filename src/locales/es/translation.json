@@ -4013,7 +4013,8 @@
         "connect": "Conectar {{name}}",
         "connecting": "Termina de conectar en tu navegador…",
         "failed": "No se pudo conectar. Inténtalo de nuevo.",
-        "permissionDenied": "Se denegó el acceso al calendario. Permítelo en Ajustes del Sistema e inténtalo de nuevo."
+        "permissionDenied": "Se denegó el acceso al calendario. Permítelo en Ajustes del Sistema e inténtalo de nuevo.",
+        "calendarTitle": "Conectar un calendario"
       },
       "access": {
         "screen": "¿Permitir el acceso a tu pantalla?",

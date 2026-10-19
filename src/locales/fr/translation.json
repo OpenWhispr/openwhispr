@@ -4131,7 +4131,8 @@
         "connect": "Connecter {{name}}",
         "connecting": "Terminez la connexion dans votre navigateur…",
         "failed": "Connexion impossible. Réessayez.",
-        "permissionDenied": "L'accès au calendrier a été refusé. Autorisez-le dans les Réglages Système, puis réessayez."
+        "permissionDenied": "L'accès au calendrier a été refusé. Autorisez-le dans les Réglages Système, puis réessayez.",
+        "calendarTitle": "Connecter un calendrier"
       },
       "access": {
         "screen": "Autoriser l'accès à votre écran ?",

@@ -3961,7 +3961,8 @@
         "connect": "連結 {{name}}",
         "connecting": "請在瀏覽器中完成連結…",
         "failed": "無法連結，請再試一次。",
-        "permissionDenied": "行事曆存取遭拒。請在系統設定中允許後再試一次。"
+        "permissionDenied": "行事曆存取遭拒。請在系統設定中允許後再試一次。",
+        "calendarTitle": "連結日曆"
       },
       "access": {
         "screen": "允許存取你的螢幕嗎？",
