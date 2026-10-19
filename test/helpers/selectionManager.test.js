@@ -902,7 +902,7 @@ test("a Linux session revalidation declines when focus moved during the modifier
   const target = { kind: "kde-window", id: "7", windowClass: "kate" };
   const other = { kind: "kde-window", id: "9", windowClass: "konsole" };
   manager._getLinuxTarget = async () => (++targetReads % 2 === 0 ? other : target);
-  manager.sessions.set("edit", { kind: "selection", text: "old", target, expiresAt: 2000 });
+  manager.sessions.set("edit", { text: "old", target, expiresAt: 2000 });
 
   assert.deepEqual(await manager.replaceSelectedText("edit", "new"), {
     success: false,
