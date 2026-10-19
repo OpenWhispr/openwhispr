@@ -3945,7 +3945,8 @@
       "stopped": "停止しました",
       "stepLimit": "ステップ数の上限に達したため一時停止しました。",
       "continue": "続ける",
-      "continueMessage": "続けて"
+      "continueMessage": "続けて",
+      "failed": "この返信は失敗しました。"
     },
     "interactions": {
       "notNow": "今はしない",

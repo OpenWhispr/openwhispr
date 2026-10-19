@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import type { AssistantTurn, Message, ToolCallInfo } from "./types";
+import type { AssistantTurn, AssistantTurnStatus, Message, ToolCallInfo } from "./types";
 import type { TurnDetails } from "./useChatStreaming";
 import type { ContainerScope } from "../../types/chat";
 import type { AgentConversationWithMessages, AgentMessageRow } from "../../types/electron";
@@ -183,8 +183,11 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
         savedRowsRef.current.get(messageId) ??
         Promise.resolve(messagesRef.current.find((m) => m.id === messageId)?.dbId ?? null);
       const saving = savedRow.then(async (rowId) => {
-        if (rowId != null) {
-          await window.electronAPI?.updateAgentMessage?.(rowId, content, metadata);
+        // A cloud pull can replace the rows, and the old id with them; the reply is then added again.
+        if (
+          rowId != null &&
+          (await window.electronAPI?.updateAgentMessage?.(rowId, content, metadata))
+        ) {
           return rowId;
         }
         const row = await window.electronAPI?.addAgentMessage?.(
@@ -245,26 +248,27 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
   };
 }
 
-// A reply saved while it waited, whose wait ended with the app or the chat
-// view, can still be answered: it loads as interrupted.
-function interruptedIfWaiting(
-  turn: AssistantTurn | undefined,
-  toolCalls: ToolCallInfo[] | undefined
-) {
-  if (turn?.status !== "waiting") return { turn, toolCalls };
+// Nothing saved is still running once it loads. A reply saved while it
+// waited, whose wait ended with the app or the chat view, can still be
+// answered: it loads as interrupted. One saved mid-turn (the app quit after
+// an answer) loads as stopped, and so does every call it had running.
+function settledOnLoad(turn: AssistantTurn | undefined, toolCalls: ToolCallInfo[] | undefined) {
+  const status: AssistantTurnStatus | null =
+    turn?.status === "waiting" ? "interrupted" : turn?.status === "running" ? "stopped" : null;
   return {
-    turn: { ...turn, status: "interrupted" as const },
-    toolCalls: toolCalls?.map((call) =>
-      call.interaction?.state === "pending"
-        ? { ...call, interaction: { ...call.interaction, state: "interrupted" as const } }
-        : call
-    ),
+    turn: turn && status ? { ...turn, status } : turn,
+    toolCalls: toolCalls?.map((call): ToolCallInfo => {
+      if (call.status !== "executing") return call;
+      return call.interaction?.state === "pending"
+        ? { ...call, status: "stopped", interaction: { ...call.interaction, state: "interrupted" } }
+        : { ...call, status: "stopped" };
+    }),
   };
 }
 
 function messageFromRow(row: AgentMessageRow): Message {
   const metadata = row.metadata ? tryParseMetadata(row.metadata) : undefined;
-  const { turn, toolCalls } = interruptedIfWaiting(
+  const { turn, toolCalls } = settledOnLoad(
     metadata?.turn as AssistantTurn | undefined,
     metadata?.toolCalls as ToolCallInfo[] | undefined
   );

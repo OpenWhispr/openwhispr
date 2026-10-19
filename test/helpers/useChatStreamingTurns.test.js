@@ -112,7 +112,7 @@ async function renderChatStreaming(
 const toolOptions = (toolCallId) => ({ toolCallId, messages: [] });
 
 test("a turn records when it ran, how it ended, its reasoning and each step", async (t) => {
-  const harness = await renderChatStreaming(t);
+  const harness = await renderChatStreaming(t, { allowInteractions: true });
   harness.setStream(() =>
     (async function* () {
       yield { type: "reasoning", text: "Check the notes " };
@@ -147,8 +147,37 @@ test("a turn records when it ran, how it ended, its reasoning and each step", as
   assert.equal(harness.assistant().turn.status, "complete");
 });
 
-test("a run stopped by the step cap is marked so the user can continue it", async (t) => {
+test("other chats show and save a reply as before: no turn notes, no reasoning", async (t) => {
   const harness = await renderChatStreaming(t);
+  harness.setStream(() =>
+    (async function* () {
+      yield { type: "reasoning", text: "Thinking it over." };
+      yield { type: "content", text: "Done." };
+      yield { type: "done", finishReason: "tool-calls" };
+    })()
+  );
+  await harness.captured.sendToAI("Go", []);
+  const [[, content, , details]] = harness.completed;
+  assert.equal(content, "Done.");
+  assert.equal(details.turn, undefined);
+  assert.equal(harness.assistant().turn, undefined);
+});
+
+test("long reasoning is cut before it is saved", async (t) => {
+  const harness = await renderChatStreaming(t, { allowInteractions: true });
+  harness.setStream(() =>
+    (async function* () {
+      yield { type: "reasoning", text: "x".repeat(25_000) };
+      yield { type: "content", text: "Done." };
+      yield { type: "done", finishReason: "stop" };
+    })()
+  );
+  await harness.captured.sendToAI("Go", []);
+  assert.equal(harness.completed[0][3].turn.reasoning.length, 20_001);
+});
+
+test("a run stopped by the step cap is marked so the user can continue it", async (t) => {
+  const harness = await renderChatStreaming(t, { allowInteractions: true });
   harness.setStream(() =>
     (async function* () {
       yield { type: "tool_calls", calls: [{ id: "c1", name: "search_notes", arguments: "{}" }] };
@@ -234,6 +263,31 @@ test("Stop while a question waits keeps the reply, marked stopped, and dismisses
   assert.equal(content, "I need one detail.");
   assert.equal(details.turn.status, "stopped");
   assert.deepEqual(toolCalls[0].interaction.result, { status: "cancelled" });
+  assert.equal(toolCalls[0].status, "stopped", "never a step stuck asking");
+});
+
+test("a tool still running at Stop ends stopped, and may still have acted", async (t) => {
+  const harness = await renderChatStreaming(t, { allowInteractions: true });
+  const reasoningService = (await harness.vite.ssrLoadModule("/services/ReasoningService.ts"))
+    .default;
+  let endStream;
+  const streamEnded = new Promise((resolve) => (endStream = resolve));
+  t.mock.method(reasoningService, "cancelActiveStream", () => endStream());
+  const { toolTrace } = await harness.vite.ssrLoadModule("/components/chat/historyMessages.ts");
+  harness.setStream(() =>
+    (async function* () {
+      yield { type: "tool_calls", calls: [{ id: "w1", name: "web_search", arguments: "{}" }] };
+      await streamEnded;
+    })()
+  );
+  const sending = harness.captured.sendToAI("Look it up", []);
+  await new Promise((resolve) => setImmediate(resolve));
+  harness.captured.cancelStream();
+  await sending;
+
+  const [[, , toolCalls]] = harness.completed;
+  assert.equal(toolCalls[0].status, "stopped");
+  assert.equal(toolTrace(toolCalls), "[Tools used: web_search (outcome not recorded)]");
 });
 
 test("a send an earlier request made shows its card again, saying so", async (t) => {
@@ -372,6 +426,8 @@ test("a send that went out is keyed on its tool call, for later turns", async (t
   );
   await harness.captured.sendToAI("Post hi to #eng", []);
   assert.match(harness.completed[0][2][0].actionKey, /^slack\.send_message:/);
+  // Saved the moment it was sent, before the turn ended.
+  assert.match(harness.checkpoints[0][2][0].actionKey, /^slack\.send_message:/);
 });
 
 test("a send that lands after Stop is saved with the stopped reply", async (t) => {
@@ -494,7 +550,11 @@ test("a surface that doesn't show interactions never offers them", async (t) => 
 });
 
 test("the cloud path marks a run that ran out of steps too", async (t) => {
-  const harness = await renderChatStreaming(t, {}, { settings: { chatAgentMode: "openwhispr" } });
+  const harness = await renderChatStreaming(
+    t,
+    { allowInteractions: true },
+    { settings: { chatAgentMode: "openwhispr" } }
+  );
   harness.setStream(() =>
     (async function* () {
       yield { type: "content", text: "Partial" };

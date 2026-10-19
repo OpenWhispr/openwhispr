@@ -4115,7 +4115,8 @@
       "stopped": "Angehalten",
       "stepLimit": "Nach der maximalen Anzahl von Schritten pausiert.",
       "continue": "Fortfahren",
-      "continueMessage": "Mach weiter"
+      "continueMessage": "Mach weiter",
+      "failed": "Diese Antwort ist fehlgeschlagen."
     },
     "interactions": {
       "notNow": "Nicht jetzt",

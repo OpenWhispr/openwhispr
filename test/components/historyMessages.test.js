@@ -366,7 +366,7 @@ test("a question nobody answered is noted as still open, and a dismissal as one"
   );
 });
 
-test("a saved API key is traced as saved, and its value never appears", async () => {
+test("a saved API key is traced as saved", async () => {
   const { toHistoryMessages } = await load();
   const saved = call(
     "request_api_key",
@@ -439,5 +439,22 @@ test("a tool that asked to connect first is traced by what it then did", async (
   assert.equal(
     toolTrace([sent, cutOff]),
     "[Tools used: slack_send_message (sent), slack_send_message (outcome not recorded)]"
+  );
+});
+
+test("a failed reply with nothing in it stays out of the history; one whose tools acted is traced", async () => {
+  const { toHistoryMessages } = await load();
+  const failed = { ...assistant("", undefined), turn: { startedAt: 1, status: "error" } };
+  const actedThenFailed = {
+    ...assistant("", [call("slack_send_message", {}, { metadata: { status: "sent" } })]),
+    turn: { startedAt: 1, status: "error" },
+  };
+  const history = toHistoryMessages(
+    [{ id: "u1", role: "user", content: "Hi", isStreaming: false }, failed, actedThenFailed],
+    { includeToolTrace: true }
+  );
+  assert.deepEqual(
+    history.map((m) => m.content),
+    ["Hi", "[Tools used: slack_send_message (sent)]\n\n"]
   );
 });

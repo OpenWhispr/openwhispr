@@ -56,6 +56,7 @@ import { getCachedPlatform } from "../../utils/platform";
 import type { ConnectionTarget } from "../../types/agentInteractions";
 import type {
   Message,
+  MessageError,
   AgentState,
   AssistantTurn,
   ChatImageAttachment,
@@ -77,6 +78,7 @@ import {
 const RAG_NOTE_LIMIT = 5;
 const RAG_NOTE_SNIPPET_LENGTH = 500;
 const STREAM_FLUSH_INTERVAL_MS = 32;
+const MAX_SAVED_REASONING_CHARS = 20_000;
 
 const LOCAL_TOOL_MIN_PARAMS_B = 4;
 
@@ -188,8 +190,10 @@ interface UseChatStreamingOptions {
   /** Optional container scope applied to RAG and the search_notes tool (container overview chat). */
   searchScope?: ContainerScope;
   /**
-   * Offer the interaction tools (questions, connect cards, access, keys,
-   * settings). Only on surfaces that render them and save a waiting turn.
+   * The agent chat: offer the interaction tools (questions, connect cards,
+   * access, keys, settings), show and save each turn's notes (status, timing,
+   * reasoning), and keep a stopped reply. Only on surfaces that render them;
+   * other chats show and save replies as they always have.
    */
   allowInteractions?: boolean;
   /**
@@ -223,7 +227,8 @@ interface UseChatStreamingOptions {
 
 /** What a saved turn needs besides its text and tool calls. */
 export interface TurnDetails {
-  turn: AssistantTurn;
+  /** Agent chat only (allowInteractions). */
+  turn?: AssistantTurn;
   /** The conversation the turn ran in, so a turn that ends after a switch saves there. */
   conversationId?: number;
 }
@@ -240,7 +245,7 @@ export interface SendToAIOptions {
   conversationId?: number;
   /** Screenshot for this message; attached only when the resolved model can see it. */
   attachment?: ChatImageAttachment;
-  /** Agent-response selection attached to this request without changing chat history. */
+  /** The selected text this request is about; saved with the user message and quoted again later. */
   selectedContext?: AgentSelectionContext;
   /**
    * Sent to the model in place of this turn's visible message, which is what the
@@ -715,7 +720,18 @@ export function useChatStreaming({
         // A tool may report before the stream shows its call (it can ask the
         // user at once), so what it reports waits here for the call.
         const annotations = new Map<string, Partial<ToolCallInfo>>();
-        const currentTurn = (): AssistantTurn => (reasoning ? { ...turn, reasoning } : turn);
+        const currentTurn = (): AssistantTurn | undefined => {
+          if (!allowInteractions) return undefined;
+          if (!reasoning) return turn;
+          // Saved again at every checkpoint, so a long one is cut.
+          return {
+            ...turn,
+            reasoning:
+              reasoning.length > MAX_SAVED_REASONING_CHARS
+                ? `${reasoning.slice(0, MAX_SAVED_REASONING_CHARS)}…`
+                : reasoning,
+          };
+        };
         const currentToolCalls = (): ToolCallInfo[] | undefined =>
           toolCalls.length > 0 ? toolCalls : undefined;
         const turnDetails = (): TurnDetails => ({
@@ -727,7 +743,13 @@ export function useChatStreaming({
 
         setMessages((prev) => [
           ...prev,
-          { id: assistantId, role: "assistant", content: "", isStreaming: true, turn },
+          {
+            id: assistantId,
+            role: "assistant",
+            content: "",
+            isStreaming: true,
+            turn: currentTurn(),
+          },
         ]);
         setAgentState("streaming");
 
@@ -764,12 +786,8 @@ export function useChatStreaming({
           flushContentNow();
           if (saves) checkpoint();
         };
-        // Whether the reply is saved, so a late send can be added to it.
-        let replySaved = false;
-        const saveReply = () => {
-          replySaved = true;
+        const saveReply = () =>
           onStreamComplete?.(assistantId, fullContent, currentToolCalls(), turnDetails());
-        };
         turnHooks.annotate = (toolCallId, patch) => {
           annotations.set(toolCallId, { ...annotations.get(toolCallId), ...patch });
           if (!toolCalls.some((call) => call.id === toolCallId)) return;
@@ -778,26 +796,29 @@ export function useChatStreaming({
           );
           if (patch.interaction) updateWaiting();
           else flushContentNow();
-          // A card already committing when the turn stopped still sends.
-          if (patch.actionKey && replySaved) checkpoint();
+          // Saved at once, so a renderer that dies before the turn ends (or a
+          // card that commits after Stop) can't lose a send.
+          if (patch.actionKey) checkpoint();
         };
 
-        // A stop keeps what the reply has so far. Questions it was waiting on
-        // are dismissed by Esc or Stop; an unmount leaves them to answer later.
-        // A tool still waiting for its service to connect never ran.
+        // A stop keeps what the reply has so far, and every call still running
+        // ends with it. Questions it was waiting on are dismissed by Esc or
+        // Stop; an unmount leaves them to answer later. A tool still waiting
+        // for its service to connect never ran.
         const settleStoppedTurn = (explicit: boolean) => {
           const waiting = hasPendingInteraction();
-          toolCalls = toolCalls.map((call) =>
-            call.interaction?.state === "pending"
-              ? {
-                  ...call,
-                  ...(connectsFirst(call) ? { metadata: { status: "not_sent" } } : {}),
-                  interaction: explicit
-                    ? { ...call.interaction, state: "settled", result: { status: "cancelled" } }
-                    : { ...call.interaction, state: "interrupted" },
-                }
-              : call
-          );
+          toolCalls = toolCalls.map((call) => {
+            if (call.status !== "executing") return call;
+            if (call.interaction?.state !== "pending") return { ...call, status: "stopped" };
+            return {
+              ...call,
+              status: "stopped",
+              ...(connectsFirst(call) ? { metadata: { status: "not_sent" } } : {}),
+              interaction: explicit
+                ? { ...call.interaction, state: "settled", result: { status: "cancelled" } }
+                : { ...call.interaction, state: "interrupted" },
+            };
+          });
           turn = {
             ...turn,
             finishedAt: Date.now(),
@@ -1048,14 +1069,13 @@ export function useChatStreaming({
             );
             announceResponse();
             const failure = describeProviderError(error, t);
-            const messageError =
-              failure.technicalDetails || failure.settingsTarget
-                ? {
-                    technicalDetails: failure.technicalDetails,
-                    settingsTarget: failure.settingsTarget,
-                  }
-                : undefined;
-            turn = { ...turn, finishedAt: Date.now(), status: "error" };
+            // Set on every failed reply: the chat then knows the failure is on screen.
+            const messageError: MessageError = {
+              ...(failure.technicalDetails ? { technicalDetails: failure.technicalDetails } : {}),
+              ...(failure.settingsTarget ? { settingsTarget: failure.settingsTarget } : {}),
+            };
+            settleStoppedTurn(true);
+            turn = { ...turn, status: "error" };
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantId
@@ -1065,7 +1085,7 @@ export function useChatStreaming({
                       isStreaming: false,
                       toolCalls: currentToolCalls(),
                       turn: currentTurn(),
-                      ...(messageError ? { error: messageError } : {}),
+                      error: messageError,
                     }
                   : m
               )

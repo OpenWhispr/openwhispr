@@ -3989,7 +3989,8 @@
       "stopped": "Остановлено",
       "stepLimit": "Приостановлено: достигнут предел шагов.",
       "continue": "Продолжить",
-      "continueMessage": "Продолжай"
+      "continueMessage": "Продолжай",
+      "failed": "Не удалось получить этот ответ."
     },
     "interactions": {
       "notNow": "Не сейчас",

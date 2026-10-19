@@ -66,7 +66,9 @@ async function mount(t, initial) {
         saveAssistantMessage: async (...args) => saved.push(args),
       },
       async (text) => {
-        sent.push([label, text]);
+        // The messages this send would put in the model's history.
+        const answered = list.at(-1)?.toolCalls?.[0]?.interaction?.state;
+        sent.push([label, text, answered]);
         return true;
       }
     );
@@ -105,7 +107,11 @@ test("an answer continues the task with the conversation as it is then", async (
     status: "answered",
     answers: { city: "Lisbon" },
   });
-  assert.deepEqual(chat.sent, [["latest", "Which city?\nLisbon"]]);
+  assert.deepEqual(
+    chat.sent,
+    [["latest", "Which city?\nLisbon", "settled"]],
+    "sent once the answer is in the history, so it isn't traced as not answered yet"
+  );
 });
 
 test("only the last reply's questions come back, and they go when the chat moves on", async (t) => {

@@ -157,11 +157,11 @@ export function toolTrace(toolCalls: ReadonlyArray<ToolCallInfo> | undefined): s
         return `${call.name} ("${arg}") (${outcome})`;
       }
       const arg = traceArgument(call);
-      // A call still executing was cut off before its result arrived, but its side
-      // effect may have happened (a send commits in main after Esc), unless the
-      // stop recorded that it never ran.
-      const outcome =
-        traceOutcome(call) ?? (call.status === "executing" ? "outcome not recorded" : null);
+      // A call cut off before its result arrived may still have had its side
+      // effect (a send commits in main after Esc), unless the stop recorded
+      // that it never ran.
+      const cutOff = call.status === "executing" || call.status === "stopped";
+      const outcome = traceOutcome(call) ?? (cutOff ? "outcome not recorded" : null);
       return `${call.name}${arg ? ` ("${arg}")` : ""}${outcome ? ` (${outcome})` : ""}`;
     });
   return entries.length ? `${TRACE_OPENING} ${entries.join(", ")}]` : "";
@@ -182,20 +182,28 @@ export function withoutEchoedToolTrace(content: string): string {
 
 /**
  * The last messages as the model sees them, with earlier tool use noted on
- * assistant turns and the selected text a request was about kept with it.
+ * assistant turns and the selected text a request was about kept with it. A
+ * failed reply with nothing in it is left out: some providers reject an empty
+ * assistant message.
  */
 export function toHistoryMessages(
   messages: ReadonlyArray<Message>,
   { includeToolTrace }: { includeToolTrace: boolean }
 ): HistoryMessage[] {
-  return messages.slice(-HISTORY_LIMIT).map((m) => {
-    if (m.role === "user" && m.selectedContext) {
-      return {
-        role: m.role,
-        content: buildAgentRequestText(m.content, { text: m.selectedContext, sourceMessageId: "" }),
-      };
-    }
-    const trace = includeToolTrace && m.role === "assistant" ? toolTrace(m.toolCalls) : "";
-    return { role: m.role, content: trace ? `${trace}\n\n${m.content}` : m.content };
-  });
+  return messages
+    .slice(-HISTORY_LIMIT)
+    .filter((m) => m.turn?.status !== "error" || m.content.trim() || toolTrace(m.toolCalls))
+    .map((m) => {
+      if (m.role === "user" && m.selectedContext) {
+        return {
+          role: m.role,
+          content: buildAgentRequestText(m.content, {
+            text: m.selectedContext,
+            sourceMessageId: "",
+          }),
+        };
+      }
+      const trace = includeToolTrace && m.role === "assistant" ? toolTrace(m.toolCalls) : "";
+      return { role: m.role, content: trace ? `${trace}\n\n${m.content}` : m.content };
+    });
 }

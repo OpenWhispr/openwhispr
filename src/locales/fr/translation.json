@@ -4115,7 +4115,8 @@
       "stopped": "Arrêté",
       "stepLimit": "En pause après le nombre maximal d'étapes.",
       "continue": "Continuer",
-      "continueMessage": "Continue"
+      "continueMessage": "Continue",
+      "failed": "Cette réponse a échoué."
     },
     "interactions": {
       "notNow": "Pas maintenant",

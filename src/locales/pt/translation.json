@@ -3945,7 +3945,8 @@
       "stopped": "Interrompido",
       "stepLimit": "Pausado após o número máximo de etapas.",
       "continue": "Continuar",
-      "continueMessage": "Continue"
+      "continueMessage": "Continue",
+      "failed": "Esta resposta falhou."
     },
     "interactions": {
       "notNow": "Agora não",

@@ -63,9 +63,10 @@ export function useInterruptedInteractions(
   const { messages, setMessages, saveAssistantMessage, conversationId } = persistence;
   // An answer can come minutes after the restore (a connect), so it reads
   // the conversation as it is then.
-  const latestRef = useRef({ messages, send, t });
-  latestRef.current = { messages, send, t };
+  const latestRef = useRef({ messages, t });
+  latestRef.current = { messages, t };
   const restoredRef = useRef(new Set<string>());
+  const followUpRef = useRef<{ text: string; options?: SendToAIOptions } | null>(null);
 
   useEffect(() => {
     const continueTask = (
@@ -89,7 +90,7 @@ export function useInterruptedInteractions(
       });
       const text = followUpText(payload, result, latest.t);
       const image = takeGrantedImage(approvalKey(messageId, toolCallId));
-      if (text) void latest.send(text, image ? { attachment: image } : undefined);
+      if (text) followUpRef.current = { text, options: image ? { attachment: image } : undefined };
     };
 
     const restored = restoredRef.current;
@@ -118,6 +119,14 @@ export function useInterruptedInteractions(
       restored.delete(key);
     }
   }, [messages, setMessages, saveAssistantMessage, conversationId]);
+
+  // Sent once the answer is in the messages, so the new turn's history has it.
+  useEffect(() => {
+    const followUp = followUpRef.current;
+    if (!followUp) return;
+    followUpRef.current = null;
+    void send(followUp.text, followUp.options);
+  }, [messages, send]);
 
   useEffect(() => {
     const restored = restoredRef.current;

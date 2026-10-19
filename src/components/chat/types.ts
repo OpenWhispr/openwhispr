@@ -6,7 +6,8 @@ export interface ToolCallInfo {
   id: string;
   name: string;
   arguments: string;
-  status: "executing" | "completed" | "error";
+  /** stopped: still running when its turn ended (Stop, a switch, an error). */
+  status: "executing" | "completed" | "error" | "stopped";
   result?: string;
   // Single object for note tools; search_notes attaches its result array.
   metadata?: Record<string, unknown> | Array<Record<string, unknown>>;

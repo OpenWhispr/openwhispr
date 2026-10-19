@@ -3945,7 +3945,8 @@
       "stopped": "已停止",
       "stepLimit": "已达到最大步骤数，已暂停。",
       "continue": "继续",
-      "continueMessage": "继续"
+      "continueMessage": "继续",
+      "failed": "此回复失败。"
     },
     "interactions": {
       "notNow": "暂不",

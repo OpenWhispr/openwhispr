@@ -46,6 +46,7 @@ function fakeDb() {
     updateAgentMessage: async (id, content, metadata) => {
       calls.update.push({ id, content, metadata });
       const row = rows.find((r) => r.id === id);
+      if (!row) return null;
       Object.assign(row, { content, metadata: metadata ? JSON.stringify(metadata) : null });
       return row;
     },
@@ -173,7 +174,37 @@ test("a reply saved while waiting loads as interrupted, so it can still be answe
   assert.equal(loaded.dbId, 1);
   assert.equal(loaded.turn.status, "interrupted");
   assert.equal(loaded.toolCalls[0].interaction.state, "interrupted");
+  assert.equal(loaded.toolCalls[0].status, "stopped", "never a step stuck asking");
   assert.equal(current().forkOrigin, null);
+});
+
+test("a reply saved mid-turn loads as stopped, with every call it had running", async (t) => {
+  const { db, act, current } = await mountPersistence(t);
+  const conversation = await db.api.createAgentConversation("Plan");
+  await db.api.addAgentMessage(conversation.id, "assistant", "Posting it.", {
+    turn: { startedAt: 1, status: "running" },
+    toolCalls: [{ id: "s1", name: "slack_send_message", arguments: "{}", status: "executing" }],
+  });
+  await act(() => current().loadConversation(conversation.id));
+
+  const [loaded] = current().messages;
+  assert.equal(loaded.turn.status, "stopped");
+  assert.equal(loaded.toolCalls[0].status, "stopped");
+});
+
+test("a reply whose row a cloud pull replaced is saved again as a new row", async (t) => {
+  const { db, act, current } = await mountPersistence(t);
+  await act(() => current().createConversation("Plan"));
+  await act(() => current().setMessages([message("a1", "assistant", "")]));
+  await act(() => current().saveAssistantMessage("a1", "Waiting.", undefined, {}));
+  db.rows.splice(0);
+  await act(() => current().saveAssistantMessage("a1", "Done.", undefined, {}));
+
+  assert.deepEqual(
+    db.calls.add.map((call) => call.content),
+    ["Waiting.", "Done."]
+  );
+  assert.equal(current().messages[0].dbId, 2);
 });
 
 test("a fork opens a new chat through the chosen reply, with its origin", async (t) => {
