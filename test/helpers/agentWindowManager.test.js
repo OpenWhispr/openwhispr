@@ -309,6 +309,25 @@ test("the agent's take keeps dictation off the mic, and dictation keeps the agen
   assert.deepEqual(win.sent, []);
 });
 
+test("the dictation window hears when the agent takes and releases the mic", async () => {
+  const toDictation = [];
+  const windowManager = createWindowManager({
+    mainWindow: {
+      isDestroyed: () => false,
+      webContents: { send: (channel, value) => toDictation.push([channel, value]) },
+    },
+  });
+  const { manager, win } = await openedManager({ windowManager });
+
+  manager.setVoiceState(fromAgent(win), "recording");
+  manager.setVoiceState(fromAgent(win), "transcribing");
+  manager.setVoiceState(fromAgent(win), "idle");
+  assert.deepEqual(toDictation, [
+    ["agent-recording-changed", true],
+    ["agent-recording-changed", false],
+  ]);
+});
+
 test("a crashed renderer releases the mic and the next press recreates the window", async () => {
   const { manager, win } = await openedManager();
   manager.setVoiceState(fromAgent(win), "recording");
@@ -336,7 +355,10 @@ test("a reloaded renderer starts hidden and without a take, like a new one", asy
   manager.handleHotkey();
   assert.equal(win.sent.length, sent, "the new renderer is not ready yet");
   manager.markReady(fromAgent(win));
-  assert.deepEqual(win.sent.at(-1), { channel: "agent-window-hotkey", payload: { external: true } });
+  assert.deepEqual(win.sent.at(-1), {
+    channel: "agent-window-hotkey",
+    payload: { external: true },
+  });
 });
 
 test("closing hides instead of destroying, and the next show starts from the pill", async () => {

@@ -1412,6 +1412,8 @@ declare global {
       ) => () => void;
       onAgentWindowCommand?: (callback: (command: AgentWindowCommand) => void) => () => void;
       onAgentWindowDismiss?: (callback: () => void) => () => void;
+      /** The dictation window's view of the agent's microphone: no dictation starts while it records. */
+      onAgentRecordingChanged?: (callback: (recording: boolean) => void) => () => void;
       /** A global Esc for the window that registered it, while it records. */
       registerCancelHotkey?: (key: string) => Promise<unknown>;
       unregisterCancelHotkey?: () => Promise<{ success: boolean }>;

@@ -139,8 +139,15 @@ class AgentWindowManager {
 
   _applyVoiceState(state) {
     if (state === this.voiceState) return;
+    const wasRecording = this.isRecording();
     this.voiceState = state;
     this.windowManager.syncUserRecording();
+    // The dictation window's own starts (a pill click, its menu) never pass
+    // through main's hotkey guard, so it is told when the agent holds the mic.
+    const main = this.windowManager.mainWindow;
+    if (wasRecording !== this.isRecording() && main && !main.isDestroyed()) {
+      main.webContents.send("agent-recording-changed", this.isRecording());
+    }
   }
 
   _ensureWindow() {

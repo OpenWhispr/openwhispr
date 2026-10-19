@@ -98,6 +98,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => (_event, command) => callback(command)
   ),
   onAgentWindowDismiss: registerListener("agent-window-dismiss", (callback) => () => callback()),
+  onAgentRecordingChanged: registerListener(
+    "agent-recording-changed",
+    (callback) => (_event, recording) => callback(recording)
+  ),
   markMacAccessibilityFeaturesReady: (expectedAccountScope) =>
     expectedAccountScope
       ? ipcRenderer.send("mac-accessibility-features-ready", expectedAccountScope)

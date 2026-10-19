@@ -62,6 +62,9 @@ export const useAudioRecording = (toast, options = {}) => {
   const [partialTranscript, setPartialTranscript] = useState("");
   const audioManagerRef = useRef(null);
   const startLockRef = useRef(false);
+  // The agent window holds the microphone while it records. Starts from the
+  // pill or its menu never pass main's hotkey guard, so they check this.
+  const agentRecordingRef = useRef(false);
   const stopRequestedDuringStartRef = useRef(false);
   const pushForceStoppedRef = useRef(false);
   const stopLockRef = useRef(false);
@@ -96,6 +99,14 @@ export const useAudioRecording = (toast, options = {}) => {
   useEffect(() => {
     onDemoEventRef.current = onDemoEvent;
   }, [onDemoEvent]);
+
+  useEffect(
+    () =>
+      window.electronAPI?.onAgentRecordingChanged?.((recording) => {
+        agentRecordingRef.current = recording;
+      }),
+    []
+  );
 
   // Read through a ref so a re-render never tears down the AudioManager
   // (the mount effect below must not depend on this callback).
@@ -134,7 +145,7 @@ export const useAudioRecording = (toast, options = {}) => {
       pushForceStoppedRef.current = false;
       let recordingStarted = false;
       try {
-        if (!audioManagerRef.current) return false;
+        if (!audioManagerRef.current || agentRecordingRef.current) return false;
         const policyState = usePolicyStore.getState();
         if (
           (!isManagedTranscriptionActive() &&
