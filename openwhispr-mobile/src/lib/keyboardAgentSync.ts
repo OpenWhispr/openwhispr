@@ -19,6 +19,10 @@ const MAX_PAYLOAD_CHARS = 8_000; // ~8 KB total safety budget
 
 const FRESH_REQUEST_TTL_MS = 15_000;
 
+// A deadline rather than a flag, so a step the app never left (killed mid-onboarding) stops
+// hiding the keyboard's example instructions on its own.
+const AGENT_HINTS_HIDDEN_TTL_MS = 15 * 60_000;
+
 export interface KeyboardAgentRequest {
   kind: 'compose' | 'follow_up';
   sessionId?: string;
@@ -211,6 +215,47 @@ export function readKeyboardAgentJob(jobId: string): KeyboardAgentJob | null {
 // initializeSharedState on app launch.
 export function clearKeyboardAgentJob(): void {
   AppGroupStorage.removeItem(APP_GROUP_KEYS.KEYBOARD_AGENT_JOB);
+}
+
+// Onboarding's voice assistant step tells the user what to say, so the keyboard's example
+// instruction would contradict it. Hides the examples; the returned function shows them again.
+// The deadline is renewed whenever the app comes back to the foreground, so a user who leaves
+// the step open past it doesn't get examples back.
+export function hideKeyboardAgentHints(): () => void {
+  const renewDeadline = (): void => {
+    AppGroupStorage.setItem(
+      APP_GROUP_KEYS.KEYBOARD_AGENT_HINTS_HIDDEN_UNTIL_MS,
+      String(Date.now() + AGENT_HINTS_HIDDEN_TTL_MS),
+    );
+  };
+  renewDeadline();
+  const appStateSub = AppState.addEventListener('change', (state) => {
+    if (state === 'active') {
+      renewDeadline();
+    }
+  });
+
+  return (): void => {
+    appStateSub.remove();
+    AppGroupStorage.removeItem(APP_GROUP_KEYS.KEYBOARD_AGENT_HINTS_HIDDEN_UNTIL_MS);
+  };
+}
+
+// The draft the keyboard's card opens on, picked as its readAgentResult picks it: the active
+// version, the first without one, clamped to the list. It is written before agent_ready, so a
+// listener for that status reads the new one.
+export function readKeyboardAgentDraft(): string | null {
+  const raw = AppGroupStorage.getItem(APP_GROUP_KEYS.KEYBOARD_AGENT_RESULT);
+  if (raw === null) return null;
+  try {
+    const { versions, activeIndex } = JSON.parse(raw) as Partial<KeyboardAgentResult>;
+    if (!Array.isArray(versions) || !versions.length) return null;
+    if (!versions.every((version) => typeof version === 'string')) return null;
+    const index = Number.isInteger(activeIndex) ? (activeIndex as number) : 0;
+    return versions[Math.min(Math.max(index, 0), versions.length - 1)];
+  } catch {
+    return null;
+  }
 }
 
 // Enforces the 5-version cap and trims oversized strings to stay within the

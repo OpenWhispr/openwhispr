@@ -3,6 +3,7 @@ import { buildProviderPrompt, stripThinkingTags } from './buildProviderPrompt';
 import { api } from '../../lib/apiClient';
 import { buildChatOverNotePayload, type ChatOverNoteRequest } from '../../lib/notes/chatOverNote';
 import {
+  fitsLocalCleanupOutput,
   fitsLocalReasoningBudget,
   getLocalReasoningReadiness,
   getLocalReasoningUnavailableMessage,
@@ -164,11 +165,16 @@ export class ReasoningService {
         const readiness = await getLocalReasoningReadiness();
         if (readiness.status === 'ready') {
           const instructions = buildLocalReasoningInstructions(localRequest);
-          const fits = await fitsLocalReasoningBudget({
-            instructions,
-            prompt: localRequest.text,
-            readiness,
-          });
+          const fits =
+            (await fitsLocalReasoningBudget({
+              instructions,
+              prompt: localRequest.text,
+              readiness,
+            })) &&
+            // The input fitting the context isn't enough for cleanup: its reply is as long as the
+            // transcript, and Apple Intelligence cuts it off at LOCAL_OUTPUT_TOKEN_RESERVE without an
+            // error.
+            (scope !== 'cleanup' || (await fitsLocalCleanupOutput(text)));
 
           if (!fits) {
             if (!allowCloudFallback) {
@@ -181,7 +187,8 @@ export class ReasoningService {
             try {
               return await LocalReasoningService.processText(localRequest);
             } catch (error) {
-              if (!allowCloudFallback) throw error;
+              // A cancelled or timed-out request is over; it must not start again in the cloud.
+              if (!allowCloudFallback || signal?.aborted) throw error;
             }
           }
         } else if (!allowCloudFallback) {

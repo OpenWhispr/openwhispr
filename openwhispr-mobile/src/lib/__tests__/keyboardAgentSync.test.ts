@@ -2,10 +2,12 @@ import {
   startKeyboardAgentSync,
   snapshotKeyboardAgentRequest,
   readKeyboardAgentJob,
+  readKeyboardAgentDraft,
   clearKeyboardAgentJob,
   writeKeyboardAgentResult,
   consumeKeyboardAgentAction,
   isKeyboardAgentCancelled,
+  hideKeyboardAgentHints,
 } from '@/lib/keyboardAgentSync';
 import type { KeyboardAgentJob, KeyboardAgentResult } from '@/lib/keyboardAgentSync';
 import { useConfigStore } from '@/store/useConfigStore';
@@ -35,12 +37,23 @@ jest.mock('../../../modules/app-group-storage/src', () => ({
     KEYBOARD_AGENT_RESULT: 'keyboard_agent_result',
     KEYBOARD_AGENT_ACTION: 'keyboard_agent_action',
     KEYBOARD_AGENT_ACTION_AT_MS: 'keyboard_agent_action_at_ms',
+    KEYBOARD_AGENT_HINTS_HIDDEN_UNTIL_MS: 'keyboard_agent_hints_hidden_until_ms',
     KEYBOARD_CANCEL_REQUESTED: 'keyboard_cancel_requested',
   },
 }));
 
+let mockAppStateListener: ((state: string) => void) | undefined;
 jest.mock('react-native', () => ({
-  AppState: { addEventListener: () => ({ remove: () => {} }) },
+  AppState: {
+    addEventListener: (_type: string, listener: (state: string) => void) => {
+      mockAppStateListener = listener;
+      return {
+        remove: () => {
+          if (mockAppStateListener === listener) mockAppStateListener = undefined;
+        },
+      };
+    },
+  },
 }));
 
 jest.mock('@/services/storage/StorageService', () => ({
@@ -332,6 +345,47 @@ describe('readKeyboardAgentJob', () => {
   });
 });
 
+// ─── readKeyboardAgentDraft ─────────────────────────────────────────────────
+
+describe('readKeyboardAgentDraft', () => {
+  it('returns the version the card shows', () => {
+    writeKeyboardAgentResult({
+      sessionId: 'sess-1',
+      jobId: 'job-1',
+      versions: ['first', 'second'],
+      activeIndex: 0,
+    });
+    expect(readKeyboardAgentDraft()).toBe('first');
+  });
+
+  // As the keyboard's card picks it (KeyboardViewController.readAgentResult).
+  it.each([
+    ['the first version without an activeIndex', { versions: ['first', 'second'] }, 'first'],
+    ['the last version past the end', { versions: ['first', 'second'], activeIndex: 3 }, 'second'],
+    [
+      'the first version before the start',
+      { versions: ['first', 'second'], activeIndex: -1 },
+      'first',
+    ],
+  ])('returns %s', (_label, result, draft) => {
+    store.keyboard_agent_result = JSON.stringify(result);
+    expect(readKeyboardAgentDraft()).toBe(draft);
+  });
+
+  it.each([
+    ['nothing is stored', undefined],
+    ['the JSON is invalid', 'bad json{{{'],
+    ['the result is not an object', 'null'],
+    ['there are no versions', JSON.stringify({ activeIndex: 0 })],
+    ['the versions are empty', JSON.stringify({ versions: [], activeIndex: 0 })],
+    ['a version is not text', JSON.stringify({ versions: ['first', 2], activeIndex: 0 })],
+  ])('returns null when %s', (_label, raw) => {
+    delete store.keyboard_agent_result;
+    if (raw !== undefined) store.keyboard_agent_result = raw;
+    expect(readKeyboardAgentDraft()).toBeNull();
+  });
+});
+
 // ─── clearKeyboardAgentJob ─────────────────────────────────────────────────────
 
 describe('clearKeyboardAgentJob', () => {
@@ -520,5 +574,40 @@ describe('isKeyboardAgentCancelled', () => {
     store.keyboard_cancel_requested = '0';
     expect(isKeyboardAgentCancelled()).toBe(false);
     expect(store.keyboard_cancel_requested).toBe('0');
+  });
+});
+
+// ─── Example instructions ─────────────────────────────────────────────────────
+
+// Onboarding's voice assistant step says what to dictate, so the keyboard hides its own examples.
+describe('hideKeyboardAgentHints', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('hides them for 15 minutes, so a step the app never left stops on its own', () => {
+    jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    hideKeyboardAgentHints();
+    expect(store.keyboard_agent_hints_hidden_until_ms).toBe(String(1_000_000 + 15 * 60_000));
+  });
+
+  it('renews the deadline when the app comes back to the foreground', () => {
+    const now = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    const show = hideKeyboardAgentHints();
+    now.mockReturnValue(2_000_000);
+    mockAppStateListener?.('background');
+    expect(store.keyboard_agent_hints_hidden_until_ms).toBe(String(1_000_000 + 15 * 60_000));
+    mockAppStateListener?.('active');
+    expect(store.keyboard_agent_hints_hidden_until_ms).toBe(String(2_000_000 + 15 * 60_000));
+    show();
+  });
+
+  it('shows them again when the step is left, and stops renewing', () => {
+    const show = hideKeyboardAgentHints();
+    expect(store.keyboard_agent_hints_hidden_until_ms).toBeDefined();
+    show();
+    expect(store.keyboard_agent_hints_hidden_until_ms).toBeUndefined();
+    mockAppStateListener?.('active');
+    expect(store.keyboard_agent_hints_hidden_until_ms).toBeUndefined();
   });
 });

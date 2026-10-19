@@ -79,6 +79,7 @@ require.cache[require.resolve("../../src/helpers/downloadUtils.js")] = {
 };
 
 const GpuBinaryManager = require("../../src/helpers/gpuBinaryManager.js");
+const debugLogger = require("../../src/helpers/debugLogger.js");
 const WhisperCudaManager = require("../../src/helpers/whisperCudaManager.js");
 const LlamaVulkanManager = require("../../src/helpers/llamaVulkanManager.js");
 const WhisperVulkanManager = require("../../src/helpers/whisperVulkanManager.js");
@@ -169,7 +170,9 @@ test("CUDA: resolves its exact asset from the pinned tag and installs binary + c
   const binDir = path.join(userDataDir, "bin", "whisper-cuda");
   const binaryPath = path.join(binDir, "whisper-server-linux-x64-cuda");
   assert.ok(fs.existsSync(binaryPath));
-  assert.ok(fs.statSync(binaryPath).mode & 0o100, "binary is executable");
+  if (process.env.OS !== "Windows_NT") {
+    assert.ok(fs.statSync(binaryPath).mode & 0o100, "binary is executable");
+  }
   assert.ok(fs.existsSync(path.join(binDir, "libggml-cuda.so")), "companion lib copied");
   assert.ok(!fs.existsSync(path.join(binDir, "README.md")), "unrelated files not copied");
   assert.equal(manager.getCudaBinaryPath(), binaryPath);
@@ -698,4 +701,28 @@ test("getStatus reflects supported/downloaded/downloading", async () => {
 
   seedPack("whisper-vulkan", ["whisper-server-linux-x64-vulkan"]);
   assert.equal(manager.getStatus().downloaded, true);
+});
+
+test("getBinaryPath: logs warning with missing required libraries when binary exists but is incomplete", () => {
+  const cuda = useWindowsAsset(new WhisperCudaManager());
+  seedPack(cuda.config.dirName, ["whisper-server-win32-x64-cuda.exe"]);
+
+  const originalWarn = debugLogger.warn;
+  const warned = [];
+  debugLogger.warn = (...args) => warned.push(args);
+
+  try {
+    const result = cuda.getBinaryPath();
+    assert.equal(result, null);
+    assert.equal(warned.length, 1);
+    assert.equal(warned[0][0], "GPU pack binary present but missing required runtime libraries");
+    assert.equal(warned[0][1].pack, "CUDA whisper");
+    assert.deepEqual(warned[0][1].missingLibraries, WINDOWS_MSVC_RUNTIME_LIBRARIES);
+
+    // Repeated call does not spam duplicate warning
+    cuda.getBinaryPath();
+    assert.equal(warned.length, 1);
+  } finally {
+    debugLogger.warn = originalWarn;
+  }
 });

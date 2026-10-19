@@ -10,6 +10,7 @@ const { getModelsDirForService } = require("./modelDirUtils");
 const { convertToWav } = require("./ffmpegUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const { applyConfirmedSpeaker } = require("./speakerAssignmentPolicy");
+const { buildSpeakerRenumber } = require("./speakerIndexBase");
 const sidecarPidFile = require("./sidecarPidFile");
 const {
   transcriptsOverlap,
@@ -443,21 +444,20 @@ class DiarizationManager {
     return segments.map((s) => (keep.has(s.speaker) ? s : { ...s, speaker: primary }));
   }
 
-  mergeWithTranscript(transcriptSegments, diarizationSegments, { diarizedSource = "system" } = {}) {
+  mergeWithTranscript(
+    transcriptSegments,
+    diarizationSegments,
+    { diarizedSource = "system", speakerIndexBase = 0 } = {}
+  ) {
     if (!transcriptSegments || transcriptSegments.length === 0) return [];
     const deduped = dedupeMicAgainstSystem(transcriptSegments);
     if (!diarizationSegments || diarizationSegments.length === 0) {
       return deduped.map((seg) => ({ ...seg }));
     }
 
-    // Build speaker renumbering map (e.g., speaker_00 → speaker_0)
+    // Renumber clusters (speaker_00 → speaker_0), offset past a resumed note's ids.
     const speakerSet = new Set(diarizationSegments.map((d) => d.speaker));
-    const speakerMap = new Map();
-    let idx = 0;
-    for (const sp of speakerSet) {
-      speakerMap.set(sp, `speaker_${idx}`);
-      idx++;
-    }
+    const speakerMap = buildSpeakerRenumber(speakerSet, speakerIndexBase);
 
     // Mic-mode softening: a single cluster on a mic-only session is the user
     // talking alone (e.g. a call where the remote never spoke audibly), so it
