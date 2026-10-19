@@ -430,6 +430,7 @@ export default function AgentWindow() {
       recording={voice.status === "recording"}
       readLevel={voice.readLevel}
       notice={placement === "typing" ? null : notice}
+      micUnavailableHint={micHint}
       onAction={handlePillAction}
     />
   );

@@ -20,6 +20,8 @@ interface AgentPillProps {
   readLevel: () => number;
   /** Shown in place of the waveform (already translated). */
   notice?: string | null;
+  /** Voice input is unavailable with this transcription provider: Mic is off. */
+  micUnavailableHint?: string;
   onAction: (button: AgentPillButton) => void;
   className?: string;
 }
@@ -30,6 +32,7 @@ export function AgentPill({
   recording,
   readLevel,
   notice,
+  micUnavailableHint,
   onAction,
   className,
 }: AgentPillProps) {
@@ -56,14 +59,16 @@ export function AgentPill({
       <span className="mx-1 h-4 w-px shrink-0 bg-border/70" aria-hidden="true" />
       {controls.buttons.map((button) => {
         const { icon: Icon, label } = BUTTONS[button];
+        const unavailable = button === "mic" ? micUnavailableHint : undefined;
         return (
           <button
             key={button}
             type="button"
             onClick={() => onAction(button)}
+            disabled={Boolean(unavailable)}
             aria-label={t(label)}
-            title={t(label)}
-            className="flex size-7 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-foreground/10 hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40"
+            title={unavailable ?? t(label)}
+            className="flex size-7 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-foreground/10 hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40 disabled:opacity-40 disabled:hover:bg-transparent"
           >
             <Icon size={button === "stop" ? 14 : 16} />
           </button>
