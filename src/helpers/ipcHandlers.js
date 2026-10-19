@@ -2684,6 +2684,27 @@ class IPCHandlers {
       }
     );
 
+    ipcMain.handle("db-update-agent-message", async (event, id, content, metadata) => {
+      return this.databaseManager.updateAgentMessage(id, content, metadata);
+    });
+
+    ipcMain.handle(
+      "db-fork-agent-conversation",
+      async (event, conversationId, throughMessageId, forkContext) => {
+        const fork = this.databaseManager.forkAgentConversation(
+          conversationId,
+          throughMessageId,
+          forkContext
+        );
+        if (fork && this.vectorIndex?.isReady?.()) {
+          this.vectorIndex
+            .upsertConversationChunks(fork.id, fork.title, fork.messages)
+            .catch(() => {});
+        }
+        return fork;
+      }
+    );
+
     ipcMain.handle("db-get-agent-messages", async (event, conversationId) => {
       return this.databaseManager.getAgentMessages(conversationId);
     });
