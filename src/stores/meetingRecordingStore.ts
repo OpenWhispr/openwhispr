@@ -1723,11 +1723,20 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
   });
 }
 
+// A line the user reassigned by hand outranks the name later given to the
+// cluster it came from, the same precedence resolveSegmentSpeakerName applies
+// when reading. Without this, correcting a line and then naming its speaker
+// would silently undo the correction.
+const keepsOwnSpeakerName = (segment: TranscriptSegment, displayName: string) =>
+  segment.speakerLockSource === "user" &&
+  !!segment.speakerName &&
+  segment.speakerName !== displayName;
+
 export function lockSpeaker(speakerId: string, displayName: string): void {
   if (!speakerId || !displayName) return;
   speakerLocks.set(speakerId, displayName);
   const next = useMeetingRecordingStore.getState().segments.map((s) =>
-    s.speaker === speakerId
+    s.speaker === speakerId && !keepsOwnSpeakerName(s, displayName)
       ? lockTranscriptSpeaker(s, {
           speakerName: displayName,
           speakerIsPlaceholder: false,
@@ -1748,6 +1757,34 @@ export function lockSpeaker(speakerId: string, displayName: string): void {
   if (systemPartialSpeakerIdValue === speakerId) {
     setSystemPartialSpeakerIdentity(speakerId, displayName);
   }
+}
+
+// Reassigns individual live lines, as opposed to lockSpeaker's whole cluster
+// (#2353). The cluster keeps its own identity: these segments are pinned to a
+// person, so neither live speaker identification nor the post-meeting
+// diarization merge may relabel them.
+export function lockSegmentSpeakers(
+  segmentIds: Iterable<string>,
+  displayName: string,
+  profileId?: number
+): void {
+  const ids = segmentIds instanceof Set ? segmentIds : new Set(segmentIds);
+  if (!displayName || ids.size === 0) return;
+  const next = useMeetingRecordingStore.getState().segments.map((s) =>
+    ids.has(s.id)
+      ? lockTranscriptSpeaker(s, {
+          speakerName: displayName,
+          speakerIsPlaceholder: false,
+          suggestedName: undefined,
+          suggestedProfileId: profileId ?? undefined,
+        })
+      : s
+  );
+  segmentsRefValue = next;
+  useMeetingRecordingStore.setState({ segments: next });
+  // A correction made early in a long call must not wait for the periodic
+  // crash-safety save to reach the note.
+  void persistLiveTranscript();
 }
 
 export function cancelPreparedTranscription(): void {
