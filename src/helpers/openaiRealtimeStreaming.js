@@ -68,6 +68,7 @@ class OpenAIRealtimeStreaming {
     this.isConnecting = false;
     this.completedSegments = [];
     this.pendingTranscriptions = new Set();
+    this.serverAcksCommits = false;
     this.currentPartial = "";
     this.onPartialTranscript = null;
     this.onFinalTranscript = null;
@@ -150,6 +151,7 @@ class OpenAIRealtimeStreaming {
     this.vadThreshold = vadThreshold ?? DEFAULT_VAD_THRESHOLD;
     this.completedSegments = [];
     this.pendingTranscriptions = new Set();
+    this.serverAcksCommits = false;
     this.currentPartial = "";
     this.audioBytesSent = 0;
     this.speechStartedAt = null;
@@ -371,6 +373,7 @@ class OpenAIRealtimeStreaming {
           this._logVadEvent(event.type);
           break;
         case "input_audio_buffer.committed":
+          this.serverAcksCommits = true;
           if (event.item_id) this.pendingTranscriptions.add(event.item_id);
           this._onTurnSettled?.("committed");
           this._logVadEvent(event.type);
@@ -635,11 +638,15 @@ class OpenAIRealtimeStreaming {
           }, timeoutMs);
 
           // VAD can have several committed turns still transcribing. A terminal
-          // event ends the wait only after all known items have settled.
+          // event ends the wait only after all known items have settled and,
+          // since an earlier turn can finish before our commit lands, after
+          // the server acks that commit. Servers that never send `committed`
+          // (Tinfoil) settle on the terminal event alone.
           let commitAcknowledged = false;
           this._onTurnSettled = (reason) => {
             if (reason === "committed") commitAcknowledged = true;
-            if (reason === "closed" || (commitAcknowledged && !this.pendingTranscriptions.size)) {
+            const acknowledged = commitAcknowledged || !this.serverAcksCommits;
+            if (reason === "closed" || (acknowledged && !this.pendingTranscriptions.size)) {
               done();
             }
           };
