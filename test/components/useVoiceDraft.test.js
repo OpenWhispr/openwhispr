@@ -15,6 +15,7 @@ const {
 // transcription open until it resolves; `agent` mounts the agent window's
 // useAgentVoice over it instead.
 async function mountVoiceDraft(t, { settings, getUserMedia, gate = null, agent = false }) {
+  const bridge = [];
   let root = null;
   // After hooks run in registration order: unmount while the globals exist.
   t.after(() => root && React.act(async () => root.unmount()));
@@ -31,9 +32,18 @@ async function mountVoiceDraft(t, { settings, getUserMedia, gate = null, agent =
         saveTempAudio: async () => ({ path: "/tmp/take.webm" }),
         deleteTempAudio: async () => undefined,
         getSystemDefaultMicrophone: async () => null,
-        agentWindowSetVoiceState: async () => true,
-        registerCancelHotkey: async () => ({ success: true }),
-        unregisterCancelHotkey: async () => ({ success: true }),
+        agentWindowSetVoiceState: async (state) => {
+          bridge.push(`voice:${state}`);
+          return true;
+        },
+        registerCancelHotkey: async (key) => {
+          bridge.push(`esc:${key}`);
+          return { success: true };
+        },
+        unregisterCancelHotkey: async () => {
+          bridge.push("esc:off");
+          return { success: true };
+        },
       },
     },
   });
@@ -101,7 +111,14 @@ async function mountVoiceDraft(t, { settings, getUserMedia, gate = null, agent =
   const { createRoot } = require("react-dom/client");
   root = createRoot(container);
   await React.act(async () => root.render(React.createElement(Harness)));
-  return { voice: () => voice, opened, transcribed, transcripts };
+  return {
+    voice: () => voice,
+    opened,
+    transcribed,
+    transcripts,
+    bridge,
+    unmount: () => React.act(async () => root.unmount()).then(() => (root = null)),
+  };
 }
 
 const SIGNED_IN_CLOUD = {
@@ -268,4 +285,40 @@ test("the agent's spoken requests expand snippets, like dictation", async (t) =>
     await settle();
   });
   assert.deepEqual(harness.transcripts, ["submit:sign it with Best, Saket"]);
+});
+
+test("the agent's Esc belongs to a recording take, and an unmount mid-take frees the mic", async (t) => {
+  const transcription = deferred();
+  const harness = await mountVoiceDraft(t, {
+    settings: SIGNED_IN_CLOUD,
+    getUserMedia: (_constraints, stream) => stream,
+    gate: transcription.promise,
+    agent: true,
+  });
+
+  await React.act(async () => {
+    await harness.voice().start();
+  });
+  assert.ok(harness.bridge.includes("esc:Escape"));
+  // The take ends (stopped, or its track ended): Esc goes back at once.
+  await React.act(async () => {
+    harness.voice().stop("submit");
+    await settle();
+  });
+  assert.equal(harness.bridge.at(-1), "voice:transcribing");
+  assert.ok(harness.bridge.includes("esc:off"));
+
+  await React.act(async () => {
+    transcription.resolve("first take");
+    await settle();
+  });
+
+  harness.bridge.length = 0;
+  await React.act(async () => {
+    await harness.voice().start();
+  });
+  assert.ok(harness.bridge.includes("esc:Escape"));
+  await harness.unmount();
+  assert.ok(harness.bridge.includes("esc:off"));
+  assert.ok(harness.bridge.includes("voice:idle"), "an error screen or reload frees the mic");
 });
