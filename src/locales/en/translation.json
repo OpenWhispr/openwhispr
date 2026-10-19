@@ -4000,7 +4000,6 @@
       "startListening": "Start listening",
       "hideForNow": "Hide for now",
       "askAssistant": "Ask assistant",
-      "busyRecording": "Finish the current dictation first",
       "startMeetingRecording": "Start meeting recording"
     }
   },
@@ -4218,16 +4217,6 @@
       "workedFor": "Worked for {{duration}}",
       "steps_one": "{{count}} step",
       "steps_other": "{{count}} steps"
-    }
-  },
-  "assistant": {
-    "toolActivity": {
-      "verbs": {
-        "invoking": "Invoking",
-        "calling": "Calling",
-        "using": "Using"
-      },
-      "toolFallback": "Tool"
     }
   },
   "integrations": {

@@ -9,9 +9,10 @@ import { SIZE_RANK, resolveMainWindowSizeKey } from "../utils/windowSizeLadder";
 const PANEL_RETURN_FADE_MS = 180;
 
 /**
- * Single owner of the main window size: Live Transcript panel > menu > toast >
- * compact pill > base. Grows apply immediately so content never clips; shrinks wait for the
- * content collapse animation to finish before the window snaps down. Also owns
+ * Single owner of the main window size: the Live Transcript panel, then the
+ * ladder (error > menu > toast > compact pill > base). Grows apply immediately
+ * so content never clips; shrinks wait for the content collapse animation to
+ * finish before the window snaps down. Also owns
  * the two pill-visibility handoffs around risky native resizes: the
  * dictation-error handoff (pill hidden until the window leaves the error
  * footprint) and the panel-return handoff (pill faded out across the

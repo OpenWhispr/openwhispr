@@ -3882,7 +3882,6 @@
       "startListening": "Empezar a escuchar",
       "hideForNow": "Ocultar por ahora",
       "askAssistant": "Preguntar al asistente",
-      "busyRecording": "Primero termina la grabación actual",
       "startMeetingRecording": "Iniciar grabación de reunión"
     }
   },
@@ -4100,16 +4099,6 @@
       "workedFor": "Trabajó durante {{duration}}",
       "steps_one": "{{count}} paso",
       "steps_other": "{{count}} pasos"
-    }
-  },
-  "assistant": {
-    "toolActivity": {
-      "verbs": {
-        "invoking": "Invocando",
-        "calling": "Llamando",
-        "using": "Usando"
-      },
-      "toolFallback": "Herramienta"
     }
   },
   "integrations": {

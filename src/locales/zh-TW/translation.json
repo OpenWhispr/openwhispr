@@ -3830,7 +3830,6 @@
       "startListening": "開始錄音",
       "hideForNow": "暫時隱藏",
       "askAssistant": "詢問助理",
-      "busyRecording": "請先結束目前的錄音",
       "startMeetingRecording": "開始會議錄音"
     }
   },
@@ -4048,16 +4047,6 @@
       "workedFor": "處理了 {{duration}}",
       "steps_one": "{{count}} 個步驟",
       "steps_other": "{{count}} 個步驟"
-    }
-  },
-  "assistant": {
-    "toolActivity": {
-      "verbs": {
-        "invoking": "呼叫中",
-        "calling": "請求中",
-        "using": "使用中"
-      },
-      "toolFallback": "工具"
     }
   },
   "integrations": {

@@ -2015,7 +2015,6 @@
       "startListening": "بدء الاستماع",
       "hideForNow": "إخفاء الآن",
       "askAssistant": "اسأل المساعد",
-      "busyRecording": "أنهِ التسجيل الحالي أولاً",
       "startMeetingRecording": "بدء تسجيل الاجتماع"
     }
   },
@@ -4978,16 +4977,6 @@
     "remove": "إزالة",
     "dismiss": "ليس الآن",
     "cancel": "إلغاء"
-  },
-  "assistant": {
-    "toolActivity": {
-      "verbs": {
-        "invoking": "جاري استدعاء",
-        "calling": "جاري تنفيذ",
-        "using": "جاري استخدام"
-      },
-      "toolFallback": "أداة"
-    }
   },
   "notesView": {
     "searchPlaceholder": "البحث في الملاحظات...",

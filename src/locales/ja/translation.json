@@ -3830,7 +3830,6 @@
       "startListening": "録音を開始",
       "hideForNow": "一時的に非表示",
       "askAssistant": "アシスタントに質問",
-      "busyRecording": "先に録音を終了してください",
       "startMeetingRecording": "ミーティングの録音を開始"
     }
   },
@@ -4048,16 +4047,6 @@
       "workedFor": "{{duration}}作業",
       "steps_one": "{{count}}ステップ",
       "steps_other": "{{count}}ステップ"
-    }
-  },
-  "assistant": {
-    "toolActivity": {
-      "verbs": {
-        "invoking": "呼び出し中",
-        "calling": "実行中",
-        "using": "使用中"
-      },
-      "toolFallback": "ツール"
     }
   },
   "integrations": {
