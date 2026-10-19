@@ -105,6 +105,8 @@ class WindowManager {
       notifyCalendarReminders: true,
     };
     this.tray = null;
+    // Set by main.js: the assistant's own window (agentWindowManager.js).
+    this.agentWindow = null;
     this.hotkeyManager = new HotkeyManager();
     this.dragManager = new DragManager();
     this._mainWindowPlacementCoordinator = new MainWindowPlacementCoordinator();
@@ -753,13 +755,13 @@ class WindowManager {
     return { success: true, bounds: newBounds, changed: true };
   }
 
-  async loadWindowContent(window, isControlPanel = false) {
+  async loadWindowContent(window, isControlPanel = false, query = {}) {
     if (process.env.NODE_ENV === "development") {
-      const appUrl = DevServerManager.getAppUrl(isControlPanel);
+      const appUrl = DevServerManager.getAppUrl(isControlPanel, query);
       await DevServerManager.waitForDevServer();
       await window.loadURL(appUrl);
     } else {
-      const fileInfo = DevServerManager.getAppFilePath(isControlPanel);
+      const fileInfo = DevServerManager.getAppFilePath(isControlPanel, query);
       if (!fileInfo) {
         throw new Error("Failed to get app file path");
       }
@@ -1083,6 +1085,8 @@ class WindowManager {
   }
 
   _shouldBlockDictationInput(inputKind) {
+    // The assistant is listening: the microphone is its until the take ends.
+    if (this.agentWindow?.isRecording()) return true;
     const blocked = shouldBlockDictationWhilePanelOpen({
       assistantPanelOpen: this._assistantPanelOpen,
       assistantPanelBusy: this._assistantPanelBusy,
@@ -1161,7 +1165,7 @@ class WindowManager {
     this._dictationLifecycleState = nextState;
     this._dictationInputKind = nextInputKind;
     this._isDictatingToggle = isDictationRecording(nextState);
-    this.meetingDetectionEngine?.setUserRecording(this._isDictatingToggle);
+    this.syncUserRecording();
     this._sendAgentDictationPillState();
     this.onDictationStateChanged?.();
   }
@@ -1169,6 +1173,19 @@ class WindowManager {
   // The tray's listen item is a toggle over this state, like the pill's.
   isDictating() {
     return this._isDictatingToggle;
+  }
+
+  // Preparing, recording or processing: the agent window stays off the mic.
+  isDictationActive() {
+    return this._dictationLifecycleState !== DICTATION_LIFECYCLE.IDLE;
+  }
+
+  // Talking to the assistant is the user recording too: it must not read as a
+  // meeting starting.
+  syncUserRecording() {
+    this.meetingDetectionEngine?.setUserRecording(
+      this._isDictatingToggle || Boolean(this.agentWindow?.isRecording())
+    );
   }
 
   _sendAgentDictationPillState() {
@@ -1210,23 +1227,24 @@ class WindowManager {
     this._sendDictationToggle("toggle-dictation", "dictation");
   }
 
+  // The assistant lives in its own window. Onboarding's assistant demo is the
+  // exception: it still records in the dictation window, whose gate admits it.
   sendToggleVoiceAgent() {
-    this._sendDictationToggle("toggle-voice-agent", "assistant");
+    if (this._onboardingActive) {
+      this._sendDictationToggle("toggle-voice-agent", "assistant");
+      return;
+    }
+    this.agentWindow?.handleHotkey();
   }
 
   sendToggleTranslation() {
     this._sendDictationToggle("toggle-translation", "translation");
   }
 
-  // The tray's Ask assistant. Only the renderer can open the panel, and only it
-  // knows the policy and recording state the pill menu gates the item on, so it
-  // decides: nothing is shown or created here, and an accepted command surfaces
-  // the pill itself through setAssistantPanelOpen. Onboarding blocks it outright
-  // rather than through the demo-aware gate — the tray is never part of the demo.
-  sendOpenAssistantPanel() {
-    if (this.hotkeyManager.isInListeningMode() || this._onboardingActive) return;
-    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
-    this.mainWindow.webContents.send("open-assistant-panel");
+  // The tray's and the pill menu's Ask assistant: the agent window opens to the
+  // composer, and its renderer explains a policy refusal itself.
+  openAgentWindow() {
+    this.agentWindow?.open({ layout: "typing" });
   }
 
   sendStartDictation() {
@@ -1832,6 +1850,7 @@ class WindowManager {
     this.hideDictationPanel();
     this._onboardingActive = false;
     if (!this._floatingIconAutoHide) this.showDictationPanel();
+    this.agentWindow?.prewarm();
     return true;
   }
 
@@ -1839,6 +1858,7 @@ class WindowManager {
     this.hideDictationPanel();
     this.hideTranscriptionPreview();
     this.hideAgentDictationPill();
+    this.agentWindow?.dismiss();
     this.dismissMeetingNotification({ flushQueued: false });
   }
 

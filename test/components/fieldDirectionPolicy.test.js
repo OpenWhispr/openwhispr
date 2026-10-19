@@ -93,6 +93,8 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/MemberPickList.tsx": ["auto"],
   "src/components/ReferralDashboard.tsx": ["ltr"],
   "src/components/SettingsPage.tsx": ["inherit"],
+  // The agent's typed request: prose in any script.
+  "src/components/agent/AgentComposer.tsx": ["auto"],
   "src/components/chat/ApprovalCard.tsx": ["auto", "auto"],
   "src/components/chat/ChatInput.tsx": ["auto"],
   // The question card's radio and checkbox options hold no text.

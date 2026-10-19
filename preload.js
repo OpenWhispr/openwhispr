@@ -78,6 +78,26 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "permission-guide-action",
     (callback) => (_event, action) => callback(action)
   ),
+  // The agent window (`?agent=true`) and the dictation window's ways into it.
+  agentWindowReady: () => ipcRenderer.send("agent-window-ready"),
+  agentWindowSetLayout: (request) => ipcRenderer.invoke("agent-window-set-layout", request),
+  agentWindowHide: () => ipcRenderer.invoke("agent-window-hide"),
+  agentWindowSetVoiceState: (state) => ipcRenderer.invoke("agent-window-voice-state", state),
+  openAgentWindow: () => ipcRenderer.invoke("open-agent-window"),
+  submitAgentCommand: (command) => ipcRenderer.invoke("agent-window-submit-command", command),
+  onAgentWindowHotkey: registerListener(
+    "agent-window-hotkey",
+    (callback) => (_event, payload) => callback(payload)
+  ),
+  onAgentWindowOpen: registerListener(
+    "agent-window-open",
+    (callback) => (_event, payload) => callback(payload)
+  ),
+  onAgentWindowCommand: registerListener(
+    "agent-window-command",
+    (callback) => (_event, command) => callback(command)
+  ),
+  onAgentWindowDismiss: registerListener("agent-window-dismiss", (callback) => () => callback()),
   markMacAccessibilityFeaturesReady: (expectedAccountScope) =>
     expectedAccountScope
       ? ipcRenderer.send("mac-accessibility-features-ready", expectedAccountScope)

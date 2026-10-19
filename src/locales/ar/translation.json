@@ -1847,6 +1847,69 @@
       }
     }
   },
+  "agentWindow": {
+    "title": "المساعد",
+    "actions": {
+      "expand": "توسيع",
+      "collapse": "تصغير",
+      "speak": "تحدّث",
+      "type": "اكتب",
+      "stop": "إيقاف",
+      "close": "إغلاق",
+      "regenerate": "إعادة الإنشاء",
+      "readAloud": "قراءة بصوت عالٍ",
+      "stopReading": "إيقاف القراءة"
+    },
+    "notices": {
+      "nothingHeard": "لم أسمع شيئًا",
+      "transcriptionFailed": "تعذّر التفريغ النصي",
+      "dictationActive": "الإملاء يستخدم الميكروفون"
+    },
+    "composer": {
+      "placeholder": "أملِ سؤالك أو اكتبه…",
+      "followUpPlaceholder": "اطرح سؤال متابعة…"
+    },
+    "empty": {
+      "title": "كيف يمكنني المساعدة؟",
+      "description": "اكتب طلبك أدناه."
+    },
+    "selectedContext": {
+      "title": "السياق المحدد",
+      "remove": "إزالة السياق المحدد",
+      "fromAnswer": "من الإجابة: \"{{text}}\"",
+      "fromOtherApp": "من تطبيق آخر: \"{{text}}\""
+    },
+    "selectionHint": "حدّد نصًا للمتابعة أو التفريع",
+    "selectionToolbar": "النص المحدد",
+    "followUp": "متابعة",
+    "forkFromHere": "تفريع من هنا",
+    "chats": {
+      "title": "المحادثات",
+      "switch": "تبديل المحادثة",
+      "new": "محادثة جديدة",
+      "empty": "لا توجد محادثات بعد",
+      "untitled": "محادثة بلا عنوان",
+      "fork": "متفرعة"
+    },
+    "progress": {
+      "callingTools_zero": "استدعاء {{count}} أداة…",
+      "callingTools_one": "استدعاء أداة واحدة ({{count}})…",
+      "callingTools_two": "استدعاء أداتين ({{count}})…",
+      "callingTools_few": "استدعاء {{count}} أدوات…",
+      "callingTools_many": "استدعاء {{count}} أداة…",
+      "callingTools_other": "استدعاء {{count}} أداة…",
+      "checkingAnswers": "جارٍ التحقق من الإجابات…",
+      "reasoning": "جارٍ الاستدلال…",
+      "reasonedFor": "استدلّ لمدة {{duration}}",
+      "workedFor": "عمل لمدة {{duration}}",
+      "steps_zero": "{{count}} خطوة",
+      "steps_one": "خطوة واحدة ({{count}})",
+      "steps_two": "خطوتان ({{count}})",
+      "steps_few": "{{count}} خطوات",
+      "steps_many": "{{count}} خطوة",
+      "steps_other": "{{count}} خطوة"
+    }
+  },
   "noteEditor": {
     "saved": "تم الحفظ",
     "deleteNote": "حذف الملاحظة",

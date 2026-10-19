@@ -4166,6 +4166,61 @@
       }
     }
   },
+  "agentWindow": {
+    "title": "Assistant",
+    "actions": {
+      "expand": "Agrandir",
+      "collapse": "Réduire",
+      "speak": "Parler",
+      "type": "Écrire",
+      "stop": "Arrêter",
+      "close": "Fermer",
+      "regenerate": "Régénérer",
+      "readAloud": "Lire à voix haute",
+      "stopReading": "Arrêter la lecture"
+    },
+    "notices": {
+      "nothingHeard": "Je n'ai rien entendu",
+      "transcriptionFailed": "Transcription impossible",
+      "dictationActive": "La dictée utilise le micro"
+    },
+    "composer": {
+      "placeholder": "Dictez ou tapez votre question…",
+      "followUpPlaceholder": "Poser une question complémentaire…"
+    },
+    "empty": {
+      "title": "Comment puis-je vous aider ?",
+      "description": "Tapez votre demande ci-dessous."
+    },
+    "selectedContext": {
+      "title": "Contexte sélectionné",
+      "remove": "Retirer le contexte sélectionné",
+      "fromAnswer": "Tiré de la réponse : « {{text}} »",
+      "fromOtherApp": "Tiré d'une autre app : « {{text}} »"
+    },
+    "selectionHint": "Sélectionnez du texte pour relancer ou dupliquer",
+    "selectionToolbar": "Texte sélectionné",
+    "followUp": "Relancer",
+    "forkFromHere": "Dupliquer à partir d'ici",
+    "chats": {
+      "title": "Conversations",
+      "switch": "Changer de conversation",
+      "new": "Nouvelle conversation",
+      "empty": "Aucune conversation pour l'instant",
+      "untitled": "Conversation sans titre",
+      "fork": "Dupliquée"
+    },
+    "progress": {
+      "callingTools_one": "Appel de {{count}} outil…",
+      "callingTools_other": "Appel de {{count}} outils…",
+      "checkingAnswers": "Vérification des réponses…",
+      "reasoning": "Réflexion…",
+      "reasonedFor": "Réflexion : {{duration}}",
+      "workedFor": "Travail : {{duration}}",
+      "steps_one": "{{count}} étape",
+      "steps_other": "{{count}} étapes"
+    }
+  },
   "assistant": {
     "panel": {
       "selectionHint": "Sélectionnez du texte à modifier avec",

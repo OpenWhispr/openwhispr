@@ -18,6 +18,13 @@ const refuse = (messageKey) => Object.freeze({ action: "refuse", messageKey });
 const policyRefusal = (policyResolved, restrictedKey) =>
   refuse(policyResolved ? restrictedKey : TRAY_REFUSAL_KEYS.policyUnresolved);
 
+/** Why the assistant can't open (an i18n key), or null when it can. */
+export function resolveAgentAccessRefusal({ agentAllowed, policyResolved }) {
+  return agentAllowed
+    ? null
+    : policyRefusal(policyResolved, TRAY_REFUSAL_KEYS.agentRestricted).messageKey;
+}
+
 /** The pill menu hides Ask Assistant without the agent, and while a panel owns the pill. */
 export function resolveTrayAssistantAction({
   agentAllowed,

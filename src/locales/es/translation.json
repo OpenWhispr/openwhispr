@@ -4048,6 +4048,61 @@
       }
     }
   },
+  "agentWindow": {
+    "title": "Asistente",
+    "actions": {
+      "expand": "Ampliar",
+      "collapse": "Minimizar",
+      "speak": "Hablar",
+      "type": "Escribir",
+      "stop": "Detener",
+      "close": "Cerrar",
+      "regenerate": "Regenerar",
+      "readAloud": "Leer en voz alta",
+      "stopReading": "Dejar de leer"
+    },
+    "notices": {
+      "nothingHeard": "No te he entendido",
+      "transcriptionFailed": "No se pudo transcribir",
+      "dictationActive": "El dictado está usando el micrófono"
+    },
+    "composer": {
+      "placeholder": "Dicta o escribe tu pregunta…",
+      "followUpPlaceholder": "Haz una pregunta de seguimiento…"
+    },
+    "empty": {
+      "title": "¿En qué puedo ayudarte?",
+      "description": "Escribe tu petición abajo."
+    },
+    "selectedContext": {
+      "title": "Contexto seleccionado",
+      "remove": "Quitar el contexto seleccionado",
+      "fromAnswer": "De la respuesta: «{{text}}»",
+      "fromOtherApp": "De otra app: «{{text}}»"
+    },
+    "selectionHint": "Selecciona texto para preguntar o bifurcar",
+    "selectionToolbar": "Texto seleccionado",
+    "followUp": "Preguntar",
+    "forkFromHere": "Bifurcar desde aquí",
+    "chats": {
+      "title": "Chats",
+      "switch": "Cambiar de chat",
+      "new": "Nuevo chat",
+      "empty": "Aún no hay chats",
+      "untitled": "Chat sin título",
+      "fork": "Bifurcado"
+    },
+    "progress": {
+      "callingTools_one": "Llamando a {{count}} herramienta…",
+      "callingTools_other": "Llamando a {{count}} herramientas…",
+      "checkingAnswers": "Revisando las respuestas…",
+      "reasoning": "Razonando…",
+      "reasonedFor": "Razonó durante {{duration}}",
+      "workedFor": "Trabajó durante {{duration}}",
+      "steps_one": "{{count}} paso",
+      "steps_other": "{{count}} pasos"
+    }
+  },
   "assistant": {
     "panel": {
       "selectionHint": "Selecciona texto para editarlo con",

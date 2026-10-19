@@ -14,7 +14,7 @@ import { mirrorActiveAccountScope } from "./lib/accountScopeMirror";
 import { usePolicyStore } from "./stores/policyStore";
 import { resolveSettledControlPanelWindowMode } from "./utils/controlPanelWindowMode.ts";
 import { resolveMacAccessibilityReadiness } from "./utils/macAccessibilityReadiness.ts";
-import { isControlPanelWindow } from "./utils/windowContext.ts";
+import { isAgentWindow, isControlPanelWindow } from "./utils/windowContext.ts";
 
 // Either marker means the flow is mid-way: the legacy step key is kept for
 // back-compat, the v2 session is what the rebuilt flow actually persists.
@@ -24,6 +24,7 @@ const isOnboardingInProgress = () =>
 
 const ControlPanel = React.lazy(() => import("./components/ControlPanel.tsx"));
 const OnboardingFlow = React.lazy(() => import("./components/OnboardingFlow.tsx"));
+const AgentWindow = React.lazy(() => import("./components/agent/AgentWindow.tsx"));
 
 export default function AppRouter() {
   useTheme();
@@ -37,6 +38,16 @@ export default function AppRouter() {
 
   if (params.includes("agent-dictation-pill=true")) {
     return <AgentDictationPillOverlay />;
+  }
+
+  // Before MainApp: it reports the onboarding state, which only the dictation
+  // window and the control panel may do.
+  if (isAgentWindow()) {
+    return (
+      <Suspense fallback={null}>
+        <AgentWindow />
+      </Suspense>
+    );
   }
 
   return <MainApp />;

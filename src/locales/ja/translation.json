@@ -3996,6 +3996,61 @@
       }
     }
   },
+  "agentWindow": {
+    "title": "アシスタント",
+    "actions": {
+      "expand": "展開",
+      "collapse": "最小化",
+      "speak": "話す",
+      "type": "入力",
+      "stop": "停止",
+      "close": "閉じる",
+      "regenerate": "再生成",
+      "readAloud": "読み上げ",
+      "stopReading": "読み上げを停止"
+    },
+    "notices": {
+      "nothingHeard": "聞き取れませんでした",
+      "transcriptionFailed": "文字起こしできませんでした",
+      "dictationActive": "音声入力がマイクを使用中です"
+    },
+    "composer": {
+      "placeholder": "質問を話すか入力してください…",
+      "followUpPlaceholder": "続けて質問…"
+    },
+    "empty": {
+      "title": "何をお手伝いしましょうか？",
+      "description": "下にリクエストを入力してください。"
+    },
+    "selectedContext": {
+      "title": "選択したコンテキスト",
+      "remove": "選択したコンテキストを削除",
+      "fromAnswer": "回答から:「{{text}}」",
+      "fromOtherApp": "別のアプリから:「{{text}}」"
+    },
+    "selectionHint": "テキストを選択して質問または分岐",
+    "selectionToolbar": "選択したテキスト",
+    "followUp": "続けて質問",
+    "forkFromHere": "ここから分岐",
+    "chats": {
+      "title": "チャット",
+      "switch": "チャットを切り替え",
+      "new": "新しいチャット",
+      "empty": "チャットはまだありません",
+      "untitled": "無題のチャット",
+      "fork": "分岐"
+    },
+    "progress": {
+      "callingTools_one": "{{count}}個のツールを呼び出し中…",
+      "callingTools_other": "{{count}}個のツールを呼び出し中…",
+      "checkingAnswers": "回答を確認中…",
+      "reasoning": "推論中…",
+      "reasonedFor": "{{duration}}推論",
+      "workedFor": "{{duration}}作業",
+      "steps_one": "{{count}}ステップ",
+      "steps_other": "{{count}}ステップ"
+    }
+  },
   "assistant": {
     "panel": {
       "selectionHint": "編集するテキストを選択",

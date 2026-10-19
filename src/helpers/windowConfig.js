@@ -204,6 +204,32 @@ const MAIN_WINDOW_CONFIG = {
   type: OVERLAY_WINDOW_TYPES.main,
 };
 
+// The assistant's own window: a pill, a composer above it, or a modal, sized to
+// whichever is shown (agentWindowPlacement.js). Web security stays on: it renders
+// model and tool output. Its focusability is per platform (agentWindowManager.js).
+const AGENT_WINDOW_CONFIG = {
+  title: "Assistant",
+  webPreferences: {
+    preload: path.join(__dirname, "..", "..", "preload.js"),
+    nodeIntegration: false,
+    contextIsolation: true,
+    sandbox: true,
+    // Streaming and the waveform must not stall while another app is in front.
+    backgroundThrottling: false,
+  },
+  frame: false,
+  alwaysOnTop: true,
+  resizable: false,
+  transparent: true,
+  show: false,
+  skipTaskbar: true,
+  visibleOnAllWorkspaces: process.platform !== "win32",
+  fullscreenable: false,
+  hasShadow: false,
+  acceptFirstMouse: true,
+  type: OVERLAY_WINDOW_TYPES.main,
+};
+
 // The expanded flow deliberately uses a denser frame than the main control
 // panel. Its typography, cards and spacing are sized for this 1000x740 canvas;
 // clampedBounds still handles displays whose work area is smaller.
@@ -383,6 +409,7 @@ class WindowPositionUtil {
 
 module.exports = {
   fitMeetingNotificationWindow,
+  AGENT_WINDOW_CONFIG,
   MAIN_WINDOW_CONFIG,
   CONTROL_PANEL_CONFIG,
   ONBOARDING_WINDOW_SIZES,

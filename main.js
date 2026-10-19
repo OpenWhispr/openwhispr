@@ -306,6 +306,7 @@ const LinuxKeyManager = require("./src/helpers/linuxKeyManager");
 const TextEditMonitor = require("./src/helpers/textEditMonitor");
 const SelectionManager = require("./src/helpers/selectionManager");
 const { PermissionGuideManager } = require("./src/helpers/permissionGuideManager");
+const { AgentWindowManager } = require("./src/helpers/agentWindowManager");
 const WhisperCudaManager = require("./src/helpers/whisperCudaManager");
 const WhisperVulkanManager = require("./src/helpers/whisperVulkanManager");
 const {
@@ -657,6 +658,7 @@ function initializeCoreManagers() {
   windowManager.windowsKeyManager = windowsKeyManager;
   windowManager.linuxKeyManager = linuxKeyManager;
   windowManager.permissionGuide = new PermissionGuideManager(windowManager);
+  windowManager.agentWindow = new AgentWindowManager(windowManager);
   if (process.platform === "linux") {
     windowManager.hotkeyManager.nativeListenerProbe = () => linuxKeyManager.checkAvailability();
   } else if (process.platform === "win32") {

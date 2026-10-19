@@ -1355,6 +1355,21 @@ export interface OnboardingDemoEvent {
   level?: number;
 }
 
+/** What the agent window shows: the pill, the composer above it, or the modal. */
+export type AgentWindowLayout = "pill" | "typing" | "modal";
+
+/** The agent window's voice take, which keeps dictation off the microphone while recording. */
+export type AgentVoiceState = "idle" | "recording" | "transcribing";
+
+/** A conversational wake-word command, sent from the dictation window to the agent window. */
+export interface AgentWindowCommand {
+  text: string;
+  /** Base64 screenshot without a data-URL prefix. */
+  attachment: { image: string; mediaType: string } | null;
+  /** Text selected in another app when the command was spoken. */
+  selectedContext: { text: string; source: "external" } | null;
+}
+
 export interface ReferralItem {
   id: string;
   email: string;
@@ -1379,6 +1394,28 @@ declare global {
       ) => void;
       onPermissionGuideState?: (callback: (state: PermissionGuideState) => void) => () => void;
       onPermissionGuideAction?: (callback: (action: PermissionGuideAction) => void) => () => void;
+      agentWindowReady?: () => void;
+      /** Bounds for a layout, and keyboard focus for typing in it. */
+      agentWindowSetLayout?: (request: {
+        layout: AgentWindowLayout;
+        focus: boolean;
+      }) => Promise<boolean>;
+      agentWindowHide?: () => Promise<boolean>;
+      /** False refuses a recording while dictation is using the microphone. */
+      agentWindowSetVoiceState?: (state: AgentVoiceState) => Promise<boolean>;
+      openAgentWindow?: () => Promise<boolean>;
+      submitAgentCommand?: (command: AgentWindowCommand) => Promise<boolean>;
+      /** `external`: the press came from another app, whose selection may be captured. */
+      onAgentWindowHotkey?: (callback: (payload: { external: boolean }) => void) => () => void;
+      onAgentWindowOpen?: (
+        callback: (payload: { layout: AgentWindowLayout }) => void
+      ) => () => void;
+      onAgentWindowCommand?: (callback: (command: AgentWindowCommand) => void) => () => void;
+      onAgentWindowDismiss?: (callback: () => void) => () => void;
+      /** A global Esc for the window that registered it, while it records. */
+      registerCancelHotkey?: (key: string) => Promise<unknown>;
+      unregisterCancelHotkey?: () => Promise<{ success: boolean }>;
+      onCancelHotkeyPressed?: (callback: () => void) => () => void;
       verifySystemAudioAccess?: () => Promise<SystemAudioAccessResult>;
       beginOnboardingDemo?: (session: { id: string; kind: OnboardingDemoKind }) => Promise<boolean>;
       endOnboardingDemo?: (id: string) => Promise<boolean>;

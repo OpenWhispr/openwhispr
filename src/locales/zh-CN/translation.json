@@ -3996,6 +3996,61 @@
       }
     }
   },
+  "agentWindow": {
+    "title": "助手",
+    "actions": {
+      "expand": "展开",
+      "collapse": "最小化",
+      "speak": "说话",
+      "type": "输入",
+      "stop": "停止",
+      "close": "关闭",
+      "regenerate": "重新生成",
+      "readAloud": "朗读",
+      "stopReading": "停止朗读"
+    },
+    "notices": {
+      "nothingHeard": "没有听清",
+      "transcriptionFailed": "无法转写",
+      "dictationActive": "听写正在使用麦克风"
+    },
+    "composer": {
+      "placeholder": "说出或输入你的问题…",
+      "followUpPlaceholder": "继续提问…"
+    },
+    "empty": {
+      "title": "有什么可以帮你？",
+      "description": "在下方输入你的请求。"
+    },
+    "selectedContext": {
+      "title": "所选上下文",
+      "remove": "移除所选上下文",
+      "fromAnswer": "来自回答：“{{text}}”",
+      "fromOtherApp": "来自其他应用：“{{text}}”"
+    },
+    "selectionHint": "选择文本以追问或分叉",
+    "selectionToolbar": "所选文本",
+    "followUp": "追问",
+    "forkFromHere": "从这里分叉",
+    "chats": {
+      "title": "对话",
+      "switch": "切换对话",
+      "new": "新对话",
+      "empty": "还没有对话",
+      "untitled": "未命名对话",
+      "fork": "分叉"
+    },
+    "progress": {
+      "callingTools_one": "正在调用 {{count}} 个工具…",
+      "callingTools_other": "正在调用 {{count}} 个工具…",
+      "checkingAnswers": "正在检查结果…",
+      "reasoning": "正在推理…",
+      "reasonedFor": "推理了 {{duration}}",
+      "workedFor": "处理了 {{duration}}",
+      "steps_one": "{{count}} 个步骤",
+      "steps_other": "{{count}} 个步骤"
+    }
+  },
   "assistant": {
     "panel": {
       "selectionHint": "选择要编辑的文本，然后按",

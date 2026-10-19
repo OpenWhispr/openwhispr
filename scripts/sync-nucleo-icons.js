@@ -99,12 +99,16 @@ export {
   ListChecks,
   ListEnd,
   ListOrdered,
+  Maximize,
+  Minimize,
   Quote,
   Square,
   SquareSlash,
   SquareSparkle,
   Strikethrough,
   Table,
+  TextSelect,
+  Volume,
 } from "./primitives";
 
 ${exportLines.join("\n")}

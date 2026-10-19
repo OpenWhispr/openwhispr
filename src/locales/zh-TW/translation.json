@@ -3996,6 +3996,61 @@
       }
     }
   },
+  "agentWindow": {
+    "title": "助理",
+    "actions": {
+      "expand": "展開",
+      "collapse": "最小化",
+      "speak": "說話",
+      "type": "輸入",
+      "stop": "停止",
+      "close": "關閉",
+      "regenerate": "重新產生",
+      "readAloud": "朗讀",
+      "stopReading": "停止朗讀"
+    },
+    "notices": {
+      "nothingHeard": "沒有聽清楚",
+      "transcriptionFailed": "無法轉寫",
+      "dictationActive": "聽寫正在使用麥克風"
+    },
+    "composer": {
+      "placeholder": "說出或輸入你的問題…",
+      "followUpPlaceholder": "繼續提問…"
+    },
+    "empty": {
+      "title": "有什麼可以幫你？",
+      "description": "在下方輸入你的請求。"
+    },
+    "selectedContext": {
+      "title": "所選內容",
+      "remove": "移除所選內容",
+      "fromAnswer": "來自回答：「{{text}}」",
+      "fromOtherApp": "來自其他應用程式：「{{text}}」"
+    },
+    "selectionHint": "選取文字以追問或分支",
+    "selectionToolbar": "所選文字",
+    "followUp": "追問",
+    "forkFromHere": "從這裡分支",
+    "chats": {
+      "title": "對話",
+      "switch": "切換對話",
+      "new": "新對話",
+      "empty": "還沒有對話",
+      "untitled": "未命名對話",
+      "fork": "分支"
+    },
+    "progress": {
+      "callingTools_one": "正在呼叫 {{count}} 個工具…",
+      "callingTools_other": "正在呼叫 {{count}} 個工具…",
+      "checkingAnswers": "正在檢查結果…",
+      "reasoning": "正在推理…",
+      "reasonedFor": "推理了 {{duration}}",
+      "workedFor": "處理了 {{duration}}",
+      "steps_one": "{{count}} 個步驟",
+      "steps_other": "{{count}} 個步驟"
+    }
+  },
   "assistant": {
     "panel": {
       "selectionHint": "選取要編輯的文字，然後按",

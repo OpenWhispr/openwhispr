@@ -11,6 +11,7 @@ const { ANALYTICS_HISTORY_BACKFILL_VERSION } = require("./analytics");
 const { PARAKEET_UNSUPPORTED_OS_CODE } = require("./parakeetCapability");
 const { getModelType, isSherpaLocalProvider } = require("./parakeetModelInfo");
 const { broadcastToWindows } = require("./windowBroadcast");
+const { isFromWindow } = require("./ipcSender");
 const { openExternalUrl } = require("./externalUrlOpener");
 const { resolveFailedGpuBackends } = require("./whisper");
 const { WHISPER_GPU_FAILURE_REASON_KEYS } = require("./whisperGpuFailureReason");
@@ -1566,6 +1567,31 @@ class IPCHandlers {
     ipcMain.on("permission-guide-drag", (event, target) =>
       this.windowManager.permissionGuide.startDrag(event, target)
     );
+
+    // The agent window's own channels; each checks that it is the sender.
+    ipcMain.on("agent-window-ready", (event) => this.windowManager.agentWindow?.markReady(event));
+    ipcMain.handle(
+      "agent-window-set-layout",
+      (event, request) => this.windowManager.agentWindow?.setLayout(event, request) ?? false
+    );
+    ipcMain.handle("agent-window-hide", (event) =>
+      Boolean(this.windowManager.agentWindow?.hide(event))
+    );
+    ipcMain.handle(
+      "agent-window-voice-state",
+      (event, state) => this.windowManager.agentWindow?.setVoiceState(event, state) ?? false
+    );
+    // The dictation window's ways into the assistant: its pill menu's Ask
+    // assistant, and a conversational wake-word command it transcribed.
+    ipcMain.handle("open-agent-window", (event) => {
+      if (!isFromWindow(event, this.windowManager.mainWindow)) return false;
+      this.windowManager.openAgentWindow();
+      return true;
+    });
+    ipcMain.handle("agent-window-submit-command", (event, command) => {
+      if (!isFromWindow(event, this.windowManager.mainWindow)) return false;
+      return this.windowManager.agentWindow?.deliverCommand(command) ?? false;
+    });
 
     // WindowManager owns every teardown path for a demo (id-matched end,
     // onboarding-set-active(false), control panel closed); without this hook a
@@ -4681,15 +4707,21 @@ class IPCHandlers {
       return this.windowManager.getHyprlandConfigStatus();
     });
 
+    // Esc goes to the window that is recording (dictation or the agent
+    // window), and only that window may take it back.
     ipcMain.handle("register-cancel-hotkey", async (event, key) => {
       const hotkeyManager = this.windowManager.hotkeyManager;
-      const mainWindow = this.windowManager.mainWindow;
+      const owner = event.sender;
+      this._cancelHotkeyOwner = owner;
       return hotkeyManager.registerSlot("cancel", key, () => {
-        mainWindow?.webContents?.send("cancel-hotkey-pressed");
+        if (!owner.isDestroyed()) owner.send("cancel-hotkey-pressed");
       });
     });
 
-    ipcMain.handle("unregister-cancel-hotkey", async () => {
+    ipcMain.handle("unregister-cancel-hotkey", async (event) => {
+      const owner = this._cancelHotkeyOwner;
+      if (owner && !owner.isDestroyed() && owner !== event.sender) return { success: false };
+      this._cancelHotkeyOwner = null;
       this.windowManager.hotkeyManager.unregisterSlot("cancel");
       return { success: true };
     });

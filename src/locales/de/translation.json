@@ -4166,6 +4166,61 @@
       }
     }
   },
+  "agentWindow": {
+    "title": "Assistent",
+    "actions": {
+      "expand": "Erweitern",
+      "collapse": "Minimieren",
+      "speak": "Sprechen",
+      "type": "Tippen",
+      "stop": "Stopp",
+      "close": "Schließen",
+      "regenerate": "Neu generieren",
+      "readAloud": "Vorlesen",
+      "stopReading": "Vorlesen beenden"
+    },
+    "notices": {
+      "nothingHeard": "Nichts verstanden",
+      "transcriptionFailed": "Transkription fehlgeschlagen",
+      "dictationActive": "Das Diktat nutzt das Mikrofon"
+    },
+    "composer": {
+      "placeholder": "Frage diktieren oder eintippen…",
+      "followUpPlaceholder": "Rückfrage stellen…"
+    },
+    "empty": {
+      "title": "Wobei kann ich helfen?",
+      "description": "Gib deine Anfrage unten ein."
+    },
+    "selectedContext": {
+      "title": "Ausgewählter Kontext",
+      "remove": "Ausgewählten Kontext entfernen",
+      "fromAnswer": "Aus der Antwort: „{{text}}“",
+      "fromOtherApp": "Aus einer anderen App: „{{text}}“"
+    },
+    "selectionHint": "Text auswählen, um nachzufragen oder abzuzweigen",
+    "selectionToolbar": "Ausgewählter Text",
+    "followUp": "Nachfragen",
+    "forkFromHere": "Hier abzweigen",
+    "chats": {
+      "title": "Chats",
+      "switch": "Chat wechseln",
+      "new": "Neuer Chat",
+      "empty": "Noch keine Chats",
+      "untitled": "Unbenannter Chat",
+      "fork": "Abgezweigt"
+    },
+    "progress": {
+      "callingTools_one": "Rufe {{count}} Tool auf…",
+      "callingTools_other": "Rufe {{count}} Tools auf…",
+      "checkingAnswers": "Prüfe die Antworten…",
+      "reasoning": "Denkt nach…",
+      "reasonedFor": "{{duration}} nachgedacht",
+      "workedFor": "{{duration}} gearbeitet",
+      "steps_one": "{{count}} Schritt",
+      "steps_other": "{{count}} Schritte"
+    }
+  },
   "assistant": {
     "panel": {
       "selectionHint": "Text zum Bearbeiten auswählen mit",

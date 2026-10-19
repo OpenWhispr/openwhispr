@@ -4040,6 +4040,65 @@
       }
     }
   },
+  "agentWindow": {
+    "title": "Ассистент",
+    "actions": {
+      "expand": "Развернуть",
+      "collapse": "Свернуть",
+      "speak": "Говорить",
+      "type": "Печатать",
+      "stop": "Остановить",
+      "close": "Закрыть",
+      "regenerate": "Сгенерировать заново",
+      "readAloud": "Прочитать вслух",
+      "stopReading": "Остановить чтение"
+    },
+    "notices": {
+      "nothingHeard": "Ничего не расслышал",
+      "transcriptionFailed": "Не удалось расшифровать",
+      "dictationActive": "Микрофон занят диктовкой"
+    },
+    "composer": {
+      "placeholder": "Продиктуйте или введите вопрос…",
+      "followUpPlaceholder": "Задайте уточняющий вопрос…"
+    },
+    "empty": {
+      "title": "Чем могу помочь?",
+      "description": "Введите запрос ниже."
+    },
+    "selectedContext": {
+      "title": "Выбранный контекст",
+      "remove": "Убрать выбранный контекст",
+      "fromAnswer": "Из ответа: «{{text}}»",
+      "fromOtherApp": "Из другого приложения: «{{text}}»"
+    },
+    "selectionHint": "Выделите текст, чтобы уточнить или ответвить",
+    "selectionToolbar": "Выделенный текст",
+    "followUp": "Уточнить",
+    "forkFromHere": "Ответвить отсюда",
+    "chats": {
+      "title": "Чаты",
+      "switch": "Сменить чат",
+      "new": "Новый чат",
+      "empty": "Чатов пока нет",
+      "untitled": "Чат без названия",
+      "fork": "Ответвление"
+    },
+    "progress": {
+      "callingTools_one": "Вызываю {{count}} инструмент…",
+      "callingTools_few": "Вызываю {{count}} инструмента…",
+      "callingTools_many": "Вызываю {{count}} инструментов…",
+      "callingTools_other": "Вызываю {{count}} инструмента…",
+      "checkingAnswers": "Проверяю ответы…",
+      "reasoning": "Рассуждаю…",
+      "reasonedFor": "Рассуждал {{duration}}",
+      "workedFor": "Работал {{duration}}",
+      "steps_one": "{{count}} шаг",
+      "steps_few": "{{count}} шага",
+      "steps_many": "{{count}} шагов",
+      "steps_other": "{{count}} шага"
+    }
+  },
   "assistant": {
     "panel": {
       "selectionHint": "Выберите текст для редактирования с помощью",

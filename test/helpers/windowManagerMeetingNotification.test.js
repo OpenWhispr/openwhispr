@@ -262,7 +262,7 @@ test("a failed activation-mode change preserves the cached mode", async () => {
   assert.equal(manager.getActivationMode(), "tap");
 });
 
-test("a busy Assistant blocks its voice hotkey before native side effects", () => {
+test("a busy Assistant blocks dictation before native side effects", () => {
   const manager = createNormalWindowManager();
   const rendererChannels = [];
   let showCount = 0;
@@ -288,9 +288,8 @@ test("a busy Assistant blocks its voice hotkey before native side effects", () =
   manager._assistantPanelOpen = false;
   manager._assistantPanelBusy = true;
 
-  manager.sendToggleVoiceAgent();
   // Before the panel opens there is no companion pill to show a plain
-  // recording either, so the busy state blocks ordinary dictation too.
+  // recording either, so the busy state blocks ordinary dictation.
   manager.sendToggleDictation();
 
   assert.equal(showCount, 0);
@@ -322,13 +321,6 @@ test("a busy Assistant blocks its voice hotkey before native side effects", () =
   assert.equal(prepareCount, 1);
   assert.deepEqual(rendererChannels, ["toggle-dictation"]);
   assert.equal(pillShowCalls, 1);
-
-  manager._assistantPanelBusy = false;
-  manager.sendToggleVoiceAgent();
-
-  assert.equal(showCount, 2);
-  assert.equal(prepareCount, 2);
-  assert.deepEqual(rendererChannels, ["toggle-dictation", "toggle-voice-agent"]);
 });
 
 test("push-to-talk dictation follows the companion pill's availability", () => {
@@ -688,39 +680,88 @@ test("manual meeting starts fail closed like the meeting hotkey", async () => {
   assert.equal(starts, 1);
 });
 
-// Only the renderer can open the assistant panel, and it owns the policy and
-// recording state the pill menu gates the item on, so nothing may be shown,
-// focused, or created before it accepts.
-test("the tray's Ask assistant asks the renderer without showing or focusing the pill", () => {
-  const fakeMainWindow = (events) => ({
+// The tray's (and the pill menu's) Ask assistant opens the agent window to its
+// composer; the dictation pill is neither shown nor focused for it.
+test("Ask assistant opens the agent window, never the dictation pill", () => {
+  const events = [];
+  const manager = createNormalWindowManager();
+  manager.mainWindow = {
     isDestroyed: () => false,
-    isMinimized: () => false,
     isVisible: () => true,
     focus: () => events.push("focus"),
     show: () => events.push("show"),
     showInactive: () => events.push("show"),
     webContents: { send: (channel) => events.push(channel) },
-  });
+  };
+  manager.agentWindow = { open: (options) => events.push(["agent", options]) };
+  manager.openAgentWindow();
+  assert.deepEqual(events, [["agent", { layout: "typing" }]]);
+});
 
-  const onboardingEvents = [];
-  const onboarding = new WindowManager();
-  onboarding.mainWindow = fakeMainWindow(onboardingEvents);
-  onboarding.sendOpenAssistantPanel();
-  assert.deepEqual(onboardingEvents, []);
-
+// Every voice-assistant press ends in sendToggleVoiceAgent: during onboarding
+// it records in the dictation window for the assistant demo, and otherwise it
+// is the agent window's.
+test("agent hotkey presses reach the agent window, except onboarding's demo", () => {
   const events = [];
-  const manager = createNormalWindowManager();
-  manager.mainWindow = fakeMainWindow(events);
-  manager.sendOpenAssistantPanel();
-  assert.deepEqual(events, ["open-assistant-panel"]);
+  const fakeMainWindow = {
+    isDestroyed: () => false,
+    isMinimized: () => false,
+    isVisible: () => true,
+    showInactive: () => undefined,
+    hide: () => undefined,
+    webContents: { send: (channel) => events.push(["main", channel]) },
+  };
+  const agentWindow = {
+    handleHotkey: () => events.push(["agent", "hotkey"]),
+    isRecording: () => false,
+  };
 
-  // Capturing a hotkey swallows it, like every other input path.
-  const capturingEvents = [];
-  const capturing = createNormalWindowManager();
-  capturing.mainWindow = fakeMainWindow(capturingEvents);
-  capturing.hotkeyManager.isInListeningMode = () => true;
-  capturing.sendOpenAssistantPanel();
-  assert.deepEqual(capturingEvents, []);
+  const onboarding = new WindowManager();
+  onboarding.mainWindow = fakeMainWindow;
+  onboarding.agentWindow = agentWindow;
+  onboarding.beginOnboardingDemo("assistant");
+  events.length = 0;
+  onboarding.sendToggleVoiceAgent();
+  assert.deepEqual(events, [
+    ["main", "prepare-dictation"],
+    ["main", "toggle-voice-agent"],
+  ]);
+
+  events.length = 0;
+  const manager = createNormalWindowManager();
+  manager.mainWindow = fakeMainWindow;
+  manager.agentWindow = agentWindow;
+  manager.sendToggleVoiceAgent();
+  assert.deepEqual(events, [["agent", "hotkey"]]);
+});
+
+test("while the agent window records, every dictation press is held off", () => {
+  const sent = [];
+  const userRecording = [];
+  const manager = createNormalWindowManager();
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    isMinimized: () => false,
+    isVisible: () => true,
+    showInactive: () => undefined,
+    webContents: { send: (channel) => sent.push(channel) },
+  };
+  manager.meetingDetectionEngine = { setUserRecording: (value) => userRecording.push(value) };
+  manager.showDictationPanel = () => undefined;
+  let agentRecording = true;
+  manager.agentWindow = { isRecording: () => agentRecording };
+
+  manager.sendToggleDictation();
+  manager.sendToggleTranslation();
+  manager.sendStartDictation();
+  assert.deepEqual(sent, []);
+
+  manager.syncUserRecording();
+  agentRecording = false;
+  manager.syncUserRecording();
+  assert.deepEqual(userRecording, [true, false]);
+  manager.sendToggleDictation();
+  assert.ok(sent.includes("toggle-dictation"));
 });
 
 async function showOwned(manager, id = "calendar:editing") {

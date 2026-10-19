@@ -210,7 +210,14 @@ export default function App() {
   const recording = useAudioRecording(toast, {
     onToggle: handleDictationToggle,
     onDemoEvent: publishOnboardingDemoEvent,
-    onAssistantCommand: assistant.handleCommand,
+    // A conversational wake-word command is answered in the agent window.
+    onAssistantCommand: (command) => {
+      void window.electronAPI?.submitAgentCommand?.({
+        text: command.text,
+        attachment: command.attachment,
+        selectedContext: command.selectedContext,
+      });
+    },
     onOnboardingAssistantCommand: runOnboardingAssistantDemo,
     dismissDictationError,
     onDictationError: handleDictationError,
@@ -777,7 +784,7 @@ export default function App() {
               }}
               onAskAssistant={() => {
                 setIsCommandMenuOpen(false);
-                void openAssistantPanel();
+                void window.electronAPI?.openAgentWindow?.();
               }}
               onStartMeeting={() => {
                 setIsCommandMenuOpen(false);
