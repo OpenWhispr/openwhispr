@@ -1,0 +1,12 @@
+<!-- Source: https://superwhisper.com/downloads/presskit/superwhisper-logo.svg
+     Original geometry; black fill for the app's existing dark-mode inversion. -->
+<svg width="828" height="755" viewBox="0 0 828 755" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g clip-path="url(#clip0_1232_3)">
+<path fill-rule="evenodd" clip-rule="evenodd" d="M531.147 67.6699C479.376 -22.5565 348.472 -22.5567 296.701 67.6698L17.9125 553.543C-33.3743 642.926 31.5864 754.027 135.135 754.027H692.712C796.261 754.027 861.222 642.926 809.935 553.543L531.147 67.6699ZM413.924 197.368C351.676 234.479 218.218 363.624 182.363 583.318C267.02 620.429 478.163 672.384 645.484 583.318C635.525 496.727 575.269 298.309 413.924 197.368Z" fill="black"/>
+</g>
+<defs>
+<clipPath id="clip0_1232_3">
+<rect width="828" height="755" fill="white"/>
+</clipPath>
+</defs>
+</svg>

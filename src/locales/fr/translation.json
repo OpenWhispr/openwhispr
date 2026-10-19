@@ -1,4 +1,30 @@
 {
+  "s1Mini": {
+    "options": "Options",
+    "description": "S1-mini de Superwhisper prend uniquement en charge le nettoyage des dictées en anglais. Choisissez ses options ci-dessous. Le raisonnement est toujours désactivé.",
+    "styling": "Style",
+    "structure": "Structure",
+    "context": "Contexte",
+    "values": {
+      "casual": "Familier",
+      "semi-casual": "Plutôt familier",
+      "semi-formal": "Plutôt formel",
+      "formal": "Formel",
+      "prose": "Paragraphes",
+      "lists": "Autoriser les listes",
+      "general": "Général",
+      "email": "E-mail"
+    },
+    "help": {
+      "styling": "Majuscules, ponctuation et contractions.",
+      "structure": "Conserver les paragraphes ou autoriser les listes à puces.",
+      "context": "Texte général ou salutations et formules de fin d’e-mail."
+    },
+    "licenseSummary": "Apache 2.0 + obligation de mention du nom",
+    "license": "Licence",
+    "notice": "Notice",
+    "modelDescription": "Anglais uniquement · Nettoyage des dictées (Q4_K_M)"
+  },
   "settings": {
     "language": {
       "sectionTitle": "Langue",
