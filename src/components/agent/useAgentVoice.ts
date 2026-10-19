@@ -55,7 +55,6 @@ export function useAgentVoice({
   // Main refuses while dictation is using the microphone.
   const start = useCallback(async (): Promise<"started" | "refused" | "failed"> => {
     if (!(await window.electronAPI?.agentWindowSetVoiceState?.("recording"))) return "refused";
-    intentRef.current = "submit";
     setOpening(true);
     const started = await startTake();
     setOpening(false);
@@ -63,6 +62,8 @@ export function useAgentVoice({
       void window.electronAPI?.agentWindowSetVoiceState?.("idle");
       return "failed";
     }
+    // Only now: a refused start must not change what the last take was for.
+    intentRef.current = "submit";
     void playStartCue();
     return "started";
   }, [startTake]);

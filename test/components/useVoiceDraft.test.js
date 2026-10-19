@@ -322,3 +322,33 @@ test("the agent's Esc belongs to a recording take, and an unmount mid-take frees
   assert.ok(harness.bridge.includes("esc:off"));
   assert.ok(harness.bridge.includes("voice:idle"), "an error screen or reload frees the mic");
 });
+
+test("a refused start leaves the transcribing take's intent alone", async (t) => {
+  const transcription = deferred();
+  const harness = await mountVoiceDraft(t, {
+    settings: SIGNED_IN_CLOUD,
+    getUserMedia: (_constraints, stream) => stream,
+    gate: transcription.promise,
+    agent: true,
+  });
+
+  await React.act(async () => {
+    await harness.voice().start();
+  });
+  // Keyboard during a take: its text goes to the draft.
+  await React.act(async () => {
+    harness.voice().stop("draft");
+    await settle();
+  });
+  let second;
+  await React.act(async () => {
+    second = await harness.voice().start();
+  });
+  assert.equal(second, "failed");
+
+  await React.act(async () => {
+    transcription.resolve("for the draft");
+    await settle();
+  });
+  assert.deepEqual(harness.transcripts, ["draft:for the draft"]);
+});

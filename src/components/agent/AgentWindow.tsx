@@ -113,8 +113,11 @@ export default function AgentWindow() {
   // Pending captures from the press (another app's selection, a screenshot).
   const pressCaptureRef = useRef<Promise<unknown> | null>(null);
   const pressRef = useRef(0);
-  // A take whose transcript must not be sent (closed, dismissed, another chat opened).
-  const dropTranscriptRef = useRef(false);
+  // Takes are numbered as they start; every take up to droppedTakeRef was
+  // dropped (closed, dismissed, another chat opened) and is never sent, even
+  // when a new take starts while its transcript waits on the press capture.
+  const takeRef = useRef(0);
+  const droppedTakeRef = useRef(0);
 
   // Read when a request arrives; set at once on a send, before the next render.
   const busyRef = useRef(busy);
@@ -159,7 +162,10 @@ export default function AgentWindow() {
 
   const handleTranscript = useCallback(
     async (text: string, intent: AgentVoiceIntent) => {
-      if (dropTranscriptRef.current) return;
+      // One take at a time: a transcript is the latest take's.
+      const take = takeRef.current;
+      const dropped = () => take <= droppedTakeRef.current;
+      if (dropped()) return;
       if (intent === "draft") {
         dispatch({ type: "appendDraft", text });
         return;
@@ -167,7 +173,7 @@ export default function AgentWindow() {
       const pending = pressCaptureRef.current;
       pressCaptureRef.current = null;
       if (pending) await Promise.race([pending, delay(PRESS_CAPTURE_WAIT_MS)]);
-      if (dropTranscriptRef.current) return;
+      if (dropped()) return;
       submit(text, false);
     },
     [dispatch, submit]
@@ -221,7 +227,7 @@ export default function AgentWindow() {
       dispatch({ type: "useKeyboard" });
       return;
     }
-    dropTranscriptRef.current = false;
+    takeRef.current += 1;
     dispatch({ type: "useVoice" });
     if ((await voice.start()) === "refused") {
       dispatch({ type: "notice", notice: "agentWindow.notices.dictationActive" });
@@ -231,7 +237,7 @@ export default function AgentWindow() {
   const { cancel: cancelTake } = voice;
   // The take belongs to the chat it was spoken in: opening another drops it.
   const dropTake = useCallback(() => {
-    dropTranscriptRef.current = true;
+    droppedTakeRef.current = takeRef.current;
     cancelTake();
   }, [cancelTake]);
   const { hide: hideSurface } = surface;
@@ -319,6 +325,7 @@ export default function AgentWindow() {
     },
     dismiss: () => {
       dropTake();
+      pressRef.current += 1;
       cancelTurn();
       stopReading();
       setRefusal(null);
