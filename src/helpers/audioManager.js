@@ -571,6 +571,12 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
   },
 };
 
+function notifyUsageChanged() {
+  window.electronAPI?.emitSyncEvent?.("usage-changed")?.catch((error) => {
+    logger.error("Failed to notify usage changed", { error: error.message });
+  });
+}
+
 // Selection-edit copy for a failed reply, looked up by the cause's messageKey,
 // then by its code.
 const SELECTION_EDIT_FAILURE_COPY = {
@@ -2247,7 +2253,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       pipeline.resultHandled = this.onTranscriptionComplete?.(result);
 
       if (result?.source === "openwhispr") {
-        window.dispatchEvent(new Event("usage-changed"));
+        notifyUsageChanged();
       }
 
       const roundTripDurationMs = Math.round(performance.now() - pipelineStart);
@@ -6197,10 +6203,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           } catch (err) {
             logger.error("Failed to report streaming usage", { error: err.message }, "streaming");
           }
-          window.dispatchEvent(new Event("usage-changed"));
+          notifyUsageChanged();
         })();
       } else {
-        window.dispatchEvent(new Event("usage-changed"));
+        notifyUsageChanged();
       }
 
       logger.info(
