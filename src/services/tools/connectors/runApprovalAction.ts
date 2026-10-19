@@ -2,11 +2,13 @@ import i18n from "../../../i18n";
 import type { ToolExecutionContext, ToolResult } from "../ToolRegistry";
 import { requestApproval } from "../../../stores/connectorApprovalStore";
 import {
+  alreadySentResult,
   approvalOutcomeResult,
   notSentResult,
   prepareFailureResult,
   unavailableResult,
 } from "./toolOutcome";
+import { connectorActionKey } from "./actionKey";
 
 /**
  * Cards one turn can raise, across every connector. "File these eight action
@@ -35,6 +37,10 @@ export async function runApprovalAction(
   // Whatever happens next (a card, a question, a refusal), the answer belongs
   // in the panel: a voice turn must never paste it at the caret.
   context.onHoldDelivery();
+  // A resumed or regenerated turn can ask for a send this conversation
+  // already made; it is refused before any card appears.
+  const actionKey = connectorActionKey(connectorId, action, args);
+  if (context.isActionCompleted(actionKey)) return alreadySentResult();
   // Claimed before the first await, so calls running in parallel can't overshoot.
   if (!context.claimTurnSlot(CARD_SLOT, MAX_APPROVAL_CARDS_PER_TURN)) {
     return notSentResult(
@@ -63,6 +69,9 @@ export async function runApprovalAction(
     connectorId,
     preview: prepared.preview,
   });
+  if (outcome.state === "sent" || outcome.state === "unknown") {
+    context.recordCompletedAction(actionKey);
+  }
   // An edited card may have gone to other recipients than the model chose.
   const destination =
     (outcome.state === "sent" || outcome.state === "unknown") && outcome.destinationLabel

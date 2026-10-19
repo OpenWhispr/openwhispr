@@ -1,4 +1,6 @@
 import type { HoldDeliveryOptions, ToolExecutionContext } from "../../services/tools/ToolRegistry";
+import type { InteractionPayload } from "../../types/agentInteractions";
+import type { ChatImageAttachment } from "./types";
 
 export interface ToolContextRequest {
   /** The assistant message the tool call belongs to. */
@@ -16,6 +18,13 @@ export interface ToolExecutionScope {
 interface ToolExecutionHandlers {
   onApprovalRequested?: () => void;
   onHoldDelivery?: (options?: HoldDeliveryOptions) => void;
+  /** A call now waits on the user's answer. */
+  onInteractionRequested?: (request: { toolCallId: string; payload: InteractionPayload }) => void;
+  onImageAttached?: (image: ChatImageAttachment) => void;
+  /** A send happened (or may have); the key belongs on its tool call. */
+  onActionCompleted?: (request: { toolCallId: string; actionKey: string }) => void;
+  /** Sends the conversation already made, from its saved tool calls. */
+  completedActions?: Iterable<string>;
 }
 
 /**
@@ -28,6 +37,7 @@ interface ToolExecutionHandlers {
 export function createToolExecutionScope(handlers: ToolExecutionHandlers = {}): ToolExecutionScope {
   const controller = new AbortController();
   const turnSlots = new Map<string, number>();
+  const completedActions = new Set(handlers.completedActions);
   const notify =
     <Args extends unknown[]>(handler?: (...args: Args) => void) =>
     (...args: Args): void => {
@@ -58,6 +68,8 @@ export function createToolExecutionScope(handlers: ToolExecutionHandlers = {}): 
       hold(options);
     };
   };
+  const interactionRequested = notify(handlers.onInteractionRequested);
+  const actionCompleted = notify(handlers.onActionCompleted);
   return {
     createContext: ({ messageId, toolCallId, signal }) => ({
       messageId,
@@ -69,6 +81,13 @@ export function createToolExecutionScope(handlers: ToolExecutionHandlers = {}): 
       onHoldDelivery: holdOncePerCall(),
       claimTurnSlot,
       releaseTurnSlot,
+      onInteractionRequested: (payload) => interactionRequested({ toolCallId, payload }),
+      attachImage: notify(handlers.onImageAttached),
+      isActionCompleted: (actionKey) => completedActions.has(actionKey),
+      recordCompletedAction: (actionKey) => {
+        completedActions.add(actionKey);
+        actionCompleted({ toolCallId, actionKey });
+      },
     }),
     abort: () => controller.abort(),
   };

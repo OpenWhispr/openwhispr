@@ -1,4 +1,5 @@
 import { DOCS_ORIGIN } from "../helpers/productHelpFallback";
+import type { ConnectionTarget } from "../types/agentInteractions";
 
 /**
  * What the assistant can't do in this conversation, and why. Named in the
@@ -22,6 +23,8 @@ export interface UnavailableCapability {
   where?: string;
   /** Sends, posts or files for the user, so the model still writes the text itself. */
   delivers?: boolean;
+  /** The user can connect it from the chat: request_connection's target for it. */
+  connectTarget?: ConnectionTarget;
 }
 
 /** Where each fix lives, as the UI labels it (localized by the caller). */
@@ -53,6 +56,8 @@ export interface UnavailableCapabilityInput {
     statuses: Readonly<Record<string, ConnectorAvailability>>;
   };
   locations: CapabilityLocations;
+  /** What request_connection can connect in this conversation (none without interactions). */
+  connectionTargets?: readonly ConnectionTarget[];
 }
 
 /** Connector names by connectorId, as the prompt names them. */
@@ -65,9 +70,23 @@ export const CONNECTOR_NAMES: Readonly<Record<string, string>> = {
 
 // Connectors the user connects one by one. Email always works (it falls back to
 // the user's mail app) and the email_draft tool reports Gmail's own state.
-const CONNECTED_ONE_BY_ONE = ["slack", "linear", "github"];
+const CONNECTED_ONE_BY_ONE: ConnectionTarget[] = ["slack", "linear", "github"];
+
+/** What request_connection can connect, as the prompt and the cards name it. */
+export const CONNECTION_TARGET_NAMES: Readonly<Record<ConnectionTarget, string>> = {
+  gmail: "Gmail",
+  slack: CONNECTOR_NAMES.slack,
+  linear: CONNECTOR_NAMES.linear,
+  github: CONNECTOR_NAMES.github,
+  google: "Google Calendar",
+  microsoft: "Microsoft Calendar",
+  apple: "Apple Calendar",
+  calendar: "a calendar",
+};
 
 const CONNECTORS_NAME = `Integrations (${Object.values(CONNECTOR_NAMES).join(", ")})`;
+const GMAIL_TO_SEND =
+  "Gmail, to send email from here (without it, email_draft opens a draft in the user's email app)";
 
 export function resolveUnavailableCapabilities(
   input: UnavailableCapabilityInput
@@ -82,6 +101,8 @@ export function resolveUnavailableCapabilities(
   }
 
   const unavailable: UnavailableCapability[] = [];
+  const connectable = (target: ConnectionTarget) =>
+    input.connectionTargets?.includes(target) ? { connectTarget: target } : {};
 
   if (!input.isSignedIn) {
     unavailable.push({ name: "Web search", reason: "signedOut", where: locations.account });
@@ -93,15 +114,31 @@ export function resolveUnavailableCapabilities(
   }
 
   if (!input.calendarConnected) {
-    unavailable.push({ name: "Calendar", reason: "notConnected", where: locations.calendars });
+    unavailable.push({
+      name: "Calendar",
+      reason: "notConnected",
+      where: locations.calendars,
+      ...connectable("calendar"),
+    });
   }
 
   const connectors = input.connectors;
   if (!connectors) return unavailable;
 
   // Every connector entry is about sending for the user, never about writing the text.
-  const unavailableConnector = (name: string, reason: UnavailableReason, where?: string): void => {
-    unavailable.push({ name, reason, ...(where ? { where } : {}), delivers: true });
+  const unavailableConnector = (
+    name: string,
+    reason: UnavailableReason,
+    where?: string,
+    target?: ConnectionTarget
+  ): void => {
+    unavailable.push({
+      name,
+      reason,
+      ...(where ? { where } : {}),
+      delivers: true,
+      ...(target ? connectable(target) : {}),
+    });
   };
 
   if (!input.isSignedIn) {
@@ -120,10 +157,15 @@ export function resolveUnavailableCapabilities(
       // provider's client hides its row, so there's nothing to connect.
       if (!status || status.configured === false) continue;
       if (!status.connected) {
-        unavailableConnector(CONNECTOR_NAMES[id], "notConnected", locations.connectors);
+        unavailableConnector(CONNECTOR_NAMES[id], "notConnected", locations.connectors, id);
       } else if (status.needsReconnect) {
-        unavailableConnector(CONNECTOR_NAMES[id], "needsReconnect", locations.connectors);
+        unavailableConnector(CONNECTOR_NAMES[id], "needsReconnect", locations.connectors, id);
       }
+    }
+    // Email works without Gmail (a draft in the user's mail app), so Gmail is
+    // named only when the chat can connect it to send from here.
+    if (input.connectionTargets?.includes("gmail")) {
+      unavailableConnector(GMAIL_TO_SEND, "notConnected", locations.connectors, "gmail");
     }
   }
 
@@ -154,9 +196,23 @@ const describeList = (items: ReadonlyArray<UnavailableCapability>): string =>
   items.map((item) => `- ${describeOne(item)}`).join("\n");
 
 export function describeUnavailable(unavailable: ReadonlyArray<UnavailableCapability>): string {
-  const other = unavailable.filter((item) => !item.delivers);
-  const delivering = unavailable.filter((item) => item.delivers);
+  const connectable = unavailable.filter((item) => item.connectTarget);
+  const other = unavailable.filter((item) => !item.delivers && !item.connectTarget);
+  const delivering = unavailable.filter((item) => item.delivers && !item.connectTarget);
   const sections: string[] = [];
+  if (connectable.length > 0) {
+    sections.push(
+      "Not connected yet, but the user can connect these right here. When the request needs " +
+        "one, call request_connection with its target, then continue the task once it " +
+        "connects; don't just tell the user to connect it themselves:\n" +
+        connectable
+          .map(
+            (item) =>
+              `- ${item.name}${item.reason === "needsReconnect" ? ", connection expired" : ""} (target: ${item.connectTarget})`
+          )
+          .join("\n")
+    );
+  }
   if (other.length > 0) {
     sections.push(
       "Not available in this conversation. If the user asks for one of these, briefly tell them " +

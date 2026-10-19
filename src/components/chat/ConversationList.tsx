@@ -89,6 +89,7 @@ export default function ConversationList({
         created_at: string;
         updated_at: string;
         archived_at?: string;
+        parent_conversation_id?: number | null;
       }) => ({
         id: c.id,
         title: c.title || "Untitled",
@@ -96,6 +97,7 @@ export default function ConversationList({
         created_at: c.created_at,
         updated_at: c.updated_at,
         is_archived: !!c.archived_at,
+        is_fork: c.parent_conversation_id != null,
       });
       setConversations([...(active ?? []).map(toPreview), ...(archived ?? []).map(toPreview)]);
       // The Archived toggle hides once nothing is archived; leave that view with it.

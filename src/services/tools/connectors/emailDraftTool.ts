@@ -13,6 +13,7 @@ import { useConnectorStatusStore } from "../../../stores/connectorStatusStore";
 import { connectorErrorText } from "../../../utils/connectorErrorCopy";
 import { runApprovalAction } from "./runApprovalAction";
 import {
+  alreadySentResult,
   failedResult,
   needsClarificationResult,
   notSentResult,
@@ -21,6 +22,7 @@ import {
   userEdits,
 } from "./toolOutcome";
 import { findContactTool } from "./findContactTool";
+import { connectorActionKey } from "./actionKey";
 import type { ConnectorToolModule } from "./connectorToolModules";
 
 // Enough for "email Josh and Dana each a recap"; a model stuck in a loop, or
@@ -220,6 +222,14 @@ function createComposeDraftTool(target: ComposeTarget): ToolDefinition {
         subject: typeof args.subject === "string" ? args.subject : "",
         body: typeof args.body === "string" ? args.body : "",
       };
+      // The same draft already opened earlier in this conversation is not opened again.
+      const actionKey = connectorActionKey("email", "draft", {
+        to,
+        cc,
+        subject: draft.subject,
+        body: draft.body,
+      });
+      if (context?.isActionCompleted(actionKey)) return alreadySentResult();
       // Main builds the same request; checking it here claims the clipboard
       // before any await, so a second overflowing draft in the turn can't
       // replace the first one's text before the user pastes it. Main refuses
@@ -278,6 +288,7 @@ function createComposeDraftTool(target: ComposeTarget): ToolDefinition {
       // An unknown run may have opened a window and used the clipboard, so
       // it keeps its slots.
       if (result.state === "unknown") {
+        context?.recordCompletedAction(actionKey);
         if (clipboardReserved) preserveClipboard();
         return unknownResult(
           to.join(", "),
@@ -287,6 +298,7 @@ function createComposeDraftTool(target: ComposeTarget): ToolDefinition {
       }
       if (result.state !== "sent") releaseSlots();
       else if (result.copyFailed) context?.releaseTurnSlot("clipboard");
+      if (result.state === "sent") context?.recordCompletedAction(actionKey);
       if (result.state === "not_sent") return notSentResult(result.reason);
       if (result.state === "unavailable") return unavailableResult(result.reason);
       if (result.state === "failed") return failedResult(result.errorCode, result.message);
@@ -322,15 +334,28 @@ function createComposeDraftTool(target: ComposeTarget): ToolDefinition {
 /**
  * One tool, two paths: with Gmail chosen, a card the user sends from the chat;
  * otherwise a compose window in their email app. gmailSend must never reach
- * buildComposeRequest, which only knows the compose targets.
+ * buildComposeRequest, which only knows the compose targets. With
+ * `currentTarget`, each call takes the path the target resolves to then:
+ * Gmail can be connected in the middle of a turn.
  */
-export function createEmailDraftTool(target: EmailDraftTarget): ToolDefinition {
-  return target === "gmailSend" ? createGmailSendTool() : createComposeDraftTool(target);
+export function createEmailDraftTool(
+  target: EmailDraftTarget,
+  currentTarget?: () => EmailDraftTarget
+): ToolDefinition {
+  const tool = target === "gmailSend" ? createGmailSendTool() : createComposeDraftTool(target);
+  if (!currentTarget) return tool;
+  return {
+    ...tool,
+    execute: (args, context) => createEmailDraftTool(currentTarget()).execute(args, context),
+  };
 }
 
 /** Email tools need no login of their own: compose windows, or Gmail's card. */
 export const emailToolModule: ConnectorToolModule = {
   connectorId: "email",
   requiresConnection: false,
-  createTools: (env) => [findContactTool, createEmailDraftTool(env.emailDraftTarget)],
+  createTools: (env) => [
+    findContactTool,
+    createEmailDraftTool(env.emailDraftTarget, env.currentEmailDraftTarget),
+  ],
 };

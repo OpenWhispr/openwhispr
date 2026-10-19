@@ -1,5 +1,7 @@
 import { jsonSchema } from "ai";
 import type { Tool, ToolExecutionOptions } from "ai";
+import type { InteractionPayload } from "../../types/agentInteractions";
+import type { ChatImageAttachment } from "../../components/chat/types";
 
 export interface ToolResult {
   success: boolean;
@@ -38,6 +40,14 @@ export interface ToolExecutionContext {
   claimTurnSlot: (key: string, limit: number) => boolean;
   /** Gives back a claimed use of `key` whose action never happened. */
   releaseTurnSlot: (key: string) => void;
+  /** Tells the chat the turn is now waiting on the user's answer to this call. */
+  onInteractionRequested: (payload: InteractionPayload) => void;
+  /** Shows the model an image (a screenshot the user allowed) from its next step on. */
+  attachImage: (image: ChatImageAttachment) => void;
+  /** Whether this conversation already sent (or may have sent) the action with this key. */
+  isActionCompleted: (actionKey: string) => boolean;
+  /** Records a send that happened or may have, so the conversation never repeats it. */
+  recordCompletedAction: (actionKey: string) => void;
 }
 
 export interface ToolDefinition {

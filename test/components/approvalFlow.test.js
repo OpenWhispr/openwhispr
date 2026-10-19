@@ -99,6 +99,8 @@ async function mountApprovalTurn(t) {
         onApprovalRequested() {},
         onHoldDelivery() {},
         claimTurnSlot: () => true,
+        isActionCompleted: () => false,
+        recordCompletedAction() {},
         releaseTurnSlot() {},
       },
       "slack",

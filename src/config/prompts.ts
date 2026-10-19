@@ -107,7 +107,16 @@ const TOOL_GROUPS: Record<string, string> = {
   update_snippets: "The user's snippets and dictionary",
   update_dictionary: "The user's snippets and dictionary",
   copy_to_clipboard: "Clipboard",
+  ask_user: "Asking the user",
+  request_connection: "Asking the user",
+  request_access: "Asking the user",
+  request_api_key: "Asking the user",
+  open_settings: "Asking the user",
 };
+
+// The interaction tools are there to finish a task, never to add steps to it.
+const ASK_ONLY_WHEN_NECESSARY_RULE =
+  "Ask the user something only when you really can't decide it yourself: the request, the conversation, your tools and reasonable defaults come first, and a simple request gets a direct answer with no questions. When you do need input, ask everything at once in one ask_user call. While a question or card waits for the user, the task is paused; when they answer, carry on with the original request and do only what is still outstanding.";
 
 const CAPABILITY_RULE =
   "Use a tool when the request needs what it provides, rather than guessing from memory; don't call one when the conversation or the context provided here already has the answer. Never tell the user you can't do something one of these tools covers (for example, never say you can't browse the web when web search is listed). If a tool call fails, say that it failed rather than claiming you lack the ability.";
@@ -211,6 +220,9 @@ export function getAgentSystemPrompt(
     }
     if (tools.some((tool) => tool.connectorId)) {
       prompt += "\n\n" + CONNECTOR_TOOL_RULES;
+    }
+    if (tools.some((tool) => tool.name === "ask_user")) {
+      prompt += "\n\n" + ASK_ONLY_WHEN_NECESSARY_RULE;
     }
     if (tools.some((tool) => tool.name === "get_calendar_availability")) {
       prompt += "\n\n" + getLocalCalendarContext();

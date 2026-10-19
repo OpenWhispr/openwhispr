@@ -1,0 +1,338 @@
+import { useState, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { GithubDeviceCode } from "../connectors/GithubDeviceCode";
+import {
+  answerQuestions,
+  cancelInteraction,
+  confirmSettingsDone,
+  connectInteraction,
+  openInteractionSettings,
+  respondToAccess,
+  submitApiKey,
+  updateInteractionDraft,
+  type InteractionEntry,
+} from "../../stores/agentInteractionStore";
+import { CONNECTION_TARGET_NAMES } from "../../config/agentCapabilities";
+import { getCachedPlatform } from "../../utils/platform";
+import type {
+  InteractionAnswers,
+  InteractionQuestion,
+  InteractionRecord,
+  InteractionResult,
+} from "../../types/agentInteractions";
+import type { CalendarProvider } from "../../utils/calendarConnect";
+
+const CARD_CLASS = "my-1.5 rounded-lg border border-border/70 bg-surface-2/60 p-3 text-[13px]";
+const CALENDAR_PROVIDERS: CalendarProvider[] =
+  getCachedPlatform() === "darwin" ? ["google", "microsoft", "apple"] : ["google", "microsoft"];
+
+/** One line for an interaction that's over: what the user answered or decided. */
+export function InteractionSummary({ record }: { record: InteractionRecord }): ReactElement {
+  const { t } = useTranslation();
+  return (
+    <p className="mb-1 text-[11px] text-muted-foreground/80" dir="auto">
+      {record.result
+        ? resultText(record, record.result, t)
+        : t("agentMode.interactions.status.notAnswered")}
+    </p>
+  );
+}
+
+function resultText(
+  { payload }: InteractionRecord,
+  result: InteractionResult,
+  t: TFunction
+): string {
+  if (result.status === "answered" && payload.kind === "questions") {
+    return payload.questions
+      .map((question) => `${question.prompt} ${answerText(question, result.answers)}`)
+      .join(" · ");
+  }
+  if (result.status === "connected") {
+    return t("agentMode.interactions.status.connected", {
+      name: CONNECTION_TARGET_NAMES[result.target],
+    });
+  }
+  return t(
+    `agentMode.interactions.status.${result.status === "not_answered" ? "notAnswered" : result.status}`
+  );
+}
+
+function answerText(question: InteractionQuestion, answers: InteractionAnswers): string {
+  const answer = answers[question.id];
+  const label = (id: string) => question.options?.find((option) => option.id === id)?.label ?? id;
+  return Array.isArray(answer) ? answer.map(label).join(", ") : label(answer ?? "");
+}
+
+function Questions({ entry }: { entry: InteractionEntry }): ReactElement | null {
+  const { t } = useTranslation();
+  if (entry.payload.kind !== "questions") return null;
+  const { questions } = entry.payload;
+  const set = (questionId: string, value: string | string[]) =>
+    updateInteractionDraft(entry.key, { ...entry.draft, [questionId]: value });
+
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        answerQuestions(entry.key);
+      }}
+    >
+      {questions.map((question) => {
+        const value = entry.draft[question.id];
+        return (
+          <fieldset key={question.id} className="mb-2">
+            <legend className="mb-1 font-medium text-foreground" dir="auto">
+              {question.prompt}
+            </legend>
+            {question.kind === "text" ? (
+              <Input
+                dir="auto"
+                value={typeof value === "string" ? value : ""}
+                placeholder={
+                  question.placeholder ?? t("agentMode.interactions.questions.placeholder")
+                }
+                onChange={(event) => set(question.id, event.target.value)}
+              />
+            ) : (
+              question.options?.map((option) => {
+                const selected = Array.isArray(value)
+                  ? value.includes(option.id)
+                  : value === option.id;
+                return (
+                  <label key={option.id} className="flex items-center gap-2 py-0.5" dir="auto">
+                    <input
+                      type={question.kind === "single" ? "radio" : "checkbox"}
+                      name={`${entry.key}:${question.id}`}
+                      checked={selected}
+                      onChange={() =>
+                        set(
+                          question.id,
+                          question.kind === "single"
+                            ? option.id
+                            : selected
+                              ? (value as string[]).filter((id) => id !== option.id)
+                              : [...(Array.isArray(value) ? value : []), option.id]
+                        )
+                      }
+                    />
+                    <span>{option.label}</span>
+                    {option.recommended && (
+                      <span className="text-xs text-muted-foreground">
+                        {t("agentMode.interactions.questions.recommended")}
+                      </span>
+                    )}
+                  </label>
+                );
+              })
+            )}
+          </fieldset>
+        );
+      })}
+      <div className="flex gap-2">
+        <Button size="sm" type="submit">
+          {t("agentMode.interactions.questions.submit")}
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          type="button"
+          onClick={() => cancelInteraction(entry.key)}
+        >
+          {t("agentMode.interactions.notNow")}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function Connection({ entry }: { entry: InteractionEntry }): ReactElement | null {
+  const { t } = useTranslation();
+  if (entry.payload.kind !== "connection") return null;
+  const { target, reason } = entry.payload;
+  const working = entry.state === "working";
+  const providers = target === "calendar" ? CALENDAR_PROVIDERS : [undefined];
+  return (
+    <>
+      <p className="font-medium text-foreground">
+        {t("agentMode.interactions.connection.title", { name: CONNECTION_TARGET_NAMES[target] })}
+      </p>
+      {reason && (
+        <p className="text-xs text-muted-foreground" dir="auto">
+          {reason}
+        </p>
+      )}
+      {working && target === "github" && <GithubDeviceCode connectorId="github" />}
+      <div role="status" className="text-xs">
+        {working && (
+          <p className="mt-2 text-muted-foreground">
+            {t("agentMode.interactions.connection.connecting")}
+          </p>
+        )}
+        {entry.error && (
+          <p className="mt-2 text-destructive">
+            {t(
+              entry.error === "permission_denied"
+                ? "agentMode.interactions.connection.permissionDenied"
+                : "agentMode.interactions.connection.failed"
+            )}
+          </p>
+        )}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {!working &&
+          providers.map((provider) => (
+            <Button
+              key={provider ?? target}
+              size="sm"
+              onClick={() => void connectInteraction(entry.key, provider)}
+            >
+              {t("agentMode.interactions.connection.connect", {
+                name: CONNECTION_TARGET_NAMES[provider ?? target],
+              })}
+            </Button>
+          ))}
+        <Button size="sm" variant="ghost" onClick={() => cancelInteraction(entry.key)}>
+          {t(working ? "agentMode.interactions.cancel" : "agentMode.interactions.notNow")}
+        </Button>
+      </div>
+    </>
+  );
+}
+
+function Access({ entry }: { entry: InteractionEntry }): ReactElement | null {
+  const { t } = useTranslation();
+  if (entry.payload.kind !== "access") return null;
+  return (
+    <>
+      <p className="font-medium text-foreground">{t("agentMode.interactions.access.screen")}</p>
+      <p className="text-xs text-muted-foreground" dir="auto">
+        {entry.payload.reason}
+      </p>
+      <div className="mt-2 flex gap-2">
+        <Button
+          size="sm"
+          disabled={entry.state === "working"}
+          onClick={() => void respondToAccess(entry.key, true)}
+        >
+          {t("agentMode.interactions.access.allow")}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => void respondToAccess(entry.key, false)}>
+          {t("agentMode.interactions.notNow")}
+        </Button>
+      </div>
+    </>
+  );
+}
+
+// The key lives only in this field until Save hands it to the secure saver.
+function ApiKey({ entry }: { entry: InteractionEntry }): ReactElement | null {
+  const { t } = useTranslation();
+  const [value, setValue] = useState("");
+  if (entry.payload.kind !== "apiKey") return null;
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        void submitApiKey(entry.key, value);
+        setValue("");
+      }}
+    >
+      <p className="font-medium text-foreground">
+        {t("agentMode.interactions.apiKey.title", { provider: entry.payload.providerName })}
+      </p>
+      {entry.payload.reason && (
+        <p className="text-xs text-muted-foreground" dir="auto">
+          {entry.payload.reason}
+        </p>
+      )}
+      <Input
+        className="mt-2"
+        dir="ltr"
+        type="password"
+        autoComplete="off"
+        spellCheck={false}
+        value={value}
+        placeholder={t("agentMode.interactions.apiKey.placeholder")}
+        aria-label={t("agentMode.interactions.apiKey.placeholder")}
+        onChange={(event) => setValue(event.target.value)}
+      />
+      <div className="mt-2 flex gap-2">
+        <Button size="sm" type="submit" disabled={!value.trim()}>
+          {t("agentMode.interactions.apiKey.save")}
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          type="button"
+          onClick={() => cancelInteraction(entry.key)}
+        >
+          {t("agentMode.interactions.notNow")}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function SettingsLink({ entry }: { entry: InteractionEntry }): ReactElement | null {
+  const { t } = useTranslation();
+  if (entry.payload.kind !== "settings") return null;
+  const { message, technicalDetails } = entry.payload;
+  return (
+    <>
+      {message && (
+        <p className="text-foreground" dir="auto">
+          {message}
+        </p>
+      )}
+      {technicalDetails && (
+        <details className="mt-1 text-xs text-muted-foreground">
+          <summary className="cursor-pointer">
+            {t("agentMode.interactions.settings.technicalDetails")}
+          </summary>
+          <pre dir="ltr" className="mt-1 whitespace-pre-wrap">
+            {technicalDetails}
+          </pre>
+        </details>
+      )}
+      <div className="mt-2 flex gap-2">
+        <Button size="sm" variant="outline" onClick={() => openInteractionSettings(entry.key)}>
+          {t("providerErrors.openSettings")}
+        </Button>
+        <Button
+          size="sm"
+          disabled={entry.state === "working"}
+          onClick={() => void confirmSettingsDone(entry.key)}
+        >
+          {t("agentMode.interactions.settings.done")}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => cancelInteraction(entry.key)}>
+          {t("agentMode.interactions.notNow")}
+        </Button>
+      </div>
+    </>
+  );
+}
+
+/** Minimal controls for an interaction the turn is waiting on; Phase 3 replaces the visuals. */
+export function InteractionCard({ entry }: { entry: InteractionEntry }): ReactElement {
+  if (entry.state === "settled" && entry.result) {
+    return (
+      <InteractionSummary
+        record={{ payload: entry.payload, state: "settled", result: entry.result }}
+      />
+    );
+  }
+  return (
+    <div data-interaction-card={entry.key} data-kind={entry.payload.kind} className={CARD_CLASS}>
+      <Questions entry={entry} />
+      <Connection entry={entry} />
+      <Access entry={entry} />
+      <ApiKey entry={entry} />
+      <SettingsLink entry={entry} />
+    </div>
+  );
+}

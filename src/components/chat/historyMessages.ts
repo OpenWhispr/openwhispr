@@ -1,4 +1,6 @@
 import type { Message, ToolCallInfo } from "./types";
+import type { InteractionRecord } from "../../types/agentInteractions";
+import { buildAgentRequestText } from "../../utils/agentSelectionContext";
 
 export interface HistoryMessage {
   role: string;
@@ -33,6 +35,7 @@ const ACTION_OUTCOME: Record<string, string> = {
   failed: "failed",
   unavailable: "unavailable",
   needs_clarification: "needed details",
+  already_sent: "already done earlier, not repeated",
 };
 const OUTCOME_URL_MAX_CHARS = 200;
 
@@ -84,6 +87,53 @@ function traceText(value: unknown): string | null {
     : clean;
 }
 
+// What the user was asked and how they answered. A saved key is only ever
+// "saved": its value never reaches the conversation.
+function interactionTrace({ payload, state, result }: InteractionRecord): {
+  arg: string;
+  outcome: string;
+} {
+  if (payload.kind !== "questions") {
+    const arg =
+      payload.kind === "access"
+        ? payload.resource
+        : payload.kind === "apiKey"
+          ? payload.provider
+          : payload.target;
+    return { arg, outcome: interactionOutcome(state, result) };
+  }
+  if (result?.status !== "answered") {
+    return {
+      arg: payload.questions.map((question) => traceText(question.prompt)).join("; "),
+      outcome: interactionOutcome(state, result),
+    };
+  }
+  const answered = payload.questions.map((question) => {
+    const answer = result.answers[question.id];
+    const label = (id: string) => question.options?.find((option) => option.id === id)?.label ?? id;
+    const text = Array.isArray(answer) ? answer.map(label).join(", ") : label(answer ?? "");
+    return `${traceText(question.prompt)} → ${traceText(text) ?? "nothing chosen"}`;
+  });
+  return { arg: answered.join("; "), outcome: "answered" };
+}
+
+function interactionOutcome(
+  state: InteractionRecord["state"],
+  result: InteractionRecord["result"]
+): string {
+  if (!result) return state === "interrupted" ? "not answered yet" : "waiting for the user";
+  switch (result.status) {
+    case "cancelled":
+      return "dismissed by the user";
+    case "not_answered":
+      return "not answered";
+    case "done":
+      return result.ready === false ? "back from settings, still not set up" : "done";
+    default:
+      return result.status;
+  }
+}
+
 /**
  * A short record of the tools a turn called, so the model sees its own
  * precedent. Never results: query items and web results are other people's
@@ -96,6 +146,10 @@ export function toolTrace(toolCalls: ReadonlyArray<ToolCallInfo> | undefined): s
   const entries = toolCalls
     .filter((call) => call.name !== "grounded_product_help")
     .map((call) => {
+      if (call.interaction) {
+        const { arg, outcome } = interactionTrace(call.interaction);
+        return `${call.name} ("${arg}") (${outcome})`;
+      }
       const arg = traceArgument(call);
       // A call still executing was cut off before its result arrived, but its side
       // effect may have happened (a send commits in main after Esc).
@@ -118,12 +172,21 @@ export function withoutEchoedToolTrace(content: string): string {
   return content.replace(ECHOED_TRACE, "");
 }
 
-/** The last messages as the model sees them, with earlier tool use noted on assistant turns. */
+/**
+ * The last messages as the model sees them, with earlier tool use noted on
+ * assistant turns and the selected text a request was about kept with it.
+ */
 export function toHistoryMessages(
   messages: ReadonlyArray<Message>,
   { includeToolTrace }: { includeToolTrace: boolean }
 ): HistoryMessage[] {
   return messages.slice(-HISTORY_LIMIT).map((m) => {
+    if (m.role === "user" && m.selectedContext) {
+      return {
+        role: m.role,
+        content: buildAgentRequestText(m.content, { text: m.selectedContext, sourceMessageId: "" }),
+      };
+    }
     const trace = includeToolTrace && m.role === "assistant" ? toolTrace(m.toolCalls) : "";
     return { role: m.role, content: trace ? `${trace}\n\n${m.content}` : m.content };
   });

@@ -9,19 +9,22 @@ import {
   ChevronDown,
   ChevronRight,
   CircleAlert,
+  GitFork,
 } from "../icons";
 import { cn } from "../lib/utils";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
 import { TechnicalErrorDetails } from "../ui/TechnicalErrorDetails";
 import { openProviderSettings } from "../../utils/describeProviderError";
-import type { MessageError, ToolCallInfo } from "./types";
+import type { AssistantTurn, MessageError, ToolCallInfo } from "./types";
 import { extractNoteCards } from "./noteCards";
 import { helpAnswerPlainText } from "./helpEvidenceText";
 import { HelpEvidence } from "./GroundedHelpEvidence";
 import { extractHelpEvidence } from "./helpEvidence";
 import { toolIcons } from "./toolIcons";
 import { ApprovalCard } from "./ApprovalCard";
+import { InteractionCard, InteractionSummary } from "./InteractionCard";
 import { approvalKey, useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
+import { useAgentInteractionStore } from "../../stores/agentInteractionStore";
 
 interface ChatMessageProps {
   messageId: string;
@@ -32,6 +35,12 @@ interface ChatMessageProps {
   error?: MessageError;
   onOpenNote?: (noteId: number) => void;
   plain?: boolean;
+  turn?: AssistantTurn;
+  /** Saved messages only: a fork's history runs through a saved row. */
+  dbId?: number;
+  onFork?: (messageId: string) => void;
+  /** Offered on a reply that stopped at the step limit. */
+  onContinue?: () => void;
 }
 
 function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
@@ -139,13 +148,50 @@ function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
   );
 }
 
-// Subscribes to its own approval entry only, so editing one card doesn't
-// re-render every message in the thread.
+// Subscribes to its own approval and interaction entries only, so editing
+// one card doesn't re-render every message in the thread.
 function ToolCallItem({ messageId, toolCall }: { messageId: string; toolCall: ToolCallInfo }) {
-  const approval = useConnectorApprovalStore(
-    (state) => state.entries[approvalKey(messageId, toolCall.id)]
+  const key = approvalKey(messageId, toolCall.id);
+  const approval = useConnectorApprovalStore((state) => state.entries[key]);
+  const interaction = useAgentInteractionStore((state) => state.entries[key]);
+  if (approval) return <ApprovalCard entry={approval} />;
+  if (interaction) return <InteractionCard entry={interaction} />;
+  if (toolCall.interaction) return <InteractionSummary record={toolCall.interaction} />;
+  return <ToolCallStep toolCall={toolCall} />;
+}
+
+// How the turn ended, when that needs saying, and the model's reasoning.
+function TurnNotes({ turn, onContinue }: { turn: AssistantTurn; onContinue?: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <>
+      {turn.reasoning && (
+        <details className="mt-1.5 text-[11px] text-muted-foreground/80">
+          <summary className="cursor-pointer select-none">{t("agentMode.turn.reasoning")}</summary>
+          <p className="mt-1 whitespace-pre-wrap" dir="auto">
+            {turn.reasoning}
+          </p>
+        </details>
+      )}
+      {turn.status === "stopped" && (
+        <p className="mt-1.5 text-[11px] text-muted-foreground/80">{t("agentMode.turn.stopped")}</p>
+      )}
+      {turn.status === "step_limit" && (
+        <p className="mt-1.5 flex items-center gap-2 text-[11px] text-muted-foreground/80">
+          {t("agentMode.turn.stepLimit")}
+          {onContinue && (
+            <button
+              type="button"
+              onClick={onContinue}
+              className="font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded-sm"
+            >
+              {t("agentMode.turn.continue")}
+            </button>
+          )}
+        </p>
+      )}
+    </>
   );
-  return approval ? <ApprovalCard entry={approval} /> : <ToolCallStep toolCall={toolCall} />;
 }
 
 function NoteCard({
@@ -201,6 +247,10 @@ export const ChatMessage = memo(function ChatMessage({
   error,
   onOpenNote,
   plain = false,
+  turn,
+  dbId,
+  onFork,
+  onContinue,
 }: ChatMessageProps) {
   const { t, i18n } = useTranslation();
   const [copied, setCopied] = useState(false);
@@ -306,6 +356,8 @@ export const ChatMessage = memo(function ChatMessage({
         )}
         {error?.technicalDetails && <TechnicalErrorDetails details={error.technicalDetails} />}
 
+        {turn && !isStreaming && <TurnNotes turn={turn} onContinue={onContinue} />}
+
         {noteCards.length > 0 && !isStreaming && (
           <div>
             {noteCards.map((card) => (
@@ -342,6 +394,17 @@ export const ChatMessage = memo(function ChatMessage({
                 <Copy size={12} />
               )}
             </button>
+            {onFork && dbId != null && (
+              <button
+                type="button"
+                onClick={() => onFork(messageId)}
+                aria-label={t("chat.fork")}
+                title={t("chat.fork")}
+                className="p-1 rounded-sm text-muted-foreground/70 hover:text-foreground hover:bg-foreground/8 opacity-0 group-hover/msg:opacity-100 transition-all duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30 focus-visible:opacity-100"
+              >
+                <GitFork size={12} />
+              </button>
+            )}
           </div>
         )}
       </div>

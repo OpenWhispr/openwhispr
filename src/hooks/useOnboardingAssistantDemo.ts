@@ -23,7 +23,6 @@ export function useOnboardingAssistantDemo(publish: (event: DemoEventInput) => v
   const [messages, setMessages] = useState<Message[]>([]);
   const repliedRef = useRef(false);
   const { agentState, activeToolName, sendToAI } = useChatStreaming({
-    messages,
     setMessages,
     inferenceScope: "dictationAgent",
     nameUnavailableCapabilities: false,

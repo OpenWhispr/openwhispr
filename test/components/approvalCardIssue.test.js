@@ -134,6 +134,8 @@ async function mountCard(
         onApprovalRequested() {},
         onHoldDelivery() {},
         claimTurnSlot: () => true,
+        isActionCompleted: () => false,
+        recordCompletedAction() {},
         releaseTurnSlot() {},
       },
       "linear",

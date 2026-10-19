@@ -1,0 +1,368 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const React = require("react");
+const { renderToStaticMarkup } = require("react-dom/server");
+const {
+  SIGNED_OUT_AUTH_MOCK,
+  createRendererServer,
+  installBrowserGlobals,
+} = require("../lib/rendererTestHarness");
+
+// The running chat's turn bookkeeping on the real useChatStreaming hook (one
+// synchronous render, then its sendToAI closure), with the model stream
+// stubbed: how a turn ends, what waits on the user, and what is saved.
+const BYOK = {
+  chatAgentMode: "providers",
+  chatAgentProvider: "openai",
+  chatAgentModel: "gpt-5-mini",
+};
+const SLACK_READY = {
+  slack: {
+    id: "slack",
+    connected: true,
+    configured: true,
+    accountLabel: "chad",
+    workspaceLabel: "Acme",
+    needsReconnect: false,
+  },
+};
+
+async function renderChatStreaming(
+  t,
+  hookOptions = {},
+  { settings = BYOK, electronAPI = {}, statuses } = {}
+) {
+  installBrowserGlobals(t, { initialStorage: { isSubscribed: "true" }, window: { electronAPI } });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-chat-streaming-turns-test-",
+    mockModules: SIGNED_OUT_AUTH_MOCK,
+  });
+  const [{ default: viteI18next }, { initReactI18next }] = await Promise.all([
+    vite.ssrLoadModule("i18next"),
+    vite.ssrLoadModule("react-i18next"),
+  ]);
+  if (!viteI18next.isInitialized) {
+    const translation = JSON.parse(
+      fs.readFileSync(path.join(__dirname, "../../src/locales/en/translation.json"), "utf8")
+    );
+    await viteI18next.use(initReactI18next).init({
+      lng: "en",
+      resources: { en: { translation } },
+      interpolation: { escapeValue: false },
+    });
+  }
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  usePolicyStore.setState({ status: "unmanaged", appVersion: "1.10.0", policy: null });
+  useSettingsStore.setState({ isSignedIn: true, ...settings });
+  if (statuses) {
+    const { useConnectorStatusStore } = await vite.ssrLoadModule("/stores/connectorStatusStore.ts");
+    useConnectorStatusStore.setState({ loaded: true, statuses });
+  }
+  const { useChatStreaming } = await vite.ssrLoadModule("/components/chat/useChatStreaming.ts");
+  await (await vite.ssrLoadModule("/i18n.ts")).default.changeLanguage("en");
+  const reasoningService = (await vite.ssrLoadModule("/services/ReasoningService.ts")).default;
+  t.after(() => reasoningService.destroy());
+
+  const offered = [];
+  const prompts = [];
+  let streamFor = () => (async function* () {})();
+  t.mock.method(reasoningService, "processTextStreamingAI", (messages, _m, _p, config, tools) => {
+    offered.push(Object.keys(tools ?? {}));
+    prompts.push(config.systemPrompt);
+    return streamFor(tools, config);
+  });
+  t.mock.method(reasoningService, "processTextStreamingCloud", (_messages, config) => {
+    offered.push((config.tools ?? []).map((tool) => tool.name));
+    prompts.push(config.systemPrompt);
+    return streamFor(undefined, config);
+  });
+
+  let messages = [];
+  const setMessages = (updater) => {
+    messages = typeof updater === "function" ? updater(messages) : updater;
+  };
+  const completed = [];
+  const waiting = [];
+  let captured = null;
+  function Harness() {
+    captured = useChatStreaming({
+      setMessages,
+      onStreamComplete: (...args) => completed.push(args),
+      onTurnWaiting: (...args) => waiting.push(args),
+      ...hookOptions,
+    });
+    return null;
+  }
+  renderToStaticMarkup(React.createElement(Harness));
+  return {
+    captured,
+    vite,
+    offered,
+    prompts,
+    completed,
+    waiting,
+    setStream: (factory) => (streamFor = factory),
+    assistant: () => messages.find((message) => message.role === "assistant"),
+  };
+}
+
+const toolOptions = (toolCallId) => ({ toolCallId, messages: [] });
+
+test("a turn records when it ran, how it ended, its reasoning and each step", async (t) => {
+  const harness = await renderChatStreaming(t);
+  harness.setStream(() =>
+    (async function* () {
+      yield { type: "reasoning", text: "Check the notes " };
+      yield { type: "reasoning", text: "first." };
+      yield { type: "content", text: "Let me look." };
+      yield { type: "tool_calls", calls: [{ id: "c1", name: "search_notes", arguments: "{}" }] };
+      yield {
+        type: "tool_result",
+        callId: "c1",
+        toolName: "search_notes",
+        displayText: "Error: boom",
+        isError: true,
+      };
+      yield { type: "content", text: "Nothing found." };
+      yield { type: "done", finishReason: "stop" };
+    })()
+  );
+  await harness.captured.sendToAI("Find the plan", [], { conversationId: 7 });
+
+  const [[, content, toolCalls, details]] = harness.completed;
+  assert.equal(
+    content,
+    "Let me look.\n\nNothing found.",
+    "text after a step starts a new paragraph"
+  );
+  assert.equal(details.conversationId, 7);
+  assert.equal(details.turn.status, "complete");
+  assert.equal(details.turn.reasoning, "Check the notes first.");
+  assert.ok(details.turn.finishedAt >= details.turn.startedAt);
+  assert.equal(toolCalls[0].status, "error");
+  assert.ok(toolCalls[0].finishedAt >= toolCalls[0].startedAt);
+  assert.equal(harness.assistant().turn.status, "complete");
+});
+
+test("a run stopped by the step cap is marked so the user can continue it", async (t) => {
+  const harness = await renderChatStreaming(t);
+  harness.setStream(() =>
+    (async function* () {
+      yield { type: "tool_calls", calls: [{ id: "c1", name: "search_notes", arguments: "{}" }] };
+      yield { type: "tool_result", callId: "c1", toolName: "search_notes", displayText: "Done" };
+      yield { type: "done", finishReason: "tool-calls" };
+    })()
+  );
+  await harness.captured.sendToAI("Do everything", []);
+  assert.equal(harness.completed[0][3].turn.status, "step_limit");
+});
+
+test("a turn waiting on a question is saved as waiting, then completed in place", async (t) => {
+  const harness = await renderChatStreaming(t, { allowInteractions: true });
+  const store = await harness.vite.ssrLoadModule("/stores/agentInteractionStore.ts");
+  harness.setStream((tools) =>
+    (async function* () {
+      yield { type: "tool_calls", calls: [{ id: "q1", name: "ask_user", arguments: "{}" }] };
+      const output = await tools.ask_user.execute(
+        { questions: [{ id: "tone", kind: "text", prompt: "Which tone?" }] },
+        toolOptions("q1")
+      );
+      yield {
+        type: "tool_result",
+        callId: "q1",
+        toolName: "ask_user",
+        displayText: "Done",
+        metadata: output,
+      };
+      yield { type: "content", text: "Casual it is." };
+      yield { type: "done", finishReason: "stop" };
+    })()
+  );
+  const sending = harness.captured.sendToAI("Write the update", []);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(harness.waiting.length, 1);
+  const [assistantId, , waitingCalls, waitingDetails] = harness.waiting[0];
+  assert.equal(waitingDetails.turn.status, "waiting");
+  assert.equal(waitingCalls[0].interaction.state, "pending");
+  assert.equal(harness.assistant().turn.status, "waiting");
+
+  const key = `${assistantId}::q1`;
+  store.updateInteractionDraft(key, { tone: "casual" });
+  store.answerQuestions(key);
+  await sending;
+
+  const [[savedId, , toolCalls, details]] = harness.completed;
+  assert.equal(savedId, assistantId, "the same reply is completed");
+  assert.equal(details.turn.status, "complete");
+  assert.deepEqual(toolCalls[0].interaction.result, {
+    status: "answered",
+    answers: { tone: "casual" },
+  });
+});
+
+test("Stop while a question waits keeps the reply, marked stopped, and dismisses it", async (t) => {
+  const harness = await renderChatStreaming(t, { allowInteractions: true });
+  const reasoningService = (await harness.vite.ssrLoadModule("/services/ReasoningService.ts"))
+    .default;
+  t.mock.method(reasoningService, "cancelActiveStream", () => {});
+  harness.setStream((tools) =>
+    (async function* () {
+      yield { type: "content", text: "I need one detail." };
+      yield { type: "tool_calls", calls: [{ id: "q1", name: "ask_user", arguments: "{}" }] };
+      await tools.ask_user.execute(
+        { questions: [{ id: "tone", kind: "text", prompt: "Which tone?" }] },
+        toolOptions("q1")
+      );
+    })()
+  );
+  const sending = harness.captured.sendToAI("Write the update", []);
+  await new Promise((resolve) => setImmediate(resolve));
+  harness.captured.cancelStream();
+  await sending;
+
+  const [[, content, toolCalls, details]] = harness.completed;
+  assert.equal(content, "I need one detail.");
+  assert.equal(details.turn.status, "stopped");
+  assert.deepEqual(toolCalls[0].interaction.result, { status: "cancelled" });
+});
+
+test("a send this conversation already made is refused, before any card", async (t) => {
+  const prepares = [];
+  const harness = await renderChatStreaming(
+    t,
+    { allowConnectors: true },
+    {
+      statuses: SLACK_READY,
+      electronAPI: {
+        connectorPrepare: async (...args) => {
+          prepares.push(args);
+          return { status: "failed", errorCode: "x", message: "x" };
+        },
+      },
+    }
+  );
+  const { connectorActionKey } = await harness.vite.ssrLoadModule(
+    "/services/tools/connectors/actionKey.ts"
+  );
+  let output;
+  harness.setStream((tools) =>
+    (async function* () {
+      output = await tools.slack_send_message.execute(
+        { destination: "#eng", text: "PR  #12 merged!" },
+        toolOptions("s2")
+      );
+      yield { type: "done", finishReason: "stop" };
+    })()
+  );
+  const earlier = {
+    id: "a0",
+    role: "assistant",
+    content: "Posted.",
+    isStreaming: false,
+    toolCalls: [
+      {
+        id: "s1",
+        name: "slack_send_message",
+        arguments: "{}",
+        status: "completed",
+        actionKey: connectorActionKey("slack", "send_message", {
+          destination: "#eng",
+          text: "PR #12 merged!",
+        }),
+      },
+    ],
+  };
+  await harness.captured.sendToAI("Post it again", [earlier]);
+
+  assert.equal(output.status, "already_sent");
+  assert.deepEqual(prepares, []);
+});
+
+test("a send that went out is keyed on its tool call, for later turns", async (t) => {
+  const harness = await renderChatStreaming(
+    t,
+    { allowConnectors: true },
+    {
+      statuses: SLACK_READY,
+      electronAPI: {
+        connectorPrepare: async () => ({
+          status: "ready",
+          actionId: "a1",
+          preview: { verbKey: "post", destinationLabel: "#eng", accountLabel: "chad", body: "hi" },
+        }),
+        connectorCommit: async () => ({ state: "sent", url: "https://slack.test/1" }),
+      },
+    }
+  );
+  const approvals = await harness.vite.ssrLoadModule("/stores/connectorApprovalStore.ts");
+  harness.setStream((tools) =>
+    (async function* () {
+      yield {
+        type: "tool_calls",
+        calls: [{ id: "s1", name: "slack_send_message", arguments: "{}" }],
+      };
+      const running = tools.slack_send_message.execute(
+        { destination: "#eng", text: "hi" },
+        toolOptions("s1")
+      );
+      await new Promise((resolve) => setImmediate(resolve));
+      const [key] = Object.keys(approvals.useConnectorApprovalStore.getState().entries);
+      await approvals.approveAction(key);
+      const output = await running;
+      yield {
+        type: "tool_result",
+        callId: "s1",
+        toolName: "slack_send_message",
+        displayText: "Sent",
+        metadata: output,
+      };
+      yield { type: "done", finishReason: "stop" };
+    })()
+  );
+  await harness.captured.sendToAI("Post hi to #eng", []);
+  assert.match(harness.completed[0][2][0].actionKey, /^slack\.send_message:/);
+});
+
+test("a service the chat can connect is offered with request_connection, and named for it", async (t) => {
+  const harness = await renderChatStreaming(
+    t,
+    { allowConnectors: true, allowInteractions: true },
+    {
+      statuses: {
+        slack: { ...SLACK_READY.slack, connected: false, accountLabel: null, workspaceLabel: null },
+      },
+      settings: { ...BYOK, gcalConnected: true },
+    }
+  );
+  await harness.captured.sendToAI("Tell #eng the PR merged", []);
+  assert.ok(harness.offered[0].includes("slack_send_message"));
+  assert.ok(harness.offered[0].includes("request_connection"));
+  assert.ok(harness.offered[0].includes("ask_user"));
+  assert.match(harness.prompts[0], /call request_connection with its target/);
+  assert.match(harness.prompts[0], /- Slack \(target: slack\)/);
+  assert.doesNotMatch(harness.prompts[0], /Connect Slack and I can post this/);
+});
+
+test("a surface that doesn't show interactions never offers them", async (t) => {
+  const harness = await renderChatStreaming(t, { allowConnectors: true });
+  await harness.captured.sendToAI("Hi", []);
+  for (const name of ["ask_user", "request_connection", "open_settings", "request_api_key"]) {
+    assert.equal(harness.offered[0].includes(name), false, name);
+  }
+});
+
+test("the cloud path marks a run that ran out of steps too", async (t) => {
+  const harness = await renderChatStreaming(t, {}, { settings: { chatAgentMode: "openwhispr" } });
+  harness.setStream(() =>
+    (async function* () {
+      yield { type: "content", text: "Partial" };
+      yield { type: "done", finishReason: "tool-calls" };
+    })()
+  );
+  await harness.captured.sendToAI("Go", []);
+  assert.equal(harness.completed[0][3].turn.status, "step_limit");
+});

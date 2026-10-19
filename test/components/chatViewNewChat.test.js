@@ -55,6 +55,7 @@ const MOCKS = {
     }
   `,
   "/ChatMessages": `export function ChatMessages() { return null; }`,
+  "/ui/useToast": `export function useToast() { return { toast() {} }; }`,
   "/ui/dialog": `export function ConfirmDialog() { return null; }`,
   "/hooks/useDialogs": `
     export function useDialogs() {

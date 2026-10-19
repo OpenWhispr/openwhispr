@@ -146,6 +146,8 @@ async function mountEmailCard(
         onApprovalRequested() {},
         onHoldDelivery() {},
         claimTurnSlot: () => true,
+        isActionCompleted: () => false,
+        recordCompletedAction() {},
         releaseTurnSlot() {},
       },
       "gmail",

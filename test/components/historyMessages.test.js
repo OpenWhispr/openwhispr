@@ -295,3 +295,116 @@ test("historical built-in help remains readable without inventing a model tool",
     [{ role: "assistant", content: "Earlier guidance." }]
   );
 });
+
+const QUESTION = {
+  kind: "questions",
+  questions: [
+    {
+      id: "channel",
+      kind: "single",
+      prompt: "Which channel?",
+      options: [
+        { id: "eng", label: "#eng" },
+        { id: "general", label: "#general" },
+      ],
+    },
+    { id: "tone", kind: "text", prompt: "Tone?" },
+  ],
+};
+
+test("an answered question and a connection reach later turns as what happened", async () => {
+  const { toolTrace } = await load();
+  const asked = call(
+    "ask_user",
+    { questions: QUESTION.questions },
+    {
+      interaction: {
+        payload: QUESTION,
+        state: "settled",
+        result: { status: "answered", answers: { channel: "general", tone: "casual" } },
+      },
+    }
+  );
+  const connected = call(
+    "request_connection",
+    { target: "slack" },
+    {
+      interaction: {
+        payload: { kind: "connection", target: "slack", reason: "to post" },
+        state: "settled",
+        result: { status: "connected", target: "slack" },
+      },
+    }
+  );
+  assert.equal(
+    toolTrace([asked, connected]),
+    '[Tools used: ask_user ("Which channel? → #general; Tone? → casual") (answered), request_connection ("slack") (connected)]'
+  );
+});
+
+test("a question nobody answered is noted as still open, and a dismissal as one", async () => {
+  const { toolTrace } = await load();
+  const interrupted = call(
+    "ask_user",
+    {},
+    { interaction: { payload: QUESTION, state: "interrupted" } }
+  );
+  const dismissed = call(
+    "request_connection",
+    {},
+    {
+      interaction: {
+        payload: { kind: "connection", target: "github" },
+        state: "settled",
+        result: { status: "cancelled" },
+      },
+    }
+  );
+  assert.equal(
+    toolTrace([interrupted, dismissed]),
+    '[Tools used: ask_user ("Which channel?; Tone?") (not answered yet), request_connection ("github") (dismissed by the user)]'
+  );
+});
+
+test("a saved API key is traced as saved, and its value never appears", async () => {
+  const { toHistoryMessages } = await load();
+  const saved = call(
+    "request_api_key",
+    { provider: "openai" },
+    {
+      result: "API key saved",
+      interaction: {
+        payload: { kind: "apiKey", provider: "openai" },
+        state: "settled",
+        result: { status: "saved" },
+      },
+    }
+  );
+  const [answer] = toHistoryMessages([assistant("Saved.", [saved])], { includeToolTrace: true });
+  assert.equal(answer.content, '[Tools used: request_api_key ("openai") (saved)]\n\nSaved.');
+});
+
+test("a send refused as a repeat is noted, so the model doesn't try it again", async () => {
+  const { toolTrace } = await load();
+  const repeat = call(
+    "slack_send_message",
+    { destination: "#eng", text: "hi" },
+    {
+      metadata: { status: "already_sent", guidance: "…" },
+    }
+  );
+  assert.equal(
+    toolTrace([repeat]),
+    "[Tools used: slack_send_message (already done earlier, not repeated)]"
+  );
+});
+
+test("selected text a request was about stays with it in later turns", async () => {
+  const { toHistoryMessages } = await load();
+  const [request] = toHistoryMessages(
+    [{ ...user("Shorten this"), selectedContext: "A long paragraph." }],
+    { includeToolTrace: true }
+  );
+  assert.match(request.content, /^Shorten this\n/);
+  assert.match(request.content, /"selectedText":"A long paragraph\."/);
+});
