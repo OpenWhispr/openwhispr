@@ -1,14 +1,16 @@
-// Clustering policy for the upload/batch diarization path. Kept free of
+// Clustering policy for uploaded files and meeting recordings. Kept free of
 // electron imports so the rules stay unit-testable (pattern: cloudChunkPolicy).
 
 // sherpa-onnx's cluster threshold is a cosine distance: higher merges more.
-// 0.55 suits short clean audio, but over a long single-mic recording one
-// speaker's embeddings drift wider than that and agglomerative clustering
-// stops merging early — a 73-minute voice memo produced 46 "speakers". Ramp
-// the threshold with duration instead of pretending one constant fits both.
+// Over a long recording one speaker's embeddings drift wider, so a constant
+// tuned for short audio stops merging early (with the previous embedding model a
+// 73-minute voice memo produced 46 "speakers"). Ramp the threshold with duration.
 // The top stays below 0.72: from there up, a two-person Spanish call merged
 // both speakers into one cluster.
-const DEFAULT_CLUSTER_THRESHOLD = 0.55;
+// Values measured for the zh-en "advanced" CAM++ on human-labelled meetings:
+// 0.6 kept clusters ~100% pure with ~1.3 clusters per person on 35-67 min calls,
+// and 0.7 did the same (~1.1 per person) on an 88-minute 12-speaker call.
+const DEFAULT_CLUSTER_THRESHOLD = 0.6;
 const LONG_AUDIO_CLUSTER_THRESHOLD = 0.7;
 const THRESHOLD_RAMP_START_SECONDS = 15 * 60;
 const THRESHOLD_RAMP_END_SECONDS = 60 * 60;
@@ -42,6 +44,15 @@ const PROTECTED_CLUSTER_COUNT = 2;
 // monologue with a stray blip isn't a collapse.
 const COLLAPSED_TOP_SHARE = 0.93;
 const COLLAPSED_MAX_MEAN_SEGMENT_SECONDS = 2.2;
+
+// Clustering splits one voice into many clusters on meeting audio, but their
+// voice centroids still match. With the zh-en CAM++ embeddings, 98 % of
+// same-person centroid pairs scored 0.5 or more on AMI meetings (#2641), and
+// 11 % of different-person pairs did too. Merging the closest pair first, by
+// speech-weighted voice, still never left fewer speakers than there were, and
+// 0.5 gave the right count on 12 of 15 recordings of 1-4 voices (0.55: 10,
+// 0.6: 7).
+const VOICE_MERGE_SIMILARITY = 0.5;
 
 function clusterThresholdForDuration(durationSeconds) {
   if (!Number.isFinite(durationSeconds) || durationSeconds <= THRESHOLD_RAMP_START_SECONDS) {
@@ -110,11 +121,63 @@ function isCollapsedDiarization(segments) {
   );
 }
 
+// Merges clusters that share a voice, closest pair first, until no two voices
+// reach VOICE_MERGE_SIMILARITY. A merged voice is the speech-weighted mean, and
+// the larger cluster keeps its label. Clusters without a centroid stay as they
+// are.
+function mergeClustersByVoice(segments, centroids, similarity) {
+  const { clusters } = summarizeClusters(segments);
+  const groups = [...clusters]
+    .filter(([speaker]) => centroids.has(speaker))
+    .map(([speaker, { total }]) => ({
+      speaker,
+      total,
+      voice: centroids.get(speaker),
+      members: [speaker],
+    }));
+
+  for (;;) {
+    let closest = null;
+    for (let i = 0; i < groups.length; i += 1) {
+      for (let j = i + 1; j < groups.length; j += 1) {
+        const score = similarity(groups[i].voice, groups[j].voice);
+        if (score >= VOICE_MERGE_SIMILARITY && (!closest || score > closest.score)) {
+          closest = { i, j, score };
+        }
+      }
+    }
+    if (!closest) break;
+
+    const [keep, extra] =
+      groups[closest.i].total >= groups[closest.j].total
+        ? [groups[closest.i], groups[closest.j]]
+        : [groups[closest.j], groups[closest.i]];
+    const total = keep.total + extra.total;
+    keep.voice = keep.voice.map(
+      (value, k) => (value * keep.total + extra.voice[k] * extra.total) / total
+    );
+    keep.total = total;
+    keep.members.push(...extra.members);
+    groups.splice(groups.indexOf(extra), 1);
+  }
+
+  const relabel = new Map();
+  for (const { speaker, members } of groups) {
+    for (const member of members) {
+      if (member !== speaker) relabel.set(member, speaker);
+    }
+  }
+  if (relabel.size === 0) return segments;
+  return segments.map((s) =>
+    relabel.has(s.speaker) ? { ...s, speaker: relabel.get(s.speaker) } : s
+  );
+}
+
 // Keeps the `cap` largest clusters and relabels each extra one to the kept
 // speaker whose voice centroid it is most similar to. Folding extras into the
-// largest cluster (capSpeakerClusters) handed one person's turns to the other
-// whenever clustering split a real speaker. Clusters without a centroid still
-// fold into the largest.
+// largest cluster handed one person's turns to the other whenever clustering
+// split a real speaker. Clusters without a centroid still fold into the
+// largest.
 function capSpeakerClustersByVoice(segments, cap, centroids, similarity) {
   const { clusters } = summarizeClusters(segments);
   if (clusters.size <= cap) return segments;
@@ -154,5 +217,6 @@ module.exports = {
   resolveClusterThreshold,
   dropNegligibleClusters,
   isCollapsedDiarization,
+  mergeClustersByVoice,
   capSpeakerClustersByVoice,
 };

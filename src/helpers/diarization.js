@@ -51,16 +51,22 @@ const dedupeMicAgainstSystem = (segments) => {
   });
 };
 
+const {
+  EMBEDDING_MODEL_FILE: EMBEDDING_ONNX,
+  EMBEDDING_MODEL_URL,
+} = require("../constants/speakerDetection.json");
+const { DEFAULT_CLUSTER_THRESHOLD } = require("./diarizationPolicy");
+// Embedding model shipped before the switch to the zh-en "advanced" CAM++; removed once
+// the current model is in place so upgrades don't leave ~30 MB behind.
+const LEGACY_EMBEDDING_ONNX = "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx";
+
 const SEGMENTATION_MODEL_URL =
   "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2";
-const EMBEDDING_MODEL_URL =
-  "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx";
 const SILERO_VAD_MODEL_URL =
   "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx";
 
 const SEGMENTATION_DIR = "sherpa-onnx-pyannote-segmentation-3-0";
 const SEGMENTATION_ONNX = path.join(SEGMENTATION_DIR, "model.onnx");
-const EMBEDDING_ONNX = "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx";
 const SILERO_VAD_ONNX = "silero_vad.onnx";
 
 class DiarizationManager {
@@ -206,6 +212,7 @@ class DiarizationManager {
           },
         });
       }
+      await fsPromises.unlink(path.join(modelsDir, LEGACY_EMBEDDING_ONNX)).catch(() => {});
 
       if (!this.isVadModelDownloaded()) {
         try {
@@ -284,7 +291,7 @@ class DiarizationManager {
   }
 
   async diarize(wavPath, options = {}) {
-    const { numSpeakers = -1, threshold = 0.55, signal = null } = options;
+    const { threshold = DEFAULT_CLUSTER_THRESHOLD, signal = null } = options;
 
     if (signal?.aborted) return [];
 
@@ -310,7 +317,9 @@ class DiarizationManager {
     const args = [
       `--segmentation.pyannote-model=${segPath}`,
       `--embedding.model=${embPath}`,
-      `--clustering.num-clusters=${numSpeakers}`,
+      // Clustering always picks the count: a forced one splits short utterances
+      // from long ones instead of one voice from another (#2021).
+      "--clustering.num-clusters=-1",
       `--clustering.cluster-threshold=${threshold}`,
       "--min-duration-on=0.2",
       "--min-duration-off=0.5",
@@ -319,7 +328,6 @@ class DiarizationManager {
 
     debugLogger.info("Starting diarization", {
       binaryPath,
-      numSpeakers,
       threshold,
       wavPath,
     });
@@ -427,20 +435,6 @@ class DiarizationManager {
     }
 
     return segments;
-  }
-
-  capSpeakerClusters(segments, cap) {
-    if (!cap || !segments?.length) return segments;
-    const totals = new Map();
-    for (const s of segments) {
-      totals.set(s.speaker, (totals.get(s.speaker) || 0) + (s.end - s.start));
-    }
-    if (totals.size <= cap) return segments;
-
-    const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]);
-    const keep = new Set(ranked.slice(0, cap).map(([sp]) => sp));
-    const primary = ranked[0][0];
-    return segments.map((s) => (keep.has(s.speaker) ? s : { ...s, speaker: primary }));
   }
 
   mergeWithTranscript(transcriptSegments, diarizationSegments, { diarizedSource = "system" } = {}) {
@@ -603,6 +597,7 @@ class DiarizationManager {
     if (fs.existsSync(embPath)) {
       await fsPromises.unlink(embPath);
     }
+    await fsPromises.unlink(path.join(modelsDir, LEGACY_EMBEDDING_ONNX)).catch(() => {});
     if (fs.existsSync(vadPath)) {
       await fsPromises.unlink(vadPath);
     }
