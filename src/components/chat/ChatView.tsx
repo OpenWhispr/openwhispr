@@ -16,7 +16,7 @@ import { getCachedPlatform } from "../../utils/platform";
 import { observeChatComposerInset } from "./composerLayout";
 import { useToast } from "../ui/useToast";
 import { GitFork } from "../icons";
-import { normalizeAgentSelectionContext } from "../../utils/agentSelectionContext";
+import { unsentForkContext } from "../../utils/agentSelectionContext";
 
 const CommandSearch = lazy(() => import("../CommandSearch"));
 
@@ -116,16 +116,7 @@ export default function ChatView({ active = true, newChatRequest = 0 }: ChatView
   });
   // A fork made from selected text sends it with its first request.
   const { forkOrigin } = persistence;
-  const forkSelection = normalizeAgentSelectionContext({
-    text: forkOrigin?.context ?? undefined,
-  })?.text;
-  const forkContext =
-    forkSelection &&
-    !persistence.messages.some(
-      (message) => message.role === "user" && message.selectedContext === forkSelection
-    )
-      ? forkSelection
-      : null;
+  const forkContext = unsentForkContext(forkOrigin, persistence.messages);
   const handleTextSubmit = useCallback(
     (text: string, options?: SendToAIOptions) =>
       sendMessage(

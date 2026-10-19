@@ -57,6 +57,8 @@ export interface Message {
   turn?: AssistantTurn;
   /** User messages: the selected text the request was about. */
   selectedContext?: string;
+  /** Set when that text was selected in another app rather than in an answer. */
+  selectedContextSource?: "external";
 }
 
 export type AgentState =

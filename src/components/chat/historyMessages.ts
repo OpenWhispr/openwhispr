@@ -193,7 +193,11 @@ export function toHistoryMessages(
     if (m.role === "user" && m.selectedContext) {
       return {
         role: m.role,
-        content: buildAgentRequestText(m.content, { text: m.selectedContext, sourceMessageId: "" }),
+        content: buildAgentRequestText(m.content, {
+          text: m.selectedContext,
+          sourceMessageId: "",
+          source: m.selectedContextSource,
+        }),
       };
     }
     const trace = includeToolTrace && m.role === "assistant" ? toolTrace(m.toolCalls) : "";

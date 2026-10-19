@@ -2942,9 +2942,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           config?.wakeWordLanguage ?? resolveWakeWordLanguage(settings),
           config?.snippets ?? settings.snippets
         );
-    const transcript = selectedText === undefined ? command : `${command}\n\n"${selectedText}"`;
-    this._bankAssistantDirective(transcript, config, {
-      selectedContext,
+    // Text selected in another app goes with the command as its selected
+    // context, the way the agent window carries one.
+    this._bankAssistantDirective(command, config, {
+      selectedContext:
+        selectedContext ??
+        (selectedText === undefined
+          ? undefined
+          : { text: selectedText, sourceMessageId: "", source: "external" }),
       deliverySessionId,
       deliveryAcceptsMarkdown,
       deliveryAppCategory,

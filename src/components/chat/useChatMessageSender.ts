@@ -64,17 +64,24 @@ export function useChatMessageSender({
           const convId = conversationId ?? (await createConversation(text));
           if (!isCurrent()) return;
           const previousMessages = persistence.messages;
-          const selectedContext = normalizeAgentSelectionContext(options?.selectedContext)?.text;
+          const context = normalizeAgentSelectionContext(options?.selectedContext);
+          const selectedContext = context?.text;
+          const selectedContextSource = context?.source === "external" ? "external" : undefined;
           const userMessage: Message = {
             id: crypto.randomUUID(),
             role: "user",
             content: text,
             isStreaming: false,
             ...(selectedContext ? { selectedContext } : {}),
+            ...(selectedContextSource ? { selectedContextSource } : {}),
           };
 
           persistence.setMessages((messages) => [...messages, userMessage]);
-          await persistence.saveUserMessage(text, { messageId: userMessage.id, selectedContext });
+          await persistence.saveUserMessage(text, {
+            messageId: userMessage.id,
+            selectedContext,
+            ...(selectedContextSource ? { selectedContextSource } : {}),
+          });
           if (!isCurrent()) return;
           await onMessagePersisted?.({
             conversationId: convId,

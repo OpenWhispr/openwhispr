@@ -18,6 +18,12 @@ export interface ForkOrigin {
   context: string | null;
 }
 
+interface UserMessageDetails {
+  messageId?: string;
+  selectedContext?: string;
+  selectedContextSource?: Message["selectedContextSource"];
+}
+
 export interface ChatPersistence {
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
@@ -33,10 +39,7 @@ export interface ChatPersistence {
   loadConversation: (id: number) => Promise<boolean | null>;
   /** Changes when the user leaves this conversation, including before a send starts. */
   getSessionVersion: () => number;
-  saveUserMessage: (
-    text: string,
-    options?: { messageId?: string; selectedContext?: string }
-  ) => Promise<void>;
+  saveUserMessage: (text: string, options?: UserMessageDetails) => Promise<void>;
   /** Saves a reply, or completes the one saved while it waited on the user. */
   saveAssistantMessage: (
     messageId: string,
@@ -150,7 +153,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
   const saveUserMessage = useCallback(
     async (
       text: string,
-      { messageId, selectedContext }: { messageId?: string; selectedContext?: string } = {}
+      { messageId, selectedContext, selectedContextSource }: UserMessageDetails = {}
     ) => {
       const conversationId = conversationIdRef.current;
       if (!conversationId) return;
@@ -160,7 +163,9 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
           conversationId,
           "user",
           text,
-          selectedContext ? { selectedContext } : undefined
+          selectedContext
+            ? { selectedContext, ...(selectedContextSource ? { selectedContextSource } : {}) }
+            : undefined
         )
         .then((row) => {
           if (row && messageId) setDbId(messageId, row.id);
@@ -280,6 +285,7 @@ function messageFromRow(row: AgentMessageRow): Message {
     metadata?.toolCalls as ToolCallInfo[] | undefined
   );
   const selectedContext = metadata?.selectedContext;
+  const fromAnotherApp = metadata?.selectedContextSource === "external";
   return {
     id: crypto.randomUUID(),
     dbId: row.id,
@@ -289,6 +295,7 @@ function messageFromRow(row: AgentMessageRow): Message {
     ...(toolCalls ? { toolCalls } : {}),
     ...(turn ? { turn } : {}),
     ...(typeof selectedContext === "string" ? { selectedContext } : {}),
+    ...(fromAnotherApp ? { selectedContextSource: "external" as const } : {}),
   };
 }
 

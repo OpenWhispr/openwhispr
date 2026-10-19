@@ -241,7 +241,7 @@ test("an Agent-panel selection stays on the panel route without touching externa
   assert.ok(!manager.pendingSelectionEdit, "no in-place replacement session may be armed");
 });
 
-test("a selection without a reachable dictation agent routes to the panel with the selection quoted", async (t) => {
+test("a selection without a reachable dictation agent goes to the assistant as selected context", async (t) => {
   const { createManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-assistant-sel-unreachable-",
     settingsKey: "__assistantSelUnreachableSettings",
@@ -254,10 +254,12 @@ test("a selection without a reachable dictation agent routes to the panel with t
   });
 
   assert.equal(result, "make this shorter");
-  assert.equal(
-    manager.pendingAssistantConversation.transcript,
-    'make this shorter\n\n"the selected paragraph"'
-  );
+  assert.equal(manager.pendingAssistantConversation.transcript, "make this shorter");
+  assert.deepEqual(manager.pendingAssistantConversation.selectedContext, {
+    text: "the selected paragraph",
+    sourceMessageId: "",
+    source: "external",
+  });
   assert.equal(modelCalls.length, 0);
   assert.ok(!manager.pendingSelectionEdit, "no in-place replacement session may be armed");
 });
@@ -342,7 +344,7 @@ test("a selection with the dictation agent reachable keeps the in-place edit pat
 // "Explain this" over highlighted text asks for an answer, not an edit: the
 // editor's question verdict must open the panel with the selection quoted and
 // never arm the replacement that would paste the answer over the selection.
-test("a question about a selection goes to the panel instead of replacing it", async (t) => {
+test("a question about a selection goes to the assistant instead of replacing it", async (t) => {
   const { createManager } = await loadAudioManagerHarness(t, {
     cachePrefix: "openwhispr-assistant-sel-question-",
     settingsKey: "__assistantSelQuestionSettings",
@@ -383,8 +385,9 @@ test("a question about a selection goes to the panel instead of replacing it", a
     assert.equal(modelCalls.length, 1, provider);
     assert.ok(!manager.pendingSelectionEdit, `${provider}: no replacement may be armed`);
     assert.deepEqual(manager.pendingAssistantConversation, {
-      transcript: 'explain this\n\n"the selected paragraph"',
+      transcript: "explain this",
       screenContext: screenshot,
+      selectedContext: { text: "the selected paragraph", sourceMessageId: "", source: "external" },
     });
   }
 });

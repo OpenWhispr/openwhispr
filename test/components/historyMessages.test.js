@@ -407,6 +407,22 @@ test("selected text a request was about stays with it in later turns", async () 
   );
   assert.match(request.content, /^Shorten this\n/);
   assert.match(request.content, /"selectedText":"A long paragraph\."/);
+  assert.match(request.content, /"source":"previous_assistant_response"/);
+});
+
+test("text selected in another app is still quoted as from another app in later turns", async () => {
+  const { toHistoryMessages } = await load();
+  const [request] = toHistoryMessages(
+    [
+      {
+        ...user("Reply to this"),
+        selectedContext: "Can we move the launch?",
+        selectedContextSource: "external",
+      },
+    ],
+    { includeToolTrace: true }
+  );
+  assert.match(request.content, /"source":"selected_in_another_app"/);
 });
 
 test("a tool that asked to connect first is traced by what it then did", async () => {
