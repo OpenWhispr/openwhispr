@@ -422,12 +422,15 @@ test("a reloaded renderer starts hidden and without a take, like a new one", asy
   manager.setLayout(fromAgent(win), { layout: "modal", focus: false });
   manager.setVoiceState(fromAgent(win), "recording");
 
-  // In-page navigation (a footnote link) keeps the renderer.
-  win.contentsListeners.get("did-start-navigation")({}, "http://app/#fn1", true, true);
+  // Only a committed main-frame navigation is a new renderer: an in-page one
+  // (a footnote link) never reports one, and a navigation will-navigate
+  // blocks (a dropped file) starts but never commits.
+  assert.equal(win.contentsListeners.has("did-start-navigation"), false);
+  assert.equal(win.contentsListeners.has("did-navigate-in-page"), false);
   assert.equal(win.visible, true);
   assert.equal(manager.isRecording(), true);
 
-  win.contentsListeners.get("did-start-navigation")({}, "http://app/?agent=true", false, true);
+  win.contentsListeners.get("did-navigate")({}, "http://app/?agent=true", 200, "OK");
   assert.equal(win.visible, false);
   assert.equal(manager.isRecording(), false);
   assert.equal(win.bounds.width, AGENT_LAYOUT_SIZES.pill.width);

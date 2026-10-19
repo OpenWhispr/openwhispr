@@ -348,6 +348,22 @@ export default function AgentWindow() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  // A file or link dropped on the window would navigate it away; only text
+  // dropped into the composer is taken.
+  useEffect(() => {
+    const refuseDrop = (event: DragEvent) => {
+      const textIntoComposer =
+        event.target instanceof HTMLTextAreaElement && !event.dataTransfer?.types.includes("Files");
+      if (!textIntoComposer) event.preventDefault();
+    };
+    document.addEventListener("dragover", refuseDrop);
+    document.addEventListener("drop", refuseDrop);
+    return () => {
+      document.removeEventListener("dragover", refuseDrop);
+      document.removeEventListener("drop", refuseDrop);
+    };
+  }, []);
+
   // Opening a chat (a fork, a switch, a new one) resets what the next request
   // carries: a fork made from selected text sends it with its first request.
   const messagesRef = useRef(messages);

@@ -4683,9 +4683,8 @@ class IPCHandlers {
       const releaseIfOwner = () => {
         if (this._cancelHotkeyOwner === owner) releaseCancelHotkey();
       };
-      owner.on("did-start-navigation", (_event, _url, isInPlace, isMainFrame) => {
-        if (isMainFrame && !isInPlace) releaseIfOwner();
-      });
+      // A committed main-frame navigation only: one will-navigate blocks keeps the renderer.
+      owner.on("did-navigate", releaseIfOwner);
       owner.on("render-process-gone", releaseIfOwner);
       owner.once("destroyed", releaseIfOwner);
     };

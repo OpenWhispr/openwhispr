@@ -180,10 +180,11 @@ class AgentWindowManager {
       if (this.window === win) this._forget();
     });
     // A reload (development, or the error screen's Reload) is a new renderer:
-    // it starts hidden with no take, and says when it is ready again. In-page
-    // navigation (a footnote link) keeps the renderer.
-    win.webContents.on("did-start-navigation", (_event, _url, isInPlace, isMainFrame) => {
-      if (this.window !== win || !isMainFrame || isInPlace) return;
+    // it starts hidden with no take, and says when it is ready again. Only a
+    // committed main-frame navigation counts: an in-page one (a footnote link)
+    // keeps the renderer, and so does one will-navigate blocks (a dropped file).
+    win.webContents.on("did-navigate", () => {
+      if (this.window !== win) return;
       if (this.ready) {
         this._applyVoiceState("idle");
         this._hide();

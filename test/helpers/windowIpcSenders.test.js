@@ -242,14 +242,17 @@ test("a window that reloads, crashes or closes while it holds Esc gives it back"
   installWindowManager(stub);
 
   for (const leave of [
-    (contents) => contents.emit("did-start-navigation", {}, "http://app/", false, true),
+    (contents) => contents.emit("did-navigate", {}, "http://app/", 200, "OK"),
     (contents) => contents.emit("render-process-gone", {}, { reason: "crashed" }),
     (contents) => contents.emit("destroyed"),
   ]) {
     const contents = makeContents();
     await handlers.get("register-cancel-hotkey")(frameOf(contents), "Escape");
-    // An in-page navigation (a footnote link) keeps the renderer, and Esc.
-    contents.emit("did-start-navigation", {}, "http://app/#note", true, true);
+    // An in-page navigation (a footnote link) keeps the renderer, and Esc,
+    // and so does one will-navigate blocks (a dropped file), which starts and
+    // never commits.
+    contents.emit("did-navigate-in-page", {}, "http://app/#note", true);
+    contents.emit("did-start-navigation", {}, "file:///tmp/shot.png", false, true);
     assert.deepEqual(calls, []);
     leave(contents);
     assert.deepEqual(calls, [["unregister", "cancel"]]);
