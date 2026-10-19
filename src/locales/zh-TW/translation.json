@@ -2684,7 +2684,7 @@
         "gemini_gemma_4_31b_it": "Google 最大的 Gemma 4，31B 稠密，256K 上下文",
         "gemini_gemma_4_26b_a4b_it": "Google Gemma 4 MoE，4B 活躍參數，256K 上下文",
         "groq_openai_gpt_oss_120b": "OpenAI 開源旗艦，500 T/sec",
-        "groq_qwen_qwen3_8_27b": "強大推理模型，131K 上下文",
+        "groq_qwen_qwen3_8_27b": "快速 Qwen 模型，450 T/sec，131K 上下文",
         "groq_openai_gpt_oss_20b": "快速開源模型，1000 T/sec",
         "groq_compound": "Groq Compound 系統，450 T/sec",
         "groq_compound_mini": "快速 Compound 系統，3x 更低延遲",

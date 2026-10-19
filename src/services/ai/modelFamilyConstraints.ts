@@ -48,8 +48,9 @@ const FAMILIES: Array<ModelFamilyConstraints & { match: RegExp }> = [
   {
     family: "qwen",
     match: /qwen/,
-    // qwen3 accepts none|default only (Groq's enum; "none" is also what the
-    // generic dialect sends everywhere, so the fact is provider-agnostic).
+    // "none" turns Qwen's thinking off on Groq (which also takes
+    // default|low|medium|high) and in the generic dialect, so the fact is
+    // provider-agnostic.
     reasoningEffort: { suppressValue: "none", options: ["none"] },
   },
   {

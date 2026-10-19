@@ -295,7 +295,7 @@
         "gemini_gemma_4_31b_it": "أكبر نموذج Gemma 4 من Google، نموذج كثيف بحجم 31B، سياق 256K",
         "gemini_gemma_4_26b_a4b_it": "نموذج Gemma 4 MoE من Google، بمعلمات نشطة 4B، سياق 256K",
         "groq_openai_gpt_oss_120b": "نموذج OpenAI مفتوح المصدر الرائد، 500 رمز/ثانية",
-        "groq_qwen_qwen3_8_27b": "نموذج استنتاج قوي، سياق 131K",
+        "groq_qwen_qwen3_8_27b": "نموذج Qwen سريع، 450 رمز/ثانية، سياق 131K",
         "groq_openai_gpt_oss_20b": "نموذج سريع مفتوح المصدر، 1000 رمز/ثانية",
         "groq_compound": "نظام Groq المركب، 450 رمز/ثانية",
         "groq_compound_mini": "نظام مركب سريع، زمن انتقال أقل بمقدار 3 أضعاف",

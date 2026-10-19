@@ -2684,7 +2684,7 @@
         "gemini_gemma_4_31b_it": "Il più grande Gemma 4 di Google, 31B denso, contesto 256K",
         "gemini_gemma_4_26b_a4b_it": "Gemma 4 MoE di Google, 4B parametri attivi, contesto 256K",
         "groq_openai_gpt_oss_120b": "Ammiraglia open source di OpenAI, 500 T/sec",
-        "groq_qwen_qwen3_8_27b": "Potente modello di ragionamento, contesto 131K",
+        "groq_qwen_qwen3_8_27b": "Modello Qwen veloce, 450 T/sec, contesto 131K",
         "groq_openai_gpt_oss_20b": "Modello open source veloce, 1000 T/sec",
         "groq_compound": "Sistema compound di Groq, 450 T/sec",
         "groq_compound_mini": "Sistema compound veloce, 3x latenza ridotta",
