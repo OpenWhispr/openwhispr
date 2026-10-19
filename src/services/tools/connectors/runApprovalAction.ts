@@ -13,7 +13,7 @@ import { connectorActionKey } from "./actionKey";
 /**
  * Cards one turn can raise, across every connector. "File these eight action
  * items as issues" gets five now and the rest on request; a model stuck in a
- * loop, or following injected text, can't bury the panel in cards.
+ * loop, or following injected text, can't bury the chat in cards.
  */
 export const MAX_APPROVAL_CARDS_PER_TURN = 5;
 const CARD_SLOT = "approval_card";

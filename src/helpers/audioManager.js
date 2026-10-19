@@ -394,14 +394,14 @@ function resolveReasoningRoute(
         ...(attach ? { screenContext, textOnlySystemPrompt: systemPrompt } : {}),
         // Selection edits run on this (dictation) scope, so they need it
         // reachable; standalone commands resolve the same scope again in the
-        // panel and report their own configuration problems in-conversation.
+        // agent window and report their own configuration problems there.
         selectionEditReachable: agent.reachable,
         // Detection and stripping must read the transcript identically, so both
         // inputs ride the route rather than being re-read after the await.
         wakeWordLanguage,
         snippets: settings.snippets,
-        // The panel re-decides attach/drop for its own request, so carry the
-        // raw screenshot past this attach gate for that path.
+        // The assistant re-decides attach/drop for its own request, so carry
+        // the raw screenshot past this attach gate for that path.
         ...(screenContext ? { rawScreenContext: screenContext } : {}),
       },
     };
@@ -2867,7 +2867,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // resolveReasoningRoute mirrors an attached screenContext into
       // rawScreenContext (same object), so the raw carry is the single source
       // to read — it also survives when this attach gate dropped the image
-      // (the panel re-decides for its own request).
+      // (the assistant re-decides for its own request).
       screenContext: config?.rawScreenContext ?? null,
       ...(selectedContext ? { selectedContext } : {}),
     };
@@ -3301,8 +3301,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       !cleanupReachable &&
       !agentReachable &&
       !(this.translationRequested && translationChainReachable(settings)) &&
-      // A voice-assistant command always routes: standalone commands stream
-      // in the panel, which reports a missing model in-conversation.
+      // A voice-assistant command always routes: standalone commands go to the
+      // assistant, which reports a missing model in-conversation.
       !this.voiceAgentRequested
     ) {
       logger.logReasoning("REASONING_SKIPPED", {

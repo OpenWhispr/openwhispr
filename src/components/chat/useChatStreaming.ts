@@ -906,7 +906,7 @@ export function useChatStreaming({
               {
                 systemPrompt,
                 // Policy and managed enforcement judge the scope that actually
-                // answers: the panel's Chat fallback as Chat, and the vision
+                // answers: the agent window's Chat fallback as Chat, and the vision
                 // override as the agent scope whose image lane it is.
                 inferenceScope:
                   llmConfig.scope === "dictationAgentVision" ? "dictationAgent" : llmConfig.scope,

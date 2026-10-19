@@ -518,9 +518,8 @@ export const useAudioRecording = (toast, options = {}) => {
         setIsStreaming(isStreaming ?? false);
         if (isRecording) setIsPreparing(false);
         if (!isRecording) setIsStopping(false);
-        // The panel only mirrors assistant-routed recordings; a plain
-        // dictation started while it is open must not masquerade as a
-        // follow-up (its transcript takes the paste route, not the panel).
+        // Only an assistant-routed recording (the onboarding demo's) shows as
+        // the assistant's; a plain dictation takes the paste route.
         setIsAssistantVoice(!!audioManagerRef.current?.voiceAgentRequested);
         if (micCaptureStatus) {
           setMicCaptureStatus(micCaptureStatus);

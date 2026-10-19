@@ -162,7 +162,7 @@ export function ExpandingPanelShell({
       aria-hidden={!open}
       data-panel-height-stabilized={stabilizeHeight ? "true" : undefined}
       style={{
-        // A long streaming response can make the natural-content floor taller
+        // A long live transcript can make the natural-content floor taller
         // than the native window. Keep the floor within the same viewport cap
         // as max-height so the middle flex child shrinks and becomes scrollable.
         height: heightFloor !== null ? `min(${heightFloor}px, calc(100% - 1.5rem))` : undefined,
