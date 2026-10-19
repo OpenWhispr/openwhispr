@@ -96,6 +96,23 @@ test("batch cleanup preserves spoken paragraph commands through the actual audio
     }
   );
 
+  await t.test("comma-separated shortcut mentions survive batch cleanup", async () => {
+    const manager = makeManager(async (text) => text);
+    const input = "Available shortcuts include new line, new paragraph, and undo.";
+    assert.equal(await manager.processTranscription(input, "local"), input);
+  });
+
+  await t.test("a model-added bullet stays attached after batch cleanup", async () => {
+    const manager = makeManager(async () => "Shopping list:\n\n- Apples and bananas.");
+    assert.equal(
+      await manager.processTranscription(
+        "Shopping list. New paragraph. Apples and bananas.",
+        "local"
+      ),
+      "Shopping list:\n\n- Apples and bananas."
+    );
+  });
+
   await t.test("non-English cleanup keeps existing behavior", async () => {
     setSettings({ ...globalThis.__spokenParagraphSettings, preferredLanguage: "fr" });
     const manager = makeManager(async (text) => text);

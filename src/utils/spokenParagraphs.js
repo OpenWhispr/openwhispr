@@ -55,11 +55,17 @@ function paragraphParts(text, language) {
     if (literalPrefix.test(before)) continue;
     // Require an utterance/clause boundary as well as an ending boundary.
     // Grammatical mentions such as "today's new paragraph" stay literal.
-    // Colons can introduce lists/definitions, so leave those ambiguous cases.
+    // Commas and colons can introduce/continue literal lists, so they are
+    // insufficient boundaries. A salutation is the narrow comma exception;
+    // adjacent recognized commands still preserve repeated breaks.
+    const adjacentCommand = commands.at(-1)?.end === start;
+    const afterGreeting =
+      /(?:^|[.!?;\r\n])[ \t]*(?:dear|hi|hello|hey)\b[^,.!?;:\r\n]*,[ \t]*$/iu.test(before);
     if (
       before.trim() &&
-      !/[.!?;,\r\n]["'”’)]*[ \t]*$/u.test(before) &&
-      commands.at(-1)?.end !== start
+      !/[.!?;\r\n]["'”’)]*[ \t]*$/u.test(before) &&
+      !afterGreeting &&
+      !adjacentCommand
     )
       continue;
     const after = text.slice(end);
@@ -68,6 +74,17 @@ function paragraphParts(text, language) {
     if (!/^[ \t]*(?:[.!?;:,]|\r?\n|$)/u.test(after) && !/^[ \t]+new[ \t]+paragraph\b/iu.test(after))
       continue;
     const punctuation = after.match(/^[ \t]*[.!?;:,]*[ \t]*/u)[0];
+    const remainder = after.slice(punctuation.length);
+    // A comma after the phrase is equally ambiguous (including a first list
+    // item). Preserve it unless the greeting/repeated-command context is clear.
+    if (
+      /^[ \t]*,+[ \t]*$/u.test(punctuation) &&
+      remainder.trim() &&
+      !afterGreeting &&
+      !adjacentCommand &&
+      !/^new[ \t]+paragraph\b/iu.test(remainder)
+    )
+      continue;
     commands.push({ start, end: end + punctuation.length });
   }
   if (!commands.length) return null;
@@ -172,22 +189,33 @@ function restoreParagraphs(parts, cleaned) {
       return original;
     const gap = cleaned.slice(start, end);
     const commands = [...gap.matchAll(commandPattern)];
+    // A line-start list/quote marker belongs to the following text, not to
+    // the punctuation ending the previous paragraph. Keep it after the break.
+    const rightMarker = boundary.right
+      ? gap.match(/(?:^|\r?\n)([ \t]*[-*+•>][ \t]+)$/u)?.[1] || ""
+      : "";
+    const leftGap = rightMarker ? gap.slice(0, -rightMarker.length) : gap;
     // The gap may contain punctuation, whitespace and the recognised command
     // words only. A model rewrite putting document words here is not safe to
     // delete, and a quoted mention must never be consumed as a command.
     if (
       quotedRanges(gap).length ||
       /[()[\]{}]/u.test(gap) ||
+      /[^.!?;:,\s]/u.test(leftGap.replace(commandPattern, "")) ||
       words(gap.replace(commandPattern, "")).length ||
       commands.length * 2 > boundary.count
     )
       return original;
-    const prefix = (commands.length ? gap.slice(0, commands[0].index) : gap).trimEnd();
+    const prefix = (commands.length ? gap.slice(0, commands[0].index) : leftGap).trimEnd();
     const existing =
       ((boundary.left?.match(/\s*$/u)[0] || "") + (boundary.right?.match(/^\s*/u)[0] || "")).match(
         /\n/gu
       )?.length || 0;
-    edits.push({ start, end, replacement: prefix + "\n".repeat(boundary.count + existing) });
+    edits.push({
+      start,
+      end,
+      replacement: prefix + "\n".repeat(boundary.count + existing) + rightMarker,
+    });
   }
   let output = "";
   let cursor = 0;

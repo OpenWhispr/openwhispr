@@ -3,6 +3,49 @@ const assert = require("node:assert/strict");
 
 const cases = [
   [
+    "greeting cannot cross a period into a shortcut list",
+    "Hi Alex. Available shortcuts include new line, new paragraph, and undo.",
+    "Hi Alex. Available shortcuts include new line, new paragraph, and undo.",
+  ],
+  [
+    "greeting cannot cross an exclamation into a shortcut list",
+    "Hello everyone! Available shortcuts include new line, new paragraph, and undo.",
+    "Hello everyone! Available shortcuts include new line, new paragraph, and undo.",
+  ],
+  [
+    "salutation cannot cross a period into a shortcut list",
+    "Dear Alex. Available shortcuts include new line, new paragraph, and undo.",
+    "Dear Alex. Available shortcuts include new line, new paragraph, and undo.",
+  ],
+  [
+    "first comma list item",
+    "New paragraph, new line, and undo.",
+    "New paragraph, new line, and undo.",
+  ],
+  ["two comma list items", "New paragraph, undo.", "New paragraph, undo."],
+  ["ambiguous command-ending comma", "One. New paragraph, Two.", "One. New paragraph, Two."],
+  ["paragraph-only ending comma", "New paragraph,", "\n\n"],
+  [
+    "comma-separated shortcut names",
+    "Available shortcuts include new line, new paragraph, and undo.",
+    "Available shortcuts include new line, new paragraph, and undo.",
+  ],
+  [
+    "comma-separated names after a colon",
+    "Available shortcuts: new line, new paragraph, undo.",
+    "Available shortcuts: new line, new paragraph, undo.",
+  ],
+  ["unlabelled comma list", "New line, new paragraph, undo.", "New line, new paragraph, undo."],
+  ["final comma list item", "New line, undo, new paragraph.", "New line, undo, new paragraph."],
+  ["capitalised comma list", "New Line, New Paragraph, Undo.", "New Line, New Paragraph, Undo."],
+  [
+    "ambiguous comma-delimited prose",
+    "First clause, new paragraph, second clause.",
+    "First clause, new paragraph, second clause.",
+  ],
+  ["short greeting", "Hi Alex, new paragraph, Ready.", "Hi Alex,\n\nReady."],
+  ["repeated comma commands", "New paragraph, new paragraph, Two.", "\n\n\n\nTwo."],
+  [
     "plural possessive within quoted passage",
     "He wrote 'The patients' notes follow. New paragraph. Keep it literal.'",
     "He wrote 'The patients' notes follow. New paragraph. Keep it literal.'",
@@ -223,3 +266,118 @@ test("model-added delimiters cannot leave unmatched punctuation around a break",
     );
   }
 });
+
+for (const [name, cleaned, expected] of [
+  [
+    "dash bullet",
+    "Shopping list:\n\n- Apples and bananas.",
+    "Shopping list:\n\n- Apples and bananas.",
+  ],
+  [
+    "asterisk bullet",
+    "Shopping list:\n\n* Apples and bananas.",
+    "Shopping list:\n\n* Apples and bananas.",
+  ],
+  [
+    "plus bullet",
+    "Shopping list:\n\n+ Apples and bananas.",
+    "Shopping list:\n\n+ Apples and bananas.",
+  ],
+  [
+    "Unicode bullet",
+    "Shopping list:\n\n• Apples and bananas.",
+    "Shopping list:\n\n• Apples and bananas.",
+  ],
+  [
+    "blockquote",
+    "Shopping list:\n\n> Apples and bananas.",
+    "Shopping list:\n\n> Apples and bananas.",
+  ],
+  [
+    "indented marker",
+    "Shopping list:\r\n\r\n  -\tApples and bananas.",
+    "Shopping list:\n\n  -\tApples and bananas.",
+  ],
+  [
+    "retained command before a bullet",
+    "Shopping list: New paragraph.\n\n- Apples and bananas.",
+    "Shopping list:\n\n- Apples and bananas.",
+  ],
+  [
+    "ambiguous inline marker",
+    "Shopping list: - Apples and bananas.",
+    "Shopping list.\n\nApples and bananas.",
+  ],
+  [
+    "unsupported numbered list",
+    "Shopping list:\n\n1. Apples and bananas.",
+    "Shopping list.\n\nApples and bananas.",
+  ],
+  [
+    "unsupported checkbox",
+    "Shopping list:\n\n- [ ] Apples and bananas.",
+    "Shopping list.\n\nApples and bananas.",
+  ],
+]) {
+  test(`cleanup keeps right-side formatting intact: ${name}`, async () => {
+    const { cleanupSpokenParagraphs } = await import("../../src/utils/spokenParagraphs.js");
+    assert.equal(
+      await cleanupSpokenParagraphs(
+        "Shopping list. New paragraph. Apples and bananas.",
+        async () => cleaned,
+        { language: "en" }
+      ),
+      expected
+    );
+  });
+}
+
+test("leading paragraph command keeps a list marker with its text", async () => {
+  const { cleanupSpokenParagraphs } = await import("../../src/utils/spokenParagraphs.js");
+  assert.equal(
+    await cleanupSpokenParagraphs(
+      "New paragraph. Apples and bananas.",
+      async () => "- Apples and bananas.",
+      { language: "en" }
+    ),
+    "\n\n- Apples and bananas."
+  );
+});
+
+test("repeated paragraph commands keep a list marker with its text", async () => {
+  const { cleanupSpokenParagraphs } = await import("../../src/utils/spokenParagraphs.js");
+  assert.equal(
+    await cleanupSpokenParagraphs(
+      "Shopping list. New paragraph. New paragraph. Apples and bananas.",
+      async () => "Shopping list:\n\n- Apples and bananas.",
+      { language: "en" }
+    ),
+    "Shopping list:\n\n\n\n- Apples and bananas."
+  );
+});
+
+test("a trailing paragraph command cannot acquire an empty model-added bullet", async () => {
+  const { cleanupSpokenParagraphs } = await import("../../src/utils/spokenParagraphs.js");
+  assert.equal(
+    await cleanupSpokenParagraphs(
+      "Shopping list. New paragraph.",
+      async () => "Shopping list:\n\n- ",
+      { language: "en" }
+    ),
+    "Shopping list.\n\n"
+  );
+});
+
+for (const marker of ["##", "–", "◦", "☞"]) {
+  test(`unsupported formatting falls back without stranding ${marker}`, async () => {
+    const { cleanupSpokenParagraphs } = await import("../../src/utils/spokenParagraphs.js");
+    assert.equal(
+      await cleanupSpokenParagraphs(
+        "Shopping list. New paragraph. Apples and bananas.",
+        async () => `Shopping list:\n\n${marker} Apples and bananas.`,
+        { language: "en" }
+      ),
+      "Shopping list.\n\nApples and bananas."
+    );
+  });
+}
