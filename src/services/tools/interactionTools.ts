@@ -205,10 +205,16 @@ const askUserTool: ToolDefinition = {
     if (!context) return noContextResult();
     const result = await requestInteraction(context, { kind: "questions", questions });
     if (result.status !== "answered") return unansweredResult(result);
+    const answers = answerLabels(questions, result.answers);
+    const answerLines = questions.map((question) => {
+      const answer = answers[question.id];
+      return `${question.prompt} ${Array.isArray(answer) ? answer.join(", ") : answer}`;
+    });
     return {
       success: true,
-      data: { status: "answered", answers: answerLabels(questions, result.answers) },
-      displayText: i18n.t("agentMode.interactions.status.answered"),
+      data: { status: "answered", answers },
+      // The step reads "Answered" and expands to what the user chose.
+      displayText: [i18n.t("agentMode.interactions.status.answered"), ...answerLines].join("\n"),
     };
   },
 };
@@ -235,7 +241,7 @@ function createConnectionTool(targets: readonly ConnectionTarget[]): ToolDefinit
     },
     readOnly: true,
     promptInstruction:
-      "When the request needs a service that isn't connected yet, call request_connection instead of telling the user to connect it themselves, then continue the task once it connects.",
+      "The tools of a service that isn't connected yet ask the user to connect it when you call them. Use request_connection only to connect one no tool of yours needs yet, and never just tell the user to connect something themselves.",
     async execute(args, context) {
       const target = targets.find((candidate) => candidate === args.target);
       if (!target) return invalidResult(`target must be one of: ${targets.join(", ")}`);
@@ -397,8 +403,9 @@ export function createInteractionTools(options: InteractionToolOptions): ToolDef
 
 /**
  * A tool whose service can be connected from the chat: registered before it
- * is, so the turn that connects it can go on to use it. Until then it asks
- * the model to request the connection.
+ * is, so the turn that needs it can connect it. Called while it isn't
+ * connected, it asks the user to connect it and then does what it was asked,
+ * so the task carries on without the model having to start it again.
  */
 export function requireConnection(
   tool: ToolDefinition,
@@ -407,19 +414,14 @@ export function requireConnection(
 ): ToolDefinition {
   return {
     ...tool,
-    execute: (args, context?: ToolExecutionContext) =>
-      isReady()
-        ? tool.execute(args, context)
-        : Promise.resolve({
-            success: true,
-            data: {
-              status: "unavailable",
-              reason: "not_connected",
-              guidance: `${CONNECTION_TARGET_NAMES[target]} isn't connected. Call request_connection with target "${target}" first, then try again once it connects.`,
-            },
-            displayText: i18n.t("agentMode.interactions.status.notConnected", {
-              name: CONNECTION_TARGET_NAMES[target],
-            }),
-          }),
+    async execute(args, context?: ToolExecutionContext) {
+      if (!isReady()) {
+        const result = context
+          ? await requestInteraction(context, { kind: "connection", target })
+          : ({ status: "unavailable", reason: "not_connected" } as const);
+        if (result.status !== "connected") return unansweredResult(result);
+      }
+      return tool.execute(args, context);
+    },
   };
 }

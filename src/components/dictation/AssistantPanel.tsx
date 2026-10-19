@@ -294,11 +294,11 @@ export function AssistantPanel({
   const panelInteractions = latestAssistantMessage
     ? (latestAssistantMessage.toolCalls ?? [])
         .map((toolCall) => interactionEntries[approvalKey(latestAssistantMessage.id, toolCall.id)])
-        .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+        .filter((entry): entry is NonNullable<typeof entry> => !!entry && entry.state !== "settled")
     : [];
   const cardAwaitingUser =
     panelApprovals.some((entry) => entry.state === "pending" || entry.state === "committing") ||
-    panelInteractions.some((entry) => entry.state !== "settled");
+    panelInteractions.length > 0;
   const isToolExecuting = Boolean(streaming.activeToolName) && !cardAwaitingUser;
   const isBusy = resolveAssistantPanelBusy({
     agentState: streaming.agentState,

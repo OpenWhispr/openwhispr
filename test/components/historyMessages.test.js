@@ -408,3 +408,36 @@ test("selected text a request was about stays with it in later turns", async () 
   assert.match(request.content, /^Shorten this\n/);
   assert.match(request.content, /"selectedText":"A long paragraph\."/);
 });
+
+test("a tool that asked to connect first is traced by what it then did", async () => {
+  const { toolTrace } = await load();
+  const connection = { payload: { kind: "connection", target: "slack" } };
+  const sent = call(
+    "slack_send_message",
+    { destination: "#eng", text: "hi" },
+    {
+      metadata: { status: "sent" },
+      interaction: {
+        ...connection,
+        state: "settled",
+        result: { status: "connected", target: "slack" },
+      },
+    }
+  );
+  const cutOff = call(
+    "slack_send_message",
+    {},
+    {
+      status: "executing",
+      interaction: {
+        ...connection,
+        state: "settled",
+        result: { status: "connected", target: "slack" },
+      },
+    }
+  );
+  assert.equal(
+    toolTrace([sent, cutOff]),
+    "[Tools used: slack_send_message (sent), slack_send_message (outcome not recorded)]"
+  );
+});

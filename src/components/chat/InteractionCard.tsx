@@ -1,6 +1,5 @@
 import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import type { TFunction } from "i18next";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { GithubDeviceCode } from "../connectors/GithubDeviceCode";
@@ -17,55 +16,13 @@ import {
 } from "../../stores/agentInteractionStore";
 import { CONNECTION_TARGET_NAMES } from "../../config/agentCapabilities";
 import { getCachedPlatform } from "../../utils/platform";
-import type {
-  InteractionAnswers,
-  InteractionQuestion,
-  InteractionRecord,
-  InteractionResult,
-} from "../../types/agentInteractions";
 import type { CalendarProvider } from "../../utils/calendarConnect";
 
 const CARD_CLASS = "my-1.5 rounded-lg border border-border/70 bg-surface-2/60 p-3 text-[13px]";
-const CALENDAR_PROVIDERS: CalendarProvider[] =
+
+// Apple Calendar connects only on macOS.
+const calendarProviders = (): CalendarProvider[] =>
   getCachedPlatform() === "darwin" ? ["google", "microsoft", "apple"] : ["google", "microsoft"];
-
-/** One line for an interaction that's over: what the user answered or decided. */
-export function InteractionSummary({ record }: { record: InteractionRecord }): ReactElement {
-  const { t } = useTranslation();
-  return (
-    <p className="mb-1 text-[11px] text-muted-foreground/80" dir="auto">
-      {record.result
-        ? resultText(record, record.result, t)
-        : t("agentMode.interactions.status.notAnswered")}
-    </p>
-  );
-}
-
-function resultText(
-  { payload }: InteractionRecord,
-  result: InteractionResult,
-  t: TFunction
-): string {
-  if (result.status === "answered" && payload.kind === "questions") {
-    return payload.questions
-      .map((question) => `${question.prompt} ${answerText(question, result.answers)}`)
-      .join(" · ");
-  }
-  if (result.status === "connected") {
-    return t("agentMode.interactions.status.connected", {
-      name: CONNECTION_TARGET_NAMES[result.target],
-    });
-  }
-  return t(
-    `agentMode.interactions.status.${result.status === "not_answered" ? "notAnswered" : result.status}`
-  );
-}
-
-function answerText(question: InteractionQuestion, answers: InteractionAnswers): string {
-  const answer = answers[question.id];
-  const label = (id: string) => question.options?.find((option) => option.id === id)?.label ?? id;
-  return Array.isArray(answer) ? answer.map(label).join(", ") : label(answer ?? "");
-}
 
 function Questions({ entry }: { entry: InteractionEntry }): ReactElement | null {
   const { t } = useTranslation();
@@ -154,7 +111,7 @@ function Connection({ entry }: { entry: InteractionEntry }): ReactElement | null
   if (entry.payload.kind !== "connection") return null;
   const { target, reason } = entry.payload;
   const working = entry.state === "working";
-  const providers = target === "calendar" ? CALENDAR_PROVIDERS : [undefined];
+  const providers = target === "calendar" ? calendarProviders() : [undefined];
   return (
     <>
       <p className="font-medium text-foreground">
@@ -319,13 +276,6 @@ function SettingsLink({ entry }: { entry: InteractionEntry }): ReactElement | nu
 
 /** Minimal controls for an interaction the turn is waiting on; Phase 3 replaces the visuals. */
 export function InteractionCard({ entry }: { entry: InteractionEntry }): ReactElement {
-  if (entry.state === "settled" && entry.result) {
-    return (
-      <InteractionSummary
-        record={{ payload: entry.payload, state: "settled", result: entry.result }}
-      />
-    );
-  }
   return (
     <div data-interaction-card={entry.key} data-kind={entry.payload.kind} className={CARD_CLASS}>
       <Questions entry={entry} />

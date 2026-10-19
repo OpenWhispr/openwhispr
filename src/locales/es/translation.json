@@ -4036,9 +4036,7 @@
         "done": "De vuelta de Ajustes",
         "cancelled": "Descartado",
         "notAnswered": "Sin respuesta",
-        "unavailable": "No disponible ahora",
-        "invalid": "No se pudo mostrar la pregunta",
-        "notConnected": "{{name}} no está conectado"
+        "invalid": "No se pudo mostrar la pregunta"
       },
       "followUp": {
         "connected": "He conectado {{name}}.",

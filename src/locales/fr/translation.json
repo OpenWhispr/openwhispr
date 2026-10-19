@@ -4154,9 +4154,7 @@
         "done": "Retour des réglages",
         "cancelled": "Ignoré",
         "notAnswered": "Sans réponse",
-        "unavailable": "Indisponible pour le moment",
-        "invalid": "Impossible d'afficher cette question",
-        "notConnected": "{{name}} n'est pas connecté"
+        "invalid": "Impossible d'afficher cette question"
       },
       "followUp": {
         "connected": "J'ai connecté {{name}}.",

@@ -3984,9 +3984,7 @@
         "done": "設定から戻りました",
         "cancelled": "閉じました",
         "notAnswered": "未回答",
-        "unavailable": "現在は利用できません",
-        "invalid": "質問を表示できませんでした",
-        "notConnected": "{{name}} は接続されていません"
+        "invalid": "質問を表示できませんでした"
       },
       "followUp": {
         "connected": "{{name}} を接続しました。",

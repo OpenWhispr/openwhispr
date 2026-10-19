@@ -1834,9 +1834,7 @@
         "done": "تمت العودة من الإعدادات",
         "cancelled": "تم التجاهل",
         "notAnswered": "لم تتم الإجابة",
-        "unavailable": "غير متاح الآن",
-        "invalid": "تعذّر عرض هذا السؤال",
-        "notConnected": "{{name}} غير مربوط"
+        "invalid": "تعذّر عرض هذا السؤال"
       },
       "followUp": {
         "connected": "لقد ربطت {{name}}.",

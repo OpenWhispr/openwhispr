@@ -146,8 +146,12 @@ export function toolTrace(toolCalls: ReadonlyArray<ToolCallInfo> | undefined): s
   const entries = toolCalls
     .filter((call) => call.name !== "grounded_product_help")
     .map((call) => {
-      if (call.interaction) {
-        const { arg, outcome } = interactionTrace(call.interaction);
+      // A tool that asked to connect its service first is traced by what it then did.
+      const asked =
+        call.interaction &&
+        (call.interaction.payload.kind !== "connection" || call.name === "request_connection");
+      if (asked) {
+        const { arg, outcome } = interactionTrace(call.interaction!);
         return `${call.name} ("${arg}") (${outcome})`;
       }
       const arg = traceArgument(call);

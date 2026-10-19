@@ -3984,9 +3984,7 @@
         "done": "Di ritorno dalle impostazioni",
         "cancelled": "Ignorato",
         "notAnswered": "Senza risposta",
-        "unavailable": "Non disponibile al momento",
-        "invalid": "Impossibile mostrare la domanda",
-        "notConnected": "{{name}} non è connesso"
+        "invalid": "Impossibile mostrare la domanda"
       },
       "followUp": {
         "connected": "Ho connesso {{name}}.",

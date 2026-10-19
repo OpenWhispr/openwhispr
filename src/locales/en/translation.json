@@ -4154,9 +4154,7 @@
         "done": "Back from Settings",
         "cancelled": "Dismissed",
         "notAnswered": "Not answered",
-        "unavailable": "Not available right now",
-        "invalid": "Couldn't show that question",
-        "notConnected": "{{name}} isn't connected"
+        "invalid": "Couldn't show that question"
       },
       "followUp": {
         "connected": "I connected {{name}}.",

@@ -115,7 +115,7 @@ test("ask_user returns the chosen labels to the model", async () => {
     status: "answered",
     answers: { channel: "#general", tone: "casual" },
   });
-  assert.equal(result.displayText, "Answered");
+  assert.equal(result.displayText, "Answered\nWhich channel? #general\nTone? casual");
 });
 
 test("a dismissed connection tells the model not to ask again", async () => {
@@ -177,30 +177,55 @@ test("allowed access attaches the screenshot for the next step", async () => {
   assert.deepEqual(images, [{ image: "IMG", mediaType: "image/jpeg" }]);
 });
 
-test("a tool whose service isn't connected yet asks the model to request it", async () => {
+test("a tool whose service isn't connected asks to connect it, then does what it was asked", async () => {
   const { requireConnection } = await load();
+  const store = await loadStore();
   let ready = false;
-  let ran = 0;
+  const ran = [];
   const tool = requireConnection(
     {
       name: "slack_send_message",
       description: "",
       parameters: {},
       readOnly: false,
-      execute: async () => {
-        ran += 1;
+      execute: async (args) => {
+        ran.push(args);
         return { success: true, data: { status: "sent" }, displayText: "Sent" };
       },
     },
     "slack",
     () => ready
   );
-  const refused = await tool.execute({}, undefined);
-  assert.equal(refused.data.reason, "not_connected");
-  assert.match(refused.data.guidance, /request_connection with target "slack"/);
-  assert.equal(ran, 0);
+
+  const declined = tool.execute({ text: "first" }, context("w1"));
+  assert.deepEqual(store.useAgentInteractionStore.getState().entries["m1::w1"].payload, {
+    kind: "connection",
+    target: "slack",
+  });
+  store.cancelInteraction("m1::w1");
+  assert.equal((await declined).data.status, "cancelled_by_user");
+  assert.deepEqual(ran, []);
+
+  const running = tool.execute({ text: "second" }, context("w2"));
   ready = true;
-  assert.equal((await tool.execute({}, undefined)).data.status, "sent");
+  globalThis.window.electronAPI = {
+    connectorConnect: async () => ({ status: "connected", accountLabel: "a", workspaceLabel: "w" }),
+    connectorStatus: async () => [
+      {
+        id: "slack",
+        connected: true,
+        configured: true,
+        accountLabel: "a",
+        workspaceLabel: "w",
+        needsReconnect: false,
+      },
+    ],
+  };
+  await store.connectInteraction("m1::w2");
+  assert.equal((await running).data.status, "sent");
+  assert.deepEqual(ran, [{ text: "second" }]);
+  assert.equal((await tool.execute({ text: "third" }, context("w3"))).data.status, "sent");
+  assert.deepEqual(store.useAgentInteractionStore.getState().entries["m1::w3"], undefined);
 });
 
 test("the prompt tells the model to ask only when it has to", async () => {

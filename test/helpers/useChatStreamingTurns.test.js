@@ -342,7 +342,7 @@ test("a service the chat can connect is offered with request_connection, and nam
   assert.ok(harness.offered[0].includes("slack_send_message"));
   assert.ok(harness.offered[0].includes("request_connection"));
   assert.ok(harness.offered[0].includes("ask_user"));
-  assert.match(harness.prompts[0], /call request_connection with its target/);
+  assert.match(harness.prompts[0], /use its tools as usual: they ask the user to connect it first/);
   assert.match(harness.prompts[0], /- Slack \(target: slack\)/);
   assert.doesNotMatch(harness.prompts[0], /Connect Slack and I can post this/);
 });

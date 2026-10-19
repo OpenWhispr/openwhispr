@@ -22,7 +22,7 @@ import { HelpEvidence } from "./GroundedHelpEvidence";
 import { extractHelpEvidence } from "./helpEvidence";
 import { toolIcons } from "./toolIcons";
 import { ApprovalCard } from "./ApprovalCard";
-import { InteractionCard, InteractionSummary } from "./InteractionCard";
+import { InteractionCard } from "./InteractionCard";
 import { approvalKey, useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
 import { useAgentInteractionStore } from "../../stores/agentInteractionStore";
 
@@ -155,8 +155,8 @@ function ToolCallItem({ messageId, toolCall }: { messageId: string; toolCall: To
   const approval = useConnectorApprovalStore((state) => state.entries[key]);
   const interaction = useAgentInteractionStore((state) => state.entries[key]);
   if (approval) return <ApprovalCard entry={approval} />;
-  if (interaction) return <InteractionCard entry={interaction} />;
-  if (toolCall.interaction) return <InteractionSummary record={toolCall.interaction} />;
+  if (interaction && interaction.state !== "settled")
+    return <InteractionCard entry={interaction} />;
   return <ToolCallStep toolCall={toolCall} />;
 }
 

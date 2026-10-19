@@ -4154,9 +4154,7 @@
         "done": "Zurück aus den Einstellungen",
         "cancelled": "Verworfen",
         "notAnswered": "Nicht beantwortet",
-        "unavailable": "Gerade nicht verfügbar",
-        "invalid": "Die Frage konnte nicht angezeigt werden",
-        "notConnected": "{{name}} ist nicht verbunden"
+        "invalid": "Die Frage konnte nicht angezeigt werden"
       },
       "followUp": {
         "connected": "Ich habe {{name}} verbunden.",

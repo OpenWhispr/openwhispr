@@ -3984,9 +3984,7 @@
         "done": "已從設定返回",
         "cancelled": "已略過",
         "notAnswered": "未回答",
-        "unavailable": "暫時無法使用",
-        "invalid": "無法顯示該問題",
-        "notConnected": "{{name}} 未連結"
+        "invalid": "無法顯示該問題"
       },
       "followUp": {
         "connected": "我已連結 {{name}}。",

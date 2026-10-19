@@ -203,8 +203,9 @@ export function describeUnavailable(unavailable: ReadonlyArray<UnavailableCapabi
   if (connectable.length > 0) {
     sections.push(
       "Not connected yet, but the user can connect these right here. When the request needs " +
-        "one, call request_connection with its target, then continue the task once it " +
-        "connects; don't just tell the user to connect it themselves:\n" +
+        "one, use its tools as usual: they ask the user to connect it first and then carry on. " +
+        "To connect one that no tool of yours needs yet (Gmail, to send email from here), call " +
+        "request_connection with its target. Don't just tell the user to connect it themselves:\n" +
         connectable
           .map(
             (item) =>
