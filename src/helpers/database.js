@@ -6073,7 +6073,11 @@ class DatabaseManager {
       }
       if (!existing) {
         existing = this.db
-          .prepare("SELECT * FROM speaker_profiles WHERE display_name = ?")
+          .prepare(
+            normalizedEmail
+              ? "SELECT * FROM speaker_profiles WHERE display_name = ? AND (email IS NULL OR email = '')"
+              : "SELECT * FROM speaker_profiles WHERE display_name = ?"
+          )
           .get(name);
       }
       if (existing) {
