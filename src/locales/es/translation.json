@@ -4063,6 +4063,7 @@
       "nothingHeard": "No te he entendido",
       "transcriptionFailed": "No se pudo transcribir",
       "micUnavailable": "No se pudo abrir el micrófono",
+      "regenerateFailed": "No se pudo regenerar la respuesta",
       "dictationActive": "El dictado está usando el micrófono"
     },
     "composer": {

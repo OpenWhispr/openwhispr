@@ -13,7 +13,14 @@ const conversationTitle = (text: string) => (text.length > 50 ? `${text.slice(0,
  * New chat, switching, forking and regenerating all end the running turn first,
  * since one stream runs per window.
  */
-export function useAgentChat({ onResponseContent }: { onResponseContent: () => void }) {
+export function useAgentChat({
+  onResponseContent,
+  onRegenerateFailed,
+}: {
+  onResponseContent: () => void;
+  /** A regenerate failed before anything new; the old reply is back. */
+  onRegenerateFailed: () => void;
+}) {
   const persistence = useChatPersistence();
   const streaming = useChatStreaming({
     setMessages: persistence.setMessages,
@@ -89,9 +96,10 @@ export function useAgentChat({ onResponseContent }: { onResponseContent: () => v
       void sendToAI(request.content, messages.slice(0, index), {
         conversationId,
         replaceMessage: messages[index],
+        onReplaceFailed: onRegenerateFailed,
       });
     },
-    [conversationId, sendToAI]
+    [conversationId, onRegenerateFailed, sendToAI]
   );
 
   return {

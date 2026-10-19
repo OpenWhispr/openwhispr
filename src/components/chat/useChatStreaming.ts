@@ -257,6 +257,8 @@ export interface SendToAIOptions {
    * adding one. The sends it made stay on it: the conversation never forgets them.
    */
   replaceMessage?: Message;
+  /** A regenerate that failed before anything new: its old reply is back, and the caller can say so. */
+  onReplaceFailed?: () => void;
 }
 
 export interface ChatStreaming {
@@ -818,9 +820,10 @@ export function useChatStreaming({
         const restoresReplaced = () =>
           Boolean(replaced) && !fullContent.trim() && toolCalls.length === carriedCallCount;
         const restoreReplaced = () => {
+          if (!replaced) return;
           cancelContentFlush();
           setMessages((prev) =>
-            prev.map((m) => (m.id === assistantId ? { ...m, ...replaced, isStreaming: false } : m))
+            prev.map((m) => (m.id === assistantId ? { ...replaced, isStreaming: false } : m))
           );
         };
 
@@ -1069,6 +1072,7 @@ export function useChatStreaming({
           }
           if (restoresReplaced()) {
             restoreReplaced();
+            if (!cancelled()) options?.onReplaceFailed?.();
           } else if (cancelled()) {
             settleStoppedTurn(explicitCancelGenerationRef.current > sendGeneration);
             flushContentNow();

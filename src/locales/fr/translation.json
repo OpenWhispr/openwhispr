@@ -4181,6 +4181,7 @@
       "nothingHeard": "Je n'ai rien entendu",
       "transcriptionFailed": "Transcription impossible",
       "micUnavailable": "Micro inaccessible",
+      "regenerateFailed": "Impossible de régénérer la réponse",
       "dictationActive": "La dictée utilise le micro"
     },
     "composer": {

@@ -4011,6 +4011,7 @@
       "nothingHeard": "聞き取れませんでした",
       "transcriptionFailed": "文字起こしできませんでした",
       "micUnavailable": "マイクを開けませんでした",
+      "regenerateFailed": "回答を再生成できませんでした",
       "dictationActive": "音声入力がマイクを使用中です"
     },
     "composer": {

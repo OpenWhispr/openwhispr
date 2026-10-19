@@ -1864,6 +1864,7 @@
       "nothingHeard": "لم أسمع شيئًا",
       "transcriptionFailed": "تعذّر التفريغ النصي",
       "micUnavailable": "تعذّر فتح الميكروفون",
+      "regenerateFailed": "تعذّرت إعادة إنشاء الإجابة",
       "dictationActive": "الإملاء يستخدم الميكروفون"
     },
     "composer": {

@@ -4181,6 +4181,7 @@
       "nothingHeard": "Didn't catch that",
       "transcriptionFailed": "Couldn't transcribe that",
       "micUnavailable": "Couldn't open the mic",
+      "regenerateFailed": "Couldn't regenerate that answer",
       "dictationActive": "Dictation is using the mic"
     },
     "composer": {

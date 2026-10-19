@@ -4011,6 +4011,7 @@
       "nothingHeard": "Não entendi",
       "transcriptionFailed": "Não foi possível transcrever",
       "micUnavailable": "Não foi possível abrir o microfone",
+      "regenerateFailed": "Não foi possível gerar a resposta novamente",
       "dictationActive": "O ditado está usando o microfone"
     },
     "composer": {

@@ -69,7 +69,11 @@ export default function AgentWindow() {
     // A spoken request thinks in the pill; the answer shows in the modal.
     if (stateRef.current.layout !== "modal") dispatch({ type: "expand" });
   }, [dispatch]);
-  const chat = useAgentChat({ onResponseContent });
+  const onRegenerateFailed = useCallback(
+    () => dispatch({ type: "notice", notice: "agentWindow.notices.regenerateFailed" }),
+    [dispatch]
+  );
+  const chat = useAgentChat({ onResponseContent, onRegenerateFailed });
   const {
     busy,
     cancel: cancelTurn,

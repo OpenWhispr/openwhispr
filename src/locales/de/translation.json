@@ -4181,6 +4181,7 @@
       "nothingHeard": "Nichts verstanden",
       "transcriptionFailed": "Transkription fehlgeschlagen",
       "micUnavailable": "Mikrofon nicht verfügbar",
+      "regenerateFailed": "Antwort konnte nicht neu generiert werden",
       "dictationActive": "Das Diktat nutzt das Mikrofon"
     },
     "composer": {

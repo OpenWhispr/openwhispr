@@ -4055,6 +4055,7 @@
       "nothingHeard": "Ничего не расслышал",
       "transcriptionFailed": "Не удалось расшифровать",
       "micUnavailable": "Не удалось открыть микрофон",
+      "regenerateFailed": "Не удалось сгенерировать ответ заново",
       "dictationActive": "Микрофон занят диктовкой"
     },
     "composer": {

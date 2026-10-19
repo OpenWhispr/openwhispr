@@ -643,7 +643,13 @@ test("the cloud path marks a run that ran out of steps too", async (t) => {
 });
 
 test("a regenerate stopped or failed before its first token shows the reply it replaced", async (t) => {
-  for (const end of ["stop", "error"]) {
+  // A reply from an older build has no turn: the aborted run's must not stick to it.
+  for (const [end, olderReply] of [
+    ["stop", false],
+    ["error", false],
+    ["error", true],
+  ]) {
+    const label = `${end}${olderReply ? ", older reply" : ""}`;
     const harness = await renderChatStreaming(t, { allowInteractions: true });
     const reasoningService = (await harness.vite.ssrLoadModule("/services/ReasoningService.ts"))
       .default;
@@ -657,7 +663,7 @@ test("a regenerate stopped or failed before its first token shows the reply it r
       role: "assistant",
       content: "Posted.",
       isStreaming: false,
-      turn: { startedAt: 1, finishedAt: 2, status: "complete" },
+      ...(olderReply ? {} : { turn: { startedAt: 1, finishedAt: 2, status: "complete" } }),
       toolCalls: [
         { id: "q1", name: "search_notes", arguments: "{}", status: "completed" },
         {
@@ -677,16 +683,20 @@ test("a regenerate stopped or failed before its first token shows the reply it r
         await streamEnded;
       })()
     );
+    let failures = 0;
     const sending = harness.captured.sendToAI(request.content, [request], {
       conversationId: 7,
       replaceMessage: reply,
+      onReplaceFailed: () => (failures += 1),
     });
     await new Promise((resolve) => setImmediate(resolve));
     if (end === "stop") harness.captured.cancelStream();
     await sending;
 
-    assert.deepEqual(harness.messages()[1], reply, end);
-    assert.deepEqual(harness.completed, [], `${end}: nothing is saved over it`);
+    assert.deepEqual(harness.messages()[1], reply, label);
+    assert.deepEqual(harness.completed, [], `${label}: nothing is saved over it`);
+    // A failure is said (the agent window shows a notice); a stop is the user's own.
+    assert.equal(failures, end === "error" ? 1 : 0, label);
   }
 });
 

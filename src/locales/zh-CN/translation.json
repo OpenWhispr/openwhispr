@@ -4011,6 +4011,7 @@
       "nothingHeard": "没有听清",
       "transcriptionFailed": "无法转写",
       "micUnavailable": "无法打开麦克风",
+      "regenerateFailed": "无法重新生成回答",
       "dictationActive": "听写正在使用麦克风"
     },
     "composer": {
