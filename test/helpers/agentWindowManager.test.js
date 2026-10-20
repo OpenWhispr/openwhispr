@@ -443,7 +443,7 @@ test("Linux asks the helper once more when the window didn't take focus", async 
   assert.deepEqual(win.helperCalls, ["focus"], "focused: no second request");
 });
 
-test("Linux: handing the keyboard back cancels the retry, so asking again retries once", async () => {
+test("Linux sends no retry once the keyboard is handed back, and one when it is asked for again", async () => {
   const { manager, win } = await openedManager({ platform: "linux" });
   manager.setLayout(fromAgent(win), { layout: "typing", focus: true });
   manager.setLayout(fromAgent(win), { layout: "pill", focus: false });
@@ -454,6 +454,15 @@ test("Linux: handing the keyboard back cancels the retry, so asking again retrie
   manager.setLayout(fromAgent(win), { layout: "typing", focus: true });
   manager.setLayout(fromAgent(win), { layout: "pill", focus: false });
   manager.setLayout(fromAgent(win), { layout: "typing", focus: true });
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.deepEqual(win.helperCalls, ["focus", "focus", "focus"], "two requests, one retry");
+});
+
+test("Linux: a second request while focused leaves one retry, from the latest request", async () => {
+  const { manager, win } = await openedManager({ platform: "linux" });
+  manager.setLayout(fromAgent(win), { layout: "typing", focus: true });
+  // A layout change that keeps the keyboard asks for it again, with no release between.
+  manager.setLayout(fromAgent(win), { layout: "modal", focus: true });
   await new Promise((resolve) => setTimeout(resolve, 300));
   assert.deepEqual(win.helperCalls, ["focus", "focus", "focus"], "two requests, one retry");
 });
