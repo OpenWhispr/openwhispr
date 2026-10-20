@@ -53,7 +53,7 @@ export function ForkOriginChip({ title, onOpen }: { title: string; onOpen: () =>
     <button
       type="button"
       onClick={onOpen}
-      className="inline-flex h-[30px] max-w-full items-center gap-1.5 rounded-full border border-border bg-surface-1 px-3 text-[13px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40"
+      className="inline-flex h-7.5 max-w-4/5 items-center gap-1.5 rounded-full border border-border bg-surface-1 px-3 text-[13px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40"
     >
       <GitFork size={14} className="shrink-0" />
       <span dir="auto" className="truncate">

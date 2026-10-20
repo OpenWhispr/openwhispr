@@ -47,7 +47,7 @@ function ChatSwitcher({
         title={t("agentWindow.chats.switch")}
         className={CHIP_BUTTON}
       >
-        <ChevronDown size={14} />
+        <ChevronDown size={12} />
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="start"
@@ -120,7 +120,7 @@ export function AgentModal({
         className="agent-modal-glow pointer-events-none absolute inset-x-0 bottom-0 h-1/2"
       />
       <header className="relative grid h-14 shrink-0 grid-cols-[1fr_auto_1fr] items-center px-3">
-        <div className="flex h-[30px] items-center gap-0.5 justify-self-start rounded-full border border-border bg-surface-1 px-1">
+        <div className="flex h-7.5 items-center gap-0.5 justify-self-start rounded-full border border-border bg-surface-1 px-1">
           <button
             type="button"
             onClick={onNewChat}
@@ -128,7 +128,7 @@ export function AgentModal({
             title={t("agentWindow.chats.new")}
             className={CHIP_BUTTON}
           >
-            <Plus size={16} />
+            <Plus size={14} />
           </button>
           <ChatSwitcher activeConversationId={conversationId} onSelect={onSelectChat} />
         </div>

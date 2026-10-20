@@ -74,6 +74,7 @@ export function AgentComposer({
       )}
     >
       {header}
+      {/* As tall as the draft, up to six lines, then it scrolls. */}
       <textarea
         ref={inputRef}
         dir="auto"
@@ -88,7 +89,7 @@ export function AgentComposer({
         }}
         placeholder={placeholder}
         aria-label={placeholder}
-        className="input-inline min-h-0 flex-1 resize-none border-0 bg-transparent px-1 text-base leading-6 text-foreground caret-primary outline-none placeholder:text-muted-foreground/70"
+        className="input-inline field-sizing-content max-h-36 min-h-0 flex-1 resize-none border-0 bg-transparent px-1 text-base leading-6 text-foreground caret-primary outline-none placeholder:text-muted-foreground/70"
       />
       {micUnavailableHint && (
         <p className="px-1 pb-1 text-[11px] text-muted-foreground">{micUnavailableHint}</p>

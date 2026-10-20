@@ -769,7 +769,7 @@ export default function AgentWindow() {
           (card?.interaction !== "apiKey" || state.draft.trim() !== "")
         }
         header={!inModal && pendingContext ? <div className="pb-2">{pendingContext}</div> : null}
-        className={inModal ? "min-h-[84px]" : "h-[145px] w-[510px]"}
+        className={inModal ? "min-h-21" : "h-[145px] w-[510px]"}
       />
     );
   };
