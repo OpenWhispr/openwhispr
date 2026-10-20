@@ -18,9 +18,9 @@ export function SelectedContextBlock({
 }) {
   const { t } = useTranslation();
   return (
-    <div className={cn("rounded-2xl bg-surface-2/70 px-3 py-2", className)}>
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <TextSelect size={13} className="shrink-0" />
+    <div className={cn("rounded-2xl bg-surface-1 px-3 py-2.5", className)}>
+      <div className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
+        <TextSelect size={14} className="shrink-0" />
         <span className="flex-1">{t("agentWindow.selectedContext.title")}</span>
         {onRemove && (
           <button
@@ -34,7 +34,7 @@ export function SelectedContextBlock({
           </button>
         )}
       </div>
-      <p dir="auto" className="mt-1 line-clamp-3 text-[13px] leading-5 text-foreground/85">
+      <p dir="auto" className="mt-1.5 line-clamp-3 text-[15px] leading-snug text-foreground/85">
         {t(
           source === "external"
             ? "agentWindow.selectedContext.fromOtherApp"
@@ -53,9 +53,9 @@ export function ForkOriginChip({ title, onOpen }: { title: string; onOpen: () =>
     <button
       type="button"
       onClick={onOpen}
-      className="inline-flex max-w-full items-center gap-1.5 self-start rounded-full border border-border/60 px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40"
+      className="inline-flex h-[30px] max-w-full items-center gap-1.5 rounded-full border border-border bg-surface-1 px-3 text-[13px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40"
     >
-      <GitFork size={12} className="shrink-0" />
+      <GitFork size={14} className="shrink-0" />
       <span dir="auto" className="truncate">
         {t("chat.forkedFrom", { title })}
       </span>

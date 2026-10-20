@@ -33,7 +33,7 @@ import { useReadAloud } from "./useReadAloud";
 import { useAnswerNudge } from "./useAnswerNudge";
 import { AgentPill } from "./AgentPill";
 import { AgentComposer } from "./AgentComposer";
-import { AgentModal } from "./AgentModal";
+import { AgentModal, type AgentModalGlow } from "./AgentModal";
 import { AgentMessageList } from "./AgentMessages";
 import { ToolCallCard } from "../chat/ChatMessage";
 import { SelectedContextBlock } from "./AgentContext";
@@ -657,6 +657,16 @@ export default function AgentWindow() {
               : busy
                 ? "streaming"
                 : "idle";
+  // Full on an empty chat, faint while listening or working, none at rest or
+  // while a card waits on the user.
+  const glow: AgentModalGlow =
+    messages.length === 0 && !refusal
+      ? state.draft.trim()
+        ? "soft"
+        : "strong"
+      : (listening || transcribing || busy) && !cardHolds
+        ? "soft"
+        : "none";
   const notice = state.notice ? t(state.notice) : null;
   const micHint = voice.streamingOnlyProvider
     ? t("agentMode.input.voiceDraftStreamingOnly")
@@ -678,6 +688,7 @@ export default function AgentWindow() {
       micUnavailableHint={micHint}
       micDisabled={busy || transcribing}
       expandCue={placement === "compact" && nudge.cue}
+      inModal={placement === "modal"}
       onAction={handlePillAction}
     />
   );
@@ -736,7 +747,7 @@ export default function AgentWindow() {
           (card?.interaction !== "apiKey" || state.draft.trim() !== "")
         }
         header={!inModal && pendingContext ? <div className="pb-2">{pendingContext}</div> : null}
-        className={inModal ? "min-h-[92px]" : "h-[145px] w-[510px]"}
+        className={inModal ? "min-h-[84px]" : "h-[145px] w-[510px]"}
       />
     );
   };
@@ -772,6 +783,7 @@ export default function AgentWindow() {
         {state.layout === "modal" ? (
           <AgentModal
             bare={messages.length === 0 && state.input === "voice" && !refusal}
+            glow={glow}
             conversationId={conversationId}
             onNewChat={newChat}
             onSelectChat={switchChat}

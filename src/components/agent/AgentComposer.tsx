@@ -69,7 +69,7 @@ export function AgentComposer({
   return (
     <div
       className={cn(
-        "flex flex-col rounded-[22px] border border-border/60 bg-surface-1 px-3 pt-3 pb-2 shadow-[var(--shadow-card)]",
+        "flex flex-col rounded-[22px] border border-border bg-surface-1 px-3 pt-3 pb-2 shadow-[var(--shadow-card)]",
         className
       )}
     >
@@ -77,6 +77,7 @@ export function AgentComposer({
       <textarea
         ref={inputRef}
         dir="auto"
+        rows={1}
         value={draft}
         onChange={(event) => onDraftChange(event.target.value)}
         onKeyDown={(event) => {
@@ -87,7 +88,7 @@ export function AgentComposer({
         }}
         placeholder={placeholder}
         aria-label={placeholder}
-        className="input-inline min-h-0 flex-1 resize-none border-0 bg-transparent px-1 text-[15px] leading-6 text-foreground caret-primary outline-none placeholder:text-muted-foreground/70"
+        className="input-inline min-h-0 flex-1 resize-none border-0 bg-transparent px-1 text-base leading-6 text-foreground caret-primary outline-none placeholder:text-muted-foreground/70"
       />
       {micUnavailableHint && (
         <p className="px-1 pb-1 text-[11px] text-muted-foreground">{micUnavailableHint}</p>
@@ -123,7 +124,7 @@ export function AgentComposer({
             disabled={!canSend}
             aria-label={t("agentMode.input.send")}
             title={t("agentMode.input.send")}
-            className="flex h-7 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-[filter,opacity] hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-40 disabled:hover:brightness-100"
+            className="flex h-6 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-[filter,opacity] hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-40 disabled:hover:brightness-100"
           >
             <CornerDownLeft size={16} className="rtl:scale-x-[-1]" />
           </button>
@@ -133,7 +134,7 @@ export function AgentComposer({
               onClick={onStop}
               aria-label={t("agentWindow.actions.stop")}
               title={t("agentWindow.actions.stop")}
-              className={cn(ICON_BUTTON, "bg-foreground/10 text-foreground")}
+              className={cn(ICON_BUTTON, "bg-surface-2 text-foreground hover:bg-surface-raised")}
             >
               <Square size={14} />
             </button>

@@ -65,7 +65,7 @@ function ResponseActions({
   };
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="-ms-2 flex items-center gap-0.5">
       {latest && (
         <button
           type="button"
@@ -119,8 +119,8 @@ function ResponseActions({
         </button>
       )}
       {latest && (
-        <span className="ms-auto flex items-center gap-1.5 text-xs text-muted-foreground/80">
-          <TextSelect size={13} />
+        <span className="ms-auto flex items-center gap-1.5 text-[13px] text-muted-foreground/80">
+          <TextSelect size={14} />
           {t("agentWindow.selectionHint")}
         </span>
       )}
@@ -144,7 +144,7 @@ const AssistantMessage = memo(function AssistantMessage(props: AssistantMessageP
         <div data-agent-answer>
           <MarkdownRenderer
             content={message.content}
-            className="text-[14px] leading-6 text-foreground selection:bg-primary selection:text-primary-foreground [&_li]:text-[14px] [&_p]:text-[14px]"
+            className="text-[15px] leading-snug text-foreground selection:bg-primary selection:text-primary-foreground [&_li]:text-[15px] [&_ol]:space-y-0 [&_p]:text-[15px] [&_ul]:space-y-0"
           />
         </div>
       )}
@@ -162,7 +162,7 @@ const AssistantMessage = memo(function AssistantMessage(props: AssistantMessageP
         <TechnicalErrorDetails details={message.error.technicalDetails} />
       )}
       {message.turn && !message.isStreaming && (
-        <div className="text-end">
+        <div className="text-end [&_p]:text-[13px]">
           <TurnNotes
             turn={message.turn}
             failedHere={!!message.error}
@@ -188,7 +188,7 @@ function UserMessage({ message }: { message: Message }) {
       )}
       <div
         dir="auto"
-        className="max-w-[85%] whitespace-pre-wrap rounded-[18px] bg-surface-2 px-3.5 py-2 text-[14px] leading-6 text-foreground"
+        className="max-w-[85%] whitespace-pre-wrap rounded-[18px] bg-surface-2 px-3 py-2 text-[14px] leading-5 text-foreground"
       >
         {message.content}
       </div>

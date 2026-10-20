@@ -27,6 +27,8 @@ interface AgentPillProps {
   micDisabled?: boolean;
   /** A card waits on the user: Expand pulses blue until the modal opens to it. */
   expandCue?: boolean;
+  /** Inside the modal the pill is a shade lighter than the panel it sits on. */
+  inModal?: boolean;
   onAction: (button: AgentPillButton) => void;
   className?: string;
 }
@@ -40,6 +42,7 @@ export function AgentPill({
   micUnavailableHint,
   micDisabled = false,
   expandCue = false,
+  inModal = false,
   onAction,
   className,
 }: AgentPillProps) {
@@ -47,48 +50,59 @@ export function AgentPill({
   return (
     <div
       className={cn(
-        "flex h-10 max-w-full items-center gap-1 rounded-full border border-border/60 bg-surface-1 ps-2 pe-1.5 text-muted-foreground shadow-[var(--shadow-card)]",
+        "flex h-10 max-w-full items-center rounded-full border border-border ps-2.5 pe-[5px] text-muted-foreground shadow-[var(--shadow-card)]",
+        inModal ? "bg-surface-2" : "bg-surface-0",
         className
       )}
     >
-      <BrandMarkIcon size={22} className="shrink-0 text-primary" />
+      <BrandMarkIcon size={16} className="shrink-0 text-primary" />
       {notice ? (
-        <span className="max-w-30 truncate ps-1 text-xs text-foreground/80" title={notice}>
+        <span className="ms-2.5 max-w-30 truncate text-xs text-foreground/80" title={notice}>
           {notice}
         </span>
       ) : controls.waiting ? (
         // Truncates where a translation outgrows the window.
         <span
-          className="min-w-0 truncate ps-1 text-[13px] text-foreground/80 select-none"
+          className="ms-2.5 min-w-0 truncate text-sm text-foreground/80 select-none"
           title={t("agentWindow.waitingForAnswer")}
         >
           {t("agentWindow.waitingForAnswer")}
         </span>
       ) : controls.thinking ? (
-        <span className="thinking-shimmer-text ps-1 text-[13px] font-medium select-none">
+        <span className="agent-shimmer-text ms-3.5 me-2 text-sm select-none">
           {t("agentMode.input.thinking")}
         </span>
       ) : controls.waveform ? (
-        <PillWaveform getLevel={readLevel} active={recording} className="h-6 text-foreground" />
+        <PillWaveform
+          getLevel={readLevel}
+          active={recording}
+          bars={4}
+          maxBarPx={14}
+          className="ms-2 h-6 gap-1 text-foreground"
+        />
       ) : null}
-      <span className="mx-1 h-4 w-px shrink-0 bg-border/70" aria-hidden="true" />
-      {controls.buttons.map((button) => {
-        const { icon: Icon, label } = BUTTONS[button];
-        const unavailable = button === "mic" ? micUnavailableHint : undefined;
-        return (
-          <button
-            key={button}
-            type="button"
-            onClick={() => onAction(button)}
-            disabled={button === "mic" && (micDisabled || Boolean(unavailable))}
-            aria-label={t(label)}
-            title={unavailable ?? t(label)}
-            className={cn(ICON_BUTTON, button === "expand" && expandCue && "agent-expand-cue")}
-          >
-            <Icon size={button === "stop" ? 14 : 16} />
-          </button>
-        );
-      })}
+      {!controls.thinking && (
+        <span className="mx-3 h-3.5 w-px shrink-0 bg-border" aria-hidden="true" />
+      )}
+      <div className="flex items-center gap-0.5">
+        {controls.buttons.map((button) => {
+          const { icon: Icon, label } = BUTTONS[button];
+          const unavailable = button === "mic" ? micUnavailableHint : undefined;
+          return (
+            <button
+              key={button}
+              type="button"
+              onClick={() => onAction(button)}
+              disabled={button === "mic" && (micDisabled || Boolean(unavailable))}
+              aria-label={t(label)}
+              title={unavailable ?? t(label)}
+              className={cn(ICON_BUTTON, button === "expand" && expandCue && "agent-expand-cue")}
+            >
+              <Icon size={button === "stop" ? 14 : 16} />
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

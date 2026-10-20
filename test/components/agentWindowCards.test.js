@@ -481,6 +481,21 @@ test("while an answer card waits, the voice modal's pill reads as at rest", asyn
   assert.ok(view.button("Speak") && view.button("Type") && view.button("Close"));
 });
 
+test("the modal's glow is full on an empty chat, faint while working, gone at rest or while a card waits", async (t) => {
+  const view = await mountWindow(t);
+  const glow = () => view.host.querySelector(".agent-modal-glow").getAttribute("data-glow");
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  assert.equal(glow(), "strong");
+  await view.chat({ busy: true, messages: [user, reply([slackCall])] });
+  assert.equal(glow(), "soft");
+  await view.askApproval("c5");
+  await view.settle();
+  assert.equal(glow(), "none");
+  await view.chat({ busy: false, messages: [user, { ...reply([], "Done."), isStreaming: false }] });
+  assert.equal(glow(), "none");
+});
+
 test("a held command over a waiting connect card types with the usual placeholder", async (t) => {
   const view = await mountWindow(t);
   await React.act(async () => view.main.handlers.hotkey({ external: false }));

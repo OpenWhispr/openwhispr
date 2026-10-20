@@ -17,6 +17,10 @@ const CHAT_LIST_LIMIT = 50;
 const HEADER_BUTTON =
   "flex size-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40 disabled:opacity-40";
 
+// The New chat and chat-switcher pair, set close together in one chip.
+const CHIP_BUTTON =
+  "flex h-full items-center rounded-full px-0.5 text-muted-foreground transition-colors hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40";
+
 /** The chats to switch to, forks marked; listed fresh each time it opens. */
 function ChatSwitcher({
   activeConversationId,
@@ -41,7 +45,7 @@ function ChatSwitcher({
       <DropdownMenuTrigger
         aria-label={t("agentWindow.chats.switch")}
         title={t("agentWindow.chats.switch")}
-        className={HEADER_BUTTON}
+        className={CHIP_BUTTON}
       >
         <ChevronDown size={14} />
       </DropdownMenuTrigger>
@@ -82,9 +86,12 @@ function ChatSwitcher({
   );
 }
 
+export type AgentModalGlow = "strong" | "soft" | "none";
+
 interface AgentModalProps {
   /** The empty voice state shows no title, and collapses with a chevron. */
   bare: boolean;
+  glow: AgentModalGlow;
   conversationId: number | null;
   onNewChat: () => void;
   onSelectChat: (conversationId: number) => void;
@@ -97,6 +104,7 @@ interface AgentModalProps {
 /** The expanded assistant: chat controls and title, the conversation, and the input docked below. */
 export function AgentModal({
   bare,
+  glow,
   conversationId,
   onNewChat,
   onSelectChat,
@@ -106,23 +114,26 @@ export function AgentModal({
 }: AgentModalProps) {
   const { t } = useTranslation();
   return (
-    <div className="agent-modal relative flex h-full w-full flex-col overflow-hidden rounded-3xl border border-border/50 bg-surface-0 shadow-[var(--shadow-modal)]">
-      <div className="agent-modal-glow pointer-events-none absolute inset-x-0 bottom-0 h-1/2" />
+    <div className="agent-modal relative flex h-full w-full flex-col overflow-hidden rounded-3xl border border-border bg-surface-0 shadow-[var(--shadow-modal)]">
+      <div
+        data-glow={glow}
+        className="agent-modal-glow pointer-events-none absolute inset-x-0 bottom-0 h-1/2"
+      />
       <header className="relative grid h-14 shrink-0 grid-cols-[1fr_auto_1fr] items-center px-3">
-        <div className="flex items-center gap-0.5 justify-self-start rounded-full border border-border/60 bg-surface-1/70 p-0.5">
+        <div className="flex h-[30px] items-center gap-0.5 justify-self-start rounded-full border border-border bg-surface-1 px-1">
           <button
             type="button"
             onClick={onNewChat}
             aria-label={t("agentWindow.chats.new")}
             title={t("agentWindow.chats.new")}
-            className={HEADER_BUTTON}
+            className={CHIP_BUTTON}
           >
             <Plus size={16} />
           </button>
           <ChatSwitcher activeConversationId={conversationId} onSelect={onSelectChat} />
         </div>
         {!bare && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 text-[15px] text-muted-foreground">
             <BrandMarkIcon size={18} />
             {t("agentWindow.title")}
           </div>
