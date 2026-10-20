@@ -1,4 +1,13 @@
-import { Fragment, memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  Fragment,
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useTranslation } from "react-i18next";
 import {
   Check,
@@ -24,6 +33,7 @@ import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 import { openProviderSettings } from "../../utils/describeProviderError";
 import { getSelectionInside } from "../../utils/assistantSelection";
 import { AgentProgressRow } from "./AgentProgressRow";
+import { placeSelectionToolbar, type ToolbarAnchor } from "./selectionToolbarPlacement";
 import { ForkOriginChip, SelectedContextBlock } from "./AgentContext";
 
 export interface ReadAloud {
@@ -196,15 +206,13 @@ function UserMessage({ message }: { message: Message }) {
   );
 }
 
-interface SelectionTarget {
+interface SelectionTarget extends ToolbarAnchor {
   messageId: string;
   text: string;
-  top: number;
-  left: number;
 }
 
 // Text selected inside one answer, and where its toolbar goes.
-function readSelection(): SelectionTarget | null {
+function readSelection(scroller: HTMLElement | null): SelectionTarget | null {
   const selection = window.getSelection();
   if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null;
   const range = selection.getRangeAt(0);
@@ -215,13 +223,12 @@ function readSelection(): SelectionTarget | null {
   const answer = start?.closest("[data-agent-answer]");
   const message = answer?.closest("[data-agent-message]");
   const text = getSelectionInside(answer as HTMLElement | null);
-  if (!answer || !message || !text) return null;
-  const rect = range.getBoundingClientRect();
+  if (!answer || !message || !text || !scroller) return null;
   return {
     messageId: message.getAttribute("data-agent-message") ?? "",
     text,
-    top: rect.bottom + 6,
-    left: Math.max(8, Math.min(rect.left, window.innerWidth - 248)),
+    rect: range.getBoundingClientRect(),
+    bounds: scroller.getBoundingClientRect(),
   };
 }
 
@@ -238,26 +245,34 @@ function SelectionToolbar({
   onForkFrom?: () => void;
 }) {
   const { t } = useTranslation();
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+  // Measured before paint, so it never shows where it doesn't fit.
+  useLayoutEffect(() => {
+    const toolbar = toolbarRef.current;
+    if (toolbar) setPosition(placeSelectionToolbar(target, toolbar.getBoundingClientRect()));
+  }, [target]);
   const item =
-    "flex items-center gap-1.5 px-3 py-1.5 text-[13px] text-foreground transition-colors hover:bg-foreground/10 focus:outline-none focus-visible:bg-foreground/10 disabled:opacity-40";
+    "flex h-full items-center gap-2 px-3.5 text-[15px] text-foreground transition-colors hover:bg-foreground/10 focus:outline-none focus-visible:bg-foreground/10 disabled:opacity-40";
   return (
     <div
+      ref={toolbarRef}
       role="toolbar"
       aria-label={t("agentWindow.selectionToolbar")}
       // Keeps the selection while a button is pressed.
       onMouseDown={(event) => event.preventDefault()}
-      className="fixed z-30 flex items-center overflow-hidden rounded-full border border-border/60 bg-surface-raised shadow-[var(--shadow-card)]"
-      style={{ top: target.top, left: target.left }}
+      className="fixed z-30 flex h-10 items-center overflow-hidden rounded-full border border-border bg-surface-1 shadow-[var(--shadow-card)]"
+      style={position ?? { top: 0, left: 0, visibility: "hidden" }}
     >
       <button type="button" onClick={onFollowUp} className={item}>
-        <CornerDownLeft size={14} className="rtl:scale-x-[-1]" />
+        <CornerDownLeft size={15} className="rtl:scale-x-[-1]" />
         {t("agentWindow.followUp")}
       </button>
       {onForkFrom && (
         <>
-          <span className="h-4 w-px bg-border/70" aria-hidden="true" />
+          <span className="h-4 w-px bg-border" aria-hidden="true" />
           <button type="button" onClick={onForkFrom} disabled={busy} className={item}>
-            <GitFork size={14} />
+            <GitFork size={15} />
             {t("agentWindow.forkFromHere")}
           </button>
         </>
@@ -330,7 +345,7 @@ export function AgentMessageList({
   }, [scrollRef]);
 
   useEffect(() => {
-    const update = () => setSelection(readSelection());
+    const update = () => setSelection(readSelection(scrollRef.current));
     const clearIfCollapsed = () => {
       if (window.getSelection()?.isCollapsed) setSelection(null);
     };
@@ -342,7 +357,7 @@ export function AgentMessageList({
       document.removeEventListener("keyup", update);
       document.removeEventListener("selectionchange", clearIfCollapsed);
     };
-  }, []);
+  }, [scrollRef]);
 
   const finishSelection = useCallback(() => {
     window.getSelection()?.removeAllRanges();
