@@ -175,4 +175,18 @@ test("above a waiting card, a step that failed still shows, so it's seen before 
   ];
   const row = await show(steps, { cards: { c1: { state: "pending" } } });
   assert.match(row, /GitHub isn't connected\./);
+
+  // A connector reports a failed search as a result, not a tool error.
+  const reported = [
+    {
+      ...call("g1", "github_search_issues", "completed"),
+      result: "That didn't work on GitHub.",
+      metadata: { status: "failed", errorCode: "fixture_refused" },
+    },
+    call("c1", "slack_send_message", "executing"),
+  ];
+  assert.match(
+    await show(reported, { cards: { c1: { state: "pending" } } }),
+    /That didn't work on GitHub\./
+  );
 });

@@ -4,7 +4,7 @@ import { Brain, ChevronRight, Lightbulb, MessageCircleQuestion, Search } from ".
 import { cn } from "../lib/utils";
 import { toolIcons } from "../chat/toolIcons";
 import { toolCallStepText, visibleToolCalls } from "../chat/toolCallText";
-import type { Message } from "../chat/types";
+import type { Message, ToolCallInfo } from "../chat/types";
 import { useAgentInteractionStore } from "../../stores/agentInteractionStore";
 import { approvalKey, useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
 import githubMark from "../../assets/icons/github.svg";
@@ -18,6 +18,13 @@ const APP_LOGOS: Record<string, { src: string; monochrome: boolean }> = {
   github: { src: githubMark, monochrome: true },
 };
 const MAX_GROUPED_ICONS = 3;
+
+// A step that went wrong: the tool threw, or a connector reported that the
+// action failed or couldn't run (its result reads "That didn't work on GitHub.").
+function stepFailed(step: ToolCallInfo): boolean {
+  const outcome = Array.isArray(step.metadata) ? undefined : step.metadata?.status;
+  return step.status === "error" || outcome === "failed" || outcome === "unavailable";
+}
 
 function ToolMark({ name, size = 16 }: { name: string; size?: number }) {
   const logo = APP_LOGOS[name.split("_")[0]];
@@ -123,7 +130,7 @@ export function AgentProgressRow({ message }: { message: Message }) {
     icon = <ToolMark name={executing[0].name} />;
     label = toolCallStepText(executing[0], t);
   } else if (running && !message.content) {
-    const failedStep = carded.size > 0 && steps.filter((step) => step.status === "error").at(-1);
+    const failedStep = carded.size > 0 && steps.filter(stepFailed).at(-1);
     if (failedStep) {
       icon = <ToolMark name={failedStep.name} />;
       label = toolCallStepText(failedStep, t).split("\n")[0];
@@ -201,7 +208,7 @@ export function AgentProgressRow({ message }: { message: Message }) {
               key={step.id}
               className={cn(
                 "flex min-w-0 items-center gap-2",
-                step.status === "error" && "text-destructive/80"
+                stepFailed(step) && "text-destructive/80"
               )}
             >
               <ToolMark name={step.name} />
