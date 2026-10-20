@@ -134,6 +134,8 @@ test("two people with the same name are told apart by their usernames", async ()
     { label: "Alex Chen (@alex.chen)", destination: "@alex.chen" },
     { label: "Alex Chen (@achen)", destination: "@achen" },
   ]);
+  // The model reads the same usernames where no picker shows.
+  assert.deepEqual(prepared.candidates, ["Alex Chen (@alex.chen)", "Alex Chen (@achen)"]);
 });
 
 test("an ambiguous name asks which one and prepares nothing", async () => {

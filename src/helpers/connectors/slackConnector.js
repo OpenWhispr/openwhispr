@@ -96,18 +96,13 @@ function clarify(message, candidates = []) {
     message,
     candidates: labels,
     // What the user can pick from: each destination finds exactly that
-    // channel (#name) or person (@username) when prepared again. A person
-    // shows their username, since display names needn't be unique.
+    // channel (#name) or person (@username) when prepared again.
     ...(candidates.length > 0
       ? {
-          choices: candidates.map((candidate, index) =>
-            candidate.kind === "channel"
-              ? { label: labels[index], destination: candidate.label }
-              : {
-                  label: `${candidate.label} (@${candidate.handle})`,
-                  destination: `@${candidate.handle}`,
-                }
-          ),
+          choices: candidates.map((candidate, index) => ({
+            label: labels[index],
+            destination: candidate.kind === "channel" ? candidate.label : `@${candidate.handle}`,
+          })),
         }
       : {}),
   };

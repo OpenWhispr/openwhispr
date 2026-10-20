@@ -883,6 +883,7 @@ test("a prepare that needs the user to say where hands the model that question",
     candidates: ["#launch-2"],
   };
   const card = await rebindCard(t, { commits: [FAILED], prepares: [question] });
+  card.store.updateApprovalDraft(card.key, { body: "Launch moved to Friday" });
   await card.store.approveAction(card.key);
   await card.store.retryApproval(card.key);
   assert.equal(card.entry().state, "not_sent", "settled, not left waiting for Retry");
@@ -890,6 +891,7 @@ test("a prepare that needs the user to say where hands the model that question",
     state: "not_sent",
     reason: "needs_clarification",
     clarification: question,
+    finalText: "Launch moved to Friday",
   });
   assert.equal(card.calls.commit.length, 1);
 });
@@ -982,4 +984,32 @@ test("a connect the app refuses says why, as the Settings row does", async (t) =
   await card.store.approveAction(card.key);
   await card.store.connectToSend(card.key);
   assert.deepEqual([card.entry().reconnect, card.entry().connectError], ["prompt", "signed_out"]);
+});
+
+for (const [ending, end, state] of [
+  ["Cancel", (card) => card.store.cancelApproval(card.key), "cancelled"],
+  ["the turn ending", (card) => card.ctx.controller.abort(), "failed"],
+]) {
+  test(`after Retry asked to connect, ${ending} still reports the failure with the edits`, async (t) => {
+    const card = await rebindCard(t, { commits: [FAILED], prepares: [READY("a-new")] });
+    await card.store.approveAction(card.key);
+    card.store.updateApprovalDraft(card.key, { body: "Edited after the failure" });
+    card.disconnect();
+    await card.store.retryApproval(card.key);
+    assert.equal(card.entry().reconnect, "prompt");
+    card.store.dismissReconnect(card.key);
+    end(card);
+    assert.deepEqual(await card.outcome, { ...FAILED, finalText: "Edited after the failure" });
+    assert.equal(card.entry().state, state);
+  });
+}
+
+test("once prepared again, the card no longer reports the old failure", async (t) => {
+  const elsewhere = { ...PREVIEW, accountLabel: "chad-work" };
+  const card = await rebindCard(t, { commits: [FAILED], prepares: [READY("a-new", elsewhere)] });
+  await card.store.approveAction(card.key);
+  await card.store.retryApproval(card.key);
+  assert.equal(card.entry().notice, "identity_changed");
+  card.store.cancelApproval(card.key);
+  assert.deepEqual(await card.outcome, { state: "cancelled" });
 });

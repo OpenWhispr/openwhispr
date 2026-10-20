@@ -85,7 +85,8 @@ export async function runApprovalAction(
     context.releaseAction(actionKey);
   }
   if (outcome.state === "not_sent" && outcome.clarification) {
-    return prepareFailureResult(outcome.clarification, connectorId);
+    // With what the user wrote on the card, so asking where keeps it.
+    return prepareFailureResult(outcome.clarification, connectorId, outcome);
   }
   // An edited card may have gone to other recipients than the model chose.
   const destination =

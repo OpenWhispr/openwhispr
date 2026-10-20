@@ -1775,3 +1775,90 @@ test("a Gmail email the card cap refuses gives back its email slot", async (t) =
   ]);
   assert.deepEqual(context.releases, ["email_draft"]);
 });
+
+test("a message the user rewrote survives a Retry that has to ask where it goes", async (t) => {
+  const prepared = [];
+  const commits = [];
+  const ready = (actionId, text) => ({
+    status: "ready",
+    actionId,
+    preview: {
+      verbKey: "slackPost",
+      destinationLabel: "#launch",
+      accountLabel: "chad",
+      body: text,
+    },
+  });
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorPrepare: async (_id, _action, args) => {
+          prepared.push(args);
+          if (prepared.length === 1) return ready("a1", args.text);
+          if (prepared.length === 2) {
+            return {
+              status: "needs_clarification",
+              message: "#launch is archived.",
+              candidates: ["#launch-2", "#launch-old"],
+              choices: [
+                { label: "#launch-2", destination: "#launch-2" },
+                { label: "#launch-old", destination: "#launch-old" },
+              ],
+            };
+          }
+          return ready("a3", args.text);
+        },
+        connectorCommit: async (actionId, edits) => {
+          commits.push({ actionId, edits });
+          return commits.length === 1
+            ? { state: "failed", errorCode: "rate_limited", message: "Busy" }
+            : { state: "sent", url: "https://slack.test/p/1" };
+        },
+        connectorCancel: async () => ({ cancelled: true }),
+      },
+    },
+  });
+  const [slackSendMessageTool, approvals, interactions] = await Promise.all([
+    askingSlackTool(),
+    loadApprovals(),
+    import("../../src/stores/agentInteractionStore.ts"),
+  ]);
+  approvals.useConnectorApprovalStore.setState({ entries: {} });
+  interactions.useAgentInteractionStore.setState({ entries: {} });
+  // Slack stays connected, so Retry prepares again instead of asking to connect.
+  const { useConnectorStatusStore } = await loadStatus();
+  useConnectorStatusStore.setState({
+    loaded: true,
+    statuses: { slack: { id: "slack", connected: true, configured: true, needsReconnect: false } },
+  });
+  const key = approvals.approvalKey("m40", "call-40");
+  const until = async (ready) => {
+    while (!ready()) await new Promise((resolve) => setImmediate(resolve));
+  };
+  const pending = slackSendMessageTool.execute(
+    { destination: "#launch", text: "Launch is Thursday" },
+    { ...toolContext("m40", "call-40"), onInteraction() {} }
+  );
+  // A failed assertion must not leave a card holding the test for its TTL.
+  t.after(() => {
+    approvals.cancelApproval(key);
+    interactions.cancelInteraction(key);
+  });
+  await until(() => approvals.useConnectorApprovalStore.getState().entries[key]);
+  approvals.updateApprovalDraft(key, { body: "Launch moved to Friday" });
+  await approvals.approveAction(key);
+  await approvals.retryApproval(key);
+  await until(
+    () => interactions.useAgentInteractionStore.getState().entries[key]?.state === "pending"
+  );
+  interactions.updateInteractionDraft(key, { destination: "#launch-2" });
+  interactions.answerQuestions(key);
+  await until(() => prepared.length === 3);
+  assert.equal(prepared[2].text, "Launch moved to Friday", "prepared again with the user's text");
+  await until(
+    () => approvals.useConnectorApprovalStore.getState().entries[key]?.state === "pending"
+  );
+  await approvals.approveAction(key);
+  assert.equal((await pending).data.status, "sent");
+  assert.equal(commits.at(-1).edits.body, "Launch moved to Friday");
+});

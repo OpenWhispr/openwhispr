@@ -19,11 +19,18 @@ const NO_RETRY = "Do not retry this action unless the user asks you to.";
 export function needsClarificationResult(
   message: string,
   candidates: string[] = [],
-  choices?: ConnectorChoice[]
+  choices?: ConnectorChoice[],
+  edits: ApprovalEdits = {}
 ): ToolResult {
   return {
     success: true,
-    data: { status: "needs_clarification", message, candidates, ...(choices ? { choices } : {}) },
+    data: {
+      status: "needs_clarification",
+      message,
+      candidates,
+      ...(choices ? { choices } : {}),
+      ...userEdits(edits),
+    },
     displayText: i18n.t("connectors.toolStatus.needsDetails"),
   };
 }
@@ -113,11 +120,13 @@ export function unknownResult(
 
 export function prepareFailureResult(
   result: Exclude<ConnectorPrepareResult, { status: "ready" }>,
-  connectorId?: string
+  connectorId?: string,
+  /** What the user changed on a card that had to be prepared again. */
+  edits: ApprovalEdits = {}
 ): ToolResult {
   switch (result.status) {
     case "needs_clarification":
-      return needsClarificationResult(result.message, result.candidates, result.choices);
+      return needsClarificationResult(result.message, result.candidates, result.choices, edits);
     case "failed":
       return failedResult(result.errorCode, result.message, connectorId);
     case "unavailable":
@@ -213,7 +222,7 @@ export function approvalOutcomeResult(
           destination,
           checkUrl: outcome.checkUrl,
           ...userEdits(outcome),
-          guidance: `It may or may not have been sent. Never say it was sent or posted: say you couldn't confirm it. ${NO_RETRY} ${
+          guidance: `It may or may not have gone through. Never say it went through (sent, posted or created): say you couldn't confirm it. ${NO_RETRY} ${
             options.unknownGuidance ?? `Tell the user to check ${destination}.`
           }`,
         },

@@ -183,15 +183,26 @@ function stopConnect(entry: ApprovalEntry): void {
   }
 }
 
+// A card that failed and hasn't been prepared again since (waiting for Retry,
+// or asking to connect after one) still reports that failure.
+function failureToReport(
+  entry: ApprovalEntry,
+  pending: PendingResolution
+): FailedOutcome | undefined {
+  return entry.awaitingRetry || entry.state === "pending" ? pending.failure : undefined;
+}
+
 // Conversation end and expiry only withdraw a card that waits on the user: a
-// committing send may already have reached the provider. A card waiting for
-// Retry reports its failure, so the model hears what really happened.
+// committing send may already have reached the provider. A card that failed
+// reports that failure, so the model hears what really happened.
 function withdraw(key: string, reason: "conversation_ended" | "expired"): void {
   const entry = entryFor(key);
   const pending = resolutions.get(key);
   if (!entry || !pending) return;
-  if (entry.awaitingRetry && pending.failure) {
-    settle(key, { ...pending.failure, ...userEditsOf(entry) }, "failed");
+  const failure = failureToReport(entry, pending);
+  if (failure) {
+    stopConnect(entry);
+    settle(key, { ...failure, ...userEditsOf(entry) }, "failed");
     return;
   }
   if (entry.state !== "pending") return;
@@ -285,8 +296,10 @@ export function cancelApproval(key: string): void {
   const pending = resolutions.get(key);
   if (!entry || !pending) return;
   // After a failed send the model hears that failure, with the user's edits.
-  if (entry.awaitingRetry && pending.failure) {
-    settle(key, { ...pending.failure, ...userEditsOf(entry) }, "cancelled");
+  const failure = failureToReport(entry, pending);
+  if (failure) {
+    stopConnect(entry);
+    settle(key, { ...failure, ...userEditsOf(entry) }, "cancelled");
     return;
   }
   if (entry.state !== "pending") return;
@@ -477,7 +490,12 @@ async function rebind(key: string): Promise<void> {
     // uninstalled): the model hears the question and asks the user.
     settle(
       key,
-      { state: "not_sent", reason: "needs_clarification", clarification: prepared },
+      {
+        state: "not_sent",
+        reason: "needs_clarification",
+        clarification: prepared,
+        ...userEditsOf(entry),
+      },
       "not_sent"
     );
     return;
@@ -491,6 +509,8 @@ async function rebind(key: string): Promise<void> {
     return;
   }
   const unchanged = sameIdentity(entry.preview, prepared.preview);
+  // Prepared again: an earlier failure is no longer what the card stands for.
+  pending.failure = undefined;
   patchEntry(key, { actionId: prepared.actionId, preview: prepared.preview });
   if (!unchanged) {
     waitForUserAgain(key, { state: "pending", notice: "identity_changed" });

@@ -100,12 +100,12 @@ export type ApprovalOutcome =
   | ({ state: "failed"; errorCode: string; message: string } & ApprovalEdits)
   | ({ state: "unknown"; checkUrl?: string; destinationLabel?: string } & ApprovalEdits)
   | { state: "cancelled" }
-  | {
+  | ({
       state: "not_sent";
       reason: string;
       /** Preparing it again (Retry, a reconnect) found it needs the user to say where. */
       clarification?: Extract<ConnectorPrepareResult, { status: "needs_clarification" }>;
-    };
+    } & ApprovalEdits);
 
 export interface ConnectorStatus {
   id: string;
