@@ -243,10 +243,16 @@ function matchHost(urlHost) {
   );
 }
 
+// Whether a host carries a site name's brand, its first word, as a label:
+// "icloud mail" on www.icloud.com, "yahoo mail" on mail.yahoo.co.uk.
+function hostCarriesSite(urlHost, siteName) {
+  return urlHost.toLowerCase().split(/[.-]/).includes(siteName.split(" ")[0]);
+}
+
 // The site name is the last segment of the page title; Edge may put a profile
 // name after it, so there the segment before counts too. Whole-segment
 // equality keeps a page that merely mentions a site name out.
-function matchTitle(windowTitle) {
+function matchTitle(windowTitle, accepts = () => true) {
   const title = windowTitle.toLowerCase().replace(ZERO_WIDTH, "");
   const candidates = withoutBrowserName(
     title.split(TITLE_SEPARATOR).map((segment) => segment.trim())
@@ -260,7 +266,7 @@ function matchTitle(windowTitle) {
     );
   return (
     CATEGORIES.find((category) =>
-      candidates.some((segment) => SITE_TITLES[category].includes(segment))
+      candidates.some((segment) => SITE_TITLES[category].includes(segment) && accepts(segment))
     ) ?? "other"
   );
 }
@@ -275,10 +281,16 @@ function classifyToneAppCategory(context) {
   const app = matchApp(signature);
   if (app) return app;
   if (!TITLE_JUDGED_PATTERNS.some((pattern) => pattern.test(signature))) return "other";
-  // A host that names no app (iCloud Mail is www.icloud.com) leaves it to the title.
   const byHost = context.urlHost && matchHost(context.urlHost);
   if (byHost) return byHost;
-  return context.windowTitle ? matchTitle(context.windowTitle) : "other";
+  if (!context.windowTitle) return "other";
+  // A host not listed here (iCloud Mail is www.icloud.com) leaves it to the
+  // title, but only to a site name the host itself carries: a Notion page
+  // titled "Hey" or "Outlook" stays other.
+  return matchTitle(
+    context.windowTitle,
+    (siteName) => !context.urlHost || hostCarriesSite(context.urlHost, siteName)
+  );
 }
 
 module.exports = { classifyToneAppCategory };

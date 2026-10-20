@@ -1,6 +1,6 @@
 import React from 'react';
-import { Alert, Platform } from 'react-native';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { Alert, AppState, Platform, type AppStateStatus } from 'react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
 const mockClearCredentials = jest.fn().mockResolvedValue(undefined);
@@ -72,6 +72,7 @@ it('shows what each workflow runs, naming the provider or on-device model', asyn
       dictation: { mode: 'providers', providerId: 'openai', modelId: 'whisper-1' },
       upload: { mode: 'local', modelId: 'whisper-base' },
       notes: { mode: 'openwhispr' },
+      noteChat: { mode: 'providers', providerId: 'custom', modelId: 'llama' },
       agent: { mode: 'providers', providerId: 'custom', modelId: 'llama' },
     },
   };
@@ -81,7 +82,7 @@ it('shows what each workflow runs, naming the provider or on-device model', asyn
   // Bring Your Own Key dictation skips cleanup until a provider is saved for it.
   expect(screen.getByText('Not set')).toBeTruthy();
   expect(screen.getByText('OpenWhispr Cloud')).toBeTruthy();
-  expect(screen.getByText('Custom server')).toBeTruthy();
+  expect(screen.getAllByText('Custom server')).toHaveLength(2);
   expect(screen.queryByText(/Meeting/)).toBeNull();
   await screen.findByText(/Status: Ready/);
 });
@@ -102,6 +103,12 @@ it('keeps the meeting speaker model with the other on-device settings', async ()
   expect(mockPush).toHaveBeenCalledWith('/(account)/diarization-model');
   expect(screen.getByText('Local Apple Intelligence')).toBeTruthy();
   await screen.findByText(/Status: Ready/);
+});
+
+it('says Apple Intelligence is downloading its model while it is not ready', async () => {
+  mockReadiness.mockResolvedValue({ status: 'modelNotReady', tokenCounting: false });
+  render(<AIModelsScreen />);
+  await screen.findByText(/Status: Downloading model/);
 });
 
 it('removes every saved provider key after confirmation', async () => {
@@ -204,12 +211,29 @@ it('says cleanup is skipped, and why, while Apple Intelligence is off', async ()
   expect(await screen.findByText('Skipped · Apple Intelligence off')).toBeTruthy();
 });
 
+// Apple Intelligence is turned on in iOS Settings, outside the app.
+it('stops saying skipped once Apple Intelligence is on when the app comes back', async () => {
+  mockReadiness.mockResolvedValue({ status: 'appleIntelligenceOff', tokenCounting: false });
+  mockActiveMode = 'private';
+  mockConfig = { defaultMode: 'private', inference: { dictation: { mode: 'local' } } };
+  render(<AIModelsScreen />);
+  expect(await screen.findByText('Skipped · Apple Intelligence off')).toBeTruthy();
+
+  const onAppState = (AppState.addEventListener as jest.Mock).mock.calls.at(-1)?.[1] as (
+    state: AppStateStatus,
+  ) => void;
+  mockReadiness.mockResolvedValue({ status: 'ready', tokenCounting: false });
+  await act(async () => onAppState('active'));
+
+  expect(screen.queryByText('Skipped · Apple Intelligence off')).toBeNull();
+});
+
 it('shows provider note chat as On-Device, which answers it on this iPhone first', async () => {
   mockActiveMode = 'private';
   mockCredentialStatus.mockResolvedValue({ isConfigured: true });
   mockConfig = {
     defaultMode: 'private',
-    inference: { agent: { mode: 'providers', providerId: 'groq', modelId: 'llama' } },
+    inference: { noteChat: { mode: 'providers', providerId: 'groq', modelId: 'llama' } },
   };
   render(<AIModelsScreen />);
   expect(screen.queryByText('Groq')).toBeNull();
@@ -260,4 +284,12 @@ it('puts the Apple Intelligence status on its own line', async () => {
   expect((await screen.findByText(/Status: Ready/)).props.children).toBe(
     'Status: Ready\nRuns On-Device text workflows, and private and signed-out note generation.',
   );
+});
+
+it('lists Note Chat and Voice Assistant as separate workflows', async () => {
+  render(<AIModelsScreen />);
+  expect(screen.getByText('Note Chat')).toBeTruthy();
+  expect(screen.getByText('Voice Assistant')).toBeTruthy();
+  expect(screen.queryByText('Chat & Voice Assistant')).toBeNull();
+  await screen.findByText(/Status: Ready/);
 });

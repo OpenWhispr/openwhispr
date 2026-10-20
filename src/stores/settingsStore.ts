@@ -17,7 +17,10 @@ import { normalizeEmailDraftTarget, type EmailDraftTargetSetting } from "../util
 import { normalizeToneStyles, type ToneStyles } from "../config/toneStyle";
 import { PROMPT_KIND_LIST, type PromptKind } from "../config/prompts/registry";
 import { sweepRetiredPromptOverrides } from "../config/retiredPrompts";
-import { sweepRetiredCloudModelSelections } from "../config/retiredCloudModels";
+import {
+  sweepRetiredCloudModelSelections,
+  type RetiredModelProvider,
+} from "../config/retiredCloudModels";
 import {
   deriveReasoningMode,
   buildReasoningScopePatches,
@@ -29,15 +32,17 @@ import {
   type InferenceScope,
   type InferenceScopeDefinition,
   type InferenceScopeStoreKeys,
+  usesCloudModelCatalog,
 } from "../config/inferenceScopes";
 import { normalizeChineseScriptPreference } from "../utils/chineseScript";
 import { adjustBedrockModelForRegion } from "../utils/bedrockRegions";
 import modelRegistryData from "../models/modelRegistryData.json";
 import { pickDefaultModelId } from "../models/providerDefaultModel";
 // Both are leaves: tinfoilModelCache imports only a type from ModelRegistry and
-// the switch store only zustand, so neither reopens the ModelRegistry cycle.
+// the switch store only zustand and a type, so neither reopens the ModelRegistry
+// cycle.
 import { readCachedTinfoilModels } from "../models/tinfoilModelCache";
-import { recordTinfoilModelSwitch } from "./tinfoilModelSwitchStore";
+import { recordRetiredModelSwitch } from "./retiredModelSwitchStore";
 import { MEETING_STREAMING_PROVIDER_IDS } from "../helpers/meetingTranscriptionRouting";
 import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
 import {
@@ -150,7 +155,7 @@ function canonicalTranscriptionBaseUrl(providerId: string): string | null {
   );
 }
 
-function reasoningModelBelongsToProvider(providerId: string, modelId: string): boolean {
+export function reasoningModelBelongsToProvider(providerId: string, modelId: string): boolean {
   if (!modelId) return false;
   // Custom and OpenRouter ids are free-form; any remembered id is valid.
   // Tinfoil's registry entry is refreshed in place from its live catalog.
@@ -835,14 +840,15 @@ if (Object.keys(healedMeetingFollowModes).length > 0) {
   );
 }
 
-// Resolved offline, so a retired model's name survives only in the user's own
-// catalog cache and a replacement's only if we seed it. The raw-id fallback is
-// what the live-catalog reconcile shows too.
-function tinfoilModelName(modelId: string): string {
+// Resolved offline, so a retired model's name survives only in Tinfoil's
+// catalog cache, and a replacement's only if the registry lists it. The raw-id
+// fallback is what the live-catalog reconcile shows too.
+function sweptModelName(providerId: RetiredModelProvider, modelId: string): string {
+  const cached = providerId === "tinfoil" ? readCachedTinfoilModels().models : [];
   const named =
-    readCachedTinfoilModels().models.find((model) => model.id === modelId) ??
+    cached.find((model) => model.id === modelId) ??
     modelRegistryData.cloudProviders
-      .find((provider) => provider.id === "tinfoil")
+      .find((provider) => provider.id === providerId)
       ?.models.find((model) => model.id === modelId);
   return named?.name ?? modelId;
 }
@@ -855,23 +861,35 @@ function migrateRetiredCloudModels() {
   if (!isBrowser) return;
   const swept = sweepRetiredCloudModelSelections(
     localStorage,
-    Object.values(INFERENCE_SCOPES).map(({ storeKeys }) => storeKeys)
+    Object.values(INFERENCE_SCOPES)
+      .map(({ storeKeys }) => storeKeys)
+      .filter(({ mode }) => {
+        const storedMode = localStorage.getItem(mode);
+        // An unset mode loads as the default, openwhispr.
+        return !storedMode || usesCloudModelCatalog(storedMode);
+      })
   );
   if (swept.length === 0) return;
 
   logger.info(
     "Repointed retired cloud model selections",
-    { scopes: swept.map(({ storeKey }) => storeKey) },
+    { swept: swept.map(({ storeKey, from, to }) => ({ storeKey, from, to })) },
     "settings"
   );
 
-  // Tinfoil is the one provider that tells the user their model was switched
-  // out, and getting here first means reconcileSelectedModels no longer will.
+  // Tell the user their model was switched out; for Tinfoil, getting here
+  // first means reconcileSelectedModels no longer will. Several scopes can
+  // share a retired model, so say so once per model.
   const announced = new Set<string>();
   for (const { provider, from, to } of swept) {
-    if (provider !== "tinfoil" || announced.has(from)) continue;
-    announced.add(from);
-    recordTinfoilModelSwitch({ from: tinfoilModelName(from), to: tinfoilModelName(to) });
+    const key = `${provider}:${from}`;
+    if (announced.has(key)) continue;
+    announced.add(key);
+    recordRetiredModelSwitch({
+      provider,
+      from: sweptModelName(provider, from),
+      to: sweptModelName(provider, to),
+    });
   }
 }
 
@@ -980,6 +998,7 @@ export interface SettingsState
   translationRemoteUrl: string;
   translationCustomApiKey: string;
   translationDisableThinking: boolean;
+  translationReasoningEffort: string;
   useDictationTranslation: boolean;
   translationSourceLanguage: string;
   translationTargetLanguage: string;
@@ -1012,6 +1031,11 @@ export interface SettingsState
   dictationAgentVisionDisableThinking: boolean;
   noteFormattingDisableThinking: boolean;
   chatAgentDisableThinking: boolean;
+  cleanupReasoningEffort: string;
+  dictationAgentReasoningEffort: string;
+  dictationAgentVisionReasoningEffort: string;
+  noteFormattingReasoningEffort: string;
+  chatAgentReasoningEffort: string;
 
   customPrompts: Record<PromptKind, string>;
   setCustomPrompt: (kind: PromptKind, value: string) => void;
@@ -1812,6 +1836,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   translationRemoteUrl: readString("translationRemoteUrl", ""),
   translationCustomApiKey: readString("translationCustomApiKey", ""),
   translationDisableThinking: readBoolean("translationDisableThinking", true),
+  translationReasoningEffort: readString("translationReasoningEffort", ""),
   useDictationTranslation: readBoolean("useDictationTranslation", false),
   translationSourceLanguage: readString("translationSourceLanguage", "auto"),
   translationTargetLanguage: readString("translationTargetLanguage", ""),
@@ -1962,6 +1987,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   dictationAgentVisionDisableThinking: readBoolean("dictationAgentVisionDisableThinking", true),
   noteFormattingDisableThinking: readBoolean("noteFormattingDisableThinking", true),
   chatAgentDisableThinking: readBoolean("chatAgentDisableThinking", true),
+  cleanupReasoningEffort: readString("cleanupReasoningEffort", ""),
+  dictationAgentReasoningEffort: readString("dictationAgentReasoningEffort", ""),
+  dictationAgentVisionReasoningEffort: readString("dictationAgentVisionReasoningEffort", ""),
+  noteFormattingReasoningEffort: readString("noteFormattingReasoningEffort", ""),
+  chatAgentReasoningEffort: readString("chatAgentReasoningEffort", ""),
 
   customPrompts: PROMPT_KIND_LIST.reduce(
     (acc, kind) => ({ ...acc, [kind]: readString(`customPrompt.${kind}`, "") }),
@@ -2894,6 +2924,7 @@ export interface ResolvedLLMConfig {
   remoteUrl?: string;
   customApiKey?: string;
   disableThinking: boolean;
+  reasoningEffort?: string;
 }
 
 export const selectResolvedLLMConfig = (
@@ -2927,6 +2958,7 @@ export const selectResolvedLLMConfig = (
     // belongs on the request path — see selectResolvedNoteFormatting.
     customApiKey: read("customApiKey"),
     disableThinking,
+    reasoningEffort: read("reasoningEffort"),
   };
   const managed = getManagedScopeResolution(scope, state.enterpriseSetupMode);
   if (managed.kind === "error") {
@@ -3228,6 +3260,7 @@ export async function reconcileLocalModelSelections(): Promise<void> {
 export function reconcileRetiredCloudModelSelections(): void {
   const state = useSettingsStore.getState() as unknown as Record<string, unknown>;
   for (const scope of Object.values(INFERENCE_SCOPES)) {
+    if (!usesCloudModelCatalog(state[scope.storeKeys.mode])) continue;
     const provider = state[scope.storeKeys.provider] as string;
     const model = state[scope.storeKeys.model] as string;
     if (!provider || !model || provider === "tinfoil") continue;

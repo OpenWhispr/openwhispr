@@ -1,6 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
+const fs = require("node:fs");
+const path = require("node:path");
 
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
@@ -40,15 +42,22 @@ const electronStub = {
     static getAllWindows() {
       return [];
     }
-    static fromWebContents() {
-      return null;
+    // Cloud retries need a window to read auth from; a sender opts in with one.
+    static fromWebContents(sender) {
+      return sender?.window ?? null;
     }
   },
   shell: {},
   dialog: {},
   screen: { getPrimaryDisplay: () => ({ workAreaSize: { width: 0, height: 0 } }) },
   systemPreferences: { getMediaAccessStatus: () => "granted" },
-  session: { fromPartition: () => ({}) },
+  session: {
+    fromPartition: () => ({
+      webRequest: { onBeforeSendHeaders: () => {} },
+      fetch: (url, init) => electronStub.net.fetch(url, init),
+      closeAllConnections: async () => {},
+    }),
+  },
   clipboard: {},
   nativeImage: {},
   globalShortcut: {},
@@ -64,6 +73,9 @@ const WAV_BUFFER = Buffer.concat([
   Buffer.alloc(32),
 ]);
 const CONVERTED_WAV = Buffer.concat([WAV_BUFFER, Buffer.from("converted")]);
+// Just over the inline upload limit, so an OpenWhispr Cloud retry is chunked.
+const CHUNKED_BUFFER = Buffer.alloc(4 * 1024 * 1024 + 1);
+const CLOUD_CHUNKS = ["chunk-000.mp3", "chunk-001.mp3", "chunk-002.mp3", "chunk-003.mp3"];
 
 // Conversion is mocked rather than run: spawning ffmpeg from a unit test would
 // make it slow and dependent on the runner having a usable binary.
@@ -72,6 +84,10 @@ let convertBehavior = async () => CONVERTED_WAV;
 
 const cortiCalls = [];
 const tinfoilCalls = [];
+const textUpdates = [];
+const statusUpdates = [];
+let parakeetBehavior = async () => ({ success: true, text: "local text" });
+let whisperBehavior = async () => ({ success: true, text: "whisper text" });
 let cortiBehavior = async () => ({ text: "corti text" });
 
 // Kept installed for the whole file: the corti client is require()d lazily at
@@ -96,6 +112,9 @@ Module._load = function loadWithMocks(request, parent, isMain) {
         getTinfoilChatModels: () => [],
       };
     }
+    if (request === "./tokenStore") {
+      return { ...originalLoad.call(this, request, parent, isMain), get: () => "test-token" };
+    }
     if (request === "./windowBroadcast") {
       return { broadcastToWindows: () => {} };
     }
@@ -106,6 +125,11 @@ Module._load = function loadWithMocks(request, parent, isMain) {
         convertBufferToWav: async (buffer, options) => {
           wavConversions.push(buffer);
           return convertBehavior(buffer, options);
+        },
+        splitAudioFile: async (inputPath, chunkDir) => {
+          const chunkPaths = CLOUD_CHUNKS.map((name) => path.join(chunkDir, name));
+          for (const chunkPath of chunkPaths) fs.writeFileSync(chunkPath, "audio");
+          return { chunkPaths, durationSeconds: 120 };
         },
       };
     }
@@ -134,15 +158,31 @@ function buildFakeThis() {
   const target = {
     sessionId: "test-session",
     audioStorageManager: {
-      // 7 is a stored WebM recording, 8 one already in WAV.
-      getAudioBuffer: (id) => (id === 7 ? Buffer.from([1, 2, 3]) : id === 8 ? WAV_BUFFER : null),
+      // 7 is a stored WebM recording, 8 one already in WAV, 9 one too large to
+      // upload inline.
+      getAudioBuffer: (id) =>
+        id === 7
+          ? Buffer.from([1, 2, 3])
+          : id === 8
+            ? WAV_BUFFER
+            : id === 9
+              ? CHUNKED_BUFFER
+              : null,
     },
     databaseManager: {
-      updateTranscriptionText: () => {},
-      updateTranscriptionStatus: () => {},
+      updateTranscriptionText: (id, text) => textUpdates.push({ id, text }),
+      updateTranscriptionStatus: (id, status) => statusUpdates.push({ id, status }),
       updateTranscriptionAudio: () => {},
       getTranscriptionById: (id) => dbRows.get(id),
     },
+    parakeetManager: {
+      transcribeLocalParakeet: (buffer, options) => parakeetBehavior(buffer, options),
+    },
+    whisperManager: {
+      serverManager: { isAvailable: () => true },
+      transcribeLocalWhisper: (buffer, options) => whisperBehavior(buffer, options),
+    },
+    _resolveWhisperVadOptions: () => ({}),
     environmentManager: {
       getOpenAIKey: () => "sk-openai",
       getGroqKey: () => "gk-groq",
@@ -363,6 +403,202 @@ test("retry: a custom URL on Tinfoil's host is refused in the main process", asy
   assert.match(result.error, /attested main-process proxy/);
   assert.equal(fetches.length, 0);
   assert.equal(tinfoilCalls.length, 0);
+});
+
+const PARAKEET_SETTINGS = {
+  transcriptionMode: "local",
+  useLocalWhisper: true,
+  localTranscriptionProvider: "nvidia",
+  parakeetModel: "parakeet-tdt-0.6b-v3",
+};
+const WHISPER_SETTINGS = {
+  transcriptionMode: "local",
+  useLocalWhisper: true,
+  localTranscriptionProvider: "whisper",
+  whisperModel: "base",
+};
+
+async function withLocalResult(behavior, settings, run) {
+  const key = settings === WHISPER_SETTINGS ? "whisper" : "parakeet";
+  const original = key === "whisper" ? whisperBehavior : parakeetBehavior;
+  if (key === "whisper") whisperBehavior = behavior;
+  else parakeetBehavior = behavior;
+  textUpdates.length = 0;
+  statusUpdates.length = 0;
+  try {
+    return await run(await invoke(settings));
+  } finally {
+    if (key === "whisper") whisperBehavior = original;
+    else parakeetBehavior = original;
+  }
+}
+
+test("retry: a clean local decode reports no warning", async () => {
+  await withLocalResult(
+    async () => ({ success: true, text: "local text" }),
+    PARAKEET_SETTINGS,
+    (result) => {
+      assert.equal(result.success, true);
+      assert.equal("warning" in result, false);
+      assert.deepEqual(textUpdates, [{ id: 7, text: "local text" }]);
+    }
+  );
+});
+
+test("retry: a truncated Parakeet decode keeps its text and returns the warning", async () => {
+  await withLocalResult(
+    async () => ({ success: true, text: "first half", warning: "truncated" }),
+    PARAKEET_SETTINGS,
+    (result) => {
+      assert.equal(result.success, true);
+      assert.equal(result.warning, "truncated", "the renderer needs it for the partial toast");
+      assert.deepEqual(textUpdates, [{ id: 7, text: "first half" }]);
+      assert.deepEqual(statusUpdates, [{ id: 7, status: "completed" }]);
+    }
+  );
+});
+
+test("retry: an all-empty Parakeet decode reports the invalid response, not a missing engine", async () => {
+  await withLocalResult(
+    async () => ({
+      success: false,
+      error: "invalid_response",
+      message: "Transcription engine returned an unexpected response",
+    }),
+    PARAKEET_SETTINGS,
+    (result) => {
+      assert.equal(result.success, false);
+      assert.equal(result.code, "INVALID_RESPONSE");
+      assert.equal(result.messageKey, "controlPanel.history.retryErrors.invalidResponse");
+      assert.equal(result.error, "Transcription engine returned an unexpected response");
+      assert.equal(textUpdates.length, 0, "a failed retry must leave the row alone");
+      assert.equal(statusUpdates.length, 0);
+    }
+  );
+});
+
+test("retry: no speech from a local engine is reported as such", async (t) => {
+  for (const [name, settings, failure] of [
+    [
+      "parakeet",
+      PARAKEET_SETTINGS,
+      { success: false, code: "NO_SPEECH_DETECTED", message: "No audio detected" },
+    ],
+    ["whisper", WHISPER_SETTINGS, { success: false, message: "No audio detected" }],
+  ]) {
+    await t.test(name, () =>
+      withLocalResult(
+        async () => failure,
+        settings,
+        (result) => {
+          assert.equal(result.success, false);
+          assert.equal(result.code, "NO_SPEECH_DETECTED");
+          assert.equal(result.messageKey, "notes.upload.noSpeechDetected");
+          assert.equal(textUpdates.length, 0);
+        }
+      )
+    );
+  }
+});
+
+test("retry: an unclassified local failure keeps the engine's own message", async () => {
+  await withLocalResult(
+    async () => ({ success: false, error: "decode_failed", message: "Decoder crashed" }),
+    PARAKEET_SETTINGS,
+    (result) => {
+      assert.equal(result.success, false);
+      assert.equal(result.error, "Decoder crashed");
+      assert.equal(result.messageKey, undefined);
+    }
+  );
+});
+
+const CLOUD_SETTINGS = {
+  transcriptionMode: "providers",
+  cloudTranscriptionMode: "openwhispr",
+  cloudTranscriptionProvider: "openai",
+};
+
+async function withCloudResponse(t, respond, id) {
+  const originalFetchResponse = fetchResponse;
+  const originalApiUrl = process.env.OPENWHISPR_API_URL;
+  t.after(() => {
+    fetchResponse = originalFetchResponse;
+    if (originalApiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
+    else process.env.OPENWHISPR_API_URL = originalApiUrl;
+  });
+  process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+  fetchResponse = (url, init) => {
+    const { status, body } = respond(init);
+    return { ok: status === 200, status, text: async () => JSON.stringify(body) };
+  };
+  textUpdates.length = 0;
+  return retryHandler({ sender: { window: {} } }, id, CLOUD_SETTINGS);
+}
+
+test("retry: no speech from OpenWhispr Cloud is translated like a local engine's", async (t) => {
+  const result = await withCloudResponse(
+    t,
+    () => ({
+      status: 422,
+      body: { code: "NO_SPEECH_DETECTED", error: "No speech detected in audio" },
+    }),
+    7
+  );
+  assert.equal(result.success, false);
+  assert.equal(result.code, "NO_SPEECH_DETECTED");
+  assert.equal(result.messageKey, "notes.upload.noSpeechDetected");
+  assert.equal(textUpdates.length, 0);
+});
+
+test("retry: an empty answer from a BYOK engine is no speech, not a missing engine", async (t) => {
+  const originalFetchResponse = fetchResponse;
+  const originalCortiBehavior = cortiBehavior;
+  t.after(() => {
+    fetchResponse = originalFetchResponse;
+    cortiBehavior = originalCortiBehavior;
+  });
+  fetchResponse = () => ({ ok: true, status: 200, json: async () => ({ text: "" }) });
+  cortiBehavior = async () => ({ text: "" });
+  for (const [name, settings] of [
+    ["custom", CUSTOM_SETTINGS],
+    [
+      "corti",
+      {
+        cloudTranscriptionProvider: "corti",
+        cloudTranscriptionMode: "byok",
+        transcriptionMode: "providers",
+      },
+    ],
+  ]) {
+    textUpdates.length = 0;
+    const result = await invoke(settings);
+    assert.equal(result.success, false, name);
+    assert.equal(result.code, "NO_SPEECH_DETECTED", name);
+    assert.equal(result.messageKey, "notes.upload.noSpeechDetected", name);
+    assert.equal(textUpdates.length, 0, name);
+  }
+});
+
+test("retry: a chunked cloud retry that lost a chunk saves the rest and returns the warning", async (t) => {
+  const result = await withCloudResponse(
+    t,
+    (init) =>
+      init.body.includes("chunk-001.mp3")
+        ? { status: 400, body: { error: "Bad chunk" } }
+        : { status: 200, body: { text: "part" } },
+    9
+  );
+  assert.equal(result.success, true, JSON.stringify(result));
+  assert.equal(result.warning, "1 of 4 chunks failed");
+  assert.equal(textUpdates.length, 1);
+  assert.match(textUpdates[0].text, /part/);
+});
+
+test("retry: a clean chunked cloud retry reports no warning", async (t) => {
+  const result = await withCloudResponse(t, () => ({ status: 200, body: { text: "part" } }), 9);
+  assert.equal(result.success, true, JSON.stringify(result));
+  assert.equal("warning" in result, false);
 });
 
 test("retry: mistral goes to Mistral with x-api-key", async () => {

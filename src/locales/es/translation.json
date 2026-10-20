@@ -121,6 +121,8 @@
       "mouseButtonOnlyMac": "Los atajos con botones del ratón solo son compatibles con macOS por ahora.",
       "alreadyRegistered": "\"{{hotkey}}\" ya está registrada por otra aplicación.",
       "osReserved": "\"{{hotkey}}\" puede estar reservada por tu entorno de escritorio.",
+      "keyNotInKeymap": "GNOME no puede usar \"{{hotkey}}\" con tu distribución de teclado. Elige otra tecla.",
+      "keyReservedByGnome": "GNOME ya usa \"{{hotkey}}\" para uno de sus propios atajos. Elige otra tecla.",
       "rightModifierNeedsListener": "\"{{hotkey}}\" no se puede usar en este escritorio, cuyos atajos necesitan una tecla normal. Añade una tecla, como Control+Alt+Space.",
       "holdNeedsReleaseKey": "Mantener para hablar necesita una tecla cuya liberación macOS pueda detectar: Globo, una tecla derecha como Opción derecha o un atajo con modificador. Pulsar funciona con cualquier tecla.",
       "holdNeedsRegularKey": "Para usar Mantener, añade una tecla normal al atajo, como Control+Alt+Space. Tu escritorio no puede detectar cuándo mantienes pulsadas solo teclas modificadoras.",
@@ -142,7 +144,7 @@
   },
   "upgradePrompt": {
     "paymentFailed": "No pudimos procesar tu pago",
-    "weeklyLimit": "Has alcanzado tu límite semanal",
+    "weeklyLimit": "Has alcanzado tu límite semanal de la nube",
     "pastDueDescription": "Estás en el plan gratuito por ahora, pero no te preocupes: aún tienes {{limit}} palabras por semana.\nActualiza tu método de pago para volver a Pro ilimitado.",
     "limitDescription": "{{used}} de {{limit}} palabras usadas.\nTu transcripción fue guardada y pegada.",
     "updatePayment": "Actualizar método de pago",
@@ -631,7 +633,7 @@
       "availableButton": "Actualización disponible"
     },
     "limit": {
-      "weeklyTitle": "Límite semanal alcanzado",
+      "weeklyTitle": "Límite semanal de la nube alcanzado",
       "weeklyDescription": "Tu límite se restablece de forma continua. Mejora a Pro o usa tu propia clave API para uso ilimitado."
     },
     "accessibilityMissing": {
@@ -681,6 +683,8 @@
       "failedCtaSettings": "Configura tu proveedor de transcripción",
       "failedCtaAndRetry": "y luego haz clic en reintentar",
       "failedCtaSettingsOnly": "Configura tu proveedor de transcripción en Ajustes",
+      "failedCtaAiSettings": "Revisa el modelo del Asistente de voz en Configuración",
+      "editFailedTranscriptKept": "Edición no aplicada · transcripción guardada",
       "failedLimitReached": "Límite diario alcanzado",
       "failedOffline": "Sin conexión",
       "clearAll": "Borrar todo",
@@ -702,6 +706,9 @@
       "retrying": "Transcribiendo de nuevo…",
       "retrySuccess": "Transcripción actualizada",
       "retryError": "Error al volver a transcribir",
+      "retryErrors": {
+        "invalidResponse": "El motor de transcripción devolvió una respuesta inesperada. Inténtalo de nuevo."
+      },
       "audioNotFound": "Archivo de audio no encontrado o expirado",
       "noAiProcessing": "No se aplicó procesamiento de IA a esta transcripción",
       "rawTranscript": "Transcripción sin procesar",
@@ -767,6 +774,21 @@
       "noSearchResults": "Ningún modelo coincide con \"{{query}}\"",
       "selectModelHint": "Aún no hay un modelo seleccionado — elige uno de la lista de abajo.",
       "keyRequiredHint": "Se requiere una clave API para la inferencia — agrega una para usar este proveedor."
+    },
+    "effort": {
+      "title": "Esfuerzo de razonamiento",
+      "description": "Cuánto piensa el modelo antes de responder.",
+      "descriptionWithDefault": "Cuánto piensa el modelo antes de responder. Auto usa el valor predeterminado del proveedor ({{value}}).",
+      "auto": "Auto",
+      "options": {
+        "none": "Ninguno",
+        "minimal": "Mínimo",
+        "low": "Bajo",
+        "medium": "Medio",
+        "high": "Alto",
+        "xhigh": "Muy alto",
+        "max": "Máximo"
+      }
     },
     "getApiKey": "Obtener clave API ->",
     "selectModel": "Seleccionar modelo",
@@ -853,8 +875,11 @@
         "apikeyHelp": "Clave API de Vertex AI Express Mode obtenida en Google AI Studio."
       }
     },
+    "modelRetiredTitle": "Modelo ya no disponible",
+    "groq": {
+      "modelRetired": "Groq retiró {{from}}. Se cambió a {{to}}."
+    },
     "tinfoil": {
-      "modelRetiredTitle": "Modelo ya no disponible",
       "modelRetired": "Tinfoil retiró {{from}}. Se cambió a {{to}}.",
       "refreshingModels": "Actualizando modelos…"
     },
@@ -905,7 +930,7 @@
         "offline": "Sin conexión",
         "agentUnavailable": "Asistente no disponible",
         "screenContextSkipped": "Contexto de pantalla omitido",
-        "dailyLimitReached": "Límite diario alcanzado",
+        "cloudLimitReached": "Límite semanal de la nube alcanzado",
         "providerRateLimited": "Límite de tasa del proveedor"
       },
       "fallback": {
@@ -1633,7 +1658,7 @@
     "account": {
       "badges": {
         "free": "Gratis",
-        "limitReached": "Límite alcanzado",
+        "limitReached": "Límite de la nube alcanzado",
         "pastDue": "Pago vencido",
         "pro": "Pro",
         "business": "Business",
@@ -1669,9 +1694,10 @@
         "title": "No pudimos procesar tu pago"
       },
       "planDescriptions": {
-        "freeUsage": "{{used}} / {{limit}} palabras esta semana",
+        "freeUsage": "{{used}} / {{limit}} palabras de OpenWhispr Cloud esta semana",
+        "byokUnlimited": "Tus propias claves API y los modelos locales siguen sin límite.",
         "nextBilling": "Próxima facturación: {{date}}",
-        "pastDue": "{{used}} / {{limit}} palabras gratis esta semana: actualiza el pago para restaurar Pro",
+        "pastDue": "{{used}} / {{limit}} palabras de OpenWhispr Cloud esta semana: actualiza el pago para restaurar Pro",
         "trial": "{{days}} días restantes: transcripciones ilimitadas",
         "unlimited": "Ilimitado",
         "accessUntil": "Acceso hasta el {{date}}",
@@ -1792,8 +1818,8 @@
       "title": "Cuenta",
       "toasts": {
         "approachingLimit": {
-          "description": "Has usado {{used}} de {{limit}} palabras gratis esta semana. Mejora a Pro para uso ilimitado.",
-          "title": "Cerca del límite semanal"
+          "description": "Has usado {{used}} de {{limit}} palabras de OpenWhispr Cloud esta semana. Mejora a Pro para uso ilimitado.",
+          "title": "Cerca del límite de palabras de la nube"
         }
       },
       "trialCta": {
@@ -2719,9 +2745,8 @@
         "gemini_gemma_4_31b_it": "El mayor Gemma 4 de Google, 31B denso, contexto 256K",
         "gemini_gemma_4_26b_a4b_it": "Gemma 4 MoE de Google, 4B parámetros activos, contexto 256K",
         "groq_openai_gpt_oss_120b": "Modelo insignia de código abierto de OpenAI, 500 T/seg",
+        "groq_qwen_qwen3_8_27b": "Modelo Qwen rápido, 450 T/seg, contexto de 131K",
         "groq_openai_gpt_oss_20b": "Modelo de código abierto rápido, 1000 T/seg",
-        "groq_compound": "Sistema compound de Groq, 450 T/seg",
-        "groq_compound_mini": "Sistema compound rápido, 3x menor latencia",
         "openai_gpt_6_astra": "El modelo más capaz de OpenAI para programación e investigación",
         "openai_gpt_5_6_sol": "GPT-5.6 insignia para programación e investigación complejas",
         "openai_gpt_5_6_terra": "GPT-5.6 equilibrado para el trabajo diario",
@@ -3428,6 +3453,7 @@
       "speakersIdentified": "Participantes identificados",
       "typeNamePlaceholder": "Escribe un nombre",
       "knownSpeakers": "Hablantes conocidos",
+      "thisIsMe": "Soy yo",
       "meetingAttendees": "Asistentes de la reunión",
       "assignName": "Asignar nombre",
       "isThisPerson": "¿Es {{name}}?",
@@ -3690,8 +3716,8 @@
     "inviteTeam": "Invita a tu equipo",
     "settings": "Configuración",
     "support": "Soporte",
-    "limitReached": "Límite semanal alcanzado",
-    "limitReachedDescription": "Mejora a Pro para transcripciones ilimitadas.",
+    "limitReached": "Límite semanal de la nube alcanzado",
+    "limitReachedDescription": "Mejora a Pro o usa tu propia clave API para uso ilimitado.",
     "viewPlans": "Ver planes",
     "upgradeTitle": "Mejorar a Pro",
     "upgradeDescription": "Transcripción ilimitada, más precisa y más rápida.",

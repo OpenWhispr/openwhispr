@@ -624,12 +624,37 @@ class SelectionManager {
     ) {
       return capture;
     }
-    const verdict = await this.textEditMonitor?.isFocusedEditable?.(target);
+    const pid = await this._linuxTargetPid(target);
+    const verdict = await this.textEditMonitor?.isFocusedEditable?.(
+      pid ? { ...target, pid } : target
+    );
+    debugLogger.debug(
+      "Editable caret probe",
+      { kind: target.kind, pid: target.pid ?? pid, verdict },
+      "clipboard"
+    );
     if (verdict === "editable") return { status: "editable", target };
     // An empty copy cannot distinguish a caret from an integrated terminal or
     // a page without an input; it can also hide a selection matching the clipboard.
     // Unknown accessibility must keep the panel fallback, including on revalidation.
     return capture;
+  }
+
+  // The Linux editable probe answers only for a focused field in this process's
+  // active window, so a focus left behind in another app can't vouch for the
+  // target. null for other target kinds, or when the process can't be read.
+  async _linuxTargetPid(target) {
+    if (target.kind === "atspi-pid") return target.id;
+    if (target.kind === "hyprland-window") return target.pid;
+    if (target.kind === "x11-window") return this._readWindowPid("xdotool", target.id);
+    if (target.kind === "kde-window") return this._readWindowPid("kdotool", target.id);
+    return null;
+  }
+
+  async _readWindowPid(tool, windowId) {
+    const result = await runFile(tool, ["getwindowpid", windowId], { timeout: 500 });
+    const pid = result.success ? result.stdout.trim() : "";
+    return /^[1-9]\d*$/.test(pid) ? pid : null;
   }
 
   _isTerminalTarget(...targets) {
@@ -764,6 +789,7 @@ class SelectionManager {
               kind: "hyprland-window",
               id: active.address,
               windowClass: typeof active.class === "string" ? active.class.toLowerCase() : null,
+              pid: Number.isInteger(active.pid) && active.pid > 0 ? active.pid : null,
             };
             if (typeof active.title === "string") this._targetTitles.set(target, active.title);
             return target;
@@ -788,7 +814,11 @@ class SelectionManager {
       debugLogger.warn("AT-SPI target probe timed out", { cooldownMs: ATSPI_COOLDOWN_MS });
     }
     const match = result.stdout.match(/^TARGET\s+ATSPI\s+(\d+)$/m);
-    return result.success && match ? { kind: "atspi-pid", id: match[1] } : null;
+    if (!result.success || !match) return null;
+    const target = { kind: "atspi-pid", id: match[1] };
+    const title = result.stdout.match(/^WINDOW_TITLE_B64 ([A-Za-z0-9+/=]+)$/m)?.[1];
+    if (title) this._targetTitles.set(target, Buffer.from(title, "base64").toString("utf8"));
+    return target;
   }
 
   async _captureViaClipboard(sendCopy, expectedTarget) {

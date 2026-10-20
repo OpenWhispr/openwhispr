@@ -33,6 +33,12 @@ const KDE_FAILURE_REASONS = {
   "modifier-only": (hotkey) => i18nMain.t("hotkey.errors.osReserved", { hotkey }),
 };
 
+// Why GNOME can't grab a key the active keymap maps elsewhere (see gnomeShortcut.js)
+const GNOME_FAILURE_REASONS = {
+  keysym_missing: (hotkey) => i18nMain.t("hotkey.errors.keyNotInKeymap", { hotkey }),
+  keysym_reserved: (hotkey) => i18nMain.t("hotkey.errors.keyReservedByGnome", { hotkey }),
+};
+
 // Right-side single modifiers are handled by native listeners, not globalShortcut
 const RIGHT_SIDE_MODIFIER_PATTERN =
   /^Right(Control|Ctrl|Alt|Option|Shift|Command|Cmd|Super|Meta|Win)$/i;
@@ -266,8 +272,6 @@ class HotkeyManager extends EventEmitter {
         };
       }
 
-      this.unregisterSlot(slotName);
-
       if (slotName === "meeting") {
         this.gnomeManager.setMeetingCallback(callback);
       } else if (slotName === "voiceAgent") {
@@ -276,14 +280,16 @@ class HotkeyManager extends EventEmitter {
         this.gnomeManager.setTranslationCallback(callback);
       }
 
-      const success = await this.gnomeManager.registerKeybinding(gnomeHotkey, slotName);
-      if (!success) {
+      const result = await this.gnomeManager.registerKeybinding(gnomeHotkey, slotName);
+      if (result !== true) {
         debugLogger.log(
           `[HotkeyManager] GNOME keybinding registration failed for slot "${slotName}" ("${hotkey}")`
         );
         return {
           success: false,
-          error: i18nMain.t("hotkey.errors.registrationFailed", { hotkey }),
+          error:
+            GNOME_FAILURE_REASONS[result]?.(hotkey) ||
+            i18nMain.t("hotkey.errors.registrationFailed", { hotkey }),
         };
       }
 
@@ -572,20 +578,21 @@ class HotkeyManager extends EventEmitter {
       return true;
     }
 
-    let success = true;
+    let result = true;
     try {
       if (this.useGnome && this.gnomeManager && hotkey && callback) {
-        success = await this.registerGnomeDictationHotkey(hotkey, callback, nextMode);
+        result = await this.registerGnomeDictationHotkey(hotkey, callback, nextMode);
       } else if (this.useHyprland && this.hyprlandManager && hotkey) {
-        success = await this.hyprlandManager.updateKeybinding(hotkey, nextMode === "push");
-        if (!success) {
+        result = await this.hyprlandManager.updateKeybinding(hotkey, nextMode === "push");
+        if (!result) {
           await this.hyprlandManager.updateKeybinding(hotkey, previousMode === "push");
         }
       }
     } catch (err) {
       debugLogger.warn("[HotkeyManager] Failed to change activation mode:", err.message);
-      success = false;
+      result = false;
     }
+    const success = result === true;
 
     if (
       !success &&
@@ -598,7 +605,7 @@ class HotkeyManager extends EventEmitter {
     ) {
       try {
         const restored = await this.registerGnomeDictationHotkey(hotkey, callback, "push");
-        if (!restored) {
+        if (restored !== true) {
           debugLogger.warn("[HotkeyManager] Could not restore GNOME push-to-talk binding");
         }
       } catch (err) {
@@ -612,7 +619,9 @@ class HotkeyManager extends EventEmitter {
     if (!success) {
       if (hotkey) {
         this.notifyHotkeyFailure(hotkey, {
-          error: i18nMain.t("hotkey.errors.registrationFailed", { hotkey }),
+          error:
+            GNOME_FAILURE_REASONS[result]?.(hotkey) ||
+            i18nMain.t("hotkey.errors.registrationFailed", { hotkey }),
         });
       }
       return false;
@@ -1066,14 +1075,14 @@ class HotkeyManager extends EventEmitter {
           try {
             const hotkey = await this.getSavedDictationHotkey();
             this.nativeRegistrationPending = false;
-            const success = await this.registerGnomeDictationHotkey(hotkey, callback);
-            if (success) {
+            const result = await this.registerGnomeDictationHotkey(hotkey, callback);
+            if (result === true) {
               this.currentHotkey = hotkey;
               this.notifyActiveHotkey(hotkey);
               debugLogger.log(`[HotkeyManager] GNOME hotkey "${hotkey}" registered successfully`);
             } else {
               const ok = await this.tryNativeFallbacks(hotkey, "GNOME", (fb) =>
-                this.registerGnomeDictationHotkey(fb, callback)
+                this.registerGnomeDictationHotkey(fb, callback).then((r) => r === true)
               );
               if (!ok) {
                 this.useGnome = false;
@@ -1534,11 +1543,13 @@ class HotkeyManager extends EventEmitter {
 
       if (this.useGnome && this.gnomeManager) {
         debugLogger.log(`[HotkeyManager] Updating GNOME hotkey to "${primary}"`);
-        const success = await this.registerGnomeDictationHotkey(primary, callback);
-        if (!success) {
+        const result = await this.registerGnomeDictationHotkey(primary, callback);
+        if (result !== true) {
           return {
             success: false,
-            message: i18nMain.t("hotkey.errors.updateFailedCheckFormat", { hotkey: primary }),
+            message:
+              GNOME_FAILURE_REASONS[result]?.(primary) ||
+              i18nMain.t("hotkey.errors.updateFailedCheckFormat", { hotkey: primary }),
           };
         }
         this.currentHotkey = primary;

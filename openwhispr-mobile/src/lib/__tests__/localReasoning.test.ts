@@ -26,8 +26,11 @@ jest.mock('@/store/useConfigStore', () => ({
 import {
   canRunLocalReasoning,
   clearLocalReasoningReadinessCache,
+  countLocalInputTokens,
+  fitsLocalCleanupOutput,
   getLocalReasoningReadiness,
   getLocalReasoningUnavailableMessage,
+  isLocalOutputLimitError,
   isLocalReasoningUnsupported,
   shouldUseLocalReasoning,
   toLocalReasoningError,
@@ -35,6 +38,7 @@ import {
 import { AppleLLM } from '@/lib/appleLLM';
 
 const mockAppleAvailability = AppleLLM.getAvailability as jest.Mock;
+const mockCountTokens = AppleLLM.countTokens as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -165,13 +169,63 @@ describe('toLocalReasoningError', () => {
     expect(toLocalReasoningError(cancelled)).toMatchObject({ code: 'APPLE_LLM_CANCELLED' });
   });
 
-  it.each(['APPLE_LLM_GUARDRAIL', 'APPLE_LLM_RATE_LIMITED', 'APPLE_LLM_CONTEXT_LIMIT'])(
-    'marks %s as not worth retrying',
-    (code) => {
-      expect(toLocalReasoningError(Object.assign(new Error('x'), { code }))).toMatchObject({
-        code,
-        retryable: false,
-      });
-    },
+  it.each([
+    'APPLE_LLM_GUARDRAIL',
+    'APPLE_LLM_RATE_LIMITED',
+    'APPLE_LLM_CONTEXT_LIMIT',
+    'APPLE_LLM_OUTPUT_LIMIT',
+  ])('marks %s as not worth retrying', (code) => {
+    expect(toLocalReasoningError(Object.assign(new Error('x'), { code }))).toMatchObject({
+      code,
+      retryable: false,
+    });
+  });
+});
+
+it('reads the native output-limit code as an output limit, and nothing else', () => {
+  const outputLimit = toLocalReasoningError(
+    Object.assign(new Error('decodingFailure'), { code: 'APPLE_LLM_OUTPUT_LIMIT' }),
   );
+  expect(isLocalOutputLimitError(outputLimit)).toBe(true);
+  expect(
+    isLocalOutputLimitError(Object.assign(new Error('x'), { code: 'APPLE_LLM_CONTEXT_LIMIT' })),
+  ).toBe(false);
+  expect(isLocalOutputLimitError(new Error('x'))).toBe(false);
+});
+
+describe('countLocalInputTokens', () => {
+  it('counts on the device, and estimates instructions and prompt together without it', async () => {
+    mockCountTokens.mockResolvedValueOnce(42);
+    await expect(countLocalInputTokens({ instructions: 'rules', prompt: 'text' })).resolves.toBe(
+      42,
+    );
+    expect(mockCountTokens).toHaveBeenCalledWith({ instructions: 'rules', prompt: 'text' });
+
+    mockCountTokens.mockResolvedValueOnce(null);
+    await expect(
+      countLocalInputTokens({ instructions: 'a'.repeat(33), prompt: 'b'.repeat(33) }),
+    ).resolves.toBe(20);
+  });
+});
+
+describe('fitsLocalCleanupOutput', () => {
+  // A 2,000-word dictation fits a 4,096-token context, but its cleaned copy can't fit the
+  // 900-token output cap.
+  it('refuses a transcript whose cleaned copy would run past the output cap', async () => {
+    mockCountTokens.mockResolvedValueOnce(2_060);
+    await expect(fitsLocalCleanupOutput('long dictation')).resolves.toBe(false);
+    expect(mockCountTokens).toHaveBeenCalledWith({ prompt: 'long dictation' });
+  });
+
+  it('accepts a transcript that leaves room for punctuation under the cap', async () => {
+    mockCountTokens.mockResolvedValueOnce(720);
+    await expect(fitsLocalCleanupOutput('short dictation')).resolves.toBe(true);
+  });
+
+  it('estimates from length where iOS cannot count tokens', async () => {
+    mockCountTokens.mockResolvedValueOnce(null);
+    await expect(fitsLocalCleanupOutput('word '.repeat(600))).resolves.toBe(false);
+    mockCountTokens.mockResolvedValueOnce(null);
+    await expect(fitsLocalCleanupOutput('word '.repeat(100))).resolves.toBe(true);
+  });
 });

@@ -433,9 +433,7 @@ export function useKeyboardHandoff() {
             ? rawText
             : await cleanupTranscript(rawText, {
                 inferenceRoute: recoveredRoute.cleanupRoute,
-                agentRoute: recoveredRoute.agentRoute,
                 cleanupUnavailable: recoveredRoute.cleanupUnavailable,
-                agentUnavailable: recoveredRoute.agentUnavailable,
                 requireProvider: recoveredRoute.provider === 'byok',
                 onSkipped: (reason): void => {
                   cleanupWarning = reason;
@@ -488,9 +486,7 @@ export function useKeyboardHandoff() {
           provider: recoveredRoute?.provider ?? 'cloud',
           inferenceRoute: recoveredRoute?.inferenceRoute,
           cleanupRoute: recoveredRoute?.cleanupRoute,
-          agentRoute: recoveredRoute?.agentRoute,
           cleanupUnavailable: recoveredRoute?.cleanupUnavailable,
-          agentUnavailable: recoveredRoute?.agentUnavailable,
           cleanupWarning,
           requestContext: 'keyboard',
         });
@@ -789,9 +785,8 @@ export function useKeyboardHandoff() {
         };
 
         // Agent job path: the recorded audio is a *spoken instruction*, not
-        // dictation to insert. Transcribe it RAW (no cleanup — so the wake-word
-        // agentName detection that lives in cleanupTranscript never fires — no
-        // snippets, no history/pending-transcript write, no insert) and hand the
+        // dictation to insert. Transcribe it RAW (no cleanup, no snippets, no
+        // history/pending-transcript write, no insert) and hand the
         // instruction to the composer, which writes the result and the terminal
         // agent_ready/agent_error status itself and validates job currency. As
         // with the normal path, endProcessingTask (via cleanup) is deferred to
@@ -889,9 +884,7 @@ export function useKeyboardHandoff() {
               provider,
               inferenceRoute: jobRoute.inferenceRoute,
               cleanupRoute: jobRoute.cleanupRoute,
-              agentRoute: jobRoute.agentRoute,
               cleanupUnavailable: jobRoute.cleanupUnavailable,
-              agentUnavailable: jobRoute.agentUnavailable,
               requestContext: 'keyboard',
               keyboardTone,
               jobId,
@@ -951,9 +944,11 @@ export function useKeyboardHandoff() {
           let cleanupStartedAt = Date.now();
           const processed = await transcribeAndCleanup(
             {
-              ...jobRoute,
               audioUri: retainedAudioUrl,
               provider,
+              inferenceRoute: jobRoute.inferenceRoute,
+              cleanupRoute: jobRoute.cleanupRoute,
+              cleanupUnavailable: jobRoute.cleanupUnavailable,
               language: getPreferredTranscriptionLanguage(),
               fileName,
               mimeType,
@@ -1069,9 +1064,7 @@ export function useKeyboardHandoff() {
             provider: processed.transcription.provider,
             inferenceRoute: processed.transcription.inferenceRoute,
             cleanupRoute: processed.transcription.cleanupRoute,
-            agentRoute: processed.transcription.agentRoute,
             cleanupUnavailable: processed.transcription.cleanupUnavailable,
-            agentUnavailable: processed.transcription.agentUnavailable,
             cleanupWarning: processed.transcription.cleanupWarning,
             requestContext: 'keyboard',
             keyboardTone,

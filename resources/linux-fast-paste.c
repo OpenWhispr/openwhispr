@@ -526,10 +526,20 @@ static int print_atspi_target(void) {
     AtspiAccessible *app = NULL;
     AtspiAccessible *win = find_active_atspi_window(&app);
     int pid = app ? atspi_active_pid(app) : 0;
+    char *title = pid && win ? atspi_accessible_get_name(win, NULL) : NULL;
     if (win) g_object_unref(win);
     if (app) g_object_unref(app);
     if (!pid) return 1;
     printf("TARGET ATSPI %d\n", pid);
+    /* The window's name is its title ("Inbox - Gmail - Google Chrome"), which
+     * Tone & Style reads to tell a browser's sites apart. Base64 keeps a title
+     * from forging a line. */
+    if (title && *title) {
+        gchar *encoded = g_base64_encode((const guchar *)title, strlen(title));
+        printf("WINDOW_TITLE_B64 %s\n", encoded);
+        g_free(encoded);
+    }
+    g_free(title);
     return 0;
 }
 

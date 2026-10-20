@@ -122,6 +122,16 @@ test("dictation cleanup carries the tone for the app it was captured in", async 
     assert.deepEqual(await manager.consumeToneStyle(), { appCategory: "email", tone: "excited" });
   });
 
+  await t.test("a cancelled upload that still resolves leaves the next dictation's tone alone", async () => {
+    capturedCategory = "work";
+    const manager = createManager();
+    // The next dictation started while the cancelled one's upload was in flight.
+    manager.beginToneStyleCapture();
+    await manager.processWithOpenWhisprCloud(new Blob(["synthetic audio"]), {}, () => true);
+    assert.equal("tone" in lastRequest(), false);
+    assert.deepEqual(await manager.consumeToneStyle(), { appCategory: "work", tone: "casual" });
+  });
+
   await t.test("a new recording drops the previous recording's capture", async () => {
     capturedCategory = "work";
     const manager = createManager();

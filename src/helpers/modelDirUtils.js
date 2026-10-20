@@ -52,7 +52,7 @@ function getPreferredCacheRoot(homeCache) {
   return homeCache;
 }
 
-// Only these subdirs resolve through getCacheRoot(). qdrant-data,
+// Only these subdirs move from the home cache to getCacheRoot(). qdrant-data,
 // embedding-models, and yt-dlp are read from the home cache directly by their
 // managers (and tolerate non-ASCII paths), so they must stay put.
 const RELOCATED_SUBDIRS = ["whisper-models", "parakeet-models", "diarization-models", "models"];

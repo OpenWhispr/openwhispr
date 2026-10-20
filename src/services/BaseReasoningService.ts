@@ -16,6 +16,7 @@ export interface ReasoningConfig {
   customApiKey?: string;
   provider?: string;
   disableThinking?: boolean;
+  reasoningEffort?: string;
   /** Screenshot attached to voice-agent requests when screen context is on. */
   screenContext?: ScreenContextImage;
   /** Dictation cleanup only: the Tone & Style tone for the app being dictated into. */
