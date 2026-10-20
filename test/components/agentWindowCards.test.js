@@ -57,9 +57,22 @@ const MOCKS = {
 async function mountWindow(t) {
   let root = null;
   t.after(() => root && React.act(async () => root.unmount()));
-  // Ends the turn's waits (and their timers) while the DOM still exists.
+  // Ends the turn's waits (and their timers) while the DOM still exists. The
+  // end of a turn withdraws only a card waiting on the user, so a card a test
+  // left sending waits again first, as a Send that didn't go out leaves it.
   const turn = new AbortController();
-  t.after(() => turn.abort());
+  let approvalStore = null;
+  t.after(() => {
+    approvalStore?.setState(({ entries }) => ({
+      entries: Object.fromEntries(
+        Object.entries(entries).map(([key, entry]) => [
+          key,
+          entry.state === "committing" ? { ...entry, state: "pending" } : entry,
+        ])
+      ),
+    }));
+    turn.abort();
+  });
   const happyWindow = await installHappyDom(t);
   const main = { layouts: [], handlers: {} };
   const on = (name) => (callback) => {
@@ -91,6 +104,7 @@ async function mountWindow(t) {
   });
   const interactions = await vite.ssrLoadModule("/stores/agentInteractionStore.ts");
   const approvals = await vite.ssrLoadModule("/stores/connectorApprovalStore.ts");
+  approvalStore = approvals.useConnectorApprovalStore;
   const { default: AgentWindow } = await vite.ssrLoadModule("/components/agent/AgentWindow.tsx");
   const { SettingsProvider } = await vite.ssrLoadModule("/hooks/useSettings.ts");
   const { ToastProvider } = await vite.ssrLoadModule("/components/ui/Toast.tsx");
@@ -456,18 +470,48 @@ test("the composer answers a restored question, and points at a card only when i
   assert.deepEqual(globalThis.__chat.sent, [], "not sent as a new request");
 });
 
-test("while an answer card waits, the composer offers no Stop", async (t) => {
+// The answer card's Send was pressed: it is sending.
+const sendCard = (view, toolCallId) =>
+  React.act(async () =>
+    view.approvals.useConnectorApprovalStore.setState(({ entries }) => {
+      const key = view.approvals.approvalKey("a1", toolCallId);
+      return { entries: { ...entries, [key]: { ...entries[key], state: "committing" } } };
+    })
+  );
+
+test("the composer keeps Stop beside a card with no dismiss control, and never beside one with its own", async (t) => {
   const view = await mountWindow(t);
   await React.act(async () => view.main.handlers.open({ layout: "modal" }));
   await view.settle();
-  await view.chat({ busy: true, messages: [user, reply([slackCall])] });
+  const step = (id) => ({ ...askUser, id });
+  await view.chat({
+    busy: true,
+    messages: [user, reply([step("c1"), step("c2"), step("c3"), slackCall])],
+  });
   assert.ok(view.button("Stop"), "a running reply can be stopped");
+
+  const cases = [
+    ["c1", QUESTION, true],
+    ["c2", KEY_CARD, true],
+    ["c3", { kind: "connection", target: "slack" }, false],
+  ];
+  for (const [toolCallId, payload, stops] of cases) {
+    await view.ask(toolCallId, payload);
+    await view.settle();
+    assert.equal(Boolean(view.button("Stop")), stops, `${payload.kind} card`);
+    await React.act(async () =>
+      view.interactions.cancelInteraction(view.approvals.approvalKey("a1", toolCallId))
+    );
+  }
+
   await view.askApproval("c5");
   await view.settle();
-  assert.equal(view.button("Stop"), undefined, "the card carries the turn");
+  assert.ok(!view.button("Stop"), "an answer card carries the turn");
+  await sendCard(view, "c5");
+  assert.ok(!view.button("Stop"), "and while it sends");
 });
 
-test("while an answer card waits, the voice modal's pill reads as at rest", async (t) => {
+test("an answer card that waits or sends leaves the pill at rest, in the modal and minimized", async (t) => {
   const view = await mountWindow(t);
   await React.act(async () => view.main.handlers.hotkey({ external: false }));
   await view.settle();
@@ -477,8 +521,14 @@ test("while an answer card waits, the voice modal's pill reads as at rest", asyn
   assert.ok(view.button("Stop"), "the voice pill stops a streaming reply");
   await view.askApproval("c5");
   await view.settle();
-  assert.equal(view.button("Stop"), undefined);
+  assert.ok(!view.button("Stop"), "no Stop while the card waits");
   assert.ok(view.button("Speak") && view.button("Type") && view.button("Close"));
+
+  await sendCard(view, "c5");
+  await React.act(async () => view.button("Minimize").click());
+  await view.settle();
+  assert.equal(view.layout(), "pill");
+  assert.ok(!view.button("Stop"), "the pill on its own offers no Stop while the card sends");
 });
 
 test("the modal's glow is full on an empty chat, faint while working, gone at rest or while a card waits", async (t) => {

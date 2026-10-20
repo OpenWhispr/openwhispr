@@ -6,15 +6,16 @@ import {
   type ReactElement,
   type RefObject,
 } from "react";
-import { cancelInteraction, type InteractionEntry } from "../../stores/agentInteractionStore";
+import {
+  CARDS_WITHOUT_DISMISS,
+  cancelInteraction,
+  type InteractionEntry,
+} from "../../stores/agentInteractionStore";
 import { QuestionsCard } from "./interactions/QuestionsCard";
 import { ConnectionCard } from "./interactions/ConnectionCard";
 import { AccessCard } from "./interactions/AccessCard";
 import { ApiKeyCard } from "./interactions/ApiKeyCard";
 import { SettingsCard } from "./interactions/SettingsCard";
-
-// Cards with no dismiss control of their own; Esc inside one dismisses it.
-const DISMISSED_BY_ESCAPE = new Set(["questions", "apiKey", "settings"]);
 
 function CardBody({ entry }: { entry: InteractionEntry }): ReactElement {
   const { payload } = entry;
@@ -113,7 +114,7 @@ export function InteractionCard({ entry }: { entry: InteractionEntry }): ReactEl
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (event.key !== "Escape") return;
     event.stopPropagation();
-    if (event.nativeEvent.isComposing || !DISMISSED_BY_ESCAPE.has(entry.payload.kind)) return;
+    if (event.nativeEvent.isComposing || !CARDS_WITHOUT_DISMISS.has(entry.payload.kind)) return;
     event.preventDefault();
     cancelInteraction(entry.key);
   };

@@ -36,6 +36,16 @@ const API_KEY_SETTERS = {
 type ApiKeyProvider = keyof typeof API_KEY_SETTERS;
 export const API_KEY_PROVIDERS = Object.keys(API_KEY_SETTERS) as ApiKeyProvider[];
 
+/**
+ * Cards with no dismiss control of their own: Esc in one dismisses it, and
+ * Stop stays beside it while it waits.
+ */
+export const CARDS_WITHOUT_DISMISS: ReadonlySet<InteractionPayload["kind"]> = new Set([
+  "questions",
+  "apiKey",
+  "settings",
+]);
+
 /** Same as an approval card: a question nobody answers stops holding the turn. */
 export const INTERACTION_TTL_MS = APPROVAL_TTL_MS;
 

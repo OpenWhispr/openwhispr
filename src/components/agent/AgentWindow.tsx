@@ -8,7 +8,11 @@ import { usePolicyStore } from "../../stores/policyStore";
 import { isAgentAllowed, isScreenContextAllowed } from "../../stores/policyRules";
 import { getSettings } from "../../stores/settingsStore";
 import { resolveAgentAccessRefusal } from "../../helpers/agentAccessPolicy";
-import { answerWithText, useAgentInteractionStore } from "../../stores/agentInteractionStore";
+import {
+  CARDS_WITHOUT_DISMISS,
+  answerWithText,
+  useAgentInteractionStore,
+} from "../../stores/agentInteractionStore";
 import { approvalKey, useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
 import { INTERACTION_TOOL_NAMES } from "../../services/tools/interactionTools";
 import type { ChatImageAttachment, Message } from "../chat/types";
@@ -111,8 +115,9 @@ export default function AgentWindow() {
     () => findPendingCard(shown, interactions, approvals, { includeRestored: true }),
     [approvals, interactions, shown]
   );
-  // A card waiting on the user or sending carries the turn: the composer
-  // offers no Stop, and the modal's pill reads as at rest.
+  // A card waiting on the user or sending carries the turn: the pill reads as
+  // at rest. Stop stays only beside a card with no dismiss control of its own
+  // (a question, key or settings card); any other card ends the wait itself.
   const cardSending = useMemo(
     () =>
       shown.some((message) =>
@@ -123,6 +128,10 @@ export default function AgentWindow() {
     [approvals, shown]
   );
   const cardHolds = pendingCard !== null || cardSending;
+  const offersStop =
+    !cardSending &&
+    (pendingCard === null ||
+      (pendingCard.interaction !== null && CARDS_WITHOUT_DISMISS.has(pendingCard.interaction)));
   // Read when a spoken command arrives, so it can be kept from answering.
   const pendingCardRef = useRef(pendingCard);
   pendingCardRef.current = pendingCard;
@@ -651,8 +660,8 @@ export default function AgentWindow() {
   const answerStarted =
     latest?.role === "assistant" && Boolean(latest.content || latest.toolCalls?.length);
   // In the modal an answer card is on screen with its own Send, so the pill
-  // waits only on a question, and reads as at rest while the card waits or
-  // sends; outside it, the pill waits on any card.
+  // waits only on an interaction card; outside it, the pill waits on any card.
+  // Either way it reads as at rest while an answer card waits or sends.
   const pillStatus = (placement: AgentPillPlacement): AgentPillStatus =>
     listening
       ? "listening"
@@ -660,7 +669,7 @@ export default function AgentWindow() {
         ? "transcribing"
         : pendingCard && (placement !== "modal" || pendingCard.interaction !== null)
           ? "waiting"
-          : placement === "modal" && cardHolds
+          : cardHolds
             ? "idle"
             : busy && !answerStarted
               ? "thinking"
@@ -746,7 +755,7 @@ export default function AgentWindow() {
         }
         busy={busy}
         answering={answering}
-        onStop={cardHolds ? undefined : cancelTurn}
+        onStop={offersStop ? cancelTurn : undefined}
         onClose={inModal ? () => void close() : undefined}
         onMic={inModal ? () => void startListening() : undefined}
         micDisabled={busy || transcribing}
