@@ -246,11 +246,13 @@ function SelectionToolbar({
   const { t } = useTranslation();
   const toolbarRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
-  // Measured before paint, so it never shows where it doesn't fit.
+  // Measured before paint, so it never shows where it doesn't fit, and again
+  // when Fork from here appears (the reply was saved) and widens it.
+  const forkable = Boolean(onForkFrom);
   useLayoutEffect(() => {
     const toolbar = toolbarRef.current;
     if (toolbar) setPosition(placeSelectionToolbar(target, toolbar.getBoundingClientRect()));
-  }, [target]);
+  }, [target, forkable]);
   const item =
     "flex h-full items-center gap-2 px-3.5 text-[15px] text-foreground transition-colors hover:bg-foreground/10 focus:outline-none focus-visible:bg-foreground/10 disabled:opacity-40";
   return (
