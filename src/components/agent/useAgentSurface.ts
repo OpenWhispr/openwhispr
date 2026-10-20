@@ -27,10 +27,13 @@ export function useAgentSurface({
   visible,
   layout,
   focus,
+  contentHeight,
 }: {
   visible: boolean;
   layout: AgentWindowLayout;
   focus: boolean;
+  /** The standalone card's height; a change resizes the window without a fade. */
+  contentHeight?: number;
 }) {
   const [shown, setShown] = useState(false);
   // The layout main last sized the window for; a hide shrinks it to the pill.
@@ -48,7 +51,11 @@ export function useAgentSurface({
         if (!current) return;
       }
       const resized = waitForResize();
-      await window.electronAPI?.agentWindowSetLayout?.({ layout, focus });
+      await window.electronAPI?.agentWindowSetLayout?.({
+        layout,
+        focus,
+        ...(contentHeight !== undefined ? { contentHeight } : {}),
+      });
       appliedLayoutRef.current = layout;
       if (resizes) {
         await resized;
@@ -59,7 +66,7 @@ export function useAgentSurface({
     return () => {
       current = false;
     };
-  }, [visible, layout, focus]);
+  }, [visible, layout, focus, contentHeight]);
 
   // Close: transparent first, so the next show never paints this frame.
   const hide = useCallback(async () => {

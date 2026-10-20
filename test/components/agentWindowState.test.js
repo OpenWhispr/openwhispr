@@ -120,6 +120,7 @@ test("the pill's controls follow the reference states", async () => {
   assert.deepEqual(controls("compact", "listening"), {
     waveform: true,
     thinking: false,
+    waiting: false,
     buttons: ["expand", "keyboard", "close"],
   });
   assert.deepEqual(controls("compact", "thinking").buttons, ["keyboard", "close"]);
@@ -191,4 +192,90 @@ test("a request that arrives while a reply runs waits in the composer with what 
     { type: "held", text: "hi", context: null, attachment: null }
   );
   assert.equal(fromPill.layout, "typing");
+});
+
+test("a card that arrives while compact shows above the pill, and the pill comes back after", async () => {
+  const { agentWindowReducer, INITIAL_AGENT_WINDOW_STATE } = await load();
+  const pill = { ...INITIAL_AGENT_WINDOW_STATE, visible: true, layout: "pill", input: "voice" };
+  const standalone = agentWindowReducer(pill, { type: "showCard" });
+  assert.equal(standalone.layout, "standalone");
+  assert.equal(agentWindowReducer(standalone, { type: "cardSettled" }).layout, "pill");
+
+  // Only from the pill: the modal and the typing layout already show the card.
+  const modal = { ...pill, layout: "modal" };
+  assert.equal(agentWindowReducer(modal, { type: "showCard" }), modal);
+  assert.equal(agentWindowReducer(modal, { type: "cardSettled" }), modal);
+});
+
+test("with a card waiting, minimize leaves the waiting pill and Keyboard opens the card", async () => {
+  const { agentWindowReducer, INITIAL_AGENT_WINDOW_STATE } = await load();
+  const modal = {
+    ...INITIAL_AGENT_WINDOW_STATE,
+    visible: true,
+    layout: "modal",
+    input: "keyboard",
+  };
+  assert.equal(agentWindowReducer(modal, { type: "collapse", pending: true }).layout, "pill");
+  assert.equal(agentWindowReducer(modal, { type: "collapse", pending: false }).layout, "typing");
+
+  const standalone = { ...modal, layout: "standalone", input: "voice" };
+  const typed = agentWindowReducer(standalone, { type: "useKeyboard", pending: true });
+  assert.deepEqual([typed.layout, typed.input], ["modal", "keyboard"]);
+  const waitingPill = { ...standalone, layout: "pill" };
+  assert.equal(
+    agentWindowReducer(waitingPill, { type: "useKeyboard", pending: true }).layout,
+    "modal"
+  );
+  // Expand keeps voice: no composer appears.
+  const expanded = agentWindowReducer(standalone, { type: "expand" });
+  assert.deepEqual([expanded.layout, expanded.input], ["modal", "voice"]);
+});
+
+test("waiting for an answer, the pill says so and keeps the way to the card", async () => {
+  const { resolveAgentPillControls } = await load();
+  assert.deepEqual(resolveAgentPillControls("compact", "waiting"), {
+    waveform: false,
+    thinking: false,
+    waiting: true,
+    buttons: ["keyboard", "expand", "close"],
+  });
+  assert.deepEqual(resolveAgentPillControls("modal", "waiting").buttons, ["keyboard", "close"]);
+});
+
+test("the pending card is the first open question or answer card on screen", async () => {
+  const { findPendingCard } = await load();
+  const call = (id, name) => ({ id, name, arguments: "{}", status: "executing" });
+  const messages = [
+    { id: "m1", toolCalls: [call("c1", "slack_send_message")] },
+    { id: "m2", toolCalls: [call("c2", "search_notes"), call("c3", "ask_user")] },
+  ];
+  const questions = { kind: "questions", questions: [] };
+  assert.equal(findPendingCard(messages, {}, {}), null);
+
+  const interaction = { "m2::c3": { state: "pending", payload: questions } };
+  assert.deepEqual(findPendingCard(messages, interaction, {}), {
+    key: "m2::c3",
+    messageId: "m2",
+    toolCall: messages[1].toolCalls[1],
+    interaction: "questions",
+  });
+  // An answer card waiting on Send, earlier in the chat, comes first.
+  const approval = { "m1::c1": { state: "pending" } };
+  assert.equal(findPendingCard(messages, interaction, approval).key, "m1::c1");
+  assert.equal(findPendingCard(messages, interaction, approval).interaction, null);
+
+  // Sending, sent, or failed with nothing waiting: not waiting on the user.
+  for (const entry of [{ state: "committing" }, { state: "sent" }, { state: "failed" }]) {
+    assert.equal(findPendingCard(messages, {}, { "m1::c1": entry }), null, entry.state);
+  }
+  assert.equal(
+    findPendingCard(messages, {}, { "m1::c1": { state: "failed", awaitingRetry: true } }).key,
+    "m1::c1"
+  );
+  assert.equal(
+    findPendingCard(messages, { "m2::c3": { state: "settled", payload: questions } }, {}),
+    null
+  );
+  // A card of another chat's message never counts.
+  assert.equal(findPendingCard([], interaction, approval), null);
 });

@@ -4078,7 +4078,8 @@
     },
     "composer": {
       "placeholder": "Dicta o escribe tu pregunta…",
-      "followUpPlaceholder": "Haz una pregunta de seguimiento…"
+      "followUpPlaceholder": "Haz una pregunta de seguimiento…",
+      "answerPlaceholder": "Responde aquí…"
     },
     "empty": {
       "title": "¿En qué puedo ayudarte?",
@@ -4111,7 +4112,8 @@
       "workedFor": "Trabajó durante {{duration}}",
       "steps_one": "{{count}} paso",
       "steps_other": "{{count}} pasos"
-    }
+    },
+    "waitingForAnswer": "Esperando respuesta"
   },
   "integrations": {
     "title": "Integraciones",

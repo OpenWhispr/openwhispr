@@ -1358,7 +1358,8 @@ export interface OnboardingDemoEvent {
 }
 
 /** What the agent window shows: the pill, the composer above it, or the modal. */
-export type AgentWindowLayout = "pill" | "typing" | "modal";
+/** standalone: a card the turn waits on, above the compact pill. */
+export type AgentWindowLayout = "pill" | "typing" | "standalone" | "modal";
 
 /** The agent window's voice take, which keeps dictation off the microphone while recording. */
 export type AgentVoiceState = "idle" | "recording" | "transcribing";
@@ -1401,6 +1402,8 @@ declare global {
       agentWindowSetLayout?: (request: {
         layout: AgentWindowLayout;
         focus: boolean;
+        /** standalone only: the card's measured height. */
+        contentHeight?: number;
       }) => Promise<boolean>;
       agentWindowHide?: () => Promise<boolean>;
       /** False refuses a recording while dictation is using the microphone. */

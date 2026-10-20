@@ -12,7 +12,12 @@ async function renderPill(t, props) {
   const { AgentPill } = await vite.ssrLoadModule("/components/agent/AgentPill.tsx");
   return renderToStaticMarkup(
     React.createElement(AgentPill, {
-      controls: { waveform: false, thinking: false, buttons: ["mic", "keyboard", "close"] },
+      controls: {
+        waveform: false,
+        thinking: false,
+        waiting: false,
+        buttons: ["mic", "keyboard", "close"],
+      },
       recording: false,
       readLevel: () => 0,
       onAction: () => {},
@@ -44,4 +49,20 @@ test("Mic is off while a take is transcribing or a reply runs", async (t) => {
 
   assert.match(buttonFor(markup, "agentWindow.actions.speak"), /disabled=""/);
   assert.match(buttonFor(markup, "agentWindow.actions.speak"), /title="agentWindow.actions.speak"/);
+});
+
+test("waiting for an answer, the pill says so and Expand can pulse blue", async (t) => {
+  const waiting = {
+    waveform: false,
+    thinking: false,
+    waiting: true,
+    buttons: ["keyboard", "expand", "close"],
+  };
+  const markup = await renderPill(t, { controls: waiting, expandCue: true });
+  assert.match(markup, /agentWindow\.waitingForAnswer/);
+  assert.match(buttonFor(markup, "agentWindow.actions.expand"), /agent-expand-cue/);
+  assert.doesNotMatch(buttonFor(markup, "agentWindow.actions.type"), /agent-expand-cue/);
+
+  const still = await renderPill(t, { controls: waiting });
+  assert.doesNotMatch(still, /agent-expand-cue/);
 });

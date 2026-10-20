@@ -4026,7 +4026,8 @@
     },
     "composer": {
       "placeholder": "Dite ou digite sua pergunta…",
-      "followUpPlaceholder": "Faça uma pergunta de acompanhamento…"
+      "followUpPlaceholder": "Faça uma pergunta de acompanhamento…",
+      "answerPlaceholder": "Responda aqui…"
     },
     "empty": {
       "title": "Como posso ajudar?",
@@ -4059,7 +4060,8 @@
       "workedFor": "Trabalhou por {{duration}}",
       "steps_one": "{{count}} etapa",
       "steps_other": "{{count}} etapas"
-    }
+    },
+    "waitingForAnswer": "Aguardando resposta"
   },
   "integrations": {
     "title": "Integrações",

@@ -4196,7 +4196,8 @@
     },
     "composer": {
       "placeholder": "Dictate or type your question…",
-      "followUpPlaceholder": "Ask a follow-up…"
+      "followUpPlaceholder": "Ask a follow-up…",
+      "answerPlaceholder": "Answer here…"
     },
     "empty": {
       "title": "What can I help with?",
@@ -4229,7 +4230,8 @@
       "workedFor": "Worked for {{duration}}",
       "steps_one": "{{count}} step",
       "steps_other": "{{count}} steps"
-    }
+    },
+    "waitingForAnswer": "Waiting for answer"
   },
   "integrations": {
     "title": "Integrations",

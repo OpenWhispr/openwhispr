@@ -1,6 +1,9 @@
 import type { AgentWindowLayout } from "../../types/electron";
 import type { AgentSelectionContext } from "../../utils/agentSelectionContext";
-import type { ChatImageAttachment, Message } from "../chat/types";
+import type { InteractionPayload } from "../../types/agentInteractions";
+import { approvalKey, type ApprovalEntry } from "../../stores/connectorApprovalStore";
+import type { InteractionEntry } from "../../stores/agentInteractionStore";
+import type { ChatImageAttachment, Message, ToolCallInfo } from "../chat/types";
 
 export type AgentInputMode = "voice" | "keyboard";
 
@@ -26,8 +29,14 @@ export interface AgentWindowState {
 export type AgentWindowAction =
   | { type: "show"; layout: AgentWindowLayout; input: AgentInputMode }
   | { type: "expand" }
-  | { type: "collapse" }
-  | { type: "useKeyboard" }
+  /** pending: a card is waiting on the user, so the pill waits for its answer. */
+  | { type: "collapse"; pending?: boolean }
+  /** pending: the card opens in the modal, with the composer. */
+  | { type: "useKeyboard"; pending?: boolean }
+  /** A card arrived while compact: it shows above the pill. */
+  | { type: "showCard" }
+  /** The standalone card is answered or gone. */
+  | { type: "cardSettled" }
   | { type: "useVoice" }
   | { type: "setDraft"; draft: string }
   | { type: "appendDraft"; text: string }
@@ -73,14 +82,20 @@ export function agentWindowReducer(
     case "expand":
       return { ...state, layout: "modal" };
     case "collapse":
-      return { ...state, layout: compactLayout(state.input) };
+      return { ...state, layout: action.pending ? "pill" : compactLayout(state.input) };
     case "useKeyboard":
       return {
         ...state,
         input: "keyboard",
-        layout: state.layout === "pill" ? "typing" : state.layout,
+        layout: action.pending ? "modal" : state.layout === "pill" ? "typing" : state.layout,
         notice: null,
       };
+    case "showCard":
+      return state.layout === "pill" ? { ...state, layout: "standalone" } : state;
+    case "cardSettled":
+      return state.layout === "standalone"
+        ? { ...state, layout: compactLayout(state.input) }
+        : state;
     case "useVoice":
       return {
         ...state,
@@ -157,14 +172,51 @@ export function awaitsTypedAnswer(messages: ReadonlyArray<Pick<Message, "toolCal
   );
 }
 
+/**
+ * The first card the chat waits on the user for: an interaction (a question, a
+ * connect, …) still open, or an answer card waiting on Send or on a Retry.
+ * Only cards of the messages on screen count.
+ */
+export interface PendingCard {
+  key: string;
+  messageId: string;
+  toolCall: ToolCallInfo;
+  /** The interaction's kind; null for an answer card. */
+  interaction: InteractionPayload["kind"] | null;
+}
+
+export function findPendingCard(
+  messages: ReadonlyArray<Pick<Message, "id" | "toolCalls">>,
+  interactions: Readonly<Record<string, Pick<InteractionEntry, "state" | "payload">>>,
+  approvals: Readonly<Record<string, Pick<ApprovalEntry, "state" | "awaitingRetry">>>
+): PendingCard | null {
+  for (const message of messages) {
+    for (const toolCall of message.toolCalls ?? []) {
+      const key = approvalKey(message.id, toolCall.id);
+      const interaction = interactions[key];
+      if (interaction && interaction.state !== "settled") {
+        return { key, messageId: message.id, toolCall, interaction: interaction.payload.kind };
+      }
+      const approval = approvals[key];
+      if (approval?.state === "pending" || approval?.awaitingRetry) {
+        return { key, messageId: message.id, toolCall, interaction: null };
+      }
+    }
+  }
+  return null;
+}
+
 export type AgentPillPlacement = "compact" | "typing" | "modal";
-export type AgentPillStatus = "idle" | "listening" | "transcribing" | "thinking" | "streaming";
+export type AgentPillStatus =
+  "idle" | "listening" | "transcribing" | "waiting" | "thinking" | "streaming";
 export type AgentPillButton = "expand" | "mic" | "keyboard" | "stop" | "close";
 
 export interface AgentPillControls {
   waveform: boolean;
   /** "Thinking…" in place of the waveform. */
   thinking: boolean;
+  /** "Waiting for answer" in place of the waveform. */
+  waiting: boolean;
   buttons: AgentPillButton[];
 }
 
@@ -173,38 +225,39 @@ export interface AgentPillControls {
  * exists outside the modal; the typing layout swaps Keyboard for Mic. A notice
  * (it heard nothing, say) leaves the compact pill room for Mic and Close only.
  * "Thinking…" covers transcribing and a reply with nothing to show yet; in the
- * modal that reply can already be stopped.
+ * modal that reply can already be stopped. Waiting for an answer, the pill
+ * offers the keyboard (and Expand) to reach the card.
  */
 export function resolveAgentPillControls(
   placement: AgentPillPlacement,
   status: AgentPillStatus,
   notice = false
 ): AgentPillControls {
-  if (placement === "typing") {
-    return { waveform: false, thinking: false, buttons: ["expand", "mic", "close"] };
-  }
-  if (notice && placement === "compact" && status === "idle") {
-    return { waveform: false, thinking: false, buttons: ["mic", "close"] };
-  }
+  const controls = (buttons: AgentPillButton[], shows: Partial<AgentPillControls> = {}) => ({
+    waveform: false,
+    thinking: false,
+    waiting: false,
+    ...shows,
+    buttons,
+  });
+  if (placement === "typing") return controls(["expand", "mic", "close"]);
+  if (notice && placement === "compact" && status === "idle") return controls(["mic", "close"]);
   const expand: AgentPillButton[] = placement === "compact" ? ["expand"] : [];
   switch (status) {
     case "listening":
-      return { waveform: true, thinking: false, buttons: [...expand, "keyboard", "close"] };
+      return controls([...expand, "keyboard", "close"], { waveform: true });
     case "transcribing":
-      return { waveform: false, thinking: true, buttons: ["keyboard", "close"] };
+      return controls(["keyboard", "close"], { thinking: true });
+    case "waiting":
+      return controls(["keyboard", ...expand, "close"], { waiting: true });
     case "thinking":
-      return {
-        waveform: false,
-        thinking: true,
-        buttons: placement === "modal" ? ["keyboard", "stop", "close"] : ["keyboard", "close"],
-      };
+      return controls(
+        placement === "modal" ? ["keyboard", "stop", "close"] : ["keyboard", "close"],
+        { thinking: true }
+      );
     case "streaming":
-      return {
-        waveform: false,
-        thinking: false,
-        buttons: [...expand, "keyboard", "stop", "close"],
-      };
+      return controls([...expand, "keyboard", "stop", "close"]);
     case "idle":
-      return { waveform: false, thinking: false, buttons: [...expand, "mic", "keyboard", "close"] };
+      return controls([...expand, "mic", "keyboard", "close"]);
   }
 }

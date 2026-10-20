@@ -400,6 +400,15 @@ const openSettingsTool: ToolDefinition = {
   },
 };
 
+/** Every interaction tool's name: a step that only asks the user something. */
+export const INTERACTION_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "ask_user",
+  "request_connection",
+  "request_access",
+  "request_api_key",
+  "open_settings",
+]);
+
 export function createInteractionTools(options: InteractionToolOptions): ToolDefinition[] {
   return [
     askUserTool,

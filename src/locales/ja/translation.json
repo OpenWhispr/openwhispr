@@ -4026,7 +4026,8 @@
     },
     "composer": {
       "placeholder": "質問を話すか入力してください…",
-      "followUpPlaceholder": "続けて質問…"
+      "followUpPlaceholder": "続けて質問…",
+      "answerPlaceholder": "ここに回答…"
     },
     "empty": {
       "title": "何をお手伝いしましょうか？",
@@ -4059,7 +4060,8 @@
       "workedFor": "{{duration}}作業",
       "steps_one": "{{count}}ステップ",
       "steps_other": "{{count}}ステップ"
-    }
+    },
+    "waitingForAnswer": "回答を待っています"
   },
   "integrations": {
     "title": "連携",

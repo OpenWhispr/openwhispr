@@ -14,10 +14,8 @@ const conversationTitle = (text: string) => (text.length > 50 ? `${text.slice(0,
  * since one stream runs per window.
  */
 export function useAgentChat({
-  onResponseContent,
   onRegenerateFailed,
 }: {
-  onResponseContent: () => void;
   /** A regenerate failed before anything new; the old reply is back. */
   onRegenerateFailed: () => void;
 }) {
@@ -29,7 +27,6 @@ export function useAgentChat({
     allowInteractions: true,
     onStreamComplete: persistence.saveAssistantMessage,
     onTurnCheckpoint: persistence.saveAssistantMessage,
-    onResponseContent,
   });
   const { cancelStream, sendToAI } = streaming;
   const [submissionInFlight, setSubmissionInFlight] = useState(false);

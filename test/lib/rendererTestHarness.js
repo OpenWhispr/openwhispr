@@ -354,13 +354,31 @@ function installMicCaptureGlobals(t) {
 async function installHappyDom(t) {
   const { Window } = await import("happy-dom");
   const happyWindow = new Window();
-  const fromWindow = ["document", "Node", "Element", "HTMLElement", "Event", "KeyboardEvent"];
+  const fromWindow = [
+    "document",
+    "Node",
+    "Element",
+    "HTMLElement",
+    "Event",
+    "KeyboardEvent",
+    "ResizeObserver",
+    "requestAnimationFrame",
+    "cancelAnimationFrame",
+  ];
   const names = ["window", ...fromWindow, "localStorage", "IS_REACT_ACT_ENVIRONMENT"];
   const originals = names.map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)]);
   const define = (name, value) =>
     Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
   define("window", happyWindow);
-  for (const name of fromWindow) define(name, happyWindow[name]);
+  for (const name of fromWindow) {
+    const value = happyWindow[name];
+    define(
+      name,
+      typeof value === "function" && name.endsWith("AnimationFrame")
+        ? value.bind(happyWindow)
+        : value
+    );
+  }
   define("localStorage", happyWindow.localStorage);
   define("IS_REACT_ACT_ENVIRONMENT", true);
   addTeardown(t, async () => {

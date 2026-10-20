@@ -184,6 +184,11 @@ test("the hotkey loads ?agent=true and shows the pill at the bottom center of th
   assert.deepEqual(win.calls[0], ["setContentProtection", true]);
 });
 
+test("the pill window fits the widest pill, Waiting for answer, with its shadow margins", () => {
+  // The reference's waiting pill is 287px wide.
+  assert.ok(AGENT_LAYOUT_SIZES.pill.width >= 287 + 2 * 8);
+});
+
 test("a press before the renderer is ready reaches it once it is", () => {
   created.length = 0;
   const manager = new AgentWindowManager(createWindowManager(), { platform: "darwin" });
@@ -208,6 +213,43 @@ test("layouts keep the bottom-center anchor and only a layout change sets bounds
   manager.setLayout(fromAgent(win), { layout: "modal", focus: false });
   const after = win.calls.filter(([name]) => name === "setBounds").length;
   assert.equal(after - before, 1);
+});
+
+test("a standalone card sizes the window to the card, within bounds, above the pill", async () => {
+  const { manager, win } = await openedManager();
+  const anchorBottom = win.bounds.y + win.bounds.height;
+  const shadow = 8;
+  const height = (card) => shadow + card + 12 + 40 + shadow;
+
+  assert.equal(
+    manager.setLayout(fromAgent(win), { layout: "standalone", focus: false, contentHeight: 180 }),
+    true
+  );
+  assert.deepEqual(win.bounds, {
+    x: (1440 - 436) / 2,
+    y: anchorBottom - height(180),
+    width: 436,
+    height: height(180),
+  });
+  manager.setLayout(fromAgent(win), { layout: "standalone", focus: false, contentHeight: 5 });
+  assert.equal(win.bounds.height, height(80), "never shorter than a card can be");
+  manager.setLayout(fromAgent(win), { layout: "standalone", focus: false, contentHeight: 900 });
+  assert.equal(win.bounds.height, height(400), "a taller card scrolls inside");
+});
+
+test("a standalone layout needs the card's measured height", async () => {
+  const { manager, win } = await openedManager();
+  const before = { ...win.bounds };
+  for (const contentHeight of [undefined, Number.NaN, Infinity, "180"]) {
+    assert.equal(
+      manager.setLayout(fromAgent(win), { layout: "standalone", focus: false, contentHeight }),
+      false,
+      String(contentHeight)
+    );
+  }
+  assert.deepEqual(win.bounds, before);
+  // Other layouts ignore it.
+  assert.equal(manager.setLayout(fromAgent(win), { layout: "modal", focus: false }), true);
 });
 
 test("a modal taller than the work area shrinks to it", async () => {

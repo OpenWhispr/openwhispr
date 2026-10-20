@@ -32,6 +32,8 @@ class AgentWindowManager {
     // The one message a renderer that is still loading gets once it is ready.
     this.pending = null;
     this.layout = "pill";
+    // A standalone card's measured height.
+    this.contentHeight = 0;
     this.anchor = null;
     this.displayId = null;
     this.voiceState = "idle";
@@ -122,7 +124,10 @@ class AgentWindowManager {
 
   setLayout(event, request) {
     if (!isFromWindow(event, this.window) || !AGENT_LAYOUT_SIZES[request?.layout]) return false;
+    const standalone = request.layout === "standalone";
+    if (standalone && !Number.isFinite(request.contentHeight)) return false;
     this.layout = request.layout;
+    this.contentHeight = standalone ? request.contentHeight : 0;
     this._applyBounds();
     this._setKeyboardFocus(request.focus === true);
     return true;
@@ -330,6 +335,7 @@ class AgentWindowManager {
       anchor: this.anchor,
       layout: this.layout,
       workArea: display.workArea || display.bounds,
+      contentHeight: this.contentHeight,
     });
     if (!sameBounds(win.getBounds(), bounds)) win.setBounds(bounds);
   }

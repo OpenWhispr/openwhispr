@@ -4026,7 +4026,8 @@
     },
     "composer": {
       "placeholder": "说出或输入你的问题…",
-      "followUpPlaceholder": "继续提问…"
+      "followUpPlaceholder": "继续提问…",
+      "answerPlaceholder": "在此回答…"
     },
     "empty": {
       "title": "有什么可以帮你？",
@@ -4059,7 +4060,8 @@
       "workedFor": "处理了 {{duration}}",
       "steps_one": "{{count}} 个步骤",
       "steps_other": "{{count}} 个步骤"
-    }
+    },
+    "waitingForAnswer": "等待回答"
   },
   "integrations": {
     "title": "集成",

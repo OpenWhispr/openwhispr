@@ -1884,7 +1884,8 @@
     },
     "composer": {
       "placeholder": "أملِ سؤالك أو اكتبه…",
-      "followUpPlaceholder": "اطرح سؤال متابعة…"
+      "followUpPlaceholder": "اطرح سؤال متابعة…",
+      "answerPlaceholder": "أجب هنا…"
     },
     "empty": {
       "title": "كيف يمكنني المساعدة؟",
@@ -1925,7 +1926,8 @@
       "steps_few": "{{count}} خطوات",
       "steps_many": "{{count}} خطوة",
       "steps_other": "{{count}} خطوة"
-    }
+    },
+    "waitingForAnswer": "في انتظار الإجابة"
   },
   "noteEditor": {
     "saved": "تم الحفظ",

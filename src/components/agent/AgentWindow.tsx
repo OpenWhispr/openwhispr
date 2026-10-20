@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import { BrandMarkIcon } from "../dictation/BrandMarkIcon";
@@ -8,12 +8,16 @@ import { usePolicyStore } from "../../stores/policyStore";
 import { isAgentAllowed, isScreenContextAllowed } from "../../stores/policyRules";
 import { getSettings } from "../../stores/settingsStore";
 import { resolveAgentAccessRefusal } from "../../helpers/agentAccessPolicy";
+import { answerWithText, useAgentInteractionStore } from "../../stores/agentInteractionStore";
+import { useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
+import { INTERACTION_TOOL_NAMES } from "../../services/tools/interactionTools";
 import type { ChatImageAttachment, Message } from "../chat/types";
 import { unsentForkContext, type AgentSelectionContext } from "../../utils/agentSelectionContext";
 import type { AgentWindowCommand, AgentWindowLayout } from "../../types/electron";
 import {
   agentWindowReducer,
   awaitsTypedAnswer,
+  findPendingCard,
   INITIAL_AGENT_WINDOW_STATE,
   resolveAgentPillControls,
   type AgentPillButton,
@@ -25,14 +29,18 @@ import { useAgentSurface } from "./useAgentSurface";
 import { useAgentVoice, type AgentVoiceIntent } from "./useAgentVoice";
 import { useAgentChat } from "./useAgentChat";
 import { useReadAloud } from "./useReadAloud";
+import { useAnswerNudge } from "./useAnswerNudge";
 import { AgentPill } from "./AgentPill";
 import { AgentComposer } from "./AgentComposer";
 import { AgentModal } from "./AgentModal";
 import { AgentMessageList } from "./AgentMessages";
+import { ToolCallCard } from "../chat/ChatMessage";
 import { SelectedContextBlock } from "./AgentContext";
 
 // How long a spoken request waits for the press-time selection and screenshot.
 const PRESS_CAPTURE_WAIT_MS = 3000;
+// How long a new step may take to show the card it asks with.
+const STEP_SETTLE_MS = 300;
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -65,15 +73,11 @@ export default function AgentWindow() {
   // The sandboxed window can't resolve a session; policy follows main's account.
   useEffect(() => mirrorActiveAccountScope(), []);
 
-  const onResponseContent = useCallback(() => {
-    // A spoken request thinks in the pill; the answer shows in the modal.
-    if (stateRef.current.layout !== "modal") dispatch({ type: "expand" });
-  }, [dispatch]);
   const onRegenerateFailed = useCallback(
     () => dispatch({ type: "notice", notice: "agentWindow.notices.regenerateFailed" }),
     [dispatch]
   );
-  const chat = useAgentChat({ onResponseContent, onRegenerateFailed });
+  const chat = useAgentChat({ onRegenerateFailed });
   const {
     busy,
     cancel: cancelTurn,
@@ -91,20 +95,91 @@ export default function AgentWindow() {
   const readAloud = useReadAloud(i18n.language);
   const { stop: stopReading } = readAloud;
 
-  // A click in the modal after a spoken request may be into a card's field.
-  const [modalClicked, setModalClicked] = useState(false);
-  const modalShown = state.visible && state.layout === "modal";
+  // The card the turn waits on: above the pill when it arrives while compact.
+  const interactions = useAgentInteractionStore((store) => store.entries);
+  const approvals = useConnectorApprovalStore((store) => store.entries);
+  const pendingCard = useMemo(
+    () => findPendingCard(messages, interactions, approvals),
+    [approvals, interactions, messages]
+  );
+  const cardFrameRef = useRef<HTMLDivElement>(null);
+  const [cardHeight, setCardHeight] = useState(0);
+  const standalone = state.layout === "standalone";
+  // Measured before paint, so the window is sized for the card it opens to.
+  useLayoutEffect(() => {
+    const frame = cardFrameRef.current;
+    if (!standalone || !frame) return;
+    const measure = () => setCardHeight(Math.ceil(frame.getBoundingClientRect().height));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, [standalone]);
+
+  // A click in the modal or on a standalone card after a spoken request may be
+  // into a card's field.
+  const cardShown = state.visible && (state.layout === "modal" || standalone);
+  const [cardClicked, setCardClicked] = useState(false);
   useEffect(() => {
-    if (!modalShown) setModalClicked(false);
-  }, [modalShown]);
+    if (!cardShown) setCardClicked(false);
+  }, [cardShown]);
   const surfaceFocus =
     state.layout !== "pill" &&
     (state.input === "keyboard" ||
-      (state.layout === "modal" && (modalClicked || awaitsTypedAnswer(messages))));
+      ((state.layout === "modal" || standalone) && (cardClicked || awaitsTypedAnswer(messages))));
   const surface = useAgentSurface({
     visible: state.visible,
     layout: state.layout,
     focus: surfaceFocus,
+    ...(standalone ? { contentHeight: cardHeight } : {}),
+  });
+
+  // A card that arrives while compact shows above the pill, if it asks
+  // something (an answer card waits behind the pill instead); once it is
+  // answered the pill is back on its own. A card the user minimized stays
+  // behind the pill.
+  const shownCardsRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (!pendingCard) {
+      if (standalone) dispatch({ type: "cardSettled" });
+      return;
+    }
+    if (standalone && pendingCard.interaction === null) dispatch({ type: "cardSettled" });
+    if (shownCardsRef.current.has(pendingCard.key)) return;
+    shownCardsRef.current.add(pendingCard.key);
+    if (pendingCard.interaction !== null) dispatch({ type: "showCard" });
+  }, [dispatch, pendingCard, standalone]);
+
+  // A reply opens the modal once it has something to show: text, an error, or
+  // a step that is doing more than asking the user (D2). A spoken request that
+  // asks first keeps its card above the pill, a connector's step that asks to
+  // connect included; such a step reports its card just after it starts, so a
+  // step gets a moment before it counts.
+  const expandedRepliesRef = useRef(new Set<string>());
+  useEffect(() => {
+    const reply = messages.at(-1);
+    if (reply?.role !== "assistant" || expandedRepliesRef.current.has(reply.id)) return;
+    const expand = () => {
+      expandedRepliesRef.current.add(reply.id);
+      if (stateRef.current.layout !== "modal") dispatch({ type: "expand" });
+    };
+    if (reply.content || reply.error) {
+      expand();
+      return;
+    }
+    const working = reply.toolCalls?.some(
+      (call) => !INTERACTION_TOOL_NAMES.has(call.name) && call.interaction?.state !== "pending"
+    );
+    if (!working) return;
+    const timer = setTimeout(expand, STEP_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [dispatch, messages]);
+
+  const nudge = useAnswerNudge({
+    pendingKey: pendingCard?.key ?? null,
+    compact: state.layout !== "modal",
+    visible: state.visible,
+    onOpen: () => dispatch({ type: "expand" }),
   });
 
   // The press that opened the window owns it until the user does something
@@ -470,7 +545,8 @@ export default function AgentWindow() {
         // What was said so far becomes the start of the typed draft.
         if (listening) voice.stop("draft");
         openedByTakeRef.current = false;
-        dispatch({ type: "useKeyboard" });
+        // A waiting card opens in the modal, with the composer to answer it.
+        dispatch({ type: "useKeyboard", pending: Boolean(pendingCard) });
         return;
       case "stop":
         cancelTurn();
@@ -488,11 +564,13 @@ export default function AgentWindow() {
     ? "listening"
     : transcribing
       ? "transcribing"
-      : busy && !answerStarted
-        ? "thinking"
-        : busy
-          ? "streaming"
-          : "idle";
+      : pendingCard
+        ? "waiting"
+        : busy && !answerStarted
+          ? "thinking"
+          : busy
+            ? "streaming"
+            : "idle";
   const notice = state.notice ? t(state.notice) : null;
   const micHint = voice.streamingOnlyProvider
     ? t("agentMode.input.voiceDraftStreamingOnly")
@@ -513,21 +591,34 @@ export default function AgentWindow() {
       notice={placement === "typing" ? null : notice}
       micUnavailableHint={micHint}
       micDisabled={busy || transcribing}
+      expandCue={placement === "compact" && nudge.cue}
       onAction={handlePillAction}
     />
   );
+
+  // The composer's text answers the question on screen (D3); a key is never
+  // typed here.
+  const answering = pendingCard?.interaction === "questions";
+  const answerQuestion = (text: string) => {
+    if (!pendingCard) return;
+    answerWithText(pendingCard.key, text);
+    dispatch({ type: "setDraft", draft: "" });
+  };
 
   const composer = (inModal: boolean) => (
     <AgentComposer
       draft={state.draft}
       onDraftChange={(draft) => dispatch({ type: "setDraft", draft })}
-      onSubmit={(text) => submit(text, true)}
+      onSubmit={(text) => (answering ? answerQuestion(text) : submit(text, true))}
       placeholder={
-        inModal && messages.length > 0
-          ? t("agentWindow.composer.followUpPlaceholder")
-          : t("agentWindow.composer.placeholder")
+        answering
+          ? t("agentWindow.composer.answerPlaceholder")
+          : inModal && messages.length > 0
+            ? t("agentWindow.composer.followUpPlaceholder")
+            : t("agentWindow.composer.placeholder")
       }
       busy={busy}
+      answering={answering}
       onStop={cancelTurn}
       onClose={inModal ? () => void close() : undefined}
       onMic={inModal ? () => void startListening() : undefined}
@@ -557,10 +648,10 @@ export default function AgentWindow() {
       <div
         className={cn(
           "agent-window-content flex h-full w-full flex-col items-center justify-end",
-          state.layout === "typing" && "gap-3"
+          (state.layout === "typing" || standalone) && "gap-3"
         )}
         data-shown={surface.shown}
-        onPointerDown={modalShown ? () => setModalClicked(true) : undefined}
+        onPointerDown={cardShown ? () => setCardClicked(true) : undefined}
       >
         {state.layout === "modal" ? (
           <AgentModal
@@ -568,7 +659,7 @@ export default function AgentWindow() {
             conversationId={conversationId}
             onNewChat={newChat}
             onSelectChat={switchChat}
-            onCollapse={() => dispatch({ type: "collapse" })}
+            onCollapse={() => dispatch({ type: "collapse", pending: Boolean(pendingCard) })}
             footer={
               <div className="flex flex-col items-center gap-2">
                 {state.input === "keyboard" && notice && (
@@ -601,6 +692,21 @@ export default function AgentWindow() {
           <>
             {composer(false)}
             {pill("typing")}
+          </>
+        ) : standalone && pendingCard ? (
+          <>
+            {/* The same card as in the modal, so what the user picked carries
+                over. Starting on it stops the timed opening. */}
+            <div
+              ref={cardFrameRef}
+              onPointerDown={nudge.cancel}
+              onFocus={nudge.cancel}
+              onKeyDown={nudge.cancel}
+              className="agent-chat-scroll flex max-h-[400px] w-[420px] shrink-0 flex-col overflow-y-auto rounded-2xl border border-border/50 bg-surface-1 shadow-[var(--shadow-card)] *:my-0"
+            >
+              <ToolCallCard messageId={pendingCard.messageId} toolCall={pendingCard.toolCall} />
+            </div>
+            {pill("compact")}
           </>
         ) : (
           pill("compact")

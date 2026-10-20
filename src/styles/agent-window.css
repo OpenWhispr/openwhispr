@@ -38,3 +38,27 @@
     transparent 75%
   );
 }
+
+/* Expand while a card waits on the user (useAnswerNudge): a blue pulse, or a
+   steady blue for reduced motion. */
+.agent-expand-cue {
+  color: var(--color-primary);
+  animation: agent-expand-cue 1.2s ease-in-out infinite;
+}
+
+@keyframes agent-expand-cue {
+  0%,
+  100% {
+    background-color: transparent;
+  }
+  50% {
+    background-color: color-mix(in oklab, var(--color-primary) 28%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-expand-cue {
+    animation: none;
+    background-color: color-mix(in oklab, var(--color-primary) 20%, transparent);
+  }
+}

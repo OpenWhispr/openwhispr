@@ -10,6 +10,8 @@ interface AgentComposerProps {
   placeholder: string;
   /** A reply is being written: Send waits, and Stop ends it. */
   busy: boolean;
+  /** The reply waits on a question the text can answer, so Send works meanwhile. */
+  answering?: boolean;
   onStop: () => void;
   /** In the modal the composer carries Close and Mic; above the pill they are the pill's. */
   onClose?: () => void;
@@ -35,6 +37,7 @@ export function AgentComposer({
   onSubmit,
   placeholder,
   busy,
+  answering = false,
   onStop,
   onClose,
   onMic,
@@ -46,7 +49,7 @@ export function AgentComposer({
 }: AgentComposerProps) {
   const { t } = useTranslation();
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const canSend = !busy && draft.trim().length > 0;
+  const canSend = (answering || !busy) && draft.trim().length > 0;
 
   useEffect(() => {
     if (!focused) return;

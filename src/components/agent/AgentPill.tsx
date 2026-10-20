@@ -24,6 +24,8 @@ interface AgentPillProps {
   micUnavailableHint?: string;
   /** A take is still transcribing, or a reply is running. */
   micDisabled?: boolean;
+  /** A card waits on the user: Expand pulses blue until the modal opens to it. */
+  expandCue?: boolean;
   onAction: (button: AgentPillButton) => void;
   className?: string;
 }
@@ -36,6 +38,7 @@ export function AgentPill({
   notice,
   micUnavailableHint,
   micDisabled = false,
+  expandCue = false,
   onAction,
   className,
 }: AgentPillProps) {
@@ -51,6 +54,10 @@ export function AgentPill({
       {notice ? (
         <span className="max-w-30 truncate ps-1 text-xs text-foreground/80" title={notice}>
           {notice}
+        </span>
+      ) : controls.waiting ? (
+        <span className="ps-1 text-[13px] whitespace-nowrap text-foreground/80 select-none">
+          {t("agentWindow.waitingForAnswer")}
         </span>
       ) : controls.thinking ? (
         <span className="thinking-shimmer-text ps-1 text-[13px] font-medium select-none">
@@ -71,7 +78,10 @@ export function AgentPill({
             disabled={button === "mic" && (micDisabled || Boolean(unavailable))}
             aria-label={t(label)}
             title={unavailable ?? t(label)}
-            className="flex size-7 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-foreground/10 hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40 disabled:opacity-40 disabled:hover:bg-transparent"
+            className={cn(
+              "flex size-7 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-foreground/10 hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40 disabled:opacity-40 disabled:hover:bg-transparent",
+              button === "expand" && expandCue && "agent-expand-cue"
+            )}
           >
             <Icon size={button === "stop" ? 14 : 16} />
           </button>

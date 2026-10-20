@@ -2,14 +2,23 @@
 // unit-tested: the manager supplies the work area and where the dictation pill is.
 
 // The window shrinks to what it shows, plus an 8px margin on every side for
-// the surface's shadow. The pill row is never wider than PILL_CONTENT_WIDTH;
-// the reference pill (173px) sits centered inside it.
+// the surface's shadow. The pill row is never wider than PILL_CONTENT_WIDTH:
+// the widest pill reads "Waiting for answer" (the reference's is 287px), and
+// the reference's idle pill (173px) sits centered inside it.
 const SHADOW_MARGIN = 8;
-const PILL_CONTENT_WIDTH = 240;
+const PILL_CONTENT_WIDTH = 296;
 const PILL_HEIGHT = 40;
 const COMPOSER = { width: 510, height: 145 };
 const COMPOSER_GAP = 12;
 const MODAL = { width: 480, height: 520 };
+// A standalone card is as tall as it measures, within these bounds; a taller
+// one scrolls inside.
+const STANDALONE_CARD = { width: 420, minHeight: 80, maxHeight: 400 };
+
+const standaloneSize = (cardHeight) => ({
+  width: STANDALONE_CARD.width + 2 * SHADOW_MARGIN,
+  height: cardHeight + COMPOSER_GAP + PILL_HEIGHT + 2 * SHADOW_MARGIN,
+});
 
 const AGENT_LAYOUT_SIZES = Object.freeze({
   pill: {
@@ -20,6 +29,7 @@ const AGENT_LAYOUT_SIZES = Object.freeze({
     width: COMPOSER.width + 2 * SHADOW_MARGIN,
     height: COMPOSER.height + COMPOSER_GAP + PILL_HEIGHT + 2 * SHADOW_MARGIN,
   },
+  standalone: standaloneSize(STANDALONE_CARD.minHeight),
   modal: {
     width: MODAL.width + 2 * SHADOW_MARGIN,
     height: MODAL.height + 2 * SHADOW_MARGIN,
@@ -57,9 +67,17 @@ function computeAgentAnchor({
   return { centerX, bottom };
 }
 
-/** The window's bounds for a layout, kept inside the work area: a modal too tall for it shrinks. */
-function computeAgentWindowBounds({ anchor, layout, workArea }) {
-  const size = AGENT_LAYOUT_SIZES[layout] ?? AGENT_LAYOUT_SIZES.pill;
+/**
+ * The window's bounds for a layout, kept inside the work area: a modal too
+ * tall for it shrinks. A standalone card brings its measured height.
+ */
+function computeAgentWindowBounds({ anchor, layout, workArea, contentHeight = 0 }) {
+  const size =
+    layout === "standalone"
+      ? standaloneSize(
+          Math.min(Math.max(contentHeight, STANDALONE_CARD.minHeight), STANDALONE_CARD.maxHeight)
+        )
+      : (AGENT_LAYOUT_SIZES[layout] ?? AGENT_LAYOUT_SIZES.pill);
   const width = Math.min(size.width, workArea.width);
   const height = Math.min(size.height, workArea.height);
   const x = Math.round(anchor.centerX - width / 2);

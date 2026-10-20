@@ -4070,7 +4070,8 @@
     },
     "composer": {
       "placeholder": "Продиктуйте или введите вопрос…",
-      "followUpPlaceholder": "Задайте уточняющий вопрос…"
+      "followUpPlaceholder": "Задайте уточняющий вопрос…",
+      "answerPlaceholder": "Ответьте здесь…"
     },
     "empty": {
       "title": "Чем могу помочь?",
@@ -4107,7 +4108,8 @@
       "steps_few": "{{count}} шага",
       "steps_many": "{{count}} шагов",
       "steps_other": "{{count}} шага"
-    }
+    },
+    "waitingForAnswer": "Ожидание ответа"
   },
   "integrations": {
     "title": "Интеграции",

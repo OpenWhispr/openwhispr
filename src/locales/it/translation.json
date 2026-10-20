@@ -4026,7 +4026,8 @@
     },
     "composer": {
       "placeholder": "Detta o scrivi la tua domanda…",
-      "followUpPlaceholder": "Fai una domanda di approfondimento…"
+      "followUpPlaceholder": "Fai una domanda di approfondimento…",
+      "answerPlaceholder": "Rispondi qui…"
     },
     "empty": {
       "title": "Come posso aiutarti?",
@@ -4059,7 +4060,8 @@
       "workedFor": "Ha lavorato per {{duration}}",
       "steps_one": "{{count}} passaggio",
       "steps_other": "{{count}} passaggi"
-    }
+    },
+    "waitingForAnswer": "In attesa di risposta"
   },
   "integrations": {
     "title": "Integrazioni",
