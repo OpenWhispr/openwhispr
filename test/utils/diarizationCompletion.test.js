@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {
   resolveDiarizationTarget,
   selectBaseSegments,
+  withoutRemovedSegments,
 } = require("../../src/utils/diarizationCompletion.ts");
 
 // Issue #1495: a delayed diarization result must be saved to the note that
@@ -149,4 +150,40 @@ test("no persisted transcript and empty live segments merge into nothing", () =>
     targetNoteId: 1,
   });
   assert.deepEqual(result, []);
+});
+
+// #2781: rows main dropped must leave the persisted transcript, or the merge
+// keeps them with their raw epoch-ms timestamps.
+test("withoutRemovedSegments drops exact source/timestamp/text matches only", () => {
+  const segments = [
+    { id: "a", source: "mic", text: "hello", timestamp: 1792414001000 },
+    { id: "b", source: "system", text: "hello", timestamp: 1792414001000 },
+    { id: "c", source: "mic", text: "hello", timestamp: 1792414002000 },
+  ];
+  const result = withoutRemovedSegments(segments, [
+    { source: "mic", text: "hello", timestamp: 1792414001000 },
+  ]);
+  assert.deepEqual(
+    result.map((segment) => segment.id),
+    ["b", "c"]
+  );
+});
+
+test("withoutRemovedSegments removes one row per removed entry", () => {
+  const row = { source: "mic", text: "yes", timestamp: 1792414003000 };
+  const segments = [
+    { id: "a", ...row },
+    { id: "b", ...row },
+  ];
+  const result = withoutRemovedSegments(segments, [row]);
+  assert.deepEqual(
+    result.map((segment) => segment.id),
+    ["b"]
+  );
+});
+
+test("withoutRemovedSegments returns the input when nothing was removed", () => {
+  const segments = [{ id: "a", source: "mic", text: "hi", timestamp: 1 }];
+  assert.deepEqual(withoutRemovedSegments(segments, undefined), segments);
+  assert.deepEqual(withoutRemovedSegments(segments, []), segments);
 });

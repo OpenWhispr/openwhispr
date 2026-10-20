@@ -17,6 +17,7 @@ export async function generateNoteTitle(
       inferenceScope: "noteFormatting",
       temperature: 0.3,
       disableThinking: getSettings().noteFormattingDisableThinking,
+      reasoningEffort: getSettings().noteFormattingReasoningEffort,
       ...config,
     });
     return sanitizeGeneratedTitle(raw);

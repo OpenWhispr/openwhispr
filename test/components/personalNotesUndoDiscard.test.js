@@ -40,7 +40,7 @@ const MOCKS = {
   "./AddNotesToFolderDialog": `export default () => null;`,
   "./NotesOnboarding": `export default () => null;`,
   "/hooks/useActionProcessing": `
-    export const useActionProcessing = () => ({ state: "idle", actionName: null, runAction() {} });
+    export const useActionProcessing = () => ({ state: "idle", actionName: null, runAction(...args) { globalThis.__noteActionCalls?.push(args); } });
   `,
   "/stores/actionStore": `export const getActionName = (action) => action.name;`,
   "/hooks/useNotesOnboarding": `
@@ -104,6 +104,7 @@ async function mountView(t, updateNote) {
   await render();
   // Re-renders with the store's current note (globalThis.__note).
   Object.defineProperty(calls, "rerender", { value: render });
+  Object.defineProperty(calls, "vite", { value: vite });
   return calls;
 }
 
@@ -182,3 +183,94 @@ test("a title edit after a notes edit still saves the notes", async (t) => {
     { title: "Again", content: "", clear_fields: ["content"] },
   ]);
 });
+
+for (const { name, transcribing, liveNoteId, expectLive } of [
+  {
+    name: "a stopped meeting's summary reads the saved transcript and speaker names",
+    transcribing: false,
+    liveNoteId: NOTE.id,
+    expectLive: false,
+  },
+  {
+    name: "a meeting still transcribing summarizes its live transcript",
+    transcribing: true,
+    liveNoteId: NOTE.id,
+    expectLive: true,
+  },
+  {
+    name: "another note's live meeting leaves this summary on the saved transcript",
+    transcribing: true,
+    liveNoteId: NOTE.id + 1,
+    expectLive: false,
+  },
+]) {
+  test(name, async (t) => {
+    const calls = await mountView(t);
+    globalThis.__noteActionCalls = [];
+    t.after(() => delete globalThis.__noteActionCalls);
+    const { serializeTranscriptSegments } = await calls.vite.ssrLoadModule(
+      "/utils/transcriptSpeakerState.ts"
+    );
+    const { useMeetingRecordingStore } = await calls.vite.ssrLoadModule(
+      "/stores/meetingRecordingStore.ts"
+    );
+    const transcript = serializeTranscriptSegments([
+      {
+        source: "system",
+        timestamp: 100,
+        text: "Ship on Friday.",
+        speaker: "speaker_0",
+        speakerName: "Alice",
+        speakerLocked: true,
+        speakerLockSource: "user",
+      },
+      // Named only by its speaker mapping, so the summary has to read the mappings.
+      { source: "system", timestamp: 200, text: "Bob reviews it.", speaker: "speaker_1" },
+    ]);
+    globalThis.__note = { ...NOTE, transcript };
+    globalThis.window.electronAPI.getSpeakerMappings = async () => [
+      { speaker_id: "speaker_0", display_name: "Alice" },
+      { speaker_id: "speaker_1", display_name: "Bob" },
+    ];
+    await React.act(async () => {
+      useMeetingRecordingStore.setState({
+        recordingNoteId: liveNoteId,
+        isRecording: transcribing,
+        isTranscribing: transcribing,
+        transcript: "Old live transcript without speaker names.",
+      });
+    });
+    await calls.rerender();
+    await React.act(async () => {
+      await globalThis.__editorProps.onRunNoteAction({
+        id: 1,
+        kind: "template",
+        name: "Detailed Notes",
+        prompt: "Summarize",
+        sections: null,
+      });
+    });
+    assert.equal(globalThis.__noteActionCalls.length, 1);
+    const [, input, hash] = globalThis.__noteActionCalls[0];
+    const source = expectLive ? "Old live transcript without speaker names." : transcript;
+    assert.equal(
+      hash,
+      `${NOTE.content.length + 1 + source.length}-${`${NOTE.content}\n${source}`.slice(0, 50)}`
+    );
+    if (expectLive) {
+      assert.match(input, /Old live transcript/);
+      assert.doesNotMatch(input, /Alice: Ship on Friday/);
+    } else {
+      assert.match(input, /Alice: Ship on Friday/);
+      assert.match(input, /Bob: Bob reviews it/);
+      assert.doesNotMatch(input, /Old live transcript/);
+      globalThis.__note = {
+        ...globalThis.__note,
+        enhanced_content: "Alice will ship on Friday.",
+        enhanced_at_content_hash: hash,
+      };
+      await calls.rerender();
+      assert.equal(globalThis.__editorProps.enhancement.isStale, false);
+    }
+  });
+}

@@ -8,7 +8,7 @@
         "offline": "أنت غير متصل بالإنترنت",
         "agentUnavailable": "المساعد غير متاح",
         "screenContextSkipped": "تم تخطي سياق الشاشة",
-        "dailyLimitReached": "تم الوصول إلى الحد اليومي",
+        "cloudLimitReached": "تم بلوغ الحد السحابي الأسبوعي",
         "providerRateLimited": "تم تقييد المعدل من قبل المزود"
       },
       "fallback": {
@@ -295,9 +295,8 @@
         "gemini_gemma_4_31b_it": "أكبر نموذج Gemma 4 من Google، نموذج كثيف بحجم 31B، سياق 256K",
         "gemini_gemma_4_26b_a4b_it": "نموذج Gemma 4 MoE من Google، بمعلمات نشطة 4B، سياق 256K",
         "groq_openai_gpt_oss_120b": "نموذج OpenAI مفتوح المصدر الرائد، 500 رمز/ثانية",
+        "groq_qwen_qwen3_8_27b": "نموذج Qwen سريع، 450 رمز/ثانية، سياق 131K",
         "groq_openai_gpt_oss_20b": "نموذج سريع مفتوح المصدر، 1000 رمز/ثانية",
-        "groq_compound": "نظام Groq المركب، 450 رمز/ثانية",
-        "groq_compound_mini": "نظام مركب سريع، زمن انتقال أقل بمقدار 3 أضعاف",
         "openai_gpt_6_astra": "نموذج OpenAI الأكثر قدرة للبرمجة والبحث",
         "openai_gpt_5_6_sol": "GPT-5.6 الرائد للبرمجة والبحوث المعقدة",
         "openai_gpt_5_6_terra": "GPT-5.6 متوازن للعمل اليومي",
@@ -410,6 +409,21 @@
       "selectModelHint": "لم يتم تحديد أي نموذج بعد — اختر واحدًا من القائمة أدناه.",
       "keyRequiredHint": "مفتاح API مطلوب للاستدلال — أضف واحدًا لاستخدام هذا المزود."
     },
+    "effort": {
+      "title": "مستوى الاستدلال",
+      "description": "مقدار تفكير النموذج قبل أن يجيب.",
+      "descriptionWithDefault": "مقدار تفكير النموذج قبل أن يجيب. يستخدم الوضع التلقائي الإعداد الافتراضي للمزوّد ({{value}}).",
+      "auto": "تلقائي",
+      "options": {
+        "none": "بلا",
+        "minimal": "أدنى",
+        "low": "منخفض",
+        "medium": "متوسط",
+        "high": "مرتفع",
+        "xhigh": "مرتفع جدًا",
+        "max": "أقصى"
+      }
+    },
     "getApiKey": "احصل على مفتاح API الخاص بك ←",
     "selectModel": "تحديد النموذج",
     "availableModels": "النماذج المتاحة",
@@ -495,8 +509,11 @@
         "apikeyHelp": "مفتاح Vertex AI Express Mode API من Google AI Studio."
       }
     },
+    "modelRetiredTitle": "النموذج لم يعد متاحًا",
+    "groq": {
+      "modelRetired": "قام Groq بإيقاف {{from}}. تم التبديل إلى {{to}}."
+    },
     "tinfoil": {
-      "modelRetiredTitle": "النموذج لم يعد متاحًا",
       "modelRetired": "قام Tinfoil بإيقاف {{from}}. تم التبديل إلى {{to}}.",
       "refreshingModels": "جاري تحديث النماذج..."
     },
@@ -523,7 +540,7 @@
       "availableButton": "التحديث متاح"
     },
     "limit": {
-      "weeklyTitle": "تم الوصول إلى الحد الأسبوعي",
+      "weeklyTitle": "تم بلوغ الحد السحابي الأسبوعي",
       "weeklyDescription": "تتم إعادة تعيين الحد الخاص بك على أساس متجدد. قم بالترقية إلى Pro أو استخدم مفتاح API الخاص بك للاستخدام غير المحدود."
     },
     "accessibilityMissing": {
@@ -572,12 +589,17 @@
       "retrying": "جاري إعادة التفريغ...",
       "retrySuccess": "تم تحديث التفريغ",
       "retryError": "فشلت إعادة التفريغ",
+      "retryErrors": {
+        "invalidResponse": "أعاد محرك التفريغ استجابة غير متوقعة. حاول مرة أخرى."
+      },
       "audioNotFound": "الملف الصوتي غير موجود أو انتهت صلاحيته",
       "noAiProcessing": "لم يتم تطبيق أي معالجة بالذكاء الاصطناعي على هذا النص المفرَّغ",
       "transcriptionFailed": "فشل التفريغ",
       "failedCtaSettings": "قم بإعداد مزود التفريغ الخاص بك",
       "failedCtaAndRetry": "ثم انقر فوق إعادة المحاولة",
       "failedCtaSettingsOnly": "قم بإعداد مزود التفريغ الخاص بك في الإعدادات",
+      "failedCtaAiSettings": "تحقق من نموذج المساعد الصوتي في الإعدادات",
+      "editFailedTranscriptKept": "لم يُطبَّق التعديل · تم الاحتفاظ بالنص المفرَّغ",
       "failedLimitReached": "تم الوصول إلى الحد اليومي",
       "failedOffline": "أنت غير متصل بالإنترنت",
       "rawTranscript": "النص المفرَّغ الخام",
@@ -2501,6 +2523,7 @@
       "typeNamePlaceholder": "اكتب اسمًا",
       "nameOrEmailPlaceholder": "اكتب اسمًا أو بريدًا إلكترونيًا",
       "knownSpeakers": "متحدثون معروفون",
+      "thisIsMe": "هذا أنا",
       "meetingAttendees": "حاضرو الاجتماع",
       "createNewPrefix": "إنشاء",
       "addContact": "إضافة جهة اتصال",
@@ -3223,7 +3246,7 @@
     "account": {
       "badges": {
         "free": "مجاني",
-        "limitReached": "تم بلوغ الحد الأقصى",
+        "limitReached": "تم بلوغ الحد السحابي",
         "pastDue": "متأخر الدفع",
         "pro": "Pro",
         "business": "Business",
@@ -3259,9 +3282,10 @@
         "title": "لم نتمكن من معالجة دفعتك"
       },
       "planDescriptions": {
-        "freeUsage": "{{used}} من {{limit}} كلمة هذا الأسبوع",
+        "freeUsage": "{{used}} من {{limit}} كلمة في OpenWhispr Cloud هذا الأسبوع",
+        "byokUnlimited": "يبقى استخدام مفاتيح API الخاصة بك والنماذج المحلية غير محدود.",
         "nextBilling": "الفوترة القادمة: {{date}}",
-        "pastDue": "{{used}} من {{limit}} كلمة مجانية هذا الأسبوع - قم بتحديث الدفع لاستعادة Pro",
+        "pastDue": "{{used}} من {{limit}} كلمة في OpenWhispr Cloud هذا الأسبوع - قم بتحديث الدفع لاستعادة Pro",
         "trial": "عدد الأيام المتبقية: {{days}} - تفريغ غير محدود",
         "unlimited": "غير محدود",
         "accessUntil": "الوصول حتى {{date}}",
@@ -3379,8 +3403,8 @@
       "title": "الحساب",
       "toasts": {
         "approachingLimit": {
-          "description": "لقد استخدمت {{used}} من أصل {{limit}} كلمة مجانية هذا الأسبوع. قم بالترقية إلى Pro للاستخدام غير المحدود.",
-          "title": "الاقتراب من الحد الأسبوعي"
+          "description": "استخدمت {{used}} من {{limit}} كلمة في OpenWhispr Cloud هذا الأسبوع. قم بالترقية إلى Pro للاستخدام غير المحدود.",
+          "title": "الاقتراب من الحد السحابي للكلمات"
         }
       },
       "trialCta": {
@@ -4195,6 +4219,8 @@
       "mouseButtonOnlyMac": "اختصارات أزرار الماوس مدعومة حاليًا على نظام macOS فقط.",
       "alreadyRegistered": "\"{{hotkey}}\" مسجل بالفعل بواسطة تطبيق آخر.",
       "osReserved": "قد يكون \"{{hotkey}}\" محجوزًا بواسطة بيئة سطح المكتب لديك.",
+      "keyNotInKeymap": "لا يمكن لـ GNOME استخدام \"{{hotkey}}\" مع تخطيط لوحة المفاتيح الحالي. اختر مفتاحًا آخر.",
+      "keyReservedByGnome": "يستخدم GNOME بالفعل \"{{hotkey}}\" لأحد اختصاراته الخاصة. اختر مفتاحًا آخر.",
       "rightModifierNeedsListener": "لا يمكن استخدام \"{{hotkey}}\" على سطح المكتب هذا، إذ تحتاج اختصاراته إلى مفتاح عادي. أضف مفتاحًا، مثل Control+Alt+Space.",
       "holdNeedsReleaseKey": "يحتاج الضغط المستمر للتحدث إلى مفتاح يمكن لـ macOS أن يرصد تحريره: Globe، أو مفتاح جانبي أيمن مثل Option الأيمن، أو اختصار مع مفتاح تعديل. أما النقر فيعمل مع أي مفتاح.",
       "holdNeedsRegularKey": "لاستخدام «استمرار الضغط»، أضف مفتاحًا عاديًا إلى الاختصار، مثل Control+Alt+Space. لا يستطيع سطح المكتب لديك رصد الضغط المستمر على مفاتيح التعديل وحدها.",
@@ -4216,7 +4242,7 @@
   },
   "upgradePrompt": {
     "paymentFailed": "لم نتمكن من معالجة دفعتك",
-    "weeklyLimit": "لقد وصلت إلى حدك الأسبوعي",
+    "weeklyLimit": "لقد وصلت إلى حدك السحابي الأسبوعي",
     "pastDueDescription": "أنت الآن على الخطة المجانية — لا تقلق، ما زلت تحصل على {{limit}} كلمة في الأسبوع.\nقم بتحديث طريقة الدفع للعودة إلى خطة Pro غير المحدودة.",
     "limitDescription": "تم استخدام {{used}} من {{limit}} كلمة.\nتم حفظ نصك المفرَّغ ولصقه.",
     "updatePayment": "تحديث طريقة الدفع",
@@ -4564,8 +4590,8 @@
     "inviteTeam": "ادعُ فريقك",
     "settings": "الإعدادات",
     "support": "الدعم",
-    "limitReached": "تم الوصول إلى الحد الأسبوعي",
-    "limitReachedDescription": "قم بالترقية إلى Pro للحصول على تفريغ صوتي غير محدود.",
+    "limitReached": "تم بلوغ الحد السحابي الأسبوعي",
+    "limitReachedDescription": "قم بالترقية إلى Pro أو استخدم مفتاح API الخاص بك للاستخدام غير المحدود.",
     "viewPlans": "عرض الخطط",
     "upgradeTitle": "الترقية إلى Pro",
     "upgradeDescription": "تفريغ صوتي غير محدود، أكثر دقة، وأسرع.",

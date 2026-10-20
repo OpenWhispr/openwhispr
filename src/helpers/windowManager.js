@@ -13,6 +13,7 @@ const HotkeyManager = require("./hotkeyManager");
 const { isGlobeLikeHotkey } = HotkeyManager;
 const DragManager = require("./dragManager");
 const MainWindowPlacementCoordinator = require("./mainWindowPlacementCoordinator");
+const { plasmaWorkAreas } = require("./plasmaWorkAreas");
 const MenuManager = require("./menuManager");
 const DevServerManager = require("./devServerManager");
 const {
@@ -131,8 +132,12 @@ class WindowManager {
   }
 
   async createMainWindow() {
+    void plasmaWorkAreas.start(() => {
+      this.positionAgentDictationPill();
+      return this._reanchorMainWindow();
+    });
     const cursorPos = screen.getCursorScreenPoint();
-    const display = screen.getDisplayNearestPoint(cursorPos);
+    const display = plasmaWorkAreas.resolve(screen.getDisplayNearestPoint(cursorPos));
     const position = WindowPositionUtil.getMainWindowPosition(
       display,
       null,
@@ -574,10 +579,12 @@ class WindowManager {
   // The pill is bottom-anchored, so the display that owns its bottom-center
   // point is the one that must keep it through resizes and repositions.
   _getMainWindowDisplayFor(bounds) {
-    return screen.getDisplayNearestPoint({
-      x: bounds.x + bounds.width / 2,
-      y: bounds.y + bounds.height,
-    });
+    return plasmaWorkAreas.resolve(
+      screen.getDisplayNearestPoint({
+        x: bounds.x + bounds.width / 2,
+        y: bounds.y + bounds.height,
+      })
+    );
   }
 
   _resolveMainWindowSize(sizeKey, workArea, request) {
@@ -1672,12 +1679,17 @@ class WindowManager {
       }
     }
     const bounds = pid ? await this.textEditMonitor.getTargetWindowBounds(pid) : null;
-    return bounds
-      ? screen.getDisplayMatching(bounds)
-      : screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+    return plasmaWorkAreas.resolve(
+      bounds
+        ? screen.getDisplayMatching(bounds)
+        : screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+    );
   }
 
   _repositionToActiveDisplay(targetPidPromise) {
+    // A panel edit that leaves the root work area unchanged raises no display
+    // event, so look again on every show; a change re-anchors the pill.
+    void plasmaWorkAreas.refresh();
     return this._mainWindowPlacementCoordinator.request(
       () => this._resolveActiveDisplay(targetPidPromise),
       (activeDisplay, isCurrent) =>
@@ -1727,6 +1739,10 @@ class WindowManager {
       { from: currentBounds, to: newPos, displayId: activeDisplay.id },
       "window"
     );
+    return this._moveMainWindowTo(newPos);
+  }
+
+  _moveMainWindowTo(newPos) {
     this._clearRendererResizeMask();
     this.mainWindow.setBounds(newPos);
     // This is an intentional native move, not a drag. Keep resize restoration
@@ -1736,6 +1752,35 @@ class WindowManager {
     this._activeHorizontalDirection = null;
     this._notifyMainWindowHorizontalDirection();
     return { applied: true, bounds: newPos };
+  }
+
+  // Corrected work areas can arrive after the pill was placed: plasmashell
+  // answers after startup, or a panel changed. An auto-placed pill moves to its
+  // display's anchor; one the user dragged stays where they put it.
+  _reanchorMainWindow() {
+    return this._enqueueMainWindowMutation(() => {
+      if (
+        !this.mainWindow ||
+        this.mainWindow.isDestroyed() ||
+        this.dragManager.isDragActive() ||
+        this._mainWindowPlacementCoordinator.hasManualPosition()
+      ) {
+        return;
+      }
+      const currentBounds = this.mainWindow.getBounds();
+      const newPos = WindowPositionUtil.getMainWindowPosition(
+        this._getMainWindowDisplayFor(currentBounds),
+        { width: currentBounds.width, height: currentBounds.height },
+        this._panelStartPosition
+      );
+      if (newPos.x === currentBounds.x && newPos.y === currentBounds.y) return;
+      debugLogger.debug(
+        "[WindowManager] Re-anchoring dictation panel to the corrected work area",
+        { from: currentBounds, to: newPos },
+        "window"
+      );
+      this._moveMainWindowTo(newPos);
+    });
   }
 
   showDictationPanel(options = {}) {
@@ -2014,7 +2059,7 @@ class WindowManager {
     }
 
     const mainBounds = this.mainWindow.getBounds();
-    const display = screen.getDisplayMatching(mainBounds);
+    const display = plasmaWorkAreas.resolve(screen.getDisplayMatching(mainBounds));
     const mainSide = resolveHorizontalWindowDirection(
       mainBounds,
       display,
@@ -2042,7 +2087,7 @@ class WindowManager {
     }
 
     const mainBounds = this.mainWindow.getBounds();
-    const display = screen.getDisplayMatching(mainBounds);
+    const display = plasmaWorkAreas.resolve(screen.getDisplayMatching(mainBounds));
     const nextSize =
       surfaceHeight === null
         ? AGENT_DICTATION_PILL_SIZE

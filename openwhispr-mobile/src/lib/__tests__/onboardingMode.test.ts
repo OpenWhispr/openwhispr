@@ -199,6 +199,51 @@ it('releases them when setup goes back to Cloud', async () => {
   });
 });
 
+// A Dictation change in AI Models holds the other workflows where they ran, so replaying setup
+// must release them even when it picks the mode dictation is already in.
+it('releases what a Dictation change held when setup is replayed with Cloud', async () => {
+  mockUser = { id: 'u', isAnonymous: false };
+  mockConfig = {
+    defaultMode: 'cloud',
+    inference: {
+      dictation: { mode: 'openwhispr' },
+      upload: { mode: 'local' },
+      cleanup: { mode: 'local' },
+      notes: { mode: 'local' },
+    },
+    pinnedInference: ['upload', 'cleanup', 'notes'],
+  };
+  await chooseOnboardingMode('cloud', 'privacy-mode');
+  expect(mockUpdateConfig.mock.calls[0][0]).toEqual({
+    defaultMode: 'cloud',
+    inference: { dictation: { mode: 'openwhispr' } },
+    pinnedInference: undefined,
+  });
+});
+
+it('holds only uploads and cleanup when setup is replayed with Local', async () => {
+  mockConfig = {
+    defaultMode: 'private',
+    inference: {
+      dictation: { mode: 'local' },
+      upload: { mode: 'local' },
+      cleanup: { mode: 'local' },
+      notes: { mode: 'openwhispr' },
+    },
+    pinnedInference: ['upload', 'cleanup', 'notes'],
+  };
+  await chooseOnboardingMode('private', 'privacy-mode');
+  expect(mockUpdateConfig.mock.calls[0][0]).toEqual({
+    defaultMode: 'private',
+    inference: {
+      dictation: { mode: 'local' },
+      upload: { mode: 'local' },
+      cleanup: { mode: 'local' },
+    },
+    pinnedInference: ['upload', 'cleanup'],
+  });
+});
+
 it('keeps a cleanup the user saved when setup picks Cloud', async () => {
   mockUser = { id: 'u', isAnonymous: false };
   const cleanup = { mode: 'local' };

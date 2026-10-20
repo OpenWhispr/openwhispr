@@ -121,6 +121,8 @@
       "mouseButtonOnlyMac": "マウスボタンのホットキーは現在 macOS でのみサポートされています。",
       "alreadyRegistered": "\"{{hotkey}}\" は別のアプリケーションで既に登録されています。",
       "osReserved": "\"{{hotkey}}\" はデスクトップ環境で予約されている可能性があります。",
+      "keyNotInKeymap": "GNOME は現在のキーボードレイアウトでは \"{{hotkey}}\" を使用できません。別のキーを選んでください。",
+      "keyReservedByGnome": "GNOME はすでに \"{{hotkey}}\" を独自のショートカットに使用しています。別のキーを選んでください。",
       "rightModifierNeedsListener": "\"{{hotkey}}\" はこのデスクトップでは使用できません。ショートカットには通常のキーが必要です。Control+Alt+Space のようにキーを追加してください。",
       "holdNeedsReleaseKey": "ホールドして話すには、macOS が離したことを検知できるキーが必要です。Globe、右 Option のような右側のキー、または修飾キー付きのショートカットです。タップならどのキーでも使えます。",
       "holdNeedsRegularKey": "ホールドを使うには、Control+Alt+Space のようにショートカットに通常のキーを追加してください。デスクトップは修飾キーだけを押し続けていることを検知できません。",
@@ -142,7 +144,7 @@
   },
   "upgradePrompt": {
     "paymentFailed": "お支払いを処理できませんでした",
-    "weeklyLimit": "週間の利用上限に達しました",
+    "weeklyLimit": "週間のクラウド上限に達しました",
     "pastDueDescription": "現在は無料プランをご利用中です。ご安心ください、週 {{limit}} ワードまで引き続きご利用いただけます。\nお支払い方法を更新して、無制限の Pro に戻しましょう。",
     "limitDescription": "{{used}} / {{limit}} ワード使用済み。\n文字起こしは保存・貼り付けされました。",
     "updatePayment": "お支払い方法を更新",
@@ -631,7 +633,7 @@
       "availableButton": "アップデートあり"
     },
     "limit": {
-      "weeklyTitle": "週間の利用上限に達しました",
+      "weeklyTitle": "週間のクラウド上限に達しました",
       "weeklyDescription": "利用上限はローリング方式でリセットされます。Pro にアップグレードするか、自分の API キーを使用して無制限にご利用ください。"
     },
     "accessibilityMissing": {
@@ -672,6 +674,8 @@
       "failedCtaSettings": "文字起こしプロバイダーを設定してください",
       "failedCtaAndRetry": "その後、再試行をクリックしてください",
       "failedCtaSettingsOnly": "設定で文字起こしプロバイダーを設定してください",
+      "failedCtaAiSettings": "設定で音声アシスタントのモデルを確認してください",
+      "editFailedTranscriptKept": "編集は適用されませんでした · 文字起こしは保存済み",
       "failedLimitReached": "1日の上限に達しました",
       "failedOffline": "オフラインです",
       "clearAll": "すべて削除",
@@ -693,6 +697,9 @@
       "retrying": "再文字起こし中…",
       "retrySuccess": "文字起こしが更新されました",
       "retryError": "再文字起こしに失敗しました",
+      "retryErrors": {
+        "invalidResponse": "文字起こしエンジンから予期しない応答が返されました。もう一度お試しください。"
+      },
       "audioNotFound": "音声ファイルが見つからないか有効期限切れです",
       "noAiProcessing": "この文字起こしにはAI処理が適用されていません",
       "rawTranscript": "生の文字起こし",
@@ -767,6 +774,21 @@
       "noSearchResults": "「{{query}}」に一致するモデルはありません",
       "selectModelHint": "モデルが未選択です — 下のリストから選択してください。",
       "keyRequiredHint": "推論には API キーが必要です — このプロバイダーを使用するには追加してください。"
+    },
+    "effort": {
+      "title": "推論の深さ",
+      "description": "モデルが回答する前にどれだけ考えるかを設定します。",
+      "descriptionWithDefault": "モデルが回答する前にどれだけ考えるかを設定します。自動ではプロバイダーの既定値（{{value}}）を使用します。",
+      "auto": "自動",
+      "options": {
+        "none": "なし",
+        "minimal": "最小",
+        "low": "低",
+        "medium": "中",
+        "high": "高",
+        "xhigh": "非常に高い",
+        "max": "最大"
+      }
     },
     "getApiKey": "API キーを取得 ->",
     "selectModel": "モデルを選択",
@@ -853,8 +875,11 @@
         "apikeyHelp": "Google AI Studio で取得した Vertex AI Express Mode の API キー。"
       }
     },
+    "modelRetiredTitle": "モデルが利用できません",
+    "groq": {
+      "modelRetired": "Groq は {{from}} を提供終了しました。{{to}} に切り替えました。"
+    },
     "tinfoil": {
-      "modelRetiredTitle": "モデルが利用できません",
       "modelRetired": "Tinfoil は {{from}} を提供終了しました。{{to}} に切り替えました。",
       "refreshingModels": "モデルを更新しています…"
     },
@@ -905,7 +930,7 @@
         "offline": "オフラインです",
         "agentUnavailable": "アシスタントを利用できません",
         "screenContextSkipped": "画面コンテキストをスキップしました",
-        "dailyLimitReached": "1 日の上限に達しました",
+        "cloudLimitReached": "週間のクラウド上限に達しました",
         "providerRateLimited": "プロバイダーのレート制限"
       },
       "fallback": {
@@ -1581,7 +1606,7 @@
     "account": {
       "badges": {
         "free": "無料",
-        "limitReached": "上限到達",
+        "limitReached": "クラウド上限到達",
         "pastDue": "支払い遅延",
         "pro": "Pro",
         "business": "Business",
@@ -1617,9 +1642,10 @@
         "title": "お支払いを処理できませんでした"
       },
       "planDescriptions": {
-        "freeUsage": "今週 {{used}} / {{limit}} ワード使用済み",
+        "freeUsage": "今週の OpenWhispr Cloud 使用量：{{used}} / {{limit}} ワード",
+        "byokUnlimited": "独自の API キーとローカルモデルは引き続き無制限で利用できます。",
         "nextBilling": "次の請求日: {{date}}",
-        "pastDue": "今週 {{used}} / {{limit}} 無料ワード使用済み - お支払い方法を更新して Pro を復元",
+        "pastDue": "今週の OpenWhispr Cloud 使用量：{{used}} / {{limit}} ワード - お支払い方法を更新して Pro を復元",
         "trial": "残り {{days}} 日 - 無制限の文字起こし",
         "unlimited": "無制限",
         "accessUntil": "{{date}} まで利用可能",
@@ -1740,8 +1766,8 @@
       "title": "アカウント",
       "toasts": {
         "approachingLimit": {
-          "description": "今週 {{used}} / {{limit}} 無料ワードを使用しました。Pro にアップグレードして無制限にご利用ください。",
-          "title": "週間利用上限に近づいています"
+          "description": "今週、OpenWhispr Cloud で {{limit}} ワード中 {{used}} ワードを使用しました。Pro にアップグレードして無制限にご利用ください。",
+          "title": "クラウドのワード上限に近づいています"
         }
       },
       "trialCta": {
@@ -2667,9 +2693,8 @@
         "gemini_gemma_4_31b_it": "Google 最大の Gemma 4、31B デンス、256K コンテキスト",
         "gemini_gemma_4_26b_a4b_it": "Google の Gemma 4 MoE、4B アクティブパラメータ、256K コンテキスト",
         "groq_openai_gpt_oss_120b": "OpenAI のオープンソースフラッグシップ、500 T/秒",
+        "groq_qwen_qwen3_8_27b": "高速 Qwen モデル、450 T/秒、131K コンテキスト",
         "groq_openai_gpt_oss_20b": "高速オープンソースモデル、1000 T/秒",
-        "groq_compound": "Groq の Compound システム、450 T/秒",
-        "groq_compound_mini": "高速 Compound システム、3x 低レイテンシー",
         "openai_gpt_6_astra": "コーディングと研究のための OpenAI の最も高性能なモデル",
         "openai_gpt_5_6_sol": "複雑なコーディングと研究のためのフラッグシップ GPT-5.6",
         "openai_gpt_5_6_terra": "日常業務向けのバランス型 GPT-5.6",
@@ -3304,6 +3329,7 @@
       "speakersIdentified": "話者を識別しました",
       "typeNamePlaceholder": "名前を入力",
       "knownSpeakers": "登録済みの話者",
+      "thisIsMe": "これは自分です",
       "meetingAttendees": "会議の参加者",
       "assignName": "名前を割り当て",
       "isThisPerson": "{{name}}さんですか？",
@@ -3638,8 +3664,8 @@
     "inviteTeam": "チームを招待",
     "settings": "設定",
     "support": "サポート",
-    "limitReached": "週間の利用上限に達しました",
-    "limitReachedDescription": "Pro にアップグレードして無制限の文字起こしをご利用ください。",
+    "limitReached": "週間のクラウド上限に達しました",
+    "limitReachedDescription": "Pro にアップグレードするか、自分の API キーを使用して無制限にご利用ください。",
     "viewPlans": "プランを見る",
     "upgradeTitle": "Pro にアップグレード",
     "upgradeDescription": "無制限・高精度・高速の文字起こし。",

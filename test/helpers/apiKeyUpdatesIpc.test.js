@@ -50,6 +50,7 @@ const environmentManager = Object.fromEntries(
 // only when it opens the socket (one already open or opening wins), cleanup
 // forgets both, and connect rides a warm socket when one is there.
 class FakeStreaming {
+  completedSegments = [];
   warmToken = null;
   warmConnectionOptions = null;
   cachedToken = null;
@@ -162,6 +163,10 @@ Module._load = function (request, parent, isMain) {
 test.after(() => {
   Module._load = originalLoad;
 });
+
+// Loaded after the electron stub above, and shared with ipcHandlers so tests can mock it.
+const liveSpeakerIdentifier = require("../../src/helpers/liveSpeakerIdentifier");
+const MeetingEchoLeakDetector = require("../../src/helpers/meetingEchoLeakDetector");
 
 function anything() {
   return new Proxy(function () {}, {
@@ -586,4 +591,72 @@ test("a prepare after a mid-meeting renewal leaves the live meeting alone", asyn
     alreadyPrepared: true,
   });
   assertMeetingStreams(renewed);
+});
+
+// Main's base (past the note's stored ids), not the renderer's, numbers the live
+// identifier, reaches the renderer, and is what each stop path hands diarization
+// beside the meeting's retracts (none here).
+for (const options of [{ provider: "local" }, { provider: "deepgram-realtime", mode: "byok" }]) {
+  test(`${options.provider}: a meeting's speaker index base reaches live identification, the renderer and diarization`, async (t) => {
+    resetMeeting(t);
+    invoke("save-deepgram-key", "A");
+    const requestedBases = [];
+    const diarized = [];
+    target._resolveMeetingSpeakerIndexBase = (_noteId, requestedBase) => {
+      requestedBases.push(requestedBase);
+      return 6;
+    };
+    target._startOrSkipDiarization = (...args) => diarized.push(args.slice(9));
+    t.after(() => {
+      delete target._resolveMeetingSpeakerIndexBase;
+      delete target._startOrSkipDiarization;
+    });
+    t.mock.method(liveSpeakerIdentifier, "isAvailable", () => true);
+    const liveStart = t.mock.method(liveSpeakerIdentifier, "start", async () => false);
+
+    const result = await invoke("meeting-transcription-start", { ...options, speakerIndexBase: 3 });
+    assert.equal(result.success, true);
+    assert.equal((await invoke("meeting-transcription-stop")).success, true);
+    assert.deepEqual(requestedBases, [3]);
+    assert.equal(liveStart.mock.calls[0].arguments[1].speakerIndexBase, 6);
+    assert.equal(result.speakerIndexBase, 6);
+    assert.deepEqual(diarized, [[6, []]]);
+  });
+}
+
+// The renderer stops applying retracts once a stop begins, so main hands each
+// meeting's retracted mic rows to its diarization and starts the next one empty.
+test("a mic row retracted during a meeting reaches that meeting's diarization only", async (t) => {
+  resetMeeting(t);
+  invoke("save-deepgram-key", "A");
+  const retracted = [];
+  target._startOrSkipDiarization = (...args) => retracted.push(args[10]);
+  t.after(() => delete target._startOrSkipDiarization);
+  t.mock.method(MeetingEchoLeakDetector.prototype, "shouldSuppressMicSegment", () => ({
+    suppress: false,
+    hasBleedEvidence: true,
+  }));
+  const options = { provider: "deepgram-realtime", mode: "byok" };
+  const text = "sounds good to me";
+
+  assert.equal((await invoke("meeting-transcription-start", options)).success, true);
+  const [mic, system] = meetingStreams();
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: Date.now() });
+  const timestamp = Date.now();
+  mic.onFinalTranscript(text, timestamp);
+  // A bleed-flagged mic row commits only after the risky-mic holdback.
+  t.mock.timers.tick(3000);
+  system.onFinalTranscript(text, timestamp + 500);
+  t.mock.timers.reset();
+  assert.equal((await invoke("meeting-transcription-stop")).success, true);
+
+  assert.equal((await invoke("meeting-transcription-start", options)).success, true);
+  assert.equal((await invoke("meeting-transcription-stop")).success, true);
+
+  assert.deepEqual(
+    retracted.map((segments) =>
+      segments.map((segment) => [segment.source, segment.text, segment.timestamp])
+    ),
+    [[["mic", text, timestamp]], []]
+  );
 });

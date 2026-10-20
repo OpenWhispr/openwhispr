@@ -13,6 +13,8 @@ export interface ModelFamilyConstraints {
   reasoningEffort?: {
     /** Value that best approximates "thinking off" for reasoning_effort. */
     suppressValue: string;
+    /** Levels a Custom or OpenRouter endpoint offers for this family. */
+    options?: string[];
     /**
      * Effort for deterministic transforms (cleanup, selection edits). gpt-oss
      * defaults to medium; low cuts hidden reasoning tokens (latency) and the
@@ -37,22 +39,28 @@ const FAMILIES: Array<ModelFamilyConstraints & { match: RegExp }> = [
     match: /gpt-oss/,
     // gpt-oss accepts low|medium|high only; it has no off switch. Confirmed
     // live on Groq and Tinfoil (#1611): "none" is a 400 on both.
-    reasoningEffort: { suppressValue: "low", cleanupValue: "low" },
+    reasoningEffort: {
+      suppressValue: "low",
+      cleanupValue: "low",
+      options: ["low", "medium", "high"],
+    },
   },
   {
     family: "qwen",
     match: /qwen/,
-    // qwen3 accepts none|default only (Groq's enum; "none" is also what the
-    // generic dialect sends everywhere, so the fact is provider-agnostic).
-    reasoningEffort: { suppressValue: "none" },
+    // "none" turns Qwen's thinking off on Groq (which also takes
+    // default|low|medium|high) and in the generic dialect, so the fact is
+    // provider-agnostic.
+    reasoningEffort: { suppressValue: "none", options: ["none"] },
   },
   {
     family: "glm-5.3",
     match: /glm[-_]?5[-.]?3/,
     // GLM-5.3/Flash always reason: low|high|max only, no off switch.
     // "low" is the closest to off. At the server default, max, a long meeting
-    // spent the whole 4,096-token notes budget thinking (#2008); at high it fit.
-    reasoningEffort: { suppressValue: "low", defaultValue: "high" },
+    // spent the whole 4,096-token notes budget thinking (#2008); at high it fit,
+    // so max isn't offered either.
+    reasoningEffort: { suppressValue: "low", defaultValue: "high", options: ["low", "high"] },
   },
   {
     family: "magistral",

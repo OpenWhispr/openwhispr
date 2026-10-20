@@ -248,12 +248,51 @@ public class AppleLLMModule: Module {
       return
     }
 
+    #if compiler(>=6.4)
+    // iOS 27 deprecates GenerationError for these types. Swift 6.4 is the first compiler with
+    // the iOS 27 SDK.
+    if #available(iOS 27.0, *) {
+      if error is GeneratedContent.ParsingError {
+        promise.reject("APPLE_LLM_OUTPUT_LIMIT", error.localizedDescription)
+        return
+      }
+      if let modelError = error as? LanguageModelError {
+        switch modelError {
+        case .contextSizeExceeded(_):
+          promise.reject("APPLE_LLM_CONTEXT_LIMIT", modelError.localizedDescription)
+        case .guardrailViolation(_), .refusal(_):
+          promise.reject("APPLE_LLM_GUARDRAIL", modelError.localizedDescription)
+        case .rateLimited(_):
+          promise.reject("APPLE_LLM_RATE_LIMITED", modelError.localizedDescription)
+        case .unsupportedLanguageOrLocale(_):
+          promise.reject("APPLE_LLM_UNAVAILABLE", modelError.localizedDescription)
+        default:
+          promise.reject("APPLE_LLM_FAILED", modelError.localizedDescription)
+        }
+        return
+      }
+      // GenerationError's assetsUnavailable and concurrentRequests moved to these two types.
+      if error is SystemLanguageModel.Error {
+        promise.reject("APPLE_LLM_UNAVAILABLE", error.localizedDescription)
+        return
+      }
+      if let sessionError = error as? LanguageModelSession.Error, sessionError == .concurrentRequests {
+        promise.reject("APPLE_LLM_RATE_LIMITED", sessionError.localizedDescription)
+        return
+      }
+    }
+    #endif
+
     if let generationError = error as? LanguageModelSession.GenerationError {
       switch generationError {
       case .guardrailViolation(_), .refusal(_, _):
         promise.reject("APPLE_LLM_GUARDRAIL", generationError.localizedDescription)
       case .exceededContextWindowSize(_):
         promise.reject("APPLE_LLM_CONTEXT_LIMIT", generationError.localizedDescription)
+      case .decodingFailure(_):
+        // Structured output that can't be decoded, most often because maximumResponseTokens cut it
+        // off. JS treats it as an output limit and retries on smaller input.
+        promise.reject("APPLE_LLM_OUTPUT_LIMIT", generationError.localizedDescription)
       case .rateLimited(_), .concurrentRequests(_):
         promise.reject("APPLE_LLM_RATE_LIMITED", generationError.localizedDescription)
       case .assetsUnavailable(_), .unsupportedLanguageOrLocale(_):

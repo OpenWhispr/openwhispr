@@ -986,9 +986,7 @@ export class TranscriptionService {
                 provider: 'byok',
                 inferenceRoute: route,
                 cleanupRoute: request.cleanupRoute,
-                agentRoute: request.agentRoute,
                 cleanupUnavailable: request.cleanupUnavailable,
-                agentUnavailable: request.agentUnavailable,
               },
             })
           : undefined;

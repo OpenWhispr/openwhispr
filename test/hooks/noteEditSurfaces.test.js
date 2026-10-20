@@ -244,7 +244,7 @@ for (const surface of ["note chat", "assistant panel"]) {
           assert.match(JSON.stringify(request.messages), /email_draft \(draft opened\)/);
         if (surface === "note chat") {
           assert.match(request.config.systemPrompt, /Note fields \(JSON\)/);
-          if (provider === "cloud") assert.equal(request.config.noteChat, true);
+          assert.equal("noteChat" in request.config, false);
         } else if (provider === "byok")
           assert.equal(request.config.inferenceScope, "dictationAgent");
       });

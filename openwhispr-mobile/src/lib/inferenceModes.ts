@@ -1,9 +1,9 @@
 import { Platform } from 'react-native';
 import type { LucideIconName } from '@/components/ui/SystemIcon';
 import type { InferenceSelection, MobileInferenceScope } from '@/lib/mobileProviders';
+import { isDictationAgentEnabled } from '@/lib/dictationAgent';
 import {
   inferenceToProcessingMode,
-  processingToInferenceMode,
   type InferenceMode,
   type ProcessingMode,
   type UserConfig,
@@ -73,35 +73,57 @@ export function localModeDefault(
 ): InferenceMode {
   const onCloud =
     scope === 'agent' ||
+    scope === 'noteChat' ||
     (scope === 'upload' && cloudAccess !== 'none') ||
     (scope === 'cleanup' && cloudAccess === 'account');
   return onCloud ? 'openwhispr' : 'local';
 }
 
-type DictationModeConfig = Pick<
-  UserConfig,
-  'defaultMode' | 'inference' | 'pinnedInference' | 'privateModeReturn'
->;
+type DictationModeConfig = Pick<UserConfig, 'defaultMode' | 'inference' | 'pinnedInference'>;
 
-// These workflows follow the dictation mode until they have a selection of their own, so they
-// would silently change destination when dictation moves to Bring Your Own Key. Cleanup is left
-// out: unsaved, it is skipped in that mode, which sends nothing anywhere. The voice assistant is
-// pinned only when leaving On-Device; unsaved, it is skipped rather than sent to Cloud.
-function scopesToPin(leavingMode: ProcessingMode): MobileInferenceScope[] {
-  return leavingMode === 'private' ? ['upload', 'notes', 'agent'] : ['upload', 'notes'];
+// The workflows besides dictation, which a dictation change never moves.
+const OTHER_WORKFLOWS = ['upload', 'cleanup', 'notes', 'noteChat', 'agent'] as const;
+type OtherWorkflow = (typeof OTHER_WORKFLOWS)[number];
+
+// The on-device model picked for a workflow, else Automatic.
+export function localSelection(
+  config: Pick<UserConfig, 'rememberedInference'> | null,
+  scope: MobileInferenceScope,
+): InferenceSelection {
+  return config?.rememberedInference?.[scope]?.local ?? { mode: 'local' };
 }
 
-// The Dictation page and onboarding own the dictation mode;
-// writing the scope selection alongside defaultMode keeps routing and UI in step.
+// What a workflow with nothing saved runs in `mode`, or undefined when there is nothing to hold:
+// cleanup and the voice assistant are skipped under Bring Your Own Key until a provider is saved
+// for them, and Local Mode turns the voice assistant off. Note formatting saved as On-Device never
+// falls back to Cloud, so Local Mode's is held on this iPhone only while Apple Intelligence can run
+// it; otherwise Local Mode asks before using Cloud. Local Mode also asks before note chat leaves the
+// phone, which no other mode does, so note chat is held On-Device rather than sent to Cloud unasked.
+function unsavedRunsIn(
+  config: Pick<UserConfig, 'rememberedInference'> | null,
+  scope: OtherWorkflow,
+  mode: ProcessingMode,
+  cloudAccess: CloudAccess,
+  localReasoningReady: boolean,
+): InferenceSelection | undefined {
+  if (mode === 'providers' && (scope === 'cleanup' || scope === 'agent')) return undefined;
+  if (mode === 'private' && scope === 'agent') return undefined;
+  const onDevice =
+    mode === 'private' &&
+    (scope === 'noteChat' ||
+      (localModeDefault(scope, cloudAccess) === 'local' &&
+        (scope !== 'notes' || localReasoningReady)));
+  return onDevice ? localSelection(config, scope) : { mode: 'openwhispr' };
+}
+
+// Onboarding's config for the dictation mode it picks. It releases the automatic pins, replaying the
+// same choice included, since a Dictation change in AI Models may have held them in that mode, so
+// those workflows follow the picked mode again; selections the user saved themselves stay.
 export function dictationModeConfig(
   config: UserConfig | null,
   mode: 'cloud' | 'private',
 ): DictationModeConfig {
-  // Changing the mode releases the automatic pins, so those workflows follow the Cloud/On-Device
-  // choice again; selections the user saved themselves stay. Picking another on-device model, or
-  // replaying the same choice in onboarding, keeps them.
-  const modeChanged = config?.defaultMode !== mode;
-  const pinned = modeChanged ? (config?.pinnedInference ?? []) : [];
+  const pinned = config?.pinnedInference ?? [];
   const inference = Object.fromEntries(
     Object.entries(config?.inference ?? {}).filter(
       ([scope]) => !pinned.includes(scope as MobileInferenceScope),
@@ -112,80 +134,49 @@ export function dictationModeConfig(
     inference: {
       ...inference,
       // On-Device restores the model picked on the Dictation page.
-      dictation:
-        mode === 'private'
-          ? (config?.rememberedInference?.dictation?.local ?? { mode: 'local' })
-          : { mode: 'openwhispr' },
+      dictation: mode === 'private' ? localSelection(config, 'dictation') : { mode: 'openwhispr' },
     },
-    ...(modeChanged && config?.pinnedInference ? { pinnedInference: undefined } : {}),
-    // Only a switch from Bring Your Own Key sets where Private mode returns to (workflowSaveConfig).
-    ...(config?.privateModeReturn ? { privateModeReturn: undefined } : {}),
+    ...(config?.pinnedInference ? { pinnedInference: undefined } : {}),
   };
 }
 
-function providerDictationConfig(
+// Changing the dictation mode changes only dictation: the automatic pins stay, and each workflow
+// with nothing saved is saved as what it ran in the mode being left, as an automatic pin.
+function dictationSwitchConfig(
   config: UserConfig | null,
   dictation: InferenceSelection,
+  mode: ProcessingMode,
   leavingMode: ProcessingMode,
   cloudAccess: CloudAccess,
+  localReasoningReady: boolean,
 ): DictationModeConfig {
   const inference = { ...config?.inference, dictation };
+  if (mode === leavingMode) return { defaultMode: mode, inference };
   const pinnedInference = [...(config?.pinnedInference ?? [])];
-  // Leaving Private mode for the provider it was turned on from holds what that provider held,
-  // so the round trip ends where it started, even over a workflow Local Mode held automatically.
-  const returning = leavingMode === 'private' && !!config?.privateModeReturn;
-  const pins: [MobileInferenceScope, InferenceSelection][] =
-    leavingMode === 'providers'
-      ? []
-      : returning
-        ? (Object.entries(config?.privateModeReturn?.pinned ?? {}) as [
-            MobileInferenceScope,
-            InferenceSelection,
-          ][])
-        : scopesToPin(leavingMode).map((scope) => [
-            scope,
-            {
-              // Each holds what ran in the mode being left: uploads in Local Mode ran on
-              // OpenWhispr Cloud when there was a session.
-              mode:
-                leavingMode === 'private' && scope === 'upload'
-                  ? localModeDefault(scope, cloudAccess)
-                  : processingToInferenceMode(leavingMode),
-            },
-          ]);
-  for (const [scope, selection] of pins) {
-    const heldAutomatically = pinnedInference.includes(scope);
-    if (inference[scope] && !(returning && heldAutomatically)) continue;
+  for (const scope of OTHER_WORKFLOWS) {
+    if (inference[scope]) continue;
+    const selection = unsavedRunsIn(config, scope, leavingMode, cloudAccess, localReasoningReady);
+    if (!selection) continue;
     inference[scope] = selection;
-    if (!heldAutomatically) pinnedInference.push(scope);
+    if (!pinnedInference.includes(scope)) pinnedInference.push(scope);
   }
   return {
-    defaultMode: 'providers',
+    defaultMode: mode,
     inference,
     ...(pinnedInference.length ? { pinnedInference } : {}),
   };
 }
 
-// What Bring Your Own Key holds on the mode dictation came from, kept while Private mode is on.
-function pinnedSelections(
-  config: UserConfig | null,
-): Partial<Record<MobileInferenceScope, InferenceSelection>> {
-  return Object.fromEntries(
-    (config?.pinnedInference ?? []).flatMap((scope) => {
-      const selection = config?.inference?.[scope];
-      return selection ? [[scope, selection]] : [];
-    }),
-  );
-}
-
 // The config a workflow page writes when the user saves `selection` for `scope`. `cloudAccess` is
-// what the user has on OpenWhispr Cloud, which decides what ran for uploads in Local Mode.
+// what the user has on OpenWhispr Cloud, and `localReasoningReady` whether Apple Intelligence can
+// run here; together they decide what an unsaved workflow ran in Local Mode.
 export function workflowSaveConfig(
   config: UserConfig | null,
   scope: MobileInferenceScope,
   selection: InferenceSelection,
   activeMode: ProcessingMode,
   cloudAccess: CloudAccess = 'none',
+  localReasoningReady = false,
 ): Partial<UserConfig> {
   const { providerId } = selection;
   const otherProviders = Object.fromEntries(
@@ -202,21 +193,23 @@ export function workflowSaveConfig(
     : {};
   if (scope === 'dictation') {
     const mode = inferenceToProcessingMode(selection.mode);
-    // Picking another on-device model keeps where Private mode returns to; leaving it clears it.
-    const privateModeReturn =
-      mode !== 'private'
-        ? undefined
-        : activeMode === 'private'
-          ? config?.privateModeReturn
-          : activeMode === 'providers'
-            ? { pinned: pinnedSelections(config) }
-            : undefined;
+    // On-Device restores the model picked on the Dictation page.
+    const dictation =
+      mode === 'providers'
+        ? selection
+        : mode === 'private'
+          ? localSelection(config, 'dictation')
+          : { mode: 'openwhispr' as const };
     return {
       ...rememberedInference,
-      ...(mode === 'providers'
-        ? providerDictationConfig(config, selection, activeMode, cloudAccess)
-        : dictationModeConfig(config, mode)),
-      ...(privateModeReturn || config?.privateModeReturn ? { privateModeReturn } : {}),
+      ...dictationSwitchConfig(
+        config,
+        dictation,
+        mode,
+        activeMode,
+        cloudAccess,
+        localReasoningReady,
+      ),
     };
   }
   return {
@@ -229,8 +222,8 @@ export function workflowSaveConfig(
 }
 
 // Holds uploads and cleanup on this iPhone unless the user saved On-Device or a provider for them.
-// They are automatic pins, so changing the mode releases them to its defaults, and a pinned
-// cleanup Apple Intelligence can't run yet is skipped quietly (skipsLocalModeCleanup).
+// They are automatic pins, which a dictation change keeps and only onboarding releases, and a
+// pinned cleanup Apple Intelligence can't run yet is skipped quietly (skipsLocalModeCleanup).
 export function holdOnDeviceConfig(
   config: Pick<UserConfig, 'inference' | 'pinnedInference' | 'rememberedInference'>,
 ): Pick<UserConfig, 'inference' | 'pinnedInference'> {
@@ -239,7 +232,7 @@ export function holdOnDeviceConfig(
   for (const scope of ['upload', 'cleanup'] as const) {
     const saved = inference[scope];
     if (saved && saved.mode !== 'openwhispr') continue;
-    inference[scope] = config.rememberedInference?.[scope]?.local ?? { mode: 'local' };
+    inference[scope] = localSelection(config, scope);
     if (!pinnedInference.includes(scope)) pinnedInference.push(scope);
   }
   return { inference, pinnedInference };
@@ -251,4 +244,26 @@ export function holdOnDeviceConfig(
 export function localModeUpgradeConfig(config: UserConfig): Partial<UserConfig> {
   if (config.defaultMode !== 'private') return { localModeUpgraded: true };
   return { localModeUpgraded: true, ...holdOnDeviceConfig(config) };
+}
+
+// Note chat once used the voice assistant's selection (agent), so a config from then gives it the
+// same selection, remembered providers and hold, leaving anything saved for note chat alone.
+export function noteChatSplitConfig(config: UserConfig): Partial<UserConfig> {
+  const agent = config.inference?.agent;
+  const copied = !!agent && !config.inference?.noteChat;
+  const rememberedAgent = config.rememberedInference?.agent;
+  return {
+    noteChatSplit: true,
+    // Note chat's switch followed the voice assistant's until set; saving it keeps it put.
+    ...(config.noteChatEnabled === undefined
+      ? { noteChatEnabled: isDictationAgentEnabled(config) }
+      : {}),
+    ...(copied ? { inference: { ...config.inference, noteChat: agent } } : {}),
+    ...(rememberedAgent && !config.rememberedInference?.noteChat
+      ? { rememberedInference: { ...config.rememberedInference, noteChat: rememberedAgent } }
+      : {}),
+    ...(copied && config.pinnedInference?.includes('agent')
+      ? { pinnedInference: [...config.pinnedInference, 'noteChat'] }
+      : {}),
+  };
 }

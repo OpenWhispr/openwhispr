@@ -19,6 +19,9 @@ jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: mockUser }) },
 }));
 
+// A keyboard recording also snapshots the voice assistant's route for a wand job.
+const KEYBOARD_TEXT_SCOPES = ['cleanup', 'agent'] as const;
+
 describe('mobile inference routing', () => {
   beforeEach(() => {
     mockState.config = { defaultMode: 'cloud', inference: {} };
@@ -87,7 +90,7 @@ it('freezes explicit Cloud cleanup and separate agent selection for a BYOK recor
       credentialRef: 'provider.openai',
     },
   };
-  const snapshot = snapshotTranscriptionJob('dictation');
+  const snapshot = snapshotTranscriptionJob('dictation', KEYBOARD_TEXT_SCOPES);
   expect(snapshot.cleanupRoute).toEqual({ mode: 'openwhispr', scope: 'cleanup' });
   expect(snapshot.agentRoute).toMatchObject({
     mode: 'providers',
@@ -99,7 +102,7 @@ it('freezes explicit Cloud cleanup and separate agent selection for a BYOK recor
 it('freezes legacy Cloud text routes rather than rereading later provider settings', () => {
   mockProcessing.activeMode = 'cloud';
   mockState.config.inference = {};
-  const snapshot = snapshotTranscriptionJob('dictation');
+  const snapshot = snapshotTranscriptionJob('dictation', KEYBOARD_TEXT_SCOPES);
   expect(snapshot.cleanupRoute).toEqual({ mode: 'openwhispr', scope: 'cleanup' });
   expect(snapshot.agentRoute).toEqual({ mode: 'openwhispr', scope: 'agent' });
 });
@@ -169,8 +172,17 @@ it('re-snapshots Cloud text stages for a consented cloud fallback', () => {
     require('../inferenceRouting') as typeof import('../inferenceRouting');
   expect(snapshotTextInference('cloud')).toEqual({
     cleanupRoute: { mode: 'openwhispr', scope: 'cleanup' },
-    agentRoute: { mode: 'openwhispr', scope: 'agent' },
   });
+});
+
+// Dictation and uploads only clean; the voice assistant's route is for the keyboard's wand jobs.
+it.each(['dictation', 'upload'] as const)('leaves the voice assistant out of a %s job', (scope) => {
+  mockProcessing.activeMode = 'cloud';
+  mockState.config.inference = { agent: OPENAI_TEXT };
+  const snapshot = snapshotTranscriptionJob(scope);
+  expect(snapshot.cleanupRoute).toEqual({ mode: 'openwhispr', scope: 'cleanup' });
+  expect(snapshot).not.toHaveProperty('agentRoute');
+  expect(snapshot).not.toHaveProperty('agentUnavailable');
 });
 
 it('refuses Bring Your Own Key dictation with no provider chosen instead of using Cloud', () => {
@@ -195,7 +207,7 @@ it('marks text stages unavailable, never Cloud, for BYOK dictation with no text 
       credentialRef: 'provider.groq',
     },
   };
-  const snapshot = snapshotTranscriptionJob('dictation');
+  const snapshot = snapshotTranscriptionJob('dictation', KEYBOARD_TEXT_SCOPES);
   expect(snapshot.cleanupRoute).toBeUndefined();
   expect(snapshot.agentRoute).toBeUndefined();
   expect(snapshot.cleanupUnavailable).toBe(
@@ -222,7 +234,7 @@ it.each([
   mockProcessing.activeMode = 'private';
   mockUser = { id: 'u', isAnonymous: false };
   mockState.config.inference = { dictation: { mode: 'local' }, cleanup, agent: OPENAI_TEXT };
-  const snapshot = snapshotTranscriptionJob('dictation');
+  const snapshot = snapshotTranscriptionJob('dictation', KEYBOARD_TEXT_SCOPES);
   expect(snapshot.provider).toBe('local');
   expect(snapshot.cleanupRoute).toMatchObject({ ...route, scope: 'cleanup' });
   expect(snapshot.agentRoute).toEqual({ mode: 'local', scope: 'agent' });
@@ -258,15 +270,24 @@ it.each([
 });
 
 // Uploads in Local Mode run what is saved for them, or OpenWhispr Cloud when there is a session.
+const HELD = { mode: 'openwhispr' };
 it.each([
   ['nothing saved, with a session', undefined, { id: 'a', isAnonymous: true }, 'cloud'],
   ['nothing saved, with no session', undefined, null, 'local'],
   ['a provider saved', { mode: 'providers', providerId: 'groq' }, null, 'byok'],
   ['On-Device saved', { mode: 'local' }, { id: 'u', isAnonymous: false }, 'local'],
+  ['Cloud saved, with no session', { mode: 'openwhispr' }, null, 'cloud'],
+  ['Cloud held automatically, with a session', HELD, { id: 'a', isAnonymous: true }, 'cloud'],
+  // Held when dictation left Cloud, before the user signed out and continued as a guest.
+  ['Cloud held automatically, with no session', HELD, null, 'local'],
 ])('routes a Local Mode upload with %s', (_label, upload, user, provider) => {
   mockProcessing.activeMode = 'private';
   mockUser = user;
-  mockState.config.inference = upload ? { upload } : {};
+  mockState.config = {
+    defaultMode: 'private',
+    inference: upload ? { upload } : {},
+    ...(upload === HELD ? { pinnedInference: ['upload'] } : {}),
+  };
   expect(getTranscriptionProvider('upload')).toBe(provider);
   expect(getTranscriptionProvider('dictation')).toBe('local');
 });

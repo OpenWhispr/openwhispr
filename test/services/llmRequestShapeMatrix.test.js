@@ -24,6 +24,8 @@ const MATRIX = [
     { max_tokens: MAX_TOKENS, temperature: 0, reasoning_effort: "low" }],
   ["groq gpt-oss suppression floors at low, never none (#990)", "Groq", "openai/gpt-oss-120b", null, CLEANUP_NO_THINK,
     { max_tokens: MAX_TOKENS, temperature: 0, reasoning_effort: "low" }],
+  ["groq qwen is registry-flagged disableThinking and always suppressed", "Groq", "qwen/qwen3.8-27b", null, CLEANUP,
+    { max_tokens: MAX_TOKENS, temperature: 0, reasoning_effort: "none" }],
   ["groq unknown family gets no guessed reasoning params", "Groq", "llama-3.3-70b-versatile", null, CLEANUP_NO_THINK,
     { max_tokens: MAX_TOKENS, temperature: 0 }],
 
@@ -88,6 +90,30 @@ const MATRIX = [
   // --- Corti (registry max_tokens; legacy set keeps unknown ids stable) ---
   ["corti keeps the legacy chat-completions shape", "Corti", "corti-s1", null, AGENT,
     { max_tokens: MAX_TOKENS, temperature: 0.3 }],
+
+  // --- Chosen reasoning effort (the per-scope picker) ---
+  ["groq gpt-oss: a chosen effort replaces the cleanup pin", "Groq", "openai/gpt-oss-120b", null, { disableThinking: false, reasoningEffort: "high" },
+    { max_tokens: MAX_TOKENS, temperature: 0, reasoning_effort: "high" }],
+  ["groq gpt-oss: suppression beats a chosen effort", "Groq", "openai/gpt-oss-120b", null, { disableThinking: true, reasoningEffort: "high" },
+    { max_tokens: MAX_TOKENS, temperature: 0, reasoning_effort: "low" }],
+  ["groq gpt-oss: a level the model doesn't offer is ignored", "Groq", "openai/gpt-oss-120b", null, { ...AGENT, disableThinking: false, reasoningEffort: "none" },
+    { max_tokens: MAX_TOKENS, temperature: 0.3 }],
+  ["custom endpoint sends a chosen effort as reasoning_effort (#791)", "custom", "grok-4.3", "https://api.x.ai/v1", { ...AGENT, disableThinking: false, reasoningEffort: "low" },
+    { max_completion_tokens: MAX_TOKENS, reasoning_effort: "low" }],
+  ["custom x.ai: a level its host doesn't take is never sent", "custom", "grok-4.7", "https://api.x.ai/v1", { ...AGENT, disableThinking: false, reasoningEffort: "minimal" },
+    { max_completion_tokens: MAX_TOKENS }],
+  ["custom deepseek: none is never sent (#1260)", "custom", "deepseek-chat", "https://api.deepseek.com", { ...AGENT, disableThinking: false, reasoningEffort: "none" },
+    { max_tokens: MAX_TOKENS, temperature: 0.3 }],
+  ["custom with a registry model: a level the registry doesn't list is never sent", "custom", "gpt-5.5", "https://custom.example/v1", { ...AGENT, disableThinking: false, reasoningEffort: "minimal" },
+    { max_completion_tokens: MAX_TOKENS }],
+  ["openrouter puts a chosen effort in its reasoning object", "openrouter", "openai/gpt-4o", null, { ...AGENT, disableThinking: false, reasoningEffort: "high" },
+    { max_tokens: MAX_TOKENS, temperature: 0.3, reasoning: { effort: "high" } }],
+  ["openrouter glm-5.3: a chosen effort sends no family default beside it", "openrouter", "z-ai/glm-5.3", null, { ...AGENT, disableThinking: false, reasoningEffort: "low" },
+    { max_tokens: MAX_TOKENS, temperature: 0.3, reasoning: { effort: "low" } }],
+  ["custom gpt-oss: a level its family rejects is never sent (#1611)", "custom", "gpt-oss-120b", "https://custom.example/v1", { ...AGENT, disableThinking: false, reasoningEffort: "none" },
+    { max_tokens: MAX_TOKENS, temperature: 0.3 }],
+  ["self-hosted never sends a level saved for a cloud provider", "lan", "openai/gpt-oss-120b", null, { disableThinking: false, reasoningEffort: "high" },
+    { max_tokens: MAX_TOKENS, temperature: 0, reasoning_effort: "low" }],
 
   // --- Gemini through its OpenAI-compat endpoint (agent streaming route) ---
   ["gemini openai-compat: fallback config, no temperature param", "gemini", "gemini-3-flash-preview", null, AGENT,

@@ -767,6 +767,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 const agentName = getAgentName();
                 const reasonedText = await ReasoningService.processText(rawText, model, agentName, {
                   disableThinking: getSettings().cleanupDisableThinking,
+                  reasoningEffort: getSettings().cleanupReasoningEffort,
                   requireCompleteOutput: true,
                 });
                 if (hasTextContent(reasonedText) && reasonedText !== rawText) {
@@ -832,6 +833,10 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 ? "controlPanel.history.discarded.recovered"
                 : "controlPanel.history.retrySuccess"
             ),
+            // A partial result still replaced the row; say so, as dictation does.
+            ...(result.warning
+              ? { description: t("hooks.audioRecording.partialTranscription.description") }
+              : {}),
           });
         } else {
           toast({

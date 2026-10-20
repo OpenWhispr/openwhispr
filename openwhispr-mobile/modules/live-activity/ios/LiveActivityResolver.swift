@@ -22,10 +22,14 @@ public struct MeetingSnapshot: Equatable {
 /// keyboard/dictation-mode events can never overwrite or end it mid-meeting; when the
 /// meeting clears, the activity falls back to the dictation session (or ends).
 public enum LiveActivityResolver {
+  /// `appAwake`: the app is foreground, or the warm mic keeps it running in the
+  /// background. Otherwise it is about to suspend, and iOS can kill a suspended app
+  /// without a willTerminate, so an idle session card would outlive it.
   public static func resolve(
     meeting: MeetingSnapshot?,
     keyboardRecording: Bool,
     dictationMode: Bool,
+    appAwake: Bool,
     now: Date
   ) -> RecordingActivityContentState? {
     if let meeting {
@@ -42,7 +46,7 @@ public enum LiveActivityResolver {
     if keyboardRecording {
       return RecordingActivityContentState(phase: .recording, startedAt: now)
     }
-    if dictationMode {
+    if dictationMode && appAwake {
       return RecordingActivityContentState(phase: .idle, startedAt: now)
     }
     return nil

@@ -121,6 +121,8 @@
       "mouseButtonOnlyMac": "鼠标按键快捷键目前仅在 macOS 上受支持。",
       "alreadyRegistered": "\"{{hotkey}}\" 已被其他应用注册。",
       "osReserved": "\"{{hotkey}}\" 可能被系统保留。",
+      "keyNotInKeymap": "GNOME 无法在当前键盘布局下使用 \"{{hotkey}}\"。请选择其他按键。",
+      "keyReservedByGnome": "GNOME 已将 \"{{hotkey}}\" 用于自身的快捷键。请选择其他按键。",
       "rightModifierNeedsListener": "\"{{hotkey}}\" 无法在此桌面上使用，其快捷键需要包含一个普通按键。请添加一个按键，例如 Control+Alt+Space。",
       "holdNeedsReleaseKey": "按住说话需要 macOS 能检测到松开的按键：Globe、右侧 Option 之类的右侧按键，或带修饰键的快捷键。点按可用于任何按键。",
       "holdNeedsRegularKey": "要使用按住模式，请在快捷键中添加一个普通按键，例如 Control+Alt+Space。桌面环境无法检测仅按住修饰键的操作。",
@@ -142,7 +144,7 @@
   },
   "upgradePrompt": {
     "paymentFailed": "我们无法处理你的付款",
-    "weeklyLimit": "你已达到本周的使用上限",
+    "weeklyLimit": "你已达到本周的云端使用上限",
     "pastDueDescription": "你目前使用的是免费版——别担心，每周仍有 {{limit}} 个词的额度。\n更新支付方式即可恢复无限制的 Pro 版。",
     "limitDescription": "已使用 {{used}} / {{limit}} 个词。\n你的转录已保存并粘贴。",
     "updatePayment": "更新支付方式",
@@ -631,7 +633,7 @@
       "availableButton": "有可用更新"
     },
     "limit": {
-      "weeklyTitle": "已达到周限额",
+      "weeklyTitle": "已达本周云端上限",
       "weeklyDescription": "你的额度按滚动方式重置。升级到 Pro 或使用自己的 API Key 可不受限制。"
     },
     "accessibilityMissing": {
@@ -672,6 +674,8 @@
       "failedCtaSettings": "设置您的转录服务商",
       "failedCtaAndRetry": "然后点击重试",
       "failedCtaSettingsOnly": "在设置中配置您的转录服务商",
+      "failedCtaAiSettings": "请在设置中检查语音助手模型",
+      "editFailedTranscriptKept": "未应用编辑 · 已保留转录文本",
       "failedLimitReached": "已达每日限额",
       "failedOffline": "离线",
       "clearAll": "全部清除",
@@ -693,6 +697,9 @@
       "retrying": "正在重新转录…",
       "retrySuccess": "转录已更新",
       "retryError": "重新转录失败",
+      "retryErrors": {
+        "invalidResponse": "转录引擎返回了意外的响应。请重试。"
+      },
       "audioNotFound": "音频文件未找到或已过期",
       "noAiProcessing": "此转录未应用 AI 处理",
       "rawTranscript": "原始转录",
@@ -767,6 +774,21 @@
       "noSearchResults": "没有与“{{query}}”匹配的模型",
       "selectModelHint": "尚未选择模型 — 请从下方列表中选择一个。",
       "keyRequiredHint": "推理需要 API 密钥 — 请添加密钥以使用此提供商。"
+    },
+    "effort": {
+      "title": "推理强度",
+      "description": "模型在回答前思考的程度。",
+      "descriptionWithDefault": "模型在回答前思考的程度。“自动”使用服务商的默认设置（{{value}}）。",
+      "auto": "自动",
+      "options": {
+        "none": "无",
+        "minimal": "极低",
+        "low": "低",
+        "medium": "中",
+        "high": "高",
+        "xhigh": "极高",
+        "max": "最大"
+      }
     },
     "getApiKey": "获取你的 API Key ->",
     "selectModel": "选择模型",
@@ -853,8 +875,11 @@
         "apikeyHelp": "从 Google AI Studio 获取的 Vertex AI Express Mode API 密钥。"
       }
     },
+    "modelRetiredTitle": "模型已不可用",
+    "groq": {
+      "modelRetired": "Groq 已停用 {{from}}，已切换至 {{to}}。"
+    },
     "tinfoil": {
-      "modelRetiredTitle": "模型已不可用",
       "modelRetired": "Tinfoil 已停用 {{from}}，已切换至 {{to}}。",
       "refreshingModels": "正在刷新模型…"
     },
@@ -905,7 +930,7 @@
         "offline": "你已离线",
         "agentUnavailable": "助手不可用",
         "screenContextSkipped": "已跳过屏幕上下文",
-        "dailyLimitReached": "已达到每日上限",
+        "cloudLimitReached": "已达本周云端上限",
         "providerRateLimited": "服务商速率限制"
       },
       "fallback": {
@@ -1581,7 +1606,7 @@
     "account": {
       "badges": {
         "free": "免费版",
-        "limitReached": "已达上限",
+        "limitReached": "已达云端上限",
         "pastDue": "逾期未付",
         "pro": "Pro",
         "business": "Business",
@@ -1617,9 +1642,10 @@
         "title": "我们无法处理你的付款"
       },
       "planDescriptions": {
-        "freeUsage": "本周已使用 {{used}} / {{limit}} 个词",
+        "freeUsage": "本周 OpenWhispr Cloud 已使用 {{used}} / {{limit}} 个词",
+        "byokUnlimited": "使用自己的 API 密钥和本地模型仍不受此限制。",
         "nextBilling": "下次扣费：{{date}}",
-        "pastDue": "本周 {{used}} / {{limit}} 免费词数——更新支付方式以恢复 Pro",
+        "pastDue": "本周 OpenWhispr Cloud 已使用 {{used}} / {{limit}} 个词——更新支付方式以恢复 Pro",
         "trial": "剩余 {{days}} 天——无限转录",
         "unlimited": "无限制",
         "accessUntil": "可使用至 {{date}}",
@@ -1641,8 +1667,8 @@
       "title": "账户",
       "toasts": {
         "approachingLimit": {
-          "description": "本周已使用 {{used}} / {{limit}} 个免费词数。升级到 Pro 可享受无限使用。",
-          "title": "即将达到周限额"
+          "description": "本周已使用 {{used}} / {{limit}} 个 OpenWhispr Cloud 词。升级到 Pro 可享受无限使用。",
+          "title": "即将达到云端字数上限"
         }
       },
       "trialCta": {
@@ -2667,9 +2693,8 @@
         "gemini_gemma_4_31b_it": "Google 最大的 Gemma 4，31B 稠密，256K 上下文",
         "gemini_gemma_4_26b_a4b_it": "Google Gemma 4 MoE，4B 活跃参数，256K 上下文",
         "groq_openai_gpt_oss_120b": "OpenAI 开源旗舰，500 T/秒",
+        "groq_qwen_qwen3_8_27b": "快速 Qwen 模型，450 T/秒，131K 上下文",
         "groq_openai_gpt_oss_20b": "快速开源模型，1000 T/秒",
-        "groq_compound": "Groq Compound 系统，450 T/秒",
-        "groq_compound_mini": "快速 Compound 系统，3x 更低延迟",
         "openai_gpt_6_astra": "OpenAI 最强大的模型，适用于编码与研究",
         "openai_gpt_5_6_sol": "旗舰 GPT-5.6，适用于复杂编码与研究",
         "openai_gpt_5_6_terra": "均衡的 GPT-5.6，适合日常工作",
@@ -3376,6 +3401,7 @@
       "speakersIdentified": "已识别发言者",
       "typeNamePlaceholder": "输入姓名",
       "knownSpeakers": "已知说话者",
+      "thisIsMe": "这是我",
       "meetingAttendees": "会议参与者",
       "assignName": "分配姓名",
       "isThisPerson": "这是{{name}}吗？",
@@ -3638,8 +3664,8 @@
     "inviteTeam": "邀请你的团队",
     "settings": "设置",
     "support": "支持",
-    "limitReached": "已达每周上限",
-    "limitReachedDescription": "升级到 Pro 即可无限转录。",
+    "limitReached": "已达本周云端上限",
+    "limitReachedDescription": "升级到 Pro 或使用自己的 API Key 可不受限制。",
     "viewPlans": "查看套餐",
     "upgradeTitle": "升级到 Pro",
     "upgradeDescription": "无限量、更准确、更快速的转录。",

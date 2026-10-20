@@ -7,6 +7,7 @@ import type { DictationTone, ToneAppCategory } from "../config/toneStyle";
 import type { OrgPolicy } from "./policy";
 import type { TechnicalErrorDetailsData } from "../components/ui/useToast";
 import type { ProviderSettingsTarget } from "../utils/describeProviderError";
+import type { RemovedTranscriptSegment } from "../utils/diarizationCompletion";
 import type {
   ManagedEnterpriseConfig,
   ManagedEnterpriseRequestContext,
@@ -1654,8 +1655,9 @@ declare global {
       ) => Promise<{
         success: boolean;
         transcription?: TranscriptionItem;
+        warning?: string;
         error?: string;
-        code?: TranscriptionErrorCode;
+        code?: string;
         messageKey?: string;
       }>;
       updateTranscriptionText: (
@@ -3122,7 +3124,6 @@ declare global {
           systemPrompt?: string;
           tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
           screenContext?: { data: string; mediaType: string };
-          noteChat?: boolean;
         }
       ) => void;
       cancelAgentStream?: (requestId: string) => void;
@@ -3278,6 +3279,7 @@ declare global {
         sessionId: string;
         autoEndEligible: boolean;
         aecEnabled?: boolean;
+        speakerIndexBase?: number;
       }) => Promise<
         {
           success: boolean;
@@ -3286,6 +3288,7 @@ declare global {
           systemAudioMode?: SystemAudioMode;
           systemAudioStrategy?: SystemAudioStrategy;
           oneOnOneAttendee?: { displayName: string; email: string | null } | null;
+          speakerIndexBase?: number;
         } & PolicyFailureMetadata
       >;
       meetingTranscriptionSend?: (buffer: ArrayBuffer, source: "mic" | "system") => void;
@@ -3391,6 +3394,7 @@ declare global {
             speakerLockSource?: "user" | "diarization" | "suggestion";
           }>;
           speakerEmbeddings?: Record<string, number[]> | null;
+          removedSegments?: RemovedTranscriptSegment[];
         }) => void
       ) => () => void;
 
