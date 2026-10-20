@@ -239,12 +239,20 @@ export function findPendingCard(
  * What the chat shows: a fork shows its own turns, under the chip that opens
  * the chat it came from. The copied history stays in the fork and goes with
  * every request; it shows only when that chat is gone, and the chip with it.
+ * Until the fork has a turn of its own, a copied last reply whose question
+ * (or other card) was left unanswered shows too: the fork can still answer it,
+ * so it never waits unseen.
  */
-export function shownMessages<T>(
+export function shownMessages<T extends Pick<Message, "toolCalls">>(
   messages: T[],
   forkOrigin: { parentTitle: string | null; copiedMessageCount: number } | null
 ): T[] {
-  return forkOrigin?.parentTitle ? messages.slice(forkOrigin.copiedMessageCount) : messages;
+  if (!forkOrigin?.parentTitle) return messages;
+  const copied = forkOrigin.copiedMessageCount;
+  const waits =
+    copied === messages.length &&
+    messages[copied - 1]?.toolCalls?.some((call) => call.interaction?.state === "interrupted");
+  return messages.slice(waits ? copied - 1 : copied);
 }
 
 export type AgentPillPlacement = "compact" | "typing" | "modal";

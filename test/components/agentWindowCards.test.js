@@ -580,6 +580,37 @@ test("a fork with nothing of its own yet shows its chip, not the new-chat prompt
   assert.doesNotMatch(view.host.textContent, /What can I help with|Here is the plan/);
 });
 
+test("a fork of a reply left waiting on a question shows it, for the composer to answer", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  const asking = {
+    ...askUser,
+    status: "stopped",
+    interaction: { payload: QUESTION, state: "interrupted" },
+  };
+  await view.chat({
+    messages: [user, { ...reply([asking]), isStreaming: false }],
+    forkOrigin: {
+      parentConversationId: 1,
+      parentTitle: "Plan",
+      context: null,
+      copiedMessageCount: 2,
+    },
+  });
+  // As the fork's chat restores a question its last reply left unanswered.
+  await React.act(async () =>
+    view.interactions.restoreInteraction(
+      { messageId: "a1", toolCallId: "c1", payload: QUESTION },
+      () => {}
+    )
+  );
+  await view.settle();
+  assert.match(view.host.textContent, /Forked from/);
+  assert.ok(view.host.querySelector("[data-interaction-card]"), "the question is on screen");
+  assert.equal(view.host.querySelector(COMPOSER).getAttribute("placeholder"), "Answer here…");
+});
+
 test("a held command over a waiting connect card types with the usual placeholder", async (t) => {
   const view = await mountWindow(t);
   await React.act(async () => view.main.handlers.hotkey({ external: false }));

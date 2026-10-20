@@ -318,3 +318,17 @@ test("a fork shows its own turns; the copied history shows only once its chat is
   assert.deepEqual(shownMessages(messages, { ...origin, parentTitle: null }), messages);
   assert.deepEqual(shownMessages(messages, null), messages);
 });
+
+test("a fork of a reply left waiting on a question shows that reply until the fork moves on", async () => {
+  const { shownMessages } = await load();
+  const asked = { toolCalls: [{ id: "c1", interaction: { state: "interrupted" } }] };
+  const origin = { parentTitle: "Plan", copiedMessageCount: 2 };
+  assert.deepEqual(shownMessages(["m1", asked], origin), [asked], "answerable, so on screen");
+  assert.deepEqual(
+    shownMessages(["m1", asked, "t1"], origin),
+    ["t1"],
+    "taken away once it moves on"
+  );
+  const answered = { toolCalls: [{ id: "c1", interaction: { state: "settled" } }] };
+  assert.deepEqual(shownMessages(["m1", answered], origin), []);
+});

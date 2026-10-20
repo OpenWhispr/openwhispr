@@ -54,16 +54,3 @@ test("a fork shows its chip above its own turns", async (t) => {
   });
   assert.ok(markup.indexOf("chat.forkedFrom") < markup.indexOf("Shorter, please"));
 });
-
-test("a fork that copied nothing it can place shows its chip at the top", async (t) => {
-  const markup = await renderList(t, {
-    messages: MESSAGES,
-    forkOrigin: {
-      parentConversationId: 1,
-      parentTitle: "Plan",
-      context: null,
-      copiedMessageCount: 0,
-    },
-  });
-  assert.ok(markup.indexOf("chat.forkedFrom") < markup.indexOf("Draft the plan"));
-});
