@@ -35,8 +35,10 @@ export type AgentWindowAction =
   | { type: "useKeyboard"; pending?: boolean }
   /**
    * A card arrived while compact: one that asks something shows above the
-   * pill. An answer card waits behind it, or opens in the modal from the
-   * typing layout, where the keyboard has to stay with the window.
+   * pill. From the typing layout, where the keyboard has to stay with the
+   * window and with a draft, an answer card, or a card that asks while a draft
+   * is written, opens in the modal instead; otherwise an answer card waits
+   * behind the pill.
    */
   | { type: "showCard"; asks: boolean }
   /** The standalone card is answered or gone. */
@@ -96,8 +98,10 @@ export function agentWindowReducer(
       };
     case "showCard":
       if (state.layout === "modal") return state;
-      if (action.asks) return { ...state, layout: "standalone" };
-      return { ...state, layout: state.layout === "typing" ? "modal" : "pill" };
+      if (state.layout === "typing" && (!action.asks || state.draft.trim() !== "")) {
+        return { ...state, layout: "modal" };
+      }
+      return { ...state, layout: action.asks ? "standalone" : "pill" };
     case "cardSettled":
       return state.layout === "standalone"
         ? { ...state, layout: compactLayout(state.input) }

@@ -52,8 +52,12 @@ export function useAgentSurface({
         setShown(false);
         await nextFrame();
         await nextFrame();
-        if (!current) return;
+      } else {
+        // An in-place change (the pill widening, a card's height) waits a frame,
+        // so a layout change made in the same moment replaces it unseen.
+        await nextFrame();
       }
+      if (!current) return;
       const resized = waitForResize();
       await window.electronAPI?.agentWindowSetLayout?.({
         layout,

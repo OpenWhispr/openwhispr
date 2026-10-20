@@ -203,14 +203,20 @@ test("a card that arrives while compact shows above the pill, and the pill comes
   // An answer card waits behind the pill.
   assert.equal(agentWindowReducer(pill, { type: "showCard", asks: false }).layout, "pill");
 
-  // From the typing layout too, and back to it once the card is answered.
-  const typing = { ...pill, layout: "typing", input: "keyboard", draft: "Also" };
+  // From the typing layout with nothing typed too, and back to it once the card is answered.
+  const typing = { ...pill, layout: "typing", input: "keyboard", draft: "" };
   const asked = agentWindowReducer(typing, { type: "showCard", asks: true });
-  assert.deepEqual([asked.layout, asked.draft], ["standalone", "Also"]);
+  assert.equal(asked.layout, "standalone");
   assert.equal(agentWindowReducer(asked, { type: "cardSettled" }).layout, "typing");
   // An answer card from typing opens in the modal: the keyboard stays with the window.
   const answer = agentWindowReducer(typing, { type: "showCard", asks: false });
-  assert.deepEqual([answer.layout, answer.input, answer.draft], ["modal", "keyboard", "Also"]);
+  assert.deepEqual([answer.layout, answer.input], ["modal", "keyboard"]);
+  // So does a card that asks while a message is being written: the message keeps the keyboard.
+  const writing = agentWindowReducer(
+    { ...typing, draft: "and also check my cal" },
+    { type: "showCard", asks: true }
+  );
+  assert.deepEqual([writing.layout, writing.draft], ["modal", "and also check my cal"]);
 
   // The modal already shows the card.
   const modal = { ...pill, layout: "modal" };

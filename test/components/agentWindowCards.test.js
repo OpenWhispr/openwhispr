@@ -314,6 +314,9 @@ test("a connector step that asks to connect first keeps its card above the pill"
 });
 
 const user = { id: "u1", role: "user", content: "Plan it", isStreaming: false };
+// The composer's field, never an answer card's message.
+const COMPOSER = "textarea:not([data-approval-card] textarea)";
+
 // Text fields outside the cards (an answer card edits its message in one).
 const composers = (view) =>
   [...view.host.querySelectorAll("textarea")].filter(
@@ -603,4 +606,77 @@ test("on a connect card the composer points at the card", async (t) => {
   await view.settle();
   const composer = view.host.querySelector("textarea");
   assert.equal(composer.getAttribute("placeholder"), "Answer on the card above…");
+});
+
+for (const [what, payload] of [
+  ["a key card", { kind: "apiKey", provider: "openai", providerName: "OpenAI" }],
+  ["a text question", TEXT_QUESTION],
+]) {
+  test(`${what} that arrives while a message is being typed opens in the modal and leaves the message the keyboard`, async (t) => {
+    const view = await mountWindow(t);
+    const { document } = view.happyWindow;
+    document.hasFocus = () => true;
+    await React.act(async () => view.main.handlers.hotkey({ external: false }));
+    await view.settle();
+    await view.chat({ busy: true, messages: [user, reply([askUser])] });
+    await React.act(async () => view.button("Type").click());
+    await view.settle();
+    const typing = view.host.querySelector("textarea");
+    typing.focus();
+    await React.act(async () => {
+      Object.getOwnPropertyDescriptor(
+        view.happyWindow.HTMLTextAreaElement.prototype,
+        "value"
+      ).set.call(typing, "and also check my cal");
+      typing.dispatchEvent(new view.happyWindow.Event("input", { bubbles: true }));
+    });
+
+    await view.ask("c1", payload);
+    // Not even during the fade: the card never takes the keyboard from the message.
+    const field = () => view.host.querySelector("[data-interaction-card] input");
+    assert.ok(document.activeElement !== field(), "the card's field doesn't take it on arrival");
+    await view.settle();
+    assert.equal(view.layout(), "modal");
+    assert.equal(view.host.querySelector(`${COMPOSER}`).value, "and also check my cal");
+    assert.ok(document.activeElement !== field(), "nor once the modal shows");
+    assert.equal(field().value, "", "nothing landed in the card");
+  });
+}
+
+test("the typing composer never answers a restored question it doesn't show", async (t) => {
+  const view = await mountWindow(t);
+  await view.chat({ messages: [user, { ...reply([askUser]), isStreaming: false }] });
+  const answered = [];
+  await React.act(async () =>
+    view.interactions.restoreInteraction(
+      { messageId: "a1", toolCallId: "c1", payload: QUESTION },
+      (result) => answered.push(result)
+    )
+  );
+  await React.act(async () => view.main.handlers.open({ layout: "typing" }));
+  await view.settle();
+  assert.equal(view.layout(), "typing");
+  const composer = view.host.querySelector("textarea");
+  assert.notEqual(composer.getAttribute("placeholder"), "Answer here…");
+  await React.act(async () => {
+    Object.getOwnPropertyDescriptor(
+      view.happyWindow.HTMLTextAreaElement.prototype,
+      "value"
+    ).set.call(composer, "What is on my calendar today?");
+    composer.dispatchEvent(new view.happyWindow.Event("input", { bubbles: true }));
+  });
+  await React.act(async () => view.button("Send").click());
+  assert.deepEqual(globalThis.__chat.sent, ["What is on my calendar today?"], "a new request");
+  assert.deepEqual(answered, [], "the old question is left as it was");
+});
+
+test("a question that arrives at the pill opens the card without widening the pill first", async (t) => {
+  const view = await mountWindow(t);
+  await askWhileCompact(view);
+  const firstCard = view.main.layouts.findIndex((request) => request.layout === "standalone");
+  assert.ok(firstCard > 0);
+  assert.ok(
+    view.main.layouts.slice(0, firstCard).every((request) => !request.wide),
+    "no wide pill shown for a moment before the card"
+  );
 });

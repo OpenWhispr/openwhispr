@@ -621,11 +621,11 @@ export default function AgentWindow() {
   );
 
   // The composer's text answers the question on screen (D3); a key is never
-  // typed here.
-  const answering = answerableCard?.interaction === "questions";
-  const answerQuestion = (text: string) => {
-    if (!answerableCard) return;
-    answerWithText(answerableCard.key, text);
+  // typed here. A restored question shows only in the modal, so only the
+  // modal's composer answers it.
+  const cardFor = (inModal: boolean) => (inModal ? answerableCard : pendingCard);
+  const answerQuestion = (key: string, text: string) => {
+    answerWithText(key, text);
     dispatch({ type: "setDraft", draft: "" });
   };
 
@@ -641,33 +641,39 @@ export default function AgentWindow() {
     if (pendingCard && key === pendingCard.key) nudge.cancel();
   };
 
-  const composer = (inModal: boolean) => (
-    <AgentComposer
-      draft={state.draft}
-      onDraftChange={(draft) => dispatch({ type: "setDraft", draft })}
-      onSubmit={(text) => (answering ? answerQuestion(text) : submit(text, true))}
-      placeholder={
-        answering
-          ? t("agentWindow.composer.answerPlaceholder")
-          : inModal && answerableCard?.interaction
-            ? // A connect, access, key or settings card above: answered there, never here.
-              t("agentWindow.composer.cardPlaceholder")
-            : inModal && messages.length > 0
-              ? t("agentWindow.composer.followUpPlaceholder")
-              : t("agentWindow.composer.placeholder")
-      }
-      busy={busy}
-      answering={answering}
-      onStop={cancelTurn}
-      onClose={inModal ? () => void close() : undefined}
-      onMic={inModal ? () => void startListening() : undefined}
-      micDisabled={busy || transcribing}
-      micUnavailableHint={micHint}
-      focused={surface.shown && surfaceFocus}
-      header={!inModal && pendingContext ? <div className="pb-2">{pendingContext}</div> : null}
-      className={inModal ? "min-h-[92px]" : "h-[145px] w-[510px]"}
-    />
-  );
+  const composer = (inModal: boolean) => {
+    const card = cardFor(inModal);
+    const answering = card?.interaction === "questions";
+    return (
+      <AgentComposer
+        draft={state.draft}
+        onDraftChange={(draft) => dispatch({ type: "setDraft", draft })}
+        onSubmit={(text) =>
+          card && answering ? answerQuestion(card.key, text) : submit(text, true)
+        }
+        placeholder={
+          answering
+            ? t("agentWindow.composer.answerPlaceholder")
+            : inModal && card?.interaction
+              ? // A connect, access, key or settings card above: answered there, never here.
+                t("agentWindow.composer.cardPlaceholder")
+              : inModal && messages.length > 0
+                ? t("agentWindow.composer.followUpPlaceholder")
+                : t("agentWindow.composer.placeholder")
+        }
+        busy={busy}
+        answering={answering}
+        onStop={cancelTurn}
+        onClose={inModal ? () => void close() : undefined}
+        onMic={inModal ? () => void startListening() : undefined}
+        micDisabled={busy || transcribing}
+        micUnavailableHint={micHint}
+        focused={surface.shown && surfaceFocus}
+        header={!inModal && pendingContext ? <div className="pb-2">{pendingContext}</div> : null}
+        className={inModal ? "min-h-[92px]" : "h-[145px] w-[510px]"}
+      />
+    );
+  };
 
   const emptyState = refusal ? (
     <div className="flex flex-1 flex-col items-center justify-center gap-2 px-8 text-center text-sm text-muted-foreground">

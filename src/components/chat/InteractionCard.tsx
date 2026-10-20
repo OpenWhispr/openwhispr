@@ -44,18 +44,28 @@ function focusCard(root: HTMLElement): void {
 const focusLost = (): boolean =>
   !document.activeElement || document.activeElement === document.body;
 
+// A message being written in a composer, even one not focused yet (the agent
+// window's modal composer takes the keyboard once its fade ends).
+const draftInProgress = (): boolean =>
+  [...document.querySelectorAll("textarea")].some(
+    (field) =>
+      field.value.trim() !== "" && !field.closest("[data-interaction-card], [data-approval-card]")
+  );
+
 /**
  * Keeps the keyboard in the card, so Esc reaches it: when the card appears in
- * a focused window with nothing focused (the composer it replaced went away),
- * when a change on the card (the next question, Done appearing, a connect
- * starting) removes the control that had focus, and when the window is given
- * the keyboard with nothing focused (Windows and Linux, for a card that needs
- * typing).
+ * a focused window with nothing focused and no message being written (the
+ * composer it replaced went away), when a change on the card (the next
+ * question, Done appearing, a connect starting) removes the control that had
+ * focus, and when the window is given the keyboard with nothing focused
+ * (Windows and Linux, for a card that needs typing).
  */
 function useCardFocus(rootRef: RefObject<HTMLDivElement | null>, shape: string): void {
   const shapeRef = useRef(shape);
   useLayoutEffect(() => {
-    if (rootRef.current && document.hasFocus() && focusLost()) focusCard(rootRef.current);
+    if (rootRef.current && document.hasFocus() && focusLost() && !draftInProgress()) {
+      focusCard(rootRef.current);
+    }
   }, [rootRef]);
   useLayoutEffect(() => {
     if (shapeRef.current === shape) return;

@@ -27,13 +27,12 @@ export function ApiKeyCard({
   const inputRef = useRef<HTMLInputElement>(null);
   const [hasValue, setHasValue] = useState(false);
   useEffect(() => {
-    // Never from text the user is typing: only from nothing, or an empty composer.
+    // From an empty composer too (the card takes it from nothing itself), never
+    // from text the user is typing.
     const active = document.activeElement;
-    const free =
-      !active ||
-      active === document.body ||
-      (active.tagName === "TEXTAREA" && (active as HTMLTextAreaElement).value === "");
-    if (document.hasFocus() && free) inputRef.current?.focus();
+    const emptyComposer =
+      active?.tagName === "TEXTAREA" && (active as HTMLTextAreaElement).value === "";
+    if (document.hasFocus() && emptyComposer) inputRef.current?.focus();
   }, []);
   return (
     <div>
