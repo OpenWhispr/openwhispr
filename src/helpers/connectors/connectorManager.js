@@ -2,6 +2,8 @@ const crypto = require("crypto");
 const { describeError } = require("./errorSummary");
 const { policyRefusal } = require("./connectorPolicy");
 const { normalizeQueryResult, queryFailed } = require("./queryResult");
+// The most destinations a connector offers to pick from.
+const { MAX_CANDIDATES } = require("./targetResolution");
 
 const CANCEL_REASONS = new Set(["cancelled_by_user", "conversation_ended", "expired"]);
 
@@ -204,6 +206,7 @@ function normalizePrepareResult(result, editable) {
               ? {
                   choices: result.choices
                     .filter((choice) => isString(choice?.label) && isString(choice?.destination))
+                    .slice(0, MAX_CANDIDATES)
                     .map(({ label, destination }) => ({ label, destination })),
                 }
               : {}),

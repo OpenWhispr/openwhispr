@@ -42,6 +42,8 @@ test("every approval outcome tells the model what happened and whether to retry"
   const unknown = approvalOutcomeResult({ state: "unknown" }, "#eng").data;
   assert.equal(unknown.status, "unknown");
   assert.match(unknown.guidance, /may or may not have been sent/);
+  // The model once answered an unconfirmed post with "I've posted the message".
+  assert.match(unknown.guidance, /Never say it was sent or posted/);
   assert.match(unknown.guidance, /#eng/);
 });
 
@@ -231,7 +233,7 @@ test("a sent email reports what the user sent, and an unknown one the connector'
       destination: "dana@acme.test",
       checkUrl: "c",
       guidance:
-        "It may or may not have been sent. Do not retry this action unless the user asks you to. Tell the user to check their Gmail Sent folder.",
+        "It may or may not have been sent. Never say it was sent or posted: say you couldn't confirm it. Do not retry this action unless the user asks you to. Tell the user to check their Gmail Sent folder.",
     }
   );
 });
@@ -551,4 +553,62 @@ test("a send that had to be prepared again is still one send for the request", a
   assert.equal(result.data.status, "sent");
   assert.deepEqual(prepared, [0, 1], "prepared again after main lost the first action");
   assert.deepEqual(ledger, { claimed: 1, released: 0, recorded: 1 });
+});
+
+test("a send prepared again that needs the user to say where asks the model that", async (t) => {
+  const question = {
+    status: "needs_clarification",
+    message: "#eng is archived.",
+    candidates: ["#eng-2"],
+  };
+  const prepares = [
+    {
+      status: "ready",
+      actionId: "a1",
+      preview: { verbKey: "slackPost", destinationLabel: "#eng", accountLabel: "chad", body: "hi" },
+    },
+    question,
+  ];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorPrepare: async () => prepares.shift(),
+        connectorCommit: async () => ({ state: "not_sent", reason: "not_found" }),
+        connectorCancel: async () => ({ cancelled: true }),
+      },
+    },
+  });
+  const { runApprovalAction } = await loadRun();
+  const { approvalKey, approveAction, cancelApproval, useConnectorApprovalStore } =
+    await loadStore();
+  useConnectorApprovalStore.setState({ entries: {} });
+  const ledger = { released: 0, recorded: 0 };
+  const context = {
+    messageId: "m9",
+    toolCallId: "call-1",
+    signal: new AbortController().signal,
+    claimTurnSlot: () => true,
+    releaseTurnSlot() {},
+    claimAction: () => true,
+    releaseAction: () => (ledger.released += 1),
+    sentEarlier: () => false,
+    recordCompletedAction: () => (ledger.recorded += 1),
+  };
+
+  const running = runApprovalAction(context, "slack", "send_message", { text: "hi" });
+  await new Promise((resolve) => setImmediate(resolve));
+  const key = approvalKey("m9", "call-1");
+  await approveAction(key);
+  const { state } = useConnectorApprovalStore.getState().entries[key];
+  // Settled with the question, not left waiting for a Retry (which would hold the test).
+  if (state !== "not_sent") cancelApproval(key);
+  assert.equal(state, "not_sent");
+  const result = await running;
+
+  assert.deepEqual(result.data, {
+    status: "needs_clarification",
+    message: "#eng is archived.",
+    candidates: ["#eng-2"],
+  });
+  assert.deepEqual(ledger, { released: 1, recorded: 0 }, "nothing went out");
 });

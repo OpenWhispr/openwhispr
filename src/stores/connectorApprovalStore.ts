@@ -86,6 +86,10 @@ interface PendingResolution {
   reprepare: Reprepare;
   /** The failure a card waiting for Retry shows; Cancel reports it. */
   failure?: FailedOutcome;
+  /** Counts the card's connects, so only the latest one's result counts. */
+  connectAttempt: number;
+  /** Where the first prepare sent it, which the tool reports unless Send changed it. */
+  preparedDestination: string;
 }
 
 // Promise resolvers stay outside zustand state: they are not renderable.
@@ -236,6 +240,8 @@ export function requestApproval(
       signal,
       expiresAt: Date.now() + APPROVAL_TTL_MS,
       reprepare,
+      connectAttempt: 0,
+      preparedDestination: request.preview.destinationLabel,
     });
     const draft: ApprovalDraft = {
       ...(request.preview.title !== undefined ? { title: request.preview.title } : {}),
@@ -329,10 +335,21 @@ export async function approveAction(key: string): Promise<void> {
 /**
  * Sends the draft once more after a failure. Main already finished the failed
  * action, so it is prepared again on the current login; the tool has waited
- * all along, so this is still the same send.
+ * all along, so this is still the same send. With the service no longer
+ * connected, the card asks to connect first.
  */
 export async function retryApproval(key: string): Promise<void> {
-  if (!entryFor(key)?.awaitingRetry) return;
+  const entry = entryFor(key);
+  if (!entry?.awaitingRetry) return;
+  if (!connectorReady(entry.connectorId)) {
+    patchEntry(key, {
+      state: "pending",
+      awaitingRetry: undefined,
+      reconnect: "prompt",
+      connectError: undefined,
+    });
+    return;
+  }
   await rebind(key);
 }
 
@@ -341,16 +358,28 @@ export async function connectToSend(key: string): Promise<void> {
   const entry = entryFor(key);
   const pending = resolutions.get(key);
   if (entry?.state !== "pending" || entry.reconnect !== "prompt" || !pending) return;
+  const attempt = ++pending.connectAttempt;
   patchEntry(key, { reconnect: "connecting", connectError: undefined });
   // Loaded when used: the interaction store imports this one.
   const { connectTarget } = await import("./agentInteractionStore");
   const outcome = await connectTarget(entry.connectorId as Exclude<ConnectionTarget, "calendar">);
-  // Withdrawn, or the user gave up (X), meanwhile.
-  if (resolutions.get(key) !== pending || entryFor(key)?.reconnect !== "connecting") return;
+  // Withdrawn, or the user gave up (X) or started another connect, meanwhile.
+  if (
+    resolutions.get(key) !== pending ||
+    pending.connectAttempt !== attempt ||
+    entryFor(key)?.reconnect !== "connecting"
+  ) {
+    return;
+  }
   if (outcome.status !== "connected") {
     patchEntry(key, {
       reconnect: "prompt",
-      connectError: outcome.status === "cancelled" ? undefined : "connect_failed",
+      connectError:
+        outcome.status === "failed"
+          ? outcome.errorCode
+          : outcome.status === "unavailable"
+            ? outcome.reason
+            : undefined,
     });
     return;
   }
@@ -360,11 +389,15 @@ export async function connectToSend(key: string): Promise<void> {
 /** The card's X on its connect prompt: back to the draft, nothing sent. */
 export function dismissReconnect(key: string): void {
   const entry = entryFor(key);
+  const pending = resolutions.get(key);
   if (entry?.state !== "pending" || !entry.reconnect) return;
   stopConnect(entry);
+  if (pending) pending.connectAttempt += 1;
   patchEntry(key, { reconnect: undefined, connectError: undefined });
 }
 
+// The renderer only has the labels the user sees, so who a send goes out as
+// and where it goes are compared by those, not by ids.
 const sameIdentity = (a: ConnectorPreview, b: ConnectorPreview): boolean =>
   a.accountLabel === b.accountLabel &&
   a.workspaceLabel === b.workspaceLabel &&
@@ -402,13 +435,25 @@ async function rebind(key: string): Promise<void> {
   const pending = resolutions.get(key);
   if (!entry || !pending) return;
   const retrying = entry.awaitingRetry;
+  // The turn ended or the card expired while the Send ran: nothing new is
+  // prepared, and the card is withdrawn as it would have been while it waited.
+  if (pending.signal.aborted || Date.now() >= pending.expiresAt) {
+    waitForUserAgain(
+      key,
+      retrying
+        ? { state: "failed", awaitingRetry: true }
+        : { state: "pending", reconnect: undefined }
+    );
+    return;
+  }
   patchEntry(key, {
     state: "committing",
     awaitingRetry: undefined,
     reconnect: undefined,
     notice: undefined,
   });
-  // The old action, if main still holds it.
+  // The old action, if main still holds it. No receipt reason fits one
+  // replaced by a new action; it reads as cancelled, and the new one sends.
   void window.electronAPI?.connectorCancel?.(entry.actionId, "cancelled_by_user");
   const prepared = await pending.reprepare().catch(() => undefined);
   // The turn ended or the card expired meanwhile: the new action goes, and the
@@ -427,12 +472,22 @@ async function rebind(key: string): Promise<void> {
     );
     return;
   }
+  if (prepared?.status === "needs_clarification") {
+    // The draft can't go where it was going (a channel archived, an app
+    // uninstalled): the model hears the question and asks the user.
+    settle(
+      key,
+      { state: "not_sent", reason: "needs_clarification", clarification: prepared },
+      "not_sent"
+    );
+    return;
+  }
   if (prepared?.status !== "ready") {
-    if (prepared?.status === "failed" && prepared.errorCode === "reconnect_needed") {
-      waitForUserAgain(key, { state: "pending", reconnect: "prompt" });
-    } else {
-      failAwaitingRetry(key, prepareFailure(prepared));
-    }
+    const needsConnect =
+      (prepared?.status === "failed" && prepared.errorCode === "reconnect_needed") ||
+      (prepared?.status === "unavailable" && prepared.reason === "not_connected");
+    if (needsConnect) waitForUserAgain(key, { state: "pending", reconnect: "prompt" });
+    else failAwaitingRetry(key, prepareFailure(prepared));
     return;
   }
   const unchanged = sameIdentity(entry.preview, prepared.preview);
@@ -484,12 +539,17 @@ async function commitDraft(key: string, { mayRebind }: { mayRebind: boolean }): 
   }
 
   const userEdits = userEditsOf(entry);
-  const destination =
+  // Where it went, when that isn't where the first prepare said: as main
+  // reports it, or as the card showed it after a reconnect prepared it again.
+  const reported =
     (result.state === "sent" || result.state === "unknown") &&
     typeof result.destinationLabel === "string" &&
     result.destinationLabel !== ""
-      ? { destinationLabel: result.destinationLabel }
-      : {};
+      ? result.destinationLabel
+      : entry.preview.destinationLabel !== resolutions.get(key)?.preparedDestination
+        ? entry.preview.destinationLabel
+        : undefined;
+  const destination = reported ? { destinationLabel: reported } : {};
   // resultLabel names what the send created ("ENG-124"); only a sent commit
   // ever carries one.
   const created =

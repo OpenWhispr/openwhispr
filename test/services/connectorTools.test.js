@@ -303,7 +303,20 @@ test("slack_send_message asks which one only once", async (t) => {
   }
   // Typed in the composer instead of picked: tried as written.
   interactions.answerWithText(key, "Gabriel from design");
-  const result = await pending;
+  // A second question would hold the tool for its ten-minute wait: fail at once instead.
+  let watching = true;
+  const askedAgain = (async () => {
+    while (watching) {
+      await new Promise((resolve) => setImmediate(resolve));
+      if (interactions.useAgentInteractionStore.getState().entries[key]?.state === "pending") {
+        interactions.cancelInteraction(key);
+        return "asked again";
+      }
+    }
+  })();
+  const result = await Promise.race([pending, askedAgain]);
+  watching = false;
+  assert.notEqual(result, "asked again", "the user is asked only once");
   assert.deepEqual(prepared, ["gab", "Gabriel from design"]);
   assert.equal(result.data.status, "needs_clarification", "the model asks from here");
 });

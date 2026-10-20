@@ -213,7 +213,7 @@ export function approvalOutcomeResult(
           destination,
           checkUrl: outcome.checkUrl,
           ...userEdits(outcome),
-          guidance: `It may or may not have been sent. ${NO_RETRY} ${
+          guidance: `It may or may not have been sent. Never say it was sent or posted: say you couldn't confirm it. ${NO_RETRY} ${
             options.unknownGuidance ?? `Tell the user to check ${destination}.`
           }`,
         },

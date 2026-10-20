@@ -113,6 +113,29 @@ test("a DM is opened only after Send, never while preparing", async () => {
   assert.equal(posts(slack)[0].params.channel, "D0GABE");
 });
 
+test("two people with the same name are told apart by their usernames", async () => {
+  const alex = (id, name) => ({
+    id,
+    name,
+    deleted: false,
+    is_bot: false,
+    profile: { real_name: "Alex Chen", display_name: "alex" },
+  });
+  const { connector } = await setupSlack({
+    ...channelsOnly,
+    "users.list": [ok({ ok: true, members: [alex("U0A1", "alex.chen"), alex("U0A2", "achen")] })],
+  });
+  const prepared = await connector.prepare(
+    "send_message",
+    { destination: "Alex Chen", text: "hi" },
+    BOUND
+  );
+  assert.deepEqual(prepared.choices, [
+    { label: "Alex Chen (@alex.chen)", destination: "@alex.chen" },
+    { label: "Alex Chen (@achen)", destination: "@achen" },
+  ]);
+});
+
 test("an ambiguous name asks which one and prepares nothing", async () => {
   const { connector, slack } = await setupSlack({
     ...channelsOnly,

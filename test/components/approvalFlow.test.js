@@ -30,19 +30,28 @@ function button(root, label) {
   return found;
 }
 
+const SENT = { state: "sent", url: "https://slack.test/p/1" };
+
 // Mounts a card for a real runApprovalAction turn; returns what the test drives.
-async function mountApprovalTurn(t) {
+// Commits answer with `replies` in turn; each prepare gets the next action id.
+async function mountApprovalTurn(t, { replies = [SENT] } = {}) {
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
   });
+  // Ends the turn, so a card a failed test left waiting holds no timer.
+  const controller = new AbortController();
+  t.after(() => controller.abort());
   const commits = [];
+  const connects = [];
+  let prepares = 0;
+  const slack = { id: "slack", connected: true, configured: true, needsReconnect: false };
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
         connectorPrepare: async () => ({
           status: "ready",
-          actionId: "a1",
+          actionId: `a${(prepares += 1)}`,
           preview: {
             verbKey: "default",
             destinationLabel: "#eng",
@@ -52,9 +61,15 @@ async function mountApprovalTurn(t) {
         }),
         connectorCommit: async (actionId, edits) => {
           commits.push({ actionId, edits });
-          return { state: "sent", url: "https://slack.test/p/1" };
+          return replies[Math.min(commits.length, replies.length) - 1];
         },
         connectorCancel: async () => ({ cancelled: true }),
+        connectorConnect: async (target) => {
+          connects.push(target);
+          slack.needsReconnect = false;
+          return { status: "connected" };
+        },
+        connectorStatus: async () => [slack],
       },
     },
   });
@@ -87,8 +102,17 @@ async function mountApprovalTurn(t) {
   const { createRoot } = require("react-dom/client");
   root = createRoot(container);
   await React.act(async () => root.render(React.createElement(Harness)));
+  // A layout change: the card goes away and comes back.
+  const remount = async () => {
+    await React.act(async () => root.render(null));
+    await React.act(async () => root.render(React.createElement(Harness)));
+  };
+  // Lets the card's IPC round trips (connect, prepare, commit) finish.
+  const settle = () =>
+    React.act(async () => {
+      for (let i = 0; i < 20; i += 1) await new Promise((resolve) => setImmediate(resolve));
+    });
 
-  const controller = new AbortController();
   let toolResult;
   await React.act(async () => {
     toolResult = runApprovalAction(
@@ -113,7 +137,7 @@ async function mountApprovalTurn(t) {
     findElement(container, (element) => element.tagName === "TEXTAREA"),
     "the card shows the text, editable"
   );
-  return { container, store, commits, toolResult };
+  return { container, store, commits, connects, toolResult, remount, settle };
 }
 
 test("Change the text in place, Send: the reviewed text is what gets sent", async (t) => {
@@ -153,4 +177,53 @@ test("Send commits the edit and freezes the text", async (t) => {
     "the sent text is no longer editable"
   );
   assert.match(container.textContent, /Edited text/);
+});
+
+test("edits on the card survive a remount", async (t) => {
+  const { container, store, remount } = await mountApprovalTurn(t);
+  await React.act(async () =>
+    store.updateApprovalDraft(store.approvalKey("m1", "call-1"), { body: "Edited text" })
+  );
+  await remount();
+  const bodyField = findElement(container, (element) => element.tagName === "TEXTAREA");
+  // A fresh field: React mounts the text as its default value.
+  assert.equal(bodyField.defaultValue, "Edited text");
+});
+
+test("Retry on the card after a failed Send prepares again and sends once", async (t) => {
+  const { container, commits, toolResult, settle } = await mountApprovalTurn(t, {
+    replies: [{ state: "failed", errorCode: "rate_limited", message: "Busy" }, SENT],
+  });
+  await React.act(async () => click(button(container, "connectors.approval.send")));
+  await settle();
+  await React.act(async () => click(button(container, "common.retry")));
+  const result = await toolResult;
+  assert.equal(result.data.status, "sent");
+  assert.deepEqual(
+    commits.map((commit) => commit.actionId),
+    ["a1", "a2"]
+  );
+});
+
+test("Yes on the card's connect prompt connects, then sends once", async (t) => {
+  const { container, commits, connects, toolResult, settle } = await mountApprovalTurn(t, {
+    replies: [{ state: "failed", errorCode: "reconnect_needed", message: "Reconnect" }, SENT],
+  });
+  await React.act(async () => click(button(container, "connectors.approval.send")));
+  await settle();
+  assert.match(container.textContent, /connectors\.approval\.connectToSend/);
+  const yes = findElement(
+    container,
+    (element) =>
+      element.tagName === "BUTTON" &&
+      element.textContent.includes("agentMode.interactions.connection.yes")
+  );
+  await React.act(async () => click(yes));
+  const result = await toolResult;
+  assert.deepEqual(connects, ["slack"]);
+  assert.equal(result.data.status, "sent");
+  assert.deepEqual(
+    commits.map((commit) => commit.actionId),
+    ["a1", "a2"]
+  );
 });

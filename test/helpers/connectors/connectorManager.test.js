@@ -430,6 +430,21 @@ test("prepare passes on only the fields each connector result defines", async ()
     ],
     [
       {
+        status: "needs_clarification",
+        message: "Which one?",
+        candidates: [],
+        choices: Array.from({ length: 8 }, (_, i) => ({ label: `#c${i}`, destination: `#c${i}` })),
+      },
+      {
+        status: "needs_clarification",
+        message: "Which one?",
+        candidates: [],
+        // No more than a connector offers to pick from.
+        choices: Array.from({ length: 5 }, (_, i) => ({ label: `#c${i}`, destination: `#c${i}` })),
+      },
+    ],
+    [
+      {
         status: "failed",
         errorCode: "channel_archived",
         message: "That channel is archived.",

@@ -84,6 +84,9 @@ export async function runApprovalAction(
   } else {
     context.releaseAction(actionKey);
   }
+  if (outcome.state === "not_sent" && outcome.clarification) {
+    return prepareFailureResult(outcome.clarification, connectorId);
+  }
   // An edited card may have gone to other recipients than the model chose.
   const destination =
     (outcome.state === "sent" || outcome.state === "unknown") && outcome.destinationLabel
