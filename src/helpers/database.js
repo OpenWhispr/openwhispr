@@ -3901,6 +3901,9 @@ class DatabaseManager {
             "UPDATE notes SET space_id = ?, account_id = ?, sync_status = 'pending', updated_at = datetime('now'), left_team = (CASE WHEN ? = 1 AND cloud_id IS NOT NULL THEN 1 ELSE 0 END) WHERE folder_id = ? AND deleted_at IS NULL"
           )
           .run(spaceId, nextAccountId, leftTeam, id);
+        this.db
+          .prepare("UPDATE agent_conversations SET space_id = ? WHERE folder_id = ?")
+          .run(spaceId, id);
         return this.db
           .prepare("SELECT * FROM notes WHERE folder_id = ? AND deleted_at IS NULL")
           .all(id);
