@@ -261,7 +261,7 @@ export async function pushNotes(
     payload: Omit<NotePushInput, 'client_note_id'>;
     pushedTranscript: PushedTranscript | null;
   })[] = [];
-  const deletes: { localId: number; remoteId: string }[] = [];
+  const deletes: { localId: number; remoteId: string; pushed: Note }[] = [];
   let failed = 0;
   let skippedPendingSpace = 0;
   let skippedPendingFolder = 0;
@@ -276,7 +276,7 @@ export async function pushNotes(
 
   for (const n of pending) {
     if (n.deletedAt) {
-      if (n.remoteId) deletes.push({ localId: n.id, remoteId: n.remoteId });
+      if (n.remoteId) deletes.push({ localId: n.id, remoteId: n.remoteId, pushed: n });
       else notesRepository.hardDeleteNote(n.id);
       continue;
     }
@@ -566,8 +566,21 @@ export async function pushNotes(
       if (e instanceof SyncCancelledError) throw e;
       checkpoint();
       if (isPolicyCloudBackupBlocked(e)) throw e;
-      failed += 1;
-      Sentry.captureException(e, { tags: { sync: 'pushNotes.delete' } });
+      const code = errorCode(e);
+      if (isPermissionDenialCode(code)) {
+        resetTeamCursors();
+        notesRepository.restoreDeniedNoteDelete(d.pushed);
+        Sentry.addBreadcrumb({
+          category: 'sync',
+          message: 'pushNotes: delete denied by permission; team cursors reset',
+          level: 'warning',
+        });
+      } else if (isSpaceAccessCode(code) || isHttpStatus(e, 404)) {
+        notesRepository.hardDeleteNote(d.localId);
+      } else {
+        failed += 1;
+        Sentry.captureException(e, { tags: { sync: 'pushNotes.delete' } });
+      }
     }
   }
 
