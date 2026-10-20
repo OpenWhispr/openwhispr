@@ -52,7 +52,7 @@ function ResolvedAddresses({ addresses }: { addresses: string[] }): ReactElement
   const { t } = useTranslation();
   if (addresses.length === 0) return null;
   return (
-    <p className="ps-18 text-xs text-muted-foreground" dir="auto">
+    <p className="ps-16 text-[13px] text-muted-foreground" dir="auto">
       {t("connectors.approval.email.sendsTo", {
         addresses: addresses.map(recipientLabel).join(", "),
       })}

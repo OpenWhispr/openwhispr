@@ -28,11 +28,11 @@ export function ApiKeyCard({
   const [hasValue, setHasValue] = useState(false);
   return (
     <div>
-      <p className="text-[14px] font-medium text-foreground">
+      <p className="font-medium text-foreground">
         {t("agentMode.interactions.apiKey.title", { provider: payload.providerName })}
       </p>
       {payload.reason && (
-        <p className="text-xs text-muted-foreground" dir="auto">
+        <p className="text-[13px] text-muted-foreground" dir="auto">
           {payload.reason}
         </p>
       )}
@@ -70,8 +70,11 @@ export function ApiKeyCard({
 export function ApiKeySavedRow({ payload }: { payload: ApiKeyPayload }): ReactElement {
   const { t } = useTranslation();
   return (
-    <p data-api-key-saved="" className="flex items-center gap-1.5 text-xs text-muted-foreground">
-      <Check size={13} className="text-success" />
+    <p
+      data-api-key-saved=""
+      className="flex items-center gap-1.5 text-[13px] text-muted-foreground"
+    >
+      <Check size={14} className="text-success" />
       {t("agentMode.interactions.apiKey.saved", { provider: payload.providerName })}
     </p>
   );

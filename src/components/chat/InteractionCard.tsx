@@ -118,7 +118,7 @@ export function InteractionCard({ entry }: { entry: InteractionEntry }): ReactEl
       data-interaction-card={entry.key}
       data-kind={entry.payload.kind}
       onKeyDown={onKeyDown}
-      className="my-1.5 rounded-2xl bg-surface-1 p-3.5 text-[13px] outline-none"
+      className="my-1.5 rounded-2xl bg-surface-1 p-3 text-[15px] outline-none"
     >
       <CardBody entry={entry} />
     </div>

@@ -70,7 +70,7 @@ function BodyField({
       className={INLINE_TEXT_FIELD}
     />
   ) : (
-    <p className="whitespace-pre-wrap break-words leading-6 text-foreground" dir="auto">
+    <p className="whitespace-pre-wrap break-words leading-snug text-foreground" dir="auto">
       {value}
     </p>
   );
@@ -226,7 +226,7 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
           defaultValue: t("connectors.approval.headers.default", { destination }),
         })}
       </p>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-[13px] text-muted-foreground">
         {preview.workspaceLabel
           ? t("connectors.approval.identityWithWorkspace", {
               account: preview.accountLabel,
@@ -291,7 +291,7 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
     <button
       type="button"
       onClick={() => openLink(entry.url as string)}
-      className="me-auto inline-flex items-center gap-1 rounded-sm text-xs font-medium text-primary hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40"
+      className="me-auto inline-flex items-center gap-1 rounded-sm text-[13px] font-medium text-primary hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40"
     >
       <ExternalLink size={12} />
       {openLabel}
@@ -305,22 +305,19 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
       data-approval-card={entry.key}
       data-state={entry.state}
       onKeyDown={keepEscape}
-      className="my-1.5 flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-surface-1 text-[13px] outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      className="my-1.5 flex flex-col overflow-hidden rounded-2xl border border-border bg-surface-1 text-[15px] outline-none focus-visible:ring-1 focus-visible:ring-ring"
     >
-      <div className="space-y-1 px-4 pt-3 pb-2.5">{header}</div>
-      <div className="border-t border-border/50" />
+      <div className="space-y-0.5 px-4 pt-3 pb-2.5">{header}</div>
+      <div className="border-t border-border" />
       {/* A long message scrolls here; who it goes to and the actions stay put. */}
-      <div
-        data-approval-body=""
-        className="agent-chat-scroll max-h-44 overflow-y-auto px-4 py-3 text-[14px]"
-      >
+      <div data-approval-body="" className="agent-chat-scroll max-h-44 overflow-y-auto px-4 py-3">
         {message}
       </div>
 
       <div className="px-4">
         {hasFieldLayout && editing && (
           <>
-            <p id={problemsId} className="pb-1 text-xs text-destructive empty:hidden">
+            <p id={problemsId} className="pb-1 text-[13px] text-destructive empty:hidden">
               {problemText}
             </p>
             {/* Always present while editable, so each new reason is heard. */}
@@ -330,7 +327,7 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
           </>
         )}
         {preview.notes?.map((note) => (
-          <p key={note.key} className="pb-1 text-xs text-muted-foreground" dir="auto">
+          <p key={note.key} className="pb-1 text-[13px] text-muted-foreground" dir="auto">
             {/* Some note copy (issue.notes.droppedLabels) interpolates the
                 card's destination, which connectors don't themselves send in
                 note values — the note's own values win on conflict. */}
@@ -339,7 +336,7 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
         ))}
         {/* One live region for every outcome, rendered from the start so a
             screen reader announces each change. */}
-        <div role="status" aria-live="polite" className="text-xs">
+        <div role="status" aria-live="polite" className="text-[13px]">
           {pending && entry.notice === "policy_retry" && (
             <p className="pb-1 text-muted-foreground">{t("connectors.approval.policyRetry")}</p>
           )}
@@ -435,7 +432,7 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
               </button>
             )}
             {entry.state === "sent" && (
-              <span className="inline-flex h-8 items-center gap-1.5 px-2 text-[13px] text-muted-foreground">
+              <span className="inline-flex h-8 items-center gap-1.5 px-2 text-[14px] text-muted-foreground">
                 <Check size={14} />
                 {verb ? sentText : t("connectors.approval.sentLabel")}
               </span>

@@ -1,7 +1,6 @@
 import { useState, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, X } from "../../icons";
-import { LogoTile } from "../../ui/LogoTile";
 import { cn } from "../../lib/utils";
 import { GithubDeviceCode } from "../../connectors/GithubDeviceCode";
 import {
@@ -78,13 +77,26 @@ export function ConnectRow({
   return (
     <div>
       <div className="flex items-center gap-3">
-        {logo && <LogoTile src={logo.src} alt="" monochrome={logo.monochrome} />}
+        {logo && (
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-2">
+            <img
+              src={logo.src}
+              alt=""
+              aria-hidden="true"
+              width={16}
+              height={16}
+              decoding="async"
+              draggable={false}
+              className={cn("size-4", logo.monochrome && "icon-monochrome")}
+            />
+          </span>
+        )}
         <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-medium text-foreground" dir="auto">
+          <p className="font-medium text-foreground" dir="auto">
             {title}
           </p>
           {reason && (
-            <p className="text-xs text-muted-foreground" dir="auto">
+            <p className="text-[13px] text-muted-foreground" dir="auto">
               {reason}
             </p>
           )}
@@ -107,7 +119,7 @@ export function ConnectRow({
       </div>
       {children}
       {working && target === "github" && <GithubDeviceCode connectorId="github" />}
-      <div role="status" className="text-xs">
+      <div role="status" className="text-[13px]">
         {/* Apple Calendar asks for macOS permission; the others finish in the browser. */}
         {working && target !== "apple" && (
           <p className="mt-2 text-muted-foreground">

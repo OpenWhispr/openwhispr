@@ -26,7 +26,7 @@ export function SettingsCard({
   return (
     <div>
       {payload.message && (
-        <p className="text-[14px] text-foreground" dir="auto">
+        <p className="text-foreground" dir="auto">
           {payload.message}
         </p>
       )}
@@ -34,7 +34,7 @@ export function SettingsCard({
         <button
           type="button"
           onClick={() => openInteractionSettings(entry.key)}
-          className="rounded-sm text-[13px] font-medium text-primary hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40"
+          className="rounded-sm text-[14px] font-medium text-primary hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40"
         >
           {t("providerErrors.openSettings")}
         </button>
@@ -54,7 +54,7 @@ export function SettingsCard({
         )}
       </div>
       {payload.technicalDetails && (
-        <details className="group mt-2 text-xs text-muted-foreground">
+        <details className="group mt-2 text-[13px] text-muted-foreground">
           <summary className="flex cursor-pointer list-none items-center gap-1 select-none [&::-webkit-details-marker]:hidden">
             <ChevronRight
               size={12}
@@ -62,7 +62,7 @@ export function SettingsCard({
             />
             {t("agentMode.interactions.settings.technicalDetails")}
           </summary>
-          <pre dir="ltr" className="mt-1 whitespace-pre-wrap ps-4 font-mono text-[11px]">
+          <pre dir="ltr" className="mt-1 whitespace-pre-wrap ps-4 font-mono text-xs">
             {payload.technicalDetails}
           </pre>
         </details>

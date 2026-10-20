@@ -84,6 +84,15 @@
   opacity: 1;
 }
 
+/* A connect card carries a faint wash of the brand blue behind its actions. */
+.agent-window [data-interaction-card][data-kind="connection"] {
+  background-image: radial-gradient(
+    55% 140% at 72% 100%,
+    color-mix(in oklab, var(--color-primary) 9%, transparent),
+    transparent
+  );
+}
+
 /* A step that is running: the label in the foreground color, with the brand
    blue sweeping across it (steady under reduced motion). */
 .agent-shimmer-text {
