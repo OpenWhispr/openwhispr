@@ -792,6 +792,11 @@
     },
     "getApiKey": "Получить API-ключ ->",
     "selectModel": "Выберите модель",
+    "typedModelId": {
+      "label": "Или введите ID модели",
+      "placeholder": "например, claude-opus-5-5",
+      "hint": "Для модели {{provider}}, которой нет в списке выше. ID отправляется в {{provider}} в точности так, как он введён."
+    },
     "availableModels": "Доступные модели",
     "disableThinking": {
       "label": "Отключить вывод рассуждений",

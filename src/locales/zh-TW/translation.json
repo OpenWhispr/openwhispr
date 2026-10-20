@@ -792,6 +792,11 @@
     },
     "getApiKey": "取得 API Key ->",
     "selectModel": "選擇模型",
+    "typedModelId": {
+      "label": "或輸入模型 ID",
+      "placeholder": "例如 claude-opus-5-5",
+      "hint": "用於上方未列出的 {{provider}} 模型。ID 會依輸入內容原樣傳送給 {{provider}}。"
+    },
     "availableModels": "可用模型",
     "disableThinking": {
       "label": "停用思考輸出",

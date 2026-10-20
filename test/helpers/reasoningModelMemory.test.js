@@ -159,3 +159,81 @@ test("retired cloud model selections are repointed to the provider default", asy
   assert.equal(state.chatAgentModel, "gpt-5.2", "shipping models stay untouched");
   assert.equal(state.noteFormattingModel, "my-endpoint-model", "custom ids are free-form");
 });
+
+// Anthropic ships models faster than the registry is updated, so the picker
+// accepts a typed id. Only ids the user typed survive the startup repoint; an
+// unknown id the user never typed (a model we removed) still resets.
+test("typed Anthropic model ids survive reconciliation and provider switches", async (t) => {
+  installBrowserGlobals(t, {
+    initialStorage: {
+      _llmScopeKeysMigrated: "1",
+      cleanupMode: "providers",
+      cleanupProvider: "anthropic",
+      cleanupModel: "claude-opus-9",
+      chatAgentMode: "providers",
+      chatAgentProvider: "anthropic",
+      chatAgentModel: "claude-retired-model",
+      customReasoningModelIds: JSON.stringify({ anthropic: ["claude-opus-9"] }),
+    },
+  });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-typed-anthropic-model-test-",
+  });
+  const { useSettingsStore, reconcileRetiredCloudModelSelections } = await vite.ssrLoadModule(
+    "/stores/settingsStore.ts"
+  );
+  const state = () => useSettingsStore.getState();
+
+  await t.test("reconciliation keeps a typed id and repoints an untyped unknown id", () => {
+    reconcileRetiredCloudModelSelections();
+    assert.equal(state().cleanupModel, "claude-opus-9");
+    assert.notEqual(state().chatAgentModel, "claude-retired-model");
+    assert.ok(state().chatAgentModel, "repointed to a concrete replacement, not cleared");
+  });
+
+  await t.test("switch-and-return restores the typed id", () => {
+    state().switchReasoningProvider("dictationCleanup", "openai", "gpt-5.2");
+    state().switchReasoningProvider("dictationCleanup", "anthropic", "claude-fable-5-1");
+    assert.equal(state().cleanupModel, "claude-opus-9");
+  });
+
+  await t.test("adding a typed id trims, dedupes and persists it newest first", () => {
+    state().addCustomReasoningModelId("anthropic", "  claude-sonnet-9  ");
+    state().addCustomReasoningModelId("anthropic", "claude-opus-9");
+    assert.deepEqual(state().customReasoningModelIds.anthropic, [
+      "claude-opus-9",
+      "claude-sonnet-9",
+    ]);
+    assert.deepEqual(JSON.parse(localStorage.getItem("customReasoningModelIds")), {
+      anthropic: ["claude-opus-9", "claude-sonnet-9"],
+    });
+  });
+
+  await t.test("registry ids, blank ids and other providers are not recorded", () => {
+    state().addCustomReasoningModelId("anthropic", "claude-fable-5-1");
+    state().addCustomReasoningModelId("anthropic", "   ");
+    state().addCustomReasoningModelId("openai", "gpt-9");
+    assert.deepEqual(state().customReasoningModelIds, {
+      anthropic: ["claude-opus-9", "claude-sonnet-9"],
+    });
+  });
+
+  await t.test("the remembered list is capped", () => {
+    for (let index = 0; index < 30; index += 1) {
+      state().addCustomReasoningModelId("anthropic", `claude-test-${index}`);
+    }
+    assert.equal(state().customReasoningModelIds.anthropic.length, 20);
+    assert.equal(state().customReasoningModelIds.anthropic[0], "claude-test-29");
+  });
+});
+
+test("a corrupt typed model id list reads as empty", async (t) => {
+  installBrowserGlobals(t, {
+    initialStorage: { customReasoningModelIds: '{"anthropic":"not-a-list"' },
+  });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-typed-anthropic-model-corrupt-test-",
+  });
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  assert.deepEqual(useSettingsStore.getState().customReasoningModelIds, {});
+});

@@ -792,6 +792,11 @@
     },
     "getApiKey": "Obtenir la clé API ->",
     "selectModel": "Sélectionner un modèle",
+    "typedModelId": {
+      "label": "Ou saisissez un ID de modèle",
+      "placeholder": "ex. : claude-opus-5-5",
+      "hint": "Pour un modèle {{provider}} absent de la liste ci-dessus. L'ID est envoyé à {{provider}} tel que vous l'avez saisi."
+    },
     "availableModels": "Modèles disponibles",
     "disableThinking": {
       "label": "Désactiver la sortie de raisonnement",

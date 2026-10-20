@@ -792,6 +792,11 @@
     },
     "getApiKey": "Get your API key ->",
     "selectModel": "Select Model",
+    "typedModelId": {
+      "label": "Or enter a model ID",
+      "placeholder": "e.g. claude-opus-5-5",
+      "hint": "For a {{provider}} model that isn't listed above. The ID is sent to {{provider}} exactly as typed."
+    },
     "availableModels": "Available Models",
     "disableThinking": {
       "label": "Disable thinking output",

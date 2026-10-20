@@ -154,15 +154,29 @@ function canonicalTranscriptionBaseUrl(providerId: string): string | null {
   );
 }
 
+/** Providers whose picker also takes a typed model id, for models the registry doesn't list yet. */
+export const TYPED_MODEL_ID_PROVIDERS: ReadonlySet<string> = new Set(["anthropic"]);
+const MAX_TYPED_MODEL_IDS = 20;
+
+function isRegistryReasoningModel(providerId: string, modelId: string): boolean {
+  return (
+    modelRegistryData.cloudProviders
+      .find((provider) => provider.id === providerId)
+      ?.models.some((model) => model.id === modelId) ?? false
+  );
+}
+
 export function reasoningModelBelongsToProvider(providerId: string, modelId: string): boolean {
   if (!modelId) return false;
   // Custom and OpenRouter ids are free-form; any remembered id is valid.
   // Tinfoil's registry entry is refreshed in place from its live catalog.
   if (providerId === "custom" || providerId === "openrouter") return true;
+  if (isRegistryReasoningModel(providerId, modelId)) return true;
+  // Only ids the user typed count, so a model we drop from the registry still
+  // falls back to the default instead of failing every request.
   return (
-    modelRegistryData.cloudProviders
-      .find((provider) => provider.id === providerId)
-      ?.models.some((model) => model.id === modelId) ?? false
+    TYPED_MODEL_ID_PROVIDERS.has(providerId) &&
+    (useSettingsStore.getState().customReasoningModelIds[providerId]?.includes(modelId) ?? false)
   );
 }
 
@@ -980,6 +994,9 @@ export interface SettingsState
   /** LLM twin of transcriptionModelByProvider, keyed `"<scope>:<providerId>"`. */
   reasoningModelByProvider: Record<string, string>;
 
+  /** Model ids typed into the picker per provider, newest first (see TYPED_MODEL_ID_PROVIDERS). */
+  customReasoningModelIds: Record<string, string[]>;
+
   noteFormattingMode: InferenceMode;
   noteFormattingProvider: string;
   noteFormattingModel: string;
@@ -1137,6 +1154,7 @@ export interface SettingsState
     providerId: string,
     fallbackModel?: string
   ) => void;
+  addCustomReasoningModelId: (providerId: string, modelId: string) => void;
   setCleanupCloudMode: (value: string) => void;
   setCleanupCloudBaseUrl: (value: string) => void;
   setCustomDictionary: (words: string[]) => void;
@@ -1298,6 +1316,21 @@ function persistTranscriptionModelMemory(memory: Record<string, string>) {
 function persistReasoningModelMemory(memory: Record<string, string>) {
   if (isBrowser) localStorage.setItem("reasoningModelByProvider", JSON.stringify(memory));
   useSettingsStore.setState({ reasoningModelByProvider: memory });
+}
+
+function readModelIdLists(key: string): Record<string, string[]> {
+  try {
+    const parsed = JSON.parse(readString(key, "{}"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        (entry): entry is [string, string[]] =>
+          Array.isArray(entry[1]) && entry[1].every((id) => typeof id === "string")
+      )
+    );
+  } catch {
+    return {};
+  }
 }
 
 function readModelMemory(key: string): Record<string, string> {
@@ -1547,6 +1580,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   ),
   transcriptionModelByProvider: readModelMemory("transcriptionModelByProvider"),
   reasoningModelByProvider: readModelMemory("reasoningModelByProvider"),
+  customReasoningModelIds: readModelIdLists("customReasoningModelIds"),
   // Secrets aren't hydrated yet at construction; the BYOK default is set
   // post-hydration in initializeSettings.
   cloudTranscriptionMode: readString("cloudTranscriptionMode", "openwhispr"),
@@ -2104,6 +2138,19 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
           ? remembered
           : fallbackModel,
     });
+  },
+  addCustomReasoningModelId: (providerId, modelId) => {
+    const id = modelId.trim();
+    if (!id || !TYPED_MODEL_ID_PROVIDERS.has(providerId)) return;
+    if (isRegistryReasoningModel(providerId, id)) return;
+    const current = useSettingsStore.getState().customReasoningModelIds;
+    const ids = [id, ...(current[providerId] ?? []).filter((existing) => existing !== id)].slice(
+      0,
+      MAX_TYPED_MODEL_IDS
+    );
+    const next = { ...current, [providerId]: ids };
+    if (isBrowser) localStorage.setItem("customReasoningModelIds", JSON.stringify(next));
+    useSettingsStore.setState({ customReasoningModelIds: next });
   },
   setCloudTranscriptionMode: createStringSetter("cloudTranscriptionMode"),
   setCleanupCloudMode: createStringSetter("cleanupCloudMode"),
@@ -3242,7 +3289,7 @@ export async function reconcileLocalModelSelections(): Promise<void> {
  * (e.g. a retired Groq id) at that provider's current default — otherwise every
  * request 404s with an error the user can't act on. Custom, OpenRouter and
  * Tinfoil ids are skipped: they're free-form or reconciled from the live
- * catalog in tinfoilModels.ts.
+ * catalog in tinfoilModels.ts. So are ids typed into the Anthropic picker.
  */
 export function reconcileRetiredCloudModelSelections(): void {
   const state = useSettingsStore.getState() as unknown as Record<string, unknown>;

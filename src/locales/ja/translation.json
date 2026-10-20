@@ -792,6 +792,11 @@
     },
     "getApiKey": "API キーを取得 ->",
     "selectModel": "モデルを選択",
+    "typedModelId": {
+      "label": "またはモデル ID を入力",
+      "placeholder": "例: claude-opus-5-5",
+      "hint": "上の一覧にない {{provider}} のモデル向けです。ID は入力したとおりに {{provider}} へ送信されます。"
+    },
     "availableModels": "利用可能なモデル",
     "disableThinking": {
       "label": "思考出力を無効にする",

@@ -426,6 +426,11 @@
     },
     "getApiKey": "احصل على مفتاح API الخاص بك ←",
     "selectModel": "تحديد النموذج",
+    "typedModelId": {
+      "label": "أو أدخل معرّف نموذج",
+      "placeholder": "مثال: claude-opus-5-5",
+      "hint": "لنموذج من {{provider}} غير مدرج أعلاه. يُرسل المعرّف إلى {{provider}} كما كتبته تمامًا."
+    },
     "availableModels": "النماذج المتاحة",
     "disableThinking": {
       "label": "تعطيل مخرجات التفكير",

@@ -11,6 +11,7 @@ import { Button } from "./ui/button";
 import { CircleAlert, Cloud, Lock, Zap } from "./icons";
 import ApiKeyInput from "./ui/ApiKeyInput";
 import ModelCardList from "./ui/ModelCardList";
+import CustomModelInput from "./ui/CustomModelInput";
 import LocalModelPicker, { type LocalProvider } from "./LocalModelPicker";
 import { ProviderTabs, type ProviderTabItem } from "./ui/ProviderTabs";
 import OpenAICompatiblePanel from "./OpenAICompatiblePanel";
@@ -25,7 +26,7 @@ import { useTinfoilModels } from "../hooks/useTinfoilModels";
 import { getRemoteProviderIcon } from "../utils/providerIcons";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
 import { getCachedPlatform } from "../utils/platform";
-import { useSettingsStore } from "../stores/settingsStore";
+import { TYPED_MODEL_ID_PROVIDERS, useSettingsStore } from "../stores/settingsStore";
 import {
   filterByokProviderOptionsByPolicy,
   isModeAllowedByPolicy,
@@ -359,6 +360,7 @@ export default function ReasoningModelSelector({
   const setTinfoilApiKey = useSettingsStore((s) => s.setTinfoilApiKey);
   const cortiApiKey = useSettingsStore((s) => s.cortiApiKey);
   const setCortiApiKey = useSettingsStore((s) => s.setCortiApiKey);
+  const addCustomReasoningModelId = useSettingsStore((s) => s.addCustomReasoningModelId);
   const [selectedMode, setSelectedMode] = useState<"cloud" | "local">(mode || "cloud");
   const [selectedCloudProvider, setSelectedCloudProvider] = useState("openai");
   const [selectedLocalProvider, setSelectedLocalProvider] = useState("qwen");
@@ -459,6 +461,16 @@ export default function ReasoningModelSelector({
     }));
   }, [displayedCloudProvider, openaiModelOptions, tinfoilModels, t]);
 
+  const typedModelIdEnabled = TYPED_MODEL_ID_PROVIDERS.has(displayedCloudProvider);
+  const committedTypedModelId =
+    typedModelIdEnabled &&
+    localReasoningProvider === displayedCloudProvider &&
+    !selectedCloudModels.some((model) => model.value === reasoningModel)
+      ? reasoningModel
+      : "";
+  const [typedModelIdDraft, setTypedModelIdDraft] = useState(committedTypedModelId);
+  useEffect(() => setTypedModelIdDraft(committedTypedModelId), [committedTypedModelId]);
+
   useEffect(() => {
     const localProviderIds = localProviders.map((p) => p.id);
     if (localProviderIds.includes(localReasoningProvider)) {
@@ -486,6 +498,22 @@ export default function ReasoningModelSelector({
         : displayedCloudProvider;
     setLocalReasoningProvider(provider);
     setReasoningModel(modelId);
+  };
+
+  const handleTypedModelIdCommit = (value: string) => {
+    const modelId = value.trim();
+    if (!modelId) return;
+    // Enter and the blur that follows it both commit; the second is a no-op.
+    if (localReasoningProvider === displayedCloudProvider && modelId === reasoningModel) {
+      setTypedModelIdDraft(committedTypedModelId);
+      return;
+    }
+    if (selectedCloudModels.some((model) => model.value === modelId)) {
+      setTypedModelIdDraft("");
+    } else {
+      addCustomReasoningModelId(displayedCloudProvider, modelId);
+    }
+    handleModelSelect(modelId);
   };
 
   const handleModeChange = (newMode: "cloud" | "local") => {
@@ -690,6 +718,18 @@ export default function ReasoningModelSelector({
                       }
                       onModelSelect={handleModelSelect}
                     />
+                    {typedModelIdEnabled && (
+                      <CustomModelInput
+                        value={typedModelIdDraft}
+                        onChange={setTypedModelIdDraft}
+                        onCommit={handleTypedModelIdCommit}
+                        label={t("reasoning.typedModelId.label")}
+                        placeholder={t("reasoning.typedModelId.placeholder")}
+                        hint={t("reasoning.typedModelId.hint", {
+                          provider: REASONING_PROVIDERS[displayedCloudProvider]?.name,
+                        })}
+                      />
+                    )}
                     {displayedCloudProvider === "tinfoil" && (
                       <>
                         {tinfoilModelsLoading && (
