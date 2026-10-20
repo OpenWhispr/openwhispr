@@ -120,8 +120,16 @@ test("every config refetch bypasses the HTTP cache and declares the client capab
   assert.deepEqual(
     requests.map(({ url, cache, headers }) => [url, cache, headers["x-openwhispr-capabilities"]]),
     [
-      ["https://api.openwhispr.test/api/stt-config", "no-store", "orukeet"],
-      ["https://api.openwhispr.test/api/note-recording-config", "no-store", "orukeet"],
+      [
+        "https://api.openwhispr.test/api/stt-config",
+        "no-store",
+        "orukeet,orukeet-pipeline-v2,orukeet-language-routing",
+      ],
+      [
+        "https://api.openwhispr.test/api/note-recording-config",
+        "no-store",
+        "orukeet,orukeet-pipeline-v2,orukeet-language-routing",
+      ],
     ]
   );
 });

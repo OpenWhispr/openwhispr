@@ -28,6 +28,7 @@ import {
   type InferenceScope,
   type InferenceScopeDefinition,
   type InferenceScopeStoreKeys,
+  usesCloudModelCatalog,
 } from "../config/inferenceScopes";
 import { normalizeChineseScriptPreference } from "../utils/chineseScript";
 import { adjustBedrockModelForRegion } from "../utils/bedrockRegions";
@@ -149,7 +150,7 @@ function canonicalTranscriptionBaseUrl(providerId: string): string | null {
   );
 }
 
-function reasoningModelBelongsToProvider(providerId: string, modelId: string): boolean {
+export function reasoningModelBelongsToProvider(providerId: string, modelId: string): boolean {
   if (!modelId) return false;
   // Custom and OpenRouter ids are free-form; any remembered id is valid.
   // Tinfoil's registry entry is refreshed in place from its live catalog.
@@ -853,7 +854,13 @@ function migrateRetiredCloudModels() {
   if (!isBrowser) return;
   const swept = sweepRetiredCloudModelSelections(
     localStorage,
-    Object.values(INFERENCE_SCOPES).map(({ storeKeys }) => storeKeys)
+    Object.values(INFERENCE_SCOPES)
+      .map(({ storeKeys }) => storeKeys)
+      .filter(({ mode }) => {
+        const storedMode = localStorage.getItem(mode);
+        // An unset mode loads as the default, openwhispr.
+        return !storedMode || usesCloudModelCatalog(storedMode);
+      })
   );
   if (swept.length === 0) return;
 
@@ -978,6 +985,7 @@ export interface SettingsState
   translationRemoteUrl: string;
   translationCustomApiKey: string;
   translationDisableThinking: boolean;
+  translationReasoningEffort: string;
   useDictationTranslation: boolean;
   translationSourceLanguage: string;
   translationTargetLanguage: string;
@@ -1008,6 +1016,11 @@ export interface SettingsState
   dictationAgentVisionDisableThinking: boolean;
   noteFormattingDisableThinking: boolean;
   chatAgentDisableThinking: boolean;
+  cleanupReasoningEffort: string;
+  dictationAgentReasoningEffort: string;
+  dictationAgentVisionReasoningEffort: string;
+  noteFormattingReasoningEffort: string;
+  chatAgentReasoningEffort: string;
 
   customPrompts: Record<PromptKind, string>;
   setCustomPrompt: (kind: PromptKind, value: string) => void;
@@ -1806,6 +1819,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   translationRemoteUrl: readString("translationRemoteUrl", ""),
   translationCustomApiKey: readString("translationCustomApiKey", ""),
   translationDisableThinking: readBoolean("translationDisableThinking", true),
+  translationReasoningEffort: readString("translationReasoningEffort", ""),
   useDictationTranslation: readBoolean("useDictationTranslation", false),
   translationSourceLanguage: readString("translationSourceLanguage", "auto"),
   translationTargetLanguage: readString("translationTargetLanguage", ""),
@@ -1954,6 +1968,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   dictationAgentVisionDisableThinking: readBoolean("dictationAgentVisionDisableThinking", true),
   noteFormattingDisableThinking: readBoolean("noteFormattingDisableThinking", true),
   chatAgentDisableThinking: readBoolean("chatAgentDisableThinking", true),
+  cleanupReasoningEffort: readString("cleanupReasoningEffort", ""),
+  dictationAgentReasoningEffort: readString("dictationAgentReasoningEffort", ""),
+  dictationAgentVisionReasoningEffort: readString("dictationAgentVisionReasoningEffort", ""),
+  noteFormattingReasoningEffort: readString("noteFormattingReasoningEffort", ""),
+  chatAgentReasoningEffort: readString("chatAgentReasoningEffort", ""),
 
   customPrompts: PROMPT_KIND_LIST.reduce(
     (acc, kind) => ({ ...acc, [kind]: readString(`customPrompt.${kind}`, "") }),
@@ -2725,6 +2744,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
 // --- Selectors (derived state, not stored) ---
 
+// Route cleanup to Cloud on this, never on cleanupCloudMode alone: picking a local
+// model or the notes onboarding mode toggle sets cleanupMode and leaves that field stale.
 export const selectIsCloudCleanupMode = (state: SettingsState) =>
   state.isSignedIn && state.cleanupMode === "openwhispr" && state.cleanupCloudMode === "openwhispr";
 
@@ -2879,6 +2900,7 @@ export interface ResolvedLLMConfig {
   remoteUrl?: string;
   customApiKey?: string;
   disableThinking: boolean;
+  reasoningEffort?: string;
 }
 
 export const selectResolvedLLMConfig = (
@@ -2912,6 +2934,7 @@ export const selectResolvedLLMConfig = (
     // belongs on the request path — see selectResolvedNoteFormatting.
     customApiKey: read("customApiKey"),
     disableThinking,
+    reasoningEffort: read("reasoningEffort"),
   };
   const managed = getManagedScopeResolution(scope, state.enterpriseSetupMode);
   if (managed.kind === "error") {
@@ -3213,6 +3236,7 @@ export async function reconcileLocalModelSelections(): Promise<void> {
 export function reconcileRetiredCloudModelSelections(): void {
   const state = useSettingsStore.getState() as unknown as Record<string, unknown>;
   for (const scope of Object.values(INFERENCE_SCOPES)) {
+    if (!usesCloudModelCatalog(state[scope.storeKeys.mode])) continue;
     const provider = state[scope.storeKeys.provider] as string;
     const model = state[scope.storeKeys.model] as string;
     if (!provider || !model || provider === "tinfoil") continue;

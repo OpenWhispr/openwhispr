@@ -2,6 +2,9 @@ import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } fr
 import { useTranslation } from "react-i18next";
 import { Check, Copy, Plus, X } from "../icons";
 import { BrandMarkIcon } from "./BrandMarkIcon";
+import { HelpEvidence } from "../chat/GroundedHelpEvidence";
+import { extractHelpEvidence } from "../chat/helpEvidence";
+import { helpAnswerPlainText } from "../chat/helpEvidenceText";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
 import { TechnicalErrorDetails } from "../ui/TechnicalErrorDetails";
 import { openProviderSettings } from "../../utils/describeProviderError";
@@ -24,7 +27,7 @@ import {
   AGENT_TOOL_NAME_FALLBACK_KEY,
 } from "../../helpers/agentToolPresentation";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
-import type { AgentState, ChatImageAttachment } from "../chat/types";
+import type { AgentState, ChatImageAttachment, Message } from "../chat/types";
 import {
   normalizeAgentSelectionContext,
   type AgentSelectionContext,
@@ -108,7 +111,7 @@ export function AssistantPanel({
   onConversationReset,
   onSelectionContextChange,
 }: AssistantPanelProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const { handleMouseDown, handleMouseUp } = useWindowDrag();
   const voiceAgentKey = useSettingsStore((state) => state.voiceAgentKey);
@@ -149,14 +152,35 @@ export function AssistantPanel({
     .reverse()
     .find((message) => message.role === "assistant");
   const responseContent = latestAssistantMessage?.content ?? "";
-  const {
-    copied,
-    copy: handleCopy,
-    copyText,
-    confirmCopied,
-  } = useCopyFeedback(responseContent, {
+  // A follow-up keeps the previous answer, and its help sources, on screen
+  // until the new answer has content.
+  const displayedMessageRef = useRef<Message | undefined>(undefined);
+  if (responseContent) displayedMessageRef.current = latestAssistantMessage;
+  const displayedMessage = displayedMessageRef.current;
+  const displayedResponse = displayedMessage?.content ?? "";
+  const helpEvidence = extractHelpEvidence(displayedMessage?.toolCalls);
+  // Keyed by the answer itself, which is what auto-copy confirms; explicit
+  // Copy adds the help sources to what it writes.
+  const { copied, copyText, confirmCopied } = useCopyFeedback(responseContent, {
     resetMs: MANUAL_COPY_FEEDBACK_MS,
   });
+  const handleCopy = useCallback(async () => {
+    const responseCopyText = helpAnswerPlainText(
+      displayedResponse,
+      helpEvidence,
+      t,
+      i18n?.resolvedLanguage
+    );
+    if (await copyText(responseCopyText.trim())) confirmCopied(responseContent);
+  }, [
+    copyText,
+    confirmCopied,
+    displayedResponse,
+    helpEvidence,
+    t,
+    i18n?.resolvedLanguage,
+    responseContent,
+  ]);
 
   useEffect(() => {
     onConversationIdChange(persistence.conversationId);
@@ -291,9 +315,6 @@ export function AssistantPanel({
     return () => onBusyChange(false);
   }, [isBusy, onBusyChange]);
 
-  const displayedResponseRef = useRef("");
-  if (responseContent) displayedResponseRef.current = responseContent;
-  const displayedResponse = responseContent || displayedResponseRef.current;
   // Keep the previous response ineligible throughout a follow-up request. Audio
   // processing can return voiceState to idle one render before the chat stream
   // reports busy; without this latch, the old response briefly restores the
@@ -319,7 +340,7 @@ export function AssistantPanel({
     persistence.handleNewChat();
     onConversationIdChange(null);
     clearSelectedContext();
-    displayedResponseRef.current = "";
+    displayedMessageRef.current = undefined;
     onConversationReset();
   }, [
     clearSelectedContext,
@@ -526,6 +547,7 @@ export function AssistantPanel({
                     />
                   )}
                 </div>
+                {helpEvidence && <HelpEvidence evidence={helpEvidence} />}
                 {/* Outside responseSelectionRootRef: a drag-select + copy over the
                     response must never pick up these affordances. */}
                 {latestAssistantMessage?.error?.settingsTarget && (

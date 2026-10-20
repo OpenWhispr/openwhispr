@@ -121,6 +121,8 @@
       "mouseButtonOnlyMac": "Maustasten-Hotkeys werden derzeit nur auf macOS unterstützt.",
       "alreadyRegistered": "\"{{hotkey}}\" ist bereits von einer anderen Anwendung registriert.",
       "osReserved": "\"{{hotkey}}\" ist möglicherweise von Ihrer Desktop-Umgebung reserviert.",
+      "keyNotInKeymap": "GNOME kann „{{hotkey}}“ mit Ihrer Tastaturbelegung nicht verwenden. Wählen Sie eine andere Taste.",
+      "keyReservedByGnome": "GNOME verwendet „{{hotkey}}“ bereits für eines seiner eigenen Tastenkürzel. Wählen Sie eine andere Taste.",
       "rightModifierNeedsListener": "„{{hotkey}}“ kann auf diesem Desktop nicht verwendet werden, da seine Tastenkürzel eine normale Taste benötigen. Fügen Sie eine Taste hinzu, z. B. Control+Alt+Space.",
       "holdNeedsReleaseKey": "Halten zum Sprechen braucht eine Taste, deren Loslassen macOS erkennt: Globe, eine rechte Taste wie Rechte Option oder ein Kürzel mit Modifikator. Tippen funktioniert mit jeder Taste.",
       "holdNeedsRegularKey": "Um Halten zu nutzen, fügen Sie dem Kürzel eine normale Taste hinzu, z. B. Control+Alt+Space. Ihr Desktop kann das Halten reiner Modifikatortasten nicht melden.",
@@ -142,7 +144,7 @@
   },
   "upgradePrompt": {
     "paymentFailed": "Ihre Zahlung konnte nicht verarbeitet werden",
-    "weeklyLimit": "Sie haben Ihr Wochenlimit erreicht",
+    "weeklyLimit": "Sie haben Ihr wöchentliches Cloud-Limit erreicht",
     "pastDueDescription": "Sie sind vorerst im kostenlosen Tarif – keine Sorge, Sie haben weiterhin {{limit}} Wörter pro Woche.\nAktualisieren Sie Ihre Zahlungsmethode, um wieder unbegrenztes Pro zu erhalten.",
     "limitDescription": "{{used}} von {{limit}} Wörtern verwendet.\nIhre Transkription wurde gespeichert und eingefügt.",
     "updatePayment": "Zahlungsmethode aktualisieren",
@@ -219,11 +221,11 @@
     "rehaul": {
       "permissions": {
         "title": "OpenWhispr in 3 Minuten einrichten",
-        "microphoneDescription": "Macht aus dem, was Sie sagen, Text. Nur während der Aufnahme aktiv.",
-        "accessibilityDescription": "Fügt den Text in die App ein, die Sie gerade nutzen.",
+        "microphoneDescription": "Hört nur während der Aufnahme zu.",
+        "accessibilityDescription": "Fügt Text in jede App ein.",
         "systemAudioTitle": "Systemaudio",
-        "systemAudioDescription": "Nimmt die anderen in Ihren Gesprächen für Besprechungsnotizen auf. Nur während der Aufnahme aktiv.",
-        "screenContextDescription": "Lässt Ihren Sprachassistenten Ihren Bildschirm sehen, wenn Sie fragen. Nie gespeichert.",
+        "systemAudioDescription": "Nimmt Ihre Gesprächspartner auf.",
+        "screenContextDescription": "Zeigt dem Assistenten Ihren Bildschirm.",
         "enable": "Aktivieren",
         "enabled": "Aktiviert"
       },
@@ -631,7 +633,7 @@
       "availableButton": "Update verfügbar"
     },
     "limit": {
-      "weeklyTitle": "Wochenlimit erreicht",
+      "weeklyTitle": "Wöchentliches Cloud-Limit erreicht",
       "weeklyDescription": "Ihr Limit setzt sich rollierend zurück. Upgraden Sie auf Pro oder nutzen Sie Ihren eigenen API-Schlüssel für unbegrenzte Nutzung."
     },
     "accessibilityMissing": {
@@ -680,12 +682,17 @@
       "retrying": "Wird erneut transkribiert…",
       "retrySuccess": "Transkription aktualisiert",
       "retryError": "Erneute Transkription fehlgeschlagen",
+      "retryErrors": {
+        "invalidResponse": "Die Transkriptions-Engine hat eine unerwartete Antwort zurückgegeben. Bitte versuchen Sie es erneut."
+      },
       "audioNotFound": "Audiodatei nicht gefunden oder abgelaufen",
       "noAiProcessing": "Auf diese Transkription wurde keine KI-Verarbeitung angewendet",
       "transcriptionFailed": "Transkription fehlgeschlagen",
       "failedCtaSettings": "Richten Sie Ihren Transkriptionsanbieter ein",
       "failedCtaAndRetry": "und klicken Sie dann auf Wiederholen",
       "failedCtaSettingsOnly": "Richten Sie Ihren Transkriptionsanbieter in den Einstellungen ein",
+      "failedCtaAiSettings": "Prüfen Sie das Modell des Sprachassistenten in den Einstellungen",
+      "editFailedTranscriptKept": "Bearbeitung nicht angewendet · Transkript behalten",
       "failedLimitReached": "Tageslimit erreicht",
       "failedOffline": "Offline",
       "rawTranscript": "Rohtranskript",
@@ -767,6 +774,21 @@
       "noSearchResults": "Keine Modelle für „{{query}}“",
       "selectModelHint": "Noch kein Modell ausgewählt — wählen Sie eines aus der Liste unten.",
       "keyRequiredHint": "Für die Inferenz ist ein API-Schlüssel erforderlich — fügen Sie einen hinzu, um diesen Anbieter zu nutzen."
+    },
+    "effort": {
+      "title": "Denkaufwand",
+      "description": "Wie viel das Modell nachdenkt, bevor es antwortet.",
+      "descriptionWithDefault": "Wie viel das Modell nachdenkt, bevor es antwortet. Auto verwendet die Standardeinstellung des Anbieters ({{value}}).",
+      "auto": "Auto",
+      "options": {
+        "none": "Keiner",
+        "minimal": "Minimal",
+        "low": "Niedrig",
+        "medium": "Mittel",
+        "high": "Hoch",
+        "xhigh": "Sehr hoch",
+        "max": "Maximal"
+      }
     },
     "getApiKey": "API-Schlüssel holen ->",
     "selectModel": "Modell auswählen",
@@ -898,12 +920,14 @@
   },
   "hooks": {
     "audioRecording": {
+      "cleanupSignedOut": "Die KI-Bereinigung nutzt OpenWhispr Cloud, aber Sie sind abgemeldet.",
+      "cleanupUnconfigured": "Die KI-Bereinigung ist aktiv, aber es ist kein Bereinigungsmodell eingerichtet.",
       "errorTitles": {
         "sessionExpired": "Sitzung abgelaufen",
         "offline": "Sie sind offline",
         "agentUnavailable": "Assistent nicht verfügbar",
         "screenContextSkipped": "Bildschirmkontext übersprungen",
-        "dailyLimitReached": "Tägliches Limit erreicht",
+        "cloudLimitReached": "Wöchentliches Cloud-Limit erreicht",
         "providerRateLimited": "Anbieter-Ratenlimit erreicht"
       },
       "fallback": {
@@ -976,7 +1000,9 @@
         "reasoningFailed": "Die KI konnte die Auswahlbearbeitung nicht abschließen. Dein ursprünglicher Text wurde nicht geändert.",
         "invalidResponse": "Die KI hat eine ungültige Bearbeitungsantwort zurückgegeben. Es wurde nichts ersetzt. Wähle den Text aus und versuche es erneut.",
         "emptyResponse": "Die KI hat eine leere Bearbeitung zurückgegeben. Es wurde nichts ersetzt. Versuche eine genauere Anweisung.",
-        "truncatedResponse": "Die KI hat die Bearbeitung vorzeitig beendet. Es wurde nichts ersetzt. Versuche, weniger Text auszuwählen."
+        "truncatedResponse": "Die KI hat die Bearbeitung vorzeitig beendet. Es wurde nichts ersetzt. Versuche, weniger Text auszuwählen.",
+        "wlCopyMissing": "OpenWhispr hat die Änderung erstellt, aber auf diesem Desktop können Wayland-Apps eingefügten Text nur über wl-copy lesen. Installiere wl-clipboard, um Änderungen anzuwenden.",
+        "wlCopyFailed": "OpenWhispr hat die Änderung erstellt, aber wl-copy konnte sie nicht für Wayland-Apps kopieren, daher wurde sie nicht angewendet."
       },
       "pastePermission": {
         "title": "Automatisches Einfügen erlauben",
@@ -990,7 +1016,12 @@
       "pasteFailed": {
         "title": "Automatisches Einfügen fehlgeschlagen"
       },
-      "interruptedRecordingRecovered": "Wiederhergestellt, nachdem OpenWhispr vor dem Ende dieses Diktats beendet wurde."
+      "interruptedRecordingRecovered": "Wiederhergestellt, nachdem OpenWhispr vor dem Ende dieses Diktats beendet wurde.",
+      "waylandClipboard": {
+        "title": "Transkription nicht eingefügt",
+        "wlCopyMissing": "Auf diesem Desktop können Wayland-Apps eingefügten Text nur über wl-copy lesen. Installiere wl-clipboard, um deine Diktate einzufügen.",
+        "wlCopyFailed": "wl-copy konnte den Text nicht für Wayland-Apps kopieren, daher wurde er nicht eingefügt. Klicke auf „Erneut versuchen“, um es noch einmal zu versuchen."
+      }
     },
     "clipboard": {
       "pasteFailed": {
@@ -1172,6 +1203,7 @@
     },
     "signedIn": {
       "welcomeBack": "Willkommen zurück",
+      "welcomeBackNamed": "Willkommen zurück, {{name}}",
       "notYou": "Nicht Sie? Abmelden"
     },
     "sso": {
@@ -1307,7 +1339,6 @@
   "apiKeysSection": {
     "title": "API-Schlüssel",
     "description": "Erstellen Sie Schlüssel für den programmatischen Zugriff auf die OpenWhispr-API.",
-    "docsLink": "API-Dokumentation",
     "empty": "Noch keine API-Schlüssel",
     "createButton": "API-Schlüssel erstellen",
     "create": {
@@ -1518,7 +1549,9 @@
     "withoutToolPrefix": "Ohne dieses Tool kopiert OpenWhispr den Text in Ihre Zwischenablage. Sie können ihn dann manuell mit Ctrl+V einfügen.",
     "wtypeCosmicTerminalsDescription": "Unter COSMIC empfangen Terminals wie Warp eingefügten Text nur über wtype. In andere Apps wird bereits ohne wtype eingefügt.",
     "wtypeFallbackDescription": "wtype ist die bevorzugte Methode für automatisches Einfügen auf diesem wlroots-Compositor. Eine Alternative ist verfügbar, kann aber weniger zuverlässig sein.",
-    "xwaylandAppsOnly": "Automatisches Einfügen funktioniert nur für XWayland-Apps"
+    "xwaylandAppsOnly": "Automatisches Einfügen funktioniert nur für XWayland-Apps",
+    "wlClipboardTitle": "Installieren Sie wl-clipboard, um in Wayland-Apps einzufügen",
+    "wlClipboardDescription": "Auf diesem Desktop können Wayland-Apps von OpenWhispr kopierten Text nur über wl-copy lesen. Um Diktate dort einzufügen, installieren Sie wl-clipboard:"
   },
   "promptStudio": {
     "common": {
@@ -1860,7 +1893,7 @@
     "account": {
       "badges": {
         "free": "Kostenlos",
-        "limitReached": "Limit erreicht",
+        "limitReached": "Cloud-Limit erreicht",
         "pastDue": "Überfällig",
         "pro": "Pro",
         "business": "Business",
@@ -1896,9 +1929,10 @@
         "title": "Ihre Zahlung konnte nicht verarbeitet werden"
       },
       "planDescriptions": {
-        "freeUsage": "{{used}} / {{limit}} Wörter diese Woche",
+        "freeUsage": "{{used}} / {{limit}} Wörter in OpenWhispr Cloud diese Woche",
+        "byokUnlimited": "Eigene API-Schlüssel und lokale Modelle bleiben unbegrenzt nutzbar.",
         "nextBilling": "Nächste Abrechnung: {{date}}",
-        "pastDue": "{{used}} / {{limit}} kostenlose Wörter diese Woche – Zahlung aktualisieren, um Pro wiederherzustellen",
+        "pastDue": "{{used}} / {{limit}} Wörter in OpenWhispr Cloud diese Woche – Zahlung aktualisieren, um Pro wiederherzustellen",
         "trial": "Noch {{days}} Tage – unbegrenzte Transkriptionen",
         "unlimited": "Unbegrenzt",
         "accessUntil": "Zugang bis {{date}}",
@@ -2016,8 +2050,8 @@
       "title": "Konto",
       "toasts": {
         "approachingLimit": {
-          "description": "Sie haben diese Woche {{used}} von {{limit}} kostenlosen Wörtern verwendet. Upgraden Sie auf Pro für unbegrenzte Nutzung.",
-          "title": "Wochenlimit fast erreicht"
+          "description": "Sie haben diese Woche {{used}} von {{limit}} Wörtern in OpenWhispr Cloud genutzt. Upgraden Sie auf Pro für unbegrenzte Nutzung.",
+          "title": "Cloud-Wortlimit fast erreicht"
         }
       },
       "trialCta": {
@@ -2365,6 +2399,10 @@
           },
           "xclip": {
             "step1Title": "xclip installieren"
+          },
+          "wlCopy": {
+            "step1Title": "wl-clipboard installieren",
+            "step2Title": "Installation überprüfen"
           }
         },
         "xclipDesc": "Zwischenablage-Tool für KDE-Wayland-Einfügen (xclip oder xsel)",
@@ -2376,7 +2414,8 @@
           "flakeTitle": "Installation über unser flake?",
           "flakeDesc": "Wenn Sie OpenWhispr über das flake installieren, aktiviert programs.openwhispr.enable automatisch ydotool, das uinput-Modul und die erforderlichen Gruppenmitgliedschaften.",
           "rebuildNote": "Führen Sie sudo nixos-rebuild switch aus, dann ab- und wieder anmelden, damit die Gruppenänderung und die /dev/uinput-Regel wirksam werden. Ersetzen Sie <you> durch Ihren Benutzernamen."
-        }
+        },
+        "wlCopyDesc": "Zwischenablage-Tool, aus dem Wayland-Apps auf diesem Desktop eingefügten Text lesen"
       },
       "updates": {
         "automaticUpdates": "Automatische Updates",
@@ -2745,6 +2784,7 @@
         "gemini_gemma_4_31b_it": "Googles größtes Gemma 4, 31B dicht, 256K Kontext",
         "gemini_gemma_4_26b_a4b_it": "Googles Gemma 4 MoE, 4B aktive Parameter, 256K Kontext",
         "groq_openai_gpt_oss_120b": "OpenAIs Open-Source-Flaggschiff, 500 T/s",
+        "groq_qwen_qwen3_8_27b": "Schnelles Qwen-Modell, 450 T/s, 131K Kontext",
         "groq_openai_gpt_oss_20b": "Schnelles Open-Source-Modell, 1000 T/s",
         "groq_compound": "Groqs Compound-System, 450 T/s",
         "groq_compound_mini": "Schnelles Compound-System, 3x niedrigere Latenz",
@@ -2959,8 +2999,8 @@
     "inviteTeam": "Team einladen",
     "settings": "Einstellungen",
     "support": "Support",
-    "limitReached": "Wochenlimit erreicht",
-    "limitReachedDescription": "Upgraden Sie auf Pro für unbegrenzte Transkriptionen.",
+    "limitReached": "Wöchentliches Cloud-Limit erreicht",
+    "limitReachedDescription": "Upgraden Sie auf Pro oder nutzen Sie Ihren eigenen API-Schlüssel für unbegrenzte Nutzung.",
     "viewPlans": "Tarife ansehen",
     "upgradeTitle": "Auf Pro upgraden",
     "upgradeDescription": "Unbegrenzte, genauere und schnellere Transkription.",
@@ -3607,19 +3647,24 @@
           "description": "Arbeitsablauf, Probleme, Reaktionen und Zitate einer teilnehmenden Person"
         },
         "shorten": {
-          "name": "Kürzen",
-          "description": "Die Zusammenfassung etwa halb so lang machen",
-          "cta": "Zusammenfassung kürzen"
+          "name": "Notizen kürzen",
+          "description": "Die gespeicherte KI-Zusammenfassung kürzen und wichtige Fakten beibehalten",
+          "cta": "Notizen kürzen"
         },
         "addTldr": {
-          "name": "TL;DR hinzufügen",
-          "description": "Ein TL;DR aus zwei oder drei Sätzen an den Anfang der Zusammenfassung setzen",
-          "cta": "TL;DR hinzufügen"
+          "name": "Kurzfassung schreiben",
+          "description": "Eine Kurzfassung mit zwei bis drei Sätzen im Chat schreiben",
+          "cta": "Kurzfassung schreiben"
         },
         "slackUpdate": {
           "name": "Slack-Update",
           "description": "Ein kurzes Team-Update für Slack schreiben",
           "cta": "Slack-Update schreiben"
+        },
+        "lengthen": {
+          "name": "Notizen erweitern",
+          "description": "Die gespeicherte KI-Zusammenfassung mit belegten Details erweitern",
+          "cta": "Notizen erweitern"
         }
       },
       "errors": {
@@ -3632,12 +3677,10 @@
       },
       "tab": "Aktionen",
       "output": {
-        "auto": "Automatisch",
         "chat": "Chat",
         "summary": "KI-Zusammenfassung",
-        "chatHint": "Antwortet im Chat der Notiz und lässt die KI-Zusammenfassung unverändert.",
-        "summaryHint": "Bearbeitet die KI-Zusammenfassung der Notiz oder erstellt sie aus dem Transkript, falls es noch keine gibt.",
-        "autoHint": "Liest beim Speichern den Prompt und wählt den Chat oder die KI-Zusammenfassung."
+        "chatHint": "Diese Aktion antwortet im Chat. Deine gespeicherte KI-Zusammenfassung bleibt unverändert.",
+        "summaryHint": "Diese integrierte Aktion aktualisiert deine gespeicherte KI-Zusammenfassung. Du kannst die Änderung rückgängig machen."
       },
       "applied": "KI-Zusammenfassung mit {{name}} aktualisiert"
     },
@@ -3662,7 +3705,8 @@
       "noSectionsHint": "Ohne Abschnitte ist der Kontext die gesamte Anweisung für die Zusammenfassung.",
       "noTemplates": "Noch keine Vorlagen",
       "emptyEditorTitle": "Vorlage auswählen",
-      "emptyEditorDescription": "Wählen Sie eine Vorlage aus der Liste oder erstellen Sie eine neue"
+      "emptyEditorDescription": "Wählen Sie eine Vorlage aus der Liste oder erstellen Sie eine neue",
+      "outputHint": "Eine Vorlage erstellt oder ersetzt die KI-Zusammenfassung anhand deiner Notizen und des Transkripts."
     },
     "onboarding": {
       "llm": {
@@ -3704,6 +3748,7 @@
       "typeNamePlaceholder": "Namen eingeben",
       "nameOrEmailPlaceholder": "Name oder E-Mail eingeben",
       "knownSpeakers": "Bekannte Sprecher",
+      "thisIsMe": "Das bin ich",
       "meetingAttendees": "Meeting-Teilnehmer",
       "createNewPrefix": "Erstellen",
       "addContact": "Kontakt hinzufügen",
@@ -3771,6 +3816,11 @@
       "author": {
         "you": "Du"
       }
+    },
+    "assistantUndo": {
+      "applied": "Der Assistent hat „{{title}}“ aktualisiert",
+      "changed": "Diese Notiz wurde nach der Änderung des Assistenten erneut geändert. Rückgängig ist nicht mehr verfügbar.",
+      "failed": "Die Änderung konnte nicht rückgängig gemacht werden. Bitte versuche es erneut."
     }
   },
   "dictionary": {
@@ -4026,7 +4076,13 @@
       "copiedToClipboard": "In die Zwischenablage kopiert",
       "openNote": "Notiz öffnen",
       "unknownTool": "Unbekanntes Werkzeug: {{name}}",
-      "invalidArgs": "Ungültige Tool-Argumente für {{name}}"
+      "invalidArgs": "Ungültige Tool-Argumente für {{name}}",
+      "search_openwhispr_helpName": "OpenWhispr-Hilfe suchen",
+      "read_openwhispr_helpName": "OpenWhispr-Hilfe lesen",
+      "get_openwhispr_contextName": "OpenWhispr-Einstellungen lesen",
+      "search_openwhispr_helpStatus": "OpenWhispr-Hilfe wird durchsucht...",
+      "read_openwhispr_helpStatus": "OpenWhispr-Hilfe wird gelesen...",
+      "get_openwhispr_contextStatus": "OpenWhispr-Einstellungen werden gelesen..."
     }
   },
   "assistant": {
@@ -4108,20 +4164,18 @@
     "mcp": {
       "description": "Chatte, suche und arbeite mit deinen Notizen in Claude, ChatGPT und Cursor.",
       "step1": "Füge OpenWhispr MCP in deinem KI-Tool mit der öffentlichen URL hinzu",
-      "step2": "Erstelle einen API-Schlüssel mit den benötigten Berechtigungen.",
-      "step3": "Füge den Schlüssel als Authorization-Header ein, um zu verbinden.",
-      "learnMore": "Mehr erfahren",
       "proRequired": "Upgrade auf einen kostenpflichtigen Plan, um OpenWhispr mit Claude, ChatGPT und Cursor zu verbinden.",
       "worksWith": "Funktioniert mit",
       "copyUrl": "MCP-URL kopieren",
-      "copied": "Kopiert"
+      "copied": "Kopiert",
+      "oauthTitle": "Mit OAuth anmelden",
+      "oauthDescription": "Füge die Server-URL in einem Client mit OAuth-Unterstützung hinzu. Melde dich dann bei OpenWhispr an und erlaube den Zugriff. Kein API-Schlüssel nötig.",
+      "apiKeyTitle": "API-Schlüssel verwenden",
+      "apiKeyDescription": "Erstelle für Clients, die Anfrage-Header akzeptieren, einen persönlichen API-Schlüssel mit den benötigten Berechtigungen und verwende den folgenden Header."
     },
     "cli": {
       "description": "Gib deinem Assistenten über das Terminal Zugriff auf deine Notizen.",
       "installLabel": "Installieren",
-      "learnMore": "Dokumentation lesen",
-      "copyDocsLink": "Doku-Link kopieren",
-      "docsLinkCopied": "Doku-Link kopiert",
       "viewPlans": "Pläne ansehen",
       "local": {
         "label": "Lokal",
@@ -4166,7 +4220,8 @@
     },
     "connectors": {
       "description": "Lass den Assistenten deine Tools nutzen. Du bestätigst jede E-Mail, jede Nachricht und jedes Issue, bevor es rausgeht."
-    }
+    },
+    "readDocs": "Dokumentation lesen"
   },
   "connectors": {
     "approval": {
@@ -4333,15 +4388,17 @@
       "descriptionSend": "Der Assistent zeigt im Chat eine E-Mail-Karte. Sie wird erst über dein Gmail gesendet, wenn du auf Senden klickst.",
       "unavailable": "E-Mail-Entwürfe sind gerade nicht verfügbar.",
       "targetLabel": "E-Mails entwerfen in",
-      "autoResolved": "Automatisch · {{target}}",
       "targets": {
         "gmail": "Gmail",
         "outlookWork": "Outlook (geschäftlich oder Schule)",
         "outlookPersonal": "Outlook.com",
-        "mailto": "Standard-E-Mail-App",
+        "mailto": "Mail-App des Systems",
         "gmailSend": "Aus dem Chat senden (Gmail)",
-        "gmailSendConnectFirst": "Aus dem Chat senden (Gmail) · Gmail unten verbinden"
-      }
+        "gmailSendConnectFirst": "Aus dem Chat senden (Gmail) · Gmail unten verbinden",
+        "auto": "Automatisch"
+      },
+      "automaticHint": "Aktuell: {{target}}. Richtet sich nach deinen verbundenen Konten.",
+      "systemMailHint": "Verwendet die auf deinem Computer eingerichtete E-Mail-Anwendung."
     },
     "slack": {
       "title": "Slack",
@@ -4739,8 +4796,7 @@
     "close": "Chat schließen",
     "newChat": "Neuer Chat",
     "conversationSelector": "Unterhaltung wechseln",
-    "history": "Verlauf",
-    "generateSummary": "Zusammenfassung erstellen"
+    "history": "Verlauf"
   },
   "transcriptionPreview": {
     "label": "Vorschau",
@@ -4868,5 +4924,55 @@
       "provider": "Anbieter",
       "requestId": "Anfrage-ID"
     }
+  },
+  "productHelp": {
+    "sources": "Offizielle Dokumentation",
+    "settings": "Aktuelle Einstellungen",
+    "guidance": "Informationen für diese Antwort.",
+    "settingsNote": "Schreibgeschützte Einstellungen und bekannte Berechtigungen für diese Antwort; Ihre Geräte werden nicht getestet.",
+    "readAt": "Gelesen am {{time}}",
+    "sourceStatus": {
+      "live": "Artikel abgerufen",
+      "bundled": "Integrierte Ersatzhilfe"
+    },
+    "reason": {
+      "policy": "Die Richtlinie Ihrer Organisation beschränkt den Onlineabruf der Dokumentation.",
+      "rateLimit": "Das Abruflimit der Onlinedokumentation wurde erreicht. Die integrierte Hilfe wird angezeigt.",
+      "unavailable": "Die aktuelle Dokumentation konnte nicht geprüft werden. Die integrierte Hilfe wird angezeigt.",
+      "privacy": "Der Onlineabruf der Dokumentation ist deaktiviert, solange Sie abgemeldet sind oder ausschließlich lokale Verarbeitung nutzen. Die integrierte Hilfe wird angezeigt."
+    },
+    "openFailed": "Der Artikel konnte nicht geöffnet werden. Kopieren Sie den Link und öffnen Sie ihn im Browser.",
+    "topicsList": {
+      "hotkeys": "Tastenkürzel",
+      "microphone": "Mikrofon",
+      "models": "Modelle",
+      "meetings": "Besprechungen",
+      "calendar": "Kalender",
+      "language": "Sprachen",
+      "backup": "Sicherung",
+      "assistant": "Assistent",
+      "hold-or-tap": "Halten oder Tippen",
+      "choose-your-microphone": "Mikrofon auswählen",
+      "microphone-not-working": "Mikrofon funktioniert nicht",
+      "local-models": "Lokale Modelle",
+      "chat-agent": "Chat-Agent",
+      "record-a-meeting": "Besprechung aufnehmen",
+      "connect-google-calendar": "Google Calendar verbinden",
+      "languages": "In anderen Sprachen diktieren",
+      "sync-across-devices": "Notizen geräteübergreifend synchronisieren"
+    },
+    "appVersion": "App-Version",
+    "platform": "Plattform",
+    "processing": "Verarbeitung",
+    "engine": "Engine",
+    "policy": "Assistent laut Richtlinie erlaubt",
+    "on": "Ein",
+    "off": "Aus",
+    "microphonePermission": "Mikrofonberechtigung",
+    "specificMicrophone": "Bestimmtes Mikrofon",
+    "permissionGranted": "Erlaubt",
+    "permissionDenied": "Verweigert",
+    "permissionRestricted": "Eingeschränkt",
+    "permissionNotDetermined": "Nicht angefragt"
   }
 }

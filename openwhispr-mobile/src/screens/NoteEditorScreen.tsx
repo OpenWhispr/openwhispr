@@ -175,7 +175,7 @@ export default function NoteEditorScreen() {
   const autoLearnEnabled = useConfigStore((s) => s.config?.autoLearnCorrections ?? true);
   const notesMode = useConfigStore((s) => s.config?.inference?.notes?.mode);
   const notesProviderId = useConfigStore((s) => s.config?.inference?.notes?.providerId);
-  const chatMode = useConfigStore((s) => s.config?.inference?.agent?.mode);
+  const chatMode = useConfigStore((s) => s.config?.inference?.noteChat?.mode);
   const chatEnabled = useConfigStore((s) => (s.config ? isNoteChatEnabled(s.config) : true));
   const providerNotes = notesMode === 'providers';
   // Only an unset or OpenWhispr chat route reaches Cloud, so only it needs an account and the paywall.

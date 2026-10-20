@@ -433,7 +433,10 @@
           "descriptionKey": "models.descriptions.cloud.openai_gpt_6_astra",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": false,
-          "supportsVision": true
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["low", "medium", "high", "xhigh", "max"]
+          }
         },
         {
           "id": "gpt-5.6-sol",
@@ -442,7 +445,11 @@
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_6_sol",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": false,
-          "supportsVision": true
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["none", "low", "medium", "high", "xhigh", "max"],
+            "defaultValue": "medium"
+          }
         },
         {
           "id": "gpt-5.6-terra",
@@ -451,7 +458,11 @@
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_6_terra",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": false,
-          "supportsVision": true
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["none", "low", "medium", "high", "xhigh", "max"],
+            "defaultValue": "medium"
+          }
         },
         {
           "id": "gpt-5.6-luna",
@@ -460,7 +471,11 @@
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_6_luna",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": false,
-          "supportsVision": true
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["none", "low", "medium", "high", "xhigh", "max"],
+            "defaultValue": "medium"
+          }
         },
         {
           "id": "gpt-5.5",
@@ -469,7 +484,11 @@
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_5",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": false,
-          "supportsVision": true
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["none", "low", "medium", "high", "xhigh"],
+            "defaultValue": "medium"
+          }
         },
         {
           "id": "gpt-5.2",
@@ -478,7 +497,11 @@
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_2",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": false,
-          "supportsVision": true
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["none", "low", "medium", "high", "xhigh"],
+            "defaultValue": "none"
+          }
         },
         {
           "id": "gpt-5-mini",
@@ -487,7 +510,11 @@
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_mini",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": false,
-          "supportsVision": true
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["minimal", "low", "medium", "high"],
+            "defaultValue": "medium"
+          }
         },
         {
           "id": "gpt-5-nano",
@@ -496,7 +523,11 @@
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_nano",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": false,
-          "supportsVision": true
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["minimal", "low", "medium", "high"],
+            "defaultValue": "medium"
+          }
         },
         {
           "id": "gpt-4.1",
@@ -631,7 +662,11 @@
           "description": "Latest fast, high-capability Gemini model",
           "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_5_flash",
           "supportsThinking": true,
-          "supportsVision": true
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["minimal", "low", "medium", "high"],
+            "defaultValue": "medium"
+          }
         },
         {
           "id": "gemini-3.5-flash-lite",
@@ -639,7 +674,11 @@
           "description": "Fastest, most cost-effective 3.5 model",
           "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_5_flash_lite",
           "supportsThinking": true,
-          "supportsVision": true
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["minimal", "low", "medium", "high"],
+            "defaultValue": "minimal"
+          }
         },
         {
           "id": "gemini-3.1-pro-preview",
@@ -647,14 +686,21 @@
           "description": "Next-gen flagship model for complex reasoning",
           "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_1_pro_preview",
           "supportsThinking": true,
-          "supportsVision": true
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["low", "medium", "high"],
+            "defaultValue": "high"
+          }
         },
         {
           "id": "gemini-3.1-flash-lite",
           "name": "Gemini 3.1 Flash Lite",
           "description": "Frontier-class performance at low cost",
           "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_1_flash_lite",
-          "supportsVision": true
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["minimal", "low", "medium", "high"]
+          }
         },
         {
           "id": "gemini-3-flash-preview",
@@ -662,7 +708,11 @@
           "description": "Ultra-fast, high-capability next-gen model",
           "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_flash_preview",
           "supportsThinking": true,
-          "supportsVision": true
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["minimal", "low", "medium", "high"],
+            "defaultValue": "high"
+          }
         },
         {
           "id": "gemini-2.5-flash-lite",
@@ -694,14 +744,27 @@
           "name": "GPT-OSS 120B",
           "description": "OpenAI's open-source flagship, 500 T/sec",
           "supportsThinking": true,
-          "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_120b"
+          "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_120b",
+          "reasoningEffort": {
+            "options": ["low", "medium", "high"]
+          }
+        },
+        {
+          "id": "qwen/qwen3.8-27b",
+          "name": "Qwen3.8 27B",
+          "description": "Fast Qwen model, 450 T/sec, 131K context",
+          "disableThinking": true,
+          "descriptionKey": "models.descriptions.cloud.groq_qwen_qwen3_8_27b"
         },
         {
           "id": "openai/gpt-oss-20b",
           "name": "GPT-OSS 20B",
           "description": "Fast open-source model, 1000 T/sec",
           "supportsThinking": true,
-          "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_20b"
+          "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_20b",
+          "reasoningEffort": {
+            "options": ["low", "medium", "high"]
+          }
         },
         {
           "id": "groq/compound",

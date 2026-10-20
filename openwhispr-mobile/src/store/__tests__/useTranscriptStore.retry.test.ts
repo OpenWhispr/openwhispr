@@ -62,6 +62,10 @@ jest.mock('@/store/useProcessingModeStore', () => ({
   },
 }));
 
+jest.mock('@/store/useAuthStore', () => ({
+  useAuthStore: { getState: () => ({ user: null }) },
+}));
+
 jest.mock('@/lib/appsflyer', () => ({
   logTranscriptionCompleted: mockLogTranscriptionCompleted,
 }));
@@ -457,22 +461,34 @@ describe('BYOK retry destination', () => {
   });
 });
 
-it('retains text-stage routes on failed rows and passes them unchanged to retry', async () => {
+it('retains the cleanup route on failed rows and passes it unchanged to retry', async () => {
   const cleanupRoute = { mode: 'openwhispr' as const, scope: 'cleanup' as const };
-  const agentRoute = { mode: 'local' as const, scope: 'agent' as const };
   await useTranscriptStore.getState().addFailedTranscript({
     id: 'stage-retry',
     errorMessage: 'failed',
     audioUrl: 'file://docs/transcript-audio/stage-retry.m4a',
     provider: 'cloud',
     cleanupRoute,
-    agentRoute,
-    agentUnavailable: 'Agent unavailable.',
   });
   await useTranscriptStore.getState().retryTranscript('stage-retry');
-  expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
-    expect.objectContaining({ cleanupRoute, agentRoute, agentUnavailable: 'Agent unavailable.' }),
-  );
+  expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(expect.objectContaining({ cleanupRoute }));
+});
+
+// Rows saved before dictation stopped taking the voice assistant's route still carry it.
+it('retries a row that still carries a voice assistant route without it', async () => {
+  useTranscriptStore.setState({
+    transcripts: [
+      failedTranscript({
+        cleanupRoute: { mode: 'openwhispr', scope: 'cleanup' },
+        agentRoute: { mode: 'local', scope: 'agent' },
+        agentUnavailable: 'Agent unavailable.',
+      } as Partial<Transcript>),
+    ],
+  });
+  await useTranscriptStore.getState().retryTranscript('t1');
+  const request = mockTranscribeAndCleanup.mock.calls[0][0] as Record<string, unknown>;
+  expect(request).not.toHaveProperty('agentRoute');
+  expect(request).not.toHaveProperty('agentUnavailable');
 });
 
 it('retries a Cloud recording on-device after switching to private mode', async () => {
@@ -486,6 +502,23 @@ it('retries a Cloud recording on-device after switching to private mode', async 
       provider: 'local',
       cleanupRoute: { mode: 'local', scope: 'cleanup' },
     }),
+  );
+});
+
+// Local Mode keeps dictation on this phone, but an upload follows what is chosen for uploads.
+it('retries an upload in Local Mode on the route chosen for uploads', async () => {
+  mockProcessingModeState.activeMode = 'private';
+  mockSnapshotTranscriptionJob.mockReturnValueOnce({
+    provider: 'cloud',
+    cleanupRoute: { mode: 'openwhispr', scope: 'cleanup' },
+  });
+  useTranscriptStore.setState({
+    transcripts: [failedTranscript({ provider: 'local', requestContext: 'file' })],
+  });
+  await useTranscriptStore.getState().retryTranscript('t1');
+  expect(mockSnapshotTranscriptionJob).toHaveBeenCalledWith('upload');
+  expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
+    expect.objectContaining({ provider: 'cloud' }),
   );
 });
 

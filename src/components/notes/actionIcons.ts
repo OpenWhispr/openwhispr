@@ -2,6 +2,7 @@ import {
   FolderRounded,
   ListEnd,
   Mail,
+  MessageSquareText,
   Send,
   Sparkles,
   SquareSlash,
@@ -10,6 +11,7 @@ import {
 
 const ACTION_ICONS: Record<string, IconComponent> = {
   mail: Mail,
+  "message-square-text": MessageSquareText,
   "clipboard-check": ListEnd,
   "file-text": FolderRounded,
   send: Send,

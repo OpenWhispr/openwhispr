@@ -121,6 +121,8 @@
       "mouseButtonOnlyMac": "マウスボタンのホットキーは現在 macOS でのみサポートされています。",
       "alreadyRegistered": "\"{{hotkey}}\" は別のアプリケーションで既に登録されています。",
       "osReserved": "\"{{hotkey}}\" はデスクトップ環境で予約されている可能性があります。",
+      "keyNotInKeymap": "GNOME は現在のキーボードレイアウトでは \"{{hotkey}}\" を使用できません。別のキーを選んでください。",
+      "keyReservedByGnome": "GNOME はすでに \"{{hotkey}}\" を独自のショートカットに使用しています。別のキーを選んでください。",
       "rightModifierNeedsListener": "\"{{hotkey}}\" はこのデスクトップでは使用できません。ショートカットには通常のキーが必要です。Control+Alt+Space のようにキーを追加してください。",
       "holdNeedsReleaseKey": "ホールドして話すには、macOS が離したことを検知できるキーが必要です。Globe、右 Option のような右側のキー、または修飾キー付きのショートカットです。タップならどのキーでも使えます。",
       "holdNeedsRegularKey": "ホールドを使うには、Control+Alt+Space のようにショートカットに通常のキーを追加してください。デスクトップは修飾キーだけを押し続けていることを検知できません。",
@@ -142,7 +144,7 @@
   },
   "upgradePrompt": {
     "paymentFailed": "お支払いを処理できませんでした",
-    "weeklyLimit": "週間の利用上限に達しました",
+    "weeklyLimit": "週間のクラウド上限に達しました",
     "pastDueDescription": "現在は無料プランをご利用中です。ご安心ください、週 {{limit}} ワードまで引き続きご利用いただけます。\nお支払い方法を更新して、無制限の Pro に戻しましょう。",
     "limitDescription": "{{used}} / {{limit}} ワード使用済み。\n文字起こしは保存・貼り付けされました。",
     "updatePayment": "お支払い方法を更新",
@@ -219,11 +221,11 @@
     "rehaul": {
       "permissions": {
         "title": "3 分で OpenWhispr を設定",
-        "microphoneDescription": "話した内容をテキストにします。録音中のみ有効です。",
-        "accessibilityDescription": "テキストを、いま使っているアプリに貼り付けます。",
+        "microphoneDescription": "録音中だけ音声を聞き取ります。",
+        "accessibilityDescription": "どのアプリにもテキストを貼り付けます。",
         "systemAudioTitle": "システムオーディオ",
-        "systemAudioDescription": "会議メモのために、通話相手の音声を録音します。録音中のみ有効です。",
-        "screenContextDescription": "音声アシスタントに何かを頼んだとき、画面の内容を見られるようにします。保存は一切されません。",
+        "systemAudioDescription": "通話相手の音声を録音します。",
+        "screenContextDescription": "アシスタントが画面を見られるようにします。",
         "enable": "有効にする",
         "enabled": "有効"
       },
@@ -631,7 +633,7 @@
       "availableButton": "アップデートあり"
     },
     "limit": {
-      "weeklyTitle": "週間の利用上限に達しました",
+      "weeklyTitle": "週間のクラウド上限に達しました",
       "weeklyDescription": "利用上限はローリング方式でリセットされます。Pro にアップグレードするか、自分の API キーを使用して無制限にご利用ください。"
     },
     "accessibilityMissing": {
@@ -672,6 +674,8 @@
       "failedCtaSettings": "文字起こしプロバイダーを設定してください",
       "failedCtaAndRetry": "その後、再試行をクリックしてください",
       "failedCtaSettingsOnly": "設定で文字起こしプロバイダーを設定してください",
+      "failedCtaAiSettings": "設定で音声アシスタントのモデルを確認してください",
+      "editFailedTranscriptKept": "編集は適用されませんでした · 文字起こしは保存済み",
       "failedLimitReached": "1日の上限に達しました",
       "failedOffline": "オフラインです",
       "clearAll": "すべて削除",
@@ -693,6 +697,9 @@
       "retrying": "再文字起こし中…",
       "retrySuccess": "文字起こしが更新されました",
       "retryError": "再文字起こしに失敗しました",
+      "retryErrors": {
+        "invalidResponse": "文字起こしエンジンから予期しない応答が返されました。もう一度お試しください。"
+      },
       "audioNotFound": "音声ファイルが見つからないか有効期限切れです",
       "noAiProcessing": "この文字起こしにはAI処理が適用されていません",
       "rawTranscript": "生の文字起こし",
@@ -767,6 +774,21 @@
       "noSearchResults": "「{{query}}」に一致するモデルはありません",
       "selectModelHint": "モデルが未選択です — 下のリストから選択してください。",
       "keyRequiredHint": "推論には API キーが必要です — このプロバイダーを使用するには追加してください。"
+    },
+    "effort": {
+      "title": "推論の深さ",
+      "description": "モデルが回答する前にどれだけ考えるかを設定します。",
+      "descriptionWithDefault": "モデルが回答する前にどれだけ考えるかを設定します。自動ではプロバイダーの既定値（{{value}}）を使用します。",
+      "auto": "自動",
+      "options": {
+        "none": "なし",
+        "minimal": "最小",
+        "low": "低",
+        "medium": "中",
+        "high": "高",
+        "xhigh": "非常に高い",
+        "max": "最大"
+      }
     },
     "getApiKey": "API キーを取得 ->",
     "selectModel": "モデルを選択",
@@ -898,12 +920,14 @@
   },
   "hooks": {
     "audioRecording": {
+      "cleanupSignedOut": "AIクリーンアップはOpenWhispr Cloudを使用しますが、サインインしていません。",
+      "cleanupUnconfigured": "AIクリーンアップはオンですが、クリーンアップモデルが設定されていません。",
       "errorTitles": {
         "sessionExpired": "セッション期限切れ",
         "offline": "オフラインです",
         "agentUnavailable": "アシスタントを利用できません",
         "screenContextSkipped": "画面コンテキストをスキップしました",
-        "dailyLimitReached": "1 日の上限に達しました",
+        "cloudLimitReached": "週間のクラウド上限に達しました",
         "providerRateLimited": "プロバイダーのレート制限"
       },
       "fallback": {
@@ -976,7 +1000,9 @@
         "reasoningFailed": "AI は選択範囲の編集を完了できませんでした。元のテキストは変更されていません。",
         "invalidResponse": "AI が無効な編集応答を返しました。テキストは置き換えられていません。テキストを選択して、もう一度お試しください。",
         "emptyResponse": "AI が空の編集結果を返しました。テキストは置き換えられていません。より具体的な指示をお試しください。",
-        "truncatedResponse": "AI が編集の完了前に停止しました。テキストは置き換えられていません。選択するテキストを減らしてお試しください。"
+        "truncatedResponse": "AI が編集の完了前に停止しました。テキストは置き換えられていません。選択するテキストを減らしてお試しください。",
+        "wlCopyMissing": "OpenWhispr は編集を生成しましたが、このデスクトップでは Wayland アプリは wl-copy を通してしか貼り付けたテキストを読み取れません。編集を適用するには wl-clipboard をインストールしてください。",
+        "wlCopyFailed": "OpenWhispr は編集を生成しましたが、wl-copy が Wayland アプリ向けにコピーできなかったため、適用されませんでした。"
       },
       "pastePermission": {
         "title": "自動貼り付けを許可",
@@ -990,7 +1016,12 @@
       "pasteFailed": {
         "title": "自動貼り付けに失敗しました"
       },
-      "interruptedRecordingRecovered": "このディクテーションの完了前に OpenWhispr が終了したため、録音を復元しました。"
+      "interruptedRecordingRecovered": "このディクテーションの完了前に OpenWhispr が終了したため、録音を復元しました。",
+      "waylandClipboard": {
+        "title": "文字起こしは貼り付けられませんでした",
+        "wlCopyMissing": "このデスクトップでは、Wayland アプリは wl-copy を通してしか貼り付けたテキストを読み取れません。音声入力を貼り付けるには wl-clipboard をインストールしてください。",
+        "wlCopyFailed": "wl-copy が Wayland アプリ向けにテキストをコピーできなかったため、貼り付けられませんでした。「再試行」を押してもう一度お試しください。"
+      }
     },
     "clipboard": {
       "pasteFailed": {
@@ -1173,6 +1204,7 @@
     },
     "signedIn": {
       "welcomeBack": "おかえりなさい",
+      "welcomeBackNamed": "おかえりなさい、{{name}}さん",
       "notYou": "別のアカウントですか？ログアウト"
     },
     "sso": {
@@ -1423,7 +1455,9 @@
     "withoutToolPrefix": "このツールがない場合、OpenWhispr はテキストをクリップボードにコピーします。Ctrl+V で手動で貼り付けてください。",
     "wtypeCosmicTerminalsDescription": "COSMIC では、Warp などのターミナルは wtype 経由でのみ貼り付けを受け取ります。その他のアプリには wtype なしで貼り付けられます。",
     "wtypeFallbackDescription": "この wlroots 系コンポジターでは wtype が推奨される自動貼り付け方法です。代替手段も利用できますが、信頼性が低い場合があります。",
-    "xwaylandAppsOnly": "自動貼り付けは XWayland アプリのみで動作します"
+    "xwaylandAppsOnly": "自動貼り付けは XWayland アプリのみで動作します",
+    "wlClipboardTitle": "Wayland アプリに貼り付けるには wl-clipboard をインストールしてください",
+    "wlClipboardDescription": "このデスクトップでは、Wayland アプリは OpenWhispr がコピーしたテキストを wl-copy を通してしか読み取れません。音声入力を貼り付けるには、wl-clipboard をインストールしてください："
   },
   "promptStudio": {
     "common": {
@@ -1565,7 +1599,7 @@
     "account": {
       "badges": {
         "free": "無料",
-        "limitReached": "上限到達",
+        "limitReached": "クラウド上限到達",
         "pastDue": "支払い遅延",
         "pro": "Pro",
         "business": "Business",
@@ -1601,9 +1635,10 @@
         "title": "お支払いを処理できませんでした"
       },
       "planDescriptions": {
-        "freeUsage": "今週 {{used}} / {{limit}} ワード使用済み",
+        "freeUsage": "今週の OpenWhispr Cloud 使用量：{{used}} / {{limit}} ワード",
+        "byokUnlimited": "独自の API キーとローカルモデルは引き続き無制限で利用できます。",
         "nextBilling": "次の請求日: {{date}}",
-        "pastDue": "今週 {{used}} / {{limit}} 無料ワード使用済み - お支払い方法を更新して Pro を復元",
+        "pastDue": "今週の OpenWhispr Cloud 使用量：{{used}} / {{limit}} ワード - お支払い方法を更新して Pro を復元",
         "trial": "残り {{days}} 日 - 無制限の文字起こし",
         "unlimited": "無制限",
         "accessUntil": "{{date}} まで利用可能",
@@ -1724,8 +1759,8 @@
       "title": "アカウント",
       "toasts": {
         "approachingLimit": {
-          "description": "今週 {{used}} / {{limit}} 無料ワードを使用しました。Pro にアップグレードして無制限にご利用ください。",
-          "title": "週間利用上限に近づいています"
+          "description": "今週、OpenWhispr Cloud で {{limit}} ワード中 {{used}} ワードを使用しました。Pro にアップグレードして無制限にご利用ください。",
+          "title": "クラウドのワード上限に近づいています"
         }
       },
       "trialCta": {
@@ -2070,6 +2105,10 @@
           },
           "xclip": {
             "step1Title": "xclipをインストール"
+          },
+          "wlCopy": {
+            "step1Title": "wl-clipboard をインストール",
+            "step2Title": "インストールの確認"
           }
         },
         "xclipDesc": "KDE Waylandの貼り付け用クリップボードツール（xclipまたはxsel）",
@@ -2081,7 +2120,8 @@
           "flakeTitle": "flakeからインストールする場合",
           "flakeDesc": "flakeからOpenWhisprをインストールする場合、programs.openwhispr.enableを有効にするとydotool、uinputモジュール、グループのメンバーシップが自動で設定されます。",
           "rebuildNote": "sudo nixos-rebuild switchを実行し、グループの変更と/dev/uinputのルールを反映させるためにログアウト後に再ログインしてください。<you>はあなたのユーザー名に置き換えてください。"
-        }
+        },
+        "wlCopyDesc": "このデスクトップで Wayland アプリが貼り付けるテキストを読み取るクリップボードツール"
       },
       "updates": {
         "automaticUpdates": "自動アップデート",
@@ -2646,6 +2686,7 @@
         "gemini_gemma_4_31b_it": "Google 最大の Gemma 4、31B デンス、256K コンテキスト",
         "gemini_gemma_4_26b_a4b_it": "Google の Gemma 4 MoE、4B アクティブパラメータ、256K コンテキスト",
         "groq_openai_gpt_oss_120b": "OpenAI のオープンソースフラッグシップ、500 T/秒",
+        "groq_qwen_qwen3_8_27b": "高速 Qwen モデル、450 T/秒、131K コンテキスト",
         "groq_openai_gpt_oss_20b": "高速オープンソースモデル、1000 T/秒",
         "groq_compound": "Groq の Compound システム、450 T/秒",
         "groq_compound_mini": "高速 Compound システム、3x 低レイテンシー",
@@ -3019,19 +3060,24 @@
           "description": "参加者のワークフロー、課題、反応、発言の引用"
         },
         "shorten": {
-          "name": "短くする",
-          "description": "要約を約半分の長さにします",
-          "cta": "要約を短くする"
+          "name": "ノートを短くする",
+          "description": "重要な事実を残して保存済みのAI要約を短くします",
+          "cta": "ノートを短くする"
         },
         "addTldr": {
-          "name": "TL;DRを追加",
-          "description": "要約の先頭に2〜3文のTL;DRを追加します",
-          "cta": "TL;DRを追加"
+          "name": "短い要約を書く",
+          "description": "2〜3文の短い要約をチャットに書きます",
+          "cta": "短い要約を書く"
         },
         "slackUpdate": {
           "name": "Slack用の共有",
           "description": "Slackに投稿するチーム向けの短い共有文を作成します",
           "cta": "Slack用の共有を書く"
+        },
+        "lengthen": {
+          "name": "ノートを詳しくする",
+          "description": "内容に裏付けられた詳細を保存済みのAI要約に追加します",
+          "cta": "ノートを詳しくする"
         }
       },
       "errors": {
@@ -3044,12 +3090,10 @@
       },
       "tab": "アクション",
       "output": {
-        "auto": "自動",
         "chat": "チャット",
         "summary": "AI要約",
-        "chatHint": "ノートのチャットで回答し、AI要約はそのまま残します。",
-        "summaryHint": "ノートのAI要約を編集します。要約がまだない場合は文字起こしから作成します。",
-        "autoHint": "保存時にプロンプトを読み取り、チャットかAI要約かを選びます。"
+        "chatHint": "このアクションはチャットに返信します。保存済みのAI要約は変更されません。",
+        "summaryHint": "この組み込みアクションは保存済みのAI要約を更新します。変更は元に戻せます。"
       },
       "applied": "{{name}}でAI要約を更新しました"
     },
@@ -3074,7 +3118,8 @@
       "noSectionsHint": "セクションがない場合、コンテキストが要約への指示のすべてになります。",
       "noTemplates": "テンプレートはまだありません",
       "emptyEditorTitle": "テンプレートを選択",
-      "emptyEditorDescription": "リストからテンプレートを選択するか、新しく作成してください"
+      "emptyEditorDescription": "リストからテンプレートを選択するか、新しく作成してください",
+      "outputHint": "テンプレートを適用すると、ノートと文字起こしをもとにAI要約を作成、または置き換えます。"
     },
     "empty": {
       "title": "まだノートがありません",
@@ -3279,6 +3324,7 @@
       "speakersIdentified": "話者を識別しました",
       "typeNamePlaceholder": "名前を入力",
       "knownSpeakers": "登録済みの話者",
+      "thisIsMe": "これは自分です",
       "meetingAttendees": "会議の参加者",
       "assignName": "名前を割り当て",
       "isThisPerson": "{{name}}さんですか？",
@@ -3347,6 +3393,11 @@
       "author": {
         "you": "自分"
       }
+    },
+    "assistantUndo": {
+      "applied": "アシスタントが「{{title}}」を更新しました",
+      "changed": "アシスタントの編集後にノートが変更されたため、元に戻せません。",
+      "failed": "編集を元に戻せませんでした。もう一度お試しください。"
     }
   },
   "dictionary": {
@@ -3608,8 +3659,8 @@
     "inviteTeam": "チームを招待",
     "settings": "設定",
     "support": "サポート",
-    "limitReached": "週間の利用上限に達しました",
-    "limitReachedDescription": "Pro にアップグレードして無制限の文字起こしをご利用ください。",
+    "limitReached": "週間のクラウド上限に達しました",
+    "limitReachedDescription": "Pro にアップグレードするか、自分の API キーを使用して無制限にご利用ください。",
     "viewPlans": "プランを見る",
     "upgradeTitle": "Pro にアップグレード",
     "upgradeDescription": "無制限・高精度・高速の文字起こし。",
@@ -3855,7 +3906,13 @@
       "copiedToClipboard": "クリップボードにコピーしました",
       "openNote": "ノートを開く",
       "unknownTool": "不明なツール: {{name}}",
-      "invalidArgs": "{{name}} のツール引数が無効です"
+      "invalidArgs": "{{name}} のツール引数が無効です",
+      "search_openwhispr_helpName": "OpenWhisprのヘルプを検索",
+      "read_openwhispr_helpName": "OpenWhisprのヘルプを読む",
+      "get_openwhispr_contextName": "OpenWhisprの設定を読む",
+      "search_openwhispr_helpStatus": "OpenWhisprのヘルプを検索中...",
+      "read_openwhispr_helpStatus": "OpenWhisprのヘルプを読み込み中...",
+      "get_openwhispr_contextStatus": "OpenWhisprの設定を読み込み中..."
     }
   },
   "assistant": {
@@ -3937,20 +3994,18 @@
     "mcp": {
       "description": "Claude、ChatGPT、Cursor内でメモを使ってチャット、検索、作業ができます。",
       "step1": "AIツールで、公開URLを使用してOpenWhispr MCPを追加します",
-      "step2": "必要なスコープを持つAPIキーを作成します。",
-      "step3": "キーを Authorization ヘッダーとして貼り付けて接続します。",
-      "learnMore": "詳細",
       "proRequired": "OpenWhispr を Claude、ChatGPT、Cursor に接続するには、有料プランへのアップグレードが必要です。",
       "worksWith": "対応アプリ",
       "copyUrl": "MCP URLをコピー",
-      "copied": "コピーしました"
+      "copied": "コピーしました",
+      "oauthTitle": "OAuth でログイン",
+      "oauthDescription": "OAuth 対応のクライアントにサーバー URL を追加し、OpenWhispr にログインしてアクセスを許可します。API キーは不要です。",
+      "apiKeyTitle": "API キーを使用",
+      "apiKeyDescription": "リクエストヘッダーに対応するクライアントでは、必要な権限を持つ個人用 API キーを作成し、以下のヘッダーを使用してください。"
     },
     "cli": {
       "description": "ターミナルからアシスタントにメモへのアクセスを許可します。",
       "installLabel": "インストール",
-      "learnMore": "ドキュメントを読む",
-      "copyDocsLink": "ドキュメントリンクをコピー",
-      "docsLinkCopied": "ドキュメントリンクをコピーしました",
       "viewPlans": "プランを表示",
       "local": {
         "label": "ローカル",
@@ -3995,7 +4050,8 @@
     },
     "connectors": {
       "description": "アシスタントがあなたのツールを使えるようにします。メール、メッセージ、課題はすべて送信前にあなたが承認します。"
-    }
+    },
+    "readDocs": "ドキュメントを読む"
   },
   "connectors": {
     "approval": {
@@ -4162,15 +4218,17 @@
       "descriptionSend": "アシスタントがチャットにメールのカードを表示します。送信を押したときだけ、Gmail から送信されます。",
       "unavailable": "現在メール下書きを利用できません。",
       "targetLabel": "メールを作成するアプリ",
-      "autoResolved": "自動 · {{target}}",
       "targets": {
         "gmail": "Gmail",
         "outlookWork": "Outlook（職場または学校）",
         "outlookPersonal": "Outlook.com",
-        "mailto": "既定のメールアプリ",
+        "mailto": "システムのメールアプリ",
         "gmailSend": "チャットから送信（Gmail）",
-        "gmailSendConnectFirst": "チャットから送信（Gmail）· 下で Gmail を接続"
-      }
+        "gmailSendConnectFirst": "チャットから送信（Gmail）· 下で Gmail を接続",
+        "auto": "自動"
+      },
+      "automaticHint": "現在：{{target}}。接続済みのアカウントに応じて選択します。",
+      "systemMailHint": "コンピューターで設定したメールハンドラーを使用します。"
     },
     "slack": {
       "title": "Slack",
@@ -4608,7 +4666,6 @@
   "apiKeysSection": {
     "title": "APIキー",
     "description": "アカウントへのプログラムアクセス用のキーを管理",
-    "docsLink": "APIドキュメント",
     "empty": "APIキーはまだありません",
     "createButton": "キーを作成",
     "create": {
@@ -4663,8 +4720,7 @@
     "close": "チャットを閉じる",
     "newChat": "新しいチャット",
     "conversationSelector": "会話を切り替え",
-    "history": "履歴",
-    "generateSummary": "要約を作成"
+    "history": "履歴"
   },
   "transcriptionPreview": {
     "label": "プレビュー",
@@ -4868,5 +4924,55 @@
       "provider": "プロバイダー",
       "requestId": "リクエストID"
     }
+  },
+  "productHelp": {
+    "sources": "公式ドキュメント",
+    "settings": "現在のアプリ設定",
+    "guidance": "この回答で使用した情報。",
+    "settingsNote": "この回答のために読み取った設定と既知の権限です。設定の変更やデバイスのテストは行いません。",
+    "readAt": "取得日時：{{time}}",
+    "sourceStatus": {
+      "live": "記事を取得済み",
+      "bundled": "内蔵ガイドで代替"
+    },
+    "reason": {
+      "policy": "組織のポリシーによりオンラインドキュメントの取得が制限されています。",
+      "rateLimit": "オンラインドキュメントの取得上限に達しました。内蔵ガイドを表示しています。",
+      "unavailable": "現在のドキュメントを確認できませんでした。内蔵ガイドを表示しています。",
+      "privacy": "サインアウト中、またはローカル処理のみを使用している間は、オンラインドキュメントの取得はオフになります。内蔵ガイドを表示しています。"
+    },
+    "openFailed": "記事を開けませんでした。リンクをコピーしてブラウザーで開いてください。",
+    "topicsList": {
+      "hotkeys": "ショートカット",
+      "microphone": "マイク",
+      "models": "モデル",
+      "meetings": "会議",
+      "calendar": "カレンダー",
+      "language": "言語",
+      "backup": "バックアップ",
+      "assistant": "アシスタント",
+      "hold-or-tap": "ホールドまたはタップ",
+      "choose-your-microphone": "マイクを選択",
+      "microphone-not-working": "マイクが動作しない",
+      "local-models": "ローカルモデル",
+      "chat-agent": "チャットエージェント",
+      "record-a-meeting": "会議を録音",
+      "connect-google-calendar": "Google カレンダーを接続",
+      "languages": "他の言語で音声入力",
+      "sync-across-devices": "デバイス間でノートを同期"
+    },
+    "appVersion": "アプリのバージョン",
+    "platform": "プラットフォーム",
+    "processing": "処理",
+    "engine": "エンジン",
+    "policy": "ポリシーによるアシスタントの許可",
+    "on": "オン",
+    "off": "オフ",
+    "microphonePermission": "マイクの権限",
+    "specificMicrophone": "指定したマイク",
+    "permissionGranted": "許可済み",
+    "permissionDenied": "拒否",
+    "permissionRestricted": "制限あり",
+    "permissionNotDetermined": "未要求"
   }
 }

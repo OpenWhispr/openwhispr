@@ -85,6 +85,7 @@ import { applyChineseScript, resolveChineseScriptTarget } from "../utils/chinese
 import { getAgentName } from "../utils/agentName";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
+import AssistantNoteUndoListener from "./notes/AssistantNoteUndoListener";
 import { providerErrorToastProps } from "../utils/describeProviderError";
 import SpaceSyncToastListener from "./notes/SpaceSyncToastListener";
 import { syncService } from "../services/SyncService.js";
@@ -766,6 +767,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 const agentName = getAgentName();
                 const reasonedText = await ReasoningService.processText(rawText, model, agentName, {
                   disableThinking: getSettings().cleanupDisableThinking,
+                  reasoningEffort: getSettings().cleanupReasoningEffort,
                   requireCompleteOutput: true,
                 });
                 if (hasTextContent(reasonedText) && reasonedText !== rawText) {
@@ -831,6 +833,10 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 ? "controlPanel.history.discarded.recovered"
                 : "controlPanel.history.retrySuccess"
             ),
+            // A partial result still replaced the row; say so, as dictation does.
+            ...(result.warning
+              ? { description: t("hooks.audioRecording.partialTranscription.description") }
+              : {}),
           });
         } else {
           toast({
@@ -1307,6 +1313,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         </main>
       </div>
       <BackgroundActionToastListener />
+      <AssistantNoteUndoListener />
       <SpaceSyncToastListener />
     </div>
   );

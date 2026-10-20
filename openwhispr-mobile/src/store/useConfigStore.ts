@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { UserConfig } from '../types';
 import { StorageService } from '../services/storage/StorageService';
+import { localModeUpgradeConfig, noteChatSplitConfig } from '../lib/inferenceModes';
 import { useProcessingModeStore } from './useProcessingModeStore';
 
 interface ConfigState {
@@ -15,6 +16,8 @@ interface ConfigState {
 const defaultConfig: UserConfig = {
   defaultMode: 'cloud',
   appleLocalIntelligenceEnabled: true,
+  localModeUpgraded: true,
+  noteChatSplit: true,
 };
 
 export const useConfigStore = create<ConfigState>((set, get) => ({
@@ -26,7 +29,21 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const config = await StorageService.getConfig();
-      const resolvedConfig = config || defaultConfig;
+      // A config from before Local Mode's Cloud defaults is upgraded before anything reads it, so
+      // its uploads and cleanup never reach Cloud, and one from before note chat had a selection of
+      // its own keeps the one it shared. A failed save upgrades it again next launch.
+      const localModeConfig =
+        !config || config.localModeUpgraded
+          ? config
+          : { ...config, ...localModeUpgradeConfig(config) };
+      const resolvedConfig = !localModeConfig
+        ? defaultConfig
+        : localModeConfig.noteChatSplit
+          ? localModeConfig
+          : { ...localModeConfig, ...noteChatSplitConfig(localModeConfig) };
+      if (config && resolvedConfig !== config) {
+        await StorageService.saveConfig(resolvedConfig).catch(() => undefined);
+      }
       useProcessingModeStore.getState().resetToDefault(resolvedConfig.defaultMode);
       set({ config: resolvedConfig, isLoading: false });
     } catch (error) {

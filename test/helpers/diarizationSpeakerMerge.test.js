@@ -163,3 +163,21 @@ test("mic mode still dedupes bleed-flagged mic echoes of system text first", () 
   assert.equal(merged.length, 1);
   assert.equal(merged[0].source, "system");
 });
+
+test("a resumed session's clusters are numbered from its speaker index base", () => {
+  const manager = new DiarizationManager();
+
+  const merged = manager.mergeWithTranscript(
+    [systemSegment(1, "picking this back up"), systemSegment(11, "sounds good")],
+    [
+      { start: 0, end: 5, speaker: "speaker_00" },
+      { start: 10, end: 15, speaker: "speaker_01" },
+    ],
+    { speakerIndexBase: 3 }
+  );
+
+  assert.deepEqual(
+    merged.map((segment) => segment.speaker),
+    ["speaker_3", "speaker_4"]
+  );
+});

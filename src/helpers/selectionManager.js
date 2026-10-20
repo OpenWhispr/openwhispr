@@ -92,10 +92,17 @@ function runSpawn(command, args, options = {}) {
   });
 }
 
-// Keys still held past the modifier wait (#2113) get their own code, so the
-// renderer can say so instead of blaming permissions or a changed target.
+// Keys still held past the modifier wait (#2113) and a Wayland clipboard wl-copy
+// didn't write (#2621) get their own code, so the renderer can say so instead of
+// blaming permissions or a changed target.
+const HELD_BACK_CODES = {
+  "modifiers-held": "modifiers_held",
+  "wl-copy-missing": "wl_copy_missing",
+  "wl-copy-failed": "wl_copy_failed",
+};
+
 function heldBackCode(fallback, { code, reason } = {}) {
-  return code === "modifiers_held" || reason === "modifiers-held" ? "modifiers_held" : fallback;
+  return code === "modifiers_held" ? code : HELD_BACK_CODES[reason] || fallback;
 }
 
 class SelectionManager {
@@ -575,12 +582,37 @@ class SelectionManager {
     ) {
       return capture;
     }
-    const verdict = await this.textEditMonitor?.isFocusedEditable?.(target);
+    const pid = await this._linuxTargetPid(target);
+    const verdict = await this.textEditMonitor?.isFocusedEditable?.(
+      pid ? { ...target, pid } : target
+    );
+    debugLogger.debug(
+      "Editable caret probe",
+      { kind: target.kind, pid: target.pid ?? pid, verdict },
+      "clipboard"
+    );
     if (verdict === "editable") return { status: "editable", target };
     // An empty copy cannot distinguish a caret from an integrated terminal or
     // a page without an input; it can also hide a selection matching the clipboard.
     // Unknown accessibility must keep the panel fallback, including on revalidation.
     return capture;
+  }
+
+  // The Linux editable probe answers only for a focused field in this process's
+  // active window, so a focus left behind in another app can't vouch for the
+  // target. null for other target kinds, or when the process can't be read.
+  async _linuxTargetPid(target) {
+    if (target.kind === "atspi-pid") return target.id;
+    if (target.kind === "hyprland-window") return target.pid;
+    if (target.kind === "x11-window") return this._readWindowPid("xdotool", target.id);
+    if (target.kind === "kde-window") return this._readWindowPid("kdotool", target.id);
+    return null;
+  }
+
+  async _readWindowPid(tool, windowId) {
+    const result = await runFile(tool, ["getwindowpid", windowId], { timeout: 500 });
+    const pid = result.success ? result.stdout.trim() : "";
+    return /^[1-9]\d*$/.test(pid) ? pid : null;
   }
 
   _isTerminalTarget(...targets) {
@@ -715,6 +747,7 @@ class SelectionManager {
               kind: "hyprland-window",
               id: active.address,
               windowClass: typeof active.class === "string" ? active.class.toLowerCase() : null,
+              pid: Number.isInteger(active.pid) && active.pid > 0 ? active.pid : null,
             };
           }
         } catch {}

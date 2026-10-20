@@ -121,6 +121,8 @@
       "mouseButtonOnlyMac": "Mouse button hotkeys are currently supported on macOS only.",
       "alreadyRegistered": "\"{{hotkey}}\" is already registered by another application.",
       "osReserved": "\"{{hotkey}}\" may be reserved by your desktop environment.",
+      "keyNotInKeymap": "GNOME can't use \"{{hotkey}}\" with your keyboard layout. Choose another key.",
+      "keyReservedByGnome": "GNOME already uses \"{{hotkey}}\" for one of its own shortcuts. Choose another key.",
       "rightModifierNeedsListener": "\"{{hotkey}}\" can't be used on this desktop, whose shortcuts need a regular key. Add a key, such as Control+Alt+Space.",
       "holdNeedsReleaseKey": "Hold-to-talk needs a key macOS can see you release: Globe, a right-side key like Right Option, or a shortcut with a modifier. Tap works with any key.",
       "holdNeedsRegularKey": "To use Hold, add a regular key to the shortcut, such as Control+Alt+Space. Your desktop can't report holding modifier keys alone.",
@@ -142,7 +144,7 @@
   },
   "upgradePrompt": {
     "paymentFailed": "We couldn't process your payment",
-    "weeklyLimit": "You've reached your weekly limit",
+    "weeklyLimit": "You've reached your weekly Cloud limit",
     "pastDueDescription": "You're on the free plan for now — don't worry, you still get {{limit}} words per week.\nUpdate your payment method to get back to unlimited Pro.",
     "limitDescription": "{{used}} of {{limit}} words used.\nYour transcription was saved and pasted.",
     "updatePayment": "Update payment method",
@@ -219,11 +221,11 @@
     "rehaul": {
       "permissions": {
         "title": "Set up OpenWhispr in 3 minutes",
-        "microphoneDescription": "Turns what you say into text. Only on while you’re recording.",
-        "accessibilityDescription": "Pastes the text into the app you’re using.",
+        "microphoneDescription": "Listens only while you record.",
+        "accessibilityDescription": "Pastes text into any app.",
         "systemAudioTitle": "System Audio",
-        "systemAudioDescription": "Records the other people on your calls for meeting notes. Only on while you’re recording.",
-        "screenContextDescription": "Lets your voice assistant see your screen when you ask it something. Never stored.",
+        "systemAudioDescription": "Captures the other side of calls.",
+        "screenContextDescription": "Lets the assistant see your screen.",
         "enable": "Enable",
         "enabled": "Enabled"
       },
@@ -631,7 +633,7 @@
       "availableButton": "Update Available"
     },
     "limit": {
-      "weeklyTitle": "Weekly limit reached",
+      "weeklyTitle": "Weekly Cloud limit reached",
       "weeklyDescription": "Your limit resets on a rolling basis. Upgrade to Pro or use your own API key for unlimited use."
     },
     "accessibilityMissing": {
@@ -680,12 +682,17 @@
       "retrying": "Re-transcribing...",
       "retrySuccess": "Transcription updated",
       "retryError": "Failed to re-transcribe",
+      "retryErrors": {
+        "invalidResponse": "The transcription engine returned an unexpected response. Try again."
+      },
       "audioNotFound": "Audio file not found or expired",
       "noAiProcessing": "No AI processing was applied to this transcription",
       "transcriptionFailed": "Transcription failed",
       "failedCtaSettings": "Set up your transcription provider",
       "failedCtaAndRetry": "then click retry",
       "failedCtaSettingsOnly": "Set up your transcription provider in Settings",
+      "failedCtaAiSettings": "Check your Voice Assistant model in Settings",
+      "editFailedTranscriptKept": "Edit not applied · transcript kept",
       "failedLimitReached": "Daily limit reached",
       "failedOffline": "You're offline",
       "rawTranscript": "Raw Transcript",
@@ -767,6 +774,21 @@
       "noSearchResults": "No models match \"{{query}}\"",
       "selectModelHint": "No model selected yet — choose one from the list below.",
       "keyRequiredHint": "An API key is required for inference — add one to use this provider."
+    },
+    "effort": {
+      "title": "Reasoning effort",
+      "description": "How much the model thinks before it answers.",
+      "descriptionWithDefault": "How much the model thinks before it answers. Auto uses the provider's default ({{value}}).",
+      "auto": "Auto",
+      "options": {
+        "none": "None",
+        "minimal": "Minimal",
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "xhigh": "Extra high",
+        "max": "Max"
+      }
     },
     "getApiKey": "Get your API key ->",
     "selectModel": "Select Model",
@@ -898,12 +920,14 @@
   },
   "hooks": {
     "audioRecording": {
+      "cleanupSignedOut": "AI cleanup uses OpenWhispr Cloud, but you're signed out.",
+      "cleanupUnconfigured": "AI cleanup is on, but no cleanup model is set up.",
       "errorTitles": {
         "sessionExpired": "Session Expired",
         "offline": "You're Offline",
         "agentUnavailable": "Assistant Unavailable",
         "screenContextSkipped": "Screen Context Skipped",
-        "dailyLimitReached": "Daily Limit Reached",
+        "cloudLimitReached": "Weekly Cloud Limit Reached",
         "providerRateLimited": "Provider Rate Limited"
       },
       "fallback": {
@@ -976,7 +1000,9 @@
         "reasoningFailed": "The AI could not complete the selection edit. Your original text was not changed.",
         "invalidResponse": "The AI returned an invalid edit response. Nothing was replaced. Select the text and try again.",
         "emptyResponse": "The AI returned an empty edit. Nothing was replaced. Try a more specific instruction.",
-        "truncatedResponse": "The AI stopped before completing the edit. Nothing was replaced. Try selecting less text."
+        "truncatedResponse": "The AI stopped before completing the edit. Nothing was replaced. Try selecting less text.",
+        "wlCopyMissing": "OpenWhispr generated the edit, but on this desktop Wayland apps can only read pasted text through wl-copy. Install wl-clipboard to apply edits.",
+        "wlCopyFailed": "OpenWhispr generated the edit, but wl-copy couldn't copy it for Wayland apps, so it wasn't applied."
       },
       "pastePermission": {
         "title": "Allow automatic pasting",
@@ -990,7 +1016,12 @@
       "pasteFailed": {
         "title": "Couldn't paste automatically"
       },
-      "interruptedRecordingRecovered": "Recovered after OpenWhispr closed before this dictation finished."
+      "interruptedRecordingRecovered": "Recovered after OpenWhispr closed before this dictation finished.",
+      "waylandClipboard": {
+        "title": "Transcription not pasted",
+        "wlCopyMissing": "On this desktop, Wayland apps can only read pasted text through wl-copy. Install wl-clipboard to paste your dictations.",
+        "wlCopyFailed": "wl-copy couldn't copy the text for Wayland apps, so it wasn't pasted. Press Retry to try again."
+      }
     },
     "clipboard": {
       "pasteFailed": {
@@ -1172,6 +1203,7 @@
     },
     "signedIn": {
       "welcomeBack": "Welcome back",
+      "welcomeBackNamed": "Welcome back, {{name}}",
       "notYou": "Not you? Log out"
     },
     "sso": {
@@ -1307,7 +1339,6 @@
   "apiKeysSection": {
     "title": "API Keys",
     "description": "Create keys to access the OpenWhispr API programmatically.",
-    "docsLink": "API Docs",
     "empty": "No API keys yet",
     "createButton": "Create API Key",
     "create": {
@@ -1518,7 +1549,9 @@
     "withoutToolPrefix": "Without this tool, OpenWhispr will copy text to your clipboard. You can then paste manually with Ctrl+V.",
     "wtypeCosmicTerminalsDescription": "On COSMIC, terminals such as Warp only receive pasted text through wtype. Other apps already paste without it.",
     "wtypeFallbackDescription": "wtype is the preferred auto-paste method for this wlroots compositor. A fallback is available, but may be less reliable.",
-    "xwaylandAppsOnly": "automatic pasting works for XWayland apps only"
+    "xwaylandAppsOnly": "automatic pasting works for XWayland apps only",
+    "wlClipboardTitle": "Install wl-clipboard to paste into Wayland apps",
+    "wlClipboardDescription": "On this desktop, Wayland apps can only read text that OpenWhispr copies through wl-copy. To paste dictation into them, install wl-clipboard:"
   },
   "promptStudio": {
     "common": {
@@ -1860,7 +1893,7 @@
     "account": {
       "badges": {
         "free": "Free",
-        "limitReached": "Limit reached",
+        "limitReached": "Cloud limit reached",
         "pastDue": "Past due",
         "pro": "Pro",
         "business": "Business",
@@ -1896,9 +1929,10 @@
         "title": "We couldn't process your payment"
       },
       "planDescriptions": {
-        "freeUsage": "{{used}} / {{limit}} words this week",
+        "freeUsage": "{{used}} / {{limit}} OpenWhispr Cloud words this week",
+        "byokUnlimited": "Your own API keys and local models remain unlimited.",
         "nextBilling": "Next billing: {{date}}",
-        "pastDue": "{{used}} / {{limit}} free words this week - update payment to restore Pro",
+        "pastDue": "{{used}} / {{limit}} OpenWhispr Cloud words this week - update payment to restore Pro",
         "trial": "{{days}} days remaining - unlimited transcriptions",
         "unlimited": "Unlimited",
         "accessUntil": "Access until {{date}}",
@@ -2016,8 +2050,8 @@
       "title": "Account",
       "toasts": {
         "approachingLimit": {
-          "description": "You've used {{used}} of {{limit}} free words this week. Upgrade to Pro for unlimited use.",
-          "title": "Approaching weekly limit"
+          "description": "You've used {{used}} of {{limit}} OpenWhispr Cloud words this week. Upgrade to Pro for unlimited use.",
+          "title": "Approaching Cloud word limit"
         }
       },
       "trialCta": {
@@ -2365,6 +2399,10 @@
           },
           "xclip": {
             "step1Title": "Install xclip"
+          },
+          "wlCopy": {
+            "step1Title": "Install wl-clipboard",
+            "step2Title": "Verify installation"
           }
         },
         "xclipDesc": "Clipboard tool for KDE Wayland paste (xclip or xsel)",
@@ -2376,7 +2414,8 @@
           "flakeTitle": "Installing via our flake?",
           "flakeDesc": "If you install OpenWhispr from the flake, programs.openwhispr.enable turns on ydotool, the uinput module and the group memberships for you.",
           "rebuildNote": "Run sudo nixos-rebuild switch, then log out and back in so the group change and the /dev/uinput rule take effect. Replace <you> with your username."
-        }
+        },
+        "wlCopyDesc": "Clipboard tool that Wayland apps read pasted text from on this desktop"
       },
       "updates": {
         "automaticUpdates": "Automatic updates",
@@ -2745,6 +2784,7 @@
         "gemini_gemma_4_31b_it": "Google's largest Gemma 4, 31B dense, 256K context",
         "gemini_gemma_4_26b_a4b_it": "Google's Gemma 4 MoE, 4B active params, 256K context",
         "groq_openai_gpt_oss_120b": "OpenAI's open-source flagship, 500 T/sec",
+        "groq_qwen_qwen3_8_27b": "Fast Qwen model, 450 T/sec, 131K context",
         "groq_openai_gpt_oss_20b": "Fast open-source model, 1000 T/sec",
         "groq_compound": "Groq's compound system, 450 T/sec",
         "groq_compound_mini": "Fast compound system, 3x lower latency",
@@ -2833,8 +2873,8 @@
     "inviteTeam": "Invite your team",
     "settings": "Settings",
     "support": "Support",
-    "limitReached": "Weekly limit reached",
-    "limitReachedDescription": "Upgrade to Pro for unlimited transcriptions.",
+    "limitReached": "Weekly Cloud limit reached",
+    "limitReachedDescription": "Upgrade to Pro or use your own API key for unlimited use.",
     "viewPlans": "View Plans",
     "upgradeTitle": "Upgrade to Pro",
     "upgradeDescription": "Unlimited, more accurate, faster transcription.",
@@ -3607,19 +3647,24 @@
           "description": "Workflow, pain points, reactions, and quotes from a participant"
         },
         "shorten": {
-          "name": "Shorten",
-          "description": "Make the summary about half as long",
-          "cta": "Shorten the summary"
+          "name": "Make notes shorter",
+          "description": "Shorten the saved AI summary while keeping key facts",
+          "cta": "Make notes shorter"
         },
         "addTldr": {
-          "name": "Add TL;DR",
-          "description": "Put a two- or three-sentence TL;DR at the top of the summary",
-          "cta": "Add a TL;DR"
+          "name": "Write TL;DR",
+          "description": "Write a two- or three-sentence TL;DR in chat",
+          "cta": "Write TL;DR"
         },
         "slackUpdate": {
           "name": "Slack update",
           "description": "Write a short team update to post in Slack",
           "cta": "Write a Slack update"
+        },
+        "lengthen": {
+          "name": "Make notes longer",
+          "description": "Expand the saved AI summary with supported detail",
+          "cta": "Make notes longer"
         }
       },
       "errors": {
@@ -3632,12 +3677,10 @@
       },
       "tab": "Actions",
       "output": {
-        "auto": "Auto",
         "chat": "Chat",
         "summary": "AI summary",
-        "chatHint": "Answers in the note's chat and leaves the AI summary as it is.",
-        "summaryHint": "Edits the note's AI summary, or writes one from the transcript if there isn't one yet.",
-        "autoHint": "Reads the prompt when you save and picks the chat or the AI summary."
+        "chatHint": "This action replies in chat. Your saved AI summary stays unchanged.",
+        "summaryHint": "This built-in action updates your saved AI summary. You can undo the change."
       },
       "applied": "AI summary updated with {{name}}"
     },
@@ -3662,7 +3705,8 @@
       "noSectionsHint": "Without sections, the context is the whole instruction for the summary.",
       "noTemplates": "No templates yet",
       "emptyEditorTitle": "Select a template",
-      "emptyEditorDescription": "Choose a template from the list or create a new one"
+      "emptyEditorDescription": "Choose a template from the list or create a new one",
+      "outputHint": "Applying a template creates or replaces the AI summary using your notes and transcript."
     },
     "onboarding": {
       "llm": {
@@ -3704,6 +3748,7 @@
       "typeNamePlaceholder": "Type a name",
       "nameOrEmailPlaceholder": "Type a name or email",
       "knownSpeakers": "Known speakers",
+      "thisIsMe": "This is me",
       "meetingAttendees": "Meeting attendees",
       "createNewPrefix": "Create",
       "addContact": "Add contact",
@@ -3771,6 +3816,11 @@
       "author": {
         "you": "You"
       }
+    },
+    "assistantUndo": {
+      "applied": "Assistant updated “{{title}}”",
+      "changed": "This note changed after the assistant edit. Undo is no longer available.",
+      "failed": "Could not undo the edit. Please try again."
     }
   },
   "dictionary": {
@@ -4026,7 +4076,13 @@
       "copiedToClipboard": "Copied to your clipboard",
       "openNote": "Open note",
       "unknownTool": "Unknown tool: {{name}}",
-      "invalidArgs": "Invalid tool arguments for {{name}}"
+      "invalidArgs": "Invalid tool arguments for {{name}}",
+      "search_openwhispr_helpName": "Search OpenWhispr help",
+      "read_openwhispr_helpName": "Read OpenWhispr help",
+      "get_openwhispr_contextName": "Read OpenWhispr settings",
+      "search_openwhispr_helpStatus": "Searching OpenWhispr help...",
+      "read_openwhispr_helpStatus": "Reading OpenWhispr help...",
+      "get_openwhispr_contextStatus": "Reading OpenWhispr settings..."
     }
   },
   "assistant": {
@@ -4108,20 +4164,18 @@
     "mcp": {
       "description": "Chat, search, and work with your notes inside Claude, ChatGPT, and Cursor.",
       "step1": "In your AI tool, add OpenWhispr MCP using the public URL",
-      "step2": "Create an API key with the scopes you need.",
-      "step3": "Paste the key as the Authorization header to connect.",
-      "learnMore": "Learn more",
       "proRequired": "Upgrade to a paid plan to connect OpenWhispr to Claude, ChatGPT, and Cursor.",
       "worksWith": "Works with",
       "copyUrl": "Copy MCP URL",
-      "copied": "Copied"
+      "copied": "Copied",
+      "oauthTitle": "Sign in with OAuth",
+      "oauthDescription": "In a client that supports OAuth, add the server URL, then sign in to OpenWhispr and approve access. No API key needed.",
+      "apiKeyTitle": "Use an API key",
+      "apiKeyDescription": "For clients that accept request headers, create a personal API key with the permissions you need and use the header below."
     },
     "cli": {
       "description": "Give your assistant access to your notes from the terminal.",
       "installLabel": "Install",
-      "learnMore": "Read the docs",
-      "copyDocsLink": "Copy docs link",
-      "docsLinkCopied": "Docs link copied",
       "viewPlans": "View Plans",
       "local": {
         "label": "Local",
@@ -4166,7 +4220,8 @@
     },
     "connectors": {
       "description": "Let the assistant use your tools. You approve every email, message and issue before it goes out."
-    }
+    },
+    "readDocs": "Read the docs"
   },
   "connectors": {
     "approval": {
@@ -4333,15 +4388,17 @@
       "descriptionSend": "The assistant shows an email card in the chat. It's sent from your Gmail only when you press Send.",
       "unavailable": "Email drafts aren't available right now.",
       "targetLabel": "Draft emails in",
-      "autoResolved": "Automatic · {{target}}",
       "targets": {
         "gmail": "Gmail",
         "outlookWork": "Outlook (work or school)",
         "outlookPersonal": "Outlook.com",
-        "mailto": "Default mail app",
+        "mailto": "System mail app",
         "gmailSend": "Send from chat (Gmail)",
-        "gmailSendConnectFirst": "Send from chat (Gmail) · connect Gmail below"
-      }
+        "gmailSendConnectFirst": "Send from chat (Gmail) · connect Gmail below",
+        "auto": "Automatic"
+      },
+      "automaticHint": "Currently: {{target}}. Follows your connected accounts.",
+      "systemMailHint": "Uses the email handler set up on your computer."
     },
     "slack": {
       "title": "Slack",
@@ -4739,8 +4796,7 @@
     "close": "Close chat",
     "newChat": "New chat",
     "conversationSelector": "Switch conversation",
-    "history": "History",
-    "generateSummary": "Generate summary"
+    "history": "History"
   },
   "transcriptionPreview": {
     "label": "Preview",
@@ -4868,5 +4924,55 @@
       "provider": "Provider",
       "requestId": "Request ID"
     }
+  },
+  "productHelp": {
+    "sources": "Official documentation",
+    "settings": "Current app settings",
+    "guidance": "Information used for this reply.",
+    "settingsNote": "Read-only choices and known permissions captured for this reply; this does not test your devices.",
+    "readAt": "Read at {{time}}",
+    "sourceStatus": {
+      "live": "Article retrieved",
+      "bundled": "Built-in fallback"
+    },
+    "reason": {
+      "policy": "Your organization’s policy limits online documentation lookup.",
+      "rateLimit": "Online documentation lookup reached its limit. Built-in guidance is shown.",
+      "unavailable": "Current documentation could not be checked. Built-in guidance is shown.",
+      "privacy": "Online documentation lookup is off while you’re signed out or using only local processing. Built-in guidance is shown."
+    },
+    "openFailed": "Could not open the article. You can copy its link and open it in your browser.",
+    "topicsList": {
+      "hotkeys": "Shortcuts",
+      "microphone": "Microphone",
+      "models": "Models",
+      "meetings": "Meetings",
+      "calendar": "Calendars",
+      "language": "Languages",
+      "backup": "Backup",
+      "assistant": "Assistant",
+      "hold-or-tap": "Hold or tap",
+      "choose-your-microphone": "Choose your microphone",
+      "microphone-not-working": "Microphone not working",
+      "local-models": "Local models",
+      "chat-agent": "Chat agent",
+      "record-a-meeting": "Record a meeting",
+      "connect-google-calendar": "Connect Google Calendar",
+      "languages": "Dictating in other languages",
+      "sync-across-devices": "Sync notes across devices"
+    },
+    "appVersion": "App version",
+    "platform": "Platform",
+    "processing": "Processing",
+    "engine": "Engine",
+    "policy": "Assistant allowed by policy",
+    "on": "On",
+    "off": "Off",
+    "microphonePermission": "Microphone permission",
+    "specificMicrophone": "Specific microphone",
+    "permissionGranted": "Allowed",
+    "permissionDenied": "Denied",
+    "permissionRestricted": "Restricted",
+    "permissionNotDetermined": "Not requested"
   }
 }

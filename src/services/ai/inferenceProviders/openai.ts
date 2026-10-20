@@ -10,6 +10,7 @@ import {
   emptyResponseError,
   fetchWithParamFallback,
   isTruncatedFinishReason,
+  responsesReasoningEffort,
   truncatedOutputError,
 } from "../chatRequestBody";
 import { detectEndpointDialect } from "../thinkingSuppressionDialects";
@@ -274,6 +275,8 @@ export const openaiProvider: InferenceProvider = {
             if (apiConfig.supportsTemperature) {
               requestBody.temperature = config.temperature ?? (config.systemPrompt ? 0.3 : 0);
             }
+            const effort = responsesReasoningEffort(model, resolvedProvider, config, openAiBase);
+            if (effort) requestBody.reasoning = { effort };
           } else {
             requestBody.messages = buildMessages(type);
             applyChatCompletionsParams(requestBody, {
@@ -286,6 +289,7 @@ export const openaiProvider: InferenceProvider = {
           }
 
           const res = await fetchWithParamFallback(
+            endpoint,
             () =>
               fetch(endpoint, {
                 method: "POST",

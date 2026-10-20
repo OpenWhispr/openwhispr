@@ -24,11 +24,17 @@ function getLinuxSessionInfo(environment = process.env) {
     !isKde &&
     !isHyprland &&
     (desktopEnv.includes("sway") || (!desktopEnv && !!environment.SWAYSOCK));
+  const isNamedWlroots = WLROOTS_DESKTOPS.some((desktop) => desktopEnv.includes(desktop));
   const isWlroots =
     isWayland &&
-    (WLROOTS_DESKTOPS.some((desktop) => desktopEnv.includes(desktop)) ||
-      !!environment.SWAYSOCK ||
-      !!environment.HYPRLAND_INSTANCE_SIGNATURE);
+    (isNamedWlroots || !!environment.SWAYSOCK || !!environment.HYPRLAND_INSTANCE_SIGNATURE);
+  const isNiri = isWayland && desktopEnv.includes("niri");
+  // wlroots, Hyprland and niri's xwayland-satellite hand an X11 clipboard write to
+  // Wayland apps only while an X11 window has focus (KWin, Mutter and COSMIC do it
+  // themselves), so the app's XWayland clipboard reaches a native Wayland app only
+  // through wl-copy. A stale SWAYSOCK or Hyprland signature alone doesn't count.
+  const requiresWlCopy =
+    isWayland && !isGnome && !isKde && !isCosmic && (isNamedWlroots || isSway || isNiri);
 
   return {
     isWayland,
@@ -40,6 +46,7 @@ function getLinuxSessionInfo(environment = process.env) {
     isHyprland,
     isSway,
     isCosmic,
+    requiresWlCopy,
   };
 }
 

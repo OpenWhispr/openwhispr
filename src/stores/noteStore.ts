@@ -937,6 +937,7 @@ export async function startMigration(): Promise<void> {
           enhanced_content: n.enhanced_content,
           enhancement_prompt: n.enhancement_prompt,
           enhancement_template_id: n.enhancement_template_id,
+          enhanced_at_content_hash: n.enhanced_at_content_hash,
           note_type: n.note_type,
           source_file: n.source_file,
           audio_duration_seconds: n.audio_duration_seconds,

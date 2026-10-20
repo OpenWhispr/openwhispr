@@ -1,3 +1,4 @@
+import { productHelpTools } from "./productHelpTools";
 import { ToolRegistry } from "./ToolRegistry";
 import { createSearchNotesTool } from "./searchNotesTool";
 import { getNoteTool } from "./getNoteTool";
@@ -21,6 +22,8 @@ export type { ToolDefinition, ToolResult } from "./ToolRegistry";
 
 interface ToolRegistrySettings {
   isSignedIn: boolean;
+  /** Disabled for onboarding demos; supported normal chat surfaces default to enabled. */
+  productHelpEnabled?: boolean;
   calendarConnected: boolean;
   cloudBackupEnabled: boolean;
   /** Pins search_notes to a container (overview chat); the LLM cannot widen it. */
@@ -30,16 +33,20 @@ interface ToolRegistrySettings {
   vocabulary?: DictionaryActions & SnippetActions;
   /** Present only when connectors are available (signed in, paid, policy allows). */
   connectors?: ConnectorToolSettings;
+  /** Leaves out update_note, for a turn that must not change any note. */
+  keepNotesUnchanged?: boolean;
 }
 
 export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry {
   const registry = new ToolRegistry();
+  if (settings.productHelpEnabled !== false)
+    for (const tool of productHelpTools) registry.register(tool);
 
   const useCloudSearch = settings.isSignedIn && settings.cloudBackupEnabled;
   registry.register(createSearchNotesTool({ useCloudSearch, fixedScope: settings.searchScope }));
   registry.register(getNoteTool);
   registry.register(createNoteTool);
-  registry.register(updateNoteTool);
+  if (!settings.keepNotesUnchanged) registry.register(updateNoteTool);
   registry.register(listFoldersTool);
   registry.register(clipboardTool);
 

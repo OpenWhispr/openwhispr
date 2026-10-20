@@ -48,6 +48,12 @@ export interface CloudModelDefinition {
   supportsVision?: boolean;
   tokenParam?: "max_tokens" | "max_completion_tokens";
   supportsTemperature?: boolean;
+  reasoningEffort?: ReasoningEffortCapability;
+}
+
+export interface ReasoningEffortCapability {
+  options: string[];
+  defaultValue?: string;
 }
 
 export interface CloudProviderData {

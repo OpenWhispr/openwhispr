@@ -16,6 +16,7 @@ jest.mock('@/lib/localReasoning', () => ({
     options.isPrivateNote === true,
   getLocalReasoningReadiness: async (): Promise<{ status: string }> => ({ status: 'ready' }),
   fitsLocalReasoningBudget: async (): Promise<boolean> => true,
+  fitsLocalCleanupOutput: async (): Promise<boolean> => true,
   getLocalReasoningUnavailableMessage: (): string => 'Local unavailable',
   LocalReasoningError: class extends Error {
     constructor(_code: string, message: string) {

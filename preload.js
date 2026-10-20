@@ -152,6 +152,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getTranscriptions: (limit, options) =>
     ipcRenderer.invoke("db-get-transcriptions", limit, options),
   recordAnalyticsEvent: (input) => ipcRenderer.invoke("analytics-record-event", input),
+  closeActivationStream: () => ipcRenderer.invoke("activation-close"),
+  beginActivationCapture: () => ipcRenderer.invoke("activation-begin"),
+  stopActivationCapture: (id) => ipcRenderer.invoke("activation-stop", id),
+  finishActivationCapture: (id, words) => ipcRenderer.invoke("activation-finish", id, words),
+  cancelActivationCapture: (id) => ipcRenderer.invoke("activation-cancel", id),
   getAnalyticsSummary: () => ipcRenderer.invoke("analytics-get-summary"),
   getPendingAnalyticsEvents: (limit, context) =>
     ipcRenderer.invoke("analytics-get-pending", limit, context),
@@ -229,7 +234,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getNotes: (noteType, limit, folderId, spaceId) =>
     ipcRenderer.invoke("db-get-notes", noteType, limit, folderId, spaceId),
   getSpaceNotes: (spaceId, limit) => ipcRenderer.invoke("db-get-space-notes", spaceId, limit),
-  updateNote: (id, updates) => ipcRenderer.invoke("db-update-note", id, updates),
+  updateNote: (id, updates, options) => ipcRenderer.invoke("db-update-note", id, updates, options),
+  getNoteUndos: () => ipcRenderer.invoke("db-get-note-undos"),
+  claimNoteUndo: (token) => ipcRenderer.invoke("db-claim-note-undo", token),
+  undoNoteUpdate: (token) => ipcRenderer.invoke("db-undo-note-update", token),
+  discardNoteUndo: (id, token) => ipcRenderer.invoke("db-discard-note-undo", id, token),
   deleteNote: (id) => ipcRenderer.invoke("db-delete-note", id),
   exportNote: (noteId, format) => ipcRenderer.invoke("export-note", noteId, format),
   exportTranscript: (noteId, format) => ipcRenderer.invoke("export-transcript", noteId, format),
@@ -470,9 +479,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => () => callback()
   ),
 
-  // One-time "GPU pack needs re-downloading" notice from the legacy-layout migration
-  getGpuPackMigrationNotice: () => ipcRenderer.invoke("get-gpu-pack-migration-notice"),
-  dismissGpuPackMigrationNotice: () => ipcRenderer.invoke("dismiss-gpu-pack-migration-notice"),
+  // One-time "GPU pack needs re-downloading" notice
+  takeGpuPackMigrationNotice: () => ipcRenderer.invoke("take-gpu-pack-migration-notice"),
+  onGpuPackMigrationNoticeReady: registerListener(
+    "gpu-pack-migration-notice-ready",
+    (callback) => () => callback()
+  ),
 
   // Local Parakeet (NVIDIA) functions
   transcribeLocalParakeet: (audioBlob, options) =>
@@ -1128,6 +1140,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
 
   // Agent cloud tools
+  productHelp: (id, input) => ipcRenderer.invoke("product-help", id, input),
+  cancelProductHelp: (id) => ipcRenderer.send("product-help-cancel", id),
+  productHelpBasics: () => ipcRenderer.invoke("product-help-basics"),
   agentWebSearch: (query, numResults) => ipcRenderer.invoke("agent-web-search", query, numResults),
   agentOpenNote: (noteId) => ipcRenderer.invoke("agent-open-note", noteId),
 
@@ -1163,7 +1178,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getNoteByClientId: (clientNoteId) => ipcRenderer.invoke("db-get-note-by-client-id", clientNoteId),
   upsertNoteFromCloud: (cloudNote, localFolderId, localSpaceId) =>
     ipcRenderer.invoke("db-upsert-note-from-cloud", cloudNote, localFolderId, localSpaceId),
-  acknowledgeNoteCreate: (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, settleIfUnchanged) =>
+  acknowledgeNoteCreate: (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) =>
     ipcRenderer.invoke(
       "db-acknowledge-note-create",
       id,
@@ -1171,22 +1186,34 @@ contextBridge.exposeInMainWorld("electronAPI", {
       cloudId,
       cloudUpdatedAt,
       ownerUserId,
-      settleIfUnchanged
+      options
     ),
-  markNoteSyncedIfUnchanged: (id, snapshot, expectedCloudId, cloudUpdatedAt, ownerUserId) =>
+  markNoteSyncedIfUnchanged: (
+    id,
+    snapshot,
+    expectedCloudId,
+    cloudUpdatedAt,
+    ownerUserId,
+    cloudRevision,
+    cloudNote
+  ) =>
     ipcRenderer.invoke(
       "db-mark-note-synced-if-unchanged",
       id,
       snapshot,
       expectedCloudId,
       cloudUpdatedAt,
-      ownerUserId
+      ownerUserId,
+      cloudRevision,
+      cloudNote
     ),
-  setNoteCloudBase: (id, cloudUpdatedAt) =>
-    ipcRenderer.invoke("db-set-note-cloud-base", id, cloudUpdatedAt),
+  setNoteCloudBase: (id, cloudUpdatedAt, cloudRevision, options) =>
+    ipcRenderer.invoke("db-set-note-cloud-base", id, cloudUpdatedAt, cloudRevision, options),
   setNoteOwnerFromCloud: (id, ownerUserId) =>
     ipcRenderer.invoke("db-set-note-owner-from-cloud", id, ownerUserId),
   countTeamNotesMissingOwner: () => ipcRenderer.invoke("db-count-team-notes-missing-owner"),
+  countNotesMissingRevision: (spaceKind) =>
+    ipcRenderer.invoke("db-count-notes-missing-revision", spaceKind),
   markNoteSyncError: (id) => ipcRenderer.invoke("db-mark-note-sync-error", id),
   restoreNoteAfterDeniedDelete: (id) =>
     ipcRenderer.invoke("db-restore-note-after-denied-delete", id),

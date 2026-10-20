@@ -90,6 +90,30 @@ test("no Assistant target and a lost target both copy the completed response", a
   }
 });
 
+// On niri, wlroots and Hyprland without wl-copy (#2621), the app the user is in
+// can't read the copy, so the panel offers its Copy button instead of "Copied".
+test("a copy only XWayland apps can read is not reported as copied", async () => {
+  const { deliverAssistantResponse } = await deliveryModule;
+
+  for (const delivery of [{ mode: "clipboard" }, PASTE_DELIVERY]) {
+    const { dependencies, writes } = createDeliveryHarness(false);
+    const rendererWrites = [];
+    dependencies.electronAPI.writeClipboard = async (text) => {
+      writes.push(text);
+      return { success: true, xwaylandOnly: true };
+    };
+    dependencies.clipboard = { writeText: async (text) => rendererWrites.push(text) };
+
+    assert.deepEqual(
+      await deliverAssistantResponse(delivery, RESPONSE, dependencies),
+      { pasted: false, copied: false },
+      delivery.mode
+    );
+    assert.deepEqual(writes, [RESPONSE], delivery.mode);
+    assert.deepEqual(rendererWrites, [], `${delivery.mode}: no second write to the same clipboard`);
+  }
+});
+
 const MARKDOWN_RESPONSE = "**Bold** start.\n\n* item one\n* item two";
 const PLAIN_RESPONSE = "Bold start.\n\n- item one\n- item two";
 

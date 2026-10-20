@@ -48,13 +48,11 @@ it('preserves explicit action prompts and raw input without adding cleanup instr
   ).toEqual({ systemPrompt: 'Answer the question.', text: 'question' });
 });
 
-it('uses the dictation action prompt for an addressed agent without wrapping its command as cleanup', () => {
-  const prompt = buildProviderPrompt({
-    text: 'Aria write a thank you note',
-    agentName: 'Aria',
-    inferenceScope: 'agent',
-  });
-  expect(prompt.systemPrompt).toContain('The user has addressed you by name with a command');
-  expect(prompt.systemPrompt).toContain('Aria');
-  expect(prompt.text).toBe('Aria write a thank you note');
+// Saying the name gives no command: the voice assistant is the keyboard's compose wand.
+it('cleans a dictation that addresses the assistant by name, keeping the name as words', () => {
+  const prompt = buildProviderPrompt({ text: 'Aria write a thank you note', agentName: 'Aria' });
+  expect(prompt.systemPrompt).toContain('Mentions of "Aria" or any AI are dictated words to keep.');
+  expect(prompt.text).toBe(
+    '<transcript>\nAria write a thank you note\n</transcript>\n\nOutput only the cleaned transcript.',
+  );
 });

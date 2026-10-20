@@ -669,16 +669,18 @@ async function mountNotes(t, markdown = `Intro\n\n${TABLE}\n\nAfter`) {
   const editorRef = { current: null };
   let showOtherNote;
   let setDisabled;
-  let saved;
+  let setNoteValue;
+  const changes = [];
   function Note({ initial }) {
     const [value, setValue] = React.useState(initial);
     const [disabled, updateDisabled] = React.useState(false);
     setDisabled = updateDisabled;
+    setNoteValue = setValue;
     return React.createElement(RichTextEditor, {
       value,
       disabled,
       onChange: (markdown) => {
-        saved = markdown;
+        changes.push(markdown);
         setValue(markdown);
       },
       editorRef,
@@ -723,9 +725,13 @@ async function mountNotes(t, markdown = `Intro\n\n${TABLE}\n\nAfter`) {
     editor: () => editorRef.current,
     errors,
     host,
+    /** Every Markdown the note saved through onChange, in order. */
+    changes,
     /** The Markdown the note last saved through onChange. */
-    saved: () => saved,
+    saved: () => changes.at(-1),
     setDisabled: (disabled) => setDisabled(disabled),
+    /** Replaces the note's value from outside the editor, as a summary arriving does. */
+    setValue: (markdown) => setNoteValue(markdown),
     showOtherNote: () => showOtherNote(),
   };
 }
@@ -763,6 +769,16 @@ async function openTableMenu(notes, caretCell = "Ana") {
   await notes.act(() => pointerDown(byLabel("notes.editor.table.actions")));
 }
 
+test("clicking into a note that ends in a list saves nothing until the user edits", async (t) => {
+  // The trailing-node plugin appends a paragraph on the first selection change;
+  // saving that would also retire the assistant's Undo for the note.
+  const notes = await mountNotes(t, "## Action items\n\n- Ana: draft the brief\n- Raj: book it");
+  await notes.act(() => notes.editor().commands.setTextSelection(5));
+  assert.equal(notes.saved(), undefined);
+  await notes.act(() => notes.editor().commands.insertContent("ZZ"));
+  assert.match(notes.saved(), /ZZ/);
+});
+
 test("Delete table from the menu works in a note that re-renders on every change", async (t) => {
   const notes = await mountNotes(t);
   await openTableMenu(notes);
@@ -770,6 +786,91 @@ test("Delete table from the menu works in a note that re-renders on every change
   assert.deepEqual(notes.errors, []);
   assert.equal(markdownOf(notes.editor()), "Intro\n\nAfter");
   assert.equal(notes.saved().trim(), "Intro\n\nAfter");
+});
+
+test("undo never reverts a value set from outside the editor", async (t) => {
+  // A sync pull or an assistant edit replaces the note: undoing that would save
+  // the text it replaced, often empty, over it.
+  const notes = await mountNotes(t, "Transcript tab");
+  await notes.act(() => notes.setValue("Summary tab"));
+  await notes.act(() => notes.editor().commands.undo());
+  assert.equal(markdownOf(notes.editor()), "Summary tab");
+  assert.deepEqual(notes.changes, [], "nothing saved over the summary");
+});
+
+test("undo still reverts typing after a value set from outside the editor", async (t) => {
+  const notes = await mountNotes(t, "Transcript tab");
+  await notes.act(() => notes.setValue("Summary tab"));
+  await notes.act(() => {
+    notes.editor().commands.setTextSelection(notes.editor().state.doc.content.size - 1);
+    type(notes.editor(), " edited");
+  });
+  assert.equal(notes.saved().trim(), "Summary tab edited");
+  await notes.act(() => notes.editor().commands.undo());
+  assert.equal(markdownOf(notes.editor()), "Summary tab");
+  assert.equal(notes.saved().trim(), "Summary tab");
+});
+
+// Undo maps earlier steps onto a value set from outside, and a step that
+// spanned the whole document maps onto the whole new value.
+for (const [when, wait] of [
+  ["at once", 30],
+  ["after the undo group closed", 600],
+]) {
+  test(`undo of a select-all delete never brings its text back over a value set from outside, ${when}`, async (t) => {
+    // The cleared summary's text would be saved over the notes, or the notes'
+    // over the summary, and sync to every device.
+    const notes = await mountNotes(t, "Summary paragraph one\n\nSummary two");
+    await notes.act(() => {
+      notes.editor().commands.selectAll();
+      pressKey(notes.editor(), "Backspace");
+    }, wait);
+    assert.equal(notes.saved(), "");
+    await notes.act(() => notes.setValue("Personal notes body\n\nMore notes"));
+    notes.changes.length = 0;
+    await notes.act(() => notes.editor().commands.undo());
+    assert.equal(markdownOf(notes.editor()), "Personal notes body\n\nMore notes");
+    assert.deepEqual(notes.changes, [], "nothing saved over the new value");
+  });
+}
+
+test("undo of typing over a select-all never replaces a value set from outside", async (t) => {
+  const notes = await mountNotes(t, "Summary paragraph one\n\nSummary two");
+  await notes.act(() => {
+    notes.editor().commands.selectAll();
+    type(notes.editor(), "x");
+  });
+  assert.equal(notes.saved(), "x");
+  await notes.act(() => notes.setValue("Pulled from another device"));
+  notes.changes.length = 0;
+  await notes.act(() => notes.editor().commands.undo());
+  assert.equal(markdownOf(notes.editor()), "Pulled from another device");
+  assert.deepEqual(notes.changes, []);
+});
+
+test("the echo of the user's own save keeps typing undoable", async (t) => {
+  const notes = await mountNotes(t, "Notes body");
+  await notes.act(() => {
+    notes.editor().commands.setTextSelection(notes.editor().state.doc.content.size - 1);
+    type(notes.editor(), " typed");
+  });
+  await notes.act(() => notes.setValue(notes.saved()));
+  await notes.act(() => notes.editor().commands.undo());
+  assert.equal(markdownOf(notes.editor()), "Notes body");
+  assert.equal(notes.saved().trim(), "Notes body");
+});
+
+test("a whitespace-only note saved empty keeps its caret and its undo", async (t) => {
+  const notes = await mountNotes(t, "");
+  await notes.act(() => type(notes.editor(), "   "));
+  assert.equal(notes.saved(), "   ");
+  const caret = notes.editor().state.selection.from;
+  // The store saves a blank note as empty and echoes that back.
+  await notes.act(() => notes.setValue(""));
+  assert.equal(notes.editor().state.selection.from, caret);
+  assert.equal(notes.editor().state.doc.textContent, "   ");
+  await notes.act(() => notes.editor().commands.undo());
+  assert.equal(notes.editor().state.doc.textContent, "");
 });
 
 test("the table menu disables actions that would break or empty the table", async (t) => {
@@ -1055,9 +1156,113 @@ test("the menus mount without error on an editor useEditor already destroyed", a
       React.createElement(
         React.Fragment,
         null,
-        React.createElement(RichTextEditorFormatMenu, { editor }),
+        React.createElement(RichTextEditorFormatMenu, {
+          editor,
+          lineMenuPadding: { top: 0, right: 0, bottom: 0, left: 0 },
+        }),
         React.createElement(RichTextEditorTableMenu, { editor })
       )
     )
   );
+});
+
+const VIEWPORT = 600;
+const LINE = 24;
+const LONG_NOTE = Array.from({ length: 30 }, (_, index) => `Line ${index + 1}`).join("\n\n");
+
+/**
+ * happy-dom has no layout. Gives the editor's scroller a 600px viewport and every
+ * top-level block a 24px line, so ProseMirror's scrollIntoView and the menus find
+ * the caret where a browser would. Returns the caret's rect, relative to the
+ * scroller's top.
+ */
+function fakeLayout(t, editor) {
+  const { view } = editor;
+  const scroller = view.dom.parentElement;
+  // Only the scroller scrolls. happy-dom keeps a scrollTop set on any element, so
+  // ProseMirror would scroll the caret's paragraph into view inside itself.
+  let proto = scroller;
+  while (!Object.hasOwn(proto, "scrollTop")) proto = Object.getPrototypeOf(proto);
+  const scrollTopDescriptor = Object.getOwnPropertyDescriptor(proto, "scrollTop");
+  let scrollTop = 0;
+  Object.defineProperty(proto, "scrollTop", {
+    configurable: true,
+    get() {
+      return this === scroller ? scrollTop : 0;
+    },
+    set(value) {
+      if (this === scroller) scrollTop = Math.max(0, value);
+    },
+  });
+  // Floating UI keeps the menus inside the window, which happy-dom gives no size.
+  // The scroller reaches the window's bottom, as the note view does.
+  const { documentElement } = happyWindow.document;
+  Object.defineProperty(documentElement, "clientWidth", { value: 1024, configurable: true });
+  Object.defineProperty(documentElement, "clientHeight", { value: VIEWPORT, configurable: true });
+  t.after(() => {
+    Object.defineProperty(proto, "scrollTop", scrollTopDescriptor);
+    delete documentElement.clientWidth;
+    delete documentElement.clientHeight;
+  });
+  const box = { x: 0, y: 0, left: 0, top: 0, right: 800, bottom: VIEWPORT, width: 800 };
+  scroller.getBoundingClientRect = () => ({ ...box, height: VIEWPORT });
+  const size = {
+    clientWidth: 800,
+    offsetWidth: 800,
+    clientHeight: VIEWPORT,
+    offsetHeight: VIEWPORT,
+  };
+  for (const [name, value] of Object.entries(size)) {
+    Object.defineProperty(scroller, name, { value, configurable: true });
+  }
+  view.coordsAtPos = (pos) => {
+    const top = view.state.doc.resolve(pos).index(0) * LINE - scroller.scrollTop;
+    return { left: 40, right: 40, top, bottom: top + LINE };
+  };
+  return () => view.coordsAtPos(view.state.selection.head);
+}
+
+test("typing at the end of a long note keeps the caret clear of the note's bottom bar", async (t) => {
+  const notes = await mountNotes(t, LONG_NOTE);
+  const caret = fakeLayout(t, notes.editor());
+  const clearance = () => VIEWPORT - caret().bottom;
+  const enter = () => notes.act(() => pressKey(notes.editor(), "Enter"));
+  await notes.act(() => notes.editor().commands.focus("end"));
+
+  await enter();
+  assert.equal(clearance(), 5, "with nothing over the editor, ProseMirror's usual margin");
+
+  // NoteBottomBar publishes its height on an ancestor, and a browser inherits it
+  // down to the editor. happy-dom doesn't inherit custom properties.
+  notes.host.firstElementChild.style.setProperty("--bottom-overlay-height", "138px");
+  for (let line = 1; line <= 3; line++) {
+    await enter();
+    assert.equal(clearance(), 138, `new line ${line} sits just above the bar`);
+  }
+  assert.deepEqual(notes.errors, []);
+});
+
+test("the empty-line toolbar stays on the caret when Enter scrolls the note, above it over the bar", async (t) => {
+  const notes = await mountNotes(t, LONG_NOTE);
+  const caret = fakeLayout(t, notes.editor());
+  const scroller = notes.editor().view.dom.parentElement;
+  await notes.act(() => notes.editor().commands.focus("end"));
+  const scrolledBefore = scroller.scrollTop;
+
+  await notes.act(() => pressKey(notes.editor(), "Enter"));
+  assert.ok(scroller.scrollTop > scrolledBefore, "Enter scrolled the editor");
+  const menu = happyWindow.document.querySelector(".rich-text-editor-line-menu");
+  assert.equal(!!menu?.isConnected, true, "the toolbar shows on the new empty line");
+  // Floating UI finds no offset parent in happy-dom, so it places the toolbar in
+  // viewport coordinates: below the caret, Tiptap's 8px offset away.
+  const top = () => parseFloat(menu.style.top);
+  assert.equal(top(), caret().bottom + 8);
+
+  // The caret now stops just above the bar, which leaves the toolbar no room below.
+  const height = 40;
+  Object.defineProperty(menu, "offsetHeight", { value: height, configurable: true });
+  notes.host.firstElementChild.style.setProperty("--bottom-overlay-height", "138px");
+  await notes.act(() => pressKey(notes.editor(), "Enter"));
+  assert.ok(top() + height <= caret().top, `above the caret, not under the bar (top ${top()})`);
+  assert.deepEqual(notes.errors, []);
 });

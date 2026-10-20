@@ -167,16 +167,6 @@ const ListEndMark = glyph(
   </>
 );
 
-const TextCursorInputMark = glyph(
-  <>
-    <path d="M5 4h1a3 3 0 0 1 3 3 3 3 0 0 1 3-3h1" />
-    <path d="M9 7v10" />
-    <path d="M13 20h-1a3 3 0 0 1-3-3 3 3 0 0 1-3 3H5" />
-    <path d="M5 16H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h1" />
-    <path d="M13 8h7a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-7" />
-  </>
-);
-
 const TableMark = glyph(
   <>
     <rect x="3" y="4" width="18" height="16" rx="2" />
@@ -201,4 +191,3 @@ export const ListOrdered = createIcon("list-ordered", ListOrderedMark);
 export const Quote = createIcon("quote", QuoteMark);
 export const Strikethrough = createIcon("strikethrough", StrikethroughMark);
 export const Table = createIcon("table", TableMark);
-export const TextCursorInput = createIcon("text-cursor-input", TextCursorInputMark);

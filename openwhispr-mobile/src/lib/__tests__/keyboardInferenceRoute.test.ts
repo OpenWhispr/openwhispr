@@ -34,7 +34,7 @@ jest.mock('../../../modules/app-group-storage/src', () => ({
     setItem: (key: string, value: string) => mockStorage.set(key, value),
   },
 }));
-jest.mock('../inferenceRouting', () => ({ snapshotTranscriptionJob: () => mockRoute }));
+jest.mock('../inferenceRouting', () => ({ snapshotTranscriptionJob: jest.fn(() => mockRoute) }));
 beforeEach(() => {
   mockStorage.clear();
   mockJobIds.length = 0;
@@ -48,6 +48,54 @@ it('persists a versioned route and only returns it for the original job', () => 
     jobId: 'one',
   });
 });
+// The same snapshot serves a wand job, so it carries the voice assistant's route too.
+it('snapshots the voice assistant route with a keyboard recording', () => {
+  const { snapshotTranscriptionJob } = jest.requireMock<{
+    snapshotTranscriptionJob: jest.Mock;
+  }>('../inferenceRouting');
+  snapshotKeyboardInferenceRoute('one');
+  expect(snapshotTranscriptionJob).toHaveBeenCalledWith('dictation', ['cleanup', 'agent']);
+});
+
+// Only a wand job reads the voice assistant's route; a dictation never does.
+it.each([
+  ['an unknown mode', { mode: 'other', scope: 'agent' }],
+  ['a provider that no longer resolves', { mode: 'providers', scope: 'agent', providerId: 'gone' }],
+])('keeps a keyboard dictation whose voice assistant route has %s', (_label, agentRoute) => {
+  mockStorage.set(
+    'keyboard_inference_route',
+    JSON.stringify({
+      version: 1,
+      jobId: 'one',
+      route: {
+        provider: 'cloud',
+        cleanupRoute: { mode: 'openwhispr', scope: 'cleanup' },
+        agentRoute,
+      },
+    }),
+  );
+  const route = readKeyboardInferenceRoute('one');
+  expect(route?.cleanupRoute).toEqual({ mode: 'openwhispr', scope: 'cleanup' });
+  expect(route?.agentRoute).toBeUndefined();
+  expect(route?.agentUnavailable).toBe(
+    'The voice assistant is unavailable. Your raw transcript is saved.',
+  );
+});
+
+it('still refuses a keyboard recording whose cleanup route no longer resolves', () => {
+  mockStorage.set(
+    'keyboard_inference_route',
+    JSON.stringify({
+      version: 1,
+      jobId: 'one',
+      route: { provider: 'cloud', cleanupRoute: { mode: 'other', scope: 'cleanup' } },
+    }),
+  );
+  expect(() => readKeyboardInferenceRoute('one')).toThrow(
+    'The original keyboard provider route is unavailable. Record again.',
+  );
+});
+
 it('does not reinterpret corrupted metadata as a Cloud route', () => {
   mockStorage.set('keyboard_inference_route', '{invalid');
   expect(() => readKeyboardInferenceRoute('one')).toThrow('route');

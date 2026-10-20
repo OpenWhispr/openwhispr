@@ -121,6 +121,8 @@
       "mouseButtonOnlyMac": "鼠标按键快捷键目前仅在 macOS 上受支持。",
       "alreadyRegistered": "\"{{hotkey}}\" 已被其他应用注册。",
       "osReserved": "\"{{hotkey}}\" 可能被系统保留。",
+      "keyNotInKeymap": "GNOME 无法在当前键盘布局下使用 \"{{hotkey}}\"。请选择其他按键。",
+      "keyReservedByGnome": "GNOME 已将 \"{{hotkey}}\" 用于自身的快捷键。请选择其他按键。",
       "rightModifierNeedsListener": "\"{{hotkey}}\" 无法在此桌面上使用，其快捷键需要包含一个普通按键。请添加一个按键，例如 Control+Alt+Space。",
       "holdNeedsReleaseKey": "按住说话需要 macOS 能检测到松开的按键：Globe、右侧 Option 之类的右侧按键，或带修饰键的快捷键。点按可用于任何按键。",
       "holdNeedsRegularKey": "要使用按住模式，请在快捷键中添加一个普通按键，例如 Control+Alt+Space。桌面环境无法检测仅按住修饰键的操作。",
@@ -142,7 +144,7 @@
   },
   "upgradePrompt": {
     "paymentFailed": "我们无法处理你的付款",
-    "weeklyLimit": "你已达到本周的使用上限",
+    "weeklyLimit": "你已达到本周的云端使用上限",
     "pastDueDescription": "你目前使用的是免费版——别担心，每周仍有 {{limit}} 个词的额度。\n更新支付方式即可恢复无限制的 Pro 版。",
     "limitDescription": "已使用 {{used}} / {{limit}} 个词。\n你的转录已保存并粘贴。",
     "updatePayment": "更新支付方式",
@@ -219,11 +221,11 @@
     "rehaul": {
       "permissions": {
         "title": "3 分钟完成 OpenWhispr 设置",
-        "microphoneDescription": "把你说的话变成文字。仅在录音时开启。",
-        "accessibilityDescription": "把文字粘贴到你正在使用的应用里。",
+        "microphoneDescription": "仅在录音时收音。",
+        "accessibilityDescription": "把文字粘贴到任意应用。",
         "systemAudioTitle": "系统音频",
-        "systemAudioDescription": "为会议笔记录下通话中的其他人。仅在录音时开启。",
-        "screenContextDescription": "当你向语音助手提问时，让它看到你屏幕上的内容。绝不保存。",
+        "systemAudioDescription": "录下通话中的其他人。",
+        "screenContextDescription": "让助手看到你的屏幕。",
         "enable": "启用",
         "enabled": "已启用"
       },
@@ -631,7 +633,7 @@
       "availableButton": "有可用更新"
     },
     "limit": {
-      "weeklyTitle": "已达到周限额",
+      "weeklyTitle": "已达本周云端上限",
       "weeklyDescription": "你的额度按滚动方式重置。升级到 Pro 或使用自己的 API Key 可不受限制。"
     },
     "accessibilityMissing": {
@@ -672,6 +674,8 @@
       "failedCtaSettings": "设置您的转录服务商",
       "failedCtaAndRetry": "然后点击重试",
       "failedCtaSettingsOnly": "在设置中配置您的转录服务商",
+      "failedCtaAiSettings": "请在设置中检查语音助手模型",
+      "editFailedTranscriptKept": "未应用编辑 · 已保留转录文本",
       "failedLimitReached": "已达每日限额",
       "failedOffline": "离线",
       "clearAll": "全部清除",
@@ -693,6 +697,9 @@
       "retrying": "正在重新转录…",
       "retrySuccess": "转录已更新",
       "retryError": "重新转录失败",
+      "retryErrors": {
+        "invalidResponse": "转录引擎返回了意外的响应。请重试。"
+      },
       "audioNotFound": "音频文件未找到或已过期",
       "noAiProcessing": "此转录未应用 AI 处理",
       "rawTranscript": "原始转录",
@@ -767,6 +774,21 @@
       "noSearchResults": "没有与“{{query}}”匹配的模型",
       "selectModelHint": "尚未选择模型 — 请从下方列表中选择一个。",
       "keyRequiredHint": "推理需要 API 密钥 — 请添加密钥以使用此提供商。"
+    },
+    "effort": {
+      "title": "推理强度",
+      "description": "模型在回答前思考的程度。",
+      "descriptionWithDefault": "模型在回答前思考的程度。“自动”使用服务商的默认设置（{{value}}）。",
+      "auto": "自动",
+      "options": {
+        "none": "无",
+        "minimal": "极低",
+        "low": "低",
+        "medium": "中",
+        "high": "高",
+        "xhigh": "极高",
+        "max": "最大"
+      }
     },
     "getApiKey": "获取你的 API Key ->",
     "selectModel": "选择模型",
@@ -898,12 +920,14 @@
   },
   "hooks": {
     "audioRecording": {
+      "cleanupSignedOut": "AI 清理使用 OpenWhispr Cloud，但你尚未登录。",
+      "cleanupUnconfigured": "已开启 AI 清理，但尚未设置清理模型。",
       "errorTitles": {
         "sessionExpired": "会话已过期",
         "offline": "你已离线",
         "agentUnavailable": "助手不可用",
         "screenContextSkipped": "已跳过屏幕上下文",
-        "dailyLimitReached": "已达到每日上限",
+        "cloudLimitReached": "已达本周云端上限",
         "providerRateLimited": "服务商速率限制"
       },
       "fallback": {
@@ -976,7 +1000,9 @@
         "reasoningFailed": "AI 无法完成选中文本编辑。原始文本未被更改。",
         "invalidResponse": "AI 返回的编辑响应格式无效。未替换任何内容。请选中文本后重试。",
         "emptyResponse": "AI 返回了空的编辑结果。未替换任何内容。请尝试更具体的指令。",
-        "truncatedResponse": "AI 在完成编辑之前停止了。未替换任何内容。请尝试选择更少的文本。"
+        "truncatedResponse": "AI 在完成编辑之前停止了。未替换任何内容。请尝试选择更少的文本。",
+        "wlCopyMissing": "OpenWhispr 已生成编辑，但在此桌面上，Wayland 应用只能通过 wl-copy 读取粘贴的文本。请安装 wl-clipboard 以应用编辑。",
+        "wlCopyFailed": "OpenWhispr 已生成编辑，但 wl-copy 无法为 Wayland 应用复制它，因此未应用。"
       },
       "pastePermission": {
         "title": "允许自动粘贴",
@@ -990,7 +1016,12 @@
       "pasteFailed": {
         "title": "无法自动粘贴"
       },
-      "interruptedRecordingRecovered": "OpenWhispr 在本次听写完成前关闭，已恢复此录音。"
+      "interruptedRecordingRecovered": "OpenWhispr 在本次听写完成前关闭，已恢复此录音。",
+      "waylandClipboard": {
+        "title": "转录内容未粘贴",
+        "wlCopyMissing": "在此桌面上，Wayland 应用只能通过 wl-copy 读取粘贴的文本。请安装 wl-clipboard 以粘贴听写内容。",
+        "wlCopyFailed": "wl-copy 无法为 Wayland 应用复制文本，因此未粘贴。点击“重试”再试一次。"
+      }
     },
     "clipboard": {
       "pasteFailed": {
@@ -1172,6 +1203,7 @@
     },
     "signedIn": {
       "welcomeBack": "欢迎回来",
+      "welcomeBackNamed": "欢迎回来，{{name}}",
       "notYou": "不是你？退出登录"
     },
     "sso": {
@@ -1423,7 +1455,9 @@
     "withoutToolPrefix": "如果不安装此工具，OpenWhispr 会将文本复制到剪贴板，你可以使用 Ctrl+V 手动粘贴。",
     "wtypeCosmicTerminalsDescription": "在 COSMIC 上，Warp 等终端只能通过 wtype 接收粘贴的文本。其他应用无需 wtype 即可粘贴。",
     "wtypeFallbackDescription": "wtype 是此 wlroots 合成器上的首选自动粘贴方式。有备用方案可用，但可能不太可靠。",
-    "xwaylandAppsOnly": "自动粘贴仅适用于 XWayland 应用"
+    "xwaylandAppsOnly": "自动粘贴仅适用于 XWayland 应用",
+    "wlClipboardTitle": "安装 wl-clipboard 以粘贴到 Wayland 应用",
+    "wlClipboardDescription": "在此桌面上，Wayland 应用只能通过 wl-copy 读取 OpenWhispr 复制的文本。要将听写内容粘贴到这些应用中，请安装 wl-clipboard："
   },
   "promptStudio": {
     "common": {
@@ -1565,7 +1599,7 @@
     "account": {
       "badges": {
         "free": "免费版",
-        "limitReached": "已达上限",
+        "limitReached": "已达云端上限",
         "pastDue": "逾期未付",
         "pro": "Pro",
         "business": "Business",
@@ -1601,9 +1635,10 @@
         "title": "我们无法处理你的付款"
       },
       "planDescriptions": {
-        "freeUsage": "本周已使用 {{used}} / {{limit}} 个词",
+        "freeUsage": "本周 OpenWhispr Cloud 已使用 {{used}} / {{limit}} 个词",
+        "byokUnlimited": "使用自己的 API 密钥和本地模型仍不受此限制。",
         "nextBilling": "下次扣费：{{date}}",
-        "pastDue": "本周 {{used}} / {{limit}} 免费词数——更新支付方式以恢复 Pro",
+        "pastDue": "本周 OpenWhispr Cloud 已使用 {{used}} / {{limit}} 个词——更新支付方式以恢复 Pro",
         "trial": "剩余 {{days}} 天——无限转录",
         "unlimited": "无限制",
         "accessUntil": "可使用至 {{date}}",
@@ -1625,8 +1660,8 @@
       "title": "账户",
       "toasts": {
         "approachingLimit": {
-          "description": "本周已使用 {{used}} / {{limit}} 个免费词数。升级到 Pro 可享受无限使用。",
-          "title": "即将达到周限额"
+          "description": "本周已使用 {{used}} / {{limit}} 个 OpenWhispr Cloud 词。升级到 Pro 可享受无限使用。",
+          "title": "即将达到云端字数上限"
         }
       },
       "trialCta": {
@@ -2070,6 +2105,10 @@
           },
           "xclip": {
             "step1Title": "安装 xclip"
+          },
+          "wlCopy": {
+            "step1Title": "安装 wl-clipboard",
+            "step2Title": "验证安装"
           }
         },
         "xclipDesc": "KDE Wayland 粘贴用的剪贴板工具（xclip 或 xsel）",
@@ -2081,7 +2120,8 @@
           "flakeTitle": "通过我们的 flake 安装？",
           "flakeDesc": "如果您通过 flake 安装 OpenWhispr，programs.openwhispr.enable 会自动为您启用 ydotool、uinput 模块以及相应的用户组权限。",
           "rebuildNote": "运行 sudo nixos-rebuild switch，然后注销并重新登录，使组变更和 /dev/uinput 规则生效。将 <you> 替换为您的用户名。"
-        }
+        },
+        "wlCopyDesc": "此桌面上 Wayland 应用读取粘贴文本所用的剪贴板工具"
       },
       "updates": {
         "automaticUpdates": "自动更新",
@@ -2646,6 +2686,7 @@
         "gemini_gemma_4_31b_it": "Google 最大的 Gemma 4，31B 稠密，256K 上下文",
         "gemini_gemma_4_26b_a4b_it": "Google Gemma 4 MoE，4B 活跃参数，256K 上下文",
         "groq_openai_gpt_oss_120b": "OpenAI 开源旗舰，500 T/秒",
+        "groq_qwen_qwen3_8_27b": "快速 Qwen 模型，450 T/秒，131K 上下文",
         "groq_openai_gpt_oss_20b": "快速开源模型，1000 T/秒",
         "groq_compound": "Groq Compound 系统，450 T/秒",
         "groq_compound_mini": "快速 Compound 系统，3x 更低延迟",
@@ -3239,19 +3280,24 @@
           "description": "参与者的工作流程、痛点、反应和原话"
         },
         "shorten": {
-          "name": "精简",
-          "description": "把摘要缩短到大约一半",
-          "cta": "精简摘要"
+          "name": "缩短笔记",
+          "description": "缩短已保存的 AI 摘要，同时保留关键事实",
+          "cta": "缩短笔记"
         },
         "addTldr": {
-          "name": "添加 TL;DR",
-          "description": "在摘要开头加上两三句话的 TL;DR",
-          "cta": "添加 TL;DR"
+          "name": "撰写简短摘要",
+          "description": "在聊天中撰写两到三句话的简短摘要",
+          "cta": "撰写简短摘要"
         },
         "slackUpdate": {
           "name": "Slack 更新",
           "description": "写一条发到 Slack 的简短团队更新",
           "cta": "写一条 Slack 更新"
+        },
+        "lengthen": {
+          "name": "扩充笔记",
+          "description": "用有依据的细节扩充已保存的 AI 摘要",
+          "cta": "扩充笔记"
         }
       },
       "errors": {
@@ -3264,12 +3310,10 @@
       },
       "tab": "操作",
       "output": {
-        "auto": "自动",
         "chat": "聊天",
         "summary": "AI 摘要",
-        "chatHint": "在笔记的聊天中回复，AI 摘要保持不变。",
-        "summaryHint": "编辑笔记的 AI 摘要；如果还没有摘要，就根据转录内容生成一份。",
-        "autoHint": "保存时读取提示词，并选择聊天或 AI 摘要。"
+        "chatHint": "此操作会在聊天中回复，不会更改已保存的 AI 摘要。",
+        "summaryHint": "此内置操作会更新已保存的 AI 摘要。你可以撤销更改。"
       },
       "applied": "已使用 {{name}} 更新 AI 摘要"
     },
@@ -3294,7 +3338,8 @@
       "noSectionsHint": "没有章节时，背景就是摘要的全部指令。",
       "noTemplates": "暂无模板",
       "emptyEditorTitle": "选择模板",
-      "emptyEditorDescription": "从列表中选择一个模板或创建新模板"
+      "emptyEditorDescription": "从列表中选择一个模板或创建新模板",
+      "outputHint": "应用模板会根据你的笔记和转录内容创建或替换 AI 摘要。"
     },
     "empty": {
       "title": "这里还没有笔记",
@@ -3351,6 +3396,7 @@
       "speakersIdentified": "已识别发言者",
       "typeNamePlaceholder": "输入姓名",
       "knownSpeakers": "已知说话者",
+      "thisIsMe": "这是我",
       "meetingAttendees": "会议参与者",
       "assignName": "分配姓名",
       "isThisPerson": "这是{{name}}吗？",
@@ -3419,6 +3465,11 @@
       "author": {
         "you": "你"
       }
+    },
+    "assistantUndo": {
+      "applied": "助手已更新“{{title}}”",
+      "changed": "助手编辑后，这篇笔记又发生了更改，无法撤销。",
+      "failed": "无法撤销编辑，请重试。"
     }
   },
   "dictionary": {
@@ -3608,8 +3659,8 @@
     "inviteTeam": "邀请你的团队",
     "settings": "设置",
     "support": "支持",
-    "limitReached": "已达每周上限",
-    "limitReachedDescription": "升级到 Pro 即可无限转录。",
+    "limitReached": "已达本周云端上限",
+    "limitReachedDescription": "升级到 Pro 或使用自己的 API Key 可不受限制。",
     "viewPlans": "查看套餐",
     "upgradeTitle": "升级到 Pro",
     "upgradeDescription": "无限量、更准确、更快速的转录。",
@@ -3855,7 +3906,13 @@
       "copiedToClipboard": "已复制到剪贴板",
       "openNote": "打开笔记",
       "unknownTool": "未知工具：{{name}}",
-      "invalidArgs": "{{name}} 的工具参数无效"
+      "invalidArgs": "{{name}} 的工具参数无效",
+      "search_openwhispr_helpName": "搜索 OpenWhispr 帮助",
+      "read_openwhispr_helpName": "阅读 OpenWhispr 帮助",
+      "get_openwhispr_contextName": "读取 OpenWhispr 设置",
+      "search_openwhispr_helpStatus": "正在搜索 OpenWhispr 帮助...",
+      "read_openwhispr_helpStatus": "正在阅读 OpenWhispr 帮助...",
+      "get_openwhispr_contextStatus": "正在读取 OpenWhispr 设置..."
     }
   },
   "assistant": {
@@ -3937,20 +3994,18 @@
     "mcp": {
       "description": "在 Claude、ChatGPT 和 Cursor 中与你的笔记一起聊天、搜索和工作。",
       "step1": "在你的 AI 工具中，使用公开 URL 添加 OpenWhispr MCP",
-      "step2": "创建具有所需权限的 API 密钥。",
-      "step3": "将密钥粘贴为 Authorization 标头以连接。",
-      "learnMore": "了解更多",
       "proRequired": "升级到付费计划，以将 OpenWhispr 连接到 Claude、ChatGPT 和 Cursor。",
       "worksWith": "支持",
       "copyUrl": "复制 MCP URL",
-      "copied": "已复制"
+      "copied": "已复制",
+      "oauthTitle": "通过 OAuth 登录",
+      "oauthDescription": "在支持 OAuth 的客户端中添加服务器 URL，然后登录 OpenWhispr 并授权访问。无需 API 密钥。",
+      "apiKeyTitle": "使用 API 密钥",
+      "apiKeyDescription": "对于支持请求标头的客户端，请创建具有所需权限的个人 API 密钥，并使用以下标头。"
     },
     "cli": {
       "description": "让你的助手通过终端访问你的笔记。",
       "installLabel": "安装",
-      "learnMore": "查看文档",
-      "copyDocsLink": "复制文档链接",
-      "docsLinkCopied": "已复制文档链接",
       "viewPlans": "查看套餐",
       "local": {
         "label": "本地",
@@ -3995,7 +4050,8 @@
     },
     "connectors": {
       "description": "让助手使用您的工具。每封邮件、每条消息和每个议题发出前都需要您批准。"
-    }
+    },
+    "readDocs": "阅读文档"
   },
   "connectors": {
     "approval": {
@@ -4162,15 +4218,17 @@
       "descriptionSend": "助手会在聊天中显示一张邮件卡片，只有在您点击发送后才会通过您的 Gmail 发出。",
       "unavailable": "邮件草稿暂时不可用。",
       "targetLabel": "在此处起草邮件",
-      "autoResolved": "自动 · {{target}}",
       "targets": {
         "gmail": "Gmail",
         "outlookWork": "Outlook（工作或学校）",
         "outlookPersonal": "Outlook.com",
-        "mailto": "默认邮件应用",
+        "mailto": "系统邮件应用",
         "gmailSend": "在聊天中发送（Gmail）",
-        "gmailSendConnectFirst": "在聊天中发送（Gmail）· 请在下方连接 Gmail"
-      }
+        "gmailSendConnectFirst": "在聊天中发送（Gmail）· 请在下方连接 Gmail",
+        "auto": "自动"
+      },
+      "automaticHint": "当前：{{target}}。根据已连接的账户选择。",
+      "systemMailHint": "使用电脑上配置的邮件处理程序。"
     },
     "slack": {
       "title": "Slack",
@@ -4608,7 +4666,6 @@
   "apiKeysSection": {
     "title": "API 密钥",
     "description": "创建密钥以编程方式访问 OpenWhispr API。",
-    "docsLink": "API 文档",
     "empty": "暂无 API 密钥",
     "createButton": "创建 API 密钥",
     "create": {
@@ -4663,8 +4720,7 @@
     "close": "关闭聊天",
     "newChat": "新对话",
     "conversationSelector": "切换对话",
-    "history": "历史记录",
-    "generateSummary": "生成摘要"
+    "history": "历史记录"
   },
   "transcriptionPreview": {
     "label": "预览",
@@ -4868,5 +4924,55 @@
       "provider": "服务商",
       "requestId": "请求 ID"
     }
+  },
+  "productHelp": {
+    "sources": "官方文档",
+    "settings": "当前应用设置",
+    "guidance": "此回复使用的信息。",
+    "settingsNote": "为本次回复读取的设置和已知权限；不会更改设置或测试设备。",
+    "readAt": "读取时间：{{time}}",
+    "sourceStatus": {
+      "live": "已获取文章",
+      "bundled": "内置备用指南"
+    },
+    "reason": {
+      "policy": "您组织的策略限制了在线文档查询。",
+      "rateLimit": "在线文档查询已达到上限。现显示内置指南。",
+      "unavailable": "无法核实当前文档。现显示内置指南。",
+      "privacy": "未登录或仅使用本地处理时，在线文档查询处于关闭状态。现显示内置指南。"
+    },
+    "openFailed": "无法打开文章。您可以复制链接并在浏览器中打开。",
+    "topicsList": {
+      "hotkeys": "快捷键",
+      "microphone": "麦克风",
+      "models": "模型",
+      "meetings": "会议",
+      "calendar": "日历",
+      "language": "语言",
+      "backup": "备份",
+      "assistant": "助手",
+      "hold-or-tap": "按住或点按",
+      "choose-your-microphone": "选择麦克风",
+      "microphone-not-working": "麦克风无法使用",
+      "local-models": "本地模型",
+      "chat-agent": "聊天助手",
+      "record-a-meeting": "录制会议",
+      "connect-google-calendar": "连接 Google 日历",
+      "languages": "用其他语言听写",
+      "sync-across-devices": "在设备间同步笔记"
+    },
+    "appVersion": "应用版本",
+    "platform": "平台",
+    "processing": "处理方式",
+    "engine": "引擎",
+    "policy": "策略允许使用助手",
+    "on": "开启",
+    "off": "关闭",
+    "microphonePermission": "麦克风权限",
+    "specificMicrophone": "指定麦克风",
+    "permissionGranted": "已允许",
+    "permissionDenied": "已拒绝",
+    "permissionRestricted": "受限",
+    "permissionNotDetermined": "尚未请求"
   }
 }

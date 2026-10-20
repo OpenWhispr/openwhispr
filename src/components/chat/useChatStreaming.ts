@@ -6,6 +6,7 @@ import { providerSupportsImages } from "../../services/ai/inferenceProviders";
 import { getSettings, useSettingsStore } from "../../stores/settingsStore";
 import { resolveChatStreamingInference } from "../../helpers/dictationAgentInference.js";
 import { describeProviderError } from "../../utils/describeProviderError";
+import { productHelpMetadata } from "../../services/help/productHelp";
 import logger from "../../utils/logger";
 import {
   isAgentAllowed,
@@ -35,6 +36,7 @@ import {
 import { resolveUnavailableCapabilities } from "../../config/agentCapabilities";
 import { getDictionaryHintWords } from "../../utils/snippets";
 import { noteAttendeesContext, withoutAttendeesFence } from "../../utils/noteAttendees";
+import { FULL_TRANSCRIPT_MAX_TOKENS } from "../../utils/transcriptEvidence";
 import { createToolRegistry } from "../../services/tools";
 import {
   executeTool,
@@ -114,6 +116,12 @@ async function buildRAGContext(userText: string, scope?: ContainerScope): Promis
  */
 export type ChatStreamingScope = "chatIntelligence" | "dictationAgent";
 
+export interface OpenNoteContext {
+  text: string;
+  /** Only the start of the transcript is included; get_note reads the rest. */
+  transcriptPreview: boolean;
+}
+
 interface UseChatStreamingOptions {
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
@@ -125,7 +133,7 @@ interface UseChatStreamingOptions {
    * The note a note's chat is about. The model answers from it first, and no
    * other notes are added up front: it reaches them through search_notes.
    */
-  openNote?: string;
+  openNote?: string | ((maxTranscriptTokens: number) => OpenNoteContext);
   /** Optional container scope applied to RAG and the search_notes tool (container overview chat). */
   searchScope?: ContainerScope;
   /**
@@ -139,6 +147,8 @@ interface UseChatStreamingOptions {
    * onboarding demo answers with suggested times instead).
    */
   nameUnavailableCapabilities?: boolean;
+  /** Disable product-help tools on guided surfaces such as the onboarding demo. */
+  productHelpEnabled?: boolean;
   /**
    * The note's meeting (note chat). Its attendees are listed for the model
    * only in a send that offers connector tools, so recipients come from them.
@@ -159,6 +169,8 @@ export interface SendToAIOptions {
    * chat shows and saves (a note action shows its name while its prompt is sent).
    */
   requestText?: string;
+  /** This turn isn't offered update_note, so it can't change a note (a note's chat action). */
+  keepNotesUnchanged?: boolean;
   /** Keeps a caret-destined voice response in the compact pill while it streams. */
   suppressResponseContent?: boolean;
   /** Asks the model for plain prose because the answer will be pasted into a plain-text app. */
@@ -206,6 +218,7 @@ export function useChatStreaming({
   searchScope,
   allowConnectors = false,
   nameUnavailableCapabilities = true,
+  productHelpEnabled = true,
   noteMeeting,
   onStreamComplete,
   onResponseContent,
@@ -427,7 +440,8 @@ export function useChatStreaming({
           connectorsOffered = connectors !== undefined;
           // Triggers ride in the tool description, so a snippet edit rebuilds the registry.
           const snippetKey = settings.snippets.map((s) => s.trigger).join("|");
-          const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${snippetKey}-${connectors?.emailDraftTarget ?? "no-connectors"}-${connectors?.readyConnectorIds.join(",") ?? ""}`;
+          const keepNotesUnchanged = !!options?.keepNotesUnchanged;
+          const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${productHelpEnabled}-${snippetKey}-${connectors?.emailDraftTarget ?? "no-connectors"}-${connectors?.readyConnectorIds.join(",") ?? ""}-${keepNotesUnchanged}`;
           if (toolRegistryRef.current?.key === cacheKey) {
             registry = toolRegistryRef.current.registry;
           } else {
@@ -437,6 +451,7 @@ export function useChatStreaming({
               cloudBackupEnabled: settings.cloudBackupEnabled,
               searchScope: scope,
               webSearchEnabled,
+              productHelpEnabled,
               vocabulary: {
                 getDictionary: () => getSettings().customDictionary,
                 updateDictionary: (changes) =>
@@ -445,6 +460,7 @@ export function useChatStreaming({
                 setSnippets: (snippets) => useSettingsStore.getState().setSnippets(snippets),
               },
               connectors,
+              keepNotesUnchanged,
             });
             toolRegistryRef.current = { key: cacheKey, registry };
           }
@@ -481,9 +497,21 @@ export function useChatStreaming({
           connectorsOffered ? buildNoteAttendeesContext(noteMeetingRef.current) : "",
         ]);
         if (cancelled() || !mountedRef.current) return;
+        // A transcript too long for the model is read through get_note, except
+        // by whole-note actions, which work from the complete source.
+        const maxTranscriptTokens =
+          registry?.get("get_note") && !options?.requestText
+            ? FULL_TRANSCRIPT_MAX_TOKENS[
+                !isCloudAgent && (isLocalProvider || isLanAgent) ? "selfHosted" : "hosted"
+              ]
+            : Infinity;
+        const currentNote: OpenNoteContext =
+          typeof openNoteRef.current === "function"
+            ? openNoteRef.current(maxTranscriptTokens)
+            : { text: openNoteRef.current ?? "", transcriptPreview: false };
         // Only main's attendee block may carry its fence: note text and search
         // results can't fake a second list.
-        const openNoteContext = [withoutAttendeesFence(openNoteRef.current ?? ""), attendeesContext]
+        const openNoteContext = [withoutAttendeesFence(currentNote.text), attendeesContext]
           .filter(Boolean)
           .join("\n\n");
         const libraryContext = [
@@ -499,6 +527,7 @@ export function useChatStreaming({
             unavailable: nameUnavailableCapabilities ? unavailable : [],
             toolTrace: registry !== null,
             openNote: openNoteContext || undefined,
+            openNoteTranscriptPreview: currentNote.transcriptPreview,
             userName: userNameRef.current,
           }),
           getDictionaryHintWords(settings),
@@ -634,8 +663,6 @@ export function useChatStreaming({
               })),
               executeToolCall,
               ...(cloudScreenContext ? { screenContext: cloudScreenContext } : {}),
-              // So the server marks its memories as past conversations, not facts about the note.
-              ...(openNoteRef.current ? { noteChat: true } : {}),
             });
           } else {
             const aiTools = registry?.toAISDKFormat(
@@ -663,6 +690,7 @@ export function useChatStreaming({
                 customApiKey:
                   isCustomAgent || isLanAgent ? llmConfig.customApiKey || undefined : undefined,
                 disableThinking: llmConfig.disableThinking,
+                reasoningEffort: llmConfig.reasoningEffort,
               },
               aiTools
             );
@@ -721,7 +749,11 @@ export function useChatStreaming({
                                 status: "completed" as const,
                                 result: toolDisplayTexts.get(chunk.callId) ?? chunk.displayText,
                                 ...(chunk.metadata && !isQueryResultData(chunk.metadata)
-                                  ? { metadata: chunk.metadata }
+                                  ? {
+                                      metadata:
+                                        productHelpMetadata(tc.name, chunk.metadata) ??
+                                        chunk.metadata,
+                                    }
                                   : {}),
                               }
                             : tc
@@ -836,6 +868,7 @@ export function useChatStreaming({
       inferenceScope,
       allowConnectors,
       nameUnavailableCapabilities,
+      productHelpEnabled,
       t,
       setMessages,
       onStreamComplete,
