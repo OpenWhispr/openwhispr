@@ -197,7 +197,7 @@ function UserMessage({ message }: { message: Message }) {
       )}
       <div
         dir="auto"
-        className="max-w-[85%] whitespace-pre-wrap rounded-[18px] bg-surface-2 px-3 py-2 text-[14px] leading-5 text-foreground"
+        className="max-w-[85%] whitespace-pre-wrap rounded-[18px] bg-surface-3 px-3 py-2 dark:bg-surface-2 text-[14px] leading-5 text-foreground"
       >
         {message.content}
       </div>

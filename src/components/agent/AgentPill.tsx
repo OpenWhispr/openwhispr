@@ -27,7 +27,7 @@ interface AgentPillProps {
   micDisabled?: boolean;
   /** A card waits on the user: Expand pulses blue until the modal opens to it. */
   expandCue?: boolean;
-  /** Inside the modal the pill is a shade lighter than the panel it sits on. */
+  /** Inside the modal the pill is a shade apart from the panel it sits on. */
   inModal?: boolean;
   onAction: (button: AgentPillButton) => void;
   className?: string;
@@ -50,8 +50,8 @@ export function AgentPill({
   return (
     <div
       className={cn(
-        "flex h-10 max-w-full items-center rounded-full border border-border ps-2.5 pe-[5px] text-muted-foreground shadow-[var(--shadow-card)]",
-        inModal ? "bg-surface-2" : "bg-surface-0",
+        "flex h-10 max-w-full items-center rounded-full border border-border ps-2.5 pe-1.25 text-muted-foreground shadow-[var(--shadow-card)]",
+        inModal ? "bg-surface-1 dark:bg-surface-2" : "bg-surface-0",
         className
       )}
     >

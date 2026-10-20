@@ -16,12 +16,20 @@
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
+  /* How strongly the modal's glow shows: a pale wash over light surfaces. */
+  --agent-glow-full: 0.4;
+  --agent-glow-faint: 0.16;
 }
 
 /* The assistant floats over any desktop, so in dark mode its surfaces are a
    step deeper than the app's charcoal and neutral, with the brand blue (the
-   glass gradient's midpoint, as in light mode). Light mode keeps the app's. */
-.dark .agent-window {
+   glass gradient's midpoint, as in light mode). Light mode keeps the app's
+   palette. The second selector reaches menus that portal out of the window's
+   tree (the chat switcher); the agent window is its own page. */
+.dark .agent-window,
+.dark:has(.agent-window) {
+  --agent-glow-full: 1;
+  --agent-glow-faint: 0.4;
   --color-primary: #4577e9;
   --color-ring: #4577e9;
   --color-surface-0: oklch(0.17 0 0);
@@ -30,6 +38,10 @@
   --color-surface-3: oklch(0.29 0 0);
   --color-surface-raised: oklch(0.31 0 0);
   --color-border: oklch(0.31 0 0);
+  --color-popover: oklch(0.218 0 0);
+  --color-muted: oklch(0.269 0 0);
+  /* Within the window's 8px margin: a larger shadow is cut off at its edge. */
+  --shadow-modal: 0 2px 8px -2px oklch(0 0 0 / 0.4);
 }
 
 /* Transparent while the native window resizes (a stale frame then shows
@@ -50,13 +62,25 @@
 .agent-modal-glow {
   opacity: 0;
   transition: opacity 400ms ease-out;
-  /* A band from the bottom that rises a little higher at the sides. */
+  /* A band from the bottom, brightest at the two bottom corners, where it
+     rises higher, and dipping under the pill. */
   background:
-    radial-gradient(45% 30% at 50% 30%, var(--color-surface-0), transparent),
+    radial-gradient(
+      30% 100% at 6% 100%,
+      color-mix(in oklab, var(--color-primary) 24%, transparent),
+      transparent
+    ),
+    radial-gradient(
+      30% 100% at 94% 100%,
+      color-mix(in oklab, var(--color-primary) 24%, transparent),
+      transparent
+    ),
     linear-gradient(
       to top,
-      color-mix(in oklab, var(--color-primary) 50%, transparent) 38%,
-      transparent 85%
+      color-mix(in oklab, var(--color-primary) 42%, transparent),
+      color-mix(in oklab, var(--color-primary) 36%, transparent) 30%,
+      color-mix(in oklab, var(--color-primary) 12%, transparent) 50%,
+      transparent 68%
     );
 }
 
@@ -76,10 +100,13 @@
 }
 
 .agent-modal-glow[data-glow="soft"] {
-  opacity: 0.35;
+  opacity: var(--agent-glow-faint);
 }
 
-.agent-modal-glow[data-glow="strong"],
+.agent-modal-glow[data-glow="strong"] {
+  opacity: var(--agent-glow-full);
+}
+
 .agent-modal-glow[data-glow="strong"]::after {
   opacity: 1;
 }

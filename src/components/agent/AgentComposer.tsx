@@ -134,7 +134,10 @@ export function AgentComposer({
               onClick={onStop}
               aria-label={t("agentWindow.actions.stop")}
               title={t("agentWindow.actions.stop")}
-              className={cn(ICON_BUTTON, "bg-surface-2 text-foreground hover:bg-surface-raised")}
+              className={cn(
+                ICON_BUTTON,
+                "bg-foreground/10 text-foreground dark:bg-surface-2 dark:hover:bg-surface-raised"
+              )}
             >
               <Square size={14} />
             </button>
