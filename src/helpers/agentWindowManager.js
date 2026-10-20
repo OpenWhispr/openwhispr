@@ -12,6 +12,8 @@ const {
 
 const VOICE_STATES = new Set(["idle", "recording", "transcribing"]);
 const DISPLAY_EVENTS = ["display-metrics-changed", "display-added", "display-removed"];
+// How long a Linux focus request may take before the helper is asked again.
+const LINUX_FOCUS_RETRY_MS = 250;
 
 const sameBounds = (a, b) =>
   a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
@@ -366,11 +368,21 @@ class AgentWindowManager {
     }
     if (requested) {
       this.keyboardFocus = true;
+      // Created unfocusable so it never steals focus; it must be focusable to
+      // take keys at all (on Linux it stays override-redirect, so the helper
+      // still has to move X focus to it).
+      win.setFocusable(true);
       if (this.platform === "win32") {
-        win.setFocusable(true);
         win.focus();
       } else {
         this._focusLinux();
+        // Chromium can miss the focus of a window that has only just become
+        // focusable (a card resizing the window in the same moment): once more.
+        setTimeout(() => {
+          if (this.keyboardFocus && this.window === win && win.isVisible() && !win.isFocused()) {
+            this._focusLinux();
+          }
+        }, LINUX_FOCUS_RETRY_MS);
       }
       return;
     }
@@ -384,6 +396,7 @@ class AgentWindowManager {
       win.setFocusable(false);
       return;
     }
+    win.setFocusable(false);
     // GNOME hands focus back to the previous app only when the focused
     // override-redirect window unmaps; wait out a focus request still landing.
     const returnFocus = () => {

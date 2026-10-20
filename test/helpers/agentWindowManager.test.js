@@ -409,6 +409,42 @@ test("Linux focuses through the input-region helper and remaps to hand focus bac
   );
 });
 
+test("Linux makes the window focusable before the helper focuses it, and unfocusable on release", async () => {
+  inputRegionCalls.length = 0;
+  const { manager, win } = await openedManager({ platform: "linux" });
+  // One timeline for the window's calls and the helper's, to see their order.
+  const setFocusable = win.setFocusable.bind(win);
+  win.setFocusable = (value) => {
+    inputRegionCalls.push(["setFocusable", value]);
+    setFocusable(value);
+  };
+
+  manager.setLayout(fromAgent(win), { layout: "typing", focus: true });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(inputRegionCalls, [["setFocusable", true], "focus"]);
+
+  inputRegionCalls.length = 0;
+  manager.setLayout(fromAgent(win), { layout: "pill", focus: false });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(inputRegionCalls, [["setFocusable", false]]);
+});
+
+test("Linux asks the helper once more when the window didn't take focus", async () => {
+  inputRegionCalls.length = 0;
+  const { manager, win } = await openedManager({ platform: "linux" });
+  manager.setLayout(fromAgent(win), { layout: "typing", focus: true });
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.deepEqual(inputRegionCalls, ["focus", "focus"], "still unfocused: once more");
+
+  inputRegionCalls.length = 0;
+  manager.setLayout(fromAgent(win), { layout: "pill", focus: false });
+  await new Promise((resolve) => setImmediate(resolve));
+  manager.setLayout(fromAgent(win), { layout: "typing", focus: true });
+  win.focused = true;
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.deepEqual(inputRegionCalls, ["focus"], "focused: no second request");
+});
+
 test("Linux re-takes focus on a click while the user is typing", async () => {
   inputRegionCalls.length = 0;
   const { manager, win } = await openedManager({ platform: "linux" });
